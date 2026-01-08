@@ -52,11 +52,15 @@ class MemoryMonitor:
         phase_name: str = "Unknown",
         log_file: Optional[Path] = None,
         stop_signal_file: Optional[Path] = None,
+        max_runtime_seconds: Optional[float] = None,
+        parent_pid: Optional[int] = None,
     ):
         self.interval_seconds = interval_seconds
         self.phase_name = phase_name
         self.log_file = log_file
         self.stop_signal_file = stop_signal_file
+        self.max_runtime_seconds = max_runtime_seconds
+        self.parent_pid = parent_pid
         self.stop_event = threading.Event()
         self.peak_memory = 0
         self.peak_swap = 0
@@ -164,6 +168,33 @@ class MemoryMonitor:
         """Main monitoring loop."""
         next_tick = time.monotonic()
         while not self.stop_event.is_set():
+            # Check if we've exceeded max runtime
+            if self.max_runtime_seconds and self.start_time:
+                elapsed = time.time() - self.start_time
+                if elapsed >= self.max_runtime_seconds:
+                    print(
+                        f"\n[TIMEOUT] Maximum runtime ({self.max_runtime_seconds}s) exceeded, stopping monitoring..."
+                    )
+                    self.stop_event.set()
+                    break
+
+            # Check if parent process is still alive
+            if self.parent_pid:
+                try:
+                    parent = psutil.Process(self.parent_pid)
+                    if not parent.is_running():
+                        print(
+                            f"\n[PARENT_DIED] Parent process (PID {self.parent_pid}) is no longer running, stopping monitoring..."
+                        )
+                        self.stop_event.set()
+                        break
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    print(
+                        f"\n[PARENT_DIED] Parent process (PID {self.parent_pid}) no longer exists, stopping monitoring..."
+                    )
+                    self.stop_event.set()
+                    break
+
             # Check for stop signal file (for Windows compatibility)
             if self.stop_signal_file and self.stop_signal_file.exists():
                 print(
@@ -452,6 +483,19 @@ def main():
     )
 
     parser.add_argument(
+        "--max-runtime",
+        type=float,
+        dest="max_runtime_seconds",
+        help="Maximum runtime in seconds before automatically stopping",
+    )
+
+    parser.add_argument(
+        "--parent-pid",
+        type=int,
+        help="PID of parent process to monitor; exit if parent dies",
+    )
+
+    parser.add_argument(
         "--background",
         action="store_true",
         help="Run monitoring in background without executing a command",
@@ -477,6 +521,8 @@ def main():
             phase_name=args.phase,
             log_file=args.log_file,
             stop_signal_file=args.stop_signal_file,
+            max_runtime_seconds=args.max_runtime_seconds,
+            parent_pid=args.parent_pid,
         )
 
         # Setup signal handlers for graceful shutdown

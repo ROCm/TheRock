@@ -15,11 +15,21 @@ PHASE="${PHASE:-Build Phase}"
 # Create logs directory in BUILD_DIR
 mkdir -p "${BUILD_DIR}/logs"
 
+# Get the parent process PID (the shell running this script's parent)
+PARENT_PID=$PPID
+
+# Set max runtime to 24 hours (matching workflow timeout) or use environment variable override
+# This ensures the monitor won't outlive the workflow even if other safeguards fail
+MAX_RUN_TIME=${MAX_RUN_TIME:-$((24 * 3600))}
+
 # Start memory monitor in background
 python "${REPO_ROOT}/build_tools/memory_monitor.py" \
   --phase "${PHASE}" \
   --log-file "${BUILD_DIR}/logs/build_memory_log_${JOB_NAME}.jsonl" \
-  --background > "${BUILD_DIR}/logs/monitor_output_${JOB_NAME}.txt" 2>&1 &
+  --parent-pid "${PARENT_PID}" \
+  --background \
+  --max-runtime "${MAX_RUN_TIME}" \
+  > "${BUILD_DIR}/logs/monitor_output_${JOB_NAME}.txt" 2>&1 &
 
 # Capture PID
 MONITOR_PID=${!}

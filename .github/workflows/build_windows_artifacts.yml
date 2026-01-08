@@ -154,13 +154,12 @@ jobs:
 
       - name: Build therock-archives and therock-dist
         if: ${{ !cancelled() }}
-        shell: powershell
         run: |
-          & build_tools\github_actions\start_memory_monitor.ps1 -MonitorMemory "${{ inputs.monitor_memory }}"
+          bash build_tools/github_actions/start_memory_monitor_win.sh "${{ inputs.monitor_memory }}"
 
-          cmake --build "${env:BUILD_DIR}" --target therock-archives therock-dist -- -k 0
+          cmake --build "${{ env.BUILD_DIR }}" --target therock-archives therock-dist -- -k 0
 
-          & build_tools\github_actions\stop_memory_monitor.ps1 -MonitorMemory "${{ inputs.monitor_memory }}"
+          bash build_tools/github_actions/stop_memory_monitor_win.sh "${{ inputs.monitor_memory }}"
 
       - name: Report
         if: ${{ !cancelled() }}

@@ -128,29 +128,24 @@ jobs:
         run: |
           python3 build_tools/github_actions/build_configure.py --manylinux
 
-      - name: Start memory monitoring
-        if: ${{ inputs.monitor_memory }}
-        id: memory-monitor
-        continue-on-error: true
-        env:
-          JOB_NAME: ${{ github.job }}
-          PHASE: "Build Phase"
-        run: |
-          MONITOR_PID=$(bash build_tools/github_actions/start_memory_monitor.sh)
-          echo "monitor-pid=$MONITOR_PID" >> $GITHUB_OUTPUT
-
       - name: Build therock-archives and therock-dist
-        run: |
-          cmake --build ${{ env.BUILD_DIR }} --target therock-archives therock-dist -- -k 0
-
-      - name: Stop memory monitoring
-        if: ${{ always() && inputs.monitor_memory && steps.memory-monitor.outputs.monitor-pid }}
-        continue-on-error: true
         env:
-          MONITOR_PID: ${{ steps.memory-monitor.outputs.monitor-pid }}
           JOB_NAME: ${{ github.job }}
+          MONITOR_MEMORY: ${{ inputs.monitor_memory }}
         run: |
-          bash build_tools/github_actions/stop_memory_monitor.sh
+          MONITOR_PID=""
+          if [ "$MONITOR_MEMORY" = "true" ]; then
+            echo "Starting memory monitoring..."
+            MONITOR_PID=$(bash build_tools/github_actions/start_memory_monitor.sh)
+            export MONITOR_PID
+            echo "Memory monitor PID: $MONITOR_PID"
+
+            # Set up trap to stop monitoring on exit (success or failure)
+            trap 'if [ -n "$MONITOR_PID" ]; then echo "Stopping memory monitoring..."; bash build_tools/github_actions/stop_memory_monitor.sh || true; fi' EXIT
+          fi
+
+          # Run the build
+          cmake --build ${{ env.BUILD_DIR }} --target therock-archives therock-dist -- -k 0
 
       - name: Test Packaging
         if: ${{ github.event.repository.name == 'TheRock' }}
