@@ -68,7 +68,12 @@ echo "[*] Checking if elevated: $isAdmin | current user: $currentUser"
 # etc. "C:\runner" vs "B:\actions-runner" so use the workspace env var
 if($ENV:GITHUB_WORKSPACE -ne $null) {
     echo "[*] GITHUB_WORKSPACE env var defined: $ENV:GITHUB_WORKSPACE"
-    $regex_build_exe = "$ENV:GITHUB_WORKSPACE\build\.*[.]exe"
+    if($ENV:THEROCK_CLEANUP_PROCESSES_USE_GITHUB_WORKSPACE -ne $null){
+        $regex_build_exe = "$ENV:GITHUB_WORKSPACE\build\.*[.]exe"
+        echo "[*] THEROCK_CLEANUP_PROCESSES_USE_GITHUB_WORKSPACE env var defined, using path in regex."
+    } else {
+        echo "[*] THEROCK_CLEANUP_PROCESSES_USE_GITHUB_WORKSPACE end var undefined, using default regex."
+    }
 } else {
     echo "[*] GITHUB_WORKSPACE env var undefined, using default regex"
 }
@@ -86,7 +91,7 @@ if($ps_list_begin_len -eq 0) {
     exit 0
 }
 
-# First Attempt with powershell `Stop-Process`
+# First Attempt with `WMI`
 echo "[*] Found $ps_list_begin_len running build executable(s):"
 $ps_list | % { echo "    > $($_.MainModule.FileName)"}
 
@@ -99,7 +104,7 @@ $ps_list | ForEach-Object {
 $IsAllStopped = Wait-Process-Filter -RegexStr $regex_build_exe -Tries 5
 
 
-# Second Attempt with `WMI` (if any processes are still running)
+# Second Attempt with powershell `Stop-Process` (if any processes are still running)
 if(!$IsAllStopped) {
     $ps_list = Get-Process-Filter -RegexStr $regex_build_exe
     if($ps_list.Count -gt 0) {
