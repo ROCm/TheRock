@@ -135,7 +135,7 @@ Hooks: Black (Python), clang-format (C++), mdformat (Markdown), actionlint (GitH
 
 ## Style Guidelines
 
-See [docs/development/style_guide.md](docs/development/style_guide.md) for full guidelines.
+See [docs/development/style_guides/README.md](docs/development/style_guides/README.md) for full guidelines.
 
 **Python:**
 

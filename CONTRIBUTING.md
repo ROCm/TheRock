@@ -129,4 +129,4 @@ List of long-lived branches:
 ### Style guide
 
 We have a project-wide style guide with recommendations at
-[`docs/development/style_guide.md`](docs/development/style_guide.md).
+[`docs/development/style_guides/README.md`](docs/development/style_guides/README.md).
