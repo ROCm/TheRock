@@ -189,7 +189,7 @@ test_matrix = {
         "platform": ["linux"],
         "total_shards": 1,
         # Architectures that we have multi GPU setup for testing
-        "multi_gpu": {"linux": ["gfx94x-dcgpu"]},
+        "multi_gpu": {"linux": ["gfx94X-dcgpu"]},
     },
     # hipDNN tests
     "hipdnn": {
