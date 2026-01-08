@@ -5,7 +5,6 @@
 import importlib
 from pathlib import Path
 import subprocess
-import sys
 import sysconfig
 import unittest
 
@@ -77,11 +76,7 @@ class ROCmLibrariesTest(unittest.TestCase):
                     preload_command
                     + " import ctypes; import sys; ctypes.CDLL(sys.argv[1])"
                 )
-                # -P flag is only available in Python 3.11+
-                cmd = [sys.executable]
-                if sys.version_info >= (3, 11):
-                    cmd.append("-P")
-                cmd.extend(["-c", command, str(so_path)])
+                cmd = utils.get_python_cmd(["-c", command, str(so_path)])
                 subprocess.check_call(cmd)
 
     def testConsoleScripts(self):
