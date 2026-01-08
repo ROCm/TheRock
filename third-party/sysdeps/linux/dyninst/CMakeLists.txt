@@ -63,18 +63,6 @@ add_custom_target(
     "${CMAKE_COMMAND}" -E copy_directory "${CMAKE_CURRENT_BINARY_DIR}/source" "${CMAKE_CURRENT_BINARY_DIR}/s"
   COMMAND
     "${CMAKE_COMMAND}" -E env
-      "LDFLAGS=-Wl,-rpath='$$ORIGIN' -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
-      --
-    "${CMAKE_CURRENT_BINARY_DIR}/s"
-      --prefix "${CMAKE_INSTALL_PREFIX}"
-      --libdir="${CMAKE_INSTALL_PREFIX}/lib"
-      --includedir="${CMAKE_INSTALL_PREFIX}/include"
-  COMMAND
-    make -j ${PAR_JOBS} V=1
-  COMMAND
-    make install
-  COMMAND
-    "${CMAKE_COMMAND}" -E env
       "PATCHELF=${PATCHELF}"
       "THEROCK_SOURCE_DIR=${THEROCK_SOURCE_DIR}"
       "Python3_EXECUTABLE=${Python3_EXECUTABLE}" --
