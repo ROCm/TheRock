@@ -494,7 +494,7 @@ Key points:
 - Always add a comment explaining WHY the import is inline
 - Consider refactoring to eliminate circular dependencies instead
 
-### Code organization
+#### Code organization
 
 **Keep functions focused and modules cohesive.**
 
@@ -517,7 +517,7 @@ When to split:
 - 100+ line methods → extract helper methods
 - Duplicate code → extract to shared function
 
-### No duplicate code
+#### No duplicate code
 
 **Extract common code to shared functions.**
 
@@ -661,7 +661,7 @@ What to validate:
 - Processed files are smaller after stripping
 - Critical operations completed successfully
 
-### Fail-fast behavior
+#### Fail-fast behavior
 
 **Always fail immediately on errors. Never silently continue or produce incomplete results.**
 
