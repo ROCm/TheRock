@@ -15,7 +15,7 @@ Our goals are to:
 
 1. **Standardize packaging behaviour across Linux, Windows native, Windows WSL2**
 2. **Ensure predicatble upgrade behaviour, side-by-side support, and compatibility with OS package managers (apt, dnf, yum, zypper for SLES)**
-3. **Comply with legal, licensing, and redistrobution rules**
+3. **Comply with legal, licensing, and redistribution rules**
 4. **Support automated packaging workflows in TheRock with productized deliverables**
 5. **Support packaging behaviour across Python ecosystems using pip and WheelNext**
 
