@@ -2,14 +2,14 @@
 # Installs Python interpreters with shared library support.
 # These are required for embedding Python (e.g., in rocgdb).
 #
-# Usage: ./install_shared_pythons.sh [parallel_jobs]
-#   parallel_jobs: Number of parallel Python builds (default: 4)
+# Usage: ./install_shared_pythons.sh <build_dir>
+#   build_dir: Directory for downloading and building (caller handles cleanup)
 #
 # Installs to /opt/python-shared/cp3XX-cp3XX/ to match manylinux conventions.
 
 set -euo pipefail
 
-PARALLEL_JOBS="${1:-4}"
+BUILD_ROOT="${1:?Build directory required}"
 INSTALL_ROOT="/opt/python-shared"
 
 # Python versions to build (major.minor.patch)
@@ -21,9 +21,7 @@ PYTHON_VERSIONS=(
   "3.14.0"
 )
 
-# Create a temporary build directory
-BUILD_ROOT="$(mktemp -d)"
-trap "rm -rf ${BUILD_ROOT}" EXIT
+mkdir -p "${BUILD_ROOT}"
 
 download_python() {
   local version="$1"
@@ -57,8 +55,6 @@ build_python() {
   "${src_dir}/configure" \
     --prefix="${install_dir}" \
     --enable-shared \
-    --enable-optimizations \
-    --with-lto \
     LDFLAGS="-Wl,-rpath,${install_dir}/lib" \
     > configure.log 2>&1
 
@@ -81,16 +77,9 @@ for version in "${PYTHON_VERSIONS[@]}"; do
 done
 wait
 
-echo "=== Building Python interpreters (${PARALLEL_JOBS} parallel jobs) ==="
-# Use a job queue with background processes
-job_count=0
+echo "=== Building Python interpreters ==="
 for version in "${PYTHON_VERSIONS[@]}"; do
   build_python "${version}" &
-  ((job_count++))
-  if ((job_count >= PARALLEL_JOBS)); then
-    wait -n
-    ((job_count--))
-  fi
 done
 wait
 

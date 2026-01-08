@@ -114,7 +114,7 @@ RUN which gcc && gcc --version && \
 # The manylinux /opt/python builds are statically linked and can't be embedded.
 WORKDIR /install-shared-pythons
 COPY install_shared_pythons.sh ./
-RUN ./install_shared_pythons.sh && rm -rf /install-shared-pythons
+RUN ./install_shared_pythons.sh /tmp/python-build && rm -rf /install-shared-pythons /tmp/python-build
 
 ######## GIT CONFIGURATION ########
 # Git started enforcing strict user checking, which thwarts version
