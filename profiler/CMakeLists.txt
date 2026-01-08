@@ -43,111 +43,6 @@ if(THEROCK_ENABLE_ROCPROFV3)
   therock_cmake_subproject_activate(aqlprofile)
 
   ##############################################################################
-  # rocprofiler-sdk
-  ##############################################################################
-  # Detect available Default Python3 version on the system or
-  # use explicitly provided Python3 versions
-  therock_detect_python_versions(_detected_python_executables _detected_python_versions)
-
-  # Use detected versions or fall back to default if none found
-  if(NOT _detected_python_versions)
-    message(FATAL_ERROR "No Python versions detected for rocprofiler-sdk")
-    set(_detected_python_versions_str "")
-  else()
-    message(STATUS "Detected Python versions for rocprofiler-sdk python bindings: ${_detected_python_versions}")
-    message(STATUS "Python executables: ${_detected_python_executables}")
-    # Join all detected Python versions into a single string separated by semicolons.
-    # This is a workaround because therock_cmake_subproject_declare does not support passing lists directly.
-    list(JOIN _detected_python_versions "\;" _detected_python_versions_str)
-  endif()
-
-  therock_cmake_subproject_declare(rocprofiler-sdk
-    USE_DIST_AMDGPU_TARGETS
-    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-sdk"
-    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-sdk"
-    BACKGROUND_BUILD
-    CMAKE_ARGS
-      -DHIP_PLATFORM=amd
-      -DBUILD_TESTS=ON
-      -DROCPROFILER_PYTHON_VERSIONS:STRING="${_detected_python_versions_str}"
-    CMAKE_INCLUDES
-      therock_explicit_finders.cmake
-    RUNTIME_DEPS
-      aqlprofile
-      hip-clr
-      rocprofiler-register
-      ${_rocprofiler_sdk_optional_deps}
-      ${THEROCK_BUNDLED_ELFUTILS}
-      ${THEROCK_BUNDLED_LIBDRM}
-      ${THEROCK_BUNDLED_SQLITE3}
-    INTERFACE_LINK_DIRS
-      lib
-      lib/rocm_sysdeps/lib
-    INTERFACE_INSTALL_RPATH_DIRS
-      lib
-      lib/rocm_sysdeps/lib
-  )
-  therock_cmake_subproject_glob_c_sources(rocprofiler-sdk
-    SUBDIRS .
-  )
-  therock_cmake_subproject_provide_package(rocprofiler-sdk rocprofiler-sdk lib/cmake/rocprofiler-sdk)
-  therock_cmake_subproject_provide_package(rocprofiler-sdk rocprofiler-sdk-roctx lib/cmake/rocprofiler-sdk-roctx)
-  therock_cmake_subproject_provide_package(rocprofiler-sdk rocprofiler-sdk-rocpd lib/cmake/rocprofiler-sdk-rocpd)
-  therock_cmake_subproject_activate(rocprofiler-sdk)
-
-  ##############################################################################
-  # rocprofiler-sdk-tests
-  ##############################################################################
-  therock_cmake_subproject_declare(rocprofiler-sdk-tests
-    USE_DIST_AMDGPU_TARGETS
-    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-sdk/tests"
-    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-sdk-tests"
-    BACKGROUND_BUILD
-    CMAKE_ARGS
-      -DHIP_PLATFORM=amd
-    RUNTIME_DEPS
-      rocprofiler-sdk
-  )
-
-  therock_cmake_subproject_glob_c_sources(rocprofiler-sdk-tests
-    SUBDIRS .
-  )
-
-  therock_cmake_subproject_provide_package(rocprofiler-sdk-tests rocprofiler-sdk-tests lib/cmake/rocprofiler-sdk-tests)
-  therock_cmake_subproject_activate(rocprofiler-sdk-tests)
-
-  ##############################################################################
-  # rocprofiler-compute
-  ##############################################################################
-  therock_cmake_subproject_declare(rocprofiler-compute
-    USE_DIST_AMDGPU_TARGETS
-    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-compute"
-    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-compute"
-    BACKGROUND_BUILD
-    CMAKE_ARGS
-      -DHIP_PLATFORM=amd
-      -DCHECK_PYTHON_DEPS=OFF
-    CMAKE_INCLUDES
-      therock_explicit_finders.cmake
-    COMPILER_TOOLCHAIN
-      amd-hip
-    RUNTIME_DEPS
-      rocprofiler-sdk
-      aqlprofile
-      hip-clr
-      rocprofiler-register
-      ${_rocprofiler_sdk_optional_deps}
-      ${THEROCK_BUNDLED_ELFUTILS}
-      ${THEROCK_BUNDLED_LIBDRM}
-      ${THEROCK_BUNDLED_SQLITE3}
-    )
-    therock_cmake_subproject_glob_c_sources(rocprofiler-compute
-      SUBDIRS .
-    )
-
-    therock_cmake_subproject_activate(rocprofiler-compute)
-
-  ##############################################################################
   # roctracer
   # This is a very old, deprecated library with a number of quirks. Long term,
   # everything is supposed to migrate to rocprofiler-sdk, which has runtime
@@ -181,6 +76,99 @@ if(THEROCK_ENABLE_ROCPROFV3)
     SUBDIRS .
   )
   therock_cmake_subproject_activate(roctracer)
+  
+  ##############################################################################
+  # rocprofiler-sdk
+  ##############################################################################
+  # Detect available Default Python3 version on the system or
+  # use explicitly provided Python3 versions
+  therock_detect_python_versions(_detected_python_executables _detected_python_versions)
+
+  # Use detected versions or fall back to default if none found
+  if(NOT _detected_python_versions)
+    message(FATAL_ERROR "No Python versions detected for rocprofiler-sdk")
+    set(_detected_python_versions_str "")
+  else()
+    message(STATUS "Detected Python versions for rocprofiler-sdk python bindings: ${_detected_python_versions}")
+    message(STATUS "Python executables: ${_detected_python_executables}")
+    # Join all detected Python versions into a single string separated by semicolons.
+    # This is a workaround because therock_cmake_subproject_declare does not support passing lists directly.
+    list(JOIN _detected_python_versions "\;" _detected_python_versions_str)
+  endif()
+
+  therock_cmake_subproject_declare(rocprofiler-sdk
+    USE_DIST_AMDGPU_TARGETS
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-sdk"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-sdk"
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      -DHIP_PLATFORM=amd
+      -DROCPROFILER_BUILD_TESTS=ON
+      -DCMAKE_PREFIX_PATH="${THEROCK_BINARY_DIR}/dist/rocm"
+      -DROCM_PATH="${THEROCK_BINARY_DIR}/dist/rocm"
+      -DROCPROFILER_PYTHON_VERSIONS:STRING="${_detected_python_versions_str}"
+    CMAKE_INCLUDES
+      therock_explicit_finders.cmake
+    IGNORE_PACKAGES
+      rocprofiler-sdk
+      rocprofiler-sdk-roctx
+      rocprofiler-sdk-rocpd
+      rocprofiler-sdk-tests
+    RUNTIME_DEPS
+      aqlprofile
+      hip-clr
+      rocprofiler-register
+      roctracer
+      ${_rocprofiler_sdk_optional_deps}
+      ${THEROCK_BUNDLED_ELFUTILS}
+      ${THEROCK_BUNDLED_LIBDRM}
+      ${THEROCK_BUNDLED_SQLITE3}
+    INTERFACE_LINK_DIRS
+      lib
+      lib/rocm_sysdeps/lib
+    INTERFACE_INSTALL_RPATH_DIRS
+      lib
+      lib/rocm_sysdeps/lib
+  )
+  therock_cmake_subproject_glob_c_sources(rocprofiler-sdk
+    SUBDIRS .
+  )
+  therock_cmake_subproject_provide_package(rocprofiler-sdk rocprofiler-sdk lib/cmake/rocprofiler-sdk)
+  therock_cmake_subproject_provide_package(rocprofiler-sdk rocprofiler-sdk-roctx lib/cmake/rocprofiler-sdk-roctx)
+  therock_cmake_subproject_provide_package(rocprofiler-sdk rocprofiler-sdk-rocpd lib/cmake/rocprofiler-sdk-rocpd)
+  therock_cmake_subproject_provide_package(rocprofiler-sdk rocprofiler-sdk-tests lib/cmake/rocprofiler-sdk-tests)
+  therock_cmake_subproject_activate(rocprofiler-sdk)
+
+  ##############################################################################
+  # rocprofiler-compute
+  ##############################################################################
+  therock_cmake_subproject_declare(rocprofiler-compute
+    USE_DIST_AMDGPU_TARGETS
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-compute"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-compute"
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      -DHIP_PLATFORM=amd
+      -DCHECK_PYTHON_DEPS=OFF
+    CMAKE_INCLUDES
+      therock_explicit_finders.cmake
+    COMPILER_TOOLCHAIN
+      amd-hip
+    RUNTIME_DEPS
+      rocprofiler-sdk
+      aqlprofile
+      hip-clr
+      rocprofiler-register
+      ${_rocprofiler_sdk_optional_deps}
+      ${THEROCK_BUNDLED_ELFUTILS}
+      ${THEROCK_BUNDLED_LIBDRM}
+      ${THEROCK_BUNDLED_SQLITE3}
+    )
+    therock_cmake_subproject_glob_c_sources(rocprofiler-compute
+      SUBDIRS .
+    )
+
+    therock_cmake_subproject_activate(rocprofiler-compute)
 
   ##############################################################################
   # Artifacts
