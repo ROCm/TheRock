@@ -181,10 +181,11 @@ def test_manifest_generation_end_to_end(tmp_path: Path, gha_env):
     _run_main_with_args(m, argv)
 
     manifest_dir = out_dir / "manifests"
-    files = list(manifest_dir.glob("therock_manifest-*.json"))
-    assert len(files) == 1
+    file = [manifest_dir / "therock_torch_manifest.json"]
+    assert file[0].exists()
+    assert len(file) == 1
 
-    data = json.loads(files[0].read_text(encoding="utf-8"))
+    data = json.loads(file[0].read_text(encoding="utf-8"))
     assert data["project"] == "TheRock"
     assert data["component"] == "pytorch"
     assert data["artifact_group"] == "pytorch-wheels"
