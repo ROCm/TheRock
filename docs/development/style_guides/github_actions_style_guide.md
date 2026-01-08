@@ -1,7 +1,5 @@
 # GitHub Actions Style Guide
 
-## General recommendations
-
 ## Style guidelines
 
 ### Pin action `uses:` versions to commit SHAs

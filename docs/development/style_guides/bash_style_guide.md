@@ -1,6 +1,6 @@
 # Bash Style Guide
 
-## General recommendations
+## Core principles
 
 > [!WARNING]
 > Bash is **strongly discouraged** for nontrivial usage in .yml GitHub Actions

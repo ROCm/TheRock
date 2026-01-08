@@ -13,7 +13,7 @@
 - [GitHub Actions Style Guide](github_actions_style_guide.md)
 - [Python Style Guide](python_style_guide.md)
 
-## General principles
+## Core principles
 
 TheRock is the central build/test/release repository for dozens of ROCm
 subprojects and external builds. Tooling in this repository is shared across

@@ -18,27 +18,27 @@ Table of Contents
     - [Code organization](#code-organization)
     - [No duplicate code](#no-duplicate-code)
   - [Error handling and reliability](#error-handling-and-reliability)
-    - [Error handling and distinction](#error-handling-and-distinction)
-    - [Output validation](#output-validation)
+    - [Distinguish between different error conditions](#distinguish-between-different-error-conditions)
+    - [Validate that operations actually succeeded](#validate-that-operations-actually-succeeded)
+    - [Fail-fast behavior](#fail-fast-behavior)
     - [No timeouts on basic binutils](#no-timeouts-on-basic-binutils)
   - [Code quality and readability](#code-quality-and-readability)
     - [Use named arguments for complicated function signatures](#use-named-arguments-for-complicated-function-signatures)
     - [No magic numbers](#no-magic-numbers)
-  - [Performance](#performance)
-    - [Performance best practices](#performance-best-practices)
-- [Reference Material](#reference-material)
-  - [Code review checklist](#code-review-checklist)
+    - [Use dataclasses, not tuples](#use-dataclasses-not-tuples)
+  - [Performance best practices](#performance-best-practices)
   - [Testing standards](#testing-standards)
+- [Reference material](#reference-material)
+  - [Code review checklist](#code-review-checklist)
+  - [Common patterns](#common-patterns)
 
-## General recommendations
+## Core principles
 
 We generally follow the [PEP 8 style guide](https://peps.python.org/pep-0008/)
 using the [_Black_ formatter](https://github.com/psf/black) (run automatically
 as a [pre-commit hook](README.md#formatting-using-pre-commit-hooks)).
 
 The guidelines here extend PEP 8 for our projects.
-
-### Core principles
 
 - This guide reflects lessons learned from multiple production incidents
 - When in doubt, fail fast and loud
@@ -164,7 +164,7 @@ def parallel_prepare_kernels(
 
 ### Filesystem and path operations
 
-### Use `pathlib` for filesystem paths
+#### Use `pathlib` for filesystem paths
 
 Use [`pathlib.Path`](https://docs.python.org/3/library/pathlib.html) for
 path and filesystem operations. Avoid string manipulation and
@@ -213,7 +213,7 @@ if os.path.exists(os.path.join(base_dir, "build", "artifacts")):
     files = os.listdir(os.path.join(base_dir, "build", "artifacts"))
 ```
 
-### Don't make assumptions about the current working directory
+#### Don't make assumptions about the current working directory
 
 Scripts should be runnable from the repository root, their script subdirectory,
 and other locations. They should not assume any particular current working
@@ -253,7 +253,7 @@ config_file = Path("build_tools/config.json")
 data_file = Path("../data/artifacts.tar.gz")
 ```
 
-### No hard-coded project paths
+#### No hard-coded project paths
 
 **Never hard-code project-specific paths. Code should be portable.**
 
@@ -297,7 +297,7 @@ Key points:
 
 ### Script structure and organization
 
-### Use `__main__` guard
+#### Use `__main__` guard
 
 Use [`__main__`](https://docs.python.org/3/library/__main__.html) to limit what
 code runs when a file is imported. Typically, Python files should define
@@ -362,7 +362,7 @@ result = fetch_artifacts(args.run_id)
 print(f"Downloaded {len(result)} artifacts")
 ```
 
-### Use `argparse` for CLI flags
+#### Use `argparse` for CLI flags
 
 Use [`argparse`](https://docs.python.org/3/library/argparse.html) for
 command-line argument parsing with clear help text and type conversion.
@@ -425,7 +425,7 @@ run_id = sys.argv[1]  # String, not validated
 output_dir = sys.argv[2]
 ```
 
-### Import organization
+#### Import organization
 
 **Put all imports at the top of the file. Avoid inline imports except for rare special cases.**
 
@@ -563,11 +563,9 @@ else:
 
 ### Error handling and reliability
 
-### Code quality and readability
+#### Distinguish between different error conditions
 
-### Performance
-
-**Distinguish between different error conditions. Don't treat all errors the same.**
+**Don't treat all errors the same.**
 
 Benefits:
 
@@ -623,32 +621,9 @@ Key points:
 - Return False only for legitimate "not found" cases
 - Use `from e` to preserve exception chain
 
-### No timeouts on basic binutils
+#### Validate that operations actually succeeded
 
-**NEVER add timeouts to basic binutils operations (readelf, objcopy, etc.).**
-
-Benefits:
-
-- Prevents spurious failures on loaded systems
-- If a tool hangs, that's a bug to fix, not mask with timeouts
-- Build systems handle global timeouts more appropriately
-- Simpler code without arbitrary timeout values
-
-✅ **Preferred:**
-
-```python
-subprocess.check_output([readelf, "-S", file])
-```
-
-❌ **Avoid:**
-
-```python
-subprocess.check_output([readelf, "-S", file], timeout=10)
-```
-
-### Output Validation
-
-**Validate that operations actually succeeded. Don't assume.**
+**Don't just assume that operatinog succeeded, check that they did.**
 
 Benefits:
 
@@ -686,69 +661,77 @@ What to validate:
 - Processed files are smaller after stripping
 - Critical operations completed successfully
 
-### No Magic Numbers
+### Fail-fast behavior
 
-**Don't use unexplained magic numbers, especially for estimates.**
+**Always fail immediately on errors. Never silently continue or produce incomplete results.**
 
 Benefits:
 
-- Code is self-documenting
-- No false precision from made-up values
-- Easier to understand and maintain
-- Prevents misleading information
+- Catches problems early before they cascade
+- Makes debugging easier by failing at the source of the problem
+- Prevents incomplete or corrupted artifacts
+- Makes build failures explicit and actionable
 
 ✅ **Preferred:**
 
 ```python
-# Either track the real size or don't log it
-new_size = binary_path.stat().st_size
-print(f"Device code stripped, new size: {new_size} bytes")
+if not path.exists():
+    raise FileNotFoundError(
+        f"Path does not exist: {path}\n"
+        f"This indicates a corrupted or incomplete artifact"
+    )
+
+# Let exceptions propagate - if we can't process, we must fail
+process_file(path)
 ```
 
 ❌ **Avoid:**
 
 ```python
-original_size = binary_path.stat().st_size + 8000000  # Estimate original size
-print(f"Stripped {original_size - new_size} bytes")
+if not path.exists():
+    print(f"Warning: Path does not exist: {path}")
+    continue  # Silently produces incomplete output
+
+try:
+    process_file(path)
+except Exception as e:
+    print(f"Warning: {e}")
+    # Continues with incomplete data
 ```
 
-### Performance Best Practices
+Key points:
 
-**Optimize hot paths, but keep code readable.**
+- If data is missing, corrupted, or unreadable → raise an exception
+- Don't catch exceptions unless you can meaningfully handle them
+- "Warnings" that indicate data problems should be errors
+- Incomplete artifacts are worse than failed builds
+
+#### No timeouts on basic binutils
+
+**NEVER add timeouts to basic binutils operations (readelf, objcopy, etc.).**
 
 Benefits:
 
-- Faster builds and tests
-- Reduced resource consumption
-- Better user experience
-- Still maintainable code
+- Prevents spurious failures on loaded systems
+- If a tool hangs, that's a bug to fix, not mask with timeouts
+- Build systems handle global timeouts more appropriately
+- Simpler code without arbitrary timeout values
 
 ✅ **Preferred:**
 
 ```python
-# Compile once at module level
-_GFX_ARCH_PATTERN = re.compile(r"gfx(\d+[a-z]*)")
-
-
-def detect(self, path: Path) -> str | None:
-    match = _GFX_ARCH_PATTERN.search(path.name)
+subprocess.check_output([readelf, "-S", file])
 ```
 
 ❌ **Avoid:**
 
 ```python
-# Compiles regex on every call
-def detect(self, path: Path) -> str | None:
-    match = re.search(r"gfx(\d+[a-z]*)", path.name)
+subprocess.check_output([readelf, "-S", file], timeout=10)
 ```
 
-Other optimizations:
+### Code quality and readability
 
-- Check cheap conditions before expensive ones (e.g., magic bytes before subprocess)
-- Cache expensive computations when called repeatedly
-- Use generators for large datasets
-
-### Use named arguments for complicated function signatures
+#### Use named arguments for complicated function signatures
 
 Using positional arguments for functions that accept many arguments is error
 prone. Use keyword arguments to make function calls explicit and
@@ -805,147 +788,33 @@ result = build_artifacts(
 process_files(input_dir, output_dir, True, False, True)
 ```
 
-### Code Review Checklist
+#### No Magic Numbers
 
-Before submitting code, verify:
-
-- [ ] No silent error handling (fail-fast on all errors)
-- [ ] No `Any` type hints (use specific types)
-- [ ] Modern type syntax (`list[T]`, `T | None`, not `List[T]`, `Optional[T]`)
-- [ ] No `from __future__ import annotations`
-- [ ] Complex type signatures extracted to NamedTuple/dataclass
-- [ ] No magic numbers or fake estimates
-- [ ] Tuples only for simple pairs, dataclasses for structured data
-- [ ] All imports at top of file (except documented circular dependencies)
-- [ ] No timeouts on binutils operations
-- [ ] No hard-coded project paths (use system defaults or env vars)
-- [ ] Output validation after critical operations
-- [ ] No duplicate code
-- [ ] Specific exception handling (not broad `except Exception`)
-- [ ] Methods < 30 lines (or have a good reason)
-- [ ] Classes < 200 lines (or split into focused components)
-- [ ] Using `pathlib.Path` for filesystem operations
-- [ ] Scripts work from any directory (no CWD assumptions)
-- [ ] CLI scripts use `argparse`
-- [ ] All functions have type hints
-- [ ] Scripts have `__main__` guard
-- [ ] Complex function calls use named arguments
-
-### Testing Standards
-
-**Tests should verify fail-fast behavior:**
-
-```python
-def test_fails_on_missing_file(self, tmp_path):
-    """Test that processing fails fast on missing files."""
-    splitter = ArtifactSplitter(...)
-
-    non_existent = tmp_path / "non_existent"
-
-    # Should raise, not continue with incomplete data
-    with pytest.raises(FileNotFoundError, match="does not exist"):
-        splitter.split(non_existent, output_dir)
-```
-
-**Use real files in tests when possible:**
-
-- Prefer real temporary files over mocks for filesystem operations
-- Mock only external dependencies (network, expensive tools)
-- Integration tests should exercise the full path
-
-## Common patterns
-
-### Pattern: reading and validating a file
-
-```python
-def read_config(path: Path) -> ConfigData:
-    """Read and validate configuration file."""
-    if not path.exists():
-        raise FileNotFoundError(f"Config file not found: {path}")
-
-    try:
-        with open(path, "r") as f:
-            data = json.load(f)
-    except json.JSONDecodeError as e:
-        raise ValueError(f"Invalid JSON in {path}: {e}") from e
-    except OSError as e:
-        raise RuntimeError(f"Cannot read {path}: {e}") from e
-
-    # Validate required fields
-    if "version" not in data:
-        raise ValueError(f"Missing 'version' field in {path}")
-
-    return ConfigData(**data)
-```
-
-### Pattern: running subprocess with proper error handling
-
-```python
-def run_binutil(tool: Path, args: list[str], input_file: Path) -> str:
-    """Run a binutil tool with proper error handling."""
-    try:
-        result = subprocess.check_output(
-            [str(tool)] + args + [str(input_file)], stderr=subprocess.STDOUT, text=True
-        )
-        return result
-    except subprocess.CalledProcessError as e:
-        # Distinguish between different exit codes
-        if e.returncode == 1:
-            # Tool-specific handling for returncode 1
-            return ""
-        raise RuntimeError(
-            f"{tool.name} failed on {input_file} with code {e.returncode}: {e.output}"
-        ) from e
-    except FileNotFoundError as e:
-        raise RuntimeError(f"Tool not found: {tool}") from e
-```
-
-### Fail-fast behavior
-
-**Always fail immediately on errors. Never silently continue or produce incomplete results.**
+**Don't use unexplained magic numbers, especially for estimates.**
 
 Benefits:
 
-- Catches problems early before they cascade
-- Makes debugging easier by failing at the source of the problem
-- Prevents incomplete or corrupted artifacts
-- Makes build failures explicit and actionable
+- Code is self-documenting
+- No false precision from made-up values
+- Easier to understand and maintain
+- Prevents misleading information
 
 ✅ **Preferred:**
 
 ```python
-if not path.exists():
-    raise FileNotFoundError(
-        f"Path does not exist: {path}\n"
-        f"This indicates a corrupted or incomplete artifact"
-    )
-
-# Let exceptions propagate - if we can't process, we must fail
-process_file(path)
+# Either track the real size or don't log it
+new_size = binary_path.stat().st_size
+print(f"Device code stripped, new size: {new_size} bytes")
 ```
 
 ❌ **Avoid:**
 
 ```python
-if not path.exists():
-    print(f"Warning: Path does not exist: {path}")
-    continue  # Silently produces incomplete output
-
-try:
-    process_file(path)
-except Exception as e:
-    print(f"Warning: {e}")
-    # Continues with incomplete data
+original_size = binary_path.stat().st_size + 8000000  # Estimate original size
+print(f"Stripped {original_size - new_size} bytes")
 ```
 
-Key points:
-
-- If data is missing, corrupted, or unreadable → raise an exception
-- Don't catch exceptions unless you can meaningfully handle them
-- "Warnings" that indicate data problems should be errors
-- Incomplete artifacts are worse than failed builds
-
-### Use Dataclasses, not Tuples
+#### Use dataclasses, not tuples
 
 **For non-trivial data with multiple fields, use dataclasses instead of tuples.**
 
@@ -984,3 +853,136 @@ When tuples are OK:
 - Simple pairs where meaning is obvious: `(x, y)`, `(min, max)`
 - Unpacking from standard library functions: `os.path.split()`
 - Single-use internal return values that are immediately unpacked
+
+### Performance best practices
+
+**Optimize hot paths, but keep code readable.**
+
+Benefits:
+
+- Faster builds and tests
+- Reduced resource consumption
+- Better user experience
+- Still maintainable code
+
+✅ **Preferred:**
+
+```python
+# Compile once at module level
+_GFX_ARCH_PATTERN = re.compile(r"gfx(\d+[a-z]*)")
+
+
+def detect(self, path: Path) -> str | None:
+    match = _GFX_ARCH_PATTERN.search(path.name)
+```
+
+❌ **Avoid:**
+
+```python
+# Compiles regex on every call
+def detect(self, path: Path) -> str | None:
+    match = re.search(r"gfx(\d+[a-z]*)", path.name)
+```
+
+Other optimizations:
+
+- Check cheap conditions before expensive ones (e.g., magic bytes before subprocess)
+- Cache expensive computations when called repeatedly
+- Use generators for large datasets
+
+### Testing Standards
+
+**Tests should verify fail-fast behavior:**
+
+```python
+def test_fails_on_missing_file(self, tmp_path):
+    """Test that processing fails fast on missing files."""
+    splitter = ArtifactSplitter(...)
+
+    non_existent = tmp_path / "non_existent"
+
+    # Should raise, not continue with incomplete data
+    with pytest.raises(FileNotFoundError, match="does not exist"):
+        splitter.split(non_existent, output_dir)
+```
+
+**Use real files in tests when possible:**
+
+- Prefer real temporary files over mocks for filesystem operations
+- Mock only external dependencies (network, expensive tools)
+- Integration tests should exercise the full path
+
+## Reference material
+
+### Code review checklist
+
+Before submitting code, verify:
+
+- [ ] No silent error handling (fail-fast on all errors)
+- [ ] No `Any` type hints (use specific types)
+- [ ] Modern type syntax (`list[T]`, `T | None`, not `List[T]`, `Optional[T]`)
+- [ ] No `from __future__ import annotations`
+- [ ] Complex type signatures extracted to NamedTuple/dataclass
+- [ ] No magic numbers or fake estimates
+- [ ] Tuples only for simple pairs, dataclasses for structured data
+- [ ] All imports at top of file (except documented circular dependencies)
+- [ ] No timeouts on binutils operations
+- [ ] No hard-coded project paths (use system defaults or env vars)
+- [ ] Output validation after critical operations
+- [ ] No duplicate code
+- [ ] Specific exception handling (not broad `except Exception`)
+- [ ] Methods < 30 lines (or have a good reason)
+- [ ] Classes < 200 lines (or split into focused components)
+- [ ] Using `pathlib.Path` for filesystem operations
+- [ ] Scripts work from any directory (no CWD assumptions)
+- [ ] CLI scripts use `argparse`
+- [ ] All functions have type hints
+- [ ] Scripts have `__main__` guard
+- [ ] Complex function calls use named arguments
+
+### Common patterns
+
+#### Pattern: reading and validating a file
+
+```python
+def read_config(path: Path) -> ConfigData:
+    """Read and validate configuration file."""
+    if not path.exists():
+        raise FileNotFoundError(f"Config file not found: {path}")
+
+    try:
+        with open(path, "r") as f:
+            data = json.load(f)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Invalid JSON in {path}: {e}") from e
+    except OSError as e:
+        raise RuntimeError(f"Cannot read {path}: {e}") from e
+
+    # Validate required fields
+    if "version" not in data:
+        raise ValueError(f"Missing 'version' field in {path}")
+
+    return ConfigData(**data)
+```
+
+#### Pattern: running subprocess with proper error handling
+
+```python
+def run_binutil(tool: Path, args: list[str], input_file: Path) -> str:
+    """Run a binutil tool with proper error handling."""
+    try:
+        result = subprocess.check_output(
+            [str(tool)] + args + [str(input_file)], stderr=subprocess.STDOUT, text=True
+        )
+        return result
+    except subprocess.CalledProcessError as e:
+        # Distinguish between different exit codes
+        if e.returncode == 1:
+            # Tool-specific handling for returncode 1
+            return ""
+        raise RuntimeError(
+            f"{tool.name} failed on {input_file} with code {e.returncode}: {e.output}"
+        ) from e
+    except FileNotFoundError as e:
+        raise RuntimeError(f"Tool not found: {tool}") from e
+```
