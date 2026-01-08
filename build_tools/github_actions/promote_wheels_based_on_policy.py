@@ -21,10 +21,13 @@ def determine_upload_flag(
 ):
     # Default to false
     upload = "false"
-    # 0) If on a release branch, always upload
+    # 0) If on a release branch, always upload, as
+    #    - Release branch has already been tested
+    #    - Flaky tests can prevent promotion, as such ignore test results
+    #    - Will insure that QA/engineers have a single point of truth to get the packages, which isnt staging
     if branch.startswith("release/therock-"):
         print(
-            "::notice::On release branch: {branch}. Forcing upload independent of test results."
+            f"::notice::On release branch: {branch}. Forcing upload independent of test results."
         )
         upload = "true"
     # 1) If the build failed → upload=false

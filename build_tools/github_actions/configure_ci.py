@@ -360,6 +360,22 @@ def generate_multi_arch_matrix(
     return matrix_output
 
 
+def determine_long_lived_branch(branch_name: str) -> bool:
+    # For long-lived branches (main, releases) we want to run both presubmit and postsubmit jobs on push,
+    # instead of just presubmit jobs (as for other branches)
+    # (have this in a separate function here for testing reasons)
+    is_long_lived_branch = False
+    # Let's differentiate between full/complete matches and prefix matches for long-lived branches
+    long_lived_full_match = ["main"]
+    long_lived_prefix_match = ["release/therock-"]
+    if branch_name in long_lived_full_match or any(
+        branch_name.startswith(prefix) for prefix in long_lived_prefix_match
+    ):
+        is_long_lived_branch = True
+
+    return is_long_lived_branch
+
+
 def matrix_generator(
     is_pull_request=False,
     is_workflow_dispatch=False,
@@ -382,15 +398,11 @@ def matrix_generator(
 
     # For long-lived branches (main, releases) we want to run both presubmit and postsubmit jobs on push,
     # instead of just presubmit jobs (as for other branches)
-    is_long_lived_branch = False
-    # Let's differentiate between full/complete matches and prefix matches for long-lived branches
-    long_lived_full_match = ["main"]
-    long_lived_prefix_match = ["release/therock-"]
-    if base_args.get("branch_name") in long_lived_full_match or any(
-        base_args.get("branch_name", "").startswith(prefix)
-        for prefix in long_lived_prefix_match
-    ):
-        is_long_lived_branch = True
+    is_long_lived_branch = determine_long_lived_branch(base_args.get("branch_name", ""))
+
+    print(
+        f"* {base_args.get("branch_name")} is considered a long-lived branch: {is_long_lived_branch}"
+    )
 
     # Determine which trigger types are active for proper matrix lookup
     active_trigger_types = []
@@ -728,11 +740,14 @@ if __name__ == "__main__":
         "INPUT_WINDOWS_AMDGPU_FAMILIES", ""
     )
 
-    # For now, add default run for gfx94X-linux
     base_args["pr_labels"] = os.environ.get("PR_LABELS", '{"labels": []}')
-    branch = os.environ.get("GITHUB_REF_NAME", "")
-    if branch == "":
-        print("[WARNING] GITHUB_REF_NAME is not set!", file=sys.stderr)
+    base_args["branch_name"] = os.environ.get("GITHUB_REF_NAME", "")
+    if base_args["branch_name"] == "":
+        print(
+            "[ERROR] GITHUB_REF_NAME is not set! No branch name detected. Exiting.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
     base_args["github_event_name"] = os.environ.get("GITHUB_EVENT_NAME", "")
     base_args["base_ref"] = os.environ.get("BASE_REF", "HEAD^1")
     base_args["linux_use_prebuilt_artifacts"] = (
