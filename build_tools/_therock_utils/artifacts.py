@@ -255,6 +255,32 @@ class ArtifactPopulator:
                                     dest_path.mkdir(parents=True, exist_ok=True)
                                 elif member.issym():
                                     dest_path.symlink_to(member.linkname)
+                                elif member.islnk():
+                                    # Hardlink: find the target file's destination path
+                                    link_target = member.linkname
+                                    for target_prefix in relpaths:
+                                        target_prefix_slash = target_prefix + "/"
+                                        if link_target.startswith(target_prefix_slash):
+                                            target_scoped_path = link_target[
+                                                len(target_prefix_slash) :
+                                            ]
+                                            if self.flatten:
+                                                target_dest_path = (
+                                                    self.output_path
+                                                    / PurePosixPath(target_scoped_path)
+                                                )
+                                            else:
+                                                target_dest_path = (
+                                                    self.output_path
+                                                    / target_prefix
+                                                    / PurePosixPath(target_scoped_path)
+                                                )
+                                            os.link(target_dest_path, dest_path)
+                                            break
+                                    else:
+                                        raise IOError(
+                                            f"Hardlink target not in manifest: {member} -> {link_target}"
+                                        )
                                 else:
                                     raise IOError(f"Unhandled tar member: {member}")
                                 break
