@@ -12,6 +12,7 @@ from pathlib import Path
 
 from github_actions_utils import *
 from benchmarks.benchmark_test_matrix import benchmark_matrix
+from amdgpu_family_matrix import get_all_families_for_trigger_types
 
 logging.basicConfig(level=logging.INFO)
 
@@ -183,11 +184,12 @@ test_matrix = {
     "rccl": {
         "job_name": "rccl",
         "fetch_artifact_args": "--rccl --tests",
-        "timeout_minutes": 300,
+        "timeout_minutes": 15,
         "test_script": f"pytest {_get_script_path('test_rccl.py')} -v -s --log-cli-level=info",
-        # TODO(#2616): Enable tests once known machine issues are resolved
-        "platform": [],
+        "platform": ["linux"],
         "total_shards": 1,
+        # Architectures that we have multi GPU setup for testing
+        "multi_gpu": ["gfx94X-dcgpu"],
     },
     # hipDNN tests
     "hipdnn": {
@@ -273,6 +275,29 @@ def run():
         if test_labels and key not in test_labels:
             logging.info(f"Excluding job {job_name} since it's not in the test labels")
             continue
+
+        # If the test requires multi GPU testing, we use a multi-GPU test runner for this specific test
+        # Inside the "multi_gpu" field, we have a mapping of amdgpu_family -> bool (if multi GPU testing is enabled for that family)
+        # If the multi GPU test runner is not enabled, we will skip the test
+        if "multi_gpu" in selected_matrix[key]:
+            amdgpu_families_matrix = get_all_families_for_trigger_types(
+                ["presubmit", "postsubmit", "nightly"]
+            )
+            if amdgpu_families in selected_matrix[key]["multi_gpu"]:
+                # If the architecture is available for multi GPU testing, we indicate that this specific test requires the multi GPU test runner
+                multi_gpu_runner = amdgpu_families_matrix[amdgpu_families][
+                    "test-runs-on-multi-gpu"
+                ]
+                logging.info(
+                    f"Including job {job_name} since multi GPU testing is available for family {amdgpu_families} with runner {multi_gpu_runner}"
+                )
+                job_config_data["multi_gpu_runner"] = multi_gpu_runner
+            else:
+                # If the architecture is not available for multi GPU testing, we skip the test requiring multi GPU
+                logging.info(
+                    f"Excluding job {job_name} since multi GPU testing is not available for family {amdgpu_families}"
+                )
+                continue
 
         # If the test is enabled for a particular platform and a particular (or all) projects are selected
         if platform in selected_matrix[key]["platform"] and (
