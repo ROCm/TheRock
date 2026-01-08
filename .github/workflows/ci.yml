@@ -69,8 +69,9 @@ concurrency:
   # A PR number if a pull request and otherwise the commit hash. This cancels
   # queued and in-progress runs for the same PR (presubmit) or commit
   # (postsubmit). The workflow name is prepended to avoid conflicts between
-  # different workflows.
-  group: ${{ github.workflow }}-${{ github.event.number || github.sha }}
+  # different workflows. Repository name is included to prevent conflicts when
+  # external repos (rocm-libraries, rocm-systems) call this workflow.
+  group: ${{ github.workflow }}-${{ github.repository }}-${{ github.event.number || github.sha }}
   cancel-in-progress: true
 
 jobs:

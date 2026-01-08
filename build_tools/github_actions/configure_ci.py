@@ -621,13 +621,13 @@ def main(base_args, linux_families, windows_families):
     # Check if we have external project configs (from detect_external_projects.py)
     external_project_configs = base_args.get("external_project_configs")
 
+    # For external repos, we cross-product: projects × GPU families
+    # The matrix will have entries like:
+    # {project_to_test, cmake_options, amdgpu_family, test_runs_on, ...}
     if external_project_configs:
         print(
             f"Using external project configurations: {len(external_project_configs)} project(s)"
         )
-        # For external repos, we cross-product: projects × GPU families
-        # The matrix will have entries like:
-        # {project_to_test, cmake_options, amdgpu_family, test_runs_on, ...}
 
     # Generate GPU family variants first
     multi_arch = base_args.get("multi_arch", False)

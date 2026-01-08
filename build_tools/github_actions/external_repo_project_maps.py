@@ -65,12 +65,16 @@ ROCM_LIBRARIES_PROJECT_MAP = {
             "-DTHEROCK_ENABLE_MIOPEN_PLUGIN=ON",
         ],
         "additional_flags": {
-            # As composable_kernel is not enabled for Windows, we only enable these flags during Linux builds
             "linux": [
                 "-DTHEROCK_ENABLE_COMPOSABLE_KERNEL=ON",
                 "-DTHEROCK_USE_EXTERNAL_COMPOSABLE_KERNEL=ON",
                 "-DTHEROCK_COMPOSABLE_KERNEL_SOURCE_DIR=../composable_kernel",
-            ]
+            ],
+            "windows": [
+                "-DTHEROCK_ENABLE_COMPOSABLE_KERNEL=ON",
+                "-DTHEROCK_USE_EXTERNAL_COMPOSABLE_KERNEL=ON",
+                "-DTHEROCK_COMPOSABLE_KERNEL_SOURCE_DIR=../composable_kernel",
+            ],
         },
         "project_to_test": ["miopen", "miopen_plugin"],
     },
@@ -81,12 +85,16 @@ ROCM_LIBRARIES_PROJECT_MAP = {
     "hipdnn": {  # due to MIOpen plugin project being inside the hipDNN directory
         "cmake_options": ["-DTHEROCK_ENABLE_MIOPEN_PLUGIN=ON"],
         "additional_flags": {
-            # As composable_kernel is not enabled for Windows, we only enable these flags during Linux builds
             "linux": [
                 "-DTHEROCK_ENABLE_COMPOSABLE_KERNEL=ON",
                 "-DTHEROCK_USE_EXTERNAL_COMPOSABLE_KERNEL=ON",
                 "-DTHEROCK_COMPOSABLE_KERNEL_SOURCE_DIR=../composable_kernel",
-            ]
+            ],
+            "windows": [
+                "-DTHEROCK_ENABLE_COMPOSABLE_KERNEL=ON",
+                "-DTHEROCK_USE_EXTERNAL_COMPOSABLE_KERNEL=ON",
+                "-DTHEROCK_COMPOSABLE_KERNEL_SOURCE_DIR=../composable_kernel",
+            ],
         },
         "project_to_test": ["hipdnn", "miopen_plugin"],
     },
@@ -150,23 +158,21 @@ ROCM_SYSTEMS_PROJECT_MAP = {
         "cmake_options": [
             "-DTHEROCK_ENABLE_CORE=ON",
             "-DTHEROCK_ENABLE_HIP_RUNTIME=ON",
-            "-DTHEROCK_ENABLE_ALL=OFF",
         ],
         "project_to_test": ["hip-tests"],
     },
     "profiler": {
-        "cmake_options": ["-DTHEROCK_ENABLE_PROFILER=ON", "-DTHEROCK_ENABLE_ALL=OFF"],
+        "cmake_options": ["-DTHEROCK_ENABLE_PROFILER=ON"],
         "project_to_test": ["rocprofiler-tests"],
     },
     "rdc": {
-        "cmake_options": ["-DTHEROCK_ENABLE_RDC=ON", "-DTHEROCK_ENABLE_ALL=OFF"],
+        "cmake_options": ["-DTHEROCK_ENABLE_RDC=ON"],
         "project_to_test": ["rdc-tests"],
     },
     "all": {
         "cmake_options": [
             "-DTHEROCK_ENABLE_CORE=ON",
             "-DTHEROCK_ENABLE_PROFILER=ON",
-            "-DTHEROCK_ENABLE_ALL=OFF",
         ],
         "project_to_test": ["hip-tests", "rocprofiler-tests"],
     },

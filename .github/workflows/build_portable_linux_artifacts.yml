@@ -80,6 +80,7 @@ jobs:
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       TEATIME_FORCE_INTERACTIVE: 0
       IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
+      THEROCK_DIR: ${{ inputs.external_source_checkout && 'TheRock' || '.' }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
@@ -90,47 +91,17 @@ jobs:
           git config --global --add safe.directory $PWD
           git config fetch.parallel 10
 
-      - name: Set TheRock directory
-        id: therock_dir
-        run: |
-          if [[ "${{ inputs.external_source_checkout }}" == "true" ]]; then
-            echo "THEROCK_DIR=TheRock" >> $GITHUB_ENV
-          else
-            echo "THEROCK_DIR=." >> $GITHUB_ENV
-          fi
-
-      - name: Auto-detect external source configuration
-        if: ${{ inputs.external_source_checkout }}
-        id: detect
-        run: |
-          REPO="${{ github.repository }}"
-          echo "Detecting configuration for repo: $REPO"
-
-          if [[ "$REPO" == *"rocm-libraries"* ]]; then
-            echo "cmake_source_var=THEROCK_ROCM_LIBRARIES_SOURCE_DIR" >> $GITHUB_OUTPUT
-            echo "patches_dir=rocm-libraries" >> $GITHUB_OUTPUT
-            echo "fetch_exclusion=--no-include-rocm-libraries" >> $GITHUB_OUTPUT
-            echo "enable_dvc=true" >> $GITHUB_OUTPUT
-            echo "enable_ck=true" >> $GITHUB_OUTPUT
-            echo "Configured for rocm-libraries"
-          elif [[ "$REPO" == *"rocm-systems"* ]]; then
-            echo "cmake_source_var=THEROCK_ROCM_SYSTEMS_SOURCE_DIR" >> $GITHUB_OUTPUT
-            echo "patches_dir=rocm-systems" >> $GITHUB_OUTPUT
-            echo "fetch_exclusion=--no-include-rocm-systems" >> $GITHUB_OUTPUT
-            echo "enable_dvc=false" >> $GITHUB_OUTPUT
-            echo "enable_ck=false" >> $GITHUB_OUTPUT
-            echo "Configured for rocm-systems"
-          else
-            echo "ERROR: Unknown external repository: $REPO"
-            exit 1
-          fi
-
       - name: Checkout TheRock repository
         if: ${{ inputs.external_source_checkout }}
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
           repository: "ROCm/TheRock"
           path: TheRock
+
+      - name: Auto-detect external source configuration
+        if: ${{ inputs.external_source_checkout }}
+        id: detect
+        run: python3 $THEROCK_DIR/build_tools/github_actions/detect_external_repo_config.py "${{ github.repository }}" --workspace "${{ github.workspace }}"
 
       - name: Checkout composable_kernel repository
         if: ${{ inputs.external_source_checkout && steps.detect.outputs.enable_ck == 'true' }}
@@ -192,8 +163,7 @@ jobs:
           amdgpu_families: ${{ inputs.amdgpu_families }}
           package_version: ${{ inputs.package_version }}
           extra_cmake_options: >-
-            ${{ inputs.external_source_checkout &&
-                format('-D{0}={1}', steps.detect.outputs.cmake_source_var, github.workspace) || '' }}
+            ${{ inputs.external_source_checkout && steps.detect.outputs.extra_cmake_options || '' }}
             ${{ inputs.extra_cmake_options }}
           BUILD_DIR: build
         run: |
