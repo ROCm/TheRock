@@ -623,7 +623,7 @@ Key points:
 
 #### Validate that operations actually succeeded
 
-**Don't just assume that operatinog succeeded, check that they did.**
+**Don't just assume that an operation succeeded, check that it did.**
 
 Benefits:
 
