@@ -7,7 +7,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     SOURCE_DIR "${_source_dir}"
     # Originally mirrored from: https://github.com/dyninst/dyninst/archive/refs/tags/v13.0.0.tar.gz
     URL https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/dyninst-13.0.0.tar.gz
-    URL_HASH SHA256=1bc48d26478b677a6c090c25586a447507bd1b4cf88d369bd61820005ce1be39
+    URL_HASH "SHA512=49e98debe661a0c7be7c4ab2ad4e140d95ed82a01d17e672f2173d8c6763761797985e67c97f0663647745277f10110e538ea558b1518cd04789d77eb6cf4174"
     TOUCH "${_download_stamp}"
   )
 
@@ -60,12 +60,12 @@ add_custom_target(
     "${CMAKE_COMMAND}" -E rm -rf -- "${CMAKE_INSTALL_PREFIX}" "${CMAKE_CURRENT_BINARY_DIR}/s"
   COMMAND
     # We have to patch the sources so make a fresh copy.
-    "${CMAKE_COMMAND}" -E copy_directory "${SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/s"
+    "${CMAKE_COMMAND}" -E copy_directory "${CMAKE_CURRENT_BINARY_DIR}/source" "${CMAKE_CURRENT_BINARY_DIR}/s"
   COMMAND
     "${CMAKE_COMMAND}" -E env
       "LDFLAGS=-Wl,-rpath='$$ORIGIN' -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
       --
-    "${CMAKE_CURRENT_BINARY_DIR}/s/configure"
+    "${CMAKE_CURRENT_BINARY_DIR}/s"
       --prefix "${CMAKE_INSTALL_PREFIX}"
       --libdir="${CMAKE_INSTALL_PREFIX}/lib"
       --includedir="${CMAKE_INSTALL_PREFIX}/include"
