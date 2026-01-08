@@ -178,9 +178,10 @@ if(THEROCK_ENABLE_ROCGDB)
   #
   # The AMD source-level debugger for Linux, based on the GNU Debugger (GDB).
   ##############################################################################
-
-  # Define the Python versions we want to build against.
-  set(rocgdb_python_versions "3.9" "3.10" "3.11" "3.12" "3.13" "3.14")
+  therock_detect_shared_python_executables(_rocgdb_python_executables)
+  if(NOT _rocgdb_python_executables)
+    message(WARNING "No Python with shared libpython found. rocgdb will be built without Python support.")
+  endif()
 
   therock_cmake_subproject_declare(rocgdb
     USE_DIST_AMDGPU_TARGETS
@@ -188,9 +189,9 @@ if(THEROCK_ENABLE_ROCGDB)
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocgdb"
     CMAKE_ARGS
       "-DPATCHELF=${PATCHELF}"
-      "-DPYTHON_VERSIONS='${rocgdb_python_versions}'"
       "-DBUILD_TESTING=${BUILD_TESTING}"
       "-DROCM_VERSION=${ROCM_MAJOR_VERSION}.${ROCM_MINOR_VERSION}.${ROCM_PATCH_VERSION}"
+      "-DSHARED_PYTHON_EXECUTABLES=${_rocgdb_python_executables}"
     COMPILER_TOOLCHAIN
       amd-llvm
     RUNTIME_DEPS
@@ -244,17 +245,5 @@ if(THEROCK_ENABLE_ROCGDB)
       therock-zlib
       therock-zstd
       rocgdb
-  )
-
-  # We don't want to keep the cmake wrapper in the ROCgdb repo itself, so we
-  # resort to keeping the wrapper in TheRock and copying it to rocgdb's source
-  # directory just before a build. That way rocgdb is kept with a clean
-  # autotools-based build system.
-  message(STATUS "Copying ROCgdb's cmake wrapper to the source directory")
-  execute_process(
-      COMMAND ${CMAKE_COMMAND} -E copy ${DEBUG_TOOLS_DIR}/rocgdb.cmake ${DEBUG_TOOLS_DIR}/rocgdb/CMakeLists.txt
-      OUTPUT_VARIABLE _output
-      ERROR_VARIABLE _error
-      RESULT_VARIABLE _result
   )
 endif()
