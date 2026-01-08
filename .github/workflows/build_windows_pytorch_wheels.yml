@@ -217,6 +217,7 @@ jobs:
             --pytorch-dir ${{ env.CHECKOUT_ROOT }}/torch ^
             --pytorch-audio-dir ${{ env.CHECKOUT_ROOT }}/audio ^
             --pytorch-vision-dir ${{ env.CHECKOUT_ROOT }}/vision ^
+            --pytorch-git-ref ${{ inputs.pytorch_git_ref }} ^
             --enable-pytorch-flash-attention-windows ^
             --clean ^
             --output-dir ${{ env.PACKAGE_DIST_DIR }} ^
@@ -249,14 +250,14 @@ jobs:
         if: ${{ github.repository_owner == 'ROCm' }}
         shell: cmd
         run: |
-          set "REF=${{ inputs.pytorch_git_ref }}"
-          set "TRACK=%REF:/=-%"
           set "PY=${{ inputs.python_version }}"
           if "%PY:~0,2%"=="py" set "PY=%PY:~2%"
-          set "MANIFEST_NAME=therock-manifest_torch_py%PY%_%TRACK%.json"
+          set "MANIFEST_NAME=therock-manifest_torch_py%PY%_${{ inputs.pytorch_git_ref }}.json"
+          set "MANIFEST_NAME=%MANIFEST_NAME:/=-%"
           aws s3 cp ^
             "${{ env.PACKAGE_DIST_DIR }}\manifests\%MANIFEST_NAME%" ^
             "s3://${{ env.S3_BUCKET_ARTIFACTS }}/${{ github.run_id }}-windows/manifests/${{ inputs.amdgpu_family }}/%MANIFEST_NAME%"
+
 
       - name: (Re-)Generate Python package release index for staging
         if: ${{ github.repository_owner == 'ROCm' }}

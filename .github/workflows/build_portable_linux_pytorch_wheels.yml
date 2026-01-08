@@ -192,6 +192,7 @@ jobs:
             --install-rocm \
             --pip-cache-dir /tmp/pipcache \
             --index-url "${{ inputs.cloudfront_url }}/${{ inputs.amdgpu_family }}/" \
+            --pytorch-git-ref "${{ inputs.pytorch_git_ref }}" \
             --clean \
             --output-dir ${{ env.PACKAGE_DIST_DIR }} ${{ env.optional_build_prod_arguments }}
           python ./build_tools/github_actions/write_torch_versions.py --dist-dir ${{ env.PACKAGE_DIST_DIR }}
@@ -216,9 +217,8 @@ jobs:
       - name: Upload PyTorch manifest to S3 artifacts
         if: ${{ github.repository_owner == 'ROCm' }}
         run: |
-          REF="${{ inputs.pytorch_git_ref }}"
-          TRACK="${REF//\//-}"
           PY="${{ inputs.python_version }}"; PY="${PY#py}"
+          TRACK="${{ inputs.pytorch_git_ref }}"; TRACK="${TRACK//\//-}"
           MANIFEST_NAME="therock-manifest_torch_py${PY}_${TRACK}.json"
           aws s3 cp \
             "${{ env.PACKAGE_DIST_DIR }}/manifests/${MANIFEST_NAME}" \
