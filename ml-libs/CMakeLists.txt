@@ -7,7 +7,7 @@ endif()
 
 # limit use of composable kernel to the GPU families it is valid for
 if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
-  set(_ck_supported_gfx_targets gfx908 gfx90a gfx942 gfx950 gfx1150 gfx1151 gfx1200 gfx1201)
+  set(_ck_supported_gfx_targets gfx908 gfx90a gfx942 gfx950 gfx1100 gfx1101 gfx1102 gfx1150 gfx1151 gfx1152 gfx1153 gfx1200 gfx1201)
   foreach(_gfx_target ${THEROCK_AMDGPU_TARGETS})
     if(NOT ${_gfx_target} IN_LIST _ck_supported_gfx_targets)
       message(WARNING

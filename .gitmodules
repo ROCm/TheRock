@@ -25,7 +25,7 @@
 [submodule "composable_kernel"]
 	path = ml-libs/composable_kernel
 	url = https://github.com/ROCm/composable_kernel.git
-	branch = develop
+	branch = barkocot/win-wmma-issue
 [submodule "rocprof-trace-decoder"]
 	path = profiler/rocprof-trace-decoder/binaries
 	url = https://github.com/ROCm/rocprof-trace-decoder.git
