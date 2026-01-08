@@ -189,7 +189,7 @@ test_matrix = {
         "platform": ["linux"],
         "total_shards": 1,
         # Architectures that we have multi GPU setup for testing
-        "multi_gpu": ["gfx94X-dcgpu"],
+        "multi_gpu": {"linux": ["gfx94x"]},
     },
     # hipDNN tests
     "hipdnn": {
@@ -283,7 +283,10 @@ def run():
             amdgpu_families_matrix = get_all_families_for_trigger_types(
                 ["presubmit", "postsubmit", "nightly"]
             )
-            if amdgpu_families in selected_matrix[key]["multi_gpu"]:
+            if (
+                platform in selected_matrix[key]["multi_gpu"]
+                and amdgpu_families in selected_matrix[key]["multi_gpu"][platform]
+            ):
                 # If the architecture is available for multi GPU testing, we indicate that this specific test requires the multi GPU test runner
                 multi_gpu_runner = amdgpu_families_matrix[amdgpu_families][
                     "test-runs-on-multi-gpu"
