@@ -61,7 +61,7 @@
 	url = https://github.com/ROCm/ROCdbgapi.git
 	branch = amd-staging
 [submodule "rocgdb"]
-	path = debug-tools/rocgdb
+	path = debug-tools/rocgdb/source
 	url = https://github.com/ROCm/rocgdb.git
 	branch = amd-staging
 [submodule "rocr-debug-agent"]
