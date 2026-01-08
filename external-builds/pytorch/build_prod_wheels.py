@@ -30,6 +30,7 @@ python pytorch_torch_repo.py checkout
 python pytorch_audio_repo.py checkout
 python pytorch_vision_repo.py checkout
 python pytorch_triton_repo.py checkout
+python pytorch_torchcodec_repo.py checkout
 
 # On Windows, using shorter paths to avoid compile command length limits:
 python pytorch_torch_repo.py checkout --checkout-dir C:/b/pytorch
@@ -120,6 +121,7 @@ import subprocess
 import sys
 import tempfile
 import textwrap
+import sysconfig
 
 script_dir = Path(__file__).resolve().parent
 
@@ -352,6 +354,7 @@ def do_build(args: argparse.Namespace):
     pytorch_dir: Path | None = args.pytorch_dir
     pytorch_audio_dir: Path | None = args.pytorch_audio_dir
     pytorch_vision_dir: Path | None = args.pytorch_vision_dir
+    pytorch_torchcodec_dir: Path | None = args.pytorch_torchcodec_dir
 
     rocm_sdk_version = get_rocm_sdk_version()
     cmake_prefix = get_rocm_path("cmake")
@@ -507,6 +510,16 @@ def do_build(args: argparse.Namespace):
         do_build_pytorch_vision(args, pytorch_vision_dir, dict(env))
     else:
         print("--- Not build pytorch-vision (no --pytorch-vision-dir)")
+    # Build pytorch torchcodec
+    if args.build_pytorch_torchcodec or (
+        args.build_pytorch_torchcodec is None and pytorch_torchcodec_dir
+    ):
+        assert (
+            pytorch_torchcodec_dir
+        ), "Must specify --pytorch-torchcodec-dir if --build-pytorch-torchcodec"
+        do_build_pytorch_torchcodec(args, pytorch_torchcodec_dir, dict(env))
+    else:
+        print("--- Not build pytorch-torchcodec (no --pytorch-torchcodec-dir)")
 
     print("--- Builds all completed")
 
@@ -931,6 +944,103 @@ def do_build_pytorch_vision(
     copy_to_output(args, built_wheel)
 
 
+def get_python_home_dir():
+    """
+    Returns the home directory for current Python executable.
+    """
+    # sys.executable provides the absolute path to the Python interpreter binary.
+    executable_path = sys.executable
+    # os.path.dirname gets the directory part of the path.
+    res = Path(executable_path)
+    ret = str(res.parent.parent.absolute())
+    return ret
+
+
+def do_build_pytorch_torchcodec(
+    args: argparse.Namespace, pytorch_torchcodec_dir: Path, env: dict[str, str]
+):
+    print("do_build_pytorch_torchcodec")
+    # Compute version.
+    build_version = (pytorch_torchcodec_dir / "version.txt").read_text().strip()
+    print(f"  pytorch torchcodec BUILD_VERSION: {build_version}")
+    version_major_int = 0
+    version_minor_int = 0
+    try:
+        version_str_arr = build_version.split(".")
+        version_major_int = int(version_str_arr[0])
+        version_minor_int = int(version_str_arr[1])
+    except ValueError:
+        print("Error, Skipping pytorch torchcodec build")
+        print(
+            f"Could not convert version string major and minor to int. Check the format of '{version_string}'."
+        )
+        return
+    if version_major_int == 0 and version_minor_int < 9:
+        print("Skipping pytorch torchcodec build")
+        print(f"Detected torchcodec version: {version_major_int}.{version_minor_int}")
+        print("Build is supported only for torchcodec version 0.9 and never")
+        return
+    # add version.suffix only once, not on each build run to avoid having it there multiple times
+    if args.version_suffix not in build_version:
+        build_version += args.version_suffix
+    env["BUILD_VERSION"] = build_version
+    env["VERSION_NAME"] = build_version
+    env["BUILD_NUMBER"] = args.pytorch_build_number
+
+    python_home_dir = get_python_home_dir()
+    # python env executed in ci build is intepreter version only version in /opt/python/cp3xy-cp3xy dir
+    # environment which contains also the libpython development files is under dir /opt/python-shared/cp3xy-cp3xy dir
+    # and we need to force the torchcodec to find it with find_package("python" command
+    if "/opt/python/cp" in python_home_dir:
+        python_home_dir = python_home_dir.replace(
+            "/opt/python/cp", "/opt/python-shared/cp", 1
+        )
+    env.update(
+        {
+            "ENABLE_CUDA": "0",
+            "TORCHCODEC_DISABLE_COMPILE_WARNING_AS_ERROR": "1",
+            "BUILD_AGAINST_ALL_FFMPEG_FROM_S3": "1",
+            "Python3_ROOT_DIR": python_home_dir,
+        }
+    )
+    print("do_build_pytorch_torchcodec")
+    print(f"    BUILD_VERSION: {env['BUILD_VERSION']}")
+    print(f"    BUILD_NUMBER:  {env['BUILD_NUMBER']}")
+    print(f"    Python3_ROOT_DIR: {env['Python3_ROOT_DIR']}")
+
+    remove_dir_if_exists(pytorch_torchcodec_dir / "dist")
+    if args.clean:
+        remove_dir_if_exists(pytorch_torchcodec_dir / "build")
+
+    # verify that installed setuptools > 80.0 (80.9.0 tested)
+    exec(
+        [sys.executable, "-m", "pip", "install", "setuptools>80.0"],
+        cwd=pytorch_torchcodec_dir,
+        env=env,
+    )
+    # pybind11
+    exec(
+        [sys.executable, "-m", "pip", "install", "pybind11"],
+        cwd=pytorch_torchcodec_dir,
+        env=env,
+    )
+    # cmake support for pybind11
+    exec(
+        [sys.executable, "-m", "pip", "install", "pybind11[global]"],
+        cwd=pytorch_torchcodec_dir,
+        env=env,
+    )
+    # torchcodec build
+    exec(
+        [sys.executable, "-m", "build", "--wheel", "-vvv", "--no-isolation"],
+        cwd=pytorch_torchcodec_dir,
+        env=env,
+    )
+    built_wheel = find_built_wheel(pytorch_torchcodec_dir / "dist", "torchcodec")
+    print(f"Found built wheel: {built_wheel}")
+    copy_to_output(args, built_wheel)
+
+
 def main(argv: list[str]):
     p = argparse.ArgumentParser(prog="build_prod_wheels.py")
 
@@ -997,6 +1107,12 @@ def main(argv: list[str]):
         help="pytorch_vision source directory",
     )
     build_p.add_argument(
+        "--pytorch-torchcodec-dir",
+        default=directory_if_exists(script_dir / "pytorch_torchcodec"),
+        type=Path,
+        help="pytorch_torchcodec source directory",
+    )
+    build_p.add_argument(
         "--triton-dir",
         default=directory_if_exists(script_dir / "triton"),
         type=Path,
@@ -1026,6 +1142,12 @@ def main(argv: list[str]):
         action=argparse.BooleanOptionalAction,
         default=None,
         help="Enable building of torch vision (requires --pytorch-vision-dir)",
+    )
+    build_p.add_argument(
+        "--build-pytorch-torchcodec",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Enable building of torchcodec (requires --pytorch-torchcodec-dir)",
     )
     build_p.add_argument(
         "--enable-pytorch-flash-attention-windows",
