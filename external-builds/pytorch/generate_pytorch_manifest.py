@@ -278,12 +278,7 @@ def main() -> None:
         "sources": sources,
         "artifacts": artifacts,
     }
-
-    run_id_for_name = run_id or "local"
-    filename = (
-        f"therock_manifest-{args.artifact_group}-{platform_id}-{run_id_for_name}.json"
-    )
-    out_path = manifest_dir / filename
+    out_path = manifest_dir / "therock_torch_manifest.json"
     out_path.write_text(
         json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
