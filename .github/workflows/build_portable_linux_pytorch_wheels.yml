@@ -196,7 +196,7 @@ jobs:
           ./external-builds/pytorch/build_prod_wheels.py \
             build \
             --install-rocm \
-            --enable_pytorch_fbgemm_genai_linux \
+            --enable-pytorch-fbgemm-genai-linux \
             --pip-cache-dir /tmp/pipcache \
             --index-url "${{ inputs.cloudfront_url }}/${{ inputs.amdgpu_family }}/" \
             --clean \
