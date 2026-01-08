@@ -72,7 +72,7 @@ if($ENV:GITHUB_WORKSPACE -ne $null) {
         $regex_build_exe = "$ENV:GITHUB_WORKSPACE\build\.*[.]exe"
         echo "[*] THEROCK_CLEANUP_PROCESSES_USE_GITHUB_WORKSPACE env var defined, using path in regex."
     } else {
-        echo "[*] THEROCK_CLEANUP_PROCESSES_USE_GITHUB_WORKSPACE end var undefined, using default regex."
+        echo "[*] THEROCK_CLEANUP_PROCESSES_USE_GITHUB_WORKSPACE env var undefined, using default regex."
     }
 } else {
     echo "[*] GITHUB_WORKSPACE env var undefined, using default regex"
