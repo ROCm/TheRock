@@ -170,6 +170,7 @@ therock_cmake_subproject_declare(hipBLASLt
     amd-hip
   BUILD_DEPS
     hipBLAS-common
+    Origami
     rocm-cmake
     therock-googletest
     therock-msgpack-cxx
