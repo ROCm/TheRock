@@ -284,15 +284,15 @@ class S3Index:
                     f' data-dist-info-metadata="{pep658_sha}" data-core-metadata="{pep658_sha}"'
                 )
             # Mark networkx versions with Python requirements (pytorch/pytorch#152191)
-            # networkx 3.4.x for Python 3.10, networkx 3.5+ for Python 3.11+
+            # networkx 3.4.x for Python 3.10, networkx 3.5+ for Python 3.11
             if "networkx-3." in obj.key and obj.key.endswith("-py3-none-any.whl"):
                 m = search(r'networkx-3\.(\d+)(?:\.(\d+))?', obj.key)
                 if m:
                     minor_ver = int(m.group(1))
-                    if minor_ver <= 4:
-                        # networkx 3.4.x and earlier: Python 3.10
+                    if minor_ver == 3 or minor_ver == 4:
+                        # networkx 3.3.x, 3.4.x: Python 3.10
                         attributes += ' data-requires-python="&gt;=3.10"'
-                    else:
+                    elif minor_ver >= 5:
                         # networkx 3.5+: Python 3.11
                         attributes += ' data-requires-python="&gt;=3.11"'
 
