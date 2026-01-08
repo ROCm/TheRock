@@ -2,7 +2,6 @@
 
 import re
 import os
-import sys
 import unittest
 
 import rocm_sdk
@@ -24,30 +23,18 @@ class ROCmBaseTest(unittest.TestCase):
             os.environ.pop("ROCM_SDK_PRELOAD_LIBRARIES", None)
 
     def testCLI(self):
-        # -P flag is only available in Python 3.11+
-        cmd = [sys.executable]
-        if sys.version_info >= (3, 11):
-            cmd.append("-P")
-        cmd.extend(["-m", "rocm_sdk", "--help"])
+        cmd = utils.get_python_cmd(["-m", "rocm_sdk", "--help"])
         output = utils.exec(cmd, capture=True).decode()
         self.assertIn("usage:", output)
 
     def testVersion(self):
-        # -P flag is only available in Python 3.11+
-        cmd = [sys.executable]
-        if sys.version_info >= (3, 11):
-            cmd.append("-P")
-        cmd.extend(["-m", "rocm_sdk", "version"])
+        cmd = utils.get_python_cmd(["-m", "rocm_sdk", "version"])
         output = utils.exec(cmd, capture=True).decode().strip()
         self.assertTrue(output)
         self.assertIn(".", output)
 
     def testTargets(self):
-        # -P flag is only available in Python 3.11+
-        cmd = [sys.executable]
-        if sys.version_info >= (3, 11):
-            cmd.append("-P")
-        cmd.extend(["-m", "rocm_sdk", "targets"])
+        cmd = utils.get_python_cmd(["-m", "rocm_sdk", "targets"])
         output = utils.exec(cmd, capture=True).decode().strip()
         self.assertTrue(output)
         self.assertIn("gfx", output)
