@@ -11,8 +11,8 @@
 
 ### CMake dependencies
 
-See [../dependencies.md](../dependencies.md) for guidance on how to add dependencies
-between subprojects and third party sources.
+See [dependencies.md](/docs/development/dependencies.md) for guidance on how to
+add dependencies between subprojects and third party sources.
 
 Note that within each superrepo
 ([rocm-systems](https://github.com/ROCm/rocm-systems),
