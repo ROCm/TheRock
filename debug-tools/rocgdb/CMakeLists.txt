@@ -557,26 +557,26 @@ if(BUILD_TESTING)
 
   # Non-executable testsuite files.
   set(ROCGDB_TESTSUITE_FILES
-    "source/config.guess"
-    "source/config.sub"
-    "source/contrib/dg-extract-results.py"
-    "source/gdb/disable-implicit-rules.mk"
-    "source/gdb/silent-rules.mk"
-    "source/include/dwarf2.def"
-    "source/include/dwarf2.h"
+    "config.guess"
+    "config.sub"
+    "contrib/dg-extract-results.py"
+    "gdb/disable-implicit-rules.mk"
+    "gdb/silent-rules.mk"
+    "include/dwarf2.def"
+    "include/dwarf2.h"
   )
 
   # Executable testsuite files.
   set(ROCGDB_EXECUTABLE_TESTSUITE_FILES
-    "source/contrib/dg-extract-results.sh"
-    "source/install-sh"
+    "contrib/dg-extract-results.sh"
+    "install-sh"
   )
 
   foreach(rocgdb_file ${ROCGDB_TESTSUITE_FILES})
     # Get the directory part of the file.
     get_filename_component(file_dir ${rocgdb_file} DIRECTORY)
 
-    install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/${rocgdb_file}
+    install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/source/${rocgdb_file}
       DESTINATION tests/rocgdb/${file_dir}
       COMPONENT tests)
   endforeach()
@@ -585,20 +585,20 @@ if(BUILD_TESTING)
     # Get the directory part of the file.
     get_filename_component(file_dir ${rocgdb_file} DIRECTORY)
 
-    install(PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR}/${rocgdb_file}
+    install(PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR}/source/${rocgdb_file}
       DESTINATION tests/rocgdb/${file_dir}
       COMPONENT tests)
   endforeach()
 
   # Testsuite directories.
   set(ROCGDB_TESTSUITE_DIRS
-    "source/gdb/contrib"
-    "source/gdb/features"
-    "source/gdb/testsuite"
+    "gdb/contrib"
+    "gdb/features"
+    "gdb/testsuite"
   )
 
   foreach(rocgdb_testsuite_dir ${ROCGDB_TESTSUITE_DIRS})
-    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${rocgdb_testsuite_dir}
+    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/source/${rocgdb_testsuite_dir}
       DESTINATION tests/rocgdb/gdb
       COMPONENT tests
       USE_SOURCE_PERMISSIONS)
