@@ -85,7 +85,7 @@ Repositories will follow the following structure:
 repo.amd.com/rocm/packages/<primary_os>/
 ```
 
-The primary OS root folder will include the following distrobutions where the packages can be found:
+The primary OS root folder will include the following distributions where the packages can be found:
 
 | Primary OS | Secondary |
 | :------------- |:-------------|
