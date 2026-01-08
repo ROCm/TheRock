@@ -106,7 +106,11 @@ set(THEROCK_ARTIFACT_ARCHIVE_SUFFIX "" CACHE STRING "Suffix to add to artifact a
 
 # Kpack artifact splitting
 option(THEROCK_KPACK_SPLIT_ARTIFACTS "Split target-specific artifacts into generic and arch-specific components" OFF)
-set(THEROCK_KPACK_DIR "" CACHE PATH "Path to rocm-kpack repository (required when THEROCK_KPACK_SPLIT_ARTIFACTS=ON)")
+# TODO: Once rocm-kpack is moved into the rocm-systems repo, hard-code the path.
+# Check for unset OR empty to handle -DTHEROCK_KPACK_DIR="" edge case.
+if(NOT THEROCK_KPACK_DIR)
+  set(THEROCK_KPACK_DIR "${THEROCK_SOURCE_DIR}/base/rocm-kpack")
+endif()
 if(THEROCK_KPACK_SPLIT_ARTIFACTS AND NOT THEROCK_KPACK_DIR)
   message(FATAL_ERROR "THEROCK_KPACK_DIR must be set when THEROCK_KPACK_SPLIT_ARTIFACTS=ON")
 endif()
@@ -248,11 +252,9 @@ include("${CMAKE_CURRENT_BINARY_DIR}/cmake/therock_topology.cmake")
 # which filters out CORE_RUNTIME dependency for HIP_RUNTIME on Windows.
 
 # Optional sub-features that control behavior within artifacts
-if(NOT WIN32)
-  cmake_dependent_option(THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL
-    "Enables composable kernel in MIOpen" ON
-    "THEROCK_ENABLE_COMPOSABLE_KERNEL" OFF)
-endif()
+cmake_dependent_option(THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL
+  "Enables composable kernel in MIOpen" ON
+  "THEROCK_ENABLE_COMPOSABLE_KERNEL" OFF)
 
 cmake_dependent_option(THEROCK_ROCWMMA_ENABLE_BENCHMARKS
   "Enables building rocWMMA benchmarks" OFF
@@ -349,11 +351,14 @@ endif()
 
 set(THEROCK_BUNDLED_BZIP2)
 set(THEROCK_BUNDLED_ELFUTILS)
+set(THEROCK_BUNDLED_EXPAT)
 set(THEROCK_BUNDLED_GMP)
 set(THEROCK_BUNDLED_LIBBACKTRACE)
 set(THEROCK_BUNDLED_LIBCAP)
 set(THEROCK_BUNDLED_LIBDRM)
 set(THEROCK_BUNDLED_LIBLZMA)
+set(THEROCK_BUNDLED_MPFR)
+set(THEROCK_BUNDLED_NCURSES)
 set(THEROCK_BUNDLED_NUMACTL)
 set(THEROCK_BUNDLED_SQLITE3)
 set(THEROCK_BUNDLED_ZLIB)
@@ -372,11 +377,14 @@ if(THEROCK_BUNDLE_SYSDEPS)
     endif()
     set(THEROCK_BUNDLED_BZIP2 therock-bzip2)
     set(THEROCK_BUNDLED_ELFUTILS therock-elfutils)
+    set(THEROCK_BUNDLED_EXPAT, therock-expat)
     set(THEROCK_BUNDLED_GMP, therock-gmp)
     set(THEROCK_BUNDLED_LIBBACKTRACE therock-libbacktrace)
     set(THEROCK_BUNDLED_LIBCAP therock-libcap)
     set(THEROCK_BUNDLED_LIBDRM therock-libdrm)
     set(THEROCK_BUNDLED_LIBLZMA therock-liblzma)
+    set(THEROCK_BUNDLED_MPFR, therock-mpfr)
+    set(THEROCK_BUNDLED_NCURSES, therock-ncurses)
     set(THEROCK_BUNDLED_NUMACTL therock-numactl)
     set(THEROCK_BUNDLED_SQLITE3 therock-sqlite3)
     set(THEROCK_BUNDLED_ZLIB therock-zlib)

@@ -19,12 +19,15 @@ import shlex
 import shutil
 import subprocess
 import sys
-from typing import List, Optional
+from typing import List
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = THIS_SCRIPT_DIR.parent
 PATCHES_DIR = THEROCK_DIR / "patches"
 TOPOLOGY_PATH = THEROCK_DIR / "BUILD_TOPOLOGY.toml"
+ALWAYS_SUBMODULE_PATHS = [
+    "base/rocm-kpack",
+]
 
 
 def is_windows() -> bool:
@@ -142,7 +145,9 @@ def fetch_nested_submodules(args, projects):
 
 def run(args):
     projects = get_enabled_projects(args)
-    submodule_paths = [get_submodule_path(project) for project in projects]
+    submodule_paths = ALWAYS_SUBMODULE_PATHS + [
+        get_submodule_path(project) for project in projects
+    ]
     # TODO(scotttodd): Check for git lfs?
     update_args = []
     if args.depth:
@@ -458,7 +463,6 @@ def main(argv):
         nargs="+",
         type=str,
         default=[
-            "amdsmi",
             "half",
             "rccl",
             "rccl-tests",
@@ -480,14 +484,9 @@ def main(argv):
         "--ml-framework-projects",
         nargs="+",
         type=str,
-        default=(
-            []
-            if is_windows()
-            else [
-                # Linux only projects.
-                "composable_kernel",
-            ]
-        ),
+        default=[
+            "composable_kernel",
+        ],
     )
     parser.add_argument(
         "--rocm-media-projects",

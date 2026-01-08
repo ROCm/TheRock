@@ -50,7 +50,13 @@
 #
 #   [artifacts.<name>]
 #   artifact_group = "group-name"           # Required: which group this belongs to
-#   type = "target-neutral" | "target-specific"  # target-specific = per GPU arch
+#   type = "target-neutral" | "target-specific"
+#       target-neutral: Built once with all architecture targets. Use for host-only
+#           code, headers, or runtime libraries where a single multi-arch build
+#           is preferred.
+#       target-specific: Built separately per architecture family and kept separate
+#           for distribution. Use for kernel libraries where sharded builds
+#           improve CI parallelism and enable per-arch downloads.
 #   artifact_deps = ["dep1", "dep2"]        # Optional: other artifacts this depends on
 #   feature_name = "FEATURE_NAME"           # Optional: override auto-generated name
 #   feature_group = "GROUP_NAME"            # Optional: override auto-generated group
@@ -74,7 +80,7 @@ description = "TheRock artifact-based build topology"
 
 [source_sets.base]
 description = "Base infrastructure submodules"
-submodules = ["half", "rocm-cmake", "amdsmi"]
+submodules = ["half", "rocm-cmake"]
 
 [source_sets.compilers]
 description = "Compiler toolchain submodules"
@@ -100,7 +106,7 @@ submodules = ["rccl", "rccl-tests"]
 description = "Additional profiler submodules"
 submodules = ["rocprof-trace-decoder"]
 
-[source_sets.rocm-media]
+[source_sets.amd-mesa]
 description = "ROCm media submodules (Mesa for VA-API)"
 submodules = ["amd-mesa"]
 disable_platforms = ["windows"]
@@ -127,7 +133,8 @@ artifact_groups = [
     "third-party-libs",
     "hip-runtime",
     "opencl-runtime",
-    "profiler-core"
+    "profiler-core",
+    "rocrtst"
 ]
 
 [build_stages.math-libs]
@@ -158,6 +165,10 @@ artifact_groups = ["iree-libs"]
 description = "Profiler applications (depends on profiler-core)"
 artifact_groups = ["profiler-apps"]
 
+[build_stages.media]
+description = "Media Libraries"
+artifact_groups = ["media"]
+
 # ==============================================================================
 # ARTIFACT GROUPS - Logical groupings of related artifacts
 # ==============================================================================
@@ -166,7 +177,6 @@ artifact_groups = ["profiler-apps"]
 [artifact_groups.third-party-sysdeps]
 description = "Critical system dependencies (always needed)"
 type = "generic"
-source_sets = ["rocm-media"]  # rocm-media disabled on Windows via source_set
 
 [artifact_groups.third-party-libs]
 description = "Optional third-party libraries (for tests/specific features)"
@@ -203,6 +213,12 @@ description = "OpenCL runtime"
 type = "generic"
 artifact_group_deps = ["core-runtime", "compiler"]
 source_sets = ["rocm-systems"]  # clr is in rocm-systems
+
+[artifact_groups.rocrtst]
+description = "Core runtime tests (ROCR-Runtime, rocminfo)"
+type = "per-arch"
+artifact_group_deps = ["opencl-runtime", "core-runtime"]
+source_sets = ["rocm-systems"]
 
 [artifact_groups.math-libs]
 description = "Math libraries (BLAS, FFT, RAND, etc.)"
@@ -255,6 +271,14 @@ type = "generic"
 artifact_group_deps = ["hip-runtime"]
 source_sets = ["iree-libs"]
 
+[artifact_groups.media]
+description = "Media Libraries"
+type = "generic"
+artifact_group_deps = ["third-party-sysdeps", "base"]
+# TODO: rocm-systems included for projects/hip/VERSION (see CMakeLists.txt)
+# amd-mesa disabled on Windows via source_set
+source_sets = ["amd-mesa", "rocm-systems"]
+
 # ==============================================================================
 # ARTIFACTS - The actual build outputs that can be transmitted between stages
 # ==============================================================================
@@ -268,6 +292,41 @@ artifact_group = "third-party-sysdeps"
 type = "target-neutral"
 artifact_deps = []  # No dependencies on other artifacts
 feature_group = "CORE"  # Part of core, enabled by default
+
+[artifacts.sysdeps-amd-mesa]
+artifact_group = "media"
+type = "target-neutral"
+artifact_deps = ["sysdeps"]
+feature_group = "MEDIA"
+disable_platforms = ["windows"]
+
+[artifacts.sysdeps-expat]
+artifact_group = "third-party-sysdeps"
+type = "target-neutral"
+artifact_deps = []
+feature_group = "CORE"
+disable_platforms = ["windows"]
+
+[artifacts.sysdeps-gmp]
+artifact_group = "third-party-sysdeps"
+type = "target-neutral"
+artifact_deps = []
+feature_group = "CORE"
+disable_platforms = ["windows"]
+
+[artifacts.sysdeps-mpfr]
+artifact_group = "third-party-sysdeps"
+type = "target-neutral"
+artifact_deps = ["sysdeps-gmp"]  # mpfr depends on gmp
+feature_group = "CORE"
+disable_platforms = ["windows"]
+
+[artifacts.sysdeps-ncurses]
+artifact_group = "third-party-sysdeps"
+type = "target-neutral"
+artifact_deps = []
+feature_group = "CORE"
+disable_platforms = ["windows"]
 
 [artifacts.host-blas]
 artifact_group = "third-party-libs"
@@ -360,6 +419,14 @@ artifact_deps = ["core-runtime", "amd-llvm"]
 feature_name = "OCL_RUNTIME"
 feature_group = "CORE"  # Part of core, enabled by default
 
+[artifacts.rocrtst]
+artifact_group = "rocrtst"
+type = "target-neutral"
+artifact_deps = ["core-runtime", "core-ocl"]
+feature_name = "CORE_RUNTIME_TESTS"
+feature_group = "CORE"
+disable_platforms = ["windows"]
+
 [artifacts.core-hipinfo]
 artifact_group = "hip-runtime"
 type = "target-neutral"
@@ -371,7 +438,7 @@ feature_group = "CORE"  # Part of core, enabled by default
 
 [artifacts.core-hiptests]
 artifact_group = "hip-runtime"
-type = "target-specific"
+type = "target-neutral"
 artifact_deps = ["core-hip"]
 feature_group = "CORE"  # Part of core, enabled by default
 
@@ -414,7 +481,6 @@ artifact_deps = []
 artifact_group = "ml-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip"]
-disable_platforms = ["windows"]
 
 [artifacts.miopen]
 artifact_group = "ml-libs"
@@ -423,19 +489,19 @@ artifact_deps = ["core-runtime", "core-hip", "blas", "composable-kernel", "rand"
 
 [artifacts.hipdnn]
 artifact_group = "ml-libs"
-type = "target-specific"
+type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip"]
 
 [artifacts.miopen-plugin]
 artifact_group = "ml-libs"
-type = "target-specific"
+type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn"]
 
 # --- IREE Integration ---
 
 [artifacts.fusilli-plugin]
 artifact_group = "iree-libs"
-type = "target-specific"
+type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "hipdnn"]
 disable_platforms = ["windows"]
 

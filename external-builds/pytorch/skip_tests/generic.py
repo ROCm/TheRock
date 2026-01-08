@@ -170,6 +170,10 @@ skip_tests = {
             #   Error checking compiler version for cl: [WinError 2] The system cannot find the file specified
             #   AssertionError: Object comparison failed: <torch.cuda.Stream device=cuda:0 cuda_stream=0x1fa05550b50> != <torch.cuda.Stream device=cuda:0 cuda_stream=0x0>
             "test_consumer_to_single_producer_case_2_correctness",
+            # Failures on Python 3.11 (not 3.12 or 3.13) with
+            #   Windows fatal exception: code 0xc0000374
+            # Possibly due to use of `torch.jit.script`?
+            "test_fork_join_in_middle",
             # This test JIT compiles and fails if MSVC is not installed on Windows:
             # We should fix the test to fail/skip more gracefully.
             #   subprocess.CalledProcessError: Command '['where', 'cl']' returned non-zero exit status 1.
@@ -178,6 +182,13 @@ skip_tests = {
             #   AssertionError: "Simulate error" does not match "grad can be implicitly created only for scalar outputs"
             "test_reentrant_parent_error_on_cpu_cuda",
         ],
+        "binary_ufuncs": [
+            # Failures on Python 3.11 (not 3.12 or 3.13) with
+            #   Windows fatal exception: code 0xc0000374
+            # Possibly due to use of `torch.jit.script`?
+            "test_div_and_floordiv_script_vs_python_cuda",
+            "test_idiv_and_ifloordiv_vs_python_cuda",
+        ],
         "cuda": [
             # RuntimeError: miopenStatusUnknownError
             "test_autocast_rnn",
@@ -185,6 +196,9 @@ skip_tests = {
             #   AssertionError: False is not true
             #   self.assertTrue(abs(check_workspace_size(a) - default_workspace_size) < 524288)
             "test_cublas_workspace_explicit_allocation",
+            # For Python 3.11, this fails with
+            #   torch.AcceleratorError: HIP error: operation not permitted when stream is capturing
+            "test_cuda_graph_tensor_item_not_allowed",
             # *** Test hang (see above) ***
             "test_graph_error",
             # This test conflicts with how our test script and runners are
