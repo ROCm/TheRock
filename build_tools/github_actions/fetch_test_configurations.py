@@ -288,8 +288,8 @@ def run():
                 and amdgpu_families in selected_matrix[key]["multi_gpu"][platform]
             ):
                 # If the architecture is available for multi GPU testing, we indicate that this specific test requires the multi GPU test runner
-                shortened_amdgpu_families = amdgpu_families.split("-")[0]
-                multi_gpu_runner = amdgpu_families_matrix[shortened_amdgpu_families][
+                shortened_amdgpu_families_name = amdgpu_families.split("-")[0].lower()
+                multi_gpu_runner = amdgpu_families_matrix[shortened_amdgpu_families_name][
                     "test-runs-on-multi-gpu"
                 ]
                 logging.info(
