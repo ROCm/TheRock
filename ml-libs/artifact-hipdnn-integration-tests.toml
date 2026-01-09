@@ -1,0 +1,6 @@
+# hipDNN Integration Tests
+[components.test."ml-libs/hipdnn-integration-tests/stage"]
+include = [
+  "bin/hipdnn_integration_tests",
+  "bin/hipdnn_integration_tests_test_infra/*",
+]
