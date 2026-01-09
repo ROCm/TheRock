@@ -345,6 +345,7 @@ def retrieve_artifacts_by_run_id(args):
             args.fft,
             args.hipdnn,
             args.hipdnn_samples,
+            args.hipdnn_integration_tests,
             args.miopen,
             args.miopenprovider,
             args.fusilliprovider,
@@ -404,6 +405,8 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("miopenprovider")
         if args.fusilliprovider:
             extra_artifacts.append("fusilliprovider")
+        if args.hipdnn_integration_tests:
+            extra_artifacts.append("hipdnn-integration-tests")
         if args.iree_compiler:
             extra_artifacts.append("iree-compiler")
         if args.rocdecode:
@@ -725,6 +728,13 @@ def main(argv):
         "--hipblasltprovider",
         default=False,
         help="Include 'hipblasltprovider' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--hipdnn-integration-tests",
+        default=False,
+        help="Include 'hipdnn-integration-tests' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
