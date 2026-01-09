@@ -15,13 +15,17 @@ Usage in CMake configure:
 
   cmake -S . -B build -GNinja \
     -DTHEROCK_AMDGPU_FAMILIES=gfx110X-all \
-    -DCMAKE_C_COMPILER_LAUNCHER="${PWD}/build_tools/resource_info.py" \
-    -DCMAKE_CXX_COMPILER_LAUNCHER="${PWD}/build_tools/resource_info.py"
+    -DCMAKE_C_COMPILER_LAUNCHER="${PWD}/build_tools/resource_info_7.py" \
+    -DCMAKE_CXX_COMPILER_LAUNCHER="${PWD}/build_tools/resource_info_7.py"
 
     cmake --build build
 
+Finalize (run once at very end of build):
+
+  python3 build_tools/resource_info_7.py --finalize
+
 Output:
-    Summary gets created in build/logs/therock-build-prof/comp-summay.md (comp-summary.html)
+    Summary gets created in build/logs/therock-build-prof/comp-summary.md (comp-summary.html)
 """
 
 import os
@@ -33,7 +37,7 @@ import subprocess
 import shlex
 import html
 import re
-from typing import Dict, Tuple, List
+from typing import Dict, Tuple, List, Optional
 from pathlib import Path
 
 # Best-effort resource usage (not available on Windows)
@@ -47,66 +51,11 @@ except Exception:
 # Component classification
 # -------------------------
 
-
 CMAKEFILES_TARGET_RE = re.compile(r"(?:^|[ /])CMakeFiles/([^/]+)\.dir/")
+TOPOLOGY_ARTIFACT_RE = re.compile(r"^\[artifacts\.([^\]]+)\]\s*$", re.MULTILINE)
 
-THEROCK_COMPONENTS = [
-    "rocPRIM",
-    "rccl",
-    "rocThrust",
-    "rocWMMA",
-    "rocBLAS",
-    "MIOpen",
-    "hipCUB",
-    "rocFFT",
-    "amd-llvm",
-    "rocSPARSE",
-    "hipBLASLt",
-    "rocprofiler-systems",
-    "hip-tests",
-    "rocprofiler-sdk",
-    "composable_kernel",
-    "hipSPARSE",
-    "rocSOLVER",
-    "hipSPARSELt",
-    "hipFFT",
-    "rocRAND",
-    "roctracer",
-    "rdc",
-    "rocRoller",
-    "hipBLAS",
-    "core-hiptests",
-    "hipDNN",
-    "rocprofiler-register",
-    "hipSOLVER",
-    "miopen_plugin",
-    "core-runtime",
-    "core-hip",
-    "amd-comgr",
-    "rccl-tests",
-    "rocprofiler-compute",
-    "hipRAND",
-    "hipify",
-    "core-ocl",
-    "hipBLAS-common",
-    "mxDataGenerator",
-    "amdsmi",
-    "amd-comgr-stub",
-    "opencl",
-    "aqlprofile",
-    "rocm_smi_lib",
-    "rocm-core",
-    "hipcc",
-    "aux-overlay",
-    "rocprof-trace-decoder",
-    "half",
-    "rocminfo",
-    "rocm-cmake",
-    "flatbuffers",
-    "spdlog",
-    "nlohmann-json",
-    "fmt",
-]
+# Cached once so we don't re-read topology for every compile invocation
+_TOPOLOGY_COMPONENTS_CACHE: Optional[List[str]] = None
 
 FAQ_HTML = """
 <h2>General FAQ</h2>
@@ -208,9 +157,75 @@ FAQ_HTML = """
 """
 
 
-def therock_components(_pwd_unused: str, cmd_str: str) -> str:
+def _repo_root() -> Path:
+    """Return repo root assuming this script lives in <repo_root>/build_tools/."""
+    return Path(__file__).resolve().parents[1]
+
+
+def load_components_from_build_topology(repo_root: Path) -> List[str]:
+    """
+    Extract component/artifact names from BUILD_TOPOLOGY.toml and print them.
+
+    Implementation:
+    - Reads <repo_root>/BUILD_TOPOLOGY.toml.
+    - Collects names from TOML section headers: [artifacts.<name>]
+    - Returns sorted unique names.
+
+    Printing:
+    - Always prints the derived list (or a message if empty/unreadable).
+    """
+    topo_path = repo_root / "BUILD_TOPOLOGY.toml"
+    try:
+        txt = topo_path.read_text(encoding="utf-8", errors="ignore")
+    except Exception:
+        print("\n[TheRock] Components derived from BUILD_TOPOLOGY.toml (artifacts.*):")
+        print("(none found or BUILD_TOPOLOGY.toml not readable)\n")
+        return []
+
+    names = TOPOLOGY_ARTIFACT_RE.findall(txt)
+    out = sorted({n.strip() for n in names if n and n.strip()})
+
+    print("\n[TheRock] Components derived from BUILD_TOPOLOGY.toml (artifacts.*):")
+    if out:
+        print(", ".join(out))
+    else:
+        print("(none found in BUILD_TOPOLOGY.toml)")
+    print()
+
+    return out
+
+
+def get_topology_components_cached(repo_root: Path) -> List[str]:
+    """
+    Return cached components derived from BUILD_TOPOLOGY.toml.
+
+    - Reads and caches once per Python process for performance.
+    - Does not print by default (printing is handled when finalize runs).
+    """
+    global _TOPOLOGY_COMPONENTS_CACHE
+    if _TOPOLOGY_COMPONENTS_CACHE is None:
+        try:
+            topo_path = repo_root / "BUILD_TOPOLOGY.toml"
+            txt = topo_path.read_text(encoding="utf-8", errors="ignore")
+            names = TOPOLOGY_ARTIFACT_RE.findall(txt)
+            _TOPOLOGY_COMPONENTS_CACHE = sorted({n.strip() for n in names if n and n.strip()})
+        except Exception:
+            _TOPOLOGY_COMPONENTS_CACHE = []
+    return _TOPOLOGY_COMPONENTS_CACHE
+
+
+def therock_components(repo_root: Path, _pwd_unused: str, cmd_str: str) -> str:
+    """
+    Classify a compile/link command into a TheRock component.
+
+    Heuristics (in order):
+    1) Expand any @response files and search their contents too.
+    2) Detect CMake target name from .../CMakeFiles/<target>.dir/... and match against known topology components.
+    3) Fall back to substring match against known topology component names.
+    """
     comp = "unknown"
     lower_cmd = cmd_str.lower()
+    components = get_topology_components_cached(repo_root)
 
     for p in cmd_str.split():
         if p.startswith("@") and len(p) > 1:
@@ -229,33 +244,34 @@ def therock_components(_pwd_unused: str, cmd_str: str) -> str:
     m = CMAKEFILES_TARGET_RE.search(cmd_str) or CMAKEFILES_TARGET_RE.search(lower_cmd)
     if m:
         target = m.group(1)
-        # common target decorations
         target_norm = target.split("-", 1)[0].split("_", 1)[0].lower()
 
-        # exact target match against known components
-        for name in THEROCK_COMPONENTS:
+        # exact target match
+        for name in components:
             if name.lower() == target.lower():
                 return name
 
-        # prefix match
-        for name in THEROCK_COMPONENTS:
+        # prefix-ish match (preserve your old behavior)
+        for name in components:
             if name.lower() == target_norm:
                 return name
 
     # substring match anywhere
-    for name in sorted(THEROCK_COMPONENTS, key=len, reverse=True):
+    for name in sorted(components, key=len, reverse=True):
         if name.lower() in lower_cmd:
             return name
 
     return comp
 
 
-# -------------------------
-# Logging + measurement
-# -------------------------
-
-
-def run_and_log_command(log_dir: str) -> int:
+def run_and_log_command(repo_root: Path, log_dir: str) -> int:
+    """
+    Compiler launcher mode:
+    - Runs the real compiler command (sys.argv[1:]).
+    - Measures wall/user/sys time and RSS (best-effort).
+    - Writes a per-command log into log_dir.
+    - Returns the real compiler return code.
+    """
     if len(sys.argv) <= 1:
         return 0
 
@@ -265,7 +281,7 @@ def run_and_log_command(log_dir: str) -> int:
     cmd_args = sys.argv[1:]
     cmd_str = " ".join(shlex.quote(arg) for arg in cmd_args)
 
-    comp = therock_components(pwd, cmd_str)
+    comp = therock_components(repo_root, pwd, cmd_str)
 
     ts = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     rand = random.randint(0, 999999)
@@ -343,12 +359,16 @@ def run_and_log_command(log_dir: str) -> int:
     return returncode
 
 
-# ------------------------------------------------
-# Aggregation / Resource Observability reporting
-# ------------------------------------------------
-
-
 def parse_log_file(path: Path, stats: Dict[Tuple[str, str], float]) -> None:
+    """
+    Parse a single per-command .log file and aggregate into stats.
+
+    Aggregates:
+    - real_s/user_s/sys_s sums per component
+    - max RSS per component
+    - per-component time span via start_epoch_s + real_s
+    - global build span under "__build__"
+    """
     comp = "unknown"
     start_epoch_s = None
     real_s = user_s = sys_s = None
@@ -426,6 +446,10 @@ def parse_log_file(path: Path, stats: Dict[Tuple[str, str], float]) -> None:
 
 
 def markdown_table_to_html(md_text: str) -> str:
+    """
+    Convert the first Markdown table in md_text into a simple HTML <table>.
+    This is intentionally minimal (no markdown library dependency).
+    """
     lines = [l.rstrip() for l in md_text.splitlines() if l.strip()]
 
     table_lines = []
@@ -465,6 +489,10 @@ def markdown_table_to_html(md_text: str) -> str:
 
 
 def print_summary_links(log_dir: str) -> None:
+    """
+    Print paths/URIs for the generated summary artifacts.
+    Helpful for CI logs so people can click/copy paths.
+    """
     try:
         base = Path(log_dir).resolve()
         html_path = base / "comp-summary.html"
@@ -481,212 +509,207 @@ def print_summary_links(log_dir: str) -> None:
 
 
 def generate_summaries(log_dir: str) -> None:
-    lock_path = Path(log_dir) / ".summary.lock"
-    try:
-        fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-        os.close(fd)
-    except FileExistsError:
+    """
+    Finalize mode:
+    - Scans all *.log files in log_dir.
+    - Aggregates build metrics per component.
+    - Writes comp-summary.md and comp-summary.html.
+    - No lock file is used because this is intended to be run once at the end.
+    """
+    stats: Dict[Tuple[str, str], float] = {}
+    for name in os.listdir(log_dir):
+        if not name.endswith(".log"):
+            continue
+        parse_log_file(Path(log_dir) / name, stats)
+
+    components = sorted({key[0] for key in stats.keys() if key[1] == "_seen"})
+    if not components:
         return
-    except Exception:
-        return
 
-    try:
-        stats: Dict[Tuple[str, str], float] = {}
-        for name in os.listdir(log_dir):
-            if not name.endswith(".log"):
-                continue
-            parse_log_file(Path(log_dir) / name, stats)
+    total_wall_s_all = 0.0
+    for comp in components:
+        total_wall_s_all += stats.get((comp, "real_s"), 0.0)
 
-        components = sorted({key[0] for key in stats.keys() if key[1] == "_seen"})
-        if not components:
-            return
+    build_start = stats.get(("__build__", "span_start_min"))
+    build_end = stats.get(("__build__", "span_end_max"))
+    build_span_s = (
+        (build_end - build_start)
+        if (
+            build_start is not None
+            and build_end is not None
+            and build_end >= build_start
+        )
+        else 0.0
+    )
 
-        # Average build concurrency estimate from timestamps:
-        # avg_concurrency ~= sum(real_s) / build_span_s
-        total_wall_s_all = 0.0
-        for comp in components:
-            total_wall_s_all += stats.get((comp, "real_s"), 0.0)
+    avg_concurrency = (
+        (total_wall_s_all / build_span_s) if build_span_s > 0.0 else 1.0
+    )
+    if avg_concurrency <= 0.0:
+        avg_concurrency = 1.0
 
-        build_start = stats.get(("__build__", "span_start_min"))
-        build_end = stats.get(("__build__", "span_end_max"))
-        build_span_s = (
-            (build_end - build_start)
+    rows = []
+    for comp in components:
+        wall_s = stats.get((comp, "real_s"), 0.0)
+        user_s = stats.get((comp, "user_s"), 0.0)
+        sys_s = stats.get((comp, "sys_s"), 0.0)
+        cpu_s = user_s + sys_s
+
+        wall_sum_min = wall_s / 60.0
+        cpu_min = cpu_s / 60.0
+        user_min = user_s / 60.0
+        sys_min = sys_s / 60.0
+
+        span_start = stats.get((comp, "span_start_min"))
+        span_end = stats.get((comp, "span_end_max"))
+        wall_span_min = (
+            (span_end - span_start) / 60.0
             if (
-                build_start is not None
-                and build_end is not None
-                and build_end >= build_start
+                span_start is not None
+                and span_end is not None
+                and span_end >= span_start
             )
             else 0.0
         )
 
-        avg_concurrency = (
-            (total_wall_s_all / build_span_s) if build_span_s > 0.0 else 1.0
+        wall_est_elapsed_min = (
+            wall_sum_min / avg_concurrency
+            if avg_concurrency > 0.0
+            else wall_sum_min
         )
-        if avg_concurrency <= 0.0:
-            avg_concurrency = 1.0
 
-        rows = []
-        for comp in components:
-            wall_s = stats.get((comp, "real_s"), 0.0)
-            user_s = stats.get((comp, "user_s"), 0.0)
-            sys_s = stats.get((comp, "sys_s"), 0.0)
-            cpu_s = user_s + sys_s
+        avg_threads = cpu_s / wall_s if wall_s > 0.0 else 0.0
 
-            wall_sum_min = wall_s / 60.0
-            cpu_min = cpu_s / 60.0
-            user_min = user_s / 60.0
-            sys_min = sys_s / 60.0
+        rss_kb = stats.get((comp, "rss_kb_max"), 0.0)
+        rss_mb = rss_kb / 1024.0
+        rss_gb = rss_kb / (1024.0 * 1024.0)
 
-            span_start = stats.get((comp, "span_start_min"))
-            span_end = stats.get((comp, "span_end_max"))
-            wall_span_min = (
-                (span_end - span_start) / 60.0
-                if (
-                    span_start is not None
-                    and span_end is not None
-                    and span_end >= span_start
-                )
-                else 0.0
+        rows.append(
+            (
+                comp,
+                wall_sum_min,
+                wall_span_min,
+                wall_est_elapsed_min,
+                cpu_min,
+                user_min,
+                sys_min,
+                avg_threads,
+                rss_mb,
+                rss_gb,
             )
+        )
 
-            wall_est_elapsed_min = (
-                wall_sum_min / avg_concurrency
-                if avg_concurrency > 0.0
-                else wall_sum_min
-            )
+    rows.sort(key=lambda r: r[4], reverse=True)
 
-            avg_threads = cpu_s / wall_s if wall_s > 0.0 else 0.0
-
-            rss_kb = stats.get((comp, "rss_kb_max"), 0.0)
-            rss_mb = rss_kb / 1024.0
-            rss_gb = rss_kb / (1024.0 * 1024.0)
-
-            rows.append(
-                (
-                    comp,
-                    wall_sum_min,
-                    wall_span_min,
-                    wall_est_elapsed_min,
-                    cpu_min,
-                    user_min,
-                    sys_min,
-                    avg_threads,
-                    rss_mb,
-                    rss_gb,
-                )
-            )
-
-        # Sort by cpu_sum_min descending
-        rows.sort(key=lambda r: r[4], reverse=True)
-
-        # Atomic write to avoid partial header-only files
-        md_path = Path(log_dir) / "comp-summary.md"
-        tmp_md_path = Path(log_dir) / "comp-summary.md.tmp"
-        try:
-            with open(tmp_md_path, "w", encoding="utf-8") as f:
-                headers = [
-                    "component",
-                    "wall_time_sum (minutes)",
-                    "wall_time_span (minutes)",
-                    "wall_time_est_elapsed (minutes)",
-                    "cpu_sum (minutes)",
-                    "user_sum (minutes)",
-                    "sys_sum (minutes)",
-                    "avg_threads",
-                    "max_rss_mb",
-                    "max_rss_gb",
-                ]
-                f.write("| " + " | ".join(headers) + " |\n")
-                f.write("| " + " | ".join(["---"] * len(headers)) + " |\n")
-
-                for (
-                    comp,
-                    wall_sum_min,
-                    wall_span_min,
-                    wall_est_elapsed_min,
-                    cpu_min,
-                    user_min,
-                    sys_min,
-                    avg_threads,
-                    rss_mb,
-                    rss_gb,
-                ) in rows:
-                    f.write(
-                        "| "
-                        f"{comp} | "
-                        f"{wall_sum_min:.2f} | {wall_span_min:.2f} | {wall_est_elapsed_min:.2f} | "
-                        f"{cpu_min:.2f} | {user_min:.2f} | {sys_min:.2f} | "
-                        f"{avg_threads:.2f} | "
-                        f"{rss_mb:.2f} | {rss_gb:.4f} |\n"
-                    )
-
-            os.replace(str(tmp_md_path), str(md_path))
-        except Exception:
-            try:
-                os.remove(str(tmp_md_path))
-            except Exception:
-                pass
-
-        html_path = Path(log_dir) / "comp-summary.html"
-        try:
-            md_text = md_path.read_text(encoding="utf-8", errors="ignore")
-            table_html = markdown_table_to_html(md_text)
-
-            html_doc = (
-                "<!doctype html>\n"
-                "<html>\n<head>\n"
-                '  <meta charset="utf-8" />\n'
-                "  <title>TheRock Build Resource Observability Report</title>\n"
-                "  <style>\n"
-                "    body { font-family: Arial, sans-serif; margin: 24px; }\n"
-                "    h1 { margin-bottom: 8px; }\n"
-                "    table { border-collapse: collapse; margin-top: 16px; }\n"
-                "    th { background: #f0f0f0; }\n"
-                "    th, td { padding: 8px 12px; text-align: center; }\n"
-                "  </style>\n"
-                "</head>\n<body>\n"
-                "<h1>TheRock Build Resource Observability Report</h1>\n"
-                "<h2>Build Resource Utilization Summary</h2>\n"
-                f"{table_html}\n"
-                "<hr />\n"
-                f"{FAQ_HTML}\n"
-                "</body>\n</html>\n"
-            )
-
-            html_path.write_text(html_doc, encoding="utf-8")
-        except Exception:
-            pass
-
-        print_summary_links(log_dir)
-
-    finally:
-        try:
-            os.remove(str(lock_path))
-        except Exception:
-            pass
-
-
-# --------------
-# Entrypoint
-# --------------
-
-
-def main() -> int:
-    default_log_dir = str(
-        (Path(__file__).resolve().parents[1] / "build" / "logs" / "therock-build-prof")
-    )
-    log_dir = os.environ.get("THEROCK_BUILD_PROF_LOG_DIR", default_log_dir)
-
-    rc = run_and_log_command(log_dir)
-
-    # Best-effort summary generation as part of the build. Never fail build.
+    md_path = Path(log_dir) / "comp-summary.md"
+    tmp_md_path = Path(log_dir) / "comp-summary.md.tmp"
     try:
-        generate_summaries(log_dir)
+        with open(tmp_md_path, "w", encoding="utf-8") as f:
+            headers = [
+                "component",
+                "wall_time_sum (minutes)",
+                "wall_time_span (minutes)",
+                "wall_time_est_elapsed (minutes)",
+                "cpu_sum (minutes)",
+                "user_sum (minutes)",
+                "sys_sum (minutes)",
+                "avg_threads",
+                "max_rss_mb",
+                "max_rss_gb",
+            ]
+            f.write("| " + " | ".join(headers) + " |\n")
+            f.write("| " + " | ".join(["---"] * len(headers)) + " |\n")
+
+            for (
+                comp,
+                wall_sum_min,
+                wall_span_min,
+                wall_est_elapsed_min,
+                cpu_min,
+                user_min,
+                sys_min,
+                avg_threads,
+                rss_mb,
+                rss_gb,
+            ) in rows:
+                f.write(
+                    "| "
+                    f"{comp} | "
+                    f"{wall_sum_min:.2f} | {wall_span_min:.2f} | {wall_est_elapsed_min:.2f} | "
+                    f"{cpu_min:.2f} | {user_min:.2f} | {sys_min:.2f} | "
+                    f"{avg_threads:.2f} | "
+                    f"{rss_mb:.2f} | {rss_gb:.4f} |\n"
+                )
+
+        os.replace(str(tmp_md_path), str(md_path))
+    except Exception:
+        try:
+            os.remove(str(tmp_md_path))
+        except Exception:
+            pass
+
+    html_path = Path(log_dir) / "comp-summary.html"
+    try:
+        md_text = md_path.read_text(encoding="utf-8", errors="ignore")
+        table_html = markdown_table_to_html(md_text)
+
+        html_doc = (
+            "<!doctype html>\n"
+            "<html>\n<head>\n"
+            '  <meta charset="utf-8" />\n'
+            "  <title>TheRock Build Resource Observability Report</title>\n"
+            "  <style>\n"
+            "    body { font-family: Arial, sans-serif; margin: 24px; }\n"
+            "    h1 { margin-bottom: 8px; }\n"
+            "    table { border-collapse: collapse; margin-top: 16px; }\n"
+            "    th { background: #f0f0f0; }\n"
+            "    th, td { padding: 8px 12px; text-align: center; }\n"
+            "  </style>\n"
+            "</head>\n<body>\n"
+            "<h1>TheRock Build Resource Observability Report</h1>\n"
+            "<h2>Build Resource Utilization Summary</h2>\n"
+            f"{table_html}\n"
+            "<hr />\n"
+            f"{FAQ_HTML}\n"
+            "</body>\n</html>\n"
+        )
+
+        html_path.write_text(html_doc, encoding="utf-8")
     except Exception:
         pass
 
+    print_summary_links(log_dir)
+
+
+def main() -> int:
+    """
+    Entrypoint supporting two modes:
+
+    1) Compiler launcher mode (default): invoked by CMake/Ninja per command.
+       -> only logs per-command stats and returns compiler exit code.
+
+    2) Finalize mode: run once after the build:
+       python resource_info.py --finalize
+       -> prints components derived from BUILD_TOPOLOGY.toml
+       -> generates comp-summary.md + comp-summary.html from accumulated logs.
+    """
+    repo_root = _repo_root()
+    default_log_dir = str(repo_root / "build" / "logs" / "therock-build-prof")
+    log_dir = os.environ.get("THEROCK_BUILD_PROF_LOG_DIR", default_log_dir)
+
+    if "--finalize" in sys.argv:
+        try:
+            os.makedirs(log_dir, exist_ok=True)
+            load_components_from_build_topology(repo_root)
+            generate_summaries(log_dir)
+        except Exception:
+            pass
+        return 0
+
+    rc = run_and_log_command(repo_root, log_dir)
     return rc
 
 
 if __name__ == "__main__":
     sys.exit(main())
+
