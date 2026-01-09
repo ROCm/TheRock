@@ -11,6 +11,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 logging.basicConfig(level=logging.INFO)
 
+
 def get_visible_gpu_count(env=None) -> int:
     rocminfo = Path(THEROCK_BIN_DIR) / "rocminfo"
     rocminfo_cmd = str(rocminfo) if rocminfo.exists() else "rocminfo"
@@ -26,11 +27,8 @@ def get_visible_gpu_count(env=None) -> int:
 
     pattern = re.compile(r"^\s*Name:\s+gfx[0-9a-z]+$", re.IGNORECASE)
 
-    return sum(
-        1 
-        for line in result.stdout.splitlines()
-        if pattern.match(line.strip())
-    )
+    return sum(1 for line in result.stdout.splitlines() if pattern.match(line.strip()))
+
 
 class TestRCCL:
     def test_rccl_unittests(self):
@@ -49,12 +47,7 @@ class TestRCCL:
         environ_vars["UT_PROCESS_MASK"] = "1"
         cmd = [f"{THEROCK_BIN_DIR}/rccl-UnitTests"]
         logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-        result = subprocess.run(
-            cmd,
-            cwd=THEROCK_DIR,
-            check=False,
-            env=environ_vars
-        )
+        result = subprocess.run(cmd, cwd=THEROCK_DIR, check=False, env=environ_vars)
         assert result.returncode == 0
 
     # Executing rccl performance and correctness tests from rccl-tests repo
