@@ -363,7 +363,6 @@ def generate_multi_arch_matrix(
 def determine_long_lived_branch(branch_name: str) -> bool:
     # For long-lived branches (main, releases) we want to run both presubmit and postsubmit jobs on push,
     # instead of just presubmit jobs (as for other branches)
-    # (have this in a separate function here for testing reasons)
     is_long_lived_branch = False
     # Let's differentiate between full/complete matches and prefix matches for long-lived branches
     long_lived_full_match = ["main"]
@@ -396,13 +395,12 @@ def matrix_generator(
     # Select only test names based on label inputs, if applied. If no test labels apply, use default logic.
     selected_test_names = []
 
+    branch_name = base_args.get("branch_name", "")
     # For long-lived branches (main, releases) we want to run both presubmit and postsubmit jobs on push,
     # instead of just presubmit jobs (as for other branches)
-    is_long_lived_branch = determine_long_lived_branch(base_args.get("branch_name", ""))
+    is_long_lived_branch = determine_long_lived_branch(branch_name)
 
-    print(
-        f"* {base_args.get("branch_name")} is considered a long-lived branch: {is_long_lived_branch}"
-    )
+    print(f"* {branch_name} is considered a long-lived branch: {is_long_lived_branch}")
 
     # Determine which trigger types are active for proper matrix lookup
     active_trigger_types = []
@@ -435,7 +433,7 @@ def matrix_generator(
             f"Unreachable code: no trigger types determined. "
             f"is_pull_request={is_pull_request}, is_workflow_dispatch={is_workflow_dispatch}, "
             f"is_push={is_push}, is_schedule={is_schedule}, "
-            f"branch_name={base_args.get('branch_name')}"
+            f"branch_name={branch_name}"
         )
 
     if is_workflow_dispatch:
@@ -507,7 +505,6 @@ def matrix_generator(
         selected_test_names.extend(filter_known_names(requested_test_names, "test"))
 
     if is_push:
-        branch_name = base_args.get("branch_name")
         if is_long_lived_branch:
             print(
                 f"[PUSH - {branch_name.upper()}] Generating build matrix with {str(base_args)}"
