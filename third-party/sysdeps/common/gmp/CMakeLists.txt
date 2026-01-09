@@ -9,6 +9,10 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/gmp-6.3.0.tar.xz"
       URL_HASH "SHA512=e85a0dab5195889948a3462189f0e0598d331d3457612e2d3350799dba2e244316d256f8161df5219538eb003e4b5343f989aaa00f96321559063ed8c8f29fd2"
       TOUCH "${_download_stamp}"
+      # We need DOWNLOAD_EXTRACT_TIMESTAMP set to TRUE to preserve the timestamp
+      # of the extracted sources, otherwise the build system will notice
+      # changes and will try to re-run autotools, causing issues.
+      DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     )
 
     therock_cmake_subproject_declare(therock-gmp
@@ -59,35 +63,9 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT PATCHELF)
   message(FATAL_ERROR "Missing PATCHELF from super-project")
 endif()
 
-# Do builds from a copy of the source directory, in case we need to
-# patch the sources.
-set(SOURCE_COPY_DIR "${CMAKE_CURRENT_BINARY_DIR}/s")
-
-# The important timestamped files we want to preserve.
-set(CRITICAL_FILES
-  "doc/gmp.info"
-  "doc/gmp.info-1"
-  "doc/gmp.info-2"
-)
-
-# Add the full path to the critical files.
-foreach(stamped_file ${CRITICAL_FILES})
-  list(APPEND TIMESTAMPED_FILES "${SOURCE_COPY_DIR}/${stamped_file}")
-endforeach()
-
 add_custom_target(
   build ALL
   WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-  COMMAND
-    "${CMAKE_COMMAND}" -E rm -rf -- "${CMAKE_INSTALL_PREFIX}" "${SOURCE_COPY_DIR}"
-  COMMAND
-    "${CMAKE_COMMAND}" -E copy_directory "${SOURCE_DIR}" "${SOURCE_COPY_DIR}"
-  COMMAND
-    # Unfortunately the source directory copy can change all of the timestamps
-    # and GMP's build system is particularly picky with them. As a workaround,
-    # touch a few critical files to make sure the build system is happy and does
-    # not want to call autotools or regenerate the documentation.
-    "${CMAKE_COMMAND}" -E touch ${TIMESTAMPED_FILES}
   #
   # OPTIONAL: Patching of the sources should happen here.
   #
@@ -102,7 +80,7 @@ add_custom_target(
       "LDFLAGS=${CMAKE_SHARED_LINKER_FLAGS} -Wl,-rpath=\\'\\$$\\$$ORIGIN\\' -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
       "CPPFLAGS=${EXTRA_CPPFLAGS}"
       --
-    "${SOURCE_COPY_DIR}/configure"
+    "${SOURCE_DIR}/configure"
       --prefix "${CMAKE_INSTALL_PREFIX}"
   COMMAND
     make V=1
