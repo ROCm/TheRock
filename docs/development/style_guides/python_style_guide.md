@@ -4,13 +4,12 @@ Table of Contents
 
 - [General recommendations](#general-recommendations)
 - [Style guidelines](#style-guidelines)
-  - [Type hints](#type-hints)
+  - [Code quality and readability](#code-quality-and-readability)
     - [Add specific type hints liberally](#add-specific-type-hints-liberally)
     - [Extract complex type signatures](#extract-complex-type-signatures)
-  - [Filesystem and path operations](#filesystem-and-path-operations)
-    - [Use `pathlib` for filesystem paths](#use-pathlib-for-filesystem-paths)
-    - [Don't make assumptions about the current working directory](#dont-make-assumptions-about-the-current-working-directory)
-    - [No hard-coded project paths](#no-hard-coded-project-paths)
+    - [Use named arguments for complicated function signatures](#use-named-arguments-for-complicated-function-signatures)
+    - [No magic numbers](#no-magic-numbers)
+    - [Use dataclasses, not tuples](#use-dataclasses-not-tuples)
   - [Script structure and organization](#script-structure-and-organization)
     - [Use `__main__` guard](#use-__main__-guard)
     - [Use `argparse` for CLI flags](#use-argparse-for-cli-flags)
@@ -22,10 +21,10 @@ Table of Contents
     - [Validate that operations actually succeeded](#validate-that-operations-actually-succeeded)
     - [Fail-fast behavior](#fail-fast-behavior)
     - [No timeouts on basic binutils](#no-timeouts-on-basic-binutils)
-  - [Code quality and readability](#code-quality-and-readability)
-    - [Use named arguments for complicated function signatures](#use-named-arguments-for-complicated-function-signatures)
-    - [No magic numbers](#no-magic-numbers)
-    - [Use dataclasses, not tuples](#use-dataclasses-not-tuples)
+  - [Filesystem and path operations](#filesystem-and-path-operations)
+    - [Use `pathlib` for filesystem paths](#use-pathlib-for-filesystem-paths)
+    - [Don't make assumptions about the current working directory](#dont-make-assumptions-about-the-current-working-directory)
+    - [No hard-coded project paths](#no-hard-coded-project-paths)
   - [Performance best practices](#performance-best-practices)
   - [Testing standards](#testing-standards)
 - [Reference material](#reference-material)
@@ -46,7 +45,9 @@ The guidelines here extend PEP 8 for our projects.
 
 ## Style guidelines
 
-### Type hints
+### Code quality and readability
+
+#### Add specific type hints liberally
 
 Add type hints (see [`typing`](https://docs.python.org/3/library/typing.html))
 to function signatures to improve code clarity and enable static analysis.
@@ -68,8 +69,6 @@ Type hint best practices:
 - Import the actual types you need (not from `typing` for basic containers)
 - Use specific return types (not `tuple`, use `tuple[Path, int]`)
 - For dict values with structure, define a dataclass
-
-#### Add specific type hints liberally
 
 **Use specific type hints. Never use `Any` except in rare generic code.**
 
@@ -162,138 +161,128 @@ def parallel_prepare_kernels(
         ...
 ```
 
-### Filesystem and path operations
+#### Use named arguments for complicated function signatures
 
-#### Use `pathlib` for filesystem paths
-
-Use [`pathlib.Path`](https://docs.python.org/3/library/pathlib.html) for
-path and filesystem operations. Avoid string manipulation and
-[`os.path`](https://docs.python.org/3/library/os.path.html).
+Using positional arguments for functions that accept many arguments is error
+prone. Use keyword arguments to make function calls explicit and
+self-documenting.
 
 Benefits:
 
-- **Platform-independent:** Handles Windows vs Unix path separators, symlinks,
-  and other features automatically
-- **Readable:** Operators like `/` and `.suffix` are easier to understand
-- **Type-safe:** Dedicated types help catch errors at development time
-- **Feature-rich:** Built-in methods like `.exists()`, `.mkdir()`, `.glob()`
+- **Readability:** Clear what each argument represents at the call site
+- **Safety:** Prevents accidentally swapping arguments of the same type
+- **Maintainability:** Function signature can evolve without breaking calls
 
 > [!TIP]
-> See the official
-> ["Corresponding tools" documentation](https://docs.python.org/3/library/pathlib.html#corresponding-tools)
-> for a table mapping from various `os` functions to `Path` equivalents.
+> Consider using named arguments when:
+>
+> - Function has more than 2-3 parameters
+> - Multiple parameters have the same type (especially booleans)
+> - The meaning of arguments isn't obvious from context
 
 ✅ **Preferred:**
 
 ```python
-from pathlib import Path
+# Intent is immediately clear
+result = build_artifacts(
+    amdgpu_family="gfx942",
+    enable_testing=True,
+    use_ccache=False,
+    build_dir="/tmp/build",
+    components=["rocblas", "hipblas"],
+)
 
-# Clear, readable, platform-independent
-artifact_path = Path(output_dir) / artifact_group / "rocm.tar.gz"
-
-# Concise and type-safe
-artifacts_dir = Path(base_dir) / "build" / "artifacts"
-if artifacts_dir.exists():
-    files = list(artifacts_dir.iterdir())
+# Flags are self-documenting
+process_files(
+    input_dir=input_dir,
+    output_dir=output_dir,
+    overwrite=True,
+    validate=False,
+    compress=True,
+)
 ```
 
 ❌ **Avoid:**
 
 ```python
-import os
+# What do these values mean? Easy to mix up the order
+result = build_artifacts(
+    "gfx942",
+    True,
+    False,
+    "/tmp/build",
+    ["rocblas", "hipblas"],
+)
 
-# Hard to read, platform-specific separators (Windows uses `\`)
-artifact_path = output_dir + "/" + artifact_group + "/" + "rocm.tar.gz"
-
-# Portable but verbose and may repeat separators if arguments include them already
-artifact_path = output_dir + os.path.sep + artifact_group + os.path.sep + "rocm.tar.gz"
-
-# Verbose and error-prone
-if os.path.exists(os.path.join(base_dir, "build", "artifacts")):
-    files = os.listdir(os.path.join(base_dir, "build", "artifacts"))
+# Even worse: easy to swap boolean flags
+process_files(input_dir, output_dir, True, False, True)
 ```
 
-#### Don't make assumptions about the current working directory
+#### No magic numbers
 
-Scripts should be runnable from the repository root, their script subdirectory,
-and other locations. They should not assume any particular current working
-directory.
+**Don't use unexplained magic numbers, especially for estimates.**
 
 Benefits:
 
-- **Location-independent:** Script works from any directory
-- **Explicit:** Clear where files are relative to the script
-- **CI-friendly:** Works in CI environments with varying working directories,
-  especially when scripts and workflows are used in other repositories
+- Code is self-documenting
+- No false precision from made-up values
+- Easier to understand and maintain
+- Prevents misleading information
 
 ✅ **Preferred:**
 
 ```python
-from pathlib import Path
-
-# Establish script's location as reference point
-THIS_SCRIPT_DIR = Path(__file__).resolve().parent
-THEROCK_DIR = THIS_SCRIPT_DIR.parent
-
-# Build paths relative to script location
-config_file = THIS_SCRIPT_DIR / "config.json"
-# Build paths relative to repository root
-version_file = THEROCK_DIR / "version.json"
+# Either track the real size or don't log it
+new_size = binary_path.stat().st_size
+print(f"Device code stripped, new size: {new_size} bytes")
 ```
 
 ❌ **Avoid:**
 
 ```python
-from pathlib import Path
-
-# Assumes script is run from repository root
-config_file = Path("build_tools/config.json")
-
-# Assumes script is run from its own directory
-data_file = Path("../data/artifacts.tar.gz")
+original_size = binary_path.stat().st_size + 8000000  # Estimate original size
+print(f"Stripped {original_size - new_size} bytes")
 ```
 
-#### No hard-coded project paths
+#### Use dataclasses, not tuples
 
-**Never hard-code project-specific paths. Code should be portable.**
+**For non-trivial data with multiple fields, use dataclasses instead of tuples.**
 
 Benefits:
 
-- Works across different development environments
-- CI/CD friendly
-- Easier for new contributors
-- No accidental dependencies on specific machine setups
+- Self-documenting: Field names make code clearer
+- IDE-friendly: Autocomplete and type checking work
+- Refactoring-safe: Adding fields doesn't break positional unpacking
+- Less error-prone: Can't accidentally swap fields of the same type
 
 ✅ **Preferred:**
 
 ```python
-# Use system defaults or user-configurable paths
-with tempfile.TemporaryDirectory() as tmpdir:
-    process(tmpdir)
+@dataclass
+class KpackInfo:
+    """Information about a created kpack file."""
+    kpack_path: Path
+    size: int
+    kernel_count: int
 
-# Use environment variables or relative paths
-CONFIG_PATH = Path(os.environ.get("ROCM_CONFIG", "config.json"))
-
-# Or derive from module location
-CONFIG_PATH = Path(__file__).parent / "config.json"
+def create_kpack_files(...) -> dict[str, KpackInfo]:
+    """Returns: Dict mapping arch to KpackInfo"""
+    return {"gfx1100": KpackInfo(kpack_path=path, size=12345, kernel_count=42)}
 ```
 
 ❌ **Avoid:**
 
 ```python
-# Hard-coded developer-specific paths
-with tempfile.TemporaryDirectory(dir="/develop/tmp") as tmpdir:
-    process(tmpdir)
-
-CONFIG_PATH = Path("/home/stella/rocm-workspace/config.json")
+def create_kpack_files(...) -> dict[str, tuple[Path, int, int]]:
+    """Returns: Dict mapping arch to (kpack_path, size, kernel_count)"""
+    return {"gfx1100": (path, 12345, 42)}  # What's what?
 ```
 
-Key points:
+When tuples are OK:
 
-- Use `tempfile.TemporaryDirectory()` without `dir=` argument (uses system default)
-- Use environment variables for configurable paths
-- Use relative paths or derive from `__file__` when appropriate
-- If a specific temp location is needed, make it configurable via environment variable
+- Simple pairs where meaning is obvious: `(x, y)`, `(min, max)`
+- Unpacking from standard library functions: `os.path.split()`
+- Single-use internal return values that are immediately unpacked
 
 ### Script structure and organization
 
@@ -729,130 +718,138 @@ subprocess.check_output([readelf, "-S", file])
 subprocess.check_output([readelf, "-S", file], timeout=10)
 ```
 
-### Code quality and readability
+### Filesystem and path operations
 
-#### Use named arguments for complicated function signatures
+#### Use `pathlib` for filesystem paths
 
-Using positional arguments for functions that accept many arguments is error
-prone. Use keyword arguments to make function calls explicit and
-self-documenting.
+Use [`pathlib.Path`](https://docs.python.org/3/library/pathlib.html) for
+path and filesystem operations. Avoid string manipulation and
+[`os.path`](https://docs.python.org/3/library/os.path.html).
 
 Benefits:
 
-- **Readability:** Clear what each argument represents at the call site
-- **Safety:** Prevents accidentally swapping arguments of the same type
-- **Maintainability:** Function signature can evolve without breaking calls
+- **Platform-independent:** Handles Windows vs Unix path separators, symlinks,
+  and other features automatically
+- **Readable:** Operators like `/` and `.suffix` are easier to understand
+- **Type-safe:** Dedicated types help catch errors at development time
+- **Feature-rich:** Built-in methods like `.exists()`, `.mkdir()`, `.glob()`
 
 > [!TIP]
-> Consider using named arguments when:
->
-> - Function has more than 2-3 parameters
-> - Multiple parameters have the same type (especially booleans)
-> - The meaning of arguments isn't obvious from context
+> See the official
+> ["Corresponding tools" documentation](https://docs.python.org/3/library/pathlib.html#corresponding-tools)
+> for a table mapping from various `os` functions to `Path` equivalents.
 
 ✅ **Preferred:**
 
 ```python
-# Intent is immediately clear
-result = build_artifacts(
-    amdgpu_family="gfx942",
-    enable_testing=True,
-    use_ccache=False,
-    build_dir="/tmp/build",
-    components=["rocblas", "hipblas"],
-)
+from pathlib import Path
 
-# Flags are self-documenting
-process_files(
-    input_dir=input_dir,
-    output_dir=output_dir,
-    overwrite=True,
-    validate=False,
-    compress=True,
-)
+# Clear, readable, platform-independent
+artifact_path = Path(output_dir) / artifact_group / "rocm.tar.gz"
+
+# Concise and type-safe
+artifacts_dir = Path(base_dir) / "build" / "artifacts"
+if artifacts_dir.exists():
+    files = list(artifacts_dir.iterdir())
 ```
 
 ❌ **Avoid:**
 
 ```python
-# What do these values mean? Easy to mix up the order
-result = build_artifacts(
-    "gfx942",
-    True,
-    False,
-    "/tmp/build",
-    ["rocblas", "hipblas"],
-)
+import os
 
-# Even worse: easy to swap boolean flags
-process_files(input_dir, output_dir, True, False, True)
+# Hard to read, platform-specific separators (Windows uses `\`)
+artifact_path = output_dir + "/" + artifact_group + "/" + "rocm.tar.gz"
+
+# Portable but verbose and may repeat separators if arguments include them already
+artifact_path = output_dir + os.path.sep + artifact_group + os.path.sep + "rocm.tar.gz"
+
+# Verbose and error-prone
+if os.path.exists(os.path.join(base_dir, "build", "artifacts")):
+    files = os.listdir(os.path.join(base_dir, "build", "artifacts"))
 ```
 
-#### No magic numbers
+#### Don't make assumptions about the current working directory
 
-**Don't use unexplained magic numbers, especially for estimates.**
+Scripts should be runnable from the repository root, their script subdirectory,
+and other locations. They should not assume any particular current working
+directory.
 
 Benefits:
 
-- Code is self-documenting
-- No false precision from made-up values
-- Easier to understand and maintain
-- Prevents misleading information
+- **Location-independent:** Script works from any directory
+- **Explicit:** Clear where files are relative to the script
+- **CI-friendly:** Works in CI environments with varying working directories,
+  especially when scripts and workflows are used in other repositories
 
 ✅ **Preferred:**
 
 ```python
-# Either track the real size or don't log it
-new_size = binary_path.stat().st_size
-print(f"Device code stripped, new size: {new_size} bytes")
+from pathlib import Path
+
+# Establish script's location as reference point
+THIS_SCRIPT_DIR = Path(__file__).resolve().parent
+THEROCK_DIR = THIS_SCRIPT_DIR.parent
+
+# Build paths relative to script location
+config_file = THIS_SCRIPT_DIR / "config.json"
+# Build paths relative to repository root
+version_file = THEROCK_DIR / "version.json"
 ```
 
 ❌ **Avoid:**
 
 ```python
-original_size = binary_path.stat().st_size + 8000000  # Estimate original size
-print(f"Stripped {original_size - new_size} bytes")
+from pathlib import Path
+
+# Assumes script is run from repository root
+config_file = Path("build_tools/config.json")
+
+# Assumes script is run from its own directory
+data_file = Path("../data/artifacts.tar.gz")
 ```
 
-#### Use dataclasses, not tuples
+#### No hard-coded project paths
 
-**For non-trivial data with multiple fields, use dataclasses instead of tuples.**
+**Never hard-code project-specific paths. Code should be portable.**
 
 Benefits:
 
-- Self-documenting: Field names make code clearer
-- IDE-friendly: Autocomplete and type checking work
-- Refactoring-safe: Adding fields doesn't break positional unpacking
-- Less error-prone: Can't accidentally swap fields of the same type
+- Works across different development environments
+- CI/CD friendly
+- Easier for new contributors
+- No accidental dependencies on specific machine setups
 
 ✅ **Preferred:**
 
 ```python
-@dataclass
-class KpackInfo:
-    """Information about a created kpack file."""
-    kpack_path: Path
-    size: int
-    kernel_count: int
+# Use system defaults or user-configurable paths
+with tempfile.TemporaryDirectory() as tmpdir:
+    process(tmpdir)
 
-def create_kpack_files(...) -> dict[str, KpackInfo]:
-    """Returns: Dict mapping arch to KpackInfo"""
-    return {"gfx1100": KpackInfo(kpack_path=path, size=12345, kernel_count=42)}
+# Use environment variables or relative paths
+CONFIG_PATH = Path(os.environ.get("ROCM_CONFIG", "config.json"))
+
+# Or derive from module location
+CONFIG_PATH = Path(__file__).parent / "config.json"
 ```
 
 ❌ **Avoid:**
 
 ```python
-def create_kpack_files(...) -> dict[str, tuple[Path, int, int]]:
-    """Returns: Dict mapping arch to (kpack_path, size, kernel_count)"""
-    return {"gfx1100": (path, 12345, 42)}  # What's what?
+# Hard-coded developer-specific paths
+with tempfile.TemporaryDirectory(dir="/develop/tmp") as tmpdir:
+    process(tmpdir)
+
+CONFIG_PATH = Path("/home/stella/rocm-workspace/config.json")
 ```
 
-When tuples are OK:
+Key points:
 
-- Simple pairs where meaning is obvious: `(x, y)`, `(min, max)`
-- Unpacking from standard library functions: `os.path.split()`
-- Single-use internal return values that are immediately unpacked
+- Use `tempfile.TemporaryDirectory()` without `dir=` argument (uses system default)
+- Use environment variables for configurable paths
+- Use relative paths or derive from `__file__` when appropriate
+- If a specific temp location is needed, make it configurable via environment variable
 
 ### Performance best practices
 
