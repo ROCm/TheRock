@@ -80,3 +80,12 @@ runs:
           --artifact-group=${ARTIFACT_GROUP} \
           --output-dir=${OUTPUT_ARTIFACTS_DIR} \
           ${FETCH_ARTIFACT_ARGS}
+
+    - name: Install additional test requirements for rocprofiler-sdk
+      if: ${{ contains(inputs.FETCH_ARTIFACT_ARGS, 'rocprofiler-sdk') }}
+      shell: bash
+      env:
+        OUTPUT_ARTIFACTS_DIR: ${{ inputs.OUTPUT_ARTIFACTS_DIR }}
+      run: |
+        uv pip install -r ${OUTPUT_ARTIFACTS_DIR}/share/rocprofiler-sdk/tests/requirements.txt
+        uv pip freeze
