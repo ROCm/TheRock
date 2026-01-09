@@ -47,7 +47,7 @@ def get_devel_root() -> Path:
     except ModuleNotFoundError as e:
         raise ModuleNotFoundError(
             "ROCm SDK development package is not installed. This can typically be "
-            "obtained by installing `rocm[devel]` from your package manager"
+            "obtained by installing `rocm-sdk[devel]` from your package manager"
         ) from e
     rocm_sdk_devel_path = _get_package_path(rocm_sdk_devel)
     if rocm_sdk_devel_path is None:
@@ -93,7 +93,7 @@ def _expand_devel_contents(rocm_sdk_devel_path: Path, site_lib_path: Path):
     # to preserve fail-fast behavior
     assert len(dist_names_list) >= 1, (
         "No distribution candidates found for 'rocm_sdk_devel'. "
-        "Ensure rocm[devel] is installed in the current environment."
+        "Ensure rocm-sdk[devel] is installed in the current environment."
     )
     # Try to find candidates until found one with files and a usable RECORD
     record_pkg_file = None
@@ -121,9 +121,9 @@ def _expand_devel_contents(rocm_sdk_devel_path: Path, site_lib_path: Path):
 
     if dist_files is None:
         raise ImportError(
-            "Cannot expand the `rocm[devel]` package because it was not installed "
+            "Cannot expand the `rocm-sdk[devel]` package because it was not installed "
             "by a user-mode package manager and is managed by the system. Please "
-            "install the `rocm` in a virtual environment."
+            "install the `rocm-sdk` in a virtual environment."
         )
 
     if dist_name is None or record_pkg_file is None:
@@ -195,13 +195,16 @@ def _lock_and_expand(
                             #   hash (empty)
                             #   size (empty)
                             record_file.write(f"{ti.name},,\n")
-                        if _is_windows() and ti.issym():
-                            # Convert symlinks into hardlinks on Windows.
-                            # This saves disk space while improving compatibility
-                            # on systems without as robust symlink support.
+                        if ti.issym():
+                            # Convert symlinks into hardlinks on all platforms.
+                            # This saves disk space while improving compatibility.
+                            # On Windows: symlinks require admin privileges.
+                            # On Linux: native binaries that use readlink(/proc/self/exe)
+                            #   to determine their location will resolve symlinks and
+                            #   report the wrong path (e.g., _rocm_sdk_core instead of
+                            #   _rocm_sdk_devel). Hardlinks avoid this issue.
                             # As needed, we could also generate tarfiles with
                             # copies instead of symlinks, at the cost of disk space.
-                            # Creating symlinks on Windows also requires admin privileges.
                             parent_path.mkdir(parents=True, exist_ok=True)
                             symlink_target = ti.linkname
                             hardlink_target = dest_path.parent / symlink_target
