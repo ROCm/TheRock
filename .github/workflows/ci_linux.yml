@@ -40,6 +40,10 @@ on:
         type: string
         description: "TheRock git ref to use (for external repos)"
         default: ""
+      repository_override:
+        type: string
+        description: "Override github.repository for testing (e.g., 'ROCm/rocm-libraries')"
+        default: ""
 
 permissions:
   contents: read
@@ -60,6 +64,7 @@ jobs:
       expect_failure: ${{ inputs.expect_failure }}
       external_source_checkout: ${{ inputs.external_source_checkout }}
       therock_ref: ${{ inputs.therock_ref }}
+      repository_override: ${{ inputs.repository_override }}
     permissions:
       contents: read
       id-token: write

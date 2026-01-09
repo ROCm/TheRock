@@ -770,16 +770,30 @@ if __name__ == "__main__":
     is_external_repo = False
     repo_name = None
 
-    # Check if we're in rocm-libraries or rocm-systems directory
-    cwd_str = str(cwd).lower()
-    if "rocm-libraries" in cwd_str:
-        is_external_repo = True
-        repo_name = "rocm-libraries"
-        print(f"Detected external repository: rocm-libraries")
-    elif "rocm-systems" in cwd_str:
-        is_external_repo = True
-        repo_name = "rocm-systems"
-        print(f"Detected external repository: rocm-systems")
+    # Check for repository override (for testing from TheRock)
+    repo_override = os.environ.get("GITHUB_REPOSITORY_OVERRIDE", "")
+    if repo_override:
+        print(f"Using repository override: {repo_override}")
+        repo_name_from_override = repo_override.split("/")[-1] if "/" in repo_override else repo_override
+        if "rocm-libraries" in repo_name_from_override.lower():
+            is_external_repo = True
+            repo_name = "rocm-libraries"
+            print(f"Detected external repository from override: rocm-libraries")
+        elif "rocm-systems" in repo_name_from_override.lower():
+            is_external_repo = True
+            repo_name = "rocm-systems"
+            print(f"Detected external repository from override: rocm-systems")
+    else:
+        # Check if we're in rocm-libraries or rocm-systems directory
+        cwd_str = str(cwd).lower()
+        if "rocm-libraries" in cwd_str:
+            is_external_repo = True
+            repo_name = "rocm-libraries"
+            print(f"Detected external repository: rocm-libraries")
+        elif "rocm-systems" in cwd_str:
+            is_external_repo = True
+            repo_name = "rocm-systems"
+            print(f"Detected external repository: rocm-systems")
 
     if is_external_repo:
         print("Using TheRock's matrix configuration for external repository")

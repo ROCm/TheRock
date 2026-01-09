@@ -112,17 +112,17 @@ def detect_projects_from_changes(
     if github_event_name == "schedule":
         print("Schedule event detected - building all projects")
         subtrees_to_build = set(subtree_to_project_map.keys())
-    # For workflow_dispatch with explicit project list
-    elif github_event_name == "workflow_dispatch" and projects_input:
+    # For workflow_dispatch with explicit project list (override for testing)
+    elif github_event_name == "workflow_dispatch" and projects_input and projects_input.strip():
         projects_input = projects_input.strip()
-        print(f"workflow_dispatch with projects input: '{projects_input}'")
+        print(f"workflow_dispatch with projects override: '{projects_input}'")
 
         if projects_input.lower() == "all":
-            print("Building all projects (requested via 'all')")
-            subtrees_to_build = set(therock_matrix.subtree_to_project_map.keys())
+            print("Building all projects (override: 'all')")
+            subtrees_to_build = set(subtree_to_project_map.keys())
         else:
-            # Parse space-separated project list (e.g., "projects/rocprim projects/hipcub")
-            requested_subtrees = projects_input.split()
+            # Parse comma-separated project list (e.g., "projects/rocprim,projects/hipcub")
+            requested_subtrees = [p.strip() for p in projects_input.split(",") if p.strip()]
             subtrees_to_build = set()
 
             for subtree in requested_subtrees:
@@ -134,9 +134,9 @@ def detect_projects_from_changes(
                     print(f"WARNING: Unknown project '{subtree}' - skipping")
 
             if not subtrees_to_build:
-                print("No valid projects found in input - defaulting to all projects")
-                subtrees_to_build = set(subtree_to_project_map.keys())
-    # For PRs and pushes, detect based on changed files
+                print("No valid projects found in override - skipping all builds")
+                return []
+    # For PRs, pushes, and workflow_dispatch without project override - detect based on changed files
     else:
         print(f"Detecting changed files for event: {github_event_name}")
         modified_paths = get_modified_paths(base_ref)

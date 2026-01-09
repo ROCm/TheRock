@@ -56,6 +56,14 @@ on:
         type: string
         description: "TheRock git ref to use (for external repos)"
         default: ""
+      repository_override:
+        type: string
+        description: "Override github.repository for testing (e.g., 'ROCm/rocm-libraries')"
+        default: ""
+      projects:
+        type: string
+        description: "Override: comma-separated list of project paths to test (e.g., 'projects/rocprim,projects/hipcub'). Leave blank for normal behavior (auto-detect from PR changes). Use 'all' to test all projects."
+        default: ""
   pull_request:
     types:
       - labeled
@@ -81,6 +89,8 @@ jobs:
       build_variant: "release"
       external_source_checkout: ${{ inputs.external_source_checkout || false }}
       therock_ref: ${{ inputs.therock_ref || '' }}
+      repository_override: ${{ inputs.repository_override || '' }}
+      projects: ${{ inputs.projects || '' }}
 
   linux_build_and_test:
     name: Linux::${{ matrix.variant.family }}::${{ matrix.variant.build_variant_label }}
@@ -112,6 +122,7 @@ jobs:
       sanity_check_only_for_family: ${{ matrix.variant.sanity_check_only_for_family == true }}
       external_source_checkout: ${{ inputs.external_source_checkout || false }}
       therock_ref: ${{ inputs.therock_ref || '' }}
+      repository_override: ${{ inputs.repository_override || '' }}
     permissions:
       contents: read
       id-token: write
@@ -145,6 +156,7 @@ jobs:
       sanity_check_only_for_family: ${{ matrix.variant.sanity_check_only_for_family == true }}
       external_source_checkout: ${{ inputs.external_source_checkout || false }}
       therock_ref: ${{ inputs.therock_ref || '' }}
+      repository_override: ${{ inputs.repository_override || '' }}
     permissions:
       contents: read
       id-token: write

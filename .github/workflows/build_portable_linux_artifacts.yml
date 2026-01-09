@@ -57,6 +57,10 @@ on:
         type: string
         description: "TheRock git ref to use (for external repos)"
         default: ""
+      repository_override:
+        type: string
+        description: "Override github.repository for testing (e.g., 'ROCm/rocm-libraries')"
+        default: ""
 
 # See the details regarding permissions from the link:
 # https://github.com/aws-actions/configure-aws-credentials?tab=readme-ov-file#oidc
@@ -106,7 +110,7 @@ jobs:
       - name: Auto-detect external source configuration
         if: ${{ inputs.external_source_checkout }}
         id: detect
-        run: python3 $THEROCK_DIR/build_tools/github_actions/detect_external_repo_config.py "${{ github.repository }}" --workspace "${{ github.workspace }}"
+        run: python3 $THEROCK_DIR/build_tools/github_actions/detect_external_repo_config.py "${{ inputs.repository_override || github.repository }}" --workspace "${{ github.workspace }}"
 
       - name: Checkout composable_kernel repository
         if: ${{ inputs.external_source_checkout && steps.detect.outputs.enable_ck == 'true' }}
