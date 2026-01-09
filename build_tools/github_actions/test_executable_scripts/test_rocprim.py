@@ -71,6 +71,10 @@ SMOKE_TESTS = [
     "TestHipGraphBasic",
 ]
 
+# sharding
+shard_index = int(os.getenv("SHARD_INDEX", "1")) - 1
+total_shards = int(os.getenv("TOTAL_SHARDS", "1"))
+
 cmd = [
     "ctest",
     "--test-dir",
@@ -82,6 +86,9 @@ cmd = [
     "900",
     "--repeat",
     "until-pass:6",
+    # shards the tests by running a specific set of tests based on starting test (shard_index) and stride (total_shards)
+    "--tests-information",
+    f"{shard_index},,{total_shards}",
 ]
 
 # If smoke tests are enabled, we run smoke tests only.

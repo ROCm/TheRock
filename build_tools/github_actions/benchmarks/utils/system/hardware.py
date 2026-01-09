@@ -3,6 +3,8 @@
 import subprocess
 import re
 import os
+import platform
+import multiprocessing
 from typing import List, Optional, Dict
 from dataclasses import dataclass, field
 
@@ -112,7 +114,18 @@ class HardwareDetector:
         self.detect_gpu()
 
     def detect_cpu(self) -> CpuInfo:
-        """Detect CPU information from /proc/cpuinfo and lscpu.
+        """Detect CPU information (cross-platform).
+
+        Returns:
+            CpuInfo object
+        """
+        if platform.system() == "Windows":
+            return self._detect_cpu_windows()
+        else:
+            return self._detect_cpu_linux()
+
+    def _detect_cpu_linux(self) -> CpuInfo:
+        """Detect CPU information from /proc/cpuinfo and lscpu (Linux).
 
         Returns:
             CpuInfo object
@@ -236,6 +249,126 @@ class HardwareDetector:
 
         except Exception:
             self.cpu_info = CpuInfo()
+
+        return self.cpu_info
+
+    def _detect_cpu_windows(self) -> CpuInfo:
+        """Detect CPU information using Windows APIs and wmic (Windows).
+
+        Returns:
+            CpuInfo object
+        """
+        try:
+            # Get CPU cores using multiprocessing
+            cores = multiprocessing.cpu_count()
+
+            # Get CPU info using wmic
+            model_name = "Unknown"
+            clock_speed_mhz = 0
+            sockets = 1
+            l1_cache_kb = 0
+            l2_cache_kb = 0
+            l3_cache_kb = 0
+            ram_size_gb = 0
+
+            try:
+                # Get CPU model name
+                cpu_output = subprocess.check_output(
+                    ["wmic", "cpu", "get", "Name"], text=True, stderr=subprocess.DEVNULL
+                ).strip()
+                lines = [
+                    line.strip() for line in cpu_output.split("\n") if line.strip()
+                ]
+                if len(lines) > 1:
+                    model_name = lines[1]  # First line is header "Name"
+
+                # Get CPU clock speed (in MHz)
+                speed_output = subprocess.check_output(
+                    ["wmic", "cpu", "get", "MaxClockSpeed"],
+                    text=True,
+                    stderr=subprocess.DEVNULL,
+                ).strip()
+                lines = [
+                    line.strip() for line in speed_output.split("\n") if line.strip()
+                ]
+                if len(lines) > 1 and lines[1].isdigit():
+                    clock_speed_mhz = int(lines[1])
+
+                # Get number of physical CPUs (sockets)
+                socket_output = subprocess.check_output(
+                    ["wmic", "cpu", "get", "NumberOfCores"],
+                    text=True,
+                    stderr=subprocess.DEVNULL,
+                ).strip()
+                lines = [
+                    line.strip() for line in socket_output.split("\n") if line.strip()
+                ]
+                if len(lines) > 1 and lines[1].isdigit():
+                    physical_cores = int(lines[1])
+                    # If we have hyperthreading, sockets = logical cores / (physical cores * 2)
+                    # Otherwise sockets = logical cores / physical cores
+                    if physical_cores > 0:
+                        sockets = max(1, cores // physical_cores)
+
+                # Get L2 cache size
+                cache_output = subprocess.check_output(
+                    ["wmic", "cpu", "get", "L2CacheSize"],
+                    text=True,
+                    stderr=subprocess.DEVNULL,
+                ).strip()
+                lines = [
+                    line.strip() for line in cache_output.split("\n") if line.strip()
+                ]
+                if len(lines) > 1 and lines[1].isdigit():
+                    l2_cache_kb = int(lines[1])
+
+                # Get L3 cache size
+                cache_output = subprocess.check_output(
+                    ["wmic", "cpu", "get", "L3CacheSize"],
+                    text=True,
+                    stderr=subprocess.DEVNULL,
+                ).strip()
+                lines = [
+                    line.strip() for line in cache_output.split("\n") if line.strip()
+                ]
+                if len(lines) > 1 and lines[1].isdigit():
+                    l3_cache_kb = int(lines[1])
+
+                # Get total RAM size (in KB, convert to GB)
+                mem_output = subprocess.check_output(
+                    ["wmic", "computersystem", "get", "TotalPhysicalMemory"],
+                    text=True,
+                    stderr=subprocess.DEVNULL,
+                ).strip()
+                lines = [
+                    line.strip() for line in mem_output.split("\n") if line.strip()
+                ]
+                if len(lines) > 1 and lines[1].isdigit():
+                    ram_size_gb = int(lines[1]) // (1024 * 1024 * 1024)
+
+            except Exception:
+                # If wmic fails, use basic detection
+                pass
+
+            self.cpu_info = CpuInfo(
+                model_name=model_name,
+                cores=cores,
+                sockets=sockets,
+                ram_size_gb=ram_size_gb,
+                numa_nodes=1,  # NUMA detection on Windows is complex, default to 1
+                clock_speed_mhz=clock_speed_mhz,
+                l1_cache_kb=l1_cache_kb,
+                l2_cache_kb=l2_cache_kb,
+                l3_cache_kb=l3_cache_kb,
+            )
+
+        except Exception:
+            # Fallback to minimal detection with at least the core count
+            try:
+                cores = multiprocessing.cpu_count()
+                self.cpu_info = CpuInfo(cores=cores, sockets=1)
+            except Exception:
+                self.cpu_info = CpuInfo()
 
         return self.cpu_info
 
