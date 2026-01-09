@@ -33,8 +33,8 @@ on:
         type: boolean
         default: false
       monitor_interval:
-        type: number
-        default: 30
+        type: string
+        default: "30"
 
   workflow_call:
     inputs:
@@ -59,8 +59,8 @@ on:
         type: boolean
         default: false
       monitor_interval:
-        type: number
-        default: 30
+        type: string
+        default: "30"
 
 # See the details regarding permissions from the link:
 # https://github.com/aws-actions/configure-aws-credentials?tab=readme-ov-file#oidc

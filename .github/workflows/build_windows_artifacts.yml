@@ -32,8 +32,8 @@ on:
         type: boolean
         default: false
       monitor_interval:
-        type: number
-        default: 30
+        type: string
+        default: "30"
 
   workflow_call:
     inputs:
@@ -58,8 +58,8 @@ on:
         type: boolean
         default: false
       monitor_interval:
-        type: number
-        default: 30
+        type: string
+        default: "30"
 
 permissions:
   contents: read
