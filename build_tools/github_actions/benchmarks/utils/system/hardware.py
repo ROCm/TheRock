@@ -3,8 +3,11 @@
 import subprocess
 import re
 import os
-from typing import List, Optional, Dict
+import json
+from typing import List, Optional, Dict, Tuple
 from dataclasses import dataclass, field
+
+from ..logger import log
 
 
 @dataclass
@@ -77,6 +80,7 @@ class GpuInfo:
     partition_mode: str = "Unknown"
     xgmi_type: str = "Unknown"
     host_driver: str = "Unknown"
+    target_graphics_version: str = "Unknown"  # e.g., 'gfx942', 'gfx1100'
     firmwares: List[Dict[str, str]] = field(default_factory=list)
 
     def __str__(self):
@@ -84,7 +88,7 @@ class GpuInfo:
 
 
 def _get_rocm_tool_path(tool_name: str) -> str:
-    """Get full path to ROCm tool (rocm-smi or amd-smi) using THEROCK_BIN_DIR.
+    """Get full path to ROCm tool (amd-smi) using THEROCK_BIN_DIR.
 
     Args:
         tool_name: Name of the tool ('rocm-smi' or 'amd-smi')
@@ -240,20 +244,42 @@ class HardwareDetector:
         return self.cpu_info
 
     def detect_gpu(self) -> List[GpuInfo]:
-        """Detect GPU information using lspci and ROCm tools.
+        """Detect GPU information using ROCm tools (amd-smi) and lspci.
+
+        Tries amd-smi first (better for compute GPUs like MI300X),
+        then falls back to lspci if needed.
 
         Returns:
             List of GpuInfo objects
         """
         self.gpu_list = []
 
+        # PRIMARY METHOD: Try amd-smi first (works better for compute GPUs, SR-IOV, containers)
+        log.debug("Trying primary GPU detection with amd-smi...")
+        if self._detect_gpu_with_amd_smi():
+            log.debug(f"Successfully detected {len(self.gpu_list)} GPU(s) with amd-smi")
+            return self.gpu_list
+
+        # FALLBACK METHOD: Use lspci (works for desktop/workstation GPUs)
+        log.debug("Primary detection found 0 GPUs, trying fallback lspci method...")
+        self._detect_gpu_with_lspci()
+
+        if len(self.gpu_list) > 0:
+            log.debug(f"Successfully detected {len(self.gpu_list)} GPU(s) with lspci")
+        else:
+            log.debug("No GPUs detected by either method")
+
+        return self.gpu_list
+
+    def _detect_gpu_with_lspci(self) -> bool:
+        """Detect GPUs using lspci (fallback method).
+
+        Returns:
+            True if GPUs detected, False otherwise
+        """
         try:
-            import logging
-
-            logger = logging.getLogger(__name__)
-
             # Run lspci to find AMD GPUs
-            logger.debug("Running lspci to detect AMD GPUs...")
+            log.debug("Running lspci to detect AMD GPUs...")
             result = subprocess.run(
                 ["lspci", "-d", "1002:", "-nn"],
                 capture_output=True,
@@ -262,10 +288,10 @@ class HardwareDetector:
             )
 
             if result.returncode != 0:
-                logger.debug(f"lspci failed with return code {result.returncode}")
-                return self.gpu_list
+                log.debug(f"lspci failed with return code {result.returncode}")
+                return False
 
-            logger.debug(f"lspci output:\n{result.stdout}")
+            log.debug(f"lspci output:\n{result.stdout}")
 
             # Parse output
             for line in result.stdout.splitlines():
@@ -333,9 +359,7 @@ class HardwareDetector:
                                 if rev_match:
                                     revision_id = rev_match.group(1)
 
-                            logger.debug(
-                                f"GPU {pci_address}: revision_id={revision_id}"
-                            )
+                            log.debug(f"GPU {pci_address}: revision_id={revision_id}")
 
                             # Extract VRAM from memory regions
                             # Look for large memory regions (typically VRAM)
@@ -362,12 +386,10 @@ class HardwareDetector:
 
                                 vram_size_gb = int(max_size)
 
-                            logger.debug(
-                                f"GPU {pci_address}: vram_size_gb={vram_size_gb}"
-                            )
+                            log.debug(f"GPU {pci_address}: vram_size_gb={vram_size_gb}")
 
                         except Exception as e:
-                            logger.debug(
+                            log.debug(
                                 f"Error getting GPU details for {pci_address}: {e}"
                             )
 
@@ -381,42 +403,22 @@ class HardwareDetector:
                     )
                     self.gpu_list.append(gpu)
 
-            # Try to enhance with rocm-smi or amd-smi for clocks
-            self._enhance_gpu_with_rocm()
+            return len(self.gpu_list) > 0
 
-        except Exception:
-            pass
+        except Exception as e:
+            log.debug(f"lspci detection failed: {e}")
+            return False
 
-        return self.gpu_list
+    def _detect_gpu_with_amd_smi(self) -> bool:
+        """Detect GPUs using amd-smi (primary method for compute GPUs).
 
-    def _enhance_gpu_with_rocm(self):
-        """Enhance GPU info with ROCm tools (amd-smi or rocm-smi) for VRAM, clocks, and firmware."""
-        import logging
-
-        logger = logging.getLogger(__name__)
-
-        logger.debug("Attempting to enhance GPU info with ROCm tools...")
-
-        # Try amd-smi first (newer)
-        if self._try_amd_smi():
-            logger.debug("Successfully enhanced GPU info with amd-smi")
-            return
-
-        # Fallback to rocm-smi
-        if self._try_rocm_smi():
-            logger.debug("Successfully enhanced GPU info with rocm-smi")
-        else:
-            logger.debug("No ROCm tools available for GPU enhancement")
-
-    def _try_amd_smi(self) -> bool:
-        """Try to get GPU info from amd-smi."""
-        import logging
-
-        logger = logging.getLogger(__name__)
-
+        Returns:
+            True if GPUs detected, False otherwise
+        """
         try:
             amd_smi_cmd = _get_rocm_tool_path("amd-smi")
-            logger.debug(f"Trying {amd_smi_cmd} static --json...")
+            log.debug(f"Running {amd_smi_cmd} static --json for GPU detection...")
+
             result = subprocess.run(
                 [amd_smi_cmd, "static", "--json"],
                 capture_output=True,
@@ -425,236 +427,178 @@ class HardwareDetector:
             )
 
             if result.returncode != 0:
-                logger.debug(f"amd-smi not available (exit code {result.returncode})")
+                log.debug(f"amd-smi not available (exit code {result.returncode})")
                 return False
 
-            logger.debug(f"amd-smi static output: {result.stdout[:200]}...")
-
-            import json
-
+            log.debug(f"amd-smi static output: {result.stdout[:200]}...")
             data = json.loads(result.stdout)
 
-            # Parse amd-smi output and update GPU info
-            for i, gpu in enumerate(self.gpu_list):
-                if i < len(data):
-                    gpu_data = data[i]
-                    if "vram" in gpu_data and gpu.vram_size_gb == 0:
-                        vram_mb = gpu_data.get("vram", {}).get("total", 0)
-                        gpu.vram_size_gb = vram_mb // 1024
-
-                    # Extract VBIOS version
-                    if "vbios" in gpu_data:
-                        gpu.vbios = gpu_data.get("vbios", "Unknown")
-
-                    # Extract partition mode
-                    if "partition" in gpu_data:
-                        gpu.partition_mode = gpu_data.get("partition", "Unknown")
-
-                    # Extract XGMI info
-                    if "xgmi" in gpu_data:
-                        xgmi_info = gpu_data.get("xgmi", {})
-                        if isinstance(xgmi_info, dict):
-                            gpu.xgmi_type = xgmi_info.get("type", "Unknown")
-                        else:
-                            gpu.xgmi_type = str(xgmi_info)
-
-                    # Extract driver info
-                    if "driver" in gpu_data:
-                        gpu.host_driver = gpu_data.get("driver", "Unknown")
-                    elif "driver_version" in gpu_data:
-                        gpu.host_driver = gpu_data.get("driver_version", "Unknown")
-
-                    # Extract firmware info
-                    if "firmware" in gpu_data:
-                        firmware_data = gpu_data.get("firmware", {})
-                        if isinstance(firmware_data, dict):
-                            for fw_name, fw_version in firmware_data.items():
-                                gpu.firmwares.append(
-                                    {"name": fw_name, "version": str(fw_version)}
-                                )
-                        elif isinstance(firmware_data, list):
-                            for fw_item in firmware_data:
-                                if isinstance(fw_item, dict):
-                                    gpu.firmwares.append(
-                                        {
-                                            "name": fw_item.get("name", "Unknown"),
-                                            "version": fw_item.get(
-                                                "version", "Unknown"
-                                            ),
-                                        }
-                                    )
-
-            # Get clocks
-            logger.debug(f"Trying {amd_smi_cmd} metric --json...")
-            result = subprocess.run(
-                [amd_smi_cmd, "metric", "--json"],
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-
-            if result.returncode == 0:
-                logger.debug(f"amd-smi metric output: {result.stdout[:200]}...")
-                data = json.loads(result.stdout)
-                for i, gpu in enumerate(self.gpu_list):
-                    if i < len(data):
-                        gpu_data = data[i]
-                        clocks = gpu_data.get("clocks", {})
-                        gpu.sys_clock_mhz = clocks.get("sclk", 0)
-                        gpu.mem_clock_mhz = clocks.get("mclk", 0)
-                        logger.debug(
-                            f"GPU {i}: sys_clock={gpu.sys_clock_mhz} MHz, mem_clock={gpu.mem_clock_mhz} MHz"
-                        )
+            # Handle different amd-smi output formats
+            gpu_list_data = None
+            if isinstance(data, dict) and "gpu_data" in data:
+                # New format: {"gpu_data": [...]}
+                gpu_list_data = data["gpu_data"]
+                log.debug("Detected new amd-smi format (gpu_data wrapper)")
+            elif isinstance(data, list):
+                # Old format: [...]
+                gpu_list_data = data
+                log.debug("Detected old amd-smi format (direct list)")
             else:
-                logger.debug(f"amd-smi metric failed (exit code {result.returncode})")
+                log.debug(f"Unexpected amd-smi output format: {type(data)}")
+                return False
 
-            return True
+            if not isinstance(gpu_list_data, list) or len(gpu_list_data) == 0:
+                log.debug("No GPUs found in amd-smi output")
+                return False
+
+            # Parse GPU data and create GpuInfo objects
+            for gpu_data in gpu_list_data:
+                gpu_info = GpuInfo(vendor="AMD")
+
+                # Extract asic information
+                if "asic" in gpu_data:
+                    asic = gpu_data["asic"]
+                    if isinstance(asic, dict):
+                        gpu_info.product_name = asic.get("market_name", "AMD GPU")
+                        gpu_info.device_id = asic.get("device_id", "").replace("0x", "")
+                        gpu_info.revision_id = asic.get("rev_id", "").replace("0x", "")
+                        gpu_info.target_graphics_version = asic.get(
+                            "target_graphics_version", "Unknown"
+                        )
+
+                # Extract bus information
+                if "bus" in gpu_data:
+                    bus = gpu_data["bus"]
+                    if isinstance(bus, dict):
+                        gpu_info.pci_address = bus.get("bdf", "").replace("0000:", "")
+
+                # Extract VRAM information
+                if "vram" in gpu_data:
+                    vram = gpu_data["vram"]
+                    if isinstance(vram, dict):
+                        vram_mb = vram.get("total", 0)
+                        gpu_info.vram_size_gb = vram_mb // 1024 if vram_mb > 0 else 0
+
+                # Extract VBIOS
+                if "vbios" in gpu_data:
+                    gpu_info.vbios = str(gpu_data.get("vbios", "Unknown"))
+
+                # Extract partition mode
+                if "partition" in gpu_data:
+                    gpu_info.partition_mode = str(gpu_data.get("partition", "Unknown"))
+
+                # Extract driver info
+                if "driver" in gpu_data:
+                    gpu_info.host_driver = str(gpu_data.get("driver", "Unknown"))
+                elif "driver_version" in gpu_data:
+                    gpu_info.host_driver = str(
+                        gpu_data.get("driver_version", "Unknown")
+                    )
+
+                self.gpu_list.append(gpu_info)
+
+            return len(self.gpu_list) > 0
 
         except FileNotFoundError:
-            logger.debug("amd-smi command not found")
+            log.debug("amd-smi command not found")
+            return False
+        except json.JSONDecodeError as e:
+            log.debug(f"Failed to parse amd-smi JSON output: {e}")
             return False
         except Exception as e:
-            logger.debug(f"amd-smi error: {e}")
+            log.debug(f"amd-smi detection error: {e}")
             return False
 
-    def _try_rocm_smi(self) -> bool:
-        """Try to get GPU info from rocm-smi."""
-        import logging
+    @staticmethod
+    def get_gpu_info_from_amd_smi() -> Tuple[int, Optional[str]]:
+        """Get GPU count and target graphics version directly from amd-smi.
 
-        logger = logging.getLogger(__name__)
-
+        Returns:
+            Tuple[int, Optional[str]]: (gpu_count, target_graphics_version)
+                - gpu_count: Number of GPUs detected (0 if detection fails)
+                - target_graphics_version: GPU architecture (e.g., 'gfx942', 'gfx1100') or None
+        """
         try:
-            rocm_smi_cmd = _get_rocm_tool_path("rocm-smi")
-            logger.debug(f"Trying {rocm_smi_cmd} --showmeminfo vram --json...")
+            amd_smi_cmd = _get_rocm_tool_path("amd-smi")
+            log.debug(f"Trying {amd_smi_cmd} static --json for GPU count...")
             result = subprocess.run(
-                [rocm_smi_cmd, "--showmeminfo", "vram", "--json"],
+                [amd_smi_cmd, "static", "--json"],
                 capture_output=True,
                 text=True,
                 timeout=10,
             )
 
             if result.returncode != 0:
-                logger.debug(f"rocm-smi not available (exit code {result.returncode})")
-                return False
+                log.debug(f"amd-smi not available (exit code {result.returncode})")
+                return 0, None
 
-            logger.debug(f"rocm-smi meminfo output: {result.stdout[:200]}...")
-
-            import json
-
+            log.debug(f"amd-smi static output: {result.stdout[:200]}...")
             data = json.loads(result.stdout)
 
-            # Parse rocm-smi output
-            for i, gpu in enumerate(self.gpu_list):
-                gpu_key = f"card{i}"
-                if gpu_key in data and gpu.vram_size_gb == 0:
-                    vram_mb = data[gpu_key].get("VRAM Total Memory (B)", 0) // (
-                        1024 * 1024
-                    )
-                    gpu.vram_size_gb = vram_mb // 1024
-
-            # Try to get VBIOS and other info from rocm-smi
-            try:
-                result = subprocess.run(
-                    [rocm_smi_cmd, "--showvbios", "--json"],
-                    capture_output=True,
-                    text=True,
-                    timeout=10,
-                )
-                if result.returncode == 0:
-                    vbios_data = json.loads(result.stdout)
-                    for i, gpu in enumerate(self.gpu_list):
-                        gpu_key = f"card{i}"
-                        if gpu_key in vbios_data:
-                            gpu.vbios = vbios_data[gpu_key].get(
-                                "VBIOS Version", "Unknown"
-                            )
-                            logger.debug(f"GPU {i}: vbios = {gpu.vbios}")
-            except Exception as e:
-                logger.debug(f"Failed to get VBIOS info: {e}")
-
-            # Try to get firmware info from rocm-smi
-            try:
-                result = subprocess.run(
-                    [rocm_smi_cmd, "--showfwinfo", "--json"],
-                    capture_output=True,
-                    text=True,
-                    timeout=10,
-                )
-                if result.returncode == 0:
-                    fw_data = json.loads(result.stdout)
-                    for i, gpu in enumerate(self.gpu_list):
-                        gpu_key = f"card{i}"
-                        if gpu_key in fw_data:
-                            fw_info = fw_data[gpu_key]
-                            # rocm-smi returns firmware info as dict
-                            for fw_name, fw_version in fw_info.items():
-                                if fw_name not in ["card", "GPU ID"]:  # Skip metadata
-                                    gpu.firmwares.append(
-                                        {"name": fw_name, "version": str(fw_version)}
-                                    )
-                            logger.debug(
-                                f"GPU {i}: found {len(gpu.firmwares)} firmwares"
-                            )
-            except Exception as e:
-                logger.debug(f"Failed to get firmware info: {e}")
-
-            # Get clocks
-            logger.debug(f"Trying {rocm_smi_cmd} --showclocks --json...")
-            result = subprocess.run(
-                [rocm_smi_cmd, "--showclocks", "--json"],
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-
-            if result.returncode == 0:
-                logger.debug(f"rocm-smi clocks output: {result.stdout[:200]}...")
-                data = json.loads(result.stdout)
-                for i, gpu in enumerate(self.gpu_list):
-                    gpu_key = f"card{i}"
-                    if gpu_key in data:
-                        gpu_data = data[gpu_key]
-                        # Extract current clocks
-                        sclk = gpu_data.get("sclk", {}).get("level", [])
-                        mclk = gpu_data.get("mclk", {}).get("level", [])
-
-                        if sclk:
-                            # Get current clock (marked with *)
-                            for clk in sclk:
-                                if "*" in str(clk):
-                                    clock_match = re.search(
-                                        r"(\d+)Mhz", str(clk), re.IGNORECASE
-                                    )
-                                    if clock_match:
-                                        gpu.sys_clock_mhz = int(clock_match.group(1))
-                                        logger.debug(
-                                            f"GPU {i}: sys_clock from rocm-smi = {gpu.sys_clock_mhz} MHz"
-                                        )
-
-                        if mclk:
-                            for clk in mclk:
-                                if "*" in str(clk):
-                                    clock_match = re.search(
-                                        r"(\d+)Mhz", str(clk), re.IGNORECASE
-                                    )
-                                    if clock_match:
-                                        gpu.mem_clock_mhz = int(clock_match.group(1))
-                                        logger.debug(
-                                            f"GPU {i}: mem_clock from rocm-smi = {gpu.mem_clock_mhz} MHz"
-                                        )
+            # Handle different amd-smi output formats
+            gpu_list = None
+            if isinstance(data, dict) and "gpu_data" in data:
+                # New format: {"gpu_data": [...]}
+                gpu_list = data["gpu_data"]
+                log.debug("Detected new amd-smi format (gpu_data wrapper)")
+            elif isinstance(data, list):
+                # Old format: [...]
+                gpu_list = data
+                log.debug("Detected old amd-smi format (direct list)")
             else:
-                logger.debug(
-                    f"rocm-smi --showclocks failed (exit code {result.returncode})"
-                )
+                log.debug(f"Unexpected amd-smi output format: {type(data)}")
+                return 0, None
 
-            return True
+            if not isinstance(gpu_list, list):
+                log.debug("gpu_list is not a list")
+                return 0, None
+
+            gpu_count = len(gpu_list)
+
+            # Extract target_graphics_version from first GPU
+            target_graphics_version = None
+            if gpu_count > 0:
+                first_gpu = gpu_list[0]
+
+                # Try different possible field names for gfx version
+                # Common fields: asic.target_graphics_version, asic.market_name, asic
+                if "asic" in first_gpu:
+                    asic_data = first_gpu["asic"]
+                    if isinstance(asic_data, dict):
+                        # Try target_graphics_version field
+                        target_graphics_version = asic_data.get(
+                            "target_graphics_version"
+                        )
+
+                        # Try market_name which might contain gfx info
+                        if not target_graphics_version:
+                            market_name = asic_data.get("market_name", "")
+                            # Extract gfxXXXX pattern from market name
+                            gfx_match = re.search(r"gfx\w+", market_name, re.IGNORECASE)
+                            if gfx_match:
+                                target_graphics_version = gfx_match.group(0).lower()
+
+                # Try top-level fields
+                if not target_graphics_version:
+                    target_graphics_version = first_gpu.get("target_graphics_version")
+
+                if not target_graphics_version:
+                    target_graphics_version = first_gpu.get("gfx_version")
+
+            log.debug(
+                f"Detected {gpu_count} GPU(s), target_graphics_version={target_graphics_version}"
+            )
+            return gpu_count, target_graphics_version
 
         except FileNotFoundError:
-            logger.debug("rocm-smi command not found")
-            return False
+            log.debug("amd-smi command not found")
+            return 0, None
+        except json.JSONDecodeError as e:
+            log.debug(f"Failed to parse amd-smi JSON output: {e}")
+            return 0, None
         except Exception as e:
-            logger.debug(f"rocm-smi error: {e}")
-            return False
+            log.debug(f"amd-smi detection error: {e}")
+            return 0, None
 
     def get_cpu(self) -> Optional[CpuInfo]:
         """Get detected CPU information.

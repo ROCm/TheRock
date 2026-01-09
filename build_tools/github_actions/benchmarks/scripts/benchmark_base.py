@@ -84,16 +84,33 @@ class BenchmarkBase:
         """Detect the number of available GPUs using HardwareDetector.
 
         Returns:
-            Number of GPUs detected, or 1 if detection fails
+            Number of GPUs detected
+
+        Raises:
+            RuntimeError: If no GPUs detected or detection fails
         """
         try:
             detector = HardwareDetector()
             gpu_list = detector.detect_gpu()
             gpu_count = len(gpu_list)
-            return max(1, gpu_count)
+
+            if gpu_count == 0:
+                raise RuntimeError(
+                    "No GPUs detected. Benchmarks require at least one GPU. "
+                    "Ensure ROCm drivers are installed and GPU devices are accessible."
+                )
+
+            log.info(f"Detected {gpu_count} GPU(s)")
+            return gpu_count
+
+        except RuntimeError:
+            # Re-raise RuntimeError as-is
+            raise
         except Exception as e:
-            log.warning(f"Could not detect GPU count: {e}. Defaulting to 1.")
-            return 1
+            raise RuntimeError(
+                f"Failed to detect GPUs: {e}. "
+                "Ensure ROCm drivers are installed and GPU devices are accessible."
+            ) from e
 
     def create_test_result(
         self,
@@ -198,9 +215,9 @@ class BenchmarkBase:
         )
 
         if success:
-            log.info("✓ Results uploaded successfully")
+            log.info("Results uploaded successfully")
         else:
-            log.info("⚠ Results saved locally only (API upload disabled or failed)")
+            log.info("Results saved locally only (API upload disabled or failed)")
 
         return success
 

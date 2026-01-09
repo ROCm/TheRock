@@ -86,7 +86,6 @@ class RCCLBenchmark(BenchmarkBase):
                             mpirun,
                             "--np",
                             "1",
-                            "--allow-run-as-root",
                             str(bench_binary),
                             "--minbytes",
                             min_size,
