@@ -297,6 +297,7 @@ def set_gpu_execution_policy(
 
     else:
         # "all" policy: Use all supported devices in the provided dictionary
+        # Can have multiple devices per specific architecture
         flat_devices = [
             (arch, idx)
             for arch, indices in supported_devices.items()
