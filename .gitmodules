@@ -56,3 +56,15 @@
 [submodule "rocm-kpack"]
 	path = base/rocm-kpack
 	url = https://github.com/ROCm/rocm-kpack.git
+[submodule "amd-dbgapi"]
+	path = debug-tools/amd-dbgapi
+	url = https://github.com/ROCm/ROCdbgapi.git
+	branch = amd-staging
+[submodule "rocgdb"]
+	path = debug-tools/rocgdb/source
+	url = https://github.com/ROCm/rocgdb.git
+	branch = amd-staging
+[submodule "rocr-debug-agent"]
+	path = debug-tools/rocr-debug-agent
+	url = https://github.com/ROCm/rocr_debug_agent.git
+	branch = amd-staging

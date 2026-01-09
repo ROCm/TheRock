@@ -11,6 +11,7 @@ The script supports the following command-line options:
 | `--amdgpu-family`   | String | AMD GPU family target (required)                                                         |
 | `--base-only`       | Flag   | Include only base artifacts (minimal installation)                                       |
 | `--blas`            | Flag   | Include BLAS artifacts                                                                   |
+| `--debug-tools`     | Flag   | Include the ROCm debugging tools artifacts                                               |
 | `--fft`             | Flag   | Include FFT artifacts                                                                    |
 | `--hipdnn`          | Flag   | Include hipDNN artifacts                                                                 |
 | `--input-dir`       | String | Existing TheRock directory to copy from                                                  |

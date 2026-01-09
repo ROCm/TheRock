@@ -1,0 +1,5 @@
+# rocr-debug-agent
+[components.dbg."debug-tools/rocr-debug-agent/stage"]
+[components.dev."debug-tools/rocr-debug-agent/stage"]
+[components.doc."debug-tools/rocr-debug-agent/stage"]
+[components.lib."debug-tools/rocr-debug-agent/stage"]

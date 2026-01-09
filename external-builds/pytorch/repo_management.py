@@ -1,7 +1,6 @@
 import argparse
 from pathlib import Path, PurePosixPath
 import shlex
-import shutil
 import subprocess
 import sys
 import os
@@ -78,7 +77,7 @@ def git_config_ignore_submodules(repo_path: Path):
     """Sets the `submodule.<name>.ignore = true` git config option for all submodules.
 
     This causes all submodules to not show up in status or diff reports, which is
-    appropriate for our case, since we make arbitrary changes and patches to them.
+    appropriate for our case, since we make arbitrary changes to them with hipify.
     Note that pytorch seems to somewhat arbitrarily have some already set this way.
     We just set them all.
     """
@@ -112,96 +111,6 @@ def git_config_ignore_submodules(repo_path: Path):
         except Exception as e:
             # pytorch audio has empty .gitmodules file which can cause exception
             pass
-
-
-def save_repo_patches(repo_path: Path, patches_path: Path):
-    """Updates the patches directory with any patches committed to the repository."""
-    if patches_path.exists():
-        shutil.rmtree(patches_path)
-    # Get key revisions.
-    upstream_rev = rev_parse(repo_path, TAG_UPSTREAM_DIFFBASE)
-    hipify_rev = rev_parse(repo_path, TAG_HIPIFY_DIFFBASE)
-    if upstream_rev is None:
-        print(f"error: Could not find upstream diffbase tag {TAG_UPSTREAM_DIFFBASE}")
-        sys.exit(1)
-    hipified_count = 0
-    if hipify_rev:
-        hipified_revlist = f"{hipify_rev}..HEAD"
-        base_revlist = f"{upstream_rev}..{hipify_rev}^"
-        hipified_count = len(rev_list(repo_path, hipified_revlist))
-    else:
-        hipified_revlist = None
-        base_revlist = f"{upstream_rev}..HEAD"
-    base_count = len(rev_list(repo_path, base_revlist))
-    if hipified_count == 0 and base_count == 0:
-        return
-    print(
-        f"Saving {patches_path} patches: {base_count} base, {hipified_count} hipified"
-    )
-    if base_count > 0:
-        base_path = patches_path / "base"
-        base_path.mkdir(parents=True, exist_ok=True)
-        exec(["git", "format-patch", "-o", base_path, base_revlist], cwd=repo_path)
-    if hipified_count > 0:
-        hipified_path = patches_path / "hipified"
-        hipified_path.mkdir(parents=True, exist_ok=True)
-        exec(
-            ["git", "format-patch", "-o", hipified_path, hipified_revlist],
-            cwd=repo_path,
-        )
-
-
-def apply_repo_patches(repo_path: Path, patches_path: Path):
-    """Applies patches to a repository from the given patches directory."""
-    patch_files = list(patches_path.glob("*.patch"))
-    print("repo_path: " + str(repo_path) + ", patches_path: " + str(patches_path))
-    if not patch_files:
-        return
-    patch_files.sort(key=lambda p: p.name)
-    exec(
-        [
-            "git",
-            "am",
-            "--whitespace=nowarn",
-            "--committer-date-is-author-date",
-            "--no-gpg-sign",
-        ]
-        + patch_files,
-        cwd=repo_path,
-    )
-
-
-def apply_all_patches(
-    root_repo_path: Path, patches_path: Path, repo_name: str, patchset_name: str
-):
-    relative_sm_paths = list_submodules(root_repo_path, relative=True)
-    # Apply base patches.
-    apply_repo_patches(root_repo_path, patches_path / repo_name / patchset_name)
-    for relative_sm_path in relative_sm_paths:
-        apply_repo_patches(
-            root_repo_path / relative_sm_path,
-            patches_path / relative_sm_path / patchset_name,
-        )
-
-
-# repo_hashtag_to_patches_dir_name('2.7.0-rc9') -> '2.7.0'
-# Note: unused function, delete? or use in get_patches_dir_name?
-def repo_hashtag_to_patches_dir_name(version_ref: str) -> str:
-    pos = version_ref.find("-")
-    if pos != -1:
-        return version_ref[:pos]
-    return version_ref
-
-
-def get_patches_dir_name(args: argparse.Namespace) -> str | None:
-    patchset_name = args.patchset
-    if patchset_name is not None:
-        return patchset_name
-
-    hashtag = args.repo_hashtag
-    if hashtag is not None:
-        return hashtag
-    return None
 
 
 def do_hipify(args: argparse.Namespace):
@@ -274,9 +183,7 @@ def commit_hipify(args: argparse.Namespace):
 
 def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
     repo_dir: Path = args.checkout_dir
-    repo_patch_dir_base = args.patch_dir
     check_git_dir = repo_dir / ".git"
-    patches_dir_name = get_patches_dir_name(args)
     if check_git_dir.exists():
         print(f"Not cloning repository ({check_git_dir} exists)")
         exec(["git", "remote", "set-url", "origin", args.gitrepo_origin], cwd=repo_dir)
@@ -317,46 +224,15 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
     )
     git_config_ignore_submodules(repo_dir)
 
-    # Base patches.
-    if args.patch and patches_dir_name:
-        apply_all_patches(
-            repo_dir,
-            repo_patch_dir_base / patches_dir_name,
-            args.repo_name,
-            "base",
-        )
-
     # Hipify.
     if args.hipify:
         custom_hipify(args)
         commit_hipify(args)
 
-    # Hipified patches.
-    if args.hipify and args.patch and patches_dir_name:
-        apply_all_patches(
-            repo_dir,
-            repo_patch_dir_base / patches_dir_name,
-            args.repo_name,
-            "hipified",
-        )
-
-
-def do_save_patches(args: argparse.Namespace):
-    repo_name = args.repo_name
-    repo_patch_dir_base = args.patch_dir
-    patches_dir_name = get_patches_dir_name(args)
-    patches_dir = repo_patch_dir_base / patches_dir_name
-    save_repo_patches(args.checkout_dir, patches_dir / repo_name)
-    relative_sm_paths = list_submodules(args.checkout_dir, relative=True)
-    for relative_sm_path in relative_sm_paths:
-        save_repo_patches(
-            args.checkout_dir / relative_sm_path, patches_dir / relative_sm_path
-        )
-
 
 # Reads the ROCm maintained "related_commits" file from the given pytorch dir.
-# If present, selects the given os and project, returning origin, hashtag and
-# "rocm-custom" patchset. Otherwise, returns the given defaults.
+# If present, selects the given os and project, returning origin and hashtag.
+# Otherwise, returns the given defaults.
 def read_pytorch_rocm_pins(
     pytorch_dir: Path,
     os: str,
@@ -364,8 +240,7 @@ def read_pytorch_rocm_pins(
     *,
     default_origin: str,
     default_hashtag: str | None,
-    default_patchset: str | None,
-) -> tuple[str, str | None, str | None, bool]:
+) -> tuple[str, str | None, bool]:
     related_commits_file = pytorch_dir / "related_commits"
     if related_commits_file.exists():
         lines = related_commits_file.read_text().splitlines()
@@ -382,7 +257,7 @@ def read_pytorch_rocm_pins(
             except ValueError:
                 print(f"WARNING: Could not parse related_commits line: {line}")
             if rec_os == os and rec_project == project:
-                return rec_origin, rec_commit, "rocm-custom", True
+                return rec_origin, rec_commit, True
 
     # Not found.
-    return default_origin, default_hashtag, default_patchset, False
+    return default_origin, default_hashtag, False
