@@ -22,6 +22,10 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 environ_vars = os.environ.copy()
 platform = os.getenv("RUNNER_OS", "linux").lower()
 
+# Set LD_LIBRARY_PATH to find liborigami.so for Python module
+lib_dir = Path(THEROCK_BIN_DIR).parent / "lib"
+environ_vars["LD_LIBRARY_PATH"] = f"{lib_dir}:{environ_vars.get('LD_LIBRARY_PATH', '')}"
+
 # Test type configuration (smoke, full)
 test_type = os.getenv("TEST_TYPE", "full")
 
