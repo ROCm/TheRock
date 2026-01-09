@@ -20,7 +20,7 @@ Environment variables:
 
 Arguments:
   * --base-ref           : Git reference to diff against (e.g., HEAD^)
-  * --matrix-module      : Path to therock_matrix.py module to import
+  * --repo-name          : Repository name (rocm-libraries or rocm-systems)
 
 Local git history with at least fetch-depth of 2 for file diffing.
 
@@ -39,7 +39,7 @@ Returns (via stdout as JSON):
 -----------------
 
 1. Determines changed files via git diff
-2. Maps changed paths to projects using subtree_to_project_map from therock_matrix.py
+2. Maps changed paths to projects using subtree_to_project_map from external_repo_project_maps.py
 3. Resolves project dependencies and combines overlapping builds
 4. Returns project-specific CMake options and test targets
 
@@ -48,57 +48,19 @@ For empty changes (e.g., doc-only PRs), returns empty list to skip builds.
 """
 
 import argparse
-import fnmatch
 import json
 import os
-import subprocess
 import sys
 from pathlib import Path
 from typing import List, Optional, Set
 
-
-# Paths matching any of these patterns are considered to have no influence over
-# build or test workflows so any related jobs can be skipped if all paths
-# modified by a commit/PR match a pattern in this list.
-SKIPPABLE_PATH_PATTERNS = [
-    "docs/*",
-    "*.gitignore",
-    "*.md",
-    "*.pre-commit-config.*",
-    ".github/dependabot.yml",
-    "*CODEOWNERS",
-    "*LICENSE",
-    ".github/workflows/*",  # Workflow changes don't require rebuilds in submodules
-]
-
-
-def is_path_skippable(path: str) -> bool:
-    """Determines if a given relative path to a file matches any skippable patterns."""
-    return any(fnmatch.fnmatch(path, pattern) for pattern in SKIPPABLE_PATH_PATTERNS)
-
-
-def check_for_non_skippable_path(paths: List[str]) -> bool:
-    """Returns true if at least one path is not in the skippable set."""
-    return any(not is_path_skippable(p) for p in paths)
-
-
-def get_modified_paths(base_ref: str) -> Optional[List[str]]:
-    """Returns the paths of modified files relative to the base reference."""
-    try:
-        result = subprocess.run(
-            ["git", "diff", "--name-only", base_ref],
-            stdout=subprocess.PIPE,
-            check=True,
-            text=True,
-            timeout=60,
-        )
-        return result.stdout.splitlines()
-    except (subprocess.TimeoutExpired, subprocess.CalledProcessError) as e:
-        print(
-            f"ERROR: Failed to compute modified files: {e}",
-            file=sys.stderr,
-        )
-        return None
+# Import common utilities from configure_ci
+from configure_ci import (
+    SKIPPABLE_PATH_PATTERNS,
+    check_for_non_skippable_path,
+    get_modified_paths,
+    is_path_skippable,
+)
 
 
 def get_changed_subtrees(

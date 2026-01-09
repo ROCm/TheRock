@@ -111,6 +111,7 @@ jobs:
       test_type: ${{ needs.setup.outputs.test_type }}
       sanity_check_only_for_family: ${{ matrix.variant.sanity_check_only_for_family == true }}
       external_source_checkout: ${{ inputs.external_source_checkout || false }}
+      therock_ref: ${{ inputs.therock_ref || '' }}
     permissions:
       contents: read
       id-token: write
@@ -143,6 +144,7 @@ jobs:
       test_type: ${{ needs.setup.outputs.test_type }}
       sanity_check_only_for_family: ${{ matrix.variant.sanity_check_only_for_family == true }}
       external_source_checkout: ${{ inputs.external_source_checkout || false }}
+      therock_ref: ${{ inputs.therock_ref || '' }}
     permissions:
       contents: read
       id-token: write

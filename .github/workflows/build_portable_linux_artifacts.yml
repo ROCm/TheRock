@@ -53,6 +53,10 @@ on:
         type: boolean
         description: "Whether source is from external repo (rocm-libraries/systems)"
         default: false
+      therock_ref:
+        type: string
+        description: "TheRock git ref to use (for external repos)"
+        default: ""
 
 # See the details regarding permissions from the link:
 # https://github.com/aws-actions/configure-aws-credentials?tab=readme-ov-file#oidc
@@ -97,6 +101,7 @@ jobs:
         with:
           repository: "ROCm/TheRock"
           path: TheRock
+          ref: ${{ inputs.therock_ref || 'main' }}
 
       - name: Auto-detect external source configuration
         if: ${{ inputs.external_source_checkout }}

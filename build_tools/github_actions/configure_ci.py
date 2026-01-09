@@ -57,19 +57,12 @@ from typing import Iterable, List, Optional
 import string
 
 # Import will be conditional - either TheRock's or external repo's matrix
-# Try to import TheRock's matrix first (will be used if running from TheRock)
-try:
-    from amdgpu_family_matrix import (
-        all_build_variants,
-        get_all_families_for_trigger_types,
-    )
-
-    USING_EXTERNAL_MATRIX = False
-except ImportError:
-    # Will be set later if external matrix is loaded
-    all_build_variants = None
-    get_all_families_for_trigger_types = None
-    USING_EXTERNAL_MATRIX = True
+# For external repos running this script, TheRock is checked out to TheRock/
+# and they use TheRock's GPU family matrix
+from amdgpu_family_matrix import (
+    all_build_variants,
+    get_all_families_for_trigger_types,
+)
 
 from fetch_test_configurations import test_matrix
 
@@ -792,11 +785,9 @@ if __name__ == "__main__":
         print("Using TheRock's matrix configuration for external repository")
         # External repos use TheRock's GPU family matrix (no custom matrices needed)
         # The project maps are centralized in external_repo_project_maps.py
-        USING_EXTERNAL_MATRIX = False
     else:
         # We're running for TheRock itself - already imported at top of file
         print("Using TheRock's own matrix configuration")
-        USING_EXTERNAL_MATRIX = False
 
     base_args = {}
     linux_families = {}
