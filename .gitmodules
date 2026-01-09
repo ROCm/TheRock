@@ -27,7 +27,7 @@
 	url = https://github.com/ROCm/rocprof-trace-decoder.git
 [submodule "rocm-libraries"]
 	path = rocm-libraries
-	url = https://github.com/ROCm/rocm-libraries
+	url = https://github.com/AaronStGeorge/rocm-libraries.git
 	branch = develop
 [submodule "rocm-systems"]
 	path = rocm-systems

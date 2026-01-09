@@ -334,6 +334,7 @@ def retrieve_artifacts_by_run_id(args):
             args.fft,
             args.hipdnn,
             args.hipdnn_samples,
+            args.hipdnn_integration_tests,
             args.miopen,
             args.miopen_plugin,
             args.fusilli_plugin,
@@ -390,6 +391,8 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("fusilli-plugin")
         if args.hipblaslt_plugin:
             extra_artifacts.append("hipblaslt-plugin")
+        if args.hipdnn_integration_tests:
+            extra_artifacts.append("hipdnn-integration-tests")
         if args.prim:
             extra_artifacts.append("prim")
         if args.rand:
@@ -660,6 +663,13 @@ def main(argv):
         "--hipblaslt-plugin",
         default=False,
         help="Include 'hipblaslt-plugin' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--hipdnn-integration-tests",
+        default=False,
+        help="Include 'hipdnn-integration-tests' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
