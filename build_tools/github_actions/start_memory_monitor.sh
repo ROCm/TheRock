@@ -11,6 +11,7 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 BUILD_DIR="${BUILD_DIR:-build}"
 JOB_NAME="${JOB_NAME:-default}"
 PHASE="${PHASE:-Build Phase}"
+MEMORY_MONITOR_INTERVAL="${MEMORY_MONITOR_INTERVAL:-30}"
 
 # Create logs directory in BUILD_DIR
 mkdir -p "${BUILD_DIR}/logs"
@@ -25,6 +26,7 @@ MAX_RUN_TIME=${MAX_RUN_TIME:-$((24 * 3600))}
 # Start memory monitor in background
 python "${REPO_ROOT}/build_tools/memory_monitor.py" \
   --phase "${PHASE}" \
+  --interval "${MEMORY_MONITOR_INTERVAL}" \
   --log-file "${BUILD_DIR}/logs/build_memory_log_${JOB_NAME}.jsonl" \
   --parent-pid "${PARENT_PID}" \
   --background \

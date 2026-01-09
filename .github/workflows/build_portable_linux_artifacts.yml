@@ -32,6 +32,9 @@ on:
       monitor_memory:
         type: boolean
         default: false
+      monitor_interval:
+        type: number
+        default: 30
 
   workflow_call:
     inputs:
@@ -55,6 +58,9 @@ on:
       monitor_memory:
         type: boolean
         default: false
+      monitor_interval:
+        type: number
+        default: 30
 
 # See the details regarding permissions from the link:
 # https://github.com/aws-actions/configure-aws-credentials?tab=readme-ov-file#oidc
@@ -132,6 +138,7 @@ jobs:
         env:
           JOB_NAME: ${{ github.job }}
           MONITOR_MEMORY: ${{ inputs.monitor_memory }}
+          MEMORY_MONITOR_INTERVAL: ${{ inputs.monitor_interval }}
         run: |
           MONITOR_PID=""
           if [ "$MONITOR_MEMORY" = "true" ]; then

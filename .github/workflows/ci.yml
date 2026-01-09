@@ -35,6 +35,10 @@ on:
         type: boolean
         description: "If enabled, memory monitoring will be performed during the build"
         default: false
+      monitor_interval:
+        type: number
+        description: "Memory monitoring interval in seconds"
+        default: 30
       windows_amdgpu_families:
         type: string
         description: "Insert comma-separated list of Windows GPU families to build and test. ex: gfx94X, gfx1201X"
@@ -102,6 +106,7 @@ jobs:
       test_type: ${{ needs.setup.outputs.test_type }}
       sanity_check_only_for_family: ${{ matrix.variant.sanity_check_only_for_family == true }}
       monitor_memory: ${{ inputs.monitor_memory == true }}
+      monitor_interval: ${{ inputs.monitor_interval }}
     permissions:
       contents: read
       id-token: write
@@ -134,6 +139,7 @@ jobs:
       test_type: ${{ needs.setup.outputs.test_type }}
       sanity_check_only_for_family: ${{ matrix.variant.sanity_check_only_for_family == true }}
       monitor_memory: ${{ inputs.monitor_memory == true }}
+      monitor_interval: ${{ inputs.monitor_interval }}
     permissions:
       contents: read
       id-token: write

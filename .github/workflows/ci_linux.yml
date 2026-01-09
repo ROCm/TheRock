@@ -35,6 +35,9 @@ on:
       monitor_memory:
         type: boolean
         default: false
+      monitor_interval:
+        type: number
+        default: 30
 
 permissions:
   contents: read
@@ -54,6 +57,7 @@ jobs:
       build_variant_suffix: ${{ inputs.build_variant_suffix }}
       expect_failure: ${{ inputs.expect_failure }}
       monitor_memory: ${{ inputs.monitor_memory }}
+      monitor_interval: ${{ inputs.monitor_interval }}
     permissions:
       contents: read
       id-token: write
