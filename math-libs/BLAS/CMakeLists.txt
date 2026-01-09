@@ -293,10 +293,14 @@ if(THEROCK_ENABLE_SPARSE)
   ##############################################################################
 
   if(NOT WIN32) # Remove this block once hipSPARSELt is supported on Windows
-    set(hipSPARSELt_optional_deps)
+    set(hipSPARSELt_optional_build_deps)
+    set(hipSPARSELt_optional_runtime_deps)
     if(NOT WIN32)
-      # hipSPARSELt is hard-coded to not expect rocm-smi on Windows.
-      list(APPEND hipSPARSELt_optional_deps
+      # hipSPARSELt is hard-coded to not expect rocm-smi and amdsmi on Windows.
+      list(APPEND hipSPARSELt_optional_build_deps
+        amdsmi
+      )      
+      list(APPEND hipSPARSELt_optional_runtime_deps
         rocm_smi_lib
       )
     endif()
@@ -319,10 +323,11 @@ if(THEROCK_ENABLE_SPARSE)
         hipSPARSE
         therock-googletest
         therock-msgpack-cxx
+        ${hipSPARSELt_optional_build_deps}
       RUNTIME_DEPS
         hip-clr
         therock-host-blas
-        ${hipSPARSELt_optional_deps}
+        ${hipSPARSELt_optional_runtime_deps}
         ${optional_profiler_deps}
     )
     therock_cmake_subproject_glob_c_sources(hipSPARSELt
