@@ -1,4 +1,4 @@
-# Bash Style Guide
+# Bash style guide
 
 ## Core principles
 

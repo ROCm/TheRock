@@ -1,4 +1,4 @@
-# Python Style Guide
+# Python style guide
 
 Table of Contents
 

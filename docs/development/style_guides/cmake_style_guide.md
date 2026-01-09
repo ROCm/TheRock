@@ -1,4 +1,4 @@
-# CMake Style Guide
+# CMake style guide
 
 ## General recommendations
 

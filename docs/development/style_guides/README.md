@@ -1,4 +1,4 @@
-# TheRock Style Guide
+# TheRock style guides
 
 > [!IMPORTANT]
 > These style guides are living documents meant to steer developers towards

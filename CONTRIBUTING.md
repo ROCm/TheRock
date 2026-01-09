@@ -126,7 +126,7 @@ List of long-lived branches:
 >   [workflow_dispatch](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow)
 >   and running on our self-hosted GitHub Actions runners
 
-### Style guide
+### Style guides
 
-We have project-wide styles guide with recommendations to follow at
+We have project-wide style guides with recommendations to follow at
 [`docs/development/style_guides/`](docs/development/style_guides/).

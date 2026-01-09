@@ -1,4 +1,4 @@
-# GitHub Actions Style Guide
+# GitHub Actions style guide
 
 ## Style guidelines
 
