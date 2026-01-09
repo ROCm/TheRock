@@ -94,11 +94,15 @@ endif()
 # hipBLASLt
 ##############################################################################
 
-set(hipBLASLt_optional_deps)
+set(hipBLASLt_optional_build_deps)
+set(hipBLASLt_optional_runtime_deps)
 if(NOT WIN32)
   # hipBLASLt is hard-coded to not expect rocm-smi and amdsmi on Windows.
-  list(APPEND hipBLASLt_optional_deps
-    rocm_smi_lib amdsmi
+  list(APPEND hipBLASLt_optional_build_deps
+    amdsmi
+  )
+  list(APPEND hipBLASLt_optional_runtime_deps
+    rocm_smi_lib
   )
 endif()
 
@@ -141,11 +145,12 @@ therock_cmake_subproject_declare(hipBLASLt
     therock-googletest
     therock-msgpack-cxx
     ${hipBLASLt_rocRoller_build_deps}
+    ${hipBLASLt_optional_build_deps}
   RUNTIME_DEPS
     hip-clr
     therock-host-blas
     ${hipBLASLt_rocRoller_runtime_deps}
-    ${hipBLASLt_optional_deps}
+    ${hipBLASLt_optional_runtime_deps}
     ${optional_profiler_deps}
 )
 therock_cmake_subproject_glob_c_sources(hipBLASLt
