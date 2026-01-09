@@ -47,6 +47,10 @@ Pass additional pytest arguments after "--":
     $ python run_pytorch_tests.py -- -m "slow"
     $ python run_pytorch_tests.py -- --tb=short -x
 
+GPU selection options:
+    $ python run_pytorch_tests.py --gpu-policy all --device-query all
+    $ python run_pytorch_tests.py --gpu-policy single --device-query all
+
 Exit Codes
 ----------
 0 : All tests passed
@@ -80,6 +84,7 @@ from pathlib import Path
 import pytest
 
 from pytorch_utils import (
+    get_all_supported_devices,
     get_unique_supported_devices,
     set_gpu_execution_policy,
     detect_pytorch_version,
@@ -199,6 +204,26 @@ By default the pytorch directory is determined based on this script's location
         help="""Disable pytest caching. Useful when only having read-only access to pytorch directory""",
     )
 
+    parser.add_argument(
+        "--gpu-policy",
+        type=str,
+        choices=["single", "all"],
+        default="single",
+        help="""GPU execution policy for test runs.
+- "single": Use a single GPU (default). Suitable for most unit tests.
+- "all": Use all supported GPUs. Useful for multi-GPU tests.""",
+    )
+
+    parser.add_argument(
+        "--device-query",
+        type=str,
+        choices=["unique", "all"],
+        default="unique",
+        help="""Device query mode for discovering GPUs.
+- "unique": One device per architecture (default). Uses get_unique_supported_devices().
+- "all": All devices of each architecture. Uses get_all_supported_devices().""",
+    )
+
     args = parser.parse_args(argv)
 
     if not args.pytorch_dir.exists():
@@ -223,9 +248,16 @@ def main() -> int:
         # CRITICAL: Determine AMDGPU family and set HIP_VISIBLE_DEVICES
         # BEFORE importing torch/running pytest. Once torch.cuda is initialized,
         # changing HIP_VISIBLE_DEVICES has no effect.
-        # For unit tests, run only on the first supported device (policy="single")
-        unique_devices = get_unique_supported_devices(args.amdgpu_family)
-        ((first_arch, _),) = set_gpu_execution_policy(unique_devices, policy="single")
+        # Select device query function based on --device-query argument
+        if args.device_query == "unique":
+            supported_devices = get_unique_supported_devices(args.amdgpu_family)
+        else:
+            supported_devices = get_all_supported_devices(args.amdgpu_family)
+
+        # Set GPU execution policy based on --gpu-policy argument
+        ((first_arch, _),) = set_gpu_execution_policy(
+            supported_devices, policy=args.gpu_policy
+        )
         print(f"Using AMDGPU family: {first_arch}")
 
         # Determine PyTorch version
