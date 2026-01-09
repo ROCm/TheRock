@@ -335,7 +335,7 @@ if(THEROCK_ENABLE_LIBHIPCXX)
   therock_cmake_subproject_declare(libhipcxx
     # TODO: use this in case libhipcx is moved to e.g. rocm-libraries
     #EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/libhipcxx"
-    EXTERNAL_SOURCE_DIR "${THEROCK_LIBHIPCXX_SOURCE_DIR}"
+    EXTERNAL_SOURCE_DIR "${THEROCK_SOURCE_DIR}/math-libs/libhipcxx"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/libhipcxx"
     BACKGROUND_BUILD
     DEFAULT_GPU_TARGETS
