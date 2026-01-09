@@ -38,8 +38,6 @@ if(THEROCK_ENABLE_CORE_AMDSMI)
     therock_cmake_subproject_provide_package(amdsmi amd_smi lib/cmake)
     therock_cmake_subproject_activate(amdsmi)
 
-    # Provide as a standalone artifact.
-    # (Descriptor should be core/artifact-core-amdsmi.toml)
     therock_provide_artifact(core-amdsmi
       TARGET_NEUTRAL
       DESCRIPTOR artifact-core-amdsmi.toml
