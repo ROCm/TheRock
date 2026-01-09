@@ -15,7 +15,7 @@ Automated benchmark testing framework for ROCm libraries with system detection, 
 
 - **Automated Benchmark Execution** - ROCfft, ROCrand, ROCsolver, hipBLASLt, rocBLAS, RCCL
 - **System Auto-Detection** - Hardware, OS, GPU, and ROCm version detection
-- **Distributed Testing** - MPI support for multi-GPU RCCL benchmarks
+- **Distributed Testing** - Multi-GPU RCCL benchmarks (requires OpenMPI in Docker image)
 - **Results Management** - Local storage (JSON) and API upload with retry logic
 - **Performance Tracking** - LKG (Last Known Good) comparison
 - **Comprehensive Logging** - File rotation and configurable log levels
@@ -27,7 +27,7 @@ Automated benchmark testing framework for ROCm libraries with system detection, 
 ### Available Benchmarks
 
 - `benchmarks/scripts/test_hipblaslt_benchmark.py` - hipBLASLt benchmark suite
-- `benchmarks/scripts/test_rccl_benchmark.py` - RCCL collective communication benchmarks (MPI-based)
+- `benchmarks/scripts/test_rccl_benchmark.py` - RCCL collective communication benchmarks (requires OpenMPI)
 - `benchmarks/scripts/test_rocblas_benchmark.py` - rocBLAS benchmark suite
 - `benchmarks/scripts/test_rocfft_benchmark.py` - ROCfft benchmark suite
 - `benchmarks/scripts/test_rocrand_benchmark.py` - ROCrand benchmark suite
@@ -57,7 +57,6 @@ build_tools/github_actions/
 │   ├── utils/                  # Benchmark utilities
 │   │   ├── benchmark_client.py # Main client API
 │   │   ├── logger.py           # Logging utilities
-│   │   ├── mpi_helper.py       # MPI setup and management (for RCCL)
 │   │   ├── config/             # Configuration management
 │   │   ├── system/             # System detection (GPU, ROCm, OS)
 │   │   └── results/            # Results API client & schemas

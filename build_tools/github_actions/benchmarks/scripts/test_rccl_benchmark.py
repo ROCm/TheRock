@@ -15,7 +15,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))  # For utils
 sys.path.insert(0, str(Path(__file__).parent))  # For benchmark_base
 from benchmark_base import BenchmarkBase, run_benchmark_main
 from utils.logger import log
-from utils.mpi_helper import MPIHelper
 
 
 class RCCLBenchmark(BenchmarkBase):
@@ -24,7 +23,6 @@ class RCCLBenchmark(BenchmarkBase):
     def __init__(self):
         super().__init__(benchmark_name="rccl", display_name="RCCL")
         self.log_file = self.script_dir / "rccl_bench.log"
-        self.mpi_helper = MPIHelper(install_dir=self.script_dir / "openmpi")
         self.ngpu = self._detect_gpu_count()
 
     def run_benchmarks(self) -> None:
@@ -33,9 +31,6 @@ class RCCLBenchmark(BenchmarkBase):
         config_file = self.script_dir.parent / "configs" / "rccl.json"
         with open(config_file, "r") as f:
             config_data = json.load(f)
-
-        # Setup MPI
-        self.mpi_helper.setup()
 
         # Get configuration
         benchmarks = config_data.get("benchmarks")
@@ -74,16 +69,9 @@ class RCCLBenchmark(BenchmarkBase):
                         env_vars = {"HSA_FORCE_FINE_GRAIN_PCIE": "1"}
 
                         # Construct benchmark command with MPI
-                        mpirun = self.mpi_helper.get_mpirun_command()
-                        if not mpirun:
-                            raise RuntimeError("mpirun not available after MPI setup")
-
-                        # Update environment with MPI paths
-                        env_vars.update(self.mpi_helper.get_env_vars())
-
-                        # Run with MPI
+                        # Note: Requires OpenMPI to be installed in the Docker image
                         cmd = [
-                            mpirun,
+                            "mpirun",
                             "--np",
                             "1",
                             str(bench_binary),

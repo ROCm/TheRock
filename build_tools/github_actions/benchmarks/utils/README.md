@@ -11,7 +11,6 @@ benchmarks/utils/
 ├── constants.py             # Framework constants
 ├── exceptions.py            # Custom exceptions
 ├── logger.py                # Logging configuration
-├── mpi_helper.py            # MPI setup and management (for distributed tests)
 ├── README.md                # This file
 │
 ├── config/                  # Configuration management
@@ -55,9 +54,6 @@ from utils.benchmark_client import BenchmarkClient
 from utils.system.system_detector import SystemDetector
 from utils.config.config_helper import ConfigHelper
 from utils.results.results_handler import ResultsHandler
-
-# Specialized utilities
-from utils.mpi_helper import MPIHelper  # For distributed/MPI-based tests
 ```
 
 ### Subdirectory Imports
@@ -86,7 +82,6 @@ from utils.results import ResultsHandler, ResultsAPI
 - **exceptions.py** - Custom exception classes
 - **logger.py** - Logging configuration
 - **benchmark_client.py** - Main BenchmarkClient API
-- **mpi_helper.py** - MPI setup and management for distributed tests
 
 ### Config
 
