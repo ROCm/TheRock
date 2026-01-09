@@ -101,7 +101,7 @@ cmd = [
 
 if AMDGPU_FAMILIES in TEST_TO_IGNORE and os_type in TEST_TO_IGNORE[AMDGPU_FAMILIES]:
     ignored_tests = TEST_TO_IGNORE[AMDGPU_FAMILIES][os_type]
-    cmd.append(["--exclude-regex", "|".join(ignored_tests)])
+    cmd.extend(["--exclude-regex", "|".join(ignored_tests)])
 
 # If smoke tests are enabled, we run smoke tests only.
 # Otherwise, we run the normal test suite
