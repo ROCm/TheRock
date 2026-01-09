@@ -377,30 +377,40 @@ class HardwareDetector:
         return self.cpu_info
 
     def detect_gpu(self) -> List[GpuInfo]:
-        """Detect GPU information using ROCm tools (amd-smi) and lspci.
+        """Detect GPU information using ROCm tools and lspci.
 
-        Tries amd-smi first (better for compute GPUs like MI300X),
-        then falls back to lspci if needed.
+        Detection hierarchy:
+        1. amd-smi (primary) - Best for modern compute GPUs, SR-IOV, containers
+        2. rocminfo (secondary) - Works with older ROCm versions, runtime-based
+        3. lspci (fallback) - Basic detection, no ROCm required
 
         Returns:
             List of GpuInfo objects
         """
         self.gpu_list = []
 
-        # PRIMARY METHOD: Try amd-smi first (works better for compute GPUs, SR-IOV, containers)
+        # PRIMARY METHOD: Try amd-smi first (modern, preferred)
         log.debug("Trying primary GPU detection with amd-smi...")
         if self._detect_gpu_with_amd_smi():
             log.debug(f"Successfully detected {len(self.gpu_list)} GPU(s) with amd-smi")
             return self.gpu_list
 
-        # FALLBACK METHOD: Use lspci (works for desktop/workstation GPUs)
-        log.debug("Primary detection found 0 GPUs, trying fallback lspci method...")
+        # SECONDARY METHOD: Try rocminfo (older ROCm versions, runtime-based)
+        log.debug("Primary detection found 0 GPUs, trying rocminfo method...")
+        if self._detect_gpu_with_rocminfo():
+            log.debug(
+                f"Successfully detected {len(self.gpu_list)} GPU(s) with rocminfo"
+            )
+            return self.gpu_list
+
+        # FALLBACK METHOD: Use lspci (works without ROCm)
+        log.debug("Secondary detection found 0 GPUs, trying fallback lspci method...")
         self._detect_gpu_with_lspci()
 
         if len(self.gpu_list) > 0:
             log.debug(f"Successfully detected {len(self.gpu_list)} GPU(s) with lspci")
         else:
-            log.debug("No GPUs detected by either method")
+            log.debug("No GPUs detected by any method")
 
         return self.gpu_list
 
@@ -540,6 +550,110 @@ class HardwareDetector:
 
         except Exception as e:
             log.debug(f"lspci detection failed: {e}")
+            return False
+
+    def _detect_gpu_with_rocminfo(self) -> bool:
+        """Detect GPUs using rocminfo (secondary method, ROCm runtime-based).
+
+        Returns:
+            True if GPUs detected, False otherwise
+        """
+        try:
+            # Try to find rocminfo
+            rocminfo_cmd = _get_rocm_tool_path("rocminfo")
+            log.debug(f"Running {rocminfo_cmd} to detect AMD GPUs...")
+
+            result = subprocess.run(
+                [rocminfo_cmd],
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+
+            if result.returncode != 0:
+                log.debug(f"rocminfo failed with return code {result.returncode}")
+                return False
+
+            log.debug(f"rocminfo output length: {len(result.stdout)} characters")
+
+            # Parse rocminfo output
+            # rocminfo outputs sections for each agent (GPU)
+            # Format:
+            # Agent 1                  *******
+            #   Name:                    gfx942
+            #   Marketing Name:          AMD Instinct MI300X
+            #   Vendor Name:             AMD
+            #   Device Type:             GPU
+            #   ...
+
+            current_agent = None
+            gpu_agents = []
+
+            for line in result.stdout.splitlines():
+                # Detect start of agent section
+                if line.strip().startswith("Agent ") and "*" in line:
+                    # Save previous agent if it was a GPU
+                    if current_agent and current_agent.get("device_type") == "GPU":
+                        gpu_agents.append(current_agent)
+
+                    # Start new agent
+                    agent_match = re.match(r"Agent\s+(\d+)", line.strip())
+                    if agent_match:
+                        current_agent = {"agent_id": agent_match.group(1)}
+
+                # Parse agent properties
+                elif current_agent is not None and ":" in line:
+                    key_value = line.split(":", 1)
+                    if len(key_value) == 2:
+                        key = key_value[0].strip()
+                        value = key_value[1].strip()
+
+                        # Map rocminfo fields to our properties
+                        if key == "Name":
+                            current_agent["gfx_version"] = value
+                        elif key == "Marketing Name":
+                            current_agent["marketing_name"] = value
+                        elif key == "Vendor Name":
+                            current_agent["vendor"] = value
+                        elif key == "Device Type":
+                            current_agent["device_type"] = value
+                        elif key == "Uuid":
+                            current_agent["uuid"] = value
+                        elif key == "Location (Bus/Device/Function)":
+                            # Format: "Location (Bus/Device/Function): 0000:1b:00.0"
+                            # Convert to XX:XX.X format
+                            location_match = re.search(
+                                r"([0-9a-fA-F]{4}):([0-9a-fA-F]{2}):([0-9a-fA-F]{2})\.([0-9a-fA-F])",
+                                value,
+                            )
+                            if location_match:
+                                # Extract just the bus:device.function part (skip domain)
+                                pci_addr = f"{location_match.group(2)}:{location_match.group(3)}.{location_match.group(4)}"
+                                current_agent["pci_address"] = pci_addr
+
+            # Don't forget the last agent
+            if current_agent and current_agent.get("device_type") == "GPU":
+                gpu_agents.append(current_agent)
+
+            log.debug(f"Found {len(gpu_agents)} GPU agent(s) in rocminfo output")
+
+            # Convert to GpuInfo objects
+            for agent in gpu_agents:
+                gpu_info = GpuInfo(
+                    vendor=agent.get("vendor", "AMD"),
+                    product_name=agent.get("marketing_name", "AMD GPU"),
+                    target_graphics_version=agent.get("gfx_version", "Unknown"),
+                    pci_address=agent.get("pci_address", ""),
+                )
+                self.gpu_list.append(gpu_info)
+
+            return len(self.gpu_list) > 0
+
+        except FileNotFoundError:
+            log.debug("rocminfo command not found")
+            return False
+        except Exception as e:
+            log.debug(f"rocminfo detection error: {e}")
             return False
 
     def _detect_gpu_with_amd_smi(self) -> bool:
