@@ -107,7 +107,7 @@ class RCCLBenchmark(BenchmarkBase):
 
                         self.execute_command(cmd, f, env=env_vars)
 
-        log.info("Benchmark execution complete")
+        log.info("RCCL benchmarks execution complete")
 
     def parse_results(self) -> Tuple[List[Dict[str, Any]], PrettyTable]:
         """Parse benchmark results from log file.

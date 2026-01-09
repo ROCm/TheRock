@@ -7,7 +7,7 @@ Runs ROCblas benchmarks, collects results, and uploads to results API.
 import json
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple, Any
+from typing import Dict, List, Tuple, Any, IO
 from prettytable import PrettyTable
 
 sys.path.insert(0, str(Path(__file__).parent.parent))  # For utils
@@ -31,272 +31,240 @@ class ROCblasBenchmark(BenchmarkBase):
         benchmark_config = config_data.get("benchmark_config", {})
         iterations = benchmark_config.get("iterations", 1000)
         cold_iterations = benchmark_config.get("cold_iterations", 1000)
+        benchmarks = benchmark_config.get("benchmarks", [])
 
         log.info("Running ROCblas Benchmarks")
 
-        # Run each benchmark suite with its own log file
-        self._run_gemm_benchmarks(config_data, iterations, cold_iterations)
-        self._run_gemv_benchmarks(config_data, iterations, cold_iterations)
-        self._run_ger_benchmarks(config_data, iterations, cold_iterations)
-        self._run_dot_benchmarks(config_data, iterations, cold_iterations)
-        self._run_gemm_hpa_hgemm_benchmarks(config_data, iterations, cold_iterations)
+        # Run each benchmark suite based on configuration
+        for bench_meta in benchmarks:
+            bench_config = config_data.get(bench_meta["name"], {})
+            self._run_benchmark(bench_meta, bench_config, iterations, cold_iterations)
 
-        log.info("Benchmark execution complete")
+        log.info("ROCblas benchmarks execution complete")
 
-    def _run_gemm_benchmarks(
-        self, config_data: Dict, iterations: int, cold_iterations: int
+    def _build_base_cmd(self, function: str, precision: str) -> List[str]:
+        """Build base rocblas-bench command with common arguments."""
+        return [
+            f"{self.therock_bin_dir}/rocblas-bench",
+            "--function",
+            function,
+            "--precision",
+            precision,
+            "--initialization",
+            "rand_int",
+        ]
+
+    def _run_benchmark(
+        self,
+        bench_meta: Dict[str, Any],
+        bench_config: Dict[str, Any],
+        iterations: int,
+        cold_iterations: int,
     ) -> None:
-        """Run GEMM benchmarks."""
+        """Generic benchmark runner for any ROCblas benchmark type.
+
+        Args:
+            bench_meta: Benchmark metadata (name, function, dimensions, etc.)
+            bench_config: Benchmark-specific configuration (sizes, precision, etc.)
+            iterations: Number of iterations
+            cold_iterations: Number of cold iterations
+        """
         try:
-            log.info("Running rocBLAS-GEMM Benchmarks")
-            log_file = self.script_dir / "rocblas-gemm_bench.log"
+            name = bench_meta["name"]
+            function = bench_meta["function"]
+            log_file = self.script_dir / bench_meta["log_file"]
+            dimensions = bench_meta.get("dimensions", "sizes")
+            extra_args = bench_meta.get("extra_args", {})
+            has_compute_type = bench_meta.get("has_compute_type", False)
+
+            log.info(f"Running rocBLAS-{name.upper()} Benchmarks")
+
+            # Apply GPU-specific overrides
+            if self.amdgpu_families and "gpu_overrides" in bench_config:
+                overrides = bench_config.get("gpu_overrides", {}).get(
+                    self.amdgpu_families, {}
+                )
+                bench_config.update(overrides)
 
             with open(log_file, "w+") as f:
-                # Get GEMM configuration
-                gemm_config = config_data.get("gemm", {})
-                gemm_sizes = gemm_config.get("sizes", [])
-                gemm_trans = gemm_config.get("transpose", [])
-                gemm_precision = gemm_config.get("precision", [])
+                precision_values = bench_config.get("precision", ["s"])
+                if not isinstance(precision_values, list):
+                    precision_values = [precision_values]
 
-                for precision in gemm_precision:
-                    for size in gemm_sizes:
-                        m = n = k = lda = ldb = ldc = size
-                        for trans in gemm_trans:
-                            # Build ROCblas benchmark command
-                            cmd = [
-                                f"{self.therock_bin_dir}/rocblas-bench",
-                                "--function",
-                                "gemm",
-                                "--precision",
-                                precision,
-                                "--initialization",
-                                "rand_int",
-                                "-m",
-                                str(m),
-                                "-n",
-                                str(n),
-                                "-k",
-                                str(k),
-                                "--lda",
-                                str(lda),
-                                "--ldb",
-                                str(ldb),
-                                "--ldc",
-                                str(ldc),
-                                "--transposeB",
-                                trans,
-                                "--iters",
-                                str(iterations),
-                                "--cold_iters",
-                                str(cold_iterations),
-                            ]
-
-                            # Add precision-specific parameters
-                            if precision == "h":
-                                cmd.extend(
-                                    ["--alpha", "1", "--beta", "0", "--transposeA", "N"]
-                                )
-
-                            self.execute_command(cmd, f)
-        except Exception as e:
-            log.error(f"GEMM benchmark failed: {e}")
-            log.warning("Continuing with next benchmark...")
-
-    def _run_gemv_benchmarks(
-        self, config_data: Dict, iterations: int, cold_iterations: int
-    ) -> None:
-        """Run GEMV benchmarks."""
-        try:
-            log.info("Running rocBLAS-GEMV Benchmarks")
-            log_file = self.script_dir / "rocblas-gemv_bench.log"
-
-            with open(log_file, "w+") as f:
-                # Get GEMV configuration
-                gemv_config = config_data.get("gemv", {})
-                gemv_m = gemv_config.get("m", [])
-                gemv_n = gemv_config.get("n", [])
-                gemv_lda = gemv_config.get("lda", [])
-                gemv_trans = gemv_config.get("transpose", [])
-                gemv_precision = gemv_config.get("precision", [])
-
-                # Validate configuration lengths match
-                if not (len(gemv_m) == len(gemv_n) == len(gemv_lda)):
-                    log.warning(
-                        f"GEMV config length mismatch: m={len(gemv_m)}, n={len(gemv_n)}, lda={len(gemv_lda)}"
-                    )
-
-                for precision in gemv_precision:
-                    for m, n, lda in zip(gemv_m, gemv_n, gemv_lda):
-                        for trans in gemv_trans:
-                            # Build ROCblas GEMV benchmark command
-                            cmd = [
-                                f"{self.therock_bin_dir}/rocblas-bench",
-                                "--function",
-                                "gemv",
-                                "--precision",
-                                precision,
-                                "--initialization",
-                                "rand_int",
-                                "-m",
-                                str(m),
-                                "-n",
-                                str(n),
-                                "--lda",
-                                str(lda),
-                                "--transposeA",
-                                trans,
-                                "--iters",
-                                str(iterations),
-                                "--cold_iters",
-                                str(cold_iterations),
-                            ]
-                            self.execute_command(cmd, f)
-        except Exception as e:
-            log.error(f"GEMV benchmark failed: {e}")
-            log.warning("Continuing with next benchmark...")
-
-    def _run_ger_benchmarks(
-        self, config_data: Dict, iterations: int, cold_iterations: int
-    ) -> None:
-        """Run GER benchmarks."""
-        try:
-            log.info("Running rocBLAS-GER Benchmarks")
-            log_file = self.script_dir / "rocblas-ger_bench.log"
-
-            with open(log_file, "w+") as f:
-                # Get GER configuration
-                ger_config = config_data.get("ger", {})
-                ger_m = ger_config.get("m", [])
-                ger_n = ger_config.get("n", [])
-                ger_lda = ger_config.get("lda", [])
-                ger_precision = ger_config.get("precision", [])
-
-                # Validate configuration lengths match
-                if not (len(ger_m) == len(ger_n) == len(ger_lda)):
-                    log.warning(
-                        f"GER config length mismatch: m={len(ger_m)}, n={len(ger_n)}, lda={len(ger_lda)}"
-                    )
-
-                for precision in ger_precision:
-                    for m, n, lda in zip(ger_m, ger_n, ger_lda):
-                        # Build ROCblas GER benchmark command
-                        cmd = [
-                            f"{self.therock_bin_dir}/rocblas-bench",
-                            "--function",
-                            "ger",
-                            "--precision",
+                for precision in precision_values:
+                    if dimensions == "sizes":
+                        # GEMM-style: single size for all dimensions
+                        self._run_sizes_benchmark(
+                            f,
+                            bench_config,
+                            function,
                             precision,
-                            "--initialization",
-                            "rand_int",
-                            "-m",
-                            str(m),
-                            "-n",
-                            str(n),
-                            "--lda",
-                            str(lda),
-                            "--iters",
-                            str(iterations),
-                            "--cold_iters",
-                            str(cold_iterations),
-                        ]
-                        self.execute_command(cmd, f)
-        except Exception as e:
-            log.error(f"GER benchmark failed: {e}")
-            log.warning("Continuing with next benchmark...")
-
-    def _run_dot_benchmarks(
-        self, config_data: Dict, iterations: int, cold_iterations: int
-    ) -> None:
-        """Run DOT benchmarks."""
-        try:
-            log.info("Running rocBLAS-DOT Benchmarks")
-            log_file = self.script_dir / "rocblas-dot_bench.log"
-
-            with open(log_file, "w+") as f:
-                # Get DOT configuration
-                dot_config = config_data.get("dot", {})
-                dot_n = dot_config.get("n", [])
-                dot_precision = dot_config.get("precision", [])
-
-                for precision in dot_precision:
-                    for n in dot_n:
-                        # Build ROCblas DOT benchmark command
-                        cmd = [
-                            f"{self.therock_bin_dir}/rocblas-bench",
-                            "--function",
-                            "dot",
-                            "--precision",
+                            iterations,
+                            cold_iterations,
+                            extra_args,
+                            has_compute_type,
+                        )
+                    elif dimensions == "separate":
+                        # GEMV/GER-style: separate m, n, lda values
+                        self._run_separate_dims_benchmark(
+                            f,
+                            bench_config,
+                            function,
                             precision,
-                            "--initialization",
-                            "rand_int",
-                            "-n",
-                            str(n),
-                            "--iters",
-                            str(iterations),
-                            "--cold_iters",
-                            str(cold_iterations),
-                        ]
-                        self.execute_command(cmd, f)
+                            iterations,
+                            cold_iterations,
+                        )
+                    elif dimensions == "simple":
+                        # DOT-style: single dimension (n)
+                        self._run_simple_benchmark(
+                            f,
+                            bench_config,
+                            function,
+                            precision,
+                            iterations,
+                            cold_iterations,
+                        )
+
         except Exception as e:
-            log.error(f"DOT benchmark failed: {e}")
+            log.error(f"{name.upper()} benchmark failed: {e}")
             log.warning("Continuing with next benchmark...")
 
-    def _run_gemm_hpa_hgemm_benchmarks(
-        self, config_data: Dict, iterations: int, cold_iterations: int
+    def _run_sizes_benchmark(
+        self,
+        f: IO[str],
+        config: Dict[str, Any],
+        function: str,
+        precision: str,
+        iterations: int,
+        cold_iterations: int,
+        extra_args: Dict[str, Any],
+        has_compute_type: bool,
     ) -> None:
-        """Run GEMM_HPA_HGEMM (HPA/Half-Precision Accumulate) benchmarks."""
-        try:
-            log.info("Running rocBLAS-GEMM_HPA_HGEMM Benchmarks")
-            log_file = self.script_dir / "rocblas-gemm_hpa_hgemm_bench.log"
+        """Run benchmarks that use 'sizes' parameter (GEMM, GEMM_HPA_HGEMM)."""
+        sizes = config.get("sizes", [])
+        transpose_values = config.get("transpose", ["N"])
 
-            with open(log_file, "w+") as f:
-                # Get GEMM_HPA_HGEMM configuration
-                gemm_hpa_hgemm_config = config_data.get("gemm_hpa_hgemm", {})
-                gemm_hpa_hgemm_sizes = gemm_hpa_hgemm_config.get("sizes", [])
-                gemm_hpa_hgemm_trans = gemm_hpa_hgemm_config.get("transpose", [])
-                gemm_hpa_hgemm_precision = gemm_hpa_hgemm_config.get("precision", "h")
-                gemm_hpa_hgemm_compute_type = gemm_hpa_hgemm_config.get(
-                    "compute_type", "s"
+        for size in sizes:
+            for trans in transpose_values:
+                # Build base command
+                cmd = self._build_base_cmd(function, precision)
+
+                # Add dimension arguments
+                cmd.extend(
+                    [
+                        "-m",
+                        str(size),
+                        "-n",
+                        str(size),
+                        "-k",
+                        str(size),
+                        "--lda",
+                        str(size),
+                        "--ldb",
+                        str(size),
+                        "--ldc",
+                        str(size),
+                    ]
                 )
 
-                for size in gemm_hpa_hgemm_sizes:
-                    m = n = k = lda = ldb = ldc = ldd = size
-                    for trans in gemm_hpa_hgemm_trans:
-                        # Build ROCblas GEMM_HPA_HGEMM benchmark command
-                        cmd = [
-                            f"{self.therock_bin_dir}/rocblas-bench",
-                            "--function",
-                            "gemm_ex",
-                            "--precision",
-                            gemm_hpa_hgemm_precision,
-                            "-m",
-                            str(m),
-                            "-n",
-                            str(n),
-                            "-k",
-                            str(k),
-                            "--lda",
-                            str(lda),
-                            "--ldb",
-                            str(ldb),
-                            "--ldc",
-                            str(ldc),
-                            "--ldd",
-                            str(ldd),
-                            "--compute_type",
-                            gemm_hpa_hgemm_compute_type,
-                            "--transposeB",
-                            trans,
-                            "--iters",
-                            str(iterations),
-                            "--cold_iters",
-                            str(cold_iterations),
-                        ]
+                # Add ldd for gemm_ex
+                if has_compute_type:
+                    cmd.extend(["--ldd", str(size)])
+                    compute_type = config.get("compute_type", "s")
+                    cmd.extend(["--compute_type", compute_type])
 
-                        self.execute_command(cmd, f)
-        except Exception as e:
-            log.error(f"GEMM_HPA_HGEMM benchmark failed: {e}")
-            log.warning("Continuing with next benchmark...")
+                # Add transpose
+                cmd.extend(["--transposeB", trans])
+
+                # Add precision-specific extra args
+                if precision in extra_args:
+                    for key, val in extra_args[precision].items():
+                        cmd.extend([f"--{key}", val])
+
+                # Add iteration args
+                cmd.extend(
+                    ["--iters", str(iterations), "--cold_iters", str(cold_iterations)]
+                )
+
+                self.execute_command(cmd, f)
+
+    def _run_separate_dims_benchmark(
+        self,
+        f: IO[str],
+        config: Dict[str, Any],
+        function: str,
+        precision: str,
+        iterations: int,
+        cold_iterations: int,
+    ) -> None:
+        """Run benchmarks with separate m, n, lda parameters (GEMV, GER)."""
+        m_values = config.get("m", [])
+        n_values = config.get("n", [])
+        lda_values = config.get("lda", [])
+        transpose_values = config.get("transpose", ["N"])
+
+        # Validate lengths match
+        if not (len(m_values) == len(n_values) == len(lda_values)):
+            log.warning(
+                f"Config length mismatch: m={len(m_values)}, n={len(n_values)}, lda={len(lda_values)}"
+            )
+
+        for m, n, lda in zip(m_values, n_values, lda_values):
+            # GEMV has transpose, GER doesn't
+            transpose_loop = transpose_values if function == "gemv" else [None]
+
+            for trans in transpose_loop:
+                cmd = self._build_base_cmd(function, precision)
+                cmd.extend(
+                    [
+                        "-m",
+                        str(m),
+                        "-n",
+                        str(n),
+                        "--lda",
+                        str(lda),
+                    ]
+                )
+
+                # Add transpose for GEMV
+                if trans is not None:
+                    cmd.extend(["--transposeA", trans])
+
+                cmd.extend(
+                    [
+                        "--iters",
+                        str(iterations),
+                        "--cold_iters",
+                        str(cold_iterations),
+                    ]
+                )
+                self.execute_command(cmd, f)
+
+    def _run_simple_benchmark(
+        self,
+        f: IO[str],
+        config: Dict[str, Any],
+        function: str,
+        precision: str,
+        iterations: int,
+        cold_iterations: int,
+    ) -> None:
+        """Run benchmarks with single dimension n (DOT)."""
+        n_values = config.get("n", [])
+
+        for n in n_values:
+            cmd = self._build_base_cmd(function, precision)
+            cmd.extend(
+                [
+                    "-n",
+                    str(n),
+                    "--iters",
+                    str(iterations),
+                    "--cold_iters",
+                    str(cold_iterations),
+                ]
+            )
+            self.execute_command(cmd, f)
 
     def parse_results(self) -> Tuple[List[Dict[str, Any]], List[PrettyTable]]:
         """Parse benchmark results from log files.
