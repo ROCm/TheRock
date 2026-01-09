@@ -63,6 +63,10 @@ users who want early previews of upcoming releases, and QA/test team members.
 | dev releases         | https://rocm.devreleases.amd.com/ | Manually triggered test workflows in [TheRock](https://github.com/ROCm/TheRock)                                                                                                                              |
 | dev builds           | No central index                  | Local builds and per-commit workflows in [TheRock](https://github.com/ROCm/TheRock),<br>[rocm-libraries](https://github.com/ROCm/rocm-libraries), [rocm-systems](https://github.com/ROCm/rocm-systems), etc. |
 
+With the exception of "dev releases", each distribution channel only contains
+release artifacts of the matching release type. The "dev releases" channel
+_can_ contain any type of release.
+
 ## Python package versions
 
 Python package versions are handled by scripts:
@@ -70,21 +74,21 @@ Python package versions are handled by scripts:
 - [`build_tools/compute_rocm_package_version.py`](/build_tools/compute_rocm_package_version.py)
   - [`build_tools/tests/compute_rocm_package_version_test.py`](/build_tools/tests/compute_rocm_package_version_test.py)
 
-The script produces these versions for each distribution channel:
+The script produces these versions for each release type:
 
-| Distribution channel | Version format    | Version example                                                                                                                                                     |
-| -------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| stable releases      | `X.Y.Z`           | `7.10.0`                                                                                                                                                            |
-| prereleases          | `X.Y.ZrcN`        | `7.10.0rc0`<br>(The first release candidate for that stable release)                                                                                                |
-| nightly releases     | `X.Y.ZaYYYYMMDD`  | `7.10.0a20251124`<br>(The nightly release on 2025-11-24)                                                                                                            |
-| dev builds/releases  | `X.Y.Z.dev0+NNNN` | `7.10.0.dev0+efed3c3b10a5cce8578f58f8eb288582c26d18c4`<br>(For commit [`efed3c3`](https://github.com/ROCm/TheRock/commit/efed3c3b10a5cce8578f58f8eb288582c26d18c4)) |
+| Release type | Version format    | Version example                                                                                                                                                     |
+| ------------ | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| stable       | `X.Y.Z`           | `7.10.0`                                                                                                                                                            |
+| prerelease   | `X.Y.ZrcN`        | `7.10.0rc0`<br>(The first release candidate for that stable release)                                                                                                |
+| nightly      | `X.Y.ZaYYYYMMDD`  | `7.10.0a20251124`<br>(The nightly release on 2025-11-24)                                                                                                            |
+| dev          | `X.Y.Z.dev0+NNNN` | `7.10.0.dev0+efed3c3b10a5cce8578f58f8eb288582c26d18c4`<br>(For commit [`efed3c3`](https://github.com/ROCm/TheRock/commit/efed3c3b10a5cce8578f58f8eb288582c26d18c4)) |
 
 Each distribution channel (and GPU family within that channel) is currently
 hosted on a separate release index that can be passed to `pip` or `uv` via
 `--index-url`. For example:
 
 ```bash
-pip install --index-url=https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/ rocm`
+pip install --index-url=https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/ rocm
 ```
 
 See [RELEASES.md - Installing releases using pip](../../RELEASES.md#installing-releases-using-pip)
@@ -102,12 +106,33 @@ When we build external projects like
 package version with our own
 [local version identifier](https://packaging.python.org/en/latest/specifications/version-specifiers/#local-version-identifiers).
 
-For example, for torch version `2.9.0` built with ROCm version `7.9.0` we
-generate a composite torch version `2.9.0+rocm7.9.0`.
+For example, for torch version `2.9.0` built with ROCm version `7.10.0` we
+generate a composite torch version `2.9.0+rocm7.10.0`. See this table for more
+possible version combinations:
 
-<!-- TODO: Document [stable, rc, and dev] local version identifiers. -->
+| ROCm release type | ROCm version example | Composite torch version example                                                    |
+| ----------------- | -------------------- | ---------------------------------------------------------------------------------- |
+| stable            | `7.10.0`             | `2.9.0+rocm7.10.0`                                                                 |
+| nightly           | `7.10.0a20251124`    | `2.9.0+rocm7.10.0a20251124`                                                        |
+| dev               | `7.10.0.dev0+efed3c` | `2.9.0+devrocm7.10.0.dev0-efed3c`<br>_(Note the `devrocm` and `-` instead of `+`)_ |
 
-<!-- See https://github.com/ROCm/TheRock/pull/2392 which may change for dev -->
+These local version identifiers are specially constructed such that the expected
+version sorting of `stable > nightly > dev` is preserved. Note that per the
+["Local version identifiers" specification](https://packaging.python.org/en/latest/specifications/version-specifiers/#local-version-identifiers),
+comparison and ordering of local version identifiers goes segment by segment
+with special rules _different from the rules used for base versions_. This
+ordering can be tested like so:
+
+```python
+>>> from packaging.version import Version
+>>> stable = Version("2.9.0+rocm7.10.0")
+>>> nightly = Version("2.9.0+rocm7.10.0a20251124")
+>>> dev = Version("2.9.0+devrocm7.10.0.dev0-efed3c")
+>>> stable > nightly
+True
+>>> nightly > dev
+True
+```
 
 #### PyTorch versions
 
@@ -120,12 +145,12 @@ PyTorch packages versions are handled via scripts:
 
 The scripts produce these versions for each distribution channel:
 
-| Package name | Example release version | Example nightly version        |
-| ------------ | ----------------------- | ------------------------------ |
-| torch        | `2.7.1+rocm7.9.0rc1`    | `2.10.0a0+rocm7.10.0a20251024` |
-| torchaudio   | `2.7.1a0+rocm7.9.0rc1`  | `2.10.0a0+rocm7.10.0a20251024` |
-| torchvision  | `0.22.1+rocm7.9.0rc1`   | `0.24.0+rocm7.11.0a20251124`   |
-| triton       | `3.3.1+rocm7.9.0rc1`    | `3.5.1+rocm7.11.0a20251124`    |
+| Package name | Example release version (stable x stable) | Example nightly version (nightly x nightly) |
+| ------------ | ----------------------------------------- | ------------------------------------------- |
+| torch        | `2.9.1+rocm7.10.0`                        | `2.10.0a0+rocm7.10.0a20251024`              |
+| torchaudio   | `2.9.0+rocm7.10.0`                        | `2.10.0a0+rocm7.10.0a20251024`              |
+| torchvision  | `0.24.0+rocm7.10.0`                       | `0.24.0+rocm7.11.0a20251124`                |
+| triton       | `3.3.1+rocm7.10.0`                        | `3.5.1+rocm7.11.0a20251124`                 |
 
 #### JAX versions
 
@@ -218,23 +243,23 @@ Native package versions are handled by scripts:
 - [`build_tools/compute_rocm_native_package_version.py`](/build_tools/compute_rocm_native_package_version.py)
   - [`build_tools/tests/compute_rocm_native_package_version_test.py`](/build_tools/tests/compute_rocm_native_package_version_test.py)
 
-The script produces these versions for rpm packages for each distribution channel:
+The script produces these versions for rpm packages for each release type:
 
-| Distribution channel | Version format              | Version example                                                                                                                        |
-| -------------------- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| stable releases      | `X.Y.Z`                     | `7.10.0`                                                                                                                               |
-| prereleases          | `X.Y.Z~rcN`                 | `7.10.0~rc0`<br>(The first release candidate for that stable release)                                                                  |
-| nightly releases     | `X.Y.Z~YYYYMMDD`            | `7.10.0~20251124`<br>(The nightly release on 2025-11-24)                                                                               |
-| dev builds/releases  | `X.Y.Z~YYYYMMDDg<git-hash>` | `7.10.0~20251124gefed3c3`<br>(For commit [`efed3c3`](https://github.com/ROCm/TheRock/commit/efed3c3b10a5cce8578f58f8eb288582c26d18c4)) |
+| Release type | Version format              | Version example                                                                                                                        |
+| ------------ | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| stable       | `X.Y.Z`                     | `7.10.0`                                                                                                                               |
+| prerelease   | `X.Y.Z~rcN`                 | `7.10.0~rc0`<br>(The first release candidate for that stable release)                                                                  |
+| nightly      | `X.Y.Z~YYYYMMDD`            | `7.10.0~20251124`<br>(The nightly release on 2025-11-24)                                                                               |
+| dev          | `X.Y.Z~YYYYMMDDg<git-hash>` | `7.10.0~20251124gefed3c3`<br>(For commit [`efed3c3`](https://github.com/ROCm/TheRock/commit/efed3c3b10a5cce8578f58f8eb288582c26d18c4)) |
 
-The script produces these versions for debian packages for each distribution channel:
+The script produces these versions for debian packages for each release type:
 
-| Distribution channel | Version format      | Version example                                                        |
-| -------------------- | ------------------- | ---------------------------------------------------------------------- |
-| stable releases      | `X.Y.Z`             | `7.10.0`                                                               |
-| prereleases          | `X.Y.Z~preN`        | `7.10.0~pre0`<br>(The first release candidate for that stable release) |
-| nightly releases     | `X.Y.Z~YYYYMMDD`    | `7.10.0~20251124`<br>(The nightly release on 2025-11-24)               |
-| dev builds/releases  | `X.Y.Z~devYYYYMMDD` | `7.10.0~dev20251124`<br>(For dev build on 2025-11-24)d18c4)            |
+| Release type | Version format      | Version example                                                        |
+| ------------ | ------------------- | ---------------------------------------------------------------------- |
+| stable       | `X.Y.Z`             | `7.10.0`                                                               |
+| prerelease   | `X.Y.Z~preN`        | `7.10.0~pre0`<br>(The first release candidate for that stable release) |
+| nightly      | `X.Y.Z~YYYYMMDD`    | `7.10.0~20251124`<br>(The nightly release on 2025-11-24)               |
+| dev          | `X.Y.Z~devYYYYMMDD` | `7.10.0~dev20251124`<br>(For dev build on 2025-11-24)d18c4)            |
 
 ## Native Windows package versions
 

@@ -181,19 +181,19 @@ class ConfigValidator:
 
                 print(f"{prefix}{key} ({prop_type})")
                 if desc:
-                    print(f"{prefix}  → {desc}")
+                    print(f"{prefix}  - {desc}")
 
                 if "enum" in value:
-                    print(f"{prefix}  → Options: {', '.join(value['enum'])}")
+                    print(f"{prefix}  - Options: {', '.join(value['enum'])}")
 
                 if "minimum" in value or "maximum" in value:
-                    min_val = value.get("minimum", "-∞")
-                    max_val = value.get("maximum", "∞")
-                    print(f"{prefix}  → Range: {min_val} to {max_val}")
+                    min_val = value.get("minimum", "-inf")
+                    max_val = value.get("maximum", "inf")
+                    print(f"{prefix}  - Range: {min_val} to {max_val}")
 
                 if "properties" in value:
                     if required:
-                        print(f"{prefix}  → Required fields: {', '.join(required)}")
+                        print(f"{prefix}  - Required fields: {', '.join(required)}")
                     print_properties(value["properties"], indent + 1)
 
                 print()

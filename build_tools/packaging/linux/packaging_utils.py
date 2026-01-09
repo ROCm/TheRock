@@ -169,6 +169,23 @@ def is_packaging_disabled(pkg_info):
     return is_key_defined(pkg_info, "Disablepackaging")
 
 
+def is_gfxarch_package(pkg_info):
+    """Check whether the package is associated with a graphics architecture
+
+    Parameters:
+    pkg_info (dict): A dictionary containing package details.
+
+    Returns:
+    bool : True if Gfxarch is set, else False.
+           #False if devel package
+    """
+    #  Disabling this for time being as per the requirements
+    #   if pkgname.endswith("-devel"):
+    #       return False
+
+    return is_key_defined(pkg_info, "Gfxarch")
+
+
 def get_package_info(pkgname):
     """Retrieves package details from a JSON file for the given package name
 
@@ -186,26 +203,6 @@ def get_package_info(pkgname):
             return package
 
     return None
-
-
-def check_for_gfxarch(pkgname):
-    """Check whether the package is associated with a graphics architecture
-
-    Parameters:
-    pkgname : Package Name
-
-    Returns:
-    bool : True if Gfxarch is set else False.
-            False if devel package
-    """
-    #  Disabling this for time being as per the requirements
-    #   if pkgname.endswith("-devel"):
-    #       return False
-
-    pkg_info = get_package_info(pkgname)
-    if str(pkg_info.get("Gfxarch", "false")).strip().lower() == "true":
-        return True
-    return False
 
 
 def get_package_list():
