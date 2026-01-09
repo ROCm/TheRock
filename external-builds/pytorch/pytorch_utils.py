@@ -255,12 +255,21 @@ def set_gpu_execution_policy(
     *before* torch is imported, because HIP_VISIBLE_DEVICES cannot affect CUDA device visibility after initialization.
 
     Args:
-        supported_devices (dict[str, list[int]]): Dictionary mapping architecture names to lists of device indices.
+        supported_devices (dict[str, list[int]]): Dictionary mapping GPU architectures to lists of device indices.
             Can be obtained from get_all_supported_devices() or get_unique_supported_devices().
+            - get_all_supported_devices(): {"gfx942": [0, 1], "gfx1100": [2]}
+            - get_unique_supported_devices(): {"gfx942": [0], "gfx1100": [2]}
         policy (str): Device selection policy. Must be one of:
             - "single": Use a single device from the provided devices at the given offset.
-            - "all": Use all provided devices.
-        offset (int): Index offset for selecting device in "single" mode.
+            - "all": Use all provided devices. The offset parameter is ignored.
+        offset (int): Index offset for selecting device with "single" policy. Ignored for "all" policy.
+            Offset is applied to the flattened list of (arch, idx) pairs made from supported_devices dictionary.
+            Depending on the function used to get supported_devices:
+            - get_all_supported_devices(): Select the device at the given offset.
+              Example: {"gfx942": [0, 1], "gfx1100": [2]} => [("gfx942", 0), ("gfx942", 1), ("gfx1100", 2)]
+            - get_unique_supported_devices(): Since every architecture has a single device,
+              offset effectively allows us to iterate over specific architectures.
+              Example: {"gfx942": [0], "gfx1100": [2]} => [("gfx942", 0), ("gfx1100", 2)]
 
     Returns:
         list[tuple[str, int]]: A list of (arch, device_index) tuples that were selected and made visible.
@@ -268,19 +277,18 @@ def set_gpu_execution_policy(
             - For "all", the list contains every (arch, idx) made visible.
 
     Raises:
-        ValueError: If an invalid policy is supplied.
-        IndexError: If the requested offset exceeds the set of possible devices.
+        ValueError: If an invalid policy is supplied or if supported_devices is empty.
+        IndexError: If the requested offset exceeds the set of possible devices (only for "single" policy).
     """
     valid_policies = ("single", "all")
     if policy not in valid_policies:
         raise ValueError(f"Invalid policy '{policy}'. Must be one of {valid_policies}.")
 
     if not supported_devices:
-        print("[ERROR] No supported devices found")
-        sys.exit(1)
+        raise ValueError("supported_devices cannot be empty; no devices available.")
 
     if policy == "single":
-        # Flatten all (arch, idx) pairs and select using offset.
+        # Flatten the supported_devices dictionary into pairs of (arch, idx) for each device.
         flat_devices = [
             (arch, idx)
             for arch, indices in supported_devices.items()
