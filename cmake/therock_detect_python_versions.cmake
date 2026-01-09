@@ -1,3 +1,75 @@
+# Check if a Python executable supports linking against a shared libpython.
+# Returns the path to the shared library if available, empty string otherwise.
+function(_therock_check_python_shared_library python_exe out_var)
+  execute_process(
+    COMMAND "${python_exe}" -c "
+import sysconfig
+import os
+# Check if Python was built with --enable-shared
+if sysconfig.get_config_var('Py_ENABLE_SHARED'):
+    libdir = sysconfig.get_config_var('LIBDIR')
+    ldlibrary = sysconfig.get_config_var('LDLIBRARY')
+    if libdir and ldlibrary:
+        libpath = os.path.join(libdir, ldlibrary)
+        if os.path.exists(libpath):
+            print(libpath)
+            exit(0)
+# No shared library available
+print('')
+"
+    OUTPUT_VARIABLE _lib_path
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    RESULT_VARIABLE _result
+  )
+  if(_result EQUAL 0 AND _lib_path)
+    set(${out_var} "${_lib_path}" PARENT_SCOPE)
+  else()
+    set(${out_var} "" PARENT_SCOPE)
+  endif()
+endfunction()
+
+# Detect Python executables that support linking against shared libpython.
+# This is required for embedding Python (e.g., in rocgdb).
+#
+# Logic:
+#   1. If THEROCK_SHARED_PYTHON_EXECUTABLES is set, use those but verify each
+#      one supports linking against libpython (fatal error if any don't).
+#   2. If not set, check if Python3_EXECUTABLE supports linking against
+#      libpython and use it if so.
+#   3. Otherwise, return an empty list.
+#
+# The caller should handle an empty list appropriately (e.g., warning and
+# disabling Python support).
+function(therock_detect_shared_python_executables out_executables)
+  set(_result_executables)
+
+  if(THEROCK_SHARED_PYTHON_EXECUTABLES)
+    message(STATUS "Using explicitly configured shared Python executables: ${THEROCK_SHARED_PYTHON_EXECUTABLES}")
+    foreach(_python_exe IN LISTS THEROCK_SHARED_PYTHON_EXECUTABLES)
+      if(NOT EXISTS "${_python_exe}")
+        message(FATAL_ERROR "Shared Python executable not found: ${_python_exe}")
+      endif()
+      _therock_check_python_shared_library("${_python_exe}" _lib_path)
+      if(NOT _lib_path)
+        message(FATAL_ERROR "Python executable does not support shared libpython: ${_python_exe} (from ${THEROCK_SHARED_PYTHON_EXECUTABLES})")
+      endif()
+      list(APPEND _result_executables "${_python_exe}")
+      message(STATUS "  Verified shared libpython at ${_lib_path} for ${_python_exe}")
+    endforeach()
+  else()
+    # Check if the default Python3 has shared library support
+    _therock_check_python_shared_library("${Python3_EXECUTABLE}" _lib_path)
+    if(_lib_path)
+      list(APPEND _result_executables "${Python3_EXECUTABLE}")
+      message(STATUS "Default Python supports shared libpython: ${_lib_path}")
+    else()
+      message(STATUS "Default Python does not support shared libpython (built without --enable-shared)")
+    endif()
+  endif()
+
+  set(${out_executables} "${_result_executables}" PARENT_SCOPE)
+endfunction()
+
 # This variable allows building for multiple Python versions by specifying their executables.
 # Note: Most projects do not need to set this; only use it for multi-version Python builds.
 # Usage scenarios:
@@ -7,7 +79,6 @@
 #
 # For manylinux builds, this should be set to a subset of Python versions from /opt/python-*/bin
 # For regular builds, if not set, it defaults to the system Python3_EXECUTABLE
-
 function(therock_detect_python_versions OUT_EXECUTABLES OUT_VERSIONS)
   set(_python_executables)
   set(_python_versions)

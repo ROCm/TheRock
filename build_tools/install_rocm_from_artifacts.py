@@ -16,6 +16,7 @@ python build_tools/install_rocm_from_artifacts.py
     (--run-id RUN_ID | --release RELEASE | --input-dir INPUT_DIR)
     [--run-github-repo RUN_GITHUB_REPO]
     [--blas | --no-blas]
+    [--debug-tools | --no-debug-tools]
     [--fft | --no-fft]
     [--hipdnn | --no-hipdnn]
     [--miopen | --no-miopen]
@@ -188,6 +189,7 @@ def retrieve_artifacts_by_run_id(args):
     elif any(
         [
             args.blas,
+            args.debug_tools,
             args.fft,
             args.hipdnn,
             args.miopen,
@@ -206,6 +208,11 @@ def retrieve_artifacts_by_run_id(args):
         extra_artifacts = []
         if args.blas:
             extra_artifacts.append("blas")
+        if args.debug_tools:
+            extra_artifacts.append("amd-dbgapi")
+            extra_artifacts.append("rocgdb")
+            extra_artifacts.append("rocr-debug-agent")
+            extra_artifacts.append("rocr-debug-agent-tests")
         if args.fft:
             extra_artifacts.append("fft")
             extra_artifacts.append("fftw3")
@@ -362,6 +369,13 @@ def main(argv):
         "--blas",
         default=False,
         help="Include 'blas' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--debug-tools",
+        default=False,
+        help="Include ROCm debugging tools (amd-dbgapi, rocgdb and rocr_debug_agent) artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
