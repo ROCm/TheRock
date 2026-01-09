@@ -124,17 +124,16 @@ def _manifest_filename(
     python_version: Optional[str],
     pytorch_git_ref: Optional[str],
 ) -> str:
-    py_part = f"py{python_version}" if python_version else "py"
+    py = (python_version or "").strip()
+    if py.startswith("py"):
+        py = py[2:]
+    py_part = f"py{py}" if py else "py"
 
-    # Match workflow semantics:
-    # - nightly: no digits
-    # - release/X.Y: encode as release-X.Y
     if pytorch_git_ref == "nightly":
         track = "nightly"
     elif pytorch_git_ref and pytorch_git_ref.startswith("release/"):
-        track = pytorch_git_ref.replace("/", "-", 1)  # release/2.8 -> release-2.8
+        track = pytorch_git_ref.replace("/", "-", 1)
     else:
-        # Fallback for unexpected values (keeps names stable and readable)
         track = (pytorch_git_ref or "unknown").replace("/", "-")
 
     return f"therock-manifest_torch_{py_part}_{track}.json"

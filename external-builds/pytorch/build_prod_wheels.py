@@ -513,6 +513,12 @@ def do_build(args: argparse.Namespace):
     # Write manifest for built wheels (into <output-dir>/manifests).
     if args.write_manifest:
         manifest_script = script_dir / "generate_pytorch_manifest.py"
+
+        if not args.python_version:
+            raise ValueError("--python-version is required for manifest naming")
+        if not args.pytorch_git_ref:
+            raise ValueError("--pytorch-git-ref is required for manifest naming")
+
         cmd = [
             sys.executable,
             manifest_script,
@@ -525,10 +531,11 @@ def do_build(args: argparse.Namespace):
             "--version-suffix",
             args.version_suffix,
             "--python-version",
-            ".".join(platform.python_version().split(".")[:2]),
+            args.python_version,
             "--pytorch-git-ref",
             args.pytorch_git_ref,
         ]
+
         if pytorch_dir:
             cmd += ["--pytorch-dir", pytorch_dir]
         if pytorch_audio_dir:
@@ -537,6 +544,8 @@ def do_build(args: argparse.Namespace):
             cmd += ["--pytorch-vision-dir", pytorch_vision_dir]
         if triton_dir:
             cmd += ["--triton-dir", triton_dir]
+
+        print("[pytorch-manifest] running:", " ".join(map(str, cmd)), flush=True)
         exec(cmd, cwd=script_dir)
 
     if args.use_ccache:
@@ -1093,6 +1102,11 @@ def main(argv: list[str]):
         "--pytorch-git-ref",
         default=None,
         help="PyTorch git ref for manifest naming (e.g. release/2.8, nightly)",
+    )
+    build_p.add_argument(
+        "--python-version",
+        default=None,
+        help="Python version for manifest naming (e.g. 3.11, 3.12).",
     )
     build_p.set_defaults(func=do_build)
 
