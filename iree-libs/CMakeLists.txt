@@ -4,6 +4,7 @@ if(THEROCK_ENABLE_FUSILLI_PLUGIN)
   ##############################################################################
 
   therock_cmake_subproject_declare(fusilli
+    USE_DIST_AMDGPU_TARGETS
     BACKGROUND_BUILD
     EXCLUDE_FROM_ALL
     NO_MERGE_COMPILE_COMMANDS
@@ -35,6 +36,7 @@ if(THEROCK_ENABLE_FUSILLI_PLUGIN)
   # fusilli hipDNN plugin
   ##############################################################################
   therock_cmake_subproject_declare(fusilli-plugin
+    USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/fusilli/plugins/hipdnn-plugin"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/fusilli-plugin"
     BACKGROUND_BUILD

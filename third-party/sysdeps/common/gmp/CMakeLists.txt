@@ -44,11 +44,6 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     )
 
     add_test(
-      NAME gmp_archive_test
-      COMMAND ls "${CMAKE_CURRENT_BINARY_DIR}/build/dist/lib/rocm_sysdeps/lib/libgmp.a"
-    )
-
-    add_test(
       NAME gmp_header_test
       COMMAND ls "${CMAKE_CURRENT_BINARY_DIR}/build/dist/lib/rocm_sysdeps/include/gmp.h"
     )
@@ -60,9 +55,6 @@ endif()
 cmake_minimum_required(VERSION 3.25)
 project(GMP_BUILD VERSION "6.3.0")
 
-include(ProcessorCount)
-ProcessorCount(PAR_JOBS)
-
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT PATCHELF)
   message(FATAL_ERROR "Missing PATCHELF from super-project")
 endif()
@@ -71,6 +63,18 @@ endif()
 # patch the sources.
 set(SOURCE_COPY_DIR "${CMAKE_CURRENT_BINARY_DIR}/s")
 
+# The important timestamped files we want to preserve.
+set(CRITICAL_FILES
+  "doc/gmp.info"
+  "doc/gmp.info-1"
+  "doc/gmp.info-2"
+)
+
+# Add the full path to the critical files.
+foreach(stamped_file ${CRITICAL_FILES})
+  list(APPEND TIMESTAMPED_FILES "${SOURCE_COPY_DIR}/${stamped_file}")
+endforeach()
+
 add_custom_target(
   build ALL
   WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
@@ -78,6 +82,12 @@ add_custom_target(
     "${CMAKE_COMMAND}" -E rm -rf -- "${CMAKE_INSTALL_PREFIX}" "${SOURCE_COPY_DIR}"
   COMMAND
     "${CMAKE_COMMAND}" -E copy_directory "${SOURCE_DIR}" "${SOURCE_COPY_DIR}"
+  COMMAND
+    # Unfortunately the source directory copy can change all of the timestamps
+    # and GMP's build system is particularly picky with them. As a workaround,
+    # touch a few critical files to make sure the build system is happy and does
+    # not want to call autotools or regenerate the documentation.
+    "${CMAKE_COMMAND}" -E touch ${TIMESTAMPED_FILES}
   #
   # OPTIONAL: Patching of the sources should happen here.
   #
@@ -95,7 +105,7 @@ add_custom_target(
     "${SOURCE_COPY_DIR}/configure"
       --prefix "${CMAKE_INSTALL_PREFIX}"
   COMMAND
-    make -j "${PAR_JOBS}" V=1
+    make V=1
   COMMAND
     make install
   COMMAND
@@ -103,7 +113,7 @@ add_custom_target(
       "PATCHELF=${PATCHELF}"
       "THEROCK_SOURCE_DIR=${THEROCK_SOURCE_DIR}"
       "Python3_EXECUTABLE=${Python3_EXECUTABLE}" --
-    "${CMAKE_CURRENT_SOURCE_DIR}/patch_install.sh" ${CMAKE_INSTALL_PREFIX}
+    "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/patch_install.py" ${CMAKE_INSTALL_PREFIX}
 )
 
 configure_file(

@@ -50,7 +50,13 @@
 #
 #   [artifacts.<name>]
 #   artifact_group = "group-name"           # Required: which group this belongs to
-#   type = "target-neutral" | "target-specific"  # target-specific = per GPU arch
+#   type = "target-neutral" | "target-specific"
+#       target-neutral: Built once with all architecture targets. Use for host-only
+#           code, headers, or runtime libraries where a single multi-arch build
+#           is preferred.
+#       target-specific: Built separately per architecture family and kept separate
+#           for distribution. Use for kernel libraries where sharded builds
+#           improve CI parallelism and enable per-arch downloads.
 #   artifact_deps = ["dep1", "dep2"]        # Optional: other artifacts this depends on
 #   feature_name = "FEATURE_NAME"           # Optional: override auto-generated name
 #   feature_group = "GROUP_NAME"            # Optional: override auto-generated group
@@ -74,11 +80,15 @@ description = "TheRock artifact-based build topology"
 
 [source_sets.base]
 description = "Base infrastructure submodules"
-submodules = ["half", "rocm-cmake", "amdsmi"]
+submodules = ["half", "rocm-cmake"]
 
 [source_sets.compilers]
 description = "Compiler toolchain submodules"
 submodules = ["llvm-project", "HIPIFY", "spirv-llvm-translator"]
+
+[source_sets.debug-tools]
+description = "ROCm debug tools submodules"
+submodules = ["amd-dbgapi", "rocgdb", "rocr-debug-agent", "rocr-debug-agent-tests"]
 
 [source_sets.rocm-systems]
 description = "ROCm systems monorepo (runtime, profiler, etc.)"
@@ -141,6 +151,10 @@ description = "Communication libraries per architecture (can run parallel to mat
 artifact_groups = ["comm-libs"]
 type = "per-arch"
 
+[build_stages.debug-tools]
+description = "ROCm debug tools"
+artifact_groups = ["debug-tools"]
+
 [build_stages.dctools-core]
 description = "Data center tools with minimal dependencies"
 artifact_groups = ["dctools-core"]
@@ -195,6 +209,12 @@ description = "AMD LLVM toolchain and compiler infrastructure"
 type = "generic"
 artifact_group_deps = ["third-party-sysdeps"]
 source_sets = ["compilers"]
+
+[artifact_groups.debug-tools]
+description = "ROCm debug tools"
+type = "generic"
+artifact_group_deps = ["compiler", "hip-runtime", "third-party-sysdeps"]
+disable_platforms = ["windows"]
 
 [artifact_groups.hip-runtime]
 description = "HIP runtime"
@@ -294,6 +314,34 @@ artifact_deps = ["sysdeps"]
 feature_group = "MEDIA"
 disable_platforms = ["windows"]
 
+[artifacts.sysdeps-expat]
+artifact_group = "third-party-sysdeps"
+type = "target-neutral"
+artifact_deps = []
+feature_group = "CORE"
+disable_platforms = ["windows"]
+
+[artifacts.sysdeps-gmp]
+artifact_group = "third-party-sysdeps"
+type = "target-neutral"
+artifact_deps = []
+feature_group = "CORE"
+disable_platforms = ["windows"]
+
+[artifacts.sysdeps-mpfr]
+artifact_group = "third-party-sysdeps"
+type = "target-neutral"
+artifact_deps = ["sysdeps-gmp"]  # mpfr depends on gmp
+feature_group = "CORE"
+disable_platforms = ["windows"]
+
+[artifacts.sysdeps-ncurses]
+artifact_group = "third-party-sysdeps"
+type = "target-neutral"
+artifact_deps = []
+feature_group = "CORE"
+disable_platforms = ["windows"]
+
 [artifacts.host-blas]
 artifact_group = "third-party-libs"
 type = "target-neutral"
@@ -387,7 +435,7 @@ feature_group = "CORE"  # Part of core, enabled by default
 
 [artifacts.rocrtst]
 artifact_group = "rocrtst"
-type = "target-specific"
+type = "target-neutral"
 artifact_deps = ["core-runtime", "core-ocl"]
 feature_name = "CORE_RUNTIME_TESTS"
 feature_group = "CORE"
@@ -404,7 +452,7 @@ feature_group = "CORE"  # Part of core, enabled by default
 
 [artifacts.core-hiptests]
 artifact_group = "hip-runtime"
-type = "target-specific"
+type = "target-neutral"
 artifact_deps = ["core-hip"]
 feature_group = "CORE"  # Part of core, enabled by default
 
@@ -447,7 +495,6 @@ artifact_deps = []
 artifact_group = "ml-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip"]
-disable_platforms = ["windows"]
 
 [artifacts.miopen]
 artifact_group = "ml-libs"
@@ -456,19 +503,19 @@ artifact_deps = ["core-runtime", "core-hip", "blas", "composable-kernel", "rand"
 
 [artifacts.hipdnn]
 artifact_group = "ml-libs"
-type = "target-specific"
+type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip"]
 
 [artifacts.miopen-plugin]
 artifact_group = "ml-libs"
-type = "target-specific"
+type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn"]
 
 # --- IREE Integration ---
 
 [artifacts.fusilli-plugin]
 artifact_group = "iree-libs"
-type = "target-specific"
+type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "hipdnn"]
 disable_platforms = ["windows"]
 
@@ -487,13 +534,6 @@ artifact_group = "profiler-core"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "base"]  # rocprofiler-register is in base
 feature_name = "ROCPROFV3"
-feature_group = "PROFILER"
-disable_platforms = ["windows"]
-
-[artifacts.aqlprofile]
-artifact_group = "profiler-core"
-type = "target-specific"
-artifact_deps = ["core-runtime"]
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
 
@@ -526,3 +566,33 @@ disable_platforms = ["windows"]
 # artifact_group = "dctools-rocm"
 # type = "target-neutral"
 # artifact_deps = ["blas", "miopen", "rocprofiler-sdk"]
+
+# --- ROCm Debug Tools ---
+
+[artifacts.amd-dbgapi]
+artifact_group = "debug-tools"
+type = "target-neutral"
+artifact_deps = ["amd-llvm", "core-runtime", "sysdeps"]
+feature_group = "DEBUG_TOOLS"  # Part of DEBUG_TOOLS, enabled by default via THEROCK_ENABLE_ALL
+disable_platforms = ["windows"]
+
+[artifacts.rocr-debug-agent]
+artifact_group = "debug-tools"
+type = "target-neutral"
+artifact_deps = ["amd-llvm", "core-runtime", "amd-dbgapi", "sysdeps"]
+feature_group = "DEBUG_TOOLS"  # Part of DEBUG_TOOLS, enabled by default via THEROCK_ENABLE_ALL
+disable_platforms = ["windows"]
+
+[artifacts.rocr-debug-agent-tests]
+artifact_group = "debug-tools"
+type = "target-specific"
+artifact_deps = ["rocr-debug-agent", "core-hip"]
+feature_group = "DEBUG_TOOLS"  # Part of DEBUG_TOOLS, enabled by default via THEROCK_ENABLE_ALL
+disable_platforms = ["windows"]
+
+[artifacts.rocgdb]
+artifact_group = "debug-tools"
+type = "target-neutral"
+artifact_deps = ["amd-llvm", "amd-dbgapi", "sysdeps-gmp", "sysdeps-mpfr", "sysdeps-expat", "sysdeps-ncurses"]
+feature_group = "DEBUG_TOOLS"  # Part of DEBUG_TOOLS, enabled by default via THEROCK_ENABLE_ALL
+disable_platforms = ["windows"]

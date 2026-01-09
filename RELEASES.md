@@ -32,6 +32,7 @@ Table of contents:
   - [Installing per-commit CI build tarballs manually](#installing-per-commit-ci-build-tarballs-manually)
   - [Installing tarballs using `install_rocm_from_artifacts.py`](#installing-tarballs-using-install_rocm_from_artifactspy)
   - [Using installed tarballs](#using-installed-tarballs)
+- [Verifying your installation](#verifying-your-installation)
 
 ## Installing releases using pip
 
@@ -506,3 +507,40 @@ ls install
 
 You may also want to add the install directory to your `PATH` or set other
 environment variables like `ROCM_HOME`.
+
+## Verifying your installation
+
+After installing ROCm via either pip packages or tarballs, you can verify that
+your GPU is properly recognized.
+
+### Linux
+
+Run one of the following commands to verify that your GPU is detected and properly
+initialized by the ROCm stack:
+
+```bash
+rocminfo
+# or
+amd-smi
+```
+
+### Windows
+
+Run the following command to verify GPU detection:
+
+```bash
+hipInfo.exe
+```
+
+### Additional troubleshooting
+
+If your GPU is not recognized or you encounter issues:
+
+- **Linux users**: Check system logs using `dmesg | grep amdgpu` for specific error messages
+- Review memory allocation settings (see the [FAQ](https://github.com/ROCm/TheRock/blob/main/faq.md)
+  for GTT configuration on unified memory systems)
+- Ensure you have the latest [AMDGPU driver](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/quick-start.html#amdgpu-driver-installation)
+  on Linux or [Adrenaline driver](https://www.amd.com/en/products/software/adrenalin.html) on Windows
+- For platform-specific troubleshooting when using PyTorch, see:
+  - [Using ROCm Python packages](#using-rocm-python-packages)
+  - [Using PyTorch Python packages](#using-pytorch-python-packages)
