@@ -88,6 +88,8 @@ add_custom_target(
       # Disable examples and tests.
       --without-examples
       --without-tests
+      # Disable xmlwf tool and its documentation (avoids needing docbook2x-man).
+      --without-xmlwf
       # Disable maintainer-mode, otherwise our copy of the sources directory
       # will potentially alter the timestamp of acinclude.m4, which will
       # trigger a reconfigure with a version of aclocal we do not have.
