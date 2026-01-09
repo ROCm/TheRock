@@ -86,6 +86,10 @@ submodules = ["half", "rocm-cmake"]
 description = "Compiler toolchain submodules"
 submodules = ["llvm-project", "HIPIFY", "spirv-llvm-translator"]
 
+[source_sets.debug-tools]
+description = "ROCm debug tools submodules"
+submodules = ["amd-dbgapi", "rocgdb", "rocr-debug-agent", "rocr-debug-agent-tests"]
+
 [source_sets.rocm-systems]
 description = "ROCm systems monorepo (runtime, profiler, etc.)"
 submodules = ["rocm-systems"]
@@ -147,6 +151,10 @@ description = "Communication libraries per architecture (can run parallel to mat
 artifact_groups = ["comm-libs"]
 type = "per-arch"
 
+[build_stages.debug-tools]
+description = "ROCm debug tools"
+artifact_groups = ["debug-tools"]
+
 [build_stages.dctools-core]
 description = "Data center tools with minimal dependencies"
 artifact_groups = ["dctools-core"]
@@ -201,6 +209,12 @@ description = "AMD LLVM toolchain and compiler infrastructure"
 type = "generic"
 artifact_group_deps = ["third-party-sysdeps"]
 source_sets = ["compilers"]
+
+[artifact_groups.debug-tools]
+description = "ROCm debug tools"
+type = "generic"
+artifact_group_deps = ["compiler", "hip-runtime", "third-party-sysdeps"]
+disable_platforms = ["windows"]
 
 [artifact_groups.hip-runtime]
 description = "HIP runtime"
@@ -552,3 +566,33 @@ disable_platforms = ["windows"]
 # artifact_group = "dctools-rocm"
 # type = "target-neutral"
 # artifact_deps = ["blas", "miopen", "rocprofiler-sdk"]
+
+# --- ROCm Debug Tools ---
+
+[artifacts.amd-dbgapi]
+artifact_group = "debug-tools"
+type = "target-neutral"
+artifact_deps = ["amd-llvm", "core-runtime", "sysdeps"]
+feature_group = "DEBUG_TOOLS"  # Part of DEBUG_TOOLS, enabled by default via THEROCK_ENABLE_ALL
+disable_platforms = ["windows"]
+
+[artifacts.rocr-debug-agent]
+artifact_group = "debug-tools"
+type = "target-neutral"
+artifact_deps = ["amd-llvm", "core-runtime", "amd-dbgapi", "sysdeps"]
+feature_group = "DEBUG_TOOLS"  # Part of DEBUG_TOOLS, enabled by default via THEROCK_ENABLE_ALL
+disable_platforms = ["windows"]
+
+[artifacts.rocr-debug-agent-tests]
+artifact_group = "debug-tools"
+type = "target-specific"
+artifact_deps = ["rocr-debug-agent", "core-hip"]
+feature_group = "DEBUG_TOOLS"  # Part of DEBUG_TOOLS, enabled by default via THEROCK_ENABLE_ALL
+disable_platforms = ["windows"]
+
+[artifacts.rocgdb]
+artifact_group = "debug-tools"
+type = "target-neutral"
+artifact_deps = ["amd-llvm", "amd-dbgapi", "sysdeps-gmp", "sysdeps-mpfr", "sysdeps-expat", "sysdeps-ncurses"]
+feature_group = "DEBUG_TOOLS"  # Part of DEBUG_TOOLS, enabled by default via THEROCK_ENABLE_ALL
+disable_platforms = ["windows"]

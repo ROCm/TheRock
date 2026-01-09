@@ -85,6 +85,23 @@ endif()
 # patch the sources.
 set(SOURCE_COPY_DIR "${CMAKE_CURRENT_BINARY_DIR}/s")
 
+# The important timestamped files we want to preserve so autotools
+# doesn't try to regenerate them (which would require aclocal, automake, etc.).
+set(CRITICAL_FILES
+  "aclocal.m4"
+  "Makefile.in"
+  "src/Makefile.in"
+  "tests/Makefile.in"
+  "tune/Makefile.in"
+  "doc/Makefile.in"
+  "tools/bench/Makefile.in"
+)
+
+# Add the full path to the critical files.
+foreach(stamped_file ${CRITICAL_FILES})
+  list(APPEND TIMESTAMPED_FILES "${SOURCE_COPY_DIR}/${stamped_file}")
+endforeach()
+
 add_custom_target(
   build ALL
   WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
@@ -92,6 +109,9 @@ add_custom_target(
     "${CMAKE_COMMAND}" -E rm -rf -- "${CMAKE_INSTALL_PREFIX}" "${SOURCE_COPY_DIR}"
   COMMAND
     "${CMAKE_COMMAND}" -E copy_directory "${SOURCE_DIR}" "${SOURCE_COPY_DIR}"
+  COMMAND
+    # Touch generated files to prevent autotools from trying to regenerate them.
+    "${CMAKE_COMMAND}" -E touch ${TIMESTAMPED_FILES}
   #
   # OPTIONAL: Patching of the sources should happen here.
   #
