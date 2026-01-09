@@ -106,7 +106,7 @@ jobs:
       test_type: ${{ needs.setup.outputs.test_type }}
       sanity_check_only_for_family: ${{ matrix.variant.sanity_check_only_for_family == true }}
       monitor_memory: ${{ inputs.monitor_memory == true }}
-      monitor_interval: ${{ inputs.monitor_interval }}
+      monitor_interval: ${{ inputs.monitor_interval || 30 }}
     permissions:
       contents: read
       id-token: write
@@ -139,7 +139,7 @@ jobs:
       test_type: ${{ needs.setup.outputs.test_type }}
       sanity_check_only_for_family: ${{ matrix.variant.sanity_check_only_for_family == true }}
       monitor_memory: ${{ inputs.monitor_memory == true }}
-      monitor_interval: ${{ inputs.monitor_interval }}
+      monitor_interval: ${{ inputs.monitor_interval || 30 }}
     permissions:
       contents: read
       id-token: write
