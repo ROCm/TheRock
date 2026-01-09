@@ -36,6 +36,30 @@
 # validate the expected files exist. It also triggers the installation of
 # the ROCgdb testsuite files. If set to OFF, no build integrity tests will
 # be included and no testsuite files will be installed.
+#
+#
+# PATCHELF
+#
+# Contains the path to the patchelf utility. This must be passed so
+# post-install RPATH patching can take place.
+#
+#
+# ROCM_VERSION
+#
+# Specifies the ROCM version we are building for. If empty or non-existent
+# we default to "ROCm development".
+#
+#
+# SHARED_PYTHON_EXECUTABLES
+#
+# A semicolon-separated list of paths to Python executables that support
+# linking against a shared libpython. If empty or non-existent only a
+# Pythonless rocgdb (rocgdb-pynone) will be built. Otherwise one rocgdb
+# will be built for each of the Python entries on the list, as long as
+# each entry supports linking against libpython.
+#
+# Example: SHARED_PYTHON_EXECUTABLES="/opt/python-shared/cp310-cp310/bin/python3"
+
 
 cmake_minimum_required(VERSION 3.25)
 project(rocgdb C CXX)
@@ -108,10 +132,10 @@ message(STATUS "Build type set to: ${CMAKE_BUILD_TYPE}")
 
 # Fetch the install prefixes for the library and executables rocgdb
 # depends on.
-fetch_library_prefix(CMAKE_PREFIX_PATH "gmp" GMP_PREFIX)
-fetch_library_prefix(CMAKE_PREFIX_PATH "mpfr" MPFR_PREFIX)
-fetch_library_prefix(CMAKE_PREFIX_PATH "expat" EXPAT_PREFIX)
-fetch_library_prefix(CMAKE_PREFIX_PATH "ncurses" NCURSES_PREFIX)
+fetch_library_prefix(CMAKE_PREFIX_PATH "/gmp/build/stage" GMP_PREFIX)
+fetch_library_prefix(CMAKE_PREFIX_PATH "/mpfr/build/stage" MPFR_PREFIX)
+fetch_library_prefix(CMAKE_PREFIX_PATH "/expat/build/stage" EXPAT_PREFIX)
+fetch_library_prefix(CMAKE_PREFIX_PATH "/ncurses/build/stage" NCURSES_PREFIX)
 
 # We need to explicitly pass ncurses' include path and set the rpath for
 # the library. The reason we need to explicitly pass rpath is because gdb's
@@ -149,42 +173,57 @@ else()
 endif()
 
 # List to accumulate all unique build targets.
-set(ALL_GDB_TARGETS)
+set(ALL_ROCGDB_TARGETS)
 
 # Adds a rocgdb build target for a python variant with explicit additional configure flags.
 # The special minor_version "none" indicates that the build is without python support.
-macro(add_python_variant minor_version configure_flags)
+#
+# For variants with minor_version other than "none", libpython_dir must contain
+# the path to the shared libpython rocgdb should link against.
+macro(add_python_variant minor_version configure_flags libpython_dir)
   # Set the name transformation for the rocgdb executable and rocgcore script.
   set(ROCGDB_PROGRAM_TRANSFORM_STR "s/^rocgdb$/rocgdb-py${minor_version}/")
 
-  # Define a unique name for the build directory. The install prefix will be
-  # the same, as all the files minus the rocgdb executable will be the same,
-  # no matter which version of python we have. We will rename the rocgdb
-  # executables later.
-  set(GDB_BUILD_DIR_VER "${CMAKE_CURRENT_BINARY_DIR}/rocgdb-build-py${minor_version}")
-  set(GDB_TARGET_NAME "rocgdb-py${minor_version}")
+  # Define a unique name for the build directory.
+  set(ROCGDB_BUILD_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocgdb-build-py${minor_version}")
+  # Define a unique name for the intermediate install directory.
+  set(ROCGDB_INTERMEDIATE_INSTALL_DIR "${ROCGDB_BUILD_DIR}-install")
+  set(ROCGDB_TARGET_NAME "rocgdb-py${minor_version}")
 
-  add_custom_target("${GDB_TARGET_NAME}"
+  # If we have a valid libpython_dir, adjust the LDFLAGS for this build
+  # variant and add an extra RPATH entry for post-install patching.
+  set(ALL_LDFLAGS ${LDFLAGS})
+  set(LIBPYTHON_RPATH "")
+  if(NOT "${libpython_dir}" STREQUAL "")
+    set(LIBPYTHON_LDFLAGS "-L${libpython_dir} -Wl,-rpath,${libpython_dir}")
+    string(APPEND ALL_LDFLAGS " ${LIBPYTHON_LDFLAGS}")
+    set(LIBPYTHON_RPATH ":${libpython_dir}")
+
+    message(STATUS "-> Extra LDFLAGS: ${LIBPYTHON_LDFLAGS}")
+    message(STATUS "-> Extra RPATH: ${LIBPYTHON_RPATH}")
+  endif()
+
+  add_custom_target("${ROCGDB_TARGET_NAME}"
     ALL
     VERBATIM
     COMMENT "rocgdb (python ${CURRENT_PYTHON_EXECUTABLE})"
     # Create the build directory
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${GDB_BUILD_DIR_VER}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${ROCGDB_BUILD_DIR}"
 
     # Configure
     COMMAND
-      ${CMAKE_COMMAND} -E chdir "${GDB_BUILD_DIR_VER}"
+      ${CMAKE_COMMAND} -E chdir "${ROCGDB_BUILD_DIR}"
       ${CMAKE_COMMAND} -E env
         "CC=${CUSTOM_CC}"
         "CXX=${CUSTOM_CXX}"
         "PKG_CONFIG_PATH=${PKG_CONFIG_PATH_ENV_VAR}"
         "CFLAGS=${CUSTOM_C_FLAGS}"
         "CXXFLAGS=${CUSTOM_CXX_FLAGS}"
-        "LDFLAGS=${LDFLAGS}"
+        "LDFLAGS=${ALL_LDFLAGS}"
       --
       # The actual configure command.
       ${CMAKE_CURRENT_SOURCE_DIR}/source/configure
-        "--prefix=${CMAKE_INSTALL_PREFIX}"
+        "--prefix=${ROCGDB_INTERMEDIATE_INSTALL_DIR}"
         --program-prefix=roc
         "--program-transform-name=${ROCGDB_PROGRAM_TRANSFORM_STR}"
 
@@ -226,36 +265,60 @@ macro(add_python_variant minor_version configure_flags)
 
     # Build
     COMMAND
-      ${CMAKE_COMMAND} -E chdir "${GDB_BUILD_DIR_VER}"
-      ${MAKE_EXECUTABLE} -j "${PAR_JOBS}" V=1
-
-    # Install gdb and gdb docs.
+      ${CMAKE_COMMAND} -E chdir "${ROCGDB_BUILD_DIR}"
+      ${MAKE_EXECUTABLE} -s -j "${PAR_JOBS}"
+    # Install gdb.
     COMMAND
-      ${CMAKE_COMMAND} -E chdir "${GDB_BUILD_DIR_VER}"
-      ${MAKE_EXECUTABLE} -C gdb install install-pdf install-html
+      ${CMAKE_COMMAND} -E chdir "${ROCGDB_BUILD_DIR}"
+      ${MAKE_EXECUTABLE} -s -C gdb install
+    # Install gdb docs.
+    COMMAND
+      ${CMAKE_COMMAND} -E chdir "${ROCGDB_BUILD_DIR}"
+      ${MAKE_EXECUTABLE} -s -C gdb install-pdf install-html
     # Install binutils for coremerge and coremerge manpage.
     COMMAND
-      ${CMAKE_COMMAND} -E chdir "${GDB_BUILD_DIR_VER}"
-      ${MAKE_EXECUTABLE} -C binutils install
+      ${CMAKE_COMMAND} -E chdir "${ROCGDB_BUILD_DIR}"
+      ${MAKE_EXECUTABLE} -s -C binutils install
     # Add in the AMD licences file.
     COMMAND
-      ${CMAKE_COMMAND} -E make_directory ${CMAKE_INSTALL_PREFIX}/share/doc
+      ${CMAKE_COMMAND} -E make_directory ${ROCGDB_INTERMEDIATE_INSTALL_DIR}/share/doc
     COMMAND
-      ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/source/gdb/NOTICES.txt ${CMAKE_INSTALL_PREFIX}/share/doc/
+      ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/source/gdb/NOTICES.txt ${ROCGDB_INTERMEDIATE_INSTALL_DIR}/share/doc/
     # Rename rocgcore to rocgcore-py<python version>.
     COMMAND
-      ${CMAKE_COMMAND} -E rename ${CMAKE_INSTALL_PREFIX}/bin/rocgcore ${CMAKE_INSTALL_PREFIX}/bin/rocgcore-py${minor_version}
+      ${CMAKE_COMMAND} -E rename ${ROCGDB_INTERMEDIATE_INSTALL_DIR}/bin/rocgcore ${ROCGDB_INTERMEDIATE_INSTALL_DIR}/bin/rocgcore-py${minor_version}
   )
 
-  list(APPEND ALL_GDB_TARGETS ${GDB_TARGET_NAME})
+  list(APPEND ALL_ROCGDB_TARGETS ${ROCGDB_TARGET_NAME})
 
-  # Record the available python versions.
-  list(APPEND ALL_AVAILABLE_PYTHON_VERSIONS ${minor_version})
+  # Register the final installation step for this variant's files.
+  # This basically moves the variant files from the intermediate install
+  # prefix to the final installation location.
+  install(DIRECTORY ${ROCGDB_INTERMEDIATE_INSTALL_DIR}/
+          DESTINATION "."
+          USE_SOURCE_PERMISSIONS
+          COMPONENT rocgdb)
+
+  # Register RPATH patching for this rocgdb variant.
+  message(STATUS "Registering fixup of ${CMAKE_INSTALL_PREFIX}/bin/rocgdb-py${minor_version}")
+  install(CODE "execute_process(
+      COMMAND \"${PATCHELF}\" --set-rpath \"\$ORIGIN:\$ORIGIN/../lib:\$ORIGIN/../lib/rocm_sysdeps/lib${LIBPYTHON_RPATH}\"
+      \"${CMAKE_INSTALL_PREFIX}/bin/rocgdb-py${minor_version}\"
+      COMMAND_ERROR_IS_FATAL ANY
+    )"
+  COMPONENT rocgdb)
+
+  if(BUILD_TESTING)
+    # Track for build validation.
+    list(APPEND ROCGDB_BUILD_INTEGRITY_FILES "bin/rocgdb-py${minor_version}")
+    list(APPEND ROCGDB_BUILD_INTEGRITY_FILES "bin/rocgcore-py${minor_version}")
+  endif()
 endmacro()
 
 # Determine python versions either from the explicit list of dist python executables
 # or from the global Python3_EXECUTABLE.
 if(SHARED_PYTHON_EXECUTABLES)
+  message(STATUS "Available python-shared: ${SHARED_PYTHON_EXECUTABLES}")
   # Build once for each shared-built python executables we were told to use.
   # Note that the build will fail if libpython is not available in any of these.
   foreach(CURRENT_PYTHON_EXECUTABLE ${SHARED_PYTHON_EXECUTABLES})
@@ -268,21 +331,39 @@ if(SHARED_PYTHON_EXECUTABLES)
     )
     list(GET _python_versions 0 CURRENT_PYTHON_VERSION)
     list(GET _python_versions 1 CURRENT_PYTHON_FULL_VERSION)
-    message(STATUS "Building for python ${CURRENT_PYTHON_EXECUTABLE}: Minor=${CURRENT_PYTHON_VERSION}, Full=${CURRENT_PYTHON_FULL_VERSION}")
+    message(STATUS "Building rocgdb for python ${CURRENT_PYTHON_EXECUTABLE}: Minor=${CURRENT_PYTHON_VERSION}, Full=${CURRENT_PYTHON_FULL_VERSION}")
     message(STATUS "-> Found Python ${CURRENT_PYTHON_FULL_VERSION} at ${CURRENT_PYTHON_EXECUTABLE}")
-    add_python_variant("${CURRENT_PYTHON_VERSION}" "--with-python=${CURRENT_PYTHON_EXECUTABLE}")
+
+    # For each Python that supports linking against a shared libpython we
+    # fetch the library directory so we can pass a linker flag to rocgdb's
+    # configure.
+    execute_process(
+      COMMAND "${CURRENT_PYTHON_EXECUTABLE}" -c "import sysconfig; libdir=sysconfig.get_config_var('LIBDIR'); print(f'{libdir}')"
+      OUTPUT_VARIABLE _libpython_dir
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      COMMAND_ERROR_IS_FATAL ANY
+    )
+
+    # Sanity check that we managed to get the libpython path. Otherwise skip
+    # this particular build.
+    if(_libpython_dir)
+      message(STATUS "-> Found libpython path ${_libpython_dir}")
+
+      # Add build instructions for this python-specific rocgdb.
+      add_python_variant("${CURRENT_PYTHON_VERSION}" "--with-python=${CURRENT_PYTHON_EXECUTABLE}" "${_libpython_dir}")
+    else()
+      message(STATUS "Failed to extract libpython directory for ${CURRENT_PYTHON_EXECUTABLE}: Skipping")
+    endif()
   endforeach()
-else()
-  # We were not told to build with python support.
-  add_python_variant("none" "--disable-python")
 endif()
 
-# Add a single custom target in the main project that depends
-# on building ALL GDB versions.
-add_custom_target(build_all_gdb ALL DEPENDS ${ALL_GDB_TARGETS})
+# We always build a rocgdb without python support as fallback.
+message(STATUS "Building rocgdb without python support")
+add_python_variant("none" "--disable-python" "")
 
-# Print the base install location.
-message(STATUS "rocgdb will be installed under ${CMAKE_INSTALL_PREFIX}")
+# Add a single custom target in the main project that depends
+# on building ALL rocgdb variants.
+add_custom_target(build_all_rocgdb ALL DEPENDS ${ALL_ROCGDB_TARGETS})
 
 ################################
 # ROCgdb script generation step.
@@ -343,9 +424,14 @@ echo "rocgdb execution failed. Possible unsupported python version ${python_vers
 file(GENERATE OUTPUT "${ROCGDB_SCRIPT}" CONTENT "${ROCGDB_SCRIPT_CONTENT}")
 
 # Install the generated script.
-install(PROGRAMS "${ROCGDB_SCRIPT}"
+install(PROGRAMS ${ROCGDB_SCRIPT}
         DESTINATION bin
-        COMPONENT tests)
+        COMPONENT rocgdb)
+
+if(BUILD_TESTING)
+  # Track for build validation.
+  list(APPEND ROCGDB_BUILD_INTEGRITY_FILES "bin/rocgdb")
+endif()
 
 ##################################
 # ROCgdb executable patching step.
@@ -357,34 +443,31 @@ install(PROGRAMS "${ROCGDB_SCRIPT}"
 # required libraries even if they move around.
 
 # List of all the files in bin we need to patch in RUNPATH's.
+# This excludes rocgdb executables as we patch those separately.
 set(ROCGDB_EXECS_TO_PATCH
-  "rocaddr2line"
-  "rocar"
-  "rocc++filt"
-  "roccoremerge"
-  "rocnm"
-  "rocobjcopy"
-  "rocobjdump"
-  "rocranlib"
-  "rocreadelf"
-  "rocsize"
-  "rocstrings"
-  "rocstrip"
+  "bin/rocaddr2line"
+  "bin/rocar"
+  "bin/rocc++filt"
+  "bin/roccoremerge"
+  "bin/rocelfedit"
+  "bin/rocnm"
+  "bin/rocobjcopy"
+  "bin/rocobjdump"
+  "bin/rocranlib"
+  "bin/rocreadelf"
+  "bin/rocsize"
+  "bin/rocstrings"
+  "bin/rocstrip"
 )
 
-# Add the python-specific rocgdb executables.
-foreach(python_version ${ALL_AVAILABLE_PYTHON_VERSIONS})
-  list(APPEND ROCGDB_EXECS_TO_PATCH "rocgdb-py${python_version}")
-endforeach()
-
 foreach(rocgdb_exec_filename ${ROCGDB_EXECS_TO_PATCH})
-  set(rocgdb_exec_file "${CMAKE_INSTALL_PREFIX}/bin/${rocgdb_exec_filename}")
+  set(rocgdb_exec_file "${CMAKE_INSTALL_PREFIX}/${rocgdb_exec_filename}")
   message(STATUS "Registering fixup of ${rocgdb_exec_file}")
 
   # Patch in the RUNPATH.
   install(CODE "execute_process(
       COMMAND \"${PATCHELF}\" --set-rpath \"\$ORIGIN:\$ORIGIN/../lib:\$ORIGIN/../lib/rocm_sysdeps/lib\"
-      \"\${CMAKE_INSTALL_PREFIX}/bin/${rocgdb_exec_filename}\"
+      \"${rocgdb_exec_file}\"
       COMMAND_ERROR_IS_FATAL ANY
   )"
   COMPONENT rocgdb)
@@ -397,26 +480,13 @@ endforeach()
 if(BUILD_TESTING)
   enable_testing()
 
-  # List of all the files in x86_64-pc-linux-gnu/bin.
-  #
-  # NOTE: We don't need to patch the files in ROCGDB_TARGET_EXECS as
-  # those are hardlinks that point to similar files in ROCGDB_EXECS_TO_PATCH.
-  set(ROCGDB_TARGET_EXECS
-    "ar"
-    "nm"
-    "objcopy"
-    "objdump"
-    "ranlib"
-    "readelf"
-    "strip"
-  )
+  list(APPEND ROCGDB_BUILD_INTEGRITY_FILES ${ROCGDB_EXECS_TO_PATCH})
 
   # List of all the other files we expect to be in the installation.
   set(ROCGDB_EXPECTED_FILES
     "include/gdb/jit-reader.h"
     "share/info/gdb.info"
     "share/info/annotate.info"
-    "share/info/binutils.info"
     "share/info/dir"
     "share/python/gdb/ptwrite.py"
     "share/python/gdb/__init__.py"
@@ -515,38 +585,24 @@ if(BUILD_TESTING)
     "share/man/man1/rocranlib.1"
     "share/man/man1/rocwindres.1"
     "share/man/man1/rocgdbserver.1"
+    "x86_64-pc-linux-gnu/bin/ar"
+    "x86_64-pc-linux-gnu/bin/nm"
+    "x86_64-pc-linux-gnu/bin/objcopy"
+    "x86_64-pc-linux-gnu/bin/objdump"
+    "x86_64-pc-linux-gnu/bin/ranlib"
+    "x86_64-pc-linux-gnu/bin/readelf"
+    "x86_64-pc-linux-gnu/bin/strip"
   )
 
-  # Add the python-specific rocgcore scripts. We add this later as otherwise
-  # we'd attempt to call patchelf for a script, and that would fail.
-  foreach(python_version ${ALL_AVAILABLE_PYTHON_VERSIONS})
-    list(APPEND ROCGDB_EXECS_TO_PATCH "rocgcore-py${python_version}")
-  endforeach()
+  list(APPEND ROCGDB_BUILD_INTEGRITY_FILES ${ROCGDB_EXPECTED_FILES})
 
   # Add build integrity tests to check if we have the files we want.
-  message(STATUS "rocgdb tests: BUILD_TESTING set. Adding installation integrity tests.")
-  # Check if we've built all the files we wanted to build.
-  foreach(rocgdb_file ${ROCGDB_EXECS_TO_PATCH})
+  message(STATUS "BUILD_TESTING set. Adding rocgdb installation integrity tests.")
+  foreach(rocgdb_file ${ROCGDB_BUILD_INTEGRITY_FILES})
     add_test(
-      NAME rocgdb_install_validation_${CMAKE_INSTALL_PREFIX}/bin/${rocgdb_file}
+      NAME rocgdb_install_validation_${CMAKE_INSTALL_PREFIX}/${rocgdb_file}
       COMMAND ${CMAKE_COMMAND} -E env
-        sh -c "test -f ${CMAKE_INSTALL_PREFIX}/bin/${rocgdb_file}"
-    )
-  endforeach()
-
-  foreach(rocgdb_file ${ROCGDB_TARGET_EXECS})
-    add_test(
-      NAME rocgdb_install_validation_${CMAKE_INSTALL_PREFIX}/x86_64-pc-linux-gnu/bin/${rocgdb_file}
-      COMMAND ${CMAKE_COMMAND} -E env
-        sh -c "test -f ${CMAKE_INSTALL_PREFIX}/x86_64-pc-linux-gnu/bin/${rocgdb_file}"
-    )
-  endforeach()
-
-  foreach(rocgdb_file ${ROCGDB_EXPECTED_FILES})
-    add_test(
-    NAME rocgdb_install_validation_${CMAKE_INSTALL_PREFIX}/${rocgdb_file}
-    COMMAND ${CMAKE_COMMAND} -E env
-      sh -c "test -f ${CMAKE_INSTALL_PREFIX}/${rocgdb_file}"
+        sh -c "test -f ${CMAKE_INSTALL_PREFIX}/${rocgdb_file}"
     )
   endforeach()
 
