@@ -289,9 +289,9 @@ def run():
             ):
                 # If the architecture is available for multi GPU testing, we indicate that this specific test requires the multi GPU test runner
                 shortened_amdgpu_families_name = amdgpu_families.split("-")[0].lower()
-                multi_gpu_runner = amdgpu_families_matrix[shortened_amdgpu_families_name][
-                    "test-runs-on-multi-gpu"
-                ]
+                multi_gpu_runner = amdgpu_families_matrix[
+                    shortened_amdgpu_families_name
+                ][platform]["test-runs-on-multi-gpu"]
                 logging.info(
                     f"Including job {job_name} since multi GPU testing is available for family {amdgpu_families} with runner {multi_gpu_runner}"
                 )
