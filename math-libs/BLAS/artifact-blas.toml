@@ -29,6 +29,7 @@ optional = true
 [components.test."math-libs/BLAS/Origami/stage"]
 include = [
   "bin/origami-tests*",
+  "bin/origami/**",
 ]
 optional = true
 

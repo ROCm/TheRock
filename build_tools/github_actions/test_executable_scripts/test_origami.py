@@ -30,7 +30,7 @@ test_type = os.getenv("TEST_TYPE", "full")
 cmd = [
     "ctest",
     "--test-dir",
-    f"{THEROCK_BIN_DIR}/Origami",
+    f"{THEROCK_BIN_DIR}/origami",
     "--output-on-failure",
     "--timeout",
     "300",
