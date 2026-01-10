@@ -128,6 +128,7 @@ jobs:
       torchaudio_version: ${{ steps.build-pytorch-wheels.outputs.torchaudio_version }}
       torchvision_version: ${{ steps.build-pytorch-wheels.outputs.torchvision_version }}
       triton_version: ${{ steps.build-pytorch-wheels.outputs.triton_version }}
+      torchcodec_version: ${{ steps.build-pytorch-wheels.outputs.torchcodec_version }}
     steps:
       - name: Checkout
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
@@ -162,6 +163,7 @@ jobs:
           ./external-builds/pytorch/pytorch_audio_repo.py checkout --repo-hashtag nightly
           ./external-builds/pytorch/pytorch_vision_repo.py checkout --repo-hashtag nightly
           ./external-builds/pytorch/pytorch_triton_repo.py checkout
+          ./external-builds/pytorch/pytorch_torchcodec_repo.py checkout --repo-hashtag nightly
 
       # Checkout stable sources from https://github.com/ROCm/pytorch
       - name: Checkout PyTorch Source Repos from stable branch
@@ -171,6 +173,7 @@ jobs:
           ./external-builds/pytorch/pytorch_audio_repo.py checkout --require-related-commit
           ./external-builds/pytorch/pytorch_vision_repo.py checkout --require-related-commit
           ./external-builds/pytorch/pytorch_triton_repo.py checkout
+          ./external-builds/pytorch/pytorch_torchcodec_repo.py checkout
 
       - name: Create pip cache directory
         run: mkdir -p /tmp/pipcache
@@ -271,6 +274,7 @@ jobs:
       TORCHAUDIO_VERSION: "${{ needs.build_pytorch_wheels.outputs.torchaudio_version }}"
       TORCHVISION_VERSION: "${{ needs.build_pytorch_wheels.outputs.torchvision_version }}"
       TRITON_VERSION: "${{ needs.build_pytorch_wheels.outputs.triton_version }}"
+      TORCHCODEC_VERSION: "${{ needs.build_pytorch_wheels.outputs.torchcodec_version }}"
 
     steps:
       - name: Checkout
@@ -306,7 +310,8 @@ jobs:
             --include "torch-${TORCH_VERSION}-${CP_VERSION}-linux_x86_64.whl" \
             --include "torchaudio-${TORCHAUDIO_VERSION}-${CP_VERSION}-linux_x86_64.whl" \
             --include "torchvision-${TORCHVISION_VERSION}-${CP_VERSION}-linux_x86_64.whl" \
-            --include "triton-${TRITON_VERSION}-${CP_VERSION}-linux_x86_64.whl"
+            --include "triton-${TRITON_VERSION}-${CP_VERSION}-linux_x86_64.whl" \
+            --include "torchcodec-${TORCHCODEC_VERSION}-${CP_VERSION}-linux_x86_64.whl"
 
       - name: (Re-)Generate Python package release index
         if: ${{ env.upload == 'true' }}
