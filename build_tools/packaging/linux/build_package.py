@@ -326,6 +326,8 @@ def generate_control_file(pkg_info, deb_dir, config: PackageConfig):
         conflicts = ", ".join(conflicts_list)
 
     depends = convert_to_versiondependency(depends_list, config)
+    if is_meta_package(pkg_info):
+        depends = append_version_suffix(depends, config)
 
     pkg_name = update_package_name(pkg_name, config)
     env = Environment(loader=FileSystemLoader(str(SCRIPT_DIR)))
@@ -590,6 +592,9 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
         requires_list = [pkg_name]
 
     requires = convert_to_versiondependency(requires_list, config)
+    if is_meta_package(pkg_info):
+        requires = append_version_suffix(requires, config)
+
     # Update package name with version details and gfxarch
     pkg_name = update_package_name(pkg_name, config)
 
@@ -745,6 +750,8 @@ def update_package_name(pkg_name, config: PackageConfig):
     Returns: Updated package name
     """
     print_function_name()
+
+    pkg_suffix = ""
     if config.versioned_pkg:
         # Split version passed to use only major and minor version for package name
         # Split by dot and take first two components
@@ -752,29 +759,28 @@ def update_package_name(pkg_name, config: PackageConfig):
         parts = config.rocm_version.split(".")
         if len(parts) < 2:
             raise ValueError(
-                f"Version string '{args.rocm_version}' does not have major.minor versions"
+                f"Version string '{config.rocm_version}' does not have major.minor versions"
             )
         major = re.match(r"^\d+", parts[0])
         minor = re.match(r"^\d+", parts[1])
         pkg_suffix = f"{major.group()}.{minor.group()}"
-    else:
-        pkg_suffix = ""
 
     if config.enable_rpath:
         pkg_suffix = f"-rpath{pkg_suffix}"
 
     pkg_info = get_package_info(pkg_name)
+    updated_pkgname = pkg_name
+    if config.pkg_type.lower() == "deb":
+        updated_pkgname = debian_replace_devel_name(pkg_name)
+
+    updated_pkgname += pkg_suffix
+
     if is_gfxarch_package(pkg_info):
         # Remove -dcgpu from gfx_arch
         gfx_arch = config.gfx_arch.lower().split("-", 1)[0]
-        pkg_name = pkg_name + pkg_suffix + "-" + gfx_arch
-    else:
-        pkg_name = pkg_name + pkg_suffix
+        updated_pkgname += "-" + gfx_arch
 
-    if config.pkg_type.lower() == "deb":
-        pkg_name = debian_replace_devel_name(pkg_name)
-
-    return pkg_name
+    return updated_pkgname
 
 
 def debian_replace_devel_name(pkg_name):
@@ -789,8 +795,10 @@ def debian_replace_devel_name(pkg_name):
     Returns: Updated package name
     """
     print_function_name()
-    # Only required for debian developement package
-    pkg_name = pkg_name.replace("-devel", "-dev")
+    # Required for debian developement package
+    suffix = "-devel"
+    if pkg_name.endswith(suffix):
+        pkg_name = pkg_name[: -len(suffix)] + "-dev"
 
     return pkg_name
 
@@ -818,6 +826,50 @@ def convert_to_versiondependency(dependency_list, config: PackageConfig):
         f"{update_package_name(pkg,local_config)}" if pkg in pkg_list else pkg
         for pkg in dependency_list
     ]
+    depends = ", ".join(updated_depends)
+    return depends
+
+
+def append_version_suffix(dep_string, config: PackageConfig):
+    """Append a ROCm version suffix to dependency names that match known ROCm packages.
+
+    This function takes a comma‑separated dependency string,
+    identifies which dependencies correspond to packages listed in `pkg_list`,
+    and appends the appropriate ROCm version suffix based on the provided configuration.
+
+    Parameters:
+    dep_string : A comma‑separated list of dependency package names.
+    config : Configuration object containing ROCm version, suffix, and packaging type.
+
+    Returns: A comma‑separated string where matching dependencies include the version suffix,
+    while all others remain unchanged.
+    """
+    print_function_name()
+
+    pkg_list = get_package_list()
+    updated_depends = []
+    dep_list = [d.strip() for d in dep_string.split(",")]
+
+    for dep in dep_list:
+        match = None
+        # find a matching package prefix
+        for pkg in pkg_list:
+            if dep.startswith(pkg):
+                match = pkg
+                break
+
+        # If matched, append version-suffix; otherwise keep original
+        if match:
+            version = str(config.rocm_version)
+            suffix = f"-{config.version_suffix}" if config.version_suffix else ""
+
+            if config.pkg_type.lower() == "deb":
+                dep += f"( = {version}{suffix})"
+            else:
+                dep += f" = {version}{suffix}"
+
+        updated_depends.append(dep)
+
     depends = ", ".join(updated_depends)
     return depends
 
