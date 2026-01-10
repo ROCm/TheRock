@@ -409,14 +409,41 @@ if(THEROCK_BUNDLE_SYSDEPS)
 endif()
 
 ################################################################################
-# Priority build targets.
-# By declaring these first as part of ALL, we influence build order a little
-# bit, helping to ensure that the critical path projects start as soon as
-# possible.
+# Build Stage Targets
+# These targets organize the build into parallel stages based on BUILD_TOPOLOGY.toml
+# This enables massive parallelization by allowing independent stages to run concurrently
 ################################################################################
 
+# Stage 1: Foundation - Critical path dependencies (sysdeps, base, third-party)
+add_custom_target(therock-stage-foundation)
+
+# Stage 2: Compiler-Runtime - Compiler toolchain, runtimes, and core profiling
+add_custom_target(therock-stage-compiler-runtime)
+
+# Stage 3: Post-Compiler Stages (these can all run in PARALLEL after compiler-runtime)
+add_custom_target(therock-stage-math-libs)
+add_custom_target(therock-stage-comm-libs)
+add_custom_target(therock-stage-debug-tools)
+add_custom_target(therock-stage-dctools)
+add_custom_target(therock-stage-iree-libs)
+add_custom_target(therock-stage-profiler-apps)
+
+# Meta-target for all post-compiler stages (allows waiting for parallel completion)
+add_custom_target(therock-stage-post-compiler)
+add_dependencies(therock-stage-post-compiler
+  therock-stage-math-libs
+  therock-stage-comm-libs
+  therock-stage-debug-tools
+  therock-stage-dctools
+  therock-stage-iree-libs
+  therock-stage-profiler-apps
+)
+
+# Priority build target (part of ALL to start critical path early)
 add_custom_target(therock-priority-build ALL)
+add_dependencies(therock-priority-build therock-stage-foundation)
 if(THEROCK_ENABLE_COMPILER)
+  # amd-llvm is on the critical path - prioritize it
   add_dependencies(therock-priority-build amd-llvm)
 endif()
 
@@ -424,8 +451,8 @@ endif()
 # External project setup
 ################################################################################
 
-# Add subdirectories in dependency DAG order (which happens to be semi-alpha:
-# don't be fooled).
+# Add subdirectories - these define the actual build targets
+# The stage dependencies will be added after subdirectories are processed
 add_subdirectory(third-party)
 add_subdirectory(base)
 add_subdirectory(compiler)
@@ -444,6 +471,175 @@ add_subdirectory(iree-libs)
 if(THEROCK_BUILD_TESTING)
   add_subdirectory(examples)
 endif()
+
+################################################################################
+# Build Stage Dependency Mapping
+# Map actual artifact targets to stage targets for parallel execution
+# These dependencies tell CMake which targets belong to which stage
+################################################################################
+
+# Foundation stage: third-party-sysdeps, base
+# Note: We use target_exists checks to handle optional/platform-specific targets
+if(TARGET therock-sysdeps)
+  add_dependencies(therock-stage-foundation therock-sysdeps)
+endif()
+if(TARGET therock-base)
+  add_dependencies(therock-stage-foundation therock-base)
+endif()
+# Third-party sysdeps (critical dependencies)
+if(TARGET therock-sysdeps-expat)
+  add_dependencies(therock-stage-foundation therock-sysdeps-expat)
+endif()
+if(TARGET therock-sysdeps-gmp)
+  add_dependencies(therock-stage-foundation therock-sysdeps-gmp)
+endif()
+if(TARGET therock-sysdeps-mpfr)
+  add_dependencies(therock-stage-foundation therock-sysdeps-mpfr)
+endif()
+if(TARGET therock-sysdeps-ncurses)
+  add_dependencies(therock-stage-foundation therock-sysdeps-ncurses)
+endif()
+
+# Compiler-Runtime stage depends on foundation
+add_dependencies(therock-stage-compiler-runtime therock-stage-foundation)
+
+# Compiler-Runtime stage: compiler, core-runtime, hip-runtime, opencl-runtime, 
+# profiler-core, rocrtst, and third-party-libs
+if(TARGET amd-llvm)
+  add_dependencies(therock-stage-compiler-runtime amd-llvm)
+endif()
+if(TARGET hipify)
+  add_dependencies(therock-stage-compiler-runtime hipify)
+endif()
+if(TARGET therock-core-runtime)
+  add_dependencies(therock-stage-compiler-runtime therock-core-runtime)
+endif()
+if(TARGET therock-core-hip)
+  add_dependencies(therock-stage-compiler-runtime therock-core-hip)
+endif()
+if(TARGET therock-core-ocl)
+  add_dependencies(therock-stage-compiler-runtime therock-core-ocl)
+endif()
+if(TARGET therock-core-hipinfo)
+  add_dependencies(therock-stage-compiler-runtime therock-core-hipinfo)
+endif()
+if(TARGET therock-core-hiptests)
+  add_dependencies(therock-stage-compiler-runtime therock-core-hiptests)
+endif()
+if(TARGET therock-rocrtst)
+  add_dependencies(therock-stage-compiler-runtime therock-rocrtst)
+endif()
+if(TARGET therock-rocprofiler-sdk)
+  add_dependencies(therock-stage-compiler-runtime therock-rocprofiler-sdk)
+endif()
+if(TARGET therock-rocprofiler-compute)
+  add_dependencies(therock-stage-compiler-runtime therock-rocprofiler-compute)
+endif()
+
+# Third-party libraries (part of compiler-runtime stage)
+if(TARGET therock-host-blas)
+  add_dependencies(therock-stage-compiler-runtime therock-host-blas)
+endif()
+if(TARGET therock-host-suite-sparse)
+  add_dependencies(therock-stage-compiler-runtime therock-host-suite-sparse)
+endif()
+if(TARGET therock-fftw3)
+  add_dependencies(therock-stage-compiler-runtime therock-fftw3)
+endif()
+if(TARGET therock-flatbuffers)
+  add_dependencies(therock-stage-compiler-runtime therock-flatbuffers)
+endif()
+if(TARGET therock-fmt)
+  add_dependencies(therock-stage-compiler-runtime therock-fmt)
+endif()
+if(TARGET therock-nlohmann-json)
+  add_dependencies(therock-stage-compiler-runtime therock-nlohmann-json)
+endif()
+if(TARGET therock-spdlog)
+  add_dependencies(therock-stage-compiler-runtime therock-spdlog)
+endif()
+
+# Post-compiler stages all depend on compiler-runtime (run in parallel after it)
+add_dependencies(therock-stage-math-libs therock-stage-compiler-runtime)
+add_dependencies(therock-stage-comm-libs therock-stage-compiler-runtime)
+add_dependencies(therock-stage-debug-tools therock-stage-compiler-runtime)
+add_dependencies(therock-stage-dctools therock-stage-compiler-runtime)
+add_dependencies(therock-stage-iree-libs therock-stage-compiler-runtime)
+add_dependencies(therock-stage-profiler-apps therock-stage-compiler-runtime)
+
+# Math-libs stage: math libraries (BLAS, FFT, RAND, etc.)
+if(TARGET therock-blas)
+  add_dependencies(therock-stage-math-libs therock-blas)
+endif()
+if(TARGET therock-fft)
+  add_dependencies(therock-stage-math-libs therock-fft)
+endif()
+if(TARGET therock-rand)
+  add_dependencies(therock-stage-math-libs therock-rand)
+endif()
+if(TARGET therock-prim)
+  add_dependencies(therock-stage-math-libs therock-prim)
+endif()
+if(TARGET therock-rocwmma)
+  add_dependencies(therock-stage-math-libs therock-rocwmma)
+endif()
+if(TARGET therock-support)
+  add_dependencies(therock-stage-math-libs therock-support)
+endif()
+
+# ML-libs stage: machine learning libraries
+if(TARGET therock-composable-kernel)
+  add_dependencies(therock-stage-math-libs therock-composable-kernel)
+endif()
+if(TARGET therock-miopen)
+  add_dependencies(therock-stage-math-libs therock-miopen)
+endif()
+if(TARGET therock-hipdnn)
+  add_dependencies(therock-stage-math-libs therock-hipdnn)
+endif()
+if(TARGET therock-miopen-plugin)
+  add_dependencies(therock-stage-math-libs therock-miopen-plugin)
+endif()
+
+# Comm-libs stage: communication libraries
+if(TARGET therock-rccl)
+  add_dependencies(therock-stage-comm-libs therock-rccl)
+endif()
+
+# Debug-tools stage: ROCm debug tools
+if(TARGET therock-amd-dbgapi)
+  add_dependencies(therock-stage-debug-tools therock-amd-dbgapi)
+endif()
+if(TARGET therock-rocr-debug-agent)
+  add_dependencies(therock-stage-debug-tools therock-rocr-debug-agent)
+endif()
+if(TARGET therock-rocr-debug-agent-tests)
+  add_dependencies(therock-stage-debug-tools therock-rocr-debug-agent-tests)
+endif()
+if(TARGET therock-rocgdb)
+  add_dependencies(therock-stage-debug-tools therock-rocgdb)
+endif()
+
+# DCTools stage: data center management tools
+if(TARGET therock-rdc)
+  add_dependencies(therock-stage-dctools therock-rdc)
+endif()
+
+# IREE-libs stage: IREE and Fusilli integration
+if(TARGET therock-fusilli-plugin)
+  add_dependencies(therock-stage-iree-libs therock-fusilli-plugin)
+endif()
+
+# Profiler-apps stage: profiler applications
+if(TARGET therock-rocprofiler-systems)
+  add_dependencies(therock-stage-profiler-apps therock-rocprofiler-systems)
+endif()
+
+message(STATUS "Build stage targets configured for parallel execution:")
+message(STATUS "  - therock-stage-foundation")
+message(STATUS "  - therock-stage-compiler-runtime")
+message(STATUS "  - therock-stage-post-compiler (includes 6 parallel stages)")
+message(STATUS "To build by stage: cmake --build . --target therock-stage-<name>")
 
 ################################################################################
 # Testing
