@@ -108,6 +108,7 @@ jobs:
       OUTPUT_DIR: ${{ github.workspace }}/output
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages/dist
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
+      S3_BUCKET_ARTIFACTS: "therock-${{ inputs.release_type }}-artifacts"
       optional_build_prod_arguments: ""
     outputs:
       cp_version: ${{ env.cp_version }}
@@ -186,14 +187,17 @@ jobs:
         id: build-pytorch-wheels
         run: |
           echo "Building PyTorch wheels for ${{ inputs.amdgpu_family }}"
-          ./external-builds/pytorch/build_prod_wheels.py \
+          python ./external-builds/pytorch/build_prod_wheels.py \
             build \
             --install-rocm \
             --pip-cache-dir /tmp/pipcache \
             --index-url "${{ inputs.cloudfront_url }}/${{ inputs.amdgpu_family }}/" \
+            --pytorch-git-ref "${{ inputs.pytorch_git_ref }}" \
+            --python-version "${{ inputs.python_version }}" \
             --clean \
-            --output-dir ${{ env.PACKAGE_DIST_DIR }} ${{ env.optional_build_prod_arguments }}
-          python ./build_tools/github_actions/write_torch_versions.py --dist-dir ${{ env.PACKAGE_DIST_DIR }}
+            --output-dir "${{ env.PACKAGE_DIST_DIR }}" \
+            ${{ env.optional_build_prod_arguments }}
+          python ./build_tools/github_actions/write_torch_versions.py --dist-dir "${{ env.PACKAGE_DIST_DIR }}"
 
       - name: Sanity Check Wheel
         run: |
@@ -211,6 +215,19 @@ jobs:
         run: |
           aws s3 cp ${{ env.PACKAGE_DIST_DIR }}/ s3://${{ env.S3_BUCKET_PY }}/${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}/ \
             --recursive --exclude "*" --include "*.whl"
+
+      - name: Upload PyTorch manifest to S3 artifacts
+        if: ${{ github.repository_owner == 'ROCm' }}
+        run: |
+          PY="${{ inputs.python_version }}"; PY="${PY#py}"
+          TRACK="${{ inputs.pytorch_git_ref }}"; TRACK="${TRACK//\//-}"
+          MANIFEST_NAME="therock-manifest_torch_py${PY}_${TRACK}.json"
+          echo "Manifest expected at: ${{ env.PACKAGE_DIST_DIR }}/manifests/${MANIFEST_NAME}"
+          ls -la "${{ env.PACKAGE_DIST_DIR }}/manifests" || true
+          test -f "${{ env.PACKAGE_DIST_DIR }}/manifests/${MANIFEST_NAME}"
+          aws s3 cp \
+            "${{ env.PACKAGE_DIST_DIR }}/manifests/${MANIFEST_NAME}" \
+            "s3://${{ env.S3_BUCKET_ARTIFACTS }}/${{ github.run_id }}-linux/manifests/${{ inputs.amdgpu_family }}/${MANIFEST_NAME}"
 
       - name: (Re-)Generate Python package release index for staging
         if: ${{ github.repository_owner == 'ROCm' }}
