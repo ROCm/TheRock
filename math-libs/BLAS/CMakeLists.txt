@@ -91,6 +91,37 @@ endif()
 
 
 ##############################################################################
+# Origami
+##############################################################################
+
+therock_cmake_subproject_declare(Origami
+  EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/origami"
+  BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/Origami"
+  BACKGROUND_BUILD
+  CMAKE_ARGS
+    -DHIP_PLATFORM=amd
+    -DORIGAMI_BUILD_SHARED_LIBS=ON
+    -DORIGAMI_BUILD_TESTING=${THEROCK_BUILD_TESTING}
+    -DORIGAMI_ENABLE_PYTHON=ON
+    -DORIGAMI_ENABLE_FETCH=OFF
+  COMPILER_TOOLCHAIN
+    amd-hip
+  BUILD_DEPS
+    rocm-cmake
+    therock-catch2
+  RUNTIME_DEPS
+    hip-clr
+)
+therock_cmake_subproject_glob_c_sources(Origami
+  SUBDIRS
+    .
+)
+therock_cmake_subproject_provide_package(Origami origami lib/cmake/origami)
+therock_cmake_subproject_activate(Origami)
+list(APPEND _blas_subproject_names Origami)
+
+
+##############################################################################
 # hipBLASLt
 ##############################################################################
 
@@ -137,6 +168,7 @@ therock_cmake_subproject_declare(hipBLASLt
     amd-hip
   BUILD_DEPS
     hipBLAS-common
+    Origami
     rocm-cmake
     therock-googletest
     therock-msgpack-cxx
