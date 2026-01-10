@@ -12,6 +12,7 @@ on:
       - '.github/workflows/ci*.yml'
       - '.github/workflows/setup.yml'
       - '.github/workflows/build_*.yml'
+      - '.github/workflows/test_external_repo_integration.yml'
       - 'build_tools/github_actions/configure_ci.py'
       - 'build_tools/github_actions/detect_external_repo_config.py'
       - 'build_tools/github_actions/detect_external_projects.py'
@@ -36,6 +37,14 @@ on:
         type: string
         description: "rocm-systems: Override project detection (e.g., 'projects/clr,projects/rocminfo'). Blank = auto-detect."
         default: ""
+      linux_test_labels:
+        type: string
+        description: "Limit Linux tests to specific labels (e.g., 'test:rocprim,test:hipcub'). Blank = run all detected tests."
+        default: ""
+      windows_test_labels:
+        type: string
+        description: "Limit Windows tests to specific labels (e.g., 'test:rocprim,test:hipcub'). Blank = run all detected tests."
+        default: ""
 
 permissions:
   contents: read
@@ -46,7 +55,7 @@ jobs:
     name: "Test rocm-libraries Integration"
     # Run on workflow_dispatch with selected scenario, or on PR (tests both)
     if: >-
-      ${{ 
+      ${{
         (github.event_name == 'workflow_dispatch' && (inputs.test_scenario == 'rocm-libraries' || inputs.test_scenario == 'both')) ||
         (github.event_name == 'pull_request')
       }}
@@ -54,18 +63,23 @@ jobs:
     secrets: inherit
     with:
       external_source_checkout: true
+      therock_ref: ${{ github.ref }}
       repository_override: "ROCm/rocm-libraries"
       projects: ${{ inputs.rocm_libraries_projects || '' }}
+      linux_amdgpu_families: "gfx94X"
+      windows_amdgpu_families: "gfx110X"
+      linux_test_labels: ${{ inputs.linux_test_labels || '' }}
+      windows_test_labels: ${{ inputs.windows_test_labels || '' }}
     permissions:
       contents: read
       id-token: write
 
-  # Test rocm-systems integration  
+  # Test rocm-systems integration
   test-rocm-systems:
     name: "Test rocm-systems Integration"
     # Run on workflow_dispatch with selected scenario, or on PR (tests both)
     if: >-
-      ${{ 
+      ${{
         (github.event_name == 'workflow_dispatch' && (inputs.test_scenario == 'rocm-systems' || inputs.test_scenario == 'both')) ||
         (github.event_name == 'pull_request')
       }}
@@ -73,8 +87,13 @@ jobs:
     secrets: inherit
     with:
       external_source_checkout: true
+      therock_ref: ${{ github.ref }}
       repository_override: "ROCm/rocm-systems"
       projects: ${{ inputs.rocm_systems_projects || '' }}
+      linux_amdgpu_families: "gfx94X"
+      windows_amdgpu_families: "gfx110X"
+      linux_test_labels: ${{ inputs.linux_test_labels || '' }}
+      windows_test_labels: ${{ inputs.windows_test_labels || '' }}
     permissions:
       contents: read
       id-token: write

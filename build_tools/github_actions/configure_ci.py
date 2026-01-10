@@ -230,7 +230,10 @@ def should_ci_run_given_modified_paths(paths: Optional[Iterable[str]]) -> bool:
 
 def get_pr_labels(args) -> List[str]:
     """Gets a list of labels applied to a pull request."""
-    data = json.loads(args.get("pr_labels"))
+    pr_labels_str = args.get("pr_labels", "")
+    if not pr_labels_str:
+        return []
+    data = json.loads(pr_labels_str)
     labels = []
     for label in data.get("labels", []):
         labels.append(label["name"])
@@ -457,36 +460,49 @@ def matrix_generator(
     if is_pull_request:
         print(f"[PULL_REQUEST] Generating build matrix with {str(base_args)}")
 
-        # Add presubmit targets.
-        for target in get_all_families_for_trigger_types(["presubmit"]):
-            selected_target_names.append(target)
+        # Check if GPU families were explicitly provided (e.g., via workflow_call inputs)
+        input_gpu_targets = families.get("amdgpu_families", "")
+        if input_gpu_targets:
+            # If families are explicitly provided, use those instead of defaults
+            print(f"Using explicitly provided GPU families: {input_gpu_targets}")
+            translator = str.maketrans(
+                string.punctuation, " " * len(string.punctuation)
+            )
+            requested_target_names = input_gpu_targets.translate(translator).split()
+            selected_target_names.extend(
+                filter_known_names(requested_target_names, "target", lookup_matrix)
+            )
+        else:
+            # Add presubmit targets.
+            for target in get_all_families_for_trigger_types(["presubmit"]):
+                selected_target_names.append(target)
 
-        # Extend with any additional targets that PR labels opt-in to running.
-        # TODO(#1097): This (or the code below) should handle opting in for
-        #     a GPU family for only one platform (e.g. Windows but not Linux)
-        requested_target_names = []
-        requested_test_names = []
-        pr_labels = get_pr_labels(base_args)
-        for label in pr_labels:
-            # if a GPU target label was added, we add the GPU target to the build and test matrix
-            if "gfx" in label:
-                target = label.split("-")[0]
-                requested_target_names.append(target)
-            # If a test label was added, we run the full test for the specified test
-            if "test:" in label:
-                _, test_name = label.split(":")
-                requested_test_names.append(test_name)
-            # If the "skip-ci" label was added, we skip all builds and tests
-            # We don't want to check for anymore labels
-            if "skip-ci" == label:
-                selected_target_names = []
-                selected_test_names = []
-                break
+            # Extend with any additional targets that PR labels opt-in to running.
+            # TODO(#1097): This (or the code below) should handle opting in for
+            #     a GPU family for only one platform (e.g. Windows but not Linux)
+            requested_target_names = []
+            requested_test_names = []
+            pr_labels = get_pr_labels(base_args)
+            for label in pr_labels:
+                # if a GPU target label was added, we add the GPU target to the build and test matrix
+                if "gfx" in label:
+                    target = label.split("-")[0]
+                    requested_target_names.append(target)
+                # If a test label was added, we run the full test for the specified test
+                if "test:" in label:
+                    _, test_name = label.split(":")
+                    requested_test_names.append(test_name)
+                # If the "skip-ci" label was added, we skip all builds and tests
+                # We don't want to check for anymore labels
+                if "skip-ci" == label:
+                    selected_target_names = []
+                    selected_test_names = []
+                    break
 
-        selected_target_names.extend(
-            filter_known_names(requested_target_names, "target", lookup_matrix)
-        )
-        selected_test_names.extend(filter_known_names(requested_test_names, "test"))
+            selected_target_names.extend(
+                filter_known_names(requested_target_names, "target", lookup_matrix)
+            )
+            selected_test_names.extend(filter_known_names(requested_test_names, "test"))
 
     if is_push:
         branch_name = base_args.get("branch_name")
@@ -774,7 +790,9 @@ if __name__ == "__main__":
     repo_override = os.environ.get("GITHUB_REPOSITORY_OVERRIDE", "")
     if repo_override:
         print(f"Using repository override: {repo_override}")
-        repo_name_from_override = repo_override.split("/")[-1] if "/" in repo_override else repo_override
+        repo_name_from_override = (
+            repo_override.split("/")[-1] if "/" in repo_override else repo_override
+        )
         if "rocm-libraries" in repo_name_from_override.lower():
             is_external_repo = True
             repo_name = "rocm-libraries"

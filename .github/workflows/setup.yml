@@ -26,6 +26,22 @@ on:
         type: string
         description: "Override: comma-separated list of project paths (e.g., 'projects/rocprim,projects/hipcub'). Blank = auto-detect."
         default: ""
+      linux_amdgpu_families:
+        type: string
+        description: "Comma-separated list of Linux GPU families to build and test"
+        default: ""
+      windows_amdgpu_families:
+        type: string
+        description: "Comma-separated list of Windows GPU families to build and test"
+        default: ""
+      linux_test_labels:
+        type: string
+        description: "Limit Linux tests to specific labels"
+        default: ""
+      windows_test_labels:
+        type: string
+        description: "Limit Windows tests to specific labels"
+        default: ""
     outputs:
       enable_build_jobs:
         description: Whether to enable build jobs.
@@ -74,7 +90,7 @@ jobs:
             echo "ERROR: repository_override can only be used when external_source_checkout is true"
             exit 1
           fi
-      
+
       - name: Checkout repository
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
@@ -110,11 +126,11 @@ jobs:
       - name: Configuring CI options
         id: configure
         env:
-          INPUT_LINUX_AMDGPU_FAMILIES: ${{ github.event.inputs.linux_amdgpu_families }}
-          LINUX_TEST_LABELS: ${{ github.event.inputs.linux_test_labels }}
+          INPUT_LINUX_AMDGPU_FAMILIES: ${{ inputs.linux_amdgpu_families || github.event.inputs.linux_amdgpu_families }}
+          LINUX_TEST_LABELS: ${{ inputs.linux_test_labels || github.event.inputs.linux_test_labels }}
           LINUX_USE_PREBUILT_ARTIFACTS: ${{ github.event.inputs.linux_use_prebuilt_artifacts }}
-          INPUT_WINDOWS_AMDGPU_FAMILIES: ${{ github.event.inputs.windows_amdgpu_families }}
-          WINDOWS_TEST_LABELS: ${{ github.event.inputs.windows_test_labels }}
+          INPUT_WINDOWS_AMDGPU_FAMILIES: ${{ inputs.windows_amdgpu_families || github.event.inputs.windows_amdgpu_families }}
+          WINDOWS_TEST_LABELS: ${{ inputs.windows_test_labels || github.event.inputs.windows_test_labels }}
           WINDOWS_USE_PREBUILT_ARTIFACTS: ${{ github.event.inputs.windows_use_prebuilt_artifacts }}
           BUILD_VARIANT: ${{ inputs.build_variant }}
           MULTI_ARCH: ${{ inputs.multi_arch }}

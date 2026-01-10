@@ -88,13 +88,17 @@ jobs:
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       TEATIME_FORCE_INTERACTIVE: 0
       IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
-      THEROCK_DIR: ${{ inputs.external_source_checkout && 'TheRock' || '.' }}
+      THEROCK_DIR: ${{ inputs.external_source_checkout && 'therock-ci' || '.' }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          repository: ${{ inputs.external_source_checkout && inputs.repository_override || github.repository }}
+          path: ${{ inputs.external_source_checkout && 'source-repo' || '.' }}
 
       # safe.directory must be set before Runner Health Status
       - name: Adjust git config
+        working-directory: ${{ inputs.external_source_checkout && 'source-repo' || '.' }}
         run: |
           git config --global --add safe.directory $PWD
           git config fetch.parallel 10
@@ -104,13 +108,70 @@ jobs:
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
           repository: "ROCm/TheRock"
-          path: TheRock
+          path: therock-ci
           ref: ${{ inputs.therock_ref || 'main' }}
+
+      - name: Verify TheRock checkout
+        if: ${{ inputs.external_source_checkout }}
+        run: |
+          echo "=== Verifying TheRock checkout ==="
+          echo "THEROCK_DIR: $THEROCK_DIR"
+          echo "Current working directory: $(pwd)"
+          echo ""
+          echo "=== Checking Python availability ==="
+          which python3 || echo "python3 not found"
+          which python || echo "python not found"
+          echo ""
+          echo "=== Directory listing of workspace root ==="
+          ls -la
+          echo ""
+          echo "=== Checking if TheRock directory exists ==="
+          if [ -d "$THEROCK_DIR" ]; then
+            echo "✓ TheRock directory exists"
+            echo ""
+            echo "=== Contents of TheRock directory ==="
+            ls -la $THEROCK_DIR/
+            echo ""
+            echo "=== Checking for build_tools directory ==="
+            if [ -d "$THEROCK_DIR/build_tools" ]; then
+              echo "✓ build_tools directory exists"
+              echo ""
+              echo "=== Checking for detect_external_repo_config.py ==="
+              if [ -f "$THEROCK_DIR/build_tools/github_actions/detect_external_repo_config.py" ]; then
+                echo "✓ detect_external_repo_config.py exists"
+              else
+                echo "✗ ERROR: detect_external_repo_config.py NOT FOUND"
+                echo "Contents of build_tools/github_actions/:"
+                ls -la $THEROCK_DIR/build_tools/github_actions/ || echo "Directory does not exist"
+                exit 1
+              fi
+            else
+              echo "✗ ERROR: build_tools directory NOT FOUND"
+              exit 1
+            fi
+          else
+            echo "✗ ERROR: TheRock directory NOT FOUND"
+            exit 1
+          fi
+
+      - name: Install python deps
+        run: |
+          pip install -r $THEROCK_DIR/requirements.txt
 
       - name: Auto-detect external source configuration
         if: ${{ inputs.external_source_checkout }}
         id: detect
-        run: python3 $THEROCK_DIR/build_tools/github_actions/detect_external_repo_config.py "${{ inputs.repository_override || github.repository }}" --workspace "${{ github.workspace }}"
+        run: python3 $THEROCK_DIR/build_tools/github_actions/detect_external_repo_config.py "${{ inputs.repository_override || github.repository }}"
+
+      - name: Debug detected configuration
+        if: ${{ inputs.external_source_checkout }}
+        run: |
+          echo "Detected cmake_source_var: ${{ steps.detect.outputs.cmake_source_var }}"
+          echo "Detected patches_dir: ${{ steps.detect.outputs.patches_dir }}"
+          echo "Detected fetch_exclusion: ${{ steps.detect.outputs.fetch_exclusion }}"
+          echo "GitHub workspace: ${{ github.workspace }}"
+          echo "Source repo will be at: ${{ github.workspace }}/source-repo"
+          echo "Will construct CMake option: -D${{ steps.detect.outputs.cmake_source_var }}=${{ github.workspace }}/source-repo"
 
       - name: Checkout composable_kernel repository
         if: ${{ inputs.external_source_checkout && steps.detect.outputs.enable_ck == 'true' }}
@@ -138,6 +199,7 @@ jobs:
 
       - name: DVC pull
         if: ${{ inputs.external_source_checkout && steps.detect.outputs.enable_dvc == 'true' }}
+        working-directory: source-repo
         run: dvc pull
 
       - name: Fetch sources
@@ -151,9 +213,10 @@ jobs:
 
       - name: Patch external repo
         if: ${{ inputs.external_source_checkout }}
+        working-directory: source-repo
         run: |
           # Apply patches from TheRock to the external repo
-          PATCHES_DIR="$THEROCK_DIR/patches/amd-mainline/${{ steps.detect.outputs.patches_dir }}"
+          PATCHES_DIR="../$THEROCK_DIR/patches/amd-mainline/${{ steps.detect.outputs.patches_dir }}"
           if [ -d "$PATCHES_DIR" ] && [ "$(ls -A $PATCHES_DIR/*.patch 2>/dev/null)" ]; then
             git -c user.name="therockbot" -c "user.email=therockbot@amd.com" \
               am --whitespace=nowarn $PATCHES_DIR/*.patch
@@ -172,7 +235,7 @@ jobs:
           amdgpu_families: ${{ inputs.amdgpu_families }}
           package_version: ${{ inputs.package_version }}
           extra_cmake_options: >-
-            ${{ inputs.external_source_checkout && steps.detect.outputs.extra_cmake_options || '' }}
+            ${{ inputs.external_source_checkout && format('-D{0}=../source-repo', steps.detect.outputs.cmake_source_var) || '' }}
             ${{ inputs.extra_cmake_options }}
           BUILD_DIR: build
         run: |
@@ -180,33 +243,34 @@ jobs:
 
       - name: Build therock-archives and therock-dist
         run: |
-          cmake --build build --target therock-archives therock-dist -- -k 0
+          cmake --build $THEROCK_DIR/build --target therock-archives therock-dist -- -k 0
 
       - name: Test Packaging
         if: ${{ github.event.repository.name == 'TheRock' && !inputs.external_source_checkout }}
         run: |
-          ctest --test-dir build --output-on-failure
+          ctest --test-dir $THEROCK_DIR/build --output-on-failure
 
       - name: Report
         if: ${{ !cancelled() }}
         shell: bash
         run: |
-          if [ -d "build" ]; then
+          BUILD_PATH="${THEROCK_DIR}/build"
+          if [ -d "$BUILD_PATH" ]; then
             echo "Full SDK du:"
             echo "------------"
-            du -h -d 1 build/dist/rocm
+            du -h -d 1 $BUILD_PATH/dist/rocm
             echo "Artifact Archives:"
             echo "------------------"
-            ls -lh build/artifacts/*.tar.xz
+            ls -lh $BUILD_PATH/artifacts/*.tar.xz
             echo "Artifacts:"
             echo "----------"
-            du -h -d 1 build/artifacts
+            du -h -d 1 $BUILD_PATH/artifacts
             echo "CCache Stats:"
             echo "-------------"
             ccache -s -v
-            tail -v -n +1 .ccache/compiler_check_cache/* > build/logs/ccache_compiler_check_cache.log
+            tail -v -n +1 .ccache/compiler_check_cache/* > $BUILD_PATH/logs/ccache_compiler_check_cache.log
           else
-            echo "[ERROR] Build directory build does not exist. Skipping report!"
+            echo "[ERROR] Build directory $BUILD_PATH does not exist. Skipping report!"
             echo "        This should only happen if the CI is cancelled before the build step."
             exit 1
           fi
@@ -215,7 +279,7 @@ jobs:
       - name: Analyze Build Times
         if: ${{ !cancelled() }}
         run: |
-          python3 $THEROCK_DIR/build_tools/analyze_build_times.py --build-dir build
+          python3 $THEROCK_DIR/build_tools/analyze_build_times.py --build-dir $THEROCK_DIR/build
 
       - name: Configure AWS Credentials for non-forked repos
         if: ${{ always() && !github.event.pull_request.head.repo.fork }}
@@ -230,5 +294,5 @@ jobs:
           python3 $THEROCK_DIR/build_tools/github_actions/post_build_upload.py \
             --run-id ${{ github.run_id }} \
             --artifact-group "${{ inputs.artifact_group }}" \
-            --build-dir build \
+            --build-dir $THEROCK_DIR/build \
             --upload

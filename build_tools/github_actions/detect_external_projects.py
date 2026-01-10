@@ -113,7 +113,11 @@ def detect_projects_from_changes(
         print("Schedule event detected - building all projects")
         subtrees_to_build = set(subtree_to_project_map.keys())
     # For workflow_dispatch with explicit project list (override for testing)
-    elif github_event_name == "workflow_dispatch" and projects_input and projects_input.strip():
+    elif (
+        github_event_name == "workflow_dispatch"
+        and projects_input
+        and projects_input.strip()
+    ):
         projects_input = projects_input.strip()
         print(f"workflow_dispatch with projects override: '{projects_input}'")
 
@@ -122,7 +126,9 @@ def detect_projects_from_changes(
             subtrees_to_build = set(subtree_to_project_map.keys())
         else:
             # Parse comma-separated project list (e.g., "projects/rocprim,projects/hipcub")
-            requested_subtrees = [p.strip() for p in projects_input.split(",") if p.strip()]
+            requested_subtrees = [
+                p.strip() for p in projects_input.split(",") if p.strip()
+            ]
             subtrees_to_build = set()
 
             for subtree in requested_subtrees:
