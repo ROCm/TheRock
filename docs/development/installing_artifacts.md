@@ -21,6 +21,7 @@ The script supports the following command-line options:
 | `--rand`            | Flag   | Include random number generator artifacts                                                |
 | `--rccl`            | Flag   | Include RCCL artifacts                                                                   |
 | `--rocwmma`         | Flag   | Include rocWMMA artifacts                                                                |
+| `--libhipcxx`       | Flag   | Include libhipcxx artifacts                                                              |
 | `--release`         | String | Release version from nightly or dev tarballs                                             |
 | `--run-github-repo` | String | GitHub repository for CI run ID (default: `GITHUB_REPOSITORY` env var or `ROCm/TheRock`) |
 | `--run-id`          | String | GitHub CI workflow run ID to install from                                                |
