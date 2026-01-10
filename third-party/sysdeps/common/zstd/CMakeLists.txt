@@ -12,7 +12,10 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     )
 
     therock_cmake_subproject_declare(therock-zstd
+      USE_DIST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR .
+      FPRINT_SOURCE_DIR "${_source_dir}"
+      FPRINT_FILE_GLOBS "${CMAKE_CURRENT_LIST_DIR}/*"
       BINARY_DIR build
       NO_MERGE_COMPILE_COMMANDS
       BACKGROUND_BUILD
@@ -80,11 +83,20 @@ else()
   message(FATAL_ERROR "System not recognized")
 endif()
 
+# Apply patch source only on Linux
+set(patch_source_commands)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  list(APPEND patch_source_commands   COMMAND
+       bash "${CMAKE_CURRENT_SOURCE_DIR}/patch_source.sh" "${SOURCE_DIR}")
+endif()
+
 add_custom_target(
   build ALL
   WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   COMMAND
     "${CMAKE_COMMAND}" -E rm -rf -- "${CMAKE_INSTALL_PREFIX}"
+  COMMAND
+    ${patch_source_commands}
   COMMAND
     "${CMAKE_COMMAND}"
       "-G${CMAKE_GENERATOR}"

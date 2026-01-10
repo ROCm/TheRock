@@ -1,0 +1,6 @@
+Calling foo from libtest: 25 0.5
+Calling bar from libtest: 11 22 33
+Results: f00 ba7
+Calling foo from libtest: 35 0.25
+Calling bar from libtest: 44 55 66
+Results: f00 ba7

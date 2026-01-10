@@ -1,0 +1,10 @@
+[options]
+unmatched_exclude = [
+  "lib/rocm_sysdeps/share/locale/**",
+  "lib/rocm_sysdeps/share/man/**",
+]
+
+# GMP
+[components.dev."third-party/sysdeps/linux/gmp/build/stage"]
+[components.doc."third-party/sysdeps/linux/gmp/build/stage"]
+[components.lib."third-party/sysdeps/linux/gmp/build/stage"]

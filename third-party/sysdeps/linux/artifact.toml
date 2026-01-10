@@ -1,3 +1,9 @@
+[options]
+unmatched_exclude = [
+  "lib/rocm_sysdeps/share/locale/**",
+  "lib/rocm_sysdeps/share/man/**",
+]
+
 # bzip2
 [components.dev."third-party/sysdeps/linux/bzip2/build/stage"]
 # Include the executables in the dev package since some sub-projects
@@ -11,12 +17,25 @@ include = [
 [components.dev."third-party/sysdeps/linux/elfutils/build/stage"]
 [components.lib."third-party/sysdeps/linux/elfutils/build/stage"]
 
+# libbacktrace
+# Required by amd-dbgapi library.
+[components.dev."third-party/sysdeps/linux/libbacktrace/build/stage"]
+[components.lib."third-party/sysdeps/linux/libbacktrace/build/stage"]
+
+# libcap
+[components.dev."third-party/sysdeps/linux/libcap/build/stage"]
+[components.lib."third-party/sysdeps/linux/libcap/build/stage"]
+
 # libdrm
 [components.dev."third-party/sysdeps/linux/libdrm/build/stage"]
 [components.lib."third-party/sysdeps/linux/libdrm/build/stage"]
 include = [
   "**/share/**",
 ]
+
+# liblzma
+[components.dev."third-party/sysdeps/linux/liblzma/build/stage"]
+[components.lib."third-party/sysdeps/linux/liblzma/build/stage"]
 
 # numactl
 [components.dev."third-party/sysdeps/linux/numactl/build/stage"]

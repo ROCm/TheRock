@@ -1,0 +1,4 @@
+LIBRARY libinterposed.so
+EXPORTS
+  foo
+  bar

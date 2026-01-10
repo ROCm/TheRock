@@ -15,7 +15,6 @@ import repo_management
 
 THIS_MAIN_REPO_NAME = "triton"
 THIS_DIR = Path(__file__).resolve().parent
-THIS_PATCHES_DIR = THIS_DIR / "patches" / THIS_MAIN_REPO_NAME
 
 
 def get_triton_pin(torch_dir: Path) -> str:
@@ -29,14 +28,14 @@ def get_triton_version(torch_dir: Path) -> str:
 
 
 def do_checkout(args: argparse.Namespace):
-    repo_dir: Path = args.repo
+    repo_dir: Path = args.checkout_dir
     torch_dir: Path = args.torch_dir
     if not torch_dir.exists():
         raise ValueError(
             f"Could not find torch dir: {torch_dir} (did you check out torch first)"
         )
 
-    build_env = {"TRITON_WHEEL_NAME": "pytorch-triton-rocm"}
+    build_env = {}
     if args.repo_hashtag is None:
         if args.release:
             # Derive the commit pin based on --release.
@@ -64,16 +63,10 @@ def do_checkout(args: argparse.Namespace):
 def main(cl_args: list[str]):
     def add_common(command_parser: argparse.ArgumentParser):
         command_parser.add_argument(
-            "--repo",
+            "--checkout-dir",
             type=Path,
             default=THIS_DIR / THIS_MAIN_REPO_NAME,
-            help="Git repository path",
-        )
-        command_parser.add_argument(
-            "--patch-dir",
-            type=Path,
-            default=THIS_PATCHES_DIR,
-            help="Git repository patch path",
+            help=f"Directory path where the git repo is cloned into. Default is {THIS_DIR / THIS_MAIN_REPO_NAME}",
         )
         command_parser.add_argument(
             "--repo-name",
@@ -85,10 +78,6 @@ def main(cl_args: list[str]):
             "--repo-hashtag",
             help="Git repository ref/tag to checkout",
         )
-        command_parser.add_argument(
-            "--patchset",
-            help="patch dir subdirectory (defaults to mangled --repo-hashtag)",
-        )
 
     p = argparse.ArgumentParser("pytorch_triton_repo.py")
     sub_p = p.add_subparsers(required=True)
@@ -96,6 +85,7 @@ def main(cl_args: list[str]):
     add_common(checkout_p)
     checkout_p.add_argument(
         "--torch-dir",
+        type=Path,
         default=THIS_DIR / "pytorch",
         help="Directory of the torch checkout",
     )
@@ -118,19 +108,7 @@ def main(cl_args: list[str]):
         default=True,
         help="Run hipify",
     )
-    checkout_p.add_argument(
-        "--patch",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Apply patches for the repo-hashtag",
-    )
     checkout_p.set_defaults(func=do_checkout)
-
-    save_patches_p = sub_p.add_parser(
-        "save-patches", help="Save local commits as patch files for later application"
-    )
-    add_common(save_patches_p)
-    save_patches_p.set_defaults(func=repo_management.do_save_patches)
 
     args = p.parse_args(cl_args)
     args.func(args)

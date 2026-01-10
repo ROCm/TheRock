@@ -1,9 +1,23 @@
+[options]
+unmatched_exclude = [
+  # The LLVM install also emits per config CMake objects directories. These
+  # are ok to ignore.
+  "lib/llvm/lib/objects-*/**",
+
+  # Various docs or utilities we don't care about.
+  "lib/llvm/share/clang-doc/**",
+  "lib/llvm/share/clang/**",
+]
+
 # LLVM deviates from the defaults in some key ways:
 #   lib/llvm/clang : Contains a prefix like tree that must always be
 #     accessible for library use, regardless of file type/association
 #     (and should be excluded from other components).
 [components.dbg."compiler/amd-llvm/stage"]
 [components.dev."compiler/amd-llvm/stage"]
+include = [
+  "lib/llvm/share/libc++/**",
+]
 exclude = [
   "lib/llvm/lib/clang/**",
 ]
@@ -11,6 +25,9 @@ exclude = [
 [components.lib."compiler/amd-llvm/stage"]
 include = [
   "lib/llvm/amdgcn/**",
+  "lib/llvm/lib/*.bc",
+  "lib/llvm/lib/*.ll",
+  "lib/llvm/lib/*.modules.json",
 ]
 force_include = [
   "lib/llvm/lib/clang/**",
@@ -35,6 +52,24 @@ exclude = [
 [components.lib."compiler/amd-comgr/stage"]
 [components.run."compiler/amd-comgr/stage"]
 
+# amd-comgr-stub (if enabled)
+[components.dbg."compiler/amd-comgr-stub/stage"]
+optional = true
+[components.dev."compiler/amd-comgr-stub/stage"]
+optional = true
+[components.doc."compiler/amd-comgr-stub/stage"]
+optional = true
+[components.lib."compiler/amd-comgr-stub/stage"]
+optional = true
+[components.run."compiler/amd-comgr-stub/stage"]
+optional = true
+[components.test."compiler/amd-comgr-stub/stage"]
+optional = true
+include = [
+  "bin/test_*",
+]
+
+# hipcc
 [components.dbg."compiler/hipcc/stage"]
 [components.dev."compiler/hipcc/stage"]
 [components.doc."compiler/hipcc/stage"]

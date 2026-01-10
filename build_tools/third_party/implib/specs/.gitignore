@@ -1,0 +1,7 @@
+# TLC temp files
+states/
+tla2tools.jar
+
+# Spin temp files
+pan
+*.pml.trail

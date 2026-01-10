@@ -174,13 +174,6 @@ class FindGit(FindProgram):
         self.get_version()
 
 
-class FindGitLFS(FindProgram):
-    def __init__(self):
-        super().__init__()
-        self.name = "git-lfs"
-        self.get_version()
-
-
 class FindUV(FindProgram):
     def __init__(self):
         super().__init__()
@@ -434,6 +427,8 @@ class FindGCC(FindProgram):
         match _target_name:
             case "x86_64-linux-gnu":
                 return "x64"
+            case "x86_64-redhat-linux":
+                return "x64"
             case "x86_64-w64-mingw32":
                 return "MinGW-x64"
             case "i686-w64-mingw32":
@@ -477,6 +472,8 @@ class FindGXX(FindProgram):
         match _target_name:
             case "x86_64-linux-gnu":
                 return "x64"
+            case "x86_64-redhat-linux":
+                return "x64"
             case "x86_64-w64-mingw32":
                 return "MinGW-x64"
             case "i686-w64-mingw32":
@@ -518,6 +515,8 @@ class FindGFortran(FindProgram):
             _target_name = None
         match _target_name:
             case "x86_64-linux-gnu":
+                return "x64"
+            case "x86_64-redhat-linux":
                 return "x64"
             case "x86_64-w64-mingw32":
                 return "MinGW-x64"

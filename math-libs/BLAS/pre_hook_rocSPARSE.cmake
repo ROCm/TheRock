@@ -8,3 +8,10 @@ if(NOT WIN32)
   find_library(_therock_legacy_roctx64 roctx64 REQUIRED)
   cmake_language(DEFER CALL therock_patch_linked_lib OLD_LIBRARY "roctx64" NEW_TARGET "${_therock_legacy_roctx64}")
 endif()
+
+# See the artifact descriptor where we require these matrices for the test
+# artifact. Consider installing as part of the main project.
+install(
+  DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/clients/matrices"
+  DESTINATION "clients"
+)

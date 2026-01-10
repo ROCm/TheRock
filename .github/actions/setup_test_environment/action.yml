@@ -1,29 +1,42 @@
 name: "Setup test environment"
 
+description: Setup ROCm test environment from built artifacts
+
 inputs:
   VENV_DIR:
-    type: string
+    description: (string) Directory in which to create a Python virtual environment (e.g. `github.workspace/.venv`)
     required: true
   OUTPUT_ARTIFACTS_DIR:
-    type: string
+    description: (string) Directory to download/unpack test artifacts into (e.g. `github.workspace/build`)
+    required: true
+  ARTIFACT_GROUP:
+    description: (string) Artifact group (e.g. `gfx110X-all`)
     required: true
   ARTIFACT_RUN_ID:
-    type: string
-  AMDGPU_FAMILIES:
-    type: string
+    description: (string) Run ID to download artifacts from (`env.ARTIFACT_RUN_ID` or a value like `19716407405`)
+    required: true
   FETCH_ARTIFACT_ARGS:
-    type: string
+    description: (string) Extra arguments to install_rocm_from_artifacts.py (e.g. `--blas --tests`)
   IS_PR_FROM_FORK:
-    type: boolean
+    description: (boolean) True if this workflow run is from a PR on a fork (often `github.event.pull_request.head.repo.fork`)
     default: false
 
 runs:
   using: "composite"
   steps:
     - name: "Setting up Python"
-      uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+      uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
       with:
-        python-version: 3.11
+        python-version: 3.12
+
+    - name: "Install UV"
+      shell: bash
+      run: |
+        if [[ "$RUNNER_OS" == "Windows" ]]; then
+          powershell -Command "irm https://astral.sh/uv/install.ps1 | iex"
+        else
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+        fi
 
     - name: Create Python venv
       shell: bash
@@ -31,13 +44,14 @@ runs:
         VENV_DIR: ${{ inputs.VENV_DIR }}
       run: |
         python build_tools/setup_venv.py ${VENV_DIR} \
-          --activate-in-future-github-actions-steps
+          --activate-in-future-github-actions-steps \
+          --use-uv
 
     - name: Install test requirements
       shell: bash
       run: |
-        pip install -r requirements-test.txt
-        pip freeze
+        uv pip install -r requirements-test.txt
+        uv pip freeze
 
     - name: Install the AWS tool
       if: ${{ runner.os == 'Linux' }}
@@ -55,14 +69,14 @@ runs:
       shell: bash
       env:
         OUTPUT_ARTIFACTS_DIR: ${{ inputs.OUTPUT_ARTIFACTS_DIR }}
+        ARTIFACT_GROUP: ${{ inputs.ARTIFACT_GROUP }}
         ARTIFACT_RUN_ID: ${{ inputs.ARTIFACT_RUN_ID }}
-        AMDGPU_FAMILIES: ${{ inputs.AMDGPU_FAMILIES }}
         FETCH_ARTIFACT_ARGS: ${{ inputs.FETCH_ARTIFACT_ARGS }}
         GITHUB_TOKEN: ${{ github.token }}
         IS_PR_FROM_FORK: ${{ inputs.IS_PR_FROM_FORK }}
       run: |
         python ./build_tools/install_rocm_from_artifacts.py \
           --run-id=${ARTIFACT_RUN_ID} \
-          --amdgpu-family=${AMDGPU_FAMILIES} \
+          --artifact-group=${ARTIFACT_GROUP} \
           --output-dir=${OUTPUT_ARTIFACTS_DIR} \
           ${FETCH_ARTIFACT_ARGS}

@@ -14,8 +14,11 @@ import re
 
 S3 = boto3.resource("s3")
 CLIENT = boto3.client("s3")
-BUCKET = S3.Bucket(getenv("S3_BUCKET_PY", "therock-nightly-python"))
-VERSION = "v2"
+# We also manage `therock-nightly-python` (not the default to make the script safer to test)
+BUCKET = S3.Bucket(getenv("S3_BUCKET_PY", "therock-dev-python"))
+# Note: v2-staging first, in case issues are observed while the script runs
+# and the developer wants to more safely cancel the script.
+VERSIONS = ["v2-staging", "v2"]
 
 PACKAGES_PER_PROJECT = {
     "dbus_python": {"version": "latest", "project": "jax"},
@@ -29,6 +32,7 @@ PACKAGES_PER_PROJECT = {
     "networkx": {"version": "latest", "project": "torch"},
     "numpy": {"version": "latest", "project": "torch"},
     "jinja2": {"version": "latest", "project": "torch"},
+    "markupsafe": {"version": "latest", "project": "torch"},
     "filelock": {"version": "latest", "project": "torch"},
     "fsspec": {"version": "latest", "project": "torch"},
     "typing-extensions": {"version": "latest", "project": "torch"},
@@ -130,6 +134,15 @@ def upload_missing_whls(
         # Skip i686 packages
         if "i686" in pkg:
             continue
+        # Skip iphoneos packages
+        if "iphoneos" in pkg:
+            continue
+        # Skip iphonesimulator packages
+        if "iphonesimulator" in pkg:
+            continue
+        # Skip riscv64 packages
+        if "riscv64" in pkg:
+            continue
         # Skip unsupported Python version
         if "cp39" in pkg:
             continue
@@ -172,9 +185,13 @@ def main() -> None:
     args = parser.parse_args()
 
     SUBFOLDERS =  [
-        "gfx110X-dgpu",
+        "gfx101X-dgpu",
+        "gfx103X-dgpu",
+        "gfx110X-all",
+        "gfx1150",
         "gfx1151",
         "gfx120X-all",
+        "gfx90X-dcgpu",
         "gfx94X-dcgpu",
         "gfx950-dcgpu",
     ]
@@ -186,19 +203,20 @@ def main() -> None:
             for pkg_name, pkg_info in PACKAGES_PER_PROJECT.items()
             if pkg_info["project"] == args.package
         }
-        for pkg_name, pkg_info in selected_packages.items():
-            if "target" in pkg_info and pkg_info["target"] != "":
-                full_path = f'{VERSION}/{prefix}/{pkg_info["target"]}'
-            else:
-                full_path = f"{VERSION}/{prefix}"
+        for VERSION in VERSIONS:
+            for pkg_name, pkg_info in selected_packages.items():
+                if "target" in pkg_info and pkg_info["target"] != "":
+                    full_path = f'{VERSION}/{prefix}/{pkg_info["target"]}'
+                else:
+                    full_path = f"{VERSION}/{prefix}"
 
-            upload_missing_whls(
-                pkg_name,
-                full_path,
-                dry_run=args.dry_run,
-                only_pypi=args.only_pypi,
-                target_version=pkg_info["version"],
-            )
+                upload_missing_whls(
+                    pkg_name,
+                    full_path,
+                    dry_run=args.dry_run,
+                    only_pypi=args.only_pypi,
+                    target_version=pkg_info["version"],
+                )
 
 
 if __name__ == "__main__":

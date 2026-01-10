@@ -32,9 +32,9 @@ python pytorch_vision_repo.py checkout
 python pytorch_triton_repo.py checkout
 
 # On Windows, using shorter paths to avoid compile command length limits:
-python pytorch_torch_repo.py checkout --repo C:/b/pytorch
-python pytorch_audio_repo.py checkout --repo C:/b/audio
-python pytorch_vision_repo.py checkout --repo C:/b/vision
+python pytorch_torch_repo.py checkout --checkout-dir C:/b/pytorch
+python pytorch_audio_repo.py checkout --checkout-dir C:/b/audio
+python pytorch_vision_repo.py checkout --checkout-dir C:/b/vision
 ```
 
 2. Install rocm wheels:
@@ -56,12 +56,12 @@ to the build sub-command (useful for docker invocations).
 # For therock-nightly-python
 build_prod_wheels.py \
     install-rocm \
-    --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/
+    --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/
 
 # For therock-dev-python (unstable but useful for testing outside of prod)
 build_prod_wheels.py \
     install-rocm \
-    --index-url https://d25kgig7rdsyks.cloudfront.net/v2/gfx110X-dgpu/
+    --index-url https://rocm.devreleases.amd.com/v2/gfx110X-all/
 ```
 
 3. Build torch, torchaudio and torchvision for a single gfx architecture.
@@ -74,10 +74,10 @@ python build_prod_wheels.py build \
     --output-dir $HOME/tmp/pyout
 
 # On Windows, using shorter custom paths:
-python build_prod_wheels.py build \
-    --output-dir %HOME%/tmp/pyout \
-    --pytorch-dir C:/b/pytorch \
-    --pytorch-audio-dir C:/b/audio \
+python build_prod_wheels.py build ^
+    --output-dir %HOME%/tmp/pyout ^
+    --pytorch-dir C:/b/pytorch ^
+    --pytorch-audio-dir C:/b/audio ^
     --pytorch-vision-dir C:/b/vision
 ```
 
@@ -99,7 +99,7 @@ versions):
     build \
         --install-rocm \
         --pip-cache-dir /therock/output/pip_cache \
-        --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/ \
+        --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ \
         --clean \
         --output-dir /therock/output/cp312/wheels
 ```
@@ -109,10 +109,10 @@ inline system deps into the audio and vision wheels as needed.
 """
 
 import argparse
-from datetime import date
 import json
 import os
 from pathlib import Path
+from packaging.version import parse
 import platform
 import shutil
 import shlex
@@ -137,10 +137,13 @@ LINUX_LIBRARY_PRELOADS = [
     "hipfft",
     "hiprand",
     "hipsparse",
+    "hipsparselt",
     "hipsolver",
     "rccl",  # Linux only for the moment.
     "hipblaslt",
     "miopen",
+    "rocm_sysdeps_liblzma",
+    "rocm-openblas",
 ]
 
 # List of library preloads for Windows to generate into _rocm_init.py
@@ -152,9 +155,11 @@ WINDOWS_LIBRARY_PRELOADS = [
     "hipfft",
     "hiprand",
     "hipsparse",
+    "hipsparselt",
     "hipsolver",
     "hipblaslt",
     "miopen",
+    "rocm-openblas",
 ]
 
 
@@ -213,6 +218,19 @@ def get_installed_package_version(dist_package_name: str) -> str:
     raise ValueError(
         f"Did not find Version for installed package '{dist_package_name}' in output:\n{joined_lines}"
     )
+
+
+def get_version_suffix_for_installed_rocm_package() -> str:
+    rocm_version = get_installed_package_version("rocm")
+    print(f"Computing version suffix for installed rocm package: {rocm_version}")
+    # Compute a version suffix to be used as a local version identifier:
+    # https://packaging.python.org/en/latest/specifications/version-specifiers/#local-version-identifiers
+    # This logic is copied from build_tools/github_actions/determine_version.py.
+    parsed_version = parse(rocm_version)
+    base_name = "devrocm" if "dev" in rocm_version else "rocm"
+    version_suffix = f"+{base_name}{str(parsed_version).replace('+','-')}"
+    print(f"Version suffix is: {version_suffix}")
+    return version_suffix
 
 
 def get_rocm_path(path_name: str) -> Path:
@@ -311,7 +329,7 @@ def add_env_compiler_flags(env: dict[str, str], flagname: str, *compiler_flags: 
     current = env.get(flagname, "")
     append = ""
     for compiler_flag in compiler_flags:
-        append += f" {compiler_flag}"
+        append += f"{compiler_flag} "
     env[flagname] = f"{current}{append}"
     print(f"-- Appended {flagname}+={append}")
 
@@ -326,6 +344,9 @@ def find_dir_containing(file_name: str, *possible_paths: Path) -> Path:
 def do_build(args: argparse.Namespace):
     if args.install_rocm:
         do_install_rocm(args)
+
+    if not args.version_suffix:
+        args.version_suffix = get_version_suffix_for_installed_rocm_package()
 
     triton_dir: Path | None = args.triton_dir
     pytorch_dir: Path | None = args.pytorch_dir
@@ -389,6 +410,15 @@ def do_build(args: argparse.Namespace):
                 addl_triton_env = json.load(f)
                 print(f"-- Additional triton build env vars: {addl_triton_env}")
             env.update(addl_triton_env)
+        # With `CMAKE_PREFIX_PATH` set, `find_package(LLVM)` (called in
+        # `MLIRConfig.cmake` shipped as part of the LLVM bundled with
+        # trition) may pick up TheRock's LLVM instead of triton's.
+        # Here, `CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH` is set
+        # and passed via `TRITON_APPEND_CMAKE_ARGS` to avoid this.
+        # See also https://github.com/ROCm/TheRock/issues/1999.
+        env["TRITON_APPEND_CMAKE_ARGS"] = (
+            "-DCMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH=FALSE"
+        )
 
     if is_windows:
         llvm_dir = rocm_dir / "lib" / "llvm" / "bin"
@@ -403,8 +433,8 @@ def do_build(args: argparse.Namespace):
         env.update(
             {
                 # Workaround GCC12 compiler flags.
-                "CXXFLAGS": " -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict",
-                "CPPFLAGS": " -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict",
+                "CXXFLAGS": " -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict ",
+                "CPPFLAGS": " -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict ",
             }
         )
 
@@ -427,6 +457,18 @@ def do_build(args: argparse.Namespace):
         )
     else:
         env["HIP_DEVICE_LIB_PATH"] = str(hip_device_lib_path)
+
+    # OpenBLAS path setup
+    host_math_path = get_rocm_path("root") / "lib" / "host-math"
+    if not host_math_path.exists():
+        print(
+            "WARNING: Default location of host-math not found. "
+            "Will not build with OpenBLAS support."
+        )
+    else:
+        env["BLAS"] = "OpenBLAS"
+        env["OpenBLAS_HOME"] = str(host_math_path)
+        env["OpenBLAS_LIB_NAME"] = "rocm-openblas"
 
     # Build triton.
     triton_requirement = None
@@ -553,6 +595,44 @@ def do_build_triton(
     return f"{triton_wheel_name}=={installed_triton_version}"
 
 
+def copy_msvc_libomp_to_torch_lib(pytorch_dir: Path):
+    # When USE_OPENMP is set (it is by default), torch_cpu.dll depends on OpenMP.
+    #
+    # Typically implementations of OpenMP are:
+    #   * Intel OpenMP, `libiomp`, which PyTorch upstream uses
+    #   * MSVC OpenMP, `libomp140`, which we'll use here since we have MSVC already
+    #   * (?) LLVM OpenMP (https://openmp.llvm.org/)?
+    #
+    # Torch's CMake build selects which OpenMP to use in `FindOpenMP.cmake`,
+    # then the relevant .dll files must be copied into the torch/lib/ folder or
+    # torch will fail to initialize. This feels like something that could be
+    # handled upstream as part of the centralized setup.py and/or CMake build
+    # processes, but given the varied scripts and build workflows upstream and
+    # multiple choices for where to source an implementation, we handle it here.
+    #
+    # If we wanted to switch to Intel OpenMP, we could:
+    #   1. Install Intel OpenMP (and/or MKL?)
+    #   2. Set CMAKE_INCLUDE_PATH and CMAKE_LIBRARY_PATH (?) so `FindOpenMP.cmake` finds them
+    #   3. Copy `libiomp5md.dll` to torch/lib
+    # Then remove the rest of the code from this function.
+
+    vc_tools_redist_dir = os.environ.get("VCToolsRedistDir", "")
+    if not vc_tools_redist_dir:
+        raise RuntimeError("VCToolsRedistDir not set, can't copy libomp to torch lib")
+
+    omp_name = "libomp140.x86_64.dll"
+    dll_paths = sorted(Path(vc_tools_redist_dir).rglob(omp_name))
+    if not dll_paths:
+        raise RuntimeError(
+            f"Did not find '{omp_name}' under '{vc_tools_redist_dir}', can't copy libomp to torch lib"
+        )
+
+    omp_path = dll_paths[0]
+    target_lib = pytorch_dir / "torch" / "lib"
+    print(f"Copying libomp from '{omp_path}' to '{target_lib}'")
+    shutil.copy2(omp_path, target_lib)
+
+
 def do_build_pytorch(
     args: argparse.Namespace,
     pytorch_dir: Path,
@@ -563,13 +643,87 @@ def do_build_pytorch(
     # Compute version.
     pytorch_build_version = (pytorch_dir / "version.txt").read_text().strip()
     pytorch_build_version += args.version_suffix
-    print(f"  Default PYTORCH_BUILD_VERSION: {pytorch_build_version}")
-    print(
-        f"  Flash attention enabled: {args.enable_pytorch_flash_attention_windows or not is_windows}"
-    )
+    pytorch_build_version_parsed = parse(pytorch_build_version)
+    print(f"  Using PYTORCH_BUILD_VERSION: {pytorch_build_version}")
+
+    # Detect exactly PyTorch 2.9.x
+    is_pytorch_2_9 = pytorch_build_version_parsed.release[:2] == (2, 9)
+
+    ## Enable FBGEMM_GENAI on Linux for PyTorch, as it is available only for 2.9 on rocm/pytorch
+    ## and causes build failures for other PyTorch versions
+    ## Warn user when enabling it manually.
+    ## https://github.com/ROCm/TheRock/issues/2056
+    if not is_windows:
+        # Enabling/Disabling FBGEMM_GENAI based on Pytorch version in Linux
+        if is_pytorch_2_9:
+            # Default ON for 2.9.x, unless explicitly disabled
+            # args.enable_pytorch_fbgemm_genai_linux can be set to false
+            # by passing --no-enable-pytorch-fbgemm-genai-linux as input
+            if args.enable_pytorch_fbgemm_genai_linux is False:
+                use_fbgemm_genai = "OFF"
+                print(f"  [WARN] User-requested override to set FBGEMM_GENAI = OFF.")
+            else:
+                use_fbgemm_genai = "ON"
+        else:
+            # Default OFF for all other versions, unless explicitly enabled
+            if args.enable_pytorch_fbgemm_genai_linux is True:
+                use_fbgemm_genai = "ON"
+            else:
+                use_fbgemm_genai = "OFF"
+
+            if use_fbgemm_genai == "ON":
+                print(f"  [WARN] User-requested override to set FBGEMM_GENAI = ON.")
+                print(
+                    f"""  [WARN] Please note that FBGEMM_GENAI is not available for PyTorch 2.7, and enabling it may cause build failures
+                    for PyTorch >= 2.8 (Except 2.9). See status of issue https://github.com/ROCm/TheRock/issues/2056
+                      """
+                )
+
+        env["USE_FBGEMM_GENAI"] = use_fbgemm_genai
+        print(f"FBGEMM_GENAI enabled: {env['USE_FBGEMM_GENAI'] == 'ON'}")
+
+        if args.enable_pytorch_flash_attention_linux is None:
+            # Default behavior — determined by if triton is build
+            use_flash_attention = "ON" if triton_requirement else "OFF"
+
+            # no aotriton support for gfx103X
+            #
+            # temporarily disable aotriton for gfx1152/53 until pytorch
+            # uses a commit that enables it ( https://github.com/ROCm/aotriton/pull/142 )
+            AOTRITON_UNSUPPORTED_ARCHS = ["gfx103", "gfx1152", "gfx1153"]
+            if any(
+                arch in env["PYTORCH_ROCM_ARCH"] for arch in AOTRITON_UNSUPPORTED_ARCHS
+            ):
+                use_flash_attention = "OFF"
+            print(
+                f"Flash Attention default behavior (based on triton and gpu): {use_flash_attention}"
+            )
+        else:
+            # Explicit override: user has set the flag to true/false
+            if args.enable_pytorch_flash_attention_linux:
+                assert (
+                    triton_requirement
+                ), "Must build with triton if wanting to use flash attention"
+                use_flash_attention = "ON"
+            else:
+                use_flash_attention = "OFF"
+
+            print(f"Flash Attention override set by flag: {use_flash_attention}")
+
+        env.update(
+            {
+                "USE_FLASH_ATTENTION": use_flash_attention,
+                "USE_MEM_EFF_ATTENTION": use_flash_attention,
+            }
+        )
+        print(
+            f"Flash Attention and Memory efficiency enabled: {env['USE_FLASH_ATTENTION'] == 'ON'}"
+        )
+
     env["USE_ROCM"] = "ON"
     env["USE_CUDA"] = "OFF"
     env["USE_MPI"] = "OFF"
+    env["USE_NUMA"] = "OFF"
     env["PYTORCH_BUILD_VERSION"] = pytorch_build_version
     env["PYTORCH_BUILD_NUMBER"] = args.pytorch_build_number
 
@@ -587,11 +741,20 @@ def do_build_pytorch(
     # Add the _rocm_init.py file.
     (pytorch_dir / "torch" / "_rocm_init.py").write_text(get_rocm_init_contents(args))
 
-    # Windows-specific options.
+    # Windows-specific settings.
     if is_windows:
-        use_flash_attention = (
-            "1" if args.enable_pytorch_flash_attention_windows else "0"
-        )
+        copy_msvc_libomp_to_torch_lib(pytorch_dir)
+
+        use_flash_attention = "0"
+
+        # temporarily prevent enabling aotriton for gfx1152/53 until pytorch
+        # uses a commit that enables it ( https://github.com/ROCm/aotriton/pull/142 )
+        AOTRITON_UNSUPPORTED_ARCHS = ["gfx1152", "gfx1153"]
+        if args.enable_pytorch_flash_attention_windows and not any(
+            arch in env["PYTORCH_ROCM_ARCH"] for arch in AOTRITON_UNSUPPORTED_ARCHS
+        ):
+            use_flash_attention = "1"
+
         env.update(
             {
                 "USE_FLASH_ATTENTION": use_flash_attention,
@@ -606,6 +769,9 @@ def do_build_pytorch(
                 # We may want to fix that and other issues to then enable building tests.
                 "BUILD_TEST": "0",
             }
+        )
+        print(
+            f"  Flash attention enabled: {args.enable_pytorch_flash_attention_windows or not is_windows}"
         )
 
     if not is_windows:
@@ -623,6 +789,10 @@ def do_build_pytorch(
             env, "CXXFLAGS", f"-I{rocm_dir / 'include' / 'roctracer'}"
         )
         add_env_compiler_flags(env, "LDFLAGS", f"-L{sysdeps_dir / 'lib'}")
+
+        # needed to find liblzma packaged by rocm as sysdep to build aotriton
+        os.environ["PKG_CONFIG_PATH"] = f"{sysdeps_dir / 'lib' / 'pkgconfig'}"
+        os.environ["LD_LIBRARY_PATH"] = f"{sysdeps_dir / 'lib'}"
 
     print("+++ Uninstalling pytorch:")
     exec(
@@ -694,7 +864,7 @@ def do_build_pytorch_audio(
     # Compute version.
     build_version = (pytorch_audio_dir / "version.txt").read_text().strip()
     build_version += args.version_suffix
-    print(f"  Default pytorch audio BUILD_VERSION: {build_version}")
+    print(f"  pytorch audio BUILD_VERSION: {build_version}")
     env["BUILD_VERSION"] = build_version
     env["BUILD_NUMBER"] = args.pytorch_build_number
 
@@ -707,6 +877,13 @@ def do_build_pytorch_audio(
             "BUILD_SOX": "0",
         }
     )
+
+    if is_windows:
+        env.update(
+            {
+                "DISTUTILS_USE_SDK": "1",
+            }
+        )
 
     remove_dir_if_exists(pytorch_audio_dir / "dist")
     if args.clean:
@@ -724,7 +901,7 @@ def do_build_pytorch_vision(
     # Compute version.
     build_version = (pytorch_vision_dir / "version.txt").read_text().strip()
     build_version += args.version_suffix
-    print(f"  Default pytorch vision BUILD_VERSION: {build_version}")
+    print(f"  pytorch vision BUILD_VERSION: {build_version}")
     env["BUILD_VERSION"] = build_version
     env["VERSION_NAME"] = build_version
     env["BUILD_NUMBER"] = args.pytorch_build_number
@@ -856,13 +1033,21 @@ def main(argv: list[str]):
         default=None,
         help="Enable building of torch flash attention on Windows (enabled by default for Linux)",
     )
-
-    today = date.today()
-    formatted_date = today.strftime("%Y%m%d")
+    build_p.add_argument(
+        "--enable-pytorch-flash-attention-linux",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Enable building of torch flash attention on Linux (enabled by default, sets USE_FLASH_ATTENTION=1)",
+    )
+    build_p.add_argument(
+        "--enable-pytorch-fbgemm-genai-linux",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Enable building of torch fbgemm_genai on Linux (enabled by default, sets USE_FBGEMM_GENAI=ON)",
+    )
     build_p.add_argument(
         "--version-suffix",
-        default=f"+rocmsdk{formatted_date}",
-        help="PyTorch version suffix",
+        help="Explicit PyTorch version suffix (e.g. `+rocm7.10.0a20251124`). Typically computed with build_tools/github_actions/determine_version.py. If omitted it will be derived from the installed rocm package",
     )
     build_p.add_argument(
         "--clean",

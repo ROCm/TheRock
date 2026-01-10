@@ -16,15 +16,48 @@ cmake_policy(SET CMP0135 NEW)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(CMakeDependentOption)
 include(ExternalProject)
+include(therock_globals)
 include(therock_default_targets)
+include(therock_detect_python_versions)
 include(therock_amdgpu_targets)
 include(therock_artifacts)
 include(therock_compiler_config)
 include(therock_external_source)
 include(therock_features)
+include(therock_sanitizers)
 include(therock_subproject)
 include(therock_job_pools)
 include(therock_testing)
+
+################################################################################
+# Python is used throughout the build. Ensure it is initialized early.
+################################################################################
+
+find_package(Python3 3.9 COMPONENTS Interpreter REQUIRED)
+
+################################################################################
+# Generate build topology targets
+################################################################################
+# Track BUILD_TOPOLOGY.toml and related files for changes to trigger reconfigure
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  "${CMAKE_CURRENT_SOURCE_DIR}/BUILD_TOPOLOGY.toml"
+  "${CMAKE_CURRENT_SOURCE_DIR}/build_tools/topology_to_cmake.py"
+  "${CMAKE_CURRENT_SOURCE_DIR}/build_tools/_therock_utils/build_topology.py"
+)
+
+block(SCOPE_FOR VARIABLES)
+  file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/cmake")
+  execute_process(
+    COMMAND ${Python3_EXECUTABLE}
+      "${CMAKE_CURRENT_SOURCE_DIR}/build_tools/topology_to_cmake.py"
+      "--topology" "${CMAKE_CURRENT_SOURCE_DIR}/BUILD_TOPOLOGY.toml"
+      "--output" "${CMAKE_CURRENT_BINARY_DIR}/cmake/therock_topology.cmake"
+    OUTPUT_VARIABLE _topology_output
+    ERROR_VARIABLE _topology_error
+    COMMAND_ERROR_IS_FATAL ANY  # Fail on any error
+  )
+  message(STATUS "Generated build topology targets from BUILD_TOPOLOGY.toml")
+endblock()
 
 ################################################################################
 # Notices
@@ -71,8 +104,32 @@ set(ROCM_SYMLINK_LIBS OFF)
 
 set(THEROCK_ARTIFACT_ARCHIVE_SUFFIX "" CACHE STRING "Suffix to add to artifact archive file stem names")
 
+# Kpack artifact splitting
+option(THEROCK_KPACK_SPLIT_ARTIFACTS "Split target-specific artifacts into generic and arch-specific components" OFF)
+# TODO: Once rocm-kpack is moved into the rocm-systems repo, hard-code the path.
+# Check for unset OR empty to handle -DTHEROCK_KPACK_DIR="" edge case.
+if(NOT THEROCK_KPACK_DIR)
+  set(THEROCK_KPACK_DIR "${THEROCK_SOURCE_DIR}/base/rocm-kpack")
+endif()
+if(THEROCK_KPACK_SPLIT_ARTIFACTS AND NOT THEROCK_KPACK_DIR)
+  message(FATAL_ERROR "THEROCK_KPACK_DIR must be set when THEROCK_KPACK_SPLIT_ARTIFACTS=ON")
+endif()
+
 option(THEROCK_BUNDLE_SYSDEPS "Builds bundled system deps for portable builds into lib/rocm_sysdeps" ON)
 option(THEROCK_ENABLE_MPI "Enables building components with Message Passing Interface (MPI) support" OFF)
+
+set(THEROCK_SANITIZER "" CACHE STRING "Enable project wide sanitizer build (e.g. 'ASAN')")
+
+# List of python executables to use for multi-version python builds
+set(THEROCK_DIST_PYTHON_EXECUTABLES "" CACHE STRING "Build for multiple python versions in supported projects (default to Python3_EXECUTABLE if empty)")
+
+# List of python executables to use for building software that needs to embed
+# python (i.e. rocgdb). If this is empty then those components may build without
+# embedded python features. For production release, this is often different
+# from THEROCK_DIST_PYTHON_EXECUTABLES because the former is built without
+# libpython shared library support (because that is the safest way to build
+# extensions).
+set(THEROCK_SHARED_PYTHON_EXECUTABLES "" CACHE STRING "Build subprojects for embedded python variants (defaults to Python3_EXECUTABLE iff it was built shared)")
 
 # Source settings.
 # Use the rocm-libraries superrepo tracked in TheRock's `.gitmodules` or
@@ -132,11 +189,35 @@ block(SCOPE_FOR VARIABLES PROPAGATE THEROCK_HIP_MAJOR_VERSION THEROCK_HIP_MINOR_
 endblock()
 
 ################################################################################
+# Feature flags
+# Project wide flags for controlling the build system.
+################################################################################
+
+# Note that delay-loading is incompatible with ASAN until a more robust mechanism
+# is implemented. See: https://github.com/ROCm/TheRock/issues/1783
+cmake_dependent_option(
+  THEROCK_FLAG_COMGR_DELAY_LOAD
+  "Enables delay loading and linker namespacing of the amd_comgr library (Linux only)"
+  ON "LINUX" OFF)
+
+# Flag: -DTHEROCK_FLAG_INCLUDE_PROFILER=OFF
+# Note that the profiler is an integral part of the system and disabling it is not
+# fully supported. However, in early bringup, it can be useful to disable building
+# it, even though that may cause problems in other libraries.
+# On some platforms (WIN32 presently), the profiler is always disabled.
+cmake_dependent_option(
+  THEROCK_FLAG_INCLUDE_PROFILER
+  "Allows the profiler to be manually disabled by setting to OFF"
+  ON "NOT WIN32" OFF)
+
+
+################################################################################
 # Debug Options
 ################################################################################
 
 option(THEROCK_SPLIT_DEBUG_INFO "Enables splitting of debug info into dbg artifacts (and strips primary packages)" OFF)
 option(THEROCK_MINIMAL_DEBUG_INFO "Enables compiler-specific flags for minimal debug symbols suitable for shipping in packages" OFF)
+option(THEROCK_COMPILER_RT_DEBUG "Enables compiler-rt debug build" OFF)
 option(THEROCK_QUIET_INSTALL "Enable quiet install logging (install logs only go to the logfile)" ON)
 option(THEROCK_USE_SAFE_DEPENDENCY_PROVIDER "Enable the safe dependency provider, performing strict package checks" ON)
 
@@ -149,118 +230,64 @@ option(THEROCK_USE_SAFE_DEPENDENCY_PROVIDER "Enable the safe dependency provider
 option(THEROCK_ENABLE_ALL "Enables building of all feature groups" ON)
 option(THEROCK_ENABLE_CORE "Enable building of core libraries" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_COMM_LIBS "Enable building of comm libraries" "${THEROCK_ENABLE_ALL}")
+option(THEROCK_ENABLE_DEBUG_TOOLS "Enable building the ROCm debug tools" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_MATH_LIBS "Enable building of math libraries" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_ML_LIBS "Enable building of ML libraries" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_PROFILER "Enable building the profiler libraries" "${THEROCK_ENABLE_ALL}")
+option(THEROCK_ENABLE_DC_TOOLS "Enable building of data center tools" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_HOST_MATH "Build all bundled host math libraries by default" OFF)
 option(THEROCK_RESET_FEATURES "One-shot flag which forces all feature flags to their default state for this configuration run" OFF)
+# TODO(iree-org/fusilli/issues/57): Enable fusilli build once multi-arch support lands.
+option(THEROCK_ENABLE_IREE_LIBS "Enable building of IREE libraries" OFF)
 
-# Host Math Features.
-therock_add_feature(HOST_BLAS
-  GROUP HOST_MATH
-  DESCRIPTION "Bundled host BLAS library"
-)
-if(NOT WIN32)
-  # Currently unsupported on Windows.
-  therock_add_feature(HOST_SUITE_SPARSE
-    GROUP HOST_MATH
-    DESCRIPTION "Bundled SuiteSparse library"
-    REQUIRES HOST_BLAS
-  )
-endif()
+################################################################################
+# Artifact-based features are auto-generated from BUILD_TOPOLOGY.toml
+# To modify artifact features, edit BUILD_TOPOLOGY.toml
+################################################################################
 
-# Base Features.
-therock_add_feature(COMPILER
-  GROUP ALL
-  DESCRIPTION "Enables the AMDGPU+host compiler toolchain"
-)
-therock_add_feature(HIPIFY
-  GROUP ALL
-  DESCRIPTION "Enables the hipify tool"
-  REQUIRES COMPILER
-)
+# Include generated topology (contains feature definitions)
+include("${CMAKE_CURRENT_BINARY_DIR}/cmake/therock_topology.cmake")
+
+################################################################################
+# Manual features that don't map to artifacts
+################################################################################
 
 # Core Features.
 # The HIP runtime for ROCm uses different implementations per platform today:
 #   * HIP on Linux uses the HSA runtime in ROCR-Runtime, used by CLR.
 #   * HIP on Windows uses the PAL runtime included directly as part of CLR.
 # https://rocm.docs.amd.com/projects/install-on-windows/en/latest/reference/component-support.html
-if(NOT WIN32)
-  # Other platforms (Linux) _do_ have the "core runtime".
-  therock_add_feature(CORE_RUNTIME
-    GROUP CORE
-    DESCRIPTION "Enables the core device runtime and tools"
-  )
-  set(_hip_runtime_platform_requirements "CORE_RUNTIME")
-else()
-  # No "core runtime" (ROCR-Runtime + rocminfo) on Windows.
-  # TODO(#36): Could provide an alternate or no-op "core runtime" instead?
-  set(_hip_runtime_platform_requirements "")
-endif()
+# Platform-specific dependencies are handled automatically by therock_add_feature()
+# which filters out CORE_RUNTIME dependency for HIP_RUNTIME on Windows.
 
-therock_add_feature(HIP_RUNTIME
-  GROUP CORE
-  DESCRIPTION "Enables the HIP runtime"
-  REQUIRES COMPILER ${_hip_runtime_platform_requirements}
-)
+# Optional sub-features that control behavior within artifacts
+cmake_dependent_option(THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL
+  "Enables composable kernel in MIOpen" ON
+  "THEROCK_ENABLE_COMPOSABLE_KERNEL" OFF)
 
-# Profiler Features.
-if(NOT WIN32)
+cmake_dependent_option(THEROCK_ROCWMMA_ENABLE_BENCHMARKS
+  "Enables building rocWMMA benchmarks" OFF
+  "THEROCK_ENABLE_ROCWMMA;THEROCK_BUILD_TESTING" OFF)
+
+# Additional manual features that don't map to artifacts
+
+# Profiler Trace Decoder Binary (not an artifact, just a config option)
+if(THEROCK_FLAG_INCLUDE_PROFILER)
   therock_add_feature(ROCPROF_TRACE_DECODER_BINARY
     GROUP PROFILER
     DESCRIPTION "Enables the closed-source rocprof trace decoder binary"
   )
-  # Other platforms (Linux) _do_ have the profiler SDK.
-  therock_add_feature(ROCPROFV3
-    GROUP PROFILER
-    DESCRIPTION "Enables the rocprofilerv3 project (and ancillary deps)"
-    REQUIRES HIP_RUNTIME
-  )
-  set(_optional_profiler_requirements "ROCPROFV3")
-else()
-  # No profiler SDK on Windows.
-  set(_optional_profiler_requirements "")
 endif()
 
-# Comm-libs Features.
-if(NOT WIN32)
-  # RCCL is Linux-only.
-  therock_add_feature(RCCL
-    GROUP COMM_LIBS
-    DESCRIPTION "Enables rccl"
-    REQUIRES COMPILER HIP_RUNTIME HIPIFY
-  )
-endif()
+# Optional sub-features that control behavior within artifacts
 
-# Math-libs Features.
-therock_add_feature(PRIM
-  GROUP MATH_LIBS
-  DESCRIPTION "Enables prim libraries (rocprim, hipCUB, rocThrust)"
-  REQUIRES COMPILER HIP_RUNTIME
-)
-therock_add_feature(BLAS
-  GROUP MATH_LIBS
-  DESCRIPTION "Enables blas libraries (hipblaslt, rocblas, hipblas)"
-  # NOTE: HOST_BLAS is only needed for some tests and PROFILER_SDK is
-  # currently only required for rocblas. We may want to re-evaluate the deps
-  # if they continue to be sparse like this as it increases minimum dep length.
-  REQUIRES COMPILER HIP_RUNTIME HOST_BLAS ${_optional_profiler_requirements}
-)
-therock_add_feature(RAND
-  GROUP MATH_LIBS
-  DESCRIPTION "Enables rand libraries (hiprand, rocrand)"
-  REQUIRES COMPILER HIP_RUNTIME
-)
-therock_add_feature(FFT
-  GROUP MATH_LIBS
-  DESCRIPTION "Enables fft libraries"
-  REQUIRES COMPILER HIP_RUNTIME RAND
-)
+# Math library sub-components (control what gets built within BLAS artifact)
 therock_add_feature(SPARSE
   GROUP MATH_LIBS
-  DESCRIPTION "Enables sparse libraries (hipsparse, rocsparse)"
-  REQUIRES COMPILER HIP_RUNTIME BLAS PRIM ${_optional_profiler_requirements}
+  DESCRIPTION "Enables sparse libraries (hipsparse, hipsparselt, rocsparse) within BLAS"
+  REQUIRES BLAS PRIM
 )
+
 if(NOT WIN32)
   set(_solver_platform_requirements "HOST_SUITE_SPARSE")
 else()
@@ -268,25 +295,10 @@ else()
 endif()
 therock_add_feature(SOLVER
   GROUP MATH_LIBS
-  DESCRIPTION "Enables solver libraries (hipsolver, rocsolver)"
-  REQUIRES COMPILER HIP_RUNTIME BLAS PRIM SPARSE ${_solver_platform_requirements}
+  DESCRIPTION "Enables solver libraries (hipsolver, rocsolver) within BLAS"
+  REQUIRES BLAS PRIM SPARSE ${_solver_platform_requirements}
 )
 
-if(NOT WIN32)
-  therock_add_feature(COMPOSABLE_KERNEL
-    GROUP MATH_LIBS
-    DESCRIPTION "Enables build of composable kernel, including minimal kernel library"
-    REQUIRES COMPILER HIP_RUNTIME RAND
-  )
-  cmake_dependent_option(THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL "Enables composable kernel in MIOpen" ON ${THEROCK_ENABLE_COMPOSABLE_KERNEL} OFF)
-endif()
-
-# ML-Libs Features.
-therock_add_feature(MIOPEN
-  GROUP ML_LIBS
-  DESCRIPTION "Enables the MIOpen project (with minimal deps defaults to ON)"
-  REQUIRES COMPILER HIP_RUNTIME BLAS RAND ${_optional_profiler_requirements}
-)
 
 # Finalize all feature flags.
 therock_finalize_features()
@@ -322,9 +334,6 @@ therock_validate_amdgpu_targets()
 # Global setup
 ################################################################################
 
-# Some sub-projects need Python. Make sure it is found consistently.
-find_package(Python3 3.9 COMPONENTS Interpreter REQUIRED)
-
 set(STAGING_INSTALL_DIR "${CMAKE_CURRENT_BINARY_DIR}/staging_install")
 
 # On some distributions, this will install to lib64. We would like
@@ -351,7 +360,14 @@ endif()
 
 set(THEROCK_BUNDLED_BZIP2)
 set(THEROCK_BUNDLED_ELFUTILS)
+set(THEROCK_BUNDLED_EXPAT)
+set(THEROCK_BUNDLED_GMP)
+set(THEROCK_BUNDLED_LIBBACKTRACE)
+set(THEROCK_BUNDLED_LIBCAP)
 set(THEROCK_BUNDLED_LIBDRM)
+set(THEROCK_BUNDLED_LIBLZMA)
+set(THEROCK_BUNDLED_MPFR)
+set(THEROCK_BUNDLED_NCURSES)
 set(THEROCK_BUNDLED_NUMACTL)
 set(THEROCK_BUNDLED_SQLITE3)
 set(THEROCK_BUNDLED_ZLIB)
@@ -370,7 +386,14 @@ if(THEROCK_BUNDLE_SYSDEPS)
     endif()
     set(THEROCK_BUNDLED_BZIP2 therock-bzip2)
     set(THEROCK_BUNDLED_ELFUTILS therock-elfutils)
+    set(THEROCK_BUNDLED_EXPAT, therock-expat)
+    set(THEROCK_BUNDLED_GMP, therock-gmp)
+    set(THEROCK_BUNDLED_LIBBACKTRACE therock-libbacktrace)
+    set(THEROCK_BUNDLED_LIBCAP therock-libcap)
     set(THEROCK_BUNDLED_LIBDRM therock-libdrm)
+    set(THEROCK_BUNDLED_LIBLZMA therock-liblzma)
+    set(THEROCK_BUNDLED_MPFR, therock-mpfr)
+    set(THEROCK_BUNDLED_NCURSES, therock-ncurses)
     set(THEROCK_BUNDLED_NUMACTL therock-numactl)
     set(THEROCK_BUNDLED_SQLITE3 therock-sqlite3)
     set(THEROCK_BUNDLED_ZLIB therock-zlib)
@@ -401,20 +424,22 @@ endif()
 # External project setup
 ################################################################################
 
-add_subdirectory(build_tools)
-
 # Add subdirectories in dependency DAG order (which happens to be semi-alpha:
 # don't be fooled).
 add_subdirectory(third-party)
 add_subdirectory(base)
 add_subdirectory(compiler)
 add_subdirectory(core)
+add_subdirectory(debug-tools)
 # Note that rocprofiler-register is in base and is what higher level clients
 # depend on. The profiler itself is independent.
 add_subdirectory(profiler)
+# Data center tools (RDC, etc.)
+add_subdirectory(dctools)
 add_subdirectory(comm-libs)
 add_subdirectory(math-libs)
 add_subdirectory(ml-libs)
+add_subdirectory(iree-libs)
 
 if(THEROCK_BUILD_TESTING)
   add_subdirectory(examples)

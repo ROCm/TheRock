@@ -1,0 +1,11 @@
+Import repo: https://github.com/yugr/Implib.so.git
+Import commit: ecf7bb51a92a0fb16834c5b698570ab25f9f1d21 (Fri Apr 4 07:18:28 2025 +0300)
+
+Local changes:
+
+* Removed `.github` directory
+
+Future disposition: We may want to check back and see if the author turns this into a more packaged
+solution, but as-is, it is just a source only tool. If it doesn't get more features, or we need to
+modify it substantially, we should consider it a hard fork at that point.
+

@@ -1,0 +1,13 @@
+[options]
+unmatched_exclude = [
+  "lib/rocm_sysdeps/share/locale/**",
+  "lib/rocm_sysdeps/share/man/**",
+]
+
+# NCurses
+[components.dev."third-party/sysdeps/linux/ncurses/build/stage"]
+[components.doc."third-party/sysdeps/linux/ncurses/build/stage"]
+[components.lib."third-party/sysdeps/linux/ncurses/build/stage"]
+include = [
+  "**/bin/*"
+]

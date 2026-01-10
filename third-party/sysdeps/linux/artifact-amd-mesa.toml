@@ -1,0 +1,9 @@
+[options]
+unmatched_exclude = [
+  "lib/rocm_sysdeps/share/locale/**",
+  "lib/rocm_sysdeps/share/man/**",
+]
+
+# amd-mesa
+[components.dev."third-party/sysdeps/linux/amd-mesa/build/stage"]
+[components.lib."third-party/sysdeps/linux/amd-mesa/build/stage"]

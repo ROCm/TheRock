@@ -208,12 +208,14 @@ These artifacts are built if any project features requiring them are enabled:
 ### Core Artifacts
 
 - `base`: Base ROCM tools and structural components. ROCM sub-projects that do not depend on anything outside of this set are included here so that everything can depend on them.
+- `core-amdsmi`: AMD System Management Interface (amdsmi) library and tools for GPU and driver management, packaged as a standalone core artifact due to distinct product and usage semantics.
 - `core-runtime`: Low level runtime components used for interfacing with kernel drivers.
 - `core-hip`: HIP runtime, compiler interface, and build tools.
 
 ### Profiler Artifacts
 
 - `rocprofiler-sdk`: The rocprofv3 tools and libraries (excluding `rocprofiler-register`, which is in `base`).
+- `rocprofiler-systems`: The ROCm Systems Profiler tools and libraries.
 
 ### Kernel Libraries
 
@@ -223,3 +225,7 @@ These artifacts are built if any project features requiring them are enabled:
 - `rand`: Random number generator libraries.
 - `rccl`: Collective communication libraries.
 - `MIOpen`: MIOpen kernel-select/fusion library.
+
+> [!NOTE]
+> After adding a new artifact via `therock_provide_artifact()`, you may need to update `install_rocm_from_artifacts.py` to allow CI workflows and users to selectively install it. <br>
+> See the [Adding Support for New Components](./installing_artifacts.md#adding-support-for-new-components) guide for step-by-step instructions.

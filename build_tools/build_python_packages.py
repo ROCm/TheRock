@@ -38,7 +38,9 @@ def run(args: argparse.Namespace):
     PopulatedDistPackage(params, logical_name="meta")
 
     # Populate each target neutral library package.
-    core = PopulatedDistPackage(params, logical_name="core").populate_runtime_files(
+    core = PopulatedDistPackage(params, logical_name="core")
+    core.rpath_dep(core, "lib/llvm/lib")
+    core.populate_runtime_files(
         params.filter_artifacts(
             core_artifact_filter,
             # TODO: The base package is shoving CMake redirects into lib.
@@ -64,9 +66,10 @@ def run(args: argparse.Namespace):
     devel = PopulatedDistPackage(params, logical_name="devel")
     devel.populate_devel_files(
         addl_artifact_names=[
-            # Since prim is a header only library, it is not included in runtime
-            # packages, but we still want it in the devel package.
+            # Since prim and rocwmma are header only libraries, they are not
+            # included in runtime packages, but we still want them in the devel package.
             "prim",
+            "rocwmma",
         ],
         tarball_compression=args.devel_tarball_compression,
     )
@@ -74,14 +77,20 @@ def run(args: argparse.Namespace):
     if args.build_packages:
         build_packages(args.dest_dir, wheel_compression=args.wheel_compression)
 
+    print(
+        f"::: Finished building packages at '{args.dest_dir}' with version '{args.version}'"
+    )
+
 
 def core_artifact_filter(an: ArtifactName) -> bool:
     core = an.name in [
         "amd-llvm",
         "base",
         "core-hip",
+        "core-ocl",
         "core-hipinfo",
         "core-runtime",
+        "hipify",
         "host-blas",
         "host-suite-sparse",
         "rocprofiler-sdk",
@@ -93,6 +102,7 @@ def core_artifact_filter(an: ArtifactName) -> bool:
     # hiprtc needs to be able to find HIP headers in its same tree.
     hip_dev = an.name in [
         "core-hip",
+        "core-ocl",
     ] and an.component in ["dev"]
     return core or hip_dev
 
@@ -136,7 +146,11 @@ def main(argv: list[str]):
         required=True,
         help="Destination directory in which to materialize packages",
     )
-    p.add_argument("--version", default="0.1.dev0", help="Package versions")
+    p.add_argument(
+        "--version",
+        default="",
+        help="Package versions (defaults to an automatic dev version)",
+    )
     p.add_argument(
         "--version-suffix",
         default="",
@@ -155,6 +169,19 @@ def main(argv: list[str]):
         help="Apply compression when building wheels (disable for faster iteration or prior to recompression activities)",
     )
     args = p.parse_args(argv)
+
+    if not args.version:
+        print(f"::: Version not specified, choosing a default")
+        import compute_rocm_package_version
+
+        # Generate a default version like `7.10.0.dev0`.
+        # This is a simple and predictable version, compared to using
+        # `release_type="dev"`, which appends the git commit hash.
+        args.version = compute_rocm_package_version.compute_version(
+            custom_version_suffix=".dev0"
+        )
+        print(f"::: Version defaulting to {args.version}")
+
     run(args)
 
 

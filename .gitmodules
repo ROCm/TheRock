@@ -13,19 +13,11 @@
 [submodule "rccl"]
 	path = comm-libs/rccl
 	url = https://github.com/ROCm/rccl.git
-	branch = mainline
+	branch = develop
 [submodule "rocm-cmake"]
 	path = base/rocm-cmake
 	url = https://github.com/ROCm/rocm-cmake.git
 	branch = mainline
-[submodule "hipSOLVER"]
-	path = math-libs/BLAS/hipSOLVER
-	url = https://github.com/ROCm/hipSOLVER.git
-	branch = develop
-[submodule "rocSOLVER"]
-	path = math-libs/BLAS/rocSOLVER
-	url = https://github.com/ROCm/rocSOLVER.git
-	branch = develop
 [submodule "rccl-tests"]
 	path = comm-libs/rccl-tests
 	url = https://github.com/ROCm/rccl-tests.git
@@ -49,3 +41,30 @@
 	path = compiler/spirv-llvm-translator
 	url = https://github.com/ROCm/SPIRV-LLVM-Translator.git
 	branch = amd-mainline
+[submodule "amd-mesa"]
+	path = third-party/sysdeps/linux/amd-mesa/mesa-fork
+	url = https://github.com/ROCm/mesa-fork.git
+	branch = amd-decode-only
+[submodule "iree"]
+	path = iree-libs/iree
+	url = https://github.com/iree-org/iree.git
+	branch = main
+[submodule "fusilli"]
+	path = iree-libs/fusilli
+	url = https://github.com/iree-org/fusilli.git
+	branch = main
+[submodule "rocm-kpack"]
+	path = base/rocm-kpack
+	url = https://github.com/ROCm/rocm-kpack.git
+[submodule "amd-dbgapi"]
+	path = debug-tools/amd-dbgapi
+	url = https://github.com/ROCm/ROCdbgapi.git
+	branch = amd-staging
+[submodule "rocgdb"]
+	path = debug-tools/rocgdb/source
+	url = https://github.com/ROCm/rocgdb.git
+	branch = amd-staging
+[submodule "rocr-debug-agent"]
+	path = debug-tools/rocr-debug-agent
+	url = https://github.com/ROCm/rocr_debug_agent.git
+	branch = amd-staging

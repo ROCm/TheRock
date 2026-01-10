@@ -24,6 +24,7 @@ Typical usage for the current shell (will set the CCACHE_CONFIGPATH var):
 import argparse
 from pathlib import Path
 import sys
+import subprocess
 
 THIS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = THIS_DIR.parent
@@ -69,9 +70,11 @@ def gen_config(dir: Path, compiler_check_file: Path, args: argparse.Namespace):
 
     # (TODO:consider https://ccache.dev/manual/4.6.1.html#_storage_interaction)
     # Switch based on cache type.
-    if False:
-        # Placeholder for other cache type switches.
-        ...
+    if args.remote:
+        if not args.remote_storage:
+            raise ValueError(f"Expected --remote-storage with --remote option")
+        lines.append(f"remote_storage = {args.remote_storage}")
+        lines.append(f"remote_only = true")
     else:
         # Default, local.
         local_path: Path = args.local_path
@@ -114,6 +117,7 @@ def run(args: argparse.Namespace):
         dir.mkdir(parents=True, exist_ok=True)
         config_file.write_text(config_contents)
         compiler_check_file.write_text(compiler_check_script)
+
     else:
         # Check to see if updated.
         if config_file.read_text() != config_contents:
@@ -130,6 +134,20 @@ def run(args: argparse.Namespace):
                 file=sys.stderr,
             )
 
+    # Reset statistic counters
+    if args.reset_stats:
+        try:
+            proc_ccache = subprocess.run(
+                ["ccache", "--zero-stats"], capture_output=True, text=True
+            )
+            proc_ccache.check_returncode()
+            print(proc_ccache.stdout, end="", file=sys.stderr)
+
+        except subprocess.CalledProcessError:
+            print(
+                f"ERROR! Zeroing statistic counters failed. Message: {proc_ccache.stderr}",
+                file=sys.stderr,
+            )
     # Output options.
     print(f"export CCACHE_CONFIGPATH={config_file}")
 
@@ -142,6 +160,12 @@ def main(argv: list[str]):
         default=REPO_ROOT / ".ccache",
         help="Location of the .ccache directory (defaults to ../.ccache)",
     )
+    p.add_argument(
+        "--reset-stats",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Zeros statistics counters (default to enabled).",
+    )
     command_group = p.add_mutually_exclusive_group()
     command_group.add_argument(
         "--init",
@@ -153,12 +177,15 @@ def main(argv: list[str]):
     type_group.add_argument(
         "--local", action="store_true", help="Use a local cache (default)"
     )
+    type_group.add_argument("--remote", action="store_true", help="Use a remote cache")
 
     p.add_argument(
         "--local-path",
         type=Path,
         help="Use a non-default local ccache directory (defaults to 'local/' in --dir)",
     )
+
+    p.add_argument("--remote-storage", help="Remote storage configuration/URL")
 
     preset_group = p.add_mutually_exclusive_group()
     preset_group.add_argument(

@@ -2,10 +2,12 @@ name: Publish build_manylinux_x86_64 images
 on:
   workflow_dispatch:
   push:
-    branches: ['main']
+    branches:
+      - 'main'
+      - 'stage/docker/**'
     paths:
-    - dockerfiles/build_manylinux_x86_64*.Dockerfile
-    - .github/workflows/publish_build_manylinux_x86_64.yml
+      - dockerfiles/build_manylinux_x86_64*.Dockerfile
+      - .github/workflows/publish_build_manylinux_x86_64.yml
 
 permissions:
   contents: read
@@ -15,5 +17,5 @@ jobs:
   publish_build_manylinux_x86_64:
     uses: ./.github/workflows/publish_dockerfile.yml
     with:
-        DOCKER_FILE_NAME: build_manylinux_x86_64
-        DOCKER_IMAGE_NAME: therock_build_manylinux_x86_64
+      DOCKER_FILE_NAME: build_manylinux_x86_64
+      DOCKER_IMAGE_NAME: therock_build_manylinux_x86_64

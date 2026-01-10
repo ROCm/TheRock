@@ -10,8 +10,25 @@ int main() {
   constexpr int blocksize = 64;
   constexpr int size = gridsize * blocksize;
   int *d_buf;
-  hipMalloc(&d_buf, size * sizeof(int));
+  hipHostMalloc(&d_buf, size * sizeof(int));
   hipLaunchKernelGGL(squares, gridsize, blocksize, 0, 0, d_buf);
   hipDeviceSynchronize();
+
+  // Check results.
+  int mismatches_count = 0;
+  for (int i = 0; i < size; ++i) {
+    int square = i * i;
+    if (d_buf[i] != square) {
+      fprintf(stderr,
+              "Element at index %d expected value %d, actual value: %d\n", i,
+              square, d_buf[i]);
+      ++mismatches_count;
+    }
+  }
+  if (mismatches_count > 0) {
+    fprintf(stderr, "There were %d mismatches\n", mismatches_count);
+    return 1;
+  }
+
   return 0;
 }

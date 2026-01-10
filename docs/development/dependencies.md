@@ -26,7 +26,9 @@ project wide:
   bundling is not enabled or supported for the target OS):
   - `THEROCK_BUNDLED_BZIP2`
   - `THEROCK_BUNDLED_ELFUTILS`
+  - `THEROCK_BUNDLED_LIBCAP`
   - `THEROCK_BUNDLED_LIBDRM`
+  - `THEROCK_BUNDLED_LIBLZMA`
   - `THEROCK_BUNDLED_NUMACTL`
   - `THEROCK_BUNDLED_SQLITE3`
   - `THEROCK_BUNDLED_ZLIB`
@@ -51,6 +53,16 @@ Implementation notes for each library is below:
 - Alternatives: None (some OS vendors will provide alternatives but the source
   distribution of bzip2 has no opinion)
 
+## Expat
+
+- Canonical method: `find_package(expat)`
+- Import library: `expat::expat`
+
+## GMP
+
+- Canonical method: `find_package(gmp)`
+- Import library: `gmp::gmp`
+
 ## ELFUTILS
 
 Supported sub-libraries: `libelf`, `libdw`.
@@ -66,6 +78,14 @@ Supported sub-libraries: `libelf`, `libdw`.
 - Canonical method: `find_package(libdw)`
 - Import library: `libdw::libdw`
 - Alternatives: `pkg_check_modules(DW libdw)`
+
+## libcap
+
+Provides Linux capabilities for privileged operations (used by RDC).
+
+- Canonical method: `find_package(Libcap)`
+- Import library: `Libcap::Libcap`
+- Alternatives: `pkg_check_modules(LIBCAP libcap)` or direct linking (used by RDC)
 
 ## libdrm
 
@@ -83,6 +103,22 @@ Supported sub-libraries: `libdrm`, `libdrm_amdgpu`
 - Import library: `PkgConfig::DRM_AMDGPU`
 - Vars: `DRM_AMDGPU_INCLUDE_DIRS`
 
+## liblzma
+
+- Canonical method: `find_package(LibLZMA)`
+- Import library: `LibLZMA::LibLZMA`
+- Alternatives: `pkg_check_modules(LZMA liblzma)`
+
+## MPFR
+
+- Canonical method: `find_package(mpfr)`
+- Import library: `mpfr::mpfr`
+
+## NCurses
+
+- Canonical method: `find_package(ncurses)`
+- Import library: `ncurses::ncurses`
+
 ### numactl
 
 Provides the `libnuma` library. Tools are not included in bundled sysdeps.
@@ -92,6 +128,16 @@ Provides the `libnuma` library. Tools are not included in bundled sysdeps.
 - Vars: `NUMA_INCLUDE_DIRS`, `NUMA_INCLUDE_LIBRARIES` (can be used to avoid
   a hard-coded dep on `numa::numa`, which seems to vary across systems)
 - Alternatives: `pkg_check_modules(NUMA numa)`
+
+## simde
+
+SIMDe (SIMD Everywhere) is a header-only portability library for SIMD intrinsics.
+
+- Canonical method: `pkg_check_modules(simde REQUIRED IMPORTED_TARGET simde)`
+- Import library: `PkgConfig::simde`
+- Vars: `simde_INCLUDE_DIRS`
+- Alternatives: none
+- Note: Header-only library, provides portable SIMD intrinsics (SSE, AVX, NEON, etc.)
 
 ## sqlite3
 
@@ -108,5 +154,11 @@ Provides the `libnuma` library. Tools are not included in bundled sysdeps.
 ## zstd
 
 - Canonical method: `find_package(zstd)`
-- Import library: `zstd::libzstd_shared`
-- Alternatives: `pkg_check_modules(ZSTD libzstd)`
+- Import library: `zstd::libzstd` (preferred - INTERFACE target that wraps the concrete library)
+- Alternatives:
+  - `zstd::libzstd_shared` - explicit shared library target
+  - `pkg_check_modules(ZSTD libzstd)`
+- Note: Upstream zstd's CMake install generates both `zstd::libzstd` (INTERFACE) and
+  `zstd::libzstd_shared` (SHARED IMPORTED). The INTERFACE target forwards to the
+  appropriate concrete target, abstracting static vs shared selection. Prefer
+  `zstd::libzstd` for new code.

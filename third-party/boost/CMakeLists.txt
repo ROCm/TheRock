@@ -2,6 +2,7 @@
 # Currently, this includes:
 #   atomic
 #   filesystem
+#   multi_index
 #   system
 #   Static libraries only
 #   Release build
@@ -21,13 +22,14 @@ therock_subproject_fetch(boost-sources
 
 therock_cmake_subproject_declare(therock-boost
   EXTERNAL_SOURCE_DIR "cmake_project"
+  USE_DIST_AMDGPU_TARGETS
   EXCLUDE_FROM_ALL
   NO_MERGE_COMPILE_COMMANDS
   BACKGROUND_BUILD
   OUTPUT_ON_FAILURE
   CMAKE_ARGS
     "-DBOOST_SOURCE_DIR=${_source_dir}"
-    "-DTHEROCK_BOOST_LIBRARIES=atomic,filesystem,system"
+    "-DTHEROCK_BOOST_LIBRARIES=atomic,filesystem,multi_index,system"
   EXTRA_DEPENDS
     "${_download_stamp}"
 )

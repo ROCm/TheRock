@@ -5,7 +5,7 @@
 #   sudo docker run --rm -it --entrypoint /bin/bash <<IMAGE>>
 #
 # To build and push to a test branch, create a pull request on a branch named:
-#   docker*
+#   stage/docker/*
 # We build our portable linux releases on the manylinux (RHEL-based)
 # images, with custom additional packages installed. We switch to
 # new upstream versions as needed.
@@ -31,7 +31,7 @@ RUN ./install_ccache.sh "4.11.2" && rm -rf /install-ccache
 
 ######## CMake ########
 WORKDIR /install-cmake
-ENV CMAKE_VERSION="3.25.2"
+ENV CMAKE_VERSION="3.27.9"
 COPY install_cmake.sh ./
 RUN ./install_cmake.sh "${CMAKE_VERSION}" && rm -rf /install-cmake
 
@@ -56,35 +56,67 @@ RUN ./install_googletest.sh "${GOOGLE_TEST_VERSION}" && rm -rf /install-googlete
 # We are pinning to gcc-toolset-12 until it is safe to upgrade. The latest
 # manylinux containers use gcc-toolset-14 or later, which is not yet compatible
 # with the LLVM that ROCm builds. This can be upgraded when clang-21 is used.
+#
+# We allow development tools in this list but not development packages (so that
+# things can't acceidentally build with system dependencies).
+#
+# Development tool dependencies:
+#   texinfo, flag: rocprofiler-systems
+#   texinfo-tex: rocgdb
 RUN yum install -y epel-release && \
     yum remove -y gcc-toolset* && \
     yum install -y \
-      gcc-toolset-12-binutils \
-      gcc-toolset-12-gcc \
-      gcc-toolset-12-gcc-c++ \
-      gcc-toolset-12-gcc-gfortran \
-      gcc-toolset-12-libatomic-devel \
-      gcc-toolset-12-libstdc++-devel \
+      gcc-toolset-13-binutils \
+      gcc-toolset-13-gcc \
+      gcc-toolset-13-gcc-c++ \
+      gcc-toolset-13-gcc-gfortran \
+      gcc-toolset-13-libatomic-devel \
+      gcc-toolset-13-libstdc++-devel \
       patchelf \
       vim-common \
-      git-lfs && \
-    yum clean all && \
+      git-lfs \
+    && yum install -y \
+      texinfo \
+      texinfo-tex \
+      flex \
+    && yum clean all && \
     rm -rf /var/cache/yum
+
+
+######## DVC via pip ######
+# dvc's rpm package includes .so dependencies built against glib 2.29
+# settling for pip install for now, but it installs modules not needed for dvc pull
+# more dvc features may be used in upcoming sequenced builds
+# Also pinning pathspec because a new version of it breaks the private _DIR_MARK
+# API that dvc uses. When upgrading past ~3.64.0, then pin can likely be removed.
+RUN pip install 'pathspec<0.13.0' 'dvc[s3]==3.62.0' && \
+    which dvc && dvc --version || true
 
 ######## Enable GCC Toolset and verify ########
 # This is a subset of what is typically sourced in the gcc-toolset enable
 # script.
+# The base manylinux container has references to its gcc-toolset in its PATHs,
+# clean up LIBRARY_PATH and LD_LIBRARY_PATH since we yum remove that version.
 # -- Predefine variables to avoid Dockerfile linting warnings --
 # Docker requires environment variables to be defined before reuse.
 ENV LIBRARY_PATH=""
-ENV PATH="/opt/rh/gcc-toolset-12/root/usr/bin:${PATH}"
-ENV LIBRARY_PATH="/opt/rh/gcc-toolset-12/root/usr/lib64:${LIBRARY_PATH}"
-ENV LD_LIBRARY_PATH="/opt/rh/gcc-toolset-12/root/usr/lib64:${LD_LIBRARY_PATH}"
+ENV LD_LIBRARY_PATH=""
+ENV DEVTOOLSET_ROOTPATH="/opt/rh/gcc-toolset-13/root"
+ENV PATH="/opt/rh/gcc-toolset-13/root/usr/bin:${PATH}"
+ENV LIBRARY_PATH="/opt/rh/gcc-toolset-13/root/usr/lib64:/opt/rh/gcc-toolset-13/root/usr/lib:${LIBRARY_PATH}"
+ENV LD_LIBRARY_PATH="/opt/rh/gcc-toolset-13/root/usr/lib64:/opt/rh/gcc-toolset-13/root/usr/lib:${LD_LIBRARY_PATH}"
 
 ######## Enable GCC Toolset and verify ########
 RUN which gcc && gcc --version && \
     which g++ && g++ --version && \
     which clang++ || true
+
+######## Shared Python Interpreters ########
+# Build Python with --enable-shared for embedding (e.g., rocgdb).
+# The manylinux /opt/python builds are statically linked and can't be embedded.
+WORKDIR /install-shared-pythons
+COPY install_shared_pythons.sh ./
+RUN ./install_shared_pythons.sh /tmp/python-build && rm -rf /install-shared-pythons /tmp/python-build
 
 ######## GIT CONFIGURATION ########
 # Git started enforcing strict user checking, which thwarts version
@@ -94,23 +126,3 @@ RUN which gcc && gcc --version && \
 # We use the wildcard option to disable the checks. This was added
 # in git 2.35.3
 RUN git config --global --add safe.directory '*'
-
-######## vcpkg ########
-# vcpkg is used to install OpenMPI and can be dropped once the latter
-# is vendored into TheRock.
-WORKDIR /opt
-ENV VCPKG_HASH="3f5ad7be7693ce6ac5599ddb7cc24f260b9d44f9"
-COPY install_vcpkg.sh ./
-RUN yum install -y zip unzip
-RUN ./install_vcpkg.sh "${VCPKG_HASH}"
-
-######## OpenMPI ########
-# OpenMPI is currently not vendored into TheRock and temorarily installed
-# via vcpkg: https://github.com/ROCm/TheRock/issues/1284
-RUN /opt/vcpkg/vcpkg install openmpi:x64-linux
-ENV PATH="/opt/vcpkg/installed/x64-linux/tools/openmpi/bin:${PATH}"
-ENV PKG_CONFIG_PATH="/opt/vcpkg/installed/x64-linux/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
-ENV LD_LIBRARY_PATH="/opt/vcpkg/installed/x64-linux/lib:${LD_LIBRARY_PATH}"
-
-RUN which mpicc && mpirun && \
-    mpirun --version || true

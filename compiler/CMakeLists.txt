@@ -11,6 +11,16 @@ if(THEROCK_ENABLE_COMPILER)
     list(APPEND _extra_llvm_cmake_args "-DLLVM_ENABLE_PEDANTIC=OFF")
   endif()
 
+  # Building Flang is very memory-intensive on systems with many cores. Allow
+  # users to specify the level of concurrency for these tasks so they can
+  # reduce the risk of running out of memory.
+  if(FLANG_PARALLEL_COMPILE_JOBS)
+    message(STATUS "Flang build concurrency level set to ${FLANG_PARALLEL_COMPILE_JOBS}")
+    list(APPEND _extra_llvm_cmake_args "-DFLANG_PARALLEL_COMPILE_JOBS=${FLANG_PARALLEL_COMPILE_JOBS}")
+  else()
+     message(STATUS "Flang concurrency is unlimited. Memory usage may be much higher.")
+  endif()
+
   # If the compiler is not pristine (i.e. has patches), then there will be a
   # ".amd-llvm.smrev" file present which must be used instead of the auto
   # computed git revision. If present, this will have a stable hash of
@@ -68,6 +78,17 @@ if(THEROCK_ENABLE_COMPILER)
       -DCLANG_ENABLE_CLANGD=OFF
       -DCLANG_TIDY_ENABLE_STATIC_ANALYZER=OFF
 
+      # ASAN features.
+      # Note that building AMDGPU ASAN extensions depends on various runtime headers
+      # (since it instruments them). These paths must line up and will be an error
+      # in the compiler-rt build if not found.
+      "-DSANITIZER_AMDGPU=${THEROCK_CONDITION_IS_NON_WINDOWS}"
+      "-DSANITIZER_HSA_INCLUDE_PATH=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/runtime/hsa-runtime/inc"
+      "-DSANITIZER_COMGR_INCLUDE_PATH=${CMAKE_CURRENT_SOURCE_DIR}/amd-llvm/amd/comgr/include"
+
+      # compiler-rt debug mode
+      "-DCOMPILER_RT_DEBUG=${THEROCK_COMPILER_RT_DEBUG}"
+
       ${_extra_llvm_cmake_args}
     BUILD_DEPS
       rocm-cmake
@@ -97,14 +118,21 @@ if(THEROCK_ENABLE_COMPILER)
 
 
   ##############################################################################
-  # comgr
+  # amd-comgr
   # A client of libLLVM which provides an in-process compiler API to the HIP
   # runtime.
   ##############################################################################
+  set(_amd_comgr_target_name "amd-comgr")
+  set(_amd_comgr_stub_target_name)
+  if(THEROCK_FLAG_COMGR_DELAY_LOAD)
+    set(_amd_comgr_target_name "amd-comgr-impl")
+    set(_amd_comgr_stub_target_name "amd-comgr")
+  endif()
 
-  therock_cmake_subproject_declare(amd-comgr
+  therock_cmake_subproject_declare("${_amd_comgr_target_name}"
     USE_DIST_AMDGPU_TARGETS
     NO_INSTALL_RPATH  # See manual handling in the pre_hook.
+    LOGICAL_TARGET_NAME "amd-comgr"
     EXTERNAL_SOURCE_DIR "amd-llvm/amd/comgr"
     BINARY_DIR "amd-comgr"
     BACKGROUND_BUILD
@@ -113,20 +141,66 @@ if(THEROCK_ENABLE_COMPILER)
       -DCOMGR_DISABLE_SPIRV=ON
       -DTHEROCK_HIP_MAJOR_VERSION=${THEROCK_HIP_MAJOR_VERSION}
       -DTHEROCK_HIP_MINOR_VERSION=${THEROCK_HIP_MINOR_VERSION}
+      "-DLLVM_VERSION_SUFFIX=-rocm${ROCM_MAJOR_VERSION}"
+      -DLLVM_ENABLE_SYMBOL_VERSIONING=ON
     BUILD_DEPS
       rocm-cmake
     RUNTIME_DEPS
       amd-llvm
       ${THEROCK_BUNDLED_ZSTD}
+    INTERFACE_LINK_DIRS
+      "lib"
+    INTERFACE_INSTALL_RPATH_DIRS
+      "lib"
   )
-  therock_cmake_subproject_provide_package(amd-comgr amd_comgr lib/cmake/amd_comgr)
-  therock_cmake_subproject_activate(amd-comgr)
+  if(NOT THEROCK_FLAG_COMGR_DELAY_LOAD)
+    therock_cmake_subproject_provide_package("${_amd_comgr_target_name}" amd_comgr lib/cmake/amd_comgr)
+  endif()
+  therock_cmake_subproject_activate("${_amd_comgr_target_name}")
 
   therock_test_validate_shared_lib(
     PATH amd-comgr/dist/lib
     LIB_NAMES
       libamd_comgr.so
   )
+
+  ##############################################################################
+  # amd-comgr stub
+  # Generates a stub that is used for dynamically loading amd-comgr in an
+  # appropriately private namespace. Since all uses of LLVM are hidden behind
+  # the comgr interface, this allows us to completely hide our LLVM and make it
+  # impossible to conflict.
+  # When enabled, this is declared as the "amd-comgr" target so that all
+  # dependencies in TheRock will use it. It also advertises the amd_comgr
+  # CMake package to be sourced from itself.
+  ##############################################################################
+
+  if(THEROCK_FLAG_COMGR_DELAY_LOAD)
+    therock_cmake_subproject_declare("${_amd_comgr_stub_target_name}"
+      FPRINT_SOURCE_HASH
+      USE_DIST_AMDGPU_TARGETS
+      NO_INSTALL_RPATH
+      LOGICAL_TARGET_NAME "amd-comgr-stub"
+      EXTERNAL_SOURCE_DIR "amd-comgr-stub"
+      BINARY_DIR "amd-comgr-stub"
+      BACKGROUND_BUILD
+      CMAKE_ARGS
+        -DAMD_COMGR_STAGE_PATH=${CMAKE_CURRENT_BINARY_DIR}/amd-comgr/stage
+      RUNTIME_DEPS
+        "${_amd_comgr_target_name}"
+    INTERFACE_LINK_DIRS
+      "lib"
+    INTERFACE_INSTALL_RPATH_DIRS
+      "lib"
+    )
+    therock_cmake_subproject_glob_c_sources("${_amd_comgr_stub_target_name}" SUBDIRS src)
+    therock_cmake_subproject_provide_package("${_amd_comgr_stub_target_name}" amd_comgr lib/cmake/amd_comgr_stub)
+    therock_cmake_subproject_activate("${_amd_comgr_stub_target_name}")
+
+    add_test(NAME amd_comgr_stub_test
+      COMMAND "${CMAKE_CURRENT_BINARY_DIR}/amd-comgr-stub/dist/bin/test_amd_comgr_stub"
+    )
+  endif()
 
   ##############################################################################
   # hipcc
@@ -158,8 +232,9 @@ if(THEROCK_ENABLE_COMPILER)
       run
     SUBPROJECT_DEPS
       amd-llvm
-      amd-comgr
       hipcc
+      "${_amd_comgr_target_name}"
+      ${_amd_comgr_stub_target_name}
   )
 endif(THEROCK_ENABLE_COMPILER)
 

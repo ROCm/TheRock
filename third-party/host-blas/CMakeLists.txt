@@ -30,7 +30,18 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       TOUCH "${_download_stamp}"
     )
 
+    # MSVC does not support VLA and AT&T assembly which are required by DYNAMIC_ARCH
+    # See: https://github.com/OpenMathLib/OpenBLAS/issues/2826#issuecomment-814170090
+    # Multi-arch support on Windows seems to be a problem not limited to MSVC
+    # See: https://github.com/OpenMathLib/OpenBLAS/issues/3985
+    if(WIN32)
+      set(_enable_dynamicArch "OFF")
+    else()
+      set(_enable_dynamicArch "ON")
+    endif()
+
     therock_cmake_subproject_declare(therock-host-blas
+      USE_DIST_AMDGPU_TARGETS
       BACKGROUND_BUILD
       EXCLUDE_FROM_ALL
       NO_MERGE_COMPILE_COMMANDS
@@ -45,10 +56,11 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       CMAKE_ARGS
         "-DSOURCE_DIR=${_source_dir}"
         -DBUILD_SHARED_LIBS=ON
-        # TODO: DYNAMIC_ARCH=ON produces illegal elf files
-        # See: https://github.com/ROCm/TheRock/issues/83
-        -DDYNAMIC_ARCH=OFF
         -DC_LAPACK=ON
+        # https://github.com/OpenMathLib/OpenBLAS?tab=readme-ov-file#x86x86-64
+        # Picking HASWELL as a baseline that supports modern AMD and Intel CPUs
+        -DTARGET=HASWELL
+        -DDYNAMIC_ARCH=${_enable_dynamicArch}
         -DBUILD_TESTING=OFF
       EXTRA_DEPENDS
         "${_download_stamp}"

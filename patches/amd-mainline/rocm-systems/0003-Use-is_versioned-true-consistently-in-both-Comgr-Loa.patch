@@ -10,18 +10,18 @@ Prior to this, RTCProgram was using is_version = true and device initialization 
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/projects/clr/rocclr/device/device.cpp b/projects/clr/rocclr/device/device.cpp
-index 6beb967129..e7554a32d8 100644
+index 5d07c2dbba..91bcbb9d71 100644
 --- a/projects/clr/rocclr/device/device.cpp
 +++ b/projects/clr/rocclr/device/device.cpp
-@@ -782,7 +782,7 @@ bool Device::ValidateComgr() {
- #if defined(USE_COMGR_LIBRARY)
+@@ -777,7 +777,7 @@ Device::~Device() {
+ 
+ bool Device::ValidateComgr() {
    // Check if Lightning compiler was requested
-   if (settings_->useLightning_) {
--    constexpr bool kComgrVersioned = false;
-+    constexpr bool kComgrVersioned = true;
-     std::call_once(amd::Comgr::initialized, amd::Comgr::LoadLib, kComgrVersioned);
-     // Use Lightning only if it's available
-     settings_->useLightning_ = amd::Comgr::IsReady();
+-  constexpr bool kComgrVersioned = false;
++  constexpr bool kComgrVersioned = true;
+   std::call_once(amd::Comgr::initialized, amd::Comgr::LoadLib, kComgrVersioned);
+   return amd::Comgr::IsReady();
+ }
 -- 
 2.43.0
 

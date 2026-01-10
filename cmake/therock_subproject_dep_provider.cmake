@@ -121,3 +121,52 @@ function(therock_reparse_super_project_find_package superproject_path package_na
   message(STATUS "Resolving super-project find_package(${_rewritten_pretty})")
   set(_therock_rewritten_superproject_find_package_sig ${_rewritten} PARENT_SCOPE)
 endfunction()
+
+# Action at a distance: sanitizers need to be able to find their runtime libraries,
+# so if configuring a sanitizer, we set the THEROCK_INCLUDE_CLANG_RESOURCE_DIR_RPATH
+# variable during toolchain setup. Now in the sub-project, we have access to clang
+# and can ask it what its resource dir is. We use this to form a proper relative
+# path and append it to the default RPATH dirs.
+if(THEROCK_INCLUDE_CLANG_RESOURCE_DIR_RPATH)
+  block(PROPAGATE THEROCK_PRIVATE_INSTALL_RPATH_DIRS THEROCK_PRIVATE_BUILD_RPATH_DIRS)
+    execute_process(
+      COMMAND "${CMAKE_CXX_COMPILER}" --print-resource-dir
+      OUTPUT_VARIABLE _abs_resource_dir
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      COMMAND_ERROR_IS_FATAL ANY
+    )
+    # This will yield an absolute path like: /some/long/path/lib/llvm/lib/clang/20
+    # The version number on the end is all we want as we will form the correct
+    # prefix relative path from that.
+    # The actual libraries live under lib/linux in that directory. We shamelessly
+    # just hardcode "linux" since that is the only system we do RPATH munging for.
+    cmake_path(GET _abs_resource_dir FILENAME _clang_version)
+    set(_prefix_resource_dir "lib/llvm/lib/clang/${_clang_version}")
+    list(APPEND THEROCK_PRIVATE_INSTALL_RPATH_DIRS "${_prefix_resource_dir}/lib/linux")
+    # Build tree needs absolute paths to the resource dir.
+    list(APPEND THEROCK_PRIVATE_BUILD_RPATH_DIRS "${_abs_resource_dir}/lib/linux")
+    message(STATUS "Added clang resource dir to RPATH: ${_prefix_resource_dir} (since sanitizer enabled)")
+  endblock()
+endif()
+
+# Setup THEROCK_SANITIZER_LAUNCHER.
+block(PROPAGATE THEROCK_SANITIZER_LAUNCHER)
+  set(THEROCK_SANITIZER_LAUNCHER)
+  if(LINUX AND THEROCK_SANITIZER STREQUAL "ASAN")
+    if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64" OR CMAKE_SYSTEM_PROCESSOR STREQUAL "amd64")
+      set(_arch_suffix "x86_64")
+    else()
+      message(FATAL_ERROR "Unknown processor ${CMAKE_SYSTEM_PROCESSOR}")
+    endif()
+    execute_process(
+      COMMAND ${CMAKE_CXX_COMPILER} "--print-file-name=libclang_rt.asan-${_arch_suffix}.so"
+      OUTPUT_VARIABLE _rt_path
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      COMMAND_ERROR_IS_FATAL ANY
+    )
+    set(THEROCK_SANITIZER_LAUNCHER
+      "${CMAKE_COMMAND}" -E env "LD_PRELOAD=${_rt_path}" --
+    )
+    message(STATUS "Sanitizer launcher: ${THEROCK_SANITIZER_LAUNCHER}")
+  endif()
+endblock()

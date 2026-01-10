@@ -14,16 +14,31 @@ from _therock_utils.hash_util import calculate_hash
 FILESET_TOOL = Path(__file__).parent.parent / "fileset_tool.py"
 
 ARTIFACT_DESCRIPTOR_1 = r"""
+[options]
+unmatched_exclude = "include/foobar.h"
+
+[components.doc]
+
 [components.doc."example/stage"]
+include = [
+    "**/*.so.1",
+]
+[components.lib."example/stage"]
 """
 
 
-def exec(args: list[str | Path], cwd: Path = FILESET_TOOL.parent) -> str:
+def capture(args: list[str | Path], cwd: Path = FILESET_TOOL.parent) -> str:
     args = [str(arg) for arg in args]
     print(f"++ Exec [{cwd}]$ {shlex.join(args)}")
     return subprocess.check_output(
         args, cwd=str(cwd), stdin=subprocess.DEVNULL
     ).decode()
+
+
+def exec(args: list[str | Path], cwd: Path = FILESET_TOOL.parent):
+    args = [str(arg) for arg in args]
+    print(f"++ Exec [{cwd}]$ {shlex.join(args)}")
+    return subprocess.check_call(args, cwd=str(cwd), stdin=subprocess.DEVNULL)
 
 
 def write_text(p: Path, text: str):
@@ -85,6 +100,13 @@ class FilesetToolTest(unittest.TestCase):
             ) as f:
                 f.write(b"Contents")
                 fset_executable(f)
+        write_text(
+            Path(input_dir / "example" / "stage" / "lib" / "libfoobar.so.1"), "foobar"
+        )
+        write_text(
+            Path(input_dir / "example" / "stage" / "include" / "foobar.h"), "foobar"
+        )
+
         exec(
             [
                 sys.executable,
@@ -92,12 +114,12 @@ class FilesetToolTest(unittest.TestCase):
                 "artifact",
                 "--descriptor",
                 descriptor_file,
-                "--output-dir",
-                artifact_dir,
+                "--artifact-name",
+                "test",
                 "--root-dir",
                 input_dir,
-                "--component",
                 "doc",
+                artifact_dir,
             ]
         )
 
@@ -167,7 +189,7 @@ class FilesetToolTest(unittest.TestCase):
             self.assertTrue(is_executable(flat1_dir / "share" / "doc" / "executable"))
 
         # Flatten the archive file and verify.
-        flatten_output = exec(
+        flatten_output = capture(
             [
                 sys.executable,
                 FILESET_TOOL,
@@ -189,6 +211,84 @@ class FilesetToolTest(unittest.TestCase):
         )
         if not is_windows():
             self.assertTrue(is_executable(flat2_dir / "share" / "doc" / "executable"))
+
+    @unittest.skipIf(is_windows(), "Hardlinks not supported the same way on Windows")
+    def testHardlinkPreservation(self):
+        """Test that hardlinks are preserved through archive/flatten cycle."""
+        input_dir = self.temp_dir / "input"
+        artifact_dir = self.temp_dir / "artifact_hardlink"
+        artifact_archive = self.temp_dir / "artifact_hardlink.tar.xz"
+        descriptor_file = self.temp_dir / "hardlink_descriptor.toml"
+        flat_dir = self.temp_dir / "flat_hardlink"
+
+        # Create descriptor
+        write_text(
+            descriptor_file,
+            """
+[components.lib."example/stage"]
+""",
+        )
+
+        # Create original file (use lib/ since lib component defaults include lib/**)
+        orig_file = input_dir / "example" / "stage" / "lib" / "original.so"
+        orig_file.parent.mkdir(parents=True, exist_ok=True)
+        orig_file.write_text("hardlink test content")
+
+        # Create hardlink
+        link_file = input_dir / "example" / "stage" / "lib" / "hardlink.so"
+        os.link(orig_file, link_file)
+
+        # Verify they share inode before archiving
+        self.assertEqual(os.stat(orig_file).st_ino, os.stat(link_file).st_ino)
+
+        # Create artifact
+        exec(
+            [
+                sys.executable,
+                FILESET_TOOL,
+                "artifact",
+                "--descriptor",
+                descriptor_file,
+                "--artifact-name",
+                "test",
+                "--root-dir",
+                input_dir,
+                "lib",
+                artifact_dir,
+            ]
+        )
+
+        # Archive it
+        exec(
+            [
+                sys.executable,
+                FILESET_TOOL,
+                "artifact-archive",
+                artifact_dir,
+                "-o",
+                artifact_archive,
+            ]
+        )
+
+        # Flatten from archive
+        exec(
+            [
+                sys.executable,
+                FILESET_TOOL,
+                "artifact-flatten",
+                artifact_archive,
+                "-o",
+                flat_dir,
+            ]
+        )
+
+        # Verify hardlinks are preserved (same inode)
+        flat_orig = flat_dir / "lib" / "original.so"
+        flat_link = flat_dir / "lib" / "hardlink.so"
+        self.assertTrue(flat_orig.exists())
+        self.assertTrue(flat_link.exists())
+        self.assertEqual(os.stat(flat_orig).st_ino, os.stat(flat_link).st_ino)
+        self.assertEqual(flat_orig.read_text(), "hardlink test content")
 
 
 if __name__ == "__main__":

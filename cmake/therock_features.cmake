@@ -9,6 +9,8 @@
 #   THEROCK_ENABLE_${feature_name}: boolean of whether enabled/disabled
 #   THEROCK_REQUIRES_${feature_name}: List of features that are required to
 #     be enabled for this feature
+#   THEROCK_PLATFORM_DISABLED_${feature_name}: List of platforms where this
+#     feature is disabled (only set if DISABLE_PLATFORMS is specified)
 #   THEROCK_ALL_FEATURES: Added to this global list of features.
 #
 # A feature is enabled by default unless if the GROUP keyword is specified.
@@ -18,7 +20,7 @@ function(therock_add_feature feature_name)
   cmake_parse_arguments(PARSE_ARGV 1 ARG
     ""
     "DEFAULT;GROUP;DESCRIPTION"
-    "REQUIRES"
+    "REQUIRES;DISABLE_PLATFORMS"
   )
 
   set(_default_enabled ON)
@@ -27,6 +29,21 @@ function(therock_add_feature feature_name)
       set(_default_enabled OFF)
     endif()
   endif()
+
+  # Check if current platform is in DISABLE_PLATFORMS list
+  # Always set the platform disabled list if DISABLE_PLATFORMS is specified
+  if(ARG_DISABLE_PLATFORMS)
+    # Set in both current and parent scope so subsequent features can see it
+    set(THEROCK_PLATFORM_DISABLED_${feature_name} "${ARG_DISABLE_PLATFORMS}")
+    set(THEROCK_PLATFORM_DISABLED_${feature_name} "${ARG_DISABLE_PLATFORMS}" PARENT_SCOPE)
+
+    string(TOLOWER "${CMAKE_SYSTEM_NAME}" _system_lower)
+    if(_system_lower IN_LIST ARG_DISABLE_PLATFORMS)
+      set(_default_enabled OFF)
+      # If user tries to force enable, we'll check later and error
+    endif()
+  endif()
+
   if(THEROCK_RESET_FEATURES)
     set(_force "FORCE")
   endif()
@@ -35,16 +52,41 @@ function(therock_add_feature feature_name)
   if("${feature_name}" IN_LIST THEROCK_ALL_FEATURES)
     message(FATAL_ERROR "CMake feature already defined: ${feature_name}")
   endif()
+
+  # Filter out requirements that are disabled on the current platform
+  set(_filtered_requires)
   foreach(require ${ARG_REQUIRES})
     if(NOT DEFINED THEROCK_ENABLE_${require})
       message(FATAL_ERROR "CMake feature order error: ${feature_name} requires ${require} which was not defined first")
     endif()
+    # Check if this requirement is disabled on the current platform
+    # by checking if it's in the list of platform-disabled features
+    if(DEFINED THEROCK_PLATFORM_DISABLED_${require})
+      # Skip this requirement on platforms where it's disabled
+      string(TOLOWER "${CMAKE_SYSTEM_NAME}" _system_lower)
+      if(NOT _system_lower IN_LIST THEROCK_PLATFORM_DISABLED_${require})
+        list(APPEND _filtered_requires ${require})
+      endif()
+    else()
+      list(APPEND _filtered_requires ${require})
+    endif()
   endforeach()
+  # Use filtered requirements
+  set(ARG_REQUIRES ${_filtered_requires})
 
   # Set up the cache option and inject the effective value into the parent
   # scope.
   set(THEROCK_ENABLE_${feature_name} ${_default_enabled} CACHE BOOL "${ARG_DESCRIPTION}" ${_force})
   set(_actual $CACHE{THEROCK_ENABLE_${feature_name}})
+
+  # Error if user tries to enable a feature that's disabled on current platform
+  if(_actual AND ARG_DISABLE_PLATFORMS)
+    string(TOLOWER "${CMAKE_SYSTEM_NAME}" _system_lower)
+    if(_system_lower IN_LIST ARG_DISABLE_PLATFORMS)
+      message(FATAL_ERROR "${feature_name} is not supported on ${CMAKE_SYSTEM_NAME}")
+    endif()
+  endif()
+
   set(THEROCK_ENABLE_${feature_name} "${_actual}" PARENT_SCOPE)
   set(THEROCK_REQUIRES_${feature_name} ${ARG_REQUIRES} PARENT_SCOPE)
   set(_all_features ${THEROCK_ALL_FEATURES})

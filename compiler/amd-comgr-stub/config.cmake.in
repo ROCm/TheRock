@@ -1,0 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier:  MIT
+
+@PACKAGE_INIT@
+
+include ( "${CMAKE_CURRENT_LIST_DIR}/amd_comgr-targets.cmake" )
