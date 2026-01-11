@@ -646,38 +646,14 @@ def do_build_pytorch(
     pytorch_build_version_parsed = parse(pytorch_build_version)
     print(f"  Using PYTORCH_BUILD_VERSION: {pytorch_build_version}")
 
-    # Detect exactly PyTorch 2.9.x
-    is_pytorch_2_9 = pytorch_build_version_parsed.release[:2] == (2, 9)
-
-    ## Enable FBGEMM_GENAI on Linux for PyTorch, as it is available only for 2.9 on rocm/pytorch
-    ## and causes build failures for other PyTorch versions
-    ## Warn user when enabling it manually.
-    ## https://github.com/ROCm/TheRock/issues/2056
+    # Enable FBGEMM_GENAI by default on Linux for all PyTorch versions
     if not is_windows:
-        # Enabling/Disabling FBGEMM_GENAI based on Pytorch version in Linux
-        if is_pytorch_2_9:
-            # Default ON for 2.9.x, unless explicitly disabled
-            # args.enable_pytorch_fbgemm_genai_linux can be set to false
-            # by passing --no-enable-pytorch-fbgemm-genai-linux as input
-            if args.enable_pytorch_fbgemm_genai_linux is False:
-                use_fbgemm_genai = "OFF"
-                print(f"  [WARN] User-requested override to set FBGEMM_GENAI = OFF.")
-            else:
-                use_fbgemm_genai = "ON"
+        if args.enable_pytorch_fbgemm_genai_linux is False:
+            use_fbgemm_genai = "OFF"
+            print("  FBGEMM_GENAI explicitly disabled by user.")
         else:
-            # Default OFF for all other versions, unless explicitly enabled
-            if args.enable_pytorch_fbgemm_genai_linux is True:
-                use_fbgemm_genai = "ON"
-            else:
-                use_fbgemm_genai = "OFF"
-
-            if use_fbgemm_genai == "ON":
-                print(f"  [WARN] User-requested override to set FBGEMM_GENAI = ON.")
-                print(
-                    f"""  [WARN] Please note that FBGEMM_GENAI is not available for PyTorch 2.7, and enabling it may cause build failures
-                    for PyTorch >= 2.8 (Except 2.9). See status of issue https://github.com/ROCm/TheRock/issues/2056
-                      """
-                )
+            use_fbgemm_genai = "ON"
+            print("FBGEMM_GENAI enabled by default.")
 
         env["USE_FBGEMM_GENAI"] = use_fbgemm_genai
         print(f"FBGEMM_GENAI enabled: {env['USE_FBGEMM_GENAI'] == 'ON'}")
