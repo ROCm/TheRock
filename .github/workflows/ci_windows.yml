@@ -109,6 +109,7 @@ jobs:
       test_labels: ${{ inputs.test_labels }}
       sanity_check_only_for_family: ${{ inputs.sanity_check_only_for_family == true }}
       project_to_test: ${{ inputs.project_to_test }}
+      therock_ref: ${{ inputs.therock_ref }}
 
   build_windows_python_packages:
     needs: [build_windows_artifacts]

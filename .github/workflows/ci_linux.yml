@@ -112,6 +112,7 @@ jobs:
       test_labels: ${{ inputs.test_labels }}
       project_to_test: ${{ inputs.project_to_test }}
       sanity_check_only_for_family: ${{ inputs.sanity_check_only_for_family == true }}
+      therock_ref: ${{ inputs.therock_ref }}
 
   test_linux_benchmarks:
     needs: [build_portable_linux_artifacts]
