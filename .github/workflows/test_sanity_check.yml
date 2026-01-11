@@ -42,7 +42,9 @@ permissions:
 
 jobs:
   test_sanity_check:
-    name: "Sanity ROCM Test"
+    # For external repos (rocm-libraries, rocm-systems), include platform and GPU family in job name.
+    # TheRock repo keeps the simple name. Detection via github.repository check.
+    name: ${{ github.repository != 'ROCm/TheRock' && format('Sanity ROCM Test {0}::{1}', inputs.platform, inputs.amdgpu_families) || 'Sanity ROCM Test' }}
     runs-on: ${{ inputs.test_runs_on }}
     # Running docker with cap-add and -v /lib/modiles, by recommendation of Github: https://rocm.docs.amd.com/projects/amdsmi/en/amd-staging/how-to/setup-docker-container.html
     container:

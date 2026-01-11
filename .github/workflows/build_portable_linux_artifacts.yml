@@ -71,6 +71,7 @@ jobs:
   build_portable_linux_artifacts:
     # For external repos (rocm-libraries, rocm-systems), include platform and GPU family in job name
     # to make them easier to identify in GitHub Actions UI. Internal builds keep simple 'Build' name.
+    # Test workflows use the same pattern.
     name: ${{ inputs.external_source_checkout && format('Build Linux::{0}', inputs.amdgpu_families) || 'Build' }} (xfail ${{ inputs.expect_failure }})
     # azure-linux-scale-rocm are used for regular CI builds
     # azure-linux-scale-rocm-heavy are used for CI builds that require more resources (ex: ASAN builds)
