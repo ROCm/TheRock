@@ -66,7 +66,9 @@ permissions:
 
 jobs:
   build_windows_artifacts:
-    name: Build ${{ inputs.build_variant_label }} (xfail ${{ inputs.expect_failure }})
+    # For external repos (rocm-libraries, rocm-systems), include platform, GPU family, and build variant
+    # in job name to make them easier to identify in GitHub Actions UI. Internal builds use 'Build {variant}' format.
+    name: ${{ inputs.external_source_checkout && format('Build Windows::{0}::{1}', inputs.amdgpu_families, inputs.build_variant_label) || format('Build {0}', inputs.build_variant_label) }} (xfail ${{ inputs.expect_failure }})
     runs-on: azure-windows-scale-rocm
     continue-on-error: ${{ inputs.expect_failure }}
     timeout-minutes: 720 # 12 hour timeout
