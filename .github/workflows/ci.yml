@@ -66,7 +66,7 @@ on:
       projects:
         type: string
         default: ""
-        description: "Override: comma-separated list of project paths to test (e.g., 'projects/rocprim,projects/hipcub'). Leave blank for normal behavior (auto-detect from PR changes). Use 'all' to test all projects."
+        description: "Override: comma-separated list of project paths to test (e.g., 'projects/rocprim,projects/hipcub'). Leave blank for normal behavior (detect from PR changes). Use 'all' to test all projects."
       linux_amdgpu_families:
         type: string
         default: ""

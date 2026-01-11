@@ -27,7 +27,7 @@ on:
       projects:
         type: string
         default: ""
-        description: "Override: comma-separated list of project paths (e.g., 'projects/rocprim,projects/hipcub'). Blank = auto-detect."
+        description: "Override: comma-separated list of project paths (e.g., 'projects/rocprim,projects/hipcub'). Blank = detect from changes."
       linux_amdgpu_families:
         type: string
         default: ""

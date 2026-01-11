@@ -116,7 +116,7 @@ jobs:
         run: |
           pip install -r $THEROCK_DIR/requirements.txt
 
-      - name: Auto-detect external source configuration
+      - name: Detect external source configuration
         if: ${{ inputs.external_source_checkout }}
         id: detect
         run: python3 $THEROCK_DIR/build_tools/github_actions/detect_external_repo_config.py "${{ inputs.repository_override || github.repository }}" --platform windows
@@ -155,11 +155,6 @@ jobs:
           git config fetch.parallel 10
           git config --global core.symlinks true
 
-      - name: DVC pull
-        if: ${{ inputs.external_source_checkout && steps.detect.outputs.enable_dvc == 'true' }}
-        working-directory: source-repo
-        run: dvc pull
-
       # TODO: We shouldn't be using a cache on actual release branches, but it
       # really helps for iteration time.
       - name: Enable cache
@@ -178,6 +173,11 @@ jobs:
           else
             python $THEROCK_DIR/build_tools/fetch_sources.py --jobs 12
           fi
+
+      - name: DVC pull (external repos only)
+        if: ${{ inputs.external_source_checkout && steps.detect.outputs.enable_dvc == 'true' }}
+        working-directory: source-repo
+        run: dvc pull
 
       - name: Patch external repo
         if: ${{ inputs.external_source_checkout }}
