@@ -10,38 +10,32 @@ on:
         type: boolean
         default: false
         description: "If true, group all families into one entry per build_variant instead of expanding cross-product"
+      # The following inputs are for external repo integration (rocm-libraries, rocm-systems).
+      # They allow external repos to override repository, checkout paths, and specify which projects to build/test.
       external_source_checkout:
         type: boolean
-        description: "Whether source is from external repo (rocm-libraries/systems)"
         default: false
+        description: "Whether source is from external repo (rocm-libraries/systems)"
       therock_ref:
         type: string
-        description: "TheRock git ref to use (for external repos)"
         default: ""
+        description: "TheRock git ref to use (for external repos)"
       repository_override:
         type: string
-        description: "Override github.repository for testing (e.g., 'ROCm/rocm-libraries')"
         default: ""
+        description: "Override github.repository for testing (e.g., 'ROCm/rocm-libraries')"
       projects:
         type: string
-        description: "Override: comma-separated list of project paths (e.g., 'projects/rocprim,projects/hipcub'). Blank = auto-detect."
         default: ""
+        description: "Override: comma-separated list of project paths (e.g., 'projects/rocprim,projects/hipcub'). Blank = auto-detect."
       linux_amdgpu_families:
         type: string
-        description: "Comma-separated list of Linux GPU families to build and test"
         default: ""
+        description: "Comma-separated list of Linux GPU families to build and test"
       windows_amdgpu_families:
         type: string
+        default: ""
         description: "Comma-separated list of Windows GPU families to build and test"
-        default: ""
-      linux_test_labels:
-        type: string
-        description: "Limit Linux tests to specific labels"
-        default: ""
-      windows_test_labels:
-        type: string
-        description: "Limit Windows tests to specific labels"
-        default: ""
     outputs:
       enable_build_jobs:
         description: Whether to enable build jobs.
@@ -127,10 +121,10 @@ jobs:
         id: configure
         env:
           INPUT_LINUX_AMDGPU_FAMILIES: ${{ inputs.linux_amdgpu_families || github.event.inputs.linux_amdgpu_families }}
-          LINUX_TEST_LABELS: ${{ inputs.linux_test_labels || github.event.inputs.linux_test_labels }}
+          LINUX_TEST_LABELS: ${{ github.event.inputs.linux_test_labels }}
           LINUX_USE_PREBUILT_ARTIFACTS: ${{ github.event.inputs.linux_use_prebuilt_artifacts }}
           INPUT_WINDOWS_AMDGPU_FAMILIES: ${{ inputs.windows_amdgpu_families || github.event.inputs.windows_amdgpu_families }}
-          WINDOWS_TEST_LABELS: ${{ inputs.windows_test_labels || github.event.inputs.windows_test_labels }}
+          WINDOWS_TEST_LABELS: ${{ github.event.inputs.windows_test_labels }}
           WINDOWS_USE_PREBUILT_ARTIFACTS: ${{ github.event.inputs.windows_use_prebuilt_artifacts }}
           BUILD_VARIANT: ${{ inputs.build_variant }}
           MULTI_ARCH: ${{ inputs.multi_arch }}
@@ -153,7 +147,8 @@ jobs:
         id: rocm_package_version
         run: |
           if [[ "${{ inputs.external_source_checkout }}" == "true" ]]; then
-            python ./TheRock/build_tools/compute_rocm_package_version.py --release-type=dev
+            # Use ADHOCBUILD for external repos to avoid building Python packages
+            echo "rocm_package_version=ADHOCBUILD" >> $GITHUB_OUTPUT
           else
             python ./build_tools/compute_rocm_package_version.py --release-type=dev
           fi

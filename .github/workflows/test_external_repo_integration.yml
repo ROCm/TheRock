@@ -4,7 +4,8 @@ name: Test External Repo Integration
 # github.repository value that is normally used for repository detection.
 #
 # Automatically runs on PRs that modify CI infrastructure files.
-# Can also be manually triggered with optional project filtering.
+#
+# TODO: Add workflow_dispatch for manual testing with project/test filtering options
 
 on:
   pull_request:
@@ -12,39 +13,18 @@ on:
       - '.github/workflows/ci*.yml'
       - '.github/workflows/setup.yml'
       - '.github/workflows/build_*.yml'
+      - '.github/workflows/test_*.yml'
       - '.github/workflows/test_external_repo_integration.yml'
+      - '.github/actions/setup_test_environment/**'
       - 'build_tools/github_actions/configure_ci.py'
       - 'build_tools/github_actions/detect_external_repo_config.py'
       - 'build_tools/github_actions/detect_external_projects.py'
       - 'build_tools/github_actions/external_repo_project_maps.py'
+      - 'build_tools/github_actions/fetch_test_configurations.py'
       - 'build_tools/github_actions/amdgpu_family_matrix.py'
-  workflow_dispatch:
-    inputs:
-      test_scenario:
-        type: choice
-        description: "Which external repo to test"
-        required: true
-        default: "rocm-libraries"
-        options:
-          - rocm-libraries
-          - rocm-systems
-          - both
-      rocm_libraries_projects:
-        type: string
-        description: "rocm-libraries: Override project detection (e.g., 'projects/rocprim,projects/hipcub'). Blank = auto-detect."
-        default: ""
-      rocm_systems_projects:
-        type: string
-        description: "rocm-systems: Override project detection (e.g., 'projects/clr,projects/rocminfo'). Blank = auto-detect."
-        default: ""
-      linux_test_labels:
-        type: string
-        description: "Limit Linux tests to specific labels (e.g., 'test:rocprim,test:hipcub'). Blank = run all detected tests."
-        default: ""
-      windows_test_labels:
-        type: string
-        description: "Limit Windows tests to specific labels (e.g., 'test:rocprim,test:hipcub'). Blank = run all detected tests."
-        default: ""
+      - 'build_tools/github_actions/github_actions_utils.py'
+      - 'build_tools/install_rocm_from_artifacts.py'
+      - 'build_tools/fetch_artifacts.py'
 
 permissions:
   contents: read
@@ -53,23 +33,16 @@ jobs:
   # Test rocm-libraries integration
   test-rocm-libraries:
     name: "Test rocm-libraries Integration"
-    # Run on workflow_dispatch with selected scenario, or on PR (tests both)
-    if: >-
-      ${{
-        (github.event_name == 'workflow_dispatch' && (inputs.test_scenario == 'rocm-libraries' || inputs.test_scenario == 'both')) ||
-        (github.event_name == 'pull_request')
-      }}
     uses: ./.github/workflows/ci.yml
     secrets: inherit
     with:
       external_source_checkout: true
       therock_ref: ${{ github.ref }}
       repository_override: "ROCm/rocm-libraries"
-      projects: ${{ inputs.rocm_libraries_projects || '' }}
+      # Test with rocprim (fast build) to simulate a typical PR scenario
+      projects: 'projects/rocprim'
       linux_amdgpu_families: "gfx94X"
       windows_amdgpu_families: "gfx110X"
-      linux_test_labels: ${{ inputs.linux_test_labels || '' }}
-      windows_test_labels: ${{ inputs.windows_test_labels || '' }}
     permissions:
       contents: read
       id-token: write
@@ -77,23 +50,16 @@ jobs:
   # Test rocm-systems integration
   test-rocm-systems:
     name: "Test rocm-systems Integration"
-    # Run on workflow_dispatch with selected scenario, or on PR (tests both)
-    if: >-
-      ${{
-        (github.event_name == 'workflow_dispatch' && (inputs.test_scenario == 'rocm-systems' || inputs.test_scenario == 'both')) ||
-        (github.event_name == 'pull_request')
-      }}
     uses: ./.github/workflows/ci.yml
     secrets: inherit
     with:
       external_source_checkout: true
       therock_ref: ${{ github.ref }}
       repository_override: "ROCm/rocm-systems"
-      projects: ${{ inputs.rocm_systems_projects || '' }}
+      # Test with clr (core component) to simulate a typical PR scenario
+      projects: 'projects/clr'
       linux_amdgpu_families: "gfx94X"
       windows_amdgpu_families: "gfx110X"
-      linux_test_labels: ${{ inputs.linux_test_labels || '' }}
-      windows_test_labels: ${{ inputs.windows_test_labels || '' }}
     permissions:
       contents: read
       id-token: write

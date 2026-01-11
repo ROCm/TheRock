@@ -31,16 +31,18 @@ REPO_CONFIGS: Dict[str, Dict[str, Any]] = {
     "rocm-libraries": {
         "cmake_source_var": "THEROCK_ROCM_LIBRARIES_SOURCE_DIR",
         "patches_dir": "rocm-libraries",
-        "fetch_exclusion": "--no-include-rocm-libraries",
+        "fetch_exclusion": "--no-include-rocm-libraries --no-include-ml-frameworks",
         "enable_dvc": True,
-        "enable_ck": True,
     },
     "rocm-systems": {
         "cmake_source_var": "THEROCK_ROCM_SYSTEMS_SOURCE_DIR",
         "patches_dir": "rocm-systems",
-        "fetch_exclusion": "--no-include-rocm-systems",
-        "enable_dvc": False,
-        "enable_ck": False,
+        "fetch_exclusion": "--no-include-rocm-systems --no-include-rocm-libraries --no-include-ml-frameworks",
+        # DVC is required on Windows but not Linux for rocm-systems
+        "enable_dvc": {
+            "linux": False,
+            "windows": True,
+        },
     },
     # Future repos can be added here:
     # "composable_kernel": {...},
@@ -86,20 +88,32 @@ def get_repo_config(repo_name: str) -> Dict[str, Any]:
     return REPO_CONFIGS[repo_name]
 
 
-def output_github_actions_vars(config: Dict[str, Any]) -> None:
+def output_github_actions_vars(config: Dict[str, Any], platform: str = None) -> None:
     """
     Output configuration as GitHub Actions environment variables.
 
     Args:
         config: Configuration dictionary
+        platform: Platform name ('linux' or 'windows') for platform-specific values
     """
     github_output = os.environ.get("GITHUB_OUTPUT")
 
     # Convert boolean values to lowercase strings for bash compatibility
     output_lines = []
     for key, value in config.items():
+        # Handle platform-specific values (dict with 'linux'/'windows' keys)
+        if isinstance(value, dict) and platform and platform in value:
+            value = value[platform]
+
         if isinstance(value, bool):
             value_str = str(value).lower()
+        elif isinstance(value, dict):
+            # If still a dict after platform resolution, skip or use a default
+            print(
+                f"WARNING: {key} has platform-specific config but no platform specified",
+                file=sys.stderr,
+            )
+            value_str = "false"  # Default to false for safety
         else:
             value_str = str(value)
         output_lines.append(f"{key}={value_str}")
@@ -127,6 +141,12 @@ def main():
         help="GitHub workspace path for formatting CMake options",
     )
     parser.add_argument(
+        "--platform",
+        type=str,
+        choices=["linux", "windows"],
+        help="Platform for platform-specific configuration (linux or windows)",
+    )
+    parser.add_argument(
         "--list",
         action="store_true",
         help="List all known repository configurations",
@@ -146,6 +166,7 @@ def main():
 
         # Log to stderr for visibility in CI logs
         print(f"Detected repository: {repo_name}", file=sys.stderr)
+        print(f"Platform: {args.platform or 'not specified'}", file=sys.stderr)
         print(f"Configuration: {config}", file=sys.stderr)
 
         # Format the full CMake option if workspace path provided
@@ -157,7 +178,7 @@ def main():
                 file=sys.stderr,
             )
 
-        output_github_actions_vars(config)
+        output_github_actions_vars(config, platform=args.platform)
         return 0
 
     except ValueError as e:

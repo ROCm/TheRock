@@ -628,14 +628,23 @@ def main(base_args, linux_families, windows_families):
     print("")
 
     # Check if we have external project configs (from detect_external_projects.py)
-    external_project_configs = base_args.get("external_project_configs")
+    linux_external_project_configs = base_args.get("linux_external_project_configs")
+    windows_external_project_configs = base_args.get("windows_external_project_configs")
 
     # For external repos, we cross-product: projects × GPU families
     # The matrix will have entries like:
     # {project_to_test, cmake_options, amdgpu_family, test_runs_on, ...}
-    if external_project_configs:
+    if linux_external_project_configs or windows_external_project_configs:
+        linux_count = (
+            len(linux_external_project_configs) if linux_external_project_configs else 0
+        )
+        windows_count = (
+            len(windows_external_project_configs)
+            if windows_external_project_configs
+            else 0
+        )
         print(
-            f"Using external project configurations: {len(external_project_configs)} project(s)"
+            f"Using external project configurations: Linux={linux_count}, Windows={windows_count}"
         )
 
     # Generate GPU family variants first
@@ -671,39 +680,34 @@ def main(base_args, linux_families, windows_families):
     print("")
 
     # For external repos, cross-product project configs with GPU family variants
-    if external_project_configs:
+    if linux_external_project_configs or windows_external_project_configs:
         print("\n=== Cross-producting projects with GPU families ===")
 
         # Cross-product Linux: projects × GPU families
         linux_final_variants = []
-        for project_config in external_project_configs:
-            for gpu_variant in linux_variants_output:
-                combined = {
-                    **gpu_variant,  # GPU family info (family, test-runs-on, build_variant_*, artifact_group)
-                    "project_to_test": project_config["project_to_test"],
-                    "cmake_options": project_config["cmake_options"],
-                }
-                # Update artifact_group to include project
-                project_name = project_config["project_to_test"].split(",")[0]
-                combined["artifact_group"] = (
-                    f"{project_name}-{gpu_variant.get('artifact_group', gpu_variant.get('family', 'unknown'))}"
-                )
-                linux_final_variants.append(combined)
+        if linux_external_project_configs:
+            for project_config in linux_external_project_configs:
+                for gpu_variant in linux_variants_output:
+                    combined = {
+                        **gpu_variant,  # GPU family info (family, test-runs-on, build_variant_*, artifact_group)
+                        "project_to_test": project_config["project_to_test"],
+                        "cmake_options": project_config["cmake_options"],
+                    }
+                    # Keep artifact_group as-is (GPU family only) since artifact names don't include project prefix
+                    linux_final_variants.append(combined)
 
         # Cross-product Windows: projects × GPU families
         windows_final_variants = []
-        for project_config in external_project_configs:
-            for gpu_variant in windows_variants_output:
-                combined = {
-                    **gpu_variant,
-                    "project_to_test": project_config["project_to_test"],
-                    "cmake_options": project_config["cmake_options"],
-                }
-                project_name = project_config["project_to_test"].split(",")[0]
-                combined["artifact_group"] = (
-                    f"{project_name}-{gpu_variant.get('artifact_group', gpu_variant.get('family', 'unknown'))}"
-                )
-                windows_final_variants.append(combined)
+        if windows_external_project_configs:
+            for project_config in windows_external_project_configs:
+                for gpu_variant in windows_variants_output:
+                    combined = {
+                        **gpu_variant,
+                        "project_to_test": project_config["project_to_test"],
+                        "cmake_options": project_config["cmake_options"],
+                    }
+                    # Keep artifact_group as-is (GPU family only) since artifact names don't include project prefix
+                    windows_final_variants.append(combined)
 
         linux_variants_output = linux_final_variants
         windows_variants_output = windows_final_variants
@@ -717,6 +721,12 @@ def main(base_args, linux_families, windows_families):
     if is_schedule:
         enable_build_jobs = True
         test_type = "full"
+    # For workflow_dispatch from external repos, always enable builds
+    elif is_workflow_dispatch and (
+        linux_external_project_configs or windows_external_project_configs
+    ):
+        print("workflow_dispatch from external repo - enabling builds")
+        enable_build_jobs = True
     else:
         modified_paths = get_modified_paths(base_ref)
         print("modified_paths (max 200):", modified_paths[:200])
@@ -855,11 +865,10 @@ if __name__ == "__main__":
 
     # For external repos, call detect_external_projects first to get project-based matrix
     if is_external_repo and repo_name:
-        # Call detect_external_projects.py to get project configurations
         print(f"\n=== Detecting projects for {repo_name} ===")
 
         try:
-            # Run the detection script to get project configurations
+            # Run the detection script once - it returns configs for both platforms
             result = subprocess.run(
                 [
                     sys.executable,
@@ -872,7 +881,7 @@ if __name__ == "__main__":
                 capture_output=True,
                 text=True,
                 timeout=120,
-                env=os.environ,  # Pass through all environment variables
+                env=os.environ,
             )
 
             if result.returncode != 0:
@@ -880,43 +889,50 @@ if __name__ == "__main__":
                 print(result.stderr)
                 sys.exit(1)
 
-            # Parse the output to get project configurations
+            # Parse the output
             output_text = result.stdout
             print(output_text)
 
-            # Extract JSON from output (should be at the end)
-            # Look for the last complete JSON object in the output
+            # Extract JSON from output
             json_start = output_text.rfind("=== Project Detection Results ===")
+            linux_project_configs = []
+            windows_project_configs = []
+
             if json_start >= 0:
-                # Find the JSON object after the marker
                 json_start = output_text.find("{", json_start)
                 if json_start >= 0:
                     json_str = output_text[json_start:]
-                    project_detection = json.loads(json_str)
-                    project_configs = project_detection.get("projects", [])
+                    try:
+                        project_detection = json.loads(json_str)
+                        linux_project_configs = project_detection.get(
+                            "linux_projects", []
+                        )
+                        windows_project_configs = project_detection.get(
+                            "windows_projects", []
+                        )
+                    except json.JSONDecodeError as e:
+                        print(
+                            f"ERROR: Failed to parse JSON from detect_external_projects.py output:"
+                        )
+                        print(f"  {e}")
+                        print(f"  JSON string attempted: {json_str[:200]}...")
+                        sys.exit(1)
                 else:
-                    project_configs = []
+                    print(
+                        "ERROR: Could not find JSON object in detect_external_projects.py output"
+                    )
+                    print(
+                        "  Expected '===' Project Detection Results ===' followed by JSON"
+                    )
+                    sys.exit(1)
             else:
-                project_configs = []
-
-            print(f"\nFound {len(project_configs)} project configuration(s)")
-
-            # If no projects detected, skip builds entirely
-            if not project_configs:
-                print("No projects to build - outputting empty matrix")
-                output = {
-                    "linux_variants": json.dumps([]),
-                    "linux_test_labels": json.dumps([]),
-                    "windows_variants": json.dumps([]),
-                    "windows_test_labels": json.dumps([]),
-                    "enable_build_jobs": json.dumps(False),
-                    "test_type": "smoke",
-                }
-                gha_set_output(output)
-                sys.exit(0)
-
-            # Store project configs to be cross-producted with GPU families in main()
-            base_args["external_project_configs"] = project_configs
+                print(
+                    "ERROR: Could not find '=== Project Detection Results ===' marker in output"
+                )
+                print(
+                    "  This indicates detect_external_projects.py did not produce expected output"
+                )
+                sys.exit(1)
 
         except subprocess.TimeoutExpired:
             print("ERROR: detect_external_projects.py timed out")
@@ -927,7 +943,27 @@ if __name__ == "__main__":
 
             traceback.print_exc()
             sys.exit(1)
-    else:
-        base_args["external_project_configs"] = None
+
+        print(
+            f"\nLinux: {len(linux_project_configs)} config(s), Windows: {len(windows_project_configs)} config(s)"
+        )
+
+        # If no projects detected for either platform, skip builds
+        if not linux_project_configs and not windows_project_configs:
+            print("No projects to build - outputting empty matrix")
+            output = {
+                "linux_variants": json.dumps([]),
+                "linux_test_labels": json.dumps([]),
+                "windows_variants": json.dumps([]),
+                "windows_test_labels": json.dumps([]),
+                "enable_build_jobs": json.dumps(False),
+                "test_type": "smoke",
+            }
+            gha_set_output(output)
+            sys.exit(0)
+
+        # Store platform-specific project configs
+        base_args["linux_external_project_configs"] = linux_project_configs
+        base_args["windows_external_project_configs"] = windows_project_configs
 
     main(base_args, linux_families, windows_families)

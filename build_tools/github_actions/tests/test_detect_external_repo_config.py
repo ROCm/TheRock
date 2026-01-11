@@ -42,18 +42,25 @@ class TestGetRepoConfig(unittest.TestCase):
             config["cmake_source_var"], "THEROCK_ROCM_LIBRARIES_SOURCE_DIR"
         )
         self.assertEqual(config["patches_dir"], "rocm-libraries")
-        self.assertEqual(config["fetch_exclusion"], "--no-include-rocm-libraries")
+        self.assertEqual(
+            config["fetch_exclusion"],
+            "--no-include-rocm-libraries --no-include-ml-frameworks",
+        )
         self.assertTrue(config["enable_dvc"])
-        self.assertTrue(config["enable_ck"])
 
     def test_rocm_systems_config(self):
         """Test rocm-systems configuration"""
         config = get_repo_config("rocm-systems")
         self.assertEqual(config["cmake_source_var"], "THEROCK_ROCM_SYSTEMS_SOURCE_DIR")
         self.assertEqual(config["patches_dir"], "rocm-systems")
-        self.assertEqual(config["fetch_exclusion"], "--no-include-rocm-systems")
-        self.assertFalse(config["enable_dvc"])
-        self.assertFalse(config["enable_ck"])
+        self.assertEqual(
+            config["fetch_exclusion"],
+            "--no-include-rocm-systems --no-include-rocm-libraries --no-include-ml-frameworks",
+        )
+        # enable_dvc is platform-specific for rocm-systems
+        self.assertIsInstance(config["enable_dvc"], dict)
+        self.assertFalse(config["enable_dvc"]["linux"])
+        self.assertTrue(config["enable_dvc"]["windows"])
 
     def test_unknown_repo_raises_error(self):
         """Test that unknown repository raises ValueError"""
@@ -69,7 +76,6 @@ class TestGetRepoConfig(unittest.TestCase):
             "patches_dir",
             "fetch_exclusion",
             "enable_dvc",
-            "enable_ck",
         }
         for repo_name, config in REPO_CONFIGS.items():
             with self.subTest(repo=repo_name):

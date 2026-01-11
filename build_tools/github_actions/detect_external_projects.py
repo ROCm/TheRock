@@ -29,19 +29,27 @@ Local git history with at least fetch-depth of 2 for file diffing.
 -----------
 
 Returns (via stdout as JSON):
-  * projects: List of project configurations, each containing:
-    - project_to_test: Comma-separated list of projects to test
-    - cmake_options: Space-separated CMake configuration flags
-    - artifact_group: Identifier for artifact grouping (same as project key)
+  * linux_projects: List of Linux project configurations
+  * windows_projects: List of Windows project configurations
+
+Each project configuration contains:
+  - project_to_test: Comma-separated list of projects to test (e.g., "rocprim,hipcub")
+  - cmake_options: Space-separated CMake configuration flags
+  - artifact_group: Identifier for artifact grouping (matches first project name)
+
+Note: The script detects changed files once, then generates platform-specific
+configurations for both Linux and Windows. This avoids redundant git operations
+while allowing platform-specific CMake flags.
 
 -----------------
 | How It Works |
 -----------------
 
-1. Determines changed files via git diff
+1. Determines changed files via git diff (once for both platforms)
 2. Maps changed paths to projects using subtree_to_project_map from external_repo_project_maps.py
 3. Resolves project dependencies and combines overlapping builds
-4. Returns project-specific CMake options and test targets
+4. Generates platform-specific CMake options for Linux and Windows
+5. Returns both platform configurations in single JSON output
 
 For workflow_dispatch with 'all' or for schedule events, returns all projects.
 For empty changes (e.g., doc-only PRs), returns empty list to skip builds.
@@ -112,14 +120,10 @@ def detect_projects_from_changes(
     if github_event_name == "schedule":
         print("Schedule event detected - building all projects")
         subtrees_to_build = set(subtree_to_project_map.keys())
-    # For workflow_dispatch with explicit project list (override for testing)
-    elif (
-        github_event_name == "workflow_dispatch"
-        and projects_input
-        and projects_input.strip()
-    ):
+    # For workflow_dispatch or when PROJECTS is explicitly set (e.g., via workflow_call)
+    elif projects_input and projects_input.strip():
         projects_input = projects_input.strip()
-        print(f"workflow_dispatch with projects override: '{projects_input}'")
+        print(f"Projects override specified: '{projects_input}'")
 
         if projects_input.lower() == "all":
             print("Building all projects (override: 'all')")
@@ -181,10 +185,19 @@ def detect_projects_from_changes(
     # Import the project collection logic from centralized module
     from external_repo_project_maps import collect_projects_to_run
 
-    # Call the collect_projects_to_run function with repo-specific config
-    project_configs = collect_projects_to_run(
+    # Generate project configs for both Linux and Windows from the same subtrees
+    linux_configs = collect_projects_to_run(
         subtrees=list(subtrees_to_build),
-        platform=platform,
+        platform="linux",
+        subtree_to_project_map=repo_config["subtree_to_project_map"],
+        project_map=repo_config["project_map"],
+        additional_options=repo_config["additional_options"],
+        dependency_graph=repo_config["dependency_graph"],
+    )
+
+    windows_configs = collect_projects_to_run(
+        subtrees=list(subtrees_to_build),
+        platform="windows",
         subtree_to_project_map=repo_config["subtree_to_project_map"],
         project_map=repo_config["project_map"],
         additional_options=repo_config["additional_options"],
@@ -192,22 +205,19 @@ def detect_projects_from_changes(
     )
 
     print(
-        f"Generated {len(project_configs)} project configuration(s) for platform {platform}"
+        f"Generated {len(linux_configs)} Linux config(s), {len(windows_configs)} Windows config(s)"
     )
 
-    # Add artifact_group to each config (use the project key as the identifier)
-    # The project configs from collect_projects_to_run already have cmake_options and project_to_test
-    for config in project_configs:
-        # For artifact_group, we'll use the first project in project_to_test
-        # This groups artifacts by the primary project
-        if isinstance(config.get("project_to_test"), str):
-            first_project = config["project_to_test"].split(",")[0].strip()
-        else:
-            first_project = "unknown"
+    # Add artifact_group to each config
+    for configs in [linux_configs, windows_configs]:
+        for config in configs:
+            if isinstance(config.get("project_to_test"), str):
+                first_project = config["project_to_test"].split(",")[0].strip()
+            else:
+                first_project = "unknown"
+            config["artifact_group"] = first_project
 
-        config["artifact_group"] = first_project
-
-    return project_configs
+    return {"linux": linux_configs, "windows": windows_configs}
 
 
 def main():
@@ -251,18 +261,19 @@ def main():
 
     print(f"Event: {github_event_name}, Platform: {platform}")
 
-    # Detect projects
-    project_configs = detect_projects_from_changes(
+    # Detect projects (returns configs for both platforms)
+    platform_configs = detect_projects_from_changes(
         base_ref=args.base_ref,
         repo_config=repo_config,
-        platform=platform,
+        platform=platform,  # Still used for any platform-specific detection logic
         github_event_name=github_event_name,
         projects_input=projects_input,
     )
 
     # Output as JSON
     output = {
-        "projects": project_configs,
+        "linux_projects": platform_configs["linux"],
+        "windows_projects": platform_configs["windows"],
     }
 
     print("\n=== Project Detection Results ===")

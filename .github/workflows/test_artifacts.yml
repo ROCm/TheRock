@@ -19,6 +19,9 @@ on:
         type: string
       test_labels:
         type: string
+      project_to_test:
+        type: string
+        default: ""
   workflow_call:
     inputs:
       artifact_group:
@@ -37,6 +40,9 @@ on:
         type: string
       test_labels:
         type: string
+      project_to_test:
+        type: string
+        default: ""
   push:
     branches:
       - ADHOCBUILD
@@ -84,6 +90,7 @@ jobs:
           AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
           TEST_TYPE: ${{ inputs.test_type }}
           TEST_LABELS: ${{ inputs.test_labels }}
+          project_to_test: ${{ inputs.project_to_test }}
         run: python ./build_tools/github_actions/fetch_test_configurations.py
 
   test_sanity_check:

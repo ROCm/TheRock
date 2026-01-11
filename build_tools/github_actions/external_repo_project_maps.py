@@ -63,19 +63,10 @@ ROCM_LIBRARIES_PROJECT_MAP = {
         "cmake_options": [
             "-DTHEROCK_ENABLE_MIOPEN=ON",
             "-DTHEROCK_ENABLE_MIOPEN_PLUGIN=ON",
+            "-DTHEROCK_ENABLE_COMPOSABLE_KERNEL=ON",
+            "-DTHEROCK_USE_EXTERNAL_COMPOSABLE_KERNEL=ON",
+            "-DTHEROCK_COMPOSABLE_KERNEL_SOURCE_DIR=../source-repo/projects/composablekernel",
         ],
-        "additional_flags": {
-            "linux": [
-                "-DTHEROCK_ENABLE_COMPOSABLE_KERNEL=ON",
-                "-DTHEROCK_USE_EXTERNAL_COMPOSABLE_KERNEL=ON",
-                "-DTHEROCK_COMPOSABLE_KERNEL_SOURCE_DIR=../composable_kernel",
-            ],
-            "windows": [
-                "-DTHEROCK_ENABLE_COMPOSABLE_KERNEL=ON",
-                "-DTHEROCK_USE_EXTERNAL_COMPOSABLE_KERNEL=ON",
-                "-DTHEROCK_COMPOSABLE_KERNEL_SOURCE_DIR=../composable_kernel",
-            ],
-        },
         "project_to_test": ["miopen", "miopen_plugin"],
     },
     "fft": {
@@ -83,19 +74,12 @@ ROCM_LIBRARIES_PROJECT_MAP = {
         "project_to_test": ["hipfft", "rocfft"],
     },
     "hipdnn": {  # due to MIOpen plugin project being inside the hipDNN directory
-        "cmake_options": ["-DTHEROCK_ENABLE_MIOPEN_PLUGIN=ON"],
-        "additional_flags": {
-            "linux": [
-                "-DTHEROCK_ENABLE_COMPOSABLE_KERNEL=ON",
-                "-DTHEROCK_USE_EXTERNAL_COMPOSABLE_KERNEL=ON",
-                "-DTHEROCK_COMPOSABLE_KERNEL_SOURCE_DIR=../composable_kernel",
-            ],
-            "windows": [
-                "-DTHEROCK_ENABLE_COMPOSABLE_KERNEL=ON",
-                "-DTHEROCK_USE_EXTERNAL_COMPOSABLE_KERNEL=ON",
-                "-DTHEROCK_COMPOSABLE_KERNEL_SOURCE_DIR=../composable_kernel",
-            ],
-        },
+        "cmake_options": [
+            "-DTHEROCK_ENABLE_MIOPEN_PLUGIN=ON",
+            "-DTHEROCK_ENABLE_COMPOSABLE_KERNEL=ON",
+            "-DTHEROCK_USE_EXTERNAL_COMPOSABLE_KERNEL=ON",
+            "-DTHEROCK_COMPOSABLE_KERNEL_SOURCE_DIR=../source-repo/projects/composablekernel",
+        ],
         "project_to_test": ["hipdnn", "miopen_plugin"],
     },
     "rocwmma": {
@@ -180,19 +164,6 @@ ROCM_SYSTEMS_PROJECT_MAP = {
 
 ROCM_SYSTEMS_ADDITIONAL_OPTIONS = {}
 ROCM_SYSTEMS_DEPENDENCY_GRAPH = {}
-
-
-# =============================================================================
-# GPU Family Matrices (all_build_variants)
-# =============================================================================
-# These are imported by configure_ci.py instead of the deleted therock_matrix.py files
-
-# Note: External repos typically use simpler GPU family matrices than TheRock
-# For now, they can use TheRock's defaults from amdgpu_family_matrix.py
-# If they need custom GPU family matrices, add them here
-
-ROCM_LIBRARIES_ALL_BUILD_VARIANTS = None  # Use TheRock defaults
-ROCM_SYSTEMS_ALL_BUILD_VARIANTS = None  # Use TheRock defaults
 
 
 # =============================================================================

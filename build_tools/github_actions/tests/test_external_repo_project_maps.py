@@ -160,7 +160,7 @@ class TestCollectProjectsToRun(unittest.TestCase):
         """Test that platform-specific flags are added correctly."""
         config = get_repo_config("rocm-libraries")
 
-        # miopen has composable_kernel flags for both Linux and Windows (as of PR #3634)
+        # miopen uses CK from rocm-libraries/projects/composablekernel
         projects_linux = collect_projects_to_run(
             subtrees=["projects/miopen"], platform="linux", **config
         )
@@ -169,19 +169,23 @@ class TestCollectProjectsToRun(unittest.TestCase):
             subtrees=["projects/miopen"], platform="windows", **config
         )
 
-        # Both Linux and Windows should have composable_kernel flags
+        # Should have CK enabled with source dir pointing to rocm-libraries CK
         linux_opts = projects_linux[0]["cmake_options"]
+        self.assertIn("-DTHEROCK_ENABLE_MIOPEN=ON", linux_opts)
         self.assertIn("-DTHEROCK_ENABLE_COMPOSABLE_KERNEL=ON", linux_opts)
         self.assertIn("-DTHEROCK_USE_EXTERNAL_COMPOSABLE_KERNEL=ON", linux_opts)
         self.assertIn(
-            "-DTHEROCK_COMPOSABLE_KERNEL_SOURCE_DIR=../composable_kernel", linux_opts
+            "-DTHEROCK_COMPOSABLE_KERNEL_SOURCE_DIR=../source-repo/projects/composablekernel",
+            linux_opts,
         )
 
         windows_opts = projects_windows[0]["cmake_options"]
+        self.assertIn("-DTHEROCK_ENABLE_MIOPEN=ON", windows_opts)
         self.assertIn("-DTHEROCK_ENABLE_COMPOSABLE_KERNEL=ON", windows_opts)
         self.assertIn("-DTHEROCK_USE_EXTERNAL_COMPOSABLE_KERNEL=ON", windows_opts)
         self.assertIn(
-            "-DTHEROCK_COMPOSABLE_KERNEL_SOURCE_DIR=../composable_kernel", windows_opts
+            "-DTHEROCK_COMPOSABLE_KERNEL_SOURCE_DIR=../source-repo/projects/composablekernel",
+            windows_opts,
         )
 
     def test_enable_all_off_is_added(self):

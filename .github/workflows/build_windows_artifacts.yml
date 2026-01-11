@@ -87,6 +87,10 @@ jobs:
       IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
       THEROCK_DIR: ${{ inputs.external_source_checkout && 'therock-ci' || '.' }}
     steps:
+      - name: Configure GitHub longpath
+        run: |
+          git config --global core.longpaths true
+
       - name: "Checking out repository"
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
@@ -101,45 +105,6 @@ jobs:
           path: therock-ci
           ref: ${{ inputs.therock_ref || 'main' }}
 
-      - name: Verify TheRock checkout
-        if: ${{ inputs.external_source_checkout }}
-        run: |
-          echo "=== Verifying TheRock checkout ==="
-          echo "THEROCK_DIR: $THEROCK_DIR"
-          echo "Current working directory: $(pwd)"
-          echo ""
-          echo "=== Directory listing of workspace root ==="
-          ls -la
-          echo ""
-          echo "=== Checking if TheRock directory exists ==="
-          if [ -d "$THEROCK_DIR" ]; then
-            echo "✓ TheRock directory exists"
-            echo ""
-            echo "=== Contents of TheRock directory ==="
-            ls -la $THEROCK_DIR/
-            echo ""
-            echo "=== Checking for build_tools directory ==="
-            if [ -d "$THEROCK_DIR/build_tools" ]; then
-              echo "✓ build_tools directory exists"
-              echo ""
-              echo "=== Checking for detect_external_repo_config.py ==="
-              if [ -f "$THEROCK_DIR/build_tools/github_actions/detect_external_repo_config.py" ]; then
-                echo "✓ detect_external_repo_config.py exists"
-              else
-                echo "✗ ERROR: detect_external_repo_config.py NOT FOUND"
-                echo "Contents of build_tools/github_actions/:"
-                ls -la $THEROCK_DIR/build_tools/github_actions/ || echo "Directory does not exist"
-                exit 1
-              fi
-            else
-              echo "✗ ERROR: build_tools directory NOT FOUND"
-              exit 1
-            fi
-          else
-            echo "✗ ERROR: TheRock directory NOT FOUND"
-            exit 1
-          fi
-
       - uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
         with:
           python-version: 3.12
@@ -151,24 +116,7 @@ jobs:
       - name: Auto-detect external source configuration
         if: ${{ inputs.external_source_checkout }}
         id: detect
-        run: python3 $THEROCK_DIR/build_tools/github_actions/detect_external_repo_config.py "${{ inputs.repository_override || github.repository }}"
-
-      - name: Debug detected configuration
-        if: ${{ inputs.external_source_checkout }}
-        run: |
-          echo "Detected cmake_source_var: ${{ steps.detect.outputs.cmake_source_var }}"
-          echo "Detected patches_dir: ${{ steps.detect.outputs.patches_dir }}"
-          echo "Detected fetch_exclusion: ${{ steps.detect.outputs.fetch_exclusion }}"
-          echo "GitHub workspace: ${{ github.workspace }}"
-          echo "Source repo will be at: ${{ github.workspace }}/source-repo"
-          echo "Will construct CMake option: -D${{ steps.detect.outputs.cmake_source_var }}=${{ github.workspace }}/source-repo"
-
-      - name: Checkout composable_kernel repository
-        if: ${{ inputs.external_source_checkout && steps.detect.outputs.enable_ck == 'true' }}
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
-        with:
-          repository: "ROCm/composable_kernel"
-          path: "composable_kernel"
+        run: python3 $THEROCK_DIR/build_tools/github_actions/detect_external_repo_config.py "${{ inputs.repository_override || github.repository }}" --platform windows
 
       - name: Install requirements
         # The first two lines removes the default commmunity feed and uses the internal proxy feed
@@ -203,7 +151,6 @@ jobs:
         run: |
           git config fetch.parallel 10
           git config --global core.symlinks true
-          git config --global core.longpaths true
 
       - name: DVC pull
         if: ${{ inputs.external_source_checkout && steps.detect.outputs.enable_dvc == 'true' }}
@@ -224,7 +171,7 @@ jobs:
         timeout-minutes: 30
         run: |
           if [[ "${{ inputs.external_source_checkout }}" == "true" ]]; then
-            python $THEROCK_DIR/build_tools/fetch_sources.py --jobs 12 --no-include-ml-frameworks ${{ steps.detect.outputs.fetch_exclusion }}
+            python $THEROCK_DIR/build_tools/fetch_sources.py --jobs 12 ${{ steps.detect.outputs.fetch_exclusion }}
           else
             python $THEROCK_DIR/build_tools/fetch_sources.py --jobs 12
           fi
@@ -305,8 +252,9 @@ jobs:
 
       - name: Post Build Upload
         if: always()
+        working-directory: ${{ inputs.external_source_checkout && env.THEROCK_DIR || '.' }}
         run: |
-          python3 $THEROCK_DIR/build_tools/github_actions/post_build_upload.py \
+          python3 ./build_tools/github_actions/post_build_upload.py \
             --run-id ${{ github.run_id }} \
             --artifact-group ${{ inputs.artifact_group }} \
             --build-dir ${{ env.BUILD_DIR }} \

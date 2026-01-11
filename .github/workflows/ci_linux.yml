@@ -44,6 +44,14 @@ on:
         type: string
         description: "Override github.repository for testing (e.g., 'ROCm/rocm-libraries')"
         default: ""
+      cmake_options:
+        type: string
+        description: "Extra CMake options for external repo projects"
+        default: ""
+      project_to_test:
+        type: string
+        description: "Comma-separated list of projects to test (for external repos)"
+        default: ""
 
 permissions:
   contents: read
@@ -65,6 +73,7 @@ jobs:
       external_source_checkout: ${{ inputs.external_source_checkout }}
       therock_ref: ${{ inputs.therock_ref }}
       repository_override: ${{ inputs.repository_override }}
+      extra_cmake_options: ${{ inputs.cmake_options }}
     permissions:
       contents: read
       id-token: write
@@ -101,6 +110,7 @@ jobs:
       artifact_run_id: ${{ inputs.artifact_run_id }}
       test_type: ${{ inputs.test_type }}
       test_labels: ${{ inputs.test_labels }}
+      project_to_test: ${{ inputs.project_to_test }}
       sanity_check_only_for_family: ${{ inputs.sanity_check_only_for_family == true }}
 
   test_linux_benchmarks:
@@ -135,6 +145,7 @@ jobs:
     # If the dependent job failed/cancelled, this job will not be run
     # The use_prebuilt_artifacts "or" statement ensures that tests will run if
     # previous build step is run or skipped.concurrency.
+    # Skip for external repos (they don't need Python packages)
     if: >-
       ${{
         !failure() &&
@@ -143,7 +154,8 @@ jobs:
           inputs.use_prebuilt_artifacts == 'false' ||
           inputs.use_prebuilt_artifacts == 'true'
         ) &&
-        inputs.expect_failure == false
+        inputs.expect_failure == false &&
+        inputs.external_source_checkout == false
       }}
     uses: ./.github/workflows/build_portable_linux_python_packages.yml
     with:
