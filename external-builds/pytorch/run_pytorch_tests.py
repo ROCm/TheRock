@@ -255,10 +255,13 @@ def main() -> int:
             supported_devices = get_all_supported_devices(args.amdgpu_family)
 
         # Set GPU execution policy based on --gpu-policy argument
-        ((first_arch, _),) = set_gpu_execution_policy(
+        selected_devices = set_gpu_execution_policy(
             supported_devices, policy=args.gpu_policy
         )
-        print(f"Using AMDGPU family: {first_arch}")
+
+        # Collect unique architectures from selected devices
+        selected_archs = list[str]({arch for arch, _ in selected_devices})
+        print(f"Using AMDGPU families: {selected_archs}")
 
         # Determine PyTorch version
         pytorch_version = args.pytorch_version
@@ -268,7 +271,7 @@ def main() -> int:
 
         # Get tests to skip
         tests_to_skip = get_tests(
-            amdgpu_family=first_arch,
+            amdgpu_family=selected_archs,
             pytorch_version=pytorch_version,
             platform=platform.system(),
             create_skip_list=not args.debug,
