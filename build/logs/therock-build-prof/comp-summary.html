@@ -19,6 +19,7 @@
 <th>component</th>
 <th>wall_time_sum (minutes)</th>
 <th>wall_time_span (minutes)</th>
+<th>wall_time_est_elapsed (minutes)</th>
 <th>avg_concurrency</th>
 <th>peak_concurrency</th>
 <th>cpu_sum (minutes)</th>
@@ -28,127 +29,229 @@
 <th>max_rss_gb</th>
 </tr></thead><tbody>
 <tr>
-<td>amd-llvm</td>
-<td>1210.35</td>
-<td>12.49</td>
-<td>96.94</td>
-<td>258</td>
-<td>1198.76</td>
-<td>1071.97</td>
-<td>126.79</td>
-<td>6663.41</td>
-<td>6.5072</td>
-</tr>
-<tr>
-<td>sysdeps</td>
-<td>117.74</td>
-<td>1.93</td>
-<td>60.85</td>
-<td>258</td>
-<td>112.24</td>
-<td>89.09</td>
-<td>23.15</td>
-<td>660.39</td>
-<td>0.6449</td>
-</tr>
-<tr>
-<td>host-blas</td>
-<td>111.47</td>
-<td>1.43</td>
-<td>78.04</td>
-<td>235</td>
-<td>109.26</td>
-<td>59.13</td>
-<td>50.13</td>
-<td>182.00</td>
-<td>0.1777</td>
-</tr>
-<tr>
-<td>unknown</td>
-<td>36.14</td>
-<td>1.87</td>
-<td>19.34</td>
-<td>219</td>
-<td>35.51</td>
-<td>28.94</td>
-<td>6.57</td>
-<td>726.08</td>
-<td>0.7091</td>
-</tr>
-<tr>
-<td>fftw3</td>
-<td>3.19</td>
-<td>0.17</td>
-<td>18.66</td>
-<td>170</td>
-<td>3.06</td>
-<td>1.96</td>
-<td>1.10</td>
-<td>70.28</td>
-<td>0.0686</td>
-</tr>
-<tr>
-<td>support</td>
-<td>1.66</td>
-<td>1.65</td>
-<td>1.01</td>
-<td>10</td>
-<td>1.64</td>
-<td>1.24</td>
-<td>0.39</td>
-<td>392.00</td>
-<td>0.3828</td>
-</tr>
-<tr>
 <td>base</td>
-<td>1.11</td>
-<td>1.70</td>
-<td>0.65</td>
-<td>11</td>
-<td>1.09</td>
-<td>0.86</td>
-<td>0.23</td>
-<td>386.00</td>
-<td>0.3770</td>
+<td>11777.73</td>
+<td>93.05</td>
+<td>73.17</td>
+<td>126.58</td>
+<td>258</td>
+<td>11287.15</td>
+<td>11067.64</td>
+<td>219.51</td>
+<td>3187.82</td>
+<td>3.1131</td>
+</tr>
+<tr>
+<td>amd-llvm</td>
+<td>1197.24</td>
+<td>15.83</td>
+<td>7.44</td>
+<td>75.62</td>
+<td>258</td>
+<td>1185.18</td>
+<td>1061.71</td>
+<td>123.47</td>
+<td>6667.02</td>
+<td>6.5108</td>
 </tr>
 <tr>
 <td>prim</td>
-<td>0.83</td>
-<td>0.18</td>
-<td>4.70</td>
-<td>6</td>
-<td>0.82</td>
-<td>0.64</td>
-<td>0.18</td>
-<td>372.00</td>
-<td>0.3633</td>
+<td>764.34</td>
+<td>77.99</td>
+<td>4.75</td>
+<td>9.80</td>
+<td>127</td>
+<td>711.94</td>
+<td>699.38</td>
+<td>12.56</td>
+<td>4517.80</td>
+<td>4.4119</td>
 </tr>
 <tr>
-<td>rand</td>
-<td>0.43</td>
-<td>1.63</td>
-<td>0.26</td>
-<td>13</td>
-<td>0.42</td>
-<td>0.27</td>
-<td>0.15</td>
-<td>186.00</td>
-<td>0.1816</td>
+<td>rccl</td>
+<td>226.45</td>
+<td>4.59</td>
+<td>1.41</td>
+<td>49.28</td>
+<td>253</td>
+<td>297.21</td>
+<td>288.16</td>
+<td>9.05</td>
+<td>363.92</td>
+<td>0.3554</td>
+</tr>
+<tr>
+<td>host-blas</td>
+<td>313.64</td>
+<td>25.58</td>
+<td>1.95</td>
+<td>12.26</td>
+<td>226</td>
+<td>256.19</td>
+<td>203.71</td>
+<td>52.47</td>
+<td>1097.87</td>
+<td>1.0721</td>
 </tr>
 <tr>
 <td>blas</td>
-<td>0.08</td>
-<td>0.04</td>
-<td>1.78</td>
-<td>4</td>
-<td>0.05</td>
-<td>0.05</td>
+<td>300.74</td>
+<td>24.94</td>
+<td>1.87</td>
+<td>12.06</td>
+<td>234</td>
+<td>190.79</td>
+<td>183.09</td>
+<td>7.70</td>
+<td>1795.82</td>
+<td>1.7537</td>
+</tr>
+<tr>
+<td>sysdeps</td>
+<td>166.59</td>
+<td>20.58</td>
+<td>1.03</td>
+<td>8.10</td>
+<td>257</td>
+<td>116.76</td>
+<td>93.17</td>
+<td>23.59</td>
+<td>690.99</td>
+<td>0.6748</td>
+</tr>
+<tr>
+<td>rand</td>
+<td>84.09</td>
+<td>28.27</td>
+<td>0.52</td>
+<td>2.97</td>
+<td>106</td>
+<td>79.50</td>
+<td>76.70</td>
+<td>2.80</td>
+<td>622.56</td>
+<td>0.6080</td>
+</tr>
+<tr>
+<td>hipdnn</td>
+<td>58.54</td>
+<td>1.60</td>
+<td>0.36</td>
+<td>36.50</td>
+<td>158</td>
+<td>55.05</td>
+<td>53.28</td>
+<td>1.77</td>
+<td>831.90</td>
+<td>0.8124</td>
+</tr>
+<tr>
+<td>unknown</td>
+<td>43.49</td>
+<td>26.99</td>
+<td>0.27</td>
+<td>1.61</td>
+<td>219</td>
+<td>42.74</td>
+<td>35.52</td>
+<td>7.22</td>
+<td>723.12</td>
+<td>0.7062</td>
+</tr>
+<tr>
+<td>rocprofiler-sdk</td>
+<td>23.55</td>
+<td>3.19</td>
+<td>0.15</td>
+<td>7.38</td>
+<td>121</td>
+<td>23.01</td>
+<td>20.75</td>
+<td>2.26</td>
+<td>2351.35</td>
+<td>2.2962</td>
+</tr>
+<tr>
+<td>hipify</td>
+<td>14.98</td>
+<td>5.28</td>
+<td>0.09</td>
+<td>2.84</td>
+<td>29</td>
+<td>10.08</td>
+<td>9.42</td>
+<td>0.66</td>
+<td>198.00</td>
+<td>0.1934</td>
+</tr>
+<tr>
+<td>fftw3</td>
+<td>3.02</td>
+<td>0.17</td>
+<td>0.02</td>
+<td>17.48</td>
+<td>181</td>
+<td>2.97</td>
+<td>1.93</td>
+<td>1.04</td>
+<td>70.83</td>
+<td>0.0692</td>
+</tr>
+<tr>
+<td>support</td>
+<td>2.75</td>
+<td>26.98</td>
+<td>0.02</td>
+<td>0.10</td>
+<td>10</td>
+<td>2.26</td>
+<td>1.89</td>
+<td>0.38</td>
+<td>387.85</td>
+<td>0.3788</td>
+</tr>
+<tr>
+<td>rocprofiler-systems</td>
+<td>2.09</td>
+<td>5.01</td>
 <td>0.01</td>
-<td>42.00</td>
-<td>0.0410</td>
+<td>0.42</td>
+<td>32</td>
+<td>2.02</td>
+<td>1.83</td>
+<td>0.19</td>
+<td>2345.79</td>
+<td>2.2908</td>
+</tr>
+<tr>
+<td>rdc</td>
+<td>0.64</td>
+<td>0.06</td>
+<td>0.00</td>
+<td>10.34</td>
+<td>23</td>
+<td>0.64</td>
+<td>0.57</td>
+<td>0.07</td>
+<td>206.00</td>
+<td>0.2012</td>
+</tr>
+<tr>
+<td>rocprofiler-compute</td>
+<td>0.20</td>
+<td>0.13</td>
+<td>0.00</td>
+<td>1.50</td>
+<td>2</td>
+<td>0.20</td>
+<td>0.19</td>
+<td>0.01</td>
+<td>207.79</td>
+<td>0.2029</td>
 </tr>
 <tr>
 <td>composable-kernel</td>
+<td>0.00</td>
 <td>0.00</td>
 <td>0.00</td>
 <td>0.00</td>
@@ -164,6 +267,7 @@
 <td>0.00</td>
 <td>0.00</td>
 <td>0.00</td>
+<td>0.00</td>
 <td>0</td>
 <td>0.00</td>
 <td>0.00</td>
@@ -173,6 +277,7 @@
 </tr>
 <tr>
 <td>core-hipinfo</td>
+<td>0.00</td>
 <td>0.00</td>
 <td>0.00</td>
 <td>0.00</td>
@@ -188,6 +293,7 @@
 <td>0.00</td>
 <td>0.00</td>
 <td>0.00</td>
+<td>0.00</td>
 <td>0</td>
 <td>0.00</td>
 <td>0.00</td>
@@ -197,6 +303,7 @@
 </tr>
 <tr>
 <td>core-runtime</td>
+<td>0.00</td>
 <td>0.00</td>
 <td>0.00</td>
 <td>0.00</td>
@@ -212,29 +319,6 @@
 <td>0.00</td>
 <td>0.00</td>
 <td>0.00</td>
-<td>0</td>
-<td>0.00</td>
-<td>0.00</td>
-<td>0.00</td>
-<td>0.00</td>
-<td>0.0000</td>
-</tr>
-<tr>
-<td>hipdnn</td>
-<td>0.00</td>
-<td>0.00</td>
-<td>0.00</td>
-<td>0</td>
-<td>0.00</td>
-<td>0.00</td>
-<td>0.00</td>
-<td>0.00</td>
-<td>0.0000</td>
-</tr>
-<tr>
-<td>hipify</td>
-<td>0.00</td>
-<td>0.00</td>
 <td>0.00</td>
 <td>0</td>
 <td>0.00</td>
@@ -245,6 +329,7 @@
 </tr>
 <tr>
 <td>host-suite-sparse</td>
+<td>0.00</td>
 <td>0.00</td>
 <td>0.00</td>
 <td>0.00</td>
@@ -260,6 +345,7 @@
 <td>0.00</td>
 <td>0.00</td>
 <td>0.00</td>
+<td>0.00</td>
 <td>0</td>
 <td>0.00</td>
 <td>0.00</td>
@@ -272,65 +358,6 @@
 <td>0.00</td>
 <td>0.00</td>
 <td>0.00</td>
-<td>0</td>
-<td>0.00</td>
-<td>0.00</td>
-<td>0.00</td>
-<td>0.00</td>
-<td>0.0000</td>
-</tr>
-<tr>
-<td>rccl</td>
-<td>0.00</td>
-<td>0.00</td>
-<td>0.00</td>
-<td>0</td>
-<td>0.00</td>
-<td>0.00</td>
-<td>0.00</td>
-<td>0.00</td>
-<td>0.0000</td>
-</tr>
-<tr>
-<td>rdc</td>
-<td>0.00</td>
-<td>0.00</td>
-<td>0.00</td>
-<td>0</td>
-<td>0.00</td>
-<td>0.00</td>
-<td>0.00</td>
-<td>0.00</td>
-<td>0.0000</td>
-</tr>
-<tr>
-<td>rocprofiler-compute</td>
-<td>0.00</td>
-<td>0.00</td>
-<td>0.00</td>
-<td>0</td>
-<td>0.00</td>
-<td>0.00</td>
-<td>0.00</td>
-<td>0.00</td>
-<td>0.0000</td>
-</tr>
-<tr>
-<td>rocprofiler-sdk</td>
-<td>0.00</td>
-<td>0.00</td>
-<td>0.00</td>
-<td>0</td>
-<td>0.00</td>
-<td>0.00</td>
-<td>0.00</td>
-<td>0.00</td>
-<td>0.0000</td>
-</tr>
-<tr>
-<td>rocprofiler-systems</td>
-<td>0.00</td>
-<td>0.00</td>
 <td>0.00</td>
 <td>0</td>
 <td>0.00</td>
@@ -341,6 +368,7 @@
 </tr>
 <tr>
 <td>rocwmma</td>
+<td>0.00</td>
 <td>0.00</td>
 <td>0.00</td>
 <td>0.00</td>
@@ -361,17 +389,49 @@
     <p>
       It means the amount of physical RAM actually in use by a process at its peak. High rss means memory-heavy compilation or linking.
       If rss is high across many parallel jobs, we can hit swapping, cache thrashing, OOM kills in CI. High rss often limits how much
-      parallelism you can safely use (-j).
+      parallelism you can safely use (-j)
     </p>
   </li>
 
   <li><b>max_rss_mb</b>
     <p>
-      The maximum RAM a compiler/linker process had allocated in memory at any point.
+      the maximum RAM a compiler or linker process had allocated in memory at any point.
     </p>
   </li>
 
-  <li><b>avg_concurrency and peak_concurrency</b>
+  <li><b>Wall time sum vs component span vs estimated elapsed</b>
+    <p>
+      <b>wall_time_sum</b> is the <b>sum</b> of wall times across all commands for that component. In parallel builds this can be
+      far larger than the total build duration because many commands run concurrently.
+    </p>
+    <p>
+      <b>wall_time_span_min</b> is the component’s <b>elapsed span</b>:
+      <code>max(end_time) - min(start_time)</code> across all commands belonging to that component. This is usually much closer to
+      “how long the build spent working on that component”, though it can still overlap with other components (parallelism).
+    </p>
+    <p>
+      <b>wall_time_est_elapsed_min</b> is an <b>estimated elapsed contribution</b> computed from average build concurrency:
+      we compute <code>avg_concurrency = sum(real_s) / build_span_s</code> using timestamps, and then estimate:
+      <code>wall_time_est_elapsed ≈ wall_time_sum / avg_concurrency</code>.
+    </p>
+    <p>
+      That doesn’t mean the build is slower; it means processes are spending time waiting (I/O, scheduling, throttling, contention),
+      so CPU time isn’t keeping up with wall time.
+    </p>
+  </li>
+
+  <li><b>What Avg Threads (avg_threads) actually mean ?</b>
+    <p><b>Case 1&gt; avg_threads ≈ 1.0</b></p>
+    <p>This means process used about one CPU core for most of its runtime.</p>
+
+    <p><b>Case 2&gt; avg_threads &lt; 1.0</b></p>
+    <p><b>Meaning:</b> The process spent a lot of time waiting, not computing (I/O, contention, throttling).</p>
+
+    <p><b>Case 3&gt; avg_threads &gt; 1.0</b></p>
+    <p><b>Meaning:</b> The process used multiple CPU cores simultaneously (e.g. LTO backends, LLVM worker threads).</p>
+  </li>
+
+<li><b>avg_concurrency and peak_concurrency</b>
     <p>
       <b>avg_concurrency</b> measures average parallelism across tool processes for the component:
       <code>avg_concurrency ≈ wall_time_sum / wall_time_span</code>.
@@ -382,20 +442,74 @@
     </p>
   </li>
 
-  <li><b>What user_sum, sys_sum, cpu_sum mean ? (Note: all times are in minutes)</b>
-    <p><b>user_sum</b> → time spent executing compiler/linker code.</p>
-    <p><b>sys_sum</b> → time spent inside the OS kernel (I/O, filesystem, etc.).</p>
-    <p><b>cpu_sum</b> → total CPU time = user_sum + sys_sum.</p>
-  </li>
+
+<li><b> What user_sum, sys_sum mean and cpu_sum mean ? (Note: all times are in minutes) </b>
+
+    <p><b>user_sum → time spent executing your code (compiler, linker, optimizer logic) </b></p>
+
+        <p><b>If this is high:</b>
+
+        <p>a) the build is compute-heavy</p>
+
+        <p>b) faster CPUs, fewer templates, or fewer TUs help</p>
+
+        <p>c) more parallelism may help if avg_threads > 1</p>
+
+    <p><b>sys_sum → time spent inside the operating system kernel</b></p>
+
+        <p><b>a) If this is high:</b>
+
+        <p>b) you’re often I/O-bound</p>
+
+        <p>c) disk speed, filesystem, caching, or build directory layout matters</p>
+
+        <p>d) adding more CPUs will not help much</p>
+
+    <p><b>cpu_sum → total CPU time = user_sum_min + sys_sum_min</b></p>
+
+        <p>a) How much CPU did this component cost overall?</p>
+
+        <p>b) It’s the best metric for:</p>
+
+        <p>c) capacity planning</p>
+
+        <p>d) CI cost estimation</p>
+
+        <p>e) "what’s expensive" comparisons between components</p>
+
+</li>
 </ol>
+
+<li><b>Wall time sum vs component span vs estimated elapsed</b>
+    <p>
+      <b>wall_time_sum</b> is the <b>sum</b> of wall times across all commands for that component. In parallel builds this can be
+      far larger than the total build duration because many commands run concurrently.
+    </p>
+    <p>
+      <b>wall_time_span_min</b> is the component’s <b>elapsed span</b>:
+      <code>max(end_time) - min(start_time)</code> across all commands belonging to that component. This is usually much closer to
+      “how long the build spent working on that component”, though it can still overlap with other components (parallelism).
+    </p>
+    <p>
+      <b>wall_time_est_elapsed_min</b> is an <b>estimated elapsed contribution</b> computed from average build concurrency:
+      we compute <code>avg_concurrency_build = sum(real_s) / build_span_s</code> using timestamps, and then estimate:
+      <code>wall_time_est_elapsed ≈ wall_time_sum / avg_concurrency_build</code>.
+    </p>
+    <p>
+      That doesn’t mean the build is slower; it means processes are spending time waiting (I/O, scheduling, throttling, contention),
+      so CPU time isn’t keeping up with wall time.
+    </p>
+  </li>
+
 
 <h3>Key mental model</h3>
 <ul>
-  <li><b>wall_time_sum</b> → total summed command wall time (inflates with parallelism)</li>
-  <li><b>wall_time_span</b> → component elapsed window</li>
-  <li><b>avg_concurrency</b> → average parallel tool processes for this component</li>
-  <li><b>peak_concurrency</b> → maximum overlap of tool processes</li>
-  <li><b>rss</b> → limits safe parallelism</li>
+  <li> wall_time_sum</b> → total summed command wall time (inflates with parallelism)</li>
+  <li> wall_time_span</b> → component elapsed window (closest to “actual component build time”)</li>
+  <li> wall_time_est_elapsed</b> → concurrency-adjusted estimate</li>
+  <li> cpu_sum</b> → cost/compute spent</li>
+  <li> avg_threads</b> → CPU utilization ratio per component</li>
+  <li> rss</b> → limits safe parallelism</li>
 </ul>
 
 </body>
