@@ -299,7 +299,7 @@ if(THEROCK_ENABLE_SPARSE)
       # hipSPARSELt is hard-coded to not expect rocm-smi and amdsmi on Windows.
       list(APPEND hipSPARSELt_optional_build_deps
         amdsmi
-      )      
+      )
       list(APPEND hipSPARSELt_optional_runtime_deps
         rocm_smi_lib
       )
