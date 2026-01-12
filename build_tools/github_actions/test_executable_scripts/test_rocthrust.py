@@ -92,8 +92,10 @@ elif AMDGPU_FAMILIES == "gfx1153":
 resource_spec_file = "resources.json"
 
 exe_suffix = ".exe" if platform.system() == "Windows" else ""
-res_gen_cmd = [f"{THEROCK_BIN_DIR}/rocthrust/generate_resource_spec{exe_suffix}",
-               f"{THEROCK_BIN_DIR}/rocthrust/{resource_spec_file}"]
+res_gen_cmd = [
+    f"{THEROCK_BIN_DIR}/rocthrust/generate_resource_spec{exe_suffix}",
+    f"{THEROCK_BIN_DIR}/rocthrust/{resource_spec_file}"
+]
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(res_gen_cmd)}")
 subprocess.run(res_gen_cmd, cwd=THEROCK_DIR, check=True)
 
@@ -108,7 +110,7 @@ cmd = [
     "--resource-spec-file",
     resource_spec_file,
     "--timeout",
-    "300"
+    "300",
 ]
 
 # If smoke tests are enabled, we run smoke tests only.
