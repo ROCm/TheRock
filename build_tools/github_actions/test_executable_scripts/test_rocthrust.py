@@ -94,7 +94,7 @@ resource_spec_file = "resources.json"
 exe_suffix = ".exe" if platform.system() == "Windows" else ""
 res_gen_cmd = [
     f"{THEROCK_BIN_DIR}/rocthrust/generate_resource_spec{exe_suffix}",
-    f"{THEROCK_BIN_DIR}/rocthrust/{resource_spec_file}"
+    f"{THEROCK_BIN_DIR}/rocthrust/{resource_spec_file}",
 ]
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(res_gen_cmd)}")
 subprocess.run(res_gen_cmd, cwd=THEROCK_DIR, check=True)
