@@ -46,12 +46,19 @@ test_matrix = {
         "platform": ["linux"],
         "total_shards": 5,
         "exclude_family": {
+            # rocroller does not plan to support Linux and Windows gfx115X architectures
             "linux": [
                 "gfx1150",
                 "gfx1151",
                 "gfx1152",
                 "gfx1153",
-            ]  # rocroller does not plan to support Linux gfx115X architectures
+            ],
+            "windows": [
+                "gfx1150",
+                "gfx1151",
+                "gfx1152",
+                "gfx1153",
+            ],
         },
     },
     "hipblas": {
