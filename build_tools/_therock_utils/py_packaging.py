@@ -98,7 +98,7 @@ class Parameters:
         # populate as will be loaded at setup and run time.
         spec = importlib.util.spec_from_loader("rocm_sdk_dist_info", loader=None)
         self.dist_info = importlib.util.module_from_spec(spec)
-        exec(self.dist_info_contents, self.dist_info.__dict__)
+        run_command(self.dist_info_contents, self.dist_info.__dict__)
 
     def filter_artifacts(
         self,

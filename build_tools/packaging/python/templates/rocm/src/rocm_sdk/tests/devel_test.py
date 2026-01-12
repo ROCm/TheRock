@@ -40,7 +40,7 @@ class ROCmDevelTest(unittest.TestCase):
 
     def testCLIPathBin(self):
         output = (
-            utils.exec(
+            utils.run_command(
                 [sys.executable, "-P", "-m", "rocm_sdk", "path", "--bin"], capture=True
             )
             .decode()
@@ -51,7 +51,7 @@ class ROCmDevelTest(unittest.TestCase):
 
     def testCLIPathCMake(self):
         output = (
-            utils.exec(
+            utils.run_command(
                 [sys.executable, "-P", "-m", "rocm_sdk", "path", "--cmake"],
                 capture=True,
             )
@@ -67,7 +67,7 @@ class ROCmDevelTest(unittest.TestCase):
 
     def testCLIPathRoot(self):
         output = (
-            utils.exec(
+            utils.run_command(
                 [sys.executable, "-P", "-m", "rocm_sdk", "path", "--root"], capture=True
             )
             .decode()
@@ -85,7 +85,7 @@ class ROCmDevelTest(unittest.TestCase):
         # We had a bug where the root llvm/ symlink, which is for backwards compat,
         # was not materialized. Verify it is.
         output = (
-            utils.exec(
+            utils.run_command(
                 [sys.executable, "-P", "-m", "rocm_sdk", "path", "--root"], capture=True
             )
             .decode()
@@ -97,7 +97,7 @@ class ROCmDevelTest(unittest.TestCase):
     def testSharedLibrariesLoad(self):
         # Make sure the devel package is expanded.
         _ = (
-            utils.exec(
+            utils.run_command(
                 [sys.executable, "-P", "-m", "rocm_sdk", "path", "--root"], capture=True
             )
             .decode()
