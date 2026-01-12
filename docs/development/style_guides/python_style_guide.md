@@ -7,9 +7,9 @@ Table of Contents
   - [Code quality and readability](#code-quality-and-readability)
     - [Add specific type hints liberally](#add-specific-type-hints-liberally)
     - [Extract complex type signatures](#extract-complex-type-signatures)
+    - [Use dataclasses, not tuples](#use-dataclasses-not-tuples)
     - [Use named arguments for complicated function signatures](#use-named-arguments-for-complicated-function-signatures)
     - [No magic numbers](#no-magic-numbers)
-    - [Use dataclasses, not tuples](#use-dataclasses-not-tuples)
   - [Script structure and organization](#script-structure-and-organization)
     - [Use `__main__` guard](#use-__main__-guard)
     - [Use `argparse` for CLI flags](#use-argparse-for-cli-flags)
@@ -52,14 +52,15 @@ The guidelines here extend PEP 8 for our projects.
 Add type hints (see [`typing`](https://docs.python.org/3/library/typing.html))
 to function signatures to improve code clarity and enable static analysis.
 
+- Use modern type hint syntax (Python 3.10+). We're on Python 3.13+.
+- Use specific type hints. Never use `Any` except in rare generic code.
+
 Benefits:
 
 - **Self-documenting:** Function signatures clearly show expected types
 - **Editor support:** IDEs provide better autocomplete and error detection
 - **Static analysis:** Tools like `mypy` can catch type errors before runtime
 - **Refactoring safety:** Easier to refactor with confidence
-
-**Use modern type hint syntax (Python 3.10+). We're on Python 3.13+.**
 
 Type hint best practices:
 
@@ -69,8 +70,6 @@ Type hint best practices:
 - Import the actual types you need (not from `typing` for basic containers)
 - Use specific return types (not `tuple`, use `tuple[Path, int]`)
 - For dict values with structure, define a dataclass
-
-**Use specific type hints. Never use `Any` except in rare generic code.**
 
 ✅ **Preferred:**
 
@@ -108,8 +107,9 @@ def process(handlers: List[Any]) -> Dict[str, Any]:
 When to extract:
 
 - Type appears in multiple signatures → Use NamedTuple or TypeAlias
-- Tuple has 3+ fields → Use NamedTuple or dataclass
 - Type signature is hard to read at a glance → Extract it
+- Dict used to pass data within a file has 3+ fields → Use NamedTuple or dataclass
+- Tuple has 3+ fields → Use NamedTuple or dataclass
 - You find yourself documenting what tuple fields mean → Use NamedTuple
 
 What to use:
@@ -160,6 +160,46 @@ def parallel_prepare_kernels(
     for relative_path, gfx_arch, hsaco_data, metadata in kernels:
         ...
 ```
+
+#### Use dataclasses, not tuples
+
+**For non-trivial data with multiple fields, use dataclasses instead of tuples.**
+
+Benefits:
+
+- Self-documenting: Field names make code clearer
+- IDE-friendly: Autocomplete and type checking work
+- Refactoring-safe: Adding fields doesn't break positional unpacking
+- Less error-prone: Can't accidentally swap fields of the same type
+
+✅ **Preferred:**
+
+```python
+@dataclass
+class KpackInfo:
+    """Information about a created kpack file."""
+    kpack_path: Path
+    size: int
+    kernel_count: int
+
+def create_kpack_files(...) -> dict[str, KpackInfo]:
+    """Returns: Dict mapping arch to KpackInfo"""
+    return {"gfx1100": KpackInfo(kpack_path=path, size=12345, kernel_count=42)}
+```
+
+❌ **Avoid:**
+
+```python
+def create_kpack_files(...) -> dict[str, tuple[Path, int, int]]:
+    """Returns: Dict mapping arch to (kpack_path, size, kernel_count)"""
+    return {"gfx1100": (path, 12345, 42)}  # What's what?
+```
+
+When tuples are OK:
+
+- Simple pairs where meaning is obvious: `(x, y)`, `(min, max)`
+- Unpacking from standard library functions: `os.path.split()`
+- Single-use internal return values that are immediately unpacked
 
 #### Use named arguments for complicated function signatures
 
@@ -226,7 +266,6 @@ Benefits:
 
 - Code is self-documenting
 - No false precision from made-up values
-- Easier to understand and maintain
 - Prevents misleading information
 
 ✅ **Preferred:**
@@ -243,46 +282,6 @@ print(f"Device code stripped, new size: {new_size} bytes")
 original_size = binary_path.stat().st_size + 8000000  # Estimate original size
 print(f"Stripped {original_size - new_size} bytes")
 ```
-
-#### Use dataclasses, not tuples
-
-**For non-trivial data with multiple fields, use dataclasses instead of tuples.**
-
-Benefits:
-
-- Self-documenting: Field names make code clearer
-- IDE-friendly: Autocomplete and type checking work
-- Refactoring-safe: Adding fields doesn't break positional unpacking
-- Less error-prone: Can't accidentally swap fields of the same type
-
-✅ **Preferred:**
-
-```python
-@dataclass
-class KpackInfo:
-    """Information about a created kpack file."""
-    kpack_path: Path
-    size: int
-    kernel_count: int
-
-def create_kpack_files(...) -> dict[str, KpackInfo]:
-    """Returns: Dict mapping arch to KpackInfo"""
-    return {"gfx1100": KpackInfo(kpack_path=path, size=12345, kernel_count=42)}
-```
-
-❌ **Avoid:**
-
-```python
-def create_kpack_files(...) -> dict[str, tuple[Path, int, int]]:
-    """Returns: Dict mapping arch to (kpack_path, size, kernel_count)"""
-    return {"gfx1100": (path, 12345, 42)}  # What's what?
-```
-
-When tuples are OK:
-
-- Simple pairs where meaning is obvious: `(x, y)`, `(min, max)`
-- Unpacking from standard library functions: `os.path.split()`
-- Single-use internal return values that are immediately unpacked
 
 ### Script structure and organization
 
@@ -304,28 +303,23 @@ Benefits:
 ```python
 import sys
 import argparse
-from pathlib import Path
 
 
 # This function can be used from other scripts by importing this file,
 # without side effects like running the argparse code below.
-def fetch_artifacts(run_id: int, output_dir: Path) -> list[Path]:
-    """Fetch artifacts from the given run ID."""
+def count_artifacts(run_id: int) -> int:
     # ... implementation here
-    return artifacts
+    return count
 
 
 # This function can called from unit tests (or other scripts).
 def main(argv: list[str]) -> int:
-    """Main entry point for the script."""
     parser = argparse.ArgumentParser(description="Fetch artifacts from GitHub Actions")
     parser.add_argument("--run-id", type=int, required=True)
-    parser.add_argument("--output-dir", type=Path, default=Path("artifacts"))
-
     args = parser.parse_args(argv)
 
-    artifacts = fetch_artifacts(args.run_id, args.output_dir)
-    print(f"Downloaded {len(artifacts)} artifacts")
+    count = count_artifacts(args.run_id)
+    print(f"Counted {count} artifacts")
     return 0
 
 
@@ -340,15 +334,20 @@ if __name__ == "__main__":
 import sys
 import argparse
 
+
+def count_artifacts(run_id: int) -> int:
+    # ... implementation here
+    return count
+
+
 # This runs immediately when imported, making testing difficult
 parser = argparse.ArgumentParser()
 parser.add_argument("--run-id", type=int, required=True)
 args = parser.parse_args()
 
 # Global side effects on import
-print(f"Fetching artifacts for run {args.run_id}")
-result = fetch_artifacts(args.run_id)
-print(f"Downloaded {len(result)} artifacts")
+count = count_artifacts(args.run_id)
+print(f"Counted {count} artifacts")
 ```
 
 #### Use `argparse` for CLI flags
