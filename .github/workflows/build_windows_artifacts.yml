@@ -28,9 +28,6 @@ on:
         type: boolean
       extra_cmake_options:
         type: string
-      monitor_memory:
-        type: boolean
-        default: false
       monitor_interval:
         type: string
         default: "30"
@@ -54,9 +51,6 @@ on:
         type: boolean
       extra_cmake_options:
         type: string
-      monitor_memory:
-        type: boolean
-        default: false
       monitor_interval:
         type: string
         default: "30"
@@ -163,11 +157,11 @@ jobs:
         env:
           MEMORY_MONITOR_INTERVAL: ${{ inputs.monitor_interval }}
         run: |
-          bash build_tools/github_actions/start_memory_monitor_win.sh "${{ inputs.monitor_memory }}"
+          bash build_tools/github_actions/start_memory_monitor_win.sh
 
           cmake --build "${{ env.BUILD_DIR }}" --target therock-archives therock-dist -- -k 0
 
-          bash build_tools/github_actions/stop_memory_monitor_win.sh "${{ inputs.monitor_memory }}"
+          bash build_tools/github_actions/stop_memory_monitor_win.sh
 
       - name: Report
         if: ${{ !cancelled() }}

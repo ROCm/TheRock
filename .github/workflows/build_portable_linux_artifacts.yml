@@ -29,9 +29,6 @@ on:
         default: false
       extra_cmake_options:
         type: string
-      monitor_memory:
-        type: boolean
-        default: false
       monitor_interval:
         type: string
         default: "30"
@@ -55,9 +52,6 @@ on:
         type: boolean
       extra_cmake_options:
         type: string
-      monitor_memory:
-        type: boolean
-        default: false
       monitor_interval:
         type: string
         default: "30"
@@ -137,19 +131,16 @@ jobs:
       - name: Build therock-archives and therock-dist
         env:
           JOB_NAME: ${{ github.job }}
-          MONITOR_MEMORY: ${{ inputs.monitor_memory }}
           MEMORY_MONITOR_INTERVAL: ${{ inputs.monitor_interval }}
         run: |
           MONITOR_PID=""
-          if [ "$MONITOR_MEMORY" = "true" ]; then
-            echo "Starting memory monitoring..."
-            MONITOR_PID=$(bash build_tools/github_actions/start_memory_monitor.sh)
-            export MONITOR_PID
-            echo "Memory monitor PID: $MONITOR_PID"
+          echo "Starting memory monitoring..."
+          MONITOR_PID=$(bash build_tools/github_actions/start_memory_monitor.sh)
+          export MONITOR_PID
+          echo "Memory monitor PID: $MONITOR_PID"
 
-            # Set up trap to stop monitoring on exit (success or failure)
-            trap 'if [ -n "$MONITOR_PID" ]; then echo "Stopping memory monitoring..."; bash build_tools/github_actions/stop_memory_monitor.sh || true; fi' EXIT
-          fi
+          # Set up trap to stop monitoring on exit (success or failure)
+          trap 'if [ -n "$MONITOR_PID" ]; then echo "Stopping memory monitoring..."; bash build_tools/github_actions/stop_memory_monitor.sh || true; fi' EXIT
 
           # Run the build
           cmake --build ${{ env.BUILD_DIR }} --target therock-archives therock-dist -- -k 0
