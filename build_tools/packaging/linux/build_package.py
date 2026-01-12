@@ -59,7 +59,7 @@ class PackageConfig:
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 # Default install prefix
-DEFAULT_INSTALL_PREFIX = "/opt/rocm"
+DEFAULT_INSTALL_PREFIX = "/opt/rocm/core"
 
 
 ################### Debian package creation #######################
@@ -149,6 +149,8 @@ def create_versioned_deb_package(pkg_name, config: PackageConfig):
     generate_changelog_file(pkg_info, deb_dir, config)
     generate_rules_file(pkg_info, deb_dir, config)
     generate_control_file(pkg_info, deb_dir, config)
+    if is_postinstallscripts_available(pkg_info):
+        generate_debian_postscripts(pkg_info, deb_dir, config)
 
     sourcedir_list = []
     dir_list = filter_components_fromartifactory(
@@ -158,10 +160,10 @@ def create_versioned_deb_package(pkg_name, config: PackageConfig):
 
     print(f"sourcedir_list:\n  {sourcedir_list}")
     if not sourcedir_list and not is_meta:
-        sys.exit("Empty sourcedir_list and not a meta package, exiting")
+        sys.exit(f"{pkg_name}: Empty sourcedir_list and not a meta package, exiting")
 
     if not sourcedir_list:
-        print(f"Meta package")
+        print(f"{pkg_name} is a Meta package")
     else:
         # Install file is required for non-meta packages
         generate_install_file(pkg_info, deb_dir, config)
@@ -259,12 +261,17 @@ def generate_rules_file(pkg_info, deb_dir, config: PackageConfig):
     rules_file = Path(deb_dir) / "rules"
     disable_dh_strip = is_key_defined(pkg_info, "Disable_DEB_STRIP")
     disable_dwz = is_key_defined(pkg_info, "Disable_DWZ")
+    # Get package name for changelog installation
+    pkg_name = update_package_name(pkg_info.get("Package"), config)
+
     env = Environment(loader=FileSystemLoader(str(SCRIPT_DIR)))
     template = env.get_template("template/debian_rules.j2")
     # Prepare  context dictionary
     context = {
         "disable_dwz": disable_dwz,
         "disable_dh_strip": disable_dh_strip,
+        "install_prefix": config.install_prefix,
+        "pkg_name": pkg_name,
     }
 
     with rules_file.open("w", encoding="utf-8") as f:
@@ -346,6 +353,47 @@ def generate_control_file(pkg_info, deb_dir, config: PackageConfig):
     with control_file.open("w", encoding="utf-8") as f:
         f.write(template.render(context))
         f.write("\n")  # Adds a blank line. For fixing missing final newline
+
+
+def generate_debian_postscripts(pkg_info, deb_dir, config: PackageConfig):
+    """Generate a Debian postinst/prerm file entry in `debian folder`.
+
+    Parameters:
+    pkg_info: Package details parsed from a JSON file
+    deb_dir: Directory where the `debian/control` file will be created
+    config: Configuration object containing package metadata
+
+    Returns: None
+    """
+    # Debian maintainer scripts that must be executable
+    EXEC_SCRIPTS = {"preinst", "postinst", "prerm", "postrm", "config"}
+    pkg_name = pkg_info.get("Package")
+    parts = config.rocm_version.split(".")
+    if len(parts) < 3:
+        raise ValueError(
+            f"Version string '{args.rocm_version}' does not have major.minor.patch versions"
+        )
+
+    env = Environment(loader=FileSystemLoader(str(SCRIPT_DIR)))
+    # Prepare your context dictionary
+    context = {
+        "install_prefix": config.install_prefix,
+        "version_major": int(re.match(r"^\d+", parts[0]).group()),
+        "version_minor": int(re.match(r"^\d+", parts[1]).group()),
+        "version_patch": int(re.match(r"^\d+", parts[2]).group()),
+        "target": "deb",
+    }
+
+    templates_root = Path(SCRIPT_DIR) / "template" / "scripts"
+    # Collect all matching files
+    for script in EXEC_SCRIPTS:
+        pattern = f"{pkg_name}-{script}.j2"
+        for file in templates_root.glob(pattern):
+            script_file = Path(deb_dir) / script
+            template = env.get_template(str(file.relative_to(SCRIPT_DIR)))
+            with script_file.open("w", encoding="utf-8") as f:
+                f.write(template.render(context))
+            os.chmod(script_file, 0o755)
 
 
 def copy_package_contents(source_dir, destination_dir):
@@ -510,6 +558,7 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
     rpmrecommends = ""
     rpmsuggests = ""
     sourcedir_list = []
+    rpm_scripts = []
     if config.versioned_pkg:
         recommends_list = pkg_info.get("RPMRecommends", [])
         rpmrecommends = convert_to_versiondependency(recommends_list, config)
@@ -525,6 +574,9 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
 
         # Filter out non-existing directories
         sourcedir_list = [path for path in sourcedir_list if os.path.isdir(path)]
+
+        if is_postinstallscripts_available(pkg_info):
+            rpm_scripts = generate_rpm_postscripts(pkg_info, config)
 
         if config.enable_rpath:
             for path in sourcedir_list:
@@ -565,10 +617,57 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
         "disable_rpm_strip": is_rpm_stripping_disabled(pkg_info),
         "disable_debug_package": is_debug_package_disabled(pkg_info),
         "sourcedir_list": sourcedir_list,
+        "rpm_scripts": rpm_scripts,
     }
 
     with open(specfile, "w", encoding="utf-8") as f:
         f.write(template.render(context))
+
+
+def generate_rpm_postscripts(pkg_info, config: PackageConfig):
+    """Generate RPM postinst/prerm sections.
+
+    Parameters:
+    pkg_info: Package details parsed from a JSON file
+    config: Configuration object containing package metadata
+
+    Returns: rpm script sections for specfile
+    """
+    # RPM maintainer scripts
+    EXEC_SCRIPTS = {
+        "preinst": "%pre",
+        "postinst": "%post",
+        "prerm": "%preun",
+        "postrm": "%postun",
+    }
+    pkg_name = pkg_info.get("Package")
+    parts = config.rocm_version.split(".")
+    env = Environment(loader=FileSystemLoader(str(SCRIPT_DIR)))
+    # Prepare your context dictionary
+    context = {
+        "install_prefix": config.install_prefix,
+        "version_major": int(re.match(r"^\d+", parts[0]).group()),
+        "version_minor": int(re.match(r"^\d+", parts[1]).group()),
+        "version_patch": int(re.match(r"^\d+", parts[2]).group()),
+        "target": "rpm",
+    }
+
+    templates_root = Path(SCRIPT_DIR) / "template" / "scripts"
+    # Collect all matching files
+    # This will hold rendered RPM script sections
+    rpm_script_sections = {}
+
+    for script, rpm_section in EXEC_SCRIPTS.items():
+        pattern = f"{pkg_name}-{script}.j2"
+
+        for file in templates_root.glob(pattern):
+            template = env.get_template(str(file.relative_to(SCRIPT_DIR)))
+            rendered = template.render(context)
+
+            # Store rendered script under its RPM section name
+            rpm_script_sections[rpm_section] = rendered
+
+    return rpm_script_sections
 
 
 def package_with_rpmbuild(spec_file):
@@ -647,14 +746,25 @@ def update_package_name(pkg_name, config: PackageConfig):
     """
     print_function_name()
     if config.versioned_pkg:
-        pkg_suffix = config.rocm_version
+        # Split version passed to use only major and minor version for package name
+        # Split by dot and take first two components
+        # Package name will be rocm8.1 and discard all other version part
+        parts = config.rocm_version.split(".")
+        if len(parts) < 2:
+            raise ValueError(
+                f"Version string '{args.rocm_version}' does not have major.minor versions"
+            )
+        major = re.match(r"^\d+", parts[0])
+        minor = re.match(r"^\d+", parts[1])
+        pkg_suffix = f"{major.group()}.{minor.group()}"
     else:
         pkg_suffix = ""
 
     if config.enable_rpath:
         pkg_suffix = f"-rpath{pkg_suffix}"
 
-    if check_for_gfxarch(pkg_name):
+    pkg_info = get_package_info(pkg_name)
+    if is_gfxarch_package(pkg_info):
         # Remove -dcgpu from gfx_arch
         gfx_arch = config.gfx_arch.lower().split("-", 1)[0]
         pkg_name = pkg_name + pkg_suffix + "-" + gfx_arch
@@ -729,10 +839,7 @@ def filter_components_fromartifactory(pkg_name, artifacts_dir, gfx_arch):
     pkg_info = get_package_info(pkg_name)
     sourcedir_list = []
 
-    if is_key_defined(pkg_info, "Gfxarch"):
-        artifact_suffix = gfx_arch
-    else:
-        artifact_suffix = "generic"
+    dir_suffix = gfx_arch if is_gfxarch_package(pkg_info) else "generic"
 
     artifactory = pkg_info.get("Artifactory")
     if artifactory is None:
@@ -743,6 +850,16 @@ def filter_components_fromartifactory(pkg_name, artifacts_dir, gfx_arch):
 
     for artifact in artifactory:
         artifact_prefix = artifact["Artifact"]
+        # Package specific key: "Gfxarch"
+        # Artifact specific key: "Artifact_Gfxarch"
+        # If "Artifact_Gfxarch" key is specified use it for artifact directory suffix
+        # Else use the package "Gfxarch" for finding the suffix
+        if "Artifact_Gfxarch" in artifact:
+            print(f"{pkg_name} : Artifact_Gfxarch key exists for artifacts {artifact}")
+            is_gfxarch = str(artifact["Artifact_Gfxarch"]).lower() == "true"
+            artifact_suffix = gfx_arch if is_gfxarch else "generic"
+        else:
+            artifact_suffix = dir_suffix
 
         for subdir in artifact["Artifact_Subdir"]:
             artifact_subdir = subdir["Name"]
@@ -832,10 +949,21 @@ def run(args: argparse.Namespace):
     # Set the global variables
     dest_dir = Path(args.dest_dir).expanduser().resolve()
 
+    # Split version passed to use only major and minor version for prefix folder
+    # Split by dot and take first two components
+    parts = args.rocm_version.split(".")
+    if len(parts) < 2:
+        raise ValueError(
+            f"Version string '{args.rocm_version}' does not have major.minor versions"
+        )
+    major = re.match(r"^\d+", parts[0])
+    minor = re.match(r"^\d+", parts[1])
+    modified_rocm_version = f"{major.group()}.{minor.group()}"
+
     # Append rocm version to default install prefix
     # TBD: Do we need to append rocm_version to other prefix?
     if args.install_prefix == f"{DEFAULT_INSTALL_PREFIX}":
-        prefix = args.install_prefix + "-" + args.rocm_version
+        prefix = args.install_prefix + "-" + modified_rocm_version
 
     # Populate package config details from user arguments
     config = PackageConfig(

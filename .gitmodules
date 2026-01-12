@@ -45,10 +45,6 @@
 	path = third-party/sysdeps/linux/amd-mesa/mesa-fork
 	url = https://github.com/ROCm/mesa-fork.git
 	branch = amd-decode-only
-[submodule "amdsmi"]
-	path = base/amdsmi
-	url = https://github.com/ROCm/amdsmi.git
-	branch = amd-staging
 [submodule "iree"]
 	path = iree-libs/iree
 	url = https://github.com/iree-org/iree.git
@@ -57,3 +53,22 @@
 	path = iree-libs/fusilli
 	url = https://github.com/iree-org/fusilli.git
 	branch = main
+[submodule "rocm-kpack"]
+	path = base/rocm-kpack
+	url = https://github.com/ROCm/rocm-kpack.git
+[submodule "amd-dbgapi"]
+	path = debug-tools/amd-dbgapi
+	url = https://github.com/ROCm/ROCdbgapi.git
+	branch = amd-staging
+[submodule "rocgdb"]
+	path = debug-tools/rocgdb/source
+	url = https://github.com/ROCm/rocgdb.git
+	branch = amd-staging
+[submodule "rocr-debug-agent"]
+	path = debug-tools/rocr-debug-agent
+	url = https://github.com/ROCm/rocr_debug_agent.git
+	branch = amd-staging
+[submodule "libhipcxx"]
+	path = math-libs/libhipcxx
+	url = https://github.com/ROCm/libhipcxx.git
+	branch = amd-develop

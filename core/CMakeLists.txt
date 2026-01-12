@@ -9,7 +9,53 @@ if(WIN32)
   set(_system_toolchain "")
 endif()
 
+if(THEROCK_ENABLE_CORE_AMDSMI)
+
+  ################################################################################
+  # amdsmi
+  ################################################################################
+
+  if(NOT WIN32)  # TODO(#36): Enable on Windows and/or make subproject inclusion generally optional
+
+    therock_cmake_subproject_declare(amdsmi
+      EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/amdsmi"
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/amdsmi"
+      USE_DIST_AMDGPU_TARGETS
+      BACKGROUND_BUILD
+      CMAKE_ARGS
+        "-DCMAKE_VERBOSE_MAKEFILE=OFF"
+        "-DBUILD_TESTS=${THEROCK_BUILD_TESTING}"
+      BUILD_DEPS
+        therock-googletest
+      RUNTIME_DEPS
+        rocm-core
+        ${THEROCK_BUNDLED_LIBDRM}
+      INSTALL_RPATH_DIRS
+        lib
+      INTERFACE_INSTALL_RPATH_DIRS
+        lib
+    )
+    therock_cmake_subproject_provide_package(amdsmi amd_smi lib/cmake)
+    therock_cmake_subproject_activate(amdsmi)
+
+    therock_provide_artifact(core-amdsmi
+      TARGET_NEUTRAL
+      DESCRIPTOR artifact-core-amdsmi.toml
+      COMPONENTS
+        dbg
+        dev
+        doc
+        lib
+        run
+      SUBPROJECT_DEPS
+        amdsmi
+    )
+
+  endif() # NOT WIN32
+endif(THEROCK_ENABLE_CORE_AMDSMI)
+
 if(THEROCK_ENABLE_CORE_RUNTIME)
+
   ##############################################################################
   # ROCR-Runtime
   ##############################################################################
@@ -178,6 +224,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
     # hipInfo (from hip-tests)
     ##############################################################################
     therock_cmake_subproject_declare(hipInfo
+      USE_DIST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR "hipInfo"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipInfo"
       BACKGROUND_BUILD
@@ -239,7 +286,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
     endif()
     # Provide it as an artifact:
     therock_provide_artifact(core-hiptests
-      TARGETS USE_DIST_AMDGPU_TARGETS
+      TARGET_NEUTRAL
       DESCRIPTOR ${hip-tests_artifact_file}
       COMPONENTS
         test
@@ -294,9 +341,6 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
       rocminfo  # Various things expect to be able to find the rocminfo tools
       rocprofiler-register
       ROCR-Runtime
-    )
-    list(APPEND OCL_CLR_CMAKE_ARGS
-      "-DBUILD_TESTS=${THEROCK_BUILD_TESTING}"
     )
   endif()
 
@@ -364,3 +408,59 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
   endif()
 
 endif(THEROCK_ENABLE_OCL_RUNTIME)
+
+##############################################################################
+# rocrtst for ROCR-Runtime
+##############################################################################
+
+if(THEROCK_BUILD_TESTING)
+  if(THEROCK_ENABLE_CORE_RUNTIME_TESTS)
+
+    # rocrtst may optionally build against amdsmi when available (Linux).
+    set(_rocrtst_build_deps
+      amd-llvm
+      ocl-clr
+    )
+    if(TARGET amdsmi)
+      list(APPEND _rocrtst_build_deps amdsmi)
+    endif()
+
+    therock_cmake_subproject_declare(rocrtst
+      USE_DIST_AMDGPU_TARGETS
+      EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/rocrtst/suites/test_common"
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocrtst"
+      BACKGROUND_BUILD
+      CMAKE_ARGS
+        "-DCMAKE_PREFIX_PATH="
+        "-DLLVM_DIR="
+        "-DROCM_DIR="
+      COMPILER_TOOLCHAIN
+        "${_system_toolchain}"
+      BUILD_DEPS
+        ${_rocrtst_build_deps}
+      RUNTIME_DEPS
+        ROCR-Runtime
+        rocprofiler-register
+        ${THEROCK_BUNDLED_ELFUTILS}
+        ${THEROCK_BUNDLED_LIBDRM}
+        ${THEROCK_BUNDLED_NUMACTL}
+    )
+    therock_cmake_subproject_glob_c_sources(rocrtst SUBDIRS .)
+    therock_cmake_subproject_activate(rocrtst)
+
+    therock_provide_artifact(rocrtst
+      TARGET_NEUTRAL
+      DESCRIPTOR artifact-core-rocrtst.toml
+      COMPONENTS
+        dbg
+        dev
+        doc
+        lib
+        run
+        test
+      SUBPROJECT_DEPS
+        rocrtst
+    )
+
+  endif(THEROCK_ENABLE_CORE_RUNTIME_TESTS)
+endif(THEROCK_BUILD_TESTING)

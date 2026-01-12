@@ -9,6 +9,10 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/gmp-6.3.0.tar.xz"
       URL_HASH "SHA512=e85a0dab5195889948a3462189f0e0598d331d3457612e2d3350799dba2e244316d256f8161df5219538eb003e4b5343f989aaa00f96321559063ed8c8f29fd2"
       TOUCH "${_download_stamp}"
+      # We need DOWNLOAD_EXTRACT_TIMESTAMP set to TRUE to preserve the timestamp
+      # of the extracted sources, otherwise the build system will notice
+      # changes and will try to re-run autotools, causing issues.
+      DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     )
 
     therock_cmake_subproject_declare(therock-gmp
@@ -44,11 +48,6 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     )
 
     add_test(
-      NAME gmp_archive_test
-      COMMAND ls "${CMAKE_CURRENT_BINARY_DIR}/build/dist/lib/rocm_sysdeps/lib/libgmp.a"
-    )
-
-    add_test(
       NAME gmp_header_test
       COMMAND ls "${CMAKE_CURRENT_BINARY_DIR}/build/dist/lib/rocm_sysdeps/include/gmp.h"
     )
@@ -60,24 +59,13 @@ endif()
 cmake_minimum_required(VERSION 3.25)
 project(GMP_BUILD VERSION "6.3.0")
 
-include(ProcessorCount)
-ProcessorCount(PAR_JOBS)
-
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT PATCHELF)
   message(FATAL_ERROR "Missing PATCHELF from super-project")
 endif()
 
-# Do builds from a copy of the source directory, in case we need to
-# patch the sources.
-set(SOURCE_COPY_DIR "${CMAKE_CURRENT_BINARY_DIR}/s")
-
 add_custom_target(
   build ALL
   WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-  COMMAND
-    "${CMAKE_COMMAND}" -E rm -rf -- "${CMAKE_INSTALL_PREFIX}" "${SOURCE_COPY_DIR}"
-  COMMAND
-    "${CMAKE_COMMAND}" -E copy_directory "${SOURCE_DIR}" "${SOURCE_COPY_DIR}"
   #
   # OPTIONAL: Patching of the sources should happen here.
   #
@@ -92,10 +80,10 @@ add_custom_target(
       "LDFLAGS=${CMAKE_SHARED_LINKER_FLAGS} -Wl,-rpath=\\'\\$$\\$$ORIGIN\\' -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
       "CPPFLAGS=${EXTRA_CPPFLAGS}"
       --
-    "${SOURCE_COPY_DIR}/configure"
+    "${SOURCE_DIR}/configure"
       --prefix "${CMAKE_INSTALL_PREFIX}"
   COMMAND
-    make -j "${PAR_JOBS}" V=1
+    make V=1
   COMMAND
     make install
   COMMAND
@@ -103,7 +91,7 @@ add_custom_target(
       "PATCHELF=${PATCHELF}"
       "THEROCK_SOURCE_DIR=${THEROCK_SOURCE_DIR}"
       "Python3_EXECUTABLE=${Python3_EXECUTABLE}" --
-    "${CMAKE_CURRENT_SOURCE_DIR}/patch_install.sh" ${CMAKE_INSTALL_PREFIX}
+    "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/patch_install.py" ${CMAKE_INSTALL_PREFIX}
 )
 
 configure_file(

@@ -5,27 +5,12 @@
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "sudo",
       "libc6",
       "python3 (>= 3.6.8)",
-      "python3-pip",
-      "python3-setuptools",
-      "python3-wheel"
-    ],
-    "RPMRequires": [
-      "sudo",
-      "python3 >= 3.6.8",
-      "python3-pip",
-      "python3-setuptools",
-      "python3-wheel"
-    ],
-    "RPMRecommends": [
-      "python3-argcomplete",
       "amdrocm-sysdeps"
     ],
-
-    "DEBRecommends": [
-      "python3-argcomplete",
+    "RPMRequires": [
+      "python3 >= 3.6.8",
       "amdrocm-sysdeps"
     ],
     "Maintainer": "AMD-SMILib Support <amd-smi.support@amd.com>",
@@ -39,7 +24,7 @@
     "Homepage": "https://github.com/ROCm/rocm-systems",
     "Artifactory": [
       {
-        "Artifact": "base",
+        "Artifact": "core-amdsmi",
         "Artifact_Subdir": [
           {
             "Name": "amdsmi",
@@ -61,7 +46,6 @@
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "python3",
       "libc6",
       "libstdc++6|libstdc++8",
       "libstdc++-5-dev|libstdc++-7-dev|libstdc++-11-dev|libstdc++-12-dev|libstdc++-13-dev|libstdc++-14-dev",
@@ -70,10 +54,6 @@
       "amdrocm-runtime"
     ],
     "RPMRequires": [
-      "python3",
-      "glibc",
-      "libstdc++",
-      "libgcc",
       "amdrocm-sysdeps",
       "amdrocm-runtime"
     ],
@@ -140,9 +120,6 @@
     ],
     "RPMRequires": [
       "python3",
-      "glibc",
-      "libstdc++",
-      "libgcc",
       "amdrocm-sysdeps",
       "amdrocm-llvm"
     ],
@@ -351,7 +328,6 @@
       "amdrocm-sysdeps"
     ],
     "RPMRequires": [
-      "glibc",
       "amdrocm-runtime",
       "amdrocm-sysdeps"
     ],
@@ -399,7 +375,6 @@
       "amdrocm-fft"
     ],
     "RPMRequires": [
-      "glibc",
       "amdrocm-fft"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
@@ -444,7 +419,6 @@
       "amdrocm-profiler-base"
     ],
     "RPMRequires": [
-      "glibc",
       "amdrocm-runtime",
       "amdrocm-profiler-base"
     ],
@@ -518,7 +492,6 @@
       "amdrocm-blas"
     ],
     "RPMRequires": [
-      "glibc",
       "amdrocm-blas"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
@@ -575,7 +548,6 @@
       "amdrocm-runtime"
     ],
     "RPMRequires": [
-      "glibc",
       "amdrocm-blas",
       "amdrocm-runtime"
     ],
@@ -624,7 +596,6 @@
       "amdrocm-sparse"
     ],
     "RPMRequires": [
-      "glibc",
       "amdrocm-sparse"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
@@ -669,7 +640,6 @@
       "amdrocm-blas"
     ],
     "RPMRequires": [
-      "glibc",
       "amdrocm-math-common",
       "amdrocm-blas"
     ],
@@ -726,7 +696,6 @@
       "amdrocm-solver"
     ],
     "RPMRequires": [
-      "glibc",
       "amdrocm-solver"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
@@ -770,7 +739,6 @@
       "amdrocm-runtime"
     ],
     "RPMRequires": [
-      "glibc",
       "amdrocm-runtime"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
@@ -818,7 +786,6 @@
       "amdrocm-rand"
     ],
     "RPMRequires": [
-      "glibc",
       "amdrocm-rand"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
@@ -861,8 +828,7 @@
       "libc6"
     ],
     "RPMRequires": [
-      "python3",
-      "glibc"
+      "python3"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "ROCm primitive header files",
@@ -908,9 +874,6 @@
     "BuildArch": "x86_64",
     "DEBDepends": [
       "libc6"
-    ],
-    "RPMRequires": [
-      "glibc"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "ROCm profiler tools ",
@@ -980,7 +943,6 @@
       "amdrocm-profiler-base"
     ],
     "RPMRequires": [
-      "glibc",
       "amdrocm-runtime",
       "amdrocm-sysdeps",
       "amdrocm-profiler-base"
@@ -1073,9 +1035,7 @@
     ],
     "RPMRequires": [
       "libgcc",
-      "libstdc++",
       "python3",
-      "glibc",
       "amdrocm-runtime"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
@@ -1223,9 +1183,6 @@
     "BuildArch": "x86_64",
     "DEBDepends": [
       "libc6"
-    ],
-    "RPMRequires": [
-      "glibc"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "ROCm system dependencies ",
@@ -1415,7 +1372,6 @@
       "amdrocm-profiler-base"
     ],
     "RPMRequires": [
-      "glibc",
       "amdrocm-base",
       "amdrocm-profiler-base"
     ],
@@ -1459,7 +1415,6 @@
     ],
     "RPMRequires": [
       "python3",
-      "glibc",
       "amdrocm-rccl"
     ],
     "Maintainer": "RCCL Maintainer <rccl-maintainer@amd.com>",
@@ -1514,6 +1469,7 @@
     "Artifactory": [
       {
         "Artifact": "hipdnn",
+        "Artifact_Gfxarch": "False",
         "Artifact_Subdir": [
           {
             "Name": "hipDNN",
@@ -1564,6 +1520,7 @@
     "Artifactory": [
       {
         "Artifact": "hipdnn",
+        "Artifact_Gfxarch": "False",
         "Artifact_Subdir": [
           {
             "Name": "hipDNN",
@@ -1590,7 +1547,7 @@
     "Gfxarch": "True"
   },
   {
-    "Comments": "Meta Package defintions start from here. There will not be any artifactory for meta packages. Gfxarch should be false for meta packages",
+    "Comments": "Meta Package defintions start from here. There will not be any artifactory for meta packages.",
     "Package": "amdrocm-core",
     "Version": "",
     "Architecture": "amd64",
@@ -1607,7 +1564,8 @@
       "amdrocm-dnn",
       "amdrocm-rccl",
       "amdrocm-math-common",
-      "amdrocm-smi"
+      "amdrocm-smi",
+      "amdrocm-hipify"
     ],
     "RPMRequires": [
       "amdrocm-base",
@@ -1621,7 +1579,8 @@
       "amdrocm-dnn",
       "amdrocm-rccl",
       "amdrocm-math-common",
-      "amdrocm-smi"
+      "amdrocm-smi",
+      "amdrocm-hipify"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "AMD ROCm core metapackage",
@@ -1633,6 +1592,7 @@
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Metapackage": "True",
+    "Postinstall": "True",
     "Gfxarch": "True"
   },
   {
@@ -1656,6 +1616,7 @@
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Metapackage": "True",
+    "Postinstall": "True",
     "Gfxarch": "True"
   },
   {

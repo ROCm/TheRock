@@ -49,13 +49,17 @@ amdgpu_family_info_matrix_presubmit = {
     "gfx94x": {
         "linux": {
             "test-runs-on": "linux-mi325-1gpu-ossci-rocm-frac",
+            # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
+            "benchmark-runs-on": "linux-mi325-1gpu-ossci-rocm-frac",
             "family": "gfx94X-dcgpu",
             "build_variants": ["release", "asan"],
         }
     },
     "gfx110x": {
         "linux": {
-            "test-runs-on": "linux-gfx110X-gpu-rocm",
+            # TODO(#2740): Re-enable machine once `amdsmi` test is fixed
+            # Label is "linux-gfx110X-gpu-rocm"
+            "test-runs-on": "",
             "family": "gfx110X-all",
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
@@ -79,6 +83,8 @@ amdgpu_family_info_matrix_presubmit = {
         },
         "windows": {
             "test-runs-on": "windows-gfx1151-gpu-rocm",
+            # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
+            "benchmark-runs-on": "windows-gfx1151-gpu-rocm",
             "family": "gfx1151",
             "build_variants": ["release"],
         },
@@ -89,16 +95,14 @@ amdgpu_family_info_matrix_presubmit = {
 amdgpu_family_info_matrix_postsubmit = {
     "gfx950": {
         "linux": {
-            # Networking issue: https://github.com/ROCm/TheRock/issues/1660
-            # Label is "linux-mi355-1gpu-ossci-rocm"
-            "test-runs-on": "",
+            "test-runs-on": "linux-mi355-1gpu-ossci-rocm",
             "family": "gfx950-dcgpu",
             "build_variants": ["release", "asan"],
         }
     },
     "gfx120x": {
         "linux": {
-            "test-runs-on": "linux-gfx1201-gpu-rocm",
+            "test-runs-on": "linux-gfx120X-gpu-rocm",
             "family": "gfx120X-all",
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
@@ -151,7 +155,9 @@ amdgpu_family_info_matrix_nightly = {
     },
     "gfx103x": {
         "linux": {
-            "test-runs-on": "linux-gfx1030-gpu-rocm",
+            # TODO(#2740): Re-enable machine once `amdsmi` test is fixed
+            # Label is "linux-gfx1030-gpu-rocm"
+            "test-runs-on": "",
             "family": "gfx103X-dgpu",
             "build_variants": ["release"],
             "sanity_check_only_for_family": True,
@@ -167,9 +173,7 @@ amdgpu_family_info_matrix_nightly = {
     },
     "gfx1150": {
         "linux": {
-            # TODO(#2614): Re-enable machine once it is stable
-            # Label is "linux-gfx1150-gpu-rocm"
-            "test-runs-on": "",
+            "test-runs-on": "linux-gfx1150-gpu-rocm",
             "family": "gfx1150",
             "build_variants": ["release"],
             "sanity_check_only_for_family": True,
@@ -184,26 +188,25 @@ amdgpu_family_info_matrix_nightly = {
         "linux": {
             "test-runs-on": "",
             "family": "gfx1152",
-            "expect_failure": True,
             "build_variants": ["release"],
         },
         "windows": {
             "test-runs-on": "",
             "family": "gfx1152",
-            "expect_failure": True,
             "build_variants": ["release"],
         },
     },
     "gfx1153": {
         "linux": {
-            "test-runs-on": "linux-gfx1153-gpu-rocm",
+            # TODO(#2682): Re-enable machine once it is stable
+            # Label is "linux-gfx1153-gpu-rocm"
+            "test-runs-on": "",
             "family": "gfx1153",
             "build_variants": ["release"],
         },
         "windows": {
             "test-runs-on": "",
             "family": "gfx1153",
-            "expect_failure": True,
             "build_variants": ["release"],
         },
     },
