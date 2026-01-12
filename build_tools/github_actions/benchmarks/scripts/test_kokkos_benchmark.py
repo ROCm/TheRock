@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))  # For utils
 sys.path.insert(0, str(Path(__file__).parent))  # For benchmark_base
 from benchmark_base import BenchmarkBase, run_benchmark_main
 from utils.logger import log
+from utils.system.hardware import HardwareDetector
 
 
 class KokkosBenchmark(BenchmarkBase):
@@ -27,7 +28,7 @@ class KokkosBenchmark(BenchmarkBase):
         super().__init__(benchmark_name="kokkos", display_name="Kokkos")
         self.log_file = self.script_dir / "kokkos_bench.log"
         self.therock_dir = self.script_dir.parent.parent.parent.parent
-        
+
         # Load configuration
         config_file = self.script_dir.parent / "configs" / "kokkos.json"
         with open(config_file, "r") as f:
@@ -48,9 +49,10 @@ class KokkosBenchmark(BenchmarkBase):
     def build(self) -> None:
         """Build Kokkos from source."""
         log.info("Starting Kokkos build process...")
-        
-        # Detect GPU architecture
-        gfx_id = self.get_gpu_architecture()
+
+        # Detect GPU architecture using HardwareDetector
+        detector = HardwareDetector()
+        gfx_id = detector.get_gpu_architecture()
 
         # Clone repository
         success, message = self.clone_repository(
@@ -67,7 +69,7 @@ class KokkosBenchmark(BenchmarkBase):
             shutil.rmtree(self.build_dir)
 
         self.build_dir.mkdir(parents=True)
-        
+
         # Configure with CMake
         log.info("Configuring Kokkos with CMake...")
         cmake_cmd = [
@@ -84,7 +86,7 @@ class KokkosBenchmark(BenchmarkBase):
             "-DKokkos_ENABLE_HIP_RELOCATABLE_DEVICE_CODE=Off",
             f"-DKokkos_ARCH_AMD_{gfx_id.upper()}=On",
         ]
-        
+
         log.info(f"++ Exec [{self.build_dir}]$ {shlex.join(cmake_cmd)}")
         subprocess.run(cmake_cmd, cwd=self.build_dir, env=self.env, check=True)
 
@@ -92,18 +94,18 @@ class KokkosBenchmark(BenchmarkBase):
         log.info("Building Kokkos...")
         nproc = os.cpu_count() or 4
         make_cmd = ["make", "-j", str(nproc)]
-        
+
         log.info(f"++ Exec [{self.build_dir}]$ {shlex.join(make_cmd)}")
         subprocess.run(make_cmd, cwd=self.build_dir, env=self.env, check=True)
 
         # Install
         log.info("Installing Kokkos...")
         install_cmd = ["make", "-j", str(nproc), "install"]
-        
+
         log.info(f"++ Exec [{self.build_dir}]$ {shlex.join(install_cmd)}")
         subprocess.run(install_cmd, cwd=self.build_dir, env=self.env, check=True)
 
-        log.info("Build completed successfully")
+        log.info("Kokkos build completed successfully")
 
     def run_benchmarks(self) -> None:
         """Run Kokkos benchmarks and save output to log file."""
@@ -114,7 +116,9 @@ class KokkosBenchmark(BenchmarkBase):
             raise ValueError(f"Kokkos build directory not found: {self.build_dir}")
 
         # Check if benchmark executable exists
-        benchmark_exe = self.build_dir / "core" / "perf_test" / "Kokkos_PerformanceTest_Benchmark"
+        benchmark_exe = (
+            self.build_dir / "core" / "perf_test" / "Kokkos_PerformanceTest_Benchmark"
+        )
         if not benchmark_exe.exists():
             raise ValueError(f"Benchmark executable not found: {benchmark_exe}")
 
@@ -145,14 +149,18 @@ class KokkosBenchmark(BenchmarkBase):
                 f.write(f"{line}")
 
             process.wait()
-            
+
             if process.returncode != 0:
-                raise ValueError(f"Benchmark execution failed with return code {process.returncode}")
+                raise ValueError(
+                    f"Benchmark execution failed with return code {process.returncode}"
+                )
 
         log.info("Benchmark execution complete")
 
     def parse_results(self) -> Tuple[List[Dict[str, Any]], PrettyTable]:
         """Parse benchmark results from JSON file.
+
+        Filters for configured test cases and kernel size from kokkos.json.
 
         Returns:
             tuple: (test_results list, PrettyTable object)
@@ -176,7 +184,7 @@ class KokkosBenchmark(BenchmarkBase):
             raise ValueError(f"Results file not found: {self.benchmark_json_path}")
 
         log.info(f"Parsing benchmark results from {self.benchmark_json_path}")
-        
+
         try:
             with open(self.benchmark_json_path, "r") as benchmark_file:
                 benchmark_data = json.load(benchmark_file)
@@ -187,16 +195,30 @@ class KokkosBenchmark(BenchmarkBase):
                     f"No 'benchmarks' key found in results JSON {self.benchmark_json_path}"
                 )
 
+            # Get kernel size string once (outside loop for efficiency)
+            kernel_size_str = str(self.config["kernel_size"])
+
             for result in benchmarks:
-                # Filter test cases based on config
-                if not any(test in result["name"] for test in self.config["test_cases"]):
+                result_name = result["name"]
+
+                # Filter for configured test cases and kernel size
+                is_target_test = any(
+                    test in result_name for test in self.config["test_cases"]
+                )
+                has_target_kernel_size = kernel_size_str in result_name
+
+                if not (is_target_test and has_target_kernel_size):
                     continue
 
                 # Extract metrics
-                test_name = result["name"]
+                test_name = result_name
                 time_normalized = result.get("Time normalized", 0.0)
                 time_unit = result.get("time_unit", "ns")
                 status = "PASS" if time_normalized > 0 else "FAIL"
+
+                log.info(
+                    f"Found {test_name} with kernel size {kernel_size_str}, score: {time_normalized} {time_unit}"
+                )
 
                 # Add to table
                 table.add_row(

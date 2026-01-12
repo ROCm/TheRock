@@ -235,41 +235,6 @@ class BenchmarkBase:
         # Return 0 only if PASS, otherwise return 1
         return 0 if final_status == "PASS" else 1
 
-    def get_gpu_architecture(self) -> str:
-        """Detect GPU architecture using rocminfo.
-
-        Returns:
-            str: GPU architecture ID (e.g., 'gfx908', 'gfx90a', 'gfx942')
-
-        Raises:
-            ValueError: If GPU architecture cannot be detected
-        """
-        log.info("Detecting GPU architecture...")
-        rocminfo_path = Path(self.therock_bin_dir) / "rocminfo"
-        
-        try:
-            result = subprocess.run(
-                [str(rocminfo_path)],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-            
-            for line in result.stdout.splitlines():
-                if "Name:" in line and "gfx" in line:
-                    # Extract gfx ID
-                    for part in line.split():
-                        if part.startswith("gfx"):
-                            log.info(f"Detected GPU architecture: {part}")
-                            return part.strip()
-        except subprocess.CalledProcessError as e:
-            log.error(f"rocminfo failed with return code {e.returncode}")
-            raise ValueError(f"Could not detect GPU architecture: {e}")
-        except FileNotFoundError:
-            raise ValueError(f"rocminfo not found at {rocminfo_path}")
-
-        raise ValueError("Could not detect GPU architecture from rocminfo output")
-
     def clone_repository(
         self, repo_url: str, clone_path: Path, branch: str = None
     ) -> Tuple[bool, str]:
@@ -294,7 +259,9 @@ class BenchmarkBase:
                 log.warning(warning_msg)
                 return True, warning_msg  # Consider existing repo as success
             elif not clone_path.is_dir():
-                error_msg = f"Destination path '{clone_path}' exists but is not a directory"
+                error_msg = (
+                    f"Destination path '{clone_path}' exists but is not a directory"
+                )
                 log.error(error_msg)
                 return False, error_msg
 
@@ -317,13 +284,15 @@ class BenchmarkBase:
                 text=True,
                 check=True,
             )
-            
+
             success_msg = f"Successfully cloned repository to {clone_path}"
             log.info(success_msg)
             return True, result.stdout or success_msg
 
         except FileNotFoundError:
-            error_msg = "git command not found. Please ensure git is installed and in PATH."
+            error_msg = (
+                "git command not found. Please ensure git is installed and in PATH."
+            )
             log.error(error_msg)
             return False, error_msg
         except subprocess.CalledProcessError as e:
