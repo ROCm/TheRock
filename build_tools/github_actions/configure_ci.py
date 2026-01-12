@@ -744,11 +744,10 @@ def main(base_args, linux_families, windows_families):
     if is_schedule:
         enable_build_jobs = True
         test_type = "full"
-    # For workflow_dispatch from external repos, always enable builds
-    elif is_workflow_dispatch and (
-        linux_external_project_configs or windows_external_project_configs
-    ):
-        print("workflow_dispatch from external repo - enabling builds")
+    # When external repos explicitly call TheRock's CI (workflow_dispatch or workflow_call),
+    # they're requesting specific project builds. Honor this request without checking modified paths.
+    elif linux_external_project_configs or windows_external_project_configs:
+        print("External repo requesting builds - enabling without path checks")
         enable_build_jobs = True
     else:
         modified_paths = get_modified_paths(base_ref)
