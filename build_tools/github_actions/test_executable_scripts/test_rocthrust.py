@@ -1,5 +1,6 @@
 import logging
 import os
+import platform
 import shlex
 import subprocess
 from pathlib import Path
@@ -87,6 +88,16 @@ if AMDGPU_FAMILIES == "gfx1152":
 elif AMDGPU_FAMILIES == "gfx1153":
     ctest_parallel_count = 4
 
+# Generate the resource spec file for ctest
+resource_spec_file = "resources.json"
+
+exe_suffix = ".exe" if platform.system() == "Windows" else ""
+res_gen_cmd = [f"{THEROCK_BIN_DIR}/rocthrust/generate_resource_spec{exe_suffix}",
+               f"{THEROCK_BIN_DIR}/rocthrust/{resource_spec_file}"]
+logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(res_gen_cmd)}")
+subprocess.run(res_gen_cmd, cwd=THEROCK_DIR, check=True)
+
+# Run ctest with resource spec file
 cmd = [
     "ctest",
     "--test-dir",
@@ -94,10 +105,10 @@ cmd = [
     "--output-on-failure",
     "--parallel",
     f"{ctest_parallel_count}",
+    "--resource-spec-file",
+    resource_spec_file,
     "--timeout",
-    "300",
-    "--repeat",
-    "until-pass:6",
+    "300"
 ]
 
 # If smoke tests are enabled, we run smoke tests only.
