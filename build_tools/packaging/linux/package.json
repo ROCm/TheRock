@@ -1,6 +1,6 @@
 [
   {
-    "Package": "amdrocm-smi",
+    "Package": "amdrocm-amdsmi",
     "Version": "",
     "Architecture": "amd64",
     "BuildArch": "x86_64",
@@ -1565,7 +1565,7 @@
       "amdrocm-dnn",
       "amdrocm-rccl",
       "amdrocm-math-common",
-      "amdrocm-smi",
+      "amdrocm-amdsmi",
       "amdrocm-hipify"
     ],
     "RPMRequires": [
@@ -1581,7 +1581,7 @@
       "amdrocm-dnn",
       "amdrocm-rccl",
       "amdrocm-math-common",
-      "amdrocm-smi",
+      "amdrocm-amdsmi",
       "amdrocm-hipify"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
@@ -1675,13 +1675,13 @@
     "BuildArch": "x86_64",
     "DEBDepends": [
       "amdrocm-base",
-      "amdrocm-smi",
+      "amdrocm-amdsmi",
       "amdrocm-profiler-base",
       "amdrocm-profiler"
     ],
     "RPMRequires": [
       "amdrocm-base",
-      "amdrocm-smi",
+      "amdrocm-amdsmi",
       "amdrocm-profiler-base",
       "amdrocm-profiler"
     ],
