@@ -581,7 +581,9 @@ def do_build_triton(
     remove_dir_if_exists(triton_python_dir / "dist")
     if args.clean:
         remove_dir_if_exists(triton_python_dir / "build")
-    run_command([sys.executable, "setup.py", "bdist_wheel"], cwd=triton_python_dir, env=env)
+    run_command(
+        [sys.executable, "setup.py", "bdist_wheel"], cwd=triton_python_dir, env=env
+    )
     built_wheel = find_built_wheel(triton_python_dir / "dist", triton_wheel_name)
     print(f"Found built wheel: {built_wheel}")
     copy_to_output(args, built_wheel)
@@ -889,7 +891,9 @@ def do_build_pytorch_audio(
     if args.clean:
         remove_dir_if_exists(pytorch_audio_dir / "build")
 
-    run_command([sys.executable, "setup.py", "bdist_wheel"], cwd=pytorch_audio_dir, env=env)
+    run_command(
+        [sys.executable, "setup.py", "bdist_wheel"], cwd=pytorch_audio_dir, env=env
+    )
     built_wheel = find_built_wheel(pytorch_audio_dir / "dist", "torchaudio")
     print(f"Found built wheel: {built_wheel}")
     copy_to_output(args, built_wheel)
@@ -925,7 +929,9 @@ def do_build_pytorch_vision(
     if args.clean:
         remove_dir_if_exists(pytorch_vision_dir / "build")
 
-    run_command([sys.executable, "setup.py", "bdist_wheel"], cwd=pytorch_vision_dir, env=env)
+    run_command(
+        [sys.executable, "setup.py", "bdist_wheel"], cwd=pytorch_vision_dir, env=env
+    )
     built_wheel = find_built_wheel(pytorch_vision_dir / "dist", "torchvision")
     print(f"Found built wheel: {built_wheel}")
     copy_to_output(args, built_wheel)

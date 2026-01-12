@@ -140,7 +140,9 @@ def save_repo_patches(repo_path: Path, patches_path: Path):
     if base_count > 0:
         base_path = patches_path / "base"
         base_path.mkdir(parents=True, exist_ok=True)
-        run_command(["git", "format-patch", "-o", base_path, base_revlist], cwd=repo_path)
+        run_command(
+            ["git", "format-patch", "-o", base_path, base_revlist], cwd=repo_path
+        )
     if hipified_count > 0:
         hipified_path = patches_path / "hipified"
         hipified_path.mkdir(parents=True, exist_ok=True)
@@ -277,13 +279,17 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
     patches_dir_name = get_patches_dir_name(args)
     if check_git_dir.exists():
         print(f"Not cloning repository ({check_git_dir} exists)")
-        run_command(["git", "remote", "set-url", "origin", args.gitrepo_origin], cwd=repo_dir)
+        run_command(
+            ["git", "remote", "set-url", "origin", args.gitrepo_origin], cwd=repo_dir
+        )
     else:
         print(f"Cloning repository at {args.repo_hashtag}")
         repo_dir.mkdir(parents=True, exist_ok=True)
         run_command(["git", "init", "--initial-branch=main"], cwd=repo_dir)
         run_command(["git", "config", "advice.detachedHead", "false"], cwd=repo_dir)
-        run_command(["git", "remote", "add", "origin", args.gitrepo_origin], cwd=repo_dir)
+        run_command(
+            ["git", "remote", "add", "origin", args.gitrepo_origin], cwd=repo_dir
+        )
 
     # Fetch and checkout.
     fetch_args = []
@@ -291,7 +297,9 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
         fetch_args.extend(["--depth", str(args.depth)])
     if args.jobs:
         fetch_args.extend(["-j", str(args.jobs)])
-    run_command(["git", "fetch"] + fetch_args + ["origin", args.repo_hashtag], cwd=repo_dir)
+    run_command(
+        ["git", "fetch"] + fetch_args + ["origin", args.repo_hashtag], cwd=repo_dir
+    )
     run_command(["git", "checkout", "FETCH_HEAD"], cwd=repo_dir)
     run_command(["git", "tag", "-f", TAG_UPSTREAM_DIFFBASE, "--no-sign"], cwd=repo_dir)
     try:
