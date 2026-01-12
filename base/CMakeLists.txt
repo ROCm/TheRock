@@ -57,6 +57,38 @@ therock_cmake_subproject_activate(rocm-core)
 
 
 ################################################################################
+# amdsmi
+################################################################################
+
+if(NOT WIN32)  # TODO(#36): Enable on Windows and/or make subproject inclusion generally optional
+
+therock_cmake_subproject_declare(amdsmi
+  EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/amdsmi"
+  BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/amdsmi"
+  USE_DIST_AMDGPU_TARGETS
+  BACKGROUND_BUILD
+  CMAKE_ARGS
+    "-DCMAKE_VERBOSE_MAKEFILE=OFF"
+    -DBUILD_TESTS=${THEROCK_BUILD_TESTING}
+  BUILD_DEPS
+    therock-googletest
+  RUNTIME_DEPS
+    rocm-core
+    ${THEROCK_BUNDLED_LIBDRM}
+  INSTALL_RPATH_DIRS
+    lib
+  INTERFACE_INSTALL_RPATH_DIRS
+    lib
+)
+therock_cmake_subproject_provide_package(amdsmi
+  amd_smi lib/cmake)
+therock_cmake_subproject_activate(amdsmi)
+list(APPEND _optional_artifact_deps amdsmi)
+
+endif()
+
+
+################################################################################
 # rocm_smi_lib
 ################################################################################
 
