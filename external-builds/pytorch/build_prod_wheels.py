@@ -745,9 +745,16 @@ def do_build_pytorch(
     if is_windows:
         copy_msvc_libomp_to_torch_lib(pytorch_dir)
 
-        use_flash_attention = (
-            "1" if args.enable_pytorch_flash_attention_windows else "0"
-        )
+        use_flash_attention = "0"
+
+        # temporarily prevent enabling aotriton for gfx1152/53 until pytorch
+        # uses a commit that enables it ( https://github.com/ROCm/aotriton/pull/142 )
+        AOTRITON_UNSUPPORTED_ARCHS = ["gfx1152", "gfx1153"]
+        if args.enable_pytorch_flash_attention_windows and not any(
+            arch in env["PYTORCH_ROCM_ARCH"] for arch in AOTRITON_UNSUPPORTED_ARCHS
+        ):
+            use_flash_attention = "1"
+
         env.update(
             {
                 "USE_FLASH_ATTENTION": use_flash_attention,
