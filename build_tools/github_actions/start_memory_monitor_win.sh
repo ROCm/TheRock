@@ -6,6 +6,9 @@ set -euo pipefail
 
 MonitorMemory="${1:-false}"
 
+# Set default memory monitor interval if not provided
+MEMORY_MONITOR_INTERVAL="${MEMORY_MONITOR_INTERVAL:-30}"
+
 # Start memory monitoring if enabled
 if [[ "${MonitorMemory}" == "true" ]]; then
   # Create logs directory
@@ -24,6 +27,7 @@ if [[ "${MonitorMemory}" == "true" ]]; then
   # Start the memory monitor in the background
   python build_tools/memory_monitor.py \
     --phase "Build Phase" \
+    --interval "${MEMORY_MONITOR_INTERVAL}" \
     --log-file "${LOG_FILE}" \
     --stop-signal-file "${STOP_SIGNAL_FILE}" \
     --max-runtime "${MAX_RUN_TIME}" \

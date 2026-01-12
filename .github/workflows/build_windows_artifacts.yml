@@ -31,6 +31,9 @@ on:
       monitor_memory:
         type: boolean
         default: false
+      monitor_interval:
+        type: string
+        default: "30"
 
   workflow_call:
     inputs:
@@ -54,6 +57,9 @@ on:
       monitor_memory:
         type: boolean
         default: false
+      monitor_interval:
+        type: string
+        default: "30"
 
 permissions:
   contents: read
@@ -154,6 +160,8 @@ jobs:
 
       - name: Build therock-archives and therock-dist
         if: ${{ !cancelled() }}
+        env:
+          MEMORY_MONITOR_INTERVAL: ${{ inputs.monitor_interval }}
         run: |
           bash build_tools/github_actions/start_memory_monitor_win.sh "${{ inputs.monitor_memory }}"
 
