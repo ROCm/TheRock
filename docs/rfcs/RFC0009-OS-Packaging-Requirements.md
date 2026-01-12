@@ -1,7 +1,7 @@
 ---
 author: Liam Berry (LiamfBerry), Saad Rahim (saadrahim)
 created: 2025-11-14
-modified: 2025-12-04
+modified: 2026-01-12
 status: draft
 ---
 
@@ -123,13 +123,13 @@ The following table shows the meta packages that will be available:
 
 | Name | Content | Descripion |
 | :------------- | :------------- | :------------- |
-| rocm & rocm-core | runtime & libraries, components, runtime compiler, amd-smi, rocminfo | Needed to run software built with ROCm Core |
-| rocm-core-devel | rocm-core + compiler cmake, static library files, and headers | Needed to build software with ROCm Core |
-| rocm-devel-tools | Profiler, debugger, and related tools | Independent set of tools to debug and profile any application built with ROCm |
-| rocm-fortran |  | Fortran compiler and related components |
-| rocm-opencl |  | Components needed to run OpenCL |
-| rocm-openmp |  | Components needed to build OpenMP |
-| rocm-core-sdk |  | Everything |
+| amdrocm & amdrocm-core | runtime & libraries, components, runtime compiler, amd-smi, rocminfo | Needed to run software built with ROCm Core |
+| amdrocm-core-devel | rocm-core + compiler cmake, static library files, and headers | Needed to build software with ROCm Core |
+| amdrocm-developer-tools | Profiler, debugger, and related tools | Independent set of tools to debug and profile any application built with ROCm |
+| amdrocm-fortran |  | Fortran compiler and related components |
+| amdrocm-opencl |  | Components needed to run OpenCL |
+| amdrocm-openmp |  | Components needed to build OpenMP |
+| amdrocm-core-sdk |  | Everything |
 
 ### Package Naming for no duplication with distors
 
@@ -176,7 +176,7 @@ Package granularity will be increased with ROCm 8.0. Development packages contai
 
 | Name | Dev package components only | Runtime packages | Source package inclusion only |
 | :------------- | :------------- | :------------- | :------------- |
-| amdrocm-amd-smi | | amd-smi | |
+| amdrocm-amdsmi | | amd-smi | |
 | amdrocm-llvm |  | amdclang++ (flang and openmp here if not separable) |  |
 | amdrocm-flang |  | flang |  |
 | amdrocm-runtimes |  | HIP, ROCR, CLR, runtime compilation, SPIR-V |  |
