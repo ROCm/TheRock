@@ -129,4 +129,9 @@ List of long-lived branches:
 ### Style guides
 
 We have project-wide style guides with recommendations to follow at
-[`docs/development/style_guides/`](docs/development/style_guides/).
+[`docs/development/style_guides/`](/docs/development/style_guides/):
+
+- [Bash Style Guide](/docs/development/style_guides/bash_style_guide.md)
+- [CMake Style Guide](/docs/development/style_guides/cmake_style_guide.md)
+- [GitHub Actions Style Guide](/docs/development/style_guides/github_actions_style_guide.md)
+- [Python Style Guide](/docs/development/style_guides/python_style_guide.md)
