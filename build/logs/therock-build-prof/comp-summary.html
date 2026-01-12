@@ -1,0 +1,250 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>TheRock Build Resource Observability Report</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; }
+    h1 { margin-bottom: 8px; }
+    table { border-collapse: collapse; margin-top: 16px; }
+    th { background: #f0f0f0; }
+    th, td { padding: 8px 12px; text-align: center; }
+  </style>
+</head>
+<body>
+<h1>TheRock Build Resource Observability Report</h1>
+<h2>Per-Component Summary (table)</h2>
+<table border='1' cellpadding='6' cellspacing='0'>
+<thead><tr>
+<th>t_offset_min</th>
+<th>avg_concurrency</th>
+</tr></thead><tbody>
+<tr>
+<td>0.00</td>
+<td>117.58</td>
+</tr>
+<tr>
+<td>1.00</td>
+<td>155.18</td>
+</tr>
+<tr>
+<td>2.00</td>
+<td>206.29</td>
+</tr>
+<tr>
+<td>3.00</td>
+<td>237.91</td>
+</tr>
+<tr>
+<td>4.00</td>
+<td>143.35</td>
+</tr>
+<tr>
+<td>5.00</td>
+<td>178.00</td>
+</tr>
+<tr>
+<td>6.00</td>
+<td>246.67</td>
+</tr>
+<tr>
+<td>7.00</td>
+<td>23.05</td>
+</tr>
+<tr>
+<td>8.00</td>
+<td>2.13</td>
+</tr>
+<tr>
+<td>9.00</td>
+<td>73.87</td>
+</tr>
+<tr>
+<td>10.00</td>
+<td>64.66</td>
+</tr>
+<tr>
+<td>11.00</td>
+<td>30.39</td>
+</tr>
+<tr>
+<td>12.00</td>
+<td>3.26</td>
+</tr>
+<tr>
+<td>13.00</td>
+<td>1.00</td>
+</tr>
+</tbody></table>
+<hr />
+
+<h2>General FAQ</h2>
+
+<ol>
+  <li><b>rss = Resident Set Size</b>
+    <p>
+      It means the amount of physical RAM actually in use by a process at its peak. High rss means memory-heavy compilation or linking.
+      If rss is high across many parallel jobs, we can hit swapping, cache thrashing, OOM kills in CI. High rss often limits how much
+      parallelism you can safely use (-j)
+    </p>
+  </li>
+
+  <li><b>max_rss_mb</b>
+    <p>
+      the maximum RAM a compiler or linker process had allocated in memory at any point.
+    </p>
+  </li>
+
+  <li><b>Wall time sum vs component span vs estimated elapsed</b>
+    <p>
+      <b>wall_time_sum</b> is the <b>sum</b> of wall times across all commands for that component. In parallel builds this can be
+      far larger than the total build duration because many commands run concurrently.
+    </p>
+    <p>
+      <b>wall_time_span_min</b> is the component’s <b>elapsed span</b>:
+      <code>max(end_time) - min(start_time)</code> across all commands belonging to that component. This is usually much closer to
+      “how long the build spent working on that component”, though it can still overlap with other components (parallelism).
+    </p>
+    <p>
+      <b>wall_time_est_elapsed_min</b> is an <b>estimated elapsed contribution</b> computed from average build concurrency:
+      we compute <code>avg_concurrency = sum(real_s) / build_span_s</code> using timestamps, and then estimate:
+      <code>wall_time_est_elapsed ≈ wall_time_sum / avg_concurrency</code>.
+    </p>
+  </li>
+
+  <li><b>avg_concurrency vs avg_threads</b>
+    <p>
+      <b>avg_concurrency</b> measures <b>parallelism across processes</b> — how many tool invocations (clang/lld/etc.) were running at once
+      on average for this component. It is computed as:
+      <code>avg_concurrency ≈ wall_time_sum / wall_time_span</code>.
+    </p>
+    <p>
+      <b>avg_threads</b> measures <b>parallelism within a process</b> — how many CPU cores a tool used on average while it ran.
+      It is computed as:
+      <code>avg_threads = cpu_sum / wall_time_sum</code>.
+      clang compilation often stays near 1.0, while LTO/ThinLTO or some linkers can be &gt; 1.0.
+    </p>
+  </li>
+
+  <li><b>Peak concurrency and histogram</b>
+    <p>
+      <b>peak_concurrency</b> is the maximum number of tool processes that overlapped at any instant during the build (max overlap).
+      The <b>histogram</b> shows how concurrency evolved over time, binned into fixed windows (default 60s).
+    </p>
+  </li>
+
+  <li><b>Critical path estimate (proxy)</b>
+    <p>
+      True build critical path requires the dependency graph (Ninja/CMake DAG). In this report we use a practical proxy:
+      <b>critical_path_est_min ≈ wall_time_span_min</b> (first start to last end for that component).
+      This is a useful “component elapsed window” signal for regressions and bottlenecks.
+    </p>
+  </li>
+
+<li><b> What user_sum, sys_sum mean and cpu_sum mean ? (Note: all times are in minutes) </b>
+
+    <p><b>user_sum → time spent executing your code (compiler, linker, optimizer logic) </b></p>
+
+    <p><b>sys_sum → time spent inside the operating system kernel</b></p>
+
+    <p><b>cpu_sum → total CPU time = user_sum_min + sys_sum_min</b></p>
+
+</li>
+</ol>
+
+<h3>Key mental model</h3>
+<ul>
+  <li> wall_time_sum</b> → total summed command wall time (inflates with parallelism)</li>
+  <li> wall_time_span</b> → component elapsed window (closest to “actual component build time”)</li>
+  <li> wall_time_est_elapsed</b> → concurrency-adjusted estimate</li>
+  <li> avg_concurrency</b> → average parallel tool processes for this component</li>
+  <li> peak_concurrency</b> → maximum overlap of tool processes</li>
+  <li> cpu_sum</b> → cost/compute spent</li>
+  <li> avg_threads</b> → CPU utilization ratio per component</li>
+  <li> rss</b> → limits safe parallelism</li>
+</ul>
+
+<hr />
+<h2>Full Markdown Report</h2>
+<pre style='white-space: pre-wrap; font-family: monospace; margin-top: 16px;'># TheRock Build Resource Observability Report
+
+## Build Concurrency Summary
+
+- build_span_min: 13.68
+- avg_concurrency_build: 108.43
+- peak_concurrency_build: 397
+- histogram_bin_seconds: 60
+
+### Concurrency Over Time (binned)
+
+| t_offset_min | avg_concurrency |
+| --- | --- |
+| 0.00 | 117.58 |
+| 1.00 | 155.18 |
+| 2.00 | 206.29 |
+| 3.00 | 237.91 |
+| 4.00 | 143.35 |
+| 5.00 | 178.00 |
+| 6.00 | 246.67 |
+| 7.00 | 23.05 |
+| 8.00 | 2.13 |
+| 9.00 | 73.87 |
+| 10.00 | 64.66 |
+| 11.00 | 30.39 |
+| 12.00 | 3.26 |
+| 13.00 | 1.00 |
+
+## Per-Component Summary
+
+| component | wall_time_sum (minutes) | wall_time_span (minutes) | wall_time_est_elapsed (minutes) | avg_concurrency | peak_concurrency | critical_path_est_min | cpu_sum (minutes) | user_sum (minutes) | sys_sum (minutes) | avg_threads | max_rss_mb | max_rss_gb |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| amd-llvm | 1210.35 | 12.49 | 11.16 | 96.94 | 258 | 12.49 | 1198.76 | 1071.97 | 126.79 | 0.99 | 6663.41 | 6.5072 |
+| sysdeps | 117.74 | 1.93 | 1.09 | 60.85 | 258 | 1.93 | 112.24 | 89.09 | 23.15 | 0.95 | 660.39 | 0.6449 |
+| host-blas | 111.47 | 1.43 | 1.03 | 78.04 | 235 | 1.43 | 109.26 | 59.13 | 50.13 | 0.98 | 182.00 | 0.1777 |
+| unknown | 36.14 | 1.87 | 0.33 | 19.34 | 219 | 1.87 | 35.51 | 28.94 | 6.57 | 0.98 | 726.08 | 0.7091 |
+| fftw3 | 3.19 | 0.17 | 0.03 | 18.66 | 170 | 0.17 | 3.06 | 1.96 | 1.10 | 0.96 | 70.28 | 0.0686 |
+| support | 1.66 | 1.65 | 0.02 | 1.01 | 10 | 1.65 | 1.64 | 1.24 | 0.39 | 0.99 | 392.00 | 0.3828 |
+| base | 1.11 | 1.70 | 0.01 | 0.65 | 11 | 1.70 | 1.09 | 0.86 | 0.23 | 0.99 | 386.00 | 0.3770 |
+| prim | 0.83 | 0.18 | 0.01 | 4.70 | 6 | 0.18 | 0.82 | 0.64 | 0.18 | 0.99 | 372.00 | 0.3633 |
+| rand | 0.43 | 1.63 | 0.00 | 0.26 | 13 | 1.63 | 0.42 | 0.27 | 0.15 | 0.98 | 186.00 | 0.1816 |
+| blas | 0.08 | 0.04 | 0.00 | 1.78 | 4 | 0.04 | 0.05 | 0.05 | 0.01 | 0.69 | 42.00 | 0.0410 |
+| composable-kernel | 0.00 | 0.00 | 0.00 | 0.00 | 0 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.0000 |
+| core-hip | 0.00 | 0.00 | 0.00 | 0.00 | 0 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.0000 |
+| core-hipinfo | 0.00 | 0.00 | 0.00 | 0.00 | 0 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.0000 |
+| core-ocl | 0.00 | 0.00 | 0.00 | 0.00 | 0 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.0000 |
+| core-runtime | 0.00 | 0.00 | 0.00 | 0.00 | 0 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.0000 |
+| fft | 0.00 | 0.00 | 0.00 | 0.00 | 0 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.0000 |
+| hipdnn | 0.00 | 0.00 | 0.00 | 0.00 | 0 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.0000 |
+| hipify | 0.00 | 0.00 | 0.00 | 0.00 | 0 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.0000 |
+| host-suite-sparse | 0.00 | 0.00 | 0.00 | 0.00 | 0 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.0000 |
+| miopen | 0.00 | 0.00 | 0.00 | 0.00 | 0 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.0000 |
+| miopen-plugin | 0.00 | 0.00 | 0.00 | 0.00 | 0 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.0000 |
+| rccl | 0.00 | 0.00 | 0.00 | 0.00 | 0 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.0000 |
+| rdc | 0.00 | 0.00 | 0.00 | 0.00 | 0 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.0000 |
+| rocprofiler-compute | 0.00 | 0.00 | 0.00 | 0.00 | 0 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.0000 |
+| rocprofiler-sdk | 0.00 | 0.00 | 0.00 | 0.00 | 0 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.0000 |
+| rocprofiler-systems | 0.00 | 0.00 | 0.00 | 0.00 | 0 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.0000 |
+| rocwmma | 0.00 | 0.00 | 0.00 | 0.00 | 0 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.0000 |
+
+---
+
+## General FAQ
+
+(See HTML report for formatted FAQ.)
+
+Key terms:
+- avg_concurrency: parallelism across processes (tool overlap)
+- avg_threads: parallelism within a process (cpu_sum / wall_time_sum)
+- critical_path_est_min: proxy via wall_time_span_min
+
+## CI Regression Check (Concurrency)
+
+- baseline: concurrency_baseline.json
+- threshold_drop: 0.20
+- avg_concurrency_build: current=108.43, baseline=108.43, drop=0.00%
+- peak_concurrency_build: current=397, baseline=397, drop=0.00%
+
+✅ No concurrency collapse detected.
+</pre>
+</body>
+</html>
