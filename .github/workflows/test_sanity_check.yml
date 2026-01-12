@@ -77,17 +77,13 @@ jobs:
       - name: Checkout TheRock Repository
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
-          sparse-checkout: |
-            build_tools
-            .github
-          path: prejob
           repository: "ROCm/TheRock"
           ref: ${{ inputs.therock_ref || github.ref }}
 
       - name: Pre-job cleanup processes on Windows
         if: ${{ runner.os == 'Windows' }}
         shell: powershell
-        run: . '${{ github.workspace }}\prejob\build_tools\github_actions\cleanup_processes.ps1'
+        run: . '${{ github.workspace }}\build_tools\github_actions\cleanup_processes.ps1'
 
       - name: Pre-job cleanup Docker containers on Linux
         if: ${{ runner.os == 'Linux' }}
@@ -99,7 +95,7 @@ jobs:
           docker network prune -f || true
 
       - name: Run setup test environment workflow
-        uses: './prejob/.github/actions/setup_test_environment'
+        uses: './.github/actions/setup_test_environment'
         with:
           ARTIFACT_GROUP: ${{ inputs.artifact_group }}
           ARTIFACT_RUN_ID: ${{ env.ARTIFACT_RUN_ID }}
@@ -115,7 +111,7 @@ jobs:
       - name: Driver / GPU sanity check
         timeout-minutes: 3
         run: |
-          python ./prejob/build_tools/print_driver_gpu_info.py
+          python ./build_tools/print_driver_gpu_info.py
 
       - name: Run ROCm Sanity Tests
         timeout-minutes: 5
@@ -124,9 +120,9 @@ jobs:
           # https://rocm.docs.amd.com/projects/HIP/en/latest/how-to/debugging.html
           AMD_LOG_LEVEL: 4
         run: |
-          pytest ./prejob/tests/ --log-cli-level=info --timeout=300
+          pytest ./tests/ --log-cli-level=info --timeout=300
 
       - name: Post-job cleanup processes on Windows
         if: ${{ always() && runner.os == 'Windows' }}
         shell: powershell
-        run: . '${{ github.workspace }}\prejob\build_tools\github_actions\cleanup_processes.ps1'
+        run: . '${{ github.workspace }}\build_tools\github_actions\cleanup_processes.ps1'
