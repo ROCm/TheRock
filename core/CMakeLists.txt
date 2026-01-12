@@ -63,6 +63,7 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
       "${_system_toolchain}"
     RUNTIME_DEPS
       ROCR-Runtime
+      ${THEROCK_BUNDLED_LIBATOMIC}
   )
   therock_cmake_subproject_glob_c_sources(rocminfo SUBDIRS .)
   therock_cmake_subproject_activate(rocminfo)
