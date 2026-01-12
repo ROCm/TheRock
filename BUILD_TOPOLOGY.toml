@@ -499,6 +499,12 @@ artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "blas"]
 
+[artifacts.libhipcxx]
+artifact_group = "math-libs"
+type = "target-specific"
+artifact_deps = ["core-runtime", "core-hip", "amd-llvm"]
+disable_platforms = ["windows"]
+
 [artifacts.support]
 artifact_group = "math-libs"
 type = "target-neutral"

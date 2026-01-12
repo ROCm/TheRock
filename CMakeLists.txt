@@ -299,7 +299,6 @@ therock_add_feature(SOLVER
   REQUIRES BLAS PRIM SPARSE ${_solver_platform_requirements}
 )
 
-
 # Finalize all feature flags.
 therock_finalize_features()
 therock_report_features()
