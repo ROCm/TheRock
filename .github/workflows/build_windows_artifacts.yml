@@ -101,7 +101,7 @@ jobs:
       - name: "Checking out repository"
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
-          repository: ${{ inputs.external_source_checkout && inputs.repository_override || github.repository }}
+          repository: ${{ inputs.repository_override || github.repository }}
           path: ${{ inputs.external_source_checkout && 'source-repo' || '.' }}
 
       - name: Checkout TheRock repository
