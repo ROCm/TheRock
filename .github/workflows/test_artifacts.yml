@@ -67,10 +67,12 @@ jobs:
       platform: ${{ steps.configure.outputs.platform }}
       shard_arr: ${{ steps.configure.outputs.shard_arr }}
     steps:
-      - name: "Checking out repository"
+      - name: "Checking out TheRock repository"
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
-          repository: ${{ github.repository != 'ROCm/TheRock' && 'ROCm/TheRock' || github.repository }}
+          sparse-checkout: build_tools
+          path: "prejob"
+          repository: ROCm/TheRock
           ref: ${{ inputs.therock_ref || github.ref }}
 
       # Checkout failure is possible on Windows, as it's the first job on a GPU test runner.
@@ -78,7 +80,7 @@ jobs:
       - name: Pre-job cleanup processes on Windows
         if: ${{ runner.os == 'Windows' }}
         shell: powershell
-        run: . '${{ github.workspace }}\build_tools\github_actions\cleanup_processes.ps1'
+        run: . '${{ github.workspace }}\prejob\build_tools\github_actions\cleanup_processes.ps1'
 
       - name: Setting up Python
         uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
@@ -93,7 +95,7 @@ jobs:
           TEST_TYPE: ${{ inputs.test_type }}
           TEST_LABELS: ${{ inputs.test_labels }}
           project_to_test: ${{ inputs.project_to_test }}
-        run: python ./build_tools/github_actions/fetch_test_configurations.py
+        run: python ./prejob/build_tools/github_actions/fetch_test_configurations.py
 
   test_sanity_check:
     name: 'Test Sanity Check'

@@ -88,7 +88,7 @@ jobs:
       TEATIME_FORCE_INTERACTIVE: 0
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
-      THEROCK_DIR: ${{ inputs.external_source_checkout && 'therock-ci' || '.' }}
+      THEROCK_DIR: ${{ inputs.external_source_checkout && 'tr' || '.' }}
     steps:
       - name: Configure GitHub longpath
         run: |
@@ -105,7 +105,8 @@ jobs:
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
           repository: "ROCm/TheRock"
-          path: therock-ci
+          # Use short path name to avoid Windows MAX_PATH issues. Keep consistent with Linux.
+          path: tr
           ref: ${{ inputs.therock_ref || 'main' }}
 
       - uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
@@ -168,11 +169,7 @@ jobs:
       - name: Fetch sources
         timeout-minutes: 30
         run: |
-          if [[ "${{ inputs.external_source_checkout }}" == "true" ]]; then
-            python $THEROCK_DIR/build_tools/fetch_sources.py --jobs 12 ${{ steps.detect.outputs.fetch_exclusion }}
-          else
-            python $THEROCK_DIR/build_tools/fetch_sources.py --jobs 12
-          fi
+          python $THEROCK_DIR/build_tools/fetch_sources.py --jobs 12 ${{ steps.detect.outputs.fetch_exclusion || '' }}
 
       - name: DVC pull (external repos only)
         if: ${{ inputs.external_source_checkout && steps.detect.outputs.enable_dvc == 'true' }}
@@ -250,6 +247,9 @@ jobs:
         uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
         with:
           aws-region: us-east-2
+          # Use github.repository instead of external_source_checkout because TheRock's
+          # external integration test workflow also uses external_source_checkout=true
+          # but should use the internal role (therock-ci), not the external role.
           role-to-assume: ${{ github.repository != 'ROCm/TheRock' && 'arn:aws:iam::692859939525:role/therock-ci-external' || 'arn:aws:iam::692859939525:role/therock-ci' }}
           special-characters-workaround: true
 

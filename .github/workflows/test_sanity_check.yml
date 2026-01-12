@@ -70,13 +70,17 @@ jobs:
       - name: Checkout TheRock Repository
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
+          sparse-checkout: |
+            build_tools
+            .github
+          path: prejob
           repository: "ROCm/TheRock"
           ref: ${{ inputs.therock_ref || github.ref }}
 
       - name: Pre-job cleanup processes on Windows
         if: ${{ runner.os == 'Windows' }}
         shell: powershell
-        run: . '${{ github.workspace }}\build_tools\github_actions\cleanup_processes.ps1'
+        run: . '${{ github.workspace }}\prejob\build_tools\github_actions\cleanup_processes.ps1'
 
       - name: Pre-job cleanup Docker containers on Linux
         if: ${{ runner.os == 'Linux' }}
@@ -88,7 +92,7 @@ jobs:
           docker network prune -f || true
 
       - name: Run setup test environment workflow
-        uses: './.github/actions/setup_test_environment'
+        uses: './prejob/.github/actions/setup_test_environment'
         with:
           ARTIFACT_GROUP: ${{ inputs.artifact_group }}
           ARTIFACT_RUN_ID: ${{ env.ARTIFACT_RUN_ID }}

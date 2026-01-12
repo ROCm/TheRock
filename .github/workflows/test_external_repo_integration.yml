@@ -10,19 +10,9 @@ name: Test External Repo Integration
 on:
   pull_request:
     paths:
-      - '.github/workflows/ci*.yml'
-      - '.github/workflows/setup.yml'
-      - '.github/workflows/build_*.yml'
-      - '.github/workflows/test_*.yml'
-      - '.github/workflows/test_external_repo_integration.yml'
-      - '.github/actions/setup_test_environment/**'
-      - 'build_tools/github_actions/configure_ci.py'
-      - 'build_tools/github_actions/detect_external_repo_config.py'
-      - 'build_tools/github_actions/detect_external_projects.py'
-      - 'build_tools/github_actions/external_repo_project_maps.py'
-      - 'build_tools/github_actions/fetch_test_configurations.py'
-      - 'build_tools/github_actions/amdgpu_family_matrix.py'
-      - 'build_tools/github_actions/github_actions_utils.py'
+      - '.github/workflows/**'
+      - '.github/actions/**'
+      - 'build_tools/github_actions/**'
       - 'build_tools/install_rocm_from_artifacts.py'
       - 'build_tools/fetch_artifacts.py'
 

@@ -91,7 +91,7 @@ jobs:
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       TEATIME_FORCE_INTERACTIVE: 0
       IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
-      THEROCK_DIR: ${{ inputs.external_source_checkout && 'therock-ci' || '.' }}
+      THEROCK_DIR: ${{ inputs.external_source_checkout && 'tr' || '.' }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
@@ -111,7 +111,8 @@ jobs:
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
           repository: "ROCm/TheRock"
-          path: therock-ci
+          # Use short path name to avoid Windows MAX_PATH issues. Keep consistent with Linux.
+          path: tr
           ref: ${{ inputs.therock_ref || 'main' }}
 
       - name: Install python deps
@@ -122,10 +123,6 @@ jobs:
         if: ${{ inputs.external_source_checkout }}
         id: detect
         run: python3 $THEROCK_DIR/build_tools/github_actions/detect_external_repo_config.py "${{ inputs.repository_override || github.repository }}" --platform linux
-
-      - name: Install python deps
-        run: |
-          pip install -r $THEROCK_DIR/requirements.txt
 
       # TODO: We shouldn't be using a cache on actual release branches, but it
       # really helps for iteration time.
@@ -143,11 +140,7 @@ jobs:
       - name: Fetch sources
         timeout-minutes: 30
         run: |
-          if [[ "${{ inputs.external_source_checkout }}" == "true" ]]; then
-            $THEROCK_DIR/build_tools/fetch_sources.py --jobs 12 ${{ steps.detect.outputs.fetch_exclusion }}
-          else
-            $THEROCK_DIR/build_tools/fetch_sources.py --jobs 12
-          fi
+          $THEROCK_DIR/build_tools/fetch_sources.py --jobs 12 ${{ steps.detect.outputs.fetch_exclusion || '' }}
 
       - name: DVC pull (external repos only)
         if: ${{ inputs.external_source_checkout && steps.detect.outputs.enable_dvc == 'true' }}
@@ -182,11 +175,7 @@ jobs:
             ${{ inputs.extra_cmake_options }}
           BUILD_DIR: build
         run: |
-          if [[ "${{ inputs.external_source_checkout }}" == "true" ]]; then
-            python3 $THEROCK_DIR/build_tools/github_actions/build_configure.py
-          else
-            python3 $THEROCK_DIR/build_tools/github_actions/build_configure.py --manylinux
-          fi
+          python3 $THEROCK_DIR/build_tools/github_actions/build_configure.py ${{ inputs.external_source_checkout && '' || '--manylinux' }}
 
       - name: Build therock-archives and therock-dist
         run: |
@@ -233,6 +222,9 @@ jobs:
         uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
         with:
           aws-region: us-east-2
+          # Use github.repository instead of external_source_checkout because TheRock's
+          # external integration test workflow also uses external_source_checkout=true
+          # but should use the internal role (therock-ci), not the external role.
           role-to-assume: ${{ github.repository != 'ROCm/TheRock' && 'arn:aws:iam::692859939525:role/therock-ci-external' || 'arn:aws:iam::692859939525:role/therock-ci' }}
 
       - name: Post Build Upload
