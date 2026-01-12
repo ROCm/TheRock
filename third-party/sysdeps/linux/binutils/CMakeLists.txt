@@ -80,7 +80,7 @@ add_custom_target(
       --disable-nls
       --disable-werror
   COMMAND
-    make -j 1 V=1
+    make -j "${PAR_JOBS}" V=1
   COMMAND
     make install
   COMMAND
