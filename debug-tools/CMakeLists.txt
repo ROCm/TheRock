@@ -179,7 +179,13 @@ if(THEROCK_ENABLE_ROCGDB)
   # The AMD source-level debugger for Linux, based on the GNU Debugger (GDB).
   ##############################################################################
   therock_detect_shared_python_executables(_rocgdb_python_executables)
-  if(NOT _rocgdb_python_executables)
+  if(_rocgdb_python_executables)
+    message(STATUS "Building rocgdb against the following libpython versions: ${_rocgdb_python_executables}")
+    # Escape semicolons so the list survives a call to
+    # therock_cmake_subproject_declare and also add_custom_command
+    # expansion in CMAKE_ARGS.
+    string(REPLACE ";" "\\\$<SEMICOLON>" _rocgdb_python_executables_escaped "${_rocgdb_python_executables}")
+  else()
     message(WARNING "No Python with shared libpython found. rocgdb will be built without Python support.")
   endif()
 
@@ -191,7 +197,7 @@ if(THEROCK_ENABLE_ROCGDB)
       "-DPATCHELF=${PATCHELF}"
       "-DBUILD_TESTING=${BUILD_TESTING}"
       "-DROCM_VERSION=${ROCM_MAJOR_VERSION}.${ROCM_MINOR_VERSION}.${ROCM_PATCH_VERSION}"
-      "-DSHARED_PYTHON_EXECUTABLES=${_rocgdb_python_executables}"
+      "-DSHARED_PYTHON_EXECUTABLES=${_rocgdb_python_executables_escaped}"
     COMPILER_TOOLCHAIN
       amd-llvm
     RUNTIME_DEPS
