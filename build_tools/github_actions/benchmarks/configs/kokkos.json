@@ -1,0 +1,8 @@
+{
+    "repository_url": "https://github.com/kokkos/kokkos.git",
+    "repository_branch": "master",
+    "test_cases": [
+        "Gram",
+        "HexGrad"
+    ]
+}
