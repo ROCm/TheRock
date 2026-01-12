@@ -378,6 +378,27 @@ class ConfigureCITest(unittest.TestCase):
         )
         self.assertEqual(windows_test_labels, [])
 
+    def test_determine_long_lived_branch(self):
+        """Test to correctly determine long-lived branch that expect more testing."""
+
+        # long-lived branches
+        for branch in [
+            "main",
+            "release/therock-7.9",
+            "release/therock-",
+            "release/therock-100",
+        ]:
+            self.assertTrue(configure_ci.determine_long_lived_branch(branch))
+        # non long-lived branches
+        for branch in [
+            "users/test",
+            "release/therock",
+            "main-test",
+            "newfeature",
+            "release/main",
+        ]:
+            self.assertFalse(configure_ci.determine_long_lived_branch(branch))
+
     ###########################################################################
     # Tests for multi_arch mode
 

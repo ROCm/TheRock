@@ -27,6 +27,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--rocprofiler-compute | --no-rocprofiler-compute]
     [--rocprofiler-systems | --no-rocprofiler-systems]
     [--rocwmma | --no-rocwmma]
+    [--libhipcxx | --no-libhipcxx]
     [--tests | --no-tests]
     [--base-only]
 
@@ -176,6 +177,8 @@ def retrieve_artifacts_by_run_id(args):
         "base_lib",
         "amd-llvm_run",
         "amd-llvm_lib",
+        "core-amdsmi_run",
+        "core-amdsmi_lib",
         "core-hip_lib",
         "core-hip_dev",
         "core-ocl_lib",
@@ -201,6 +204,7 @@ def retrieve_artifacts_by_run_id(args):
             args.rocprofiler_compute,
             args.rocprofiler_systems,
             args.rocwmma,
+            args.libhipcxx,
         ]
     ):
         argv.extend(base_artifact_patterns)
@@ -240,6 +244,11 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("rocprofiler-systems")
         if args.rocwmma:
             extra_artifacts.append("rocwmma")
+        if args.libhipcxx:
+            extra_artifacts.append("libhipcxx")
+            argv.append("amd-llvm_dev")
+            argv.append("amd-llvm_lib")
+            argv.append("base_dev_generic")
 
         extra_artifact_patterns = [f"{a}_lib" for a in extra_artifacts]
         if args.tests:
@@ -453,6 +462,13 @@ def main(argv):
         "--rocwmma",
         default=False,
         help="Include 'rocwmma' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--libhipcxx",
+        default=False,
+        help="Include 'libhipcxx' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 

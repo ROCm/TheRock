@@ -24,7 +24,7 @@
     "Homepage": "https://github.com/ROCm/rocm-systems",
     "Artifactory": [
       {
-        "Artifact": "base",
+        "Artifact": "core-amdsmi",
         "Artifact_Subdir": [
           {
             "Name": "amdsmi",
