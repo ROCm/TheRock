@@ -6,7 +6,9 @@
 
 Pin actions in
 [`jobs.<job_id>.steps[*].uses`](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstepsuses)
-to specific commit SHAs for security and reproducibility.
+to specific commit SHAs for security and reproducibility. Do not use release
+tags like `@v6` or branch names like `@main` as these can change outside of our
+control.
 
 Benefits:
 
@@ -49,7 +51,6 @@ Benefits:
 - **Control:** Update runner versions on our schedule, not GitHub's
 - **Reproducibility:** Consistent environment across time
 - **Testing:** Can test changes before rolling out to all workflows
-- **Debugging:** Easier to debug when environment is known
 
 ✅ **Preferred:**
 
@@ -76,7 +77,7 @@ Benefits:
 - **Testable:** Can be tested locally and with unit tests
 - **Debuggable:** Easier to debug with standard Python tools
 - **Portable:** Works consistently across platforms (Linux/Windows)
-- **Maintainable:** Better error handling and logging support
+- **Approachable:** Better error handling and logging support
 - **Modular:** Functions can be shared across multiple scripts
 
 > [!TIP]
@@ -120,9 +121,8 @@ Workflow inputs must have safe default values that work in common scenarios.
 Benefits:
 
 - **Safety:** Defaults don't trigger production changes
-- **Documentation:** Clear when and how to override
-- **Developer-friendly:** Easy to use for common cases
 - **Fail-safe:** Mistakes default to non-destructive behavior
+- **Developer-friendly:** Easy to use for common cases
 
 > [!NOTE]
 > Some workflows may be configured to have stricter security boundaries, such
@@ -176,7 +176,6 @@ Benefits:
 - **Parallelization:** Multiple test jobs can share build artifacts
 - **Packaging enforcement:** Testing in this way enforces that build artifacts
   are installable and usable on other machines
-- **Resource efficiency:** Separate resource allocation for different tasks
 
 ✅ **Preferred:**
 
@@ -190,7 +189,7 @@ jobs:
 
       - name: Build ROCm artifacts
         run: |
-          cmake -B build -GNinja . -DTHEROCK_AMDGPU_FAMILIES=gfx942
+          cmake -B build -GNinja .
           cmake --build build
 
       # ... Upload artifacts, logs, etc.
@@ -218,7 +217,7 @@ jobs:
 
       - name: Build ROCm artifacts
         run: |
-          cmake -B build -GNinja . -DTHEROCK_AMDGPU_FAMILIES=gfx942
+          cmake -B build -GNinja .
           cmake --build build
 
       - name: Run tests on GPU
