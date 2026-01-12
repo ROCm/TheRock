@@ -22,9 +22,30 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 environ_vars = os.environ.copy()
 platform = os.getenv("RUNNER_OS", "linux").lower()
 
-# Set LD_LIBRARY_PATH to find liborigami.so for Python module
-lib_dir = Path(THEROCK_BIN_DIR).parent / "lib"
-environ_vars["LD_LIBRARY_PATH"] = f"{lib_dir}:{environ_vars.get('LD_LIBRARY_PATH', '')}"
+# Set up library and Python paths for finding liborigami.so and the Python module
+bin_dir = Path(THEROCK_BIN_DIR)
+lib_dir = bin_dir.parent / "lib"
+origami_test_dir = bin_dir / "origami"
+
+# Build LD_LIBRARY_PATH with multiple possible locations
+if platform == "linux":
+    ld_paths = [
+        str(lib_dir),                    # Main lib directory (./build/lib)
+        str(origami_test_dir),           # Origami test directory (./build/bin/origami)
+        environ_vars.get("LD_LIBRARY_PATH", ""),
+    ]
+    # Filter empty paths and join
+    environ_vars["LD_LIBRARY_PATH"] = ":".join(p for p in ld_paths if p)
+
+# Set PYTHONPATH to help Python find the origami module
+python_paths = [
+    str(origami_test_dir),               # Where origami Python module is staged
+    environ_vars.get("PYTHONPATH", ""),
+]
+environ_vars["PYTHONPATH"] = ":".join(p for p in python_paths if p)
+
+logging.info(f"LD_LIBRARY_PATH: {environ_vars.get('LD_LIBRARY_PATH', '')}")
+logging.info(f"PYTHONPATH: {environ_vars.get('PYTHONPATH', '')}")
 
 # Test type configuration (smoke, full)
 test_type = os.getenv("TEST_TYPE", "full")

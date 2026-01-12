@@ -25,6 +25,9 @@ optional = true
 [components.dev."math-libs/BLAS/Origami/stage"]
 optional = true
 [components.lib."math-libs/BLAS/Origami/stage"]
+include = [
+  "lib/**",
+]
 optional = true
 [components.test."math-libs/BLAS/Origami/stage"]
 include = [
