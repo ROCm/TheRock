@@ -23,7 +23,8 @@ environ_vars = os.environ.copy()
 platform = os.getenv("RUNNER_OS", "linux").lower()
 
 # Set up library and Python paths for finding liborigami.so and the Python module
-bin_dir = Path(THEROCK_BIN_DIR)
+# Use resolve() to get absolute paths, so they work regardless of ctest's working directory
+bin_dir = Path(THEROCK_BIN_DIR).resolve()
 lib_dir = bin_dir.parent / "lib"
 origami_test_dir = bin_dir / "origami"
 
