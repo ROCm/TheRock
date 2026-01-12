@@ -31,8 +31,8 @@
 	url = https://github.com/ROCm/rocprof-trace-decoder.git
 [submodule "rocm-libraries"]
 	path = rocm-libraries
-	url = https://github.com/ROCm/rocm-libraries
-	branch = develop
+	url = https://github.com/bstefanuk/rocm-libraries
+	branch = next-rocsparse-cmake
 [submodule "rocm-systems"]
 	path = rocm-systems
 	url = https://github.com/ROCm/rocm-systems.git
