@@ -119,19 +119,50 @@ amdgpu_family_info_matrix_postsubmit = {
 
 # The 'nightly' matrix runs on 'schedule' triggers.
 amdgpu_family_info_matrix_nightly = {
-    "gfx90x": {
+    # gfx906/908/90a split into separate families - each has different instruction
+    # support (e.g., fp8 variants, WMMA) so CK/MIOpen need to build/test individually.
+    "gfx906": {
         "linux": {
-            # label is linux-gfx90X-gpu-rocm
             # Disabled due to inconsistent up-time
             "test-runs-on": "",
-            "family": "gfx90X-dcgpu",
+            "family": "gfx906",
             "sanity_check_only_for_family": True,
             "build_variants": ["release"],
         },
         # TODO(#1927): Resolve error generating file `torch_hip_generated_int4mm.hip.obj`, to enable PyTorch builds
         "windows": {
             "test-runs-on": "",
-            "family": "gfx90X-dcgpu",
+            "family": "gfx906",
+            "build_variants": ["release"],
+            "expect_pytorch_failure": True,
+        },
+    },
+    "gfx908": {
+        "linux": {
+            # Disabled due to inconsistent up-time
+            "test-runs-on": "",
+            "family": "gfx908",
+            "sanity_check_only_for_family": True,
+            "build_variants": ["release"],
+        },
+        "windows": {
+            "test-runs-on": "",
+            "family": "gfx908",
+            "build_variants": ["release"],
+            "expect_pytorch_failure": True,
+        },
+    },
+    "gfx90a": {
+        "linux": {
+            # Disabled due to inconsistent up-time
+            "test-runs-on": "",
+            "family": "gfx90a",
+            "sanity_check_only_for_family": True,
+            "build_variants": ["release"],
+        },
+        "windows": {
+            "test-runs-on": "",
+            "family": "gfx90a",
             "build_variants": ["release"],
             "expect_pytorch_failure": True,
         },
