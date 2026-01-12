@@ -108,7 +108,7 @@ jobs:
       - name: Driver / GPU sanity check
         timeout-minutes: 3
         run: |
-          python ./build_tools/print_driver_gpu_info.py
+          python ./prejob/build_tools/print_driver_gpu_info.py
 
       - name: Run ROCm Sanity Tests
         timeout-minutes: 5
@@ -117,9 +117,9 @@ jobs:
           # https://rocm.docs.amd.com/projects/HIP/en/latest/how-to/debugging.html
           AMD_LOG_LEVEL: 4
         run: |
-          pytest tests/ --log-cli-level=info --timeout=60
+          pytest ./prejob/tests/ --log-cli-level=info --timeout=60
 
       - name: Post-job cleanup processes on Windows
         if: ${{ always() && runner.os == 'Windows' }}
         shell: powershell
-        run: . '${{ github.workspace }}\build_tools\github_actions\cleanup_processes.ps1'
+        run: . '${{ github.workspace }}\prejob\build_tools\github_actions\cleanup_processes.ps1'

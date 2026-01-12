@@ -104,6 +104,10 @@ jobs:
       projects: ${{ inputs.projects || '' }}
       linux_amdgpu_families: ${{ inputs.linux_amdgpu_families || '' }}
       windows_amdgpu_families: ${{ inputs.windows_amdgpu_families || '' }}
+      linux_test_labels: ${{ inputs.linux_test_labels || '' }}
+      linux_use_prebuilt_artifacts: ${{ inputs.linux_use_prebuilt_artifacts || false }}
+      windows_test_labels: ${{ inputs.windows_test_labels || '' }}
+      windows_use_prebuilt_artifacts: ${{ inputs.windows_use_prebuilt_artifacts || false }}
 
   linux_build_and_test:
     name: Linux::${{ matrix.variant.family }}::${{ matrix.variant.build_variant_label }}

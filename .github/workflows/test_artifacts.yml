@@ -107,6 +107,7 @@ jobs:
       amdgpu_families: ${{ inputs.amdgpu_families }}
       test_runs_on: ${{ inputs.test_runs_on }}
       platform: ${{ needs.configure_test_matrix.outputs.platform }}
+      therock_ref: ${{ inputs.therock_ref }}
 
   test_components:
     name: 'Test ${{ matrix.components.job_name }}'

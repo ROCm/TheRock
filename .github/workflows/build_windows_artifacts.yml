@@ -29,6 +29,10 @@ on:
       extra_cmake_options:
         type: string
 
+  # workflow_call has additional inputs (external_source_checkout, therock_ref, repository_override)
+  # that workflow_dispatch doesn't have. This is intentional - workflow_dispatch would exceed
+  # GitHub's previous 10-input limit (now 25 as of Dec 2025), and actionlint still enforces
+  # the old limit. These extra inputs are only needed for programmatic calls from ci.yml anyway.
   workflow_call:
     inputs:
       package_version:
