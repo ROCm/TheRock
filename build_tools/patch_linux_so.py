@@ -9,7 +9,7 @@ import subprocess
 import sys
 
 
-def exec(args: list[str | Path], cwd: Path):
+def run_command(args: list[str | Path], cwd: Path):
     args = [str(arg) for arg in args]
     print(f"++ Exec [{cwd}]$ {shlex.join(args)}")
     subprocess.check_call(args, cwd=str(cwd), stdin=subprocess.DEVNULL)
@@ -53,7 +53,7 @@ def add_prefix(args: argparse.Namespace):
             new_lib_path.unlink()
         print(f"Prefixing SONAME {orig_soname} -> {new_soname} for {lib_path_canon}")
         lib_path_canon.rename(new_lib_path)
-        exec(
+        run_command(
             [
                 args.patchelf,
                 "--set-soname",
@@ -77,7 +77,7 @@ def add_prefix(args: argparse.Namespace):
     # Now go back and replace updated sonames.
     for soname_from, soname_to in soname_updates.items():
         for updated_lib in updated_libs:
-            exec(
+            run_command(
                 [
                     args.patchelf,
                     "--replace-needed",
