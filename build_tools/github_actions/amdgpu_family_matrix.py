@@ -198,9 +198,7 @@ amdgpu_family_info_matrix_nightly = {
     },
     "gfx1153": {
         "linux": {
-            # TODO(#2682): Re-enable machine once it is stable
-            # Label is "linux-gfx1153-gpu-rocm"
-            "test-runs-on": "",
+            "test-runs-on": "linux-gfx1153-gpu-rocm",
             "family": "gfx1153",
             "build_variants": ["release"],
         },
