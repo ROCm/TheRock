@@ -15,7 +15,6 @@ import repo_management
 
 THIS_MAIN_REPO_NAME = "triton"
 THIS_DIR = Path(__file__).resolve().parent
-THIS_PATCHES_DIR = THIS_DIR / "patches" / THIS_MAIN_REPO_NAME
 
 
 def get_triton_pin(torch_dir: Path) -> str:
@@ -70,12 +69,6 @@ def main(cl_args: list[str]):
             help=f"Directory path where the git repo is cloned into. Default is {THIS_DIR / THIS_MAIN_REPO_NAME}",
         )
         command_parser.add_argument(
-            "--patch-dir",
-            type=Path,
-            default=THIS_PATCHES_DIR,
-            help="Git repository patch path",
-        )
-        command_parser.add_argument(
             "--repo-name",
             type=Path,
             default=THIS_MAIN_REPO_NAME,
@@ -84,10 +77,6 @@ def main(cl_args: list[str]):
         command_parser.add_argument(
             "--repo-hashtag",
             help="Git repository ref/tag to checkout",
-        )
-        command_parser.add_argument(
-            "--patchset",
-            help="patch dir subdirectory (defaults to mangled --repo-hashtag)",
         )
 
     p = argparse.ArgumentParser("pytorch_triton_repo.py")
@@ -119,19 +108,7 @@ def main(cl_args: list[str]):
         default=True,
         help="Run hipify",
     )
-    checkout_p.add_argument(
-        "--patch",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Apply patches for the repo-hashtag",
-    )
     checkout_p.set_defaults(func=do_checkout)
-
-    save_patches_p = sub_p.add_parser(
-        "save-patches", help="Save local commits as patch files for later application"
-    )
-    add_common(save_patches_p)
-    save_patches_p.set_defaults(func=repo_management.do_save_patches)
 
     args = p.parse_args(cl_args)
     args.func(args)
