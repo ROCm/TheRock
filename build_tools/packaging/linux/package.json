@@ -54,8 +54,6 @@
       "amdrocm-runtime"
     ],
     "RPMRequires": [
-      "glibc",
-      "libstdc++",
       "amdrocm-sysdeps",
       "amdrocm-runtime"
     ],
@@ -122,8 +120,6 @@
     ],
     "RPMRequires": [
       "python3",
-      "glibc",
-      "libstdc++",
       "amdrocm-sysdeps",
       "amdrocm-llvm"
     ],
@@ -332,7 +328,6 @@
       "amdrocm-sysdeps"
     ],
     "RPMRequires": [
-      "glibc",
       "amdrocm-runtime",
       "amdrocm-sysdeps"
     ],
@@ -380,7 +375,6 @@
       "amdrocm-fft"
     ],
     "RPMRequires": [
-      "glibc",
       "amdrocm-fft"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
@@ -425,7 +419,6 @@
       "amdrocm-profiler-base"
     ],
     "RPMRequires": [
-      "glibc",
       "amdrocm-runtime",
       "amdrocm-profiler-base"
     ],
@@ -499,7 +492,6 @@
       "amdrocm-blas"
     ],
     "RPMRequires": [
-      "glibc",
       "amdrocm-blas"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
@@ -556,7 +548,6 @@
       "amdrocm-runtime"
     ],
     "RPMRequires": [
-      "glibc",
       "amdrocm-blas",
       "amdrocm-runtime"
     ],
@@ -605,7 +596,6 @@
       "amdrocm-sparse"
     ],
     "RPMRequires": [
-      "glibc",
       "amdrocm-sparse"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
@@ -650,7 +640,6 @@
       "amdrocm-blas"
     ],
     "RPMRequires": [
-      "glibc",
       "amdrocm-math-common",
       "amdrocm-blas"
     ],
@@ -707,7 +696,6 @@
       "amdrocm-solver"
     ],
     "RPMRequires": [
-      "glibc",
       "amdrocm-solver"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
@@ -751,7 +739,6 @@
       "amdrocm-runtime"
     ],
     "RPMRequires": [
-      "glibc",
       "amdrocm-runtime"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
@@ -799,7 +786,6 @@
       "amdrocm-rand"
     ],
     "RPMRequires": [
-      "glibc",
       "amdrocm-rand"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
@@ -842,8 +828,7 @@
       "libc6"
     ],
     "RPMRequires": [
-      "python3",
-      "glibc"
+      "python3"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "ROCm primitive header files",
@@ -889,9 +874,6 @@
     "BuildArch": "x86_64",
     "DEBDepends": [
       "libc6"
-    ],
-    "RPMRequires": [
-      "glibc"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "ROCm profiler tools ",
@@ -961,7 +943,6 @@
       "amdrocm-profiler-base"
     ],
     "RPMRequires": [
-      "glibc",
       "amdrocm-runtime",
       "amdrocm-sysdeps",
       "amdrocm-profiler-base"
@@ -1054,9 +1035,7 @@
     ],
     "RPMRequires": [
       "libgcc",
-      "libstdc++",
       "python3",
-      "glibc",
       "amdrocm-runtime"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
@@ -1204,9 +1183,6 @@
     "BuildArch": "x86_64",
     "DEBDepends": [
       "libc6"
-    ],
-    "RPMRequires": [
-      "glibc"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "ROCm system dependencies ",
@@ -1396,7 +1372,6 @@
       "amdrocm-profiler-base"
     ],
     "RPMRequires": [
-      "glibc",
       "amdrocm-base",
       "amdrocm-profiler-base"
     ],
@@ -1440,7 +1415,6 @@
     ],
     "RPMRequires": [
       "python3",
-      "glibc",
       "amdrocm-rccl"
     ],
     "Maintainer": "RCCL Maintainer <rccl-maintainer@amd.com>",
@@ -1590,7 +1564,8 @@
       "amdrocm-dnn",
       "amdrocm-rccl",
       "amdrocm-math-common",
-      "amdrocm-smi"
+      "amdrocm-smi",
+      "amdrocm-hipify"
     ],
     "RPMRequires": [
       "amdrocm-base",
@@ -1604,7 +1579,8 @@
       "amdrocm-dnn",
       "amdrocm-rccl",
       "amdrocm-math-common",
-      "amdrocm-smi"
+      "amdrocm-smi",
+      "amdrocm-hipify"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "AMD ROCm core metapackage",

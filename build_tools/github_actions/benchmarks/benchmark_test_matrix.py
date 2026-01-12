@@ -26,8 +26,7 @@ benchmark_matrix = {
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 60,
         "test_script": f"python {_get_benchmark_script_path('test_hipblaslt_benchmark.py')}",
-        # TODO(lajagapp): Add windows support (https://github.com/ROCm/TheRock/issues/2478)
-        "platform": ["linux"],
+        "platform": ["linux", "windows"],
         "total_shards": 1,
         # TODO: Remove xfail once dedicated performance servers are added in "benchmark-runs-on"
         "expect_failure": True,
@@ -38,8 +37,7 @@ benchmark_matrix = {
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 60,
         "test_script": f"python {_get_benchmark_script_path('test_rocsolver_benchmark.py')}",
-        # TODO(lajagapp): Add windows support (https://github.com/ROCm/TheRock/issues/2478)
-        "platform": ["linux"],
+        "platform": ["linux", "windows"],
         "total_shards": 1,
         # TODO: Remove xfail once dedicated performance servers are added in "benchmark-runs-on"
         "expect_failure": True,
@@ -48,10 +46,9 @@ benchmark_matrix = {
     "rocrand_bench": {
         "job_name": "rocrand_bench",
         "fetch_artifact_args": "--rand --tests",
-        "timeout_minutes": 60,
+        "timeout_minutes": 90,
         "test_script": f"python {_get_benchmark_script_path('test_rocrand_benchmark.py')}",
-        # TODO(lajagapp): Add windows support (https://github.com/ROCm/TheRock/issues/2478)
-        "platform": ["linux"],
+        "platform": ["linux", "windows"],
         "total_shards": 1,
         # TODO: Remove xfail once dedicated performance servers are added in "benchmark-runs-on"
         "expect_failure": True,
@@ -62,8 +59,7 @@ benchmark_matrix = {
         "fetch_artifact_args": "--fft --rand --tests",
         "timeout_minutes": 60,
         "test_script": f"python {_get_benchmark_script_path('test_rocfft_benchmark.py')}",
-        # TODO(lajagapp): Add windows support (https://github.com/ROCm/TheRock/issues/2478)
-        "platform": ["linux"],
+        "platform": ["linux", "windows"],
         "total_shards": 1,
         # TODO: Remove xfail once dedicated performance servers are added in "benchmark-runs-on"
         "expect_failure": True,
