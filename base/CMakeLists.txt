@@ -1,8 +1,12 @@
+# Optional subprojects add themselves to this list for artifact dependencies.
+set(_optional_artifact_deps)
+
 ################################################################################
 # aux-overlay
 ################################################################################
 
 therock_cmake_subproject_declare(therock-aux-overlay
+  FPRINT_SOURCE_HASH
   EXTERNAL_SOURCE_DIR "aux-overlay"
   USE_DIST_AMDGPU_TARGETS
   BACKGROUND_BUILD
@@ -59,22 +63,27 @@ therock_cmake_subproject_activate(rocm-core)
 if(NOT WIN32)  # TODO(#36): Enable on Windows and/or make subproject inclusion generally optional
 
 therock_cmake_subproject_declare(amdsmi
-  EXTERNAL_SOURCE_DIR "amdsmi"
+  EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/amdsmi"
+  BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/amdsmi"
   USE_DIST_AMDGPU_TARGETS
   BACKGROUND_BUILD
   CMAKE_ARGS
-    # TODO: Enable tests
-    # -DBUILD_TESTS=${THEROCK_BUILD_TESTING}
     "-DCMAKE_VERBOSE_MAKEFILE=OFF"
+    -DBUILD_TESTS=${THEROCK_BUILD_TESTING}
   BUILD_DEPS
     therock-googletest
   RUNTIME_DEPS
     rocm-core
     ${THEROCK_BUNDLED_LIBDRM}
+  INSTALL_RPATH_DIRS
+    lib
+  INTERFACE_INSTALL_RPATH_DIRS
+    lib
 )
 therock_cmake_subproject_provide_package(amdsmi
   amd_smi lib/cmake)
 therock_cmake_subproject_activate(amdsmi)
+list(APPEND _optional_artifact_deps amdsmi)
 
 endif()
 
@@ -112,6 +121,7 @@ therock_cmake_subproject_glob_c_sources(rocm_smi_lib
 )
 therock_cmake_subproject_provide_package(rocm_smi_lib rocm_smi lib/cmake/rocm_smi)
 therock_cmake_subproject_activate(rocm_smi_lib)
+list(APPEND _optional_artifact_deps rocm_smi_lib)
 
 endif()
 
@@ -141,6 +151,7 @@ therock_cmake_subproject_glob_c_sources(rocprofiler-register
 therock_cmake_subproject_provide_package(rocprofiler-register
   rocprofiler-register lib/cmake/rocprofiler-register)
 therock_cmake_subproject_activate(rocprofiler-register)
+list(APPEND _optional_artifact_deps rocprofiler-register)
 
 endif()
 
@@ -166,16 +177,39 @@ therock_cmake_subproject_activate(rocm-half)
 
 
 ################################################################################
-# Artifacts
+# rocm-kpack
 ################################################################################
 
-set(_optional_subproject_deps)
-if(NOT WIN32)
-  # TODO(#36): Enable on Windows and/or make subproject inclusion generally optional
-  list(APPEND _optional_subproject_deps amdsmi)
-  list(APPEND _optional_subproject_deps rocm_smi_lib)
-  list(APPEND _optional_subproject_deps rocprofiler-register)
+if(THEROCK_KPACK_SPLIT_ARTIFACTS)
+
+therock_cmake_subproject_declare(rocm-kpack
+  EXTERNAL_SOURCE_DIR "rocm-kpack"
+  USE_DIST_AMDGPU_TARGETS
+  BACKGROUND_BUILD
+  OPTIONAL
+  CMAKE_ARGS
+    -DBUILD_TESTING=OFF
+    -DBUILD_SHARED_LIBS=ON
+  BUILD_DEPS
+    therock-msgpack-cxx
+  RUNTIME_DEPS
+    therock-zstd
+  INTERFACE_LINK_DIRS
+    lib
+  INTERFACE_INSTALL_RPATH_DIRS
+    lib
+)
+therock_cmake_subproject_provide_package(rocm-kpack
+  rocm-kpack lib/cmake/rocm-kpack)
+therock_cmake_subproject_activate(rocm-kpack)
+list(APPEND _optional_artifact_deps rocm-kpack)
+
 endif()
+
+
+################################################################################
+# Artifacts
+################################################################################
 
 therock_provide_artifact(base
   TARGET_NEUTRAL
@@ -188,7 +222,7 @@ therock_provide_artifact(base
     run
     test
   SUBPROJECT_DEPS
-    ${_optional_subproject_deps}
+    ${_optional_artifact_deps}
     rocm-cmake
     rocm-core
     rocm-half

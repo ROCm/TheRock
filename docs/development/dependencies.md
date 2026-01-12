@@ -53,6 +53,16 @@ Implementation notes for each library is below:
 - Alternatives: None (some OS vendors will provide alternatives but the source
   distribution of bzip2 has no opinion)
 
+## Expat
+
+- Canonical method: `find_package(expat)`
+- Import library: `expat::expat`
+
+## GMP
+
+- Canonical method: `find_package(gmp)`
+- Import library: `gmp::gmp`
+
 ## ELFUTILS
 
 Supported sub-libraries: `libelf`, `libdw`.
@@ -99,6 +109,16 @@ Supported sub-libraries: `libdrm`, `libdrm_amdgpu`
 - Import library: `LibLZMA::LibLZMA`
 - Alternatives: `pkg_check_modules(LZMA liblzma)`
 
+## MPFR
+
+- Canonical method: `find_package(mpfr)`
+- Import library: `mpfr::mpfr`
+
+## NCurses
+
+- Canonical method: `find_package(ncurses)`
+- Import library: `ncurses::ncurses`
+
 ### numactl
 
 Provides the `libnuma` library. Tools are not included in bundled sysdeps.
@@ -134,5 +154,11 @@ SIMDe (SIMD Everywhere) is a header-only portability library for SIMD intrinsics
 ## zstd
 
 - Canonical method: `find_package(zstd)`
-- Import library: `zstd::libzstd_shared`
-- Alternatives: `pkg_check_modules(ZSTD libzstd)`
+- Import library: `zstd::libzstd` (preferred - INTERFACE target that wraps the concrete library)
+- Alternatives:
+  - `zstd::libzstd_shared` - explicit shared library target
+  - `pkg_check_modules(ZSTD libzstd)`
+- Note: Upstream zstd's CMake install generates both `zstd::libzstd` (INTERFACE) and
+  `zstd::libzstd_shared` (SHARED IMPORTED). The INTERFACE target forwards to the
+  appropriate concrete target, abstracting static vs shared selection. Prefer
+  `zstd::libzstd` for new code.

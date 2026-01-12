@@ -11,6 +11,16 @@ if(THEROCK_ENABLE_COMPILER)
     list(APPEND _extra_llvm_cmake_args "-DLLVM_ENABLE_PEDANTIC=OFF")
   endif()
 
+  # Building Flang is very memory-intensive on systems with many cores. Allow
+  # users to specify the level of concurrency for these tasks so they can
+  # reduce the risk of running out of memory.
+  if(FLANG_PARALLEL_COMPILE_JOBS)
+    message(STATUS "Flang build concurrency level set to ${FLANG_PARALLEL_COMPILE_JOBS}")
+    list(APPEND _extra_llvm_cmake_args "-DFLANG_PARALLEL_COMPILE_JOBS=${FLANG_PARALLEL_COMPILE_JOBS}")
+  else()
+     message(STATUS "Flang concurrency is unlimited. Memory usage may be much higher.")
+  endif()
+
   # If the compiler is not pristine (i.e. has patches), then there will be a
   # ".amd-llvm.smrev" file present which must be used instead of the auto
   # computed git revision. If present, this will have a stable hash of
@@ -138,6 +148,10 @@ if(THEROCK_ENABLE_COMPILER)
     RUNTIME_DEPS
       amd-llvm
       ${THEROCK_BUNDLED_ZSTD}
+    INTERFACE_LINK_DIRS
+      "lib"
+    INTERFACE_INSTALL_RPATH_DIRS
+      "lib"
   )
   if(NOT THEROCK_FLAG_COMGR_DELAY_LOAD)
     therock_cmake_subproject_provide_package("${_amd_comgr_target_name}" amd_comgr lib/cmake/amd_comgr)
@@ -163,6 +177,7 @@ if(THEROCK_ENABLE_COMPILER)
 
   if(THEROCK_FLAG_COMGR_DELAY_LOAD)
     therock_cmake_subproject_declare("${_amd_comgr_stub_target_name}"
+      FPRINT_SOURCE_HASH
       USE_DIST_AMDGPU_TARGETS
       NO_INSTALL_RPATH
       LOGICAL_TARGET_NAME "amd-comgr-stub"
@@ -173,6 +188,10 @@ if(THEROCK_ENABLE_COMPILER)
         -DAMD_COMGR_STAGE_PATH=${CMAKE_CURRENT_BINARY_DIR}/amd-comgr/stage
       RUNTIME_DEPS
         "${_amd_comgr_target_name}"
+    INTERFACE_LINK_DIRS
+      "lib"
+    INTERFACE_INSTALL_RPATH_DIRS
+      "lib"
     )
     therock_cmake_subproject_glob_c_sources("${_amd_comgr_stub_target_name}" SUBDIRS src)
     therock_cmake_subproject_provide_package("${_amd_comgr_stub_target_name}" amd_comgr lib/cmake/amd_comgr_stub)

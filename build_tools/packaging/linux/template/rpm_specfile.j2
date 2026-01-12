@@ -20,13 +20,24 @@ Group: {{ group }}
 License: {{ pkg_license }}
 Vendor: {{ vendor }}
 Prefix: {{ install_prefix }}
-{% if requires %}
+{%- if requires %}
 Requires: {{ requires }}
-{% endif %}
-{% if rpmrecommends %}
+{%- endif %}
+{%- if rpmrecommends %}
 Recommends: {{ rpmrecommends }}
-{% endif %}
-
+{%- endif %}
+{%- if rpmsuggests %}
+Suggests: {{ rpmsuggests }}
+{%- endif %}
+{%- if provides %}
+Provides: {{ provides }}
+{%- endif %}
+{%- if obsoletes %}
+Obsoletes: {{ obsoletes }}
+{%- endif %}
+{%- if conflicts %}
+Conflicts: {{ conflicts }}
+{%- endif %}
 %description
 {{ description_long }}
 
@@ -46,3 +57,23 @@ cp -R {{ path }}/* $RPM_BUILD_ROOT{{ install_prefix }}
 
 %clean
 rm -rf $RPM_BUILD_ROOT
+
+{% if rpm_scripts['%pre'] %}
+%pre
+{{ rpm_scripts['%pre'] }}
+{% endif %}
+
+{% if rpm_scripts['%post'] %}
+%post
+{{ rpm_scripts['%post'] }}
+{% endif %}
+
+{% if rpm_scripts['%preun'] %}
+%preun
+{{ rpm_scripts['%preun'] }}
+{% endif %}
+
+{% if rpm_scripts['%postun'] %}
+%postun
+{{ rpm_scripts['%postun'] }}
+{% endif %}

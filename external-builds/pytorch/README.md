@@ -59,7 +59,6 @@ Each PyTorch version uses a combination of:
 
 - Git repository URLs for each project
 - Git "repo hashtags" (branch names, tag names, or commit refs) for each project
-- Optional patches to be applied on top of a git checkout
 
 See the following table for how each version is supported:
 
@@ -73,8 +72,8 @@ See the following table for how each version is supported:
 
 See also:
 
-- The [Alternate Branches / Patch Sets](#alternate-branches--patch-sets) section
-  for detailed information about configurations
+- The [Alternative branches and versions](#alternative-branches-and-versions)
+  section for detailed information about configurations
 - The upstream PyTorch
   [release documentation](https://github.com/pytorch/pytorch/blob/main/RELEASE.md)
 - Workflow source code:
@@ -156,7 +155,7 @@ mix/match build steps.
 
   ```bash
   python build_prod_wheels.py build \
-    --install-rocm --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/ \
+    --install-rocm --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ \
     --output-dir $HOME/tmp/pyout
   ```
 
@@ -164,7 +163,7 @@ mix/match build steps.
 
   ```batch
   python build_prod_wheels.py build ^
-    --install-rocm --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/ ^
+    --install-rocm --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ ^
     --pytorch-dir C:/b/pytorch ^
     --pytorch-audio-dir C:/b/audio ^
     --pytorch-vision-dir C:/b/vision ^
@@ -172,6 +171,20 @@ mix/match build steps.
   ```
 
 ## Running/testing PyTorch
+
+### Prerequisites
+
+On Linux we run automated tests under our
+[`no_rocm_image_ubuntu24_04.Dockerfile`](dockerfiles/no_rocm_image_ubuntu24_04.Dockerfile)
+container. Docker is optional for developers and users. If you want to use our
+test image, run it like so:
+
+```bash
+sudo docker run -it \
+  --device=/dev/kfd --device=/dev/dri \
+  --ipc=host --group-add=video --group-add=render --group-add=110 \
+  ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest
+```
 
 ### Running ROCm and PyTorch sanity checks
 
@@ -187,24 +200,56 @@ python -c "import torch; print(torch.cuda.is_available())"
 
 ### Running PyTorch smoketests
 
-We have additional smoketests that run some sample computations. See
-[smoke-tests](./smoke-tests/) for details, or just run:
+We have additional smoketests in [smoke-tests](./smoke-tests/) that run some
+sample computations. To run these tests:
 
 ```bash
+# Basic usage (no wrapper script)
 pytest -v smoke-tests
+
+# Wrapper script, passing through some useful pytest args:
+python run_pytorch_smoke_tests.py -- \
+  --log-cli-level=INFO \
+  -v
 ```
 
 ### Running full PyTorch tests
 
-See https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/3rd-party/pytorch-install.html#testing-the-pytorch-installation
+We have a [`run_pytorch_tests.py`](run_pytorch_tests.py) script
+which runs PyTorch unit tests using pytest with additional test exclusion
+capabilities tailored for AMD ROCm GPUs. See the script for detailed
+instructions. Here are a few examples:
 
-<!-- TODO(erman-gurses): update docs here -->
+```bash
+# Basic usage (auto-detect everything, no extra args):
+python run_pytorch_tests.py
+
+# Typical usage on CI, passing through some useful pytest args:
+python run_pytorch_tests.py -- \
+  --continue-on-collection-errors \
+  --import-mode=importlib \
+  -v
+
+# Custom test selection with pytest -k:
+python run_pytorch_tests.py -k "test_nn and not test_dropout"
+
+# Explicit pytorch repo path (for test sources) and GPU family (for filtering)
+python run_pytorch_tests.py --pytorch-dir=/tmp/pytorch --amdgpu-family=gfx950
+```
+
+Tests can also be run by following the ROCm documentation at
+https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/3rd-party/pytorch-install.html#testing-the-pytorch-installation.
+For example:
+
+```bash
+PYTORCH_TEST_WITH_ROCM=1 python pytorch/test/run_test.py --include test_torch
+```
 
 ## Nightly releases
 
 ### Gating releases with Pytorch tests
 
-With passing builds we upload `torch`, `torchvision`, `torchaudio`, and `pytorch-triton-rocm` wheels to subfolders of the "v2-staging" directory in the nightly release s3 bucket with a public URL at https://rocm.nightlies.amd.com/v2-staging/
+With passing builds we upload `torch`, `torchvision`, `torchaudio`, and `triton` wheels to subfolders of the "v2-staging" directory in the nightly release s3 bucket with a public URL at https://rocm.nightlies.amd.com/v2-staging/
 
 Only with passing Torch tests we promote passed wheels to the "v2" directory in the nightly release s3 bucket with a public URL at https://rocm.nightlies.amd.com/v2/
 
@@ -222,7 +267,7 @@ The `rocm[libraries,devel]` packages can be installed in multiple ways:
 
   ```bash
   build_prod_wheels.py
-      --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/ \
+      --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ \
       install-rocm
   ```
 
@@ -231,12 +276,12 @@ The `rocm[libraries,devel]` packages can be installed in multiple ways:
   ```bash
   # From therock-nightly-python
   python -m pip install \
-    --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/ \
+    --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ \
     rocm[libraries,devel]
 
   # OR from therock-dev-python
   python -m pip install \
-    --index-url https://rocm.devreleases.amd.com/v2/gfx110X-dgpu/ \
+    --index-url https://rocm.devreleases.amd.com/v2/gfx110X-all/ \
     rocm[libraries,devel]
   ```
 
@@ -250,7 +295,7 @@ The `rocm[libraries,devel]` packages can be installed in multiple ways:
   mkdir $HOME/.therock/17123441166/artifacts
   python ./build_tools/fetch_artifacts.py \
     --run-id=17123441166 \
-    --target=gfx110X-dgpu \
+    --target=gfx110X-all \
     --output-dir=$HOME/.therock/17123441166/artifacts
 
   python ./build_tools/build_python_packages.py \
@@ -288,169 +333,49 @@ This section covers recommended practices for making changes to PyTorch and
 other repositories for use with the build scripts and integration with
 version control systems.
 
-### Recommendation: avoid using patch files if possible
-
 If you want to make changes to PyTorch source code, prefer in this order:
 
 1. Contributing to upstream `main` branches
-1. Contributing to upstream `release/` branches
-1. Maintaining downstream git forks with their own branches
-   - This allows for standard git workflows to merge, resolve conflicts, etc.
-1. Using an upstream or downstream branch with patch files
-   - Patch files can be applied on top of git history and do not require commit
-     access in an upstream repository but require extra effort to keep current
-     and provide no path to being merged
+1. Contributing to upstream `release/` branches while within the release window
+1. Contributing to downstream `release/` branches in forked repositories
 
-> [!WARNING]
-> We carry some patch files out of necessity while waiting on upstream consensus
-> and code review, but maintaining patch files carries significant overhead. For
-> long term support, we use downstream git forks like the
-> [ROCm PyTorch release branches](#rocm-pytorch-release-branches).
+> [!NOTE]
+> We used to support applying git patches as part of checkout out PyTorch
+> repositories. This system has been removed as ROCm-specific changes are now
+> maintained in the https://github.com/ROCm/pytorch/ fork rather than as patch
+> files.
 
-### About patch files and patchsets
+### Checking out PyTorch repositories
 
-Patches are commits saved to text files generated by
-[`git format-patch`](https://git-scm.com/docs/git-format-patch) that can be
-replayed later using [`git am`](https://git-scm.com/docs/git-am).
-
-We store patches in a directory hierarchy within the
-[`patches/` subdirectory](./patches/):
-
-```text
-pytorch/                 <-- project name (for pytorch_torch_repo.py)
-  main/                  <-- patchset name (typically a git tag or branch name)
-    pytorch/             <-- folder within the project
-      base/              <-- patches to apply before hipify
-        0001-COMMIT_MESSAGE.patch
-        0002-COMMIT_MESSAGE.patch
-      hipified/          <-- patches to apply after hipify
-        0001-COMMIT_MESSAGE.patch
-    third_party/         <-- another folder within the project
-      fbgemm/
-        base/
-        hipified/
-          0001-COMMIT_MESSAGE.patch
-  v2.7.0/                <-- a different patchset name
-    pytorch/
-      base/
-        0001-COMMIT_MESSAGE.patch
-
-pytorch_audio/
-  main/
-    ...
-  v2.7.0/
-    ...
-```
-
-### Checking out and applying patches
-
-Each `pytorch_*_repo.py` scripts handle a few aspects of working with each
-associated repository:
+Each `pytorch_*_repo.py` script handles checkout and preparation:
 
 1. Clone the repository as needed from `--gitrepo-origin` to the `--repo-name`
    folder under path `--repo`
 1. Checkout the `--repo-hashtag` git ref/tag
-1. Apply "base" patches from the `--patchset` subfolders of `--patch-dir`
+1. Tag the upstream commit as `THEROCK_UPSTREAM_DIFFBASE`
 1. Run 'hipify' on the repository, editing source files and committing the
    changes
-1. Apply "hipified" patches from the `--patchset` subfolders of `--patch-dir`
+1. Tag the hipify commit as `THEROCK_HIPIFY_DIFFBASE`
 
 After running one of the `pytorch_*_repo.py` scripts you should have a
 repository with history like this:
 
 ```console
-$ python pytorch_torch_repo.py checkout --repo-hashtag main --patchset main
-$ cd src/pytorch
+$ python pytorch_torch_repo.py checkout --repo-hashtag main
+$ cd pytorch
 $ git log --oneline
 
-bbb55555555 (HEAD) Example 'hipified' patch 2
-bbb44444444 Example 'hipified' patch 1
-bbb33333333 (tag: THEROCK_HIPIFY_DIFFBASE) DO NOT SUBMIT: HIPIFY
-bbb22222222 Example 'base' patch 2
-bbb11111111 Example 'base' patch 1
-aaa22222222 (tag: THEROCK_UPSTREAM_DIFFBASE, origin/main) Example upstream commit 2
-aaa11111111 Example upstream commit 1
+cb53ee6fd45 (HEAD, tag: THEROCK_HIPIFY_DIFFBASE) DO NOT SUBMIT: HIPIFY
+96682103026 (tag: THEROCK_UPSTREAM_DIFFBASE, origin/main) Example upstream commit 2
+3f5a8e2003f Example upstream commit 1
 ```
 
 Note the sequence of commits and tags that were created:
 
 - `main` is checked out initially and is tagged `THEROCK_UPSTREAM_DIFFBASE`
-- "base" patches are added _before_ running hipify
 - hipify is run and its changes are tagged `THEROCK_HIPIFY_DIFFBASE`
-- "hipified" patches are added _after_ running hipify
 
-> [!NOTE]
-> For repositories with no patches, this simplifies to "clone the repo, checkout
-> a branch, then run hipify".
->
-> If you maintain a downstream fork like https://github.com/ROCm/pytorch,
-> aim to have a branch that only depends on hipify running on it.
-
-### Saving new patches
-
-To create patches, modify the commits after the `THEROCK_UPSTREAM_DIFFBASE` tag
-then run the `save-patches` subcommand of the relevant source management script.
-If you want a patch to be applied _before_ hipify, you can put it before
-`THEROCK_HIPIFY_DIFFBASE` while editing git history or you can move the patch
-file from the `hipified` patch folder to the `base` patch folder.
-
-- If a patch modifies code at a `*/cuda/*` path, it likely needs to be a 'base'
-  patch that is applied before hipify is run.
-- If a patch modifies code at a `*/hip/*` path, it should either be a
-  'hipified' patch or should be reworked to modify `*/cuda/*` code that gets
-  correctly transformed by hipify.
-- Most other patches can be categorized as 'base' or 'hipified', though
-  'hipified' is simplest to construct based on git history
-
-Here is a complete example:
-
-```bash
-cd external-builds/pytorch
-python -m venv .venv && source .venv/bin/activate
-
-# Checkout, applying patches and running hipify.
-python pytorch_torch_repo.py checkout --repo-hashtag main --patchset main
-
-# Switch into the new source directory and make a change.
-pushd pytorch
-git log --oneline -n 5
-# f3d83d2abee (HEAD) Support FLASH_ATTENTION, MEM_EFF_ATTENTION via. aotriton on windows
-# b3787ab8e90 Include native_transformers srcs to fix link errors.
-# cb53ee6fd45 (tag: THEROCK_HIPIFY_DIFFBASE) DO NOT SUBMIT: HIPIFY
-# 96682103026 (tag: THEROCK_UPSTREAM_DIFFBASE, origin/main) Allow bypasses for Precompile when guards, etc. cannot be serialized (#160902)
-# 3f5a8e2003f Fix torchaudio build when TORCH_CUDA_ARCH_LIST is not set (#161084)
-touch test.txt
-git add -A
-git commit -m "Test commit for patch saving"
-popd
-
-# Save the patch.
-python pytorch_torch_repo.py save-patches --repo-hashtag main
-
-git status
-# Untracked files:
-#   (use "git add <file>..." to include in what will be committed)
-#         patches/pytorch/main/pytorch/hipified/0003-Test-commit-for-patch-saving.patch
-```
-
-Since the commit was added on top of `THEROCK_HIPIFY_DIFFBASE`, it was written
-to the `hipified/` patch folder. The patch could stay there or be moved to the
-`base/` patch folder.
-
-### Alternate branches / patch sets
-
-> [!TIP]
-> Each branch combination below can also use specific commits by selecting a
-> patchset. For example, this will fetch PyTorch at
-> [pytorch/pytorch@3e2aa4b](https://github.com/pytorch/pytorch/commit/3e2aa4b0e3e971a81f665a9a6d803683452c022d)
-> using the patches from
-> [`patches/pytorch/main/pytorch/`](./patches/pytorch/main/pytorch/):
->
-> ```bash
-> python pytorch_torch_repo.py checkout \
->   --repo-hashtag 3e2aa4b0e3e971a81f665a9a6d803683452c022d \
->   --patchset main
-> ```
+### Alternative branches and versions
 
 #### PyTorch main branches
 
@@ -483,56 +408,36 @@ python pytorch_torch_repo.py checkout --repo-hashtag nightly
 python pytorch_audio_repo.py checkout --repo-hashtag nightly
 python pytorch_vision_repo.py checkout --repo-hashtag nightly
 # Note that triton will be checked out at the PyTorch pin.
-python pytorch_triton_repo.py checkout --patch --patch-set nightly
+python pytorch_triton_repo.py checkout
 ```
 
 #### ROCm PyTorch release branches
 
 Because upstream PyTorch freezes at release but AMD needs to keep updating
-stable versions for a longer period of time, backport branches are maintained.
+stable versions for a longer period of time, backport branches are maintained in
+the fork at https://github.com/ROCm/pytorch.
+
+> [!TIP]
+> You are welcome to maintain your own branches that extend one of AMD's.
+> Change origins and tags as appropriate.
+
 In order to check out and build one of these, use the following instructions:
 
-In general, we regularly build PyTorch nightly from upstream sources and the
-most recent stable backport. Generally, backports are only supported on Linux
-at present.
-
-Backport branches have `related_commits` files that point to specific
-sub-project commits, so the main torch repo must be checked out first to
-have proper defaults.
-
-You are welcome to maintain your own branches that extend one of AMD's.
-Change origins and tags as appropriate.
-
-##### ROCm release v2.9.x branch
-
 ```bash
+# Other common --repo-hashtag values:
+#   release/2.10
+#   release/2.9
+#   release/2.8
+#   release/2.7
 python pytorch_torch_repo.py checkout \
   --gitrepo-origin https://github.com/ROCm/pytorch.git \
   --repo-hashtag release/2.9
+
+# Backport branches have `related_commits` files that point to specific
+# sub-project commits, so the main torch repo must be checked out first to
+# have proper defaults.
 python pytorch_audio_repo.py checkout --require-related-commit
 python pytorch_vision_repo.py checkout --require-related-commit
-python pytorch_triton_repo.py checkout
-```
 
-##### ROCm release v2.8.x branch
-
-```bash
-python pytorch_torch_repo.py checkout \
-  --gitrepo-origin https://github.com/ROCm/pytorch.git \
-  --repo-hashtag release/2.8
-python pytorch_audio_repo.py checkout --require-related-commit
-python pytorch_vision_repo.py checkout --require-related-commit
-python pytorch_triton_repo.py checkout
-```
-
-##### ROCm release v2.7.x branch
-
-```bash
-python pytorch_torch_repo.py checkout \
-  --gitrepo-origin https://github.com/ROCm/pytorch.git \
-  --repo-hashtag release/2.7 \
-  --patchset rocm_2.7
-python pytorch_audio_repo.py checkout --require-related-commit
-python pytorch_vision_repo.py checkout --require-related-commit
 python pytorch_triton_repo.py checkout
 ```

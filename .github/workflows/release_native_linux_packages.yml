@@ -51,6 +51,8 @@ permissions:
   id-token: write
   contents: read
 
+run-name: Release native Linux packages (${{ inputs.amdgpu_family }}, ${{ inputs.rocm_version }}, ${{ inputs.package_type }}, ${{ inputs.package_suffix }})
+
 jobs:
   release:
     name: Release Native Linux Package

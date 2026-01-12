@@ -450,20 +450,28 @@ class SystemInfo:
         return ccache
 
     def device_python_list(self):
-        """
-        Return a list of strings containing the output of `df -h`.
-        `df -h` shows information about all file systems of the systems, including
-        filesystem name, size, available and used storage, and where it is mounted
-        """
+        # Try pip first
+        try:
+            proc = subprocess.run(
+                ["pip", "list", "--format=freeze"],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            return proc.stdout.splitlines()
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            # Fallback to importlib.metadata if pip not found
+            try:
+                from importlib.metadata import distributions
 
-        proc = subprocess.run(
-            ["pip", "list", "--format=freeze"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-
-        return proc.stdout.splitlines()
+                packages = []
+                for dist in distributions():
+                    packages.append(f"{dist.metadata['Name']}=={dist.version}")
+                return sorted(packages)
+            except Exception:
+                return [
+                    "Unable to detect Python packages (neither pip nor importlib.metadata available)"
+                ]
 
     @property
     def CCACHE_STAT(self):
