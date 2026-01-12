@@ -102,12 +102,28 @@ ci_nightly.yml → ci_linux.yml
 
 The following benchmark tests are defined in `benchmarks/benchmark_test_matrix.py`:
 
-| Test Name         | Library   | Platform | Timeout | Shards |
-| ----------------- | --------- | -------- | ------- | ------ |
-| `hipblaslt_bench` | hipBLASLt | Linux    | 60 min  | 1      |
-| `rocsolver_bench` | ROCsolver | Linux    | 60 min  | 1      |
-| `rocrand_bench`   | ROCrand   | Linux    | 60 min  | 1      |
-| `rocfft_bench`    | ROCfft    | Linux    | 60 min  | 1      |
+| Test Name         | Library   | Platform       | Timeout | Shards |
+| ----------------- | --------- | -------------- | ------- | ------ |
+| `hipblaslt_bench` | hipBLASLt | Linux, Windows | 60 min  | 1      |
+| `rocsolver_bench` | ROCsolver | Linux, Windows | 60 min  | 1      |
+| `rocrand_bench`   | ROCrand   | Linux, Windows | 60 min  | 1      |
+| `rocfft_bench`    | ROCfft    | Linux, Windows | 60 min  | 1      |
+
+**GPU Family Support:**
+
+| GPU Family | Platform | Architecture          | Benchmark Supported | Benchmark CI Status  |
+| ---------- | -------- | --------------------- | ------------------- | -------------------- |
+| `gfx94x`   | Linux    | MI300X/MI325X (CDNA3) | Yes                 | Enabled (nightly CI) |
+| `gfx1151`  | Windows  | RDNA 3.5              | Yes                 | Enabled (nightly CI) |
+| `gfx950`   | Linux    | MI355X (CDNA4)        | Yes                 | Not enabled          |
+| `gfx110x`  | Windows  | RDNA 2                | Yes                 | Not enabled          |
+| `gfx110x`  | Linux    | RDNA 2                | Yes                 | Not enabled          |
+| `gfx120x`  | Linux    | RDNA 3                | Yes                 | Not enabled          |
+| `gfx120x`  | Windows  | RDNA 3                | Yes                 | Not enabled          |
+| `gfx90x`   | Linux    | MI200 (CDNA2)         | Yes                 | Not enabled          |
+| `gfx1151`  | Linux    | RDNA 3.5              | Yes                 | Not enabled          |
+
+> **Note:** All benchmarks are **architecture-agnostic** and support any ROCm-compatible GPU. The table above lists GPU families actively used in CI testing. To add support for additional GPU families, update [`amdgpu_family_matrix.py`](../amdgpu_family_matrix.py) with appropriate `benchmark-runs-on` runners.
 
 ### Implementation Details
 
@@ -228,8 +244,10 @@ Edit `benchmarks/benchmark_test_matrix.py`:
     "fetch_artifact_args": "--your-lib --tests",
     "timeout_minutes": 60,
     "test_script": f"python {_get_benchmark_script_path('test_your_benchmark.py')}",
-    "platform": ["linux"],
+    "platform": ["linux", "windows"],  # Supported platforms
     "total_shards": 1,
+    # TODO: Remove xfail once dedicated performance servers are added
+    "expect_failure": True,
 },
 ```
 

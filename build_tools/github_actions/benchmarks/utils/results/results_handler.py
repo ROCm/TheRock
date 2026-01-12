@@ -125,7 +125,7 @@ class ResultsHandler:
             with open(output_file, "w") as f:
                 json.dump(results_data, f, indent=2)
 
-            log.info(f"✓ Results saved: {output_file}")
+            log.info(f"Results saved: {output_file}")
             return output_file
         except Exception as e:
             log.error(f"Failed to save local results: {e}")
@@ -219,10 +219,10 @@ class ResultsHandler:
             success = api_client.submit_results(payload)
 
             if success:
-                log.info("✓ Results submitted to API successfully")
+                log.info("Results submitted to API successfully")
                 return True
             else:
-                log.warning("⚠ Failed to submit results to API")
+                log.warning("Failed to submit results to API")
                 return False
 
         except Exception as e:
