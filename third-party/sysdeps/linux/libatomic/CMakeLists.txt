@@ -76,7 +76,7 @@ add_custom_target(
     "${CMAKE_CURRENT_SOURCE_DIR}/patch_source.sh" "${SOURCE_DIR}"
   COMMAND
     # Configure libatomic only from GCC sources
-    bash -c "cd ${CMAKE_CURRENT_BINARY_DIR}/build_libatomic && ${SOURCE_DIR}/libatomic/configure --prefix=${CMAKE_INSTALL_PREFIX} --enable-shared --disable-static --libdir=${CMAKE_INSTALL_PREFIX}/lib"
+    bash -c "cd ${CMAKE_CURRENT_BINARY_DIR}/build_libatomic && ${SOURCE_DIR}/libatomic/configure --prefix=${CMAKE_INSTALL_PREFIX} --enable-shared --disable-static --disable-multilib --libdir=${CMAKE_INSTALL_PREFIX}/lib"
   COMMAND
     # Build libatomic
     make -C "${CMAKE_CURRENT_BINARY_DIR}/build_libatomic" -j "${PAR_JOBS}"
