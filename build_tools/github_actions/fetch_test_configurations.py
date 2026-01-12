@@ -123,6 +123,14 @@ test_matrix = {
         "platform": ["linux", "windows"],
         "total_shards": 1,
     },
+    "rocr-debug-agent": {
+        "job_name": "rocr-debug-agent",
+        "fetch_artifact_args": "--debug-tools --tests",
+        "timeout_minutes": 10,
+        "test_script": f"python {_get_script_path('test_rocr-debug-agent.py')}",
+        "platform": ["linux"],
+        "total_shards": 1,
+    },
     "rocthrust": {
         "job_name": "rocthrust",
         "fetch_artifact_args": "--prim --tests",
