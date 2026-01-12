@@ -51,6 +51,6 @@ pre-commit run
 pre-commit run --all-files
 
 # (Optional but recommended)
-# Install git hook.
+# Install git hook. Now pre-commit runs on every git commit.
 pre-commit install
 ```
