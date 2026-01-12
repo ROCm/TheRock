@@ -456,6 +456,13 @@ def main(argv):
     )
 
     artifacts_group.add_argument(
+        "--rocprofiler-sdk",
+        default=False,
+        help="Include 'rocprofiler-sdk' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
         "--rocprofiler-systems",
         default=False,
         help="Include 'rocprofiler-systems' artifacts",
