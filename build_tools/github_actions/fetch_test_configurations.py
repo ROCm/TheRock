@@ -45,6 +45,14 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_rocroller.py')}",
         "platform": ["linux"],
         "total_shards": 5,
+        "exclude_family": {
+            "linux": [
+                "gfx1150",
+                "gfx1151",
+                "gfx1152",
+                "gfx1153",
+            ]  # rocroller does not plan to support Linux gfx115X architectures
+        },
     },
     "hipblas": {
         "job_name": "hipblas",
