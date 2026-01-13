@@ -1,7 +1,7 @@
 """
-TheRock Test Framework
+TheRock Extended Tests Framework
 
-Unified framework for benchmark, performance, and functional testing.
+Unified framework for benchmark and functional testing.
 
 Test Types:
 - benchmark: Regression detection via LKG comparison (PASS/FAIL gates)
