@@ -53,8 +53,10 @@ class TestRocprofsys:
             "--junit-xml=junit.xml",
             # RCCL runtime-instrument is broken
             # RCCL sampling perfetto validation is also broken
-            "-k",
-            "not TestRCCL",
+            "-m",
+            "not rccl",
+            "--show-config",
+            "--print-env",
             # Custom flags -------
             # "--no-output", # Supresses all output
             "--show-output-on-subtest-fail",  # Shows runner output on subtest fail
