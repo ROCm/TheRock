@@ -194,7 +194,7 @@ Package granularity will be increased with ROCm 8.0. Development packages contai
 | amdrocm-base |  | rocminfo, version (rocm-core) |  |
 | amdrocm-CK |  |  | CK |
 | amdrocm-debugger |  | rocgdb |  |
-| amdrocm-math-comon or rocm-math-dev |  |  | CK, rocWMMA, rocRoller, Tensile, Origami |
+| amdrocm-math-common or amdrocm-math-dev |  |  | CK, rocWMMA, rocRoller, Tensile, Origami |
 | amdrocm-hipify |  | HIPIFY |  |
 | amdrocm-opencl |  | OpenCL |  |
 | amdrocm-decode |  | rocDecode |  |
