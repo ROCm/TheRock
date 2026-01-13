@@ -143,8 +143,10 @@ def upload_missing_whls(
         # Skip riscv64 packages
         if "riscv64" in pkg:
             continue
-        # Skip unsupported Python versions
+        # Skip unsupported Python version
         if "cp39" in pkg:
+            continue
+        if "cp310" in pkg:
             continue
         if "cp313t" in pkg:
             continue

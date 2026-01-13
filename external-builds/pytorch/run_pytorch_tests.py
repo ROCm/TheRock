@@ -292,7 +292,7 @@ def force_exit_with_code(retcode):
     retcode_file = Path("run_pytorch_tests_exit_code.txt")
     print(f"Writing retcode {retcode} to '{retcode_file}'")
     with open(retcode_file, "w") as f:
-        f.write(str(int(retcode)))
+        f.write(str(retcode))
 
     print("Forcefully terminating to avoid https://github.com/ROCm/TheRock/issues/999")
 
