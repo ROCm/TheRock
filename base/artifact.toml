@@ -2,6 +2,23 @@
 [components.dev."base/half/stage"]
 [components.doc."base/half/stage"]
 
+# amdsmi
+[components.dbg."base/amdsmi/stage"]
+optional = "windows"
+[components.dev."base/amdsmi/stage"]
+optional = "windows"
+[components.doc."base/amdsmi/stage"]
+optional = "windows"
+[components.lib."base/amdsmi/stage"]
+optional = "windows"
+[components.run."base/amdsmi/stage"]
+optional = "windows"
+include = [
+  "bin/**",
+  "libexec/**",
+  "share/amd_smi/**",
+]
+
 # rocm_smi_lib
 [components.dbg."base/rocm_smi_lib/stage"]
 optional = "windows"
