@@ -1,13 +1,16 @@
-# RFC0009: Memory Monitoring System for CI/CD Builds
+---
+author: Dezhi Liao
+created: 2026-01-05
+modified: 2026-01-13
+status: Draft
+pr: https://github.com/ROCm/TheRock/pull/2453
+---
 
-**Status:** Draft
-**Author:** Dezhi Liao
-**Created:** January 5, 2026
-**PR:** [#2453](https://github.com/ROCm/TheRock/pull/2453)
+# RFC0009: Memory Monitoring System for CI/CD Builds
 
 ______________________________________________________________________
 
-## Summary
+## Overview
 
 This RFC proposes the implementation of a comprehensive memory monitoring system for TheRock CI/CD pipeline to investigate and diagnose out-of-memory (OOM) issues occurring on self-hosted GitHub runners. The system provides real-time memory tracking, detailed logging, post-build analysis capabilities, and GitHub Actions integration to identify which build phases consume excessive memory resources.
 
@@ -48,7 +51,7 @@ The solution consists of four main components:
 │  (ci.yml, ci_linux.yml, ci_windows.yml, build_*.yml)       │
 └───────────────────┬─────────────────────────────────────────┘
                     │
-                    ├─ Start: start_memory_monitor.sh/.ps1
+                    ├─ Start: start_memory_monitor.sh
                     │         ↓
                     │  ┌──────────────────────────┐
                     │  │   memory_monitor.py      │
@@ -57,7 +60,7 @@ The solution consists of four main components:
                     │  │  - Monitors signals      │
                     │  └──────────────────────────┘
                     │         ↓
-                    ├─ Stop:  stop_memory_monitor.sh/.ps1
+                    ├─ Stop:  stop_memory_monitor.sh
                     │         ↓
                     │  ┌──────────────────────────┐
                     │  │  analyze_memory_logs.py  │
@@ -75,9 +78,11 @@ The solution consists of four main components:
 
 **Key Features:**
 
-- **Real-time monitoring** with configurable intervals (default: 30 seconds)
+- **Real-time monitoring** with configurable intervals (default: 5 seconds in code, 30 seconds via environment variable)
 - **Thread-safe operation** using `threading.Event` for clean shutdown
 - **Cross-platform support** for Linux and Windows
+- **Parent process monitoring** - exits automatically if parent process dies (via `--parent-pid`)
+- **Maximum runtime limit** - prevents orphaned processes (via `--max-runtime`)
 - **Multiple operation modes:**
   - Background monitoring (for CI integration)
   - Command wrapping (monitor specific commands)
@@ -114,11 +119,18 @@ The solution consists of four main components:
 - **Linux/Unix:** Signal handlers for `SIGTERM`, `SIGINT`, `SIGBREAK`
 - **Windows:** Stop signal file detection (polled every interval)
 - **Thread coordination:** Uses `threading.Event.wait()` for responsive shutdown
+- **Parent process monitoring:** Monitor exits automatically if parent dies (via `--parent-pid`)
+- **Maximum runtime:** Automatic termination after specified duration (via `--max-runtime`)
+
+**Default Intervals:**
+
+- **Code default:** 5 seconds (when specified via `--interval` argument)
+- **Environment variable fallback:** 30 seconds (when using `MEMORY_MONITOR_INTERVAL` env var or no explicit interval set)
 
 **Warning Thresholds:**
 
-- **High memory:** >75% usage
 - **Critical memory:** >90% usage (likely OOM risk)
+- **High memory:** >75% usage
 - **High swap:** >50% usage (performance degradation)
 
 **Usage Examples:**
@@ -129,7 +141,9 @@ python build_tools/memory_monitor.py \
   --background \
   --phase "Build Phase" \
   --interval 30 \
-  --log-file build/logs/memory.jsonl
+  --log-file build/logs/memory.jsonl \
+  --parent-pid $PPID \
+  --max-runtime 86400
 
 # Monitor a specific command
 python build_tools/memory_monitor.py \
@@ -167,6 +181,11 @@ HIGH:     >= 90% memory usage
 MEDIUM:   >= 75% memory usage
 LOW:      < 75% memory usage
 ```
+
+**GitHub Actions Summary Format:**
+
+- Displays peak memory usage
+- Includes warnings section for critical phases
 
 **Report Formats:**
 
@@ -240,10 +259,10 @@ kill -SIGINT <PID>
 **New Input Parameter:**
 
 ```yaml
-monitor_memory:
-  type: boolean
-  description: "If enabled, memory monitoring will be performed during the build"
-  default: false
+monitor_interval:
+  type: string
+  description: "Memory monitoring interval in seconds"
+  default: 30
 ```
 
 **Integration Points:**
@@ -253,12 +272,16 @@ monitor_memory:
    - Start script: `start_memory_monitor.sh`
    - Stop script: `stop_memory_monitor.sh`
    - Uses SIGINT for graceful shutdown
+   - Uses `JOB_NAME` environment variable for file naming
+   - Tracks parent PID for automatic cleanup
 
 1. **Windows Workflows** (`build_windows_artifacts.yml`, `ci_windows.yml`)
 
-   - Start script: `start_memory_monitor.ps1`
-   - Stop script: `stop_memory_monitor.ps1`
+   - Start script: `start_memory_monitor_win.sh` (Bash for Git Bash)
+   - Stop script: `stop_memory_monitor_win.sh` (Bash for Git Bash)
    - Uses stop signal file mechanism
+   - Uses `JOB_NAME` environment variable for file naming
+   - Includes `taskkill` fallback for force termination
 
 **Environment Variables:**
 
@@ -287,36 +310,42 @@ PHASE: "Build Phase"
 
 **`start_memory_monitor.sh`:**
 
+- Discovers repository root using `git rev-parse --show-toplevel`
 - Starts Python monitor in background
-- Captures and exports PID
+- Tracks parent process PID (`$PPID`) for automatic termination if parent dies
+- Sets max runtime to 24 hours (workflow timeout) to prevent orphaned processes
+- Captures and exports PID to environment and file
 - Creates log directory structure
+- Includes 2-second grace period to ensure monitor starts properly
 - Returns PID for cleanup
 
 **`stop_memory_monitor.sh`:**
 
+- Requires `MONITOR_PID` environment variable
 - Sends SIGINT to monitor process (native Linux signal handling)
-- Waits for graceful exit (monitor's signal handler triggers cleanup)
-- Force kills if necessary (fallback)
-- Displays monitor output
-- No need for graceful_shutdown.py utility
+- Waits 2 seconds for graceful exit
+- Force kills with SIGKILL if necessary (fallback)
+- Displays monitor output from log file
+- No need for graceful_shutdown.py utility (Linux has native signal support)
 
 #### Windows PowerShell Scripts
 
-**`start_memory_monitor.ps1`:**
+**`start_memory_monitor_win.sh`:** (Bash script for Git Bash on Windows)
 
-- Conditional execution based on `$MonitorMemory` parameter
+- Sets default memory monitor interval to 30 seconds if not provided
 - Starts monitor with stop signal file support
-- Writes PID to file for later cleanup
+- Uses `GITHUB_JOB` environment variable for log file naming
+- Sets max runtime to 24 hours (workflow timeout)
+- Writes PID to file (`memory_monitor.pid`) for later cleanup
 - Redirects output to log file
 
-**`stop_memory_monitor.ps1`:**
+**`stop_memory_monitor_win.sh`:** (Bash script for Git Bash on Windows)
 
-- Reads PID from file
-- Stops process forcefully (Windows signal limitations)
-- Uses stop signal file mechanism for graceful shutdown
-- Displays monitor output
-- Handles missing files gracefully
-- May use graceful_shutdown.py utility for better cleanup in future
+- Reads PID from file (`memory_monitor.pid`)
+- Creates stop signal file to trigger graceful shutdown
+- Waits up to 5 seconds (10 iterations of 0.5s) for graceful termination
+- Falls back to `taskkill /F /PID` on Windows (or `kill -9` otherwise) if timeout exceeded
+- Displays monitor output from log file
 
 ### Data Flow
 
@@ -332,18 +361,23 @@ PHASE: "Build Phase"
 │  - Creates log directory             │
 │  - Starts background monitor         │
 │  - Captures PID                      │
+│  - Tracks parent PID (Linux)         │
+│  - Sets 24h max runtime              │
+│  - 2s grace period for startup       │
 └──────────┬───────────────────────────┘
            │
            ▼
 ┌──────────────────────────────────────┐
 │  memory_monitor.py (Background)      │
 │  ┌────────────────────────────────┐  │
-│  │  Loop (every 30s):             │  │
+│  │  Loop (every 5-30s):           │  │
 │  │  1. Collect system metrics     │  │
 │  │  2. Track peak usage           │  │
 │  │  3. Write JSON log             │  │
 │  │  4. Print warnings             │  │
 │  │  5. Check stop signal          │  │
+│  │  6. Check parent still alive   │  │
+│  │  7. Check max runtime          │  │
 │  └────────────────────────────────┘  │
 └──────────┬───────────────────────────┘
            │ (Continuous)
@@ -360,7 +394,9 @@ PHASE: "Build Phase"
 ┌──────────────────────────────────────┐
 │  stop_memory_monitor.sh/.ps1         │
 │  - Sends stop signal                 │
-│  - Waits for clean exit              │
+│  - Waits for clean exit (2-5s)       │
+│  - Force kill if needed (SIGKILL)    │
+│  - Uses taskkill on Windows          │
 │  - Displays output                   │
 └──────────┬───────────────────────────┘
            │
@@ -406,16 +442,18 @@ PHASE: "Build Phase"
    - Stats collection validation
    - Monitoring loop functionality
    - Thread-safe stop event mechanism
-   - Responsive shutdown timing
+   - Responsive shutdown timing (verifies shutdown < 2s even with 30s interval)
    - Stop signal file detection
    - Log file writing
+   - Analysis script integration test
 
 1. **`graceful_shutdown_test.py`:**
 
    - Process termination with stop signal file
    - Timeout handling
    - Summary output validation
-   - Cross-platform compatibility (Windows-specific)
+   - Cross-platform compatibility (Windows-specific, skipped on other OS)
+   - Integration test with memory_monitor.py
 
 **Test Coverage:**
 
@@ -424,6 +462,8 @@ PHASE: "Build Phase"
 - Stop signal file detection (Windows compatibility)
 - Log file I/O and JSON formatting
 - Analysis script output correctness
+- Parent process monitoring (via `--parent-pid`)
+- Maximum runtime limits (via `--max-runtime`)
 
 ______________________________________________________________________
 
@@ -459,8 +499,8 @@ build_tools/
 ├── github_actions/
 │   ├── start_memory_monitor.sh        # Linux start script
 │   ├── stop_memory_monitor.sh         # Linux stop script (uses kill -SIGINT)
-│   ├── start_memory_monitor.ps1       # Windows start script
-│   └── stop_memory_monitor.ps1        # Windows stop script (uses stop signal file)
+│   ├── start_memory_monitor_win.sh    # Windows start script (Bash for Git Bash)
+│   └── stop_memory_monitor_win.sh     # Windows stop script (Bash for Git Bash with stop signal file)
 └── tests/
     ├── memory_monitor_test.py         # Monitor unit tests
     └── graceful_shutdown_test.py      # Shutdown utility tests (Windows-specific)
@@ -483,12 +523,13 @@ build/logs/                             # Generated during builds
 
 **Environment Variables:**
 
-- `MEMORY_MONITOR_INTERVAL`: Override default monitoring interval (seconds)
+- `MEMORY_MONITOR_INTERVAL`: Override default monitoring interval (seconds, default: 30)
 - `MEMORY_MONITOR_LOG_FILE`: Path to write detailed memory logs
 - `BUILD_DIR`: Build directory location (default: `build`)
-- `JOB_NAME`: GitHub job name for log file naming
+- `JOB_NAME`: GitHub job name for log file naming (set from `${{ github.job }}` in workflows)
 - `PHASE`: Build phase name for categorization
 - `GITHUB_STEP_SUMMARY`: GitHub Actions summary file path (auto-set)
+- `MAX_RUN_TIME`: Maximum runtime in seconds (default: 86400 = 24 hours)
 
 **Workflow Inputs:**
 
@@ -509,13 +550,19 @@ ______________________________________________________________________
 1. **Monitoring Overhead:**
 
    - Python process runs continuously during builds
-   - Memory/CPU overhead: ~20-50 MB RAM, \<1% CPU (at 30s intervals)
+   - Memory/CPU overhead: ~4-8 MB RAM, \<1% CPU (at 5-30s intervals)
+     - **Data structures:** ~1 MB:
+       - `samples` list accumulating memory snapshots over time (each sample ~1-2 KB)
+       - For a 1-hour build with 30s interval: 120 samples × 1.5 KB ≈ 180 KB
+       - For a 4-hour build: ~720 KB of sample data
+     - **Thread overhead:** ~1-2 MB for the monitoring thread stack
+     - **Runtime overhead:** ~2-5 MB for Python's memory management, garbage collection, and runtime buffers
    - Impact is negligible compared to build resource consumption
 
 1. **I/O Overhead:**
 
    - JSON logging writes (~200 bytes per sample)
-   - At 30s intervals, ~6 KB/min per job
+   - At 30s intervals, ~6 KB/min per job; at 5s intervals, ~36 KB/min per job
    - Minimal disk I/O impact
 
 ### Platform Limitations
@@ -527,6 +574,7 @@ ______________________________________________________________________
    - Requires stop signal file polling as alternative mechanism
    - Slight delay in detecting stop requests (\<1 interval)
    - `graceful_shutdown.py` utility provides Windows-specific graceful termination
+   - Windows scripts use Bash (for Git Bash) rather than PowerShell for consistency
 
 1. **Process Monitoring Accuracy:**
 
@@ -536,11 +584,11 @@ ______________________________________________________________________
 
 ### Operational Considerations
 
-1. **Manual Enablement:**
+1. **Orphaned Process Prevention:**
 
-   - Monitoring is opt-in via `monitor_memory` input
-   - Not enabled by default to avoid unnecessary overhead on all builds
-   - Must be explicitly enabled when investigating OOM issues
+   - Monitor tracks parent PID and exits if parent dies (Linux implementation)
+   - Max runtime limit (24 hours) prevents monitors from outliving workflows
+   - 2-second grace period in start script ensures proper initialization
 
 1. **Log Retention:**
 
@@ -690,7 +738,7 @@ ______________________________________________________________________
 
    - Memory monitoring system fully functional on Linux and Windows
    - Zero impact on builds when disabled
-   - Minimal overhead when enabled (\<1% CPU, \<50 MB RAM)
+   - Minimal overhead when enabled (\<1% CPU, \<10 MB RAM)
 
 1. **Data Collection:**
 
@@ -785,6 +833,7 @@ ______________________________________________________________________
    - Is 30 seconds appropriate for all scenarios?
    - Should we make it adaptive based on memory pressure?
    - Trade-off between granularity and overhead?
+   - **Current implementation:** Default is 5s in code, 30s via environment variable
 
 1. **Log Retention:**
 
@@ -794,7 +843,7 @@ ______________________________________________________________________
 
 1. **Alert Thresholds:**
 
-   - Are current thresholds (75%, 90%) appropriate?
+   - Are current thresholds (75%, 90%, 95%) appropriate?
    - Should they be configurable per workflow?
    - Different thresholds for different runner sizes?
 
@@ -808,7 +857,7 @@ ______________________________________________________________________
 ================================================================================
 [SUMMARY] Memory Monitoring Summary - Phase: Build Phase
 ================================================================================
-Duration: 1247.3 seconds
+Duration: 20.8 minutes
 Samples collected: 42
 
 Memory Usage:
@@ -858,18 +907,36 @@ KEY FINDINGS
 
 | Metric | Value |
 |:-------|------:|
-| **Duration** | 1247.3s |
+| **Duration** | 20.8 min |
 | **Samples Collected** | 42 |
 | **Average Memory** | 67.3% |
 | **Peak Memory** | 89.4% (56.30 GB) |
 | **Average Swap** | 15.2% |
 | **Peak Swap** | 28.7% (4.58 GB) |
 
-> [!WARNING]
-> Memory usage exceeded 75% during this phase.
+> [!CAUTION]
+> Memory usage exceeded 90% during this phase! This phase is likely causing out-of-memory issues.
 
 > [!WARNING]
 > Significant swap usage detected (28.7%). Consider increasing available memory or reducing parallel jobs.
+```
+
+**Analysis Report GitHub Summary:**
+
+```markdown
+## Memory Usage Analysis
+
+### Peak Memory Usage by Phase
+
+| Phase | Peak Memory | Avg Memory | Peak Swap | Severity |
+|-------|-------------|------------|-----------|----------|
+| therock-archives Build | 89.4% | 67.3% | 28.7% |  HIGH |
+| CMake Configure | 76.2% | 54.1% | 12.1% | MEDIUM |
+| Test Packaging | 45.8% | 38.2% | 5.2% |  LOW |
+
+###  Phases with High Memory Usage
+
+- **therock-archives Build**: 89.4% peak memory
 ```
 
 ______________________________________________________________________
@@ -889,7 +956,14 @@ ______________________________________________________________________
 - **Cause:** Windows has limited signal support (no SIGINT like Linux)
 - **Solution:** Ensure stop signal file mechanism is working properly
 - **Note:** Linux uses native `kill -SIGINT` which works reliably
+- **Note:** Windows scripts use Bash (for Git Bash) with stop signal file polling
 - **Workaround:** Increase timeout in stop script or use graceful_shutdown.py utility
+
+**Issue:** Monitor becomes orphaned after workflow ends
+
+- **Cause:** Parent process died or workflow timeout exceeded
+- **Solution:** Scripts now include `--parent-pid` (Linux) and `--max-runtime` (24 hours) safeguards
+- **Note:** Monitor automatically exits when parent process dies or max runtime exceeded
 
 **Issue:** Missing memory data in logs
 
@@ -901,7 +975,7 @@ ______________________________________________________________________
 
 - **Cause:** Interval too short
 - **Solution:** Increase interval to 60+ seconds
-- **Note:** 30s is optimal for most cases
+- **Note:** Default is 30s via environment variable, but can be as low as 5s when explicitly set
 
 ______________________________________________________________________
 
