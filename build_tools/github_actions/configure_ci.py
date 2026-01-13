@@ -498,7 +498,7 @@ def matrix_generator(
                 selected_target_names = []
                 selected_test_names = []
                 break
-            if "run-all-ci" == label:
+            if "run-all-archs-ci" == label:
                 selected_target_names = [
                     target
                     for target in get_all_families_for_trigger_types(
