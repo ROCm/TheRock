@@ -63,6 +63,8 @@ def build_configure(manylinux=False):
             "-DCMAKE_C_COMPILER_LAUNCHER=ccache",
             "-DCMAKE_CXX_COMPILER_LAUNCHER=ccache",
             "-DBUILD_TESTING=ON",
+            "-DTHEROCK_ENABLE_ALL=OFF",
+            "-DTHEROCK_ENABLE_SPARSE=ON",
         ]
     )
 
