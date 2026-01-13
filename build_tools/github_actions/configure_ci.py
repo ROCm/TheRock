@@ -608,6 +608,23 @@ def matrix_generator(
                     artifact_group += f"-{build_variant_suffix}"
                 matrix_row["artifact_group"] = artifact_group
 
+                # If a specific test kernel type was specified, we use that kernel-enabled test runners
+                # We disable the other machines that do not have the specified kernel type
+                pr_labels = get_pr_labels(base_args)
+                for label in pr_labels:
+                    if "kernel" in label:
+                        _, kernel_type = label.split(":")
+                        if (
+                            "test-runs-on-kernel" in platform_info
+                            and kernel_type in platform_info["test-runs-on-kernel"]
+                        ):
+                            matrix_row["test-runs-on"] = platform_info[
+                                "test-runs-on-kernel"
+                            ][kernel_type]
+                        else:
+                            matrix_row["test-runs-on"] = ""
+                        break
+
                 matrix_output.append(matrix_row)
 
     print(f"Generated build matrix: {str(matrix_output)}")
