@@ -30,6 +30,15 @@ def _get_script_path(script_name: str) -> str:
 
 
 test_matrix = {
+    # hip-tests
+    "hip-tests": {
+        "job_name": "hip-tests",
+        "fetch_artifact_args": "--tests",
+        "timeout_minutes": 120,
+        "test_script": f"python {_get_script_path('test_hiptests.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards": 4,
+    },
     # BLAS tests
     "rocblas": {
         "job_name": "rocblas",
