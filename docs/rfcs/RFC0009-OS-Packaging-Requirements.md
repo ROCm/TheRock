@@ -204,6 +204,8 @@ Package granularity will be increased with ROCm 8.0. Development packages contai
 | amdrocm-sysdeps |  | Bundled 3rd party dependencies (e.g. libdrm, libelf, numa, subset of libVA) |  |
 | amdrocm-rdc|  | ROCm Datacenter | |
 
+Note: Product management would like to follow upstream packaging structrure in ROCm in the future with no interm due dates as of now. Today there may be one amdrocm-llvm that includes both flang and the flang compiler, the flang component can be dependent on the llvm component.
+
 ## Versioning Requirements
 
 For versioning requirements on packaging see the following documentation: [TheRock package versioning](/docs/packaging/versioning.md)
