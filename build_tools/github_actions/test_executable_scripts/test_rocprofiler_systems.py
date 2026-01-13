@@ -57,11 +57,7 @@ class TestRocprofsys:
             "not rccl",
             "--show-config",
             "--print-env",
-            # Custom flags -------
-            # "--no-output", # Supresses all output
-            "--show-output-on-subtest-fail",  # Shows runner output on subtest fail
-            # "--show-output", # Shows runner output even on success (REQUIRES -s flag)
-            # --------------------
+            "--show-output-on-subtest-fail",
             "-v",
             "-rs",
             "--log-cli-level=info",
