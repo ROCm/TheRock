@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 
 from github_actions_utils import *
-from test_framework.benchmark.benchmark_test_matrix import benchmark_matrix
+from extended_tests.benchmark.benchmark_test_matrix import benchmark_matrix
 from amdgpu_family_matrix import get_all_families_for_trigger_types
 
 logging.basicConfig(level=logging.INFO)

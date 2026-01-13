@@ -9,7 +9,7 @@ from pathlib import Path
 
 # Note: these paths are relative to the repository root.
 SCRIPT_DIR = (
-    Path("build_tools") / "github_actions" / "test_framework" / "benchmark" / "scripts"
+    Path("build_tools") / "github_actions" / "extended_tests" / "benchmark" / "scripts"
 )
 
 

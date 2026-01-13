@@ -5,7 +5,7 @@ Utility modules organized into logical subdirectories for maintainability and sc
 ## Structure
 
 ```
-test_framework/utils/
+extended_tests/utils/
 ├── __init__.py              # Public exports
 ├── test_client.py           # Main TestClient API
 ├── constants.py             # Framework constants
@@ -38,13 +38,13 @@ test_framework/utils/
 
 ### From Test Scripts
 
-Test scripts (benchmark/functional) add `test_framework/` to `sys.path`, then import:
+Test scripts (benchmark/functional) add `extended_tests/` to `sys.path`, then import:
 
 ```python
 # Import path setup (already done in base classes)
 sys.path.insert(
     0, str(Path(__file__).parent.parent.parent)
-)  # Adds test_framework/ to path
+)  # Adds extended_tests/ to path
 
 # Core utilities
 from utils.logger import log
@@ -130,6 +130,6 @@ Test results formatting, saving, and API submission.
 cd /path/to/TheRock
 
 # Verify utils imports work
-cd build_tools/github_actions/test_framework
+cd build_tools/github_actions/extended_tests
 python -c "from utils.logger import log; print('Utils imports working')"
 ```

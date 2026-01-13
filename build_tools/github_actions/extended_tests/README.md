@@ -1,4 +1,4 @@
-# TheRock Test Framework
+# TheRock Extended Tests Framework
 
 Unified testing framework for TheRock ROCm distribution, supporting benchmark and functional testing with automated execution, system detection, and results management.
 
@@ -51,7 +51,7 @@ See test-specific READMEs for detailed instructions and examples:
 ## Project Structure
 
 ```
-test_framework/
+extended_tests/
 ├── __init__.py
 ├── README.md                       # This file
 │

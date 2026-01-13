@@ -2,7 +2,7 @@
 
 Performance regression detection tests that compare current results against Last Known Good (LKG) baselines.
 
-> **Prerequisites:** See [Test Framework Overview](../README.md) for environment setup and general architecture.
+> **Prerequisites:** See [Extended Tests Framework Overview](../README.md) for environment setup and general architecture.
 
 ## Overview
 
@@ -26,7 +26,7 @@ Benchmark tests detect **performance regressions** by comparing against baseline
 
 ```bash
 # Run a benchmark (environment variables from main README required)
-cd build_tools/github_actions/test_framework/benchmark/scripts
+cd build_tools/github_actions/extended_tests/benchmark/scripts
 python test_hipblaslt_benchmark.py
 ```
 
@@ -168,5 +168,5 @@ python scripts/test_yourlib_benchmark.py
 
 ## See Also
 
-- [Test Framework Overview](../README.md) - Environment setup, CI/CD architecture
+- [Extended Tests Framework Overview](../README.md) - Environment setup, CI/CD architecture
 - [Functional Tests](../functional/README.md) - Correctness validation tests

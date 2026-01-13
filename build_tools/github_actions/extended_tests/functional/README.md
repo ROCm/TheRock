@@ -2,7 +2,7 @@
 
 Correctness validation tests that verify expected behavior without performance measurements.
 
-> **Prerequisites:** See [Test Framework Overview](../README.md) for environment setup and general architecture.
+> **Prerequisites:** See [Extended Tests Framework Overview](../README.md) for environment setup and general architecture.
 
 ## Overview
 
@@ -23,7 +23,7 @@ Functional tests validate **correctness and behavior**:
 
 ```bash
 # Run a functional test (environment variables from main README required)
-python build_tools/github_actions/test_framework/functional/scripts/test_miopendriver_conv.py
+python build_tools/github_actions/extended_tests/functional/scripts/test_miopendriver_conv.py
 ```
 
 ## CI Test Matrix
@@ -75,7 +75,7 @@ from pathlib import Path
 from typing import Dict, List, Tuple, Any
 from prettytable import PrettyTable
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))  # test_framework/
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))  # extended_tests/
 sys.path.insert(0, str(Path(__file__).parent))  # For functional_base
 from functional_base import FunctionalBase, run_functional_test_main
 from utils.logger import log
@@ -157,5 +157,5 @@ python scripts/test_yourtest.py
 
 ## See Also
 
-- [Test Framework Overview](../README.md) - Environment setup, CI/CD architecture
+- [Extended Tests Framework Overview](../README.md) - Environment setup, CI/CD architecture
 - [Benchmark Tests](../benchmark/README.md) - Performance regression tests
