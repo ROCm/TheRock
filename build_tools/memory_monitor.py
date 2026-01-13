@@ -42,13 +42,37 @@ import psutil
 sys.path.insert(0, str(Path(__file__).parent))
 from github_actions.github_actions_utils import gha_append_step_summary
 
+# Constants
+BYTES_TO_GB = 1024**3
+
+# Memory thresholds (percentages)
+MEMORY_CRITICAL_PERCENT = 90
+MEMORY_WARNING_PERCENT = 75
+SWAP_WARNING_PERCENT = 50
+
+# Default intervals (seconds)
+DEFAULT_INTERVAL_SECONDS = 5.0
+DEFAULT_INTERVAL_ENV_FALLBACK = 30.0
+
+# Timeouts (seconds)
+THREAD_JOIN_BUFFER_SECONDS = 1
+STOP_CHECK_INTERVAL_SECONDS = 1
+
+# Exit codes
+EXIT_SUCCESS = 0
+EXIT_ERROR = 1
+EXIT_INTERRUPTED = 130
+
+# Display formatting
+SEPARATOR_WIDTH = 80
+
 
 class MemoryMonitor:
     """Monitors system and process memory usage."""
 
     def __init__(
         self,
-        interval_seconds: float = 5.0,
+        interval_seconds: float = DEFAULT_INTERVAL_SECONDS,
         phase_name: str = "Unknown",
         log_file: Optional[Path] = None,
         stop_signal_file: Optional[Path] = None,
@@ -103,22 +127,22 @@ class MemoryMonitor:
             "timestamp": datetime.now().isoformat(),
             "phase": self.phase_name,
             # System memory
-            "total_memory_gb": vm.total / (1024**3),
-            "available_memory_gb": vm.available / (1024**3),
-            "used_memory_gb": vm.used / (1024**3),
+            "total_memory_gb": vm.total / BYTES_TO_GB,
+            "available_memory_gb": vm.available / BYTES_TO_GB,
+            "used_memory_gb": vm.used / BYTES_TO_GB,
             "memory_percent": vm.percent,
-            "free_memory_gb": vm.free / (1024**3),
+            "free_memory_gb": vm.free / BYTES_TO_GB,
             # Peak memory
-            "peak_memory_gb": self.peak_memory / (1024**3),
-            "peak_swap_gb": self.peak_swap / (1024**3),
+            "peak_memory_gb": self.peak_memory / BYTES_TO_GB,
+            "peak_swap_gb": self.peak_swap / BYTES_TO_GB,
             # Swap
-            "total_swap_gb": swap.total / (1024**3),
-            "used_swap_gb": swap.used / (1024**3),
+            "total_swap_gb": swap.total / BYTES_TO_GB,
+            "used_swap_gb": swap.used / BYTES_TO_GB,
             "swap_percent": swap.percent,
             # Process memory
-            "process_memory_gb": process_memory / (1024**3),
-            "children_memory_gb": children_memory / (1024**3),
-            "total_process_memory_gb": total_process_memory / (1024**3),
+            "process_memory_gb": process_memory / BYTES_TO_GB,
+            "children_memory_gb": children_memory / BYTES_TO_GB,
+            "total_process_memory_gb": total_process_memory / BYTES_TO_GB,
         }
 
         return stats
@@ -150,15 +174,15 @@ class MemoryMonitor:
                 print(f"Warning: Failed to write to log file: {e}", file=sys.stderr)
 
         # Check for concerning memory levels
-        if stats["memory_percent"] > 90:
+        if stats["memory_percent"] > MEMORY_CRITICAL_PERCENT:
             print(
                 f"[WARNING] Memory usage is critically high ({stats['memory_percent']:.1f}%)",
                 file=sys.stderr,
             )
-        elif stats["memory_percent"] > 75:
+        elif stats["memory_percent"] > MEMORY_WARNING_PERCENT:
             print(f"[WARNING] Memory usage is high ({stats['memory_percent']:.1f}%)")
 
-        if stats["swap_percent"] > 50:
+        if stats["swap_percent"] > SWAP_WARNING_PERCENT:
             print(
                 f"[WARNING] Swap usage is high ({stats['swap_percent']:.1f}%), this may slow down builds",
                 file=sys.stderr,
@@ -238,7 +262,7 @@ class MemoryMonitor:
         self.end_time = time.time()
 
         if hasattr(self, "thread"):
-            self.thread.join(timeout=self.interval_seconds + 1)
+            self.thread.join(timeout=self.interval_seconds + THREAD_JOIN_BUFFER_SECONDS)
 
         # Print summary
         self.print_summary()
@@ -266,10 +290,10 @@ class MemoryMonitor:
         )
         max_swap_percent = max(s["swap_percent"] for s in self.samples)
 
-        print("\n" + "=" * 80)
+        print("\n" + "=" * SEPARATOR_WIDTH)
         print(f"[SUMMARY] Memory Monitoring Summary - Phase: {self.phase_name}")
-        print("=" * 80)
-        print(f"Duration: {duration:.1f} seconds")
+        print("=" * SEPARATOR_WIDTH)
+        print(f"Duration: {duration / 60:.1f} minutes")
         print(f"Samples collected: {len(self.samples)}")
         print()
         print(f"Memory Usage:")
@@ -281,19 +305,23 @@ class MemoryMonitor:
         print(f"  Peak: {max_swap_percent:.1f}% ({peak_swap_gb:.2f} GB)")
 
         # Warnings
-        if max_memory_percent > 90:
-            print(f"\n[CRITICAL] Memory usage exceeded 90% during this phase!")
+        if max_memory_percent > MEMORY_CRITICAL_PERCENT:
+            print(
+                f"\n[CRITICAL] Memory usage exceeded {MEMORY_CRITICAL_PERCENT}% during this phase!"
+            )
             print(f"   This phase is likely causing out-of-memory issues.")
-        elif max_memory_percent > 75:
-            print(f"\n[WARNING] Memory usage exceeded 75% during this phase.")
+        elif max_memory_percent > MEMORY_WARNING_PERCENT:
+            print(
+                f"\n[WARNING] Memory usage exceeded {MEMORY_WARNING_PERCENT}% during this phase."
+            )
 
-        if max_swap_percent > 50:
+        if max_swap_percent > SWAP_WARNING_PERCENT:
             print(
                 f"\n[WARNING] Significant swap usage detected ({max_swap_percent:.1f}%)"
             )
             print(f"   Consider increasing available memory or reducing parallel jobs.")
 
-        print("=" * 80 + "\n")
+        print("=" * SEPARATOR_WIDTH + "\n")
 
         # GitHub Actions Step Summary
         if "GITHUB_STEP_SUMMARY" in os.environ:
@@ -319,9 +347,9 @@ class MemoryMonitor:
     ):
         """Write summary to GitHub Actions step summary."""
         # Determine status indicator
-        if max_memory_percent > 90:
+        if max_memory_percent > MEMORY_CRITICAL_PERCENT:
             status = "CRITICAL"
-        elif max_memory_percent > 75:
+        elif max_memory_percent > MEMORY_WARNING_PERCENT:
             status = "WARNING"
         else:
             status = "OK"
@@ -332,7 +360,7 @@ class MemoryMonitor:
         # Main statistics table
         summary += "| Metric | Value |\n"
         summary += "|:-------|------:|\n"
-        summary += f"| **Duration** | {duration:.1f}s |\n"
+        summary += f"| **Duration** | {duration / 60:.1f} min |\n"
         summary += f"| **Samples Collected** | {len(self.samples)} |\n"
         summary += f"| **Average Memory** | {avg_memory_percent:.1f}% |\n"
         summary += f"| **Peak Memory** | {max_memory_percent:.1f}% ({peak_memory_gb:.2f} GB) |\n"
@@ -342,14 +370,14 @@ class MemoryMonitor:
         )
 
         # Add warnings as alerts if needed
-        if max_memory_percent > 90:
+        if max_memory_percent > MEMORY_CRITICAL_PERCENT:
             summary += "\n> [!CAUTION]\n"
-            summary += "> Memory usage exceeded 90% during this phase! This phase is likely causing out-of-memory issues.\n"
-        elif max_memory_percent > 75:
+            summary += f"> Memory usage exceeded {MEMORY_CRITICAL_PERCENT}% during this phase! This phase is likely causing out-of-memory issues.\n"
+        elif max_memory_percent > MEMORY_WARNING_PERCENT:
             summary += "\n> [!WARNING]\n"
-            summary += "> Memory usage exceeded 75% during this phase.\n"
+            summary += f"> Memory usage exceeded {MEMORY_WARNING_PERCENT}% during this phase.\n"
 
-        if max_swap_percent > 50:
+        if max_swap_percent > SWAP_WARNING_PERCENT:
             summary += "\n> [!WARNING]\n"
             summary += f"> Significant swap usage detected ({max_swap_percent:.1f}%). Consider increasing available memory or reducing parallel jobs.\n"
 
@@ -400,10 +428,10 @@ def run_command_with_monitoring(
         return_code = result.returncode
     except KeyboardInterrupt:
         print("\n[INTERRUPTED] Interrupted by user")
-        return_code = 130
+        return_code = EXIT_INTERRUPTED
     except Exception as e:
         print(f"[ERROR] Error executing command: {e}", file=sys.stderr)
-        return_code = 1
+        return_code = EXIT_ERROR
     finally:
         if log_file:
             try:
@@ -436,7 +464,7 @@ def setup_signal_handlers(monitor: MemoryMonitor):
     def signal_handler(signum, frame):
         print(f"\n[SIGNAL] Received signal {signum}, stopping monitoring...")
         monitor.stop()
-        sys.exit(0)
+        sys.exit(EXIT_SUCCESS)
 
     # Register handlers for SIGTERM and SIGINT (Ctrl+C)
     signal.signal(signal.SIGTERM, signal_handler)
@@ -465,8 +493,10 @@ def main():
         "--interval",
         type=float,
         dest="interval_seconds",
-        default=float(os.getenv("MEMORY_MONITOR_INTERVAL", "30")),
-        help="Monitoring interval in seconds (default: 30)",
+        default=float(
+            os.getenv("MEMORY_MONITOR_INTERVAL", str(DEFAULT_INTERVAL_ENV_FALLBACK))
+        ),
+        help=f"Monitoring interval in seconds (default: {DEFAULT_INTERVAL_ENV_FALLBACK})",
     )
 
     parser.add_argument(
@@ -547,7 +577,7 @@ def main():
                     break
 
                 # Use wait() for more responsive shutdown
-                monitor.stop_event.wait(timeout=1)
+                monitor.stop_event.wait(timeout=STOP_CHECK_INTERVAL_SECONDS)
 
             # If we exited the loop because stop_event was set by a signal handler
             # (not by the stop signal file check above), we need to call stop() to print the summary
@@ -564,7 +594,7 @@ def main():
             print("\n[STOP] Stopping background monitoring...")
             monitor.stop()
 
-        return 0
+        return EXIT_SUCCESS
 
     elif args.command:
         # Command execution mode
@@ -585,7 +615,7 @@ def main():
         )
         stats = monitor.get_memory_stats()
         monitor.log_stats(stats)
-        return 0
+        return EXIT_SUCCESS
 
 
 if __name__ == "__main__":
