@@ -127,11 +127,11 @@ if(THEROCK_ENABLE_ROCR_DEBUG_AGENT_TESTS)
   # rocr-debug-agent-tests
   #
   # Validation tests for the rocr-debug-agent component. This is only built
-  # whenever -DBUILD_TESTING=ON and we may have a build for each gfx level
-  # that is requested.
+  # whenever -DTHEROCK_BUILD_TESTING=ON. If multiple GPU targets are specified,
+  # fat binaries are built containing support for all of those GPU targets.
   ##############################################################################
 
-  if(BUILD_TESTING)
+  if(THEROCK_BUILD_TESTING)
     therock_cmake_subproject_declare(rocr-debug-agent-tests
       EXTERNAL_SOURCE_DIR "rocr-debug-agent/test"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocr-debug-agent-tests"
@@ -179,7 +179,13 @@ if(THEROCK_ENABLE_ROCGDB)
   # The AMD source-level debugger for Linux, based on the GNU Debugger (GDB).
   ##############################################################################
   therock_detect_shared_python_executables(_rocgdb_python_executables)
-  if(NOT _rocgdb_python_executables)
+  if(_rocgdb_python_executables)
+    message(STATUS "Building rocgdb against the following libpython versions: ${_rocgdb_python_executables}")
+    # Escape semicolons so the list survives a call to
+    # therock_cmake_subproject_declare and also add_custom_command
+    # expansion in CMAKE_ARGS.
+    string(REPLACE ";" "\\\$<SEMICOLON>" _rocgdb_python_executables_escaped "${_rocgdb_python_executables}")
+  else()
     message(WARNING "No Python with shared libpython found. rocgdb will be built without Python support.")
   endif()
 
@@ -189,9 +195,9 @@ if(THEROCK_ENABLE_ROCGDB)
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocgdb"
     CMAKE_ARGS
       "-DPATCHELF=${PATCHELF}"
-      "-DBUILD_TESTING=${BUILD_TESTING}"
+      "-DBUILD_TESTING=${THEROCK_BUILD_TESTING}"
       "-DROCM_VERSION=${ROCM_MAJOR_VERSION}.${ROCM_MINOR_VERSION}.${ROCM_PATCH_VERSION}"
-      "-DSHARED_PYTHON_EXECUTABLES=${_rocgdb_python_executables}"
+      "-DSHARED_PYTHON_EXECUTABLES=${_rocgdb_python_executables_escaped}"
     COMPILER_TOOLCHAIN
       amd-llvm
     RUNTIME_DEPS

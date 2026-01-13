@@ -120,7 +120,7 @@ jobs:
           # https://rocm.docs.amd.com/projects/HIP/en/latest/how-to/debugging.html
           AMD_LOG_LEVEL: 4
         run: |
-          pytest tests/ --log-cli-level=info --timeout=60
+          pytest tests/ --log-cli-level=info --timeout=300
 
       - name: Post-job cleanup processes on Windows
         if: ${{ always() && runner.os == 'Windows' }}

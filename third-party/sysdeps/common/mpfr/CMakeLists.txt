@@ -9,6 +9,10 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/mpfr-4.2.2.tar.xz"
       URL_HASH "SHA512=eb9e7f51b5385fb349cc4fba3a45ffdf0dd53be6dfc74932dc01258158a10514667960c530c47dd9dfc5aa18be2bd94859d80499844c5713710581e6ac6259a9"
       TOUCH "${_download_stamp}"
+      # We need DOWNLOAD_EXTRACT_TIMESTAMP set to TRUE to preserve the timestamp
+      # of the extracted sources, otherwise the build system will notice
+      # changes and will try to re-run autotools, causing issues.
+      DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     )
 
     therock_cmake_subproject_declare(therock-mpfr
@@ -81,37 +85,9 @@ else()
     message(SEND_ERROR "Did not find a path containing '/gmp/build/stage' in CMAKE_LIBRARY_PATH.")
 endif()
 
-# Do builds from a copy of the source directory, in case we need to
-# patch the sources.
-set(SOURCE_COPY_DIR "${CMAKE_CURRENT_BINARY_DIR}/s")
-
-# The important timestamped files we want to preserve so autotools
-# doesn't try to regenerate them (which would require aclocal, automake, etc.).
-set(CRITICAL_FILES
-  "aclocal.m4"
-  "Makefile.in"
-  "src/Makefile.in"
-  "tests/Makefile.in"
-  "tune/Makefile.in"
-  "doc/Makefile.in"
-  "tools/bench/Makefile.in"
-)
-
-# Add the full path to the critical files.
-foreach(stamped_file ${CRITICAL_FILES})
-  list(APPEND TIMESTAMPED_FILES "${SOURCE_COPY_DIR}/${stamped_file}")
-endforeach()
-
 add_custom_target(
   build ALL
   WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-  COMMAND
-    "${CMAKE_COMMAND}" -E rm -rf -- "${CMAKE_INSTALL_PREFIX}" "${SOURCE_COPY_DIR}"
-  COMMAND
-    "${CMAKE_COMMAND}" -E copy_directory "${SOURCE_DIR}" "${SOURCE_COPY_DIR}"
-  COMMAND
-    # Touch generated files to prevent autotools from trying to regenerate them.
-    "${CMAKE_COMMAND}" -E touch ${TIMESTAMPED_FILES}
   #
   # OPTIONAL: Patching of the sources should happen here.
   #
@@ -124,7 +100,7 @@ add_custom_target(
       # potentially fragile. We use a patchelf step instead.
       "LDFLAGS=${CMAKE_SHARED_LINKER_FLAGS} -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
       --
-    "${SOURCE_COPY_DIR}/configure"
+    "${SOURCE_DIR}/configure"
       --prefix "${CMAKE_INSTALL_PREFIX}"
       --with-gmp="${GMP_PREFIX}"
   COMMAND

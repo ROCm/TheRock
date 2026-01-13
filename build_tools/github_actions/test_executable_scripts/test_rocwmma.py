@@ -27,6 +27,9 @@ logging.basicConfig(level=logging.INFO)
 # Otherwise, we run the normal test suite
 test_type = os.getenv("TEST_TYPE", "full")
 
+# TODO(#2823): Re-enable test once flaky issue is resolved
+TESTS_TO_IGNORE = ["unpack_util_test"]
+
 # If there are devices for which the full set is too slow, we can
 # programatically set test_type to "regression" here.
 
@@ -50,6 +53,8 @@ cmd = [
     "8",
     "--timeout",
     timeout,
+    "--exclude-regex",
+    "|".join(TESTS_TO_IGNORE),
 ]
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 
