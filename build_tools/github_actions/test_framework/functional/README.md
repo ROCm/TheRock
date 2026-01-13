@@ -2,90 +2,41 @@
 
 Correctness validation tests that verify expected behavior without performance measurements.
 
-## Purpose
+> **Prerequisites:** See [Test Framework Overview](../README.md) for environment setup and general architecture.
 
-Functional tests validate **correctness and behavior** by checking that outputs match expectations:
+## Overview
 
-- **Result:** PASS (correct behavior) / FAIL (incorrect behavior) / ERROR (execution failure) / SKIP (prerequisites not met)
-- **Frequency:** Every nightly CI
-- **Use Case:** Automated correctness validation, API contract verification
+Functional tests validate **correctness and behavior**:
 
-## Quick Start
+- **Result Types:** PASS / FAIL / ERROR / SKIP
+- **Validation:** Output correctness, API contracts, expected behavior
+- **CI Execution:** Nightly CI and optionally on PRs
+- **Exit Code:** Non-zero if any test FAILS or has ERRORs
 
-### Available Functional Tests
+## Available Tests
 
 | Test Script                 | Library | Description                                    |
 | --------------------------- | ------- | ---------------------------------------------- |
 | `test_miopendriver_conv.py` | MIOpen  | Convolution forward/backward correctness tests |
 
-### Running Locally
+## Quick Start
 
 ```bash
-# Set required environment variables
-export THEROCK_BIN_DIR=/path/to/therock/build/bin
-export ARTIFACT_RUN_ID=local-test
-export AMDGPU_FAMILIES=gfx94x-dcgpu
-
-# Run a functional test
+# Run a functional test (environment variables from main README required)
 python build_tools/github_actions/test_framework/functional/scripts/test_miopendriver_conv.py
 ```
 
-## Directory Structure
+## CI Test Matrix
 
-```
-functional/
-├── scripts/                    # Functional test implementations
-│   ├── functional_base.py      # Base class (common test logic)
-│   └── test_miopendriver_conv.py
-│
-├── configs/                    # Test-specific configurations
-│   └── miopen_driver_conv.json # MIOpen test parameters
-│
-├── functional_matrix.py        # CI test matrix definitions
-└── README.md                   # This file
-```
+Tests defined in `functional_matrix.py`:
 
-## Functional Test Matrix
-
-Tests defined in `functional_matrix.py` for CI:
-
-| Test Name            | Library | Platform | Timeout | Artifacts Needed   |
-| -------------------- | ------- | -------- | ------- | ------------------ |
-| `miopen_driver_conv` | MIOpen  | Linux    | 30 min  | `--miopen --tests` |
+| Test Name            | Library | Platform | Timeout | Artifacts Needed   | CI Status         |
+| -------------------- | ------- | -------- | ------- | ------------------ | ----------------- |
+| `miopen_driver_conv` | MIOpen  | Linux    | 30 min  | `--miopen --tests` | Enabled (nightly) |
 
 ## How Functional Tests Work
 
-### 1. Execution Flow
-
-```
-┌─────────────────────────────────────────┐
-│ 1. Initialize Test                      │
-│    - Auto-detect GPU, ROCm version      │
-│    - Load configuration from JSON       │
-└──────────────┬──────────────────────────┘
-               ↓
-┌─────────────────────────────────────────┐
-│ 2. Run Test Commands                    │
-│    - Execute test binary/driver         │
-│    - Capture output to log file         │
-└──────────────┬──────────────────────────┘
-               ↓
-┌─────────────────────────────────────────┐
-│ 3. Parse Results                        │
-│    - Extract pass/fail from logs        │
-│    - Generate detailed per-case results │
-│    - Calculate statistics               │
-└──────────────┬──────────────────────────┘
-               ↓
-┌─────────────────────────────────────────┐
-│ 4. Report Results                       │
-│    - Display formatted tables           │
-│    - Upload to results API              │
-│    - Generate GitHub Actions summary    │
-└─────────────────────────────────────────┘
-```
-
-### 2. Result Tables
+### Result Tables
 
 Functional tests generate two tables:
 
@@ -199,20 +150,12 @@ export AMDGPU_FAMILIES=gfx94x-dcgpu
 python scripts/test_yourtest.py
 ```
 
-## CI Integration
+## Configuration
 
-Functional tests run in CI workflows:
+- **Test Matrix:** `functional_matrix.py` - CI test definitions
+- **Test Parameters:** `configs/*.json` - Test-specific parameters and configurations
 
-1. **Trigger:** Nightly scheduled run
-1. **Execution:** Parallel with other tests
-1. **Matrix:** Generated from `functional_matrix.py`
-1. **Runners:** Standard test runners
-1. **Results:** Uploaded to results API, displayed in GHA summary
+## See Also
 
-See [main test framework README](../README.md) for full CI architecture.
-
-## Related Documentation
-
-- [Test Framework README](../README.md) - Main framework documentation
-- [Shared Utils](../utils/README.md) - Utility modules reference
+- [Test Framework Overview](../README.md) - Environment setup, CI/CD architecture
 - [Benchmark Tests](../benchmark/README.md) - Performance regression tests

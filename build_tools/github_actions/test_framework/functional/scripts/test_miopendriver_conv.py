@@ -108,7 +108,7 @@ class MIOpenDriverConvTest(FunctionalBase):
                         log.error(f"Error running command: {e}")
                         f.write(f"ERROR: {e}\n\n")
 
-        log.info("Test execution complete")
+        log.info("MIOpenDriver convolution test execution complete")
 
     def parse_results(self) -> Tuple[List[Dict[str, Any]], PrettyTable, int]:
         """Parse test results from log file.

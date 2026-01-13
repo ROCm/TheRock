@@ -1,18 +1,19 @@
 # Benchmark Tests
 
-Regression detection tests that compare current performance against Last Known Good (LKG) baselines.
+Performance regression detection tests that compare current results against Last Known Good (LKG) baselines.
 
-## Purpose
+> **Prerequisites:** See [Test Framework Overview](../README.md) for environment setup and general architecture.
 
-Benchmark tests detect **performance regressions** by comparing test results against established baselines:
+## Overview
 
-- **Result:** PASS (within tolerance) / FAIL (regression detected) / UNKNOWN (no baseline)
-- **Frequency:** Every nightly CI
-- **Use Case:** Automated CI gates to prevent performance degradation
+Benchmark tests detect **performance regressions** by comparing against baselines:
 
-## Quick Start
+- **Result Types:** PASS (within tolerance) / FAIL (regression) / UNKNOWN (no baseline)
+- **Comparison:** Current performance vs. LKG baseline with configurable tolerance
+- **CI Execution:** Nightly only (not on PRs to save resources)
+- **Exit Code:** Non-zero if any test FAILS
 
-### Available Benchmark Tests
+## Available Tests
 
 | Test Script                   | Library   | Description                             |
 | ----------------------------- | --------- | --------------------------------------- |
@@ -21,48 +22,24 @@ Benchmark tests detect **performance regressions** by comparing test results aga
 | `test_rocrand_benchmark.py`   | rocRAND   | Random number generation benchmarks     |
 | `test_rocsolver_benchmark.py` | ROCsolver | Dense linear algebra benchmarks         |
 
-### Running Locally
+## Quick Start
 
 ```bash
-# Set required environment variables
-export THEROCK_BIN_DIR=/path/to/therock/build/bin
-export ARTIFACT_RUN_ID=local-test
-export AMDGPU_FAMILIES=gfx950-dcgpu
-
-# Run a benchmark
+# Run a benchmark (environment variables from main README required)
 cd build_tools/github_actions/test_framework/benchmark/scripts
 python test_hipblaslt_benchmark.py
 ```
 
-## Directory Structure
+## CI Test Matrix
 
-```
-benchmark/
-├── scripts/                    # Benchmark implementations
-│   ├── benchmark_base.py       # Base class (LKG comparison logic)
-│   ├── test_hipblaslt_benchmark.py
-│   ├── test_rocfft_benchmark.py
-│   ├── test_rocrand_benchmark.py
-│   └── test_rocsolver_benchmark.py
-│
-├── configs/                    # Benchmark-specific test configurations
-│   ├── hipblaslt.json         # Test parameters (matrix sizes, precisions)
-│   └── rocfft.json            # Test parameters (FFT sizes, dimensions)
-│
-├── benchmark_matrix.py         # CI test matrix definitions
-└── README.md                   # This file
-```
+Tests defined in `benchmark_matrix.py`:
 
-## Benchmark Test Matrix
-
-Tests defined in `benchmark_matrix.py` for nightly CI:
-
-| Test Name         | Library   | Platform       | Timeout | Artifacts Needed       |
-| ----------------- | --------- | -------------- | ------- | ---------------------- |
-| `hipblaslt_bench` | hipBLASLt | Linux, Windows | 60 min  | `--blas --tests`       |
-| `rocfft_bench`    | rocFFT    | Linux, Windows | 60 min  | `--fft --rand --tests` |
-| `rocrand_bench`   | rocRAND   | Linux, Windows | 60 min  | `--rand --tests`       |
-| `rocsolver_bench` | ROCsolver | Linux, Windows | 60 min  | `--blas --tests`       |
+| Test Name         | Library   | Platform       | Timeout | Artifacts Needed       | CI Status         |
+| ----------------- | --------- | -------------- | ------- | ---------------------- | ----------------- |
+| `hipblaslt_bench` | hipBLASLt | Linux, Windows | 60 min  | `--blas --tests`       | Enabled (nightly) |
+| `rocfft_bench`    | rocFFT    | Linux, Windows | 60 min  | `--fft --rand --tests` | Enabled (nightly) |
+| `rocrand_bench`   | rocRAND   | Linux, Windows | 60 min  | `--rand --tests`       | Enabled (nightly) |
+| `rocsolver_bench` | ROCsolver | Linux, Windows | 60 min  | `--blas --tests`       | Enabled (nightly) |
 
 **GPU Family Support:**
 
@@ -82,43 +59,7 @@ Tests defined in `benchmark_matrix.py` for nightly CI:
 
 ## How Benchmark Tests Work
 
-### 1. Execution Flow
-
-```
-┌─────────────────────────────────────────┐
-│ 1. Initialize Benchmark                 │
-│    - Auto-detect GPU, ROCm version      │
-│    - Load configuration                 │
-└──────────────┬──────────────────────────┘
-               ↓
-┌─────────────────────────────────────────┐
-│ 2. Run Benchmark Binary                 │
-│    - Execute (e.g., rocblas-bench)      │
-│    - Capture output to log file         │
-└──────────────┬──────────────────────────┘
-               ↓
-┌─────────────────────────────────────────┐
-│ 3. Parse Results                        │
-│    - Extract metrics from logs          │
-│    - Structure as test results          │
-└──────────────┬──────────────────────────┘
-               ↓
-┌─────────────────────────────────────────┐
-│ 4. Compare with LKG Baseline            │
-│    - Fetch last known good results      │
-│    - Calculate performance delta        │
-│    - Determine: PASS/FAIL/UNKNOWN       │
-└──────────────┬──────────────────────────┘
-               ↓
-┌─────────────────────────────────────────┐
-│ 5. Report Results                       │
-│    - Display formatted table            │
-│    - Upload to results API              │
-│    - Return exit code (0=pass, 1=fail) │
-└─────────────────────────────────────────┘
-```
-
-### 2. LKG Comparison
+### LKG (Last Known Good) Comparison
 
 ```python
 # Pseudocode
@@ -134,13 +75,13 @@ else:
     result = "PASS"  # Performance acceptable
 ```
 
-### 3. Result Statuses
+### Result Statuses
 
-| Status      | Meaning                                  | Action                             |
-| ----------- | ---------------------------------------- | ---------------------------------- |
-| **PASS**    | Performance within tolerance of baseline | ✅ CI passes                       |
-| **FAIL**    | Performance degraded beyond tolerance    | ❌ CI fails, blocks merge          |
-| **UNKNOWN** | No baseline data available (new test)    | ⚠️ CI passes, baseline established |
+| Status      | Meaning                                  | Action                          |
+| ----------- | ---------------------------------------- | ------------------------------- |
+| **PASS**    | Performance within tolerance of baseline | CI passes                       |
+| **FAIL**    | Performance degraded beyond tolerance    | CI fails, blocks merge          |
+| **UNKNOWN** | No baseline data available (new test)    | CI passes, baseline established |
 
 ## Adding a New Benchmark
 
@@ -219,20 +160,13 @@ export AMDGPU_FAMILIES=gfx950-dcgpu
 python scripts/test_yourlib_benchmark.py
 ```
 
-## CI Integration
+## Configuration
 
-Benchmark tests automatically run in nightly CI:
+- **Test Matrix:** `benchmark_matrix.py` - CI test definitions
+- **Test Parameters:** `configs/*.json` - Benchmark-specific parameters (sizes, precisions, etc.)
+- **Performance Tolerance:** Default 5% degradation threshold (configurable per test)
 
-1. **Trigger:** Nightly scheduled run
-1. **Execution:** Parallel with regular tests
-1. **Matrix:** Generated from `benchmark_matrix.py`
-1. **Runners:** Dedicated GPU runners (if configured)
-1. **Results:** Uploaded to results API, compared with LKG
+## See Also
 
-See [main test framework README](../README.md) for full CI architecture.
-
-## Related Documentation
-
-- [Test Framework README](../README.md) - Main framework documentation
-- [Shared Utils](../utils/README.md) - Utility modules reference
+- [Test Framework Overview](../README.md) - Environment setup, CI/CD architecture
 - [Functional Tests](../functional/README.md) - Correctness validation tests
