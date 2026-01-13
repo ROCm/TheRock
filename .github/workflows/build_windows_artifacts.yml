@@ -48,6 +48,22 @@ on:
         type: boolean
       extra_cmake_options:
         type: string
+      external_source_checkout:
+        type: boolean
+        description: "Whether source is from external repo (rocm-libraries/systems/EMU)"
+        default: false
+      therock_ref:
+        type: string
+        description: "TheRock git ref to use (for external repos)"
+        default: ""
+      repository_override:
+        type: string
+        description: "Override github.repository for testing (e.g., 'ROCm/rocm-libraries')"
+        default: ""
+      s3_bucket_override:
+        type: string
+        default: ""
+        description: "Override S3 bucket for artifact storage (for EMU repos with different permissions)"
 
 permissions:
   contents: read
@@ -73,6 +89,7 @@ jobs:
       TEATIME_FORCE_INTERACTIVE: 0
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
+      THEROCK_S3_BUCKET_OVERRIDE: ${{ inputs.s3_bucket_override }}
     steps:
       - name: "Checking out repository"
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1

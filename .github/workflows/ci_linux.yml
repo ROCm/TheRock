@@ -32,6 +32,30 @@ on:
         type: string
       sanity_check_only_for_family:
         type: boolean
+      external_source_checkout:
+        type: boolean
+        description: "Whether source is from external repo (rocm-libraries/systems/EMU)"
+        default: false
+      therock_ref:
+        type: string
+        description: "TheRock git ref to use (for external repos)"
+        default: ""
+      repository_override:
+        type: string
+        description: "Override github.repository for testing (e.g., 'ROCm/rocm-libraries')"
+        default: ""
+      cmake_options:
+        type: string
+        description: "Extra CMake options for external repo projects"
+        default: ""
+      project_to_test:
+        type: string
+        description: "Comma-separated list of projects to test (for external repos)"
+        default: ""
+      s3_bucket_override:
+        type: string
+        default: ""
+        description: "Override S3 bucket for artifact storage (for EMU repos with different permissions)"
 
 permissions:
   contents: read
@@ -50,6 +74,11 @@ jobs:
       build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
       build_variant_suffix: ${{ inputs.build_variant_suffix }}
       expect_failure: ${{ inputs.expect_failure }}
+      external_source_checkout: ${{ inputs.external_source_checkout }}
+      therock_ref: ${{ inputs.therock_ref }}
+      repository_override: ${{ inputs.repository_override }}
+      extra_cmake_options: ${{ inputs.cmake_options }}
+      s3_bucket_override: ${{ inputs.s3_bucket_override }}
     permissions:
       contents: read
       id-token: write
@@ -87,6 +116,11 @@ jobs:
       test_type: ${{ inputs.test_type }}
       test_labels: ${{ inputs.test_labels }}
       sanity_check_only_for_family: ${{ inputs.sanity_check_only_for_family == true }}
+      external_source_checkout: ${{ inputs.external_source_checkout }}
+      therock_ref: ${{ inputs.therock_ref }}
+      repository_override: ${{ inputs.repository_override }}
+      project_to_test: ${{ inputs.project_to_test }}
+      s3_bucket_override: ${{ inputs.s3_bucket_override }}
 
   test_linux_benchmarks:
     needs: [build_portable_linux_artifacts]

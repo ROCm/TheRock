@@ -16,6 +16,26 @@ on:
         type: string
       component:
         type: string
+      external_source_checkout:
+        type: boolean
+        description: "Whether source is from external repo (rocm-libraries/systems/EMU)"
+        default: false
+      therock_ref:
+        type: string
+        description: "TheRock git ref to use (for external repos)"
+        default: ""
+      repository_override:
+        type: string
+        description: "Override github.repository for testing"
+        default: ""
+      project_to_test:
+        type: string
+        description: "Comma-separated list of projects to test (for external repos)"
+        default: ""
+      s3_bucket_override:
+        type: string
+        default: ""
+        description: "Override S3 bucket for artifact storage"
 
 permissions:
   contents: read
@@ -58,6 +78,7 @@ jobs:
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       OUTPUT_ARTIFACTS_DIR: "./build"
       THEROCK_BIN_DIR: "./build/bin"
+      THEROCK_S3_BUCKET_OVERRIDE: ${{ inputs.s3_bucket_override }}
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       # Benchmark results database API endpoints for performance metrics collection
       # NOTE: These secrets are only required for benchmark results submission in nightly CI runs.

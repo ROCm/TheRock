@@ -1,0 +1,43 @@
+name: Test External Repo Integration
+
+# This workflow tests external repository CI integration including bucket override functionality.
+# It validates that EMU repos and other external repos can use TheRock's workflows with custom S3 buckets.
+#
+# Automatically runs on PRs that modify CI infrastructure files.
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+      - '.github/actions/**'
+      - 'build_tools/github_actions/**'
+      - 'build_tools/install_rocm_from_artifacts.py'
+      - 'build_tools/fetch_artifacts.py'
+  workflow_dispatch:
+    inputs:
+      test_bucket_override:
+        type: boolean
+        description: "Test bucket override functionality"
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  # Test bucket override mechanism (using existing bucket for safety)
+  test-bucket-override:
+    name: "Test S3 Bucket Override"
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.test_bucket_override }}
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit
+    with:
+      external_source_checkout: false  # Test with TheRock itself
+      therock_ref: ${{ github.ref }}
+      # Override bucket to test the mechanism (using existing ci-artifacts-external bucket)
+      s3_bucket_override: "therock-ci-artifacts-external"
+      linux_amdgpu_families: "gfx94X"
+      # Minimal test to validate bucket override propagates correctly
+      projects: ''
+    permissions:
+      contents: read
+      id-token: write

@@ -224,6 +224,23 @@ def retrieve_bucket_info(
 
     _log("Retrieving bucket info...")
 
+    # Check for explicit bucket override (for EMU repos with different permissions)
+    bucket_override = os.getenv("THEROCK_S3_BUCKET_OVERRIDE")
+    if bucket_override:
+        _log(f"Using S3 bucket override: {bucket_override}")
+        # Still compute external_repo for folder structure
+        github_repository = github_repository or os.getenv("GITHUB_REPOSITORY", "ROCm/TheRock")
+        _log(f"  github_repository: {github_repository}")
+        owner, repo_name = github_repository.split("/")
+        external_repo = (
+            ""
+            if repo_name == "TheRock" and owner == "ROCm"
+            else f"{owner}-{repo_name}/"
+        )
+        _log(f"  external_repo: {external_repo}")
+        _log(f"  bucket (override): {bucket_override}")
+        return (external_repo, bucket_override)
+
     curr_commit_dt = None
 
     if github_repository:

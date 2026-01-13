@@ -37,6 +37,26 @@ on:
         type: string
       test_labels:
         type: string
+      external_source_checkout:
+        type: boolean
+        description: "Whether source is from external repo (rocm-libraries/systems/EMU)"
+        default: false
+      therock_ref:
+        type: string
+        description: "TheRock git ref to use (for external repos)"
+        default: ""
+      repository_override:
+        type: string
+        description: "Override github.repository for testing (e.g., 'ROCm/rocm-libraries')"
+        default: ""
+      project_to_test:
+        type: string
+        description: "Comma-separated list of projects to test (for external repos)"
+        default: ""
+      s3_bucket_override:
+        type: string
+        default: ""
+        description: "Override S3 bucket for artifact storage (for EMU repos with different permissions)"
   push:
     branches:
       - ADHOCBUILD
@@ -121,3 +141,8 @@ jobs:
         }}
       platform: ${{ needs.configure_test_matrix.outputs.platform }}
       component: ${{ toJSON(matrix.components) }}
+      external_source_checkout: ${{ inputs.external_source_checkout }}
+      therock_ref: ${{ inputs.therock_ref }}
+      repository_override: ${{ inputs.repository_override }}
+      project_to_test: ${{ inputs.project_to_test }}
+      s3_bucket_override: ${{ inputs.s3_bucket_override }}

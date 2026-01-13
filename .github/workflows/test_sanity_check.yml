@@ -29,6 +29,10 @@ on:
         type: string
       platform:
         type: string
+      s3_bucket_override:
+        type: string
+        default: ""
+        description: "Override S3 bucket for artifact storage"
   push:
     branches:
       - ADHOCBUILD
@@ -65,6 +69,7 @@ jobs:
       VENV_DIR: ${{ github.workspace }}/.venv
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       OUTPUT_ARTIFACTS_DIR: ${{ github.workspace }}/build
+      THEROCK_S3_BUCKET_OVERRIDE: ${{ inputs.s3_bucket_override }}
       THEROCK_BIN_DIR: ${{ github.workspace }}/build/bin
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
     steps:
