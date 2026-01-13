@@ -25,6 +25,9 @@ class RCCLBenchmark(BenchmarkBase):
         self.log_file = self.script_dir / "rccl_bench.log"
         self.ngpu = self._detect_gpu_count()
 
+        # Validate OpenMPI is available (from base class)
+        self._validate_openmpi()
+
     def run_benchmarks(self) -> None:
         """Run RCCL benchmarks and save output to log file."""
         # Load benchmark configuration
@@ -69,7 +72,6 @@ class RCCLBenchmark(BenchmarkBase):
                         env_vars = {"HSA_FORCE_FINE_GRAIN_PCIE": "1"}
 
                         # Construct benchmark command with MPI
-                        # Note: Requires OpenMPI to be installed in the Docker image
                         cmd = [
                             "mpirun",
                             "--np",

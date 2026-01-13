@@ -2,6 +2,7 @@
 
 import os
 import shlex
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -13,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))  # benchmarks/
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))  # github_actions/
 from utils import BenchmarkClient, HardwareDetector
 from utils.logger import log
+from utils.exceptions import TestExecutionError
 from github_actions_utils import gha_append_step_summary
 
 
@@ -111,6 +113,19 @@ class BenchmarkBase:
                 f"Failed to detect GPUs: {e}. "
                 "Ensure ROCm drivers are installed and GPU devices are accessible."
             ) from e
+
+    def _validate_openmpi(self) -> None:
+        """Check if OpenMPI is installed and available in the system.
+
+        Raises:
+            TestExecutionError: If OpenMPI (mpirun) is not found
+        """
+        if not shutil.which("mpirun"):
+            raise TestExecutionError(
+                "OpenMPI not found in system\n"
+                "Ensure OpenMPI is installed and 'mpirun' is available in PATH"
+            )
+        log.info("OpenMPI validated: mpirun found in system")
 
     def create_test_result(
         self,
