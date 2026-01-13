@@ -333,9 +333,12 @@ def run():
                 i + 1 for i in range(job_config_data["total_shards"])
             ]
 
+            # TODO(#2895): Remove the following override once smoke test filter is provided
+            test_jobs_to_full_shard = ["hip-tests"]
+
             # If the test type is smoke tests, we only need one shard for the test job
             # Note: Benchmarks always use test_type="full" but have total_shards=1 anyway
-            if test_type == "smoke":
+            if test_type == "smoke" and job_name not in test_jobs_to_full_shard:
                 job_config_data["total_shards"] = 1
                 job_config_data["shard_arr"] = [1]
 
