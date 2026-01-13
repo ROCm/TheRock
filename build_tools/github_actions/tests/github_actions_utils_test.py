@@ -33,8 +33,8 @@ class GitHubActionsUtilsTest(unittest.TestCase):
         os.getenv("GITHUB_TOKEN"),
         "GITHUB_TOKEN not set, skipping test that requires GitHub API access",
     )
-    def test_gha_query_workflow_run_information(self):
-        workflow_run = gha_query_workflow_run_information("ROCm/TheRock", "18022609292")
+    def test_gha_query_workflow_run_by_id(self):
+        workflow_run = gha_query_workflow_run_by_id("ROCm/TheRock", "18022609292")
         self.assertEqual(workflow_run["repository"]["full_name"], "ROCm/TheRock")
 
         # Useful for debugging
