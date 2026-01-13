@@ -209,6 +209,18 @@ amdgpu_family_info_matrix_nightly = {
             "build_variants": ["release"],
         },
     },
+    "gfx1151": {
+        "linux": {
+            "test-runs-on": "linux-gfx1151-gpu-rocm",
+            "family": "gfx1151",
+            "build_variants": ["release"],
+        },
+        "windows": {
+            "test-runs-on": "",
+            "family": "gfx1151",
+            "build_variants": ["release"],
+        },
+    },
 }
 
 
