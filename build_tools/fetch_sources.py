@@ -95,6 +95,8 @@ def get_enabled_projects(args) -> List[str]:
         projects.extend(args.system_projects)
     if args.include_compilers:
         projects.extend(args.compiler_projects)
+    if args.include_debug_tools:
+        projects.extend(args.debug_tools)
     if args.include_rocm_libraries:
         projects.extend(["rocm-libraries"])
     if args.include_rocm_systems:
@@ -105,6 +107,8 @@ def get_enabled_projects(args) -> List[str]:
         projects.extend(args.rocm_media_projects)
     if args.include_iree_libs:
         projects.extend(args.iree_libs_projects)
+    if args.include_math_libraries:
+        projects.extend(args.math_library_projects)
     return projects
 
 
@@ -429,6 +433,12 @@ def main(argv):
         help="Include compilers",
     )
     parser.add_argument(
+        "--include-debug-tools",
+        default=True,
+        action=argparse.BooleanOptionalAction,
+        help="Include ROCm debugging tools",
+    )
+    parser.add_argument(
         "--include-rocm-libraries",
         default=True,
         action=argparse.BooleanOptionalAction,
@@ -457,6 +467,12 @@ def main(argv):
         default=True,
         action=argparse.BooleanOptionalAction,
         help="Include IREE and related libraries",
+    )
+    parser.add_argument(
+        "--include-math-libraries",
+        default=True,
+        action=argparse.BooleanOptionalAction,
+        help="Include math libraries that are part of ROCM",
     )
     parser.add_argument(
         "--system-projects",
@@ -523,6 +539,29 @@ def main(argv):
             if is_windows()
             else [
                 "rocm-libraries",
+            ]
+        ),
+    )
+    parser.add_argument(
+        "--debug-tools",
+        nargs="+",
+        type=str,
+        default=[
+            "amd-dbgapi",
+            "rocr-debug-agent",
+            "rocgdb",
+        ],
+    )
+    parser.add_argument(
+        "--math-library-projects",
+        nargs="+",
+        type=str,
+        default=(
+            []
+            if is_windows()
+            else [
+                # Linux only projects.
+                "libhipcxx",
             ]
         ),
     )

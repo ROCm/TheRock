@@ -254,28 +254,32 @@ Using the index pages [listed above](#installing-rocm-python-packages), you can
 also install `torch`, `torchaudio`, and `torchvision`.
 
 > [!NOTE]
-> By default, pip will install the latest versions of each package. If you want to
-> install older versions take note of the compatibility matrix:
+> By default, pip will install the latest stable versions of each package.
 >
-> | torch version | torchaudio version | torchvision version |
-> | ------------- | ------------------ | ------------------- |
-> | 2.10          | 2.10               | 0.25                |
-> | 2.9           | 2.9                | 0.24                |
-> | 2.8           | 2.8                | 0.23                |
-> | 2.7           | 2.7.1a0            | 0.22.1              |
+> - If you want to allow installing prerelease versions, use the `--pre`
 >
-> For example, `torch` 2.7.1 and compatible wheels can be installed by specifying
+> - If you want to install other versions, take note of the compatibility
+>   matrix:
 >
-> ```
-> torch==2.7.1 torchaudio==2.7.1a0 torchvision==0.22.1
-> ```
+>   | torch version | torchaudio version | torchvision version |
+>   | ------------- | ------------------ | ------------------- |
+>   | 2.10          | 2.10               | 0.25                |
+>   | 2.9           | 2.9                | 0.24                |
+>   | 2.8           | 2.8                | 0.23                |
+>   | 2.7           | 2.7.1a0            | 0.22.1              |
 >
-> See also
+>   For example, `torch` 2.7.1 and compatible wheels can be installed by specifying
 >
-> - [Supported PyTorch versions in TheRock](https://github.com/ROCm/TheRock/tree/main/external-builds/pytorch#supported-pytorch-versions)
-> - [Installing previous versions of PyTorch](https://pytorch.org/get-started/previous-versions/)
-> - [torchvision installation - compatixbility matrix](https://github.com/pytorch/vision?tab=readme-ov-file#installation)
-> - [torchaudio installation - compatixbility matrix](https://docs.pytorch.org/audio/main/installation.html#compatibility-matrix)
+>   ```
+>   torch==2.7.1 torchaudio==2.7.1a0 torchvision==0.22.1
+>   ```
+>
+>   See also
+>
+>   - [Supported PyTorch versions in TheRock](https://github.com/ROCm/TheRock/tree/main/external-builds/pytorch#supported-pytorch-versions)
+>   - [Installing previous versions of PyTorch](https://pytorch.org/get-started/previous-versions/)
+>   - [torchvision installation - compatixbility matrix](https://github.com/pytorch/vision?tab=readme-ov-file#installation)
+>   - [torchaudio installation - compatixbility matrix](https://docs.pytorch.org/audio/main/installation.html#compatibility-matrix)
 
 > [!TIP]
 > The `torch` packages depend on `rocm[libraries]`, so ROCm packages should
@@ -301,7 +305,7 @@ Supported devices in this family:
 | MI300A/MI300X | gfx942     |
 
 ```bash
-pip install --index-url https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/ --pre torch torchaudio torchvision
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/ torch torchaudio torchvision
 ```
 
 #### torch for gfx950-dcgpu
@@ -313,7 +317,7 @@ Supported devices in this family:
 | MI350X/MI355X | gfx950     |
 
 ```bash
-pip install --index-url https://rocm.nightlies.amd.com/v2/gfx950-dcgpu/ --pre torch torchaudio torchvision
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx950-dcgpu/ torch torchaudio torchvision
 ```
 
 #### torch for gfx110X-all
@@ -328,7 +332,7 @@ Supported devices in this family:
 | AMD Radeon 780M Laptop iGPU        | gfx1103    |
 
 ```bash
-pip install --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ --pre torch torchaudio torchvision
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ torch torchaudio torchvision
 ```
 
 #### torch for gfx1151
@@ -340,7 +344,7 @@ Supported devices in this family:
 | AMD Strix Halo iGPU | gfx1151    |
 
 ```bash
-pip install --index-url https://rocm.nightlies.amd.com/v2/gfx1151/ --pre torch torchaudio torchvision
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx1151/ torch torchaudio torchvision
 ```
 
 #### torch for gfx120X-all
@@ -353,7 +357,7 @@ Supported devices in this family:
 | AMD RX 9070 / XT | gfx1201    |
 
 ```bash
-pip install --index-url https://rocm.nightlies.amd.com/v2/gfx120X-all/ --pre torch torchaudio torchvision
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx120X-all/ torch torchaudio torchvision
 ```
 
 ### Using PyTorch Python packages
