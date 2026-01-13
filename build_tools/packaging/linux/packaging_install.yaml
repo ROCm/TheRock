@@ -1,0 +1,39 @@
+debian:
+  test:
+      s3: https://{{ bucket }}.s3.us-east-2.amazonaws.com/{{ artifact_group }}_{{ run_id }}
+  dev:
+      s3: https://{{ bucket }}.s3.us-east-2.amazonaws.com/{{ artifact_group }}_{{ run_id }}
+  daily:
+      s3:
+  nightly:
+      s3: https://{{ bucket }}.s3.us-east-2.amazonaws.com/{{ artifact_group }}_{{ run_id }}
+  release:
+      s3:
+  bi-weekly:
+      s3:
+  rc:
+      s3:
+rpm:
+  test:
+      s3: https://{{ bucket }}.s3.us-east-2.amazonaws.com/{{ artifact_group }}_{{ run_id }}
+  dev:
+      s3: https://{{ bucket }}.s3.us-east-2.amazonaws.com/{{ artifact_group }}_{{ run_id }}
+  daily:
+      s3:
+  nightly:
+      s3:
+  release:
+      s3:
+  bi-weekly:
+      s3:
+  rc:
+      s3:
+repos:
+  ubuntu:
+    rocm_repo_file: /etc/apt/sources.list.d/rocm.list
+  rhel:
+    rocm_repo_file: /etc/yum.repos.d/rocm.repo
+  almalinux:
+    rocm_repo_file: /etc/yum.repos.d/rocm.repo
+  sles:
+    rocm_repo_file: /etc/zypp/repos.d/rocm.repo
