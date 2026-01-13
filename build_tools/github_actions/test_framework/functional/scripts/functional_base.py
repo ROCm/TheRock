@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))  # test_framework/
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))  # github_actions/
 from utils import TestClient
 from utils.logger import log
-from utils.exceptions import TestExecutionError
+from utils.exceptions import TestExecutionError, TestResultError
 from github_actions_utils import gha_append_step_summary
 
 
@@ -66,13 +66,13 @@ class FunctionalBase:
                 return json.load(f)
         except FileNotFoundError:
             raise TestExecutionError(
-                f"Configuration file not found: {config_file}",
-                action=f"Ensure {config_filename} exists in configs/ directory",
+                f"Configuration file not found: {config_file}\n"
+                f"Ensure {config_filename} exists in configs/ directory"
             )
         except json.JSONDecodeError as e:
             raise TestExecutionError(
-                f"Invalid JSON in configuration file: {e}",
-                action=f"Check JSON syntax in {config_filename}",
+                f"Invalid JSON in configuration file: {e}\n"
+                f"Check JSON syntax in {config_filename}"
             )
 
     def create_test_result(
@@ -233,11 +233,16 @@ class FunctionalBase:
             f"```\n{summary_table}\n```\n"
         )
 
-    def run(self) -> int:
-        """Execute functional test workflow and return exit code (0=PASS, 1=FAIL).
+    def run(self) -> None:
+        """Execute functional test workflow.
 
-        Returns:
-            0 if all tests passed, 1 if any test failed
+        Raises:
+            TestExecutionError: If test execution encounters errors (missing files, etc.)
+            TestResultError: If tests run successfully but results show failures
+
+        Note:
+            On success, returns normally (exit code 0)
+            On failure, raises exception (exit code 1)
         """
         log.info(f"{self.display_name} - Starting Functional Test")
 
@@ -251,10 +256,11 @@ class FunctionalBase:
         # Parse results (implemented by child class)
         test_results, detailed_table, num_suites = self.parse_results()
 
+        # Validate test results structure
         if not test_results:
             raise TestExecutionError(
-                "No test results generated",
-                action="Check if tests executed properly and log file contains output",
+                "No test results generated - parse_results() returned empty list\n"
+                "Check if tests executed successfully and results were saved to file"
             )
 
         # Calculate statistics
@@ -283,27 +289,24 @@ class FunctionalBase:
         except Exception as e:
             log.warning(f"Could not write GitHub Actions summary: {e}")
 
-        # Return 0 only if PASS, otherwise return 1
-        return 0 if stats["overall_status"] == "PASS" else 1
+        # Raise exception if tests failed
+        if stats["overall_status"] != "PASS":
+            failed = stats["failed"]
+            errored = stats["error"]
+            total = stats["total"]
+            raise TestResultError(
+                f"Test suite completed with failures: "
+                f"{failed} failed, {errored} errors out of {total} total tests"
+            )
 
 
 def run_functional_test_main(test_instance):
-    """Run functional test with standard error handling.
+    """Run functional test.
 
-    Raises:
-        KeyboardInterrupt: If execution is interrupted by user
-        Exception: If test execution fails
+    Raises exceptions on failure, returns normally on success.
+    This is the Pythonic way - let Python set exit codes automatically:
+    - Success: Returns normally → exit code 0
+    - Execution Error: Raises TestExecutionError → exit code 1
+    - Result Failure: Raises TestResultError → exit code 1
     """
-    try:
-        exit_code = test_instance.run()
-        if exit_code != 0:
-            raise RuntimeError(f"Test failed with exit code {exit_code}")
-    except KeyboardInterrupt:
-        log.warning("\nExecution interrupted by user")
-        raise
-    except Exception as e:
-        log.error(f"Unexpected error: {e}")
-        import traceback
-
-        traceback.print_exc()
-        raise
+    test_instance.run()

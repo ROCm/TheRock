@@ -60,8 +60,8 @@ class MIOpenDriverConvTest(FunctionalBase):
         miopen_driver = Path(self.therock_bin_dir) / "MIOpenDriver"
         if not miopen_driver.exists():
             raise TestExecutionError(
-                f"MIOpenDriver not found at {miopen_driver}",
-                action="Ensure MIOpen is installed correctly",
+                f"MIOpenDriver not found at {miopen_driver}\n"
+                f"Ensure MIOpen is installed correctly"
             )
 
         # Calculate total number of tests for progress indicator
@@ -180,8 +180,7 @@ class MIOpenDriverConvTest(FunctionalBase):
 
             if not isinstance(json_results, list):
                 raise TestExecutionError(
-                    "Results JSON is not a list",
-                    action="Check results file format",
+                    "Results JSON is not a list\n" "Check results file format"
                 )
 
             # Process each result with safe key access
@@ -220,24 +219,24 @@ class MIOpenDriverConvTest(FunctionalBase):
 
         except FileNotFoundError:
             raise TestExecutionError(
-                f"Results JSON file not found: {self.results_json}",
-                action="Ensure tests were executed successfully",
+                f"Results JSON file not found: {self.results_json}\n"
+                f"Ensure tests were executed successfully"
             )
         except json.JSONDecodeError as e:
             raise TestExecutionError(
-                f"Error parsing results JSON: {e}",
-                action="Check if results file is valid JSON",
+                f"Error parsing results JSON: {e}\n"
+                f"Check if results file is valid JSON"
             )
         except OSError as e:
             raise TestExecutionError(
-                f"Error reading results file: {e}",
-                action="Check file permissions and disk space",
+                f"Error reading results file: {e}\n"
+                f"Check file permissions and disk space"
             )
 
         if not test_results:
             raise TestExecutionError(
-                "No valid test results found in JSON file",
-                action="Check if tests executed successfully and results were saved",
+                "No valid test results found in JSON file\n"
+                "Check if tests executed successfully and results were saved"
             )
 
         num_suites = len(self.tests_list)
