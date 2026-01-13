@@ -498,6 +498,14 @@ def matrix_generator(
                 selected_target_names = []
                 selected_test_names = []
                 break
+            if "run-all-ci" == label:
+                selected_target_names = [
+                    target
+                    for target in get_all_families_for_trigger_types(
+                        ["presubmit", "postsubmit", "nightly"]
+                    )
+                ]
+                break
 
         selected_target_names.extend(
             filter_known_names(requested_target_names, "target", lookup_matrix)

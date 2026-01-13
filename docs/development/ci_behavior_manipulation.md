@@ -13,6 +13,7 @@ For `pull_request`, TheRock CI collects the `amdgpu_family_info_matrix_presubmit
 However, if additional options are wanted, you can add a label to manipulate the behavior. The labels we provide are:
 
 - `skip-ci`: The CI will skip all builds and tests
+- `run-all-ci`: The CI will run all builds
 - `gfx...`: A build and test (if a test machine is available) is added to the CI matrix for the specified gfx family. (ex: `gfx120X`, `gfx950`)
 - `test:...`: The full test will run only for the specified label and other labeled projects (ex: `test:rocthrust`, `test:hipblaslt`)
 
