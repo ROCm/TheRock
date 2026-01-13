@@ -57,11 +57,6 @@ add_custom_target(
   build ALL
   WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   COMMAND
-    "${CMAKE_COMMAND}" -E rm -rf -- "${CMAKE_INSTALL_PREFIX}" "${CMAKE_CURRENT_BINARY_DIR}/s"
-  COMMAND
-    # We have to patch the sources so make a fresh copy.
-    "${CMAKE_COMMAND}" -E copy_directory "${CMAKE_CURRENT_BINARY_DIR}/source" "${CMAKE_CURRENT_BINARY_DIR}/s"
-  COMMAND
     "${CMAKE_COMMAND}" -E env
       "PATCHELF=${PATCHELF}"
       "THEROCK_SOURCE_DIR=${THEROCK_SOURCE_DIR}"
