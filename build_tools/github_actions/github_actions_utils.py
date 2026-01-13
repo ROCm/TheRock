@@ -4,10 +4,12 @@ See also https://pypi.org/project/github-action-utils/.
 """
 
 from datetime import datetime, timezone
+from enum import Enum, auto
 import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 from typing import Mapping
@@ -17,6 +19,209 @@ from urllib.request import urlopen, Request
 def _log(*args, **kwargs):
     print(*args, **kwargs)
     sys.stdout.flush()
+
+
+class GitHubAPIError(Exception):
+    """Error from a GitHub API request.
+
+    Raised when a GitHub API request fails, whether via REST API or gh CLI.
+    """
+
+    pass
+
+
+class GitHubAPI:
+    """Client for making GitHub API requests.
+
+    Handles authentication automatically:
+    1. If GITHUB_TOKEN env var is set, uses that (CI environment)
+    2. If gh CLI is installed and authenticated, uses `gh api` (local dev)
+    3. Falls back to unauthenticated requests (rate limited)
+
+    CI workflows are expected to set the GITHUB_TOKEN environment variable from
+    ${{ secrets.GITHUB_TOKEN }} or ${{ github.token }}.
+
+    Developers are encouraged to install the `gh` CLI and authenticate with
+    `gh auth login`. They _can_ also use a Personal Access Token in the
+    GITHUB_TOKEN env var but this is less secure.
+
+    References:
+      * https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api?apiVersion=2022-11-28
+      * https://docs.github.com/en/rest/using-the-rest-api/getting-started-with-the-rest-api?apiVersion=2022-11-28#authentication
+      * https://cli.github.com/manual/gh_auth_login
+      * https://docs.github.com/en/actions/tutorials/authenticate-with-github_token
+
+    The authentication method is detected once and cached for the lifetime
+    of the instance.
+
+    Usage:
+        api = GitHubAPI()
+        response = api.send_request("https://api.github.com/repos/owner/repo")
+
+    For most use cases, use the module-level functions which use a shared
+    singleton instance:
+        response = gha_send_request("https://api.github.com/repos/owner/repo")
+    """
+
+    class AuthMethod(Enum):
+        """Authentication method for GitHub API requests."""
+
+        # Use GITHUB_TOKEN env var (CI environment) with the GitHub REST API.
+        GITHUB_TOKEN = auto()
+
+        # Use `gh api` command (local dev with OAuth).
+        GH_CLI = auto()
+
+        # Use the GitHub REST API without authenticating, subject to rate limits.
+        UNAUTHENTICATED = auto()
+
+    def __init__(self):
+        self._auth_method: GitHubAPI.AuthMethod | None = None
+        self._github_token: str | None = None
+        self._gh_cli_path: str | None = None
+
+    def _detect_auth_method(self) -> AuthMethod:
+        """Detects the best available GitHub API authentication method.
+
+        Always performs fresh detection. Use get_auth_method() for cached access.
+        """
+        # Check for GITHUB_TOKEN (CI environment or PAT)
+        token = os.getenv("GITHUB_TOKEN", "")
+        if token:
+            self._github_token = token
+            return GitHubAPI.AuthMethod.GITHUB_TOKEN
+
+        # Check for gh CLI
+        gh_path = shutil.which("gh")
+        if gh_path:
+            # Verify gh is authenticated by checking auth status
+            try:
+                result = subprocess.run(
+                    [gh_path, "auth", "status"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+                if result.returncode == 0:
+                    self._gh_cli_path = gh_path
+                    return GitHubAPI.AuthMethod.GH_CLI
+            except (subprocess.TimeoutExpired, OSError):
+                pass  # Fall through to unauthenticated
+
+        return GitHubAPI.AuthMethod.UNAUTHENTICATED
+
+    def get_auth_method(self) -> AuthMethod:
+        """Gets the current GitHub API authentication method.
+
+        Returns the detected auth method (GITHUB_TOKEN, GH_CLI, or UNAUTHENTICATED).
+        The result is cached after the first call.
+        """
+        if self._auth_method is None:
+            self._auth_method = self._detect_auth_method()
+        return self._auth_method
+
+    def is_authenticated(self) -> bool:
+        """Checks if authenticated GitHub API access is available.
+
+        Returns True if either GITHUB_TOKEN is set or gh CLI is authenticated.
+        """
+        return self.get_auth_method() != GitHubAPI.AuthMethod.UNAUTHENTICATED
+
+    def _get_request_headers(self) -> dict[str, str]:
+        """Gets common request headers for use with the GitHub REST API.
+
+        Note: This is only used for direct REST API calls (GITHUB_TOKEN or
+        unauthenticated). When using gh CLI, headers are handled by gh.
+        """
+        headers = {
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+
+        if self.get_auth_method() == GitHubAPI.AuthMethod.GITHUB_TOKEN:
+            headers["Authorization"] = f"Bearer {self._github_token}"
+
+        return headers
+
+    def _send_request_via_gh_cli(self, url: str) -> object:
+        """Sends a GitHub API request using the gh CLI."""
+        assert self._gh_cli_path is not None, (
+            "_send_request_via_gh_cli called without gh CLI path set. "
+            "Call get_auth_method() first."
+        )
+
+        # Strip the base URL to get the API path
+        api_path = url.removeprefix("https://api.github.com")
+
+        result = subprocess.run(
+            [self._gh_cli_path, "api", api_path],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+
+        if result.returncode != 0:
+            stderr = result.stderr or "(no error message)"
+            raise GitHubAPIError(f"gh api request failed: {stderr}")
+
+        if not result.stdout:
+            raise GitHubAPIError("gh api returned empty response")
+
+        return json.loads(result.stdout)
+
+    def _send_request_via_rest_api(self, url: str) -> object:
+        """Sends a GitHub API request using the REST API directly."""
+        headers = self._get_request_headers()
+        request = Request(url, headers=headers)
+        with urlopen(request) as response:
+            if response.status == 403:
+                raise GitHubAPIError(
+                    f"Access denied (403 Forbidden). "
+                    f"Check if your token has the necessary permissions (e.g., `repo`, `workflow`)."
+                )
+            elif response.status != 200:
+                raise GitHubAPIError(
+                    f"Received unexpected status code: {response.status}. "
+                    f"Please verify the URL or check GitHub API status."
+                )
+
+            return json.loads(response.read().decode("utf-8"))
+
+    def send_request(self, url: str) -> object:
+        """Sends a request to the given GitHub REST API URL.
+
+        Args:
+            url: Full GitHub API URL (e.g., https://api.github.com/repos/...)
+
+        Returns:
+            Parsed JSON response.
+
+        Raises:
+            GitHubAPIError: If the request fails.
+        """
+        auth_method = self.get_auth_method()
+
+        if auth_method == GitHubAPI.AuthMethod.GH_CLI:
+            return self._send_request_via_gh_cli(url)
+
+        if auth_method == GitHubAPI.AuthMethod.UNAUTHENTICATED:
+            _log("Warning: No GitHub auth available, requests may be rate limited")
+
+        return self._send_request_via_rest_api(url)
+
+
+# Module-level singleton with cached state.
+# Tests may opt to use separate instances to exercise the state more precisely.
+_default_github_api = GitHubAPI()
+
+
+def is_authenticated_github_api_available() -> bool:
+    """Checks if authenticated GitHub API access is available.
+
+    Returns True if either GITHUB_TOKEN is set or gh CLI is authenticated.
+    Useful for tests to decide whether to skip network-dependent tests.
+    """
+    return _default_github_api.is_authenticated()
 
 
 def gha_warn_if_not_running_on_ci():
@@ -106,46 +311,29 @@ def gha_append_step_summary(summary: str):
         f.write(summary + "\n\n")
 
 
-def gha_get_request_headers():
-    """Gets common request heaers for use with the GitHub REST API.
+def gha_get_request_headers() -> dict[str, str]:
+    """Gets common request headers for use with the GitHub REST API.
 
     See https://docs.github.com/en/rest.
+
+    Note: This is only used for direct REST API calls (GITHUB_TOKEN or
+    unauthenticated). When using gh CLI, headers are handled by gh.
     """
-    headers = {
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
-
-    # If GITHUB_TOKEN environment variable is available, include it in the API
-    # request to avoid a lower rate limit
-    gh_token = os.getenv("GITHUB_TOKEN", "")
-    if gh_token:
-        headers["Authorization"] = f"Bearer {gh_token}"
-    else:
-        _log(f"Warning: GITHUB_TOKEN not set, requests may be rate limited")
-
-    return headers
+    return _default_github_api._get_request_headers()
 
 
 def gha_send_request(url: str) -> object:
-    """Sents a request to the given GitHub REST API URL and returns the response if successful."""
-    headers = gha_get_request_headers()
+    """Sends a request to the given GitHub REST API URL and returns the response.
 
-    _log(f"Sending request to URL: {url}")
+    Authentication is handled automatically:
+    1. If GITHUB_TOKEN env var is set, uses that (CI environment)
+    2. If gh CLI is installed and authenticated, uses `gh api` (local dev)
+    3. Falls back to unauthenticated requests (rate limited)
 
-    request = Request(url, headers=headers)
-    with urlopen(request) as response:
-        if response.status == 403:
-            raise Exception(
-                f"Access denied (403 Forbidden). "
-                f"Check if your token has the necessary permissions (e.g., `repo`, `workflow`)."
-            )
-        elif response.status != 200:
-            raise Exception(
-                f"Received unexpected status code: {response.status}. Please verify the URL or check GitHub API status {response.status}."
-            )
-
-        return json.loads(response.read().decode("utf-8"))
+    Raises:
+        GitHubAPIError: If the request fails.
+    """
+    return _default_github_api.send_request(url)
 
 
 def gha_query_workflow_run_information(github_repository: str, workflow_run_id: str):
