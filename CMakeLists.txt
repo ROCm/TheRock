@@ -269,6 +269,9 @@ cmake_dependent_option(THEROCK_ROCWMMA_ENABLE_BENCHMARKS
   "Enables building rocWMMA benchmarks" OFF
   "THEROCK_ENABLE_ROCWMMA;THEROCK_BUILD_TESTING" OFF)
 
+option(THEROCK_ENABLE_LLVM_TESTS
+  "Enables building LLVM LIT tests" OFF)
+
 # Additional manual features that don't map to artifacts
 
 # Profiler Trace Decoder Binary (not an artifact, just a config option)
