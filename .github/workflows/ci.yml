@@ -137,11 +137,36 @@ jobs:
   #   name: Build Python Packages
   #   uses: ./.github/workflows/build_python_packages.yml
 
+  # Automatically run a dev release from the PR head SHA when rocm-libraries is bumped.
+  # This will rebuild ROCm packages that other CI jobs may already build.
+  dev_release_on_rocm_libraries_bump:
+    needs: [setup]
+    if: >-
+      ${{
+        github.event_name == 'pull_request' &&
+        needs.setup.outputs.rocm_libraries_bump == 'true' &&
+        github.event.pull_request.head.repo.fork == false
+      }}
+    permissions:
+      contents: write
+      actions: write
+      id-token: write
+    uses: ./.github/workflows/release_portable_linux_packages.yml
+    secrets: inherit
+    with:
+      release_type: "dev"
+      families: "gfx94X-dcgpu"
+      s3_subdir: "v2"
+      s3_staging_subdir: "v2-staging"
+      repository: ${{ github.repository }}
+      ref: ${{ github.event.pull_request.head.sha }}
+
   ci_summary:
     name: CI Summary
     if: always()
     needs:
       - setup
+      - dev_release_on_rocm_libraries_bump
       - linux_build_and_test
       - windows_build_and_test
     runs-on: ubuntu-24.04
