@@ -49,6 +49,7 @@ amdgpu_family_info_matrix_presubmit = {
     "gfx94x": {
         "linux": {
             "test-runs-on": "linux-mi325-1gpu-ossci-rocm-frac",
+            "test-runs-on-multi-gpu": "linux-mi325-4gpu-ossci-rocm",
             # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
             "benchmark-runs-on": "linux-mi325-1gpu-ossci-rocm-frac",
             "family": "gfx94X-dcgpu",
@@ -102,9 +103,7 @@ amdgpu_family_info_matrix_postsubmit = {
     },
     "gfx120x": {
         "linux": {
-            # TODO(#2683): Re-enable machine once it is stable
-            # Label is "linux-gfx120X-gpu-rocm"
-            "test-runs-on": "",
+            "test-runs-on": "linux-gfx120X-gpu-rocm",
             "family": "gfx120X-all",
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],

@@ -31,13 +31,19 @@ jobs:
     timeout-minutes: 210
     container:
       image: ${{ inputs.platform == 'linux' && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98' || null }}
+      # --ulimit memlock=-1:-1 - Prevents memory allocation issues with ROCm inside container
+      # --security-opt seccomp=unconfined - enables memory mapping, and is recommended for containers running in HPC environments
+      # --env-file /etc/podinfo/gha-gpu-isolation-settings - Required for GPU isolation on OSSCI MIXXX runners
+      # --user 0:0 - Running as root, by recommendation of GitHub: https://docs.github.com/en/actions/reference/workflows-and-actions/dockerfile-support#user
       options: --ipc host
         --group-add video
         --device /dev/kfd
         --device /dev/dri
         --group-add 110
+        --ulimit memlock=-1:-1
+        --security-opt seccomp=unconfined
         --env-file /etc/podinfo/gha-gpu-isolation-settings
-        --user 0:0 # Running as root, by recommendation of GitHub: https://docs.github.com/en/actions/reference/workflows-and-actions/dockerfile-support#user
+        --user 0:0
     strategy:
       fail-fast: false
       matrix:
