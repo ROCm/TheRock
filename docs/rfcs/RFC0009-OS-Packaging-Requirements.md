@@ -9,21 +9,20 @@ status: draft
 
 ## Overview
 
-With the implementation of TheRock build system new software packaging requirements need to be introduced to reflect TheRock's strategy. This RFC defines the cross-platform packaging, installation, versioning, and distribution requirements for TheRock; including the ROCm Core SDK and related ROCm software components. The scope of these requirments will cover OS distrobution packaging, Windows packaging requirements, and python packaging.
+With the implementation of TheRock build system new software packaging requirements need to be introduced to reflect TheRock's strategy. This RFC defines the cross-platform packaging, installation, versioning, and distribution requirements for TheRock; including the ROCm Core SDK and related ROCm software components. The scope of these requirments will cover OS distrobution packaging.
 
 Our goals are to:
 
-1. **Standardize packaging behaviour across Linux, Windows native, Windows WSL2**
+1. **Standardize packaging behaviour across Linux, Windows WSL2**
 2. **Ensure predicatble upgrade behaviour, side-by-side support, and compatibility with OS package managers (apt, dnf, yum, zypper for SLES)**
 3. **Comply with legal, licensing, and redistribution rules**
 4. **Support automated packaging workflows in TheRock with productized deliverables**
-5. **Support packaging behaviour across Python ecosystems using pip and WheelNext**
 
 ## Scope
 
 ### In Scope
 
-- Packaging formats: rpm, deb, msi, winget manifests, pip wheels, WheelNext
+- Packaging formats: rpm and deb
 - GPU-architecture-specific package variants
 - Side-by-side installation of ROCm Core SDK
 - Repository metadata, signing, and precedence
@@ -39,6 +38,8 @@ Our goals are to:
 - Internal CI/CD implementation details
 - Legacy ROCm 5.x / 6.x packaging
 - Non-Linux UNIX variants
+- Windows packaging requirements
+- Python pip and wheelnext packaging requirements
 
 ## Linux Packaging Requirements
 
@@ -108,29 +109,6 @@ Package-type = standard, asan, future variant
 
 This will reduce the number of packages visible via the package manager.
 
-### Meta Packages
-
-Using `yum` ROCm Core SDK runtime components and ROCm Core SDK runtime + development components can be installed.
-
-```
-yum install rocm # ROCm 8.0
-yum install rocm-core # ROCm 8.0
-yum install rocm-core<ver>
-yum install rocm-core-devel
-yum install rocm-core-devel<ver>
-```
-The following table shows the meta packages that will be available:
-
-| Name | Content | Descripion |
-| :------------- | :------------- | :------------- |
-| amdrocm & amdrocm-core | runtime & libraries, components, runtime compiler, amd-smi, rocminfo | Needed to run software built with ROCm Core |
-| amdrocm-core-devel | rocm-core + compiler cmake, static library files, and headers | Needed to build software with ROCm Core |
-| amdrocm-developer-tools | Profiler, debugger, and related tools | Independent set of tools to debug and profile any application built with ROCm |
-| amdrocm-fortran |  | Fortran compiler and related components |
-| amdrocm-opencl |  | Components needed to run OpenCL |
-| amdrocm-openmp |  | Components needed to build OpenMP |
-| amdrocm-core-sdk |  | Everything |
-
 ### Package Naming for no duplication with distors
 
 The four possible naming strategies for packages were analyzed:
@@ -141,8 +119,8 @@ The four possible naming strategies for packages were analyzed:
 4. Do nothing: Manage through versioning
 5. Prefix `amd`
 
-TheRock should adopt `amdrocm-<package>` for Linux distro-native package disambiguation unless Legal or Branding teams choose an alternative.
-This avoids namespace conflicts with distro-provided packages. Distros will use `rocm-<package>`
+A working group concluded that TheRock will adopt `amdrocm-<package>` for Linux distro-native package disambiguation.
+This avoids namespace conflicts with distro-provided packages. Distros will use `rocm-<package>` i.e. upstream distrobutions like ubuntu and redhat should not use `amdrocm-`, this will be recommended by AMD but not enforced by any restrictive covenants.
 
 ### Device-Specific Architecture Packages
 
@@ -169,6 +147,29 @@ All device-specific packages must:
 - Allow autodetection of local GPUs
 
 TheRock must provide a GPU detection interface for package managers.
+
+### Meta Packages
+
+Using `yum` ROCm Core SDK runtime components and ROCm Core SDK runtime + development components can be installed.
+
+```
+yum install rocm # ROCm 8.0
+yum install rocm-core # ROCm 8.0
+yum install rocm-core<ver>
+yum install rocm-core-devel
+yum install rocm-core-devel<ver>
+```
+The following table shows the meta packages that will be available:
+
+| Name | Content | Descripion |
+| :------------- | :------------- | :------------- |
+| amdrocm & amdrocm-core | runtime & libraries, components, runtime compiler, amd-smi, rocminfo | Needed to run software built with ROCm Core |
+| amdrocm-core-devel | rocm-core + compiler cmake, static library files, and headers | Needed to build software with ROCm Core |
+| amdrocm-developer-tools | Profiler, debugger, and related tools | Independent set of tools to debug and profile any application built with ROCm |
+| amdrocm-fortran |  | Fortran compiler and related components |
+| amdrocm-opencl |  | Components needed to run OpenCL |
+| amdrocm-openmp |  | Components needed to build OpenMP |
+| amdrocm-core-sdk |  | Everything |
 
 ## Package Granularity 
 
