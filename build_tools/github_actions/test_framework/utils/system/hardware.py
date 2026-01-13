@@ -79,6 +79,9 @@ class GpuInfo:
     partition_mode: str = "Unknown"
     xgmi_type: str = "Unknown"
     host_driver: str = "Unknown"
+    target_graphics_version: str = (
+        "Unknown"  # Target GPU architecture (e.g., gfx950, gfx942)
+    )
     firmwares: List[Dict[str, str]] = field(default_factory=list)
 
     def __str__(self):
@@ -521,6 +524,50 @@ class HardwareDetector:
             pass
 
         return self.gpu_list
+
+    def get_gpu_architecture(self) -> str:
+        """Detect GPU architecture using rocminfo.
+        Returns:
+            str: GPU architecture ID (e.g., 'gfx908', 'gfx90a', 'gfx942')
+        Raises:
+            ValueError: If GPU architecture cannot be detected
+        """
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.debug("Detecting GPU architecture...")
+
+        therock_bin_dir = os.getenv("THEROCK_BIN_DIR")
+        if therock_bin_dir:
+            rocminfo_path = os.path.join(therock_bin_dir, "rocminfo")
+        else:
+            rocminfo_path = "rocminfo"
+
+        try:
+            result = subprocess.run(
+                [rocminfo_path],
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=10,
+            )
+
+            for line in result.stdout.splitlines():
+                if "Name:" in line and "gfx" in line:
+                    # Extract gfx ID
+                    for part in line.split():
+                        if part.startswith("gfx"):
+                            gfx_id = part.strip()
+                            logger.info(f"Detected GPU architecture: {gfx_id}")
+                            return gfx_id
+
+        except subprocess.CalledProcessError as e:
+            logger.error(f"rocminfo failed with return code {e.returncode}")
+            raise ValueError(f"Could not detect GPU architecture: {e}")
+        except FileNotFoundError:
+            raise ValueError(f"rocminfo not found at {rocminfo_path}")
+
+        raise ValueError("Could not detect GPU architecture from rocminfo output")
 
     def _enhance_gpu_with_rocm(self):
         """Enhance GPU info with ROCm tools (amd-smi or rocm-smi) for VRAM, clocks, and firmware."""

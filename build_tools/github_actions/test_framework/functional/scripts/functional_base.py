@@ -35,7 +35,7 @@ class FunctionalBase:
             display_name: Display name for reports (e.g., 'MIOpen Driver Convolution')
         """
         self.test_name = test_name
-        self.display_name = display_name or test_name.replace("_", " ").title()
+        self.display_name = display_name or test_name
 
         # Environment variables
         self.therock_bin_dir = os.getenv("THEROCK_BIN_DIR")
@@ -232,20 +232,6 @@ class FunctionalBase:
             f"## {self.display_name} - Functional Test Results\n\n"
             f"```\n{summary_table}\n```\n"
         )
-
-    def get_gpu_id(self) -> str:
-        """Detect GPU ID using rocminfo."""
-        try:
-            result = subprocess.run(
-                ["rocminfo"], capture_output=True, text=True, check=True
-            )
-            # Extract GPU name (e.g., gfx90a, gfx942)
-            match = re.search(r"Name:\s+(gfx\w+)", result.stdout)
-            if match:
-                return match.group(1)
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            log.warning("Could not detect GPU ID, assuming default")
-        return "unknown"
 
     def run(self) -> int:
         """Execute functional test workflow and return exit code (0=PASS, 1=FAIL).

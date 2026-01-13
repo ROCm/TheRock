@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))  # For utils
 sys.path.insert(0, str(Path(__file__).parent))  # For functional_base
 from functional_base import FunctionalBase, run_functional_test_main
 from utils.logger import log
+from utils.system.hardware import HardwareDetector
 from utils.exceptions import TestExecutionError
 
 
@@ -49,8 +50,10 @@ class MIOpenDriverConvTest(FunctionalBase):
         """Run MIOpen driver convolution tests and save output to log file."""
         log.info(f"Running {self.display_name} Tests")
 
-        gpu_id = self.get_gpu_id()
-        log.info(f"Detected GPU: {gpu_id}")
+        # Detect GPU architecture using HardwareDetector
+        detector = HardwareDetector()
+        gfx_id = detector.get_gpu_architecture()
+        log.info(f"Detected GPU: {gfx_id}")
 
         miopen_driver = f"{self.therock_bin_dir}/MIOpenDriver"
         if not Path(miopen_driver).exists():
@@ -73,9 +76,9 @@ class MIOpenDriverConvTest(FunctionalBase):
                     # Add GPU-specific flags if needed
                     if (
                         "Backward_Conv" in test_suite
-                        and gpu_id in self.gpu_specific_flags
+                        and gfx_id in self.gpu_specific_flags
                     ):
-                        backward_flags = self.gpu_specific_flags[gpu_id].get(
+                        backward_flags = self.gpu_specific_flags[gfx_id].get(
                             "backward_flags", ""
                         )
                         if backward_flags:
