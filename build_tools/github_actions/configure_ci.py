@@ -505,7 +505,6 @@ def matrix_generator(
                         ["presubmit", "postsubmit", "nightly"]
                     )
                 ]
-                break
 
         selected_target_names.extend(
             filter_known_names(requested_target_names, "target", lookup_matrix)
