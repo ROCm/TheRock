@@ -814,6 +814,9 @@ if __name__ == "__main__":
     # will be 'source-repo' which contains the external repo
     cwd = Path.cwd()
 
+    # List of supported external repositories
+    EXTERNAL_REPOS = ["rocm-libraries", "rocm-systems"]
+
     # Detect repository by checking for .git/config or examining the path
     is_external_repo = False
     repo_name = None
@@ -825,25 +828,21 @@ if __name__ == "__main__":
         repo_name_from_override = (
             repo_override.split("/")[-1] if "/" in repo_override else repo_override
         )
-        if "rocm-libraries" in repo_name_from_override.lower():
-            is_external_repo = True
-            repo_name = "rocm-libraries"
-            print(f"Detected external repository from override: rocm-libraries")
-        elif "rocm-systems" in repo_name_from_override.lower():
-            is_external_repo = True
-            repo_name = "rocm-systems"
-            print(f"Detected external repository from override: rocm-systems")
+        for external_repo in EXTERNAL_REPOS:
+            if external_repo in repo_name_from_override.lower():
+                is_external_repo = True
+                repo_name = external_repo
+                print(f"Detected external repository from override: {external_repo}")
+                break
     else:
-        # Check if we're in rocm-libraries or rocm-systems directory
+        # Check if we're in an external repository directory
         cwd_str = str(cwd).lower()
-        if "rocm-libraries" in cwd_str:
-            is_external_repo = True
-            repo_name = "rocm-libraries"
-            print(f"Detected external repository: rocm-libraries")
-        elif "rocm-systems" in cwd_str:
-            is_external_repo = True
-            repo_name = "rocm-systems"
-            print(f"Detected external repository: rocm-systems")
+        for external_repo in EXTERNAL_REPOS:
+            if external_repo in cwd_str:
+                is_external_repo = True
+                repo_name = external_repo
+                print(f"Detected external repository: {external_repo}")
+                break
 
     if is_external_repo:
         print("Using TheRock's matrix configuration for external repository")

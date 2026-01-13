@@ -58,7 +58,7 @@ jobs:
   configure_test_matrix:
     # For external repos (rocm-libraries, rocm-systems), include GPU family in job name.
     # TheRock repo keeps the simple name. Detection via github.repository check.
-    name: ${{ github.repository != 'ROCm/TheRock' && format('Configure test matrix {0}', inputs.amdgpu_families) || 'Configure test matrix' }}
+    name: ${{ !contains(github.repository, 'TheRock') && format('Configure test matrix {0}', inputs.amdgpu_families) || 'Configure test matrix' }}
     # if there is a test machine available
     if: ${{ inputs.test_runs_on != '' }}
     runs-on: ${{ inputs.test_runs_on }}
