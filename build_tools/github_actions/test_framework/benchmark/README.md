@@ -32,7 +32,7 @@ python test_hipblaslt_benchmark.py
 
 ## CI Test Matrix
 
-Tests defined in `benchmark_matrix.py`:
+Tests defined in `benchmark_test_matrix.py`:
 
 | Test Name         | Library   | Platform       | Timeout | Artifacts Needed       | CI Status         |
 | ----------------- | --------- | -------------- | ------- | ---------------------- | ----------------- |
@@ -135,7 +135,7 @@ if __name__ == "__main__":
 
 ### Step 2: Add to Benchmark Matrix
 
-Edit `benchmark_matrix.py`:
+Edit `benchmark_test_matrix.py`:
 
 ```python
 "yourlib_bench": {
@@ -162,7 +162,7 @@ python scripts/test_yourlib_benchmark.py
 
 ## Configuration
 
-- **Test Matrix:** `benchmark_matrix.py` - CI test definitions
+- **Test Matrix:** `benchmark_test_matrix.py` - CI test definitions
 - **Test Parameters:** `configs/*.json` - Benchmark-specific parameters (sizes, precisions, etc.)
 - **Performance Tolerance:** Default 5% degradation threshold (configurable per test)
 

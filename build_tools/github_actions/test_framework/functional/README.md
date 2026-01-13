@@ -28,7 +28,7 @@ python build_tools/github_actions/test_framework/functional/scripts/test_miopend
 
 ## CI Test Matrix
 
-Tests defined in `functional_matrix.py`:
+Tests defined in `functional_test_matrix.py`:
 
 | Test Name            | Library | Platform | Timeout | Artifacts Needed   | CI Status         |
 | -------------------- | ------- | -------- | ------- | ------------------ | ----------------- |
@@ -127,7 +127,7 @@ if __name__ == "__main__":
 
 ### Step 2: Add to Functional Matrix
 
-Edit `functional_matrix.py`:
+Edit `functional_test_matrix.py`:
 
 ```python
 "yourtest_name": {
@@ -152,7 +152,7 @@ python scripts/test_yourtest.py
 
 ## Configuration
 
-- **Test Matrix:** `functional_matrix.py` - CI test definitions
+- **Test Matrix:** `functional_test_matrix.py` - CI test definitions
 - **Test Parameters:** `configs/*.json` - Test-specific parameters and configurations
 
 ## See Also

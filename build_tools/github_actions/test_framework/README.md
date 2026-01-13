@@ -65,7 +65,7 @@ test_framework/
 │   ├── configs/                   # Test-specific configurations
 │   │   ├── hipblaslt.json
 │   │   └── rocfft.json
-│   ├── benchmark_matrix.py        # CI test matrix
+│   ├── benchmark_test_matrix.py   # Benchmark test matrix
 │   └── README.md                  # Benchmark-specific docs
 │
 ├── functional/                     # Functional/correctness tests
@@ -74,7 +74,7 @@ test_framework/
 │   │   └── test_miopendriver_conv.py  # MIOpen convolution tests
 │   ├── configs/                   # Test-specific configurations
 │   │   └── miopen_driver_conv.json
-│   ├── functional_matrix.py       # CI test matrix
+│   ├── functional_test_matrix.py  # Functional test matrix
 │   └── README.md                  # Functional-specific docs
 │
 └── utils/                          # SHARED utilities for all test types
