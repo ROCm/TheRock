@@ -8,3 +8,8 @@ prettytable==3.12.0
 requests==2.32.4
 jsonschema==4.23.0
 packaging==25.0
+
+# libhipcxx test requirement
+lit==18.1.8
+psutil==7.1.3
+sccache==0.10.0
