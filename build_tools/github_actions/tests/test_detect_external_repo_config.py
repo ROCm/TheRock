@@ -46,7 +46,10 @@ class TestGetRepoConfig(unittest.TestCase):
             config["fetch_exclusion"],
             "--no-include-rocm-libraries --no-include-ml-frameworks",
         )
-        self.assertTrue(config["enable_dvc"])
+        # enable_dvc is platform-specific for rocm-libraries
+        self.assertIsInstance(config["enable_dvc"], dict)
+        self.assertTrue(config["enable_dvc"]["linux"])
+        self.assertTrue(config["enable_dvc"]["windows"])
 
     def test_rocm_systems_config(self):
         """Test rocm-systems configuration"""

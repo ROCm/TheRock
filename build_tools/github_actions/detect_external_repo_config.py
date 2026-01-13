@@ -32,7 +32,11 @@ REPO_CONFIGS: Dict[str, Dict[str, Any]] = {
         "cmake_source_var": "THEROCK_ROCM_LIBRARIES_SOURCE_DIR",
         "patches_dir": "rocm-libraries",
         "fetch_exclusion": "--no-include-rocm-libraries --no-include-ml-frameworks",
-        "enable_dvc": True,
+        # DVC is required on both platforms for rocm-libraries
+        "enable_dvc": {
+            "linux": True,
+            "windows": True,
+        },
     },
     "rocm-systems": {
         "cmake_source_var": "THEROCK_ROCM_SYSTEMS_SOURCE_DIR",
