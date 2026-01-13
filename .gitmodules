@@ -68,3 +68,7 @@
 	path = debug-tools/rocr-debug-agent
 	url = https://github.com/ROCm/rocr_debug_agent.git
 	branch = amd-staging
+[submodule "libhipcxx"]
+	path = math-libs/libhipcxx
+	url = https://github.com/ROCm/libhipcxx.git
+	branch = amd-develop
