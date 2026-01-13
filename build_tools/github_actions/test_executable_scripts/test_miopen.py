@@ -235,9 +235,7 @@ test_type = os.getenv("TEST_TYPE", "full")
 if test_type == "smoke":
     test_filter = "--gtest_filter=" + ":".join(smoke_filter)
 else:
-    test_filter = (
-        "--gtest_filter=" + ":".join(positive_filter) + "-" + ":".join(negative_filter)
-    )
+    test_filter = "--gtest_filter=" + ":*" + "-" + ":".join(negative_filter)
 #############################################
 
 cmd = [f"{THEROCK_BIN_DIR}/miopen_gtest", test_filter]
