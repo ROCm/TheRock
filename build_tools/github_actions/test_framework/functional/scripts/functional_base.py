@@ -6,7 +6,7 @@ import subprocess
 import shlex
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple, Any
+from typing import Dict, List, Tuple, Any, IO
 from prettytable import PrettyTable
 
 # Add parent directory to path for utils import
@@ -245,10 +245,6 @@ class FunctionalBase:
         self.client = TestClient(auto_detect=True)
         self.client.print_system_summary()
 
-        # Build the tests if the build method is implemented in the child class
-        if hasattr(self, "build"):
-            self.build()
-
         # Run tests (implemented by child class)
         self.run_tests()
 
@@ -325,73 +321,6 @@ class FunctionalBase:
 
         process.wait()
         return process.returncode
-
-    def clone_repository(
-        self, repo_url: str, clone_path: Path, branch: str = None
-    ) -> Tuple[bool, str]:
-        """Clone a git repository to the specified path.
-        Args:
-            repo_url: Repository URL (supports HTTPS, SSH, or file:// protocols)
-            clone_path: Target directory path for cloning (Path object or string)
-            branch: Optional branch/tag name to checkout (defaults to default branch)
-        Returns:
-            Tuple of (success: bool, message: str)
-        """
-        # Ensure clone_path is a Path object
-        if not isinstance(clone_path, Path):
-            clone_path = Path(clone_path)
-
-        # Validate destination path
-        if clone_path.exists():
-            if clone_path.is_dir() and any(clone_path.iterdir()):
-                warning_msg = f"Destination path '{clone_path}' already exists and is not empty. Skipping clone."
-                log.warning(warning_msg)
-                return True, warning_msg  # Consider existing repo as success
-            elif not clone_path.is_dir():
-                error_msg = (
-                    f"Destination path '{clone_path}' exists but is not a directory"
-                )
-                log.error(error_msg)
-                return False, error_msg
-
-        # Build git clone command
-        cmd = ["git", "clone"]
-        if branch:
-            cmd.extend(["--branch", branch])
-        cmd.extend([repo_url, str(clone_path)])
-
-        # Log clone operation
-        log.info(f"Cloning repository: {repo_url}")
-        if branch:
-            log.info(f"Target branch: {branch}")
-        log.info(f"Destination: {clone_path}")
-
-        try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-
-            success_msg = f"Successfully cloned repository to {clone_path}"
-            log.info(success_msg)
-            return True, result.stdout or success_msg
-
-        except FileNotFoundError:
-            error_msg = (
-                "git command not found. Please ensure git is installed and in PATH."
-            )
-            log.error(error_msg)
-            return False, error_msg
-        except subprocess.CalledProcessError as e:
-            error_msg = f"Git clone failed with exit code {e.returncode}: {e.stderr}"
-            log.error(error_msg)
-            return False, error_msg
-        except Exception as e:
-            error_msg = f"Unexpected error during git clone: {type(e).__name__}: {e}"
-            log.error(error_msg)
-            return False, error_msg
 
 
 def run_functional_test_main(test_instance):

@@ -1,0 +1,19 @@
+{
+  "executable_names": [
+    "all_reduce_perf",
+    "all_gather_perf",
+    "broadcast_perf",
+    "reduce_perf",
+    "reduce_scatter_perf",
+    "alltoall_perf",
+    "scatter_perf",
+    "gather_perf"
+  ],
+  "_comment_test_args": "RCCL test arguments explanation:",
+  "_comment_n": "-n: Number of GPUs to use for the test (minimum 2 for meaningful multi-GPU communication)",
+  "_comment_b": "-b: Minimum message size (starting size for test sweep)",
+  "_comment_e": "-e: Maximum message size (ending size for test sweep)",
+  "_comment_f": "-f: Multiplication factor between message sizes (size progression)",
+  "_comment_G": "-G: Enable HIP graph capture and replay N times (1 = capture once and replay once)",
+  "test_args": "-n 2 -b 16 -e 1G -f 2 -G 1"
+}

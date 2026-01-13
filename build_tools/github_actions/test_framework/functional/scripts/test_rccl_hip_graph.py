@@ -31,88 +31,59 @@ class RCCLHIPGraphTest(FunctionalBase):
         config = self.load_config("rccl_hip_graph.json")
 
         # Parse configuration
-        self.repo_url = config.get("repository_url")
-        self.repo_branch = config.get("repository_branch")
-        self.repo_name = config.get("repository_name")
+        self.executables = config.get("executable_names", [])
         self.test_args = config.get("test_args", "")
-        self.clone_dir = Path.home() / self.repo_name
-
-    def build(self) -> None:
-        """Build the RCCL tests.
-
-        This method is automatically called by the base class before run_tests().
-        It clones the repository and builds the tests.
-        """
-        log.info("=" * 80)
-        log.info("Building Tests")
-        log.info("=" * 80)
-
-        # Clone repository
-        success, message = self.clone_repository(
-            self.repo_url,
-            self.clone_dir,
-            branch=self.repo_branch,
-        )
-        if not success:
-            raise TestExecutionError(
-                f"Failed to clone repository: {message}",
-                action="Check network connectivity and repository URL",
-            )
-
-        # Build RCCL tests
-        build_cmd = ["make", "-j"]
-        log.info(f"Building with: {shlex.join(build_cmd)}")
-
-        # Create a temporary build log file
-        build_log = self.script_dir / "rccl_build.log"
-        with open(build_log, "w") as f:
-            return_code = self.execute_command(build_cmd, self.clone_dir, f)
-
-        if return_code != 0:
-            raise TestExecutionError(
-                f"Build failed with return code {return_code}",
-                action=f"Check build errors in {build_log}",
-            )
-
-        log.info("RCCL HIP Graph build completed successfully")
 
     def run_tests(self) -> None:
         """Run RCCL HIP Graph tests and save output to log file."""
         log.info(f"Running {self.display_name} Tests")
 
-        # Verify build was successful
-        build_dir = self.clone_dir / "build"
-        if not build_dir.exists() or not any(build_dir.iterdir()):
+        # Verify executables are configured
+        if not self.executables:
             raise TestExecutionError(
-                f"Build directory empty or not found: {build_dir}",
-                action="Check if build succeeded",
+                "No executables specified in config",
+                action="Add 'executable_names' list to rccl_hip_graph.json",
             )
 
-        # Get all executables in build directory
-        executables = [
-            f for f in build_dir.iterdir() if f.is_file() and os.access(f, os.X_OK)
-        ]
-
-        if not executables:
+        # Find executables in THEROCK_BIN_DIR
+        bin_dir = Path(self.therock_bin_dir)
+        if not bin_dir.exists():
             raise TestExecutionError(
-                f"No executable files found in {build_dir}",
-                action="Check if build produced executables",
+                f"Binary directory not found: {bin_dir}",
+                action="Check THEROCK_BIN_DIR environment variable",
             )
+
+        # Verify each executable exists
+        exe_paths = []
+        for exe_name in self.executables:
+            exe_path = bin_dir / exe_name
+            if not exe_path.exists():
+                log.warning(f"Executable not found: {exe_path}, skipping")
+                continue
+            exe_paths.append(exe_path)
+
+        if not exe_paths:
+            raise TestExecutionError(
+                f"No executables found in {bin_dir}",
+                action=f"Ensure RCCL test executables are built: {', '.join(self.executables)}",
+            )
+
+        log.info(f"Found {len(exe_paths)} executables to test")
 
         with open(self.log_file, "w") as f:
             f.write(f"{'='*80}\n")
-            f.write(f"Running Test Executables\n")
+            f.write(f"Running RCCL HIP Graph Test Executables\n")
             f.write(f"{'='*80}\n\n")
 
-            for exe in executables:
-                log.info(f"Running test executable: {exe.name}")
+            for exe_path in exe_paths:
+                log.info(f"Running test executable: {exe_path.name}")
                 f.write(f"\n{'-'*80}\n")
-                f.write(f"Test Executable: {exe.name}\n")
+                f.write(f"Test Executable: {exe_path.name}\n")
                 f.write(f"{'-'*80}\n\n")
 
                 # Build command with arguments
-                test_cmd = [str(exe)] + shlex.split(self.test_args)
-                self.execute_command(test_cmd, build_dir, f)
+                test_cmd = [str(exe_path)] + shlex.split(self.test_args)
+                self.execute_command(test_cmd, bin_dir, f)
 
         log.info("RCCL HIP Graph test execution complete")
 
