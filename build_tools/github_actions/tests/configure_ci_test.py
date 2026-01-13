@@ -360,14 +360,7 @@ class ConfigureCITest(unittest.TestCase):
         self.assert_target_output_is_valid(
             target_output=linux_target_output, allow_xfail=True
         )
-        # For nightly runs, benchmark tests should be included in test labels
-        expected_benchmark_labels = set(benchmark_matrix.keys())
-        actual_benchmark_labels = set(linux_test_labels)
-        self.assertEqual(
-            actual_benchmark_labels,
-            expected_benchmark_labels,
-            f"Nightly builds should include all benchmark test labels",
-        )
+        self.assertEqual(linux_test_labels, [])
 
     def test_windows_schedule_matrix_generator(self):
         windows_target_output, windows_test_labels = configure_ci.matrix_generator(
@@ -383,14 +376,28 @@ class ConfigureCITest(unittest.TestCase):
         self.assert_target_output_is_valid(
             target_output=windows_target_output, allow_xfail=True
         )
-        # For nightly runs, benchmark tests should be included in test labels
-        expected_benchmark_labels = set(benchmark_matrix.keys())
-        actual_benchmark_labels = set(windows_test_labels)
-        self.assertEqual(
-            actual_benchmark_labels,
-            expected_benchmark_labels,
-            f"Nightly builds should include all benchmark test labels",
-        )
+        self.assertEqual(windows_test_labels, [])
+
+    def test_determine_long_lived_branch(self):
+        """Test to correctly determine long-lived branch that expect more testing."""
+
+        # long-lived branches
+        for branch in [
+            "main",
+            "release/therock-7.9",
+            "release/therock-",
+            "release/therock-100",
+        ]:
+            self.assertTrue(configure_ci.determine_long_lived_branch(branch))
+        # non long-lived branches
+        for branch in [
+            "users/test",
+            "release/therock",
+            "main-test",
+            "newfeature",
+            "release/main",
+        ]:
+            self.assertFalse(configure_ci.determine_long_lived_branch(branch))
 
     ###########################################################################
     # Tests for multi_arch mode

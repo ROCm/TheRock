@@ -88,7 +88,7 @@ class ResultsAPI:
             response.raise_for_status()
 
             # If we reach here, request was successful
-            log.info(f"✓ Results submitted successfully to {url_type} API")
+            log.info(f"Results submitted successfully to {url_type} API")
             try:
                 response_data = response.json()
                 log.debug(f"API Response: {json.dumps(response_data, indent=2)}")
@@ -98,14 +98,14 @@ class ResultsAPI:
 
         except requests.exceptions.Timeout as e:
             url_type = "fallback" if is_fallback else "primary"
-            log.warning(f"✗ {url_type.capitalize()} API Request Timed Out: {e}")
+            log.warning(f"{url_type.capitalize()} API Request Timed Out: {e}")
             if not is_fallback:
                 log.debug("  Will try fallback URL if configured")
             return False
 
         except requests.exceptions.ConnectionError as e:
             url_type = "fallback" if is_fallback else "primary"
-            log.warning(f"✗ {url_type.capitalize()} API Connection Failed: {e}")
+            log.warning(f"{url_type.capitalize()} API Connection Failed: {e}")
             if not is_fallback:
                 log.debug("  Will try fallback URL if configured")
             return False
@@ -117,18 +117,18 @@ class ResultsAPI:
                 e.response.text[:200] if e.response and e.response.text else str(e)
             )
             log.warning(
-                f"✗ {url_type.capitalize()} API Error ({status_code}): {error_msg}"
+                f"{url_type.capitalize()} API Error ({status_code}): {error_msg}"
             )
             return False
 
         except json.JSONDecodeError as e:
             url_type = "fallback" if is_fallback else "primary"
-            log.warning(f"✗ {url_type.capitalize()} API Invalid JSON Response: {e}")
+            log.warning(f"{url_type.capitalize()} API Invalid JSON Response: {e}")
             return False
 
         except Exception as e:
             url_type = "fallback" if is_fallback else "primary"
-            log.warning(f"✗ {url_type.capitalize()} API Unexpected Error: {e}")
+            log.warning(f"{url_type.capitalize()} API Unexpected Error: {e}")
             return False
 
 

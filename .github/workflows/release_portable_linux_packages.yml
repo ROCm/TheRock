@@ -77,6 +77,7 @@ jobs:
       package_targets: ${{ steps.configure.outputs.package_targets }}
       cloudfront_url: ${{ steps.release_information.outputs.cloudfront_url }}
       cloudfront_staging_url: ${{ steps.release_information.outputs.cloudfront_staging_url }}
+      cloudfront_base_url: ${{ steps.release_information.outputs.cloudfront_base_url }}
       s3_subdir_tar: ${{ steps.release_information.outputs.s3_subdir_tar }}
     steps:
       - name: Checkout repository
@@ -140,6 +141,9 @@ jobs:
           echo "cloudfront_url=${tmp_cloudfront_url}" >> $GITHUB_OUTPUT
           echo "cloudfront_staging_url=${tmp_cloudfront_staging_url}" >> $GITHUB_OUTPUT
           echo "s3_subdir_tar=${tmp_s3_subdir_tar}" >> $GITHUB_OUTPUT
+          # TODO: Refactor to use the base URL as CloudFront URL once bucket paths (v2 vs. whl) are harmonized.
+          # Uses bash parameter expansion to strip off subdirectories.
+          echo "cloudfront_base_url=${tmp_cloudfront_url%/*}" >> $GITHUB_OUTPUT
 
       - name: Generating package target matrix
         id: configure
@@ -168,7 +172,7 @@ jobs:
     env:
       TEATIME_LABEL_GH_GROUP: 1
       OUTPUT_DIR: ${{ github.workspace }}/output
-      BUILD_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:583d473f263a289222c48d4b493e2956b2354a45796f09dee6f2c8ecd4504ab6
+      BUILD_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:6e8242d347af7e0c43c82d5031a3ac67b669f24898ea8dc2f1d5b7e4798b66bd
       DIST_ARCHIVE: "${{ github.workspace }}/output/therock-dist-linux-${{ matrix.target_bundle.amdgpu_family }}${{ inputs.package_suffix }}-${{ needs.setup_metadata.outputs.version }}.tar.gz"
       FILE_NAME: "therock-dist-linux-${{ matrix.target_bundle.amdgpu_family }}${{ inputs.package_suffix }}-${{ needs.setup_metadata.outputs.version }}.tar.gz"
       RELEASE_TYPE: "${{ needs.setup_metadata.outputs.release_type }}"
@@ -329,7 +333,7 @@ jobs:
         # TODO: Enable JAX wheels for prereleases
         if: ${{ env.RELEASE_TYPE != 'prerelease' }}
         id: url-encode-tar
-        run: python -c "from urllib.parse import quote; print('tar_url=https://therock-${{ env.RELEASE_TYPE }}-tarball.s3.amazonaws.com/' + quote('therock-dist-linux-${{ matrix.target_bundle.amdgpu_family }}${{ inputs.package_suffix }}-${{ needs.setup_metadata.outputs.version }}.tar.gz'))" >> ${GITHUB_OUTPUT}
+        run: python -c "from urllib.parse import quote; print('tar_url=${{ needs.setup_metadata.outputs.cloudfront_base_url }}/tarball/' + quote('${{ env.FILE_NAME }}'))" >> ${GITHUB_OUTPUT}
 
       - name: Trigger build JAX wheels
         # TODO: Enable JAX wheels for prereleases

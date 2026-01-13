@@ -25,6 +25,9 @@ THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = THIS_SCRIPT_DIR.parent
 PATCHES_DIR = THEROCK_DIR / "patches"
 TOPOLOGY_PATH = THEROCK_DIR / "BUILD_TOPOLOGY.toml"
+ALWAYS_SUBMODULE_PATHS = [
+    "base/rocm-kpack",
+]
 
 
 def is_windows() -> bool:
@@ -92,6 +95,8 @@ def get_enabled_projects(args) -> List[str]:
         projects.extend(args.system_projects)
     if args.include_compilers:
         projects.extend(args.compiler_projects)
+    if args.include_debug_tools:
+        projects.extend(args.debug_tools)
     if args.include_rocm_libraries:
         projects.extend(["rocm-libraries"])
     if args.include_rocm_systems:
@@ -102,6 +107,8 @@ def get_enabled_projects(args) -> List[str]:
         projects.extend(args.rocm_media_projects)
     if args.include_iree_libs:
         projects.extend(args.iree_libs_projects)
+    if args.include_math_libraries:
+        projects.extend(args.math_library_projects)
     return projects
 
 
@@ -142,7 +149,9 @@ def fetch_nested_submodules(args, projects):
 
 def run(args):
     projects = get_enabled_projects(args)
-    submodule_paths = [get_submodule_path(project) for project in projects]
+    submodule_paths = ALWAYS_SUBMODULE_PATHS + [
+        get_submodule_path(project) for project in projects
+    ]
     # TODO(scotttodd): Check for git lfs?
     update_args = []
     if args.depth:
@@ -424,6 +433,12 @@ def main(argv):
         help="Include compilers",
     )
     parser.add_argument(
+        "--include-debug-tools",
+        default=True,
+        action=argparse.BooleanOptionalAction,
+        help="Include ROCm debugging tools",
+    )
+    parser.add_argument(
         "--include-rocm-libraries",
         default=True,
         action=argparse.BooleanOptionalAction,
@@ -454,6 +469,12 @@ def main(argv):
         help="Include IREE and related libraries",
     )
     parser.add_argument(
+        "--include-math-libraries",
+        default=True,
+        action=argparse.BooleanOptionalAction,
+        help="Include math libraries that are part of ROCM",
+    )
+    parser.add_argument(
         "--system-projects",
         nargs="+",
         type=str,
@@ -479,14 +500,9 @@ def main(argv):
         "--ml-framework-projects",
         nargs="+",
         type=str,
-        default=(
-            []
-            if is_windows()
-            else [
-                # Linux only projects.
-                "composable_kernel",
-            ]
-        ),
+        default=[
+            "composable_kernel",
+        ],
     )
     parser.add_argument(
         "--rocm-media-projects",
@@ -523,6 +539,29 @@ def main(argv):
             if is_windows()
             else [
                 "rocm-libraries",
+            ]
+        ),
+    )
+    parser.add_argument(
+        "--debug-tools",
+        nargs="+",
+        type=str,
+        default=[
+            "amd-dbgapi",
+            "rocr-debug-agent",
+            "rocgdb",
+        ],
+    )
+    parser.add_argument(
+        "--math-library-projects",
+        nargs="+",
+        type=str,
+        default=(
+            []
+            if is_windows()
+            else [
+                # Linux only projects.
+                "libhipcxx",
             ]
         ),
     )

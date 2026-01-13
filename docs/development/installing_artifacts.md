@@ -11,6 +11,7 @@ The script supports the following command-line options:
 | `--amdgpu-family`       | String | AMD GPU family target (required)                                                         |
 | `--base-only`           | Flag   | Include only base artifacts (minimal installation)                                       |
 | `--blas`                | Flag   | Include BLAS artifacts                                                                   |
+| `--debug-tools`         | Flag   | Include the ROCm debugging tools artifacts                                               |
 | `--fft`                 | Flag   | Include FFT artifacts                                                                    |
 | `--hipdnn`              | Flag   | Include hipDNN artifacts                                                                 |
 | `--input-dir`           | String | Existing TheRock directory to copy from                                                  |
@@ -22,6 +23,7 @@ The script supports the following command-line options:
 | `--rocprofiler-compute` | Flag   | Include rocprofiler-compute artifacts                                                    |
 | `--rocprofiler-systems` | Flag   | Include rocprofiler-systems artifacts                                                    |
 | `--rocwmma`             | Flag   | Include rocWMMA artifacts                                                                |
+| `--libhipcxx`           | Flag   | Include libhipcxx artifacts                                                              |
 | `--release`             | String | Release version from nightly or dev tarballs                                             |
 | `--run-github-repo`     | String | GitHub repository for CI run ID (default: `GITHUB_REPOSITORY` env var or `ROCm/TheRock`) |
 | `--run-id`              | String | GitHub CI workflow run ID to install from                                                |
