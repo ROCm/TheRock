@@ -1392,6 +1392,7 @@ function(_therock_cmake_subproject_setup_toolchain
     # TODO: AMDGPU_TARGETS is being deprecated. For now we set both.
     string(APPEND _toolchain_contents "set(AMDGPU_TARGETS @_filtered_gpu_targets@ CACHE STRING \"From super-project\" FORCE)\n")
     string(APPEND _toolchain_contents "set(GPU_TARGETS @_filtered_gpu_targets@ CACHE STRING \"From super-project\" FORCE)\n")
+    string(APPEND _toolchain_contents "set(CMAKE_HIP_ARCHITECTURES @_filtered_gpu_targets@ CACHE STRING \"From super-project\" FORCE)\n")
   endif()
 
   # General settings applicable to all toolchains.

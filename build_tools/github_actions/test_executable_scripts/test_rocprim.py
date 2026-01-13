@@ -3,12 +3,19 @@ import os
 import shlex
 import subprocess
 from pathlib import Path
+import platform
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
+AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
+os_type = platform.system().lower()
+
 logging.basicConfig(level=logging.INFO)
+
+# TODO#(2836): Re-enable test once issues are resolved
+TEST_TO_IGNORE = {"gfx1151": {"windows": ["rocprim.device_merge_sort"]}}
 
 SMOKE_TESTS = [
     "*ArgIndexIterator",
@@ -75,6 +82,7 @@ SMOKE_TESTS = [
 shard_index = int(os.getenv("SHARD_INDEX", "1")) - 1
 total_shards = int(os.getenv("TOTAL_SHARDS", "1"))
 
+
 cmd = [
     "ctest",
     "--test-dir",
@@ -90,6 +98,10 @@ cmd = [
     "--tests-information",
     f"{shard_index},,{total_shards}",
 ]
+
+if AMDGPU_FAMILIES in TEST_TO_IGNORE and os_type in TEST_TO_IGNORE[AMDGPU_FAMILIES]:
+    ignored_tests = TEST_TO_IGNORE[AMDGPU_FAMILIES][os_type]
+    cmd.extend(["--exclude-regex", "|".join(ignored_tests)])
 
 # If smoke tests are enabled, we run smoke tests only.
 # Otherwise, we run the normal test suite
