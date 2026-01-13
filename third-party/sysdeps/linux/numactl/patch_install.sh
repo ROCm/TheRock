@@ -53,6 +53,9 @@ update_library_links() {
 
 update_library_links "$PREFIX/lib/librocm_sysdeps_numa.so" "libnuma.so"
 
+# Set RUNPATH so numa can find other sysdeps (like libatomic) in the same directory
+"$PATCHELF" --set-rpath '$ORIGIN' "$PREFIX/lib/librocm_sysdeps_numa.so.1"
+
 # pc files are not output with a relative prefix. Sed it to relative.
 sed -i -E 's|^prefix=.+|prefix=${pcfiledir}/../..|' $PREFIX/lib/pkgconfig/*.pc
 sed -i -E 's|^exec_prefix=.+|exec_prefix=${pcfiledir}/../..|' $PREFIX/lib/pkgconfig/*.pc
