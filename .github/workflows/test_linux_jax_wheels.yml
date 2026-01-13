@@ -182,10 +182,10 @@ jobs:
         run: |
           # Install jaxlib/plugin/pjrt from the GPU-family index; install jax from PyPI to match the version
           pip install --index-url "${{ env.WHEEL_INDEX_URL }}" \
-            "jaxlib==${JAX_VERSION}+rocm${{ inputs.rocm_version }}" \
-            "jax-rocm7-plugin==${JAX_VERSION}+rocm${{ inputs.rocm_version }}" \
-            "jax-rocm7-pjrt==${JAX_VERSION}+rocm${{ inputs.rocm_version }}"
-          pip install --extra-index-url https://pypi.org/simple "jax==${JAX_VERSION}"
+            "jaxlib==${{ env.JAX_VERSION }}+rocm${{ inputs.rocm_version }}" \
+            "jax-rocm7-plugin==${{ env.JAX_VERSION }}+rocm${{ inputs.rocm_version }}" \
+            "jax-rocm7-pjrt==${{ env.JAX_VERSION }}+rocm${{ inputs.rocm_version }}"
+          pip install --extra-index-url https://pypi.org/simple "jax==${{ env.JAX_VERSION }}"
 
       - name: Run JAX tests
         run: |
