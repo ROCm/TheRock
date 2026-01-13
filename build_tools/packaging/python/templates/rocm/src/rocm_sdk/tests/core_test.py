@@ -132,10 +132,27 @@ class ROCmCoreTest(unittest.TestCase):
                     msg=f"Console script {script_path} does not exist",
                 )
                 encoding = locale.getpreferredencoding()
-                output_text = subprocess.check_output(
-                    [script_path] + cl,
-                    stderr=subprocess.STDOUT,
-                ).decode(encoding)
+                try:
+                    proc = subprocess.run(
+                        [script_path] + cl,
+                        capture_output=True,
+                        text=True,
+                        timeout=10,
+                    )
+                except subprocess.TimeoutExpired:
+                    print(f"{script_name} timed out after 10 seconds")
+                    raise
+                if proc.returncode != 0:
+                    print(f"{script_name} failed with exit code {proc.returncode}")
+                    print("Stdout:", proc.stdout)
+                    print("Stderr:", proc.stderr)
+                    raise subprocess.CalledProcessError(
+                        proc.returncode,
+                        [script_path] + cl,
+                        output=proc.stdout,
+                        stderr=proc.stderr,
+                    )
+                output_text = proc.stdout
                 if expected_text not in output_text:
                     self.fail(
                         f"Expected '{expected_text}' in console-script {script_name} outuput:\n"
