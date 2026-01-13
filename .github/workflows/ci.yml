@@ -32,10 +32,6 @@ on:
       linux_use_prebuilt_artifacts:
         type: boolean
         description: "If enabled, the CI will pull Linux artifacts using artifact_run_id and only run tests"
-      monitor_memory:
-        type: boolean
-        description: "If enabled, memory monitoring will be performed during the build"
-        default: false
       monitor_interval:
         type: string
         description: "Memory monitoring interval in seconds"
@@ -106,7 +102,6 @@ jobs:
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
       sanity_check_only_for_family: ${{ matrix.variant.sanity_check_only_for_family == true }}
-      monitor_memory: ${{ inputs.monitor_memory == true }}
       monitor_interval: ${{ inputs.monitor_interval || '30' }}
     permissions:
       contents: read
@@ -125,7 +120,6 @@ jobs:
       matrix:
         variant: ${{ fromJSON(needs.setup.outputs.windows_variants) }}
     uses: ./.github/workflows/ci_windows.yml
-    secrets: inherit
     with:
       amdgpu_families: ${{ matrix.variant.family }}
       artifact_group: ${{ matrix.variant.artifact_group }}
@@ -140,7 +134,6 @@ jobs:
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
       sanity_check_only_for_family: ${{ matrix.variant.sanity_check_only_for_family == true }}
-      monitor_memory: ${{ inputs.monitor_memory == true }}
       monitor_interval: ${{ inputs.monitor_interval || '30' }}
     permissions:
       contents: read
