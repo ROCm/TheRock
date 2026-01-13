@@ -5,7 +5,7 @@ Tests MIOpenDriver convolution operations (Forward and Backward) to ensure
 correct functionality across different GPU architectures.
 """
 
-import re
+import json
 import shlex
 import subprocess
 import sys
@@ -30,6 +30,7 @@ class MIOpenDriverConvTest(FunctionalBase):
         )
 
         self.log_file = self.script_dir / "miopendriver_conv.log"
+        self.results_json = self.script_dir / "miopendriver_conv_results.json"
 
         # Load test configurations from JSON
         config = self.load_config("miopen_driver_conv.json")
@@ -47,7 +48,7 @@ class MIOpenDriverConvTest(FunctionalBase):
         self.gpu_specific_flags = config.get("gpu_specific_flags", {})
 
     def run_tests(self) -> None:
-        """Run MIOpen driver convolution tests and save output to log file."""
+        """Run MIOpen driver convolution tests and save output to log file and results to JSON."""
         log.info(f"Running {self.display_name} Tests")
 
         # Detect GPU architecture using HardwareDetector
@@ -55,12 +56,21 @@ class MIOpenDriverConvTest(FunctionalBase):
         gfx_id = detector.get_gpu_architecture()
         log.info(f"Detected GPU: {gfx_id}")
 
-        miopen_driver = f"{self.therock_bin_dir}/MIOpenDriver"
-        if not Path(miopen_driver).exists():
+        # Use Path object consistently
+        miopen_driver = Path(self.therock_bin_dir) / "MIOpenDriver"
+        if not miopen_driver.exists():
             raise TestExecutionError(
                 f"MIOpenDriver not found at {miopen_driver}",
                 action="Ensure MIOpen is installed correctly",
             )
+
+        # Calculate total number of tests for progress indicator
+        total_tests = sum(len(self.tests_cmd[suite]) for suite in self.tests_list)
+        current_test = 0
+        log.info(f"Total tests to run: {total_tests}")
+
+        # Store results as we execute
+        all_results = []
 
         with open(self.log_file, "w+") as f:
             for test_suite in self.tests_list:
@@ -69,7 +79,9 @@ class MIOpenDriverConvTest(FunctionalBase):
                 f.write(f"Test Suite: {test_suite}\n")
                 f.write(f"{'='*80}\n\n")
 
-                for cmd_str in self.tests_cmd[test_suite]:
+                for i, cmd_str in enumerate(self.tests_cmd[test_suite], 1):
+                    current_test += 1
+
                     # Build full command with MIOpenDriver path
                     full_cmd = f"{miopen_driver} {cmd_str}"
 
@@ -86,9 +98,15 @@ class MIOpenDriverConvTest(FunctionalBase):
 
                     cmd = shlex.split(full_cmd)
 
+                    # Progress indicator
+                    test_case_name = f"{test_suite}_case{i}"
+                    log.info(f"[{current_test}/{total_tests}] Running {test_case_name}")
                     log.info(f"++ Exec [{self.therock_dir}]$ {shlex.join(cmd)}")
                     f.write(f"\nCommand: {shlex.join(cmd)}\n")
                     f.write(f"-" * 80 + "\n")
+
+                    return_code = None
+                    error_message = None
 
                     try:
                         process = subprocess.Popen(
@@ -105,16 +123,44 @@ class MIOpenDriverConvTest(FunctionalBase):
                             f.write(line)
 
                         process.wait()
-                        f.write(f"\nReturn code: {process.returncode}\n\n")
+                        return_code = process.returncode
+                        f.write(f"\nReturn code: {return_code}\n\n")
 
                     except Exception as e:
                         log.error(f"Error running command: {e}")
                         f.write(f"ERROR: {e}\n\n")
+                        error_message = str(e)
+                        return_code = -1
 
+                    # Determine status based on return code
+                    status = "PASS" if return_code == 0 else "FAIL"
+
+                    # Store result immediately
+                    result = {
+                        "test_suite": test_suite,
+                        "test_case": test_case_name,
+                        "command": cmd_str,
+                        "command_index": i,
+                        "return_code": return_code,
+                        "status": status,
+                    }
+                    if error_message:
+                        result["error"] = error_message
+
+                    all_results.append(result)
+                    log.info(
+                        f"[{current_test}/{total_tests}] {test_case_name}: {status}"
+                    )
+
+        # Write all results to JSON file
+        with open(self.results_json, "w") as f:
+            json.dump(all_results, f, indent=2)
+
+        log.info(f"Results saved to {self.results_json}")
         log.info("MIOpenDriver convolution test execution complete")
 
     def parse_results(self) -> Tuple[List[Dict[str, Any]], PrettyTable, int]:
-        """Parse test results from log file.
+        """Parse test results from JSON file.
 
         Returns:
             tuple: (test_results list, detailed PrettyTable, number of test suites)
@@ -128,87 +174,70 @@ class MIOpenDriverConvTest(FunctionalBase):
         test_results = []
 
         try:
-            with open(self.log_file, "r") as f:
-                content = f.read()
+            # Read results from JSON file
+            with open(self.results_json, "r") as f:
+                json_results = json.load(f)
 
-            # Parse results for each test suite
-            for test_suite in self.tests_list:
-                # Find the section for this test suite
-                pattern = re.compile(
-                    rf"Test Suite: {test_suite}.*?(?=Test Suite:|$)", re.DOTALL
+            if not isinstance(json_results, list):
+                raise TestExecutionError(
+                    "Results JSON is not a list",
+                    action="Check results file format",
                 )
-                match = pattern.search(content)
 
-                if not match:
-                    log.warning(f"Could not find results for {test_suite}")
+            # Process each result with safe key access
+            for idx, result in enumerate(json_results):
+                if not isinstance(result, dict):
+                    log.warning(f"Result {idx} is not a dictionary, skipping")
                     continue
 
-                suite_content = match.group(0)
+                # Use .get() with defaults to handle missing keys gracefully
+                test_suite = result.get("test_suite", "unknown_suite")
+                test_case = result.get("test_case", f"unknown_case_{idx}")
+                status = result.get("status", "FAIL")  # Default to FAIL if unknown
+                command = result.get("command", "")
+                command_index = result.get("command_index", idx + 1)
 
-                # Parse each command in the suite
-                for i, cmd_str in enumerate(self.tests_cmd[test_suite], 1):
-                    # Build the command pattern to search for
-                    miopen_driver = f"{self.therock_bin_dir}/MIOpenDriver"
-                    full_cmd = f"{miopen_driver} {cmd_str}"
-                    test_case_name = f"{test_suite}_case{i}"
-
-                    # Find this specific command in the suite content
-                    cmd_pattern = re.escape(f"Command: {full_cmd}")
-                    cmd_match = re.search(cmd_pattern, suite_content)
-
-                    if cmd_match:
-                        # Extract content after this command until next command or end
-                        start_pos = cmd_match.end()
-                        next_cmd_match = re.search(
-                            r"\nCommand:", suite_content[start_pos:]
-                        )
-                        if next_cmd_match:
-                            cmd_section = suite_content[
-                                start_pos : start_pos + next_cmd_match.start()
-                            ]
-                        else:
-                            cmd_section = suite_content[start_pos:]
-
-                        # Check return code in THIS command's section only
-                        return_code_match = re.search(
-                            r"Return code:\s*(\d+)", cmd_section
-                        )
-                        if return_code_match:
-                            return_code = int(return_code_match.group(1))
-                            status = "PASS" if return_code == 0 else "FAIL"
-                        elif "PASSED" in cmd_section:
-                            status = "PASS"
-                        elif "FAILED" in cmd_section or "ERROR" in cmd_section:
-                            status = "FAIL"
-                        else:
-                            status = "FAIL"  # Unknown result, assume fail
-                    else:
-                        status = "FAIL"  # Command not found in log
-
-                    # Add each individual test case to detailed table
-                    detailed_table.add_row([test_suite, test_case_name, status])
-
-                    # Add each test case to results list using helper
-                    test_results.append(
-                        self.create_test_result(
-                            test_name=self.test_name,
-                            subtest_name=test_case_name,
-                            status=status,
-                            suite=test_suite,
-                            command_index=i,
-                            command=cmd_str,
-                        )
+                # Log warning if critical keys are missing
+                if "test_suite" not in result or "test_case" not in result:
+                    log.warning(
+                        f"Result {idx} missing critical keys (test_suite/test_case)"
                     )
+
+                # Add to detailed table
+                detailed_table.add_row([test_suite, test_case, status])
+
+                # Add to results list using helper
+                test_results.append(
+                    self.create_test_result(
+                        test_name=self.test_name,
+                        subtest_name=test_case,
+                        status=status,
+                        suite=test_suite,
+                        command_index=command_index,
+                        command=command,
+                    )
+                )
 
         except FileNotFoundError:
             raise TestExecutionError(
-                f"Log file not found: {self.log_file}",
+                f"Results JSON file not found: {self.results_json}",
                 action="Ensure tests were executed successfully",
+            )
+        except json.JSONDecodeError as e:
+            raise TestExecutionError(
+                f"Error parsing results JSON: {e}",
+                action="Check if results file is valid JSON",
             )
         except OSError as e:
             raise TestExecutionError(
-                f"Error reading log file: {e}",
+                f"Error reading results file: {e}",
                 action="Check file permissions and disk space",
+            )
+
+        if not test_results:
+            raise TestExecutionError(
+                "No valid test results found in JSON file",
+                action="Check if tests executed successfully and results were saved",
             )
 
         num_suites = len(self.tests_list)
