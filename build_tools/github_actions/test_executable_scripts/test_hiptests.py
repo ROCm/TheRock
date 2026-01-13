@@ -29,13 +29,7 @@ env = os.environ.copy()
 
 # TODO(#2895): Re-enable these tests once parallelization issues are resolved
 TESTS_TO_IGNORE = [
-    "Unit_hipThreadExchangeStreamCaptureMode_Positive_Functional",
-    "Unit_hipStreamIsCapturing_ParentAndForkedStream",
-    "Unit_hipMemcpyToFromSymbol_SyncAndAsync",
-    "Unit_hipMemPoolApi_BasicAlloc",
-    "Unit_hipMemPoolApi_Default",
-    "Unit_hipDeviceGetDefaultMemPool_Functional",
-    "Unit_hipDeviceSetMemPool_functionalAttribute",
+    "Unit_hipClock64_Positive_Basic"
 ]
 
 
@@ -84,8 +78,6 @@ def execute_tests(env):
         "--test-dir",
         CATCH_TESTS_PATH,
         "--output-on-failure",
-        "--parallel",
-        "8",
         "--timeout",
         "600",
         # shards the tests by running a specific set of tests based on starting test (shard_index) and stride (total_shards)
