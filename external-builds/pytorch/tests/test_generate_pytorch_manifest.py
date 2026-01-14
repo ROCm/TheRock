@@ -124,9 +124,17 @@ def test_manifest_generation_end_to_end(tmp_path: Path, gha_env):
 
     (out_dir / "torch-2.7.0-cp312-cp312-manylinux_2_28_x86_64.whl").write_bytes(b"x")
 
+    manifest_dir = out_dir / "manifests"
+
     argv = [
         "--output-dir",
         str(out_dir),
+        "--manifest-dir",
+        str(manifest_dir),
+        "--artifact-group",
+        "pytorch-wheels",
+        "--amdgpu-family",
+        "gfx110X-all",
         "--rocm-sdk-version",
         "7.10.0a20251120",
         "--pytorch-rocm-arch",
@@ -140,8 +148,6 @@ def test_manifest_generation_end_to_end(tmp_path: Path, gha_env):
     ]
 
     _run_main_with_args(m, argv)
-
-    manifest_dir = out_dir / "manifests"
 
     # Exactly one manifest should be produced.
     manifests = list(manifest_dir.glob("*.json"))
@@ -180,11 +186,21 @@ def test_manifest_filename_release_28(tmp_path: Path, gha_env):
 
     (out_dir / "torch-2.8.0-cp312-cp312-manylinux_2_28_x86_64.whl").write_bytes(b"x")
 
+    manifest_dir = out_dir / "manifests"
+
     _run_main_with_args(
         m,
         [
             "--output-dir",
             str(out_dir),
+            "--manifest-dir",
+            str(manifest_dir),
+            "--artifact-group",
+            "pytorch-wheels",
+            "--amdgpu-family",
+            "gfx110X-all",
+            "--rocm-sdk-version",
+            "7.10.0a20251120",
             "--python-version",
             "3.12",
             "--pytorch-git-ref",
@@ -192,7 +208,5 @@ def test_manifest_filename_release_28(tmp_path: Path, gha_env):
         ],
     )
 
-    manifest_path = (
-        out_dir / "manifests" / "therock-manifest_torch_py3.12_release-2.8.json"
-    )
+    manifest_path = manifest_dir / "therock-manifest_torch_py3.12_release-2.8.json"
     assert manifest_path.exists(), f"Missing manifest: {manifest_path}"
