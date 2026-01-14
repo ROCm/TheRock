@@ -197,6 +197,9 @@ def main(argv):
                   rocm-libraries,
                   rocm-systems,
                   profiler
+                  iree-libs
+                  debug-tools
+                  rocm-media
              """,
     )
     args = parser.parse_args(argv)
