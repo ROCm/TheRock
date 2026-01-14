@@ -47,7 +47,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
   )
   therock_cmake_subproject_activate(aqlprofile)
 
-
+if(THEROCK_BUILD_TESTING)
   therock_provide_artifact(aqlprofile-tests
     DESCRIPTOR artifact-aqlprofile.toml
     COMPONENTS
@@ -55,7 +55,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
     SUBPROJECT_DEPS
       aqlprofile
   )
-
+endif(THEROCK_BUILD_TESTING)
 
   ##############################################################################
   # rocprofiler-sdk
