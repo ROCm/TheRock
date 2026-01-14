@@ -543,9 +543,9 @@ feature_name = "ROCPROFV3"
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
 
-[artifacts.aqlprofile]
+[artifacts.aqlprofile-tests]
 artifact_group = "profiler-core"
-type = "target-neutral"
+type = "target-specfic"
 artifact_deps = ["core-runtime"]
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
