@@ -225,11 +225,6 @@ def main() -> None:
         help="ROCm SDK version used for the build (e.g. 7.11.0a20251124).",
     )
     ap.add_argument(
-        "--version-suffix",
-        default=None,
-        help="Version suffix applied to built packages (e.g. +rocm7.11.0a20251124).",
-    )
-    ap.add_argument(
         "--pytorch-git-ref",
         default=None,
         required=True,
@@ -331,7 +326,6 @@ def main() -> None:
         "run_id": run_id,
         "job_id": job_id,
         "rocm_sdk_version": args.rocm_sdk_version,
-        "version_suffix": args.version_suffix,
         "pytorch_git_ref": args.pytorch_git_ref,
         "python_version": args.python_version,
         "therock": {
