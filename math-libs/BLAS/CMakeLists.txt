@@ -163,6 +163,11 @@ list(APPEND _blas_subproject_names hipBLASLt)
 set(_is_hipblaslt_declared)
 therock_check_is_cmake_subproject_declared(hipBLASLt _is_hipblaslt_declared)
 
+set(_hipblaslt_opt OFF)
+if(_is_hipblaslt_declared)
+  set(_hipblaslt_opt ON)
+endif()
+
 set(rocBLAS_optional_runtime_deps)
 if(NOT WIN32)
   # rocBLAS is hard-coded to not expect rocm-smi.
@@ -185,7 +190,7 @@ therock_cmake_subproject_declare(rocBLAS
     -DROCM_DIR=
     -Dhipblaslt_path=
     -DBUILD_WITH_TENSILE=ON
-    -DBUILD_WITH_HIPBLASLT="${_is_hipblaslt_declared}"
+    -DBUILD_WITH_HIPBLASLT="${_hipblaslt_opt}"
     # TODO: With `Tensile_TEST_LOCAL_PATH` set, the resulting build path is ${Tensile_TEST_LOCAL_PATH}/build.
     "-DTensile_TEST_LOCAL_PATH=${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/tensile"
     # Since using a local Tensile vs fetched, unset TENSILE_VERSION to avoid
