@@ -7,6 +7,7 @@ alongside the built artifacts.
 """
 
 import argparse
+from dataclasses import dataclass
 import json
 import os
 import platform
@@ -15,15 +16,59 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 
-def parse_wheel_name(filename: str) -> Dict[str, str]:
-    # Best-effort wheel parse per PEP 427:
-    #   {distribution}-{version}(-{build tag})?-{python tag}-{abi tag}-{platform tag}.whl
+@dataclass(frozen=True)
+class WheelNameInfo:
+    """
+    Best-effort parse of a wheel filename per PEP 427.
+
+    Format:
+      {distribution}-{version}(-{build tag})?-{python tag}-{abi tag}-{platform tag}.whl
+
+    Fields are None when they could not be determined (e.g. non-wheel or malformed).
+    """
+
+    distribution: Optional[str] = None
+    version: Optional[str] = None
+    build_tag: Optional[str] = None
+    python_tag: Optional[str] = None
+    abi_tag: Optional[str] = None
+    platform_tag: Optional[str] = None
+
+    def to_labels(self) -> Dict[str, str]:
+        labels: Dict[str, str] = {}
+        if self.distribution:
+            labels["distribution"] = self.distribution
+        if self.version:
+            labels["version"] = self.version
+        if self.build_tag:
+            labels["build_tag"] = self.build_tag
+        if self.python_tag:
+            labels["python_tag"] = self.python_tag
+        if self.abi_tag:
+            labels["abi_tag"] = self.abi_tag
+        if self.platform_tag:
+            labels["platform_tag"] = self.platform_tag
+        return labels
+
+
+def parse_wheel_name(filename: str) -> WheelNameInfo:
+    """
+    Best-effort parser for PEP 427 wheel filenames.
+
+    Expected format:
+        {distribution}-{version}(-{build tag})?-{python tag}-{abi tag}-{platform tag}.whl
+
+    Returns:
+        WheelNameInfo:
+            Parsed wheel components. All fields are set to None if the filename
+            is not a valid wheel filename or does not contain enough components.
+    """
     if not filename.endswith(".whl"):
-        return {}
+        return WheelNameInfo()
 
     parts = filename[:-4].split("-")
     if len(parts) < 5:
-        return {}
+        return WheelNameInfo()
 
     distribution = parts[0]
     version = parts[1]
@@ -32,22 +77,18 @@ def parse_wheel_name(filename: str) -> Dict[str, str]:
     abi_tag = parts[-2]
     platform_tag = parts[-1]
 
-    # Optional build tag: present when there are >5 dash-separated fields.
-    build_tag = None
+    build_tag: Optional[str] = None
     if len(parts) > 5:
         build_tag = "-".join(parts[2:-3])
 
-    meta: Dict[str, str] = {
-        "distribution": distribution,
-        "version": version,
-        "python_tag": python_tag,
-        "abi_tag": abi_tag,
-        "platform_tag": platform_tag,
-    }
-    if build_tag:
-        meta["build_tag"] = build_tag
-
-    return meta
+    return WheelNameInfo(
+        distribution=distribution,
+        version=version,
+        build_tag=build_tag,
+        python_tag=python_tag,
+        abi_tag=abi_tag,
+        platform_tag=platform_tag,
+    )
 
 
 def capture(cmd: List[str], cwd: Optional[Path] = None) -> str:
@@ -154,7 +195,7 @@ def main() -> None:
         "--manifest-dir",
         type=Path,
         required=True,
-        help="Output directory for the manifest (e.g.: <output-dir>/manifests).",
+        help="Output directory for the manifest (e.g. <output-dir>/manifests).",
     )
     ap.add_argument(
         "--artifact-group",
@@ -222,7 +263,7 @@ def main() -> None:
     args = ap.parse_args()
 
     output_dir = args.output_dir.resolve()
-    manifest_dir = (args.manifest_dir or (output_dir / "manifests")).resolve()
+    manifest_dir = args.manifest_dir.resolve()
     manifest_dir.mkdir(parents=True, exist_ok=True)
 
     sys_platform = platform.system().lower()
@@ -247,7 +288,7 @@ def main() -> None:
     artifacts: List[Dict[str, Any]] = []
     for p in sorted(output_dir.rglob("*.whl")):
         rel = p.relative_to(output_dir)
-        meta = parse_wheel_name(p.name)
+        info = parse_wheel_name(p.name)
         artifacts.append(
             {
                 "relative_path": str(rel).replace("\\", "/"),
@@ -255,7 +296,7 @@ def main() -> None:
                 "labels": {
                     "framework": "pytorch",
                     "build_variant": os.getenv("BUILD_VARIANT", "release"),
-                    **meta,
+                    **info.to_labels(),
                 },
             }
         )

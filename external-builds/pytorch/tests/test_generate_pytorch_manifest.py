@@ -76,13 +76,12 @@ def test_parse_wheel_name_no_build_tag():
     # Standard wheel filenames should parse without a build_tag.
     m = _load_manifest_module()
     meta = m.parse_wheel_name("torch-2.7.0-cp312-cp312-manylinux_2_28_x86_64.whl")
-    assert meta == {
-        "distribution": "torch",
-        "version": "2.7.0",
-        "python_tag": "cp312",
-        "abi_tag": "cp312",
-        "platform_tag": "manylinux_2_28_x86_64",
-    }
+    assert meta.distribution == "torch"
+    assert meta.version == "2.7.0"
+    assert meta.build_tag is None
+    assert meta.python_tag == "cp312"
+    assert meta.abi_tag == "cp312"
+    assert meta.platform_tag == "manylinux_2_28_x86_64"
 
 
 def test_parse_wheel_name_with_build_tag():
@@ -91,28 +90,36 @@ def test_parse_wheel_name_with_build_tag():
     meta = m.parse_wheel_name(
         "torch-2.7.0+rocm7.10.0a20251120-1-cp312-cp312-win_amd64.whl"
     )
-    assert meta == {
-        "distribution": "torch",
-        "version": "2.7.0+rocm7.10.0a20251120",
-        "build_tag": "1",
-        "python_tag": "cp312",
-        "abi_tag": "cp312",
-        "platform_tag": "win_amd64",
-    }
+    assert meta.distribution == "torch"
+    assert meta.version == "2.7.0+rocm7.10.0a20251120"
+    assert meta.build_tag == "1"
+    assert meta.python_tag == "cp312"
+    assert meta.abi_tag == "cp312"
+    assert meta.platform_tag == "win_amd64"
 
 
 def test_parse_wheel_name_ignores_non_wheel():
     # Non-wheel artifacts should be ignored.
     m = _load_manifest_module()
-    assert m.parse_wheel_name("torch-2.7.0.tar.gz") == {}
-    assert m.parse_wheel_name("torch-2.7.0.zip") == {}
-    assert m.parse_wheel_name("README.txt") == {}
+    meta = m.parse_wheel_name("torch-2.7.0.tar.gz")
+    assert meta.distribution is None
+    assert meta.version is None
+    assert meta.build_tag is None
+    assert meta.python_tag is None
+    assert meta.abi_tag is None
+    assert meta.platform_tag is None
 
 
 def test_parse_wheel_name_too_few_fields():
     # Malformed wheel filenames (too few fields) should be rejected.
     m = _load_manifest_module()
-    assert m.parse_wheel_name("torch-2.7.0.whl") == {}
+    meta = m.parse_wheel_name("torch-2.7.0.whl")
+    assert meta.distribution is None
+    assert meta.version is None
+    assert meta.build_tag is None
+    assert meta.python_tag is None
+    assert meta.abi_tag is None
+    assert meta.platform_tag is None
 
 
 def test_manifest_generation_end_to_end(tmp_path: Path, gha_env):
