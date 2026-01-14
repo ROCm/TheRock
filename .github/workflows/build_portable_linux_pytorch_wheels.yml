@@ -213,10 +213,10 @@ jobs:
             --pytorch-git-ref "${{ inputs.pytorch_git_ref }}" \
             --python-version "${{ inputs.python_version }}" \
             --pytorch-rocm-arch "${PYTORCH_ROCM_ARCH}" \
-            --pytorch-dir "${{ github.workspace }}/external-builds/pytorch/pytorch" \
-            --pytorch-audio-dir "${{ github.workspace }}/external-builds/pytorch/pytorch_audio" \
-            --pytorch-vision-dir "${{ github.workspace }}/external-builds/pytorch/pytorch_vision" \
-            --triton-dir "${{ github.workspace }}/external-builds/pytorch/triton"
+            --pytorch-dir "external-builds/pytorch/pytorch" \
+            --pytorch-audio-dir "external-builds/pytorch/pytorch_audio" \
+            --pytorch-vision-dir "external-builds/pytorch/pytorch_vision" \
+            --triton-dir "external-builds/pytorch/triton"
 
       - name: Configure AWS Credentials
         if: always()

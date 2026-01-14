@@ -245,9 +245,7 @@ jobs:
             --pytorch-rocm-arch "%PYTORCH_ROCM_ARCH%" ^
             --pytorch-dir "${{ env.CHECKOUT_ROOT }}/torch" ^
             --pytorch-audio-dir "${{ env.CHECKOUT_ROOT }}/audio" ^
-            --pytorch-vision-dir "${{ env.CHECKOUT_ROOT }}/vision" ^
-            --triton-dir "${{ github.workspace }}\external-builds\pytorch\triton"
-
+            --pytorch-vision-dir "${{ env.CHECKOUT_ROOT }}/vision"
 
       - name: Configure AWS Credentials
         if: always()
