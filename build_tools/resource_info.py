@@ -200,7 +200,7 @@ def _repo_root() -> Path:
 def load_components_from_build_topology(repo_root: Path) -> List[str]:
     """
     Extract component/artifact names from BUILD_TOPOLOGY.toml and print them.
-    TODO: explore use of build_topology.py, get_artifact_groups() 
+    TODO: explore use of build_topology.py, get_artifact_groups()
     or other accessors on the BuildTopology classfor this
     """
     topo_path = repo_root / "BUILD_TOPOLOGY.toml"
@@ -242,11 +242,13 @@ def get_topology_components_cached(repo_root: Path) -> List[str]:
     return TOPOLOGY_COMPONENTS_CACHE
 
 
-def therock_components_compile_classifier(repo_root: Path, _pwd_unused: str, cmd_str: str) -> str:
+def therock_components_compile_classifier(
+    repo_root: Path, _pwd_unused: str, cmd_str: str
+) -> str:
     """
-    Classify a compile/link command into a TheRock component. 
+    Classify a compile/link command into a TheRock component.
     This is needed to figure out which TheRock component a compiler
-    command belongs to, even when CMake/Ninja hides that 
+    command belongs to, even when CMake/Ninja hides that
     information behind indirection.
     """
     comp = "unknown"
@@ -511,7 +513,7 @@ def generate_summaries(log_dir: str) -> None:
 
     for log_path in Path(log_dir).glob("*.log"):
         parse_log_file(log_path, stats, events)
-    
+
     repo_root = _repo_root()
     topo = get_topology_components_cached(repo_root)
     seen = {key[0] for key in stats.keys() if key[1] == "_seen"}
