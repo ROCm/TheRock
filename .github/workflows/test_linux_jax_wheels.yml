@@ -182,6 +182,11 @@ jobs:
 
       - name: Install JAX wheels from package index
         run: |
+          # Fix DNS issues in GitHub Actions
+          sudo bash -c 'echo "nameserver 8.8.8.8" > /etc/resolv.conf'
+          sudo bash -c 'echo "nameserver 8.8.4.4" >> /etc/resolv.conf'
+          # Wait a moment for DNS to settle
+          sleep 2
           curl -I https://rocm.devreleases.amd.com/v2-staging/gfx94X-dcgpu/jaxlib/ || true
           # Install jaxlib/plugin/pjrt from the GPU-family index; install jax from PyPI to match the version
           echo "WHEEL_INDEX_URL=${{ env.WHEEL_INDEX_URL }}"
