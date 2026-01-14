@@ -2,7 +2,8 @@
 """
 Generate a manifest for PyTorch external builds.
 
-It is called by build_prod_wheels.py after building wheels.
+This is invoked by CI workflows after building wheels, and writes a JSON manifest
+alongside the built artifacts.
 """
 
 import argparse
@@ -152,23 +153,30 @@ def main() -> None:
     ap.add_argument(
         "--manifest-dir",
         type=Path,
-        default=None,
-        help="Output directory for the manifest (default: <output-dir>/manifests).",
+        required=True,
+        help="Output directory for the manifest (e.g.: <output-dir>/manifests).",
     )
     ap.add_argument(
         "--artifact-group",
-        default="pytorch-wheels",
-        help="Manifest artifact_group value (default: pytorch-wheels).",
+        required=True,
+        help="Manifest artifact_group value (e.g. pytorch-wheels).",
     )
     ap.add_argument(
-        "--rocm-sdk-version",
+        "--amdgpu-family",
         default=None,
-        help="ROCm SDK version used for the build (e.g. 7.11.0a20251124).",
+        required=True,
+        help="AMDGPU family selector (e.g. gfx94X-dcgpu, gfx110X-all).",
     )
     ap.add_argument(
         "--pytorch-rocm-arch",
         default=None,
-        help="PYTORCH_ROCM_ARCH used for the build (e.g. gfx942 or gfx94X).",
+        help="PYTORCH_ROCM_ARCH used for the build (e.g. gfx942 or gfx942,gfx90a).",
+    )
+    ap.add_argument(
+        "--rocm-sdk-version",
+        default=None,
+        required=True,
+        help="ROCm SDK version used for the build (e.g. 7.11.0a20251124).",
     )
     ap.add_argument(
         "--version-suffix",
@@ -178,11 +186,13 @@ def main() -> None:
     ap.add_argument(
         "--pytorch-git-ref",
         default=None,
+        required=True,
         help="PyTorch ref used for the build (e.g. release/2.8 or nightly).",
     )
     ap.add_argument(
         "--python-version",
         default=None,
+        required=True,
         help="Python version used for the build (e.g. 3.11, 3.12).",
     )
     ap.add_argument(
@@ -250,6 +260,9 @@ def main() -> None:
             }
         )
 
+    if not artifacts:
+        raise SystemExit(f"ERROR: No .whl files found under: {output_dir}")
+
     sources: Dict[str, Any] = {}
     for name, d in [
         ("pytorch", args.pytorch_dir),
@@ -267,10 +280,11 @@ def main() -> None:
         "build_type": "external",
         "artifact_group": args.artifact_group,
         "platform": platform_id,
+        "amdgpu_family": args.amdgpu_family,
+        "pytorch_rocm_arch": args.pytorch_rocm_arch,
         "run_id": run_id,
         "job_id": job_id,
         "rocm_sdk_version": args.rocm_sdk_version,
-        "pytorch_rocm_arch": args.pytorch_rocm_arch,
         "version_suffix": args.version_suffix,
         "pytorch_git_ref": args.pytorch_git_ref,
         "python_version": args.python_version,
