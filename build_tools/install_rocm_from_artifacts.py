@@ -215,10 +215,22 @@ def retrieve_artifacts_by_run_id(args):
         if args.blas:
             extra_artifacts.append("blas")
         if args.debug_tools:
+            # Add extra artifacts so we generate _lib and _test artifact
+            # entries later.
             extra_artifacts.append("amd-dbgapi")
             extra_artifacts.append("rocgdb")
             extra_artifacts.append("rocr-debug-agent")
             extra_artifacts.append("rocr-debug-agent-tests")
+
+            # Add the rest of the artifacts not handled automatically (non-lib
+            # and non-test).
+            argv.append("rocgdb_run")
+
+            # Libraries rocgdb depends on.
+            extra_artifacts.append("gmp")
+            extra_artifacts.append("mpfr")
+            extra_artifacts.append("expat")
+            extra_artifacts.append("ncurses")
         if args.fft:
             extra_artifacts.append("fft")
             extra_artifacts.append("fftw3")
