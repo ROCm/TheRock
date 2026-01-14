@@ -210,6 +210,10 @@ skip_tests = {
             #   AssertionError: Scalars are not equal!
             #   Expected 0 but got 2173342911312.
             "test_streams",
+            # Python 3.14 compatibility - PEP 649 changed __annotations__ behavior
+            # AttributeError: 'Model' object has no attribute '__annotations__'
+            # https://github.com/ROCm/TheRock/actions/runs/20955499125/job/60224765842
+            "test_autocast_cat_jit",
         ],
         "nn": [
             # RuntimeError: miopenStatusUnknownError
@@ -236,7 +240,7 @@ skip_tests = {
             # The callstack for this one points to _fill_mem_eff_dropout_mask, so it may be related to aotriton?
             "test_cublas_config_nondeterministic_alert_cuda",
             # Large test that isn't very CI-friendly (takes ~2 seconds, possibly hanging)
-            "test_memory_format_operators_cuda"
+            "test_memory_format_operators_cuda",
             # Flaky tests hanging on some gfx1151 machines...
             # Maybe memory pressure? Tests use some large tensors:
             #   v = torch.FloatTensor([64000., 32., 64000.])
@@ -244,6 +248,10 @@ skip_tests = {
             # We could also skip all test_grad_*.
             "test_grad_scale_will_not_overflow_cuda",
             "test_grad_scaling_unscale_sparse_cuda_float32",
+            # Python 3.14 compatibility issues - storage deallocation tests fail
+            # https://github.com/ROCm/TheRock/actions/runs/20955499125/job/60224765842
+            "test_storage_dealloc_subclass_resurrected",
+            "test_storage_dealloc_subclass_zombie",
         ],
     },
 }
