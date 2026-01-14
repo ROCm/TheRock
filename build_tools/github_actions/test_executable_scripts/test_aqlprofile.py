@@ -10,7 +10,6 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = Path(os.getenv("OUTPUT_ARTIFACTS_DIR")).resolve()
 env = os.environ.copy()
-platform = os.getenv("RUNNER_OS", "linux").lower()
 
 env["LD_LIBRARY_PATH"] = THEROCK_DIR / "lib"
 cmd = THEROCK_DIR / "share" / "hsa-amd-aqlprofile" / "run_tests.sh"
