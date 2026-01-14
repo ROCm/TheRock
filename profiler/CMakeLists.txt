@@ -71,6 +71,8 @@ if(THEROCK_ENABLE_ROCPROFV3)
       -DROCPROFILER_PYTHON_VERSIONS:STRING="${_detected_python_versions_str}"
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
+    COMPILER_TOOLCHAIN
+      amd-hip
     RUNTIME_DEPS
       aqlprofile
       hip-clr
@@ -201,7 +203,9 @@ if(THEROCK_ENABLE_ROCPROFV3)
   ##############################################################################
   # rocprofiler-systems
   ##############################################################################
-  if (THEROCK_ENABLE_ROCPROFSYS)
+  # rocprofiler-systems requires GCC, but sanitizer builds use Clang.
+  # Skip enabling rocprofiler-systems when building with sanitizers.
+  if (THEROCK_ENABLE_ROCPROFSYS AND THEROCK_SANITIZER STREQUAL "")
     therock_cmake_subproject_declare(rocprofiler-systems
       USE_DIST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-systems"

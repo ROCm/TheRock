@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
+import re
+import subprocess
 import sys
 from typing import Mapping
 from urllib.request import urlopen, Request
@@ -324,3 +326,21 @@ def str2bool(value: str | None) -> bool:
     ):
         return False
     raise ValueError(f"Invalid string value for boolean conversion: {value}")
+
+
+def get_visible_gpu_count(env=None, therock_bin_dir: str | None = None) -> int:
+    rocminfo = Path(therock_bin_dir) / "rocminfo"
+    rocminfo_cmd = str(rocminfo) if rocminfo.exists() else "rocminfo"
+
+    result = subprocess.run(
+        [rocminfo_cmd],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=env,
+        check=False,
+    )
+
+    pattern = re.compile(r"^\s*Name:\s+gfx[0-9a-z]+$", re.IGNORECASE)
+
+    return sum(1 for line in result.stdout.splitlines() if pattern.match(line.strip()))

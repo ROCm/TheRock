@@ -49,6 +49,7 @@ amdgpu_family_info_matrix_presubmit = {
     "gfx94x": {
         "linux": {
             "test-runs-on": "linux-mi325-1gpu-ossci-rocm-frac",
+            "test-runs-on-multi-gpu": "linux-mi325-4gpu-ossci-rocm",
             # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
             "benchmark-runs-on": "linux-mi325-1gpu-ossci-rocm-frac",
             "family": "gfx94X-dcgpu",
@@ -89,17 +90,6 @@ amdgpu_family_info_matrix_presubmit = {
             "build_variants": ["release"],
         },
     },
-}
-
-# The 'postsubmit' matrix runs on 'push' triggers (for every commit to the default branch).
-amdgpu_family_info_matrix_postsubmit = {
-    "gfx950": {
-        "linux": {
-            "test-runs-on": "linux-mi355-1gpu-ossci-rocm",
-            "family": "gfx950-dcgpu",
-            "build_variants": ["release", "asan"],
-        }
-    },
     "gfx120x": {
         "linux": {
             "test-runs-on": "linux-gfx120X-gpu-rocm",
@@ -114,6 +104,17 @@ amdgpu_family_info_matrix_postsubmit = {
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
         },
+    },
+}
+
+# The 'postsubmit' matrix runs on 'push' triggers (for every commit to the default branch).
+amdgpu_family_info_matrix_postsubmit = {
+    "gfx950": {
+        "linux": {
+            "test-runs-on": "linux-mi355-1gpu-ossci-rocm",
+            "family": "gfx950-dcgpu",
+            "build_variants": ["release", "asan"],
+        }
     },
 }
 

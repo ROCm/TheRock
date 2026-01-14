@@ -9,6 +9,10 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/ncurses-6.5.tar.gz"
       URL_HASH "SHA512=fc5a13409d2a530a1325776dcce3a99127ddc2c03999cfeb0065d0eee2d68456274fb1c7b3cc99c1937bc657d0e7fca97016e147f93c7821b5a4a6837db821e8"
       TOUCH "${_download_stamp}"
+      # We need DOWNLOAD_EXTRACT_TIMESTAMP set to TRUE to preserve the timestamp
+      # of the extracted sources, otherwise the build system will notice
+      # changes and will try to re-run autotools, causing issues.
+      DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     )
 
     therock_cmake_subproject_declare(therock-ncurses
@@ -100,17 +104,9 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT PATCHELF)
   message(FATAL_ERROR "Missing PATCHELF from super-project")
 endif()
 
-# Do builds from a copy of the source directory, in case we need to
-# patch the sources.
-set(SOURCE_COPY_DIR "${CMAKE_CURRENT_BINARY_DIR}/s")
-
 add_custom_target(
   build ALL
   WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-  COMMAND
-    "${CMAKE_COMMAND}" -E rm -rf -- "${CMAKE_INSTALL_PREFIX}" "${SOURCE_COPY_DIR}"
-  COMMAND
-    "${CMAKE_COMMAND}" -E copy_directory "${SOURCE_DIR}" "${SOURCE_COPY_DIR}"
   #
   # OPTIONAL: Patching of the sources should happen here.
   #
@@ -124,7 +120,7 @@ add_custom_target(
       # See https://github.com/conan-io/conan-center-index/issues/28083
       "CPPFLAGS=${EXTRA_CPPFLAGS} -std=gnu17"
       --
-    "${SOURCE_COPY_DIR}/configure"
+    "${SOURCE_DIR}/configure"
       --prefix "${CMAKE_INSTALL_PREFIX}"
       --with-shared
       --enable-widec

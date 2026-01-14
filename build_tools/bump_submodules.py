@@ -43,27 +43,6 @@ def exec(args: list[str | Path], cwd: Path):
     subprocess.check_call(args, cwd=str(cwd), stdin=subprocess.DEVNULL)
 
 
-def pin_ck():
-    requirements_file_path = (
-        THEROCK_DIR / "rocm-libraries" / "projects" / "miopen" / "requirements.txt"
-    )
-    with open(requirements_file_path) as requirements_file:
-        requirements = requirements_file.read().splitlines()
-
-    # The requirements file pins several dependencies. And entry for CK looks like:
-    # 'ROCm/composable_kernel@778ac24376813d18e63c9f77a2dd51cf87eb4a80 -DCMAKE_BUILD_TYPE=Release'
-    # After filtering, the string is split to isolate the CK commit.
-    ck_requirement = list(
-        filter(lambda x: "rocm/composable_kernel" in x.lower(), requirements)
-    )[0]
-    ck_commit = ck_requirement.split("@")[-1].split()[0]
-
-    exec(
-        ["git", "checkout", ck_commit],
-        cwd=THEROCK_DIR / "ml-libs" / "composable_kernel",
-    )
-
-
 def parse_components(components: list[str]) -> list[list]:
     arguments = []
     system_projects = []
@@ -148,9 +127,6 @@ def run(args: argparse.Namespace, fetch_args: list[str], system_projects: list[s
         cwd=THEROCK_DIR,
     )
 
-    if args.pin_ck:
-        pin_ck()
-
     exec(
         ["git", "commit", "-a", "-m", "Bump submodules " + date],
         cwd=THEROCK_DIR,
@@ -191,12 +167,6 @@ def main(argv):
         default=False,
         action=argparse.BooleanOptionalAction,
         help="Create and push a branch",
-    )
-    parser.add_argument(
-        "--pin-ck",
-        default=True,
-        action=argparse.BooleanOptionalAction,
-        help="Pin composable_kernel to version tagged in MIOpen",
     )
     parser.add_argument(
         "--components",

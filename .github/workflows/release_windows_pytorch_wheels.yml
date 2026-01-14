@@ -91,11 +91,6 @@ jobs:
       matrix:
         python_version: ["3.11", "3.12", "3.13"]
         pytorch_git_ref: ["release/2.9", "nightly"]
-        include:
-          - pytorch_git_ref: release/2.9
-            pytorch_patchset: rocm_2.9
-          - pytorch_git_ref: nightly
-            pytorch_patchset: nightly
 
     uses: ./.github/workflows/build_windows_pytorch_wheels.yml
     with:
@@ -108,5 +103,4 @@ jobs:
       cloudfront_staging_url: ${{ inputs.cloudfront_staging_url }}
       rocm_version: ${{ inputs.rocm_version }}
       pytorch_git_ref: ${{ matrix.pytorch_git_ref }}
-      pytorch_patchset: ${{ matrix.pytorch_patchset }}
       ref: ${{ inputs.ref || '' }}

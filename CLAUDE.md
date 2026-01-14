@@ -135,7 +135,14 @@ Hooks: Black (Python), clang-format (C++), mdformat (Markdown), actionlint (GitH
 
 ## Style Guidelines
 
-See [docs/development/style_guide.md](docs/development/style_guide.md) for full guidelines.
+See the [docs/development/style_guides/](docs/development/style_guides/)
+directory for each style guide:
+
+- [README.md - General principles](docs/development/style_guides/README.md#general-principles)
+- [bash_style_guide.md](docs/development/style_guides/bash_style_guide.md)
+- [cmake_style_guide.md](docs/development/style_guides/cmake_style_guide.md)
+- [github_actions_style_guide.md](docs/development/style_guides/github_actions_style_guide.md)
+- [python_style_guide.md](docs/development/style_guides/python_style_guide.md)
 
 **Python:**
 

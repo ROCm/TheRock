@@ -11,17 +11,16 @@ $ docker run -i \
     --group-add video \
     --device /dev/kfd \
     --device /dev/dri \
-    --group-add 110 \
-    -t ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26 /bin/bash
+    -t ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98 /bin/bash
+$ sudo apt-get update && sudo apt install python3.12-venv
 $ git clone https://github.com/ROCm/TheRock.git
 $ cd TheRock
+$ python -m venv .venv && source .venv/bin/activate
+$ pip install -r requirements-test.txt
 $ GITHUB_REPOSITORY={GITHUB_REPO} python build_tools/install_rocm_from_artifacts.py --run-id {CI_RUN_ID} --amdgpu-family {GPU_FAMILY} --tests
 $ export THEROCK_BIN_DIR=./therock-build/bin
 # The python test scripts are in directory "build_tools/github_actions/test_executable_scripts/"
 # Below is an example on how to run "test_rocblas.py"
-$ python -m venv venv
-$ source venv/bin/activate
-$ pip install -r requirements-test.txt
 $ python build_tools/github_actions/test_executable_scripts/test_rocblas.py
 ```
 
