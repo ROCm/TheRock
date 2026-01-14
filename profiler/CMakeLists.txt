@@ -1,5 +1,7 @@
 if(THEROCK_ENABLE_ROCPROFV3)
   set(_rocprofiler_sdk_optional_deps)
+  set(_rocprofiler_sdk_extra_cmake_args)
+  set(_rocprofiler_sdk_interface_include_dirs)
 
   ##############################################################################
   # rocprof-trace-decoder-binary
@@ -61,16 +63,27 @@ if(THEROCK_ENABLE_ROCPROFV3)
     list(JOIN _detected_python_versions "\;" _detected_python_versions_str)
   endif()
 
+  if(THEROCK_AOMP_BUILD)
+    list(APPEND _rocprofiler_sdk_extra_cmake_args
+         -DCMAKE_CXX_FLAGS=-I${THEROCK_SOURCE_DIR}/build/dist/rocm/include
+         -DCMAKE_C_FLAGS=-I${THEROCK_SOURCE_DIR}/build/dist/rocm/include)
+    list(APPEND _rocprofiler_sdk_interface_include_dirs
+         ${THEROCK_SOURCE_DIR}/build/dist/rocm/include)
+  endif()
+
   therock_cmake_subproject_declare(rocprofiler-sdk
     USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-sdk"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-sdk"
     BACKGROUND_BUILD
     CMAKE_ARGS
+      ${_rocprofiler_sdk_extra_cmake_args}
       -DHIP_PLATFORM=amd
       -DROCPROFILER_PYTHON_VERSIONS:STRING="${_detected_python_versions_str}"
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
+    INTERFACE_INCLUDE_DIRS
+      ${_rocprofiler_sdk_interface_include_dirs}
     COMPILER_TOOLCHAIN
       amd-hip
     RUNTIME_DEPS
@@ -145,11 +158,13 @@ if(THEROCK_ENABLE_ROCPROFV3)
       # Must build with the HIP compiler.
       amd-hip
     CMAKE_ARGS
+      ${_rocprofiler_sdk_extra_cmake_args}
       -DHIP_PLATFORM=amd
     INTERFACE_INCLUDE_DIRS
       # All old clients of roctx64 expect to just be able to find its include
       # with no further qualification. Bad design, but also deprecated, so meh.
       include
+      ${_rocprofiler_sdk_interface_include_dirs}
     INTERFACE_LINK_DIRS
       # So that dependents can find the roctx library via find_library()
       lib
