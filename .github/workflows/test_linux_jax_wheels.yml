@@ -105,7 +105,6 @@ jobs:
           --device /dev/dri
           --group-add render
           --group-add video
-          --network host
           --user root
           --env-file /etc/podinfo/gha-gpu-isolation-settings
     defaults:
@@ -184,11 +183,18 @@ jobs:
           nslookup rocm.devreleases.amd.com || true
           curl -I https://rocm.devreleases.amd.com/v2-staging/gfx94X-dcgpu/jaxlib/ || true
           # Install jaxlib/plugin/pjrt from the GPU-family index; install jax from PyPI to match the version
-          pip install --index-url "${WHEEL_INDEX_URL}" \
+          echo "WHEEL_INDEX_URL=${WHEEL_INDEX_URL}"
+          echo "JAX_VERSION=${JAX_VERSION}"
+          echo "inputs.rocm_version=${{ inputs.rocm_version }}"
+          echo "inputs.amdgpu_family=${{ inputs.amdgpu_family }}"
+          echo "inputs.python_version=${{ inputs.python_version }}"
+          which python
+          python --version
+            pip install -v --index-url "${WHEEL_INDEX_URL}" \
             "jaxlib==${JAX_VERSION}+rocm${{ inputs.rocm_version }}" \
             "jax_rocm7_plugin==${JAX_VERSION}+rocm${{ inputs.rocm_version }}" \
             "jax_rocm7_pjrt==${JAX_VERSION}+rocm${{ inputs.rocm_version }}"
-          pip install --extra-index-url https://pypi.org/simple "jax==${JAX_VERSION}"
+            pip install -v --extra-index-url https://pypi.org/simple "jax==${JAX_VERSION}"
 
       - name: Run JAX tests
         run: |
