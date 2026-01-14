@@ -27,7 +27,9 @@ cmd = [f"{THEROCK_BIN_DIR}/hipsparse-test"]
 
 test_type = os.getenv("TEST_TYPE", "full")
 if test_type == "smoke":
-    cmd.append("--gtest_filter=*spmv*:*spsv*:*spsm*:*spmm*:*csric0*:*csrilu0*:-known_bug*")
+    cmd.append(
+        "--gtest_filter=*spmv*:*spsv*:*spsm*:*spmm*:*csric0*:*csrilu0*:-known_bug*"
+    )
 else:
     # TODO(#2616): Enable correct filter once known test set is reduced to appropriate amount
     cmd.append("--gtest_filter=*quick*:-known_bug*")
