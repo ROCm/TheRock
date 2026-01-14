@@ -125,7 +125,9 @@ def capture(cmd: List[str], cwd: Optional[Path] = None) -> str:
         ) from e
 
 
-def git_head(dirpath: Optional[Path], *, label: str = "source") -> Optional[GitHeadInfo]:
+def git_head(
+    dirpath: Optional[Path], *, label: str = "source"
+) -> Optional[GitHeadInfo]:
     """
     Returns git metadata for a source checkout.
 
