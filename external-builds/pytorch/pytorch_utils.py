@@ -141,7 +141,7 @@ def get_all_supported_devices(amdgpu_family: str = "") -> dict[str, list[int]]:
 
     # Query both supported and visible GPUs in a single subprocess call
     # (doesn't initialize CUDA in main process)
-    print("Getting GPU information from PyTorch...", end="")
+    print("Getting GPU information from PyTorch...", end=" ")
     supported_gpus, raw_visible_gpus = get_supported_and_visible_gpus()
     print("done")
 
