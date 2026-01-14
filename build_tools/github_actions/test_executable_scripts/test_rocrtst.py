@@ -13,6 +13,11 @@ THEROCK_DIR = Path(os.getenv("OUTPUT_ARTIFACTS_DIR")).resolve()
 env = os.environ.copy()
 platform = os.getenv("RUNNER_OS", "linux").lower()
 
+env["LD_LIBRARY_PATH"] = os.pathsep.join(filter(None, [
+    env.get("LD_LIBRARY_PATH"),
+    str(THEROCK_DIR / "lib" / "rocrtst" / "lib"),
+    str(THEROCK_DIR / "lib" / "rocm_sysdeps" / "lib")
+]))
 cwd_dir = THEROCK_DIR / "bin" / "gfx942"
 cmd = "./rocrtst64"
 
