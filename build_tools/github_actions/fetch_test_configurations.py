@@ -108,7 +108,7 @@ test_matrix = {
     },
     "rocprofiler_systems": {
         "job_name": "rocprofiler_systems",
-        "fetch_artifact_args": "--prim --tests",
+        "fetch_artifact_args": "--rocprofiler-systems --tests",
         "timeout_minutes": 15,
         "test_script": f"python {_get_script_path('test_rocprofiler_systems.py')}",
         "platform": ["linux"],

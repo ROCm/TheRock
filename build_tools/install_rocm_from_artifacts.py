@@ -240,6 +240,11 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("rocprofiler-compute")
         if args.rocprofiler_systems:
             extra_artifacts.append("rocprofiler-systems")
+            # We need share/rocprofiler-systems/rocprofsys-tests.pyz for tests
+            argv.append("rocprofiler-systems_run")
+            # rocprofiler-systems needs rocprofiler-sdk-rocpd SQL schema files
+            # which are in share/rocprofiler-sdk-rocpd/ (part of rocprofiler-sdk_run)
+            argv.append("rocprofiler-sdk_run")
         if args.rocwmma:
             extra_artifacts.append("rocwmma")
         if args.libhipcxx:
