@@ -88,6 +88,6 @@ runs:
         OUTPUT_ARTIFACTS_DIR: ${{ inputs.OUTPUT_ARTIFACTS_DIR }}
       run: |
         apt-get update -y
-        apt-get install -y gcc build-essential
+        apt-get install -y gcc build-essential libdw-dev
         uv pip install -r ${OUTPUT_ARTIFACTS_DIR}/share/rocprofiler-sdk/tests/requirements.txt
         uv pip freeze
