@@ -756,7 +756,6 @@ def main(base_args, linux_families, windows_families):
 * `windows_variants`: {str(format_variants(windows_variants_output))}
 * `windows_test_labels`: {str([test for test in windows_test_output])}
 * `windows_use_prebuilt_artifacts`: {json.dumps(base_args.get("windows_use_prebuilt_artifacts"))}
-* `additional_label_options`: {json.dumps(base_args.get("workflow_dispatch_additional_label_options"))}
 * `enable_build_jobs`: {json.dumps(enable_build_jobs)}
 * `test_type`: {test_type}
     """
