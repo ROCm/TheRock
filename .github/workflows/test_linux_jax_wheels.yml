@@ -191,13 +191,12 @@ jobs:
           echo "inputs.python_version=${{ inputs.python_version }}"
           which python
           python --version
-          pip install -vvv --extra-index-url https://pypi.org/simple "jax==${{ env.JAX_VERSION }}"
           pip install -vvv --index-url "${{ env.WHEEL_INDEX_URL }}" \
-          "jaxlib==${{ env.JAX_VERSION }}+rocm${{ inputs.rocm_version }}" \
-          "jax_rocm7_plugin==${{ env.JAX_VERSION }}+rocm${{ inputs.rocm_version }}" \
-          "jax_rocm7_pjrt==${{ env.JAX_VERSION }}+rocm${{ inputs.rocm_version }}"
+            "jaxlib==${{ env.JAX_VERSION }}+rocm${{ inputs.rocm_version }}" \
+            "jax_rocm7_plugin==${{ env.JAX_VERSION }}+rocm${{ inputs.rocm_version }}" \
+            "jax_rocm7_pjrt==${{ env.JAX_VERSION }}+rocm${{ inputs.rocm_version }}"
+          pip install -vvv --extra-index-url https://pypi.org/simple "jax==${{ env.JAX_VERSION }}"
           
-
       - name: Run JAX tests
         run: |
             pytest jax/jax_tests/tests/multi_device_test.py -q --log-cli-level=INFO
