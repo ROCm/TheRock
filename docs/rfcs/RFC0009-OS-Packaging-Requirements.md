@@ -9,12 +9,12 @@ status: draft
 
 ## Overview
 
-With the implementation of TheRock build system new software packaging requirements need to be introduced to reflect TheRock's strategy. This RFC defines the cross-platform packaging, installation, versioning, and distribution requirements for TheRock; including the ROCm Core SDK and related ROCm software components. The scope of these requirments will cover OS distrobution packaging.
+With the implementation of TheRock build system, new software packaging requirements need to be introduced to reflect TheRock's strategy. This RFC defines the cross-platform packaging, installation, versioning, and distribution requirements for TheRock, including the ROCm Core SDK and related ROCm software components. The scope of these requirements will cover OS distribution packaging.
 
 Our goals are to:
 
-1. **Standardize packaging behaviour across Linux, Windows WSL2**
-2. **Ensure predicatble upgrade behaviour, side-by-side support, and compatibility with OS package managers (apt, dnf, yum, zypper for SLES)**
+1. **Standardize packaging behavior across Linux, Windows WSL2**
+2. **Ensure predictable upgrade behavior, side-by-side support, and compatibility with OS package managers (apt, dnf, yum, zypper for SLES)**
 3. **Comply with legal, licensing, and redistribution rules**
 4. **Support automated packaging workflows in TheRock with productized deliverables**
 
@@ -26,9 +26,9 @@ Our goals are to:
 - GPU-architecture-specific package variants
 - Side-by-side installation of ROCm Core SDK
 - Repository metadata, signing, and precedence
-- Development vs runtime package separation
+- Development vs. runtime package separation
 - ASAN, debug, and source packages
-- Naming conventions (AMD-generated vs native distorbutions)
+- Naming conventions (AMD-generated vs. native distributions)
 - Nightly, prerelease, patch, and stable release version semantics
 - Integration with TheRock build system
 
@@ -54,19 +54,19 @@ The ROCm Core SDK must be installed under:
 Where:
 
 - `X.Y` = major + minor version
-- Patch versions must be in-place within the existing `X.Y` folder
+- Patch versions must be in place within the existing `X.Y` folder
 - Side-by-side installation is supported only for major.minor releases, not patches
 
-A softlink must exist as a path to the latest rocm and to the latest rocm minor release for a major release:
+A soft link must exist as a path to the latest rocm and to the latest rocm minor release for a major release:
 
 ```
 /opt/rocm/core/ -> /opt/rocm/core-8.2.0
 /opt/rocm/core-8 -> /opt/rocm/core-8.2.0
 ```
 
-The two options for the softlinks as shown above allow users to either specify the major release and pull the latest minor and patch release of that version or to just pull the latest release by not specifiying the version.
+The two options for the softlinks as shown above allow users to either specify the major release and pull the latest minor and patch release of that version or to just pull the latest release by not specifying the version.
 
-The softlinks allow for an independent directory structure for ROCm expansions which must be in the following formating:
+The soft links allow for an independent directory structure for ROCm expansions, which must be in the following format:
 
 ```
 /opt/rocm/hpc-25.12.0
@@ -75,7 +75,7 @@ The softlinks allow for an independent directory structure for ROCm expansions w
 
 ### RPATH and Relocatability
 
-- All ROCm packages must be built and shiped with `$ORIGIN`-based RPATH
+- All ROCm packages must be built and shipped with `$ORIGIN`-based RPATH
 - RPMs must honor the `--prefix` argument for relocatable installs
 
 ### Repository Layout
@@ -109,18 +109,18 @@ Package-type = standard, asan, future variant
 
 This will reduce the number of packages visible via the package manager.
 
-### Package Naming for no duplication with distors
+### Package Naming for No Duplication with Distros
 
 The four possible naming strategies for packages were analyzed:
 
 1. Prefix `amd-`
-2. Prefix `amdi-`: Legally the safest option as no one can claim to AMD incorporated
+2. Prefix `amdi-`: Legally the safest option, as no one can claim to AMD incorporated
 3. Suffix `-amd`
 4. Do nothing: Manage through versioning
 5. Prefix `amd`
 
 A working group concluded that TheRock will adopt `amdrocm-<package>` for Linux distro-native package disambiguation.
-This avoids namespace conflicts with distro-provided packages. Distros will use `rocm-<package>` i.e. upstream distrobutions like ubuntu and redhat should not use `amdrocm-`, this will be recommended by AMD but not enforced by any restrictive covenants.
+This avoids namespace conflicts with distro-provided packages. Distros will use `rocm-<package>` i.e., upstream distributions like Ubuntu and Redhat should not use `amdrocm-`, this will be recommended by AMD but not enforced by any restrictive covenants.
 
 ### Device-Specific Architecture Packages
 
@@ -128,8 +128,8 @@ Local GPUs must have an autodetection mechanism via the package manager. Possibl
 
 | Component | Meta package for all device packages |
 | :------------- | :------------- |
-| component-host | Host only package |
-| component-$device | $device is the llvm gfx architecture each device package must have no conflict with other devices |
+| component-host | Host-only package |
+| component-$device | $device is the llvm gfx architecture; each device package must have no conflict with other devices |
 
 Example: 
 
@@ -161,7 +161,7 @@ yum install rocm-core-devel<ver>
 ```
 The following table shows the meta packages that will be available:
 
-| Name | Content | Descripion |
+| Name | Content | Description |
 | :------------- | :------------- | :------------- |
 | amdrocm & amdrocm-core | runtime & libraries, components, runtime compiler, amd-smi, rocminfo | Needed to run software built with ROCm Core |
 | amdrocm-core-devel | rocm-core + compiler cmake, static library files, and headers | Needed to build software with ROCm Core |
@@ -173,7 +173,7 @@ The following table shows the meta packages that will be available:
 
 ## Package Granularity 
 
-Package granularity will be increased with ROCm 8.0. Development packages contain all the code required to build the libraries including headers, cmakefiles, and static libraries. Source packages for all of rocm-libraries provides all the files to build the libraries from source in addition to the rocm-rock source package.
+Package granularity will be increased with ROCm 8.0. Development packages contain all the code required to build the libraries, including headers, Cmake files, and static libraries. Source packages for all of rocm-libraries provide all the files to build the libraries from source in addition to the rocm-rock source package.
 
 | Name | Dev package components only | Runtime packages | Source package inclusion only |
 | :------------- | :------------- | :------------- | :------------- |
@@ -182,7 +182,7 @@ Package granularity will be increased with ROCm 8.0. Development packages contai
 | amdrocm-flang |  | flang |  |
 | amdrocm-runtimes |  | HIP, ROCR, CLR, runtime compilation, SPIR-V |  |
 | amdrocm-fft |  | rocFFT, hipFFT, hipFFTW |  |
-| amdrocm-math |  | Temporary catch all if libraries cannot fix circular dependencies by ROCm 8.0 |  |
+| amdrocm-math |  | Temporary catch-all if libraries cannot fix circular dependencies by ROCm 8.0 |  |
 | amdrocm-blas | hipBLAS-common | rocBLAS, hipBLAS, hipBLASLt, hipSPARSELt |  |
 | amdrocm-sparse |  | rocSPARSE, hipSPARSE |  |
 | amdrocm-solver |  | rocSOLVER, hipSOLVER |  |
@@ -201,11 +201,11 @@ Package granularity will be increased with ROCm 8.0. Development packages contai
 | amdrocm-jpeg |  | rocJPEG |  |
 | amdrocm-file |  | hipFile, rocFile (future addition) |  |
 | amdrocm-rccl| | rccl |
-| amdrocm-sysdeps |  | Bundled 3rd party dependencies (e.g. libdrm, libelf, numa, subset of libVA) |  |
+| amdrocm-sysdeps |  | Bundled 3rd party dependencies (e.g., libdrm, libelf, numa, subset of libVA) |  |
 | amdrocm-rdc|  | ROCm Datacenter | |
 
-Note: Product management would like to follow upstream packaging structrure in ROCm in the future with no interm due dates as of now. Today there may be one amdrocm-llvm that includes both flang and the flang compiler, the flang component can be dependent on the llvm component.
+Note: Product management would like to follow upstream packaging structrures in ROCm in the future with no interim due dates as of now. Today there may be one amdrocm-llvm that includes both flang and the flang compiler; the flang component can be dependent on the llvm component.
 
 ## Versioning Requirements
 
-For versioning requirements on packaging see the following documentation: [TheRock package versioning](/docs/packaging/versioning.md)
+For versioning requirements on packaging, see the following documentation: [TheRock package versioning](/docs/packaging/versioning.md)
