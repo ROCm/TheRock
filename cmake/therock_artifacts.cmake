@@ -48,15 +48,16 @@ function(therock_provide_artifact slice_name)
   endif()
 
   # Filter subprojects based on declaration
+  set(filtered_subproject_deps)
   foreach(subproject IN LISTS ARG_SUBPROJECT_DEPS)
     set(_is_subproject_declared)
     therock_check_is_cmake_subproject_declared(${subproject} _is_subproject_declared)
-    if(NOT _is_subproject_declared)
-      list(REMOVE_ITEM ARG_SUBPROJECT_DEPS ${subproject})
+    if(_is_subproject_declared)
+      list(APPEND filtered_subproject_deps ${subproject})
     endif()
   endforeach()
 
-  if(NOT ARG_SUBPROJECT_DEPS)
+  if(NOT filtered_subproject_deps)
     return()
   endif()
 
@@ -150,13 +151,13 @@ function(therock_provide_artifact slice_name)
   ### Generate artifact directories.
   # Determine dependencies.
   set(_stamp_file_deps)
-  _therock_cmake_subproject_deps_to_stamp(_stamp_file_deps "stage.stamp" ${ARG_SUBPROJECT_DEPS})
+  _therock_cmake_subproject_deps_to_stamp(_stamp_file_deps "stage.stamp" ${filtered_subproject_deps})
 
   # Compute fingerprint of dependencies.
   # TODO: Potentially prime content with some environment/machine state.
   set(_fprint_content "ARTIFACT=${slice_name}" "DESCRIPTOR=${_descriptor_fprint}")
   set(_fprint_is_valid TRUE)
-  foreach(_subproject_dep ${ARG_SUBPROJECT_DEPS})
+  foreach(_subproject_dep ${filtered_subproject_deps})
     get_target_property(_subproject_fprint "${_subproject_dep}" THEROCK_FPRINT)
     if(_subproject_fprint)
       list(APPEND _fprint_content "${_subproject_dep}=${_subproject_fprint}")
@@ -371,7 +372,7 @@ function(therock_provide_artifact slice_name)
   # this only applies to the convenience +dist target, not the underlying
   # stamp-file chain, which is what the core dependency mechanism uses.
   if(ARG_DISTRIBUTION)
-    foreach(subproject_dep ${ARG_SUBPROJECT_DEPS})
+    foreach(subproject_dep ${filtered_subproject_deps})
       set(_subproject_dist_target "${subproject_dep}+dist")
       if(NOT TARGET "${_subproject_dist_target}")
         message(FATAL_ERROR "Subproject convenience target ${_subproject_dist_target} does not exist")
