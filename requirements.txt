@@ -17,3 +17,6 @@ msgpack>=1.1.0
 
 # KPACK
 zstandard>=0.19.0
+
+# libhipcxx build requirement
+lit==18.1.8
