@@ -230,6 +230,27 @@ jobs:
         run: |
           python external-builds/pytorch/sanity_check_wheel.py ${{ env.PACKAGE_DIST_DIR }}
 
+      - name: Generate PyTorch manifest
+        shell: cmd
+        run: |
+          set "VERSION_SUFFIX=%ROCM_VERSION_SUFFIX%"
+          if "%VERSION_SUFFIX%"=="" set "VERSION_SUFFIX="
+          python external-builds/pytorch/generate_pytorch_manifest.py ^
+            --output-dir "${{ env.PACKAGE_DIST_DIR }}" ^
+            --manifest-dir "${{ env.PACKAGE_DIST_DIR }}\manifests" ^
+            --artifact-group "pytorch-wheels" ^
+            --rocm-sdk-version "${{ inputs.rocm_version }}" ^
+            --amdgpu-family "${{ inputs.amdgpu_family }}" ^
+            --version-suffix "%VERSION_SUFFIX%" ^
+            --pytorch-git-ref "${{ inputs.pytorch_git_ref }}" ^
+            --python-version "${{ inputs.python_version }}" ^
+            --pytorch-rocm-arch "%PYTORCH_ROCM_ARCH%" ^
+            --pytorch-dir "${{ env.CHECKOUT_ROOT }}/torch" ^
+            --pytorch-audio-dir "${{ env.CHECKOUT_ROOT }}/audio" ^
+            --pytorch-vision-dir "${{ env.CHECKOUT_ROOT }}/vision" ^
+            --triton-dir "${{ github.workspace }}\external-builds\pytorch\triton"
+
+
       - name: Configure AWS Credentials
         if: always()
         uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
@@ -257,6 +278,13 @@ jobs:
           set "MANIFEST_NAME=%MANIFEST_NAME:/=-%"
           echo "Available manifest files:"
           ls -l "${PACKAGE_DIST_DIR}/manifests" || dir "${PACKAGE_DIST_DIR}\manifests"
+
+          if not exist "${{ env.PACKAGE_DIST_DIR }}\manifests\%MANIFEST_NAME%" (
+            echo "ERROR: Manifest not found: %MANIFEST_NAME%"
+            dir "${{ env.PACKAGE_DIST_DIR }}\manifests"
+            exit /b 1
+          )
+
           aws s3 cp ^
             "${{ env.PACKAGE_DIST_DIR }}\manifests\%MANIFEST_NAME%" ^
             "s3://${{ env.S3_BUCKET_ARTIFACTS }}/${{ github.run_id }}-windows/manifests/${{ inputs.amdgpu_family }}/%MANIFEST_NAME%"
