@@ -1,54 +1,5 @@
 """
-Tests for generate_pytorch_manifest.py
-
-This test suite validates the PyTorch external-build manifest generator used by
-TheRock CI workflows. The goal is to ensure correct, reproducible manifest
-generation for externally built PyTorch wheels, independent of the execution
-environment.
-
-What is covered
-----------------
-1. Wheel filename parsing (PEP 427)
-   - Correctly parses wheel filenames to extract:
-     * distribution
-     * version (including ROCm suffixes)
-     * optional build tag
-     * python tag
-     * ABI tag
-     * platform tag
-   - Ignores non-wheel files (sdist, zip, text) and malformed filenames
-
-2. GitHub Actions environment handling
-   - Simulates a GitHub Actions runtime using environment variables
-   - Verifies that CI metadata is captured only when GITHUB_ACTIONS=true
-   - Validates recorded fields:
-     * run_id
-     * job_id
-     * repository URL
-     * commit SHA
-     * git ref
-
-3. End-to-end manifest generation
-   - Creates a temporary wheel output directory
-   - Invokes generate_pytorch_manifest.main() as a CLI entrypoint
-   - Generates exactly one manifest JSON file under <output-dir>/manifests
-   - Verifies TheRock naming conventions for the manifest file
-
-4. Manifest content validation
-   - Validates top-level metadata:
-     * project == "TheRock"
-     * component == "pytorch"
-     * artifact_group == "pytorch-wheels"
-   - Validates artifact entries:
-     * relative path
-     * file size
-     * parsed wheel labels
-
-How to run
-----------
-From the repository root:
-
-    pytest external-builds/pytorch/tests/test_generate_pytorch_manifest.py
+Unit tests for external-builds/pytorch/generate_pytorch_manifest.py.
 """
 
 import importlib.util
@@ -79,6 +30,7 @@ def _load_manifest_module() -> ModuleType:
 
 @pytest.fixture
 def gha_env():
+    # Simulate a GitHub Actions environment so CI metadata fields are deterministic.
     keys = [
         "GITHUB_ACTIONS",
         "GITHUB_RUN_ID",
@@ -121,6 +73,7 @@ def _run_main_with_args(module: ModuleType, argv: list[str]) -> None:
 
 
 def test_parse_wheel_name_no_build_tag():
+    # Standard wheel filenames should parse without a build_tag.
     m = _load_manifest_module()
     meta = m.parse_wheel_name("torch-2.7.0-cp312-cp312-manylinux_2_28_x86_64.whl")
     assert meta == {
@@ -133,6 +86,7 @@ def test_parse_wheel_name_no_build_tag():
 
 
 def test_parse_wheel_name_with_build_tag():
+    # Wheel filenames with build tags should expose build_tag separately.
     m = _load_manifest_module()
     meta = m.parse_wheel_name(
         "torch-2.7.0+rocm7.10.0a20251120-1-cp312-cp312-win_amd64.whl"
@@ -148,6 +102,7 @@ def test_parse_wheel_name_with_build_tag():
 
 
 def test_parse_wheel_name_ignores_non_wheel():
+    # Non-wheel artifacts should be ignored.
     m = _load_manifest_module()
     assert m.parse_wheel_name("torch-2.7.0.tar.gz") == {}
     assert m.parse_wheel_name("torch-2.7.0.zip") == {}
@@ -155,11 +110,13 @@ def test_parse_wheel_name_ignores_non_wheel():
 
 
 def test_parse_wheel_name_too_few_fields():
+    # Malformed wheel filenames (too few fields) should be rejected.
     m = _load_manifest_module()
     assert m.parse_wheel_name("torch-2.7.0.whl") == {}
 
 
 def test_manifest_generation_end_to_end(tmp_path: Path, gha_env):
+    # End-to-end: create a fake dist dir and ensure exactly one manifest is written.
     m = _load_manifest_module()
 
     out_dir = tmp_path / "dist"
@@ -186,20 +143,22 @@ def test_manifest_generation_end_to_end(tmp_path: Path, gha_env):
 
     manifest_dir = out_dir / "manifests"
 
-    # Ensure exactly one manifest file was created.
+    # Exactly one manifest should be produced.
     manifests = list(manifest_dir.glob("*.json"))
     assert len(manifests) == 1, f"Expected exactly one manifest, found: {manifests}"
 
-    # Verify naming convention for nightly.
+    # Verify naming convention for nightly builds.
     manifest_name = "therock-manifest_torch_py3.12_nightly.json"
     manifest_path = manifest_dir / manifest_name
     assert manifest_path.exists(), f"Expected manifest not found: {manifest_path}"
 
     data = json.loads(manifest_path.read_text(encoding="utf-8"))
+
     assert data["project"] == "TheRock"
     assert data["component"] == "pytorch"
     assert data["artifact_group"] == "pytorch-wheels"
 
+    # CI metadata should be captured when running under GitHub Actions.
     assert data["run_id"] == "123456"
     assert data["job_id"] == "build_pytorch_wheels"
     assert data["therock"]["repo"] == "https://github.com/ROCm/TheRock"
@@ -213,6 +172,7 @@ def test_manifest_generation_end_to_end(tmp_path: Path, gha_env):
 
 
 def test_manifest_filename_release_28(tmp_path: Path, gha_env):
+    # release/2.8 should normalize to release-2.8 in the manifest filename.
     m = _load_manifest_module()
 
     out_dir = tmp_path / "dist"
