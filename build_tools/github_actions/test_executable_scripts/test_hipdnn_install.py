@@ -20,30 +20,20 @@ from pathlib import Path
 THEROCK_DIST_DIR = os.getenv("THEROCK_DIST_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
-TEST_PROJECTS_DIR = SCRIPT_DIR / "hipdnn_install_tests"
-
-TEST_PROJECTS = [
-    "test_data_sdk",
-    "test_plugin_sdk",
-    "test_backend",
-    "test_frontend",
-    "test_test_sdk",
-]
+TEST_PROJECT_DIR = SCRIPT_DIR / "hipdnn_install_tests"
 
 logging.basicConfig(level=logging.INFO)
 
 
-def run_test(project_name: str, build_dir: Path):
-    """Configure, build, and test a single project."""
-    project_dir = TEST_PROJECTS_DIR / project_name
-
+def run_tests(build_dir: Path):
+    """Configure, build, and test all hipDNN packages."""
     # Configure
     configure_cmd = [
         "cmake",
         "-B",
         str(build_dir),
         "-S",
-        str(project_dir),
+        str(TEST_PROJECT_DIR),
         "-GNinja",
         f"-DCMAKE_PREFIX_PATH={THEROCK_DIST_DIR}",
     ]
@@ -67,10 +57,7 @@ if __name__ == "__main__":
 
     logging.info(f"Using THEROCK_DIST_DIR: {THEROCK_DIST_DIR}")
 
-    for project in TEST_PROJECTS:
-        logging.info(f"=== Testing {project} ===")
-        with tempfile.TemporaryDirectory() as build_dir:
-            run_test(project, Path(build_dir))
-        logging.info(f"=== {project} PASSED ===")
+    with tempfile.TemporaryDirectory() as build_dir:
+        run_tests(Path(build_dir))
 
     logging.info("All hipDNN install tests passed!")
