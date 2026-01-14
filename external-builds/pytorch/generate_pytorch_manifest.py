@@ -51,6 +51,24 @@ class WheelNameInfo:
         return labels
 
 
+@dataclass(frozen=True)
+class GitHeadInfo:
+    """Git provenance for a source checkout."""
+
+    dir: str
+    commit: str
+    describe: str
+    remote: str
+
+    def to_dict(self) -> Dict[str, str]:
+        return {
+            "dir": self.dir,
+            "commit": self.commit,
+            "describe": self.describe,
+            "remote": self.remote,
+        }
+
+
 def parse_wheel_name(filename: str) -> WheelNameInfo:
     """
     Best-effort parser for PEP 427 wheel filenames.
@@ -99,67 +117,52 @@ def capture(cmd: List[str], cwd: Optional[Path] = None) -> str:
             stderr=subprocess.STDOUT,
             text=True,
         ).strip()
-    except FileNotFoundError:
-        print(
-            f"  [WARN] Command not found: {cmd[0]} (skipping: {' '.join(cmd)})",
-            flush=True,
-        )
-        return ""
     except subprocess.CalledProcessError as e:
         output = (e.output or "").strip()
-        print(
-            f"  [WARN] Command failed ({e.returncode}): {' '.join(cmd)}"
-            + (f"\n    output: {output}" if output else ""),
-            flush=True,
-        )
-        return ""
-    except Exception as e:
-        print(
-            f"  [WARN] Unexpected error running {' '.join(cmd)}: "
-            f"{type(e).__name__}: {e}",
-            flush=True,
-        )
-        return ""
+        raise RuntimeError(
+            f"Command failed ({e.returncode}): {' '.join(cmd)}"
+            + (f"\nOutput:\n{output}" if output else "")
+        ) from e
 
 
-def git_head(dirpath: Optional[Path]) -> Optional[Dict[str, str]]:
-    if not dirpath:
-        print("  [WARN] git_head: no directory provided (skipping)", flush=True)
+def git_head(dirpath: Optional[Path], *, label: str = "source") -> Optional[GitHeadInfo]:
+    """
+    Returns git metadata for a source checkout.
+
+    If dirpath is None, no metadata is recorded.
+    If dirpath is provided but invalid, this function fails fast.
+    """
+    if dirpath is None:
+        print(
+            f"  [INFO] git_head: no directory provided for {label} (omitting)",
+            flush=True,
+        )
         return None
 
     dirpath = dirpath.resolve()
 
     if not dirpath.exists():
-        print(
-            f"  [WARN] git_head: directory does not exist: {dirpath} (skipping)",
-            flush=True,
+        raise FileNotFoundError(
+            f"git_head: directory does not exist for {label}: {dirpath}\n"
+            "This indicates a misconfigured workflow or incomplete checkout."
         )
-        return None
 
     if not (dirpath / ".git").exists():
-        print(
-            f"  [WARN] git_head: not a git checkout (no .git): {dirpath} (skipping)",
-            flush=True,
+        raise FileNotFoundError(
+            f"git_head: not a git checkout for {label} (missing .git): {dirpath}\n"
+            "Manifests must not be generated without source provenance."
         )
-        return None
 
-    commit = capture(["git", "rev-parse", "HEAD"], cwd=dirpath) or None
-    desc = capture(["git", "describe", "--always", "--dirty"], cwd=dirpath) or None
-    remote = capture(["git", "remote", "get-url", "origin"], cwd=dirpath) or None
+    commit = capture(["git", "rev-parse", "HEAD"], cwd=dirpath)
+    desc = capture(["git", "describe", "--always", "--dirty"], cwd=dirpath)
+    remote = capture(["git", "remote", "get-url", "origin"], cwd=dirpath)
 
-    if not (commit or desc or remote):
-        print(
-            f"  [WARN] git_head: unable to determine git metadata for {dirpath}",
-            flush=True,
-        )
-        return None
-
-    return {
-        "dir": str(dirpath),
-        "commit": commit,
-        "describe": desc,
-        "remote": remote,
-    }
+    return GitHeadInfo(
+        dir=str(dirpath),
+        commit=commit,
+        describe=desc,
+        remote=remote,
+    )
 
 
 def _manifest_filename(
@@ -311,9 +314,9 @@ def main() -> None:
         ("pytorch_vision", args.pytorch_vision_dir),
         ("triton", args.triton_dir),
     ]:
-        info = git_head(d)
-        if info:
-            sources[name] = info
+        info = git_head(d, label=name)
+        if info is not None:
+            sources[name] = info.to_dict()
 
     manifest: Dict[str, Any] = {
         "project": "TheRock",
