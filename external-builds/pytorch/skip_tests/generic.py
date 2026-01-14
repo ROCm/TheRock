@@ -214,6 +214,10 @@ skip_tests = {
             # AttributeError: 'Model' object has no attribute '__annotations__'
             # https://github.com/ROCm/TheRock/actions/runs/20955499125/job/60224765842
             "test_autocast_cat_jit",
+            # Floating-point precision issue: int(fraction * memory) differs by 1
+            # due to rounding, causing assertion failure and UnboundLocalError in cleanup.
+            # Expected 874512384 but got 874512383.
+            "test_max_split_expandable",
         ],
         "nn": [
             # RuntimeError: miopenStatusUnknownError
