@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import logging
 import os
-import shlex
 import subprocess
 from pathlib import Path
 
