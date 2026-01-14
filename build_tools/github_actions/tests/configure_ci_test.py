@@ -293,6 +293,26 @@ class ConfigureCITest(unittest.TestCase):
         )
         self.assertEqual(linux_test_labels, [])
 
+    def test_kernel_test_label_linux_pull_request_matrix_generator(self):
+        base_args = {
+            "pr_labels": '{"labels":[{"name":"kernel:oem"}]}',
+            "build_variant": "release",
+        }
+        linux_target_output, linux_test_labels = configure_ci.matrix_generator(
+            is_pull_request=True,
+            is_workflow_dispatch=False,
+            is_push=False,
+            is_schedule=False,
+            base_args=base_args,
+            families={},
+            platform="linux",
+        )
+        self.assertGreaterEqual(len(linux_target_output), 1)
+        self.assert_target_output_is_valid(
+            target_output=linux_target_output, allow_xfail=False
+        )
+        self.assertEqual(linux_test_labels, [])
+
     def test_main_linux_branch_push_matrix_generator(self):
         base_args = {"branch_name": "main", "build_variant": "release"}
         linux_target_output, linux_test_labels = configure_ci.matrix_generator(

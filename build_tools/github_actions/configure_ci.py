@@ -224,7 +224,7 @@ def should_ci_run_given_modified_paths(paths: Optional[Iterable[str]]) -> bool:
 
 def get_pr_labels(args) -> List[str]:
     """Gets a list of labels applied to a pull request."""
-    data = json.loads(args.get("pr_labels"))
+    data = json.loads(args.get("pr_labels", "{}"))
     labels = []
     for label in data.get("labels", []):
         labels.append(label["name"])
@@ -612,8 +612,10 @@ def matrix_generator(
                 # We disable the other machines that do not have the specified kernel type
                 pr_labels = get_pr_labels(base_args)
                 for label in pr_labels:
+                    # If a kernel test label was added, we set the test-runs-on accordingly to kernel-specific test machines
                     if "kernel" in label:
                         _, kernel_type = label.split(":")
+                        # If the architecture has a valid kernel machine, we set it here
                         if (
                             "test-runs-on-kernel" in platform_info
                             and kernel_type in platform_info["test-runs-on-kernel"]
@@ -621,8 +623,11 @@ def matrix_generator(
                             matrix_row["test-runs-on"] = platform_info[
                                 "test-runs-on-kernel"
                             ][kernel_type]
+                        # Otherwise, we disable the test runner for this architecture
                         else:
                             matrix_row["test-runs-on"] = ""
+                            if "test-runs-on-multi-gpu" in platform_info:
+                                matrix_row["test-runs-on-multi-gpu"] = ""
                         break
 
                 matrix_output.append(matrix_row)
