@@ -49,7 +49,6 @@ if(THEROCK_ENABLE_ROCPROFV3)
 
 
   therock_provide_artifact(aqlprofile-tests
-    TARGET_SPECIFIC
     DESCRIPTOR artifact-aqlprofile.toml
     COMPONENTS
       test
