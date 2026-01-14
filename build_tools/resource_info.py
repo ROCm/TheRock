@@ -57,6 +57,8 @@ TOPOLOGY_ARTIFACT_RE = re.compile(r"^\[artifacts\.([^\]]+)\]\s*$", re.MULTILINE)
 # Cached once so we don't re-read topology for every compile invocation
 TOPOLOGY_COMPONENTS_CACHE: Optional[List[str]] = None
 
+# TODO: move FAQ HTML to a separate file
+
 FAQ_HTML = """
 <h2>General FAQ</h2>
 
@@ -198,6 +200,8 @@ def _repo_root() -> Path:
 def load_components_from_build_topology(repo_root: Path) -> List[str]:
     """
     Extract component/artifact names from BUILD_TOPOLOGY.toml and print them.
+    TODO: explore use of build_topology.py, get_artifact_groups() 
+    or other accessors on the BuildTopology classfor this
     """
     topo_path = repo_root / "BUILD_TOPOLOGY.toml"
     try:
