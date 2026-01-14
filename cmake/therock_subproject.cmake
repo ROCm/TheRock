@@ -380,7 +380,7 @@ function(therock_cmake_subproject_declare target_name)
     set(_is_subproject_declared)
     therock_check_is_cmake_subproject_declared(${_dep} _is_subproject_declared)
     if(NOT _is_subproject_declared)
-        message(WARNING "Sub-project ${_dep} declared as dependency of sub-project ${target_name} but has been disabled for the given targets. "
+        message(VERBOSE "Sub-project ${_dep} declared as dependency of sub-project ${target_name} but has been disabled for the given targets. "
         "Building ${target_name} without ${_dep}. "
         "This message should never appear for production/supported gfx targets.")
         list(APPEND _excluded_deps ${_dep})
