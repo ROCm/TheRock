@@ -136,11 +136,13 @@ therock_add_amdgpu_target(gfx1100 "AMD RX 7900 XTX" FAMILY dgpu-all gfx110X-all 
   EXCLUDE_TARGET_PROJECTS
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
     rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
+    libhipcxx # https://github.com/ROCm/TheRock/issues/2504
 )
 therock_add_amdgpu_target(gfx1101 "AMD RX 7800 XT" FAMILY dgpu-all gfx110X-all gfx110X-dgpu
   EXCLUDE_TARGET_PROJECTS
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
     rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
+    libhipcxx # https://github.com/ROCm/TheRock/issues/2504
 )
 therock_add_amdgpu_target(gfx1102 "AMD RX 7700S/Framework Laptop 16" FAMILY dgpu-all gfx110X-all gfx110X-dgpu
   EXCLUDE_TARGET_PROJECTS
@@ -179,6 +181,7 @@ therock_add_amdgpu_target(gfx1152 "AMD Krackan 1 iGPU" FAMILY igpu-all gfx115X-a
     rccl  # https://github.com/ROCm/TheRock/issues/150
     rocWMMA # https://github.com/ROCm/TheRock/issues/1944
     rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
+    libhipcxx # https://github.com/ROCm/TheRock/issues/2504
 )
 therock_add_amdgpu_target(gfx1153 "AMD Radeon 820M iGPU" FAMILY igpu-all gfx115X-all gfx115X-igpu
   EXCLUDE_TARGET_PROJECTS
@@ -186,6 +189,7 @@ therock_add_amdgpu_target(gfx1153 "AMD Radeon 820M iGPU" FAMILY igpu-all gfx115X
     rccl  # https://github.com/ROCm/TheRock/issues/150
     rocWMMA # https://github.com/ROCm/TheRock/issues/1944
     rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
+    libhipcxx # https://github.com/ROCm/TheRock/issues/2504
 )
 
 # gfx120X family
@@ -193,11 +197,13 @@ therock_add_amdgpu_target(gfx1200 "AMD RX 9060 / XT" FAMILY dgpu-all gfx120X-all
   EXCLUDE_TARGET_PROJECTS
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
     rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
+    libhipcxx # https://github.com/ROCm/TheRock/issues/2504
 )
 therock_add_amdgpu_target(gfx1201 "AMD RX 9070 / XT" FAMILY dgpu-all gfx120X-all
   EXCLUDE_TARGET_PROJECTS
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
     rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
+    libhipcxx # https://github.com/ROCm/TheRock/issues/2504
 )
 
 # Optional extension targets (used for out of tree target development).

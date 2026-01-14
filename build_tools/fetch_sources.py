@@ -500,9 +500,7 @@ def main(argv):
         "--ml-framework-projects",
         nargs="+",
         type=str,
-        default=[
-            "composable_kernel",
-        ],
+        default=[],
     )
     parser.add_argument(
         "--rocm-media-projects",
