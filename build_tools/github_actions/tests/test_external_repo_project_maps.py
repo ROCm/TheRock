@@ -81,11 +81,11 @@ class TestCollectProjectsToRun(unittest.TestCase):
 
     def test_basic_project_collection_rocm_libraries(self):
         """Test basic project collection for rocm-libraries."""
-        config = get_repo_config("rocm-libraries")
-
         # Test single project
         projects = collect_projects_to_run(
-            subtrees=["projects/rocprim"], platform="linux", **config
+            subtrees=["projects/rocprim"],
+            platform="linux",
+            repo_name="rocm-libraries",
         )
 
         self.assertEqual(len(projects), 1)
@@ -94,11 +94,11 @@ class TestCollectProjectsToRun(unittest.TestCase):
 
     def test_basic_project_collection_rocm_systems(self):
         """Test basic project collection for rocm-systems."""
-        config = get_repo_config("rocm-systems")
-
         # Test single project
         projects = collect_projects_to_run(
-            subtrees=["projects/hip"], platform="linux", **config
+            subtrees=["projects/hip"],
+            platform="linux",
+            repo_name="rocm-systems",
         )
 
         self.assertEqual(len(projects), 1)
@@ -106,11 +106,11 @@ class TestCollectProjectsToRun(unittest.TestCase):
 
     def test_multiple_subtrees_same_project(self):
         """Test that multiple subtrees mapping to the same project are deduplicated."""
-        config = get_repo_config("rocm-libraries")
-
         # Both rocprim and hipcub map to "prim"
         projects = collect_projects_to_run(
-            subtrees=["projects/rocprim", "projects/hipcub"], platform="linux", **config
+            subtrees=["projects/rocprim", "projects/hipcub"],
+            platform="linux",
+            repo_name="rocm-libraries",
         )
 
         # Should result in only one "prim" project
@@ -119,11 +119,11 @@ class TestCollectProjectsToRun(unittest.TestCase):
 
     def test_dependency_merging(self):
         """Test that dependencies are properly merged."""
-        config = get_repo_config("rocm-libraries")
-
         # miopen depends on blas and rand
         projects = collect_projects_to_run(
-            subtrees=["projects/miopen", "projects/rocblas"], platform="linux", **config
+            subtrees=["projects/miopen", "projects/rocblas"],
+            platform="linux",
+            repo_name="rocm-libraries",
         )
 
         # Should have miopen (with blas merged) - blas should be removed
@@ -136,13 +136,11 @@ class TestCollectProjectsToRun(unittest.TestCase):
 
     def test_optional_component_merging(self):
         """Test that optional components (sparse, solver) are merged correctly."""
-        config = get_repo_config("rocm-libraries")
-
         # sparse is optional and should be added to blas
         projects = collect_projects_to_run(
             subtrees=["projects/rocsparse", "projects/rocblas"],
             platform="linux",
-            **config,
+            repo_name="rocm-libraries",
         )
 
         # Should result in one blas project with sparse options added
@@ -158,15 +156,17 @@ class TestCollectProjectsToRun(unittest.TestCase):
 
     def test_platform_specific_flags(self):
         """Test that platform-specific flags are added correctly."""
-        config = get_repo_config("rocm-libraries")
-
         # miopen uses CK from rocm-libraries/projects/composablekernel
         projects_linux = collect_projects_to_run(
-            subtrees=["projects/miopen"], platform="linux", **config
+            subtrees=["projects/miopen"],
+            platform="linux",
+            repo_name="rocm-libraries",
         )
 
         projects_windows = collect_projects_to_run(
-            subtrees=["projects/miopen"], platform="windows", **config
+            subtrees=["projects/miopen"],
+            platform="windows",
+            repo_name="rocm-libraries",
         )
 
         # Should have CK enabled with source dir pointing to rocm-libraries CK
@@ -190,10 +190,10 @@ class TestCollectProjectsToRun(unittest.TestCase):
 
     def test_enable_all_off_is_added(self):
         """Test that -DTHEROCK_ENABLE_ALL=OFF is always added."""
-        config = get_repo_config("rocm-libraries")
-
         projects = collect_projects_to_run(
-            subtrees=["projects/rocprim"], platform="linux", **config
+            subtrees=["projects/rocprim"],
+            platform="linux",
+            repo_name="rocm-libraries",
         )
 
         self.assertIn("-DTHEROCK_ENABLE_ALL=OFF", projects[0]["cmake_options"])

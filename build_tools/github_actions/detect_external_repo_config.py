@@ -7,7 +7,6 @@ being built (rocm-libraries, rocm-systems, etc.). It outputs GitHub Actions vari
 that control checkout steps, patches, and build options.
 
 Usage:
-    python detect_external_repo_config.py <repository_name>
     python detect_external_repo_config.py --repository <repository_name>
 
 Examples:
@@ -81,18 +80,29 @@ def get_repo_config(repo_name: str) -> Dict[str, Any]:
     return REPO_CONFIGS[repo_name]
 
 
-def output_github_actions_vars(config: Dict[str, Any], platform: str = None) -> None:
-    """Writes config as GitHub Actions outputs (to `GITHUB_OUTPUT` or stdout)."""
+def output_github_actions_vars(config: Dict[str, Any]) -> None:
+    """Writes config as GitHub Actions outputs (to `GITHUB_OUTPUT` or stdout).
+
+    Args:
+        config: Configuration dictionary with keys like 'cmake_source_var',
+            'patches_dir', etc. Values should be strings or booleans (already
+            resolved for platform-specific values).
+
+    Returns:
+        None. Outputs are written as side effects:
+        - If GITHUB_OUTPUT env var is set: Appends to that file
+        - Otherwise: Prints to stdout for local testing
+
+    Note:
+        Boolean values are converted to lowercase strings ('true'/'false')
+        for bash compatibility. Platform-specific values should be resolved
+        by the caller before passing to this function.
+    """
     github_output = os.environ.get("GITHUB_OUTPUT")
 
     # Convert boolean values to lowercase strings for bash compatibility
     output_lines = []
     for key, value in config.items():
-        # Handle platform-specific values (dict with 'linux'/'windows' keys).
-        if isinstance(value, dict):
-            # main() is responsible for ensuring platform is provided when needed.
-            value = value[platform]
-
         value_str = str(value).lower() if isinstance(value, bool) else str(value)
         output_lines.append(f"{key}={value_str}")
 
@@ -109,25 +119,35 @@ def main():
     parser = argparse.ArgumentParser(
         description=(
             "Detect external repository configuration for TheRock CI workflows.\n\n"
-            "Outputs GitHub Actions key/value pairs (via GITHUB_OUTPUT when set) that\n"
-            "control checkout paths, patch selection, and build options."
+            "This script determines build configuration settings based on the external\n"
+            "repository being built (rocm-libraries, rocm-systems, etc.). It outputs\n"
+            "GitHub Actions variables that control checkout steps, patches, and build options.\n\n"
+            "Output Format (GitHub Actions):\n"
+            "  cmake_source_var=THEROCK_ROCM_LIBRARIES_SOURCE_DIR\n"
+            "  patches_dir=rocm-libraries\n"
+            "  fetch_exclusion=--no-include-rocm-libraries\n"
+            "  enable_dvc=true"
         ),
         epilog=(
             "Examples:\n"
-            "  python build_tools/github_actions/detect_external_repo_config.py --repository ROCm/rocm-libraries --platform linux\n"
-            "  python build_tools/github_actions/detect_external_repo_config.py --repository rocm-systems --platform windows\n"
-            '  python build_tools/github_actions/detect_external_repo_config.py --repository ROCm/rocm-libraries --workspace "$GITHUB_WORKSPACE/source-repo" --platform linux\n'
+            "  # Linux config for rocm-libraries:\n"
+            "  python build_tools/github_actions/detect_external_repo_config.py \\\n"
+            "    --repository ROCm/rocm-libraries --platform linux\n\n"
+            "  # Windows config for rocm-systems:\n"
+            "  python build_tools/github_actions/detect_external_repo_config.py \\\n"
+            "    --repository rocm-systems --platform windows\n\n"
+            "  # Include workspace path for CMake options:\n"
+            "  python build_tools/github_actions/detect_external_repo_config.py \\\n"
+            '    --repository ROCm/rocm-libraries --workspace "$GITHUB_WORKSPACE/source-repo" \\\n'
+            "    --platform linux\n\n"
+            "  # List all known repositories:\n"
+            "  python build_tools/github_actions/detect_external_repo_config.py --list"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
-        "repository",
-        nargs="?",
-        help="Full repository name (e.g., ROCm/rocm-libraries) or short name (e.g., rocm-libraries)",
-    )
-    parser.add_argument(
         "--repository",
-        dest="repository_arg",
+        required=True,
         help="Full repository name (e.g., ROCm/rocm-libraries) or short name (e.g., rocm-libraries)",
     )
     parser.add_argument(
@@ -156,12 +176,7 @@ def main():
         return 0
 
     try:
-        repo_arg = args.repository_arg or args.repository
-        if not repo_arg:
-            raise ValueError(
-                "Missing required repository. Use --repository or positional."
-            )
-        repo_name = detect_repo_name(repo_arg)
+        repo_name = detect_repo_name(args.repository)
         config = get_repo_config(repo_name)
 
         # Some config values are platform-specific (dict keyed by linux/windows).
@@ -174,16 +189,24 @@ def main():
         print(f"Platform: {args.platform or 'not specified'}", file=sys.stderr)
         print(f"Configuration: {config}", file=sys.stderr)
 
+        # Resolve platform-specific values
+        resolved_config = {}
+        for key, value in config.items():
+            if isinstance(value, dict):
+                resolved_config[key] = value[args.platform]
+            else:
+                resolved_config[key] = value
+
         # Format the full CMake option if workspace path provided
         if args.workspace:
-            cmake_var = config["cmake_source_var"]
-            config["extra_cmake_options"] = f"-D{cmake_var}={args.workspace}"
+            cmake_var = resolved_config["cmake_source_var"]
+            resolved_config["extra_cmake_options"] = f"-D{cmake_var}={args.workspace}"
             print(
-                f"Generated CMake option: {config['extra_cmake_options']}",
+                f"Generated CMake option: {resolved_config['extra_cmake_options']}",
                 file=sys.stderr,
             )
 
-        output_github_actions_vars(config, platform=args.platform)
+        output_github_actions_vars(resolved_config)
         return 0
 
     except ValueError as e:

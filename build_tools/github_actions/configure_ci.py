@@ -111,6 +111,39 @@ def parse_gpu_family_overrides(value: str, lookup_matrix: dict) -> list[str]:
 # --------------------------------------------------------------------------- #
 
 
+def _add_gpu_families_from_input(
+    families: dict,
+    lookup_matrix: dict,
+    selected_target_names: list,
+    fallback_targets: list = None,
+) -> bool:
+    """Add GPU families from input to selected_target_names.
+
+    Args:
+        families: Dictionary containing 'amdgpu_families' key with comma-separated values
+        lookup_matrix: Family info matrix from amdgpu_family_matrix.py
+        selected_target_names: List to append selected target names to (modified in place)
+        fallback_targets: Optional list of fallback targets if no explicit input provided
+
+    Returns:
+        True if explicit input was used, False if fallback was used
+    """
+    input_gpu_targets = families.get("amdgpu_families", "")
+    if input_gpu_targets:
+        print(f"Using explicitly provided GPU families: {input_gpu_targets}")
+        requested_target_names = parse_gpu_family_overrides(
+            input_gpu_targets, lookup_matrix
+        )
+        selected_target_names.extend(
+            filter_known_names(requested_target_names, "target", lookup_matrix)
+        )
+        return True
+    elif fallback_targets is not None:
+        selected_target_names.extend(fallback_targets)
+        return False
+    return False
+
+
 def _format_variants_for_summary(variants: list[dict]) -> list:
     result = []
     for item in variants:
@@ -736,15 +769,8 @@ def matrix_generator(
     if is_workflow_dispatch:
         print(f"[WORKFLOW_DISPATCH] Generating build matrix with {str(base_args)}")
 
-        # Parse inputs into a targets list.
-        input_gpu_targets = families.get("amdgpu_families")
-        requested_target_names = parse_gpu_family_overrides(
-            input_gpu_targets, lookup_matrix
-        )
-
-        selected_target_names.extend(
-            filter_known_names(requested_target_names, "target", lookup_matrix)
-        )
+        # Parse GPU family inputs
+        _add_gpu_families_from_input(families, lookup_matrix, selected_target_names)
 
         # If any workflow dispatch test labels are specified, we run full tests for those specific tests
         workflow_dispatch_test_labels_str = (
@@ -769,22 +795,16 @@ def matrix_generator(
         print(f"[PULL_REQUEST] Generating build matrix with {str(base_args)}")
 
         # Check if GPU families were explicitly provided (e.g., via workflow_call inputs)
-        input_gpu_targets = families.get("amdgpu_families", "")
-        if input_gpu_targets:
-            # If families are explicitly provided, use those instead of defaults
-            print(f"Using explicitly provided GPU families: {input_gpu_targets}")
-            requested_target_names = parse_gpu_family_overrides(
-                input_gpu_targets, lookup_matrix
-            )
-            selected_target_names.extend(
-                filter_known_names(requested_target_names, "target", lookup_matrix)
-            )
-        else:
-            # Add presubmit targets.
-            assert (
-                presubmit_matrix is not None
-            ), "presubmit_matrix should be set for pull_request runs"
-            selected_target_names.extend(list(presubmit_matrix.keys()))
+        # If not, fall back to presubmit defaults
+        assert (
+            presubmit_matrix is not None
+        ), "presubmit_matrix should be set for pull_request runs"
+        _add_gpu_families_from_input(
+            families,
+            lookup_matrix,
+            selected_target_names,
+            fallback_targets=list(presubmit_matrix.keys()),
+        )
 
         # Extend with any additional targets that PR labels opt-in to running.
         # TODO(#1097): This (or the code below) should handle opting in for
@@ -925,54 +945,59 @@ def matrix_generator(
 # --------------------------------------------------------------------------- #
 
 
-def main(base_args, linux_families, windows_families):
+def _extract_event_flags(base_args: dict) -> dict:
+    """Extract and log event type flags.
+
+    Args:
+        base_args: Dictionary containing 'github_event_name'
+
+    Returns:
+        Dictionary with event name and boolean flags for each event type
+    """
     github_event_name = base_args.get("github_event_name")
-    is_push = github_event_name == "push"
-    is_workflow_dispatch = github_event_name == "workflow_dispatch"
-    is_pull_request = github_event_name == "pull_request"
-    is_schedule = github_event_name == "schedule"
-
-    base_ref = base_args.get("base_ref")
+    flags = {
+        "github_event_name": github_event_name,
+        "is_push": github_event_name == "push",
+        "is_workflow_dispatch": github_event_name == "workflow_dispatch",
+        "is_pull_request": github_event_name == "pull_request",
+        "is_schedule": github_event_name == "schedule",
+    }
     print("Found metadata:")
-    print(f"  github_event_name: {github_event_name}")
-    print(f"  is_push: {is_push}")
-    print(f"  is_workflow_dispatch: {is_workflow_dispatch}")
-    print(f"  is_pull_request: {is_pull_request}")
+    print(f"  github_event_name: {flags['github_event_name']}")
+    print(f"  is_push: {flags['is_push']}")
+    print(f"  is_workflow_dispatch: {flags['is_workflow_dispatch']}")
+    print(f"  is_pull_request: {flags['is_pull_request']}")
     print("")
+    return flags
 
-    # Check if we have external project configs (from external project detection)
-    linux_external_project_configs = base_args.get("linux_external_project_configs")
-    windows_external_project_configs = base_args.get("windows_external_project_configs")
-    has_external_project_configs = bool(
-        linux_external_project_configs or windows_external_project_configs
-    )
 
-    # For external repos, we cross-product: projects × GPU families
-    # The matrix will have entries like:
-    # {project_to_test, cmake_options, amdgpu_family, test_runs_on, ...}
-    if has_external_project_configs:
-        linux_count = (
-            len(linux_external_project_configs) if linux_external_project_configs else 0
-        )
-        windows_count = (
-            len(windows_external_project_configs)
-            if windows_external_project_configs
-            else 0
-        )
-        print(
-            f"Using external project configurations: Linux={linux_count}, Windows={windows_count}"
-        )
+def _generate_base_matrices(
+    base_args: dict,
+    linux_families: dict,
+    windows_families: dict,
+    event_flags: dict,
+) -> tuple[list[dict], list, list[dict], list]:
+    """Generate base GPU family matrices for both platforms.
 
-    # Generate GPU family variants first
+    Args:
+        base_args: Base arguments including 'multi_arch'
+        linux_families: Linux GPU family input
+        windows_families: Windows GPU family input
+        event_flags: Dictionary with event type flags
+
+    Returns:
+        Tuple of (linux_variants, linux_tests, windows_variants, windows_tests)
+    """
     multi_arch = base_args.get("multi_arch", False)
+
     print(
         f"Generating build matrix for Linux (multi_arch={multi_arch}): {str(linux_families)}"
     )
-    linux_variants_output, linux_test_output = matrix_generator(
-        is_pull_request,
-        is_workflow_dispatch,
-        is_push,
-        is_schedule,
+    linux_variants, linux_tests = matrix_generator(
+        event_flags["is_pull_request"],
+        event_flags["is_workflow_dispatch"],
+        event_flags["is_push"],
+        event_flags["is_schedule"],
         base_args,
         linux_families,
         platform="linux",
@@ -983,11 +1008,11 @@ def main(base_args, linux_families, windows_families):
     print(
         f"Generating build matrix for Windows (multi_arch={multi_arch}): {str(windows_families)}"
     )
-    windows_variants_output, windows_test_output = matrix_generator(
-        is_pull_request,
-        is_workflow_dispatch,
-        is_push,
-        is_schedule,
+    windows_variants, windows_tests = matrix_generator(
+        event_flags["is_pull_request"],
+        event_flags["is_workflow_dispatch"],
+        event_flags["is_push"],
+        event_flags["is_schedule"],
         base_args,
         windows_families,
         platform="windows",
@@ -995,44 +1020,101 @@ def main(base_args, linux_families, windows_families):
     )
     print("")
 
-    # Log matrix sizes for visibility (helps detect matrix explosion)
     print(
-        f"Generated matrix sizes: Linux={len(linux_variants_output)} variants, Windows={len(windows_variants_output)} variants"
+        f"Generated matrix sizes: Linux={len(linux_variants)} variants, Windows={len(windows_variants)} variants"
+    )
+    return linux_variants, linux_tests, windows_variants, windows_tests
+
+
+def _apply_external_project_cross_product(
+    base_args: dict,
+    linux_variants: list[dict],
+    windows_variants: list[dict],
+) -> tuple[list[dict], list[dict]]:
+    """Cross-product external project configs with GPU families if applicable.
+
+    Args:
+        base_args: Dictionary containing optional external project configs
+        linux_variants: Base Linux GPU family variants
+        windows_variants: Base Windows GPU family variants
+
+    Returns:
+        Tuple of (linux_variants, windows_variants) after cross-product
+    """
+    linux_configs = base_args.get("linux_external_project_configs")
+    windows_configs = base_args.get("windows_external_project_configs")
+
+    if not (linux_configs or windows_configs):
+        return linux_variants, windows_variants
+
+    print("\n=== Cross-producting projects with GPU families ===")
+
+    if linux_configs:
+        linux_variants = _cross_product_projects_with_gpu_variants(
+            linux_configs, linux_variants
+        )
+
+    if windows_configs:
+        windows_variants = _cross_product_projects_with_gpu_variants(
+            windows_configs, windows_variants
+        )
+
+    print(f"Final Linux matrix: {len(linux_variants)} entries")
+    print(f"Final Windows matrix: {len(windows_variants)} entries")
+
+    return linux_variants, windows_variants
+
+
+def main(base_args, linux_families, windows_families):
+    """Main orchestration function for CI configuration.
+
+    Args:
+        base_args: Dictionary with CI metadata (event name, base ref, etc.)
+        linux_families: Linux GPU family input
+        windows_families: Windows GPU family input
+    """
+    # Extract event flags
+    event_flags = _extract_event_flags(base_args)
+
+    # Check for external project configs
+    has_external_configs = bool(
+        base_args.get("linux_external_project_configs")
+        or base_args.get("windows_external_project_configs")
+    )
+    if has_external_configs:
+        linux_count = len(base_args.get("linux_external_project_configs", []))
+        windows_count = len(base_args.get("windows_external_project_configs", []))
+        print(
+            f"Using external project configurations: Linux={linux_count}, Windows={windows_count}"
+        )
+
+    # Generate base matrices
+    linux_variants, linux_tests, windows_variants, windows_tests = (
+        _generate_base_matrices(
+            base_args, linux_families, windows_families, event_flags
+        )
     )
 
-    # For external repos, cross-product project configs with GPU family variants
-    if has_external_project_configs:
-        print("\n=== Cross-producting projects with GPU families ===")
+    # Apply external project cross-product if needed
+    linux_variants, windows_variants = _apply_external_project_cross_product(
+        base_args, linux_variants, windows_variants
+    )
 
-        # Cross-product Linux: projects × GPU families
-        if linux_external_project_configs:
-            linux_variants_output = _cross_product_projects_with_gpu_variants(
-                linux_external_project_configs, linux_variants_output
-            )
-
-        # Cross-product Windows: projects × GPU families
-        if windows_external_project_configs:
-            windows_variants_output = _cross_product_projects_with_gpu_variants(
-                windows_external_project_configs, windows_variants_output
-            )
-
-        print(f"Final Linux matrix: {len(linux_variants_output)} entries")
-        print(f"Final Windows matrix: {len(windows_variants_output)} entries")
-
+    # Determine build configuration and emit outputs
     enable_build_jobs, test_type = _determine_enable_build_jobs_and_test_type(
-        github_event_name=github_event_name,
-        is_schedule=is_schedule,
-        base_ref=base_ref,
-        linux_test_output=linux_test_output,
-        windows_test_output=windows_test_output,
-        has_external_project_configs=has_external_project_configs,
+        github_event_name=event_flags["github_event_name"],
+        is_schedule=event_flags["is_schedule"],
+        base_ref=base_args.get("base_ref"),
+        linux_test_output=linux_tests,
+        windows_test_output=windows_tests,
+        has_external_project_configs=has_external_configs,
     )
 
     _emit_summary_and_outputs(
-        linux_variants_output=linux_variants_output,
-        linux_test_output=linux_test_output,
-        windows_variants_output=windows_variants_output,
-        windows_test_output=windows_test_output,
+        linux_variants_output=linux_variants,
+        linux_test_output=linux_tests,
+        windows_variants_output=windows_variants,
+        windows_test_output=windows_tests,
         enable_build_jobs=enable_build_jobs,
         test_type=test_type,
         base_args=base_args,

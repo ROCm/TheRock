@@ -179,10 +179,7 @@ ROCM_SYSTEMS_DEPENDENCY_GRAPH = {}
 def collect_projects_to_run(
     subtrees: list,
     platform: str,
-    subtree_to_project_map: dict,
-    project_map: dict,
-    additional_options: dict,
-    dependency_graph: dict,
+    repo_name: str,
 ) -> list:
     """Collects projects to run based on changed subtrees.
 
@@ -192,15 +189,19 @@ def collect_projects_to_run(
     Args:
         subtrees: List of changed subtree paths (e.g., ["projects/rocprim"])
         platform: Target platform ("linux" or "windows")
-        subtree_to_project_map: Mapping of subtree paths to project names
-        project_map: Mapping of project names to build configurations
-        additional_options: Optional components that get merged into other projects
-        dependency_graph: Project dependencies that should be combined
+        repo_name: Repository name (e.g., "rocm-libraries", "rocm-systems")
 
     Returns:
         List of project configurations with cmake_options and project_to_test
     """
     import copy
+
+    # Get repository configuration
+    repo_config = get_repo_config(repo_name)
+    subtree_to_project_map = repo_config["subtree_to_project_map"]
+    project_map = repo_config["project_map"]
+    additional_options = repo_config["additional_options"]
+    dependency_graph = repo_config["dependency_graph"]
 
     # Create a deep copy to avoid modifying the original
     project_map = copy.deepcopy(project_map)
@@ -453,19 +454,13 @@ def detect_projects_from_changes(
     linux_configs = collect_projects_to_run(
         subtrees=list(subtrees_to_build),
         platform="linux",
-        subtree_to_project_map=repo_config["subtree_to_project_map"],
-        project_map=repo_config["project_map"],
-        additional_options=repo_config["additional_options"],
-        dependency_graph=repo_config["dependency_graph"],
+        repo_name=repo_name,
     )
 
     windows_configs = collect_projects_to_run(
         subtrees=list(subtrees_to_build),
         platform="windows",
-        subtree_to_project_map=repo_config["subtree_to_project_map"],
-        project_map=repo_config["project_map"],
-        additional_options=repo_config["additional_options"],
-        dependency_graph=repo_config["dependency_graph"],
+        repo_name=repo_name,
     )
 
     # Add artifact_group to each config
