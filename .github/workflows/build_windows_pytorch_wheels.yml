@@ -214,8 +214,6 @@ jobs:
             build ^
             --install-rocm ^
             --index-url "${{ inputs.cloudfront_url }}/${{ inputs.amdgpu_family }}/" ^
-            --pytorch-git-ref "${{ inputs.pytorch_git_ref }}" ^
-            --python-version "${{ inputs.python_version }}" ^
             --pytorch-dir ${{ env.CHECKOUT_ROOT }}/torch ^
             --pytorch-audio-dir ${{ env.CHECKOUT_ROOT }}/audio ^
             --pytorch-vision-dir ${{ env.CHECKOUT_ROOT }}/vision ^
