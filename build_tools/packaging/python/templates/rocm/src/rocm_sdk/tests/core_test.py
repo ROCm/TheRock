@@ -5,7 +5,6 @@ import locale
 from pathlib import Path
 import platform
 import subprocess
-import sys
 import unittest
 
 from .. import _dist_info as di
@@ -117,9 +116,8 @@ class ROCmCoreTest(unittest.TestCase):
                 # are designed to load into the same process (i.e. LLVM runtime libs,
                 # etc).
                 command = "import ctypes; import sys; ctypes.CDLL(sys.argv[1])"
-                subprocess.check_call(
-                    [sys.executable, "-P", "-c", command, str(so_path)]
-                )
+                cmd = utils.get_python_cmd(["-c", command, str(so_path)])
+                subprocess.check_call(cmd)
 
     def testConsoleScripts(self):
         for script_name, cl, expected_text, required in CONSOLE_SCRIPT_TESTS:
