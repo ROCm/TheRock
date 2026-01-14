@@ -40,8 +40,6 @@ else:
 # Run tests
 cmd = [
     "ctest",
-    "--test-dir",
-    f"{OUTPUT_ARTIFACTS_DIR}/libexec/rocprofiler-compute",
     "--output-on-failure",
     "--parallel",
     "8",
