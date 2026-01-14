@@ -27,13 +27,13 @@ if not os.path.isdir(CATCH_TESTS_PATH):
     sys.exit(1)
 env = os.environ.copy()
 
-# TODO(#2895): Re-enable these tests once parallelization issues are resolved
+# TODO(#2895): Re-enable these flaky tests once fixed
 TESTS_TO_IGNORE = [
     # gfx94X-dcgpu flaky tests
     "Unit_hipClock_Positive_Basic",
     "Unit_hipClock64_Positive_Basic",
     # gfx950-dcgpu flaky tests
-    "Unit_hipManagedKeyword_SingleGpu"
+    "Unit_hipManagedKeyword_SingleGpu",
 ]
 
 

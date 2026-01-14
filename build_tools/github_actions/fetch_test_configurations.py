@@ -36,7 +36,7 @@ test_matrix = {
         "fetch_artifact_args": "--tests",
         "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_hiptests.py')}",
-        # TODO(#2895): Re-enable windows tests once parallelization issues are resolved
+        # TODO(#2895): Re-enable windows tests once test kernel failures are fixed
         "platform": ["linux"],
         "total_shards": 4,
     },
@@ -334,14 +334,16 @@ def run():
                 i + 1 for i in range(job_config_data["total_shards"])
             ]
 
-            # TODO(#2895): Remove the following override once smoke test filter is provided
+            # TODO(#2912): Remove the following override once sharded test architectures are fixed
             test_jobs_to_full_shard = {
                 "linux": {
                     "gfx94X-dcgpu": ["hip-tests"],
                 }
             }
 
-            tests_to_always_shard = test_jobs_to_full_shard.get(platform, {}).get(amdgpu_families, [])
+            tests_to_always_shard = test_jobs_to_full_shard.get(platform, {}).get(
+                amdgpu_families, []
+            )
 
             # If the test type is smoke tests, we only need one shard for the test job
             # Note: Benchmarks always use test_type="full" but have total_shards=1 anyway
