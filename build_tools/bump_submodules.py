@@ -196,9 +196,9 @@ def main(argv):
                   ml-libs,
                   rocm-libraries,
                   rocm-systems,
-                  profiler
-                  iree-libs
-                  debug-tools
+                  profiler,
+                  iree-libs,
+                  debug-tools.
                   rocm-media
              """,
     )
