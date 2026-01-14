@@ -34,9 +34,10 @@ test_matrix = {
     "hip-tests": {
         "job_name": "hip-tests",
         "fetch_artifact_args": "--tests",
-        "timeout_minutes": 120,
+        "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_hiptests.py')}",
-        "platform": ["linux", "windows"],
+        # TODO(#2895): Re-enable windows tests once parallelization issues are resolved
+        "platform": ["linux"],
         "total_shards": 4,
     },
     # BLAS tests
