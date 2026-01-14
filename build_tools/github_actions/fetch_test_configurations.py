@@ -335,11 +335,17 @@ def run():
             ]
 
             # TODO(#2895): Remove the following override once smoke test filter is provided
-            test_jobs_to_full_shard = ["hip-tests"]
+            test_jobs_to_full_shard = {
+                "linux": {
+                    "gfx94X-dcgpu": ["hip-tests"],
+                }
+            }
+
+            tests_to_always_shard = test_jobs_to_full_shard.get(platform, {}).get(amdgpu_families, [])
 
             # If the test type is smoke tests, we only need one shard for the test job
             # Note: Benchmarks always use test_type="full" but have total_shards=1 anyway
-            if test_type == "smoke" and job_name not in test_jobs_to_full_shard:
+            if test_type == "smoke" and job_name not in tests_to_always_shard:
                 job_config_data["total_shards"] = 1
                 job_config_data["shard_arr"] = [1]
 
