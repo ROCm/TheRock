@@ -146,8 +146,6 @@ def test_manifest_generation_end_to_end(tmp_path: Path, gha_env):
         "7.10.0a20251120",
         "--pytorch-rocm-arch",
         "gfx94X",
-        "--version-suffix",
-        "+rocm7.10.0a20251120",
         "--python-version",
         "3.12",
         "--pytorch-git-ref",

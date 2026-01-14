@@ -202,14 +202,12 @@ jobs:
 
       - name: Generate PyTorch manifest
         run: |
-          VERSION_SUFFIX="${ROCM_VERSION_SUFFIX:-}"
           python external-builds/pytorch/generate_pytorch_manifest.py \
             --output-dir "${{ env.PACKAGE_DIST_DIR }}" \
             --manifest-dir "${{ env.PACKAGE_DIST_DIR }}/manifests" \
             --artifact-group "pytorch-wheels" \
             --rocm-sdk-version "${{ inputs.rocm_version }}" \
             --amdgpu-family "${{ inputs.amdgpu_family }}" \
-            --version-suffix "${VERSION_SUFFIX}" \
             --pytorch-git-ref "${{ inputs.pytorch_git_ref }}" \
             --python-version "${{ inputs.python_version }}" \
             --pytorch-rocm-arch "${PYTORCH_ROCM_ARCH}" \
