@@ -16,6 +16,11 @@ These maps should be kept in sync with the actual project structure in those rep
 Unit tests verify that the paths referenced here actually exist.
 """
 
+import fnmatch
+import subprocess
+import sys
+from typing import Iterable, Optional, Set
+
 # =============================================================================
 # ROCm Libraries Project Maps
 # =============================================================================
@@ -289,6 +294,13 @@ def get_repo_config(repo_name: str) -> dict:
     Returns:
         Dictionary containing subtree_to_project_map, project_map,
         additional_options, and dependency_graph
+        Example:
+            {
+                "subtree_to_project_map": {"projects/rocprim": "prim", ...},
+                "project_map": {"prim": {"cmake_options": [...], "project_to_test": [...]}, ...},
+                "additional_options": {"solver": {...}, ...},
+                "dependency_graph": {"miopen": ["blas", "rand"], ...},
+            }
 
     Raises:
         ValueError: If repo_name is not recognized
@@ -309,3 +321,157 @@ def get_repo_config(repo_name: str) -> dict:
         }
     else:
         raise ValueError(f"Unknown repository: {repo_name}")
+
+
+# =============================================================================
+# Change detection (shared logic)
+# =============================================================================
+
+
+def get_modified_paths(base_ref: str) -> Optional[list[str]]:
+    """Returns modified paths relative to `base_ref` (via `git diff --name-only`)."""
+    try:
+        return subprocess.run(
+            ["git", "diff", "--name-only", base_ref],
+            stdout=subprocess.PIPE,
+            check=True,
+            text=True,
+            timeout=60,
+        ).stdout.splitlines()
+    except TimeoutError:
+        print(
+            "Computing modified files timed out. Not using PR diff to determine projects.",
+            file=sys.stderr,
+        )
+        return None
+
+
+# Paths matching any of these patterns are considered to have no influence over
+# external repo project selection (docs, markdown, etc).
+SKIPPABLE_PATH_PATTERNS = [
+    "docs/*",
+    "*.gitignore",
+    "*.md",
+    "*.pre-commit-config.*",
+    "*CODEOWNERS",
+    "*LICENSE",
+]
+
+
+def is_path_skippable(path: str) -> bool:
+    return any(fnmatch.fnmatch(path, pattern) for pattern in SKIPPABLE_PATH_PATTERNS)
+
+
+def check_for_non_skippable_path(paths: Optional[Iterable[str]]) -> bool:
+    if paths is None:
+        return False
+    return any(not is_path_skippable(p) for p in paths)
+
+
+def get_changed_subtrees(
+    modified_paths: list[str], subtree_to_project_map: dict
+) -> Set[str]:
+    """Returns subtree roots that were touched by modified paths."""
+    changed_subtrees: Set[str] = set()
+    for path in modified_paths:
+        for subtree in subtree_to_project_map.keys():
+            if path.startswith(subtree + "/") or path == subtree:
+                changed_subtrees.add(subtree)
+                break
+    return changed_subtrees
+
+
+def detect_projects_from_changes(
+    *,
+    repo_name: str,
+    base_ref: str,
+    github_event_name: str,
+    projects_input: str = "",
+) -> dict:
+    """Detects per-platform project configs for external repos based on changes.
+
+    Returns:
+        Dict with keys:
+          - linux_projects: list[dict]
+          - windows_projects: list[dict]
+    """
+    repo_config = get_repo_config(repo_name)
+    subtree_to_project_map = repo_config["subtree_to_project_map"]
+
+    # For scheduled builds, always build all projects
+    if github_event_name == "schedule":
+        print("Schedule event detected - building all projects")
+        subtrees_to_build = set(subtree_to_project_map.keys())
+    # For workflow_dispatch or when PROJECTS is explicitly set (e.g., via workflow_call)
+    elif projects_input and projects_input.strip():
+        projects_input = projects_input.strip()
+        print(f"Projects override specified: '{projects_input}'")
+
+        if projects_input.lower() == "all":
+            print("Building all projects (override: 'all')")
+            subtrees_to_build = set(subtree_to_project_map.keys())
+        else:
+            requested_subtrees = [
+                p.strip() for p in projects_input.split(",") if p.strip()
+            ]
+            subtrees_to_build = set()
+            for subtree in requested_subtrees:
+                subtree = subtree.replace("\\", "/")
+                if subtree in subtree_to_project_map:
+                    subtrees_to_build.add(subtree)
+                else:
+                    print(f"WARNING: Unknown project '{subtree}' - skipping")
+
+            if not subtrees_to_build:
+                print("No valid projects found in override - skipping all builds")
+                return {"linux_projects": [], "windows_projects": []}
+    else:
+        print(f"Detecting changed files for event: {github_event_name}")
+        modified_paths = get_modified_paths(base_ref)
+
+        if modified_paths is None:
+            print("ERROR: Could not determine modified paths")
+            return {"linux_projects": [], "windows_projects": []}
+        if not modified_paths:
+            print("No files modified - skipping all builds")
+            return {"linux_projects": [], "windows_projects": []}
+
+        print(f"Found {len(modified_paths)} modified files")
+        print(f"Modified paths (first 20): {modified_paths[:20]}")
+
+        if not check_for_non_skippable_path(modified_paths):
+            print("Only skippable paths modified - skipping all builds")
+            return {"linux_projects": [], "windows_projects": []}
+
+        subtrees_to_build = get_changed_subtrees(modified_paths, subtree_to_project_map)
+        if not subtrees_to_build:
+            print("No project-related files changed - skipping builds")
+            return {"linux_projects": [], "windows_projects": []}
+
+        print(f"Changed subtrees: {sorted(subtrees_to_build)}")
+
+    linux_configs = collect_projects_to_run(
+        subtrees=list(subtrees_to_build),
+        platform="linux",
+        subtree_to_project_map=repo_config["subtree_to_project_map"],
+        project_map=repo_config["project_map"],
+        additional_options=repo_config["additional_options"],
+        dependency_graph=repo_config["dependency_graph"],
+    )
+
+    windows_configs = collect_projects_to_run(
+        subtrees=list(subtrees_to_build),
+        platform="windows",
+        subtree_to_project_map=repo_config["subtree_to_project_map"],
+        project_map=repo_config["project_map"],
+        additional_options=repo_config["additional_options"],
+        dependency_graph=repo_config["dependency_graph"],
+    )
+
+    # Add artifact_group to each config
+    for configs in (linux_configs, windows_configs):
+        for cfg in configs:
+            first_project = str(cfg.get("project_to_test", "")).split(",")[0].strip()
+            cfg["artifact_group"] = first_project or "unknown"
+
+    return {"linux_projects": linux_configs, "windows_projects": windows_configs}

@@ -94,7 +94,7 @@ jobs:
           AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
           TEST_TYPE: ${{ inputs.test_type }}
           TEST_LABELS: ${{ inputs.test_labels }}
-          project_to_test: ${{ inputs.project_to_test }}
+          PROJECT_TO_TEST: ${{ inputs.project_to_test }}
         run: python ./prejob/build_tools/github_actions/fetch_test_configurations.py
 
   test_sanity_check:

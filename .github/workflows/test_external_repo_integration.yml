@@ -31,8 +31,8 @@ jobs:
       repository_override: "ROCm/rocm-libraries"
       # Test with rocprim (fast build) to simulate a typical PR scenario
       projects: 'projects/rocprim'
-      linux_amdgpu_families: "gfx94X"
-      windows_amdgpu_families: "gfx110X"
+      linux_amdgpu_families: "gfx94X-dcgpu"
+      windows_amdgpu_families: "gfx110X-all"
     permissions:
       contents: read
       id-token: write
@@ -48,8 +48,8 @@ jobs:
       repository_override: "ROCm/rocm-systems"
       # Test with clr (core component) to simulate a typical PR scenario
       projects: 'projects/clr'
-      linux_amdgpu_families: "gfx94X"
-      windows_amdgpu_families: "gfx110X"
+      linux_amdgpu_families: "gfx94X-dcgpu"
+      windows_amdgpu_families: "gfx110X-all"
     permissions:
       contents: read
       id-token: write

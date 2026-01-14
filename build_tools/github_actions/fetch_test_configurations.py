@@ -272,7 +272,7 @@ test_matrix = {
 
 def run():
     platform = os.getenv("RUNNER_OS").lower()
-    project_to_test = os.getenv("project_to_test", "*")
+    project_to_test = os.getenv("PROJECT_TO_TEST", "*")
     amdgpu_families = os.getenv("AMDGPU_FAMILIES")
     test_type = os.getenv("TEST_TYPE", "full")
     test_labels = json.loads(os.getenv("TEST_LABELS", "[]"))

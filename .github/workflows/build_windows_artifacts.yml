@@ -124,7 +124,7 @@ jobs:
       - name: Detect external source configuration
         if: ${{ inputs.external_source_checkout }}
         id: detect
-        run: python3 $THEROCK_DIR/build_tools/github_actions/detect_external_repo_config.py "${{ inputs.repository_override || github.repository }}" --platform windows
+        run: python3 $THEROCK_DIR/build_tools/github_actions/detect_external_repo_config.py --repository "${{ inputs.repository_override || github.repository }}" --platform windows
 
       - name: Install requirements
         # The first two lines removes the default commmunity feed and uses the internal proxy feed
@@ -259,6 +259,9 @@ jobs:
 
       - name: Post Build Upload
         if: always()
+        # For external repos we set the working directory to TheRock so the packaging/upload
+        # runs from the same repo root as internal CI. This keeps produced tarball layouts and
+        # paths consistent across internal vs external-source builds.
         working-directory: ${{ inputs.external_source_checkout && env.THEROCK_DIR || '.' }}
         run: |
           python3 ./build_tools/github_actions/post_build_upload.py \
