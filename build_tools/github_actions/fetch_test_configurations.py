@@ -137,7 +137,7 @@ test_matrix = {
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_hipsparse.py')}",
-        "platform": ["linux"],
+        "platform": ["linux", "windows"],
         "total_shards": 2,
     },
     "rocsparse": {
@@ -147,9 +147,6 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_rocsparse.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 1,
-        "exclude_family": {
-            "windows": ["gfx1151"]  # issue: https://github.com/ROCm/TheRock/issues/1640
-        },
     },
     "hipsparselt": {
         "job_name": "hipsparselt",

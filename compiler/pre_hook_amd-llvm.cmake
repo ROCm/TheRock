@@ -130,7 +130,6 @@ block()
     LLVM_AR
     LLVM_CONFIG
     LLVM_DWARFDUMP
-    LLVM_JITLINK
     LLVM_LINK
     LLVM_MC
     LLVM_NM
