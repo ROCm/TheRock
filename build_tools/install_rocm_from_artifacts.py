@@ -211,7 +211,7 @@ def retrieve_artifacts_by_run_id(args):
 
         extra_artifacts = []
         if args.aqlprofile:
-            extra_artifacts.append("aqlprofile")
+            extra_artifacts.append("aqlprofile-tests")
         if args.blas:
             extra_artifacts.append("blas")
         if args.debug_tools:
