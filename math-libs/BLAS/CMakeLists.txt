@@ -102,6 +102,7 @@ if(NOT WIN32)
     amdsmi
   )
   list(APPEND hipBLASLt_optional_runtime_deps
+    amdsmi
     rocm_smi_lib
   )
 endif()
