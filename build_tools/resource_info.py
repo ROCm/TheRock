@@ -189,6 +189,7 @@ FAQ_HTML = """
 </ul>
 """
 
+
 def _repo_root() -> Path:
     """Return repo root assuming this script lives in <repo_root>/build_tools/."""
     return Path(__file__).resolve().parents[1]
@@ -229,15 +230,20 @@ def get_topology_components_cached(repo_root: Path) -> List[str]:
             topo_path = repo_root / "BUILD_TOPOLOGY.toml"
             txt = topo_path.read_text(encoding="utf-8", errors="ignore")
             names = TOPOLOGY_ARTIFACT_RE.findall(txt)
-            TOPOLOGY_COMPONENTS_CACHE = sorted({n.strip() for n in names if n and n.strip()})
+            TOPOLOGY_COMPONENTS_CACHE = sorted(
+                {n.strip() for n in names if n and n.strip()}
+            )
         except Exception:
             TOPOLOGY_COMPONENTS_CACHE = []
     return TOPOLOGY_COMPONENTS_CACHE
 
 
-def therock_components(repo_root: Path, _pwd_unused: str, cmd_str: str) -> str:
+def therock_components_compile_classifier(repo_root: Path, _pwd_unused: str, cmd_str: str) -> str:
     """
-    Classify a compile/link command into a TheRock component.
+    Classify a compile/link command into a TheRock component. 
+    This is needed to figure out which TheRock component a compiler
+    command belongs to, even when CMake/Ninja hides that 
+    information behind indirection.
     """
     comp = "unknown"
     lower_cmd = cmd_str.lower()
@@ -287,7 +293,7 @@ def run_and_log_command(repo_root: Path, log_dir: str) -> int:
     cmd_args = sys.argv[1:]
     cmd_str = " ".join(shlex.quote(arg) for arg in cmd_args)
 
-    comp = therock_components(repo_root, pwd, cmd_str)
+    comp = therock_components_compile_classifer(repo_root, pwd, cmd_str)
 
     ts = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     rand = random.randint(0, 999999)
@@ -363,7 +369,11 @@ def run_and_log_command(repo_root: Path, log_dir: str) -> int:
     return returncode
 
 
-def parse_log_file(path: Path, stats: Dict[Tuple[str, str], float], events: List[Tuple[float, float, str]]) -> None:
+def parse_log_file(
+    path: Path,
+    stats: Dict[Tuple[str, str], float],
+    events: List[Tuple[float, float, str]],
+) -> None:
     """
     Parse a single per-command .log file and aggregate into stats, plus capture (start,end,component) events.
     """
@@ -442,7 +452,9 @@ def parse_log_file(path: Path, stats: Dict[Tuple[str, str], float], events: List
     stats[(comp, "_seen")] = 1.0
 
 
-def compute_peak_concurrency_by_component(events: List[Tuple[float, float, str]]) -> Dict[str, int]:
+def compute_peak_concurrency_by_component(
+    events: List[Tuple[float, float, str]],
+) -> Dict[str, int]:
     """
     Compute maximum overlap (peak concurrency) per component using sweep-line over (start,end) events.
     """
@@ -492,11 +504,10 @@ def generate_summaries(log_dir: str) -> None:
     """
     stats: Dict[Tuple[str, str], float] = {}
     events: List[Tuple[float, float, str]] = []
-    for name in os.listdir(log_dir):
-        if not name.endswith(".log"):
-            continue
-        parse_log_file(Path(log_dir) / name, stats, events)
 
+    for log_path in Path(log_dir).glob("*.log"):
+        parse_log_file(log_path, stats, events)
+    
     repo_root = _repo_root()
     topo = get_topology_components_cached(repo_root)
     seen = {key[0] for key in stats.keys() if key[1] == "_seen"}
@@ -524,7 +535,9 @@ def generate_summaries(log_dir: str) -> None:
         else 0.0
     )
 
-    avg_concurrency_build = (total_wall_s_all / build_span_s) if build_span_s > 0.0 else 1.0
+    avg_concurrency_build = (
+        (total_wall_s_all / build_span_s) if build_span_s > 0.0 else 1.0
+    )
     if avg_concurrency_build <= 0.0:
         avg_concurrency_build = 1.0
 
@@ -556,7 +569,9 @@ def generate_summaries(log_dir: str) -> None:
         peak_concurrency = int(peak_by_comp.get(comp, 0))
 
         wall_est_elapsed_min = (
-            (wall_sum_min / avg_concurrency_build) if avg_concurrency_build > 0.0 else wall_sum_min
+            (wall_sum_min / avg_concurrency_build)
+            if avg_concurrency_build > 0.0
+            else wall_sum_min
         )
 
         rss_kb = stats.get((comp, "rss_kb_max"), 0.0)
@@ -736,4 +751,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-
