@@ -90,17 +90,6 @@ amdgpu_family_info_matrix_presubmit = {
             "build_variants": ["release"],
         },
     },
-}
-
-# The 'postsubmit' matrix runs on 'push' triggers (for every commit to the default branch).
-amdgpu_family_info_matrix_postsubmit = {
-    "gfx950": {
-        "linux": {
-            "test-runs-on": "linux-mi355-1gpu-ossci-rocm",
-            "family": "gfx950-dcgpu",
-            "build_variants": ["release", "asan"],
-        }
-    },
     "gfx120x": {
         "linux": {
             "test-runs-on": "linux-gfx120X-gpu-rocm",
@@ -115,6 +104,17 @@ amdgpu_family_info_matrix_postsubmit = {
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
         },
+    },
+}
+
+# The 'postsubmit' matrix runs on 'push' triggers (for every commit to the default branch).
+amdgpu_family_info_matrix_postsubmit = {
+    "gfx950": {
+        "linux": {
+            "test-runs-on": "linux-mi355-1gpu-ossci-rocm",
+            "family": "gfx950-dcgpu",
+            "build_variants": ["release", "asan"],
+        }
     },
 }
 

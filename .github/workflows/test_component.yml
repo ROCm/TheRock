@@ -22,8 +22,10 @@ permissions:
 
 jobs:
   test_component:
+    # For external repos (rocm-libraries, rocm-systems), include platform and GPU family in job name.
+    # TheRock repo keeps the simple 'Test' prefix. Detection via github.repository check.
     name: >-
-      Test ${{ fromJSON(inputs.component).job_name }}
+      ${{ !contains(github.repository, 'TheRock') && format('Test {0}::{1}::', inputs.platform, inputs.amdgpu_families) || 'Test ' }}${{ fromJSON(inputs.component).job_name }}
       (shard ${{ matrix.shard }} of ${{ fromJSON(inputs.component).total_shards }})
       ${{ fromJSON(inputs.component).expect_failure == true && '(xfail)' || '' }}
     runs-on: ${{ inputs.test_runs_on }}
