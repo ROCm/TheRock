@@ -7,5 +7,5 @@ exclude = [
 [components.test."ml-libs/miopen_provider/stage"]
 include = [
   "bin/miopen_*_test*",
-  "bin/miopen_legacy_plugin/CTestTestfile.cmake",
+  "bin/miopen_plugin/CTestTestfile.cmake",
 ]
