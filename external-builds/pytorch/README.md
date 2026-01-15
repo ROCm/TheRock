@@ -41,11 +41,11 @@ stable, nightly, and dev release channels.
 
 The following projects are not currently packaged and released by TheRock, functionality may vary.
 
-| Project       | Linux support        | Windows support  | Notes                                                                             |
-| ------------- | -------------------- | ---------------- | --------------------------------------------------------------------------------- |
-| torch-scatter | ✅ Community support | ❌ Not supported | [ROCm enablement in upstream](https://github.com/rusty1s/pytorch_scatter)         |
-| torch-sparse  | ✅ Community support | ❌ Not supported | [ROCm enablement in upstream](https://github.com/rusty1s/pytorch_sparse)          |
-| torchcodec    | ❌ Not supported     | ❌ Not supported | See Issue [#1490](https://github.com/ROCm/TheRock/issues/1490)                    |
+| Project       | Linux support        | Windows support  | Notes                                                                     |
+| ------------- | -------------------- | ---------------- | ------------------------------------------------------------------------- |
+| torch-scatter | ✅ Community support | ❌ Not supported | [ROCm enablement in upstream](https://github.com/rusty1s/pytorch_scatter) |
+| torch-sparse  | ✅ Community support | ❌ Not supported | [ROCm enablement in upstream](https://github.com/rusty1s/pytorch_sparse)  |
+| torchcodec    | ❌ Not supported     | ❌ Not supported | See Issue [#1490](https://github.com/ROCm/TheRock/issues/1490)            |
 
 ### Supported PyTorch versions
 
