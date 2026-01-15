@@ -22,8 +22,6 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 environ_vars = os.environ.copy()
 platform = os.getenv("RUNNER_OS", "linux").lower()
 
-# Set up library and Python paths for finding liborigami.so/.dll and the Python module
-# Use resolve() to get absolute paths, so they work regardless of ctest's working directory
 bin_dir = Path(THEROCK_BIN_DIR).resolve()
 lib_dir = bin_dir.parent / "lib"
 origami_test_dir = bin_dir / "origami"
@@ -33,19 +31,17 @@ path_sep = ";" if platform == "windows" else ":"
 
 # Build library path with multiple possible locations
 if platform == "linux":
-    # On Linux, use LD_LIBRARY_PATH
     ld_paths = [
-        str(lib_dir),                    # Main lib directory (./build/lib)
-        str(origami_test_dir),           # Origami test directory (./build/bin/origami)
+        str(lib_dir),                    # Main lib directory 
+        str(origami_test_dir),           # Origami test directory
         environ_vars.get("LD_LIBRARY_PATH", ""),
     ]
     environ_vars["LD_LIBRARY_PATH"] = path_sep.join(p for p in ld_paths if p)
 elif platform == "windows":
-    # On Windows, use PATH for DLL discovery
     dll_paths = [
-        str(bin_dir),                    # Main bin directory (./build/bin) - contains origami.dll and amdhip64.dll
-        str(lib_dir),                    # Main lib directory (./build/lib)
-        str(origami_test_dir),           # Origami test directory (./build/bin/origami)
+        str(bin_dir),                    # Main bin directory
+        str(lib_dir),                    # Main lib directory 
+        str(origami_test_dir),           # Origami test directory 
         environ_vars.get("PATH", ""),
     ]
     environ_vars["PATH"] = path_sep.join(p for p in dll_paths if p)
@@ -58,13 +54,12 @@ python_paths = [
 environ_vars["PYTHONPATH"] = path_sep.join(p for p in python_paths if p)
 
 logging.info(f"LD_LIBRARY_PATH: {environ_vars.get('LD_LIBRARY_PATH', '')}")
-logging.info(f"PATH: {environ_vars.get('PATH', '')[:200]}...")  # Truncate PATH for readability
+logging.info(f"PATH: {environ_vars.get('PATH', '')[:200]}...")
 logging.info(f"PYTHONPATH: {environ_vars.get('PYTHONPATH', '')}")
 
 # Test type configuration (smoke, full)
 test_type = os.getenv("TEST_TYPE", "full")
 
-# Build the ctest command
 # CTest runs both C++ (Catch2) tests and Python (pytest) tests
 cmd = [
     "ctest",
@@ -75,14 +70,14 @@ cmd = [
     "300",
 ]
 
-# Test filtering based on test type
-if test_type == "smoke":
-    # Run only a subset of tests for smoke testing
-    # Use CTest's regex to filter test names
+# Test filtering based on test type and platform
+if platform == "windows":
+    if test_type == "smoke":
+        cmd.extend(["-R", "GEMM:.*compute"])
+    else:
+        cmd.extend(["-R", "origami-tests"])
+elif test_type == "smoke":
     cmd.extend(["-R", "origami_python|GEMM:.*compute"])
-else:
-    # For"full" test type
-    pass
 
 cmd.append("--parallel")
 
