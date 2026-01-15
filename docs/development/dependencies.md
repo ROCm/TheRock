@@ -53,6 +53,11 @@ Implementation notes for each library is below:
 - Alternatives: None (some OS vendors will provide alternatives but the source
   distribution of bzip2 has no opinion)
 
+## Expat
+
+- Canonical method: `find_package(expat)`
+- Import library: `expat::expat`
+
 ## GMP
 
 - Canonical method: `find_package(gmp)`
@@ -103,6 +108,16 @@ Supported sub-libraries: `libdrm`, `libdrm_amdgpu`
 - Canonical method: `find_package(LibLZMA)`
 - Import library: `LibLZMA::LibLZMA`
 - Alternatives: `pkg_check_modules(LZMA liblzma)`
+
+## MPFR
+
+- Canonical method: `find_package(mpfr)`
+- Import library: `mpfr::mpfr`
+
+## NCurses
+
+- Canonical method: `find_package(ncurses)`
+- Import library: `ncurses::ncurses`
 
 ### numactl
 

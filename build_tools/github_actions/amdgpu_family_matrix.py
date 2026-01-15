@@ -49,7 +49,8 @@ amdgpu_family_info_matrix_presubmit = {
     "gfx94x": {
         "linux": {
             "test-runs-on": "linux-mi325-1gpu-ossci-rocm-frac",
-            # TODO: Add new benchmark-runs-on runner for benchmarks
+            "test-runs-on-multi-gpu": "linux-mi325-4gpu-ossci-rocm",
+            # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
             "benchmark-runs-on": "linux-mi325-1gpu-ossci-rocm-frac",
             "family": "gfx94X-dcgpu",
             "build_variants": ["release", "asan"],
@@ -83,7 +84,24 @@ amdgpu_family_info_matrix_presubmit = {
         },
         "windows": {
             "test-runs-on": "windows-gfx1151-gpu-rocm",
+            # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
+            "benchmark-runs-on": "windows-gfx1151-gpu-rocm",
             "family": "gfx1151",
+            "build_variants": ["release"],
+        },
+    },
+    "gfx120x": {
+        "linux": {
+            "test-runs-on": "linux-gfx120X-gpu-rocm",
+            "family": "gfx120X-all",
+            "bypass_tests_for_releases": True,
+            "build_variants": ["release"],
+            "sanity_check_only_for_family": True,
+        },
+        "windows": {
+            "test-runs-on": "",
+            "family": "gfx120X-all",
+            "bypass_tests_for_releases": True,
             "build_variants": ["release"],
         },
     },
@@ -97,23 +115,6 @@ amdgpu_family_info_matrix_postsubmit = {
             "family": "gfx950-dcgpu",
             "build_variants": ["release", "asan"],
         }
-    },
-    "gfx120x": {
-        "linux": {
-            # TODO(#2683): Re-enable machine once it is stable
-            # Label is "linux-gfx120X-gpu-rocm"
-            "test-runs-on": "",
-            "family": "gfx120X-all",
-            "bypass_tests_for_releases": True,
-            "build_variants": ["release"],
-            "sanity_check_only_for_family": True,
-        },
-        "windows": {
-            "test-runs-on": "",
-            "family": "gfx120X-all",
-            "bypass_tests_for_releases": True,
-            "build_variants": ["release"],
-        },
     },
 }
 
