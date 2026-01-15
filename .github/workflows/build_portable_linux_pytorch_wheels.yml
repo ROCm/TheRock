@@ -232,15 +232,14 @@ jobs:
       - name: Upload PyTorch manifest to S3 artifacts
         if: ${{ github.repository_owner == 'ROCm' }}
         run: |
-          PY="${{ inputs.python_version }}"; PY="${PY#py}"
-          TRACK="${{ inputs.pytorch_git_ref }}"; TRACK="${TRACK//\//-}"
-          MANIFEST_NAME="therock-manifest_torch_py${PY}_${TRACK}.json"
-          echo "Manifest expected at: ${{ env.PACKAGE_DIST_DIR }}/manifests/${MANIFEST_NAME}"
-          ls -la "${{ env.PACKAGE_DIST_DIR }}/manifests" || true
-          test -f "${{ env.PACKAGE_DIST_DIR }}/manifests/${MANIFEST_NAME}"
-          aws s3 cp \
-            "${{ env.PACKAGE_DIST_DIR }}/manifests/${MANIFEST_NAME}" \
-            "s3://${{ env.S3_BUCKET_ARTIFACTS }}/${{ github.run_id }}-linux/manifests/${{ inputs.amdgpu_family }}/${MANIFEST_NAME}"
+          python build_tools/github_actions/upload_pytorch_manifest.py \
+            --dist-dir "${{ env.PACKAGE_DIST_DIR }}" \
+            --bucket "${{ env.S3_BUCKET_ARTIFACTS }}" \
+            --run-id "${{ github.run_id }}" \
+            --platform linux \
+            --amdgpu-family "${{ inputs.amdgpu_family }}" \
+            --python-version "${{ inputs.python_version }}" \
+            --pytorch-git-ref "${{ inputs.pytorch_git_ref }}"
 
       - name: (Re-)Generate Python package release index for staging
         if: ${{ github.repository_owner == 'ROCm' }}
