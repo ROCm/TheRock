@@ -33,6 +33,8 @@ jobs:
     uses: ./.github/workflows/setup.yml
     with:
       build_variant: "asan"
+      linux_amdgpu_families: ${{ inputs.linux_amdgpu_families || '' }}
+      linux_use_prebuilt_artifacts: ${{ inputs.linux_use_prebuilt_artifacts || false }}
 
   linux_build_and_test:
     name: Linux::${{ matrix.variant.family }}::${{ matrix.variant.build_variant_label }}
