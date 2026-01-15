@@ -64,4 +64,16 @@ benchmark_matrix = {
         # TODO: Remove xfail once dedicated performance servers are added in "benchmark-runs-on"
         "expect_failure": True,
     },
+    # Kokkos benchmark tests
+    "kokkos_bench": {
+        "job_name": "kokkos_bench",
+        "fetch_artifact_args": "--base-only --tests",
+        "timeout_minutes": 90,
+        "test_script": f"python {_get_benchmark_script_path('test_kokkos_benchmark.py')}",
+        # TODO: Add windows support
+        "platform": ["linux"],
+        "total_shards": 1,
+        # TODO: Remove xfail once dedicated performance servers are added in "benchmark-runs-on"
+        "expect_failure": True,
+    },
 }
