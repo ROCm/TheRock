@@ -184,6 +184,7 @@ def initialize():
     'rccl',
     'hipblaslt',
     'miopen',
+    'hipdnn',
   ],
   check_version='$(rocm-sdk version)')
 " > torch/_rocm_init.py
