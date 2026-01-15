@@ -43,6 +43,7 @@ if platform == "linux":
 elif platform == "windows":
     # On Windows, use PATH for DLL discovery
     dll_paths = [
+        str(bin_dir),                    # Main bin directory (./build/bin) - contains origami.dll and amdhip64.dll
         str(lib_dir),                    # Main lib directory (./build/lib)
         str(origami_test_dir),           # Origami test directory (./build/bin/origami)
         environ_vars.get("PATH", ""),
