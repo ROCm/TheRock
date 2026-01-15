@@ -61,6 +61,21 @@ if(NOT PATCHELF)
   message(FATAL_ERROR "Missing PATCHELF from super-project")
 endif()
 
+# Find static libatomic to avoid runtime dependency on libatomic.so.1
+execute_process(
+  COMMAND ${CMAKE_C_COMPILER} -print-file-name=libatomic.a
+  OUTPUT_VARIABLE LIBATOMIC_STATIC
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+  ERROR_QUIET
+)
+if(LIBATOMIC_STATIC AND EXISTS "${LIBATOMIC_STATIC}")
+  message(STATUS "Found static libatomic: ${LIBATOMIC_STATIC}")
+  set(NUMACTL_LIBS "${LIBATOMIC_STATIC}")
+else()
+  message(STATUS "Static libatomic not found, will use system default if needed")
+  set(NUMACTL_LIBS "")
+endif()
+
 add_custom_target(
   build ALL
   WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
@@ -75,6 +90,9 @@ add_custom_target(
     # reconfigure the project as the version of autoconf available may differ
     autoreconf -f -i "${CMAKE_CURRENT_BINARY_DIR}/s"
   COMMAND
+    "${CMAKE_COMMAND}" -E env
+      "LIBS=${NUMACTL_LIBS}"
+      --
     "${CMAKE_CURRENT_BINARY_DIR}/s/configure"
       --prefix "${CMAKE_INSTALL_PREFIX}"
       --disable-static
