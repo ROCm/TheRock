@@ -122,8 +122,6 @@ therock_cmake_subproject_declare(hipBLASLt
   EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipblaslt"
   BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipBLASLt"
   BACKGROUND_BUILD
-  DEFAULT_GPU_TARGETS
-    gfx1100  # TODO: Fix hipblaslt to accept an empty target list.
   CMAKE_ARGS
     -DHIP_PLATFORM=amd
     -DHIPBLASLT_ENABLE_BLIS=OFF  # TODO: Evaluate
@@ -162,11 +160,23 @@ list(APPEND _blas_subproject_names hipBLASLt)
 # rocBLAS
 ##############################################################################
 
+set(_is_hipblaslt_declared)
+therock_check_is_cmake_subproject_declared(hipBLASLt _is_hipblaslt_declared)
+
+set(_hipblaslt_opt OFF)
+if(_is_hipblaslt_declared)
+  set(_hipblaslt_opt ON)
+endif()
+
 set(rocBLAS_optional_runtime_deps)
 if(NOT WIN32)
   # rocBLAS is hard-coded to not expect rocm-smi.
   list(APPEND rocBLAS_optional_runtime_deps rocm_smi_lib)
 elseif(THEROCK_BUILD_TESTING)
+  list(APPEND rocBLAS_optional_runtime_deps therock-host-blas)
+endif()
+
+if(NOT _is_hipblaslt_declared)
   list(APPEND rocBLAS_optional_runtime_deps therock-host-blas)
 endif()
 
@@ -180,7 +190,7 @@ therock_cmake_subproject_declare(rocBLAS
     -DROCM_DIR=
     -Dhipblaslt_path=
     -DBUILD_WITH_TENSILE=ON
-    -DBUILD_WITH_HIPBLASLT=ON
+    -DBUILD_WITH_HIPBLASLT="${_hipblaslt_opt}"
     # TODO: With `Tensile_TEST_LOCAL_PATH` set, the resulting build path is ${Tensile_TEST_LOCAL_PATH}/build.
     "-DTensile_TEST_LOCAL_PATH=${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/tensile"
     # Since using a local Tensile vs fetched, unset TENSILE_VERSION to avoid
