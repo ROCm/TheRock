@@ -15,6 +15,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--output-dir OUTPUT_DIR]
     (--run-id RUN_ID | --release RELEASE | --input-dir INPUT_DIR)
     [--run-github-repo RUN_GITHUB_REPO]
+    [--aqlprofile | --no-aqlprofile]
     [--blas | --no-blas]
     [--debug-tools | --no-debug-tools]
     [--fft | --no-fft]
@@ -189,6 +190,7 @@ def retrieve_artifacts_by_run_id(args):
         argv.extend(base_artifact_patterns)
     elif any(
         [
+            args.aqlprofile,
             args.blas,
             args.debug_tools,
             args.fft,
@@ -208,6 +210,8 @@ def retrieve_artifacts_by_run_id(args):
         argv.extend(base_artifact_patterns)
 
         extra_artifacts = []
+        if args.aqlprofile:
+            extra_artifacts.append("aqlprofile-tests")
         if args.blas:
             extra_artifacts.append("blas")
         if args.debug_tools:
@@ -372,6 +376,13 @@ def main(argv):
     )
 
     artifacts_group = parser.add_argument_group("artifacts_group")
+    artifacts_group.add_argument(
+        "--aqlprofile",
+        default=False,
+        help="Include 'aqlprofile' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
     artifacts_group.add_argument(
         "--blas",
         default=False,

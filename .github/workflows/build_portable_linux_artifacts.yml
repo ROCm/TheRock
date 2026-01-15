@@ -30,10 +30,6 @@ on:
       extra_cmake_options:
         type: string
 
-  # workflow_call has additional inputs (external_source_checkout, therock_ref, repository_override)
-  # that workflow_dispatch doesn't have. This is intentional - workflow_dispatch would exceed
-  # GitHub's previous 10-input limit (now 25 as of Dec 2025), and actionlint still enforces
-  # the old limit. These extra inputs are only needed for programmatic calls from ci.yml anyway.
   workflow_call:
     inputs:
       package_version:
@@ -53,18 +49,6 @@ on:
         type: boolean
       extra_cmake_options:
         type: string
-      external_source_checkout:
-        type: boolean
-        description: "Whether source is from external repo (rocm-libraries/systems)"
-        default: false
-      therock_ref:
-        type: string
-        description: "TheRock git ref to use (for external repos)"
-        default: ""
-      repository_override:
-        type: string
-        description: "Override github.repository for testing (e.g., 'ROCm/rocm-libraries')"
-        default: ""
 
 # See the details regarding permissions from the link:
 # https://github.com/aws-actions/configure-aws-credentials?tab=readme-ov-file#oidc
@@ -73,10 +57,7 @@ permissions:
 
 jobs:
   build_portable_linux_artifacts:
-    # For external repos (rocm-libraries, rocm-systems), include platform and GPU family in job name
-    # to make them easier to identify in GitHub Actions UI. Internal builds keep simple 'Build' name.
-    # Test workflows use the same pattern.
-    name: ${{ inputs.external_source_checkout && format('Build Linux::{0}', inputs.amdgpu_families) || 'Build' }} (xfail ${{ inputs.expect_failure }})
+    name: Build (xfail ${{ inputs.expect_failure }})
     # azure-linux-scale-rocm are used for regular CI builds
     # azure-linux-scale-rocm-heavy are used for CI builds that require more resources (ex: ASAN builds)
     runs-on: ${{ inputs.build_variant_label == 'asan' && 'azure-linux-u2404-hx176-cpu-rocm' || 'azure-linux-scale-rocm' }}
@@ -95,122 +76,81 @@ jobs:
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       TEATIME_FORCE_INTERACTIVE: 0
       IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
-      THEROCK_DIR: ${{ inputs.external_source_checkout && 'tr' || '.' }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
-        with:
-          repository: ${{ inputs.repository_override || github.repository }}
-          path: ${{ inputs.external_source_checkout && 'source-repo' || '.' }}
-
-      # safe.directory must be set before Runner Health Status
-      - name: Adjust git config
-        working-directory: ${{ inputs.external_source_checkout && 'source-repo' || '.' }}
-        run: |
-          git config --global --add safe.directory $PWD
-          git config fetch.parallel 10
-
-      - name: Checkout TheRock repository
-        if: ${{ inputs.external_source_checkout }}
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
-        with:
-          repository: "ROCm/TheRock"
-          # Use short path name to avoid Windows MAX_PATH issues. Keep consistent with Linux.
-          path: tr
-          ref: ${{ inputs.therock_ref || 'main' }}
 
       - name: Install python deps
         run: |
-          pip install -r $THEROCK_DIR/requirements.txt
+          pip install -r requirements.txt
 
-      - name: Detect external source configuration
-        if: ${{ inputs.external_source_checkout }}
-        id: detect
-        run: python3 $THEROCK_DIR/build_tools/github_actions/detect_external_repo_config.py --repository "${{ inputs.repository_override || github.repository }}" --platform linux
+      # safe.directory must be set before Runner Health Status
+      - name: Adjust git config
+        run: |
+          git config --global --add safe.directory $PWD
+          git config fetch.parallel 10
 
       # TODO: We shouldn't be using a cache on actual release branches, but it
       # really helps for iteration time.
       - name: Setup ccache
         run: |
-          $THEROCK_DIR/build_tools/setup_ccache.py \
+          ./build_tools/setup_ccache.py \
             --config-preset "github-oss-presubmit" \
             --dir "$(dirname $CCACHE_CONFIGPATH)" \
             --local-path "$CACHE_DIR/ccache"
 
       - name: Runner health status
         run: |
-          $THEROCK_DIR/build_tools/health_status.py
+          ./build_tools/health_status.py
+
+      - name: Test build_tools
+        run: |
+          python -m pytest build_tools/tests build_tools/github_actions/tests
 
       - name: Fetch sources
         timeout-minutes: 30
         run: |
-          $THEROCK_DIR/build_tools/fetch_sources.py --jobs 12 ${{ steps.detect.outputs.fetch_exclusion || '' }}
-
-      - name: DVC pull (external repos only)
-        if: ${{ inputs.external_source_checkout && steps.detect.outputs.enable_dvc == 'true' }}
-        working-directory: source-repo
-        run: dvc pull
-
-      - name: Patch external repo
-        if: ${{ inputs.external_source_checkout }}
-        working-directory: source-repo
-        run: |
-          # Apply patches from TheRock to the external repo
-          PATCHES_DIR="../$THEROCK_DIR/patches/amd-mainline/${{ steps.detect.outputs.patches_dir }}"
-          if [ -d "$PATCHES_DIR" ] && [ "$(ls -A $PATCHES_DIR/*.patch 2>/dev/null)" ]; then
-            git -c user.name="therockbot" -c "user.email=therockbot@amd.com" \
-              am --whitespace=nowarn $PATCHES_DIR/*.patch
-          else
-            echo "No patches found in $PATCHES_DIR or directory doesn't exist"
-          fi
-
-      - name: Test build_tools
-        if: ${{ !inputs.external_source_checkout }}
-        run: |
-          python -m pytest build_tools/tests build_tools/github_actions/tests
+          ./build_tools/fetch_sources.py --jobs 12
 
       - name: Configure Projects
         env:
           cmake_preset: ${{ inputs.build_variant_cmake_preset }}
           amdgpu_families: ${{ inputs.amdgpu_families }}
           package_version: ${{ inputs.package_version }}
-          extra_cmake_options: >-
-            ${{ inputs.external_source_checkout && format('-D{0}=../source-repo', steps.detect.outputs.cmake_source_var) || '' }}
-            ${{ inputs.extra_cmake_options }}
+          extra_cmake_options: ${{ inputs.extra_cmake_options }}
           BUILD_DIR: build
         run: |
-          python3 $THEROCK_DIR/build_tools/github_actions/build_configure.py ${{ inputs.external_source_checkout && '' || '--manylinux' }}
+          python3 build_tools/github_actions/build_configure.py --manylinux
 
       - name: Build therock-archives and therock-dist
         run: |
-          cmake --build $THEROCK_DIR/build --target therock-archives therock-dist -- -k 0
+          cmake --build build --target therock-archives therock-dist -- -k 0
 
       - name: Test Packaging
-        if: ${{ github.event.repository.name == 'TheRock' && !inputs.external_source_checkout }}
+        if: ${{ github.event.repository.name == 'TheRock' }}
         run: |
-          ctest --test-dir $THEROCK_DIR/build --output-on-failure
+          ctest --test-dir build --output-on-failure
 
       - name: Report
         if: ${{ !cancelled() }}
         shell: bash
         run: |
-          BUILD_PATH="${THEROCK_DIR}/build"
-          if [ -d "$BUILD_PATH" ]; then
+          if [ -d "./build" ]; then
             echo "Full SDK du:"
             echo "------------"
-            du -h -d 1 $BUILD_PATH/dist/rocm
+            du -h -d 1 build/dist/rocm
             echo "Artifact Archives:"
             echo "------------------"
-            ls -lh $BUILD_PATH/artifacts/*.tar.xz
+            ls -lh build/artifacts/*.tar.xz
             echo "Artifacts:"
             echo "----------"
-            du -h -d 1 $BUILD_PATH/artifacts
+            du -h -d 1 build/artifacts
             echo "CCache Stats:"
             echo "-------------"
             ccache -s -v
-            tail -v -n +1 .ccache/compiler_check_cache/* > $BUILD_PATH/logs/ccache_compiler_check_cache.log
+            tail -v -n +1 .ccache/compiler_check_cache/* > build/logs/ccache_compiler_check_cache.log
           else
-            echo "[ERROR] Build directory $BUILD_PATH does not exist. Skipping report!"
+            echo "[ERROR] Build directory ./build does not exist. Skipping report!"
             echo "        This should only happen if the CI is cancelled before the build step."
             exit 1
           fi
@@ -219,26 +159,19 @@ jobs:
       - name: Analyze Build Times
         if: ${{ !cancelled() }}
         run: |
-          python3 $THEROCK_DIR/build_tools/analyze_build_times.py --build-dir $THEROCK_DIR/build
+          python3 build_tools/analyze_build_times.py --build-dir build
 
       - name: Configure AWS Credentials for non-forked repos
         if: ${{ always() && !github.event.pull_request.head.repo.fork }}
         uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
         with:
           aws-region: us-east-2
-          # Use github.repository instead of external_source_checkout because TheRock's
-          # external integration test workflow also uses external_source_checkout=true
-          # but should use the internal role (therock-ci), not the external role.
-          role-to-assume: ${{ github.repository != 'ROCm/TheRock' && 'arn:aws:iam::692859939525:role/therock-ci-external' || 'arn:aws:iam::692859939525:role/therock-ci' }}
+          role-to-assume: arn:aws:iam::692859939525:role/therock-ci
 
       - name: Post Build Upload
         if: always()
-        # For external repos we set the working directory to TheRock so the packaging/upload
-        # runs from the same repo root as internal CI. This keeps produced tarball layouts and
-        # paths consistent across internal vs external-source builds.
-        working-directory: ${{ inputs.external_source_checkout && env.THEROCK_DIR || '.' }}
         run: |
-          python3 ./build_tools/github_actions/post_build_upload.py \
+          python3 build_tools/github_actions/post_build_upload.py \
             --run-id ${{ github.run_id }} \
             --artifact-group "${{ inputs.artifact_group }}" \
             --build-dir build \
