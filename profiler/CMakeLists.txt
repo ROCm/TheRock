@@ -249,5 +249,5 @@ if(THEROCK_ENABLE_ROCPROFV3)
         rocprofiler-sdk
         rocprofiler-systems
       )
-  endif(THEROCK_ENABLE_ROCPROFSYS)
+  endif(THEROCK_ENABLE_ROCPROFSYS AND THEROCK_SANITIZER STREQUAL "")
 endif(THEROCK_ENABLE_ROCPROFV3)
