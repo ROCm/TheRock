@@ -100,7 +100,7 @@ class GitHubAPI:
                     [gh_path, "auth", "status"],
                     capture_output=True,
                     text=True,
-                    timeout=5,
+                    timeout=30,  # seconds
                 )
                 if result.returncode == 0:
                     self._gh_cli_path = gh_path
@@ -143,7 +143,7 @@ class GitHubAPI:
 
         return headers
 
-    def _send_request_via_gh_cli(self, url: str) -> object:
+    def _send_request_via_gh_cli(self, url: str, timeout_seconds: int) -> object:
         """Sends a GitHub API request using the gh CLI."""
         assert self._gh_cli_path is not None, (
             "_send_request_via_gh_cli called without gh CLI path set. "
@@ -158,6 +158,7 @@ class GitHubAPI:
             capture_output=True,
             text=True,
             encoding="utf-8",
+            timeout=timeout_seconds,
         )
 
         if result.returncode != 0:
@@ -169,11 +170,11 @@ class GitHubAPI:
 
         return json.loads(result.stdout)
 
-    def _send_request_via_rest_api(self, url: str) -> object:
+    def _send_request_via_rest_api(self, url: str, timeout_seconds: int) -> object:
         """Sends a GitHub API request using the REST API directly."""
         headers = self._get_request_headers()
         request = Request(url, headers=headers)
-        with urlopen(request) as response:
+        with urlopen(request, timeout=timeout_seconds) as response:
             if response.status == 403:
                 raise GitHubAPIError(
                     f"Access denied (403 Forbidden). "
@@ -187,7 +188,7 @@ class GitHubAPI:
 
             return json.loads(response.read().decode("utf-8"))
 
-    def send_request(self, url: str) -> object:
+    def send_request(self, url: str, timeout_seconds: int = 300) -> object:
         """Sends a request to the given GitHub REST API URL.
 
         Args:
@@ -202,12 +203,12 @@ class GitHubAPI:
         auth_method = self.get_auth_method()
 
         if auth_method == GitHubAPI.AuthMethod.GH_CLI:
-            return self._send_request_via_gh_cli(url)
+            return self._send_request_via_gh_cli(url, timeout_seconds)
 
         if auth_method == GitHubAPI.AuthMethod.UNAUTHENTICATED:
             _log("Warning: No GitHub auth available, requests may be rate limited")
 
-        return self._send_request_via_rest_api(url)
+        return self._send_request_via_rest_api(url, timeout_seconds)
 
 
 # Module-level singleton with cached state.
@@ -322,7 +323,7 @@ def gha_get_request_headers() -> dict[str, str]:
     return _default_github_api._get_request_headers()
 
 
-def gha_send_request(url: str) -> object:
+def gha_send_request(url: str, timeout_seconds: int = 300) -> object:
     """Sends a request to the given GitHub REST API URL and returns the response.
 
     Authentication is handled automatically:
@@ -332,8 +333,12 @@ def gha_send_request(url: str) -> object:
 
     Raises:
         GitHubAPIError: If the request fails.
+        URLError: If the request fails.
+        subprocess.TimeoutExpired: If the request exceeds timeout_seconds.
+
+    TODO: unify exception types?
     """
-    return _default_github_api.send_request(url)
+    return _default_github_api.send_request(url, timeout_seconds=timeout_seconds)
 
 
 def gha_query_workflow_run_information(github_repository: str, workflow_run_id: str):
