@@ -13,6 +13,7 @@ import shutil
 import subprocess
 import sys
 from typing import Mapping
+from urllib.error import HTTPError, URLError
 from urllib.request import urlopen, Request
 
 
@@ -144,7 +145,11 @@ class GitHubAPI:
         return headers
 
     def _send_request_via_gh_cli(self, url: str, timeout_seconds: int) -> object:
-        """Sends a GitHub API request using the gh CLI."""
+        """Sends a GitHub API request using the gh CLI.
+
+        Raises:
+            GitHubAPIError: If the request fails for any reason.
+        """
         assert self._gh_cli_path is not None, (
             "_send_request_via_gh_cli called without gh CLI path set. "
             "Call get_auth_method() first."
@@ -153,13 +158,22 @@ class GitHubAPI:
         # Strip the base URL to get the API path
         api_path = url.removeprefix("https://api.github.com")
 
-        result = subprocess.run(
-            [self._gh_cli_path, "api", api_path],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            timeout=timeout_seconds,
-        )
+        try:
+            result = subprocess.run(
+                [self._gh_cli_path, "api", api_path],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=timeout_seconds,
+            )
+        except subprocess.TimeoutExpired as e:
+            raise GitHubAPIError(
+                f"gh api request timed out after {timeout_seconds}s for {api_path}"
+            ) from e
+        except OSError as e:
+            raise GitHubAPIError(
+                f"Failed to execute gh CLI at {self._gh_cli_path}: {e}"
+            ) from e
 
         if result.returncode != 0:
             stderr = result.stderr or "(no error message)"
@@ -168,37 +182,68 @@ class GitHubAPI:
         if not result.stdout:
             raise GitHubAPIError("gh api returned empty response")
 
-        return json.loads(result.stdout)
+        try:
+            return json.loads(result.stdout)
+        except json.JSONDecodeError as e:
+            raise GitHubAPIError(
+                f"gh api returned invalid JSON: {e.msg} at position {e.pos}"
+            ) from e
 
     def _send_request_via_rest_api(self, url: str, timeout_seconds: int) -> object:
-        """Sends a GitHub API request using the REST API directly."""
+        """Sends a GitHub API request using the REST API directly.
+
+        Raises:
+            GitHubAPIError: If the request fails for any reason.
+        """
         headers = self._get_request_headers()
         request = Request(url, headers=headers)
-        with urlopen(request, timeout=timeout_seconds) as response:
-            if response.status == 403:
-                raise GitHubAPIError(
-                    f"Access denied (403 Forbidden). "
-                    f"Check if your token has the necessary permissions (e.g., `repo`, `workflow`)."
-                )
-            elif response.status != 200:
-                raise GitHubAPIError(
-                    f"Received unexpected status code: {response.status}. "
-                    f"Please verify the URL or check GitHub API status."
-                )
 
-            return json.loads(response.read().decode("utf-8"))
+        try:
+            with urlopen(request, timeout=timeout_seconds) as response:
+                body = response.read().decode("utf-8")
+        except HTTPError as e:
+            if e.code == 403:
+                raise GitHubAPIError(
+                    f"Access denied (403 Forbidden) for {url}. "
+                    f"Check if your token has the necessary permissions (e.g., `repo`, `workflow`)."
+                ) from e
+            elif e.code == 404:
+                raise GitHubAPIError(
+                    f"Resource not found (404) for {url}. "
+                    f"Verify the repository, workflow, or run ID exists."
+                ) from e
+            else:
+                raise GitHubAPIError(
+                    f"HTTP {e.code} error for {url}: {e.reason}"
+                ) from e
+        except URLError as e:
+            raise GitHubAPIError(f"Network error for {url}: {e.reason}") from e
+        except TimeoutError as e:
+            raise GitHubAPIError(
+                f"Request timed out after {timeout_seconds}s for {url}"
+            ) from e
+
+        try:
+            return json.loads(body)
+        except json.JSONDecodeError as e:
+            raise GitHubAPIError(
+                f"Invalid JSON response from {url}: {e.msg} at position {e.pos}"
+            ) from e
 
     def send_request(self, url: str, timeout_seconds: int = 300) -> object:
         """Sends a request to the given GitHub REST API URL.
 
         Args:
             url: Full GitHub API URL (e.g., https://api.github.com/repos/...)
+            timeout_seconds: Request timeout in seconds (default 300).
 
         Returns:
             Parsed JSON response.
 
         Raises:
-            GitHubAPIError: If the request fails.
+            GitHubAPIError: If the request fails (network error, HTTP error,
+                timeout, invalid JSON, etc.). The original exception is
+                available via the __cause__ attribute.
         """
         auth_method = self.get_auth_method()
 
@@ -331,12 +376,17 @@ def gha_send_request(url: str, timeout_seconds: int = 300) -> object:
     2. If gh CLI is installed and authenticated, uses `gh api` (local dev)
     3. Falls back to unauthenticated requests (rate limited)
 
-    Raises:
-        GitHubAPIError: If the request fails.
-        URLError: If the request fails.
-        subprocess.TimeoutExpired: If the request exceeds timeout_seconds.
+    Args:
+        url: Full GitHub API URL (e.g., https://api.github.com/repos/...)
+        timeout_seconds: Request timeout in seconds (default 300).
 
-    TODO: unify exception types?
+    Returns:
+        Parsed JSON response.
+
+    Raises:
+        GitHubAPIError: If the request fails (network error, HTTP error,
+            timeout, invalid JSON, etc.). The original exception is available
+            via the __cause__ attribute.
     """
     return _default_github_api.send_request(url, timeout_seconds=timeout_seconds)
 

@@ -1,12 +1,15 @@
 import os
 from pathlib import Path
+import subprocess
 import sys
 import unittest
 from unittest import mock
+from urllib.error import HTTPError, URLError
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 from github_actions_utils import (
     GitHubAPI,
+    GitHubAPIError,
     gha_query_last_successful_workflow_run,
     gha_query_workflow_run_information,
     is_authenticated_github_api_available,
@@ -40,6 +43,10 @@ class GitHubAPITest(unittest.TestCase):
             os.environ["GITHUB_TOKEN"] = self._saved_token
         elif "GITHUB_TOKEN" in os.environ:
             del os.environ["GITHUB_TOKEN"]
+
+    # -------------------------------------------------------------------------
+    # Authentication method selection tests
+    # -------------------------------------------------------------------------
 
     def test_github_token_takes_priority(self):
         """GITHUB_TOKEN should be used when available, even if gh CLI is present."""
@@ -133,6 +140,245 @@ class GitHubAPITest(unittest.TestCase):
         api = GitHubAPI()
         auth_method = api.get_auth_method()
         self.assertIsInstance(auth_method, GitHubAPI.AuthMethod)
+
+    # -------------------------------------------------------------------------
+    # Successful request tests
+    # -------------------------------------------------------------------------
+
+    def test_rest_api_success(self):
+        """REST API successful request should return parsed JSON."""
+        os.environ["GITHUB_TOKEN"] = "test-token"
+        api = GitHubAPI()
+
+        mock_response = mock.MagicMock()
+        mock_response.read.return_value = b'{"id": 12345, "name": "test"}'
+        mock_response.__enter__.return_value = mock_response
+
+        with mock.patch("github_actions_utils.urlopen", return_value=mock_response):
+            result = api.send_request("https://api.github.com/repos/test/test")
+
+        self.assertEqual(result, {"id": 12345, "name": "test"})
+
+    def test_gh_cli_success(self):
+        """gh CLI successful request should return parsed JSON."""
+        api = GitHubAPI()
+        api._auth_method = GitHubAPI.AuthMethod.GH_CLI
+        api._gh_cli_path = "/usr/bin/gh"
+
+        mock_result = mock.Mock()
+        mock_result.returncode = 0
+        mock_result.stdout = '{"id": 12345, "name": "test"}'
+
+        with mock.patch(
+            "github_actions_utils.subprocess.run", return_value=mock_result
+        ):
+            result = api.send_request("https://api.github.com/repos/test/test")
+
+        self.assertEqual(result, {"id": 12345, "name": "test"})
+
+    # -------------------------------------------------------------------------
+    # gh CLI error handling tests
+    # -------------------------------------------------------------------------
+
+    def test_gh_cli_timeout_raises_github_api_error(self):
+        """gh CLI timeout should raise GitHubAPIError with TimeoutExpired cause."""
+        api = GitHubAPI()
+        api._auth_method = GitHubAPI.AuthMethod.GH_CLI
+        api._gh_cli_path = "/usr/bin/gh"
+
+        with mock.patch(
+            "github_actions_utils.subprocess.run",
+            side_effect=subprocess.TimeoutExpired(cmd="gh", timeout=10),
+        ):
+            with self.assertRaises(GitHubAPIError) as ctx:
+                api.send_request("https://api.github.com/repos/test/test")
+
+            self.assertIn("timed out", str(ctx.exception))
+            self.assertIsInstance(ctx.exception.__cause__, subprocess.TimeoutExpired)
+
+    def test_gh_cli_oserror_raises_github_api_error(self):
+        """gh CLI OSError should raise GitHubAPIError with OSError cause."""
+        api = GitHubAPI()
+        api._auth_method = GitHubAPI.AuthMethod.GH_CLI
+        api._gh_cli_path = "/nonexistent/gh"
+
+        with mock.patch(
+            "github_actions_utils.subprocess.run",
+            side_effect=OSError("No such file or directory"),
+        ):
+            with self.assertRaises(GitHubAPIError) as ctx:
+                api.send_request("https://api.github.com/repos/test/test")
+
+            self.assertIn("Failed to execute gh CLI", str(ctx.exception))
+            self.assertIsInstance(ctx.exception.__cause__, OSError)
+
+    def test_gh_cli_nonzero_exit_raises_github_api_error(self):
+        """gh CLI non-zero exit should raise GitHubAPIError."""
+        api = GitHubAPI()
+        api._auth_method = GitHubAPI.AuthMethod.GH_CLI
+        api._gh_cli_path = "/usr/bin/gh"
+
+        mock_result = mock.Mock()
+        mock_result.returncode = 1
+        mock_result.stderr = "gh: Not Found (HTTP 404)"
+
+        with mock.patch(
+            "github_actions_utils.subprocess.run", return_value=mock_result
+        ):
+            with self.assertRaises(GitHubAPIError) as ctx:
+                api.send_request("https://api.github.com/repos/test/test")
+
+            self.assertIn("gh api request failed", str(ctx.exception))
+            self.assertIn("Not Found", str(ctx.exception))
+
+    def test_gh_cli_empty_response_raises_github_api_error(self):
+        """gh CLI empty response should raise GitHubAPIError."""
+        api = GitHubAPI()
+        api._auth_method = GitHubAPI.AuthMethod.GH_CLI
+        api._gh_cli_path = "/usr/bin/gh"
+
+        mock_result = mock.Mock()
+        mock_result.returncode = 0
+        mock_result.stdout = ""
+
+        with mock.patch(
+            "github_actions_utils.subprocess.run", return_value=mock_result
+        ):
+            with self.assertRaises(GitHubAPIError) as ctx:
+                api.send_request("https://api.github.com/repos/test/test")
+
+            self.assertIn("empty response", str(ctx.exception))
+
+    def test_gh_cli_invalid_json_raises_github_api_error(self):
+        """gh CLI invalid JSON should raise GitHubAPIError with JSONDecodeError cause."""
+        import json
+
+        api = GitHubAPI()
+        api._auth_method = GitHubAPI.AuthMethod.GH_CLI
+        api._gh_cli_path = "/usr/bin/gh"
+
+        mock_result = mock.Mock()
+        mock_result.returncode = 0
+        mock_result.stdout = "not valid json {"
+
+        with mock.patch(
+            "github_actions_utils.subprocess.run", return_value=mock_result
+        ):
+            with self.assertRaises(GitHubAPIError) as ctx:
+                api.send_request("https://api.github.com/repos/test/test")
+
+            self.assertIn("invalid JSON", str(ctx.exception))
+            self.assertIsInstance(ctx.exception.__cause__, json.JSONDecodeError)
+
+    # -------------------------------------------------------------------------
+    # REST API error handling tests
+    # -------------------------------------------------------------------------
+
+    def test_rest_api_http_403_raises_github_api_error(self):
+        """REST API 403 should raise GitHubAPIError with HTTPError cause."""
+        os.environ["GITHUB_TOKEN"] = "test-token"
+        api = GitHubAPI()
+
+        mock_error = HTTPError(
+            url="https://api.github.com/repos/test/test",
+            code=403,
+            msg="Forbidden",
+            hdrs={},
+            fp=None,
+        )
+
+        with mock.patch("github_actions_utils.urlopen", side_effect=mock_error):
+            with self.assertRaises(GitHubAPIError) as ctx:
+                api.send_request("https://api.github.com/repos/test/test")
+
+            self.assertIn("403", str(ctx.exception))
+            self.assertIn("Access denied", str(ctx.exception))
+            self.assertIsInstance(ctx.exception.__cause__, HTTPError)
+
+    def test_rest_api_http_404_raises_github_api_error(self):
+        """REST API 404 should raise GitHubAPIError with HTTPError cause."""
+        os.environ["GITHUB_TOKEN"] = "test-token"
+        api = GitHubAPI()
+
+        mock_error = HTTPError(
+            url="https://api.github.com/repos/test/test",
+            code=404,
+            msg="Not Found",
+            hdrs={},
+            fp=None,
+        )
+
+        with mock.patch("github_actions_utils.urlopen", side_effect=mock_error):
+            with self.assertRaises(GitHubAPIError) as ctx:
+                api.send_request("https://api.github.com/repos/test/test")
+
+            self.assertIn("404", str(ctx.exception))
+            self.assertIn("not found", str(ctx.exception).lower())
+            self.assertIsInstance(ctx.exception.__cause__, HTTPError)
+
+    def test_rest_api_http_500_raises_github_api_error(self):
+        """REST API 500 should raise GitHubAPIError with HTTPError cause."""
+        os.environ["GITHUB_TOKEN"] = "test-token"
+        api = GitHubAPI()
+
+        mock_error = HTTPError(
+            url="https://api.github.com/repos/test/test",
+            code=500,
+            msg="Internal Server Error",
+            hdrs={},
+            fp=None,
+        )
+
+        with mock.patch("github_actions_utils.urlopen", side_effect=mock_error):
+            with self.assertRaises(GitHubAPIError) as ctx:
+                api.send_request("https://api.github.com/repos/test/test")
+
+            self.assertIn("500", str(ctx.exception))
+            self.assertIsInstance(ctx.exception.__cause__, HTTPError)
+
+    def test_rest_api_network_error_raises_github_api_error(self):
+        """REST API network error should raise GitHubAPIError with URLError cause."""
+        os.environ["GITHUB_TOKEN"] = "test-token"
+        api = GitHubAPI()
+
+        mock_error = URLError(reason="Connection refused")
+
+        with mock.patch("github_actions_utils.urlopen", side_effect=mock_error):
+            with self.assertRaises(GitHubAPIError) as ctx:
+                api.send_request("https://api.github.com/repos/test/test")
+
+            self.assertIn("Network error", str(ctx.exception))
+            self.assertIsInstance(ctx.exception.__cause__, URLError)
+
+    def test_rest_api_timeout_raises_github_api_error(self):
+        """REST API timeout should raise GitHubAPIError with TimeoutError cause."""
+        os.environ["GITHUB_TOKEN"] = "test-token"
+        api = GitHubAPI()
+
+        with mock.patch("github_actions_utils.urlopen", side_effect=TimeoutError()):
+            with self.assertRaises(GitHubAPIError) as ctx:
+                api.send_request("https://api.github.com/repos/test/test")
+
+            self.assertIn("timed out", str(ctx.exception))
+            self.assertIsInstance(ctx.exception.__cause__, TimeoutError)
+
+    def test_rest_api_invalid_json_raises_github_api_error(self):
+        """REST API invalid JSON should raise GitHubAPIError with JSONDecodeError cause."""
+        import json
+
+        os.environ["GITHUB_TOKEN"] = "test-token"
+        api = GitHubAPI()
+
+        mock_response = mock.MagicMock()
+        mock_response.read.return_value = b"not valid json {"
+        mock_response.__enter__.return_value = mock_response
+
+        with mock.patch("github_actions_utils.urlopen", return_value=mock_response):
+            with self.assertRaises(GitHubAPIError) as ctx:
+                api.send_request("https://api.github.com/repos/test/test")
+
+            self.assertIn("Invalid JSON", str(ctx.exception))
+            self.assertIsInstance(ctx.exception.__cause__, json.JSONDecodeError)
 
 
 class GitHubActionsUtilsTest(unittest.TestCase):
