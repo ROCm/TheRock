@@ -186,13 +186,17 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
     check_git_dir = repo_dir / ".git"
     if check_git_dir.exists():
         print(f"Not cloning repository ({check_git_dir} exists)")
-        run_command(["git", "remote", "set-url", "origin", args.gitrepo_origin], cwd=repo_dir)
+        run_command(
+            ["git", "remote", "set-url", "origin", args.gitrepo_origin], cwd=repo_dir
+        )
     else:
         print(f"Cloning repository at {args.repo_hashtag}")
         repo_dir.mkdir(parents=True, exist_ok=True)
         run_command(["git", "init", "--initial-branch=main"], cwd=repo_dir)
         run_command(["git", "config", "advice.detachedHead", "false"], cwd=repo_dir)
-        run_command(["git", "remote", "add", "origin", args.gitrepo_origin], cwd=repo_dir)
+        run_command(
+            ["git", "remote", "add", "origin", args.gitrepo_origin], cwd=repo_dir
+        )
 
     # Fetch and checkout.
     fetch_args = []
@@ -200,7 +204,9 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
         fetch_args.extend(["--depth", str(args.depth)])
     if args.jobs:
         fetch_args.extend(["-j", str(args.jobs)])
-    run_command(["git", "fetch"] + fetch_args + ["origin", args.repo_hashtag], cwd=repo_dir)
+    run_command(
+        ["git", "fetch"] + fetch_args + ["origin", args.repo_hashtag], cwd=repo_dir
+    )
     run_command(["git", "checkout", "FETCH_HEAD"], cwd=repo_dir)
     run_command(["git", "tag", "-f", TAG_UPSTREAM_DIFFBASE, "--no-sign"], cwd=repo_dir)
     try:
