@@ -99,7 +99,7 @@ amdgpu_family_info_matrix_presubmit = {
             "sanity_check_only_for_family": True,
         },
         "windows": {
-            "test-runs-on": "windows-rx9070-gpu-rocm",
+            "test-runs-on": "windows-rx9700-gpu-rocm",
             "family": "gfx120X-all",
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
