@@ -571,14 +571,9 @@ def main(argv):
         "--math-library-projects",
         nargs="+",
         type=str,
-        default=(
-            []
-            if is_windows()
-            else [
-                # Linux only projects.
-                "libhipcxx",
-            ]
-        ),
+        default=[
+            "libhipcxx",
+        ],
     )
     args = parser.parse_args(argv)
 
