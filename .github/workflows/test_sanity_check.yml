@@ -29,6 +29,10 @@ on:
         type: string
       platform:
         type: string
+      therock_ref:
+        type: string
+        description: "TheRock git ref to use (for external repos)"
+        default: ""
   push:
     branches:
       - ADHOCBUILD
@@ -38,7 +42,9 @@ permissions:
 
 jobs:
   test_sanity_check:
-    name: "Sanity ROCM Test"
+    # For external repos (rocm-libraries, rocm-systems), include platform and GPU family in job name.
+    # TheRock repo keeps the simple name. Detection via github.repository check.
+    name: ${{ !contains(github.repository, 'TheRock') && format('Sanity ROCM Test {0}::{1}', inputs.platform, inputs.amdgpu_families) || 'Sanity ROCM Test' }}
     runs-on: ${{ inputs.test_runs_on }}
     # Running docker with cap-add and -v /lib/modiles, by recommendation of Github: https://rocm.docs.amd.com/projects/amdsmi/en/amd-staging/how-to/setup-docker-container.html
     container:
@@ -68,22 +74,16 @@ jobs:
       THEROCK_BIN_DIR: ${{ github.workspace }}/build/bin
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
     steps:
-      - name: "Fetch 'build_tools' from repository"
-        if: ${{ runner.os == 'Windows' }}
+      - name: Checkout TheRock Repository
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
-          sparse-checkout: build_tools
-          path: prejob
+          repository: "ROCm/TheRock"
+          ref: ${{ inputs.therock_ref || github.ref }}
 
       - name: Pre-job cleanup processes on Windows
         if: ${{ runner.os == 'Windows' }}
         shell: powershell
-        run: . '${{ github.workspace }}\prejob\build_tools\github_actions\cleanup_processes.ps1'
-
-      - name: Checkout Repository
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
-        with:
-          repository: "ROCm/TheRock"
+        run: . '${{ github.workspace }}\build_tools\github_actions\cleanup_processes.ps1'
 
       - name: Pre-job cleanup Docker containers on Linux
         if: ${{ runner.os == 'Linux' }}
@@ -120,7 +120,7 @@ jobs:
           # https://rocm.docs.amd.com/projects/HIP/en/latest/how-to/debugging.html
           AMD_LOG_LEVEL: 4
         run: |
-          pytest tests/ --log-cli-level=info --timeout=300
+          pytest ./tests/ --log-cli-level=info --timeout=300
 
       - name: Post-job cleanup processes on Windows
         if: ${{ always() && runner.os == 'Windows' }}

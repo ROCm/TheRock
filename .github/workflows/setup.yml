@@ -10,6 +10,44 @@ on:
         type: boolean
         default: false
         description: "If true, group all families into one entry per build_variant instead of expanding cross-product"
+      # The following inputs are for external repo integration (rocm-libraries, rocm-systems).
+      # They allow external repos to override repository, checkout paths, and specify which projects to build/test.
+      external_source_checkout:
+        type: boolean
+        default: false
+        description: "Whether source is from external repo (rocm-libraries/systems)"
+      therock_ref:
+        type: string
+        default: ""
+        description: "TheRock git ref to use (for external repos)"
+      repository_override:
+        type: string
+        default: ""
+        description: "Override github.repository for testing (e.g., 'ROCm/rocm-libraries')"
+      projects:
+        type: string
+        default: ""
+        description: "Override: comma-separated list of project paths (e.g., 'projects/rocprim,projects/hipcub'). Blank = detect from changes."
+      linux_amdgpu_families:
+        type: string
+        default: ""
+        description: "Comma-separated list of Linux GPU families to build and test"
+      windows_amdgpu_families:
+        type: string
+        default: ""
+        description: "Comma-separated list of Windows GPU families to build and test"
+      linux_test_labels:
+        type: string
+        default: ""
+      linux_use_prebuilt_artifacts:
+        type: boolean
+        default: false
+      windows_test_labels:
+        type: string
+        default: ""
+      windows_use_prebuilt_artifacts:
+        type: boolean
+        default: false
     outputs:
       enable_build_jobs:
         description: Whether to enable build jobs.
@@ -52,11 +90,27 @@ jobs:
       windows_test_labels: ${{ steps.configure.outputs.windows_test_labels }}
       rocm_package_version: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
     steps:
-      - name: Checking out repository
+      - name: Validate inputs
+        run: |
+          if [[ -n "${{ inputs.repository_override }}" && "${{ inputs.external_source_checkout }}" != "true" ]]; then
+            echo "ERROR: repository_override can only be used when external_source_checkout is true"
+            exit 1
+          fi
+
+      - name: Checkout ${{ inputs.repository_override || github.repository }}
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
-          # We need the parent commit to do a diff
+          repository: ${{ inputs.repository_override || github.repository }}
+          path: ${{ inputs.external_source_checkout && 'source-repo' || '.' }}
           fetch-depth: 2
+
+      - name: Checkout TheRock (external)
+        if: ${{ inputs.external_source_checkout }}
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          repository: ROCm/TheRock
+          path: TheRock
+          ref: ${{ inputs.therock_ref || github.ref }}
 
       - name: Set PR_LABELS variable with labels assigned to pull request
         if: ${{ github.event.pull_request }} # only set PR labels var if this is a pull request
@@ -69,19 +123,34 @@ jobs:
       - name: Configuring CI options
         id: configure
         env:
-          INPUT_LINUX_AMDGPU_FAMILIES: ${{ github.event.inputs.linux_amdgpu_families }}
-          LINUX_TEST_LABELS: ${{ github.event.inputs.linux_test_labels }}
-          LINUX_USE_PREBUILT_ARTIFACTS: ${{ github.event.inputs.linux_use_prebuilt_artifacts }}
-          INPUT_WINDOWS_AMDGPU_FAMILIES: ${{ github.event.inputs.windows_amdgpu_families }}
-          WINDOWS_TEST_LABELS: ${{ github.event.inputs.windows_test_labels }}
-          WINDOWS_USE_PREBUILT_ARTIFACTS: ${{ github.event.inputs.windows_use_prebuilt_artifacts }}
+          INPUT_LINUX_AMDGPU_FAMILIES: ${{ inputs.linux_amdgpu_families }}
+          LINUX_TEST_LABELS: ${{ inputs.linux_test_labels }}
+          LINUX_USE_PREBUILT_ARTIFACTS: ${{ inputs.linux_use_prebuilt_artifacts }}
+          INPUT_WINDOWS_AMDGPU_FAMILIES: ${{ inputs.windows_amdgpu_families }}
+          WINDOWS_TEST_LABELS: ${{ inputs.windows_test_labels }}
+          WINDOWS_USE_PREBUILT_ARTIFACTS: ${{ inputs.windows_use_prebuilt_artifacts }}
           BUILD_VARIANT: ${{ inputs.build_variant }}
           MULTI_ARCH: ${{ inputs.multi_arch }}
           # Variable comes from ROCm organization variable 'ROCM_THEROCK_TEST_RUNNERS'
           ROCM_THEROCK_TEST_RUNNERS: ${{ vars.ROCM_THEROCK_TEST_RUNNERS }}
           LOAD_TEST_RUNNERS_FROM_VAR: false
-        run: ./build_tools/github_actions/configure_ci.py
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_REPOSITORY_OVERRIDE: ${{ inputs.repository_override }}
+          PROJECTS: ${{ inputs.projects }}
+        run: |
+          if [[ "${{ inputs.external_source_checkout }}" == "true" ]]; then
+            cd source-repo
+            python ../TheRock/build_tools/github_actions/configure_ci.py
+          else
+            ./build_tools/github_actions/configure_ci.py
+          fi
 
       - name: Compute package version
         id: rocm_package_version
-        run: python ./build_tools/compute_rocm_package_version.py --release-type=dev
+        run: |
+          if [[ "${{ inputs.external_source_checkout }}" == "true" ]]; then
+            # Use ADHOCBUILD for external repos to avoid building Python packages
+            echo "rocm_package_version=ADHOCBUILD" >> $GITHUB_OUTPUT
+          else
+            python ./build_tools/compute_rocm_package_version.py --release-type=dev
+          fi
