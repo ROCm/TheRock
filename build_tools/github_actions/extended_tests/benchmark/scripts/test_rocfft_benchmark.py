@@ -25,7 +25,6 @@ class ROCfftBenchmark(BenchmarkBase):
     def __init__(self):
         super().__init__(benchmark_name="rocfft", display_name="ROCfft")
         self.log_file = self.script_dir / "rocfft_bench.log"
-        self.therock_dir = self.script_dir.parent.parent.parent.parent
 
     def run_benchmarks(self) -> None:
         """Run ROCfft benchmarks and save output to log file."""

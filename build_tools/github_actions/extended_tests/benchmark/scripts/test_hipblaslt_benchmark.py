@@ -25,7 +25,6 @@ class HipblasltBenchmark(BenchmarkBase):
     def __init__(self):
         super().__init__(benchmark_name="hipblaslt", display_name="hipBLASLt")
         self.log_file = self.script_dir / "hipblaslt_bench.log"
-        self.therock_dir = self.script_dir.parent.parent.parent.parent
 
     def run_benchmarks(self) -> None:
         """Run hipBLASLt benchmarks and save output to log file."""

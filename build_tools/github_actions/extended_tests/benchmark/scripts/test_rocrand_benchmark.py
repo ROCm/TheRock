@@ -25,7 +25,6 @@ class ROCrandBenchmark(BenchmarkBase):
 
     def __init__(self):
         super().__init__(benchmark_name="rocrand", display_name="ROCrand")
-        self.therock_dir = self.script_dir.parent.parent.parent.parent
         self.bench_bins = ["benchmark_rocrand_host_api", "benchmark_rocrand_device_api"]
 
     def run_benchmarks(self) -> None:

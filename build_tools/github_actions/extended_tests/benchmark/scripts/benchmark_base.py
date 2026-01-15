@@ -35,6 +35,7 @@ class BenchmarkBase:
         self.artifact_run_id = os.getenv("ARTIFACT_RUN_ID")
         self.amdgpu_families = os.getenv("AMDGPU_FAMILIES")
         self.script_dir = Path(__file__).resolve().parent
+        self.therock_dir = self.script_dir.parent.parent.parent.parent.parent
 
         # Initialize test client (will be set in run())
         self.client = None

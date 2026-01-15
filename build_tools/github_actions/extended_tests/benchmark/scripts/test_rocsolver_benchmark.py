@@ -25,7 +25,6 @@ class ROCsolverBenchmark(BenchmarkBase):
     def __init__(self):
         super().__init__(benchmark_name="rocsolver", display_name="ROCsolver")
         self.log_file = self.script_dir / "rocsolver_bench.log"
-        self.therock_dir = self.script_dir.parent.parent.parent.parent
 
     def run_benchmarks(self) -> None:
         """Run ROCsolver benchmarks and save output to log file."""
