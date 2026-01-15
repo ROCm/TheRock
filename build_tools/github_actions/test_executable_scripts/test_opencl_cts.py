@@ -22,53 +22,19 @@ ROCM_PATH = THEROCK_BIN_DIR.parent
 CTS_SOURCE_DIR = THEROCK_DIR / "build" / "opencl-cts-source"
 CTS_BUILD_DIR = THEROCK_DIR / "build" / "opencl-cts-build"
 
-OPENCL_CTS_REPO = "https://github.com/ROCm/OpenCL-CTS.git"
+OPENCL_CTS_REPO = "https://github.com/KhronosGroup/OpenCL-CTS.git"
 OPENCL_CTS_BRANCH = os.getenv("OPENCL_CTS_BRANCH", "main")
 
-TEST_TYPE = os.getenv("TEST_TYPE", "full")
 
 logging.info(f"THEROCK_BIN_DIR: {THEROCK_BIN_DIR}")
 logging.info(f"ROCM_PATH: {ROCM_PATH}")
 logging.info(f"CTS_SOURCE_DIR: {CTS_SOURCE_DIR}")
 logging.info(f"CTS_BUILD_DIR: {CTS_BUILD_DIR}")
 logging.info(f"OpenCL-CTS Branch: {OPENCL_CTS_BRANCH}")
-logging.info(f"Test Type: {TEST_TYPE}")
+OPENCL_ICD_FILENAMES = ROCM_PATH / "lib" / "opencl" / "libamdocl64.so"
 
 
-def setup_environment():
-    logging.info("++ Setting up environment variables")
-
-    env = os.environ.copy()
-
-    env["ROCM_PATH"] = str(ROCM_PATH)
-
-    ocl_icd_path = ROCM_PATH / "lib" / "opencl" / "libamdocl64.so"
-    if not ocl_icd_path.exists():
-        ocl_icd_path = ROCM_PATH / "lib" / "libamdocl64.so"
-
-    if ocl_icd_path.exists():
-        env["OCL_ICD_FILENAMES"] = str(ocl_icd_path)
-        logging.info(f"OCL_ICD_FILENAMES: {ocl_icd_path}")
-    else:
-        logging.warning("OpenCL library not found at expected locations")
-
-    rocm_lib = str(ROCM_PATH / "lib")
-    if "LD_LIBRARY_PATH" in env:
-        env["LD_LIBRARY_PATH"] = f"{rocm_lib}:{env['LD_LIBRARY_PATH']}"
-    else:
-        env["LD_LIBRARY_PATH"] = rocm_lib
-    logging.info(f"LD_LIBRARY_PATH: {env['LD_LIBRARY_PATH']}")
-
-    rocm_bin = str(ROCM_PATH / "bin")
-    if "PATH" in env:
-        env["PATH"] = f"{rocm_bin}:{env['PATH']}"
-    else:
-        env["PATH"] = rocm_bin
-
-    return env
-
-
-def verify_opencl_runtime(env):
+def verify_opencl_runtime():
     logging.info("++ Verifying OpenCL runtime availability")
 
     clinfo_path = ROCM_PATH / "bin" / "clinfo"
@@ -123,19 +89,13 @@ def clone_opencl_cts():
     logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
     subprocess.run(cmd, cwd=THEROCK_DIR, check=True)
 
-    logging.info("++ Initializing git submodules")
-    cmd = ["git", "submodule", "update", "--init", "--recursive"]
-    logging.info(f"++ Exec [{CTS_SOURCE_DIR}]$ {shlex.join(cmd)}")
-    subprocess.run(cmd, cwd=CTS_SOURCE_DIR, check=True)
 
-
-def configure_build(env):
+def configure_build():
     logging.info("++ Configuring OpenCL-CTS build")
 
     CTS_BUILD_DIR.mkdir(parents=True, exist_ok=True)
 
     opencl_lib_dir = ROCM_PATH / "lib"
-    opencl_include_dir = ROCM_PATH / "include"
 
     cmd = [
         "cmake",
@@ -143,59 +103,50 @@ def configure_build(env):
         str(CTS_SOURCE_DIR),
         "-B",
         str(CTS_BUILD_DIR),
-        "-GNinja",
-        "-DCMAKE_BUILD_TYPE=Release",
-        f"-DOPENCL_LIBRARIES={opencl_lib_dir}",
-        f"-DOPENCL_INCLUDE_DIR={opencl_include_dir}",
-        f"-DCL_INCLUDE_DIR={opencl_include_dir}",
         f"-DCL_LIB_DIR={opencl_lib_dir}",
+        "-DCL_INCLUDE_DIR=/usr/include",
+        "-DSPIRV_INCLUDE_DIR=/usr",
     ]
 
     logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-    subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=env)
+    subprocess.run(cmd, cwd=THEROCK_DIR, check=True)
 
 
-def build_tests(env):
+def build_tests():
     logging.info("++ Building OpenCL-CTS tests")
 
-    cpu_count = os.cpu_count() or 4
     cmd = [
         "cmake",
         "--build",
         str(CTS_BUILD_DIR),
         "--config",
         "Release",
-        "--parallel",
-        str(cpu_count),
     ]
 
     logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-    subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=env)
+    subprocess.run(cmd, cwd=THEROCK_DIR, check=True)
 
 
-def run_tests(env):
-    logging.info(f"++ Running OpenCL-CTS tests (type: {TEST_TYPE})")
+def run_tests():
+    logging.info("++ Running OpenCL-CTS tests ")
 
     cmd = [
-        "ctest",
-        "--test-dir",
-        str(CTS_BUILD_DIR),
-        "--output-on-failure",
-        "--timeout",
-        "600",
+        "python",
+        str(CTS_SOURCE_DIR / "test_conformance" / "run_conformance.py"),
+        str(CTS_SOURCE_DIR / "test_conformance" / "opencl_conformance_tests_full.csv"),
     ]
-    logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-    subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=env)
+    logging.info(f"++ Exec [{CTS_BUILD_DIR}]$ {shlex.join(cmd)}")
+    env = {"OCL_ICD_FILENAMES": OPENCL_ICD_FILENAMES}
+    subprocess.run(cmd, cwd=CTS_BUILD_DIR, check=True, env=env)
 
 
 if __name__ == "__main__":
     try:
-        env = setup_environment()
-        verify_opencl_runtime(env)
+        verify_opencl_runtime()
         clone_opencl_cts()
-        configure_build(env)
-        build_tests(env)
-        run_tests(env)
+        configure_build()
+        build_tests()
+        run_tests()
         logging.info("++ OpenCL-CTS tests completed successfully")
 
     except subprocess.CalledProcessError as e:
