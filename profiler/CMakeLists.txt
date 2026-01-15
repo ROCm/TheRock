@@ -205,7 +205,10 @@ if(THEROCK_ENABLE_ROCPROFV3)
   ##############################################################################
   # rocprofiler-systems
   ##############################################################################
-  if (THEROCK_ENABLE_ROCPROFSYS)
+
+  # rocprofiler-systems requires GCC, but sanitizer builds use Clang.
+  # Skip enabling rocprofiler-systems when building with sanitizers.
+  if (THEROCK_ENABLE_ROCPROFSYS AND THEROCK_SANITIZER STREQUAL "")
     # Escape semicolons in GPU targets list to prevent shell interpretation
     string(REPLACE ";" "\\;" _ROCPROFSYS_GFX_TARGETS_ESCAPED "${THEROCK_AMDGPU_TARGETS}")
 

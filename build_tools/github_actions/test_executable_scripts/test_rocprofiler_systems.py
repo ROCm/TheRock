@@ -42,11 +42,6 @@ class TestRocprofsys:
         else:
             os.environ["LD_LIBRARY_PATH"] = new_ld_path
 
-        # ROCPD_SCHEMA_PATH - rocpd SQL schema files location
-        # These are in share/rocprofiler-sdk-rocpd/ (from rocprofiler-sdk)
-        # rocpd_schema_path = rocm_base / "share" / "rocprofiler-sdk-rocpd"
-        # os.environ["ROCPD_SCHEMA_PATH"] = str(rocpd_schema_path)
-
     @staticmethod
     def run_pytest_package():
         TestRocprofsys.configure_paths()
@@ -66,15 +61,7 @@ class TestRocprofsys:
             "python3",
             str(pytest_package_exec),
             "--junit-xml=junit.xml",
-            # RCCL runtime-instrument is broken
-            # RCCL sampling perfetto validation is also broken
-            "-m",
-            "not rccl",
-            "--show-config",
-            "--print-env",
-            "--show-output-on-subtest-fail",
-            "-v",
-            "-rs",
+            "--ci-mode",
             "--log-cli-level=info",
         ]
 
