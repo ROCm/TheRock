@@ -76,7 +76,7 @@ amdgpu_family_info_matrix_presubmit = {
     },
     "gfx1151": {
         "linux": {
-            "test-runs-on": "linux-gfx1151-gpu-rocm",
+            "test-runs-on": "test-linux-strix-halo-gpu-rocm",
             "family": "gfx1151",
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
