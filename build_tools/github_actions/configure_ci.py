@@ -579,6 +579,22 @@ def matrix_generator(
                 if build_variant_name != base_args.get("build_variant"):
                     continue
 
+                # If an "build_variant" label was added to a PR, we enable that build variant
+                # Example: pr_labels = ["kernel:oem", "build_variant:asan", "test:rocprim"] -> ["asan"]
+                build_variant_pr_labels = [
+                    label.split(":")[1]
+                    for label in get_pr_labels(base_args)
+                    if "build_variant:" in label
+                ]
+                # If we find any build variant labels and it is a pull request, we check if we can run the build_variant build
+                if (
+                    build_variant_pr_labels
+                    and base_args.get("github_event_name") == "pull_request"
+                ):
+                    # Check if any build_variant labels were added to the PR
+                    if build_variant_name not in build_variant_pr_labels:
+                        continue
+
                 # Merge platform_info and build_variant_info into a matrix_row.
                 matrix_row = dict(platform_info)
 
