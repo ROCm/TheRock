@@ -4,7 +4,7 @@
 
 ## Types of filters
 
-- <b>smoke</b>: We run a "sanity check" to ensure the system is fundamentally working
+- <b>smoke</b>: A "sanity check" to ensure the system is fundamentally working
   - Runs on: pull requests (if ROCm non-component related change)
   - Characteristics: Shallow validation, focus on critical paths, component runs properly
   - Execution time: < 5 min
