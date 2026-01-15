@@ -2,30 +2,18 @@
 Unit tests for external-builds/pytorch/generate_pytorch_manifest.py.
 """
 
-import importlib.util
 import json
 import os
 import sys
 from pathlib import Path
-from types import ModuleType
 
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
-SCRIPT_PATH = REPO_ROOT / "external-builds" / "pytorch" / "generate_pytorch_manifest.py"
+THIS_DIR = Path(__file__).resolve().parent
+PYTORCH_DIR = THIS_DIR.parent
+sys.path.insert(0, os.fspath(PYTORCH_DIR))
 
-
-def _load_manifest_module() -> ModuleType:
-    assert SCRIPT_PATH.exists(), f"Missing script at {SCRIPT_PATH}"
-
-    spec = importlib.util.spec_from_file_location(
-        "generate_pytorch_manifest", SCRIPT_PATH
-    )
-    assert spec and spec.loader
-
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+import generate_pytorch_manifest as m
 
 
 @pytest.fixture
@@ -41,10 +29,18 @@ def gha_env():
         "GITHUB_REF",
     ]
 
-    original_values: dict[str, str | None] = {}
+    # Save environment state (only keys that exist)
+    saved_env: dict[str, str] = {}
     for key in keys:
-        original_values[key] = os.environ.get(key)
+        if key in os.environ:
+            saved_env[key] = os.environ[key]
 
+    # Clean environment for test
+    for key in keys:
+        if key in os.environ:
+            del os.environ[key]
+
+    # Set test environment
     os.environ["GITHUB_ACTIONS"] = "true"
     os.environ["GITHUB_RUN_ID"] = "123456"
     os.environ["GITHUB_JOB"] = "build_pytorch_wheels"
@@ -56,25 +52,26 @@ def gha_env():
     try:
         yield
     finally:
-        for key, value in original_values.items():
-            if value is None:
-                os.environ.pop(key, None)
-            else:
-                os.environ[key] = value
+        # Clean environment after test
+        for key in keys:
+            if key in os.environ:
+                del os.environ[key]
+        # Restore saved environment
+        for key, value in saved_env.items():
+            os.environ[key] = value
 
 
-def _run_main_with_args(module: ModuleType, argv: list[str]) -> None:
+def _run_main_with_args(argv: list[str]) -> None:
     original_argv = sys.argv[:]
     sys.argv = ["generate_pytorch_manifest.py", *argv]
     try:
-        module.main()
+        m.main()
     finally:
         sys.argv = original_argv
 
 
 def test_parse_wheel_name_no_build_tag():
     # Standard wheel filenames should parse without a build_tag.
-    m = _load_manifest_module()
     meta = m.parse_wheel_name("torch-2.7.0-cp312-cp312-manylinux_2_28_x86_64.whl")
     assert meta.distribution == "torch"
     assert meta.version == "2.7.0"
@@ -86,7 +83,6 @@ def test_parse_wheel_name_no_build_tag():
 
 def test_parse_wheel_name_with_build_tag():
     # Wheel filenames with build tags should expose build_tag separately.
-    m = _load_manifest_module()
     meta = m.parse_wheel_name(
         "torch-2.7.0+rocm7.10.0a20251120-1-cp312-cp312-win_amd64.whl"
     )
@@ -100,7 +96,6 @@ def test_parse_wheel_name_with_build_tag():
 
 def test_parse_wheel_name_ignores_non_wheel():
     # Non-wheel artifacts should be ignored.
-    m = _load_manifest_module()
     meta = m.parse_wheel_name("torch-2.7.0.tar.gz")
     assert meta.distribution is None
     assert meta.version is None
@@ -112,7 +107,6 @@ def test_parse_wheel_name_ignores_non_wheel():
 
 def test_parse_wheel_name_too_few_fields():
     # Malformed wheel filenames (too few fields) should be rejected.
-    m = _load_manifest_module()
     meta = m.parse_wheel_name("torch-2.7.0.whl")
     assert meta.distribution is None
     assert meta.version is None
@@ -124,8 +118,6 @@ def test_parse_wheel_name_too_few_fields():
 
 def test_manifest_generation_end_to_end(tmp_path: Path, gha_env):
     # End-to-end: create a fake dist dir and ensure exactly one manifest is written.
-    m = _load_manifest_module()
-
     out_dir = tmp_path / "dist"
     out_dir.mkdir(parents=True)
 
@@ -152,7 +144,7 @@ def test_manifest_generation_end_to_end(tmp_path: Path, gha_env):
         "nightly",
     ]
 
-    _run_main_with_args(m, argv)
+    _run_main_with_args(argv)
 
     # Exactly one manifest should be produced.
     manifests = list(manifest_dir.glob("*.json"))
@@ -184,8 +176,6 @@ def test_manifest_generation_end_to_end(tmp_path: Path, gha_env):
 
 def test_manifest_filename_release_28(tmp_path: Path, gha_env):
     # release/2.8 should normalize to release-2.8 in the manifest filename.
-    m = _load_manifest_module()
-
     out_dir = tmp_path / "dist"
     out_dir.mkdir(parents=True)
 
@@ -194,7 +184,6 @@ def test_manifest_filename_release_28(tmp_path: Path, gha_env):
     manifest_dir = out_dir / "manifests"
 
     _run_main_with_args(
-        m,
         [
             "--output-dir",
             str(out_dir),
@@ -210,7 +199,7 @@ def test_manifest_filename_release_28(tmp_path: Path, gha_env):
             "3.12",
             "--pytorch-git-ref",
             "release/2.8",
-        ],
+        ]
     )
 
     manifest_path = manifest_dir / "therock-manifest_torch_py3.12_release-2.8.json"
