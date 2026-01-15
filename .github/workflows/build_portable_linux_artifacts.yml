@@ -130,7 +130,7 @@ jobs:
 
       - name: Build therock-archives and therock-dist
         env:
-          JOB_NAME: ${{ github.job }}
+          GITHUB_JOB_NAME: ${{ github.job }}
           MEMORY_MONITOR_INTERVAL: ${{ inputs.monitor_interval }}
         run: |
           MONITOR_PID=""

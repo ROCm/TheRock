@@ -155,13 +155,14 @@ jobs:
       - name: Build therock-archives and therock-dist
         if: ${{ !cancelled() }}
         env:
+          GITHUB_JOB_NAME: ${{ github.job }}
           MEMORY_MONITOR_INTERVAL: ${{ inputs.monitor_interval }}
         run: |
-          bash build_tools/github_actions/start_memory_monitor_win.sh
+          bash build_tools/github_actions/start_memory_monitor.sh
 
           cmake --build "${{ env.BUILD_DIR }}" --target therock-archives therock-dist -- -k 0
 
-          bash build_tools/github_actions/stop_memory_monitor_win.sh
+          bash build_tools/github_actions/stop_memory_monitor.sh
 
       - name: Report
         if: ${{ !cancelled() }}
