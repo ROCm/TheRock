@@ -92,7 +92,7 @@ amdgpu_family_info_matrix_presubmit = {
     },
     "gfx120x": {
         "linux": {
-            "test-runs-on": "linux-gfx9700-gpu-rocm",
+            "test-runs-on": "linux-rx9700-gpu-rocm",
             "family": "gfx120X-all",
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
