@@ -5,10 +5,7 @@ Upload the generated PyTorch manifest JSON to S3.
 Intended for use from GitHub Actions workflows.
 """
 
-from __future__ import annotations
-
 import argparse
-import os
 import subprocess
 from pathlib import Path
 
@@ -35,10 +32,14 @@ def main() -> None:
         help="Platform name for prefix.",
     )
     ap.add_argument(
-        "--amdgpu-family", required=True, help="AMDGPU family (used in prefix)."
+        "--amdgpu-family",
+        required=True,
+        help="AMDGPU family (used in prefix).",
     )
     ap.add_argument(
-        "--python-version", required=True, help="Python version (e.g. 3.11 or py3.11)."
+        "--python-version",
+        required=True,
+        help="Python version (e.g. 3.11 or py3.11).",
     )
     ap.add_argument(
         "--pytorch-git-ref",
