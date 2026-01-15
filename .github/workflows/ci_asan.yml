@@ -12,7 +12,6 @@ on:
       linux_use_prebuilt_artifacts:
         type: boolean
         description: "If enabled, the CI will pull Linux artifacts using artifact_run_id and only run tests"
-        default: false
       artifact_run_id:
         type: string
         description: "If provided, the tests will run on this artifact ID"
@@ -34,8 +33,6 @@ jobs:
     uses: ./.github/workflows/setup.yml
     with:
       build_variant: "asan"
-      linux_amdgpu_families: ${{ inputs.linux_amdgpu_families }}
-      linux_use_prebuilt_artifacts: ${{ inputs.linux_use_prebuilt_artifacts }}
 
   linux_build_and_test:
     name: Linux::${{ matrix.variant.family }}::${{ matrix.variant.build_variant_label }}

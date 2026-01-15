@@ -25,7 +25,6 @@ on:
       linux_use_prebuilt_artifacts:
         type: boolean
         description: "If enabled, the CI will pull Linux artifacts using artifact_run_id and only run tests"
-        default: false
       windows_amdgpu_families:
         type: string
         description: "Insert comma-separated list of Windows GPU families to build and test. ex: gfx94X, gfx1201X"
@@ -37,7 +36,6 @@ on:
       windows_use_prebuilt_artifacts:
         type: boolean
         description: "If enabled, the CI will pull Windows artifacts using artifact_run_id and only run tests"
-        default: false
       artifact_run_id:
         type: string
         description: "If provided, the tests will run on this artifact ID"
@@ -65,12 +63,6 @@ jobs:
     with:
       build_variant: "release"
       multi_arch: true
-      linux_amdgpu_families: ${{ inputs.linux_amdgpu_families }}
-      linux_test_labels: ${{ inputs.linux_test_labels }}
-      linux_use_prebuilt_artifacts: ${{ inputs.linux_use_prebuilt_artifacts }}
-      windows_amdgpu_families: ${{ inputs.windows_amdgpu_families }}
-      windows_test_labels: ${{ inputs.windows_test_labels }}
-      windows_use_prebuilt_artifacts: ${{ inputs.windows_use_prebuilt_artifacts }}
 
   linux_build_and_test:
     name: Linux::${{ matrix.variant.build_variant_label }}
