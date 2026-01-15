@@ -100,7 +100,7 @@ submodules = ["rocm-libraries"]
 
 [source_sets.ml-frameworks]
 description = "ML framework submodules"
-submodules = ["composable_kernel"]
+submodules = []
 
 [source_sets.comm-libs]
 description = "Communication library submodules"
