@@ -208,14 +208,14 @@ if(THEROCK_ENABLE_HIPDNN)
   )
 endif(THEROCK_ENABLE_HIPDNN)
 
-if(THEROCK_ENABLE_MIOPEN_PLUGIN)
+if(THEROCK_ENABLE_MIOPEN_PROVIDER)
   ##############################################################################
-  # hipDNN MIOpen plugin
+  # hipDNN MIOpen provider
   ##############################################################################
 
-  therock_cmake_subproject_declare(MIOpen_plugin
-    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipdnn/plugins/miopen_legacy_plugin"
-    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/miopen_plugin"
+  therock_cmake_subproject_declare(miopen_provider
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/dnn-providers/miopen-provider"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/miopen_provider"
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
@@ -236,20 +236,20 @@ if(THEROCK_ENABLE_MIOPEN_PLUGIN)
     RUNTIME_DEPS
       MIOpen
   )
-  therock_cmake_subproject_glob_c_sources(MIOpen_plugin
+  therock_cmake_subproject_glob_c_sources(miopen_provider
   SUBDIRS
     .
   )
-  therock_cmake_subproject_activate(MIOpen_plugin)
+  therock_cmake_subproject_activate(miopen_provider)
 
-  therock_provide_artifact(miopen-plugin
+  therock_provide_artifact(miopen-provider
     TARGET_NEUTRAL
-    DESCRIPTOR artifact-miopen-plugin.toml
+    DESCRIPTOR artifact-miopen-provider.toml
     COMPONENTS
       dbg
       lib
       test
     SUBPROJECT_DEPS
-      MIOpen_plugin
+      miopen_provider
   )
-endif(THEROCK_ENABLE_MIOPEN_PLUGIN)
+endif(THEROCK_ENABLE_MIOPEN_PROVIDER)
