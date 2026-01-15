@@ -124,7 +124,7 @@ This avoids namespace conflicts with distro-provided packages. Distros will use 
 
 ### Device-Specific Architecture Packages
 
-Users are encouraged to identify their local GPU architecture and install packages exclusive to the GPU architectures present. Otherwise, users can install a complete ROCm installation with all GPU architectures to enable all GPUs. Users not familiar with their GPU architecture may be director to runfile installers with autodetection capabilities. These compromises are made with the understanding that package managers cannot autodetect local hardware to select package families.
+Users are encouraged to identify their local GPU architecture and install packages exclusive to the GPU architectures present. Otherwise, users can install a complete ROCm installation with all GPU architectures to enable all GPUs. Users not familiar with their GPU architecture may be directed to runfile installers with autodetection capabilities. These compromises are made with the understanding that package managers cannot autodetect local hardware to select package families.
 
 | Component | Meta package for all device packages |
 | :------------- | :------------- |
