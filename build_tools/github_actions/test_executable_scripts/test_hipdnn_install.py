@@ -18,7 +18,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-THEROCK_DIST_DIR = os.getenv("THEROCK_DIST_DIR")
+OUTPUT_ARTIFACTS_DIR = os.getenv("OUTPUT_ARTIFACTS_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 TEST_PROJECT_DIR = SCRIPT_DIR / "hipdnn_install_tests"
@@ -35,7 +35,7 @@ def run_tests(build_dir: Path):
         "-S",
         str(TEST_PROJECT_DIR),
         "-GNinja",
-        f"-DCMAKE_PREFIX_PATH={THEROCK_DIST_DIR}",
+        f"-DCMAKE_PREFIX_PATH={OUTPUT_ARTIFACTS_DIR}",
         "--log-level=WARNING",
     ]
     logging.info(f"++ Configure: {shlex.join(configure_cmd)}")
@@ -62,10 +62,10 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    if not THEROCK_DIST_DIR:
-        raise RuntimeError("THEROCK_DIST_DIR environment variable not set")
+    if not OUTPUT_ARTIFACTS_DIR:
+        raise RuntimeError("OUTPUT_ARTIFACTS_DIR environment variable not set")
 
-    logging.info(f"Using THEROCK_DIST_DIR: {THEROCK_DIST_DIR}")
+    logging.info(f"Using OUTPUT_ARTIFACTS_DIR: {OUTPUT_ARTIFACTS_DIR}")
 
     if args.build_dir:
         build_dir = args.build_dir.resolve()
