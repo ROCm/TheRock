@@ -90,9 +90,11 @@ def core_artifact_filter(an: ArtifactName) -> bool:
         "core-ocl",
         "core-hipinfo",
         "core-runtime",
+        "hipdnn",
         "hipify",
         "host-blas",
         "host-suite-sparse",
+        "miopen-plugin",
         "rocprofiler-sdk",
         "sysdeps",
     ] and an.component in [
