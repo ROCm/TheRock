@@ -111,7 +111,9 @@ class GeneratePyTorchManifestTest(unittest.TestCase):
         out_dir = self.tmp_path / "dist"
         out_dir.mkdir(parents=True)
 
-        (out_dir / "torch-2.7.0-cp312-cp312-manylinux_2_28_x86_64.whl").write_bytes(b"x")
+        (out_dir / "torch-2.7.0-cp312-cp312-manylinux_2_28_x86_64.whl").write_bytes(
+            b"x"
+        )
 
         manifest_dir = out_dir / "manifests"
 
@@ -137,10 +139,14 @@ class GeneratePyTorchManifestTest(unittest.TestCase):
         self._run_main_with_args(argv)
 
         manifests = list(manifest_dir.glob("*.json"))
-        self.assertEqual(len(manifests), 1, f"Expected exactly one manifest, found: {manifests}")
+        self.assertEqual(
+            len(manifests), 1, f"Expected exactly one manifest, found: {manifests}"
+        )
 
         manifest_path = manifest_dir / "therock-manifest_torch_py3.12_nightly.json"
-        self.assertTrue(manifest_path.exists(), f"Expected manifest not found: {manifest_path}")
+        self.assertTrue(
+            manifest_path.exists(), f"Expected manifest not found: {manifest_path}"
+        )
 
         data = json.loads(manifest_path.read_text(encoding="utf-8"))
         self.assertEqual(data["project"], "TheRock")
@@ -162,7 +168,9 @@ class GeneratePyTorchManifestTest(unittest.TestCase):
         out_dir = self.tmp_path / "dist_release"
         out_dir.mkdir(parents=True)
 
-        (out_dir / "torch-2.8.0-cp312-cp312-manylinux_2_28_x86_64.whl").write_bytes(b"x")
+        (out_dir / "torch-2.8.0-cp312-cp312-manylinux_2_28_x86_64.whl").write_bytes(
+            b"x"
+        )
 
         manifest_dir = out_dir / "manifests"
 
