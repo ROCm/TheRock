@@ -58,7 +58,7 @@ def get_all_wheel_versions(
     torch_version = get_wheel_version(package_dist_dir, "torch")
     torchaudio_version = get_wheel_version(package_dist_dir, "torchaudio")
     torchvision_version = get_wheel_version(package_dist_dir, "torchvision")
-    triton_version = get_wheel_version(package_dist_dir, "pytorch_triton_rocm")
+    triton_version = get_wheel_version(package_dist_dir, "triton")
     _log("")
 
     if torch_version:

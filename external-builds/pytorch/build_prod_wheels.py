@@ -643,24 +643,39 @@ def do_build_pytorch(
     # Compute version.
     pytorch_build_version = (pytorch_dir / "version.txt").read_text().strip()
     pytorch_build_version += args.version_suffix
+    pytorch_build_version_parsed = parse(pytorch_build_version)
     print(f"  Using PYTORCH_BUILD_VERSION: {pytorch_build_version}")
 
-    ## Disable FBGEMM_GENAI on Linux for PyTorch, as not available for 2.7 on rocm/pytorch
-    ## and causes build failures for PyTorch >= 2.8.
+    # Detect exactly PyTorch 2.9.x
+    is_pytorch_2_9 = pytorch_build_version_parsed.release[:2] == (2, 9)
+
+    ## Enable FBGEMM_GENAI on Linux for PyTorch, as it is available only for 2.9 on rocm/pytorch
+    ## and causes build failures for other PyTorch versions
     ## Warn user when enabling it manually.
     ## https://github.com/ROCm/TheRock/issues/2056
     if not is_windows:
         # Enabling/Disabling FBGEMM_GENAI based on Pytorch version in Linux
-        if args.enable_pytorch_fbgemm_genai_linux is None:
-            use_fbgemm_genai = "OFF"
+        if is_pytorch_2_9:
+            # Default ON for 2.9.x, unless explicitly disabled
+            # args.enable_pytorch_fbgemm_genai_linux can be set to false
+            # by passing --no-enable-pytorch-fbgemm-genai-linux as input
+            if args.enable_pytorch_fbgemm_genai_linux is False:
+                use_fbgemm_genai = "OFF"
+                print(f"  [WARN] User-requested override to set FBGEMM_GENAI = OFF.")
+            else:
+                use_fbgemm_genai = "ON"
         else:
-            # Explicit override: user has set the flag to true/false
-            use_fbgemm_genai = "ON" if args.enable_pytorch_fbgemm_genai_linux else "OFF"
+            # Default OFF for all other versions, unless explicitly enabled
+            if args.enable_pytorch_fbgemm_genai_linux is True:
+                use_fbgemm_genai = "ON"
+            else:
+                use_fbgemm_genai = "OFF"
+
             if use_fbgemm_genai == "ON":
                 print(f"  [WARN] User-requested override to set FBGEMM_GENAI = ON.")
                 print(
                     f"""  [WARN] Please note that FBGEMM_GENAI is not available for PyTorch 2.7, and enabling it may cause build failures
-for PyTorch >= 2.8. See status of issue https://github.com/ROCm/TheRock/issues/2056
+                    for PyTorch >= 2.8 (Except 2.9). See status of issue https://github.com/ROCm/TheRock/issues/2056
                       """
                 )
 
@@ -670,8 +685,15 @@ for PyTorch >= 2.8. See status of issue https://github.com/ROCm/TheRock/issues/2
         if args.enable_pytorch_flash_attention_linux is None:
             # Default behavior — determined by if triton is build
             use_flash_attention = "ON" if triton_requirement else "OFF"
-            if "gfx103" in env["PYTORCH_ROCM_ARCH"]:
-                # no aotriton support for gfx103X
+
+            # no aotriton support for gfx103X
+            #
+            # temporarily disable aotriton for gfx1152/53 until pytorch
+            # uses a commit that enables it ( https://github.com/ROCm/aotriton/pull/142 )
+            AOTRITON_UNSUPPORTED_ARCHS = ["gfx103", "gfx1152", "gfx1153"]
+            if any(
+                arch in env["PYTORCH_ROCM_ARCH"] for arch in AOTRITON_UNSUPPORTED_ARCHS
+            ):
                 use_flash_attention = "OFF"
             print(
                 f"Flash Attention default behavior (based on triton and gpu): {use_flash_attention}"
@@ -723,9 +745,16 @@ for PyTorch >= 2.8. See status of issue https://github.com/ROCm/TheRock/issues/2
     if is_windows:
         copy_msvc_libomp_to_torch_lib(pytorch_dir)
 
-        use_flash_attention = (
-            "1" if args.enable_pytorch_flash_attention_windows else "0"
-        )
+        use_flash_attention = "0"
+
+        # temporarily prevent enabling aotriton for gfx1152/53 until pytorch
+        # uses a commit that enables it ( https://github.com/ROCm/aotriton/pull/142 )
+        AOTRITON_UNSUPPORTED_ARCHS = ["gfx1152", "gfx1153"]
+        if args.enable_pytorch_flash_attention_windows and not any(
+            arch in env["PYTORCH_ROCM_ARCH"] for arch in AOTRITON_UNSUPPORTED_ARCHS
+        ):
+            use_flash_attention = "1"
+
         env.update(
             {
                 "USE_FLASH_ATTENTION": use_flash_attention,
@@ -848,6 +877,13 @@ def do_build_pytorch_audio(
             "BUILD_SOX": "0",
         }
     )
+
+    if is_windows:
+        env.update(
+            {
+                "DISTUTILS_USE_SDK": "1",
+            }
+        )
 
     remove_dir_if_exists(pytorch_audio_dir / "dist")
     if args.clean:

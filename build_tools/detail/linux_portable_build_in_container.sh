@@ -1,5 +1,5 @@
 #!/bin/bash
-# See corresponding linux_build_portable.py which invokes this within a
+# See corresponding linux_portable_build.py which invokes this within a
 # container.
 set -e
 set -o pipefail
@@ -15,6 +15,8 @@ mkdir -p "$PIP_CACHE_DIR"
 
 pip install -r /therock/src/requirements.txt
 
+python /therock/src/build_tools/health_status.py
+
 export CMAKE_C_COMPILER_LAUNCHER=ccache
 export CMAKE_CXX_COMPILER_LAUNCHER=ccache
 
@@ -27,6 +29,7 @@ fi
 set -o xtrace
 time cmake -GNinja -S /therock/src -B "$OUTPUT_DIR/build" \
   -DTHEROCK_BUNDLE_SYSDEPS=ON \
+  -DTHEROCK_ENABLE_SYSDEPS_AMD_MESA=ON \
   ${PYTHON_EXECUTABLES_ARG} \
   "$@"
 time cmake --build "$OUTPUT_DIR/build" --target therock-archives therock-dist

@@ -27,7 +27,7 @@ Let's say we want to test
 which
 
 1. Installs ROCm packages that have already been built
-1. Builds `torch`, `torchvision`, `torchaudio`, and `pytorch-triton-rocm` packages
+1. Builds `torch`, `torchvision`, `torchaudio`, and `triton` packages
 1. Uploads the built packages to a staging directory in a release index
 1. Runs tests on the packages
 1. Copies the built packages from staging to the final directory in that

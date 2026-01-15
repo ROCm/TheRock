@@ -6,6 +6,7 @@ import unittest
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 import configure_ci
+from benchmarks.benchmark_test_matrix import benchmark_matrix
 
 therock_test_runner_dict = {
     "gfx110x": {
@@ -376,6 +377,27 @@ class ConfigureCITest(unittest.TestCase):
             target_output=windows_target_output, allow_xfail=True
         )
         self.assertEqual(windows_test_labels, [])
+
+    def test_determine_long_lived_branch(self):
+        """Test to correctly determine long-lived branch that expect more testing."""
+
+        # long-lived branches
+        for branch in [
+            "main",
+            "release/therock-7.9",
+            "release/therock-",
+            "release/therock-100",
+        ]:
+            self.assertTrue(configure_ci.determine_long_lived_branch(branch))
+        # non long-lived branches
+        for branch in [
+            "users/test",
+            "release/therock",
+            "main-test",
+            "newfeature",
+            "release/main",
+        ]:
+            self.assertFalse(configure_ci.determine_long_lived_branch(branch))
 
     ###########################################################################
     # Tests for multi_arch mode

@@ -142,6 +142,9 @@ class ROCmDevelTest(unittest.TestCase):
                 # Internal rocprofiler-sdk libraries are meant to be pre-loaded
                 # explicitly and cannot necessarily be loaded standalone.
                 continue
+            if "libtest_linking_lib" in str(so_path):
+                # rocprim unit tests, not actual library files
+                continue
             with self.subTest(msg="Check shared library loads", so_path=so_path):
                 # Load each in an isolated process because not all libraries in the tree
                 # are designed to load into the same process (i.e. LLVM runtime libs,

@@ -106,18 +106,31 @@ set(THEROCK_ARTIFACT_ARCHIVE_SUFFIX "" CACHE STRING "Suffix to add to artifact a
 
 # Kpack artifact splitting
 option(THEROCK_KPACK_SPLIT_ARTIFACTS "Split target-specific artifacts into generic and arch-specific components" OFF)
-set(THEROCK_KPACK_DIR "" CACHE PATH "Path to rocm-kpack repository (required when THEROCK_KPACK_SPLIT_ARTIFACTS=ON)")
+# TODO: Once rocm-kpack is moved into the rocm-systems repo, hard-code the path.
+# Check for unset OR empty to handle -DTHEROCK_KPACK_DIR="" edge case.
+if(NOT THEROCK_KPACK_DIR)
+  set(THEROCK_KPACK_DIR "${THEROCK_SOURCE_DIR}/base/rocm-kpack")
+endif()
 if(THEROCK_KPACK_SPLIT_ARTIFACTS AND NOT THEROCK_KPACK_DIR)
   message(FATAL_ERROR "THEROCK_KPACK_DIR must be set when THEROCK_KPACK_SPLIT_ARTIFACTS=ON")
 endif()
 
 option(THEROCK_BUNDLE_SYSDEPS "Builds bundled system deps for portable builds into lib/rocm_sysdeps" ON)
 option(THEROCK_ENABLE_MPI "Enables building components with Message Passing Interface (MPI) support" OFF)
+option(THEROCK_ENABLE_LLVM_TESTS "Enables building LLVM LIT tests" OFF)
 
 set(THEROCK_SANITIZER "" CACHE STRING "Enable project wide sanitizer build (e.g. 'ASAN')")
 
 # List of python executables to use for multi-version python builds
 set(THEROCK_DIST_PYTHON_EXECUTABLES "" CACHE STRING "Build for multiple python versions in supported projects (default to Python3_EXECUTABLE if empty)")
+
+# List of python executables to use for building software that needs to embed
+# python (i.e. rocgdb). If this is empty then those components may build without
+# embedded python features. For production release, this is often different
+# from THEROCK_DIST_PYTHON_EXECUTABLES because the former is built without
+# libpython shared library support (because that is the safest way to build
+# extensions).
+set(THEROCK_SHARED_PYTHON_EXECUTABLES "" CACHE STRING "Build subprojects for embedded python variants (defaults to Python3_EXECUTABLE iff it was built shared)")
 
 # Source settings.
 # Use the rocm-libraries superrepo tracked in TheRock's `.gitmodules` or
@@ -218,12 +231,15 @@ option(THEROCK_USE_SAFE_DEPENDENCY_PROVIDER "Enable the safe dependency provider
 option(THEROCK_ENABLE_ALL "Enables building of all feature groups" ON)
 option(THEROCK_ENABLE_CORE "Enable building of core libraries" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_COMM_LIBS "Enable building of comm libraries" "${THEROCK_ENABLE_ALL}")
+option(THEROCK_ENABLE_DEBUG_TOOLS "Enable building the ROCm debug tools" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_MATH_LIBS "Enable building of math libraries" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_ML_LIBS "Enable building of ML libraries" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_PROFILER "Enable building the profiler libraries" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_DC_TOOLS "Enable building of data center tools" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_HOST_MATH "Build all bundled host math libraries by default" OFF)
 option(THEROCK_RESET_FEATURES "One-shot flag which forces all feature flags to their default state for this configuration run" OFF)
+# TODO(iree-org/fusilli/issues/57): Enable fusilli build once multi-arch support lands.
+option(THEROCK_ENABLE_IREE_LIBS "Enable building of IREE libraries" OFF)
 
 ################################################################################
 # Artifact-based features are auto-generated from BUILD_TOPOLOGY.toml
@@ -246,15 +262,9 @@ include("${CMAKE_CURRENT_BINARY_DIR}/cmake/therock_topology.cmake")
 # which filters out CORE_RUNTIME dependency for HIP_RUNTIME on Windows.
 
 # Optional sub-features that control behavior within artifacts
-if(NOT WIN32)
-  cmake_dependent_option(THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL
-    "Enables composable kernel in MIOpen" ON
-    "THEROCK_ENABLE_COMPOSABLE_KERNEL" OFF)
-endif()
-
-cmake_dependent_option(THEROCK_ROCWMMA_USE_ROCBLAS
-  "Enables rocBLAS validation in rocWMMA" ON
-  "THEROCK_ENABLE_ROCWMMA;THEROCK_ENABLE_BLAS" OFF)
+cmake_dependent_option(THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL
+  "Enables composable kernel in MIOpen" ON
+  "THEROCK_ENABLE_COMPOSABLE_KERNEL" OFF)
 
 cmake_dependent_option(THEROCK_ROCWMMA_ENABLE_BENCHMARKS
   "Enables building rocWMMA benchmarks" OFF
@@ -289,7 +299,6 @@ therock_add_feature(SOLVER
   DESCRIPTION "Enables solver libraries (hipsolver, rocsolver) within BLAS"
   REQUIRES BLAS PRIM SPARSE ${_solver_platform_requirements}
 )
-
 
 # Finalize all feature flags.
 therock_finalize_features()
@@ -351,10 +360,14 @@ endif()
 
 set(THEROCK_BUNDLED_BZIP2)
 set(THEROCK_BUNDLED_ELFUTILS)
+set(THEROCK_BUNDLED_EXPAT)
+set(THEROCK_BUNDLED_GMP)
 set(THEROCK_BUNDLED_LIBBACKTRACE)
 set(THEROCK_BUNDLED_LIBCAP)
 set(THEROCK_BUNDLED_LIBDRM)
 set(THEROCK_BUNDLED_LIBLZMA)
+set(THEROCK_BUNDLED_MPFR)
+set(THEROCK_BUNDLED_NCURSES)
 set(THEROCK_BUNDLED_NUMACTL)
 set(THEROCK_BUNDLED_SQLITE3)
 set(THEROCK_BUNDLED_ZLIB)
@@ -373,10 +386,14 @@ if(THEROCK_BUNDLE_SYSDEPS)
     endif()
     set(THEROCK_BUNDLED_BZIP2 therock-bzip2)
     set(THEROCK_BUNDLED_ELFUTILS therock-elfutils)
+    set(THEROCK_BUNDLED_EXPAT, therock-expat)
+    set(THEROCK_BUNDLED_GMP, therock-gmp)
     set(THEROCK_BUNDLED_LIBBACKTRACE therock-libbacktrace)
     set(THEROCK_BUNDLED_LIBCAP therock-libcap)
     set(THEROCK_BUNDLED_LIBDRM therock-libdrm)
     set(THEROCK_BUNDLED_LIBLZMA therock-liblzma)
+    set(THEROCK_BUNDLED_MPFR, therock-mpfr)
+    set(THEROCK_BUNDLED_NCURSES, therock-ncurses)
     set(THEROCK_BUNDLED_NUMACTL therock-numactl)
     set(THEROCK_BUNDLED_SQLITE3 therock-sqlite3)
     set(THEROCK_BUNDLED_ZLIB therock-zlib)
@@ -413,6 +430,7 @@ add_subdirectory(third-party)
 add_subdirectory(base)
 add_subdirectory(compiler)
 add_subdirectory(core)
+add_subdirectory(debug-tools)
 # Note that rocprofiler-register is in base and is what higher level clients
 # depend on. The profiler itself is independent.
 add_subdirectory(profiler)
@@ -421,6 +439,7 @@ add_subdirectory(dctools)
 add_subdirectory(comm-libs)
 add_subdirectory(math-libs)
 add_subdirectory(ml-libs)
+add_subdirectory(iree-libs)
 
 if(THEROCK_BUILD_TESTING)
   add_subdirectory(examples)

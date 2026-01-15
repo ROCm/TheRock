@@ -80,6 +80,7 @@ def build_configure(manylinux=False):
             "/opt/python/cp313-cp313/bin/python"
         )
         cmd.append(f"-DTHEROCK_DIST_PYTHON_EXECUTABLES={python_executables}")
+        cmd.append("-DTHEROCK_ENABLE_SYSDEPS_AMD_MESA=ON")
 
     if PLATFORM == "windows":
         # VCToolsInstallDir is required for build. Throwing an error if environment variable doesn't exist
