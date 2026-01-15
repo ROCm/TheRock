@@ -191,7 +191,7 @@ jobs:
           "jax_rocm7_plugin==${{ env.PACKAGE_VERSION }}" \
           "jax_rocm7_pjrt==${{ env.PACKAGE_VERSION }}"
           pip install jax==${{ env.JAX_VERSION }}
-          
+
       - name: Run JAX tests
         run: |
           pytest jax/jax_tests/tests/multi_device_test.py -q --log-cli-level=INFO
