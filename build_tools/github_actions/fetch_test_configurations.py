@@ -252,7 +252,7 @@ test_matrix = {
     # rocprofiler-compute tests
     "rocprofiler-compute": {
         "job_name": "rocprofiler_compute",
-        "fetch_artifact_args": "--rocprofiler-compute --tests",
+        "fetch_artifact_args": "--rocprofiler-compute --rocprofiler-sdk --tests",
         "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_rocprofiler_compute.py')}",
         "platform": ["linux"],
