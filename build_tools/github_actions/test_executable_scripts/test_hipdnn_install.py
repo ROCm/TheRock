@@ -10,6 +10,7 @@ consumed by external projects using CMake's find_package. It tests the
 CMake packaging/installation correctness, not hipDNN functionality.
 """
 
+import argparse
 import logging
 import os
 import shlex
@@ -27,7 +28,6 @@ logging.basicConfig(level=logging.INFO)
 
 def run_tests(build_dir: Path):
     """Configure, build, and test all hipDNN packages."""
-    # Configure
     configure_cmd = [
         "cmake",
         "-B",
@@ -36,28 +36,46 @@ def run_tests(build_dir: Path):
         str(TEST_PROJECT_DIR),
         "-GNinja",
         f"-DCMAKE_PREFIX_PATH={THEROCK_DIST_DIR}",
+        "--log-level=WARNING",
     ]
     logging.info(f"++ Configure: {shlex.join(configure_cmd)}")
     subprocess.run(configure_cmd, check=True, cwd=THEROCK_DIR)
 
-    # Build
     build_cmd = ["cmake", "--build", str(build_dir)]
     logging.info(f"++ Build: {shlex.join(build_cmd)}")
     subprocess.run(build_cmd, check=True, cwd=THEROCK_DIR)
 
-    # Test
     test_cmd = ["ctest", "--test-dir", str(build_dir), "--output-on-failure"]
     logging.info(f"++ Test: {shlex.join(test_cmd)}")
     subprocess.run(test_cmd, check=True, cwd=THEROCK_DIR)
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Test hipDNN package installation and consumption"
+    )
+    parser.add_argument(
+        "--build-dir",
+        type=Path,
+        help="Build directory path (will be created if doesn't exist). "
+        "If not specified, uses temporary directory that is auto-deleted.",
+    )
+    args = parser.parse_args()
+
     if not THEROCK_DIST_DIR:
         raise RuntimeError("THEROCK_DIST_DIR environment variable not set")
 
     logging.info(f"Using THEROCK_DIST_DIR: {THEROCK_DIST_DIR}")
 
-    with tempfile.TemporaryDirectory() as build_dir:
-        run_tests(Path(build_dir))
+    if args.build_dir:
+        build_dir = args.build_dir.resolve()
+        build_dir.mkdir(parents=True, exist_ok=True)
+        logging.info(f"Using persistent build directory: {build_dir}")
+        run_tests(build_dir)
+        logging.info(f"Build artifacts retained in: {build_dir}")
+    else:
+        logging.info("Using temporary build directory (auto-cleanup)")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            run_tests(Path(temp_dir))
 
     logging.info("All hipDNN install tests passed!")
