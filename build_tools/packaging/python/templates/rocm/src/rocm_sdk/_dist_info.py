@@ -238,6 +238,7 @@ LibraryEntry("hipsparselt", "libraries", "libhipsparselt.so*", "")
 LibraryEntry("hipsolver", "libraries", "libhipsolver.so*", "hipsolver*.dll")
 LibraryEntry("rccl", "libraries", "librccl.so*", "")
 LibraryEntry("miopen", "libraries", "libMIOpen.so*", "MIOpen*.dll")
+LibraryEntry("hipdnn", "core", "libhipdnn_backend.so*", "hipdnn_backend*.dll")
 
 # Others we may want:
 # hiprtc-builtins
