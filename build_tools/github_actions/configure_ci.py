@@ -46,7 +46,6 @@
   * Detailed information for CI maintainers
 """
 
-import argparse
 import fnmatch
 import json
 import os
@@ -54,339 +53,17 @@ from pathlib import Path
 import subprocess
 import sys
 from typing import Iterable, List, Optional
-
+import string
 from amdgpu_family_matrix import (
     all_build_variants,
     get_all_families_for_trigger_types,
 )
-
 from fetch_test_configurations import test_matrix
 
 from github_actions_utils import *
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = THIS_SCRIPT_DIR.parent.parent
-
-# --------------------------------------------------------------------------- #
-# Parsing helpers
-# --------------------------------------------------------------------------- #
-
-
-def parse_gpu_family_overrides(value: str, lookup_matrix: dict) -> list[str]:
-    """Parses an amdgpu_families override string into lookup-matrix keys.
-
-    Accepts comma/whitespace-separated tokens. Each token may be either:
-    - A matrix key (e.g. "gfx94x", "gfx110x")
-    - A canonical family string from the matrix (e.g. "gfx94X-dcgpu", "gfx110X-all")
-    """
-    # Build a reverse map from canonical family strings -> lookup keys.
-    family_to_key: dict[str, str] = {}
-    for key, platform_set in lookup_matrix.items():
-        if not isinstance(platform_set, dict):
-            continue
-        for platform_info in platform_set.values():
-            if not isinstance(platform_info, dict):
-                continue
-            family = platform_info.get("family")
-            if family:
-                family_to_key[str(family).lower()] = key
-
-    tokens = [t for t in value.replace(",", " ").split() if t]
-    resolved: list[str] = []
-    for token in tokens:
-        tl = token.lower()
-        if tl in lookup_matrix:
-            resolved.append(tl)
-        elif tl in family_to_key:
-            resolved.append(family_to_key[tl])
-        else:
-            print(
-                f"WARNING: unknown target name '{token}' not found in matrix keys or family strings"
-            )
-    return resolved
-
-
-# --------------------------------------------------------------------------- #
-# Main orchestration helpers
-# --------------------------------------------------------------------------- #
-
-
-def _add_gpu_families_from_input(
-    families: dict,
-    lookup_matrix: dict,
-    selected_target_names: list,
-    fallback_targets: list = None,
-) -> bool:
-    """Add GPU families from input to selected_target_names.
-
-    Args:
-        families: Dictionary containing 'amdgpu_families' key with comma-separated values
-        lookup_matrix: Family info matrix from amdgpu_family_matrix.py
-        selected_target_names: List to append selected target names to (modified in place)
-        fallback_targets: Optional list of fallback targets if no explicit input provided
-
-    Returns:
-        True if explicit input was used, False if fallback was used
-    """
-    input_gpu_targets = families.get("amdgpu_families", "")
-    if input_gpu_targets:
-        print(f"Using explicitly provided GPU families: {input_gpu_targets}")
-        requested_target_names = parse_gpu_family_overrides(
-            input_gpu_targets, lookup_matrix
-        )
-        selected_target_names.extend(
-            filter_known_names(requested_target_names, "target", lookup_matrix)
-        )
-        return True
-    elif fallback_targets is not None:
-        selected_target_names.extend(fallback_targets)
-        return False
-    return False
-
-
-def _format_variants_for_summary(variants: list[dict]) -> list:
-    result = []
-    for item in variants:
-        if "family" in item:
-            result.append(item["family"])
-        elif "matrix_per_family_json" in item:
-            # Multi-arch mode: show the families from the JSON
-            families = json.loads(item["matrix_per_family_json"])
-            result.append([f["amdgpu_family"] for f in families])
-    return result
-
-
-def _cross_product_projects_with_gpu_variants(
-    project_configs: list[dict], gpu_variants: list[dict]
-) -> list[dict]:
-    """Cross-products external repo project configs with GPU family variants."""
-    final_variants: list[dict] = []
-    for project_config in project_configs:
-        for gpu_variant in gpu_variants:
-            final_variants.append(
-                {
-                    **gpu_variant,
-                    "project_to_test": project_config["project_to_test"],
-                    "cmake_options": project_config["cmake_options"],
-                }
-            )
-    return final_variants
-
-
-def _determine_enable_build_jobs_and_test_type(
-    *,
-    github_event_name: str,
-    is_schedule: bool,
-    base_ref: str,
-    linux_test_output: list,
-    windows_test_output: list,
-    has_external_project_configs: bool,
-) -> tuple[bool, str]:
-    test_type = "smoke"
-
-    # In the case of a scheduled run, we always want to build and we want to run full tests
-    if is_schedule:
-        enable_build_jobs = True
-        test_type = "full"
-        return enable_build_jobs, test_type
-
-    # When external repos explicitly call TheRock's CI (workflow_dispatch or workflow_call),
-    # they're requesting specific project builds. Honor this request without checking modified paths.
-    if has_external_project_configs:
-        print("External repo requesting builds - enabling without path checks")
-        enable_build_jobs = True
-        return enable_build_jobs, (
-            "full" if (linux_test_output or windows_test_output) else test_type
-        )
-
-    modified_paths = get_modified_paths(base_ref)
-    print("modified_paths (max 200):", modified_paths[:200])
-    print(f"Checking modified files since this had a {github_event_name} trigger")
-    # TODO(#199): other behavior changes
-    #     * workflow_dispatch or workflow_call with inputs controlling enabled jobs?
-    enable_build_jobs = should_ci_run_given_modified_paths(modified_paths)
-
-    # If the modified path contains any git submodules, we want to run a full test suite.
-    # Otherwise, we just run smoke tests
-    submodule_paths = get_therock_submodule_paths()
-    matching_submodule_paths = list(set(submodule_paths) & set(modified_paths))
-    if matching_submodule_paths:
-        print(
-            f"Found changed submodules: {str(matching_submodule_paths)}. Running full tests."
-        )
-        test_type = "full"
-
-    # If any test label is included, run full test suite for specified tests
-    if linux_test_output or windows_test_output:
-        test_type = "full"
-
-    return enable_build_jobs, test_type
-
-
-def _emit_summary_and_outputs(
-    *,
-    linux_variants_output: list[dict],
-    linux_test_output: list,
-    windows_variants_output: list[dict],
-    windows_test_output: list,
-    enable_build_jobs: bool,
-    test_type: str,
-    base_args: dict,
-) -> None:
-    gha_append_step_summary(
-        f"""## Workflow configure results
-
-* `linux_variants`: {str(_format_variants_for_summary(linux_variants_output))}
-* `linux_test_labels`: {str([test for test in linux_test_output])}
-* `linux_use_prebuilt_artifacts`: {json.dumps(base_args.get("linux_use_prebuilt_artifacts"))}
-* `windows_variants`: {str(_format_variants_for_summary(windows_variants_output))}
-* `windows_test_labels`: {str([test for test in windows_test_output])}
-* `windows_use_prebuilt_artifacts`: {json.dumps(base_args.get("windows_use_prebuilt_artifacts"))}
-* `enable_build_jobs`: {json.dumps(enable_build_jobs)}
-* `test_type`: {test_type}
-    """
-    )
-
-    output = {
-        "linux_variants": json.dumps(linux_variants_output),
-        "linux_test_labels": json.dumps(linux_test_output),
-        "windows_variants": json.dumps(windows_variants_output),
-        "windows_test_labels": json.dumps(windows_test_output),
-        "enable_build_jobs": json.dumps(enable_build_jobs),
-        "test_type": test_type,
-    }
-    gha_set_output(output)
-
-
-def _detect_external_repo(cwd: Path, repo_override: str) -> tuple[bool, Optional[str]]:
-    # List of supported external repositories
-    external_repos = ["rocm-libraries", "rocm-systems"]
-
-    if repo_override:
-        print(f"Using repository override: {repo_override}")
-        repo_name_from_override = (
-            repo_override.split("/")[-1] if "/" in repo_override else repo_override
-        )
-        for external_repo in external_repos:
-            if external_repo in repo_name_from_override.lower():
-                print(f"Detected external repository from override: {external_repo}")
-                return True, external_repo
-        return False, None
-
-    # Check if any part of the path matches an external repo name
-    # Using path parts prevents false matches like "/my-rocm-libraries-backup/other-project"
-    cwd_parts = [p.lower() for p in cwd.parts]
-    for external_repo in external_repos:
-        if external_repo in cwd_parts:
-            print(f"Detected external repository from path: {external_repo}")
-            return True, external_repo
-
-    return False, None
-
-
-def _collect_inputs_from_env() -> tuple[dict, dict, dict]:
-    base_args: dict = {}
-    linux_families: dict = {}
-    windows_families: dict = {}
-
-    linux_families["amdgpu_families"] = os.environ.get(
-        "INPUT_LINUX_AMDGPU_FAMILIES", ""
-    )
-    windows_families["amdgpu_families"] = os.environ.get(
-        "INPUT_WINDOWS_AMDGPU_FAMILIES", ""
-    )
-
-    base_args["pr_labels"] = os.environ.get("PR_LABELS", '{"labels": []}')
-    base_args["branch_name"] = os.environ.get("GITHUB_REF_NAME", "")
-    if base_args["branch_name"] == "":
-        print(
-            "[ERROR] GITHUB_REF_NAME is not set! No branch name detected. Exiting.",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-    base_args["github_event_name"] = os.environ.get("GITHUB_EVENT_NAME", "")
-    base_args["base_ref"] = os.environ.get("BASE_REF", "HEAD^1")
-    base_args["linux_use_prebuilt_artifacts"] = (
-        os.environ.get("LINUX_USE_PREBUILT_ARTIFACTS") == "true"
-    )
-    base_args["windows_use_prebuilt_artifacts"] = (
-        os.environ.get("WINDOWS_USE_PREBUILT_ARTIFACTS") == "true"
-    )
-    base_args["workflow_dispatch_linux_test_labels"] = os.getenv(
-        "LINUX_TEST_LABELS", ""
-    )
-    base_args["workflow_dispatch_windows_test_labels"] = os.getenv(
-        "WINDOWS_TEST_LABELS", ""
-    )
-    base_args["build_variant"] = os.getenv("BUILD_VARIANT", "release")
-    base_args["multi_arch"] = os.environ.get("MULTI_ARCH", "false") == "true"
-
-    return base_args, linux_families, windows_families
-
-
-def _detect_external_projects_or_exit(base_args: dict, repo_name: str) -> None:
-    print(f"\n=== Detecting projects for {repo_name} ===")
-    from external_repo_project_maps import detect_projects_from_changes
-
-    project_detection = detect_projects_from_changes(
-        repo_name=repo_name,
-        base_ref=base_args["base_ref"],
-        github_event_name=base_args.get("github_event_name", ""),
-        projects_input=os.environ.get("PROJECTS", ""),
-    )
-
-    linux_project_configs = project_detection.get("linux_projects", [])
-    windows_project_configs = project_detection.get("windows_projects", [])
-
-    print(
-        f"\nLinux: {len(linux_project_configs)} config(s), Windows: {len(windows_project_configs)} config(s)"
-    )
-
-    # If no projects detected for either platform, skip builds
-    if not linux_project_configs and not windows_project_configs:
-        print("No projects to build - outputting empty matrix")
-        output = {
-            "linux_variants": json.dumps([]),
-            "linux_test_labels": json.dumps([]),
-            "windows_variants": json.dumps([]),
-            "windows_test_labels": json.dumps([]),
-            "enable_build_jobs": json.dumps(False),
-            "test_type": "smoke",
-        }
-        gha_set_output(output)
-        sys.exit(0)
-
-    # Store platform-specific project configs
-    base_args["linux_external_project_configs"] = linux_project_configs
-    base_args["windows_external_project_configs"] = windows_project_configs
-
-
-def run_from_env() -> None:
-    # Auto-detect if we're running for an external repository
-    # When running from setup.yml with external_source_checkout=true, the working directory
-    # will be 'source-repo' which contains the external repo
-    cwd = Path.cwd()
-
-    # Check for repository override (for testing from TheRock)
-    repo_override = os.environ.get("GITHUB_REPOSITORY_OVERRIDE", "")
-    is_external_repo, repo_name = _detect_external_repo(cwd, repo_override)
-
-    if is_external_repo:
-        print("Using TheRock's matrix configuration for external repository")
-        # External repos use TheRock's GPU family matrix (no custom matrices needed)
-        # The project maps are centralized in external_repo_project_maps.py
-    else:
-        # We're running for TheRock itself - already imported at top of file
-        print("Using TheRock's own matrix configuration")
-
-    base_args, linux_families, windows_families = _collect_inputs_from_env()
-
-    # For external repos, call detect_external_projects first to get project-based matrix
-    if is_external_repo and repo_name:
-        _detect_external_projects_or_exit(base_args, repo_name)
-
-    main(base_args, linux_families, windows_families)
-
 
 # --------------------------------------------------------------------------- #
 # Filtering by modified paths
@@ -547,10 +224,7 @@ def should_ci_run_given_modified_paths(paths: Optional[Iterable[str]]) -> bool:
 
 def get_pr_labels(args) -> List[str]:
     """Gets a list of labels applied to a pull request."""
-    pr_labels_str = args.get("pr_labels", "")
-    if not pr_labels_str:
-        return []
-    data = json.loads(pr_labels_str)
+    data = json.loads(args.get("pr_labels"))
     labels = []
     for label in data.get("labels", []):
         labels.append(label["name"])
@@ -743,15 +417,11 @@ def matrix_generator(
 
     # Get the appropriate family matrix based on active triggers
     # For workflow_dispatch and PR labels, we need to check all matrices
-    presubmit_matrix = None
     if is_workflow_dispatch or is_pull_request:
         # For workflow_dispatch, check all possible matrices
         lookup_trigger_types = ["presubmit", "postsubmit", "nightly"]
         lookup_matrix = get_all_families_for_trigger_types(lookup_trigger_types)
         print(f"Using family matrix for trigger types: {lookup_trigger_types}")
-        # For PR defaults we still need the presubmit set (subset of lookup_matrix keys).
-        if is_pull_request:
-            presubmit_matrix = get_all_families_for_trigger_types(["presubmit"])
     elif active_trigger_types:
         lookup_matrix = get_all_families_for_trigger_types(active_trigger_types)
         print(f"Using family matrix for trigger types: {active_trigger_types}")
@@ -769,8 +439,17 @@ def matrix_generator(
     if is_workflow_dispatch:
         print(f"[WORKFLOW_DISPATCH] Generating build matrix with {str(base_args)}")
 
-        # Parse GPU family inputs
-        _add_gpu_families_from_input(families, lookup_matrix, selected_target_names)
+        # Parse inputs into a targets list.
+        input_gpu_targets = families.get("amdgpu_families")
+        # Sanitizing the string to remove any punctuation from the input
+        # After replacing punctuation with spaces, turning string input to an array
+        # (ex: ",gfx94X ,|.gfx1201" -> "gfx94X   gfx1201" -> ["gfx94X", "gfx1201"])
+        translator = str.maketrans(string.punctuation, " " * len(string.punctuation))
+        requested_target_names = input_gpu_targets.translate(translator).split()
+
+        selected_target_names.extend(
+            filter_known_names(requested_target_names, "target", lookup_matrix)
+        )
 
         # If any workflow dispatch test labels are specified, we run full tests for those specific tests
         workflow_dispatch_test_labels_str = (
@@ -794,17 +473,9 @@ def matrix_generator(
     if is_pull_request:
         print(f"[PULL_REQUEST] Generating build matrix with {str(base_args)}")
 
-        # Check if GPU families were explicitly provided (e.g., via workflow_call inputs)
-        # If not, fall back to presubmit defaults
-        assert (
-            presubmit_matrix is not None
-        ), "presubmit_matrix should be set for pull_request runs"
-        _add_gpu_families_from_input(
-            families,
-            lookup_matrix,
-            selected_target_names,
-            fallback_targets=list(presubmit_matrix.keys()),
-        )
+        # Add presubmit targets.
+        for target in get_all_families_for_trigger_types(["presubmit"]):
+            selected_target_names.append(target)
 
         # Extend with any additional targets that PR labels opt-in to running.
         # TODO(#1097): This (or the code below) should handle opting in for
@@ -828,13 +499,17 @@ def matrix_generator(
                 selected_test_names = []
                 break
             if "run-all-archs-ci" == label:
-                # lookup_matrix already contains presubmit+postsubmit+nightly for PR runs.
-                selected_target_names = list(lookup_matrix.keys())
+                selected_target_names = [
+                    target
+                    for target in get_all_families_for_trigger_types(
+                        ["presubmit", "postsubmit", "nightly"]
+                    )
+                ]
 
-            selected_target_names.extend(
-                filter_known_names(requested_target_names, "target", lookup_matrix)
-            )
-            selected_test_names.extend(filter_known_names(requested_test_names, "test"))
+        selected_target_names.extend(
+            filter_known_names(requested_target_names, "target", lookup_matrix)
+        )
+        selected_test_names.extend(filter_known_names(requested_test_names, "test"))
 
     if is_push:
         if is_long_lived_branch:
@@ -945,59 +620,30 @@ def matrix_generator(
 # --------------------------------------------------------------------------- #
 
 
-def _extract_event_flags(base_args: dict) -> dict:
-    """Extract and log event type flags.
-
-    Args:
-        base_args: Dictionary containing 'github_event_name'
-
-    Returns:
-        Dictionary with event name and boolean flags for each event type
-    """
+def main(base_args, linux_families, windows_families):
     github_event_name = base_args.get("github_event_name")
-    flags = {
-        "github_event_name": github_event_name,
-        "is_push": github_event_name == "push",
-        "is_workflow_dispatch": github_event_name == "workflow_dispatch",
-        "is_pull_request": github_event_name == "pull_request",
-        "is_schedule": github_event_name == "schedule",
-    }
+    is_push = github_event_name == "push"
+    is_workflow_dispatch = github_event_name == "workflow_dispatch"
+    is_pull_request = github_event_name == "pull_request"
+    is_schedule = github_event_name == "schedule"
+
+    base_ref = base_args.get("base_ref")
     print("Found metadata:")
-    print(f"  github_event_name: {flags['github_event_name']}")
-    print(f"  is_push: {flags['is_push']}")
-    print(f"  is_workflow_dispatch: {flags['is_workflow_dispatch']}")
-    print(f"  is_pull_request: {flags['is_pull_request']}")
+    print(f"  github_event_name: {github_event_name}")
+    print(f"  is_push: {is_push}")
+    print(f"  is_workflow_dispatch: {is_workflow_dispatch}")
+    print(f"  is_pull_request: {is_pull_request}")
     print("")
-    return flags
 
-
-def _generate_base_matrices(
-    base_args: dict,
-    linux_families: dict,
-    windows_families: dict,
-    event_flags: dict,
-) -> tuple[list[dict], list, list[dict], list]:
-    """Generate base GPU family matrices for both platforms.
-
-    Args:
-        base_args: Base arguments including 'multi_arch'
-        linux_families: Linux GPU family input
-        windows_families: Windows GPU family input
-        event_flags: Dictionary with event type flags
-
-    Returns:
-        Tuple of (linux_variants, linux_tests, windows_variants, windows_tests)
-    """
     multi_arch = base_args.get("multi_arch", False)
-
     print(
         f"Generating build matrix for Linux (multi_arch={multi_arch}): {str(linux_families)}"
     )
-    linux_variants, linux_tests = matrix_generator(
-        event_flags["is_pull_request"],
-        event_flags["is_workflow_dispatch"],
-        event_flags["is_push"],
-        event_flags["is_schedule"],
+    linux_variants_output, linux_test_output = matrix_generator(
+        is_pull_request,
+        is_workflow_dispatch,
+        is_push,
+        is_schedule,
         base_args,
         linux_families,
         platform="linux",
@@ -1008,11 +654,11 @@ def _generate_base_matrices(
     print(
         f"Generating build matrix for Windows (multi_arch={multi_arch}): {str(windows_families)}"
     )
-    windows_variants, windows_tests = matrix_generator(
-        event_flags["is_pull_request"],
-        event_flags["is_workflow_dispatch"],
-        event_flags["is_push"],
-        event_flags["is_schedule"],
+    windows_variants_output, windows_test_output = matrix_generator(
+        is_pull_request,
+        is_workflow_dispatch,
+        is_push,
+        is_schedule,
         base_args,
         windows_families,
         platform="windows",
@@ -1020,106 +666,107 @@ def _generate_base_matrices(
     )
     print("")
 
-    print(
-        f"Generated matrix sizes: Linux={len(linux_variants)} variants, Windows={len(windows_variants)} variants"
-    )
-    return linux_variants, linux_tests, windows_variants, windows_tests
+    test_type = "smoke"
 
+    # In the case of a scheduled run, we always want to build and we want to run full tests
+    if is_schedule:
+        enable_build_jobs = True
+        test_type = "full"
+    else:
+        modified_paths = get_modified_paths(base_ref)
+        print("modified_paths (max 200):", modified_paths[:200])
+        print(f"Checking modified files since this had a {github_event_name} trigger")
+        # TODO(#199): other behavior changes
+        #     * workflow_dispatch or workflow_call with inputs controlling enabled jobs?
+        enable_build_jobs = should_ci_run_given_modified_paths(modified_paths)
 
-def _apply_external_project_cross_product(
-    base_args: dict,
-    linux_variants: list[dict],
-    windows_variants: list[dict],
-) -> tuple[list[dict], list[dict]]:
-    """Cross-product external project configs with GPU families if applicable.
+        # If the modified path contains any git submodules, we want to run a full test suite.
+        # Otherwise, we just run smoke tests
+        submodule_paths = get_therock_submodule_paths()
+        matching_submodule_paths = list(set(submodule_paths) & set(modified_paths))
+        if matching_submodule_paths:
+            print(
+                f"Found changed submodules: {str(matching_submodule_paths)}. Running full tests."
+            )
+            test_type = "full"
 
-    Args:
-        base_args: Dictionary containing optional external project configs
-        linux_variants: Base Linux GPU family variants
-        windows_variants: Base Windows GPU family variants
+        # If any test label is included, run full test suite for specified tests
+        if linux_test_output or windows_test_output:
+            test_type = "full"
 
-    Returns:
-        Tuple of (linux_variants, windows_variants) after cross-product
+    # Format variants for summary - handle both regular and multi-arch modes
+    def format_variants(variants):
+        result = []
+        for item in variants:
+            if "family" in item:
+                result.append(item["family"])
+            elif "matrix_per_family_json" in item:
+                # Multi-arch mode: show the families from the JSON
+                families = json.loads(item["matrix_per_family_json"])
+                result.append([f["amdgpu_family"] for f in families])
+        return result
+
+    gha_append_step_summary(
+        f"""## Workflow configure results
+
+* `linux_variants`: {str(format_variants(linux_variants_output))}
+* `linux_test_labels`: {str([test for test in linux_test_output])}
+* `linux_use_prebuilt_artifacts`: {json.dumps(base_args.get("linux_use_prebuilt_artifacts"))}
+* `windows_variants`: {str(format_variants(windows_variants_output))}
+* `windows_test_labels`: {str([test for test in windows_test_output])}
+* `windows_use_prebuilt_artifacts`: {json.dumps(base_args.get("windows_use_prebuilt_artifacts"))}
+* `enable_build_jobs`: {json.dumps(enable_build_jobs)}
+* `test_type`: {test_type}
     """
-    linux_configs = base_args.get("linux_external_project_configs")
-    windows_configs = base_args.get("windows_external_project_configs")
-
-    if not (linux_configs or windows_configs):
-        return linux_variants, windows_variants
-
-    print("\n=== Cross-producting projects with GPU families ===")
-
-    if linux_configs:
-        linux_variants = _cross_product_projects_with_gpu_variants(
-            linux_configs, linux_variants
-        )
-
-    if windows_configs:
-        windows_variants = _cross_product_projects_with_gpu_variants(
-            windows_configs, windows_variants
-        )
-
-    print(f"Final Linux matrix: {len(linux_variants)} entries")
-    print(f"Final Windows matrix: {len(windows_variants)} entries")
-
-    return linux_variants, windows_variants
-
-
-def main(base_args, linux_families, windows_families):
-    """Main orchestration function for CI configuration.
-
-    Args:
-        base_args: Dictionary with CI metadata (event name, base ref, etc.)
-        linux_families: Linux GPU family input
-        windows_families: Windows GPU family input
-    """
-    # Extract event flags
-    event_flags = _extract_event_flags(base_args)
-
-    # Check for external project configs
-    has_external_configs = bool(
-        base_args.get("linux_external_project_configs")
-        or base_args.get("windows_external_project_configs")
-    )
-    if has_external_configs:
-        linux_count = len(base_args.get("linux_external_project_configs", []))
-        windows_count = len(base_args.get("windows_external_project_configs", []))
-        print(
-            f"Using external project configurations: Linux={linux_count}, Windows={windows_count}"
-        )
-
-    # Generate base matrices
-    linux_variants, linux_tests, windows_variants, windows_tests = (
-        _generate_base_matrices(
-            base_args, linux_families, windows_families, event_flags
-        )
     )
 
-    # Apply external project cross-product if needed
-    linux_variants, windows_variants = _apply_external_project_cross_product(
-        base_args, linux_variants, windows_variants
-    )
-
-    # Determine build configuration and emit outputs
-    enable_build_jobs, test_type = _determine_enable_build_jobs_and_test_type(
-        github_event_name=event_flags["github_event_name"],
-        is_schedule=event_flags["is_schedule"],
-        base_ref=base_args.get("base_ref"),
-        linux_test_output=linux_tests,
-        windows_test_output=windows_tests,
-        has_external_project_configs=has_external_configs,
-    )
-
-    _emit_summary_and_outputs(
-        linux_variants_output=linux_variants,
-        linux_test_output=linux_tests,
-        windows_variants_output=windows_variants,
-        windows_test_output=windows_tests,
-        enable_build_jobs=enable_build_jobs,
-        test_type=test_type,
-        base_args=base_args,
-    )
+    output = {
+        "linux_variants": json.dumps(linux_variants_output),
+        "linux_test_labels": json.dumps(linux_test_output),
+        "windows_variants": json.dumps(windows_variants_output),
+        "windows_test_labels": json.dumps(windows_test_output),
+        "enable_build_jobs": json.dumps(enable_build_jobs),
+        "test_type": test_type,
+    }
+    gha_set_output(output)
 
 
 if __name__ == "__main__":
-    run_from_env()
+    base_args = {}
+    linux_families = {}
+    windows_families = {}
+
+    linux_families["amdgpu_families"] = os.environ.get(
+        "INPUT_LINUX_AMDGPU_FAMILIES", ""
+    )
+
+    windows_families["amdgpu_families"] = os.environ.get(
+        "INPUT_WINDOWS_AMDGPU_FAMILIES", ""
+    )
+
+    base_args["pr_labels"] = os.environ.get("PR_LABELS", '{"labels": []}')
+    base_args["branch_name"] = os.environ.get("GITHUB_REF_NAME", "")
+    if base_args["branch_name"] == "":
+        print(
+            "[ERROR] GITHUB_REF_NAME is not set! No branch name detected. Exiting.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    base_args["github_event_name"] = os.environ.get("GITHUB_EVENT_NAME", "")
+    base_args["base_ref"] = os.environ.get("BASE_REF", "HEAD^1")
+    base_args["linux_use_prebuilt_artifacts"] = (
+        os.environ.get("LINUX_USE_PREBUILT_ARTIFACTS") == "true"
+    )
+    base_args["windows_use_prebuilt_artifacts"] = (
+        os.environ.get("WINDOWS_USE_PREBUILT_ARTIFACTS") == "true"
+    )
+    base_args["workflow_dispatch_linux_test_labels"] = os.getenv(
+        "LINUX_TEST_LABELS", ""
+    )
+    base_args["workflow_dispatch_windows_test_labels"] = os.getenv(
+        "WINDOWS_TEST_LABELS", ""
+    )
+    base_args["build_variant"] = os.getenv("BUILD_VARIANT", "release")
+    base_args["multi_arch"] = os.environ.get("MULTI_ARCH", "false") == "true"
+
+    main(base_args, linux_families, windows_families)
