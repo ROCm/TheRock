@@ -27,6 +27,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--rccl | --no-rccl]
     [--rocprofiler-compute | --no-rocprofiler-compute]
     [--rocprofiler-systems | --no-rocprofiler-systems]
+    [--rocrtst | --no-rocrtst]
     [--rocwmma | --no-rocwmma]
     [--libhipcxx | --no-libhipcxx]
     [--tests | --no-tests]
@@ -203,6 +204,7 @@ def retrieve_artifacts_by_run_id(args):
             args.rccl,
             args.rocprofiler_compute,
             args.rocprofiler_systems,
+            args.rocrtst,
             args.rocwmma,
             args.libhipcxx,
         ]
@@ -244,6 +246,8 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("rocprofiler-compute")
         if args.rocprofiler_systems:
             extra_artifacts.append("rocprofiler-systems")
+        if args.rocrtst:
+            extra_artifacts.append("rocrtst")
         if args.rocwmma:
             extra_artifacts.append("rocwmma")
         if args.libhipcxx:
@@ -464,6 +468,13 @@ def main(argv):
         "--rocprofiler-systems",
         default=False,
         help="Include 'rocprofiler-systems' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--rocrtst",
+        default=False,
+        help="Include 'rocrtst' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 

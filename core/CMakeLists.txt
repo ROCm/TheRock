@@ -385,6 +385,12 @@ if(THEROCK_BUILD_TESTING)
         ${THEROCK_BUNDLED_ELFUTILS}
         ${THEROCK_BUNDLED_LIBDRM}
         ${THEROCK_BUNDLED_NUMACTL}
+      INTERFACE_LINK_DIRS
+        lib
+        lib/rocm_sysdeps/lib
+      INTERFACE_INSTALL_RPATH_DIRS
+        lib
+        lib/rocm_sysdeps/lib
     )
     therock_cmake_subproject_glob_c_sources(rocrtst SUBDIRS .)
     therock_cmake_subproject_activate(rocrtst)
