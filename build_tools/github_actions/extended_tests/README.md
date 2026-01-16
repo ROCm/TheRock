@@ -108,9 +108,9 @@ extended_tests/
 
 | Workflow Trigger           | Benchmark Tests | Functional Tests |
 | -------------------------- | --------------- | ---------------- |
-| **Pull Request (PR)**      | Skipped         | Optional         |
+| **Pull Request (PR)**      | Skipped         | Skipped          |
 | **Nightly CI (scheduled)** | Run (parallel)  | Run (parallel)   |
-| **Push to main**           | Skipped         | Optional         |
+| **Push to main**           | Skipped         | Skipped          |
 
 ### Parallel Execution Architecture
 
@@ -118,21 +118,32 @@ Tests run in **parallel** for faster CI execution:
 
 ```
 ci_nightly.yml
-  └─ ci_linux.yml
+  └─ ci_linux.yml / ci_windows.yml
       ├─ build_artifacts
       │
-      ├─ test_artifacts ────────┐ Run in parallel
-      │   └─ Functional tests   │ after build
-      │                          │
-      └─ test_benchmarks ────────┘
-          └─ Benchmark tests
+      ├─ test_artifacts ────────────────────┐
+      │   └─ Component tests (smoke/full)   │ Run in parallel
+      │                                      │ after build
+      ├─ test_benchmarks ───────────────────┤
+      │   └─ Benchmark tests                │
+      │                                      │
+      └─ test_extended_functional ──────────┘
+          └─ Extended functional tests
 ```
 
 **Workflow Files:**
 
 - `.github/workflows/ci_nightly.yml` - Nightly CI orchestration
-- `.github/workflows/test_benchmarks.yml` - Benchmark execution
-- `.github/workflows/test_artifacts.yml` - Functional test execution
+- `.github/workflows/ci_linux.yml` / `ci_windows.yml` - Platform-specific CI logic
+- `.github/workflows/test_benchmarks.yml` - Benchmark test execution (uses `benchmark_runs_on`)
+- `.github/workflows/test_extended_functional.yml` - Extended functional test execution (uses `test_runs_on`)
+- `.github/workflows/test_artifacts.yml` - Component test execution (uses `test_runs_on`)
+
+**Key Differences:**
+
+- **Component Tests**: Run on all PRs (smoke) and nightly (full), use regular runners
+- **Benchmark Tests**: Run only on nightly, use dedicated performance runners (`benchmark_runs_on`)
+- **Extended Functional Tests**: Run only on nightly, use regular runners (`test_runs_on`), controlled by `run_extended_functional` flag
 
 ## Architecture
 

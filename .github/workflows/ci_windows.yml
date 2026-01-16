@@ -22,6 +22,9 @@ on:
       benchmark_runs_on:
         type: string
         default: ""
+      run_extended_functional:
+        type: boolean
+        default: false
       expect_failure:
         type: boolean
       use_prebuilt_artifacts:
@@ -121,6 +124,7 @@ jobs:
     # - Build succeeded (or using prebuilt artifacts)
     # - Not expecting failure
     # - Test runner is available (test_runs_on is set)
+    # - Extended functional flag is enabled (only set to true in ci_nightly.yml)
     if: >-
       ${{
         !failure() &&
@@ -130,7 +134,8 @@ jobs:
           inputs.use_prebuilt_artifacts == 'true'
         ) &&
         inputs.expect_failure == false &&
-        inputs.test_runs_on != ''
+        inputs.test_runs_on != '' &&
+        inputs.run_extended_functional == true
       }}
     uses: ./.github/workflows/test_extended_functional.yml
     secrets: inherit

@@ -10,7 +10,7 @@ Functional tests validate **correctness and behavior**:
 
 - **Result Types:** PASS / FAIL / ERROR / SKIP
 - **Validation:** Output correctness, API contracts, expected behavior
-- **CI Execution:** Nightly CI and optionally on PRs
+- **CI Execution:** Nightly CI only (controlled by `run_extended_functional` flag)
 - **Exit Code:** Non-zero if any test FAILS or has ERRORs
 
 ## Available Tests
