@@ -474,6 +474,10 @@ class GitHubActionsUtilsTest(unittest.TestCase):
                 "ROCm/TheRock", "nonexistent_workflow_12345.yml", "main"
             )
 
+    # -------------------------------------------------------------------------
+    # retrieve_bucket_info tests
+    # -------------------------------------------------------------------------
+
     @_skip_unless_authenticated_github_api_is_available
     def test_retrieve_older_bucket_info(self):
         # TODO(geomin12): work on pulling these run IDs more dynamically
@@ -551,7 +555,6 @@ class GitHubActionsUtilsTest(unittest.TestCase):
         self.assertEqual(external_repo, "")
         self.assertEqual(bucket, "therock-nightly-artifacts")
 
-    @_skip_unless_authenticated_github_api_is_available
     def test_retrieve_bucket_info_with_workflow_run_skips_api_call(self):
         """Test that providing workflow_run skips the API call."""
         # Mock workflow_run data matching the structure from GitHub API
