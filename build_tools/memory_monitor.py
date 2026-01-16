@@ -78,6 +78,7 @@ class MemoryMonitor:
         stop_signal_file: Optional[Path] = None,
         max_runtime_seconds: Optional[float] = None,
         parent_pid: Optional[int] = None,
+        parent_creation_time: Optional[str] = None,
     ):
         self.interval_seconds = interval_seconds
         self.phase_name = phase_name
@@ -85,6 +86,7 @@ class MemoryMonitor:
         self.stop_signal_file = stop_signal_file
         self.max_runtime_seconds = max_runtime_seconds
         self.parent_pid = parent_pid
+        self.parent_creation_time = parent_creation_time
         self.stop_event = threading.Event()
         self.peak_memory = 0
         self.peak_swap = 0
@@ -212,6 +214,48 @@ class MemoryMonitor:
                         )
                         self.stop_event.set()
                         break
+                    
+                    # On Windows, check for PID reuse by comparing creation times
+                    if self.parent_creation_time and sys.platform == "win32":
+                        try:
+                            # Get the current process creation time
+                            current_creation_time = parent.create_time()
+                            # Parse ISO 8601 string to timestamp for comparison
+                            # Use datetime.fromisoformat() which is available in Python 3.7+
+                            expected_creation_datetime = datetime.fromisoformat(
+                                self.parent_creation_time.replace('Z', '+00:00')
+                            )
+                            expected_creation_timestamp = expected_creation_datetime.timestamp()
+                            
+                            # Allow small tolerance for floating point comparison (1 second)
+                            time_diff = abs(current_creation_time - expected_creation_timestamp)
+                            if time_diff > 1.0:
+                                print(
+                                    f"\n[PID_REUSE] Parent PID {self.parent_pid} has been reused by a different process!"
+                                )
+                                print(
+                                    f"  Expected creation time: {self.parent_creation_time}"
+                                )
+                                print(
+                                    f"  Current process creation time: {datetime.fromtimestamp(current_creation_time).isoformat()}"
+                                )
+                                print(
+                                    f"  Time difference: {time_diff:.1f} seconds - stopping monitoring..."
+                                )
+                                self.stop_event.set()
+                                break
+                        except (ValueError, AttributeError) as e:
+                            # Log but don't fail if creation time parsing fails
+                            print(
+                                f"[WARNING] Failed to parse parent process creation time: {e}",
+                                file=sys.stderr,
+                            )
+                        except Exception as e:
+                            # Log but don't fail if creation time check fails
+                            print(
+                                f"[WARNING] Failed to check parent process creation time: {e}",
+                                file=sys.stderr,
+                            )
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
                     print(
                         f"\n[PARENT_DIED] Parent process (PID {self.parent_pid}) no longer exists, stopping monitoring..."
@@ -526,6 +570,12 @@ def main():
     )
 
     parser.add_argument(
+        "--parent-creation-time",
+        type=str,
+        help="Creation time of parent process (ISO 8601 format) to detect PID reuse on Windows",
+    )
+
+    parser.add_argument(
         "--background",
         action="store_true",
         help="Run monitoring in background without executing a command",
@@ -543,6 +593,12 @@ def main():
     if args.command and args.command[0] == "--":
         args.command = args.command[1:]
 
+    # If parent_pid is not provided, automatically obtain it using os.getppid()
+    # This works on both Windows (Python 3.2+) and Linux
+    if args.parent_pid is None and args.background:
+        args.parent_pid = os.getppid()
+        print(f"[INFO] Automatically detected parent PID: {args.parent_pid}")
+
     if args.background:
         # Background monitoring mode
         print("[INFO] Background monitoring mode - press Ctrl+C to stop")
@@ -553,6 +609,7 @@ def main():
             stop_signal_file=args.stop_signal_file,
             max_runtime_seconds=args.max_runtime_seconds,
             parent_pid=args.parent_pid,
+            parent_creation_time=args.parent_creation_time,
         )
 
         # Setup signal handlers for graceful shutdown

@@ -133,17 +133,12 @@ jobs:
           GITHUB_JOB_NAME: ${{ github.job }}
           MEMORY_MONITOR_INTERVAL: ${{ inputs.monitor_interval }}
         run: |
-          MONITOR_PID=""
-          echo "Starting memory monitoring..."
           MONITOR_PID=$(bash build_tools/github_actions/start_memory_monitor.sh)
           export MONITOR_PID
-          echo "Memory monitor PID: $MONITOR_PID"
 
-          # Set up trap to stop monitoring on exit (success or failure)
-          trap 'if [ -n "$MONITOR_PID" ]; then echo "Stopping memory monitoring..."; bash build_tools/github_actions/stop_memory_monitor.sh || true; fi' EXIT
-
-          # Run the build
           cmake --build ${{ env.BUILD_DIR }} --target therock-archives therock-dist -- -k 0
+
+          bash build_tools/github_actions/stop_memory_monitor.sh
 
       - name: Test Packaging
         if: ${{ github.event.repository.name == 'TheRock' }}
