@@ -33,6 +33,31 @@ def log(*args, **kwargs):
     sys.stdout.flush()
 
 
+# Common system paths where commands like modinfo might be located
+SYSTEM_BIN_PATHS = [
+    Path("/sbin"),
+    Path("/usr/sbin"),
+    Path("/bin"),
+    Path("/usr/bin"),
+]
+
+
+def find_command(command: str) -> Optional[str]:
+    """Find a command in PATH or common system directories."""
+    # First try PATH
+    resolved = shutil.which(command)
+    if resolved:
+        return resolved
+
+    # Then try common system paths (not always in PATH for non-root users)
+    for path in SYSTEM_BIN_PATHS:
+        candidate = path / command
+        if candidate.exists() and os.access(candidate, os.X_OK):
+            return str(candidate)
+
+    return None
+
+
 def run_command(args: List[str | Path], cwd: Optional[Path] = None) -> None:
     args = [str(arg) for arg in args]
     if cwd is None:
@@ -103,9 +128,12 @@ def print_linux_firmware_version() -> None:
     """Print the version of the installed linux-firmware package."""
     log("\n=== Linux Firmware Package ===")
 
+    found_package_manager = False
+
     # Try dpkg (Debian/Ubuntu)
-    dpkg = shutil.which("dpkg-query")
+    dpkg = find_command("dpkg-query")
     if dpkg:
+        found_package_manager = True
         try:
             proc = subprocess.run(
                 [dpkg, "-W", "-f", "${Version}", "linux-firmware"],
@@ -117,12 +145,17 @@ def print_linux_firmware_version() -> None:
             if proc.returncode == 0 and proc.stdout.strip():
                 log(f"linux-firmware (dpkg): {proc.stdout.strip()}")
                 return
-        except Exception:
-            pass
+            else:
+                log(f"linux-firmware: not installed (dpkg-query at {dpkg})")
+                if proc.stderr.strip():
+                    log(f"  {proc.stderr.strip()}")
+        except Exception as e:
+            log(f"dpkg-query error: {e}")
 
     # Try rpm (Fedora/RHEL)
-    rpm = shutil.which("rpm")
+    rpm = find_command("rpm")
     if rpm:
+        found_package_manager = True
         try:
             proc = subprocess.run(
                 [rpm, "-q", "linux-firmware", "--queryformat", "%{VERSION}-%{RELEASE}"],
@@ -134,63 +167,134 @@ def print_linux_firmware_version() -> None:
             if proc.returncode == 0 and proc.stdout.strip():
                 log(f"linux-firmware (rpm): {proc.stdout.strip()}")
                 return
-        except Exception:
-            pass
+            else:
+                log(f"linux-firmware: not installed (rpm at {rpm})")
+                if proc.stderr.strip():
+                    log(f"  {proc.stderr.strip()}")
+        except Exception as e:
+            log(f"rpm error: {e}")
 
-    log("linux-firmware: package not found or unsupported package manager")
+    # Fallback: check if /lib/firmware exists and show amdgpu firmware info
+    firmware_dir = Path("/lib/firmware/amdgpu")
+    if firmware_dir.exists():
+        try:
+            fw_files = list(firmware_dir.glob("*.bin"))
+            log(f"Firmware directory exists: {firmware_dir}")
+            log(f"  Number of amdgpu firmware files: {len(fw_files)}")
+            # Try to get modification time of a firmware file as a proxy for version
+            if fw_files:
+                newest = max(fw_files, key=lambda p: p.stat().st_mtime)
+                import datetime
+
+                mtime = datetime.datetime.fromtimestamp(newest.stat().st_mtime)
+                log(f"  Newest firmware file: {newest.name} ({mtime.isoformat()})")
+        except Exception as e:
+            log(f"Error reading firmware directory: {e}")
+    elif not found_package_manager:
+        log("No supported package manager found (dpkg-query, rpm)")
+        log("  /lib/firmware/amdgpu does not exist")
 
 
 def print_amdgpu_driver_source() -> None:
     """Check whether the amdgpu driver is from the kernel or external (DKMS)."""
     log("\n=== AMDGPU Driver Source ===")
 
-    modinfo = shutil.which("modinfo")
-    if not modinfo:
-        log("modinfo: command not found")
-        return
+    modinfo = find_command("modinfo")
+    if modinfo:
+        log(f"Using modinfo: {modinfo}")
+        try:
+            proc = subprocess.run(
+                [modinfo, "amdgpu"],
+                capture_output=True,
+                text=True,
+                check=False,
+                stdin=subprocess.DEVNULL,
+            )
+            if proc.returncode == 0:
+                # Parse modinfo output
+                info = {}
+                for line in proc.stdout.splitlines():
+                    if ":" in line:
+                        key, _, value = line.partition(":")
+                        # Only keep first occurrence of each key
+                        if key.strip() not in info:
+                            info[key.strip()] = value.strip()
 
-    try:
-        proc = subprocess.run(
-            [modinfo, "amdgpu"],
-            capture_output=True,
-            text=True,
-            check=False,
-            stdin=subprocess.DEVNULL,
-        )
-        if proc.returncode != 0:
-            log("amdgpu: module not found")
-            return
+                filename = info.get("filename", "")
+                version = info.get("version", "unknown")
 
-        # Parse modinfo output
-        info = {}
-        for line in proc.stdout.splitlines():
-            if ":" in line:
-                key, _, value = line.partition(":")
-                # Only keep first occurrence of each key
-                if key.strip() not in info:
-                    info[key.strip()] = value.strip()
+                # Determine source based on module path
+                if "updates/dkms" in filename or "/dkms/" in filename:
+                    source = "DKMS (external)"
+                elif "extra/" in filename or "/extra/" in filename:
+                    source = "External (extra modules)"
+                elif "kernel/drivers" in filename:
+                    source = "In-kernel"
+                elif "(builtin)" in filename.lower() or not filename:
+                    source = "Built-in (compiled into kernel)"
+                else:
+                    source = "Unknown"
 
-        filename = info.get("filename", "")
-        version = info.get("version", "unknown")
+                log(f"Driver version: {version}")
+                log(f"Driver source: {source}")
+                log(f"Module path: {filename}")
+                return
+            else:
+                log(f"modinfo amdgpu failed (returncode: {proc.returncode})")
+                if proc.stderr.strip():
+                    log(f"  {proc.stderr.strip()}")
+        except Exception as e:
+            log(f"modinfo error: {e}")
+    else:
+        log("modinfo: not found (kmod package not installed)")
+        log(f"  Searched: PATH, {', '.join(str(p) for p in SYSTEM_BIN_PATHS)}")
 
-        # Determine source based on module path
-        if "updates/dkms" in filename or "/dkms/" in filename:
-            source = "DKMS (external)"
-        elif "extra/" in filename or "/extra/" in filename:
-            source = "External (extra modules)"
-        elif "kernel/drivers" in filename:
-            source = "In-kernel"
-        elif "(builtin)" in filename.lower() or not filename:
-            source = "Built-in (compiled into kernel)"
-        else:
-            source = "Unknown"
+    # Fallback: check sysfs for amdgpu module info
+    sysfs_amdgpu = Path("/sys/module/amdgpu")
+    if sysfs_amdgpu.exists():
+        log("Fallback: amdgpu module detected via sysfs")
+        # Check for version in sysfs
+        version_file = sysfs_amdgpu / "version"
+        if version_file.exists():
+            try:
+                version = version_file.read_text().strip()
+                log(f"  Driver version (sysfs): {version}")
+            except Exception:
+                pass
 
-        log(f"Driver version: {version}")
-        log(f"Driver source: {source}")
-        log(f"Module path: {filename}")
+        # Try to determine source from /proc/modules
+        try:
+            proc_modules = Path("/proc/modules").read_text()
+            for line in proc_modules.splitlines():
+                if line.startswith("amdgpu "):
+                    log(f"  /proc/modules entry: {line}")
+                    break
+        except Exception:
+            pass
 
-    except Exception as e:
-        log(f"Error checking amdgpu driver: {e}")
+        # Check kernel release to help identify module path
+        kernel_release = platform.release()
+        possible_paths = [
+            f"/lib/modules/{kernel_release}/updates/dkms/amdgpu.ko*",
+            f"/lib/modules/{kernel_release}/kernel/drivers/gpu/drm/amd/amdgpu/amdgpu.ko*",
+            f"/lib/modules/{kernel_release}/extra/amdgpu.ko*",
+        ]
+        for pattern in possible_paths:
+            matches = list(Path("/").glob(pattern.lstrip("/")))
+            if matches:
+                path = matches[0]
+                if "dkms" in str(path):
+                    source = "DKMS (external)"
+                elif "extra" in str(path):
+                    source = "External (extra modules)"
+                else:
+                    source = "In-kernel"
+                log(f"  Driver source: {source}")
+                log(f"  Module path: {path}")
+                return
+        log("  Could not determine driver source from filesystem")
+    else:
+        log("amdgpu: module not loaded (/sys/module/amdgpu not found)")
 
 
 def run_sanity(os_name: str) -> None:
