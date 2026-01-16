@@ -39,6 +39,15 @@ test_matrix = {
         "platform": ["linux", "windows"],
         "total_shards": 4,
     },
+    # hip-tests
+    "opencl-cts": {
+        "job_name": "opencl-cts",
+        "fetch_artifact_args": "--tests",
+        "timeout_minutes": 120,
+        "test_script": f"python {_get_script_path('test_opencl_cts.py')}",
+        "platform": ["linux"],
+        "total_shards": 1,
+    },
     # BLAS tests
     "rocblas": {
         "job_name": "rocblas",
