@@ -357,17 +357,6 @@ def gha_append_step_summary(summary: str):
         f.write(summary + "\n\n")
 
 
-def gha_get_request_headers() -> dict[str, str]:
-    """Gets common request headers for use with the GitHub REST API.
-
-    See https://docs.github.com/en/rest.
-
-    Note: This is only used for direct REST API calls (GITHUB_TOKEN or
-    unauthenticated). When using gh CLI, headers are handled by gh.
-    """
-    return _default_github_api._get_request_headers()
-
-
 def gha_send_request(url: str, timeout_seconds: int = 300) -> object:
     """Sends a request to the given GitHub REST API URL and returns the response.
 
