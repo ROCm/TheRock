@@ -22,7 +22,7 @@ print(f"THEROCK_BIN_PATH: {THEROCK_BIN_PATH}")
 
 # Set up PYTHONPATH
 old_pythonpath = os.getenv("PYTHONPATH", "")
-module_dir = f"{THEROCK_BIN_PATH}/libexec/rocprofiler-compute/tests"
+module_dir = f"{THEROCK_BIN_PATH}/../libexec/rocprofiler-compute/tests"
 print(f"Module Directory: {module_dir}")
 if old_pythonpath:
     os.environ["PYTHONPATH"] = f"{module_dir}:{old_pythonpath}"
