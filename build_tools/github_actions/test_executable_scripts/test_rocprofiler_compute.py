@@ -17,10 +17,13 @@ environ_vars["ROCM_PATH"] = str(ROCM_PATH)
 # Resolve absolute paths
 OUTPUT_ARTIFACTS_PATH = Path(OUTPUT_ARTIFACTS_DIR).resolve()
 THEROCK_BIN_PATH = Path(THEROCK_BIN_DIR).resolve()
+print(f"OUTPUT_ARTIFACTS_PATH: {OUTPUT_ARTIFACTS_DIR}")
+print(f"THEROCK_BIN_PATH: {THEROCK_BIN_PATH}")
 
 # Set up PYTHONPATH
 old_pythonpath = os.getenv("PYTHONPATH", "")
 module_dir = f"{THEROCK_BIN_PATH}/libexec/rocprofiler-compute/tests"
+print(f"Module Directory: {module_dir}")
 if old_pythonpath:
     os.environ["PYTHONPATH"] = f"{module_dir}:{old_pythonpath}"
 else:
@@ -29,6 +32,7 @@ else:
 # Set up PATH
 old_path = os.getenv("PATH", "")
 rocm_bin = str(THEROCK_BIN_PATH)
+print(f"ROCm Bin Directory: {rocm_bin}")
 if old_path:
     os.environ["PATH"] = f"{rocm_bin}:{old_path}"
 else:
@@ -37,12 +41,17 @@ else:
 # Set up LD_LIBRARY_PATH
 old_ld_lib_path = os.getenv("LD_LIBRARY_PATH", "")
 rocm_lib = str(OUTPUT_ARTIFACTS_PATH / "lib")
+print(f"ROCm Lib Directory: {rocm_lib}")
 if old_ld_lib_path:
     os.environ["LD_LIBRARY_PATH"] = (
         f"{rocm_lib}:{rocm_lib}/rocm_sysdeps/lib:{old_ld_lib_path}"
     )
 else:
     os.environ["LD_LIBRARY_PATH"] = rocm_lib
+
+# Print out all env vars
+for key, value in os.environ.items():
+    print(f"{key}: {value}")
 
 # Run tests
 cmd = [
