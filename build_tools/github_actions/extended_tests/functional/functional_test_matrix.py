@@ -25,7 +25,7 @@ functional_matrix = {
         "job_name": "test_miopendriver_conv",
         "fetch_artifact_args": "--miopen --tests",
         "timeout_minutes": 30,
-        "test_script": f"python {_get_script_path('test_rocrand_benchmark.py')}",
+        "test_script": f"python {_get_script_path('test_miopendriver_conv.py')}",
         # TODO(lajagapp): Add windows support
         "platform": ["linux"],
         "total_shards": 1,

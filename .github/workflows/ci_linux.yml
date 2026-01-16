@@ -114,6 +114,32 @@ jobs:
       test_runs_on: ${{ inputs.benchmark_runs_on }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
 
+  test_linux_extended_functional:
+    needs: [build_portable_linux_artifacts]
+    name: Test Linux Extended Functional
+    # Run extended functional tests if:
+    # - Build succeeded (or using prebuilt artifacts)
+    # - Not expecting failure
+    # - Test runner is available (test_runs_on is set)
+    if: >-
+      ${{
+        !failure() &&
+        !cancelled() &&
+        (
+          inputs.use_prebuilt_artifacts == 'false' ||
+          inputs.use_prebuilt_artifacts == 'true'
+        ) &&
+        inputs.expect_failure == false &&
+        inputs.test_runs_on != ''
+      }}
+    uses: ./.github/workflows/test_extended_functional.yml
+    secrets: inherit
+    with:
+      artifact_group: ${{ inputs.artifact_group }}
+      amdgpu_families: ${{ inputs.amdgpu_families }}
+      test_runs_on: ${{ inputs.test_runs_on }}
+      artifact_run_id: ${{ inputs.artifact_run_id }}
+
   build_portable_linux_python_packages:
     needs: [build_portable_linux_artifacts]
     name: Build Python
