@@ -15,12 +15,14 @@ Benchmark tests detect **performance regressions** by comparing against baseline
 
 ## Available Tests
 
-| Test Script                   | Library   | Description                             |
-| ----------------------------- | --------- | --------------------------------------- |
-| `test_hipblaslt_benchmark.py` | hipBLASLt | Matrix multiplication benchmarks (GEMM) |
-| `test_rocfft_benchmark.py`    | rocFFT    | FFT benchmarks (1D, 2D, 3D transforms)  |
-| `test_rocrand_benchmark.py`   | rocRAND   | Random number generation benchmarks     |
-| `test_rocsolver_benchmark.py` | ROCsolver | Dense linear algebra benchmarks         |
+| Test Script                   | Library   | Description                                      |
+| ----------------------------- | --------- | ------------------------------------------------ |
+| `test_hipblaslt_benchmark.py` | hipBLASLt | Matrix multiplication benchmarks (GEMM)          |
+| `test_rocfft_benchmark.py`    | rocFFT    | FFT benchmarks (1D, 2D, 3D transforms)           |
+| `test_rocrand_benchmark.py`   | rocRAND   | Random number generation benchmarks              |
+| `test_rocsolver_benchmark.py` | ROCsolver | Dense linear algebra benchmarks                  |
+| `test_rccl_benchmark.py`      | RCCL      | Collective communication benchmarks (multi-GPU)  |
+| `test_rocblas_benchmark.py`   | rocBLAS   | BLAS benchmarks (GEMM, GEMV, and other routines) |
 
 ## Quick Start
 
@@ -40,6 +42,8 @@ Tests defined in `benchmark_test_matrix.py`:
 | `rocfft_bench`    | rocFFT    | Linux, Windows | 60 min  | `--fft --rand --tests` | Enabled (nightly) |
 | `rocrand_bench`   | rocRAND   | Linux, Windows | 60 min  | `--rand --tests`       | Enabled (nightly) |
 | `rocsolver_bench` | ROCsolver | Linux, Windows | 60 min  | `--blas --tests`       | Enabled (nightly) |
+| `rccl_bench`      | RCCL      | Linux          | 90 min  | `--rccl --tests`       | Enabled (nightly) |
+| `rocblas_bench`   | rocBLAS   | Linux, Windows | 90 min  | `--blas --tests`       | Enabled (nightly) |
 
 **GPU Family Support:**
 
