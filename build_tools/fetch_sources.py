@@ -150,6 +150,86 @@ def fetch_nested_submodules(args, projects):
         )
 
 
+def run(args):
+    # Handle external source override if present
+    external_source_checkout = (
+        os.environ.get("EXTERNAL_SOURCE_CHECKOUT", "false").lower() == "true"
+    )
+    external_source_temp_path = os.environ.get("EXTERNAL_SOURCE_TEMP_PATH", "")
+    override_submodule = None
+
+    if external_source_checkout and external_source_temp_path:
+        temp_dir = THEROCK_DIR / external_source_temp_path
+        if temp_dir.exists():
+            try:
+                result = subprocess.run(
+                    ["git", "config", "--get", "remote.origin.url"],
+                    cwd=str(temp_dir),
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                repo_url = result.stdout.strip()
+                override_submodule = extract_submodule_name_from_repo_url(repo_url)
+                log(f"External source detected: {override_submodule}")
+                move_external_source_to_submodule(
+                    external_source_temp_path, override_submodule
+                )
+            except subprocess.CalledProcessError as e:
+                log(f"Warning: Could not determine external repo: {e}")
+
+    # Get enabled projects
+    projects = get_enabled_projects(args)
+
+    # Build submodule list, excluding override if present
+    submodule_paths = ALWAYS_SUBMODULE_PATHS + [
+        get_submodule_path(project)
+        for project in projects
+        if project != override_submodule
+    ]
+
+    # TODO(scotttodd): Check for git lfs?
+    update_args = []
+    if args.depth:
+        update_args += ["--depth", str(args.depth)]
+    if args.progress:
+        update_args += ["--progress"]
+    if args.jobs:
+        update_args += ["--jobs", str(args.jobs)]
+    if args.remote:
+        update_args += ["--remote"]
+    if args.update_submodules:
+        exec(
+            ["git", "submodule", "update", "--init"]
+            + update_args
+            + ["--"]
+            + submodule_paths,
+            cwd=THEROCK_DIR,
+        )
+    if args.dvc_projects:
+        pull_large_files(args.dvc_projects, projects)
+
+    # Fetch nested submodules
+    if args.update_submodules:
+        fetch_nested_submodules(args, projects)
+
+    # Because we allow local patches, if a submodule is in a patched state,
+    # we manually set it to skip-worktree since recording the commit is
+    # then meaningless. Here on each fetch, we reset the flag so that if
+    # patches are aged out, the tree is restored to normal.
+    submodule_paths = [get_submodule_path(name) for name in projects]
+    exec(
+        ["git", "update-index", "--no-skip-worktree", "--"] + submodule_paths,
+        cwd=THEROCK_DIR,
+    )
+
+    # Remove any stale .smrev files.
+    remove_smrev_files(args, projects)
+
+    if args.apply_patches:
+        apply_patches(args, projects)
+
+
 def extract_submodule_name_from_repo_url(repo_url: str) -> str:
     """Extract submodule name from repository URL.
 
@@ -299,86 +379,6 @@ def apply_patches(args, projects):
         project_revision_file.write_text(
             f"{submodule_url}\n{submodule_revision}+PATCHED:{patches_digest}\n"
         )
-
-
-def run(args):
-    # Handle external source override if present
-    external_source_checkout = (
-        os.environ.get("EXTERNAL_SOURCE_CHECKOUT", "false").lower() == "true"
-    )
-    external_source_temp_path = os.environ.get("EXTERNAL_SOURCE_TEMP_PATH", "")
-    override_submodule = None
-
-    if external_source_checkout and external_source_temp_path:
-        temp_dir = THEROCK_DIR / external_source_temp_path
-        if temp_dir.exists():
-            try:
-                result = subprocess.run(
-                    ["git", "config", "--get", "remote.origin.url"],
-                    cwd=str(temp_dir),
-                    capture_output=True,
-                    text=True,
-                    check=True,
-                )
-                repo_url = result.stdout.strip()
-                override_submodule = extract_submodule_name_from_repo_url(repo_url)
-                log(f"External source detected: {override_submodule}")
-                move_external_source_to_submodule(
-                    external_source_temp_path, override_submodule
-                )
-            except subprocess.CalledProcessError as e:
-                log(f"Warning: Could not determine external repo: {e}")
-
-    # Get enabled projects
-    projects = get_enabled_projects(args)
-
-    # Build submodule list, excluding override if present
-    submodule_paths = ALWAYS_SUBMODULE_PATHS + [
-        get_submodule_path(project)
-        for project in projects
-        if project != override_submodule
-    ]
-
-    # TODO(scotttodd): Check for git lfs?
-    update_args = []
-    if args.depth:
-        update_args += ["--depth", str(args.depth)]
-    if args.progress:
-        update_args += ["--progress"]
-    if args.jobs:
-        update_args += ["--jobs", str(args.jobs)]
-    if args.remote:
-        update_args += ["--remote"]
-    if args.update_submodules:
-        exec(
-            ["git", "submodule", "update", "--init"]
-            + update_args
-            + ["--"]
-            + submodule_paths,
-            cwd=THEROCK_DIR,
-        )
-    if args.dvc_projects:
-        pull_large_files(args.dvc_projects, projects)
-
-    # Fetch nested submodules
-    if args.update_submodules:
-        fetch_nested_submodules(args, projects)
-
-    # Because we allow local patches, if a submodule is in a patched state,
-    # we manually set it to skip-worktree since recording the commit is
-    # then meaningless. Here on each fetch, we reset the flag so that if
-    # patches are aged out, the tree is restored to normal.
-    submodule_paths = [get_submodule_path(name) for name in projects]
-    exec(
-        ["git", "update-index", "--no-skip-worktree", "--"] + submodule_paths,
-        cwd=THEROCK_DIR,
-    )
-
-    # Remove any stale .smrev files.
-    remove_smrev_files(args, projects)
-
-    if args.apply_patches:
-        apply_patches(args, projects)
 
 
 # Gets the the relative path to a submodule given its name.

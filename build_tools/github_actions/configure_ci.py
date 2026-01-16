@@ -395,6 +395,14 @@ def run_from_env() -> None:
 
 def get_modified_paths(base_ref: str) -> Optional[Iterable[str]]:
     """Returns the paths of modified files relative to the base reference."""
+    # For external repos, diff the .external-source-temp directory instead of current directory
+    external_source_checkout = (
+        os.environ.get("EXTERNAL_SOURCE_CHECKOUT", "false").lower() == "true"
+    )
+    git_cwd = (
+        THEROCK_DIR / ".external-source-temp" if external_source_checkout else None
+    )
+
     try:
         return subprocess.run(
             ["git", "diff", "--name-only", base_ref],
@@ -402,6 +410,7 @@ def get_modified_paths(base_ref: str) -> Optional[Iterable[str]]:
             check=True,
             text=True,
             timeout=60,
+            cwd=git_cwd,
         ).stdout.splitlines()
     except TimeoutError:
         print(

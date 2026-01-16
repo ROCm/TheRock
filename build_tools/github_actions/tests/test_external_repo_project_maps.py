@@ -35,9 +35,6 @@ ROCM_SYSTEMS_ROOT = THEROCK_ROOT / "rocm-systems"
 class TestRocmLibrariesPaths(unittest.TestCase):
     """Verify that paths in rocm-libraries project maps exist."""
 
-    @unittest.skipIf(
-        not ROCM_LIBRARIES_ROOT.exists(), "rocm-libraries submodule not initialized"
-    )
     def test_subtree_paths_exist(self):
         """Verify all subtree paths in ROCM_LIBRARIES_SUBTREE_TO_PROJECT_MAP exist."""
         missing_paths = []
@@ -57,9 +54,6 @@ class TestRocmLibrariesPaths(unittest.TestCase):
 class TestRocmSystemsPaths(unittest.TestCase):
     """Verify that paths in rocm-systems project maps exist."""
 
-    @unittest.skipIf(
-        not ROCM_SYSTEMS_ROOT.exists(), "rocm-systems submodule not initialized"
-    )
     def test_subtree_paths_exist(self):
         """Verify all subtree paths in ROCM_SYSTEMS_SUBTREE_TO_PROJECT_MAP exist."""
         missing_paths = []

@@ -28,7 +28,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from detect_external_repo_config import (
     detect_repo_name,
     get_repo_config,
-    resolve_platform_specific_config,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -105,11 +104,10 @@ def build_configure(manylinux=False):
             try:
                 repo_name = detect_repo_name(repo_override)
                 config = get_repo_config(repo_name)
-                platform_config = resolve_platform_specific_config(config, PLATFORM)
 
                 # Add the CMake source directory variable
-                cmake_source_var = platform_config.get("cmake_source_var")
-                submodule_path = platform_config.get("submodule_path")
+                cmake_source_var = config.get("cmake_source_var")
+                submodule_path = config.get("submodule_path")
                 if cmake_source_var and submodule_path:
                     cmd.append(f"-D{cmake_source_var}=./{submodule_path}")
                     logging.info(

@@ -90,7 +90,7 @@ jobs:
     name: Test Artifacts
     # If the dependent job failed/cancelled, this job will not be run
     # The use_prebuilt_artifacts "or" statement ensures that tests will run if
-    # previous build step is run or skipped.
+    # previous build step is run or skipped.concurrency.
     # If we are expecting a build failure, do not run tests to save machine capacity
     if: >-
       ${{
@@ -143,6 +143,10 @@ jobs:
   build_portable_linux_python_packages:
     needs: [build_portable_linux_artifacts]
     name: Build Python
+    # If the dependent job failed/cancelled, this job will not be run
+    # The use_prebuilt_artifacts "or" statement ensures that tests will run if
+    # previous build step is run or skipped.concurrency.
+    # Skip for external repos (they don't need Python packages)
     if: >-
       ${{
         !failure() &&

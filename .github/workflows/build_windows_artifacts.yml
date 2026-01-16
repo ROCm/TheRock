@@ -112,6 +112,7 @@ jobs:
         if: ${{ inputs.external_source_checkout }}
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
+          repository: ${{ inputs.repository_override || github.repository }}
           path: .external-source-temp
 
       - uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
