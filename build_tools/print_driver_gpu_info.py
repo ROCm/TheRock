@@ -7,6 +7,7 @@ On Linux:
   - print linux-firmware package version
   - print amdgpu driver source (in-kernel vs DKMS/external)
   - run "amd-smi static"
+  - run "amd-smi firmware" (shows GPU firmware versions)
   - run "rocminfo"
 
 On Windows:
@@ -117,6 +118,31 @@ def run_command_with_search(
     log(f"{command}: command not found")
 
 
+def is_running_in_container() -> bool:
+    """Detect if we're running inside a container (Docker, podman, etc.)."""
+    # Check for /.dockerenv file
+    if Path("/.dockerenv").exists():
+        return True
+
+    # Check cgroup for container indicators
+    try:
+        cgroup = Path("/proc/1/cgroup").read_text()
+        if "docker" in cgroup or "containerd" in cgroup or "podman" in cgroup:
+            return True
+        # In cgroup v2, check if we're not in the root cgroup
+        if cgroup.strip() == "0::/":
+            # Could be cgroup v2, check for container env vars
+            pass
+    except Exception:
+        pass
+
+    # Check for container environment variables
+    if os.getenv("container") or os.getenv("KUBERNETES_SERVICE_HOST"):
+        return True
+
+    return False
+
+
 def print_kernel_version() -> None:
     """Print the Linux kernel version."""
     log("\n=== Linux Kernel Version ===")
@@ -176,6 +202,8 @@ def print_linux_firmware_version() -> None:
 
     # Fallback: check if /lib/firmware exists and show amdgpu firmware info
     firmware_dir = Path("/lib/firmware/amdgpu")
+    in_container = is_running_in_container()
+
     if firmware_dir.exists():
         try:
             fw_files = list(firmware_dir.glob("*.bin"))
@@ -190,9 +218,12 @@ def print_linux_firmware_version() -> None:
                 log(f"  Newest firmware file: {newest.name} ({mtime.isoformat()})")
         except Exception as e:
             log(f"Error reading firmware directory: {e}")
-    elif not found_package_manager:
-        log("No supported package manager found (dpkg-query, rpm)")
-        log("  /lib/firmware/amdgpu does not exist")
+    else:
+        if in_container:
+            log("Note: Running in container, firmware is loaded by host kernel")
+        elif not found_package_manager:
+            log("No supported package manager found (dpkg-query, rpm)")
+            log("  /lib/firmware/amdgpu does not exist")
 
 
 def print_amdgpu_driver_source() -> None:
@@ -313,7 +344,7 @@ def run_sanity(os_name: str) -> None:
             extra_command_search_paths=[bin_dir],
         )
     else:
-        # Linux: kernel version, firmware, driver source, amd-smi static, rocminfo
+        # Linux: kernel version, firmware pkg, driver source, amd-smi, rocminfo
         print_kernel_version()
         print_linux_firmware_version()
         print_amdgpu_driver_source()
@@ -324,6 +355,12 @@ def run_sanity(os_name: str) -> None:
                 label="amd-smi static",
                 command="amd-smi",
                 args=["static"],
+                extra_command_search_paths=[bin_dir],
+            )
+            run_command_with_search(
+                label="amd-smi firmware",
+                command="amd-smi",
+                args=["firmware"],
                 extra_command_search_paths=[bin_dir],
             )
         run_command_with_search(
