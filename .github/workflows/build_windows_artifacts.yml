@@ -158,7 +158,8 @@ jobs:
           GITHUB_JOB_NAME: ${{ github.job }}
           MEMORY_MONITOR_INTERVAL: ${{ inputs.monitor_interval }}
         run: |
-          bash build_tools/github_actions/start_memory_monitor.sh
+          MONITOR_PID=$(bash build_tools/github_actions/start_memory_monitor.sh)
+          export MONITOR_PID
 
           cmake --build "${{ env.BUILD_DIR }}" --target therock-archives therock-dist -- -k 0
 
