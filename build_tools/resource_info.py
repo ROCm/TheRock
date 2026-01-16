@@ -299,7 +299,7 @@ def run_and_log_command(repo_root: Path, log_dir: str) -> int:
     cmd_args = sys.argv[1:]
     cmd_str = " ".join(shlex.quote(arg) for arg in cmd_args)
 
-    comp = therock_components_compile_classifer(repo_root, pwd, cmd_str)
+    comp = therock_components_compile_classifier(repo_root, pwd, cmd_str)
 
     ts = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     rand = random.randint(0, 999999)
