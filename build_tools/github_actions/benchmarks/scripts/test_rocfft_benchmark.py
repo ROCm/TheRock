@@ -66,23 +66,7 @@ class ROCfftBenchmark(BenchmarkBase):
                     str(NUM_ITERATIONS),
                 ]
 
-                log.info(f"++ Exec [{self.therock_dir}]$ {shlex.join(cmd)}")
-                f.write(f"{shlex.join(cmd)}\n")
-
-                process = subprocess.Popen(
-                    cmd,
-                    cwd=self.therock_dir,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    bufsize=1,
-                )
-
-                for line in process.stdout:
-                    log.info(line.strip())
-                    f.write(f"{line}\n")
-
-                process.wait()
+                self.execute_command(cmd, f)
 
         log.info("Benchmark execution complete")
 
@@ -119,102 +103,96 @@ class ROCfftBenchmark(BenchmarkBase):
         num_gpus = 1
         batch_size = default_batch_size
 
-        try:
-            with open(self.log_file, "r") as log_fp:
+        with open(self.log_file, "r") as log_fp:
 
-                for line in log_fp:
-                    # Extract batch size from command line
-                    batch_match = re.search(pattern_batch_size, line)
-                    if batch_match:
-                        batch_size = int(batch_match.group(1))
+            for line in log_fp:
+                # Extract batch size from command line
+                batch_match = re.search(pattern_batch_size, line)
+                if batch_match:
+                    batch_size = int(batch_match.group(1))
 
-                    # Check if this is a test case line
-                    test_case_match = re.search(pattern_test_case, line)
-                    if not test_case_match:
-                        continue
+                # Check if this is a test case line
+                test_case_match = re.search(pattern_test_case, line)
+                if not test_case_match:
+                    continue
 
-                    # Build subtest identifier
-                    length_type = test_case_match.group(1)
-                    dimensions = (
-                        test_case_match.group(2).replace(" ", "_").replace("-", "")
+                # Build subtest identifier
+                length_type = test_case_match.group(1)
+                dimensions = test_case_match.group(2).replace(" ", "_").replace("-", "")
+                subtest_id = f"{length_type}={dimensions}"
+
+                # Parse test results
+                gpu_time = None
+                gflops = None
+
+                for result_line in log_fp:
+                    if re.search(pattern_gpu_time, result_line):
+                        gpu_time = float(result_line.split()[-2])
+                    elif re.search(pattern_gflops, result_line):
+                        gflops = float(result_line.split()[-1])
+                        break  # Found both metrics
+                    elif "--length" in result_line:
+                        # Next test case started, this one failed
+                        break
+
+                # Determine if test passed or failed
+                status = "PASS" if (gpu_time and gflops) else "FAIL"
+                gpu_time = gpu_time or 0.0
+                gflops = gflops or 0.0
+
+                # Add GPU time result
+                time_testname = f"rider_{subtest_id}_time"
+                table.add_row(
+                    [
+                        self.benchmark_name,
+                        time_testname,
+                        batch_size,
+                        num_gpus,
+                        status,
+                        gpu_time,
+                        "ms",
+                        "L",
+                    ]
+                )
+                test_results.append(
+                    self.create_test_result(
+                        self.benchmark_name,
+                        time_testname,
+                        status,
+                        gpu_time,
+                        "ms",
+                        "L",
+                        batch_size=batch_size,
+                        ngpu=num_gpus,
                     )
-                    subtest_id = f"{length_type}={dimensions}"
+                )
 
-                    # Parse test results
-                    gpu_time = None
-                    gflops = None
-
-                    for result_line in log_fp:
-                        if re.search(pattern_gpu_time, result_line):
-                            gpu_time = float(result_line.split()[-2])
-                        elif re.search(pattern_gflops, result_line):
-                            gflops = float(result_line.split()[-1])
-                            break  # Found both metrics
-                        elif "--length" in result_line:
-                            # Next test case started, this one failed
-                            break
-
-                    # Determine if test passed or failed
-                    status = "PASS" if (gpu_time and gflops) else "FAIL"
-                    gpu_time = gpu_time or 0.0
-                    gflops = gflops or 0.0
-
-                    # Add GPU time result
-                    time_testname = f"rider_{subtest_id}_time"
-                    table.add_row(
-                        [
-                            self.benchmark_name,
-                            time_testname,
-                            batch_size,
-                            num_gpus,
-                            status,
-                            gpu_time,
-                            "ms",
-                            "L",
-                        ]
+                # Add GFLOPS result
+                gflops_testname = f"rider_{subtest_id}_gflops"
+                table.add_row(
+                    [
+                        self.benchmark_name,
+                        gflops_testname,
+                        batch_size,
+                        num_gpus,
+                        status,
+                        gflops,
+                        "GFLOPS",
+                        "H",
+                    ]
+                )
+                test_results.append(
+                    self.create_test_result(
+                        self.benchmark_name,
+                        gflops_testname,
+                        status,
+                        gflops,
+                        "GFLOPS",
+                        "H",
+                        batch_size=batch_size,
+                        ngpu=num_gpus,
                     )
-                    test_results.append(
-                        self.create_test_result(
-                            self.benchmark_name,
-                            time_testname,
-                            status,
-                            gpu_time,
-                            "ms",
-                            "L",
-                            batch_size=batch_size,
-                            ngpu=num_gpus,
-                        )
-                    )
-
-                    # Add GFLOPS result
-                    gflops_testname = f"rider_{subtest_id}_gflops"
-                    table.add_row(
-                        [
-                            self.benchmark_name,
-                            gflops_testname,
-                            batch_size,
-                            num_gpus,
-                            status,
-                            gflops,
-                            "GFLOPS",
-                            "H",
-                        ]
-                    )
-                    test_results.append(
-                        self.create_test_result(
-                            self.benchmark_name,
-                            gflops_testname,
-                            status,
-                            gflops,
-                            "GFLOPS",
-                            "H",
-                            batch_size=batch_size,
-                            ngpu=num_gpus,
-                        )
-                    )
-
-        except OSError as e:
-            raise ValueError(f"IO Error in Score Extractor: {e}")
+                )
 
         return test_results, table
 

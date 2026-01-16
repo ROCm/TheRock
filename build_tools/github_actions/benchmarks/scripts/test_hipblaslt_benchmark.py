@@ -107,23 +107,7 @@ class HipblasltBenchmark(BenchmarkBase):
                         B,
                     ]
 
-                    log.info(f"++ Exec [{self.therock_dir}]$ {shlex.join(cmd)}")
-                    f.write(f"{shlex.join(cmd)}\n")
-
-                    process = subprocess.Popen(
-                        cmd,
-                        cwd=self.therock_dir,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.STDOUT,
-                        text=True,
-                        bufsize=1,
-                    )
-
-                    for line in process.stdout:
-                        log.info(line.strip())
-                        f.write(f"{line}\n")
-
-                    process.wait()
+                    self.execute_command(cmd, f)
 
         log.info("Benchmark execution complete")
 
@@ -178,93 +162,86 @@ class HipblasltBenchmark(BenchmarkBase):
                 f"_{batch_count}"
             )
 
-        try:
-            with open(self.log_file, "r") as log_fp:
-                data = log_fp.readlines()
+        with open(self.log_file, "r") as log_fp:
+            data = log_fp.readlines()
 
-            # Find CSV header line
-            header_line = None
-            header_index = -1
+        # Find CSV header line
+        header_line = None
+        header_index = -1
 
-            for i, line in enumerate(data):
-                if "transA" in line and "transB" in line and "hipblaslt-Gflops" in line:
-                    header_line = line.replace("[0]:", "").strip().split(",")
-                    header_index = i
-                    break
+        for i, line in enumerate(data):
+            if "transA" in line and "transB" in line and "hipblaslt-Gflops" in line:
+                header_line = line.replace("[0]:", "").strip().split(",")
+                header_index = i
+                break
 
-            if not header_line or header_index == -1:
-                log.warning("CSV header not found in log file")
-                return test_results, table
+        if not header_line or header_index == -1:
+            log.warning("CSV header not found in log file")
+            return test_results, table
 
-            for line in data[header_index + 1 :]:
-                line = line.strip()
+        for line in data[header_index + 1 :]:
+            line = line.strip()
 
-                # Skip empty or header lines
-                if (
-                    not line
-                    or len(line.split(",")) < 2
-                    or "transA" in line
-                    or "transB" in line
-                ):
-                    continue
+            # Skip empty or header lines
+            if (
+                not line
+                or len(line.split(",")) < 2
+                or "transA" in line
+                or "transB" in line
+            ):
+                continue
 
-                # Remove [0]: prefix and parse values
-                line = re.sub(r"^\[\d+\]:\s*", "", line)
-                values = line.split(",")
+            # Remove [0]: prefix and parse values
+            line = re.sub(r"^\[\d+\]:\s*", "", line)
+            values = line.split(",")
 
-                if len(values) != len(header_line):
-                    continue
+            if len(values) != len(header_line):
+                continue
 
-                params = dict(zip(header_line, values))
+            params = dict(zip(header_line, values))
 
-                # Validate batch_count
-                try:
-                    batch_count = int(get_param(params, "batch_count", "0") or "0")
-                except (ValueError, TypeError):
-                    log.warning(f"Invalid batch_count, skipping line")
-                    continue
+            # Validate batch_count
+            try:
+                batch_count = int(get_param(params, "batch_count", "0") or "0")
+            except (ValueError, TypeError):
+                log.warning(f"Invalid batch_count, skipping line")
+                continue
 
-                # Validate Gflops score
-                try:
-                    score = float(get_param(params, "hipblaslt-Gflops", "0"))
-                    status = "PASS" if score > 0 else "FAIL"
-                except (ValueError, TypeError):
-                    score = 0.0
-                    status = "FAIL"
+            # Validate Gflops score
+            try:
+                score = float(get_param(params, "hipblaslt-Gflops", "0"))
+                status = "PASS" if score > 0 else "FAIL"
+            except (ValueError, TypeError):
+                score = 0.0
+                status = "FAIL"
 
-                # Create subtest name
-                subtest_name = create_subtest_name(params, batch_count)
+            # Create subtest name
+            subtest_name = create_subtest_name(params, batch_count)
 
-                table.add_row(
-                    [
-                        self.benchmark_name,
-                        subtest_name,
-                        batch_count,
-                        num_gpus,
-                        status,
-                        score,
-                        "Gflops",
-                        "H",
-                    ]
+            table.add_row(
+                [
+                    self.benchmark_name,
+                    subtest_name,
+                    batch_count,
+                    num_gpus,
+                    status,
+                    score,
+                    "Gflops",
+                    "H",
+                ]
+            )
+            test_results.append(
+                self.create_test_result(
+                    self.benchmark_name,
+                    subtest_name,
+                    status,
+                    score,
+                    "Gflops",
+                    "H",
+                    batch_size=batch_count,
+                    ngpu=num_gpus,
                 )
-                test_results.append(
-                    self.create_test_result(
-                        self.benchmark_name,
-                        subtest_name,
-                        status,
-                        score,
-                        "Gflops",
-                        "H",
-                        batch_size=batch_count,
-                        ngpu=num_gpus,
-                    )
-                )
-
-        except FileNotFoundError:
-            log.error(f"Log file not found: {self.log_file}")
-        except OSError as e:
-            log.error(f"Failed to read log file: {e}")
-            raise
+            )
 
         return test_results, table
 

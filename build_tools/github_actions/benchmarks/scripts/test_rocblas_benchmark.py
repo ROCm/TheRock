@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))  # For utils
 sys.path.insert(0, str(Path(__file__).parent))  # For benchmark_base
 from benchmark_base import BenchmarkBase, run_benchmark_main
 from utils.logger import log
+from utils.exceptions import TestExecutionError
 
 
 class ROCblasBenchmark(BenchmarkBase):
@@ -311,98 +312,93 @@ class ROCblasBenchmark(BenchmarkBase):
             suite_table = PrettyTable(field_names)
             suite_table.title = f"ROCblas {suite_name} Benchmark Results"
 
-            try:
-                with open(log_file, "r") as log_fp:
-                    lines = log_fp.readlines()
+            with open(log_file, "r") as log_fp:
+                lines = log_fp.readlines()
 
-                # Parse line by line, looking for CSV header followed by data
-                i = 0
-                current_precision = None  # Track precision from command line
+            # Parse line by line, looking for CSV header followed by data
+            i = 0
+            current_precision = None  # Track precision from command line
 
-                while i < len(lines):
-                    line = lines[i].strip()
+            while i < len(lines):
+                line = lines[i].strip()
 
-                    # Extract precision from command line (e.g., "-r s")
-                    if "rocblas-bench" in line and "-r" in line:
-                        parts = line.split()
-                        try:
-                            idx = parts.index("-r")
-                            current_precision = (
-                                parts[idx + 1] if idx + 1 < len(parts) else None
-                            )
-                        except (ValueError, IndexError):
-                            pass
-
-                    # Look for CSV header line
-                    if "rocblas-Gflops" in line:
-                        header = [col.strip() for col in line.split(",")]
-
-                        i += 1
-                        if i >= len(lines):
-                            break
-
-                        data_line = lines[i].strip()
-                        if not data_line or "rocblas-Gflops" in data_line:
-                            i += 1
-                            continue
-
-                        values = [val.strip() for val in data_line.split(",")]
-                        if len(values) != len(header):
-                            log.warning(
-                                f"Column mismatch: expected {len(header)}, got {len(values)}"
-                            )
-                            i += 1
-                            continue
-
-                        params = dict(zip(header, values))
-
-                        # Add precision from command line if not in CSV
-                        if current_precision and not any(
-                            k in params for k in ["a_type", "precision"]
-                        ):
-                            params["precision"] = current_precision
-
-                        function_type = self._determine_function_type(params)
-                        subtest_name = self._build_subtest_name_from_params(
-                            function_type, params
+                # Extract precision from command line (e.g., "-r s")
+                if "rocblas-bench" in line and "-r" in line:
+                    parts = line.split()
+                    try:
+                        idx = parts.index("-r")
+                        current_precision = (
+                            parts[idx + 1] if idx + 1 < len(parts) else None
                         )
+                    except (ValueError, IndexError):
+                        pass
 
-                        try:
-                            gflops = float(params.get("rocblas-Gflops", "0"))
-                            status = "PASS" if gflops > 0 else "FAIL"
+                # Look for CSV header line
+                if "rocblas-Gflops" in line:
+                    header = [col.strip() for col in line.split(",")]
 
-                            row_data = [
+                    i += 1
+                    if i >= len(lines):
+                        break
+
+                    data_line = lines[i].strip()
+                    if not data_line or "rocblas-Gflops" in data_line:
+                        i += 1
+                        continue
+
+                    values = [val.strip() for val in data_line.split(",")]
+                    if len(values) != len(header):
+                        log.warning(
+                            f"Column mismatch: expected {len(header)}, got {len(values)}"
+                        )
+                        i += 1
+                        continue
+
+                    params = dict(zip(header, values))
+
+                    # Add precision from command line if not in CSV
+                    if current_precision and not any(
+                        k in params for k in ["a_type", "precision"]
+                    ):
+                        params["precision"] = current_precision
+
+                    function_type = self._determine_function_type(params)
+                    subtest_name = self._build_subtest_name_from_params(
+                        function_type, params
+                    )
+
+                    try:
+                        gflops = float(params.get("rocblas-Gflops", "0"))
+                        status = "PASS" if gflops > 0 else "FAIL"
+
+                        row_data = [
+                            self.benchmark_name,
+                            subtest_name,
+                            num_gpus,
+                            status,
+                            gflops,
+                            "rocblas-Gflops",
+                            "H",
+                        ]
+                        suite_table.add_row(row_data)
+
+                        test_results.append(
+                            self.create_test_result(
                                 self.benchmark_name,
                                 subtest_name,
-                                num_gpus,
                                 status,
                                 gflops,
                                 "rocblas-Gflops",
                                 "H",
-                            ]
-                            suite_table.add_row(row_data)
-
-                            test_results.append(
-                                self.create_test_result(
-                                    self.benchmark_name,
-                                    subtest_name,
-                                    status,
-                                    gflops,
-                                    "rocblas-Gflops",
-                                    "H",
-                                    ngpu=num_gpus,
-                                )
+                                ngpu=num_gpus,
                             )
-                        except (ValueError, TypeError) as e:
-                            log.warning(f"Failed to parse metrics: {e}")
-                            i += 1
-                            continue
+                        )
+                    except (ValueError, TypeError) as e:
+                        log.warning(f"Failed to parse metrics: {e}")
+                        i += 1
+                        continue
 
-                    i += 1
-
-            except OSError as e:
-                log.error(f"IO Error reading {log_file}: {e}")
-                continue
+                i += 1
 
             # Add suite table to the list of tables
             all_tables.append(suite_table)

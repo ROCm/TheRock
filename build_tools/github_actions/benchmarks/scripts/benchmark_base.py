@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))  # benchmarks/
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))  # github_actions/
 from utils import BenchmarkClient, HardwareDetector
 from utils.logger import log
-from utils.exceptions import TestExecutionError
+from utils.exceptions import TestExecutionError, TestResultError
 from github_actions_utils import gha_append_step_summary
 
 
@@ -45,19 +45,25 @@ class BenchmarkBase:
         self.client = None
 
     def execute_command(
-        self, cmd: List[str], log_file_handle: IO, env: Dict[str, str] = None
-    ) -> int:
+        self,
+        cmd: List[str],
+        log_file_handle: IO,
+        env: Dict[str, str] = None,
+        cwd: Path = None,
+    ) -> None:
         """Execute a command and stream output to log file.
 
         Args:
             cmd: Command list to execute
             log_file_handle: File handle to write output
             env: Optional environment variables to set
+            cwd: Optional working directory (defaults to self.therock_dir)
 
-        Returns:
-            Exit code from the command
+        Raises:
+            TestExecutionError: If command fails with non-zero exit code
         """
-        log.info(f"++ Exec [{self.therock_dir}]$ {shlex.join(cmd)}")
+        working_dir = cwd if cwd is not None else self.therock_dir
+        log.info(f"++ Exec [{working_dir}]$ {shlex.join(cmd)}")
         log_file_handle.write(f"{shlex.join(cmd)}\n")
 
         # Merge custom env with current environment
@@ -67,7 +73,7 @@ class BenchmarkBase:
 
         process = subprocess.Popen(
             cmd,
-            cwd=self.therock_dir,
+            cwd=working_dir,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
@@ -80,7 +86,14 @@ class BenchmarkBase:
             log_file_handle.write(f"{line}")
 
         process.wait()
-        return process.returncode
+
+        if process.returncode != 0:
+            raise TestExecutionError(
+                f"Command failed with exit code {process.returncode}\n"
+                f"Command: {shlex.join(cmd)}\n"
+                f"Working directory: {working_dir}\n"
+                f"Check log file for details"
+            )
 
     def _detect_gpu_count(self) -> int:
         """Detect the number of available GPUs using HardwareDetector.
@@ -309,8 +322,17 @@ class BenchmarkBase:
 
         return "FAIL" if has_fail else ("UNKNOWN" if has_unknown else "PASS")
 
-    def run(self) -> int:
-        """Execute benchmark workflow and return exit code (0=PASS, 1=FAIL)."""
+    def run(self) -> None:
+        """Execute benchmark workflow.
+
+        Raises:
+            TestExecutionError: If benchmark execution encounters errors (missing files, etc.)
+            TestResultError: If benchmarks run successfully but results show failures
+
+        Note:
+            On success, returns normally (exit code 0)
+            On failure, raises exception (exit code 1)
+        """
         log.info(f"Initializing {self.display_name} Benchmark Test")
 
         # Initialize benchmark client and print system info
@@ -323,9 +345,12 @@ class BenchmarkBase:
         # Parse results (implemented by child class)
         test_results, tables = self.parse_results()
 
+        # Validate test results structure
         if not test_results:
-            log.error("No test results found")
-            return 1
+            raise TestResultError(
+                "No test results found\n"
+                "Ensure benchmarks were executed successfully and results were parsed"
+            )
 
         # Calculate statistics
         stats = self.calculate_statistics(test_results)
@@ -344,27 +369,22 @@ class BenchmarkBase:
         final_status = self.determine_final_status(final_tables)
         log.info(f"Final Status: {final_status}")
 
-        # Return 0 only if PASS, otherwise return 1
-        return 0 if final_status == "PASS" else 1
+        # Raise exception if benchmarks failed
+        if final_status != "PASS":
+            raise TestResultError(
+                f"Benchmark test failed: {stats['failed']} out of {stats['total']} tests failed\n"
+                f"Check the test results above for details"
+            )
 
 
 def run_benchmark_main(benchmark_instance):
     """Run benchmark with standard error handling.
 
-    Raises:
-        KeyboardInterrupt: If execution is interrupted by user
-        Exception: If benchmark execution fails
-    """
-    try:
-        exit_code = benchmark_instance.run()
-        if exit_code != 0:
-            raise RuntimeError(f"Benchmark failed with exit code {exit_code}")
-    except KeyboardInterrupt:
-        log.warning("\nExecution interrupted by user")
-        raise
-    except Exception as e:
-        log.error(f"Execution failed: {e}")
-        import traceback
+    Args:
+        benchmark_instance: Instance of a benchmark test class
 
-        traceback.print_exc()
-        raise
+    Raises:
+        TestExecutionError: If benchmark execution fails
+        TestResultError: If benchmark results show failures
+    """
+    benchmark_instance.run()
