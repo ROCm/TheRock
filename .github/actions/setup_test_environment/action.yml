@@ -24,6 +24,12 @@ inputs:
 runs:
   using: "composite"
   steps:
+    # Reset git config in case of corrupted and bloated global .gitconfig on persistent test runners (#2929)
+    - name: "Cleaning up existing global .gitconfig"
+      shell: bash
+      run: |
+        rm -f ~/.gitconfig
+
     - name: "Setting up Python"
       uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
       with:
