@@ -20,10 +20,16 @@ THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 ROCM_PATH = THEROCK_BIN_DIR.parent
 
 CTS_SOURCE_DIR = THEROCK_DIR / "build" / "opencl-cts-source"
+HEADERS_SOURCE_DIR = THEROCK_DIR / "build" / "opencl-headers-source"
+SPIRV_HEADERS_DIR = THEROCK_DIR / "build" / "spirv-headers-source"
 CTS_BUILD_DIR = THEROCK_DIR / "build" / "opencl-cts-build"
 
-OPENCL_CTS_REPO = "https://github.com/KhronosGroup/OpenCL-CTS.git"
+OPENCL_CTS_REPO = "https://github.com/ROCm/OpenCL-CTS.git"
 OPENCL_CTS_BRANCH = os.getenv("OPENCL_CTS_BRANCH", "main")
+OPENCL_HEADERS_REPO = "https://github.com/KhronosGroup/OpenCL-Headers.git"
+OPENCL_HEADERS_BRANCH = os.getenv("OPENCL_HEADERS_BRANCH", "main")
+SPIRV_HEADERS_REPO = "https://github.com/KhronosGroup/SPIRV-Headers.git"
+SPIRV_HEADERS_BRANCH = os.getenv("SPIRV_HEADERS_BRANCH", "main")
 
 
 logging.info(f"THEROCK_BIN_DIR: {THEROCK_BIN_DIR}")
@@ -48,7 +54,6 @@ def verify_opencl_runtime():
         result = subprocess.run(
             cmd,
             cwd=THEROCK_DIR,
-            env=env,
             capture_output=True,
             text=True,
             timeout=30,
@@ -70,8 +75,8 @@ def verify_opencl_runtime():
         logging.warning(f"Error running clinfo: {e}")
 
 
-def clone_opencl_cts():
-    logging.info(f"++ Cloning OpenCL-CTS from {OPENCL_CTS_REPO}")
+def clone_opencl():
+    logging.info(f"++ Cloning OpenCL dependencies from {OPENCL_CTS_REPO}")
 
     CTS_SOURCE_DIR.parent.mkdir(parents=True, exist_ok=True)
 
@@ -84,6 +89,34 @@ def clone_opencl_cts():
         OPENCL_CTS_BRANCH,
         OPENCL_CTS_REPO,
         str(CTS_SOURCE_DIR),
+    ]
+
+    logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
+    subprocess.run(cmd, cwd=THEROCK_DIR, check=True)
+
+    cmd = [
+        "git",
+        "clone",
+        "--depth",
+        "1",
+        "--branch",
+        OPENCL_HEADERS_BRANCH,
+        OPENCL_HEADERS_REPO,
+        str(HEADERS_SOURCE_DIR),
+    ]
+
+    logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
+    subprocess.run(cmd, cwd=THEROCK_DIR, check=True)
+
+    cmd = [
+        "git",
+        "clone",
+        "--depth",
+        "1",
+        "--branch",
+        SPIRV_HEADERS_BRANCH,
+        SPIRV_HEADERS_REPO,
+        str(SPIRV_HEADERS_DIR),
     ]
 
     logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
@@ -104,8 +137,9 @@ def configure_build():
         "-B",
         str(CTS_BUILD_DIR),
         f"-DCL_LIB_DIR={opencl_lib_dir}",
-        "-DCL_INCLUDE_DIR=/usr/include",
-        "-DSPIRV_INCLUDE_DIR=/usr",
+        f"-DCL_INCLUDE_DIR={HEADERS_SOURCE_DIR}",
+        f"-DSPIRV_INCLUDE_DIR={SPIRV_HEADERS_DIR}",
+        "-DOPENCL_LIBRARIES=OpenCL",
     ]
 
     logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
@@ -132,18 +166,20 @@ def run_tests():
 
     cmd = [
         "python",
-        str(CTS_SOURCE_DIR / "test_conformance" / "run_conformance.py"),
-        str(CTS_SOURCE_DIR / "test_conformance" / "opencl_conformance_tests_full.csv"),
+        str(CTS_BUILD_DIR / "test_conformance" / "run_conformance.py"),
+        str(CTS_BUILD_DIR / "test_conformance" / "opencl_conformance_tests_full.csv"),
     ]
     logging.info(f"++ Exec [{CTS_BUILD_DIR}]$ {shlex.join(cmd)}")
-    env = {"OCL_ICD_FILENAMES": OPENCL_ICD_FILENAMES}
-    subprocess.run(cmd, cwd=CTS_BUILD_DIR, check=True, env=env)
+    env = {"OCL_ICD_FILENAMES": str(OPENCL_ICD_FILENAMES)}
+    subprocess.run(
+        cmd, cwd=str(CTS_BUILD_DIR / "test_conformance"), check=True, env=env
+    )
 
 
 if __name__ == "__main__":
     try:
         verify_opencl_runtime()
-        clone_opencl_cts()
+        clone_opencl()
         configure_build()
         build_tests()
         run_tests()
