@@ -1551,10 +1551,16 @@
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "amdrocm-amdsmi"
+      "amdrocm-amdsmi",
+      "amdrocm-profiler-base",
+      "amdrocm-runtime",
+      "amdrocm-sysdeps"
     ],
     "RPMRequires": [
-      "amdrocm-amdsmi"
+      "amdrocm-amdsmi",
+      "amdrocm-profiler-base",
+      "amdrocm-runtime",
+      "amdrocm-sysdeps"
     ],
     "Maintainer": "RDC Support <rdc.support@amd.com>",
     "Description_Short": "ROCm Data Center Tools",
@@ -1601,7 +1607,7 @@
     "Section": "devel",
     "Priority": "optional",
     "Group": "unknown",
-    "License": "MIT",
+    "License": "MIT AND GPL AND NCSA",
     "Vendor": "Advanced Micro Devices, Inc",
     "Homepage": "https://github.com/ROCm/rocGdb",
     "Artifactory": [
