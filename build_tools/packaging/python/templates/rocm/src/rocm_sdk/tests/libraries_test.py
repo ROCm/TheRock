@@ -5,6 +5,7 @@
 import importlib
 from pathlib import Path
 import subprocess
+import sys
 import sysconfig
 import unittest
 
@@ -76,7 +77,7 @@ class ROCmLibrariesTest(unittest.TestCase):
                     preload_command
                     + " import ctypes; import sys; ctypes.CDLL(sys.argv[1])"
                 )
-                cmd = utils.get_python_cmd(["-c", command, str(so_path)])
+                cmd = [sys.executable, "-c", command, str(so_path)]
                 subprocess.check_call(cmd)
 
     def testConsoleScripts(self):

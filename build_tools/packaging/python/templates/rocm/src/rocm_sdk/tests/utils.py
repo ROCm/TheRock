@@ -11,34 +11,6 @@ is_windows = platform.system() == "Windows"
 exe_suffix = ".exe" if is_windows else ""
 
 
-def _get_executable_version() -> tuple[int, int]:
-    """Get the major.minor version of sys.executable."""
-    try:
-        out = subprocess.check_output(
-            [sys.executable, "--version"], text=True, stderr=subprocess.STDOUT
-        )
-        # Parse "Python X.Y.Z" -> (X, Y)
-        version_str = out.strip().split()[1]
-        parts = version_str.split(".")
-        return (int(parts[0]), int(parts[1]))
-    except Exception:
-        return sys.version_info[:2]
-
-
-def get_python_cmd(extra_args: list[str] | None = None) -> list[str]:
-    """Build a Python command with the -P flag if Python >= 3.11.
-
-    The -P flag disables adding the current directory to sys.path,
-    which is only available in Python 3.11+.
-    """
-    cmd = [sys.executable]
-    if _get_executable_version() >= (3, 11):
-        cmd.append("-P")
-    if extra_args:
-        cmd.extend(extra_args)
-    return cmd
-
-
 def exec(args: list[str | Path], cwd: Path | None = None, capture: bool = False):
     args = [str(arg) for arg in args]
     if cwd is None:

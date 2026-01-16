@@ -6,6 +6,7 @@ import importlib
 from pathlib import Path
 import platform
 import subprocess
+import sys
 import unittest
 
 from .. import _dist_info as di
@@ -38,13 +39,13 @@ class ROCmDevelTest(unittest.TestCase):
         )
 
     def testCLIPathBin(self):
-        cmd = utils.get_python_cmd(["-m", "rocm_sdk", "path", "--bin"])
+        cmd = [sys.executable, "-m", "rocm_sdk", "path", "--bin"]
         output = utils.exec(cmd, capture=True).decode().strip()
         path = Path(output)
         self.assertTrue(path.exists(), msg=f"Expected bin path {path} to exist")
 
     def testCLIPathCMake(self):
-        cmd = utils.get_python_cmd(["-m", "rocm_sdk", "path", "--cmake"])
+        cmd = [sys.executable, "-m", "rocm_sdk", "path", "--cmake"]
         output = utils.exec(cmd, capture=True).decode().strip()
         path = Path(output)
         self.assertTrue(path.exists(), msg=f"Expected cmake path {path} to exist")
@@ -54,7 +55,7 @@ class ROCmDevelTest(unittest.TestCase):
         )
 
     def testCLIPathRoot(self):
-        cmd = utils.get_python_cmd(["-m", "rocm_sdk", "path", "--root"])
+        cmd = [sys.executable, "-m", "rocm_sdk", "path", "--root"]
         output = utils.exec(cmd, capture=True).decode().strip()
         path = Path(output)
         self.assertTrue(path.exists(), msg=f"Expected root path {path} to exist")
@@ -67,14 +68,14 @@ class ROCmDevelTest(unittest.TestCase):
     def testRootLLVMSymlinkExists(self):
         # We had a bug where the root llvm/ symlink, which is for backwards compat,
         # was not materialized. Verify it is.
-        cmd = utils.get_python_cmd(["-m", "rocm_sdk", "path", "--root"])
+        cmd = [sys.executable, "-m", "rocm_sdk", "path", "--root"]
         output = utils.exec(cmd, capture=True).decode().strip()
         path = Path(output) / "llvm" / "bin" / "clang++"
         self.assertTrue(path.exists(), msg=f"Expected {path} to exist")
 
     def testSharedLibrariesLoad(self):
         # Make sure the devel package is expanded.
-        cmd = utils.get_python_cmd(["-m", "rocm_sdk", "path", "--root"])
+        cmd = [sys.executable, "-m", "rocm_sdk", "path", "--root"]
         _ = utils.exec(cmd, capture=True).decode().strip()
 
         # Ensure that the platform package exists now.
@@ -123,5 +124,5 @@ class ROCmDevelTest(unittest.TestCase):
                 # are designed to load into the same process (i.e. LLVM runtime libs,
                 # etc).
                 command = "import ctypes; import sys; ctypes.CDLL(sys.argv[1])"
-                cmd = utils.get_python_cmd(["-c", command, str(so_path)])
+                cmd = [sys.executable, "-c", command, str(so_path)]
                 subprocess.check_call(cmd)
