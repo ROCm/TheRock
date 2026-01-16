@@ -10,6 +10,7 @@ Required environment variables:
 Optional environment variables:
   - VCToolsInstallDir
   - GITHUB_WORKSPACE
+  - EXTERNAL_SOURCE_CHECKOUT - Whether building for external repo (true/false)
 """
 
 import argparse
@@ -19,6 +20,16 @@ from pathlib import Path
 import platform
 import shlex
 import subprocess
+import sys
+
+# Add parent directories to path to import detect_external_repo_config
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from detect_external_repo_config import (
+    detect_repo_name,
+    get_repo_config,
+    resolve_platform_specific_config,
+)
 
 logging.basicConfig(level=logging.INFO)
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
@@ -29,10 +40,13 @@ PLATFORM = platform.system().lower()
 cmake_preset = os.getenv("cmake_preset")
 amdgpu_families = os.getenv("amdgpu_families")
 package_version = os.getenv("package_version")
-extra_cmake_options = os.getenv("extra_cmake_options")
+extra_cmake_options = os.getenv("extra_cmake_options", "")
 build_dir = os.getenv("BUILD_DIR")
 vctools_install_dir = os.getenv("VCToolsInstallDir")
 github_workspace = os.getenv("GITHUB_WORKSPACE")
+external_source_checkout = (
+    os.getenv("EXTERNAL_SOURCE_CHECKOUT", "false").lower() == "true"
+)
 
 platform_options = {
     "windows": [
@@ -81,6 +95,30 @@ def build_configure(manylinux=False):
         )
         cmd.append(f"-DTHEROCK_DIST_PYTHON_EXECUTABLES={python_executables}")
         cmd.append("-DTHEROCK_ENABLE_SYSDEPS_AMD_MESA=ON")
+
+    # Handle external source directory override
+    if external_source_checkout:
+        repo_override = os.getenv(
+            "GITHUB_REPOSITORY_OVERRIDE", os.getenv("GITHUB_REPOSITORY", "")
+        )
+        if repo_override:
+            try:
+                repo_name = detect_repo_name(repo_override)
+                config = get_repo_config(repo_name)
+                platform_config = resolve_platform_specific_config(config, PLATFORM)
+
+                # Add the CMake source directory variable
+                cmake_source_var = platform_config.get("cmake_source_var")
+                submodule_path = platform_config.get("submodule_path")
+                if cmake_source_var and submodule_path:
+                    cmd.append(f"-D{cmake_source_var}=./{submodule_path}")
+                    logging.info(
+                        f"External source override: -D{cmake_source_var}=./{submodule_path}"
+                    )
+            except (ValueError, KeyError) as e:
+                logging.warning(
+                    f"Could not determine external source configuration: {e}"
+                )
 
     if PLATFORM == "windows":
         # VCToolsInstallDir is required for build. Throwing an error if environment variable doesn't exist

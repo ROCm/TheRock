@@ -37,6 +37,7 @@ from typing import Dict, Any
 REPO_CONFIGS: Dict[str, Dict[str, Any]] = {
     "rocm-libraries": {
         "cmake_source_var": "THEROCK_ROCM_LIBRARIES_SOURCE_DIR",
+        "submodule_path": "rocm-libraries",
         "patches_dir": "rocm-libraries",
         "fetch_exclusion": "--no-include-rocm-libraries --no-include-ml-frameworks",
         # DVC is required on both platforms for rocm-libraries
@@ -47,6 +48,7 @@ REPO_CONFIGS: Dict[str, Dict[str, Any]] = {
     },
     "rocm-systems": {
         "cmake_source_var": "THEROCK_ROCM_SYSTEMS_SOURCE_DIR",
+        "submodule_path": "rocm-systems",
         "patches_dir": "rocm-systems",
         "fetch_exclusion": "--no-include-rocm-systems --no-include-rocm-libraries --no-include-ml-frameworks",
         # DVC is required on Windows but not Linux for rocm-systems
