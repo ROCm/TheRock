@@ -55,7 +55,14 @@ else()
 endif()
 
 # Set the LLVM_ENABLE_PROJECTS variable before including LLVM's CMakeLists.txt
-set(BUILD_TESTING OFF CACHE BOOL "DISABLE BUILDING TESTS IN SUBPROJECTS" FORCE)
+# Only enable BUILD_TESTING if LLVM tests are explicitly enabled
+if(THEROCK_ENABLE_LLVM_TESTS)
+  set(BUILD_TESTING ON CACHE BOOL "Enable building LLVM tests" FORCE)
+  set(LLVM_BUILD_TOOLS ON CACHE BOOL "Build LLVM tools required for tests" FORCE)
+  set(LLVM_INSTALL_UTILS ON CACHE BOOL "Install LLVM utility binaries like FileCheck" FORCE)
+else()
+  set(BUILD_TESTING OFF CACHE BOOL "DISABLE BUILDING TESTS IN SUBPROJECTS" FORCE)
+endif()
 # we have never enabled benchmarks,
 # disabling more explicitly after a bug fix enabled.
 set(LLVM_INCLUDE_BENCHMARKS OFF)
@@ -122,48 +129,52 @@ function(therock_set_implicit_llvm_options type tools_dir required_tool_names)
   endforeach()
 endfunction()
 
-block()
-  # This list contains the minimum tooling that must be enabled to build LLVM.
-  # It is empically derived (either configure or ninja invocation will fail
-  # on a missing tool).
-  set(_llvm_required_tools
-    LLVM_AR
-    LLVM_CONFIG
-    LLVM_DWARFDUMP
-    LLVM_LINK
-    LLVM_MC
-    LLVM_NM
-    LLVM_OFFLOAD_BINARY
-    LLVM_SHLIB
-    LLVM_OBJCOPY
-    LLVM_OBJDUMP
-    OPT
-    YAML2OBJ
-  )
-  if(WIN32)
-    # These can be provided by the "C++ Clang tools for Windows" in MSVC, but
-    # we might as well build them from source ourselves.
-    list(APPEND _llvm_required_tools "LLVM_DLLTOOL")
-    list(APPEND _llvm_required_tools "LLVM_LIB")
-    list(APPEND _llvm_required_tools "LLVM_RANLIB")
-  endif()
-  therock_set_implicit_llvm_options(LLVM "${CMAKE_CURRENT_SOURCE_DIR}/tools" "${_llvm_required_tools}")
+# When LLVM tests are enabled, build all tools (don't selectively disable).
+# Otherwise, only build the minimum required tools for production.
+if(NOT THEROCK_ENABLE_LLVM_TESTS)
+  block()
+    # This list contains the minimum tooling that must be enabled to build LLVM.
+    # It is empically derived (either configure or ninja invocation will fail
+    # on a missing tool).
+    set(_llvm_required_tools
+      LLVM_AR
+      LLVM_CONFIG
+      LLVM_DWARFDUMP
+      LLVM_LINK
+      LLVM_MC
+      LLVM_NM
+      LLVM_OFFLOAD_BINARY
+      LLVM_SHLIB
+      LLVM_OBJCOPY
+      LLVM_OBJDUMP
+      OPT
+      YAML2OBJ
+    )
+    if(WIN32)
+      # These can be provided by the "C++ Clang tools for Windows" in MSVC, but
+      # we might as well build them from source ourselves.
+      list(APPEND _llvm_required_tools "LLVM_DLLTOOL")
+      list(APPEND _llvm_required_tools "LLVM_LIB")
+      list(APPEND _llvm_required_tools "LLVM_RANLIB")
+    endif()
+    therock_set_implicit_llvm_options(LLVM "${CMAKE_CURRENT_SOURCE_DIR}/tools" "${_llvm_required_tools}")
 
-  # Clang tools that are required.
-  set(_clang_required_tools
-    CLANG_HIP
-    CLANG_OFFLOAD_BUNDLER
-    CLANG_OFFLOAD_PACKAGER
-    CLANG_OFFLOAD_WRAPPER
-    CLANG_LINKER_WRAPPER
-    CLANG_SHLIB
-    DRIVER
-    OFFLOAD_ARCH
-  )
-  if(WIN32)
-    # These can be provided by the "C++ Clang tools for Windows" in MSVC, but
-    # we might as well build them from source ourselves.
-    list(APPEND _clang_required_tools "CLANG_SCAN_DEPS")
-  endif()
-  therock_set_implicit_llvm_options(CLANG "${CMAKE_CURRENT_SOURCE_DIR}/../clang/tools" "${_clang_required_tools}")
-endblock()
+    # Clang tools that are required.
+    set(_clang_required_tools
+      CLANG_HIP
+      CLANG_OFFLOAD_BUNDLER
+      CLANG_OFFLOAD_PACKAGER
+      CLANG_OFFLOAD_WRAPPER
+      CLANG_LINKER_WRAPPER
+      CLANG_SHLIB
+      DRIVER
+      OFFLOAD_ARCH
+    )
+    if(WIN32)
+      # These can be provided by the "C++ Clang tools for Windows" in MSVC, but
+      # we might as well build them from source ourselves.
+      list(APPEND _clang_required_tools "CLANG_SCAN_DEPS")
+    endif()
+    therock_set_implicit_llvm_options(CLANG "${CMAKE_CURRENT_SOURCE_DIR}/../clang/tools" "${_clang_required_tools}")
+  endblock()
+endif()
