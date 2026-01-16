@@ -1,7 +1,8 @@
 """Installation package tests for the base installation."""
 
-import re
 import os
+import re
+import sys
 import unittest
 
 import rocm_sdk
@@ -23,18 +24,18 @@ class ROCmBaseTest(unittest.TestCase):
             os.environ.pop("ROCM_SDK_PRELOAD_LIBRARIES", None)
 
     def testCLI(self):
-        cmd = utils.get_python_cmd(["-m", "rocm_sdk", "--help"])
+        cmd = [sys.executable, "-m", "rocm_sdk", "--help"]
         output = utils.exec(cmd, capture=True).decode()
         self.assertIn("usage:", output)
 
     def testVersion(self):
-        cmd = utils.get_python_cmd(["-m", "rocm_sdk", "version"])
+        cmd = [sys.executable, "-m", "rocm_sdk", "version"]
         output = utils.exec(cmd, capture=True).decode().strip()
         self.assertTrue(output)
         self.assertIn(".", output)
 
     def testTargets(self):
-        cmd = utils.get_python_cmd(["-m", "rocm_sdk", "targets"])
+        cmd = [sys.executable, "-m", "rocm_sdk", "targets"]
         output = utils.exec(cmd, capture=True).decode().strip()
         self.assertTrue(output)
         self.assertIn("gfx", output)
