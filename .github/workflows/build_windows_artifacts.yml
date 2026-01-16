@@ -167,7 +167,7 @@ jobs:
 
       - name: Test build_tools
         run: |
-          python -m pytest build_tools/tests build_tools/github_actions/tests
+          python -m pytest build_tools/tests
 
       - name: Detect external source configuration
         if: ${{ inputs.external_source_checkout }}
@@ -178,6 +178,10 @@ jobs:
         timeout-minutes: 30
         run: |
           python build_tools/fetch_sources.py --jobs 12 ${{ steps.detect.outputs.fetch_exclusion || '' }}
+
+      - name: Test GitHub Actions build_tools
+        run: |
+          python -m pytest build_tools/github_actions/tests
 
       - name: Configure Projects
         env:
