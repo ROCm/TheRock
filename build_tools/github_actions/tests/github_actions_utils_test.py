@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 import sys
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 from github_actions_utils import *
@@ -120,7 +121,7 @@ class GitHubActionsUtilsTest(unittest.TestCase):
         os.getenv("GITHUB_TOKEN"),
         "GITHUB_TOKEN not set, skipping test that requires GitHub API access",
     )
-    def test_retrieve_bucket_info(self):
+    def test_retrieve_older_bucket_info(self):
         # TODO(geomin12): work on pulling these run IDs more dynamically
         # https://github.com/ROCm/TheRock/actions/runs/18022609292?pr=1597
         external_repo, bucket = retrieve_bucket_info("ROCm/TheRock", "18022609292")
@@ -210,6 +211,85 @@ class GitHubActionsUtilsTest(unittest.TestCase):
         external_repo, bucket = retrieve_bucket_info()
         self.assertEqual(external_repo, "")
         self.assertEqual(bucket, "therock-nightly-artifacts")
+
+    def test_retrieve_bucket_info_with_workflow_run_skips_api_call(self):
+        """Test that providing workflow_run skips the API call."""
+        # Mock workflow_run data matching the structure from GitHub API
+        mock_workflow_run = {
+            "id": 12345678901,
+            "head_repository": {"full_name": "ROCm/TheRock"},
+            "updated_at": "2025-12-01T12:00:00Z",  # After the bucket cutover date
+            "status": "completed",
+            "html_url": "https://github.com/ROCm/TheRock/actions/runs/12345678901",
+        }
+
+        with patch("github_actions_utils.gha_send_request") as mock_send_request, patch(
+            "github_actions_utils.gha_query_workflow_run_by_id"
+        ) as mock_query_by_id:
+            external_repo, bucket = retrieve_bucket_info(
+                github_repository="ROCm/TheRock",
+                workflow_run=mock_workflow_run,
+            )
+
+            # Verify no API calls were made
+            mock_send_request.assert_not_called()
+            mock_query_by_id.assert_not_called()
+
+            # Verify correct bucket info based on mock data
+            self.assertEqual(external_repo, "")
+            self.assertEqual(bucket, "therock-ci-artifacts")
+
+    def test_retrieve_bucket_info_with_workflow_run_from_fork(self):
+        """Test workflow_run from a fork returns external bucket."""
+        mock_workflow_run = {
+            "id": 12345678901,
+            "head_repository": {"full_name": "SomeUser/TheRock"},  # Fork
+            "updated_at": "2025-12-01T12:00:00Z",
+            "status": "completed",
+            "html_url": "https://github.com/ROCm/TheRock/actions/runs/12345678901",
+        }
+
+        with patch("github_actions_utils.gha_send_request") as mock_send_request, patch(
+            "github_actions_utils.gha_query_workflow_run_by_id"
+        ) as mock_query_by_id:
+            external_repo, bucket = retrieve_bucket_info(
+                github_repository="ROCm/TheRock",
+                workflow_run=mock_workflow_run,
+            )
+
+            # Verify no API calls were made
+            mock_send_request.assert_not_called()
+            mock_query_by_id.assert_not_called()
+
+            # Fork PRs go to external bucket with repo prefix
+            self.assertEqual(external_repo, "ROCm-TheRock/")
+            self.assertEqual(bucket, "therock-ci-artifacts-external")
+
+    def test_retrieve_bucket_info_with_workflow_run_old_date(self):
+        """Test workflow_run with old date returns legacy bucket."""
+        mock_workflow_run = {
+            "id": 12345678901,
+            "head_repository": {"full_name": "ROCm/TheRock"},
+            "updated_at": "2025-10-01T12:00:00Z",  # Before the bucket cutover date
+            "status": "completed",
+            "html_url": "https://github.com/ROCm/TheRock/actions/runs/12345678901",
+        }
+
+        with patch("github_actions_utils.gha_send_request") as mock_send_request, patch(
+            "github_actions_utils.gha_query_workflow_run_by_id"
+        ) as mock_query_by_id:
+            external_repo, bucket = retrieve_bucket_info(
+                github_repository="ROCm/TheRock",
+                workflow_run=mock_workflow_run,
+            )
+
+            # Verify no API calls were made
+            mock_send_request.assert_not_called()
+            mock_query_by_id.assert_not_called()
+
+            # Old runs use legacy bucket
+            self.assertEqual(external_repo, "")
+            self.assertEqual(bucket, "therock-artifacts")
 
 
 if __name__ == "__main__":
