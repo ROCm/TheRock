@@ -550,11 +550,16 @@ def main(argv):
         "--debug-tools",
         nargs="+",
         type=str,
-        default=[
-            "amd-dbgapi",
-            "rocr-debug-agent",
-            "rocgdb",
-        ],
+        default=(
+            []
+            if is_windows()
+            else [
+                # Linux only projects.
+                "amd-dbgapi",
+                "rocr-debug-agent",
+                "rocgdb",
+            ]
+        ),
     )
     parser.add_argument(
         "--math-library-projects",
