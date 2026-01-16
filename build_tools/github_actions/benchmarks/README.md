@@ -13,8 +13,9 @@ Automated benchmark testing framework for ROCm libraries with system detection, 
 
 ## Features
 
-- **Automated Benchmark Execution** - ROCfft, ROCrand, ROCsolver, hipBLASLt
+- **Automated Benchmark Execution** - ROCfft, ROCrand, ROCsolver, hipBLASLt, rocBLAS, RCCL
 - **System Auto-Detection** - Hardware, OS, GPU, and ROCm version detection
+- **Distributed Testing** - Multi-GPU RCCL benchmarks (requires OpenMPI in Docker image)
 - **Results Management** - Local storage (JSON) and API upload with retry logic
 - **Performance Tracking** - LKG (Last Known Good) comparison
 - **Comprehensive Logging** - File rotation and configurable log levels
@@ -26,9 +27,11 @@ Automated benchmark testing framework for ROCm libraries with system detection, 
 ### Available Benchmarks
 
 - `benchmarks/scripts/test_hipblaslt_benchmark.py` - hipBLASLt benchmark suite
-- `benchmarks/scripts/test_rocsolver_benchmark.py` - ROCsolver benchmark suite
-- `benchmarks/scripts/test_rocrand_benchmark.py` - ROCrand benchmark suite
+- `benchmarks/scripts/test_rccl_benchmark.py` - RCCL collective communication benchmarks (requires OpenMPI)
+- `benchmarks/scripts/test_rocblas_benchmark.py` - rocBLAS benchmark suite
 - `benchmarks/scripts/test_rocfft_benchmark.py` - ROCfft benchmark suite
+- `benchmarks/scripts/test_rocrand_benchmark.py` - ROCrand benchmark suite
+- `benchmarks/scripts/test_rocsolver_benchmark.py` - ROCsolver benchmark suite
 
 ## Project Structure
 
@@ -38,13 +41,17 @@ build_tools/github_actions/
 │   ├── scripts/                # Benchmark test implementations
 │   │   ├── benchmark_base.py   # Base class for all benchmarks
 │   │   ├── test_hipblaslt_benchmark.py
-│   │   ├── test_rocsolver_benchmark.py
+│   │   ├── test_rccl_benchmark.py
+│   │   ├── test_rocblas_benchmark.py
+│   │   ├── test_rocfft_benchmark.py
 │   │   ├── test_rocrand_benchmark.py
-│   │   └── test_rocfft_benchmark.py
+│   │   └── test_rocsolver_benchmark.py
 │   │
 │   ├── configs/                # Benchmark configs
 │   │   ├── config.yml          # Framework configuration
 │   │   ├── hipblaslt.json      # hipBLASLt benchmark config
+│   │   ├── rccl.json           # RCCL benchmark config
+│   │   ├── rocblas.json        # rocBLAS benchmark config
 │   │   └── rocfft.json         # ROCfft benchmark config
 │   │
 │   ├── utils/                  # Benchmark utilities
@@ -105,9 +112,11 @@ The following benchmark tests are defined in `benchmarks/benchmark_test_matrix.p
 | Test Name         | Library   | Platform       | Timeout | Shards |
 | ----------------- | --------- | -------------- | ------- | ------ |
 | `hipblaslt_bench` | hipBLASLt | Linux, Windows | 60 min  | 1      |
-| `rocsolver_bench` | ROCsolver | Linux, Windows | 60 min  | 1      |
-| `rocrand_bench`   | ROCrand   | Linux, Windows | 60 min  | 1      |
+| `rccl_bench`      | RCCL      | Linux          | 60 min  | 1      |
+| `rocblas_bench`   | rocBLAS   | Linux          | 60 min  | 1      |
 | `rocfft_bench`    | ROCfft    | Linux, Windows | 60 min  | 1      |
+| `rocrand_bench`   | ROCrand   | Linux, Windows | 60 min  | 1      |
+| `rocsolver_bench` | ROCsolver | Linux, Windows | 60 min  | 1      |
 
 **GPU Family Support:**
 
