@@ -10,7 +10,6 @@ GITHUB_JOB_NAME="${GITHUB_JOB_NAME:-default}"
 MONITOR_PID="${MONITOR_PID:-}"
 PID_FILE="${BUILD_DIR}/logs/monitor_pid_${GITHUB_JOB_NAME}.txt"
 STOP_SIGNAL_FILE="${BUILD_DIR}/logs/stop_monitor_${GITHUB_JOB_NAME}.signal"
-MONITOR_OUTPUT="${BUILD_DIR}/logs/monitor_output_${GITHUB_JOB_NAME}.txt"
 
 # Detect Windows-like environments (MSYS/MINGW/CYGWIN)
 UNAME_OUT="$(uname -s 2>/dev/null || true)"
@@ -55,7 +54,7 @@ if [ "${IS_WINDOWS}" -eq 1 ]; then
     echo "Graceful shutdown timed out, forcing termination"
     # Use taskkill on Windows for more reliable termination
     if command -v taskkill &> /dev/null; then
-      taskkill //F //PID "${MONITOR_PID}" 2>/dev/null || true
+      taskkill /F /PID "${MONITOR_PID}" 2>/dev/null || true
     else
       kill -9 "${MONITOR_PID}" 2>/dev/null || true
     fi
@@ -71,9 +70,3 @@ else
 fi
 
 echo "Memory monitor stopped"
-
-# Display the monitor output
-if [ -f "${MONITOR_OUTPUT}" ]; then
-  echo "=== Memory Monitor Output ==="
-  cat "${MONITOR_OUTPUT}"
-fi
