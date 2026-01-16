@@ -152,6 +152,12 @@ therock_enable_external_source("composable-kernel" "${THEROCK_SOURCE_DIR}/ml-lib
 # Overall build settings.
 option(THEROCK_VERBOSE "Enables verbose CMake statuses" OFF)
 
+# AOMP-related options.
+set(THEROCK_AOMP_BUILD OFF CACHE BOOL "Enable AOMP build configuration settings")
+set(THEROCK_AOMP_VERSION_MOD "" CACHE STRING "Set patch version name for AOMP build")
+set(THEROCK_DEFAULT_LLVM_TOOLSET OFF CACHE BOOL "Build default set of LLVM tools (vs. TheRock subset)")
+set(THEROCK_DEFAULT_CLANG_TOOLSET OFF CACHE BOOL "Build default set of Clang tools (vs. TheRock subset)")
+
 # Initialize the install directory.
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
   set(CMAKE_INSTALL_PREFIX "${THEROCK_SOURCE_DIR}/install" CACHE PATH "" FORCE)
