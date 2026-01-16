@@ -94,7 +94,8 @@ jobs:
       # safe.directory must be set before Runner Health Status
       - name: Adjust git config
         run: |
-          python build_tools/test_ci_git_config_value_updater.py $PWD 10
+          python build_tools/gitconfig_force_value_update.py safe.directory $PWD
+          git config fetch.parallel 10
 
       - name: Runner health status
         run: |
