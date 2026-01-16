@@ -42,29 +42,15 @@ class TestGetRepoConfig(unittest.TestCase):
         self.assertEqual(
             config["cmake_source_var"], "THEROCK_ROCM_LIBRARIES_SOURCE_DIR"
         )
-        self.assertEqual(config["patches_dir"], "rocm-libraries")
-        self.assertEqual(
-            config["fetch_exclusion"],
-            "--no-include-rocm-libraries --no-include-ml-frameworks",
-        )
-        # enable_dvc is platform-specific for rocm-libraries
-        self.assertIsInstance(config["enable_dvc"], dict)
-        self.assertTrue(config["enable_dvc"]["linux"])
-        self.assertTrue(config["enable_dvc"]["windows"])
+        self.assertEqual(config["submodule_path"], "rocm-libraries")
+        self.assertEqual(config["fetch_exclusion"], "--no-include-rocm-libraries")
 
     def test_rocm_systems_config(self):
         """Test rocm-systems configuration"""
         config = get_repo_config("rocm-systems")
         self.assertEqual(config["cmake_source_var"], "THEROCK_ROCM_SYSTEMS_SOURCE_DIR")
-        self.assertEqual(config["patches_dir"], "rocm-systems")
-        self.assertEqual(
-            config["fetch_exclusion"],
-            "--no-include-rocm-systems --no-include-rocm-libraries --no-include-ml-frameworks",
-        )
-        # enable_dvc is platform-specific for rocm-systems
-        self.assertIsInstance(config["enable_dvc"], dict)
-        self.assertFalse(config["enable_dvc"]["linux"])
-        self.assertTrue(config["enable_dvc"]["windows"])
+        self.assertEqual(config["submodule_path"], "rocm-systems")
+        self.assertEqual(config["fetch_exclusion"], "--no-include-rocm-systems")
 
     def test_unknown_repo_raises_error(self):
         """Test that unknown repository raises ValueError"""
@@ -77,9 +63,8 @@ class TestGetRepoConfig(unittest.TestCase):
         """Test that all repo configs have required keys"""
         required_keys = {
             "cmake_source_var",
-            "patches_dir",
+            "submodule_path",
             "fetch_exclusion",
-            "enable_dvc",
         }
         for repo_name, config in REPO_CONFIGS.items():
             with self.subTest(repo=repo_name):
@@ -103,9 +88,8 @@ class TestOutputGithubActionsVars(unittest.TestCase):
 
             config = {
                 "cmake_source_var": "TEST_VAR",
-                "patches_dir": "test-dir",
-                "enable_dvc": True,
-                "enable_ck": False,
+                "submodule_path": "test-dir",
+                "fetch_exclusion": "--no-include-test",
             }
 
             output_github_actions_vars(config)
@@ -116,9 +100,8 @@ class TestOutputGithubActionsVars(unittest.TestCase):
 
             # Verify output format
             self.assertIn("cmake_source_var=TEST_VAR", output)
-            self.assertIn("patches_dir=test-dir", output)
-            self.assertIn("enable_dvc=true", output)  # Boolean converted to lowercase
-            self.assertIn("enable_ck=false", output)  # Boolean converted to lowercase
+            self.assertIn("submodule_path=test-dir", output)
+            self.assertIn("fetch_exclusion=--no-include-test", output)
 
         finally:
             # Cleanup
@@ -164,14 +147,11 @@ class TestOutputGithubActionsVars(unittest.TestCase):
 
         try:
             os.environ["GITHUB_OUTPUT"] = temp_file
-            # main() requires --platform for repos with platform-specific config values.
             old_argv = sys.argv[:]
             sys.argv = [
                 "detect_external_repo_config.py",
                 "--repository",
                 "ROCm/rocm-libraries",
-                "--platform",
-                "linux",
                 "--workspace",
                 "/workspace",
             ]
