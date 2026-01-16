@@ -287,7 +287,9 @@ def run():
     test_type = os.getenv("TEST_TYPE", "full")
     test_labels = json.loads(os.getenv("TEST_LABELS", "[]"))
     is_benchmark_workflow = str2bool(os.getenv("IS_BENCHMARK_WORKFLOW", "false"))
-    is_extended_functional_workflow = str2bool(os.getenv("IS_EXTENDED_FUNCTIONAL_WORKFLOW", "false"))
+    is_extended_functional_workflow = str2bool(
+        os.getenv("IS_EXTENDED_FUNCTIONAL_WORKFLOW", "false")
+    )
 
     logging.info(f"Selecting projects: {project_to_test}")
 
