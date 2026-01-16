@@ -119,8 +119,13 @@ endif(THEROCK_BUILD_TESTING)
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-compute"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-compute"
     BACKGROUND_BUILD
+    DEFAULT_GPU_TARGETS
+      gfx942  # TODO: Fix rocprofiler-compute to accept an empty target list.
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
+      -DENABLE_TESTS=ON
+      -DINSTALL_TESTS=ON
+      -DTEST_FROM_INSTALL=ON
       -DCHECK_PYTHON_DEPS=OFF
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
@@ -211,8 +216,6 @@ endif(THEROCK_BUILD_TESTING)
       aqlprofile
       rocprofiler-sdk
       rocprofiler-compute
-      roctracer
-      ${_rocprofiler_sdk_optional_deps}
   )
 
   ##############################################################################
