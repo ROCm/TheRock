@@ -67,7 +67,7 @@ amdgpu_family_info_matrix_presubmit = {
             "sanity_check_only_for_family": True,
         },
         "windows": {
-            "test-runs-on": "windows-gfx110X-gpu-rocm",
+            "test-runs-on": "windows-gfx1100-gpu-rocm",
             "family": "gfx110X-all",
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
@@ -124,7 +124,7 @@ amdgpu_family_info_matrix_nightly = {
         "linux": {
             # label is linux-gfx90X-gpu-rocm
             # Disabled due to inconsistent up-time
-            "test-runs-on": "linux-gfx90X-gpu-rocm",
+            "test-runs-on": "test-gfx90a-gpu-rocm",
             "family": "gfx90X-dcgpu",
             "sanity_check_only_for_family": True,
             "build_variants": ["release"],
