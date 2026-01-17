@@ -67,13 +67,11 @@ echo "[*] Checking if elevated: $isAdmin | current user: $currentUser"
 #### Cleanup system environment ####
 # Only perform system environment cleanup if running as NT AUTHORITY\* (any windows service account)
 # as a safeguard from accidentally running this cleanup on a normal user account
-if ($currentUser -match "STX") { # TODO: replace "STX" with "NT AUTHORITY" BEFORE I COMMIT
+if ($currentUser -match "NT AUTHORITY") {
     echo "[*] Running as a Windows Service (NT AUTHORITY\*) - Cleaning up system environment..."
-    
-    echo "[*] Cleaning up system environment..."
 
     # Remove ~/.gitconfig file in case it was corrupted during a previous job
-    $gitConfigPath = Join-Path $env:USERPROFILE ".gitconfig" 
+    $gitConfigPath = Join-Path $env:USERPROFILE ".gitconfig"
 
     echo "[*] > Checking for `"~/.gitconfig`" file at: $gitConfigPath"
     if (Test-Path $gitConfigPath) {
