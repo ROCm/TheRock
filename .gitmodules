@@ -22,10 +22,6 @@
 	path = comm-libs/rccl-tests
 	url = https://github.com/ROCm/rccl-tests.git
 	branch = develop
-[submodule "composable_kernel"]
-	path = ml-libs/composable_kernel
-	url = https://github.com/ROCm/composable_kernel.git
-	branch = develop
 [submodule "rocprof-trace-decoder"]
 	path = profiler/rocprof-trace-decoder/binaries
 	url = https://github.com/ROCm/rocprof-trace-decoder.git

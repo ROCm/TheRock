@@ -44,14 +44,19 @@ function(therock_detect_shared_python_executables out_executables)
   set(_result_executables)
 
   if(THEROCK_SHARED_PYTHON_EXECUTABLES)
-    message(STATUS "Using explicitly configured shared Python executables: ${THEROCK_SHARED_PYTHON_EXECUTABLES}")
-    foreach(_python_exe IN LISTS THEROCK_SHARED_PYTHON_EXECUTABLES)
+    # Make sure our list of python executables does not contain any duplicate
+    # entries.
+    set(_sanitized_shared_python_executables ${THEROCK_SHARED_PYTHON_EXECUTABLES})
+    list(REMOVE_DUPLICATES _sanitized_shared_python_executables)
+
+    message(STATUS "Using explicitly configured shared Python executables: ${_sanitized_shared_python_executables}")
+    foreach(_python_exe IN LISTS _sanitized_shared_python_executables)
       if(NOT EXISTS "${_python_exe}")
         message(FATAL_ERROR "Shared Python executable not found: ${_python_exe}")
       endif()
       _therock_check_python_shared_library("${_python_exe}" _lib_path)
       if(NOT _lib_path)
-        message(FATAL_ERROR "Python executable does not support shared libpython: ${_python_exe} (from ${THEROCK_SHARED_PYTHON_EXECUTABLES})")
+        message(FATAL_ERROR "Python executable does not support shared libpython: ${_python_exe} (from ${_sanitized_shared_python_executables})")
       endif()
       list(APPEND _result_executables "${_python_exe}")
       message(STATUS "  Verified shared libpython at ${_lib_path} for ${_python_exe}")

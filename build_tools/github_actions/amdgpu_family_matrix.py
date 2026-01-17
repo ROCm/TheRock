@@ -90,6 +90,23 @@ amdgpu_family_info_matrix_presubmit = {
             "build_variants": ["release"],
         },
     },
+    "gfx120x": {
+        "linux": {
+            "test-runs-on": "linux-gfx120X-gpu-rocm",
+            "family": "gfx120X-all",
+            "bypass_tests_for_releases": True,
+            "build_variants": ["release"],
+            "sanity_check_only_for_family": True,
+        },
+        "windows": {
+            # TODO(#2962): Re-enable machine once sanity checks work with this architecture
+            # Label is windows-gfx120X-gpu-rocm
+            "test-runs-on": "",
+            "family": "gfx120X-all",
+            "bypass_tests_for_releases": True,
+            "build_variants": ["release"],
+        },
+    },
 }
 
 # The 'postsubmit' matrix runs on 'push' triggers (for every commit to the default branch).
@@ -101,29 +118,14 @@ amdgpu_family_info_matrix_postsubmit = {
             "build_variants": ["release", "asan"],
         }
     },
-    "gfx120x": {
-        "linux": {
-            "test-runs-on": "linux-gfx120X-gpu-rocm",
-            "family": "gfx120X-all",
-            "bypass_tests_for_releases": True,
-            "build_variants": ["release"],
-            "sanity_check_only_for_family": True,
-        },
-        "windows": {
-            "test-runs-on": "",
-            "family": "gfx120X-all",
-            "bypass_tests_for_releases": True,
-            "build_variants": ["release"],
-        },
-    },
 }
 
 # The 'nightly' matrix runs on 'schedule' triggers.
 amdgpu_family_info_matrix_nightly = {
     "gfx90x": {
         "linux": {
+            # TODO(#2963): Re-enable machine once sanity checks pass
             # label is linux-gfx90X-gpu-rocm
-            # Disabled due to inconsistent up-time
             "test-runs-on": "",
             "family": "gfx90X-dcgpu",
             "sanity_check_only_for_family": True,

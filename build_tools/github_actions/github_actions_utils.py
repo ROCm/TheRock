@@ -148,15 +148,56 @@ def gha_send_request(url: str) -> object:
         return json.loads(response.read().decode("utf-8"))
 
 
-def gha_query_workflow_run_information(github_repository: str, workflow_run_id: str):
-    """Gets metadata for a workflow run from the GitHub REST API.
+def gha_query_workflow_run_by_id(github_repository: str, workflow_run_id: str) -> dict:
+    """Gets metadata for a workflow run by its run ID.
 
-    https://docs.github.com/en/rest/actions/workflow-runs?apiVersion=2022-11-28
+    Uses the GitHub REST API endpoint: /actions/runs/{run_id}
+
+    Args:
+        github_repository: Repository in "owner/repo" format (e.g., "ROCm/TheRock")
+        workflow_run_id: The workflow run ID (e.g., "12345678901")
+
+    Returns:
+        Workflow run metadata dict from GitHub API.
+
+    See: https://docs.github.com/en/rest/actions/workflow-runs#get-a-workflow-run
     """
-
     url = f"https://api.github.com/repos/{github_repository}/actions/runs/{workflow_run_id}"
-    workflow_run = gha_send_request(url)
-    return workflow_run
+    return gha_send_request(url)
+
+
+def gha_query_workflow_runs_for_commit(
+    github_repository: str,
+    workflow_file_name: str,
+    git_commit_sha: str,
+) -> list[dict]:
+    """Gets all workflow runs for a specific commit.
+
+    Uses the GitHub REST API endpoint: /actions/workflows/{workflow}/runs?head_sha={sha}
+
+    A commit may have multiple workflow runs if the workflow was retriggered.
+    The list is ordered by most recent first.
+
+    Note: The API returns up to 30 results by default (first page only).
+    For a single commit this is typically sufficient.
+
+    Args:
+        github_repository: Repository in "owner/repo" format (e.g., "ROCm/TheRock")
+        workflow_file_name: Workflow filename (e.g., "ci.yml")
+        git_commit_sha: Full git commit SHA
+
+    Returns:
+        List of workflow run metadata dicts, ordered most recent first.
+        Empty list if no runs exist for this commit.
+
+    See: https://docs.github.com/en/rest/actions/workflow-runs#list-workflow-runs-for-a-workflow
+    """
+    url = (
+        f"https://api.github.com/repos/{github_repository}"
+        f"/actions/workflows/{workflow_file_name}/runs?head_sha={git_commit_sha}"
+    )
+    response = gha_send_request(url)
+    return response.get("workflow_runs", [])
 
 
 def gha_query_last_successful_workflow_run(
@@ -188,6 +229,7 @@ def gha_query_last_successful_workflow_run(
 def retrieve_bucket_info(
     github_repository: str | None = None,
     workflow_run_id: str | None = None,
+    workflow_run: dict | None = None,
 ) -> tuple[str, str]:
     """Given a github repository and a workflow run, retrieves bucket information.
 
@@ -211,10 +253,12 @@ def retrieve_bucket_info(
       2. The GITHUB_REPOSITORY environment variable
       3. The default, "ROCm/TheRock"
 
-    If |workflow_run_id| is provided, the function will check if that workflow
-    run was triggered from different repository than |github_repository| and
-    will set |is_pr_from_fork| accordingly. Otherwise, that value is populated
-    from the |IS_PR_FROM_FORK| environment variable.
+    If |workflow_run| is provided, uses it directly without making an API call.
+    Otherwise, if |workflow_run_id| is provided, fetches the workflow run data
+    from the GitHub API.
+
+    If neither is provided, |is_pr_from_fork| is populated from the
+    IS_PR_FROM_FORK environment variable.
 
     Returns a tuple [EXTERNAL_REPO, BUCKET], where:
     - EXTERNAL_REPO = if CI is run on an external repo, we create a S3 sub-folder
@@ -224,20 +268,21 @@ def retrieve_bucket_info(
 
     _log("Retrieving bucket info...")
 
-    curr_commit_dt = None
-
     if github_repository:
         _log(f"  (explicit) github_repository: {github_repository}")
-    if not github_repository:
+    else:
         # Default to the current repository (if any), else ROCm/TheRock.
         github_repository = os.getenv("GITHUB_REPOSITORY", "ROCm/TheRock")
         _log(f"  (implicit) github_repository: {github_repository}")
 
-    if workflow_run_id:
-        _log(f"  workflow_run_id             : {workflow_run_id}")
-        workflow_run = gha_query_workflow_run_information(
-            github_repository, workflow_run_id
-        )
+    # Fetch workflow_run from API if not provided but workflow_run_id is set
+    if workflow_run is None and workflow_run_id is not None:
+        workflow_run = gha_query_workflow_run_by_id(github_repository, workflow_run_id)
+
+    # Extract metadata from workflow_run if available
+    curr_commit_dt = None
+    if workflow_run is not None:
+        _log(f"  workflow_run_id             : {workflow_run['id']}")
         head_github_repository = workflow_run["head_repository"]["full_name"]
         is_pr_from_fork = head_github_repository != github_repository
         _log(f"  head_github_repository      : {head_github_repository}")

@@ -2,11 +2,39 @@
 # SPDX-License-Identifier: MIT
 
 
+import copy
+import glob
 import json
 import os
+import platform
+import re
 import shutil
 import sys
+
+from dataclasses import dataclass, field
 from pathlib import Path
+
+
+# User inputs required for packaging
+# dest_dir - For saving the rpm/deb packages
+# pkg_type - Package type DEB or RPM
+# rocm_version - Used along with package name
+# version_suffix - Used along with package name
+# install_prefix - Install prefix for the package
+# gfx_arch - gfxarch used for building artifacts
+# enable_rpath - To enable RPATH packages
+# versioned_pkg - Used to indicate versioned or non versioned packages
+@dataclass
+class PackageConfig:
+    artifacts_dir: Path
+    dest_dir: Path
+    pkg_type: str
+    rocm_version: str
+    version_suffix: str
+    install_prefix: str
+    gfx_arch: str
+    enable_rpath: bool = field(default=False)
+    versioned_pkg: bool = field(default=True)
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -262,3 +290,244 @@ def version_to_str(version_str):
     major, minor, patch = parts[:3]  # Ignore extra parts
 
     return f"{int(major):01d}{int(minor):02d}{int(patch):02d}"
+
+
+def update_package_name(pkg_name, config: PackageConfig):
+    """Update the package name by adding ROCm version and graphics architecture.
+
+    Based on conditions, the function may append:
+    - ROCm version
+    - '-rpath'
+    - Graphics architecture (gfxarch)
+
+    Parameters:
+    pkg_name : Package name
+    config: Configuration object containing package metadata
+
+    Returns: Updated package name
+    """
+    print_function_name()
+
+    pkg_suffix = ""
+    if config.versioned_pkg:
+        # Split version passed to use only major and minor version for package name
+        # Split by dot and take first two components
+        # Package name will be rocm8.1 and discard all other version part
+        parts = config.rocm_version.split(".")
+        if len(parts) < 2:
+            raise ValueError(
+                f"Version string '{config.rocm_version}' does not have major.minor versions"
+            )
+        major = re.match(r"^\d+", parts[0])
+        minor = re.match(r"^\d+", parts[1])
+        pkg_suffix = f"{major.group()}.{minor.group()}"
+
+    if config.enable_rpath:
+        pkg_suffix = f"-rpath{pkg_suffix}"
+
+    pkg_info = get_package_info(pkg_name)
+    updated_pkgname = pkg_name
+    if config.pkg_type.lower() == "deb":
+        updated_pkgname = debian_replace_devel_name(pkg_name)
+
+    updated_pkgname += pkg_suffix
+
+    if is_gfxarch_package(pkg_info):
+        # Remove -dcgpu from gfx_arch
+        gfx_arch = config.gfx_arch.lower().split("-", 1)[0]
+        updated_pkgname += "-" + gfx_arch
+
+    return updated_pkgname
+
+
+def debian_replace_devel_name(pkg_name):
+    """Replace '-devel' with '-dev' in the package name.
+
+    Development package names are defined as -devel in json file
+    For Debian packages -dev should be used instead.
+
+    Parameters:
+    pkg_name : Package name
+
+    Returns: Updated package name
+    """
+    print_function_name()
+    # Required for debian developement package
+    suffix = "-devel"
+    if pkg_name.endswith(suffix):
+        pkg_name = pkg_name[: -len(suffix)] + "-dev"
+
+    return pkg_name
+
+
+def convert_to_versiondependency(dependency_list, config: PackageConfig):
+    """Change ROCm package dependencies to versioned ones.
+
+    If a package depends on any packages listed in `pkg_list`,
+    this function appends the dependency name with the specified ROCm version.
+
+    Parameters:
+    dependency_list : List of dependent packages
+    config: Configuration object containing package metadata
+
+    Returns: A string of comma separated versioned packages
+    """
+    print_function_name()
+    # This function is to add Version dependency
+    # Make sure the flag is set to True
+
+    local_config = copy.deepcopy(config)
+    local_config.versioned_pkg = True
+    pkg_list = get_package_list()
+    updated_depends = [
+        f"{update_package_name(pkg,local_config)}" if pkg in pkg_list else pkg
+        for pkg in dependency_list
+    ]
+    depends = ", ".join(updated_depends)
+    return depends
+
+
+def append_version_suffix(dep_string, config: PackageConfig):
+    """Append a ROCm version suffix to dependency names that match known ROCm packages.
+
+    This function takes a comma‑separated dependency string,
+    identifies which dependencies correspond to packages listed in `pkg_list`,
+    and appends the appropriate ROCm version suffix based on the provided configuration.
+
+    Parameters:
+    dep_string : A comma‑separated list of dependency package names.
+    config : Configuration object containing ROCm version, suffix, and packaging type.
+
+    Returns: A comma‑separated string where matching dependencies include the version suffix,
+    while all others remain unchanged.
+    """
+    print_function_name()
+
+    pkg_list = get_package_list()
+    updated_depends = []
+    dep_list = [d.strip() for d in dep_string.split(",")]
+
+    for dep in dep_list:
+        match = None
+        # find a matching package prefix
+        for pkg in pkg_list:
+            if dep.startswith(pkg):
+                match = pkg
+                break
+
+        # If matched, append version-suffix; otherwise keep original
+        if match:
+            version = str(config.rocm_version)
+            suffix = f"-{config.version_suffix}" if config.version_suffix else ""
+
+            if config.pkg_type.lower() == "deb":
+                dep += f"( = {version}{suffix})"
+            else:
+                dep += f" = {version}{suffix}"
+
+        updated_depends.append(dep)
+
+    depends = ", ".join(updated_depends)
+    return depends
+
+
+def move_packages_to_destination(pkg_name, config: PackageConfig):
+    """Move the generated Debian package from the build directory to the destination directory.
+
+    Parameters:
+    pkg_name : Package name
+    config: Configuration object containing package metadata
+
+    Returns: None
+    """
+    print_function_name()
+
+    # Create destination dir to move the packages created
+    os.makedirs(config.dest_dir, exist_ok=True)
+    print(f"Package name: {pkg_name}")
+    PKG_DIR = Path(config.dest_dir) / config.pkg_type
+    if config.pkg_type.lower() == "deb":
+        artifacts = list(PKG_DIR.glob("*.deb"))
+        # Replace -devel with -dev for debian packages
+        pkg_name = debian_replace_devel_name(pkg_name)
+    else:
+        artifacts = list(PKG_DIR.glob(f"*/RPMS/{platform.machine()}/*.rpm"))
+
+    # Move deb/rpm files to the destination directory
+    for file_path in artifacts:
+        file_path = Path(file_path)  # ensure it's a Path object
+        file_name = file_path.name  # basename equivalent
+
+        if file_name.startswith(pkg_name):
+            dest_file = Path(config.dest_dir) / file_name
+
+            # if file exists, remove it first
+            if dest_file.exists():
+                dest_file.unlink()
+
+            shutil.move(str(file_path), str(config.dest_dir))
+
+
+def filter_components_fromartifactory(pkg_name, artifacts_dir, gfx_arch):
+    """Get the list of Artifactory directories required for creating the package.
+
+    The `package.json` file defines the required artifactories for each package.
+
+    Parameters:
+    pkg_name : package name
+    artifacts_dir : Directory where artifacts are saved
+    gfx_arch : graphics architecture
+
+    Returns: List of directories
+    """
+    print_function_name()
+
+    pkg_info = get_package_info(pkg_name)
+    sourcedir_list = []
+
+    dir_suffix = gfx_arch if is_gfxarch_package(pkg_info) else "generic"
+
+    artifactory = pkg_info.get("Artifactory")
+    if artifactory is None:
+        print(
+            f'The "Artifactory" key is missing for {pkg_name}. Is this a meta package?'
+        )
+        return sourcedir_list
+
+    for artifact in artifactory:
+        artifact_prefix = artifact["Artifact"]
+        # Package specific key: "Gfxarch"
+        # Artifact specific key: "Artifact_Gfxarch"
+        # If "Artifact_Gfxarch" key is specified use it for artifact directory suffix
+        # Else use the package "Gfxarch" for finding the suffix
+        if "Artifact_Gfxarch" in artifact:
+            print(f"{pkg_name} : Artifact_Gfxarch key exists for artifacts {artifact}")
+            is_gfxarch = str(artifact["Artifact_Gfxarch"]).lower() == "true"
+            artifact_suffix = gfx_arch if is_gfxarch else "generic"
+        else:
+            artifact_suffix = dir_suffix
+
+        for subdir in artifact["Artifact_Subdir"]:
+            artifact_subdir = subdir["Name"]
+            component_list = subdir["Components"]
+
+            for component in component_list:
+                source_dir = (
+                    Path(artifacts_dir)
+                    / f"{artifact_prefix}_{component}_{artifact_suffix}"
+                )
+                filename = source_dir / "artifact_manifest.txt"
+                with open(filename, "r", encoding="utf-8") as file:
+                    for line in file:
+
+                        match_found = (
+                            isinstance(artifact_subdir, str)
+                            and (artifact_subdir.lower() + "/") in line.lower()
+                        )
+
+                        if match_found and line.strip():
+                            print("Matching line:", line.strip())
+                            source_path = source_dir / line.strip()
+                            sourcedir_list.append(source_path)
+
+    return sourcedir_list
