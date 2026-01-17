@@ -9,7 +9,7 @@
 #
 # This powershell script is used on non-ephemeral Windows runners to stop
 # any processes that still exist after a Github actions job has completed
-# typically due to timing out. Additionally, it will clean up the system 
+# typically due to timing out. Additionally, it will clean up the system
 # environment to restore the system to a clean state for the next job.
 #
 # It's written in powershell per the specifications
