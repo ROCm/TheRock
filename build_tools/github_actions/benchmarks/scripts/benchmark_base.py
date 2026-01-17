@@ -284,7 +284,7 @@ class BenchmarkBase:
             status_info: Dictionary from determine_final_status()
         """
         summary = (
-            f"## {self.display_name} Benchmark Results\n\n"
+            f"### {self.display_name} Benchmark Results\n\n"
             f"**Status:** {status_info['final_status']} | "
             f"**Passed:** {status_info['pass_count']}/{status_info['total_count']} | "
             f"**Failed:** {status_info['fail_count']}/{status_info['total_count']}"
