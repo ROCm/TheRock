@@ -48,10 +48,38 @@ def create_deb_package(pkg_name, config: PackageConfig):
     pkg_name : Name of the package to be created
     config: Configuration object containing package metadata
 
-    Returns: None
+    Returns: None (or False if package was skipped)
     """
     print_function_name()
     print(f"Package Name: {pkg_name}")
+
+    # Check early if package should be skipped due to missing artifacts
+    pkg_info = get_package_info(pkg_name)
+    is_meta = is_meta_package(pkg_info)
+
+    if not is_meta:
+        # Pre-check: see if artifacts exist before attempting to build
+        dir_list = filter_components_fromartifactory(
+            pkg_name, config.artifacts_dir, config.gfx_arch
+        )
+
+        if not dir_list:
+            # Check if this is expected due to all components being excluded
+            pkg_excluded = is_package_excluded_for_gfx_arch(pkg_name, config.gfx_arch)
+            if pkg_excluded:
+                print(
+                    f"{pkg_name}: All components excluded for {config.gfx_arch}, skipping package creation"
+                )
+                return False
+            elif config.skip_missing_artifacts:
+                print(
+                    f"Warning: {pkg_name}: No artifacts found - skipping package (--skip-missing-artifacts enabled)"
+                )
+                return False
+            else:
+                sys.exit(
+                    f"{pkg_name}: No artifacts found and not a meta package, exiting"
+                )
 
     # Non-versioned packages are not required for RPATH packages
     if not config.enable_rpath:
@@ -61,6 +89,7 @@ def create_deb_package(pkg_name, config: PackageConfig):
     move_packages_to_destination(pkg_name, config)
     # Clean debian build directory
     remove_dir(Path(config.dest_dir) / config.pkg_type)
+    return True
 
 
 def create_nonversioned_deb_package(pkg_name, config: PackageConfig):
@@ -134,8 +163,6 @@ def create_versioned_deb_package(pkg_name, config: PackageConfig):
     sourcedir_list.extend(dir_list)
 
     print(f"sourcedir_list:\n  {sourcedir_list}")
-    if not sourcedir_list and not is_meta:
-        sys.exit(f"{pkg_name}: Empty sourcedir_list and not a meta package, exiting")
 
     if not sourcedir_list:
         print(f"{pkg_name} is a Meta package")
@@ -277,9 +304,15 @@ def generate_control_file(pkg_info, deb_dir, config: PackageConfig):
 
     if config.versioned_pkg:
         recommends_list = pkg_info.get("DEBRecommends", [])
-        debrecommends = convert_to_versiondependency(recommends_list, config)
+        # Filter exclusions for meta packages with gfxarch
+        filter_exclusions = is_meta_package(pkg_info) and is_gfxarch_package(pkg_info)
+        debrecommends = convert_to_versiondependency(
+            recommends_list, config, filter_exclusions=filter_exclusions
+        )
         suggests_list = pkg_info.get("DEBSuggests", [])
-        debsuggests = convert_to_versiondependency(suggests_list, config)
+        debsuggests = convert_to_versiondependency(
+            suggests_list, config, filter_exclusions=filter_exclusions
+        )
 
         depends_list = pkg_info.get("DEBDepends", [])
     else:
@@ -300,7 +333,11 @@ def generate_control_file(pkg_info, deb_dir, config: PackageConfig):
         ]
         conflicts = ", ".join(conflicts_list)
 
-    depends = convert_to_versiondependency(depends_list, config)
+    # For meta packages, filter out dependencies that are excluded for this gfx_arch
+    filter_exclusions = is_meta_package(pkg_info) and is_gfxarch_package(pkg_info)
+    depends = convert_to_versiondependency(
+        depends_list, config, filter_exclusions=filter_exclusions
+    )
     if is_meta_package(pkg_info):
         depends = append_version_suffix(depends, config)
 
@@ -348,7 +385,7 @@ def generate_debian_postscripts(pkg_info, deb_dir, config: PackageConfig):
     parts = config.rocm_version.split(".")
     if len(parts) < 3:
         raise ValueError(
-            f"Version string '{args.rocm_version}' does not have major.minor.patch versions"
+            f"Version string '{config.rocm_version}' does not have major.minor.patch versions"
         )
 
     env = Environment(loader=FileSystemLoader(str(SCRIPT_DIR)))
@@ -497,10 +534,38 @@ def create_rpm_package(pkg_name, config: PackageConfig):
     pkg_name : Name of the package to be created
     config: Configuration object containing package metadata
 
-    Returns: None
+    Returns: None (or False if package was skipped)
     """
     print_function_name()
     print(f"Package Name: {pkg_name}")
+
+    # Check early if package should be skipped due to missing artifacts
+    pkg_info = get_package_info(pkg_name)
+    is_meta = is_meta_package(pkg_info)
+
+    if not is_meta:
+        # Pre-check: see if artifacts exist before attempting to build
+        dir_list = filter_components_fromartifactory(
+            pkg_name, config.artifacts_dir, config.gfx_arch
+        )
+
+        if not dir_list:
+            # Check if this is expected due to all components being excluded
+            pkg_excluded = is_package_excluded_for_gfx_arch(pkg_name, config.gfx_arch)
+            if pkg_excluded:
+                print(
+                    f"{pkg_name}: All components excluded for {config.gfx_arch}, skipping RPM package creation"
+                )
+                return False
+            elif config.skip_missing_artifacts:
+                print(
+                    f"Warning: {pkg_name}: No artifacts found - skipping RPM package (--skip-missing-artifacts enabled)"
+                )
+                return False
+            else:
+                sys.exit(
+                    f"{pkg_name}: No artifacts found and not a meta package, exiting"
+                )
 
     if not config.enable_rpath:
         create_nonversioned_rpm_package(pkg_name, config)
@@ -509,6 +574,7 @@ def create_rpm_package(pkg_name, config: PackageConfig):
     move_packages_to_destination(pkg_name, config)
     # Clean rpm build directory
     remove_dir(Path(config.dest_dir) / config.pkg_type)
+    return True
 
 
 def generate_spec_file(pkg_name, specfile, config: PackageConfig):
@@ -538,9 +604,15 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
     rpm_scripts = []
     if config.versioned_pkg:
         recommends_list = pkg_info.get("RPMRecommends", [])
-        rpmrecommends = convert_to_versiondependency(recommends_list, config)
+        # Filter exclusions for meta packages with gfxarch
+        filter_exclusions = is_meta_package(pkg_info) and is_gfxarch_package(pkg_info)
+        rpmrecommends = convert_to_versiondependency(
+            recommends_list, config, filter_exclusions=filter_exclusions
+        )
         suggests_list = pkg_info.get("RPMSuggests", [])
-        rpmsuggests = convert_to_versiondependency(suggests_list, config)
+        rpmsuggests = convert_to_versiondependency(
+            suggests_list, config, filter_exclusions=filter_exclusions
+        )
 
         requires_list = pkg_info.get("RPMRequires", [])
 
@@ -566,7 +638,11 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
         conflicts = ", ".join(pkg_info.get("Conflicts", []) or [])
         requires_list = [pkg_name]
 
-    requires = convert_to_versiondependency(requires_list, config)
+    # For meta packages, filter out dependencies that are excluded for this gfx_arch
+    filter_exclusions = is_meta_package(pkg_info) and is_gfxarch_package(pkg_info)
+    requires = convert_to_versiondependency(
+        requires_list, config, filter_exclusions=filter_exclusions
+    )
     if is_meta_package(pkg_info):
         requires = append_version_suffix(requires, config)
 
@@ -761,22 +837,58 @@ def run(args: argparse.Namespace):
         install_prefix=prefix,
         gfx_arch=args.target,
         enable_rpath=args.rpath_pkg,
+        skip_missing_artifacts=args.skip_missing_artifacts,
     )
 
     # Clean the packaging build directories
     clean_package_build_dir(config)
 
     pkg_list = parse_input_package_list(args.pkg_names)
+
+    # Track which packages were skipped (for meta-package dependency filtering)
+    skipped_packages = []
+    successfully_built = []
+
     # Create deb/rpm packages
     package_creators = {"deb": create_deb_package, "rpm": create_rpm_package}
     for pkg_name in pkg_list:
+        # Check if this package should be skipped for this gfx architecture
+        if is_package_excluded_for_gfx_arch(pkg_name, config.gfx_arch):
+            print(f"Skipping package '{pkg_name}' - excluded for {config.gfx_arch}")
+            skipped_packages.append(pkg_name)
+            continue
+
+        # Store skipped packages in config for dependency filtering
+        config.skipped_packages = skipped_packages
+
+        build_result = True
         if config.pkg_type and config.pkg_type.lower() in package_creators:
             print(f"Create {config.pkg_type.upper()} package.")
-            package_creators[config.pkg_type.lower()](pkg_name, config)
+            result = package_creators[config.pkg_type.lower()](pkg_name, config)
+            if result is False:
+                build_result = False
         else:
             print("Create both DEB and RPM packages.")
             for creator in package_creators.values():
-                creator(pkg_name, config)
+                result = creator(pkg_name, config)
+                if result is False:
+                    build_result = False
+
+        if build_result:
+            successfully_built.append(pkg_name)
+        else:
+            skipped_packages.append(pkg_name)
+
+    print(f"\nPackage build summary:")
+    print(f"  Successfully built: {len(successfully_built)}")
+    if successfully_built:
+        for pkg in successfully_built:
+            print(f"    - {pkg}")
+    print(f"  Skipped: {len(skipped_packages)}")
+    if skipped_packages:
+        for pkg in skipped_packages:
+            print(f"    - {pkg}")
+
     clean_package_build_dir(config)
 
 
@@ -843,6 +955,12 @@ def main(argv: list[str]):
         "--pkg-names",
         nargs="+",
         help="Specify the packages to be created",
+    )
+
+    p.add_argument(
+        "--skip-missing-artifacts",
+        action="store_true",
+        help="Skip packages with missing artifacts instead of failing (useful for partial builds)",
     )
 
     args = p.parse_args(argv)
