@@ -309,6 +309,7 @@ class ResultsHandler:
         # Add new columns
         new_field_names = table.field_names + ["LKGScores", "%Diff", "FinalResult"]
         new_table = PrettyTable(new_field_names)
+        new_table.title = table.title  # Preserve the original table title
 
         for row in table._rows:  # Consider using table.rows if available
             row_dict = dict(zip(table.field_names, row))
