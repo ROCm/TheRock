@@ -25,10 +25,12 @@ We generate three types of packages:
   a relative binary).
 - Devel package: The `rocm-sdk-devel` package is the catch-all for everything.
   For any file already populated in a runtime package, it will include it as
-  a relative symlink (also rewriting shared library soname links as needed).
-  Since symlinks and non-standard attributes cannot be included in a wheel file,
-  the platform contents are stored in a `_devel.tar` or `_devel.tar.xz` file.
-  The installed package is extended in response to requesting a path to it
+  a relative symlink in the tarball. During extraction, file symlinks are
+  converted to hardlinks to improve compatibility, while directory symlinks
+  remain as symlinks. Shared library soname links are also rewritten as needed.
+  Since symlinks/hardlinks and non-standard attributes cannot be included in a
+  wheel file, the platform contents are stored in a `_devel.tar` or `_devel.tar.xz`
+  file. The installed package is extended in response to requesting a path to it
   via the `rocm-sdk` tool.
 
 Runtime packages can either be target neutral or target specific. Target specific
