@@ -227,9 +227,9 @@ def retrieve_artifacts_by_run_id(args):
         if args.miopen:
             extra_artifacts.append("miopen")
             # We need bin/MIOpenDriver executable for tests.
-            argv.extend("miopen_run")
+            argv.append("miopen_run")
             # Also need these for runtime kernel compilation (rocrand includes).
-            argv.extend("rand_dev")
+            argv.append("rand_dev")
         if args.miopen_plugin:
             extra_artifacts.append("miopen-plugin")
         if args.fusilli_plugin:
