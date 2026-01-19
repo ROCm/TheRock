@@ -459,7 +459,14 @@
               "doc"
             ]
           },
-
+          {
+            "Name": "Origami",
+            "Components": [
+              "lib",
+              "run",
+              "doc"
+            ]
+          },
           {
             "Name": "hipBLASLt",
             "Components": [
