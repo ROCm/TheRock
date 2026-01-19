@@ -6,25 +6,22 @@ import json
 import re
 
 JSON_FILE = "package.json"
-VERSION_FILE = "../../../version.json"
-GRAPHICS_SUFFIX = "-gfx"
-BUILD_OUTPUT = "Packages.txt"
+BUILD_OUTPUT = "built_packages.txt"
+SKIPPED_OUTPUT = "skipped_packages.txt"
 
 class Parser:
-    def __init__(self, json_path, version_path):
+    def __init__(self, json_path):
         self.json_path = json_path
-        self.version_path = version_path
-        self.enabled_packages_dict = {}
-        self.build_dict = {}
+        self.version_path = None
+        self.pkg_type = None
+        self.gfx = []
 
         self.enabled_pkg_json_set = set()
         self.build_set = set()
+        self.skipped_set = set()
         
         # store content of json 
         self.json_content = self.load_json_file(self.json_path)
-
-        # get rocm-version 
-        self.rocm_version = self.find_rocm_version(self.version_path)
 
 
     def load_json_file(self, filepath):
@@ -42,32 +39,75 @@ class Parser:
             print(f"Error: {e}")
             return None
 
+    def parse_skipped_packages(self, skipped_output_path):
+        # Open and read the file
+        with open(skipped_output_path, 'r') as file:
+            lines = file.readlines()
 
-    def find_rocm_version(self, filepath):
-        try:
-            with open(filepath, 'r') as file:
-                data = json.load(file)
-                ver = data.get('rocm-version')
-                # remove last 2 characters i.e 7.11.0 -> 7.11
-                return ver[:-2]
-        except FileNotFoundError:
-            print(f"Error: File '{filepath}' not found")
-            return None
-        except json.JSONDecodeError as e:
-            print(f"Error: Invalid JSON format - {e}")
-            return None
-        except Exception as e:
-            print(f"Error: {e}")
-            return None
+        # Pattern to match all packages that start with amd 
+        regex_pkg = r'(^amd\S+)'
+
+        # ROCm Version: 7.11.0~20251224
+        regex_rocm_ver = r'# ROCm Version:\s*(\d+\.\d+)\.\d+~\d+'
 
 
-    # TODO add logic:
-    # rpm is devel 
-    # deb is dev 
+        # Process each line
+        for line in lines:
+            line = line.strip()  # Remove whitespace/newlines
+            if line:  # Skip empty lines
+                amd_pkg_name_match = re.match(regex_pkg, line)
+
+                if amd_pkg_name_match:
+                    package_name = amd_pkg_name_match.group(1)
+                    self.skipped_set.add(package_name)
+                
+
+    def parse_build_packages(self, build_ouput_path):
+        # Open and read the file
+        with open(build_ouput_path, 'r') as file:
+            lines = file.readlines()
+
+        # Pattern to match all packages that start with amd 
+        regex_pkg = r'(^amd\S+)'
+
+        # find pkg type 
+        regex_pkg_type = r'# Package Type:\s*(\w+)'
+
+        # ROCm Version: 7.11.0~20251224
+        regex_rocm_ver = r'# ROCm Version:\s*(\d+\.\d+)\.\d+~\d+'
+
+        # Graphics Architecture
+        regex_gfx = r'^# Graphics Architecture:\s*(.+)$'
+
+        # Process each line
+        for line in lines:
+            line = line.strip()  # Remove whitespace/newlines
+            if line:  # Skip empty lines
+                amd_pkg_name_match = re.match(regex_pkg, line)
+                pkg_type_match = re.match(regex_pkg_type, line)
+                rocm_ver_match = re.match(regex_rocm_ver, line)
+                gfx_match = re.match(regex_gfx, line)
+
+                if amd_pkg_name_match:
+                    package_name = amd_pkg_name_match.group(1)
+                    self.build_set.add(package_name)
+                
+                if pkg_type_match:
+                    self.pkg_type = pkg_type_match.group(1)
+                
+                if rocm_ver_match:
+                    self.rocm_version = rocm_ver_match.group(1)
+                
+                if gfx_match:
+                    arch_line = gfx_match.group(1)
+                    # Extract gfx values
+                    gfx_pattern = r'gfx\d+x?'
+                    self.gfx = re.findall(gfx_pattern, arch_line)
+
+
     def get_enabled_packages(self):
         # need to auto generate expected gfx version numbers 
         # after building this info will be provided 
-        gfx_num_arr = ['1150', '1151', '120x', '94x', '950'] 
         
         self.enabled_packages_dict = {}
         
@@ -75,48 +115,50 @@ class Parser:
             if pkg.get('DisablePackaging') != 'True':
                 name = pkg.get('Package')
 
+                if name in self.skipped_set:
+                    continue
+
+                # if package is deb rename devel suffix to dev by slicing last 2 chars out 
+                if self.pkg_type == 'DEB' and name[-5:] == 'devel':
+                    name = name[:-2]
+
                 if pkg.get('Gfxarch') == 'True':
-                    for num in gfx_num_arr:
-                        name_gfx = ''.join([name, GRAPHICS_SUFFIX, num])
-                        #self.enabled_packages_dict[name_gfx] = name_gfx
+                    for gfx_suffix in self.gfx:
+
+                        name_gfx = ''.join([name, '-', gfx_suffix])
                         self.enabled_pkg_json_set.add(name_gfx)
 
-                    for num in gfx_num_arr:
-                        name_gfx = ''.join([name, self.rocm_version, GRAPHICS_SUFFIX, num])
-                        #self.enabled_packages_dict[name_gfx] = name_gfx
+                    for gfx_suffix in self.gfx:
+                        name_gfx = ''.join([name, self.rocm_version, '-', gfx_suffix])
                         self.enabled_pkg_json_set.add(name_gfx)
 
                 else:
-                    self.enabled_packages_dict[name] = name
+                    self.enabled_pkg_json_set.add(''.join([name, self.rocm_version]))
 
-
-    def find_missing_packages(self, build_ouput_path):
-        # Open and read the file
-        with open(build_ouput_path, 'r') as file:
-            lines = file.readlines()
-
-        # Pattern to match everything before first _ or ~ 
-        pattern = r'^([^_~]+)'
-
-        # Process each line
-        for line in lines:
-            line = line.strip()  # Remove whitespace/newlines
-            if line:  # Skip empty lines
-                match = re.match(pattern, line)
-                if match:
-                    package_name = match.group(1)
-                    #self.build_dict[package_name] = package_name
-                    self.build_set.add(package_name)
     
     def missing_packages(self):
+        print("\nMissing in build_set")
         return self.enabled_pkg_json_set.difference(self.build_set)
 
 # if everything built can be installed pass 
 # if not being built then give warning         
 def main():
-    json_parser = Parser(JSON_FILE, VERSION_FILE)
+    json_parser = Parser(JSON_FILE)
+    json_parser.parse_skipped_packages(SKIPPED_OUTPUT)
+    json_parser.parse_build_packages(BUILD_OUTPUT)
     json_parser.get_enabled_packages()
-    json_parser.find_missing_packages(BUILD_OUTPUT)
+
+    print(json_parser.missing_packages())
+    print("\nEnabled set:")
+    print(json_parser.enabled_pkg_json_set)
+
+    print("\nSkipped set:")
+    print(json_parser.skipped_set)
+    
+    print("\nbuild set:")
+    print(json_parser.build_set)
+
+    print()
 
 
 main()
