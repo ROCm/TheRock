@@ -37,7 +37,7 @@ def log(*args, **kwargs):
     sys.stdout.flush()
 
 
-def exec(args: list[str | Path], cwd: Path):
+def run_command(args: list[str | Path], cwd: Path):
     args = [str(arg) for arg in args]
     log(f"++ Exec [{cwd}]$ {shlex.join(args)}")
     subprocess.check_call(args, cwd=str(cwd), stdin=subprocess.DEVNULL)
@@ -120,7 +120,7 @@ def run(args: argparse.Namespace, fetch_args: list[str], system_projects: list[s
     date = datetime.today().strftime("%Y%m%d")
 
     if args.create_branch or args.push_branch:
-        exec(
+        run_command(
             ["git", "checkout", "-b", args.branch_name],
             cwd=THEROCK_DIR,
         )
@@ -130,7 +130,7 @@ def run(args: argparse.Namespace, fetch_args: list[str], system_projects: list[s
     else:
         projects_args = []
 
-    exec(
+    run_command(
         [
             sys.executable,
             "./build_tools/fetch_sources.py",
@@ -142,13 +142,13 @@ def run(args: argparse.Namespace, fetch_args: list[str], system_projects: list[s
         cwd=THEROCK_DIR,
     )
 
-    exec(
+    run_command(
         ["git", "commit", "-a", "-m", "Bump submodules " + date],
         cwd=THEROCK_DIR,
     )
 
     try:
-        exec(
+        run_command(
             [sys.executable, "./build_tools/fetch_sources.py"],
             cwd=THEROCK_DIR,
         )
@@ -157,7 +157,7 @@ def run(args: argparse.Namespace, fetch_args: list[str], system_projects: list[s
         sys.exit(1)
 
     if args.push_branch:
-        exec(
+        run_command(
             ["git", "push", "-u", "origin", args.branch_name],
             cwd=THEROCK_DIR,
         )
