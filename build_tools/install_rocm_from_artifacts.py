@@ -224,6 +224,8 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("fftw3")
         if args.hipdnn:
             extra_artifacts.append("hipdnn")
+            # Add dev artifacts for CMake config files (needed for consumption tests)
+            argv.append("hipdnn_dev_generic")
         if args.miopen:
             extra_artifacts.append("miopen")
             # We need bin/MIOpenDriver executable for tests.
