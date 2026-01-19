@@ -115,6 +115,10 @@ description = "ROCm media submodules (Mesa for VA-API)"
 submodules = ["amd-mesa"]
 disable_platforms = ["windows"]
 
+[source_sets.opencl-cts]
+description = "OpenCL Conformance Test Suite and dependencies"
+submodules = ["opencl/opencl-cts", "opencl/opencl-headers", "opencl/spirv-headers", "opencl/spirv-tools"]
+
 [source_sets.iree-libs]
 description = "IREE integration submodules"
 submodules = ["iree", "fusilli"]
@@ -233,6 +237,12 @@ description = "Core runtime tests (ROCR-Runtime, rocminfo)"
 type = "per-arch"
 artifact_group_deps = ["opencl-runtime", "core-runtime"]
 source_sets = ["rocm-systems"]
+
+[artifact_groups.opencl-cts]
+description = "OpenCL Conformance Test Suite"
+type = "per-arch"
+artifact_group_deps = ["opencl-runtime"]
+source_sets = ["opencl-cts"]
 
 [artifact_groups.math-libs]
 description = "Math libraries (BLAS, FFT, RAND, etc.)"
@@ -440,6 +450,13 @@ artifact_deps = ["core-runtime", "core-ocl"]
 feature_name = "CORE_RUNTIME_TESTS"
 feature_group = "CORE"
 disable_platforms = ["windows"]
+
+[artifacts.opencl-cts]
+artifact_group = "opencl-cts"
+type = "target-specific"
+artifact_deps = ["core-ocl"]
+feature_name = "OPENCL_CTS"
+feature_group = "CORE"
 
 [artifacts.core-hipinfo]
 artifact_group = "hip-runtime"
