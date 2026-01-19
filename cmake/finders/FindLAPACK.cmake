@@ -14,7 +14,7 @@ if("OpenBLAS" IN_LIST THEROCK_PROVIDED_PACKAGES)
     find_package(OpenBLAS CONFIG REQUIRED)
     set(_OPENBLAS OpenBLAS)
   endif()
-  
+
   set(LAPACK_LIBRARIES ${_OPENBLAS}::OpenBLAS)
   add_library(LAPACK::LAPACK ALIAS ${_OPENBLAS}::OpenBLAS)
 
