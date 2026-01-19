@@ -22,29 +22,10 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 environ_vars = os.environ.copy()
 platform = os.getenv("RUNNER_OS", "linux").lower()
 
-bin_dir = Path(THEROCK_BIN_DIR).resolve()
-lib_dir = bin_dir.parent / "lib"
-origami_test_dir = bin_dir / "origami"
+origami_test_dir = Path(THEROCK_BIN_DIR).resolve() / "origami"
 
 # Path separator is different on Windows vs Linux
 path_sep = ";" if platform == "windows" else ":"
-
-# Build library path with multiple possible locations
-if platform == "linux":
-    ld_paths = [
-        str(lib_dir),                    # Main lib directory 
-        str(origami_test_dir),           # Origami test directory
-        environ_vars.get("LD_LIBRARY_PATH", ""),
-    ]
-    environ_vars["LD_LIBRARY_PATH"] = path_sep.join(p for p in ld_paths if p)
-elif platform == "windows":
-    dll_paths = [
-        str(bin_dir),                    # Main bin directory
-        str(lib_dir),                    # Main lib directory 
-        str(origami_test_dir),           # Origami test directory 
-        environ_vars.get("PATH", ""),
-    ]
-    environ_vars["PATH"] = path_sep.join(p for p in dll_paths if p)
 
 # Set PYTHONPATH to help Python find the origami module
 python_paths = [
@@ -53,8 +34,6 @@ python_paths = [
 ]
 environ_vars["PYTHONPATH"] = path_sep.join(p for p in python_paths if p)
 
-logging.info(f"LD_LIBRARY_PATH: {environ_vars.get('LD_LIBRARY_PATH', '')}")
-logging.info(f"PATH: {environ_vars.get('PATH', '')[:200]}...")
 logging.info(f"PYTHONPATH: {environ_vars.get('PYTHONPATH', '')}")
 
 # Test type configuration (smoke, full)
@@ -64,22 +43,16 @@ test_type = os.getenv("TEST_TYPE", "full")
 cmd = [
     "ctest",
     "--test-dir",
-    f"{THEROCK_BIN_DIR}/origami",
+    str(origami_test_dir),
     "--output-on-failure",
-    "--timeout",
-    "300",
+    "--parallel",
+    "8",
 ]
 
-# Test filtering based on test type and platform
 if platform == "windows":
-    if test_type == "smoke":
-        cmd.extend(["-R", "GEMM:.*compute"])
-    else:
-        cmd.extend(["-R", "origami-tests"])
+    cmd.extend(["-R", "origami-tests"])
 elif test_type == "smoke":
     cmd.extend(["-R", "origami_python|GEMM:.*compute"])
-
-cmd.append("--parallel")
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=environ_vars)
