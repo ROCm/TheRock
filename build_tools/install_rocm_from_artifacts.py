@@ -13,8 +13,7 @@ Usage:
 python build_tools/install_rocm_from_artifacts.py
     (--artifact-group ARTIFACT_GROUP | --amdgpu_family AMDGPU_FAMILY)
     [--output-dir OUTPUT_DIR]
-    (--run-id RUN_ID | --release RELEASE | --latest |
-     --list-available | --input-dir INPUT_DIR)
+    (--run-id RUN_ID | --release RELEASE | --latest | --input-dir INPUT_DIR)
     [--run-github-repo RUN_GITHUB_REPO]
     [--aqlprofile | --no-aqlprofile]
     [--dry-run]
@@ -82,13 +81,6 @@ Examples:
         --amdgpu-family gfx110X-all \
         --dry-run
     ```
-- Lists available nightly releases for a GPU family:
-    ```
-    python build_tools/install_rocm_from_artifacts.py \
-        --list-available \
-        --amdgpu-family gfx110X-all
-    ```
-
 You can select your AMD GPU family from therock_amdgpu_targets.cmake.
 
 By default for CI workflow retrieval, all artifacts (excluding test artifacts)
@@ -158,7 +150,7 @@ def list_available_gpu_families(
 ) -> set[str]:
     """
     Query S3 to find all GPU families that have releases.
-    Useful for error messages and --list-available.
+    Useful for error messages when an invalid GPU family is specified.
     """
     bucket_name = f"therock-{bucket_type}-tarball"
     prefix = f"therock-dist-{platform_str}-"
@@ -241,30 +233,6 @@ def discover_latest_release(
     if not releases:
         return None
     return (releases[0]["version"], releases[0]["asset_name"])
-
-
-def list_available_releases(
-    bucket_type: str,
-    artifact_group: str,
-    platform_str: str = PLATFORM,
-    limit: int = 10,
-) -> list[dict]:
-    """
-    List available releases for a GPU family, sorted by recency.
-
-    Returns:
-        List of dicts with keys: version, asset_name, last_modified, size, parsed_date
-    """
-    return _fetch_and_sort_releases(bucket_type, artifact_group, platform_str)[:limit]
-
-
-def format_size(size_bytes: int) -> str:
-    """Format file size in human-readable format."""
-    for unit in ["B", "KB", "MB", "GB"]:
-        if size_bytes < 1024:
-            return f"{size_bytes:.1f} {unit}"
-        size_bytes /= 1024
-    return f"{size_bytes:.1f} TB"
 
 
 def log(*args, **kwargs):
@@ -530,37 +498,7 @@ def retrieve_artifacts_by_latest(args):
     )
 
 
-def handle_list_available(args):
-    """
-    List available nightly releases for the specified GPU family.
-    """
-    bucket_type = "nightly"
-    log(f"Available nightly releases for '{args.artifact_group}':")
-    log("")
-
-    releases = list_available_releases(bucket_type, args.artifact_group)
-
-    if not releases:
-        log(f"  No releases found for '{args.artifact_group}'")
-        log("")
-        log(f"Available GPU families in the {bucket_type} bucket:")
-        available = list_available_gpu_families(bucket_type)
-        for family in sorted(available):
-            log(f"  - {family}")
-        return
-
-    for r in releases:
-        size_str = format_size(r["size"])
-        date_str = r["last_modified"].strftime("%Y-%m-%d %H:%M:%S")
-        log(f"  {r['version']:<50} {date_str} ({size_str})")
-
-
 def run(args):
-    # Handle --list-available first (doesn't require output directory)
-    if args.list_available:
-        handle_list_available(args)
-        return
-
     log("### Installing TheRock using artifacts ###")
 
     # For --latest with --dry-run, we don't need to create the output directory
@@ -618,12 +556,6 @@ def main(argv):
         "--latest",
         action="store_true",
         help="Install the latest nightly release (built daily from main branch)",
-    )
-
-    group.add_argument(
-        "--list-available",
-        action="store_true",
-        help="List available nightly releases for the specified GPU family",
     )
 
     parser.add_argument(
