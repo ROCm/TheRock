@@ -253,3 +253,45 @@ if(THEROCK_ENABLE_MIOPEN_PLUGIN)
       MIOpen_plugin
   )
 endif(THEROCK_ENABLE_MIOPEN_PLUGIN)
+
+if(THEROCK_ENABLE_HIPDNN_SAMPLES)
+  ##############################################################################
+  # hipDNN samples
+  ##############################################################################
+
+  therock_cmake_subproject_declare(hipDNN_samples
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipdnn/samples"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipdnn_samples"
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      -DHIP_PLATFORM=amd
+      -DROCM_PATH=
+      -DROCM_DIR=
+      "-DHIP_DNN_SKIP_TESTS=$<NOT:$<BOOL:${THEROCK_BUILD_TESTING}>>"
+    CMAKE_INCLUDES
+      therock_explicit_finders.cmake
+    COMPILER_TOOLCHAIN
+      amd-hip
+    BUILD_DEPS
+      hipDNN
+      therock-flatbuffers
+      therock-nlohmann-json
+      therock-fmt
+      therock-spdlog
+    RUNTIME_DEPS
+      MIOpen_plugin
+  )
+  therock_cmake_subproject_glob_c_sources(hipDNN_samples
+  SUBDIRS
+    .
+  )
+  therock_cmake_subproject_activate(hipDNN_samples)
+
+  therock_provide_artifact(hipdnn-samples
+    DESCRIPTOR artifact-hipdnn-samples.toml
+    COMPONENTS
+      test
+    SUBPROJECT_DEPS
+      hipDNN_samples
+  )
+endif(THEROCK_ENABLE_HIPDNN_SAMPLES)

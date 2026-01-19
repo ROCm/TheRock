@@ -221,6 +221,15 @@ test_matrix = {
         "platform": ["linux", "windows"],
         "total_shards": 1,
     },
+    # hipDNN samples tests
+    "hipdnn-samples": {
+        "job_name": "hipdnn-samples",
+        "fetch_artifact_args": "--blas --miopen --hipdnn --miopen-plugin --hipdnn-samples --tests",
+        "timeout_minutes": 5,
+        "test_script": f"python {_get_script_path('test_hipdnn_samples.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards": 1,
+    },
     # MIOpen plugin tests
     "miopen_plugin": {
         "job_name": "miopen_plugin",
