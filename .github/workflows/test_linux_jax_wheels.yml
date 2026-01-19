@@ -109,8 +109,6 @@ jobs:
           --group-add video
           --user root
           --env-file /etc/podinfo/gha-gpu-isolation-settings
-          --dns 8.8.8.8
-          --dns 8.8.4.4
     defaults:
       run:
         shell: bash
