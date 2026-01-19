@@ -142,7 +142,8 @@ artifact_groups = [
     "hip-runtime",
     "opencl-runtime",
     "profiler-core",
-    "rocrtst"
+    "rocrtst",
+    "opencl-cts"
 ]
 
 [build_stages.math-libs]
