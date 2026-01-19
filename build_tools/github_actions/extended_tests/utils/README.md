@@ -42,9 +42,8 @@ Test scripts (benchmark/functional) add `extended_tests/` to `sys.path`, then im
 
 ```python
 # Import path setup (already done in base classes)
-sys.path.insert(
-    0, str(Path(__file__).parent.parent.parent)
-)  # Adds extended_tests/ to path
+# Adds extended_tests/ to path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 # Core utilities
 from utils.logger import log

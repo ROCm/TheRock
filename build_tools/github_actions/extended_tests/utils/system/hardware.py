@@ -82,9 +82,8 @@ class GpuInfo:
     partition_mode: str = "Unknown"
     xgmi_type: str = "Unknown"
     host_driver: str = "Unknown"
-    target_graphics_version: str = (
-        "Unknown"  # Target GPU architecture (e.g., gfx950, gfx942)
-    )
+    # Target GPU architecture (e.g., gfx950, gfx942)
+    target_graphics_version: str = "Unknown"
     firmwares: List[Dict[str, str]] = field(default_factory=list)
 
     def __str__(self):

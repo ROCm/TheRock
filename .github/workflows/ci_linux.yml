@@ -22,7 +22,7 @@ on:
       benchmark_runs_on:
         type: string
         default: ""
-      run_extended_functional:
+      run_extended_functional_tests:
         type: boolean
         default: false
       expect_failure:
@@ -117,9 +117,9 @@ jobs:
       test_runs_on: ${{ inputs.benchmark_runs_on }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
 
-  test_linux_extended_functional:
+  run_linux_extended_functional_tests:
     needs: [build_portable_linux_artifacts]
-    name: Test Linux Extended Functional
+    name: Run Extended Functional Tests
     # Run extended functional tests if:
     # - Build succeeded (or using prebuilt artifacts)
     # - Not expecting failure
@@ -135,9 +135,9 @@ jobs:
         ) &&
         inputs.expect_failure == false &&
         inputs.test_runs_on != '' &&
-        inputs.run_extended_functional == true
+        inputs.run_extended_functional_tests == true
       }}
-    uses: ./.github/workflows/test_extended_functional.yml
+    uses: ./.github/workflows/test_extended_functional_tests.yml
     secrets: inherit
     with:
       artifact_group: ${{ inputs.artifact_group }}
