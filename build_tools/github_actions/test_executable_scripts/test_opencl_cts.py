@@ -140,6 +140,8 @@ def configure_build():
         f"-DCL_INCLUDE_DIR={HEADERS_SOURCE_DIR}",
         f"-DSPIRV_INCLUDE_DIR={SPIRV_HEADERS_DIR}",
         "-DOPENCL_LIBRARIES=OpenCL",
+        "-DCMAKE_C_COMPILER_LAUNCHER=ccache",
+        "-DCMAKE_CXX_COMPILER_LAUNCHER=ccache",
     ]
 
     logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
