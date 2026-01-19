@@ -13,10 +13,9 @@ Usage:
 python build_tools/install_rocm_from_artifacts.py
     (--artifact-group ARTIFACT_GROUP | --amdgpu_family AMDGPU_FAMILY)
     [--output-dir OUTPUT_DIR]
-    (--run-id RUN_ID | --release RELEASE | --latest | --input-dir INPUT_DIR)
+    (--run-id RUN_ID | --release RELEASE | --latest [--dry-run] | --input-dir INPUT_DIR)
     [--run-github-repo RUN_GITHUB_REPO]
     [--aqlprofile | --no-aqlprofile]
-    [--dry-run]
     [--blas | --no-blas]
     [--debug-tools | --no-debug-tools]
     [--fft | --no-fft]
@@ -486,7 +485,7 @@ def retrieve_artifacts_by_latest(args):
     log(f"Found latest release: {version}")
 
     if args.dry_run:
-        log(f"[Dry run] Would download: {asset_name}")
+        log(f"[DRY RUN] Would download: {asset_name}")
         return
 
     # Reuse existing download logic
@@ -561,7 +560,7 @@ def main(argv):
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Show which release would be installed without downloading",
+        help="With --latest: show which release would be installed without downloading",
     )
 
     artifacts_group = parser.add_argument_group("artifacts_group")
@@ -699,6 +698,9 @@ def main(argv):
         raise argparse.ArgumentTypeError(
             "Either --amdgpu-family or --artifact-group must be specified"
         )
+
+    if args.dry_run and not args.latest:
+        parser.error("--dry-run can only be used with --latest")
 
     run(args)
 
