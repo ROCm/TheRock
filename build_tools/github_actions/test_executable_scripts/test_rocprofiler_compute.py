@@ -26,7 +26,7 @@ environ_vars["ROCM_PATH"] = str(THEROCK_PATH)
 
 # Set up PYTHONPATH
 old_pythonpath = os.getenv("PYTHONPATH", "")
-module_dir = f"{THEROCK_DIR}/libexec/rocprofiler-compute/tests"
+module_dir = f"{THEROCK_PATH}/libexec/rocprofiler-compute/tests"
 print(f"Module Directory: {module_dir}")
 if old_pythonpath:
     os.environ["PYTHONPATH"] = f"{module_dir}:{old_pythonpath}"

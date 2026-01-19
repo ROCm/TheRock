@@ -180,6 +180,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
       doc
       lib
       run
+      test
     SUBPROJECT_DEPS
       aqlprofile
       rocprofiler-sdk
