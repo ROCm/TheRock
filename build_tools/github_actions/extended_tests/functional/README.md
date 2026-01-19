@@ -26,13 +26,12 @@ Functional tests validate **correctness and behavior**:
 python build_tools/github_actions/extended_tests/functional/scripts/test_miopendriver_conv.py
 ```
 
-## CI Test Matrix
+## CI Configuration
 
-Tests defined in `functional_test_matrix.py`:
-
-| Test Name            | Library | Platform | Timeout | Artifacts Needed   | CI Status         |
-| -------------------- | ------- | -------- | ------- | ------------------ | ----------------- |
-| `miopen_driver_conv` | MIOpen  | Linux    | 30 min  | `--miopen --tests` | Enabled (nightly) |
+- **Test Matrix:** See [`functional_test_matrix.py`](functional_test_matrix.py) for complete test definitions (platforms, timeouts, artifacts needed)
+- **Execution:** All functional tests run in nightly CI builds only
+- **Architecture Support:** Tests are architecture-agnostic and support any ROCm-compatible GPU
+- **Architecture Exclusions:** If a specific GPU architecture is not supported for a test, use the `exclude_family` field in the test matrix to skip that architecture/platform combination (see `fetch_test_configurations.py` for filtering logic)
 
 ## How Functional Tests Work
 
@@ -75,8 +74,10 @@ from pathlib import Path
 from typing import Dict, List, Tuple, Any
 from prettytable import PrettyTable
 
+# Add parent directories to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))  # extended_tests/
 sys.path.insert(0, str(Path(__file__).parent))  # For functional_base
+
 from functional_base import FunctionalBase, run_functional_test_main
 from utils.logger import log
 from utils.exceptions import TestExecutionError
@@ -127,6 +128,12 @@ class YourTest(FunctionalBase):
 if __name__ == "__main__":
     run_functional_test_main(YourTestFunctionalTest())
 ```
+
+**Required Methods:**
+- `run_tests()` → Execute tests and save results
+- `parse_results()` → Returns `(test_results_list, display_table, num_suites)`
+  - Must use `self.create_test_result(test_name, subtest_name, status, **kwargs)`
+  - Status must be: `"PASS"`, `"FAIL"`, `"ERROR"`, or `"SKIP"`
 
 ### Step 2: Add to Functional Matrix
 
