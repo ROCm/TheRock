@@ -13,7 +13,8 @@ Usage:
 python build_tools/install_rocm_from_artifacts.py
     (--artifact-group ARTIFACT_GROUP | --amdgpu_family AMDGPU_FAMILY)
     [--output-dir OUTPUT_DIR]
-    (--run-id RUN_ID | --release RELEASE | --latest [--dry-run] | --input-dir INPUT_DIR)
+    (--run-id RUN_ID | --release RELEASE | --latest | --input-dir INPUT_DIR)
+    [--dry-run]
     [--run-github-repo RUN_GITHUB_REPO]
     [--aqlprofile | --no-aqlprofile]
     [--blas | --no-blas]
@@ -73,10 +74,14 @@ Examples:
         --latest \
         --amdgpu-family gfx110X-all
     ```
-- Shows which release would be downloaded without actually downloading:
+- Shows what would be downloaded without actually downloading (works with any mode):
     ```
     python build_tools/install_rocm_from_artifacts.py \
         --latest \
+        --amdgpu-family gfx110X-all \
+        --dry-run
+    python build_tools/install_rocm_from_artifacts.py \
+        --release 7.11.0a20260119 \
         --amdgpu-family gfx110X-all \
         --dry-run
     ```
@@ -288,6 +293,8 @@ def retrieve_artifacts_by_run_id(args):
         str(args.output_dir),
         "--flatten",
     ]
+    if args.dry_run:
+        argv.append("--dry-run")
     if args.run_github_repo:
         argv.extend(["--run-github-repo", args.run_github_repo])
 
@@ -421,6 +428,14 @@ def retrieve_artifacts_by_release(args):
     release_version = args.release
 
     log(f"Retrieving artifacts from release bucket {release_bucket}")
+
+    if args.dry_run:
+        asset_name = (
+            f"therock-dist-{PLATFORM}-{artifact_group}-{release_version}.tar.gz"
+        )
+        log(f"[DRY RUN] Would download: {asset_name} (version {release_version})")
+        return
+
     _retrieve_s3_release_assets(
         release_bucket, artifact_group, release_version, output_dir
     )
@@ -430,6 +445,10 @@ def retrieve_artifacts_by_input_dir(args):
     input_dir = args.input_dir
     output_dir = args.output_dir
     log(f"Retrieving artifacts from input dir {input_dir}")
+
+    if args.dry_run:
+        log(f"[DRY RUN] Would rsync from {input_dir} to {output_dir}")
+        return
 
     # Check to make sure rsync exists
     if not shutil.which("rsync"):
@@ -489,12 +508,9 @@ def retrieve_artifacts_by_latest(args):
 def run(args):
     log("### Installing TheRock using artifacts ###")
 
-    # For --latest with --dry-run, we don't need to create the output directory
-    if args.latest and args.dry_run:
-        retrieve_artifacts_by_latest(args)
-        return
-
-    _create_output_directory(args.output_dir)
+    # Skip directory creation for dry-run
+    if not args.dry_run:
+        _create_output_directory(args.output_dir)
 
     if args.run_id:
         retrieve_artifacts_by_run_id(args)
@@ -549,7 +565,7 @@ def main(argv):
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="With --latest: show which release would be installed without downloading",
+        help="Show what would be downloaded/copied without actually doing it",
     )
 
     artifacts_group = parser.add_argument_group("artifacts_group")
@@ -687,9 +703,6 @@ def main(argv):
         raise argparse.ArgumentTypeError(
             "Either --amdgpu-family or --artifact-group must be specified"
         )
-
-    if args.dry_run and not args.latest:
-        parser.error("--dry-run can only be used with --latest")
 
     run(args)
 
