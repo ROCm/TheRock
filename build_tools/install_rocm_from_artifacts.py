@@ -176,61 +176,17 @@ def list_available_gpu_families(
     return families
 
 
-def discover_latest_release(
+def _fetch_and_sort_releases(
     bucket_type: str,
     artifact_group: str,
     platform_str: str = PLATFORM,
-) -> Optional[tuple[str, str]]:
-    """
-    Query S3 bucket to find the latest release for given artifact group.
-
-    Returns:
-        Tuple of (version_string, full_asset_name) or None if not found.
-    """
-    bucket_name = f"therock-{bucket_type}-tarball"
-    prefix = f"therock-dist-{platform_str}-{artifact_group}-"
-
-    paginator = s3_client.get_paginator("list_objects_v2")
-    releases: list[tuple[str, str, datetime | None, datetime]] = []
-
-    for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
-        for obj in page.get("Contents", []):
-            key = obj["Key"]
-            if not key.endswith(".tar.gz"):
-                continue
-            version = extract_version_from_asset_name(key, artifact_group, platform_str)
-            if version:
-                parsed_date = parse_nightly_version(version)
-                last_modified = obj["LastModified"]
-                releases.append((version, key, parsed_date, last_modified))
-
-    if not releases:
-        return None
-
-    # Sort by parsed date (for nightly) or last_modified (for dev)
-    if bucket_type == "nightly":
-        # Sort by parsed date, falling back to last_modified if parsing fails
-        releases.sort(
-            key=lambda x: (x[2] if x[2] else datetime.min, x[3]), reverse=True
-        )
-    else:
-        # Dev releases: sort by last_modified timestamp
-        releases.sort(key=lambda x: x[3], reverse=True)
-
-    return (releases[0][0], releases[0][1])
-
-
-def list_available_releases(
-    bucket_type: str,
-    artifact_group: str,
-    platform_str: str = PLATFORM,
-    limit: int = 10,
 ) -> list[dict]:
     """
-    List available releases for a GPU family, sorted by recency.
+    Fetch and sort releases from S3 bucket for a given artifact group.
 
     Returns:
-        List of dicts with keys: version, asset_name, last_modified, size
+        List of dicts with keys: version, asset_name, last_modified, size, parsed_date
+        Sorted by recency (newest first).
     """
     bucket_name = f"therock-{bucket_type}-tarball"
     prefix = f"therock-dist-{platform_str}-{artifact_group}-"
@@ -245,14 +201,13 @@ def list_available_releases(
                 continue
             version = extract_version_from_asset_name(key, artifact_group, platform_str)
             if version:
-                parsed_date = parse_nightly_version(version)
                 releases.append(
                     {
                         "version": version,
                         "asset_name": key,
                         "last_modified": obj["LastModified"],
                         "size": obj["Size"],
-                        "parsed_date": parsed_date,
+                        "parsed_date": parse_nightly_version(version),
                     }
                 )
 
@@ -268,7 +223,39 @@ def list_available_releases(
     else:
         releases.sort(key=lambda x: x["last_modified"], reverse=True)
 
-    return releases[:limit]
+    return releases
+
+
+def discover_latest_release(
+    bucket_type: str,
+    artifact_group: str,
+    platform_str: str = PLATFORM,
+) -> Optional[tuple[str, str]]:
+    """
+    Query S3 bucket to find the latest release for given artifact group.
+
+    Returns:
+        Tuple of (version_string, full_asset_name) or None if not found.
+    """
+    releases = _fetch_and_sort_releases(bucket_type, artifact_group, platform_str)
+    if not releases:
+        return None
+    return (releases[0]["version"], releases[0]["asset_name"])
+
+
+def list_available_releases(
+    bucket_type: str,
+    artifact_group: str,
+    platform_str: str = PLATFORM,
+    limit: int = 10,
+) -> list[dict]:
+    """
+    List available releases for a GPU family, sorted by recency.
+
+    Returns:
+        List of dicts with keys: version, asset_name, last_modified, size, parsed_date
+    """
+    return _fetch_and_sort_releases(bucket_type, artifact_group, platform_str)[:limit]
 
 
 def format_size(size_bytes: int) -> str:
