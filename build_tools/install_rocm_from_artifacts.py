@@ -144,14 +144,12 @@ def extract_version_from_asset_name(
     return None
 
 
-def list_available_gpu_families(
-    bucket_type: str, platform_str: str = PLATFORM
-) -> set[str]:
+def list_available_nightly_gpu_families(platform_str: str = PLATFORM) -> set[str]:
     """
-    Query S3 to find all GPU families that have releases.
+    Query S3 to find all GPU families that have nightly releases.
     Useful for error messages when an invalid GPU family is specified.
     """
-    bucket_name = f"therock-{bucket_type}-tarball"
+    bucket_name = "therock-nightly-tarball"
     prefix = f"therock-dist-{platform_str}-"
 
     paginator = s3_client.get_paginator("list_objects_v2")
@@ -167,19 +165,18 @@ def list_available_gpu_families(
     return families
 
 
-def _fetch_and_sort_releases(
-    bucket_type: str,
+def _fetch_and_sort_nightly_releases(
     artifact_group: str,
     platform_str: str = PLATFORM,
 ) -> list[dict]:
     """
-    Fetch and sort releases from S3 bucket for a given artifact group.
+    Fetch and sort nightly releases from S3 bucket for a given artifact group.
 
     Returns:
         List of dicts with keys: version, asset_name, last_modified, size, parsed_date
         Sorted by recency (newest first).
     """
-    bucket_name = f"therock-{bucket_type}-tarball"
+    bucket_name = "therock-nightly-tarball"
     prefix = f"therock-dist-{platform_str}-{artifact_group}-"
 
     paginator = s3_client.get_paginator("list_objects_v2")
@@ -202,33 +199,29 @@ def _fetch_and_sort_releases(
                     }
                 )
 
-    # Sort by parsed date (for nightly) or last_modified (for dev)
-    if bucket_type == "nightly":
-        releases.sort(
-            key=lambda x: (
-                x["parsed_date"] if x["parsed_date"] else datetime.min,
-                x["last_modified"],
-            ),
-            reverse=True,
-        )
-    else:
-        releases.sort(key=lambda x: x["last_modified"], reverse=True)
+    # Sort by parsed date (newest first), falling back to last_modified
+    releases.sort(
+        key=lambda x: (
+            x["parsed_date"] if x["parsed_date"] else datetime.min,
+            x["last_modified"],
+        ),
+        reverse=True,
+    )
 
     return releases
 
 
-def discover_latest_release(
-    bucket_type: str,
+def discover_latest_nightly_release(
     artifact_group: str,
     platform_str: str = PLATFORM,
 ) -> Optional[tuple[str, str]]:
     """
-    Query S3 bucket to find the latest release for given artifact group.
+    Query S3 bucket to find the latest nightly release for given artifact group.
 
     Returns:
         Tuple of (version_string, full_asset_name) or None if not found.
     """
-    releases = _fetch_and_sort_releases(bucket_type, artifact_group, platform_str)
+    releases = _fetch_and_sort_nightly_releases(artifact_group, platform_str)
     if not releases:
         return None
     return (releases[0]["version"], releases[0]["asset_name"])
@@ -464,19 +457,15 @@ def retrieve_artifacts_by_latest(args):
     """
     Find and retrieve the latest nightly release from S3.
     """
-    bucket_type = "nightly"
     log(f"Finding latest nightly release for {args.artifact_group}...")
 
-    result = discover_latest_release(
-        bucket_type=bucket_type,
-        artifact_group=args.artifact_group,
-    )
+    result = discover_latest_nightly_release(artifact_group=args.artifact_group)
 
     if result is None:
-        log(f"ERROR: No {bucket_type} release found for '{args.artifact_group}'")
+        log(f"ERROR: No nightly release found for '{args.artifact_group}'")
         log("")
-        log(f"Available GPU families in the {bucket_type} bucket:")
-        available = list_available_gpu_families(bucket_type)
+        log("Available GPU families in the nightly bucket:")
+        available = list_available_nightly_gpu_families()
         for family in sorted(available):
             log(f"  - {family}")
         sys.exit(1)
@@ -490,7 +479,7 @@ def retrieve_artifacts_by_latest(args):
 
     # Reuse existing download logic
     _retrieve_s3_release_assets(
-        release_bucket=f"therock-{bucket_type}-tarball",
+        release_bucket="therock-nightly-tarball",
         artifact_group=args.artifact_group,
         release_version=version,
         output_dir=args.output_dir,
