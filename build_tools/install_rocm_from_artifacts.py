@@ -474,7 +474,7 @@ def retrieve_artifacts_by_latest(args):
     log(f"Found latest release: {version}")
 
     if args.dry_run:
-        log(f"[DRY RUN] Would download: {asset_name}")
+        log(f"[DRY RUN] Would download: {asset_name} (version {version})")
         return
 
     # Reuse existing download logic
