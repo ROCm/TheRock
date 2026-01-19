@@ -33,6 +33,8 @@ class TestRocprofsys:
         ld_paths = [
             rocm_lib_base,
             rocm_lib_base / "rocprofiler-systems",
+            rocm_lib_base / "rocm_sysdeps" / "lib",
+            rocm_base / "llvm" / "lib",
             rocm_base / "share" / "rocprofiler-systems" / "examples" / "lib",
         ]
         new_ld_path = ":".join(str(p) for p in ld_paths)
