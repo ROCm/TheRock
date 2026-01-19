@@ -52,6 +52,7 @@ class MIOpenDriverConvTest(FunctionalBase):
         log.info(f"Running {self.display_name} Tests")
 
         # Detect GPU architecture using HardwareDetector
+        # Returns first discrete GPU. Use ROCR_VISIBLE_DEVICES to control which GPU if needed.
         detector = HardwareDetector()
         gfx_id = detector.get_gpu_architecture()
         log.info(f"Detected GPU: {gfx_id}")

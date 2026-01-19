@@ -44,6 +44,9 @@ export ARTIFACT_RUN_ID=local-test
 
 # Required: Update to match your GPU family (e.g., gfx908, gfx90a, gfx942, gfx950-dcgpu)
 export AMDGPU_FAMILIES=gfx950-dcgpu
+
+# Optional: Control GPU visibility on multi-GPU nodes (e.g., ROCR_VISIBLE_DEVICES=0)
+# export ROCR_VISIBLE_DEVICES=0
 ```
 
 ### Running Tests

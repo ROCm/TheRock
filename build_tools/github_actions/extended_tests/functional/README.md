@@ -111,12 +111,15 @@ class YourTest(FunctionalBase):
         log.info("Parsing Results")
 
         detailed_table = PrettyTable()
+        # Field names are flexible - customize based on your test output
+        # Common patterns: ["TestCase", "Status"] or ["TestSuite", "TestCase", "Status"]
         detailed_table.field_names = ["TestCase", "Status"]
 
         test_results = []
 
         # Parse log file for each test case
-        # Use self.create_test_result() to create result dictionaries
+        # MANDATORY: Use self.create_test_result(test_name, subtest_name, status, **kwargs)
+        # to create standardized result dictionaries for database upload
 
         return test_results, detailed_table, num_suites
 

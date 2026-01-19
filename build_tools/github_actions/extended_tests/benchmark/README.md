@@ -10,6 +10,7 @@ Benchmark tests detect **performance regressions** by comparing against baseline
 
 - **Result Types:** PASS (within tolerance) / FAIL (regression) / UNKNOWN (no baseline)
 - **Comparison:** Current performance vs. LKG baseline with configurable tolerance
+- **Baseline Selection:** LKG baselines are retrieved from the benchmark database API, currently filtered by ROCm version, test name and test configuration (GPU architecture, hostname). The baseline represents the last known good performance metrics for each test configuration.
 - **CI Execution:** Nightly only (not on PRs to save resources)
 - **Exit Code:** Non-zero if any test FAILS
 
@@ -32,34 +33,13 @@ cd build_tools/github_actions/extended_tests/benchmark/scripts
 python test_hipblaslt_benchmark.py
 ```
 
-## CI Test Matrix
+## CI Configuration
 
-Tests defined in `benchmark_test_matrix.py`:
-
-| Test Name         | Library   | Platform       | Timeout | Artifacts Needed       | CI Status         |
-| ----------------- | --------- | -------------- | ------- | ---------------------- | ----------------- |
-| `hipblaslt_bench` | hipBLASLt | Linux, Windows | 60 min  | `--blas --tests`       | Enabled (nightly) |
-| `rocfft_bench`    | rocFFT    | Linux, Windows | 60 min  | `--fft --rand --tests` | Enabled (nightly) |
-| `rocrand_bench`   | rocRAND   | Linux, Windows | 60 min  | `--rand --tests`       | Enabled (nightly) |
-| `rocsolver_bench` | ROCsolver | Linux, Windows | 60 min  | `--blas --tests`       | Enabled (nightly) |
-| `rccl_bench`      | RCCL      | Linux          | 90 min  | `--rccl --tests`       | Enabled (nightly) |
-| `rocblas_bench`   | rocBLAS   | Linux, Windows | 90 min  | `--blas --tests`       | Enabled (nightly) |
-
-**GPU Family Support:**
-
-| GPU Family | Platform | Architecture          | Benchmark Supported | Benchmark CI Status  |
-| ---------- | -------- | --------------------- | ------------------- | -------------------- |
-| `gfx94x`   | Linux    | MI300X/MI325X (CDNA3) | Yes                 | Enabled (nightly CI) |
-| `gfx1151`  | Windows  | RDNA 3.5              | Yes                 | Enabled (nightly CI) |
-| `gfx950`   | Linux    | MI355X (CDNA4)        | Yes                 | Not enabled          |
-| `gfx110x`  | Windows  | RDNA 2                | Yes                 | Not enabled          |
-| `gfx110x`  | Linux    | RDNA 2                | Yes                 | Not enabled          |
-| `gfx120x`  | Linux    | RDNA 3                | Yes                 | Not enabled          |
-| `gfx120x`  | Windows  | RDNA 3                | Yes                 | Not enabled          |
-| `gfx90x`   | Linux    | MI200 (CDNA2)         | Yes                 | Not enabled          |
-| `gfx1151`  | Linux    | RDNA 3.5              | Yes                 | Not enabled          |
-
-> **Note:** All benchmarks are **architecture-agnostic** and support any ROCm-compatible GPU. The table above lists GPU families actively used in CI testing. To add support for additional GPU families, update [`amdgpu_family_matrix.py`](../amdgpu_family_matrix.py) with appropriate `benchmark-runs-on` runners.
+- **Test Matrix:** See [`benchmark_test_matrix.py`](benchmark_test_matrix.py) for complete test definitions (platforms, timeouts, artifacts needed)
+- **GPU Family Support:** See [`amdgpu_family_matrix.py`](../amdgpu_family_matrix.py) for CI-enabled GPU families and runner configurations
+- **Execution:** All benchmarks run in nightly CI builds only (not on PRs to save resources)
+- **Architecture Support:** Benchmarks are architecture-agnostic and support any ROCm-compatible GPU
+- **Architecture Exclusions:** If a specific GPU architecture is not supported for a test, use the `exclude_family` field in the test matrix to skip that architecture/platform combination (see `fetch_test_configurations.py` for filtering logic)
 
 ## How Benchmark Tests Work
 
