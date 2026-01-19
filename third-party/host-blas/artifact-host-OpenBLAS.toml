@@ -4,8 +4,8 @@
 [components.doc."third-party/host-blas/host-blas/stage"]
 [components.lib."third-party/host-blas/host-blas/stage"]
 
-# therock-host-blas-64
-[components.dbg."third-party/host-blas/host-blas-64/stage"]
-[components.dev."third-party/host-blas/host-blas-64/stage"]
-[components.doc."third-party/host-blas/host-blas-64/stage"]
-[components.lib."third-party/host-blas/host-blas-64/stage"]
+# therock-host-blas64
+[components.dbg."third-party/host-blas/host-blas64/stage"]
+[components.dev."third-party/host-blas/host-blas64/stage"]
+[components.doc."third-party/host-blas/host-blas64/stage"]
+[components.lib."third-party/host-blas/host-blas64/stage"]

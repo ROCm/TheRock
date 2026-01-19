@@ -439,7 +439,7 @@ endif()
 if(THEROCK_BUILD_TESTING)
   # Note: hipBLAS tests require ILP64 host blas
   # https://rocm.docs.amd.com/projects/hipBLAS/en/latest/install/Linux_Install_Guide.html#dependencies-for-building-the-library
-  list(APPEND hipBLAS_optional_deps therock-host-blas-64)
+  list(APPEND hipBLAS_optional_deps therock-host-blas64)
 endif()
 
 therock_cmake_subproject_declare(hipBLAS

@@ -23,9 +23,8 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       CMAKE_PROJECT
       SOURCE_DIR "${_source_dir}"
       # Originally mirrored from: https://github.com/OpenMathLib/OpenBLAS/releases/download/v0.3.29/OpenBLAS-0.3.29.tar.gz
-      URL https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/OpenBLAS-0.3.30.tar.gz
-      URL_HASH SHA256=27342cff518646afb4c2b976d809102e368957974c250a25ccc965e53063c95d
-      PATCH_COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/build_tools/patch_third_party_source.py ${CMAKE_SOURCE_DIR}/patches/third-party/host-blas
+      URL https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/OpenBLAS-0.3.31.tar.gz
+      URL_HASH SHA256=6dd2a63ac9d32643b7cc636eab57bf4e57d0ed1fff926dfbc5d3d97f2d2be3a6
       # Originally posted MD5 was recomputed as SHA256 manually:
       # URL_HASH MD5=853a0c5c0747c5943e7ef4bbb793162d
       TOUCH "${_download_stamp}"
@@ -85,9 +84,9 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     ##############################################################################
     # ILP64 OpenBLAS
     ##############################################################################
-    therock_cmake_subproject_declare(therock-host-blas-64
+    therock_cmake_subproject_declare(therock-host-blas64
       USE_DIST_AMDGPU_TARGETS
-      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/host-blas-64"
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/host-blas64"
       BACKGROUND_BUILD
       EXCLUDE_FROM_ALL
       NO_MERGE_COMPILE_COMMANDS
@@ -112,16 +111,16 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       EXTRA_DEPENDS
         "${_download_stamp}"
     )
-    therock_cmake_subproject_provide_package(therock-host-blas-64 OpenBLAS64 lib/host-math/lib/cmake/OpenBLAS64)
-    therock_cmake_subproject_provide_package(therock-host-blas-64 cblas64 lib/host-math/lib/cmake/OpenBLAS64)
-    therock_cmake_subproject_activate(therock-host-blas-64)
+    therock_cmake_subproject_provide_package(therock-host-blas64 OpenBLAS64 lib/host-math/lib/cmake/OpenBLAS64)
+    therock_cmake_subproject_provide_package(therock-host-blas64 cblas64 lib/host-math/lib/cmake/OpenBLAS64)
+    therock_cmake_subproject_activate(therock-host-blas64)
 
     therock_test_validate_shared_lib(
-      PATH host-blas-64/dist/lib/host-math/lib
+      PATH host-blas64/dist/lib/host-math/lib
       LIB_NAMES librocm-openblas64.so
     )
 
-    list(APPEND _host_blas_subproject_names therock-host-blas-64)
+    list(APPEND _host_blas_subproject_names therock-host-blas64)
 
     therock_provide_artifact(host-blas
       DESCRIPTOR artifact-host-OpenBLAS.toml
