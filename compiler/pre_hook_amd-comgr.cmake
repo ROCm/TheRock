@@ -7,9 +7,6 @@ endif()
 set(COMGR_DISABLE_SPIRV OFF)
 
 # Enable comgr tests when LLVM tests are enabled.
-# Note: The circular dependency mentioned in https://github.com/ROCm/TheRock/issues/67
-# has been resolved - comgr tests only link against amd_comgr and use clang/lld
-# for input file generation, not the HIP runtime itself.
 if(THEROCK_ENABLE_LLVM_TESTS)
   set(BUILD_TESTING ON CACHE BOOL "Enable comgr tests" FORCE)
 else()
