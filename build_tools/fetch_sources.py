@@ -151,10 +151,43 @@ def fetch_nested_submodules(args, projects):
 
 
 def run(args):
+    # Handle external source override if present
+    external_source_checkout = (
+        os.environ.get("EXTERNAL_SOURCE_CHECKOUT", "false").lower() == "true"
+    )
+    external_source_temp_path = os.environ.get("EXTERNAL_SOURCE_TEMP_PATH", "")
+    override_submodule = None
+
+    if external_source_checkout and external_source_temp_path:
+        temp_dir = THEROCK_DIR / external_source_temp_path
+        if temp_dir.exists():
+            try:
+                result = subprocess.run(
+                    ["git", "config", "--get", "remote.origin.url"],
+                    cwd=str(temp_dir),
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                repo_url = result.stdout.strip()
+                override_submodule = extract_submodule_name_from_repo_url(repo_url)
+                log(f"External source detected: {override_submodule}")
+                move_external_source_to_submodule(
+                    external_source_temp_path, override_submodule
+                )
+            except subprocess.CalledProcessError as e:
+                log(f"Warning: Could not determine external repo: {e}")
+
+    # Get enabled projects
     projects = get_enabled_projects(args)
+
+    # Build submodule list, excluding override if present
     submodule_paths = ALWAYS_SUBMODULE_PATHS + [
-        get_submodule_path(project) for project in projects
+        get_submodule_path(project)
+        for project in projects
+        if project != override_submodule
     ]
+
     # TODO(scotttodd): Check for git lfs?
     update_args = []
     if args.depth:
@@ -195,6 +228,52 @@ def run(args):
 
     if args.apply_patches:
         apply_patches(args, projects)
+
+
+def extract_submodule_name_from_repo_url(repo_url: str) -> str:
+    """Extract submodule name from repository URL.
+
+    Examples:
+        "ROCm/rocm-libraries" -> "rocm-libraries"
+        "https://github.com/ROCm/rocm-systems" -> "rocm-systems"
+    """
+    # Remove .git suffix if present
+    repo_url = repo_url.rstrip("/")
+    if repo_url.endswith(".git"):
+        repo_url = repo_url[:-4]
+
+    # Extract the last component (repo name)
+    return repo_url.split("/")[-1]
+
+
+def move_external_source_to_submodule(temp_path: str, submodule_name: str):
+    """Move pre-checked-out external source to its submodule directory.
+
+    This is used when GitHub Actions checks out the external repo (handling
+    fork PRs correctly), and we need to move it to the submodule location.
+
+    Args:
+        temp_path: Path where GitHub Actions checked out the source
+        submodule_name: Name of the submodule (e.g., "rocm-libraries")
+    """
+    temp_dir = THEROCK_DIR / temp_path
+    if not temp_dir.exists():
+        log(f"External source temp directory not found: {temp_dir}")
+        return
+
+    submodule_path = get_submodule_path(submodule_name)
+    target_dir = THEROCK_DIR / submodule_path
+
+    log(f"Moving external source from {temp_dir} to {target_dir}")
+
+    # Remove existing directory if it exists
+    if target_dir.exists():
+        log(f"Removing existing directory: {target_dir}")
+        shutil.rmtree(target_dir)
+
+    # Move the checked-out source to submodule location
+    shutil.move(str(temp_dir), str(target_dir))
+    log(f"Successfully moved external source to {target_dir}")
 
 
 def pull_large_files(dvc_projects, projects):

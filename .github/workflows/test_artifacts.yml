@@ -19,6 +19,9 @@ on:
         type: string
       test_labels:
         type: string
+      project_to_test:
+        type: string
+        default: ""
   workflow_call:
     inputs:
       artifact_group:
@@ -37,6 +40,13 @@ on:
         type: string
       test_labels:
         type: string
+      project_to_test:
+        type: string
+        default: ""
+      therock_ref:
+        type: string
+        description: "TheRock git ref to use (for external repos)"
+        default: ""
   push:
     branches:
       - ADHOCBUILD
@@ -46,7 +56,9 @@ permissions:
 
 jobs:
   configure_test_matrix:
-    name: "Configure test matrix"
+    # For external repos (rocm-libraries, rocm-systems), include GPU family in job name.
+    # TheRock repo keeps the simple name. Detection via github.repository check.
+    name: ${{ !contains(github.repository, 'TheRock') && format('Configure test matrix {0}', inputs.amdgpu_families) || 'Configure test matrix' }}
     # if there is a test machine available
     if: ${{ inputs.test_runs_on != '' }}
     runs-on: ${{ inputs.test_runs_on }}
@@ -55,12 +67,13 @@ jobs:
       platform: ${{ steps.configure.outputs.platform }}
       shard_arr: ${{ steps.configure.outputs.shard_arr }}
     steps:
-      - name: "Fetch 'build_tools' from repository"
-        if: ${{ runner.os == 'Windows' }}
+      - name: "Checking out TheRock repository"
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
           sparse-checkout: build_tools
           path: "prejob"
+          repository: ROCm/TheRock
+          ref: ${{ inputs.therock_ref || github.ref }}
 
       # Checkout failure is possible on Windows, as it's the first job on a GPU test runner.
       # Post-job cleanup isn't necessary since no executables are launched in this job.
@@ -68,9 +81,6 @@ jobs:
         if: ${{ runner.os == 'Windows' }}
         shell: powershell
         run: . '${{ github.workspace }}\prejob\build_tools\github_actions\cleanup_processes.ps1'
-
-      - name: "Checking out repository"
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
       - name: Setting up Python
         uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
@@ -84,7 +94,8 @@ jobs:
           AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
           TEST_TYPE: ${{ inputs.test_type }}
           TEST_LABELS: ${{ inputs.test_labels }}
-        run: python ./build_tools/github_actions/fetch_test_configurations.py
+          PROJECT_TO_TEST: ${{ inputs.project_to_test }}
+        run: python ./prejob/build_tools/github_actions/fetch_test_configurations.py
 
   test_sanity_check:
     name: 'Test Sanity Check'
@@ -96,6 +107,7 @@ jobs:
       amdgpu_families: ${{ inputs.amdgpu_families }}
       test_runs_on: ${{ inputs.test_runs_on }}
       platform: ${{ needs.configure_test_matrix.outputs.platform }}
+      therock_ref: ${{ inputs.therock_ref }}
 
   test_components:
     name: 'Test ${{ matrix.components.job_name }}'
