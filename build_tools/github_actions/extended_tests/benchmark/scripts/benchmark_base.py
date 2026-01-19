@@ -10,9 +10,9 @@ from typing import Dict, List, Tuple, Any, IO
 from prettytable import PrettyTable
 
 # Add parent directory to path for utils import
-sys.path.insert(0, str(Path(__file__).parent.parent))  # benchmarks/
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))  # github_actions/
-from utils import BenchmarkClient, HardwareDetector
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))  # extended_tests/
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))  # github_actions/
+from utils import TestClient, HardwareDetector
 from utils.logger import log
 from utils.exceptions import TestExecutionError
 from github_actions_utils import gha_append_step_summary
@@ -39,7 +39,7 @@ class BenchmarkBase:
         self.artifact_run_id = os.getenv("ARTIFACT_RUN_ID")
         self.amdgpu_families = os.getenv("AMDGPU_FAMILIES")
         self.script_dir = Path(__file__).resolve().parent
-        self.therock_dir = self.script_dir.parent.parent.parent.parent
+        self.therock_dir = self.script_dir.parent.parent.parent.parent.parent
 
         # Initialize test client (will be set in run())
         self.client = None
@@ -314,7 +314,7 @@ class BenchmarkBase:
         log.info(f"Initializing {self.display_name} Benchmark Test")
 
         # Initialize benchmark client and print system info
-        self.client = BenchmarkClient(auto_detect=True)
+        self.client = TestClient(auto_detect=True)
         self.client.print_system_summary()
 
         # Run benchmarks (implemented by child class)
