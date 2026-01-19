@@ -33,12 +33,17 @@ The test framework provides infrastructure for two test types:
 
 ### Environment Setup
 
-All tests require these environment variables:
+All tests require these environment variables. **Note:** These are automatically configured in CI runs. For local testing, adjust values based on your setup:
 
 ```bash
-export THEROCK_BIN_DIR=/path/to/therock/build/bin  # Path to TheRock binaries
-export ARTIFACT_RUN_ID=local-test                  # Unique identifier for this test run
-export AMDGPU_FAMILIES=gfx950-dcgpu                # Target GPU family
+# Required: Update to your actual TheRock build directory
+export THEROCK_BIN_DIR=/path/to/therock/build/bin
+
+# Optional: Unique identifier for this test run (default: local-test)
+export ARTIFACT_RUN_ID=local-test
+
+# Required: Update to match your GPU family (e.g., gfx908, gfx90a, gfx942, gfx950-dcgpu)
+export AMDGPU_FAMILIES=gfx950-dcgpu
 ```
 
 ### Running Tests

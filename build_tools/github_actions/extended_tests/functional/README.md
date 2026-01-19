@@ -142,6 +142,8 @@ Edit `functional_test_matrix.py`:
 
 ### Step 3: Test Locally
 
+For example, run test for gfx94x-dcgpu:
+
 ```bash
 export THEROCK_BIN_DIR=/path/to/build/bin
 export ARTIFACT_RUN_ID=local-test

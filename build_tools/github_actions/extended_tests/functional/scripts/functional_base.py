@@ -1,4 +1,19 @@
-"""Base class for functional tests with common functionality."""
+"""
+Base class for functional tests with common functionality.
+
+Provides test execution, result parsing, logging, and GitHub Actions integration
+for functional correctness tests. Unlike benchmarks which measure performance,
+functional tests verify correctness with pass/fail results.
+
+Usage:
+    Subclass and implement run_tests() and parse_results():
+
+    class MyTest(FunctionalBase):
+        def run_tests(self): ...
+        def parse_results(self, log_file): ...
+
+Required environment variables: THEROCK_BIN_DIR, ARTIFACT_RUN_ID, AMDGPU_FAMILIES
+"""
 
 import json
 import os
