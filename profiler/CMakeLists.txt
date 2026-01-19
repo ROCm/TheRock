@@ -264,5 +264,5 @@ endif(THEROCK_BUILD_TESTING)
         rocprofiler-sdk
         rocprofiler-systems
       )
-  endif(THEROCK_ENABLE_ROCPROFSYS)
+  endif(THEROCK_ENABLE_ROCPROFSYS AND THEROCK_SANITIZER STREQUAL "")
 endif(THEROCK_ENABLE_ROCPROFV3)
