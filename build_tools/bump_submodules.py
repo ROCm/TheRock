@@ -94,6 +94,21 @@ def parse_components(components: list[str]) -> list[list]:
     else:
         arguments.append("--no-include-compilers")
 
+    if "iree-libs" in components:
+        arguments.append("--include-iree-libs")
+    else:
+        arguments.append("--no-include-iree-libs")
+
+    if "debug-tools" in components:
+        arguments.append("--include-debug-tools")
+    else:
+        arguments.append("--no-include-debug-tools")
+
+    if "rocm-media" in components:
+        arguments.append("--include-rocm-media")
+    else:
+        arguments.append("--no-include-rocm-media")
+
     log(f"++ Arguments: {shlex.join(arguments)}")
     if system_projects:
         log(f"++ System projects: {shlex.join(system_projects)}")
@@ -181,7 +196,10 @@ def main(argv):
                   ml-libs,
                   rocm-libraries,
                   rocm-systems,
-                  profiler
+                  profiler,
+                  iree-libs,
+                  debug-tools.
+                  rocm-media
              """,
     )
     args = parser.parse_args(argv)
