@@ -87,9 +87,11 @@ The `test_packaging_utils.py` file includes tests for:
 The `test_build_package.py` file includes tests for:
 
 **File Operations:**
+
 - `copy_package_contents()` - File/directory copying with symlink support
 
 **Debian Package Generation:**
+
 - `generate_changelog_file()` - Debian changelog generation
 - `generate_install_file()` - Debian install file generation
 - `generate_rules_file()` - Debian rules file generation
@@ -100,6 +102,7 @@ The `test_build_package.py` file includes tests for:
 - `package_with_dpkg_build()` - DEB package building with dpkg-buildpackage
 
 **RPM Package Generation:**
+
 - `generate_spec_file()` - RPM spec file generation
 - `generate_rpm_postscripts()` - RPM post-installation script sections
 - `create_nonversioned_rpm_package()` - Non-versioned RPM meta packages
@@ -107,6 +110,7 @@ The `test_build_package.py` file includes tests for:
 - `package_with_rpmbuild()` - RPM package building with rpmbuild
 
 **Orchestration Functions:**
+
 - `parse_input_package_list()` - Package list parsing with filtering
 - `clean_package_build_dir()` - Build directory cleanup
 - `create_deb_package()` - Complete DEB package orchestration
@@ -119,6 +123,7 @@ The `test_build_package.py` file includes tests for:
 ### Mocking
 
 Tests use Python's `unittest.mock` module to:
+
 - Mock file system operations
 - Mock subprocess calls (dpkg-buildpackage, rpmbuild)
 - Mock external dependencies
@@ -127,6 +132,7 @@ Tests use Python's `unittest.mock` module to:
 ### Edge Cases
 
 Tests cover various edge cases including:
+
 - Non-existent files and directories
 - Invalid version formats
 - Empty package lists
@@ -162,6 +168,7 @@ python3 -m unittest test_packaging_utils.TestVersionToStr.test_version_three_par
 ### Check Test Output
 
 The `-v` flag will show:
+
 - Which tests passed (✓)
 - Which tests failed (✗)
 - Error messages and tracebacks
@@ -170,6 +177,7 @@ The `-v` flag will show:
 ## Requirements
 
 The tests require:
+
 - Python 3.6+
 - Standard library modules: `unittest`, `tempfile`, `pathlib`, `json`, `os`, `shutil`
 - The modules being tested: `packaging_utils.py` and `build_package.py`
@@ -181,10 +189,10 @@ No additional packages like pytest are required.
 When adding new functions to `packaging_utils.py` or `build_package.py`:
 
 1. Create a corresponding test class in the appropriate test file
-2. Test both success and failure cases
-3. Test edge cases and error conditions
-4. Use mocks to avoid external dependencies
-5. Run all tests to ensure no regressions
+1. Test both success and failure cases
+1. Test edge cases and error conditions
+1. Use mocks to avoid external dependencies
+1. Run all tests to ensure no regressions
 
 ## Example Test Output
 

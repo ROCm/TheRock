@@ -24,6 +24,7 @@ class TestPrintFunctionName(unittest.TestCase):
     @patch("builtins.print")
     def test_print_function_name(self, mock_print):
         """Test that print_function_name prints the calling function name."""
+
         def caller_function():
             packaging_utils.print_function_name()
 
@@ -40,16 +41,19 @@ class TestReadPackageJsonFile(unittest.TestCase):
     def setUp(self):
         """Set up test fixtures."""
         self.test_data = [
-            {
-                "Package": "test-package",
-                "Version": "1.0",
-                "Gfxarch": "True"
-            }
+            {"Package": "test-package", "Version": "1.0", "Gfxarch": "True"}
         ]
 
     @patch("packaging_utils.SCRIPT_DIR", Path("/test/dir"))
-    @patch("pathlib.Path.open", new_callable=mock_open, read_data='[{"Package": "test-pkg"}]')
-    def test_read_package_json_file_success(self, mock_file, ):
+    @patch(
+        "pathlib.Path.open",
+        new_callable=mock_open,
+        read_data='[{"Package": "test-pkg"}]',
+    )
+    def test_read_package_json_file_success(
+        self,
+        mock_file,
+    ):
         """Test successful reading of package.json file."""
         result = packaging_utils.read_package_json_file()
         self.assertEqual(result, [{"Package": "test-pkg"}])
@@ -60,18 +64,55 @@ class TestIsKeyDefined(unittest.TestCase):
 
     def test_key_true_values(self):
         """Test keys with true-like values."""
-        true_values = ["1", "true", "t", "yes", "y", "on", "enable", "enabled", "found", "TRUE", "True", "YES"]
+        true_values = [
+            "1",
+            "true",
+            "t",
+            "yes",
+            "y",
+            "on",
+            "enable",
+            "enabled",
+            "found",
+            "TRUE",
+            "True",
+            "YES",
+        ]
         for val in true_values:
             pkg_info = {"TestKey": val}
-            self.assertTrue(packaging_utils.is_key_defined(pkg_info, "TestKey"), f"Failed for value: {val}")
+            self.assertTrue(
+                packaging_utils.is_key_defined(pkg_info, "TestKey"),
+                f"Failed for value: {val}",
+            )
 
     def test_key_false_values(self):
         """Test keys with false-like values."""
-        false_values = ["", "0", "false", "f", "no", "n", "off", "disable", "disabled", 
-                       "notfound", "none", "null", "nil", "undefined", "n/a", "FALSE", "False", "NO"]
+        false_values = [
+            "",
+            "0",
+            "false",
+            "f",
+            "no",
+            "n",
+            "off",
+            "disable",
+            "disabled",
+            "notfound",
+            "none",
+            "null",
+            "nil",
+            "undefined",
+            "n/a",
+            "FALSE",
+            "False",
+            "NO",
+        ]
         for val in false_values:
             pkg_info = {"TestKey": val}
-            self.assertFalse(packaging_utils.is_key_defined(pkg_info, "TestKey"), f"Failed for value: {val}")
+            self.assertFalse(
+                packaging_utils.is_key_defined(pkg_info, "TestKey"),
+                f"Failed for value: {val}",
+            )
 
     def test_case_insensitive_key(self):
         """Test that key lookup is case insensitive."""
@@ -193,7 +234,7 @@ class TestGetPackageInfo(unittest.TestCase):
         """Test getting package info when package exists."""
         mock_read.return_value = [
             {"Package": "amdrocm-llvm", "Version": "1.0"},
-            {"Package": "amdrocm-runtime", "Version": "2.0"}
+            {"Package": "amdrocm-runtime", "Version": "2.0"},
         ]
         result = packaging_utils.get_package_info("amdrocm-runtime")
         self.assertEqual(result, {"Package": "amdrocm-runtime", "Version": "2.0"})
@@ -201,9 +242,7 @@ class TestGetPackageInfo(unittest.TestCase):
     @patch("packaging_utils.read_package_json_file")
     def test_get_package_info_not_exists(self, mock_read):
         """Test getting package info when package does not exist."""
-        mock_read.return_value = [
-            {"Package": "amdrocm-llvm", "Version": "1.0"}
-        ]
+        mock_read.return_value = [{"Package": "amdrocm-llvm", "Version": "1.0"}]
         result = packaging_utils.get_package_info("non-existent-package")
         self.assertIsNone(result)
 
@@ -217,7 +256,7 @@ class TestGetPackageList(unittest.TestCase):
         mock_read.return_value = [
             {"Package": "pkg1", "Disablepackaging": "false"},
             {"Package": "pkg2", "Disablepackaging": "true"},
-            {"Package": "pkg3", "Disablepackaging": "no"}
+            {"Package": "pkg3", "Disablepackaging": "no"},
         ]
         result = packaging_utils.get_package_list()
         self.assertEqual(result, ["pkg1", "pkg3"])
@@ -225,10 +264,7 @@ class TestGetPackageList(unittest.TestCase):
     @patch("packaging_utils.read_package_json_file")
     def test_get_package_list_all_enabled(self, mock_read):
         """Test get_package_list when all packages are enabled."""
-        mock_read.return_value = [
-            {"Package": "pkg1"},
-            {"Package": "pkg2"}
-        ]
+        mock_read.return_value = [{"Package": "pkg1"}, {"Package": "pkg2"}]
         result = packaging_utils.get_package_list()
         self.assertEqual(result, ["pkg1", "pkg2"])
 
@@ -299,7 +335,9 @@ class TestUpdatePackageName(unittest.TestCase):
 
     @patch("packaging_utils.get_package_info")
     @patch("builtins.print")
-    def test_update_package_name_versioned_no_rpath_no_gfx(self, mock_print, mock_get_info):
+    def test_update_package_name_versioned_no_rpath_no_gfx(
+        self, mock_print, mock_get_info
+    ):
         """Test package name update with version, no rpath, no gfx."""
         mock_get_info.return_value = {"Package": "test-pkg", "Gfxarch": "False"}
         config = PackageConfig(
@@ -311,7 +349,7 @@ class TestUpdatePackageName(unittest.TestCase):
             install_prefix="/opt/rocm",
             gfx_arch="gfx900",
             enable_rpath=False,
-            versioned_pkg=True
+            versioned_pkg=True,
         )
         result = packaging_utils.update_package_name("test-pkg", config)
         self.assertEqual(result, "test-pkg7.1")
@@ -330,7 +368,7 @@ class TestUpdatePackageName(unittest.TestCase):
             install_prefix="/opt/rocm",
             gfx_arch="gfx900",
             enable_rpath=True,
-            versioned_pkg=True
+            versioned_pkg=True,
         )
         result = packaging_utils.update_package_name("test-pkg", config)
         self.assertEqual(result, "test-pkg-rpath7.1")
@@ -349,7 +387,7 @@ class TestUpdatePackageName(unittest.TestCase):
             install_prefix="/opt/rocm",
             gfx_arch="gfx900-dcgpu",
             enable_rpath=False,
-            versioned_pkg=True
+            versioned_pkg=True,
         )
         result = packaging_utils.update_package_name("test-pkg", config)
         self.assertEqual(result, "test-pkg7.1-gfx900")
@@ -357,7 +395,9 @@ class TestUpdatePackageName(unittest.TestCase):
     @patch("packaging_utils.get_package_info")
     @patch("packaging_utils.debian_replace_devel_name")
     @patch("builtins.print")
-    def test_update_package_name_deb_devel(self, mock_print, mock_debian_replace, mock_get_info):
+    def test_update_package_name_deb_devel(
+        self, mock_print, mock_debian_replace, mock_get_info
+    ):
         """Test package name update for debian devel package."""
         mock_get_info.return_value = {"Package": "test-pkg-devel", "Gfxarch": "False"}
         mock_debian_replace.return_value = "test-pkg-dev"
@@ -370,7 +410,7 @@ class TestUpdatePackageName(unittest.TestCase):
             install_prefix="/opt/rocm",
             gfx_arch="gfx900",
             enable_rpath=False,
-            versioned_pkg=True
+            versioned_pkg=True,
         )
         result = packaging_utils.update_package_name("test-pkg-devel", config)
         self.assertEqual(result, "test-pkg-dev7.1")
@@ -389,7 +429,7 @@ class TestUpdatePackageName(unittest.TestCase):
             install_prefix="/opt/rocm",
             gfx_arch="gfx900",
             enable_rpath=False,
-            versioned_pkg=False
+            versioned_pkg=False,
         )
         result = packaging_utils.update_package_name("test-pkg", config)
         self.assertEqual(result, "test-pkg")
@@ -408,7 +448,7 @@ class TestUpdatePackageName(unittest.TestCase):
             install_prefix="/opt/rocm",
             gfx_arch="gfx900",
             enable_rpath=False,
-            versioned_pkg=True
+            versioned_pkg=True,
         )
         with self.assertRaises(ValueError):
             packaging_utils.update_package_name("test-pkg", config)
@@ -446,7 +486,7 @@ class TestConvertToVersionDependency(unittest.TestCase):
         """Test converting dependencies that are ROCm packages."""
         mock_get_list.return_value = ["amdrocm-llvm", "amdrocm-runtime"]
         mock_update.side_effect = lambda pkg, cfg: f"{pkg}7.1"
-        
+
         config = PackageConfig(
             artifacts_dir=Path("/tmp"),
             dest_dir=Path("/tmp"),
@@ -456,9 +496,9 @@ class TestConvertToVersionDependency(unittest.TestCase):
             install_prefix="/opt/rocm",
             gfx_arch="gfx900",
             enable_rpath=False,
-            versioned_pkg=True
+            versioned_pkg=True,
         )
-        
+
         dep_list = ["amdrocm-llvm", "libc6", "amdrocm-runtime"]
         result = packaging_utils.convert_to_versiondependency(dep_list, config)
         self.assertEqual(result, "amdrocm-llvm7.1, libc6, amdrocm-runtime7.1")
@@ -468,7 +508,7 @@ class TestConvertToVersionDependency(unittest.TestCase):
     def test_convert_no_rocm_packages(self, mock_print, mock_get_list):
         """Test converting dependencies with no ROCm packages."""
         mock_get_list.return_value = ["amdrocm-llvm"]
-        
+
         config = PackageConfig(
             artifacts_dir=Path("/tmp"),
             dest_dir=Path("/tmp"),
@@ -478,9 +518,9 @@ class TestConvertToVersionDependency(unittest.TestCase):
             install_prefix="/opt/rocm",
             gfx_arch="gfx900",
             enable_rpath=False,
-            versioned_pkg=True
+            versioned_pkg=True,
         )
-        
+
         dep_list = ["libc6", "libstdc++"]
         result = packaging_utils.convert_to_versiondependency(dep_list, config)
         self.assertEqual(result, "libc6, libstdc++")
@@ -494,7 +534,7 @@ class TestAppendVersionSuffix(unittest.TestCase):
     def test_append_version_rpm(self, mock_print, mock_get_list):
         """Test appending version suffix for RPM."""
         mock_get_list.return_value = ["amdrocm-llvm", "amdrocm-runtime"]
-        
+
         config = PackageConfig(
             artifacts_dir=Path("/tmp"),
             dest_dir=Path("/tmp"),
@@ -504,19 +544,21 @@ class TestAppendVersionSuffix(unittest.TestCase):
             install_prefix="/opt/rocm",
             gfx_arch="gfx900",
             enable_rpath=False,
-            versioned_pkg=True
+            versioned_pkg=True,
         )
-        
+
         dep_string = "amdrocm-llvm, libc6, amdrocm-runtime"
         result = packaging_utils.append_version_suffix(dep_string, config)
-        self.assertEqual(result, "amdrocm-llvm = 7.1.0-50, libc6, amdrocm-runtime = 7.1.0-50")
+        self.assertEqual(
+            result, "amdrocm-llvm = 7.1.0-50, libc6, amdrocm-runtime = 7.1.0-50"
+        )
 
     @patch("packaging_utils.get_package_list")
     @patch("builtins.print")
     def test_append_version_deb(self, mock_print, mock_get_list):
         """Test appending version suffix for DEB."""
         mock_get_list.return_value = ["amdrocm-llvm"]
-        
+
         config = PackageConfig(
             artifacts_dir=Path("/tmp"),
             dest_dir=Path("/tmp"),
@@ -526,9 +568,9 @@ class TestAppendVersionSuffix(unittest.TestCase):
             install_prefix="/opt/rocm",
             gfx_arch="gfx900",
             enable_rpath=False,
-            versioned_pkg=True
+            versioned_pkg=True,
         )
-        
+
         dep_string = "amdrocm-llvm, libc6"
         result = packaging_utils.append_version_suffix(dep_string, config)
         self.assertEqual(result, "amdrocm-llvm( = 7.1.0-50), libc6")
@@ -538,7 +580,7 @@ class TestAppendVersionSuffix(unittest.TestCase):
     def test_append_version_no_suffix(self, mock_print, mock_get_list):
         """Test appending version with no suffix."""
         mock_get_list.return_value = ["amdrocm-llvm"]
-        
+
         config = PackageConfig(
             artifacts_dir=Path("/tmp"),
             dest_dir=Path("/tmp"),
@@ -548,9 +590,9 @@ class TestAppendVersionSuffix(unittest.TestCase):
             install_prefix="/opt/rocm",
             gfx_arch="gfx900",
             enable_rpath=False,
-            versioned_pkg=True
+            versioned_pkg=True,
         )
-        
+
         dep_string = "amdrocm-llvm"
         result = packaging_utils.append_version_suffix(dep_string, config)
         self.assertEqual(result, "amdrocm-llvm = 7.1.0")
@@ -587,11 +629,11 @@ class TestMovePackagesToDestination(unittest.TestCase):
             install_prefix="/opt/rocm",
             gfx_arch="gfx900",
             enable_rpath=False,
-            versioned_pkg=True
+            versioned_pkg=True,
         )
 
         packaging_utils.move_packages_to_destination("test-pkg", config)
-        
+
         # Check that destination directory exists
         self.assertTrue(self.dest_dir.exists())
         # Check that file was moved to dest_dir root
@@ -617,11 +659,11 @@ class TestMovePackagesToDestination(unittest.TestCase):
             install_prefix="/opt/rocm",
             gfx_arch="gfx900",
             enable_rpath=False,
-            versioned_pkg=True
+            versioned_pkg=True,
         )
 
         packaging_utils.move_packages_to_destination("test-pkg", config)
-        
+
         # Check that destination directory exists
         self.assertTrue(self.dest_dir.exists())
         # Check that file was moved to dest_dir root
@@ -654,13 +696,10 @@ class TestFilterComponentsFromArtifactory(unittest.TestCase):
                 {
                     "Artifact": "base",
                     "Artifact_Subdir": [
-                        {
-                            "Name": "test-component",
-                            "Components": ["lib"]
-                        }
-                    ]
+                        {"Name": "test-component", "Components": ["lib"]}
+                    ],
                 }
-            ]
+            ],
         }
 
         # Create artifact directory and manifest
@@ -672,7 +711,7 @@ class TestFilterComponentsFromArtifactory(unittest.TestCase):
         result = packaging_utils.filter_components_fromartifactory(
             "test-pkg", self.artifacts_dir, "gfx900"
         )
-        
+
         self.assertEqual(len(result), 1)
         self.assertTrue(str(result[0]).endswith("test-component/libtest.so"))
 
@@ -686,14 +725,9 @@ class TestFilterComponentsFromArtifactory(unittest.TestCase):
             "Artifactory": [
                 {
                     "Artifact": "blas",
-                    "Artifact_Subdir": [
-                        {
-                            "Name": "rocBLAS",
-                            "Components": ["lib"]
-                        }
-                    ]
+                    "Artifact_Subdir": [{"Name": "rocBLAS", "Components": ["lib"]}],
                 }
-            ]
+            ],
         }
 
         # Create artifact directory and manifest
@@ -705,13 +739,15 @@ class TestFilterComponentsFromArtifactory(unittest.TestCase):
         result = packaging_utils.filter_components_fromartifactory(
             "test-pkg", self.artifacts_dir, "gfx900"
         )
-        
+
         self.assertEqual(len(result), 1)
         self.assertTrue(str(result[0]).endswith("rocBLAS/librocblas.so"))
 
     @patch("packaging_utils.get_package_info")
     @patch("builtins.print")
-    def test_filter_components_artifact_gfxarch_override(self, mock_print, mock_get_info):
+    def test_filter_components_artifact_gfxarch_override(
+        self, mock_print, mock_get_info
+    ):
         """Test filtering with Artifact_Gfxarch override."""
         mock_get_info.return_value = {
             "Package": "test-pkg",
@@ -720,14 +756,9 @@ class TestFilterComponentsFromArtifactory(unittest.TestCase):
                 {
                     "Artifact": "hipdnn",
                     "Artifact_Gfxarch": "False",
-                    "Artifact_Subdir": [
-                        {
-                            "Name": "hipDNN",
-                            "Components": ["lib"]
-                        }
-                    ]
+                    "Artifact_Subdir": [{"Name": "hipDNN", "Components": ["lib"]}],
                 }
-            ]
+            ],
         }
 
         # Create artifact directory with generic suffix
@@ -739,7 +770,7 @@ class TestFilterComponentsFromArtifactory(unittest.TestCase):
         result = packaging_utils.filter_components_fromartifactory(
             "test-pkg", self.artifacts_dir, "gfx900"
         )
-        
+
         self.assertEqual(len(result), 1)
         self.assertTrue(str(result[0]).endswith("hipDNN/libhipdnn.so"))
 
@@ -747,15 +778,12 @@ class TestFilterComponentsFromArtifactory(unittest.TestCase):
     @patch("builtins.print")
     def test_filter_components_no_artifactory(self, mock_print, mock_get_info):
         """Test filtering when package has no Artifactory key (meta package)."""
-        mock_get_info.return_value = {
-            "Package": "meta-pkg",
-            "Metapackage": "True"
-        }
+        mock_get_info.return_value = {"Package": "meta-pkg", "Metapackage": "True"}
 
         result = packaging_utils.filter_components_fromartifactory(
             "meta-pkg", self.artifacts_dir, "gfx900"
         )
-        
+
         self.assertEqual(result, [])
 
     @patch("packaging_utils.get_package_info")
@@ -769,13 +797,10 @@ class TestFilterComponentsFromArtifactory(unittest.TestCase):
                 {
                     "Artifact": "base",
                     "Artifact_Subdir": [
-                        {
-                            "Name": "test-component",
-                            "Components": ["lib"]
-                        }
-                    ]
+                        {"Name": "test-component", "Components": ["lib"]}
+                    ],
                 }
-            ]
+            ],
         }
 
         # Create artifact directory and manifest with non-matching content
@@ -787,7 +812,7 @@ class TestFilterComponentsFromArtifactory(unittest.TestCase):
         result = packaging_utils.filter_components_fromartifactory(
             "test-pkg", self.artifacts_dir, "gfx900"
         )
-        
+
         self.assertEqual(result, [])
 
 
@@ -805,9 +830,9 @@ class TestPackageConfig(unittest.TestCase):
             install_prefix="/opt/rocm",
             gfx_arch="gfx900",
             enable_rpath=True,
-            versioned_pkg=True
+            versioned_pkg=True,
         )
-        
+
         self.assertEqual(config.artifacts_dir, Path("/tmp/artifacts"))
         self.assertEqual(config.dest_dir, Path("/tmp/dest"))
         self.assertEqual(config.pkg_type, "rpm")
@@ -827,9 +852,9 @@ class TestPackageConfig(unittest.TestCase):
             rocm_version="7.1.0",
             version_suffix="50",
             install_prefix="/opt/rocm",
-            gfx_arch="gfx900"
+            gfx_arch="gfx900",
         )
-        
+
         self.assertFalse(config.enable_rpath)
         self.assertTrue(config.versioned_pkg)
 
