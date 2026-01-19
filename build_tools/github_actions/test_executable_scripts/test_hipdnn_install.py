@@ -28,6 +28,11 @@ logging.basicConfig(level=logging.INFO)
 
 def run_tests(build_dir: Path):
     """Configure, build, and test all hipDNN packages."""
+    # Resolve to absolute path - CMake needs absolute paths for CMAKE_PREFIX_PATH
+    # In CI, OUTPUT_ARTIFACTS_DIR is ./build with flat structure (lib/cmake/...)
+    # Locally, set OUTPUT_ARTIFACTS_DIR=build/dist/rocm for testing
+    artifacts_path = Path(OUTPUT_ARTIFACTS_DIR).resolve()
+
     configure_cmd = [
         "cmake",
         "-B",
@@ -35,7 +40,7 @@ def run_tests(build_dir: Path):
         "-S",
         str(TEST_PROJECT_DIR),
         "-GNinja",
-        f"-DCMAKE_PREFIX_PATH={OUTPUT_ARTIFACTS_DIR}",
+        f"-DCMAKE_PREFIX_PATH={artifacts_path}",
         "--log-level=WARNING",
     ]
     logging.info(f"++ Configure: {shlex.join(configure_cmd)}")
