@@ -30,7 +30,7 @@ on:
         description: ROCm version to install (e.g. "7.10.0a20251124")
         type: string
       tar_url:
-        description: URL to TheRock tarball to build against
+        description: "URL to TheRock tarball to build against (e.g. https://rocm.nightlies.amd.com/tarball/therock-dist-linux-gfx94X-dcgpu-7.10.0a20251124.tar.gz)"
         type: string
       ref:
         description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
@@ -76,7 +76,7 @@ on:
         description: ROCm version to install (e.g. "7.10.0a20251124")
         type: string
       tar_url:
-        description: URL to TheRock tarball to build against
+        description: "URL to TheRock tarball to build against (e.g. https://rocm.nightlies.amd.com/tarball/therock-dist-linux-gfx94X-dcgpu-7.10.0a20251124.tar.gz)"
         type: string
       ref:
         description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
