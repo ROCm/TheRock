@@ -349,6 +349,13 @@ artifact_deps = []
 feature_group = "CORE"
 disable_platforms = ["windows"]
 
+[artifacts.sysdeps-hwloc]
+artifact_group = "third-party-sysdeps"
+type = "target-neutral"
+artifact_deps = ["sysdeps", "sysdeps-libpciaccess"]  # hwloc depends on numactl (in core sysdeps) and libpciaccess
+feature_group = "CORE"
+disable_platforms = ["windows"]
+
 [artifacts.host-blas]
 artifact_group = "third-party-libs"
 type = "target-neutral"
@@ -443,7 +450,7 @@ feature_group = "CORE"  # Part of core, enabled by default
 [artifacts.rocrtst]
 artifact_group = "rocrtst"
 type = "target-neutral"
-artifact_deps = ["core-runtime", "core-ocl"]
+artifact_deps = ["core-runtime", "core-ocl", "sysdeps-hwloc"]
 feature_name = "CORE_RUNTIME_TESTS"
 feature_group = "CORE"
 disable_platforms = ["windows"]
