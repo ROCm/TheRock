@@ -44,10 +44,12 @@ if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_OCL_RUNTIME)
       BACKGROUND_BUILD
       CMAKE_ARGS
         "-DCL_INCLUDE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/opencl-headers"
-        "-DCL_LIB_DIR=${CMAKE_BINARY_DIR}/core/ocl-clr/dist/lib"
+        "-DCL_LIB_DIR=${CMAKE_BINARY_DIR}/core/opencl/icd/dist/lib"
         "-DSPIRV_INCLUDE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/spirv-headers"
         "-DSPIRV_TOOLS_DIR=${CMAKE_CURRENT_BINARY_DIR}/spirv-tools/dist/bin"
         "-DOPENCL_LIBRARIES=OpenCL"
+        "-DCMAKE_C_FLAGS=-DCL_TARGET_OPENCL_VERSION=220"
+        "-DCMAKE_CXX_FLAGS=-DCL_TARGET_OPENCL_VERSION=220"
         "-DCMAKE_BUILD_TYPE=Release"
       BUILD_DEPS
         rocm-cmake
