@@ -90,11 +90,9 @@ def core_artifact_filter(an: ArtifactName) -> bool:
         "core-ocl",
         "core-hipinfo",
         "core-runtime",
-        "hipdnn",
         "hipify",
         "host-blas",
         "host-suite-sparse",
-        "miopen-plugin",
         "rocprofiler-sdk",
         "sysdeps",
     ] and an.component in [
@@ -115,7 +113,9 @@ def libraries_artifact_filter(target_family: str, an: ArtifactName) -> bool:
         in [
             "blas",
             "fft",
+            "hipdnn",
             "miopen",
+            "miopen-plugin",
             "rand",
             "rccl",
         ]
@@ -123,7 +123,7 @@ def libraries_artifact_filter(target_family: str, an: ArtifactName) -> bool:
         in [
             "lib",
         ]
-        and an.target_family == target_family
+        and (an.target_family == target_family or an.target_family == "generic")
     )
     return libraries
 
