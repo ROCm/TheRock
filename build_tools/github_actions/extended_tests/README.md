@@ -135,7 +135,7 @@ ci_nightly.yml
       ├─ test_benchmarks ───────────────────┤
       │   └─ Benchmark tests                │
       │                                      │
-      └─ test_extended_functional ──────────┘
+      └─ test_extended_functional_tests ──────┘
           └─ Extended functional tests
 ```
 
@@ -144,14 +144,14 @@ ci_nightly.yml
 - `.github/workflows/ci_nightly.yml` - Nightly CI orchestration
 - `.github/workflows/ci_linux.yml` / `ci_windows.yml` - Platform-specific CI logic
 - `.github/workflows/test_benchmarks.yml` - Benchmark test execution (uses `benchmark_runs_on`)
-- `.github/workflows/test_extended_functional.yml` - Extended functional test execution (uses `test_runs_on`)
+- `.github/workflows/test_extended_functional_tests.yml` - Extended functional test execution (uses `test_runs_on`)
 - `.github/workflows/test_artifacts.yml` - Component test execution (uses `test_runs_on`)
 
 **Key Differences:**
 
 - **Component Tests**: Run on all PRs (smoke) and nightly (full), use regular runners
 - **Benchmark Tests**: Run only on nightly, use dedicated performance runners (`benchmark_runs_on`)
-- **Extended Functional Tests**: Run only on nightly, use regular runners (`test_runs_on`), controlled by `run_extended_functional` flag
+- **Extended Functional Tests**: Run only on nightly, use regular runners (`test_runs_on`), controlled by `run_extended_functional_tests` flag
 
 ## Architecture
 

@@ -72,7 +72,7 @@ jobs:
         env:
           ARTIFACT_GROUP: ${{ inputs.artifact_group }}
           AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
-          IS_EXTENDED_FUNCTIONAL_WORKFLOW: "true"
+          IS_EXTENDED_FUNCTIONAL_TESTS: "true"
         run: python ./build_tools/github_actions/fetch_test_configurations.py
 
   run_tests:
