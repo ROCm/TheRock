@@ -21,6 +21,7 @@ The script supports the following command-line options:
 | `--rand`                | Flag   | Include random number generator artifacts                                                |
 | `--rccl`                | Flag   | Include RCCL artifacts                                                                   |
 | `--rocprofiler-compute` | Flag   | Include rocprofiler-compute artifacts                                                    |
+| `--rocprofiler-sdk`     | Flag   | Include rocprofiler-sdk artifacts                                                        |
 | `--rocprofiler-systems` | Flag   | Include rocprofiler-systems artifacts                                                    |
 | `--rocwmma`             | Flag   | Include rocWMMA artifacts                                                                |
 | `--libhipcxx`           | Flag   | Include libhipcxx artifacts                                                              |
