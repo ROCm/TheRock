@@ -117,7 +117,7 @@ disable_platforms = ["windows"]
 
 [source_sets.opencl-cts]
 description = "OpenCL Conformance Test Suite and dependencies"
-submodules = ["opencl/opencl-cts", "opencl/opencl-headers", "opencl/spirv-headers", "opencl/spirv-tools"]
+submodules = ["opencl/opencl-cts", "opencl/opencl-headers", "opencl/opencl-icd-loader", "opencl/spirv-headers", "opencl/spirv-tools"]
 
 [source_sets.iree-libs]
 description = "IREE integration submodules"

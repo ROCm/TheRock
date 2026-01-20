@@ -80,3 +80,6 @@
 [submodule "opencl/spirv-tools"]
 	path = opencl/spirv-tools
 	url = https://github.com/KhronosGroup/SPIRV-Tools
+[submodule "opencl/opencl-icd-loader"]
+	path = opencl/opencl-icd-loader
+	url = https://github.com/KhronosGroup/OpenCL-ICD-Loader.git

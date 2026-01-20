@@ -5,6 +5,32 @@ if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_OCL_RUNTIME)
   if(THEROCK_ENABLE_OPENCL_CTS)
 
     ##############################################################################
+    # opencl-icd-loader
+    # OpenCL ICD Loader with OpenCL 3.0 support for CTS
+    ##############################################################################
+
+    therock_cmake_subproject_declare(opencl-icd-loader
+      USE_DIST_AMDGPU_TARGETS
+      EXTERNAL_SOURCE_DIR
+        "${CMAKE_CURRENT_SOURCE_DIR}/opencl-icd-loader"
+        "${CMAKE_CURRENT_SOURCE_DIR}/opencl-headers"
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/opencl-icd-loader"
+      BACKGROUND_BUILD
+      CMAKE_ARGS
+        "-DOPENCL_ICD_LOADER_HEADERS_DIR=${CMAKE_CURRENT_SOURCE_DIR}/opencl-headers"
+        "-DOPENCL_ICD_LOADER_BUILD_SHARED_LIBS=ON"
+        "-DCMAKE_BUILD_TYPE=Release"
+      BUILD_DEPS
+        rocm-cmake
+      INTERFACE_LINK_DIRS
+        "lib"
+      INTERFACE_INSTALL_RPATH_DIRS
+        "lib"
+    )
+    therock_cmake_subproject_glob_c_sources(opencl-icd-loader SUBDIRS .)
+    therock_cmake_subproject_activate(opencl-icd-loader)
+
+    ##############################################################################
     # spirv-tools
     # SPIR-V Tools for OpenCL CTS (spirv-as, spirv-val)
     ##############################################################################
@@ -44,7 +70,7 @@ if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_OCL_RUNTIME)
       BACKGROUND_BUILD
       CMAKE_ARGS
         "-DCL_INCLUDE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/opencl-headers"
-        "-DCL_LIB_DIR=${CMAKE_BINARY_DIR}/core/opencl/icd/dist/lib"
+        "-DCL_LIB_DIR=${CMAKE_CURRENT_BINARY_DIR}/opencl-icd-loader/dist/lib"
         "-DSPIRV_INCLUDE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/spirv-headers"
         "-DSPIRV_TOOLS_DIR=${CMAKE_CURRENT_BINARY_DIR}/spirv-tools/dist/bin"
         "-DOPENCL_LIBRARIES=OpenCL"
@@ -52,6 +78,7 @@ if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_OCL_RUNTIME)
       BUILD_DEPS
         rocm-cmake
         spirv-tools
+        opencl-icd-loader
       RUNTIME_DEPS
         ocl-clr
         ocl-icd
