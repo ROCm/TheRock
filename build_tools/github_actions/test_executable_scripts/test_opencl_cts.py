@@ -19,8 +19,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 ROCM_PATH = THEROCK_BIN_DIR.parent
 
-# CTS test executables are in bin/ directory
-CTS_BIN_DIR = THEROCK_BIN_DIR
+CTS_BIN_DIR = THEROCK_BIN_DIR / "Release"
 OPENCL_ICD_FILENAMES = ROCM_PATH / "lib" / "opencl" / "libamdocl64.so"
 
 logging.info(f"THEROCK_BIN_DIR: {THEROCK_BIN_DIR}")
@@ -72,7 +71,6 @@ def find_test_executables():
         )
         sys.exit(1)
 
-    # Find all test_* executables recursively
     test_executables = []
     for test_exe in CTS_BIN_DIR.rglob("test_*"):
         if test_exe.is_file() and os.access(test_exe, os.X_OK):
@@ -82,7 +80,6 @@ def find_test_executables():
         logging.error(f"No test executables found in {CTS_BIN_DIR}")
         sys.exit(1)
 
-    # Sort for consistent execution order
     test_executables.sort()
     return test_executables
 
@@ -101,7 +98,6 @@ def run_test(test_exe, env):
             cwd=str(test_exe.parent),
             capture_output=True,
             text=True,
-            timeout=300,  # 5 minute timeout per test
             env=env,
         )
 
@@ -128,15 +124,20 @@ def run_tests():
     """Run all OpenCL CTS test executables"""
     logging.info("++ Running OpenCL-CTS tests")
 
-    # Set up environment
     env = os.environ.copy()
     env["OCL_ICD_FILENAMES"] = str(OPENCL_ICD_FILENAMES)
 
-    # Find all test executables
+    lib_dir = THEROCK_BIN_DIR / "lib"
+    if lib_dir.exists():
+        ld_library_path = str(lib_dir)
+        if "LD_LIBRARY_PATH" in env:
+            ld_library_path = f"{ld_library_path}:{env['LD_LIBRARY_PATH']}"
+        env["LD_LIBRARY_PATH"] = ld_library_path
+        logging.info(f"Set LD_LIBRARY_PATH to include: {lib_dir}")
+
     test_executables = find_test_executables()
     logging.info(f"Found {len(test_executables)} test executables")
 
-    # Run each test
     passed = 0
     failed = 0
     for test_exe in test_executables:
@@ -145,10 +146,9 @@ def run_tests():
         else:
             failed += 1
 
-    # Summary
     total = passed + failed
     logging.info("=" * 70)
-    logging.info(f"OpenCL-CTS Test Summary:")
+    logging.info("OpenCL-CTS Test Summary:")
     logging.info(f"  Total:  {total}")
     logging.info(f"  Passed: {passed}")
     logging.info(f"  Failed: {failed}")

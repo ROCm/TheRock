@@ -2,4 +2,5 @@
 [components.test."opencl/opencl-cts/stage"]
 include = [
   "bin/**",
+  "lib/**",
 ]
