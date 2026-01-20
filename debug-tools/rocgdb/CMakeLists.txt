@@ -403,6 +403,15 @@ set(ROCGDB_SCRIPT_CONTENT [=[#!/usr/bin/env bash
 python_version=$(python3 --version 2>&1 | sed -n 's/^Python \([0-9]\+\.[0-9]\+\).*$/\1/p' )
 GDB_BIN_DIR="$(dirname "$(realpath -e "${BASH_SOURCE[0]}")")"
 
+# Set the ncurses TERMINFO lookup directory if it isn't set already.
+# This is used to locate our own terminfo database in a relative path, since
+# ncurses doesn't support relative path lookups as a configure option.
+#
+# ROCgdb TUI mode requires this information.
+if [ -z "$TERMINFO" ]; then
+    export TERMINFO="$GDB_BIN_DIR/../lib/rocm_sysdeps/share/terminfo"
+fi
+
 # Create a rocgdb command with the active python version.
 gdb_command="rocgdb-py$python_version"
 if ! [ -f "$GDB_BIN_DIR/$gdb_command" ]; then

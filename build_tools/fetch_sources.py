@@ -20,6 +20,7 @@ import shutil
 import subprocess
 import sys
 from typing import List
+import os
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = THIS_SCRIPT_DIR.parent
@@ -39,11 +40,13 @@ def log(*args, **kwargs):
     sys.stdout.flush()
 
 
-def exec(args: list[str | Path], cwd: Path):
+def exec(args: list[str | Path], cwd: Path, env: dict[str, str] | None = None):
     args = [str(arg) for arg in args]
     log(f"++ Exec [{cwd}]$ {shlex.join(args)}")
     sys.stdout.flush()
-    subprocess.check_call(args, cwd=str(cwd), stdin=subprocess.DEVNULL)
+
+    full_env = {**os.environ, **(env or {})}
+    subprocess.check_call(args, cwd=str(cwd), env=full_env, stdin=subprocess.DEVNULL)
 
 
 def get_projects_from_topology(stage: str) -> List[str]:
@@ -107,6 +110,8 @@ def get_enabled_projects(args) -> List[str]:
         projects.extend(args.rocm_media_projects)
     if args.include_iree_libs:
         projects.extend(args.iree_libs_projects)
+    if args.include_math_libraries:
+        projects.extend(args.math_library_projects)
     return projects
 
 
@@ -266,6 +271,9 @@ def apply_patches(args, projects):
             ]
             + patch_files,
             cwd=project_dir,
+            env={
+                "GIT_COMMITTER_DATE": "Thu, 1 Jan 2099 00:00:00 +0000",
+            },
         )
         # Since it is in a patched state, make it invisible to changes.
         exec(
@@ -467,6 +475,12 @@ def main(argv):
         help="Include IREE and related libraries",
     )
     parser.add_argument(
+        "--include-math-libraries",
+        default=True,
+        action=argparse.BooleanOptionalAction,
+        help="Include math libraries that are part of ROCM",
+    )
+    parser.add_argument(
         "--system-projects",
         nargs="+",
         type=str,
@@ -492,9 +506,7 @@ def main(argv):
         "--ml-framework-projects",
         nargs="+",
         type=str,
-        default=[
-            "composable_kernel",
-        ],
+        default=[],
     )
     parser.add_argument(
         "--rocm-media-projects",
@@ -538,11 +550,29 @@ def main(argv):
         "--debug-tools",
         nargs="+",
         type=str,
-        default=[
-            "amd-dbgapi",
-            "rocr-debug-agent",
-            "rocgdb",
-        ],
+        default=(
+            []
+            if is_windows()
+            else [
+                # Linux only projects.
+                "amd-dbgapi",
+                "rocr-debug-agent",
+                "rocgdb",
+            ]
+        ),
+    )
+    parser.add_argument(
+        "--math-library-projects",
+        nargs="+",
+        type=str,
+        default=(
+            []
+            if is_windows()
+            else [
+                # Linux only projects.
+                "libhipcxx",
+            ]
+        ),
     )
     args = parser.parse_args(argv)
 

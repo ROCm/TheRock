@@ -208,7 +208,6 @@ These artifacts are built if any project features requiring them are enabled:
 ### Core Artifacts
 
 - `base`: Base ROCM tools and structural components. ROCM sub-projects that do not depend on anything outside of this set are included here so that everything can depend on them.
-- `core-amdsmi`: AMD System Management Interface (amdsmi) library and tools for GPU and driver management, packaged as a standalone core artifact due to distinct product and usage semantics.
 - `core-runtime`: Low level runtime components used for interfacing with kernel drivers.
 - `core-hip`: HIP runtime, compiler interface, and build tools.
 

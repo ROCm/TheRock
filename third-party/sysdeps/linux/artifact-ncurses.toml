@@ -6,6 +6,9 @@ unmatched_exclude = [
 
 # NCurses
 [components.dev."third-party/sysdeps/linux/ncurses/build/stage"]
+include = [
+  "lib/rocm_sysdeps/share/terminfo/**"
+]
 [components.doc."third-party/sysdeps/linux/ncurses/build/stage"]
 [components.lib."third-party/sysdeps/linux/ncurses/build/stage"]
 include = [

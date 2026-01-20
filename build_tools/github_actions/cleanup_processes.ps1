@@ -9,7 +9,10 @@
 #
 # This powershell script is used on non-ephemeral Windows runners to stop
 # any processes that still exist after a Github actions job has completed
-# typically due to timing out. It's written in powershell per the specifications
+# typically due to timing out. Additionally, it will clean up the system
+# environment to restore the system to a clean state for the next job.
+#
+# It's written in powershell per the specifications
 # for github pre or post job scripts in this article:
 # https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/run-scripts
 #
@@ -54,15 +57,46 @@ function Wait-Process-Filter ([String]$RegexStr, [int] $Tries, [int] $Seconds = 
 
 
 #### Script Start ####
-
-# Note use of single '\' for Windows path separator, but it's escaped as '\\' for regex
-$regex_build_exe = "\build\.*[.]exe"
-
+echo "[*] ==== Starting cleanup_processes.ps1 ===="
 # https://superuser.com/questions/749243/detect-if-powershell-is-running-as-administrator/756696#756696
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::
             GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
 $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
 echo "[*] Checking if elevated: $isAdmin | current user: $currentUser"
+
+#### Cleanup system environment ####
+# Only perform system environment cleanup if running as NT AUTHORITY\* (any windows service account)
+# as a safeguard from accidentally running this cleanup on a normal user account
+if ($currentUser -match "NT AUTHORITY") {
+    echo "[*] Running as a Windows Service (NT AUTHORITY\*) - Cleaning up system environment..."
+
+    # Remove ~/.gitconfig file in case it was corrupted during a previous job
+    $gitConfigPath = Join-Path $env:USERPROFILE ".gitconfig"
+
+    echo "[*] > Checking for `"~/.gitconfig`" file at: $gitConfigPath"
+    if (Test-Path $gitConfigPath) {
+        echo "[*] >> .gitconfig file found, removing after logging contents:"
+
+        # Returns non-zero exit code if invalid and outputs "fatal: bad config line 1..." to stderr
+        git config --global --list
+        try {
+            Remove-Item -Path $gitConfigPath -Force -ErrorAction Stop
+            echo "[+] >> Successfully removed .gitconfig"
+        } catch {
+            echo "[!] >> Warning: Failed to remove .gitconfig: $_"
+        }
+    } else {
+        echo "[*] >> .gitconfig file not found at: $gitConfigPath"
+    }
+} else {
+    echo "[*] Not Running as a Windows Service (NT AUTHORITY\*) - skipping system environment cleanup"
+}
+
+#### Cleanup Processes ####
+echo "[*] Cleaning up processes..."
+
+# Note use of single '\' for Windows path separator, but it's escaped as '\\' for regex
+$regex_build_exe = "\build\.*[.]exe"
 
 # Some test runners have been setup with differing working directories
 # etc. "C:\runner" vs "B:\actions-runner" so use the workspace env var

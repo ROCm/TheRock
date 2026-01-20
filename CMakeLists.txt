@@ -117,6 +117,7 @@ endif()
 
 option(THEROCK_BUNDLE_SYSDEPS "Builds bundled system deps for portable builds into lib/rocm_sysdeps" ON)
 option(THEROCK_ENABLE_MPI "Enables building components with Message Passing Interface (MPI) support" OFF)
+option(THEROCK_ENABLE_LLVM_TESTS "Enables building LLVM LIT tests" OFF)
 
 set(THEROCK_SANITIZER "" CACHE STRING "Enable project wide sanitizer build (e.g. 'ASAN')")
 
@@ -298,7 +299,6 @@ therock_add_feature(SOLVER
   DESCRIPTION "Enables solver libraries (hipsolver, rocsolver) within BLAS"
   REQUIRES BLAS PRIM SPARSE ${_solver_platform_requirements}
 )
-
 
 # Finalize all feature flags.
 therock_finalize_features()

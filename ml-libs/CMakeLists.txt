@@ -26,7 +26,7 @@ if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
   # TODO: Move this to math-libs
 
   therock_cmake_subproject_declare(composable_kernel
-    EXTERNAL_SOURCE_DIR "${THEROCK_COMPOSABLE_KERNEL_SOURCE_DIR}"
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/composablekernel"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/composable_kernel"
     BACKGROUND_BUILD
     CMAKE_ARGS
