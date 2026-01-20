@@ -130,6 +130,7 @@ if __name__ == "__main__":
 ```
 
 **Required Methods:**
+
 - `run_tests()` → Execute tests and save results
 - `parse_results()` → Returns `(test_results_list, display_table, num_suites)`
   - Must use `self.create_test_result(test_name, subtest_name, status, **kwargs)`
