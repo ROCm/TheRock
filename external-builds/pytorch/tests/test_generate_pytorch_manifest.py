@@ -1,9 +1,10 @@
 """
-Unit tests for external-builds/pytorch/generate_pytorch_manifest.py.
+Unit tests for external-builds/pytorch/generate_pytorch_manifest.py
 """
 
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -16,48 +17,38 @@ sys.path.insert(0, os.fspath(PYTORCH_DIR))
 import generate_pytorch_manifest as m  # noqa: E402
 
 
-class GeneratePyTorchManifestTest(unittest.TestCase):
+class GeneratePyTorchSourcesManifestTest(unittest.TestCase):
     def setUp(self) -> None:
-        # Save environment state (only keys that exist)
         self._gha_keys = [
-            "GITHUB_ACTIONS",
-            "GITHUB_RUN_ID",
-            "GITHUB_JOB",
             "GITHUB_SERVER_URL",
             "GITHUB_REPOSITORY",
             "GITHUB_SHA",
             "GITHUB_REF",
         ]
+
         self._saved_env: dict[str, str] = {}
         for key in self._gha_keys:
             if key in os.environ:
                 self._saved_env[key] = os.environ[key]
 
-        # Clean environment for tests
         for key in self._gha_keys:
             if key in os.environ:
                 del os.environ[key]
 
-        # Set test environment
-        os.environ["GITHUB_ACTIONS"] = "true"
-        os.environ["GITHUB_RUN_ID"] = "123456"
-        os.environ["GITHUB_JOB"] = "build_pytorch_wheels"
         os.environ["GITHUB_SERVER_URL"] = "https://github.com"
         os.environ["GITHUB_REPOSITORY"] = "ROCm/TheRock"
-        os.environ["GITHUB_SHA"] = "aabbccdd"
-        os.environ["GITHUB_REF"] = "refs/heads/main"
+        os.environ["GITHUB_SHA"] = "b3eda956a19d0151cbb4699739eb71f62596c8bb"
+        self.expected_ref = "refs/heads/main"
+        os.environ["GITHUB_REF"] = self.expected_ref
 
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
         self.tmp_path = Path(self._tmp.name)
 
     def tearDown(self) -> None:
-        # Clean environment after tests
         for key in self._gha_keys:
             if key in os.environ:
                 del os.environ[key]
-
-        # Restore saved environment
         for key, value in self._saved_env.items():
             os.environ[key] = value
 
@@ -69,132 +60,136 @@ class GeneratePyTorchManifestTest(unittest.TestCase):
         finally:
             sys.argv = original_argv
 
-    def test_parse_wheel_name_no_build_tag(self) -> None:
-        meta = m.parse_wheel_name("torch-2.7.0-cp312-cp312-manylinux_2_28_x86_64.whl")
-        self.assertEqual(meta.distribution, "torch")
-        self.assertEqual(meta.version, "2.7.0")
-        self.assertIsNone(meta.build_tag)
-        self.assertEqual(meta.python_tag, "cp312")
-        self.assertEqual(meta.abi_tag, "cp312")
-        self.assertEqual(meta.platform_tag, "manylinux_2_28_x86_64")
-
-    def test_parse_wheel_name_with_build_tag(self) -> None:
-        meta = m.parse_wheel_name(
-            "torch-2.7.0+rocm7.10.0a20251120-1-cp312-cp312-win_amd64.whl"
+    def _init_git_repo(self, repo_dir: Path, *, remote_url: str) -> str:
+        repo_dir.mkdir(parents=True, exist_ok=True)
+        subprocess.check_call(["git", "init", "-q"], cwd=str(repo_dir))
+        subprocess.check_call(
+            ["git", "config", "user.email", "test@example.com"], cwd=str(repo_dir)
         )
-        self.assertEqual(meta.distribution, "torch")
-        self.assertEqual(meta.version, "2.7.0+rocm7.10.0a20251120")
-        self.assertEqual(meta.build_tag, "1")
-        self.assertEqual(meta.python_tag, "cp312")
-        self.assertEqual(meta.abi_tag, "cp312")
-        self.assertEqual(meta.platform_tag, "win_amd64")
-
-    def test_parse_wheel_name_ignores_non_wheel(self) -> None:
-        meta = m.parse_wheel_name("torch-2.7.0.tar.gz")
-        self.assertIsNone(meta.distribution)
-        self.assertIsNone(meta.version)
-        self.assertIsNone(meta.build_tag)
-        self.assertIsNone(meta.python_tag)
-        self.assertIsNone(meta.abi_tag)
-        self.assertIsNone(meta.platform_tag)
-
-    def test_parse_wheel_name_too_few_fields(self) -> None:
-        meta = m.parse_wheel_name("torch-2.7.0.whl")
-        self.assertIsNone(meta.distribution)
-        self.assertIsNone(meta.version)
-        self.assertIsNone(meta.build_tag)
-        self.assertIsNone(meta.python_tag)
-        self.assertIsNone(meta.abi_tag)
-        self.assertIsNone(meta.platform_tag)
-
-    def test_manifest_generation_end_to_end(self) -> None:
-        out_dir = self.tmp_path / "dist"
-        out_dir.mkdir(parents=True)
-
-        (out_dir / "torch-2.7.0-cp312-cp312-manylinux_2_28_x86_64.whl").write_bytes(
-            b"x"
+        subprocess.check_call(["git", "config", "user.name", "Test"], cwd=str(repo_dir))
+        subprocess.check_call(
+            ["git", "remote", "add", "origin", remote_url], cwd=str(repo_dir)
         )
 
-        manifest_dir = out_dir / "manifests"
+        (repo_dir / "README.txt").write_text("test\n", encoding="utf-8")
+        subprocess.check_call(["git", "add", "-A"], cwd=str(repo_dir))
+        subprocess.check_call(["git", "commit", "-q", "-m", "init"], cwd=str(repo_dir))
 
-        argv = [
-            "--output-dir",
-            str(out_dir),
-            "--manifest-dir",
-            str(manifest_dir),
-            "--artifact-group",
-            "pytorch-wheels",
-            "--amdgpu-family",
-            "gfx110X-all",
-            "--rocm-sdk-version",
-            "7.10.0a20251120",
-            "--pytorch-rocm-arch",
-            "gfx94X",
-            "--python-version",
-            "3.12",
-            "--pytorch-git-ref",
-            "nightly",
-        ]
+        return subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=str(repo_dir), text=True
+        ).strip()
 
-        self._run_main_with_args(argv)
+    def test_sources_only_manifest(self) -> None:
+        manifest_dir = self.tmp_path / "manifests"
+        manifest_dir.mkdir(parents=True, exist_ok=True)
 
-        manifests = list(manifest_dir.glob("*.json"))
-        self.assertEqual(
-            len(manifests), 1, f"Expected exactly one manifest, found: {manifests}"
+        pytorch_repo = self.tmp_path / "src_pytorch"
+        audio_repo = self.tmp_path / "src_audio"
+        vision_repo = self.tmp_path / "src_vision"
+        triton_repo = self.tmp_path / "src_triton"
+
+        pytorch_head = self._init_git_repo(
+            pytorch_repo, remote_url="https://github.com/ROCm/pytorch.git"
         )
-
-        manifest_path = manifest_dir / "therock-manifest_torch_py3.12_nightly.json"
-        self.assertTrue(
-            manifest_path.exists(), f"Expected manifest not found: {manifest_path}"
+        audio_head = self._init_git_repo(
+            audio_repo, remote_url="https://github.com/pytorch/audio"
         )
-
-        data = json.loads(manifest_path.read_text(encoding="utf-8"))
-        self.assertEqual(data["project"], "TheRock")
-        self.assertEqual(data["component"], "pytorch")
-        self.assertEqual(data["artifact_group"], "pytorch-wheels")
-
-        self.assertEqual(data["run_id"], "123456")
-        self.assertEqual(data["job_id"], "build_pytorch_wheels")
-        self.assertEqual(data["therock"]["repo"], "https://github.com/ROCm/TheRock")
-        self.assertEqual(data["therock"]["commit"], "aabbccdd")
-        self.assertEqual(data["therock"]["ref"], "refs/heads/main")
-
-        self.assertEqual(len(data["artifacts"]), 1)
-        labels = data["artifacts"][0]["labels"]
-        self.assertEqual(labels["distribution"], "torch")
-        self.assertEqual(labels["version"], "2.7.0")
-
-    def test_manifest_filename_release_28(self) -> None:
-        out_dir = self.tmp_path / "dist_release"
-        out_dir.mkdir(parents=True)
-
-        (out_dir / "torch-2.8.0-cp312-cp312-manylinux_2_28_x86_64.whl").write_bytes(
-            b"x"
+        vision_head = self._init_git_repo(
+            vision_repo, remote_url="https://github.com/pytorch/vision"
         )
-
-        manifest_dir = out_dir / "manifests"
+        triton_head = self._init_git_repo(
+            triton_repo, remote_url="https://github.com/ROCm/triton.git"
+        )
 
         self._run_main_with_args(
             [
-                "--output-dir",
-                str(out_dir),
                 "--manifest-dir",
                 str(manifest_dir),
-                "--artifact-group",
-                "pytorch-wheels",
-                "--amdgpu-family",
-                "gfx110X-all",
-                "--rocm-sdk-version",
-                "7.10.0a20251120",
                 "--python-version",
-                "3.12",
+                "3.11",
                 "--pytorch-git-ref",
-                "release/2.8",
+                "release/2.7",
+                "--pytorch-dir",
+                str(pytorch_repo),
+                "--pytorch-audio-dir",
+                str(audio_repo),
+                "--pytorch-vision-dir",
+                str(vision_repo),
+                "--triton-dir",
+                str(triton_repo),
             ]
         )
 
-        manifest_path = manifest_dir / "therock-manifest_torch_py3.12_release-2.8.json"
+        manifest_path = manifest_dir / "therock-manifest_torch_py3.11_release-2.7.json"
         self.assertTrue(manifest_path.exists(), f"Missing manifest: {manifest_path}")
+
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(set(data.keys()), {"sources", "therock"})
+
+        sources = data["sources"]
+        self.assertEqual(sources["pytorch"]["commit"], pytorch_head)
+        self.assertEqual(
+            sources["pytorch"]["remote"], "https://github.com/ROCm/pytorch.git"
+        )
+
+        self.assertEqual(sources["pytorch_audio"]["commit"], audio_head)
+        self.assertEqual(
+            sources["pytorch_audio"]["remote"], "https://github.com/pytorch/audio"
+        )
+
+        self.assertEqual(sources["pytorch_vision"]["commit"], vision_head)
+        self.assertEqual(
+            sources["pytorch_vision"]["remote"], "https://github.com/pytorch/vision"
+        )
+
+        self.assertEqual(sources["triton"]["commit"], triton_head)
+        self.assertEqual(
+            sources["triton"]["remote"], "https://github.com/ROCm/triton.git"
+        )
+
+        self.assertEqual(data["therock"]["repo"], "https://github.com/ROCm/TheRock")
+        self.assertEqual(
+            data["therock"]["commit"], "b3eda956a19d0151cbb4699739eb71f62596c8bb"
+        )
+        self.assertEqual(data["therock"]["ref"], self.expected_ref)
+
+    def test_sources_only_manifest_without_triton(self) -> None:
+        manifest_dir = self.tmp_path / "manifests_no_triton"
+        manifest_dir.mkdir(parents=True, exist_ok=True)
+
+        pytorch_repo = self.tmp_path / "src_pytorch2"
+        audio_repo = self.tmp_path / "src_audio2"
+        vision_repo = self.tmp_path / "src_vision2"
+
+        self._init_git_repo(
+            pytorch_repo, remote_url="https://github.com/ROCm/pytorch.git"
+        )
+        self._init_git_repo(audio_repo, remote_url="https://github.com/pytorch/audio")
+        self._init_git_repo(vision_repo, remote_url="https://github.com/pytorch/vision")
+
+        self._run_main_with_args(
+            [
+                "--manifest-dir",
+                str(manifest_dir),
+                "--python-version",
+                "3.11",
+                "--pytorch-git-ref",
+                "nightly",
+                "--pytorch-dir",
+                str(pytorch_repo),
+                "--pytorch-audio-dir",
+                str(audio_repo),
+                "--pytorch-vision-dir",
+                str(vision_repo),
+            ]
+        )
+
+        manifest_path = manifest_dir / "therock-manifest_torch_py3.11_nightly.json"
+        self.assertTrue(manifest_path.exists(), f"Missing manifest: {manifest_path}")
+
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
+        self.assertNotIn("triton", data["sources"])
 
 
 if __name__ == "__main__":

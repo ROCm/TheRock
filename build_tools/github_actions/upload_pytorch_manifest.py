@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """
 Upload the generated PyTorch manifest JSON to S3.
-
-Intended for use from GitHub Actions workflows.
 """
 
 import argparse
@@ -10,7 +8,7 @@ import subprocess
 from pathlib import Path
 
 
-def _run(cmd: list[str]) -> None:
+def run_command(cmd: list[str]) -> None:
     print("++", " ".join(cmd), flush=True)
     subprocess.check_call(cmd)
 
@@ -48,7 +46,7 @@ def main() -> None:
     )
     args = ap.parse_args()
 
-    py = args.python_version
+    py = args.python_version.strip()
     if py.startswith("py"):
         py = py[2:]
 
@@ -70,7 +68,7 @@ def main() -> None:
         f"s3://{args.bucket}/"
         f"{args.run_id}-{args.platform}/manifests/{args.amdgpu_family}/{manifest_name}"
     )
-    _run(["aws", "s3", "cp", str(manifest_path), dest_uri])
+    run_command(["aws", "s3", "cp", str(manifest_path), dest_uri])
 
 
 if __name__ == "__main__":
