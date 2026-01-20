@@ -53,11 +53,21 @@ def create_deb_package(pkg_name, config: PackageConfig):
     print_function_name()
     print(f"Package Name: {pkg_name}")
 
+    # Try to create versioned package first
+    versioned_success = create_versioned_deb_package(pkg_name, config)
+
+    if not versioned_success:
+        print(
+            f"❌ Skipping non-versioned package creation for {pkg_name} due to missing artifacts"
+        )
+        # Clean debian build directory
+        remove_dir(Path(config.dest_dir) / config.pkg_type)
+        return
+
     # Non-versioned packages are not required for RPATH packages
     if not config.enable_rpath:
         create_nonversioned_deb_package(pkg_name, config)
 
-    create_versioned_deb_package(pkg_name, config)
     move_packages_to_destination(pkg_name, config)
     # Clean debian build directory
     remove_dir(Path(config.dest_dir) / config.pkg_type)
@@ -108,7 +118,7 @@ def create_versioned_deb_package(pkg_name, config: PackageConfig):
     pkg_name : Name of the package to be created
     config: Configuration object containing package metadata
 
-    Returns: None
+    Returns: True if package was created successfully, False otherwise
     """
     print_function_name()
     config.versioned_pkg = True
@@ -121,22 +131,43 @@ def create_versioned_deb_package(pkg_name, config: PackageConfig):
 
     pkg_info = get_package_info(pkg_name)
     is_meta = is_meta_package(pkg_info)
+
+    # Get artifact status (handles missing manifests gracefully)
+    artifact_status = filter_components_fromartifactory(
+        pkg_name, config.artifacts_dir, config.gfx_arch
+    )
+
+    # Check if we should proceed with package creation
+    if not is_meta:
+        if not artifact_status.has_any_artifacts():
+            print(
+                f"❌ SKIPPING {pkg_name}: No artifacts available (all manifests missing)"
+            )
+            if artifact_status.has_missing_artifacts():
+                print(f"   Missing artifacts:")
+                for missing in artifact_status.missing_artifacts:
+                    print(
+                        f"     - {missing['artifact']}/{missing['component']}: {missing['manifest']}"
+                    )
+            config.skipped_packages[pkg_name] = "Missing artifacts"
+            return False
+
+        if artifact_status.has_missing_artifacts():
+            print(
+                f"⚠️  WARNING: {pkg_name} has missing artifacts but will build with available ones"
+            )
+            print(f"   Missing artifacts:")
+            for missing in artifact_status.missing_artifacts:
+                print(f"     - {missing['artifact']}/{missing['component']}")
+            print(f"   Available artifacts: {len(artifact_status.available_artifacts)}")
+
     generate_changelog_file(pkg_info, deb_dir, config)
     generate_rules_file(pkg_info, deb_dir, config)
     generate_control_file(pkg_info, deb_dir, config)
     if is_postinstallscripts_available(pkg_info):
         generate_debian_postscripts(pkg_info, deb_dir, config)
 
-    sourcedir_list = []
-    dir_list = filter_components_fromartifactory(
-        pkg_name, config.artifacts_dir, config.gfx_arch
-    )
-    sourcedir_list.extend(dir_list)
-
-    print(f"sourcedir_list:\n  {sourcedir_list}")
-    if not sourcedir_list and not is_meta:
-        sys.exit(f"{pkg_name}: Empty sourcedir_list and not a meta package, exiting")
-
+    sourcedir_list = artifact_status.available_artifacts
     if not sourcedir_list:
         print(f"{pkg_name} is a Meta package")
     else:
@@ -150,6 +181,7 @@ def create_versioned_deb_package(pkg_name, config: PackageConfig):
             convert_runpath_to_rpath(package_dir)
 
     package_with_dpkg_build(package_dir)
+    return True
 
 
 def generate_changelog_file(pkg_info, deb_dir, config: PackageConfig):
@@ -348,7 +380,7 @@ def generate_debian_postscripts(pkg_info, deb_dir, config: PackageConfig):
     parts = config.rocm_version.split(".")
     if len(parts) < 3:
         raise ValueError(
-            f"Version string '{args.rocm_version}' does not have major.minor.patch versions"
+            f"Version string '{config.rocm_version}' does not have major.minor.patch versions"
         )
 
     env = Environment(loader=FileSystemLoader(str(SCRIPT_DIR)))
@@ -475,7 +507,7 @@ def create_versioned_rpm_package(pkg_name, config: PackageConfig):
     pkg_name : Name of the package to be created
     config: Configuration object containing package metadata
 
-    Returns: None
+    Returns: True if package was created successfully, False otherwise
     """
     print_function_name()
     config.versioned_pkg = True
@@ -483,8 +515,14 @@ def create_versioned_rpm_package(pkg_name, config: PackageConfig):
         Path(config.dest_dir) / config.pkg_type / f"{pkg_name}{config.rocm_version}"
     )
     specfile = package_dir / "specfile"
-    generate_spec_file(pkg_name, specfile, config)
+
+    # Check artifact availability and decide whether to proceed
+    success = generate_spec_file(pkg_name, specfile, config)
+    if not success:
+        return False
+
     package_with_rpmbuild(specfile)
+    return True
 
 
 def create_rpm_package(pkg_name, config: PackageConfig):
@@ -502,10 +540,20 @@ def create_rpm_package(pkg_name, config: PackageConfig):
     print_function_name()
     print(f"Package Name: {pkg_name}")
 
+    # Try to create versioned package first
+    versioned_success = create_versioned_rpm_package(pkg_name, config)
+
+    if not versioned_success:
+        print(
+            f"❌ Skipping non-versioned package creation for {pkg_name} due to missing artifacts"
+        )
+        # Clean rpm build directory
+        remove_dir(Path(config.dest_dir) / config.pkg_type)
+        return
+
     if not config.enable_rpath:
         create_nonversioned_rpm_package(pkg_name, config)
 
-    create_versioned_rpm_package(pkg_name, config)
     move_packages_to_destination(pkg_name, config)
     # Clean rpm build directory
     remove_dir(Path(config.dest_dir) / config.pkg_type)
@@ -519,12 +567,13 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
     specfile: Path where the generated spec file should be saved
     config: Configuration object containing package metadata
 
-    Returns: None
+    Returns: True if spec file was generated successfully, False if package should be skipped
     """
     print_function_name()
     os.makedirs(os.path.dirname(specfile), exist_ok=True)
 
     pkg_info = get_package_info(pkg_name)
+    is_meta = is_meta_package(pkg_info)
     # populate packge version details
     version = f"{config.rocm_version}"
     # TBD: Whether to use component version details?
@@ -544,10 +593,38 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
 
         requires_list = pkg_info.get("RPMRequires", [])
 
-        dir_list = filter_components_fromartifactory(
+        # Get artifact status (handles missing manifests gracefully)
+        artifact_status = filter_components_fromartifactory(
             pkg_name, config.artifacts_dir, config.gfx_arch
         )
-        sourcedir_list.extend(dir_list)
+
+        # Check if we should proceed with package creation
+        if not is_meta:
+            if not artifact_status.has_any_artifacts():
+                print(
+                    f"❌ SKIPPING {pkg_name}: No artifacts available (all manifests missing)"
+                )
+                if artifact_status.has_missing_artifacts():
+                    print(f"   Missing artifacts:")
+                    for missing in artifact_status.missing_artifacts:
+                        print(
+                            f"     - {missing['artifact']}/{missing['component']}: {missing['manifest']}"
+                        )
+                config.skipped_packages[pkg_name] = "Missing artifacts"
+                return False
+
+            if artifact_status.has_missing_artifacts():
+                print(
+                    f"⚠️  WARNING: {pkg_name} has missing artifacts but will build with available ones"
+                )
+                print(f"   Missing artifacts:")
+                for missing in artifact_status.missing_artifacts:
+                    print(f"     - {missing['artifact']}/{missing['component']}")
+                print(
+                    f"   Available artifacts: {len(artifact_status.available_artifacts)}"
+                )
+
+        sourcedir_list = artifact_status.available_artifacts
 
         # Filter out non-existing directories
         sourcedir_list = [path for path in sourcedir_list if os.path.isdir(path)]
@@ -602,6 +679,8 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
 
     with open(specfile, "w", encoding="utf-8") as f:
         f.write(template.render(context))
+
+    return True
 
 
 def generate_rpm_postscripts(pkg_info, config: PackageConfig):
@@ -672,7 +751,119 @@ def package_with_rpmbuild(spec_file):
         sys.exit(e.returncode)
 
 
-######################## Begin Packaging Process################################
+def write_build_manifest(config: PackageConfig, successful_packages, pkg_list):
+    """Write manifest files listing built and skipped packages.
+
+    Parameters:
+    config: Configuration object containing package metadata
+    successful_packages: List of successfully built packages
+    pkg_list: List of all packages attempted
+
+    Returns: None
+    """
+    print_function_name()
+
+    # Write successful packages manifest
+    manifest_file = Path(config.dest_dir) / "built_packages.txt"
+    try:
+        with open(manifest_file, "w", encoding="utf-8") as f:
+            f.write(f"# Built Packages Manifest\n")
+            f.write(f"# Package Type: {config.pkg_type.upper()}\n")
+            f.write(f"# ROCm Version: {config.rocm_version}\n")
+            f.write(f"# Graphics Architecture: {config.gfx_arch}\n")
+            f.write(
+                f"# Build Date: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}\n"
+            )
+            f.write(f"# Total Attempted: {len(pkg_list)}\n")
+            f.write(f"# Successfully Built: {len(successful_packages)}\n")
+            f.write(f"# Skipped: {len(config.skipped_packages)}\n")
+            f.write(f"\n")
+
+            if successful_packages:
+                f.write(
+                    f"# Successfully Built Packages (with version and architecture):\n"
+                )
+                for pkg in sorted(successful_packages):
+                    f.write(f"{pkg}\n")
+            else:
+                f.write(f"# No packages were successfully built\n")
+
+        print(f"✅ Built packages manifest written to: {manifest_file}")
+    except Exception as e:
+        print(f"⚠️  WARNING: Failed to write built packages manifest: {e}")
+
+    # Write skipped packages manifest
+    if config.skipped_packages:
+        skipped_file = Path(config.dest_dir) / "skipped_packages.txt"
+        try:
+            with open(skipped_file, "w", encoding="utf-8") as f:
+                f.write(f"# Skipped Packages Manifest\n")
+                f.write(f"# Package Type: {config.pkg_type.upper()}\n")
+                f.write(f"# ROCm Version: {config.rocm_version}\n")
+                f.write(f"# Graphics Architecture: {config.gfx_arch}\n")
+                f.write(
+                    f"# Build Date: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}\n"
+                )
+                f.write(f"# Format: package_name | reason\n")
+                f.write(
+                    f"# Note: Package names shown are base names from package.json\n"
+                )
+                f.write(f"\n")
+                f.write(f"# Skipped Packages:\n")
+                for pkg in sorted(config.skipped_packages.keys()):
+                    reason = config.skipped_packages[pkg]
+                    f.write(f"{pkg} | {reason}\n")
+
+            print(f"⚠️  Skipped packages manifest written to: {skipped_file}")
+        except Exception as e:
+            print(f"⚠️  WARNING: Failed to write skipped packages manifest: {e}")
+
+
+def print_build_summary(pkg_list, config: PackageConfig, successful_packages):
+    """Print a summary of the build process.
+
+    Parameters:
+    pkg_list : List of all packages attempted
+    config: Configuration object containing package metadata
+    successful_packages: List of successfully built packages
+
+    Returns: None
+    """
+    print("\n" + "=" * 80)
+    print("BUILD SUMMARY")
+    print("=" * 80)
+
+    total_packages = len(pkg_list)
+    success_count = len(successful_packages)
+    skipped_count = len(config.skipped_packages)
+
+    print(f"\nTotal packages attempted: {total_packages}")
+    print(f"✅ Successfully built: {success_count}")
+    print(f"⏭️  Skipped: {skipped_count}")
+
+    if successful_packages:
+        print(f"\n✅ Successfully built packages ({success_count}):")
+        print(f"   (Showing full package names with version and architecture)")
+        for pkg in sorted(successful_packages):
+            print(f"   - {pkg}")
+
+    if config.skipped_packages:
+        print(f"\n⏭️  Skipped packages ({skipped_count}):")
+        print(f"   (Showing base package names from package.json)")
+        for pkg in sorted(config.skipped_packages.keys()):
+            reason = config.skipped_packages[pkg]
+            print(f"   - {pkg} ({reason})")
+        print(
+            "\nNote: Skipped packages have been excluded from meta-package dependencies"
+        )
+
+    print("\n" + "=" * 80)
+    print(f"Package type: {config.pkg_type.upper()}")
+    print(f"ROCm version: {config.rocm_version}")
+    print(f"Output directory: {config.dest_dir}")
+    print("=" * 80 + "\n")
+
+
 def parse_input_package_list(pkg_name):
     """Populate the package list from the provided input arguments.
 
@@ -767,17 +958,45 @@ def run(args: argparse.Namespace):
     clean_package_build_dir(config)
 
     pkg_list = parse_input_package_list(args.pkg_names)
+    successful_packages = []
+
     # Create deb/rpm packages
     package_creators = {"deb": create_deb_package, "rpm": create_rpm_package}
     for pkg_name in pkg_list:
-        if config.pkg_type and config.pkg_type.lower() in package_creators:
-            print(f"Create {config.pkg_type.upper()} package.")
-            package_creators[config.pkg_type.lower()](pkg_name, config)
-        else:
-            print("Create both DEB and RPM packages.")
-            for creator in package_creators.values():
-                creator(pkg_name, config)
+        print(f"\n{'='*80}")
+        print(f"Processing package: {pkg_name}")
+        print(f"{'='*80}\n")
+
+        try:
+            if config.pkg_type and config.pkg_type.lower() in package_creators:
+                print(f"Create {config.pkg_type.upper()} package.")
+                package_creators[config.pkg_type.lower()](pkg_name, config)
+            else:
+                print("Create both DEB and RPM packages.")
+                for creator in package_creators.values():
+                    creator(pkg_name, config)
+
+            # If we got here without the package being marked as skipped, it succeeded
+            if pkg_name not in config.skipped_packages:
+                # Store the full package name (with version and gfx_arch)
+                config.versioned_pkg = True
+                full_pkg_name = update_package_name(pkg_name, config)
+                successful_packages.append(full_pkg_name)
+                print(f"✅ Successfully created package: {full_pkg_name}")
+        except Exception as e:
+            print(f"❌ ERROR creating package {pkg_name}: {e}")
+            config.skipped_packages[pkg_name] = f"Build error: {str(e)[:100]}"
+            import traceback
+
+            traceback.print_exc()
+
     clean_package_build_dir(config)
+
+    # Write build manifest files
+    write_build_manifest(config, successful_packages, pkg_list)
+
+    # Print build summary
+    print_build_summary(pkg_list, config, successful_packages)
 
 
 def main(argv: list[str]):

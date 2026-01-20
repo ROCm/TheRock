@@ -35,6 +35,23 @@ class PackageConfig:
     gfx_arch: str
     enable_rpath: bool = field(default=False)
     versioned_pkg: bool = field(default=True)
+    skipped_packages: dict = field(default_factory=dict)  # pkg_name -> reason
+
+
+# Data class to track missing artifacts for a package
+@dataclass
+class ArtifactStatus:
+    package_name: str
+    missing_artifacts: list = field(default_factory=list)
+    available_artifacts: list = field(default_factory=list)
+
+    def has_any_artifacts(self):
+        """Check if any artifacts are available"""
+        return len(self.available_artifacts) > 0
+
+    def has_missing_artifacts(self):
+        """Check if any artifacts are missing"""
+        return len(self.missing_artifacts) > 0
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -365,6 +382,7 @@ def convert_to_versiondependency(dependency_list, config: PackageConfig):
 
     If a package depends on any packages listed in `pkg_list`,
     this function appends the dependency name with the specified ROCm version.
+    Excludes packages that failed to build.
 
     Parameters:
     dependency_list : List of dependent packages
@@ -379,10 +397,22 @@ def convert_to_versiondependency(dependency_list, config: PackageConfig):
     local_config = copy.deepcopy(config)
     local_config.versioned_pkg = True
     pkg_list = get_package_list()
-    updated_depends = [
-        f"{update_package_name(pkg,local_config)}" if pkg in pkg_list else pkg
-        for pkg in dependency_list
-    ]
+    updated_depends = []
+
+    for pkg in dependency_list:
+        # Skip packages that were skipped
+        if pkg in config.skipped_packages:
+            reason = config.skipped_packages[pkg]
+            print(
+                f"⚠️  Excluding skipped package '{pkg}' from dependencies (reason: {reason})"
+            )
+            continue
+
+        if pkg in pkg_list:
+            updated_depends.append(f"{update_package_name(pkg, local_config)}")
+        else:
+            updated_depends.append(pkg)
+
     depends = ", ".join(updated_depends)
     return depends
 
@@ -393,6 +423,7 @@ def append_version_suffix(dep_string, config: PackageConfig):
     This function takes a comma‑separated dependency string,
     identifies which dependencies correspond to packages listed in `pkg_list`,
     and appends the appropriate ROCm version suffix based on the provided configuration.
+    Excludes packages that failed to build.
 
     Parameters:
     dep_string : A comma‑separated list of dependency package names.
@@ -414,6 +445,14 @@ def append_version_suffix(dep_string, config: PackageConfig):
             if dep.startswith(pkg):
                 match = pkg
                 break
+
+        # Skip packages that were skipped
+        if match and match in config.skipped_packages:
+            reason = config.skipped_packages[match]
+            print(
+                f"⚠️  Excluding skipped package '{match}' from dependencies (reason: {reason})"
+            )
+            continue
 
         # If matched, append version-suffix; otherwise keep original
         if match:
@@ -478,12 +517,12 @@ def filter_components_fromartifactory(pkg_name, artifacts_dir, gfx_arch):
     artifacts_dir : Directory where artifacts are saved
     gfx_arch : graphics architecture
 
-    Returns: List of directories
+    Returns: ArtifactStatus object containing available and missing artifacts
     """
     print_function_name()
 
     pkg_info = get_package_info(pkg_name)
-    sourcedir_list = []
+    artifact_status = ArtifactStatus(package_name=pkg_name)
 
     dir_suffix = gfx_arch if is_gfxarch_package(pkg_info) else "generic"
 
@@ -492,7 +531,7 @@ def filter_components_fromartifactory(pkg_name, artifacts_dir, gfx_arch):
         print(
             f'The "Artifactory" key is missing for {pkg_name}. Is this a meta package?'
         )
-        return sourcedir_list
+        return artifact_status
 
     for artifact in artifactory:
         artifact_prefix = artifact["Artifact"]
@@ -517,17 +556,53 @@ def filter_components_fromartifactory(pkg_name, artifacts_dir, gfx_arch):
                     / f"{artifact_prefix}_{component}_{artifact_suffix}"
                 )
                 filename = source_dir / "artifact_manifest.txt"
-                with open(filename, "r", encoding="utf-8") as file:
-                    for line in file:
 
-                        match_found = (
-                            isinstance(artifact_subdir, str)
-                            and (artifact_subdir.lower() + "/") in line.lower()
-                        )
+                # Handle missing manifest files gracefully
+                try:
+                    with open(filename, "r", encoding="utf-8") as file:
+                        found_match = False
+                        for line in file:
+                            match_found = (
+                                isinstance(artifact_subdir, str)
+                                and (artifact_subdir.lower() + "/") in line.lower()
+                            )
 
-                        if match_found and line.strip():
-                            print("Matching line:", line.strip())
-                            source_path = source_dir / line.strip()
-                            sourcedir_list.append(source_path)
+                            if match_found and line.strip():
+                                print("Matching line:", line.strip())
+                                source_path = source_dir / line.strip()
+                                artifact_status.available_artifacts.append(source_path)
+                                found_match = True
 
-    return sourcedir_list
+                        if not found_match:
+                            print(
+                                f"⚠️  WARNING: No matching subdirectory '{artifact_subdir}' found in manifest for {component}"
+                            )
+
+                except FileNotFoundError:
+                    missing_info = {
+                        "artifact": artifact_prefix,
+                        "component": component,
+                        "manifest": str(filename),
+                    }
+                    artifact_status.missing_artifacts.append(missing_info)
+                    print(f"⚠️  WARNING: Manifest file not found: {filename}")
+                except PermissionError:
+                    missing_info = {
+                        "artifact": artifact_prefix,
+                        "component": component,
+                        "manifest": str(filename),
+                        "error": "Permission denied",
+                    }
+                    artifact_status.missing_artifacts.append(missing_info)
+                    print(f"⚠️  WARNING: Permission denied reading manifest: {filename}")
+                except Exception as e:
+                    missing_info = {
+                        "artifact": artifact_prefix,
+                        "component": component,
+                        "manifest": str(filename),
+                        "error": str(e),
+                    }
+                    artifact_status.missing_artifacts.append(missing_info)
+                    print(f"⚠️  WARNING: Error reading manifest {filename}: {e}")
+
+    return artifact_status
