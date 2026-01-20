@@ -51,20 +51,18 @@ def log(*args, **kwargs):
     sys.stdout.flush()
 
 
-def list_s3_artifacts(backend: S3Backend, artifact_group: str) -> set[str]:
-    """Lists artifacts from S3 backend, filtered by artifact_group.
+def list_artifacts_for_group(backend: ArtifactBackend, artifact_group: str) -> set[str]:
+    """Lists artifacts from backend, filtered by artifact_group.
 
     Args:
-        backend: S3Backend instance configured for the target run
+        backend: ArtifactBackend instance configured for the target run
         artifact_group: GPU family to filter by (e.g., "gfx94X-all"). Also includes
             artifacts with "generic" in the name.
 
     Returns:
         Set of artifact filenames matching the artifact_group or "generic".
     """
-    log(
-        f"Retrieving S3 artifacts for run '{backend.run_id}' in '{backend.bucket}' at '{backend.s3_prefix}'"
-    )
+    log(f"Retrieving artifacts from '{backend.base_uri}'")
 
     # Get all artifacts from backend
     all_artifacts = backend.list_artifacts()
@@ -76,9 +74,7 @@ def list_s3_artifacts(backend: S3Backend, artifact_group: str) -> set[str]:
             data.add(filename)
 
     if not data:
-        log(
-            f"Found no S3 artifacts for run '{backend.run_id}' at '{backend.s3_prefix}'"
-        )
+        log(f"Found no artifacts matching '{artifact_group}' at '{backend.base_uri}'")
     return data
 
 
@@ -231,7 +227,9 @@ def run(args):
     # Note: this currently does not check that all requested artifacts
     # (via include patterns) do exist, so this may silently fail to fetch
     # expected files.
-    s3_artifacts = list_s3_artifacts(backend=backend, artifact_group=artifact_group)
+    s3_artifacts = list_artifacts_for_group(
+        backend=backend, artifact_group=artifact_group
+    )
     if not s3_artifacts:
         log(f"No matching artifacts for {run_id} exist. Exiting...")
         sys.exit(1)

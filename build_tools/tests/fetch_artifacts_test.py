@@ -7,9 +7,9 @@ from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
-from _therock_utils.artifact_backend import S3Backend
+from _therock_utils.artifact_backend import ArtifactBackend
 from fetch_artifacts import (
-    list_s3_artifacts,
+    list_artifacts_for_group,
     filter_artifacts,
 )
 
@@ -18,12 +18,10 @@ REPO_DIR = THIS_DIR.parent.parent
 
 
 class ArtifactsIndexPageTest(unittest.TestCase):
-    def testListS3Artifacts_Found(self):
+    def testListArtifactsForGroup_Found(self):
         # Create a mock backend that returns test artifacts
-        backend = MagicMock(spec=S3Backend)
-        backend.run_id = "123"
-        backend.bucket = "therock-ci-artifacts"
-        backend.s3_prefix = "ROCm-TheRock/123-linux"
+        backend = MagicMock(spec=ArtifactBackend)
+        backend.base_uri = "s3://therock-ci-artifacts/ROCm-TheRock/123-linux"
         backend.list_artifacts.return_value = [
             "empty_1test.tar.xz",
             "empty_2test.tar.xz",
@@ -31,7 +29,7 @@ class ArtifactsIndexPageTest(unittest.TestCase):
             "empty_4test.tar.xz",
         ]
 
-        result = list_s3_artifacts(backend, "test")
+        result = list_artifacts_for_group(backend, "test")
 
         self.assertEqual(len(result), 4)
         self.assertTrue("empty_1test.tar.xz" in result)
@@ -39,12 +37,10 @@ class ArtifactsIndexPageTest(unittest.TestCase):
         self.assertTrue("empty_3generic.tar.xz" in result)
         self.assertTrue("empty_4test.tar.xz" in result)
 
-    def testListS3Artifacts_NotFound(self):
+    def testListArtifactsForGroup_NotFound(self):
         # Create a mock backend that raises ClientError
-        backend = MagicMock(spec=S3Backend)
-        backend.run_id = "123"
-        backend.bucket = "therock-ci-artifacts"
-        backend.s3_prefix = "ROCm-TheRock/123-linux"
+        backend = MagicMock(spec=ArtifactBackend)
+        backend.base_uri = "s3://therock-ci-artifacts/ROCm-TheRock/123-linux"
         backend.list_artifacts.side_effect = ClientError(
             error_response={
                 "Error": {"Code": "AccessDenied", "Message": "Access Denied"}
@@ -53,16 +49,14 @@ class ArtifactsIndexPageTest(unittest.TestCase):
         )
 
         with self.assertRaises(ClientError) as context:
-            list_s3_artifacts(backend, "test")
+            list_artifacts_for_group(backend, "test")
 
         self.assertEqual(context.exception.response["Error"]["Code"], "AccessDenied")
 
-    def testListS3Artifacts_FiltersByArtifactGroup(self):
+    def testListArtifactsForGroup_FiltersByArtifactGroup(self):
         # Test that filtering by artifact_group works correctly
-        backend = MagicMock(spec=S3Backend)
-        backend.run_id = "123"
-        backend.bucket = "therock-ci-artifacts"
-        backend.s3_prefix = "ROCm-TheRock/123-linux"
+        backend = MagicMock(spec=ArtifactBackend)
+        backend.base_uri = "s3://therock-ci-artifacts/ROCm-TheRock/123-linux"
         backend.list_artifacts.return_value = [
             "rocblas_lib_gfx94X.tar.xz",  # matches gfx94X
             "rocblas_lib_gfx110X.tar.xz",  # doesn't match
@@ -70,7 +64,7 @@ class ArtifactsIndexPageTest(unittest.TestCase):
             "hipblas_lib_gfx94X.tar.xz",  # matches gfx94X
         ]
 
-        result = list_s3_artifacts(backend, "gfx94X")
+        result = list_artifacts_for_group(backend, "gfx94X")
 
         self.assertEqual(len(result), 3)
         self.assertIn("rocblas_lib_gfx94X.tar.xz", result)
