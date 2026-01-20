@@ -80,7 +80,7 @@ jobs:
     with:
       artifact_group: ${{ inputs.artifact_group }}
       amdgpu_families: ${{ fromJSON(inputs.amdgpu_family_config).amdgpu_family }}
-      test_runs_on: ${{ fromJSON(inputs.amdgpu_family_config).test.runs_on }}
+      test_runs_on: ${{ fromJSON(inputs.amdgpu_family_config).test.runs_on.test }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
       test_type: ${{ inputs.test_type }}
       test_labels: ${{ inputs.test_labels }}
@@ -92,7 +92,7 @@ jobs:
     # Run benchmarks if:
     # - Build succeeded (or using prebuilt artifacts)
     # - Not expecting failure
-    # - Benchmark runner is available (benchmark_runs_on is set)
+    # - Benchmark runner is available (runs_on.benchmark is set)
     if: >-
       ${{
         !failure() &&
@@ -102,14 +102,14 @@ jobs:
           inputs.use_prebuilt_artifacts == 'true'
         ) &&
         fromJSON(inputs.amdgpu_family_config).build.expect_failure == false &&
-        fromJSON(inputs.amdgpu_family_config).test.benchmark_runs_on != ''
+        fromJSON(inputs.amdgpu_family_config).test.runs_on.benchmark != ''
       }}
     uses: ./.github/workflows/test_benchmarks.yml
     secrets: inherit
     with:
       artifact_group: ${{ inputs.artifact_group }}
       amdgpu_families: ${{ fromJSON(inputs.amdgpu_family_config).amdgpu_family }}
-      test_runs_on: ${{ fromJSON(inputs.amdgpu_family_config).test.benchmark_runs_on }}
+      test_runs_on: ${{ fromJSON(inputs.amdgpu_family_config).test.runs_on.benchmark }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
 
   build_portable_linux_python_packages:

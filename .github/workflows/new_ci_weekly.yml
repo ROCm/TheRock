@@ -130,7 +130,7 @@ jobs:
       build_variant_suffix: ${{ matrix.linux_config.build_variant_suffix }}
       test_labels: ""
       artifact_run_id: ${{ inputs.artifact_run_id }}
-      test_runs_on: ${{ matrix.linux_config.test.runs_on }}
+      test_runs_on: ${{ matrix.linux_config.test.runs_on.test }}
       use_prebuilt_artifacts: ${{ inputs.linux_use_prebuilt_artifacts == true && 'true' || 'false' }}
       rocm_package_version: "ADHOCBUILD"
       test_type: "smoke"

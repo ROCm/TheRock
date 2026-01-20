@@ -50,7 +50,7 @@ import pprint
 import subprocess
 import sys
 from enum import Flag, auto
-from typing import Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional
 
 from new_amdgpu_family_matrix import (
     amdgpu_family_predefined_groups,
@@ -226,7 +226,14 @@ class PlatformMask(Flag):
 platform_label = {PlatformMask.LINUX: "linux", PlatformMask.WINDOWS: "windows"}
 
 
-def get_build_config(amdgpu_matrix_entry, build_variant, platform_str, arch):
+def get_build_config(
+    amdgpu_matrix_entry,
+    build_variant,
+    platform_str,
+    arch,
+    overwrite_values=None,
+    enforce_overwrite=False,
+):
     # amdgpu_matrix_entry is the "build" entry of a single arch and a given platform from new_amdgpu_family_matrix.py
 
     # We have custom build variants for specific CI flows.
@@ -276,7 +283,38 @@ def get_build_config(amdgpu_matrix_entry, build_variant, platform_str, arch):
     return build_config
 
 
-def get_test_config(amdgpu_matrix_entry, platform_str, target):
+def get_test_config(
+    amdgpu_matrix_entry,
+    platform_str,
+    target,
+    overwrite_values=None,
+    enforce_overwrite=False,
+):
+    """
+    Layout overwrite_values:
+    {
+        "test": "oem"
+        "benchmark": "some_benchmark_label"
+    }
+
+    And in new_amdgpu_family_matrix.py:
+    {
+        "test": {
+            "runs_on": {
+                "test": "linux-mi325-1gpu-ossci-rocm-frac",
+                "benchmark": "linux-mi325-1gpu-ossci-rocm-frac",
+                "oem": "<some machine with oem kernel>",
+                "some_benchmark_machine": "<some machine dedicated to run benchmarks>",
+            }
+        }
+    }
+
+
+    enforce_overwrite: If False, only overwrite if the value is available in the test_config["runs_on"]
+                                 and continue with the configuration process.
+                       If False, fail the configuration process if the value is not available in the test_config["runs_on"]
+                                 and print a warning and return None
+    """
     # only run test if run_tests is True
     if not amdgpu_matrix_entry.get("run_tests", False):
         return None
@@ -285,26 +323,59 @@ def get_test_config(amdgpu_matrix_entry, platform_str, target):
     test_config = copy.deepcopy(amdgpu_matrix_entry)
 
     # TODO TODO automate this. have default values in new_amdgpu_family_matrix.py
-    # set default values if not set
-    if "benchmark_runs_on" not in test_config.keys():
-        test_config["benchmark_runs_on"] = ""
-    if "runs_on" not in test_config.keys():
-        test_config["runs_on"] = ""
+    # TODO TODO IMPORTANT: ADD code from amdgpu_family_matrix.py to autofill test machines
+    # Set all default values BEFORE overwrite logic to ensure data structure integrity
+    if "runs_on" not in test_config:
+        test_config["runs_on"] = {}
+    if "benchmark" not in test_config["runs_on"].keys():
+        test_config["runs_on"]["benchmark"] = ""
+    if "test" not in test_config["runs_on"].keys():
+        test_config["runs_on"]["test"] = ""
     if "sanity_check_only_for_family" not in test_config.keys():
         test_config["sanity_check_only_for_family"] = False
     if "expect_pytorch_failure" not in test_config.keys():
         test_config["expect_pytorch_failure"] = False
 
-    # TODO TODO IMPORTANT: ADD code from amdgpu_family_matrix.py to autofill test machines
+    if overwrite_values:
+        for key, value in overwrite_values.items():
+            if "test_runner" in key or "benchmark_runner" in key:
+                label = key.split("_")[0]
+                if value in test_config["runs_on"].keys():
+                    test_config["runs_on"][label] = test_config["runs_on"][value]
+                else:
+                    if not enforce_overwrite:
+                        print(
+                            f"[WARNING] Value {value} not found in test_config['runs_on'] for target {target} on {platform_str}"
+                        )
+                        continue
+                    else:
+                        print(
+                            f"[ERROR] Value {value} not found in test_config['runs_on'] for target {target} on {platform_str}"
+                        )
+                        return None
 
-    # sanity check: check if we have some machine to run on, otherwise skip test job
-    if not test_config["runs_on"] and not test_config["benchmark_runs_on"]:
+    # Clean up runs_on: only keep "test" and "benchmark" keys
+    allowed_keys = {"test", "benchmark"}
+    test_config["runs_on"] = {
+        k: v for k, v in test_config["runs_on"].items() if k in allowed_keys
+    }
+
+    # Sanity check: check if we have some machine to run on, otherwise skip test job
+    test_runner = test_config["runs_on"].get("test", "")
+    benchmark_runner = test_config["runs_on"].get("benchmark", "")
+    if not test_runner and not benchmark_runner:
         return None
 
     return test_config
 
 
-def get_release_config(amdgpu_matrix_entry, platform_str, target):
+def get_release_config(
+    amdgpu_matrix_entry,
+    platform_str,
+    target,
+    overwrite_values=None,
+    enforce_overwrite=False,
+):
     # only run releases if we want to also push them
     if not amdgpu_matrix_entry.get("push_on_success", False):
         return None
@@ -323,6 +394,8 @@ def new_matrix_generator(
     task_mask: TaskMask,
     req_gpu_families_or_targets: List[str],
     build_variant: str = "release",
+    overwrite_values: Dict[str, str] = {},
+    enforce_overwrite: bool = False,
 ):
     # TODO TODO move to main() those checks
     if not bool(platform_mask):
@@ -386,6 +459,8 @@ def new_matrix_generator(
                     build_variant,
                     platform_str,
                     target,
+                    overwrite_values,
+                    enforce_overwrite,
                 )
                 if build_config:
                     data[task_label[TaskMask.BUILD]["label"]] = build_config
@@ -395,7 +470,11 @@ def new_matrix_generator(
                     )
             if TaskMask.TEST in task_mask:
                 test_config = get_test_config(
-                    gpu_matrix[platform][target]["test"], platform_str, target
+                    gpu_matrix[platform][target]["test"],
+                    platform_str,
+                    target,
+                    overwrite_values,
+                    enforce_overwrite,
                 )
                 if test_config:
                     data[task_label[TaskMask.TEST]["label"]] = test_config
@@ -405,7 +484,11 @@ def new_matrix_generator(
                     )
             if TaskMask.RELEASE in task_mask:
                 release_config = get_release_config(
-                    gpu_matrix[platform][target]["release"], platform_str, target
+                    gpu_matrix[platform][target]["release"],
+                    platform_str,
+                    target,
+                    overwrite_values,
+                    enforce_overwrite,
                 )
                 if release_config:
                     data[task_label[TaskMask.RELEASE]["label"]] = release_config
@@ -425,7 +508,13 @@ def new_matrix_generator(
 
 def get_github_event_args():
     github_event_args = {}
+    # Ensure pr_labels is a proper JSON string with a "labels" key (list of dicts)
     github_event_args["pr_labels"] = os.environ.get("PR_LABELS", "[]")
+
+    # TODO TODO Remove after testing
+    # github_event_args["pr_labels"] = os.environ.get(
+    #     "PR_LABELS", '{"labels":[{"name":"test_runner:oem"}]}'
+    # )
     github_event_args["branch_name"] = os.environ.get(
         "GITHUB_REF", "not/a/notaref"
     ).split("/")[-1]
@@ -460,6 +549,16 @@ def get_github_event_args():
     github_event_args["req_windows_amdgpus_predef"] = os.environ.get(
         "INPUT_WINDOWS_AMDGPU_PREDEFINED_GROUP", ""
     )
+    github_event_args["req_windows_amdgpus_predef"] = os.environ.get(
+        "INPUT_USE_RUNNER_LABEL_FOR_TEST", ""
+    )
+    github_event_args["req_windows_amdgpus_predef"] = os.environ.get(
+        "INPUT_USE_RUNNER_LABEL_FOR_BENCHMARK", ""
+    )
+
+    github_event_args["enforce_overwrite"] = (
+        os.environ.get("INPUT_ENFORCE_OVERWRITE", "false") == "true"
+    )
 
     return github_event_args
 
@@ -491,8 +590,8 @@ def get_requested_amdgpu_families(github_event_args):
         pr_labels = get_pr_labels(github_event_args)
         for label in pr_labels:
             if "gfx" in label:
-                req_gpu_families_or_targets[PlatformMask.LINUX] += label
-                req_gpu_families_or_targets[PlatformMask.WINDOWS] += label
+                req_gpu_families_or_targets[PlatformMask.LINUX] += label.strip()
+                req_gpu_families_or_targets[PlatformMask.WINDOWS] += label.strip()
 
     # remove duplicates
     for platform in req_gpu_families_or_targets.keys():
@@ -501,6 +600,18 @@ def get_requested_amdgpu_families(github_event_args):
         )
 
     return req_gpu_families_or_targets
+
+
+def get_overwrite_values(github_event_args):
+    overwrite_values = {}
+
+    value_to_overwrite_labels = ["test_runner", "benchmark_runner"]
+
+    for label in get_pr_labels(github_event_args):
+        if label.split(":")[0] in value_to_overwrite_labels:
+            overwrite_values[label.split(":")[0]] = label.split(":")[-1].strip()
+
+    return overwrite_values
 
 
 def get_task_mask(github_event_args):
@@ -554,6 +665,8 @@ if __name__ == "__main__":
         task_mask=task_mask,
         req_gpu_families_or_targets=req_gpu_families_or_targets,
         build_variant=github_event_args["build_variant"],
+        overwrite_values=get_overwrite_values(github_event_args),
+        enforce_overwrite=github_event_args["enforce_overwrite"],
     )
 
     print("")
