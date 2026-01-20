@@ -81,7 +81,6 @@ if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_OCL_RUNTIME)
         opencl-icd-loader
       RUNTIME_DEPS
         ocl-clr
-        ocl-icd
         ROCR-Runtime
       INTERFACE_LINK_DIRS
         "lib"
