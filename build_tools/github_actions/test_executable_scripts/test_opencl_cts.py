@@ -20,7 +20,7 @@ THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 ROCM_PATH = THEROCK_BIN_DIR.parent
 
 # CTS test executables are in bin/ directory
-CTS_BIN_DIR = THEROCK_BIN_DIR / "bin"
+CTS_BIN_DIR = THEROCK_BIN_DIR
 OPENCL_ICD_FILENAMES = ROCM_PATH / "lib" / "opencl" / "libamdocl64.so"
 
 logging.info(f"THEROCK_BIN_DIR: {THEROCK_BIN_DIR}")
