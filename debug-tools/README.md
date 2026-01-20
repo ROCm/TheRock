@@ -1,10 +1,10 @@
 # Debug Tools
 
-This is the home of the ROCm debug tools, which include ROCgdb, ROCdbgapi, and
-the ROCr debug agent.
+This is the home of the TheRock's build config for ROCm debug tools, which
+include ROCgdb, ROCdbgapi, and the ROCr debug agent.
 
-ROCdbgapi and the ROCr debug agent may eventually be migrated to the
-rocm-systems super-repo.
+The source code for ROCdbgapi and the ROCr debug agent may eventually be
+migrated to the rocm-systems super-repo.
 
 ## Structure
 
@@ -34,10 +34,11 @@ automatically points to the database using the TERMINFO environment variable.
 If the ROCgdb binary is invoked directly and TERMINFO is not set, the terminfo
 lookup logic checks the following paths in order:
 
-- $HOME/.terminfo
-- /usr/share/terminfo
-- /lib/terminfo
-- /etc/terminfo
+- `$HOME/.terminfo`
+- `/usr/share/terminfo`
+- `/usr/lib/terminfo`
+- `/etc/terminfo`
+- `/lib/terminfo`
 - The build-time prefix path (which may no longer be accessible)
 
 If the lookup fails to return any valid entries, ncurses provides the following
@@ -52,5 +53,4 @@ terminal types as compiled-in fallbacks:
 
 If the user's system terminal type does not match any of these fallbacks, the
 user must install a terminfo dependency in one of the lookup paths listed
-above. Otherwise, the TUI mode in ROCgdb will remain unavailable until the
-dependency is resolved.
+above. Otherwise, the TUI mode in ROCgdb will remain unavailable.

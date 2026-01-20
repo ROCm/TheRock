@@ -150,7 +150,7 @@ add_custom_target(
       # Since we have the fallback above, set the terminfo lookup paths to the
       # standard installation prefixes. We hope the system will provide the
       # additional required terminfo files if the fallbacks are not enough.
-      --with-terminfo-dirs="/usr/share/terminfo:/lib/terminfo:/etc/terminfo"
+      --with-terminfo-dirs="/usr/share/terminfo:/usr/lib/terminfo:/etc/terminfo:/lib/terminfo"
   COMMAND
     make -j "${PAR_JOBS}" V=1
   COMMAND
