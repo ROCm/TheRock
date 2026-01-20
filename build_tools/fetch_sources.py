@@ -545,6 +545,7 @@ def main(argv):
         default=[
             "opencl/opencl-cts",
             "opencl/opencl-headers",
+            "opencl/opencl-icd-loader",
             "opencl/spirv-headers",
             "opencl/spirv-tools",
         ],
