@@ -80,6 +80,7 @@ if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_OCL_RUNTIME)
         spirv-tools
         opencl-icd-loader
       RUNTIME_DEPS
+        opencl-icd-loader
         ocl-clr
         ROCR-Runtime
       INTERFACE_LINK_DIRS
