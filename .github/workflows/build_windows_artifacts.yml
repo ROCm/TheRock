@@ -181,6 +181,11 @@ jobs:
           $fsout | % {$_.Used/=1GB;$_.Free/=1GB;$_} | Write-Host
           get-disk | Select-object @{Name="Size(GB)";Expression={$_.Size/1GB}} | Write-Host
 
+      - name: Analyze Build Times
+        if: ${{ !cancelled() }}
+        run: |
+          python3 build_tools/analyze_build_times.py --build-dir ${{ env.BUILD_DIR }}
+
       - name: Configure AWS Credentials for non-forked repos
         if: ${{ always() && !github.event.pull_request.head.repo.fork }}
         uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
