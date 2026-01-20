@@ -4,8 +4,8 @@ This directory contains comprehensive unit tests for the ROCm packaging tools wi
 
 ## Test Files
 
-- `test_packaging_utils.py` - 54 tests for `packaging_utils.py` (99% coverage)
-- `test_build_package.py` - 36 tests for `build_package.py` (94% coverage)
+- `test_linux_packaging_utils.py` - 54 tests for `packaging_utils.py` (99% coverage)
+- `test_linux_build_package.py` - 36 tests for `build_package.py` (94% coverage)
 
 ## Running Tests
 
@@ -23,13 +23,13 @@ python3 -m unittest discover -v
 To run tests for `packaging_utils.py`:
 
 ```bash
-python3 -m unittest test_packaging_utils -v
+python3 -m unittest test_linux_packaging_utils -v
 ```
 
 To run tests for `build_package.py`:
 
 ```bash
-python3 -m unittest test_build_package -v
+python3 -m unittest test_linux_build_package -v
 ```
 
 ### Run a Specific Test Class
@@ -37,13 +37,13 @@ python3 -m unittest test_build_package -v
 To test a specific function (e.g., `version_to_str`):
 
 ```bash
-python3 -m unittest test_packaging_utils.TestVersionToStr -v
+python3 -m unittest test_linux_packaging_utils.TestVersionToStr -v
 ```
 
 To test DEB package creation functions:
 
 ```bash
-python3 -m unittest test_build_package.TestCreateDebPackage -v
+python3 -m unittest test_linux_build_package.TestCreateDebPackage -v
 ```
 
 ### Run a Single Test Method
@@ -51,14 +51,14 @@ python3 -m unittest test_build_package.TestCreateDebPackage -v
 To run just one specific test case:
 
 ```bash
-python3 -m unittest test_packaging_utils.TestVersionToStr.test_version_three_parts -v
+python3 -m unittest test_linux_packaging_utils.TestVersionToStr.test_version_three_parts -v
 ```
 
 ## Test Coverage
 
 ### packaging_utils.py Tests
 
-The `test_packaging_utils.py` file includes tests for:
+The `test_linux_packaging_utils.py` file includes tests for:
 
 - `print_function_name()` - Function name printing
 - `read_package_json_file()` - JSON file reading
@@ -84,7 +84,7 @@ The `test_packaging_utils.py` file includes tests for:
 
 ### build_package.py Tests
 
-The `test_build_package.py` file includes tests for:
+The `test_linux_build_package.py` file includes tests for:
 
 **File Operations:**
 
@@ -154,7 +154,7 @@ Tests cover various edge cases including:
 Use the `-v` flag for detailed test output:
 
 ```bash
-python3 -m unittest test_packaging_utils -v
+python3 -m unittest test_linux_packaging_utils -v
 ```
 
 ### Run Specific Failing Test
@@ -162,7 +162,7 @@ python3 -m unittest test_packaging_utils -v
 If a test fails, run only that test to debug:
 
 ```bash
-python3 -m unittest test_packaging_utils.TestVersionToStr.test_version_three_parts -v
+python3 -m unittest test_linux_packaging_utils.TestVersionToStr.test_version_three_parts -v
 ```
 
 ### Check Test Output
@@ -197,12 +197,12 @@ When adding new functions to `packaging_utils.py` or `build_package.py`:
 ## Example Test Output
 
 ```
-$ python3 -m unittest test_packaging_utils.TestVersionToStr -v
-test_version_four_parts (test_packaging_utils.TestVersionToStr) ... ok
-test_version_large_numbers (test_packaging_utils.TestVersionToStr) ... ok
-test_version_one_part (test_packaging_utils.TestVersionToStr) ... ok
-test_version_three_parts (test_packaging_utils.TestVersionToStr) ... ok
-test_version_two_parts (test_packaging_utils.TestVersionToStr) ... ok
+$ python3 -m unittest test_linux_packaging_utils.TestVersionToStr -v
+test_version_four_parts (test_linux_packaging_utils.TestVersionToStr) ... ok
+test_version_large_numbers (test_linux_packaging_utils.TestVersionToStr) ... ok
+test_version_one_part (test_linux_packaging_utils.TestVersionToStr) ... ok
+test_version_three_parts (test_linux_packaging_utils.TestVersionToStr) ... ok
+test_version_two_parts (test_linux_packaging_utils.TestVersionToStr) ... ok
 
 ----------------------------------------------------------------------
 Ran 5 tests in 0.002s
