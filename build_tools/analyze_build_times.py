@@ -26,8 +26,10 @@ CI Usage:
 
 import argparse
 import os
+import platform
 import re
 import sys
+import psutil
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -248,32 +250,42 @@ def get_system_info() -> Dict[str, str]:
     """Get build server system information."""
     info = {"cpu_model": "Unknown", "cpu_cores": "Unknown", "memory_gb": "Unknown"}
 
-    # Get CPU model from /proc/cpuinfo
-    try:
-        with open("/proc/cpuinfo", "r") as f:
-            for line in f:
-                if line.startswith("model name"):
-                    info["cpu_model"] = line.split(":")[1].strip()
-                    break
-    except (FileNotFoundError, IOError):
-        pass
+    # Get CPU cores using psutil
+    info["cpu_cores"] = str(psutil.cpu_count(logical=True) or "Unknown")
 
-    # Get CPU cores
-    try:
-        info["cpu_cores"] = str(os.cpu_count() or "Unknown")
-    except Exception:
-        pass
+    # Get memory using psutil (cross-platform)
+    mem = psutil.virtual_memory()
+    info["memory_gb"] = f"{mem.total / (1024 ** 3):.1f}"
 
-    # Get memory from /proc/meminfo
-    try:
-        with open("/proc/meminfo", "r") as f:
-            for line in f:
-                if line.startswith("MemTotal"):
-                    kb = int(line.split()[1])
-                    info["memory_gb"] = f"{kb / 1024 / 1024:.1f}"
-                    break
-    except (FileNotFoundError, IOError, ValueError):
-        pass
+    # Get CPU model - platform-specific
+    system = platform.system()
+    if system == "Linux":
+        # Linux: read from /proc/cpuinfo
+        try:
+            with open("/proc/cpuinfo", "r") as f:
+                for line in f:
+                    if line.startswith("model name"):
+                        info["cpu_model"] = line.split(":", 1)[1].strip()
+                        break
+        except (FileNotFoundError, IOError):
+            pass
+    elif system == "Windows":
+        # Windows: use platform.processor() or wmi
+        try:
+            processor = platform.processor()
+            if processor:
+                info["cpu_model"] = processor
+        except Exception:
+            pass
+
+    # Fallback to platform.processor() if still unknown
+    if info["cpu_model"] == "Unknown":
+        try:
+            processor = platform.processor()
+            if processor:
+                info["cpu_model"] = processor
+        except Exception:
+            pass
 
     return info
 
