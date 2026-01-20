@@ -5,6 +5,31 @@ if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_OCL_RUNTIME)
   if(THEROCK_ENABLE_OPENCL_CTS)
 
     ##############################################################################
+    # spirv-tools
+    # SPIR-V Tools for OpenCL CTS (spirv-as, spirv-val)
+    ##############################################################################
+
+    therock_cmake_subproject_declare(spirv-tools
+      USE_DIST_AMDGPU_TARGETS
+      EXTERNAL_SOURCE_DIR
+        "${CMAKE_CURRENT_SOURCE_DIR}/spirv-tools"
+        "${CMAKE_CURRENT_SOURCE_DIR}/spirv-headers"
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/spirv-tools"
+      BACKGROUND_BUILD
+      CMAKE_ARGS
+        "-DSPIRV-Headers_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/spirv-headers"
+        "-DSPIRV_SKIP_TESTS=ON"
+        "-DSPIRV_SKIP_EXECUTABLES=OFF"
+        "-DCMAKE_BUILD_TYPE=Release"
+      BUILD_DEPS
+        rocm-cmake
+      INTERFACE_PROGRAM_DIRS
+        "bin"
+    )
+    therock_cmake_subproject_glob_c_sources(spirv-tools SUBDIRS .)
+    therock_cmake_subproject_activate(spirv-tools)
+
+    ##############################################################################
     # opencl-cts
     # OpenCL Conformance Test Suite
     ##############################################################################
@@ -19,11 +44,14 @@ if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_OCL_RUNTIME)
       BACKGROUND_BUILD
       CMAKE_ARGS
         "-DCL_INCLUDE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/opencl-headers"
+        "-DCL_LIB_DIR=${CMAKE_BINARY_DIR}/core/ocl-clr/dist/lib"
         "-DSPIRV_INCLUDE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/spirv-headers"
+        "-DSPIRV_TOOLS_DIR=${CMAKE_CURRENT_BINARY_DIR}/spirv-tools/dist/bin"
         "-DOPENCL_LIBRARIES=OpenCL"
         "-DCMAKE_BUILD_TYPE=Release"
       BUILD_DEPS
         rocm-cmake
+        spirv-tools
       RUNTIME_DEPS
         ocl-clr
         ocl-icd
