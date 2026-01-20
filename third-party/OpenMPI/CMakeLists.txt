@@ -2,37 +2,13 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     set(_source_dir "${CMAKE_CURRENT_BINARY_DIR}/source")
     set(_download_stamp "${_source_dir}/download.stamp")
 
-    # TODO: mirror full release and use therock_subproject_fetch, this is for TESTING ONLY
-
-    if(EXISTS "${_source_dir}")
-        file(REMOVE_RECURSE "${_source_dir}")
-    endif()
-
-    execute_process(
-        COMMAND git clone --recursive --branch v5.0.9 https://github.com/open-mpi/ompi.git "${_source_dir}"
-        RESULT_VARIABLE GIT_CLONE_RESULT
-        OUTPUT_VARIABLE GIT_CLONE_OUT
-        ERROR_VARIABLE GIT_CLONE_ERR
+    therock_subproject_fetch(therock-openmpi-sources
+      SOURCE_DIR "${_source_dir}"
+      # Originally mirrored from: "https://download.open-mpi.org/release/open-mpi/v5.0/openmpi-5.0.9.tar.bz2"
+      URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/openmpi-5.0.9.tar.bz2"
+      URL_HASH "SHA256=dfb72762531170847af3e4a0f21d77d7b23cf36f67ce7ce9033659273677d80b"
+      TOUCH "${_download_stamp}"
     )
-
-    if(NOT GIT_CLONE_RESULT EQUAL 0)
-      message(FATAL_ERROR "Git clone failed:\n${GIT_CLONE_LOG}\n${GIT_CLONE_ERR}\n")
-    endif()
-
-    execute_process(
-        COMMAND git submodule update --init --recursive
-        WORKING_DIRECTORY "${_source_dir}"
-        RESULT_VARIABLE GIT_SUBMODULE_RESULT
-        OUTPUT_VARIABLE GIT_SUBMODULE_OUT
-        ERROR_VARIABLE GIT_SUBMODULE_ERR
-    )
-
-    if(NOT GIT_SUBMODULE_RESULT EQUAL 0)
-        message(FATAL_ERROR "Git submodule update failed:\n${GIT_SUBMODULE_OUT}\n${GIT_SUBMODULE_ERR}")
-    endif()
-
-    # Touch the download stamp
-    file(WRITE "${_download_stamp}" "")
 
     therock_cmake_subproject_declare(therock-openmpi
         USE_DIST_AMDGPU_TARGETS
@@ -75,12 +51,13 @@ endif()
 add_custom_target(
   build ALL
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  # release 5.0.9 uses autoconf 1.16.5, while the manylinux image uses 1.16.1, so we regenerate the autotools files due to incompatibility issues
   COMMAND
-    "${CMAKE_COMMAND}" -E chdir ${SOURCE_DIR} perl autogen.pl
+    ${CMAKE_COMMAND} -E chdir ${SOURCE_DIR} perl autogen.pl --force
   COMMAND
-    "${SOURCE_DIR}/configure" "--prefix=${MPI_PREFIX}" --disable-silent-rules
+    ${SOURCE_DIR}/configure --prefix=${MPI_PREFIX} --disable-silent-rules
   COMMAND
-    make -j "${PAR_JOBS}"
+    make -j ${PAR_JOBS}
   COMMAND
     make install
   VERBATIM
