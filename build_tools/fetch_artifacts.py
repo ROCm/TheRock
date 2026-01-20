@@ -29,7 +29,6 @@ If unspecified, we will create an anonymous boto file that can only acccess publ
 
 import argparse
 import concurrent.futures
-from dataclasses import dataclass
 import os
 from pathlib import Path
 import platform
@@ -42,6 +41,7 @@ from _therock_utils.artifacts import (
     ArtifactPopulator,
     _open_archive_for_read,
 )
+from artifact_manager import DownloadRequest, download_artifact
 from github_actions.github_actions_utils import retrieve_bucket_info
 
 
@@ -109,60 +109,20 @@ def filter_artifacts(
     return {a for a in artifacts if _should_include(a)}
 
 
-@dataclass
-class ArtifactDownloadRequest:
-    """Information about a request to download an artifact to a local path."""
-
-    artifact_name: str  # Artifact filename (e.g., "rocblas_lib_gfx94X.tar.xz")
-    output_path: Path
-    backend: ArtifactBackend
-
-    def __str__(self):
-        return f"{self.backend.base_uri}/{self.artifact_name}"
-
-
-def download_artifact(
-    artifact_download_request: ArtifactDownloadRequest,
-) -> ArtifactDownloadRequest:
-    """Download an artifact using the backend's download_artifact() method."""
-    artifact_name = artifact_download_request.artifact_name
-    output_path = artifact_download_request.output_path
-    backend = artifact_download_request.backend
-
-    log(f"++ Downloading {artifact_name} to {output_path}")
-    backend.download_artifact(artifact_name, output_path)
-    log(f"++ Download complete for {output_path}")
-    return artifact_download_request
-
-
-def download_artifacts(artifact_download_requests: list[ArtifactDownloadRequest]):
-    """Downloads artifacts in parallel using a thread pool executor."""
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        futures = [
-            executor.submit(download_artifact, artifact_download_request)
-            for artifact_download_request in artifact_download_requests
-        ]
-        for future in concurrent.futures.as_completed(futures):
-            future.result(timeout=60)
-
-
-def get_artifact_download_requests(
+def get_download_requests(
     backend: ArtifactBackend,
-    s3_artifacts: set[str],
+    artifacts: set[str],
     output_dir: Path,
-) -> list[ArtifactDownloadRequest]:
-    """Gets artifact download requests from requested artifacts."""
-    artifacts_to_download = []
-
-    for artifact in sorted(list(s3_artifacts)):
-        artifacts_to_download.append(
-            ArtifactDownloadRequest(
-                artifact_name=artifact,
-                output_path=output_dir / artifact,
-                backend=backend,
-            )
+) -> list[DownloadRequest]:
+    """Creates download requests for the given artifacts."""
+    return [
+        DownloadRequest(
+            artifact_key=artifact,
+            dest_path=output_dir / artifact,
+            backend=backend,
         )
-    return artifacts_to_download
+        for artifact in sorted(artifacts)
+    ]
 
 
 def get_postprocess_mode(args) -> str | None:
@@ -175,13 +135,13 @@ def get_postprocess_mode(args) -> str | None:
 
 
 def extract_artifact(
-    artifact: ArtifactDownloadRequest, *, delete_archive: bool, postprocess_mode: str
+    archive_path: Path, *, delete_archive: bool, postprocess_mode: str
 ):
     # Get (for example) 'amd-llvm_lib_generic' from '/path/to/amd-llvm_lib_generic.tar.xz'
     # We can't just use .stem since that only removes the last extension.
     #   1. .name gets us 'amd-llvm_lib_generic.tar.xz'
     #   2. .partition('.') gets (before, sep, after), discard all but 'before'
-    archive_file = artifact.output_path
+    archive_file = archive_path
     artifact_name, *_ = archive_file.name.partition(".")
 
     if postprocess_mode == "extract":
@@ -240,13 +200,15 @@ def run(args):
         log(f"Filtering artifacts for {run_id} resulted in an empty set. Exiting...")
         sys.exit(1)
 
-    artifacts_to_download = get_artifact_download_requests(
+    download_requests = get_download_requests(
         backend=backend,
-        s3_artifacts=s3_artifacts_filtered,
+        artifacts=s3_artifacts_filtered,
         output_dir=output_dir,
     )
 
-    download_summary = "\n  ".join([str(item) for item in artifacts_to_download])
+    download_summary = "\n  ".join(
+        [f"{req.backend.base_uri}/{req.artifact_key}" for req in download_requests]
+    )
     log(f"\nFiltered artifacts to download:\n  {download_summary}\n")
 
     if args.dry_run:
@@ -259,7 +221,7 @@ def run(args):
     ) as download_executor:
         download_futures = [
             download_executor.submit(download_artifact, req)
-            for req in artifacts_to_download
+            for req in download_requests
         ]
 
         postprocess_mode = get_postprocess_mode(args)
@@ -273,7 +235,10 @@ def run(args):
         ) as extract_executor:
             extract_futures: list[concurrent.futures.Future] = []
             for download_future in concurrent.futures.as_completed(download_futures):
+                # download_artifact returns Optional[Path] - None on failure
                 download_result = download_future.result(timeout=60)
+                if download_result is None:
+                    continue
                 extract_futures.append(
                     extract_executor.submit(
                         extract_artifact,

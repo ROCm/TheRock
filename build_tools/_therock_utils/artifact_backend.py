@@ -229,27 +229,10 @@ class S3Backend(ArtifactBackend):
         return sorted(set(artifacts))
 
     def download_artifact(self, artifact_key: str, dest_path: Path) -> None:
-        """Download from S3 with retry logic."""
-        import time
-
+        """Download from S3."""
         s3_key = f"{self.s3_prefix}/{artifact_key}"
         dest_path.parent.mkdir(parents=True, exist_ok=True)
-
-        max_retries = 3
-        base_delay = 3  # seconds
-        for attempt in range(max_retries):
-            try:
-                self.s3_client.download_file(self.bucket, s3_key, str(dest_path))
-                return
-            except Exception as e:
-                if attempt < max_retries - 1:
-                    delay = base_delay * (2**attempt)
-                    print(f"Download failed for {s3_key}: {e}. Retrying in {delay}s...")
-                    time.sleep(delay)
-                else:
-                    raise RuntimeError(
-                        f"Failed to download {s3_key} after {max_retries} retries"
-                    ) from e
+        self.s3_client.download_file(self.bucket, s3_key, str(dest_path))
 
     def upload_artifact(self, source_path: Path, artifact_key: str) -> None:
         """Upload to S3."""
