@@ -117,6 +117,9 @@ jobs:
           --group-add video
           --user root
           --env-file /etc/podinfo/gha-gpu-isolation-settings
+          # DNS workaround: These --dns entries are added to resolve CloudFront/runner DNS issues
+          # They should NOT be required for testing JAX and can be removed once DNS issues are resolved
+          # TODO: Remove these lines when issue is fixed - https://github.com/ROCm/TheRock/issues/3014
           --dns 8.8.8.8
           --dns 8.8.4.4
     defaults:
