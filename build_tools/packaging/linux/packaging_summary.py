@@ -1,20 +1,24 @@
 from datetime import datetime, timezone
 from packaging_utils import *
 
+
 def get_skipped_pkglist(pkg_list):
-    """ Determine which packages were skipped during packaging. 
+    """Determine which packages were skipped during packaging.
 
     This function reads package.json and builds the full list of packages
     that are eligible for packaging (i.e., not marked with 'Disablepackaging').
-    It then compares that list with the list of packages that were actually 
-    processed and returns the packages that were skipped. 
+    It then compares that list with the list of packages that were actually
+    processed and returns the packages that were skipped.
 
-    Parameters: pkg_list: A list of package names that were successfully packaged. 
+    Parameters: pkg_list: A list of package names that were successfully packaged.
 
-    Returns: A list of package names that were expected to be packaged but were skipped. """
+    Returns: A list of package names that were expected to be packaged but were skipped.
+    """
 
     data = read_package_json_file()
-    original_pkglist = [pkginfo["Package"] for pkginfo in data if not is_packaging_disabled(pkginfo)]
+    original_pkglist = [
+        pkginfo["Package"] for pkginfo in data if not is_packaging_disabled(pkginfo)
+    ]
     skipped_pkglist = [item for item in original_pkglist if item not in pkg_list]
     return skipped_pkglist
 
@@ -54,7 +58,7 @@ def write_build_manifest(config: PackageConfig, pkg_list):
     except Exception as e:
         print(f"⚠️  WARNING: Failed to write built packages manifest: {e}")
 
-  # Write skipped packages manifest
+    # Write skipped packages manifest
     if skipped_packages:
         skipped_file = Path(config.dest_dir) / "skipped_packages.txt"
         try:
@@ -78,7 +82,6 @@ def write_build_manifest(config: PackageConfig, pkg_list):
             print(f"⚠️  Skipped packages manifest written to: {skipped_file}")
         except Exception as e:
             print(f"⚠️  WARNING: Failed to write skipped packages manifest: {e}")
-
 
 
 def print_build_status(config: PackageConfig, pkg_list):
@@ -109,9 +112,7 @@ def print_build_status(config: PackageConfig, pkg_list):
         print(f"   (Showing base package names from package.json)")
         for pkg in sorted(skipped_packages):
             print(f"   - {pkg}")
-        print(
-            "\nNote: Skipped packages have been excluded from dependencies"
-        )
+        print("\nNote: Skipped packages have been excluded from dependencies")
 
     print("\n" + "=" * 80)
     print(f"Package type: {config.pkg_type.upper()}")
