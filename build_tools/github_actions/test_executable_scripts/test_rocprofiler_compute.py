@@ -60,8 +60,6 @@ cmd = [
     "--test-dir",
     f"{THEROCK_PATH}/libexec/rocprofiler-compute",
     "--output-on-failure",
-    "--parallel",
-    "8",
     "--timeout",
     "1800",
 ]
