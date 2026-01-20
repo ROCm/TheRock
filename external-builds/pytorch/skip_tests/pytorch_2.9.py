@@ -1,8 +1,11 @@
 # NOTE: not tested. just combining pytorch_2.7.py and pytorch_2.10.py to see if that resolves the OOM errors
 skip_tests = {
     "common": {
+        "autograd": [
+            "test_side_stream_backward_overlap",
+        ],
         "cuda": [
-            # Explicitly deselected since givind segfault
+            # Explicitly deselected since giving segfault
             "test_unused_output_device_cuda",  # this test does not exist in nightly anymore
             "test_pinned_memory_empty_cache",
             "test_float32_matmul_precision_get_set",
@@ -12,14 +15,39 @@ skip_tests = {
             # Greatest relative difference: 0.01495361328125 at index (3, 114, 184) (up to 0.01 allowed)
             "test_index_add_correctness",
             "test_graph_concurrent_replay",
-        ]
+            # passes on single run, crashes if run in a group
+            # TypeError: 'CustomDecompTable' object is not a mapping
+            "test_memory_compile_regions",
+            # AssertionError: False is not true
+            "test_memory_plots",
+            # AssertionError: Booleans mismatch: False is not True
+            "test_memory_plots_free_segment_stack",
+            # FileNotFoundError: [Errno 2] No such file or directory: '/github/home/.cache//flamegraph.pl'
+            "test_memory_snapshot",
+            # AssertionError: String comparison failed: 'test_memory_snapshot' != 'foo'
+            "test_memory_snapshot_script",
+            # AssertionError: False is not true
+            "test_memory_snapshot_with_cpp",
+            # AssertionError: Scalars are not equal!
+            "test_mempool_ctx_multithread",
+            # RuntimeError: Error building extension 'dummy_allocator'
+            "test_mempool_empty_cache_inactive",
+            # RuntimeError: Error building extension 'dummy_allocator_v1'
+            "test_mempool_limited_memory_with_allocator",
+            # for whatever reason these are also flaky: if run standalone they pass?
+            # AttributeError: module 'torch.backends.cudnn.rnn' has no attribute 'fp32_precision'
+            "test_fp32_precision_with_float32_matmul_precision",
+            # AttributeError: module 'torch.backends.cudnn.rnn' has no attribute 'fp32_precision'
+            "test_fp32_precision_with_tf32",
+            # AttributeError: module 'torch.backends.cudnn.rnn' has no attribute 'fp32_precision'
+            "test_invalid_status_for_legacy_api",
+        ],
     },
     "gfx942": {
         "autograd": [
             # fixed or just good with no caching?
             # "test_reentrant_parent_error_on_cpu_cuda",
             # "test_multi_grad_all_hooks",
-            # "test_side_stream_backward_overlap",
             # "test_side_stream_backward_overlap",
             #
             #  Test run says they are good????
@@ -35,27 +63,9 @@ skip_tests = {
             # "test_autograd_simple_views_python",
             "test_grad_dtype",
             # Skip entire TestAutogradMultipleDispatchCUDA class - all tests in this class fail
-            "TestAutogradMultipleDispatchCUDA",
         ],
         "cuda": [
             # "test_cpp_memory_snapshot_pickle",
-            "test_mempool_ctx_multithread",
-            #
-            # passes on single run, crashes if run in a group
-            "test_memory_plots",
-            "test_memory_compile_regions",
-            "test_memory_plots_free_segment_stack",
-            # FileNotFoundError: [Errno 2] No such file or directory: '/github/home/.cache//flamegraph.pl'
-            "test_memory_snapshot",
-            #  AssertionError: String comparison failed: 'test_memory_snapshot' != 'foo'
-            "test_memory_snapshot_script",
-            "test_memory_snapshot_with_cpp",
-            #
-            # /home/tester/TheRock/.venv/lib/python3.12/site-packages/torch/include/ATen/hip/Exceptions.h:4:10: fatal error: 'hipblas/hipblas.h' file not found
-            # 4 | #include <hipblas/hipblas.h>
-            # |          ^~~~~~~~~~~~~~~~~~~
-            #
-            "test_mempool_empty_cache_inactive",
             #
             # what():  HIP error: operation not permitted when stream is capturing
             # Search for `hipErrorStreamCaptureUnsupported' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__HIPRT__TYPES.html for more information.
@@ -69,8 +79,6 @@ skip_tests = {
             "test_graph_make_graphed_callables_parameterless_nograd_module_without_amp_not_allow_unused_input",
             "test_graph_concurrent_replay ",
             #
-            # Error building extension 'dummy_allocator'
-            "test_mempool_limited_memory_with_allocator",
             # OSError: libhiprtc.so: cannot open shared object file: No such file or directory
             # File "/home/tester/TheRock/.venv/lib/python3.12/site-packages/torch/cuda/_utils.py", line 57, in _get_hiprtc_library
             # lib = ctypes.CDLL("libhiprtc.so")
@@ -86,12 +94,6 @@ skip_tests = {
             "test_record_stream_on_shifted_view",
             #
             # for whatever reason these are also flaky: if run standalone they pass?
-            # AttributeError: module 'torch.backends.cudnn.rnn' has no attribute 'fp32_precision'
-            "test_fp32_precision_with_float32_matmul_precision",
-            # AttributeError: module 'torch.backends.cudnn.rnn' has no attribute 'fp32_precision'
-            "test_fp32_precision_with_tf32",
-            # AttributeError: module 'torch.backends.cudnn.rnn' has no attribute 'fp32_precision'
-            "test_invalid_status_for_legacy_api",
             # AttributeError: Unknown attribute allow_bf16_reduced_precision_reduction_split_k
             "test_cublas_allow_bf16_reduced_precision_reduction_get_set",
             # AttributeError: Unknown attribute allow_fp16_reduced_precision_reduction_split_k
@@ -116,9 +118,21 @@ skip_tests = {
         "torch": [
             "test_terminate_handler_on_crash",  # flaky !! hangs forever or works... can need up to 30 sec to pass
         ],
+    },
+    "gfx950": {
         "binary_ufuncs": [
-            # Skip entire BinaryUFuncsCUDA class - all tests in this class fail
-            "TestBinaryUfuncsCUDA",
+            # AssertionError: Tensor-likes are not close!
+            "test_contig_vs_every_other___rpow___cuda_complex64",
+            # AssertionError: Tensor-likes are not close!
+            "test_contig_vs_every_other__refs_pow_cuda_complex64",
+            # AssertionError: Tensor-likes are not close!
+            "test_contig_vs_every_other_pow_cuda_complex64",
+            # AssertionError: Tensor-likes are not close!
+            "test_non_contig___rpow___cuda_complex64",
+            # AssertionError: Tensor-likes are not close!
+            "test_non_contig__refs_pow_cuda_complex64",
+            # AssertionError: Tensor-likes are not close!
+            "test_non_contig_pow_cuda_complex64",
         ],
     },
 }

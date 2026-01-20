@@ -12,7 +12,10 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     )
 
     therock_cmake_subproject_declare(therock-libdrm
+      USE_DIST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR .
+      FPRINT_SOURCE_DIR "${_source_dir}"
+      FPRINT_FILE_GLOBS "${CMAKE_CURRENT_LIST_DIR}/*"
       BINARY_DIR build
       NO_MERGE_COMPILE_COMMANDS
       BACKGROUND_BUILD
@@ -62,6 +65,8 @@ add_custom_target(
   COMMAND
     # We have to patch the sources so make a fresh copy.
     "${CMAKE_COMMAND}" -E copy_directory "${SOURCE_DIR}" "${PATCH_SOURCE_DIR}"
+  COMMAND
+    bash "${CMAKE_CURRENT_SOURCE_DIR}/patch_source.sh" "${PATCH_SOURCE_DIR}"
   COMMAND
     # Inline the amdgpu device table.
     "${CMAKE_CURRENT_SOURCE_DIR}/inline_amdgpu_ids.sh" "${PATCH_SOURCE_DIR}"

@@ -28,6 +28,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 
   # Declare the sub-project (uses this same CMakeLists.txt as sub-build)
   therock_cmake_subproject_declare(therock-simde
+    USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR .
     BINARY_DIR build
     NO_MERGE_COMPILE_COMMANDS

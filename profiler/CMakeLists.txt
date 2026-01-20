@@ -79,12 +79,19 @@ if(THEROCK_ENABLE_ROCPROFV3)
       ${THEROCK_BUNDLED_ELFUTILS}
       ${THEROCK_BUNDLED_LIBDRM}
       ${THEROCK_BUNDLED_SQLITE3}
+    INTERFACE_LINK_DIRS
+      lib
+      lib/rocm_sysdeps/lib
+    INTERFACE_INSTALL_RPATH_DIRS
+      lib
+      lib/rocm_sysdeps/lib
   )
   therock_cmake_subproject_glob_c_sources(rocprofiler-sdk
     SUBDIRS .
   )
   therock_cmake_subproject_provide_package(rocprofiler-sdk rocprofiler-sdk lib/cmake/rocprofiler-sdk)
   therock_cmake_subproject_provide_package(rocprofiler-sdk rocprofiler-sdk-roctx lib/cmake/rocprofiler-sdk-roctx)
+  therock_cmake_subproject_provide_package(rocprofiler-sdk rocprofiler-sdk-rocpd lib/cmake/rocprofiler-sdk-rocpd)
   therock_cmake_subproject_activate(rocprofiler-sdk)
 
   ##############################################################################
@@ -97,6 +104,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
+      -DCHECK_PYTHON_DEPS=OFF
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
