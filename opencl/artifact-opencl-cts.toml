@@ -1,5 +1,5 @@
 # opencl-cts
 [components.test."opencl/opencl-cts/stage"]
 include = [
-  "test_conformance/**",
+  "bin/**",
 ]

@@ -19,15 +19,17 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 ROCM_PATH = THEROCK_BIN_DIR.parent
 
-CTS_BUILD_DIR = THEROCK_BIN_DIR / "opencl-cts"
+# CTS test executables are in bin/ directory
+CTS_BIN_DIR = THEROCK_BIN_DIR / "bin"
 OPENCL_ICD_FILENAMES = ROCM_PATH / "lib" / "opencl" / "libamdocl64.so"
 
 logging.info(f"THEROCK_BIN_DIR: {THEROCK_BIN_DIR}")
 logging.info(f"ROCM_PATH: {ROCM_PATH}")
-logging.info(f"CTS_BUILD_DIR: {CTS_BUILD_DIR}")
+logging.info(f"CTS_BIN_DIR: {CTS_BIN_DIR}")
 
 
 def verify_opencl_runtime():
+    """Verify OpenCL runtime is available using clinfo"""
     logging.info("++ Verifying OpenCL runtime availability")
 
     clinfo_path = ROCM_PATH / "bin" / "clinfo"
@@ -61,37 +63,100 @@ def verify_opencl_runtime():
         logging.warning(f"Error running clinfo: {e}")
 
 
-def run_tests():
-    logging.info("++ Running OpenCL-CTS tests")
-
-    if not CTS_BUILD_DIR.exists():
+def find_test_executables():
+    """Find all test_* executables in the CTS bin directory"""
+    if not CTS_BIN_DIR.exists():
         logging.error(
-            f"OpenCL-CTS build directory not found at {CTS_BUILD_DIR}. "
-            "Please ensure opencl-cts was built during the build stage."
+            f"OpenCL-CTS bin directory not found at {CTS_BIN_DIR}. "
+            "Please ensure opencl-cts was built and artifacts were created."
         )
         sys.exit(1)
 
-    test_conformance_dir = CTS_BUILD_DIR / "test_conformance"
-    run_conformance_script = test_conformance_dir / "run_conformance.py"
-    test_csv = test_conformance_dir / "opencl_conformance_tests_full.csv"
+    # Find all test_* executables recursively
+    test_executables = []
+    for test_exe in CTS_BIN_DIR.rglob("test_*"):
+        if test_exe.is_file() and os.access(test_exe, os.X_OK):
+            test_executables.append(test_exe)
 
-    if not run_conformance_script.exists():
-        logging.error(f"run_conformance.py not found at {run_conformance_script}")
+    if not test_executables:
+        logging.error(f"No test executables found in {CTS_BIN_DIR}")
         sys.exit(1)
 
-    if not test_csv.exists():
-        logging.error(f"Test CSV not found at {test_csv}")
-        sys.exit(1)
+    # Sort for consistent execution order
+    test_executables.sort()
+    return test_executables
 
-    cmd = [
-        "python",
-        str(run_conformance_script),
-        str(test_csv),
-    ]
-    logging.info(f"++ Exec [{test_conformance_dir}]$ {shlex.join(cmd)}")
+
+def run_test(test_exe, env):
+    """Run a single test executable and return True if it passes"""
+    test_name = test_exe.name
+    logging.info(f"++ Running test: {test_name}")
+
+    cmd = [str(test_exe)]
+    logging.info(f"++ Exec [{test_exe.parent}]$ {shlex.join(cmd)}")
+
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=str(test_exe.parent),
+            capture_output=True,
+            text=True,
+            timeout=300,  # 5 minute timeout per test
+            env=env,
+        )
+
+        if result.returncode == 0:
+            logging.info(f"✓ PASSED: {test_name}")
+            return True
+        else:
+            logging.error(f"✗ FAILED: {test_name} (exit code: {result.returncode})")
+            if result.stdout:
+                logging.error(f"  stdout: {result.stdout[:500]}")
+            if result.stderr:
+                logging.error(f"  stderr: {result.stderr[:500]}")
+            return False
+
+    except subprocess.TimeoutExpired:
+        logging.error(f"✗ TIMEOUT: {test_name} (exceeded 300 seconds)")
+        return False
+    except Exception as e:
+        logging.error(f"✗ ERROR: {test_name} - {e}")
+        return False
+
+
+def run_tests():
+    """Run all OpenCL CTS test executables"""
+    logging.info("++ Running OpenCL-CTS tests")
+
+    # Set up environment
     env = os.environ.copy()
     env["OCL_ICD_FILENAMES"] = str(OPENCL_ICD_FILENAMES)
-    subprocess.run(cmd, cwd=str(test_conformance_dir), check=True, env=env)
+
+    # Find all test executables
+    test_executables = find_test_executables()
+    logging.info(f"Found {len(test_executables)} test executables")
+
+    # Run each test
+    passed = 0
+    failed = 0
+    for test_exe in test_executables:
+        if run_test(test_exe, env):
+            passed += 1
+        else:
+            failed += 1
+
+    # Summary
+    total = passed + failed
+    logging.info("=" * 70)
+    logging.info(f"OpenCL-CTS Test Summary:")
+    logging.info(f"  Total:  {total}")
+    logging.info(f"  Passed: {passed}")
+    logging.info(f"  Failed: {failed}")
+    logging.info("=" * 70)
+
+    if failed > 0:
+        logging.error(f"{failed} test(s) failed")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
