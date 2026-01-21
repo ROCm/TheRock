@@ -127,7 +127,7 @@ def run_tests():
     env = os.environ.copy()
     env["OCL_ICD_FILENAMES"] = str(OPENCL_ICD_FILENAMES)
 
-    lib_dir = THEROCK_BIN_DIR / "lib"
+    lib_dir = ROCM_PATH / "lib"
     if lib_dir.exists():
         ld_library_path = str(lib_dir)
         if "LD_LIBRARY_PATH" in env:
