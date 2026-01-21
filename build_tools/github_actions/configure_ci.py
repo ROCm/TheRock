@@ -692,6 +692,7 @@ def main(base_args, linux_families, windows_families):
 
         # If any test label is included, run full test suite for specified tests
         if linux_test_output or windows_test_output:
+            print("A test label was included. Running full tests.")
             test_type = "full"
 
     # Format variants for summary - handle both regular and multi-arch modes
