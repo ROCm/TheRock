@@ -54,6 +54,7 @@ cmd = [
     "8",
     "--timeout",
     "600",
+    "--verbose",
 ]
 logging.info(f"++ Exec [{THEROCK_PATH}]$ {shlex.join(cmd)}")
 subprocess.run(
