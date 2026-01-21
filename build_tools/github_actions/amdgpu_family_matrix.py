@@ -71,7 +71,6 @@ amdgpu_family_info_matrix_presubmit = {
             "family": "gfx110X-all",
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
-            "sanity_check_only_for_family": True,
         },
     },
     "gfx1151": {
