@@ -30,7 +30,6 @@ origami_test_dir = bin_dir / "origami"
 path_sep = ";" if platform == "windows" else ":"
 
 # LD_LIBRARY_PATH is needed for Python tests to find liborigami.so
-# (the origami Python module is a pybind11 binding that links against liborigami)
 if platform == "linux":
     ld_paths = [
         str(lib_dir),
@@ -49,7 +48,7 @@ elif platform == "windows":
 
 # Set PYTHONPATH to help Python find the origami module
 python_paths = [
-    str(origami_test_dir),               # Where origami Python module is staged
+    str(origami_test_dir), # Where origami Python module is staged
     environ_vars.get("PYTHONPATH", ""),
 ]
 environ_vars["PYTHONPATH"] = path_sep.join(p for p in python_paths if p)
@@ -72,8 +71,6 @@ cmd = [
 
 if platform == "windows":
     cmd.extend(["-R", "origami-tests"])
-elif test_type == "smoke":
-    cmd.extend(["-R", "origami_python|GEMM:.*compute"])
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=environ_vars)
