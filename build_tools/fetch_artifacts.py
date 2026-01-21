@@ -153,7 +153,6 @@ def run(args):
     run_id = args.run_id
     artifact_group = args.artifact_group
     output_dir = args.output_dir
-    output_dir.mkdir(parents=True, exist_ok=True)
 
     external_repo, bucket = retrieve_bucket_info(
         github_repository=run_github_repo,
@@ -202,6 +201,8 @@ def run(args):
     if args.dry_run:
         log("Skipping downloads since --dry-run was set")
         return
+
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     # Download and extract in parallel.
     with concurrent.futures.ThreadPoolExecutor(
