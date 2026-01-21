@@ -10,6 +10,10 @@ Required environment variables:
 Optional environment variables:
   - VCToolsInstallDir
   - GITHUB_WORKSPACE
+  - EXTRA_C_COMPILER_LAUNCHER: Additional C compiler launcher to prepend before ccache
+                               (e.g., resource_info.py for build time analysis)
+  - EXTRA_CXX_COMPILER_LAUNCHER: Additional CXX compiler launcher to prepend before ccache
+                                 (e.g., resource_info.py for build time analysis)
 """
 
 import argparse
@@ -33,6 +37,31 @@ extra_cmake_options = os.getenv("extra_cmake_options")
 build_dir = os.getenv("BUILD_DIR")
 vctools_install_dir = os.getenv("VCToolsInstallDir")
 github_workspace = os.getenv("GITHUB_WORKSPACE")
+extra_c_compiler_launcher = os.getenv("EXTRA_C_COMPILER_LAUNCHER", "")
+extra_cxx_compiler_launcher = os.getenv("EXTRA_CXX_COMPILER_LAUNCHER", "")
+
+
+def build_compiler_launcher(extra_launcher: str, default_launcher: str = "ccache") -> str:
+    """Build compiler launcher string, prepending extra launcher if provided.
+
+    Args:
+        extra_launcher: Additional launcher to prepend (e.g., resource_info.py)
+        default_launcher: Default launcher to use (default: ccache)
+
+    Returns:
+        Launcher string for CMake. If extra_launcher is provided, returns
+        "extra_launcher;default_launcher", otherwise returns default_launcher.
+
+    Example:
+        build_compiler_launcher("/path/to/resource_info.py", "ccache")
+        -> "/path/to/resource_info.py;ccache"
+
+        build_compiler_launcher("", "ccache")
+        -> "ccache"
+    """
+    if extra_launcher:
+        return f"{extra_launcher};{default_launcher}"
+    return default_launcher
 
 platform_options = {
     "windows": [
@@ -56,12 +85,16 @@ def build_configure(manylinux=False):
     ]
     if cmake_preset:
         cmd.extend(["--preset", cmake_preset])
+    # Build compiler launcher strings (prepend extra launcher if provided)
+    c_launcher = build_compiler_launcher(extra_c_compiler_launcher)
+    cxx_launcher = build_compiler_launcher(extra_cxx_compiler_launcher)
+
     cmd.extend(
         [
             f"-DTHEROCK_AMDGPU_FAMILIES={amdgpu_families}",
             f"-DTHEROCK_PACKAGE_VERSION='{package_version}'",
-            "-DCMAKE_C_COMPILER_LAUNCHER=ccache",
-            "-DCMAKE_CXX_COMPILER_LAUNCHER=ccache",
+            f"-DCMAKE_C_COMPILER_LAUNCHER={c_launcher}",
+            f"-DCMAKE_CXX_COMPILER_LAUNCHER={cxx_launcher}",
             "-DBUILD_TESTING=ON",
         ]
     )
