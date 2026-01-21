@@ -102,7 +102,7 @@ def print_build_status(config: PackageConfig, pkg_list):
     built_count = len(pkg_list)
     total_packages = built_count + skipped_count
 
-    print(f"\nTotal packages attempted: {built_count}")
+    print(f"\nTotal packages attempted: {total_packages}")
     print(f"✅ Successfully built: {built_count}")
     print(f"   (Showing base package names)")
     for pkg in sorted(pkg_list):
