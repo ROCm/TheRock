@@ -121,6 +121,12 @@ s3_client = boto3.client(
     verify=False,
     config=Config(max_pool_connections=100, signature_version=UNSIGNED),
 )
+# S3 bucket names for TheRock releases.
+# NOTE: These buckets will be restricted to CloudFront-only access in the future.
+# When that happens, direct S3 API calls (list_objects, download_fileobj) will fail
+# and this script will need to be updated to use CloudFront URLs instead.
+NIGHTLY_BUCKET_NAME = "therock-nightly-tarball"
+DEV_BUCKET_NAME = "therock-dev-tarball"
 
 
 def parse_nightly_version(version: str) -> Optional[datetime]:
@@ -154,13 +160,12 @@ def list_available_nightly_gpu_families(platform_str: str = PLATFORM) -> set[str
     Query S3 to find all GPU families that have nightly releases.
     Useful for error messages when an invalid GPU family is specified.
     """
-    bucket_name = "therock-nightly-tarball"
     prefix = f"therock-dist-{platform_str}-"
 
     paginator = s3_client.get_paginator("list_objects_v2")
     families: set[str] = set()
 
-    for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
+    for page in paginator.paginate(Bucket=NIGHTLY_BUCKET_NAME, Prefix=prefix):
         for obj in page.get("Contents", []):
             # Extract family from: therock-dist-linux-{family}-{version}.tar.gz
             match = re.match(rf"{prefix}([\w-]+)-", obj["Key"])
@@ -181,13 +186,12 @@ def _fetch_and_sort_nightly_releases(
         List of dicts with keys: version, asset_name, last_modified, size, parsed_date
         Sorted by recency (newest first).
     """
-    bucket_name = "therock-nightly-tarball"
     prefix = f"therock-dist-{platform_str}-{artifact_group}-"
 
     paginator = s3_client.get_paginator("list_objects_v2")
     releases: list[dict] = []
 
-    for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
+    for page in paginator.paginate(Bucket=NIGHTLY_BUCKET_NAME, Prefix=prefix):
         for obj in page.get("Contents", []):
             key = obj["Key"]
             if not key.endswith(".tar.gz"):
@@ -434,9 +438,7 @@ def retrieve_artifacts_by_release(args):
         log("Exiting...")
         return
 
-    release_bucket = (
-        "therock-nightly-tarball" if nightly_release else "therock-dev-tarball"
-    )
+    release_bucket = NIGHTLY_BUCKET_NAME if nightly_release else DEV_BUCKET_NAME
     release_version = args.release
 
     log(f"Retrieving artifacts from release bucket {release_bucket}")
@@ -510,7 +512,7 @@ def retrieve_artifacts_by_latest(args):
 
     # Reuse existing download logic
     _retrieve_s3_release_assets(
-        release_bucket="therock-nightly-tarball",
+        release_bucket=NIGHTLY_BUCKET_NAME,
         artifact_group=args.artifact_group,
         release_version=version,
         output_dir=args.output_dir,
