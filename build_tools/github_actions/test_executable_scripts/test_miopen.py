@@ -132,12 +132,13 @@ if AMDGPU_FAMILIES in ["gfx110X-all", "gfx1150", "gfx1151", "gfx120X-all"]:
     negative_filter.append("Smoke/GPU_MultiMarginLoss_*")
     negative_filter.append("CPU_TuningPolicy_NONE")
     negative_filter.append("Full/CPU_CandidateSelection_NONE*")
-    negative_filter.append("GPU_GroupConv2D_Forward_BFP16*")  # It tries to hipMalloc 2.5GB of memory
     negative_filter.append("GPU_OpTensorFwdBiasTest_FP32*")
     negative_filter.append("GPU_ConvGrpBiasActivInfer3D_BFP16*")
     negative_filter.append("GPU_ConvGrpActivInfer_BFP16*")
+    negative_filter.append(
+        "GPU_GroupConv2D_Forward_BFP16*"
+    )  # It tries to hipMalloc 2.5GB of memory
 
-    
     # Tests failing CI now but are not new
 
 ####################################################
