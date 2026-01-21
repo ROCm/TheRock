@@ -48,7 +48,7 @@ elif platform == "windows":
 
 # Set PYTHONPATH to help Python find the origami module
 python_paths = [
-    str(origami_test_dir), # Where origami Python module is staged
+    str(origami_test_dir),  # Where origami Python module is staged
     environ_vars.get("PYTHONPATH", ""),
 ]
 environ_vars["PYTHONPATH"] = path_sep.join(p for p in python_paths if p)
