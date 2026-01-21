@@ -149,6 +149,29 @@ skip_tests = {
             "test_reference_numerics_small_special_spherical_bessel_j0_cuda_uint8",
         ],
     },
+    "gfx950": {
+        "binary_ufuncs": [
+            # for all the pow() issues see https://github.com/ROCm/TheRock/issues/2070
+            # AssertionError: Tensor-likes are not close!
+            "test_contig_vs_every_other___rpow___cuda_complex64",
+            # AssertionError: Tensor-likes are not close!
+            "test_contig_vs_every_other__refs_pow_cuda_complex64",
+            # AssertionError: Tensor-likes are not close!
+            "test_contig_vs_every_other_pow_cuda_complex64",
+            # AssertionError: Tensor-likes are not close!
+            "test_non_contig___rpow___cuda_complex64",
+            # AssertionError: Tensor-likes are not close!
+            "test_non_contig__refs_pow_cuda_complex64",
+            # AssertionError: Tensor-likes are not close!
+            "test_non_contig_pow_cuda_complex64",
+            # AssertionError: Tensor-likes are not close!
+            "test_batch_vs_slicing_pow_cuda_complex64",
+            # 2.11 specific?
+            "test_batch_vs_slicing__refs_pow_cuda_complex64",
+            "test_batch_vs_slicing__refs_pow_cuda_complex32",
+            "test_batch_vs_slicing___rpow___cuda_complex64",
+        ],
+    },
     # Special notes for Windows:
     #   * Some tests hang and *must* be skipped for testing to complete.
     #     That is likely related to processes not terminating on their own:
