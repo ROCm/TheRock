@@ -166,8 +166,11 @@ set(rocBLAS_optional_runtime_deps)
 if(NOT WIN32)
   # rocBLAS is hard-coded to not expect rocm-smi.
   list(APPEND rocBLAS_optional_runtime_deps rocm_smi_lib)
-elseif(THEROCK_BUILD_TESTING)
-  list(APPEND rocBLAS_optional_runtime_deps therock-host-blas)
+endif()
+if(THEROCK_BUILD_TESTING)
+  # CPU reference BLAS libraries for rocBLAS clients/tests
+  list(APPEND rocBLAS_optional_runtime_deps therock-host-blas)       # OpenBLAS
+  list(APPEND rocBLAS_optional_runtime_deps therock-aocl-blas)       # AOCL-BLAS
 endif()
 
 therock_cmake_subproject_declare(rocBLAS
@@ -188,7 +191,7 @@ therock_cmake_subproject_declare(rocBLAS
     -DTENSILE_VERSION=
     -DBUILD_CLIENTS_TESTS=${THEROCK_BUILD_TESTING}
     -DBUILD_CLIENTS_BENCHMARKS=${THEROCK_BUILD_TESTING}
-    -DLINK_BLIS=OFF
+    -DLINK_BLIS=${THEROCK_BUILD_TESTING}  # Links AOCL-BLAS (libaocl.a) for CPU BLAS
   CMAKE_INCLUDES
     therock_explicit_finders.cmake
   COMPILER_TOOLCHAIN
