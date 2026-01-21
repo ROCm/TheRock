@@ -14,7 +14,7 @@ THIS_DIR = Path(__file__).resolve().parent
 PYTORCH_DIR = THIS_DIR.parent
 sys.path.insert(0, os.fspath(PYTORCH_DIR))
 
-import generate_pytorch_manifest as m  # noqa: E402
+import generate_pytorch_manifest as m
 
 
 class GeneratePyTorchSourcesManifestTest(unittest.TestCase):
