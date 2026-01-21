@@ -40,6 +40,12 @@ github_workspace = os.getenv("GITHUB_WORKSPACE")
 extra_c_compiler_launcher = os.getenv("EXTRA_C_COMPILER_LAUNCHER", "")
 extra_cxx_compiler_launcher = os.getenv("EXTRA_CXX_COMPILER_LAUNCHER", "")
 
+# Normalize paths to use forward slashes for CMake compatibility on Windows
+if extra_c_compiler_launcher:
+    extra_c_compiler_launcher = extra_c_compiler_launcher.replace("\\", "/")
+if extra_cxx_compiler_launcher:
+    extra_cxx_compiler_launcher = extra_cxx_compiler_launcher.replace("\\", "/")
+
 
 def build_compiler_launcher(extra_launcher: str, default_launcher: str = "ccache") -> str:
     """Build compiler launcher string, prepending extra launcher if provided.
