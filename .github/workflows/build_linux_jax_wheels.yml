@@ -93,7 +93,7 @@ on:
         description: CloudFront base URL pointing to staging Python index
         type: string
         default: "https://rocm.devreleases.amd.com/v2-staging"
-      jax_ref:
+      ref:
         description: rocm-jax repository ref/branch to check out
         type: string
         default: rocm-jaxlib-v0.8.0
