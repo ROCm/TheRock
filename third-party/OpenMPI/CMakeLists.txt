@@ -24,13 +24,11 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         "-DSOURCE_DIR=${_source_dir}"
         BINARY_DIR
           build
-        INSTALL_DESTINATION
-          lib/MPI
         EXTRA_DEPENDS
           "${_download_stamp}"
     )
 
-    therock_cmake_subproject_provide_package(therock-openmpi MPI lib/MPI/lib/cmake/OpenMPI)
+    therock_cmake_subproject_provide_package(therock-openmpi MPI lib/cmake/OpenMPI)
 
     therock_cmake_subproject_activate(therock-openmpi)
     return()
@@ -65,16 +63,23 @@ add_custom_target(
   VERBATIM
 )
 
-install(
-  DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/install/"
-  DESTINATION lib
-  PATTERN "include" EXCLUDE
+install(DIRECTORY "${MPI_PREFIX}/"
+        DESTINATION .
+        PATTERN "*.mod" EXCLUDE
 )
 
-install(
-  DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/install/include/"
-  DESTINATION include
-)
+# make install puts .mod files into lib, to avoid passing lib as an include-dir
+# of fortran we move them in the final install to the mod directory
+install(CODE "
+  file(GLOB_RECURSE MOD_FILES \"${MPI_PREFIX}/*.mod\")
+  if(MOD_FILES)
+    file(INSTALL
+      DESTINATION \"\${CMAKE_INSTALL_PREFIX}/mod\"
+      TYPE FILE
+      FILES \${MOD_FILES}
+    )
+  endif()
+")
 
 configure_package_config_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/mpi-config.cmake.in"
