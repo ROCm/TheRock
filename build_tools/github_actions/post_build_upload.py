@@ -258,7 +258,9 @@ def upload_manifest_to_s3(artifact_group: str, build_dir: Path, bucket_uri: str)
     run_aws_cp(manifest_path, dest, content_type="application/json")
 
 
-def write_gha_build_summary(artifact_group: str, bucket_url: str, job_status: str, build_dir: Path):
+def write_gha_build_summary(
+    artifact_group: str, bucket_url: str, job_status: str, build_dir: Path
+):
     log(f"Adding links to job summary to bucket {bucket_url}")
 
     log_index_url = f"{bucket_url}/logs/{artifact_group}/index.html"
@@ -322,7 +324,9 @@ def run(args):
 
     log("Write github actions build summary")
     log("--------------------")
-    write_gha_build_summary(args.artifact_group, bucket_url, args.job_status, args.build_dir)
+    write_gha_build_summary(
+        args.artifact_group, bucket_url, args.job_status, args.build_dir
+    )
 
 
 if __name__ == "__main__":
