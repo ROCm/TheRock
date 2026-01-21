@@ -35,6 +35,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
 
+if platform.system() == "Windows":
+    import wmi
+else:
+    wmi = None
+
 # =============================================================================
 # Configuration
 # =============================================================================
@@ -260,7 +265,6 @@ def get_system_info() -> Dict[str, str]:
     # Get CPU model - platform-specific
     system = platform.system()
     if system == "Linux":
-        # Linux: read from /proc/cpuinfo
         try:
             with open("/proc/cpuinfo", "r") as f:
                 for line in f:
@@ -270,13 +274,11 @@ def get_system_info() -> Dict[str, str]:
         except (FileNotFoundError, IOError):
             pass
     elif system == "Windows":
-        # Windows: use platform.processor() or wmi
-        try:
-            processor = platform.processor()
-            if processor:
-                info["cpu_model"] = processor
-        except Exception:
-            pass
+        if wmi is not None:
+            w = wmi.WMI()
+            for processor in w.Win32_Processor():
+                info["cpu_model"] = processor.Name
+                break
 
     # Fallback to platform.processor() if still unknown
     if info["cpu_model"] == "Unknown":
