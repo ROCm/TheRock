@@ -12,20 +12,41 @@ THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
 logging.basicConfig(level=logging.INFO)
 
-# Build the ctest command
-cmd = [
-    "ctest",
-    "--test-dir",
-    f"{THEROCK_BIN_DIR}/fusilli_plugin_test_infra",
-    "--output-on-failure",
-    "--parallel",
-    "8",
-    "--timeout",
-    "600",
-]
+# TODO: Remove this - temporarily running hipDNN integration tests instead of fusilli plugin tests
+RUN_HIPDNN_INTEGRATION_TESTS = True
+
+if RUN_HIPDNN_INTEGRATION_TESTS:
+    # Run hipDNN integration tests with fusilli plugin
+    cmd = [
+        str(THEROCK_BIN_DIR / "hipdnn_integration_tests"),
+    ]
+else:
+    # Build the ctest command
+    cmd = [
+        "ctest",
+        "--test-dir",
+        f"{THEROCK_BIN_DIR}/fusilli_plugin_test_infra",
+        "--output-on-failure",
+        "--parallel",
+        "8",
+        "--timeout",
+        "600",
+    ]
 
 # Set up environment variables
 environ_vars = os.environ.copy()
+
+# TODO: Remove this - set plugin path for hipDNN integration tests
+if RUN_HIPDNN_INTEGRATION_TESTS:
+    plugin_path = (
+        THEROCK_BIN_DIR.parent
+        / "lib"
+        / "hipdnn_plugins"
+        / "engines"
+        / "libfusilli_plugin.so"
+    )
+    environ_vars["HIPDNN_TEST_PLUGIN_PATH"] = str(plugin_path)
+    logging.info(f"Using plugin: {plugin_path}")
 
 # Determine test filter based on TEST_TYPE environment variable
 test_type = os.getenv("TEST_TYPE", "full")
