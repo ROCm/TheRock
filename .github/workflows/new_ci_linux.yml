@@ -3,21 +3,11 @@ name: CI - Linux
 on:
   workflow_call:
     inputs:
-      artifact_group:
-        type: string
       amdgpu_family_config:
-        type: string
-      build_variant_label:
-        type: string
-      build_variant_cmake_preset:
-        type: string
-      build_variant_suffix:
         type: string
       test_labels:
         type: string
       artifact_run_id:
-        type: string
-      test_runs_on:
         type: string
       use_prebuilt_artifacts:
         type: string
@@ -38,12 +28,12 @@ jobs:
     uses: ./.github/workflows/build_portable_linux_artifacts.yml
     secrets: inherit
     with:
-      artifact_group: ${{ inputs.artifact_group }}
+      artifact_group: ${{ fromJSON(inputs.amdgpu_family_config).build.artifact_group }}
       package_version: ${{ inputs.rocm_package_version }}
       amdgpu_families: ${{ fromJSON(inputs.amdgpu_family_config).amdgpu_family }}
-      build_variant_label: ${{ inputs.build_variant_label }}
-      build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
-      build_variant_suffix: ${{ inputs.build_variant_suffix }}
+      build_variant_label: ${{ fromJSON(inputs.amdgpu_family_config).build.build_variant_label }}
+      build_variant_cmake_preset: ${{ fromJSON(inputs.amdgpu_family_config).build.build_variant_cmake_preset }}
+      build_variant_suffix: ${{ fromJSON(inputs.amdgpu_family_config).build.build_variant_suffix }}
       expect_failure: ${{ fromJSON(inputs.amdgpu_family_config).build.expect_failure }}
       container_image: ${{ inputs.container_image }}
     permissions:
@@ -78,7 +68,7 @@ jobs:
       }}
     uses: ./.github/workflows/test_artifacts.yml
     with:
-      artifact_group: ${{ inputs.artifact_group }}
+      artifact_group: ${{ fromJSON(inputs.amdgpu_family_config).build.artifact_group }}
       amdgpu_families: ${{ fromJSON(inputs.amdgpu_family_config).amdgpu_family }}
       test_runs_on: ${{ fromJSON(inputs.amdgpu_family_config).test.runs_on.test }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
@@ -107,7 +97,7 @@ jobs:
     uses: ./.github/workflows/test_benchmarks.yml
     secrets: inherit
     with:
-      artifact_group: ${{ inputs.artifact_group }}
+      artifact_group: ${{ fromJSON(inputs.amdgpu_family_config).build.artifact_group }}
       amdgpu_families: ${{ fromJSON(inputs.amdgpu_family_config).amdgpu_family }}
       test_runs_on: ${{ fromJSON(inputs.amdgpu_family_config).test.runs_on.benchmark }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
@@ -131,5 +121,5 @@ jobs:
     uses: ./.github/workflows/build_portable_linux_python_packages.yml
     with:
       artifact_run_id: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
-      artifact_group: ${{ inputs.artifact_group }}
+      artifact_group: ${{ fromJSON(inputs.amdgpu_family_config).build.artifact_group }}
       package_version: ${{ inputs.rocm_package_version }}
