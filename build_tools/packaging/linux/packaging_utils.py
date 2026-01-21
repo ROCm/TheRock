@@ -258,6 +258,11 @@ def get_package_list(artifact_dir):
         if is_packaging_disabled(pkg_info):
             continue
 
+        # metapackages don't need artifact lookup
+        if is_meta_package(pkg_info):
+            pkg_list.append(pkg_info["Package"])
+            continue
+
         artifactory_list = pkg_info.get("Artifactory", [])
         artifact_found = False
 
@@ -277,8 +282,7 @@ def get_package_list(artifact_dir):
             if artifact_found:
                 break
 
-        # Include metapackages even if no artifact directory exists
-        if artifact_found or is_meta_package(pkg_info):
+        if artifact_found:
             pkg_list.append(pkg_info["Package"])
 
     return pkg_list
@@ -576,7 +580,7 @@ def filter_components_fromartifactory(pkg_name, artifacts_dir, gfx_arch):
                                 source_path = source_dir / line.strip()
                                 sourcedir_list.append(source_path)
                 except OSError as e:
-                    print(f"Could not read {filename}: {e}")
+                    print(f"Could not read manifest {filename}: {e}")
                     continue
 
     return sourcedir_list

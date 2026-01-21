@@ -46,7 +46,7 @@ def write_build_manifest(config: PackageConfig, pkg_list):
             f.write(
                 f"# Build Date: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}\n"
             )
-            f.write(f"# Total Attempted: {len(pkg_list)}\n")
+            f.write(f"# Total Attempted: {len(pkg_list) + len(skipped_packages)}\n")
             f.write(f"# Successfully Built: {len(pkg_list)}\n")
             f.write(f"# Skipped: {len(skipped_packages)}\n")
             f.write(f"\n")
@@ -98,11 +98,12 @@ def print_build_status(config: PackageConfig, pkg_list):
     print("=" * 80)
 
     skipped_packages = get_skipped_pkglist(pkg_list)
-    total_packages = len(pkg_list)
     skipped_count = len(skipped_packages)
+    built_count = len(pkg_list)
+    total_packages = built_count + skipped_count
 
-    print(f"\nTotal packages attempted: {total_packages}")
-    print(f"✅ Successfully built: {total_packages}")
+    print(f"\nTotal packages attempted: {built_count}")
+    print(f"✅ Successfully built: {built_count}")
     print(f"   (Showing base package names)")
     for pkg in sorted(pkg_list):
         print(f"   - {pkg}")
