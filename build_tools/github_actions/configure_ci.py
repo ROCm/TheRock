@@ -649,26 +649,26 @@ def main(base_args, linux_families, windows_families):
     is_pull_request = github_event_name == "pull_request"
     is_schedule = github_event_name == "schedule"
 
-    base_ref = base_args.get("base_ref")
     branch_name = base_args.get("branch_name", "")
+    base_ref = base_args.get("base_ref")
     build_variant = base_args.get("build_variant", "")
+    multi_arch = base_args.get("multi_arch", False)
+
+    linux_use_prebuilt_artifacts = base_args.get("linux_use_prebuilt_artifacts")
+    windows_use_prebuilt_artifacts = base_args.get("windows_use_prebuilt_artifacts")
 
     print("Found metadata:")
     print(f"  github_event_name: {github_event_name}")
     print(f"  branch_name: {branch_name}")
     print(f"  base_ref: {base_ref}")
+    print(f"  multi_arch: {multi_arch}")
     print(f"  build_variant: {build_variant}")
     print(f"  is_push: {is_push}")
     print(f"  is_workflow_dispatch: {is_workflow_dispatch}")
     print(f"  is_pull_request: {is_pull_request}")
     print(f"  is_schedule: {is_schedule}")
-    print(f"  multi_arch: {multi_arch}")
-    print(
-        f"  linux_use_prebuilt_artifacts: {base_args.get('linux_use_prebuilt_artifacts')}"
-    )
-    print(
-        f"  windows_use_prebuilt_artifacts: {base_args.get('windows_use_prebuilt_artifacts')}"
-    )
+    print(f"  linux_use_prebuilt_artifacts: {linux_use_prebuilt_artifacts}")
+    print(f"  windows_use_prebuilt_artifacts: {windows_use_prebuilt_artifacts}")
     if is_pull_request:
         pr_labels = get_pr_labels(base_args)
         print(f"  pr_labels: {pr_labels}")
@@ -681,7 +681,6 @@ def main(base_args, linux_families, windows_families):
         )
     print("")
 
-    multi_arch = base_args.get("multi_arch", False)
     print(
         f"Generating build matrix for Linux (multi_arch={multi_arch}): {str(linux_families)}"
     )
@@ -733,18 +732,12 @@ def main(base_args, linux_families, windows_families):
         submodule_paths = get_therock_submodule_paths()
         matching_submodule_paths = list(set(submodule_paths) & set(modified_paths))
         if matching_submodule_paths:
-            print(
-                f"Found changed submodules: {str(matching_submodule_paths)}. Running full tests."
-            )
             test_type = "full"
             test_type_reason = f"submodule(s) changed: {matching_submodule_paths}"
 
         # If any test label is included, run full test suite for specified tests
         if linux_test_output or windows_test_output:
             combined_test_labels = list(set(linux_test_output + windows_test_output))
-            print(
-                f"Test label(s) specified: {combined_test_labels}. Running full tests."
-            )
             test_type = "full"
             test_type_reason = f"test label(s) specified: {combined_test_labels}"
 
@@ -767,10 +760,10 @@ def main(base_args, linux_families, windows_families):
 
 * `linux_variants`: {str(format_variants(linux_variants_output))}
 * `linux_test_labels`: {str([test for test in linux_test_output])}
-* `linux_use_prebuilt_artifacts`: {json.dumps(base_args.get("linux_use_prebuilt_artifacts"))}
+* `linux_use_prebuilt_artifacts`: {json.dumps(linux_use_prebuilt_artifacts)}
 * `windows_variants`: {str(format_variants(windows_variants_output))}
 * `windows_test_labels`: {str([test for test in windows_test_output])}
-* `windows_use_prebuilt_artifacts`: {json.dumps(base_args.get("windows_use_prebuilt_artifacts"))}
+* `windows_use_prebuilt_artifacts`: {json.dumps(windows_use_prebuilt_artifacts)}
 * `enable_build_jobs`: {json.dumps(enable_build_jobs)}
 * `test_type`: {test_type}
     """
