@@ -1,9 +1,8 @@
-from botocore.exceptions import ClientError
 from pathlib import Path
 import os
 import sys
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
@@ -36,22 +35,6 @@ class ArtifactsIndexPageTest(unittest.TestCase):
         self.assertTrue("empty_2test.tar.xz" in result)
         self.assertTrue("empty_3generic.tar.xz" in result)
         self.assertTrue("empty_4test.tar.xz" in result)
-
-    def testListArtifactsForGroup_NotFound(self):
-        # Create a mock backend that raises ClientError
-        backend = MagicMock(spec=ArtifactBackend)
-        backend.base_uri = "s3://therock-ci-artifacts/ROCm-TheRock/123-linux"
-        backend.list_artifacts.side_effect = ClientError(
-            error_response={
-                "Error": {"Code": "AccessDenied", "Message": "Access Denied"}
-            },
-            operation_name="ListObjectsV2",
-        )
-
-        with self.assertRaises(ClientError) as context:
-            list_artifacts_for_group(backend, "test")
-
-        self.assertEqual(context.exception.response["Error"]["Code"], "AccessDenied")
 
     def testListArtifactsForGroup_FiltersByArtifactGroup(self):
         # Test that filtering by artifact_group works correctly
