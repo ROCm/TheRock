@@ -68,7 +68,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       EXTRA_DEPENDS
         "${_download_stamp}"
     )
-    
+
     # Register AOCL-BLAS package for downstream consumption
     # This makes find_package(aocl) work in dependent projects (package name stays "aocl")
     therock_cmake_subproject_provide_package(therock-aocl-blas aocl lib/host-math/lib/cmake/aocl)
@@ -79,23 +79,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       PATH dist/lib/host-math/lib
       LIB_NAMES libaocl.a
     )
-    
-    # Copy headers from dist/include to dist/lib/host-math/include
-    # AOCL's build system ignores CMAKE_INSTALL_INCLUDEDIR, so we copy them manually
-    # This must run after the stage install is complete
-    add_custom_command(
-      OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/dist/lib/host-math/include/blis.h"
-      COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/dist/lib/host-math/include"
-      COMMAND ${CMAKE_COMMAND} -E copy_directory
-              "${CMAKE_CURRENT_BINARY_DIR}/dist/include"
-              "${CMAKE_CURRENT_BINARY_DIR}/dist/lib/host-math/include"
-      DEPENDS therock-aocl-blas+stage
-      COMMENT "Copying AOCL-BLAS headers to lib/host-math/include/"
-    )
-    add_custom_target(therock-aocl-blas-headers ALL
-      DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/dist/lib/host-math/include/blis.h"
-    )
-    
+
     therock_provide_artifact(host-aocl-blas
       DESCRIPTOR artifact-aocl.toml
       TARGET_NEUTRAL
@@ -129,10 +113,22 @@ add_subdirectory(${SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/build-aocl)
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/build-aocl/libaocl.a"
         DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
-# Install BLIS/BLAS headers
-install(DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/build-aocl/blis/install_package/include/"
-        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-        FILES_MATCHING PATTERN "*.h")
+# Install BLIS/BLAS headers to lib/host-math/include/aocl/
+# AOCL installs headers to ${CMAKE_INSTALL_PREFIX}/include, so we copy them to our desired location
+# We use an aocl/ subdirectory to match OpenBLAS's pattern (openblas/ subdirectory)
+install(CODE "
+  file(GLOB_RECURSE AOCL_HEADERS \"\${CMAKE_INSTALL_PREFIX}/include/*.h\" \"\${CMAKE_INSTALL_PREFIX}/include/*.hh\")
+  file(MAKE_DIRECTORY \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_INCLUDEDIR}/aocl\")
+  foreach(HEADER \${AOCL_HEADERS})
+    file(RELATIVE_PATH REL_PATH \"\${CMAKE_INSTALL_PREFIX}/include\" \"\${HEADER}\")
+    get_filename_component(HEADER_DIR \"\${REL_PATH}\" DIRECTORY)
+    if(HEADER_DIR)
+      file(MAKE_DIRECTORY \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_INCLUDEDIR}/aocl/\${HEADER_DIR}\")
+    endif()
+    file(COPY_FILE \"\${HEADER}\" \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_INCLUDEDIR}/aocl/\${REL_PATH}\")
+  endforeach()
+  message(STATUS \"Copied AOCL headers to ${CMAKE_INSTALL_INCLUDEDIR}/aocl\")
+")
 
 # Install our custom CMake package config
 configure_file(
@@ -140,5 +136,5 @@ configure_file(
   ${CMAKE_CURRENT_BINARY_DIR}/aocl-config.cmake
   @ONLY
 )
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/aocl-config.cmake" 
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/aocl-config.cmake"
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/aocl)
