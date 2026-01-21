@@ -340,7 +340,7 @@ jobs:
         if: ${{ env.RELEASE_TYPE != 'prerelease' && github.repository_owner == 'ROCm' }}
         uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc # v1.2.4
         with:
-          workflow: release_portable_linux_jax_wheels.yml
+          workflow: ROCm/TheRock/.github/workflows/release_portable_linux_packages.yml@users/kithumma/jax-branches-python-support
           inputs: |
             { "amdgpu_family": "${{ matrix.target_bundle.amdgpu_family }}",
               "release_type": "${{ env.RELEASE_TYPE }}",
