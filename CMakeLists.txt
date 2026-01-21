@@ -430,6 +430,7 @@ add_subdirectory(third-party)
 add_subdirectory(base)
 add_subdirectory(compiler)
 add_subdirectory(core)
+add_subdirectory(opencl)
 add_subdirectory(debug-tools)
 # Note that rocprofiler-register is in base and is what higher level clients
 # depend on. The profiler itself is independent.

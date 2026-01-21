@@ -110,6 +110,8 @@ def get_enabled_projects(args) -> List[str]:
         projects.extend(args.rocm_media_projects)
     if args.include_iree_libs:
         projects.extend(args.iree_libs_projects)
+    if args.include_opencl:
+        projects.extend(args.opencl_projects)
     if args.include_math_libraries:
         projects.extend(args.math_library_projects)
     return projects
@@ -475,6 +477,12 @@ def main(argv):
         help="Include IREE and related libraries",
     )
     parser.add_argument(
+        "--include-opencl",
+        default=True,
+        action=argparse.BooleanOptionalAction,
+        help="Include OpenCL CTS and dependencies",
+    )
+    parser.add_argument(
         "--include-math-libraries",
         default=True,
         action=argparse.BooleanOptionalAction,
@@ -528,6 +536,18 @@ def main(argv):
         default=[
             "iree",
             "fusilli",
+        ],
+    )
+    parser.add_argument(
+        "--opencl-projects",
+        nargs="+",
+        type=str,
+        default=[
+            "opencl/opencl-cts",
+            "opencl/opencl-headers",
+            "opencl/opencl-icd-loader",
+            "opencl/spirv-headers",
+            "opencl/spirv-tools",
         ],
     )
     parser.add_argument(

@@ -68,3 +68,18 @@
 	path = math-libs/libhipcxx
 	url = https://github.com/ROCm/libhipcxx.git
 	branch = amd-develop
+[submodule "opencl/opencl-cts"]
+	path = opencl/opencl-cts
+	url = https://github.com/ROCm/OpenCL-CTS
+[submodule "opencl/opencl-headers"]
+	path = opencl/opencl-headers
+	url = https://github.com/KhronosGroup/OpenCL-Headers
+[submodule "opencl/spirv-headers"]
+	path = opencl/spirv-headers
+	url = https://github.com/KhronosGroup/SPIRV-Headers
+[submodule "opencl/spirv-tools"]
+	path = opencl/spirv-tools
+	url = https://github.com/KhronosGroup/SPIRV-Tools
+[submodule "opencl/opencl-icd-loader"]
+	path = opencl/opencl-icd-loader
+	url = https://github.com/KhronosGroup/OpenCL-ICD-Loader.git

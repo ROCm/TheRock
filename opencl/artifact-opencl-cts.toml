@@ -1,0 +1,9 @@
+# opencl-cts
+[components.test."opencl/opencl-cts/stage"]
+include = [
+  "bin/**",
+]
+[components.test."opencl/opencl-icd-loader/stage"]
+include = [
+  "lib/*.so*",
+]
