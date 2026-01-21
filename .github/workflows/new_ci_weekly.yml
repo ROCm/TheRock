@@ -107,7 +107,7 @@ jobs:
       windows_use_prebuilt_artifacts: ${{ github.event_name == 'schedule' && '' || inputs.windows_use_prebuilt_artifacts }}
       artifact_run_id: ${{ github.event_name == 'schedule' && '' || inputs.artifact_run_id }}
       # ghcr.io/rocm/therock_build_manylinux_x86_64:users-lpromber-DockerCmake4
-      container_image_linux: "ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:57b5cd3769d7a865500690258a530d3db6a277234ebf3379945de7bce3973301"
+      container_image_linux: "ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:4a584d50cdcfa69ea0643f4b0065d30c68ed964a15c954fc2574ee31f4f849fc"
       # we always want to build and not use artifacts
       force_build: true
 
