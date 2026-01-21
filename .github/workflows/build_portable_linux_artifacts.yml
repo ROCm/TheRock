@@ -161,6 +161,7 @@ jobs:
       - name: Analyze Build Times
         if: ${{ !cancelled() }}
         run: |
+          python3 build_tools/resource_info.py --finalize
           python3 build_tools/analyze_build_times.py --build-dir build
 
       - name: Configure AWS Credentials for non-forked repos

@@ -253,7 +253,10 @@ jobs:
       # Analyze ninja build log to generate per-component timing report
       - name: Analyze Build Times
         if: ${{ !cancelled() }}
+        env:
+          THEROCK_BUILD_PROF_LOG_DIR: ${{ env.OUTPUT_DIR }}/build/logs/therock-build-prof
         run: |
+          python3 build_tools/resource_info.py --finalize
           python3 build_tools/analyze_build_times.py --build-dir ${{ env.OUTPUT_DIR }}/build
 
       - name: Configure AWS Credentials
