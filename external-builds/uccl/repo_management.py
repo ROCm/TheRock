@@ -11,7 +11,7 @@ TAG_HIPIFY_DIFFBASE = "THEROCK_HIPIFY_DIFFBASE"
 HIPIFY_COMMIT_MESSAGE = "DO NOT SUBMIT: HIPIFY"
 
 
-def exec(args: list[str | Path], cwd: Path, *, stdout_devnull: bool = False):
+def run_command(args: list[str | Path], cwd: Path, *, stdout_devnull: bool = False):
     args = [str(arg) for arg in args]
     print(f"++ Exec [{cwd}]$ {shlex.join(args)}")
     subprocess.check_call(
@@ -102,9 +102,9 @@ def git_config_ignore_submodules(repo_path: Path):
             )
             for config_name in config_names:
                 ignore_name = config_name.removesuffix(".path") + ".ignore"
-                exec(["git", "config", ignore_name, "all"], cwd=repo_path)
+                run_command(["git", "config", ignore_name, "all"], cwd=repo_path)
             submodule_paths = list_submodules(repo_path, relative=True, recursive=False)
-            exec(
+            run_command(
                 ["git", "update-index", "--skip-worktree"] + submodule_paths,
                 cwd=repo_path,
             )
@@ -140,11 +140,13 @@ def save_repo_patches(repo_path: Path, patches_path: Path):
     if base_count > 0:
         base_path = patches_path / "base"
         base_path.mkdir(parents=True, exist_ok=True)
-        exec(["git", "format-patch", "-o", base_path, base_revlist], cwd=repo_path)
+        run_command(
+            ["git", "format-patch", "-o", base_path, base_revlist], cwd=repo_path
+        )
     if hipified_count > 0:
         hipified_path = patches_path / "hipified"
         hipified_path.mkdir(parents=True, exist_ok=True)
-        exec(
+        run_command(
             ["git", "format-patch", "-o", hipified_path, hipified_revlist],
             cwd=repo_path,
         )
@@ -157,7 +159,7 @@ def apply_repo_patches(repo_path: Path, patches_path: Path):
     if not patch_files:
         return
     patch_files.sort(key=lambda p: p.name)
-    exec(
+    run_command(
         [
             "git",
             "am",
@@ -207,13 +209,13 @@ def do_hipify(args: argparse.Namespace):
     print(f"Hipifying {repo_dir}")
     build_amd_path = repo_dir / "tools" / "amd_build" / "build_amd.py"
     if build_amd_path.exists():
-        exec([sys.executable, build_amd_path], cwd=repo_dir)
+        run_command([sys.executable, build_amd_path], cwd=repo_dir)
 
 
 def tag_hipify_diffbase(module_path: Path):
     """Apply the HIPIFY diffbase tag to the module."""
     try:
-        exec(
+        run_command(
             ["git", "tag", "-f", TAG_HIPIFY_DIFFBASE, "--no-sign"],
             cwd=module_path,
         )
@@ -229,7 +231,7 @@ def commit_hipify_module(module_path: Path):
         return
 
     print(f"HIPIFY made changes to {module_path}: Committing")
-    exec(["git", "add", "-A"], cwd=module_path)
+    run_command(["git", "add", "-A"], cwd=module_path)
 
     # Check if there are staged changes
     try:
@@ -249,7 +251,7 @@ def commit_hipify_module(module_path: Path):
 
     # Attempt to commit changes
     try:
-        exec(
+        run_command(
             ["git", "commit", "-m", HIPIFY_COMMIT_MESSAGE, "--no-gpg-sign"],
             cwd=module_path,
         )
@@ -277,13 +279,17 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
     patches_dir_name = get_patches_dir_name(args)
     if check_git_dir.exists():
         print(f"Not cloning repository ({check_git_dir} exists)")
-        exec(["git", "remote", "set-url", "origin", args.gitrepo_origin], cwd=repo_dir)
+        run_command(
+            ["git", "remote", "set-url", "origin", args.gitrepo_origin], cwd=repo_dir
+        )
     else:
         print(f"Cloning repository at {args.repo_hashtag}")
         repo_dir.mkdir(parents=True, exist_ok=True)
-        exec(["git", "init", "--initial-branch=main"], cwd=repo_dir)
-        exec(["git", "config", "advice.detachedHead", "false"], cwd=repo_dir)
-        exec(["git", "remote", "add", "origin", args.gitrepo_origin], cwd=repo_dir)
+        run_command(["git", "init", "--initial-branch=main"], cwd=repo_dir)
+        run_command(["git", "config", "advice.detachedHead", "false"], cwd=repo_dir)
+        run_command(
+            ["git", "remote", "add", "origin", args.gitrepo_origin], cwd=repo_dir
+        )
 
     # Fetch and checkout.
     fetch_args = []
@@ -291,18 +297,20 @@ def do_checkout(args: argparse.Namespace, custom_hipify=do_hipify):
         fetch_args.extend(["--depth", str(args.depth)])
     if args.jobs:
         fetch_args.extend(["-j", str(args.jobs)])
-    exec(["git", "fetch"] + fetch_args + ["origin", args.repo_hashtag], cwd=repo_dir)
-    exec(["git", "checkout", "FETCH_HEAD"], cwd=repo_dir)
-    exec(["git", "tag", "-f", TAG_UPSTREAM_DIFFBASE, "--no-sign"], cwd=repo_dir)
+    run_command(
+        ["git", "fetch"] + fetch_args + ["origin", args.repo_hashtag], cwd=repo_dir
+    )
+    run_command(["git", "checkout", "FETCH_HEAD"], cwd=repo_dir)
+    run_command(["git", "tag", "-f", TAG_UPSTREAM_DIFFBASE, "--no-sign"], cwd=repo_dir)
     try:
-        exec(
+        run_command(
             ["git", "submodule", "update", "--init", "--recursive"] + fetch_args,
             cwd=repo_dir,
         )
     except subprocess.CalledProcessError:
         print("Failed to fetch git submodules")
         sys.exit(1)
-    exec(
+    run_command(
         [
             "git",
             "submodule",
