@@ -109,6 +109,11 @@ def parse_components(components: list[str]) -> list[list]:
     else:
         arguments.append("--no-include-rocm-media")
 
+    if "math-libraries" in components:
+        arguments.append("--include-math-libraries")
+    else:
+        arguments.append("--no-include-math-libraries")
+
     log(f"++ Arguments: {shlex.join(arguments)}")
     if system_projects:
         log(f"++ System projects: {shlex.join(system_projects)}")
@@ -198,8 +203,9 @@ def main(argv):
                   rocm-systems,
                   profiler,
                   iree-libs,
-                  debug-tools.
-                  rocm-media
+                  debug-tools,
+                  rocm-media,
+                  math-libraries
              """,
     )
     args = parser.parse_args(argv)
