@@ -29,7 +29,6 @@ If unspecified, we will create an anonymous boto file that can only acccess publ
 
 import argparse
 import concurrent.futures
-import os
 from pathlib import Path
 import platform
 import re
@@ -109,22 +108,6 @@ def filter_artifacts(
     return {a for a in artifacts if _should_include(a)}
 
 
-def get_download_requests(
-    backend: ArtifactBackend,
-    artifacts: set[str],
-    output_dir: Path,
-) -> list[DownloadRequest]:
-    """Creates download requests for the given artifacts."""
-    return [
-        DownloadRequest(
-            artifact_key=artifact,
-            dest_path=output_dir / artifact,
-            backend=backend,
-        )
-        for artifact in sorted(artifacts)
-    ]
-
-
 def get_postprocess_mode(args) -> str | None:
     """Returns 'extract', 'flatten' or None (default is 'extract')."""
     if args.flatten:
@@ -187,24 +170,29 @@ def run(args):
     # Note: this currently does not check that all requested artifacts
     # (via include patterns) do exist, so this may silently fail to fetch
     # expected files.
-    s3_artifacts = list_artifacts_for_group(
+    available_artifacts = list_artifacts_for_group(
         backend=backend, artifact_group=artifact_group
     )
-    if not s3_artifacts:
+    if not available_artifacts:
         log(f"No matching artifacts for {run_id} exist. Exiting...")
         sys.exit(1)
 
     # Include/exclude filtering.
-    s3_artifacts_filtered = filter_artifacts(s3_artifacts, args.include, args.exclude)
-    if not s3_artifacts_filtered:
+    filtered_artifacts = filter_artifacts(
+        available_artifacts, args.include, args.exclude
+    )
+    if not filtered_artifacts:
         log(f"Filtering artifacts for {run_id} resulted in an empty set. Exiting...")
         sys.exit(1)
 
-    download_requests = get_download_requests(
-        backend=backend,
-        artifacts=s3_artifacts_filtered,
-        output_dir=output_dir,
-    )
+    download_requests = [
+        DownloadRequest(
+            artifact_key=artifact,
+            dest_path=output_dir / artifact,
+            backend=backend,
+        )
+        for artifact in sorted(filtered_artifacts)
+    ]
 
     download_summary = "\n  ".join(
         [f"{req.backend.base_uri}/{req.artifact_key}" for req in download_requests]
