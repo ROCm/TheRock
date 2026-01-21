@@ -37,6 +37,7 @@ if(THEROCK_ENABLE_RCCL AND THEROCK_SANITIZER STREQUAL "")
     RUNTIME_DEPS
       hip-clr
       hipify
+      amd_smi_lib
       rocm_smi_lib
       rocprofiler-register
       ${optional_profiler_deps}
