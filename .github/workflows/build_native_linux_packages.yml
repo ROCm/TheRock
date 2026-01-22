@@ -134,4 +134,5 @@ jobs:
             --s3-bucket ${{ env.S3_BUCKET_NATIVE }} \
             --amdgpu-family ${{ inputs.artifact_group }} \
             --artifact-id ${{ env.ARTIFACT_RUN_ID }} \
-            --job ${{ inputs.release_type }}
+            --job "prerelease"
+            #--job ${{ inputs.release_type }}
