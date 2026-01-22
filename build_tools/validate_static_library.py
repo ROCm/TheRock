@@ -10,12 +10,12 @@ import sys
 def run(args: argparse.Namespace):
     for static_lib in args.static_libs:
         print(f"Validating static library: {static_lib}", end="")
-        
+
         # Check if file exists
         if not os.path.isfile(static_lib):
             print(f" : ERROR - File does not exist")
             sys.exit(1)
-        
+
         # Check if it's a valid archive using 'ar'
         try:
             result = subprocess.run(
@@ -24,7 +24,7 @@ def run(args: argparse.Namespace):
                 stderr=subprocess.PIPE,
                 check=True,
             )
-            num_objects = len(result.stdout.decode().strip().split('\n'))
+            num_objects = len(result.stdout.decode().strip().split("\n"))
             print(f" : OK (contains {num_objects} object files)")
         except subprocess.CalledProcessError as e:
             print(f" : ERROR - Not a valid archive: {e.stderr.decode()}")
