@@ -17,9 +17,10 @@ if(NOT TARGET AOCL::aocl)
   add_library(AOCL::aocl STATIC IMPORTED)
   
   # Set the BLAS library location
+  # Headers are in lib/host-math/include/aocl/ subdirectory (matching OpenBLAS pattern)
   set_target_properties(AOCL::aocl PROPERTIES
     IMPORTED_LOCATION "${CMAKE_CURRENT_LIST_DIR}/../../../lib/libaocl.a"
-    INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_CURRENT_LIST_DIR}/../../../include"
+    INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_CURRENT_LIST_DIR}/../../../include/aocl"
   )
   
   # AOCL-BLAS may need OpenMP for multithreaded BLAS operations
@@ -33,4 +34,4 @@ endif()
 
 # Legacy variables for compatibility
 set(AOCL_LIBRARIES AOCL::aocl)
-set(AOCL_INCLUDE_DIRS "${CMAKE_CURRENT_LIST_DIR}/../../../include")
+set(AOCL_INCLUDE_DIRS "${CMAKE_CURRENT_LIST_DIR}/../../../include/aocl")
