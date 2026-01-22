@@ -4,29 +4,13 @@ set_and_check(MPI_ROOT "${PACKAGE_PREFIX_DIR}")
 
 set_and_check(MPI_C_INCLUDE_DIRS "${MPI_ROOT}/include")
 set_and_check(MPI_CXX_INCLUDE_DIRS "${MPI_ROOT}/include")
-set(MPI_Fortran_INCLUDE_DIRS "${MPI_ROOT}/include;${MPI_ROOT}/mod")
-
-foreach(_dir IN LISTS MPI_Fortran_INCLUDE_DIRS)
-    if(NOT EXISTS "${_dir}")
-        message(FATAL_ERROR "Directory ${_dir} referenced by variable MPI_Fortran_INCLUDE_DIRS does not exist !")
-    endif()
-endforeach()
 
 set_and_check(MPI_C_LIBRARIES "${MPI_ROOT}/lib/libmpi.so")
 set_and_check(MPI_CXX_LIBRARIES "${MPI_ROOT}/lib/libmpi.so")
-set(MPI_Fortran_LIBRARIES "${MPI_ROOT}/lib/libmpi_mpifh.so;${MPI_ROOT}/lib/libmpi_usempif08.so;${MPI_ROOT}/lib/libmpi_usempi_ignore_tkr.so")
-
-foreach(_lib IN LISTS MPI_Fortran_LIBRARIES)
-    if(NOT EXISTS "${_lib}")
-        message(FATAL_ERROR "File ${_lib} referenced by variable MPI_Fortran_LIBRARIES does not exist !")
-    endif()
-endforeach()
 
 set_and_check(MPIEXEC_EXECUTABLE "${MPI_ROOT}/bin/mpiexec")
 set_and_check(MPI_C_COMPILER "${MPI_ROOT}/bin/mpicc")
 set_and_check(MPI_CXX_COMPILER "${MPI_ROOT}/bin/mpicxx")
-set_and_check(MPI_Fortran_COMPILER "${MPI_ROOT}/bin/mpifort")
-
 
 if(NOT TARGET MPI::MPI_C)
     add_library(MPI::MPI_C INTERFACE IMPORTED)
@@ -44,15 +28,7 @@ if(NOT TARGET MPI::MPI_CXX)
     )
 endif()
 
-if(NOT TARGET MPI::MPI_Fortran)
-    add_library(MPI::MPI_Fortran INTERFACE IMPORTED)
-    set_target_properties(MPI::MPI_Fortran PROPERTIES
-        INTERFACE_INCLUDE_DIRECTORIES "${MPI_Fortran_INCLUDE_DIRS}"
-        INTERFACE_LINK_LIBRARIES "${MPI_Fortran_LIBRARIES}"
-    )
-endif()
-
 set(MPI_FOUND TRUE)
 set(MPI_C_FOUND TRUE)
 set(MPI_CXX_FOUND TRUE)
-set(MPI_Fortran_FOUND TRUE)
+set(MPI_Fortran_FOUND FALSE)
