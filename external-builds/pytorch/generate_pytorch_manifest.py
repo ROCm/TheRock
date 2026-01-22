@@ -63,6 +63,7 @@ def git_head(dirpath: Path, *, label: str) -> GitSourceInfo:
 
     commit = capture(["git", "rev-parse", "HEAD"], cwd=dirpath)
     repo = capture(["git", "remote", "get-url", "origin"], cwd=dirpath)
+
     return GitSourceInfo(commit=commit, repo=repo)
 
 
@@ -147,7 +148,7 @@ def main() -> None:
     manifest = {
         "sources": sources,
         "therock": {
-            "repo": f"{server_url}/{repo}",
+            "repo": f"{server_url}/{repo}.git",
             "commit": sha,
             "ref": ref,
         },
