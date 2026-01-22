@@ -51,7 +51,6 @@ class Node(object):
                     i,
                     env={
                         "ROCR_VISIBLE_DEVICES": i,
-                        "HIP_VISIBLE_DEVICES": i,
                         "HSA_TEST_GPUS_NUM": i,
                     },
                 )
