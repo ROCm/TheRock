@@ -233,19 +233,58 @@ def get_package_info(pkgname):
     return None
 
 
-def get_package_list():
-    """Read package.json and return package names.
+def get_package_list(artifact_dir):
+    """Read package.json and return a list of package names.
 
-    Packages marked as 'Disablepackaging' will be excluded from the list
+    Packages marked as 'Disablepackaging' are excluded.
+    If the entire Artifactory directory is missing, the package is excluded
+    unless it is a metapackage.
 
-    Parameters: None
+    Parameters:
+        artifact_dir : The path to the Artifactory directory
 
-    Returns: Package list
+    Returns: A list of package names.
     """
-
+    pkg_list = []
     data = read_package_json_file()
 
-    pkg_list = [pkg["Package"] for pkg in data if not is_packaging_disabled(pkg)]
+    try:
+        dir_entries = os.listdir(artifact_dir)
+    except FileNotFoundError:
+        sys.exit(f"{artifact_dir}: Artifactory directory doesn not exist, Exiting")
+
+    for pkg_info in data:
+        # Skip disabled packages
+        if is_packaging_disabled(pkg_info):
+            continue
+
+        # metapackages don't need artifact lookup
+        if is_meta_package(pkg_info):
+            pkg_list.append(pkg_info["Package"])
+            continue
+
+        artifactory_list = pkg_info.get("Artifactory", [])
+        artifact_found = False
+
+        for artifactory in artifactory_list:
+            artifact_name = artifactory.get("Artifact")
+            if not artifact_name:
+                continue
+
+            # Look for directories starting with the artifact name
+            for entry in dir_entries:
+                path = Path(artifact_dir) / entry
+
+                if entry.startswith(artifact_name) and path.is_dir():
+                    artifact_found = True
+                    break
+
+            if artifact_found:
+                break
+
+        if artifact_found:
+            pkg_list.append(pkg_info["Package"])
+
     return pkg_list
 
 
@@ -378,10 +417,17 @@ def convert_to_versiondependency(dependency_list, config: PackageConfig):
 
     local_config = copy.deepcopy(config)
     local_config.versioned_pkg = True
-    pkg_list = get_package_list()
+    pkg_list = get_package_list(config.artifacts_dir)
+
+    filtered_deps = []
+    # Remove amdrocm* packages that are NOT in pkg_list
+    for pkg in dependency_list:
+        if not (pkg.startswith("amdrocm") and pkg not in pkg_list):
+            filtered_deps.append(pkg)
+
     updated_depends = [
         f"{update_package_name(pkg,local_config)}" if pkg in pkg_list else pkg
-        for pkg in dependency_list
+        for pkg in filtered_deps
     ]
     depends = ", ".join(updated_depends)
     return depends
@@ -403,7 +449,7 @@ def append_version_suffix(dep_string, config: PackageConfig):
     """
     print_function_name()
 
-    pkg_list = get_package_list()
+    pkg_list = get_package_list(config.artifacts_dir)
     updated_depends = []
     dep_list = [d.strip() for d in dep_string.split(",")]
 
@@ -517,17 +563,24 @@ def filter_components_fromartifactory(pkg_name, artifacts_dir, gfx_arch):
                     / f"{artifact_prefix}_{component}_{artifact_suffix}"
                 )
                 filename = source_dir / "artifact_manifest.txt"
-                with open(filename, "r", encoding="utf-8") as file:
-                    for line in file:
+                if not filename.exists():
+                    print(f"{pkg_name} : Missing {filename}")
+                    continue
+                try:
+                    with filename.open("r", encoding="utf-8") as file:
+                        for line in file:
 
-                        match_found = (
-                            isinstance(artifact_subdir, str)
-                            and (artifact_subdir.lower() + "/") in line.lower()
-                        )
+                            match_found = (
+                                isinstance(artifact_subdir, str)
+                                and (artifact_subdir.lower() + "/") in line.lower()
+                            )
 
-                        if match_found and line.strip():
-                            print("Matching line:", line.strip())
-                            source_path = source_dir / line.strip()
-                            sourcedir_list.append(source_path)
+                            if match_found and line.strip():
+                                print("Matching line:", line.strip())
+                                source_path = source_dir / line.strip()
+                                sourcedir_list.append(source_path)
+                except OSError as e:
+                    print(f"Could not read manifest {filename}: {e}")
+                    continue
 
     return sourcedir_list

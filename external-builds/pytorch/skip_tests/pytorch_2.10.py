@@ -122,20 +122,6 @@ skip_tests = {
         "cuda": [
             "test_cpp_warnings_have_python_context_cuda",
         ],
-        "binary_ufuncs": [
-            # AssertionError: Tensor-likes are not close!
-            "test_contig_vs_every_other___rpow___cuda_complex64",
-            # AssertionError: Tensor-likes are not close!
-            "test_contig_vs_every_other__refs_pow_cuda_complex64",
-            # AssertionError: Tensor-likes are not close!
-            "test_contig_vs_every_other_pow_cuda_complex64",
-            # AssertionError: Tensor-likes are not close!
-            "test_non_contig___rpow___cuda_complex64",
-            # AssertionError: Tensor-likes are not close!
-            "test_non_contig__refs_pow_cuda_complex64",
-            # AssertionError: Tensor-likes are not close!
-            "test_non_contig_pow_cuda_complex64",
-        ],
     },
     "windows": {
         "torch": [

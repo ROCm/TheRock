@@ -37,7 +37,7 @@ def log(*args, **kwargs):
     sys.stdout.flush()
 
 
-def exec(args: list[str | Path], cwd: Path):
+def run_command(args: list[str | Path], cwd: Path):
     args = [str(arg) for arg in args]
     log(f"++ Exec [{cwd}]$ {shlex.join(args)}")
     subprocess.check_call(args, cwd=str(cwd), stdin=subprocess.DEVNULL)
@@ -109,6 +109,11 @@ def parse_components(components: list[str]) -> list[list]:
     else:
         arguments.append("--no-include-rocm-media")
 
+    if "math-libraries" in components:
+        arguments.append("--include-math-libraries")
+    else:
+        arguments.append("--no-include-math-libraries")
+
     log(f"++ Arguments: {shlex.join(arguments)}")
     if system_projects:
         log(f"++ System projects: {shlex.join(system_projects)}")
@@ -120,7 +125,7 @@ def run(args: argparse.Namespace, fetch_args: list[str], system_projects: list[s
     date = datetime.today().strftime("%Y%m%d")
 
     if args.create_branch or args.push_branch:
-        exec(
+        run_command(
             ["git", "checkout", "-b", args.branch_name],
             cwd=THEROCK_DIR,
         )
@@ -130,7 +135,7 @@ def run(args: argparse.Namespace, fetch_args: list[str], system_projects: list[s
     else:
         projects_args = []
 
-    exec(
+    run_command(
         [
             sys.executable,
             "./build_tools/fetch_sources.py",
@@ -142,13 +147,13 @@ def run(args: argparse.Namespace, fetch_args: list[str], system_projects: list[s
         cwd=THEROCK_DIR,
     )
 
-    exec(
+    run_command(
         ["git", "commit", "-a", "-m", "Bump submodules " + date],
         cwd=THEROCK_DIR,
     )
 
     try:
-        exec(
+        run_command(
             [sys.executable, "./build_tools/fetch_sources.py"],
             cwd=THEROCK_DIR,
         )
@@ -157,7 +162,7 @@ def run(args: argparse.Namespace, fetch_args: list[str], system_projects: list[s
         sys.exit(1)
 
     if args.push_branch:
-        exec(
+        run_command(
             ["git", "push", "-u", "origin", args.branch_name],
             cwd=THEROCK_DIR,
         )
@@ -198,8 +203,9 @@ def main(argv):
                   rocm-systems,
                   profiler,
                   iree-libs,
-                  debug-tools.
-                  rocm-media
+                  debug-tools,
+                  rocm-media,
+                  math-libraries
              """,
     )
     args = parser.parse_args(argv)

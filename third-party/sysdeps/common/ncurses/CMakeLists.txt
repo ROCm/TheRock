@@ -136,6 +136,21 @@ add_custom_target(
       # This makes it so we install the ncurses headers in the include/
       # directory as opposed to a distinct subdirectory.
       --enable-overwrite
+      # Enable fallbacks. We are building our own ncurses library. Though we
+      # install it at a known place in our TheRock installation tree, the tree
+      # itself can be located anywhere (relocatable).
+      #
+      # The problem is that terminfo lookup logic in ncurses is rigid and
+      # expects (a list of) absolute directories, and we can't provide that.
+      #
+      # For this reason, the fallback should act as a mechanism that allows
+      # ROCgdb's TUI interface to work for the majority of the most common
+      # terminal types even when the terminfo database cannot be found.
+      --with-fallbacks="xterm,xterm-256color,vt100,linux,screen,screen-256color,tmux,tmux-256color,ansi"
+      # Since we have the fallback above, set the terminfo lookup paths to the
+      # standard installation prefixes. We hope the system will provide the
+      # additional required terminfo files if the fallbacks are not enough.
+      --with-terminfo-dirs="/usr/share/terminfo:/usr/lib/terminfo:/etc/terminfo:/lib/terminfo"
   COMMAND
     make -j "${PAR_JOBS}" V=1
   COMMAND
