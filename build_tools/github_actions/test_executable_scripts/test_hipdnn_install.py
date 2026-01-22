@@ -28,9 +28,7 @@ logging.basicConfig(level=logging.INFO)
 
 def run_tests(build_dir: Path):
     """Configure, build, and test all hipDNN packages."""
-    # Resolve to absolute path - CMake needs absolute paths for CMAKE_PREFIX_PATH
-    # In CI, OUTPUT_ARTIFACTS_DIR is ./build with flat structure (lib/cmake/...)
-    # Locally, set OUTPUT_ARTIFACTS_DIR=build/dist/rocm for testing
+    # Locally, can set OUTPUT_ARTIFACTS_DIR=build/dist/rocm for testing
     artifacts_path = Path(OUTPUT_ARTIFACTS_DIR).resolve()
 
     # Set up environment variables for CMake/HIP
