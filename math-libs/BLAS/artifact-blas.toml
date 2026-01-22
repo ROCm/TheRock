@@ -101,6 +101,8 @@ include = [
   "bin/rocblas_*.yaml",
   "bin/*_rtest.xml",
   "bin/*_rtest.py",
+  # Clients samples
+  "bin/rocblas-example*",
 ]
 
 # rocSOLVER
