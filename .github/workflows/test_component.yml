@@ -24,7 +24,8 @@ jobs:
   test_component:
     name: >-
       Test ${{ fromJSON(inputs.component).job_name }}
-      (shard ${{ matrix.shard }} of ${{ fromJSON(inputs.component).total_shards }})
+      (shard ${{ matrix.shard }}/${{ fromJSON(inputs.component).total_shards }})
+      (${{ inputs.amdgpu_families }})
       ${{ fromJSON(inputs.component).expect_failure == true && '(xfail)' || '' }}
     runs-on: ${{ inputs.test_runs_on }}
     continue-on-error: ${{ fromJSON(inputs.component).expect_failure == true }}
