@@ -42,7 +42,7 @@ PID_FILE="${BUILD_DIR}/logs/monitor_pid_${GITHUB_JOB_NAME}.txt"
 
 # Start memory monitor in background
 if [ "${IS_WINDOWS}" -eq 1 ]; then
-  python "${REPO_ROOT}/build_tools/memory_monitor.py" \
+  python "${REPO_ROOT}/build_tools/github_actions/memory_monitor.py" \
     --phase "${PHASE}" \
     --interval "${MEMORY_MONITOR_INTERVAL}" \
     --log-file "${LOG_FILE}" \
@@ -51,7 +51,7 @@ if [ "${IS_WINDOWS}" -eq 1 ]; then
     --max-runtime "${MAX_RUN_TIME}" \
     > "${MONITOR_OUTPUT}" 2>&1 &
 else
-  python "${REPO_ROOT}/build_tools/memory_monitor.py" \
+  python "${REPO_ROOT}/build_tools/github_actions/memory_monitor.py" \
     --phase "${PHASE}" \
     --interval "${MEMORY_MONITOR_INTERVAL}" \
     --log-file "${LOG_FILE}" \

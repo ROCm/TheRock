@@ -16,10 +16,10 @@ Graceful Shutdown:
 
 Usage:
     # Monitor a single command:
-    python build_tools/memory_monitor.py --phase "Configure Projects" -- cmake ...
+    python build_tools/github_actions/memory_monitor.py --phase "Configure Projects" -- cmake ...
 
     # Run as background monitoring:
-    python build_tools/memory_monitor.py --background --interval 5 --phase "Build Phase"
+    python build_tools/github_actions/memory_monitor.py --background --interval 5 --phase "Build Phase"
 
 Environment Variables:
     MEMORY_MONITOR_INTERVAL: Override default monitoring interval (seconds)
@@ -39,8 +39,7 @@ import signal
 import threading
 import psutil
 
-sys.path.insert(0, str(Path(__file__).parent))
-from github_actions.github_actions_utils import gha_append_step_summary
+from github_actions_utils import gha_append_step_summary
 
 # Constants
 BYTES_TO_GB = 1024**3
