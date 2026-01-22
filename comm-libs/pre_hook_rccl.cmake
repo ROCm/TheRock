@@ -1,3 +1,12 @@
+# Remove -DNDEBUG: RCCL requires assertions enabled for correct behavior
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+  set(CMAKE_C_FLAGS_RELEASE "-O3" CACHE STRING "Release flags" FORCE)
+  set(CMAKE_CXX_FLAGS_RELEASE "-O3" CACHE STRING "Release flags" FORCE)
+elseif(CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+  set(CMAKE_C_FLAGS_RELWITHDEBINFO "-O3 -g" CACHE STRING "RelWithDebInfo flags" FORCE)
+  set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O3 -g" CACHE STRING "RelWithDebInfo flags" FORCE)
+endif()
+
 if(NOT WIN32)
   # Configure roctracer if on a supported operating system (Linux).
   # rocBLAS has deprecated dependencies on roctracer. We apply a patch to redirect
