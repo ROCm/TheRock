@@ -163,7 +163,7 @@ WINDOWS_LIBRARY_PRELOADS = [
 ]
 
 
-def exec(args: list[str | Path], cwd: Path, env: dict[str, str] | None = None):
+def run_command(args: list[str | Path], cwd: Path, env: dict[str, str] | None = None):
     args = [str(arg) for arg in args]
     full_env = dict(os.environ)
     print(f"++ Exec [{cwd}]$ {shlex.join(args)}")
@@ -299,7 +299,7 @@ def do_install_rocm(args: argparse.Namespace):
     # Because the rocm package caches current GPU selection and such, we
     # always purge it to ensure a clean rebuild.
 
-    exec(
+    run_command(
         [sys.executable, "-m", "pip", "cache", "remove", "rocm_sdk"] + cache_dir_args,
         cwd=Path.cwd(),
     )
@@ -321,7 +321,7 @@ def do_install_rocm(args: argparse.Namespace):
     pip_args += cache_dir_args
     rocm_sdk_version = args.rocm_sdk_version if args.rocm_sdk_version else ""
     pip_args.extend([f"rocm[libraries,devel]{rocm_sdk_version}"])
-    exec(pip_args, cwd=Path.cwd())
+    run_command(pip_args, cwd=Path.cwd())
     print(f"Installed version: {get_rocm_sdk_version()}")
 
 
@@ -395,7 +395,7 @@ def do_build(args: argparse.Namespace):
         print("Building with ccache, clearing stats first")
         env["CMAKE_C_COMPILER_LAUNCHER"] = "ccache"
         env["CMAKE_CXX_COMPILER_LAUNCHER"] = "ccache"
-        exec(["ccache", "--zero-stats"], cwd=tempfile.gettempdir())
+        run_command(["ccache", "--zero-stats"], cwd=tempfile.gettempdir())
 
     # GLOO enabled for only Linux
     if not is_windows:
@@ -552,7 +552,7 @@ def do_build_triton(
 
     triton_wheel_name = env.get("TRITON_WHEEL_NAME", "triton")
     print(f"+++ Uninstall {triton_wheel_name}")
-    exec(
+    run_command(
         [sys.executable, "-m", "pip", "uninstall", triton_wheel_name, "-y"],
         cwd=tempfile.gettempdir(),
     )
@@ -560,7 +560,7 @@ def do_build_triton(
     pip_install_args = []
     if args.pip_cache_dir:
         pip_install_args.extend(["--cache-dir", args.pip_cache_dir])
-    exec(
+    run_command(
         [
             sys.executable,
             "-m",
@@ -581,13 +581,15 @@ def do_build_triton(
     remove_dir_if_exists(triton_python_dir / "dist")
     if args.clean:
         remove_dir_if_exists(triton_python_dir / "build")
-    exec([sys.executable, "setup.py", "bdist_wheel"], cwd=triton_python_dir, env=env)
+    run_command(
+        [sys.executable, "setup.py", "bdist_wheel"], cwd=triton_python_dir, env=env
+    )
     built_wheel = find_built_wheel(triton_python_dir / "dist", triton_wheel_name)
     print(f"Found built wheel: {built_wheel}")
     copy_to_output(args, built_wheel)
 
     print("+++ Installing built triton:")
-    exec(
+    run_command(
         [sys.executable, "-m", "pip", "install", built_wheel], cwd=tempfile.gettempdir()
     )
 
@@ -795,7 +797,7 @@ def do_build_pytorch(
         os.environ["LD_LIBRARY_PATH"] = f"{sysdeps_dir / 'lib'}"
 
     print("+++ Uninstalling pytorch:")
-    exec(
+    run_command(
         [sys.executable, "-m", "pip", "uninstall", "torch", "-y"],
         cwd=tempfile.gettempdir(),
     )
@@ -804,7 +806,7 @@ def do_build_pytorch(
     pip_install_args = []
     if args.pip_cache_dir:
         pip_install_args.extend(["--cache-dir", args.pip_cache_dir])
-    exec(
+    run_command(
         [
             sys.executable,
             "-m",
@@ -822,7 +824,7 @@ def do_build_pytorch(
         # * https://pypi.org/project/ninja/#history
         # * https://github.com/ninja-build/ninja/releases
         # Version 1.11.1 is buggy on Windows (looping without making progress):
-        exec(
+        run_command(
             [
                 sys.executable,
                 "-m",
@@ -837,13 +839,13 @@ def do_build_pytorch(
     remove_dir_if_exists(pytorch_dir / "dist")
     if args.clean:
         remove_dir_if_exists(pytorch_dir / "build")
-    exec([sys.executable, "setup.py", "bdist_wheel"], cwd=pytorch_dir, env=env)
+    run_command([sys.executable, "setup.py", "bdist_wheel"], cwd=pytorch_dir, env=env)
     built_wheel = find_built_wheel(pytorch_dir / "dist", "torch")
     print(f"Found built wheel: {built_wheel}")
     copy_to_output(args, built_wheel)
 
     print("+++ Installing built torch:")
-    exec(
+    run_command(
         [sys.executable, "-m", "pip", "install", built_wheel], cwd=tempfile.gettempdir()
     )
 
@@ -889,7 +891,9 @@ def do_build_pytorch_audio(
     if args.clean:
         remove_dir_if_exists(pytorch_audio_dir / "build")
 
-    exec([sys.executable, "setup.py", "bdist_wheel"], cwd=pytorch_audio_dir, env=env)
+    run_command(
+        [sys.executable, "setup.py", "bdist_wheel"], cwd=pytorch_audio_dir, env=env
+    )
     built_wheel = find_built_wheel(pytorch_audio_dir / "dist", "torchaudio")
     print(f"Found built wheel: {built_wheel}")
     copy_to_output(args, built_wheel)
@@ -925,7 +929,9 @@ def do_build_pytorch_vision(
     if args.clean:
         remove_dir_if_exists(pytorch_vision_dir / "build")
 
-    exec([sys.executable, "setup.py", "bdist_wheel"], cwd=pytorch_vision_dir, env=env)
+    run_command(
+        [sys.executable, "setup.py", "bdist_wheel"], cwd=pytorch_vision_dir, env=env
+    )
     built_wheel = find_built_wheel(pytorch_vision_dir / "dist", "torchvision")
     print(f"Found built wheel: {built_wheel}")
     copy_to_output(args, built_wheel)
