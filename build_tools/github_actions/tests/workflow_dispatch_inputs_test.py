@@ -155,9 +155,6 @@ def _make_unexpected_inputs_test(workflow_path: Path):
     def test_method(self):
         workflow = load_workflow(workflow_path)
         calls = find_dispatch_calls_in_workflow(workflow)
-        if not calls:
-            return
-
         errors = []
         for call in calls:
             target_path = WORKFLOWS_DIR / call.target_workflow
@@ -190,9 +187,6 @@ def _make_required_inputs_test(workflow_path: Path):
     def test_method(self):
         workflow = load_workflow(workflow_path)
         calls = find_dispatch_calls_in_workflow(workflow)
-        if not calls:
-            return
-
         errors = []
         for call in calls:
             target_path = WORKFLOWS_DIR / call.target_workflow
@@ -219,8 +213,12 @@ def _workflow_name_to_test_suffix(workflow_path: Path) -> str:
     return workflow_path.stem.replace("-", "_").replace(".", "_")
 
 
-# Dynamically generate test methods, one per workflow file.
+# Dynamically generate test methods for workflow files that have dispatch calls.
 for _workflow_path in sorted(WORKFLOWS_DIR.glob("*.yml")):
+    _workflow = load_workflow(_workflow_path)
+    if not find_dispatch_calls_in_workflow(_workflow):
+        continue
+
     _suffix = _workflow_name_to_test_suffix(_workflow_path)
 
     _test = _make_unexpected_inputs_test(_workflow_path)
