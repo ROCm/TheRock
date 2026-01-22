@@ -29,13 +29,13 @@ class TestRocprofsys:
         os.environ["ROCM_PATH"] = str(rocm_base)
 
         # LD_LIBRARY_PATH - prepend ROCm paths while preserving existing
-        rocm_lib_base = rocm_base / "lib"
         ld_paths = [
-            rocm_lib_base,
-            rocm_lib_base / "rocprofiler-systems",
-            rocm_lib_base / "rocm_sysdeps" / "lib",
-            rocm_base / "llvm" / "lib",
-            rocm_base / "share" / "rocprofiler-systems" / "examples" / "lib",
+            # For libopenmp-target-lib.so
+            rocm_base
+            / "share"
+            / "rocprofiler-systems"
+            / "examples"
+            / "lib",
         ]
         new_ld_path = ":".join(str(p) for p in ld_paths)
         existing_ld_path = os.environ.get("LD_LIBRARY_PATH", "")
@@ -48,14 +48,11 @@ class TestRocprofsys:
     def run_pytest_package():
         TestRocprofsys.configure_paths()
 
-        # Required to force rocprofsys pytest into install mode
-        os.environ["ROCPROFSYS_INSTALL_DIR"] = str(
-            Path(THEROCK_BIN_DIR).resolve().parent
-        )
         pytest_package_exec = (
             Path(THEROCK_BIN_DIR).resolve().parent
             / "share"
             / "rocprofiler-systems"
+            / "tests"
             / "rocprofsys-tests.pyz"
         )
 
