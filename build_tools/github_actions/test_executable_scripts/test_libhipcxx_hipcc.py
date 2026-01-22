@@ -4,6 +4,7 @@ import os
 import shlex
 import subprocess
 from pathlib import Path
+import platform
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 OUTPUT_ARTIFACTS_DIR = os.getenv("OUTPUT_ARTIFACTS_DIR")
@@ -73,13 +74,18 @@ except FileNotFoundError as e:
     logging.error(f"Error: Directory '{LIBHIPCXX_BUILD_DIR}' does not exist.")
     raise
 
+if platform.system() == "Windows":
+    HIPCC_BINARY_NAME = "hipcc.exe"
+elif platform.system() == "Linux":
+    HIPCC_BINARY_NAME = "hipcc"
+else:
+    print("Incompatible platform!")
 
 # Configure with CMake
 cmd = [
     "cmake",
     f"-DCMAKE_PREFIX_PATH={OUTPUT_ARTIFACTS_PATH}",
-    f"-DCMAKE_CXX_COMPILER={THEROCK_BIN_PATH / "hipcc"}",
-    f"-DHIP_HIPCC_EXECUTABLE={THEROCK_BIN_PATH / "hipcc"}",
+    f"-DHIP_HIPCC_EXECUTABLE={THEROCK_BIN_PATH / HIPCC_BINARY_NAME}",
     "-GNinja",
     "..",
 ]
@@ -92,7 +98,7 @@ cmd = [
     "bash",
     "../ci/test_libhipcxx.sh",
     "-cmake-options",
-    f"-DHIP_HIPCC_EXECUTABLE={THEROCK_BIN_PATH}/hipcc",
+    f"-DHIP_HIPCC_EXECUTABLE={THEROCK_BIN_PATH / HIPCC_BINARY_NAME}",
 ]
 
 logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
