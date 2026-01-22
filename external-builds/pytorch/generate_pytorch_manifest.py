@@ -3,7 +3,7 @@
 Generate a manifest for PyTorch external builds.
 
 Writes a JSON manifest containing:
-  - sources: git commit + remote for each provided source checkout
+  - sources: git commit + repo for each provided source checkout
   - therock: repo/ref/commit from GitHub Actions env (or user-provided env)
 
 Filename format
@@ -20,13 +20,13 @@ from pathlib import Path
 
 @dataclass(frozen=True)
 class GitSourceInfo:
-    """Git commit and origin remote for a source checkout."""
+    """Git commit and origin repo for a source checkout."""
 
     commit: str
-    remote: str
+    repo: str
 
     def to_dict(self) -> dict[str, str]:
-        return {"commit": self.commit, "remote": self.remote}
+        return {"commit": self.commit, "repo": self.repo}
 
 
 def capture(cmd: list[str], *, cwd: Path) -> str:
@@ -46,7 +46,7 @@ def capture(cmd: list[str], *, cwd: Path) -> str:
 
 
 def git_head(dirpath: Path, *, label: str) -> GitSourceInfo:
-    """Return commit + origin remote for a git checkout."""
+    """Return commit + origin repo for a git checkout."""
     dirpath = dirpath.resolve()
 
     if not dirpath.exists():
@@ -58,12 +58,12 @@ def git_head(dirpath: Path, *, label: str) -> GitSourceInfo:
     if not (dirpath / ".git").exists():
         raise FileNotFoundError(
             f"{label}: not a git checkout (missing .git): {dirpath}\n"
-            "Manifest generation requires git commit hash and origin remote."
+            "Manifest generation requires git commit hash and origin repo."
         )
 
     commit = capture(["git", "rev-parse", "HEAD"], cwd=dirpath)
-    remote = capture(["git", "remote", "get-url", "origin"], cwd=dirpath)
-    return GitSourceInfo(commit=commit, remote=remote)
+    repo = capture(["git", "remote", "get-url", "origin"], cwd=dirpath)
+    return GitSourceInfo(commit=commit, repo=repo)
 
 
 def normalize_release_track(pytorch_git_ref: str) -> str:
