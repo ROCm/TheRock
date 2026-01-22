@@ -39,8 +39,7 @@ include(CMakePackageConfigHelpers)
 cmake_minimum_required(VERSION 3.25)
 project(OpenMPI_BUILD VERSION 5.0.9)
 
-set(MPI_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/install")
-set(MPI_INSTALL_DESTINATION "${CMAKE_INSTALL_PREFIX}")
+set(MPI_STAGE_DIR "${CMAKE_CURRENT_BINARY_DIR}/install")
 
 include(ProcessorCount)
 ProcessorCount(PAR_JOBS)
@@ -50,20 +49,21 @@ endif()
 
 add_custom_target(
   build ALL
-  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   # release 5.0.9 uses autoconf 1.16.5, while the manylinux image uses 1.16.1, so we regenerate the autotools files due to incompatibility issues
   COMMAND
-    ${CMAKE_COMMAND} -E chdir ${SOURCE_DIR} perl autogen.pl --force
+    ${CMAKE_COMMAND} -E chdir "${SOURCE_DIR}" perl autogen.pl --force
   COMMAND
-    ${SOURCE_DIR}/configure --prefix=${MPI_PREFIX} --disable-silent-rules --enable-mpi-fortran=no
+    "${SOURCE_DIR}/configure" --prefix=${CMAKE_INSTALL_PREFIX} --disable-silent-rules --enable-mpi-fortran=no
   COMMAND
     make -j ${PAR_JOBS}
   COMMAND
-    make install
+    make install DESTDIR="${MPI_STAGE_DIR}"
   VERBATIM
 )
 
-install(DIRECTORY "${MPI_PREFIX}/"
+install(DIRECTORY "${MPI_STAGE_DIR}${CMAKE_INSTALL_PREFIX}/"
+        USE_SOURCE_PERMISSIONS
         DESTINATION .
 )
 
