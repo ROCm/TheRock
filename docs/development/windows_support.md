@@ -43,6 +43,11 @@ mainline, in open source, using MSVC, etc.).
 | core                | [hipInfo from hip-tests](https://github.com/ROCm/hip-tests)                                                              | ✅        |                                               |
 | core                | [clr](https://github.com/ROCm/clr)                                                                                       | 🟡        | Needs a folder with prebuilt static libraries |
 |                     |                                                                                                                          |           |                                               |
+| debug-tools         | [amd-dbgapi](https://github.com/ROCm/ROCdbgapi.git)                                                                      | ❌        | Unsupported                                   |
+| debug-tools         | [rocr-debug-agent](https://github.com/ROCm/rocr_debug_agent.git)                                                         | ❌        | Unsupported                                   |
+| debug-tools         | [rocgdb](https://github.com/ROCm/rocgdb.git)                                                                             | ❌        | Unsupported                                   |
+|                     |                                                                                                                          |           |                                               |
+| profiler            | [aqlprofile](https://github.com/ROCm/rocm-systems/tree/develop/projects/aqlprofile)                                      | ❌        | Unsupported                                   |
 | profiler            | [rocprofiler-sdk](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocprofiler-sdk)                            | ❌        | Unsupported                                   |
 | profiler            | [rocprofiler-compute](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocprofiler-compute)                    | ❌        | Unsupported                                   |
 | profiler            | [rocprofiler-systems](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocprofiler-systems)                    | ❌        | Unsupported                                   |
@@ -68,11 +73,12 @@ mainline, in open source, using MSVC, etc.).
 | math-libs (BLAS)    | [hipSOLVER](https://github.com/ROCm/hipSOLVER)                                                                           | ✅        |                                               |
 | math-libs (BLAS)    | [hipBLAS](https://github.com/ROCm/hipBLAS)                                                                               | ✅        |                                               |
 | math-libs           | [rocWMMA](https://github.com/ROCm/rocm-libraries/tree/develop/projects/rocwmma)                                          | ✅        |                                               |
+| math-libs           | [libhipcxx](https://github.com/ROCm/libhipcxx)                                                                           | ❌        | Unsupported                                   |
 |                     |                                                                                                                          |           |                                               |
 | ml-libs             | [Composable Kernel](https://github.com/ROCm/composable_kernel)                                                           | ❌        | Unsupported                                   |
 | ml-libs             | [MIOpen](https://github.com/ROCm/MIOpen)                                                                                 | ✅        |                                               |
-| ml-libs             | [hipDNN](https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipdnn)                                            | ❌        | Unsupported                                   |
-| ml-libs             | [MIOpen Legacy Plugin](https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipdnn/plugins/miopen_legacy_plugin) | ❌        | Unsupported (requires hipDNN)                 |
+| ml-libs             | [hipDNN](https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipdnn)                                            | ✅        |                                               |
+| ml-libs             | [MIOpen Legacy Plugin](https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipdnn/plugins/miopen_legacy_plugin) | ✅        |                                               |
 
 ## Building TheRock from source
 
@@ -126,24 +132,15 @@ These instructions mostly mirror the instructions in the root
 #### Install tools
 
 > [!TIP]
-> These tools are available via package managers like
-> [chocolatey](https://chocolatey.org/):
+> These tools are available via package managers like winget on Windows:
 >
 > ```bash
-> choco install visualstudio2022buildtools -y --params "--add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.VC.CMake.Project --add Microsoft.VisualStudio.Component.VC.ATL --add Microsoft.VisualStudio.Component.Windows11SDK.22621"
-> choco install git.install -y --params "'/GitAndUnixToolsOnPath'"
-> choco install cmake --version=3.31.0 -y
-> choco install ninja -y
-> choco install ccache -y
-> choco install python -y
-> choco install strawberryperl -y
-> ```
-
-> [!TIP]
-> winget installation is recommended for dvc
-> [winget-cli](https://github.com/microsoft/winget-cli):
->
-> ```bash
+> winget install --id Microsoft.VisualStudio.2022.BuildTools --source winget --override "--add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add
+> Microsoft.VisualStudio.Component.VC.CMake.Project --add Microsoft.VisualStudio.Component.VC.ATL --add
+> Microsoft.VisualStudio.Component.Windows11SDK.22621"
+> winget install --id Git.Git -e --source winget --custom "/o:PathOption=CmdTools"
+> winget install cmake -v 3.31.0
+> winget install ninja-build.ninja ccache python strawberryperl bloodrock.pkg-config-lite
 > winget install --id Iterative.DVC --silent --accept-source-agreements
 > ```
 
@@ -236,7 +233,7 @@ the [instructions in the root README](../../README.md#configuration) for other
 options you may want to set.
 
 ```bash
-cmake -B build -GNinja . -DTHEROCK_AMDGPU_FAMILIES=gfx110X-dgpu
+cmake -B build -GNinja . -DTHEROCK_AMDGPU_FAMILIES=gfx110X-all
 
 # If iterating and wishing to cache, add these:
 #  -DCMAKE_C_COMPILER_LAUNCHER=ccache \

@@ -5,13 +5,13 @@ Example usage:
 
     # Build for a specific family. Note that all options after the "--" are
     # passed verbatim to CMake.
-    python linux_build_portable.py -- -DTHEROCK_AMDGPU_FAMILIES=gfx110X-all
+    python linux_portable_build.py -- -DTHEROCK_AMDGPU_FAMILIES=gfx110X-all
 
     # Build with podman vs docker.
-    python linux_build_portable.py --docker=podman
+    python linux_portable_build.py --docker=podman
 
     # Enter an interactive shell set up like the build.
-    python linux_build_portable.py --interactive
+    python linux_portable_build.py --interactive
 
 Other options of note:
 
@@ -33,7 +33,7 @@ THIS_DIR = Path(__file__).resolve().parent
 REPO_DIR = THIS_DIR.parent
 
 
-def exec(args: list[str | Path], cwd: Path):
+def run_command(args: list[str | Path], cwd: Path):
     args = [str(arg) for arg in args]
     print(f"++ Exec [{cwd}]$ {shlex.join(args)}")
     subprocess.check_call(args, cwd=str(cwd))
@@ -41,7 +41,7 @@ def exec(args: list[str | Path], cwd: Path):
 
 def do_build(args: argparse.Namespace, *, rest_args: list[str]):
     if args.pull:
-        exec([args.docker, "pull", args.image], cwd=THIS_DIR)
+        run_command([args.docker, "pull", args.image], cwd=THIS_DIR)
     output_dir: Path = args.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
     cl = [
@@ -128,7 +128,7 @@ def main(argv: list[str]):
     p.add_argument("--docker", default="docker", help="Docker or podman binary")
     p.add_argument(
         "--image",
-        default="ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:4af52d56d91ef6ef8b7d0a13c6115af1ab2c9bf4a8a85d9267b489ecb737ed25",
+        default="ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:6e8242d347af7e0c43c82d5031a3ac67b669f24898ea8dc2f1d5b7e4798b66bd",
         help="Build docker image",
     )
     p.add_argument(

@@ -10,6 +10,5 @@ on:
 jobs:
   donothing:
     runs-on: ubuntu-latest
-    if: false
     steps:
       - run: echo "Skipped"

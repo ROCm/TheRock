@@ -22,6 +22,7 @@ therock_subproject_fetch(boost-sources
 
 therock_cmake_subproject_declare(therock-boost
   EXTERNAL_SOURCE_DIR "cmake_project"
+  USE_DIST_AMDGPU_TARGETS
   EXCLUDE_FROM_ALL
   NO_MERGE_COMPILE_COMMANDS
   BACKGROUND_BUILD

@@ -2,6 +2,14 @@
 # Fetches sources from a specified branch/set of projects.
 # This script is available for users, but it is primarily the mechanism
 # the CI uses to get to a clean state.
+#
+# Stage-aware fetching:
+#   Use --stage <stage_name> to fetch only submodules needed for a build stage.
+#   This uses BUILD_TOPOLOGY.toml to determine which submodules are required.
+#
+# Legacy flag-based fetching:
+#   Use --include-* flags to control which project groups to fetch.
+#   This is the original behavior and is still supported.
 
 import argparse
 import hashlib
@@ -11,10 +19,16 @@ import shlex
 import shutil
 import subprocess
 import sys
+from typing import List
+import os
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = THIS_SCRIPT_DIR.parent
 PATCHES_DIR = THEROCK_DIR / "patches"
+TOPOLOGY_PATH = THEROCK_DIR / "BUILD_TOPOLOGY.toml"
+ALWAYS_SUBMODULE_PATHS = [
+    "base/rocm-kpack",
+]
 
 
 def is_windows() -> bool:
@@ -26,31 +40,121 @@ def log(*args, **kwargs):
     sys.stdout.flush()
 
 
-def exec(args: list[str | Path], cwd: Path):
+def run_command(args: list[str | Path], cwd: Path, env: dict[str, str] | None = None):
     args = [str(arg) for arg in args]
     log(f"++ Exec [{cwd}]$ {shlex.join(args)}")
     sys.stdout.flush()
-    subprocess.check_call(args, cwd=str(cwd), stdin=subprocess.DEVNULL)
+
+    full_env = {**os.environ, **(env or {})}
+    subprocess.check_call(args, cwd=str(cwd), env=full_env, stdin=subprocess.DEVNULL)
 
 
-def get_enabled_projects(args) -> list[str]:
+def get_projects_from_topology(stage: str) -> List[str]:
+    """Get submodule names for a build stage from BUILD_TOPOLOGY.toml."""
+    from _therock_utils.build_topology import BuildTopology
+
+    if not TOPOLOGY_PATH.exists():
+        raise FileNotFoundError(f"BUILD_TOPOLOGY.toml not found at {TOPOLOGY_PATH}")
+
+    topology = BuildTopology(str(TOPOLOGY_PATH))
+    current_platform = platform.system().lower()
+    submodules = topology.get_submodules_for_stage(stage, platform=current_platform)
+    return [s.name for s in submodules]
+
+
+def get_available_stages() -> List[str]:
+    """Get list of available build stages from BUILD_TOPOLOGY.toml."""
+    from _therock_utils.build_topology import BuildTopology
+
+    if not TOPOLOGY_PATH.exists():
+        return []
+
+    topology = BuildTopology(str(TOPOLOGY_PATH))
+    return [s.name for s in topology.get_build_stages()]
+
+
+def parse_nested_submodules(input):
+    """Parse nested submodules string like 'iree:flatcc,something' into ("iree", ["flatcc", "something"])."""
+    project, nested = input.split(":", 1)
+    nested_list = [n.strip() for n in nested.split(",")] if nested else []
+    return (project, nested_list)
+
+
+def get_enabled_projects(args) -> List[str]:
+    """Get list of submodule names to fetch.
+
+    If --stage is provided, uses BUILD_TOPOLOGY.toml to determine submodules.
+    Otherwise, uses the legacy --include-* flags.
+    """
+    # Stage-aware mode: use topology
+    if args.stage:
+        projects = get_projects_from_topology(args.stage)
+        log(f"Stage '{args.stage}' requires submodules: {projects}")
+        return projects
+
+    # Legacy flag-based mode
     projects = []
     if args.include_system_projects:
         projects.extend(args.system_projects)
     if args.include_compilers:
         projects.extend(args.compiler_projects)
+    if args.include_debug_tools:
+        projects.extend(args.debug_tools)
     if args.include_rocm_libraries:
         projects.extend(["rocm-libraries"])
     if args.include_rocm_systems:
         projects.extend(["rocm-systems"])
     if args.include_ml_frameworks:
         projects.extend(args.ml_framework_projects)
+    if args.include_rocm_media:
+        projects.extend(args.rocm_media_projects)
+    if args.include_iree_libs:
+        projects.extend(args.iree_libs_projects)
+    if args.include_math_libraries:
+        projects.extend(args.math_library_projects)
     return projects
+
+
+def fetch_nested_submodules(args, projects):
+    """Fetch nested submodules for projects specified in --nested-submodules."""
+    update_args = []
+    if args.depth:
+        update_args += ["--depth", str(args.depth)]
+    if args.progress:
+        update_args += ["--progress"]
+    if args.jobs:
+        update_args += ["--jobs", str(args.jobs)]
+    if args.remote:
+        update_args += ["--remote"]
+
+    for parent, nested_submodules in dict(args.nested_submodules).items():
+        if len(nested_submodules) == 0:
+            continue
+
+        # Skip if parent project wasn't fetched
+        if parent not in projects:
+            continue
+
+        # Fetch the nested submodules
+        parent_dir = THEROCK_DIR / get_submodule_path(parent)
+        nested_submodule_paths = [
+            get_submodule_path(nested_submodule, cwd=parent_dir)
+            for nested_submodule in nested_submodules
+        ]
+        run_command(
+            ["git", "submodule", "update", "--init"]
+            + update_args
+            + ["--"]
+            + nested_submodule_paths,
+            cwd=parent_dir,
+        )
 
 
 def run(args):
     projects = get_enabled_projects(args)
-    submodule_paths = [get_submodule_path(project) for project in projects]
+    submodule_paths = ALWAYS_SUBMODULE_PATHS + [
+        get_submodule_path(project) for project in projects
+    ]
     # TODO(scotttodd): Check for git lfs?
     update_args = []
     if args.depth:
@@ -62,7 +166,7 @@ def run(args):
     if args.remote:
         update_args += ["--remote"]
     if args.update_submodules:
-        exec(
+        run_command(
             ["git", "submodule", "update", "--init"]
             + update_args
             + ["--"]
@@ -72,12 +176,16 @@ def run(args):
     if args.dvc_projects:
         pull_large_files(args.dvc_projects, projects)
 
+    # Fetch nested submodules
+    if args.update_submodules:
+        fetch_nested_submodules(args, projects)
+
     # Because we allow local patches, if a submodule is in a patched state,
     # we manually set it to skip-worktree since recording the commit is
     # then meaningless. Here on each fetch, we reset the flag so that if
     # patches are aged out, the tree is restored to normal.
     submodule_paths = [get_submodule_path(name) for name in projects]
-    exec(
+    run_command(
         ["git", "update-index", "--no-skip-worktree", "--"] + submodule_paths,
         cwd=THEROCK_DIR,
     )
@@ -110,7 +218,7 @@ def pull_large_files(dvc_projects, projects):
         dvc_config_file = project_dir / ".dvc" / "config"
         if dvc_config_file.exists():
             print(f"dvc detected in {project_dir}, running dvc pull")
-            exec(["dvc", "pull"], cwd=project_dir)
+            run_command(["dvc", "pull"], cwd=project_dir)
         else:
             log(f"WARNING: dvc config not found in {project_dir}, when expected.")
 
@@ -151,7 +259,7 @@ def apply_patches(args, projects):
         patch_files = list(patch_project_dir.glob("*.patch"))
         patch_files.sort()
         log(f"Applying {len(patch_files)} patches")
-        exec(
+        run_command(
             [
                 "git",
                 "-c",
@@ -163,9 +271,12 @@ def apply_patches(args, projects):
             ]
             + patch_files,
             cwd=project_dir,
+            env={
+                "GIT_COMMITTER_DATE": "Thu, 1 Jan 2099 00:00:00 +0000",
+            },
         )
         # Since it is in a patched state, make it invisible to changes.
-        exec(
+        run_command(
             ["git", "update-index", "--skip-worktree", "--", submodule_path],
             cwd=THEROCK_DIR,
         )
@@ -193,7 +304,7 @@ def apply_patches(args, projects):
 
 # Gets the the relative path to a submodule given its name.
 # Raises an exception on failure.
-def get_submodule_path(name: str) -> str:
+def get_submodule_path(name: str, cwd=THEROCK_DIR) -> str:
     relpath = (
         subprocess.check_output(
             [
@@ -204,7 +315,7 @@ def get_submodule_path(name: str) -> str:
                 "--get",
                 f"submodule.{name}.path",
             ],
-            cwd=str(THEROCK_DIR),
+            cwd=cwd,
         )
         .decode()
         .strip()
@@ -247,7 +358,28 @@ def get_submodule_revision(submodule_path: str) -> str:
 
 
 def main(argv):
-    parser = argparse.ArgumentParser(prog="fetch_sources")
+    parser = argparse.ArgumentParser(
+        prog="fetch_sources",
+        description="Fetch sources for TheRock build. Use --stage for stage-aware "
+        "fetching or --include-* flags for legacy mode.",
+    )
+
+    # Stage-aware fetching (preferred for CI)
+    available_stages = get_available_stages()
+    parser.add_argument(
+        "--stage",
+        type=str,
+        choices=available_stages if available_stages else None,
+        help=f"Build stage to fetch sources for. Uses BUILD_TOPOLOGY.toml. "
+        f"Available: {', '.join(available_stages) if available_stages else 'none'}",
+    )
+    parser.add_argument(
+        "--list-stages",
+        action="store_true",
+        help="List available build stages and their submodules, then exit",
+    )
+
+    # Legacy options
     parser.add_argument(
         "--patch-tag",
         type=str,
@@ -288,6 +420,13 @@ def main(argv):
         default=None,
     )
     parser.add_argument(
+        "--nested-submodules",
+        nargs="+",
+        type=parse_nested_submodules,
+        default=[("iree", ["third_party/flatcc", "third_party/benchmark"])],
+        help="Specify which nested submodules to fetch (e.g., project1:nested_in_project1_1,nested_in_project1_2 project2:nested_in_project2)",
+    )
+    parser.add_argument(
         "--include-system-projects",
         default=True,
         action=argparse.BooleanOptionalAction,
@@ -298,6 +437,12 @@ def main(argv):
         default=True,
         action=argparse.BooleanOptionalAction,
         help="Include compilers",
+    )
+    parser.add_argument(
+        "--include-debug-tools",
+        default=True,
+        action=argparse.BooleanOptionalAction,
+        help="Include ROCm debugging tools",
     )
     parser.add_argument(
         "--include-rocm-libraries",
@@ -318,11 +463,28 @@ def main(argv):
         help="Include machine learning frameworks that are part of ROCM",
     )
     parser.add_argument(
+        "--include-rocm-media",
+        default=True,
+        action=argparse.BooleanOptionalAction,
+        help="Include media projects that are part of ROCM",
+    )
+    parser.add_argument(
+        "--include-iree-libs",
+        default=True,
+        action=argparse.BooleanOptionalAction,
+        help="Include IREE and related libraries",
+    )
+    parser.add_argument(
+        "--include-math-libraries",
+        default=True,
+        action=argparse.BooleanOptionalAction,
+        help="Include math libraries that are part of ROCM",
+    )
+    parser.add_argument(
         "--system-projects",
         nargs="+",
         type=str,
         default=[
-            "amdsmi",
             "half",
             "rccl",
             "rccl-tests",
@@ -344,14 +506,29 @@ def main(argv):
         "--ml-framework-projects",
         nargs="+",
         type=str,
+        default=[],
+    )
+    parser.add_argument(
+        "--rocm-media-projects",
+        nargs="+",
+        type=str,
         default=(
             []
             if is_windows()
             else [
                 # Linux only projects.
-                "composable_kernel",
+                "amd-mesa",
             ]
         ),
+    )
+    parser.add_argument(
+        "--iree-libs-projects",
+        nargs="+",
+        type=str,
+        default=[
+            "iree",
+            "fusilli",
+        ],
     )
     parser.add_argument(
         # projects that use DVC to manage large files
@@ -369,7 +546,57 @@ def main(argv):
             ]
         ),
     )
+    parser.add_argument(
+        "--debug-tools",
+        nargs="+",
+        type=str,
+        default=(
+            []
+            if is_windows()
+            else [
+                # Linux only projects.
+                "amd-dbgapi",
+                "rocr-debug-agent",
+                "rocgdb",
+            ]
+        ),
+    )
+    parser.add_argument(
+        "--math-library-projects",
+        nargs="+",
+        type=str,
+        default=(
+            []
+            if is_windows()
+            else [
+                # Linux only projects.
+                "libhipcxx",
+            ]
+        ),
+    )
     args = parser.parse_args(argv)
+
+    # Handle --list-stages
+    if args.list_stages:
+        from _therock_utils.build_topology import BuildTopology
+
+        if not TOPOLOGY_PATH.exists():
+            print(f"BUILD_TOPOLOGY.toml not found at {TOPOLOGY_PATH}")
+            sys.exit(1)
+
+        topology = BuildTopology(str(TOPOLOGY_PATH))
+        print("Available build stages and their submodules:\n")
+        for stage in topology.get_build_stages():
+            submodules = topology.get_submodules_for_stage(stage.name)
+            submodule_names = [s.name for s in submodules]
+            print(f"  {stage.name} ({stage.type}):")
+            print(f"    {stage.description}")
+            print(
+                f"    Submodules: {', '.join(submodule_names) if submodule_names else '(none)'}"
+            )
+            print()
+        sys.exit(0)
+
     run(args)
 
 

@@ -1,3 +1,4 @@
+boto3>=1.26.0
 installer==0.7.0
 packaging==25.0
 pkginfo==1.12.1.2

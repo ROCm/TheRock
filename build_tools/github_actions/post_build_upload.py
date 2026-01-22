@@ -46,7 +46,7 @@ def log(*args):
     sys.stdout.flush()
 
 
-def exec(cmd: list[str], cwd: Path):
+def run_command(cmd: list[str], cwd: Path):
     log(f"++ Exec [{cwd}]$ {shlex.join(cmd)}")
     subprocess.run(cmd, check=True)
 
@@ -136,7 +136,7 @@ def index_log_files(build_dir: Path, artifact_group: str):
         log(
             f"[INFO] Found '{log_dir}' directory. Indexing '*.log' and '*.tar.gz' files..."
         )
-        exec(
+        run_command(
             [
                 sys.executable,
                 str(indexer_path),
@@ -196,7 +196,7 @@ def upload_artifacts(artifact_group: str, build_dir: Path, bucket_uri: str):
         "--region",
         "us-east-2",
     ]
-    exec(cmd, cwd=Path.cwd())
+    run_command(cmd, cwd=Path.cwd())
 
     # Uploading index.html to S3 bucket
     cmd = [
@@ -206,7 +206,7 @@ def upload_artifacts(artifact_group: str, build_dir: Path, bucket_uri: str):
         str(build_dir / "artifacts" / "index.html"),
         f"{bucket_uri}/index-{artifact_group}.html",
     ]
-    exec(cmd, cwd=Path.cwd())
+    run_command(cmd, cwd=Path.cwd())
 
 
 def upload_logs_to_s3(artifact_group: str, build_dir: Path, bucket_uri: str):
@@ -223,6 +223,13 @@ def upload_logs_to_s3(artifact_group: str, build_dir: Path, bucket_uri: str):
         log("[WARN] No .log or .tar.gz files found. Skipping log upload.")
     else:
         run_aws_cp(log_dir, s3_base_path, content_type="text/plain")
+
+    # Build Time Analysis is only generated on Linux
+    analysis_path = log_dir / "build_time_analysis.html"
+    if analysis_path.is_file():
+        analysis_s3_dest = f"{s3_base_path}/build_time_analysis.html"
+        run_aws_cp(analysis_path, analysis_s3_dest, content_type="text/html")
+        log(f"[INFO] Uploaded {analysis_path} to {analysis_s3_dest}")
 
     # Upload index.html
     index_path = log_dir / "index.html"
@@ -251,14 +258,21 @@ def upload_manifest_to_s3(artifact_group: str, build_dir: Path, bucket_uri: str)
     run_aws_cp(manifest_path, dest, content_type="application/json")
 
 
-def write_gha_build_summary(artifact_group: str, bucket_url: str):
+def write_gha_build_summary(artifact_group: str, bucket_url: str, job_status: str):
     log(f"Adding links to job summary to bucket {bucket_url}")
 
     log_index_url = f"{bucket_url}/logs/{artifact_group}/index.html"
     gha_append_step_summary(f"[Build Logs]({log_index_url})")
 
-    artifact_url = f"{bucket_url}/index-{artifact_group}.html"
-    gha_append_step_summary(f"[Artifacts]({artifact_url})")
+    # Build Time Analysis is only generated on Linux
+    if PLATFORM == "linux":
+        analysis_url = f"{bucket_url}/logs/{artifact_group}/build_time_analysis.html"
+        gha_append_step_summary(f"[Build Time Analysis]({analysis_url})")
+
+    # Only add artifact links if the job not failed
+    if not job_status or job_status == "success":
+        artifact_url = f"{bucket_url}/index-{artifact_group}.html"
+        gha_append_step_summary(f"[Artifacts]({artifact_url})")
 
     manifest_url = f"{bucket_url}/manifests/{artifact_group}/therock_manifest.json"
     gha_append_step_summary(f"[TheRock Manifest]({manifest_url})")
@@ -291,9 +305,11 @@ def run(args):
     log("----------------------")
     write_time_sync_log()
 
-    log("Upload build artifacts")
-    log("----------------------")
-    upload_artifacts(args.artifact_group, args.build_dir, bucket_uri)
+    # Upload artifacts only if the job not failed
+    if not args.job_status or args.job_status == "success":
+        log("Upload build artifacts")
+        log("----------------------")
+        upload_artifacts(args.artifact_group, args.build_dir, bucket_uri)
 
     log("Upload log")
     log("----------")
@@ -305,7 +321,7 @@ def run(args):
 
     log("Write github actions build summary")
     log("--------------------")
-    write_gha_build_summary(args.artifact_group, bucket_url)
+    write_gha_build_summary(args.artifact_group, bucket_url, args.job_status)
 
 
 if __name__ == "__main__":
@@ -331,6 +347,9 @@ if __name__ == "__main__":
         action=argparse.BooleanOptionalAction,
     )
     parser.add_argument("--run-id", type=str, help="GitHub run ID of this workflow run")
+    parser.add_argument(
+        "--job-status", type=str, help="Status of this Job ('success', 'failure')"
+    )
     args = parser.parse_args()
 
     # Check preconditions for provided arguments before proceeding.

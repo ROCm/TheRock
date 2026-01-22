@@ -3,16 +3,21 @@
 This page describes how to install and use our release artifacts for ROCm and
 external builds like PyTorch. We produce build artifacts as part of our
 Continuous Integration (CI) build/test workflows as well as release artifacts as
-part of Continuous Delivery (CD) nightly releases. See also the
+part of Continuous Delivery (CD) nightly releases. For the development-status of GPU architecture support in TheRock, please see the [SUPPORTED_GPUS.md](./SUPPORTED_GPUS.md) document, which tracks readiness and onboarding progress for each AMD GPU architecture.
+
+See also the
 [Roadmap for support](ROADMAP.md) and
 [Build artifacts overview](docs/development/artifacts.md) pages.
 
-> [!WARNING]
-> These instructions assume familiarity with how to use ROCm. Please see
-> https://rocm.docs.amd.com/ for general information about the ROCm software
-> platform. In addition, Linux users, please be aware of the [prerequisites](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/prerequisites.html#configuring-permissions-for-gpu-access), including enabling GPU access, needed to run ROCm.
+> [!IMPORTANT]
+> These instructions assume familiarity with how to use ROCm.
+> Please see https://rocm.docs.amd.com/ for general information about the ROCm software
+> platform.
 >
-> **Note: these install steps are a substitute for those on that website**.
+> Prerequisites:
+>
+> - We recommend installing the latest [AMDGPU driver](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/quick-start.html#amdgpu-driver-installation) on Linux and [Adrenaline driver](https://www.amd.com/en/products/software/adrenalin.html) on Windows
+> - Linux users, please be aware of [Configuring permissions for GPU access](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/prerequisites.html#configuring-permissions-for-gpu-access) needed for ROCm
 
 Table of contents:
 
@@ -27,6 +32,7 @@ Table of contents:
   - [Installing per-commit CI build tarballs manually](#installing-per-commit-ci-build-tarballs-manually)
   - [Installing tarballs using `install_rocm_from_artifacts.py`](#installing-tarballs-using-install_rocm_from_artifactspy)
   - [Using installed tarballs](#using-installed-tarballs)
+- [Verifying your installation](#verifying-your-installation)
 
 ## Installing releases using pip
 
@@ -76,9 +82,10 @@ project layouts.**
 | ---------------------------------- | ---------- | ------------ | ------------------------------------------------------------------ |
 | MI300A/MI300X                      | gfx942     | gfx94X-dcgpu | [rocm](#rocm-for-gfx94X-dcgpu) // [torch](#torch-for-gfx94X-dcgpu) |
 | MI350X/MI355X                      | gfx950     | gfx950-dcgpu | [rocm](#rocm-for-gfx950-dcgpu) // [torch](#torch-for-gfx950-dcgpu) |
-| AMD RX 7900 XTX                    | gfx1100    | gfx110X-dgpu | [rocm](#rocm-for-gfx110X-dgpu) // [torch](#torch-for-gfx110X-dgpu) |
-| AMD RX 7800 XT                     | gfx1101    | gfx110X-dgpu | [rocm](#rocm-for-gfx110X-dgpu) // [torch](#torch-for-gfx110X-dgpu) |
-| AMD RX 7700S / Framework Laptop 16 | gfx1102    | gfx110X-dgpu | [rocm](#rocm-for-gfx110X-dgpu) // [torch](#torch-for-gfx110X-dgpu) |
+| AMD RX 7900 XTX                    | gfx1100    | gfx110X-all  | [rocm](#rocm-for-gfx110X-all) // [torch](#torch-for-gfx110X-all)   |
+| AMD RX 7800 XT                     | gfx1101    | gfx110X-all  | [rocm](#rocm-for-gfx110X-all) // [torch](#torch-for-gfx110X-all)   |
+| AMD RX 7700S / Framework Laptop 16 | gfx1102    | gfx110X-all  | [rocm](#rocm-for-gfx110X-all) // [torch](#torch-for-gfx110X-all)   |
+| AMD Radeon 780M Laptop iGPU        | gfx1103    | gfx110X-all  | [rocm](#rocm-for-gfx110X-all) // [torch](#torch-for-gfx110X-all)   |
 | AMD Strix Halo iGPU                | gfx1151    | gfx1151      | [rocm](#rocm-for-gfx1151) // [torch](#torch-for-gfx1151)           |
 | AMD RX 9060 / XT                   | gfx1200    | gfx120X-all  | [rocm](#rocm-for-gfx120X-all) // [torch](#torch-for-gfx120X-all)   |
 | AMD RX 9070 / XT                   | gfx1201    | gfx120X-all  | [rocm](#rocm-for-gfx120X-all) // [torch](#torch-for-gfx120X-all)   |
@@ -111,9 +118,7 @@ Supported devices in this family:
 Install instructions:
 
 ```bash
-python -m pip install \
-  --index-url https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/ \
-  "rocm[libraries,devel]"
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/ "rocm[libraries,devel]"
 ```
 
 #### rocm for gfx950-dcgpu
@@ -127,12 +132,10 @@ Supported devices in this family:
 Install instructions:
 
 ```bash
-python -m pip install \
-  --index-url https://rocm.nightlies.amd.com/v2/gfx950-dcgpu/ \
-  "rocm[libraries,devel]"
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx950-dcgpu/ "rocm[libraries,devel]"
 ```
 
-#### rocm for gfx110X-dgpu
+#### rocm for gfx110X-all
 
 Supported devices in this family:
 
@@ -141,13 +144,12 @@ Supported devices in this family:
 | AMD RX 7900 XTX                    | gfx1100    |
 | AMD RX 7800 XT                     | gfx1101    |
 | AMD RX 7700S / Framework Laptop 16 | gfx1102    |
+| AMD Radeon 780M Laptop iGPU        | gfx1103    |
 
 Install instructions:
 
 ```bash
-python -m pip install \
-  --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/ \
-  "rocm[libraries,devel]"
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ "rocm[libraries,devel]"
 ```
 
 #### rocm for gfx1151
@@ -161,9 +163,7 @@ Supported devices in this family:
 Install instructions:
 
 ```bash
-python -m pip install \
-  --index-url https://rocm.nightlies.amd.com/v2/gfx1151/ \
-  "rocm[libraries,devel]"
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx1151/ "rocm[libraries,devel]"
 ```
 
 #### rocm for gfx120X-all
@@ -178,9 +178,7 @@ Supported devices in this family:
 Install instructions:
 
 ```bash
-python -m pip install \
-  --index-url https://rocm.nightlies.amd.com/v2/gfx120X-all/ \
-  "rocm[libraries,devel]"
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx120X-all/ "rocm[libraries,devel]"
 ```
 
 ### Using ROCm Python packages
@@ -193,7 +191,7 @@ pip freeze | grep rocm
 # rocm==6.5.0rc20250610
 # rocm-sdk-core==6.5.0rc20250610
 # rocm-sdk-devel==6.5.0rc20250610
-# rocm-sdk-libraries-gfx110X-dgpu==6.5.0rc20250610
+# rocm-sdk-libraries-gfx110X-all==6.5.0rc20250610
 ```
 
 You should also see various tools on your `PATH` and in the `bin` directory:
@@ -256,33 +254,47 @@ Using the index pages [listed above](#installing-rocm-python-packages), you can
 also install `torch`, `torchaudio`, and `torchvision`.
 
 > [!NOTE]
-> By default, pip will install the latest versions of each package. If you want to
-> install older versions take note of the compatibility matrix:
+> By default, pip will install the latest stable versions of each package.
 >
-> | torch version | torchaudio version | torchvision version |
-> | ------------- | ------------------ | ------------------- |
-> | 2.10          | 2.10               | 0.25                |
-> | 2.9           | 2.9                | 0.24                |
-> | 2.8           | 2.8                | 0.23                |
-> | 2.7           | 2.7.1a0            | 0.22.1              |
+> - If you want to allow installing prerelease versions, use the `--pre`
 >
-> For example, `torch` 2.7.1 and compatible wheels can be installed by specifying
+> - If you want to install other versions, take note of the compatibility
+>   matrix:
 >
-> ```
-> torch==2.7.1 torchaudio==2.7.1a0 torchvision==0.22.1
-> ```
+>   | torch version | torchaudio version | torchvision version |
+>   | ------------- | ------------------ | ------------------- |
+>   | 2.10          | 2.10               | 0.25                |
+>   | 2.9           | 2.9                | 0.24                |
+>   | 2.8           | 2.8                | 0.23                |
+>   | 2.7           | 2.7.1a0            | 0.22.1              |
 >
-> See also
+>   For example, `torch` 2.7.1 and compatible wheels can be installed by specifying
 >
-> - [Supported PyTorch versions in TheRock](https://github.com/ROCm/TheRock/tree/main/external-builds/pytorch#supported-pytorch-versions)
-> - [Installing previous versions of PyTorch](https://pytorch.org/get-started/previous-versions/)
-> - [torchvision installation - compatixbility matrix](https://github.com/pytorch/vision?tab=readme-ov-file#installation)
-> - [torchaudio installation - compatixbility matrix](https://docs.pytorch.org/audio/main/installation.html#compatibility-matrix)
+>   ```
+>   torch==2.7.1 torchaudio==2.7.1a0 torchvision==0.22.1
+>   ```
+>
+>   See also
+>
+>   - [Supported PyTorch versions in TheRock](https://github.com/ROCm/TheRock/tree/main/external-builds/pytorch#supported-pytorch-versions)
+>   - [Installing previous versions of PyTorch](https://pytorch.org/get-started/previous-versions/)
+>   - [torchvision installation - compatixbility matrix](https://github.com/pytorch/vision?tab=readme-ov-file#installation)
+>   - [torchaudio installation - compatixbility matrix](https://docs.pytorch.org/audio/main/installation.html#compatibility-matrix)
 
 > [!TIP]
 > The `torch` packages depend on `rocm[libraries]`, so ROCm packages should
 > be installed automatically for you and you do not need to explicitly install
 > ROCm first.
+
+> [!TIP]
+> If you previously installed PyTorch with the `pytorch-triton-rocm` package,
+> please uninstall it before installing the new packages:
+>
+> ```bash
+> pip uninstall pytorch-triton-rocm
+> ```
+>
+> The triton package is now named `triton`.
 
 #### torch for gfx94X-dcgpu
 
@@ -293,9 +305,7 @@ Supported devices in this family:
 | MI300A/MI300X | gfx942     |
 
 ```bash
-python -m pip install \
-  --index-url https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/ \
-  --pre torch torchaudio torchvision
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/ torch torchaudio torchvision
 ```
 
 #### torch for gfx950-dcgpu
@@ -307,12 +317,10 @@ Supported devices in this family:
 | MI350X/MI355X | gfx950     |
 
 ```bash
-python -m pip install \
-  --index-url https://rocm.nightlies.amd.com/v2/gfx950-dcgpu/ \
-  --pre torch torchaudio torchvision
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx950-dcgpu/ torch torchaudio torchvision
 ```
 
-#### torch for gfx110X-dgpu
+#### torch for gfx110X-all
 
 Supported devices in this family:
 
@@ -321,11 +329,10 @@ Supported devices in this family:
 | AMD RX 7900 XTX                    | gfx1100    |
 | AMD RX 7800 XT                     | gfx1101    |
 | AMD RX 7700S / Framework Laptop 16 | gfx1102    |
+| AMD Radeon 780M Laptop iGPU        | gfx1103    |
 
 ```bash
-python -m pip install \
-  --index-url https://rocm.nightlies.amd.com/v2/gfx110X-dgpu/ \
-  --pre torch torchaudio torchvision
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ torch torchaudio torchvision
 ```
 
 #### torch for gfx1151
@@ -337,9 +344,7 @@ Supported devices in this family:
 | AMD Strix Halo iGPU | gfx1151    |
 
 ```bash
-python -m pip install \
-  --index-url https://rocm.nightlies.amd.com/v2/gfx1151/ \
-  --pre torch torchaudio torchvision
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx1151/ torch torchaudio torchvision
 ```
 
 #### torch for gfx120X-all
@@ -352,9 +357,7 @@ Supported devices in this family:
 | AMD RX 9070 / XT | gfx1201    |
 
 ```bash
-python -m pip install \
-  --index-url https://rocm.nightlies.amd.com/v2/gfx120X-all/ \
-  --pre torch torchaudio torchvision
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx120X-all/ torch torchaudio torchvision
 ```
 
 ### Using PyTorch Python packages
@@ -396,7 +399,7 @@ After downloading, simply extract the release tarball into place:
 ```bash
 mkdir therock-tarball && cd therock-tarball
 # For example...
-wget https://therock-nightly-tarball.s3.us-east-2.amazonaws.com/therock-dist-linux-gfx110X-dgpu-6.5.0rc20250610.tar.gz
+wget https://therock-nightly-tarball.s3.us-east-2.amazonaws.com/therock-dist-linux-gfx110X-all-6.5.0rc20250610.tar.gz
 
 mkdir install
 tar -xf *.tar.gz -C install
@@ -473,13 +476,19 @@ Examples:
 - Downloads the version `6.4.0rc20250516` gfx110X artifacts from GitHub release tag `nightly-tarball` to the specified output directory `build`:
 
   ```bash
-  python build_tools/install_rocm_from_artifacts.py --release 6.4.0rc20250516 --amdgpu-family gfx110X-dgpu --output-dir build
+  python build_tools/install_rocm_from_artifacts.py --release 6.4.0rc20250516 --amdgpu-family gfx110X-all --output-dir build
   ```
 
 - Downloads the version `6.4.0.dev0+e015c807437eaf32dac6c14a9c4f752770c51b14` gfx110X artifacts from GitHub release tag `dev-tarball` to the default output directory `therock-build`:
 
   ```bash
-  python build_tools/install_rocm_from_artifacts.py --release 6.4.0.dev0+e015c807437eaf32dac6c14a9c4f752770c51b14 --amdgpu-family gfx110X-dgpu
+  python build_tools/install_rocm_from_artifacts.py --release 6.4.0.dev0+e015c807437eaf32dac6c14a9c4f752770c51b14 --amdgpu-family gfx110X-all
+  ```
+
+- Downloads all gfx94X S3 artifacts from [GitHub CI workflow run 19644138192](https://github.com/ROCm/rocm-libraries/actions/runs/19644138192) in the `ROCm/rocm-libraries` repository:
+
+  ```bash
+  python build_tools/install_rocm_from_artifacts.py --run-id 19644138192 --amdgpu-family gfx94X-dcgpu --tests --run-github-repo ROCm/rocm-libraries
   ```
 
 Select your AMD GPU family from this file [therock_amdgpu_targets.cmake](https://github.com/ROCm/TheRock/blob/59c324a759e8ccdfe5a56e0ebe72a13ffbc04c1f/cmake/therock_amdgpu_targets.cmake#L44-L81)
@@ -502,3 +511,40 @@ ls install
 
 You may also want to add the install directory to your `PATH` or set other
 environment variables like `ROCM_HOME`.
+
+## Verifying your installation
+
+After installing ROCm via either pip packages or tarballs, you can verify that
+your GPU is properly recognized.
+
+### Linux
+
+Run one of the following commands to verify that your GPU is detected and properly
+initialized by the ROCm stack:
+
+```bash
+rocminfo
+# or
+amd-smi
+```
+
+### Windows
+
+Run the following command to verify GPU detection:
+
+```bash
+hipInfo.exe
+```
+
+### Additional troubleshooting
+
+If your GPU is not recognized or you encounter issues:
+
+- **Linux users**: Check system logs using `dmesg | grep amdgpu` for specific error messages
+- Review memory allocation settings (see the [FAQ](https://github.com/ROCm/TheRock/blob/main/faq.md)
+  for GTT configuration on unified memory systems)
+- Ensure you have the latest [AMDGPU driver](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/quick-start.html#amdgpu-driver-installation)
+  on Linux or [Adrenaline driver](https://www.amd.com/en/products/software/adrenalin.html) on Windows
+- For platform-specific troubleshooting when using PyTorch, see:
+  - [Using ROCm Python packages](#using-rocm-python-packages)
+  - [Using PyTorch Python packages](#using-pytorch-python-packages)

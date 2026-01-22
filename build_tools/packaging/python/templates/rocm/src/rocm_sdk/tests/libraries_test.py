@@ -59,7 +59,7 @@ class ROCmLibrariesTest(unittest.TestCase):
                 if "amd_smi" in str(so_path) or "goamdsmi" in str(so_path):
                     # TODO: Library preloads for amdsmi need to be implement.
                     # Though this is not needed for the amd-smi client.
-                    self.skipTest("Skipping amdsmi test")
+                    continue
 
                 # For Windows compatibility, we first preload libraries (DLLs)
                 # that are not co-located. Specifically this is for

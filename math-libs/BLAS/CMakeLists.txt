@@ -96,8 +96,9 @@ endif()
 
 set(hipBLASLt_optional_deps)
 if(NOT WIN32)
-  # hipBLASLt is hard-coded to not expect rocm-smi on Windows.
+  # hipBLASLt is hard-coded to not expect rocm-smi and amdsmi on Windows.
   list(APPEND hipBLASLt_optional_deps
+    amdsmi
     rocm_smi_lib
   )
 endif()
@@ -291,8 +292,9 @@ if(THEROCK_ENABLE_SPARSE)
   if(NOT WIN32) # Remove this block once hipSPARSELt is supported on Windows
     set(hipSPARSELt_optional_deps)
     if(NOT WIN32)
-      # hipSPARSELt is hard-coded to not expect rocm-smi on Windows.
+      # hipSPARSELt is hard-coded to not expect rocm-smi and amdsmi on Windows.
       list(APPEND hipSPARSELt_optional_deps
+        amdsmi
         rocm_smi_lib
       )
     endif()
@@ -313,6 +315,7 @@ if(THEROCK_ENABLE_SPARSE)
       BUILD_DEPS
         rocm-cmake
         hipSPARSE
+        rocSPARSE
         therock-googletest
         therock-msgpack-cxx
       RUNTIME_DEPS
