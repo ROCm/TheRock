@@ -8,6 +8,10 @@ trap 'kill -TERM 0' INT
 OUTPUT_DIR="/therock/output"
 mkdir -p "$OUTPUT_DIR/caches"
 
+# Set build profiling log directory to match the actual build output location
+# This ensures resource_info.py writes logs to the correct path inside the container
+export THEROCK_BUILD_PROF_LOG_DIR="$OUTPUT_DIR/build/logs/therock-build-prof"
+
 export CCACHE_DIR="$OUTPUT_DIR/caches/container/ccache"
 export PIP_CACHE_DIR="$OUTPUT_DIR/caches/container/pip"
 mkdir -p "$CCACHE_DIR"
