@@ -78,8 +78,8 @@ except FileNotFoundError as e:
 cmd = [
     "cmake",
     f"-DCMAKE_PREFIX_PATH={OUTPUT_ARTIFACTS_PATH}",
-    f"-DCMAKE_CXX_COMPILER={THEROCK_BIN_PATH}/hipcc",
-    f"-DHIP_HIPCC_EXECUTABLE={THEROCK_BIN_PATH}/hipcc",
+    f"-DCMAKE_CXX_COMPILER={THEROCK_BIN_PATH / "hipcc"}",
+    f"-DHIP_HIPCC_EXECUTABLE={THEROCK_BIN_PATH / "hipcc"}",
     "-GNinja",
     "..",
 ]
