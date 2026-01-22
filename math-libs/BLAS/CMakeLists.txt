@@ -173,6 +173,12 @@ if(THEROCK_BUILD_TESTING)
   list(APPEND rocBLAS_optional_runtime_deps therock-aocl-blas)       # AOCL-BLAS
 endif()
 
+# AOCL-BLAS is a static library that must be built before rocBLAS links against it
+set(rocBLAS_optional_build_deps)
+if(THEROCK_BUILD_TESTING)
+  list(APPEND rocBLAS_optional_build_deps therock-aocl-blas)
+endif()
+
 therock_cmake_subproject_declare(rocBLAS
   EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocblas"
   BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocBLAS"
@@ -201,6 +207,7 @@ therock_cmake_subproject_declare(rocBLAS
     rocm-cmake
     therock-googletest
     therock-msgpack-cxx
+    ${rocBLAS_optional_build_deps}
   RUNTIME_DEPS
     hip-clr
     hipBLASLt

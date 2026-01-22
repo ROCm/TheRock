@@ -61,6 +61,10 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         -DENABLE_MULTITHREADING=ON
         # Disable OpenMP library linking (let AOCL handle it internally)
         -DOpenMP_libomp_LIBRARY=""
+        # Set install directories to match TheRock's host-math layout
+        -DCMAKE_INSTALL_BINDIR=lib/host-math/bin
+        -DCMAKE_INSTALL_LIBDIR=lib/host-math/lib
+        -DCMAKE_INSTALL_INCLUDEDIR=lib/host-math/include
       EXTRA_DEPENDS
         "${_download_stamp}"
     )
@@ -72,11 +76,26 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 
     # Validate that the built BLAS library exists
     therock_test_validate_static_lib(
-      PATH dist/lib
+      PATH dist/lib/host-math/lib
       LIB_NAMES libaocl.a
     )
-
-    # Define the artifact
+    
+    # Copy headers from dist/include to dist/lib/host-math/include
+    # AOCL's build system ignores CMAKE_INSTALL_INCLUDEDIR, so we copy them manually
+    # This must run after the stage install is complete
+    add_custom_command(
+      OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/dist/lib/host-math/include/blis.h"
+      COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/dist/lib/host-math/include"
+      COMMAND ${CMAKE_COMMAND} -E copy_directory
+              "${CMAKE_CURRENT_BINARY_DIR}/dist/include"
+              "${CMAKE_CURRENT_BINARY_DIR}/dist/lib/host-math/include"
+      DEPENDS therock-aocl-blas+stage
+      COMMENT "Copying AOCL-BLAS headers to lib/host-math/include/"
+    )
+    add_custom_target(therock-aocl-blas-headers ALL
+      DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/dist/lib/host-math/include/blis.h"
+    )
+    
     therock_provide_artifact(host-aocl-blas
       DESCRIPTOR artifact-aocl.toml
       TARGET_NEUTRAL
@@ -105,6 +124,15 @@ add_subdirectory(${SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/build-aocl)
 
 # AOCL's CMake should create the aocl target
 # The library will be named libaocl.a by default
+# However, AOCL's build system installs to lib/ and include/ instead of lib/host-math/
+# So we manually install both to the correct locations
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/build-aocl/libaocl.a"
+        DESTINATION ${CMAKE_INSTALL_LIBDIR})
+
+# Install BLIS/BLAS headers
+install(DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/build-aocl/blis/install_package/include/"
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+        FILES_MATCHING PATTERN "*.h")
 
 # Install our custom CMake package config
 configure_file(
