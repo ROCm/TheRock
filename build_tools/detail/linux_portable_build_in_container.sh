@@ -17,10 +17,11 @@ pip install -r /therock/src/requirements.txt
 
 python /therock/src/build_tools/health_status.py
 
-# Build compiler launcher: prepend extra launcher if provided
+# Build compiler launcher: use extra launcher if provided (it handles ccache internally),
+# otherwise fall back to ccache directly.
 if [ -n "${EXTRA_C_COMPILER_LAUNCHER}" ]; then
-  export CMAKE_C_COMPILER_LAUNCHER="${EXTRA_C_COMPILER_LAUNCHER};ccache"
-  export CMAKE_CXX_COMPILER_LAUNCHER="${EXTRA_CXX_COMPILER_LAUNCHER};ccache"
+  export CMAKE_C_COMPILER_LAUNCHER="${EXTRA_C_COMPILER_LAUNCHER}"
+  export CMAKE_CXX_COMPILER_LAUNCHER="${EXTRA_CXX_COMPILER_LAUNCHER}"
 else
   export CMAKE_C_COMPILER_LAUNCHER=ccache
   export CMAKE_CXX_COMPILER_LAUNCHER=ccache

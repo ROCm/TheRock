@@ -10,10 +10,10 @@ Required environment variables:
 Optional environment variables:
   - VCToolsInstallDir
   - GITHUB_WORKSPACE
-  - EXTRA_C_COMPILER_LAUNCHER: Additional C compiler launcher to prepend before ccache
-                               (e.g., resource_info.py for build time analysis)
-  - EXTRA_CXX_COMPILER_LAUNCHER: Additional CXX compiler launcher to prepend before ccache
-                                 (e.g., resource_info.py for build time analysis)
+  - EXTRA_C_COMPILER_LAUNCHER: Compiler launcher for C (e.g., resource_info.py for build
+                               time analysis). If set, this replaces ccache as the launcher.
+                               Note: resource_info.py automatically invokes ccache internally.
+  - EXTRA_CXX_COMPILER_LAUNCHER: Compiler launcher for CXX. Same behavior as above.
 """
 
 import argparse
@@ -48,25 +48,28 @@ if extra_cxx_compiler_launcher:
 
 
 def build_compiler_launcher(extra_launcher: str, default_launcher: str = "ccache") -> str:
-    """Build compiler launcher string, prepending extra launcher if provided.
+    """Build compiler launcher string.
 
     Args:
-        extra_launcher: Additional launcher to prepend (e.g., resource_info.py)
-        default_launcher: Default launcher to use (default: ccache)
+        extra_launcher: Custom launcher to use (e.g., resource_info.py).
+                        If provided, this replaces the default launcher entirely.
+                        Note: resource_info.py automatically invokes ccache internally,
+                        so no semicolon-separated list is needed.
+        default_launcher: Default launcher to use when extra_launcher is not set.
 
     Returns:
-        Launcher string for CMake. If extra_launcher is provided, returns
-        "extra_launcher;default_launcher", otherwise returns default_launcher.
+        Launcher string for CMake. If extra_launcher is provided, returns it directly.
+        Otherwise returns default_launcher.
 
     Example:
         build_compiler_launcher("/path/to/resource_info.py", "ccache")
-        -> "/path/to/resource_info.py;ccache"
+        -> "/path/to/resource_info.py"
 
         build_compiler_launcher("", "ccache")
         -> "ccache"
     """
     if extra_launcher:
-        return f"{extra_launcher};{default_launcher}"
+        return extra_launcher
     return default_launcher
 
 platform_options = {
