@@ -222,6 +222,20 @@ therock_cmake_subproject_provide_package(rocBLAS rocblas lib/cmake/rocblas)
 therock_cmake_subproject_activate(rocBLAS)
 list(APPEND _blas_subproject_names rocBLAS)
 
+# Clean Tensile build artifacts during expunge to prevent pip install issues
+# The Tensile source directory can accumulate stale egg-info and build artifacts
+# that cause permission errors on subsequent builds
+add_custom_target(rocBLAS+expunge-tensile
+  COMMAND
+    ${CMAKE_COMMAND} -E rm -rf
+      "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/tensile/Tensile.egg-info"
+      "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/tensile/build"
+      "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/tensile/dist"
+      "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/tensile/.eggs"
+  COMMENT "Cleaning Tensile build artifacts"
+)
+add_dependencies(rocBLAS+expunge rocBLAS+expunge-tensile)
+
 
 if(THEROCK_ENABLE_SPARSE)
   ##############################################################################
