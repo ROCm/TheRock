@@ -1,7 +1,10 @@
+import json
 import logging
 import os
 import shlex
 import subprocess
+import tempfile
+import tomllib
 from pathlib import Path
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
@@ -10,26 +13,20 @@ THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
 logging.basicConfig(level=logging.INFO)
 
-# Derive plugin path from THEROCK_BIN_DIR
-# THEROCK_BIN_DIR = .../dist/rocm/bin
-# Plugin path = .../dist/rocm/lib/hipdnn_plugins/engines/<plugin>.so
-bin_dir = Path(THEROCK_BIN_DIR)
-plugin_dir = bin_dir.parent / "lib" / "hipdnn_plugins" / "engines"
+# Load test configuration from TOML
+config_path = SCRIPT_DIR / "hipdnn_test_config.toml"
+with open(config_path, "rb") as f:
+    config = tomllib.load(f)
 
-# Find the first available plugin (or specify a particular one)
-# For now, use fusilli_plugin as default
-plugin_path = plugin_dir / "libfusilli_plugin.so"
-if not plugin_path.exists():
-    # Fall back to finding any plugin
-    plugins = list(plugin_dir.glob("*.so"))
-    if plugins:
-        plugin_path = plugins[0]
-    else:
-        raise RuntimeError(f"No plugins found in {plugin_dir}")
+logging.info(f"Loaded test config from: {config_path}")
 
-# Set environment variable for plugin path
-os.environ["HIPDNN_TEST_PLUGIN_PATH"] = str(plugin_path)
-logging.info(f"Using plugin: {plugin_path}")
+# Write JSON config to temp file for C++ harness
+fd, json_config_path = tempfile.mkstemp(suffix=".json", prefix="hipdnn_test_config_")
+with os.fdopen(fd, "w") as f:
+    json.dump(config, f)
+
+os.environ["HIPDNN_TEST_CONFIG_PATH"] = json_config_path
+logging.info(f"Wrote JSON config to: {json_config_path}")
 
 cmd = [
     "ctest",

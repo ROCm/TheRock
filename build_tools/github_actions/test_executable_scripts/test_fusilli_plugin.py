@@ -1,8 +1,10 @@
+import json
 import logging
 import os
 import shlex
 import subprocess
 import tempfile
+import tomllib
 import venv
 from pathlib import Path
 
@@ -12,47 +14,15 @@ THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
 logging.basicConfig(level=logging.INFO)
 
-# TODO: Remove this - temporarily running hipDNN integration tests instead of fusilli plugin tests
-RUN_HIPDNN_INTEGRATION_TESTS = True
-
-if RUN_HIPDNN_INTEGRATION_TESTS:
-    # Run hipDNN integration tests with fusilli plugin
-    cmd = [
-        str(THEROCK_BIN_DIR / "hipdnn_integration_tests"),
-    ]
-else:
-    # Build the ctest command
-    cmd = [
-        "ctest",
-        "--test-dir",
-        f"{THEROCK_BIN_DIR}/fusilli_plugin_test_infra",
-        "--output-on-failure",
-        "--parallel",
-        "8",
-        "--timeout",
-        "600",
-    ]
-
 # Set up environment variables
 environ_vars = os.environ.copy()
-
-# TODO: Remove this - set plugin path for hipDNN integration tests
-if RUN_HIPDNN_INTEGRATION_TESTS:
-    plugin_path = (
-        THEROCK_BIN_DIR.parent
-        / "lib"
-        / "hipdnn_plugins"
-        / "engines"
-        / "libfusilli_plugin.so"
-    )
-    environ_vars["HIPDNN_TEST_PLUGIN_PATH"] = str(plugin_path)
-    logging.info(f"Using plugin: {plugin_path}")
 
 # Determine test filter based on TEST_TYPE environment variable
 test_type = os.getenv("TEST_TYPE", "full")
 if test_type == "smoke":
     # Exclude tests that start with "Full" during smoke tests
     environ_vars["GTEST_FILTER"] = "-Full*"
+    logging.info("TEST_TYPE=smoke: Excluding Full* tests via GTEST_FILTER")
 
 # Create a temporary venv with `iree-base-compiler` package installed. The
 # package provides an `iree-compile` binary, which Fusilli and the Fusilli
@@ -95,12 +65,61 @@ with tempfile.TemporaryDirectory(prefix="fusilli_test_venv_") as venv_dir:
     # Add THEROCK_BIN_DIR to PATH for rocm_agent_enumerator
     environ_vars["PATH"] = f"{THEROCK_BIN_DIR}:{environ_vars['PATH']}"
 
-    # Run the tests
-    logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-    if test_type == "smoke":
-        logging.info(f"   TEST_TYPE=smoke: Excluding Full* tests via GTEST_FILTER")
+    # =========================================================================
+    # 1. Run fusilli plugin tests
+    # =========================================================================
+    fusilli_cmd = [
+        "ctest",
+        "--test-dir",
+        f"{THEROCK_BIN_DIR}/fusilli_plugin_test_infra",
+        "--output-on-failure",
+        "--parallel",
+        "8",
+        "--timeout",
+        "600",
+    ]
+
+    logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(fusilli_cmd)}")
     subprocess.run(
-        cmd,
+        fusilli_cmd,
+        cwd=THEROCK_DIR,
+        check=True,
+        env=environ_vars,
+    )
+
+    # =========================================================================
+    # 2. Run hipDNN integration tests (with fusilli as the plugin)
+    # =========================================================================
+
+    # Load fusilli-specific test configuration from TOML
+    config_path = SCRIPT_DIR / "fusilli_test_config.toml"
+    with open(config_path, "rb") as f:
+        config = tomllib.load(f)
+    logging.info(f"Loaded fusilli test config from: {config_path}")
+
+    # Write JSON config to temp file for C++ harness
+    fd, json_config_path = tempfile.mkstemp(
+        suffix=".json", prefix="fusilli_test_config_"
+    )
+    with os.fdopen(fd, "w") as f:
+        json.dump(config, f)
+    environ_vars["HIPDNN_TEST_CONFIG_PATH"] = json_config_path
+    logging.info(f"Wrote JSON config to: {json_config_path}")
+
+    hipdnn_cmd = [
+        "ctest",
+        "--test-dir",
+        f"{THEROCK_BIN_DIR}/hipdnn_integration_tests_test_infra",
+        "--output-on-failure",
+        "--parallel",
+        "8",
+        "--timeout",
+        "600",
+    ]
+
+    logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(hipdnn_cmd)}")
+    subprocess.run(
+        hipdnn_cmd,
         cwd=THEROCK_DIR,
         check=True,
         env=environ_vars,
