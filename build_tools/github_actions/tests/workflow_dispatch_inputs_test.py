@@ -11,7 +11,6 @@ See: https://github.com/ROCm/TheRock/pull/2557 for an example of this class of b
 from dataclasses import dataclass
 import json
 from pathlib import Path
-import re
 import unittest
 
 import yaml
@@ -61,28 +60,16 @@ def get_required_workflow_dispatch_inputs(workflow: dict) -> set:
 
 
 def parse_dispatch_inputs_json(inputs_raw: str) -> set:
-    """Parse the JSON inputs string from a benc-uk/workflow-dispatch step.
+    """Parses the JSON inputs string from a benc-uk/workflow-dispatch step.
 
-    GitHub expressions (${{ ... }}) are typically inside JSON string values
-    and don't affect structure parsing. Falls back to regex sanitization if
-    direct parsing fails (e.g. expressions containing quote characters).
+    GitHub expressions (${{ ... }}) are inside JSON string values and don't
+    affect JSON structure, so direct parsing works.
     """
     if not inputs_raw:
         return set()
-    try:
-        parsed = json.loads(inputs_raw)
-        if isinstance(parsed, dict):
-            return set(parsed.keys())
-    except json.JSONDecodeError:
-        pass
-    # Fallback: replace ${{ ... }} with placeholders to extract keys.
-    sanitized = re.sub(r"\$\{\{.*?\}\}", "__placeholder__", inputs_raw)
-    try:
-        parsed = json.loads(sanitized)
-        if isinstance(parsed, dict):
-            return set(parsed.keys())
-    except json.JSONDecodeError:
-        pass
+    parsed = json.loads(inputs_raw)
+    if isinstance(parsed, dict):
+        return set(parsed.keys())
     return set()
 
 
