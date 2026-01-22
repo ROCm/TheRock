@@ -267,6 +267,8 @@ if(THEROCK_ENABLE_HIPDNN_INTEGRATION_TESTS)
       -DHIP_PLATFORM=amd
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
+    COMPILER_TOOLCHAIN
+      amd-hip
     BUILD_DEPS
       hip-clr
       hipDNN
