@@ -70,6 +70,11 @@ def run(args: argparse.Namespace):
             # included in runtime packages, but we still want them in the devel package.
             "prim",
             "rocwmma",
+            # Third party dependencies needed by hipDNN consumers.
+            "flatbuffers",
+            "fmt",
+            "nlohmann-json",
+            "spdlog",
         ],
         tarball_compression=args.devel_tarball_compression,
     )
