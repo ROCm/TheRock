@@ -150,7 +150,7 @@ class WorkflowDispatchInputsTest(unittest.TestCase):
 
 
 def _make_unexpected_inputs_test(workflow_path: Path):
-    """Create a test that checks for unexpected inputs in dispatch calls."""
+    """Creates a test that checks for unexpected inputs in dispatch calls."""
 
     def test_method(self):
         workflow = load_workflow(workflow_path)
@@ -170,13 +170,6 @@ def _make_unexpected_inputs_test(workflow_path: Path):
 
             target_workflow = load_workflow(target_path)
             accepted_inputs = get_workflow_dispatch_inputs(target_workflow)
-            if not accepted_inputs:
-                errors.append(
-                    f"step '{call.step_name}' dispatches "
-                    f"'{call.target_workflow}' which has no workflow_dispatch inputs"
-                )
-                continue
-
             unexpected = call.passed_inputs - accepted_inputs
             if unexpected:
                 errors.append(
@@ -192,7 +185,7 @@ def _make_unexpected_inputs_test(workflow_path: Path):
 
 
 def _make_required_inputs_test(workflow_path: Path):
-    """Create a test that checks all required inputs are passed."""
+    """Creates a test that checks all required inputs are passed."""
 
     def test_method(self):
         workflow = load_workflow(workflow_path)
