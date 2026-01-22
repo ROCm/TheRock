@@ -27,7 +27,17 @@ def load_workflow(path: Path) -> dict:
 
 
 def get_workflow_dispatch_inputs(workflow: dict) -> set:
-    """Extracts input names from a workflow's on.workflow_dispatch.inputs section."""
+    """Extracts input names from a workflow's on.workflow_dispatch.inputs section.
+
+    For a workflow with:
+        on:
+          workflow_dispatch:
+            inputs:
+              amdgpu_family: ...
+              release_type: ...
+
+    Returns: {"amdgpu_family", "release_type"}
+    """
     # PyYAML parses the unquoted YAML key `on:` as boolean True.
     on_block = workflow.get("on") or workflow.get(True)
     if not isinstance(on_block, dict):
@@ -42,7 +52,20 @@ def get_workflow_dispatch_inputs(workflow: dict) -> set:
 
 
 def get_required_workflow_dispatch_inputs(workflow: dict) -> set:
-    """Extracts required input names (no default) from workflow_dispatch."""
+    """Extracts required input names (no default) from workflow_dispatch.
+
+    For a workflow with:
+        on:
+          workflow_dispatch:
+            inputs:
+              amdgpu_family:
+                required: true
+              release_type:
+                required: true
+                default: dev
+
+    Returns: {"amdgpu_family"}  (release_type has a default)
+    """
     # PyYAML parses the unquoted YAML key `on:` as boolean True.
     on_block = workflow.get("on") or workflow.get(True)
     if not isinstance(on_block, dict):
@@ -62,7 +85,17 @@ def get_required_workflow_dispatch_inputs(workflow: dict) -> set:
 
 
 def parse_dispatch_inputs_json(inputs_raw: str) -> set:
-    """Parses the JSON inputs string from a benc-uk/workflow-dispatch step."""
+    """Parses the JSON inputs string from a benc-uk/workflow-dispatch step.
+
+    For an action step with:
+        uses: benc-uk/workflow-dispatch@v1.2.4
+        with:
+          inputs: |
+            { "amdgpu_family": "${{ matrix.amdgpu_family }}",
+              "release_type": "${{ env.RELEASE_TYPE }}" }
+
+    Parses the inputs value and returns: {"amdgpu_family", "release_type"}
+    """
     if not inputs_raw:
         return set()
 
