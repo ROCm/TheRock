@@ -18,16 +18,17 @@ import yaml
 
 WORKFLOWS_DIR = Path(__file__).resolve().parents[3] / ".github" / "workflows"
 
-WORKFLOW_DISPATCH_ACTION = "benc-uk/workflow-dispatch@"
+WORKFLOW_DISPATCH_ACTION_NAME = "benc-uk/workflow-dispatch"
 
 
 def load_workflow(path: Path) -> dict:
+    """Loads a workflow file from the given Path as a JSON dictionary."""
     with open(path) as f:
         return yaml.safe_load(f)
 
 
 def get_workflow_dispatch_inputs(workflow: dict) -> set:
-    """Extract input names from a workflow's on.workflow_dispatch.inputs section."""
+    """Extracts input names from a workflow's on.workflow_dispatch.inputs section."""
     on_block = workflow.get("on") or workflow.get(True)
     if not isinstance(on_block, dict):
         return set()
@@ -41,7 +42,7 @@ def get_workflow_dispatch_inputs(workflow: dict) -> set:
 
 
 def get_required_workflow_dispatch_inputs(workflow: dict) -> set:
-    """Extract required input names (no default) from workflow_dispatch."""
+    """Extracts required input names (no default) from workflow_dispatch."""
     on_block = workflow.get("on") or workflow.get(True)
     if not isinstance(on_block, dict):
         return set()
@@ -96,14 +97,16 @@ class DispatchCall:
 
 def find_dispatch_calls_in_workflow(workflow: dict) -> list[DispatchCall]:
     """Find benc-uk/workflow-dispatch steps in a single workflow."""
-    calls = []
     if not workflow or "jobs" not in workflow:
-        return calls
+        return []
+
+    calls = []
     for job_name, job in workflow["jobs"].items():
         for step in job.get("steps", []):
             uses = step.get("uses", "")
-            if WORKFLOW_DISPATCH_ACTION not in uses:
+            if WORKFLOW_DISPATCH_ACTION_NAME not in uses:
                 continue
+
             with_block = step.get("with", {})
             calls.append(
                 DispatchCall(
