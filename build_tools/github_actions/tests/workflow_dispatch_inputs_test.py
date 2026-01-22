@@ -21,7 +21,7 @@ WORKFLOW_DISPATCH_ACTION_NAME = "benc-uk/workflow-dispatch"
 
 
 def load_workflow(path: Path) -> dict:
-    """Loads a workflow file from the given Path as a JSON dictionary."""
+    """Loads a YAML workflow file from the given Path as a JSON dictionary."""
     with open(path) as f:
         return yaml.safe_load(f)
 
@@ -157,6 +157,9 @@ def _make_unexpected_inputs_test(workflow_path: Path):
         calls = find_dispatch_calls_in_workflow(workflow)
         errors = []
         for call in calls:
+            # benc-uk/workflow-dispatch supports workflow names, filenames, or
+            # IDs. We enforce filenames so we can resolve and validate the
+            # target workflow locally.
             target_path = WORKFLOWS_DIR / call.target_workflow
             if not target_path.exists():
                 errors.append(
