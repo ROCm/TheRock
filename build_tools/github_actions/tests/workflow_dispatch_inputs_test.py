@@ -60,16 +60,14 @@ def get_required_workflow_dispatch_inputs(workflow: dict) -> set:
 
 
 def parse_dispatch_inputs_json(inputs_raw: str) -> set:
-    """Parses the JSON inputs string from a benc-uk/workflow-dispatch step.
-
-    GitHub expressions (${{ ... }}) are inside JSON string values and don't
-    affect JSON structure, so direct parsing works.
-    """
+    """Parses the JSON inputs string from a benc-uk/workflow-dispatch step."""
     if not inputs_raw:
         return set()
+
     parsed = json.loads(inputs_raw)
     if isinstance(parsed, dict):
         return set(parsed.keys())
+
     return set()
 
 
