@@ -167,7 +167,7 @@ def test_stop_signal_file_with_event():
 
 def test_analysis_script():
     """Test that analysis script can process logs."""
-    analysis_script = Path(__file__).parent.parent / "analyze_memory_logs.py"
+    analysis_script = Path(__file__).parent.parent.parent / "analyze_memory_logs.py"
     assert analysis_script.exists(), f"Analysis script not found: {analysis_script}"
 
     # Create test logs

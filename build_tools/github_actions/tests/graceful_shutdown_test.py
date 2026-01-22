@@ -44,7 +44,7 @@ def test_graceful_shutdown_with_memory_monitor(temp_files):
         process = subprocess.Popen(
             [
                 sys.executable,
-                "build_tools/memory_monitor.py",
+                "build_tools/github_actions/memory_monitor.py",
                 "--background",
                 "--phase",
                 "Test Phase",
