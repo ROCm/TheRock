@@ -267,12 +267,21 @@ test_matrix = {
         "platform": ["linux"],
         "total_shards": 1,
     },
+    # aqlprofile tests
+    "aqlprofile": {
+        "job_name": "aqlprofile",
+        "fetch_artifact_args": "--aqlprofile --tests",
+        "timeout_minutes": 5,
+        "test_script": f"python {_get_script_path('test_aqlprofile.py')}",
+        "platform": ["linux"],
+        "total_shards": 1,
+    },
 }
 
 
 def run():
     platform = os.getenv("RUNNER_OS").lower()
-    project_to_test = os.getenv("PROJECT_TO_TEST", "*")
+    project_to_test = os.getenv("project_to_test", "*")
     amdgpu_families = os.getenv("AMDGPU_FAMILIES")
     test_type = os.getenv("TEST_TYPE", "full")
     test_labels = json.loads(os.getenv("TEST_LABELS", "[]"))
