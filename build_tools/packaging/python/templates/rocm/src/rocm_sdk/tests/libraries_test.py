@@ -61,6 +61,11 @@ class ROCmLibrariesTest(unittest.TestCase):
                     # Though this is not needed for the amd-smi client.
                     continue
 
+                if "hipdnn_plugins" in str(so_path):
+                    # hipdnn plugins have dependencies on other libraries (e.g. miopen)
+                    # and cannot be loaded standalone without setting up the path.
+                    continue
+
                 # For Windows compatibility, we first preload libraries (DLLs)
                 # that are not co-located. Specifically this is for
                 # the "libraries" like hipfft, rocblas, etc. which are siblings
