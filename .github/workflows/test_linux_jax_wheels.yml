@@ -9,6 +9,9 @@ on:
       release_type:
         required: true
         type: string
+      s3_subdir:
+        required: true
+        type: string
       package_index_url:
         description: Base CloudFront URL for the Python package index
         required: true
@@ -61,6 +64,11 @@ on:
         required: true
         type: string
         default: dev
+      s3_subdir:
+        description: S3 subdirectory, not including the GPU-family
+        required: true
+        type: string
+        default: v2
       package_index_url:
         description: Base CloudFront URL for the Python package index
         required: true
@@ -122,7 +130,7 @@ jobs:
       AMDGPU_FAMILY: ${{ inputs.amdgpu_family }}
       THEROCK_TAR_URL: ${{ inputs.tar_url }}
       PYTHON_VERSION: ${{ inputs.python_version }}
-      WHEEL_INDEX_URL: ${{ inputs.package_index_url }}/${{ inputs.amdgpu_family }}/
+      WHEEL_INDEX_URL: ${{ inputs.package_index_url }}/${{ inputs.amdgpu_family }}
 
     steps:
       - name: Checkout
@@ -184,20 +192,19 @@ jobs:
           JAX_VERSION=$(tr -d ' ' < jax/build/requirements.txt \
           | grep -E '^(jax|jaxlib)==[^#]+' | head -n1 | cut -d'=' -f3)
           echo "JAX_VERSION=$JAX_VERSION" >> "$GITHUB_ENV"
-          echo "PACKAGE_VERSION=${JAX_VERSION}+rocm${{ inputs.rocm_version }}" >> "$GITHUB_ENV"
 
       - name: Install JAX wheels from package index
         run: |
           # Install jaxlib/plugin/pjrt from the GPU-family index; install jax from PyPI to match the version
           pip install --index-url "${{ env.WHEEL_INDEX_URL }}" \
-            "jaxlib==${{ env.PACKAGE_VERSION }}" \
-            "jax_rocm7_plugin==${{ env.PACKAGE_VERSION }}" \
-            "jax_rocm7_pjrt==${{ env.PACKAGE_VERSION }}"
-          pip install jax==${{ env.JAX_VERSION }}
+            "jaxlib==${JAX_VERSION}+rocm${{ inputs.rocm_version }}" \
+            "jax-rocm7-plugin==${JAX_VERSION}+rocm${{ inputs.rocm_version }}" \
+            "jax-rocm7-pjrt==${JAX_VERSION}+rocm${{ inputs.rocm_version }}"
+          pip install --extra-index-url https://pypi.org/simple "jax==${JAX_VERSION}"
 
       - name: Run JAX tests
         run: |
-          pytest jax/jax_tests/tests/multi_device_test.py -q --log-cli-level=INFO
-          pytest jax/jax_tests/tests/core_test.py -q --log-cli-level=INFO
-          pytest jax/jax_tests/tests/util_test.py -q --log-cli-level=INFO
-          pytest jax/jax_tests/tests/scipy_stats_test.py -q --log-cli-level=INFO
+            pytest jax/jax_tests/tests/multi_device_test.py -q --log-cli-level=INFO
+            pytest jax/jax_tests/tests/core_test.py -q --log-cli-level=INFO
+            pytest jax/jax_tests/tests/util_test.py -q --log-cli-level=INFO
+            pytest jax/jax_tests/tests/scipy_stats_test.py -q --log-cli-level=INFO
