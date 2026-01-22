@@ -92,10 +92,10 @@ class GeneratePyTorchSourcesManifestTest(unittest.TestCase):
             pytorch_repo, remote_url="https://github.com/ROCm/pytorch.git"
         )
         audio_head = self._init_git_repo(
-            audio_repo, remote_url="https://github.com/pytorch/audio"
+            audio_repo, remote_url="https://github.com/pytorch/audio.git"
         )
         vision_head = self._init_git_repo(
-            vision_repo, remote_url="https://github.com/pytorch/vision"
+            vision_repo, remote_url="https://github.com/pytorch/vision.git"
         )
         triton_head = self._init_git_repo(
             triton_repo, remote_url="https://github.com/ROCm/triton.git"
@@ -124,31 +124,32 @@ class GeneratePyTorchSourcesManifestTest(unittest.TestCase):
         self.assertTrue(manifest_path.exists(), f"Missing manifest: {manifest_path}")
 
         data = json.loads(manifest_path.read_text(encoding="utf-8"))
-
         self.assertEqual(set(data.keys()), {"sources", "therock"})
 
         sources = data["sources"]
+
         self.assertEqual(sources["pytorch"]["commit"], pytorch_head)
         self.assertEqual(
-            sources["pytorch"]["remote"], "https://github.com/ROCm/pytorch.git"
+            sources["pytorch"]["repo"], "https://github.com/ROCm/pytorch.git"
         )
 
         self.assertEqual(sources["pytorch_audio"]["commit"], audio_head)
         self.assertEqual(
-            sources["pytorch_audio"]["remote"], "https://github.com/pytorch/audio"
+            sources["pytorch_audio"]["repo"], "https://github.com/pytorch/audio.git"
         )
 
         self.assertEqual(sources["pytorch_vision"]["commit"], vision_head)
         self.assertEqual(
-            sources["pytorch_vision"]["remote"], "https://github.com/pytorch/vision"
+            sources["pytorch_vision"]["repo"], "https://github.com/pytorch/vision.git"
         )
 
         self.assertEqual(sources["triton"]["commit"], triton_head)
         self.assertEqual(
-            sources["triton"]["remote"], "https://github.com/ROCm/triton.git"
+            sources["triton"]["repo"], "https://github.com/ROCm/triton.git"
         )
 
-        self.assertEqual(data["therock"]["repo"], "https://github.com/ROCm/TheRock")
+        # Your script appends ".git" to therock repo.
+        self.assertEqual(data["therock"]["repo"], "https://github.com/ROCm/TheRock.git")
         self.assertEqual(
             data["therock"]["commit"], "b3eda956a19d0151cbb4699739eb71f62596c8bb"
         )
@@ -165,8 +166,12 @@ class GeneratePyTorchSourcesManifestTest(unittest.TestCase):
         self._init_git_repo(
             pytorch_repo, remote_url="https://github.com/ROCm/pytorch.git"
         )
-        self._init_git_repo(audio_repo, remote_url="https://github.com/pytorch/audio")
-        self._init_git_repo(vision_repo, remote_url="https://github.com/pytorch/vision")
+        self._init_git_repo(
+            audio_repo, remote_url="https://github.com/pytorch/audio.git"
+        )
+        self._init_git_repo(
+            vision_repo, remote_url="https://github.com/pytorch/vision.git"
+        )
 
         self._run_main_with_args(
             [
