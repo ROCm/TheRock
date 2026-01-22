@@ -55,7 +55,7 @@ add_custom_target(
   COMMAND
     ${CMAKE_COMMAND} -E chdir ${SOURCE_DIR} perl autogen.pl --force
   COMMAND
-    ${SOURCE_DIR}/configure --prefix=${MPI_PREFIX} --disable-silent-rules
+    ${SOURCE_DIR}/configure --prefix=${MPI_PREFIX} --disable-silent-rules --enable-mpi-fortran=no
   COMMAND
     make -j ${PAR_JOBS}
   COMMAND
@@ -65,21 +65,7 @@ add_custom_target(
 
 install(DIRECTORY "${MPI_PREFIX}/"
         DESTINATION .
-        PATTERN "*.mod" EXCLUDE
 )
-
-# make install puts .mod files into lib, to avoid passing lib as an include-dir
-# of fortran we move them in the final install to the mod directory
-install(CODE "
-  file(GLOB_RECURSE MOD_FILES \"${MPI_PREFIX}/*.mod\")
-  if(MOD_FILES)
-    file(INSTALL
-      DESTINATION \"\${CMAKE_INSTALL_PREFIX}/mod\"
-      TYPE FILE
-      FILES \${MOD_FILES}
-    )
-  endif()
-")
 
 configure_package_config_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/mpi-config.cmake.in"
