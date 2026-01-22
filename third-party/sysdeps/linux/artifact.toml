@@ -17,12 +17,6 @@ include = [
 [components.dev."third-party/sysdeps/linux/elfutils/build/stage"]
 [components.lib."third-party/sysdeps/linux/elfutils/build/stage"]
 
-# GMP
-# Required by ROCgdb.
-[components.dev."third-party/sysdeps/linux/gmp/build/stage"]
-[components.doc."third-party/sysdeps/linux/gmp/build/stage"]
-[components.lib."third-party/sysdeps/linux/gmp/build/stage"]
-
 # libbacktrace
 # Required by amd-dbgapi library.
 [components.dev."third-party/sysdeps/linux/libbacktrace/build/stage"]

@@ -24,14 +24,14 @@ class ROCmBaseTest(unittest.TestCase):
             os.environ.pop("ROCM_SDK_PRELOAD_LIBRARIES", None)
 
     def testCLI(self):
-        output = utils.exec(
+        output = utils.run_command(
             [sys.executable, "-P", "-m", "rocm_sdk", "--help"], capture=True
         ).decode()
         self.assertIn("usage:", output)
 
     def testVersion(self):
         output = (
-            utils.exec(
+            utils.run_command(
                 [sys.executable, "-P", "-m", "rocm_sdk", "version"], capture=True
             )
             .decode()
@@ -42,7 +42,7 @@ class ROCmBaseTest(unittest.TestCase):
 
     def testTargets(self):
         output = (
-            utils.exec(
+            utils.run_command(
                 [sys.executable, "-P", "-m", "rocm_sdk", "targets"], capture=True
             )
             .decode()

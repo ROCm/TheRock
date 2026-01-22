@@ -32,6 +32,7 @@ Table of contents:
   - [Installing per-commit CI build tarballs manually](#installing-per-commit-ci-build-tarballs-manually)
   - [Installing tarballs using `install_rocm_from_artifacts.py`](#installing-tarballs-using-install_rocm_from_artifactspy)
   - [Using installed tarballs](#using-installed-tarballs)
+- [Verifying your installation](#verifying-your-installation)
 
 ## Installing releases using pip
 
@@ -253,28 +254,32 @@ Using the index pages [listed above](#installing-rocm-python-packages), you can
 also install `torch`, `torchaudio`, and `torchvision`.
 
 > [!NOTE]
-> By default, pip will install the latest versions of each package. If you want to
-> install older versions take note of the compatibility matrix:
+> By default, pip will install the latest stable versions of each package.
 >
-> | torch version | torchaudio version | torchvision version |
-> | ------------- | ------------------ | ------------------- |
-> | 2.10          | 2.10               | 0.25                |
-> | 2.9           | 2.9                | 0.24                |
-> | 2.8           | 2.8                | 0.23                |
-> | 2.7           | 2.7.1a0            | 0.22.1              |
+> - If you want to allow installing prerelease versions, use the `--pre`
 >
-> For example, `torch` 2.7.1 and compatible wheels can be installed by specifying
+> - If you want to install other versions, take note of the compatibility
+>   matrix:
 >
-> ```
-> torch==2.7.1 torchaudio==2.7.1a0 torchvision==0.22.1
-> ```
+>   | torch version | torchaudio version | torchvision version |
+>   | ------------- | ------------------ | ------------------- |
+>   | 2.10          | 2.10               | 0.25                |
+>   | 2.9           | 2.9                | 0.24                |
+>   | 2.8           | 2.8                | 0.23                |
+>   | 2.7           | 2.7.1a0            | 0.22.1              |
 >
-> See also
+>   For example, `torch` 2.7.1 and compatible wheels can be installed by specifying
 >
-> - [Supported PyTorch versions in TheRock](https://github.com/ROCm/TheRock/tree/main/external-builds/pytorch#supported-pytorch-versions)
-> - [Installing previous versions of PyTorch](https://pytorch.org/get-started/previous-versions/)
-> - [torchvision installation - compatixbility matrix](https://github.com/pytorch/vision?tab=readme-ov-file#installation)
-> - [torchaudio installation - compatixbility matrix](https://docs.pytorch.org/audio/main/installation.html#compatibility-matrix)
+>   ```
+>   torch==2.7.1 torchaudio==2.7.1a0 torchvision==0.22.1
+>   ```
+>
+>   See also
+>
+>   - [Supported PyTorch versions in TheRock](https://github.com/ROCm/TheRock/tree/main/external-builds/pytorch#supported-pytorch-versions)
+>   - [Installing previous versions of PyTorch](https://pytorch.org/get-started/previous-versions/)
+>   - [torchvision installation - compatixbility matrix](https://github.com/pytorch/vision?tab=readme-ov-file#installation)
+>   - [torchaudio installation - compatixbility matrix](https://docs.pytorch.org/audio/main/installation.html#compatibility-matrix)
 
 > [!TIP]
 > The `torch` packages depend on `rocm[libraries]`, so ROCm packages should
@@ -300,7 +305,7 @@ Supported devices in this family:
 | MI300A/MI300X | gfx942     |
 
 ```bash
-pip install --index-url https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/ --pre torch torchaudio torchvision
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/ torch torchaudio torchvision
 ```
 
 #### torch for gfx950-dcgpu
@@ -312,7 +317,7 @@ Supported devices in this family:
 | MI350X/MI355X | gfx950     |
 
 ```bash
-pip install --index-url https://rocm.nightlies.amd.com/v2/gfx950-dcgpu/ --pre torch torchaudio torchvision
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx950-dcgpu/ torch torchaudio torchvision
 ```
 
 #### torch for gfx110X-all
@@ -327,7 +332,7 @@ Supported devices in this family:
 | AMD Radeon 780M Laptop iGPU        | gfx1103    |
 
 ```bash
-pip install --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ --pre torch torchaudio torchvision
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ torch torchaudio torchvision
 ```
 
 #### torch for gfx1151
@@ -339,7 +344,7 @@ Supported devices in this family:
 | AMD Strix Halo iGPU | gfx1151    |
 
 ```bash
-pip install --index-url https://rocm.nightlies.amd.com/v2/gfx1151/ --pre torch torchaudio torchvision
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx1151/ torch torchaudio torchvision
 ```
 
 #### torch for gfx120X-all
@@ -352,7 +357,7 @@ Supported devices in this family:
 | AMD RX 9070 / XT | gfx1201    |
 
 ```bash
-pip install --index-url https://rocm.nightlies.amd.com/v2/gfx120X-all/ --pre torch torchaudio torchvision
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx120X-all/ torch torchaudio torchvision
 ```
 
 ### Using PyTorch Python packages
@@ -506,3 +511,40 @@ ls install
 
 You may also want to add the install directory to your `PATH` or set other
 environment variables like `ROCM_HOME`.
+
+## Verifying your installation
+
+After installing ROCm via either pip packages or tarballs, you can verify that
+your GPU is properly recognized.
+
+### Linux
+
+Run one of the following commands to verify that your GPU is detected and properly
+initialized by the ROCm stack:
+
+```bash
+rocminfo
+# or
+amd-smi
+```
+
+### Windows
+
+Run the following command to verify GPU detection:
+
+```bash
+hipInfo.exe
+```
+
+### Additional troubleshooting
+
+If your GPU is not recognized or you encounter issues:
+
+- **Linux users**: Check system logs using `dmesg | grep amdgpu` for specific error messages
+- Review memory allocation settings (see the [FAQ](https://github.com/ROCm/TheRock/blob/main/faq.md)
+  for GTT configuration on unified memory systems)
+- Ensure you have the latest [AMDGPU driver](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/quick-start.html#amdgpu-driver-installation)
+  on Linux or [Adrenaline driver](https://www.amd.com/en/products/software/adrenalin.html) on Windows
+- For platform-specific troubleshooting when using PyTorch, see:
+  - [Using ROCm Python packages](#using-rocm-python-packages)
+  - [Using PyTorch Python packages](#using-pytorch-python-packages)

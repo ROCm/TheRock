@@ -20,6 +20,8 @@ set_property(GLOBAL PROPERTY THEROCK_DEFAULT_CMAKE_VARS
   THEROCK_ROCM_LIBRARIES_SOURCE_DIR
   THEROCK_ROCM_SYSTEMS_SOURCE_DIR
   THEROCK_BUILD_TESTING
+  THEROCK_ENABLE_LLVM_TESTS
+  LLVM_LIT_ARGS
   THEROCK_USE_SAFE_DEPENDENCY_PROVIDER
   ROCM_SYMLINK_LIBS
 
@@ -1392,6 +1394,7 @@ function(_therock_cmake_subproject_setup_toolchain
     # TODO: AMDGPU_TARGETS is being deprecated. For now we set both.
     string(APPEND _toolchain_contents "set(AMDGPU_TARGETS @_filtered_gpu_targets@ CACHE STRING \"From super-project\" FORCE)\n")
     string(APPEND _toolchain_contents "set(GPU_TARGETS @_filtered_gpu_targets@ CACHE STRING \"From super-project\" FORCE)\n")
+    string(APPEND _toolchain_contents "set(CMAKE_HIP_ARCHITECTURES @_filtered_gpu_targets@ CACHE STRING \"From super-project\" FORCE)\n")
   endif()
 
   # General settings applicable to all toolchains.

@@ -17,12 +17,21 @@ from github_actions_utils import *
 
 
 def determine_upload_flag(
-    build_result, test_result, test_runs_on, bypass_tests_for_releases
+    build_result, test_result, test_runs_on, bypass_tests_for_releases, branch
 ):
     # Default to false
     upload = "false"
+    # 0) If on a release branch, always upload, as
+    #    - Release branch has already been tested
+    #    - Flaky tests can prevent promotion, as such ignore test results
+    #    - Will insure that QA/engineers have a single point of truth to get the packages, which isnt staging
+    if branch.startswith("release/therock-"):
+        print(
+            f"::notice::On release branch: {branch}. Forcing upload independent of test results."
+        )
+        upload = "true"
     # 1) If the build failed → upload=false
-    if build_result != "success":
+    elif build_result != "success":
         print("::warning::Build failed. Skipping upload.")
 
     # 2) Else if there was a test runner AND tests did not succeed -> upload=false
@@ -52,9 +61,10 @@ def main(argv: list[str]):
     test_result = os.getenv("TEST_RESULT", "").lower()
     test_runs_on = os.getenv("TEST_RUNS_ON", "")
     bypass_tests_for_releases = os.getenv("BYPASS_TESTS_FOR_RELEASES", "")
+    branch = os.getenv("GITHUB_REF_NAME", "").lower()
 
     upload = determine_upload_flag(
-        build_result, test_result, test_runs_on, bypass_tests_for_releases
+        build_result, test_result, test_runs_on, bypass_tests_for_releases, branch
     )
 
     # Export result so GitHub Actions env variable
