@@ -28,6 +28,7 @@ def load_workflow(path: Path) -> dict:
 
 def get_workflow_dispatch_inputs(workflow: dict) -> set:
     """Extracts input names from a workflow's on.workflow_dispatch.inputs section."""
+    # PyYAML parses the unquoted YAML key `on:` as boolean True.
     on_block = workflow.get("on") or workflow.get(True)
     if not isinstance(on_block, dict):
         return set()
@@ -42,6 +43,7 @@ def get_workflow_dispatch_inputs(workflow: dict) -> set:
 
 def get_required_workflow_dispatch_inputs(workflow: dict) -> set:
     """Extracts required input names (no default) from workflow_dispatch."""
+    # PyYAML parses the unquoted YAML key `on:` as boolean True.
     on_block = workflow.get("on") or workflow.get(True)
     if not isinstance(on_block, dict):
         return set()
