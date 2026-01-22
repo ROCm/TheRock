@@ -8,6 +8,7 @@ This test catches mismatches at lint time rather than waiting for CI failures.
 See: https://github.com/ROCm/TheRock/pull/2557 for an example of this class of bug.
 """
 
+from dataclasses import dataclass
 import json
 from pathlib import Path
 import re
@@ -84,14 +85,17 @@ def parse_dispatch_inputs_json(inputs_raw: str) -> set:
     return set()
 
 
-def find_dispatch_calls_in_workflow(workflow: dict) -> list:
-    """Find benc-uk/workflow-dispatch steps in a single workflow.
+@dataclass
+class DispatchCall:
+    """A single benc-uk/workflow-dispatch action invocation."""
 
-    Returns a list of dicts with keys:
-        - step_name: name of the step
-        - target_workflow: filename of the target workflow
-        - passed_inputs: set of input names passed in the 'inputs' field
-    """
+    step_name: str
+    target_workflow: str
+    passed_inputs: set
+
+
+def find_dispatch_calls_in_workflow(workflow: dict) -> list[DispatchCall]:
+    """Find benc-uk/workflow-dispatch steps in a single workflow."""
     calls = []
     if not workflow or "jobs" not in workflow:
         return calls
@@ -101,15 +105,14 @@ def find_dispatch_calls_in_workflow(workflow: dict) -> list:
             if WORKFLOW_DISPATCH_ACTION not in uses:
                 continue
             with_block = step.get("with", {})
-            target = with_block.get("workflow", "")
-            inputs_raw = with_block.get("inputs", "")
-            passed_inputs = parse_dispatch_inputs_json(inputs_raw)
             calls.append(
-                {
-                    "step_name": step.get("name", "(unnamed)"),
-                    "target_workflow": target,
-                    "passed_inputs": passed_inputs,
-                }
+                DispatchCall(
+                    step_name=step.get("name", "(unnamed)"),
+                    target_workflow=with_block.get("workflow", ""),
+                    passed_inputs=parse_dispatch_inputs_json(
+                        with_block.get("inputs", "")
+                    ),
+                )
             )
     return calls
 
@@ -134,11 +137,11 @@ def _make_unexpected_inputs_test(workflow_path: Path):
 
         errors = []
         for call in calls:
-            target_path = WORKFLOWS_DIR / call["target_workflow"]
+            target_path = WORKFLOWS_DIR / call.target_workflow
             if not target_path.exists():
                 errors.append(
-                    f"step '{call['step_name']}' dispatches "
-                    f"'{call['target_workflow']}' which does not exist"
+                    f"step '{call.step_name}' dispatches "
+                    f"'{call.target_workflow}' which does not exist"
                 )
                 continue
 
@@ -146,16 +149,16 @@ def _make_unexpected_inputs_test(workflow_path: Path):
             accepted_inputs = get_workflow_dispatch_inputs(target_workflow)
             if not accepted_inputs:
                 errors.append(
-                    f"step '{call['step_name']}' dispatches "
-                    f"'{call['target_workflow']}' which has no workflow_dispatch inputs"
+                    f"step '{call.step_name}' dispatches "
+                    f"'{call.target_workflow}' which has no workflow_dispatch inputs"
                 )
                 continue
 
-            unexpected = call["passed_inputs"] - accepted_inputs
+            unexpected = call.passed_inputs - accepted_inputs
             if unexpected:
                 errors.append(
-                    f"step '{call['step_name']}' passes unexpected inputs to "
-                    f"'{call['target_workflow']}': {sorted(unexpected)}. "
+                    f"step '{call.step_name}' passes unexpected inputs to "
+                    f"'{call.target_workflow}': {sorted(unexpected)}. "
                     f"Accepted: {sorted(accepted_inputs)}"
                 )
 
@@ -176,17 +179,17 @@ def _make_required_inputs_test(workflow_path: Path):
 
         errors = []
         for call in calls:
-            target_path = WORKFLOWS_DIR / call["target_workflow"]
+            target_path = WORKFLOWS_DIR / call.target_workflow
             if not target_path.exists():
                 continue
 
             target_workflow = load_workflow(target_path)
             required_inputs = get_required_workflow_dispatch_inputs(target_workflow)
-            missing = required_inputs - call["passed_inputs"]
+            missing = required_inputs - call.passed_inputs
             if missing:
                 errors.append(
-                    f"step '{call['step_name']}' does not pass required inputs to "
-                    f"'{call['target_workflow']}': {sorted(missing)}"
+                    f"step '{call.step_name}' does not pass required inputs to "
+                    f"'{call.target_workflow}': {sorted(missing)}"
                 )
 
         if errors:
