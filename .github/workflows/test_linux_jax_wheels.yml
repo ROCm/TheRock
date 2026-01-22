@@ -192,19 +192,20 @@ jobs:
           JAX_VERSION=$(tr -d ' ' < jax/build/requirements.txt \
           | grep -E '^(jax|jaxlib)==[^#]+' | head -n1 | cut -d'=' -f3)
           echo "JAX_VERSION=$JAX_VERSION" >> "$GITHUB_ENV"
+          echo "PACKAGE_VERSION=${JAX_VERSION}+rocm${{ inputs.rocm_version }}" >> "$GITHUB_ENV"
 
       - name: Install JAX wheels from package index
         run: |
           # Install jaxlib/plugin/pjrt from the GPU-family index; install jax from PyPI to match the version
           pip install --index-url "${{ env.WHEEL_INDEX_URL }}" \
-            "jaxlib==${JAX_VERSION}+rocm${{ inputs.rocm_version }}" \
-            "jax-rocm7-plugin==${JAX_VERSION}+rocm${{ inputs.rocm_version }}" \
-            "jax-rocm7-pjrt==${JAX_VERSION}+rocm${{ inputs.rocm_version }}"
-          pip install --extra-index-url https://pypi.org/simple "jax==${JAX_VERSION}"
+            "jaxlib==${{ env.PACKAGE_VERSION }}" \
+            "jax_rocm7_plugin==${{ env.PACKAGE_VERSION }}" \
+            "jax_rocm7_pjrt==${{ env.PACKAGE_VERSION }}"
+          pip install jax==${{ env.JAX_VERSION }}
 
       - name: Run JAX tests
         run: |
-            pytest jax/jax_tests/tests/multi_device_test.py -q --log-cli-level=INFO
-            pytest jax/jax_tests/tests/core_test.py -q --log-cli-level=INFO
-            pytest jax/jax_tests/tests/util_test.py -q --log-cli-level=INFO
-            pytest jax/jax_tests/tests/scipy_stats_test.py -q --log-cli-level=INFO
+          pytest jax/jax_tests/tests/multi_device_test.py -q --log-cli-level=INFO
+          pytest jax/jax_tests/tests/core_test.py -q --log-cli-level=INFO
+          pytest jax/jax_tests/tests/util_test.py -q --log-cli-level=INFO
+          pytest jax/jax_tests/tests/scipy_stats_test.py -q --log-cli-level=INFO
