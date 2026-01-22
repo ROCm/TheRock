@@ -33,9 +33,6 @@ include(therock_testing)
 # Python is used throughout the build. Ensure it is initialized early.
 ################################################################################
 
-# INTENTIONAL ERROR FOR TESTING MEMORY MONITOR CLEANUP - REMOVE THIS LINE TO FIX
-message(FATAL_ERROR "Intentional build failure to test memory monitor cleanup on error")
-
 find_package(Python3 3.9 COMPONENTS Interpreter REQUIRED)
 
 ################################################################################
