@@ -102,6 +102,9 @@ jobs:
     runs-on: ${{ inputs.test_runs_on }}
     container:
       image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26
+      # DNS workaround: These --dns entries are added to resolve CloudFront/runner DNS issues
+      # They should NOT be required for testing JAX and can be removed once DNS issues are resolved
+      # TODO: Remove these lines when issue is fixed - https://github.com/ROCm/TheRock/issues/3014
       options:  >-
           --device /dev/kfd
           --device /dev/dri
@@ -109,6 +112,8 @@ jobs:
           --group-add video
           --user root
           --env-file /etc/podinfo/gha-gpu-isolation-settings
+          --dns 8.8.8.8
+          --dns 8.8.4.4
     defaults:
       run:
         shell: bash

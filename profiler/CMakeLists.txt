@@ -241,6 +241,9 @@ endif(THEROCK_BUILD_TESTING)
         -DROCPROFSYS_BUILD_DYNINST=ON
         -DROCPROFSYS_BUILD_FOR_THEROCK=ON
         -DROCPROFSYS_GFX_TARGETS="${_ROCPROFSYS_GFX_TARGETS_ESCAPED}"
+      INSTALL_RPATH_DIRS
+        "lib"
+        "lib/rocprofiler-systems"
       CMAKE_INCLUDES
         therock_explicit_finders.cmake
       RUNTIME_DEPS
