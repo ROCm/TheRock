@@ -232,7 +232,7 @@ def analyze_tasks(
         # Normalize path (strip build prefix)
         output = task.output
         if output.startswith(build_prefix):
-            output = output[len(build_prefix):].lstrip("/")
+            output = output[len(build_prefix) :].lstrip("/")
 
         # Dedup
         key = (output, task.start, task.end)
