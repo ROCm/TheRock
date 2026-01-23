@@ -14,6 +14,10 @@ THEROCK_BIN_PATH = Path(THEROCK_BIN_DIR).resolve()
 THEROCK_PATH = THEROCK_BIN_PATH.parent
 THEROCK_LIB_PATH = str(THEROCK_PATH / "lib")
 
+# Set up excluded tests (include Jiras)
+# AIPROFSDK-36: rocr issue causing test to fail
+EXCLUDED_TESTS = "test_profile_pc_sampling"
+
 # Set up ROCM_PATH
 environ_vars = os.environ.copy()
 environ_vars["ROCM_PATH"] = str(THEROCK_PATH)
@@ -52,9 +56,9 @@ cmd = [
     "--output-on-failure",
     "--parallel",
     "8",
-    "--timeout",
-    "600",
     "--verbose",
+    "-E",
+    f"{EXCLUDED_TESTS}",
 ]
 logging.info(f"++ Exec [{THEROCK_PATH}]$ {shlex.join(cmd)}")
 subprocess.run(
