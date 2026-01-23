@@ -27,6 +27,7 @@ import sys
 from datetime import datetime, timezone
 from email.utils import format_datetime
 from jinja2 import Environment, FileSystemLoader, Template
+from packaging_summary import *
 from packaging_utils import *
 from pathlib import Path
 from runpath_to_rpath import *
@@ -673,11 +674,12 @@ def package_with_rpmbuild(spec_file):
 
 
 ######################## Begin Packaging Process################################
-def parse_input_package_list(pkg_name):
+def parse_input_package_list(pkg_name, artifact_dir):
     """Populate the package list from the provided input arguments.
 
     Parameters:
     pkg_name : List of packages to be created
+    artifact_dir: The path to the Artifactory directory
 
     Returns: Package list
     """
@@ -685,7 +687,7 @@ def parse_input_package_list(pkg_name):
     pkg_list = []
     # If pkg_name is None, include all packages
     if pkg_name is None:
-        pkg_list = get_package_list()
+        pkg_list = get_package_list(artifact_dir)
         return pkg_list
 
     # Proceed if pkg_name is not None
@@ -766,7 +768,7 @@ def run(args: argparse.Namespace):
     # Clean the packaging build directories
     clean_package_build_dir(config)
 
-    pkg_list = parse_input_package_list(args.pkg_names)
+    pkg_list = parse_input_package_list(args.pkg_names, config.artifacts_dir)
     # Create deb/rpm packages
     package_creators = {"deb": create_deb_package, "rpm": create_rpm_package}
     for pkg_name in pkg_list:
@@ -778,6 +780,9 @@ def run(args: argparse.Namespace):
             for creator in package_creators.values():
                 creator(pkg_name, config)
     clean_package_build_dir(config)
+
+    # Print build summary
+    print_build_summary(config, pkg_list)
 
 
 def main(argv: list[str]):

@@ -33,7 +33,7 @@ THIS_DIR = Path(__file__).resolve().parent
 REPO_DIR = THIS_DIR.parent
 
 
-def exec(args: list[str | Path], cwd: Path):
+def run_command(args: list[str | Path], cwd: Path):
     args = [str(arg) for arg in args]
     print(f"++ Exec [{cwd}]$ {shlex.join(args)}")
     subprocess.check_call(args, cwd=str(cwd))
@@ -41,7 +41,7 @@ def exec(args: list[str | Path], cwd: Path):
 
 def do_build(args: argparse.Namespace, *, rest_args: list[str]):
     if args.pull:
-        exec([args.docker, "pull", args.image], cwd=THIS_DIR)
+        run_command([args.docker, "pull", args.image], cwd=THIS_DIR)
     output_dir: Path = args.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
     cl = [
