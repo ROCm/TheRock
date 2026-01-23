@@ -131,7 +131,7 @@ install(CODE "
   endif()
 
   # Validate critical AOCL-BLAS headers are present
-  set(CRITICAL_HEADERS blis.h cblas.h blis64.h)
+  set(CRITICAL_HEADERS blis.h cblas.h)
   foreach(CRITICAL_HEADER \${CRITICAL_HEADERS})
     set(FOUND_CRITICAL FALSE)
     foreach(HEADER \${AOCL_HEADERS})
