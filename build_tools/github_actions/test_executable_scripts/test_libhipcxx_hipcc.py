@@ -81,11 +81,15 @@ elif platform.system() == "Linux":
 else:
     print("Incompatible platform!")
 
+HIP_COMPILER_ROCM_ROOT = OUTPUT_ARTIFACTS_PATH
+
 # Configure with CMake
 cmd = [
     "cmake",
     f"-DCMAKE_PREFIX_PATH={OUTPUT_ARTIFACTS_PATH}",
     f"-DHIP_HIPCC_EXECUTABLE={THEROCK_BIN_PATH / HIPCC_BINARY_NAME}",
+    f"-DCMAKE_CXX_COMPILER={THEROCK_BIN_PATH / HIPCC_BINARY_NAME}",
+    f"-DCMAKE_HIP_COMPILER_ROCM_ROOT={HIP_COMPILER_ROCM_ROOT}",
     "-GNinja",
     "..",
 ]
@@ -98,7 +102,7 @@ cmd = [
     "bash",
     "../ci/test_libhipcxx.sh",
     "-cmake-options",
-    f"-DHIP_HIPCC_EXECUTABLE={THEROCK_BIN_PATH / HIPCC_BINARY_NAME}",
+    f"-DHIP_HIPCC_EXECUTABLE={THEROCK_BIN_PATH / HIPCC_BINARY_NAME} -DCMAKE_HIP_COMPILER_ROCM_ROOT={HIP_COMPILER_ROCM_ROOT}",
 ]
 
 logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
