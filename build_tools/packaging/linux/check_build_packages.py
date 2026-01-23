@@ -150,9 +150,31 @@ class Parser:
 
     
     def missing_pkg(self):
-        print("\nMissing in build_set")
-        return self.enabled_pkg_json_set.difference(self.build_set)
-    
+        miss_set = self.enabled_pkg_json_set.difference(self.build_set)
+
+        print(f"\n{'='*60}")
+        if len(miss_set) == 0:
+            print("PASS")
+            print("No missing packages")
+        else:
+            print("FAIL\n")
+            print("Missing in build_set:")
+            for p in miss_set:
+                print(p)
+
+        print(f"\n{'='*60}")
+            
+
+
+    def ensure_directory_exists(self, path):
+        """Ensure directory exists, create if it doesn't"""
+        if not os.path.exists(path):
+            os.makedirs(path)
+            print(f"Created directory: {path}")
+        else:
+            print(f"Directory exists: {path}")
+        return path
+
 
     def get_package_info(self, dir):
         """Detect package type and commands"""
@@ -186,6 +208,8 @@ class Parser:
 
     def install_deb_files_with_logging(self, directory='.', log_file='install.log'):
         """Install DEB and RPM packages with detailed logging"""
+        self.ensure_directory_exists(directory)
+
         os.chdir(directory)
         package_groups = self.get_package_info(directory)
         
@@ -307,23 +331,11 @@ def main():
     json_parser.parse_skipped_packages(SKIPPED_OUTPUT)
     json_parser.parse_build_packages(BUILD_OUTPUT)
     json_parser.get_enabled_packages()
+    json_parser.missing_pkg()
 
 
     json_parser.install_deb_files_with_logging(INSTALL_DIR)
 
-    '''
-    print(json_parser.missing_packages())
-    print("\nEnabled set:")
-    print(json_parser.enabled_pkg_json_set)
-
-    print("\nSkipped set:")
-    print(json_parser.skipped_set)
-    
-    print("\nbuild set:")
-    print(json_parser.build_set)
-    '''
-
-    #os.system(''.join(["ls ", INSTALL_DIR]))
 
 
 main()
