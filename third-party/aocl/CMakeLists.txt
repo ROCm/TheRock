@@ -115,6 +115,19 @@ add_subdirectory(${SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/build-aocl)
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/build-aocl/libaocl.a"
         DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
+# TEMPORARY: Create a symlink so rocBLAS can find AOCL via find_library(NAMES cblas ...)
+# This workaround allows the develop branch of rocm-libraries to discover TheRock's AOCL
+# without requiring changes to rocBLAS's CMake. Once rocBLAS uses find_package(aocl),
+# this symlink can be removed.
+install(CODE "
+  execute_process(
+    COMMAND \${CMAKE_COMMAND} -E create_symlink
+      libaocl.a
+      \${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libcblas.a
+  )
+  message(STATUS \"Created symlink: libcblas.a -> libaocl.a (temporary for rocBLAS compatibility)\")
+")
+
 # Install BLIS/BLAS headers to lib/host-math/include/aocl/
 # AOCL installs headers to ${CMAKE_INSTALL_PREFIX}/include, so we copy them to our desired location
 # We use an aocl/ subdirectory to match OpenBLAS's pattern (openblas/ subdirectory)
