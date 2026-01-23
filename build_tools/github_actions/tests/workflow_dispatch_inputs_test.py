@@ -1,11 +1,33 @@
-"""Validate that benc-uk/workflow-dispatch calls only pass inputs defined by target workflows.
+"""Tests validating inputs to benc-uk/workflow-dispatch in workflow files.
 
-The benc-uk/workflow-dispatch action triggers workflows via the GitHub REST API's
-"Create a workflow dispatch event" endpoint. This endpoint rejects any inputs that
-are not defined in the target workflow's `on: workflow_dispatch: inputs:` section.
+The https://github.com/benc-uk/workflow-dispatch action triggers workflows via
+the GitHub REST API's "Create a workflow dispatch event" endpoint. This endpoint
+rejects any inputs that are not defined in the target workflow's
+`on: workflow_dispatch: inputs:` section. Changes to workflow files that
+pass basic parsing checks and https://github.com/rhysd/actionlint can still
+fail at runtime, like the bug at
+https://github.com/ROCm/TheRock/pull/2557#discussion_r2717677336. These tests
+add an extra layer of validation.
 
-This test catches mismatches at lint time rather than waiting for CI failures.
-See: https://github.com/ROCm/TheRock/pull/2557 for an example of this class of bug.
+This file creates test cases for each file in .github/workflows/ that uses
+benc-uk/workflow-dispatch. It is run like a standard unit test, e.g.:
+
+```
+python ./build_tools/github_actions/tests/workflow_dispatch_inputs_test.py --v
+test_no_unexpected_inputs__release_portable_linux_packages (__main__.WorkflowDispatchInputsTest.test_no_unexpected_inputs__release_portable_linux_packages)
+No unexpected dispatch inputs in release_portable_linux_packages.yml ... ok
+test_no_unexpected_inputs__release_windows_packages (__main__.WorkflowDispatchInputsTest.test_no_unexpected_inputs__release_windows_packages)
+No unexpected dispatch inputs in release_windows_packages.yml ... ok
+test_required_inputs_passed__release_portable_linux_packages (__main__.WorkflowDispatchInputsTest.test_required_inputs_passed__release_portable_linux_packages)
+All required dispatch inputs passed in release_portable_linux_packages.yml ... ok
+test_required_inputs_passed__release_windows_packages (__main__.WorkflowDispatchInputsTest.test_required_inputs_passed__release_windows_packages)
+All required dispatch inputs passed in release_windows_packages.yml ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.087s
+
+OK
+```
 """
 
 from dataclasses import dataclass
@@ -116,7 +138,7 @@ class DispatchCall:
 
 
 def find_dispatch_calls_in_workflow(workflow: dict) -> list[DispatchCall]:
-    """Find benc-uk/workflow-dispatch steps in a single workflow."""
+    """Finds benc-uk/workflow-dispatch steps in a single workflow."""
     if not workflow or "jobs" not in workflow:
         return []
 
@@ -141,7 +163,7 @@ def find_dispatch_calls_in_workflow(workflow: dict) -> list[DispatchCall]:
 
 
 class WorkflowDispatchInputsTest(unittest.TestCase):
-    """Verify benc-uk/workflow-dispatch calls only pass valid inputs.
+    """Verifies benc-uk/workflow-dispatch calls only pass valid inputs.
 
     Test cases are generated dynamically, one per workflow file.
     """
@@ -212,7 +234,7 @@ def _make_required_inputs_test(workflow_path: Path):
 
 
 def _workflow_name_to_test_suffix(workflow_path: Path) -> str:
-    """Convert a workflow filename to a valid Python identifier suffix."""
+    """Converts a workflow filename to a valid Python identifier suffix."""
     return workflow_path.stem.replace("-", "_").replace(".", "_")
 
 
