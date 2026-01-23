@@ -70,6 +70,9 @@ add_custom_target(
         --prefix "/"
         -Dpkgconfig.relocatable=true
         -Dlibdir=lib
+        # Disable zlib: only needed for reading compressed pci.ids.gz files
+        # (human-readable device names). Core PCI device enumeration and
+        # topology discovery work without it.
         -Dzlib=disabled
         "${SOURCE_DIR}"
   COMMAND
