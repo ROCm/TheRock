@@ -77,7 +77,8 @@ jobs:
         family_info: ${{ fromJSON(inputs.matrix_per_family_json) }}
     uses: ./.github/workflows/test_artifacts.yml
     with:
-      artifact_group: ${{ inputs.artifact_group }}
+      # Use architecture-specific artifact group for fetching per-arch artifacts
+      artifact_group: ${{ matrix.family_info.amdgpu_family }}
       amdgpu_families: ${{ matrix.family_info.amdgpu_family }}
       test_runs_on: ${{ matrix.family_info.test-runs-on }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
