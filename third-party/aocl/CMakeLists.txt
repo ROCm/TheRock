@@ -48,6 +48,9 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         # Build static library (AOCL's CMake builds static by default for ILP64)
         -DBUILD_SHARED_LIBS=OFF
         -DCMAKE_BUILD_TYPE=Release
+        # Force Release configuration: AOCL's CMakeLists.txt defaults CMAKE_CONFIGURATION_TYPES to Debug
+        # Without this, BLIS builds in Debug mode causing 100-450x slowdowns on trsm/trmm operations
+        -DCMAKE_CONFIGURATION_TYPES=Release
         # Enable ILP64 support (64-bit integers) - required for rocBLAS stress tests
         -DENABLE_ILP64=ON
         # Enable AOCL BLAS and utilities
