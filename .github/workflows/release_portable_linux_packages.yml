@@ -340,7 +340,6 @@ jobs:
               "release_type": "${{ env.RELEASE_TYPE }}",
               "artifact_run_id": "${{ github.run_id  }}",
               "ref": "${{ inputs.ref || '' }}",
-              "repository": ${{ inputs.repository || github.repository }},
               "native_package_type": "rpm"
             }
 
@@ -355,7 +354,6 @@ jobs:
               "release_type": "${{ env.RELEASE_TYPE }}",
               "artifact_run_id": "${{ github.run_id  }}",
               "ref": "${{ inputs.ref || '' }}",
-              "repository": ${{ inputs.repository || github.repository }},
               "native_package_type": "deb"
             }
 
