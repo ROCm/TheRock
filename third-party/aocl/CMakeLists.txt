@@ -28,8 +28,8 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       TOUCH "${_download_stamp}"
     )
 
-    # AOCL-BLAS CMake configuration matching install.sh behavior
-    # See: /root/coding/rocm-libraries/projects/rocblas/install.sh lines 316-317
+    # AOCL-BLAS CMake configuration matching rocBLAS install.sh behavior
+    # See: https://github.com/ROCm/rocm-libraries/blob/develop/projects/rocblas/install.sh#L316
     therock_cmake_subproject_declare(therock-aocl-blas
       USE_DIST_AMDGPU_TARGETS
       BACKGROUND_BUILD
@@ -59,7 +59,9 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         -DENABLE_AOCL_LAPACK=OFF
         # Enable multithreading support for parallel BLAS operations
         -DENABLE_MULTITHREADING=ON
-        # Disable OpenMP library linking (let AOCL handle it internally)
+        # Let AOCL's build system discover and link the appropriate OpenMP implementation.
+        # By setting OpenMP_libomp_LIBRARY empty, we avoid forcing a specific OpenMP library
+        # from this wrapper project, allowing AOCL to manage OpenMP discovery internally.
         -DOpenMP_libomp_LIBRARY=""
         # Set install directories to match TheRock's host-math layout
         -DCMAKE_INSTALL_BINDIR=lib/host-math/bin
@@ -116,8 +118,16 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/build-aocl/libaocl.a"
 # Install BLIS/BLAS headers to lib/host-math/include/aocl/
 # AOCL installs headers to ${CMAKE_INSTALL_PREFIX}/include, so we copy them to our desired location
 # We use an aocl/ subdirectory to match OpenBLAS's pattern (openblas/ subdirectory)
+#
+# Note: GLOB_RECURSE evaluates at install time (not configure time). If AOCL's build changes
+# and stops generating expected headers, this won't be detected until install. The install
+# will print a status message showing how many headers were copied, which serves as verification.
 install(CODE "
   file(GLOB_RECURSE AOCL_HEADERS \"\${CMAKE_INSTALL_PREFIX}/include/*.h\" \"\${CMAKE_INSTALL_PREFIX}/include/*.hh\")
+  list(LENGTH AOCL_HEADERS NUM_HEADERS)
+  if(NUM_HEADERS EQUAL 0)
+    message(FATAL_ERROR \"No AOCL headers found in \${CMAKE_INSTALL_PREFIX}/include/\")
+  endif()
   file(MAKE_DIRECTORY \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_INCLUDEDIR}/aocl\")
   foreach(HEADER \${AOCL_HEADERS})
     file(RELATIVE_PATH REL_PATH \"\${CMAKE_INSTALL_PREFIX}/include\" \"\${HEADER}\")
@@ -127,7 +137,7 @@ install(CODE "
     endif()
     file(COPY_FILE \"\${HEADER}\" \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_INCLUDEDIR}/aocl/\${REL_PATH}\")
   endforeach()
-  message(STATUS \"Copied AOCL headers to ${CMAKE_INSTALL_INCLUDEDIR}/aocl\")
+  message(STATUS \"Copied \${NUM_HEADERS} AOCL headers to ${CMAKE_INSTALL_INCLUDEDIR}/aocl\")
 ")
 
 # Install our custom CMake package config

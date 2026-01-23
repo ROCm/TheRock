@@ -23,7 +23,9 @@ if(NOT TARGET AOCL::aocl)
     INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_CURRENT_LIST_DIR}/../../../include/aocl"
   )
 
-  # AOCL-BLAS may need OpenMP for multithreaded BLAS operations
+  # AOCL-BLAS is built with multithreading enabled and requires OpenMP.
+  # AOCL's build system handles OpenMP discovery and linking internally,
+  # but consumers may still need to link OpenMP if not already in their toolchain.
   find_package(OpenMP QUIET)
   if(OpenMP_CXX_FOUND)
     set_property(TARGET AOCL::aocl APPEND PROPERTY

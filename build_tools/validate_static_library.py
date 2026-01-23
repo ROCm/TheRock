@@ -24,7 +24,12 @@ def run(args: argparse.Namespace):
                 stderr=subprocess.PIPE,
                 check=True,
             )
-            num_objects = len(result.stdout.decode().strip().split("\n"))
+            # Filter empty strings to correctly count object files
+            object_files = [line for line in result.stdout.decode().splitlines() if line]
+            num_objects = len(object_files)
+            if num_objects == 0:
+                print(f" : ERROR - Archive is empty (0 object files)")
+                sys.exit(1)
             print(f" : OK (contains {num_objects} object files)")
         except subprocess.CalledProcessError as e:
             print(f" : ERROR - Not a valid archive: {e.stderr.decode()}")
@@ -32,6 +37,9 @@ def run(args: argparse.Namespace):
         except FileNotFoundError:
             # 'ar' command not found, just check file size
             size_mb = os.path.getsize(static_lib) / (1024 * 1024)
+            if size_mb <= 0:
+                print(f" : ERROR - File size is 0 MB, not a valid static library")
+                sys.exit(1)
             print(f" : OK ({size_mb:.1f} MB)")
 
 

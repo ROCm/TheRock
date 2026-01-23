@@ -45,6 +45,11 @@ function(therock_test_validate_static_lib)
     "LIB_NAMES"
   )
 
+  # Skip static library validation for sanitizer builds (matches shared lib behavior).
+  if(NOT "${THEROCK_SANITIZER}" STREQUAL "")
+    return()
+  endif()
+
   if(WIN32)
     # This helper is Linux only.
     return()
