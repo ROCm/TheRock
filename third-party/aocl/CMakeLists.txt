@@ -129,7 +129,7 @@ install(CODE "
   if(NUM_HEADERS EQUAL 0)
     message(FATAL_ERROR \"No AOCL headers found in \${CMAKE_INSTALL_PREFIX}/include/\")
   endif()
-  
+
   # Validate critical AOCL-BLAS headers are present
   set(CRITICAL_HEADERS blis.h cblas.h blis64.h)
   foreach(CRITICAL_HEADER \${CRITICAL_HEADERS})
@@ -145,7 +145,7 @@ install(CODE "
       message(FATAL_ERROR \"Critical AOCL header \${CRITICAL_HEADER} not found in \${CMAKE_INSTALL_PREFIX}/include/\")
     endif()
   endforeach()
-  
+
   file(MAKE_DIRECTORY \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_INCLUDEDIR}/aocl\")
   foreach(HEADER \${AOCL_HEADERS})
     file(RELATIVE_PATH REL_PATH \"\${CMAKE_INSTALL_PREFIX}/include\" \"\${HEADER}\")
