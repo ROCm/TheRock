@@ -8,32 +8,34 @@ libpciaccess provides portable abstraction for PCI device access across differen
 
 ## Version
 
-- **libpciaccess 0.17** (last stable autotools-based release)
-- Source: https://www.x.org/releases/individual/lib/libpciaccess-0.17.tar.gz
-- Note: Version 0.18+ uses Meson build system (not compatible with our infrastructure)
+- **libpciaccess 0.18.1** (latest stable release as of January 2026)
+- Source: https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/libpciaccess-0.18.1.tar.xz
+  - Originally from: https://www.x.org/releases/individual/lib/libpciaccess-0.18.1.tar.xz
+- Build System: Meson/Ninja (following TheRock's meson infrastructure pattern)
 
 ## Dependencies
 
 - **System:** glibc (libc.so.6) only
-- **Build:** patchelf, autotools
+- **Build:** patchelf, meson, ninja
 
 This library has no external dependencies beyond the base system, making it highly portable.
 
 ## Build Configuration
 
-The build uses a minimal feature set optimized for hwloc (the primary consumer):
+The build uses Meson with a minimal feature set optimized for hwloc (the primary consumer):
 
-### Enabled Features:
+### Meson Options:
 
-- `--enable-shared` - Shared library support
+- `--prefix "/"` - Relocatable installation (uses DESTDIR)
+- `-Dpkgconfig.relocatable=true` - Relocatable pkg-config files
+- `-Dlibdir=lib` - Install libraries to lib/ subdirectory
+- `-Dzlib=disabled` - Disable gzip-compressed pci.ids support
+
+### Enabled Features (default):
+
 - PCI device enumeration (core, always enabled)
 - Config space reading (core, always enabled)
 - Vendor/device name lookup (core, always enabled)
-
-### Disabled Features:
-
-- `--disable-static` - Only build shared libraries
-- `--without-zlib` - Disable gzip-compressed pci.ids support
 
 ### Minimal Configuration Rationale
 
@@ -47,7 +49,7 @@ This configuration provides the minimal feature set required by hwloc while avoi
 
 **What we disable:**
 
-- `--without-zlib`: Disables gzip-compressed pci.ids database support. Name lookup still works with uncompressed system pci.ids files (e.g., `/usr/share/misc/pci.ids`), but we avoid a zlib dependency.
+- `-Dzlib=disabled`: Disables gzip-compressed pci.ids database support. Name lookup still works with uncompressed system pci.ids files (e.g., `/usr/share/misc/pci.ids`), but we avoid a zlib dependency.
 
 **What cannot be disabled:**
 
@@ -70,19 +72,13 @@ The library is built with:
 
 ## Usage
 
-This sysdep is automatically enabled when `THEROCK_ENABLE_SYSDEPS_HWLOC=ON`.
-
-To explicitly enable:
+Enable bundled system dependencies during CMake configuration:
 
 ```bash
-cmake -DTHEROCK_ENABLE_SYSDEPS_LIBPCIACCESS=ON ...
+cmake -DTHEROCK_BUNDLE_SYSDEPS=ON ...
 ```
 
-Components can link against libpciaccess via pkg-config:
-
-```bash
-PKG_CONFIG_PATH=/path/to/rocm_sysdeps/lib/pkgconfig pkg-config --cflags --libs pciaccess
-```
+This automatically enables `libpciaccess` as a transitive dependency when `hwloc` is enabled.
 
 ## hwloc Integration
 

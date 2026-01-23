@@ -4,8 +4,9 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 
     therock_subproject_fetch(therock-libpciaccess-sources
       SOURCE_DIR "${_source_dir}"
-      URL "https://www.x.org/releases/individual/lib/libpciaccess-0.17.tar.gz"
-      URL_HASH "SHA256=bf6985a77d2ecb00e2c79da3edfb26b909178ffca3f2e9d14ed0620259ab733b"
+      # Originally mirrored from: "https://www.x.org/releases/individual/lib/libpciaccess-0.18.1.tar.xz"
+      URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/libpciaccess-0.18.1.tar.xz"
+      URL_HASH "SHA256=4af43444b38adb5545d0ed1c2ce46d9608cc47b31c2387fc5181656765a6fa76"
       TOUCH "${_download_stamp}"
       DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     )
@@ -22,6 +23,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       CMAKE_ARGS
         "-DSOURCE_DIR=${_source_dir}"
         "-DPATCHELF=${PATCHELF}"
+        "-DMESON_BUILD=${MESON_BUILD}"
         "-DPython3_EXECUTABLE=${Python3_EXECUTABLE}"
       INSTALL_DESTINATION
         lib/rocm_sysdeps
@@ -45,28 +47,36 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 endif()
 
 cmake_minimum_required(VERSION 3.25)
-project(LIBPCIACCESS_BUILD VERSION "0.17")
+project(LIBPCIACCESS_BUILD VERSION "0.18.1")
 
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT PATCHELF)
-  message(FATAL_ERROR "Missing PATCHELF from super-project")
+if(NOT PATCHELF OR NOT MESON_BUILD)
+  message(FATAL_ERROR "Missing PATCHELF or MESON_BUILD from super-project")
 endif()
 
 add_custom_target(
-  build ALL
+  meson_build ALL
   WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   COMMAND
+    "${CMAKE_COMMAND}" -E rm -rf -- "${CMAKE_INSTALL_PREFIX}"
+  COMMAND
     "${CMAKE_COMMAND}" -E env
-      "LDFLAGS=${CMAKE_SHARED_LINKER_FLAGS} -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
+      # Escaping hack: experimentally determined to persist through the layers.
+      "LDFLAGS=-Wl,-rpath='$$ORIGIN' -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
       --
-    "${SOURCE_DIR}/configure"
-      --prefix "${CMAKE_INSTALL_PREFIX}"
-      --disable-static
-      --enable-shared
-      --without-zlib
+      "${MESON_BUILD}" setup "${CMAKE_CURRENT_BINARY_DIR}"
+        --reconfigure
+        # We generate relocatable, arch neutral directory layouts and use
+        # DESTDIR to install into the lib/rocm_sysdeps tree.
+        --prefix "/"
+        -Dpkgconfig.relocatable=true
+        -Dlibdir=lib
+        -Dzlib=disabled
+        "${SOURCE_DIR}"
   COMMAND
-    make V=1
+    "${MESON_BUILD}" compile --verbose
   COMMAND
-    make install
+    "${CMAKE_COMMAND}" -E env "DESTDIR=${CMAKE_INSTALL_PREFIX}" --
+      "${MESON_BUILD}" install
   COMMAND
     ${PATCHELF} --set-rpath '\$\$ORIGIN:\$\$ORIGIN/rocm_sysdeps/lib' ${CMAKE_INSTALL_PREFIX}/lib/libpciaccess.so
   COMMAND
