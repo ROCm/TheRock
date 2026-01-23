@@ -131,8 +131,7 @@ jobs:
           echo "Uploading to s3 bucket : ${{ inputs.release_type }}"
           python ./build_tools/packaging/linux/upload_package_repo.py \
             --pkg-type ${{ inputs.native_package_type }} \
-            --s3-bucket "therock-prerelease-packages" \
+            --s3-bucket ${{ env.S3_BUCKET_NATIVE }} \
             --amdgpu-family ${{ inputs.artifact_group }} \
             --artifact-id ${{ env.ARTIFACT_RUN_ID }} \
-            --job "prerelease"
-            #--job ${{ inputs.release_type }}
+            --job ${{ inputs.release_type }}
