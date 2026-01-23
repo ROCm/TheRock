@@ -1,0 +1,7 @@
+# Fusilli Plugin Test Configuration
+#
+# Used by test_fusilli_plugin.py when running hipDNN integration tests
+# with the fusilli plugin.
+
+[plugins.fusilli]
+path = "libfusilli_plugin.so"
