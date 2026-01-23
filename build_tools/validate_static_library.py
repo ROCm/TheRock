@@ -25,7 +25,9 @@ def run(args: argparse.Namespace):
                 check=True,
             )
             # Filter empty strings to correctly count object files
-            object_files = [line for line in result.stdout.decode().splitlines() if line]
+            object_files = [
+                line for line in result.stdout.decode().splitlines() if line
+            ]
             num_objects = len(object_files)
             if num_objects == 0:
                 print(f" : ERROR - Archive is empty (0 object files)")
