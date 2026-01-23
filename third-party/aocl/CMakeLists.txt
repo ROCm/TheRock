@@ -122,12 +122,30 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/build-aocl/libaocl.a"
 # Note: GLOB_RECURSE evaluates at install time (not configure time). If AOCL's build changes
 # and stops generating expected headers, this won't be detected until install. The install
 # will print a status message showing how many headers were copied, which serves as verification.
+# We also validate that critical AOCL-BLAS headers (blis.h, cblas.h, blis64.h) are present.
 install(CODE "
   file(GLOB_RECURSE AOCL_HEADERS \"\${CMAKE_INSTALL_PREFIX}/include/*.h\" \"\${CMAKE_INSTALL_PREFIX}/include/*.hh\")
   list(LENGTH AOCL_HEADERS NUM_HEADERS)
   if(NUM_HEADERS EQUAL 0)
     message(FATAL_ERROR \"No AOCL headers found in \${CMAKE_INSTALL_PREFIX}/include/\")
   endif()
+  
+  # Validate critical AOCL-BLAS headers are present
+  set(CRITICAL_HEADERS blis.h cblas.h blis64.h)
+  foreach(CRITICAL_HEADER \${CRITICAL_HEADERS})
+    set(FOUND_CRITICAL FALSE)
+    foreach(HEADER \${AOCL_HEADERS})
+      get_filename_component(HEADER_NAME \"\${HEADER}\" NAME)
+      if(HEADER_NAME STREQUAL \"\${CRITICAL_HEADER}\")
+        set(FOUND_CRITICAL TRUE)
+        break()
+      endif()
+    endforeach()
+    if(NOT FOUND_CRITICAL)
+      message(FATAL_ERROR \"Critical AOCL header \${CRITICAL_HEADER} not found in \${CMAKE_INSTALL_PREFIX}/include/\")
+    endif()
+  endforeach()
+  
   file(MAKE_DIRECTORY \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_INCLUDEDIR}/aocl\")
   foreach(HEADER \${AOCL_HEADERS})
     file(RELATIVE_PATH REL_PATH \"\${CMAKE_INSTALL_PREFIX}/include\" \"\${HEADER}\")
