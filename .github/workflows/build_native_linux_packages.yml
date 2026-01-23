@@ -27,6 +27,12 @@ on:
         description: The type of release to build ("dev", "nightly", or "prerelease"). All developer-triggered jobs should use "dev"!
         required: false
         type: string
+      repository:
+          description: "Repository to checkout. Otherwise, defaults to `github.repository`."
+          type: string
+      ref:
+          description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
+          type: string
   workflow_dispatch:
     inputs:
       artifact_group:
@@ -55,9 +61,6 @@ on:
         description: The type of release to build ("dev", "nightly", or "prerelease"). All developer-triggered jobs should use "dev"!
         type: string
         default: "dev"
-      repository:
-          description: "Repository to checkout. Otherwise, defaults to `github.repository`."
-          type: string
       ref:
           description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
           type: string
