@@ -38,8 +38,7 @@ class GeneratePyTorchSourcesManifestTest(unittest.TestCase):
         os.environ["GITHUB_SERVER_URL"] = "https://github.com"
         os.environ["GITHUB_REPOSITORY"] = "ROCm/TheRock"
         os.environ["GITHUB_SHA"] = "b3eda956a19d0151cbb4699739eb71f62596c8bb"
-        self.expected_ref = "refs/heads/main"
-        os.environ["GITHUB_REF"] = self.expected_ref
+        os.environ["GITHUB_REF"] = "refs/heads/main"
 
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
@@ -153,7 +152,7 @@ class GeneratePyTorchSourcesManifestTest(unittest.TestCase):
         self.assertEqual(
             data["therock"]["commit"], "b3eda956a19d0151cbb4699739eb71f62596c8bb"
         )
-        self.assertEqual(data["therock"]["ref"], self.expected_ref)
+        self.assertEqual(data["therock"]["branch"], "main")
 
     def test_sources_only_manifest_without_triton(self) -> None:
         manifest_dir = self.tmp_path / "manifests_no_triton"

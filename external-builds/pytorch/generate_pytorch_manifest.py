@@ -145,12 +145,20 @@ def main() -> None:
     sha = require_env("GITHUB_SHA")
     ref = require_env("GITHUB_REF")
 
+    prefix = "refs/heads/"
+    if not ref.startswith(prefix):
+        raise RuntimeError(
+            f"Unexpected GITHUB_REF: {ref}\n"
+            "Expected a branch ref of the form refs/heads/<branch>."
+        )
+    branch = ref[len(prefix) :]
+
     manifest = {
         "sources": sources,
         "therock": {
             "repo": f"{server_url}/{repo}.git",
             "commit": sha,
-            "ref": ref,
+            "branch": branch,
         },
     }
 
