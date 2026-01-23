@@ -191,6 +191,9 @@ therock_cmake_subproject_declare(rocBLAS
     -DROCM_PATH=
     -DROCM_DIR=
     -Dhipblaslt_path=
+    # BUILD_DIR: Custom variable used by rocBLAS clients to locate bundled dependencies
+    # Set to rocBLAS's build directory so it can find deps/ subdirectory
+    "-DBUILD_DIR=${CMAKE_CURRENT_BINARY_DIR}/rocBLAS/build"
     -DBUILD_WITH_TENSILE=ON
     -DBUILD_WITH_HIPBLASLT=ON
     # TODO: With `Tensile_TEST_LOCAL_PATH` set, the resulting build path is ${Tensile_TEST_LOCAL_PATH}/build.
