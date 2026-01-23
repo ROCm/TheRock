@@ -8,8 +8,9 @@ hwloc (Hardware Locality) provides portable abstraction of the hierarchical topo
 
 ## Version
 
-- **hwloc 1.11.13** (last stable 1.x release, compatible with rocrtst)
-- Source: https://download.open-mpi.org/release/hwloc/v1.11/hwloc-1.11.13.tar.gz
+- **hwloc 1.11.13** (last stable 1.x release, compatible with rocrtst, as of January 2026)
+- Source: https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/hwloc-1.11.13.tar.bz2
+  - Originally from: https://download.open-mpi.org/release/hwloc/v1.11/hwloc-1.11.13.tar.bz2
 - Note: Using hwloc 1.x for compatibility with rocrtst which uses hwloc 1.11.6 API
 
 ## Dependencies
@@ -76,23 +77,19 @@ The library is built with:
 
 ## Usage
 
-To enable hwloc in your build:
+Enable bundled system dependencies during CMake configuration:
 
 ```bash
-cmake -DTHEROCK_ENABLE_SYSDEPS_HWLOC=ON ...
+cmake -DTHEROCK_BUNDLE_SYSDEPS=ON ...
 ```
 
-Components can link against hwloc using the CMake target:
+This automatically enables `hwloc` along with its dependencies (`libpciaccess`, `libnuma`).
+
+Components can link against hwloc using CMake's `find_package()`:
 
 ```cmake
 find_package(hwloc REQUIRED)
 target_link_libraries(my_target PRIVATE hwloc::hwloc)
-```
-
-Or via pkg-config:
-
-```bash
-PKG_CONFIG_PATH=/path/to/rocm_sysdeps/lib/pkgconfig pkg-config --cflags --libs hwloc
 ```
 
 ## rocrtst Integration
