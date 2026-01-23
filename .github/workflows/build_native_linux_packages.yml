@@ -93,7 +93,7 @@ jobs:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
 
-      - name: Set up Python 3.12
+      - name: Set up Python
         uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
         with:
           python-version: '3.12'
@@ -116,7 +116,7 @@ jobs:
           echo "Fetching artifacts for build ${{ inputs.artifact_run_id }}"
           python ./build_tools/fetch_artifacts.py \
             --run-id=${{ env.ARTIFACT_RUN_ID }} \
-            --run-github-repo=${{ inputs.repository || 'ROCm/TheRock' }} \
+            --run-github-repo="ROCm/TheRock" \
             --artifact-group=${{ inputs.artifact_group }} \
             --output-dir=${{ env.ARTIFACTS_DIR }}
 
