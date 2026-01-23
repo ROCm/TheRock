@@ -75,7 +75,7 @@ jobs:
       fail-fast: false
       matrix:
         family_info: ${{ fromJSON(inputs.matrix_per_family_json) }}
-    uses: ./.github/workflows/test_artifacts.yml
+    uses: ./.github/workflows/multi_arch_test_artifacts.yml
     with:
       # Use architecture-specific artifact group for fetching per-arch artifacts
       artifact_group: ${{ matrix.family_info.amdgpu_family }}
