@@ -16,7 +16,7 @@ import time
 from os import path, makedirs, getenv
 from collections import defaultdict
 from typing import Iterable, List, Type, Dict, Set, TypeVar, Optional
-from re import sub, match, search
+from re import sub, match
 from packaging.version import parse as _parse_version, Version, InvalidVersion
 
 import boto3
@@ -284,15 +284,11 @@ class S3Index:
                     f' data-dist-info-metadata="{pep658_sha}" data-core-metadata="{pep658_sha}"'
                 )
             # Mark networkx versions with Python requirements (pytorch/pytorch#152191)
-            # Use networkx 3.4 for Python 3.10, networkx 3.5 for Python 3.11
-            if "networkx-3." in obj.key and obj.key.endswith("-py3-none-any.whl"):
-                m = search(r'networkx-3\.(\d+)(?:\.(\d+))?', obj.key)
-                if m:
-                    minor_ver = int(m.group(1))
-                    if minor_ver == 3 or minor_ver == 4:
-                        attributes += ' data-requires-python="&gt;=3.10"'
-                    elif minor_ver >= 5:
-                        attributes += ' data-requires-python="&gt;=3.11"'
+            # networkx 3.4.2 for Python 3.10, 3.5+ for Python 3.11+
+            if obj.key.endswith("networkx-3.4.2-py3-none-any.whl"):
+                attributes += ' data-requires-python="&gt;=3.10"'
+            elif "networkx-3." in obj.key and obj.key.endswith("-py3-none-any.whl"):
+                attributes += ' data-requires-python="&gt;=3.11"'
 
             stripped_key = obj.key.split("/")[-1]
 

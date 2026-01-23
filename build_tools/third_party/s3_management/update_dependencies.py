@@ -29,7 +29,8 @@ PACKAGES_PER_PROJECT = {
     "sympy": {"version": "latest", "project": "torch"},
     "mpmath": {"version": "latest", "project": "torch"},
     "pillow": {"version": "latest", "project": "torch"},
-    "networkx": {"version": "latest", "project": "torch"},
+    # 3.4.2 for Python 3.10, latest for Python 3.11+
+    "networkx": {"version": ["3.4.2", "latest"], "project": "torch"},
     "numpy": {"version": "latest", "project": "torch"},
     "jinja2": {"version": "latest", "project": "torch"},
     "markupsafe": {"version": "latest", "project": "torch"},
@@ -208,13 +209,18 @@ def main() -> None:
                 else:
                     full_path = f"{VERSION}/{prefix}"
 
-                upload_missing_whls(
-                    pkg_name,
-                    full_path,
-                    dry_run=args.dry_run,
-                    only_pypi=args.only_pypi,
-                    target_version=pkg_info["version"],
-                )
+                # Support both single version and list of versions
+                versions = pkg_info["version"]
+                if not isinstance(versions, list):
+                    versions = [versions]
+                for target_version in versions:
+                    upload_missing_whls(
+                        pkg_name,
+                        full_path,
+                        dry_run=args.dry_run,
+                        only_pypi=args.only_pypi,
+                        target_version=target_version,
+                    )
 
 
 if __name__ == "__main__":
