@@ -54,8 +54,6 @@ cmd = [
     "--test-dir",
     f"{THEROCK_PATH}/libexec/rocprofiler-compute",
     "--output-on-failure",
-    "--parallel",
-    "8",
     "--verbose",
     "-E",
     f"{EXCLUDED_TESTS}",
