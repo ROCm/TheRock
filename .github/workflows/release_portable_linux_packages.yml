@@ -339,6 +339,7 @@ jobs:
               "rocm_version": "${{ needs.setup_metadata.outputs.rpm_version }}",
               "release_type": "${{ env.RELEASE_TYPE }}",
               "artifact_run_id": "${{ github.run_id  }}",
+              "ref": "${{ inputs.ref || '' }}",
               "native_package_type": "rpm"
             }
 
@@ -352,6 +353,7 @@ jobs:
               "rocm_version": "${{ needs.setup_metadata.outputs.deb_version }}",
               "release_type": "${{ env.RELEASE_TYPE }}",
               "artifact_run_id": "${{ github.run_id  }}",
+              "ref": "${{ inputs.ref || '' }}",
               "native_package_type": "deb"
             }
 
