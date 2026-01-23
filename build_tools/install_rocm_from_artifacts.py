@@ -184,6 +184,8 @@ def retrieve_artifacts_by_run_id(args):
         "core-ocl_lib",
         "core-ocl_dev",
         "rocprofiler-sdk_lib",
+        # TODO: Remove rocprofiler-sdk_dev once necessary artifacts are moved over to _test
+        "rocprofiler-sdk_dev",
         "host-suite-sparse_lib",
     ]
 

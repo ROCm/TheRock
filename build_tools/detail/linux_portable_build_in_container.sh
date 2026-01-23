@@ -14,7 +14,6 @@ mkdir -p "$CCACHE_DIR"
 mkdir -p "$PIP_CACHE_DIR"
 
 pip install -r /therock/src/requirements.txt
-pip install -r /therock/src/requirements-external.txt
 
 python /therock/src/build_tools/health_status.py
 
