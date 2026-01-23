@@ -235,7 +235,6 @@ add_custom_target(rocBLAS+expunge-tensile
   COMMENT "Cleaning Tensile build artifacts"
 )
 add_dependencies(rocBLAS+expunge rocBLAS+expunge-tensile)
-add_dependencies(rocBLAS+clean rocBLAS+expunge-tensile)
 
 
 if(THEROCK_ENABLE_SPARSE)
