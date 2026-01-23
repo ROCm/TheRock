@@ -158,6 +158,41 @@ install(CODE "
   message(STATUS \"Copied \${NUM_HEADERS} AOCL headers to ${CMAKE_INSTALL_INCLUDEDIR}/aocl\")
 ")
 
+# Copy AOCL to the location rocBLAS searches: ${BUILD_DIR}/deps/aocl/install_package/
+# This runs during AOCL's install phase, ensuring files exist before rocBLAS configures.
+# rocBLAS's clients/CMakeLists.txt searches this location first, allowing it to discover
+# TheRock's AOCL without modifications to rocm-libraries.
+if(NOT WIN32)
+  install(CODE "
+    # Construct path to rocBLAS build directory from AOCL's stage directory
+    # stage is at: build/third-party/aocl/stage
+    # rocBLAS is at: build/math-libs/BLAS/rocBLAS/build
+    set(_rocblas_deps_dir \"\${CMAKE_INSTALL_PREFIX}/../../../math-libs/BLAS/rocBLAS/build/deps/aocl/install_package\")
+    get_filename_component(_rocblas_deps_dir \"\${_rocblas_deps_dir}\" ABSOLUTE)
+
+    # Create destination directories
+    file(MAKE_DIRECTORY \"\${_rocblas_deps_dir}/lib\")
+    file(MAKE_DIRECTORY \"\${_rocblas_deps_dir}/include\")
+
+    # Copy library
+    file(COPY \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libaocl.a\"
+         DESTINATION \"\${_rocblas_deps_dir}/lib\")
+    message(STATUS \"Copied AOCL library for rocBLAS: \${_rocblas_deps_dir}/lib/libaocl.a\")
+
+    # Copy headers (from aocl subdirectory to root, matching AOCL's expected structure)
+    file(GLOB_RECURSE _aocl_headers \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_INCLUDEDIR}/aocl/*.h\" \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_INCLUDEDIR}/aocl/*.hh\")
+    foreach(_header \${_aocl_headers})
+      file(RELATIVE_PATH _rel_path \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_INCLUDEDIR}/aocl\" \"\${_header}\")
+      get_filename_component(_header_dir \"\${_rel_path}\" DIRECTORY)
+      if(_header_dir)
+        file(MAKE_DIRECTORY \"\${_rocblas_deps_dir}/include/\${_header_dir}\")
+      endif()
+      file(COPY_FILE \"\${_header}\" \"\${_rocblas_deps_dir}/include/\${_rel_path}\")
+    endforeach()
+    message(STATUS \"Copied AOCL headers for rocBLAS: \${_rocblas_deps_dir}/include/\")
+  ")
+endif()
+
 # Install our custom CMake package config
 configure_file(
   ${CMAKE_CURRENT_SOURCE_DIR}/aocl-config.cmake.in

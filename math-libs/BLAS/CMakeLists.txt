@@ -180,31 +180,6 @@ endif()
 set(rocBLAS_optional_build_deps)
 if(THEROCK_BUILD_TESTING AND NOT WIN32)
   list(APPEND rocBLAS_optional_build_deps therock-aocl-blas)
-
-  # Copy AOCL to the location rocBLAS searches: ${BUILD_DIR}/deps/aocl/install_package/
-  # This matches the search path in rocm-libraries/projects/rocblas/clients/CMakeLists.txt
-  # and allows rocBLAS to find AOCL without modifications to rocm-libraries.
-  set(_aocl_source_dir "${CMAKE_CURRENT_BINARY_DIR}/../third-party/aocl/dist/lib/host-math")
-  set(_aocl_dest_dir "${CMAKE_CURRENT_BINARY_DIR}/rocBLAS/build/deps/aocl/install_package")
-
-  # Create destination directories
-  file(MAKE_DIRECTORY "${_aocl_dest_dir}/lib")
-  file(MAKE_DIRECTORY "${_aocl_dest_dir}/include")
-
-  # Copy library and headers if AOCL has been built
-  # Note: This runs at configure time. If AOCL hasn't been built yet (first configure),
-  # these will be no-ops. The BUILD_DEPS ensures AOCL is built before rocBLAS links.
-  if(EXISTS "${_aocl_source_dir}/lib/libaocl.a")
-    file(COPY "${_aocl_source_dir}/lib/libaocl.a"
-         DESTINATION "${_aocl_dest_dir}/lib")
-    message(STATUS "Copied AOCL library for rocBLAS: ${_aocl_dest_dir}/lib/libaocl.a")
-  endif()
-
-  if(EXISTS "${_aocl_source_dir}/include/aocl")
-    file(COPY "${_aocl_source_dir}/include/aocl/"
-         DESTINATION "${_aocl_dest_dir}/include")
-    message(STATUS "Copied AOCL headers for rocBLAS: ${_aocl_dest_dir}/include/")
-  endif()
 endif()
 
 therock_cmake_subproject_declare(rocBLAS
