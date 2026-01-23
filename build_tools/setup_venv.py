@@ -62,7 +62,7 @@ def log(*args, **kwargs):
     sys.stdout.flush()
 
 
-def exec(args: list[str | Path], cwd: Path = Path.cwd()):
+def run_command(args: list[str | Path], cwd: Path = Path.cwd()):
     args = [str(arg) for arg in args]
     log(f"++ Exec [{cwd}]$ {shlex.join(args)}")
     subprocess.check_call(args, cwd=str(cwd), stdin=subprocess.DEVNULL)
@@ -102,12 +102,12 @@ def create_venv(venv_dir: Path, py_cmd: list[str] | None = None):
         log(f"  Found existing python executable at '{python_exe}', skipping creation")
         log("  Run again with --clean to clear the existing directory instead")
     else:
-        exec(py_cmd + ["venv", str(venv_dir_resolved)])
+        run_command(py_cmd + ["venv", str(venv_dir_resolved)])
 
 
 def upgrade_pip(python_exe: Path):
     log("")
-    exec([str(python_exe), "-m", "pip", "install", "--upgrade", "pip"])
+    run_command([str(python_exe), "-m", "pip", "install", "--upgrade", "pip"])
 
 
 def install_packages(args: argparse.Namespace, py_cmd: list[str] | None):
@@ -125,7 +125,7 @@ def install_packages(args: argparse.Namespace, py_cmd: list[str] | None):
     command = py_cmd + [f"--index-url={index_url}", args.packages]
     if args.disable_cache:
         command.append("--no-cache-dir")
-    exec(command)
+    run_command(command)
 
 
 def activate_venv_in_gha(venv_dir: Path):
