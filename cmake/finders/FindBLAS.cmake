@@ -15,11 +15,10 @@ if("OpenBLAS" IN_LIST THEROCK_PROVIDED_PACKAGES)
     set(_OPENBLAS OpenBLAS)
   endif()
 
-  set(BLAS_LIBRARIES ${_OPENBLAS}::OpenBLAS)
-  add_library(BLAS::BLAS ALIAS ${_OPENBLAS}::OpenBLAS)
-
   # See: https://cmake.org/cmake/help/latest/module/FindBLAS.html
   set(BLAS_LINKER_FLAGS)
+  set(BLAS_LIBRARIES ${_OPENBLAS}::OpenBLAS)
+  add_library(BLAS::BLAS ALIAS ${_OPENBLAS}::OpenBLAS)
   set(BLAS95_LIBRARIES)
   set(BLAS95_FOUND FALSE)
   set(BLAS_FOUND TRUE)
