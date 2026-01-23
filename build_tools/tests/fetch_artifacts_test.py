@@ -8,10 +8,10 @@ from unittest.mock import patch
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from fetch_artifacts import (
-    BucketMetadata,
     list_s3_artifacts,
     filter_artifacts,
 )
+from _therock_utils.run_outputs import RunOutputRoot
 
 THIS_DIR = Path(__file__).resolve().parent
 REPO_DIR = THIS_DIR.parent.parent
@@ -20,8 +20,11 @@ REPO_DIR = THIS_DIR.parent.parent
 class ArtifactsIndexPageTest(unittest.TestCase):
     @patch("fetch_artifacts.paginator")
     def testListS3Artifacts_Found(self, mock_paginator):
-        bucket_info = BucketMetadata(
-            "ROCm-TheRock/", "therock-ci-artifacts", "123", "linux"
+        run_root = RunOutputRoot(
+            bucket="therock-ci-artifacts",
+            external_repo="ROCm-TheRock/",
+            run_id="123",
+            platform="linux",
         )
         mock_paginator.paginate.return_value = [
             {
@@ -35,7 +38,7 @@ class ArtifactsIndexPageTest(unittest.TestCase):
             {"Contents": [{"Key": "rocm-libraries/test/empty_4test.tar.xz"}]},
         ]
 
-        result = list_s3_artifacts(bucket_info, "test")
+        result = list_s3_artifacts(run_root, "test")
 
         self.assertEqual(len(result), 4)
         self.assertTrue("empty_1test.tar.xz" in result)
@@ -45,8 +48,11 @@ class ArtifactsIndexPageTest(unittest.TestCase):
 
     @patch("fetch_artifacts.paginator")
     def testListS3Artifacts_NotFound(self, mock_paginator):
-        bucket_info = BucketMetadata(
-            "ROCm-TheRock/", "therock-ci-artifacts", "123", "linux"
+        run_root = RunOutputRoot(
+            bucket="therock-ci-artifacts",
+            external_repo="ROCm-TheRock/",
+            run_id="123",
+            platform="linux",
         )
         mock_paginator.paginate.side_effect = ClientError(
             error_response={
@@ -56,7 +62,7 @@ class ArtifactsIndexPageTest(unittest.TestCase):
         )
 
         with self.assertRaises(ClientError) as context:
-            list_s3_artifacts(bucket_info, "test")
+            list_s3_artifacts(run_root, "test")
 
         self.assertEqual(context.exception.response["Error"]["Code"], "AccessDenied")
 

@@ -6,6 +6,9 @@ both local directories (for prototyping/testing) and S3 (for CI/CD).
 Environment-based switching:
 - THEROCK_LOCAL_STAGING_DIR set → use LocalDirectoryBackend
 - Otherwise → use S3Backend with existing retrieve_bucket_info() logic
+
+Path computation is delegated to RunOutputRoot (see run_outputs.py) to ensure
+consistent paths across all tools.
 """
 
 from abc import ABC, abstractmethod
@@ -14,6 +17,8 @@ from pathlib import Path
 from typing import List, Optional, Set
 import os
 import shutil
+
+from .run_outputs import RunOutputRoot
 
 
 @dataclass
@@ -84,16 +89,17 @@ class LocalDirectoryBackend(ArtifactBackend):
     """Backend using a local directory (for testing/prototyping).
 
     Directory structure mirrors S3:
-        {staging_dir}/run-{run_id}-{platform}/
+        {staging_dir}/{run_id}-{platform}/
             {artifact_name}_{component}_{target_family}.tar.zst
             {artifact_name}_{component}_{target_family}.tar.zst.sha256sum
+
+    Uses RunOutputRoot for path computation to ensure consistency with S3 layout.
     """
 
-    def __init__(self, staging_dir: Path, run_id: str, platform: str = "linux"):
+    def __init__(self, staging_dir: Path, run_root: RunOutputRoot):
         self.staging_dir = Path(staging_dir)
-        self.run_id = run_id
-        self.platform = platform
-        self.base_path = self.staging_dir / f"run-{run_id}-{platform}"
+        self.run_root = run_root
+        self.base_path = run_root.local_path(self.staging_dir)
         self.base_path.mkdir(parents=True, exist_ok=True)
 
     @property
@@ -146,28 +152,30 @@ class LocalDirectoryBackend(ArtifactBackend):
 
 
 class S3Backend(ArtifactBackend):
-    """Backend using AWS S3 (wraps existing implementation patterns).
+    """Backend using AWS S3.
 
     S3 path structure:
-        s3://{bucket}/{external_repo}{run_id}-{platform}/
+        s3://{bucket}/{prefix}/
             {artifact_name}_{component}_{target_family}.tar.zst
+
+    Uses RunOutputRoot for path computation to ensure consistency across tools.
     """
 
-    def __init__(
-        self,
-        bucket: str,
-        run_id: str,
-        platform: str = "linux",
-        external_repo: str = "",
-    ):
-        self.bucket = bucket
-        self.external_repo = external_repo
-        self.run_id = run_id
-        self.platform = platform
-        self.s3_prefix = f"{external_repo}{run_id}-{platform}"
-
-        # Initialize S3 client (lazy, reuse existing patterns)
+    def __init__(self, run_root: RunOutputRoot):
+        self.run_root = run_root
         self._s3_client = None
+
+    @property
+    def base_uri(self) -> str:
+        return self.run_root.s3_uri
+
+    @property
+    def bucket(self) -> str:
+        return self.run_root.bucket
+
+    @property
+    def s3_prefix(self) -> str:
+        return self.run_root.prefix
 
     @property
     def s3_client(self):
@@ -196,10 +204,6 @@ class S3Backend(ArtifactBackend):
                     config=Config(max_pool_connections=100, signature_version=UNSIGNED),
                 )
         return self._s3_client
-
-    @property
-    def base_uri(self) -> str:
-        return f"s3://{self.bucket}/{self.s3_prefix}"
 
     def list_artifacts(self, name_filter: Optional[str] = None) -> List[str]:
         """List S3 artifacts."""
@@ -258,10 +262,10 @@ def create_backend_from_env(
     Environment variables:
     - THEROCK_LOCAL_STAGING_DIR: If set, use local backend
     - THEROCK_RUN_ID: Override run ID (default: "local" or GITHUB_RUN_ID)
-    - THEROCK_PLATFORM: Override platform (default: "linux")
+    - THEROCK_PLATFORM: Override platform (default: current platform)
 
     For S3 backend (when THEROCK_LOCAL_STAGING_DIR is not set):
-    - Uses existing retrieve_bucket_info() logic
+    - Uses RunOutputRoot.from_workflow_run() for bucket selection
     - Respects GITHUB_REPOSITORY, IS_PR_FROM_FORK, etc.
     """
     import platform as platform_module
@@ -273,26 +277,12 @@ def create_backend_from_env(
     run_id = run_id or os.getenv("THEROCK_RUN_ID", os.getenv("GITHUB_RUN_ID", "local"))
 
     if local_staging:
+        run_root = RunOutputRoot.for_local(run_id=run_id, platform=platform_name)
         return LocalDirectoryBackend(
             staging_dir=Path(local_staging),
-            run_id=run_id,
-            platform=platform_name,
+            run_root=run_root,
         )
 
-    # Default to S3 (existing behavior)
-    # Import here to avoid circular dependency and missing module issues
-    try:
-        from .github_actions_utils import retrieve_bucket_info
-
-        external_repo, bucket = retrieve_bucket_info()
-    except (ImportError, ModuleNotFoundError):
-        # Fallback for when github_actions_utils is not available
-        bucket = os.getenv("THEROCK_S3_BUCKET", "therock-ci-artifacts")
-        external_repo = ""
-
-    return S3Backend(
-        bucket=bucket,
-        run_id=run_id,
-        platform=platform_name,
-        external_repo=external_repo,
-    )
+    # Default to S3
+    run_root = RunOutputRoot.from_workflow_run(run_id=run_id, platform=platform_name)
+    return S3Backend(run_root=run_root)

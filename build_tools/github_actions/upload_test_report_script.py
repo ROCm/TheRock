@@ -11,13 +11,15 @@ import platform
 import shlex
 import subprocess
 import sys
-from github_actions.github_actions_utils import retrieve_bucket_info
-
-
-logging.basicConfig(level=logging.INFO)
 
 THEROCK_DIR = Path(__file__).resolve().parent.parent.parent
 PLATFORM = platform.system().lower()
+
+# Add build_tools to path for _therock_utils imports
+sys.path.insert(0, str(THEROCK_DIR / "build_tools"))
+from _therock_utils.run_outputs import RunOutputRoot
+
+logging.basicConfig(level=logging.INFO)
 
 # Importing indexer.py
 sys.path.append(str(THEROCK_DIR / "third-party" / "indexer"))
@@ -83,9 +85,7 @@ def upload_test_report(report_dir: Path, bucket_uri: str, log_destination: str):
 
 
 def run(args: argparse.Namespace):
-    external_repo_path, bucket = retrieve_bucket_info()
-    run_id = args.run_id
-    bucket_uri = f"s3://{bucket}/{external_repo_path}{run_id}-{PLATFORM}"
+    run_root = RunOutputRoot.from_workflow_run(run_id=args.run_id, platform=PLATFORM)
 
     if not args.report_path.exists():
         logging.error(
@@ -94,7 +94,7 @@ def run(args: argparse.Namespace):
         return
 
     create_index_file(args)
-    upload_test_report(args.report_path, bucket_uri, args.log_destination)
+    upload_test_report(args.report_path, run_root.s3_uri, args.log_destination)
 
 
 def main(argv):

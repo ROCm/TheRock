@@ -3,7 +3,6 @@
 See also https://pypi.org/project/github-action-utils/.
 """
 
-from datetime import datetime, timezone
 from enum import Enum, auto
 import json
 import os
@@ -456,112 +455,6 @@ def gha_query_last_successful_workflow_run(
     if response and response.get("workflow_runs"):
         return response["workflow_runs"][0]
     return None
-
-
-def retrieve_bucket_info(
-    github_repository: str | None = None,
-    workflow_run_id: str | None = None,
-    workflow_run: dict | None = None,
-) -> tuple[str, str]:
-    """Given a github repository and a workflow run, retrieves bucket information.
-
-    This is intended to segment artifacts by repository and trust level, with
-    artifacts split across several buckets:
-      * therock-ci-artifacts
-      * therock-ci-artifacts-external
-      * therock-artifacts-internal
-      * therock-dev-artifacts
-      * therock-nightly-artifacts
-      * therock-release-artifacts
-
-    Typically while run as a continious CI/CD pipeline, this function should
-    return the same bucket information for each stage of the pipeline. While
-    testing workflows, it can be useful to reference artifacts from other
-    repositories and arbitrary buckets to avoid rebuilding. Those test cases
-    can use the explicit |github_repository| and |workflow_run_id| parameters.
-
-    Priority for |github_repository| is:
-      1. The function argument
-      2. The GITHUB_REPOSITORY environment variable
-      3. The default, "ROCm/TheRock"
-
-    If |workflow_run| is provided, uses it directly without making an API call.
-    Otherwise, if |workflow_run_id| is provided, fetches the workflow run data
-    from the GitHub API.
-
-    If neither is provided, |is_pr_from_fork| is populated from the
-    IS_PR_FROM_FORK environment variable.
-
-    Returns a tuple [EXTERNAL_REPO, BUCKET], where:
-    - EXTERNAL_REPO = if CI is run on an external repo, we create a S3 sub-folder
-                      to avoid conflicting run IDs
-    - BUCKET = the name of the S3 bucket
-    """
-
-    _log("Retrieving bucket info...")
-
-    if github_repository:
-        _log(f"  (explicit) github_repository: {github_repository}")
-    else:
-        # Default to the current repository (if any), else ROCm/TheRock.
-        github_repository = os.getenv("GITHUB_REPOSITORY", "ROCm/TheRock")
-        _log(f"  (implicit) github_repository: {github_repository}")
-
-    # Fetch workflow_run from API if not provided but workflow_run_id is set
-    if workflow_run is None and workflow_run_id is not None:
-        workflow_run = gha_query_workflow_run_by_id(github_repository, workflow_run_id)
-
-    # Extract metadata from workflow_run if available
-    curr_commit_dt = None
-    if workflow_run is not None:
-        _log(f"  workflow_run_id             : {workflow_run['id']}")
-        head_github_repository = workflow_run["head_repository"]["full_name"]
-        is_pr_from_fork = head_github_repository != github_repository
-        _log(f"  head_github_repository      : {head_github_repository}")
-        _log(f"  is_pr_from_fork             : {is_pr_from_fork}")
-
-        # From TheRock #2046 onward, a new S3 bucket was used.
-        # This datetime comparison will determine whether to download from older bucket or newer bucket.
-        curr_commit_dt = datetime.strptime(
-            workflow_run["updated_at"], "%Y-%m-%dT%H:%M:%SZ"
-        )
-        curr_commit_dt = curr_commit_dt.replace(tzinfo=timezone.utc)
-        commit_to_compare_dt = datetime.fromisoformat("2025-11-11T16:18:48+00:00")
-    else:
-        is_pr_from_fork = os.getenv("IS_PR_FROM_FORK", "false") == "true"
-        _log(f"  (implicit) is_pr_from_fork  : {is_pr_from_fork}")
-
-    owner, repo_name = github_repository.split("/")
-    external_repo = (
-        ""
-        if repo_name == "TheRock" and owner == "ROCm" and not is_pr_from_fork
-        else f"{owner}-{repo_name}/"
-    )
-
-    release_type = os.getenv("RELEASE_TYPE")
-    if release_type:
-        _log(f"  (implicit) RELEASE_TYPE: {release_type}")
-        bucket = f"therock-{release_type}-artifacts"
-    else:
-        if external_repo == "":
-            bucket = "therock-ci-artifacts"
-            if curr_commit_dt and curr_commit_dt <= commit_to_compare_dt:
-                bucket = "therock-artifacts"
-        elif (
-            repo_name == "therock-releases-internal"
-            and owner == "ROCm"
-            and not is_pr_from_fork
-        ):
-            bucket = "therock-artifacts-internal"
-        else:
-            bucket = "therock-ci-artifacts-external"
-            if curr_commit_dt and curr_commit_dt <= commit_to_compare_dt:
-                bucket = "therock-artifacts-external"
-
-    _log("Retrieved bucket info:")
-    _log(f"  external_repo: {external_repo}")
-    _log(f"  bucket       : {bucket}")
-    return (external_repo, bucket)
 
 
 def str2bool(value: str | None) -> bool:

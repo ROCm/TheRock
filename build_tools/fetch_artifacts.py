@@ -36,7 +36,7 @@ import boto3
 from botocore import UNSIGNED
 from botocore.config import Config
 import concurrent.futures
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import os
 from pathlib import Path
 import platform
@@ -53,7 +53,7 @@ from _therock_utils.artifacts import (
     ArtifactPopulator,
     _open_archive_for_read,
 )
-from github_actions.github_actions_utils import retrieve_bucket_info
+from _therock_utils.run_outputs import RunOutputRoot
 
 
 warnings.filterwarnings("ignore", category=InsecureRequestWarning)
@@ -88,29 +88,13 @@ def log(*args, **kwargs):
     sys.stdout.flush()
 
 
-# TODO: move into github_actions_utils.py?
-@dataclass
-class BucketMetadata:
-    """Metadata for a workflow run's artifacts in an AWS S3 bucket."""
-
-    external_repo: str
-    bucket: str
-    workflow_run_id: str
-    platform: str
-    s3_key_path: str = field(init=False)
-
-    def __post_init__(self):
-        self.s3_key_path = f"{self.external_repo}{self.workflow_run_id}-{self.platform}"
-
-
-def list_s3_artifacts(bucket_info: BucketMetadata, artifact_group: str) -> set[str]:
+def list_s3_artifacts(run_root: RunOutputRoot, artifact_group: str) -> set[str]:
     """Checks that the AWS S3 bucket exists and returns artifact names."""
-    s3_key_path = bucket_info.s3_key_path
     log(
-        f"Retrieving S3 artifacts for {bucket_info.workflow_run_id} in '{bucket_info.bucket}' at '{s3_key_path}'"
+        f"Retrieving S3 artifacts for {run_root.run_id} in '{run_root.bucket}' at '{run_root.prefix}'"
     )
 
-    page_iterator = paginator.paginate(Bucket=bucket_info.bucket, Prefix=s3_key_path)
+    page_iterator = paginator.paginate(Bucket=run_root.bucket, Prefix=run_root.prefix)
     data = set()
     for page in page_iterator:
         if not "Contents" in page:
@@ -128,7 +112,7 @@ def list_s3_artifacts(bucket_info: BucketMetadata, artifact_group: str) -> set[s
                 file_name = artifact_key.split("/")[-1]
                 data.add(file_name)
     if not data:
-        log(f"Found no S3 artifacts for {bucket_info.run_id} at '{s3_key_path}'")
+        log(f"Found no S3 artifacts for {run_root.run_id} at '{run_root.prefix}'")
     return data
 
 
@@ -214,7 +198,7 @@ def download_artifacts(artifact_download_requests: list[ArtifactDownloadRequest]
 
 
 def get_artifact_download_requests(
-    bucket_info: BucketMetadata,
+    run_root: RunOutputRoot,
     s3_artifacts: set[str],
     output_dir: Path,
 ) -> list[ArtifactDownloadRequest]:
@@ -224,8 +208,8 @@ def get_artifact_download_requests(
     for artifact in sorted(list(s3_artifacts)):
         artifacts_to_download.append(
             ArtifactDownloadRequest(
-                artifact_key=f"{bucket_info.s3_key_path}/{artifact}",
-                bucket=bucket_info.bucket,
+                artifact_key=f"{run_root.prefix}/{artifact}",
+                bucket=run_root.bucket,
                 output_path=output_dir / artifact,
             )
         )
@@ -279,24 +263,17 @@ def run(args):
     output_dir = args.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    external_repo, bucket = retrieve_bucket_info(
-        github_repository=run_github_repo,
-        workflow_run_id=run_id,
-    )
-    bucket_info = BucketMetadata(
-        external_repo=external_repo,
-        bucket=bucket,
-        workflow_run_id=run_id,
+    run_root = RunOutputRoot.from_workflow_run(
+        run_id=run_id,
         platform=args.platform,
+        github_repository=run_github_repo,
     )
 
     # Lookup which artifacts exist in the bucket.
     # Note: this currently does not check that all requested artifacts
     # (via include patterns) do exist, so this may silently fail to fetch
     # expected files.
-    s3_artifacts = list_s3_artifacts(
-        bucket_info=bucket_info, artifact_group=artifact_group
-    )
+    s3_artifacts = list_s3_artifacts(run_root=run_root, artifact_group=artifact_group)
     if not s3_artifacts:
         log(f"No matching artifacts for {run_id} exist. Exiting...")
         sys.exit(1)
@@ -308,7 +285,7 @@ def run(args):
         sys.exit(1)
 
     artifacts_to_download = get_artifact_download_requests(
-        bucket_info=bucket_info,
+        run_root=run_root,
         s3_artifacts=s3_artifacts_filtered,
         output_dir=output_dir,
     )
