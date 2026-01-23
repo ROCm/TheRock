@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Find CI artifacts for a given commit.
+"""Module and CLI script for finding CI artifacts for a given commit.
 
 This script queries the GitHub API to find workflow runs for a commit and
 returns information about where the artifacts are stored in S3.
@@ -17,7 +17,7 @@ For script-to-script composition, import and call find_artifacts_for_commit():
     info = find_artifacts_for_commit(
         commit="abc123",
         repo="ROCm/TheRock",
-        amdgpu_family="gfx94X-dcgpu",
+        artifact_group="gfx94X-dcgpu",
     )
     if info:
         print(f"Artifacts at {info.s3_uri}")
@@ -50,7 +50,7 @@ class ArtifactRunInfo:
     external_repo: str  # e.g. "ROCm-TheRock" (used for namespacing, may be empty)
 
     platform: str  # "linux" or "windows"
-    amdgpu_family: str  # e.g., "gfx94X-dcgpu"
+    artifact_group: str  # e.g., "gfx94X-dcgpu", "gfx950-dcgpu-asan"
 
     workflow_file_name: str  # e.g. "ci.yml"
     workflow_run_id: str  # e.g. "12345678901"
@@ -74,21 +74,70 @@ class ArtifactRunInfo:
 
     @property
     def s3_index_url(self) -> str:
-        return f"https://{self.s3_bucket}.s3.amazonaws.com/{self.s3_path}index-{self.amdgpu_family}.html"
+        return f"https://{self.s3_bucket}.s3.amazonaws.com/{self.s3_path}index-{self.artifact_group}.html"
+
+    def print(self):
+        """Prints artifact info in a human-readable format."""
+        status_str = self.workflow_run_status
+        if self.workflow_run_conclusion:
+            status_str = f"{self.workflow_run_status} ({self.workflow_run_conclusion})"
+
+        print(f"Artifact info:")
+        print(f"  Git repository:      {self.github_repository_name}")
+        print(f"  Git commit:          {self.git_commit_sha}")
+        print(f"  Git commit URL:      {self.git_commit_url}")
+        print(f"  Platform:            {self.platform}")
+        print(f"  Artifact group:      {self.artifact_group}")
+        print(f"  Workflow name:       {self.workflow_file_name}")
+        print(f"  Workflow run ID:     {self.workflow_run_id}")
+        print(f"  Workflow run URL:    {self.workflow_run_html_url}")
+        print(f"  Workflow run status: {status_str}")
+        print(f"  S3 Bucket:           {self.s3_bucket}")
+        print(f"  S3 Path:             {self.s3_path}")
+        print(f"  S3 Index:            {self.s3_index_url}")
 
 
-def check_artifacts_exist(info: ArtifactRunInfo) -> bool:
-    """Check if artifacts exist at the expected S3 location.
+def _build_artifact_run_info(
+    commit: str,
+    github_repository_name: str,
+    artifact_group: str,
+    workflow_file_name: str,
+    platform: str,
+    workflow_run: dict,
+) -> ArtifactRunInfo:
+    """Builds ArtifactRunInfo from a workflow run dict."""
+    external_repo, bucket = retrieve_bucket_info(
+        github_repository=github_repository_name,
+        workflow_run=workflow_run,
+    )
+
+    return ArtifactRunInfo(
+        git_commit_sha=commit,
+        github_repository_name=github_repository_name,
+        external_repo=external_repo,
+        workflow_file_name=workflow_file_name,
+        workflow_run_id=str(workflow_run["id"]),
+        workflow_run_status=workflow_run.get("status", "unknown"),
+        workflow_run_conclusion=workflow_run.get("conclusion"),
+        workflow_run_html_url=workflow_run.get("html_url", ""),
+        platform=platform,
+        artifact_group=artifact_group,
+        s3_bucket=bucket,
+    )
+
+
+def check_if_artifacts_exist(info: ArtifactRunInfo) -> bool:
+    """Checks if artifacts exist at the expected S3 location.
 
     Performs an HTTP HEAD request to the S3 index URL to verify artifacts
-    have been uploaded. This is useful because artifacts for a specific GPU
-    family may be available early, before all workflow jobs are complete.
+    have been uploaded. Note that this does not guarantee that all artifacts
+    exist. Artifacts could be partially uploaded.
 
     Args:
-        info: ArtifactRunInfo with the S3 location to check.
+        info: ArtifactRunInfo with the S3 location to check
 
     Returns:
-        True if artifacts exist (HTTP 200), False otherwise.
+        True if artifacts are likely to exist, False otherwise
     """
     try:
         request = urllib.request.Request(info.s3_index_url, method="HEAD")
@@ -98,26 +147,6 @@ def check_artifacts_exist(info: ArtifactRunInfo) -> bool:
         return False
     except urllib.error.URLError:
         return False
-
-
-def infer_workflow_for_repo(github_repository_name: str) -> str:
-    """Infers the standard workflow file that produces artifacts for a repository.
-
-    Args:
-        github_repository_name: Repository in "owner/repo" format
-
-    Returns:
-        Workflow filename (e.g., "ci.yml")
-    """
-    _, repo_name = github_repository_name.split("/")
-
-    if repo_name == "TheRock":
-        return "ci.yml"
-    elif repo_name in ("rocm-libraries", "rocm-systems"):
-        return "therock-ci.yml"
-    else:
-        # Default fallback
-        return "ci.yml"
 
 
 def detect_repo_from_git() -> str | None:
@@ -146,44 +175,38 @@ def detect_repo_from_git() -> str | None:
 
         # No ROCm remote found - default to TheRock
         return "ROCm/TheRock"
-    except subprocess.CalledProcessError:
-        # Not in a git repo or git not available
-        return None
+    except subprocess.CalledProcessError as e:
+        # Not in a git repo or git not available?
+        raise RuntimeError(
+            "Could not detect repository from git, pass explicit github_repository_name (--repo CLI arg)"
+        ) from e
 
 
-def _build_artifact_run_info(
-    commit: str,
-    github_repository_name: str,
-    amdgpu_family: str,
-    workflow_file_name: str,
-    platform: str,
-    workflow_run: dict,
-) -> ArtifactRunInfo:
-    """Builds ArtifactRunInfo from a workflow run dict."""
-    external_repo, bucket = retrieve_bucket_info(
-        github_repository=github_repository_name,
-        workflow_run=workflow_run,
-    )
+def infer_artifacts_workflow_for_repo(github_repository_name: str) -> str | None:
+    """Infers the standard workflow file that produces artifacts for a repository.
 
-    return ArtifactRunInfo(
-        git_commit_sha=commit,
-        github_repository_name=github_repository_name,
-        external_repo=external_repo,
-        workflow_file_name=workflow_file_name,
-        workflow_run_id=str(workflow_run["id"]),
-        workflow_run_status=workflow_run.get("status", "unknown"),
-        workflow_run_conclusion=workflow_run.get("conclusion"),
-        workflow_run_html_url=workflow_run.get("html_url", ""),
-        platform=platform,
-        amdgpu_family=amdgpu_family,
-        s3_bucket=bucket,
-    )
+    Args:
+        github_repository_name: Repository in "owner/repo" format
+
+    Returns:
+        Workflow filename (e.g., "ci.yml"), or None if unknown repository.
+    """
+    _, repo_name = github_repository_name.split("/")
+
+    if repo_name == "TheRock":
+        return "ci.yml"
+    elif repo_name in ("rocm-libraries", "rocm-systems"):
+        return "therock-ci.yml"
+    else:
+        raise RuntimeError(
+            f"Could not infer artifacts workflow for repository {github_repository_name}, pass explicit workflow_file_name (--workflow CLI arg)"
+        )
 
 
 def find_artifacts_for_commit(
     commit: str,
-    github_repository_name: str,
-    amdgpu_family: str,
+    artifact_group: str,
+    github_repository_name: str | None = None,
     workflow_file_name: str | None = None,
     platform: str | None = None,
 ) -> ArtifactRunInfo | None:
@@ -199,7 +222,7 @@ def find_artifacts_for_commit(
     Args:
         commit: Git commit SHA (full or abbreviated)
         github_repository_name: Repository in "owner/repo" format
-        amdgpu_family: GPU family (e.g., "gfx94X-dcgpu")
+        artifact_group: GPU family (e.g., "gfx94X-dcgpu", "gfx950-dcgpu-asan")
         workflow_file_name: Workflow filename, or None to infer from repo
         platform: "linux" or "windows", or None for current platform
 
@@ -207,8 +230,12 @@ def find_artifacts_for_commit(
         ArtifactRunInfo for the first run with artifacts, or None if no
         workflow runs exist or no artifacts are available.
     """
+
+    if github_repository_name is None:
+        github_repository_name = detect_repo_from_git()
+
     if workflow_file_name is None:
-        workflow_file_name = infer_workflow_for_repo(github_repository_name)
+        workflow_file_name = infer_artifacts_workflow_for_repo(github_repository_name)
 
     if platform is None:
         platform = platform_module.system().lower()
@@ -229,38 +256,17 @@ def find_artifacts_for_commit(
         info = _build_artifact_run_info(
             commit=commit,
             github_repository_name=github_repository_name,
-            amdgpu_family=amdgpu_family,
+            artifact_group=artifact_group,
             workflow_file_name=workflow_file_name,
             platform=platform,
             workflow_run=workflow_run,
         )
 
-        if check_artifacts_exist(info):
+        if check_if_artifacts_exist(info):
             return info
 
     # No runs had artifacts available
     return None
-
-
-# TODO: move into ArtifactRunInfo itself? Make a `class` instead of `dataclass`?
-def print_artifact_info(info: ArtifactRunInfo) -> None:
-    """Prints artifact info in human-readable format."""
-    status_str = info.workflow_run_status
-    if info.workflow_run_conclusion:
-        status_str = f"{info.workflow_run_status} ({info.workflow_run_conclusion})"
-
-    print(f"Git repository:      {info.github_repository_name}")
-    print(f"Git commit:          {info.git_commit_sha}")
-    print(f"Git commit URL:      {info.git_commit_url}")
-    print(f"Platform:            {info.platform}")
-    print(f"GPU Family:          {info.amdgpu_family}")
-    print(f"Workflow name:       {info.workflow_file_name}")
-    print(f"Workflow run ID:     {info.workflow_run_id}")
-    print(f"Workflow run URL:    {info.workflow_run_html_url}")
-    print(f"Workflow run status: {status_str}")
-    print(f"S3 Bucket:           {info.s3_bucket}")
-    print(f"S3 Path:             {info.s3_path}")
-    print(f"S3 Index:            {info.s3_index_url}")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -273,7 +279,7 @@ def main(argv: list[str] | None = None) -> int:
         "--commit",
         type=str,
         required=True,
-        help="Git commit SHA to find artifacts for",
+        help="Git commit SHA to find artifacts for (full SHA)",
     )
     parser.add_argument(
         "--repo",
@@ -283,7 +289,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--workflow",
         type=str,
-        help="Workflow filename (default: infer from repo)",
+        help="Workflow filename that produces artifats (default: infer from repo, e.g. ci.yml in TheRock)",
     )
     parser.add_argument(
         "--platform",
@@ -293,38 +299,31 @@ def main(argv: list[str] | None = None) -> int:
         help=f"Platform (default: {platform_module.system().lower()})",
     )
     parser.add_argument(
-        "--amdgpu-family",
+        "--artifact-group",
         type=str,
         required=True,
-        help="GPU family (e.g., gfx94X-dcgpu, gfx110X-all)",
+        help="Artifact group (e.g., gfx94X-dcgpu, gfx950-dcgpu-asan)",
     )
 
     args = parser.parse_args(argv)
 
-    repo = args.repo
-    if repo is None:
-        repo = detect_repo_from_git()
-        if repo is None:
-            print("Error: Could not detect repository. Use --repo.", file=sys.stderr)
-            return 2
-
     info = find_artifacts_for_commit(
         commit=args.commit,
-        github_repository_name=repo,
-        amdgpu_family=args.amdgpu_family,
+        github_repository_name=args.repo,
         workflow_file_name=args.workflow,
         platform=args.platform,
+        artifact_group=args.artifact_group,
     )
 
     if info is None:
         print(
             f"No artifacts found for commit {args.commit} "
-            f"(platform={args.platform}, amdgpu_family={args.amdgpu_family})",
+            f"(platform={args.platform}, artifact_group={args.artifact_group})",
             file=sys.stderr,
         )
         return 1
 
-    print_artifact_info(info)
+    info.print()
     return 0
 
 

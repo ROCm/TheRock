@@ -1,8 +1,10 @@
 #!/usr/bin/env python
-"""Find the most recent commit on main with CI artifacts.
+"""Module and CLI script for finding the most recent CI artifacts from a branch.
 
-This script queries the GitHub API for commits on the main branch and finds
-the most recent one that has a completed workflow run with artifacts.
+This script
+1. Queries the GitHub API for commits on the chosen branch
+2. Invokes find_artifacts_for_commit to find CI artifacts
+It skips over commits that are missing artifacts for any reason.
 
 Usage:
     python find_latest_artifacts.py --amdgpu-family gfx94X-dcgpu
@@ -11,9 +13,8 @@ For script-to-script composition, import and call find_latest_artifacts():
 
     from find_latest_artifacts import find_latest_artifacts
 
-    info = find_latest_artifacts(
-        amdgpu_family="gfx94X-dcgpu",
-    )
+    # Using the default branch, repository, etc.
+    info = find_latest_artifacts(artifact_group="gfx94X-dcgpu")
     if info:
         print(f"Found artifacts at {info.s3_uri}")
 """
@@ -24,30 +25,35 @@ import sys
 
 from find_artifacts_for_commit import (
     ArtifactRunInfo,
-    check_artifacts_exist,
+    detect_repo_from_git,
     find_artifacts_for_commit,
-    print_artifact_info,
 )
 from github_actions.github_actions_utils import gha_send_request
 
 
-def get_branch_commits(
+# TODO: move to github_actions_utils or github_utils for reuse in other files?
+#       could also rename 'gha_send_request' to 'gh_send_request'
+def get_recent_branch_commits_via_api(
     github_repository_name: str,
     branch: str = "main",
     max_count: int = 50,
 ) -> list[str]:
-    """Get commit SHAs from a branch via GitHub API.
+    """Gets the list of recent commit SHAs for a branch via the GitHub API.
+
+    Commits could also be enumerated via local `git log` commands, but using
+    the API ensures that we get the latest commits regardless of local
+    repository state.
 
     Args:
-        github_repository_name: Repository in "owner/repo" format.
-        branch: Branch name (default: "main").
-        max_count: Maximum number of commits to retrieve (max 100 per API).
+        github_repository_name: Repository in "owner/repo" format
+        branch: Branch name (default: "main")
+        max_count: Maximum number of commits to retrieve (max 100 per API)
 
     Returns:
         List of commit SHAs, most recent first.
 
     Raises:
-        Exception: If GitHub API request fails.
+        GitHubAPIError: If GitHub API request fails.
     """
     url = f"https://api.github.com/repos/{github_repository_name}/commits?sha={branch}&per_page={max_count}"
     response = gha_send_request(url)
@@ -55,10 +61,33 @@ def get_branch_commits(
     return [commit["sha"] for commit in response]
 
 
+def infer_default_branch_for_repo(github_repository_name: str) -> str:
+    """Infers the default branch name for a repository.
+
+    We could also look this up with an API call, as needed.
+
+    Args:
+        github_repository_name: Repository in "owner/repo" format
+
+    Returns:
+        Branch name (e.g., "main")
+    """
+    _, repo_name = github_repository_name.split("/")
+
+    if repo_name == "TheRock":
+        return "main"
+    elif repo_name in ("rocm-libraries", "rocm-systems"):
+        return "develop"
+    else:
+        # Default fallback
+        return "develop"
+
+
 def find_latest_artifacts(
-    amdgpu_family: str,
-    github_repository_name: str = "ROCm/TheRock",
-    branch: str = "main",
+    artifact_group: str,
+    github_repository_name: str,
+    workflow_file_name: str | None = None,
+    branch: str | None = None,
     platform: str | None = None,
     max_commits: int = 50,
     verbose: bool = False,
@@ -71,22 +100,23 @@ def find_latest_artifacts(
     - A workflow failed for other families but this family succeeded
 
     Args:
-        amdgpu_family: GPU family for S3 index URL (e.g., "gfx94X-dcgpu").
-        github_repository_name: GitHub repository in "owner/repo" format.
-        branch: Branch name to search (default: "main").
-        platform: Target platform ("linux" or "windows"), or None for current.
-        max_commits: Maximum number of commits to search through.
-        verbose: If True, print progress information.
+        artifact_group: Artifact group to find (e.g., "gfx94X-dcgpu", ""gfx950-dcgpu-asan")
+        github_repository_name: GitHub repository in "owner/repo" format
+        workflow_file_name: Workflow filename, or None to infer from repo
+        branch: Branch name to search (default: "main")
+        platform: Target platform ("linux" or "windows"), or None for current
+        max_commits: Maximum number of commits to search through
+        verbose: If True, print progress information
 
     Returns:
         ArtifactRunInfo for the most recent commit with artifacts, or None
         if no matching commit found within max_commits.
     """
-    if platform is None:
-        platform = platform_module.system().lower()
+    if branch is None:
+        branch = infer_default_branch_for_repo(github_repository_name)
 
     try:
-        commits = get_branch_commits(
+        commits = get_recent_branch_commits_via_api(
             github_repository_name=github_repository_name,
             branch=branch,
             max_count=max_commits,
@@ -111,7 +141,8 @@ def find_latest_artifacts(
         info = find_artifacts_for_commit(
             commit=commit,
             github_repository_name=github_repository_name,
-            amdgpu_family=amdgpu_family,
+            workflow_file_name=workflow_file_name,
+            artifact_group=artifact_group,
             platform=platform,
         )
 
@@ -138,22 +169,14 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     parser.add_argument(
-        "--amdgpu-family",
-        type=str,
-        required=True,
-        help="GPU family (e.g., gfx94X-dcgpu, gfx110X-all)",
-    )
-    parser.add_argument(
         "--repo",
         type=str,
-        default="ROCm/TheRock",
-        help="Repository in 'owner/repo' format (default: ROCm/TheRock)",
+        help="Repository in 'owner/repo' format (default: detect from git remote)",
     )
     parser.add_argument(
-        "--branch",
+        "--workflow",
         type=str,
-        default="main",
-        help="Branch name to search (default: main)",
+        help="Workflow filename that produces artifats (default: infer from repo, e.g. ci.yml in TheRock)",
     )
     parser.add_argument(
         "--platform",
@@ -161,6 +184,18 @@ def main(argv: list[str] | None = None) -> int:
         choices=["linux", "windows"],
         default=platform_module.system().lower(),
         help=f"Platform (default: {platform_module.system().lower()})",
+    )
+    parser.add_argument(
+        "--artifact-group",
+        type=str,
+        required=True,
+        help="Artifact group (e.g., gfx94X-dcgpu, gfx950-dcgpu-asan)",
+    )
+    parser.add_argument(
+        "--branch",
+        type=str,
+        default="main",
+        help="Branch name to search (default: main)",
     )
     parser.add_argument(
         "--max-commits",
@@ -177,9 +212,14 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
 
+    repo = args.repo
+    if repo is None:
+        repo = detect_repo_from_git()
+
     info = find_latest_artifacts(
-        amdgpu_family=args.amdgpu_family,
-        github_repository_name=args.repo,
+        artifact_group=args.artifact_group,
+        github_repository_name=repo,
+        workflow_file_name=args.workflow,
         branch=args.branch,
         platform=args.platform,
         max_commits=args.max_commits,
@@ -193,7 +233,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
-    print_artifact_info(info)
+    info.print()
     return 0
 
 
