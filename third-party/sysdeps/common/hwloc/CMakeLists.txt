@@ -5,10 +5,9 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 
     therock_subproject_fetch(therock-hwloc-sources
       SOURCE_DIR "${_source_dir}"
-      URL "https://download.open-mpi.org/release/hwloc/v1.11/hwloc-1.11.13.tar.gz"
-      URL_HASH "SHA256=a8f781ae4d347708a07d95e7549039887f151ed7f92263238527dfb0a3709b9d"
-      # TODO: After uploading to S3, switch to:
-      # URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/hwloc-1.11.13.tar.gz"
+      # Originally mirrored from: "https://download.open-mpi.org/release/hwloc/v1.11/hwloc-1.11.13.tar.bz2"
+      URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/hwloc-1.11.13.tar.bz2"
+      URL_HASH "SHA256=a4494b7765f517c0990d1c7f09d98cb87755bb6b841e4e2cbfebca1b14bac9c8"
       TOUCH "${_download_stamp}"
       # We need DOWNLOAD_EXTRACT_TIMESTAMP set to TRUE to preserve the timestamp
       # of the extracted sources, otherwise the build system will notice
