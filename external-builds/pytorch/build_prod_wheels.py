@@ -959,7 +959,7 @@ def do_build_apex(args: argparse.Namespace, apex_dir: Path, env: dict[str, str])
     if args.clean:
         remove_dir_if_exists(apex_dir / "build")
 
-    exec(
+    run_command(
         [
             sys.executable,
             "-m",
