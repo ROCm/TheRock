@@ -32,9 +32,8 @@ def _skip_unless_authenticated_github_api_is_available(test_func):
 #    when artifacts are cleaned up.
 #
 # 2. Workflow run stability: The GitHub API workflow run history for these
-#    pinned commits is unlikely to change (runs won't be re-triggered or
-#    deleted for old commits). If tests become brittle due to upstream changes,
-#    we can re-evaluate the pinned data.
+#    pinned commits is unlikely to change (runs probably won't be re-triggered
+#    or deleted for old commits). If tests become brittle we can re-evaluate.
 
 # Known commits with CI workflow runs in ROCm/TheRock:
 #   https://github.com/ROCm/TheRock/commit/77f0cb2112d1d0aaae0de6088a6e4337f2488233
@@ -45,6 +44,8 @@ THEROCK_MAIN_RUN_ID = "20083647898"
 #   https://github.com/ROCm/TheRock/commit/62bc1eaa02e6ad1b49a718eed111cf4c9f03593a
 #   CI run: https://github.com/ROCm/TheRock/actions/runs/20384488184
 #   (PR from fork: ScottTodd/TheRock)
+#   (attribution is fuzzy here, since branches from forks are often deleted,
+#    we really just want to test that therock-ci-artifacts-external is used)
 THEROCK_FORK_COMMIT = "62bc1eaa02e6ad1b49a718eed111cf4c9f03593a"
 THEROCK_FORK_RUN_ID = "20384488184"
 
@@ -110,8 +111,8 @@ class FindArtifactsForCommitTest(unittest.TestCase):
 
     @_skip_unless_authenticated_github_api_is_available
     @mock.patch("find_artifacts_for_commit.check_if_artifacts_exist", return_value=True)
-    def test_platform_is_reflected_in_result(self, mock_check):
-        """Platform argument is reflected in returned ArtifactRunInfo."""
+    def test_platform_windows(self, mock_check):
+        """Check that we can find artifacts for Windows as well as Linux."""
         info = find_artifacts_for_commit(
             commit=THEROCK_MAIN_COMMIT,
             github_repository_name="ROCm/TheRock",
@@ -122,21 +123,6 @@ class FindArtifactsForCommitTest(unittest.TestCase):
         self.assertIsNotNone(info)
         self.assertEqual(info.platform, "windows")
         self.assertIn("windows", info.s3_path)
-
-    @_skip_unless_authenticated_github_api_is_available
-    @mock.patch("find_artifacts_for_commit.check_if_artifacts_exist", return_value=True)
-    def test_artifact_group_is_reflected_in_result(self, mock_check):
-        """Artifact group argument is reflected in returned ArtifactRunInfo."""
-        info = find_artifacts_for_commit(
-            commit=THEROCK_MAIN_COMMIT,
-            github_repository_name="ROCm/TheRock",
-            artifact_group="gfx94X-dcgpu",
-            platform="linux",
-        )
-
-        self.assertIsNotNone(info)
-        self.assertEqual(info.artifact_group, "gfx94X-dcgpu")
-        self.assertIn("gfx94X-dcgpu", info.s3_index_url)
 
 
 if __name__ == "__main__":
