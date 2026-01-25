@@ -46,7 +46,7 @@ def log(*args):
     sys.stdout.flush()
 
 
-def exec(cmd: list[str], cwd: Path):
+def run_command(cmd: list[str], cwd: Path):
     log(f"++ Exec [{cwd}]$ {shlex.join(cmd)}")
     subprocess.run(cmd, check=True)
 
@@ -136,7 +136,7 @@ def index_log_files(build_dir: Path, artifact_group: str):
         log(
             f"[INFO] Found '{log_dir}' directory. Indexing '*.log', '*.tar.gz', and memory monitoring files..."
         )
-        exec(
+        run_command(
             [
                 sys.executable,
                 str(indexer_path),
@@ -198,7 +198,7 @@ def upload_artifacts(artifact_group: str, build_dir: Path, bucket_uri: str):
         "--region",
         "us-east-2",
     ]
-    exec(cmd, cwd=Path.cwd())
+    run_command(cmd, cwd=Path.cwd())
 
     # Uploading index.html to S3 bucket
     cmd = [
@@ -208,7 +208,7 @@ def upload_artifacts(artifact_group: str, build_dir: Path, bucket_uri: str):
         str(build_dir / "artifacts" / "index.html"),
         f"{bucket_uri}/index-{artifact_group}.html",
     ]
-    exec(cmd, cwd=Path.cwd())
+    run_command(cmd, cwd=Path.cwd())
 
 
 def upload_logs_to_s3(artifact_group: str, build_dir: Path, bucket_uri: str):
@@ -234,9 +234,9 @@ def upload_logs_to_s3(artifact_group: str, build_dir: Path, bucket_uri: str):
         run_aws_cp(log_dir, s3_base_path, content_type="text/plain")
 
     # Build Time Analysis is only generated on Linux
-    analysis_path = log_dir / "build_time_analysis.html"
+    analysis_path = log_dir / "build_observability.html"
     if analysis_path.is_file():
-        analysis_s3_dest = f"{s3_base_path}/build_time_analysis.html"
+        analysis_s3_dest = f"{s3_base_path}/build_observability.html"
         run_aws_cp(analysis_path, analysis_s3_dest, content_type="text/html")
         log(f"[INFO] Uploaded {analysis_path} to {analysis_s3_dest}")
 
@@ -275,8 +275,8 @@ def write_gha_build_summary(artifact_group: str, bucket_url: str, job_status: st
 
     # Build Time Analysis is only generated on Linux
     if PLATFORM == "linux":
-        analysis_url = f"{bucket_url}/logs/{artifact_group}/build_time_analysis.html"
-        gha_append_step_summary(f"[Build Time Analysis]({analysis_url})")
+        analysis_url = f"{bucket_url}/logs/{artifact_group}/build_observability.html"
+        gha_append_step_summary(f"[Build Observability]({analysis_url})")
 
     # Only add artifact links if the job not failed
     if not job_status or job_status == "success":

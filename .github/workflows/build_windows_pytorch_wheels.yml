@@ -232,7 +232,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
         with:
           aws-region: us-east-2
-          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}-releases
+          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}
           special-characters-workaround: true
 
       - name: Upload wheels to S3 staging
@@ -315,7 +315,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
         with:
           aws-region: us-east-2
-          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}-releases
+          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}
           special-characters-workaround: true
 
       - name: Determine upload flag
