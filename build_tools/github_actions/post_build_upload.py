@@ -35,6 +35,7 @@ from github_actions_utils import *
 
 THEROCK_DIR = Path(__file__).resolve().parent.parent.parent
 PLATFORM = platform.system().lower()
+BUILD_OBSERVABILITY_FILENAME = "build_observability.html"
 
 # Importing indexer.py
 sys.path.append(str(THEROCK_DIR / "third-party" / "indexer"))
@@ -224,9 +225,9 @@ def upload_logs_to_s3(artifact_group: str, build_dir: Path, bucket_uri: str):
     else:
         run_aws_cp(log_dir, s3_base_path, content_type="text/plain")
 
-    analysis_path = log_dir / "build_observability.html"
+    analysis_path = log_dir / BUILD_OBSERVABILITY_FILENAME
     if analysis_path.is_file():
-        analysis_s3_dest = f"{s3_base_path}/build_observability.html"
+        analysis_s3_dest = f"{s3_base_path}/{BUILD_OBSERVABILITY_FILENAME}"
         run_aws_cp(analysis_path, analysis_s3_dest, content_type="text/html")
         log(f"[INFO] Uploaded {analysis_path} to {analysis_s3_dest}")
 
@@ -266,9 +267,9 @@ def write_gha_build_summary(
     gha_append_step_summary(f"[Build Logs]({log_index_url})")
 
     # Build Time Analysis - check if file exists
-    analysis_path = build_dir / "logs" / "build_observability.html"
+    analysis_path = build_dir / "logs" / BUILD_OBSERVABILITY_FILENAME
     if analysis_path.is_file():
-        analysis_url = f"{bucket_url}/logs/{artifact_group}/build_observability.html"
+        analysis_url = f"{bucket_url}/logs/{artifact_group}/{BUILD_OBSERVABILITY_FILENAME}"
         gha_append_step_summary(f"[Build Observability]({analysis_url})")
 
     # Only add artifact links if the job not failed
