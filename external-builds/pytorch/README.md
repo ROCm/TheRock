@@ -33,6 +33,7 @@ This incorporates advice from:
 | torch                          | ✅ Supported                                                                      | ✅ Supported     |
 | torchaudio                     | ✅ Supported                                                                      | ✅ Supported     |
 | torchvision                    | ✅ Supported                                                                      | ✅ Supported     |
+| apex                           | ✅ Supported                                                                      | ❌ Not supported |
 | Flash attention via [ao]triton | ✅ Supported                                                                      | ✅ Supported     |
 | FBGEMM GenAI                   | ❌ Not supported (see Issue [#2056](https://github.com/ROCm/TheRock/issues/2056)) | ❌ Not supported |
 
@@ -133,6 +134,7 @@ Now checkout repositories using their default branches:
   python pytorch_torch_repo.py checkout
   python pytorch_audio_repo.py checkout
   python pytorch_vision_repo.py checkout
+  python pytorch_apex_repo.py checkout
   ```
 
 - On Windows, use shorter paths to avoid command length limits:
@@ -141,6 +143,7 @@ Now checkout repositories using their default branches:
   python pytorch_torch_repo.py checkout --checkout-dir C:/b/pytorch
   python pytorch_audio_repo.py checkout --checkout-dir C:/b/audio
   python pytorch_vision_repo.py checkout --checkout-dir C:/b/vision
+
   ```
 
 Now note the gfx target you want to build for and then...
@@ -253,7 +256,7 @@ PYTORCH_TEST_WITH_ROCM=1 python pytorch/test/run_test.py --include test_torch
 
 ### Gating releases with Pytorch tests
 
-With passing builds we upload `torch`, `torchvision`, `torchaudio`, and `triton` wheels to subfolders of the "v2-staging" directory in the nightly release s3 bucket with a public URL at https://rocm.nightlies.amd.com/v2-staging/
+With passing builds we upload `torch`, `torchvision`, `torchaudio`, `triton`, and `apex` wheels to subfolders of the "v2-staging" directory in the nightly release s3 bucket with a public URL at https://rocm.nightlies.amd.com/v2-staging/
 
 Only with passing Torch tests we promote passed wheels to the "v2" directory in the nightly release s3 bucket with a public URL at https://rocm.nightlies.amd.com/v2/
 
@@ -389,6 +392,7 @@ the latest (potentially unstable) code:
 - https://github.com/pytorch/pytorch/tree/main
 - https://github.com/pytorch/audio/tree/main
 - https://github.com/pytorch/vision/tree/main
+- https://github.com/ROCm/apex/tree/master
 
 ```bash
 python pytorch_torch_repo.py checkout --repo-hashtag main
@@ -396,6 +400,7 @@ python pytorch_audio_repo.py checkout --repo-hashtag main
 python pytorch_vision_repo.py checkout --repo-hashtag main
 # Note that triton will be checked out at the PyTorch pin.
 python pytorch_triton_repo.py checkout
+python pytorch_apex_repo.py checkout --repo-hashtag master
 ```
 
 #### PyTorch nightly branches
@@ -406,6 +411,7 @@ tracking the latest pytorch.org nightly release:
 - https://github.com/pytorch/pytorch/tree/nightly
 - https://github.com/pytorch/audio/tree/nightly
 - https://github.com/pytorch/vision/tree/nightly
+- https://github.com/ROCm/apex/tree/master
 
 ```bash
 python pytorch_torch_repo.py checkout --repo-hashtag nightly
@@ -413,6 +419,7 @@ python pytorch_audio_repo.py checkout --repo-hashtag nightly
 python pytorch_vision_repo.py checkout --repo-hashtag nightly
 # Note that triton will be checked out at the PyTorch pin.
 python pytorch_triton_repo.py checkout
+python pytorch_apex_repo.py checkout --repo-hashtag master
 ```
 
 #### ROCm PyTorch release branches
@@ -444,4 +451,5 @@ python pytorch_audio_repo.py checkout --require-related-commit
 python pytorch_vision_repo.py checkout --require-related-commit
 
 python pytorch_triton_repo.py checkout
+python pytorch_apex_repo.py checkout --require-related-commit
 ```
