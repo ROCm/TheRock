@@ -47,7 +47,9 @@ if extra_cxx_compiler_launcher:
     extra_cxx_compiler_launcher = extra_cxx_compiler_launcher.replace("\\", "/")
 
 
-def build_compiler_launcher(extra_launcher: str, default_launcher: str = "ccache") -> str:
+def build_compiler_launcher(
+    extra_launcher: str, default_launcher: str = "ccache"
+) -> str:
     """Build compiler launcher string.
 
     Args:
@@ -71,6 +73,7 @@ def build_compiler_launcher(extra_launcher: str, default_launcher: str = "ccache
     if extra_launcher:
         return extra_launcher
     return default_launcher
+
 
 platform_options = {
     "windows": [
