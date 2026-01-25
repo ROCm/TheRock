@@ -269,7 +269,9 @@ def write_gha_build_summary(
     # Build Time Analysis - check if file exists
     analysis_path = build_dir / "logs" / BUILD_OBSERVABILITY_FILENAME
     if analysis_path.is_file():
-        analysis_url = f"{bucket_url}/logs/{artifact_group}/{BUILD_OBSERVABILITY_FILENAME}"
+        analysis_url = (
+            f"{bucket_url}/logs/{artifact_group}/{BUILD_OBSERVABILITY_FILENAME}"
+        )
         gha_append_step_summary(f"[Build Observability]({analysis_url})")
 
     # Only add artifact links if the job not failed
