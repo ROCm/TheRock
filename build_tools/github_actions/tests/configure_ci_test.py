@@ -45,6 +45,9 @@ class ConfigureCITest(unittest.TestCase):
             family_info_list = json.loads(entry["matrix_per_family_json"])
             self.assertTrue(all("amdgpu_family" in f for f in family_info_list))
             self.assertTrue(all("test-runs-on" in f for f in family_info_list))
+            self.assertTrue(
+                all("sanity_check_only_for_family" in f for f in family_info_list)
+            )
 
         if not allow_xfail:
             self.assertFalse(
@@ -519,6 +522,81 @@ class ConfigureCITest(unittest.TestCase):
         for family_info in family_info_list:
             self.assertIn("amdgpu_family", family_info)
             self.assertIn("test-runs-on", family_info)
+
+    def test_multi_arch_with_sanity_check_only_families(self):
+        """Test multi_arch mode with families that have sanity_check_only_for_family=True."""
+        import json
+
+        # gfx110x has sanity_check_only_for_family=True in presubmit
+        build_families = {"amdgpu_families": "gfx110X"}
+        linux_target_output, linux_test_labels = configure_ci.matrix_generator(
+            is_pull_request=False,
+            is_workflow_dispatch=True,
+            is_push=False,
+            is_schedule=False,
+            base_args={
+                "workflow_dispatch_linux_test_labels": "",
+                "workflow_dispatch_windows_test_labels": "",
+                "build_variant": "release",
+            },
+            families=build_families,
+            platform="linux",
+            multi_arch=True,
+        )
+        self.assertEqual(len(linux_target_output), 1)
+        self.assert_multi_arch_output_is_valid(
+            target_output=linux_target_output, allow_xfail=True
+        )
+
+        entry = linux_target_output[0]
+        family_info_list = json.loads(entry["matrix_per_family_json"])
+        self.assertEqual(len(family_info_list), 1)
+
+        # Verify sanity_check_only_for_family is True for gfx110X
+        gfx110x_info = family_info_list[0]
+        self.assertEqual(gfx110x_info["amdgpu_family"], "gfx110X-all")
+        self.assertTrue(gfx110x_info["sanity_check_only_for_family"])
+
+    def test_multi_arch_mixed_sanity_check_families(self):
+        """Test multi_arch mode with mix of families with/without sanity_check_only_for_family."""
+        import json
+
+        # gfx94x has sanity_check_only_for_family=False (default)
+        # gfx110x has sanity_check_only_for_family=True
+        build_families = {"amdgpu_families": "gfx94X, gfx110X"}
+        linux_target_output, linux_test_labels = configure_ci.matrix_generator(
+            is_pull_request=False,
+            is_workflow_dispatch=True,
+            is_push=False,
+            is_schedule=False,
+            base_args={
+                "workflow_dispatch_linux_test_labels": "",
+                "workflow_dispatch_windows_test_labels": "",
+                "build_variant": "release",
+            },
+            families=build_families,
+            platform="linux",
+            multi_arch=True,
+        )
+        self.assertEqual(len(linux_target_output), 1)
+        self.assert_multi_arch_output_is_valid(
+            target_output=linux_target_output, allow_xfail=True
+        )
+
+        entry = linux_target_output[0]
+        family_info_list = json.loads(entry["matrix_per_family_json"])
+        self.assertEqual(len(family_info_list), 2)
+
+        # Find and validate both families
+        family_dict = {f["amdgpu_family"]: f for f in family_info_list}
+
+        # gfx94X should have sanity_check_only_for_family=False
+        self.assertIn("gfx94X-dcgpu", family_dict)
+        self.assertFalse(family_dict["gfx94X-dcgpu"]["sanity_check_only_for_family"])
+
+        # gfx110X should have sanity_check_only_for_family=True
+        self.assertIn("gfx110X-all", family_dict)
+        self.assertTrue(family_dict["gfx110X-all"]["sanity_check_only_for_family"])
 
     def test_rocm_org_var_names(self):
         os.environ["LOAD_TEST_RUNNERS_FROM_VAR"] = "false"
