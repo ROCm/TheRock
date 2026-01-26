@@ -142,6 +142,7 @@ therock_add_amdgpu_target(gfx1103 "AMD Radeon 780M Laptop iGPU" FAMILY igpu-all 
   EXCLUDE_TARGET_PROJECTS
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
     rccl  # https://github.com/ROCm/TheRock/issues/150
+    rccl-tests  # https://github.com/ROCm/TheRock/issues/150
     rocWMMA # https://github.com/ROCm/TheRock/issues/1944
     libhipcxx # https://github.com/ROCm/TheRock/issues/2504
 )
@@ -151,18 +152,21 @@ therock_add_amdgpu_target(gfx1150 "AMD Strix Point iGPU" FAMILY igpu-all gfx115X
   EXCLUDE_TARGET_PROJECTS
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
     rccl  # https://github.com/ROCm/TheRock/issues/150
+    rccl-tests  # https://github.com/ROCm/TheRock/issues/150
     libhipcxx # https://github.com/ROCm/TheRock/issues/2504
 )
 therock_add_amdgpu_target(gfx1151 "AMD Strix Halo iGPU" FAMILY igpu-all gfx115X-all gfx115X-igpu
   EXCLUDE_TARGET_PROJECTS
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
     rccl  # https://github.com/ROCm/TheRock/issues/150
+    rccl-tests  # https://github.com/ROCm/TheRock/issues/150
     libhipcxx # https://github.com/ROCm/TheRock/issues/2504
 )
 therock_add_amdgpu_target(gfx1152 "AMD Krackan 1 iGPU" FAMILY igpu-all gfx115X-all gfx115X-igpu
   EXCLUDE_TARGET_PROJECTS
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
     rccl  # https://github.com/ROCm/TheRock/issues/150
+    rccl-tests  # https://github.com/ROCm/TheRock/issues/150
     rocWMMA # https://github.com/ROCm/TheRock/issues/1944
     libhipcxx # https://github.com/ROCm/TheRock/issues/2504
 )
@@ -170,6 +174,7 @@ therock_add_amdgpu_target(gfx1153 "AMD Radeon 820M iGPU" FAMILY igpu-all gfx115X
   EXCLUDE_TARGET_PROJECTS
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
     rccl  # https://github.com/ROCm/TheRock/issues/150
+    rccl-tests  # https://github.com/ROCm/TheRock/issues/150
     rocWMMA # https://github.com/ROCm/TheRock/issues/1944
     libhipcxx # https://github.com/ROCm/TheRock/issues/2504
 )

@@ -214,12 +214,6 @@ endfunction()
 # DISABLE_AMDGPU_TARGETS: Do not set any GPU_TARGETS or AMDGPU_TARGETS variables
 #   in the project. This is largely used for broken projects that cannot
 #   build with an explicit target list.
-# DEFAULT_GPU_TARGETS: List of GPU targets to use as a fallback when all targets
-#   are excluded via EXCLUDE_TARGET_PROJECTS in therock_amdgpu_targets.cmake.
-#   Most projects should NOT set this and will default to an empty list. Only
-#   set this for projects that cannot build with an empty target list. This
-#   should only be needed during bringup of new targets and is not intended
-#   for production use.
 # NO_MERGE_COMPILE_COMMANDS: Option to disable merging of this project's
 #   compile_commands.json into the overall project. This is useful for
 #   third-party projects that are excluded from all as it eliminates a
@@ -329,7 +323,7 @@ function(therock_cmake_subproject_declare target_name)
     PARSE_ARGV 1 ARG
     "ACTIVATE;USE_DIST_AMDGPU_TARGETS;DISABLE_AMDGPU_TARGETS;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH;FPRINT_SOURCE_HASH"
     "EXTERNAL_SOURCE_DIR;BINARY_DIR;DIR_PREFIX;INSTALL_DESTINATION;COMPILER_TOOLCHAIN;INTERFACE_PROGRAM_DIRS;CMAKE_LISTS_RELPATH;INTERFACE_PKG_CONFIG_DIRS;INSTALL_RPATH_EXECUTABLE_DIR;INSTALL_RPATH_LIBRARY_DIR;LOGICAL_TARGET_NAME;FPRINT_SOURCE_DIR"
-    "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS;DEFAULT_GPU_TARGETS;FPRINT_FILE_GLOBS"
+    "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS;FPRINT_FILE_GLOBS"
   )
   if(TARGET "${target_name}")
     message(FATAL_ERROR "Cannot declare subproject '${target_name}': a target with that name already exists")
@@ -381,6 +375,21 @@ function(therock_cmake_subproject_declare target_name)
   # Prefix directory.
   set(_prefix_dir "${ARG_BINARY_DIR}/${ARG_DIR_PREFIX}prefix")
   make_directory("${_prefix_dir}")
+
+  # Filter runtime and build deps to exclude projects that have been deactivated
+  set(_excluded_deps)
+  foreach(_dep IN LISTS ARG_BUILD_DEPS ARG_RUNTIME_DEPS)
+    set(_is_subproject_declared)
+    therock_check_is_cmake_subproject_declared(${_dep} _is_subproject_declared)
+    if(NOT _is_subproject_declared)
+        message(VERBOSE "Sub-project ${_dep} declared as dependency of sub-project ${target_name} but has been disabled for the given targets. "
+        "Building ${target_name} without ${_dep}. "
+        "This message should never appear for production/supported gfx targets.")
+        list(APPEND _excluded_deps ${_dep})
+    endif()
+  endforeach()
+  list(REMOVE_ITEM ARG_RUNTIME_DEPS ${_excluded_deps})
+  list(REMOVE_ITEM ARG_BUILD_DEPS ${_excluded_deps})
 
   # Collect transitive requirements from runtime and build deps.
   # Include, link, program, pkgconfig and configure depends are derived transitively
@@ -474,12 +483,17 @@ function(therock_cmake_subproject_declare target_name)
     set(_gpu_targets "${THEROCK_AMDGPU_TARGETS}")
   endif()
 
+  set(_filtered_gpu_targets)
+  set(therock_subproject cmake)
+  if(NOT ARG_DISABLE_AMDGPU_TARGETS)
+    _therock_filter_project_gpu_targets(_filtered_gpu_targets "${target_name}" "${_gpu_targets}")
+  endif()
+
   set_target_properties("${target_name}" PROPERTIES
     THEROCK_LOGICAL_TARGET_NAME "${ARG_LOGICAL_TARGET_NAME}"
-    THEROCK_SUBPROJECT cmake
+    THEROCK_SUBPROJECT "${therock_subproject}"
     THEROCK_BUILD_POOL "${_build_pool}"
-    THEROCK_AMDGPU_TARGETS "${_gpu_targets}"
-    THEROCK_DEFAULT_GPU_TARGETS "${ARG_DEFAULT_GPU_TARGETS}"
+    THEROCK_FILTERED_AMDGPU_TARGETS "${_filtered_gpu_targets}"
     THEROCK_DISABLE_AMDGPU_TARGETS "${ARG_DISABLE_AMDGPU_TARGETS}"
     THEROCK_EXCLUDE_FROM_ALL "${ARG_EXCLUDE_FROM_ALL}"
     THEROCK_NO_MERGE_COMPILE_COMMANDS "${ARG_NO_MERGE_COMPILE_COMMANDS}"
@@ -545,8 +559,13 @@ endfunction()
 # with `find_package(package_name)` at the given path relative to its install
 # directory.
 function(therock_cmake_subproject_provide_package target_name package_name relative_path)
-string(APPEND CMAKE_MESSAGE_INDENT "  ")
-get_property(existing_packages GLOBAL PROPERTY THEROCK_ALL_PROVIDED_PACKAGES)
+  set(_is_subproject_declared)
+  therock_check_is_cmake_subproject_declared(${target_name} _is_subproject_declared)
+  if(NOT _is_subproject_declared)
+    return()
+  endif()
+  string(APPEND CMAKE_MESSAGE_INDENT "  ")
+  get_property(existing_packages GLOBAL PROPERTY THEROCK_ALL_PROVIDED_PACKAGES)
   if("${package_name}" IN_LIST existing_packages)
     message(SEND_ERROR "Duplicate package provided by ${target_name}: ${package_name}")
   endif()
@@ -568,6 +587,11 @@ endfunction()
 # If using multi-step setup (i.e. without 'ACTIVATE' on the declare), then this
 # must be called once all configuration is complete.
 function(therock_cmake_subproject_activate target_name)
+  set(_is_subproject_declared)
+  therock_check_is_cmake_subproject_declared(${target_name} _is_subproject_declared)
+  if(NOT _is_subproject_declared)
+    return()
+  endif()
   _therock_assert_is_cmake_subproject("${target_name}")
 
   # Get properties.
@@ -1085,6 +1109,11 @@ function(therock_cmake_subproject_glob_c_sources target_name)
     ""
     "SUBDIRS"
   )
+  set(_is_subproject_declared)
+  therock_check_is_cmake_subproject_declared(${target_name} _is_subproject_declared)
+  if(NOT _is_subproject_declared)
+    return()
+  endif()
   get_target_property(_project_source_dir "${target_name}" THEROCK_EXTERNAL_SOURCE_DIR)
   set(_globs)
   foreach(_subdir ${ARG_SUBDIRS})
@@ -1154,6 +1183,16 @@ function(_therock_assert_is_cmake_subproject target_name)
   get_target_property(_is_subproject "${target_name}" THEROCK_SUBPROJECT)
   if(NOT _is_subproject STREQUAL "cmake")
     message(FATAL_ERROR "Target ${target_name} is not a sub-project")
+  endif()
+endfunction()
+
+function(therock_check_is_cmake_subproject_declared target_name out_var_name)
+  # Make sure the subproject has valid targets
+  get_target_property(_subproject_declared "${target_name}" THEROCK_SUBPROJECT)
+  if(_subproject_declared STREQUAL "cmake-OFF")
+    set(${out_var_name} OFF PARENT_SCOPE)
+  else()
+    set(${out_var_name} ON PARENT_SCOPE)
   endif()
 endfunction()
 
@@ -1320,12 +1359,11 @@ function(_therock_cmake_subproject_absolutize list_var relative_to)
 endfunction()
 
 # Filters the target's THEROCK_AMDGPU_TARGETS property based on global settings for the project.
-function(_therock_filter_project_gpu_targets out_var target_name)
+function(_therock_filter_project_gpu_targets out_var target_name gpu_targets)
   get_property(_excludes GLOBAL PROPERTY "THEROCK_AMDGPU_PROJECT_TARGET_EXCLUDES_${target_name}")
-  get_target_property(_gpu_targets "${target_name}" THEROCK_AMDGPU_TARGETS)
-  set(_filtered ${_gpu_targets})
+  set(_filtered ${gpu_targets})
   if(_excludes)
-    foreach(exclude in ${_excludes})
+    foreach(exclude IN LISTS _excludes)
       if("${exclude}" IN_LIST _filtered)
         message(WARNING
           "Excluding support for ${exclude} in ${target_name} because it was "
@@ -1337,15 +1375,13 @@ function(_therock_filter_project_gpu_targets out_var target_name)
   endif()
 
   if(NOT _filtered)
-    get_target_property(_default_gpu_targets "${target_name}" THEROCK_DEFAULT_GPU_TARGETS)
-    if(_default_gpu_targets)
-      set(_filtered ${_default_gpu_targets})
-      message(WARNING
-        "Project ${target_name} cannot build with no gpu targets but was "
-        "instructed to do so. Overriding to the project-specific default ${_filtered}. "
-        "This message should never appear for production/supported gfx targets."
-      )
-    endif()
+    message(WARNING
+      "Subproject ${target_name} cannot be built with no gpu targets but was "
+      "instructed to do so. Disabling the project. "
+      "This message should never appear for production/supported gfx targets."
+    )
+
+    set(therock_subproject cmake-OFF PARENT_SCOPE)
   endif()
 
   set("${out_var}" "${_filtered}" PARENT_SCOPE)
@@ -1370,7 +1406,7 @@ function(_therock_cmake_subproject_setup_toolchain
   get_target_property(_disable_amdgpu_targets "${target_name}" THEROCK_DISABLE_AMDGPU_TARGETS)
   set(_filtered_gpu_targets)
   if(NOT _disable_amdgpu_targets)
-    _therock_filter_project_gpu_targets(_filtered_gpu_targets "${target_name}")
+    get_target_property(_filtered_gpu_targets "${target_name}" THEROCK_FILTERED_AMDGPU_TARGETS)
 
     # Check for sentinel values indicating no targets were configured.
     # This is a lazy error - we only fail when actually building a subproject
