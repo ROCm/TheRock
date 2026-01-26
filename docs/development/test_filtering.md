@@ -57,6 +57,7 @@ if test_type == "smoke":
 ```
 
 ## Additional information
+
 - Each test filter should build on top of each other, to bring confidence to ROCm at each stage of development
 - Execution time means total test time (excluding environment setup) with no sharding
 - These test execution times will be enforced with GitHub Actions step timeouts, and going over the timeout will cause a CI failure
