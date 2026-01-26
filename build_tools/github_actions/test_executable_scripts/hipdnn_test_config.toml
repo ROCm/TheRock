@@ -1,0 +1,7 @@
+# hipDNN Integration Test Configuration
+#
+# Specifies expected plugins for test verification.
+# The test harness will verify that these plugins are loaded.
+
+[plugins.miopen]
+path = "libmiopen_legacy_plugin.so"

@@ -253,3 +253,42 @@ if(THEROCK_ENABLE_MIOPEN_PLUGIN)
       MIOpen_plugin
   )
 endif(THEROCK_ENABLE_MIOPEN_PLUGIN)
+
+if(THEROCK_ENABLE_HIPDNN_INTEGRATION_TESTS)
+  ##############################################################################
+  # hipDNN Integration Tests
+  ##############################################################################
+
+  therock_cmake_subproject_declare(hipdnn-integration-tests
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipdnn-integration-tests"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipdnn-integration-tests"
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      -DHIP_PLATFORM=amd
+    CMAKE_INCLUDES
+      therock_explicit_finders.cmake
+    COMPILER_TOOLCHAIN
+      amd-hip
+    BUILD_DEPS
+      hip-clr
+      hipDNN
+      therock-flatbuffers
+      therock-fmt
+      therock-nlohmann-json
+      therock-spdlog
+      therock-googletest
+    RUNTIME_DEPS
+      hip-clr
+      hipDNN
+  )
+  therock_cmake_subproject_activate(hipdnn-integration-tests)
+
+  therock_provide_artifact(hipdnn-integration-tests
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-hipdnn-integration-tests.toml
+    COMPONENTS
+      test
+    SUBPROJECT_DEPS
+      hipdnn-integration-tests
+  )
+endif(THEROCK_ENABLE_HIPDNN_INTEGRATION_TESTS)

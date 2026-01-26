@@ -103,6 +103,7 @@ add_custom_target(
     "${SOURCE_DIR}/configure"
       --prefix "${CMAKE_INSTALL_PREFIX}"
       --with-gmp="${GMP_PREFIX}"
+      --disable-maintainer-mode
   COMMAND
     make V=1
   COMMAND
