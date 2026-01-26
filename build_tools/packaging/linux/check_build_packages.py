@@ -57,12 +57,9 @@ class Parser:
         with open(skipped_output_path, 'r') as file:
             lines = file.readlines()
 
-        # Pattern to match all packages that start with amd 
-        regex_pkg = r'(^amd\S+)'
-
-        # ROCm Version: 7.11.0~20251224
-        regex_rocm_ver = r'# ROCm Version:\s*(\d+\.\d+)\.\d+~\d+'
-
+        # Pattern to match all packages that start with amd
+        # match everything starting with 'amd' ending at first whitespace 
+        regex_pkg = r'^(amd[^\s]+)'
 
         # Process each line
         for line in lines:
@@ -80,14 +77,16 @@ class Parser:
         with open(build_ouput_path, 'r') as file:
             lines = file.readlines()
 
-        # Pattern to match all packages that start with amd 
-        regex_pkg = r'(^amd\S+)'
+        # Pattern to match all packages that start with amd
+        # match everything before '_' amdrocm-dnn7.2-gfx103x_7.2.1-crdnnh_amd64.deb -> amdrocm-dnn7.2-gfx103x
+        regex_pkg = r'^(amd[^_]+)'
 
         # find pkg type 
         regex_pkg_type = r'# Package Type:\s*(\w+)'
 
         # ROCm Version: 7.11.0~20251224
-        regex_rocm_ver = r'# ROCm Version:\s*(\d+\.\d+)\.\d+~\d+'
+        #regex_rocm_ver = r'# ROCm Version:\s*(\d+\.\d+)\.\d+~\d+'
+        regex_rocm_ver = r'# ROCm Version:\s*(\d+\.\d+)\.\d+'
 
         # Graphics Architecture
         regex_gfx = r'^# Graphics Architecture:\s*(.+)$'
@@ -114,7 +113,7 @@ class Parser:
                 if gfx_match:
                     arch_line = gfx_match.group(1)
                     # Extract gfx values
-                    gfx_pattern = r'gfx\d+x?'
+                    gfx_pattern = r'(?i)gfx\d+x?'
                     self.gfx = re.findall(gfx_pattern, arch_line)
 
 
@@ -137,12 +136,11 @@ class Parser:
 
                 if pkg.get('Gfxarch') == 'True':
                     for gfx_suffix in self.gfx:
-
-                        name_gfx = ''.join([name, '-', gfx_suffix])
+                        name_gfx = ''.join([name, '-', gfx_suffix.lower()])
                         self.enabled_pkg_json_set.add(name_gfx)
 
                     for gfx_suffix in self.gfx:
-                        name_gfx = ''.join([name, self.rocm_version, '-', gfx_suffix])
+                        name_gfx = ''.join([name, self.rocm_version, '-', gfx_suffix.lower()])
                         self.enabled_pkg_json_set.add(name_gfx)
 
                 else:
@@ -150,7 +148,7 @@ class Parser:
 
     
     def missing_pkg(self):
-        miss_set = self.enabled_pkg_json_set.difference(self.build_set)
+        miss_set = self.enabled_pkg_json_set - self.build_set
 
         print(f"\n{'='*60}")
         if len(miss_set) == 0:
@@ -324,8 +322,8 @@ class Parser:
         print(f"\n{'='*60}")
 
 
-# if everything built can be installed pass 
-# if not being built then give warning         
+# if everything built can be installed, then pass 
+# if not being built then give, then warning         
 def main():
     json_parser = Parser(JSON_FILE)
     json_parser.parse_skipped_packages(SKIPPED_OUTPUT)
@@ -333,9 +331,7 @@ def main():
     json_parser.get_enabled_packages()
     json_parser.missing_pkg()
 
-
     json_parser.install_deb_files_with_logging(INSTALL_DIR)
-
 
 
 main()
