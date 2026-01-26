@@ -149,66 +149,12 @@ def check_if_artifacts_exist(info: ArtifactRunInfo) -> bool:
         return False
 
 
-def detect_repo_from_git() -> str | None:
-    """Detects the github repository name based on git remotes.
-
-    Looks for any remote pointing to github.com/ROCm/*.
-    Falls back to ROCm/TheRock if no ROCm remote found.
-
-    Returns:
-        Repository in "owner/repo" format, or None if not in a git repo.
-    """
-    try:
-        result = subprocess.run(
-            ["git", "config", "--get-regexp", r"remote\..*\.url"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-
-        # Look for ROCm repos in any remote URL
-        # Matches both SSH (git@github.com:ROCm/X) and HTTPS (github.com/ROCm/X)
-        for line in result.stdout.splitlines():
-            match = re.search(r"github\.com[:/](ROCm/[^/\s]+)", line)
-            if match:
-                return match.group(1).removesuffix(".git")
-
-        # No ROCm remote found - default to TheRock
-        return "ROCm/TheRock"
-    except subprocess.CalledProcessError as e:
-        # Not in a git repo or git not available?
-        raise RuntimeError(
-            "Could not detect repository from git, pass explicit github_repository_name (--repo CLI arg)"
-        ) from e
-
-
-def infer_artifacts_workflow_for_repo(github_repository_name: str) -> str | None:
-    """Infers the standard workflow file that produces artifacts for a repository.
-
-    Args:
-        github_repository_name: Repository in "owner/repo" format
-
-    Returns:
-        Workflow filename (e.g., "ci.yml"), or None if unknown repository.
-    """
-    _, repo_name = github_repository_name.split("/")
-
-    if repo_name == "TheRock":
-        return "ci.yml"
-    elif repo_name in ("rocm-libraries", "rocm-systems"):
-        return "therock-ci.yml"
-    else:
-        raise RuntimeError(
-            f"Could not infer artifacts workflow for repository {github_repository_name}, pass explicit workflow_file_name (--workflow CLI arg)"
-        )
-
-
 def find_artifacts_for_commit(
     commit: str,
     artifact_group: str,
-    github_repository_name: str | None = None,
-    workflow_file_name: str | None = None,
-    platform: str | None = None,
+    github_repository_name: str = "ROCm/TheRock",
+    workflow_file_name: str = "ci.yml",
+    platform: str = platform_module.system().lower(),
 ) -> ArtifactRunInfo | None:
     """Main entry point: finds artifact info for a commit.
 
@@ -230,16 +176,6 @@ def find_artifacts_for_commit(
         ArtifactRunInfo for the first run with artifacts, or None if no
         workflow runs exist or no artifacts are available.
     """
-
-    if github_repository_name is None:
-        github_repository_name = detect_repo_from_git()
-
-    if workflow_file_name is None:
-        workflow_file_name = infer_artifacts_workflow_for_repo(github_repository_name)
-
-    if platform is None:
-        platform = platform_module.system().lower()
-
     try:
         workflow_runs = gha_query_workflow_runs_for_commit(
             github_repository_name, workflow_file_name, commit
@@ -284,12 +220,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--repo",
         type=str,
-        help="Repository in 'owner/repo' format (default: detect from git remote)",
+        default="ROCm/TheRock",
+        help="Repository in 'owner/repo' format (default: ROCm/TheRock)",
     )
     parser.add_argument(
         "--workflow",
         type=str,
-        help="Workflow filename that produces artifats (default: infer from repo, e.g. ci.yml in TheRock)",
+        default="ci.yml",
+        help="Workflow filename that produces artifats (default: ci.yml)",
     )
     parser.add_argument(
         "--platform",

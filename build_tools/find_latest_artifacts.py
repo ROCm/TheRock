@@ -25,7 +25,6 @@ import sys
 
 from find_artifacts_for_commit import (
     ArtifactRunInfo,
-    detect_repo_from_git,
     find_artifacts_for_commit,
 )
 from github_actions.github_actions_utils import gha_send_request
@@ -61,34 +60,12 @@ def get_recent_branch_commits_via_api(
     return [commit["sha"] for commit in response]
 
 
-def infer_default_branch_for_repo(github_repository_name: str) -> str:
-    """Infers the default branch name for a repository.
-
-    We could also look this up with an API call, as needed.
-
-    Args:
-        github_repository_name: Repository in "owner/repo" format
-
-    Returns:
-        Branch name (e.g., "main")
-    """
-    _, repo_name = github_repository_name.split("/")
-
-    if repo_name == "TheRock":
-        return "main"
-    elif repo_name in ("rocm-libraries", "rocm-systems"):
-        return "develop"
-    else:
-        # Default fallback
-        return "develop"
-
-
 def find_latest_artifacts(
     artifact_group: str,
-    github_repository_name: str,
-    workflow_file_name: str | None = None,
-    branch: str | None = None,
-    platform: str | None = None,
+    github_repository_name: str = "ROCm/TheRock",
+    workflow_file_name: str = "ci.yml",
+    platform: str = platform_module.system().lower(),
+    branch: str = "main",
     max_commits: int = 50,
     verbose: bool = False,
 ) -> ArtifactRunInfo | None:
@@ -112,9 +89,6 @@ def find_latest_artifacts(
         ArtifactRunInfo for the most recent commit with artifacts, or None
         if no matching commit found within max_commits.
     """
-    if branch is None:
-        branch = infer_default_branch_for_repo(github_repository_name)
-
     try:
         commits = get_recent_branch_commits_via_api(
             github_repository_name=github_repository_name,
@@ -171,11 +145,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--repo",
         type=str,
+        default="ROCm/TheRock",
         help="Repository in 'owner/repo' format (default: detect from git remote)",
     )
     parser.add_argument(
         "--workflow",
         type=str,
+        default="ci.yml",
         help="Workflow filename that produces artifats (default: infer from repo, e.g. ci.yml in TheRock)",
     )
     parser.add_argument(
@@ -212,16 +188,12 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
 
-    repo = args.repo
-    if repo is None:
-        repo = detect_repo_from_git()
-
     info = find_latest_artifacts(
         artifact_group=args.artifact_group,
-        github_repository_name=repo,
+        github_repository_name=args.repo,
         workflow_file_name=args.workflow,
-        branch=args.branch,
         platform=args.platform,
+        branch=args.branch,
         max_commits=args.max_commits,
         verbose=args.verbose,
     )
