@@ -340,6 +340,7 @@ def run():
             ]
 
             # Due to the lack of test filter options but importance of tests, we allow specific tests to run sharded always
+            # TODO(#2914): remove hip-test off of this list once smoke test filter is provided
             test_jobs_to_full_shard = ["hip-tests"]
 
             # If the test type is smoke tests, we only need one shard for the test job
