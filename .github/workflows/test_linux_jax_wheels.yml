@@ -204,7 +204,9 @@ jobs:
 
       - name: Run JAX tests
         run: |
-            pytest jax/jax_tests/tests/multi_device_test.py -q --log-cli-level=INFO
             pytest jax/jax_tests/tests/core_test.py -q --log-cli-level=INFO
+            pytest jax/jax_tests/tests/multi_device_test.py -q --log-cli-level=INFO
+            pytest jax/jax_tests/tests/pgle_test.py -q --log-cli-level=INFO
+            pytest jax/jax_tests/tests/profiler_test.py -q --log-cli-level=INFO
             pytest jax/jax_tests/tests/util_test.py -q --log-cli-level=INFO
             pytest jax/jax_tests/tests/scipy_stats_test.py -q --log-cli-level=INFO
