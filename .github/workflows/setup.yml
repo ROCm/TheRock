@@ -32,6 +32,9 @@ on:
       rocm_package_version:
         description: ROCm package version (primarily for Python packages).
         value: ${{ jobs.setup.outputs.rocm_package_version }}
+      rocm_libraries_bump:
+        description: True if PR bumps the rocm-libraries submodule
+        value: ${{ jobs.setup.outputs.rocm_libraries_bump }}
 
 permissions:
   contents: read
@@ -51,6 +54,7 @@ jobs:
       test_type: ${{ steps.configure.outputs.test_type }}
       windows_test_labels: ${{ steps.configure.outputs.windows_test_labels }}
       rocm_package_version: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
+      rocm_libraries_bump: ${{ steps.configure.outputs.rocm_libraries_bump }}
     steps:
       - name: Checking out repository
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1

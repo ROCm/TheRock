@@ -160,6 +160,13 @@ def check_for_non_skippable_path(paths: Optional[Iterable[str]]) -> bool:
     return any(not is_path_skippable(p) for p in paths)
 
 
+def did_bump_rocm_libraries(modified_paths: Optional[Iterable[str]]) -> bool:
+    """Returns true if the PR updates the rocm-libraries submodule gitlink."""
+    if modified_paths is None:
+        return False
+    return "rocm-libraries" in set(modified_paths)
+
+
 GITHUB_WORKFLOWS_CI_PATTERNS = [
     "setup.yml",
     "ci*.yml",
@@ -667,6 +674,7 @@ def main(base_args, linux_families, windows_families):
     print("")
 
     test_type = "smoke"
+    rocm_libraries_bump = False
 
     # In the case of a scheduled run, we always want to build and we want to run full tests
     if is_schedule:
@@ -675,6 +683,9 @@ def main(base_args, linux_families, windows_families):
     else:
         modified_paths = get_modified_paths(base_ref)
         print("modified_paths (max 200):", modified_paths[:200])
+        rocm_libraries_bump = did_bump_rocm_libraries(modified_paths)
+        if rocm_libraries_bump:
+            print("Detected rocm-libraries submodule bump")
         print(f"Checking modified files since this had a {github_event_name} trigger")
         # TODO(#199): other behavior changes
         #     * workflow_dispatch or workflow_call with inputs controlling enabled jobs?
@@ -727,6 +738,7 @@ def main(base_args, linux_families, windows_families):
         "windows_test_labels": json.dumps(windows_test_output),
         "enable_build_jobs": json.dumps(enable_build_jobs),
         "test_type": test_type,
+        "rocm_libraries_bump": json.dumps(rocm_libraries_bump),
     }
     gha_set_output(output)
 
