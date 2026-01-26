@@ -88,18 +88,6 @@ jobs:
         with:
           python-version: ${{ inputs.python_version }}
 
-      - name: Summarize workflow inputs
-        run: |
-          echo "## Test ROCm Wheels" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Input | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| GPU Family | \`${{ inputs.amdgpu_family }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Package Version | \`${{ inputs.package_version }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Index URL | \`${{ inputs.package_index_url }}/${{ inputs.amdgpu_family }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Python Version | \`${{ inputs.python_version }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Runner | \`${{ inputs.test_runs_on }}\` |" >> $GITHUB_STEP_SUMMARY
-
       - name: Set up virtual environment and install ROCm packages
         run: |
           python build_tools/setup_venv.py ${VENV_DIR} \
