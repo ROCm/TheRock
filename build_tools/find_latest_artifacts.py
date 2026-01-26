@@ -47,7 +47,7 @@ def find_latest_artifacts(
     - A workflow failed for other families but this family succeeded
 
     Args:
-        artifact_group: Artifact group to find (e.g., "gfx94X-dcgpu", ""gfx950-dcgpu-asan")
+        artifact_group: Artifact group to find (e.g., "gfx94X-dcgpu", "gfx950-dcgpu-asan")
         github_repository_name: GitHub repository in "owner/repo" format
         workflow_file_name: Workflow filename, or None to infer from repo
         branch: Branch name to search (default: "main")
@@ -123,7 +123,7 @@ def main(argv: list[str] | None = None) -> int:
         "--workflow",
         type=str,
         default="ci.yml",
-        help="Workflow filename that produces artifats (default: infer from repo, e.g. ci.yml in TheRock)",
+        help="Workflow filename that produces artifacts (default: infer from repo, e.g. ci.yml in TheRock)",
     )
     parser.add_argument(
         "--platform",

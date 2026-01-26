@@ -228,7 +228,7 @@ def main(argv: list[str] | None = None) -> int:
         "--workflow",
         type=str,
         default="ci.yml",
-        help="Workflow filename that produces artifats (default: ci.yml)",
+        help="Workflow filename that produces artifacts (default: ci.yml)",
     )
     parser.add_argument(
         "--platform",
