@@ -62,7 +62,7 @@ def do_checkout(args: argparse.Namespace):
             elif pin_minor == 9:
                 args.repo_hashtag = "v0.9.1"
             elif pin_minor == 10:
-                args.repo_hashtag = "v0.10-rc1"
+                args.repo_hashtag = "v0.10.0"
             elif pin_minor == 11:
                 args.repo_hashtag = "nightly"
             else:
