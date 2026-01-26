@@ -21,4 +21,5 @@ updates:
     target-branch: "main"
     allow:
       - dependency-name: "rocm-systems"
+      - dependency-name: "rocm-libraries"
     open-pull-requests-limit: 10
