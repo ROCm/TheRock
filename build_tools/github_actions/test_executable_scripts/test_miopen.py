@@ -42,6 +42,7 @@ environ_vars["ROCM_PATH"] = str(ROCM_PATH)
 logging.basicConfig(level=logging.INFO)
 ##############################################
 
+
 def get_available_gpu_exclusion_tests():
     """
     Get all available GPU exclusion test architectures from ctest -N.
@@ -159,6 +160,7 @@ def build_ctest_command(category, gpu_arch, available_gpu_archs):
         print(f"# No GPU exclusion found for {gpu_arch}, excluding all ex_gpu tests")
 
     return cmd
+
 
 def main():
     # Use TEST_TYPE from environment variable, convert "smoke" to "quick"
