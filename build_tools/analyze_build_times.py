@@ -35,7 +35,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
 
-if platform.system() == "Windows":
+SYSTEM = platform.system()
+
+if SYSTEM == "Windows":
     import wmi
 else:
     wmi = None
@@ -285,8 +287,7 @@ def get_system_info() -> Dict[str, str]:
     info["memory_gb"] = f"{mem.total / (1024 ** 3):.1f}"
 
     # Get CPU model - platform-specific
-    system = platform.system()
-    if system == "Linux":
+    if SYSTEM == "Linux":
         try:
             with open("/proc/cpuinfo", "r") as f:
                 for line in f:
@@ -295,7 +296,7 @@ def get_system_info() -> Dict[str, str]:
                         break
         except (FileNotFoundError, IOError):
             pass
-    elif system == "Windows":
+    elif SYSTEM == "Windows":
         if wmi is not None:
             w = wmi.WMI()
             for processor in w.Win32_Processor():
