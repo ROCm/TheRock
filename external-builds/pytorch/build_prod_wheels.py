@@ -1011,24 +1011,6 @@ def do_build_pytorch_torchcodec(
     if args.clean:
         remove_dir_if_exists(pytorch_torchcodec_dir / "build")
 
-    # verify that installed setuptools > 80.0 (80.9.0 tested)
-    exec(
-        [sys.executable, "-m", "pip", "install", "setuptools>80.0"],
-        cwd=pytorch_torchcodec_dir,
-        env=env,
-    )
-    # pybind11
-    exec(
-        [sys.executable, "-m", "pip", "install", "pybind11"],
-        cwd=pytorch_torchcodec_dir,
-        env=env,
-    )
-    # cmake support for pybind11
-    exec(
-        [sys.executable, "-m", "pip", "install", "pybind11[global]"],
-        cwd=pytorch_torchcodec_dir,
-        env=env,
-    )
     # torchcodec build
     exec(
         [sys.executable, "-m", "build", "--wheel", "-vvv", "--no-isolation"],
