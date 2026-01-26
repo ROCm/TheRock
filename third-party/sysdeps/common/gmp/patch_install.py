@@ -33,7 +33,10 @@ def relativize_pc_file(pc_file: Path) -> None:
     content = content.replace(f"{original_prefix}/", "${prefix}/")
     pc_file.write_text(content)
 
-def update_library_links(libfile: Path, linker_name: str, patchelf: str = "patchelf") -> None:
+
+def update_library_links(
+    libfile: Path, linker_name: str, patchelf: str = "patchelf"
+) -> None:
     """
     Normalize a shared library so that its real file is named exactly as its ELF SONAME,
     and ensure a canonical linker-visible symlink exists.
@@ -58,7 +61,7 @@ def update_library_links(libfile: Path, linker_name: str, patchelf: str = "patch
 
     patchelf : str, optional
     Path to the `patchelf` executable used to extract the SONAME.
-  """
+    """
     # Ensure file exists
     if not libfile.exists():
         raise FileNotFoundError(f"File '{libfile}' not found")
@@ -67,9 +70,10 @@ def update_library_links(libfile: Path, linker_name: str, patchelf: str = "patch
     # Get SONAME
     try:
         lib_soname = subprocess.check_output(
-                 [patchelf, "--print-soname", str(libfile)],
-                  stderr=subprocess.DEVNULL,
-                  text=True ).strip()
+            [patchelf, "--print-soname", str(libfile)],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        ).strip()
     except subprocess.CalledProcessError:
         lib_soname = ""
 
@@ -140,7 +144,7 @@ if platform.system() == "Linux":
     # Update library linking
     source = lib_dir / "librocm_sysdeps_gmp.so"
     update_library_links(source, "libgmp.so")
-    
+
     # Fix .pc files to use relocatable paths.
     pkgconfig_dir = lib_dir / "pkgconfig"
     if pkgconfig_dir.exists():
