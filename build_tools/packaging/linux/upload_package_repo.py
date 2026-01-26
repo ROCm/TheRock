@@ -750,16 +750,19 @@ def main():
     parser.add_argument(
         "--job",
         default="dev",
-        choices=["dev", "nightly"],
+        choices=["dev", "nightly", "prerelease"],
         help="Enable dev or nightly shared repo",
     )
 
     args = parser.parse_args()
     package_dir = find_package_dir()
 
-    # TODO : Add the cases for release/prerelease
+    # Setup the prefix based on build type
     if args.job in ["nightly", "dev"]:
         prefix = f"{args.pkg_type}/{yyyymmdd()}-{args.artifact_id}"
+        dedupe = True
+    elif args.job == "prerelease":
+        prefix = f"v3/packages/{args.pkg_type}"
         dedupe = True
 
     if args.pkg_type == "deb":
