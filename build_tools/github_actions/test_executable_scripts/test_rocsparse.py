@@ -28,10 +28,8 @@ if test_type == "smoke":
         f"{THEROCK_DIR}/build/share/rocsparse/test/rocsparse_smoke.yaml",
     ]
 else:
-    # TODO(#2616): Enable full tests once known test issues are resolved
     test_filter = [
-        "--yaml",
-        f"{THEROCK_DIR}/build/share/rocsparse/test/rocsparse_smoke.yaml",
+        "--gtest_filter=*quick*-*known_bug*",
     ]
 
 cmd = [

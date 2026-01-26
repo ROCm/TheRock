@@ -143,10 +143,10 @@ test_matrix = {
     "rocsparse": {
         "job_name": "rocsparse",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 15,
+        "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_rocsparse.py')}",
         "platform": ["linux", "windows"],
-        "total_shards": 1,
+        "total_shards": 4,
     },
     "hipsparselt": {
         "job_name": "hipsparselt",
