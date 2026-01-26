@@ -74,7 +74,6 @@ jobs:
         shell: bash
     env:
       VENV_DIR: ${{ github.workspace }}/.venv
-      AMDGPU_FAMILY: ${{ inputs.amdgpu_family }}
 
     steps:
       - name: Checkout
