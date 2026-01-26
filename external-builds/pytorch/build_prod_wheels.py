@@ -972,7 +972,7 @@ def do_build_pytorch_torchcodec(
     except ValueError:
         print("Error, Skipping pytorch torchcodec build")
         print(
-            f"Could not convert version string major and minor to int. Check the format of '{version_string}'."
+            f"Could not convert version string major and minor to int. Check the format of '{build_version}'."
         )
         return
     if version_major_int == 0 and version_minor_int < 9:
@@ -1003,7 +1003,6 @@ def do_build_pytorch_torchcodec(
             "Python3_ROOT_DIR": python_home_dir,
         }
     )
-    print("do_build_pytorch_torchcodec")
     print(f"    BUILD_VERSION: {env['BUILD_VERSION']}")
     print(f"    BUILD_NUMBER:  {env['BUILD_NUMBER']}")
     print(f"    Python3_ROOT_DIR: {env['Python3_ROOT_DIR']}")
