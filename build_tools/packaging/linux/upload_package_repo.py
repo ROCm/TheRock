@@ -762,7 +762,7 @@ def main():
         prefix = f"{args.pkg_type}/{yyyymmdd()}-{args.artifact_id}"
         dedupe = True
     elif args.job == "prerelease":
-        prefix = f"v3/packages/{args.pkg_type}"
+        prefix = f"v3/{args.pkg_type}"
         dedupe = True
 
     if args.pkg_type == "deb":
