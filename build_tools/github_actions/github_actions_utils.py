@@ -458,6 +458,31 @@ def gha_query_last_successful_workflow_run(
     return None
 
 
+def gha_query_recent_branch_commits(
+    github_repository_name: str = "ROCm/TheRock",
+    branch: str = "main",
+    max_count: int = 50,
+) -> list[str]:
+    """Gets the list of recent commit SHAs for a branch via the GitHub API.
+
+    Commits could also be enumerated via local `git log` commands, but using
+    the API ensures that we get the latest commits regardless of local
+    repository state.
+
+    Args:
+        github_repository_name: Repository in "owner/repo" format
+        branch: Branch name (default: "main")
+        max_count: Maximum number of commits to retrieve (max 100 per API)
+
+    Returns:
+        List of commit SHAs, most recent first.
+    """
+    url = f"https://api.github.com/repos/{github_repository_name}/commits?sha={branch}&per_page={max_count}"
+    response = gha_send_request(url)
+
+    return [commit["sha"] for commit in response]
+
+
 def retrieve_bucket_info(
     github_repository: str | None = None,
     workflow_run_id: str | None = None,
