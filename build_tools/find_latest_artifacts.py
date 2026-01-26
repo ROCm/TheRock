@@ -7,9 +7,9 @@ This script
 It skips over commits that are missing artifacts for any reason.
 
 Usage:
-    python find_latest_artifacts.py --amdgpu-family gfx94X-dcgpu
+    python find_latest_artifacts.py --artifact-group gfx94X-dcgpu
 
-For script-to-script composition, import and call find_latest_artifacts():
+For script-to-script composition:
 
     from find_latest_artifacts import find_latest_artifacts
 
@@ -66,6 +66,7 @@ def find_latest_artifacts(
             max_count=max_commits,
         )
     except Exception as e:
+        # TODO(scotttodd): propagate 'e'... depending on what usage looks like
         print(f"Error getting commits from GitHub: {e}", file=sys.stderr)
         return None
 
@@ -108,7 +109,7 @@ def find_latest_artifacts(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Find the most recent commit on main with CI artifacts",
+        description="Find the most recent commit on a branch with CI artifacts",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 

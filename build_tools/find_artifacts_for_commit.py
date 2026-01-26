@@ -8,9 +8,9 @@ Usage:
     python find_artifacts_for_commit.py \
         --commit abc123 \
         --repo ROCm/TheRock \
-        --amdgpu-family gfx94X-dcgpu
+        --artifact-group gfx94X-dcgpu
 
-For script-to-script composition, import and call find_artifacts_for_commit():
+For script-to-script composition:
 
     from find_artifacts_for_commit import find_artifacts_for_commit, ArtifactRunInfo
 
@@ -26,8 +26,6 @@ For script-to-script composition, import and call find_artifacts_for_commit():
 import argparse
 from dataclasses import dataclass
 import platform as platform_module
-import re
-import subprocess
 import sys
 import urllib.request
 import urllib.error
@@ -132,6 +130,9 @@ def check_if_artifacts_exist(info: ArtifactRunInfo) -> bool:
     Performs an HTTP HEAD request to the S3 index URL to verify artifacts
     have been uploaded. Note that this does not guarantee that all artifacts
     exist. Artifacts could be partially uploaded.
+
+    TODO(scotttodd): plumb through a list of artifact keys to check for, then
+       use `ArtifactBackend::artifact_exists(artifact_key)`
 
     Args:
         info: ArtifactRunInfo with the S3 location to check
