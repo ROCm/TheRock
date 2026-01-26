@@ -853,7 +853,7 @@ def main():
     args = parser.parse_args()
     package_dir = find_package_dir()
 
-    # TODO : Add the cases for release/prerelease
+    # Setup the prefix based on build type
     if args.job in ["nightly", "dev"]:
         prefix = f"{args.pkg_type}/{yyyymmdd()}-{args.artifact_id}"
         dedupe = True

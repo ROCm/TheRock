@@ -116,7 +116,7 @@ jobs:
           echo "Fetching artifacts for build ${{ inputs.artifact_run_id }}"
           python ./build_tools/fetch_artifacts.py \
             --run-id=${{ env.ARTIFACT_RUN_ID }} \
-            --run-github-repo="ROCm/TheRock" \
+            --run-github-repo=${{ github.repository }} \
             --artifact-group=${{ inputs.artifact_group }} \
             --output-dir=${{ env.ARTIFACTS_DIR }}
 
