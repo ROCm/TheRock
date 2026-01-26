@@ -11,6 +11,7 @@ from github_actions_utils import (
     GitHubAPI,
     GitHubAPIError,
     gha_query_last_successful_workflow_run,
+    gha_query_recent_branch_commits,
     gha_query_workflow_run_by_id,
     gha_query_workflow_runs_for_commit,
     is_authenticated_github_api_available,
@@ -473,6 +474,35 @@ class GitHubActionsUtilsTest(unittest.TestCase):
             gha_query_last_successful_workflow_run(
                 "ROCm/TheRock", "nonexistent_workflow_12345.yml", "main"
             )
+
+    @_skip_unless_authenticated_github_api_is_available
+    def test_gha_query_recent_branch_commits(self):
+        """Test querying recent commits on a branch."""
+        import re
+
+        sha_pattern = re.compile(r"^[0-9a-f]{40}$")
+
+        # Test default parameters (main branch)
+        commits = gha_query_recent_branch_commits("ROCm/TheRock")
+        self.assertIsInstance(commits, list)
+        self.assertGreater(len(commits), 0)
+
+        # Verify each commit SHA is a valid 40-character hex string
+        for sha in commits:
+            self.assertIsInstance(sha, str)
+            self.assertRegex(sha, sha_pattern, f"Invalid SHA format: {sha}")
+
+        # Test max_count parameter limits results
+        commits_limited = gha_query_recent_branch_commits(
+            "ROCm/TheRock", branch="main", max_count=5
+        )
+        self.assertIsInstance(commits_limited, list)
+        self.assertLessEqual(len(commits_limited), 5)
+        self.assertGreater(len(commits_limited), 0)
+
+        # Each limited result should also be a valid SHA
+        for sha in commits_limited:
+            self.assertRegex(sha, sha_pattern)
 
     # -------------------------------------------------------------------------
     # retrieve_bucket_info tests
