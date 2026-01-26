@@ -48,6 +48,12 @@ For example, if the URL is `https://github.com/ROCm/TheRock/actions/runs/1557562
 
 #### Finding GitHub Run IDs Programmatically
 
+> [!TIP]
+> These scripts use the GitHub API which rate limits unauthenticated requests.
+>
+> Installing the [`gh` CLI](https://cli.github.com/) and authenticating with
+> [`gh auth login`](https://cli.github.com/manual/gh_auth_login) is recommended.
+
 If you have a commit SHA and want to find the corresponding run ID, use
 `find_artifacts_for_commit.py`:
 
