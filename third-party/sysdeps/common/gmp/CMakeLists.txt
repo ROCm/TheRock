@@ -8,6 +8,8 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       # Originally mirrored from: https://gmplib.org/download/gmp/gmp-6.3.0.tar.xz
       URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/gmp-6.3.0.tar.xz"
       URL_HASH "SHA512=e85a0dab5195889948a3462189f0e0598d331d3457612e2d3350799dba2e244316d256f8161df5219538eb003e4b5343f989aaa00f96321559063ed8c8f29fd2"
+      PATCH_COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/build_tools/patch_third_party_source.py ${CMAKE_SOURCE_DIR}/patches/third-party/gmp
+
       TOUCH "${_download_stamp}"
       # We need DOWNLOAD_EXTRACT_TIMESTAMP set to TRUE to preserve the timestamp
       # of the extracted sources, otherwise the build system will notice

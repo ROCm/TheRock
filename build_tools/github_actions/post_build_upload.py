@@ -46,7 +46,7 @@ def log(*args):
     sys.stdout.flush()
 
 
-def exec(cmd: list[str], cwd: Path):
+def run_command(cmd: list[str], cwd: Path):
     log(f"++ Exec [{cwd}]$ {shlex.join(cmd)}")
     subprocess.run(cmd, check=True)
 
@@ -136,7 +136,7 @@ def index_log_files(build_dir: Path, artifact_group: str):
         log(
             f"[INFO] Found '{log_dir}' directory. Indexing '*.log' and '*.tar.gz' files..."
         )
-        exec(
+        run_command(
             [
                 sys.executable,
                 str(indexer_path),
@@ -196,7 +196,7 @@ def upload_artifacts(artifact_group: str, build_dir: Path, bucket_uri: str):
         "--region",
         "us-east-2",
     ]
-    exec(cmd, cwd=Path.cwd())
+    run_command(cmd, cwd=Path.cwd())
 
     # Uploading index.html to S3 bucket
     cmd = [
@@ -206,7 +206,7 @@ def upload_artifacts(artifact_group: str, build_dir: Path, bucket_uri: str):
         str(build_dir / "artifacts" / "index.html"),
         f"{bucket_uri}/index-{artifact_group}.html",
     ]
-    exec(cmd, cwd=Path.cwd())
+    run_command(cmd, cwd=Path.cwd())
 
 
 def upload_logs_to_s3(artifact_group: str, build_dir: Path, bucket_uri: str):
