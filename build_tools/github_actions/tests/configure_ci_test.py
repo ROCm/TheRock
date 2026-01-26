@@ -528,9 +528,7 @@ class ConfigureCITest(unittest.TestCase):
     def test_multi_arch_mixed_sanity_check_families(self):
         """Test multi_arch mode with mix of families with/without sanity_check_only_for_family."""
         # Get real matrix and modify it to ensure we have mixed sanity_check_only_for_family values
-        original_matrix = configure_ci.get_all_families_for_trigger_types(
-            ["presubmit"]
-        )
+        original_matrix = configure_ci.get_all_families_for_trigger_types(["presubmit"])
 
         # Deep copy to avoid mutating the original module-level dict
         modified_matrix = copy.deepcopy(original_matrix)
@@ -546,8 +544,12 @@ class ConfigureCITest(unittest.TestCase):
         modified_matrix["gfx110x"]["linux"]["sanity_check_only_for_family"] = True
 
         # Extract expected family names from matrix
-        gfx94x_family = modified_matrix["gfx94x"]["linux"]["family"]  # e.g., "gfx94X-dcgpu"
-        gfx110x_family = modified_matrix["gfx110x"]["linux"]["family"]  # e.g., "gfx110X-all"
+        gfx94x_family = modified_matrix["gfx94x"]["linux"][
+            "family"
+        ]  # e.g., "gfx94X-dcgpu"
+        gfx110x_family = modified_matrix["gfx110x"]["linux"][
+            "family"
+        ]  # e.g., "gfx110X-all"
 
         # Patch the function to return our modified matrix
         with patch(
