@@ -13,7 +13,7 @@ Usage:
 python build_tools/install_rocm_from_artifacts.py
     (--artifact-group ARTIFACT_GROUP | --amdgpu_family AMDGPU_FAMILY)
     [--output-dir OUTPUT_DIR]
-    (--run-id RUN_ID | --release RELEASE | --latest | --input-dir INPUT_DIR)
+    (--run-id RUN_ID | --release RELEASE | --latest-release | --input-dir INPUT_DIR)
     [--dry-run]
     [--run-github-repo RUN_GITHUB_REPO]
     [--aqlprofile | --no-aqlprofile]
@@ -71,15 +71,16 @@ Examples:
 - Downloads and unpacks the latest nightly release for gfx110X:
     ```
     python build_tools/install_rocm_from_artifacts.py \
-        --latest \
+        --latest-release \
         --amdgpu-family gfx110X-all
     ```
 - Shows what would be downloaded without actually downloading (works with any mode):
     ```
     python build_tools/install_rocm_from_artifacts.py \
-        --latest \
+        --latest-release \
         --amdgpu-family gfx110X-all \
         --dry-run
+
     python build_tools/install_rocm_from_artifacts.py \
         --release 7.11.0a20260119 \
         --amdgpu-family gfx110X-all \
@@ -220,7 +221,7 @@ def _fetch_and_sort_nightly_releases(
     return releases
 
 
-def discover_latest_nightly_release(
+def discover_latest_release(
     artifact_group: str,
     platform_str: str = PLATFORM,
 ) -> Optional[tuple[str, str]]:
@@ -486,13 +487,13 @@ def retrieve_artifacts_by_input_dir(args):
         log(str(ex))
 
 
-def retrieve_artifacts_by_latest(args):
+def retrieve_artifacts_by_latest_release(args):
     """
     Find and retrieve the latest nightly release from S3.
     """
     log(f"Finding latest nightly release for {args.artifact_group}...")
 
-    result = discover_latest_nightly_release(artifact_group=args.artifact_group)
+    result = discover_latest_release(artifact_group=args.artifact_group)
 
     if result is None:
         log(f"ERROR: No nightly release found for '{args.artifact_group}'")
@@ -530,8 +531,8 @@ def run(args):
         retrieve_artifacts_by_run_id(args)
     elif args.release:
         retrieve_artifacts_by_release(args)
-    elif args.latest:
-        retrieve_artifacts_by_latest(args)
+    elif args.latest_release:
+        retrieve_artifacts_by_latest_release(args)
 
     if args.input_dir:
         retrieve_artifacts_by_input_dir(args)
@@ -571,7 +572,7 @@ def main(argv):
     )
 
     group.add_argument(
-        "--latest",
+        "--latest-release",
         action="store_true",
         help="Install the latest nightly release (built daily from main branch)",
     )

@@ -12,9 +12,11 @@ The script supports the following command-line options:
 | `--base-only`       | Flag   | Include only base artifacts (minimal installation)                                       |
 | `--blas`            | Flag   | Include BLAS artifacts                                                                   |
 | `--debug-tools`     | Flag   | Include the ROCm debugging tools artifacts                                               |
+| `--dry-run`         | Flag   | Show what would be downloaded without actually downloading                               |
 | `--fft`             | Flag   | Include FFT artifacts                                                                    |
 | `--hipdnn`          | Flag   | Include hipDNN artifacts                                                                 |
 | `--input-dir`       | String | Existing TheRock directory to copy from                                                  |
+| `--latest-release`  | Flag   | Install the latest nightly release (built daily from main branch)                        |
 | `--miopen`          | Flag   | Include MIOpen artifacts                                                                 |
 | `--output-dir`      | Path   | Output directory for TheRock installation (default: `./therock-build`)                   |
 | `--prim`            | Flag   | Include primitives artifacts                                                             |
@@ -41,9 +43,11 @@ For example, if the URL is `https://github.com/ROCm/TheRock/actions/runs/1557562
 
 ### Finding Release Versions
 
+#### Finding Release Versions Manually
+
 TheRock provides two types of release tarballs:
 
-#### Nightly Tarballs
+##### Nightly Tarballs
 
 Nightly tarballs are built daily and follow the naming pattern: `MAJOR.MINOR.aYYYYMMDD`
 
@@ -67,7 +71,7 @@ Nightly tarballs are built daily and follow the naming pattern: `MAJOR.MINOR.aYY
 - `a` = alpha version
 - `YYYYMMDD` = build date (e.g., `20251124` = November 24, 2025)
 
-#### Dev Tarballs
+##### Dev Tarballs
 
 Dev tarballs are built from specific commits and follow the naming pattern: `MAJOR.MINOR.PATCH.dev0+{COMMIT_HASH}`
 
@@ -94,6 +98,25 @@ Dev tarballs are built from specific commits and follow the naming pattern: `MAJ
 > [!TIP]
 > You can browse the S3 buckets directly in your browser to see all available versions and GPU families.
 > The version string to use with `--release` is always the portion of the filename between the GPU family and `.tar.gz`.
+
+#### Using The Latest Release
+
+To automatically install the latest nightly release without manually finding a version string, use the `--latest-release` flag:
+
+```bash
+python build_tools/install_rocm_from_artifacts.py \
+    --latest-release \
+    --amdgpu-family gfx110X-all
+```
+
+To preview what would be downloaded without actually downloading:
+
+```bash
+python build_tools/install_rocm_from_artifacts.py \
+    --latest-release \
+    --amdgpu-family gfx110X-all \
+    --dry-run
+```
 
 ### Fetching Artifacts from Other Repositories
 
