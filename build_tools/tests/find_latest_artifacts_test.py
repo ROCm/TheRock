@@ -22,14 +22,15 @@ def _skip_unless_authenticated_github_api_is_available(test_func):
 #
 # These tests mock two layers:
 #
-# 1. get_recent_branch_commits_via_api() — Mocked to return a fixed list of
+# 1. gha_query_recent_branch_commits() — Mocked to return a fixed list of
 #    known commit SHAs. This avoids dependence on the evolving tip of any
 #    branch and lets us control which commits are "searched".
 #
 # 2. check_if_artifacts_exist() — Mocked because S3 artifacts are subject to
 #    a retention policy and may be deleted for older runs. By controlling this
-#    mock's return value per-commit, we simulate scenarios like flaky builds
-#    where some commits are missing artifacts for a given artifact group.
+#    mock's return value per-commit, we can test commits/workflows that have
+#    already expired and we can also simulate missing artifacts due to failed
+#    builds.
 #
 # The GitHub API calls within find_artifacts_for_commit() (querying workflow
 # runs by commit SHA, retrieving bucket info) are NOT mocked — they hit the
@@ -37,15 +38,14 @@ def _skip_unless_authenticated_github_api_is_available(test_func):
 # unlikely to change. If tests become brittle, we can re-evaluate.
 
 # Two consecutive commits on TheRock main with CI workflow runs, simulating
-# what get_recent_branch_commits_via_api() would return (most recent first).
+# what gha_query_recent_branch_commits() would return (most recent first).
 #
 #   https://github.com/ROCm/TheRock/commit/5ea91c38d19237716ba0c9382928da12a6fc9b08
 #   CI run: https://github.com/ROCm/TheRock/actions/runs/21249928112
-THEROCK_COMMIT_NEWER = "5ea91c38d19237716ba0c9382928da12a6fc9b08"
-
+TEST_THEROCK_COMMIT_NEWER = "5ea91c38d19237716ba0c9382928da12a6fc9b08"
 #   https://github.com/ROCm/TheRock/commit/02946b2295f8fae31fd506c1be6735b5911cdc6b
 #   CI run: https://github.com/ROCm/TheRock/actions/runs/21243829022
-THEROCK_COMMIT_OLDER = "02946b2295f8fae31fd506c1be6735b5911cdc6b"
+TEST_THEROCK_COMMIT_OLDER = "02946b2295f8fae31fd506c1be6735b5911cdc6b"
 
 
 class FindLatestArtifactsTest(unittest.TestCase):
@@ -53,12 +53,12 @@ class FindLatestArtifactsTest(unittest.TestCase):
 
     @_skip_unless_authenticated_github_api_is_available
     @mock.patch("find_artifacts_for_commit.check_if_artifacts_exist", return_value=True)
-    @mock.patch("find_latest_artifacts.get_recent_branch_commits_via_api")
+    @mock.patch("find_latest_artifacts.gha_query_recent_branch_commits")
     def test_returns_first_commit_with_artifacts(self, mock_commits, mock_check):
         """Returns the first commit that has artifacts."""
         mock_commits.return_value = [
-            THEROCK_COMMIT_NEWER,
-            THEROCK_COMMIT_OLDER,
+            TEST_THEROCK_COMMIT_NEWER,
+            TEST_THEROCK_COMMIT_OLDER,
         ]
 
         info = find_latest_artifacts(
@@ -68,21 +68,21 @@ class FindLatestArtifactsTest(unittest.TestCase):
         )
 
         self.assertIsNotNone(info)
-        self.assertEqual(info.git_commit_sha, THEROCK_COMMIT_NEWER)
+        self.assertEqual(info.git_commit_sha, TEST_THEROCK_COMMIT_NEWER)
 
     @_skip_unless_authenticated_github_api_is_available
     @mock.patch("find_artifacts_for_commit.check_if_artifacts_exist")
-    @mock.patch("find_latest_artifacts.get_recent_branch_commits_via_api")
+    @mock.patch("find_latest_artifacts.gha_query_recent_branch_commits")
     def test_skips_commits_missing_artifacts(self, mock_commits, mock_check):
         """Skips commits whose artifacts are missing (e.g. flaky build)."""
         mock_commits.return_value = [
-            THEROCK_COMMIT_NEWER,
-            THEROCK_COMMIT_OLDER,
+            TEST_THEROCK_COMMIT_NEWER,
+            TEST_THEROCK_COMMIT_OLDER,
         ]
 
         # First commit's artifacts are missing, second commit's are present
         def check_by_commit(info):
-            return info.git_commit_sha != THEROCK_COMMIT_NEWER
+            return info.git_commit_sha != TEST_THEROCK_COMMIT_NEWER
 
         mock_check.side_effect = check_by_commit
 
@@ -93,18 +93,18 @@ class FindLatestArtifactsTest(unittest.TestCase):
         )
 
         self.assertIsNotNone(info)
-        self.assertEqual(info.git_commit_sha, THEROCK_COMMIT_OLDER)
+        self.assertEqual(info.git_commit_sha, TEST_THEROCK_COMMIT_OLDER)
 
     @_skip_unless_authenticated_github_api_is_available
     @mock.patch(
         "find_artifacts_for_commit.check_if_artifacts_exist", return_value=False
     )
-    @mock.patch("find_latest_artifacts.get_recent_branch_commits_via_api")
+    @mock.patch("find_latest_artifacts.gha_query_recent_branch_commits")
     def test_returns_none_when_all_artifacts_missing(self, mock_commits, mock_check):
         """Returns None when no commits have artifacts available."""
         mock_commits.return_value = [
-            THEROCK_COMMIT_NEWER,
-            THEROCK_COMMIT_OLDER,
+            TEST_THEROCK_COMMIT_NEWER,
+            TEST_THEROCK_COMMIT_OLDER,
         ]
 
         info = find_latest_artifacts(

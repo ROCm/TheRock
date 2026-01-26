@@ -38,16 +38,22 @@ def _skip_unless_authenticated_github_api_is_available(test_func):
 # Known commits with CI workflow runs in ROCm/TheRock:
 #   https://github.com/ROCm/TheRock/commit/77f0cb2112d1d0aaae0de6088a6e4337f2488233
 #   CI run: https://github.com/ROCm/TheRock/actions/runs/20083647898
-THEROCK_MAIN_COMMIT = "77f0cb2112d1d0aaae0de6088a6e4337f2488233"
-THEROCK_MAIN_RUN_ID = "20083647898"
+TEST_THEROCK_MAIN_COMMIT = "77f0cb2112d1d0aaae0de6088a6e4337f2488233"
+TEST_THEROCK_MAIN_RUN_ID = "20083647898"
 
 #   https://github.com/ROCm/TheRock/commit/62bc1eaa02e6ad1b49a718eed111cf4c9f03593a
 #   CI run: https://github.com/ROCm/TheRock/actions/runs/20384488184
 #   (PR from fork: ScottTodd/TheRock)
 #   (attribution is fuzzy here, since branches from forks are often deleted,
 #    we really just want to test that therock-ci-artifacts-external is used)
-THEROCK_FORK_COMMIT = "62bc1eaa02e6ad1b49a718eed111cf4c9f03593a"
-THEROCK_FORK_RUN_ID = "20384488184"
+TEST_THEROCK_FORK_COMMIT = "62bc1eaa02e6ad1b49a718eed111cf4c9f03593a"
+TEST_THEROCK_FORK_RUN_ID = "20384488184"
+
+# Known commit with CI workflow run in ROCm/rocm-libraries:
+#   https://github.com/ROCm/rocm-libraries/commit/ab692342ac4d00268ac8a5a4efbc144c194cb45a
+#   CI run: https://github.com/ROCm/rocm-libraries/actions/runs/21365647639
+TEST_ROCM_LIBRARIES_COMMIT = "ab692342ac4d00268ac8a5a4efbc144c194cb45a"
+TEST_ROCM_LIBRARIES_RUN_ID = "21365647639"
 
 
 class FindArtifactsForCommitTest(unittest.TestCase):
@@ -58,7 +64,7 @@ class FindArtifactsForCommitTest(unittest.TestCase):
     def test_therock_main_commit(self, mock_check):
         """Known main commit returns ArtifactRunInfo with correct metadata."""
         info = find_artifacts_for_commit(
-            commit=THEROCK_MAIN_COMMIT,
+            commit=TEST_THEROCK_MAIN_COMMIT,
             github_repository_name="ROCm/TheRock",
             artifact_group="gfx110X-all",
             platform="linux",
@@ -66,10 +72,10 @@ class FindArtifactsForCommitTest(unittest.TestCase):
 
         self.assertIsNotNone(info)
         self.assertIsInstance(info, ArtifactRunInfo)
-        self.assertEqual(info.git_commit_sha, THEROCK_MAIN_COMMIT)
+        self.assertEqual(info.git_commit_sha, TEST_THEROCK_MAIN_COMMIT)
         self.assertEqual(info.github_repository_name, "ROCm/TheRock")
         self.assertEqual(info.workflow_file_name, "ci.yml")
-        self.assertEqual(info.workflow_run_id, THEROCK_MAIN_RUN_ID)
+        self.assertEqual(info.workflow_run_id, TEST_THEROCK_MAIN_RUN_ID)
         self.assertEqual(info.s3_bucket, "therock-ci-artifacts")
         self.assertEqual(info.external_repo, "")
         self.assertEqual(info.platform, "linux")
@@ -82,14 +88,14 @@ class FindArtifactsForCommitTest(unittest.TestCase):
     def test_therock_fork_commit(self, mock_check):
         """Fork commit returns ArtifactRunInfo with external bucket."""
         info = find_artifacts_for_commit(
-            commit=THEROCK_FORK_COMMIT,
+            commit=TEST_THEROCK_FORK_COMMIT,
             github_repository_name="ROCm/TheRock",
             artifact_group="gfx110X-all",
             platform="linux",
         )
 
         self.assertIsNotNone(info)
-        self.assertEqual(info.workflow_run_id, THEROCK_FORK_RUN_ID)
+        self.assertEqual(info.workflow_run_id, TEST_THEROCK_FORK_RUN_ID)
         self.assertEqual(info.s3_bucket, "therock-ci-artifacts-external")
         self.assertEqual(info.external_repo, "ROCm-TheRock/")
 
@@ -100,7 +106,7 @@ class FindArtifactsForCommitTest(unittest.TestCase):
     def test_commit_with_runs_but_no_artifacts(self, mock_check):
         """Commit with workflow runs but no S3 artifacts returns None."""
         info = find_artifacts_for_commit(
-            commit=THEROCK_MAIN_COMMIT,
+            commit=TEST_THEROCK_MAIN_COMMIT,
             github_repository_name="ROCm/TheRock",
             artifact_group="gfx110X-all",
             platform="linux",
@@ -114,7 +120,7 @@ class FindArtifactsForCommitTest(unittest.TestCase):
     def test_platform_windows(self, mock_check):
         """Check that we can find artifacts for Windows as well as Linux."""
         info = find_artifacts_for_commit(
-            commit=THEROCK_MAIN_COMMIT,
+            commit=TEST_THEROCK_MAIN_COMMIT,
             github_repository_name="ROCm/TheRock",
             artifact_group="gfx110X-all",
             platform="windows",
@@ -123,6 +129,31 @@ class FindArtifactsForCommitTest(unittest.TestCase):
         self.assertIsNotNone(info)
         self.assertEqual(info.platform, "windows")
         self.assertIn("windows", info.s3_path)
+
+    @_skip_unless_authenticated_github_api_is_available
+    @mock.patch("find_artifacts_for_commit.check_if_artifacts_exist", return_value=True)
+    def test_rocm_libraries_commit(self, mock_check):
+        """rocm-libraries commit uses therock-ci.yml and external bucket."""
+        info = find_artifacts_for_commit(
+            commit=TEST_ROCM_LIBRARIES_COMMIT,
+            github_repository_name="ROCm/rocm-libraries",
+            workflow_file_name="therock-ci.yml",
+            artifact_group="gfx94X-dcgpu",
+            platform="linux",
+        )
+
+        self.assertIsNotNone(info)
+        self.assertIsInstance(info, ArtifactRunInfo)
+        self.assertEqual(info.git_commit_sha, TEST_ROCM_LIBRARIES_COMMIT)
+        self.assertEqual(info.github_repository_name, "ROCm/rocm-libraries")
+        self.assertEqual(info.workflow_file_name, "therock-ci.yml")
+        self.assertEqual(info.workflow_run_id, TEST_ROCM_LIBRARIES_RUN_ID)
+        self.assertEqual(info.s3_bucket, "therock-ci-artifacts-external")
+        self.assertEqual(info.external_repo, "ROCm-rocm-libraries/")
+        self.assertEqual(info.platform, "linux")
+        self.assertEqual(info.artifact_group, "gfx94X-dcgpu")
+
+        mock_check.assert_called()
 
 
 if __name__ == "__main__":
