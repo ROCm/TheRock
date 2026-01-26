@@ -672,6 +672,12 @@ def main(base_args, linux_families, windows_families):
     if is_schedule:
         enable_build_jobs = True
         test_type = "full"
+    # If PR targets a release branch, enforce full build and test coverage
+    elif is_pull_request and base_args.get("branch_name", "").startswith("release/"):
+        print(f"PR targets a release branch: {base_args.get('branch_name')}")
+        print("Running additional builds and enabling full test coverage.")
+        enable_build_jobs = True
+        test_type = "full"
     else:
         modified_paths = get_modified_paths(base_ref)
         print("modified_paths (max 200):", modified_paths[:200])
@@ -717,6 +723,7 @@ def main(base_args, linux_families, windows_families):
 * `windows_use_prebuilt_artifacts`: {json.dumps(base_args.get("windows_use_prebuilt_artifacts"))}
 * `enable_build_jobs`: {json.dumps(enable_build_jobs)}
 * `test_type`: {test_type}
+* `release_branch_full_tests`: {str(base_args.get("branch_name", '').startswith('release/'))}
     """
     )
 
