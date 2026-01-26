@@ -123,9 +123,11 @@ def check_for_non_skippable_path(paths: Optional[Iterable[str]]) -> bool:
 GITHUB_WORKFLOWS_CI_PATTERNS = [
     "setup.yml",
     "ci*.yml",
-    "build*package*.yml",
-    "test*packages.yml",
-    "test*.yml",  # This may be too broad, but there are many test workflows.
+    "multi_arch*.yml",
+    "build*artifact*.yml",
+    "test*artifacts.yml",
+    "test_sanity_check.yml",
+    "test_component.yml",
 ]
 
 
@@ -361,7 +363,7 @@ def get_test_config(
     # For more info, go to 'docs/development/test_runner_info.md'
     for overwrite_arch in orgwide_test_runner_dict.keys():
         # we need to do partial matching of the orgwide_test_runner_dict keys with the target
-        if overwrite_arch in target:
+        if overwrite_arch.upper() in target.upper():
             test_runner = orgwide_test_runner_dict[overwrite_arch][platform_str]
             test_config["runs_on"]["test"] = test_runner
             break
