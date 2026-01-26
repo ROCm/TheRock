@@ -34,7 +34,7 @@ test_matrix = {
     "hip-tests": {
         "job_name": "hip-tests",
         "fetch_artifact_args": "--tests",
-        "timeout_minutes": 120,
+        "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_hiptests.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 4,
@@ -339,9 +339,12 @@ def run():
                 i + 1 for i in range(job_config_data["total_shards"])
             ]
 
+            # Due to the lack of test filter options but importance of tests, we allow specific tests to run sharded always
+            test_jobs_to_full_shard = ["hip-tests"]
+
             # If the test type is smoke tests, we only need one shard for the test job
             # Note: Benchmarks always use test_type="full" but have total_shards=1 anyway
-            if test_type == "smoke":
+            if test_type == "smoke" and job_name not in test_jobs_to_full_shard:
                 job_config_data["total_shards"] = 1
                 job_config_data["shard_arr"] = [1]
 
