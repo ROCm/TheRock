@@ -49,7 +49,8 @@ def create_deb_package(pkg_name, config: PackageConfig):
     pkg_name : Name of the package to be created
     config: Configuration object containing package metadata
 
-    Returns: None
+    Returns:
+    output_list: List of packages created
     """
     print_function_name()
     print(f"Package Name: {pkg_name}")
@@ -59,9 +60,10 @@ def create_deb_package(pkg_name, config: PackageConfig):
         create_nonversioned_deb_package(pkg_name, config)
 
     create_versioned_deb_package(pkg_name, config)
-    move_packages_to_destination(pkg_name, config)
+    output_list = move_packages_to_destination(pkg_name, config)
     # Clean debian build directory
     remove_dir(Path(config.dest_dir) / config.pkg_type)
+    return output_list
 
 
 def create_nonversioned_deb_package(pkg_name, config: PackageConfig):
@@ -443,6 +445,32 @@ def package_with_dpkg_build(pkg_dir):
 
 
 ######################## RPM package creation ####################
+def create_rpm_package(pkg_name, config: PackageConfig):
+    """Create an RPM package.
+
+    This function invokes the creation of versioned and non-versioned packages
+    and moves the resulting `.rpm` files to the destination directory.
+
+    Parameters:
+    pkg_name : Name of the package to be created
+    config: Configuration object containing package metadata
+
+    Returns:
+    output_list: List of packages created
+    """
+    print_function_name()
+    print(f"Package Name: {pkg_name}")
+
+    if not config.enable_rpath:
+        create_nonversioned_rpm_package(pkg_name, config)
+
+    create_versioned_rpm_package(pkg_name, config)
+    output_list = move_packages_to_destination(pkg_name, config)
+    # Clean rpm build directory
+    remove_dir(Path(config.dest_dir) / config.pkg_type)
+    return output_list
+
+
 def create_nonversioned_rpm_package(pkg_name, config: PackageConfig):
     """Create a non-versioned RPM meta package (.rpm).
 
@@ -486,30 +514,6 @@ def create_versioned_rpm_package(pkg_name, config: PackageConfig):
     specfile = package_dir / "specfile"
     generate_spec_file(pkg_name, specfile, config)
     package_with_rpmbuild(specfile)
-
-
-def create_rpm_package(pkg_name, config: PackageConfig):
-    """Create an RPM package.
-
-    This function invokes the creation of versioned and non-versioned packages
-    and moves the resulting `.rpm` files to the destination directory.
-
-    Parameters:
-    pkg_name : Name of the package to be created
-    config: Configuration object containing package metadata
-
-    Returns: None
-    """
-    print_function_name()
-    print(f"Package Name: {pkg_name}")
-
-    if not config.enable_rpath:
-        create_nonversioned_rpm_package(pkg_name, config)
-
-    create_versioned_rpm_package(pkg_name, config)
-    move_packages_to_destination(pkg_name, config)
-    # Clean rpm build directory
-    remove_dir(Path(config.dest_dir) / config.pkg_type)
 
 
 def generate_spec_file(pkg_name, specfile, config: PackageConfig):
@@ -685,10 +689,11 @@ def parse_input_package_list(pkg_name, artifact_dir):
     """
     print_function_name()
     pkg_list = []
+    skipped_list = []
     # If pkg_name is None, include all packages
     if pkg_name is None:
-        pkg_list = get_package_list(artifact_dir)
-        return pkg_list
+        pkg_list, skipped_list = get_package_list(artifact_dir)
+        return pkg_list, skipped_list
 
     # Proceed if pkg_name is not None
     data = read_package_json_file()
@@ -707,7 +712,7 @@ def parse_input_package_list(pkg_name, artifact_dir):
                 break
 
     print(f"pkg_list:\n  {pkg_list}")
-    return pkg_list
+    return pkg_list, skipped_list
 
 
 def clean_package_build_dir(config: PackageConfig):
@@ -768,21 +773,52 @@ def run(args: argparse.Namespace):
     # Clean the packaging build directories
     clean_package_build_dir(config)
 
-    pkg_list = parse_input_package_list(args.pkg_names, config.artifacts_dir)
+    pkg_list, skipped_list = parse_input_package_list(
+        args.pkg_names, config.artifacts_dir
+    )
     # Create deb/rpm packages
-    package_creators = {"deb": create_deb_package, "rpm": create_rpm_package}
-    for pkg_name in pkg_list:
-        if config.pkg_type and config.pkg_type.lower() in package_creators:
-            print(f"Create {config.pkg_type.upper()} package.")
-            package_creators[config.pkg_type.lower()](pkg_name, config)
-        else:
-            print("Create both DEB and RPM packages.")
-            for creator in package_creators.values():
-                creator(pkg_name, config)
-    clean_package_build_dir(config)
+    valid_types = {"deb", "rpm"}
+    pkg_type = (config.pkg_type or "").lower()
+    if pkg_type not in valid_types:
+        raise ValueError(
+            f"Invalid package type: {config.pkg_type}. Must be 'deb' or 'rpm'."
+        )
 
-    # Print build summary
-    print_build_summary(config, pkg_list)
+    try:
+        built_pkglist = []
+        for pkg_name in pkg_list:
+            print(f"Create {pkg_type} package.")
+            if pkg_type == "rpm":
+                output_list = create_rpm_package(pkg_name, config)
+            else:
+                output_list = create_deb_package(pkg_name, config)
+
+            if output_list:
+                built_pkglist.extend(output_list)
+                print(f"Built package List: {built_pkglist}")
+
+        # Clean the build directories
+        clean_package_build_dir(config)
+
+        pkglist_status = PackageList(
+            total=pkg_list,
+            built=built_pkglist,
+            skipped=skipped_list,
+        )
+
+        # Print build summary
+        print_build_summary(config, pkglist_status)
+    except SystemExit:
+        # Build aborted somewhere inside create_* functions
+        print("\n❌ Build aborted due to an error.\n")
+        pkglist_status = PackageList(
+            total=pkg_list,
+            built=built_pkglist,
+            skipped=skipped_list,
+        )
+        print_build_summary(config, pkglist_status)
+        # Stop the program
+        raise
 
 
 def main(argv: list[str]):
