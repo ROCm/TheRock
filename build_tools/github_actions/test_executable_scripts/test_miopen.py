@@ -239,7 +239,7 @@ if test_type == "smoke":
     test_filter = "--gtest_filter=" + ":".join(smoke_filter)
 else:
     test_filter = (
-        "--gtest_filter=" + ":*" + "-" + ":".join(negative_filter)
+        "--gtest_filter=" + ":".join(positive_filter) + "-" + ":".join(negative_filter)
     )
 #############################################
 
