@@ -289,6 +289,7 @@ def get_test_config(
     target,
     overwrite_values=None,
     enforce_overwrite=False,
+    orgwide_test_runner_dict={},
 ):
     """
     Layout overwrite_values:
@@ -354,6 +355,17 @@ def get_test_config(
                         )
                         return None
 
+    # For external TheRock-CI:
+    # As test runner names are frequently updated, we are pulling the runner label data from the ROCm organization variable
+    # called "ROCM_THEROCK_TEST_RUNNERS"
+    # For more info, go to 'docs/development/test_runner_info.md'
+    for overwrite_arch in orgwide_test_runner_dict.keys():
+        # we need to do partial matching of the orgwide_test_runner_dict keys with the target
+        if overwrite_arch in target:
+            test_runner = orgwide_test_runner_dict[overwrite_arch][platform_str]
+            test_config["runs_on"]["test"] = test_runner
+            break
+
     # Clean up runs_on: only keep "test" and "benchmark" keys
     allowed_keys = {"test", "benchmark"}
     test_config["runs_on"] = {
@@ -389,13 +401,14 @@ def get_release_config(
     return release_config
 
 
-def new_matrix_generator(
+def matrix_generator(
     platform_mask: PlatformMask,
     task_mask: TaskMask,
     req_gpu_families_or_targets: List[str],
     build_variant: str = "release",
     overwrite_values: Dict[str, str] = {},
     enforce_overwrite: bool = False,
+    orgwide_test_runner_dict: Dict[str, str] = {},
 ):
     # TODO TODO move to main() those checks
     if not bool(platform_mask):
@@ -475,6 +488,7 @@ def new_matrix_generator(
                     target,
                     overwrite_values,
                     enforce_overwrite,
+                    orgwide_test_runner_dict,
                 )
                 if test_config:
                     data[task_label[TaskMask.TEST]["label"]] = test_config
@@ -559,6 +573,13 @@ def get_github_event_args():
     github_event_args["enforce_overwrite"] = (
         os.environ.get("INPUT_ENFORCE_OVERWRITE", "false") == "true"
     )
+
+    # For external TheRock-CI:
+    # As test runner names are frequently updated, we are pulling the runner label data from the ROCm organization variable
+    # called "ROCM_THEROCK_TEST_RUNNERS"
+    # For more info, go to 'docs/development/test_runner_info.md'
+    test_runner_json_str = os.getenv("ROCM_THEROCK_TEST_RUNNERS", "{}")
+    github_event_args["orgwide_test_runner_dict"] = json.loads(test_runner_json_str)
 
     return github_event_args
 
@@ -660,13 +681,14 @@ if __name__ == "__main__":
 
     # linux only "gfx94X-dcgpu", "gfx110X-dgpu",
     # export INPUT_LINUX_AMDGPU_FAMILIES="gfx94X-dcgpu, gfx110X-dgpu"
-    full_matrix = new_matrix_generator(
+    full_matrix = matrix_generator(
         platform_mask=platform_mask,
         task_mask=task_mask,
         req_gpu_families_or_targets=req_gpu_families_or_targets,
         build_variant=github_event_args["build_variant"],
         overwrite_values=get_overwrite_values(github_event_args),
         enforce_overwrite=github_event_args["enforce_overwrite"],
+        orgwide_test_runner_dict=github_event_args["orgwide_test_runner_dict"],
     )
 
     print("")
