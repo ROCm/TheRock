@@ -794,7 +794,7 @@ def upload_to_s3(source_dir, bucket, prefix, dedupe=False):
                 continue
 
             # Skip build manifest files - these are for local tracking only
-            if fname in ["built_packages.txt"]:
+            if fname.lower().endswith(".txt"):
                 print(f"Skipping build manifest file (local only): {fname}")
                 continue
 
