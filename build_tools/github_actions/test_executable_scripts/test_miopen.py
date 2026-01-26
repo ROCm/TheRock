@@ -1,13 +1,29 @@
-import logging
-import os
-import shlex
+#!/usr/bin/env python3
+"""
+Run CTest with appropriate GPU exclusion labels based on hierarchical matching.
+
+Usage:
+    run_test.py <category> <gpu_arch>
+
+Examples:
+    run_test.py quick gfx1151
+    run_test.py standard gfx950
+    run_test.py comprehensive generic
+"""
+
+import sys
 import subprocess
+import re
+import os
+
+import logging
+import shlex
 from pathlib import Path
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
-
+TEST_TYPE = os.getenv("TEST_TYPE", "quick")
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 
 # GTest sharding
@@ -24,225 +40,175 @@ ROCM_PATH = Path(THEROCK_BIN_DIR).resolve().parent
 environ_vars["ROCM_PATH"] = str(ROCM_PATH)
 
 logging.basicConfig(level=logging.INFO)
+##############################################
 
-###########################################
+def get_available_gpu_exclusion_tests():
+    """
+    Get all available GPU exclusion test architectures from ctest -N.
 
-positive_filter = []
-negative_filter = []
+    Parses test names in the format: {target_name}-{category}-{gpu_arch}-exclude
+    Returns a set of gpu_arch strings (e.g., 'gfx1150', 'gfx11X', 'gfx950').
+    """
+    try:
+        result = subprocess.run(
+            ["ctest", "-N"], capture_output=True, text=True, check=True
+        )
 
-# Fusion #
-positive_filter.append("*Fusion*")
+        gpu_archs = set()
+        # Parse output for test names
+        # Looking for pattern: Test #N: name-category-gpuarch-exclude
+        # Example: Test #123: miopen_gtest-quick-gfx1150-exclude
+        for line in result.stdout.split("\n"):
+            # Look for lines containing test names with "-exclude" suffix
+            if "-exclude" in line and "Test #" in line:
+                # Extract the test name
+                # Format: "Test #123: miopen_gtest-quick-gfx1150-exclude"
+                match = re.search(r"Test\s+#\d+:\s+(.+)", line)
+                if match:
+                    test_name = match.group(1).strip()
+                    # Extract gpu_arch from pattern: *-{category}-{gpu_arch}-exclude
+                    # Split from the right to get the parts
+                    parts = test_name.split("-")
+                    if len(parts) >= 3 and parts[-1] == "exclude":
+                        # The gpu_arch is the second-to-last part
+                        gpu_arch = parts[-2]
+                        # Verify it looks like a GPU arch (starts with gfx)
+                        if gpu_arch.startswith("gfx"):
+                            gpu_archs.add(gpu_arch)
 
-# Batch Normalization #
-positive_filter.append("*/GPU_BNBWD*_*")
-positive_filter.append("*/GPU_BNOCLBWD*_*")
-positive_filter.append("*/GPU_BNFWD*_*")
-positive_filter.append("*/GPU_BNOCLFWD*_*")
-positive_filter.append("*/GPU_BNInfer*_*")
-positive_filter.append("*/GPU_BNActivInfer_*")
-positive_filter.append("*/GPU_BNOCLInfer*_*")
-positive_filter.append("*/GPU_bn_infer*_*")
+        return gpu_archs
+    except subprocess.CalledProcessError as e:
+        print(f"Error running ctest -N: {e}", file=sys.stderr)
+        sys.exit(1)
+    except FileNotFoundError:
+        print(
+            "Error: ctest not found. Make sure CMake/CTest is installed.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
-# CPU tests
-positive_filter.append("CPU_*")  # tests without a suite
-positive_filter.append("*/CPU_*")  # tests with a suite
 
-# Different
-positive_filter.append("*/GPU_Cat_*")
-positive_filter.append("*/GPU_ConvBiasActiv*")
+def find_matching_gpu_arch(gpu_arch, available_gpu_archs):
+    """
+    Find the most specific GPU architecture that matches the given GPU.
 
-# Convolutions
-positive_filter.append("*/GPU_Conv*")
-positive_filter.append("*/GPU_conv*")
+    Tries in order from most specific to least specific:
+    - Exact match (gfx1151)
+    - Wildcard matches (gfx115X, gfx11X, etc.)
 
-# Solvers
-positive_filter.append("*/GPU_UnitTestConv*")
+    Returns the matching architecture string or None if no match found.
+    """
+    # First, try exact match
+    if gpu_arch in available_gpu_archs:
+        return gpu_arch
 
-# Misc
+    # Generate possible wildcard patterns from most specific to least specific
+    # For gfx1151: try gfx115X, gfx11X, gfx1X
+    possible_patterns = []
+    arch_str = gpu_arch
 
-positive_filter.append("*/GPU_GetitemBwd*")
-positive_filter.append("*/GPU_GLU_*")
+    # Generate patterns by replacing characters with X from right to left
+    for i in range(len(arch_str) - 1, 0, -1):
+        pattern = arch_str[:i] + "X"
+        possible_patterns.append(pattern)
 
-positive_filter.append("*/GPU_GroupConv*")
-positive_filter.append("*/GPU_GroupNorm_*")
-positive_filter.append("*/GPU_GRUExtra_*")
-positive_filter.append("*/GPU_TestActivation*")
-positive_filter.append("*/GPU_HipBLASLtGEMMTest*")
-positive_filter.append("*/GPU_KernelTuningNetTestConv*")
-positive_filter.append("*/GPU_Kthvalue_*")
-positive_filter.append("*/GPU_LayerNormTest*")
-positive_filter.append("*/GPU_LayoutTransposeTest_*")
-positive_filter.append("*/GPU_Lrn*")
-positive_filter.append("*/GPU_lstm_extra*")
+    # Try each pattern
+    for pattern in possible_patterns:
+        if pattern in available_gpu_archs:
+            return pattern
 
-positive_filter.append("*/GPU_MultiMarginLoss_*")
-positive_filter.append("*/GPU_ConvNonpack*")
-positive_filter.append("*/GPU_PerfConfig_HipImplicitGemm*")
-positive_filter.append("*/GPU_AsymPooling2d_*")
-positive_filter.append("*/GPU_WidePooling2d_*")
-positive_filter.append("*/GPU_PReLU_*")
-positive_filter.append("*/GPU_Reduce*")
-positive_filter.append("*/GPU_reduce_custom_*")
-positive_filter.append("*/GPU_regression_issue_*")
-positive_filter.append("*/GPU_RNNExtra_*")
-positive_filter.append("*/GPU_RoPE*")
-positive_filter.append("*/GPU_SoftMarginLoss*")
-positive_filter.append("*/GPU_T5LayerNormTest_*")
-positive_filter.append("*/GPU_Op4dTensorGenericTest_*")
-positive_filter.append("*/GPU_TernaryTensorOps_*")
-positive_filter.append("*/GPU_unaryTensorOps_*")
-positive_filter.append("*/GPU_Transformers*")
-positive_filter.append("*/GPU_TunaNetTest_*")
-positive_filter.append("*/GPU_UnitTestActivationDescriptor_*")
-positive_filter.append("*/GPU_FinInterfaceTest*")
-positive_filter.append("*/GPU_VecAddTest_*")
+    return None
 
-positive_filter.append("*/GPU_KernelTuningNetTest*")
 
-positive_filter.append("*/GPU_Bwd_Mha_*")
-positive_filter.append("*/GPU_Fwd_Mha_*")
-positive_filter.append("*/GPU_Softmax*")
-positive_filter.append("*/GPU_Dropout*")
-positive_filter.append("*/GPU_MhaBackward_*")
-positive_filter.append("*/GPU_MhaForward_*")
-positive_filter.append("*GPU_TestMhaFind20*")
+def build_ctest_command(category, gpu_arch, available_gpu_archs):
+    """
+    Build the appropriate ctest command based on the category and GPU architecture.
 
-#############################################
+    Returns a list of command arguments suitable for subprocess.run()
+    """
+    cmd = ["ctest", "-L", category]
 
-negative_filter.append("*DeepBench*")
-negative_filter.append("*MIOpenTestConv*")
-
-# For sake of time saving on pre-commit step
-####################################################
-negative_filter.append("Full/GPU_Reduce_FP64*")  # 4 min 19 sec
-negative_filter.append("Full/GPU_BNOCLFWDTrainSerialRun3D_BFP16*")  # 3 min 37 sec
-negative_filter.append("Full/GPU_Lrn_FP32*")  # 2 min 50 sec
-negative_filter.append("Full/GPU_Lrn_FP16*")  # 2 min 20 sec
-negative_filter.append("Full/GPU_BNOCLInferSerialRun3D_BFP16*")  # 2 min 19 sec
-negative_filter.append("Smoke/GPU_BNOCLFWDTrainLarge2D_BFP16*")  # 1 min 55 sec
-negative_filter.append("Smoke/GPU_BNOCLInferLarge2D_BFP16*")  # 1 min 48 sec
-negative_filter.append("Full/GPU_BNOCLBWDSerialRun3D_BFP16*")  # 1 min 28 sec
-negative_filter.append("Smoke/GPU_BNOCLBWDLarge2D_BFP16*")  # 1 min 19 sec
-
-negative_filter.append("Full/GPU_UnitTestActivationDescriptor_FP32*")  # 1 min 23 sec
-negative_filter.append("Full/GPU_UnitTestActivationDescriptor_FP16*")  # 1 min 0 sec
-
-negative_filter.append(
-    "Smoke/GPU_BNOCLBWDLargeFusedActivation2D_BFP16*"
-)  # 0 min 52 sec
-negative_filter.append("Smoke/GPU_BNOCLBWDLargeFusedActivation2D_FP16*")  # 0 min 49 sec
-
-negative_filter.append("Full/GPU_ConvGrpBiasActivInfer_BFP16*")  # 0 min 40 sec
-negative_filter.append("Full/GPU_ConvGrpBiasActivInfer_FP32*")  # 0 min 38 sec
-negative_filter.append("Full/GPU_ConvGrpBiasActivInfer_FP16*")  # 0 min 25 sec
-
-negative_filter.append("Full/GPU_ConvGrpActivInfer_BFP16*")  # 0 min 42 sec
-negative_filter.append("Full/GPU_ConvGrpActivInfer_FP32*")  # 0 min 35 sec
-negative_filter.append("Full/GPU_ConvGrpActivInfer_FP16*")  # 0 min 25 sec
-
-negative_filter.append("Full/GPU_ConvGrpBiasActivInfer3D_BFP16*")  # 0 min 27 sec
-negative_filter.append("Full/GPU_ConvGrpBiasActivInfer3D_FP32*")  # 0 min 25 sec
-negative_filter.append("Full/GPU_ConvGrpBiasActivInfer3D_FP16*")  # 0 min 19 sec
-
-negative_filter.append("Full/GPU_ConvGrpActivInfer3D_BFP16*")  # 0 min 27 sec
-negative_filter.append("Full/GPU_ConvGrpActivInfer3D_FP32*")  # 0 min 22 sec
-negative_filter.append("Full/GPU_ConvGrpActivInfer3D_FP16*")  # 0 min 16 sec
-
-# Flaky tests
-negative_filter.append(
-    "Smoke/GPU_UnitTestConvSolverHipImplicitGemmV4R1Fwd_BFP16.ConvHipImplicitGemmV4R1Fwd/0"
-)  # https://github.com/ROCm/TheRock/issues/1682
-
-# Don't run while investigating to allow CI to pass
-# Jira Ticket ALMIOPEN-990
-negative_filter.append("*/GPU_MIOpenDriver*")
-
-# TODO(rocm-libraries#2266): re-enable test for gfx950-dcgpu
-if AMDGPU_FAMILIES == "gfx950-dcgpu":
-    negative_filter.append("*DBSync*")
-
-# Tests to be filtered for navi
-# 1- Ignore gfx942 tests
-# TODO: There is no FP32 wmma on Navi, remove all FP32 conv tests. These should already be skipped via applicability for
-# CK solvers
-if AMDGPU_FAMILIES in ["gfx110X-all", "gfx1150", "gfx1151", "gfx120X-all"]:
-    # These are ignored in miopen
-    negative_filter.append(
-        "Smoke/GPU_BNFWDTrainLargeFusedActivation2D_FP32.BnV2LargeFWD_TrainCKfp32Activation/NCHW_BNSpatial_testBNAPIV1_Dim_2_test_id_32"
-    )  # Temporarily disabled until gfx1151 CI nodes have fw 31 or higher installed
-    negative_filter.append(
-        "Smoke/GPU_BNFWDTrainLarge2D_FP32.BnV2LargeFWD_TrainCKfp32/NCHW_BNSpatial_testBNAPIV2_Dim_2_test_id_64"
-    )  # Temporarily disabled until gfx1151 CI nodes have fw 31 or higher installed
-    # this could address 2
-    negative_filter.append(
-        "*SerialRun3D*"
-    )  # These FP32 SerialRun3D tests use so much memory that they have a risk of timing out the machine during tests
-    # this could address 1
-    negative_filter.append("*gfx942*")
-    # List of currently failing tests
-    negative_filter.append("*GPU_UnitTestConvSolverFFTFwd_FP32*")
-    negative_filter.append("*GPU_UnitTestConvSolverFFTBwd_FP32*")
-    negative_filter.append("*GPU_TernaryTensorOps_FP64*")
-    negative_filter.append("*GPU_TernaryTensorOps_FP16*")
-    negative_filter.append("*GPU_TernaryTensorOps_FP32*")
-    negative_filter.append("*GPU_Op4dTensorGenericTest_FP32*")
-    negative_filter.append("*GPU_UnitTestActivationDescriptor_FP16*")
-    negative_filter.append("*GPU_UnitTestActivationDescriptor_FP32*")
-    negative_filter.append("*CPU_TuningPolicy_NONE*")
-    negative_filter.append("*GPU_Dropout_FP32*")
-    negative_filter.append("*GPU_Dropout_FP16*")
-
-    # TODO: We need to work to re-enable these
-    negative_filter.append(
-        "*GPU_GroupConv3D_BackwardData_FP16.GroupConv3D_BackwardData_half_Test*"
-    )
-    negative_filter.append(
-        "*GPU_GroupConv3D_BackwardData_BFP16.GroupConv3D_BackwardData_bfloat16_Test*"
-    )
-    negative_filter.append(
-        "*GPU_UnitTestConvSolverImplicitGemmGroupWrwXdlops_BFP16.ConvHipImplicitGemmGroupWrwXdlops*"
+    # Add common ctest parameters
+    cmd.extend(
+        [
+            "--output-on-failure",
+            "--parallel",
+            "8",
+            "--test-dir",
+            f"{THEROCK_BIN_DIR}/MIOpen",
+            "-V",  # Always run in verbose mode
+        ]
     )
 
-    negative_filter.append("Smoke/GPU_MultiMarginLoss*")
+    if gpu_arch.lower() in ["generic", "none", ""]:
+        # For generic/unspecified GPU, exclude all GPU-specific tests
+        cmd.extend(["-LE", "ex_gpu"])
+        return cmd
 
-    negative_filter.append(
-        "*CPU_UnitTestConvSolverImplicitGemmGroupWrwXdlopsDevApplicability_FP16.ConvHipImplicitGemmGroupWrwXdlops*"
-    )
+    # Find the appropriate GPU exclusion architecture
+    matching_arch = find_matching_gpu_arch(gpu_arch, available_gpu_archs)
 
-####################################################
+    if matching_arch:
+        # Run the specific GPU exclusion test using the ex_gpu label
+        gpu_label = f"ex_gpu_{matching_arch}"
+        cmd.extend(["-L", gpu_label])
+        print(f"# Using GPU exclusion label: {gpu_label}")
+    else:
+        # No specific GPU exclusion found, run standard tests excluding all GPU-specific ones
+        cmd.extend(["-LE", "ex_gpu"])
+        print(f"# No GPU exclusion found for {gpu_arch}, excluding all ex_gpu tests")
 
-# Creating a smoke test filter
-smoke_filter = [
-    # Batch norm FWD smoke tests
-    "Smoke/GPU_BNCKFWDTrainLarge2D_FP16*",
-    "Smoke/GPU_BNOCLFWDTrainLarge2D_FP16*",
-    "Smoke/GPU_BNOCLFWDTrainLarge3D_FP16*",
-    "Smoke/GPU_BNCKFWDTrainLarge2D_BFP16*",
-    "Smoke/GPU_BNOCLFWDTrainLarge2D_BFP16*",
-    "Smoke/GPU_BNOCLFWDTrainLarge3D_BFP16*",
-    # CK Grouped FWD Conv smoke tests
-    "Smoke/GPU_UnitTestConvSolverImplicitGemmFwdXdlops_FP16*",
-    "Smoke/GPU_UnitTestConvSolverImplicitGemmFwdXdlops_BFP16*",
-]
+    return cmd
 
-# TODO(rocm-libraries#2266): re-enable test for gfx950-dcgpu
-if AMDGPU_FAMILIES != "gfx950-dcgpu":
-    smoke_filter.append("*DBSync*")
-    positive_filter.append("*DBSync*")
+def main():
+    # Use TEST_TYPE from environment variable, convert "smoke" to "quick"
+    category = TEST_TYPE
+    if category.lower() == "smoke":
+        category = "quick"
 
-####################################################
+    # Use AMDGPU_FAMILIES from environment variable, extract gfx<xxx> part
+    gpu_arch = "gfx1151"  # default
+    if AMDGPU_FAMILIES:
+        # Extract gfx<xxx> pattern from AMDGPU_FAMILIES string
+        # Pattern matches: gfx followed by alphanumeric characters (e.g., gfx1151, gfx950, gfx11X)
+        match = re.search(r"gfx[0-9a-zA-Z]+", AMDGPU_FAMILIES)
+        if match:
+            gpu_arch = match.group(0)
+        else:
+            print(
+                f"# Warning: Could not extract GPU architecture from AMDGPU_FAMILIES='{AMDGPU_FAMILIES}', using default '{gpu_arch}'"
+            )
 
-# If smoke tests are enabled, we run smoke tests only.
-# Otherwise, we run the normal test suite
-test_type = os.getenv("TEST_TYPE", "full")
-if test_type == "smoke":
-    test_filter = "--gtest_filter=" + ":".join(smoke_filter)
-else:
-    test_filter = (
-        "--gtest_filter=" + ":".join(positive_filter) + "-" + ":".join(negative_filter)
-    )
-#############################################
+    print(f"# TEST_TYPE: {TEST_TYPE} -> Category: {category}")
+    print(f"# AMDGPU_FAMILIES: {AMDGPU_FAMILIES} -> GPU Architecture: {gpu_arch}")
+    print()
 
-cmd = [f"{THEROCK_BIN_DIR}/miopen_gtest", test_filter]
-logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=environ_vars)
+    # Get available GPU exclusion tests from ctest
+    print("# Discovering available GPU exclusion tests...")
+    available_gpu_archs = get_available_gpu_exclusion_tests()
+
+    if available_gpu_archs:
+        print(f"# Found {len(available_gpu_archs)} GPU exclusion test(s)")
+        print(f"# Available GPU architectures: {sorted(available_gpu_archs)}")
+    else:
+        print("# Warning: No GPU exclusion tests found")
+    print()
+
+    # Build the ctest command
+    cmd = build_ctest_command(category, gpu_arch, available_gpu_archs)
+
+    print(f"# Running: {' '.join(cmd)}")
+    print()
+
+    # Execute the command
+    try:
+        logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
+        result = subprocess.run(cmd, check=False)
+        return result.returncode
+    except Exception as e:
+        print(f"Error running ctest: {e}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
