@@ -1011,6 +1011,13 @@ def do_build_pytorch_torchcodec(
     if args.clean:
         remove_dir_if_exists(pytorch_torchcodec_dir / "build")
 
+    # cmake support for pybind11 to avoid error:
+    # Could not find a package configuration file provided by "pybind11"
+    exec(
+        [sys.executable, "-m", "pip", "install", "pybind11[global]"],
+        cwd=pytorch_torchcodec_dir,
+        env=env,
+    )
     # torchcodec build
     exec(
         [sys.executable, "-m", "build", "--wheel", "-vvv", "--no-isolation"],
