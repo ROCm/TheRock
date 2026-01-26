@@ -3,6 +3,7 @@ import os
 import shlex
 import subprocess
 from pathlib import Path
+import multiprocessing
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -17,6 +18,30 @@ environ_vars["GTEST_SHARD_INDEX"] = str(int(SHARD_INDEX) - 1)
 environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 
 logging.basicConfig(level=logging.INFO)
+
+# DIAGNOSTIC: Log CPU allocation information to understand CI environment
+logging.info("=== CPU Allocation Diagnostics ===")
+logging.info(f"multiprocessing.cpu_count(): {multiprocessing.cpu_count()}")
+logging.info(f"SLURM_CPUS_PER_TASK: {os.getenv('SLURM_CPUS_PER_TASK', 'NOT SET')}")
+logging.info(f"SLURM_CPUS_ON_NODE: {os.getenv('SLURM_CPUS_ON_NODE', 'NOT SET')}")
+logging.info(
+    f"SLURM_JOB_CPUS_PER_NODE: {os.getenv('SLURM_JOB_CPUS_PER_NODE', 'NOT SET')}"
+)
+logging.info(f"OMP_NUM_THREADS (current): {os.getenv('OMP_NUM_THREADS', 'NOT SET')}")
+
+# Try to detect cgroup CPU quota (container limits)
+try:
+    with open("/sys/fs/cgroup/cpu/cpu.cfs_quota_us", "r") as f:
+        quota = int(f.read().strip())
+    with open("/sys/fs/cgroup/cpu/cpu.cfs_period_us", "r") as f:
+        period = int(f.read().strip())
+    if quota > 0:
+        cgroup_cpus = quota // period
+        logging.info(f"cgroup CPU quota: {cgroup_cpus} CPUs")
+except:
+    logging.info("cgroup CPU quota: Unable to detect")
+
+logging.info("=== End Diagnostics ===")
 
 # If smoke tests are enabled, we run smoke tests only.
 # Otherwise, we run the normal test suite
