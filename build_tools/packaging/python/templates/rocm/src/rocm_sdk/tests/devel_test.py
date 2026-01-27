@@ -125,6 +125,10 @@ class ROCmDevelTest(unittest.TestCase):
                 # clang_rt and sanitizer libraries are not all intended to be
                 # loadable arbitrarily.
                 continue
+            if "libhipsolver_fortran" in str(so_path):
+                # Currently fails to load unless libgfortran.so.5 exists on the system.
+                # TODO(#3115): Re-enable this test once the dep is bundled
+                continue
             if "libLLVMOffload" in str(so_path):
                 # recent addition from upstream, issue tracked in
                 # https://github.com/ROCm/TheRock/issues/2537
