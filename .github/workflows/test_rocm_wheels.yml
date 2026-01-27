@@ -87,18 +87,35 @@ jobs:
         with:
           python-version: ${{ inputs.python_version }}
 
-      - name: Set up virtual environment and install ROCm packages
+      # Note: we test twice:
+      # * First with 'rocm[libraries]'
+      # * Then  with 'rocm[libraries,devel]'
+      # Note the use of `--clean` to use a fresh venv each time.
+
+      - name: Setup venv and install 'rocm[libraries]'
+        run: |
+          python build_tools/setup_venv.py ${VENV_DIR} \
+            --packages "rocm[libraries]==${{ inputs.rocm_version }}" \
+            --index-url=${{ inputs.package_index_url }} \
+            --index-subdir=${{ inputs.amdgpu_family }} \
+            --clean \
+            --activate-in-future-github-actions-steps
+          pip freeze
+
+      - name: Run 'rocm-sdk test' with 'rocm[libraries]' installed
+        run: |
+          rocm-sdk test
+
+      - name: Setup venv and install 'rocm[libraries,devel]'
         run: |
           python build_tools/setup_venv.py ${VENV_DIR} \
             --packages "rocm[libraries,devel]==${{ inputs.rocm_version }}" \
             --index-url=${{ inputs.package_index_url }} \
             --index-subdir=${{ inputs.amdgpu_family }} \
+            --clean \
             --activate-in-future-github-actions-steps
-
-      - name: Show installed packages
-        run: |
           pip freeze
 
-      - name: Run rocm-sdk sanity tests
+      - name: Run 'rocm-sdk test' with 'rocm[libraries,devel]' installed
         run: |
           rocm-sdk test
