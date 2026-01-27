@@ -249,6 +249,15 @@ test_matrix = {
         "platform": ["linux", "windows"],
         "total_shards": 5,
     },
+    # rocprofiler-compute tests
+    "rocprofiler-compute": {
+        "job_name": "rocprofiler_compute",
+        "fetch_artifact_args": "--rocprofiler-compute --rocprofiler-sdk --tests",
+        "timeout_minutes": 60,
+        "test_script": f"python {_get_script_path('test_rocprofiler_compute.py')} -v",
+        "platform": ["linux"],
+        "total_shards": 1,
+    },
     # libhipcxx hipcc tests
     "libhipcxx_hipcc": {
         "job_name": "libhipcxx_hipcc",
