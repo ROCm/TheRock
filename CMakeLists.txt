@@ -118,7 +118,7 @@ endif()
 option(THEROCK_BUNDLE_SYSDEPS "Builds bundled system deps for portable builds into lib/rocm_sysdeps" ON)
 cmake_dependent_option(THEROCK_ENABLE_MPI
   "Enables building components with Message Passing Interface (MPI) support"
-  ON NOT WIN32 OFF)
+  ON "NOT WIN32" OFF)
 option(THEROCK_ENABLE_LLVM_TESTS "Enables building LLVM LIT tests" OFF)
 
 set(THEROCK_SANITIZER "" CACHE STRING "Enable project wide sanitizer build ('ASAN' for host+device, 'HOST_ASAN' for host-only)")
