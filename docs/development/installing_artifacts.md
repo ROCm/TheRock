@@ -12,18 +12,18 @@ Choose one of these options to specify where to install from:
 
 | Option             | Type   | Description                                                       |
 | ------------------ | ------ | ----------------------------------------------------------------- |
-| `--run-id`         | String | GitHub CI workflow run ID to install from                         |
-| `--release`        | String | Release version from nightly or dev tarballs                      |
-| `--latest-release` | Flag   | Install the latest nightly release (built daily from main branch) |
 | `--input-dir`      | String | Existing TheRock directory to copy from                           |
+| `--latest-release` | Flag   | Install the latest nightly release (built daily from main branch) |
+| `--release`        | String | Release version from nightly or dev tarballs                      |
+| `--run-id`         | String | GitHub CI workflow run ID to install from                         |
 
 ### Repository Options
 
 | Option              | Type   | Description                                                                                                    |
 | ------------------- | ------ | -------------------------------------------------------------------------------------------------------------- |
 | `--amdgpu-family`   | String | AMD GPU family target (required). See [therock_amdgpu_targets.cmake](../../cmake/therock_amdgpu_targets.cmake) |
-| `--run-github-repo` | String | GitHub repository for CI run ID (default: `GITHUB_REPOSITORY` env var or `ROCm/TheRock`)                       |
 | `--output-dir`      | Path   | Output directory for TheRock installation (default: `./therock-build`)                                         |
+| `--run-github-repo` | String | GitHub repository for CI run ID (default: `GITHUB_REPOSITORY` env var or `ROCm/TheRock`)                       |
 
 ### Component Selection
 
