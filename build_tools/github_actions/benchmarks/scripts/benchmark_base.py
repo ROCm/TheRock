@@ -326,6 +326,8 @@ class BenchmarkBase:
                 'unknown_count': int - Number of tests with no baseline
                 'pass_count': int - Number of tests that passed LKG comparison
                 'total_count': int - Total number of tests
+                'failed_tests': list - Names of tests that failed
+                'unknown_tests': list - Names of tests with no baseline
             }
         """
         tables = final_tables if isinstance(final_tables, list) else [final_tables]
@@ -333,16 +335,28 @@ class BenchmarkBase:
         fail_count = 0
         unknown_count = 0
         pass_count = 0
+        failed_tests = []
+        unknown_tests = []
 
         for table in tables:
             if "FinalResult" not in table.field_names:
                 raise ValueError(f"Table '{table.title}' missing 'FinalResult' column")
 
-            idx = table.field_names.index("FinalResult")
-            results = [row[idx] for row in table._rows]
+            result_idx = table.field_names.index("FinalResult")
+            name_idx = 0  # Assume first column is the test name/identifier
+
+            # Extract results and test names
+            results = [row[result_idx] for row in table._rows]
+            test_names = [row[name_idx] for row in table._rows]
+
+            # Count statuses
             fail_count += results.count("FAIL")
             unknown_count += results.count("UNKNOWN")
             pass_count += results.count("PASS")
+
+            # Collect test names by status
+            failed_tests.extend([test_names[i] for i, r in enumerate(results) if r == "FAIL"])
+            unknown_tests.extend([test_names[i] for i, r in enumerate(results) if r == "UNKNOWN"])
 
         if unknown_count > 0 and fail_count == 0:
             log.warning("Some results have UNKNOWN status (no LKG data available)")
@@ -357,6 +371,8 @@ class BenchmarkBase:
             "unknown_count": unknown_count,
             "pass_count": pass_count,
             "total_count": fail_count + unknown_count + pass_count,
+            "failed_tests": failed_tests,
+            "unknown_tests": unknown_tests,
         }
 
     def run(self) -> None:
@@ -409,33 +425,38 @@ class BenchmarkBase:
         )
         sys.stdout.flush()  # Ensure final status is displayed
 
-        # Write to GitHub Actions step summary (do this BEFORE raising exception)
+        # Write results to GitHub Actions step summary
         self.write_step_summary(final_tables, status_info)
 
-        # Flush output streams to ensure all messages appear before exception
+        # Flush output streams to ensure proper display ordering
         sys.stdout.flush()
         sys.stderr.flush()
 
         # Raise exception if benchmarks failed
         if status_info["final_status"] != "PASS":
             if status_info["fail_count"] > 0 and status_info["unknown_count"] > 0:
+                failed_list = ", ".join(status_info["failed_tests"])
+                unknown_list = ", ".join(status_info["unknown_tests"])
                 raise TestResultError(
                     f"Benchmark test failed: {status_info['fail_count']} FAIL, "
                     f"{status_info['unknown_count']} UNKNOWN out of {status_info['total_count']} tests\n"
-                    f"Performance regressions detected (FAIL) and missing baselines (UNKNOWN)\n"
-                    f"Check the test results above for details"
+                    f"Failed tests: {failed_list}\n"
+                    f"Unknown tests: {unknown_list}\n"
+                    f"Performance regressions detected (FAIL) and missing baselines (UNKNOWN)"
                 )
             elif status_info["fail_count"] > 0:
+                failed_list = ", ".join(status_info["failed_tests"])
                 raise TestResultError(
                     f"Benchmark test failed: {status_info['fail_count']} out of {status_info['total_count']} tests failed\n"
-                    f"Performance regressions detected\n"
-                    f"Check the test results above for details"
+                    f"Failed tests: {failed_list}\n"
+                    f"Performance regressions detected"
                 )
             else:  # unknown_count > 0
+                unknown_list = ", ".join(status_info["unknown_tests"])
                 raise TestResultError(
                     f"Benchmark test status unknown: {status_info['unknown_count']} out of {status_info['total_count']} tests have no baseline\n"
-                    f"No baseline data available for comparison (expected for new benchmarks)\n"
-                    f"Check the test results above for details"
+                    f"Unknown tests: {unknown_list}\n"
+                    f"No baseline data available for comparison (expected for new benchmarks)"
                 )
 
 
