@@ -87,11 +87,6 @@ jobs:
         with:
           python-version: ${{ inputs.python_version }}
 
-      # Note: we test twice:
-      # * First with 'rocm[libraries]'
-      # * Then  with 'rocm[libraries,devel]'
-      # Note the use of `--clean` to use a fresh venv each time.
-
       - name: Setup venv and install 'rocm[libraries]'
         run: |
           python build_tools/setup_venv.py ${VENV_DIR} \
@@ -106,13 +101,15 @@ jobs:
         run: |
           rocm-sdk test
 
-      - name: Setup venv and install 'rocm[libraries,devel]'
+      # Now test again with rocm[devel] installed too.
+      # Note: this reuses the existing venv.
+
+      - name: Install 'rocm[libraries,devel]'
         run: |
           python build_tools/setup_venv.py ${VENV_DIR} \
             --packages "rocm[libraries,devel]==${{ inputs.rocm_version }}" \
             --index-url=${{ inputs.package_index_url }} \
             --index-subdir=${{ inputs.amdgpu_family }} \
-            --clean \
             --activate-in-future-github-actions-steps
           pip freeze
 
