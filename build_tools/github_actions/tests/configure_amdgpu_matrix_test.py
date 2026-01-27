@@ -513,7 +513,7 @@ class TestShouldCIRun(unittest.TestCase):
         run_ci = should_ci_run_given_modified_paths(paths)
         self.assertFalse(run_ci)
 
-    def test_dont_run_ci_if_only_experimental_edited(self):
+    def test_dont_run_ci_if_only_precommit_workflow_edited(self):
         """Test that CI skips if only pre-commit is modified."""
         paths = [".github/workflows/pre-commit.yml"]
         run_ci = should_ci_run_given_modified_paths(paths)
