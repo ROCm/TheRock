@@ -386,7 +386,9 @@ instructions in the AMD ROCm documentation.
 > stable and well-tested installation path.
 
 Standalone "ROCm SDK tarballs" are assembled from the same
-[artifacts](docs/development/artifacts.md) as the Python packages.
+[artifacts](docs/development/artifacts.md) as the Python packages which can be
+[installed using pip](#installing-releases-using-pip), without the additional
+wrapper Python wheels or utility scripts.
 
 ### Release tarballs
 
@@ -397,10 +399,11 @@ Release tarballs are automatically uploaded to AWS S3 buckets:
 | [therock-nightly-tarball](https://therock-nightly-tarball.s3.amazonaws.com/index.html) | Nightly builds from the `main` branch             |
 | [therock-dev-tarball](https://therock-dev-tarball.s3.amazonaws.com/index.html)         | ⚠️ Development builds from project maintainers ⚠️ |
 
-After downloading, extract the release tarball:
+After downloading, simply xtract the release tarball into place:
 
 ```bash
 mkdir therock-tarball && cd therock-tarball
+# For example...
 wget https://therock-nightly-tarball.s3.us-east-2.amazonaws.com/therock-dist-linux-gfx110X-all-6.5.0rc20250610.tar.gz
 mkdir install && tar -xf *.tar.gz -C install
 ```
@@ -411,7 +414,7 @@ For more control over artifact installation—including per-commit CI builds,
 specific release versions, the latest nightly release, and component
 selection—see the
 [Installing Artifacts](docs/development/installing_artifacts.md) developer
-documentation.
+documentation. The [`install_rocm_from_artifacts.py`](build_tools/install_rocm_from_artifacts.py) script can be used to install artifacts from a variety of sources.
 
 ### Using installed tarballs
 
