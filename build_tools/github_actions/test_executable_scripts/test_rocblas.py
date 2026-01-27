@@ -43,6 +43,23 @@ except:
 
 logging.info("=== End Diagnostics ===")
 
+# Set OMP_NUM_THREADS to prevent AOCL thread oversubscription
+# CI environment reports 256 system cores but containers are limited to ~32-64 allocated cores.
+# Standard detection methods (multiprocessing.cpu_count(), cgroup, SLURM vars) all fail
+# to detect the actual allocation, so we use a conservative value.
+#
+# AOCL performance degrades 60-100x with thread oversubscription. Better to under-utilize
+# than over-subscribe. Based on testing: 20 threads on 24-core allocation = 60x speedup.
+#
+# Setting to 48 threads assumes CI allocates 50-64 cores (leaving ~4-16 for system threads).
+# This is conservative - if allocation is smaller, we under-utilize; if larger, we leave headroom.
+if "OMP_NUM_THREADS" not in environ_vars:
+    conservative_thread_count = 48
+    environ_vars["OMP_NUM_THREADS"] = str(conservative_thread_count)
+    logging.info(
+        f"Setting OMP_NUM_THREADS={conservative_thread_count} (conservative for CI to prevent AOCL oversubscription)"
+    )
+
 # If smoke tests are enabled, we run smoke tests only.
 # Otherwise, we run the normal test suite
 test_type = os.getenv("TEST_TYPE", "full")
@@ -58,5 +75,6 @@ logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 subprocess.run(
     cmd,
     cwd=THEROCK_DIR,
+    env=environ_vars,
     check=True,
 )
