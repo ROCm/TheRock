@@ -93,8 +93,10 @@ jobs:
             --packages "rocm[libraries]==${{ inputs.rocm_version }}" \
             --index-url=${{ inputs.package_index_url }} \
             --index-subdir=${{ inputs.amdgpu_family }} \
-            --clean \
             --activate-in-future-github-actions-steps
+
+      - name: Show installed packages
+        run: |
           pip freeze
 
       - name: Run 'rocm-sdk test' with 'rocm[libraries]' installed
@@ -111,6 +113,9 @@ jobs:
             --index-url=${{ inputs.package_index_url }} \
             --index-subdir=${{ inputs.amdgpu_family }} \
             --activate-in-future-github-actions-steps
+
+      - name: Show installed packages
+        run: |
           pip freeze
 
       - name: Run 'rocm-sdk test' with 'rocm[libraries,devel]' installed
