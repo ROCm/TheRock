@@ -486,11 +486,17 @@ def gha_query_recent_branch_commits(
     Args:
         github_repository_name: Repository in "owner/repo" format
         branch: Branch name (default: "main")
-        max_count: Maximum number of commits to retrieve (max 100 per API)
+        max_count: Maximum number of commits to retrieve
+                   (max 100 per API, without pagination)
 
     Returns:
         List of commit SHAs, most recent first.
     """
+    if max_count > 100:
+        _log(
+            f"Warning: max_count of {max_count} commits to query exceeds API per_page limit of 100"
+        )
+
     url = f"https://api.github.com/repos/{github_repository_name}/commits?sha={branch}&per_page={max_count}"
     response = gha_send_request(url)
 

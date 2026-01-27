@@ -150,7 +150,7 @@ def main(argv: list[str] | None = None) -> int:
         "--max-commits",
         type=int,
         default=50,
-        help="Maximum commits to search (default: 50)",
+        help="Maximum commits to search (default: 50, max: 100)",
     )
     parser.add_argument(
         "-v",
