@@ -61,7 +61,6 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       CMAKE_ARGS
         "-DSOURCE_DIR=${_source_dir}"
         -DBUILD_SHARED_LIBS=ON
-        -DC_LAPACK=ON
         # https://github.com/OpenMathLib/OpenBLAS?tab=readme-ov-file#x86x86-64
         # Picking HASWELL as a baseline that supports modern AMD and Intel CPUs
         -DTARGET=HASWELL
@@ -101,7 +100,6 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       CMAKE_ARGS
         "-DSOURCE_DIR=${_source_dir}"
         -DBUILD_SHARED_LIBS=ON
-        -DC_LAPACK=ON
         # https://github.com/OpenMathLib/OpenBLAS?tab=readme-ov-file#x86x86-64
         # Picking HASWELL as a baseline that supports modern AMD and Intel CPUs
         -DTARGET=HASWELL
