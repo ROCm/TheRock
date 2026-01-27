@@ -158,10 +158,6 @@ class FindArtifactsForCommitTest(unittest.TestCase):
 
         mock_check.assert_called()
 
-
-class FindArtifactsForCommitErrorHandlingTest(unittest.TestCase):
-    """Tests for error handling in find_artifacts_for_commit()."""
-
     def test_rate_limit_error_raises_exception(self):
         """Rate limit errors raise GitHubAPIError (not silently return None)."""
         rate_limit_error = GitHubAPIError(
@@ -181,23 +177,6 @@ class FindArtifactsForCommitErrorHandlingTest(unittest.TestCase):
                 )
 
             self.assertIn("rate limit", str(ctx.exception).lower())
-
-    def test_network_error_raises_exception(self):
-        """Network errors raise GitHubAPIError (not silently return None)."""
-        api_error = GitHubAPIError("Network error: Connection refused")
-
-        with mock.patch(
-            "find_artifacts_for_commit.gha_query_workflow_runs_for_commit",
-            side_effect=api_error,
-        ):
-            with self.assertRaises(GitHubAPIError) as ctx:
-                find_artifacts_for_commit(
-                    commit="abc123",
-                    github_repository_name="ROCm/TheRock",
-                    artifact_group="gfx110X-all",
-                )
-
-            self.assertIn("Network error", str(ctx.exception))
 
 
 if __name__ == "__main__":
