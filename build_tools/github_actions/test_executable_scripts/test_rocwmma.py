@@ -28,7 +28,7 @@ logging.basicConfig(level=logging.INFO)
 test_type = os.getenv("TEST_TYPE", "full")
 
 # TODO(#2823): Re-enable test once flaky issue is resolved
-TESTS_TO_IGNORE = ["unpack_util_test"]
+TESTS_TO_RUN = ["unpack_util_test"]
 
 # If there are devices for which the full set is too slow, we can
 # programatically set test_type to "regression" here.
@@ -53,8 +53,9 @@ cmd = [
     "8",
     "--timeout",
     timeout,
-    "--exclude-regex",
-    "|".join(TESTS_TO_IGNORE),
+    "--tests-regex",
+    "|".join(TESTS_TO_RUN),
+    "--repeat", "until-fail:10",
 ]
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 
