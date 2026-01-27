@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 
 from github_actions_utils import *
+from install_requirements import install_requirements
 from benchmarks.benchmark_test_matrix import benchmark_matrix
 from amdgpu_family_matrix import get_all_families_for_trigger_types
 
@@ -353,6 +354,12 @@ def run():
             if test_type == "smoke":
                 job_config_data["total_shards"] = 1
                 job_config_data["shard_arr"] = [1]
+
+            # If the test requires additional requirements, install them
+            extra_setup_jobs = ["rocprofiler_compute"]
+            if job_name in extra_setup_jobs:
+                print(f"Installing additional setup for {job_name}...")
+                install_requirements(job_name)
 
             # If the test requires multi GPU testing, we use a multi-GPU test runner for this specific test
             # Inside the "multi_gpu" field, we have a mapping of amdgpu_family -> bool (if multi GPU testing is enabled for that family)
