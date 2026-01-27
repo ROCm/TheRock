@@ -284,7 +284,7 @@ def run():
     project_to_test = os.getenv("project_to_test", "*")
     amdgpu_families = os.getenv("AMDGPU_FAMILIES")
     test_type = os.getenv("TEST_TYPE", "full")
-    test_labels = json.loads(os.getenv("TEST_LABELS", "[]"))
+    test_labels = json.loads(os.getenv("TEST_LABELS") or "[]")
     is_benchmark_workflow = str2bool(os.getenv("IS_BENCHMARK_WORKFLOW", "false"))
 
     logging.info(f"Selecting projects: {project_to_test}")
