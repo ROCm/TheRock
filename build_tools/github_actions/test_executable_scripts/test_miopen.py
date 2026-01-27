@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """
-Run CTest with appropriate GPU exclusion labels based on hierarchical matching.
+Run MIOpen CTest with appropriate GPU exclusion labels based on hierarchical matching.
+This works on top of the PR - Test Filter Standardization Proof of Concept - MIOpen #3513
+in rocm-libraries (https://github.com/ROCm/rocm-libraries/pull/3513)
 
-Usage:
-    run_test.py <category> <gpu_arch>
+The script reads TEST_TYPE and AMDGPU_FAMILIES environment variables:
+- TEST_TYPE="smoke" -> runs tests with "quick" category
+- TEST_TYPE=<anything else or not set> -> runs tests with "standard" category
+- AMDGPU_FAMILIES is parsed to extract GPU architecture (e.g., "gfx1151")
 
-Examples:
-    run_test.py quick gfx1151
-    run_test.py standard gfx950
-    run_test.py comprehensive generic
+The script checks the available tests from ctest -N and filters the appropriate tests based on the GPU architecture.
 """
 
 import sys
@@ -163,10 +164,11 @@ def build_ctest_command(category, gpu_arch, available_gpu_archs):
 
 
 def main():
-    # Use TEST_TYPE from environment variable, convert "smoke" to "quick"
-    category = TEST_TYPE
-    if category.lower() == "smoke":
+    # Use only two categories for now - quick and standard - depending on TEST_TYPE.
+    if TEST_TYPE and TEST_TYPE.lower() == "smoke":
         category = "quick"
+    else:
+        category = "standard"
 
     # Use AMDGPU_FAMILIES from environment variable, extract gfx<xxx> part
     gpu_arch = "gfx1151"  # default
