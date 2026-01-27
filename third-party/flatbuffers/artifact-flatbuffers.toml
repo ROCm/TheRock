@@ -3,4 +3,5 @@
 [components.run."third-party/flatbuffers/stage"]
 include = [
   "bin/flatc",
+  "bin/flatc.exe",
 ]
