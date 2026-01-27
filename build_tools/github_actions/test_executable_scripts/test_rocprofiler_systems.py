@@ -13,7 +13,7 @@ logging.basicConfig(level=logging.INFO)
 class TestRocprofsys:
     @staticmethod
     def configure_paths():
-        """Prepend TheRock's bin dir to PATH so that the correct executables are found"""
+        """Configure environment path variables for rocprofiler-systems tests"""
 
         # Everything that we need should be in here
         rocm_base = Path(THEROCK_BIN_DIR).resolve().parent
@@ -26,7 +26,7 @@ class TestRocprofsys:
             os.environ["PATH"] = THEROCK_BIN_DIR
 
         # ROCM_PATH
-        os.environ["ROCM_PATH"] = str(rocm_base)
+        # os.environ["ROCM_PATH"] = str(rocm_base)
 
         # LD_LIBRARY_PATH
         ld_paths = [
