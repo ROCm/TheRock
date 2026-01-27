@@ -531,9 +531,13 @@ def get_github_event_args():
     # github_event_args["pr_labels"] = os.environ.get(
     #     "PR_LABELS", '{"labels":[{"name":"test_runner:oem"}]}'
     # )
-    github_event_args["branch_name"] = os.environ.get(
-        "GITHUB_REF", "not/a/notaref"
-    ).split("/")[-1]
+    github_event_args["branch_name"] = os.environ.get("GITHUB_REF_NAME", "")
+    if github_event_args["branch_name"] == "":
+        print(
+            "[ERROR] GITHUB_REF_NAME is not set! No branch name detected. Exiting.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
     # TODO TODO Remove after testing
     github_event_args["github_event_name"] = os.environ.get(
         "GITHUB_EVENT_NAME", "workflow_dispatch"
@@ -565,10 +569,10 @@ def get_github_event_args():
     github_event_args["req_windows_amdgpus_predef"] = os.environ.get(
         "INPUT_WINDOWS_AMDGPU_PREDEFINED_GROUP", ""
     )
-    github_event_args["req_windows_amdgpus_predef"] = os.environ.get(
+    github_event_args["use_runner_label_for_test"] = os.environ.get(
         "INPUT_USE_RUNNER_LABEL_FOR_TEST", ""
     )
-    github_event_args["req_windows_amdgpus_predef"] = os.environ.get(
+    github_event_args["use_runner_label_for_benchmark"] = os.environ.get(
         "INPUT_USE_RUNNER_LABEL_FOR_BENCHMARK", ""
     )
 
@@ -580,8 +584,11 @@ def get_github_event_args():
     # As test runner names are frequently updated, we are pulling the runner label data from the ROCm organization variable
     # called "ROCM_THEROCK_TEST_RUNNERS"
     # For more info, go to 'docs/development/test_runner_info.md'
-    test_runner_json_str = os.getenv("ROCM_THEROCK_TEST_RUNNERS", "{}")
-    github_event_args["orgwide_test_runner_dict"] = json.loads(test_runner_json_str)
+    if os.environ.get("LOAD_TEST_RUNNERS_FROM_VAR", "false") == "true":
+        test_runner_json_str = os.getenv("ROCM_THEROCK_TEST_RUNNERS", "{}")
+        github_event_args["orgwide_test_runner_dict"] = json.loads(test_runner_json_str)
+    else:
+        github_event_args["orgwide_test_runner_dict"] = {}
 
     return github_event_args
 
@@ -613,8 +620,8 @@ def get_requested_amdgpu_families(github_event_args):
         pr_labels = get_pr_labels(github_event_args)
         for label in pr_labels:
             if "gfx" in label:
-                req_gpu_families_or_targets[PlatformMask.LINUX] += label.strip()
-                req_gpu_families_or_targets[PlatformMask.WINDOWS] += label.strip()
+                req_gpu_families_or_targets[PlatformMask.LINUX].append(label.strip())
+                req_gpu_families_or_targets[PlatformMask.WINDOWS].append(label.strip())
 
     # remove duplicates
     for platform in req_gpu_families_or_targets.keys():
