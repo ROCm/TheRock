@@ -202,7 +202,21 @@ class GitHubAPI:
             with urlopen(request, timeout=timeout_seconds) as response:
                 body = response.read().decode("utf-8")
         except HTTPError as e:
+            # Try to read the error response body for more context
+            error_body = ""
+            try:
+                error_body = e.read().decode("utf-8")
+            except Exception:
+                pass  # If we can't read it, continue with generic message
+
             if e.code == 403:
+                # Check if this is a rate limit error
+                if "rate limit" in error_body.lower():
+                    raise GitHubAPIError(
+                        f"GitHub API rate limit exceeded for {url}. "
+                        f"Authenticate with `gh auth login` or set GITHUB_TOKEN to increase limits. "
+                        f"See https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api"
+                    ) from e
                 raise GitHubAPIError(
                     f"Access denied (403 Forbidden) for {url}. "
                     f"Check if your token has the necessary permissions (e.g., `repo`, `workflow`)."

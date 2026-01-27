@@ -10,7 +10,10 @@ from find_artifacts_for_commit import (
     ArtifactRunInfo,
     find_artifacts_for_commit,
 )
-from github_actions.github_actions_utils import is_authenticated_github_api_available
+from github_actions.github_actions_utils import (
+    GitHubAPIError,
+    is_authenticated_github_api_available,
+)
 
 
 def _skip_unless_authenticated_github_api_is_available(test_func):
@@ -154,6 +157,47 @@ class FindArtifactsForCommitTest(unittest.TestCase):
         self.assertEqual(info.artifact_group, "gfx94X-dcgpu")
 
         mock_check.assert_called()
+
+
+class FindArtifactsForCommitErrorHandlingTest(unittest.TestCase):
+    """Tests for error handling in find_artifacts_for_commit()."""
+
+    def test_rate_limit_error_raises_exception(self):
+        """Rate limit errors raise GitHubAPIError (not silently return None)."""
+        rate_limit_error = GitHubAPIError(
+            "GitHub API rate limit exceeded. "
+            "Authenticate with `gh auth login` or set GITHUB_TOKEN to increase limits."
+        )
+
+        with mock.patch(
+            "find_artifacts_for_commit.gha_query_workflow_runs_for_commit",
+            side_effect=rate_limit_error,
+        ):
+            with self.assertRaises(GitHubAPIError) as ctx:
+                find_artifacts_for_commit(
+                    commit="abc123",
+                    github_repository_name="ROCm/TheRock",
+                    artifact_group="gfx110X-all",
+                )
+
+            self.assertIn("rate limit", str(ctx.exception).lower())
+
+    def test_network_error_raises_exception(self):
+        """Network errors raise GitHubAPIError (not silently return None)."""
+        api_error = GitHubAPIError("Network error: Connection refused")
+
+        with mock.patch(
+            "find_artifacts_for_commit.gha_query_workflow_runs_for_commit",
+            side_effect=api_error,
+        ):
+            with self.assertRaises(GitHubAPIError) as ctx:
+                find_artifacts_for_commit(
+                    commit="abc123",
+                    github_repository_name="ROCm/TheRock",
+                    artifact_group="gfx110X-all",
+                )
+
+            self.assertIn("Network error", str(ctx.exception))
 
 
 if __name__ == "__main__":

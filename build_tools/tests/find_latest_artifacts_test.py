@@ -7,7 +7,10 @@ from unittest import mock
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from find_latest_artifacts import find_latest_artifacts
-from github_actions.github_actions_utils import is_authenticated_github_api_available
+from github_actions.github_actions_utils import (
+    GitHubAPIError,
+    is_authenticated_github_api_available,
+)
 
 
 def _skip_unless_authenticated_github_api_is_available(test_func):
@@ -114,6 +117,67 @@ class FindLatestArtifactsTest(unittest.TestCase):
         )
 
         self.assertIsNone(info)
+
+
+class FindLatestArtifactsErrorHandlingTest(unittest.TestCase):
+    """Tests for error handling in find_latest_artifacts()."""
+
+    def test_rate_limit_error_on_commit_list_raises_exception(self):
+        """Rate limit when fetching commits raises GitHubAPIError."""
+        rate_limit_error = GitHubAPIError(
+            "GitHub API rate limit exceeded. "
+            "Authenticate with `gh auth login` or set GITHUB_TOKEN to increase limits."
+        )
+
+        with mock.patch(
+            "find_latest_artifacts.gha_query_recent_branch_commits",
+            side_effect=rate_limit_error,
+        ):
+            with self.assertRaises(GitHubAPIError) as ctx:
+                find_latest_artifacts(
+                    artifact_group="gfx110X-all",
+                    github_repository_name="ROCm/TheRock",
+                )
+
+            self.assertIn("rate limit", str(ctx.exception).lower())
+
+    def test_rate_limit_error_on_artifact_check_raises_exception(self):
+        """Rate limit when checking artifacts for a commit raises GitHubAPIError."""
+        rate_limit_error = GitHubAPIError(
+            "GitHub API rate limit exceeded. "
+            "Authenticate with `gh auth login` or set GITHUB_TOKEN to increase limits."
+        )
+
+        with mock.patch(
+            "find_latest_artifacts.gha_query_recent_branch_commits",
+            return_value=["abc123", "def456"],
+        ), mock.patch(
+            "find_latest_artifacts.find_artifacts_for_commit",
+            side_effect=rate_limit_error,
+        ):
+            with self.assertRaises(GitHubAPIError) as ctx:
+                find_latest_artifacts(
+                    artifact_group="gfx110X-all",
+                    github_repository_name="ROCm/TheRock",
+                )
+
+            self.assertIn("rate limit", str(ctx.exception).lower())
+
+    def test_network_error_raises_exception(self):
+        """Network errors raise GitHubAPIError (not silently return None)."""
+        api_error = GitHubAPIError("Network error: Connection refused")
+
+        with mock.patch(
+            "find_latest_artifacts.gha_query_recent_branch_commits",
+            side_effect=api_error,
+        ):
+            with self.assertRaises(GitHubAPIError) as ctx:
+                find_latest_artifacts(
+                    artifact_group="gfx110X-all",
+                    github_repository_name="ROCm/TheRock",
+                )
+
+            self.assertIn("Network error", str(ctx.exception))
 
 
 if __name__ == "__main__":

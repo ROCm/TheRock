@@ -176,14 +176,15 @@ def find_artifacts_for_commit(
     Returns:
         ArtifactRunInfo for the first run with artifacts, or None if no
         workflow runs exist or no artifacts are available.
+
+    Raises:
+        GitHubAPIError: If the GitHub API request fails (rate limit, network
+            error, etc.). Callers should handle this to distinguish between
+            "no artifacts found" (None) and "couldn't check" (exception).
     """
-    try:
-        workflow_runs = gha_query_workflow_runs_for_commit(
-            github_repository_name, workflow_file_name, commit
-        )
-    except GitHubAPIError as e:
-        print(f"Error querying GitHub API: {e}", file=sys.stderr)
-        return None
+    workflow_runs = gha_query_workflow_runs_for_commit(
+        github_repository_name, workflow_file_name, commit
+    )
 
     if not workflow_runs:
         return None
@@ -246,13 +247,17 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
 
-    info = find_artifacts_for_commit(
-        commit=args.commit,
-        github_repository_name=args.repo,
-        workflow_file_name=args.workflow,
-        platform=args.platform,
-        artifact_group=args.artifact_group,
-    )
+    try:
+        info = find_artifacts_for_commit(
+            commit=args.commit,
+            github_repository_name=args.repo,
+            workflow_file_name=args.workflow,
+            platform=args.platform,
+            artifact_group=args.artifact_group,
+        )
+    except GitHubAPIError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 2
 
     if info is None:
         print(

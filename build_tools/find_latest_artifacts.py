@@ -27,7 +27,10 @@ from find_artifacts_for_commit import (
     ArtifactRunInfo,
     find_artifacts_for_commit,
 )
-from github_actions.github_actions_utils import gha_query_recent_branch_commits
+from github_actions.github_actions_utils import (
+    GitHubAPIError,
+    gha_query_recent_branch_commits,
+)
 
 
 def find_latest_artifacts(
@@ -58,17 +61,16 @@ def find_latest_artifacts(
     Returns:
         ArtifactRunInfo for the most recent commit with artifacts, or None
         if no matching commit found within max_commits.
+
+    Raises:
+        GitHubAPIError: If the GitHub API request fails (rate limit, network
+            error, etc.).
     """
-    try:
-        commits = gha_query_recent_branch_commits(
-            github_repository_name=github_repository_name,
-            branch=branch,
-            max_count=max_commits,
-        )
-    except Exception as e:
-        # TODO(scotttodd): propagate 'e'... depending on what usage looks like
-        print(f"Error getting commits from GitHub: {e}", file=sys.stderr)
-        return None
+    commits = gha_query_recent_branch_commits(
+        github_repository_name=github_repository_name,
+        branch=branch,
+        max_count=max_commits,
+    )
 
     if verbose:
         print(
@@ -159,15 +161,19 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
 
-    info = find_latest_artifacts(
-        artifact_group=args.artifact_group,
-        github_repository_name=args.repo,
-        workflow_file_name=args.workflow,
-        platform=args.platform,
-        branch=args.branch,
-        max_commits=args.max_commits,
-        verbose=args.verbose,
-    )
+    try:
+        info = find_latest_artifacts(
+            artifact_group=args.artifact_group,
+            github_repository_name=args.repo,
+            workflow_file_name=args.workflow,
+            platform=args.platform,
+            branch=args.branch,
+            max_commits=args.max_commits,
+            verbose=args.verbose,
+        )
+    except GitHubAPIError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 2
 
     if info is None:
         print(

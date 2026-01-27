@@ -233,6 +233,26 @@ class GitHubAPITest(unittest.TestCase):
             self.assertIn("gh api request failed", str(ctx.exception))
             self.assertIn("Not Found", str(ctx.exception))
 
+    def test_gh_cli_rate_limit_error_passes_through_message(self):
+        """gh CLI rate limit error should pass through the stderr message."""
+        api = GitHubAPI()
+        api._auth_method = GitHubAPI.AuthMethod.GH_CLI
+        api._gh_cli_path = "/usr/bin/gh"
+
+        mock_result = mock.Mock()
+        mock_result.returncode = 1
+        mock_result.stderr = "gh: API rate limit exceeded for user ID 123."
+
+        with mock.patch(
+            "github_actions_utils.subprocess.run", return_value=mock_result
+        ):
+            with self.assertRaises(GitHubAPIError) as ctx:
+                api.send_request("https://api.github.com/repos/test/test")
+
+            error_msg = str(ctx.exception)
+            # gh CLI stderr message should be preserved in error
+            self.assertIn("rate limit", error_msg.lower())
+
     def test_gh_cli_empty_response_raises_github_api_error(self):
         """gh CLI empty response should raise GitHubAPIError."""
         api = GitHubAPI()
@@ -295,6 +315,33 @@ class GitHubAPITest(unittest.TestCase):
 
             self.assertIn("403", str(ctx.exception))
             self.assertIn("Access denied", str(ctx.exception))
+            self.assertIsInstance(ctx.exception.__cause__, HTTPError)
+
+    def test_rest_api_rate_limit_error_provides_helpful_message(self):
+        """REST API rate limit (403 with rate limit body) should provide actionable guidance."""
+        import io
+
+        os.environ["GITHUB_TOKEN"] = "test-token"
+        api = GitHubAPI()
+
+        # GitHub returns 403 with a JSON body containing the rate limit message
+        rate_limit_body = b'{"message": "API rate limit exceeded for user ID 123."}'
+
+        mock_error = HTTPError(
+            url="https://api.github.com/repos/test/test",
+            code=403,
+            msg="Forbidden",
+            hdrs={},
+            fp=io.BytesIO(rate_limit_body),
+        )
+
+        with mock.patch("github_actions_utils.urlopen", side_effect=mock_error):
+            with self.assertRaises(GitHubAPIError) as ctx:
+                api.send_request("https://api.github.com/repos/test/test")
+
+            error_msg = str(ctx.exception)
+            # Should mention rate limit, not just "Access denied"
+            self.assertIn("rate limit", error_msg.lower())
             self.assertIsInstance(ctx.exception.__cause__, HTTPError)
 
     def test_rest_api_http_404_raises_github_api_error(self):
