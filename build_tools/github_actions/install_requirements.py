@@ -13,7 +13,6 @@ def install_requirements(job_name: str):
         case "rocprofiler_compute":
             requirements_dir = f"{THEROCK_OUTPUT_DIR}/libexec/rocprofiler-compute"
             cmd = [
-                "uv",
                 "pip",
                 "install",
                 "-r",
