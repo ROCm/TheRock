@@ -343,7 +343,7 @@ class BenchmarkBase:
                 raise ValueError(f"Table '{table.title}' missing 'FinalResult' column")
 
             result_idx = table.field_names.index("FinalResult")
-            name_idx = 0  # Assume first column is the test name/identifier
+            name_idx = 1  # Second column contains the subtest names
 
             # Extract results and test names
             results = [row[result_idx] for row in table._rows]
