@@ -178,8 +178,10 @@ mix/match build steps.
 
 On Linux we run automated tests under our
 [`no_rocm_image_ubuntu24_04.Dockerfile`](dockerfiles/no_rocm_image_ubuntu24_04.Dockerfile)
-container. Docker is optional for developers and users. If you want to use our
-test image, run it like so:
+container (also
+[documented in `dockerfiles/README.md`](/dockerfiles/README.md#no_rocm_image_dockerfile)).
+Docker is optional for developers and users. If you want to use our test image,
+run it like so:
 
 ```bash
 sudo docker run -it \
