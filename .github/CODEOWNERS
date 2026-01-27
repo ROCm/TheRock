@@ -1,3 +1,6 @@
+# This file itself
+/.github/CODEOWNERS     @ROCm/TheRock-infra-admins
+
 # Regularly updated submodules
 /rocm-libraries         @ROCm/TheRock-infra-write
 /rocm-systems           @ROCm/TheRock-infra-write
