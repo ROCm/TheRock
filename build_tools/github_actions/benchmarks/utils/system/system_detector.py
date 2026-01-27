@@ -179,7 +179,7 @@ class SystemDetector:
         context = self.build_system_context()
 
         if verbose:
-            log.info("✓ System detection complete")
+            log.info("System detection complete")
 
         return context
 
@@ -298,21 +298,21 @@ class SystemDetector:
         Args:
             context: SystemContext with detected information
         """
-        log.info(f"✓ Platform detected: {context.os_name} {context.os_version}")
+        log.info(f"Platform detected: {context.os_name} {context.os_version}")
         log.info(f"  Kernel: {context.kernel}")
         log.info(f"  Hostname: {context.hostname}")
 
-        log.info(f"✓ CPU detected: {context.cpu_model}")
+        log.info(f"CPU detected: {context.cpu_model}")
         log.info(f"  Cores: {context.cpu_cores}, Sockets: {context.cpu_sockets}")
 
         if context.gpu_count > 0:
-            log.info(f"✓ GPU detected: {context.gpu_count} GPU(s)")
+            log.info(f"GPU detected: {context.gpu_count} GPU(s)")
             log.info(
                 f"  GPU 0: {context.gpu_name} (Device ID: {context.gpu_device_id})"
             )
         else:
-            log.warning("⚠ No GPU detected")
+            log.warning("No GPU detected")
 
-        log.info(f"✓ ROCm detected: {context.rocm_version}")
+        log.info(f"ROCm detected: {context.rocm_version}")
         log.info(f"  Install type: {context.rocm_install_type}")
         log.info(f"  Build type: {context.rocm_build_type}")

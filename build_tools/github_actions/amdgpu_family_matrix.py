@@ -49,7 +49,8 @@ amdgpu_family_info_matrix_presubmit = {
     "gfx94x": {
         "linux": {
             "test-runs-on": "linux-mi325-1gpu-ossci-rocm-frac",
-            # TODO: Add new benchmark-runs-on runner for benchmarks
+            "test-runs-on-multi-gpu": "linux-mi325-4gpu-ossci-rocm",
+            # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
             "benchmark-runs-on": "linux-mi325-1gpu-ossci-rocm-frac",
             "family": "gfx94X-dcgpu",
             "build_variants": ["release", "asan"],
@@ -75,9 +76,7 @@ amdgpu_family_info_matrix_presubmit = {
     },
     "gfx1151": {
         "linux": {
-            # TODO(#2741): Re-enable machine once `amdsmi` test timeout is fixed
-            # Label is "linux-gfx1151-gpu-rocm"
-            "test-runs-on": "",
+            "test-runs-on": "linux-gfx1151-gpu-rocm",
             "family": "gfx1151",
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
@@ -85,7 +84,26 @@ amdgpu_family_info_matrix_presubmit = {
         },
         "windows": {
             "test-runs-on": "windows-gfx1151-gpu-rocm",
+            # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
+            "benchmark-runs-on": "windows-gfx1151-gpu-rocm",
             "family": "gfx1151",
+            "build_variants": ["release"],
+        },
+    },
+    "gfx120x": {
+        "linux": {
+            "test-runs-on": "linux-gfx120X-gpu-rocm",
+            "family": "gfx120X-all",
+            "bypass_tests_for_releases": True,
+            "build_variants": ["release"],
+            "sanity_check_only_for_family": True,
+        },
+        "windows": {
+            # TODO(#2962): Re-enable machine once sanity checks work with this architecture
+            # Label is windows-gfx120X-gpu-rocm
+            "test-runs-on": "",
+            "family": "gfx120X-all",
+            "bypass_tests_for_releases": True,
             "build_variants": ["release"],
         },
     },
@@ -100,31 +118,14 @@ amdgpu_family_info_matrix_postsubmit = {
             "build_variants": ["release", "asan"],
         }
     },
-    "gfx120x": {
-        "linux": {
-            # TODO(#2683): Re-enable machine once it is stable
-            # Label is "linux-gfx120X-gpu-rocm"
-            "test-runs-on": "",
-            "family": "gfx120X-all",
-            "bypass_tests_for_releases": True,
-            "build_variants": ["release"],
-            "sanity_check_only_for_family": True,
-        },
-        "windows": {
-            "test-runs-on": "",
-            "family": "gfx120X-all",
-            "bypass_tests_for_releases": True,
-            "build_variants": ["release"],
-        },
-    },
 }
 
 # The 'nightly' matrix runs on 'schedule' triggers.
 amdgpu_family_info_matrix_nightly = {
     "gfx90x": {
         "linux": {
+            # TODO(#2963): Re-enable machine once sanity checks pass
             # label is linux-gfx90X-gpu-rocm
-            # Disabled due to inconsistent up-time
             "test-runs-on": "",
             "family": "gfx90X-dcgpu",
             "sanity_check_only_for_family": True,
@@ -175,9 +176,7 @@ amdgpu_family_info_matrix_nightly = {
     },
     "gfx1150": {
         "linux": {
-            # TODO(#2614): Re-enable machine once it is stable
-            # Label is "linux-gfx1150-gpu-rocm"
-            "test-runs-on": "",
+            "test-runs-on": "linux-gfx1150-gpu-rocm",
             "family": "gfx1150",
             "build_variants": ["release"],
             "sanity_check_only_for_family": True,

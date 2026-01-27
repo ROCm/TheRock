@@ -12,6 +12,7 @@ from pathlib import Path
 
 from github_actions_utils import *
 from benchmarks.benchmark_test_matrix import benchmark_matrix
+from amdgpu_family_matrix import get_all_families_for_trigger_types
 
 logging.basicConfig(level=logging.INFO)
 
@@ -29,6 +30,15 @@ def _get_script_path(script_name: str) -> str:
 
 
 test_matrix = {
+    # hip-tests
+    "hip-tests": {
+        "job_name": "hip-tests",
+        "fetch_artifact_args": "--tests",
+        "timeout_minutes": 120,
+        "test_script": f"python {_get_script_path('test_hiptests.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards": 4,
+    },
     # BLAS tests
     "rocblas": {
         "job_name": "rocblas",
@@ -41,14 +51,24 @@ test_matrix = {
     "rocroller": {
         "job_name": "rocroller",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 30,
+        "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_rocroller.py')}",
         "platform": ["linux"],
-        "total_shards": 4,
+        "total_shards": 5,
         "exclude_family": {
+            # rocroller does not plan to support Linux and Windows gfx115X architectures
             "linux": [
-                "gfx950-dcgpu"
-            ]  # issue: https://github.com/ROCm/TheRock/issues/2727
+                "gfx1150",
+                "gfx1151",
+                "gfx1152",
+                "gfx1153",
+            ],
+            "windows": [
+                "gfx1150",
+                "gfx1151",
+                "gfx1152",
+                "gfx1153",
+            ],
         },
     },
     "hipblas": {
@@ -93,7 +113,7 @@ test_matrix = {
         "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_rocprim.py')}",
         "platform": ["linux", "windows"],
-        "total_shards": 1,
+        "total_shards": 2,
     },
     "hipcub": {
         "job_name": "hipcub",
@@ -117,7 +137,7 @@ test_matrix = {
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_hipsparse.py')}",
-        "platform": ["linux"],
+        "platform": ["linux", "windows"],
         "total_shards": 2,
     },
     "rocsparse": {
@@ -127,9 +147,6 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_rocsparse.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 1,
-        "exclude_family": {
-            "windows": ["gfx1151"]  # issue: https://github.com/ROCm/TheRock/issues/1640
-        },
     },
     "hipsparselt": {
         "job_name": "hipsparselt",
@@ -190,9 +207,10 @@ test_matrix = {
         "fetch_artifact_args": "--rccl --tests",
         "timeout_minutes": 15,
         "test_script": f"pytest {_get_script_path('test_rccl.py')} -v -s --log-cli-level=info",
-        # TODO(#2616): Enable tests once known machine issues are resolved
-        "platform": [],
+        "platform": ["linux"],
         "total_shards": 1,
+        # Architectures that we have multi GPU setup for testing
+        "multi_gpu": {"linux": ["gfx94X-dcgpu"]},
     },
     # hipDNN tests
     "hipdnn": {
@@ -230,6 +248,33 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_rocwmma.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 5,
+    },
+    # libhipcxx hipcc tests
+    "libhipcxx_hipcc": {
+        "job_name": "libhipcxx_hipcc",
+        "fetch_artifact_args": "--libhipcxx --tests",
+        "timeout_minutes": 30,
+        "test_script": f"python {_get_script_path('test_libhipcxx_hipcc.py')}",
+        "platform": ["linux"],
+        "total_shards": 1,
+    },
+    # libhipcxx hiprtc tests
+    "libhipcxx_hiprtc": {
+        "job_name": "libhipcxx_hiprtc",
+        "fetch_artifact_args": "--libhipcxx --tests",
+        "timeout_minutes": 20,
+        "test_script": f"python {_get_script_path('test_libhipcxx_hiprtc.py')}",
+        "platform": ["linux"],
+        "total_shards": 1,
+    },
+    # aqlprofile tests
+    "aqlprofile": {
+        "job_name": "aqlprofile",
+        "fetch_artifact_args": "--aqlprofile --tests",
+        "timeout_minutes": 5,
+        "test_script": f"python {_get_script_path('test_aqlprofile.py')}",
+        "platform": ["linux"],
+        "total_shards": 1,
     },
 }
 
@@ -299,6 +344,35 @@ def run():
             if test_type == "smoke":
                 job_config_data["total_shards"] = 1
                 job_config_data["shard_arr"] = [1]
+
+            # If the test requires multi GPU testing, we use a multi-GPU test runner for this specific test
+            # Inside the "multi_gpu" field, we have a mapping of amdgpu_family -> bool (if multi GPU testing is enabled for that family)
+            # If the multi GPU test runner is not enabled, we will skip the test
+            if "multi_gpu" in selected_matrix[key]:
+                amdgpu_families_matrix = get_all_families_for_trigger_types(
+                    ["presubmit", "postsubmit", "nightly"]
+                )
+                if (
+                    platform in selected_matrix[key]["multi_gpu"]
+                    and amdgpu_families in selected_matrix[key]["multi_gpu"][platform]
+                ):
+                    # If the architecture is available for multi GPU testing, we indicate that this specific test requires the multi GPU test runner
+                    shortened_amdgpu_families_name = amdgpu_families.split("-")[
+                        0
+                    ].lower()
+                    multi_gpu_runner = amdgpu_families_matrix[
+                        shortened_amdgpu_families_name
+                    ][platform]["test-runs-on-multi-gpu"]
+                    logging.info(
+                        f"Including job {job_name} since multi GPU testing is available for family {amdgpu_families} with runner {multi_gpu_runner}"
+                    )
+                    job_config_data["multi_gpu_runner"] = multi_gpu_runner
+                else:
+                    # If the architecture is not available for multi GPU testing, we skip the test requiring multi GPU
+                    logging.info(
+                        f"Excluding job {job_name} since multi GPU testing is not available for family {amdgpu_families}"
+                    )
+                    continue
 
             output_matrix.append(job_config_data)
 
