@@ -55,7 +55,7 @@ cmd = [
     timeout,
     "--tests-regex",
     "|".join(TESTS_TO_RUN),
-    "--repeat", "until-fail:10",
+    "--repeat", "until-fail:1000",
 ]
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 
