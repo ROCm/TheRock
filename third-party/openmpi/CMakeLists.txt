@@ -28,7 +28,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
           "${_download_stamp}"
     )
 
-    therock_cmake_subproject_provide_package(therock-openmpi MPI lib/cmake/OpenMPI)
+    therock_cmake_subproject_provide_package(therock-openmpi MPI lib/cmake/openmpi)
 
     therock_cmake_subproject_activate(therock-openmpi)
     return()
@@ -70,7 +70,7 @@ install(DIRECTORY "${MPI_STAGE_DIR}${CMAKE_INSTALL_PREFIX}/"
 configure_package_config_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/mpi-config.cmake.in"
     "${CMAKE_CURRENT_BINARY_DIR}/mpi-config.cmake"
-    INSTALL_DESTINATION lib/cmake/OpenMPI
+    INSTALL_DESTINATION lib/cmake/openmpi
     NO_CHECK_REQUIRED_COMPONENTS_MACRO
 )
 
@@ -83,5 +83,5 @@ write_basic_package_version_file(
 install(FILES
     "${CMAKE_CURRENT_BINARY_DIR}/mpi-config.cmake"
     "${CMAKE_CURRENT_BINARY_DIR}/mpi-version-config.cmake"
-    DESTINATION lib/cmake/OpenMPI
+    DESTINATION lib/cmake/openmpi
 )
