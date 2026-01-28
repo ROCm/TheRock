@@ -66,33 +66,24 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT PATCHELF)
   message(FATAL_ERROR "Missing PATCHELF from super-project")
 endif()
 
-# HWLOC depends on NUMA and libpciaccess, so we need to pass their prefixes to HWLOC's configure.
-# Extract that information now.
+# Helper function to extract dependency prefixes from CMAKE_PREFIX_PATH.
+# Needed for autotools-based builds that require --with-* configure flags.
+# (Autotools doesn't use CMAKE_PREFIX_PATH directly, so we must extract and pass explicitly.)
+function(fetch_library_prefix input_path_list pattern output_var)
+  set(_input_list "${${input_path_list}}")
+  list(FILTER _input_list INCLUDE REGEX "${pattern}")
+  if(_input_list)
+    list(GET _input_list 0 _result_path)
+    set(${output_var} "${_result_path}" PARENT_SCOPE)
+    message(STATUS "Extracted path for pattern '${pattern}': ${_result_path}")
+  else()
+    message(SEND_ERROR "Did not find a path containing '${pattern}' in CMAKE_PREFIX_PATH.")
+  endif()
+endfunction()
 
-# Create temporary variables to hold the lists we are filtering
-# We use CMAKE_PREFIX_PATH as it contains the stage prefixes.
-set(temp_numa_paths ${CMAKE_PREFIX_PATH})
-set(temp_pciaccess_paths ${CMAKE_PREFIX_PATH})
-
-# Filter the temporary lists to include only the items that contain the stage
-# prefixes we are looking for.
-list(FILTER temp_numa_paths INCLUDE REGEX "/numactl/build/stage")
-list(FILTER temp_pciaccess_paths INCLUDE REGEX "/libpciaccess/build/stage")
-
-# Store our paths or complain.
-if(temp_numa_paths)
-    list(GET temp_numa_paths 0 NUMA_PREFIX)
-    message(STATUS "Extracted NUMA_PREFIX: ${NUMA_PREFIX}")
-else()
-    message(SEND_ERROR "Did not find a path containing '/numactl/build/stage' in CMAKE_PREFIX_PATH.")
-endif()
-
-if(temp_pciaccess_paths)
-    list(GET temp_pciaccess_paths 0 PCIACCESS_PREFIX)
-    message(STATUS "Extracted PCIACCESS_PREFIX: ${PCIACCESS_PREFIX}")
-else()
-    message(SEND_ERROR "Did not find a path containing '/libpciaccess/build/stage' in CMAKE_PREFIX_PATH.")
-endif()
+# Fetch dependency prefixes for hwloc's configure script.
+fetch_library_prefix(CMAKE_PREFIX_PATH "/numactl/build/stage" NUMA_PREFIX)
+fetch_library_prefix(CMAKE_PREFIX_PATH "/libpciaccess/build/stage" PCIACCESS_PREFIX)
 
 add_custom_target(
   build ALL
@@ -103,10 +94,7 @@ add_custom_target(
   COMMAND
     "${CMAKE_COMMAND}" -E env
       "PKG_CONFIG_PATH=${PCIACCESS_PREFIX}/lib/pkgconfig:${NUMA_PREFIX}/lib/pkgconfig:$ENV{PKG_CONFIG_PATH}"
-      # We don't insert rpath here because there are multiple layers of
-      # escaping going on (cmake, configure, shell, libtool), and making
-      # our $ORIGIN string survive through all that is complex and
-      # potentially fragile. We use a patchelf step instead.
+      # Apply symbol versioning via version.lds. RPATH is set post-install via patch_install.py.
       "LDFLAGS=${CMAKE_SHARED_LINKER_FLAGS} -L${PCIACCESS_PREFIX}/lib -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
       "CPPFLAGS=-I${PCIACCESS_PREFIX}/include -I${NUMA_PREFIX}/include"
       --
@@ -131,9 +119,6 @@ add_custom_target(
     make V=1
   COMMAND
     make install
-  COMMAND
-    # Patch in the RUNPATH.
-    ${PATCHELF} --set-rpath '\$\$ORIGIN:\$\$ORIGIN/rocm_sysdeps/lib' ${CMAKE_INSTALL_PREFIX}/lib/libhwloc.so
   COMMAND
     "${CMAKE_COMMAND}" -E env
       "PATCHELF=${PATCHELF}"

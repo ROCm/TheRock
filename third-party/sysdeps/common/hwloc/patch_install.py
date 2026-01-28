@@ -88,12 +88,28 @@ if platform.system() == "Linux":
             print(f"Error: Failed to patch {lib_path.name} (Exit: {e.returncode})")
             sys.exit(e.returncode)
 
+    # Set RPATH on all prefixed shared libraries.
+    for lib_path in lib_dir.glob("librocm_sysdeps_*.so*"):
+        if lib_path.is_symlink():
+            continue
+        try:
+            subprocess.run(
+                [
+                    patchelf_exe,
+                    "--set-rpath",
+                    "$ORIGIN:$ORIGIN/rocm_sysdeps/lib",
+                    str(lib_path),
+                ],
+                check=True,
+            )
+        except subprocess.CalledProcessError as e:
+            print(
+                f"Error: Failed to set RPATH on {lib_path.name} (Exit: {e.returncode})"
+            )
+            sys.exit(e.returncode)
+
     # Fix .pc files to use relocatable paths.
     pkgconfig_dir = lib_dir / "pkgconfig"
     if pkgconfig_dir.exists():
         for pc_file in pkgconfig_dir.glob("*.pc"):
             relativize_pc_file(pc_file)
-
-elif platform.system() == "Windows":
-    # Do nothing for now.
-    sys.exit(0)
