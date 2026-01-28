@@ -29,6 +29,7 @@ class PackageInstaller:
         rpm_package_prefix: Optional[str] = None,
         docker_image: Optional[str] = None,
         uninstall: Optional[List[str]] = None,
+        skip_package: Optional[str] = None,
     ):
         """Initialize the package installer.
 
@@ -46,6 +47,7 @@ class PackageInstaller:
         self.rpm_package_prefix = rpm_package_prefix
         self.docker_image = docker_image
         self.uninstall = uninstall
+        self.skip_package = [pkg.strip() for pkg in skip_package]
 
         # Validate inputs
         if self.package_type not in ["deb", "rpm"]:
@@ -131,9 +133,26 @@ class PackageInstaller:
         if not packages:
             raise ValueError(f"No {extension} packages found in {self.package_folder}")
 
-        return sorted(packages)
+        # convert to absolute path
+        packages = sorted([str(pkg.absolute()) for pkg in packages])
 
-    def install_deb_packages(self, packages: List[Path]) -> bool:
+        # skip packages
+        if self.skip_package:
+            print("\n" + "=" * 80)
+            print("SKIPPING PACKAGES")
+            for skip in self.skip_package:
+                 print(f"   - {Path(skip).name}")
+            print("=" * 80)
+
+            for skip in self.skip_package:
+                # iterate over a copy remove from original packages
+                for pkg in packages[:]:
+                    if skip in pkg:
+                        packages.remove(pkg)
+
+        return packages
+
+    def install_deb_packages(self, package_paths: List[Path]) -> bool:
         """Install DEB packages using apt.
 
         Args:
@@ -145,9 +164,6 @@ class PackageInstaller:
         print("\n" + "=" * 80)
         print("INSTALLING DEB PACKAGES")
         print("=" * 80)
-
-        # Convert to absolute paths
-        package_paths = [str(pkg.absolute()) for pkg in packages]
 
         print(f"\nPackages to install ({len(package_paths)}):")
         for pkg in package_paths:
@@ -174,7 +190,7 @@ class PackageInstaller:
             print(f"Error output:\n{e.stdout}")
             return False
 
-    def install_rpm_packages(self, packages: List[Path]) -> bool:
+    def install_rpm_packages(self, package_paths: List[Path]) -> bool:
         """Install RPM packages using dnf.
 
         Args:
@@ -186,9 +202,6 @@ class PackageInstaller:
         print("\n" + "=" * 80)
         print("INSTALLING RPM PACKAGES")
         print("=" * 80)
-
-        # Convert to absolute paths
-        package_paths = [str(pkg.absolute()) for pkg in packages]
 
         print(f"\nPackages to install ({len(package_paths)}):")
         for pkg in package_paths:
@@ -664,6 +677,13 @@ Examples:
         help="Uninstall packages instead of installing. If no package names provided, uninstalls all packages in folder. If package names provided, uninstalls only those packages.",
     )
 
+    parser.add_argument(
+        "--skip-package",
+        type=str,
+        nargs="+",
+        help="Skip installing packages provided",
+    )
+
     args = parser.parse_args()
 
     # Validate RPM prefix is only used with RPM packages
@@ -685,6 +705,7 @@ Examples:
         rpm_package_prefix=args.rpm_package_prefix,
         docker_image=args.docker_image,
         uninstall=args.uninstall,
+        skip_package = args.skip_package,
     )
 
     success = installer.run()
