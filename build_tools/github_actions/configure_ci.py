@@ -224,11 +224,25 @@ def should_ci_run_given_modified_paths(paths: Optional[Iterable[str]]) -> bool:
 
 def get_pr_labels(args) -> List[str]:
     """Gets a list of labels applied to a pull request."""
-    data = json.loads(args.get("pr_labels"))
+    data = json.loads(args.get("pr_labels", "{}"))
     labels = []
     for label in data.get("labels", []):
         labels.append(label["name"])
     return labels
+
+
+def get_workflow_dispatch_additional_label_options(args) -> List[str]:
+    """Gets a list of additional label options from workflow_dispatch."""
+    additional_label_options = args.get(
+        "workflow_dispatch_additional_label_options", ""
+    )
+    if additional_label_options:
+        return [
+            label.strip()
+            for label in additional_label_options.split(",")
+            if label.strip()
+        ]
+    return []
 
 
 def filter_known_names(
@@ -633,6 +647,33 @@ def matrix_generator(
                     artifact_group += f"-{build_variant_suffix}"
                 matrix_row["artifact_group"] = artifact_group
 
+                # We retrieve labels from both PR and workflow_dispatch to customize the build and test jobs
+                label_options = []
+                label_options.extend(get_pr_labels(base_args))
+                label_options.extend(
+                    get_workflow_dispatch_additional_label_options(base_args)
+                )
+                for label in label_options:
+                    # If a specific test kernel type was specified, we use that kernel-enabled test runners
+                    # We disable the other machines that do not have the specified kernel type
+                    # If a kernel test label was added, we set the test-runs-on accordingly to kernel-specific test machines
+                    if "test_runner" in label:
+                        _, kernel_type = label.split(":")
+                        # If the architecture has a valid kernel machine, we set it here
+                        if (
+                            "test-runs-on-kernel" in platform_info
+                            and kernel_type in platform_info["test-runs-on-kernel"]
+                        ):
+                            matrix_row["test-runs-on"] = platform_info[
+                                "test-runs-on-kernel"
+                            ][kernel_type]
+                        # Otherwise, we disable the test runner for this architecture
+                        else:
+                            matrix_row["test-runs-on"] = ""
+                            if "test-runs-on-multi-gpu" in platform_info:
+                                matrix_row["test-runs-on-multi-gpu"] = ""
+                        break
+
                 matrix_output.append(matrix_row)
 
     print(f"Generated build matrix: {str(matrix_output)}")
@@ -817,6 +858,9 @@ if __name__ == "__main__":
     )
     base_args["workflow_dispatch_windows_test_labels"] = os.getenv(
         "WINDOWS_TEST_LABELS", ""
+    )
+    base_args["workflow_dispatch_additional_label_options"] = os.getenv(
+        "ADDITIONAL_LABEL_OPTIONS", ""
     )
     base_args["build_variant"] = os.getenv("BUILD_VARIANT", "release")
     base_args["multi_arch"] = os.environ.get("MULTI_ARCH", "false") == "true"

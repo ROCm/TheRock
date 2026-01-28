@@ -75,6 +75,7 @@ jobs:
           INPUT_WINDOWS_AMDGPU_FAMILIES: ${{ github.event.inputs.windows_amdgpu_families }}
           WINDOWS_TEST_LABELS: ${{ github.event.inputs.windows_test_labels }}
           WINDOWS_USE_PREBUILT_ARTIFACTS: ${{ github.event.inputs.windows_use_prebuilt_artifacts }}
+          ADDITIONAL_LABEL_OPTIONS: ${{ github.event.inputs.additional_label_options }}
           BUILD_VARIANT: ${{ inputs.build_variant }}
           MULTI_ARCH: ${{ inputs.multi_arch }}
           # Variable comes from ROCm organization variable 'ROCM_THEROCK_TEST_RUNNERS'
