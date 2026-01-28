@@ -2,8 +2,11 @@
 
 set_and_check(MPI_ROOT "${PACKAGE_PREFIX_DIR}")
 
-set_and_check(MPI_C_INCLUDE_DIRS "${MPI_ROOT}/include")
-set_and_check(MPI_CXX_INCLUDE_DIRS "${MPI_ROOT}/include")
+set_and_check(MPI_C_HEADER_DIR "${MPI_ROOT}/include")
+set_and_check(MPI_CXX_HEADER_DIR "${MPI_ROOT}/include")
+
+set_and_check(MPI_C_INCLUDE_DIRS "${MPI_C_HEADER_DIR}")
+set_and_check(MPI_CXX_INCLUDE_DIRS "${MPI_CXX_HEADER_DIR}")
 
 set_and_check(MPI_C_LIBRARIES "${MPI_ROOT}/lib/libmpi.so")
 set_and_check(MPI_CXX_LIBRARIES "${MPI_ROOT}/lib/libmpi.so")
