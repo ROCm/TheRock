@@ -13,7 +13,11 @@ if(WIN32)
   # TODO(#36): Enable libunwind, libcxx, and libcxxabi on Windows?
   #     Should they be supported? What depends on them?
   set(LLVM_ENABLE_LIBCXX OFF)
-  set(LLVM_ENABLE_RUNTIMES "compiler-rt" CACHE STRING "Enabled runtimes" FORCE)
+  if(THEROCK_AOMP_BUILD)
+    set(LLVM_ENABLE_RUNTIMES "libcxx;libcxxabi;libunwind;openmp;offload;compiler-rt;flang-rt" CACHE STRING "Enabled runtimes" FORCE)
+  else()
+    set(LLVM_ENABLE_RUNTIMES "compiler-rt" CACHE STRING "Enabled runtimes" FORCE)
+  endif()
   set(LLVM_ENABLE_PROJECTS "clang;lld;clang-tools-extra" CACHE STRING "Enable LLVM projects" FORCE)
 else()
   set(LLVM_BUILD_LLVM_DYLIB ON)
@@ -40,7 +44,14 @@ else()
     if(EXISTS "${THEROCK_SOURCE_DIR}/compiler/amd-llvm/openmp/device/CMakeLists.txt")
       list(APPEND LLVM_ENABLE_RUNTIMES "flang-rt")
       set(LLVM_RUNTIME_TARGETS "default;amdgcn-amd-amdhsa")
-      set(RUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_RUNTIMES "openmp")
+      if(THEROCK_AOMP_BUILD)
+        set(RUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_RUNTIMES "compiler-rt;libc;libcxx;libcxxabi;flang-rt;openmp")
+        set(RUNTIMES_amdgcn-amd-amdhsa_FLANG_RT_LIBC_PROVIDER "llvm")
+        set(RUNTIMES_amdgcn-amd-amdhsa_FLANG_RT_LIBCXX_PROVIDER "llvm")
+        set(RUNTIMES_amdgcn-amd-amdhsa_CACHE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/../libcxx/cmake/caches/AMDGPU.cmake")
+      else()
+        set(RUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_RUNTIMES "openmp")
+      endif()
       set(RUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_PER_TARGET_RUNTIME_DIR ON)
       set(FLANG_RUNTIME_F128_MATH_LIB "libquadmath")
       set(LIBOMPTARGET_BUILD_DEVICE_FORTRT ON)
@@ -98,6 +109,9 @@ endif()
 # disabling more explicitly after a bug fix enabled.
 set(LLVM_INCLUDE_BENCHMARKS OFF)
 set(LLVM_TARGETS_TO_BUILD "AMDGPU;X86" CACHE STRING "Enable LLVM Targets" FORCE)
+if(THEROCK_AOMP_BUILD)
+  set(LLVM_RUNTIME_TARGETS "default;amdgcn-amd-amdhsa")
+endif()
 
 # Packaging.
 set(PACKAGE_VENDOR "AMD" CACHE STRING "Vendor" FORCE)
@@ -118,9 +132,11 @@ set(LLVM_EXTERNAL_PROJECTS "rocm-device-libs;spirv-llvm-translator" CACHE STRING
 # options to manage this transition but they require knowing the clange resource
 # dir. In order to avoid drift, we just fixate that too. This can all be
 # removed in a future version.
-# set(CLANG_RESOURCE_DIR "../lib/clang/${LLVM_VERSION_MAJOR}" CACHE STRING "Resource dir" FORCE)
-# set(ROCM_DEVICE_LIBS_BITCODE_INSTALL_LOC_NEW "lib/clang/${LLVM_VERSION_MAJOR}/amdgcn" CACHE STRING "New devicelibs loc" FORCE)
-# set(ROCM_DEVICE_LIBS_BITCODE_INSTALL_LOC_OLD "amdgcn" CACHE STRING "Old devicelibs loc" FORCE)
+if(NOT THEROCK_AOMP_BUILD)
+  set(CLANG_RESOURCE_DIR "../lib/clang/${LLVM_VERSION_MAJOR}" CACHE STRING "Resource dir" FORCE)
+  set(ROCM_DEVICE_LIBS_BITCODE_INSTALL_LOC_NEW "lib/clang/${LLVM_VERSION_MAJOR}/lib/amdgcn" CACHE STRING "New devicelibs loc" FORCE)
+  set(ROCM_DEVICE_LIBS_BITCODE_INSTALL_LOC_OLD "amdgcn" CACHE STRING "Old devicelibs loc" FORCE)
+endif()
 
 # Setup the install rpath (let CMake handle build RPATH per usual):
 # * Executables and libraries can always search their adjacent lib directory
@@ -188,7 +204,9 @@ if(NOT THEROCK_ENABLE_LLVM_TESTS)
       list(APPEND _llvm_required_tools "LLVM_LIB")
       list(APPEND _llvm_required_tools "LLVM_RANLIB")
     endif()
-    therock_set_implicit_llvm_options(LLVM "${CMAKE_CURRENT_SOURCE_DIR}/tools" "${_llvm_required_tools}")
+    if(NOT THEROCK_DEFAULT_LLVM_TOOLSET)
+      therock_set_implicit_llvm_options(LLVM "${CMAKE_CURRENT_SOURCE_DIR}/tools" "${_llvm_required_tools}")
+    endif()
 
     # Clang tools that are required.
     set(_clang_required_tools
@@ -206,6 +224,8 @@ if(NOT THEROCK_ENABLE_LLVM_TESTS)
       # we might as well build them from source ourselves.
       list(APPEND _clang_required_tools "CLANG_SCAN_DEPS")
     endif()
-    therock_set_implicit_llvm_options(CLANG "${CMAKE_CURRENT_SOURCE_DIR}/../clang/tools" "${_clang_required_tools}")
+    if(NOT THEROCK_DEFAULT_CLANG_TOOLSET)
+      therock_set_implicit_llvm_options(CLANG "${CMAKE_CURRENT_SOURCE_DIR}/../clang/tools" "${_clang_required_tools}")
+    endif()
   endblock()
 endif()
