@@ -131,6 +131,7 @@ jobs:
               --package-type rpm \
               --package-folder ${{ env.PACKAGE_DIST_DIR }} \
               --docker-image ${{ env.BUILD_IMAGE }}
+              --skip-package amdrocm-rdc
           fi
 
       - name: Uninstall Test Packages (DEB only)
