@@ -46,8 +46,9 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     return()
 endif()
 
+# Otherwise, this is the sub-project build.
 cmake_minimum_required(VERSION 3.25)
-project(LIBPCIACCESS_BUILD VERSION "0.18.1")
+project(LIBPCIACCESS_BUILD)
 
 if(NOT PATCHELF OR NOT MESON_BUILD)
   message(FATAL_ERROR "Missing PATCHELF or MESON_BUILD from super-project")
