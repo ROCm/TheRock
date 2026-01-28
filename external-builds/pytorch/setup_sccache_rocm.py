@@ -112,67 +112,72 @@ def install_sccache() -> Path:
 def create_sccache_wrapper(compiler_path: Path, sccache_path: Path) -> None:
     """Create an sccache wrapper for a compiler (Linux only).
 
-    This moves the original compiler to an 'original' subdirectory and creates
-    a wrapper script that invokes sccache with the original compiler.
+    This replaces the compiler (or symlink) with a wrapper script that invokes
+    sccache with the resolved absolute path to the real compiler binary.
     """
     if not compiler_path.exists():
         print(f"  Skipping {compiler_path} (does not exist)")
         return
 
-    compiler_name = compiler_path.name
     compiler_dir = compiler_path.parent
     original_dir = compiler_dir / "original"
 
-    # Create original directory if needed
+    # Create original directory for metadata
     original_dir.mkdir(exist_ok=True)
 
-    original_compiler = original_dir / compiler_name
+    # Store the original target path in a file for restoration
+    original_path_file = original_dir / f"{compiler_path.name}.path"
 
     # Check if already wrapped
-    if original_compiler.exists():
-        print(f"  {compiler_path} already wrapped (original exists)")
+    if original_path_file.exists():
+        print(f"  {compiler_path} already wrapped (path file exists)")
         return
 
-    # Handle symlinks - if clang is a symlink to clang-XX, we need to preserve that
+    # Resolve the compiler to its real absolute path (following all symlinks)
     try:
-        if compiler_path.is_symlink():
-            link_target = os.readlink(compiler_path)
-            # If it's a relative link like clang-17, create a symlink in original/ pointing up
-            if not os.path.isabs(link_target):
-                # Create symlink in original dir pointing to ../clang-17
-                # Note: Use string concatenation, not Path() - Path normalizes and eats the ../
-                symlink_target = "../" + link_target
-                original_compiler.symlink_to(symlink_target)
-                print(f"  Created symlink {original_compiler} -> {symlink_target}")
-            else:
-                # Absolute symlink - copy the symlink
-                shutil.copy2(compiler_path, original_compiler, follow_symlinks=False)
-        else:
-            # Move the actual compiler binary
-            shutil.move(compiler_path, original_compiler)
-            print(f"  Moved {compiler_path} -> {original_compiler}")
-    except (OSError, PermissionError, shutil.Error) as e:
+        real_compiler = compiler_path.resolve(strict=True)
+        print(f"  Resolved {compiler_path.name} -> {real_compiler}")
+    except (OSError, RuntimeError) as e:
         raise RuntimeError(
-            f"Failed to backup compiler {compiler_path}: {e}\n"
-            f"Possible causes:\n"
-            f"  - Insufficient permissions (try running with elevated privileges)\n"
-            f"  - Compiler is in use (close any running processes)\n"
-            f"  - Cross-device move (original_dir on different filesystem)"
+            f"Failed to resolve compiler path {compiler_path}: {e}"
         ) from e
 
-    # Create wrapper script
+    # Verify the resolved compiler exists and is executable
+    if not real_compiler.exists():
+        raise RuntimeError(f"Resolved compiler does not exist: {real_compiler}")
+    if not os.access(real_compiler, os.X_OK):
+        raise RuntimeError(f"Resolved compiler is not executable: {real_compiler}")
+
+    # Save the original symlink target (if symlink) or path for restoration
     try:
-        wrapper_content = f'#!/bin/sh\nexec "{sccache_path}" "{original_compiler}" "$@"\n'
+        if compiler_path.is_symlink():
+            original_target = os.readlink(compiler_path)
+            original_path_file.write_text(f"symlink:{original_target}")
+        else:
+            original_path_file.write_text(f"binary:{real_compiler}")
+            # Move binary to original/ for safekeeping
+            original_binary = original_dir / compiler_path.name
+            shutil.move(compiler_path, original_binary)
+            print(f"  Moved binary {compiler_path} -> {original_binary}")
+    except (OSError, PermissionError, shutil.Error) as e:
+        raise RuntimeError(
+            f"Failed to backup compiler {compiler_path}: {e}"
+        ) from e
+
+    # Remove existing symlink if present
+    if compiler_path.is_symlink():
+        compiler_path.unlink()
+
+    # Create wrapper script that calls sccache with the resolved absolute path
+    try:
+        wrapper_content = f'#!/bin/sh\nexec "{sccache_path}" "{real_compiler}" "$@"\n'
         compiler_path.write_text(wrapper_content)
         # Make executable
-        compiler_path.chmod(compiler_path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-        print(f"  Created sccache wrapper: {compiler_path}")
+        compiler_path.chmod(stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH)
+        print(f"  Created sccache wrapper: {compiler_path} -> sccache {real_compiler}")
     except (OSError, PermissionError) as e:
         raise RuntimeError(
-            f"Failed to create sccache wrapper for {compiler_path}: {e}\n"
-            f"Possible causes:\n"
-            f"  - Insufficient write permissions in {compiler_path.parent}\n"
-            f"  - Disk full or filesystem read-only"
+            f"Failed to create sccache wrapper for {compiler_path}: {e}"
         ) from e
 
 
@@ -181,29 +186,36 @@ def restore_compiler(compiler_path: Path) -> None:
     compiler_name = compiler_path.name
     compiler_dir = compiler_path.parent
     original_dir = compiler_dir / "original"
-    original_compiler = original_dir / compiler_name
+    original_path_file = original_dir / f"{compiler_name}.path"
+    original_binary = original_dir / compiler_name
 
-    if not original_compiler.exists():
-        print(f"  {compiler_path}: no original to restore")
+    if not original_path_file.exists():
+        print(f"  {compiler_path}: no path file to restore from")
         return
 
+    # Read the original path info
+    path_info = original_path_file.read_text().strip()
+
     # Remove the wrapper
-    if compiler_path.exists():
+    if compiler_path.exists() or compiler_path.is_symlink():
         compiler_path.unlink()
 
-    # Restore original
-    if original_compiler.is_symlink():
-        # Recreate the symlink
-        link_target = os.readlink(original_compiler)
-        # Adjust path - original/clang links to ../clang-17, we need clang-17
-        if str(link_target).startswith("../"):
-            link_target = Path(str(link_target)[3:])
-        compiler_path.symlink_to(link_target)
-        original_compiler.unlink()
-        print(f"  Restored symlink {compiler_path} -> {link_target}")
-    else:
-        shutil.move(original_compiler, compiler_path)
-        print(f"  Restored {original_compiler} -> {compiler_path}")
+    # Restore based on type
+    if path_info.startswith("symlink:"):
+        # Restore the original symlink
+        symlink_target = path_info[8:]  # Remove "symlink:" prefix
+        compiler_path.symlink_to(symlink_target)
+        print(f"  Restored symlink {compiler_path} -> {symlink_target}")
+    elif path_info.startswith("binary:"):
+        # Restore the moved binary
+        if original_binary.exists():
+            shutil.move(original_binary, compiler_path)
+            print(f"  Restored binary {original_binary} -> {compiler_path}")
+        else:
+            print(f"  Warning: Original binary not found: {original_binary}")
+
+    # Clean up path file
+    original_path_file.unlink()
 
     # Clean up original dir if empty
     try:
