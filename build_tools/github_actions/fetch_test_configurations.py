@@ -31,7 +31,7 @@ def _get_script_path(script_name: str) -> str:
 
 
 def _get_setup_script_path(script_name: str) -> str:
-    platform_path = SCRIPT_DIR / script_name
+    platform_path = SETUP_SCRIPT_DIR / script_name
     # Convert to posix (using `/` instead of `\\`) so test workflows can use
     # 'bash' as the shell on Linux and Windows.
     posix_path = platform_path.as_posix()
