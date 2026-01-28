@@ -211,7 +211,7 @@ def parse_output_path(
 
 def load_comp_summary(build_dir: Path) -> str:
     """Load comp-summary.html body content if available."""
-    path = build_dir / "logs" / "comp-summary.html"
+    path = build_dir / "logs" / "therock-build-prof" / "comp-summary.html"
     if not path.exists():
         return ""
     content = path.read_text()
