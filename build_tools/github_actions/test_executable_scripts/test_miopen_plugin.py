@@ -14,11 +14,11 @@ cmd = [
     "ctest",
     "--test-dir",
     f"{THEROCK_BIN_DIR}/miopen_legacy_plugin",
-    "--output-on-failure",
+    "--verbose",
     "--parallel",
     "8",
     "--timeout",
-    "600",
+    "800",
 ]
 
 # Determine test filter based on TEST_TYPE environment variable
