@@ -109,7 +109,6 @@ jobs:
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages/dist
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
       optional_build_prod_arguments: ""
-      CACHE_DIR: ${{ github.workspace }}/.container-cache
       # sccache configuration for ROCm compiler caching with S3 backend
       SCCACHE_BUCKET: therock-pytorch-sccache
       SCCACHE_REGION: us-east-2
