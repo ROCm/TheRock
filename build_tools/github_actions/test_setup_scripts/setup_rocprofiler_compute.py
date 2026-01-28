@@ -9,8 +9,6 @@ THEROCK_OUTPUT_DIR = str(THEROCK_DIR / "build")
 
 requirements_dir = f"{THEROCK_OUTPUT_DIR}/libexec/rocprofiler-compute"
 cmd = [
-    "python",
-    "-m",
     "pip",
     "install",
     "-r",
