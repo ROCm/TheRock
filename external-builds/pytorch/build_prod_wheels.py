@@ -399,12 +399,12 @@ def do_build(args: argparse.Namespace):
 
     # Track whether sccache wrapping was attempted (for cleanup in finally block)
     sccache_setup_attempted = False
-    
+
     if args.use_sccache:
         print("Setting up sccache with ROCm compiler wrapping...")
         # Add script directory to path for importing setup_sccache_rocm
         sys.path.insert(0, str(script_dir))
-        
+
         try:
             from setup_sccache_rocm import (
                 install_sccache,
@@ -424,14 +424,16 @@ def do_build(args: argparse.Namespace):
 
             # Start sccache server to warm it up
             try:
-                run_command([str(sccache_path), "--start-server"], cwd=tempfile.gettempdir())
+                run_command(
+                    [str(sccache_path), "--start-server"], cwd=tempfile.gettempdir()
+                )
             except subprocess.CalledProcessError:
                 # Server may already be running, ignore
                 pass
 
             # Zero sccache stats
             run_command([str(sccache_path), "--zero-stats"], cwd=tempfile.gettempdir())
-            
+
         except Exception as e:
             print(f"ERROR: sccache setup failed: {e}")
             print("Falling back to ccache for host code compilation...")
@@ -501,7 +503,9 @@ def do_build(args: argparse.Namespace):
         # on directory layout.
         # Obviously, this should be completely burned with fire once the root causes
         # are eliminted.
-        hip_device_lib_path = get_rocm_path("root") / "lib" / "llvm" / "amdgcn" / "bitcode"
+        hip_device_lib_path = (
+            get_rocm_path("root") / "lib" / "llvm" / "amdgcn" / "bitcode"
+        )
         if not hip_device_lib_path.exists():
             print(
                 "WARNING: Default location of device libs not found. Relying on "
@@ -575,26 +579,30 @@ def do_build(args: argparse.Namespace):
                     [str(sccache_path), "--show-stats"], cwd=tempfile.gettempdir()
                 )
                 print(f"sccache --show-stats output:\n{sccache_stats_output}")
-                
+
                 # Parse and display cache hit rate
                 metrics = parse_sccache_stats(sccache_stats_output)
                 if metrics:
-                    print("\n" + "="*60)
+                    print("\n" + "=" * 60)
                     print("sccache Cache Performance Summary")
-                    print("="*60)
+                    print("=" * 60)
                     if "compile_requests" in metrics:
-                        print(f"Total Compile Requests: {metrics['compile_requests']:,}")
+                        print(
+                            f"Total Compile Requests: {metrics['compile_requests']:,}"
+                        )
                     if "cache_hits" in metrics:
                         print(f"Cache Hits: {metrics['cache_hits']:,}")
                     if "cache_misses" in metrics:
                         print(f"Cache Misses: {metrics['cache_misses']:,}")
                     if "hit_rate" in metrics:
-                        hit_rate = metrics['hit_rate']
-                        emoji = "🎯" if hit_rate > 80 else "✅" if hit_rate > 50 else "⚠️"
+                        hit_rate = metrics["hit_rate"]
+                        emoji = (
+                            "🎯" if hit_rate > 80 else "✅" if hit_rate > 50 else "⚠️"
+                        )
                         print(f"Cache Hit Rate: {hit_rate:.1f}% {emoji}")
                     if "cache_errors" in metrics and metrics["cache_errors"] > 0:
                         print(f"⚠️  Cache Errors: {metrics['cache_errors']:,}")
-                    print("="*60 + "\n")
+                    print("=" * 60 + "\n")
 
     finally:
         # Always restore original compilers, even on failure
