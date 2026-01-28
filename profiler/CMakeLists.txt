@@ -236,6 +236,7 @@ endif(THEROCK_BUILD_TESTING)
       INSTALL_RPATH_DIRS
         "lib"
         "lib/rocprofiler-systems"
+        "llvm/lib"
       CMAKE_INCLUDES
         therock_explicit_finders.cmake
       RUNTIME_DEPS

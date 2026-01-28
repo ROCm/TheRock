@@ -1,0 +1,87 @@
+name: Multi-Arch CI - Linux
+
+on:
+  workflow_call:
+    inputs:
+      artifact_group:
+        type: string
+      matrix_per_family_json:
+        type: string
+        description: "JSON array of {amdgpu_family, test-runs-on} objects for per-arch stages"
+      dist_amdgpu_families:
+        type: string
+        description: "Semicolon-separated list of all GPU families for dist targets"
+      build_variant_label:
+        type: string
+      build_variant_cmake_preset:
+        type: string
+      build_variant_suffix:
+        type: string
+      test_labels:
+        type: string
+      artifact_run_id:
+        type: string
+      expect_failure:
+        type: boolean
+      use_prebuilt_artifacts:
+        type: string
+      rocm_package_version:
+        type: string
+      test_type:
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build_multi_arch_stages:
+    name: Build Multi-Arch Stages
+    if: ${{ inputs.use_prebuilt_artifacts == 'false' }}
+    uses: ./.github/workflows/multi_arch_build_portable_linux.yml
+    secrets: inherit
+    with:
+      matrix_per_family_json: ${{ inputs.matrix_per_family_json }}
+      dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
+      artifact_group: ${{ inputs.artifact_group }}
+      build_variant_label: ${{ inputs.build_variant_label }}
+      build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
+      build_variant_suffix: ${{ inputs.build_variant_suffix }}
+      expect_failure: ${{ inputs.expect_failure }}
+      use_prebuilt_artifacts: ${{ inputs.use_prebuilt_artifacts }}
+      rocm_package_version: ${{ inputs.rocm_package_version }}
+      test_type: ${{ inputs.test_type }}
+    permissions:
+      contents: read
+      id-token: write
+
+  test_artifacts_per_family:
+    needs: [build_multi_arch_stages]
+    name: Test ${{ matrix.family_info.amdgpu_family }}
+    # If the dependent job failed/cancelled, this job will not be run
+    # The use_prebuilt_artifacts "or" statement ensures that tests will run if
+    # previous build step is run or skipped.
+    # If we are expecting a build failure, do not run tests to save machine capacity
+    if: >-
+      ${{
+        !failure() &&
+        !cancelled() &&
+        (
+          inputs.use_prebuilt_artifacts == 'false' ||
+          inputs.use_prebuilt_artifacts == 'true'
+        ) &&
+        inputs.expect_failure == false
+      }}
+    strategy:
+      fail-fast: false
+      matrix:
+        family_info: ${{ fromJSON(inputs.matrix_per_family_json) }}
+    uses: ./.github/workflows/test_artifacts.yml
+    with:
+      # Use architecture-specific artifact group for fetching per-arch artifacts
+      artifact_group: ${{ matrix.family_info.amdgpu_family }}
+      amdgpu_families: ${{ matrix.family_info.amdgpu_family }}
+      test_runs_on: ${{ matrix.family_info.test-runs-on }}
+      artifact_run_id: ${{ inputs.artifact_run_id }}
+      test_type: ${{ inputs.test_type }}
+      test_labels: ${{ inputs.test_labels }}
+      sanity_check_only_for_family: ${{ matrix.family_info.sanity_check_only_for_family }}

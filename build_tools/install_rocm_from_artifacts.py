@@ -13,7 +13,8 @@ Usage:
 python build_tools/install_rocm_from_artifacts.py
     (--artifact-group ARTIFACT_GROUP | --amdgpu_family AMDGPU_FAMILY)
     [--output-dir OUTPUT_DIR]
-    (--run-id RUN_ID | --release RELEASE | --input-dir INPUT_DIR)
+    (--run-id RUN_ID | --release RELEASE | --latest-release | --input-dir INPUT_DIR)
+    [--dry-run]
     [--run-github-repo RUN_GITHUB_REPO]
     [--aqlprofile | --no-aqlprofile]
     [--blas | --no-blas]
@@ -67,7 +68,24 @@ Examples:
         --tests \
         --run-github-repo ROCm/rocm-libraries
     ```
+- Downloads and unpacks the latest nightly release for gfx110X:
+    ```
+    python build_tools/install_rocm_from_artifacts.py \
+        --latest-release \
+        --amdgpu-family gfx110X-all
+    ```
+- Shows what would be downloaded without actually downloading (works with any mode):
+    ```
+    python build_tools/install_rocm_from_artifacts.py \
+        --latest-release \
+        --amdgpu-family gfx110X-all \
+        --dry-run
 
+    python build_tools/install_rocm_from_artifacts.py \
+        --release 7.11.0a20260119 \
+        --amdgpu-family gfx110X-all \
+        --dry-run
+    ```
 You can select your AMD GPU family from therock_amdgpu_targets.cmake.
 
 By default for CI workflow retrieval, all artifacts (excluding test artifacts)
@@ -87,6 +105,7 @@ import argparse
 import boto3
 from botocore import UNSIGNED
 from botocore.config import Config
+from datetime import datetime
 from fetch_artifacts import main as fetch_artifacts_main
 from pathlib import Path
 import platform
@@ -95,6 +114,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
+from typing import Optional
 
 PLATFORM = platform.system().lower()
 s3_client = boto3.client(
@@ -102,6 +122,119 @@ s3_client = boto3.client(
     verify=False,
     config=Config(max_pool_connections=100, signature_version=UNSIGNED),
 )
+# S3 bucket names for TheRock releases.
+# NOTE: These buckets will be restricted to CloudFront-only access in the future.
+# When that happens, direct S3 API calls (list_objects, download_fileobj) will fail
+# and this script will need to be updated to use CloudFront URLs instead.
+NIGHTLY_BUCKET_NAME = "therock-nightly-tarball"
+DEV_BUCKET_NAME = "therock-dev-tarball"
+
+
+def parse_nightly_version(version: str) -> Optional[datetime]:
+    """
+    Parse nightly version like '7.11.0a20251124' to extract date.
+    Returns datetime for sorting, None if not parseable.
+    """
+    match = re.search(r"(\d+)\.(\d+)\.(\d+)(a|rc)(\d{4})(\d{2})(\d{2})", version)
+    if match:
+        year, month, day = int(match.group(5)), int(match.group(6)), int(match.group(7))
+        return datetime(year, month, day)
+    return None
+
+
+def extract_version_from_asset_name(
+    asset_name: str, artifact_group: str, platform_str: str
+) -> Optional[str]:
+    """
+    Extract version string from asset name.
+    E.g., 'therock-dist-linux-gfx110X-all-7.11.0a20251124.tar.gz' -> '7.11.0a20251124'
+    """
+    prefix = f"therock-dist-{platform_str}-{artifact_group}-"
+    suffix = ".tar.gz"
+    if asset_name.startswith(prefix) and asset_name.endswith(suffix):
+        return asset_name[len(prefix) : -len(suffix)]
+    return None
+
+
+def list_available_nightly_gpu_families(platform_str: str = PLATFORM) -> set[str]:
+    """
+    Query S3 to find all GPU families that have nightly releases.
+    Useful for error messages when an invalid GPU family is specified.
+    """
+    prefix = f"therock-dist-{platform_str}-"
+
+    paginator = s3_client.get_paginator("list_objects_v2")
+    families: set[str] = set()
+
+    for page in paginator.paginate(Bucket=NIGHTLY_BUCKET_NAME, Prefix=prefix):
+        for obj in page.get("Contents", []):
+            # Extract family from: therock-dist-linux-{family}-{version}.tar.gz
+            match = re.match(rf"{prefix}([\w-]+)-", obj["Key"])
+            if match:
+                families.add(match.group(1))
+
+    return families
+
+
+def _fetch_and_sort_nightly_releases(
+    artifact_group: str,
+    platform_str: str = PLATFORM,
+) -> list[dict]:
+    """
+    Fetch and sort nightly releases from S3 bucket for a given artifact group.
+
+    Returns:
+        List of dicts with keys: version, asset_name, last_modified, size, parsed_date
+        Sorted by recency (newest first).
+    """
+    prefix = f"therock-dist-{platform_str}-{artifact_group}-"
+
+    paginator = s3_client.get_paginator("list_objects_v2")
+    releases: list[dict] = []
+
+    for page in paginator.paginate(Bucket=NIGHTLY_BUCKET_NAME, Prefix=prefix):
+        for obj in page.get("Contents", []):
+            key = obj["Key"]
+            if not key.endswith(".tar.gz"):
+                continue
+            version = extract_version_from_asset_name(key, artifact_group, platform_str)
+            if version:
+                releases.append(
+                    {
+                        "version": version,
+                        "asset_name": key,
+                        "last_modified": obj["LastModified"],
+                        "size": obj["Size"],
+                        "parsed_date": parse_nightly_version(version),
+                    }
+                )
+
+    # Sort by parsed date (newest first), falling back to last_modified
+    releases.sort(
+        key=lambda x: (
+            x["parsed_date"] if x["parsed_date"] else datetime.min,
+            x["last_modified"],
+        ),
+        reverse=True,
+    )
+
+    return releases
+
+
+def discover_latest_release(
+    artifact_group: str,
+    platform_str: str = PLATFORM,
+) -> Optional[tuple[str, str]]:
+    """
+    Query S3 bucket to find the latest nightly release for given artifact group.
+
+    Returns:
+        Tuple of (version_string, full_asset_name) or None if not found.
+    """
+    releases = _fetch_and_sort_nightly_releases(artifact_group, platform_str)
+    if not releases:
+        return None
+    return (releases[0]["version"], releases[0]["asset_name"])
 
 
 def log(*args, **kwargs):
@@ -165,6 +298,8 @@ def retrieve_artifacts_by_run_id(args):
         str(args.output_dir),
         "--flatten",
     ]
+    if args.dry_run:
+        argv.append("--dry-run")
     if args.run_github_repo:
         argv.extend(["--run-github-repo", args.run_github_repo])
 
@@ -304,12 +439,18 @@ def retrieve_artifacts_by_release(args):
         log("Exiting...")
         return
 
-    release_bucket = (
-        "therock-nightly-tarball" if nightly_release else "therock-dev-tarball"
-    )
+    release_bucket = NIGHTLY_BUCKET_NAME if nightly_release else DEV_BUCKET_NAME
     release_version = args.release
 
     log(f"Retrieving artifacts from release bucket {release_bucket}")
+
+    if args.dry_run:
+        asset_name = (
+            f"therock-dist-{PLATFORM}-{artifact_group}-{release_version}.tar.gz"
+        )
+        log(f"[DRY RUN] Would download: {asset_name} (version {release_version})")
+        return
+
     _retrieve_s3_release_assets(
         release_bucket, artifact_group, release_version, output_dir
     )
@@ -319,6 +460,10 @@ def retrieve_artifacts_by_input_dir(args):
     input_dir = args.input_dir
     output_dir = args.output_dir
     log(f"Retrieving artifacts from input dir {input_dir}")
+
+    if args.dry_run:
+        log(f"[DRY RUN] Would rsync from {input_dir} to {output_dir}")
+        return
 
     # Check to make sure rsync exists
     if not shutil.which("rsync"):
@@ -342,13 +487,52 @@ def retrieve_artifacts_by_input_dir(args):
         log(str(ex))
 
 
+def retrieve_artifacts_by_latest_release(args):
+    """
+    Find and retrieve the latest nightly release from S3.
+    """
+    log(f"Finding latest nightly release for {args.artifact_group}...")
+
+    result = discover_latest_release(artifact_group=args.artifact_group)
+
+    if result is None:
+        log(f"ERROR: No nightly release found for '{args.artifact_group}'")
+        log("")
+        log("Available GPU families in the nightly bucket:")
+        available = list_available_nightly_gpu_families()
+        for family in sorted(available):
+            log(f"  - {family}")
+        sys.exit(1)
+
+    version, asset_name = result
+    log(f"Found latest release: {version}")
+
+    if args.dry_run:
+        log(f"[DRY RUN] Would download: {asset_name} (version {version})")
+        return
+
+    # Reuse existing download logic
+    _retrieve_s3_release_assets(
+        release_bucket=NIGHTLY_BUCKET_NAME,
+        artifact_group=args.artifact_group,
+        release_version=version,
+        output_dir=args.output_dir,
+    )
+
+
 def run(args):
     log("### Installing TheRock using artifacts ###")
-    _create_output_directory(args.output_dir)
+
+    # Skip directory creation for dry-run
+    if not args.dry_run:
+        _create_output_directory(args.output_dir)
+
     if args.run_id:
         retrieve_artifacts_by_run_id(args)
     elif args.release:
         retrieve_artifacts_by_release(args)
+    elif args.latest_release:
+        retrieve_artifacts_by_latest_release(args)
 
     if args.input_dir:
         retrieve_artifacts_by_input_dir(args)
@@ -385,6 +569,18 @@ def main(argv):
         "--release",
         type=str,
         help="Release version of TheRock to install, from the nightly-tarball (X.Y.ZrcYYYYMMDD) or dev-tarball (X.Y.Z.dev0+{hash})",
+    )
+
+    group.add_argument(
+        "--latest-release",
+        action="store_true",
+        help="Install the latest nightly release (built daily from main branch)",
+    )
+
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be downloaded/copied without actually doing it",
     )
 
     artifacts_group = parser.add_argument_group("artifacts_group")

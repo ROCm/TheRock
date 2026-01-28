@@ -8,6 +8,10 @@ trap 'kill -TERM 0' INT
 OUTPUT_DIR="/therock/output"
 mkdir -p "$OUTPUT_DIR/caches"
 
+# Set build profiling log directory to match the actual build output location
+# This ensures resource_info.py writes logs to the correct path inside the container
+export THEROCK_BUILD_PROF_LOG_DIR="$OUTPUT_DIR/build/logs/therock-build-prof"
+
 export CCACHE_DIR="$OUTPUT_DIR/caches/container/ccache"
 export PIP_CACHE_DIR="$OUTPUT_DIR/caches/container/pip"
 mkdir -p "$CCACHE_DIR"
@@ -17,8 +21,15 @@ pip install -r /therock/src/requirements.txt
 
 python /therock/src/build_tools/health_status.py
 
-export CMAKE_C_COMPILER_LAUNCHER=ccache
-export CMAKE_CXX_COMPILER_LAUNCHER=ccache
+# Build compiler launcher: use extra launcher if provided (it handles ccache internally),
+# otherwise fall back to ccache directly.
+if [ -n "${EXTRA_C_COMPILER_LAUNCHER}" ]; then
+  export CMAKE_C_COMPILER_LAUNCHER="${EXTRA_C_COMPILER_LAUNCHER}"
+  export CMAKE_CXX_COMPILER_LAUNCHER="${EXTRA_CXX_COMPILER_LAUNCHER}"
+else
+  export CMAKE_C_COMPILER_LAUNCHER=ccache
+  export CMAKE_CXX_COMPILER_LAUNCHER=ccache
+fi
 
 # Build manylinux Python executables argument if MANYLINUX is set
 PYTHON_EXECUTABLES_ARG=""

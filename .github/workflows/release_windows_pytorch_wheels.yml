@@ -90,7 +90,7 @@ jobs:
       fail-fast: false
       matrix:
         python_version: ["3.11", "3.12", "3.13"]
-        pytorch_git_ref: ["release/2.9", "nightly"]
+        pytorch_git_ref: ["release/2.9", "release/2.10", "nightly"]
 
     uses: ./.github/workflows/build_windows_pytorch_wheels.yml
     with:
