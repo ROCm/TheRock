@@ -140,7 +140,8 @@ def create_sccache_wrapper(compiler_path: Path, sccache_path: Path) -> None:
             # If it's a relative link like clang-17, create a symlink in original/ pointing up
             if not os.path.isabs(link_target):
                 # Create symlink in original dir pointing to ../clang-17
-                symlink_target = Path("..") / link_target
+                # Note: Use string concatenation, not Path() - Path normalizes and eats the ../
+                symlink_target = "../" + link_target
                 original_compiler.symlink_to(symlink_target)
                 print(f"  Created symlink {original_compiler} -> {symlink_target}")
             else:
