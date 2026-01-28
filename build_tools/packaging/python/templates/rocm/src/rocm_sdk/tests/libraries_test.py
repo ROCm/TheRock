@@ -66,9 +66,9 @@ class ROCmLibrariesTest(unittest.TestCase):
                 # the "libraries" like hipfft, rocblas, etc. which are siblings
                 # in '_rocm_sdk_libraries_gfx####/bin' while the "compiler" is
                 # in '_rocm_sdk_core/bin'
-                # TODO(#996): track deps in libraries then have the preloader
-                #   recursively get deps instead of hardcoding like this
-                preload_command = "import rocm_sdk; rocm_sdk.preload_libraries('amd_comgr', 'amdhip64', 'hiprtc');"
+                preload_command = (
+                    "import rocm_sdk; rocm_sdk.preload_libraries('hiprtc');"
+                )
 
                 # Load each in an isolated process because not all libraries in the tree
                 # are designed to load into the same process (i.e. LLVM runtime libs,
