@@ -21,9 +21,12 @@ add_subdirectory(frugally-deep)
 # spdlog depends on fmt.
 add_subdirectory(spdlog)
 
-# Host math libraries.
+# Host math libraries (CPU reference BLAS for testing).
 if(THEROCK_ENABLE_HOST_BLAS)
   add_subdirectory(host-blas)
+endif()
+if(THEROCK_ENABLE_HOST_AOCL_BLAS)
+  add_subdirectory(aocl)  # AOCL-BLAS: Alternative to OpenBLAS
 endif()
 if(THEROCK_ENABLE_HOST_SUITE_SPARSE)
   add_subdirectory(SuiteSparse)

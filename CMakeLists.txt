@@ -89,6 +89,12 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME AND NOT DEFINED THEROCK_BUILD_TESTIN
 endif()
 if(THEROCK_BUILD_TESTING)
   message(STATUS "Enabling building tests")
+  # Enable host math libraries (OpenBLAS, AOCL-BLAS, SuiteSparse) when testing is enabled
+  # These provide CPU reference BLAS implementations for rocBLAS clients/tests
+  if(NOT DEFINED THEROCK_ENABLE_HOST_MATH)
+    set(THEROCK_ENABLE_HOST_MATH ON)
+    message(STATUS "Enabling host math libraries for testing")
+  endif()
 endif()
 
 ################################################################################
