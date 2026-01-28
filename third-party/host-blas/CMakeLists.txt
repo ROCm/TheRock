@@ -46,6 +46,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       EXCLUDE_FROM_ALL
       NO_MERGE_COMPILE_COMMANDS
       OUTPUT_ON_FAILURE
+      THIRD_PARTY_DEP
       EXTERNAL_SOURCE_DIR .
       INTERFACE_LINK_DIRS "lib/host-math/lib"
       # RPATH logic needs to know that executables/libs for this project are in
