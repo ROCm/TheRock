@@ -60,14 +60,70 @@ Requirements for these files:
   - Some extra tools like `lit` for LLVM testing are acceptable and should be
     evaluated on a case-by-case basis.
 
-<!-- ### Multi-distro rocm-runtime base Dockerfile -->
+This test dockerfile is used by various CI/CD workflows, such as:
 
-<!-- TODO: add docs together with https://github.com/ROCm/TheRock/pull/2572
+- [`.github/workflows/test_component.yml`](/.github/workflows/test_component.yml)
+- [`.github/workflows/test_pytorch_wheels.yml`](/.github/workflows/test_pytorch_wheels.yml)
 
-base image for images that include ROCm and a base set of runtime dependencies
+To run this test dockerfile yourself on a machine with a compatible GPU:
 
-See https://github.com/ROCm/TheRock/pull/2572#discussion_r2631985736
--->
+```bash
+sudo docker run -it \
+  --device=/dev/kfd --device=/dev/dri \
+  --ipc=host --group-add=video --group-add=render --group-add=110 \
+  ghcr.io/rocm/no_rocm_image_ubuntu24_04@latest
+```
+
+> [!TIP]
+> We recommend creating a Python venv to install Python packages while using
+> this image:
+>
+> ```bash
+> sudo apt update && sudo apt install python3-venv -y
+> python3 -m venv .venv && source .venv/bin/activate
+>
+> # Then install packages. For example, with nightly rocm packages for gfx94X:
+> pip install --index-url=https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu 'rocm[libraries,devel]'
+> ```
+
+### `rocm_runtime.Dockerfile`
+
+| Source .Dockerfile                                   | Published package |
+| ---------------------------------------------------- | ----------------- |
+| [`rocm_runtime.Dockerfile`](rocm_runtime.Dockerfile) | N/A               |
+
+This Dockerfile builds ROCm runtime images from TheRock prebuilt tarballs for
+multiple Linux distributions using a single Dockerfile via the `BASE_IMAGE`
+build argument.
+
+This is a user-space ROCm runtime image. It does NOT include kernel drivers.
+The host must provide compatible AMDGPU/ROCm kernel components and device
+access (e.g., `--device=/dev/kfd --device=/dev/dri`).
+
+See the header comments in [`rocm_runtime.Dockerfile`](rocm_runtime.Dockerfile)
+for supported base images, build arguments, and build/run examples.
+
+Supporting scripts:
+
+- [`install_rocm_deps.sh`](install_rocm_deps.sh): Auto-detects the distribution
+  and installs ROCm runtime dependencies using the appropriate package manager
+  (apt, dnf, or tdnf).
+
+- [`install_rocm_tarball.sh`](install_rocm_tarball.sh): Downloads ROCm tarball
+  from `rocm.{nightlies|prereleases|devreleases}.amd.com` or `repo.amd.com` (for
+  stable releases), extracts to `/opt/rocm-{VERSION}` with `/opt/rocm` symlink.
+  Can also be used standalone on a Linux host (prints environment variable
+  setup instructions after installation):
+
+  ```bash
+  # One-liner installation
+  curl -sSL https://raw.githubusercontent.com/ROCm/TheRock/main/dockerfiles/install_rocm_tarball.sh | \
+    sudo bash -s -- <VERSION> <AMDGPU_FAMILY> [RELEASE_TYPE]
+
+  # Example: Install ROCm 7.11.0a20251211 for gfx110X
+  curl -sSL https://raw.githubusercontent.com/ROCm/TheRock/main/dockerfiles/install_rocm_tarball.sh | \
+    sudo bash -s -- 7.11.0a20260108 gfx94X-dcgpu nightlies
+  ```
 
 ## Using published images
 

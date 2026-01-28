@@ -4,28 +4,65 @@ This document provides instructions for installing ROCm artifacts from TheRock b
 
 ## Command Options
 
-The script supports the following command-line options:
+The script supports the following command-line options, organized by category:
 
-| Option              | Type   | Description                                                                              |
-| ------------------- | ------ | ---------------------------------------------------------------------------------------- |
-| `--amdgpu-family`   | String | AMD GPU family target (required)                                                         |
-| `--base-only`       | Flag   | Include only base artifacts (minimal installation)                                       |
-| `--blas`            | Flag   | Include BLAS artifacts                                                                   |
-| `--debug-tools`     | Flag   | Include the ROCm debugging tools artifacts                                               |
-| `--fft`             | Flag   | Include FFT artifacts                                                                    |
-| `--hipdnn`          | Flag   | Include hipDNN artifacts                                                                 |
-| `--input-dir`       | String | Existing TheRock directory to copy from                                                  |
-| `--miopen`          | Flag   | Include MIOpen artifacts                                                                 |
-| `--output-dir`      | Path   | Output directory for TheRock installation (default: `./therock-build`)                   |
-| `--prim`            | Flag   | Include primitives artifacts                                                             |
-| `--rand`            | Flag   | Include random number generator artifacts                                                |
-| `--rccl`            | Flag   | Include RCCL artifacts                                                                   |
-| `--rocwmma`         | Flag   | Include rocWMMA artifacts                                                                |
-| `--libhipcxx`       | Flag   | Include libhipcxx artifacts                                                              |
-| `--release`         | String | Release version from nightly or dev tarballs                                             |
-| `--run-github-repo` | String | GitHub repository for CI run ID (default: `GITHUB_REPOSITORY` env var or `ROCm/TheRock`) |
-| `--run-id`          | String | GitHub CI workflow run ID to install from                                                |
-| `--tests`           | Flag   | Include test artifacts for enabled components                                            |
+### Source Options
+
+Choose one of these options to specify where to install from:
+
+| Option             | Type   | Description                                                       |
+| ------------------ | ------ | ----------------------------------------------------------------- |
+| `--input-dir`      | String | Existing TheRock directory to copy from                           |
+| `--latest-release` | Flag   | Install the latest nightly release (built daily from main branch) |
+| `--release`        | String | Release version from nightly or dev tarballs                      |
+| `--run-id`         | String | GitHub CI workflow run ID to install from                         |
+
+### Repository Options
+
+| Option              | Type   | Description                                                                                                    |
+| ------------------- | ------ | -------------------------------------------------------------------------------------------------------------- |
+| `--amdgpu-family`   | String | AMD GPU family target (required). See [therock_amdgpu_targets.cmake](../../cmake/therock_amdgpu_targets.cmake) |
+| `--output-dir`      | Path   | Output directory for TheRock installation (default: `./therock-build`)                                         |
+| `--run-github-repo` | String | GitHub repository for CI run ID (default: `GITHUB_REPOSITORY` env var or `ROCm/TheRock`)                       |
+
+### Component Selection
+
+| Option          | Type | Description                                        |
+| --------------- | ---- | -------------------------------------------------- |
+| `--base-only`   | Flag | Include only base artifacts (minimal installation) |
+| `--blas`        | Flag | Include BLAS artifacts                             |
+| `--debug-tools` | Flag | Include ROCm debugging tools artifacts             |
+| `--fft`         | Flag | Include FFT artifacts                              |
+| `--hipdnn`      | Flag | Include hipDNN artifacts                           |
+| `--libhipcxx`   | Flag | Include libhipcxx artifacts                        |
+| `--miopen`      | Flag | Include MIOpen artifacts                           |
+| `--prim`        | Flag | Include primitives artifacts                       |
+| `--rand`        | Flag | Include random number generator artifacts          |
+| `--rccl`        | Flag | Include RCCL artifacts                             |
+| `--rocwmma`     | Flag | Include rocWMMA artifacts                          |
+| `--tests`       | Flag | Include test artifacts for enabled components      |
+
+### Utility Options
+
+| Option      | Type | Description                                                |
+| ----------- | ---- | ---------------------------------------------------------- |
+| `--dry-run` | Flag | Show what would be downloaded without actually downloading |
+
+### Default Behavior
+
+By default for CI workflow retrieval (`--run-id`), all artifacts (excluding test artifacts) will be downloaded. To customize:
+
+- Use `--base-only` for minimal installation (core ROCm only)
+- Use component flags (`--blas`, `--fft`, etc.) to select specific libraries
+- Add `--tests` to include test artifacts for enabled components
+
+### Selecting Your GPU Family
+
+Select your AMD GPU family from [therock_amdgpu_targets.cmake](https://github.com/ROCm/TheRock/blob/main/cmake/therock_amdgpu_targets.cmake#L44-L81). Common families include:
+
+- `gfx110X-all` - RDNA 3 consumer GPUs (RX 7000 series)
+- `gfx94X-dcgpu` - MI300 series datacenter GPUs
+- `gfx90X-dcgpu` - MI200 series datacenter GPUs
 
 ### Finding GitHub Run IDs
 
@@ -41,9 +78,11 @@ For example, if the URL is `https://github.com/ROCm/TheRock/actions/runs/1557562
 
 ### Finding Release Versions
 
+#### Finding Release Versions Manually
+
 TheRock provides two types of release tarballs:
 
-#### Nightly Tarballs
+##### Nightly Tarballs
 
 Nightly tarballs are built daily and follow the naming pattern: `MAJOR.MINOR.aYYYYMMDD`
 
@@ -67,7 +106,7 @@ Nightly tarballs are built daily and follow the naming pattern: `MAJOR.MINOR.aYY
 - `a` = alpha version
 - `YYYYMMDD` = build date (e.g., `20251124` = November 24, 2025)
 
-#### Dev Tarballs
+##### Dev Tarballs
 
 Dev tarballs are built from specific commits and follow the naming pattern: `MAJOR.MINOR.PATCH.dev0+{COMMIT_HASH}`
 
@@ -95,6 +134,25 @@ Dev tarballs are built from specific commits and follow the naming pattern: `MAJ
 > You can browse the S3 buckets directly in your browser to see all available versions and GPU families.
 > The version string to use with `--release` is always the portion of the filename between the GPU family and `.tar.gz`.
 
+#### Using The Latest Release
+
+To automatically install the latest nightly release without manually finding a version string, use the `--latest-release` flag:
+
+```bash
+python build_tools/install_rocm_from_artifacts.py \
+    --latest-release \
+    --amdgpu-family gfx110X-all
+```
+
+To preview what would be downloaded without actually downloading:
+
+```bash
+python build_tools/install_rocm_from_artifacts.py \
+    --latest-release \
+    --amdgpu-family gfx110X-all \
+    --dry-run
+```
+
 ### Fetching Artifacts from Other Repositories
 
 By default, the script fetches artifacts from the repository defined in the `GITHUB_REPOSITORY` environment variable. If that variable is unset, it defaults to `ROCm/TheRock`.
@@ -107,6 +165,45 @@ python build_tools/install_rocm_from_artifacts.py \
     --amdgpu-family gfx110X-dgpu \
     --run-github-repo ROCm/rocm-libraries
 ```
+
+## Installing Per-Commit CI Artifacts Manually
+
+For advanced use cases, you can manually download and flatten CI artifacts using AWS CLI and the `fileset_tool.py` script.
+
+1. Find the CI workflow run that you want to install from. For example, search
+   through recent successful runs of the `ci.yml` workflow for `push` events on
+   the `main` branch
+   [using this page](https://github.com/ROCm/TheRock/actions/workflows/ci.yml?query=branch%3Amain+is%3Asuccess+event%3Apush)
+   (choosing a build that took more than a few minutes - documentation only
+   changes skip building and uploading).
+
+1. Download the artifacts for that workflow run from S3 using either the
+   [AWS CLI](https://aws.amazon.com/cli/) or
+   [AWS SDK for Python (Boto3)](https://aws.amazon.com/sdk-for-python/):
+
+   ```bash
+   export LOCAL_ARTIFACTS_DIR=~/therock-artifacts
+   export LOCAL_INSTALL_DIR=${LOCAL_ARTIFACTS_DIR}/install
+   mkdir -p ${LOCAL_ARTIFACTS_DIR}
+   mkdir -p ${LOCAL_INSTALL_DIR}
+
+   # Example: https://github.com/ROCm/TheRock/actions/runs/15575624591
+   export RUN_ID=15575624591
+   export OPERATING_SYSTEM=linux # or 'windows'
+   aws s3 cp s3://therock-artifacts/${RUN_ID}-${OPERATING_SYSTEM}/ \
+     ${LOCAL_ARTIFACTS_DIR} \
+     --no-sign-request --recursive --exclude "*" --include "*.tar.xz"
+   ```
+
+1. Flatten the artifacts:
+
+   ```bash
+   python build_tools/fileset_tool.py artifact-flatten \
+     ${LOCAL_ARTIFACTS_DIR}/*.tar.xz -o ${LOCAL_INSTALL_DIR}
+   ```
+
+> [!NOTE]
+> The `install_rocm_from_artifacts.py` script automates this process and is the recommended approach for most use cases.
 
 ## Usage Examples
 
@@ -128,6 +225,40 @@ python build_tools/install_rocm_from_artifacts.py \
     --release 6.4.0rc20250416 \
     --amdgpu-family gfx94X-dcgpu \
     --rccl --fft --tests
+```
+
+### Install from rocm-libraries Repository
+
+Download artifacts from the `ROCm/rocm-libraries` repository:
+
+```bash
+python build_tools/install_rocm_from_artifacts.py \
+    --run-id 19644138192 \
+    --amdgpu-family gfx94X-dcgpu \
+    --tests \
+    --run-github-repo ROCm/rocm-libraries
+```
+
+### Install from Dev Tarball
+
+Install a development build using a commit hash version:
+
+```bash
+python build_tools/install_rocm_from_artifacts.py \
+    --release 6.4.0.dev0+e015c807437eaf32dac6c14a9c4f752770c51b14 \
+    --amdgpu-family gfx110X-all
+```
+
+### Preview Before Downloading
+
+Use `--dry-run` with any source to see what would be downloaded:
+
+```bash
+python build_tools/install_rocm_from_artifacts.py \
+    --run-id 15052158890 \
+    --amdgpu-family gfx94X-dcgpu \
+    --blas --tests \
+    --dry-run
 ```
 
 ## Adding Support for New Components

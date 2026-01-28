@@ -26,6 +26,7 @@ mainline, in open source, using MSVC, etc.).
 | Component subset    | Subproject                                                                                                               | Supported | Notes                                         |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------ | --------- | --------------------------------------------- |
 | base                | aux-overlay                                                                                                              | ✅        |                                               |
+| base                | [amdsmi](https://github.com/ROCm/amdsmi)                                                                                 | ❌        | Unsupported                                   |
 | base                | [rocm-cmake](https://github.com/ROCm/rocm-cmake)                                                                         | ✅        |                                               |
 | base                | [rocm-core](https://github.com/ROCm/rocm-core)                                                                           | ✅        |                                               |
 | base                | [rocm_smi_lib](https://github.com/ROCm/rocm_smi_lib)                                                                     | ❌        | Unsupported                                   |
@@ -37,7 +38,6 @@ mainline, in open source, using MSVC, etc.).
 | compiler            | [hipcc](https://github.com/ROCm/llvm-project/tree/amd-staging/amd/hipcc)                                                 | ✅        |                                               |
 | compiler            | [hipify](https://github.com/ROCm/HIPIFY)                                                                                 | ✅        |                                               |
 |                     |                                                                                                                          |           |                                               |
-| core                | [amdsmi](https://github.com/ROCm/amdsmi)                                                                                 | ❌        | Unsupported                                   |
 | core                | [ROCR-Runtime](https://github.com/ROCm/ROCR-Runtime)                                                                     | ❌        | Unsupported                                   |
 | core                | [rocminfo](https://github.com/ROCm/rocminfo)                                                                             | ❌        | Unsupported                                   |
 | core                | [hipInfo from hip-tests](https://github.com/ROCm/hip-tests)                                                              | ✅        |                                               |
@@ -47,6 +47,7 @@ mainline, in open source, using MSVC, etc.).
 | debug-tools         | [rocr-debug-agent](https://github.com/ROCm/rocr_debug_agent.git)                                                         | ❌        | Unsupported                                   |
 | debug-tools         | [rocgdb](https://github.com/ROCm/rocgdb.git)                                                                             | ❌        | Unsupported                                   |
 |                     |                                                                                                                          |           |                                               |
+| profiler            | [aqlprofile](https://github.com/ROCm/rocm-systems/tree/develop/projects/aqlprofile)                                      | ❌        | Unsupported                                   |
 | profiler            | [rocprofiler-sdk](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocprofiler-sdk)                            | ❌        | Unsupported                                   |
 | profiler            | [rocprofiler-compute](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocprofiler-compute)                    | ❌        | Unsupported                                   |
 | profiler            | [rocprofiler-systems](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocprofiler-systems)                    | ❌        | Unsupported                                   |
