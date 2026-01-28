@@ -233,6 +233,10 @@ endif(THEROCK_BUILD_TESTING)
         -DROCPROFSYS_BUILD_LIBIBERTY=ON
         -DROCPROFSYS_BUILD_BOOST=ON
         -DROCPROFSYS_BUILD_DYNINST=ON
+      INSTALL_RPATH_DIRS
+        "lib"
+        "lib/rocprofiler-systems"
+        "llvm/lib"
       CMAKE_INCLUDES
         therock_explicit_finders.cmake
       RUNTIME_DEPS
@@ -264,5 +268,5 @@ endif(THEROCK_BUILD_TESTING)
         rocprofiler-sdk
         rocprofiler-systems
       )
-  endif(THEROCK_ENABLE_ROCPROFSYS)
+  endif(THEROCK_ENABLE_ROCPROFSYS AND THEROCK_SANITIZER STREQUAL "")
 endif(THEROCK_ENABLE_ROCPROFV3)

@@ -60,6 +60,32 @@ Requirements for these files:
   - Some extra tools like `lit` for LLVM testing are acceptable and should be
     evaluated on a case-by-case basis.
 
+This test dockerfile is used by various CI/CD workflows, such as:
+
+- [`.github/workflows/test_component.yml`](/.github/workflows/test_component.yml)
+- [`.github/workflows/test_pytorch_wheels.yml`](/.github/workflows/test_pytorch_wheels.yml)
+
+To run this test dockerfile yourself on a machine with a compatible GPU:
+
+```bash
+sudo docker run -it \
+  --device=/dev/kfd --device=/dev/dri \
+  --ipc=host --group-add=video --group-add=render --group-add=110 \
+  ghcr.io/rocm/no_rocm_image_ubuntu24_04@latest
+```
+
+> [!TIP]
+> We recommend creating a Python venv to install Python packages while using
+> this image:
+>
+> ```bash
+> sudo apt update && sudo apt install python3-venv -y
+> python3 -m venv .venv && source .venv/bin/activate
+>
+> # Then install packages. For example, with nightly rocm packages for gfx94X:
+> pip install --index-url=https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu 'rocm[libraries,devel]'
+> ```
+
 ### `rocm_runtime.Dockerfile`
 
 | Source .Dockerfile                                   | Published package |

@@ -56,9 +56,7 @@ permissions:
 
 jobs:
   configure_test_matrix:
-    # For external repos (rocm-libraries, rocm-systems), include GPU family in job name.
-    # TheRock repo keeps the simple name. Detection via github.repository check.
-    name: ${{ !contains(github.repository, 'TheRock') && format('Configure test matrix {0}', inputs.amdgpu_families) || 'Configure test matrix' }}
+    name: "Configure test matrix (${{ inputs.amdgpu_families }})"
     # if there is a test machine available
     if: ${{ inputs.test_runs_on != '' }}
     runs-on: ${{ inputs.test_runs_on }}
@@ -67,8 +65,9 @@ jobs:
       platform: ${{ steps.configure.outputs.platform }}
       shard_arr: ${{ steps.configure.outputs.shard_arr }}
     steps:
-      - name: "Checking out TheRock repository"
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+      - name: "Fetch 'build_tools' from repository"
+        if: ${{ runner.os == 'Windows' }}
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           sparse-checkout: build_tools
           path: "prejob"
@@ -82,8 +81,11 @@ jobs:
         shell: powershell
         run: . '${{ github.workspace }}\prejob\build_tools\github_actions\cleanup_processes.ps1'
 
+      - name: "Checking out repository"
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
       - name: Setting up Python
-        uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: 3.12
 

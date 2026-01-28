@@ -90,8 +90,8 @@ jobs:
       windows_test_labels: ${{ steps.configure.outputs.windows_test_labels }}
       rocm_package_version: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
     steps:
-      - name: Checkout TheRock
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+      - name: Checking out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: ROCm/TheRock
           ref: ${{ inputs.therock_ref || github.ref }}
@@ -99,10 +99,11 @@ jobs:
 
       - name: Checkout external source repository
         if: ${{ inputs.external_source_checkout }}
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: ${{ inputs.repository_override || github.repository }}
           path: .external-source-temp
+          # We need the parent commit to do a diff
           fetch-depth: 2
 
       - name: Set PR_LABELS variable with labels assigned to pull request
