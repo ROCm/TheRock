@@ -446,81 +446,82 @@ def do_build(args: argparse.Namespace):
                 print("Continuing without compiler caching...")
                 args.use_ccache = False
 
-    # GLOO enabled for only Linux
-    if not is_windows:
-        env["USE_GLOO"] = "ON"
-
-    # At checkout, we compute some additional env vars that influence the way that
-    # the wheel is named/versioned.
-    if triton_dir:
-        triton_env_file = triton_dir / "build_env.json"
-        if triton_env_file.exists():
-            with open(triton_env_file, "r") as f:
-                addl_triton_env = json.load(f)
-                print(f"-- Additional triton build env vars: {addl_triton_env}")
-            env.update(addl_triton_env)
-        # With `CMAKE_PREFIX_PATH` set, `find_package(LLVM)` (called in
-        # `MLIRConfig.cmake` shipped as part of the LLVM bundled with
-        # trition) may pick up TheRock's LLVM instead of triton's.
-        # Here, `CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH` is set
-        # and passed via `TRITON_APPEND_CMAKE_ARGS` to avoid this.
-        # See also https://github.com/ROCm/TheRock/issues/1999.
-        env["TRITON_APPEND_CMAKE_ARGS"] = (
-            "-DCMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH=FALSE"
-        )
-
-    if is_windows:
-        llvm_dir = rocm_dir / "lib" / "llvm" / "bin"
-        env.update(
-            {
-                "HIP_CLANG_PATH": str(llvm_dir.resolve().as_posix()),
-                "CC": str((llvm_dir / "clang-cl.exe").resolve()),
-                "CXX": str((llvm_dir / "clang-cl.exe").resolve()),
-            }
-        )
-    else:
-        env.update(
-            {
-                # Workaround GCC12 compiler flags.
-                "CXXFLAGS": " -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict ",
-                "CPPFLAGS": " -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict ",
-            }
-        )
-
-    # Workaround missing devicelib bitcode
-    # TODO: When "ROCM_PATH" and/or "ROCM_HOME" is set in the environment, the
-    # clang frontend ignores its default heuristics and (depending on version)
-    # finds the wrong path to the device library. This is bad/annoying. But
-    # the PyTorch build shouldn't even need these to be set. Unfortunately, it
-    # has been hardcoded for a long time. So we use a clang env var to force
-    # a specific device lib path to workaround the hack to get pytorch to build.
-    # This may or may not only affect the Python wheels with their own quirks
-    # on directory layout.
-    # Obviously, this should be completely burned with fire once the root causes
-    # are eliminted.
-    hip_device_lib_path = get_rocm_path("root") / "lib" / "llvm" / "amdgcn" / "bitcode"
-    if not hip_device_lib_path.exists():
-        print(
-            "WARNING: Default location of device libs not found. Relying on "
-            "clang heuristics which are known to be buggy in this configuration"
-        )
-    else:
-        env["HIP_DEVICE_LIB_PATH"] = str(hip_device_lib_path)
-
-    # OpenBLAS path setup
-    host_math_path = get_rocm_path("root") / "lib" / "host-math"
-    if not host_math_path.exists():
-        print(
-            "WARNING: Default location of host-math not found. "
-            "Will not build with OpenBLAS support."
-        )
-    else:
-        env["BLAS"] = "OpenBLAS"
-        env["OpenBLAS_HOME"] = str(host_math_path)
-        env["OpenBLAS_LIB_NAME"] = "rocm-openblas"
-
-    # Build all components - wrap in try/finally to ensure sccache cleanup
+    # Wrap ALL remaining code in try/finally to ensure sccache cleanup
+    # This must cover everything after compiler wrapping to handle any exception
     try:
+        # GLOO enabled for only Linux
+        if not is_windows:
+            env["USE_GLOO"] = "ON"
+
+        # At checkout, we compute some additional env vars that influence the way that
+        # the wheel is named/versioned.
+        if triton_dir:
+            triton_env_file = triton_dir / "build_env.json"
+            if triton_env_file.exists():
+                with open(triton_env_file, "r") as f:
+                    addl_triton_env = json.load(f)
+                    print(f"-- Additional triton build env vars: {addl_triton_env}")
+                env.update(addl_triton_env)
+            # With `CMAKE_PREFIX_PATH` set, `find_package(LLVM)` (called in
+            # `MLIRConfig.cmake` shipped as part of the LLVM bundled with
+            # trition) may pick up TheRock's LLVM instead of triton's.
+            # Here, `CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH` is set
+            # and passed via `TRITON_APPEND_CMAKE_ARGS` to avoid this.
+            # See also https://github.com/ROCm/TheRock/issues/1999.
+            env["TRITON_APPEND_CMAKE_ARGS"] = (
+                "-DCMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH=FALSE"
+            )
+
+        if is_windows:
+            llvm_dir = rocm_dir / "lib" / "llvm" / "bin"
+            env.update(
+                {
+                    "HIP_CLANG_PATH": str(llvm_dir.resolve().as_posix()),
+                    "CC": str((llvm_dir / "clang-cl.exe").resolve()),
+                    "CXX": str((llvm_dir / "clang-cl.exe").resolve()),
+                }
+            )
+        else:
+            env.update(
+                {
+                    # Workaround GCC12 compiler flags.
+                    "CXXFLAGS": " -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict ",
+                    "CPPFLAGS": " -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict ",
+                }
+            )
+
+        # Workaround missing devicelib bitcode
+        # TODO: When "ROCM_PATH" and/or "ROCM_HOME" is set in the environment, the
+        # clang frontend ignores its default heuristics and (depending on version)
+        # finds the wrong path to the device library. This is bad/annoying. But
+        # the PyTorch build shouldn't even need these to be set. Unfortunately, it
+        # has been hardcoded for a long time. So we use a clang env var to force
+        # a specific device lib path to workaround the hack to get pytorch to build.
+        # This may or may not only affect the Python wheels with their own quirks
+        # on directory layout.
+        # Obviously, this should be completely burned with fire once the root causes
+        # are eliminted.
+        hip_device_lib_path = get_rocm_path("root") / "lib" / "llvm" / "amdgcn" / "bitcode"
+        if not hip_device_lib_path.exists():
+            print(
+                "WARNING: Default location of device libs not found. Relying on "
+                "clang heuristics which are known to be buggy in this configuration"
+            )
+        else:
+            env["HIP_DEVICE_LIB_PATH"] = str(hip_device_lib_path)
+
+        # OpenBLAS path setup
+        host_math_path = get_rocm_path("root") / "lib" / "host-math"
+        if not host_math_path.exists():
+            print(
+                "WARNING: Default location of host-math not found. "
+                "Will not build with OpenBLAS support."
+            )
+        else:
+            env["BLAS"] = "OpenBLAS"
+            env["OpenBLAS_HOME"] = str(host_math_path)
+            env["OpenBLAS_LIB_NAME"] = "rocm-openblas"
+
         # Build triton.
         triton_requirement = None
         if args.build_triton or (args.build_triton is None and triton_dir):
