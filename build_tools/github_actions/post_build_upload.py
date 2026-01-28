@@ -35,6 +35,7 @@ from github_actions_utils import *
 
 THEROCK_DIR = Path(__file__).resolve().parent.parent.parent
 PLATFORM = platform.system().lower()
+BUILD_OBSERVABILITY_FILENAME = "build_observability.html"
 
 # Importing indexer.py
 sys.path.append(str(THEROCK_DIR / "third-party" / "indexer"))
@@ -237,10 +238,9 @@ def upload_logs_to_s3(artifact_group: str, build_dir: Path, bucket_uri: str):
                 run_aws_cp(file_path, s3_dest, content_type=content_type)
                 log(f"[INFO] Uploaded {file_path} to {s3_dest}")
 
-    # Build Time Analysis is only generated on Linux
-    analysis_path = log_dir / "build_observability.html"
+    analysis_path = log_dir / BUILD_OBSERVABILITY_FILENAME
     if analysis_path.is_file():
-        analysis_s3_dest = f"{s3_base_path}/build_observability.html"
+        analysis_s3_dest = f"{s3_base_path}/{BUILD_OBSERVABILITY_FILENAME}"
         run_aws_cp(analysis_path, analysis_s3_dest, content_type="text/html")
         log(f"[INFO] Uploaded {analysis_path} to {analysis_s3_dest}")
 
@@ -271,15 +271,20 @@ def upload_manifest_to_s3(artifact_group: str, build_dir: Path, bucket_uri: str)
     run_aws_cp(manifest_path, dest, content_type="application/json")
 
 
-def write_gha_build_summary(artifact_group: str, bucket_url: str, job_status: str):
+def write_gha_build_summary(
+    artifact_group: str, bucket_url: str, job_status: str, build_dir: Path
+):
     log(f"Adding links to job summary to bucket {bucket_url}")
 
     log_index_url = f"{bucket_url}/logs/{artifact_group}/index.html"
     gha_append_step_summary(f"[Build Logs]({log_index_url})")
 
-    # Build Time Analysis is only generated on Linux
-    if PLATFORM == "linux":
-        analysis_url = f"{bucket_url}/logs/{artifact_group}/build_observability.html"
+    # Build Time Analysis - check if file exists
+    analysis_path = build_dir / "logs" / BUILD_OBSERVABILITY_FILENAME
+    if analysis_path.is_file():
+        analysis_url = (
+            f"{bucket_url}/logs/{artifact_group}/{BUILD_OBSERVABILITY_FILENAME}"
+        )
         gha_append_step_summary(f"[Build Observability]({analysis_url})")
 
     # Only add artifact links if the job not failed
@@ -334,7 +339,9 @@ def run(args):
 
     log("Write github actions build summary")
     log("--------------------")
-    write_gha_build_summary(args.artifact_group, bucket_url, args.job_status)
+    write_gha_build_summary(
+        args.artifact_group, bucket_url, args.job_status, args.build_dir
+    )
 
 
 if __name__ == "__main__":
