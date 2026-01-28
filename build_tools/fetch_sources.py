@@ -488,6 +488,7 @@ def main(argv):
             "half",
             "rccl",
             "rccl-tests",
+            "rocshmem",
             "rocm-cmake",
             "rocprof-trace-decoder",
         ],
