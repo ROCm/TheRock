@@ -47,10 +47,12 @@ def find_sccache() -> Path | None:
         Path.home() / ".cargo" / "bin" / "sccache",
     ]
     if is_windows:
-        common_paths.extend([
-            Path("C:/ProgramData/chocolatey/bin/sccache.exe"),
-            Path.home() / ".cargo" / "bin" / "sccache.exe",
-        ])
+        common_paths.extend(
+            [
+                Path("C:/ProgramData/chocolatey/bin/sccache.exe"),
+                Path.home() / ".cargo" / "bin" / "sccache.exe",
+            ]
+        )
 
     for path in common_paths:
         if path.exists():
@@ -160,9 +162,7 @@ def create_sccache_wrapper(compiler_path: Path, sccache_path: Path) -> None:
             shutil.move(compiler_path, original_binary)
             print(f"  Moved binary {compiler_path} -> {original_binary}")
     except (OSError, PermissionError, shutil.Error) as e:
-        raise RuntimeError(
-            f"Failed to backup compiler {compiler_path}: {e}"
-        ) from e
+        raise RuntimeError(f"Failed to backup compiler {compiler_path}: {e}") from e
 
     # Remove existing symlink if present
     if compiler_path.is_symlink():
@@ -173,7 +173,9 @@ def create_sccache_wrapper(compiler_path: Path, sccache_path: Path) -> None:
         wrapper_content = f'#!/bin/sh\nexec "{sccache_path}" "{real_compiler}" "$@"\n'
         compiler_path.write_text(wrapper_content)
         # Make executable
-        compiler_path.chmod(stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH)
+        compiler_path.chmod(
+            stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH
+        )
         print(f"  Created sccache wrapper: {compiler_path} -> sccache {real_compiler}")
     except (OSError, PermissionError) as e:
         raise RuntimeError(
@@ -238,7 +240,7 @@ def _find_rocm_llvm_bin(rocm_path: Path) -> Path | None:
 
 def setup_rocm_sccache(rocm_path: Path, sccache_path: Path) -> None:
     """Wrap ROCm compilers with sccache (Linux only).
-    
+
     On Windows, compiler wrapping is skipped because hipcc calls clang.exe
     directly and shell script wrappers won't intercept these calls.
     Windows builds rely solely on CMAKE_*_COMPILER_LAUNCHER for host code.
@@ -246,12 +248,14 @@ def setup_rocm_sccache(rocm_path: Path, sccache_path: Path) -> None:
     if is_windows:
         print("Skipping ROCm compiler wrapping on Windows (using CMAKE launcher only)")
         return
-    
+
     llvm_bin = _find_rocm_llvm_bin(rocm_path)
     if not llvm_bin:
-        raise RuntimeError(f"Could not find ROCm LLVM bin directory. Tried:\n"
-                          f"  {rocm_path / 'lib' / 'llvm' / 'bin'}\n"
-                          f"  {rocm_path / 'llvm' / 'bin'}")
+        raise RuntimeError(
+            f"Could not find ROCm LLVM bin directory. Tried:\n"
+            f"  {rocm_path / 'lib' / 'llvm' / 'bin'}\n"
+            f"  {rocm_path / 'llvm' / 'bin'}"
+        )
 
     print(f"Setting up sccache wrappers in {llvm_bin}")
     for compiler in ["clang", "clang++"]:
@@ -263,7 +267,7 @@ def restore_rocm_compilers(rocm_path: Path) -> None:
     """Restore original ROCm compilers (Linux only)."""
     if is_windows:
         return
-    
+
     llvm_bin = _find_rocm_llvm_bin(rocm_path)
     if not llvm_bin:
         print("Warning: Could not find ROCm LLVM bin directory")
@@ -277,7 +281,7 @@ def restore_rocm_compilers(rocm_path: Path) -> None:
 
 def parse_sccache_stats(stats_output: str) -> dict:
     """Parse sccache --show-stats output for metrics.
-    
+
     Returns a dictionary with keys:
         - compile_requests: Total compilation requests
         - cache_hits: Number of cache hits
@@ -286,13 +290,13 @@ def parse_sccache_stats(stats_output: str) -> dict:
         - cache_errors: Number of cache errors
     """
     metrics = {}
-    
+
     def extract_int(line: str) -> int | None:
         try:
             return int(line.split()[-1])
         except (ValueError, IndexError):
             return None
-    
+
     for line in stats_output.splitlines():
         line = line.strip()
         if "Compile requests" in line and "compile_requests" not in metrics:
@@ -307,12 +311,14 @@ def parse_sccache_stats(stats_output: str) -> dict:
         elif "Cache errors" in line:
             if (val := extract_int(line)) is not None:
                 metrics["cache_errors"] = val
-    
+
     # Calculate hit rate
     if "compile_requests" in metrics and "cache_hits" in metrics:
         total = metrics["compile_requests"]
-        metrics["hit_rate"] = (metrics["cache_hits"] / total * 100.0) if total > 0 else 0.0
-    
+        metrics["hit_rate"] = (
+            (metrics["cache_hits"] / total * 100.0) if total > 0 else 0.0
+        )
+
     return metrics
 
 
@@ -325,11 +331,11 @@ def print_sccache_stats():
                 [str(sccache_path), "--show-stats"],
                 capture_output=True,
                 text=True,
-                check=False
+                check=False,
             )
             stats_output = result.stdout
             print(stats_output)
-            
+
             # Parse and display metrics
             metrics = parse_sccache_stats(stats_output)
             if metrics:
@@ -355,22 +361,20 @@ def main():
     parser.add_argument(
         "--rocm-path",
         type=Path,
-        help="Path to ROCm installation (e.g., from `python -m rocm_sdk path --root`)"
+        help="Path to ROCm installation (e.g., from `python -m rocm_sdk path --root`)",
     )
     parser.add_argument(
         "--restore",
         action="store_true",
-        help="Restore original compilers (remove sccache wrappers)"
+        help="Restore original compilers (remove sccache wrappers)",
     )
     parser.add_argument(
         "--sccache-path",
         type=Path,
-        help="Path to sccache binary (auto-detected if not specified)"
+        help="Path to sccache binary (auto-detected if not specified)",
     )
     parser.add_argument(
-        "--show-stats",
-        action="store_true",
-        help="Show sccache statistics"
+        "--show-stats", action="store_true", help="Show sccache statistics"
     )
 
     args = parser.parse_args()
@@ -400,10 +404,7 @@ def main():
     # Verify sccache works
     try:
         result = subprocess.run(
-            [str(sccache_path), "--version"],
-            capture_output=True,
-            text=True,
-            check=True
+            [str(sccache_path), "--version"], capture_output=True, text=True, check=True
         )
         print(f"sccache version: {result.stdout.strip()}")
     except subprocess.CalledProcessError as e:
