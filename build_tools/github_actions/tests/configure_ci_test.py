@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 import configure_ci
-from benchmarks.benchmark_test_matrix import benchmark_matrix
+from extended_tests.benchmark.benchmark_test_matrix import benchmark_matrix
 
 therock_test_runner_dict = {
     "gfx110x": {
