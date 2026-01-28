@@ -120,7 +120,6 @@ if(THEROCK_ENABLE_SYSDEPS_LIBPCIACCESS)
     DESCRIPTOR artifact-libpciaccess.toml
     COMPONENTS
       dev
-      doc
       lib
     SUBPROJECT_DEPS
       therock-libpciaccess
