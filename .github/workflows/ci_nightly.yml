@@ -122,6 +122,16 @@ jobs:
       contents: read
       id-token: write
 
+  generate_blame_list:
+    name: Generate Blame List
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Generate Diff Report
+        uses: ./.github/workflows/manifest-diff.yml
+        with:
+          end_commit: ${{ github.sha }}
+          find_last_successful: "ci_nightly.yml"
+
   # build_python_packages:
   #   name: Build Python Packages
   #   uses: ./.github/workflows/build_python_packages.yml
