@@ -75,8 +75,8 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     )
 
     # Register AOCL-BLAS package for downstream consumption
-    # This makes find_package(aocl) work in dependent projects (package name stays "aocl")
-    therock_cmake_subproject_provide_package(therock-aocl-blas aocl lib/host-math/lib/cmake/aocl)
+    # This makes find_package(AOCL) work in dependent projects (follows CMake conventions for acronyms)
+    therock_cmake_subproject_provide_package(therock-aocl-blas AOCL lib/host-math/lib/cmake/AOCL)
     therock_cmake_subproject_activate(therock-aocl-blas)
 
     # Validate that the built BLAS library exists
@@ -199,8 +199,8 @@ endif()
 # Install our custom CMake package config
 configure_file(
   ${CMAKE_CURRENT_SOURCE_DIR}/aocl-config.cmake.in
-  ${CMAKE_CURRENT_BINARY_DIR}/aocl-config.cmake
+  ${CMAKE_CURRENT_BINARY_DIR}/AOCLConfig.cmake
   @ONLY
 )
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/aocl-config.cmake"
-        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/aocl)
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/AOCLConfig.cmake"
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/AOCL)
