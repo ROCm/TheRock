@@ -44,8 +44,7 @@ else()
       set(RUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_PER_TARGET_RUNTIME_DIR ON)
       set(FLANG_RUNTIME_F128_MATH_LIB "libquadmath")
       set(LIBOMPTARGET_BUILD_DEVICE_FORTRT ON)
-      #TODO: Enable when HWLOC dependency is figured out
-      #set(LIBOMP_USE_HWLOC ON)
+      set(LIBOMP_USE_HWLOC ON)
     endif()
   endif()
   # Setting "LIBOMP_COPY_EXPORTS" to `OFF` "aids parallel builds to not interfere
