@@ -1,0 +1,24 @@
+# Skipped Packages Manifest
+# Package Type: DEB
+# ROCm Version: 7.11.0~20251224
+# Graphics Architecture: gfx94x
+# Build Date: 2026-01-17 00:16:24 UTC
+# Format: package_name | reason
+# Note: Package names shown are base names from package.json
+
+# Skipped Packages:
+amdrocm-blas | Missing artifacts
+amdrocm-blas-devel | Missing artifacts
+amdrocm-ccl-devel | Missing artifacts
+amdrocm-ck | Missing artifacts
+amdrocm-fft | Missing artifacts
+amdrocm-fft-devel | Missing artifacts
+amdrocm-hipblas-common-devel | Missing artifacts
+amdrocm-rand | Missing artifacts
+amdrocm-rand-devel | Missing artifacts
+amdrocm-rccl | Missing artifacts
+amdrocm-rccl-devel | Missing artifacts
+amdrocm-solver | Missing artifacts
+amdrocm-solver-devel | Missing artifacts
+amdrocm-sparse | Missing artifacts
+amdrocm-sparse-devel | Missing artifacts
