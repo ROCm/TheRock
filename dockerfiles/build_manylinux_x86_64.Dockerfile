@@ -89,6 +89,9 @@ RUN yum install -y epel-release && \
 # more dvc features may be used in upcoming sequenced builds
 # Also pinning pathspec because a new version of it breaks the private _DIR_MARK
 # API that dvc uses. When upgrading past ~3.64.0, then pin can likely be removed.
+#
+# Note: dvc[s3] version locking currently limits boto3>=1.41.0,<1.42.0
+#       in requirements.txt
 RUN pip install 'pathspec<0.13.0' 'dvc[s3]==3.62.0' && \
     which dvc && dvc --version || true
 
