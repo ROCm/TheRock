@@ -269,6 +269,102 @@ class BenchmarkBase:
 
         return compared_results
 
+    def _detect_optional_columns(
+        self, test_results: List[Dict[str, Any]]
+    ) -> Dict[str, bool]:
+        """Detect which optional columns are actually used in test results.
+
+        Args:
+            test_results: List of test result dictionaries
+
+        Returns:
+            Dict mapping column names to whether they should be included
+        """
+        has_batch_size = any(
+            result.get("batch_size") is not None and result.get("batch_size", 0) != 0
+            for result in test_results
+        )
+        has_mode = any(
+            result.get("test_config", {}).get("mode") is not None
+            for result in test_results
+        )
+
+        return {
+            "batch_size": has_batch_size,
+            "mode": has_mode,
+        }
+
+    def _build_table_from_results(
+        self,
+        results: List[Dict[str, Any]],
+        title: str = None,
+        optional_cols: Dict[str, bool] = None,
+    ) -> PrettyTable:
+        """Build a single PrettyTable from results with dynamic columns.
+
+        Args:
+            results: List of test result dictionaries
+            title: Optional table title
+            optional_cols: Dict of optional columns to include
+
+        Returns:
+            PrettyTable: Formatted table
+        """
+        optional_cols = optional_cols or {}
+
+        # Build field names dynamically
+        field_names = ["TestName", "SubTests"]
+
+        if optional_cols.get("batch_size"):
+            field_names.append("BatchSize")
+        if optional_cols.get("mode"):
+            field_names.append("Mode")
+
+        field_names.extend(
+            [
+                "nGPU",
+                "Result",
+                "Scores",
+                "Units",
+                "Flag",
+                "LKGScores",
+                "%Diff",
+                "FinalResult",
+            ]
+        )
+
+        table = PrettyTable(field_names)
+        if title:
+            table.title = title
+
+        for result in results:
+            row = [
+                result.get("test_name", ""),
+                result.get("subtest", ""),
+            ]
+
+            if optional_cols.get("batch_size"):
+                row.append(result.get("batch_size", 0))
+            if optional_cols.get("mode"):
+                row.append(result.get("test_config", {}).get("mode", ""))
+
+            row.extend(
+                [
+                    result.get("ngpu", 1),
+                    result.get("status", "UNKNOWN"),
+                    result.get("score", 0.0),
+                    result.get("unit", ""),
+                    result.get("flag", "H"),
+                    result.get("lkg_score", None),
+                    result.get("diff_pct", None),
+                    result.get("final_result", "UNKNOWN"),
+                ]
+            )
+
+            table.add_row(row)
+
+        return table
+
     def build_display_table(
         self,
         test_results: List[Dict[str, Any]],
@@ -285,19 +381,8 @@ class BenchmarkBase:
         Returns:
             PrettyTable or List[PrettyTable]: Single table or list of tables if grouping
         """
-        field_names = [
-            "TestName",
-            "SubTests",
-            "BatchCount",
-            "nGPU",
-            "Result",
-            "Scores",
-            "Units",
-            "Flag",
-            "LKGScores",
-            "%Diff",
-            "FinalResult",
-        ]
+        # Detect which optional columns are actually used
+        optional_cols = self._detect_optional_columns(test_results)
 
         # If grouping requested, create multiple tables
         if group_by:
@@ -312,53 +397,16 @@ class BenchmarkBase:
             # Create a table for each group
             tables = []
             for group_name, group_results in groups.items():
-                table = PrettyTable(field_names)
-                table.title = f"{title} - {group_name}" if title else group_name
-
-                for result in group_results:
-                    table.add_row(
-                        [
-                            result.get("test_name", ""),
-                            result.get("subtest", ""),
-                            result.get("batch_size", 0),
-                            result.get("ngpu", 1),
-                            result.get("status", "UNKNOWN"),
-                            result.get("score", 0.0),
-                            result.get("unit", ""),
-                            result.get("flag", "H"),
-                            result.get("lkg_score", None),
-                            result.get("diff_pct", None),
-                            result.get("final_result", "UNKNOWN"),
-                        ]
-                    )
-
+                table_title = f"{title} - {group_name}" if title else group_name
+                table = self._build_table_from_results(
+                    group_results, table_title, optional_cols
+                )
                 tables.append(table)
 
             return tables
 
         # Single table (no grouping)
-        table = PrettyTable(field_names)
-        if title:
-            table.title = title
-
-        for result in test_results:
-            table.add_row(
-                [
-                    result.get("test_name", ""),
-                    result.get("subtest", ""),
-                    result.get("batch_size", 0),
-                    result.get("ngpu", 1),
-                    result.get("status", "UNKNOWN"),
-                    result.get("score", 0.0),
-                    result.get("unit", ""),
-                    result.get("flag", "H"),
-                    result.get("lkg_score", None),
-                    result.get("diff_pct", None),
-                    result.get("final_result", "UNKNOWN"),
-                ]
-            )
-
-        return table
+        return self._build_table_from_results(test_results, title, optional_cols)
 
     def write_step_summary(
         self, display_tables: Any, status_info: Dict[str, Any]
