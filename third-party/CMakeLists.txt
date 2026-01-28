@@ -31,7 +31,7 @@ endif()
 
 # OpenMPI implementation of MPI
 if(THEROCK_ENABLE_MPI)
-  add_subdirectory(OpenMPI)
+  add_subdirectory(openmpi)
 endif()
 
 # TODO: Relocate non header-only libraries here (i.e. boost, host-blas).
