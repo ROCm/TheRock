@@ -174,20 +174,22 @@ The following benchmark tests are defined in `benchmarks/benchmark_test_matrix.p
 
 3. Parse Results
    ↓ Extract metrics from log file
-   ↓ Structure data according to schema
+   ↓ Return test_results as JSON/dict
 
 4. Upload Results
-   ↓ Submit to API (with retry)
-   ↓ Save JSON locally
+   ↓ Submit JSON to API (with retry)
+   ↓ Save JSON locally (results_<timestamp>.json)
 
 5. Compare with LKG
    ↓ Fetch last known good results
    ↓ Calculate performance delta
+   ↓ Add LKG comparison data to test_results
 
 6. Report Results
-   ↓ Display formatted table
-   ↓ Append to GitHub Actions step summary
-   ↓ Return exit code (0=success, 1=failure)
+   ↓ Build formatted tables from test_results (for display only)
+   ↓ Display tables in console logs
+   ↓ Append tables to GitHub Actions step summary
+   ↓ Raises TestExecutionError or TestResultError as needed
 ```
 
 ## Adding New Benchmarks
@@ -202,16 +204,16 @@ Key components:
 
 - Inherit from `BenchmarkBase` class
 - Implement `run_benchmarks()` - executes binary and logs output
-- Implement `parse_results()` - parses logs and returns structured data
+- Implement `parse_results()` - parses logs and returns test results as JSON/dict
 - Results are automatically uploaded to API via base class
+- Tables are generated automatically for display from the test results
 
 Example:
 
 ```python
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple, Any
-from prettytable import PrettyTable
+from typing import Dict, List, Any
 
 sys.path.insert(0, str(Path(__file__).parent.parent))  # For utils
 sys.path.insert(0, str(Path(__file__).parent))  # For benchmark_base
@@ -232,11 +234,25 @@ class YourBenchmark(BenchmarkBase):
         # Your benchmark execution logic here
         pass
 
-    def parse_results(self) -> Tuple[List[Dict[str, Any]], PrettyTable]:
-        """Parse log file and return (test_results, table)."""
+    def parse_results(self) -> List[Dict[str, Any]]:
+        """Parse log file and return test results as JSON/dict list."""
+        test_results = []
+
         # Your parsing logic here
         # Use self.create_test_result() to build result dictionaries
-        pass
+        test_results.append(
+            self.create_test_result(
+                self.benchmark_name,
+                subtest_name="your_test_case",
+                status="PASS",
+                score=1234.5,
+                unit="GFLOPS",
+                flag="H",  # H=Higher is better, L=Lower is better
+                # Optional: batch_size=10, ngpu=1, mode="host", etc.
+            )
+        )
+
+        return test_results
 
 
 if __name__ == "__main__":

@@ -297,10 +297,9 @@ class ROCblasBenchmark(BenchmarkBase):
                 lines = log_fp.readlines()
 
             # Parse line by line, looking for CSV header followed by data
-            i = 0
             current_precision = None  # Track precision from command line
 
-            while i < len(lines):
+            for i in range(len(lines)):
                 line = lines[i].strip()
 
                 # Extract precision from command line (e.g., "-r s")
@@ -318,13 +317,12 @@ class ROCblasBenchmark(BenchmarkBase):
                 if "rocblas-Gflops" in line:
                     header = [col.strip() for col in line.split(",")]
 
-                    i += 1
-                    if i >= len(lines):
-                        break
+                    # Check if next line exists and is data (not another header)
+                    if i + 1 >= len(lines):
+                        continue
 
-                    data_line = lines[i].strip()
+                    data_line = lines[i + 1].strip()
                     if not data_line or "rocblas-Gflops" in data_line:
-                        i += 1
                         continue
 
                     values = [val.strip() for val in data_line.split(",")]
@@ -332,9 +330,9 @@ class ROCblasBenchmark(BenchmarkBase):
                         log.warning(
                             f"Column mismatch: expected {len(header)}, got {len(values)}"
                         )
-                        i += 1
                         continue
 
+                    # Create dict mapping column names to values: {"transA": "N", "m": "1024", "rocblas-Gflops": "1234.5", ...}
                     params = dict(zip(header, values))
 
                     # Add precision from command line if not in CSV
@@ -366,10 +364,7 @@ class ROCblasBenchmark(BenchmarkBase):
                         )
                     except (ValueError, TypeError) as e:
                         log.warning(f"Failed to parse metrics: {e}")
-                        i += 1
                         continue
-
-                i += 1
 
         return test_results
 
