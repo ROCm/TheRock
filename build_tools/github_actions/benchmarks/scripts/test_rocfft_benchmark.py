@@ -10,8 +10,7 @@ import shlex
 import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple, Any
-from prettytable import PrettyTable
+from typing import Dict, List, Any
 
 sys.path.insert(0, str(Path(__file__).parent.parent))  # For utils
 sys.path.insert(0, str(Path(__file__).parent))  # For benchmark_base
@@ -70,11 +69,11 @@ class ROCfftBenchmark(BenchmarkBase):
 
         log.info("Benchmark execution complete")
 
-    def parse_results(self) -> Tuple[List[Dict[str, Any]], PrettyTable]:
+    def parse_results(self) -> List[Dict[str, Any]]:
         """Parse benchmark results from log file.
 
         Returns:
-            tuple: (test_results list, PrettyTable object)
+            List[Dict[str, Any]]: test_results list
         """
         default_batch_size = 10
 
@@ -85,19 +84,6 @@ class ROCfftBenchmark(BenchmarkBase):
         pattern_batch_size = re.compile(r"-b\s+(\d+)")
 
         log.info("Parsing Results")
-
-        # Setup table
-        field_names = [
-            "TestName",
-            "SubTests",
-            "BatchSize",
-            "nGPU",
-            "Result",
-            "Scores",
-            "Units",
-            "Flag",
-        ]
-        table = PrettyTable(field_names)
 
         test_results = []
         num_gpus = 1
@@ -142,18 +128,6 @@ class ROCfftBenchmark(BenchmarkBase):
 
                 # Add GPU time result
                 time_testname = f"rider_{subtest_id}_time"
-                table.add_row(
-                    [
-                        self.benchmark_name,
-                        time_testname,
-                        batch_size,
-                        num_gpus,
-                        status,
-                        gpu_time,
-                        "ms",
-                        "L",
-                    ]
-                )
                 test_results.append(
                     self.create_test_result(
                         self.benchmark_name,
@@ -169,18 +143,6 @@ class ROCfftBenchmark(BenchmarkBase):
 
                 # Add GFLOPS result
                 gflops_testname = f"rider_{subtest_id}_gflops"
-                table.add_row(
-                    [
-                        self.benchmark_name,
-                        gflops_testname,
-                        batch_size,
-                        num_gpus,
-                        status,
-                        gflops,
-                        "GFLOPS",
-                        "H",
-                    ]
-                )
                 test_results.append(
                     self.create_test_result(
                         self.benchmark_name,
@@ -194,7 +156,7 @@ class ROCfftBenchmark(BenchmarkBase):
                     )
                 )
 
-        return test_results, table
+        return test_results
 
 
 if __name__ == "__main__":

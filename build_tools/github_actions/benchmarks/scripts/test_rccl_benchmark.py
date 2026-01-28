@@ -8,8 +8,7 @@ import json
 import re
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple, Any
-from prettytable import PrettyTable
+from typing import Dict, List, Any
 
 sys.path.insert(0, str(Path(__file__).parent.parent))  # For utils
 sys.path.insert(0, str(Path(__file__).parent))  # For benchmark_base
@@ -99,11 +98,11 @@ class RCCLBenchmark(BenchmarkBase):
 
         log.info("RCCL benchmarks execution complete")
 
-    def parse_results(self) -> Tuple[List[Dict[str, Any]], PrettyTable]:
+    def parse_results(self) -> List[Dict[str, Any]]:
         """Parse benchmark results from log file.
 
         Returns:
-            tuple: (test_results list, PrettyTable object)
+            List[Dict[str, Any]]: test_results list
         """
         # Regex patterns for parsing
         pattern_benchmark = re.compile(r"Benchmark:\s*(\S+)")
@@ -112,18 +111,6 @@ class RCCLBenchmark(BenchmarkBase):
         pattern_bandwidth = re.compile(r"#\s+Avg bus bandwidth\s+:\s+(\d+\.\d+)")
 
         log.info("Parsing Results")
-
-        # Setup table
-        field_names = [
-            "TestName",
-            "SubTests",
-            "nGPU",
-            "Result",
-            "Scores",
-            "Units",
-            "Flag",
-        ]
-        table = PrettyTable(field_names)
 
         test_results = []
 
@@ -156,19 +143,6 @@ class RCCLBenchmark(BenchmarkBase):
             # Build subtest name
             subtest_name = f"{benchmark_name}_{dtype}_{operation}"
 
-            # Add to table and results
-            table.add_row(
-                [
-                    self.benchmark_name,
-                    subtest_name,
-                    self.ngpu,
-                    status,
-                    bandwidth,
-                    "GB/s",
-                    "H",
-                ]
-            )
-
             test_results.append(
                 self.create_test_result(
                     self.benchmark_name,
@@ -183,7 +157,7 @@ class RCCLBenchmark(BenchmarkBase):
                 )
             )
 
-        return test_results, table
+        return test_results
 
 
 if __name__ == "__main__":

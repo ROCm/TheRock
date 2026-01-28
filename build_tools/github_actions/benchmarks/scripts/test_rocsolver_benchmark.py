@@ -10,8 +10,7 @@ import shlex
 import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple, Any
-from prettytable import PrettyTable
+from typing import Dict, List, Any
 
 sys.path.insert(0, str(Path(__file__).parent.parent))  # For utils
 sys.path.insert(0, str(Path(__file__).parent))  # For benchmark_base
@@ -52,11 +51,11 @@ class ROCsolverBenchmark(BenchmarkBase):
 
         log.info("Benchmark execution complete")
 
-    def parse_results(self) -> Tuple[List[Dict[str, Any]], PrettyTable]:
+    def parse_results(self) -> List[Dict[str, Any]]:
         """Parse benchmark results from log file.
 
         Returns:
-            tuple: (test_results list, PrettyTable object)
+            List[Dict[str, Any]]: test_results list
         """
         # Regex patterns for parsing
         # Pattern to match timing results: "cpu_time_us  gpu_time_us"
@@ -65,17 +64,6 @@ class ROCsolverBenchmark(BenchmarkBase):
         device_pattern = re.compile(r"Device\s+ID\s*\d+")
 
         log.info("Parsing Results")
-        # Setup table
-        field_names = [
-            "TestName",
-            "SubTests",
-            "nGPU",
-            "Result",
-            "Scores",
-            "Units",
-            "Flag",
-        ]
-        table = PrettyTable(field_names)
 
         test_results = []
         score = 0
@@ -112,11 +100,6 @@ class ROCsolverBenchmark(BenchmarkBase):
         if num_gpus == 0:
             num_gpus = 1
 
-        # Add to table
-        table.add_row(
-            [self.benchmark_name, subtest_name, num_gpus, status, score, "us", "L"]
-        )
-
         # Add to test results
         test_results.append(
             self.create_test_result(
@@ -130,7 +113,7 @@ class ROCsolverBenchmark(BenchmarkBase):
             )
         )
 
-        return test_results, table
+        return test_results
 
 
 if __name__ == "__main__":

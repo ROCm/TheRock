@@ -10,8 +10,7 @@ import shlex
 import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple, Any
-from prettytable import PrettyTable
+from typing import Dict, List, Any
 
 sys.path.insert(0, str(Path(__file__).parent.parent))  # For utils
 sys.path.insert(0, str(Path(__file__).parent))  # For benchmark_base
@@ -111,25 +110,13 @@ class HipblasltBenchmark(BenchmarkBase):
 
         log.info("Benchmark execution complete")
 
-    def parse_results(self) -> Tuple[List[Dict[str, Any]], PrettyTable]:
+    def parse_results(self) -> List[Dict[str, Any]]:
         """Parse benchmark results from log file.
 
         Returns:
-            tuple: (test_results list, PrettyTable object)
+            List[Dict[str, Any]]: test_results list
         """
         log.info("Parsing Results")
-
-        field_names = [
-            "TestName",
-            "SubTests",
-            "BatchCount",
-            "nGPU",
-            "Result",
-            "Scores",
-            "Units",
-            "Flag",
-        ]
-        table = PrettyTable(field_names)
 
         test_results = []
         num_gpus = 1
@@ -177,7 +164,7 @@ class HipblasltBenchmark(BenchmarkBase):
 
         if not header_line or header_index == -1:
             log.warning("CSV header not found in log file")
-            return test_results, table
+            return test_results
 
         for line in data[header_index + 1 :]:
             line = line.strip()
@@ -218,18 +205,6 @@ class HipblasltBenchmark(BenchmarkBase):
             # Create subtest name
             subtest_name = create_subtest_name(params, batch_count)
 
-            table.add_row(
-                [
-                    self.benchmark_name,
-                    subtest_name,
-                    batch_count,
-                    num_gpus,
-                    status,
-                    score,
-                    "Gflops",
-                    "H",
-                ]
-            )
             test_results.append(
                 self.create_test_result(
                     self.benchmark_name,
@@ -243,7 +218,7 @@ class HipblasltBenchmark(BenchmarkBase):
                 )
             )
 
-        return test_results, table
+        return test_results
 
 
 if __name__ == "__main__":

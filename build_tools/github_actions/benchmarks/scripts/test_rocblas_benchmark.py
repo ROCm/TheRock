@@ -7,8 +7,7 @@ Runs ROCblas benchmarks, collects results, and uploads to results API.
 import json
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple, Any, IO
-from prettytable import PrettyTable
+from typing import Dict, List, Any, IO
 
 sys.path.insert(0, str(Path(__file__).parent.parent))  # For utils
 sys.path.insert(0, str(Path(__file__).parent))  # For benchmark_base
@@ -267,27 +266,13 @@ class ROCblasBenchmark(BenchmarkBase):
             )
             self.execute_command(cmd, f)
 
-    def parse_results(self) -> Tuple[List[Dict[str, Any]], List[PrettyTable]]:
+    def parse_results(self) -> List[Dict[str, Any]]:
         """Parse benchmark results from log files.
 
         Parses CSV output from rocBLAS-bench for GEMM, GEMV, GER, DOT, and GEMM_HPA_HGEMM suites.
         Only rocblas-Gflops metric is captured.
         """
         log.info("Parsing Results")
-
-        # Setup field names for tables
-        field_names = [
-            "TestName",
-            "SubTests",
-            "nGPU",
-            "Result",
-            "Scores",
-            "Units",
-            "Flag",
-        ]
-
-        # List to store all suite-specific tables
-        all_tables = []
 
         test_results = []
         num_gpus = 1
@@ -307,10 +292,6 @@ class ROCblasBenchmark(BenchmarkBase):
                 continue
 
             log.info(f"Parsing {suite_name} results from {log_file.name}")
-
-            # Create suite-specific table
-            suite_table = PrettyTable(field_names)
-            suite_table.title = f"ROCblas {suite_name} Benchmark Results"
 
             with open(log_file, "r") as log_fp:
                 lines = log_fp.readlines()
@@ -371,17 +352,6 @@ class ROCblasBenchmark(BenchmarkBase):
                         gflops = float(params.get("rocblas-Gflops", "0"))
                         status = "PASS" if gflops > 0 else "FAIL"
 
-                        row_data = [
-                            self.benchmark_name,
-                            subtest_name,
-                            num_gpus,
-                            status,
-                            gflops,
-                            "rocblas-Gflops",
-                            "H",
-                        ]
-                        suite_table.add_row(row_data)
-
                         test_results.append(
                             self.create_test_result(
                                 self.benchmark_name,
@@ -391,6 +361,7 @@ class ROCblasBenchmark(BenchmarkBase):
                                 "rocblas-Gflops",
                                 "H",
                                 ngpu=num_gpus,
+                                suite=suite_name,
                             )
                         )
                     except (ValueError, TypeError) as e:
@@ -400,10 +371,7 @@ class ROCblasBenchmark(BenchmarkBase):
 
                 i += 1
 
-            # Add suite table to the list of tables
-            all_tables.append(suite_table)
-
-        return test_results, all_tables
+        return test_results
 
     def _determine_function_type(self, params: Dict[str, str]) -> str:
         """Determine ROCblas function type from parameters."""
