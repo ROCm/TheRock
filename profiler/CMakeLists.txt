@@ -104,9 +104,14 @@ if(THEROCK_ENABLE_ROCPROFV3)
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-compute"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-compute"
     BACKGROUND_BUILD
+    DEFAULT_GPU_TARGETS
+      gfx942  # TODO: Fix rocprofiler-compute to accept an empty target list.
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
       -DCHECK_PYTHON_DEPS=OFF
+      -DENABLE_TESTS=ON
+      -DINSTALL_TESTS=ON
+      -DSTANDALONEBINARY=ON
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
@@ -126,41 +131,6 @@ if(THEROCK_ENABLE_ROCPROFV3)
   )
 
   therock_cmake_subproject_activate(rocprofiler-compute)
-
-  # Standalone binary creation
-  add_custom_target(
-      standalonebinary
-      # Change working directory to src
-      WORKING_DIRECTORY "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-compute"
-      # Create VERSION.sha file
-      COMMAND git rev-parse HEAD > VERSION.sha
-      # Build standalone binary
-      # NOTE: --no-deployment-flag=self-execution is used to avoid self-execution
-      # and fork bombs as explained in
-      # https://nuitka.net/user-documentation/common-issue-solutions.html#fork-bombs-self-execution
-      COMMAND
-          ${Python3_EXECUTABLE} -m nuitka --mode=onefile --no-deployment-flag=self-execution
-          --product-name=${STANDALONEBINARY_EXTRACT_DIR}
-          --onefile-tempdir-spec=/{PRODUCT}/rocprof_compute_standalonebinary_{PID}
-          --include-data-files=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-compute/VERSION*=./ --enable-plugin=no-qt
-          --include-data-files=src/lib/rocprofiler_compute_tool.cpp=lib/rocprofiler_compute_tool.cpp
-          --include-data-files=src/lib/helper.cpp=lib/helper.cpp
-          --include-data-files=src/lib/helper.hpp=lib/helper.hpp --include-package=dash_svg
-          --include-package-data=dash_svg --include-package=dash_bootstrap_components
-          --include-package-data=dash_bootstrap_components --include-package=plotly
-          --include-package-data=plotly --include-package=rocprof_compute_analyze
-          --include-package-data=rocprof_compute_analyze
-          --include-package=rocprof_compute_profile
-          --include-package-data=rocprof_compute_profile
-          --include-package=rocprof_compute_tui --include-package-data=rocprof_compute_tui
-          --include-package=rocprof_compute_soc --include-package-data=rocprof_compute_soc
-          --include-package=utils --include-package-data=utils --include-package=hip
-          --include-package-data=hip src/rocprof-compute
-      # Remove library rpath from executable
-      COMMAND patchelf --remove-rpath rocprof-compute.bin
-      # Move to build directory
-      COMMAND mv rocprof-compute.bin ${CMAKE_BINARY_DIR}
-  )
 
   ##############################################################################
   # roctracer
