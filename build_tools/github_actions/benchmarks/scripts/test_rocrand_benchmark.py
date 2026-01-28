@@ -11,8 +11,7 @@ import shlex
 import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple, Any
-from prettytable import PrettyTable
+from typing import Dict, List, Any
 
 sys.path.insert(0, str(Path(__file__).parent.parent))  # For utils
 sys.path.insert(0, str(Path(__file__).parent))  # For benchmark_base
@@ -58,11 +57,11 @@ class ROCrandBenchmark(BenchmarkBase):
 
         log.info("Benchmark execution complete")
 
-    def parse_results(self) -> Tuple[List[Dict[str, Any]], PrettyTable]:
+    def parse_results(self) -> List[Dict[str, Any]]:
         """Parse benchmark results from log files.
 
         Returns:
-            tuple: (test_results list, PrettyTable object)
+            List[Dict[str, Any]]: test_results list
         """
         log.info("Parsing Results")
 
@@ -74,20 +73,7 @@ class ROCrandBenchmark(BenchmarkBase):
 
         bench_types = ["rocrand_host", "rocrand_device"]
 
-        # Setup table
-        field_names = [
-            "TestName",
-            "SubTests",
-            "Mode",
-            "Result",
-            "Scores",
-            "Units",
-            "Flag",
-        ]
-        table = PrettyTable(field_names)
-
         test_results = []
-        num_gpus = 1
 
         for bench_type in bench_types:
             log_file = self.script_dir / f"{bench_type}_bench.log"
@@ -131,19 +117,6 @@ class ROCrandBenchmark(BenchmarkBase):
                 # Determine status
                 status = "PASS" if throughput_val > 0 else "FAIL"
 
-                # Add to results
-                table.add_row(
-                    [
-                        self.benchmark_name,
-                        subtest_id,
-                        mode,
-                        status,
-                        throughput_val,
-                        "GB/s",
-                        "H",
-                    ]
-                )
-
                 test_results.append(
                     self.create_test_result(
                         self.benchmark_name,
@@ -156,7 +129,7 @@ class ROCrandBenchmark(BenchmarkBase):
                     )
                 )
 
-        return test_results, table
+        return test_results
 
 
 if __name__ == "__main__":

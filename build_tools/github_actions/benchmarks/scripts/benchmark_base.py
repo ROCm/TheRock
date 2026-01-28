@@ -249,38 +249,124 @@ class BenchmarkBase:
 
         return success
 
-    def compare_with_lkg(self, tables: Any) -> Any:
-        """Compare results with Last Known Good baseline."""
+    def compare_with_lkg(
+        self, test_results: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Compare results with Last Known Good baseline.
+
+        Args:
+            test_results: List of test result dictionaries
+
+        Returns:
+            List[Dict[str, Any]]: Test results with LKG comparison data
+        """
         log.info("Comparing results with LKG")
 
-        if isinstance(tables, list):
-            # Compare each table with LKG
-            final_tables = []
-            for table in tables:
-                if table._rows:
-                    final_table = self.client.compare_results(
-                        test_name=self.benchmark_name, table=table
-                    )
-                    log.info(f"\n{final_table}")
-                    final_tables.append(final_table)
-                else:
-                    log.warning(f"Table '{table.title}' has no results, skipping")
-            return final_tables
-
-        # Single table
-        final_table = self.client.compare_results(
-            test_name=self.benchmark_name, table=tables
+        # Use client to compare results with LKG
+        compared_results = self.client.compare_results(
+            self.benchmark_name, test_results
         )
-        log.info(f"\n{final_table}")
-        return final_table
+
+        return compared_results
+
+    def build_display_table(
+        self,
+        test_results: List[Dict[str, Any]],
+        title: str = None,
+        group_by: str = None,
+    ) -> Any:
+        """Build a PrettyTable for display from test results.
+
+        Args:
+            test_results: List of test result dictionaries with LKG comparison data
+            title: Optional table title
+            group_by: Optional field name to group results by (returns list of tables)
+
+        Returns:
+            PrettyTable or List[PrettyTable]: Single table or list of tables if grouping
+        """
+        field_names = [
+            "TestName",
+            "SubTests",
+            "BatchCount",
+            "nGPU",
+            "Result",
+            "Scores",
+            "Units",
+            "Flag",
+            "LKGScores",
+            "%Diff",
+            "FinalResult",
+        ]
+
+        # If grouping requested, create multiple tables
+        if group_by:
+            # Group results by the specified field
+            groups = {}
+            for result in test_results:
+                group_key = result.get("test_config", {}).get(group_by, "Unknown")
+                if group_key not in groups:
+                    groups[group_key] = []
+                groups[group_key].append(result)
+
+            # Create a table for each group
+            tables = []
+            for group_name, group_results in groups.items():
+                table = PrettyTable(field_names)
+                table.title = f"{title} - {group_name}" if title else group_name
+
+                for result in group_results:
+                    table.add_row(
+                        [
+                            result.get("test_name", ""),
+                            result.get("subtest", ""),
+                            result.get("batch_size", 0),
+                            result.get("ngpu", 1),
+                            result.get("status", "UNKNOWN"),
+                            result.get("score", 0.0),
+                            result.get("unit", ""),
+                            result.get("flag", "H"),
+                            result.get("lkg_score", None),
+                            result.get("diff_pct", None),
+                            result.get("final_result", "UNKNOWN"),
+                        ]
+                    )
+
+                tables.append(table)
+
+            return tables
+
+        # Single table (no grouping)
+        table = PrettyTable(field_names)
+        if title:
+            table.title = title
+
+        for result in test_results:
+            table.add_row(
+                [
+                    result.get("test_name", ""),
+                    result.get("subtest", ""),
+                    result.get("batch_size", 0),
+                    result.get("ngpu", 1),
+                    result.get("status", "UNKNOWN"),
+                    result.get("score", 0.0),
+                    result.get("unit", ""),
+                    result.get("flag", "H"),
+                    result.get("lkg_score", None),
+                    result.get("diff_pct", None),
+                    result.get("final_result", "UNKNOWN"),
+                ]
+            )
+
+        return table
 
     def write_step_summary(
-        self, final_tables: Any, status_info: Dict[str, Any]
+        self, display_tables: Any, status_info: Dict[str, Any]
     ) -> None:
         """Write results to GitHub Actions step summary.
 
         Args:
-            final_tables: Results table(s) with LKG comparison
+            display_tables: Results table(s) with LKG comparison (PrettyTable or List[PrettyTable])
             status_info: Dictionary from determine_final_status()
         """
         summary = (
@@ -295,9 +381,9 @@ class BenchmarkBase:
 
         summary += "\n\n"
 
-        if isinstance(final_tables, list):
-            # Multiple tables - add each one
-            for table in final_tables:
+        # Handle multiple tables (e.g., rocblas with suites)
+        if isinstance(display_tables, list):
+            for table in display_tables:
                 summary += (
                     f"<details>\n"
                     f"<summary>{table.title}</summary>\n\n"
@@ -309,15 +395,20 @@ class BenchmarkBase:
             summary += (
                 f"<details>\n"
                 f"<summary>View detailed results ({status_info['total_count']} tests)</summary>\n\n"
-                f"```\n{final_tables}\n```\n\n"
+                f"```\n{display_tables}\n```\n\n"
                 f"</details>"
             )
 
         # Write to GitHub Actions step summary
         gha_append_step_summary(summary)
 
-    def determine_final_status(self, final_tables: Any) -> Dict[str, Any]:
-        """Determine final test status from results table(s).
+    def determine_final_status(
+        self, test_results: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """Determine final test status from test results with LKG comparison data.
+
+        Args:
+            test_results: List of test results with LKG comparison data
 
         Returns:
             dict: {
@@ -330,33 +421,24 @@ class BenchmarkBase:
                 'unknown_tests': list - Names of tests with no baseline
             }
         """
-        tables = final_tables if isinstance(final_tables, list) else [final_tables]
-
         fail_count = 0
         unknown_count = 0
         pass_count = 0
         failed_tests = []
         unknown_tests = []
 
-        for table in tables:
-            if "FinalResult" not in table.field_names:
-                raise ValueError(f"Table '{table.title}' missing 'FinalResult' column")
+        for result in test_results:
+            final_result = result.get("final_result", "UNKNOWN")
+            subtest = result.get("subtest", "")
 
-            result_idx = table.field_names.index("FinalResult")
-            name_idx = 1  # Second column contains the subtest names
-
-            # Extract results and test names
-            results = [row[result_idx] for row in table._rows]
-            test_names = [row[name_idx] for row in table._rows]
-
-            # Count statuses
-            fail_count += results.count("FAIL")
-            unknown_count += results.count("UNKNOWN")
-            pass_count += results.count("PASS")
-
-            # Collect test names by status
-            failed_tests.extend([test_names[i] for i, r in enumerate(results) if r == "FAIL"])
-            unknown_tests.extend([test_names[i] for i, r in enumerate(results) if r == "UNKNOWN"])
+            if final_result == "FAIL":
+                fail_count += 1
+                failed_tests.append(subtest)
+            elif final_result == "UNKNOWN":
+                unknown_count += 1
+                unknown_tests.append(subtest)
+            elif final_result == "PASS":
+                pass_count += 1
 
         if unknown_count > 0 and fail_count == 0:
             log.warning("Some results have UNKNOWN status (no LKG data available)")
@@ -396,7 +478,7 @@ class BenchmarkBase:
         self.run_benchmarks()
 
         # Parse results (implemented by child class)
-        test_results, tables = self.parse_results()
+        test_results = self.parse_results()
 
         # Validate test results structure
         if not test_results:
@@ -412,11 +494,11 @@ class BenchmarkBase:
         # Upload results
         self.upload_results(test_results, stats)
 
-        # Compare with LKG (compares each table individually and prints results)
-        final_tables = self.compare_with_lkg(tables)
+        # Compare with LKG baseline
+        compared_results = self.compare_with_lkg(test_results)
 
         # Determine final status (do this BEFORE writing summary so we have correct counts)
-        status_info = self.determine_final_status(final_tables)
+        status_info = self.determine_final_status(compared_results)
         log.info(
             f"Final Status: {status_info['final_status']} "
             f"(PASS: {status_info['pass_count']}, "
@@ -425,8 +507,29 @@ class BenchmarkBase:
         )
         sys.stdout.flush()  # Ensure final status is displayed
 
+        # Build display table from compared results
+        # Check if results have suite grouping (e.g., rocblas)
+        has_suite = any(
+            "suite" in result.get("test_config", {}) for result in compared_results
+        )
+
+        if has_suite:
+            display_tables = self.build_display_table(
+                compared_results,
+                title=f"{self.display_name} Benchmark Results",
+                group_by="suite",
+            )
+            # Log each table
+            for table in display_tables:
+                log.info(f"\n{table}")
+        else:
+            display_tables = self.build_display_table(
+                compared_results, title=f"{self.display_name} Benchmark Results"
+            )
+            log.info(f"\n{display_tables}")
+
         # Write results to GitHub Actions step summary
-        self.write_step_summary(final_tables, status_info)
+        self.write_step_summary(display_tables, status_info)
 
         # Flush output streams to ensure proper display ordering
         sys.stdout.flush()

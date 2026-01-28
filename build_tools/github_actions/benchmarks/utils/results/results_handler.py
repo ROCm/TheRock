@@ -7,7 +7,6 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 from datetime import datetime
-from prettytable import PrettyTable
 from decimal import Decimal, InvalidOperation
 
 from ..logger import log
@@ -287,63 +286,58 @@ class ResultsHandler:
             raise RuntimeError(f"Unexpected error: {e}")
 
     @staticmethod
-    def get_final_result_table(
-        table: PrettyTable, lkg_scores: Dict[Tuple[str, str], float]
-    ) -> PrettyTable:
-        """Augment PrettyTable with LKG comparison columns.
+    def compare_results_with_lkg(
+        test_results: List[Dict[str, Any]], lkg_scores: Dict[Tuple[str, str], float]
+    ) -> List[Dict[str, Any]]:
+        """Compare test results with LKG baseline and add comparison data.
 
         Args:
-            table: PrettyTable with test results
-            lkg_scores: Mapping of (TestName, SubTests) to LKG scores
+            test_results: List of test result dicts
+            lkg_scores: Mapping of (test_name, subtest) to LKG scores
 
         Returns:
-            PrettyTable: New table with LKGScores, %Diff, and FinalResult columns
+            List[Dict[str, Any]]: Test results with added lkg_score, diff_pct, final_result fields
         """
+        compared_results = []
 
-        # Validate required columns
-        required_cols = ["TestName", "SubTests", "Scores", "Flag"]
-        for col in required_cols:
-            if col not in table.field_names:
-                raise ValueError(f"Missing required column '{col}' in PrettyTable.")
+        for result in test_results:
+            # Create a copy to avoid modifying original
+            compared = result.copy()
 
-        # Add new columns
-        new_field_names = table.field_names + ["LKGScores", "%Diff", "FinalResult"]
-        new_table = PrettyTable(new_field_names)
-        new_table.title = table.title  # Preserve the original table title
-
-        for row in table._rows:  # Consider using table.rows if available
-            row_dict = dict(zip(table.field_names, row))
-            test_name = row_dict["TestName"]
-            sub_test_name = row_dict["SubTests"]
-            flag = row_dict["Flag"]
-
-            try:
-                score = Decimal(str(row_dict["Scores"]))
-            except InvalidOperation:
-                raise ValueError(f"Invalid score value: {row_dict['Scores']}")
+            test_name = result.get("test_name", "")
+            subtest = result.get("subtest", "")
+            score = result.get("score", 0.0)
+            flag = result.get("flag", "H")
 
             # Get LKG score
-            lkg_score = lkg_scores.get((test_name, sub_test_name))
+            lkg_score = lkg_scores.get((test_name, subtest))
             diff: Optional[Decimal] = None
             final_result = "UNKNOWN"
 
             if lkg_score is not None:
-                lkg_score_dec = Decimal(str(lkg_score))
-                if flag == "H" and lkg_score_dec != 0:
-                    diff = ((score - lkg_score_dec) / lkg_score_dec) * 100
-                elif flag == "L" and lkg_score_dec != 0:
-                    diff = ((lkg_score_dec - score) / lkg_score_dec) * 100
+                try:
+                    score_dec = Decimal(str(score))
+                    lkg_score_dec = Decimal(str(lkg_score))
 
-                # Determine FinalResult
-                if diff is not None:
-                    final_result = "FAIL" if diff < -5 else "PASS"
+                    if flag == "H" and lkg_score_dec != 0:
+                        diff = ((score_dec - lkg_score_dec) / lkg_score_dec) * 100
+                    elif flag == "L" and lkg_score_dec != 0:
+                        diff = ((lkg_score_dec - score_dec) / lkg_score_dec) * 100
 
-            # Append new values
-            new_row = row + [
-                float(lkg_score) if lkg_score is not None else None,
-                round(float(diff), 2) if diff is not None else None,
-                final_result,
-            ]
-            new_table.add_row(new_row)
+                    # Determine FinalResult
+                    if diff is not None:
+                        final_result = "FAIL" if diff < -5 else "PASS"
 
-        return new_table
+                except (InvalidOperation, ValueError) as e:
+                    log.warning(
+                        f"Error calculating diff for {test_name}/{subtest}: {e}"
+                    )
+
+            # Add LKG comparison fields to result
+            compared["lkg_score"] = float(lkg_score) if lkg_score is not None else None
+            compared["diff_pct"] = round(float(diff), 2) if diff is not None else None
+            compared["final_result"] = final_result
+
+            compared_results.append(compared)
+
+        return compared_results
