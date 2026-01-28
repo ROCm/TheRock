@@ -87,7 +87,10 @@ ctest --test-dir build
 cmake -B build -GNinja \
   -DCMAKE_C_COMPILER_LAUNCHER=ccache \
   -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-  -DTHEROCK_AMDGPU_FAMILIES=gfx1100
+  -DTHEROCK_AMDGPU_FAMILIES=gfx1100 \
+  -DTHEROCK_ENABLE_SYSDEPS_AMD_MESA=ON \
+  -DTHEROCK_ENABLE_ROCDECODE=ON \
+  -DTHEROCK_ENABLE_ROCJPEG=ON
 ```
 
 **Debug build for specific component:**
@@ -96,7 +99,10 @@ cmake -B build -GNinja \
 cmake -B build -GNinja \
   -DCMAKE_BUILD_TYPE=Release \
   -Drocblas_BUILD_TYPE=RelWithDebInfo \
-  -DTHEROCK_AMDGPU_FAMILIES=gfx1100
+  -DTHEROCK_AMDGPU_FAMILIES=gfx1100 \
+  -DTHEROCK_ENABLE_SYSDEPS_AMD_MESA=ON \
+  -DTHEROCK_ENABLE_ROCDECODE=ON \
+  -DTHEROCK_ENABLE_ROCJPEG=ON
 ```
 
 ### Top-Level Targets
@@ -171,6 +177,7 @@ base/           # rocm-systems (driver, runtime foundations)
 compiler/       # LLVM/Clang/LLD, device libraries
 core/           # HIP, CLR, ROCr
 math-libs/      # rocBLAS, rocFFT, etc.
+media-libs/     # rocdecode, and rocJPEG.
 ml-libs/        # MIOpen, composable_kernel
 comm-libs/      # RCCL
 profiler/       # rocprofiler, roctracer
