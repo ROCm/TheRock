@@ -182,6 +182,7 @@ minimal build):
 | `-DTHEROCK_ENABLE_MIOPEN_PLUGIN=ON`    | Enables MIOpen_plugin                          |
 | `-DTHEROCK_ENABLE_HIPDNN_SAMPLES=ON`   | Enables hipDNN samples (hipDNN Usage Examples) |
 | `-DTHEROCK_ENABLE_HIPDNN=ON`           | Enables hipDNN                                 |
+| `-DTHEROCK_ENABLE_HIPBLASLT_PLUGIN=ON` | Enables hipBLASLt Plugin                       |
 | `-DTHEROCK_ENABLE_ROCWMMA=ON`          | Enables rocWMMA                                |
 | `-DTHEROCK_ENABLE_RDC=ON`              | Enables ROCm Data Center Tool (Linux only)     |
 | `-DTHEROCK_ENABLE_FUSILLI_PLUGIN=ON`   | Enables Fusilli Plugin                         |
