@@ -3,6 +3,7 @@
 """Installation package tests for the core package."""
 
 import importlib
+import os
 from pathlib import Path
 import platform
 import subprocess
@@ -145,15 +146,28 @@ class ROCmDevelTest(unittest.TestCase):
             if "libtest_linking_lib" in str(so_path):
                 # rocprim unit tests, not actual library files
                 continue
-            if "hipdnn_plugins" in str(so_path):
-                # hipdnn plugins have dependencies on other libraries (e.g. miopen)
-                # and cannot be loaded standalone without setting up the path.
-                continue
             with self.subTest(msg="Check shared library loads", so_path=so_path):
                 # Load each in an isolated process because not all libraries in the tree
                 # are designed to load into the same process (i.e. LLVM runtime libs,
                 # etc).
                 command = "import ctypes; import sys; ctypes.CDLL(sys.argv[1])"
+                env = None
+                if "hipdnn_plugins" in str(so_path):
+                    # hipdnn plugins have dependencies on other libraries (e.g. miopen).
+                    # In a real-world scenario, hipdnn_backend loads these plugins, and
+                    # the dependencies are found because they reside in the same directory
+                    # (or are otherwise resolvable).
+                    # To simulate this loading behavior in the test:
+                    # - On Linux, RPATH ($ORIGIN/../../) handles dependency resolution.
+                    # - On Windows, we must manually add the library directory (calculated
+                    #   relative to the plugin) to PATH, as there is no RPATH equivalent.
+                    if sys.platform == "win32":
+                        env = os.environ.copy()
+                        # We assume the plugin is at .../lib/hipdnn_plugins/engines/plugin.so
+                        # and the dependencies are at .../lib.
+                        lib_dir = str(so_path.parents[2])
+                        env["PATH"] = lib_dir + os.pathsep + env.get("PATH", "")
+
                 subprocess.check_call(
-                    [sys.executable, "-P", "-c", command, str(so_path)]
+                    [sys.executable, "-P", "-c", command, str(so_path)], env=env
                 )
