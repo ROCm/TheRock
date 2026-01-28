@@ -60,9 +60,12 @@ add_custom_target(
   COMMAND
     "${CMAKE_COMMAND}" -E rm -rf -- "${CMAKE_INSTALL_PREFIX}"
   COMMAND
+    # Meson refuses to build if the source dir is a subdir of the build dir.
+    # Run meson from the source directory to avoid this issue.
+    "${CMAKE_COMMAND}" -E chdir "${SOURCE_DIR}"
     "${CMAKE_COMMAND}" -E env
-      # Escaping hack: experimentally determined to persist through the layers.
-      "LDFLAGS=-Wl,-rpath='$$ORIGIN' -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
+      # Apply symbol versioning via version.lds. RPATH is set post-install via patch_install.py.
+      "LDFLAGS=-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
       --
       "${MESON_BUILD}" setup "${CMAKE_CURRENT_BINARY_DIR}"
         --reconfigure
@@ -71,18 +74,12 @@ add_custom_target(
         --prefix "/"
         -Dpkgconfig.relocatable=true
         -Dlibdir=lib
-        # Disable zlib: only needed for reading compressed pci.ids.gz files
-        # (human-readable device names). Core PCI device enumeration and
-        # topology discovery work without it.
         -Dzlib=disabled
-        "${SOURCE_DIR}"
   COMMAND
     "${MESON_BUILD}" compile --verbose
   COMMAND
     "${CMAKE_COMMAND}" -E env "DESTDIR=${CMAKE_INSTALL_PREFIX}" --
       "${MESON_BUILD}" install
-  COMMAND
-    ${PATCHELF} --set-rpath '\$\$ORIGIN:\$\$ORIGIN/rocm_sysdeps/lib' ${CMAKE_INSTALL_PREFIX}/lib/libpciaccess.so
   COMMAND
     "${CMAKE_COMMAND}" -E env
       "PATCHELF=${PATCHELF}"
