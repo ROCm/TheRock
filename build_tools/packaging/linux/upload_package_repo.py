@@ -793,6 +793,11 @@ def upload_to_s3(source_dir, bucket, prefix, dedupe=False):
             if fname == "index.html":
                 continue
 
+            # Skip build manifest files - these are for local tracking only
+            if fname.lower().endswith(".txt"):
+                print(f"Skipping build manifest file (local only): {fname}")
+                continue
+
             local = os.path.join(root, fname)
             rel = os.path.relpath(local, source_dir)
             key = os.path.join(prefix, rel).replace("\\", "/")

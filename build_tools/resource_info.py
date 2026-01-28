@@ -286,9 +286,20 @@ def therock_components_compile_classifier(
     return comp
 
 
+def find_ccache() -> Optional[str]:
+    """
+    Find ccache executable in PATH.
+    Returns the path to ccache if found, None otherwise.
+    """
+    import shutil
+
+    return shutil.which("ccache")
+
+
 def run_and_log_command(repo_root: Path, log_dir: str) -> int:
     """
     Compiler launcher mode: run compiler command and emit per-command log file.
+    Automatically prepends ccache if available (unless already present in command).
     """
     if len(sys.argv) <= 1:
         return 0
@@ -297,6 +308,14 @@ def run_and_log_command(repo_root: Path, log_dir: str) -> int:
 
     pwd = os.getcwd()
     cmd_args = sys.argv[1:]
+
+    # Automatically prepend ccache if available and not already in the command
+    # This allows resource_info.py to be used as a single compiler launcher
+    # without needing CMake list syntax (semicolon-separated launchers)
+    ccache_path = find_ccache()
+    if ccache_path and cmd_args and not cmd_args[0].endswith("ccache"):
+        cmd_args = [ccache_path] + cmd_args
+
     cmd_str = " ".join(shlex.quote(arg) for arg in cmd_args)
 
     comp = therock_components_compile_classifier(repo_root, pwd, cmd_str)
