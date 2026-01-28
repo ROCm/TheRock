@@ -57,27 +57,22 @@ class ROCsolverBenchmark(BenchmarkBase):
         Returns:
             List[Dict[str, Any]]: test_results list
         """
-        # Regex patterns for parsing
-        # Pattern to match timing results: "cpu_time_us  gpu_time_us"
+        # Regex pattern for parsing timing results: "cpu_time_us  gpu_time_us"
         gpu_pattern = re.compile(r"^\s*(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)\s*$")
-        # Pattern to detect device ID
-        device_pattern = re.compile(r"Device\s+ID\s*\d+")
 
         log.info("Parsing Results")
 
         test_results = []
         score = 0
-        num_gpus = 0
+
+        # Detect actual GPU count from system
+        num_gpus = self._detect_gpu_count()
 
         # Test configuration from command
         subtest_name = "rocsolver_gesvd_d_S_S_250_250"
 
         with open(self.log_file, "r") as fp:
             for line in fp:
-                # Check for GPU device lines
-                if re.search(device_pattern, line):
-                    num_gpus += 1
-
                 # Extract timing score - try new 2-column format first
                 gpu_match = re.search(gpu_pattern, line)
                 if gpu_match:
@@ -95,10 +90,6 @@ class ROCsolverBenchmark(BenchmarkBase):
             log.warning(f"No valid score extracted from log file. Score = {score}")
 
         log.info(f"Extracted score: {score} us")
-
-        # Default to 1 GPU if none detected
-        if num_gpus == 0:
-            num_gpus = 1
 
         # Add to test results
         test_results.append(
