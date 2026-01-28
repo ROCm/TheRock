@@ -460,7 +460,7 @@
             ]
           },
           {
-            "Name": "Origami",
+            "Name": "origami",
             "Components": [
               "lib",
               "run",

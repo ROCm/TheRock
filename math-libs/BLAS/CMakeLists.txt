@@ -91,12 +91,12 @@ endif()
 
 
 ##############################################################################
-# Origami
+# origami
 ##############################################################################
 
-therock_cmake_subproject_declare(Origami
+therock_cmake_subproject_declare(origami
   EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/origami"
-  BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/Origami"
+  BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/origami"
   BACKGROUND_BUILD
   CMAKE_ARGS
     -DHIP_PLATFORM=amd
@@ -112,13 +112,13 @@ therock_cmake_subproject_declare(Origami
   RUNTIME_DEPS
     hip-clr
 )
-therock_cmake_subproject_glob_c_sources(Origami
+therock_cmake_subproject_glob_c_sources(origami
   SUBDIRS
     .
 )
-therock_cmake_subproject_provide_package(Origami origami lib/cmake/origami)
-therock_cmake_subproject_activate(Origami)
-list(APPEND _blas_subproject_names Origami)
+therock_cmake_subproject_provide_package(origami origami lib/cmake/origami)
+therock_cmake_subproject_activate(origami)
+list(APPEND _blas_subproject_names origami)
 
 
 ##############################################################################
@@ -175,7 +175,7 @@ therock_cmake_subproject_declare(hipBLASLt
     ${hipBLASLt_rocRoller_build_deps}
   RUNTIME_DEPS
     hip-clr
-    Origami
+    origami
     therock-host-blas
     ${hipBLASLt_rocRoller_runtime_deps}
     ${hipBLASLt_optional_deps}
