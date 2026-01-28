@@ -371,16 +371,6 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("fftw3")
         if args.hipdnn:
             extra_artifacts.append("hipdnn")
-            # Add dev artifacts for CMake config files (needed for consumption tests)
-            argv.append("hipdnn_dev_generic")
-            # Add transitive dependencies required by hipdnn_data_sdk's find_dependency() calls
-            argv.append("flatbuffers_dev_generic")
-            argv.append("flatbuffers_run_generic")  # flatc binary referenced by cmake
-            argv.append("spdlog_dev_generic")
-            argv.append("nlohmann-json_dev_generic")
-            argv.append("fmt_dev_generic")
-            # Add amd-llvm_dev for AMDDeviceLibs (required by hip config)
-            argv.append("amd-llvm_dev_generic")
         if args.miopen:
             extra_artifacts.append("miopen")
             # We need bin/MIOpenDriver executable for tests.

@@ -40,9 +40,10 @@ def run_tests(build_dir: Path):
     environ_vars = os.environ.copy()
     environ_vars["HIP_PLATFORM"] = "amd"
 
-    # Set library path for runtime (needed when running the test executables)
-    rocm_lib = str(artifacts_path / "lib")
     if is_windows:
+        # Set library path for runtime (needed when running the test executables)
+        rocm_lib = str(artifacts_path)
+
         # Windows uses PATH for DLL lookup
         path_sep = ";"
         if "PATH" in environ_vars:
@@ -50,6 +51,8 @@ def run_tests(build_dir: Path):
         else:
             environ_vars["PATH"] = rocm_lib
     else:
+        rocm_lib = str(artifacts_path / "lib")
+        
         # Linux uses LD_LIBRARY_PATH
         path_sep = ":"
         if "LD_LIBRARY_PATH" in environ_vars:

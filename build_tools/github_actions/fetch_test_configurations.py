@@ -224,7 +224,6 @@ test_matrix = {
     # hipDNN install/consumption tests
     "hipdnn_install": {
         "job_name": "hipdnn_install",
-        "fetch_artifact_args": "--hipdnn",
         "timeout_minutes": 10,
         "test_script": f"python {_get_script_path('test_hipdnn_install.py')}",
         "platform": ["linux", "windows"],
