@@ -397,6 +397,55 @@ def do_build(args: argparse.Namespace):
         env["CMAKE_CXX_COMPILER_LAUNCHER"] = "ccache"
         run_command(["ccache", "--zero-stats"], cwd=tempfile.gettempdir())
 
+    # Track whether sccache wrapping was attempted (for cleanup in finally block)
+    sccache_setup_attempted = False
+    
+    if args.use_sccache:
+        print("Setting up sccache with ROCm compiler wrapping...")
+        # Add script directory to path for importing setup_sccache_rocm
+        sys.path.insert(0, str(script_dir))
+        
+        try:
+            from setup_sccache_rocm import (
+                install_sccache,
+                setup_rocm_sccache,
+                restore_rocm_compilers,
+                find_sccache,
+                parse_sccache_stats,
+            )
+
+            sccache_path = install_sccache()
+            sccache_setup_attempted = True  # Mark before wrapping starts
+            setup_rocm_sccache(rocm_dir, sccache_path)
+
+            # Also set CMAKE launcher for host code (belt and suspenders)
+            env["CMAKE_C_COMPILER_LAUNCHER"] = str(sccache_path)
+            env["CMAKE_CXX_COMPILER_LAUNCHER"] = str(sccache_path)
+
+            # Start sccache server to warm it up
+            try:
+                run_command([str(sccache_path), "--start-server"], cwd=tempfile.gettempdir())
+            except subprocess.CalledProcessError:
+                # Server may already be running, ignore
+                pass
+
+            # Zero sccache stats
+            run_command([str(sccache_path), "--zero-stats"], cwd=tempfile.gettempdir())
+            
+        except Exception as e:
+            print(f"ERROR: sccache setup failed: {e}")
+            print("Falling back to ccache for host code compilation...")
+            args.use_sccache = False
+            args.use_ccache = True
+            env["CMAKE_C_COMPILER_LAUNCHER"] = "ccache"
+            env["CMAKE_CXX_COMPILER_LAUNCHER"] = "ccache"
+            try:
+                run_command(["ccache", "--zero-stats"], cwd=tempfile.gettempdir())
+            except Exception as ccache_error:
+                print(f"WARNING: ccache fallback also failed: {ccache_error}")
+                print("Continuing without compiler caching...")
+                args.use_ccache = False
+
     # GLOO enabled for only Linux
     if not is_windows:
         env["USE_GLOO"] = "ON"
@@ -470,51 +519,92 @@ def do_build(args: argparse.Namespace):
         env["OpenBLAS_HOME"] = str(host_math_path)
         env["OpenBLAS_LIB_NAME"] = "rocm-openblas"
 
-    # Build triton.
-    triton_requirement = None
-    if args.build_triton or (args.build_triton is None and triton_dir):
-        assert triton_dir, "Must specify --triton-dir if --build-triton"
-        triton_requirement = do_build_triton(args, triton_dir, dict(env))
-    else:
-        print("--- Not building triton (no --triton-dir)")
+    # Build all components - wrap in try/finally to ensure sccache cleanup
+    try:
+        # Build triton.
+        triton_requirement = None
+        if args.build_triton or (args.build_triton is None and triton_dir):
+            assert triton_dir, "Must specify --triton-dir if --build-triton"
+            triton_requirement = do_build_triton(args, triton_dir, dict(env))
+        else:
+            print("--- Not building triton (no --triton-dir)")
 
-    # Build pytorch.
-    if pytorch_dir:
-        do_build_pytorch(
-            args, pytorch_dir, dict(env), triton_requirement=triton_requirement
-        )
-    else:
-        print("--- Not building pytorch (no --pytorch-dir)")
+        # Build pytorch.
+        if pytorch_dir:
+            do_build_pytorch(
+                args, pytorch_dir, dict(env), triton_requirement=triton_requirement
+            )
+        else:
+            print("--- Not building pytorch (no --pytorch-dir)")
 
-    # Build pytorch audio.
-    if args.build_pytorch_audio or (
-        args.build_pytorch_audio is None and pytorch_audio_dir
-    ):
-        assert (
-            pytorch_audio_dir
-        ), "Must specify --pytorch-audio-dir if --build-pytorch-audio"
-        do_build_pytorch_audio(args, pytorch_audio_dir, dict(env))
-    else:
-        print("--- Not build pytorch-audio (no --pytorch-audio-dir)")
+        # Build pytorch audio.
+        if args.build_pytorch_audio or (
+            args.build_pytorch_audio is None and pytorch_audio_dir
+        ):
+            assert (
+                pytorch_audio_dir
+            ), "Must specify --pytorch-audio-dir if --build-pytorch-audio"
+            do_build_pytorch_audio(args, pytorch_audio_dir, dict(env))
+        else:
+            print("--- Not build pytorch-audio (no --pytorch-audio-dir)")
 
-    # Build pytorch vision.
-    if args.build_pytorch_vision or (
-        args.build_pytorch_vision is None and pytorch_vision_dir
-    ):
-        assert (
-            pytorch_vision_dir
-        ), "Must specify --pytorch-vision-dir if --build-pytorch-vision"
-        do_build_pytorch_vision(args, pytorch_vision_dir, dict(env))
-    else:
-        print("--- Not build pytorch-vision (no --pytorch-vision-dir)")
+        # Build pytorch vision.
+        if args.build_pytorch_vision or (
+            args.build_pytorch_vision is None and pytorch_vision_dir
+        ):
+            assert (
+                pytorch_vision_dir
+            ), "Must specify --pytorch-vision-dir if --build-pytorch-vision"
+            do_build_pytorch_vision(args, pytorch_vision_dir, dict(env))
+        else:
+            print("--- Not build pytorch-vision (no --pytorch-vision-dir)")
 
-    print("--- Builds all completed")
+        print("--- Builds all completed")
 
-    if args.use_ccache:
-        ccache_stats_output = capture(
-            ["ccache", "--show-stats"], cwd=tempfile.gettempdir()
-        )
-        print(f"ccache --show-stats output:\n{ccache_stats_output}")
+        if args.use_ccache:
+            ccache_stats_output = capture(
+                ["ccache", "--show-stats"], cwd=tempfile.gettempdir()
+            )
+            print(f"ccache --show-stats output:\n{ccache_stats_output}")
+
+        if args.use_sccache:
+            sccache_path = find_sccache()
+            if sccache_path:
+                sccache_stats_output = capture(
+                    [str(sccache_path), "--show-stats"], cwd=tempfile.gettempdir()
+                )
+                print(f"sccache --show-stats output:\n{sccache_stats_output}")
+                
+                # Parse and display cache hit rate
+                metrics = parse_sccache_stats(sccache_stats_output)
+                if metrics:
+                    print("\n" + "="*60)
+                    print("sccache Cache Performance Summary")
+                    print("="*60)
+                    if "compile_requests" in metrics:
+                        print(f"Total Compile Requests: {metrics['compile_requests']:,}")
+                    if "cache_hits" in metrics:
+                        print(f"Cache Hits: {metrics['cache_hits']:,}")
+                    if "cache_misses" in metrics:
+                        print(f"Cache Misses: {metrics['cache_misses']:,}")
+                    if "hit_rate" in metrics:
+                        hit_rate = metrics['hit_rate']
+                        emoji = "🎯" if hit_rate > 80 else "✅" if hit_rate > 50 else "⚠️"
+                        print(f"Cache Hit Rate: {hit_rate:.1f}% {emoji}")
+                    if "cache_errors" in metrics and metrics["cache_errors"] > 0:
+                        print(f"⚠️  Cache Errors: {metrics['cache_errors']:,}")
+                    print("="*60 + "\n")
+
+    finally:
+        # Always restore original compilers, even on failure
+        # Use sccache_setup_attempted flag since args.use_sccache may be False
+        # due to fallback, but wrappers might still have been created
+        if sccache_setup_attempted:
+            print("Restoring original ROCm compilers...")
+            try:
+                restore_rocm_compilers(rocm_dir)
+            except Exception as e:
+                print(f"Warning: Failed to restore compilers: {e}")
 
 
 def do_build_triton(
@@ -984,7 +1074,12 @@ def main(argv: list[str]):
     build_p.add_argument(
         "--use-ccache",
         action=argparse.BooleanOptionalAction,
-        help="Use ccache as the compiler launcher",
+        help="Use ccache as the compiler launcher (for host code only)",
+    )
+    build_p.add_argument(
+        "--use-sccache",
+        action=argparse.BooleanOptionalAction,
+        help="Use sccache with ROCm compiler wrapping (comprehensive caching for HIP code)",
     )
     build_p.add_argument(
         "--pytorch-dir",
