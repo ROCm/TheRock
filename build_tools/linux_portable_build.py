@@ -23,6 +23,7 @@ Other options of note:
 """
 
 import argparse
+import os
 from pathlib import Path
 import shlex
 import subprocess
@@ -61,6 +62,18 @@ def do_build(args: argparse.Namespace, *, rest_args: list[str]):
             f"type=bind,src={args.repo_dir},dst=/therock/src",
         ]
     )
+
+    # Pass through environment variables that control build behavior.
+    # These are set by CI workflows to enable features like build profiling.
+    passthrough_env_vars = [
+        "EXTRA_C_COMPILER_LAUNCHER",
+        "EXTRA_CXX_COMPILER_LAUNCHER",
+        "THEROCK_BUILD_PROF_LOG_DIR",
+    ]
+    for var in passthrough_env_vars:
+        if var in os.environ:
+            cl.extend(["-e", f"{var}={os.environ[var]}"])
+
     if args.build_python_only:
         cl.extend(
             [
