@@ -62,17 +62,8 @@ class ROCmLibrariesTest(unittest.TestCase):
                     # Though this is not needed for the amd-smi client.
                     continue
 
-                # For Windows compatibility, we first preload libraries (DLLs)
-                # that are not co-located. Specifically this is for
-                # the "libraries" like hipfft, rocblas, etc. which are siblings
-                # in '_rocm_sdk_libraries_gfx####/bin' while the "compiler" is
-                # in '_rocm_sdk_core/bin'
-                # TODO(#996): track deps in libraries then have the preloader
-                #   recursively get deps instead of hardcoding like this
-                preload_command = "import rocm_sdk; rocm_sdk.preload_libraries('amd_comgr', 'amdhip64', 'hiprtc');"
-
                 extra_setup = ""
-                if "hipdnn_plugins" in str(so_path):
+                if "hipdnn_plugins" in str(so_path) and sys.platform == "win32":
                     # hipdnn plugins have dependencies on other libraries (e.g. miopen).
                     # In a real-world scenario, hipdnn_backend loads these plugins, and
                     # the dependencies are found because they reside in the same directory
@@ -81,11 +72,19 @@ class ROCmLibrariesTest(unittest.TestCase):
                     # - On Linux, RPATH ($ORIGIN/../../) handles dependency resolution.
                     # - On Windows, we must manually add the library directory (calculated
                     #   relative to the plugin) via add_dll_directory, as there is no RPATH equivalent.
-                    if sys.platform == "win32":
-                        # We assume the plugin is at .../{lib|bin}/hipdnn_plugins/engines/plugin.so
-                        # and the dependencies are at .../{lib|bin}.
-                        lib_dir = str(so_path.parents[2]).replace("\\", "\\\\")
-                        extra_setup = f"import os; os.add_dll_directory('{lib_dir}') if hasattr(os, 'add_dll_directory') else None; "
+                    # We assume the plugin is at .../{lib|bin}/hipdnn_plugins/engines/plugin.so
+                    # and the dependencies are at .../{lib|bin}.
+                    lib_dir = str(so_path.parents[2]).replace("\\", "\\\\")
+                    extra_setup = f"import os; os.add_dll_directory('{lib_dir}') if hasattr(os, 'add_dll_directory') else None; "
+
+                # For Windows compatibility, we first preload libraries (DLLs)
+                # that are not co-located. Specifically this is for
+                # the "libraries" like hipfft, rocblas, etc. which are siblings
+                # in '_rocm_sdk_libraries_gfx####/bin' while the "compiler" is
+                # in '_rocm_sdk_core/bin'
+                # TODO(#996): track deps in libraries then have the preloader
+                #   recursively get deps instead of hardcoding like this
+                preload_command = "import rocm_sdk; rocm_sdk.preload_libraries('amd_comgr', 'amdhip64', 'hiprtc');"
 
                 # Load each in an isolated process because not all libraries in the tree
                 # are designed to load into the same process (i.e. LLVM runtime libs,
