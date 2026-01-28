@@ -6,5 +6,4 @@ unmatched_exclude = [
 
 # libpciaccess
 [components.dev."third-party/sysdeps/linux/libpciaccess/build/stage"]
-[components.doc."third-party/sysdeps/linux/libpciaccess/build/stage"]
 [components.lib."third-party/sysdeps/linux/libpciaccess/build/stage"]
