@@ -95,6 +95,7 @@ jobs:
           docker network prune -f || true
 
       - name: Run setup test environment workflow
+        timeout-minutes: 30
         uses: './.github/actions/setup_test_environment'
         with:
           ARTIFACT_GROUP: ${{ inputs.artifact_group }}
@@ -121,6 +122,10 @@ jobs:
           AMD_LOG_LEVEL: 4
         run: |
           pytest tests/ --log-cli-level=info --timeout=300
+
+      - name: Run network diagnostics on failure
+        if: ${{ failure() }}
+        uses: ./.github/actions/network_diagnostics
 
       - name: Post-job cleanup processes on Windows
         if: ${{ always() && runner.os == 'Windows' }}
