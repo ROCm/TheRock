@@ -142,8 +142,8 @@ class TestFullBuildDetection(unittest.TestCase):
 
             self.assertEqual(len(result["linux_projects"]), 1)
             self.assertEqual(len(result["windows_projects"]), 1)
-            # Should have test list, not just ["all"]
-            self.assertIsInstance(result["linux_projects"][0]["project_to_test"], list)
+            # Should have test list as comma-separated string
+            self.assertIsInstance(result["linux_projects"][0]["project_to_test"], str)
 
     def test_manual_all_override_builds(self):
         """Test that explicit 'all' projects input triggers builds."""
@@ -196,9 +196,9 @@ class TestFullBuildDetection(unittest.TestCase):
 
             self.assertEqual(len(result["linux_projects"]), 1)
             self.assertEqual(len(result["windows_projects"]), 1)
-            # Should have actual test list from rocm-libraries
+            # Should have actual test list from rocm-libraries as comma-separated string
             test_list = result["linux_projects"][0]["project_to_test"]
-            self.assertIsInstance(test_list, list)
+            self.assertIsInstance(test_list, str)
             self.assertGreater(len(test_list), 0)
 
     def test_no_modified_files_skips_build(self):
@@ -248,9 +248,9 @@ class TestFullBuildDetection(unittest.TestCase):
             # Should NOT have cmake_options (we do full builds)
             self.assertNotIn("cmake_options", result["linux_projects"][0])
 
-            # Test list should be from external repo, not just ["all"]
+            # Should have test list, not just ["all"]
             test_list = result["linux_projects"][0]["project_to_test"]
-            self.assertIsInstance(test_list, list)
+            self.assertIsInstance(test_list, str)
 
 
 if __name__ == "__main__":
