@@ -751,7 +751,7 @@ def generate_multi_arch_matrix(
 
     Returns:
         List of matrix entries, each containing:
-        - matrix_per_family_json: JSON array of {amdgpu_family, test-runs-on} objects
+        - matrix_per_family_json: JSON array of {amdgpu_family, test-runs-on, sanity_check_only_for_family} objects
           for per-architecture job matrix expansion
         - dist_amdgpu_families: Semicolon-separated family names for THEROCK_DIST_AMDGPU_TARGETS
         - build_variant_label: Human-readable label (e.g., "Release", "ASAN")
@@ -793,6 +793,9 @@ def generate_multi_arch_matrix(
                     {
                         "amdgpu_family": family_name,
                         "test-runs-on": test_runs_on,
+                        "sanity_check_only_for_family": platform_info.get(
+                            "sanity_check_only_for_family", False
+                        ),
                     }
                 )
 

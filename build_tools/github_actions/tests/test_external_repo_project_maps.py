@@ -10,6 +10,7 @@ These tests verify:
 4. Full build configuration is returned (ignoring cmake_options)
 """
 
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -27,23 +28,36 @@ from configure_ci import _detect_external_repo_projects
 
 
 class TestDynamicImport(unittest.TestCase):
-    """Test dynamic import from external repos."""
+    """Test dynamic import from external repos.
+
+    These tests will skip when external repos are not available, which happens when:
+    - Submodules are not populated (local development without fetch_sources)
+    - External repo is not checked out in alternate CI paths
+
+    The import_external_repo_module function checks these locations in order:
+    1. EXTERNAL_SOURCE_PATH environment variable (test integration workflows)
+    2. Current working directory (external repo calling TheRock CI)
+    3. GITHUB_WORKSPACE (GitHub Actions workspace)
+    4. TheRock submodule path (TheRock's own CI after fetch_sources)
+    """
 
     def test_import_rocm_libraries_matrix(self):
         """Test importing therock_matrix from rocm-libraries."""
         module = import_external_repo_module("rocm-libraries", "therock_matrix")
-        self.assertIsNotNone(
-            module, "Should successfully import rocm-libraries therock_matrix"
-        )
+        if module is None:
+            self.skipTest(
+                "rocm-libraries not available (submodule not populated or not in CI paths)"
+            )
         self.assertTrue(hasattr(module, "project_map"))
         self.assertTrue(hasattr(module, "subtree_to_project_map"))
 
     def test_import_rocm_systems_matrix(self):
         """Test importing therock_matrix from rocm-systems."""
         module = import_external_repo_module("rocm-systems", "therock_matrix")
-        self.assertIsNotNone(
-            module, "Should successfully import rocm-systems therock_matrix"
-        )
+        if module is None:
+            self.skipTest(
+                "rocm-systems not available (submodule not populated or not in CI paths)"
+            )
         self.assertTrue(hasattr(module, "project_map"))
 
     def test_import_rocm_systems_configure_ci(self):

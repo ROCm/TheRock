@@ -49,14 +49,17 @@ class TestDetectExternalProjectsOrExit(unittest.TestCase):
         base_args = {"base_ref": "HEAD^1", "github_event_name": "pull_request"}
 
         with (
-            patch(
-                "external_repo_project_maps.detect_projects_from_changes",
+            patch.object(
+                configure_ci,
+                "_detect_external_repo_projects",
                 return_value={"linux_projects": [], "windows_projects": []},
             ),
             patch.object(configure_ci, "gha_set_output") as mock_set_output,
             self.assertRaises(SystemExit) as cm,
         ):
-            configure_ci._detect_external_projects_or_exit(base_args, "rocm-libraries")
+            configure_ci._handle_external_repo_detection_or_exit(
+                base_args, "rocm-libraries"
+            )
 
         self.assertEqual(cm.exception.code, 0)
         mock_set_output.assert_called_once()
@@ -76,13 +79,16 @@ class TestDetectExternalProjectsOrExit(unittest.TestCase):
         }
 
         with (
-            patch(
-                "external_repo_project_maps.detect_projects_from_changes",
+            patch.object(
+                configure_ci,
+                "_detect_external_repo_projects",
                 return_value=fake_detection,
             ) as mock_detect,
             patch.dict(os.environ, {"PROJECTS": "projects/rocprim"}),
         ):
-            configure_ci._detect_external_projects_or_exit(base_args, "rocm-libraries")
+            configure_ci._handle_external_repo_detection_or_exit(
+                base_args, "rocm-libraries"
+            )
 
         mock_detect.assert_called_once()
         self.assertIn("linux_external_project_configs", base_args)
