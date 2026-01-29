@@ -397,7 +397,9 @@ def generate_html_table(title: str, headers: List[str], rows: List[tuple]) -> st
     return "\n".join(lines) + "\n"
 
 
-def generate_report(projects: Dict, tasks: List[Task], output_file: Path, build_dir: Path):
+def generate_report(
+    projects: Dict, tasks: List[Task], output_file: Path, build_dir: Path
+):
     """Generate HTML report from analyzed project data."""
     # ROCm Components table
     rocm_data = projects.get(CATEGORY_ROCM, {})
