@@ -69,7 +69,7 @@ endif()
 set(patch_source_commands)
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   list(APPEND patch_source_commands   COMMAND
-    bash "${CMAKE_CURRENT_SOURCE_DIR}/patch_source.sh" "${CMAKE_CURRENT_BINARY_DIR}/s")
+    bash "${CMAKE_CURRENT_SOURCE_DIR}/patch_source.sh" "${SOURCE_DIR}")
 endif()
 
 add_custom_target(
@@ -78,16 +78,11 @@ add_custom_target(
   #
   # OPTIONAL: Patching of the sources should happen here.
   #
-   COMMAND
-    "${CMAKE_COMMAND}" -E rm -rf -- "${CMAKE_INSTALL_PREFIX}" "${CMAKE_CURRENT_BINARY_DIR}/s"
-  COMMAND
-    "${CMAKE_COMMAND}" -E copy_directory "${SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/s"
   COMMAND
     ${patch_source_commands}
   COMMAND
-    # reconfigure the project as the version of autoconf available may differ
-    autoreconf -f -i "${CMAKE_CURRENT_BINARY_DIR}/s"
-
+    # reconfigure the project since the source files have been edited
+    autoreconf -f -i "${SOURCE_DIR}"
   COMMAND
     "${CMAKE_COMMAND}" -E env
       "PKG_CONFIG_PATH=$ENV{PKG_CONFIG_PATH}"
@@ -99,7 +94,7 @@ add_custom_target(
       "LDFLAGS=${CMAKE_SHARED_LINKER_FLAGS} -Wl,-rpath=\\'\\$$\\$$ORIGIN\\' -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
       "CPPFLAGS=${EXTRA_CPPFLAGS}"
       --
-    "${CMAKE_CURRENT_BINARY_DIR}/s/configure"
+    "${SOURCE_DIR}/configure"
       --prefix "${CMAKE_INSTALL_PREFIX}"
   COMMAND
     make V=1
