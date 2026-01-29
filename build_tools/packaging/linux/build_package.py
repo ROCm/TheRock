@@ -461,6 +461,8 @@ def create_rpm_package(pkg_name, config: PackageConfig):
     print_function_name()
     print(f"Package Name: {pkg_name}")
 
+    # By default both versioned and non versioned packages are created.
+    # In case rpath is enabled need to create only versioned package. So skipping nonversioned here
     if not config.enable_rpath:
         create_nonversioned_rpm_package(pkg_name, config)
 
