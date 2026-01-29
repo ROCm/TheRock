@@ -26,9 +26,8 @@ S3 Layout:
     index.html        # File listing for pip --find-links
 
 Installation:
-  pip install rocm[libraries] \\
-    --find-links=https://{bucket}.s3.amazonaws.com/{path}/index.html \\
-    --pre
+  pip install rocm[libraries,devel] --pre \\
+    --find-links=https://{bucket}.s3.amazonaws.com/{path}/index.html
 """
 
 import argparse
@@ -205,8 +204,6 @@ def upload_packages(
 
 
 def write_gha_upload_summary(upload_path: UploadPath):
-    log(f"Adding links to job summary")
-
     index_url = f"{upload_path.s3_url}/index.html"
     install_instructions_markdown = f"""[ROCm Python packages]({index_url})
 ```bash
@@ -261,7 +258,7 @@ def run(args: argparse.Namespace):
 
     if not args.output_dir:
         log("Write github actions build summary")
-        log("--------------------")
+        log("------------------")
         write_gha_upload_summary(upload_path)
 
     log("")
