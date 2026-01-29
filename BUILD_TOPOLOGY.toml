@@ -538,6 +538,12 @@ type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "hipify", "rocprofiler-sdk"]
 disable_platforms = ["windows"]
 
+[artifacts.rocshmem]
+artifact_group = "comm-libs"
+type = "target-specific"
+artifact_deps = ["core-runtime", "core-hip"]
+disable_platforms = ["windows"]
+
 # --- Profiler Tools ---
 
 [artifacts.rocprofiler-sdk]

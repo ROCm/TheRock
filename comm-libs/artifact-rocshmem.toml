@@ -1,0 +1,8 @@
+# rocshmem
+[components.dbg."comm-libs/rocshmem/stage"]
+[components.dev."comm-libs/rocshmem/stage"]
+[components.doc."comm-libs/rocshmem/stage"]
+[components.lib."comm-libs/rocshmem/stage"]
+include = [
+  "share/rocshmem/**",
+]
