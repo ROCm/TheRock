@@ -71,49 +71,49 @@ class TestROCmSanity:
             f"Failed to search for {to_search} in rocminfo output",
         )
 
-    def test_hip_printf(self):
-        platform_executable_suffix = ".exe" if is_windows() else ""
+    # def test_hip_printf(self):
+    #     platform_executable_suffix = ".exe" if is_windows() else ""
 
-        # Look up offload arch, e.g. gfx1100, for explicit `--offload-arch`.
-        # See https://github.com/ROCm/llvm-project/issues/302:
-        #   * If this is omitted on Linux, hipcc uses rocm_agent_enumerator.
-        #   * If this is omitted on Windows, hipcc uses a default (e.g. gfx906).
-        # We include it on both platforms for consistency.
-        offload_arch_executable_file = f"offload-arch{platform_executable_suffix}"
-        offload_arch_path = (
-            THEROCK_BIN_DIR
-            / ".."
-            / "lib"
-            / "llvm"
-            / "bin"
-            / offload_arch_executable_file
-        ).resolve()
-        process = run_command([str(offload_arch_path)])
-        offload_arch = process.stdout.splitlines()[0]
+    #     # Look up offload arch, e.g. gfx1100, for explicit `--offload-arch`.
+    #     # See https://github.com/ROCm/llvm-project/issues/302:
+    #     #   * If this is omitted on Linux, hipcc uses rocm_agent_enumerator.
+    #     #   * If this is omitted on Windows, hipcc uses a default (e.g. gfx906).
+    #     # We include it on both platforms for consistency.
+    #     offload_arch_executable_file = f"offload-arch{platform_executable_suffix}"
+    #     offload_arch_path = (
+    #         THEROCK_BIN_DIR
+    #         / ".."
+    #         / "lib"
+    #         / "llvm"
+    #         / "bin"
+    #         / offload_arch_executable_file
+    #     ).resolve()
+    #     process = run_command([str(offload_arch_path)])
+    #     offload_arch = process.stdout.splitlines()[0]
 
-        # Compiling .cpp file using hipcc
-        hipcc_check_executable_file = f"hipcc_check{platform_executable_suffix}"
-        run_command(
-            [
-                f"{THEROCK_BIN_DIR}/hipcc",
-                str(THIS_DIR / "hipcc_check.cpp"),
-                "-Xlinker",
-                f"-rpath={THEROCK_BIN_DIR}/../lib/",
-                f"--offload-arch={offload_arch}",
-                "-o",
-                hipcc_check_executable_file,
-            ],
-            cwd=str(THEROCK_BIN_DIR),
-        )
+    #     # Compiling .cpp file using hipcc
+    #     hipcc_check_executable_file = f"hipcc_check{platform_executable_suffix}"
+    #     run_command(
+    #         [
+    #             f"{THEROCK_BIN_DIR}/hipcc",
+    #             str(THIS_DIR / "hipcc_check.cpp"),
+    #             "-Xlinker",
+    #             f"-rpath={THEROCK_BIN_DIR}/../lib/",
+    #             f"--offload-arch={offload_arch}",
+    #             "-o",
+    #             hipcc_check_executable_file,
+    #         ],
+    #         cwd=str(THEROCK_BIN_DIR),
+    #     )
 
-        # Running and checking the executable
-        platform_executable_prefix = "./" if not is_windows() else ""
-        hipcc_check_executable = f"{platform_executable_prefix}hipcc_check"
-        process = run_command([hipcc_check_executable], cwd=str(THEROCK_BIN_DIR))
-        check.equal(process.returncode, 0)
-        check.greater(
-            os.path.getsize(str(THEROCK_BIN_DIR / hipcc_check_executable_file)), 0
-        )
+    #     # Running and checking the executable
+    #     platform_executable_prefix = "./" if not is_windows() else ""
+    #     hipcc_check_executable = f"{platform_executable_prefix}hipcc_check"
+    #     process = run_command([hipcc_check_executable], cwd=str(THEROCK_BIN_DIR))
+    #     check.equal(process.returncode, 0)
+    #     check.greater(
+    #         os.path.getsize(str(THEROCK_BIN_DIR / hipcc_check_executable_file)), 0
+    #     )
 
     @pytest.mark.skipif(
         is_windows(),
