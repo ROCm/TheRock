@@ -26,9 +26,11 @@ function(therock_sanitizer_configure
   endif()
 
   # Our own toolchains get ASAN enabled consistently.
+  # ASAN: Full host+device address sanitizer (xnack+ GPU targets for gfx942, gfx950)
+  # HOST_ASAN: Host-only address sanitizer (no device-side instrumentation)
   set(_stanza)
-  if(_sanitizer STREQUAL "ASAN")
-    string(APPEND _stanza "set(THEROCK_SANITIZER \"ASAN\")\n")
+  if(_sanitizer STREQUAL "ASAN" OR _sanitizer STREQUAL "HOST_ASAN")
+    string(APPEND _stanza "set(THEROCK_SANITIZER \"${_sanitizer}\")\n")
     # TODO: Support ASAN_STATIC to use static ASAN linkage. Shared is almost always the right thing,
     # so make "ASAN" imply shared linkage.
     string(APPEND _stanza "string(APPEND CMAKE_CXX_FLAGS \" -fsanitize=address -fno-omit-frame-pointer -g\")\n")
@@ -42,15 +44,20 @@ function(therock_sanitizer_configure
     # https://github.com/ROCm/TheRock/issues/1782
     string(APPEND _stanza "add_link_options($<$<LINK_LANGUAGE:C,CXX>:-fsanitize=address>\n")
     string(APPEND _stanza "  $<$<AND:$<LINK_LANGUAGE:C,CXX>,$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>>:-shared-libsan>)\n")
+    # Device-side ASAN: Only for full ASAN mode, not HOST_ASAN.
     # Filter GPU_TARGETS to enable xnack+ mode only for gfx targets that support it.
-    string(APPEND _stanza "list(TRANSFORM GPU_TARGETS REPLACE \"^(gfx942|gfx950)$\" \"\\\\1:xnack+\")\n")
-    string(APPEND _stanza "set(AMDGPU_TARGETS \"\${GPU_TARGETS}\")\n")
-    string(APPEND _stanza "message(STATUS \"Override ASAN GPU_TARGETS = \${GPU_TARGETS}\")\n")
+    if(_sanitizer STREQUAL "ASAN")
+      string(APPEND _stanza "list(TRANSFORM GPU_TARGETS REPLACE \"^(gfx942|gfx950)$\" \"\\\\1:xnack+\")\n")
+      string(APPEND _stanza "set(AMDGPU_TARGETS \"\${GPU_TARGETS}\")\n")
+      string(APPEND _stanza "message(STATUS \"Override ASAN GPU_TARGETS = \${GPU_TARGETS}\")\n")
+    else()
+      string(APPEND _stanza "message(STATUS \"HOST_ASAN enabled - GPU_TARGETS unchanged\")\n")
+    endif()
     # Action at a distance: Signal that the sub-project should extend its build and install
     # RPATHs to include the clang resource dir.
     string(APPEND _stanza "set(THEROCK_INCLUDE_CLANG_RESOURCE_DIR_RPATH ON)")
   else()
-    message(FATAL_ERROR "Cannot configure sanitizer '${_sanitizer} for ${subprojet_name}: unknown sanitizer")
+    message(FATAL_ERROR "Cannot configure sanitizer '${_sanitizer}' for ${subproject_name}: unknown sanitizer")
   endif()
 
   set("${out_sanitizer_stanza}" "${_stanza}" PARENT_SCOPE)
