@@ -209,6 +209,25 @@ def parse_output_path(
 # =============================================================================
 
 
+def load_comp_summary(build_dir: Path) -> str:
+    """Load comp-summary.html body content if available."""
+    path = build_dir / "logs" / "therock-build-prof" / "comp-summary.html"
+    if not path.exists():
+        return ""
+    content = path.read_text()
+    match = re.search(r"<body>(.*)</body>", content, re.DOTALL)
+    if not match:
+        return ""
+    body = match.group(1).strip()
+    # Remove table border attribute to match template style
+    body = re.sub(r"<table[^>]*border=['\"]?\d['\"]?[^>]*>", "<table>", body)
+    # Remove original h1 title to avoid duplication
+    body = re.sub(r"<h1>.*?</h1>", "", body, flags=re.DOTALL)
+    # Remove horizontal rule
+    body = re.sub(r"<hr\s*/?>", "", body)
+    return body
+
+
 def analyze_tasks(
     tasks: List[Task], build_dir: Path
 ) -> Dict[str, Dict[str, Dict[str, int]]]:
@@ -378,7 +397,9 @@ def generate_html_table(title: str, headers: List[str], rows: List[tuple]) -> st
     return "\n".join(lines) + "\n"
 
 
-def generate_report(projects: Dict, tasks: List[Task], output_file: Path):
+def generate_report(
+    projects: Dict, tasks: List[Task], output_file: Path, build_dir: Path
+):
     """Generate HTML report from analyzed project data."""
     # ROCm Components table
     rocm_data = projects.get(CATEGORY_ROCM, {})
@@ -426,12 +447,14 @@ def generate_report(projects: Dict, tasks: List[Task], output_file: Path):
 
     # Load template and generate output
     template_path = Path(__file__).resolve().parent / "report_build_time_template.html"
+    comp_summary_html = load_comp_summary(build_dir)
     try:
         template = template_path.read_text()
         html = (
             template.replace("{{SYSTEM_INFO}}", system_html)
             .replace("{{ROCM_TABLE}}", rocm_html)
             .replace("{{DEP_TABLE}}", dep_html)
+            .replace("{{COMP_SUMMARY}}", comp_summary_html)
         )
         output_file.write_text(html)
         print(f"HTML report generated at: {output_file}")
@@ -464,7 +487,7 @@ def main():
 
     output_file = args.output or args.build_dir / "logs" / "build_observability.html"
     output_file.parent.mkdir(parents=True, exist_ok=True)
-    generate_report(projects, tasks, output_file)
+    generate_report(projects, tasks, output_file, args.build_dir)
 
 
 if __name__ == "__main__":
