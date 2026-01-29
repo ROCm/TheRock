@@ -100,18 +100,27 @@ def build_configure(manylinux=False):
         repo_override = os.getenv(
             "GITHUB_REPOSITORY_OVERRIDE", os.getenv("GITHUB_REPOSITORY", "")
         )
-        if repo_override:
+        external_source_path = os.getenv("EXTERNAL_SOURCE_PATH", "")
+        if repo_override and external_source_path:
             try:
                 repo_name = detect_repo_name(repo_override)
                 config = get_repo_config(repo_name)
 
-                # Add the CMake source directory variable
+                # Add the CMake source directory variable pointing to external source
+                # Resolve path to absolute to ensure CMake and Python agree on location
                 cmake_source_var = config.get("cmake_source_var")
-                submodule_path = config.get("submodule_path")
-                if cmake_source_var and submodule_path:
-                    cmd.append(f"-D{cmake_source_var}=./{submodule_path}")
+                if cmake_source_var:
+                    external_path = Path(external_source_path)
+                    if not external_path.is_absolute():
+                        # Resolve relative paths from GITHUB_WORKSPACE
+                        workspace = Path(os.environ.get("GITHUB_WORKSPACE", Path.cwd()))
+                        external_path = workspace / external_source_path
+                    # Resolve symlinks and relative components
+                    external_path = external_path.resolve()
+
+                    cmd.append(f"-D{cmake_source_var}={external_path}")
                     logging.info(
-                        f"External source override: -D{cmake_source_var}=./{submodule_path}"
+                        f"External source override: -D{cmake_source_var}={external_path}"
                     )
             except (ValueError, KeyError) as e:
                 logging.warning(

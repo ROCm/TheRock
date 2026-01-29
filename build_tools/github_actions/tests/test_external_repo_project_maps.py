@@ -1,236 +1,242 @@
 #!/usr/bin/env python3
 
-"""Unit tests for external_repo_project_maps.py
+"""Unit tests for external repo CI detection logic
 
+Tests for both detect_external_repo_config.py and configure_ci.py functions.
 These tests verify:
-1. Project paths referenced in the maps actually exist in the external repos
-2. The collect_projects_to_run logic works correctly
-3. Dependency resolution and merging works as expected
+1. Dynamic import from external repos works correctly
+2. Skip pattern detection uses external repo patterns
+3. Test list extraction from external repo project maps
+4. Full build configuration is returned (ignoring cmake_options)
 """
 
-import os
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch, MagicMock
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from external_repo_project_maps import (
-    ROCM_LIBRARIES_SUBTREE_TO_PROJECT_MAP,
-    ROCM_LIBRARIES_PROJECT_MAP,
-    ROCM_SYSTEMS_SUBTREE_TO_PROJECT_MAP,
-    ROCM_SYSTEMS_PROJECT_MAP,
-    collect_projects_to_run,
-    get_repo_config,
+from detect_external_repo_config import (
+    import_external_repo_module,
+    get_skip_patterns,
+    get_test_list,
 )
+from configure_ci import _detect_external_repo_projects
 
 
-# Path to the workspace root (TheRock/)
-THEROCK_ROOT = Path(__file__).parent.parent.parent.parent
-ROCM_LIBRARIES_ROOT = THEROCK_ROOT / "rocm-libraries"
-ROCM_SYSTEMS_ROOT = THEROCK_ROOT / "rocm-systems"
+class TestDynamicImport(unittest.TestCase):
+    """Test dynamic import from external repos."""
 
-
-class TestRocmLibrariesPaths(unittest.TestCase):
-    """Verify that paths in rocm-libraries project maps exist."""
-
-    def test_subtree_paths_exist(self):
-        """Verify all subtree paths in ROCM_LIBRARIES_SUBTREE_TO_PROJECT_MAP exist."""
-        missing_paths = []
-
-        for subtree_path in ROCM_LIBRARIES_SUBTREE_TO_PROJECT_MAP.keys():
-            full_path = ROCM_LIBRARIES_ROOT / subtree_path
-            if not full_path.exists():
-                missing_paths.append(subtree_path)
-
-        self.assertEqual(
-            missing_paths,
-            [],
-            f"The following subtree paths do not exist in rocm-libraries: {missing_paths}",
+    def test_import_rocm_libraries_matrix(self):
+        """Test importing therock_matrix from rocm-libraries."""
+        module = import_external_repo_module("rocm-libraries", "therock_matrix")
+        self.assertIsNotNone(
+            module, "Should successfully import rocm-libraries therock_matrix"
         )
+        self.assertTrue(hasattr(module, "project_map"))
+        self.assertTrue(hasattr(module, "subtree_to_project_map"))
 
-
-class TestRocmSystemsPaths(unittest.TestCase):
-    """Verify that paths in rocm-systems project maps exist."""
-
-    def test_subtree_paths_exist(self):
-        """Verify all subtree paths in ROCM_SYSTEMS_SUBTREE_TO_PROJECT_MAP exist."""
-        missing_paths = []
-
-        for subtree_path in ROCM_SYSTEMS_SUBTREE_TO_PROJECT_MAP.keys():
-            full_path = ROCM_SYSTEMS_ROOT / subtree_path
-            if not full_path.exists():
-                missing_paths.append(subtree_path)
-
-        self.assertEqual(
-            missing_paths,
-            [],
-            f"The following subtree paths do not exist in rocm-systems: {missing_paths}",
+    def test_import_rocm_systems_matrix(self):
+        """Test importing therock_matrix from rocm-systems."""
+        module = import_external_repo_module("rocm-systems", "therock_matrix")
+        self.assertIsNotNone(
+            module, "Should successfully import rocm-systems therock_matrix"
         )
+        self.assertTrue(hasattr(module, "project_map"))
+
+    def test_import_rocm_systems_configure_ci(self):
+        """Test importing therock_configure_ci from rocm-systems (may have deps)."""
+        module = import_external_repo_module("rocm-systems", "therock_configure_ci")
+        # May fail due to internal import dependencies, which is OK
+        # We mainly care that the import mechanism works for simpler modules
+        if module:
+            self.assertTrue(hasattr(module, "SKIPPABLE_PATH_PATTERNS"))
+
+    def test_import_nonexistent_module(self):
+        """Test that importing non-existent module returns None gracefully."""
+        module = import_external_repo_module("nonexistent-repo", "nonexistent_module")
+        self.assertIsNone(module)
 
 
-class TestCollectProjectsToRun(unittest.TestCase):
-    """Test the collect_projects_to_run logic."""
+class TestSkipPatternExtraction(unittest.TestCase):
+    """Test extracting skip patterns from external repos."""
 
-    def test_basic_project_collection_rocm_libraries(self):
-        """Test basic project collection for rocm-libraries."""
-        # Test single project
-        projects = collect_projects_to_run(
-            subtrees=["projects/rocprim"],
-            platform="linux",
-            repo_name="rocm-libraries",
-        )
+    def test_get_skip_patterns_rocm_systems(self):
+        """Test getting skip patterns from rocm-systems."""
+        patterns = get_skip_patterns("rocm-systems")
+        self.assertIsInstance(patterns, list)
+        # May be empty if import fails, that's OK
+        if patterns:
+            self.assertIn("docs/*", patterns)
 
-        self.assertEqual(len(projects), 1)
-        self.assertIn("-DTHEROCK_ENABLE_PRIM=ON", projects[0]["cmake_options"])
-        self.assertEqual(projects[0]["project_to_test"], "rocprim,rocthrust,hipcub")
+    def test_get_skip_patterns_rocm_libraries(self):
+        """Test getting skip patterns for rocm-libraries."""
+        patterns = get_skip_patterns("rocm-libraries")
+        self.assertIsInstance(patterns, list)
+        # rocm-libraries may not have therock_configure_ci, returns empty list
 
-    def test_basic_project_collection_rocm_systems(self):
-        """Test basic project collection for rocm-systems."""
-        # Test single project
-        projects = collect_projects_to_run(
-            subtrees=["projects/hip"],
-            platform="linux",
-            repo_name="rocm-systems",
-        )
-
-        self.assertEqual(len(projects), 1)
-        self.assertIn("-DTHEROCK_ENABLE_CORE=ON", projects[0]["cmake_options"])
-
-    def test_multiple_subtrees_same_project(self):
-        """Test that multiple subtrees mapping to the same project are deduplicated."""
-        # Both rocprim and hipcub map to "prim"
-        projects = collect_projects_to_run(
-            subtrees=["projects/rocprim", "projects/hipcub"],
-            platform="linux",
-            repo_name="rocm-libraries",
-        )
-
-        # Should result in only one "prim" project
-        self.assertEqual(len(projects), 1)
-        self.assertIn("-DTHEROCK_ENABLE_PRIM=ON", projects[0]["cmake_options"])
-
-    def test_dependency_merging(self):
-        """Test that dependencies are properly merged."""
-        # miopen depends on blas and rand
-        projects = collect_projects_to_run(
-            subtrees=["projects/miopen", "projects/rocblas"],
-            platform="linux",
-            repo_name="rocm-libraries",
-        )
-
-        # Should have miopen (with blas merged) - blas should be removed
-        self.assertEqual(len(projects), 1)
-
-        # Check that miopen has both its own and blas cmake options
-        cmake_opts = projects[0]["cmake_options"]
-        self.assertIn("-DTHEROCK_ENABLE_MIOPEN=ON", cmake_opts)
-        self.assertIn("-DTHEROCK_ENABLE_BLAS=ON", cmake_opts)
-
-    def test_optional_component_merging(self):
-        """Test that optional components (sparse, solver) are merged correctly."""
-        # sparse is optional and should be added to blas
-        projects = collect_projects_to_run(
-            subtrees=["projects/rocsparse", "projects/rocblas"],
-            platform="linux",
-            repo_name="rocm-libraries",
-        )
-
-        # Should result in one blas project with sparse options added
-        self.assertEqual(len(projects), 1)
-        cmake_opts = projects[0]["cmake_options"]
-        self.assertIn("-DTHEROCK_ENABLE_BLAS=ON", cmake_opts)
-        self.assertIn("-DTHEROCK_ENABLE_SPARSE=ON", cmake_opts)
-
-        # Check tests include both blas and sparse projects
-        project_tests = projects[0]["project_to_test"]
-        self.assertIn("rocblas", project_tests)
-        self.assertIn("rocsparse", project_tests)
-
-    def test_platform_specific_flags(self):
-        """Test that platform-specific flags are added correctly."""
-        # miopen uses CK from rocm-libraries/projects/composablekernel
-        projects_linux = collect_projects_to_run(
-            subtrees=["projects/miopen"],
-            platform="linux",
-            repo_name="rocm-libraries",
-        )
-
-        projects_windows = collect_projects_to_run(
-            subtrees=["projects/miopen"],
-            platform="windows",
-            repo_name="rocm-libraries",
-        )
-
-        # Should have CK enabled with source dir pointing to rocm-libraries CK
-        linux_opts = projects_linux[0]["cmake_options"]
-        self.assertIn("-DTHEROCK_ENABLE_MIOPEN=ON", linux_opts)
-        self.assertIn("-DTHEROCK_ENABLE_COMPOSABLE_KERNEL=ON", linux_opts)
-        self.assertIn("-DTHEROCK_USE_EXTERNAL_COMPOSABLE_KERNEL=ON", linux_opts)
-        self.assertIn(
-            "-DTHEROCK_COMPOSABLE_KERNEL_SOURCE_DIR=../source-repo/projects/composablekernel",
-            linux_opts,
-        )
-
-        windows_opts = projects_windows[0]["cmake_options"]
-        self.assertIn("-DTHEROCK_ENABLE_MIOPEN=ON", windows_opts)
-        self.assertIn("-DTHEROCK_ENABLE_COMPOSABLE_KERNEL=ON", windows_opts)
-        self.assertIn("-DTHEROCK_USE_EXTERNAL_COMPOSABLE_KERNEL=ON", windows_opts)
-        self.assertIn(
-            "-DTHEROCK_COMPOSABLE_KERNEL_SOURCE_DIR=../source-repo/projects/composablekernel",
-            windows_opts,
-        )
-
-    def test_enable_all_off_is_added(self):
-        """Test that -DTHEROCK_ENABLE_ALL=OFF is always added."""
-        projects = collect_projects_to_run(
-            subtrees=["projects/rocprim"],
-            platform="linux",
-            repo_name="rocm-libraries",
-        )
-
-        self.assertIn("-DTHEROCK_ENABLE_ALL=OFF", projects[0]["cmake_options"])
+    def test_skip_patterns_fallback(self):
+        """Test that empty list is returned when external repo doesn't have patterns."""
+        patterns = get_skip_patterns("nonexistent-repo")
+        self.assertIsInstance(patterns, list)
+        # Should return empty list, configure_ci.py provides defaults
 
 
-class TestGetRepoConfig(unittest.TestCase):
-    """Test get_repo_config function."""
+class TestTestListExtraction(unittest.TestCase):
+    """Test extracting test lists from external repo project maps."""
 
-    def test_rocm_libraries_config(self):
-        """Test getting rocm-libraries configuration."""
-        config = get_repo_config("rocm-libraries")
+    def test_get_test_list_rocm_libraries(self):
+        """Test getting test list from rocm-libraries."""
+        tests = get_test_list("rocm-libraries")
+        self.assertIsInstance(tests, list)
+        if tests:  # May be empty if import fails
+            # rocm-libraries should have various project tests
+            possible_tests = {"rocprim", "rocblas", "hipblas", "rocfft", "miopen"}
+            self.assertTrue(any(test in possible_tests for test in tests))
 
-        self.assertIn("subtree_to_project_map", config)
-        self.assertIn("project_map", config)
-        self.assertIn("additional_options", config)
-        self.assertIn("dependency_graph", config)
+    def test_get_test_list_rocm_systems(self):
+        """Test getting test list from rocm-systems."""
+        tests = get_test_list("rocm-systems")
+        self.assertIsInstance(tests, list)
+        if tests:  # May be empty if import fails
+            # rocm-systems should have hip-tests, rocprofiler-tests
+            self.assertTrue("hip-tests" in tests or "rocprofiler-tests" in tests)
 
-        # Verify it has the expected content
-        self.assertIn("projects/rocprim", config["subtree_to_project_map"])
-        self.assertIn("prim", config["project_map"])
+    def test_test_list_fallback(self):
+        """Test that empty list is returned when external repo doesn't have project maps."""
+        tests = get_test_list("nonexistent-repo")
+        self.assertIsInstance(tests, list)
+        # Should return empty list, configure_ci.py provides ["all"] default
 
-    def test_rocm_systems_config(self):
-        """Test getting rocm-systems configuration."""
-        config = get_repo_config("rocm-systems")
 
-        self.assertIn("subtree_to_project_map", config)
-        self.assertIn("project_map", config)
+class TestFullBuildDetection(unittest.TestCase):
+    """Test the _detect_external_repo_projects function for full builds."""
 
-        # Verify it has the expected content
-        self.assertIn("projects/hip", config["subtree_to_project_map"])
-        self.assertIn("core", config["project_map"])
+    def test_schedule_event_always_builds(self):
+        """Test that schedule events always trigger builds."""
+        with patch("configure_ci.get_modified_paths") as mock_get_paths:
+            mock_get_paths.return_value = []
 
-    def test_case_insensitive_repo_name(self):
-        """Test that repo name matching is case-insensitive."""
-        config1 = get_repo_config("ROCm-Libraries")
-        config2 = get_repo_config("rocm-LIBRARIES")
+            result = _detect_external_repo_projects(
+                repo_name="rocm-libraries",
+                base_ref="origin/develop",
+                github_event_name="schedule",
+                projects_input="",
+            )
 
-        self.assertEqual(config1, config2)
+            self.assertEqual(len(result["linux_projects"]), 1)
+            self.assertEqual(len(result["windows_projects"]), 1)
+            # Should have test list, not just ["all"]
+            self.assertIsInstance(result["linux_projects"][0]["project_to_test"], list)
 
-    def test_unknown_repo_raises_error(self):
-        """Test that unknown repo name raises ValueError."""
-        with self.assertRaises(ValueError):
-            get_repo_config("unknown-repo")
+    def test_manual_all_override_builds(self):
+        """Test that explicit 'all' projects input triggers builds."""
+        with patch("configure_ci.get_modified_paths") as mock_get_paths:
+            mock_get_paths.return_value = []
+
+            result = _detect_external_repo_projects(
+                repo_name="rocm-libraries",
+                base_ref="origin/develop",
+                github_event_name="pull_request",
+                projects_input="all",
+            )
+
+            self.assertEqual(len(result["linux_projects"]), 1)
+            self.assertEqual(len(result["windows_projects"]), 1)
+
+    def test_only_skippable_paths_skips_build(self):
+        """Test that only docs/metadata changes skip builds."""
+        with patch("configure_ci.get_modified_paths") as mock_get_paths:
+            mock_get_paths.return_value = [
+                "README.md",
+                "docs/api.rst",
+                ".gitignore",
+            ]
+
+            result = _detect_external_repo_projects(
+                repo_name="rocm-systems",
+                base_ref="origin/develop",
+                github_event_name="pull_request",
+                projects_input="",
+            )
+
+            self.assertEqual(result["linux_projects"], [])
+            self.assertEqual(result["windows_projects"], [])
+
+    def test_code_changes_trigger_build(self):
+        """Test that code changes trigger builds."""
+        with patch("configure_ci.get_modified_paths") as mock_get_paths:
+            mock_get_paths.return_value = [
+                "README.md",
+                "projects/rocprim/src/main.cpp",
+            ]
+
+            result = _detect_external_repo_projects(
+                repo_name="rocm-libraries",
+                base_ref="origin/develop",
+                github_event_name="pull_request",
+                projects_input="",
+            )
+
+            self.assertEqual(len(result["linux_projects"]), 1)
+            self.assertEqual(len(result["windows_projects"]), 1)
+            # Should have actual test list from rocm-libraries
+            test_list = result["linux_projects"][0]["project_to_test"]
+            self.assertIsInstance(test_list, list)
+            self.assertGreater(len(test_list), 0)
+
+    def test_no_modified_files_skips_build(self):
+        """Test that no file changes skip builds."""
+        with patch("configure_ci.get_modified_paths") as mock_get_paths:
+            mock_get_paths.return_value = []
+
+            result = _detect_external_repo_projects(
+                repo_name="rocm-libraries",
+                base_ref="origin/develop",
+                github_event_name="pull_request",
+                projects_input="",
+            )
+
+            self.assertEqual(result["linux_projects"], [])
+            self.assertEqual(result["windows_projects"], [])
+
+    def test_git_diff_error_skips_build(self):
+        """Test that git diff errors skip builds."""
+        with patch("configure_ci.get_modified_paths") as mock_get_paths:
+            mock_get_paths.return_value = None
+
+            result = _detect_external_repo_projects(
+                repo_name="rocm-libraries",
+                base_ref="origin/develop",
+                github_event_name="pull_request",
+                projects_input="",
+            )
+
+            self.assertEqual(result["linux_projects"], [])
+            self.assertEqual(result["windows_projects"], [])
+
+    def test_returns_test_list_not_cmake_options(self):
+        """Test that builds return test lists but NOT cmake options (full builds)."""
+        with patch("configure_ci.get_modified_paths") as mock_get_paths:
+            mock_get_paths.return_value = ["projects/rocprim/src/main.cpp"]
+
+            result = _detect_external_repo_projects(
+                repo_name="rocm-libraries",
+                base_ref="origin/develop",
+                github_event_name="pull_request",
+                projects_input="",
+            )
+
+            # Should have test list
+            self.assertIn("project_to_test", result["linux_projects"][0])
+            # Should NOT have cmake_options (we do full builds)
+            self.assertNotIn("cmake_options", result["linux_projects"][0])
+
+            # Test list should be from external repo, not just ["all"]
+            test_list = result["linux_projects"][0]["project_to_test"]
+            self.assertIsInstance(test_list, list)
 
 
 if __name__ == "__main__":

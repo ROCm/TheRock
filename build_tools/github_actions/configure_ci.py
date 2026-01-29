@@ -100,8 +100,8 @@ def parse_gpu_family_overrides(value: str, lookup_matrix: dict) -> list[str]:
         elif tl in family_to_key:
             resolved.append(family_to_key[tl])
         else:
-            print(
-                f"WARNING: unknown target name '{token}' not found in matrix keys or family strings"
+            raise Exception(
+                f"Unknown target name '{token}' not found in matrix keys or family strings"
             )
     return resolved
 
@@ -167,7 +167,7 @@ def _cross_product_projects_with_gpu_variants(
                 {
                     **gpu_variant,
                     "project_to_test": project_config["project_to_test"],
-                    "cmake_options": project_config["cmake_options"],
+                    # Note: cmake_options removed - external repos do full builds
                 }
             )
     return final_variants
@@ -259,8 +259,10 @@ def _emit_summary_and_outputs(
 
 
 def _detect_external_repo(cwd: Path, repo_override: str) -> tuple[bool, Optional[str]]:
-    # List of supported external repositories
-    external_repos = ["rocm-libraries", "rocm-systems"]
+    # List of supported external repositories - derived from REPO_CONFIGS
+    from detect_external_repo_config import REPO_CONFIGS
+
+    external_repos = list(REPO_CONFIGS.keys())
 
     if repo_override:
         print(f"Using repository override: {repo_override}")
@@ -324,11 +326,134 @@ def _collect_inputs_from_env() -> tuple[dict, dict, dict]:
     return base_args, linux_families, windows_families
 
 
-def _detect_external_projects_or_exit(base_args: dict, repo_name: str) -> None:
-    print(f"\n=== Detecting projects for {repo_name} ===")
-    from external_repo_project_maps import detect_projects_from_changes
+# =============================================================================
+# External Repository CI Detection Logic
+# =============================================================================
 
-    project_detection = detect_projects_from_changes(
+
+def _detect_external_repo_projects(
+    *,
+    repo_name: str,
+    base_ref: str,
+    github_event_name: str,
+    projects_input: str = "",
+) -> dict:
+    """Detects whether to run CI for external repos based on changes (pure function).
+
+    This is a pure detection function that:
+    - Imports skip patterns and test lists from external repos
+    - Determines if CI should run based on file changes
+    - Returns project configuration for full builds
+
+    NOTE: Always performs FULL BUILDS (ignores selective cmake options from external repos).
+
+    Args:
+        repo_name: Repository name (e.g., "rocm-libraries", "rocm-systems")
+        base_ref: Base git ref to diff against
+        github_event_name: GitHub event that triggered this (e.g., "pull_request", "schedule")
+        projects_input: Optional manual projects override
+
+    Returns:
+        Dict with keys:
+          - linux_projects: list[dict] - Empty list or single test config
+          - windows_projects: list[dict] - Empty list or single test config
+
+        Each config dict contains:
+          - project_to_test: [list of tests] - Tests to run (full builds always happen)
+    """
+    from detect_external_repo_config import get_skip_patterns, get_test_list
+
+    # For scheduled builds or explicit "all" request, always build
+    if github_event_name == "schedule":
+        print("Schedule event detected - building all")
+        should_build = True
+    elif projects_input and projects_input.strip().lower() in ["all", ""]:
+        print("Projects override: building all")
+        should_build = True
+    else:
+        # Get skip patterns from external repo
+        skip_patterns = get_skip_patterns(repo_name)
+
+        # Fallback to defaults if external repo doesn't provide patterns
+        if not skip_patterns:
+            print("Using default skip patterns")
+            skip_patterns = [
+                "docs/*",
+                "*.gitignore",
+                "*.md",
+                "*.pre-commit-config.*",
+                "*CODEOWNERS",
+                "*LICENSE",
+            ]
+
+        # Check if only skippable paths changed
+        print(f"Detecting changed files for event: {github_event_name}")
+        modified_paths = get_modified_paths(base_ref)
+
+        if modified_paths is None:
+            print("ERROR: Could not determine modified paths")
+            return {"linux_projects": [], "windows_projects": []}
+        if not modified_paths:
+            print("No files modified - skipping builds")
+            return {"linux_projects": [], "windows_projects": []}
+
+        print(f"Found {len(modified_paths)} modified files")
+
+        # Check if any non-skippable paths changed
+        has_non_skippable = any(
+            not any(fnmatch.fnmatch(path, pattern) for pattern in skip_patterns)
+            for path in modified_paths
+        )
+
+        if not has_non_skippable:
+            print("Only skippable paths modified (docs, etc) - skipping builds")
+            return {"linux_projects": [], "windows_projects": []}
+
+        should_build = True
+
+    if should_build:
+        # Get test list from external repo
+        # NOTE: We do FULL BUILDS (no selective cmake options), but we can
+        # still use their test list for test selection
+        test_list = get_test_list(repo_name)
+
+        # Fallback to "all" if external repo doesn't provide test list
+        if not test_list:
+            print("Using default test list: ['all']")
+            test_list = ["all"]
+
+        test_config = {"project_to_test": test_list}
+        return {
+            "linux_projects": [test_config],
+            "windows_projects": [test_config],
+        }
+    else:
+        return {"linux_projects": [], "windows_projects": []}
+
+
+def _handle_external_repo_detection_or_exit(base_args: dict, repo_name: str) -> None:
+    """Orchestrates external repo CI detection and handles early exit (has side effects).
+
+    This orchestrator function:
+    1. Calls _detect_external_repo_projects() for pure detection logic
+    2. Prints detection results
+    3. Exits early with empty matrix if nothing to build
+    4. Stores project configs in base_args for downstream processing
+
+    This is separate from _detect_external_repo_projects() to maintain separation
+    between pure logic (detection) and side effects (I/O, exit, state mutation).
+
+    Args:
+        base_args: Configuration dictionary to store results in
+        repo_name: Repository name (e.g., "rocm-libraries", "rocm-systems")
+
+    Side Effects:
+        - Prints to stdout
+        - Calls sys.exit(0) if no projects detected
+        - Mutates base_args by adding linux/windows_external_project_configs
+    """
+    print(f"\n=== Detecting projects for {repo_name} ===")
+    project_detection = _detect_external_repo_projects(
         repo_name=repo_name,
         base_ref=base_args["base_ref"],
         github_event_name=base_args.get("github_event_name", ""),
@@ -383,7 +508,7 @@ def run_from_env() -> None:
 
     # For external repos, call detect_external_projects first to get project-based matrix
     if is_external_repo and repo_name:
-        _detect_external_projects_or_exit(base_args, repo_name)
+        _handle_external_repo_detection_or_exit(base_args, repo_name)
 
     main(base_args, linux_families, windows_families)
 
