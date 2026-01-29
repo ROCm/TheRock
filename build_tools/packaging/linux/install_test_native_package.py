@@ -133,9 +133,6 @@ class PackageInstaller:
         if not packages:
             raise ValueError(f"No {extension} packages found in {self.package_folder}")
 
-        # convert to absolute path
-        packages = sorted([str(pkg.absolute()) for pkg in packages])
-
         # skip packages
         if self.skip_package:
             print("\n" + "=" * 80)
@@ -147,12 +144,12 @@ class PackageInstaller:
             for skip in self.skip_package:
                 # iterate over a copy remove from original packages
                 for pkg in packages[:]:
-                    if skip in pkg:
+                    if skip in pkg.name:
                         packages.remove(pkg)
 
-        return packages
+        return sorted(packages)
 
-    def install_deb_packages(self, package_paths: List[Path]) -> bool:
+    def install_deb_packages(self, packages: List[Path]) -> bool:
         """Install DEB packages using apt.
 
         Args:
@@ -164,6 +161,9 @@ class PackageInstaller:
         print("\n" + "=" * 80)
         print("INSTALLING DEB PACKAGES")
         print("=" * 80)
+
+        # Convert to absolute paths
+        package_paths = [str(pkg.absolute()) for pkg in packages]
 
         print(f"\nPackages to install ({len(package_paths)}):")
         for pkg in package_paths:
@@ -190,7 +190,7 @@ class PackageInstaller:
             print(f"Error output:\n{e.stdout}")
             return False
 
-    def install_rpm_packages(self, package_paths: List[Path]) -> bool:
+    def install_rpm_packages(self, packages: List[Path]) -> bool:
         """Install RPM packages using dnf.
 
         Args:
@@ -202,6 +202,9 @@ class PackageInstaller:
         print("\n" + "=" * 80)
         print("INSTALLING RPM PACKAGES")
         print("=" * 80)
+
+        # Convert to absolute paths
+        package_paths = [str(pkg.absolute()) for pkg in packages]
 
         print(f"\nPackages to install ({len(package_paths)}):")
         for pkg in package_paths:
@@ -714,4 +717,3 @@ Examples:
 
 if __name__ == "__main__":
     main()
-
