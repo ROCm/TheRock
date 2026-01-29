@@ -41,7 +41,7 @@ logging.info(f"Detected GPU architecture: {gpu_arch}")
 cwd_dir = THEROCK_DIR / "bin" / gpu_arch
 cmd = "./rocrtst64"
 
-logging.info(f"++ Exec {cmd}")
+logging.info(f"++ Exec [{cwd_dir}]$ {cmd}")
 
 subprocess.run(
     cmd,
