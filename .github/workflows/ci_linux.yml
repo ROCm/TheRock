@@ -36,6 +36,10 @@ on:
         type: boolean
         description: "Whether source is from external repo (rocm-libraries/systems)"
         default: false
+      external_source_path:
+        type: string
+        description: "Path to external repo checkout (e.g., external-repos/rocm-libraries)"
+        default: ""
       therock_ref:
         type: string
         description: "TheRock git ref to use (for external repos)"
@@ -71,6 +75,7 @@ jobs:
       build_variant_suffix: ${{ inputs.build_variant_suffix }}
       expect_failure: ${{ inputs.expect_failure }}
       external_source_checkout: ${{ inputs.external_source_checkout }}
+      external_source_path: ${{ inputs.external_source_path }}
       therock_ref: ${{ inputs.therock_ref }}
       repository_override: ${{ inputs.repository_override }}
       extra_cmake_options: ${{ inputs.cmake_options }}

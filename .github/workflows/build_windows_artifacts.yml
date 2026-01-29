@@ -56,6 +56,10 @@ on:
         type: boolean
         description: "Whether source is from external repo (rocm-libraries/systems)"
         default: false
+      external_source_path:
+        type: string
+        description: "Path to external repo checkout (e.g., external-repos/rocm-libraries)"
+        default: ""
       therock_ref:
         type: string
         description: "TheRock git ref to use (for external repos)"
@@ -94,6 +98,7 @@ jobs:
       IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
       # For external repo integration (rocm-libraries, rocm-systems)
       EXTERNAL_SOURCE_CHECKOUT: ${{ inputs.external_source_checkout }}
+      EXTERNAL_SOURCE_PATH: ${{ inputs.external_source_path }}
     steps:
       - name: Configure GitHub longpath
         run: |

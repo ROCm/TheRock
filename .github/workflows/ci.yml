@@ -139,6 +139,7 @@ jobs:
       test_type: ${{ needs.setup.outputs.test_type }}
       sanity_check_only_for_family: ${{ matrix.variant.sanity_check_only_for_family == true }}
       external_source_checkout: ${{ inputs.external_source_checkout || false }}
+      external_source_path: ${{ needs.setup.outputs.external_source_path }}
       therock_ref: ${{ inputs.therock_ref || '' }}
       repository_override: ${{ inputs.repository_override || '' }}
       cmake_options: ${{ matrix.variant.cmake_options || '' }}
@@ -175,6 +176,7 @@ jobs:
       test_type: ${{ needs.setup.outputs.test_type }}
       sanity_check_only_for_family: ${{ matrix.variant.sanity_check_only_for_family == true }}
       external_source_checkout: ${{ inputs.external_source_checkout || false }}
+      external_source_path: ${{ needs.setup.outputs.external_source_path }}
       therock_ref: ${{ inputs.therock_ref || '' }}
       repository_override: ${{ inputs.repository_override || '' }}
       cmake_options: ${{ matrix.variant.cmake_options || '' }}

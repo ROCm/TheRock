@@ -57,6 +57,10 @@ on:
         type: boolean
         description: "Whether source is from external repo (rocm-libraries/systems)"
         default: false
+      external_source_path:
+        type: string
+        description: "Path to external repo checkout (e.g., external-repos/rocm-libraries)"
+        default: ""
       therock_ref:
         type: string
         description: "TheRock git ref to use (for external repos)"
@@ -99,6 +103,7 @@ jobs:
       EXTRA_CXX_COMPILER_LAUNCHER: "${{ github.workspace }}/build_tools/resource_info.py"
       # For external repo integration (rocm-libraries, rocm-systems)
       EXTERNAL_SOURCE_CHECKOUT: ${{ inputs.external_source_checkout }}
+      EXTERNAL_SOURCE_PATH: ${{ inputs.external_source_path }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
