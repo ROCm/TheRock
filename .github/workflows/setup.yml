@@ -90,19 +90,29 @@ jobs:
       windows_test_labels: ${{ steps.configure.outputs.windows_test_labels }}
       rocm_package_version: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
     steps:
-      - name: Checking out repository
+      - name: Checkout TheRock repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: ROCm/TheRock
           ref: ${{ inputs.therock_ref || github.ref }}
           fetch-depth: 2
 
+      - name: Extract external repo name
+        if: ${{ inputs.external_source_checkout }}
+        id: external_repo
+        run: |
+          REPO="${{ inputs.repository_override || github.repository }}"
+          REPO_NAME="${REPO##*/}"
+          echo "repo_name=${REPO_NAME}" >> $GITHUB_OUTPUT
+          echo "external_path=external-repos/${REPO_NAME}" >> $GITHUB_OUTPUT
+          echo "Detected external repo: ${REPO_NAME}, checkout path: external-repos/${REPO_NAME}"
+
       - name: Checkout external source repository
         if: ${{ inputs.external_source_checkout }}
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: ${{ inputs.repository_override || github.repository }}
-          path: external-source
+          path: ${{ steps.external_repo.outputs.external_path }}
           # We need the parent commit to do a diff
           fetch-depth: 2
 
@@ -131,7 +141,9 @@ jobs:
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           GITHUB_REPOSITORY_OVERRIDE: ${{ inputs.repository_override }}
           PROJECTS: ${{ inputs.projects }}
+          # For external repo integration (rocm-libraries, rocm-systems)
           EXTERNAL_SOURCE_CHECKOUT: ${{ inputs.external_source_checkout }}
+          EXTERNAL_SOURCE_PATH: ${{ steps.external_repo.outputs.external_path || '' }}
         run: |
           ./build_tools/github_actions/configure_ci.py
 

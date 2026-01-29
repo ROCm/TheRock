@@ -520,13 +520,10 @@ def run_from_env() -> None:
 
 def get_modified_paths(base_ref: str) -> Optional[Iterable[str]]:
     """Returns the paths of modified files relative to the base reference."""
-    # For external repos, diff the .external-source-temp directory instead of current directory
-    external_source_checkout = (
-        os.environ.get("EXTERNAL_SOURCE_CHECKOUT", "false").lower() == "true"
-    )
-    git_cwd = (
-        THEROCK_DIR / ".external-source-temp" if external_source_checkout else None
-    )
+    # For external repos, diff their checkout directory (e.g., external-repos/rocm-libraries)
+    # instead of the current directory (TheRock root)
+    external_source_path = os.environ.get("EXTERNAL_SOURCE_PATH", "")
+    git_cwd = THEROCK_DIR / external_source_path if external_source_path else None
 
     try:
         return subprocess.run(

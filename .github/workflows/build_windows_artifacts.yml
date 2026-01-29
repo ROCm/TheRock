@@ -92,9 +92,8 @@ jobs:
       TEATIME_FORCE_INTERACTIVE: 0
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
-      # Environment variables for fetch_sources.py to handle external repo overrides
+      # For external repo integration (rocm-libraries, rocm-systems)
       EXTERNAL_SOURCE_CHECKOUT: ${{ inputs.external_source_checkout }}
-      EXTERNAL_SOURCE_PATH: ${{ inputs.external_source_checkout && 'external-source' || '' }}
     steps:
       - name: Configure GitHub longpath
         run: |
@@ -106,14 +105,25 @@ jobs:
           repository: "ROCm/TheRock"
           ref: ${{ inputs.therock_ref || github.ref }}
 
-      # For external repos (rocm-libraries, rocm-systems), checkout to alternate path.
+      # For external repos (rocm-libraries, rocm-systems), checkout to isolated path.
       # CMake will be configured to use this path via THEROCK_*_SOURCE_DIR options.
+      - name: Extract external repo name
+        if: ${{ inputs.external_source_checkout }}
+        id: external_repo
+        run: |
+          $REPO = "${{ inputs.repository_override || github.repository }}"
+          $REPO_NAME = $REPO.Split('/')[-1]
+          $EXTERNAL_PATH = "external-repos/$REPO_NAME"
+          "repo_name=$REPO_NAME" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "external_path=$EXTERNAL_PATH" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "Detected external repo: $REPO_NAME, checkout path: $EXTERNAL_PATH"
+
       - name: Checkout external source repository
         if: ${{ inputs.external_source_checkout }}
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: ${{ inputs.repository_override || github.repository }}
-          path: external-source
+          path: ${{ steps.external_repo.outputs.external_path }}
 
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
