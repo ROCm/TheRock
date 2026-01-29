@@ -22,8 +22,65 @@
 #include "hip_remote/hip_remote_client.h"
 #include "hip_remote/hip_remote_protocol.h"
 
+#include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
+
+/* ============================================================================
+ * Function Info Tracking
+ *
+ * The remote protocol returns the kernel argument count from the worker.
+ * We store this info so that hipModuleLaunchKernel can use the correct
+ * argument count instead of requiring NULL-terminated arrays.
+ * ============================================================================ */
+
+#define MAX_TRACKED_FUNCTIONS 1024
+
+typedef struct {
+    hipFunction_t function;
+    uint32_t num_args;
+} FunctionInfo;
+
+static FunctionInfo g_function_info[MAX_TRACKED_FUNCTIONS];
+static uint32_t g_function_count = 0;
+static pthread_mutex_t g_function_lock = PTHREAD_MUTEX_INITIALIZER;
+
+static void store_function_info(hipFunction_t function, uint32_t num_args) {
+    pthread_mutex_lock(&g_function_lock);
+
+    /* Check if already exists */
+    for (uint32_t i = 0; i < g_function_count; i++) {
+        if (g_function_info[i].function == function) {
+            g_function_info[i].num_args = num_args;
+            pthread_mutex_unlock(&g_function_lock);
+            return;
+        }
+    }
+
+    /* Add new entry */
+    if (g_function_count < MAX_TRACKED_FUNCTIONS) {
+        g_function_info[g_function_count].function = function;
+        g_function_info[g_function_count].num_args = num_args;
+        g_function_count++;
+    }
+
+    pthread_mutex_unlock(&g_function_lock);
+}
+
+static uint32_t get_function_num_args(hipFunction_t function) {
+    pthread_mutex_lock(&g_function_lock);
+
+    for (uint32_t i = 0; i < g_function_count; i++) {
+        if (g_function_info[i].function == function) {
+            uint32_t num_args = g_function_info[i].num_args;
+            pthread_mutex_unlock(&g_function_lock);
+            return num_args;
+        }
+    }
+
+    pthread_mutex_unlock(&g_function_lock);
+    return 0; /* Unknown function - return 0 args */
+}
 
 /* ============================================================================
  * Module Management
@@ -34,28 +91,61 @@ hipError_t hipModuleLoadData(hipModule_t* module, const void* image) {
         return hipErrorInvalidValue;
     }
 
-    /* Determine code object size by reading ELF header */
-    /* For AMDGPU code objects, we need to parse the ELF to get size */
-    /* For now, we require the caller to use hipModuleLoadDataEx with size hint */
-    /* or use a simpler approach: scan for reasonable size markers */
-
-    /* ELF magic check */
+    /*
+     * The image can be either:
+     * 1. Raw ELF code object (starts with 0x7f 'E' 'L' 'F')
+     * 2. Clang offload bundle (starts with '__CLANG_OFFLOAD_BUNDLE__')
+     *
+     * We need to determine the size. For bundles, we scan for a reasonable size.
+     * The HIP runtime on the worker side will handle extraction.
+     */
     const unsigned char* data = (const unsigned char*)image;
-    if (data[0] != 0x7f || data[1] != 'E' || data[2] != 'L' || data[3] != 'F') {
-        hip_remote_log_error("hipModuleLoadData: invalid ELF magic");
-        return hipErrorInvalidImage;
+    size_t approx_size;
+
+    /* Check for ELF magic */
+    if (data[0] == 0x7f && data[1] == 'E' && data[2] == 'L' && data[3] == 'F') {
+        /* Parse ELF header to get size (64-bit ELF) */
+        uint64_t e_shoff = *(uint64_t*)(data + 40);
+        uint16_t e_shentsize = *(uint16_t*)(data + 58);
+        uint16_t e_shnum = *(uint16_t*)(data + 60);
+        approx_size = (size_t)(e_shoff + e_shnum * e_shentsize);
+    }
+    /* Check for Clang offload bundle magic */
+    else if (memcmp(data, "__CLANG_OFFLOAD_BUNDLE__", 24) == 0) {
+        /*
+         * Offload bundle format:
+         * - Magic (24 bytes): "__CLANG_OFFLOAD_BUNDLE__"
+         * - Number of bundles (8 bytes)
+         * - For each bundle:
+         *   - Offset (8 bytes)
+         *   - Size (8 bytes)
+         *   - Triple length (8 bytes)
+         *   - Triple string
+         *
+         * Find the largest offset + size to get total bundle size.
+         */
+        uint64_t num_bundles = *(uint64_t*)(data + 24);
+        const unsigned char* ptr = data + 32;
+        uint64_t max_end = 0;
+
+        for (uint64_t i = 0; i < num_bundles && i < 16; i++) {
+            uint64_t offset = *(uint64_t*)ptr;
+            uint64_t size = *(uint64_t*)(ptr + 8);
+            uint64_t triple_len = *(uint64_t*)(ptr + 16);
+            uint64_t end = offset + size;
+            if (end > max_end) max_end = end;
+            ptr += 24 + triple_len;
+        }
+        approx_size = (size_t)max_end;
+    }
+    else {
+        /* Unknown format - use default max and let worker validate */
+        hip_remote_log_debug("hipModuleLoadData: unknown format, using default size");
+        approx_size = 16 * 1024 * 1024;
     }
 
-    /* Parse ELF header to get size (simplified - assumes 64-bit ELF) */
-    /* e_shoff + (e_shnum * e_shentsize) gives approximate end */
-    uint64_t e_shoff = *(uint64_t*)(data + 40);     /* Section header offset */
-    uint16_t e_shentsize = *(uint16_t*)(data + 58); /* Section header entry size */
-    uint16_t e_shnum = *(uint16_t*)(data + 60);     /* Number of section headers */
-
-    size_t approx_size = (size_t)(e_shoff + e_shnum * e_shentsize);
     if (approx_size < 64 || approx_size > HIP_REMOTE_MAX_PAYLOAD_SIZE) {
-        /* Fallback: assume a reasonable max size and let server validate */
-        approx_size = 16 * 1024 * 1024; /* 16MB max */
+        approx_size = 16 * 1024 * 1024;
     }
 
     HipRemoteModuleLoadRequest req;
@@ -126,6 +216,10 @@ hipError_t hipModuleGetFunction(hipFunction_t* function, hipModule_t module,
 
     if (err == hipSuccess) {
         *function = (hipFunction_t)(uintptr_t)resp.function;
+        /* Store the argument count from the worker for use at launch time */
+        store_function_info(*function, resp.num_args);
+        hip_remote_log_debug("hipModuleGetFunction: function=%p, num_args=%u",
+                             (void*)*function, resp.num_args);
     }
 
     return err;
@@ -156,22 +250,30 @@ hipError_t hipModuleLaunchKernel(hipFunction_t f,
         return hipErrorNotSupported;
     }
 
-    /* Count and validate arguments */
-    uint32_t num_args = 0;
-    size_t total_arg_size = 0;
+    /* Get the number of arguments from stored function info.
+     * This was populated when hipModuleGetFunction was called.
+     * If num_args is 0, it means either:
+     * 1. The kernel truly has 0 args, or
+     * 2. The worker doesn't support hipKernelGetParamInfo (older ROCm)
+     * In case 2, fall back to NULL-terminated counting. */
+    uint32_t num_args = get_function_num_args(f);
 
-    if (kernelParams) {
-        /* Count arguments - kernelParams is NULL-terminated */
+    if (num_args == 0 && kernelParams != NULL) {
+        /* Fall back to NULL-terminated counting for compatibility */
         while (kernelParams[num_args] != NULL && num_args < HIP_REMOTE_MAX_KERNEL_ARGS) {
             num_args++;
         }
+        hip_remote_log_debug("hipModuleLaunchKernel: using NULL-terminated arg count: %u", num_args);
+    } else if (num_args > 0 && kernelParams == NULL) {
+        hip_remote_log_error("hipModuleLaunchKernel: kernel expects %u args but kernelParams is NULL", num_args);
+        return hipErrorInvalidValue;
     }
 
     /* For simplicity, we assume each argument is a pointer (8 bytes) */
     /* In a real implementation, we'd need argument metadata from the kernel */
     /* For now, treat each kernelParams entry as a pointer-sized value */
     size_t arg_size = sizeof(void*);
-    total_arg_size = num_args * arg_size;
+    size_t total_arg_size = num_args * arg_size;
 
     /* Build the request */
     size_t request_size = sizeof(HipRemoteLaunchKernelRequest) +

@@ -407,6 +407,8 @@ typedef struct __attribute__((packed)) {
 typedef struct __attribute__((packed)) {
     HipRemoteResponseHeader header;
     uint64_t function;        /**< Remote function handle */
+    uint32_t num_args;        /**< Number of kernel arguments (from kernel metadata) */
+    uint32_t reserved;        /**< Reserved for future use (alignment) */
 } HipRemoteModuleGetFunctionResponse;
 
 /* ============================================================================
