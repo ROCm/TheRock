@@ -41,6 +41,7 @@ import sys
 
 from github_actions_utils import (
     gha_append_step_summary,
+    gha_set_output,
     retrieve_bucket_info,
 )
 
@@ -203,7 +204,7 @@ def upload_packages(
         )
 
 
-def write_gha_upload_summary(upload_path: UploadPath):
+def write_gha_outputs(upload_path: UploadPath):
     index_url = f"{upload_path.s3_url}/index.html"
     install_instructions_markdown = f"""[ROCm Python packages]({index_url})
 ```bash
@@ -212,6 +213,8 @@ pip install rocm[libraries,devel] --pre {LINE_CONTINUATION_CHAR}
 ```
 """
     gha_append_step_summary(install_instructions_markdown)
+
+    gha_set_output({"package_find_links_url": index_url})
 
 
 def run(args: argparse.Namespace):
@@ -259,7 +262,7 @@ def run(args: argparse.Namespace):
     if not args.output_dir:
         log("Write github actions build summary")
         log("------------------")
-        write_gha_upload_summary(upload_path)
+        write_gha_outputs(upload_path)
 
     log("")
     log("[INFO] Done!")

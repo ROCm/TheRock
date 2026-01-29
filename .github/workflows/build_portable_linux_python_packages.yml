@@ -27,6 +27,12 @@ on:
         type: string
       package_version:
         type: string
+      repository:
+        description: "Repository to checkout. Otherwise, defaults to `github.repository`."
+        type: string
+      ref:
+        description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
+        type: string
 
 permissions:
   contents: read
@@ -34,10 +40,12 @@ permissions:
 run-name: Build portable Linux Python Packages (${{ inputs.artifact_group }}, ${{ inputs.package_version }})
 
 jobs:
-  build:
+  build_rocm_wheels:
     name: Build Python | ${{ inputs.artifact_group }}
     # Note: GitHub-hosted runners run out of disk space for some gpu families
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
+    outputs:
+      package_find_links_url:  ${{ steps.upload.outputs.package_find_links_url }}
     env:
       BUILD_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:db2b63f938941dde2abc80b734e64b45b9995a282896d513a0f3525d4591d6cb
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
@@ -68,7 +76,7 @@ jobs:
 
       - name: Build Python packages
         run: |
-          ./build_tools/linux_portable_build.py \
+          python ./build_tools/linux_portable_build.py \
             --image=${{ env.BUILD_IMAGE }} \
             --output-dir=${{ env.PACKAGES_DIR }} \
             --artifact-dir=${{ env.ARTIFACTS_DIR }} \
@@ -76,17 +84,47 @@ jobs:
             -- \
             "--version=${{ inputs.package_version }}"
 
-      - name: Inspect Python packages
+      - name: Upload Python packages
+        id: upload
         run: |
-          ls -la "${{ env.PACKAGES_DIR }}"
+          python build_tools/github_actions/upload_python_packages.py \
+            --packages-dir=${{ env.PACKAGES_DIR }} \
+            --artifact-group "${{ inputs.artifact_group }}" \
+            --run-id ${{ github.run_id }}
 
-      # TODO(#1559): Sanity check (Linux can't find the directories, maybe Docker issues?)
+  generate_target_to_run:
+    name: Generate target_to_run
+    runs-on: ubuntu-24.04
+    outputs:
+      test_runs_on: ${{ steps.configure.outputs.test-runs-on }}
+      # bypass_tests_for_releases: ${{ steps.configure.outputs.bypass_tests_for_releases }}
+    steps:
+      - name: Checking out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || '' }}
 
-      # - name: Sanity check Python packages
-      #   run: |
-      #     piprepo build "${{ env.PACKAGES_DIR }}/dist"
-      #     pip install rocm[devel]==${{ inputs.package_version }} \
-      #       --extra-index-url "${{ env.PACKAGES_DIR }}/dist/simple/"
-      #     rocm-sdk test
+      - name: Generating target to run
+        id: configure
+        env:
+          TARGET: ${{ inputs.artifact_group }}
+          PLATFORM: "linux"
+          # Variable comes from ROCm organization variable 'ROCM_THEROCK_TEST_RUNNERS'
+          ROCM_THEROCK_TEST_RUNNERS: ${{ vars.ROCM_THEROCK_TEST_RUNNERS }}
+          LOAD_TEST_RUNNERS_FROM_VAR: false
+        run: python ./build_tools/github_actions/configure_target_run.py
 
-      # TODO(#1559): upload packages to artifacts S3 bucket and/or a dedicated Python packages bucket
+  test_rocm_wheels:
+    name: Test Python | ${{ inputs.artifact_group }} | ${{ needs.generate_target_to_run.outputs.test_runs_on }}
+    if: ${{ needs.generate_target_to_run.outputs.test_runs_on != '' }}
+    needs: [build_rocm_wheels, generate_target_to_run]
+    uses: ./.github/workflows/test_rocm_wheels.yml
+    with:
+      amdgpu_family: ${{ inputs.artifact_group }}
+      test_runs_on: ${{ needs.generate_target_to_run.outputs.test_runs_on }}
+      package_find_links_url: ${{ needs.build_rocm_wheels.outputs.package_find_links_url }}
+      python_version: 3.12
+      rocm_version: ${{ inputs.package_version }}
+      repository: ${{ inputs.repository || github.repository }}
+      ref: ${{ inputs.ref || '' }}
