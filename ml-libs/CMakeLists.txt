@@ -254,6 +254,53 @@ if(THEROCK_ENABLE_MIOPEN_PLUGIN)
   )
 endif(THEROCK_ENABLE_MIOPEN_PLUGIN)
 
+if(THEROCK_ENABLE_HIPBLASLT_PLUGIN)
+  ##############################################################################
+  # hipDNN hipBLASlt plugin
+  ##############################################################################
+
+  therock_cmake_subproject_declare(hipBLASLt_plugin
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/dnn-providers/hipblaslt-provider"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipblaslt_plugin"
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      -DHIP_PLATFORM=amd
+      -DROCM_PATH=
+      -DROCM_DIR=
+      "-DHIP_DNN_SKIP_TESTS=$<NOT:$<BOOL:${THEROCK_BUILD_TESTING}>>"
+    CMAKE_INCLUDES
+      therock_explicit_finders.cmake
+    COMPILER_TOOLCHAIN
+      amd-hip
+    BUILD_DEPS
+      hipDNN
+      therock-googletest
+      therock-flatbuffers
+      therock-nlohmann-json
+      therock-fmt
+      therock-spdlog
+    RUNTIME_DEPS
+      hipBLAS-common
+      hipBLASLt
+  )
+  therock_cmake_subproject_glob_c_sources(hipBLASLt_plugin
+  SUBDIRS
+    .
+  )
+  therock_cmake_subproject_activate(hipBLASLt_plugin)
+
+  therock_provide_artifact(hipblaslt-plugin
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-hipblaslt-plugin.toml
+    COMPONENTS
+      dbg
+      lib
+      test
+    SUBPROJECT_DEPS
+      hipBLASLt_plugin
+  )
+endif(THEROCK_ENABLE_HIPBLASLT_PLUGIN)
+
 if(THEROCK_ENABLE_HIPDNN_SAMPLES)
   ##############################################################################
   # hipDNN samples
