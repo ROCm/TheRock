@@ -38,7 +38,7 @@ permissions:
 
 jobs:
   test_sanity_check:
-    name: "Sanity ROCM Test"
+    name: "Sanity ROCM Test (${{ inputs.amdgpu_families }})"
     runs-on: ${{ inputs.test_runs_on }}
     # Running docker with cap-add and -v /lib/modiles, by recommendation of Github: https://rocm.docs.amd.com/projects/amdsmi/en/amd-staging/how-to/setup-docker-container.html
     container:
