@@ -76,7 +76,7 @@ jobs:
       fail-fast: false
       matrix:
         variant: ${{ fromJSON(needs.setup.outputs.linux_variants) }}
-    uses: ./.github/workflows/multi_arch_build_portable_linux.yml
+    uses: ./.github/workflows/multi_arch_ci_linux.yml
     secrets: inherit
     with:
       matrix_per_family_json: ${{ matrix.variant.matrix_per_family_json }}
