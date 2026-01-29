@@ -103,7 +103,12 @@ def get_external_repo_path(repo_name: str) -> Path:
     if external_source_env:
         base_path = Path(os.environ.get("GITHUB_WORKSPACE", "."))
         repo_path = base_path / external_source_env
-        if repo_path.exists() and _is_valid_repo_path(repo_path):
+        # Validate that the path ends with the repo name we're looking for
+        if (
+            repo_path.exists()
+            and _is_valid_repo_path(repo_path)
+            and repo_path.name == repo_name
+        ):
             print(
                 f"Found external repo via EXTERNAL_SOURCE_PATH: {repo_path}",
                 file=sys.stderr,
