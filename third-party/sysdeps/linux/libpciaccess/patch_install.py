@@ -1,8 +1,7 @@
-#!/usr/bin/env python3
-"""Post-install patching for libpciaccess."""
 from pathlib import Path
 import os
 import platform
+import shutil
 import subprocess
 import sys
 
@@ -114,6 +113,3 @@ if platform.system() == "Linux":
     if pkgconfig_dir.exists():
         for pc_file in pkgconfig_dir.glob("*.pc"):
             relativize_pc_file(pc_file)
-elif platform.system() == "Windows":
-    # Do nothing for now.
-    sys.exit(0)
