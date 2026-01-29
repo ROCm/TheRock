@@ -543,6 +543,126 @@ static void handle_peek_at_last_error(int fd, uint32_t request_id) {
 }
 
 /* ============================================================================
+ * Module and Kernel Handlers
+ * ============================================================================ */
+
+static void handle_module_load_data(int fd, uint32_t request_id,
+                                     const void* payload, size_t payload_size) {
+    if (!payload || payload_size < sizeof(HipRemoteModuleLoadRequest)) {
+        send_simple_response(fd, HIP_OP_MODULE_LOAD_DATA, request_id, hipErrorInvalidValue);
+        return;
+    }
+
+    const HipRemoteModuleLoadRequest* req = (const HipRemoteModuleLoadRequest*)payload;
+    const void* code_data = (const uint8_t*)payload + sizeof(HipRemoteModuleLoadRequest);
+    size_t code_size = payload_size - sizeof(HipRemoteModuleLoadRequest);
+
+    if (code_size < req->data_size) {
+        LOG_ERROR("ModuleLoadData: incomplete data (got %zu, expected %lu)", code_size, req->data_size);
+        send_simple_response(fd, HIP_OP_MODULE_LOAD_DATA, request_id, hipErrorInvalidValue);
+        return;
+    }
+
+    hipModule_t module = NULL;
+    hipError_t err = hipModuleLoadData(&module, code_data);
+    LOG_DEBUG("ModuleLoadData: size=%lu, module=%p, err=%d", req->data_size, (void*)module, err);
+
+    HipRemoteModuleLoadResponse resp = {
+        .header = { .error_code = (int32_t)err },
+        .module = (uint64_t)(uintptr_t)module
+    };
+    send_response(fd, HIP_OP_MODULE_LOAD_DATA, request_id, &resp, sizeof(resp));
+}
+
+static void handle_module_unload(int fd, uint32_t request_id,
+                                  const void* payload, size_t payload_size) {
+    if (!payload || payload_size < sizeof(HipRemoteModuleUnloadRequest)) {
+        send_simple_response(fd, HIP_OP_MODULE_UNLOAD, request_id, hipErrorInvalidValue);
+        return;
+    }
+
+    const HipRemoteModuleUnloadRequest* req = (const HipRemoteModuleUnloadRequest*)payload;
+    hipModule_t module = (hipModule_t)(uintptr_t)req->module;
+
+    hipError_t err = hipModuleUnload(module);
+    LOG_DEBUG("ModuleUnload: module=%p, err=%d", (void*)module, err);
+    send_simple_response(fd, HIP_OP_MODULE_UNLOAD, request_id, err);
+}
+
+static void handle_module_get_function(int fd, uint32_t request_id,
+                                        const void* payload, size_t payload_size) {
+    if (!payload || payload_size < sizeof(HipRemoteModuleGetFunctionRequest)) {
+        send_simple_response(fd, HIP_OP_MODULE_GET_FUNCTION, request_id, hipErrorInvalidValue);
+        return;
+    }
+
+    const HipRemoteModuleGetFunctionRequest* req = (const HipRemoteModuleGetFunctionRequest*)payload;
+    hipModule_t module = (hipModule_t)(uintptr_t)req->module;
+
+    hipFunction_t function = NULL;
+    hipError_t err = hipModuleGetFunction(&function, module, req->function_name);
+    LOG_DEBUG("ModuleGetFunction: module=%p, name=%s, function=%p, err=%d",
+              (void*)module, req->function_name, (void*)function, err);
+
+    HipRemoteModuleGetFunctionResponse resp = {
+        .header = { .error_code = (int32_t)err },
+        .function = (uint64_t)(uintptr_t)function
+    };
+    send_response(fd, HIP_OP_MODULE_GET_FUNCTION, request_id, &resp, sizeof(resp));
+}
+
+static void handle_launch_kernel(int fd, uint32_t request_id,
+                                  const void* payload, size_t payload_size) {
+    if (!payload || payload_size < sizeof(HipRemoteLaunchKernelRequest)) {
+        send_simple_response(fd, HIP_OP_LAUNCH_KERNEL, request_id, hipErrorInvalidValue);
+        return;
+    }
+
+    const HipRemoteLaunchKernelRequest* req = (const HipRemoteLaunchKernelRequest*)payload;
+
+    /* Validate sizes */
+    size_t expected_min = sizeof(HipRemoteLaunchKernelRequest) +
+                          req->num_args * sizeof(HipRemoteKernelArg);
+    if (payload_size < expected_min) {
+        LOG_ERROR("LaunchKernel: payload too small (got %zu, expected %zu)", payload_size, expected_min);
+        send_simple_response(fd, HIP_OP_LAUNCH_KERNEL, request_id, hipErrorInvalidValue);
+        return;
+    }
+
+    hipFunction_t function = (hipFunction_t)(uintptr_t)req->function;
+    hipStream_t stream = (hipStream_t)(uintptr_t)req->stream;
+
+    LOG_DEBUG("LaunchKernel: func=%p, grid=(%u,%u,%u), block=(%u,%u,%u), shared=%u, stream=%p, args=%u",
+              (void*)function, req->grid_dim_x, req->grid_dim_y, req->grid_dim_z,
+              req->block_dim_x, req->block_dim_y, req->block_dim_z,
+              req->shared_mem_bytes, (void*)stream, req->num_args);
+
+    /* Extract kernel arguments */
+    const HipRemoteKernelArg* arg_descs = (const HipRemoteKernelArg*)((const uint8_t*)payload +
+                                           sizeof(HipRemoteLaunchKernelRequest));
+    const uint8_t* arg_data = (const uint8_t*)(arg_descs + req->num_args);
+
+    /* Build argument pointer array for hipModuleLaunchKernel */
+    void* kernel_params[HIP_REMOTE_MAX_KERNEL_ARGS];
+    for (uint32_t i = 0; i < req->num_args && i < HIP_REMOTE_MAX_KERNEL_ARGS; i++) {
+        kernel_params[i] = (void*)(arg_data + arg_descs[i].offset);
+    }
+
+    hipError_t err = hipModuleLaunchKernel(
+        function,
+        req->grid_dim_x, req->grid_dim_y, req->grid_dim_z,
+        req->block_dim_x, req->block_dim_y, req->block_dim_z,
+        req->shared_mem_bytes,
+        stream,
+        kernel_params,
+        NULL  /* extra */
+    );
+
+    LOG_DEBUG("LaunchKernel: err=%d", err);
+    send_simple_response(fd, HIP_OP_LAUNCH_KERNEL, request_id, err);
+}
+
+/* ============================================================================
  * Client Handler
  * ============================================================================ */
 
@@ -668,6 +788,21 @@ static void handle_client(int client_fd) {
                 break;
             case HIP_OP_PEEK_AT_LAST_ERROR:
                 handle_peek_at_last_error(client_fd, header.request_id);
+                break;
+
+            case HIP_OP_MODULE_LOAD_DATA:
+            case HIP_OP_MODULE_LOAD_DATA_EX:
+                handle_module_load_data(client_fd, header.request_id, payload, header.payload_length);
+                break;
+            case HIP_OP_MODULE_UNLOAD:
+                handle_module_unload(client_fd, header.request_id, payload, header.payload_length);
+                break;
+            case HIP_OP_MODULE_GET_FUNCTION:
+                handle_module_get_function(client_fd, header.request_id, payload, header.payload_length);
+                break;
+            case HIP_OP_LAUNCH_KERNEL:
+            case HIP_OP_MODULE_LAUNCH_KERNEL:
+                handle_launch_kernel(client_fd, header.request_id, payload, header.payload_length);
                 break;
 
             default:

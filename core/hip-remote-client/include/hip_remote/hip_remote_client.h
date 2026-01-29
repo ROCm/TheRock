@@ -127,6 +127,15 @@ typedef enum {
 } hipMemcpyKind;
 
 /* ============================================================================
+ * Type Definitions
+ * ============================================================================ */
+
+typedef void* hipStream_t;
+
+/* Additional error codes */
+#define hipErrorInvalidHandle           400
+
+/* ============================================================================
  * Client State
  * ============================================================================ */
 
@@ -308,6 +317,66 @@ hipError_t hipEventRecord(void* event, void* stream);
 hipError_t hipEventSynchronize(void* event);
 hipError_t hipEventQuery(void* event);
 hipError_t hipEventElapsedTime(float* ms, void* start, void* stop);
+
+/* Module Management */
+typedef void* hipModule_t;
+typedef void* hipFunction_t;
+typedef enum {
+    hipJitOptionMaxRegisters = 0,
+    hipJitOptionThreadsPerBlock,
+    hipJitOptionInfoLogBuffer,
+    hipJitOptionInfoLogBufferSizeBytes,
+    hipJitOptionErrorLogBuffer,
+    hipJitOptionErrorLogBufferSizeBytes,
+    hipJitOptionOptimizationLevel,
+    hipJitOptionTargetFromContext,
+    hipJitOptionTarget,
+    hipJitOptionFallbackStrategy,
+    hipJitOptionGenerateDebugInfo,
+    hipJitOptionLogVerbose,
+    hipJitOptionGenerateLineInfo,
+    hipJitOptionCacheMode,
+    hipJitOptionNumOptions
+} hipJitOption;
+
+hipError_t hipModuleLoadData(hipModule_t* module, const void* image);
+hipError_t hipModuleLoadDataEx(hipModule_t* module, const void* image,
+                                unsigned int numOptions, hipJitOption* options,
+                                void** optionValues);
+hipError_t hipModuleUnload(hipModule_t module);
+hipError_t hipModuleGetFunction(hipFunction_t* function, hipModule_t module,
+                                 const char* kname);
+
+/* Kernel Launch */
+typedef struct {
+    unsigned int x, y, z;
+} dim3;
+
+hipError_t hipModuleLaunchKernel(hipFunction_t f,
+                                  unsigned int gridDimX,
+                                  unsigned int gridDimY,
+                                  unsigned int gridDimZ,
+                                  unsigned int blockDimX,
+                                  unsigned int blockDimY,
+                                  unsigned int blockDimZ,
+                                  unsigned int sharedMemBytes,
+                                  hipStream_t stream,
+                                  void** kernelParams,
+                                  void** extra);
+
+hipError_t hipLaunchKernel(const void* function_address,
+                            dim3 numBlocks,
+                            dim3 dimBlocks,
+                            void** args,
+                            size_t sharedMemBytes,
+                            hipStream_t stream);
+
+hipError_t hipLaunchCooperativeKernel(const void* f,
+                                       dim3 gridDim,
+                                       dim3 blockDim,
+                                       void** kernelParams,
+                                       unsigned int sharedMemBytes,
+                                       hipStream_t stream);
 
 #ifdef __cplusplus
 }

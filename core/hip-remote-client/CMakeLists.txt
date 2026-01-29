@@ -26,6 +26,7 @@ set(HIP_REMOTE_SOURCES
   src/hip_api_device.c
   src/hip_api_memory.c
   src/hip_api_stream.c
+  src/hip_api_module.c
 )
 
 set(HIP_REMOTE_HEADERS
