@@ -123,6 +123,9 @@ endif(THEROCK_BUILD_TESTING)
       gfx942  # TODO: Fix rocprofiler-compute to accept an empty target list.
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
+      -DCMAKE_HIP_PLATFORM=amd
+      -DCMAKE_HIP_COMPILER_ROCM_ROOT=${THEROCK_BINARY_DIR}/dist/rocm
+      -DCMAKE_HIP_COMPILER=${THEROCK_BINARY_DIR}/dist/rocm/lib/llvm/bin/clang++${CMAKE_EXECUTABLE_SUFFIX}
       -DCHECK_PYTHON_DEPS=OFF
       -DENABLE_TESTS=ON
       -DINSTALL_TESTS=ON
