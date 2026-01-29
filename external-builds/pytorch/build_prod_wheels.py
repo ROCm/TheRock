@@ -418,12 +418,11 @@ def do_build(args: argparse.Namespace):
             sccache_setup_attempted = True  # Mark before wrapping starts
             setup_rocm_sccache(rocm_dir, sccache_path)
 
-            # Set CMAKE launchers for all compilers
-            # - C/CXX: Host code compilation
-            # - HIP: Device code compilation (hipcc) - key for ROCm build speedup
+            # Set CMAKE launchers for C/C++ compilers only
+            # Note: CMAKE_HIP_COMPILER_LAUNCHER is not supported by sccache
+            # (returns "Compiler not supported" error)
             env["CMAKE_C_COMPILER_LAUNCHER"] = str(sccache_path)
             env["CMAKE_CXX_COMPILER_LAUNCHER"] = str(sccache_path)
-            env["CMAKE_HIP_COMPILER_LAUNCHER"] = str(sccache_path)
 
             # Start sccache server to warm it up
             try:
