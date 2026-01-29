@@ -111,7 +111,7 @@ jobs:
       SCCACHE_BUCKET: therock-pytorch-sccache
       SCCACHE_REGION: us-east-2
       SCCACHE_S3_USE_SSL: "true"
-      SCCACHE_S3_KEY_PREFIX: ${{ inputs.amdgpu_family }}/
+      SCCACHE_S3_KEY_PREFIX: windows/${{ inputs.amdgpu_family }}/
       SCCACHE_S3_SERVER_SIDE_ENCRYPTION: "true"
       SCCACHE_IDLE_TIMEOUT: "0"
     outputs:

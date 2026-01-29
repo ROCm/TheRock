@@ -243,10 +243,11 @@ def setup_rocm_sccache(rocm_path: Path, sccache_path: Path) -> None:
 
     On Windows, compiler wrapping is skipped because hipcc calls clang.exe
     directly and shell script wrappers won't intercept these calls.
-    Windows builds rely solely on CMAKE_*_COMPILER_LAUNCHER for host code.
+    Windows builds rely on CMAKE_*_COMPILER_LAUNCHER (including HIP launcher)
+    which is set in build_prod_wheels.py for caching both host and device code.
     """
     if is_windows:
-        print("Skipping ROCm compiler wrapping on Windows (using CMAKE launcher only)")
+        print("Skipping ROCm compiler wrapping on Windows (using CMAKE launchers)")
         return
 
     llvm_bin = _find_rocm_llvm_bin(rocm_path)
