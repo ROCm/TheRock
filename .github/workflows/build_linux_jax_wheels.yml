@@ -96,7 +96,7 @@ on:
       jax_ref:
         description: rocm-jax repository ref/branch to check out
         type: string
-        default: rocm-jaxlib-v0.8.0
+        default: rocm-jaxlib-v0.8.2
 
 permissions:
   id-token: write
@@ -108,7 +108,7 @@ jobs:
   build_jax_wheels:
     strategy:
       matrix:
-        jax_ref: [rocm-jaxlib-v0.8.0]
+        jax_ref: [rocm-jaxlib-v0.8.2]
     name: Build Linux JAX Wheels | ${{ inputs.amdgpu_family }} | Python ${{ inputs.python_version }}
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     env:
@@ -159,7 +159,7 @@ jobs:
       - name: Extract JAX version
         id: extract_jax_version
         run: |
-            # Extract JAX version from requirements.txt (e.g., "jax==0.8.0")
+            # Extract JAX version from requirements.txt (e.g., "jax==0.8.2")
             # Remove all whitespace from requirements.txt to simplify parsing
             # Search for lines starting with "jax==" or "jaxlib==" followed by version (excluding comments)
             # Extract the version number by splitting on '=' and taking the 3rd field
