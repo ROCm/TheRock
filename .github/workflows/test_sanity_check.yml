@@ -29,6 +29,10 @@ on:
         type: string
       platform:
         type: string
+      therock_ref:
+        type: string
+        description: "TheRock git ref to use (for external repos)"
+        default: ""
   push:
     branches:
       - ADHOCBUILD
