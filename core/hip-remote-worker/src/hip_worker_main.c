@@ -601,12 +601,35 @@ static void handle_module_get_function(int fd, uint32_t request_id,
 
     hipFunction_t function = NULL;
     hipError_t err = hipModuleGetFunction(&function, module, req->function_name);
-    LOG_DEBUG("ModuleGetFunction: module=%p, name=%s, function=%p, err=%d",
-              (void*)module, req->function_name, (void*)function, err);
+
+    /* Query the number of kernel arguments.
+     * Note: hipKernelGetParamInfo is available in newer ROCm versions.
+     * For older versions, return 0 and client falls back to NULL termination. */
+    uint32_t num_args = 0;
+#ifdef HIP_KERNEL_GET_PARAM_INFO_AVAILABLE
+    if (err == hipSuccess && function != NULL) {
+        for (uint32_t i = 0; i < HIP_REMOTE_MAX_KERNEL_ARGS; i++) {
+            size_t offset = 0;
+            hipError_t param_err = hipKernelGetParamInfo((hipKernel_t)function, i, &offset, NULL);
+            if (param_err != hipSuccess) {
+                break;
+            }
+            num_args++;
+        }
+    }
+#else
+    /* hipKernelGetParamInfo not available - client will use NULL-terminated array */
+    (void)function;  /* Suppress unused warning */
+#endif
+
+    LOG_DEBUG("ModuleGetFunction: module=%p, name=%s, function=%p, num_args=%u, err=%d",
+              (void*)module, req->function_name, (void*)function, num_args, err);
 
     HipRemoteModuleGetFunctionResponse resp = {
         .header = { .error_code = (int32_t)err },
-        .function = (uint64_t)(uintptr_t)function
+        .function = (uint64_t)(uintptr_t)function,
+        .num_args = num_args,
+        .reserved = 0
     };
     send_response(fd, HIP_OP_MODULE_GET_FUNCTION, request_id, &resp, sizeof(resp));
 }

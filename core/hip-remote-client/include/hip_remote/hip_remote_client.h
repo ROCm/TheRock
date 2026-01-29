@@ -352,6 +352,19 @@ typedef struct {
     unsigned int x, y, z;
 } dim3;
 
+/**
+ * Launch a kernel function.
+ *
+ * The remote HIP client queries kernel metadata from the worker to determine
+ * the number of arguments (requires ROCm 7.2+ on the worker). For older ROCm
+ * versions, the kernelParams array must be NULL-terminated:
+ *
+ *     void* args[] = { &d_a, &d_b, &d_c, &N, NULL };
+ *     hipModuleLaunchKernel(function, gridX, 1, 1, blockX, 1, 1, 0, stream, args, NULL);
+ *
+ * Note: All arguments are currently assumed to be pointer-sized (8 bytes).
+ * The 'extra' parameter is not supported in remote mode.
+ */
 hipError_t hipModuleLaunchKernel(hipFunction_t f,
                                   unsigned int gridDimX,
                                   unsigned int gridDimY,
