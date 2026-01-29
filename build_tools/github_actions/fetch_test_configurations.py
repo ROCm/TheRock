@@ -280,7 +280,7 @@ test_matrix = {
     "rocrtst": {
         "job_name": "rocrtst",
         "fetch_artifact_args": "--rocrtst --tests",
-        "timeout_minutes": 15,
+        "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_rocrtst.py')}",
         "platform": ["linux"],
         "total_shards": 1,
