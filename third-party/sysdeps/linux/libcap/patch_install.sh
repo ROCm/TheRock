@@ -3,26 +3,56 @@ set -e
 
 PREFIX="${1:?Expected install prefix argument}"
 PATCHELF="${PATCHELF:-patchelf}"
-THEROCK_SOURCE_DIR="${THEROCK_SOURCE_DIR:?THEROCK_SOURCE_DIR not defined}"
-Python3_EXECUTABLE="${Python3_EXECUTABLE:?Python3_EXECUTABLE not defined}"
 
-declare -A _unique_targets
-while IFS= read -r -d '' candidate; do
-  real_path=$(readlink -f "$candidate" 2>/dev/null || printf '%s' "$candidate")
-  if [ -f "$real_path" ]; then
-    _unique_targets["$real_path"]=1
-  fi
-done < <(find "${PREFIX}/lib" -maxdepth 1 \( -name "libcap.so*" -o -name "libpsx.so*" \) -print0)
+# update_library_links
+# ---------------------
+# Purpose:
+#   Normalize a shared library so that its real file is named exactly as its ELF SONAME,
+#   and rename the input file (usually a symlink) to a desired linker name (e.g., libfoo.so).
+#
+# Synopsis:
+#   update_library_links <libfile> <linker_name>
+#
+# Arguments:
+#   libfile      Path to the library file or symlink.
+#                Example: $PREFIX/lib/librocm_sysdeps_cap.so
+#   linker_name  Desired linker-name filename to exist in the same directory.
+#                Example: libcap.so
+update_library_links() {
+    local libfile="$1"        # e.g. $PREFIX/lib/librocm_sysdeps_cap.so
+    local linker_name="$2"    # e.g. libcap.so
 
-patch_targets=("${!_unique_targets[@]}")
-if [ ${#patch_targets[@]} -eq 0 ]; then
-  echo "libcap patch_install: no shared libraries found under ${PREFIX}/lib" >&2
-  exit 1
-fi
+    if [ ! -e "$libfile" ]; then
+        echo "Error: File '$libfile' not found" >&2
+        return 1
+    fi
 
-"$Python3_EXECUTABLE" "$THEROCK_SOURCE_DIR/build_tools/patch_linux_so.py" \
-  --patchelf "${PATCHELF}" --add-prefix rocm_sysdeps_ \
-  "${patch_targets[@]}"
+    local dir="$(dirname -- "$libfile")"
+    # Get the soname and realname
+    local lib_soname="$("$PATCHELF" --print-soname "$libfile" 2>/dev/null || true)"
+    local realname="$(readlink -f -- "$libfile" 2>/dev/null || true)"
+
+    if [[ -z "$lib_soname" || -z "$realname" ]]; then
+        [[ -z "$lib_soname" ]] && echo "Error: No SONAME found in '$libfile'" >&2
+        [[ -z "$realname" ]] && echo "Error: readlink -f failed for '$libfile'" >&2
+        return 1
+    fi
+
+    if [[ "$realname" != "$dir/$lib_soname" ]]; then
+        # Move the real file to $dir/$lib_soname
+        mv -v -- "$realname" "$dir/$lib_soname"
+        pushd "$dir" > /dev/null
+        ln -sf "$lib_soname" "$linker_name"
+        popd > /dev/null
+        rm "$libfile"
+    else
+    # Rename symlink in the same directory
+        mv "$libfile" "$dir/$linker_name"
+    fi
+}
+
+update_library_links "$PREFIX/lib/librocm_sysdeps_cap.so" "libcap.so"
+update_library_links "$PREFIX/lib/librocm_sysdeps_psx.so" "libpsx.so"
 
 # pc files are not output with a relative prefix. Sed it to relative.
 if [ -d "$PREFIX/lib/pkgconfig" ]; then
