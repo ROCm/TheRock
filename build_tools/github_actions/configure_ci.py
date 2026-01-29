@@ -632,7 +632,7 @@ def matrix_generator(
                     # If a specific test kernel type was specified, we use that kernel-enabled test runners
                     # We disable the other machines that do not have the specified kernel type
                     # If a kernel test label was added, we set the test-runs-on accordingly to kernel-specific test machines
-                    if "kernel" in label:
+                    if "test_runner" in label:
                         _, kernel_type = label.split(":")
                         # If the architecture has a valid kernel machine, we set it here
                         if (

@@ -295,7 +295,7 @@ class ConfigureCITest(unittest.TestCase):
 
     def test_kernel_test_label_linux_pull_request_matrix_generator(self):
         base_args = {
-            "pr_labels": '{"labels":[{"name":"kernel:oem"}]}',
+            "pr_labels": '{"labels":[{"name":"test_runner:oem"}]}',
             "build_variant": "release",
         }
         linux_target_output, linux_test_labels = configure_ci.matrix_generator(
@@ -308,6 +308,8 @@ class ConfigureCITest(unittest.TestCase):
             platform="linux",
         )
         self.assertGreaterEqual(len(linux_target_output), 1)
+        # check that at least one runner name has "oem" in test runner name if "oem" test runner was requested
+        self.assertTrue("oem" in item["test-runs-on"] for item in linux_target_output)
         self.assert_target_output_is_valid(
             target_output=linux_target_output, allow_xfail=False
         )
