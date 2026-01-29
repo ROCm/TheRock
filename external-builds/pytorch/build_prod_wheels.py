@@ -334,6 +334,49 @@ def add_env_compiler_flags(env: dict[str, str], flagname: str, *compiler_flags: 
     print(f"-- Appended {flagname}+={append}")
 
 
+def find_lld(rocm_dir: Path | None = None) -> Path | None:
+    """Find lld linker binary.
+
+    Returns the path to lld if found, None otherwise.
+    On Linux, looks for 'ld.lld' in ROCm SDK, PATH, and common locations.
+
+    Args:
+        rocm_dir: Optional ROCm installation directory to check first.
+    """
+    if is_windows:
+        # Windows uses lld-link which has different semantics
+        return None
+
+    # Check ROCm SDK first (preferred for compatibility)
+    if rocm_dir:
+        rocm_lld_paths = [
+            rocm_dir / "lib" / "llvm" / "bin" / "ld.lld",
+            rocm_dir / "llvm" / "bin" / "ld.lld",
+        ]
+        for path in rocm_lld_paths:
+            if path.exists():
+                return path
+
+    # Check PATH
+    lld_path = shutil.which("ld.lld")
+    if lld_path:
+        return Path(lld_path)
+
+    # Check common system locations
+    common_paths = [
+        Path("/opt/rocm/lib/llvm/bin/ld.lld"),
+        Path("/opt/rocm/llvm/bin/ld.lld"),
+        Path("/usr/bin/ld.lld"),
+        Path("/usr/local/bin/ld.lld"),
+    ]
+
+    for path in common_paths:
+        if path.exists():
+            return path
+
+    return None
+
+
 def find_dir_containing(file_name: str, *possible_paths: Path) -> Path:
     for path in possible_paths:
         if (path / file_name).exists():
@@ -457,6 +500,28 @@ def do_build(args: argparse.Namespace):
         # GLOO enabled for only Linux
         if not is_windows:
             env["USE_GLOO"] = "ON"
+
+        # LLD linker setup (Linux only) - faster linking than gold/ld
+        if not is_windows:
+            use_lld = args.use_lld
+            if use_lld is None:
+                # Auto-detect: enable if lld is available
+                lld_path = find_lld(rocm_dir)
+                use_lld = lld_path is not None
+                if use_lld:
+                    print(f"Auto-detected lld linker at: {lld_path}")
+            elif use_lld:
+                # User explicitly requested lld
+                lld_path = find_lld(rocm_dir)
+                if not lld_path:
+                    print("WARNING: --use-lld specified but lld not found, disabling")
+                    use_lld = False
+
+            if use_lld:
+                # Add lld linker flag - significantly faster than gold/ld
+                # lld is ~2-5x faster for large binaries like PyTorch
+                add_env_compiler_flags(env, "LDFLAGS", "-fuse-ld=lld")
+                print("Using LLVM lld linker for faster linking")
 
         # At checkout, we compute some additional env vars that influence the way that
         # the wheel is named/versioned.
@@ -1090,6 +1155,12 @@ def main(argv: list[str]):
         "--use-sccache",
         action=argparse.BooleanOptionalAction,
         help="Use sccache with ROCm compiler wrapping (comprehensive caching for HIP code)",
+    )
+    build_p.add_argument(
+        "--use-lld",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Use LLVM lld linker for faster linking (Linux only, auto-detected if not specified)",
     )
     build_p.add_argument(
         "--pytorch-dir",
