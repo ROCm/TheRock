@@ -156,15 +156,11 @@ class FetchTestConfigurationsTest(unittest.TestCase):
 
     def test_multi_gpu_job_included_when_supported(self):
         def fake_get_all_families(_):
-            return {
-                "gfx94x": {
-                    "linux": {
-                        "test-runs-on-multi-gpu": "linux-mi300-mgpu"
-                    }
-                }
-            }
+            return {"gfx94x": {"linux": {"test-runs-on-multi-gpu": "linux-mi300-mgpu"}}}
 
-        fetch_test_configurations.get_all_families_for_trigger_types = fake_get_all_families
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
 
         fetch_test_configurations.run()
         components = self._get_components()
@@ -178,7 +174,9 @@ class FetchTestConfigurationsTest(unittest.TestCase):
         def fake_get_all_families(_):
             return {}
 
-        fetch_test_configurations.get_all_families_for_trigger_types = fake_get_all_families
+        fetch_test_configurations.get_all_families_for_trigger_types = (
+            fake_get_all_families
+        )
 
         fetch_test_configurations.run()
         components = self._get_components()
