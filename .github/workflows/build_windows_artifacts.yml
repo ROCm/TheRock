@@ -110,6 +110,7 @@ jobs:
       - name: Extract external repo name
         if: ${{ inputs.external_source_checkout }}
         id: external_repo
+        shell: pwsh
         run: |
           $REPO = "${{ inputs.repository_override || github.repository }}"
           $REPO_NAME = $REPO.Split('/')[-1]
