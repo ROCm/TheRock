@@ -47,6 +47,35 @@ on:
         type: string
         description: "If provided, the tests will run on this artifact ID"
         default: ""
+  workflow_call:
+    # This workflow_call section allows external repositories (rocm-libraries, rocm-systems)
+    # to reuse this CI workflow for integration testing with TheRock's build infrastructure.
+    # All inputs are optional; for normal TheRock CI (workflow_dispatch/pull_request), these are unused.
+    inputs:
+      external_source_checkout:
+        type: boolean
+        default: false
+        description: "Whether source is from external repo (rocm-libraries/systems)"
+      therock_ref:
+        type: string
+        default: ""
+        description: "TheRock git ref to use (for external repos)"
+      repository_override:
+        type: string
+        default: ""
+        description: "Override github.repository for testing (e.g., 'ROCm/rocm-libraries')"
+      projects:
+        type: string
+        default: ""
+        description: "Override: comma-separated list of project paths to test (e.g., 'projects/rocprim,projects/hipcub'). Leave blank for normal behavior (detect from PR changes). Use 'all' to test all projects."
+      linux_amdgpu_families:
+        type: string
+        default: ""
+        description: "Insert comma-separated list of Linux GPU families to build and test. ex: gfx94X, gfx1201X"
+      windows_amdgpu_families:
+        type: string
+        default: ""
+        description: "Insert comma-separated list of Windows GPU families to build and test. ex: gfx94X, gfx1201X"
   pull_request:
     types:
       - labeled
@@ -60,8 +89,9 @@ concurrency:
   # A PR number if a pull request and otherwise the commit hash. This cancels
   # queued and in-progress runs for the same PR (presubmit) or commit
   # (postsubmit). The workflow name is prepended to avoid conflicts between
-  # different workflows.
-  group: ${{ github.workflow }}-${{ github.event.number || github.sha }}
+  # different workflows. Repository override is included to allow parallel
+  # external repo integration tests (rocm-libraries, rocm-systems).
+  group: ${{ github.workflow }}-${{ inputs.repository_override || github.repository }}-${{ github.event.number || github.sha }}
   cancel-in-progress: true
 
 jobs:
@@ -69,6 +99,16 @@ jobs:
     uses: ./.github/workflows/setup.yml
     with:
       build_variant: "release"
+      external_source_checkout: ${{ inputs.external_source_checkout || false }}
+      therock_ref: ${{ inputs.therock_ref || '' }}
+      repository_override: ${{ inputs.repository_override || '' }}
+      projects: ${{ inputs.projects || '' }}
+      linux_amdgpu_families: ${{ inputs.linux_amdgpu_families || '' }}
+      windows_amdgpu_families: ${{ inputs.windows_amdgpu_families || '' }}
+      linux_test_labels: ${{ inputs.linux_test_labels || '' }}
+      linux_use_prebuilt_artifacts: ${{ inputs.linux_use_prebuilt_artifacts || false }}
+      windows_test_labels: ${{ inputs.windows_test_labels || '' }}
+      windows_use_prebuilt_artifacts: ${{ inputs.windows_use_prebuilt_artifacts || false }}
 
   linux_build_and_test:
     name: Linux::${{ matrix.variant.family }}::${{ matrix.variant.build_variant_label }}
@@ -98,6 +138,11 @@ jobs:
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
       sanity_check_only_for_family: ${{ matrix.variant.sanity_check_only_for_family == true }}
+      external_source_checkout: ${{ inputs.external_source_checkout || false }}
+      therock_ref: ${{ inputs.therock_ref || '' }}
+      repository_override: ${{ inputs.repository_override || '' }}
+      cmake_options: ${{ matrix.variant.cmake_options || '' }}
+      project_to_test: ${{ matrix.variant.project_to_test || '' }}
     permissions:
       contents: read
       id-token: write
@@ -129,6 +174,11 @@ jobs:
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
       sanity_check_only_for_family: ${{ matrix.variant.sanity_check_only_for_family == true }}
+      external_source_checkout: ${{ inputs.external_source_checkout || false }}
+      therock_ref: ${{ inputs.therock_ref || '' }}
+      repository_override: ${{ inputs.repository_override || '' }}
+      cmake_options: ${{ matrix.variant.cmake_options || '' }}
+      project_to_test: ${{ matrix.variant.project_to_test || '' }}
     permissions:
       contents: read
       id-token: write
