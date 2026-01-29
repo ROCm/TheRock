@@ -151,33 +151,72 @@ def create_sccache_wrapper(compiler_path: Path, sccache_path: Path) -> None:
         raise RuntimeError(f"Resolved compiler is not executable: {real_compiler}")
 
     # Save the original symlink target (if symlink) or path for restoration
+    is_symlink = compiler_path.is_symlink()
+    original_binary = None
+    
     try:
-        if compiler_path.is_symlink():
+        if is_symlink:
             original_target = os.readlink(compiler_path)
             original_path_file.write_text(f"symlink:{original_target}")
         else:
+            # Save metadata for binary (don't move yet - move after wrapper is ready)
             original_path_file.write_text(f"binary:{real_compiler}")
-            # Move binary to original/ for safekeeping
             original_binary = original_dir / compiler_path.name
-            shutil.move(compiler_path, original_binary)
-            print(f"  Moved binary {compiler_path} -> {original_binary}")
-    except (OSError, PermissionError, shutil.Error) as e:
-        raise RuntimeError(f"Failed to backup compiler {compiler_path}: {e}") from e
+    except (OSError, PermissionError) as e:
+        raise RuntimeError(f"Failed to save compiler metadata for {compiler_path}: {e}") from e
+
+    # Prepare wrapper content
+    wrapper_content = f'#!/bin/sh\nexec "{sccache_path}" "{real_compiler}" "$@"\n'
+    
+    # For binaries, create wrapper at temp location first to verify we can write it
+    # before moving the binary (avoids orphaned state if wrapper creation fails)
+    wrapper_temp = None
+    if original_binary is not None:
+        wrapper_temp = compiler_path.parent / f".{compiler_path.name}.sccache_wrapper.tmp"
+        try:
+            wrapper_temp.write_text(wrapper_content)
+            wrapper_temp.chmod(
+                stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH
+            )
+        except (OSError, PermissionError) as e:
+            raise RuntimeError(
+                f"Failed to create sccache wrapper for {compiler_path}: {e}"
+            ) from e
 
     # Remove existing symlink if present
-    if compiler_path.is_symlink():
+    if is_symlink:
         compiler_path.unlink()
 
-    # Create wrapper script that calls sccache with the resolved absolute path
+    # For binaries: move binary to original/, then move wrapper to final location
+    # For symlinks: create wrapper directly (symlink already removed above)
     try:
-        wrapper_content = f'#!/bin/sh\nexec "{sccache_path}" "{real_compiler}" "$@"\n'
-        compiler_path.write_text(wrapper_content)
-        # Make executable
-        compiler_path.chmod(
-            stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH
-        )
-        print(f"  Created sccache wrapper: {compiler_path} -> sccache {real_compiler}")
-    except (OSError, PermissionError) as e:
+        if original_binary is not None:
+            # Move binary to original/ for safekeeping
+            shutil.move(compiler_path, original_binary)
+            print(f"  Moved binary {compiler_path} -> {original_binary}")
+            # Move wrapper from temp to final location
+            wrapper_temp.replace(compiler_path)
+            print(f"  Created sccache wrapper: {compiler_path} -> sccache {real_compiler}")
+        else:
+            # For symlinks, create wrapper directly
+            compiler_path.write_text(wrapper_content)
+            compiler_path.chmod(
+                stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH
+            )
+            print(f"  Created sccache wrapper: {compiler_path} -> sccache {real_compiler}")
+    except (OSError, PermissionError, shutil.Error) as e:
+        # Cleanup on failure: restore binary if it was moved
+        if original_binary is not None and original_binary.exists():
+            try:
+                shutil.move(original_binary, compiler_path)
+            except Exception:
+                pass  # Best effort restore
+        # Clean up temp wrapper if it exists
+        if wrapper_temp is not None and wrapper_temp.exists():
+            try:
+                wrapper_temp.unlink()
+            except Exception:
+                pass
         raise RuntimeError(
             f"Failed to create sccache wrapper for {compiler_path}: {e}"
         ) from e
