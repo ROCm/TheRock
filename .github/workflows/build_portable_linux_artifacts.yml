@@ -79,8 +79,6 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
-        with:
-          submodule: false
 
       - name: Install python deps
         run: |
@@ -108,6 +106,13 @@ jobs:
       - name: Test build_tools
         run: |
           python -m pytest build_tools/tests build_tools/github_actions/tests
+
+      - name: Submodule cleanup
+        run: |
+          git submodule foreach --recursive '
+            git reset --hard
+            git clean -fd
+          '
 
       - name: Fetch sources
         timeout-minutes: 30
