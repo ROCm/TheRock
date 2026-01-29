@@ -20,7 +20,7 @@ on:
         required: true
         type: string
       package_suffix:
-        description: The suffix to be added to package name (asan, static or rpath).
+        description: The suffix to be added to package name (asan, tsan, static or rpath).
         required: false
         type: string
       release_type:
@@ -48,7 +48,7 @@ on:
           - deb
         default: "rpm"
       package_suffix:
-        description: The suffix to be added to package name (asan, static or rpath).
+        description: The suffix to be added to package name (asan, tsan, static or rpath).
         type: string
         required: false
       release_type:
