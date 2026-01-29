@@ -4,7 +4,9 @@ This document provides instructions for installing ROCm artifacts from TheRock b
 
 ## Command Options
 
-The script supports the following command-line options, organized by category:
+The
+[`build_tools/install_rocm_from_artifacts.py`](/build_tools/install_rocm_from_artifacts.py)
+script supports the following command-line options, organized by category:
 
 ### Source Options
 
@@ -66,7 +68,12 @@ Select your AMD GPU family from [therock_amdgpu_targets.cmake](https://github.co
 
 ### Finding GitHub Run IDs
 
-To use the `--run-id` option, you need to find the GitHub Actions workflow run ID:
+The `--run-id` option fetches artifacts from a GitHub Actions CI workflow run
+with the chosen ID.
+
+#### Finding GitHub Run IDs Manually
+
+To find a workflow run ID manually using the GitHub UI:
 
 1. Navigate to the [TheRock Actions page](https://github.com/ROCm/TheRock/actions)
 1. Click on the "CI" workflow
@@ -75,6 +82,49 @@ To use the `--run-id` option, you need to find the GitHub Actions workflow run I
 1. The run ID is the number in the URL: `https://github.com/ROCm/TheRock/actions/runs/[RUN_ID]`
 
 For example, if the URL is `https://github.com/ROCm/TheRock/actions/runs/15575624591`, then the run ID is `15575624591`.
+
+#### Finding GitHub Run IDs Programmatically
+
+> [!TIP]
+> These scripts use the GitHub API which rate limits unauthenticated requests.
+>
+> Installing the [`gh` CLI](https://cli.github.com/) and authenticating with
+> [`gh auth login`](https://cli.github.com/manual/gh_auth_login) is recommended.
+
+If you have a commit SHA and want to find the corresponding run ID, use
+`find_artifacts_for_commit.py`:
+
+```bash
+# Find the workflow run ID and artifact URLs for a specific commit
+python build_tools/find_artifacts_for_commit.py \
+    --commit 77f0cb2112d1d0aaae0de6088a6e4337f2488233 \
+    --artifact-group gfx110X-all
+```
+
+This queries the GitHub API for workflow runs on that commit and prints the
+artifact location info including the run ID.
+
+To find the most recent commit on a branch that has artifacts available:
+
+```bash
+# Find the latest commit ROCm/TheRock's "main" branch with artifacts
+python build_tools/find_latest_artifacts.py \
+    --artifact-group gfx110X-all
+```
+
+For rocm-libraries or other repositories, specify `--repo` and `--workflow`:
+
+```bash
+python build_tools/find_artifacts_for_commit.py \
+    --commit ab692342ac4d00268ac8a5a4efbc144c194cb45a \
+    --repo ROCm/rocm-libraries \
+    --workflow therock-ci.yml \
+    --artifact-group gfx94X-dcgpu
+```
+
+<!-- TODO: Add --commit option to install_rocm_from_artifacts.py that uses
+     find_artifacts_for_commit internally, so users don't need to run two
+     commands. -->
 
 ### Finding Release Versions
 
