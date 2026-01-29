@@ -363,12 +363,29 @@ def _detect_external_repo_projects(
     """
     from detect_external_repo_config import get_skip_patterns, get_test_list
 
+    # Check if specific projects were requested
+    specific_projects = []
+    if projects_input and projects_input.strip().lower() not in ["all", ""]:
+        # Parse comma-separated project list (e.g., "projects/rocprim,projects/rocrand")
+        # Strip "projects/" prefix to get just the project names
+        specific_projects = [
+            p.strip().replace("projects/", "")
+            for p in projects_input.split(",")
+            if p.strip()
+        ]
+        if specific_projects:
+            print(f"Specific projects requested: {specific_projects}")
+
     # For scheduled builds or explicit "all" request, always build
     if github_event_name == "schedule":
         print("Schedule event detected - building all")
         should_build = True
-    elif projects_input and projects_input.strip().lower() in ["all", ""]:
+    elif projects_input and projects_input.strip().lower() == "all":
         print("Projects override: building all")
+        should_build = True
+    elif specific_projects:
+        # Specific projects requested - skip change detection
+        print(f"Building specific projects: {specific_projects}")
         should_build = True
     else:
         # Get skip patterns from external repo
@@ -412,15 +429,20 @@ def _detect_external_repo_projects(
         should_build = True
 
     if should_build:
-        # Get test list from external repo
-        # NOTE: We do FULL BUILDS (no selective cmake options), but we can
-        # still use their test list for test selection
-        test_list = get_test_list(repo_name)
+        # Determine which tests to run
+        if specific_projects:
+            # Use the specific projects requested
+            test_list = specific_projects
+        else:
+            # Get test list from external repo
+            # NOTE: We do FULL BUILDS (no selective cmake options), but we can
+            # still use their test list for test selection
+            test_list = get_test_list(repo_name)
 
-        # Fallback to "all" if external repo doesn't provide test list
-        if not test_list:
-            print("Using default test list: ['all']")
-            test_list = ["all"]
+            # Fallback to "all" if external repo doesn't provide test list
+            if not test_list:
+                print("Using default test list: ['all']")
+                test_list = ["all"]
 
         test_config = {"project_to_test": test_list}
         return {
