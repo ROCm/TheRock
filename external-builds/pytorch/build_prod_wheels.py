@@ -418,11 +418,13 @@ def do_build(args: argparse.Namespace):
             sccache_setup_attempted = True  # Mark before wrapping starts
             setup_rocm_sccache(rocm_dir, sccache_path)
 
-            # Set CMAKE launchers for C/C++ compilers only
-            # Note: CMAKE_HIP_COMPILER_LAUNCHER is not supported by sccache
-            # (returns "Compiler not supported" error)
+            # Set CMAKE launchers for compilers
             env["CMAKE_C_COMPILER_LAUNCHER"] = str(sccache_path)
             env["CMAKE_CXX_COMPILER_LAUNCHER"] = str(sccache_path)
+            # On Windows, CMAKE_HIP_COMPILER_LAUNCHER helps CMake's HIP compiler
+            # detection pass. On Linux, it causes "Compiler not supported" error.
+            if is_windows:
+                env["CMAKE_HIP_COMPILER_LAUNCHER"] = str(sccache_path)
 
             # Start sccache server to warm it up
             try:
