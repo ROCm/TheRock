@@ -240,6 +240,8 @@ option(THEROCK_ENABLE_HOST_MATH "Build all bundled host math libraries by defaul
 option(THEROCK_RESET_FEATURES "One-shot flag which forces all feature flags to their default state for this configuration run" OFF)
 # TODO(iree-org/fusilli/issues/57): Enable fusilli build once multi-arch support lands.
 option(THEROCK_ENABLE_IREE_LIBS "Enable building of IREE libraries" OFF)
+# Remote HIP worker service (for serving remote HIP clients from macOS, etc.)
+option(THEROCK_ENABLE_REMOTE_HIP_WORKER "Enable building the remote HIP worker service" OFF)
 
 ################################################################################
 # Artifact-based features are auto-generated from BUILD_TOPOLOGY.toml
@@ -395,6 +397,28 @@ if(THEROCK_BUNDLE_SYSDEPS)
     set(THEROCK_BUNDLED_MPFR, therock-mpfr)
     set(THEROCK_BUNDLED_NCURSES, therock-ncurses)
     set(THEROCK_BUNDLED_NUMACTL therock-numactl)
+    set(THEROCK_BUNDLED_SQLITE3 therock-sqlite3)
+    set(THEROCK_BUNDLED_ZLIB therock-zlib)
+    set(THEROCK_BUNDLED_ZSTD therock-zstd)
+  elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    # macOS uses install_name_tool (from Xcode) instead of patchelf
+    find_program(INSTALL_NAME_TOOL install_name_tool)
+    if(NOT INSTALL_NAME_TOOL)
+      message(FATAL_ERROR "Building with THEROCK_BUNDLE_SYSDEPS=ON on macOS requires `install_name_tool` (install Xcode Command Line Tools)")
+    endif()
+    find_program(MESON_BUILD meson)
+    if(NOT MESON_BUILD)
+      message(FATAL_ERROR "Building with THEROCK_BUNDLE_SYSDEPS=ON on macOS requires `meson` (easiest: `pip install meson`)")
+    endif()
+    # macOS bundled deps - note: libcap, libdrm, numactl are Linux-specific
+    set(THEROCK_BUNDLED_BZIP2 therock-bzip2)
+    set(THEROCK_BUNDLED_ELFUTILS therock-elfutils)
+    set(THEROCK_BUNDLED_EXPAT, therock-expat)
+    set(THEROCK_BUNDLED_GMP, therock-gmp)
+    set(THEROCK_BUNDLED_LIBBACKTRACE therock-libbacktrace)
+    set(THEROCK_BUNDLED_LIBLZMA therock-liblzma)
+    set(THEROCK_BUNDLED_MPFR, therock-mpfr)
+    set(THEROCK_BUNDLED_NCURSES, therock-ncurses)
     set(THEROCK_BUNDLED_SQLITE3 therock-sqlite3)
     set(THEROCK_BUNDLED_ZLIB therock-zlib)
     set(THEROCK_BUNDLED_ZSTD therock-zstd)
