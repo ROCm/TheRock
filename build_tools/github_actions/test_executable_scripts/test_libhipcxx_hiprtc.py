@@ -4,6 +4,7 @@ import os
 import shlex
 import subprocess
 from pathlib import Path
+import platform
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 OUTPUT_ARTIFACTS_DIR = os.getenv("OUTPUT_ARTIFACTS_DIR")
@@ -72,12 +73,22 @@ except FileNotFoundError as e:
     logging.error(f"Error: Directory '{LIBHIPCXX_BUILD_DIR}' does not exist.")
     raise
 
+if platform.system() == "Windows":
+    HIPCC_BINARY_NAME = "hipcc.exe"
+elif platform.system() == "Linux":
+    HIPCC_BINARY_NAME = "hipcc"
+else:
+    print("Incompatible platform!")
+
+HIP_COMPILER_ROCM_ROOT = OUTPUT_ARTIFACTS_PATH
 
 cmd = [
     "cmake",
     f"-DCMAKE_PREFIX_PATH={OUTPUT_ARTIFACTS_PATH}",
-    f"-DCMAKE_CXX_COMPILER={THEROCK_BIN_PATH}/hipcc",
-    f"-DHIP_HIPCC_EXECUTABLE={THEROCK_BIN_PATH}/hipcc",
+    f"-DHIP_HIPCC_EXECUTABLE={THEROCK_BIN_PATH / HIPCC_BINARY_NAME}",
+    f"-DCMAKE_CXX_COMPILER={THEROCK_BIN_PATH / HIPCC_BINARY_NAME}",
+    f"-DCMAKE_HIP_COMPILER={THEROCK_BIN_PATH / HIPCC_BINARY_NAME}",
+    f"-DCMAKE_HIP_COMPILER_ROCM_ROOT={HIP_COMPILER_ROCM_ROOT}",
     "-DLIBHIPCXX_TEST_WITH_HIPRTC=ON",
     "-GNinja",
     "..",
@@ -90,6 +101,8 @@ subprocess.run(cmd, check=True, env=environ_vars)
 cmd = [
     "bash",
     "../ci/hiprtc_libhipcxx.sh",
+    "-cmake-options",
+    f"-DHIP_HIPCC_EXECUTABLE={THEROCK_BIN_PATH / HIPCC_BINARY_NAME} -DCMAKE_HIP_COMPILER_ROCM_ROOT={HIP_COMPILER_ROCM_ROOT}",
 ]
 logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
 
