@@ -25,9 +25,9 @@ cmd = [
 environ_vars = os.environ.copy()
 test_type = os.getenv("TEST_TYPE", "full")
 
-if test_type == "smoke":
-    # Exclude tests that start with "Full" during smoke tests
-    # environ_vars["GTEST_FILTER"] = "-Full*"
+# if test_type == "smoke":
+#    # Exclude tests that start with "Full" during smoke tests
+#    environ_vars["GTEST_FILTER"] = "-Full*"
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 
