@@ -341,7 +341,7 @@ def regenerate_deb_metadata_from_s3(
         s3: boto3 S3 client
         bucket: S3 bucket name
         prefix: S3 prefix (e.g., 'deb/20251222-12345')
-        uploaded_packages: List of actually uploaded .deb file paths
+        uploaded_packages: List of local paths of ,deb packages that were successfully uploaded to s3
         job_type: Job type for Release file metadata (default: 'nightly')
     """
     import tempfile
