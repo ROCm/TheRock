@@ -34,7 +34,10 @@ extern "C" {
 #endif
 
 /* ============================================================================
- * Error Codes (matching hipError_t values)
+ * Error Codes (matching hipError_t values from hip_runtime_api.h)
+ *
+ * These definitions match the HIP runtime exactly. The error string functions
+ * (hipGetErrorName, hipGetErrorString) are ported from hip_error.cpp.
  * ============================================================================ */
 
 typedef int hipError_t;
@@ -82,6 +85,7 @@ typedef int hipError_t;
 #define hipErrorSharedObjectSymbolNotFound 302
 #define hipErrorSharedObjectInitFailed  303
 #define hipErrorOperatingSystem         304
+#define hipErrorInvalidHandle           400
 #define hipErrorInvalidResourceHandle   400
 #define hipErrorIllegalState            401
 #define hipErrorNotFound                500
@@ -131,9 +135,6 @@ typedef enum {
  * ============================================================================ */
 
 typedef void* hipStream_t;
-
-/* Additional error codes */
-#define hipErrorInvalidHandle           400
 
 /* ============================================================================
  * Client State
