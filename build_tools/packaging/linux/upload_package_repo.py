@@ -369,7 +369,9 @@ def regenerate_deb_metadata_from_s3(
             with open(existing_packages, "r") as f:
                 content = f.read()
                 pkg_count = content.count("\nPackage: ")
-            print(f"✅ Downloaded existing Packages file containing ({pkg_count} packages)")
+            print(
+                f"✅ Downloaded existing Packages file containing ({pkg_count} packages)"
+            )
         except Exception as e:
             print(f"⚠️  No existing Packages file found (new repo?): {e}")
             existing_packages = None
