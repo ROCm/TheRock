@@ -47,7 +47,7 @@ class PackageInstaller:
         self.rpm_package_prefix = rpm_package_prefix
         self.docker_image = docker_image
         self.uninstall = uninstall
-        self.skip_package = [pkg.strip() for pkg in skip_package]
+        self.skip_package = skip_package
 
         # Validate inputs
         if self.package_type not in ["deb", "rpm"]:
