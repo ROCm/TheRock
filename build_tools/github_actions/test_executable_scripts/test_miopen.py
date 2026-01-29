@@ -53,7 +53,10 @@ def get_available_gpu_exclusion_tests():
     """
     try:
         result = subprocess.run(
-            ["ctest", "-N"], capture_output=True, text=True, check=True
+            ["ctest", "-N", "--test-dir", f"{THEROCK_BIN_DIR}/MIOpen"],
+            capture_output=True,
+            text=True,
+            check=True,
         )
 
         gpu_archs = set()
