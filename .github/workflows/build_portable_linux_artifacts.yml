@@ -107,6 +107,13 @@ jobs:
         run: |
           python -m pytest build_tools/tests build_tools/github_actions/tests
 
+      - name: Submodule cleanup
+        run: |
+          git submodule foreach --recursive '
+            git reset --hard
+            git clean -fd
+          '
+
       - name: Fetch sources
         timeout-minutes: 30
         run: |
