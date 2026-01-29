@@ -444,7 +444,8 @@ def _detect_external_repo_projects(
                 print("Using default test list: ['all']")
                 test_list = ["all"]
 
-        test_config = {"project_to_test": test_list}
+        # Convert test list to comma-separated string (consumed by fetch_test_configurations.py)
+        test_config = {"project_to_test": ",".join(test_list)}
         return {
             "linux_projects": [test_config],
             "windows_projects": [test_config],
