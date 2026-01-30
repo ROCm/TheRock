@@ -291,13 +291,62 @@ macro(add_python_variant minor_version configure_flags libpython_dir)
 
   list(APPEND ALL_ROCGDB_TARGETS ${ROCGDB_TARGET_NAME})
 
+  # We only want to install a subset of the files, so we list them here,
+  # relative to their intermediate install prefixes.
+  # For instance, we don't want to include any binutils files other than
+  # roccoremerge.
+
+  # Misc directories.
+  set(ROCGDB_MISC_DIRS_TO_INSTALL
+    "include"
+    "share/doc"
+    "share/man/man5"
+    "share/rocgdb"
+  )
+
+  # Executable files.
+  set(ROCGDB_EXEC_FILES_TO_INSTALL
+    "bin/roccoremerge"
+    "bin/rocgcore-py${minor_version}"
+    "bin/rocgdb-py${minor_version}"
+  )
+
+  # Misc files.
+  set(ROCGDB_MISC_FILES_TO_INSTALL
+    "share/info/rocgdb/annotate.info"
+    "share/info/rocgdb/gdb.info"
+    "share/man/man1/roccoremerge.1"
+    "share/man/man1/rocgdb.1"
+    "share/man/man1/rocgcore.1"
+    "share/man/man1/rocgdb-add-index.1"
+  )
+
   # Register the final installation step for this variant's files.
   # This basically moves the variant files from the intermediate install
   # prefix to the final installation location.
-  install(DIRECTORY ${ROCGDB_INTERMEDIATE_INSTALL_DIR}/
-          DESTINATION "."
-          USE_SOURCE_PERMISSIONS
-          COMPONENT rocgdb)
+  foreach(rocgdb_dir ${ROCGDB_MISC_DIRS_TO_INSTALL})
+    # The last "/" is important, as we want to copy the contents from the
+    # listed directory into another directory, and not the directory itself.
+    install(DIRECTORY ${ROCGDB_INTERMEDIATE_INSTALL_DIR}/${rocgdb_dir}/
+            DESTINATION "${rocgdb_dir}"
+            USE_SOURCE_PERMISSIONS
+            COMPONENT rocgdb)
+  endforeach()
+
+  foreach(rocgdb_file ${ROCGDB_EXEC_FILES_TO_INSTALL})
+    install(PROGRAMS ${ROCGDB_INTERMEDIATE_INSTALL_DIR}/${rocgdb_file}
+            DESTINATION bin
+            COMPONENT rocgdb)
+  endforeach()
+
+  foreach(rocgdb_file ${ROCGDB_MISC_FILES_TO_INSTALL})
+    # Get the directory part of the file.
+    get_filename_component(file_dir ${rocgdb_file} DIRECTORY)
+
+    install(FILES ${ROCGDB_INTERMEDIATE_INSTALL_DIR}/${rocgdb_file}
+      DESTINATION ${file_dir}
+      COMPONENT rocgdb)
+  endforeach()
 
   # Register RPATH patching for this rocgdb variant.
   message(STATUS "Registering fixup of ${CMAKE_INSTALL_PREFIX}/bin/rocgdb-py${minor_version}")
@@ -454,19 +503,7 @@ endif()
 # List of all the files in bin we need to patch in RUNPATH's.
 # This excludes rocgdb executables as we patch those separately.
 set(ROCGDB_EXECS_TO_PATCH
-  "bin/rocaddr2line"
-  "bin/rocar"
-  "bin/rocc++filt"
   "bin/roccoremerge"
-  "bin/rocelfedit"
-  "bin/rocnm"
-  "bin/rocobjcopy"
-  "bin/rocobjdump"
-  "bin/rocranlib"
-  "bin/rocreadelf"
-  "bin/rocsize"
-  "bin/rocstrings"
-  "bin/rocstrip"
 )
 
 foreach(rocgdb_exec_filename ${ROCGDB_EXECS_TO_PATCH})
@@ -496,7 +533,6 @@ if(BUILD_TESTING)
     "include/gdb/jit-reader.h"
     "share/info/rocgdb/gdb.info"
     "share/info/rocgdb/annotate.info"
-    "share/info/rocgdb/dir"
     "share/rocgdb/python/gdb/ptwrite.py"
     "share/rocgdb/python/gdb/__init__.py"
     "share/rocgdb/python/gdb/missing_objfile.py"
@@ -574,33 +610,9 @@ if(BUILD_TESTING)
     "share/rocgdb/system-gdbinit/wrs-linux.py"
     "share/man/man5/rocgdbinit.5"
     "share/man/man1/rocgdb-add-index.1"
-    "share/man/man1/rocdlltool.1"
-    "share/man/man1/rocsize.1"
-    "share/man/man1/rocobjdump.1"
-    "share/man/man1/rocstrings.1"
-    "share/man/man1/rocc++filt.1"
     "share/man/man1/rocgcore.1"
     "share/man/man1/rocgdb.1"
-    "share/man/man1/rocar.1"
-    "share/man/man1/rocnm.1"
-    "share/man/man1/rocelfedit.1"
-    "share/man/man1/rocwindmc.1"
-    "share/man/man1/rocgstack.1"
     "share/man/man1/roccoremerge.1"
-    "share/man/man1/rocobjcopy.1"
-    "share/man/man1/rocreadelf.1"
-    "share/man/man1/rocstrip.1"
-    "share/man/man1/rocaddr2line.1"
-    "share/man/man1/rocranlib.1"
-    "share/man/man1/rocwindres.1"
-    "share/man/man1/rocgdbserver.1"
-    "x86_64-pc-linux-gnu/bin/ar"
-    "x86_64-pc-linux-gnu/bin/nm"
-    "x86_64-pc-linux-gnu/bin/objcopy"
-    "x86_64-pc-linux-gnu/bin/objdump"
-    "x86_64-pc-linux-gnu/bin/ranlib"
-    "x86_64-pc-linux-gnu/bin/readelf"
-    "x86_64-pc-linux-gnu/bin/strip"
   )
 
   list(APPEND ROCGDB_BUILD_INTEGRITY_FILES ${ROCGDB_EXPECTED_FILES})
