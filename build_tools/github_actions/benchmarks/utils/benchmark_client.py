@@ -161,15 +161,17 @@ class BenchmarkClient:
         # Use SystemDetector for printing
         self.system_detector.print_system_summary(self.system_context)
 
-    def compare_results(self, test_name: str, table: PrettyTable) -> PrettyTable:
+    def compare_results(
+        self, test_name: str, test_results: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
         """Compare test results against Last Known Good (LKG) scores from API.
 
         Args:
             test_name: Test identifier for LKG lookup
-            table: PrettyTable with test results
+            test_results: List of test result dictionaries
 
         Returns:
-            PrettyTable: Table enriched with LKG comparison columns
+            List[Dict[str, Any]]: Test results with LKG comparison data
         """
         # Get API configuration
         api_config = ConfigHelper.get_api_config(self.config)
@@ -179,5 +181,5 @@ class BenchmarkClient:
             test_name, api_config, self.system_detector.rocm_info
         )
 
-        # Compute final results data using ResultsHandler
-        return ResultsHandler.get_final_result_table(table=table, lkg_scores=lkg_scores)
+        # Compare test results with LKG baseline
+        return ResultsHandler.compare_results_with_lkg(test_results, lkg_scores)
