@@ -52,7 +52,7 @@ def run_tests(build_dir: Path):
             environ_vars["PATH"] = rocm_lib
     else:
         rocm_lib = str(artifacts_path / "lib")
-        
+
         # Linux uses LD_LIBRARY_PATH
         path_sep = ":"
         if "LD_LIBRARY_PATH" in environ_vars:
