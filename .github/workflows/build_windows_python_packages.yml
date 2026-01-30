@@ -88,9 +88,9 @@ jobs:
         id: upload
         run: |
           python build_tools/github_actions/upload_python_packages.py \
-            --packages-dir=${{ env.PACKAGES_DIR }} \
-            --artifact-group "${{ inputs.artifact_group }}" \
-            --run-id ${{ github.run_id }}
+            --packages-dir="${{ env.PACKAGES_DIR }}" \
+            --artifact-group="${{ inputs.artifact_group }}" \
+            --run-id="${{ github.run_id }}"
 
   generate_target_to_run:
     name: Generate target_to_run
