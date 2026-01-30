@@ -1,0 +1,5 @@
+# rocjpeg
+[components.dbg."media-libs/rocjpeg/stage"]
+[components.dev."media-libs/rocjpeg/stage"]
+[components.lib."media-libs/rocjpeg/stage"]
+[components.test."media-libs/rocjpeg/stage"]

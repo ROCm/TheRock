@@ -41,6 +41,8 @@ set -o xtrace
 time cmake -GNinja -S /therock/src -B "$OUTPUT_DIR/build" \
   -DTHEROCK_BUNDLE_SYSDEPS=ON \
   -DTHEROCK_ENABLE_SYSDEPS_AMD_MESA=ON \
+  -DTHEROCK_ENABLE_ROCDECODE=ON \
+  -DTHEROCK_ENABLE_ROCJPEG=ON \
   ${PYTHON_EXECUTABLES_ARG} \
   "$@"
 time cmake --build "$OUTPUT_DIR/build" --target therock-archives therock-dist

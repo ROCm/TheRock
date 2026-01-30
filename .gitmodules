@@ -68,3 +68,11 @@
 	path = math-libs/libhipcxx
 	url = https://github.com/ROCm/libhipcxx.git
 	branch = amd-develop
+[submodule "rocdecode"]
+	path = media-libs/rocdecode
+	url = https://github.com/ROCm/rocDecode.git
+	branch = therock
+[submodule "rocjpeg"]
+	path = media-libs/rocjpeg
+	url = https://github.com/ROCm/rocjpeg.git
+	branch = therock
