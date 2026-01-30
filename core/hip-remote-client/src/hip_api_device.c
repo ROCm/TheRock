@@ -266,10 +266,16 @@ hipError_t hipPeekAtLastError(void) {
 }
 
 /*
- * Error string implementations ported from:
- * rocm-systems/projects/clr/hipamd/src/hip_error.cpp
+ * Error string implementations.
  *
- * These provide complete coverage of all HIP error codes.
+ * These provide the same functionality as the HIP runtime functions in
+ * rocm-systems/projects/clr/hipamd/src/hip_error.cpp.
+ *
+ * We implement these locally because:
+ * 1. The remote client runs on macOS where HIP libraries are not available
+ * 2. The client needs to translate error codes returned from the worker
+ *
+ * Error codes match hip_runtime_api.h. Last synced: HIP 6.3 (ROCm 6.3)
  */
 const char* hipGetErrorName(hipError_t error) {
     switch (error) {
@@ -346,6 +352,8 @@ const char* hipGetErrorName(hipError_t error) {
         case hipErrorCapturedEvent: return "hipErrorCapturedEvent";
         case hipErrorStreamCaptureWrongThread: return "hipErrorStreamCaptureWrongThread";
         case hipErrorGraphExecUpdateFailure: return "hipErrorGraphExecUpdateFailure";
+        case hipErrorInvalidChannelDescriptor: return "hipErrorInvalidChannelDescriptor";
+        case hipErrorInvalidTexture: return "hipErrorInvalidTexture";
         case hipErrorTbd: return "hipErrorTbd";
         default: return "hipErrorUnknown";
     }
@@ -423,6 +431,8 @@ const char* hipGetErrorString(hipError_t error) {
         case hipErrorCapturedEvent: return "operation not permitted on an event last recorded in a capturing stream";
         case hipErrorStreamCaptureWrongThread: return "attempt to terminate a thread-local capture sequence from another thread";
         case hipErrorGraphExecUpdateFailure: return "the graph update was not performed because it included changes which violated constraints specific to instantiated graph update";
+        case hipErrorInvalidChannelDescriptor: return "invalid channel descriptor";
+        case hipErrorInvalidTexture: return "invalid texture";
         case hipErrorRuntimeMemory: return "runtime memory call returned error";
         case hipErrorRuntimeOther: return "runtime call other than memory returned error";
         case hipErrorUnknown:

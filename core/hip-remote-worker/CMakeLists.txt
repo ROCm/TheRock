@@ -68,12 +68,34 @@ add_executable(hip-worker
 
 target_include_directories(hip-worker PRIVATE
   ${HIP_REMOTE_INCLUDE_DIR}
+  ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
 target_link_libraries(hip-worker PRIVATE
   hip::host
   pthread
 )
+
+################################################################################
+# AMD SMI Integration (optional)
+################################################################################
+
+find_package(amd_smi QUIET)
+
+if(amd_smi_FOUND)
+  message(STATUS "hip-remote-worker: AMD SMI found, enabling SMI support")
+  target_sources(hip-worker PRIVATE
+    src/smi_worker_handlers.c
+  )
+  target_link_libraries(hip-worker PRIVATE
+    amd_smi
+  )
+  target_compile_definitions(hip-worker PRIVATE
+    HIP_WORKER_SMI_ENABLED=1
+  )
+else()
+  message(STATUS "hip-remote-worker: AMD SMI not found, SMI support disabled")
+endif()
 
 set_target_properties(hip-worker PROPERTIES
   C_STANDARD 11

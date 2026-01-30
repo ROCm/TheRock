@@ -43,6 +43,11 @@
 /* Include protocol from client */
 #include "hip_remote/hip_remote_protocol.h"
 
+/* SMI handlers (conditionally compiled) */
+#ifdef HIP_WORKER_SMI_ENABLED
+#include "smi_worker_handlers.h"
+#endif
+
 /* ============================================================================
  * Configuration
  * ============================================================================ */
@@ -829,6 +834,14 @@ static void handle_client(int client_fd) {
                 break;
 
             default:
+#ifdef HIP_WORKER_SMI_ENABLED
+                /* Check if this is an SMI operation (0x08xx range) */
+                if ((header.op_code & 0xFF00) == 0x0800) {
+                    smi_worker_dispatch(client_fd, header.op_code, header.request_id,
+                                       payload, header.payload_length);
+                    break;
+                }
+#endif
                 LOG_ERROR("Unknown opcode: 0x%04x", header.op_code);
                 send_simple_response(client_fd, (HipRemoteOpCode)header.op_code,
                                      header.request_id, hipErrorNotSupported);
@@ -928,6 +941,15 @@ int main(int argc, char** argv) {
         LOG_INFO("  Compute: %d.%d", props.major, props.minor);
     }
 
+#ifdef HIP_WORKER_SMI_ENABLED
+    /* Initialize AMD SMI */
+    if (smi_worker_init() == 0) {
+        LOG_INFO("AMD SMI: %u GPU(s) available", smi_worker_get_processor_count());
+    } else {
+        LOG_INFO("AMD SMI: Not available (continuing without SMI support)");
+    }
+#endif
+
     /* Create server socket */
     g_server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (g_server_fd < 0) {
@@ -984,6 +1006,10 @@ int main(int argc, char** argv) {
     if (g_server_fd >= 0) {
         close(g_server_fd);
     }
+
+#ifdef HIP_WORKER_SMI_ENABLED
+    smi_worker_shutdown();
+#endif
 
     LOG_INFO("Shutting down");
     return 0;
