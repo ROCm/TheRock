@@ -130,7 +130,7 @@ jobs:
             python ./build_tools/packaging/linux/install_test_native_package.py \
               --package-type rpm \
               --package-folder ${{ env.PACKAGE_DIST_DIR }} \
-              --docker-image ${{ env.BUILD_IMAGE }}
+              --docker-image ${{ env.BUILD_IMAGE }} \
               --skip-package amdrocm-rdc
           fi
 
