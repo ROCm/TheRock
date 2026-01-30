@@ -122,12 +122,12 @@ jobs:
           echo "Testing ${{ inputs.native_package_type }} package installation"
           if [ "${{ inputs.native_package_type }}" = "deb" ]; then
             echo "Installing DEB packages on host system for testing"
-            python ./build_tools/packaging/linux/install_test_native_package.py \
+            python ./build_tools/packaging/linux/package_sanity_check.py  \
               --package-type deb \
               --package-folder ${{ env.PACKAGE_DIST_DIR }}
           else
             echo "Installing RPM packages in Docker container for testing"
-            python ./build_tools/packaging/linux/install_test_native_package.py \
+            python ./build_tools/packaging/linux/package_sanity_check.py \
               --package-type rpm \
               --package-folder ${{ env.PACKAGE_DIST_DIR }} \
               --docker-image ${{ env.BUILD_IMAGE }} \
@@ -138,7 +138,7 @@ jobs:
         if: inputs.native_package_type == 'deb'
         run: |
           echo "Uninstalling DEB packages after testing"
-          python ./build_tools/packaging/linux/install_test_native_package.py \
+          python ./build_tools/packaging/linux/package_sanity_check.py \
             --package-type deb \
             --package-folder ${{ env.PACKAGE_DIST_DIR }} \
             --uninstall

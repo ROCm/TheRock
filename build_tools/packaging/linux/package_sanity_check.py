@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: MIT
 
 """
-Script to install and test native packages (DEB/RPM).
+Sanity check script to install and test packages (DEB/RPM).
 
 This script installs packages using apt (for DEB) or dnf (for RPM) and verifies
 that the installation was successful. If all packages are installed (no specific
@@ -19,7 +19,7 @@ from typing import List, Set, Optional
 
 
 class PackageInstaller:
-    """Handles installation and testing of native packages."""
+    """Sanity check for installation and testing of packages."""
 
     def __init__(
         self,
@@ -601,41 +601,41 @@ class PackageInstaller:
 def main():
     """Main entry point for the script."""
     parser = argparse.ArgumentParser(
-        description="Install and test native packages (DEB/RPM)",
+        description="Sanity check for to install packages (DEB/RPM)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   # Install all DEB packages in a folder
-  python install_test_native_package.py --package-type deb --package-folder /path/to/packages
+  python package_sanity_check.py --package-type deb --package-folder /path/to/packages
 
   # Install all RPM packages
-  python install_test_native_package.py --package-type rpm --package-folder /path/to/packages
+  python package_sanity_check.py --package-type rpm --package-folder /path/to/packages
 
   # Install specific DEB packages
-  python install_test_native_package.py --package-type deb --package-folder /path/to/packages \\
+  python package_sanity_check.py --package-type deb --package-folder /path/to/packages \\
       --package-name amdrocm-core amdrocm-hip
 
   # Install DEB packages inside a Docker container
-  python install_test_native_package.py --package-type deb --package-folder /path/to/packages \\
+  python package_sanity_check.py --package-type deb --package-folder /path/to/packages \\
       --docker-image ubuntu:22.04
 
   # Install RPM packages inside a Docker container
-  python install_test_native_package.py --package-type rpm --package-folder /path/to/packages \\
+  python package_sanity_check.py --package-type rpm --package-folder /path/to/packages \\
       --docker-image almalinux:9
 
   # Install RPM packages inside a manylinux Docker container
-  python install_test_native_package.py --package-type rpm --package-folder /path/to/packages \\
+  python package_sanity_check.py --package-type rpm --package-folder /path/to/packages \\
       --docker-image ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:6e8242d347af7e0c43c82d5031a3ac67b669f24898ea8dc2f
 
   # Uninstall all DEB packages in a folder
-  python install_test_native_package.py --package-type deb --package-folder /path/to/packages --uninstall
+  python package_sanity_check.py --package-type deb --package-folder /path/to/packages --uninstall
 
   # Uninstall specific packages
-  python install_test_native_package.py --package-type rpm --package-folder /path/to/packages \\
+  python package_sanity_check.py --package-type rpm --package-folder /path/to/packages \\
       --uninstall amdrocm-core amdrocm-hip
 
   # Install RPM package with prefix (placeholder - not yet implemented)
-  python install_test_native_package.py --package-type rpm --package-folder /path/to/packages \\
+  python package_sanity_check.py --package-type rpm --package-folder /path/to/packages \\
       --rpm-package-prefix /opt/rocm
         """,
     )
