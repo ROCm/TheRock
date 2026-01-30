@@ -156,6 +156,18 @@ typedef enum {
     HIP_OP_RUNTIME_GET_VERSION      = 0x0700,
     HIP_OP_DRIVER_GET_VERSION       = 0x0701,
 
+    /* AMD SMI operations (0x08xx) */
+    SMI_OP_INIT                     = 0x0800,
+    SMI_OP_SHUTDOWN                 = 0x0801,
+    SMI_OP_GET_PROCESSOR_COUNT      = 0x0802,
+    SMI_OP_GET_GPU_METRICS          = 0x0820,
+    SMI_OP_GET_POWER_INFO           = 0x0821,
+    SMI_OP_GET_CLOCK_INFO           = 0x0822,
+    SMI_OP_GET_TEMP_METRIC          = 0x0823,
+    SMI_OP_GET_GPU_ACTIVITY         = 0x0824,
+    SMI_OP_GET_VRAM_USAGE           = 0x0825,
+    SMI_OP_GET_ASIC_INFO            = 0x0830,
+
 } HipRemoteOpCode;
 
 /* ============================================================================
@@ -467,6 +479,114 @@ typedef struct __attribute__((packed)) {
 } HipRemoteVersionResponse;
 
 /* ============================================================================
+ * AMD SMI Operations
+ * ============================================================================ */
+
+/* SMI_OP_INIT request */
+typedef struct __attribute__((packed)) {
+    uint64_t init_flags;          /**< amdsmi_init_flags_t */
+} SmiRemoteInitRequest;
+
+/* SMI_OP_GET_PROCESSOR_COUNT response */
+typedef struct __attribute__((packed)) {
+    HipRemoteResponseHeader header;
+    uint32_t processor_count;
+} SmiRemoteProcessorCountResponse;
+
+/* Request with processor index (used by most SMI queries) */
+typedef struct __attribute__((packed)) {
+    uint32_t processor_index;     /**< Maps to remote amdsmi_processor_handle */
+} SmiRemoteProcessorRequest;
+
+/* SMI_OP_GET_GPU_METRICS response - summary of key metrics */
+typedef struct __attribute__((packed)) {
+    HipRemoteResponseHeader header;
+    int32_t temperature_edge;     /**< Edge temperature (C) */
+    int32_t temperature_hotspot;  /**< Hotspot/junction temperature (C) */
+    int32_t temperature_mem;      /**< Memory temperature (C) */
+    uint32_t average_socket_power;/**< Average socket power (W) */
+    uint32_t gfx_activity;        /**< GFX engine activity (%) */
+    uint32_t umc_activity;        /**< Memory controller activity (%) */
+    uint32_t mm_activity;         /**< Multimedia engine activity (%) */
+    uint32_t current_gfxclk;      /**< Current GFX clock (MHz) */
+    uint32_t current_uclk;        /**< Current memory clock (MHz) */
+    uint32_t current_socclk;      /**< Current SOC clock (MHz) */
+    uint64_t vram_total;          /**< Total VRAM (bytes) */
+    uint64_t vram_used;           /**< Used VRAM (bytes) */
+    uint32_t fan_speed_rpm;       /**< Fan speed (RPM) */
+    uint32_t pcie_bandwidth;      /**< PCIe bandwidth (MB/s) */
+    uint32_t throttle_status;     /**< Throttle status flags */
+    uint32_t reserved;            /**< Padding for alignment */
+} SmiRemoteGpuMetricsResponse;
+
+/* SMI_OP_GET_POWER_INFO response */
+typedef struct __attribute__((packed)) {
+    HipRemoteResponseHeader header;
+    uint32_t current_socket_power;/**< Current socket power (W) */
+    uint32_t average_socket_power;/**< Average socket power (W) */
+    uint32_t gfx_voltage;         /**< GFX voltage (mV) */
+    uint32_t soc_voltage;         /**< SOC voltage (mV) */
+    uint32_t mem_voltage;         /**< Memory voltage (mV) */
+    uint32_t power_limit;         /**< Power limit/cap (W) */
+} SmiRemotePowerInfoResponse;
+
+/* SMI_OP_GET_CLOCK_INFO request */
+typedef struct __attribute__((packed)) {
+    uint32_t processor_index;
+    uint32_t clock_type;          /**< amdsmi_clk_type_t */
+} SmiRemoteClockInfoRequest;
+
+/* SMI_OP_GET_CLOCK_INFO response */
+typedef struct __attribute__((packed)) {
+    HipRemoteResponseHeader header;
+    uint32_t current_clk;         /**< Current clock (MHz) */
+    uint32_t min_clk;             /**< Minimum clock (MHz) */
+    uint32_t max_clk;             /**< Maximum clock (MHz) */
+    uint8_t clk_locked;           /**< Clock locked flag */
+    uint8_t clk_deep_sleep;       /**< Deep sleep flag */
+    uint16_t reserved;            /**< Padding */
+} SmiRemoteClockInfoResponse;
+
+/* SMI_OP_GET_TEMP_METRIC request */
+typedef struct __attribute__((packed)) {
+    uint32_t processor_index;
+    uint32_t sensor_type;         /**< amdsmi_temperature_type_t */
+} SmiRemoteTempMetricRequest;
+
+/* SMI_OP_GET_TEMP_METRIC response */
+typedef struct __attribute__((packed)) {
+    HipRemoteResponseHeader header;
+    int32_t temperature;          /**< Temperature (milli-Celsius) */
+} SmiRemoteTempMetricResponse;
+
+/* SMI_OP_GET_GPU_ACTIVITY response */
+typedef struct __attribute__((packed)) {
+    HipRemoteResponseHeader header;
+    uint32_t gfx_activity;        /**< GFX activity (%) */
+    uint32_t umc_activity;        /**< Memory controller activity (%) */
+    uint32_t mm_activity;         /**< Multimedia activity (%) */
+    uint32_t reserved;            /**< Padding */
+} SmiRemoteGpuActivityResponse;
+
+/* SMI_OP_GET_VRAM_USAGE response */
+typedef struct __attribute__((packed)) {
+    HipRemoteResponseHeader header;
+    uint64_t vram_total;          /**< Total VRAM (bytes) */
+    uint64_t vram_used;           /**< Used VRAM (bytes) */
+} SmiRemoteVramUsageResponse;
+
+/* SMI_OP_GET_ASIC_INFO response */
+typedef struct __attribute__((packed)) {
+    HipRemoteResponseHeader header;
+    char market_name[256];        /**< Marketing name (e.g., "AMD Instinct MI300X") */
+    uint32_t vendor_id;           /**< PCI vendor ID */
+    uint32_t device_id;           /**< PCI device ID */
+    uint32_t rev_id;              /**< Revision ID */
+    uint32_t num_compute_units;   /**< Number of compute units */
+    char asic_serial[64];         /**< ASIC serial number */
+} SmiRemoteAsicInfoResponse;
+
+/* ============================================================================
  * Utility Functions
  * ============================================================================ */
 
@@ -582,6 +702,17 @@ static inline const char* hip_remote_op_name(HipRemoteOpCode op_code) {
 
         case HIP_OP_RUNTIME_GET_VERSION: return "hipRuntimeGetVersion";
         case HIP_OP_DRIVER_GET_VERSION: return "hipDriverGetVersion";
+
+        case SMI_OP_INIT: return "amdsmi_init";
+        case SMI_OP_SHUTDOWN: return "amdsmi_shut_down";
+        case SMI_OP_GET_PROCESSOR_COUNT: return "amdsmi_get_processor_count";
+        case SMI_OP_GET_GPU_METRICS: return "amdsmi_get_gpu_metrics";
+        case SMI_OP_GET_POWER_INFO: return "amdsmi_get_power_info";
+        case SMI_OP_GET_CLOCK_INFO: return "amdsmi_get_clock_info";
+        case SMI_OP_GET_TEMP_METRIC: return "amdsmi_get_temp_metric";
+        case SMI_OP_GET_GPU_ACTIVITY: return "amdsmi_get_gpu_activity";
+        case SMI_OP_GET_VRAM_USAGE: return "amdsmi_get_vram_usage";
+        case SMI_OP_GET_ASIC_INFO: return "amdsmi_get_asic_info";
 
         default: return "unknown";
     }
