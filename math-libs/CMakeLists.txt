@@ -327,7 +327,7 @@ if(THEROCK_ENABLE_ROCWMMA)
   )
 endif(THEROCK_ENABLE_ROCWMMA)
 
-if(THEROCK_ENABLE_LIBHIPCXX)
+if(FLASE)
   ##############################################################################
   # libhipcxx
   ##############################################################################
@@ -373,4 +373,4 @@ if(THEROCK_ENABLE_LIBHIPCXX)
     SUBPROJECT_DEPS
       libhipcxx
   )
-endif(THEROCK_ENABLE_LIBHIPCXX)
+endif()
