@@ -56,6 +56,10 @@ on:
         type: string
         description: "Comma-separated list of projects to test (for external repos)"
         default: ""
+      skip_patches:
+        type: string
+        description: "Comma-separated patch filenames to temporarily skip during patch removal coordination with external repos"
+        default: ""
 
 permissions:
   contents: read
@@ -79,6 +83,7 @@ jobs:
       therock_ref: ${{ inputs.therock_ref }}
       repository_override: ${{ inputs.repository_override }}
       extra_cmake_options: ${{ inputs.cmake_options }}
+      skip_patches: ${{ inputs.skip_patches }}
     permissions:
       contents: read
       id-token: write

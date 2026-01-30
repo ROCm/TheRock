@@ -69,6 +69,10 @@ on:
         type: string
         description: "Override github.repository for testing (e.g., 'ROCm/rocm-libraries')"
         default: ""
+      skip_patches:
+        type: string
+        description: "Comma-separated patch filenames to temporarily skip during patch removal coordination with external repos"
+        default: ""
 
 # See the details regarding permissions from the link:
 # https://github.com/aws-actions/configure-aws-credentials?tab=readme-ov-file#oidc
@@ -164,6 +168,8 @@ jobs:
 
       - name: Fetch and prepare all sources
         timeout-minutes: 30
+        env:
+          SKIP_PATCHES: ${{ inputs.skip_patches }}
         run: |
           build_tools/fetch_sources.py --jobs 12 ${{ steps.detect.outputs.fetch_exclusion || '' }}
 

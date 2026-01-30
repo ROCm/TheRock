@@ -68,6 +68,10 @@ on:
         type: string
         description: "Override github.repository for testing (e.g., 'ROCm/rocm-libraries')"
         default: ""
+      skip_patches:
+        type: string
+        description: "Comma-separated patch filenames to temporarily skip during patch removal coordination with external repos"
+        default: ""
 
 permissions:
   contents: read
@@ -193,6 +197,8 @@ jobs:
 
       - name: Fetch and prepare all sources
         timeout-minutes: 30
+        env:
+          SKIP_PATCHES: ${{ inputs.skip_patches }}
         run: |
           python build_tools/fetch_sources.py --jobs 12 ${{ steps.detect.outputs.fetch_exclusion || '' }}
 

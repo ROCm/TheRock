@@ -48,6 +48,10 @@ on:
       windows_use_prebuilt_artifacts:
         type: boolean
         default: false
+      skip_patches:
+        type: string
+        default: ""
+        description: "Comma-separated patch filenames to temporarily skip during patch removal coordination with external repos"
     outputs:
       enable_build_jobs:
         description: Whether to enable build jobs.
@@ -73,6 +77,9 @@ on:
       external_source_path:
         description: Path to external repo checkout (for external repo integration)
         value: ${{ jobs.setup.outputs.external_source_path }}
+      skip_patches:
+        description: Comma-separated patch filenames to skip
+        value: ${{ inputs.skip_patches }}
 
 permissions:
   contents: read

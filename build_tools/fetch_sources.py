@@ -324,6 +324,24 @@ def apply_patches(args, projects, override_submodule=None, override_source_dir=N
             continue
         patch_files = list(patch_project_dir.glob("*.patch"))
         patch_files.sort()
+
+        # Handle skipping specific patches via SKIP_PATCHES environment variable
+        skip_patches_str = os.environ.get("SKIP_PATCHES", "")
+        skip_patches = [p.strip() for p in skip_patches_str.split(",") if p.strip()]
+
+        if skip_patches:
+            filtered_patch_files = []
+            for patch_file in patch_files:
+                if patch_file.name in skip_patches:
+                    log(f"  Skipping patch {patch_file.name} (in SKIP_PATCHES)")
+                else:
+                    filtered_patch_files.append(patch_file)
+            patch_files = filtered_patch_files
+
+        if not patch_files:
+            log(f"No patches to apply (all skipped or none exist)")
+            continue
+
         log(f"Applying {len(patch_files)} patches")
         run_command(
             [
