@@ -218,15 +218,16 @@ pip install rocm[libraries,devel] --pre {LINE_CONTINUATION_CHAR}
 
 
 def run(args: argparse.Namespace):
-    packages_dir = args.packages_dir.resolve()
-    if not packages_dir.is_dir():
-        raise FileNotFoundError(f"Packages root directory not found: {packages_dir}")
+    if not args.packages_dir.is_dir():
+        raise FileNotFoundError(
+            f"Packages root directory not found: {args.packages_dir}"
+        )
 
-    dist_dir = packages_dir / "dist"
+    dist_dir = args.packages_dir / "dist"
     if not dist_dir.is_dir():
         raise FileNotFoundError(f"Packages dist/ subdirectory not found: {dist_dir}")
 
-    log(f"[INFO] Packages directory: {packages_dir}")
+    log(f"[INFO] Packages directory: {args.packages_dir}")
     log(f"[INFO] Dist subdirectory : {dist_dir}")
     log(f"[INFO] Artifact group    : {args.artifact_group}")
     log(f"[INFO] Run ID            : {args.run_id}")
