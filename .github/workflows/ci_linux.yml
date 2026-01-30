@@ -22,6 +22,9 @@ on:
       benchmark_runs_on:
         type: string
         default: ""
+      run_extended_functional_tests:
+        type: boolean
+        default: false
       expect_failure:
         type: boolean
       use_prebuilt_artifacts:
@@ -112,6 +115,34 @@ jobs:
       artifact_group: ${{ inputs.artifact_group }}
       amdgpu_families: ${{ inputs.amdgpu_families }}
       test_runs_on: ${{ inputs.benchmark_runs_on }}
+      artifact_run_id: ${{ inputs.artifact_run_id }}
+
+  run_linux_extended_functional_tests:
+    needs: [build_portable_linux_artifacts]
+    name: Run Extended Functional Tests
+    # Run extended functional tests if:
+    # - Build succeeded (or using prebuilt artifacts)
+    # - Not expecting failure
+    # - Test runner is available (test_runs_on is set)
+    # - Extended functional flag is enabled (only set to true in ci_nightly.yml)
+    if: >-
+      ${{
+        !failure() &&
+        !cancelled() &&
+        (
+          inputs.use_prebuilt_artifacts == 'false' ||
+          inputs.use_prebuilt_artifacts == 'true'
+        ) &&
+        inputs.expect_failure == false &&
+        inputs.test_runs_on != '' &&
+        inputs.run_extended_functional_tests == true
+      }}
+    uses: ./.github/workflows/test_extended_functional_tests.yml
+    secrets: inherit
+    with:
+      artifact_group: ${{ inputs.artifact_group }}
+      amdgpu_families: ${{ inputs.amdgpu_families }}
+      test_runs_on: ${{ inputs.test_runs_on }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
 
   build_portable_linux_python_packages:
