@@ -243,9 +243,12 @@ def get_package_list(artifact_dir):
     Parameters:
         artifact_dir : The path to the Artifactory directory
 
-    Returns: A list of package names.
+    Returns:
+    pkg_list : list of package names that will be packaged
+    skipped_list  : list of package names excluded due to missing artifacts
     """
     pkg_list = []
+    skipped = []
     data = read_package_json_file()
 
     try:
@@ -254,13 +257,14 @@ def get_package_list(artifact_dir):
         sys.exit(f"{artifact_dir}: Artifactory directory doesn not exist, Exiting")
 
     for pkg_info in data:
+        pkg_name = pkg_info["Package"]
         # Skip disabled packages
         if is_packaging_disabled(pkg_info):
             continue
 
         # metapackages don't need artifact lookup
         if is_meta_package(pkg_info):
-            pkg_list.append(pkg_info["Package"])
+            pkg_list.append(pkg_name)
             continue
 
         artifactory_list = pkg_info.get("Artifactory", [])
@@ -283,9 +287,11 @@ def get_package_list(artifact_dir):
                 break
 
         if artifact_found:
-            pkg_list.append(pkg_info["Package"])
+            pkg_list.append(pkg_name)
+        else:
+            skipped.append(pkg_name)
 
-    return pkg_list
+    return pkg_list, skipped
 
 
 def remove_dir(dir_name):
@@ -417,7 +423,7 @@ def convert_to_versiondependency(dependency_list, config: PackageConfig):
 
     local_config = copy.deepcopy(config)
     local_config.versioned_pkg = True
-    pkg_list = get_package_list(config.artifacts_dir)
+    pkg_list, skipped_list = get_package_list(config.artifacts_dir)
 
     filtered_deps = []
     # Remove amdrocm* packages that are NOT in pkg_list
@@ -449,7 +455,7 @@ def append_version_suffix(dep_string, config: PackageConfig):
     """
     print_function_name()
 
-    pkg_list = get_package_list(config.artifacts_dir)
+    pkg_list, skipped_list = get_package_list(config.artifacts_dir)
     updated_depends = []
     dep_list = [d.strip() for d in dep_string.split(",")]
 
@@ -484,10 +490,11 @@ def move_packages_to_destination(pkg_name, config: PackageConfig):
     pkg_name : Package name
     config: Configuration object containing package metadata
 
-    Returns: None
+    Returns:
+    output_packages : list of package names moved to the destination folder
     """
     print_function_name()
-
+    output_packages = []
     # Create destination dir to move the packages created
     os.makedirs(config.dest_dir, exist_ok=True)
     print(f"Package name: {pkg_name}")
@@ -512,6 +519,9 @@ def move_packages_to_destination(pkg_name, config: PackageConfig):
                 dest_file.unlink()
 
             shutil.move(str(file_path), str(config.dest_dir))
+            output_packages.append(file_name)
+
+    return output_packages
 
 
 def filter_components_fromartifactory(pkg_name, artifacts_dir, gfx_arch):
