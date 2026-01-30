@@ -67,7 +67,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install Python requirements
-        run: pip install boto3 packaging setuptools
+        run: pip install -r requirements.txt
 
       - name: Install requirements
         # The first two lines removes the default commmunity feed and uses the internal proxy feed

@@ -66,7 +66,7 @@ jobs:
           ref: ${{ inputs.ref || '' }}
 
       - name: Install Python requirements
-        run: pip install boto3 packaging setuptools
+        run: pip install -r requirements.txt
 
       # Note: we could fetch "all" artifacts if we wanted to include more files
       - name: Fetch artifacts
