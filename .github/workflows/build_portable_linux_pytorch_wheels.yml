@@ -116,6 +116,7 @@ jobs:
       SCCACHE_S3_KEY_PREFIX: linux/${{ inputs.amdgpu_family }}/
       SCCACHE_S3_SERVER_SIDE_ENCRYPTION: "true"
       SCCACHE_IDLE_TIMEOUT: "0"
+      SCCACHE_LOG: warn
     outputs:
       cp_version: ${{ env.cp_version }}
       # The following are python package versions produced by the build. The
