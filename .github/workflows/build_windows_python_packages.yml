@@ -27,13 +27,23 @@ on:
         type: string
       package_version:
         type: string
+      repository:
+        description: "Repository to checkout. Otherwise, defaults to `github.repository`."
+        type: string
+      ref:
+        description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
+        type: string
 
 permissions:
   contents: read
 
+run-name: Build Windows Python Packages (${{ inputs.artifact_group }}, ${{ inputs.package_version }})
+
 jobs:
   build:
     name: Build Python | ${{ inputs.artifact_group }}
+    outputs:
+      package_find_links_url: ${{ steps.upload.outputs.package_find_links_url }}
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-windows-scale-rocm' || 'windows-2022' }}
     env:
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
@@ -49,7 +59,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install Python requirements
-        run: pip install boto3 packaging piprepo setuptools
+        run: pip install boto3 packaging setuptools
 
       # Note: we could fetch "all" artifacts if we wanted to include more files
       - name: Fetch artifacts
@@ -74,11 +84,43 @@ jobs:
         run: |
           ls -la "${{ env.PACKAGES_DIR }}"
 
-      - name: Sanity check Python packages
+      - name: Upload Python packages
+        id: upload
         run: |
-          piprepo build "${{ env.PACKAGES_DIR }}/dist"
-          pip install rocm[libraries,devel]==${{ inputs.package_version }} \
-            --extra-index-url "${{ env.PACKAGES_DIR }}/dist/simple/"
-          rocm-sdk test
+          python build_tools/github_actions/upload_python_packages.py \
+            --packages-dir=${{ env.PACKAGES_DIR }} \
+            --artifact-group "${{ inputs.artifact_group }}" \
+            --run-id ${{ github.run_id }}
 
-      # TODO(#1559): upload packages to artifacts S3 bucket and/or a dedicated Python packages bucket
+  generate_target_to_run:
+    name: Generate target_to_run
+    runs-on: ubuntu-24.04
+    outputs:
+      test_runs_on: ${{ steps.configure.outputs.test-runs-on }}
+    steps:
+      - name: Checking out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || '' }}
+
+      - name: Generating target to run
+        id: configure
+        env:
+          TARGET: ${{ inputs.artifact_group }}
+          PLATFORM: "windows"
+        run: python ./build_tools/github_actions/configure_target_run.py
+
+  test_rocm_wheels:
+    name: Test Python | ${{ inputs.artifact_group }} | ${{ needs.generate_target_to_run.outputs.test_runs_on }}
+    if: ${{ needs.generate_target_to_run.outputs.test_runs_on != '' }}
+    needs: [build, generate_target_to_run]
+    uses: ./.github/workflows/test_rocm_wheels.yml
+    with:
+      amdgpu_family: ${{ inputs.artifact_group }}
+      test_runs_on: ${{ needs.generate_target_to_run.outputs.test_runs_on }}
+      package_find_links_url: ${{ needs.build.outputs.package_find_links_url }}
+      python_version: "3.12"
+      rocm_version: ${{ inputs.package_version }}
+      repository: ${{ inputs.repository || github.repository }}
+      ref: ${{ inputs.ref || '' }}
