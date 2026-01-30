@@ -85,9 +85,9 @@ jobs:
             --dest-dir="${{ env.PACKAGES_DIR }}" \
             --version="${{ inputs.package_version }}"
 
-      - name: Configure AWS Credentials
+      - name: Configure AWS Credentials for non-forked repos
         if: ${{ !github.event.pull_request.head.repo.fork }}
-        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-ci
