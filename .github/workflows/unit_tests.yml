@@ -1,0 +1,72 @@
+name: Unit Tests
+
+on:
+  push:
+    branches:
+      - main
+      - release/therock-*
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unit_tests:
+    name: "Unit Tests :: ${{ matrix.runs-on}}"
+    strategy:
+      fail-fast: false
+      matrix:
+        runs-on: [ubuntu-24.04, windows-2022]
+    runs-on: ${{ matrix.runs-on }}
+    defaults:
+      run:
+        shell: bash
+    env:
+        GITHUB_TOKEN: ${{ github.token }}
+
+    steps:
+    - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+    - uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
+      with:
+        python-version: 3.12
+
+    - name: Install python deps
+      run: pip install -r requirements-test.txt
+
+    # Note: build_tools/github_actions/ contains complicated tests in some
+    # subdirectories that do not support pytest:
+    #   build_tools/github_actions/benchmarks/scripts/
+    #   build_tools/github_actions/test_executable_scripts/
+    # We could move them if we want a simple `pytest build_tools/` to work.
+    # TODO(scotttodd): enable code coverage collection/reporting here
+    - name: Test build_tools
+      run: |
+        python -m pytest -vv \
+          build_tools/tests \
+          build_tools/github_actions/tests
+
+  # TODO(scotttodd): share code with ci_summary in ci.yml
+  #   Could reuse this from prior projects:
+  #   https://github.com/iree-org/iree/blob/main/.github/workflows/workflow_summary.yml
+  #   (including support for sending alerts on failures)
+  unit_tests_summary:
+    name: Unit Tests Summary
+    if: always()
+    needs:
+      - unit_tests
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Output failed jobs
+        run: |
+          echo '${{ toJson(needs) }}'
+          FAILED_JOBS="$(echo '${{ toJson(needs) }}' \
+            | jq --raw-output \
+            'map_values(select(.result!="success" and .result!="skipped")) | keys | join(",")' \
+          )"
+          if [[ "${FAILED_JOBS}" != "" ]]; then
+            echo "The following jobs failed: ${FAILED_JOBS}"
+            exit 1
+          else
+            echo "All required jobs succeeded."
+          fi
