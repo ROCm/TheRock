@@ -15,9 +15,11 @@ on:
         default: "linux-mi325-1gpu-ossci-rocm-frac"
       package_index_url:
         description: Base Python package index URL (without GPU family subdir)
-        required: true
         type: string
         default: "https://rocm.nightlies.amd.com/v2"
+      package_find_links_url:
+        description: Full Python package index URL for use with --find-links (instead of package_index_url)
+        type: string
       python_version:
         required: true
         type: string
@@ -36,7 +38,8 @@ on:
         required: true
         type: string
       package_index_url:
-        required: true
+        type: string
+      package_find_links_url:
         type: string
       python_version:
         required: true
@@ -93,6 +96,7 @@ jobs:
             --packages "rocm[libraries,devel]==${{ inputs.rocm_version }}" \
             --index-url=${{ inputs.package_index_url }} \
             --index-subdir=${{ inputs.amdgpu_family }} \
+            --find-links-url=${{ inputs.package_find_links_url }} \
             --activate-in-future-github-actions-steps
 
       - name: Show installed packages

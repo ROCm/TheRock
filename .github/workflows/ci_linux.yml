@@ -135,3 +135,6 @@ jobs:
       artifact_run_id: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       artifact_group: ${{ inputs.artifact_group }}
       package_version: ${{ inputs.rocm_package_version }}
+    permissions:
+      contents: read
+      id-token: write

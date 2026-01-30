@@ -116,15 +116,24 @@ def install_packages(args: argparse.Namespace, py_cmd: list[str] | None):
 
     log("")
 
-    if args.index_name:
-        index_url = INDEX_URLS_MAP[args.index_name]
-    else:
-        index_url = args.index_url
-    index_url = index_url.rstrip("/") + "/" + args.index_subdir.strip("/")
+    command = py_cmd
 
-    command = py_cmd + [f"--index-url={index_url}", args.packages]
+    if args.find_links_url:
+        command.append(f"--find-links={args.find_links_url}")
+    else:
+        if args.index_name:
+            index_url = INDEX_URLS_MAP[args.index_name]
+        else:
+            index_url = args.index_url
+        index_url = index_url.rstrip("/") + "/" + args.index_subdir.strip("/")
+
+        command.append(f"--index-url={index_url}")
+
     if args.disable_cache:
         command.append("--no-cache-dir")
+
+    command.append(args.packages)
+
     run_command(command)
 
 
@@ -265,7 +274,7 @@ def main(argv: list[str]):
         help="List of packages to install, including any extras or explicit versions",
     )
 
-    index_group = install_options.add_mutually_exclusive_group()
+    index_group = install_options.add_argument_group()
     # TODO(#1036): add "auto" mode here that infers the index from the version?
     # TODO(#1036): Default to nightly?
     index_group.add_argument(
@@ -277,7 +286,12 @@ def main(argv: list[str]):
     index_group.add_argument(
         "--index-url",
         type=str,
-        help="Full URL for a release index to use with 'pip install --index-url='",
+        help="Base URL for a release index to use with 'pip install --index-url='",
+    )
+    index_group.add_argument(
+        "--find-links-url",
+        type=str,
+        help="Full URL for a release index to use with 'pip install --find-links='",
     )
 
     subdirs: dict[str, set[str]] | set[str] | None = scrape_subdirs()
@@ -304,20 +318,26 @@ def main(argv: list[str]):
     # Validate arguments.
     if args.venv_dir.exists() and not args.venv_dir.is_dir():
         p.error(f"venv_dir '{args.venv_dir}' exists and is not a directory")
-    if args.packages and not (args.index_name or args.index_url):
-        p.error("If --packages is set, one of --index-name or --index-url must be set")
-    if args.packages and not args.index_subdir:
-        if subdirs and not all_subdir_sets_congruent:
-            if not args.index_name:
-                p.error(
-                    f"If --packages is set, --index-subdir must be set from the following list: {subdirs}"
-                )
+    if args.packages and not (args.index_name or args.index_url or args.find_links_url):
+        p.error(
+            "If --packages is set, one of --index-name, --index-url, or --find-links-url must be set"
+        )
+    if args.packages:
+        if args.find_links_url:
+            # Omitting --index-subdir is fine when --find-links-url is set.
+            pass
+        elif not args.index_subdir:
+            if subdirs and not all_subdir_sets_congruent:
+                if not args.index_name:
+                    p.error(
+                        f"If --packages is set, --index-subdir must be set from the following list: {subdirs}"
+                    )
+                else:
+                    p.error(
+                        f"If --packages is set, --index-subdir must be set from the following list: {subdirs[args.index_name]}"
+                    )
             else:
-                p.error(
-                    f"If --packages is set, --index-subdir must be set from the following list: {subdirs[args.index_name]}"
-                )
-        else:
-            p.error("If --packages is set, --index-subdir must be set")
+                p.error("If --packages is set, --index-subdir must be set")
 
     run(args)
 
