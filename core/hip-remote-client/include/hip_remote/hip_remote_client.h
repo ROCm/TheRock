@@ -34,94 +34,105 @@ extern "C" {
 #endif
 
 /* ============================================================================
- * Error Codes (matching hipError_t values from hip_runtime_api.h)
+ * HIP Type Definitions
  *
- * These definitions match the HIP runtime exactly. The error string functions
- * (hipGetErrorName, hipGetErrorString) are ported from hip_error.cpp.
+ * These definitions are copied directly from the official HIP headers at:
+ *   rocm-systems/projects/hip/include/hip/hip_runtime_api.h
+ *
+ * We cannot simply #include the HIP headers because:
+ * 1. This library builds on macOS where HIP is not installed
+ * 2. The HIP headers have many nested platform-specific dependencies
+ *    (amd_detail/host_defines.h, driver_types.h, etc.)
+ * 3. The remote client only needs the type definitions, not the full HIP API
+ *
+ * These values must stay synchronized with the HIP headers.
+ * Last synced with: HIP 6.3 (ROCm 6.3)
  * ============================================================================ */
 
-typedef int hipError_t;
+typedef enum {
+    hipSuccess = 0,
+    hipErrorInvalidValue = 1,
+    hipErrorOutOfMemory = 2,
+    hipErrorMemoryAllocation = 2,  /* Deprecated alias */
+    hipErrorNotInitialized = 3,
+    hipErrorInitializationError = 3,  /* Deprecated alias */
+    hipErrorDeinitialized = 4,
+    hipErrorProfilerDisabled = 5,
+    hipErrorProfilerNotInitialized = 6,
+    hipErrorProfilerAlreadyStarted = 7,
+    hipErrorProfilerAlreadyStopped = 8,
+    hipErrorInvalidConfiguration = 9,
+    hipErrorInvalidPitchValue = 12,
+    hipErrorInvalidSymbol = 13,
+    hipErrorInvalidDevicePointer = 17,
+    hipErrorInvalidMemcpyDirection = 21,
+    hipErrorInsufficientDriver = 35,
+    hipErrorMissingConfiguration = 52,
+    hipErrorPriorLaunchFailure = 53,
+    hipErrorInvalidDeviceFunction = 98,
+    hipErrorNoDevice = 100,
+    hipErrorInvalidDevice = 101,
+    hipErrorInvalidImage = 200,
+    hipErrorInvalidContext = 201,
+    hipErrorContextAlreadyCurrent = 202,
+    hipErrorMapFailed = 205,
+    hipErrorMapBufferObjectFailed = 205,  /* Deprecated alias */
+    hipErrorUnmapFailed = 206,
+    hipErrorArrayIsMapped = 207,
+    hipErrorAlreadyMapped = 208,
+    hipErrorNoBinaryForGpu = 209,
+    hipErrorAlreadyAcquired = 210,
+    hipErrorNotMapped = 211,
+    hipErrorNotMappedAsArray = 212,
+    hipErrorNotMappedAsPointer = 213,
+    hipErrorECCNotCorrectable = 214,
+    hipErrorUnsupportedLimit = 215,
+    hipErrorContextAlreadyInUse = 216,
+    hipErrorPeerAccessUnsupported = 217,
+    hipErrorInvalidKernelFile = 218,
+    hipErrorInvalidGraphicsContext = 219,
+    hipErrorInvalidSource = 300,
+    hipErrorFileNotFound = 301,
+    hipErrorSharedObjectSymbolNotFound = 302,
+    hipErrorSharedObjectInitFailed = 303,
+    hipErrorOperatingSystem = 304,
+    hipErrorInvalidHandle = 400,
+    hipErrorInvalidResourceHandle = 400,  /* Deprecated alias */
+    hipErrorIllegalState = 401,
+    hipErrorNotFound = 500,
+    hipErrorNotReady = 600,
+    hipErrorIllegalAddress = 700,
+    hipErrorLaunchOutOfResources = 701,
+    hipErrorLaunchTimeOut = 702,
+    hipErrorPeerAccessAlreadyEnabled = 704,
+    hipErrorPeerAccessNotEnabled = 705,
+    hipErrorSetOnActiveProcess = 708,
+    hipErrorContextIsDestroyed = 709,
+    hipErrorAssert = 710,
+    hipErrorHostMemoryAlreadyRegistered = 712,
+    hipErrorHostMemoryNotRegistered = 713,
+    hipErrorLaunchFailure = 719,
+    hipErrorCooperativeLaunchTooLarge = 720,
+    hipErrorNotSupported = 801,
+    hipErrorStreamCaptureUnsupported = 900,
+    hipErrorStreamCaptureInvalidated = 901,
+    hipErrorStreamCaptureMerge = 902,
+    hipErrorStreamCaptureUnmatched = 903,
+    hipErrorStreamCaptureUnjoined = 904,
+    hipErrorStreamCaptureIsolation = 905,
+    hipErrorStreamCaptureImplicit = 906,
+    hipErrorCapturedEvent = 907,
+    hipErrorStreamCaptureWrongThread = 908,
+    hipErrorGraphExecUpdateFailure = 910,
+    hipErrorInvalidChannelDescriptor = 911,
+    hipErrorInvalidTexture = 912,
+    hipErrorUnknown = 999,
+    hipErrorRuntimeMemory = 1052,
+    hipErrorRuntimeOther = 1053,
+    hipErrorTbd = 1054
+} hipError_t;
 
-#define hipSuccess                      0
-#define hipErrorInvalidValue            1
-#define hipErrorOutOfMemory             2
-#define hipErrorNotInitialized          3
-#define hipErrorDeinitialized           4
-#define hipErrorProfilerDisabled        5
-#define hipErrorProfilerNotInitialized  6
-#define hipErrorProfilerAlreadyStarted  7
-#define hipErrorProfilerAlreadyStopped  8
-#define hipErrorInvalidConfiguration    9
-#define hipErrorInvalidPitchValue       12
-#define hipErrorInvalidSymbol           13
-#define hipErrorInvalidDevicePointer    17
-#define hipErrorInvalidMemcpyDirection  21
-#define hipErrorInsufficientDriver      35
-#define hipErrorMissingConfiguration    52
-#define hipErrorPriorLaunchFailure      53
-#define hipErrorInvalidDeviceFunction   98
-#define hipErrorNoDevice                100
-#define hipErrorInvalidDevice           101
-#define hipErrorInvalidImage            200
-#define hipErrorInvalidContext          201
-#define hipErrorContextAlreadyCurrent   202
-#define hipErrorMapFailed               205
-#define hipErrorUnmapFailed             206
-#define hipErrorArrayIsMapped           207
-#define hipErrorAlreadyMapped           208
-#define hipErrorNoBinaryForGpu          209
-#define hipErrorAlreadyAcquired         210
-#define hipErrorNotMapped               211
-#define hipErrorNotMappedAsArray        212
-#define hipErrorNotMappedAsPointer      213
-#define hipErrorECCNotCorrectable       214
-#define hipErrorUnsupportedLimit        215
-#define hipErrorContextAlreadyInUse     216
-#define hipErrorPeerAccessUnsupported   217
-#define hipErrorInvalidKernelFile       218
-#define hipErrorInvalidGraphicsContext  219
-#define hipErrorInvalidSource           300
-#define hipErrorFileNotFound            301
-#define hipErrorSharedObjectSymbolNotFound 302
-#define hipErrorSharedObjectInitFailed  303
-#define hipErrorOperatingSystem         304
-#define hipErrorInvalidHandle           400
-#define hipErrorInvalidResourceHandle   400
-#define hipErrorIllegalState            401
-#define hipErrorNotFound                500
-#define hipErrorNotReady                600
-#define hipErrorIllegalAddress          700
-#define hipErrorLaunchOutOfResources    701
-#define hipErrorLaunchTimeOut           702
-#define hipErrorPeerAccessAlreadyEnabled 704
-#define hipErrorPeerAccessNotEnabled    705
-#define hipErrorSetOnActiveProcess      708
-#define hipErrorContextIsDestroyed      709
-#define hipErrorAssert                  710
-#define hipErrorHostMemoryAlreadyRegistered 712
-#define hipErrorHostMemoryNotRegistered 713
-#define hipErrorLaunchFailure           719
-#define hipErrorCooperativeLaunchTooLarge 720
-#define hipErrorNotSupported            801
-#define hipErrorStreamCaptureUnsupported 900
-#define hipErrorStreamCaptureInvalidated 901
-#define hipErrorStreamCaptureMerge      902
-#define hipErrorStreamCaptureUnmatched  903
-#define hipErrorStreamCaptureUnjoined   904
-#define hipErrorStreamCaptureIsolation  905
-#define hipErrorStreamCaptureImplicit   906
-#define hipErrorCapturedEvent           907
-#define hipErrorStreamCaptureWrongThread 908
-#define hipErrorGraphExecUpdateFailure  910
-#define hipErrorUnknown                 999
-#define hipErrorRuntimeMemory           1052
-#define hipErrorRuntimeOther            1053
-#define hipErrorTbd                     1054
-
-/* ============================================================================
- * Memory Copy Kind
- * ============================================================================ */
-
+/* Memory copy direction - from hip_runtime_api.h */
 typedef enum {
     hipMemcpyHostToHost = 0,
     hipMemcpyHostToDevice = 1,
@@ -130,10 +141,7 @@ typedef enum {
     hipMemcpyDefault = 4
 } hipMemcpyKind;
 
-/* ============================================================================
- * Type Definitions
- * ============================================================================ */
-
+/* Opaque stream handle */
 typedef void* hipStream_t;
 
 /* ============================================================================
@@ -320,6 +328,8 @@ hipError_t hipEventQuery(void* event);
 hipError_t hipEventElapsedTime(float* ms, void* start, void* stop);
 
 /* Module Management */
+#if !(defined(HIP_REMOTE_USE_HIP_HEADERS) && HIP_REMOTE_USE_HIP_HEADERS)
+/* Fallback definitions when HIP headers are not available */
 typedef void* hipModule_t;
 typedef void* hipFunction_t;
 typedef enum {
@@ -340,6 +350,12 @@ typedef enum {
     hipJitOptionNumOptions
 } hipJitOption;
 
+/* Kernel Launch */
+typedef struct {
+    unsigned int x, y, z;
+} dim3;
+#endif /* !HIP_REMOTE_USE_HIP_HEADERS */
+
 hipError_t hipModuleLoadData(hipModule_t* module, const void* image);
 hipError_t hipModuleLoadDataEx(hipModule_t* module, const void* image,
                                 unsigned int numOptions, hipJitOption* options,
@@ -347,11 +363,6 @@ hipError_t hipModuleLoadDataEx(hipModule_t* module, const void* image,
 hipError_t hipModuleUnload(hipModule_t module);
 hipError_t hipModuleGetFunction(hipFunction_t* function, hipModule_t module,
                                  const char* kname);
-
-/* Kernel Launch */
-typedef struct {
-    unsigned int x, y, z;
-} dim3;
 
 /**
  * Launch a kernel function.
