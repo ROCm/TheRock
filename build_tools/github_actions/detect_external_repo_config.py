@@ -29,7 +29,7 @@ import argparse
 import os
 import sys
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from github_actions_utils import gha_set_output
 
@@ -79,20 +79,18 @@ def get_external_repo_path(repo_name: str) -> Path:
     test integration workflows, TheRock CI, etc.).
 
     Args:
-        repo_name: Repository name (e.g., "rocm-libraries", "rocm-systems")
+        repo_name (str): Repository name (e.g., "rocm-libraries", "rocm-systems")
 
     Returns:
-        Path to the external repository root directory
+        Path: Path to the external repository root directory
 
     Raises:
         ValueError: If the external repo path cannot be determined
     """
-    from pathlib import Path
-
     try:
         normalized_name = detect_repo_name(repo_name)
         repo_config = get_repo_config(normalized_name)
-    except (ValueError, KeyError):
+    except ValueError:
         raise ValueError(f"Unknown repository: {repo_name}")
 
     # Priority order for determining external repo location:
@@ -101,13 +99,20 @@ def get_external_repo_path(repo_name: str) -> Path:
     #    Set in test integration workflows where TheRock is main checkout
     external_source_env = os.environ.get("EXTERNAL_SOURCE_PATH")
     if external_source_env:
-        base_path = Path(os.environ.get("GITHUB_WORKSPACE", "."))
+        workspace_env = os.environ.get("GITHUB_WORKSPACE")
+        if workspace_env:
+            base_path = Path(workspace_env)
+        else:
+            base_path = Path.cwd()
+            _log_warning(
+                "EXTERNAL_SOURCE_PATH set but GITHUB_WORKSPACE not set, using CWD as base"
+            )
         repo_path = base_path / external_source_env
-        # Validate that the path ends with the repo name we're looking for
+        # Validate that the path ends with the expected repo name
         if (
             repo_path.exists()
             and _is_valid_repo_path(repo_path)
-            and repo_path.name == repo_name
+            and repo_path.name == normalized_name
         ):
             print(
                 f"Found external repo via EXTERNAL_SOURCE_PATH: {repo_path}",
@@ -121,29 +126,10 @@ def get_external_repo_path(repo_name: str) -> Path:
         print(f"Found external repo at CWD: {Path.cwd()}", file=sys.stderr)
         return Path.cwd()
 
-    # 3. GITHUB_WORKSPACE (when different from cwd)
-    if os.environ.get("GITHUB_WORKSPACE"):
-        workspace_path = Path(os.environ["GITHUB_WORKSPACE"])
-        if workspace_path.exists() and _is_valid_repo_path(workspace_path):
-            print(
-                f"Found external repo at GITHUB_WORKSPACE: {workspace_path}",
-                file=sys.stderr,
-            )
-            return workspace_path
-
-    # 4. TheRock submodule (TheRock's own CI)
-    therock_root = Path(__file__).parent.parent.parent
-    submodule_path = therock_root / repo_config.get("submodule_path", repo_name)
-    if submodule_path.exists() and _is_valid_repo_path(submodule_path):
-        print(f"Found external repo as submodule: {submodule_path}", file=sys.stderr)
-        return submodule_path
-
     raise ValueError(
-        f"Could not find external repo '{repo_name}'. Tried:\n"
-        f"  - EXTERNAL_SOURCE_PATH: {external_source_env}\n"
-        f"  - CWD: {Path.cwd()}\n"
-        f"  - GITHUB_WORKSPACE: {os.environ.get('GITHUB_WORKSPACE')}\n"
-        f"  - Submodule: {submodule_path}"
+        f"Could not find external repo '{repo_name}'. Checked:\n"
+        f"  - EXTERNAL_SOURCE_PATH: {external_source_env or 'not set'}\n"
+        f"  - CWD: {Path.cwd()}"
     )
 
 
@@ -156,50 +142,53 @@ def _is_valid_repo_path(path: Path) -> bool:
     Returns:
         True if path appears to be a valid external repo checkout
     """
-    # Check for git repository
-    if not (path / ".git").exists():
+    # Check for git repository (can be file or directory for worktrees)
+    git_path = path / ".git"
+    if not git_path.exists():
         return False
 
     # Check for .github/scripts directory (external repo structure)
-    if not (path / ".github" / "scripts").exists():
+    scripts_dir = path / ".github" / "scripts"
+    if not scripts_dir.exists() or not scripts_dir.is_dir():
         return False
 
     return True
 
 
+def _log_warning(message: str) -> None:
+    """Helper to log warning messages to stderr."""
+    print(f"WARNING: {message}", file=sys.stderr)
+
+
 def import_external_repo_module(
-    repo_name: str, module_name: str, repo_path: Path = None
-):
+    repo_name: str, module_name: str, repo_path: Optional[Path] = None
+) -> Optional[Any]:
     """Dynamically import a module from an external repo's .github/scripts directory.
 
     Args:
-        repo_name: Repository name (e.g., "rocm-libraries", "rocm-systems")
-        module_name: Module name without .py extension (e.g., "therock_matrix")
-        repo_path: Optional path to the external repo. If not provided,
-                  calls get_external_repo_path() to determine it.
+        repo_name (str): Repository name (e.g., "rocm-libraries", "rocm-systems")
+        module_name (str): Module name without .py extension (e.g., "therock_matrix")
+        repo_path (Optional[Path]): Optional path to the external repo. If not provided,
+                                     calls get_external_repo_path() to determine it.
 
     Returns:
-        The imported module, or None if import fails
+        Optional[Any]: The imported module, or None if import fails
     """
     import importlib.util
-    from pathlib import Path
 
     # Determine repo path if not provided
     if repo_path is None:
         try:
             repo_path = get_external_repo_path(repo_name)
         except ValueError as e:
-            print(f"WARNING: {e}", file=sys.stderr)
+            _log_warning(str(e))
             return None
 
     # All external repos follow the same convention: .github/scripts/
     script_path = repo_path / ".github" / "scripts" / f"{module_name}.py"
 
     if not script_path.exists():
-        print(
-            f"WARNING: Could not find {module_name}.py at {script_path}",
-            file=sys.stderr,
-        )
+        _log_warning(f"Could not find {module_name}.py at {script_path}")
         return None
 
     print(f"Importing {module_name} from: {script_path}", file=sys.stderr)
@@ -212,26 +201,32 @@ def import_external_repo_module(
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
             return module
+        else:
+            _log_warning(
+                f"Could not create module spec for {module_name} at {script_path}"
+            )
+            return None
+    except ImportError as e:
+        _log_warning(f"Failed to import {module_name} from {repo_name}: {e}")
+        return None
     except Exception as e:
         print(
-            f"WARNING: Failed to import {module_name} from {repo_name}: {e}",
+            f"ERROR: Unexpected error importing {module_name} from {repo_name}: {type(e).__name__}: {e}",
             file=sys.stderr,
         )
-        return None
-
-    return None
+        raise
 
 
-def get_skip_patterns(repo_name: str, repo_path: Path = None) -> list:
+def get_skip_patterns(repo_name: str, repo_path: Optional[Path] = None) -> list[str]:
     """Get skip patterns from external repo's therock_configure_ci.py.
 
     Args:
-        repo_name: Repository name (e.g., "rocm-libraries", "rocm-systems")
-        repo_path: Optional path to the external repo. If not provided,
-                  will be determined automatically.
+        repo_name (str): Repository name (e.g., "rocm-libraries", "rocm-systems")
+        repo_path (Optional[Path]): Optional path to the external repo. If not provided,
+                                     will be determined automatically.
 
     Returns:
-        List of skip patterns, or empty list if not found
+        list[str]: List of skip patterns, or empty list if not found
     """
     configure_module = import_external_repo_module(
         repo_name, "therock_configure_ci", repo_path
@@ -246,16 +241,16 @@ def get_skip_patterns(repo_name: str, repo_path: Path = None) -> list:
     return []
 
 
-def get_test_list(repo_name: str, repo_path: Path = None) -> list:
+def get_test_list(repo_name: str, repo_path: Optional[Path] = None) -> list[str]:
     """Get test list from external repo's therock_matrix.py project_map.
 
     Args:
-        repo_name: Repository name (e.g., "rocm-libraries", "rocm-systems")
-        repo_path: Optional path to the external repo. If not provided,
-                  will be determined automatically.
+        repo_name (str): Repository name (e.g., "rocm-libraries", "rocm-systems")
+        repo_path (Optional[Path]): Optional path to the external repo. If not provided,
+                                     will be determined automatically.
 
     Returns:
-        List of test names, or empty list if not found
+        list[str]: List of test names, or empty list if not found
     """
     matrix_module = import_external_repo_module(repo_name, "therock_matrix", repo_path)
     if not matrix_module or not hasattr(matrix_module, "project_map"):
@@ -343,13 +338,6 @@ def main():
         help="GitHub workspace path for formatting CMake options",
     )
     parser.add_argument(
-        "--platform",
-        type=str,
-        choices=["linux", "windows"],
-        default="linux" if os.name == "posix" else "windows",
-        help="Platform for platform-specific configuration. Defaults to current platform.",
-    )
-    parser.add_argument(
         "--list",
         action="store_true",
         help="List all known repository configurations",
@@ -363,6 +351,13 @@ def main():
             print(f"  - {repo_name}")
         return 0
 
+    if not args.repository:
+        print(
+            "ERROR: --repository is required when GITHUB_REPOSITORY is not set",
+            file=sys.stderr,
+        )
+        return 1
+
     try:
         repo_name = detect_repo_name(args.repository)
         config = get_repo_config(repo_name)
@@ -373,6 +368,9 @@ def main():
 
         # Format the full CMake option if workspace path provided
         if args.workspace:
+            workspace_path = Path(args.workspace)
+            if not workspace_path.is_absolute():
+                _log_warning("Workspace path is not absolute, using as-is")
             cmake_var = config["cmake_source_var"]
             config["extra_cmake_options"] = f"-D{cmake_var}={args.workspace}"
             print(

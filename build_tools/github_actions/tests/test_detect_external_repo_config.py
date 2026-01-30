@@ -6,6 +6,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch, MagicMock, mock_open
 
 # Add parent directory to path to import the module
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -13,6 +14,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from detect_external_repo_config import (
     detect_repo_name,
     get_repo_config,
+    get_external_repo_path,
+    import_external_repo_module,
+    get_skip_patterns,
+    get_test_list,
     main as detect_external_repo_config_main,
     output_github_actions_vars,
     REPO_CONFIGS,
@@ -173,6 +178,198 @@ class TestOutputGithubActionsVars(unittest.TestCase):
                 del os.environ["GITHUB_OUTPUT"]
             if os.path.exists(temp_file):
                 os.unlink(temp_file)
+
+
+class TestGetExternalRepoPath(unittest.TestCase):
+    """Tests for get_external_repo_path function"""
+
+    @patch.dict(
+        os.environ,
+        {"EXTERNAL_SOURCE_PATH": "rocm-libraries", "GITHUB_WORKSPACE": "/workspace"},
+    )
+    @patch("detect_external_repo_config.Path")
+    @patch("detect_external_repo_config._is_valid_repo_path")
+    def test_external_source_path_priority(self, mock_is_valid, mock_path_cls):
+        """Test that EXTERNAL_SOURCE_PATH has highest priority"""
+        # Mock Path behavior
+        mock_path = MagicMock()
+        mock_path.exists.return_value = True
+        mock_path.name = "rocm-libraries"
+        mock_path_cls.return_value = mock_path
+
+        # Mock validation
+        mock_is_valid.return_value = True
+
+        result = get_external_repo_path("rocm-libraries")
+        self.assertIsNotNone(result)
+
+    @patch.dict(os.environ, {}, clear=True)
+    @patch("detect_external_repo_config.Path")
+    @patch("detect_external_repo_config._is_valid_repo_path")
+    def test_cwd_fallback(self, mock_is_valid, mock_path_cls):
+        """Test that current working directory is used as fallback"""
+        mock_cwd = MagicMock()
+        mock_cwd.exists.return_value = True
+        mock_path_cls.cwd.return_value = mock_cwd
+        mock_is_valid.return_value = True
+
+        result = get_external_repo_path("rocm-libraries")
+        self.assertEqual(result, mock_cwd)
+
+    @patch.dict(os.environ, {}, clear=True)
+    @patch("detect_external_repo_config.Path")
+    @patch("detect_external_repo_config._is_valid_repo_path")
+    def test_no_valid_path_raises_error(self, mock_is_valid, mock_path_cls):
+        """Test that ValueError is raised when no valid path is found"""
+        mock_cwd = MagicMock()
+        mock_path_cls.cwd.return_value = mock_cwd
+        mock_is_valid.return_value = False
+
+        with self.assertRaises(ValueError) as context:
+            get_external_repo_path("rocm-libraries")
+        self.assertIn("Could not find external repo", str(context.exception))
+
+
+class TestImportExternalRepoModule(unittest.TestCase):
+    """Tests for import_external_repo_module function"""
+
+    @patch("detect_external_repo_config.get_external_repo_path")
+    @patch("importlib.util.spec_from_file_location")
+    @patch("importlib.util.module_from_spec")
+    def test_successful_import(
+        self, mock_module_from_spec, mock_spec_from_file, mock_get_path
+    ):
+        """Test successful module import"""
+        # Mock repo path
+        mock_repo_path = MagicMock()
+        mock_script_path = MagicMock()
+        mock_script_path.exists.return_value = True
+        mock_repo_path.__truediv__ = MagicMock(return_value=mock_script_path)
+        mock_get_path.return_value = mock_repo_path
+
+        # Mock importlib
+        mock_spec = MagicMock()
+        mock_loader = MagicMock()
+        mock_spec.loader = mock_loader
+        mock_module = MagicMock()
+        mock_spec_from_file.return_value = mock_spec
+        mock_module_from_spec.return_value = mock_module
+
+        result = import_external_repo_module("rocm-libraries", "test_module")
+        self.assertEqual(result, mock_module)
+        mock_loader.exec_module.assert_called_once_with(mock_module)
+
+    @patch("detect_external_repo_config.get_external_repo_path")
+    def test_module_not_found(self, mock_get_path):
+        """Test handling when module file doesn't exist"""
+        mock_repo_path = MagicMock()
+        mock_script_path = MagicMock()
+        mock_script_path.exists.return_value = False
+        mock_repo_path.__truediv__ = MagicMock(return_value=mock_script_path)
+        mock_get_path.return_value = mock_repo_path
+
+        result = import_external_repo_module("rocm-libraries", "missing_module")
+        self.assertIsNone(result)
+
+    @patch("detect_external_repo_config.get_external_repo_path")
+    def test_repo_path_not_found(self, mock_get_path):
+        """Test handling when repo path cannot be determined"""
+        mock_get_path.side_effect = ValueError("Repo not found")
+
+        result = import_external_repo_module("unknown-repo", "test_module")
+        self.assertIsNone(result)
+
+    @patch("detect_external_repo_config.get_external_repo_path")
+    @patch("importlib.util.spec_from_file_location")
+    @patch("importlib.util.module_from_spec")
+    def test_import_error_handling(
+        self, mock_module_from_spec, mock_spec_from_file, mock_get_path
+    ):
+        """Test handling of ImportError during module loading"""
+        mock_repo_path = MagicMock()
+        mock_script_path = MagicMock()
+        mock_script_path.exists.return_value = True
+        mock_repo_path.__truediv__ = MagicMock(return_value=mock_script_path)
+        mock_get_path.return_value = mock_repo_path
+
+        # Mock import failure
+        mock_spec = MagicMock()
+        mock_loader = MagicMock()
+        mock_spec.loader = mock_loader
+        mock_loader.exec_module.side_effect = ImportError("Import failed")
+        mock_spec_from_file.return_value = mock_spec
+        mock_module_from_spec.return_value = MagicMock()
+
+        result = import_external_repo_module("rocm-libraries", "test_module")
+        self.assertIsNone(result)
+
+
+class TestGetSkipPatterns(unittest.TestCase):
+    """Tests for get_skip_patterns function"""
+
+    @patch("detect_external_repo_config.import_external_repo_module")
+    def test_get_skip_patterns_success(self, mock_import):
+        """Test successful retrieval of skip patterns"""
+        mock_module = MagicMock()
+        mock_module.SKIPPABLE_PATH_PATTERNS = ["pattern1/*", "pattern2/*"]
+        mock_import.return_value = mock_module
+
+        result = get_skip_patterns("rocm-libraries")
+        self.assertEqual(result, ["pattern1/*", "pattern2/*"])
+
+    @patch("detect_external_repo_config.import_external_repo_module")
+    def test_get_skip_patterns_no_module(self, mock_import):
+        """Test when module cannot be imported"""
+        mock_import.return_value = None
+
+        result = get_skip_patterns("rocm-libraries")
+        self.assertEqual(result, [])
+
+    @patch("detect_external_repo_config.import_external_repo_module")
+    def test_get_skip_patterns_no_attribute(self, mock_import):
+        """Test when module doesn't have SKIPPABLE_PATH_PATTERNS attribute"""
+        mock_module = MagicMock(spec=[])
+        del mock_module.SKIPPABLE_PATH_PATTERNS  # Ensure attribute doesn't exist
+        mock_import.return_value = mock_module
+
+        result = get_skip_patterns("rocm-libraries")
+        self.assertEqual(result, [])
+
+
+class TestGetTestList(unittest.TestCase):
+    """Tests for get_test_list function"""
+
+    @patch("detect_external_repo_config.import_external_repo_module")
+    def test_get_test_list_success(self, mock_import):
+        """Test successful retrieval of test list"""
+        mock_module = MagicMock()
+        mock_module.project_map = {
+            "project1": {"project_to_test": ["test1", "test2"]},
+            "project2": {"project_to_test": "test3"},
+        }
+        mock_import.return_value = mock_module
+
+        result = get_test_list("rocm-libraries")
+        # Result is a sorted list from a set, so order may vary
+        self.assertEqual(set(result), {"test1", "test2", "test3"})
+
+    @patch("detect_external_repo_config.import_external_repo_module")
+    def test_get_test_list_no_module(self, mock_import):
+        """Test when module cannot be imported"""
+        mock_import.return_value = None
+
+        result = get_test_list("rocm-libraries")
+        self.assertEqual(result, [])
+
+    @patch("detect_external_repo_config.import_external_repo_module")
+    def test_get_test_list_no_attribute(self, mock_import):
+        """Test when module doesn't have project_map attribute"""
+        mock_module = MagicMock(spec=[])
+        del mock_module.project_map  # Ensure attribute doesn't exist
+        mock_import.return_value = mock_module
+
+        result = get_test_list("rocm-libraries")
+        self.assertEqual(result, [])
 
 
 if __name__ == "__main__":
