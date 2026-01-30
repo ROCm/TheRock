@@ -142,6 +142,9 @@ def build_ctest_command(category, gpu_arch, available_gpu_archs):
             "--test-dir",
             f"{THEROCK_BIN_DIR}/MIOpen",
             "-V",  # Always run in verbose mode
+            # Shards the tests by running a specific set of tests based on starting test (shard_index) and stride (total_shards)
+            "--tests-information",
+            f"{SHARD_INDEX},,{TOTAL_SHARDS}",
         ]
     )
 
@@ -174,7 +177,7 @@ def main():
         category = "standard"
 
     # Use AMDGPU_FAMILIES from environment variable, extract gfx<xxx> part
-    gpu_arch = "gfx1151"  # default
+    gpu_arch = ""
     if AMDGPU_FAMILIES:
         # Extract gfx<xxx> pattern from AMDGPU_FAMILIES string
         # Pattern matches: gfx followed by alphanumeric characters (e.g., gfx1151, gfx950, gfx11X)
