@@ -426,7 +426,26 @@ if [ -f "$GDB_BIN_DIR/$gdb_command" ]; then
     fi
 fi
 
-echo "rocgdb execution failed. Possible unsupported python version ${python_version} in the system."
+echo "Not successful in running rocgdb with active Python Version: ${python_version} in the system"
+echo "Checking for working Python Version Installed"
+# If the default python version didn't work,
+# Make the rocgdb command with the working python version
+working_gdb=""
+while read -r gdb
+do
+    if "$gdb" --version >/dev/null 2>&1
+    then
+        working_gdb="$gdb"
+        break
+    fi
+done < <(find "$GDB_BIN_DIR" -name "rocgdb-py*" | sort -r)
+
+if [ -n "$working_gdb" ]
+then
+    "$working_gdb" "$@"
+else
+    echo "ROCgdb execution Failed: No compatible Python version available in $GDB_BIN_DIR."
+fi
 ]=])
 
 # Generate the script file.
