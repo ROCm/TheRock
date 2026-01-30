@@ -99,6 +99,7 @@ jobs:
         with:
           repository: ROCm/TheRock
           ref: ${{ inputs.therock_ref || github.ref }}
+          # We need the parent commit to do a diff
           fetch-depth: 2
 
       - name: Extract external repo name

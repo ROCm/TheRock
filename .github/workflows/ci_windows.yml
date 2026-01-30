@@ -151,7 +151,6 @@ jobs:
     # If the dependent job failed/cancelled, this job will not be run
     # The use_prebuilt_artifacts "or" statement ensures that tests will run if
     # previous build step is run or skipped.concurrency.
-    # Skip for external repos (they don't need Python packages)
     if: >-
       ${{
         !failure() &&
