@@ -21,13 +21,14 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 # Environment setup
 environ_vars = os.environ.copy()
 platform = os.getenv("RUNNER_OS", "linux").lower()
+is_windows = platform == "windows"
 
 bin_dir = Path(THEROCK_BIN_DIR).resolve()
 lib_dir = bin_dir.parent / "lib"
 origami_test_dir = bin_dir / "origami"
 
 # Path separator is different on Windows vs Linux
-path_sep = ";" if platform == "windows" else ":"
+path_sep = ";" if is_windows else ":"
 
 # LD_LIBRARY_PATH is needed for Python tests to find liborigami.so
 if platform == "linux":
@@ -37,7 +38,7 @@ if platform == "linux":
         environ_vars.get("LD_LIBRARY_PATH", ""),
     ]
     environ_vars["LD_LIBRARY_PATH"] = path_sep.join(p for p in ld_paths if p)
-elif platform == "windows":
+elif is_windows:
     dll_paths = [
         str(bin_dir),
         str(lib_dir),
@@ -56,9 +57,6 @@ environ_vars["PYTHONPATH"] = path_sep.join(p for p in python_paths if p)
 logging.info(f"LD_LIBRARY_PATH: {environ_vars.get('LD_LIBRARY_PATH', '')}")
 logging.info(f"PYTHONPATH: {environ_vars.get('PYTHONPATH', '')}")
 
-# Test type configuration (smoke, full)
-test_type = os.getenv("TEST_TYPE", "full")
-
 # CTest runs both C++ (Catch2) tests and Python (pytest) tests
 cmd = [
     "ctest",
@@ -69,7 +67,7 @@ cmd = [
     "8",
 ]
 
-if platform == "windows":
+if is_windows:
     cmd.extend(["-R", "origami-tests"])
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
