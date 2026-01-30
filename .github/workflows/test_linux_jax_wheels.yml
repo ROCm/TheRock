@@ -95,7 +95,7 @@ on:
         description: Runner label to use. The selected runner should have a GPU supported by amdgpu_family
         required: true
         type: string
-        default: "linux-mi325-1gpu-ossci-rocm-frac"
+        default: "linux-mi325-1gpu-ossci-rocm"
       ref:
         description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
         type: string
