@@ -40,7 +40,7 @@ permissions:
 run-name: Build Windows Python Packages (${{ inputs.artifact_group }}, ${{ inputs.package_version }})
 
 jobs:
-  build:
+  build_rocm_wheels:
     name: Build Python | ${{ inputs.artifact_group }}
     outputs:
       package_find_links_url: ${{ steps.upload.outputs.package_find_links_url }}
@@ -54,6 +54,10 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || '' }}
+
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: '3.12'
@@ -80,10 +84,6 @@ jobs:
             --dest-dir="${{ env.PACKAGES_DIR }}" \
             --version="${{ inputs.package_version }}"
 
-      - name: Inspect Python packages
-        run: |
-          ls -la "${{ env.PACKAGES_DIR }}"
-
       - name: Upload Python packages
         id: upload
         run: |
@@ -109,17 +109,20 @@ jobs:
         env:
           TARGET: ${{ inputs.artifact_group }}
           PLATFORM: "windows"
+          # Variable comes from ROCm organization variable 'ROCM_THEROCK_TEST_RUNNERS'
+          ROCM_THEROCK_TEST_RUNNERS: ${{ vars.ROCM_THEROCK_TEST_RUNNERS }}
+          LOAD_TEST_RUNNERS_FROM_VAR: false
         run: python ./build_tools/github_actions/configure_target_run.py
 
   test_rocm_wheels:
     name: Test Python | ${{ inputs.artifact_group }} | ${{ needs.generate_target_to_run.outputs.test_runs_on }}
     if: ${{ needs.generate_target_to_run.outputs.test_runs_on != '' }}
-    needs: [build, generate_target_to_run]
+    needs: [build_rocm_wheels, generate_target_to_run]
     uses: ./.github/workflows/test_rocm_wheels.yml
     with:
       amdgpu_family: ${{ inputs.artifact_group }}
       test_runs_on: ${{ needs.generate_target_to_run.outputs.test_runs_on }}
-      package_find_links_url: ${{ needs.build.outputs.package_find_links_url }}
+      package_find_links_url: ${{ needs.build_rocm_wheels.outputs.package_find_links_url }}
       python_version: "3.12"
       rocm_version: ${{ inputs.package_version }}
       repository: ${{ inputs.repository || github.repository }}
