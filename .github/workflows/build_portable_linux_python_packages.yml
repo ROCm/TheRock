@@ -68,15 +68,13 @@ jobs:
       - name: Install Python requirements
         run: pip install -r requirements.txt
 
-      # Note: we could fetch "all" artifacts if we wanted to include more files
       - name: Fetch artifacts
         run: |
           python ./build_tools/fetch_artifacts.py \
             --run-github-repo="${{ inputs.artifact_github_repo }}" \
             --run-id="${{ env.ARTIFACT_RUN_ID }}" \
             --artifact-group="${{ inputs.artifact_group }}" \
-            --output-dir="${{ env.ARTIFACTS_DIR }}" \
-            _dev_ _lib_ _run_
+            --output-dir="${{ env.ARTIFACTS_DIR }}"
 
       - name: Build Python packages
         run: |
@@ -105,7 +103,6 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       test_runs_on: ${{ steps.configure.outputs.test-runs-on }}
-      # bypass_tests_for_releases: ${{ steps.configure.outputs.bypass_tests_for_releases }}
     steps:
       - name: Checking out repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
