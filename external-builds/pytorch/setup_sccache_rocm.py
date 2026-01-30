@@ -153,7 +153,7 @@ def create_sccache_wrapper(compiler_path: Path, sccache_path: Path) -> None:
     # Save the original symlink target (if symlink) or path for restoration
     is_symlink = compiler_path.is_symlink()
     original_binary = None
-    
+
     try:
         if is_symlink:
             original_target = os.readlink(compiler_path)
@@ -163,16 +163,20 @@ def create_sccache_wrapper(compiler_path: Path, sccache_path: Path) -> None:
             original_path_file.write_text(f"binary:{real_compiler}")
             original_binary = original_dir / compiler_path.name
     except (OSError, PermissionError) as e:
-        raise RuntimeError(f"Failed to save compiler metadata for {compiler_path}: {e}") from e
+        raise RuntimeError(
+            f"Failed to save compiler metadata for {compiler_path}: {e}"
+        ) from e
 
     # Prepare wrapper content
     wrapper_content = f'#!/bin/sh\nexec "{sccache_path}" "{real_compiler}" "$@"\n'
-    
+
     # For binaries, create wrapper at temp location first to verify we can write it
     # before moving the binary (avoids orphaned state if wrapper creation fails)
     wrapper_temp = None
     if original_binary is not None:
-        wrapper_temp = compiler_path.parent / f".{compiler_path.name}.sccache_wrapper.tmp"
+        wrapper_temp = (
+            compiler_path.parent / f".{compiler_path.name}.sccache_wrapper.tmp"
+        )
         try:
             wrapper_temp.write_text(wrapper_content)
             wrapper_temp.chmod(
@@ -196,14 +200,18 @@ def create_sccache_wrapper(compiler_path: Path, sccache_path: Path) -> None:
             print(f"  Moved binary {compiler_path} -> {original_binary}")
             # Move wrapper from temp to final location
             wrapper_temp.replace(compiler_path)
-            print(f"  Created sccache wrapper: {compiler_path} -> sccache {real_compiler}")
+            print(
+                f"  Created sccache wrapper: {compiler_path} -> sccache {real_compiler}"
+            )
         else:
             # For symlinks, create wrapper directly
             compiler_path.write_text(wrapper_content)
             compiler_path.chmod(
                 stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH
             )
-            print(f"  Created sccache wrapper: {compiler_path} -> sccache {real_compiler}")
+            print(
+                f"  Created sccache wrapper: {compiler_path} -> sccache {real_compiler}"
+            )
     except (OSError, PermissionError, shutil.Error) as e:
         # Cleanup on failure: restore binary if it was moved
         if original_binary is not None and original_binary.exists():
