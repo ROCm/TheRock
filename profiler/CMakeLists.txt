@@ -114,14 +114,37 @@ endif(THEROCK_BUILD_TESTING)
   ##############################################################################
   # rocprofiler-compute
   ##############################################################################
+
+  # Set default version
+  set(PYTHON3_EXECUTABLE "/opt/python-shared/cp312-cp312/bin/python3.12")
+
+  # Search for cp312 executable
+  if(SHARED_PYTHON_EXECUTABLES)
+    message(STATUS "Available python-shared: ${SHARED_PYTHON_EXECUTABLES}")
+    set(search_string "cp312")
+    foreach(CURRENT_PYTHON_EXECUTABLE ${SHARED_PYTHON_EXECUTABLES})
+      if(CURRENT_PYTHON_EXECUTABLE MATCHES "${search_string}")
+        set(PYTHON3_EXECUTABLE "${CURRENT_PYTHON_EXECUTABLE}")
+      endif()
+    endforeach()
+  endif()
+
   therock_cmake_subproject_declare(rocprofiler-compute
     USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-compute"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-compute"
     BACKGROUND_BUILD
+    DEFAULT_GPU_TARGETS
+      gfx942  # TODO: Fix rocprofiler-compute to accept an empty target list.
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
-      -DCHECK_PYTHON_DEPS=OFF
+      -DCMAKE_HIP_PLATFORM=amd
+      -DCMAKE_HIP_COMPILER_ROCM_ROOT=${THEROCK_BINARY_DIR}/dist/rocm
+      -DCMAKE_HIP_COMPILER=${THEROCK_BINARY_DIR}/dist/rocm/lib/llvm/bin/clang++${CMAKE_EXECUTABLE_SUFFIX}
+      -DPython3_EXECUTABLE=${PYTHON3_EXECUTABLE}
+      -DENABLE_TESTS=ON
+      -DINSTALL_TESTS=ON
+      -DSTANDALONEBINARY=ON
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
@@ -135,12 +158,12 @@ endif(THEROCK_BUILD_TESTING)
       ${THEROCK_BUNDLED_ELFUTILS}
       ${THEROCK_BUNDLED_LIBDRM}
       ${THEROCK_BUNDLED_SQLITE3}
-    )
-    therock_cmake_subproject_glob_c_sources(rocprofiler-compute
-      SUBDIRS .
-    )
+  )
+  therock_cmake_subproject_glob_c_sources(rocprofiler-compute
+    SUBDIRS .
+  )
 
-    therock_cmake_subproject_activate(rocprofiler-compute)
+  therock_cmake_subproject_activate(rocprofiler-compute)
 
   ##############################################################################
   # roctracer
