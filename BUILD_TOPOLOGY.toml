@@ -517,6 +517,11 @@ artifact_group = "ml-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn"]
 
+[artifacts.hipdnn-samples]
+artifact_group = "ml-libs"
+type = "target-specific"
+artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "miopen-plugin"]
+
 # --- IREE Integration ---
 
 [artifacts.fusilli-plugin]
