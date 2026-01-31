@@ -65,7 +65,6 @@ def find_sccache() -> Path | None:
     return None
 
 
-
 def create_sccache_wrapper(compiler_path: Path, sccache_path: Path) -> None:
     """Create an sccache wrapper for a compiler (Linux only).
 
@@ -280,7 +279,6 @@ def restore_rocm_compilers(rocm_path: Path) -> None:
     for compiler in ["clang", "clang++"]:
         restore_compiler(llvm_bin / compiler)
     print("ROCm compiler restoration complete.")
-
 
 
 def main():

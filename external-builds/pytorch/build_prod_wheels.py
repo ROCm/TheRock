@@ -570,12 +570,10 @@ def do_build(args: argparse.Namespace):
             print(f"ccache --show-stats output:\n{ccache_stats_output}")
 
         if args.use_sccache:
-            sccache_path = find_sccache()
-            if sccache_path:
-                sccache_stats_output = capture(
-                    [str(sccache_path), "--show-stats"], cwd=tempfile.gettempdir()
-                )
-                print(f"sccache --show-stats output:\n{sccache_stats_output}")
+            sccache_stats_output = capture(
+                [str(sccache_path), "--show-stats"], cwd=tempfile.gettempdir()
+            )
+            print(f"sccache --show-stats output:\n{sccache_stats_output}")
 
     finally:
         # Always restore original compilers, even on build failure
