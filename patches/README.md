@@ -75,58 +75,90 @@ Several external repositories like
 TheRock in their own CI workflows. If there are patches in TheRock for those
 submodules, then those CI workflows may need to handle them carefully.
 
-**The typical CI pattern**:
+#### Automated patch application (CI workflows)
 
-1. The external repository checks out its own code at HEAD
-1. Checks out TheRock into a subdirectory (e.g., `./TheRock`)
-1. Fetches all _other_ dependencies via TheRock's `fetch_sources.py` (excluding
-   the external repo itself)
-1. Applies patches from `TheRock/patches/amd-mainline/<repo>/` to the external repository
-1. Builds using TheRock with the patched external repository as a source override
-
-**Example from rocm-libraries**:
+External repositories use TheRock's reusable `ci.yml` workflow via `workflow_call`.
+Patches are applied automatically by `fetch_sources.py`:
 
 ```yml
-      # (1)
-      - name: "Checking out repository for rocm-libraries"
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
-
-      # (2)
-      - name: Checkout TheRock repository
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
-        with:
-          repository: "ROCm/TheRock"
-          path: TheRock
-          ref: a1f6b57cc31890c05ab0094212ae0b269765db8e # 2025-11-25 commit
-
-      # (3)
-      - name: Fetch sources
-        run: |
-          ./TheRock/build_tools/fetch_sources.py --jobs 12 \
-              --no-include-rocm-libraries --no-include-ml-frameworks
-
-      # (4)
-      - name: Patch rocm-libraries
-        run: |
-          # Remove patches here if they cannot be applied cleanly, and they have not been deleted from TheRock repo
-          # rm ./TheRock/patches/amd-mainline/rocm-libraries/*.patch
-          git -c user.name="therockbot" -c "user.email=therockbot@amd.com" am \
-              --whitespace=nowarn ./TheRock/patches/amd-mainline/rocm-libraries/*.patch
-
-      # (5)
-      - name: Configure Projects
-        env:
-          extra_cmake_options: "-DTHEROCK_ROCM_LIBRARIES_SOURCE_DIR=../"
-          BUILD_DIR: build
-        run: python3 TheRock/build_tools/github_actions/build_configure.py
-      - name: Build therock-dist
-        run: cmake --build TheRock/build --target therock-dist
+jobs:
+  build:
+    uses: ROCm/TheRock/.github/workflows/ci.yml@some-ref
+    with:
+      external_source_checkout: true
+      repository_override: ${{ github.repository }}
+      # Other inputs as needed (projects, amdgpu_families, etc.)
 ```
 
-Example full workflows:
+**How patches are applied automatically**:
 
-- [rocm-libraries - `.github/workflows/therock-ci-linux.yml`](https://github.com/ROCm/rocm-libraries/blob/develop/.github/workflows/therock-ci-linux.yml)
-- [rocm-systems - `.github/workflows/therock-ci-linux.yml`](https://github.com/ROCm/rocm-systems/blob/develop/.github/workflows/therock-ci-linux.yml)
+1. TheRock's `ci.yml` workflow checks out both TheRock and the external repository
+1. `fetch_sources.py` is called with `EXTERNAL_SOURCE_CHECKOUT=true` and `EXTERNAL_SOURCE_PATH` set
+1. Patches from `patches/amd-mainline/<repo>/` are automatically applied to the external repository
+1. Build proceeds with the patched external repository
+
+**Skipping specific patches during removal** (see [Removing Patches](#removing-patches)):
+
+When removing patches, external repositories can temporarily skip specific patches using the `skip_patches` input:
+
+```yml
+jobs:
+  build:
+    uses: ROCm/TheRock/.github/workflows/ci.yml@some-ref
+    with:
+      external_source_checkout: true
+      repository_override: ${{ github.repository }}
+      skip_patches: "0001-workaround.patch,0002-temp-fix.patch"  # Comma-separated filenames
+```
+
+This allows external repositories to merge fixes before TheRock removes the corresponding patch files.
+
+#### Manual patch application (local development)
+
+For local development, you can manually apply patches using environment variables:
+
+```bash
+# Set up environment variables
+export EXTERNAL_SOURCE_CHECKOUT=true
+export EXTERNAL_SOURCE_PATH=/path/to/your/rocm-libraries  # Your local checkout path
+
+# Fetch sources and apply patches
+cd TheRock
+python build_tools/fetch_sources.py --no-include-rocm-libraries
+
+# Verify patches were applied
+cd /path/to/your/rocm-libraries
+git log -3  # Should show patch commits by therockbot
+
+# Build
+cd TheRock
+cmake -B build -DTHEROCK_ROCM_LIBRARIES_SOURCE_DIR=/path/to/your/rocm-libraries
+cmake --build build
+```
+
+To skip specific patches locally:
+
+```bash
+export SKIP_PATCHES="0001-workaround.patch,0002-temp-fix.patch"
+python build_tools/fetch_sources.py --no-include-rocm-libraries
+```
+
+#### Under the hood: what `fetch_sources.py` does
+
+When applying patches, `fetch_sources.py` runs the following git command for each project:
+
+```bash
+git -c user.name="therockbot" \
+    -c user.email="therockbot@amd.com" \
+    am --whitespace=nowarn \
+    patches/<patch-tag>/<project>/*.patch
+```
+
+- `user.name` and `user.email`: Patch commits are attributed to "therockbot"
+- `am --whitespace=nowarn`: Apply mailbox patches, ignoring whitespace warnings
+- `GIT_COMMITTER_DATE`: Set to fixed date for reproducible builds
+
+Patches listed in `SKIP_PATCHES` are filtered out before running `git am`.
 
 #### Resolving conflicts with patches
 
@@ -134,13 +166,11 @@ Example full workflows:
 > If a patch does not apply, such as when another commit modifies a file that
 > the patch modifies, the workflow will fail.
 >
-> - If the conflicting commit is itself equivalent to the patch, then the patch
->   can be deleted via the (commented out) `rm ...` line. When TheRock picks up
->   the equivalent commit and the external repository in turns picks up a new
->   the commit `ref` for TheRock, the `rm ...` line can be removed again.
+> - If the conflicting commit is itself equivalent to the patch, use the
+>   `skip_patches` input to temporarily skip the patch (see [Removing Patches](#removing-patches))
 > - If the conflicting commit is NOT equivalent to the patch, for example if it
->   modifies unrelated lines in one of the patched files, then a different
->   resolution is needed. **This is why patches are expensive and should be
+>   modifies unrelated lines in one of the patched files, then the patch needs to
+>   be regenerated or removed. **This is why patches are expensive and should be
 >   avoided at all costs - they can block regular project development!**
 
 ## Rules for creating patches
@@ -195,3 +225,90 @@ Commit messages for patches should include:
    discussions if applicable
 1. **Reproduction info**: For bug fixes, include error messages or reproduction
    steps
+
+## Removing Patches
+
+Patches should be removed as soon as the underlying fix is available upstream or when they become obsolete.
+
+### For TheRock submodules (llvm-project, third-party libraries)
+
+Use a single PR approach:
+
+1. **Update the submodule** to pick up the upstream commit that replaces the patch
+1. **Delete the patch file(s)** from `patches/<patch-tag>/<project>/`
+1. **Test the build** without the patch:
+   ```bash
+   python build_tools/fetch_sources.py
+   cmake -B build
+   cmake --build build
+   ```
+1. **Commit both changes** (submodule update + patch deletion) together
+1. **Open a PR** with a reference to the upstream commit that made the patch obsolete
+
+### For external repositories (rocm-libraries, rocm-systems)
+
+External repositories require a **three-step coordinated process** using the `skip_patches` input to avoid the chicken-and-egg problem where:
+
+- TheRock can't remove the patch until external repo has the fix
+- External repo CI can't pass until TheRock removes the patch
+
+**Step 1: External repo PR (merge first)**
+
+1. Merge the upstream fix that makes the patch obsolete into the external repository
+1. Add `skip_patches` to the workflow file to temporarily skip the patch during CI:
+
+```yml
+jobs:
+  build:
+    uses: ROCm/TheRock/.github/workflows/ci.yml@some-ref
+    with:
+      external_source_checkout: true
+      repository_override: ${{ github.repository }}
+      skip_patches: "0001-workaround.patch"  # Add the patch filename(s) to skip
+```
+
+3. Verify CI passes (the patch is skipped automatically by `fetch_sources.py`)
+1. **Merge this PR** - the external repo now has the fix and can build with or without the patch
+
+**Step 2: TheRock PR (merge second)**
+
+1. **Delete the patch file(s)** from `patches/amd-mainline/<project>/`
+1. **Document in the PR description**:
+   - Which external repo commit made the patch obsolete
+   - Link to the external repo PR from Step 1
+1. Test by having the external repo CI reference your TheRock branch
+1. **Merge this PR** - TheRock no longer has the patch file
+
+**Step 3: External repo cleanup PR (merge third)**
+
+1. Update the TheRock ref in the external repo workflow to point to the merged commit from Step 2
+1. **Remove the `skip_patches` line** from the workflow (patch file no longer exists)
+1. Verify CI still passes
+1. **Merge this PR** - cleanup complete
+
+### Testing patch removal locally
+
+**For submodules:**
+
+```bash
+# Update submodule and test without patch
+git submodule update --init <project>
+python build_tools/fetch_sources.py
+# Verify no patch application messages in output
+cmake -B build
+cmake --build build
+```
+
+**For external repos:**
+
+```bash
+# Test with skip_patches
+export SKIP_PATCHES="0001-workaround.patch"
+export EXTERNAL_SOURCE_CHECKOUT=true
+export EXTERNAL_SOURCE_PATH=/path/to/your/rocm-libraries
+python build_tools/fetch_sources.py --no-include-rocm-libraries
+
+# Verify patch was skipped in output
+cd /path/to/your/rocm-libraries
+git log -3  # Should NOT show the skipped patch commit
+```
