@@ -10,10 +10,7 @@ Required environment variables:
 Optional environment variables:
   - VCToolsInstallDir
   - GITHUB_WORKSPACE
-  - EXTRA_C_COMPILER_LAUNCHER: Compiler launcher for C (e.g., resource_info.py for build
-                               time analysis). If set, this replaces ccache as the launcher.
-                               Note: resource_info.py automatically invokes ccache internally.
-  - EXTRA_CXX_COMPILER_LAUNCHER: Compiler launcher for CXX. Same behavior as above.
+  - EXTERNAL_SOURCE_CHECKOUT - Whether building for external repo (true/false)
 """
 
 import argparse
@@ -23,6 +20,15 @@ from pathlib import Path
 import platform
 import shlex
 import subprocess
+import sys
+
+# Add parent directories to path to import detect_external_repo_config
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from detect_external_repo_config import (
+    detect_repo_name,
+    get_repo_config,
+)
 
 logging.basicConfig(level=logging.INFO)
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
@@ -33,47 +39,13 @@ PLATFORM = platform.system().lower()
 cmake_preset = os.getenv("cmake_preset")
 amdgpu_families = os.getenv("amdgpu_families")
 package_version = os.getenv("package_version")
-extra_cmake_options = os.getenv("extra_cmake_options")
+extra_cmake_options = os.getenv("extra_cmake_options", "")
 build_dir = os.getenv("BUILD_DIR")
 vctools_install_dir = os.getenv("VCToolsInstallDir")
 github_workspace = os.getenv("GITHUB_WORKSPACE")
-extra_c_compiler_launcher = os.getenv("EXTRA_C_COMPILER_LAUNCHER", "")
-extra_cxx_compiler_launcher = os.getenv("EXTRA_CXX_COMPILER_LAUNCHER", "")
-
-# Normalize paths to use forward slashes for CMake compatibility on Windows
-if extra_c_compiler_launcher:
-    extra_c_compiler_launcher = extra_c_compiler_launcher.replace("\\", "/")
-if extra_cxx_compiler_launcher:
-    extra_cxx_compiler_launcher = extra_cxx_compiler_launcher.replace("\\", "/")
-
-
-def build_compiler_launcher(
-    extra_launcher: str, default_launcher: str = "ccache"
-) -> str:
-    """Build compiler launcher string.
-
-    Args:
-        extra_launcher: Custom launcher to use (e.g., resource_info.py).
-                        If provided, this replaces the default launcher entirely.
-                        Note: resource_info.py automatically invokes ccache internally,
-                        so no semicolon-separated list is needed.
-        default_launcher: Default launcher to use when extra_launcher is not set.
-
-    Returns:
-        Launcher string for CMake. If extra_launcher is provided, returns it directly.
-        Otherwise returns default_launcher.
-
-    Example:
-        build_compiler_launcher("/path/to/resource_info.py", "ccache")
-        -> "/path/to/resource_info.py"
-
-        build_compiler_launcher("", "ccache")
-        -> "ccache"
-    """
-    if extra_launcher:
-        return extra_launcher
-    return default_launcher
-
+external_source_checkout = (
+    os.getenv("EXTERNAL_SOURCE_CHECKOUT", "false").lower() == "true"
+)
 
 platform_options = {
     "windows": [
@@ -97,16 +69,12 @@ def build_configure(manylinux=False):
     ]
     if cmake_preset:
         cmd.extend(["--preset", cmake_preset])
-    # Build compiler launcher strings (prepend extra launcher if provided)
-    c_launcher = build_compiler_launcher(extra_c_compiler_launcher)
-    cxx_launcher = build_compiler_launcher(extra_cxx_compiler_launcher)
-
     cmd.extend(
         [
             f"-DTHEROCK_AMDGPU_FAMILIES={amdgpu_families}",
             f"-DTHEROCK_PACKAGE_VERSION='{package_version}'",
-            f"-DCMAKE_C_COMPILER_LAUNCHER={c_launcher}",
-            f"-DCMAKE_CXX_COMPILER_LAUNCHER={cxx_launcher}",
+            "-DCMAKE_C_COMPILER_LAUNCHER=ccache",
+            "-DCMAKE_CXX_COMPILER_LAUNCHER=ccache",
             "-DBUILD_TESTING=ON",
         ]
     )
@@ -126,6 +94,38 @@ def build_configure(manylinux=False):
         )
         cmd.append(f"-DTHEROCK_DIST_PYTHON_EXECUTABLES={python_executables}")
         cmd.append("-DTHEROCK_ENABLE_SYSDEPS_AMD_MESA=ON")
+
+    # Handle external source directory override
+    if external_source_checkout:
+        repo_override = os.getenv(
+            "GITHUB_REPOSITORY_OVERRIDE", os.getenv("GITHUB_REPOSITORY", "")
+        )
+        external_source_path = os.getenv("EXTERNAL_SOURCE_PATH", "")
+        if repo_override and external_source_path:
+            try:
+                repo_name = detect_repo_name(repo_override)
+                config = get_repo_config(repo_name)
+
+                # Add the CMake source directory variable pointing to external source
+                # Resolve path to absolute to ensure CMake and Python agree on location
+                cmake_source_var = config.get("cmake_source_var")
+                if cmake_source_var:
+                    external_path = Path(external_source_path)
+                    if not external_path.is_absolute():
+                        # Resolve relative paths from GITHUB_WORKSPACE
+                        workspace = Path(os.environ.get("GITHUB_WORKSPACE", Path.cwd()))
+                        external_path = workspace / external_source_path
+                    # Resolve symlinks and relative components
+                    external_path = external_path.resolve()
+
+                    cmd.append(f"-D{cmake_source_var}={external_path}")
+                    logging.info(
+                        f"External source override: -D{cmake_source_var}={external_path}"
+                    )
+            except (ValueError, KeyError) as e:
+                logging.warning(
+                    f"Could not determine external source configuration: {e}"
+                )
 
     if PLATFORM == "windows":
         # VCToolsInstallDir is required for build. Throwing an error if environment variable doesn't exist

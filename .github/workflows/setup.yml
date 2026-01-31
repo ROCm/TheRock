@@ -10,6 +10,52 @@ on:
         type: boolean
         default: false
         description: "If true, group all families into one entry per build_variant instead of expanding cross-product"
+      # The following inputs are for external repo integration (rocm-libraries, rocm-systems).
+      # They allow external repos to override repository, checkout paths, and specify which projects to build/test.
+      external_source_checkout:
+        type: boolean
+        default: false
+        description: "Whether source is from external repo (rocm-libraries/systems)"
+      therock_ref:
+        type: string
+        default: ""
+        description: "TheRock git ref to use (for external repos)"
+      repository_override:
+        type: string
+        default: ""
+        description: "Override github.repository for testing (e.g., 'ROCm/rocm-libraries')"
+      projects:
+        type: string
+        default: ""
+        description: "Override: comma-separated list of project paths (e.g., 'projects/rocprim,projects/hipcub'). Blank = detect from changes."
+      linux_amdgpu_families:
+        type: string
+        default: ""
+        description: "Comma-separated list of Linux GPU families to build and test"
+      windows_amdgpu_families:
+        type: string
+        default: ""
+        description: "Comma-separated list of Windows GPU families to build and test"
+      linux_test_labels:
+        type: string
+        default: ""
+      linux_use_prebuilt_artifacts:
+        type: boolean
+        default: false
+      windows_test_labels:
+        type: string
+        default: ""
+      windows_use_prebuilt_artifacts:
+        type: boolean
+        default: false
+      additional_label_options:
+        type: string
+        default: ""
+        description: "Additional label options (e.g., test_runner:oem)"
+      skip_patches:
+        type: string
+        default: ""
+        description: "Comma-separated patch filenames to temporarily skip during patch removal coordination with external repos"
     outputs:
       enable_build_jobs:
         description: Whether to enable build jobs.
@@ -32,6 +78,12 @@ on:
       rocm_package_version:
         description: ROCm package version (primarily for Python packages).
         value: ${{ jobs.setup.outputs.rocm_package_version }}
+      external_source_path:
+        description: Path to external repo checkout (for external repo integration)
+        value: ${{ jobs.setup.outputs.external_source_path }}
+      skip_patches:
+        description: Comma-separated patch filenames to skip
+        value: ${{ inputs.skip_patches }}
 
 permissions:
   contents: read
@@ -51,15 +103,37 @@ jobs:
       test_type: ${{ steps.configure.outputs.test_type }}
       windows_test_labels: ${{ steps.configure.outputs.windows_test_labels }}
       rocm_package_version: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
+      external_source_path: ${{ steps.external_repo.outputs.external_path || '' }}
     steps:
-      - name: Checking out repository
+      - name: Checkout TheRock repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          repository: ROCm/TheRock
+          ref: ${{ inputs.therock_ref || github.ref }}
+          # We need the parent commit to do a diff
+          fetch-depth: 2
+
+      - name: Extract external repo name
+        if: ${{ inputs.external_source_checkout }}
+        id: external_repo
+        run: |
+          REPO="${{ inputs.repository_override || github.repository }}"
+          REPO_NAME="${REPO##*/}"
+          echo "repo_name=${REPO_NAME}" >> $GITHUB_OUTPUT
+          echo "external_path=external-repos/${REPO_NAME}" >> $GITHUB_OUTPUT
+          echo "Detected external repo: ${REPO_NAME}, checkout path: external-repos/${REPO_NAME}"
+
+      - name: Checkout external source repository
+        if: ${{ inputs.external_source_checkout }}
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ inputs.repository_override || github.repository }}
+          path: ${{ steps.external_repo.outputs.external_path }}
           # We need the parent commit to do a diff
           fetch-depth: 2
 
       - name: Set PR_LABELS variable with labels assigned to pull request
-        if: ${{ github.event.pull_request }} # only set PR labels var if this is a pull request
+        if: ${{ github.event.pull_request }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.number }}
@@ -69,20 +143,28 @@ jobs:
       - name: Configuring CI options
         id: configure
         env:
-          INPUT_LINUX_AMDGPU_FAMILIES: ${{ github.event.inputs.linux_amdgpu_families }}
-          LINUX_TEST_LABELS: ${{ github.event.inputs.linux_test_labels }}
-          LINUX_USE_PREBUILT_ARTIFACTS: ${{ github.event.inputs.linux_use_prebuilt_artifacts }}
-          INPUT_WINDOWS_AMDGPU_FAMILIES: ${{ github.event.inputs.windows_amdgpu_families }}
-          WINDOWS_TEST_LABELS: ${{ github.event.inputs.windows_test_labels }}
-          WINDOWS_USE_PREBUILT_ARTIFACTS: ${{ github.event.inputs.windows_use_prebuilt_artifacts }}
-          ADDITIONAL_LABEL_OPTIONS: ${{ github.event.inputs.additional_label_options }}
+          INPUT_LINUX_AMDGPU_FAMILIES: ${{ inputs.linux_amdgpu_families }}
+          LINUX_TEST_LABELS: ${{ inputs.linux_test_labels }}
+          LINUX_USE_PREBUILT_ARTIFACTS: ${{ inputs.linux_use_prebuilt_artifacts }}
+          INPUT_WINDOWS_AMDGPU_FAMILIES: ${{ inputs.windows_amdgpu_families }}
+          WINDOWS_TEST_LABELS: ${{ inputs.windows_test_labels }}
+          WINDOWS_USE_PREBUILT_ARTIFACTS: ${{ inputs.windows_use_prebuilt_artifacts }}
+          ADDITIONAL_LABEL_OPTIONS: ${{ inputs.additional_label_options }}
           BUILD_VARIANT: ${{ inputs.build_variant }}
           MULTI_ARCH: ${{ inputs.multi_arch }}
           # Variable comes from ROCm organization variable 'ROCM_THEROCK_TEST_RUNNERS'
           ROCM_THEROCK_TEST_RUNNERS: ${{ vars.ROCM_THEROCK_TEST_RUNNERS }}
           LOAD_TEST_RUNNERS_FROM_VAR: false
-        run: ./build_tools/github_actions/configure_ci.py
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_REPOSITORY_OVERRIDE: ${{ inputs.repository_override }}
+          PROJECTS: ${{ inputs.projects }}
+          # For external repo integration (rocm-libraries, rocm-systems)
+          EXTERNAL_SOURCE_CHECKOUT: ${{ inputs.external_source_checkout }}
+          EXTERNAL_SOURCE_PATH: ${{ steps.external_repo.outputs.external_path || '' }}
+        run: |
+          ./build_tools/github_actions/configure_ci.py
 
       - name: Compute package version
         id: rocm_package_version
-        run: python ./build_tools/compute_rocm_package_version.py --release-type=dev
+        run: |
+          python ./build_tools/compute_rocm_package_version.py --release-type=dev
