@@ -31,3 +31,47 @@ $ python build_tools/github_actions/test_executable_scripts/test_rocblas.py
 - GITHUB_REPO is the GitHub repository that this CI run was executed. (ex: ROCm/rocm-libraries, ROCm/rccl)
 
 To view which python test wrappers we have, please checkout [`test_executable_scripts/`](https://github.com/ROCm/TheRock/tree/main/build_tools/github_actions/test_executable_scripts)
+
+## JAX Testing (Experimental)
+
+> [!NOTE]
+> JAX support is tracked in [issue #247](https://github.com/ROCm/TheRock/issues/247).
+
+To test JAX with TheRock-built ROCm:
+
+```bash
+# Start from the same base container
+$ docker run -i \
+    --ipc host \
+    --group-add video \
+    --device /dev/kfd \
+    --device /dev/dri \
+    -t ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98 /bin/bash
+
+# Install dependencies
+$ sudo apt-get update && sudo apt install python3.12-venv
+$ git clone https://github.com/ROCm/TheRock.git
+$ cd TheRock
+$ python -m venv .venv && source .venv/bin/activate
+$ pip install -r requirements-test.txt
+
+# Install ROCm artifacts
+$ GITHUB_REPOSITORY=ROCm/TheRock python build_tools/install_rocm_from_artifacts.py \
+    --run-id {CI_RUN_ID} --amdgpu-family {GPU_FAMILY}
+
+# Set environment for ROCm
+$ export ROCM_PATH=$(pwd)/therock-build
+$ export LD_LIBRARY_PATH=$ROCM_PATH/lib:$LD_LIBRARY_PATH
+$ export PATH=$ROCM_PATH/bin:$PATH
+
+# Install JAX with ROCm support
+# Note: JAX ROCm wheels may need to be built from source or obtained from
+# nightly builds. Check https://github.com/jax-ml/jax for current instructions.
+$ pip install jax jaxlib  # Placeholder - actual installation may vary
+
+# Verify JAX can see the GPU
+$ python -c "import jax; print(jax.devices())"
+```
+
+See the [JAX GitHub issue](https://github.com/ROCm/TheRock/issues/247) for the
+latest status and instructions.
