@@ -58,6 +58,9 @@ from amdgpu_family_matrix import (
     all_build_variants,
     get_all_families_for_trigger_types,
 )
+import configure_ci_shared as shared
+import configure_ci_external_repos as external_repos
+from detect_external_repo_config import get_skip_patterns
 from fetch_test_configurations import test_matrix
 
 from github_actions_utils import *
@@ -68,25 +71,6 @@ THEROCK_DIR = THIS_SCRIPT_DIR.parent.parent
 # --------------------------------------------------------------------------- #
 # Filtering by modified paths
 # --------------------------------------------------------------------------- #
-
-
-def get_modified_paths(base_ref: str) -> Optional[Iterable[str]]:
-    """Returns the paths of modified files relative to the base reference."""
-    try:
-        return subprocess.run(
-            ["git", "diff", "--name-only", base_ref],
-            stdout=subprocess.PIPE,
-            check=True,
-            text=True,
-            timeout=60,
-        ).stdout.splitlines()
-    except TimeoutError:
-        print(
-            "Computing modified files timed out. Not using PR diff to determine"
-            " jobs to run.",
-            file=sys.stderr,
-        )
-        return None
 
 
 def get_therock_submodule_paths() -> Optional[Iterable[str]]:
@@ -116,36 +100,8 @@ def get_therock_submodule_paths() -> Optional[Iterable[str]]:
         return []
 
 
-# Paths matching any of these patterns are considered to have no influence over
-# build or test workflows so any related jobs can be skipped if all paths
-# modified by a commit/PR match a pattern in this list.
-SKIPPABLE_PATH_PATTERNS = [
-    "docs/*",
-    "*.gitignore",
-    "*.md",
-    "*.pre-commit-config.*",
-    ".github/dependabot.yml",
-    "*CODEOWNERS",
-    "*LICENSE",
-    # Changes to 'external-builds/' (e.g. PyTorch) do not affect "CI" workflows.
-    # At time of writing, workflows run in this sequence:
-    #   `ci.yml`
-    #   `ci_linux.yml`
-    #   `build_linux_artifacts.yml`
-    #   `test_artifacts.yml`
-    #   `test_component.yml`
-    # If we add external-builds tests there, we can revisit this, maybe leaning
-    # on options like LINUX_USE_PREBUILT_ARTIFACTS or sufficient caching to keep
-    # workflows efficient when only nodes closer to the edges of the build graph
-    # are changed.
-    "external-builds/*",
-    # Changes to dockerfiles do not currently affect CI workflows directly.
-    # Docker images are built and published after commits are pushed, then
-    # workflows can be updated to use the new image sha256 values.
-    "dockerfiles/*",
-    # Changes to experimental code do not run standard build/test workflows.
-    "experimental/*",
-]
+# Use TheRock's skippable path patterns from shared module
+SKIPPABLE_PATH_PATTERNS = shared.THEROCK_SKIPPABLE_PATH_PATTERNS
 
 
 def is_path_skippable(path: str) -> bool:
@@ -755,6 +711,23 @@ def main(base_args, linux_families, windows_families):
     )
     print("")
 
+    # Check if external repo project configs exist and apply cross-product
+    linux_external_configs = base_args.get("linux_external_project_configs", [])
+    windows_external_configs = base_args.get("windows_external_project_configs", [])
+
+    linux_variants_output, windows_variants_output = (
+        external_repos.apply_external_repo_cross_product(
+            linux_external_configs,
+            windows_external_configs,
+            linux_variants_output,
+            windows_variants_output,
+        )
+    )
+
+    has_external_project_configs = bool(
+        linux_external_configs or windows_external_configs
+    )
+
     test_type = "smoke"
     test_type_reason = "default (smoke tests)"
 
@@ -763,8 +736,17 @@ def main(base_args, linux_families, windows_families):
         enable_build_jobs = True
         test_type = "full"
         test_type_reason = "scheduled run triggers full tests"
+    # When external repos explicitly call TheRock's CI, honor their request without checking modified paths
+    elif has_external_project_configs:
+        print("External repo requesting builds - enabling without path checks")
+        enable_build_jobs = True
+        test_type_reason = "external repo build request"
+        # If tests are specified, run full tests
+        if linux_test_output or windows_test_output:
+            test_type = "full"
+            test_type_reason = "external repo with test labels"
     else:
-        modified_paths = get_modified_paths(base_ref)
+        modified_paths = shared.get_modified_paths(base_ref)
         print("modified_paths (max 200):", modified_paths[:200])
         print(f"Checking modified files since this had a {github_event_name} trigger")
         # TODO(#199): other behavior changes
@@ -864,5 +846,15 @@ if __name__ == "__main__":
     )
     base_args["build_variant"] = os.getenv("BUILD_VARIANT", "release")
     base_args["multi_arch"] = os.environ.get("MULTI_ARCH", "false") == "true"
+
+    # Detect if we're running for an external repository and configure accordingly
+    external_configs = external_repos.setup_external_repo_configs(
+        base_args=base_args,
+        output_empty_matrix_and_exit_func=lambda: external_repos.output_empty_matrix_and_exit(
+            gha_set_output
+        ),
+    )
+    if external_configs:
+        base_args.update(external_configs)
 
     main(base_args, linux_families, windows_families)
