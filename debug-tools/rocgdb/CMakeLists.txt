@@ -158,9 +158,6 @@ string(REPLACE ";" ":" PKG_CONFIG_PATH_ENV_VAR "${THEROCK_PKG_CONFIG_DIRS}")
 
 # Set some global variables for the configure/build.
 set(ROCGDB_BUG_URL "https://github.com/ROCm-Developer-Tools/ROCgdb/issues")
-set(ROCGDB_HTML_DIR "\\\${prefix}/share/html")
-set(ROCGDB_PDF_DIR "\\\${prefix}/share/doc")
-set(ROCGDB_INFO_DIR "\\\${prefix}/share/info/rocgdb")
 set(ROCGDB_SEPARATE_DEBUG_INFO_DIR "\\\${prefix}/lib/debug:/usr/lib/debug")
 set(ROCGDB_DATA_DIR "\\\${prefix}/share/rocgdb")
 set(ROCGDB_TARGETS "x86_64-linux-gnu,amdgcn-amd-amdhsa")
@@ -202,6 +199,13 @@ macro(add_python_variant minor_version configure_flags libpython_dir)
     message(STATUS "-> Extra LDFLAGS: ${LIBPYTHON_LDFLAGS}")
     message(STATUS "-> Extra RPATH: ${LIBPYTHON_RPATH}")
   endif()
+
+  # These directories are adjusted here so we don't have to escape
+  # ${prefix} and make it survive across multiple expansions from shells
+  # cmake and libtool.
+  set(ROCGDB_HTML_DIR "${ROCGDB_INTERMEDIATE_INSTALL_DIR}/share/html")
+  set(ROCGDB_PDF_DIR "${ROCGDB_INTERMEDIATE_INSTALL_DIR}/share/doc")
+  set(ROCGDB_INFO_DIR "${ROCGDB_INTERMEDIATE_INSTALL_DIR}/share/info/rocgdb")
 
   add_custom_target("${ROCGDB_TARGET_NAME}"
     ALL
