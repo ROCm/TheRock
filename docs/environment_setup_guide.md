@@ -10,9 +10,40 @@ If you have a configuration that you have found workarounds to support, please s
 
 See the [project README](../README.md) for quick getting started instructions the following combinations:
 
-- Fedora (TODO: looking for contribution)
+- Fedora 40+
 - Ubuntu 24.04
 - Windows (VS2022)
+
+### Setup - Fedora 40+
+
+```bash
+# Install Fedora dependencies
+sudo dnf install -y gcc-gfortran git ninja-build cmake g++ pkgconf xxd patchelf \
+    automake libtool python3-devel mesa-libEGL-devel texinfo bison flex \
+    libstdc++-static
+
+# Clone the repository
+git clone https://github.com/ROCm/TheRock.git
+cd TheRock
+
+# Init python virtual environment and install python dependencies
+python3 -m venv .venv && source .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+
+# Download submodules and apply patches
+python3 ./build_tools/fetch_sources.py
+
+# Configure (adjust GPU family for your hardware)
+cmake -B build -GNinja -DTHEROCK_AMDGPU_FAMILIES=gfx1100
+
+# Build
+ninja -C build
+```
+
+> [!NOTE]
+> Fedora packages may have slightly different names across versions. If a package
+> is not found, search for alternatives with `dnf search <keyword>`.
 
 In general, we will keep the home page updated with quick start instructions for recent versions of the above. Additional advanced advice may be found below for specialty quirks and workarounds.
 

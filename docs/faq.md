@@ -115,3 +115,117 @@ section in RELEASES.md for platform-specific instructions.
 Check your GTT configuration, ensure sufficient system memory is available, and
 verify that kernel parameters are correctly set. Review system logs using
 `dmesg | grep amdgpu` for specific error messages.
+
+### Build fails with "resource exhausted" or out of memory errors
+
+ROCm is a resource-intensive project to build. Try the following:
+
+1. **Reduce parallelism**: Limit the number of parallel jobs
+
+   ```bash
+   ninja -C build -j4  # Use only 4 parallel jobs
+   ```
+
+1. **Add swap space**: If you have limited RAM, consider adding swap
+
+   ```bash
+   sudo fallocate -l 16G /swapfile
+   sudo chmod 600 /swapfile
+   sudo mkswap /swapfile
+   sudo swapon /swapfile
+   ```
+
+1. **Build specific components**: Instead of building everything, target only
+   what you need
+
+   ```bash
+   cmake -B build -GNinja \
+     -DTHEROCK_ENABLE_ALL=OFF \
+     -DTHEROCK_ENABLE_HIPIFY=ON \
+     -DTHEROCK_AMDGPU_FAMILIES=gfx1100
+   ```
+
+### CMake version errors
+
+Different project components enforce different CMake version ranges. If you
+encounter CMake version issues:
+
+```bash
+# Activate your venv
+source .venv/bin/activate
+
+# Install a specific CMake version
+pip install 'cmake<4'
+
+# On Linux, refresh the path cache
+hash -r
+```
+
+### Pre-commit hooks are failing
+
+Run pre-commit on all files to see detailed error messages:
+
+```bash
+pre-commit run --all-files
+```
+
+Common issues:
+
+- **Formatting errors**: Let the hooks auto-fix by running them again after the
+  first failure
+- **clang-format version mismatch**: Ensure you have clang-format 18.1.4
+  installed
+- **Trailing whitespace/tabs**: These are auto-fixed by the hooks
+
+### How do I clean and rebuild a specific component?
+
+Use the component's `+expunge` target for a clean slate:
+
+```bash
+# Clean and rebuild just CLR
+ninja -C build clr+expunge && ninja -C build clr
+```
+
+### Build succeeds but tests fail
+
+1. Ensure your GPU is properly detected:
+
+   ```bash
+   # Check if amdgpu driver is loaded
+   lsmod | grep amdgpu
+
+   # Check GPU visibility
+   ls /dev/kfd /dev/dri/render*
+   ```
+
+1. Verify library paths are correct:
+
+   ```bash
+   export LD_LIBRARY_PATH=build/dist/rocm/lib:$LD_LIBRARY_PATH
+   ```
+
+1. Check permissions:
+
+   ```bash
+   # Your user should be in the 'render' or 'video' group
+   groups
+   # Add if needed
+   sudo usermod -a -G render $USER
+   sudo usermod -a -G video $USER
+   # Log out and back in for changes to take effect
+   ```
+
+## Contributing questions
+
+### How do I find good first issues?
+
+Look for issues labeled with `good first issue` or check the
+[Contribution opportunities](../CONTRIBUTING.md#contribution-opportunities)
+section in CONTRIBUTING.md for areas where help is needed.
+
+### Where can I get help with my contribution?
+
+- **Discord**: Join the [AMD Developer Community](https://discord.com/invite/amd-dev)
+  and ask in `#therock-contributors`
+- **GitHub Issues**: File an issue if you're stuck on a specific problem
+- **GitHub Discussions**: For broader questions about direction or approach

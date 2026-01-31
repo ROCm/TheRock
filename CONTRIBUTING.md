@@ -9,6 +9,39 @@ functionality is lacking or even better volunteer to help contribute to help clo
 > For contribution guidelines to other parts of ROCm outside of TheRock, please see
 > [ROCm/CONTRIBUTING.md](https://github.com/ROCm/ROCm/blob/develop/CONTRIBUTING.md).
 
+## Quick start for contributors
+
+```bash
+# 1. Fork on GitHub, then clone your fork
+git clone https://github.com/YOUR_USERNAME/TheRock.git
+cd TheRock
+
+# 2. Add upstream remote
+git remote add upstream https://github.com/ROCm/TheRock.git
+
+# 3. Create feature branch
+git checkout -b users/YOUR_USERNAME/feature-name
+
+# 4. Setup environment
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+pip install pre-commit
+pre-commit install
+
+# 5. Fetch submodules
+python3 ./build_tools/fetch_sources.py
+
+# 6. Make changes, then verify
+pre-commit run --all-files
+
+# 7. Commit and push
+git add <files>
+git commit -m "Description of change"
+git push origin users/YOUR_USERNAME/feature-name
+
+# 8. Create PR on GitHub targeting 'main' branch
+```
+
 ## Developer policies
 
 ### Governance
@@ -135,3 +168,89 @@ We have project-wide style guides with recommendations to follow at
 - [CMake Style Guide](/docs/development/style_guides/cmake_style_guide.md)
 - [GitHub Actions Style Guide](/docs/development/style_guides/github_actions_style_guide.md)
 - [Python Style Guide](/docs/development/style_guides/python_style_guide.md)
+
+Core principles across all languages:
+
+- Optimize for readability and debuggability
+- Explicit is better than implicit
+- Follow DRY, YAGNI, and KISS principles
+- Write portable code (Linux/Windows)
+
+### Testing your changes
+
+Before submitting a PR, verify your changes build and pass tests:
+
+```bash
+# Rebuild affected component
+ninja -C build <component>+build
+
+# Run tests
+ctest --test-dir build
+
+# Or run specific test binary
+LD_LIBRARY_PATH=build/dist/rocm/lib build/dist/rocm/bin/<test_binary>
+```
+
+See the [Development Guide](docs/development/development_guide.md) for more details on
+the build system and component development.
+
+## CI/CD pipeline
+
+Pull requests trigger the following workflows:
+
+| Workflow         | Purpose                          |
+| ---------------- | -------------------------------- |
+| `ci.yml`         | Main CI (Linux + Windows builds) |
+| `pre-commit.yml` | Code style validation            |
+
+### Default CI builds
+
+- Linux: gfx94X, gfx110X
+- Windows: gfx110X
+
+### Triggering additional builds
+
+Add labels to your PR to trigger builds for additional GPU families:
+
+- `gfx120X-linux` - Build for RDNA4 on Linux
+- `gfx94X-linux` - Build for CDNA3 on Linux
+
+See `.github/workflows/ci.yml` for the full list of supported labels.
+
+## Contribution opportunities
+
+### Documentation
+
+- Fill gaps in setup guides (Fedora instructions needed at `docs/environment_setup_guide.md`)
+- Improve the FAQ at `docs/faq.md`
+- Add troubleshooting content
+
+### GPU architecture support
+
+Check [ROADMAP.md](ROADMAP.md) for architectures that need testing:
+
+- RDNA2 (gfx1030-gfx1036) - not yet tested
+- Older GCN architectures
+
+### Build system
+
+- CMake improvements
+- Python tooling enhancements
+- CI/CD workflow improvements
+
+### Testing
+
+- Add test coverage
+- Improve test infrastructure
+- Hardware-specific testing
+
+## Key files reference
+
+| File                               | Purpose                       |
+| ---------------------------------- | ----------------------------- |
+| `CONTRIBUTING.md`                  | This file                     |
+| `ROADMAP.md`                       | GPU support roadmap           |
+| `CLAUDE.md`                        | Development quick reference   |
+| `.pre-commit-config.yaml`          | Pre-commit hook configuration |
+| `docs/development/style_guides/`   | Style guides                  |
+| `docs/development/build_system.md` | Build architecture details    |
