@@ -160,31 +160,32 @@ Individual features can be controlled separately (typically in combination with
 `-DTHEROCK_ENABLE_ALL=OFF` or `-DTHEROCK_RESET_FEATURES=ON` to force a
 minimal build):
 
-| Component flag                         | Description                                   |
-| -------------------------------------- | --------------------------------------------- |
-| `-DTHEROCK_ENABLE_AMD_DBGAPI=ON`       | Enables the ROCm debug API library            |
-| `-DTHEROCK_ENABLE_COMPILER=ON`         | Enables the GPU+host compiler toolchain       |
-| `-DTHEROCK_ENABLE_HIPIFY=ON`           | Enables the hipify tool                       |
-| `-DTHEROCK_ENABLE_CORE_RUNTIME=ON`     | Enables the core runtime components and tools |
-| `-DTHEROCK_ENABLE_HIP_RUNTIME=ON`      | Enables the HIP runtime components            |
-| `-DTHEROCK_ENABLE_OCL_RUNTIME=ON`      | Enables the OpenCL runtime components         |
-| `-DTHEROCK_ENABLE_ROCGDB=ON`           | Enables the ROCm debugger (ROCgdb)            |
-| `-DTHEROCK_ENABLE_ROCPROFV3=ON`        | Enables rocprofv3                             |
-| `-DTHEROCK_ENABLE_ROCPROFSYS=ON`       | Enables rocprofiler-systems                   |
-| `-DTHEROCK_ENABLE_RCCL=ON`             | Enables RCCL                                  |
-| `-DTHEROCK_ENABLE_ROCR_DEBUG_AGENT=ON` | Enables the ROCR debug agent library          |
-| `-DTHEROCK_ENABLE_PRIM=ON`             | Enables the PRIM library                      |
-| `-DTHEROCK_ENABLE_BLAS=ON`             | Enables the BLAS libraries                    |
-| `-DTHEROCK_ENABLE_RAND=ON`             | Enables the RAND libraries                    |
-| `-DTHEROCK_ENABLE_SOLVER=ON`           | Enables the SOLVER libraries                  |
-| `-DTHEROCK_ENABLE_SPARSE=ON`           | Enables the SPARSE libraries                  |
-| `-DTHEROCK_ENABLE_MIOPEN=ON`           | Enables MIOpen                                |
-| `-DTHEROCK_ENABLE_MIOPEN_PLUGIN=ON`    | Enables MIOpen_plugin                         |
-| `-DTHEROCK_ENABLE_HIPDNN=ON`           | Enables hipDNN                                |
-| `-DTHEROCK_ENABLE_ROCWMMA=ON`          | Enables rocWMMA                               |
-| `-DTHEROCK_ENABLE_RDC=ON`              | Enables ROCm Data Center Tool (Linux only)    |
-| `-DTHEROCK_ENABLE_FUSILLI_PLUGIN=ON`   | Enables Fusilli Plugin                        |
-| `-DTHEROCK_ENABLE_LIBHIPCXX=ON`        | Enables libhipcxx                             |
+| Component flag                         | Description                                    |
+| -------------------------------------- | ---------------------------------------------- |
+| `-DTHEROCK_ENABLE_AMD_DBGAPI=ON`       | Enables the ROCm debug API library             |
+| `-DTHEROCK_ENABLE_COMPILER=ON`         | Enables the GPU+host compiler toolchain        |
+| `-DTHEROCK_ENABLE_HIPIFY=ON`           | Enables the hipify tool                        |
+| `-DTHEROCK_ENABLE_CORE_RUNTIME=ON`     | Enables the core runtime components and tools  |
+| `-DTHEROCK_ENABLE_HIP_RUNTIME=ON`      | Enables the HIP runtime components             |
+| `-DTHEROCK_ENABLE_OCL_RUNTIME=ON`      | Enables the OpenCL runtime components          |
+| `-DTHEROCK_ENABLE_ROCGDB=ON`           | Enables the ROCm debugger (ROCgdb)             |
+| `-DTHEROCK_ENABLE_ROCPROFV3=ON`        | Enables rocprofv3                              |
+| `-DTHEROCK_ENABLE_ROCPROFSYS=ON`       | Enables rocprofiler-systems                    |
+| `-DTHEROCK_ENABLE_RCCL=ON`             | Enables RCCL                                   |
+| `-DTHEROCK_ENABLE_ROCR_DEBUG_AGENT=ON` | Enables the ROCR debug agent library           |
+| `-DTHEROCK_ENABLE_PRIM=ON`             | Enables the PRIM library                       |
+| `-DTHEROCK_ENABLE_BLAS=ON`             | Enables the BLAS libraries                     |
+| `-DTHEROCK_ENABLE_RAND=ON`             | Enables the RAND libraries                     |
+| `-DTHEROCK_ENABLE_SOLVER=ON`           | Enables the SOLVER libraries                   |
+| `-DTHEROCK_ENABLE_SPARSE=ON`           | Enables the SPARSE libraries                   |
+| `-DTHEROCK_ENABLE_MIOPEN=ON`           | Enables MIOpen                                 |
+| `-DTHEROCK_ENABLE_MIOPEN_PLUGIN=ON`    | Enables MIOpen_plugin                          |
+| `-DTHEROCK_ENABLE_HIPDNN_SAMPLES=ON`   | Enables hipDNN samples (hipDNN Usage Examples) |
+| `-DTHEROCK_ENABLE_HIPDNN=ON`           | Enables hipDNN                                 |
+| `-DTHEROCK_ENABLE_ROCWMMA=ON`          | Enables rocWMMA                                |
+| `-DTHEROCK_ENABLE_RDC=ON`              | Enables ROCm Data Center Tool (Linux only)     |
+| `-DTHEROCK_ENABLE_FUSILLI_PLUGIN=ON`   | Enables Fusilli Plugin                         |
+| `-DTHEROCK_ENABLE_LIBHIPCXX=ON`        | Enables libhipcxx                              |
 
 > [!TIP]
 > Enabling any features will implicitly enable their *minimum* dependencies. Some
