@@ -407,14 +407,18 @@ def do_build(args: argparse.Namespace):
 
         try:
             from setup_sccache_rocm import (
-                install_sccache,
                 setup_rocm_sccache,
                 restore_rocm_compilers,
                 find_sccache,
-                parse_sccache_stats,
             )
 
-            sccache_path = install_sccache()
+            sccache_path = find_sccache()
+            if not sccache_path:
+                raise RuntimeError(
+                    "sccache not found. Please install it:\n"
+                    "  - Linux: sccache should be pre-installed in the Docker image\n"
+                    "  - Windows: choco install sccache"
+                )
             sccache_setup_attempted = True  # Mark before wrapping starts
             setup_rocm_sccache(rocm_dir, sccache_path)
 
@@ -439,18 +443,7 @@ def do_build(args: argparse.Namespace):
             run_command([str(sccache_path), "--zero-stats"], cwd=tempfile.gettempdir())
 
         except Exception as e:
-            print(f"ERROR: sccache setup failed: {e}")
-            print("Falling back to ccache for host code compilation...")
-            args.use_sccache = False
-            args.use_ccache = True
-            env["CMAKE_C_COMPILER_LAUNCHER"] = "ccache"
-            env["CMAKE_CXX_COMPILER_LAUNCHER"] = "ccache"
-            try:
-                run_command(["ccache", "--zero-stats"], cwd=tempfile.gettempdir())
-            except Exception as ccache_error:
-                print(f"WARNING: ccache fallback also failed: {ccache_error}")
-                print("Continuing without compiler caching...")
-                args.use_ccache = False
+            raise RuntimeError(f"sccache setup failed: {e}") from e
 
     # Wrap ALL remaining code in try/finally to ensure sccache cleanup
     # This must cover everything after compiler wrapping to handle any exception
@@ -584,40 +577,11 @@ def do_build(args: argparse.Namespace):
                 )
                 print(f"sccache --show-stats output:\n{sccache_stats_output}")
 
-                # Parse and display cache hit rate
-                metrics = parse_sccache_stats(sccache_stats_output)
-                if metrics:
-                    print("\n" + "=" * 60)
-                    print("sccache Cache Performance Summary")
-                    print("=" * 60)
-                    if "compile_requests" in metrics:
-                        print(
-                            f"Total Compile Requests: {metrics['compile_requests']:,}"
-                        )
-                    if "cache_hits" in metrics:
-                        print(f"Cache Hits: {metrics['cache_hits']:,}")
-                    if "cache_misses" in metrics:
-                        print(f"Cache Misses: {metrics['cache_misses']:,}")
-                    if "hit_rate" in metrics:
-                        hit_rate = metrics["hit_rate"]
-                        emoji = (
-                            "🎯" if hit_rate > 80 else "✅" if hit_rate > 50 else "⚠️"
-                        )
-                        print(f"Cache Hit Rate: {hit_rate:.1f}% {emoji}")
-                    if "cache_errors" in metrics and metrics["cache_errors"] > 0:
-                        print(f"⚠️  Cache Errors: {metrics['cache_errors']:,}")
-                    print("=" * 60 + "\n")
-
     finally:
-        # Always restore original compilers, even on failure
-        # Use sccache_setup_attempted flag since args.use_sccache may be False
-        # due to fallback, but wrappers might still have been created
+        # Always restore original compilers, even on build failure
         if sccache_setup_attempted:
             print("Restoring original ROCm compilers...")
-            try:
-                restore_rocm_compilers(rocm_dir)
-            except Exception as e:
-                print(f"Warning: Failed to restore compilers: {e}")
+            restore_rocm_compilers(rocm_dir)
 
 
 def do_build_triton(
@@ -1084,14 +1048,15 @@ def main(argv: list[str]):
         required=True,
         help="Directory to copy built wheels to",
     )
-    build_p.add_argument(
+    cache_group = build_p.add_mutually_exclusive_group()
+    cache_group.add_argument(
         "--use-ccache",
-        action=argparse.BooleanOptionalAction,
+        action="store_true",
         help="Use ccache as the compiler launcher (for host code only)",
     )
-    build_p.add_argument(
+    cache_group.add_argument(
         "--use-sccache",
-        action=argparse.BooleanOptionalAction,
+        action="store_true",
         help="Use sccache with ROCm compiler wrapping (comprehensive caching for HIP code)",
     )
     build_p.add_argument(

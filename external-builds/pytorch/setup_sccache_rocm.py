@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Sets up sccache to wrap ROCm compilers for PyTorch builds.
+"""Sets up sccache to wrap ROCm compilers for HIP builds.
 
 This script wraps the ROCm LLVM compilers (clang, clang++) with sccache stubs
 to enable caching of HIP device code compilation. This is necessary because
@@ -19,6 +19,11 @@ Environment variables for sccache configuration:
     SCCACHE_BUCKET: S3 bucket for remote caching
     SCCACHE_REGION: S3 region
     SCCACHE_DIR: Local cache directory (if not using remote)
+
+Prerequisites:
+    sccache must be installed and available in PATH.
+    On Linux CI, sccache is pre-installed in the Docker image.
+    On Windows, install via: choco install sccache
 """
 
 import argparse
@@ -27,7 +32,6 @@ import platform
 import shutil
 import stat
 import subprocess
-import sys
 from pathlib import Path
 
 is_windows = platform.system() == "Windows"
@@ -60,55 +64,6 @@ def find_sccache() -> Path | None:
 
     return None
 
-
-def install_sccache() -> Path:
-    """Install sccache if not available."""
-    sccache_path = find_sccache()
-    if sccache_path:
-        print(f"Found sccache at: {sccache_path}")
-        return sccache_path
-
-    print("sccache not found, attempting to install...")
-
-    if is_windows:
-        # Try cargo install
-        try:
-            subprocess.check_call(["cargo", "install", "sccache"])
-            sccache_path = Path.home() / ".cargo" / "bin" / "sccache.exe"
-            if sccache_path.exists():
-                return sccache_path
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            pass
-
-        raise RuntimeError(
-            "Could not install sccache. Please install it manually:\n"
-            "  choco install sccache\n"
-            "  or: cargo install sccache"
-        )
-    else:
-        # Try pip install (sccache is available on PyPI)
-        try:
-            subprocess.check_call([sys.executable, "-m", "pip", "install", "sccache"])
-            sccache_path = find_sccache()
-            if sccache_path:
-                return sccache_path
-        except subprocess.CalledProcessError:
-            pass
-
-        # Try cargo install as fallback
-        try:
-            subprocess.check_call(["cargo", "install", "sccache"])
-            sccache_path = Path.home() / ".cargo" / "bin" / "sccache"
-            if sccache_path.exists():
-                return sccache_path
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            pass
-
-        raise RuntimeError(
-            "Could not install sccache. Please install it manually:\n"
-            "  pip install sccache\n"
-            "  or: cargo install sccache"
-        )
 
 
 def create_sccache_wrapper(compiler_path: Path, sccache_path: Path) -> None:
@@ -327,88 +282,15 @@ def restore_rocm_compilers(rocm_path: Path) -> None:
     print("ROCm compiler restoration complete.")
 
 
-def parse_sccache_stats(stats_output: str) -> dict:
-    """Parse sccache --show-stats output for metrics.
-
-    Returns a dictionary with keys:
-        - compile_requests: Total compilation requests
-        - cache_hits: Number of cache hits
-        - cache_misses: Number of cache misses
-        - hit_rate: Cache hit percentage
-        - cache_errors: Number of cache errors
-    """
-    metrics = {}
-
-    def extract_int(line: str) -> int | None:
-        try:
-            return int(line.split()[-1])
-        except (ValueError, IndexError):
-            return None
-
-    for line in stats_output.splitlines():
-        line = line.strip()
-        if "Compile requests" in line and "compile_requests" not in metrics:
-            if (val := extract_int(line)) is not None:
-                metrics["compile_requests"] = val
-        elif "Cache hits" in line and "(Rust)" not in line:
-            if (val := extract_int(line)) is not None:
-                metrics["cache_hits"] = val
-        elif "Cache misses" in line:
-            if (val := extract_int(line)) is not None:
-                metrics["cache_misses"] = val
-        elif "Cache errors" in line:
-            if (val := extract_int(line)) is not None:
-                metrics["cache_errors"] = val
-
-    # Calculate hit rate
-    if "compile_requests" in metrics and "cache_hits" in metrics:
-        total = metrics["compile_requests"]
-        metrics["hit_rate"] = (
-            (metrics["cache_hits"] / total * 100.0) if total > 0 else 0.0
-        )
-
-    return metrics
-
-
-def print_sccache_stats():
-    """Print sccache statistics with cache hit rate analysis."""
-    sccache_path = find_sccache()
-    if sccache_path:
-        try:
-            result = subprocess.run(
-                [str(sccache_path), "--show-stats"],
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            stats_output = result.stdout
-            print(stats_output)
-
-            # Parse and display metrics
-            metrics = parse_sccache_stats(stats_output)
-            if metrics:
-                print("\n=== sccache Cache Performance ===")
-                if "compile_requests" in metrics:
-                    print(f"Total Compile Requests: {metrics['compile_requests']}")
-                if "cache_hits" in metrics:
-                    print(f"Cache Hits: {metrics['cache_hits']}")
-                if "cache_misses" in metrics:
-                    print(f"Cache Misses: {metrics['cache_misses']}")
-                if "hit_rate" in metrics:
-                    print(f"Cache Hit Rate: {metrics['hit_rate']:.1f}%")
-                if "cache_errors" in metrics and metrics["cache_errors"] > 0:
-                    print(f"⚠️  Cache Errors: {metrics['cache_errors']}")
-        except Exception as e:
-            print(f"Could not get sccache stats: {e}")
-
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Setup sccache to wrap ROCm compilers for PyTorch builds"
+        description="Setup sccache to wrap ROCm compilers for HIP builds"
     )
     parser.add_argument(
         "--rocm-path",
         type=Path,
+        required=True,
         help="Path to ROCm installation (e.g., from `python -m rocm_sdk path --root`)",
     )
     parser.add_argument(
@@ -421,31 +303,26 @@ def main():
         type=Path,
         help="Path to sccache binary (auto-detected if not specified)",
     )
-    parser.add_argument(
-        "--show-stats", action="store_true", help="Show sccache statistics"
-    )
 
     args = parser.parse_args()
-
-    if args.show_stats:
-        print_sccache_stats()
-        return
-
-    # rocm-path is required for setup and restore operations
-    if not args.rocm_path:
-        parser.error("--rocm-path is required for setup/restore operations")
 
     if args.restore:
         restore_rocm_compilers(args.rocm_path)
         return
 
-    # Find or install sccache
+    # Find sccache - must be pre-installed
     if args.sccache_path:
         sccache_path = args.sccache_path
         if not sccache_path.exists():
             raise RuntimeError(f"Specified sccache not found: {sccache_path}")
     else:
-        sccache_path = install_sccache()
+        sccache_path = find_sccache()
+        if not sccache_path:
+            raise RuntimeError(
+                "sccache not found. Please install it:\n"
+                "  - Linux: sccache should be pre-installed in the Docker image\n"
+                "  - Windows: choco install sccache"
+            )
 
     print(f"Using sccache: {sccache_path}")
 
@@ -456,7 +333,7 @@ def main():
         )
         print(f"sccache version: {result.stdout.strip()}")
     except subprocess.CalledProcessError as e:
-        raise RuntimeError(f"sccache verification failed: {e}")
+        raise RuntimeError(f"sccache verification failed: {e}") from e
 
     # Setup wrappers
     setup_rocm_sccache(args.rocm_path, sccache_path)
