@@ -42,6 +42,11 @@ on:
       ref:
         description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
         type: string
+      cache_type:
+        description: "Compiler cache type (sccache, ccache, or none)"
+        required: false
+        type: string
+        default: sccache
   workflow_dispatch:
     inputs:
       amdgpu_family:
@@ -91,6 +96,14 @@ on:
         required: true
         type: string
         default: "release/2.7"
+      cache_type:
+        description: "Compiler cache type"
+        type: choice
+        options:
+          - sccache
+          - ccache
+          - none
+        default: sccache
 
 permissions:
   id-token: write
@@ -209,17 +222,23 @@ jobs:
             --install-rocm \
             --pip-cache-dir /tmp/pipcache \
             --index-url "${{ inputs.cloudfront_url }}/${{ inputs.amdgpu_family }}/" \
-            --use-sccache \
+            ${{ inputs.cache_type == 'sccache' && '--use-sccache' || (inputs.cache_type == 'ccache' && '--use-ccache' || '') }} \
             --clean \
             --output-dir ${{ env.PACKAGE_DIST_DIR }} ${{ env.optional_build_prod_arguments }}
           python ./build_tools/github_actions/write_torch_versions.py --dist-dir ${{ env.PACKAGE_DIST_DIR }}
 
-      - name: Report sccache stats
-        if: ${{ !cancelled() }}
+      - name: Report cache stats
+        if: ${{ !cancelled() && inputs.cache_type != 'none' }}
         run: |
-          echo "sccache Stats:"
-          echo "--------------"
-          sccache --show-stats || true
+          if [ "${{ inputs.cache_type }}" = "sccache" ]; then
+            echo "sccache Stats:"
+            echo "--------------"
+            sccache --show-stats || true
+          elif [ "${{ inputs.cache_type }}" = "ccache" ]; then
+            echo "ccache Stats:"
+            echo "-------------"
+            ccache -s -v || true
+          fi
 
       - name: Sanity Check Wheel
         run: |
