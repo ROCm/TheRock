@@ -46,7 +46,7 @@ permissions:
 
 jobs:
   configure_test_matrix:
-    name: "Configure test matrix"
+    name: "Configure test matrix (${{ inputs.amdgpu_families }})"
     # if there is a test machine available
     if: ${{ inputs.test_runs_on != '' }}
     runs-on: ${{ inputs.test_runs_on }}

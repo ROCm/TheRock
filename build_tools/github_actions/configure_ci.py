@@ -333,6 +333,9 @@ def generate_multi_arch_matrix(
                     {
                         "amdgpu_family": family_name,
                         "test-runs-on": test_runs_on,
+                        "sanity_check_only_for_family": platform_info.get(
+                            "sanity_check_only_for_family", False
+                        ),
                     }
                 )
 
