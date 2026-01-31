@@ -155,10 +155,8 @@ jobs:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}
 
-      - name: Install sccache
-        run: |
-          pip install sccache
-          sccache --version
+      - name: Verify sccache
+        run: sccache --version
 
       - name: Select Python version
         run: |
