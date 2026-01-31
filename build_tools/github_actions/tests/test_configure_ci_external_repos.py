@@ -43,7 +43,7 @@ from configure_ci_external_repos import (
 
 class TestDetectExternalRepo(unittest.TestCase):
     """Test detect_external_repo() function.
-    
+
     Tests repository name detection and validation logic.
     No mocking needed - pure string parsing and lookup.
     """
@@ -87,7 +87,7 @@ class TestDetectExternalRepo(unittest.TestCase):
 
 class TestDetectExternalRepoProjects(unittest.TestCase):
     """Test detect_external_repo_projects_to_build() function.
-    
+
     This function orchestrates multiple I/O operations (git diff, config file reading)
     to decide whether to build and what to test. We mock the I/O operations to test
     the orchestration logic in isolation, following patterns in:
@@ -310,7 +310,7 @@ class TestDetectExternalRepoProjects(unittest.TestCase):
 
 class TestCrossProductProjectsWithGpuVariants(unittest.TestCase):
     """Test cross_product_projects_with_gpu_variants() function.
-    
+
     Tests pure matrix generation logic. No mocking needed - pure function
     that takes lists and returns combined list.
     """
