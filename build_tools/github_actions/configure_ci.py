@@ -202,7 +202,7 @@ def _determine_enable_build_jobs_and_test_type(
             "full" if (linux_test_output or windows_test_output) else test_type
         )
 
-    modified_paths = get_modified_paths(base_ref)
+    modified_paths = shared.get_modified_paths(base_ref)
     print("modified_paths (max 200):", modified_paths[:200])
     print(f"Checking modified files since this had a {github_event_name} trigger")
     # TODO(#199): other behavior changes
@@ -411,7 +411,7 @@ def _detect_external_repo_projects(
 
         # Check if only skippable paths changed
         print(f"Detecting changed files for event: {github_event_name}")
-        modified_paths = get_modified_paths(base_ref)
+        modified_paths = shared.get_modified_paths(base_ref)
 
         if modified_paths is None:
             print("ERROR: Could not determine modified paths")
