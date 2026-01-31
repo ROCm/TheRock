@@ -168,7 +168,12 @@ jobs:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}
 
+      - name: Install sccache (temporary until Docker image is updated)
+        if: ${{ inputs.cache_type == 'sccache' }}
+        run: pip install sccache
+
       - name: Verify sccache
+        if: ${{ inputs.cache_type == 'sccache' }}
         run: sccache --version
 
       - name: Select Python version
