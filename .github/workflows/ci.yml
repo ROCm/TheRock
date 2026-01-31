@@ -43,6 +43,10 @@ on:
       windows_use_prebuilt_artifacts:
         type: boolean
         description: "If enabled, the CI will pull Windows artifacts using artifact_run_id and only run tests"
+      additional_label_options:
+        type: string
+        description: "If enabled, these additional labels options will be applied. ex: test_runner:oem"
+        default: ""
       artifact_run_id:
         type: string
         description: "If provided, the tests will run on this artifact ID"
