@@ -422,13 +422,14 @@ def do_build(args: argparse.Namespace):
             sccache_setup_attempted = True  # Mark before wrapping starts
             setup_rocm_sccache(rocm_dir, sccache_path)
 
-            # Set CMAKE launchers for C/C++ compilers only
-            # Note: CMAKE_HIP_COMPILER_LAUNCHER is NOT set because:
-            # - On Linux: sccache returns "Compiler not supported" error
-            # - On Windows: doesn't help with HIP linker flag issues
-            # HIP caching on Linux is handled by wrapper scripts instead
+            # Set CMAKE launchers for C/C++ host code compilation
             env["CMAKE_C_COMPILER_LAUNCHER"] = str(sccache_path)
             env["CMAKE_CXX_COMPILER_LAUNCHER"] = str(sccache_path)
+
+            # Set HIP_CLANG_LAUNCHER to enable HIP device code caching
+            # This tells hipcc to use sccache when invoking clang for HIP compilation
+            # Critical for Windows where wrapper scripts don't work
+            env["HIP_CLANG_LAUNCHER"] = str(sccache_path)
 
             # Start sccache server to warm it up
             try:
