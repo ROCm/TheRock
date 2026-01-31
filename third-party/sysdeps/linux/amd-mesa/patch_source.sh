@@ -9,7 +9,7 @@ LIBVA_PKGCONFIG_MESON_BUILD="$SOURCE_DIR/subprojects/libva-2.22.0/pkgconfig/meso
 LIBVA_SOURCE="$SOURCE_DIR/subprojects/libva-2.22.0/va/va.c"
 echo "Patching sources..."
 
-# Replace 'gallium_drv_video' in shared_library() calls with 'rocm_sysdeps_gallium_drv_video' 
+# Replace 'gallium_drv_video' in shared_library() calls with 'rocm_sysdeps_gallium_drv_video'
 # This handles both the with_amd_decode_only branch and the standard branch
 sed -i -E "/shared_library\(/,/\)/ s/'gallium_drv_video'/'rocm_sysdeps_gallium_drv_video'/" "$VA_MESON_BUILD"
 
