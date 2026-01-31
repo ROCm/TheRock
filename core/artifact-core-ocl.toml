@@ -4,9 +4,10 @@
 [components.doc."core/ocl-clr/stage"]
 [components.lib."core/ocl-clr/stage"]
 include = [
-  "share/ocl/**",
+  "share/opencl/**",
 ]
 [components.run."core/ocl-clr/stage"]
 include = [
   "bin/**",
+  "tests/**",
 ]
