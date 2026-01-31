@@ -59,6 +59,9 @@ from amdgpu_family_matrix import (
     all_build_variants,
     get_all_families_for_trigger_types,
 )
+import configure_ci_shared as shared
+import configure_ci_external_repos as external_repos
+from detect_external_repo_config import get_skip_patterns
 
 from fetch_test_configurations import test_matrix
 
@@ -544,31 +547,6 @@ def run_from_env() -> None:
 # --------------------------------------------------------------------------- #
 
 
-def get_modified_paths(base_ref: str) -> Optional[Iterable[str]]:
-    """Returns the paths of modified files relative to the base reference."""
-    # For external repos, diff their checkout directory (e.g., external-repos/rocm-libraries)
-    # instead of the current directory (TheRock root)
-    external_source_path = os.environ.get("EXTERNAL_SOURCE_PATH", "")
-    git_cwd = THEROCK_DIR / external_source_path if external_source_path else None
-
-    try:
-        return subprocess.run(
-            ["git", "diff", "--name-only", base_ref],
-            stdout=subprocess.PIPE,
-            check=True,
-            text=True,
-            timeout=60,
-            cwd=git_cwd,
-        ).stdout.splitlines()
-    except TimeoutError:
-        print(
-            "Computing modified files timed out. Not using PR diff to determine"
-            " jobs to run.",
-            file=sys.stderr,
-        )
-        return None
-
-
 def get_therock_submodule_paths() -> Optional[Iterable[str]]:
     """Returns TheRock submodules paths."""
     try:
@@ -596,36 +574,8 @@ def get_therock_submodule_paths() -> Optional[Iterable[str]]:
         return []
 
 
-# Paths matching any of these patterns are considered to have no influence over
-# build or test workflows so any related jobs can be skipped if all paths
-# modified by a commit/PR match a pattern in this list.
-SKIPPABLE_PATH_PATTERNS = [
-    "docs/*",
-    "*.gitignore",
-    "*.md",
-    "*.pre-commit-config.*",
-    ".github/dependabot.yml",
-    "*CODEOWNERS",
-    "*LICENSE",
-    # Changes to 'external-builds/' (e.g. PyTorch) do not affect "CI" workflows.
-    # At time of writing, workflows run in this sequence:
-    #   `ci.yml`
-    #   `ci_linux.yml`
-    #   `build_linux_artifacts.yml`
-    #   `test_artifacts.yml`
-    #   `test_component.yml`
-    # If we add external-builds tests there, we can revisit this, maybe leaning
-    # on options like LINUX_USE_PREBUILT_ARTIFACTS or sufficient caching to keep
-    # workflows efficient when only nodes closer to the edges of the build graph
-    # are changed.
-    "external-builds/*",
-    # Changes to dockerfiles do not currently affect CI workflows directly.
-    # Docker images are built and published after commits are pushed, then
-    # workflows can be updated to use the new image sha256 values.
-    "dockerfiles/*",
-    # Changes to experimental code do not run standard build/test workflows.
-    "experimental/*",
-]
+# Use TheRock's skippable path patterns from shared module
+SKIPPABLE_PATH_PATTERNS = shared.THEROCK_SKIPPABLE_PATH_PATTERNS
 
 
 def is_path_skippable(path: str) -> bool:
