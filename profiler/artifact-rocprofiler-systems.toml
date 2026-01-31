@@ -7,7 +7,8 @@ include = [
 ]
 [components.lib."profiler/rocprofiler-systems/stage"]
 include = [
-  "libexec/rocprofiler-systems/**"
+  "libexec/rocprofiler-systems/**",
+  "share/rocprofiler-systems/**",
 ]
 [components.run."profiler/rocprofiler-systems/stage"]
 include = [
