@@ -35,6 +35,20 @@ DEFAULT_ORIGIN = "https://github.com/pytorch/pytorch.git"
 DEFAULT_HASHTAG = "nightly"
 
 
+def fix_windows_build(repo_dir: Path):
+    # This is a hack workaround for the pytorch build issue.
+    # This can be removed once cmake correctly uses clang-cl.
+    file = repo_dir / "cmake" / "public" / "LoadHIP.cmake"
+    lines = file.read_text("utf-8").splitlines()
+    with open(file, "w", encoding="utf-8") as fp:
+        for line in lines:
+            if line.startswith("enable_language(HIP)"):
+                fp.write("#enable_language(HIP)\n")
+            else:
+                fp.write(line)
+                fp.write('\n')
+
+
 def main(cl_args: list[str]):
     def add_common(command_parser: argparse.ArgumentParser):
         command_parser.add_argument(
@@ -80,6 +94,9 @@ def main(cl_args: list[str]):
 
     args = p.parse_args(cl_args)
     args.func(args)
+
+    if sys.platform == "win32":
+        fix_windows_build(args.checkout_dir)
 
 
 if __name__ == "__main__":
