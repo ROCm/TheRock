@@ -94,6 +94,9 @@ cmd = [
     "..",
 ]
 
+if platform.system() == "Windows":
+    cmd.append("-DCMAKE_RC_COMPILER=rc.exe")
+
 logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
 subprocess.run(cmd, check=True, env=environ_vars)
 
@@ -104,7 +107,6 @@ cmd = [
     "-cmake-options",
     f"-DHIP_HIPCC_EXECUTABLE={THEROCK_BIN_PATH / HIPCC_BINARY_NAME} -DCMAKE_HIP_COMPILER_ROCM_ROOT={HIP_COMPILER_ROCM_ROOT}",
 ]
-
 logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
 
 subprocess.run(cmd, check=True, env=environ_vars)
