@@ -112,7 +112,7 @@ jobs:
           SHARD_INDEX: ${{ matrix.shard }}
           TOTAL_SHARDS: ${{ fromJSON(inputs.component).total_shards }}
           TEST_TYPE: ${{ fromJSON(inputs.component).test_type }}
-          ASAN_OPTIONS: "detect_leaks=0:halt_on_error:0:print_stats=1:verbosity=1"
+#          ASAN_OPTIONS: "detect_leaks=0:halt_on_error:0:print_stats=1:verbosity=1"
         run: |
           ${{ fromJSON(inputs.component).test_script }}
 
