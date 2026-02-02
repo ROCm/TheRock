@@ -81,10 +81,7 @@ class MIOpenDriverConvTest(FunctionalBase):
                 full_cmd = f"{miopen_driver} {cmd_str}"
 
                 # Add GPU-specific flags if needed
-                if (
-                    "Backward_Conv" in test_suite
-                    and gfx_id in self.gpu_specific_flags
-                ):
+                if "Backward_Conv" in test_suite and gfx_id in self.gpu_specific_flags:
                     backward_flags = self.gpu_specific_flags[gfx_id].get(
                         "backward_flags", ""
                     )
@@ -137,9 +134,7 @@ class MIOpenDriverConvTest(FunctionalBase):
                     result["error"] = error_message
 
                 all_results.append(result)
-                log.info(
-                    f"[{current_test}/{total_tests}] {test_case_name}: {status}"
-                )
+                log.info(f"[{current_test}/{total_tests}] {test_case_name}: {status}")
 
         # Write all results to JSON file
         with open(self.results_json, "w") as f:
