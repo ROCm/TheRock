@@ -72,6 +72,8 @@ class ROCfftBenchmark(BenchmarkBase):
     def parse_results(self) -> List[Dict[str, Any]]:
         """Parse benchmark results from log file.
 
+        Note: rocfft-bench outputs text format only (no CSV/JSON support).
+
         Returns:
             List[Dict[str, Any]]: test_results list
         """
@@ -102,7 +104,11 @@ class ROCfftBenchmark(BenchmarkBase):
                 if not test_case_match:
                     continue
 
-                # Build subtest identifier
+                # Build subtest identifier from rocFFT command-line argument
+                # Example inputs:
+                #   "--length 336 336 56"          (3D FFT) -> "length=336_336_56"
+                #   "--length 1024-1024-1024"      (alternative format) -> "length=1024_1024_1024"
+                # The dimensions use spaces or hyphens as separators, normalized to underscores
                 length_type = test_case_match.group(1)
                 dimensions = test_case_match.group(2).replace(" ", "_").replace("-", "")
                 subtest_id = f"{length_type}={dimensions}"
@@ -121,10 +127,12 @@ class ROCfftBenchmark(BenchmarkBase):
                         # Next test case started, this one failed
                         break
 
-                # Determine if test passed or failed
-                status = "PASS" if (gpu_time and gflops) else "FAIL"
+                # Set defaults for failed test cases
                 gpu_time = gpu_time or 0.0
                 gflops = gflops or 0.0
+
+                # Determine if test passed or failed (both values must be > 0)
+                status = "PASS" if (gpu_time > 0 and gflops > 0) else "FAIL"
 
                 # Add GPU time result
                 time_testname = f"rider_{subtest_id}_time"

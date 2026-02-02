@@ -101,6 +101,8 @@ class RCCLBenchmark(BenchmarkBase):
     def parse_results(self) -> List[Dict[str, Any]]:
         """Parse benchmark results from log file.
 
+        Note: RCCL benchmarks output text format only (no CSV/JSON support).
+
         Returns:
             List[Dict[str, Any]]: test_results list
         """

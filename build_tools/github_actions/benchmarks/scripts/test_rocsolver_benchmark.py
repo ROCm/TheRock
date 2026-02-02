@@ -54,6 +54,8 @@ class ROCsolverBenchmark(BenchmarkBase):
     def parse_results(self) -> List[Dict[str, Any]]:
         """Parse benchmark results from log file.
 
+        Note: rocsolver-bench outputs text format only (no CSV/JSON support).
+
         Returns:
             List[Dict[str, Any]]: test_results list
         """

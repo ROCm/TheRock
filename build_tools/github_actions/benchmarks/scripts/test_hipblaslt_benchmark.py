@@ -113,6 +113,9 @@ class HipblasltBenchmark(BenchmarkBase):
     def parse_results(self) -> List[Dict[str, Any]]:
         """Parse benchmark results from log file.
 
+        Note: hipblaslt-bench supports --data (CSV) or --yaml output.
+        Currently using CSV (default).
+
         Returns:
             List[Dict[str, Any]]: test_results list
         """
@@ -152,12 +155,17 @@ class HipblasltBenchmark(BenchmarkBase):
         with open(self.log_file, "r") as log_fp:
             data = log_fp.readlines()
 
-        # Find CSV header line
+        # Parse CSV output from benchmark logs
+        # hipblaslt-bench outputs CSV format like:
+        #   Header: [0]:transA,transB,grouped_gemm,batch_count,m,n,k,...,hipblaslt-Gflops,hipblaslt-GB/s,us,...
+        #   Data:   N,N,0,1,8192,320,320,...,177875,1055.59,9.432,...
         header_line = None
         header_index = -1
 
         for i, line in enumerate(data):
+            # Identify header row (contains column names: transA, transB, hipblaslt-Gflops)
             if "transA" in line and "transB" in line and "hipblaslt-Gflops" in line:
+                # Remove "[0]:" prefix, strip whitespace, split by comma to get individual columns
                 header_line = line.replace("[0]:", "").strip().split(",")
                 header_index = i
                 break
@@ -166,6 +174,7 @@ class HipblasltBenchmark(BenchmarkBase):
             log.warning("CSV header not found in log file")
             return test_results
 
+        # Process data rows (lines after the header)
         for line in data[header_index + 1 :]:
             line = line.strip()
 
@@ -178,8 +187,7 @@ class HipblasltBenchmark(BenchmarkBase):
             ):
                 continue
 
-            # Remove [0]: prefix and parse values
-            line = re.sub(r"^\[\d+\]:\s*", "", line)
+            # Parse CSV data row, split by comma to get individual columns
             values = line.split(",")
 
             if len(values) != len(header_line):

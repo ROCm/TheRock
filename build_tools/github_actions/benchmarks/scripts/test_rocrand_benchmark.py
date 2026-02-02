@@ -60,6 +60,9 @@ class ROCrandBenchmark(BenchmarkBase):
     def parse_results(self) -> List[Dict[str, Any]]:
         """Parse benchmark results from log files.
 
+        Note: rocrand benchmarks support --benchmark_format=csv/json/console.
+        Currently using CSV format (--benchmark_format=csv).
+
         Returns:
             List[Dict[str, Any]]: test_results list
         """

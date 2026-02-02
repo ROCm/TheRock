@@ -269,6 +269,8 @@ class ROCblasBenchmark(BenchmarkBase):
     def parse_results(self) -> List[Dict[str, Any]]:
         """Parse benchmark results from log files.
 
+        Note: rocblas-bench outputs CSV to stdout (no JSON support).
+
         Parses CSV output from rocBLAS-bench for GEMM, GEMV, GER, DOT, and GEMM_HPA_HGEMM suites.
         Only rocblas-Gflops metric is captured.
         """

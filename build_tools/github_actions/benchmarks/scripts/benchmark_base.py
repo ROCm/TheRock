@@ -585,30 +585,43 @@ class BenchmarkBase:
 
         # Raise exception if benchmarks failed
         if status_info["final_status"] != "PASS":
-            if status_info["fail_count"] > 0 and status_info["unknown_count"] > 0:
-                failed_list = ", ".join(status_info["failed_tests"])
-                unknown_list = ", ".join(status_info["unknown_tests"])
-                raise TestResultError(
-                    f"Benchmark test failed: {status_info['fail_count']} FAIL, "
-                    f"{status_info['unknown_count']} UNKNOWN out of {status_info['total_count']} tests\n"
-                    f"Failed tests: {failed_list}\n"
-                    f"Unknown tests: {unknown_list}\n"
+            fail_count = status_info["fail_count"]
+            unknown_count = status_info["unknown_count"]
+            total_count = status_info["total_count"]
+
+            # Build test lists
+            failed_tests = (
+                f"Failed tests: {', '.join(status_info['failed_tests'])}\n"
+                if fail_count > 0
+                else ""
+            )
+            unknown_tests = (
+                f"Unknown tests: {', '.join(status_info['unknown_tests'])}\n"
+                if unknown_count > 0
+                else ""
+            )
+
+            # Construct error message based on failure type
+            if fail_count > 0 and unknown_count > 0:
+                error_msg = (
+                    f"Benchmark test failed: {fail_count} FAIL, {unknown_count} UNKNOWN out of {total_count} tests\n"
+                    f"{failed_tests}{unknown_tests}"
                     f"Performance regressions detected (FAIL) and missing baselines (UNKNOWN)"
                 )
-            elif status_info["fail_count"] > 0:
-                failed_list = ", ".join(status_info["failed_tests"])
-                raise TestResultError(
-                    f"Benchmark test failed: {status_info['fail_count']} out of {status_info['total_count']} tests failed\n"
-                    f"Failed tests: {failed_list}\n"
+            elif fail_count > 0:
+                error_msg = (
+                    f"Benchmark test failed: {fail_count} out of {total_count} tests failed\n"
+                    f"{failed_tests}"
                     f"Performance regressions detected"
                 )
             else:  # unknown_count > 0
-                unknown_list = ", ".join(status_info["unknown_tests"])
-                raise TestResultError(
-                    f"Benchmark test status unknown: {status_info['unknown_count']} out of {status_info['total_count']} tests have no baseline\n"
-                    f"Unknown tests: {unknown_list}\n"
+                error_msg = (
+                    f"Benchmark test status unknown: {unknown_count} out of {total_count} tests have no baseline\n"
+                    f"{unknown_tests}"
                     f"No baseline data available for comparison (expected for new benchmarks)"
                 )
+
+            raise TestResultError(error_msg)
 
 
 def run_benchmark_main(benchmark_instance):
