@@ -29,6 +29,10 @@ on:
       extra_cmake_options:
         type: string
 
+  # workflow_call has additional inputs (external_source_checkout, therock_ref, repository_override)
+  # that workflow_dispatch doesn't have. This is intentional - workflow_dispatch would exceed
+  # GitHub's previous 10-input limit (now 25 as of Dec 2025), and actionlint still enforces
+  # the old limit. These extra inputs are only needed for programmatic calls from ci.yml anyway.
   workflow_call:
     inputs:
       package_version:
@@ -48,13 +52,36 @@ on:
         type: boolean
       extra_cmake_options:
         type: string
+      external_source_checkout:
+        type: boolean
+        description: "Whether source is from external repo (rocm-libraries/systems)"
+        default: false
+      external_source_path:
+        type: string
+        description: "Path to external repo checkout (e.g., external-repos/rocm-libraries)"
+        default: ""
+      therock_ref:
+        type: string
+        description: "TheRock git ref to use (for external repos)"
+        default: ""
+      repository_override:
+        type: string
+        description: "Override github.repository for testing (e.g., 'ROCm/rocm-libraries')"
+        default: ""
+      skip_patches:
+        type: string
+        description: "Comma-separated patch filenames to temporarily skip during patch removal coordination with external repos"
+        default: ""
 
 permissions:
   contents: read
 
 jobs:
   build_windows_artifacts:
-    name: Build ${{ inputs.build_variant_label }} (xfail ${{ inputs.expect_failure }})
+    # For external repos (rocm-libraries, rocm-systems), include platform, GPU family, and build variant
+    # in job name to make them easier to identify in GitHub Actions UI. Internal builds use 'Build {variant}' format.
+    # Test workflows use the same pattern.
+    name: ${{ inputs.external_source_checkout && format('Build Windows::{0}::{1}', inputs.amdgpu_families, inputs.build_variant_label) || format('Build {0}', inputs.build_variant_label) }} (xfail ${{ inputs.expect_failure }})
     runs-on: azure-windows-scale-rocm
     continue-on-error: ${{ inputs.expect_failure }}
     timeout-minutes: 720 # 12 hour timeout
@@ -73,9 +100,40 @@ jobs:
       TEATIME_FORCE_INTERACTIVE: 0
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
+      # For external repo integration (rocm-libraries, rocm-systems)
+      EXTERNAL_SOURCE_CHECKOUT: ${{ inputs.external_source_checkout }}
+      EXTERNAL_SOURCE_PATH: ${{ inputs.external_source_path }}
     steps:
-      - name: "Checking out repository"
+      - name: Configure GitHub longpath
+        run: |
+          git config --global core.longpaths true
+
+      - name: Checking out repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: "ROCm/TheRock"
+          ref: ${{ inputs.therock_ref || github.ref }}
+
+      # For external repos (rocm-libraries, rocm-systems), checkout to isolated path.
+      # CMake will be configured to use this path via THEROCK_*_SOURCE_DIR options.
+      - name: Extract external repo name
+        if: ${{ inputs.external_source_checkout }}
+        id: external_repo
+        shell: pwsh
+        run: |
+          $REPO = "${{ inputs.repository_override || github.repository }}"
+          $REPO_NAME = $REPO.Split('/')[-1]
+          $EXTERNAL_PATH = "external-repos/$REPO_NAME"
+          "repo_name=$REPO_NAME" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "external_path=$EXTERNAL_PATH" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "Detected external repo: $REPO_NAME, checkout path: $EXTERNAL_PATH"
+
+      - name: Checkout external source repository
+        if: ${{ inputs.external_source_checkout }}
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ inputs.repository_override || github.repository }}
+          path: ${{ steps.external_repo.outputs.external_path }}
 
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
@@ -111,7 +169,12 @@ jobs:
       - name: Runner health status
         run: |
           ccache --zero-stats
-          python ./build_tools/health_status.py
+          python build_tools/health_status.py
+
+      - name: Adjust git config
+        run: |
+          git config fetch.parallel 10
+          git config --global core.symlinks true
 
       # TODO: We shouldn't be using a cache on actual release branches, but it
       # really helps for iteration time.
@@ -123,13 +186,25 @@ jobs:
           restore-keys: |
             windows-build-packages-v4-${{ inputs.amdgpu_families }}-
 
-      - name: Fetch sources
-        timeout-minutes: 30
+      - name: Test build_tools
         run: |
-          git config fetch.parallel 10
-          git config --global core.symlinks true
-          git config --global core.longpaths true
-          python ./build_tools/fetch_sources.py --jobs 12
+          python -m pytest build_tools/tests
+
+      - name: Detect external source configuration
+        if: ${{ inputs.external_source_checkout }}
+        id: detect
+        run: python3 build_tools/github_actions/detect_external_repo_config.py --repository "${{ inputs.repository_override || github.repository }}" --platform windows
+
+      - name: Fetch and prepare all sources
+        timeout-minutes: 30
+        env:
+          SKIP_PATCHES: ${{ inputs.skip_patches }}
+        run: |
+          python build_tools/fetch_sources.py --jobs 12 ${{ steps.detect.outputs.fetch_exclusion || '' }}
+
+      - name: Test GitHub Actions build_tools
+        run: |
+          python -m pytest build_tools/github_actions/tests
 
       - name: Configure Projects
         env:
@@ -137,6 +212,7 @@ jobs:
           amdgpu_families: ${{ inputs.amdgpu_families }}
           package_version: ${{ inputs.package_version }}
           extra_cmake_options: ${{ inputs.extra_cmake_options }}
+          GITHUB_REPOSITORY_OVERRIDE: ${{ inputs.repository_override }}
         run: |
           # clear cache before build and after download
           ccache -z
@@ -182,7 +258,10 @@ jobs:
         uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
         with:
           aws-region: us-east-2
-          role-to-assume: arn:aws:iam::692859939525:role/therock-ci
+          # Use github.repository instead of external_source_checkout because TheRock's
+          # external integration test workflow also uses external_source_checkout=true
+          # but should use the internal role (therock-ci), not the external role.
+          role-to-assume: ${{ github.repository != 'ROCm/TheRock' && 'arn:aws:iam::692859939525:role/therock-ci-external' || 'arn:aws:iam::692859939525:role/therock-ci' }}
           special-characters-workaround: true
 
       - name: Post Build Upload

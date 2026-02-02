@@ -10,6 +10,30 @@
 # Legacy flag-based fetching:
 #   Use --include-* flags to control which project groups to fetch.
 #   This is the original behavior and is still supported.
+#
+# External repository support:
+#   When building external repositories (rocm-libraries, rocm-systems), set:
+#
+#   Required:
+#     EXTERNAL_SOURCE_CHECKOUT=true
+#     EXTERNAL_SOURCE_PATH=/absolute/path/to/external-repo
+#     GITHUB_REPOSITORY_OVERRIDE=ROCm/rocm-libraries
+#
+#   Optional:
+#     SKIP_PATCHES=0001-fix.patch,0002-workaround.patch
+#
+#   Example (absolute path):
+#     export EXTERNAL_SOURCE_CHECKOUT=true
+#     export EXTERNAL_SOURCE_PATH=/home/user/rocm-libraries
+#     export GITHUB_REPOSITORY_OVERRIDE=ROCm/rocm-libraries
+#     python build_tools/fetch_sources.py --no-include-rocm-libraries
+#
+#   Example (skip patches during coordinated removal):
+#     export EXTERNAL_SOURCE_CHECKOUT=true
+#     export EXTERNAL_SOURCE_PATH=/home/user/rocm-libraries
+#     export GITHUB_REPOSITORY_OVERRIDE=ROCm/rocm-libraries
+#     export SKIP_PATCHES=0001-obsolete-fix.patch
+#     python build_tools/fetch_sources.py --no-include-rocm-libraries
 
 import argparse
 import hashlib
@@ -150,11 +174,46 @@ def fetch_nested_submodules(args, projects):
         )
 
 
+def _detect_external_source_override():
+    """Detect external source checkout configuration from environment variables.
+
+    Returns:
+        tuple: (override_submodule: str|None, override_source_dir: Path|None)
+    """
+    if os.environ.get("EXTERNAL_SOURCE_CHECKOUT", "").lower() != "true":
+        return None, None
+
+    external_source_path = os.environ.get("EXTERNAL_SOURCE_PATH", "")
+    repo_override = os.environ.get(
+        "GITHUB_REPOSITORY_OVERRIDE", os.environ.get("GITHUB_REPOSITORY", "")
+    )
+
+    if not external_source_path or not repo_override:
+        return None, None
+
+    # Extract repo name (e.g., "ROCm/rocm-libraries" -> "rocm-libraries")
+    override_submodule = repo_override.split("/")[-1]
+    override_source_dir = Path(external_source_path)
+
+    log(f"External source detected: {override_submodule}")
+    log(f"External source path: {override_source_dir}")
+    log(f"Skipping submodule update for: {override_submodule}")
+
+    return override_submodule, override_source_dir
+
+
 def run(args):
+    override_submodule, override_source_dir = _detect_external_source_override()
+
     projects = get_enabled_projects(args)
+
+    # Build submodule list, excluding override if present
     submodule_paths = ALWAYS_SUBMODULE_PATHS + [
-        get_submodule_path(project) for project in projects
+        get_submodule_path(project)
+        for project in projects
+        if project != override_submodule
     ]
+
     # TODO(scotttodd): Check for git lfs?
     update_args = []
     if args.depth:
@@ -173,8 +232,6 @@ def run(args):
             + submodule_paths,
             cwd=THEROCK_DIR,
         )
-    if args.dvc_projects:
-        pull_large_files(args.dvc_projects, projects)
 
     # Fetch nested submodules
     if args.update_submodules:
@@ -184,20 +241,30 @@ def run(args):
     # we manually set it to skip-worktree since recording the commit is
     # then meaningless. Here on each fetch, we reset the flag so that if
     # patches are aged out, the tree is restored to normal.
-    submodule_paths = [get_submodule_path(name) for name in projects]
-    run_command(
-        ["git", "update-index", "--no-skip-worktree", "--"] + submodule_paths,
-        cwd=THEROCK_DIR,
-    )
+    # Skip external repos since they're not submodules.
+    submodule_paths = [
+        get_submodule_path(name) for name in projects if name != override_submodule
+    ]
+    if submodule_paths:
+        run_command(
+            ["git", "update-index", "--no-skip-worktree", "--"] + submodule_paths,
+            cwd=THEROCK_DIR,
+        )
 
-    # Remove any stale .smrev files.
-    remove_smrev_files(args, projects)
+    remove_smrev_files(args, projects, override_submodule)
 
     if args.apply_patches:
-        apply_patches(args, projects)
+        apply_patches(args, projects, override_submodule, override_source_dir)
+
+    if args.dvc_projects:
+        pull_large_files(
+            args.dvc_projects, projects, override_submodule, override_source_dir
+        )
 
 
-def pull_large_files(dvc_projects, projects):
+def pull_large_files(
+    dvc_projects, projects, override_submodule=None, override_source_dir=None
+):
     if not dvc_projects:
         print("No DVC projects specified, skipping large file pull.")
         return
@@ -213,8 +280,14 @@ def pull_large_files(dvc_projects, projects):
     for project in dvc_projects:
         if not project in projects:
             continue
-        submodule_path = get_submodule_path(project)
-        project_dir = THEROCK_DIR / submodule_path
+
+        # Use override path for external source, otherwise use submodule path
+        if project == override_submodule and override_source_dir:
+            project_dir = override_source_dir
+        else:
+            submodule_path = get_submodule_path(project)
+            project_dir = THEROCK_DIR / submodule_path
+
         dvc_config_file = project_dir / ".dvc" / "config"
         if dvc_config_file.exists():
             print(f"dvc detected in {project_dir}, running dvc pull")
@@ -223,8 +296,10 @@ def pull_large_files(dvc_projects, projects):
             log(f"WARNING: dvc config not found in {project_dir}, when expected.")
 
 
-def remove_smrev_files(args, projects):
+def remove_smrev_files(args, projects, override_submodule=None):
     for project in projects:
+        if project == override_submodule:
+            continue  # Skip external repos
         submodule_path = get_submodule_path(project)
         project_dir = THEROCK_DIR / submodule_path
         project_revision_file = project_dir.with_name(f".{project_dir.name}.smrev")
@@ -233,12 +308,46 @@ def remove_smrev_files(args, projects):
             project_revision_file.unlink()
 
 
-def apply_patches(args, projects):
+def _filter_patches_by_skip_list(
+    patch_files: list[Path], project_name: str, override_submodule: str | None
+) -> list[Path]:
+    """Filter patch files based on SKIP_PATCHES environment variable.
+
+    SKIP_PATCHES only applies when processing the external repo that set it.
+    This prevents one external repo from accidentally skipping patches for other repos.
+
+    Args:
+        patch_files: List of patch file paths to filter
+        project_name: Name of the project being patched (e.g., "rocm-libraries")
+        override_submodule: External repo submodule name, if any
+
+    Returns:
+        Filtered list of patch files with skipped patches removed
+    """
+    skip_patches_str = os.environ.get("SKIP_PATCHES", "")
+    skip_patches = [p.strip() for p in skip_patches_str.split(",") if p.strip()]
+
+    # Only apply SKIP_PATCHES when processing the external repo that set it
+    if not skip_patches or project_name != override_submodule:
+        return patch_files
+
+    filtered = []
+    for patch_file in patch_files:
+        if patch_file.name in skip_patches:
+            log(f"  Skipping patch {patch_file.name} (in SKIP_PATCHES)")
+        else:
+            filtered.append(patch_file)
+    return filtered
+
+
+def apply_patches(args, projects, override_submodule=None, override_source_dir=None):
     if not args.patch_tag:
         log("Not patching (no --patch-tag specified)")
+
     patch_version_dir: Path = PATCHES_DIR / args.patch_tag
     if not patch_version_dir.exists():
         log(f"ERROR: Patch directory {patch_version_dir} does not exist")
+
     for patch_project_dir in patch_version_dir.iterdir():
         log(f"* Processing project patch directory {patch_project_dir}:")
         # Check that project patch directory was included
@@ -247,10 +356,19 @@ def apply_patches(args, projects):
                 f"* Project patch directory {patch_project_dir.name} was not included. Skipping."
             )
             continue
-        submodule_path = get_submodule_path(patch_project_dir.name)
-        submodule_url = get_submodule_url(patch_project_dir.name)
-        submodule_revision = get_submodule_revision(submodule_path)
-        project_dir = THEROCK_DIR / submodule_path
+
+        # Use override path for external source, otherwise use submodule path
+        if patch_project_dir.name == override_submodule and override_source_dir:
+            project_dir = override_source_dir
+            submodule_url = get_submodule_url(patch_project_dir.name)
+            # For external sources, we don't have a submodule revision in the same way
+            submodule_revision = None
+        else:
+            submodule_path = get_submodule_path(patch_project_dir.name)
+            submodule_url = get_submodule_url(patch_project_dir.name)
+            submodule_revision = get_submodule_revision(submodule_path)
+            project_dir = THEROCK_DIR / submodule_path
+
         project_revision_file = project_dir.with_name(f".{project_dir.name}.smrev")
 
         if not project_dir.exists():
@@ -258,6 +376,16 @@ def apply_patches(args, projects):
             continue
         patch_files = list(patch_project_dir.glob("*.patch"))
         patch_files.sort()
+
+        # Filter patches based on SKIP_PATCHES environment variable
+        patch_files = _filter_patches_by_skip_list(
+            patch_files, patch_project_dir.name, override_submodule
+        )
+
+        if not patch_files:
+            log(f"No patches to apply (all skipped or none exist)")
+            continue
+
         log(f"Applying {len(patch_files)} patches")
         run_command(
             [
@@ -276,10 +404,12 @@ def apply_patches(args, projects):
             },
         )
         # Since it is in a patched state, make it invisible to changes.
-        run_command(
-            ["git", "update-index", "--skip-worktree", "--", submodule_path],
-            cwd=THEROCK_DIR,
-        )
+        # Skip this for external sources since they're not submodules
+        if not (patch_project_dir.name == override_submodule and override_source_dir):
+            run_command(
+                ["git", "update-index", "--skip-worktree", "--", submodule_path],
+                cwd=THEROCK_DIR,
+            )
 
         # Generate the .smrev patch state file.
         # This file consists of two lines: The git origin and a summary of the
@@ -292,14 +422,15 @@ def apply_patches(args, projects):
         # Note that this does not track the dirty state of the tree. If full
         # fidelity hashes of the tree state are needed for development/dirty
         # trees, then another mechanism must be used.
-        patches_hash = hashlib.sha1()
-        for patch_file in patch_files:
-            patch_contents = Path(patch_file).read_bytes()
-            patches_hash.update(patch_contents)
-        patches_digest = patches_hash.digest().hex()
-        project_revision_file.write_text(
-            f"{submodule_url}\n{submodule_revision}+PATCHED:{patches_digest}\n"
-        )
+        if submodule_revision:  # Only for submodules, not external sources
+            patches_hash = hashlib.sha1()
+            for patch_file in patch_files:
+                patch_contents = Path(patch_file).read_bytes()
+                patches_hash.update(patch_contents)
+            patches_digest = patches_hash.digest().hex()
+            project_revision_file.write_text(
+                f"{submodule_url}\n{submodule_revision}+PATCHED:{patches_digest}\n"
+            )
 
 
 # Gets the the relative path to a submodule given its name.
