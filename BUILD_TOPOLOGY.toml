@@ -342,6 +342,13 @@ artifact_deps = []
 feature_group = "CORE"
 disable_platforms = ["windows"]
 
+[artifacts.sysdeps-libpciaccess]
+artifact_group = "third-party-sysdeps"
+type = "target-neutral"
+artifact_deps = []
+feature_group = "CORE"
+disable_platforms = ["windows"]
+
 [artifacts.host-blas]
 artifact_group = "third-party-libs"
 type = "target-neutral"
@@ -516,6 +523,11 @@ artifact_deps = ["core-runtime", "core-hip"]
 artifact_group = "ml-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn"]
+
+[artifacts.hipdnn-samples]
+artifact_group = "ml-libs"
+type = "target-specific"
+artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "miopen-plugin"]
 
 # --- IREE Integration ---
 

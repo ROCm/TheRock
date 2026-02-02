@@ -48,10 +48,10 @@ all_build_variants = {
 amdgpu_family_info_matrix_presubmit = {
     "gfx94x": {
         "linux": {
-            "test-runs-on": "linux-mi325-1gpu-ossci-rocm-frac",
-            "test-runs-on-multi-gpu": "linux-mi325-4gpu-ossci-rocm",
+            "test-runs-on": "linux-mi325-1gpu-ossci-rocm",
+            "test-runs-on-multi-gpu": "linux-mi325-8gpu-ossci-rocm",
             # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
-            "benchmark-runs-on": "linux-mi325-1gpu-ossci-rocm-frac",
+            "benchmark-runs-on": "linux-mi325-8gpu-ossci-rocm",
             "family": "gfx94X-dcgpu",
             "build_variants": ["release", "asan"],
         }
@@ -77,6 +77,9 @@ amdgpu_family_info_matrix_presubmit = {
     "gfx1151": {
         "linux": {
             "test-runs-on": "linux-gfx1151-gpu-rocm",
+            "test-runs-on-kernel": {
+                "oem": "linux-strix-halo-gpu-rocm-oem",
+            },
             "family": "gfx1151",
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
@@ -165,12 +168,10 @@ amdgpu_family_info_matrix_nightly = {
             "build_variants": ["release"],
             "sanity_check_only_for_family": True,
         },
-        # TODO(#1925): Enable arch for aotriton to enable PyTorch builds
         "windows": {
             "test-runs-on": "windows-gfx1030-gpu-rocm",
             "family": "gfx103X-dgpu",
             "build_variants": ["release"],
-            "expect_pytorch_failure": True,
             "sanity_check_only_for_family": True,
         },
     },
