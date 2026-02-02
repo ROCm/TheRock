@@ -7,15 +7,9 @@ endif()
 set(COMGR_DISABLE_SPIRV OFF)
 
 # Enable ASAN for Comgr when THEROCK_SANITIZER is set to ASAN or HOST_ASAN
-# Check subproject-specific override first, then fall back to global setting
-set(_sanitizer "${THEROCK_SANITIZER}")
-if(DEFINED amd-comgr_SANITIZER)
-  set(_sanitizer "${amd-comgr_SANITIZER}")
-endif()
-
-if(_sanitizer STREQUAL "ASAN" OR _sanitizer STREQUAL "HOST_ASAN")
+if(THEROCK_SANITIZER STREQUAL "ASAN" OR THEROCK_SANITIZER STREQUAL "HOST_ASAN")
   set(ADDRESS_SANITIZER ON)
-  message(STATUS "Enabling ASAN for Comgr (sanitizer=${_sanitizer})")
+  message(STATUS "Enabling ASAN for Comgr (THEROCK_SANITIZER=${THEROCK_SANITIZER})")
 endif()
 
 # The comgr tests have a circular dependency on the HIP runtime.
