@@ -17,35 +17,56 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     set(_source_dir "${CMAKE_CURRENT_BINARY_DIR}/source")
     set(_download_stamp "${_source_dir}/download.stamp")
 
-    # Fetch AOCL 5.2 from GitHub
-    # AOCL-BLAS 5.2 provides ILP64 BLAS support needed for rocBLAS stress tests
-    therock_subproject_fetch(therock-aocl-blas-sources
-      CMAKE_PROJECT
-      SOURCE_DIR "${_source_dir}"
-      GIT_REPOSITORY https://github.com/amd/aocl.git
-      GIT_TAG AOCL-5.2
-      GIT_SHALLOW TRUE
-      TOUCH "${_download_stamp}"
-    )
+  # Fetch AOCL with Windows/TheRock integration fixes from tony-davis fork
+  # TODO: Switch to official AMD repo once PRs are merged
+  # AOCL-BLAS 5.2.1 provides ILP64 BLAS support with pinned submodule versions (reproducible builds)
+  # Fixes:
+  # 1. Use CMAKE_CURRENT_SOURCE_DIR instead of CMAKE_SOURCE_DIR for submodule paths
+  # 2. Replace execute_process() anti-pattern with add_subdirectory() for BLIS build
+  # 3. BLIS submodule points to tony-davis/blis with MSVC and OpenMP 2.0 fixes
+  therock_subproject_fetch(therock-aocl-blas-sources
+    CMAKE_PROJECT
+    SOURCE_DIR "${_source_dir}"
+    GIT_REPOSITORY https://github.com/tony-davis/aocl.git
+    GIT_TAG windows-therock-integration
+    GIT_SHALLOW TRUE
+    TOUCH "${_download_stamp}"
+  )
 
     # AOCL-BLAS CMake configuration matching rocBLAS install.sh behavior
     # See: https://github.com/ROCm/rocm-libraries/blob/develop/projects/rocblas/install.sh#L316
-    therock_cmake_subproject_declare(therock-aocl-blas
+    #
+  # Compiler Strategy (Windows):
+  # - BLIS (core component of AOCL-BLAS) requires Clang for proper architecture flag handling
+  # - On Windows: Uses Visual Studio's Clang-CL (from VS Developer PowerShell PATH)
+  # - Clang-CL must be installed: "C++ Clang Compiler for Windows" VS component
+  # - This matches AOCL's official Windows build method (see their README.md)
+  
+  # On Windows, use a toolchain file to force clang-cl before project() command
+  # This ensures CMake detects clang-cl instead of falling back to cl.exe
+  set(_aocl_cmake_args "-DSOURCE_DIR=${_source_dir}")
+  if(WIN32)
+    set(_toolchain_file "${CMAKE_CURRENT_SOURCE_DIR}/clang-cl-toolchain.cmake")
+    list(APPEND _aocl_cmake_args "-DCMAKE_TOOLCHAIN_FILE=${_toolchain_file}")
+    message(STATUS "Using clang-cl toolchain for AOCL: ${_toolchain_file}")
+  endif()
+
+  therock_cmake_subproject_declare(therock-aocl-blas
       USE_DIST_AMDGPU_TARGETS
       BACKGROUND_BUILD
       EXCLUDE_FROM_ALL
       NO_MERGE_COMPILE_COMMANDS
       OUTPUT_ON_FAILURE
       EXTERNAL_SOURCE_DIR .
-      INTERFACE_LINK_DIRS "lib/host-math/lib"
+      INTERFACE_LINK_DIRS "lib/host-math/${CMAKE_INSTALL_LIBDIR}"
       # RPATH logic needs to know that executables/libs for this project are in
       # a non-default location (same as OpenBLAS).
-      INSTALL_RPATH_EXECUTABLE_DIR "lib/host-math/bin"
-      INSTALL_RPATH_LIBRARY_DIR "lib/host-math/lib"
-      INTERFACE_INSTALL_RPATH_DIRS "lib/host-math/lib"
-      CMAKE_ARGS
-        "-DSOURCE_DIR=${_source_dir}"
-        # Build static library (AOCL's CMake builds static by default for ILP64)
+      INSTALL_RPATH_EXECUTABLE_DIR "lib/host-math/${CMAKE_INSTALL_BINDIR}"
+      INSTALL_RPATH_LIBRARY_DIR "lib/host-math/${CMAKE_INSTALL_LIBDIR}"
+      INTERFACE_INSTALL_RPATH_DIRS "lib/host-math/${CMAKE_INSTALL_LIBDIR}"
+          CMAKE_ARGS
+            ${_aocl_cmake_args}
+            # Build static library (AOCL's CMake builds static by default for ILP64)
         -DBUILD_SHARED_LIBS=OFF
         -DCMAKE_BUILD_TYPE=Release
         # Force Release configuration: AOCL's CMakeLists.txt defaults CMAKE_CONFIGURATION_TYPES to Debug
@@ -53,18 +74,22 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         -DCMAKE_CONFIGURATION_TYPES=Release
         # Enable ILP64 support (64-bit integers) - required for rocBLAS stress tests
         -DENABLE_ILP64=ON
-        # Enable AOCL BLAS and utilities
-        # Note: Output is named libaocl.a (AOCL's unified naming convention),
-        # but only contains BLAS component due to selective enabling below
+        # Enable AOCL BLAS only
+        # Note: Output is named libaocl.a on Linux, aocl.lib on Windows (AOCL's unified naming convention),
+        # We disable UTILS on Windows due to MSVC incompatibility issues with GCC-specific intrinsics
         -DENABLE_AOCL_BLAS=ON
-        -DENABLE_AOCL_UTILS=ON
+        $<IF:$<PLATFORM_ID:Windows>,-DENABLE_AOCL_UTILS=OFF,-DENABLE_AOCL_UTILS=ON>
         # Disable LAPACK (not needed for rocBLAS clients - we only need BLAS)
         -DENABLE_AOCL_LAPACK=OFF
         # Enable multithreading support for parallel BLAS operations
         -DENABLE_MULTITHREADING=ON
-        # Let AOCL's build system discover and link the appropriate OpenMP implementation.
-        # By setting OpenMP_libomp_LIBRARY empty, we avoid forcing a specific OpenMP library
-        # from this wrapper project, allowing AOCL to manage OpenMP discovery internally.
+        # Configure OpenMP for MSVC
+        # MSVC's OpenMP support requires explicit flags and variables since FindOpenMP doesn't auto-detect
+        # Note: MSVC OpenMP is built into vcruntime - no separate library needed (unlike GCC's libgomp)
+        $<IF:$<PLATFORM_ID:Windows>,-DOpenMP_C_FLAGS=/openmp,-DOpenMP_C_FLAGS=-fopenmp>
+        $<IF:$<PLATFORM_ID:Windows>,-DOpenMP_CXX_FLAGS=/openmp,-DOpenMP_CXX_FLAGS=-fopenmp>
+        $<IF:$<PLATFORM_ID:Windows>,-DOpenMP_C_LIB_NAMES=,>
+        $<IF:$<PLATFORM_ID:Windows>,-DOpenMP_CXX_LIB_NAMES=,>
         -DOpenMP_libomp_LIBRARY=""
         # Set install directories to match TheRock's host-math layout
         -DCMAKE_INSTALL_BINDIR=lib/host-math/bin
@@ -74,15 +99,22 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         "${_download_stamp}"
     )
 
-    # Register AOCL-BLAS package for downstream consumption
-    # This makes find_package(AOCL) work in dependent projects (follows CMake conventions for acronyms)
-    therock_cmake_subproject_provide_package(therock-aocl-blas AOCL lib/host-math/lib/cmake/AOCL)
+    # Register AOCL package for downstream consumption
+    # AOCL now properly exports AOCL::AOCL target via its own CMake package config
+    therock_cmake_subproject_provide_package(therock-aocl-blas AOCL lib/host-math/${CMAKE_INSTALL_LIBDIR}/cmake/AOCL)
     therock_cmake_subproject_activate(therock-aocl-blas)
 
     # Validate that the built BLAS library exists
+    # AOCL installs library with standard naming: libaocl.a on Linux, aocl.lib on Windows
+    if(WIN32)
+      set(_aocl_lib_name "aocl.lib")
+    else()
+      set(_aocl_lib_name "libaocl.a")
+    endif()
+    
     therock_test_validate_static_lib(
-      PATH dist/lib/host-math/lib
-      LIB_NAMES libaocl.a
+      PATH dist/lib/host-math/${CMAKE_INSTALL_LIBDIR}
+      LIB_NAMES ${_aocl_lib_name}
     )
 
     therock_provide_artifact(host-aocl-blas
@@ -103,104 +135,72 @@ cmake_minimum_required(VERSION 3.25)
 project(AOCL_BUILD)
 
 # Install to lib/host-math to keep AOCL alongside OpenBLAS
-# This creates a unified location for all host math libraries
-set(CMAKE_INSTALL_BINDIR "lib/host-math/bin")
-set(CMAKE_INSTALL_LIBDIR "lib/host-math/lib")
-set(CMAKE_INSTALL_INCLUDEDIR "lib/host-math/include")
+# AOCL uses GNUInstallDirs, so we need to set the install dirs directly
+# to avoid double-nesting (don't modify CMAKE_INSTALL_PREFIX, set the subdirs)
+include(GNUInstallDirs)
+
+# Override GNUInstallDirs defaults to install to lib/host-math subdirectory
+set(CMAKE_INSTALL_BINDIR "lib/host-math/bin" CACHE PATH "Binary install dir" FORCE)
+set(CMAKE_INSTALL_LIBDIR "lib/host-math/lib" CACHE PATH "Library install dir" FORCE)
+set(CMAKE_INSTALL_INCLUDEDIR "lib/host-math/include" CACHE PATH "Include install dir" FORCE)
 
 # Build AOCL from the fetched source
+# AOCL now properly exports AOCL::AOCL target and installs to CMAKE_INSTALL_LIBDIR
 add_subdirectory(${SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/build-aocl)
 
-# AOCL's CMake should create the aocl target
-# The library will be named libaocl.a by default
-# However, AOCL's build system installs to lib/ and include/ instead of lib/host-math/
-# So we manually install both to the correct locations
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/build-aocl/libaocl.a"
-        DESTINATION ${CMAKE_INSTALL_LIBDIR})
+# AOCL now installs its own proper CMake package config (AOCLConfig.cmake)
+# to ${CMAKE_INSTALL_LIBDIR}/cmake/AOCL, so we don't need custom package files
 
-# Install BLIS/BLAS headers to lib/host-math/include/aocl/
-# AOCL installs headers to ${CMAKE_INSTALL_PREFIX}/include, so we copy them to our desired location
-# We use an aocl/ subdirectory to match OpenBLAS's pattern (openblas/ subdirectory)
+# ============================================================================
+# TODO: REMOVE THIS WORKAROUND once rocm-libraries PR for find_package(AOCL) is merged
+# ============================================================================
+# Temporary: Copy AOCL to legacy rocBLAS discovery location
+# rocBLAS currently hardcodes a search path instead of using find_package(AOCL).
+# This workaround maintains compatibility until rocm-libraries is updated.
 #
-# Note: GLOB_RECURSE evaluates at install time (not configure time). If AOCL's build changes
-# and stops generating expected headers, this won't be detected until install. The install
-# will print a status message showing how many headers were copied, which serves as verification.
-# We also validate that critical AOCL-BLAS headers (blis.h, cblas.h, blis64.h) are present.
+# Legacy location: ${BUILD_DIR}/math-libs/BLAS/rocBLAS/build/deps/aocl/install_package/
+# 
+# Once the rocm-libraries PR is merged, rocBLAS will use:
+#   find_package(AOCL REQUIRED)
+#   target_link_libraries(rocblas-clients PRIVATE AOCL::AOCL)
 install(CODE "
-  file(GLOB_RECURSE AOCL_HEADERS \"\${CMAKE_INSTALL_PREFIX}/include/*.h\" \"\${CMAKE_INSTALL_PREFIX}/include/*.hh\")
-  list(LENGTH AOCL_HEADERS NUM_HEADERS)
-  if(NUM_HEADERS EQUAL 0)
-    message(FATAL_ERROR \"No AOCL headers found in \${CMAKE_INSTALL_PREFIX}/include/\")
-  endif()
-
-  # Validate critical AOCL-BLAS headers are present
-  set(CRITICAL_HEADERS blis.h cblas.h)
-  foreach(CRITICAL_HEADER \${CRITICAL_HEADERS})
-    set(FOUND_CRITICAL FALSE)
-    foreach(HEADER \${AOCL_HEADERS})
-      get_filename_component(HEADER_NAME \"\${HEADER}\" NAME)
-      if(HEADER_NAME STREQUAL \"\${CRITICAL_HEADER}\")
-        set(FOUND_CRITICAL TRUE)
-        break()
-      endif()
-    endforeach()
-    if(NOT FOUND_CRITICAL)
-      message(FATAL_ERROR \"Critical AOCL header \${CRITICAL_HEADER} not found in \${CMAKE_INSTALL_PREFIX}/include/\")
-    endif()
-  endforeach()
-
-  file(MAKE_DIRECTORY \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_INCLUDEDIR}/aocl\")
-  foreach(HEADER \${AOCL_HEADERS})
-    file(RELATIVE_PATH REL_PATH \"\${CMAKE_INSTALL_PREFIX}/include\" \"\${HEADER}\")
-    get_filename_component(HEADER_DIR \"\${REL_PATH}\" DIRECTORY)
-    if(HEADER_DIR)
-      file(MAKE_DIRECTORY \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_INCLUDEDIR}/aocl/\${HEADER_DIR}\")
-    endif()
-    file(COPY_FILE \"\${HEADER}\" \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_INCLUDEDIR}/aocl/\${REL_PATH}\")
-  endforeach()
-  message(STATUS \"Copied \${NUM_HEADERS} AOCL headers to ${CMAKE_INSTALL_INCLUDEDIR}/aocl\")
-")
-
-# Copy AOCL to the location rocBLAS searches: ${BUILD_DIR}/deps/aocl/install_package/
-# This runs during AOCL's install phase, ensuring files exist before rocBLAS configures.
-# rocBLAS's clients/CMakeLists.txt searches this location first, allowing it to discover
-# TheRock's AOCL without modifications to rocm-libraries.
-if(NOT WIN32)
-  install(CODE "
-    # Construct path to rocBLAS build directory from AOCL's stage directory
-    # stage is at: build/third-party/aocl/stage
-    # rocBLAS is at: build/math-libs/BLAS/rocBLAS/build
-    set(_rocblas_deps_dir \"\${CMAKE_INSTALL_PREFIX}/../../../math-libs/BLAS/rocBLAS/build/deps/aocl/install_package\")
-    get_filename_component(_rocblas_deps_dir \"\${_rocblas_deps_dir}\" ABSOLUTE)
-
+  # Construct path to rocBLAS build directory from AOCL's install prefix
+  # CMAKE_INSTALL_PREFIX here is stage/, so we navigate to rocBLAS build
+  set(_rocblas_deps_dir \"\${CMAKE_INSTALL_PREFIX}/../../math-libs/BLAS/rocBLAS/build/deps/aocl/install_package\")
+  get_filename_component(_rocblas_deps_dir \"\${_rocblas_deps_dir}\" ABSOLUTE)
+  
+  # Only copy if rocBLAS build directory exists (might not exist in all build configs)
+  if(EXISTS \"\${CMAKE_INSTALL_PREFIX}/../../math-libs/BLAS/rocBLAS\")
     # Create destination directories
     file(MAKE_DIRECTORY \"\${_rocblas_deps_dir}/lib\")
     file(MAKE_DIRECTORY \"\${_rocblas_deps_dir}/include\")
-
-    # Copy library
-    file(COPY \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libaocl.a\"
-         DESTINATION \"\${_rocblas_deps_dir}/lib\")
-    message(STATUS \"Copied AOCL library for rocBLAS: \${_rocblas_deps_dir}/lib/libaocl.a\")
-
-    # Copy headers (from aocl subdirectory to root, matching AOCL's expected structure)
-    file(GLOB_RECURSE _aocl_headers \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_INCLUDEDIR}/aocl/*.h\" \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_INCLUDEDIR}/aocl/*.hh\")
+    
+    # Copy library (platform-specific naming)
+    if(WIN32)
+      file(COPY \"\${CMAKE_INSTALL_PREFIX}/lib/host-math/lib/aocl.lib\"
+           DESTINATION \"\${_rocblas_deps_dir}/lib\")
+      message(STATUS \"[AOCL Workaround] Copied library for rocBLAS: \${_rocblas_deps_dir}/lib/aocl.lib\")
+    else()
+      file(COPY \"\${CMAKE_INSTALL_PREFIX}/lib/host-math/lib/libaocl.a\"
+           DESTINATION \"\${_rocblas_deps_dir}/lib\")
+      message(STATUS \"[AOCL Workaround] Copied library for rocBLAS: \${_rocblas_deps_dir}/lib/libaocl.a\")
+    endif()
+    
+    # Copy headers (maintain directory structure)
+    file(GLOB_RECURSE _aocl_headers \"\${CMAKE_INSTALL_PREFIX}/lib/host-math/include/*.h\")
     foreach(_header \${_aocl_headers})
-      file(RELATIVE_PATH _rel_path \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_INCLUDEDIR}/aocl\" \"\${_header}\")
+      file(RELATIVE_PATH _rel_path \"\${CMAKE_INSTALL_PREFIX}/lib/host-math/include\" \"\${_header}\")
       get_filename_component(_header_dir \"\${_rel_path}\" DIRECTORY)
       if(_header_dir)
         file(MAKE_DIRECTORY \"\${_rocblas_deps_dir}/include/\${_header_dir}\")
       endif()
       file(COPY_FILE \"\${_header}\" \"\${_rocblas_deps_dir}/include/\${_rel_path}\")
     endforeach()
-    message(STATUS \"Copied AOCL headers for rocBLAS: \${_rocblas_deps_dir}/include/\")
-  ")
-endif()
-
-# Install our custom CMake package config
-configure_file(
-  ${CMAKE_CURRENT_SOURCE_DIR}/aocl-config.cmake.in
-  ${CMAKE_CURRENT_BINARY_DIR}/AOCLConfig.cmake
-  @ONLY
-)
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/AOCLConfig.cmake"
-        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/AOCL)
+    message(STATUS \"[AOCL Workaround] Copied headers for rocBLAS: \${_rocblas_deps_dir}/include/\")
+  else()
+    message(STATUS \"[AOCL Workaround] rocBLAS build directory not found, skipping legacy copy\")
+  endif()
+")
+# ============================================================================
+# END TEMPORARY WORKAROUND
+# ============================================================================

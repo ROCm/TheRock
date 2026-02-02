@@ -351,9 +351,8 @@ feature_group = "HOST_MATH"  # Controlled by THEROCK_ENABLE_HOST_MATH (OFF by de
 [artifacts.host-aocl-blas]
 artifact_group = "third-party-libs"
 type = "target-neutral"
-artifact_deps = []
+artifact_deps = []  # No dependencies - uses system compiler like OpenBLAS
 feature_group = "HOST_MATH"  # Controlled by THEROCK_ENABLE_HOST_MATH (OFF by default)
-disable_platforms = ["windows"]  # AOCL requires different toolchain on Windows
 # AOCL-BLAS provides BLIS/BLAS/CBLAS functions for CPU reference BLAS in testing
 
 [artifacts.host-suite-sparse]

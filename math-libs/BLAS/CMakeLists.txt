@@ -170,15 +170,12 @@ endif()
 if(THEROCK_BUILD_TESTING)
   # CPU reference BLAS libraries for rocBLAS clients/tests
   list(APPEND rocBLAS_optional_runtime_deps therock-host-blas)       # OpenBLAS
-  if(NOT WIN32)
-    # AOCL-BLAS is Linux-only (Windows continues to use OpenBLAS)
-    list(APPEND rocBLAS_optional_runtime_deps therock-aocl-blas)     # AOCL-BLAS
-  endif()
+  list(APPEND rocBLAS_optional_runtime_deps therock-aocl-blas)       # AOCL-BLAS (Linux & Windows)
 endif()
 
 # AOCL-BLAS is a static library that must be built before rocBLAS links against it
 set(rocBLAS_optional_build_deps)
-if(THEROCK_BUILD_TESTING AND NOT WIN32)
+if(THEROCK_BUILD_TESTING)
   list(APPEND rocBLAS_optional_build_deps therock-aocl-blas)
 endif()
 
