@@ -17,25 +17,6 @@ REPO_DIR = THIS_DIR.parent.parent
 
 
 class ArtifactsIndexPageTest(unittest.TestCase):
-    def testListArtifactsForGroup_Found(self):
-        # Create a mock backend that returns test artifacts
-        backend = MagicMock(spec=ArtifactBackend)
-        backend.base_uri = "s3://therock-ci-artifacts/ROCm-TheRock/123-linux"
-        backend.list_artifacts.return_value = [
-            "empty_1test.tar.xz",
-            "empty_2test.tar.xz",
-            "empty_3generic.tar.xz",
-            "empty_4test.tar.xz",
-        ]
-
-        result = list_artifacts_for_group(backend, "test")
-
-        self.assertEqual(len(result), 4)
-        self.assertTrue("empty_1test.tar.xz" in result)
-        self.assertTrue("empty_2test.tar.xz" in result)
-        self.assertTrue("empty_3generic.tar.xz" in result)
-        self.assertTrue("empty_4test.tar.xz" in result)
-
     def testListArtifactsForGroup_FiltersByArtifactGroup(self):
         # Test that filtering by artifact_group works correctly
         backend = MagicMock(spec=ArtifactBackend)

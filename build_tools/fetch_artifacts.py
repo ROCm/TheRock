@@ -120,6 +120,15 @@ def get_postprocess_mode(args) -> str | None:
 def extract_artifact(
     archive_path: Path, *, delete_archive: bool, postprocess_mode: str
 ):
+    """Extracts and postprocesses an artifact from an archive file in-place.
+
+    Args:
+        archive_path: Path to the archive (e.g. `amd-llvm_lib_generic.tar.xz`)
+        delete_archive: True to delete the archive after extraction
+        postprocess_mode: Either 'flatten' or 'extract'
+          * 'flatten' merges artifacts into a single "dist/" directory
+          * 'extract' puts each artifact in a dir (e.g. `amd-llvm_lib_generic/`)
+    """
     # Get (for example) 'amd-llvm_lib_generic' from '/path/to/amd-llvm_lib_generic.tar.xz'
     # We can't just use .stem since that only removes the last extension.
     #   1. .name gets us 'amd-llvm_lib_generic.tar.xz'
