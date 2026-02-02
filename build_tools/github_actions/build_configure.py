@@ -10,6 +10,10 @@ Required environment variables:
 Optional environment variables:
   - VCToolsInstallDir
   - GITHUB_WORKSPACE
+  - EXTRA_C_COMPILER_LAUNCHER: Compiler launcher for C (e.g., resource_info.py for build
+                               time analysis). If set, this replaces ccache as the launcher.
+                               Note: resource_info.py automatically invokes ccache internally.
+  - EXTRA_CXX_COMPILER_LAUNCHER: Compiler launcher for CXX. Same behavior as above.
 """
 
 import argparse
@@ -33,6 +37,43 @@ extra_cmake_options = os.getenv("extra_cmake_options")
 build_dir = os.getenv("BUILD_DIR")
 vctools_install_dir = os.getenv("VCToolsInstallDir")
 github_workspace = os.getenv("GITHUB_WORKSPACE")
+extra_c_compiler_launcher = os.getenv("EXTRA_C_COMPILER_LAUNCHER", "")
+extra_cxx_compiler_launcher = os.getenv("EXTRA_CXX_COMPILER_LAUNCHER", "")
+
+# Normalize paths to use forward slashes for CMake compatibility on Windows
+if extra_c_compiler_launcher:
+    extra_c_compiler_launcher = extra_c_compiler_launcher.replace("\\", "/")
+if extra_cxx_compiler_launcher:
+    extra_cxx_compiler_launcher = extra_cxx_compiler_launcher.replace("\\", "/")
+
+
+def build_compiler_launcher(
+    extra_launcher: str, default_launcher: str = "ccache"
+) -> str:
+    """Build compiler launcher string.
+
+    Args:
+        extra_launcher: Custom launcher to use (e.g., resource_info.py).
+                        If provided, this replaces the default launcher entirely.
+                        Note: resource_info.py automatically invokes ccache internally,
+                        so no semicolon-separated list is needed.
+        default_launcher: Default launcher to use when extra_launcher is not set.
+
+    Returns:
+        Launcher string for CMake. If extra_launcher is provided, returns it directly.
+        Otherwise returns default_launcher.
+
+    Example:
+        build_compiler_launcher("/path/to/resource_info.py", "ccache")
+        -> "/path/to/resource_info.py"
+
+        build_compiler_launcher("", "ccache")
+        -> "ccache"
+    """
+    if extra_launcher:
+        return extra_launcher
+    return default_launcher
+
 
 platform_options = {
     "windows": [
@@ -56,12 +97,16 @@ def build_configure(manylinux=False):
     ]
     if cmake_preset:
         cmd.extend(["--preset", cmake_preset])
+    # Build compiler launcher strings (prepend extra launcher if provided)
+    c_launcher = build_compiler_launcher(extra_c_compiler_launcher)
+    cxx_launcher = build_compiler_launcher(extra_cxx_compiler_launcher)
+
     cmd.extend(
         [
             f"-DTHEROCK_AMDGPU_FAMILIES={amdgpu_families}",
             f"-DTHEROCK_PACKAGE_VERSION='{package_version}'",
-            "-DCMAKE_C_COMPILER_LAUNCHER=ccache",
-            "-DCMAKE_CXX_COMPILER_LAUNCHER=ccache",
+            f"-DCMAKE_C_COMPILER_LAUNCHER={c_launcher}",
+            f"-DCMAKE_CXX_COMPILER_LAUNCHER={cxx_launcher}",
             "-DBUILD_TESTING=ON",
         ]
     )

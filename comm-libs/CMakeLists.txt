@@ -35,6 +35,7 @@ if(THEROCK_ENABLE_RCCL AND THEROCK_SANITIZER STREQUAL "")
       therock-fmt
       therock-googletest
     RUNTIME_DEPS
+      amdsmi
       hip-clr
       hipify
       rocm_smi_lib
