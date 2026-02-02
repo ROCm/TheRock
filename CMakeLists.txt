@@ -91,6 +91,9 @@ if(THEROCK_BUILD_TESTING)
   message(STATUS "Enabling building tests")
 endif()
 
+# Force-disable libhipcxx everywhere
+set(THEROCK_ENABLE_LIBHIPCXX OFF CACHE BOOL "Force-disable libhipcxx" FORCE)
+
 ################################################################################
 # Options
 ################################################################################
