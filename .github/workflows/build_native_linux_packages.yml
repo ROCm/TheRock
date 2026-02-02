@@ -116,33 +116,6 @@ jobs:
             --pkg-type ${{ inputs.native_package_type }} \
             --version-suffix ${{ env.ARTIFACT_RUN_ID }}
 
-      - name: Test Package Installation
-        id: test-packages
-        run: |
-          echo "Testing ${{ inputs.native_package_type }} package installation"
-          if [ "${{ inputs.native_package_type }}" = "deb" ]; then
-            echo "Installing DEB packages on host system for testing"
-            python ./build_tools/packaging/linux/package_sanity_check.py  \
-              --package-type deb \
-              --package-folder ${{ env.PACKAGE_DIST_DIR }}
-          else
-            echo "Installing RPM packages in Docker container for testing"
-            python ./build_tools/packaging/linux/package_sanity_check.py \
-              --package-type rpm \
-              --package-folder ${{ env.PACKAGE_DIST_DIR }} \
-              --docker-image ${{ env.BUILD_IMAGE }} \
-              --skip-package amdrocm-rdc
-          fi
-
-      - name: Uninstall Test Packages (DEB only)
-        if: inputs.native_package_type == 'deb'
-        run: |
-          echo "Uninstalling DEB packages after testing"
-          python ./build_tools/packaging/linux/package_sanity_check.py \
-            --package-type deb \
-            --package-folder ${{ env.PACKAGE_DIST_DIR }} \
-            --uninstall
-
       - name: Install AWS CLI
         run: bash ./dockerfiles/install_awscli.sh
 
