@@ -77,6 +77,9 @@ amdgpu_family_info_matrix_presubmit = {
     "gfx1151": {
         "linux": {
             "test-runs-on": "linux-gfx1151-gpu-rocm",
+            "test-runs-on-kernel": {
+                "oem": "linux-strix-halo-gpu-rocm-oem",
+            },
             "family": "gfx1151",
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
@@ -165,12 +168,10 @@ amdgpu_family_info_matrix_nightly = {
             "build_variants": ["release"],
             "sanity_check_only_for_family": True,
         },
-        # TODO(#1925): Enable arch for aotriton to enable PyTorch builds
         "windows": {
             "test-runs-on": "windows-gfx1030-gpu-rocm",
             "family": "gfx103X-dgpu",
             "build_variants": ["release"],
-            "expect_pytorch_failure": True,
             "sanity_check_only_for_family": True,
         },
     },
