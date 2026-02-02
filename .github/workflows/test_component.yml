@@ -77,10 +77,14 @@ jobs:
         shell: powershell
         run: . '${{ github.workspace }}\prejob\build_tools\github_actions\cleanup_processes.ps1'
 
-      - name: Checkout Repository
+      - name: Checkout TheRock repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          repository: "ROCm/TheRock"
+          # When therock_ref is specified (external repos calling this workflow), checkout ROCm/TheRock with sparse checkout.
+          # When therock_ref is empty (TheRock's own CI, including forks), leave repository unspecified to respect forks.
+          repository: ${{ inputs.therock_ref && 'ROCm/TheRock' || '' }}
+          ref: ${{ inputs.therock_ref || github.ref }}
+          sparse-checkout: ${{ inputs.therock_ref && 'build_tools' || '' }}
 
       - name: Run setup test environment workflow
         uses: './.github/actions/setup_test_environment'

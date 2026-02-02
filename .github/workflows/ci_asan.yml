@@ -62,6 +62,12 @@ jobs:
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
       sanity_check_only_for_family: ${{ matrix.variant.sanity_check_only_for_family == true }}
+      # External repo inputs (unused for internal CI, but required by ci_linux.yml)
+      external_source_checkout: false
+      external_source_path: ""
+      therock_ref: ""
+      repository_override: ""
+      skip_patches: ""
     permissions:
       contents: read
       id-token: write
