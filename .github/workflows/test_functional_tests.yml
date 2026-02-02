@@ -1,4 +1,4 @@
-name: Run Extended Functional Tests
+name: Run Functional Tests
 
 on:
   workflow_dispatch:
@@ -37,7 +37,7 @@ permissions:
 
 jobs:
   configure_test_matrix:
-    name: "Configure extended functional test matrix"
+    name: "Configure functional test matrix"
     # if there is a test machine available
     if: ${{ inputs.test_runs_on != '' }}
     runs-on: ${{ inputs.test_runs_on }}
@@ -72,11 +72,11 @@ jobs:
         env:
           ARTIFACT_GROUP: ${{ inputs.artifact_group }}
           AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
-          IS_EXTENDED_FUNCTIONAL_TESTS: "true"
+          IS_FUNCTIONAL_TESTS: "true"
         run: python ./build_tools/github_actions/fetch_test_configurations.py
 
-  run_extended_functional_tests:
-    name: 'Run Extended Functional Tests ${{ matrix.components.job_name }}'
+  run_functional_tests:
+    name: 'Run Functional Tests ${{ matrix.components.job_name }}'
     needs: [configure_test_matrix]
     # skip tests if no test matrix to run
     if: ${{ needs.configure_test_matrix.outputs.components != '[]' }}

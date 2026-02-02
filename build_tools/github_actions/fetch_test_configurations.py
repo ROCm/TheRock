@@ -304,8 +304,8 @@ def run():
     test_type = os.getenv("TEST_TYPE", "full")
     test_labels = json.loads(os.getenv("TEST_LABELS") or "[]")
     is_benchmark_workflow = str2bool(os.getenv("IS_BENCHMARK_WORKFLOW", "false"))
-    is_extended_functional_tests = str2bool(
-        os.getenv("IS_EXTENDED_FUNCTIONAL_TESTS", "false")
+    is_functional_tests = str2bool(
+        os.getenv("IS_FUNCTIONAL_TESTS", "false")
     )
 
     logging.info(f"Selecting projects: {projects_to_test}")
@@ -316,10 +316,10 @@ def run():
         # Benchmarks don't use test_type/test_labels (all have total_shards=1, no filtering)
         logging.info("Using benchmark_matrix only (benchmark tests)")
         selected_matrix = benchmark_matrix.copy()
-    elif is_extended_functional_tests:
-        # For extended functional workflow, use ONLY functional_matrix
-        # Extended functional tests don't use test_type/test_labels (all have total_shards=1, no filtering)
-        logging.info("Using functional_matrix only (extended functional tests)")
+    elif is_functional_tests:
+        # For functional workflow, use ONLY functional_matrix
+        # Functional tests don't use test_type/test_labels (all have total_shards=1, no filtering)
+        logging.info("Using functional_matrix only (functional tests)")
         selected_matrix = functional_matrix.copy()
     else:
         # For regular workflow, use ONLY test_matrix
