@@ -222,6 +222,14 @@ test_matrix = {
         "platform": ["linux", "windows"],
         "total_shards": 1,
     },
+    # hipDNN install/consumption tests
+    "hipdnn_install": {
+        "job_name": "hipdnn_install",
+        "timeout_minutes": 10,
+        "test_script": f"python {_get_script_path('test_hipdnn_install.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards": 1,
+    },
     # hipDNN samples tests
     "hipdnn-samples": {
         "job_name": "hipdnn-samples",
@@ -291,7 +299,7 @@ test_matrix = {
 
 def run():
     platform = os.getenv("RUNNER_OS").lower()
-    project_to_test = os.getenv("project_to_test", "*")
+    projects_to_test = os.getenv("PROJECTS_TO_TEST", "*")
     amdgpu_families = os.getenv("AMDGPU_FAMILIES")
     test_type = os.getenv("TEST_TYPE", "full")
     test_labels = json.loads(os.getenv("TEST_LABELS") or "[]")
@@ -300,7 +308,7 @@ def run():
         os.getenv("IS_EXTENDED_FUNCTIONAL_TESTS", "false")
     )
 
-    logging.info(f"Selecting projects: {project_to_test}")
+    logging.info(f"Selecting projects: {projects_to_test}")
 
     # Determine which test matrix to use
     if is_benchmark_workflow:
@@ -319,7 +327,7 @@ def run():
         selected_matrix = test_matrix.copy()
 
     # This string -> array conversion ensures no partial strings are detected during test selection (ex: "hipblas" in ["hipblaslt", "rocblas"] = false)
-    project_array = [item.strip() for item in project_to_test.split(",")]
+    project_array = [item.strip() for item in projects_to_test.split(",")]
 
     output_matrix = []
     for key in selected_matrix:
