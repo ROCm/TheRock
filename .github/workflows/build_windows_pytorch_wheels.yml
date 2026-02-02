@@ -120,14 +120,7 @@ jobs:
       PACKAGE_DIST_DIR: ${{ github.workspace }}\output\packages\dist
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
       optional_build_prod_arguments: ""
-      # sccache configuration for ROCm compiler caching with S3 backend
-      SCCACHE_BUCKET: therock-${{ inputs.release_type }}-pytorch-sccache
-      SCCACHE_REGION: us-east-2
-      SCCACHE_S3_USE_SSL: "true"
-      SCCACHE_S3_KEY_PREFIX: windows/${{ inputs.amdgpu_family }}/
-      SCCACHE_S3_SERVER_SIDE_ENCRYPTION: "true"
-      SCCACHE_IDLE_TIMEOUT: "0"
-      SCCACHE_LOG: warn
+      # Using ccache with GitHub Actions cache for Windows (better HIP support than sccache)
     outputs:
       cp_version: ${{ env.cp_version }}
       # The following are python package versions produced by the build. The
@@ -174,7 +167,7 @@ jobs:
       # TODO(amd-justchen): share with build_windows_artifacts.yml. Include in VM image? Dockerfile?
       - name: Install requirements
         run: |
-          choco install --no-progress -y sccache
+          choco install --no-progress -y ccache
           choco install --no-progress -y ninja --version 1.13.1
           choco install --no-progress -y awscli
           echo "$PATH;C:\Program Files\Amazon\AWSCLIV2" >> $GITHUB_PATH
@@ -183,16 +176,30 @@ jobs:
       - name: Configure MSVC
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
 
-      - name: Configure AWS Credentials for sccache
+      - name: Configure ccache
+        run: |
+          ccache --version
+          ccache --set-config=cache_dir=${{ github.workspace }}/.ccache
+          ccache --set-config=max_size=10G
+          ccache --set-config=compression=true
+          ccache -z
+
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.ccache
+          key: ccache-windows-pytorch-${{ inputs.amdgpu_family }}-${{ inputs.pytorch_git_ref }}-${{ github.sha }}
+          restore-keys: |
+            ccache-windows-pytorch-${{ inputs.amdgpu_family }}-${{ inputs.pytorch_git_ref }}-
+            ccache-windows-pytorch-${{ inputs.amdgpu_family }}-
+
+      - name: Configure AWS Credentials
         if: ${{ github.repository_owner == 'ROCm' }}
         uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}
           special-characters-workaround: true
-
-      - name: Verify sccache
-        run: sccache --version
 
       # Checkout nightly sources from https://github.com/pytorch/pytorch
       # TODO: switch to 'nightly' to match our Linux workflows?
@@ -250,25 +257,19 @@ jobs:
             --pytorch-audio-dir ${{ env.CHECKOUT_ROOT }}/audio ^
             --pytorch-vision-dir ${{ env.CHECKOUT_ROOT }}/vision ^
             --enable-pytorch-flash-attention-windows ^
-            ${{ inputs.cache_type == 'sccache' && '--use-sccache' || (inputs.cache_type == 'ccache' && '--use-ccache' || '') }} ^
+            --use-ccache ^
             --clean ^
             --output-dir ${{ env.PACKAGE_DIST_DIR }} ^
             ${{ env.optional_build_prod_arguments }}
           python ./build_tools/github_actions/write_torch_versions.py --dist-dir ${{ env.PACKAGE_DIST_DIR }}
 
-      - name: Report cache stats
-        if: ${{ !cancelled() && inputs.cache_type != 'none' }}
+      - name: Report ccache stats
+        if: ${{ !cancelled() }}
         shell: bash
         run: |
-          if [ "${{ inputs.cache_type }}" = "sccache" ]; then
-            echo "sccache Stats:"
-            echo "--------------"
-            sccache --show-stats || true
-          elif [ "${{ inputs.cache_type }}" = "ccache" ]; then
-            echo "ccache Stats:"
-            echo "-------------"
-            ccache -s -v || true
-          fi
+          echo "ccache Stats:"
+          echo "-------------"
+          ccache -s -v || true
 
       - name: Sanity Check Wheel
         shell: cmd
