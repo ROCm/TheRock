@@ -121,7 +121,7 @@ jobs:
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
       optional_build_prod_arguments: ""
       # sccache configuration for ROCm compiler caching with S3 backend
-      SCCACHE_BUCKET: therock-pytorch-sccache-${{ inputs.release_type }}
+      SCCACHE_BUCKET: therock-${{ inputs.release_type }}-pytorch-sccache
       SCCACHE_REGION: us-east-2
       SCCACHE_S3_USE_SSL: "true"
       SCCACHE_S3_KEY_PREFIX: windows/${{ inputs.amdgpu_family }}/
