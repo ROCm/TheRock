@@ -26,7 +26,7 @@ class TestRocprofsys:
             os.environ["PATH"] = THEROCK_BIN_DIR
 
         # ROCM_PATH
-        # os.environ["ROCM_PATH"] = str(rocm_base)
+        os.environ["ROCM_PATH"] = str(rocm_base)
 
         # LD_LIBRARY_PATH
         ld_paths = [
@@ -43,6 +43,9 @@ class TestRocprofsys:
             os.environ["LD_LIBRARY_PATH"] = f"{new_ld_path}:{existing_ld_path}"
         else:
             os.environ["LD_LIBRARY_PATH"] = new_ld_path
+
+        # Required to force pytest to use install mode
+        os.environ["ROCPROFSYS_INSTALL_DIR"] = str(rocm_base)
 
     @staticmethod
     def run_pytest_package():
