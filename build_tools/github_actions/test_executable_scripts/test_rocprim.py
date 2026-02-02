@@ -14,9 +14,17 @@ os_type = platform.system().lower()
 
 logging.basicConfig(level=logging.INFO)
 
-# TODO#(2836): Re-enable test once issues are resolved
 TEST_TO_IGNORE = {
-    "gfx1151": {"windows": ["rocprim.device_merge_sort", "rocprim.device_radix_sort"]}
+    "gfx1151": {
+        "windows": [
+            # TODO(#2836): Re-enable test once issues are resolved
+            "rocprim.device_merge_sort",
+            # TODO(#2836): Re-enable test once issues are resolved
+            "rocprim.device_radix_sort",
+            # TODO(#3155): Re-enable test once consistent issues are resolved
+            "rocprim.device_reduce_by_key",
+        ]
+    }
 }
 
 SMOKE_TESTS = [
