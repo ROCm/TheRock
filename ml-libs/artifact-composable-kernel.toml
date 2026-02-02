@@ -7,4 +7,3 @@ include = [
 ]
 [components.doc."ml-libs/composable_kernel/stage"]
 [components.lib."ml-libs/composable_kernel/stage"]
-[components.run."ml-libs/composable_kernel/stage"]

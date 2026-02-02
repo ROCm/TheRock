@@ -62,7 +62,6 @@ if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
       dev
       doc
       lib
-      run
     SUBPROJECT_DEPS
       composable_kernel
   )
