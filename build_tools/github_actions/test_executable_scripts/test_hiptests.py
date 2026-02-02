@@ -31,9 +31,9 @@ if not os.path.isdir(CATCH_TESTS_PATH):
     sys.exit(1)
 env = os.environ.copy()
 
+# TODO(#3204): Re-enable tests once issues are resolved
 TEST_TO_IGNORE = {
     "gfx94X-dcgpu": {
-        # TODO(#2836): Re-enable test once issues are resolved
         "linux": [
             "Unit_hipGetProcAddress_spt_Stream",
         ]
