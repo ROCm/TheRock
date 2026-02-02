@@ -119,7 +119,7 @@ jobs:
 
   run_linux_extended_functional_tests:
     needs: [build_portable_linux_artifacts]
-    name: Run Extended Functional Tests
+    name: Run Linux Extended Functional Tests
     # Run extended functional tests if:
     # - Build succeeded (or using prebuilt artifacts)
     # - Not expecting failure

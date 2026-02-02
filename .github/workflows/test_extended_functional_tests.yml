@@ -75,8 +75,8 @@ jobs:
           IS_EXTENDED_FUNCTIONAL_TESTS: "true"
         run: python ./build_tools/github_actions/fetch_test_configurations.py
 
-  run_tests:
-    name: 'Test ${{ matrix.components.job_name }}'
+  run_extended_functional_tests:
+    name: 'Run Extended Functional Tests ${{ matrix.components.job_name }}'
     needs: [configure_test_matrix]
     # skip tests if no test matrix to run
     if: ${{ needs.configure_test_matrix.outputs.components != '[]' }}

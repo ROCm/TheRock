@@ -119,7 +119,7 @@ jobs:
 
   run_windows_extended_functional_tests:
     needs: [build_windows_artifacts]
-    name: Run Extended Functional Tests
+    name: Run Windows Extended Functional Tests
     # Run extended functional tests if:
     # - Build succeeded (or using prebuilt artifacts)
     # - Not expecting failure

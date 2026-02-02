@@ -208,7 +208,7 @@ class FunctionalBase:
         Returns:
             True if upload successful, False otherwise
         """
-        log.info("Uploading Results to API")
+        log.info("Uploading Functional Tests Results to API")
         success = self.client.upload_results(
             test_name=f"{self.test_name}_functional",
             test_results=test_results,
@@ -233,20 +233,6 @@ class FunctionalBase:
             log.info("Results saved locally only (API upload disabled or failed)")
 
         return success
-
-    def write_step_summary(
-        self, stats: Dict[str, Any], summary_table: PrettyTable
-    ) -> None:
-        """Write results to GitHub Actions step summary.
-
-        Args:
-            stats: Test statistics dictionary
-            summary_table: PrettyTable with summary statistics
-        """
-        gha_append_step_summary(
-            f"## {self.display_name} - Functional Test Results\n\n"
-            f"```\n{summary_table}\n```\n"
-        )
 
     def run(self) -> None:
         """Execute functional test workflow.
@@ -300,9 +286,12 @@ class FunctionalBase:
 
         # Write to GitHub Actions step summary
         try:
-            self.write_step_summary(stats, summary_table)
+            gha_append_step_summary(
+                f"## {self.display_name} - Functional Test Results\n\n"
+                f"```\n{summary_table}\n```\n"
+            )
         except Exception as e:
-            log.warning(f"Could not write GitHub Actions summary: {e}")
+            log.error(f"Could not write GitHub Actions summary: {e}")
 
         # Raise exception if tests failed
         if stats["overall_status"] != "PASS":

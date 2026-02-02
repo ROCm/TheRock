@@ -26,7 +26,7 @@ functional_matrix = {
         "fetch_artifact_args": "--miopen --tests",
         "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_miopendriver_conv.py')}",
-        # TODO(lajagapp): Add windows support
+        # TODO(lajagapp): Add windows support (https://github.com/ROCm/TheRock/issues/3207)
         "platform": ["linux"],
         "total_shards": 1,
     },
