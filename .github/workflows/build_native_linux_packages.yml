@@ -135,4 +135,3 @@ jobs:
             --amdgpu-family ${{ inputs.artifact_group }} \
             --artifact-id ${{ env.ARTIFACT_RUN_ID }} \
             --job ${{ inputs.release_type }}
-            
