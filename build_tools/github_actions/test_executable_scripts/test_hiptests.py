@@ -9,8 +9,6 @@ import json
 import sys
 import platform
 
-from build_tools.print_driver_gpu_info import AMDGPU_FAMILIES
-
 logging.basicConfig(level=logging.INFO)
 THEROCK_BIN_DIR_STR = os.getenv("THEROCK_BIN_DIR")
 if THEROCK_BIN_DIR_STR is None:
