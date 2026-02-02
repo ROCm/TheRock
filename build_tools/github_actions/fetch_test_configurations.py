@@ -137,7 +137,7 @@ test_matrix = {
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_hipsparse.py')}",
-        "platform": ["linux"],
+        "platform": ["linux", "windows"],
         "total_shards": 2,
     },
     "rocsparse": {
@@ -147,9 +147,6 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_rocsparse.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 1,
-        "exclude_family": {
-            "windows": ["gfx1151"]  # issue: https://github.com/ROCm/TheRock/issues/1640
-        },
     },
     "hipsparselt": {
         "job_name": "hipsparselt",
@@ -224,6 +221,15 @@ test_matrix = {
         "platform": ["linux", "windows"],
         "total_shards": 1,
     },
+    # hipDNN samples tests
+    "hipdnn-samples": {
+        "job_name": "hipdnn-samples",
+        "fetch_artifact_args": "--blas --miopen --hipdnn --miopen-plugin --hipdnn-samples --tests",
+        "timeout_minutes": 5,
+        "test_script": f"python {_get_script_path('test_hipdnn_samples.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards": 1,
+    },
     # MIOpen plugin tests
     "miopen_plugin": {
         "job_name": "miopen_plugin",
@@ -270,6 +276,15 @@ test_matrix = {
         "platform": ["linux"],
         "total_shards": 1,
     },
+    # aqlprofile tests
+    "aqlprofile": {
+        "job_name": "aqlprofile",
+        "fetch_artifact_args": "--aqlprofile --tests",
+        "timeout_minutes": 5,
+        "test_script": f"python {_get_script_path('test_aqlprofile.py')}",
+        "platform": ["linux"],
+        "total_shards": 1,
+    },
 }
 
 
@@ -278,7 +293,7 @@ def run():
     project_to_test = os.getenv("project_to_test", "*")
     amdgpu_families = os.getenv("AMDGPU_FAMILIES")
     test_type = os.getenv("TEST_TYPE", "full")
-    test_labels = json.loads(os.getenv("TEST_LABELS", "[]"))
+    test_labels = json.loads(os.getenv("TEST_LABELS") or "[]")
     is_benchmark_workflow = str2bool(os.getenv("IS_BENCHMARK_WORKFLOW", "false"))
 
     logging.info(f"Selecting projects: {project_to_test}")

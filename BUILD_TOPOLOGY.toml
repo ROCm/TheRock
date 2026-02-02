@@ -100,7 +100,7 @@ submodules = ["rocm-libraries"]
 
 [source_sets.ml-frameworks]
 description = "ML framework submodules"
-submodules = ["composable_kernel"]
+submodules = []
 
 [source_sets.comm-libs]
 description = "Communication library submodules"
@@ -452,7 +452,7 @@ feature_group = "CORE"  # Part of core, enabled by default
 
 [artifacts.core-hiptests]
 artifact_group = "hip-runtime"
-type = "target-neutral"
+type = "target-specific"
 artifact_deps = ["core-hip"]
 feature_group = "CORE"  # Part of core, enabled by default
 
@@ -517,6 +517,11 @@ artifact_group = "ml-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn"]
 
+[artifacts.hipdnn-samples]
+artifact_group = "ml-libs"
+type = "target-specific"
+artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "miopen-plugin"]
+
 # --- IREE Integration ---
 
 [artifacts.fusilli-plugin]
@@ -540,6 +545,13 @@ artifact_group = "profiler-core"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "base"]  # rocprofiler-register is in base
 feature_name = "ROCPROFV3"
+feature_group = "PROFILER"
+disable_platforms = ["windows"]
+
+[artifacts.aqlprofile-tests]
+artifact_group = "profiler-core"
+type = "target-specific"
+artifact_deps = ["core-runtime"]
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
 

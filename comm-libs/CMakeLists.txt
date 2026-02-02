@@ -35,6 +35,7 @@ if(THEROCK_ENABLE_RCCL AND THEROCK_SANITIZER STREQUAL "")
       therock-fmt
       therock-googletest
     RUNTIME_DEPS
+      amdsmi
       hip-clr
       hipify
       rocm_smi_lib
@@ -89,4 +90,4 @@ if(THEROCK_ENABLE_RCCL AND THEROCK_SANITIZER STREQUAL "")
     SUBPROJECT_DEPS
       ${_rccl_subproject_names}
   )
-endif(THEROCK_ENABLE_RCCL)
+endif(THEROCK_ENABLE_RCCL AND THEROCK_SANITIZER STREQUAL "")

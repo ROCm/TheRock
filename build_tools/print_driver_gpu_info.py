@@ -22,7 +22,8 @@ import sys
 from typing import List, Optional
 
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
-unsupported_amdsmi_families = ["gfx1151"]
+# TODO(#2964): Remove gfx950-dcgpu once amdsmi static does not timeout
+unsupported_amdsmi_families = ["gfx1151", "gfx950-dcgpu"]
 
 
 def log(*args, **kwargs):
