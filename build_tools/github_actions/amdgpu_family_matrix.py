@@ -58,7 +58,9 @@ amdgpu_family_info_matrix_presubmit = {
     },
     "gfx110x": {
         "linux": {
-            "test-runs-on": "linux-gfx110X-gpu-rocm",
+            # TODO(#2740): Re-enable machine once `amdsmi` test is fixed
+            # Label is "linux-gfx110X-gpu-rocm"
+            "test-runs-on": "",
             "family": "gfx110X-all",
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],

@@ -168,21 +168,6 @@ class TestROCmSanity:
                     "amdsmitstReadWrite.TestPciReadWrite",
                 ]
             },
-            "gfx103X-dgpu": {
-                # TODO(#2740): Re-enable test once resolved
-                "linux": [
-                    "amdsmitstReadWrite.FanReadWrite",
-                    "amdsmitstReadOnly.FanRead",
-                    "amdsmitstReadOnly.VoltRead",
-                    "amdsmitstReadOnly.TestSysInfoRead",
-                    "amdsmitstReadOnly.TestPowerRead",
-                    "amdsmitstReadOnly.TestIdInfoRead"
-                ]
-            },
-            "gfx110X-dgpu": {
-                # TODO(#2740): Re-enable test once resolved
-                "linux": ["amdsmitstReadWrite.FanReadWrite"]
-            },
         }
 
         platform_key = "windows" if is_windows() else "linux"
