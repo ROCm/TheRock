@@ -416,6 +416,14 @@ artifact_deps = ["sysdeps"]
 feature_name = "COMPILER"
 feature_group = "ALL"
 
+[artifacts.core-runtime]
+artifact_group = "core-runtime"
+type = "target-neutral"
+artifact_deps = ["base", "sysdeps", "amd-llvm"]
+feature_name = "CORE_RUNTIME"
+feature_group = "CORE"
+disable_platforms = ["windows"]
+
 [artifacts.hipify]
 artifact_group = "compiler"
 type = "target-neutral"
@@ -428,16 +436,9 @@ type = "target-neutral"
 artifact_deps = ["amd-llvm", "core-runtime"]  # Built on top of amd-llvm
 feature_name = "COMPILER_EXTRAS"
 feature_group = "ALL"
+disable_platforms = ["windows"]
 
 # --- Runtime Artifacts ---
-
-[artifacts.core-runtime]
-artifact_group = "core-runtime"
-type = "target-neutral"
-artifact_deps = ["base", "sysdeps", "amd-llvm"]
-feature_name = "CORE_RUNTIME"
-feature_group = "CORE"
-disable_platforms = ["windows"]
 
 [artifacts.core-hip]
 artifact_group = "hip-runtime"
