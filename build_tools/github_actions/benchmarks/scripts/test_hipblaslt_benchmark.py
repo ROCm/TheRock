@@ -10,8 +10,7 @@ import shlex
 import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple, Any
-from prettytable import PrettyTable
+from typing import Dict, List, Any
 
 sys.path.insert(0, str(Path(__file__).parent.parent))  # For utils
 sys.path.insert(0, str(Path(__file__).parent))  # For benchmark_base
@@ -107,45 +106,20 @@ class HipblasltBenchmark(BenchmarkBase):
                         B,
                     ]
 
-                    log.info(f"++ Exec [{self.therock_dir}]$ {shlex.join(cmd)}")
-                    f.write(f"{shlex.join(cmd)}\n")
-
-                    process = subprocess.Popen(
-                        cmd,
-                        cwd=self.therock_dir,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.STDOUT,
-                        text=True,
-                        bufsize=1,
-                    )
-
-                    for line in process.stdout:
-                        log.info(line.strip())
-                        f.write(f"{line}\n")
-
-                    process.wait()
+                    self.execute_command(cmd, f)
 
         log.info("Benchmark execution complete")
 
-    def parse_results(self) -> Tuple[List[Dict[str, Any]], PrettyTable]:
+    def parse_results(self) -> List[Dict[str, Any]]:
         """Parse benchmark results from log file.
 
+        Note: hipblaslt-bench supports --data (CSV) or --yaml output.
+        Currently using CSV (default).
+
         Returns:
-            tuple: (test_results list, PrettyTable object)
+            List[Dict[str, Any]]: test_results list
         """
         log.info("Parsing Results")
-
-        field_names = [
-            "TestName",
-            "SubTests",
-            "BatchCount",
-            "nGPU",
-            "Result",
-            "Scores",
-            "Units",
-            "Flag",
-        ]
-        table = PrettyTable(field_names)
 
         test_results = []
         num_gpus = 1
@@ -178,95 +152,81 @@ class HipblasltBenchmark(BenchmarkBase):
                 f"_{batch_count}"
             )
 
-        try:
-            with open(self.log_file, "r") as log_fp:
-                data = log_fp.readlines()
+        with open(self.log_file, "r") as log_fp:
+            data = log_fp.readlines()
 
-            # Find CSV header line
-            header_line = None
-            header_index = -1
+        # Parse CSV output from benchmark logs
+        # hipblaslt-bench outputs CSV format like:
+        #   Header: [0]:transA,transB,grouped_gemm,batch_count,m,n,k,...,hipblaslt-Gflops,hipblaslt-GB/s,us,...
+        #   Data:   N,N,0,1,8192,320,320,...,177875,1055.59,9.432,...
+        header_line = None
+        header_index = -1
 
-            for i, line in enumerate(data):
-                if "transA" in line and "transB" in line and "hipblaslt-Gflops" in line:
-                    header_line = line.replace("[0]:", "").strip().split(",")
-                    header_index = i
-                    break
+        for i, line in enumerate(data):
+            # Identify header row (contains column names: transA, transB, hipblaslt-Gflops)
+            if "transA" in line and "transB" in line and "hipblaslt-Gflops" in line:
+                # Remove "[0]:" prefix, strip whitespace, split by comma to get individual columns
+                header_line = line.replace("[0]:", "").strip().split(",")
+                header_index = i
+                break
 
-            if not header_line or header_index == -1:
-                log.warning("CSV header not found in log file")
-                return test_results, table
+        if not header_line or header_index == -1:
+            log.warning("CSV header not found in log file")
+            return test_results
 
-            for line in data[header_index + 1 :]:
-                line = line.strip()
+        # Process data rows (lines after the header)
+        for line in data[header_index + 1 :]:
+            line = line.strip()
 
-                # Skip empty or header lines
-                if (
-                    not line
-                    or len(line.split(",")) < 2
-                    or "transA" in line
-                    or "transB" in line
-                ):
-                    continue
+            # Skip empty or header lines
+            if (
+                not line
+                or len(line.split(",")) < 2
+                or "transA" in line
+                or "transB" in line
+            ):
+                continue
 
-                # Remove [0]: prefix and parse values
-                line = re.sub(r"^\[\d+\]:\s*", "", line)
-                values = line.split(",")
+            # Parse CSV data row, split by comma to get individual columns
+            values = line.split(",")
 
-                if len(values) != len(header_line):
-                    continue
+            if len(values) != len(header_line):
+                continue
 
-                params = dict(zip(header_line, values))
+            params = dict(zip(header_line, values))
 
-                # Validate batch_count
-                try:
-                    batch_count = int(get_param(params, "batch_count", "0") or "0")
-                except (ValueError, TypeError):
-                    log.warning(f"Invalid batch_count, skipping line")
-                    continue
+            # Validate batch_count
+            try:
+                batch_count = int(get_param(params, "batch_count", "0") or "0")
+            except (ValueError, TypeError):
+                log.warning(f"Invalid batch_count, skipping line")
+                continue
 
-                # Validate Gflops score
-                try:
-                    score = float(get_param(params, "hipblaslt-Gflops", "0"))
-                    status = "PASS" if score > 0 else "FAIL"
-                except (ValueError, TypeError):
-                    score = 0.0
-                    status = "FAIL"
+            # Validate Gflops score
+            try:
+                score = float(get_param(params, "hipblaslt-Gflops", "0"))
+                status = "PASS" if score > 0 else "FAIL"
+            except (ValueError, TypeError):
+                score = 0.0
+                status = "FAIL"
 
-                # Create subtest name
-                subtest_name = create_subtest_name(params, batch_count)
+            # Create subtest name
+            subtest_name = create_subtest_name(params, batch_count)
 
-                table.add_row(
-                    [
-                        self.benchmark_name,
-                        subtest_name,
-                        batch_count,
-                        num_gpus,
-                        status,
-                        score,
-                        "Gflops",
-                        "H",
-                    ]
+            test_results.append(
+                self.create_test_result(
+                    self.benchmark_name,
+                    subtest_name,
+                    status,
+                    score,
+                    "Gflops",
+                    "H",
+                    batch_size=batch_count,
+                    ngpu=num_gpus,
                 )
-                test_results.append(
-                    self.create_test_result(
-                        self.benchmark_name,
-                        subtest_name,
-                        status,
-                        score,
-                        "Gflops",
-                        "H",
-                        batch_size=batch_count,
-                        ngpu=num_gpus,
-                    )
-                )
+            )
 
-        except FileNotFoundError:
-            log.error(f"Log file not found: {self.log_file}")
-        except OSError as e:
-            log.error(f"Failed to read log file: {e}")
-            raise
-
-        return test_results, table
+        return test_results
 
 
 if __name__ == "__main__":

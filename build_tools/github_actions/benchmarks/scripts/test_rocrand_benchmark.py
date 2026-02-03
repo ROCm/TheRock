@@ -11,8 +11,7 @@ import shlex
 import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple, Any
-from prettytable import PrettyTable
+from typing import Dict, List, Any
 
 sys.path.insert(0, str(Path(__file__).parent.parent))  # For utils
 sys.path.insert(0, str(Path(__file__).parent))  # For benchmark_base
@@ -54,31 +53,18 @@ class ROCrandBenchmark(BenchmarkBase):
                     "--benchmark_format=csv",
                 ]
 
-                log.info(f"++ Exec [{self.therock_dir}]$ {shlex.join(cmd)}")
-                f.write(f"{shlex.join(cmd)}\n")
-
-                process = subprocess.Popen(
-                    cmd,
-                    cwd=self.therock_dir,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    bufsize=1,
-                )
-
-                for line in process.stdout:
-                    log.info(line.strip())
-                    f.write(f"{line}\n")
-
-                process.wait()
+                self.execute_command(cmd, f)
 
         log.info("Benchmark execution complete")
 
-    def parse_results(self) -> Tuple[List[Dict[str, Any]], PrettyTable]:
+    def parse_results(self) -> List[Dict[str, Any]]:
         """Parse benchmark results from log files.
 
+        Note: rocrand benchmarks support --benchmark_format=csv/json/console.
+        Currently using CSV format (--benchmark_format=csv).
+
         Returns:
-            tuple: (test_results list, PrettyTable object)
+            List[Dict[str, Any]]: test_results list
         """
         log.info("Parsing Results")
 
@@ -90,20 +76,7 @@ class ROCrandBenchmark(BenchmarkBase):
 
         bench_types = ["rocrand_host", "rocrand_device"]
 
-        # Setup table
-        field_names = [
-            "TestName",
-            "SubTests",
-            "Mode",
-            "Result",
-            "Scores",
-            "Units",
-            "Flag",
-        ]
-        table = PrettyTable(field_names)
-
         test_results = []
-        num_gpus = 1
 
         for bench_type in bench_types:
             log_file = self.script_dir / f"{bench_type}_bench.log"
@@ -114,70 +87,52 @@ class ROCrandBenchmark(BenchmarkBase):
 
             log.info(f"Parsing {bench_type} results")
 
-            try:
-                with open(log_file, "r") as f:
-                    data = f.read()
+            with open(log_file, "r") as f:
+                data = f.read()
 
-                # Find the CSV data in the file
-                csv_match = csv_pattern.search(data)
-                if not csv_match:
-                    log.warning(f"No CSV data found in {log_file}")
-                    continue
-
-                csv_data = csv_match.group()
-                lines = csv_data.strip().split("\n")
-
-                # Parse CSV data
-                csv_reader = csv.DictReader(io.StringIO("\n".join(lines)))
-
-                for row in csv_reader:
-                    engine = row.get("engine", "")
-                    distribution = row.get("distribution", "")
-                    mode = row.get("mode", "")
-                    throughput = row.get("throughput_gigabytes_per_second", "0")
-
-                    try:
-                        throughput_val = float(throughput)
-                    except (ValueError, TypeError):
-                        log.warning(f"Invalid throughput value: {throughput}, skipping")
-                        continue
-
-                    # Build subtest identifier
-                    subtest_id = f"{engine}_{distribution}"
-
-                    # Determine status
-                    status = "PASS" if throughput_val > 0 else "FAIL"
-
-                    # Add to results
-                    table.add_row(
-                        [
-                            self.benchmark_name,
-                            subtest_id,
-                            mode,
-                            status,
-                            throughput_val,
-                            "GB/s",
-                            "H",
-                        ]
-                    )
-
-                    test_results.append(
-                        self.create_test_result(
-                            self.benchmark_name,
-                            subtest_id,
-                            status,
-                            throughput_val,
-                            "GB/s",
-                            "H",
-                            mode=mode,
-                        )
-                    )
-
-            except OSError as e:
-                log.error(f"IO Error reading {log_file}: {e}")
+            # Find the CSV data in the file
+            csv_match = csv_pattern.search(data)
+            if not csv_match:
+                log.warning(f"No CSV data found in {log_file}")
                 continue
 
-        return test_results, table
+            csv_data = csv_match.group()
+            lines = csv_data.strip().split("\n")
+
+            # Parse CSV data
+            csv_reader = csv.DictReader(io.StringIO("\n".join(lines)))
+
+            for row in csv_reader:
+                engine = row.get("engine", "")
+                distribution = row.get("distribution", "")
+                mode = row.get("mode", "")
+                throughput = row.get("throughput_gigabytes_per_second", "0")
+
+                try:
+                    throughput_val = float(throughput)
+                except (ValueError, TypeError):
+                    log.warning(f"Invalid throughput value: {throughput}, skipping")
+                    continue
+
+                # Build subtest identifier
+                subtest_id = f"{engine}_{distribution}"
+
+                # Determine status
+                status = "PASS" if throughput_val > 0 else "FAIL"
+
+                test_results.append(
+                    self.create_test_result(
+                        self.benchmark_name,
+                        subtest_id,
+                        status,
+                        throughput_val,
+                        "GB/s",
+                        "H",
+                        mode=mode,
+                    )
+                )
+
+        return test_results
 
 
 if __name__ == "__main__":

@@ -8,8 +8,7 @@ import json
 import re
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple, Any
-from prettytable import PrettyTable
+from typing import Dict, List, Any
 
 sys.path.insert(0, str(Path(__file__).parent.parent))  # For utils
 sys.path.insert(0, str(Path(__file__).parent))  # For benchmark_base
@@ -99,11 +98,13 @@ class RCCLBenchmark(BenchmarkBase):
 
         log.info("RCCL benchmarks execution complete")
 
-    def parse_results(self) -> Tuple[List[Dict[str, Any]], PrettyTable]:
+    def parse_results(self) -> List[Dict[str, Any]]:
         """Parse benchmark results from log file.
 
+        Note: RCCL benchmarks output text format only (no CSV/JSON support).
+
         Returns:
-            tuple: (test_results list, PrettyTable object)
+            List[Dict[str, Any]]: test_results list
         """
         # Regex patterns for parsing
         pattern_benchmark = re.compile(r"Benchmark:\s*(\S+)")
@@ -113,81 +114,52 @@ class RCCLBenchmark(BenchmarkBase):
 
         log.info("Parsing Results")
 
-        # Setup table
-        field_names = [
-            "TestName",
-            "SubTests",
-            "nGPU",
-            "Result",
-            "Scores",
-            "Units",
-            "Flag",
-        ]
-        table = PrettyTable(field_names)
-
         test_results = []
 
-        try:
-            with open(self.log_file, "r") as log_fp:
-                content = log_fp.read()
-            # Split by benchmark sections
-            sections = content.split("=" * 80)
+        with open(self.log_file, "r") as log_fp:
+            content = log_fp.read()
+        # Split by benchmark sections
+        sections = content.split("=" * 80)
 
-            for section in sections:
-                if not section.strip():
-                    continue
+        for section in sections:
+            if not section.strip():
+                continue
 
-                # Extract metadata
-                benchmark_match = re.search(pattern_benchmark, section)
-                dtype_match = re.search(pattern_dtype, section)
-                operation_match = re.search(pattern_operation, section)
-                bandwidth_match = re.search(pattern_bandwidth, section)
+            # Extract metadata
+            benchmark_match = re.search(pattern_benchmark, section)
+            dtype_match = re.search(pattern_dtype, section)
+            operation_match = re.search(pattern_operation, section)
+            bandwidth_match = re.search(pattern_bandwidth, section)
 
-                if not (benchmark_match and dtype_match and bandwidth_match):
-                    continue
+            if not (benchmark_match and dtype_match and bandwidth_match):
+                continue
 
-                benchmark_name = benchmark_match.group(1)
-                dtype = dtype_match.group(1)
-                operation = operation_match.group(1) if operation_match else "sum"
-                bandwidth = float(bandwidth_match.group(1))
+            benchmark_name = benchmark_match.group(1)
+            dtype = dtype_match.group(1)
+            operation = operation_match.group(1) if operation_match else "sum"
+            bandwidth = float(bandwidth_match.group(1))
 
-                # Determine status
-                status = "PASS" if bandwidth > 0 else "FAIL"
+            # Determine status
+            status = "PASS" if bandwidth > 0 else "FAIL"
 
-                # Build subtest name
-                subtest_name = f"{benchmark_name}_{dtype}_{operation}"
+            # Build subtest name
+            subtest_name = f"{benchmark_name}_{dtype}_{operation}"
 
-                # Add to table and results
-                table.add_row(
-                    [
-                        self.benchmark_name,
-                        subtest_name,
-                        self.ngpu,
-                        status,
-                        bandwidth,
-                        "GB/s",
-                        "H",
-                    ]
+            test_results.append(
+                self.create_test_result(
+                    self.benchmark_name,
+                    subtest_name,
+                    status,
+                    bandwidth,
+                    "GB/s",
+                    "H",
+                    ngpu=self.ngpu,
+                    dtype=dtype,
+                    operation=operation,
                 )
+            )
 
-                test_results.append(
-                    self.create_test_result(
-                        self.benchmark_name,
-                        subtest_name,
-                        status,
-                        bandwidth,
-                        "GB/s",
-                        "H",
-                        ngpu=self.ngpu,
-                        dtype=dtype,
-                        operation=operation,
-                    )
-                )
-
-        except OSError as e:
-            raise ValueError(f"IO Error in Score Extractor: {e}")
-
-        return test_results, table
+        return test_results
 
 
 if __name__ == "__main__":

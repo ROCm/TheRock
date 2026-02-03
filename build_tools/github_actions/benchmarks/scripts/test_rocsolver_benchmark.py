@@ -10,8 +10,7 @@ import shlex
 import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple, Any
-from prettytable import PrettyTable
+from typing import Dict, List, Any
 
 sys.path.insert(0, str(Path(__file__).parent.parent))  # For utils
 sys.path.insert(0, str(Path(__file__).parent))  # For benchmark_base
@@ -48,109 +47,66 @@ class ROCsolverBenchmark(BenchmarkBase):
                 "250",
             ]
 
-            log.info(f"++ Exec [{self.therock_dir}]$ {shlex.join(cmd)}")
-            f.write(f"{shlex.join(cmd)}\n")
-
-            process = subprocess.Popen(
-                cmd,
-                cwd=self.therock_dir,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,
-            )
-
-            for line in process.stdout:
-                log.info(line.strip())
-                f.write(f"{line}\n")
-
-            process.wait()
+            self.execute_command(cmd, f)
 
         log.info("Benchmark execution complete")
 
-    def parse_results(self) -> Tuple[List[Dict[str, Any]], PrettyTable]:
+    def parse_results(self) -> List[Dict[str, Any]]:
         """Parse benchmark results from log file.
 
+        Note: rocsolver-bench outputs text format only (no CSV/JSON support).
+
         Returns:
-            tuple: (test_results list, PrettyTable object)
+            List[Dict[str, Any]]: test_results list
         """
-        # Regex patterns for parsing
-        # Pattern to match timing results: "cpu_time_us  gpu_time_us"
+        # Regex pattern for parsing timing results: "cpu_time_us  gpu_time_us"
         gpu_pattern = re.compile(r"^\s*(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)\s*$")
-        # Pattern to detect device ID
-        device_pattern = re.compile(r"Device\s+ID\s*\d+")
 
         log.info("Parsing Results")
-        # Setup table
-        field_names = [
-            "TestName",
-            "SubTests",
-            "nGPU",
-            "Result",
-            "Scores",
-            "Units",
-            "Flag",
-        ]
-        table = PrettyTable(field_names)
 
         test_results = []
         score = 0
-        num_gpus = 0
+
+        # Detect actual GPU count from system
+        num_gpus = self._detect_gpu_count()
 
         # Test configuration from command
         subtest_name = "rocsolver_gesvd_d_S_S_250_250"
 
-        try:
-            with open(self.log_file, "r") as fp:
-                for line in fp:
-                    # Check for GPU device lines
-                    if re.search(device_pattern, line):
-                        num_gpus += 1
+        with open(self.log_file, "r") as fp:
+            for line in fp:
+                # Extract timing score - try new 2-column format first
+                gpu_match = re.search(gpu_pattern, line)
+                if gpu_match:
+                    # Group 2 contains gpu_time_us in new format
+                    score = float(gpu_match.group(2))
+                    log.debug(
+                        f"Matched 2-column format: cpu_time={gpu_match.group(1)}, gpu_time={gpu_match.group(2)}"
+                    )
 
-                    # Extract timing score - try new 2-column format first
-                    gpu_match = re.search(gpu_pattern, line)
-                    if gpu_match:
-                        # Group 2 contains gpu_time_us in new format
-                        score = float(gpu_match.group(2))
-                        log.debug(
-                            f"Matched 2-column format: cpu_time={gpu_match.group(1)}, gpu_time={gpu_match.group(2)}"
-                        )
+        # Determine status
+        if score > 0:
+            status = "PASS"
+        else:
+            status = "FAIL"
+            log.warning(f"No valid score extracted from log file. Score = {score}")
 
-            # Determine status
-            if score > 0:
-                status = "PASS"
-            else:
-                status = "FAIL"
-                log.warning(f"No valid score extracted from log file. Score = {score}")
+        log.info(f"Extracted score: {score} us")
 
-            log.info(f"Extracted score: {score} us")
-
-            # Default to 1 GPU if none detected
-            if num_gpus == 0:
-                num_gpus = 1
-
-            # Add to table
-            table.add_row(
-                [self.benchmark_name, subtest_name, num_gpus, status, score, "us", "L"]
+        # Add to test results
+        test_results.append(
+            self.create_test_result(
+                self.benchmark_name,
+                subtest_name,
+                status,
+                score,
+                "us",
+                "L",  # Lower is better for time
+                ngpu=num_gpus,
             )
+        )
 
-            # Add to test results
-            test_results.append(
-                self.create_test_result(
-                    self.benchmark_name,
-                    subtest_name,
-                    status,
-                    score,
-                    "us",
-                    "L",  # Lower is better for time
-                    ngpu=num_gpus,
-                )
-            )
-
-        except OSError as e:
-            raise ValueError(f"IO Error in Score Extractor: {e}")
-
-        return test_results, table
+        return test_results
 
 
 if __name__ == "__main__":
