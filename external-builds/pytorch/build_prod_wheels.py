@@ -35,7 +35,6 @@ python pytorch_triton_repo.py checkout
 # On Windows, using shorter paths to avoid compile command length limits:
 python pytorch_torch_repo.py checkout --checkout-dir C:/b/pytorch
 python pytorch_audio_repo.py checkout --checkout-dir C:/b/audio
-python pytorch_apex_repo.py checkout --checkout-dir C:/b/apex
 python pytorch_vision_repo.py checkout --checkout-dir C:/b/vision
 ```
 
