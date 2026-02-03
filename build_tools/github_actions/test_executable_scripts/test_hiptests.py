@@ -3,7 +3,7 @@ import os
 import shlex
 import subprocess
 from pathlib import Path
-import glob
+import platform
 import shutil
 import json
 import sys
@@ -16,6 +16,7 @@ if THEROCK_BIN_DIR_STR is None:
         "++ Error: env(THEROCK_BIN_DIR) is not set. Please set it before executing tests."
     )
     sys.exit(1)
+ASAN_OPTIONS = os.getenv("ASAN_OPTIONS", "")
 THEROCK_BIN_DIR = Path(THEROCK_BIN_DIR_STR)
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
@@ -28,13 +29,28 @@ if not os.path.isdir(CATCH_TESTS_PATH):
 env = os.environ.copy()
 
 
-def get_test_count():
+def get_asan_lib_path():
+    arch = platform.machine()
+    CLANG_PATH = str(Path(THEROCK_BIN_DIR).parent / "lib" / "llvm" / "bin" / "clang++")
+    cmd = [f"{CLANG_PATH}", f"--print-file-name=libclang_rt.asan-{arch}.so"]
+    logging.info(f"++ Exec [{CLANG_PATH}]$ {shlex.join(cmd)}")
+    result = subprocess.run(
+        cmd,
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+    return result.stdout.strip()
+
+
+def get_test_count(env):
     cmd = ["ctest", "--show-only=json-v1"]
     result = subprocess.run(
         cmd,
         cwd=CATCH_TESTS_PATH,
         check=True,
         capture_output=True,
+        env=env,
     )
     jdata = json.loads(result.stdout)
     tests = jdata["tests"]
@@ -86,12 +102,15 @@ def setup_env(env):
             env["LD_LIBRARY_PATH"] = f"{HIP_LIB_PATH}:{env['LD_LIBRARY_PATH']}"
         else:
             env["LD_LIBRARY_PATH"] = HIP_LIB_PATH
+        # For ASAN mode, we preload it for test count query and test running
+        if ASAN_OPTIONS:
+            env["LD_PRELOAD"] = get_asan_lib_path()
     else:
         copy_dlls_exe_path()
 
 
 def execute_tests(env):
-    total_tests = get_test_count()
+    total_tests = get_test_count(env)
     index_start, index_end = get_test_range_per_shard(
         total_tests, int(TOTAL_SHARDS), int(SHARD_INDEX)
     )
