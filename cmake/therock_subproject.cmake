@@ -34,6 +34,13 @@ set_property(GLOBAL PROPERTY THEROCK_DEFAULT_CMAKE_VARS
   # Debug info handling.
   THEROCK_SPLIT_DEBUG_INFO
 )
+# THEROCK_THIRD_PARTY_CMAKE_VARS
+# List of CMake variables that should be propagated to third party deps.
+set_property(GLOBAL PROPERTY THEROCK_THIRD_PARTY_CMAKE_VARS
+  CMAKE_BUILD_TYPE
+  CMAKE_C_COMPILER_LAUNCHER
+  CMAKE_CXX_COMPILER_LAUNCHER
+)
 
 # Whenever a new package is advertised by the super-project, it is added here.
 # This is used by the sub-project dependency resolver to error if a package
@@ -224,6 +231,8 @@ endfunction()
 #   compile_commands.json into the overall project. This is useful for
 #   third-party projects that are excluded from all as it eliminates a
 #   dependency that forces them to be downloaded/built.
+# THIRD_PARTY_DEP: Option to propagate relevant CMake variables to third-party dependencies.
+#   Ensures that external or sysdeps projects use the same settings as the main project.
 # SOURCE_DIR: Absolute path to the external source directory.
 # DIR_PREFIX: By default, directories named "build", "stage", "stamp" are
 #   created. But if there are multiple sub-projects in a parent dir, then they
@@ -327,7 +336,7 @@ endfunction()
 function(therock_cmake_subproject_declare target_name)
   cmake_parse_arguments(
     PARSE_ARGV 1 ARG
-    "ACTIVATE;USE_DIST_AMDGPU_TARGETS;DISABLE_AMDGPU_TARGETS;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH;FPRINT_SOURCE_HASH"
+    "ACTIVATE;USE_DIST_AMDGPU_TARGETS;DISABLE_AMDGPU_TARGETS;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH;FPRINT_SOURCE_HASH;THIRD_PARTY_DEP"
     "EXTERNAL_SOURCE_DIR;BINARY_DIR;DIR_PREFIX;INSTALL_DESTINATION;COMPILER_TOOLCHAIN;INTERFACE_PROGRAM_DIRS;CMAKE_LISTS_RELPATH;INTERFACE_PKG_CONFIG_DIRS;INSTALL_RPATH_EXECUTABLE_DIR;INSTALL_RPATH_LIBRARY_DIR;LOGICAL_TARGET_NAME;FPRINT_SOURCE_DIR"
     "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS;DEFAULT_GPU_TARGETS;FPRINT_FILE_GLOBS"
   )
@@ -483,6 +492,7 @@ function(therock_cmake_subproject_declare target_name)
     THEROCK_DISABLE_AMDGPU_TARGETS "${ARG_DISABLE_AMDGPU_TARGETS}"
     THEROCK_EXCLUDE_FROM_ALL "${ARG_EXCLUDE_FROM_ALL}"
     THEROCK_NO_MERGE_COMPILE_COMMANDS "${ARG_NO_MERGE_COMPILE_COMMANDS}"
+    THEROCK_THIRD_PARTY_DEP "${ARG_THIRD_PARTY_DEP}"
     THEROCK_EXTERNAL_SOURCE_DIR "${ARG_EXTERNAL_SOURCE_DIR}"
     THEROCK_BINARY_DIR "${_binary_dir}"
     THEROCK_DIST_DIR "${_dist_dir}"
@@ -589,6 +599,7 @@ function(therock_cmake_subproject_activate target_name)
   get_target_property(_ignore_packages "${target_name}" THEROCK_IGNORE_PACKAGES)
   get_target_property(_install_destination "${target_name}" THEROCK_INSTALL_DESTINATION)
   get_target_property(_no_merge_compile_commands "${target_name}" THEROCK_NO_MERGE_COMPILE_COMMANDS)
+  get_target_property(_third_party_dep "${target_name}" THEROCK_THIRD_PARTY_DEP)
   get_target_property(_private_include_dirs "${target_name}" THEROCK_PRIVATE_INCLUDE_DIRS)
   get_target_property(_private_link_dirs "${target_name}" THEROCK_PRIVATE_LINK_DIRS)
   get_target_property(_private_pkg_config_dirs "${target_name}" THEROCK_PRIVATE_PKG_CONFIG_DIRS)
@@ -672,6 +683,12 @@ function(therock_cmake_subproject_activate target_name)
   endif()
 
   get_property(_mirror_cmake_vars GLOBAL PROPERTY THEROCK_DEFAULT_CMAKE_VARS)
+
+  # Add third-party-relevant cmake vars to the list of mirrored vars in case of third party subproject
+  if(_third_party_dep)
+    get_property(_third_party_cmake_vars GLOBAL PROPERTY THEROCK_THIRD_PARTY_CMAKE_VARS)
+    list(APPEND _mirror_cmake_vars ${_third_party_cmake_vars})
+  endif()
 
   # Pairs of arguments for a `cmake -E env` command to run before each
   # subproject build or configure command.
