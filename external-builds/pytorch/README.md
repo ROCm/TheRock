@@ -142,9 +142,8 @@ Now checkout repositories using their default branches:
   ```batch
   python pytorch_torch_repo.py checkout --checkout-dir C:/b/pytorch
   python pytorch_audio_repo.py checkout --checkout-dir C:/b/audio
-  python pytorch_vision_repo.py checkout --checkout-dir C:/b/vision
-
-  ```
+ python pytorch_vision_repo.py checkout --checkout-dir C:/b/vision
+ ```
 
 Now note the gfx target you want to build for and then...
 
