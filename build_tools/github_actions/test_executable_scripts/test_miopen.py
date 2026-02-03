@@ -153,9 +153,10 @@ negative_filter.append("Full/GPU_ConvGrpActivInfer3D_FP16*")  # 0 min 16 sec
 # Flaky tests
 TEST_TO_IGNORE = {
     "gfx1151": {
+        # TODO(#3202): Re-enable tests once issues are resolved
         "windows": [
             "Full/GPU_UnitTestConvSolverGemmBwdRestBwd_FP16.GemmBwdRest/0"
-        ]  # https://github.com/ROCm/TheRock/issues/3202
+        ]
     }
 }
 
