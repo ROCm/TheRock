@@ -115,20 +115,6 @@ endif(THEROCK_BUILD_TESTING)
   # rocprofiler-compute
   ##############################################################################
 
-  # Set default version
-  set(PYTHON3_EXECUTABLE "/opt/python-shared/cp312-cp312/bin/python3.12")
-
-  # Search for cp312 executable
-  if(SHARED_PYTHON_EXECUTABLES)
-    message(STATUS "Available python-shared: ${SHARED_PYTHON_EXECUTABLES}")
-    set(search_string "cp312")
-    foreach(CURRENT_PYTHON_EXECUTABLE ${SHARED_PYTHON_EXECUTABLES})
-      if(CURRENT_PYTHON_EXECUTABLE MATCHES "${search_string}")
-        set(PYTHON3_EXECUTABLE "${CURRENT_PYTHON_EXECUTABLE}")
-      endif()
-    endforeach()
-  endif()
-
   therock_cmake_subproject_declare(rocprofiler-compute
     USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-compute"
@@ -141,7 +127,7 @@ endif(THEROCK_BUILD_TESTING)
       -DCMAKE_HIP_PLATFORM=amd
       -DCMAKE_HIP_COMPILER_ROCM_ROOT=${THEROCK_BINARY_DIR}/dist/rocm
       -DCMAKE_HIP_COMPILER=${THEROCK_BINARY_DIR}/dist/rocm/lib/llvm/bin/clang++${CMAKE_EXECUTABLE_SUFFIX}
-      -DPython3_EXECUTABLE=${PYTHON3_EXECUTABLE}
+      -DPython3_ROOT_DIR=/opt/python-shared/cp312-cp312
       -DENABLE_TESTS=ON
       -DINSTALL_TESTS=ON
       -DSTANDALONEBINARY=ON
