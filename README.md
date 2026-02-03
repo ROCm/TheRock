@@ -173,6 +173,7 @@ minimal build):
 | `-DTHEROCK_ENABLE_ROCPROFV3=ON`        | Enables rocprofv3                              |
 | `-DTHEROCK_ENABLE_ROCPROFSYS=ON`       | Enables rocprofiler-systems                    |
 | `-DTHEROCK_ENABLE_RCCL=ON`             | Enables RCCL                                   |
+| `-DTHEROCK_ENABLE_ROCSHMEM=ON`         | Enables rocSHMEM                               |
 | `-DTHEROCK_ENABLE_ROCR_DEBUG_AGENT=ON` | Enables the ROCR debug agent library           |
 | `-DTHEROCK_ENABLE_PRIM=ON`             | Enables the PRIM library                       |
 | `-DTHEROCK_ENABLE_BLAS=ON`             | Enables the BLAS libraries                     |
