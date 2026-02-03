@@ -510,14 +510,14 @@ def do_build(args: argparse.Namespace):
     else:
         print("--- Not build pytorch-vision (no --pytorch-vision-dir)")
 
-    print("--- Builds all completed")
-
     # Build apex.
     if args.build_apex or (args.build_apex is None and apex_dir):
         assert apex_dir, "Must specify --apex-dir if --build-apex"
         do_build_apex(args, apex_dir, dict(env))
     else:
         print("--- Not build apex (no --apex-dir)")
+
+    print("--- Builds all completed")
 
     if args.use_ccache:
         ccache_stats_output = capture(
