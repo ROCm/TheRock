@@ -1,0 +1,45 @@
+name: "Network Diagnostic"
+description: "Collect runner-specific network information for debugging connectivity issues"
+runs:
+  using: "composite"
+  steps:
+    - name: Linux network diagnostics
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        echo "--- Timestamp ---"
+        date
+        echo "--- System Info ---"
+        uname -a
+        echo "--- Network Interfaces ---"
+        ip a || ifconfig
+        echo "--- Routing Table ---"
+        ip route || route -n
+        echo "--- DNS Test ---"
+        nslookup github.com || dig github.com
+        echo "--- Connectivity Test ---"
+        ping -c 3 github.com || true
+        curl -I https://github.com || true
+        traceroute github.com || true
+        echo "--- Environment Variables (proxy/http) ---"
+        env | grep -iE "proxy|http|https" || true
+
+    - name: Windows network diagnostics
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        Write-Output "--- Timestamp ---"
+        Get-Date
+        Write-Output "--- System Info ---"
+        systeminfo
+        Write-Output "--- Network Interfaces ---"
+        ipconfig /all
+        Write-Output "--- Routing Table ---"
+        route print
+        Write-Output "--- DNS Test ---"
+        nslookup github.com
+        Write-Output "--- Connectivity Test ---"
+        Test-Connection github.com -Count 3
+        Invoke-WebRequest -Uri https://github.com -Method Head -UseBasicParsing
+        Write-Output "--- Environment Variables (proxy/http) ---"
+        Get-ChildItem Env: | Where-Object {$_.Name -match 'proxy|http|https'}

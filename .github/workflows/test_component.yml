@@ -83,6 +83,7 @@ jobs:
           repository: "ROCm/TheRock"
 
       - name: Run setup test environment workflow
+        timeout-minutes: 30
         uses: './.github/actions/setup_test_environment'
         with:
           ARTIFACT_RUN_ID: ${{ env.ARTIFACT_RUN_ID }}
@@ -116,8 +117,10 @@ jobs:
         run: |
           ${{ fromJSON(inputs.component).test_script }}
 
-      # GitHub's 'Complete job' step is unaware of launched executables
-      # and will fail to clean up orphan processes.
+      - name: Run network diagnostics on failure
+        if: ${{ failure() }}
+        uses: ./.github/actions/network_diagnostics
+
       - name: Post-job cleanup processes on Windows
         if: ${{ always() && runner.os == 'Windows' }}
         shell: powershell
