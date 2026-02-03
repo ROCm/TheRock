@@ -213,7 +213,7 @@ source_sets = ["compilers"]
 [artifact_groups.compiler-extras]
 description = "AMD LLVM Extra Projects (beyond core toolchain)"
 type = "generic"
-artifact_group_deps = ["compiler"]
+artifact_group_deps = ["compiler", "core-runtime"]
 source_sets = ["compilers"]
 
 [artifact_groups.debug-tools]
@@ -431,7 +431,7 @@ artifact_deps = ["amd-llvm"]  # Built on top of amd-llvm
 feature_group = "ALL"
 
 [artifacts.amd-llvm-extras]
-artifact_group = "compiler"
+artifact_group = "compiler-extras"
 type = "target-neutral"
 artifact_deps = ["amd-llvm", "core-runtime"]  # Built on top of amd-llvm
 feature_name = "COMPILER_EXTRAS"
