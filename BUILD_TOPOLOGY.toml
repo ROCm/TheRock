@@ -98,6 +98,10 @@ submodules = ["rocm-systems"]
 description = "ROCm libraries monorepo (math libs)"
 submodules = ["rocm-libraries"]
 
+[source_sets.math-libs]
+description = "Additional math library submodules"
+submodules = ["libhipcxx"]
+
 [source_sets.ml-frameworks]
 description = "ML framework submodules"
 submodules = []
@@ -239,7 +243,7 @@ description = "Math libraries (BLAS, FFT, RAND, etc.)"
 type = "per-arch"  # Built per GPU architecture
 artifact_group_deps = ["hip-runtime", "profiler-core"]
 # TODO: rocm-systems included for projects/hip/VERSION (see CMakeLists.txt)
-source_sets = ["rocm-libraries", "rocm-systems"]
+source_sets = ["rocm-libraries", "rocm-systems", "math-libs"]
 
 [artifact_groups.ml-libs]
 description = "Machine learning libraries"
