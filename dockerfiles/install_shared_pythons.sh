@@ -13,12 +13,16 @@ BUILD_ROOT="${1:?Build directory required}"
 INSTALL_ROOT="/opt/python-shared"
 
 # Python versions to build (major.minor.patch)
+#
+# Though EOL, both python 3.8 and python 3.9 are still actively used on
+# supported distros. We pick their most recent release versions.
 PYTHON_VERSIONS=(
+  "3.8.20"
+  "3.9.25"
   "3.10.16"
   "3.11.11"
   "3.12.9"
   "3.13.2"
-  "3.14.0"
 )
 
 mkdir -p "${BUILD_ROOT}"
