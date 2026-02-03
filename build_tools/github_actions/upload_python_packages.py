@@ -1,26 +1,26 @@
 #!/usr/bin/env python3
 
 """
-Upload Python packages to S3 or a local directory.
+This script uploads built Python packages (wheels, sdists) along with an index
+page to S3 or a local directory for testing. Once packages are uploaded, they
+can be downloaded directly or via `pip install --find-links {index_url}` by
+developers, users, and test workflows.
 
 Usage:
   upload_python_packages.py
-    --packages-dir PACKAGES_DIR
+    --input-packages-dir PACKAGES_DIR
     --artifact-group ARTIFACT_GROUP
     --run-id RUN_ID
     [--output-dir OUTPUT_DIR]  # Local output instead of S3
-    [--bucket BUCKET]          # Override bucket selection
-    [--dry-run]                # Print what would happen
-
-This script uploads built Python packages (wheels, sdists) to S3 for testing
-by downstream workflows. It can also output to a local directory for testing.
+    [--bucket BUCKET]          # Override bucket selection (defaults to retrieve_bucket_info())
+    [--dry-run]                # Print what would happen without taking action
 
 Modes:
-  1. S3 upload (default): Uploads to S3 bucket selected by retrieve_bucket_info()
+  1. S3 upload (default): Uploads to an AWS S3 bucket
   2. Local output: With --output-dir, copies files to local directory
   3. Dry run: With --dry-run, prints plan without uploading or copying
 
-S3 Layout:
+Output Layout:
   {bucket}/{external_repo}{run_id}-{platform}/python/{artifact_group}/
     *.whl, *.tar.gz   # Wheel and sdist files
     index.html        # File listing for pip --find-links
@@ -80,7 +80,7 @@ class UploadPath:
         return f"https://{self.bucket}.s3.amazonaws.com/{self.prefix}"
 
 
-def _build_upload_path_for_workflow_run(
+def build_upload_path_for_workflow_run(
     run_id: str,
     artifact_group: str,
     bucket_override: str | None = None,
@@ -145,7 +145,10 @@ def run_aws_cp(source_path: Path, s3_destination: str, dry_run: bool = False):
 
 # TODO: share helper with post_build_upload.py?
 def run_local_cp(source_path: Path, dest_path: Path, dry_run: bool = False):
-    """Copies a directory to a local destination."""
+    """Copies a directory to a local destination.
+
+    This creates dest_path and its parents as needed.
+    """
     if not source_path.is_dir():
         raise ValueError(f"source_path must be a directory: {source_path}")
 
@@ -176,7 +179,11 @@ def upload_packages(
     output_dir: Path | None = None,
     dry_run: bool = False,
 ):
-    """Uploads package files to S3 or local directory."""
+    """Uploads package files to S3 or local directory.
+
+    Uploads to a local directory if output_dir is set.
+    Otherwise uploads to upload_path.s3_uri.
+    """
     package_files = find_package_files(dist_dir)
     if not package_files:
         raise FileNotFoundError(f"No package files found in {dist_dir}")
@@ -185,8 +192,8 @@ def upload_packages(
     for f in package_files:
         log(f"  - {f.relative_to(dist_dir)}")
 
-    # TODO: should the `run_*_cp()` calls below use package_files instead of
-    #       just copying the whole dist_dir directory?
+    # Note: we're not using 'package_files' here, we're just copying/uploading
+    # the whole directory. We could check for unexpected/loose files first.
 
     if output_dir:
         local_dist_path = output_dir / upload_path.prefix
@@ -215,7 +222,7 @@ pip install rocm[libraries,devel] --pre {LINE_CONTINUATION_CHAR}
 
 
 def run(args: argparse.Namespace):
-    packages_dir = args.packages_dir.resolve()
+    packages_dir = args.input_packages_dir.resolve()
     if not packages_dir.is_dir():
         raise FileNotFoundError(f"Packages root directory not found: {packages_dir}")
 
@@ -240,7 +247,7 @@ def run(args: argparse.Namespace):
     log("---------------------")
     generate_index(dist_dir, dry_run=args.dry_run)
 
-    upload_path = _build_upload_path_for_workflow_run(
+    upload_path = build_upload_path_for_workflow_run(
         run_id=args.run_id,
         artifact_group=args.artifact_group,
         bucket_override=args.bucket,
@@ -270,7 +277,7 @@ def main():
         description="Upload Python packages to S3 or a local directory"
     )
     parser.add_argument(
-        "--packages-dir",
+        "--input-packages-dir",
         type=Path,
         required=True,
         help="Directory containing built packages (with dist/ subdirectory)",

@@ -95,8 +95,8 @@ You can also build packages from artifacts uploaded by CI workflows:
 # 1. Fetch artifacts from a CI run (find run IDs at github.com/ROCm/TheRock/actions)
 RUN_ID=21440027240
 ARTIFACT_GROUP=gfx110X-all
-ARTIFACTS_DIR=${HOME}/.therock/${RUN_ID}/artifacts
-PACKAGES_DIR=${HOME}/.therock/${RUN_ID}/packages
+ARTIFACTS_DIR=${HOME}/therock/${RUN_ID}/artifacts
+PACKAGES_DIR=${HOME}/therock/${RUN_ID}/packages
 
 python ./build_tools/fetch_artifacts.py \
     --run-id=${RUN_ID} \
