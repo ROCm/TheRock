@@ -414,9 +414,9 @@ Release tarballs are uploaded to the following locations:
 
 | Tarball index                             | S3 bucket                                                                                | Description                                        |
 | ----------------------------------------- | ---------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| https://repo.amd.com/rocm/tarball/        | (Hidden)                                                                                 | Stable releases                                    |
-| https://rocm.prereleases.amd.com/tarball/ | (Hidden)                                                                                 | Prerelease builds for QA testing                   |
+| https://repo.amd.com/rocm/tarball/        | (not publicly accessible)                                                                | Stable releases                                    |
 | https://rocm.nightlies.amd.com/tarball/   | [`therock-nightly-tarball`](https://therock-nightly-tarball.s3.amazonaws.com/index.html) | Nightly builds from the default development branch |
+| https://rocm.prereleases.amd.com/tarball/ | (not publicly accessible)                                                                | ⚠️ Prerelease builds for QA testing ⚠️             |
 | https://rocm.devreleases.amd.com/tarball/ | [`therock-dev-tarball`](https://therock-dev-tarball.s3.amazonaws.com/index.html)         | ⚠️ Development builds from project maintainers ⚠️  |
 
 ### Manual tarball extraction
@@ -463,7 +463,7 @@ ls install
 
 > [!TIP]
 > After extracting a tarball, metadata about which commits were used to build
-> that tarball can be found in the `share/therock/therock_manifest.json` file:
+> TheRock can be found in the `share/therock/therock_manifest.json` file:
 >
 > ```bash
 > cat install/share/therock/therock_manifest.json
