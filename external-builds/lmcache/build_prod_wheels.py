@@ -59,17 +59,19 @@ def do_build(args: argparse.Namespace):
     
     build_cmd = [
         "docker", "build",
+        "--progress=plain",  # Show full build output including RUN command stdout
         "--target", "export",
         "--output", f"type=local,dest={args.output_dir}",
-        "--build-arg", f"BASE_IMAGE={args.image}",
         "--build-arg", f"PYTHON_VERSION={args.python_version}",
         "--build-arg", f"INDEX_URL={args.index_url}",
         "--build-arg", f"PYTORCH_ROCM_ARCH={args.rocm_arch}",
-        "--build-arg", f"LMCACHE_VERSION={args.lmcache_version}",
-        "--build-arg", f"MAX_JOBS={args.max_jobs}",
+        "--build-arg", f"LMCACHE_BRANCH={args.lmcache_branch}",
         "-f", "Dockerfile",
         ".",
     ]
+    
+    if args.no_cache:
+        build_cmd.insert(2, "--no-cache")
     
     run_command(build_cmd, cwd=script_dir)
     
@@ -88,51 +90,45 @@ def do_build(args: argparse.Namespace):
 
 
 def main(argv: list[str]):
-    p = argparse.ArgumentParser(
+    parser = argparse.ArgumentParser(
         prog="build_prod_wheels.py",
         description="Build LMCache wheels with ROCm support"
     )
     
-    p.add_argument(
-        "--image",
-        default="ghcr.io/rocm/therock_build_manylinux_x86_64:latest",
-        help="Base TheRock manylinux docker image for build",
-    )
-    p.add_argument(
+    parser.add_argument(
         "--output-dir",
         type=Path,
         required=True,
         help="Directory to copy built wheels to",
     )
-    p.add_argument(
+    parser.add_argument(
         "--python-version",
         default=".".join(platform.python_version_tuple()[:2]),
         type=str,
         help="Python version to use for the build (e.g., 3.10, 3.11, 3.12)",
     )
-    p.add_argument(
+    parser.add_argument(
         "--index-url",
         required=True,
         help="Index URL for Python-packaged ROCm matching your GPU's gfx arch (e.g., https://rocm.prereleases.amd.com/whl/gfx94X-dcgpu)",
     )
-    p.add_argument(
+    parser.add_argument(
         "--rocm-arch",
         default="gfx90a;gfx942;gfx950;gfx1100;gfx1101;gfx1200;gfx1201",
         help="ROCm GPU architectures (semicolon-separated)",
     )
-    p.add_argument(
-        "--lmcache-version",
-        default="main",
-        help="LMCache git ref/tag to build",
+    parser.add_argument(
+        "--lmcache-branch",
+        default="dev",
+        help="LMCache branch to checkout (default: dev)",
     )
-    p.add_argument(
-        "--max-jobs",
-        type=int,
-        default=8,
-        help="Maximum parallel build jobs",
+    parser.add_argument(
+        "--no-cache",
+        action="store_true",
+        help="Build without using Docker cache",
     )
     
-    args = p.parse_args(argv)
+    args = parser.parse_args(argv)
     do_build(args)
 
 
