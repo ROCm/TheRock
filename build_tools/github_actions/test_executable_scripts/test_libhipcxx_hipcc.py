@@ -14,6 +14,48 @@ THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
 
+# get GPU architecture
+def get_current_gpu_architecture():
+    """
+    Execute offload-arch command and return the second line of output.
+
+    Returns:
+        str: The second line of the offload-arch output, or None if not available.
+    """
+    try:
+        subprocess.run(
+            f"python {THEROCK_DIR}/build_tools/setup_venv.py --index-name nightly --index-subdir gfx110X-all --packages rocm .tmpvenv",
+            shell=True,
+        )
+        if platform.system() == "Windows":
+            offload_arch_location = ".tmpvenv/Scripts/offload-arch.exe"
+        else:
+            offload_arch_location = ".tmpvenv/bin/offload-arch"
+        result = subprocess.run(
+            [offload_arch_location], capture_output=True, text=True, check=True
+        )
+
+        lines = result.stdout.strip().split("\n")
+
+        if len(lines) >= 2:
+            return lines[1]
+        else:
+            print(f"Warning: offload-arch returned fewer than 2 lines", file=sys.stderr)
+            return None
+
+    except subprocess.CalledProcessError as e:
+        print(f"Error executing offload-arch: {e}", file=sys.stderr)
+        print(f"stderr: {e.stderr}", file=sys.stderr)
+        return None
+    except FileNotFoundError:
+        print("Error: offload-arch command not found", file=sys.stderr)
+        return None
+
+
+gpu_arch = get_current_gpu_architecture()
+logging.info(f"++ Detected GPU architecture: {gpu_arch}")
+
+
 # Load ROCm version from version.json
 def load_rocm_version() -> str:
     """Loads the rocm-version from the repository's version.json file."""
@@ -90,6 +132,7 @@ cmd = [
     f"-DHIP_HIPCC_EXECUTABLE={THEROCK_BIN_PATH / HIPCC_BINARY_NAME}",
     f"-DCMAKE_CXX_COMPILER={THEROCK_BIN_PATH / HIPCC_BINARY_NAME}",
     f"-DCMAKE_HIP_COMPILER_ROCM_ROOT={HIP_COMPILER_ROCM_ROOT}",
+    f"-DCMAKE_HIP_ARCHITECTURES={gpu_arch}",
     "-GNinja",
     "..",
 ]
@@ -105,7 +148,7 @@ cmd = [
     "bash",
     "../ci/test_libhipcxx.sh",
     "-cmake-options",
-    f"-DHIP_HIPCC_EXECUTABLE={THEROCK_BIN_PATH / HIPCC_BINARY_NAME} -DCMAKE_HIP_COMPILER_ROCM_ROOT={HIP_COMPILER_ROCM_ROOT}",
+    f"-DHIP_HIPCC_EXECUTABLE={THEROCK_BIN_PATH / HIPCC_BINARY_NAME} -DCMAKE_HIP_COMPILER_ROCM_ROOT={HIP_COMPILER_ROCM_ROOT} -DCMAKE_HIP_ARCHITECTURES={gpu_arch}",
 ]
 logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
 
