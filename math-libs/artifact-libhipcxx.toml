@@ -11,3 +11,8 @@ optional = true
 include = [
   "libhipcxx/**/*",
 ]
+exclude = [
+  # Exclude folders not needed for testing 
+  "libhipcxx/._upstream/**",
+  "libhipcxx/docs/**",
+]
