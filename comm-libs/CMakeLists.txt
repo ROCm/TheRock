@@ -1,5 +1,5 @@
 # TODO(#2632): Re-enable RCCL for sanitizer builds once RCCL build time is acceptable
-if(THEROCK_ENABLE_RCCL AND THEROCK_SANITIZER STREQUAL "")
+if(THEROCK_ENABLE_RCCL)
   # Most libraries need to depend on the profiler, but is conditionally only used
   # on Posix.
   set(optional_profiler_deps)
@@ -11,6 +11,12 @@ if(THEROCK_ENABLE_RCCL AND THEROCK_SANITIZER STREQUAL "")
   # rccl
   ##############################################################################
   set(_rccl_subproject_names)
+
+  # Set ASAN-specific CMake args
+  set(_rccl_asan_args)
+  if(THEROCK_SANITIZER STREQUAL "ASAN")
+    list(APPEND _rccl_asan_args -DBUILD_ADDRESS_SANITIZER=ON)
+  endif()
 
   therock_cmake_subproject_declare(rccl
     EXTERNAL_SOURCE_DIR "${THEROCK_RCCL_SOURCE_DIR}"
@@ -26,6 +32,7 @@ if(THEROCK_ENABLE_RCCL AND THEROCK_SANITIZER STREQUAL "")
       -DENABLE_MSCCLPP=OFF
       -DENABLE_MSCCL_KERNEL=OFF
       -DBUILD_TESTS=${THEROCK_BUILD_TESTING}
+      ${_rccl_asan_args}
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
@@ -89,4 +96,4 @@ if(THEROCK_ENABLE_RCCL AND THEROCK_SANITIZER STREQUAL "")
     SUBPROJECT_DEPS
       ${_rccl_subproject_names}
   )
-endif(THEROCK_ENABLE_RCCL AND THEROCK_SANITIZER STREQUAL "")
+endif(THEROCK_ENABLE_RCCL)
