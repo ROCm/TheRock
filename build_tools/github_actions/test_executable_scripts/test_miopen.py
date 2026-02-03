@@ -154,9 +154,7 @@ negative_filter.append("Full/GPU_ConvGrpActivInfer3D_FP16*")  # 0 min 16 sec
 TEST_TO_IGNORE = {
     "gfx1151": {
         # TODO(#3202): Re-enable tests once issues are resolved
-        "windows": [
-            "Full/GPU_UnitTestConvSolverGemmBwdRestBwd_FP16.GemmBwdRest/0"
-        ]
+        "windows": ["Full/GPU_UnitTestConvSolverGemmBwdRestBwd_FP16.GemmBwdRest/0"]
     }
 }
 
