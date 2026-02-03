@@ -170,7 +170,14 @@ class TestROCmSanity:
             },
             "gfx103X-dgpu": {
                 # TODO(#2740): Re-enable test once resolved
-                "linux": ["amdsmitstReadWrite.FanReadWrite"]
+                "linux": [
+                    "amdsmitstReadWrite.FanReadWrite",
+                    "amdsmitstReadOnly.FanRead",
+                    "amdsmitstReadOnly.VoltRead",
+                    "amdsmitstReadOnly.TestSysInfoRead",
+                    "amdsmitstReadOnly.TestPowerRead",
+                    "amdsmitstReadOnly.TestIdInfoRead"
+                ]
             },
             "gfx110X-dgpu": {
                 # TODO(#2740): Re-enable test once resolved
