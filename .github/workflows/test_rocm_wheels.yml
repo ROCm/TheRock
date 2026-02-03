@@ -58,7 +58,7 @@ run-name: Test ROCm Wheels (${{ inputs.amdgpu_family }}, ${{ inputs.rocm_version
 
 jobs:
   test_wheels:
-    name: Test ROCm Wheels | ${{ inputs.amdgpu_family }}
+    name: Test ${{ matrix.packages }} wheels | ${{ inputs.amdgpu_family }}
     runs-on: ${{ inputs.test_runs_on }}
     container:
       image: ${{ contains(inputs.test_runs_on, 'linux') && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26' || null }}
@@ -69,6 +69,10 @@ jobs:
         --group-add 110
         --env-file /etc/podinfo/gha-gpu-isolation-settings
         --user 0:0 # Running as root, by recommendation of GitHub: https://docs.github.com/en/actions/reference/workflows-and-actions/dockerfile-support#user
+    strategy:
+      fail-fast: false
+      matrix:
+        packages: ["rocm[libraries]", "rocm[libraries,devel]"]
     defaults:
       run:
         shell: bash
@@ -87,10 +91,10 @@ jobs:
         with:
           python-version: ${{ inputs.python_version }}
 
-      - name: Set up virtual environment and install ROCm packages
+      - name: Setup venv and install '${{ matrix.packages }}'
         run: |
           python build_tools/setup_venv.py ${VENV_DIR} \
-            --packages "rocm[libraries,devel]==${{ inputs.rocm_version }}" \
+            --packages "${{ matrix.packages }}==${{ inputs.rocm_version }}" \
             --index-url=${{ inputs.package_index_url }} \
             --index-subdir=${{ inputs.amdgpu_family }} \
             --activate-in-future-github-actions-steps
@@ -99,6 +103,6 @@ jobs:
         run: |
           pip freeze
 
-      - name: Run rocm-sdk sanity tests
+      - name: Run 'rocm-sdk test' with '${{ matrix.packages }}' installed
         run: |
           rocm-sdk test

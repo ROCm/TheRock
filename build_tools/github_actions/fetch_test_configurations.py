@@ -71,14 +71,6 @@ test_matrix = {
             ],
         },
     },
-    "origami": {
-        "job_name": "origami",
-        "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 5,
-        "test_script": f"python {_get_script_path('test_origami.py')}",
-        "platform": ["linux", "windows"],
-        "total_shards": 1,
-    },
     "hipblas": {
         "job_name": "hipblas",
         "fetch_artifact_args": "--blas --tests",

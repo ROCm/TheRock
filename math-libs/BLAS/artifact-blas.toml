@@ -19,23 +19,6 @@ include = [
 ]
 optional = true
 
-# origami
-[components.dbg."math-libs/BLAS/origami/stage"]
-optional = true
-[components.dev."math-libs/BLAS/origami/stage"]
-optional = true
-[components.lib."math-libs/BLAS/origami/stage"]
-include = [
-  "lib/**",
-]
-optional = true
-[components.test."math-libs/BLAS/origami/stage"]
-include = [
-  "bin/origami-tests*",
-  "bin/origami/**",
-]
-optional = true
-
 # hipBLAS
 [components.dbg."math-libs/BLAS/hipBLAS/stage"]
 [components.dev."math-libs/BLAS/hipBLAS/stage"]
