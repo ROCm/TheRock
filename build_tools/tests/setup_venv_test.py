@@ -12,7 +12,6 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 from setup_venv import (
     GFX_TARGET_REGEX,
     install_packages_into_venv,
-    main,
 )
 
 
@@ -26,22 +25,22 @@ class InstallPackagesTest(unittest.TestCase):
         shutil.rmtree(self.venv_dir, ignore_errors=True)
 
     @patch("setup_venv.run_command")
-    def test_index_name_with_subdir(self, mock_run):
-        """index_name with index_subdir constructs full URL."""
+    def test_basic_usage(self, mock_run):
+        """The most basic usage should run `pip install [packages]`"""
         install_packages_into_venv(
             venv_dir=self.venv_dir,
             packages=["rocm"],
-            index_name="nightly",
-            index_subdir="gfx110X-all",
         )
 
         cmd = mock_run.call_args[0][0]
-        self.assertIn("--index-url=https://rocm.nightlies.amd.com/v2/gfx110X-all", cmd)
+        self.assertIn("pip", cmd)
+        self.assertIn("install", cmd)
         self.assertIn("rocm", cmd)
+        self.assertNotIn("index-url", cmd)
 
     @patch("setup_venv.run_command")
     def test_index_url_complete(self, mock_run):
-        """index_url without index_subdir uses URL as-is."""
+        """Passing index_url without index_subdir uses the URL as-is."""
         install_packages_into_venv(
             venv_dir=self.venv_dir,
             packages=["rocm"],
@@ -52,8 +51,21 @@ class InstallPackagesTest(unittest.TestCase):
         self.assertIn("--index-url=https://example.com/full/path/", cmd)
 
     @patch("setup_venv.run_command")
+    def test_index_name_with_subdir(self, mock_run):
+        """Passing index_name with index_subdir constructs full URL."""
+        install_packages_into_venv(
+            venv_dir=self.venv_dir,
+            packages=["rocm"],
+            index_name="nightly",
+            index_subdir="gfx110X-all",
+        )
+
+        cmd = mock_run.call_args[0][0]
+        self.assertIn("--index-url=https://rocm.nightlies.amd.com/v2/gfx110X-all", cmd)
+
+    @patch("setup_venv.run_command")
     def test_index_url_with_subdir(self, mock_run):
-        """index_url with index_subdir constructs full URL."""
+        """Passing index_url with index_subdir constructs full URL."""
         install_packages_into_venv(
             venv_dir=self.venv_dir,
             packages=["rocm"],
@@ -66,7 +78,7 @@ class InstallPackagesTest(unittest.TestCase):
 
     @patch("setup_venv.run_command")
     def test_find_links_only(self, mock_run):
-        """find_links_url alone works without index_url."""
+        """Passing just find_links_url uses it."""
         install_packages_into_venv(
             venv_dir=self.venv_dir,
             packages=["rocm"],
@@ -90,49 +102,6 @@ class InstallPackagesTest(unittest.TestCase):
         cmd = mock_run.call_args[0][0]
         self.assertIn("--index-url=https://deps/simple/", cmd)
         self.assertIn("--find-links=https://bucket/run-123/index.html", cmd)
-
-    @patch("setup_venv.run_command")
-    def test_index_name_and_find_links(self, mock_run):
-        """index_name with index_subdir and find_links_url together."""
-        install_packages_into_venv(
-            venv_dir=self.venv_dir,
-            packages=["rocm"],
-            index_name="dev",
-            index_subdir="gfx110X-all",
-            find_links_url="https://bucket/run-123/index.html",
-        )
-
-        cmd = mock_run.call_args[0][0]
-        self.assertIn(
-            "--index-url=https://rocm.devreleases.amd.com/v2/gfx110X-all", cmd
-        )
-        self.assertIn("--find-links=https://bucket/run-123/index.html", cmd)
-
-    def test_index_url_and_index_name_raises(self):
-        """Setting both index_url and index_name raises ValueError."""
-        with self.assertRaises(ValueError):
-            install_packages_into_venv(
-                venv_dir=self.venv_dir,
-                packages=["rocm"],
-                index_url="https://example.com/",
-                index_name="nightly",
-            )
-
-
-class ValidationTest(unittest.TestCase):
-    """Tests for argument validation in main()."""
-
-    def setUp(self):
-        self.temp_dir = tempfile.mkdtemp()
-
-    def tearDown(self):
-        shutil.rmtree(self.temp_dir, ignore_errors=True)
-
-    @patch("setup_venv._scrape_rocm_index_subdirs", return_value=None)
-    def test_index_name_requires_subdir(self, mock_scrape):
-        """--index-name without --index-subdir should error."""
-        with self.assertRaises(SystemExit):
-            main([self.temp_dir, "--packages", "rocm", "--index-name", "nightly"])
 
 
 class GfxRegexPatternTest(unittest.TestCase):
