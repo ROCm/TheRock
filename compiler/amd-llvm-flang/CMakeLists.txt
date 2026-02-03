@@ -87,7 +87,7 @@ set(LLVM_ENABLE_RUNTIMES "")
 # Flang settings
 # Note: FLANG_RUNTIME_F128_MATH_LIB disabled - requires flang-rt which we don't build here
 #=============================================================================
-# set(FLANG_RUNTIME_F128_MATH_LIB "libquadmath")
+set(FLANG_RUNTIME_F128_MATH_LIB "libquadmath")
 
 #=============================================================================
 # Generate quadmath_wrapper.h

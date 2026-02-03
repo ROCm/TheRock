@@ -82,6 +82,7 @@ if(THEROCK_ENABLE_COMPILER)
       -DCLANG_ENABLE_STATIC_ANALYZER=OFF
       -DCLANG_ENABLE_CLANGD=OFF
       -DCLANG_TIDY_ENABLE_STATIC_ANALYZER=OFF
+      -DCLANG_LINK_FLANG=OFF  # Don't create a flang->clang symlink (?!?!)
 
       # ASAN features.
       # Note that building AMDGPU ASAN extensions depends on various runtime headers
@@ -248,6 +249,86 @@ if(THEROCK_ENABLE_COMPILER)
   )
 endif(THEROCK_ENABLE_COMPILER)
 
+if(THEROCK_ENABLE_CORE_RUNTIME)
+  ##############################################################################
+  # ROCR-Runtime
+  # The core HSA runtime is included in the "compiler" tree because it forms
+  # the basis of both the compiler runtimes and the higher level runtime
+  # support in core/. In the long tradition of "compilers", they always swallow
+  # the lowest level runtimes, so we just embrace it and keep the layering a
+  # nice DAG. Note that things built on top of ROCR (including tests) remain
+  # in the core/ tree.
+  ##############################################################################
+
+  therock_cmake_subproject_declare(ROCR-Runtime
+    USE_DIST_AMDGPU_TARGETS
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/ROCR-Runtime"
+    BACKGROUND_BUILD
+    COMPILER_TOOLCHAIN
+      amd-llvm
+    CMAKE_ARGS
+      "-DBUILD_SHARED_LIBS=ON"
+    BUILD_DEPS
+      amd-llvm
+      therock-simde
+    RUNTIME_DEPS
+      rocprofiler-register
+      ${THEROCK_BUNDLED_ELFUTILS}
+      ${THEROCK_BUNDLED_LIBDRM}
+      ${THEROCK_BUNDLED_NUMACTL}
+    INTERFACE_LINK_DIRS
+      "lib"
+    INTERFACE_INSTALL_RPATH_DIRS
+      "lib"
+  )
+  therock_cmake_subproject_glob_c_sources(ROCR-Runtime
+    SUBDIRS
+      libhsakmt
+      runtime
+  )
+  therock_cmake_subproject_provide_package(ROCR-Runtime hsakmt lib/cmake/hsakmt)
+  therock_cmake_subproject_provide_package(ROCR-Runtime hsa-runtime64 lib/cmake/hsa-runtime64)
+  therock_cmake_subproject_activate(ROCR-Runtime)
+
+  therock_test_validate_shared_lib(
+    PATH ROCR-Runtime/dist/lib
+    LIB_NAMES libhsa-runtime64.so
+  )
+
+  ##############################################################################
+  # rocminfo
+  ##############################################################################
+
+  therock_cmake_subproject_declare(rocminfo
+    USE_DIST_AMDGPU_TARGETS
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocminfo"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocminfo"
+    BACKGROUND_BUILD
+    COMPILER_TOOLCHAIN
+      amd-llvm
+    RUNTIME_DEPS
+      ROCR-Runtime
+  )
+  therock_cmake_subproject_glob_c_sources(rocminfo SUBDIRS .)
+  therock_cmake_subproject_activate(rocminfo)
+
+  therock_provide_artifact(core-runtime
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-core-runtime.toml
+    COMPONENTS
+      dbg
+      dev
+      doc
+      lib
+      run
+    SUBPROJECT_DEPS
+      ROCR-Runtime
+      rocminfo
+  )
+
+endif(THEROCK_ENABLE_CORE_RUNTIME)
+
 if(THEROCK_ENABLE_HIPIFY)
   ##############################################################################
   # HIPIFY
@@ -288,43 +369,6 @@ endif(THEROCK_ENABLE_HIPIFY)
 
 if(THEROCK_ENABLE_COMPILER_EXTRAS)
   ##############################################################################
-  # llvm-rocr-runtime
-  # Builds rocr-runtime for use by LLVM extras (openmp/offload).
-  # This breaks the dependency cycle - compiler doesn't depend on core runtime,
-  # but extras can depend on this private copy built with the compiler toolchain.
-  ##############################################################################
-
-  therock_cmake_subproject_declare(llvm-rocr-runtime
-    USE_DIST_AMDGPU_TARGETS
-    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime"
-    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/llvm-rocr-runtime"
-    BACKGROUND_BUILD
-    COMPILER_TOOLCHAIN
-      amd-llvm
-    CMAKE_ARGS
-      -DBUILD_SHARED_LIBS=ON
-      -DIMAGE_SUPPORT=OFF
-      -DLLVM_RUNTIME_OPENMP=ON
-    BUILD_DEPS
-      amd-llvm
-      therock-simde
-    RUNTIME_DEPS
-      rocprofiler-register
-      ${THEROCK_BUNDLED_LIBDRM}
-      ${THEROCK_BUNDLED_NUMACTL}
-      ${THEROCK_BUNDLED_ELFUTILS}
-    INTERFACE_LINK_DIRS
-      "lib"
-  )
-  therock_cmake_subproject_glob_c_sources(llvm-rocr-runtime
-    SUBDIRS
-      libhsakmt
-      runtime
-  )
-  therock_cmake_subproject_provide_package(llvm-rocr-runtime hsa-runtime64 lib/cmake/hsa-runtime64)
-  therock_cmake_subproject_activate(llvm-rocr-runtime)
-
-  ##############################################################################
   # amd-llvm-extras
   # Builds parts of LLVM that are not core dependencies of the C language
   # toolchain. This allows build parallelization for these parts of the
@@ -348,27 +392,14 @@ if(THEROCK_ENABLE_COMPILER_EXTRAS)
       # Note that if LLVM_SMREV_REPO and LLVM_FORCE_VC_REVISION are empty,
       # LLVM will compute the tip of tree revision, which is appropriate for
       # pristine checkouts.
-      # TODO: Re-enable these once include issue fixed in out of tree builds.
       -DLLVM_APPEND_VC_REV=ON
       "-DLLVM_FORCE_VC_REPOSITORY=${LLVM_SMREV_REPO}"
       "-DLLVM_FORCE_VC_REVISION=${LLVM_SMREV_REVISION}"
-
-      # LIBCXX
-      # -DLIBCXX_ENABLE_SHARED=OFF
-      # -DLIBCXX_ENABLE_STATIC=ON
-      # -DLIBCXX_INSTALL_LIBRARY=OFF
-      # -DLIBCXX_INSTALL_HEADERS=OFF
-      # -DLIBCXXABI_ENABLE_SHARED=OFF
-      # -DLIBCXXABI_ENABLE_STATIC=ON
-
-      # Clang features.
-      # -DCLANG_TIDY_ENABLE_STATIC_ANALYZER=OFF
 
     BUILD_DEPS
       rocm-cmake
     RUNTIME_DEPS
       amd-llvm
-      llvm-rocr-runtime
     # The entire LLVM install tree is placed inside of the overall ROCM lib/llvm
     # directory.
     INSTALL_DESTINATION "lib/llvm"
@@ -379,17 +410,42 @@ if(THEROCK_ENABLE_COMPILER_EXTRAS)
   )
   therock_cmake_subproject_activate(amd-llvm-flang)
 
-  # TODO: enable
-  # therock_provide_artifact(amd-llvm-extras
-  #   TARGET_NEUTRAL
-  #   DESCRIPTOR artifact-amd-llvm.toml
-  #   COMPONENTS
-  #     dbg
-  #     dev
-  #     doc
-  #     lib
-  #     run
-  #   SUBPROJECT_DEPS
+  ##############################################################################
+  # amd-llvm-offload-runtimes
+  # Builds LLVM runtimes (openmp, offload, flang-rt) using the standalone
+  # runtimes build mechanism. Depends on amd-llvm-flang for the Fortran compiler.
+  ##############################################################################
+  therock_cmake_subproject_declare(amd-llvm-offload-runtimes
+    USE_DIST_AMDGPU_TARGETS
+    EXTERNAL_SOURCE_DIR "amd-llvm-offload-runtimes"
+    BACKGROUND_BUILD
+    COMPILER_TOOLCHAIN
+      amd-llvm
+    CMAKE_ARGS
+      -DCMAKE_Fortran_COMPILER_WORKS=YES
+      # TODO: Properly wire up the Fortran compiler path from amd-llvm-flang
+      "-DCMAKE_Fortran_COMPILER=${CMAKE_CURRENT_BINARY_DIR}/amd-llvm-flang/dist/lib/llvm/bin/flang"
+    RUNTIME_DEPS
+      amd-llvm
+      amd-llvm-flang
+      ROCR-Runtime
+    INSTALL_DESTINATION "lib/llvm"
+    INTERFACE_LINK_DIRS
+      "lib/llvm/lib"
+  )
+  therock_cmake_subproject_activate(amd-llvm-offload-runtimes)
 
-  # )
+  therock_provide_artifact(amd-llvm-extras
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-amd-llvm-extras.toml
+    COMPONENTS
+      dbg
+      dev
+      doc
+      lib
+      run
+    SUBPROJECT_DEPS
+      amd-llvm-flang
+      amd-llvm-offload-runtimes
+  )
 endif()

@@ -425,7 +425,7 @@ feature_group = "ALL"
 [artifacts.amd-llvm-extras]
 artifact_group = "compiler"
 type = "target-neutral"
-artifact_deps = ["amd-llvm"]  # Built on top of amd-llvm
+artifact_deps = ["amd-llvm", "core-runtime"]  # Built on top of amd-llvm
 feature_name = "COMPILER_EXTRAS"
 feature_group = "ALL"
 
