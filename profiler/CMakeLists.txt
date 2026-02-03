@@ -244,6 +244,10 @@ endif(THEROCK_BUILD_TESTING)
         -DROCPROFSYS_BUILD_LIBIBERTY=ON
         -DROCPROFSYS_BUILD_BOOST=ON
         -DROCPROFSYS_BUILD_DYNINST=ON
+      INSTALL_RPATH_DIRS
+        "lib"
+        "lib/rocprofiler-systems"
+        "llvm/lib"
       CMAKE_INCLUDES
         therock_explicit_finders.cmake
       RUNTIME_DEPS

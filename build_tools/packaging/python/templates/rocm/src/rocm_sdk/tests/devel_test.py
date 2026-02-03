@@ -40,7 +40,7 @@ class ROCmDevelTest(unittest.TestCase):
 
     def testCLIPathBin(self):
         output = (
-            utils.exec(
+            utils.run_command(
                 [sys.executable, "-P", "-m", "rocm_sdk", "path", "--bin"], capture=True
             )
             .decode()
@@ -51,7 +51,7 @@ class ROCmDevelTest(unittest.TestCase):
 
     def testCLIPathCMake(self):
         output = (
-            utils.exec(
+            utils.run_command(
                 [sys.executable, "-P", "-m", "rocm_sdk", "path", "--cmake"],
                 capture=True,
             )
@@ -67,7 +67,7 @@ class ROCmDevelTest(unittest.TestCase):
 
     def testCLIPathRoot(self):
         output = (
-            utils.exec(
+            utils.run_command(
                 [sys.executable, "-P", "-m", "rocm_sdk", "path", "--root"], capture=True
             )
             .decode()
@@ -85,7 +85,7 @@ class ROCmDevelTest(unittest.TestCase):
         # We had a bug where the root llvm/ symlink, which is for backwards compat,
         # was not materialized. Verify it is.
         output = (
-            utils.exec(
+            utils.run_command(
                 [sys.executable, "-P", "-m", "rocm_sdk", "path", "--root"], capture=True
             )
             .decode()
@@ -97,7 +97,7 @@ class ROCmDevelTest(unittest.TestCase):
     def testSharedLibrariesLoad(self):
         # Make sure the devel package is expanded.
         _ = (
-            utils.exec(
+            utils.run_command(
                 [sys.executable, "-P", "-m", "rocm_sdk", "path", "--root"], capture=True
             )
             .decode()
@@ -124,6 +124,13 @@ class ROCmDevelTest(unittest.TestCase):
             if "clang_rt" in str(so_path):
                 # clang_rt and sanitizer libraries are not all intended to be
                 # loadable arbitrarily.
+                continue
+            if "libhipsolver_fortran" in str(so_path):
+                # Currently fails to load unless libgfortran.so.5 exists on the system.
+                # TODO(#3115): Decide if this test should be permanently
+                #     disabled or fixed and then re-enabled somehow. This
+                #     library may only be used by tests and we might not care
+                #     about it failing to load standalone.
                 continue
             if "libLLVMOffload" in str(so_path):
                 # recent addition from upstream, issue tracked in

@@ -28,9 +28,9 @@ Table of contents:
   - [Installing PyTorch Python packages](#installing-pytorch-python-packages)
   - [Using PyTorch Python packages](#using-pytorch-python-packages)
 - [Installing from tarballs](#installing-from-tarballs)
-  - [Installing release tarballs](#installing-release-tarballs)
-  - [Installing per-commit CI build tarballs manually](#installing-per-commit-ci-build-tarballs-manually)
-  - [Installing tarballs using `install_rocm_from_artifacts.py`](#installing-tarballs-using-install_rocm_from_artifactspy)
+  - [Browsing release tarballs](#browsing-release-tarballs)
+  - [Manual tarball extraction](#manual-tarball-extraction)
+  - [Automated tarball extraction](#automated-tarball-extraction)
   - [Using installed tarballs](#using-installed-tarballs)
 - [Verifying your installation](#verifying-your-installation)
 
@@ -380,120 +380,65 @@ instructions in the AMD ROCm documentation.
 
 ## Installing from tarballs
 
-Standalone "ROCm SDK tarballs" are assembled from the same
-[artifacts](docs/development/artifacts.md) as the Python packages which can be
-[installed using pip](#installing-releases-using-pip), without the additional
-wrapper Python wheels or utility scripts.
+Standalone "ROCm SDK tarballs" are a flattened view of ROCm
+[artifacts](docs/development/artifacts.md) matching the familiar folder
+structure seen with system installs on Linux to `/opt/rocm/` or on Windows via
+the HIP SDK:
 
-### Installing release tarballs
+```bash
+install/  # Extracted tarball location, file path of your choosing
+  .info/
+  bin/
+  clients/
+  include/
+  lib/
+  libexec/
+  share/
+```
 
-Release tarballs are automatically uploaded to AWS S3 buckets.
+Tarballs are _just_ these raw files. They do not come with "install" steps
+such as setting environment variables.
 
-| S3 bucket                                                                              | Description                                       |
-| -------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| [therock-nightly-tarball](https://therock-nightly-tarball.s3.amazonaws.com/index.html) | Nightly builds from the `main` branch             |
-| [therock-dev-tarball](https://therock-dev-tarball.s3.amazonaws.com/index.html)         | ⚠️ Development builds from project maintainers ⚠️ |
+> [!WARNING]
+> Tarballs and per-commit CI artifacts are primarily intended for developers
+> and CI workflows.
+>
+> For most users, we recommend installing via package managers:
+>
+> - [Installing releases using pip](#installing-releases-using-pip)
+> - (TODO) Installing native Linux deb/RPM packages
 
-After downloading, simply extract the release tarball into place:
+### Browsing release tarballs
+
+Release tarballs are uploaded to the following locations:
+
+| Tarball index                             | S3 bucket                                                                                | Description                                        |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| https://repo.amd.com/rocm/tarball/        | (not publicly accessible)                                                                | Stable releases                                    |
+| https://rocm.nightlies.amd.com/tarball/   | [`therock-nightly-tarball`](https://therock-nightly-tarball.s3.amazonaws.com/index.html) | Nightly builds from the default development branch |
+| https://rocm.prereleases.amd.com/tarball/ | (not publicly accessible)                                                                | ⚠️ Prerelease builds for QA testing ⚠️             |
+| https://rocm.devreleases.amd.com/tarball/ | [`therock-dev-tarball`](https://therock-dev-tarball.s3.amazonaws.com/index.html)         | ⚠️ Development builds from project maintainers ⚠️  |
+
+### Manual tarball extraction
+
+To download a tarball and extract it into place manually:
 
 ```bash
 mkdir therock-tarball && cd therock-tarball
 # For example...
-wget https://therock-nightly-tarball.s3.us-east-2.amazonaws.com/therock-dist-linux-gfx110X-all-6.5.0rc20250610.tar.gz
-
-mkdir install
-tar -xf *.tar.gz -C install
+wget https://rocm.nightlies.amd.com/tarball/therock-dist-linux-gfx110X-all-7.12.0a20260202.tar.gz
+mkdir install && tar -xf *.tar.gz -C install
 ```
 
-### Installing per-commit CI build tarballs manually
+### Automated tarball extraction
 
-<!-- TODO: Hide this section by default?
-           Maybe move into artifacts.md or another developer page. -->
-
-Our CI builds artifacts at every commit. These can be installed by "flattening"
-them from the expanded artifacts down to a ROCm SDK "dist folder" using the
-`artifact-flatten` command from
-[`build_tools/fileset_tool.py`](https://github.com/ROCm/TheRock/blob/main/build_tools/fileset_tool.py).
-
-1. Download TheRock's source code and setup your Python environment:
-
-   ```bash
-   # Clone the repository
-   git clone https://github.com/ROCm/TheRock.git
-   cd TheRock
-
-   # Init python virtual environment and install python dependencies
-   python3 -m venv .venv && source .venv/bin/activate
-   pip install -r requirements.txt
-   ```
-
-1. Find the CI workflow run that you want to install from. For example, search
-   through recent successful runs of the `ci.yml` workflow for `push` events on
-   the `main` branch
-   [using this page](https://github.com/ROCm/TheRock/actions/workflows/ci.yml?query=branch%3Amain+is%3Asuccess+event%3Apush)
-   (choosing a build that took more than a few minutes - documentation only
-   changes skip building and uploading).
-
-1. Download the artifacts for that workflow run from S3 using either the
-   [AWS CLI](https://aws.amazon.com/cli/) or
-   [AWS SDK for Python (Boto3)](https://aws.amazon.com/sdk-for-python/):
-
-   ```bash
-   export LOCAL_ARTIFACTS_DIR=~/therock-artifacts
-   export LOCAL_INSTALL_DIR=${LOCAL_ARTIFACTS_DIR}/install
-   mkdir -p ${LOCAL_ARTIFACTS_DIR}
-   mkdir -p ${LOCAL_INSTALL_DIR}
-
-   # Example: https://github.com/ROCm/TheRock/actions/runs/15575624591
-   export RUN_ID=15575624591
-   export OPERATING_SYSTEM=linux # or 'windows'
-   aws s3 cp s3://therock-artifacts/${RUN_ID}-${OPERATING_SYSTEM}/ \
-     ${LOCAL_ARTIFACTS_DIR} \
-     --no-sign-request --recursive --exclude "*" --include "*.tar.xz"
-   ```
-
-1. Flatten the artifacts:
-
-   ```bash
-   python build_tools/fileset_tool.py artifact-flatten \
-     ${LOCAL_ARTIFACTS_DIR}/*.tar.xz -o ${LOCAL_INSTALL_DIR}
-   ```
-
-### Installing tarballs using `install_rocm_from_artifacts.py`
-
-<!-- TODO: move this above the manual `tar -xf` commands? -->
-
-This script installs ROCm community builds produced by TheRock from either a developer/nightly tarball, a specific CI runner build or an already existing installation of TheRock. This script is used by CI and can be used locally. Please run `pip install boto3` to get the necessary library.
-
-Examples:
-
-- Downloads all gfx94X S3 artifacts from [GitHub CI workflow run 15052158890](https://github.com/ROCm/TheRock/actions/runs/15052158890) to the default output directory `therock-build`:
-
-  ```bash
-  python build_tools/install_rocm_from_artifacts.py --run-id 15052158890 --amdgpu-family gfx94X-dcgpu --tests
-  ```
-
-- Downloads the version `6.4.0rc20250516` gfx110X artifacts from GitHub release tag `nightly-tarball` to the specified output directory `build`:
-
-  ```bash
-  python build_tools/install_rocm_from_artifacts.py --release 6.4.0rc20250516 --amdgpu-family gfx110X-all --output-dir build
-  ```
-
-- Downloads the version `6.4.0.dev0+e015c807437eaf32dac6c14a9c4f752770c51b14` gfx110X artifacts from GitHub release tag `dev-tarball` to the default output directory `therock-build`:
-
-  ```bash
-  python build_tools/install_rocm_from_artifacts.py --release 6.4.0.dev0+e015c807437eaf32dac6c14a9c4f752770c51b14 --amdgpu-family gfx110X-all
-  ```
-
-- Downloads all gfx94X S3 artifacts from [GitHub CI workflow run 19644138192](https://github.com/ROCm/rocm-libraries/actions/runs/19644138192) in the `ROCm/rocm-libraries` repository:
-
-  ```bash
-  python build_tools/install_rocm_from_artifacts.py --run-id 19644138192 --amdgpu-family gfx94X-dcgpu --tests --run-github-repo ROCm/rocm-libraries
-  ```
-
-Select your AMD GPU family from this file [therock_amdgpu_targets.cmake](https://github.com/ROCm/TheRock/blob/59c324a759e8ccdfe5a56e0ebe72a13ffbc04c1f/cmake/therock_amdgpu_targets.cmake#L44-L81)
-
-By default for CI workflow retrieval, all artifacts (excluding test artifacts) will be downloaded. For specific artifacts, pass in the flag such as `--rand` (RAND artifacts). For test artifacts, pass in the flag `--tests` (test artifacts). For base artifacts only, pass in the flag `--base-only`
+For more control over artifact installation—including per-commit CI builds,
+specific release versions, the latest nightly release, and component
+selection—see the
+[Installing Artifacts](docs/development/installing_artifacts.md) developer
+documentation. The
+[`install_rocm_from_artifacts.py`](build_tools/install_rocm_from_artifacts.py)
+script can be used to install artifacts from a variety of sources.
 
 ### Using installed tarballs
 
@@ -509,8 +454,31 @@ ls install
 ./install/bin/test_hip_api
 ```
 
-You may also want to add the install directory to your `PATH` or set other
-environment variables like `ROCM_HOME`.
+> [!TIP]
+> You may also want to add parts of the install directory to your `PATH` or set
+> other environment variables like `ROCM_HOME`.
+>
+> See also [this issue](https://github.com/ROCm/TheRock/issues/1658) discussing
+> relevant environment variables.
+
+> [!TIP]
+> After extracting a tarball, metadata about which commits were used to build
+> TheRock can be found in the `share/therock/therock_manifest.json` file:
+>
+> ```bash
+> cat install/share/therock/therock_manifest.json
+> # {
+> #   "the_rock_commit": "567dd890a3bc3261ffb26ae38b582378df298374",
+> #   "submodules": [
+> #     {
+> #       "submodule_name": "half",
+> #       "submodule_path": "base/half",
+> #       "submodule_url": "https://github.com/ROCm/half.git",
+> #       "pin_sha": "207ee58595a64b5c4a70df221f1e6e704b807811",
+> #       "patches": []
+> #     },
+> #     ...
+> ```
 
 ## Verifying your installation
 
