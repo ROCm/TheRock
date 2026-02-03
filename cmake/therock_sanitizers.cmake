@@ -54,6 +54,7 @@ function(therock_sanitizer_configure
     # TODO: Support TSAN_STATIC to use static TSAN linkage. Shared is almost always the right thing,
     # so make "TSAN" imply shared linkage.
     string(APPEND _stanza "string(APPEND CMAKE_CXX_FLAGS \" -fsanitize=thread -fno-omit-frame-pointer -g\")\n")
+	string(APPEND _stanza "string(APPEND CMAKE_C_FLAGS \" -fsanitize=thread -fno-omit-frame-pointer -g\")\n")
     # Sharp edge: The -shared-libsan flag is compiler frontend specific:
     #   gcc (and gfortran): defaults to shared sanitizer linkage
     #   clang: defaults to static linkage and requires -shared-libsan to link shared
@@ -72,7 +73,7 @@ function(therock_sanitizer_configure
     # RPATHs to include the clang resource dir.
     string(APPEND _stanza "set(THEROCK_INCLUDE_CLANG_RESOURCE_DIR_RPATH ON)")
   else()
-    message(FATAL_ERROR "Cannot configure sanitizer '${_sanitizer} for ${subprojet_name}: unknown sanitizer")
+    message(FATAL_ERROR "Cannot configure sanitizer '${_sanitizer} for ${subproject_name}: unknown sanitizer")
   endif()
 
   set("${out_sanitizer_stanza}" "${_stanza}" PARENT_SCOPE)
