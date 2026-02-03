@@ -224,11 +224,25 @@ def should_ci_run_given_modified_paths(paths: Optional[Iterable[str]]) -> bool:
 
 def get_pr_labels(args) -> List[str]:
     """Gets a list of labels applied to a pull request."""
-    data = json.loads(args.get("pr_labels"))
+    data = json.loads(args.get("pr_labels", "{}"))
     labels = []
     for label in data.get("labels", []):
         labels.append(label["name"])
     return labels
+
+
+def get_workflow_dispatch_additional_label_options(args) -> List[str]:
+    """Gets a list of additional label options from workflow_dispatch."""
+    additional_label_options = args.get(
+        "workflow_dispatch_additional_label_options", ""
+    )
+    if additional_label_options:
+        return [
+            label.strip()
+            for label in additional_label_options.split(",")
+            if label.strip()
+        ]
+    return []
 
 
 def filter_known_names(
@@ -333,6 +347,9 @@ def generate_multi_arch_matrix(
                     {
                         "amdgpu_family": family_name,
                         "test-runs-on": test_runs_on,
+                        "sanity_check_only_for_family": platform_info.get(
+                            "sanity_check_only_for_family", False
+                        ),
                     }
                 )
 
@@ -360,6 +377,21 @@ def generate_multi_arch_matrix(
     return matrix_output
 
 
+def determine_long_lived_branch(branch_name: str) -> bool:
+    # For long-lived branches (main, releases) we want to run both presubmit and postsubmit jobs on push,
+    # instead of just presubmit jobs (as for other branches)
+    is_long_lived_branch = False
+    # Let's differentiate between full/complete matches and prefix matches for long-lived branches
+    long_lived_full_match = ["main"]
+    long_lived_prefix_match = ["release/therock-"]
+    if branch_name in long_lived_full_match or any(
+        branch_name.startswith(prefix) for prefix in long_lived_prefix_match
+    ):
+        is_long_lived_branch = True
+
+    return is_long_lived_branch
+
+
 def matrix_generator(
     is_pull_request=False,
     is_workflow_dispatch=False,
@@ -380,15 +412,22 @@ def matrix_generator(
     # Select only test names based on label inputs, if applied. If no test labels apply, use default logic.
     selected_test_names = []
 
+    branch_name = base_args.get("branch_name", "")
+    # For long-lived branches (main, releases) we want to run both presubmit and postsubmit jobs on push,
+    # instead of just presubmit jobs (as for other branches)
+    is_long_lived_branch = determine_long_lived_branch(branch_name)
+
+    print(f"* {branch_name} is considered a long-lived branch: {is_long_lived_branch}")
+
     # Determine which trigger types are active for proper matrix lookup
     active_trigger_types = []
     if is_pull_request:
         active_trigger_types.append("presubmit")
     if is_push:
-        if base_args.get("branch_name") == "main":
+        if is_long_lived_branch:
             active_trigger_types.extend(["presubmit", "postsubmit"])
         else:
-            # Non-main branch pushes (e.g., multi_arch/bringup1) use presubmit defaults
+            # Non-long-lived branch pushes (e.g., multi_arch/bringup1) use presubmit defaults
             active_trigger_types.append("presubmit")
     if is_schedule:
         active_trigger_types.extend(["presubmit", "postsubmit", "nightly"])
@@ -411,7 +450,7 @@ def matrix_generator(
             f"Unreachable code: no trigger types determined. "
             f"is_pull_request={is_pull_request}, is_workflow_dispatch={is_workflow_dispatch}, "
             f"is_push={is_push}, is_schedule={is_schedule}, "
-            f"branch_name={base_args.get('branch_name')}"
+            f"branch_name={branch_name}"
         )
 
     if is_workflow_dispatch:
@@ -446,6 +485,13 @@ def matrix_generator(
             if "test:" in label:
                 _, test_name = label.split(":")
                 requested_test_names.append(test_name)
+                print(
+                    f"    Workflow dispatch test label '{label}' -> test: {test_name}"
+                )
+
+        if requested_test_names:
+            print(f"  Requested tests from workflow_dispatch: {requested_test_names}")
+
         selected_test_names.extend(filter_known_names(requested_test_names, "test"))
 
     if is_pull_request:
@@ -461,21 +507,43 @@ def matrix_generator(
         requested_target_names = []
         requested_test_names = []
         pr_labels = get_pr_labels(base_args)
+        print(f"  Processing {len(pr_labels)} PR label(s): {pr_labels}")
+
         for label in pr_labels:
             # if a GPU target label was added, we add the GPU target to the build and test matrix
             if "gfx" in label:
                 target = label.split("-")[0]
                 requested_target_names.append(target)
+                print(f"    Label '{label}' matched 'gfx*' pattern -> target: {target}")
             # If a test label was added, we run the full test for the specified test
             if "test:" in label:
                 _, test_name = label.split(":")
                 requested_test_names.append(test_name)
+                print(
+                    f"    Label '{label}' matched 'test:*' pattern -> test: {test_name}"
+                )
             # If the "skip-ci" label was added, we skip all builds and tests
             # We don't want to check for anymore labels
             if "skip-ci" == label:
+                print(f"    Label 'skip-ci' detected -> skipping all builds and tests")
                 selected_target_names = []
                 selected_test_names = []
                 break
+            if "run-all-archs-ci" == label:
+                print(
+                    f"    Label 'run-all-archs-ci' detected -> enabling all architectures"
+                )
+                selected_target_names = [
+                    target
+                    for target in get_all_families_for_trigger_types(
+                        ["presubmit", "postsubmit", "nightly"]
+                    )
+                ]
+
+        if requested_target_names:
+            print(f"  Requested targets from labels: {requested_target_names}")
+        if requested_test_names:
+            print(f"  Requested tests from labels: {requested_test_names}")
 
         selected_target_names.extend(
             filter_known_names(requested_target_names, "target", lookup_matrix)
@@ -483,9 +551,10 @@ def matrix_generator(
         selected_test_names.extend(filter_known_names(requested_test_names, "test"))
 
     if is_push:
-        branch_name = base_args.get("branch_name")
-        if branch_name == "main":
-            print(f"[PUSH - MAIN] Generating build matrix with {str(base_args)}")
+        if is_long_lived_branch:
+            print(
+                f"[PUSH - {branch_name.upper()}] Generating build matrix with {str(base_args)}"
+            )
 
             # Add presubmit and postsubmit targets.
             for target in get_all_families_for_trigger_types(
@@ -497,7 +566,7 @@ def matrix_generator(
                 f"[PUSH - {branch_name}] Generating build matrix with {str(base_args)}"
             )
 
-            # Non-main branch pushes use presubmit targets
+            # Non-long-lived branch pushes use presubmit targets
             for target in get_all_families_for_trigger_types(["presubmit"]):
                 selected_target_names.append(target)
 
@@ -578,6 +647,33 @@ def matrix_generator(
                     artifact_group += f"-{build_variant_suffix}"
                 matrix_row["artifact_group"] = artifact_group
 
+                # We retrieve labels from both PR and workflow_dispatch to customize the build and test jobs
+                label_options = []
+                label_options.extend(get_pr_labels(base_args))
+                label_options.extend(
+                    get_workflow_dispatch_additional_label_options(base_args)
+                )
+                for label in label_options:
+                    # If a specific test kernel type was specified, we use that kernel-enabled test runners
+                    # We disable the other machines that do not have the specified kernel type
+                    # If a kernel test label was added, we set the test-runs-on accordingly to kernel-specific test machines
+                    if "test_runner" in label:
+                        _, kernel_type = label.split(":")
+                        # If the architecture has a valid kernel machine, we set it here
+                        if (
+                            "test-runs-on-kernel" in platform_info
+                            and kernel_type in platform_info["test-runs-on-kernel"]
+                        ):
+                            matrix_row["test-runs-on"] = platform_info[
+                                "test-runs-on-kernel"
+                            ][kernel_type]
+                        # Otherwise, we disable the test runner for this architecture
+                        else:
+                            matrix_row["test-runs-on"] = ""
+                            if "test-runs-on-multi-gpu" in platform_info:
+                                matrix_row["test-runs-on-multi-gpu"] = ""
+                        break
+
                 matrix_output.append(matrix_row)
 
     print(f"Generated build matrix: {str(matrix_output)}")
@@ -597,15 +693,38 @@ def main(base_args, linux_families, windows_families):
     is_pull_request = github_event_name == "pull_request"
     is_schedule = github_event_name == "schedule"
 
+    branch_name = base_args.get("branch_name", "")
     base_ref = base_args.get("base_ref")
+    build_variant = base_args.get("build_variant", "")
+    multi_arch = base_args.get("multi_arch", False)
+
+    linux_use_prebuilt_artifacts = base_args.get("linux_use_prebuilt_artifacts")
+    windows_use_prebuilt_artifacts = base_args.get("windows_use_prebuilt_artifacts")
+
     print("Found metadata:")
     print(f"  github_event_name: {github_event_name}")
+    print(f"  branch_name: {branch_name}")
+    print(f"  base_ref: {base_ref}")
+    print(f"  multi_arch: {multi_arch}")
+    print(f"  build_variant: {build_variant}")
     print(f"  is_push: {is_push}")
     print(f"  is_workflow_dispatch: {is_workflow_dispatch}")
     print(f"  is_pull_request: {is_pull_request}")
+    print(f"  is_schedule: {is_schedule}")
+    print(f"  linux_use_prebuilt_artifacts: {linux_use_prebuilt_artifacts}")
+    print(f"  windows_use_prebuilt_artifacts: {windows_use_prebuilt_artifacts}")
+    if is_pull_request:
+        pr_labels = get_pr_labels(base_args)
+        print(f"  pr_labels: {pr_labels}")
+    if is_workflow_dispatch:
+        print(
+            f"  workflow_dispatch_linux_test_labels: {base_args.get('workflow_dispatch_linux_test_labels', '')}"
+        )
+        print(
+            f"  workflow_dispatch_windows_test_labels: {base_args.get('workflow_dispatch_windows_test_labels', '')}"
+        )
     print("")
 
-    multi_arch = base_args.get("multi_arch", False)
     print(
         f"Generating build matrix for Linux (multi_arch={multi_arch}): {str(linux_families)}"
     )
@@ -637,11 +756,13 @@ def main(base_args, linux_families, windows_families):
     print("")
 
     test_type = "smoke"
+    test_type_reason = "default (smoke tests)"
 
     # In the case of a scheduled run, we always want to build and we want to run full tests
     if is_schedule:
         enable_build_jobs = True
         test_type = "full"
+        test_type_reason = "scheduled run triggers full tests"
     else:
         modified_paths = get_modified_paths(base_ref)
         print("modified_paths (max 200):", modified_paths[:200])
@@ -655,14 +776,16 @@ def main(base_args, linux_families, windows_families):
         submodule_paths = get_therock_submodule_paths()
         matching_submodule_paths = list(set(submodule_paths) & set(modified_paths))
         if matching_submodule_paths:
-            print(
-                f"Found changed submodules: {str(matching_submodule_paths)}. Running full tests."
-            )
             test_type = "full"
+            test_type_reason = f"submodule(s) changed: {matching_submodule_paths}"
 
         # If any test label is included, run full test suite for specified tests
         if linux_test_output or windows_test_output:
+            combined_test_labels = list(set(linux_test_output + windows_test_output))
             test_type = "full"
+            test_type_reason = f"test label(s) specified: {combined_test_labels}"
+
+    print(f"test_type decision: '{test_type}' (reason: {test_type_reason})")
 
     # Format variants for summary - handle both regular and multi-arch modes
     def format_variants(variants):
@@ -681,10 +804,10 @@ def main(base_args, linux_families, windows_families):
 
 * `linux_variants`: {str(format_variants(linux_variants_output))}
 * `linux_test_labels`: {str([test for test in linux_test_output])}
-* `linux_use_prebuilt_artifacts`: {json.dumps(base_args.get("linux_use_prebuilt_artifacts"))}
+* `linux_use_prebuilt_artifacts`: {json.dumps(linux_use_prebuilt_artifacts)}
 * `windows_variants`: {str(format_variants(windows_variants_output))}
 * `windows_test_labels`: {str([test for test in windows_test_output])}
-* `windows_use_prebuilt_artifacts`: {json.dumps(base_args.get("windows_use_prebuilt_artifacts"))}
+* `windows_use_prebuilt_artifacts`: {json.dumps(windows_use_prebuilt_artifacts)}
 * `enable_build_jobs`: {json.dumps(enable_build_jobs)}
 * `test_type`: {test_type}
     """
@@ -714,9 +837,14 @@ if __name__ == "__main__":
         "INPUT_WINDOWS_AMDGPU_FAMILIES", ""
     )
 
-    # For now, add default run for gfx94X-linux
     base_args["pr_labels"] = os.environ.get("PR_LABELS", '{"labels": []}')
-    base_args["branch_name"] = os.environ.get("GITHUB_REF").split("/")[-1]
+    base_args["branch_name"] = os.environ.get("GITHUB_REF_NAME", "")
+    if base_args["branch_name"] == "":
+        print(
+            "[ERROR] GITHUB_REF_NAME is not set! No branch name detected. Exiting.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
     base_args["github_event_name"] = os.environ.get("GITHUB_EVENT_NAME", "")
     base_args["base_ref"] = os.environ.get("BASE_REF", "HEAD^1")
     base_args["linux_use_prebuilt_artifacts"] = (
@@ -730,6 +858,9 @@ if __name__ == "__main__":
     )
     base_args["workflow_dispatch_windows_test_labels"] = os.getenv(
         "WINDOWS_TEST_LABELS", ""
+    )
+    base_args["workflow_dispatch_additional_label_options"] = os.getenv(
+        "ADDITIONAL_LABEL_OPTIONS", ""
     )
     base_args["build_variant"] = os.getenv("BUILD_VARIANT", "release")
     base_args["multi_arch"] = os.environ.get("MULTI_ARCH", "false") == "true"

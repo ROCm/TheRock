@@ -1,4 +1,5 @@
-if(THEROCK_ENABLE_RCCL)
+# TODO(#2632): Re-enable RCCL for sanitizer builds once RCCL build time is acceptable
+if(THEROCK_ENABLE_RCCL AND THEROCK_SANITIZER STREQUAL "")
   # Most libraries need to depend on the profiler, but is conditionally only used
   # on Posix.
   set(optional_profiler_deps)
@@ -34,6 +35,7 @@ if(THEROCK_ENABLE_RCCL)
       therock-fmt
       therock-googletest
     RUNTIME_DEPS
+      amdsmi
       hip-clr
       hipify
       rocm_smi_lib
@@ -88,4 +90,4 @@ if(THEROCK_ENABLE_RCCL)
     SUBPROJECT_DEPS
       ${_rccl_subproject_names}
   )
-endif(THEROCK_ENABLE_RCCL)
+endif(THEROCK_ENABLE_RCCL AND THEROCK_SANITIZER STREQUAL "")

@@ -77,16 +77,17 @@ jobs:
       package_targets: ${{ steps.configure.outputs.package_targets }}
       cloudfront_url: ${{ steps.release_information.outputs.cloudfront_url }}
       cloudfront_staging_url: ${{ steps.release_information.outputs.cloudfront_staging_url }}
+      cloudfront_base_url: ${{ steps.release_information.outputs.cloudfront_base_url }}
       s3_subdir_tar: ${{ steps.release_information.outputs.s3_subdir_tar }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
 
       - name: Setup Python
-        uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: 3.12
 
@@ -140,6 +141,9 @@ jobs:
           echo "cloudfront_url=${tmp_cloudfront_url}" >> $GITHUB_OUTPUT
           echo "cloudfront_staging_url=${tmp_cloudfront_staging_url}" >> $GITHUB_OUTPUT
           echo "s3_subdir_tar=${tmp_s3_subdir_tar}" >> $GITHUB_OUTPUT
+          # TODO: Refactor to use the base URL as CloudFront URL once bucket paths (v2 vs. whl) are harmonized.
+          # Uses bash parameter expansion to strip off subdirectories.
+          echo "cloudfront_base_url=${tmp_cloudfront_url%/*}" >> $GITHUB_OUTPUT
 
       - name: Generating package target matrix
         id: configure
@@ -168,7 +172,7 @@ jobs:
     env:
       TEATIME_LABEL_GH_GROUP: 1
       OUTPUT_DIR: ${{ github.workspace }}/output
-      BUILD_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:583d473f263a289222c48d4b493e2956b2354a45796f09dee6f2c8ecd4504ab6
+      BUILD_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:db2b63f938941dde2abc80b734e64b45b9995a282896d513a0f3525d4591d6cb
       DIST_ARCHIVE: "${{ github.workspace }}/output/therock-dist-linux-${{ matrix.target_bundle.amdgpu_family }}${{ inputs.package_suffix }}-${{ needs.setup_metadata.outputs.version }}.tar.gz"
       FILE_NAME: "therock-dist-linux-${{ matrix.target_bundle.amdgpu_family }}${{ inputs.package_suffix }}-${{ needs.setup_metadata.outputs.version }}.tar.gz"
       RELEASE_TYPE: "${{ needs.setup_metadata.outputs.release_type }}"
@@ -178,22 +182,24 @@ jobs:
       S3_SUBDIR: ${{ inputs.s3_subdir || 'v2' }}
       S3_STAGING_SUBDIR: ${{ inputs.s3_staging_subdir || 'v2-staging' }}
       MANYLINUX: 1
+      EXTRA_C_COMPILER_LAUNCHER: /therock/src/build_tools/resource_info.py
+      EXTRA_CXX_COMPILER_LAUNCHER: /therock/src/build_tools/resource_info.py
 
     steps:
       - name: "Checking out repository"
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
 
-      - uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: 3.12
 
       # TODO: We shouldn't be using a cache on actual release branches, but it
       # really helps for iteration time.
       - name: Enable cache
-        uses: actions/cache/restore@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
+        uses: actions/cache/restore@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.2
         with:
           path: ${{ env.OUTPUT_DIR }}/caches
           key: portable-linux-package-matrix-v1-${{ matrix.target_bundle.amdgpu_family }}-${{ github.sha }}
@@ -247,7 +253,10 @@ jobs:
       # Analyze ninja build log to generate per-component timing report
       - name: Analyze Build Times
         if: ${{ !cancelled() }}
+        env:
+          THEROCK_BUILD_PROF_LOG_DIR: ${{ env.OUTPUT_DIR }}/build/logs/therock-build-prof
         run: |
+          python3 build_tools/resource_info.py --finalize
           python3 build_tools/analyze_build_times.py --build-dir ${{ env.OUTPUT_DIR }}/build
 
       - name: Configure AWS Credentials
@@ -329,7 +338,7 @@ jobs:
         # TODO: Enable JAX wheels for prereleases
         if: ${{ env.RELEASE_TYPE != 'prerelease' }}
         id: url-encode-tar
-        run: python -c "from urllib.parse import quote; print('tar_url=https://therock-${{ env.RELEASE_TYPE }}-tarball.s3.amazonaws.com/' + quote('therock-dist-linux-${{ matrix.target_bundle.amdgpu_family }}${{ inputs.package_suffix }}-${{ needs.setup_metadata.outputs.version }}.tar.gz'))" >> ${GITHUB_OUTPUT}
+        run: python -c "from urllib.parse import quote; print('tar_url=${{ needs.setup_metadata.outputs.cloudfront_base_url }}/tarball/' + quote('${{ env.FILE_NAME }}'))" >> ${GITHUB_OUTPUT}
 
       - name: Trigger build JAX wheels
         # TODO: Enable JAX wheels for prereleases
@@ -373,7 +382,7 @@ jobs:
             }
 
       - name: Save cache
-        uses: actions/cache/save@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
+        uses: actions/cache/save@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.2
         if: ${{ !cancelled() }}
         with:
           path: ${{ env.OUTPUT_DIR }}/caches

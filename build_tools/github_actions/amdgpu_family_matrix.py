@@ -48,9 +48,10 @@ all_build_variants = {
 amdgpu_family_info_matrix_presubmit = {
     "gfx94x": {
         "linux": {
-            "test-runs-on": "linux-mi325-1gpu-ossci-rocm-frac",
-            # TODO: Add new benchmark-runs-on runner for benchmarks
-            "benchmark-runs-on": "linux-mi325-1gpu-ossci-rocm-frac",
+            "test-runs-on": "linux-mi325-1gpu-ossci-rocm",
+            "test-runs-on-multi-gpu": "linux-mi325-8gpu-ossci-rocm",
+            # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
+            "benchmark-runs-on": "linux-mi325-8gpu-ossci-rocm",
             "family": "gfx94X-dcgpu",
             "build_variants": ["release", "asan"],
         }
@@ -75,9 +76,10 @@ amdgpu_family_info_matrix_presubmit = {
     },
     "gfx1151": {
         "linux": {
-            # TODO(#2741): Re-enable machine once `amdsmi` test timeout is fixed
-            # Label is "linux-gfx1151-gpu-rocm"
-            "test-runs-on": "",
+            "test-runs-on": "linux-gfx1151-gpu-rocm",
+            "test-runs-on-kernel": {
+                "oem": "linux-strix-halo-gpu-rocm-oem",
+            },
             "family": "gfx1151",
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
@@ -85,7 +87,26 @@ amdgpu_family_info_matrix_presubmit = {
         },
         "windows": {
             "test-runs-on": "windows-gfx1151-gpu-rocm",
+            # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
+            "benchmark-runs-on": "windows-gfx1151-gpu-rocm",
             "family": "gfx1151",
+            "build_variants": ["release"],
+        },
+    },
+    "gfx120x": {
+        "linux": {
+            "test-runs-on": "linux-gfx120X-gpu-rocm",
+            "family": "gfx120X-all",
+            "bypass_tests_for_releases": True,
+            "build_variants": ["release"],
+            "sanity_check_only_for_family": True,
+        },
+        "windows": {
+            # TODO(#2962): Re-enable machine once sanity checks work with this architecture
+            # Label is windows-gfx120X-gpu-rocm
+            "test-runs-on": "",
+            "family": "gfx120X-all",
+            "bypass_tests_for_releases": True,
             "build_variants": ["release"],
         },
     },
@@ -100,32 +121,13 @@ amdgpu_family_info_matrix_postsubmit = {
             "build_variants": ["release", "asan"],
         }
     },
-    "gfx120x": {
-        "linux": {
-            # TODO(#2683): Re-enable machine once it is stable
-            # Label is "linux-gfx120X-gpu-rocm"
-            "test-runs-on": "",
-            "family": "gfx120X-all",
-            "bypass_tests_for_releases": True,
-            "build_variants": ["release"],
-            "sanity_check_only_for_family": True,
-        },
-        "windows": {
-            "test-runs-on": "",
-            "family": "gfx120X-all",
-            "bypass_tests_for_releases": True,
-            "build_variants": ["release"],
-        },
-    },
 }
 
 # The 'nightly' matrix runs on 'schedule' triggers.
 amdgpu_family_info_matrix_nightly = {
     "gfx90x": {
         "linux": {
-            # label is linux-gfx90X-gpu-rocm
-            # Disabled due to inconsistent up-time
-            "test-runs-on": "",
+            "test-runs-on": "linux-gfx90X-gpu-rocm",
             "family": "gfx90X-dcgpu",
             "sanity_check_only_for_family": True,
             "build_variants": ["release"],
@@ -157,25 +159,25 @@ amdgpu_family_info_matrix_nightly = {
     },
     "gfx103x": {
         "linux": {
-            # TODO(#2740): Re-enable machine once `amdsmi` test is fixed
+            # TODO(#2740): Re-enable machine once it is stable
             # Label is "linux-gfx1030-gpu-rocm"
             "test-runs-on": "",
             "family": "gfx103X-dgpu",
             "build_variants": ["release"],
             "sanity_check_only_for_family": True,
         },
-        # TODO(#1925): Enable arch for aotriton to enable PyTorch builds
         "windows": {
-            "test-runs-on": "windows-gfx1030-gpu-rocm",
+            # TODO(#3200): Re-enable machine once it is stable
+            # Label is "windows-gfx1030-gpu-rocm"
+            "test-runs-on": "",
             "family": "gfx103X-dgpu",
             "build_variants": ["release"],
-            "expect_pytorch_failure": True,
             "sanity_check_only_for_family": True,
         },
     },
     "gfx1150": {
         "linux": {
-            # TODO(#2614): Re-enable machine once it is stable
+            # TODO(#3199): Re-enable machine once it is stable
             # Label is "linux-gfx1150-gpu-rocm"
             "test-runs-on": "",
             "family": "gfx1150",

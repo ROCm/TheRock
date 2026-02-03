@@ -36,10 +36,6 @@ on:
         description: PyTorch ref to checkout. (typically "nightly", or "release/X.Y")
         required: true
         type: string
-      pytorch_patchset:
-        description: Patch directory name from where to apply existing patches.
-        required: true
-        type: string
       repository:
         description: "Repository to checkout. Otherwise, defaults to `github.repository`."
         type: string
@@ -95,11 +91,6 @@ on:
         required: true
         type: string
         default: "release/2.7"
-      pytorch_patchset:
-        description: Patch directory name from where to apply existing patches.
-        required: true
-        type: string
-        default: "rocm_2.7"
 
 permissions:
   id-token: write
@@ -140,7 +131,7 @@ jobs:
         shell: bash
     steps:
       - name: Checkout
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
@@ -150,7 +141,7 @@ jobs:
           git config --global user.name "therockbot"
           git config --global user.email "therockbot@amd.com"
 
-      - uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: ${{ inputs.python_version }}
 
@@ -194,8 +185,7 @@ jobs:
           python ./external-builds/pytorch/pytorch_torch_repo.py checkout \
               --checkout-dir ${{ env.CHECKOUT_ROOT }}/torch \
               --gitrepo-origin https://github.com/ROCm/pytorch.git \
-              --repo-hashtag ${{ inputs.pytorch_git_ref }} \
-              --patchset ${{ inputs.pytorch_patchset }}
+              --repo-hashtag ${{ inputs.pytorch_git_ref }}
           python ./external-builds/pytorch/pytorch_audio_repo.py checkout \
               --checkout-dir ${{ env.CHECKOUT_ROOT }}/audio \
               --torch-dir ${{ env.CHECKOUT_ROOT }}/torch \
@@ -242,7 +232,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
         with:
           aws-region: us-east-2
-          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}-releases
+          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}
           special-characters-workaround: true
 
       - name: Upload wheels to S3 staging
@@ -272,7 +262,7 @@ jobs:
       bypass_tests_for_releases: ${{ steps.configure.outputs.bypass_tests_for_releases }}
     steps:
       - name: Checking out repository
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
@@ -315,7 +305,7 @@ jobs:
       TORCHVISION_VERSION: "${{ needs.build_pytorch_wheels.outputs.torchvision_version }}"
     steps:
       - name: Checkout
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
@@ -325,7 +315,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
         with:
           aws-region: us-east-2
-          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}-releases
+          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}
           special-characters-workaround: true
 
       - name: Determine upload flag

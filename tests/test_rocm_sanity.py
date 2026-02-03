@@ -15,6 +15,8 @@ logger = logging.getLogger(__name__)
 
 THEROCK_BIN_DIR = Path(os.getenv("THEROCK_BIN_DIR")).resolve()
 
+AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
+
 
 def is_windows():
     return "windows" == platform.system().lower()
@@ -125,6 +127,10 @@ class TestROCmSanity:
         check.is_true(output)
 
     @pytest.mark.skipif(is_windows(), reason="amdsmitst is not supported on Windows")
+    # TODO(#2789): Remove skip once amdsmi supports gfx1151
+    @pytest.mark.skipif(
+        AMDGPU_FAMILIES == "gfx1151", reason="Linux gfx1151 does not support amdsmi yet"
+    )
     def test_amdsmi_suite(self):
         amdsmi_test_bin = (
             THEROCK_BIN_DIR.parent / "share" / "amd_smi" / "tests" / "amdsmitst"
@@ -153,6 +159,25 @@ class TestROCmSanity:
             "amdsmitstReadOnly.TestFrequenciesRead",
             "amdsmitstReadWrite.TestPowerReadWrite",
         ]
+
+        TESTS_TO_IGNORE = {
+            "gfx90X-dcgpu": {
+                # TODO(#2963): Re-enable once amdsmi tests are fixed for gfx90X-dcgpu
+                "linux": [
+                    "amdsmitstReadOnly.TestSysInfoRead",
+                    "amdsmitstReadOnly.TestIdInfoRead",
+                    "amdsmitstReadWrite.TestPciReadWrite",
+                ]
+            },
+        }
+
+        platform_key = "windows" if is_windows() else "linux"
+        if (
+            AMDGPU_FAMILIES in TESTS_TO_IGNORE
+            and platform_key in TESTS_TO_IGNORE[AMDGPU_FAMILIES]
+        ):
+            ignored_tests = TESTS_TO_IGNORE[AMDGPU_FAMILIES][platform_key]
+            exclude_tests.extend(ignored_tests)
 
         gtest_filter = f"{':'.join(include_tests)}:-{':'.join(exclude_tests)}"
         cmd = [str(amdsmi_test_bin), f"--gtest_filter={gtest_filter}"]

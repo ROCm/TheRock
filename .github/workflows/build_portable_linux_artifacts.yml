@@ -66,7 +66,7 @@ jobs:
     permissions:
       id-token: write
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:583d473f263a289222c48d4b493e2956b2354a45796f09dee6f2c8ecd4504ab6
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:db2b63f938941dde2abc80b734e64b45b9995a282896d513a0f3525d4591d6cb
       options: -v /runner/config:/home/awsconfig/
     env:
       AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
@@ -76,9 +76,11 @@ jobs:
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
       TEATIME_FORCE_INTERACTIVE: 0
       IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
+      EXTRA_C_COMPILER_LAUNCHER: "${{ github.workspace }}/build_tools/resource_info.py"
+      EXTRA_CXX_COMPILER_LAUNCHER: "${{ github.workspace }}/build_tools/resource_info.py"
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Install python deps
         run: |
@@ -102,10 +104,6 @@ jobs:
       - name: Runner health status
         run: |
           ./build_tools/health_status.py
-
-      - name: Test build_tools
-        run: |
-          python -m pytest build_tools/tests build_tools/github_actions/tests
 
       - name: Fetch sources
         timeout-minutes: 30
@@ -159,6 +157,7 @@ jobs:
       - name: Analyze Build Times
         if: ${{ !cancelled() }}
         run: |
+          python3 build_tools/resource_info.py --finalize
           python3 build_tools/analyze_build_times.py --build-dir build
 
       - name: Configure AWS Credentials for non-forked repos
