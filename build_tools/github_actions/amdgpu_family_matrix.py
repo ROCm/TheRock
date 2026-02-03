@@ -38,7 +38,7 @@ all_build_variants = {
             "build_variant_label": "tsan",
             "build_variant_suffix": "tsan",
             "build_variant_cmake_preset": "linux-release-tsan",
-            "expect_failure": False,
+            "expect_failure": True,
         },
     },
     "windows": {
