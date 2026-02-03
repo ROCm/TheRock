@@ -124,33 +124,58 @@ else:
     print("Incompatible platform!")
 
 HIP_COMPILER_ROCM_ROOT = OUTPUT_ARTIFACTS_PATH
-environ_vars["HIPCXX"] = f"{THEROCK_BIN_PATH / HIPCC_BINARY_NAME}"
+if platform.system() == "Windows":
+    environ_vars["HIPCXX"] = str(
+        OUTPUT_ARTIFACTS_PATH / "lib" / "llvm" / "bin" / "amdclang++.exe"
+    )
+    print("HIPCXX:", environ_vars["HIPCXX"], str(OUTPUT_ARTIFACTS_PATH))
 
 # Configure with CMake
 cmd = [
     "cmake",
     f"-DCMAKE_PREFIX_PATH={OUTPUT_ARTIFACTS_PATH}",
-    f"-DHIP_HIPCC_EXECUTABLE={THEROCK_BIN_PATH / HIPCC_BINARY_NAME}",
-    f"-DCMAKE_CXX_COMPILER={THEROCK_BIN_PATH / HIPCC_BINARY_NAME}",
-    f"-DCMAKE_HIP_COMPILER_ROCM_ROOT={HIP_COMPILER_ROCM_ROOT}",
+    f"-DHIP_HIPCC_EXECUTABLE={(THEROCK_BIN_PATH / HIPCC_BINARY_NAME).as_posix()}",
+    f"-DCMAKE_CXX_COMPILER={(THEROCK_BIN_PATH / HIPCC_BINARY_NAME)}",
+    f"-DCMAKE_HIP_COMPILER_ROCM_ROOT={HIP_COMPILER_ROCM_ROOT.as_posix()}",
     f"-DCMAKE_HIP_ARCHITECTURES={gpu_arch}",
-    "-GNinja",
-    "..",
 ]
 
+# Find lit executable (from venv or system)
+if platform.system() == "Windows":
+    lit_executable = None
+    # Check in current venv
+    venv_lit = Path(os.sys.prefix) / "Scripts" / "lit.exe"
+    if venv_lit.exists():
+        lit_executable = str(venv_lit)
+    # Check in .tmpvenv
+    elif (Path(".tmpvenv") / "Scripts" / "lit.exe").exists():
+        lit_executable = str((Path(".tmpvenv") / "Scripts" / "lit.exe").resolve())
+    if lit_executable:
+        logging.info(f"Found lit executable at: {lit_executable}")
+        cmd.append(f"-Dlibcudacxx_LIT={lit_executable}")
+        cmd.append(f"-DLLVM_EXTERNAL_LIT={lit_executable}")
+
+# Add rc compiler for windows
 if platform.system() == "Windows":
     cmd.append("-DCMAKE_RC_COMPILER=rc.exe")
 
+cmd.extend(["-GNinja", ".."])
+
 logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
 subprocess.run(cmd, check=True, env=environ_vars)
-
 # Run the tests using lit
-cmd = [
-    "bash",
-    "../ci/test_libhipcxx.sh",
-    "-cmake-options",
-    f"-DHIP_HIPCC_EXECUTABLE={THEROCK_BIN_PATH / HIPCC_BINARY_NAME} -DCMAKE_HIP_COMPILER_ROCM_ROOT={HIP_COMPILER_ROCM_ROOT} -DCMAKE_HIP_ARCHITECTURES={gpu_arch}",
-]
+if platform.system() == "Windows":
+    cmd = [
+        "ninja",
+        "check-hipcxx",
+    ]
+else:
+    cmd = [
+        "bash",
+        "../ci/test_libhipcxx.sh",
+        "-cmake-options",
+        f"-DHIP_HIPCC_EXECUTABLE={THEROCK_BIN_PATH / HIPCC_BINARY_NAME} -DCMAKE_HIP_COMPILER_ROCM_ROOT={HIP_COMPILER_ROCM_ROOT} -DCMAKE_HIP_ARCHITECTURES={gpu_arch}",
+    ]
 logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
 
 subprocess.run(cmd, check=True, env=environ_vars)
