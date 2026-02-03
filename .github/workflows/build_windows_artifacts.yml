@@ -28,6 +28,9 @@ on:
         type: boolean
       extra_cmake_options:
         type: string
+      monitor_interval:
+        type: string
+        default: "30"
 
   workflow_call:
     inputs:
@@ -48,6 +51,9 @@ on:
         type: boolean
       extra_cmake_options:
         type: string
+      monitor_interval:
+        type: string
+        default: "30"
 
 permissions:
   contents: read
@@ -143,7 +149,16 @@ jobs:
           python3 build_tools/github_actions/build_configure.py
 
       - name: Build therock-archives and therock-dist
-        run: cmake --build "${{ env.BUILD_DIR }}" --target therock-archives therock-dist -- -k 0
+        if: ${{ !cancelled() }}
+        env:
+          GITHUB_JOB_NAME: ${{ github.job }}
+          MEMORY_MONITOR_INTERVAL: ${{ inputs.monitor_interval }}
+        run: |
+          MONITOR_PID=$(bash build_tools/github_actions/start_memory_monitor.sh)
+          export MONITOR_PID
+          trap 'bash build_tools/github_actions/stop_memory_monitor.sh || true' EXIT
+
+          cmake --build "${{ env.BUILD_DIR }}" --target therock-archives therock-dist -- -k 0
 
       - name: Report
         if: ${{ !cancelled() }}
