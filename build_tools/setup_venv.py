@@ -118,16 +118,22 @@ def install_packages(args: argparse.Namespace, py_cmd: list[str] | None):
 
     command = py_cmd
 
+    # Add --index-url if specified (via --index-name or --index-url directly).
+    if args.index_name:
+        index_url = INDEX_URLS_MAP[args.index_name]
+        # --index-name requires --index-subdir (validated in main).
+        index_url = index_url.rstrip("/") + "/" + args.index_subdir.strip("/")
+        command.append(f"--index-url={index_url}")
+    elif args.index_url:
+        index_url = args.index_url
+        # --index-subdir is optional with --index-url; append if provided.
+        if args.index_subdir:
+            index_url = index_url.rstrip("/") + "/" + args.index_subdir.strip("/")
+        command.append(f"--index-url={index_url}")
+
+    # Add --find-links if specified (can be used alongside --index-url).
     if args.find_links_url:
         command.append(f"--find-links={args.find_links_url}")
-    else:
-        if args.index_name:
-            index_url = INDEX_URLS_MAP[args.index_name]
-        else:
-            index_url = args.index_url
-        index_url = index_url.rstrip("/") + "/" + args.index_subdir.strip("/")
-
-        command.append(f"--index-url={index_url}")
 
     if args.disable_cache:
         command.append("--no-cache-dir")
@@ -322,22 +328,15 @@ def main(argv: list[str]):
         p.error(
             "If --packages is set, one of --index-name, --index-url, or --find-links-url must be set"
         )
-    if args.packages:
-        if args.find_links_url:
-            # Omitting --index-subdir is fine when --find-links-url is set.
-            pass
-        elif not args.index_subdir:
-            if subdirs and not all_subdir_sets_congruent:
-                if not args.index_name:
-                    p.error(
-                        f"If --packages is set, --index-subdir must be set from the following list: {subdirs}"
-                    )
-                else:
-                    p.error(
-                        f"If --packages is set, --index-subdir must be set from the following list: {subdirs[args.index_name]}"
-                    )
-            else:
-                p.error("If --packages is set, --index-subdir must be set")
+    # --index-subdir is required with --index-name (known base URLs need a subdir).
+    # --index-subdir is optional with --index-url (can pass a complete URL).
+    if args.index_name and not args.index_subdir:
+        if subdirs and not all_subdir_sets_congruent:
+            p.error(
+                f"--index-subdir must be set when using --index-name. Options: {subdirs[args.index_name]}"
+            )
+        else:
+            p.error("--index-subdir must be set when using --index-name")
 
     run(args)
 
