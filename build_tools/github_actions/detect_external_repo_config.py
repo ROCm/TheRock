@@ -11,13 +11,13 @@ Usage:
 
 Examples:
     # Config for rocm-libraries:
-    python build_tools/github_actions/detect_external_repo_config.py --repository ROCm/rocm-libraries
+    python build_tools/github_actions/detect_external_repo_config.py --repository rocm-libraries
 
     # Config for rocm-systems:
     python build_tools/github_actions/detect_external_repo_config.py --repository rocm-systems
 
     # Include a workspace path to produce an extra_cmake_options entry:
-    python build_tools/github_actions/detect_external_repo_config.py --repository ROCm/rocm-libraries --workspace "$GITHUB_WORKSPACE/source-repo"
+    python build_tools/github_actions/detect_external_repo_config.py --repository rocm-libraries --workspace "$GITHUB_WORKSPACE/source-repo"
 
 Output (GitHub Actions format):
     cmake_source_var=THEROCK_ROCM_LIBRARIES_SOURCE_DIR
@@ -26,8 +26,10 @@ Output (GitHub Actions format):
 """
 
 import argparse
+import importlib.util
 import os
 import sys
+from functools import lru_cache
 from pathlib import Path
 from typing import Dict, Any, Optional
 
@@ -47,17 +49,16 @@ REPO_CONFIGS: Dict[str, Dict[str, Any]] = {
         "fetch_exclusion": "--no-include-rocm-systems",
     },
     # Future repos can be added here:
-    # "composable_kernel": {...},
-    # "rccl": {...},
+    # "llvm-project": {...},
+    # "hipify": {...},
+    # "rocgdb": {...},
+    # "libhipcxx": {...},
 }
 
 
-def detect_repo_name(repo_full_name: str) -> str:
-    """Returns the repo name from `owner/repo` or `repo`."""
-    # Handle both "ROCm/rocm-libraries" and "rocm-libraries" formats
-    if "/" in repo_full_name:
-        return repo_full_name.split("/")[-1]
-    return repo_full_name
+def _log_warning(message: str) -> None:
+    """Helper to log warning messages to stderr."""
+    print(f"WARNING: {message}", file=sys.stderr)
 
 
 def get_repo_config(repo_name: str) -> Dict[str, Any]:
@@ -71,8 +72,13 @@ def get_repo_config(repo_name: str) -> Dict[str, Any]:
     return REPO_CONFIGS[repo_name]
 
 
+@lru_cache()
 def get_external_repo_path(repo_name: str) -> Path:
     """Determines the path to the external repository checkout.
+
+    This function is cached (using functools.lru_cache) to avoid repeated
+    filesystem lookups. The path for a given repo_name is computed once
+    and reused for all subsequent calls during program execution.
 
     This function encapsulates the logic for finding where an external repo
     is checked out in different scenarios (external repo calling TheRock,
@@ -82,16 +88,15 @@ def get_external_repo_path(repo_name: str) -> Path:
         repo_name (str): Repository name (e.g., "rocm-libraries", "rocm-systems")
 
     Returns:
-        Path: Path to the external repository root directory
+        Path: Path to the external repository root directory (cached after first call)
 
     Raises:
         ValueError: If the external repo path cannot be determined
     """
     try:
-        normalized_name = detect_repo_name(repo_name)
-        repo_config = get_repo_config(normalized_name)
-    except ValueError:
-        raise ValueError(f"Unknown repository: {repo_name}")
+        repo_config = get_repo_config(repo_name)
+    except ValueError as e:
+        raise ValueError(f"Unknown repository: {repo_name}") from e
 
     # Priority order for determining external repo location:
 
@@ -112,7 +117,7 @@ def get_external_repo_path(repo_name: str) -> Path:
         if (
             repo_path.exists()
             and _is_valid_repo_path(repo_path)
-            and repo_path.name == normalized_name
+            and repo_path.name == repo_name
         ):
             print(
                 f"Found external repo via EXTERNAL_SOURCE_PATH: {repo_path}",
@@ -134,13 +139,18 @@ def get_external_repo_path(repo_name: str) -> Path:
 
 
 def _is_valid_repo_path(path: Path) -> bool:
-    """Validate that a path is a git repository with .github/scripts structure.
+    """Validate that a path is a git repository with required TheRock integration scripts.
+
+    External repositories that integrate with TheRock must have:
+    - A .github/scripts/ directory
+    - therock_matrix.py: Defines project build matrix and test lists
+    - therock_configure_ci.py: CI configuration including skippable path patterns
 
     Args:
         path: Path to check
 
     Returns:
-        True if path appears to be a valid external repo checkout
+        True if path is a valid external repo with all required integration scripts
     """
     # Check for git repository (can be file or directory for worktrees)
     git_path = path / ".git"
@@ -152,37 +162,31 @@ def _is_valid_repo_path(path: Path) -> bool:
     if not scripts_dir.exists() or not scripts_dir.is_dir():
         return False
 
+    # Check for required TheRock integration scripts
+    required_scripts = ["therock_matrix.py", "therock_configure_ci.py"]
+    for script_name in required_scripts:
+        script_path = scripts_dir / script_name
+        if not script_path.exists():
+            return False
+
     return True
 
 
-def _log_warning(message: str) -> None:
-    """Helper to log warning messages to stderr."""
-    print(f"WARNING: {message}", file=sys.stderr)
-
-
-def import_external_repo_module(
-    repo_name: str, module_name: str, repo_path: Optional[Path] = None
-) -> Optional[Any]:
+def import_external_repo_module(repo_name: str, module_name: str) -> Optional[Any]:
     """Dynamically import a module from an external repo's .github/scripts directory.
 
     Args:
         repo_name (str): Repository name (e.g., "rocm-libraries", "rocm-systems")
         module_name (str): Module name without .py extension (e.g., "therock_matrix")
-        repo_path (Optional[Path]): Optional path to the external repo. If not provided,
-                                     calls get_external_repo_path() to determine it.
 
     Returns:
         Optional[Any]: The imported module, or None if import fails
-    """
-    import importlib.util
 
-    # Determine repo path if not provided
-    if repo_path is None:
-        try:
-            repo_path = get_external_repo_path(repo_name)
-        except ValueError as e:
-            _log_warning(str(e))
-            return None
+    Raises:
+        ValueError: If the external repo path cannot be determined
+    """
+    # Get the validated repo path (will raise ValueError if invalid)
+    repo_path = get_external_repo_path(repo_name)
 
     # All external repos follow the same convention: .github/scripts/
     script_path = repo_path / ".github" / "scripts" / f"{module_name}.py"
@@ -217,20 +221,24 @@ def import_external_repo_module(
         raise
 
 
-def get_skip_patterns(repo_name: str, repo_path: Optional[Path] = None) -> list[str]:
+def get_skip_patterns(repo_name: str) -> list[str]:
     """Get skip patterns from external repo's therock_configure_ci.py.
+
+    These are file path patterns that, when ALL modified files in a PR match at least
+    one pattern, indicate the changes have no impact on CI workflows. When this occurs,
+    TheRock CI will skip build/test jobs to save resources.
+
+    Example patterns: ["*.md", "docs/*", ".github/workflows/*"]
+
+    See: https://github.com/ROCm/rocm-libraries/blob/develop/.github/scripts/therock_configure_ci.py
 
     Args:
         repo_name (str): Repository name (e.g., "rocm-libraries", "rocm-systems")
-        repo_path (Optional[Path]): Optional path to the external repo. If not provided,
-                                     will be determined automatically.
 
     Returns:
         list[str]: List of skip patterns, or empty list if not found
     """
-    configure_module = import_external_repo_module(
-        repo_name, "therock_configure_ci", repo_path
-    )
+    configure_module = import_external_repo_module(repo_name, "therock_configure_ci")
     if configure_module and hasattr(configure_module, "SKIPPABLE_PATH_PATTERNS"):
         patterns = configure_module.SKIPPABLE_PATH_PATTERNS
         print(
@@ -241,18 +249,16 @@ def get_skip_patterns(repo_name: str, repo_path: Optional[Path] = None) -> list[
     return []
 
 
-def get_test_list(repo_name: str, repo_path: Optional[Path] = None) -> list[str]:
+def get_test_list(repo_name: str) -> list[str]:
     """Get test list from external repo's therock_matrix.py project_map.
 
     Args:
         repo_name (str): Repository name (e.g., "rocm-libraries", "rocm-systems")
-        repo_path (Optional[Path]): Optional path to the external repo. If not provided,
-                                     will be determined automatically.
 
     Returns:
         list[str]: List of test names, or empty list if not found
     """
-    matrix_module = import_external_repo_module(repo_name, "therock_matrix", repo_path)
+    matrix_module = import_external_repo_module(repo_name, "therock_matrix")
     if not matrix_module or not hasattr(matrix_module, "project_map"):
         return []
 
@@ -299,7 +305,15 @@ def output_github_actions_vars(config: Dict[str, Any]) -> None:
     gha_set_output(normalized_config)
 
 
-def main():
+def main(argv=None):
+    """Main entry point for the script.
+
+    Args:
+        argv: Command line arguments (defaults to sys.argv if None)
+
+    Returns:
+        Exit code (0 for success, 1 for error)
+    """
     parser = argparse.ArgumentParser(
         description=(
             "Detect external repository configuration for TheRock CI workflows.\n\n"
@@ -315,13 +329,13 @@ def main():
             "Examples:\n"
             "  # Config for rocm-libraries:\n"
             "  python build_tools/github_actions/detect_external_repo_config.py \\\n"
-            "    --repository ROCm/rocm-libraries\n\n"
+            "    --repository rocm-libraries\n\n"
             "  # Config for rocm-systems:\n"
             "  python build_tools/github_actions/detect_external_repo_config.py \\\n"
             "    --repository rocm-systems\n\n"
             "  # Include workspace path for CMake options:\n"
             "  python build_tools/github_actions/detect_external_repo_config.py \\\n"
-            '    --repository ROCm/rocm-libraries --workspace "$GITHUB_WORKSPACE/source-repo"\n\n'
+            '    --repository rocm-libraries --workspace "$GITHUB_WORKSPACE/source-repo"\n\n'
             "  # List all known repositories:\n"
             "  python build_tools/github_actions/detect_external_repo_config.py --list"
         ),
@@ -329,8 +343,7 @@ def main():
     )
     parser.add_argument(
         "--repository",
-        default=os.environ.get("GITHUB_REPOSITORY"),
-        help="Full repository name (e.g., ROCm/rocm-libraries) or short name (e.g., rocm-libraries). Defaults to $GITHUB_REPOSITORY.",
+        help="Repository name (e.g., rocm-libraries, rocm-systems). Required.",
     )
     parser.add_argument(
         "--workspace",
@@ -343,7 +356,7 @@ def main():
         help="List all known repository configurations",
     )
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if args.list:
         print("Known external repositories:")
@@ -353,17 +366,16 @@ def main():
 
     if not args.repository:
         print(
-            "ERROR: --repository is required when GITHUB_REPOSITORY is not set",
+            "ERROR: --repository is required",
             file=sys.stderr,
         )
         return 1
 
     try:
-        repo_name = detect_repo_name(args.repository)
-        config = get_repo_config(repo_name)
+        config = get_repo_config(args.repository)
 
         # Log to stderr for visibility in CI logs
-        print(f"Detected repository: {repo_name}", file=sys.stderr)
+        print(f"Detected repository: {args.repository}", file=sys.stderr)
         print(f"Configuration: {config}", file=sys.stderr)
 
         # Format the full CMake option if workspace path provided
