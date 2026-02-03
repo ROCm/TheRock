@@ -284,7 +284,7 @@ also install `torch`, `torchaudio`, and `torchvision`.
 > The `torch` packages depend on `rocm[libraries]`, so the compatible ROCm packages
 > should be installed automatically for you and you do not need to explicitly install
 > ROCm first. If ROCm is already installed this may result in a downgrade if the
-> available `torch` wheels are out of date.
+> `torch` wheel to be installed requires a different version.
 
 > [!TIP]
 > If you previously installed PyTorch with the `pytorch-triton-rocm` package,
