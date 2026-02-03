@@ -40,14 +40,7 @@ import subprocess
 import sys
 import re
 
-try:
-    import requests
-except ImportError:
-    requests = None
-
 from github_actions.github_actions_utils import *
-
-GFX_TARGET_REGEX = r'(gfx(?:\d{2,3}X|\d{3,4})(?:-[^<"/]*)?)</a>'
 
 is_windows = platform.system() == "Windows"
 
@@ -67,11 +60,6 @@ def run_command(args: list[str | Path], cwd: Path = Path.cwd()):
     args = [str(arg) for arg in args]
     log(f"++ Exec [{cwd}]$ {shlex.join(args)}")
     subprocess.check_call(args, cwd=str(cwd), stdin=subprocess.DEVNULL)
-
-
-def get_system_py_command(use_uv: bool) -> str:
-    """Returns the current system python command."""
-    return "uv" if use_uv else sys.executable
 
 
 def find_venv_python_exe(venv_path: Path) -> Path | None:
@@ -212,40 +200,6 @@ def install_packages_into_venv(
     run_command(pip_install_cmd)
 
 
-def scrape_subdirs() -> dict[str, set[str]] | set[str] | None:
-    if not requests:
-        return None
-
-    index_subdirs: dict[str, set[str]] | set[str] = dict()
-
-    def scrape_subdirs_from_index(index_url: str) -> set[str]:
-        index_url = index_url.rstrip("/") + "/"
-        try:
-            response = requests.get(index_url)
-            response.raise_for_status()
-        except Exception as e:
-            print(
-                f"[ERROR]: fetching subdirs from index url: {index_url} failed with: {e}"
-            )
-            return set()
-
-        # matches the text inside the <a></a> elements to find all gfx targets, then puts returns them in a set
-        html = response.text
-        matches = re.findall(GFX_TARGET_REGEX, html)
-        return set(matches)
-
-    # for every index url in the map fetches the subdirs and puts them in a dict with the index_name being the key
-    for index_name, index_url in ROCM_INDEX_URLS_MAP.items():
-        index_subdirs[index_name] = scrape_subdirs_from_index(index_url)
-
-    # compares the first set of dirs to the rest of them, then, if they are all equal, returns a singular set instead of a dictionary
-    subdirs_sets = list(index_subdirs.values())
-    if all(s == subdirs_sets[0] for s in subdirs_sets[1:]):
-        index_subdirs = subdirs_sets[0]
-
-    return index_subdirs
-
-
 def log_venv_activate_instructions(venv_dir: Path):
     """Logs platform-specific instructions for activating a venv."""
     log("")
@@ -285,6 +239,34 @@ def run(args: argparse.Namespace):
         log_venv_activate_instructions(venv_dir)
 
 
+GFX_TARGET_REGEX = r'(gfx(?:\d{2,3}X|\d{3,4})(?:-[^<"/]*)?)</a>'
+
+
+def _scrape_rocm_index_subdirs() -> set[str] | None:
+    """Scrapes available subdirs from all known indexes, returns union of all."""
+    try:
+        import requests
+    except ImportError:
+        return
+
+    all_subdirs: set[str] = set()
+
+    for index_url in ROCM_INDEX_URLS_MAP.values():
+        index_url = index_url.rstrip("/") + "/"
+        try:
+            response = requests.get(index_url)
+            response.raise_for_status()
+        except Exception as e:
+            print(f"[ERROR]: fetching subdirs from {index_url} failed: {e}")
+            continue
+
+        # Extract gfx targets from <a> elements.
+        matches = re.findall(GFX_TARGET_REGEX, response.text)
+        all_subdirs.update(matches)
+
+    return all_subdirs if all_subdirs else None
+
+
 def main(argv: list[str]):
     p = argparse.ArgumentParser("setup_venv.py")
     p.add_argument(
@@ -320,64 +302,46 @@ def main(argv: list[str]):
     # TODO(#1036): Other flags or helper scripts to help map between versions,
     #              git commits/refs, workflow runs, etc.
     #              I'd like a shorthand for "install packages from commit abcde"
+    #              Maybe use find_artifacts_for_commit.py
     install_options.add_argument(
         "--packages",
         type=str,
         help="Comma-delimited list of packages to install, including any extras or explicit versions",
     )
     # TODO(#1036): add "auto" mode here that infers the index from the version?
-    # TODO(#1036): Default to nightly?
-    install_options.add_argument(
-        "--index-name",
-        type=str,
-        choices=["nightly", "dev"],
-        help="Shorthand name for an index (requires --index-subdir)",
-    )
     install_options.add_argument(
         "--index-url",
         type=str,
         help="Package index URL for pip --index-url (complete URL, or base URL with --index-subdir)",
     )
     install_options.add_argument(
+        "--index-name",
+        type=str,
+        choices=["stable", "nightly", "dev"],
+        help="Shorthand for a named index (requires --index-subdir)",
+    )
+    install_options.add_argument(
         "--find-links-url",
         type=str,
-        help="Package location URL for pip --find-links (can be used with --index-url)",
+        help="Package location URL for pip --find-links (compatible with --index-url)",
     )
 
-    subdirs: dict[str, set[str]] | set[str] | None = scrape_subdirs()
-    all_subdir_sets_congruent = isinstance(subdirs, set)
-
-    index_subdir_help = "Index subdirectory"
-    if not all_subdir_sets_congruent and subdirs:
-        index_subdir_help += ". Available options per index: " + str(subdirs)
-    elif not subdirs:
-        index_subdir_help += ", such as 'gfx110X-all'"
-    else:
-        index_subdir_help += "."
-
+    # Scrape available subdirs for --index-subdir choices.
+    available_subdirs = _scrape_rocm_index_subdirs()
     install_options.add_argument(
         "--index-subdir",
         "--index-subdirectory",
         type=str,
-        help=index_subdir_help,
-        choices=subdirs if all_subdir_sets_congruent else None,
+        help="Index subdirectory, such as 'gfx110X-all'",
+        choices=available_subdirs,
     )
 
     args = p.parse_args(argv)
 
-    # Validate arguments.
     if args.venv_dir.exists() and not args.venv_dir.is_dir():
         p.error(f"venv_dir '{args.venv_dir}' exists and is not a directory")
-
-    # --index-subdir is required with --index-name (known base URLs need a subdir).
-    # --index-subdir is optional with --index-url (can pass a complete URL).
     if args.index_name and not args.index_subdir:
-        if subdirs and not all_subdir_sets_congruent:
-            p.error(
-                f"--index-subdir must be set when using --index-name. Options: {subdirs[args.index_name]}"
-            )
-        else:
-            p.error("--index-subdir must be set when using --index-name")
+        p.error("--index-subdir must be set when using --index-name")
 
     run(args)
 
