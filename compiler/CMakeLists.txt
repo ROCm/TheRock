@@ -11,6 +11,29 @@ if(THEROCK_ENABLE_COMPILER)
     list(APPEND _extra_llvm_cmake_args "-DLLVM_ENABLE_PEDANTIC=OFF")
   endif()
 
+  if(THEROCK_AOMP_BUILD)
+    list(APPEND _extra_llvm_cmake_args
+      -DLLVM_VERSION_SUFFIX=_SROCK
+      -DLLVM_VERSION_PATCH=${THEROCK_AOMP_VERSION_MOD}
+      -DLLVM_BUILD_TESTS=ON
+      -DLLVM_INCLUDE_TESTS=ON
+      -DCLANG_INCLUDE_TESTS=ON
+      -DLLVM_LIT_ARGS="-vv --show-unsupported --show-xfail -j 16"
+      -DCLANG_TOOL_CLANG_LINKER_WRAPPER_BUILD=ON
+      -DCLANG_TOOL_OFFLOAD_ARCH_BUILD=ON
+      -DOPENMP_ENABLE_LIBOMPTARGET=ON
+      -DLIBOMPTARGET_BUILD_DEVICE_FORTRT=ON
+      -DOFFLOAD_EXTERNAL_PROJECT_UNIFIED_ROCR=ON
+      -DLIBOMP_USE_HWLOC=ON
+      -DLIBOMPTARGET_EXTERNAL_PROJECT_HSA_PATH=${CMAKE_CURRENT_SOURCE_DIR}/../rocm-systems/projects/rocr-runtime
+      -DFLANG_RUNTIME_F128_MATH_LIB=libquadmath
+      -DROCM_DEVICE_LIBS_BITCODE_INSTALL_LOC_NEW=${CMAKE_CURRENT_BINARY_DIR}/lib/clang/${LLVM_VERSION_MAJOR}/lib/amdgcn
+      -DRUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_PER_TARGET_RUNTIME_DIR=ON
+      -DRUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_RUNTIMES=openmp)
+  else()
+    list(APPEND _extra_llvm_cmake_args "-DLLVM_INCLUDE_TESTS=${THEROCK_ENABLE_LLVM_TESTS}")
+  endif()
+
   # Building Flang is very memory-intensive on systems with many cores. Allow
   # users to specify the level of concurrency for these tasks so they can
   # reduce the risk of running out of memory.
@@ -61,7 +84,6 @@ if(THEROCK_ENABLE_COMPILER)
       -DLIBCXXABI_ENABLE_STATIC=ON
 
       # Features
-      -DLLVM_INCLUDE_TESTS=${THEROCK_ENABLE_LLVM_TESTS}
       -DLLVM_ENABLE_ZLIB=FORCE_ON
       -DLLVM_ENABLE_Z3_SOLVER=OFF
       -DLLVM_ENABLE_LIBXML2=OFF
