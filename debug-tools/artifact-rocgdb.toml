@@ -2,11 +2,11 @@
 [components.dbg."debug-tools/rocgdb/stage"]
 [components.dev."debug-tools/rocgdb/stage"]
 include = [
-  "include/**",
+  "include/gdb/**",
   "share/locale/**",
-  "share/python/**",
-  "share/syscalls/**",
-  "share/system-gdbinit/**"
+  "share/rocgdb/python/**",
+  "share/rocgdb/syscalls/**",
+  "share/rocgdb/system-gdbinit/**"
 ]
 [components.doc."debug-tools/rocgdb/stage"]
 include = [

@@ -158,11 +158,8 @@ string(REPLACE ";" ":" PKG_CONFIG_PATH_ENV_VAR "${THEROCK_PKG_CONFIG_DIRS}")
 
 # Set some global variables for the configure/build.
 set(ROCGDB_BUG_URL "https://github.com/ROCm-Developer-Tools/ROCgdb/issues")
-set(ROCGDB_HTML_DIR "\\\${prefix}/share/html")
-set(ROCGDB_PDF_DIR "\\\${prefix}/share/doc")
-set(ROCGDB_INFO_DIR "\\\${prefix}/share/info")
 set(ROCGDB_SEPARATE_DEBUG_INFO_DIR "\\\${prefix}/lib/debug:/usr/lib/debug")
-set(ROCGDB_DATA_DIR "\\\${prefix}/share")
+set(ROCGDB_DATA_DIR "\\\${prefix}/share/rocgdb")
 set(ROCGDB_TARGETS "x86_64-linux-gnu,amdgcn-amd-amdhsa")
 
 # If the version is not set, set it to a generic value.
@@ -202,6 +199,13 @@ macro(add_python_variant minor_version configure_flags libpython_dir)
     message(STATUS "-> Extra LDFLAGS: ${LIBPYTHON_LDFLAGS}")
     message(STATUS "-> Extra RPATH: ${LIBPYTHON_RPATH}")
   endif()
+
+  # These directories are adjusted here so we don't have to escape
+  # ${prefix} and make it survive across multiple expansions from shells
+  # cmake and libtool.
+  set(ROCGDB_HTML_DIR "${ROCGDB_INTERMEDIATE_INSTALL_DIR}/share/html")
+  set(ROCGDB_PDF_DIR "${ROCGDB_INTERMEDIATE_INSTALL_DIR}/share/doc")
+  set(ROCGDB_INFO_DIR "${ROCGDB_INTERMEDIATE_INSTALL_DIR}/share/info/rocgdb")
 
   add_custom_target("${ROCGDB_TARGET_NAME}"
     ALL
@@ -274,7 +278,7 @@ macro(add_python_variant minor_version configure_flags libpython_dir)
     # Install gdb docs.
     COMMAND
       ${CMAKE_COMMAND} -E chdir "${ROCGDB_BUILD_DIR}"
-      ${MAKE_EXECUTABLE} -s -C gdb install-pdf install-html
+      ${MAKE_EXECUTABLE} -s -C gdb install-html
     # Install binutils for coremerge and coremerge manpage.
     COMMAND
       ${CMAKE_COMMAND} -E chdir "${ROCGDB_BUILD_DIR}"
@@ -291,13 +295,62 @@ macro(add_python_variant minor_version configure_flags libpython_dir)
 
   list(APPEND ALL_ROCGDB_TARGETS ${ROCGDB_TARGET_NAME})
 
+  # We only want to install a subset of the files, so we list them here,
+  # relative to their intermediate install prefixes.
+  # For instance, we don't want to include any binutils files other than
+  # roccoremerge.
+
+  # Misc directories.
+  set(ROCGDB_MISC_DIRS_TO_INSTALL
+    "include"
+    "share/doc"
+    "share/man/man5"
+    "share/rocgdb"
+  )
+
+  # Executable files.
+  set(ROCGDB_EXEC_FILES_TO_INSTALL
+    "bin/roccoremerge"
+    "bin/rocgcore-py${minor_version}"
+    "bin/rocgdb-py${minor_version}"
+  )
+
+  # Misc files.
+  set(ROCGDB_MISC_FILES_TO_INSTALL
+    "share/info/rocgdb/annotate.info"
+    "share/info/rocgdb/gdb.info"
+    "share/man/man1/roccoremerge.1"
+    "share/man/man1/rocgdb.1"
+    "share/man/man1/rocgcore.1"
+    "share/man/man1/rocgdb-add-index.1"
+  )
+
   # Register the final installation step for this variant's files.
   # This basically moves the variant files from the intermediate install
   # prefix to the final installation location.
-  install(DIRECTORY ${ROCGDB_INTERMEDIATE_INSTALL_DIR}/
-          DESTINATION "."
-          USE_SOURCE_PERMISSIONS
-          COMPONENT rocgdb)
+  foreach(rocgdb_dir ${ROCGDB_MISC_DIRS_TO_INSTALL})
+    # The last "/" is important, as we want to copy the contents from the
+    # listed directory into another directory, and not the directory itself.
+    install(DIRECTORY ${ROCGDB_INTERMEDIATE_INSTALL_DIR}/${rocgdb_dir}/
+            DESTINATION "${rocgdb_dir}"
+            USE_SOURCE_PERMISSIONS
+            COMPONENT rocgdb)
+  endforeach()
+
+  foreach(rocgdb_file ${ROCGDB_EXEC_FILES_TO_INSTALL})
+    install(PROGRAMS ${ROCGDB_INTERMEDIATE_INSTALL_DIR}/${rocgdb_file}
+            DESTINATION bin
+            COMPONENT rocgdb)
+  endforeach()
+
+  foreach(rocgdb_file ${ROCGDB_MISC_FILES_TO_INSTALL})
+    # Get the directory part of the file.
+    get_filename_component(file_dir ${rocgdb_file} DIRECTORY)
+
+    install(FILES ${ROCGDB_INTERMEDIATE_INSTALL_DIR}/${rocgdb_file}
+      DESTINATION ${file_dir}
+      COMPONENT rocgdb)
+  endforeach()
 
   # Register RPATH patching for this rocgdb variant.
   message(STATUS "Registering fixup of ${CMAKE_INSTALL_PREFIX}/bin/rocgdb-py${minor_version}")
@@ -454,19 +507,7 @@ endif()
 # List of all the files in bin we need to patch in RUNPATH's.
 # This excludes rocgdb executables as we patch those separately.
 set(ROCGDB_EXECS_TO_PATCH
-  "bin/rocaddr2line"
-  "bin/rocar"
-  "bin/rocc++filt"
   "bin/roccoremerge"
-  "bin/rocelfedit"
-  "bin/rocnm"
-  "bin/rocobjcopy"
-  "bin/rocobjdump"
-  "bin/rocranlib"
-  "bin/rocreadelf"
-  "bin/rocsize"
-  "bin/rocstrings"
-  "bin/rocstrip"
 )
 
 foreach(rocgdb_exec_filename ${ROCGDB_EXECS_TO_PATCH})
@@ -494,113 +535,88 @@ if(BUILD_TESTING)
   # List of all the other files we expect to be in the installation.
   set(ROCGDB_EXPECTED_FILES
     "include/gdb/jit-reader.h"
-    "share/info/gdb.info"
-    "share/info/annotate.info"
-    "share/info/dir"
-    "share/python/gdb/ptwrite.py"
-    "share/python/gdb/__init__.py"
-    "share/python/gdb/missing_objfile.py"
-    "share/python/gdb/xmethod.py"
-    "share/python/gdb/missing_debug.py"
-    "share/python/gdb/frames.py"
-    "share/python/gdb/FrameIterator.py"
-    "share/python/gdb/prompt.py"
-    "share/python/gdb/printing.py"
-    "share/python/gdb/missing_files.py"
-    "share/python/gdb/disassembler.py"
-    "share/python/gdb/styling.py"
-    "share/python/gdb/function/caller_is.py"
-    "share/python/gdb/function/__init__.py"
-    "share/python/gdb/function/as_string.py"
-    "share/python/gdb/function/rocm_get_scaled_float.py"
-    "share/python/gdb/function/strfns.py"
-    "share/python/gdb/FrameDecorator.py"
-    "share/python/gdb/types.py"
-    "share/python/gdb/printer/__init__.py"
-    "share/python/gdb/printer/rocm_ocp_mx.py"
-    "share/python/gdb/unwinder.py"
-    "share/python/gdb/dap/varref.py"
-    "share/python/gdb/dap/locations.py"
-    "share/python/gdb/dap/threads.py"
-    "share/python/gdb/dap/next.py"
-    "share/python/gdb/dap/events.py"
-    "share/python/gdb/dap/__init__.py"
-    "share/python/gdb/dap/launch.py"
-    "share/python/gdb/dap/sources.py"
-    "share/python/gdb/dap/bt.py"
-    "share/python/gdb/dap/state.py"
-    "share/python/gdb/dap/typecheck.py"
-    "share/python/gdb/dap/globalvars.py"
-    "share/python/gdb/dap/server.py"
-    "share/python/gdb/dap/evaluate.py"
-    "share/python/gdb/dap/scopes.py"
-    "share/python/gdb/dap/frames.py"
-    "share/python/gdb/dap/startup.py"
-    "share/python/gdb/dap/disassemble.py"
-    "share/python/gdb/dap/pause.py"
-    "share/python/gdb/dap/memory.py"
-    "share/python/gdb/dap/completions.py"
-    "share/python/gdb/dap/breakpoint.py"
-    "share/python/gdb/dap/modules.py"
-    "share/python/gdb/dap/io.py"
-    "share/python/gdb/command/__init__.py"
-    "share/python/gdb/command/pretty_printers.py"
-    "share/python/gdb/command/frame_filters.py"
-    "share/python/gdb/command/prompt.py"
-    "share/python/gdb/command/unwinders.py"
-    "share/python/gdb/command/xmethods.py"
-    "share/python/gdb/command/type_printers.py"
-    "share/python/gdb/command/explore.py"
-    "share/python/gdb/command/missing_files.py"
-    "share/syscalls/mips-n64-linux.xml"
-    "share/syscalls/loongarch-linux.xml"
-    "share/syscalls/amd64-linux.xml"
-    "share/syscalls/mips-n32-linux.xml"
-    "share/syscalls/ppc-linux.xml"
-    "share/syscalls/riscv-linux.xml"
-    "share/syscalls/sparc-linux.xml"
-    "share/syscalls/mips-o32-linux.xml"
-    "share/syscalls/aarch64-linux.xml"
-    "share/syscalls/ppc64-linux.xml"
-    "share/syscalls/netbsd.xml"
-    "share/syscalls/sparc64-linux.xml"
-    "share/syscalls/arm-linux.xml"
-    "share/syscalls/s390-linux.xml"
-    "share/syscalls/s390x-linux.xml"
-    "share/syscalls/i386-linux.xml"
-    "share/syscalls/freebsd.xml"
-    "share/syscalls/gdb-syscalls.dtd"
-    "share/system-gdbinit/elinos.py"
-    "share/system-gdbinit/wrs-linux.py"
+    "share/info/rocgdb/gdb.info"
+    "share/info/rocgdb/annotate.info"
+    "share/rocgdb/python/gdb/ptwrite.py"
+    "share/rocgdb/python/gdb/__init__.py"
+    "share/rocgdb/python/gdb/missing_objfile.py"
+    "share/rocgdb/python/gdb/xmethod.py"
+    "share/rocgdb/python/gdb/missing_debug.py"
+    "share/rocgdb/python/gdb/frames.py"
+    "share/rocgdb/python/gdb/FrameIterator.py"
+    "share/rocgdb/python/gdb/prompt.py"
+    "share/rocgdb/python/gdb/printing.py"
+    "share/rocgdb/python/gdb/missing_files.py"
+    "share/rocgdb/python/gdb/disassembler.py"
+    "share/rocgdb/python/gdb/styling.py"
+    "share/rocgdb/python/gdb/function/caller_is.py"
+    "share/rocgdb/python/gdb/function/__init__.py"
+    "share/rocgdb/python/gdb/function/as_string.py"
+    "share/rocgdb/python/gdb/function/rocm_get_scaled_float.py"
+    "share/rocgdb/python/gdb/function/strfns.py"
+    "share/rocgdb/python/gdb/FrameDecorator.py"
+    "share/rocgdb/python/gdb/types.py"
+    "share/rocgdb/python/gdb/printer/__init__.py"
+    "share/rocgdb/python/gdb/printer/rocm_ocp_mx.py"
+    "share/rocgdb/python/gdb/unwinder.py"
+    "share/rocgdb/python/gdb/dap/varref.py"
+    "share/rocgdb/python/gdb/dap/locations.py"
+    "share/rocgdb/python/gdb/dap/threads.py"
+    "share/rocgdb/python/gdb/dap/next.py"
+    "share/rocgdb/python/gdb/dap/events.py"
+    "share/rocgdb/python/gdb/dap/__init__.py"
+    "share/rocgdb/python/gdb/dap/launch.py"
+    "share/rocgdb/python/gdb/dap/sources.py"
+    "share/rocgdb/python/gdb/dap/bt.py"
+    "share/rocgdb/python/gdb/dap/state.py"
+    "share/rocgdb/python/gdb/dap/typecheck.py"
+    "share/rocgdb/python/gdb/dap/globalvars.py"
+    "share/rocgdb/python/gdb/dap/server.py"
+    "share/rocgdb/python/gdb/dap/evaluate.py"
+    "share/rocgdb/python/gdb/dap/scopes.py"
+    "share/rocgdb/python/gdb/dap/frames.py"
+    "share/rocgdb/python/gdb/dap/startup.py"
+    "share/rocgdb/python/gdb/dap/disassemble.py"
+    "share/rocgdb/python/gdb/dap/pause.py"
+    "share/rocgdb/python/gdb/dap/memory.py"
+    "share/rocgdb/python/gdb/dap/completions.py"
+    "share/rocgdb/python/gdb/dap/breakpoint.py"
+    "share/rocgdb/python/gdb/dap/modules.py"
+    "share/rocgdb/python/gdb/dap/io.py"
+    "share/rocgdb/python/gdb/command/__init__.py"
+    "share/rocgdb/python/gdb/command/pretty_printers.py"
+    "share/rocgdb/python/gdb/command/frame_filters.py"
+    "share/rocgdb/python/gdb/command/prompt.py"
+    "share/rocgdb/python/gdb/command/unwinders.py"
+    "share/rocgdb/python/gdb/command/xmethods.py"
+    "share/rocgdb/python/gdb/command/type_printers.py"
+    "share/rocgdb/python/gdb/command/explore.py"
+    "share/rocgdb/python/gdb/command/missing_files.py"
+    "share/rocgdb/syscalls/mips-n64-linux.xml"
+    "share/rocgdb/syscalls/loongarch-linux.xml"
+    "share/rocgdb/syscalls/amd64-linux.xml"
+    "share/rocgdb/syscalls/mips-n32-linux.xml"
+    "share/rocgdb/syscalls/ppc-linux.xml"
+    "share/rocgdb/syscalls/riscv-linux.xml"
+    "share/rocgdb/syscalls/sparc-linux.xml"
+    "share/rocgdb/syscalls/mips-o32-linux.xml"
+    "share/rocgdb/syscalls/aarch64-linux.xml"
+    "share/rocgdb/syscalls/ppc64-linux.xml"
+    "share/rocgdb/syscalls/netbsd.xml"
+    "share/rocgdb/syscalls/sparc64-linux.xml"
+    "share/rocgdb/syscalls/arm-linux.xml"
+    "share/rocgdb/syscalls/s390-linux.xml"
+    "share/rocgdb/syscalls/s390x-linux.xml"
+    "share/rocgdb/syscalls/i386-linux.xml"
+    "share/rocgdb/syscalls/freebsd.xml"
+    "share/rocgdb/syscalls/gdb-syscalls.dtd"
+    "share/rocgdb/system-gdbinit/elinos.py"
+    "share/rocgdb/system-gdbinit/wrs-linux.py"
     "share/man/man5/rocgdbinit.5"
     "share/man/man1/rocgdb-add-index.1"
-    "share/man/man1/rocdlltool.1"
-    "share/man/man1/rocsize.1"
-    "share/man/man1/rocobjdump.1"
-    "share/man/man1/rocstrings.1"
-    "share/man/man1/rocc++filt.1"
     "share/man/man1/rocgcore.1"
     "share/man/man1/rocgdb.1"
-    "share/man/man1/rocar.1"
-    "share/man/man1/rocnm.1"
-    "share/man/man1/rocelfedit.1"
-    "share/man/man1/rocwindmc.1"
-    "share/man/man1/rocgstack.1"
     "share/man/man1/roccoremerge.1"
-    "share/man/man1/rocobjcopy.1"
-    "share/man/man1/rocreadelf.1"
-    "share/man/man1/rocstrip.1"
-    "share/man/man1/rocaddr2line.1"
-    "share/man/man1/rocranlib.1"
-    "share/man/man1/rocwindres.1"
-    "share/man/man1/rocgdbserver.1"
-    "x86_64-pc-linux-gnu/bin/ar"
-    "x86_64-pc-linux-gnu/bin/nm"
-    "x86_64-pc-linux-gnu/bin/objcopy"
-    "x86_64-pc-linux-gnu/bin/objdump"
-    "x86_64-pc-linux-gnu/bin/ranlib"
-    "x86_64-pc-linux-gnu/bin/readelf"
-    "x86_64-pc-linux-gnu/bin/strip"
   )
 
   list(APPEND ROCGDB_BUILD_INTEGRITY_FILES ${ROCGDB_EXPECTED_FILES})

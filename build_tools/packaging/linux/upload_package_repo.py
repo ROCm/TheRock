@@ -793,6 +793,11 @@ def upload_to_s3(source_dir, bucket, prefix, dedupe=False):
             if fname == "index.html":
                 continue
 
+            # Skip build manifest files - these are for local tracking only
+            if fname.lower().endswith(".txt"):
+                print(f"Skipping build manifest file (local only): {fname}")
+                continue
+
             local = os.path.join(root, fname)
             rel = os.path.relpath(local, source_dir)
             key = os.path.join(prefix, rel).replace("\\", "/")
@@ -841,7 +846,7 @@ def main():
     parser.add_argument(
         "--job",
         default="dev",
-        choices=["dev", "nightly"],
+        choices=["dev", "nightly", "prerelease"],
         help="Enable dev or nightly shared repo",
     )
 
@@ -851,6 +856,9 @@ def main():
     # TODO : Add the cases for release/prerelease
     if args.job in ["nightly", "dev"]:
         prefix = f"{args.pkg_type}/{yyyymmdd()}-{args.artifact_id}"
+        dedupe = True
+    elif args.job == "prerelease":
+        prefix = f"v3/packages/{args.pkg_type}"
         dedupe = True
 
     if args.pkg_type == "deb":
