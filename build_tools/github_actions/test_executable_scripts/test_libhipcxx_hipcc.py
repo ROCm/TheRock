@@ -124,6 +124,7 @@ else:
     print("Incompatible platform!")
 
 HIP_COMPILER_ROCM_ROOT = OUTPUT_ARTIFACTS_PATH
+environ_vars["HIPCXX"] = f"{THEROCK_BIN_PATH / HIPCC_BINARY_NAME}"
 
 # Configure with CMake
 cmd = [
