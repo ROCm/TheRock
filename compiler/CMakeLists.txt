@@ -121,7 +121,6 @@ if(THEROCK_ENABLE_COMPILER)
   therock_cmake_subproject_provide_package(amd-llvm LLVM lib/llvm/lib/cmake/llvm)
   therock_cmake_subproject_activate(amd-llvm)
 
-
   ##############################################################################
   # amd-comgr
   # A client of libLLVM which provides an in-process compiler API to the HIP
@@ -141,6 +140,8 @@ if(THEROCK_ENABLE_COMPILER)
     EXTERNAL_SOURCE_DIR "amd-llvm/amd/comgr"
     BINARY_DIR "amd-comgr"
     BACKGROUND_BUILD
+    COMPILER_TOOLCHAIN
+      amd-llvm
     CMAKE_ARGS
       # TODO: Currently unstable. Enable in >6.4.
       -DCOMGR_DISABLE_SPIRV=ON
@@ -189,6 +190,8 @@ if(THEROCK_ENABLE_COMPILER)
       EXTERNAL_SOURCE_DIR "amd-comgr-stub"
       BINARY_DIR "amd-comgr-stub"
       BACKGROUND_BUILD
+      COMPILER_TOOLCHAIN
+        amd-llvm
       CMAKE_ARGS
         -DAMD_COMGR_STAGE_PATH=${CMAKE_CURRENT_BINARY_DIR}/amd-comgr/stage
       RUNTIME_DEPS
@@ -217,6 +220,8 @@ if(THEROCK_ENABLE_COMPILER)
     EXTERNAL_SOURCE_DIR "amd-llvm/amd/hipcc"
     BINARY_DIR "hipcc"
     BACKGROUND_BUILD
+    COMPILER_TOOLCHAIN
+      amd-llvm
     CMAKE_ARGS
       -DHIPCC_BACKWARD_COMPATIBILITY=OFF
     BUILD_DEPS
@@ -253,6 +258,8 @@ if(THEROCK_ENABLE_HIPIFY)
     NO_INSTALL_RPATH  # See manual handling in the pre_hook.
     EXTERNAL_SOURCE_DIR "hipify"
     BACKGROUND_BUILD
+    COMPILER_TOOLCHAIN
+      amd-llvm
     INTERFACE_PROGRAM_DIRS
       bin
     CMAKE_ARGS
@@ -278,3 +285,111 @@ if(THEROCK_ENABLE_HIPIFY)
       hipify
   )
 endif(THEROCK_ENABLE_HIPIFY)
+
+if(THEROCK_ENABLE_COMPILER_EXTRAS)
+  ##############################################################################
+  # llvm-rocr-runtime
+  # Builds rocr-runtime for use by LLVM extras (openmp/offload).
+  # This breaks the dependency cycle - compiler doesn't depend on core runtime,
+  # but extras can depend on this private copy built with the compiler toolchain.
+  ##############################################################################
+
+  therock_cmake_subproject_declare(llvm-rocr-runtime
+    USE_DIST_AMDGPU_TARGETS
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/llvm-rocr-runtime"
+    BACKGROUND_BUILD
+    COMPILER_TOOLCHAIN
+      amd-llvm
+    CMAKE_ARGS
+      -DBUILD_SHARED_LIBS=ON
+      -DIMAGE_SUPPORT=OFF
+      -DLLVM_RUNTIME_OPENMP=ON
+    BUILD_DEPS
+      amd-llvm
+      therock-simde
+    RUNTIME_DEPS
+      rocprofiler-register
+      ${THEROCK_BUNDLED_LIBDRM}
+      ${THEROCK_BUNDLED_NUMACTL}
+      ${THEROCK_BUNDLED_ELFUTILS}
+    INTERFACE_LINK_DIRS
+      "lib"
+  )
+  therock_cmake_subproject_glob_c_sources(llvm-rocr-runtime
+    SUBDIRS
+      libhsakmt
+      runtime
+  )
+  therock_cmake_subproject_provide_package(llvm-rocr-runtime hsa-runtime64 lib/cmake/hsa-runtime64)
+  therock_cmake_subproject_activate(llvm-rocr-runtime)
+
+  ##############################################################################
+  # amd-llvm-extras
+  # Builds parts of LLVM that are not core dependencies of the C language
+  # toolchain. This allows build parallelization for these parts of the
+  # toolchain which are optional for many of the downstream deps. We don't
+  # break it up into very fine-grained pieces because we still want a fairly
+  # "chunky" build that can saturate a machine. We just don't want it in the
+  # critical path of all other projects.
+  ##############################################################################
+
+  therock_cmake_subproject_declare(amd-llvm-flang
+    USE_DIST_AMDGPU_TARGETS
+    NO_INSTALL_RPATH  # See manual handling in the pre_hook.
+    EXTERNAL_SOURCE_DIR "amd-llvm-flang"
+    BACKGROUND_BUILD
+    COMPILER_TOOLCHAIN
+      amd-llvm
+    INTERFACE_PROGRAM_DIRS
+      lib/llvm/bin
+    CMAKE_ARGS
+      # Version configuration
+      # Note that if LLVM_SMREV_REPO and LLVM_FORCE_VC_REVISION are empty,
+      # LLVM will compute the tip of tree revision, which is appropriate for
+      # pristine checkouts.
+      # TODO: Re-enable these once include issue fixed in out of tree builds.
+      -DLLVM_APPEND_VC_REV=ON
+      "-DLLVM_FORCE_VC_REPOSITORY=${LLVM_SMREV_REPO}"
+      "-DLLVM_FORCE_VC_REVISION=${LLVM_SMREV_REVISION}"
+
+      # LIBCXX
+      # -DLIBCXX_ENABLE_SHARED=OFF
+      # -DLIBCXX_ENABLE_STATIC=ON
+      # -DLIBCXX_INSTALL_LIBRARY=OFF
+      # -DLIBCXX_INSTALL_HEADERS=OFF
+      # -DLIBCXXABI_ENABLE_SHARED=OFF
+      # -DLIBCXXABI_ENABLE_STATIC=ON
+
+      # Clang features.
+      # -DCLANG_TIDY_ENABLE_STATIC_ANALYZER=OFF
+
+    BUILD_DEPS
+      rocm-cmake
+    RUNTIME_DEPS
+      amd-llvm
+      llvm-rocr-runtime
+    # The entire LLVM install tree is placed inside of the overall ROCM lib/llvm
+    # directory.
+    INSTALL_DESTINATION "lib/llvm"
+    INTERFACE_LINK_DIRS
+      "lib/llvm/lib"
+    INTERFACE_INSTALL_RPATH_DIRS
+      "lib/llvm/lib"
+  )
+  therock_cmake_subproject_activate(amd-llvm-flang)
+
+  # TODO: enable
+  # therock_provide_artifact(amd-llvm-extras
+  #   TARGET_NEUTRAL
+  #   DESCRIPTOR artifact-amd-llvm.toml
+  #   COMPONENTS
+  #     dbg
+  #     dev
+  #     doc
+  #     lib
+  #     run
+  #   SUBPROJECT_DEPS
+
+  # )
+endif()
