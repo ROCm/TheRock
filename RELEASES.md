@@ -28,8 +28,9 @@ Table of contents:
   - [Installing PyTorch Python packages](#installing-pytorch-python-packages)
   - [Using PyTorch Python packages](#using-pytorch-python-packages)
 - [Installing from tarballs](#installing-from-tarballs)
-  - [Release tarballs](#release-tarballs)
-  - [Automated installation](#automated-installation)
+  - [Browsing release tarballs](#browsing-release-tarballs)
+  - [Manual tarball extraction](#manual-tarball-extraction)
+  - [Automated tarball extraction](#automated-tarball-extraction)
   - [Using installed tarballs](#using-installed-tarballs)
 - [Verifying your installation](#verifying-your-installation)
 
@@ -379,42 +380,65 @@ instructions in the AMD ROCm documentation.
 
 ## Installing from tarballs
 
-> [!NOTE]
+Standalone "ROCm SDK tarballs" are a flattened view of ROCm
+[artifacts](docs/development/artifacts.md) matching the familiar folder
+structure seen with system installs on Linux to `/opt/rocm/` or on Windows via
+the HIP SDK:
+
+```bash
+install/  # Extracted tarball location, file path of your choosing
+  .info/
+  bin/
+  clients/
+  include/
+  lib/
+  libexec/
+  share/
+```
+
+Tarballs are _just_ these raw files. They do not come with "install" steps
+such as setting environment variables.
+
+> [!WARNING]
 > Tarballs and per-commit CI artifacts are primarily intended for developers
-> and CI workflows. For most users, we recommend
-> [installing ROCm via pip](#installing-releases-using-pip) as the more
-> stable and well-tested installation path.
+> and CI workflows.
+>
+> For most users, we recommend installing via package managers:
+>
+> - [Installing releases using pip](#installing-releases-using-pip)
+> - (TODO) Installing native Linux deb/RPM packages
 
-Standalone "ROCm SDK tarballs" are assembled from the same
-[artifacts](docs/development/artifacts.md) as the Python packages which can be
-[installed using pip](#installing-releases-using-pip), without the additional
-wrapper Python wheels or utility scripts.
+### Browsing release tarballs
 
-### Release tarballs
+Release tarballs are uploaded to the following locations:
 
-Release tarballs are automatically uploaded to AWS S3 buckets.
+| Tarball index                             | S3 bucket                                                                                | Description                                        |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| https://repo.amd.com/rocm/tarball/        | (not publicly accessible)                                                                | Stable releases                                    |
+| https://rocm.nightlies.amd.com/tarball/   | [`therock-nightly-tarball`](https://therock-nightly-tarball.s3.amazonaws.com/index.html) | Nightly builds from the default development branch |
+| https://rocm.prereleases.amd.com/tarball/ | (not publicly accessible)                                                                | ⚠️ Prerelease builds for QA testing ⚠️             |
+| https://rocm.devreleases.amd.com/tarball/ | [`therock-dev-tarball`](https://therock-dev-tarball.s3.amazonaws.com/index.html)         | ⚠️ Development builds from project maintainers ⚠️  |
 
-| S3 bucket                                                                              | Description                                       |
-| -------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| [therock-nightly-tarball](https://therock-nightly-tarball.s3.amazonaws.com/index.html) | Nightly builds from the `main` branch             |
-| [therock-dev-tarball](https://therock-dev-tarball.s3.amazonaws.com/index.html)         | ⚠️ Development builds from project maintainers ⚠️ |
+### Manual tarball extraction
 
-After downloading, simply extract the release tarball into place:
+To download a tarball and extract it into place manually:
 
 ```bash
 mkdir therock-tarball && cd therock-tarball
 # For example...
-wget https://therock-nightly-tarball.s3.us-east-2.amazonaws.com/therock-dist-linux-gfx110X-all-6.5.0rc20250610.tar.gz
+wget https://rocm.nightlies.amd.com/tarball/therock-dist-linux-gfx110X-all-7.12.0a20260202.tar.gz
 mkdir install && tar -xf *.tar.gz -C install
 ```
 
-### Automated installation
+### Automated tarball extraction
 
 For more control over artifact installation—including per-commit CI builds,
 specific release versions, the latest nightly release, and component
 selection—see the
 [Installing Artifacts](docs/development/installing_artifacts.md) developer
-documentation. The [`install_rocm_from_artifacts.py`](build_tools/install_rocm_from_artifacts.py) script can be used to install artifacts from a variety of sources.
+documentation. The
+[`install_rocm_from_artifacts.py`](build_tools/install_rocm_from_artifacts.py)
+script can be used to install artifacts from a variety of sources.
 
 ### Using installed tarballs
 
@@ -430,8 +454,31 @@ ls install
 ./install/bin/test_hip_api
 ```
 
-You may also want to add the install directory to your `PATH` or set other
-environment variables like `ROCM_HOME`.
+> [!TIP]
+> You may also want to add parts of the install directory to your `PATH` or set
+> other environment variables like `ROCM_HOME`.
+>
+> See also [this issue](https://github.com/ROCm/TheRock/issues/1658) discussing
+> relevant environment variables.
+
+> [!TIP]
+> After extracting a tarball, metadata about which commits were used to build
+> TheRock can be found in the `share/therock/therock_manifest.json` file:
+>
+> ```bash
+> cat install/share/therock/therock_manifest.json
+> # {
+> #   "the_rock_commit": "567dd890a3bc3261ffb26ae38b582378df298374",
+> #   "submodules": [
+> #     {
+> #       "submodule_name": "half",
+> #       "submodule_path": "base/half",
+> #       "submodule_url": "https://github.com/ROCm/half.git",
+> #       "pin_sha": "207ee58595a64b5c4a70df221f1e6e704b807811",
+> #       "patches": []
+> #     },
+> #     ...
+> ```
 
 ## Verifying your installation
 

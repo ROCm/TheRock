@@ -15,9 +15,11 @@ project(therock-aux-overlay)
 if(NOT WIN32)
   add_custom_target(symlinks ALL
     COMMAND "${CMAKE_COMMAND}" -E create_symlink "lib/llvm" "${CMAKE_CURRENT_BINARY_DIR}/llvm"
+    COMMAND "${CMAKE_COMMAND}" -E create_symlink "lib/llvm/amdgcn" "${CMAKE_CURRENT_BINARY_DIR}/amdgcn"
   )
   install(FILES
     "${CMAKE_CURRENT_BINARY_DIR}/llvm"
+    "${CMAKE_CURRENT_BINARY_DIR}/amdgcn"
     DESTINATION .
   )
 endif()
