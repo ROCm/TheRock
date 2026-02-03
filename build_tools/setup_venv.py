@@ -116,22 +116,21 @@ def install_packages(args: argparse.Namespace, py_cmd: list[str] | None):
 
     log("")
 
-    command = py_cmd
+    command = list(py_cmd)
 
-    # Add --index-url if specified (via --index-name or --index-url directly).
+    # Build --index-url from --index-name or --index-url, with optional --index-subdir.
+    index_url = None
     if args.index_name:
         index_url = INDEX_URLS_MAP[args.index_name]
-        # --index-name requires --index-subdir (validated in main).
-        index_url = index_url.rstrip("/") + "/" + args.index_subdir.strip("/")
-        command.append(f"--index-url={index_url}")
     elif args.index_url:
         index_url = args.index_url
-        # --index-subdir is optional with --index-url; append if provided.
+
+    if index_url:
         if args.index_subdir:
-            index_url = index_url.rstrip("/") + "/" + args.index_subdir.strip("/")
+            index_url = f"{index_url.rstrip('/')}/{args.index_subdir.strip('/')}"
         command.append(f"--index-url={index_url}")
 
-    # Add --find-links if specified (can be used alongside --index-url).
+    # --find-links can be used alone or alongside --index-url.
     if args.find_links_url:
         command.append(f"--find-links={args.find_links_url}")
 
@@ -279,25 +278,23 @@ def main(argv: list[str]):
         type=str,
         help="List of packages to install, including any extras or explicit versions",
     )
-
-    index_group = install_options.add_argument_group()
     # TODO(#1036): add "auto" mode here that infers the index from the version?
     # TODO(#1036): Default to nightly?
-    index_group.add_argument(
+    install_options.add_argument(
         "--index-name",
         type=str,
         choices=["nightly", "dev"],
-        help="Shorthand name for an index to use with 'pip install --index-url='",
+        help="Shorthand name for an index (requires --index-subdir)",
     )
-    index_group.add_argument(
+    install_options.add_argument(
         "--index-url",
         type=str,
-        help="Base URL for a release index to use with 'pip install --index-url='",
+        help="Package index URL for pip --index-url (complete URL, or base URL with --index-subdir)",
     )
-    index_group.add_argument(
+    install_options.add_argument(
         "--find-links-url",
         type=str,
-        help="Full URL for a release index to use with 'pip install --find-links='",
+        help="Package location URL for pip --find-links (can be used with --index-url)",
     )
 
     subdirs: dict[str, set[str]] | set[str] | None = scrape_subdirs()
