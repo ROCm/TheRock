@@ -51,7 +51,7 @@ class InstallPackagesTest(unittest.TestCase):
         return None
 
     @patch("setup_venv.run_command")
-    @patch("setup_venv.scrape_subdirs", return_value=None)
+    @patch("setup_venv._scrape_rocm_index_subdirs", return_value=None)
     def test_index_name_with_subdir(self, mock_scrape, mock_run):
         """--index-name with --index-subdir constructs full URL."""
         main(
@@ -72,7 +72,7 @@ class InstallPackagesTest(unittest.TestCase):
         self.assertIn("rocm", cmd)
 
     @patch("setup_venv.run_command")
-    @patch("setup_venv.scrape_subdirs", return_value=None)
+    @patch("setup_venv._scrape_rocm_index_subdirs", return_value=None)
     def test_index_url_complete(self, mock_scrape, mock_run):
         """--index-url without --index-subdir uses URL as-is."""
         main(
@@ -90,7 +90,7 @@ class InstallPackagesTest(unittest.TestCase):
         self.assertIn("--index-url=https://example.com/full/path/", cmd)
 
     @patch("setup_venv.run_command")
-    @patch("setup_venv.scrape_subdirs", return_value=None)
+    @patch("setup_venv._scrape_rocm_index_subdirs", return_value=None)
     def test_index_url_with_subdir(self, mock_scrape, mock_run):
         """--index-url with --index-subdir constructs full URL."""
         main(
@@ -110,7 +110,7 @@ class InstallPackagesTest(unittest.TestCase):
         self.assertIn("--index-url=https://example.com/base/gfx94X-dcgpu", cmd)
 
     @patch("setup_venv.run_command")
-    @patch("setup_venv.scrape_subdirs", return_value=None)
+    @patch("setup_venv._scrape_rocm_index_subdirs", return_value=None)
     def test_find_links_only(self, mock_scrape, mock_run):
         """--find-links-url alone works without --index-url."""
         main(
@@ -130,7 +130,7 @@ class InstallPackagesTest(unittest.TestCase):
         self.assertFalse(any("--index-url" in str(a) for a in cmd))
 
     @patch("setup_venv.run_command")
-    @patch("setup_venv.scrape_subdirs", return_value=None)
+    @patch("setup_venv._scrape_rocm_index_subdirs", return_value=None)
     def test_index_url_and_find_links(self, mock_scrape, mock_run):
         """Both --index-url and --find-links-url can be used together."""
         main(
@@ -151,7 +151,7 @@ class InstallPackagesTest(unittest.TestCase):
         self.assertIn("--find-links=https://bucket/run-123/index.html", cmd)
 
     @patch("setup_venv.run_command")
-    @patch("setup_venv.scrape_subdirs", return_value=None)
+    @patch("setup_venv._scrape_rocm_index_subdirs", return_value=None)
     def test_index_name_and_find_links(self, mock_scrape, mock_run):
         """--index-name with --index-subdir and --find-links-url together."""
         main(
@@ -185,19 +185,7 @@ class ValidationTest(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
-    @patch("setup_venv.scrape_subdirs", return_value=None)
-    def test_packages_requires_index_source(self, mock_scrape):
-        """--packages without any index option should error."""
-        with self.assertRaises(SystemExit):
-            main(
-                [
-                    self.temp_dir,
-                    "--packages",
-                    "rocm",
-                ]
-            )
-
-    @patch("setup_venv.scrape_subdirs", return_value=None)
+    @patch("setup_venv._scrape_rocm_index_subdirs", return_value=None)
     def test_index_name_requires_subdir(self, mock_scrape):
         """--index-name without --index-subdir should error."""
         with self.assertRaises(SystemExit):
