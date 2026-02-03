@@ -14,6 +14,8 @@ message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 set(PACKAGE_VERSION ${LLVM_PACKAGE_VERSION})
 
 # Disable tests - they depend on LLVM-internal targets like llvm_gtest
+# In order to enable (if desired), we need to install into a non-distributed
+# component that we can still depend on here.
 set(LLVM_INCLUDE_TESTS OFF)
 
 # Runtimes to build - set as CACHE FORCE to override the default empty value
@@ -30,6 +32,10 @@ set(LIBOMPTARGET_BUILD_DEVICE_FORTRT ON)
 set(LIBOMPTARGET_ENABLE_DEBUG ON)
 set(LIBOMPTARGET_NO_SANITIZER_AMDGPU ON)
 set(LIBOMP_INSTALL_RPATH "\$ORIGIN:\$ORIGIN/../lib:\$ORIGIN/../../lib:\$ORIGIN/../../../lib")
+# Setting "LIBOMP_COPY_EXPORTS" to `OFF` "aids parallel builds to not interfere
+# with each other" as libomp and generated headers are copied into the original
+# source otherwise. Defaults to `ON`.
+set(LIBOMP_COPY_EXPORTS OFF)
 
 set(LLVM_RUNTIME_TARGETS "default;amdgcn-amd-amdhsa")
 set(RUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_RUNTIMES "openmp")

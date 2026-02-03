@@ -422,8 +422,10 @@ if(THEROCK_ENABLE_COMPILER_EXTRAS)
     COMPILER_TOOLCHAIN
       amd-llvm
     CMAKE_ARGS
+      # Since we need a flang to build its runtime, it won't pass CMake checks and
+      # the toolchain doesn't know where it is yet. So hard code it to let it
+      # pass its checks. See LLVM/flang-rt/README
       -DCMAKE_Fortran_COMPILER_WORKS=YES
-      # TODO: Properly wire up the Fortran compiler path from amd-llvm-flang
       "-DCMAKE_Fortran_COMPILER=${CMAKE_CURRENT_BINARY_DIR}/amd-llvm-flang/dist/lib/llvm/bin/flang"
     RUNTIME_DEPS
       amd-llvm
