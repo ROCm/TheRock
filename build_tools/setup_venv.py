@@ -223,8 +223,8 @@ def run(args: argparse.Namespace):
     update_venv(venv_dir, use_uv)
 
     if args.packages:
-        packages = args.packages.split(",") if args.packages else None
-        extra_pip_args = args.extra_pip_args.split(",") if args.extra_pip_args else None
+        packages = args.packages.split()
+        extra_pip_args = args.extra_pip_args.split() if args.extra_pip_args else None
         install_packages_into_venv(
             venv_dir=venv_dir,
             packages=packages,
@@ -287,7 +287,7 @@ def main(argv: list[str]):
     general_options.add_argument(
         "--extra-pip-args",
         type=str,
-        help="Comma-delimited extra arguments to pass to pip/uv install (e.g. '--pre,--no-cache-dir')",
+        help="Extra arguments to pass to pip/uv install (e.g. '--pre --no-cache-dir')",
     )
     general_options.add_argument(
         "--activate-in-future-github-actions-steps",
@@ -309,7 +309,7 @@ def main(argv: list[str]):
     install_options.add_argument(
         "--packages",
         type=str,
-        help="Comma-delimited list of packages to install, including any extras or explicit versions",
+        help="Packages to install, including any extras or explicit versions (e.g. 'rocm[libraries,devel]==1.0')",
     )
     # TODO(#1036): add "auto" mode here that infers the index from the version?
     install_options.add_argument(
