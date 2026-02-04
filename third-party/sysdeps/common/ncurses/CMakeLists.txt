@@ -151,6 +151,11 @@ add_custom_target(
       # standard installation prefixes. We hope the system will provide the
       # additional required terminfo files if the fallbacks are not enough.
       --with-terminfo-dirs="/usr/share/terminfo:/usr/lib/terminfo:/etc/terminfo:/lib/terminfo"
+      # Fix #3223: Override autoconf's pid_t detection which incorrectly
+      # defines pid_t as int on modern systems with GCC 14+. This conflicts
+      # with glibc's typedef, breaking wchar_t detection and causing
+      # --enable-widec to silently fail.
+      ac_cv_type_pid_t=yes
   COMMAND
     make -j "${PAR_JOBS}" V=1
   COMMAND

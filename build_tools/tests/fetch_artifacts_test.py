@@ -1,15 +1,14 @@
-from botocore.exceptions import ClientError
 from pathlib import Path
 import os
 import sys
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
+from _therock_utils.artifact_backend import ArtifactBackend
 from fetch_artifacts import (
-    BucketMetadata,
-    list_s3_artifacts,
+    list_artifacts_for_group,
     filter_artifacts,
 )
 
@@ -18,47 +17,24 @@ REPO_DIR = THIS_DIR.parent.parent
 
 
 class ArtifactsIndexPageTest(unittest.TestCase):
-    @patch("fetch_artifacts.paginator")
-    def testListS3Artifacts_Found(self, mock_paginator):
-        bucket_info = BucketMetadata(
-            "ROCm-TheRock/", "therock-ci-artifacts", "123", "linux"
-        )
-        mock_paginator.paginate.return_value = [
-            {
-                "Contents": [
-                    {"Key": "hello/empty_1test.tar.xz"},
-                    {"Key": "hello/empty_2test.tar.xz"},
-                ]
-            },
-            {"Contents": [{"Key": "test/empty_3generic.tar.xz"}]},
-            {"Contents": [{"Key": "test/empty_3test.tar.xz.sha256sum"}]},
-            {"Contents": [{"Key": "rocm-libraries/test/empty_4test.tar.xz"}]},
+    def testListArtifactsForGroup_FiltersByArtifactGroup(self):
+        # Test that filtering by artifact_group works correctly
+        backend = MagicMock(spec=ArtifactBackend)
+        backend.base_uri = "s3://therock-ci-artifacts/ROCm-TheRock/123-linux"
+        backend.list_artifacts.return_value = [
+            "rocblas_lib_gfx94X.tar.xz",  # matches gfx94X
+            "rocblas_lib_gfx110X.tar.xz",  # doesn't match
+            "amd-llvm_lib_generic.tar.xz",  # matches generic
+            "hipblas_lib_gfx94X.tar.xz",  # matches gfx94X
         ]
 
-        result = list_s3_artifacts(bucket_info, "test")
+        result = list_artifacts_for_group(backend, "gfx94X")
 
-        self.assertEqual(len(result), 4)
-        self.assertTrue("empty_1test.tar.xz" in result)
-        self.assertTrue("empty_2test.tar.xz" in result)
-        self.assertTrue("empty_3generic.tar.xz" in result)
-        self.assertTrue("empty_4test.tar.xz" in result)
-
-    @patch("fetch_artifacts.paginator")
-    def testListS3Artifacts_NotFound(self, mock_paginator):
-        bucket_info = BucketMetadata(
-            "ROCm-TheRock/", "therock-ci-artifacts", "123", "linux"
-        )
-        mock_paginator.paginate.side_effect = ClientError(
-            error_response={
-                "Error": {"Code": "AccessDenied", "Message": "Access Denied"}
-            },
-            operation_name="ListObjectsV2",
-        )
-
-        with self.assertRaises(ClientError) as context:
-            list_s3_artifacts(bucket_info, "test")
-
-        self.assertEqual(context.exception.response["Error"]["Code"], "AccessDenied")
+        self.assertEqual(len(result), 3)
+        self.assertIn("rocblas_lib_gfx94X.tar.xz", result)
+        self.assertIn("amd-llvm_lib_generic.tar.xz", result)
+        self.assertIn("hipblas_lib_gfx94X.tar.xz", result)
+        self.assertNotIn("rocblas_lib_gfx110X.tar.xz", result)
 
     def testFilterArtifacts_NoIncludesOrExcludes(self):
         artifacts = {"foo_test", "foo_run", "bar_test", "bar_run"}

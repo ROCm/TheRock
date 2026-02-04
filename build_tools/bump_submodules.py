@@ -14,10 +14,10 @@ Bump submpdules in base, core and profiler
     --components base core profiler
 ```
 
-Bump comm-lib submodules and create a branch
+Bump rocm-systems submodule and create a branch
 ```
 ./build_tools/bump_submodules.py \
-    --create-branch --branch-name shared/bump-comm-libs --components comm-libs
+    --create-branch --branch-name shared/bump-rocm-systems --components rocm-systems
 ```
 """
 
@@ -60,12 +60,6 @@ def parse_components(components: list[str]) -> list[list]:
         system_projects += [
             "half",
             "rocm-cmake",
-        ]
-
-    if "comm-libs" in components:
-        system_projects += [
-            "rccl",
-            "rccl-tests",
         ]
 
     if "profiler" in components:
@@ -196,7 +190,6 @@ def main(argv):
         help="""List of components (subdirectories) to bump. Choices:
                   default,
                   base,
-                  comm-libs,
                   compiler,
                   ml-libs,
                   rocm-libraries,

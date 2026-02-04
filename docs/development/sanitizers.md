@@ -4,7 +4,11 @@
 
 Sanitizers can be enabled via the `THEROCK_SANITIZER` variable. We will be extending this to support all sanitizers. Presently supported sanitizers are:
 
-- `ASAN` : Enables ASAN, using a shared library ASAN runtime throughout (i.e. everything links to the appropriate support library).
+- `ASAN` : Enables full ASAN with both host-side (`-fsanitize=address`) and device-side instrumentation (xnack+ GPU targets for gfx942, gfx950). Requires xnack-capable hardware at runtime.
+- `HOST_ASAN` : Enables host-side ASAN only (`-fsanitize=address` compiler flags) without device-side instrumentation. Use this when:
+  - You don't have xnack-capable hardware (gfx942, gfx950)
+  - You want faster builds (no xnack+ kernel variants)
+  - You only need to catch host-side memory errors
 - `OFF` : Explicitly disable sanitizers.
 
 The sanitizer selection can be controlled per project by using a variable of the form `{subproject}_SANITIZER={VALUE}`. This is most commonly used to disable santiziers for specific projects once enabled globally.
@@ -15,14 +19,15 @@ Because ROCm includes a compiler and uses multiple toolchains to build, there ar
 
 In order to simplify use, the following presets are available for setting up specific sanitizer strategies:
 
-- `--preset linux-release-asan`: Our default "ASAN enabled release" builds that we use for most build and test pipelines. This enables ASAN globally and then selectively disables it for the compiler and certain system libraries that are not yet ready for generic sanitizer builds.
+- `--preset linux-release-asan`: Full ASAN build with both host and device instrumentation. Enables ASAN globally and selectively disables it for the compiler and certain system libraries that are not yet ready for generic sanitizer builds. Requires xnack-capable hardware (gfx942, gfx950) at runtime.
+- `--preset linux-release-host-asan`: Host-only ASAN build without device-side instrumentation. Same as above but GPU_TARGETS are not modified to include xnack+ variants. Can run on any GPU hardware.
 - TODO: compiler-asan preset: We will enable a build mode such that the compiler and base libraries can also be instrumented. We will use this for qualifying compiler builds but not generally for *using* the compiler.
 
 ## Sanitizer Aware Project Development
 
-### GFX Target Munging
+### GFX Target Munging (ASAN only)
 
-Certain GFX targets have special hardware support for device-side ASAN. This is enabled transparently where available by changing the `GPU_TARGETS` variable propagated to sup-projects:
+When using full `ASAN` mode (not `HOST_ASAN`), certain GFX targets have special hardware support for device-side ASAN. This is enabled transparently where available by changing the `GPU_TARGETS` variable propagated to sub-projects:
 
 - `gfx942` -> `gfx942:xnack+`
 - `gfx950` -> `gfx950:xnack+`
@@ -33,8 +38,8 @@ Some sub-projects have strict gfx target checks that do not allow these extends 
 
 When a project is configured for sanitizers, it will have certain variables injected into it. While it is often possible to not require projects to have any special knowledge of what sanitizer they were compiled for, some do need to know. For these cases, it can be necessary to use these special variables so injected.
 
-- `THEROCK_SANITIZER={ASAN}` : Set if a sanitizer is active for the project and indicates which one.
-- `THEROCK_SANITIZER_LAUNCHER` : If invoking certain tools at build time that dynamically link to a shared library compiled with a sanitizer, you need to prefix it with this value as `${THEROCK_SANITIZER_LAUNCHER}` (not surrounded in quotes so it can expand to multiple terms). This is most commonly needed for invoking system-python and importing native extensions that were built in the project with ASAN.
+- `THEROCK_SANITIZER={ASAN|HOST_ASAN}` : Set if a sanitizer is active for the project and indicates which one. `ASAN` enables both host and device ASAN; `HOST_ASAN` enables host-only ASAN.
+- `THEROCK_SANITIZER_LAUNCHER` : If invoking certain tools at build time that dynamically link to a shared library compiled with a sanitizer, you need to prefix it with this value as `${THEROCK_SANITIZER_LAUNCHER}` (not surrounded in quotes so it can expand to multiple terms). This is most commonly needed for invoking system-python and importing native extensions that were built in the project with ASAN. This is set for both `ASAN` and `HOST_ASAN` modes.
 
 You are recommended to code defensively with patterns like:
 
@@ -56,7 +61,8 @@ if(NOT DEFINED THEROCK_SANITIZER_LAUNCHER)
   set(THEROCK_SANITIZER_LAUNCHER)
 endif()
 set(PYTHON_LAUNCHER ${THEROCK_SANITIZER_LAUNCHER} "${Python3_EXECUTABLE}")
-if(THEROCK_SANITIZER STREQUAL "ASAN")
+# Disable leak detector for any ASAN mode (both ASAN and HOST_ASAN)
+if(THEROCK_SANITIZER STREQUAL "ASAN" OR THEROCK_SANITIZER STREQUAL "HOST_ASAN")
   list(PREPEND PYTHON_LAUNCHER "${CMAKE_COMMAND}" -E ASAN_OPTIONS=detect_leaks=0 --)
 endif()
 

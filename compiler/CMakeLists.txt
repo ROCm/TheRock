@@ -18,7 +18,16 @@ if(THEROCK_ENABLE_COMPILER)
     message(STATUS "Flang build concurrency level set to ${FLANG_PARALLEL_COMPILE_JOBS}")
     list(APPEND _extra_llvm_cmake_args "-DFLANG_PARALLEL_COMPILE_JOBS=${FLANG_PARALLEL_COMPILE_JOBS}")
   else()
-     message(STATUS "Flang concurrency is unlimited. Memory usage may be much higher.")
+     message(WARNING "Flang concurrency is unlimited. Memory usage may be much higher. Set -DFLANG_PARALLEL_COMPILE_JOBS to reduce memory use.")
+  endif()
+
+  # LLVM linking is also very memory intensive. Allow users to adjust the number
+  # of parallel link jobs.
+  if(LLVM_PARALLEL_LINK_JOBS)
+    message(STATUS "LLVM parallel link jobs set to ${LLVM_PARALLEL_LINK_JOBS}")
+    list(APPEND _extra_llvm_cmake_args "-DLLVM_PARALLEL_LINK_JOBS=${LLVM_PARALLEL_LINK_JOBS}")
+  else()
+     message(WARNING "LLVM parallel link jobs is unlimited. Memory usage may be much higher. Set -DLLVM_PARALLEL_LINK_JOBS to reduce memory use.")
   endif()
 
   # If the compiler is not pristine (i.e. has patches), then there will be a
