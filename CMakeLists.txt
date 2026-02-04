@@ -284,26 +284,6 @@ if(THEROCK_FLAG_INCLUDE_PROFILER)
   )
 endif()
 
-# Optional sub-features that control behavior within artifacts
-
-# Math library sub-components (control what gets built within BLAS artifact)
-therock_add_feature(SPARSE
-  GROUP MATH_LIBS
-  DESCRIPTION "Enables sparse libraries (hipsparse, hipsparselt, rocsparse) within BLAS"
-  REQUIRES BLAS PRIM
-)
-
-if(NOT WIN32)
-  set(_solver_platform_requirements "HOST_SUITE_SPARSE")
-else()
-  set(_solver_platform_requirements "")
-endif()
-therock_add_feature(SOLVER
-  GROUP MATH_LIBS
-  DESCRIPTION "Enables solver libraries (hipsolver, rocsolver) within BLAS"
-  REQUIRES BLAS PRIM SPARSE ${_solver_platform_requirements}
-)
-
 # Finalize all feature flags.
 therock_finalize_features()
 therock_report_features()

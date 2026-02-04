@@ -490,6 +490,16 @@ artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip"]
 
+[artifacts.sparse]
+artifact_group = "math-libs"
+type = "target-specific"
+artifact_deps = ["blas", "prim"]
+
+[artifacts.solver]
+artifact_group = "math-libs"
+type = "target-specific"
+artifact_deps = ["blas", "prim", "sparse", "host-suite-sparse"]
+
 [artifacts.rocwmma]
 artifact_group = "math-libs"
 type = "target-specific"
