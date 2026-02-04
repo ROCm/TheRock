@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import shlex
+import sys
 import subprocess
 from pathlib import Path
 import platform
@@ -39,6 +40,7 @@ def get_current_gpu_architecture():
         )
 
         lines = result.stdout.strip().split("\n")
+        logging.info(f"DEBUG:{lines}")
 
         if len(lines) >= 2:
             return lines[1]
