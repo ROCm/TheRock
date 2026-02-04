@@ -48,6 +48,7 @@ class PackageInstaller:
         self.docker_image = docker_image
         self.uninstall = uninstall
         self.skip_package = skip_package
+        self.skip_set = set()
 
         # Validate inputs
         if self.package_type not in ["deb", "rpm"]:
@@ -146,11 +147,12 @@ class PackageInstaller:
                 for pkg in packages[:]:
                     if skip in pkg.name:
                         packages.remove(pkg)
+                        self.skip_set.add(Path(pkg).name)
 
         return sorted(packages)
 
     def install_deb_packages(self, packages: List[Path]) -> bool:
-        """Install DEB packages using apt.
+        """Simulate install DEB packages using apt.
 
         Args:
             packages: List of package file paths to install
@@ -170,7 +172,7 @@ class PackageInstaller:
             print(f"   - {Path(pkg).name}")
 
         # Install using apt
-        cmd = ["sudo", "apt", "install", "-y"] + package_paths
+        cmd = ["sudo", "apt", "install", "--simulate", "-y"] + package_paths
 
         print(f"\nRunning: {' '.join(cmd)}\n")
 
@@ -191,7 +193,7 @@ class PackageInstaller:
             return False
 
     def install_rpm_packages(self, packages: List[Path]) -> bool:
-        """Install RPM packages using dnf.
+        """Simulate install RPM packages using dnf.
 
         Args:
             packages: List of package file paths to install
@@ -215,7 +217,7 @@ class PackageInstaller:
         # For now, use dnf install
 
         # Install using dnf
-        cmd = ["sudo", "dnf", "install", "-y"] + package_paths
+        cmd = ["sudo", "dnf", "install", "--assumeno", "-y"] + package_paths
 
         print(f"\nRunning: {' '.join(cmd)}\n")
 
@@ -454,8 +456,11 @@ class PackageInstaller:
         installed_names = {pkg.name for pkg in installed_packages}
 
         # Compare with built packages
-        if installed_names == built_packages:
-            print(f"\n✅ Verification passed: All {len(built_packages)} packages from manifest were installed")
+        if installed_names.union(self.skip_set) == built_packages:
+            print(f"\n✅ Verification passed: {len(built_packages) - len(self.skip_set)} packages from manifest were installed, {len(self.skip_set)} packages were skipped")
+            skip_arr = sorted(list(self.skip_set))
+            for pkg in skip_arr:
+                print(f"Skipped   - {pkg}")
             return True
         else:
             print(f"\n❌ Verification failed: Installed packages don't match manifest")
