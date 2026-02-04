@@ -18,6 +18,7 @@ amdgpu_family_info_matrix_all {
               "run_tests":                      #         boolean: True if the test should run
               "runs_on": {                      #         dict: Host names of compute nodes
                   "test":                       #             string: test runner (optional)
+                  "test-multi-gpu":             #             string: multi-gpu test runner (optional)
                   "benchmark":                  #             string: benchmark runner (optional)
               }
             }
@@ -35,6 +36,7 @@ amdgpu_family_info_matrix_all {
               "run_tests":                      #         boolean: True if the test should run
               "runs_on": {                      #         dict: Host names of compute nodes
                   "test":                       #             string: test runner (optional)
+                  "test-multi-gpu":             #             string: multi-gpu test runner (optional)
                   "benchmark":                  #             string: benchmark runner (optional)
               }
             }
@@ -60,6 +62,7 @@ Cmake targets are defined in: cmake/therock_amdgpu_targets.cmake
 #                     "run_tests": False,
 #                     "runs_on": {
 #                         "test": "",
+#                         "test-multi-gpu": "",
 #                         "benchmark": "",
 #                     },
 #                     "sanity_check_only_for_family": False,
@@ -79,6 +82,7 @@ Cmake targets are defined in: cmake/therock_amdgpu_targets.cmake
 #                     "run_tests": False,
 #                     "runs_on": {
 #                         "test": "",
+#                         "test-multi-gpu": "",
 #                         "benchmark": "",
 #                     },
 #                     "sanity_check_only_for_family": False,
@@ -91,13 +95,22 @@ Cmake targets are defined in: cmake/therock_amdgpu_targets.cmake
 #             },
 # }
 
+# NOTE: when doing changes here, also check that they are done in amdgpu_family_matrix.py
+
 amdgpu_family_predefined_groups = {
     # The 'presubmit' matrix runs on 'pull_request' triggers (on all PRs).
-    "amdgpu_presubmit": ["gfx94X-dcgpu", "gfx110X-all", "gfx1151"],
+    "amdgpu_presubmit": ["gfx94X-dcgpu", "gfx110X-all", "gfx1151", "gfx120X-all"],
     # The 'postsubmit' matrix runs on 'push' triggers (for every commit to the default branch).
-    "amdgpu_postsubmit": ["gfx950-dcgpu", "gfx120X-all"],
+    "amdgpu_postsubmit": ["gfx950-dcgpu"],
     # The 'nightly' matrix runs on 'schedule' triggers.
-    "amdgpu_nightly_ci": ["gfx90X-dcgpu", "gfx101X-dgpu", "gfx103X-dgpu"],
+    "amdgpu_nightly_ci": [
+        "gfx90X-dcgpu",
+        "gfx101X-dgpu",
+        "gfx103X-dgpu",
+        "gfx1150",
+        "gfx1152",
+        "gfx1153",
+    ],
 }
 
 all_build_variants = {
@@ -138,7 +151,9 @@ amdgpu_family_info_matrix_all = {
                     "run_tests": True,
                     "runs_on": {
                         "test": "linux-mi325-1gpu-ossci-rocm-frac",
-                        "benchmark": "linux-mi325-1gpu-ossci-rocm-frac",
+                        "test-multi-gpu": "linux-mi325-8gpu-ossci-rocm",
+                        # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
+                        "benchmark": "linux-mi325-8gpu-ossci-rocm",
                     },
                 },
                 "release": {
@@ -168,7 +183,8 @@ amdgpu_family_info_matrix_all = {
                     "build_variants": ["release"],
                 },
                 "test": {
-                    "run_tests": True,
+                    # TODO(#2740): Re-enable machine once `amdsmi` test is fixed
+                    "run_tests": False,
                     "runs_on": {
                         "test": "linux-gfx110X-gpu-rocm",
                     },
@@ -201,8 +217,7 @@ amdgpu_family_info_matrix_all = {
                     "build_variants": ["release"],
                 },
                 "test": {
-                    # TODO(#2614): Re-enable machine once it is stable
-                    "run_tests": False,
+                    "run_tests": True,
                     "runs_on": {
                         "test": "linux-gfx1150-gpu-rocm",
                     },
@@ -253,6 +268,7 @@ amdgpu_family_info_matrix_all = {
                     "run_tests": True,
                     "runs_on": {
                         "test": "windows-gfx1151-gpu-rocm",
+                        "benchmark": "windows-gfx1151-gpu-rocm",
                     },
                 },
                 "release": {
@@ -298,6 +314,7 @@ amdgpu_family_info_matrix_all = {
                     "build_variants": ["release"],
                 },
                 "test": {
+                    # TODO(#2682): Re-enable machine once it is stable
                     "run_tests": False,
                     "runs_on": {
                         "test": "linux-gfx1153-gpu-rocm",
@@ -333,9 +350,7 @@ amdgpu_family_info_matrix_all = {
                 },
                 "test": {
                     "run_tests": True,
-                    # Networking issue: https://github.com/ROCm/TheRock/issues/1660
-                    # Label is "linux-mi355-1gpu-ossci-rocm"
-                    "runs_on": {},
+                    "runs_on": {"test": "linux-mi355-1gpu-ossci-rocm"},
                 },
                 "release": {
                     "push_on_success": False,
@@ -366,7 +381,7 @@ amdgpu_family_info_matrix_all = {
                 "test": {
                     "run_tests": True,
                     "runs_on": {
-                        "test": "linux-gfx1201-gpu-rocm",
+                        "test": "linux-gfx120X-gpu-rocm",
                     },
                     "sanity_check_only_for_family": True,
                 },
@@ -459,7 +474,8 @@ amdgpu_family_info_matrix_all = {
                     "build_variants": ["release"],
                 },
                 "test": {
-                    "run_tests": True,
+                    # TODO(#2740): Re-enable machine once `amdsmi` test is fixed
+                    "run_tests": False,
                     "runs_on": {
                         "test": "linux-gfx1030-gpu-rocm",
                     },
