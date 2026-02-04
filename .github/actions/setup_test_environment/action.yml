@@ -87,8 +87,6 @@ runs:
       env:
         OUTPUT_ARTIFACTS_DIR: ${{ inputs.OUTPUT_ARTIFACTS_DIR }}
       run: |
-        sed -i "s/pandas>=1.4.3/pandas==2.3.3/g" ${OUTPUT_ARTIFACTS_DIR}/libexec/rocprofiler-compute/requirements.txt
-        sed -i "s/src\///g" ${OUTPUT_ARTIFACTS_DIR}/libexec/rocprofiler-compute/tests/test_autogen_config.py
         uv pip install -r ${OUTPUT_ARTIFACTS_DIR}/libexec/rocprofiler-compute/requirements.txt
         uv pip install -r ${OUTPUT_ARTIFACTS_DIR}/libexec/rocprofiler-compute/requirements-test.txt
         uv pip freeze
