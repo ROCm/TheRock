@@ -59,6 +59,19 @@ class InstallPackagesTest(unittest.TestCase):
 
     @patch("setup_venv.find_venv_python_exe", return_value="python")
     @patch("setup_venv.run_command")
+    def test_multiple_packages(self, mock_run, mock_find_python):
+        """Multiple packages can be installed at once."""
+        install_packages_into_venv(
+            venv_dir=self.venv_dir,
+            packages=["torch", "torchaudio"],
+        )
+
+        cmd = mock_run.call_args[0][0]
+        self.assertIn("torch", cmd)
+        self.assertIn("torchaudio", cmd)
+
+    @patch("setup_venv.find_venv_python_exe", return_value="python")
+    @patch("setup_venv.run_command")
     def test_extra_pip_args(self, mock_run, mock_find_python):
         """Extra pip args are passed through to the command."""
         install_packages_into_venv(
