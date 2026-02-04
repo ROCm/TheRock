@@ -95,6 +95,8 @@ Cmake targets are defined in: cmake/therock_amdgpu_targets.cmake
 #             },
 # }
 
+# NOTE: when doing changes here, also check that they are done in amdgpu_family_matrix.py
+
 amdgpu_family_predefined_groups = {
     # The 'presubmit' matrix runs on 'pull_request' triggers (on all PRs).
     "amdgpu_presubmit": ["gfx94X-dcgpu", "gfx110X-all", "gfx1151", "gfx120X-all"],
