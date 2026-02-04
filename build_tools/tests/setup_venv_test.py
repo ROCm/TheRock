@@ -24,22 +24,56 @@ class InstallPackagesTest(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.venv_dir, ignore_errors=True)
 
+    @patch("setup_venv.find_venv_python_exe", return_value="python")
     @patch("setup_venv.run_command")
-    def test_basic_usage(self, mock_run):
-        """The most basic usage should run `pip install [packages]`"""
+    def test_basic_pip_usage(self, mock_run, mock_find_python):
+        """The most basic usage should run `python -m pip install [packages]`"""
         install_packages_into_venv(
             venv_dir=self.venv_dir,
             packages=["rocm"],
         )
 
         cmd = mock_run.call_args[0][0]
-        self.assertIn("pip", cmd)
-        self.assertIn("install", cmd)
+        self.assertEqual(cmd[0], "python")
+        self.assertEqual(cmd[1], "-m")
+        self.assertEqual(cmd[2], "pip")
+        self.assertEqual(cmd[3], "install")
         self.assertIn("rocm", cmd)
-        self.assertNotIn("index-url", cmd)
 
+    @patch("setup_venv.find_venv_python_exe", return_value="python")
     @patch("setup_venv.run_command")
-    def test_index_url_complete(self, mock_run):
+    def test_basic_uv_usage(self, mock_run, mock_find_python):
+        """Using uv generates a different command structure."""
+        install_packages_into_venv(
+            venv_dir=self.venv_dir,
+            packages=["rocm"],
+            use_uv=True,
+        )
+
+        cmd = mock_run.call_args[0][0]
+        self.assertEqual(cmd[0], "uv")
+        self.assertEqual(cmd[1], "pip")
+        self.assertEqual(cmd[2], "install")
+        self.assertEqual(cmd[3], "--python")
+        self.assertIn("rocm", cmd)
+
+    @patch("setup_venv.find_venv_python_exe", return_value="python")
+    @patch("setup_venv.run_command")
+    def test_extra_pip_args(self, mock_run, mock_find_python):
+        """Extra pip args are passed through to the command."""
+        install_packages_into_venv(
+            venv_dir=self.venv_dir,
+            packages=["rocm"],
+            extra_pip_args=["--pre", "--no-cache-dir"],
+        )
+
+        cmd = mock_run.call_args[0][0]
+        self.assertIn("--pre", cmd)
+        self.assertIn("--no-cache-dir", cmd)
+
+    @patch("setup_venv.find_venv_python_exe", return_value="python")
+    @patch("setup_venv.run_command")
+    def test_index_url_complete(self, mock_run, mock_find_python):
         """Passing index_url without index_subdir uses the URL as-is."""
         install_packages_into_venv(
             venv_dir=self.venv_dir,
@@ -50,8 +84,9 @@ class InstallPackagesTest(unittest.TestCase):
         cmd = mock_run.call_args[0][0]
         self.assertIn("--index-url=https://example.com/full/path/", cmd)
 
+    @patch("setup_venv.find_venv_python_exe", return_value="python")
     @patch("setup_venv.run_command")
-    def test_index_name_with_subdir(self, mock_run):
+    def test_index_name_with_subdir(self, mock_run, mock_find_python):
         """Passing index_name with index_subdir constructs full URL."""
         install_packages_into_venv(
             venv_dir=self.venv_dir,
@@ -63,8 +98,9 @@ class InstallPackagesTest(unittest.TestCase):
         cmd = mock_run.call_args[0][0]
         self.assertIn("--index-url=https://rocm.nightlies.amd.com/v2/gfx110X-all", cmd)
 
+    @patch("setup_venv.find_venv_python_exe", return_value="python")
     @patch("setup_venv.run_command")
-    def test_index_url_with_subdir(self, mock_run):
+    def test_index_url_with_subdir(self, mock_run, mock_find_python):
         """Passing index_url with index_subdir constructs full URL."""
         install_packages_into_venv(
             venv_dir=self.venv_dir,
@@ -76,8 +112,9 @@ class InstallPackagesTest(unittest.TestCase):
         cmd = mock_run.call_args[0][0]
         self.assertIn("--index-url=https://example.com/base/gfx94X-dcgpu", cmd)
 
+    @patch("setup_venv.find_venv_python_exe", return_value="python")
     @patch("setup_venv.run_command")
-    def test_find_links_only(self, mock_run):
+    def test_find_links_only(self, mock_run, mock_find_python):
         """Passing just find_links_url uses it."""
         install_packages_into_venv(
             venv_dir=self.venv_dir,
@@ -89,8 +126,9 @@ class InstallPackagesTest(unittest.TestCase):
         self.assertIn("--find-links=https://bucket/run-123/index.html", cmd)
         self.assertFalse(any("--index-url" in str(a) for a in cmd))
 
+    @patch("setup_venv.find_venv_python_exe", return_value="python")
     @patch("setup_venv.run_command")
-    def test_index_url_and_find_links(self, mock_run):
+    def test_index_url_and_find_links(self, mock_run, mock_find_python):
         """Both index_url and find_links_url can be used together."""
         install_packages_into_venv(
             venv_dir=self.venv_dir,

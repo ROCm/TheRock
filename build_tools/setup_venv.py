@@ -152,7 +152,7 @@ def install_packages_into_venv(
     index_name: str | None = None,
     index_subdir: str | None = None,
     find_links_url: str | None = None,
-    disable_cache: bool = False,
+    extra_pip_args: list[str] | None = None,
 ):
     """Installs packages into venv_dir using the provided options.
 
@@ -164,11 +164,12 @@ def install_packages_into_venv(
         index_name: Shorthand for a base index_url (e.g. 'nightly')
         index_subdir: Subdirectory for 'index_url' or 'index_name'
         find_links_url: Url for '--find-links' command argument
-        disable_cache: Sets '--no-cache-dir' command argument if True
+        extra_pip_args: Additional arguments to pass to pip/uv install
     """
     log("")
 
     venv_python_exe = find_venv_python_exe(venv_dir)
+    assert venv_python_exe is not None, f"No python executable found in {venv_dir}"
     pip_install_cmd = (
         [str(venv_python_exe), "-m", "pip", "install"]
         if not use_uv
@@ -192,8 +193,8 @@ def install_packages_into_venv(
     if find_links_url:
         pip_install_cmd.append(f"--find-links={find_links_url}")
 
-    if disable_cache:
-        pip_install_cmd.append("--no-cache-dir")
+    if extra_pip_args:
+        pip_install_cmd.extend(extra_pip_args)
 
     pip_install_cmd.extend(packages)
 
@@ -222,15 +223,17 @@ def run(args: argparse.Namespace):
     update_venv(venv_dir, use_uv)
 
     if args.packages:
+        packages = args.packages.split(",") if args.packages else None
+        extra_pip_args = args.extra_pip_args.split(",") if args.extra_pip_args else None
         install_packages_into_venv(
             venv_dir=venv_dir,
-            packages=args.packages.split(","),
+            packages=packages,
             use_uv=use_uv,
             index_url=args.index_url,
             index_subdir=args.index_subdir,
             index_name=args.index_name,
             find_links_url=args.find_links_url,
-            disable_cache=args.disable_cache,
+            extra_pip_args=extra_pip_args,
         )
 
     if args.activate_in_future_github_actions_steps:
@@ -282,9 +285,9 @@ def main(argv: list[str]):
         help="If the venv directory already exists, clear it and start fresh",
     )
     general_options.add_argument(
-        "--disable-cache",
-        action=argparse.BooleanOptionalAction,
-        help="Disables the pip cache through the --no-cache-dir option",
+        "--extra-pip-args",
+        type=str,
+        help="Comma-delimited extra arguments to pass to pip/uv install (e.g. '--pre,--no-cache-dir')",
     )
     general_options.add_argument(
         "--activate-in-future-github-actions-steps",
