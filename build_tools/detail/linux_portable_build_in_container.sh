@@ -21,9 +21,11 @@ mkdir -p "$PIP_CACHE_DIR"
 pip install -r /therock/src/requirements.txt
 
 #configures and initializes ccache inside the container
-python /therock/src/setup_ccache.py --config-preset "github-oss-postsubmit" \
-        --dir "$(dirname $CCACHE_CONFIGPATH)" \
-        --local-path "$CACHE_DIR/ccache"
+if [ "${ENABLE_CCACHE}" = "true" ]; then
+  python /therock/src/setup_ccache.py --config-preset "github-oss-postsubmit" \
+          --dir "$(dirname $CCACHE_CONFIGPATH)" \
+          --local-path "$CACHE_DIR/ccache"
+fi
 
 python /therock/src/build_tools/health_status.py
 
