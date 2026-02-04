@@ -14,10 +14,16 @@ export THEROCK_BUILD_PROF_LOG_DIR="$OUTPUT_DIR/build/logs/therock-build-prof"
 
 export CCACHE_DIR="$OUTPUT_DIR/caches/container/ccache"
 export PIP_CACHE_DIR="$OUTPUT_DIR/caches/container/pip"
+export CCACHE_CONFIGPATH="/therock/src/.ccache/ccache.conf"
 mkdir -p "$CCACHE_DIR"
 mkdir -p "$PIP_CACHE_DIR"
 
 pip install -r /therock/src/requirements.txt
+
+#configures and initializes ccache inside the container
+python /therock/src/setup_ccache.py --config-preset "github-oss-postsubmit" \
+        --dir "$(dirname $CCACHE_CONFIGPATH)" \
+        --local-path "$CACHE_DIR/ccache"
 
 python /therock/src/build_tools/health_status.py
 
