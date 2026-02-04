@@ -49,23 +49,18 @@ endfunction()
 # by filtering for a specific pattern. This is useful for autotools-based builds
 # that require explicit --with-* configure flags, as autotools doesn't use
 # CMAKE_PREFIX_PATH directly.
-#
 # Args:
 #   input_path_list: Name of the variable containing the list of paths (e.g., "CMAKE_PREFIX_PATH")
 #   pattern: Regex pattern to filter the paths (e.g., "/gmp/build/stage")
 #   output_var: Name of the variable to store the result in
-#
 # Example:
 #   fetch_library_prefix(CMAKE_PREFIX_PATH "/gmp/build/stage" GMP_PREFIX)
 #   # Sets GMP_PREFIX to the first path in CMAKE_PREFIX_PATH matching the pattern
-#
 function(therock_fetch_library_prefix input_path_list pattern output_var)
   # Access the list contents using the input variable name
   set(_input_list "${${input_path_list}}")
-
   # Filter the list to include only items matching the pattern
   list(FILTER _input_list INCLUDE REGEX "${pattern}")
-
   # Check if a match was found
   if(_input_list)
     # Get the first match and return it
