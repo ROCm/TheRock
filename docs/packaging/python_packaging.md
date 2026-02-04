@@ -118,8 +118,20 @@ ls ${PACKAGES_DIR}
 
 ### Installing Locally Built Packages
 
-To install packages with `pip install rocm[...]`, you need a pip-compatible
-index. One way to generate an index is with the
+To install locally built packages, you can use the
+[`-f, --find-links`](https://pip.pypa.io/en/stable/cli/pip_install/#cmdoption-f)
+option:
+
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install rocm[libraries,devel] --pre \
+    --find-links=${PACKAGES_DIR}/dist
+
+# Run sanity tests to verify the installation
+rocm-sdk test
+```
+
+You can also create an index.html page with the
 [`indexer.py` script](/third-party/indexer/indexer.py):
 
 ```bash
@@ -131,18 +143,6 @@ python ./third-party/indexer/indexer.py ${PACKAGES_DIR}/dist \
 python -m venv .venv && source .venv/bin/activate
 pip install rocm[libraries,devel] --pre \
     --find-links=${PACKAGES_DIR}/dist/index.html
-
-# Run sanity tests to verify the installation
-rocm-sdk test
-```
-
-Alternatively, install packages directly by file path (no index needed):
-
-```bash
-python3 -m venv .venv && source .venv/bin/activate
-pip install ${PACKAGES_DIR}/dist/rocm-*.tar.gz \
-            ${PACKAGES_DIR}/dist/rocm_sdk_core-*.whl
-# Optionally install rocm_sdk_devel and rocm_sdk_libraries wheels too
 ```
 
 > [!TIP]

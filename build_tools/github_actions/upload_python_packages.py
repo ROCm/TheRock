@@ -3,7 +3,7 @@
 """
 This script uploads built Python packages (wheels, sdists) along with an index
 page to S3 or a local directory for testing. Once packages are uploaded, they
-can be downloaded directly or via `pip install --find-links {index_url}` by
+can be downloaded directly or via `pip install --find-links {url}` by
 developers, users, and test workflows.
 
 Usage:
