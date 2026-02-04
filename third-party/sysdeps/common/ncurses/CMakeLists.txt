@@ -123,6 +123,7 @@ add_custom_target(
     "${SOURCE_DIR}/configure"
       --prefix "${CMAKE_INSTALL_PREFIX}"
       --with-shared
+      --without-ada
       --enable-widec
       --enable-pc-files
       # Without this, it will attempt to install pcfiles in the path reported
