@@ -22,6 +22,3 @@ zstandard>=0.19.0
 
 # libhipcxx build requirement
 lit==18.1.8
-
-# rocprofiler-compute build requirement
-nuitka==2.6

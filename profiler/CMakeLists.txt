@@ -127,6 +127,7 @@ endif(THEROCK_BUILD_TESTING)
       -DCMAKE_HIP_PLATFORM=amd
       -DCMAKE_HIP_COMPILER_ROCM_ROOT=${THEROCK_BINARY_DIR}/dist/rocm
       -DCMAKE_HIP_COMPILER=${THEROCK_BINARY_DIR}/dist/rocm/lib/llvm/bin/clang++${CMAKE_EXECUTABLE_SUFFIX}
+      -DPython3_EXECUTABLE=/opt/python/cp312-cp312/bin/python3.12
       -DPython3_ROOT_DIR=/opt/python-shared/cp312-cp312
       -DENABLE_TESTS=ON
       -DINSTALL_TESTS=ON
