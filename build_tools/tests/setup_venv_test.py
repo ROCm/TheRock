@@ -141,11 +141,11 @@ class InstallPackagesTest(unittest.TestCase):
     @patch("setup_venv.find_venv_python_exe", return_value="python")
     @patch("setup_venv.run_command")
     def test_find_links_only(self, mock_run, mock_find_python):
-        """Passing just find_links_url uses it."""
+        """Passing just find_links uses it."""
         install_packages_into_venv(
             venv_dir=self.venv_dir,
             packages=["rocm"],
-            find_links_url="https://bucket/run-123/index.html",
+            find_links="https://bucket/run-123/index.html",
         )
 
         cmd = mock_run.call_args[0][0]
@@ -155,12 +155,12 @@ class InstallPackagesTest(unittest.TestCase):
     @patch("setup_venv.find_venv_python_exe", return_value="python")
     @patch("setup_venv.run_command")
     def test_index_url_and_find_links(self, mock_run, mock_find_python):
-        """Both index_url and find_links_url can be used together."""
+        """Both index_url and find_links can be used together."""
         install_packages_into_venv(
             venv_dir=self.venv_dir,
             packages=["rocm"],
             index_url="https://deps/simple/",
-            find_links_url="https://bucket/run-123/index.html",
+            find_links="https://bucket/run-123/index.html",
         )
 
         cmd = mock_run.call_args[0][0]
