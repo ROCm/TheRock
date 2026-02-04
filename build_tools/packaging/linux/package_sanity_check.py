@@ -136,18 +136,19 @@ class PackageInstaller:
 
         # skip packages
         if self.skip_package:
-            print("\n" + "=" * 80)
-            print("SKIPPING PACKAGES")
-            for skip in self.skip_package:
-                 print(f"   - {Path(skip).name}")
-            print("=" * 80)
-
             for skip in self.skip_package:
                 # iterate over a copy remove from original packages
                 for pkg in packages[:]:
                     if skip in pkg.name:
                         packages.remove(pkg)
                         self.skip_set.add(Path(pkg).name)
+
+                print("\n" + "=" * 80)
+                print("SKIPPING PACKAGES")
+                skip_arr = sorted(list(self.skip_set))
+                for pkg in skip_arr:
+                    print(f"Skipped   - {pkg}")
+                print("=" * 80)
 
         return sorted(packages)
 
@@ -214,10 +215,10 @@ class PackageInstaller:
 
         # TODO: Add support for --rpm-package-prefix
         # This will use: rpm -i --prefix <prefix> <packages>
-        # For now, use dnf install
+        # For now, use rpm -Uvh --test
 
         # Install using dnf
-        cmd = ["sudo", "dnf", "install", "--assumeno", "-y"] + package_paths
+        cmd = ["sudo", "rpm", "-Uvh", "--test"] + package_paths
 
         print(f"\nRunning: {' '.join(cmd)}\n")
 
@@ -387,10 +388,10 @@ class PackageInstaller:
 
         # Build installation command based on package type
         if self.package_type == "deb":
-            install_cmd = f"apt update && apt install -y {' '.join(container_packages)}"
+            install_cmd = f"apt update && apt install --simulate -y {' '.join(container_packages)}"
         else:  # rpm
             # TODO: Add support for --rpm-package-prefix when implemented
-            install_cmd = f"dnf install -y {' '.join(container_packages)}"
+            install_cmd = f"rpm -Uvh --test {' '.join(container_packages)}"
 
         # Build docker run command
         docker_cmd = [
