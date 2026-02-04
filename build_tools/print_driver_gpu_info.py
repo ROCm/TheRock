@@ -123,8 +123,8 @@ def run_sanity(os_name: str) -> None:
         )
         run_command_with_search(
             label="Kernel version",
-            command="uname -r",
-            args=[],
+            command="uname",
+            args=["-r"],
             extra_command_search_paths=[bin_dir],
         )
 

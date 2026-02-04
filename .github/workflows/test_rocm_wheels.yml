@@ -60,6 +60,7 @@ jobs:
   test_wheels:
     name: Test ${{ matrix.packages }} wheels | ${{ inputs.amdgpu_family }}
     runs-on: ${{ inputs.test_runs_on }}
+    timeout-minutes: 30
     container:
       image: ${{ contains(inputs.test_runs_on, 'linux') && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26' || null }}
       options: --ipc host
@@ -104,5 +105,6 @@ jobs:
           pip freeze
 
       - name: Run 'rocm-sdk test' with '${{ matrix.packages }}' installed
+        timeout-minutes: 5
         run: |
           rocm-sdk test

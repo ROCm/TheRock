@@ -165,6 +165,7 @@ GITHUB_WORKFLOWS_CI_PATTERNS = [
     "ci*.yml",
     "multi_arch*.yml",
     "build*artifact*.yml",
+    "build*python_packages.yml",
     "test*artifacts.yml",
     "test_sanity_check.yml",
     "test_component.yml",
