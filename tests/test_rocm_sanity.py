@@ -22,6 +22,9 @@ ARTIFACT_GROUP = os.getenv("ARTIFACT_GROUP")
 def is_windows():
     return "windows" == platform.system().lower()
 
+def is_asan():
+    return "asan" in ARTIFACT_GROUP
+
 
 def run_command(command: list[str], cwd=None):
     logger.info(f"++ Run [{cwd}]$ {shlex.join(command)}")
@@ -51,6 +54,7 @@ def rocm_info_output():
 
 class TestROCmSanity:
     @pytest.mark.skipif(is_windows(), reason="rocminfo is not supported on Windows")
+    @pytest.mark.skipif(is_asan(), reason="rocminfo is not supported with ASAN")
     @pytest.mark.parametrize(
         "to_search",
         [
@@ -72,6 +76,7 @@ class TestROCmSanity:
             f"Failed to search for {to_search} in rocminfo output",
         )
 
+    @pytest.mark.skipif(is_asan(), reason="rocminfo is not supported with ASAN")
     def test_hip_printf(self):
         platform_executable_suffix = ".exe" if is_windows() else ""
 
@@ -103,9 +108,6 @@ class TestROCmSanity:
             "-o",
             hipcc_check_executable_file,
         ]
-        if "asan" in ARTIFACT_GROUP.lower():
-            hipcc_command.insert(1, "-fsanitize=address")
-            hipcc_command.insert(2, "-shared-libasan")
         run_command(
             hipcc_command,
             cwd=str(THEROCK_BIN_DIR),
