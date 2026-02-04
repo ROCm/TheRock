@@ -575,10 +575,16 @@ artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "miopen-plugin"
 
 # --- IREE Integration ---
 
+[artifacts.iree-compiler]
+artifact_group = "iree-libs"
+type = "target-neutral"
+artifact_deps = ["core-hip"]
+disable_platforms = ["windows"]
+
 [artifacts.fusilli-plugin]
 artifact_group = "iree-libs"
 type = "target-neutral"
-artifact_deps = ["core-runtime", "core-hip", "hipdnn"]
+artifact_deps = ["core-runtime", "core-hip", "hipdnn", "iree-compiler"]
 disable_platforms = ["windows"]
 
 # --- Media Integration ---

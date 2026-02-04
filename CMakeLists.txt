@@ -242,7 +242,7 @@ option(THEROCK_ENABLE_MEDIA_LIBS "Enable building of Media libraries" "${THEROCK
 option(THEROCK_ENABLE_HOST_MATH "Build all bundled host math libraries by default" OFF)
 option(THEROCK_RESET_FEATURES "One-shot flag which forces all feature flags to their default state for this configuration run" OFF)
 # TODO(iree-org/fusilli/issues/57): Enable fusilli build once multi-arch support lands.
-option(THEROCK_ENABLE_IREE_LIBS "Enable building of IREE libraries" OFF)
+option(THEROCK_ENABLE_IREE_LIBS "Enable building of IREE libraries" "${THEROCK_ENABLE_ALL}")
 
 ################################################################################
 # Artifact-based features are auto-generated from BUILD_TOPOLOGY.toml

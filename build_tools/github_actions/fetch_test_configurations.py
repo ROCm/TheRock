@@ -268,14 +268,14 @@ test_matrix = {
     },
     # TODO(iree-org/fusilli/issues/57): Enable fusilli tests once build is
     # enabled by default.
-    # "fusilli_plugin": {
-    #     "job_name": "fusilli_plugin",
-    #     "fetch_artifact_args": "--hipdnn --fusilli-plugin --tests",
-    #     "timeout_minutes": 15,
-    #     "test_script": f"python {_get_script_path('test_fusilli_plugin.py')}",
-    #     "platform": ["linux"],
-    #     "total_shards": 1,
-    # },
+    "fusilli_plugin": {
+        "job_name": "fusilli_plugin",
+        "fetch_artifact_args": "--hipdnn --fusilli-plugin --iree-compiler --tests",
+        "timeout_minutes": 15,
+        "test_script": f"python {_get_script_path('test_fusilli_plugin.py')}",
+        "platform": ["linux"],
+        "total_shards": 1,
+    },
     # hipBLASLt plugin tests
     "hipblaslt_plugin": {
         "job_name": "hipblaslt_plugin",

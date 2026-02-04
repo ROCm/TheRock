@@ -35,7 +35,7 @@
 	branch = amd-decode-only
 [submodule "iree"]
 	path = iree-libs/iree
-	url = https://github.com/iree-org/iree.git
+	url = https://github.com/AaronStGeorge/iree.git
 	branch = main
 [submodule "fusilli"]
 	path = iree-libs/fusilli
