@@ -14,7 +14,7 @@ from configure_amdgpu_matrix import (
     get_test_config,
     get_release_config,
     matrix_generator,
-    should_ci_run_given_modified_paths,
+    is_ci_run_required,
 )
 
 # Set up test runner dictionary for ROCM_THEROCK_TEST_RUNNERS
@@ -466,7 +466,7 @@ class TestMatrixGenerator(unittest.TestCase):
     def test_orgwide_test_runner_integration(self):
         """Test that orgwide test runners are properly integrated into matrix generation."""
         req_families = {
-            PlatformMask.LINUX: ["gfx110X-all"],
+            PlatformMask.LINUX: ["gfx94X-dcgpu"],
             PlatformMask.WINDOWS: [],
         }
 
@@ -480,65 +480,63 @@ class TestMatrixGenerator(unittest.TestCase):
 
         entry = matrix["linux"][0]
         self.assertIn("test", entry)
-        # The orgwide dict should override the default runner for gfx110X
-        self.assertEqual(
-            entry["test"]["runs_on"]["test"], "linux-gfx110X-gpu-rocm-test"
-        )
+        # The orgwide dict should override the default runner for gfx94X
+        self.assertEqual(entry["test"]["runs_on"]["test"], "linux-mi325-orgwide-runner")
 
 
 class TestShouldCIRun(unittest.TestCase):
-    """Tests for should_ci_run_given_modified_paths() function."""
+    """Tests for is_ci_run_required() function."""
 
     def test_run_ci_if_source_file_edited(self):
         """Test that CI runs if source files are modified."""
         paths = ["source_file.h", "CMakeLists.txt"]
-        run_ci = should_ci_run_given_modified_paths(paths)
+        run_ci = is_ci_run_required(paths)
         self.assertTrue(run_ci)
 
     def test_dont_run_ci_if_only_markdown_files_edited(self):
         """Test that CI skips if only markdown files are modified."""
         paths = ["README.md", "docs/setup.md"]
-        run_ci = should_ci_run_given_modified_paths(paths)
+        run_ci = is_ci_run_required(paths)
         self.assertFalse(run_ci)
 
     def test_dont_run_ci_if_only_external_builds_edited(self):
         """Test that CI skips if only external-builds are modified."""
         paths = ["external-builds/pytorch/CMakeLists.txt"]
-        run_ci = should_ci_run_given_modified_paths(paths)
+        run_ci = is_ci_run_required(paths)
         self.assertFalse(run_ci)
 
     def test_dont_run_ci_if_only_experimental_edited(self):
         """Test that CI skips if only experimental code is modified."""
         paths = ["experimental/test.cpp"]
-        run_ci = should_ci_run_given_modified_paths(paths)
+        run_ci = is_ci_run_required(paths)
         self.assertFalse(run_ci)
 
     def test_dont_run_ci_if_only_precommit_workflow_edited(self):
         """Test that CI skips if only pre-commit is modified."""
         paths = [".github/workflows/pre-commit.yml"]
-        run_ci = should_ci_run_given_modified_paths(paths)
+        run_ci = is_ci_run_required(paths)
         self.assertFalse(run_ci)
 
     def test_run_ci_if_workflow_file_edited(self):
         """Test that CI runs if related workflow files are modified."""
         paths = [".github/workflows/ci.yml"]
-        run_ci = should_ci_run_given_modified_paths(paths)
+        run_ci = is_ci_run_required(paths)
         self.assertTrue(run_ci)
 
         paths = [".github/workflows/build_portable_linux_artifacts.yml"]
-        run_ci = should_ci_run_given_modified_paths(paths)
+        run_ci = is_ci_run_required(paths)
         self.assertTrue(run_ci)
 
     def test_run_ci_if_mixed_files_edited(self):
         """Test that CI runs if mix of skippable and non-skippable files."""
         paths = ["README.md", "source_file.cpp"]
-        run_ci = should_ci_run_given_modified_paths(paths)
+        run_ci = is_ci_run_required(paths)
         self.assertTrue(run_ci)
 
     def test_no_files_returns_false(self):
         """Test that CI skips if no files are modified."""
         paths = None
-        run_ci = should_ci_run_given_modified_paths(paths)
+        run_ci = is_ci_run_required(paths)
         self.assertFalse(run_ci)
 
 
