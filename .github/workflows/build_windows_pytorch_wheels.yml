@@ -179,15 +179,16 @@ jobs:
       - name: Configure ccache
         run: |
           ccache --version
-          ccache --set-config=cache_dir=${{ github.workspace }}/.ccache
-          ccache --set-config=max_size=10G
+          # Use very short paths to avoid Windows MAX_PATH issues
+          ccache --set-config=cache_dir=C:/cc
+          ccache --set-config=base_dir=C:/home/runner/_work
           ccache --set-config=compression=true
           ccache -z
 
       - name: Restore ccache
         uses: actions/cache@v4
         with:
-          path: ${{ github.workspace }}/.ccache
+          path: C:/cc
           key: ccache-windows-pytorch-${{ inputs.amdgpu_family }}-${{ inputs.pytorch_git_ref }}-${{ github.sha }}
           restore-keys: |
             ccache-windows-pytorch-${{ inputs.amdgpu_family }}-${{ inputs.pytorch_git_ref }}-
