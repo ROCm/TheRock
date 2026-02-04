@@ -22,7 +22,7 @@ pip install -r /therock/src/requirements.txt
 
 #configures and initializes ccache inside the container
 if [ "${ENABLE_CCACHE}" = "true" ]; then
-  python /therock/src/setup_ccache.py --config-preset "github-oss-postsubmit" \
+  python /therock/src/build_tools/setup_ccache.py --config-preset "github-oss-postsubmit" \
           --dir "$(dirname $CCACHE_CONFIGPATH)" \
           --local-path "$CACHE_DIR/ccache"
 fi
