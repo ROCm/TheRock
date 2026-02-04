@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 THEROCK_BIN_DIR = Path(os.getenv("THEROCK_BIN_DIR")).resolve()
 
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
+ARTIFACT_GROUP = os.getenv("ARTIFACT_GROUP")
 
 
 def is_windows():
@@ -93,16 +94,20 @@ class TestROCmSanity:
 
         # Compiling .cpp file using hipcc
         hipcc_check_executable_file = f"hipcc_check{platform_executable_suffix}"
+        hipcc_command = [
+            f"{THEROCK_BIN_DIR}/hipcc",
+            str(THIS_DIR / "hipcc_check.cpp"),
+            "-Xlinker",
+            f"-rpath={THEROCK_BIN_DIR}/../lib/",
+            f"--offload-arch={offload_arch}",
+            "-o",
+            hipcc_check_executable_file,
+        ]
+        if "asan" in ARTIFACT_GROUP.lower():
+            hipcc_command.insert(1, "-fsanitize=address")
+            hipcc_command.insert(2, "-shared-libasan")
         run_command(
-            [
-                f"{THEROCK_BIN_DIR}/hipcc",
-                str(THIS_DIR / "hipcc_check.cpp"),
-                "-Xlinker",
-                f"-rpath={THEROCK_BIN_DIR}/../lib/",
-                f"--offload-arch={offload_arch}",
-                "-o",
-                hipcc_check_executable_file,
-            ],
+            hipcc_command,
             cwd=str(THEROCK_BIN_DIR),
         )
 
