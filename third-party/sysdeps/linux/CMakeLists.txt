@@ -16,6 +16,8 @@ add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/zstd" "${CMAKE_CURRENT_B
 add_subdirectory(elfutils)
 # MPFR depends on GMP.
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/mpfr" "${CMAKE_CURRENT_BINARY_DIR}/mpfr")
+# libpciaccess for PCI device access.
+add_subdirectory(libpciaccess)
 
 # Core sysdeps: This artifact includes libraries that are widely used and are typically
 # available on base systems. All of these should be small, fast to build, and high
@@ -108,5 +110,18 @@ if(THEROCK_ENABLE_SYSDEPS_NCURSES)
       lib
     SUBPROJECT_DEPS
       therock-ncurses
+  )
+endif()
+
+# Optional sysdep: libpciaccess
+if(THEROCK_ENABLE_SYSDEPS_LIBPCIACCESS)
+  therock_provide_artifact(sysdeps-libpciaccess
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-libpciaccess.toml
+    COMPONENTS
+      dev
+      lib
+    SUBPROJECT_DEPS
+      therock-libpciaccess
   )
 endif()
