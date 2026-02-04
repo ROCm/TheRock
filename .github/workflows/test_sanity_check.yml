@@ -104,9 +104,11 @@ jobs:
           FETCH_ARTIFACT_ARGS: "--base-only"
           IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
 
-      - name: Set HIP_CLANG_PATH for windows
+      - name: Set PATH and HIP_CLANG_PATH for windows
         if: ${{ runner.os == 'Windows' }}
-        run: echo "HIP_CLANG_PATH=${OUTPUT_ARTIFACTS_DIR}\lib\llvm\bin" >> $GITHUB_ENV
+        run: |
+          echo "HIP_CLANG_PATH=${OUTPUT_ARTIFACTS_DIR}\lib\llvm\bin" >> $GITHUB_ENV
+          echo "${OUTPUT_ARTIFACTS_DIR}\bin" >> $GITHUB_PATH
 
       - name: Driver / GPU sanity check
         timeout-minutes: 3
