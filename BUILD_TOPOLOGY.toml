@@ -108,7 +108,7 @@ submodules = []
 
 [source_sets.comm-libs]
 description = "Communication library submodules"
-submodules = ["rccl", "rccl-tests"]
+submodules = []
 
 [source_sets.profiler-extras]
 description = "Additional profiler submodules"
