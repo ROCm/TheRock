@@ -35,10 +35,14 @@ if old_ld_lib_path:
     environ_vars["LD_LIBRARY_PATH"] = (
         f"{THEROCK_LIB_PATH}:{sysdeps_path}:{old_ld_lib_path}"
     )
-    environ_vars["ROCPROFILER_SDK_TEST_LD_LIBRARY_PATH"] = f"{THEROCK_LIB_PATH}:{sysdeps_path}:{old_ld_lib_path}"
+    environ_vars["ROCPROFILER_SDK_TEST_LD_LIBRARY_PATH"] = (
+        f"{THEROCK_LIB_PATH}:{sysdeps_path}:{old_ld_lib_path}"
+    )
 else:
     environ_vars["LD_LIBRARY_PATH"] = f"{THEROCK_LIB_PATH}:{sysdeps_path}"
-    environ_vars["ROCPROFILER_SDK_TEST_LD_LIBRARY_PATH"] = f"{THEROCK_LIB_PATH}:{sysdeps_path}"
+    environ_vars["ROCPROFILER_SDK_TEST_LD_LIBRARY_PATH"] = (
+        f"{THEROCK_LIB_PATH}:{sysdeps_path}"
+    )
 
 # CMake Configuration
 cmake_config_cmd = [
@@ -53,7 +57,12 @@ cmake_config_cmd = [
 ]
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmake_config_cmd)}")
-subprocess.run(cmake_config_cmd, cwd=THEROCK_DIR, check=True, env=environ_vars,)
+subprocess.run(
+    cmake_config_cmd,
+    cwd=THEROCK_DIR,
+    check=True,
+    env=environ_vars,
+)
 
 # CMake Build
 cmake_build_cmd = [
@@ -63,8 +72,15 @@ cmake_build_cmd = [
     "-j",
 ]
 
-logging.info(f"++ Exec [{ROCPROFILER_SDK_TESTS_DIRECTORY}]$ {shlex.join(cmake_build_cmd)}")
-subprocess.run(cmake_build_cmd, cwd=ROCPROFILER_SDK_TESTS_DIRECTORY, check=True, env=environ_vars,)
+logging.info(
+    f"++ Exec [{ROCPROFILER_SDK_TESTS_DIRECTORY}]$ {shlex.join(cmake_build_cmd)}"
+)
+subprocess.run(
+    cmake_build_cmd,
+    cwd=ROCPROFILER_SDK_TESTS_DIRECTORY,
+    check=True,
+    env=environ_vars,
+)
 
 # CTest
 ctest_cmd = [
@@ -75,4 +91,9 @@ ctest_cmd = [
 ]
 
 logging.info(f"++ Exec [{ROCPROFILER_SDK_TESTS_DIRECTORY}]$ {shlex.join(ctest_cmd)}")
-subprocess.run(ctest_cmd, cwd=ROCPROFILER_SDK_TESTS_DIRECTORY, check=True, env=environ_vars,)
+subprocess.run(
+    ctest_cmd,
+    cwd=ROCPROFILER_SDK_TESTS_DIRECTORY,
+    check=True,
+    env=environ_vars,
+)
