@@ -72,17 +72,30 @@ class InstallPackagesTest(unittest.TestCase):
 
     @patch("setup_venv.find_venv_python_exe", return_value="python")
     @patch("setup_venv.run_command")
-    def test_extra_pip_args(self, mock_run, mock_find_python):
-        """Extra pip args are passed through to the command."""
+    def test_pre_flag_pip(self, mock_run, mock_find_python):
+        """--pre flag uses pip syntax."""
         install_packages_into_venv(
             venv_dir=self.venv_dir,
             packages=["rocm"],
-            extra_pip_args=["--pre", "--no-cache-dir"],
+            pre=True,
         )
 
         cmd = mock_run.call_args[0][0]
         self.assertIn("--pre", cmd)
-        self.assertIn("--no-cache-dir", cmd)
+
+    @patch("setup_venv.find_venv_python_exe", return_value="python")
+    @patch("setup_venv.run_command")
+    def test_pre_flag_uv(self, mock_run, mock_find_python):
+        """--pre flag uses uv syntax when use_uv=True."""
+        install_packages_into_venv(
+            venv_dir=self.venv_dir,
+            packages=["rocm"],
+            use_uv=True,
+            pre=True,
+        )
+
+        cmd = mock_run.call_args[0][0]
+        self.assertIn("--prerelease=allow", cmd)
 
     @patch("setup_venv.find_venv_python_exe", return_value="python")
     @patch("setup_venv.run_command")
