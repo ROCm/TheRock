@@ -121,6 +121,10 @@ option(THEROCK_ENABLE_LLVM_TESTS "Enables building LLVM LIT tests" OFF)
 
 set(THEROCK_SANITIZER "" CACHE STRING "Enable project wide sanitizer build ('ASAN' for host+device, 'HOST_ASAN' for host-only)")
 
+# Options to control the concurrency for building LLVM.
+set(FLANG_PARALLEL_COMPILE_JOBS "" CACHE STRING "Limit parallel compile jobs for Flang (reduces memory usage on systems with many cores)")
+set(LLVM_PARALLEL_LINK_JOBS "" CACHE STRING "Limit parallel link jobs for LLVM (reduces memory usage on systems with many cores)")
+
 # List of python executables to use for multi-version python builds
 set(THEROCK_DIST_PYTHON_EXECUTABLES "" CACHE STRING "Build for multiple python versions in supported projects (default to Python3_EXECUTABLE if empty)")
 
