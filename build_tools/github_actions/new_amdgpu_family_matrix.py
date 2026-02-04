@@ -18,6 +18,7 @@ amdgpu_family_info_matrix_all {
               "run_tests":                      #         boolean: True if the test should run
               "runs_on": {                      #         dict: Host names of compute nodes
                   "test":                       #             string: test runner (optional)
+                  "test-multi-gpu":             #             string: multi-gpu test runner (optional)
                   "benchmark":                  #             string: benchmark runner (optional)
               }
             }
@@ -35,6 +36,7 @@ amdgpu_family_info_matrix_all {
               "run_tests":                      #         boolean: True if the test should run
               "runs_on": {                      #         dict: Host names of compute nodes
                   "test":                       #             string: test runner (optional)
+                  "test-multi-gpu":             #             string: multi-gpu test runner (optional)
                   "benchmark":                  #             string: benchmark runner (optional)
               }
             }
@@ -60,6 +62,7 @@ Cmake targets are defined in: cmake/therock_amdgpu_targets.cmake
 #                     "run_tests": False,
 #                     "runs_on": {
 #                         "test": "",
+#                         "test-multi-gpu": "",
 #                         "benchmark": "",
 #                     },
 #                     "sanity_check_only_for_family": False,
@@ -79,6 +82,7 @@ Cmake targets are defined in: cmake/therock_amdgpu_targets.cmake
 #                     "run_tests": False,
 #                     "runs_on": {
 #                         "test": "",
+#                         "test-multi-gpu": "",
 #                         "benchmark": "",
 #                     },
 #                     "sanity_check_only_for_family": False,
@@ -145,7 +149,7 @@ amdgpu_family_info_matrix_all = {
                     "run_tests": True,
                     "runs_on": {
                         "test": "linux-mi325-1gpu-ossci-rocm-frac",
-                        "test-runs-on-multi-gpu": "linux-mi325-8gpu-ossci-rocm",
+                        "test-multi-gpu": "linux-mi325-8gpu-ossci-rocm",
                         # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
                         "benchmark": "linux-mi325-8gpu-ossci-rocm",
                     },
