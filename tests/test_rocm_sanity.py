@@ -160,6 +160,25 @@ class TestROCmSanity:
             "amdsmitstReadWrite.TestPowerReadWrite",
         ]
 
+        TESTS_TO_IGNORE = {
+            "gfx90X-dcgpu": {
+                # TODO(#2963): Re-enable once amdsmi tests are fixed for gfx90X-dcgpu
+                "linux": [
+                    "amdsmitstReadOnly.TestSysInfoRead",
+                    "amdsmitstReadOnly.TestIdInfoRead",
+                    "amdsmitstReadWrite.TestPciReadWrite",
+                ]
+            },
+        }
+
+        platform_key = "windows" if is_windows() else "linux"
+        if (
+            AMDGPU_FAMILIES in TESTS_TO_IGNORE
+            and platform_key in TESTS_TO_IGNORE[AMDGPU_FAMILIES]
+        ):
+            ignored_tests = TESTS_TO_IGNORE[AMDGPU_FAMILIES][platform_key]
+            exclude_tests.extend(ignored_tests)
+
         gtest_filter = f"{':'.join(include_tests)}:-{':'.join(exclude_tests)}"
         cmd = [str(amdsmi_test_bin), f"--gtest_filter={gtest_filter}"]
 

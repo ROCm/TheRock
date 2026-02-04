@@ -121,6 +121,12 @@ def run_sanity(os_name: str) -> None:
             args=[],
             extra_command_search_paths=[bin_dir],
         )
+        run_command_with_search(
+            label="Kernel version",
+            command="uname -r",
+            args=[],
+            extra_command_search_paths=[bin_dir],
+        )
 
     log("\n=== End of sanity check ===")
 
