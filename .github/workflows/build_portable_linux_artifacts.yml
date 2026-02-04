@@ -66,7 +66,7 @@ jobs:
     permissions:
       id-token: write
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:db2b63f938941dde2abc80b734e64b45b9995a282896d513a0f3525d4591d6cb
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:3494ea779c36b765da3ed55306db89704358b699a2d83835e81e9c67729104ee
       # --cap-add=SYS_PTRACE : to enable ptrace insided the build container for tsan builds
       # --security-opt seccomp=unconfined : to disable the system call filtering for tsan builds
       options: -v /runner/config:/home/awsconfig/ --cap-add=SYS_PTRACE --security-opt seccomp=unconfined

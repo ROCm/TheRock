@@ -45,7 +45,7 @@ jobs:
     permissions:
       id-token: write
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:db2b63f938941dde2abc80b734e64b45b9995a282896d513a0f3525d4591d6cb
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:3494ea779c36b765da3ed55306db89704358b699a2d83835e81e9c67729104ee
       options: -v /runner/config:/home/awsconfig/
     outputs:
       package_find_links_url: ${{ steps.upload.outputs.package_find_links_url }}
