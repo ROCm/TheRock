@@ -217,7 +217,8 @@ amdgpu_family_info_matrix_all = {
                     "build_variants": ["release"],
                 },
                 "test": {
-                    "run_tests": True,
+                    # TODO(#3199): Re-enable machine once it is stable
+                    "run_tests": False,
                     "runs_on": {
                         "test": "linux-gfx1150-gpu-rocm",
                     },
@@ -268,6 +269,7 @@ amdgpu_family_info_matrix_all = {
                     "run_tests": True,
                     "runs_on": {
                         "test": "windows-gfx1151-gpu-rocm",
+                        # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
                         "benchmark": "windows-gfx1151-gpu-rocm",
                     },
                 },
@@ -395,8 +397,11 @@ amdgpu_family_info_matrix_all = {
                     "build_variants": ["release"],
                 },
                 "test": {
+                    # TODO(#2962): Re-enable machine once sanity checks work with this architecture
                     "run_tests": False,
-                    "runs_on": {},
+                    "runs_on": {
+                        "test": "windows-gfx120X-gpu-rocm",
+                    },
                 },
                 "release": {"push_on_success": True, "bypass_tests_for_releases": True},
             },
@@ -409,8 +414,10 @@ amdgpu_family_info_matrix_all = {
                     "build_variants": ["release"],
                 },
                 "test": {
-                    "run_tests": False,
-                    "runs_on": {},
+                    "run_tests": True,
+                    "runs_on": {
+                        "test": "linux-gfx90X-gpu-rocm",
+                    },
                     "sanity_check_only_for_family": True,
                 },
                 "release": {
@@ -418,6 +425,8 @@ amdgpu_family_info_matrix_all = {
                     "bypass_tests_for_releases": False,
                 },
             },
+            # TODO(#1927): Resolve error generating file `torch_hip_generated_int4mm.hip.obj`,
+            # to enable PyTorch builds
             "windows": {
                 "build": {
                     "build_variants": ["release"],
@@ -444,6 +453,8 @@ amdgpu_family_info_matrix_all = {
                 "test": {
                     "run_tests": False,
                     "runs_on": {},
+                    # TODO(#1926): Resolve bgemm kernel hip file generation error,
+                    # to enable PyTorch builds
                     "expect_pytorch_failure": True,
                 },
                 "release": {
@@ -458,6 +469,7 @@ amdgpu_family_info_matrix_all = {
                 "test": {
                     "run_tests": False,
                     "runs_on": {},
+                    # TODO(#1925): Enable arch for aotriton to enable PyTorch build
                     "expect_pytorch_failure": True,
                 },
                 "release": {
@@ -491,7 +503,8 @@ amdgpu_family_info_matrix_all = {
                     "build_variants": ["release"],
                 },
                 "test": {
-                    "run_tests": True,
+                    # TODO(#3200): Re-enable machine once it is stable
+                    "run_tests": False,
                     "runs_on": {
                         "test": "windows-gfx1030-gpu-rocm",
                     },
