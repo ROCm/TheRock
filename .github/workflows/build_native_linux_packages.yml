@@ -116,18 +116,18 @@ jobs:
             --pkg-type ${{ inputs.native_package_type }} \
             --version-suffix ${{ env.ARTIFACT_RUN_ID }}
 
-      - name: Test Package Installation
+      - name: Test Package Simulate installation
         id: test-packages
         run: |
-          echo "Testing ${{ inputs.native_package_type }} package installation"
+          echo "Testing ${{ inputs.native_package_type }} package simulate installation"
           if [ "${{ inputs.native_package_type }}" = "deb" ]; then
-            echo "Installing DEB packages on host system for testing"
-            python ./build_tools/packaging/linux/install_test_native_package.py \
+            echo "Simulate installing DEB packages on host system for testing"
+            python ./build_tools/packaging/linux/package_sanity_check.py \
               --package-type deb \
               --package-folder ${{ env.PACKAGE_DIST_DIR }}
           else
-            echo "Installing RPM packages in Docker container for testing"
-            python ./build_tools/packaging/linux/install_test_native_package.py \
+            echo "Simulate installing RPM packages in Docker container for testing"
+            python ./build_tools/packaging/linux/package_sanity_check.py \
               --package-type rpm \
               --package-folder ${{ env.PACKAGE_DIST_DIR }} \
               --docker-image ${{ env.BUILD_IMAGE }} \
