@@ -12,7 +12,6 @@ from unittest.mock import patch, MagicMock, mock_open
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from detect_external_repo_config import (
-    detect_repo_name,
     get_repo_config,
     get_external_repo_path,
     import_external_repo_module,
@@ -22,20 +21,6 @@ from detect_external_repo_config import (
     output_github_actions_vars,
     REPO_CONFIGS,
 )
-
-
-class TestDetectRepoName(unittest.TestCase):
-    """Tests for detect_repo_name function"""
-
-    def test_full_repo_name(self):
-        """Test with full repository name (org/repo format)"""
-        self.assertEqual(detect_repo_name("ROCm/rocm-libraries"), "rocm-libraries")
-        self.assertEqual(detect_repo_name("ROCm/rocm-systems"), "rocm-systems")
-
-    def test_short_repo_name(self):
-        """Test with short repository name"""
-        self.assertEqual(detect_repo_name("rocm-libraries"), "rocm-libraries")
-        self.assertEqual(detect_repo_name("rocm-systems"), "rocm-systems")
 
 
 class TestGetRepoConfig(unittest.TestCase):
@@ -82,102 +67,79 @@ class TestGetRepoConfig(unittest.TestCase):
 class TestOutputGithubActionsVars(unittest.TestCase):
     """Tests for output_github_actions_vars function"""
 
+    def setUp(self):
+        """Set up test fixtures"""
+        # Create temporary file for GITHUB_OUTPUT
+        with tempfile.NamedTemporaryFile(mode="w+", delete=False) as f:
+            self.temp_file = f.name
+        os.environ["GITHUB_OUTPUT"] = self.temp_file
+
+    def tearDown(self):
+        """Clean up test fixtures"""
+        # Remove GITHUB_OUTPUT env var
+        if "GITHUB_OUTPUT" in os.environ:
+            del os.environ["GITHUB_OUTPUT"]
+        # Delete temp file
+        if hasattr(self, "temp_file") and os.path.exists(self.temp_file):
+            os.unlink(self.temp_file)
+
     def test_output_to_file(self):
         """Test output to GITHUB_OUTPUT file"""
-        with tempfile.NamedTemporaryFile(mode="w+", delete=False) as f:
-            temp_file = f.name
+        config = {
+            "cmake_source_var": "TEST_VAR",
+            "submodule_path": "test-dir",
+            "fetch_exclusion": "--no-include-test",
+        }
 
-        try:
-            # Set GITHUB_OUTPUT environment variable
-            os.environ["GITHUB_OUTPUT"] = temp_file
+        output_github_actions_vars(config)
 
-            config = {
-                "cmake_source_var": "TEST_VAR",
-                "submodule_path": "test-dir",
-                "fetch_exclusion": "--no-include-test",
-            }
+        # Read the output file
+        with open(self.temp_file, "r") as f:
+            output = f.read()
 
-            output_github_actions_vars(config)
-
-            # Read the output file
-            with open(temp_file, "r") as f:
-                output = f.read()
-
-            # Verify output format
-            self.assertIn("cmake_source_var=TEST_VAR", output)
-            self.assertIn("submodule_path=test-dir", output)
-            self.assertIn("fetch_exclusion=--no-include-test", output)
-
-        finally:
-            # Cleanup
-            if "GITHUB_OUTPUT" in os.environ:
-                del os.environ["GITHUB_OUTPUT"]
-            if os.path.exists(temp_file):
-                os.unlink(temp_file)
+        # Verify output format
+        self.assertIn("cmake_source_var=TEST_VAR", output)
+        self.assertIn("submodule_path=test-dir", output)
+        self.assertIn("fetch_exclusion=--no-include-test", output)
 
     def test_boolean_conversion(self):
         """Test that booleans are converted to lowercase strings"""
-        with tempfile.NamedTemporaryFile(mode="w+", delete=False) as f:
-            temp_file = f.name
+        config = {
+            "bool_true": True,
+            "bool_false": False,
+        }
 
-        try:
-            os.environ["GITHUB_OUTPUT"] = temp_file
+        output_github_actions_vars(config)
 
-            config = {
-                "bool_true": True,
-                "bool_false": False,
-            }
+        with open(self.temp_file, "r") as f:
+            output = f.read()
 
-            output_github_actions_vars(config)
-
-            with open(temp_file, "r") as f:
-                output = f.read()
-
-            # Verify lowercase (important for bash conditionals)
-            self.assertIn("bool_true=true", output)
-            self.assertIn("bool_false=false", output)
-            self.assertNotIn("True", output)
-            self.assertNotIn("False", output)
-
-        finally:
-            if "GITHUB_OUTPUT" in os.environ:
-                del os.environ["GITHUB_OUTPUT"]
-            if os.path.exists(temp_file):
-                os.unlink(temp_file)
+        # Verify lowercase (important for bash conditionals)
+        self.assertIn("bool_true=true", output)
+        self.assertIn("bool_false=false", output)
+        self.assertNotIn("True", output)
+        self.assertNotIn("False", output)
 
     def test_extra_cmake_options_generated(self):
         """Test that extra_cmake_options is generated by main() when --workspace is provided."""
-        with tempfile.NamedTemporaryFile(mode="w+", delete=False) as f:
-            temp_file = f.name
-
-        try:
-            os.environ["GITHUB_OUTPUT"] = temp_file
-            old_argv = sys.argv[:]
-            sys.argv = [
-                "detect_external_repo_config.py",
+        rc = detect_external_repo_config_main(
+            [
                 "--repository",
-                "ROCm/rocm-libraries",
+                "rocm-libraries",
                 "--workspace",
                 "/workspace",
             ]
-            rc = detect_external_repo_config_main()
-            self.assertEqual(rc, 0)
+        )
+        self.assertEqual(rc, 0)
 
-            with open(temp_file, "r") as f:
-                output = f.read()
+        with open(self.temp_file, "r") as f:
+            output = f.read()
 
-            # Verify extra_cmake_options is included
-            self.assertIn(
-                "extra_cmake_options=-DTHEROCK_ROCM_LIBRARIES_SOURCE_DIR=/workspace",
-                output,
-            )
-
-        finally:
-            sys.argv = old_argv
-            if "GITHUB_OUTPUT" in os.environ:
-                del os.environ["GITHUB_OUTPUT"]
-            if os.path.exists(temp_file):
-                os.unlink(temp_file)
+        # Verify extra_cmake_options is included
+        self.assertIn(
+            "extra_cmake_options=-DTHEROCK_ROCM_LIBRARIES_SOURCE_DIR=/workspace",
+            output,
+        )
 
 
 class TestGetExternalRepoPath(unittest.TestCase):
@@ -221,6 +183,9 @@ class TestGetExternalRepoPath(unittest.TestCase):
     @patch("detect_external_repo_config._is_valid_repo_path")
     def test_no_valid_path_raises_error(self, mock_is_valid, mock_path_cls):
         """Test that ValueError is raised when no valid path is found"""
+        # Clear the cache to ensure this test runs fresh
+        get_external_repo_path.cache_clear()
+
         mock_cwd = MagicMock()
         mock_path_cls.cwd.return_value = mock_cwd
         mock_is_valid.return_value = False
@@ -269,14 +234,6 @@ class TestImportExternalRepoModule(unittest.TestCase):
         mock_get_path.return_value = mock_repo_path
 
         result = import_external_repo_module("rocm-libraries", "missing_module")
-        self.assertIsNone(result)
-
-    @patch("detect_external_repo_config.get_external_repo_path")
-    def test_repo_path_not_found(self, mock_get_path):
-        """Test handling when repo path cannot be determined"""
-        mock_get_path.side_effect = ValueError("Repo not found")
-
-        result = import_external_repo_module("unknown-repo", "test_module")
         self.assertIsNone(result)
 
     @patch("detect_external_repo_config.get_external_repo_path")

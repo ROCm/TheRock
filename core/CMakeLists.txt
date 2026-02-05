@@ -231,7 +231,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
         lib
         lib/rocm_sysdeps/lib
     )
-    therock_cmake_subproject_glob_c_sources(hip-tests SUBDIRS catch)
+    therock_cmake_subproject_glob_c_sources(hip-tests SUBDIRS .)
     therock_cmake_subproject_activate(hip-tests)
     # Provide it as an artifact:
     therock_provide_artifact(core-hiptests
