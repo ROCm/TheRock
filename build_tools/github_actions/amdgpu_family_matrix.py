@@ -68,9 +68,7 @@ amdgpu_family_info_matrix_presubmit = {
             # Label is "linux-gfx110X-gpu-rocm"
             "test-runs-on": "linux-gfx1103-gpu-rocm",
             "family": "gfx110X-all",
-            "bypass_tests_for_releases": True,
             "build_variants": ["release"],
-            "sanity_check_only_for_family": True,
         },
         "windows": {
             "test-runs-on": "windows-gfx110X-gpu-rocm",
