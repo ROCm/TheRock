@@ -95,18 +95,20 @@ Cmake targets are defined in: cmake/therock_amdgpu_targets.cmake
 #             },
 # }
 
+#######
 # NOTE: when doing changes here, also check that they are done in amdgpu_family_matrix.py
+#######
 
 amdgpu_family_predefined_groups = {
     # The 'presubmit' matrix runs on 'pull_request' triggers (on all PRs).
-    "amdgpu_presubmit": ["gfx94X-dcgpu", "gfx110X-all", "gfx1151", "gfx120X-all"],
+    "amdgpu_presubmit": ["gfx94Xxdcgpu", "gfx110x-all", "gfx1151", "gfx120x-all"],
     # The 'postsubmit' matrix runs on 'push' triggers (for every commit to the default branch).
     "amdgpu_postsubmit": ["gfx950-dcgpu"],
     # The 'nightly' matrix runs on 'schedule' triggers.
-    "amdgpu_nightly_ci": [
-        "gfx90X-dcgpu",
-        "gfx101X-dgpu",
-        "gfx103X-dgpu",
+    "amdgpu_nightly": [
+        "gfx90x-dcgpu",
+        "gfx101x-dgpu",
+        "gfx103x-dgpu",
         "gfx1150",
         "gfx1152",
         "gfx1153",
@@ -141,7 +143,7 @@ all_build_variants = {
 
 
 amdgpu_family_info_matrix_all = {
-    "gfx94X": {
+    "gfx94x": {
         "dcgpu": {
             "linux": {
                 "build": {
@@ -176,7 +178,7 @@ amdgpu_family_info_matrix_all = {
             },
         },
     },
-    "gfx110X": {
+    "gfx110x": {
         "all": {
             "linux": {
                 "build": {
@@ -374,7 +376,7 @@ amdgpu_family_info_matrix_all = {
             },
         }
     },
-    "gfx120X": {
+    "gfx120x": {
         "all": {
             "linux": {
                 "build": {
@@ -407,7 +409,7 @@ amdgpu_family_info_matrix_all = {
             },
         }
     },
-    "gfx90X": {
+    "gfx90x": {
         "dcgpu": {
             "linux": {
                 "build": {
@@ -443,7 +445,7 @@ amdgpu_family_info_matrix_all = {
             },
         }
     },
-    "gfx101X": {
+    "gfx101x": {
         "dgpu": {
             "linux": {
                 "build": {
@@ -479,7 +481,7 @@ amdgpu_family_info_matrix_all = {
             },
         }
     },
-    "gfx103X": {
+    "gfx103x": {
         "dgpu": {
             "linux": {
                 "build": {
