@@ -117,12 +117,12 @@ class InstallPackagesTest(unittest.TestCase):
         install_packages_into_venv(
             venv_dir=self.venv_dir,
             packages=["rocm"],
-            index_name="nightly",
+            index_name="stable",
             index_subdir="gfx110X-all",
         )
 
         cmd = mock_run.call_args[0][0]
-        self.assertIn("--index-url=https://rocm.nightlies.amd.com/v2/gfx110X-all", cmd)
+        self.assertIn("--index-url=https://repo.amd.com/rocm/whl/gfx110X-all", cmd)
 
     @patch("setup_venv.find_venv_python_exe", return_value="python")
     @patch("setup_venv.run_command")

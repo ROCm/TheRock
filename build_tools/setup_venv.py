@@ -46,6 +46,7 @@ is_windows = platform.system() == "Windows"
 
 ROCM_INDEX_URLS_MAP = {
     "stable": "https://repo.amd.com/rocm/whl/",
+    "prerelease": "https://rocm.prereleases.amd.com/whl",
     "nightly": "https://rocm.nightlies.amd.com/v2",
     "dev": "https://rocm.devreleases.amd.com/v2",
 }
@@ -161,10 +162,10 @@ def install_packages_into_venv(
         venv_dir: The venv to install into
         packages: The list of packages to install
         use_uv: True to use 'uv', uses 'pip' otherwise
-        index_url: Url for '--index-url' command argument
+        index_url: URL for '--index-url' command argument
         index_name: Shorthand for a base index_url (e.g. 'nightly')
         index_subdir: Subdirectory for 'index_url' or 'index_name'
-        find_links: Url for '--find-links' command argument
+        find_links: URL for '--find-links' command argument
         pre: Allow pre-release packages (pip: --pre, uv: --prerelease=allow)
         disable_cache: Disable package cache (pip: --no-cache-dir, uv: --no-cache)
     """
@@ -329,7 +330,7 @@ def main(argv: list[str]):
     install_options.add_argument(
         "--index-name",
         type=str,
-        choices=["stable", "nightly", "dev"],
+        choices=["stable", "prerelease", "nightly", "dev"],
         help="Shorthand for a named index (requires --index-subdir)",
     )
     install_options.add_argument(
