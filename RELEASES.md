@@ -338,7 +338,7 @@ Supported devices in this family:
 | AMD Radeon 780M Laptop iGPU        | gfx1103    |
 
 ```bash
-pip install --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ torch torchaudio 
+pip install --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ torch torchaudio
 # Optional additional packages on Linux:
 #   apex
 ```
