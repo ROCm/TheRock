@@ -89,7 +89,25 @@ class TestROCmSanity:
             / offload_arch_executable_file
         ).resolve()
         process = run_command([str(offload_arch_path)])
-        offload_arch = process.stdout.splitlines()[0]
+
+        # Extract the arch from the command output, working around
+        # https://github.com/ROCm/TheRock/issues/1118. We only expect the output
+        # to contain 'gfx####` text but some ROCm releases contained stray
+        # "HIP Library Path" logging first.
+        # **Note**: this partly defaults the purpose of the sanity check, since
+        # that should really be a test failure. However, per discussion on
+        # https://github.com/ROCm/TheRock/pull/3257 we found that system
+        # installs of ROCm (DLLs in system32) take precedence over user
+        # installs (PATH env var) under certain conditions. Hopefully a
+        # different unit test elsewhere in ROCm catches that more directly.
+        offload_arch = None
+        for line in process.stdout.splitlines():
+            if "gfx" in line:
+                offload_arch = line
+                break
+        assert (
+            offload_arch is not None
+        ), f"Expected offload-arch to return gfx####, got:\n{process.stdout}"
 
         # Compiling .cpp file using hipcc
         hipcc_check_executable_file = f"hipcc_check{platform_executable_suffix}"

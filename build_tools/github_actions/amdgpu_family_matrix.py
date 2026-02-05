@@ -34,6 +34,12 @@ all_build_variants = {
             "build_variant_cmake_preset": "linux-release-asan",
             "expect_failure": True,
         },
+        "tsan": {
+            "build_variant_label": "tsan",
+            "build_variant_suffix": "tsan",
+            "build_variant_cmake_preset": "linux-release-tsan",
+            "expect_failure": True,
+        },
     },
     "windows": {
         "release": {
@@ -53,7 +59,7 @@ amdgpu_family_info_matrix_presubmit = {
             # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
             "benchmark-runs-on": "linux-mi325-8gpu-ossci-rocm",
             "family": "gfx94X-dcgpu",
-            "build_variants": ["release", "asan"],
+            "build_variants": ["release", "asan", "tsan"],
         }
     },
     "gfx110x": {
@@ -118,7 +124,7 @@ amdgpu_family_info_matrix_postsubmit = {
         "linux": {
             "test-runs-on": "linux-mi355-1gpu-ossci-rocm",
             "family": "gfx950-dcgpu",
-            "build_variants": ["release", "asan"],
+            "build_variants": ["release", "asan", "tsan"],
         }
     },
 }

@@ -39,11 +39,14 @@ jobs:
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       ARTIFACTS_DIR: "${{ github.workspace }}/artifacts"
       PACKAGES_DIR: "${{ github.workspace }}/packages"
+      IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
     defaults:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: '3.12'
@@ -53,8 +56,6 @@ jobs:
 
       # Note: we could fetch "all" artifacts if we wanted to include more files
       - name: Fetch artifacts
-        env:
-          IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
         run: |
           python ./build_tools/fetch_artifacts.py \
             --run-github-repo=${{ inputs.artifact_github_repo }} \
