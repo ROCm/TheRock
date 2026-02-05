@@ -43,20 +43,14 @@ def get_asan_lib_path():
     return result.stdout.strip()
 
 
-# If we have built tests in ASAN mode
-# We need t supress the leak messages when we detect the number of test cases for sharding purpose
-# We make a copy of env and override the options
 def get_test_count(env):
-    tc_env = env
-    if ASAN_OPTIONS:
-        tc_env["ASAN_OPTIONS"] = "detect_leaks=0"
     cmd = ["ctest", "--show-only=json-v1"]
     result = subprocess.run(
         cmd,
         cwd=CATCH_TESTS_PATH,
         check=True,
         capture_output=True,
-        env=tc_env,
+        env=env,
     )
     jdata = json.loads(result.stdout)
     tests = jdata["tests"]
@@ -111,8 +105,6 @@ def setup_env(env):
         # For ASAN mode, we preload it for test count query and test running
         if ASAN_OPTIONS:
             env["LD_PRELOAD"] = get_asan_lib_path()
-            # TODO: enable this when we have symbolizer patch in
-            # env["ASAN_SYMBOLIZER_PATH"] = str(Path(THEROCK_BIN_DIR).parent / "lib" / "llvm" / "bin" / "llvm-symbolizer")
     else:
         copy_dlls_exe_path()
 
