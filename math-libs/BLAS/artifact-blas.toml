@@ -71,17 +71,11 @@ include = [
   # Clients tests
   "bin/hipblaslt-test*",
   "bin/hipblaslt_gentest.py",
-  "bin/hipblaslt_common.yaml",
-  "bin/hipblaslt-perf",
-  # Python modules for hipblaslt-perf
-  "bin/bench.py",
-  "bin/bench_sample.py", 
-  "bin/generator.py",
-  "bin/git_info.py",
-  "bin/specs.py",
-  "bin/suites.py",
   "bin/hipblaslt_gtest.data",
   "bin/hipblaslt_*.yaml",
+  # hipblaslt-perf and python modules
+  "bin/hipblaslt-perf",
+  "share/hipblaslt/performance/**",
   # Built samples (may want these in a samples component at some point).
   "libexec/hipblaslt-samples/**",
 ]
