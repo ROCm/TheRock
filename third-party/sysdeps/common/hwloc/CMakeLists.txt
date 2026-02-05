@@ -62,7 +62,7 @@ endif()
 cmake_minimum_required(VERSION 3.25)
 project(HWLOC_BUILD)
 
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT PATCHELF)
+if(NOT PATCHELF)
   message(FATAL_ERROR "Missing PATCHELF from super-project")
 endif()
 
