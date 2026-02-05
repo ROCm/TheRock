@@ -50,7 +50,7 @@ cmd = [
     f"{THEROCK_BIN_DIR}/rocwmma{test_subdir}",
     "--output-on-failure",
     "--parallel",
-    "8",
+    "1",
     "--timeout",
     timeout,
     "--exclude-regex",
