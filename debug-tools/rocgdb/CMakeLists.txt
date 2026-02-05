@@ -150,7 +150,15 @@ set(NCURSES_INCLUDE "-I${NCURSES_PREFIX}/include")
 # Adjust the compilation flags and LDFLAGS.
 set(CUSTOM_C_FLAGS "${CUSTOM_C_FLAGS} ${NCURSES_INCLUDE}")
 set(CUSTOM_CXX_FLAGS "${CUSTOM_CXX_FLAGS} ${NCURSES_INCLUDE}")
-set(LDFLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${NCURSES_RPATH} -Wl,--enable-new-dtags")
+
+#
+# -latomic: We need to pass this switch so rocgdb builds properly with LLVM.
+#           The code that parses DWARF may use atomics. GCC does not need
+#           this switch, but it is safe to pass it anyway.
+#
+# -Wl,--enable-new-dtags: Modifies RPATH/RUNPATH shared library discovery logic.
+#
+set(LDFLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${NCURSES_RPATH} -Wl,--enable-new-dtags -latomic")
 
 # Replace all semicolons (the CMake separator) with colons (the ENV separator).
 # We need this to pass it on to rocgdb's configure.
