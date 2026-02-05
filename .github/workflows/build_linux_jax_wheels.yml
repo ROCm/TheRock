@@ -280,14 +280,17 @@ jobs:
         if: ${{ env.upload == 'true' }}
         run: |
           echo "Copying exact tested wheels to release S3 bucket..."
+          # Sanitize ROCM_VERSION: replace '+' with '.' for PEP 440 compliance
+          # (local version label can only contain alphanumerics and periods)
+          SANITIZED_ROCM_VERSION=$(echo "${ROCM_VERSION}" | tr '+' '.')
           aws s3 cp \
             s3://${S3_BUCKET_PY}/${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}/ \
             s3://${S3_BUCKET_PY}/${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}/ \
             --recursive \
             --exclude "*" \
-            --include "jaxlib-${JAX_VERSION}+rocm${ROCM_VERSION}-${CP_VERSION}-manylinux_2_27_x86_64.whl" \
-            --include "jax_rocm7_plugin-${JAX_VERSION}+rocm${ROCM_VERSION}-${CP_VERSION}-manylinux_2_28_x86_64.whl" \
-            --include "jax_rocm7_pjrt-${JAX_VERSION}+rocm${ROCM_VERSION}-py3-none-manylinux_2_28_x86_64.whl"
+            --include "jaxlib-${JAX_VERSION}+rocm${SANITIZED_ROCM_VERSION}-${CP_VERSION}-manylinux_2_27_x86_64.whl" \
+            --include "jax_rocm7_plugin-${JAX_VERSION}+rocm${SANITIZED_ROCM_VERSION}-${CP_VERSION}-manylinux_2_28_x86_64.whl" \
+            --include "jax_rocm7_pjrt-${JAX_VERSION}+rocm${SANITIZED_ROCM_VERSION}-py3-none-manylinux_2_28_x86_64.whl"
 
       - name: (Re-)Generate Python package release index
         if: ${{ env.upload == 'true' }}

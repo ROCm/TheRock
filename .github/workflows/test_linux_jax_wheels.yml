@@ -185,7 +185,10 @@ jobs:
           JAX_VERSION=$(tr -d ' ' < jax/build/requirements.txt \
           | grep -E '^(jax|jaxlib)==[^#]+' | head -n1 | cut -d'=' -f3)
           echo "JAX_VERSION=$JAX_VERSION" >> "$GITHUB_ENV"
-          echo "PACKAGE_VERSION=${JAX_VERSION}+rocm${{ inputs.rocm_version }}" >> "$GITHUB_ENV"
+          # Sanitize rocm_version: replace '+' with '.' for PEP 440 compliance
+          # (local version label can only contain alphanumerics and periods)
+          SANITIZED_ROCM_VERSION=$(echo "${{ inputs.rocm_version }}" | tr '+' '.')
+          echo "PACKAGE_VERSION=${JAX_VERSION}+rocm${SANITIZED_ROCM_VERSION}" >> "$GITHUB_ENV"
 
       - name: Install JAX wheels from package index
         run: |
@@ -202,4 +205,3 @@ jobs:
           pytest jax/jax_tests/tests/core_test.py -q --log-cli-level=INFO
           pytest jax/jax_tests/tests/util_test.py -q --log-cli-level=INFO
           pytest jax/jax_tests/tests/scipy_stats_test.py -q --log-cli-level=INFO
-
