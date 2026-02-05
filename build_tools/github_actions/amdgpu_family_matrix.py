@@ -92,7 +92,7 @@ amdgpu_family_info_matrix_presubmit = {
             "sanity_check_only_for_family": True,
         },
         "windows": {
-            "test-runs-on": "windows-gfx1151-gpu-rocm",
+            "test-runs-on": "test-windows-strix-halo-gpu-rocm",
             # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
             "benchmark-runs-on": "windows-gfx1151-gpu-rocm",
             "family": "gfx1151",
@@ -165,8 +165,6 @@ amdgpu_family_info_matrix_nightly = {
     },
     "gfx103x": {
         "linux": {
-            # TODO(#2740): Re-enable machine once it is stable
-            # Label is ""
             "test-runs-on": "linux-gfx1030-gpu-rocm",
             "family": "gfx103X-dgpu",
             "build_variants": ["release"],
@@ -174,8 +172,8 @@ amdgpu_family_info_matrix_nightly = {
         },
         "windows": {
             # TODO(#3200): Re-enable machine once it is stable
-            # Label is ""
-            "test-runs-on": "windows-gfx1030-gpu-rocm",
+            # Label is "windows-gfx1030-gpu-rocm"
+            "test-runs-on": "",
             "family": "gfx103X-dgpu",
             "build_variants": ["release"],
             "sanity_check_only_for_family": True,
