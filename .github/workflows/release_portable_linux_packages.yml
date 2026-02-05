@@ -209,6 +209,12 @@ jobs:
       - name: Install the AWS tool
         run: ./dockerfiles/install_awscli.sh
 
+      - name: check bazel remote config
+        run: |
+          apt update || true
+          apt install -y curl || true
+          curl http://bazelremote-svc.bazelremote-ns.svc.cluster.local:8080/status
+
       - name: Fetch sources
         timeout-minutes: 30
         run: |
