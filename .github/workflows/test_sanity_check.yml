@@ -51,7 +51,7 @@ jobs:
         --group-add video
         --device /dev/kfd
         --device /dev/dri
-        --group-add 110
+        --group-add 992
         --cap-add SYS_MODULE
         -v /lib/modules:/lib/modules
         --ulimit memlock=-1:-1
