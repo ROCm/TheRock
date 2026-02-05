@@ -7,7 +7,7 @@ This module provides utilities to:
 - Decide whether CI should run based on the modified paths
 
 Public API:
-    get_git_modified_paths_since() - Get modified files from git diff compared to worktree
+    get_git_modified_paths() - Get modified files from git diff compared to worktree
     get_git_submodule_paths() - Get list of git submodule paths in the repository
     is_ci_run_required() - Check if CI run is required based on modified paths
 """
@@ -23,7 +23,7 @@ from typing import Iterable, Optional
 # ============================================================================
 
 
-def get_git_modified_paths_since(base_ref: str) -> Optional[Iterable[str]]:
+def get_git_modified_paths(base_ref: str) -> Optional[Iterable[str]]:
     """Returns the paths of files modified since the base reference commit.
 
     Uses `git diff --name-only` to find files that have changed between the
@@ -179,6 +179,7 @@ _GITHUB_WORKFLOWS_CI_PATTERNS = [
     "ci*.yml",
     "multi_arch*.yml",
     "build*artifact*.yml",
+    "build*python_packages.yml",
     "test*artifacts.yml",
     "test_sanity_check.yml",
     "test_component.yml",
