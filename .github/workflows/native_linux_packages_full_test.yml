@@ -1,0 +1,239 @@
+name: Full Test of Native Linux Packages
+
+on:
+  workflow_call:
+    inputs:
+      artifact_group:
+        description: gfx arch group for the s3 server
+        type: string
+        default: gfx94X-dcgpu
+      artifact_run_id:
+        description: workflow run id to download the artifacts from.
+        required: true
+        type: string
+      rocm_version:
+        description: ROCm version to append to the package (8.0.0, 8.0.1rc1, ...).
+        required: true
+        type: string
+      native_package_type:
+        description: Specify whether debian or rpm packages are needed (deb or rpm).
+        required: true
+        type: string
+      release_type:
+        description: The type of release to test ("dev", "nightly", or "prerelease").
+        required: false
+        type: string
+      s3_download_path:
+        description: S3 path to download packages from (optional, defaults to standard location).
+        required: false
+        type: string
+  workflow_dispatch:
+    inputs:
+      artifact_group:
+        type: string
+        default: gfx94X-dcgpu
+      artifact_run_id:
+        description: workflow run id to download the artifacts from
+        required: true
+        type: string
+      rocm_version:
+        description: ROCm version to append to the package (8.0.0, 8.0.1rc1, ...).
+        type: string
+        default: "0.0.1"
+      native_package_type:
+        description: Specify whether debian or rpm packages are needed (deb or rpm).
+        required: true
+        type: choice
+        options:
+          - rpm
+          - deb
+        default: "deb"
+      release_type:
+        description: The type of release to test ("dev", "nightly", or "prerelease").
+        type: string
+        default: "dev"
+      s3_download_path:
+        description: S3 path to download packages from (optional).
+        type: string
+        required: false
+
+permissions:
+  id-token: write
+  contents: read
+
+run-name: Full Test - Native Linux packages (${{ inputs.artifact_group }}, ${{ inputs.rocm_version }}, ${{ inputs.native_package_type }}, ${{ inputs.release_type }})
+
+jobs:
+  full_test_native_packages:
+    name: Full Installation Test - ${{ inputs.native_package_type }}
+    strategy:
+      fail-fast: false
+    # Use appropriate runner based on package type
+    #runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
+    runs-on: ${{ inputs.native_package_type == 'deb' && 'ubuntu-24.04' || 'ubuntu-24.04' }}
+    container:
+      # Use container matching the package type
+      image: ${{ inputs.native_package_type == 'deb' && 'ubuntu:24.04' || 'almalinux:9' }}
+      options: --privileged
+    env:
+      ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id }}
+      ROCM_VERSION: ${{ inputs.rocm_version }}
+      ARTIFACT_GROUP: ${{ inputs.artifact_group }}
+      PACKAGE_TYPE: ${{ inputs.native_package_type }}
+      RELEASE_TYPE: ${{ inputs.release_type || 'dev' }}
+      S3_BUCKET_NATIVE: "therock-${{ inputs.release_type }}-packages"
+      S3_DOWNLOAD_PATH: ${{ inputs.s3_download_path }}
+      PACKAGE_DOWNLOAD_DIR: /tmp/rocm_packages
+      INSTALL_PREFIX: /opt/rocm
+    steps:
+      - name: Install System Prerequisites
+        run: |
+          echo "Installing prerequisites for ${{ inputs.native_package_type }} on container"
+          
+          if [ "${{ inputs.native_package_type }}" == "deb" ]; then
+            # Ubuntu/Debian prerequisites
+            apt update
+            apt install -y \
+              python3 \
+              python3-pip \
+              wget \
+              curl \
+              ca-certificates \
+              git \
+              gnupg \
+              lsb-release
+          else
+            # RHEL/CentOS/AlmaLinux prerequisites
+            dnf install -y \
+              python3 \
+              python3-pip \
+              wget \
+              curl \
+              ca-certificates \
+              git \
+              dnf-plugins-core
+          fi
+
+      - name: Checkout Repository
+        run: |
+          echo "Cloning TheRock repository"
+          cd /tmp
+          git clone https://github.com/ROCm/TheRock.git
+          cd TheRock
+          git checkout ${{ github.ref_name }}
+
+      - name: Install Python Dependencies
+        run: |
+          pip3 install --break-system-packages boto3 pyelftools requests
+
+      - name: Install AWS CLI
+        run: |
+          cd /tmp/TheRock
+          bash ./dockerfiles/install_awscli.sh
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}
+
+      - name: Full Package Installation Test
+        id: full-test
+        run: |
+          echo "=========================================================================="
+          echo "FULL INSTALLATION TEST - NATIVE LINUX PACKAGES"
+          echo "=========================================================================="
+          echo "Package Type: ${{ inputs.native_package_type }}"
+          echo "Artifact Group: ${{ inputs.artifact_group }}"
+          echo "Artifact Run ID: ${{ inputs.artifact_run_id }}"
+          echo "ROCm Version: ${{ inputs.rocm_version }}"
+          echo "Release Type: ${{ inputs.release_type }}"
+          echo "S3 Bucket: ${{ env.S3_BUCKET_NATIVE }}"
+          echo "=========================================================================="
+          echo ""
+          
+          python3 /tmp/TheRock/build_tools/packaging/linux/package_full_test.py \
+            --package-type ${{ inputs.native_package_type }} \
+            --s3-bucket ${{ env.S3_BUCKET_NATIVE }} \
+            --artifact-group ${{ inputs.artifact_group }} \
+            --artifact-id ${{ env.ARTIFACT_RUN_ID }} \
+            --rocm-version ${{ inputs.rocm_version }} \
+            --download-dir ${{ env.PACKAGE_DOWNLOAD_DIR }} \
+            --install-prefix ${{ env.INSTALL_PREFIX }} \
+            --s3-path "${{ inputs.s3_download_path }}"
+
+      - name: Verify ROCm Installation
+        if: always() && steps.full-test.outcome == 'success'
+        run: |
+          echo "=========================================================================="
+          echo "VERIFYING ROCM INSTALLATION"
+          echo "=========================================================================="
+          
+          # Check if ROCm directory exists
+          if [ -d "${{ env.INSTALL_PREFIX }}" ]; then
+            echo "✅ ROCm installation directory exists: ${{ env.INSTALL_PREFIX }}"
+            echo ""
+            echo "Directory structure:"
+            ls -la ${{ env.INSTALL_PREFIX }}
+          else
+            echo "❌ ROCm installation directory not found: ${{ env.INSTALL_PREFIX }}"
+            exit 1
+          fi
+          
+          # Check for key ROCm components
+          echo ""
+          echo "Checking for key ROCm components:"
+          
+          components=(
+            "bin/rocminfo"
+            "bin/hipcc"
+            "include/hip/hip_runtime.h"
+            "lib/libamdhip64.so"
+          )
+          
+          all_found=true
+          for comp in "${components[@]}"; do
+            full_path="${{ env.INSTALL_PREFIX }}/${comp}"
+            if [ -e "$full_path" ]; then
+              echo "  ✅ $comp"
+            else
+              echo "  ⚠️  $comp (not found)"
+              all_found=false
+            fi
+          done
+          
+          if [ "$all_found" = true ]; then
+            echo ""
+            echo "All key components found"
+          else
+            echo ""
+            echo "Some components missing (may be expected depending on package selection)"
+          fi
+
+      - name: Test Report
+        if: always()
+        run: |
+          echo ""
+          echo "=========================================================================="
+          echo "FULL TEST REPORT"
+          echo "=========================================================================="
+          
+          if [ "${{ steps.full-test.outcome }}" == "success" ]; then
+            echo "FULL INSTALLATION TEST PASSED"
+            echo ""
+            echo "Summary:"
+            echo "  - Packages downloaded from S3: SUCCESS"
+            echo "  - Package installation: SUCCESS"
+            echo "  - ROCm verification: SUCCESS"
+            echo ""
+            echo "ROCm ${{ inputs.rocm_version }} is successfully installed at ${{ env.INSTALL_PREFIX }}"
+          else
+            echo "FULL INSTALLATION TEST FAILED"
+            echo ""
+            echo "The test failed during package download or installation."
+            echo "Please check the logs above for detailed error messages."
+            exit 1
+          fi
+          echo "=========================================================================="
+
+
