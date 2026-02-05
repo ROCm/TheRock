@@ -18,6 +18,7 @@ therock_cmake_subproject_declare(therock-spdlog
     -DSPDLOG_BUILD_EXAMPLE=OFF
     -DSPDLOG_INSTALL=ON
     -DSPDLOG_FMT_EXTERNAL=ON
+    -DSPDLOG_BUILD_PIC=ON
 )
 therock_cmake_subproject_provide_package(therock-spdlog spdlog lib/cmake)
 therock_cmake_subproject_activate(therock-spdlog)
