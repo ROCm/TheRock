@@ -173,7 +173,7 @@ class PackageInstaller:
             print(f"   - {Path(pkg).name}")
 
         # Install using apt
-        cmd = ["sudo", "apt", "install", "--simulate", "-y"] + package_paths
+        cmd = ["sudo", "apt", "install", "--simulate"] + package_paths
 
         print(f"\nRunning: {' '.join(cmd)}\n")
 
@@ -217,8 +217,8 @@ class PackageInstaller:
         # This will use: rpm -i --prefix <prefix> <packages>
         # For now, use rpm -Uvh --test
 
-        # Install using dnf
-        cmd = ["sudo", "dnf", "install", "--assumeno"] + package_paths
+        # Install using rpm
+        cmd = ["sudo", "rpm", "-Uvh", "--test", "--nodeps"] + package_paths
 
         print(f"\nRunning: {' '.join(cmd)}\n")
 
@@ -388,10 +388,10 @@ class PackageInstaller:
 
         # Build installation command based on package type
         if self.package_type == "deb":
-            install_cmd = f"apt update && apt install --simulate -y {' '.join(container_packages)}"
+            install_cmd = f"apt update && apt install --simulate {' '.join(container_packages)}"
         else:  # rpm
             # TODO: Add support for --rpm-package-prefix when implemented
-            install_cmd = f"dnf install --assumeno {' '.join(container_packages)}"
+            install_cmd = f"sudo rpm -Uvh --test --nodeps {' '.join(container_packages)}"
 
         # Build docker run command
         docker_cmd = [
