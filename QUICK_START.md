@@ -1,6 +1,14 @@
 ***IMPORTANT: MAKE SURE NO AMD ROCm COMPILER TOOLS ARE IN YOUR `PATH`
    OR `LD_LIBRARY_PATH` ENVIRONMENT VARIABLES***
 
+In the cmake command below, change `gfx1100` to whatever GPU family or
+families you're interested in.  Separate with commas, I think, or
+semicolons if that doesn't work.
+
+#If you don't want ccache, delete everything after
+ `-DTHEROCK_ENABLE_MATH_LIBS=ON` in the cmake command and don't bother
+ running `eval "$(./build_tools/setup_ccache.py)"`.
+
 ```bash
 git clone https://github.com/ROCm/TheRock.git
 cd TheRock
