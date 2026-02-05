@@ -65,8 +65,8 @@ amdgpu_family_info_matrix_presubmit = {
     "gfx110x": {
         "linux": {
             # TODO(#2740): Re-enable machine once `amdsmi` test is fixed
-            # Label is "linux-gfx110X-gpu-rocm"
-            "test-runs-on": "",
+            # Label is ""
+            "test-runs-on": "linux-gfx110X-gpu-rocm",
             "family": "gfx110X-all",
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
@@ -166,16 +166,16 @@ amdgpu_family_info_matrix_nightly = {
     "gfx103x": {
         "linux": {
             # TODO(#2740): Re-enable machine once it is stable
-            # Label is "linux-gfx1030-gpu-rocm"
-            "test-runs-on": "",
+            # Label is ""
+            "test-runs-on": "linux-gfx1030-gpu-rocm",
             "family": "gfx103X-dgpu",
             "build_variants": ["release"],
             "sanity_check_only_for_family": True,
         },
         "windows": {
             # TODO(#3200): Re-enable machine once it is stable
-            # Label is "windows-gfx1030-gpu-rocm"
-            "test-runs-on": "",
+            # Label is ""
+            "test-runs-on": "windows-gfx1030-gpu-rocm",
             "family": "gfx103X-dgpu",
             "build_variants": ["release"],
             "sanity_check_only_for_family": True,
