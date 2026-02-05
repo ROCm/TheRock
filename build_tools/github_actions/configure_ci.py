@@ -17,7 +17,7 @@
   * WINDOWS_TEST_LABELS (optional): Comma-separated list of test labels to test
   * WINDOWS_USE_PREBUILT_ARTIFACTS (optional): If enabled, CI will only run Windows tests
   * BRANCH_NAME (optional): The branch name
-  * BUILD_VARIANT (optional): The build variant to run (ex: release, asan)
+  * BUILD_VARIANT (optional): The build variant to run (ex: release, asan, tsan)
   * ROCM_THEROCK_TEST_RUNNERS (optional): Test runner JSON object, coming from ROCm organization
   * LOAD_TEST_RUNNERS_FROM_VAR (optional): boolean env variable that loads in ROCm org data if enabled
 
@@ -309,10 +309,10 @@ def generate_multi_arch_matrix(
         - matrix_per_family_json: JSON array of {amdgpu_family, test-runs-on} objects
           for per-architecture job matrix expansion
         - dist_amdgpu_families: Semicolon-separated family names for THEROCK_DIST_AMDGPU_TARGETS
-        - build_variant_label: Human-readable label (e.g., "Release", "ASAN")
-        - build_variant_suffix: Suffix for artifact naming (e.g., "", "asan"). Empty string
+        - build_variant_label: Human-readable label (e.g., "Release", "ASAN", "TSAN")
+        - build_variant_suffix: Suffix for artifact naming (e.g., "", "asan", "tsan"). Empty string
           for release builds, short identifier for other variants.
-        - build_variant_cmake_preset: CMake preset name (e.g., "release", "asan")
+        - build_variant_cmake_preset: CMake preset name (e.g., "release", "asan", "tsan")
         - expect_failure: If True, job failure is non-blocking (continue-on-error)
         - artifact_group: Unique identifier for artifact grouping, formatted as
           "multi-arch-{suffix}" where suffix defaults to "release" if empty
@@ -621,7 +621,7 @@ def matrix_generator(
             for build_variant_name in build_variant_names:
                 # We have custom build variants for specific CI flows.
                 # For CI, we use the release build variant (for PRs, pushes to main, nightlies)
-                # For CI ASAN, we use the ASAN build variant (for pushes to main)
+                # For CI ASAN/TSAN, we use the ASAN/TSAN build variant (for pushes to main)
                 # In the case that the build variant is not requested, we skip it
                 if build_variant_name != base_args.get("build_variant"):
                     continue
