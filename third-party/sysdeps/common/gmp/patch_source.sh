@@ -2,7 +2,7 @@
 set -e
 
 SOURCE_DIR="${1:?Source directory must be given}"
-GMP_MAKEFILE="$SOURCE_DIR/Makefile.am"
+GMP_MAKEFILE="$SOURCE_DIR/Makefile.in"
 
 echo "Patching sources..."
 sed -i 's/libgmp\.la/librocm_sysdeps_gmp.la/g' "$GMP_MAKEFILE"

@@ -2,7 +2,7 @@
 set -e
 
 SOURCE_DIR="${1:?Source directory must be given}"
-MPFR_MAKEFILE="$SOURCE_DIR/src/Makefile.am"
+MPFR_MAKEFILE="$SOURCE_DIR/src/Makefile.in"
 
 echo "Patching sources..."
 sed -i 's/libmpfr\.la/librocm_sysdeps_mpfr.la/g' "$MPFR_MAKEFILE"
