@@ -14,10 +14,18 @@ export THEROCK_BUILD_PROF_LOG_DIR="$OUTPUT_DIR/build/logs/therock-build-prof"
 
 export CCACHE_DIR="$OUTPUT_DIR/caches/container/ccache"
 export PIP_CACHE_DIR="$OUTPUT_DIR/caches/container/pip"
+export CCACHE_CONFIGPATH="/therock/src/.ccache/ccache.conf"
 mkdir -p "$CCACHE_DIR"
 mkdir -p "$PIP_CACHE_DIR"
 
 pip install -r /therock/src/requirements.txt
+
+#configures and initializes ccache inside the container
+if [ "${ENABLE_CCACHE}" = "true" ]; then
+  python /therock/src/build_tools/setup_ccache.py --config-preset "github-oss-postsubmit" \
+          --dir "$(dirname $CCACHE_CONFIGPATH)" \
+          --local-path "$CACHE_DIR/ccache"
+fi
 
 python /therock/src/build_tools/health_status.py
 
@@ -44,3 +52,5 @@ time cmake -GNinja -S /therock/src -B "$OUTPUT_DIR/build" \
   ${PYTHON_EXECUTABLES_ARG} \
   "$@"
 time cmake --build "$OUTPUT_DIR/build" --target therock-archives therock-dist
+
+ccache -s
