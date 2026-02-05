@@ -6,3 +6,11 @@
 include = [
   "share/rocshmem/**",
 ]
+[components.run."comm-libs/rocshmem/stage"]
+include = [
+  "bin/rocshmem_info",
+]
+
+# Tests
+[components.test."comm-libs/rocshmem/stage"]
+optional = true
