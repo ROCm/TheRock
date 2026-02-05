@@ -64,8 +64,6 @@ amdgpu_family_info_matrix_presubmit = {
     },
     "gfx110x": {
         "linux": {
-            # TODO(#2740): Re-enable machine once `amdsmi` test is fixed
-            # Label is ""
             "test-runs-on": "linux-gfx110X-gpu-rocm",
             "family": "gfx110X-all",
             "bypass_tests_for_releases": True,
@@ -73,7 +71,7 @@ amdgpu_family_info_matrix_presubmit = {
             "sanity_check_only_for_family": True,
         },
         "windows": {
-            "test-runs-on": "test-windows-gfx110X-gpu-rocm",
+            "test-runs-on": "windows-gfx110X-gpu-rocm",
             "family": "gfx110X-all",
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
@@ -92,7 +90,7 @@ amdgpu_family_info_matrix_presubmit = {
             "sanity_check_only_for_family": True,
         },
         "windows": {
-            "test-runs-on": "test-windows-strix-halo-gpu-rocm",
+            "test-runs-on": "windows-strix-halo-gpu-rocm",
             # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
             "benchmark-runs-on": "windows-gfx1151-gpu-rocm",
             "family": "gfx1151",
