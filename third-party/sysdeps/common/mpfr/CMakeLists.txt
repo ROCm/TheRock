@@ -101,9 +101,6 @@ add_custom_target(
   COMMAND
     ${patch_source_commands}
   COMMAND
-    # reconfigure the project since the source files have been edited
-    autoreconf -f -i "${SOURCE_DIR}"
-  COMMAND
 
     "${CMAKE_COMMAND}" -E env
       "PKG_CONFIG_PATH=$ENV{PKG_CONFIG_PATH}"
