@@ -21,23 +21,23 @@ BUCKET = S3.Bucket(getenv("S3_BUCKET_PY", "therock-dev-python"))
 VERSIONS = ["v2-staging", "v2"]
 
 PACKAGES_PER_PROJECT = {
-    "dbus_python": {"version": "latest", "project": "jax"},
-    "flatbuffers": {"version": "latest", "project": "jax"},
-    "ml_dtypes": {"version": "latest", "project": "jax"},
-    "opt_einsum": {"version": "latest", "project": "jax"},
-    "tomli": {"version": "latest", "project": "jax"},
-    "sympy": {"version": "latest", "project": "torch"},
-    "mpmath": {"version": "latest", "project": "torch"},
-    "pillow": {"version": "latest", "project": "torch"},
+    "dbus_python": {"versions": ["latest"], "project": "jax"},
+    "flatbuffers": {"versions": ["latest"], "project": "jax"},
+    "ml_dtypes": {"versions": ["latest"], "project": "jax"},
+    "opt_einsum": {"versions": ["latest"], "project": "jax"},
+    "tomli": {"versions": ["latest"], "project": "jax"},
+    "sympy": {"versions": ["latest"], "project": "torch"},
+    "mpmath": {"versions": ["latest"], "project": "torch"},
+    "pillow": {"versions": ["latest"], "project": "torch"},
     # 3.4.2 for Python 3.10, latest for Python 3.11+
-    "networkx": {"version": ["3.4.2", "latest"], "project": "torch"},
-    "numpy": {"version": "latest", "project": "torch"},
-    "jinja2": {"version": "latest", "project": "torch"},
-    "markupsafe": {"version": "latest", "project": "torch"},
-    "filelock": {"version": "latest", "project": "torch"},
-    "fsspec": {"version": "latest", "project": "torch"},
-    "typing-extensions": {"version": "latest", "project": "torch"},
-    "setuptools": {"version": "latest", "project": "rocm"},
+    "networkx": {"versions": ["3.4.2", "latest"], "project": "torch"},
+    "numpy": {"versions": ["latest"], "project": "torch"},
+    "jinja2": {"versions": ["latest"], "project": "torch"},
+    "markupsafe": {"versions": ["latest"], "project": "torch"},
+    "filelock": {"versions": ["latest"], "project": "torch"},
+    "fsspec": {"versions": ["latest"], "project": "torch"},
+    "typing-extensions": {"versions": ["latest"], "project": "torch"},
+    "setuptools": {"versions": ["latest"], "project": "rocm"},
 }
 
 
@@ -209,11 +209,7 @@ def main() -> None:
                 else:
                     full_path = f"{VERSION}/{prefix}"
 
-                # Support both single version and list of versions
-                versions = pkg_info["version"]
-                if not isinstance(versions, list):
-                    versions = [versions]
-                for target_version in versions:
+                for target_version in pkg_info["versions"]:
                     upload_missing_whls(
                         pkg_name,
                         full_path,

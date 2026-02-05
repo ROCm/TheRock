@@ -287,7 +287,7 @@ class S3Index:
             # networkx 3.4.2 for Python 3.10, 3.5+ for Python 3.11+
             if obj.key.endswith("networkx-3.4.2-py3-none-any.whl"):
                 attributes += ' data-requires-python="&gt;=3.10"'
-            elif "networkx-3." in obj.key and obj.key.endswith("-py3-none-any.whl"):
+            elif "networkx-" in obj.key and obj.key.endswith("-py3-none-any.whl"):
                 attributes += ' data-requires-python="&gt;=3.11"'
 
             stripped_key = obj.key.split("/")[-1]
