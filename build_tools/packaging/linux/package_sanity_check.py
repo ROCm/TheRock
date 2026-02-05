@@ -218,7 +218,7 @@ class PackageInstaller:
         # For now, use rpm -Uvh --test
 
         # Install using dnf
-        cmd = ["sudo", "rpm", "-Uvh", "--test"] + package_paths
+        cmd = ["sudo", "dnf", "install", "--assumeno"] + package_paths
 
         print(f"\nRunning: {' '.join(cmd)}\n")
 
@@ -391,7 +391,7 @@ class PackageInstaller:
             install_cmd = f"apt update && apt install --simulate -y {' '.join(container_packages)}"
         else:  # rpm
             # TODO: Add support for --rpm-package-prefix when implemented
-            install_cmd = f"rpm -Uvh --test {' '.join(container_packages)}"
+            install_cmd = f"dnf install --assumeno {' '.join(container_packages)}"
 
         # Build docker run command
         docker_cmd = [
