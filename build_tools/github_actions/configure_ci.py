@@ -59,8 +59,8 @@ from amdgpu_family_matrix import (
 )
 from fetch_test_configurations import test_matrix
 
-from ci_path_filters import (
-    get_git_modified_paths_since,
+from configure_ci_path_filters import (
+    get_git_modified_paths,
     get_git_submodule_paths,
     is_ci_run_required,
 )
@@ -616,7 +616,7 @@ def main(base_args, linux_families, windows_families):
         test_type = "full"
         test_type_reason = "scheduled run triggers full tests"
     else:
-        modified_paths = get_git_modified_paths_since(base_ref)
+        modified_paths = get_git_modified_paths(base_ref)
         print("modified_paths (max 200):", modified_paths[:200])
         print(f"Checking modified files since this had a {github_event_name} trigger")
         # TODO(#199): other behavior changes
