@@ -43,7 +43,7 @@ def get_current_gpu_architecture():
             return lines[1]
         else:
             print(f"Warning: offload-arch returned fewer than 2 lines", file=sys.stderr)
-            return None
+            return lines[-1]
 
     except subprocess.CalledProcessError as e:
         print(f"Error executing offload-arch: {e}", file=sys.stderr)
