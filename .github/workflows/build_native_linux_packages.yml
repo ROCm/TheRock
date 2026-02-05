@@ -130,7 +130,6 @@ jobs:
             python ./build_tools/packaging/linux/package_sanity_check.py \
               --package-type rpm \
               --package-folder ${{ env.PACKAGE_DIST_DIR }} \
-              --docker-image ${{ env.BUILD_IMAGE }} \
               --skip-package amdrocm-rdc
           fi
 
