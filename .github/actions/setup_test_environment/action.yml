@@ -58,10 +58,11 @@ runs:
       shell: bash
       run: ./dockerfiles/install_awscli.sh
 
-    - name: Install the AWS tool
+    - name: Install Choco tools
       if: ${{ runner.os == 'Windows' }}
       shell: bash
       run: |
+        choco install --no-progress -y ninja
         choco install --no-progress -y awscli
         echo "$PATH;C:\Program Files\Amazon\AWSCLIV2" >> $GITHUB_PATH
 
