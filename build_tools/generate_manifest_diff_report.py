@@ -189,6 +189,10 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
         default="main",
         help="Branch to search for last successful workflow run (default: main)",
     )
+    parser.add_argument(
+        "--output-dir",
+        help="Output directory for the report (default: TheRock root directory)",
+    )
     return parser.parse_args(argv)
 
 
@@ -1099,13 +1103,29 @@ def generate_non_superrepo_html(diff: ManifestDiff) -> str:
 # =============================================================================
 
 
-def generate_html_report(diff: ManifestDiff) -> None:
-    """Generate TheRockReport.html from template."""
+def generate_html_report(diff: ManifestDiff, output_dir: Path | None = None) -> Path:
+    """Generate TheRockReport.html from template.
+
+    Args:
+        diff: The manifest diff to generate the report from.
+        output_dir: Optional output directory. If provided, creates the directory
+                    and writes the report there. Otherwise writes to TheRock root.
+
+    Returns:
+        Path to the generated report file.
+    """
     print("\n=== Writing HTML Report ===")
+
+    # Determine output path
+    if output_dir:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        report_path = output_dir / "TheRockReport.html"
+    else:
+        report_path = HTML_REPORT_PATH
 
     if not HTML_TEMPLATE_PATH.exists():
         print(f"  ERROR: Template not found at {HTML_TEMPLATE_PATH}")
-        return
+        raise FileNotFoundError(f"Template not found at {HTML_TEMPLATE_PATH}")
 
     html = HTML_TEMPLATE_PATH.read_text(encoding="utf-8")
 
@@ -1197,10 +1217,11 @@ def generate_html_report(diff: ManifestDiff) -> None:
         f'<div id="commit-diff-job-content-non-superrepo" style="margin-top:8px;">\n        {non_superrepo_html}\n      </div>',
     )
 
-    HTML_REPORT_PATH.write_text(html, encoding="utf-8")
-    if not HTML_REPORT_PATH.exists() or HTML_REPORT_PATH.stat().st_size == 0:
-        raise RuntimeError(f"Failed to write HTML report to {HTML_REPORT_PATH}")
-    print(f"  Report written to: {HTML_REPORT_PATH}")
+    report_path.write_text(html, encoding="utf-8")
+    if not report_path.exists() or report_path.stat().st_size == 0:
+        raise RuntimeError(f"Failed to write HTML report to {report_path}")
+    print(f"  Report written to: {report_path}")
+    return report_path
 
 
 def generate_step_summary(diff: ManifestDiff) -> None:
@@ -1300,7 +1321,9 @@ def main(argv: list[str] | None = None) -> int:
 
     diff = compare_manifests(start_commit, end_commit)
 
-    generate_html_report(diff)
+    # Determine output directory
+    output_dir = Path(args.output_dir) if args.output_dir else None
+    generate_html_report(diff, output_dir)
 
     print("\n=== Generating Step Summary ===")
     generate_step_summary(diff)
