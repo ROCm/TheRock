@@ -42,6 +42,9 @@ on:
       ref:
         description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
         type: string
+      jax_ref:
+        description: "rocm-jax repository ref/branch to check out"
+        type: string
   workflow_dispatch:
     inputs:
       amdgpu_family:
@@ -93,10 +96,14 @@ on:
         description: CloudFront base URL pointing to staging Python index
         type: string
         default: "https://rocm.devreleases.amd.com/v2-staging"
+      ref:
+        description: TheRock repository ref/branch to check out
+        type: string
+        default: ""
       jax_ref:
         description: rocm-jax repository ref/branch to check out
         type: string
-        default: rocm-jaxlib-v0.8.0
+        default: "rocm-jaxlib-v0.8.0"
 
 permissions:
   id-token: write
@@ -117,6 +124,7 @@ jobs:
     outputs:
       cp_version: ${{ env.cp_version }}
       jax_version: ${{ steps.extract_jax_version.outputs.jax_version }}
+      jax_ref: ${{ matrix.jax_ref }}
     steps:
       - name: Checkout TheRock
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -226,14 +234,13 @@ jobs:
     with:
       amdgpu_family: ${{ inputs.amdgpu_family }}
       release_type: ${{ inputs.release_type }}
-      s3_subdir: ${{ inputs.s3_subdir }}
       package_index_url: ${{ inputs.cloudfront_staging_url }}
       rocm_version: ${{ inputs.rocm_version }}
       tar_url: ${{ inputs.tar_url }}
       python_version: ${{ inputs.python_version }}
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref || '' }}
-      jax_ref: ${{ inputs.jax_ref }}
+      jax_ref: ${{ needs.build_jax_wheels.outputs.jax_ref }}
       test_runs_on: ${{ needs.generate_target_to_run.outputs.test_runs_on }}
 
   upload_jax_wheels:
@@ -273,14 +280,17 @@ jobs:
         if: ${{ env.upload == 'true' }}
         run: |
           echo "Copying exact tested wheels to release S3 bucket..."
+          # Sanitize ROCM_VERSION: replace '+' with '.' for PEP 440 compliance
+          # (local version label can only contain alphanumerics and periods)
+          SANITIZED_ROCM_VERSION=$(echo "${ROCM_VERSION}" | tr '+' '.')
           aws s3 cp \
             s3://${S3_BUCKET_PY}/${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}/ \
             s3://${S3_BUCKET_PY}/${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}/ \
             --recursive \
             --exclude "*" \
-            --include "jaxlib-${JAX_VERSION}+rocm${ROCM_VERSION}-${CP_VERSION}-manylinux_2_27_x86_64.whl" \
-            --include "jax_rocm7_plugin-${JAX_VERSION}+rocm${ROCM_VERSION}-${CP_VERSION}-manylinux_2_28_x86_64.whl" \
-            --include "jax_rocm7_pjrt-${JAX_VERSION}+rocm${ROCM_VERSION}-py3-none-manylinux_2_28_x86_64.whl"
+            --include "jaxlib-${JAX_VERSION}+rocm${SANITIZED_ROCM_VERSION}-${CP_VERSION}-manylinux_2_27_x86_64.whl" \
+            --include "jax_rocm7_plugin-${JAX_VERSION}+rocm${SANITIZED_ROCM_VERSION}-${CP_VERSION}-manylinux_2_28_x86_64.whl" \
+            --include "jax_rocm7_pjrt-${JAX_VERSION}+rocm${SANITIZED_ROCM_VERSION}-py3-none-manylinux_2_28_x86_64.whl"
 
       - name: (Re-)Generate Python package release index
         if: ${{ env.upload == 'true' }}
