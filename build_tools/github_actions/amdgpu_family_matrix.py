@@ -107,8 +107,8 @@ amdgpu_family_info_matrix_presubmit = {
         },
         "windows": {
             # TODO(#2962): Re-enable machine once sanity checks work with this architecture
-            # Label is 
-            "test-runs-on": "windows-gfx120X-gpu-rocm",
+            # Label is windows-gfx120X-gpu-rocm
+            "test-runs-on": "",
             "family": "gfx120X-all",
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
