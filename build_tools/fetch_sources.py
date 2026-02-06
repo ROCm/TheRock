@@ -12,28 +12,14 @@
 #   This is the original behavior and is still supported.
 #
 # External repository support:
-#   When building external repositories (rocm-libraries, rocm-systems), set:
+#   When building external repositories (rocm-libraries, rocm-systems) that are
+#   checked out separately instead of as git submodules, exclude the submodule
+#   and provide the external path:
 #
-#   Required:
-#     EXTERNAL_SOURCE_CHECKOUT=true
-#     EXTERNAL_SOURCE_PATH=/absolute/path/to/external-repo
-#     GITHUB_REPOSITORY_OVERRIDE=ROCm/rocm-libraries
-#
-#   Optional:
-#     SKIP_PATCHES=0001-fix.patch,0002-workaround.patch
-#
-#   Example (absolute path):
-#     export EXTERNAL_SOURCE_CHECKOUT=true
-#     export EXTERNAL_SOURCE_PATH=/home/user/rocm-libraries
-#     export GITHUB_REPOSITORY_OVERRIDE=ROCm/rocm-libraries
-#     python build_tools/fetch_sources.py --no-include-rocm-libraries
-#
-#   Example (skip patches during coordinated removal):
-#     export EXTERNAL_SOURCE_CHECKOUT=true
-#     export EXTERNAL_SOURCE_PATH=/home/user/rocm-libraries
-#     export GITHUB_REPOSITORY_OVERRIDE=ROCm/rocm-libraries
-#     export SKIP_PATCHES=0001-obsolete-fix.patch
-#     python build_tools/fetch_sources.py --no-include-rocm-libraries
+#   Example:
+#     python build_tools/fetch_sources.py \
+#       --no-include-rocm-libraries \
+#       --rocm-libraries-path /home/user/rocm-libraries
 
 import argparse
 import hashlib
@@ -174,45 +160,47 @@ def fetch_nested_submodules(args, projects):
         )
 
 
-def _detect_external_source_override():
-    """Detect external source checkout configuration from environment variables.
+def _detect_external_source_override(args):
+    """Detect external source checkout configuration from command-line arguments.
 
     When external repos (rocm-libraries, rocm-systems) are checked out separately
     instead of as git submodules, this function identifies which project name
     corresponds to the submodule being replaced and where the external source is located.
+
+    Args:
+        args: Parsed command-line arguments
 
     Returns:
         tuple: (external_repo_name: str|None, external_source_dir: Path|None)
             external_repo_name: Name of the external repo (e.g., "rocm-libraries")
             external_source_dir: Path to the external repo checkout directory
     """
-    if os.environ.get("EXTERNAL_SOURCE_CHECKOUT", "").lower() != "true":
-        return None, None
+    # Check for rocm-libraries external path
+    if args.rocm_libraries_path:
+        external_repo_name = "rocm-libraries"
+        external_source_dir = Path(args.rocm_libraries_path)
+        log(f"External source detected: {external_repo_name}")
+        log(f"External source path: {external_source_dir}")
+        log(f"Skipping submodule update for: {external_repo_name}")
+        return external_repo_name, external_source_dir
 
-    external_source_path = os.environ.get("EXTERNAL_SOURCE_PATH", "")
-    repo_override = os.environ.get(
-        "GITHUB_REPOSITORY_OVERRIDE", os.environ.get("GITHUB_REPOSITORY", "")
-    )
+    # Check for rocm-systems external path
+    if args.rocm_systems_path:
+        external_repo_name = "rocm-systems"
+        external_source_dir = Path(args.rocm_systems_path)
+        log(f"External source detected: {external_repo_name}")
+        log(f"External source path: {external_source_dir}")
+        log(f"Skipping submodule update for: {external_repo_name}")
+        return external_repo_name, external_source_dir
 
-    if not external_source_path or not repo_override:
-        return None, None
-
-    # Extract repo name (e.g., "ROCm/rocm-libraries" -> "rocm-libraries")
-    external_repo_name = repo_override.split("/")[-1]
-    external_source_dir = Path(external_source_path)
-
-    log(f"External source detected: {external_repo_name}")
-    log(f"External source path: {external_source_dir}")
-    log(f"Skipping submodule update for: {external_repo_name}")
-
-    return external_repo_name, external_source_dir
+    return None, None
 
 
 def run(args):
     # Detect if we're using an external repo checkout instead of a git submodule
     # external_repo_name: name of the external repo (e.g., "rocm-libraries")
     # external_source_dir: path to the external repo checkout directory
-    external_repo_name, external_source_dir = _detect_external_source_override()
+    external_repo_name, external_source_dir = _detect_external_source_override(args)
 
     projects = get_enabled_projects(args)
 
@@ -318,38 +306,6 @@ def remove_smrev_files(args, projects, external_repo_name=None):
             project_revision_file.unlink()
 
 
-def _filter_patches_by_skip_list(
-    patch_files: list[Path], project_name: str, external_repo_name: str | None
-) -> list[Path]:
-    """Filter patch files based on SKIP_PATCHES environment variable.
-
-    SKIP_PATCHES only applies when processing the external repo that set it.
-    This prevents one external repo from accidentally skipping patches for other repos.
-
-    Args:
-        patch_files: List of patch file paths to filter
-        project_name: Name of the project being patched (e.g., "rocm-libraries")
-        external_repo_name: External repo name, if any
-
-    Returns:
-        Filtered list of patch files with skipped patches removed
-    """
-    skip_patches_str = os.environ.get("SKIP_PATCHES", "")
-    skip_patches = [p.strip() for p in skip_patches_str.split(",") if p.strip()]
-
-    # Only apply SKIP_PATCHES when processing the external repo that set it
-    if not skip_patches or project_name != external_repo_name:
-        return patch_files
-
-    filtered = []
-    for patch_file in patch_files:
-        if patch_file.name in skip_patches:
-            log(f"  Skipping patch {patch_file.name} (in SKIP_PATCHES)")
-        else:
-            filtered.append(patch_file)
-    return filtered
-
-
 def apply_patches(args, projects, external_repo_name=None, external_source_dir=None):
     if not args.patch_tag:
         log("Not patching (no --patch-tag specified)")
@@ -391,11 +347,6 @@ def apply_patches(args, projects, external_repo_name=None, external_source_dir=N
             continue
         patch_files = list(patch_project_dir.glob("*.patch"))
         patch_files.sort()
-
-        # Filter patches based on SKIP_PATCHES environment variable
-        patch_files = _filter_patches_by_skip_list(
-            patch_files, patch_project_dir.name, external_repo_name
-        )
 
         if not patch_files:
             log(f"No patches to apply (all skipped or none exist)")
@@ -720,6 +671,18 @@ def main(argv):
                 "libhipcxx",
             ]
         ),
+    )
+    parser.add_argument(
+        "--rocm-libraries-path",
+        type=str,
+        default=None,
+        help="Path to external rocm-libraries checkout (use with --no-include-rocm-libraries)",
+    )
+    parser.add_argument(
+        "--rocm-systems-path",
+        type=str,
+        default=None,
+        help="Path to external rocm-systems checkout (use with --no-include-rocm-systems)",
     )
     args = parser.parse_args(argv)
 
