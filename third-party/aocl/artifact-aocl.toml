@@ -1,0 +1,6 @@
+# AOCL-BLAS artifact descriptor
+# Provides BLIS/BLAS/CBLAS functions for CPU reference BLAS in testing
+[components.dbg."third-party/aocl/stage"]
+[components.dev."third-party/aocl/stage"]
+[components.doc."third-party/aocl/stage"]
+[components.lib."third-party/aocl/stage"]

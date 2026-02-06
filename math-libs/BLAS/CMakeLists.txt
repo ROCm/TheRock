@@ -166,8 +166,20 @@ set(rocBLAS_optional_runtime_deps)
 if(NOT WIN32)
   # rocBLAS is hard-coded to not expect rocm-smi.
   list(APPEND rocBLAS_optional_runtime_deps rocm_smi_lib)
-elseif(THEROCK_BUILD_TESTING)
-  list(APPEND rocBLAS_optional_runtime_deps therock-host-blas)
+endif()
+if(THEROCK_BUILD_TESTING)
+  # CPU reference BLAS libraries for rocBLAS clients/tests
+  list(APPEND rocBLAS_optional_runtime_deps therock-host-blas)       # OpenBLAS
+  if(NOT WIN32)
+    # AOCL-BLAS is Linux-only (Windows continues to use OpenBLAS)
+    list(APPEND rocBLAS_optional_runtime_deps therock-aocl-blas)     # AOCL-BLAS
+  endif()
+endif()
+
+# AOCL-BLAS is a static library that must be built before rocBLAS links against it
+set(rocBLAS_optional_build_deps)
+if(THEROCK_BUILD_TESTING AND NOT WIN32)
+  list(APPEND rocBLAS_optional_build_deps therock-aocl-blas)
 endif()
 
 therock_cmake_subproject_declare(rocBLAS
@@ -179,6 +191,9 @@ therock_cmake_subproject_declare(rocBLAS
     -DROCM_PATH=
     -DROCM_DIR=
     -Dhipblaslt_path=
+    # BUILD_DIR: Custom variable used by rocBLAS clients to locate bundled dependencies
+    # Set to rocBLAS's build directory so it can find deps/ subdirectory
+    "-DBUILD_DIR=${CMAKE_CURRENT_BINARY_DIR}/rocBLAS/build"
     -DBUILD_WITH_TENSILE=ON
     -DBUILD_WITH_HIPBLASLT=ON
     # TODO: With `Tensile_TEST_LOCAL_PATH` set, the resulting build path is ${Tensile_TEST_LOCAL_PATH}/build.
@@ -188,7 +203,7 @@ therock_cmake_subproject_declare(rocBLAS
     -DTENSILE_VERSION=
     -DBUILD_CLIENTS_TESTS=${THEROCK_BUILD_TESTING}
     -DBUILD_CLIENTS_BENCHMARKS=${THEROCK_BUILD_TESTING}
-    -DLINK_BLIS=OFF
+    -DLINK_BLIS=${THEROCK_BUILD_TESTING}  # Links AOCL-BLAS (libaocl.a) for CPU BLAS
   CMAKE_INCLUDES
     therock_explicit_finders.cmake
   COMPILER_TOOLCHAIN
@@ -198,6 +213,7 @@ therock_cmake_subproject_declare(rocBLAS
     rocm-cmake
     therock-googletest
     therock-msgpack-cxx
+    ${rocBLAS_optional_build_deps}
   RUNTIME_DEPS
     hip-clr
     hipBLASLt
@@ -211,6 +227,20 @@ SUBDIRS
 therock_cmake_subproject_provide_package(rocBLAS rocblas lib/cmake/rocblas)
 therock_cmake_subproject_activate(rocBLAS)
 list(APPEND _blas_subproject_names rocBLAS)
+
+# Clean Tensile build artifacts during expunge to prevent pip install issues
+# The Tensile source directory can accumulate stale egg-info and build artifacts
+# that cause permission errors on subsequent builds
+add_custom_target(rocBLAS+expunge-tensile
+  COMMAND
+    ${CMAKE_COMMAND} -E rm -rf
+      "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/tensile/Tensile.egg-info"
+      "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/tensile/build"
+      "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/tensile/dist"
+      "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/shared/tensile/.eggs"
+  COMMENT "Cleaning Tensile build artifacts"
+)
+add_dependencies(rocBLAS+expunge rocBLAS+expunge-tensile)
 
 
 if(THEROCK_ENABLE_SPARSE)
