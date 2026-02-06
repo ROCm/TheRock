@@ -9,7 +9,7 @@
 [submodule "llvm-project"]
 	path = compiler/amd-llvm
 	url = https://github.com/ROCm/llvm-project.git
-	branch = amd-mainline
+	branch = users/abeltons/improve_memcpy_obj_handling
 [submodule "rccl"]
 	path = comm-libs/rccl
 	url = https://github.com/ROCm/rccl.git
