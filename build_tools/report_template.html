@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Commit Diff Report</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    /* Common table styles */
+    .report-table, .commit-history-table {
+      width: 100%;
+      border-collapse: collapse;
+      border: 1px solid #ccc;
+      font-family: Verdana, sans-serif;
+      font-size: 14px;
+      table-layout: fixed;
+    }
+
+    .commit-history-table {
+      margin-top: 8px;
+    }
+
+    .report-table th, .commit-history-table th {
+      padding: 8px;
+      border: 1px solid #ccc;
+      text-align: left;
+    }
+
+    .report-table th {
+      background-color: #f1f1f1;
+    }
+
+    /* Column widths for report table */
+    .report-table th:first-child,
+    .report-table td:first-child {
+      width: 180px;
+    }
+
+    .commit-history-table th {
+      background-color: #f8f9fa;
+    }
+
+    .report-table td, .commit-history-table td {
+      padding: 8px;
+      border: 1px solid #ccc;
+    }
+
+    .report-table td {
+      vertical-align: top;
+    }
+
+    .commit-history-table .date-col, .commit-history-table .author-col {
+      font-size: 12px;
+    }
+
+    .commit-history-table .date-col {
+      color: #666;
+    }
+
+    .commit-history-table .author-col {
+      color: #555;
+    }
+
+    .commit-history-table .project-col {
+      font-weight: bold;
+    }
+
+    .commit-history-table .message-col {
+      font-size: 13px;
+    }
+    /* Commit styling */
+    .commit-badge {
+      display: inline-block;
+      background-color: #1976D2;
+      color: #fff;
+      padding: 2px 8px;
+      font-family: Verdana, sans-serif;
+      font-size: 12px;
+      border-radius: 2px;
+    }
+
+    .commit-badge-link {
+      text-decoration: none;
+    }
+
+    .commit-item {
+      margin-bottom: 8px;
+      border-left: 3px solid #1976D2;
+      padding-left: 8px;
+    }
+
+    .commit-meta {
+      color: #666;
+      font-size: 11px;
+      margin-top: 2px;
+    }
+
+    .commit-list {
+      max-height: 160px;
+      overflow-y: auto;
+      padding: 4px;
+      border: 1px solid #ccc;
+      font-family: Verdana, sans-serif;
+      font-size: 13px;
+      line-height: 1.4;
+      background-color: #f9f9f9;
+    }
+
+    .no-commits {
+        text-align: center;
+        padding: 8px;
+        color: #888;
+        font-style: italic;
+    }
+
+    /* Summary category removed - no background, left-aligned */
+    .summary-category.removed {
+        background-color: transparent;
+        text-align: left;
+    }
+
+    /* Background colors for commit-list containers */
+    .commit-list.reverted-bg {
+        background-color: #fff3cd;
+    }
+
+    .commit-list.newly-added-bg {
+        background-color: #d4edda;
+    }
+
+    .commit-list.removed-bg {
+        background-color: #f8d7da;
+    }
+
+    .removed-message {
+        color: #721c24;
+        font-weight: bold;
+        text-align: center;
+        padding: 8px;
+    }
+
+    /* Superrepo status banners */
+    .superrepo-status-banner {
+        padding: 12px 16px;
+        margin-bottom: 12px;
+        border-radius: 4px;
+        font-size: 14px;
+    }
+
+    .superrepo-status-banner.added {
+        background-color: #d4edda;
+        border-left: 4px solid #28a745;
+        color: #155724;
+    }
+
+    .superrepo-status-banner.removed {
+        background-color: #f8d7da;
+        border-left: 4px solid #dc3545;
+        color: #721c24;
+    }
+
+    .superrepo-status-banner.reverted {
+        background-color: #fff3cd;
+        border-left: 4px solid #ffc107;
+        color: #856404;
+    }
+
+    .replaced-submodules {
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px solid rgba(0,0,0,0.1);
+        font-size: 13px;
+    }
+
+    .replaced-submodules code {
+        background-color: rgba(0,0,0,0.05);
+        padding: 2px 4px;
+        border-radius: 3px;
+        font-size: 12px;
+    }
+
+    /* Removed submodules banner in Other Components section */
+    .removed-submodules-banner {
+        background-color: #f8d7da;
+        border-left: 4px solid #dc3545;
+        color: #721c24;
+        padding: 12px 16px;
+        margin-bottom: 12px;
+        border-radius: 4px;
+        font-size: 14px;
+    }
+
+    .removed-submodules-banner code {
+        background-color: rgba(0,0,0,0.05);
+        padding: 2px 4px;
+        border-radius: 3px;
+        font-size: 12px;
+        word-break: break-word;
+    }
+
+    .reverted-header {
+        background-color: #fff3cd;
+        padding: 8px;
+        border-radius: 4px;
+        margin-bottom: 8px;
+        border-left: 3px solid #ffc107;
+    }
+
+    .newly-added-header {
+        color: #155724;
+        font-weight: bold;
+        padding: 8px;
+        margin-bottom: 8px;
+        border-bottom: 1px solid rgba(0,0,0,0.1);
+    }
+
+    /* Consolidated Summary Styles */
+    .summary-container {
+        background-color: #ffffff;
+        padding: 16px;
+        margin-bottom: 3em;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.16), 0 2px 10px rgba(0,0,0,0.12);
+    }
+
+    .summary-title {
+        text-align: center;
+        color: #1976D2;
+        font-size: 2.2em;
+        font-weight: bold;
+        margin-bottom: 16px;
+    }
+
+    .summary-note {
+        text-align: center;
+        color: #666;
+        font-size: 0.9em;
+        margin-bottom: 20px;
+        padding: 8px;
+        background-color: #f8f9fa;
+        border-radius: 4px;
+        border-left: 4px solid #17a2b8;
+    }
+
+    /* Ensure individual superrepo containers don't inherit note styling */
+    #rocm-libraries-superrepo-container,
+    #rocm-systems-superrepo-container {
+        background-color: #ffffff !important;
+        border-left: none !important;
+        font-size: inherit !important;
+    }
+
+    .summary-section {
+        margin-bottom: 8px;
+        padding: 16px;
+    }
+
+    .summary-section h2 {
+        color: #1976D2;
+        margin-top: 0;
+        margin-bottom: 16px;
+        font-size: 1.5em;
+    }
+
+    .summary-category {
+        margin-bottom: 16px;
+    }
+
+    .summary-category h3 {
+        margin-bottom: 8px;
+    }
+
+    .summary-category.added h3 {
+        color: #28a745;
+    }
+
+    .summary-category.removed h3 {
+        color: #dc3545;
+    }
+
+    .summary-category.changed h3 {
+        color: #ffc107;
+    }
+
+    .summary-category.unchanged h3 {
+        color: #6c757d;
+    }
+
+    .summary-list {
+        margin: 0;
+        padding-left: 20px;
+    }
+
+    .summary-list li {
+        color: #6c757d;
+        margin-bottom: 4px;
+    }
+
+    /* Column width classes for associations table */
+    .col-date { width: 80px; }
+    .col-sha { width: 60px; }
+    .col-author { width: 120px; }
+    .col-projects { width: 150px; }
+
+    /* Filter controls styling */
+    .filter-container {
+      background-color: #fff3cd;
+      border: 1px solid #ffeaa7;
+      border-left: 4px solid #f39c12;
+      border-radius: 4px;
+      padding: 16px;
+      margin-bottom: 2em;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+
+    .filter-title {
+      color: #856404;
+      font-weight: bold;
+      font-size: 1.1em;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+    }
+
+    .filter-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      align-items: center;
+    }
+
+    .filter-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .filter-checkbox {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+    }
+
+    .filter-label {
+      color: #856404;
+      font-weight: 500;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .filter-divider {
+      height: 20px;
+      width: 1px;
+      background-color: #ddd;
+      margin: 0 8px;
+    }
+
+    /* Hide/show classes for filtered content */
+    .hidden {
+      display: none !important;
+    }
+
+    /* Selective filtering styles */
+    .selective-filter {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid #e0e0e0;
+    }
+
+    .selective-filter-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .filter-dropdown {
+      min-width: 200px;
+      padding: 6px 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+      background-color: white;
+      cursor: pointer;
+    }
+
+    .filter-dropdown:focus {
+      outline: none;
+      border-color: #f39c12;
+      box-shadow: 0 0 0 2px rgba(243, 156, 18, 0.2);
+    }
+
+    .add-button {
+      padding: 6px 12px;
+      background-color: #f39c12;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .add-button:hover {
+      background-color: #d68910;
+    }
+
+    .add-button:disabled {
+      background-color: #ccc;
+      cursor: not-allowed;
+    }
+
+    .selected-items {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .selected-item {
+      background-color: #f8f9fa;
+      border: 1px solid #dee2e6;
+      border-radius: 16px;
+      padding: 4px 12px;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .selected-item .remove-btn {
+      background: #dc3545;
+      color: white;
+      border: none;
+      border-radius: 50%;
+      width: 16px;
+      height: 16px;
+      font-size: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+    }
+
+    .selected-item .remove-btn:hover {
+      background: #c82333;
+    }
+
+    .clear-all {
+      background: none;
+      border: none;
+      color: #dc3545;
+      text-decoration: underline;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    .clear-all:hover {
+      color: #c82333;
+    }
+  </style>
+</head>
+<body style="margin:0; padding:0; background-color:#f1f1f1; font-family:'Segoe UI', sans-serif;">
+
+  <!-- Header -->
+  <div style="padding:32px 16px; margin-bottom:16px; text-align:center; background-color:#1976D2; color:#ffffff; font-size:2em; font-weight:600; letter-spacing:1px;">
+    ROCm CI Infra Report
+  </div>
+
+  <!-- TheRock Commit Range -->
+  <div style="padding:16px; margin-bottom:16px; text-align:center; background-color:#f8f9fa; color:#495057; font-size:1.4em; font-weight:500; border:1px solid #dee2e6; border-radius:6px; box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+    TheRock Commit Range: <code style="background-color:#e9ecef; color:#495057; padding:4px 8px; border-radius:4px; font-family:monospace; border:1px solid #ced4da;"><span id="therock-start-commit">START_COMMIT</span></code> → <code style="background-color:#e9ecef; color:#495057; padding:4px 8px; border-radius:4px; font-family:monospace; border:1px solid #ced4da;"><span id="therock-end-commit">END_COMMIT</span></code>
+  </div>
+
+  <!-- Container -->
+  <div style="margin: 2em auto; max-width: 1200px;">
+
+    <!-- Report Information -->
+    <div style="background-color:#e8f5e8; padding:12px; margin-bottom:2em; box-shadow:0 2px 5px rgba(0,0,0,0.16); border-radius:4px; border-left:4px solid #28a745;">
+      <div style="color:#155724; font-weight:bold; margin-bottom:8px;">📋 Report Information</div>
+      <div style="color:#155724; font-size:0.9em; margin-bottom:6px;">All commits in this report are ordered from <strong>newest to oldest</strong>.</div>
+      <div style="color:#155724; font-size:0.9em;"><strong>Note on Unassigned Commits:</strong> Some commits may appear as "unassigned" - these are typically root-level changes that don't belong to a specific project component. These may also be commits from CK that are being handled through the merge commits.</div>
+    </div>
+
+    <!-- Filter Controls -->
+    <div class="filter-container">
+      <div class="filter-title">
+        🔍 Report Filters & Display Options
+      </div>
+      <div class="filter-controls">
+        <div class="filter-group">
+          <input type="checkbox" id="toggle-summaries" class="filter-checkbox" checked>
+          <label for="toggle-summaries" class="filter-label">Show Summary Sections</label>
+        </div>
+        <div class="filter-divider"></div>
+        <div class="filter-group">
+          <input type="checkbox" id="toggle-commit-history" class="filter-checkbox" checked>
+          <label for="toggle-commit-history" class="filter-label">Show Commit History Tables</label>
+        </div>
+        <div class="filter-divider"></div>
+        <div class="filter-group">
+          <input type="checkbox" id="toggle-component-tables" class="filter-checkbox" checked>
+          <label for="toggle-component-tables" class="filter-label">Show Component Tables</label>
+        </div>
+        <div class="filter-divider"></div>
+        <div class="filter-group">
+          <input type="checkbox" id="toggle-unchanged" class="filter-checkbox">
+          <label for="toggle-unchanged" class="filter-label">Hide Unchanged Components</label>
+        </div>
+      </div>
+
+      <!-- Selective Filtering -->
+      <div class="selective-filter">
+        <div class="selective-filter-header">
+          <input type="checkbox" id="enable-selective-filter" class="filter-checkbox">
+          <label for="enable-selective-filter" class="filter-label">Filter by Selected Components/Submodules Only</label>
+          <div class="filter-divider"></div>
+          <select id="component-dropdown" class="filter-dropdown" disabled>
+            <option value="">Select a component or submodule...</option>
+          </select>
+          <button id="add-component" class="add-button" disabled>Add</button>
+          <button id="clear-all" class="clear-all" style="display:none;">Clear All</button>
+        </div>
+        <div id="selected-items" class="selected-items"></div>
+      </div>
+    </div>
+
+    <!-- Submodule Changes Summary -->
+    <div id="submodule-summary" class="summary-container">
+      <div class="summary-title">Submodule Changes Summary</div>
+      <div class="summary-note">
+        <strong>Note:</strong> This summary shows only the direct submodules found in TheRock repository (start and end commits).
+      </div>
+      <div id="submodule-content"></div>
+    </div>
+
+    <!-- Superrepo Components Summary -->
+    <div id="superrepo-summary" class="summary-container">
+      <div class="summary-title">Superrepo Components Summary</div>
+      <div class="summary-note">
+        <strong>Note:</strong> This summary shows component-level changes within ROCm-Libraries and ROCm-Systems superrepos.
+        Each component represents a project or library within the superrepo structure.
+      </div>
+      <div id="superrepo-content"></div>
+    </div>
+
+    <!-- Commit Diff Job Container for ROCm-Libraries Superrepo -->
+    <div id="rocm-libraries-superrepo-container" style="background-color:#ffffff; padding:16px; margin-bottom:3em; box-shadow:0 2px 5px rgba(0,0,0,0.16), 0 2px 10px rgba(0,0,0,0.12);">
+      <div style="text-align:center; color:#1976D2; font-size:2.2em; font-weight:bold;">ROCm-Libraries Superrepo Component Commit Diff</div>
+      <div style="text-align:center; color:#3a3a3a;">Start Commit: <span id="commit-diff-start-rocm-libraries-superrepo"></span> &nbsp; End Commit: <span id="commit-diff-end-rocm-libraries-superrepo"></span></div>
+      <div id="commit-diff-job-content-rocm-libraries-superrepo" style="margin-top:8px;">
+      </div>
+    </div>
+
+    <!-- Commit Diff Job Container for ROCm-Systems Superrepo -->
+    <div id="rocm-systems-superrepo-container" style="background-color:#ffffff; padding:16px; margin-bottom:3em; box-shadow:0 2px 5px rgba(0,0,0,0.16), 0 2px 10px rgba(0,0,0,0.12);">
+      <div style="text-align:center; color:#1976D2; font-size:2.2em; font-weight:bold;">ROCm-Systems Superrepo Component Commit Diff</div>
+      <div style="text-align:center; color:#3a3a3a;">Start Commit: <span id="commit-diff-start-rocm-systems-superrepo"></span> &nbsp; End Commit: <span id="commit-diff-end-rocm-systems-superrepo"></span></div>
+      <div id="commit-diff-job-content-rocm-systems-superrepo" style="margin-top:8px;">
+      </div>
+    </div>
+
+    <!-- Commit Diff Job Container for Other Components -->
+    <div id="non-superrepo-container" style="background-color:#ffffff; padding:16px; margin-bottom:3em; box-shadow:0 2px 5px rgba(0,0,0,0.16), 0 2px 10px rgba(0,0,0,0.12);">
+      <div style="text-align:center; color:#1976D2; font-size:2.2em; font-weight:bold;">Other Component Commit Diff</div>
+      <div style="text-align:center; color:#3a3a3a;">Start Commit: <span id="commit-diff-start-non-superrepo"></span> &nbsp; End Commit: <span id="commit-diff-end-non-superrepo"></span></div>
+      <div id="commit-diff-job-content-non-superrepo" style="margin-top:8px;">
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // Filter functionality
+    document.addEventListener('DOMContentLoaded', function() {
+      // Summary sections toggle
+      const summariesToggle = document.getElementById('toggle-summaries');
+      const summaryContainers = document.querySelectorAll('#submodule-summary, #superrepo-summary');
+
+      summariesToggle.addEventListener('change', function() {
+        summaryContainers.forEach(container => {
+          if (this.checked) {
+            container.classList.remove('hidden');
+          } else {
+            container.classList.add('hidden');
+          }
+        });
+      });
+
+      // Commit history tables toggle
+      const commitHistoryToggle = document.getElementById('toggle-commit-history');
+
+      commitHistoryToggle.addEventListener('change', function() {
+        // Hide/show all commit history tables
+        const commitHistoryTables = document.querySelectorAll('.commit-history-table');
+        const commitHistorySections = document.querySelectorAll('.section-title');
+
+        commitHistoryTables.forEach(table => {
+          if (this.checked) {
+            table.classList.remove('hidden');
+          } else {
+            table.classList.add('hidden');
+          }
+        });
+
+        commitHistorySections.forEach(section => {
+          if (this.checked) {
+            section.classList.remove('hidden');
+          } else {
+            section.classList.add('hidden');
+          }
+        });
+      });
+
+      // Component tables toggle
+      const componentTablesToggle = document.getElementById('toggle-component-tables');
+
+      componentTablesToggle.addEventListener('change', function() {
+        // Hide/show all component tables (report-table class)
+        const componentTables = document.querySelectorAll('.report-table');
+
+        componentTables.forEach(table => {
+          if (this.checked) {
+            table.classList.remove('hidden');
+          } else {
+            table.classList.add('hidden');
+          }
+        });
+      });
+
+      // Hide unchanged components toggle
+      const unchangedToggle = document.getElementById('toggle-unchanged');
+
+      unchangedToggle.addEventListener('change', function() {
+        // Hide/show all rows with unchanged-row class
+        const unchangedRows = document.querySelectorAll('.unchanged-row');
+
+        unchangedRows.forEach(row => {
+          if (this.checked) {
+            row.classList.add('hidden');
+          } else {
+            row.classList.remove('hidden');
+          }
+        });
+      });
+
+      // Selective filtering functionality
+      let selectedComponents = new Set();
+      const selectiveFilterCheckbox = document.getElementById('enable-selective-filter');
+      const componentDropdown = document.getElementById('component-dropdown');
+      const addButton = document.getElementById('add-component');
+      const clearAllButton = document.getElementById('clear-all');
+      const selectedItemsContainer = document.getElementById('selected-items');
+
+      // Populate dropdown with all components and submodules found in the report
+      function populateDropdown() {
+        const components = new Set();
+
+        // Find all component names from report tables
+        document.querySelectorAll('.report-table tr td:first-child').forEach(cell => {
+          const componentName = cell.textContent.trim();
+          if (componentName && componentName !== 'Component' && componentName !== 'Submodule') {
+            components.add(componentName);
+          }
+        });
+
+        // Clear dropdown and add options
+        componentDropdown.innerHTML = '<option value="">Select a component or submodule...</option>';
+        Array.from(components).sort().forEach(component => {
+          const option = document.createElement('option');
+          option.value = component;
+          option.textContent = component;
+          componentDropdown.appendChild(option);
+        });
+      }
+
+      // Enable/disable selective filtering
+      selectiveFilterCheckbox.addEventListener('change', function() {
+        const isEnabled = this.checked;
+        componentDropdown.disabled = !isEnabled;
+        addButton.disabled = !isEnabled;
+
+        if (isEnabled) {
+          populateDropdown();
+          applySelectiveFilter();
+        } else {
+          // Show all components when disabled
+          document.querySelectorAll('.report-table tr').forEach(row => {
+            if (!row.querySelector('th')) { // Skip header rows
+              row.classList.remove('hidden');
+            }
+          });
+        }
+      });
+
+      // Add selected component
+      addButton.addEventListener('click', function() {
+        const selectedValue = componentDropdown.value;
+        if (selectedValue && !selectedComponents.has(selectedValue)) {
+          selectedComponents.add(selectedValue);
+          renderSelectedItems();
+          applySelectiveFilter();
+          componentDropdown.value = ''; // Reset dropdown
+        }
+      });
+
+      // Clear all selected components
+      clearAllButton.addEventListener('click', function() {
+        selectedComponents.clear();
+        renderSelectedItems();
+        applySelectiveFilter();
+      });
+
+      // Support Enter key in dropdown
+      componentDropdown.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter' && this.value) {
+          addButton.click();
+        }
+      });
+
+      // Render selected items UI
+      function renderSelectedItems() {
+        selectedItemsContainer.innerHTML = '';
+
+        selectedComponents.forEach(component => {
+          const item = document.createElement('div');
+          item.className = 'selected-item';
+          item.innerHTML = `
+            <span>${component}</span>
+            <button class="remove-btn" data-component="${component}">×</button>
+          `;
+          selectedItemsContainer.appendChild(item);
+        });
+
+        // Show/hide clear all button
+        clearAllButton.style.display = selectedComponents.size > 0 ? 'inline-block' : 'none';
+
+        // Add remove button listeners
+        selectedItemsContainer.querySelectorAll('.remove-btn').forEach(btn => {
+          btn.addEventListener('click', function() {
+            const component = this.dataset.component;
+            selectedComponents.delete(component);
+            renderSelectedItems();
+            applySelectiveFilter();
+          });
+        });
+      }
+
+      // Apply selective filter to hide/show table rows
+      function applySelectiveFilter() {
+        if (!selectiveFilterCheckbox.checked || selectedComponents.size === 0) {
+          // Show all if filter disabled or no selections
+          document.querySelectorAll('.report-table tr').forEach(row => {
+            if (!row.querySelector('th')) { // Skip header rows
+              row.classList.remove('hidden');
+            }
+          });
+          return;
+        }
+
+        // Hide all rows, then show only selected components
+        document.querySelectorAll('.report-table tr').forEach(row => {
+          if (!row.querySelector('th')) { // Skip header rows
+            const firstCell = row.querySelector('td:first-child');
+            if (firstCell) {
+              const componentName = firstCell.textContent.trim();
+              if (selectedComponents.has(componentName)) {
+                row.classList.remove('hidden');
+              } else {
+                row.classList.add('hidden');
+              }
+            }
+          }
+        });
+      }
+    });
+  </script>
+
+</body>
+</html>
