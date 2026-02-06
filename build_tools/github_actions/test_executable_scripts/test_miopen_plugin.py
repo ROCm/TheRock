@@ -14,7 +14,7 @@ cmd = [
     "ctest",
     "--test-dir",
     f"{THEROCK_BIN_DIR}/miopen_legacy_plugin",
-    "--output-on-failure",
+    "--verbose",
     "--parallel",
     "8",
     "--timeout",
