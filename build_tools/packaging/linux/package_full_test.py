@@ -141,7 +141,7 @@ class PackageFullTester:
             else:
                 print(
                     f"\n[FAIL] Failed to update package lists (exit code: {return_code})"
-                )                
+                )
                 return False
         except subprocess.TimeoutExpired:
             process.kill()
@@ -392,7 +392,7 @@ gpgcheck=0
                 line
                 for line in result.stdout.split("\n")
                 if grep_pattern.lower() in line.lower()
-            ]            
+            ]
             print(f"   Found {len(rocm_packages)} ROCm packages installed")
 
             if rocm_packages:
@@ -602,7 +602,7 @@ gpgcheck=0
                 print("[PASS] FULL INSTALLATION TEST PASSED")
                 print(
                     "\nROCm has been successfully installed from repository and verified!"
-                )            
+                )
             else:
                 print("[FAIL] FULL INSTALLATION TEST FAILED")
             print("=" * 80 + "\n")
@@ -614,7 +614,6 @@ gpgcheck=0
             import traceback
             traceback.print_exc()
             return False
-
 
 def main():
     """Main entry point for the script."""
