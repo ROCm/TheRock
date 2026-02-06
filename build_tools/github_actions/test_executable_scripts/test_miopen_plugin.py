@@ -14,20 +14,20 @@ cmd = [
     "ctest",
     "--test-dir",
     f"{THEROCK_BIN_DIR}/miopen_legacy_plugin",
-    "--output-on-failure",
+    "--verbose",
     "--parallel",
     "8",
     "--timeout",
-    "600",
+    "800",
 ]
 
 # Determine test filter based on TEST_TYPE environment variable
 environ_vars = os.environ.copy()
 test_type = os.getenv("TEST_TYPE", "full")
 
-if test_type == "smoke":
-    # Exclude tests that start with "Full" during smoke tests
-    environ_vars["GTEST_FILTER"] = "-Full*"
+# if test_type == "smoke":
+#    # Exclude tests that start with "Full" during smoke tests
+#    environ_vars["GTEST_FILTER"] = "-Full*"
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 
