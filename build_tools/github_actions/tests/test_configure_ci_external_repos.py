@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 
-"""Unit tests for configure_ci_external_repos.py module.
+"""Unit tests for external repository CI configuration (configure_ci.py).
 
 Tests for external repository CI configuration logic, including:
-- detect_external_repo() - Repository name detection and validation
+- setup_external_repo_configs() - Uses EXTERNAL_REPO_NAME when set
 - parse_projects_input() - Project input string parsing
 - get_test_list_for_build() - Test list determination
 - detect_external_repo_projects_to_build() - Main orchestration function
@@ -16,7 +16,8 @@ Testing Strategy:
     multiple I/O operations are tested by mocking those operations.
 
     Mocked operations include:
-    - get_modified_paths: Calls git diff (subprocess)
+    - get_git_modified_paths: Calls git diff (subprocess)
+    - get_external_repo_path: Resolves external repo directory
     - get_test_list: Reads external repo configuration files
     - get_skip_patterns: Reads external repo configuration files
 
@@ -32,57 +33,60 @@ from unittest.mock import patch, MagicMock
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from configure_ci_external_repos import (
-    detect_external_repo,
+from configure_ci import (
     parse_projects_input,
     get_test_list_for_build,
     cross_product_projects_with_gpu_variants,
     detect_external_repo_projects_to_build,
+    setup_external_repo_configs,
 )
 
 
-class TestDetectExternalRepo(unittest.TestCase):
-    """Test detect_external_repo() function.
+class TestSetupExternalRepoConfigs(unittest.TestCase):
+    """Test setup_external_repo_configs() with EXTERNAL_REPO_NAME set or unset."""
 
-    Tests repository name detection and validation logic.
-    No mocking needed - pure string parsing and lookup.
-    """
+    def test_returns_none_when_external_repo_name_unset(self):
+        """When EXTERNAL_REPO_NAME is unset or empty, we are not an external run."""
+        with patch.dict(os.environ, {"EXTERNAL_REPO_NAME": ""}, clear=False):
+            result = setup_external_repo_configs(
+                base_args={"base_ref": "HEAD^1", "github_event_name": "pull_request"},
+                output_empty_matrix_and_exit_func=lambda: None,
+            )
+        self.assertIsNone(result)
 
-    def test_detect_from_override_exact_match(self):
-        """Test detection from repo override with exact match."""
-        is_external, repo_name = detect_external_repo("ROCm/rocm-libraries")
-        self.assertTrue(is_external)
-        self.assertEqual(repo_name, "rocm-libraries")
+    def test_returns_none_when_external_repo_name_unknown(self):
+        """When EXTERNAL_REPO_NAME is set to unknown repo, return None."""
+        with patch.dict(os.environ, {"EXTERNAL_REPO_NAME": "unknown-repo"}):
+            result = setup_external_repo_configs(
+                base_args={"base_ref": "HEAD^1", "github_event_name": "pull_request"},
+                output_empty_matrix_and_exit_func=lambda: None,
+            )
+        self.assertIsNone(result)
 
-    def test_detect_from_override_normalized(self):
-        """Test detection from repo override with normalization."""
-        is_external, repo_name = detect_external_repo("ROCm/rocm-systems")
-        self.assertTrue(is_external)
-        self.assertEqual(repo_name, "rocm-systems")
-
-    def test_detect_from_override_no_slash(self):
-        """Test detection from repo override without slash."""
-        is_external, repo_name = detect_external_repo("rocm-libraries")
-        self.assertTrue(is_external)
-        self.assertEqual(repo_name, "rocm-libraries")
-
-    def test_detect_therock(self):
-        """Test that TheRock is not detected as external repo."""
-        is_external, repo_name = detect_external_repo("ROCm/TheRock")
-        self.assertFalse(is_external)
-        self.assertIsNone(repo_name)
-
-    def test_detect_unknown_repo(self):
-        """Test that unknown repos are not detected as external."""
-        is_external, repo_name = detect_external_repo("ROCm/some-other-repo")
-        self.assertFalse(is_external)
-        self.assertIsNone(repo_name)
-
-    def test_detect_empty_string(self):
-        """Test that empty string returns False."""
-        is_external, repo_name = detect_external_repo("")
-        self.assertFalse(is_external)
-        self.assertIsNone(repo_name)
+    @patch("configure_ci.detect_external_repo_projects_to_build")
+    def test_returns_config_when_external_repo_name_known(self, mock_projects_to_build):
+        """When EXTERNAL_REPO_NAME is set to a known repo, return config from detect_external_repo_projects_to_build."""
+        mock_projects_to_build.return_value = {
+            "linux_projects": [{"projects_to_test": "rocprim,rocblas"}],
+            "windows_projects": [{"projects_to_test": "rocprim,rocblas"}],
+        }
+        with patch.dict(os.environ, {"EXTERNAL_REPO_NAME": "rocm-libraries"}):
+            result = setup_external_repo_configs(
+                base_args={"base_ref": "HEAD^1", "github_event_name": "pull_request"},
+                output_empty_matrix_and_exit_func=MagicMock(),
+            )
+        self.assertIsNotNone(result)
+        self.assertEqual(
+            result["linux_external_project_configs"],
+            [{"projects_to_test": "rocprim,rocblas"}],
+        )
+        self.assertEqual(
+            result["windows_external_project_configs"],
+            [{"projects_to_test": "rocprim,rocblas"}],
+        )
+        mock_projects_to_build.assert_called_once()
+        call_kwargs = mock_projects_to_build.call_args[1]
+        self.assertEqual(call_kwargs["repo_name"], "rocm-libraries")
 
 
 class TestDetectExternalRepoProjects(unittest.TestCase):
@@ -97,7 +101,7 @@ class TestDetectExternalRepoProjects(unittest.TestCase):
 
     def test_schedule_event_always_builds(self):
         """Test that schedule events always trigger builds."""
-        with patch("configure_ci_external_repos.get_test_list") as mock_get_test_list:
+        with patch("configure_ci.get_test_list") as mock_get_test_list:
             mock_get_test_list.return_value = ["rocprim", "rocblas"]
 
             result = detect_external_repo_projects_to_build(
@@ -119,7 +123,7 @@ class TestDetectExternalRepoProjects(unittest.TestCase):
 
     def test_manual_all_override_builds(self):
         """Test that explicit 'all' projects input triggers builds."""
-        with patch("configure_ci_external_repos.get_test_list") as mock_get_test_list:
+        with patch("configure_ci.get_test_list") as mock_get_test_list:
             mock_get_test_list.return_value = ["rocprim", "rocblas"]
 
             result = detect_external_repo_projects_to_build(
@@ -147,10 +151,19 @@ class TestDetectExternalRepoProjects(unittest.TestCase):
             result["linux_projects"][0]["projects_to_test"], "rocprim,rocblas"
         )
 
-    @patch("configure_ci_shared.get_modified_paths")
-    def test_only_skippable_paths_skips_build(self, mock_get_modified_paths):
+    @patch("configure_ci.get_skip_patterns")
+    @patch("configure_ci.get_git_modified_paths")
+    @patch("configure_ci.get_external_repo_path")
+    def test_only_skippable_paths_skips_build(
+        self,
+        mock_get_external_repo_path,
+        mock_get_git_modified_paths,
+        mock_get_skip_patterns,
+    ):
         """Test that only docs/metadata changes skip builds."""
-        mock_get_modified_paths.return_value = [
+        mock_get_external_repo_path.return_value = MagicMock()
+        mock_get_skip_patterns.return_value = ["*.md", "docs/*", ".gitignore"]
+        mock_get_git_modified_paths.return_value = [
             "README.md",
             "docs/api.rst",
             ".gitignore",
@@ -166,13 +179,21 @@ class TestDetectExternalRepoProjects(unittest.TestCase):
         self.assertEqual(result["linux_projects"], [])
         self.assertEqual(result["windows_projects"], [])
 
-    @patch("configure_ci_shared.get_modified_paths")
-    @patch("configure_ci_external_repos.get_test_list")
+    @patch("configure_ci.get_skip_patterns")
+    @patch("configure_ci.get_test_list")
+    @patch("configure_ci.get_git_modified_paths")
+    @patch("configure_ci.get_external_repo_path")
     def test_code_changes_trigger_build(
-        self, mock_get_test_list, mock_get_modified_paths
+        self,
+        mock_get_external_repo_path,
+        mock_get_git_modified_paths,
+        mock_get_test_list,
+        mock_get_skip_patterns,
     ):
         """Test that code changes trigger builds."""
-        mock_get_modified_paths.return_value = [
+        mock_get_external_repo_path.return_value = MagicMock()
+        mock_get_skip_patterns.return_value = []
+        mock_get_git_modified_paths.return_value = [
             "README.md",
             "projects/rocprim/src/main.cpp",
         ]
@@ -191,10 +212,19 @@ class TestDetectExternalRepoProjects(unittest.TestCase):
         self.assertIsInstance(test_list, str)
         self.assertGreater(len(test_list), 0)
 
-    @patch("configure_ci_shared.get_modified_paths")
-    def test_no_modified_files_skips_build(self, mock_get_modified_paths):
+    @patch("configure_ci.get_skip_patterns")
+    @patch("configure_ci.get_git_modified_paths")
+    @patch("configure_ci.get_external_repo_path")
+    def test_no_modified_files_skips_build(
+        self,
+        mock_get_external_repo_path,
+        mock_get_git_modified_paths,
+        mock_get_skip_patterns,
+    ):
         """Test that no file changes skip builds."""
-        mock_get_modified_paths.return_value = []
+        mock_get_external_repo_path.return_value = MagicMock()
+        mock_get_skip_patterns.return_value = []
+        mock_get_git_modified_paths.return_value = []
 
         result = detect_external_repo_projects_to_build(
             repo_name="rocm_libraries",
@@ -206,28 +236,45 @@ class TestDetectExternalRepoProjects(unittest.TestCase):
         self.assertEqual(result["linux_projects"], [])
         self.assertEqual(result["windows_projects"], [])
 
-    @patch("configure_ci_shared.get_modified_paths")
-    def test_git_diff_error_skips_build(self, mock_get_modified_paths):
-        """Test that git diff errors raise RuntimeError (fast fail)."""
-        mock_get_modified_paths.return_value = None
+    @patch("configure_ci.get_skip_patterns")
+    @patch("configure_ci.get_git_modified_paths")
+    @patch("configure_ci.get_external_repo_path")
+    def test_git_diff_error_skips_build(
+        self,
+        mock_get_external_repo_path,
+        mock_get_git_modified_paths,
+        mock_get_skip_patterns,
+    ):
+        """Test that git diff failure (None) skips build, same as internal is_ci_run_required(None)."""
+        mock_get_external_repo_path.return_value = MagicMock()
+        mock_get_skip_patterns.return_value = []
+        mock_get_git_modified_paths.return_value = None
 
-        with self.assertRaises(RuntimeError) as cm:
-            detect_external_repo_projects_to_build(
-                repo_name="rocm_libraries",
-                base_ref="origin/develop",
-                github_event_name="pull_request",
-                projects_input="",
-            )
+        result = detect_external_repo_projects_to_build(
+            repo_name="rocm_libraries",
+            base_ref="origin/develop",
+            github_event_name="pull_request",
+            projects_input="",
+        )
 
-        self.assertIn("Could not determine modified paths", str(cm.exception))
+        self.assertEqual(result["linux_projects"], [])
+        self.assertEqual(result["windows_projects"], [])
 
-    @patch("configure_ci_shared.get_modified_paths")
-    @patch("configure_ci_external_repos.get_test_list")
+    @patch("configure_ci.get_skip_patterns")
+    @patch("configure_ci.get_test_list")
+    @patch("configure_ci.get_git_modified_paths")
+    @patch("configure_ci.get_external_repo_path")
     def test_returns_test_list_not_cmake_options(
-        self, mock_get_test_list, mock_get_modified_paths
+        self,
+        mock_get_external_repo_path,
+        mock_get_git_modified_paths,
+        mock_get_test_list,
+        mock_get_skip_patterns,
     ):
         """Test that builds return test lists but NOT cmake options (full builds)."""
-        mock_get_modified_paths.return_value = ["projects/rocprim/src/main.cpp"]
+        mock_get_external_repo_path.return_value = MagicMock()
+        mock_get_skip_patterns.return_value = []
+        mock_get_git_modified_paths.return_value = ["projects/rocprim/src/main.cpp"]
         mock_get_test_list.return_value = ["rocprim", "rocblas"]
 
         result = detect_external_repo_projects_to_build(
@@ -247,13 +294,21 @@ class TestDetectExternalRepoProjects(unittest.TestCase):
         self.assertIsInstance(test_list, str)
         self.assertEqual(test_list, "rocprim,rocblas")
 
-    @patch("configure_ci_shared.get_modified_paths")
-    @patch("configure_ci_external_repos.get_test_list")
+    @patch("configure_ci.get_skip_patterns")
+    @patch("configure_ci.get_test_list")
+    @patch("configure_ci.get_git_modified_paths")
+    @patch("configure_ci.get_external_repo_path")
     def test_fallback_to_default_test_list(
-        self, mock_get_test_list, mock_get_modified_paths
+        self,
+        mock_get_external_repo_path,
+        mock_get_git_modified_paths,
+        mock_get_test_list,
+        mock_get_skip_patterns,
     ):
         """Test that fallback to ['all'] works when external repo doesn't provide test list."""
-        mock_get_modified_paths.return_value = ["projects/rocprim/src/main.cpp"]
+        mock_get_external_repo_path.return_value = MagicMock()
+        mock_get_skip_patterns.return_value = []
+        mock_get_git_modified_paths.return_value = ["projects/rocprim/src/main.cpp"]
         mock_get_test_list.return_value = []  # Empty list
 
         result = detect_external_repo_projects_to_build(
@@ -266,13 +321,17 @@ class TestDetectExternalRepoProjects(unittest.TestCase):
         self.assertEqual(len(result["linux_projects"]), 1)
         self.assertEqual(result["linux_projects"][0]["projects_to_test"], "all")
 
-    @patch("configure_ci_shared.get_modified_paths")
-    @patch("configure_ci_external_repos.get_skip_patterns")
+    @patch("configure_ci.get_skip_patterns")
+    @patch("configure_ci.get_git_modified_paths")
+    @patch("configure_ci.get_external_repo_path")
     def test_uses_external_repo_skip_patterns(
-        self, mock_get_skip, mock_get_modified_paths
+        self, mock_get_external_repo_path, mock_get_git_modified_paths, mock_get_skip
     ):
         """Test that external repo skip patterns are used when available."""
-        mock_get_modified_paths.return_value = ["docs/README.md"]  # Should be skipped
+        mock_get_external_repo_path.return_value = MagicMock()
+        mock_get_git_modified_paths.return_value = [
+            "docs/README.md"
+        ]  # Should be skipped
         mock_get_skip.return_value = ["docs/*"]
 
         result = detect_external_repo_projects_to_build(
@@ -285,13 +344,15 @@ class TestDetectExternalRepoProjects(unittest.TestCase):
         self.assertEqual(result["linux_projects"], [])
         self.assertEqual(result["windows_projects"], [])
 
-    @patch("configure_ci_shared.get_modified_paths")
-    @patch("configure_ci_external_repos.get_skip_patterns")
+    @patch("configure_ci.get_skip_patterns")
+    @patch("configure_ci.get_git_modified_paths")
+    @patch("configure_ci.get_external_repo_path")
     def test_fallback_to_default_skip_patterns(
-        self, mock_get_skip, mock_get_modified_paths
+        self, mock_get_external_repo_path, mock_get_git_modified_paths, mock_get_skip
     ):
         """Test that default skip patterns are used when external repo doesn't provide them."""
-        mock_get_modified_paths.return_value = [
+        mock_get_external_repo_path.return_value = MagicMock()
+        mock_get_git_modified_paths.return_value = [
             "README.md"
         ]  # Should be skipped by default patterns
         mock_get_skip.return_value = []  # Empty list
