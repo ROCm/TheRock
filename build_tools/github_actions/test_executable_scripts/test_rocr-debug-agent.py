@@ -15,44 +15,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def set_core_dump_limit() -> None:
-    """
-    Set core dump size limit to 0 (equivalent to ulimit -c 0).
-    """
-    try:
-        resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
-        logger.info("[✓] Core dump limit set to 0.")
-    except (ValueError, OSError) as e:
-        logger.warning(f"[!] Failed to set core dump limit: {e}")
-        logger.warning("Core files may be generated and consume disk space.")
-
-
-def validate_path(path: Path, path_type: str, must_exist: bool = True) -> Path:
-    """
-    Validate and resolve a path.
-
-    Args:
-        path: Path to validate.
-        path_type: Description of the path (for error messages).
-        must_exist: Whether the path must exist.
-
-    Returns:
-        Resolved path.
-
-    Raises:
-        SystemExit: If path validation fails.
-    """
-    try:
-        resolved = path.resolve(strict=must_exist)
-        if must_exist and not resolved.exists():
-            logger.error(f"[X] Error: {path_type} does not exist: {resolved}")
-            sys.exit(1)
-        return resolved
-    except (OSError, RuntimeError) as e:
-        logger.error(f"[X] Error: Could not resolve {path_type} '{path}': {e}")
-        sys.exit(1)
-
-
 def parse_arguments() -> argparse.Namespace:
     """
     Parse command-line arguments with all-or-nothing logic.
@@ -104,6 +66,44 @@ Environment Variables (used when CLI args are not provided):
     return args
 
 
+def set_core_dump_limit() -> None:
+    """
+    Set core dump size limit to 0 (equivalent to ulimit -c 0).
+    """
+    try:
+        resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+        logger.info("[✓] Core dump limit set to 0.")
+    except (ValueError, OSError) as e:
+        logger.warning(f"[!] Failed to set core dump limit: {e}")
+        logger.warning("Core files may be generated and consume disk space.")
+
+
+def validate_path(path: Path, path_type: str, must_exist: bool = True) -> Path:
+    """
+    Validate and resolve a path.
+
+    Args:
+        path: Path to validate.
+        path_type: Description of the path (for error messages).
+        must_exist: Whether the path must exist.
+
+    Returns:
+        Resolved path.
+
+    Raises:
+        SystemExit: If path validation fails.
+    """
+    try:
+        resolved = path.resolve(strict=must_exist)
+        if must_exist and not resolved.exists():
+            logger.error(f"[X] Error: {path_type} does not exist: {resolved}")
+            sys.exit(1)
+        return resolved
+    except (OSError, RuntimeError) as e:
+        logger.error(f"[X] Error: Could not resolve {path_type} '{path}': {e}")
+        sys.exit(1)
+
+
 def get_default_paths() -> Dict[str, Path]:
     """
     Get default paths from environment variables.
@@ -134,7 +134,7 @@ def get_default_paths() -> Dict[str, Path]:
 
     return {
         "test_bin": therock_bin_dir / "rocm-debug-agent-test",
-        "test_script": artifacts_dir / "src/rocm-debug-agent-test/run-test.py",
+        "test_script": artifacts_dir / "src" / "rocm-debug-agent-test" / "run-test.py",
     }
 
 
