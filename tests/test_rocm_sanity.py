@@ -16,20 +16,27 @@ logger = logging.getLogger(__name__)
 THEROCK_BIN_DIR = Path(os.getenv("THEROCK_BIN_DIR")).resolve()
 
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
-ARTIFACT_GROUP = os.getenv("ARTIFACT_GROUP")
 
+# Importing get_asan_lib_path from github_actions_utils.py
+sys.path.append(str(THIS_DIR.parent / "build_tools" / "github_actions"))
+from github_actions_utils import get_asan_lib_path
 
 def is_windows():
     return "windows" == platform.system().lower()
 
 def is_asan():
+    ARTIFACT_GROUP = os.getenv("ARTIFACT_GROUP")
     return "asan" in ARTIFACT_GROUP
 
 
 def run_command(command: list[str], cwd=None):
     logger.info(f"++ Run [{cwd}]$ {shlex.join(command)}")
+    env = os.environ.copy()
+    if is_asan():
+        asan_lib_path = get_asan_lib_path(THEROCK_BIN_DIR)
+        env["LD_PRELOAD"] = asan_lib_path
     process = subprocess.run(
-        command, capture_output=True, cwd=cwd, shell=is_windows(), text=True
+        command, capture_output=True, cwd=cwd, shell=is_windows(), text=True, env=env
     )
     if process.returncode != 0:
         logger.error(f"Command failed!")
@@ -54,7 +61,6 @@ def rocm_info_output():
 
 class TestROCmSanity:
     @pytest.mark.skipif(is_windows(), reason="rocminfo is not supported on Windows")
-    @pytest.mark.skipif(is_asan(), reason="rocminfo is not supported with ASAN")
     @pytest.mark.parametrize(
         "to_search",
         [
@@ -76,7 +82,6 @@ class TestROCmSanity:
             f"Failed to search for {to_search} in rocminfo output",
         )
 
-    @pytest.mark.skipif(is_asan(), reason="rocminfo is not supported with ASAN")
     def test_hip_printf(self):
         platform_executable_suffix = ".exe" if is_windows() else ""
 
