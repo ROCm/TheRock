@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 """
-Run MIOpen CTest with appropriate GPU exclusion labels based on hierarchical matching.
+This is a generic test runner that can test multiple components using GPU-based filtering.
 This works on top of the PR - Test Filter Standardization Proof of Concept - MIOpen #3513
 in rocm-libraries (https://github.com/ROCm/rocm-libraries/pull/3513)
 
-The script reads TEST_TYPE and AMDGPU_FAMILIES environment variables:
-- TEST_TYPE="smoke" -> runs tests with "quick" category
-- TEST_TYPE=<anything else or not set> -> runs tests with "standard" category
-- AMDGPU_FAMILIES is parsed to extract GPU architecture (e.g., "gfx1151")
+Environment variables used:
+- TEST_COMPONENT: Job name of the component to test (e.g., "miopen", "rocrand", "hiprand")
+  This is automatically set by the GitHub Actions workflow from the job_name field.
+  The script maps these job names to actual test directory names (e.g., "miopen" -> "MIOpen")
+  Defaults to "miopen" if not set.
+- TEST_TYPE: "smoke" runs tests with "quick" category, otherwise runs "standard" category
+- AMDGPU_FAMILIES: Parsed to extract GPU architecture (e.g., "gfx1151")
 
 The script checks the available tests from ctest -N and filters the appropriate tests based on the GPU architecture.
 """
@@ -26,6 +29,36 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 TEST_TYPE = os.getenv("TEST_TYPE", "quick")
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
+
+# Map job names to actual test directory names
+# The job names come from TEST_COMPONENT env var (set by GitHub Actions workflow)
+# and need to be mapped to the actual directory names in THEROCK_BIN_DIR
+COMPONENT_DIR_MAPPING = {
+    "miopen": "MIOpen",
+    "rocrand": "rocRAND",
+    "hiprand": "hipRAND",
+    "rocthrust": "rocthrust",
+    "rocprim": "rocprim",
+    "rocwmma": "rocwmma",
+    "hipcub": "hipcub",
+    "hipdnn": "hipdnn",
+    "hipdnn-samples": "hipdnn_samples",
+    "miopen_plugin": "miopen_legacy_plugin",
+    # Add more mappings as needed
+}
+
+# Get the test component from environment (required - no default)
+test_component_job_name = os.getenv("TEST_COMPONENT")
+if not test_component_job_name:
+    print(
+        "ERROR: TEST_COMPONENT environment variable is required but not set.",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+TEST_COMPONENT = COMPONENT_DIR_MAPPING.get(
+    test_component_job_name, test_component_job_name
+)
 
 # GTest sharding
 SHARD_INDEX = os.getenv("SHARD_INDEX", 1)
@@ -53,7 +86,7 @@ def get_available_gpu_exclusion_tests():
     """
     try:
         result = subprocess.run(
-            ["ctest", "-N", "--test-dir", f"{THEROCK_BIN_DIR}/MIOpen"],
+            ["ctest", "-N", "--test-dir", f"{THEROCK_BIN_DIR}/{TEST_COMPONENT}"],
             capture_output=True,
             text=True,
             check=True,
@@ -140,7 +173,7 @@ def build_ctest_command(category, gpu_arch, available_gpu_archs):
             "--parallel",
             "8",
             "--test-dir",
-            f"{THEROCK_BIN_DIR}/MIOpen",
+            f"{THEROCK_BIN_DIR}/{TEST_COMPONENT}",
             "-V",  # Always run in verbose mode
             # Shards the tests by running a specific set of tests based on starting test (shard_index) and stride (total_shards)
             "--tests-information",
@@ -189,6 +222,9 @@ def main():
                 f"# Warning: Could not extract GPU architecture from AMDGPU_FAMILIES='{AMDGPU_FAMILIES}', using default '{gpu_arch}'"
             )
 
+    print(
+        f"# TEST_COMPONENT: {test_component_job_name} -> Test Directory: {TEST_COMPONENT}"
+    )
     print(f"# TEST_TYPE: {TEST_TYPE} -> Category: {category}")
     print(f"# AMDGPU_FAMILIES: {AMDGPU_FAMILIES} -> GPU Architecture: {gpu_arch}")
     print()
@@ -213,7 +249,7 @@ def main():
     # Execute the command
     try:
         logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-        result = subprocess.run(cmd, check=False)
+        result = subprocess.run(cmd, cwd=THEROCK_DIR, env=environ_vars, check=False)
         return result.returncode
     except Exception as e:
         print(f"Error running ctest: {e}", file=sys.stderr)
