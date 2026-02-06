@@ -352,6 +352,16 @@ class ResolveCommitsTest(unittest.TestCase):
         self.assertEqual(start_sha, "abc123")
         self.assertEqual(end_sha, "def456")
 
+    def test_output_dir_argument_parsed(self):
+        """--output-dir argument is parsed correctly."""
+        args = parse_args(["--start", "abc", "--end", "def", "--output-dir", "reports"])
+        self.assertEqual(args.output_dir, "reports")
+
+    def test_output_dir_defaults_to_none(self):
+        """--output-dir defaults to None when not specified."""
+        args = parse_args(["--start", "abc", "--end", "def"])
+        self.assertIsNone(args.output_dir)
+
 
 # =============================================================================
 # CLI Options Integration Tests (Real API Calls)
