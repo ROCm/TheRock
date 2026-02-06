@@ -98,6 +98,10 @@ submodules = ["rocm-systems"]
 description = "ROCm libraries monorepo (math libs)"
 submodules = ["rocm-libraries"]
 
+[source_sets.math-libs]
+description = "Additional math library submodules"
+submodules = ["libhipcxx"]
+
 [source_sets.ml-frameworks]
 description = "ML framework submodules"
 submodules = []
@@ -239,7 +243,7 @@ description = "Math libraries (BLAS, FFT, RAND, etc.)"
 type = "per-arch"  # Built per GPU architecture
 artifact_group_deps = ["hip-runtime", "profiler-core"]
 # TODO: rocm-systems included for projects/hip/VERSION (see CMakeLists.txt)
-source_sets = ["rocm-libraries", "rocm-systems"]
+source_sets = ["rocm-libraries", "rocm-systems", "math-libs"]
 
 [artifact_groups.ml-libs]
 description = "Machine learning libraries"
@@ -336,6 +340,13 @@ feature_group = "CORE"
 disable_platforms = ["windows"]
 
 [artifacts.sysdeps-ncurses]
+artifact_group = "third-party-sysdeps"
+type = "target-neutral"
+artifact_deps = []
+feature_group = "CORE"
+disable_platforms = ["windows"]
+
+[artifacts.sysdeps-libpciaccess]
 artifact_group = "third-party-sysdeps"
 type = "target-neutral"
 artifact_deps = []
@@ -479,6 +490,16 @@ artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip"]
 
+[artifacts.sparse]
+artifact_group = "math-libs"
+type = "target-specific"
+artifact_deps = ["blas", "prim"]
+
+[artifacts.solver]
+artifact_group = "math-libs"
+type = "target-specific"
+artifact_deps = ["blas", "prim", "sparse", "host-suite-sparse"]
+
 [artifacts.rocwmma]
 artifact_group = "math-libs"
 type = "target-specific"
@@ -516,6 +537,11 @@ artifact_deps = ["core-runtime", "core-hip"]
 artifact_group = "ml-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn"]
+
+[artifacts.hipdnn-samples]
+artifact_group = "ml-libs"
+type = "target-specific"
+artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "miopen-plugin"]
 
 # --- IREE Integration ---
 
