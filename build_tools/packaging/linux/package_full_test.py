@@ -47,7 +47,7 @@ class PackageFullTester:
             gfx_arch: GPU architecture (default: gfx94x)
         """
         self.package_type = package_type.lower()
-        self.repo_base_url = repo_base_url.rstrip('/')
+        self.repo_base_url = repo_base_url.rstrip("/")
         self.artifact_id = artifact_id
         self.rocm_version = rocm_version
         self.os_profile = os_profile
@@ -57,13 +57,19 @@ class PackageFullTester:
 
         # Validate inputs
         if self.package_type not in ["deb", "rpm"]:
-            raise ValueError(f"Invalid package type: {package_type}. Must be 'deb' or 'rpm'")
+            raise ValueError(
+                f"Invalid package type: {package_type}. Must be 'deb' or 'rpm'"
+            )
 
         if not self.date or len(self.date) != 8:
-            raise ValueError(f"Invalid date format: {date}. Must be YYYYMMDD (e.g., 20260204)")
+            raise ValueError(
+                f"Invalid date format: {date}. Must be YYYYMMDD (e.g., 20260204)"
+            )
 
         # Construct repository URL for nightly builds: base_url/{deb|rpm}/YYYYMMDD-RUNID/
-        self.repo_url = f"{self.repo_base_url}/{self.package_type}/{self.date}-{self.artifact_id}/"
+        self.repo_url = (
+            f"{self.repo_base_url}/{self.package_type}/{self.date}-{self.artifact_id}/"
+        )
 
     def construct_repo_url_with_os(self) -> str:
         """Construct the full repository URL including OS profile for nightly builds.
@@ -97,7 +103,7 @@ class PackageFullTester:
         print("\nAdding ROCm repository...")
         sources_list = f"/etc/apt/sources.list.d/rocm-test.list"
 
-        repo_entry = f"deb [arch=amd64] {repo_url} ./\n"
+        repo_entry = f"deb [arch=amd64] [trusted=yes] {repo_url} ./\n"
 
         try:
             with open(sources_list, "w") as f:
@@ -134,7 +140,9 @@ class PackageFullTester:
                 print("\n[PASS] Package lists updated")
                 return True
             else:
-                print(f"\n[FAIL] Failed to update package lists (exit code: {return_code})")
+                print(
+                    f"\n[FAIL] Failed to update package lists (exit code: {return_code})"
+                )                
                 return False
         except subprocess.TimeoutExpired:
             process.kill()
@@ -247,7 +255,9 @@ gpgcheck=0
                 return True
             else:
                 print("\n" + "=" * 80)
-                print(f"[FAIL] Failed to install DEB packages (exit code: {return_code})")
+                print(
+                    f"[FAIL] Failed to install DEB packages (exit code: {return_code})"
+                )
                 return False
 
         except subprocess.TimeoutExpired:
@@ -306,7 +316,9 @@ gpgcheck=0
                 return True
             else:
                 print("\n" + "=" * 80)
-                print(f"[FAIL] Failed to install RPM packages (exit code: {return_code})")
+                print(
+                    f"[FAIL] Failed to install RPM packages (exit code: {return_code})"
+                )
                 return False
 
         except subprocess.TimeoutExpired:
@@ -377,7 +389,11 @@ gpgcheck=0
                 text=True,
             )
 
-            rocm_packages = [line for line in result.stdout.split('\n') if grep_pattern.lower() in line.lower()]
+            rocm_packages = [
+                line
+                for line in result.stdout.split("\n")
+                if grep_pattern.lower() in line.lower()
+            ]            
             print(f"   Found {len(rocm_packages)} ROCm packages installed")
 
             if rocm_packages:
@@ -405,7 +421,7 @@ gpgcheck=0
                 )
                 print("   [PASS] rocminfo executed successfully")
                 # Print first few lines of output
-                lines = result.stdout.split('\n')[:10]
+                lines = result.stdout.split("\n")[:10]
                 print("\n   First few lines of rocminfo output:")
                 for line in lines:
                     if line.strip():
@@ -473,7 +489,7 @@ gpgcheck=0
             print("   [PASS] rdhc.py executed successfully with --all")
             if result.stdout:
                 # Print first few lines of output
-                lines = result.stdout.split('\n')[:5]
+                lines = result.stdout.split("\n")[:5]
                 print("\n   First few lines of output:")
                 for line in lines:
                     if line.strip():
@@ -517,7 +533,7 @@ gpgcheck=0
             print("   [PASS] rdhc.py executed successfully")
             if result.stdout:
                 # Print first few lines of output
-                lines = result.stdout.split('\n')[:5]
+                lines = result.stdout.split("\n")[:5]
                 print("\n   First few lines of output:")
                 for line in lines:
                     if line.strip():
@@ -530,7 +546,7 @@ gpgcheck=0
             print(f"   [WARN] rdhc.py failed (return code: {e.returncode})")
             if e.stdout:
                 # Print first few lines of error output
-                lines = e.stdout.split('\n')[:3]
+                lines = e.stdout.split("\n")[:3]
                 print("\n   Error output:")
                 for line in lines:
                     if line.strip():
@@ -585,7 +601,9 @@ gpgcheck=0
             print("\n" + "=" * 80)
             if install_success and verification_success:
                 print("[PASS] FULL INSTALLATION TEST PASSED")
-                print("\nROCm has been successfully installed from repository and verified!")
+                print(
+                    "\nROCm has been successfully installed from repository and verified!"
+                )            
             else:
                 print("[FAIL] FULL INSTALLATION TEST FAILED")
             print("=" * 80 + "\n")
@@ -711,8 +729,9 @@ Examples:
         parser.error("Build date cannot be empty")
 
     if len(args.date) != 8 or not args.date.isdigit():
-        parser.error(f"Invalid date format: {args.date}. Must be YYYYMMDD (e.g., 20260204)")
-
+        parser.error(
+            f"Invalid date format: {args.date}. Must be YYYYMMDD (e.g., 20260204)"
+        )
     # Print configuration
     print("\n" + "=" * 80)
     print("CONFIGURATION")
