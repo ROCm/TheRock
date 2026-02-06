@@ -15,7 +15,6 @@ from configure_ci import (
 
 
 class TestParseProjectsInput(unittest.TestCase):
-    """Test parse_projects_input() - pure logic, no mocking needed."""
 
     def test_empty_input_returns_empty_list(self):
         """Test that empty or whitespace input returns empty list."""
@@ -24,7 +23,6 @@ class TestParseProjectsInput(unittest.TestCase):
         self.assertEqual(parse_projects_input("all"), [])
 
     def test_single_project(self):
-        """Test parsing single project."""
         result = parse_projects_input("rocprim")
         self.assertEqual(result, ["rocprim"])
 
@@ -50,10 +48,8 @@ class TestParseProjectsInput(unittest.TestCase):
 
 
 class TestCrossProductProjectsWithGpuVariants(unittest.TestCase):
-    """Test cross_product_projects_with_gpu_variants() - pure logic, no mocking needed."""
 
     def test_single_project_single_variant(self):
-        """Test cross-product with one project and one GPU variant."""
         project_configs = [{"projects_to_test": "rocprim,rocblas"}]
         gpu_variants = [{"family": "gfx94x", "platform": "linux"}]
 
