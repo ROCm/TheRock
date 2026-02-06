@@ -417,12 +417,127 @@ gpgcheck=0
             except Exception as e:
                 print(f"   [WARN] Could not run rocminfo: {e}")
 
+        # Test rdhc.py if available
+        self.test_rdhc()
+
         # Return success if at least some components were found
         if found_count >= 2:  # Require at least 2 key components
             print("\n[PASS] ROCm installation verification PASSED")
             return True
         else:
             print("\n[FAIL] ROCm installation verification FAILED")
+            return False
+
+    def test_rdhc(self) -> bool:
+        """Test rdhc.py binary in libexec/rocm-core/.
+
+        Returns:
+            True if test successful, False otherwise
+        """
+        print("\n" + "=" * 80)
+        print("TESTING RDHC.PY")
+        print("=" * 80)
+
+        install_path = Path(self.install_prefix)
+        rdhc_script = install_path / "libexec" / "rocm-core" / "rdhc.py"
+
+        # Check if script exists
+        if not rdhc_script.exists():
+            print(f"\n[WARN] rdhc.py not found at: {rdhc_script}")
+            print("       This is expected if rocm-core package is not installed")
+            return False
+
+        print(f"\n[PASS] rdhc.py found at: {rdhc_script}")
+
+        # Check if script is executable or can be run with python
+        if os.access(rdhc_script, os.X_OK):
+            cmd = [str(rdhc_script)]
+        else:
+            cmd = [sys.executable, str(rdhc_script)]
+
+        # Try to run with --help first, then without arguments
+        test_args = ["--all"]
+        print(f"\nTrying to run rdhc.py with --all...")
+        print(f"Command: {' '.join(cmd + test_args)}")
+
+        try:
+            result = subprocess.run(
+                cmd + test_args,
+                cwd=str(install_path),
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                timeout=30,
+            )
+            print("   [PASS] rdhc.py executed successfully with --all")
+            if result.stdout:
+                # Print first few lines of output
+                lines = result.stdout.split('\n')[:5]
+                print("\n   First few lines of output:")
+                for line in lines:
+                    if line.strip():
+                        print(f"      {line}")
+            return True
+        except subprocess.TimeoutExpired:
+            print("   [WARN] rdhc.py --alltimed out")
+            # Try without arguments
+            return self._try_rdhc_without_args(cmd, install_path)
+        except subprocess.CalledProcessError:
+            print("   [WARN] rdhc.py --all failed, trying without arguments...")
+            # Try without arguments
+            return self._try_rdhc_without_args(cmd, install_path)
+        except Exception as e:
+            print(f"   [WARN] Could not run rdhc.py: {e}")
+            return False
+
+    def _try_rdhc_without_args(self, cmd: list, install_path: Path) -> bool:
+        """Try running rdhc.py without arguments.
+
+        Args:
+            cmd: Command to run (without arguments)
+            install_path: Installation prefix path
+
+        Returns:
+            True if successful, False otherwise
+        """
+        print(f"\nTrying to run rdhc.py without arguments...")
+        print(f"Command: {' '.join(cmd)}")
+
+        try:
+            result = subprocess.run(
+                cmd,
+                cwd=str(install_path),
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                timeout=30,
+            )
+            print("   [PASS] rdhc.py executed successfully")
+            if result.stdout:
+                # Print first few lines of output
+                lines = result.stdout.split('\n')[:5]
+                print("\n   First few lines of output:")
+                for line in lines:
+                    if line.strip():
+                        print(f"      {line}")
+            return True
+        except subprocess.TimeoutExpired:
+            print("   [WARN] rdhc.py timed out")
+            return False
+        except subprocess.CalledProcessError as e:
+            print(f"   [WARN] rdhc.py failed (return code: {e.returncode})")
+            if e.stdout:
+                # Print first few lines of error output
+                lines = e.stdout.split('\n')[:3]
+                print("\n   Error output:")
+                for line in lines:
+                    if line.strip():
+                        print(f"      {line}")
+            return False
+        except Exception as e:
+            print(f"   [WARN] Could not run rdhc.py: {e}")
             return False
 
     def run(self) -> bool:
