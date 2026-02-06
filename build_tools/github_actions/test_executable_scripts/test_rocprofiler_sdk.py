@@ -51,15 +51,17 @@ cmake_config_cmd = [
     "build",
     "-G",
     "Ninja",
-    f"-DCMAKE_PREFIX_PATH={THEROCK_PATH}",
+    f"-DCMAKE_PREFIX_PATH={THEROCK_PATH};{THEROCK_LIB_PATH}/rocm_sysdeps",
     f"-DCMAKE_HIP_COMPILER={THEROCK_PATH}/llvm/bin/amdclang++",
     f"-DHIP_HIPCC_EXECUTABLE={THEROCK_PATH}/bin/hipcc",
 ]
 
-logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmake_config_cmd)}")
+logging.info(
+    f"++ Exec [{ROCPROFILER_SDK_TESTS_DIRECTORY}]$ {shlex.join(cmake_config_cmd)}"
+)
 subprocess.run(
     cmake_config_cmd,
-    cwd=THEROCK_DIR,
+    cwd=ROCPROFILER_SDK_TESTS_DIRECTORY,
     check=True,
     env=environ_vars,
 )
