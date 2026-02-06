@@ -249,7 +249,7 @@ def main():
     # Execute the command
     try:
         logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-        result = subprocess.run(cmd, check=False)
+        result = subprocess.run(cmd, cwd=THEROCK_DIR, env=environ_vars, check=False)
         return result.returncode
     except Exception as e:
         print(f"Error running ctest: {e}", file=sys.stderr)
