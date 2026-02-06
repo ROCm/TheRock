@@ -103,7 +103,7 @@ on:
       jax_ref:
         description: rocm-jax repository ref/branch to check out
         type: string
-        default: "rocm-jaxlib-v0.8.0-fixdevtar"
+        default: "rocm-jaxlib-v0.8.0"
 
 permissions:
   id-token: write
@@ -115,7 +115,7 @@ jobs:
   build_jax_wheels:
     strategy:
       matrix:
-        jax_ref: [rocm-jaxlib-v0.8.0-fixdevtar]
+        jax_ref: [rocm-jaxlib-v0.8.0]
     name: Build Linux JAX Wheels | ${{ inputs.amdgpu_family }} | Python ${{ inputs.python_version }}
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     env:
