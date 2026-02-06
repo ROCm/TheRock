@@ -31,13 +31,13 @@ This incorporates advice from:
 The following projects and features are packaged and released through TheRock's
 stable, nightly, and dev release channels.
 
-| Project / feature | Linux support                                                                     | Windows support  |
-| ----------------- | --------------------------------------------------------------------------------- | ---------------- |
-| torch             | ✅ Supported                                                                      | ✅ Supported     |
-| ↳ aotriton        | ✅ Supported                                                                      | ✅ Supported     |
-| ↳ FBGEMM GenAI    | ❌ Not supported (see Issue [#2056](https://github.com/ROCm/TheRock/issues/2056)) | ❌ Not supported |
-| torchaudio        | ✅ Supported                                                                      | ✅ Supported     |
-| torchvision       | ✅ Supported                                                                      | ✅ Supported     |
+| Project / feature | Linux support | Windows support  |
+| ----------------- | ------------- | ---------------- |
+| torch             | ✅ Supported  | ✅ Supported     |
+| ↳ aotriton        | ✅ Supported  | ✅ Supported     |
+| ↳ FBGEMM GenAI    | ✅ Supported  | ❌ Not supported |
+| torchaudio        | ✅ Supported  | ✅ Supported     |
+| torchvision       | ✅ Supported  | ✅ Supported     |
 
 The following projects are not currently packaged and released by TheRock, functionality may vary.
 
