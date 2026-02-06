@@ -40,13 +40,13 @@ class ROCmDevelTest(unittest.TestCase):
 
     def testCLIPathBin(self):
         cmd = [sys.executable, "-m", "rocm_sdk", "path", "--bin"]
-        output = utils.exec(cmd, capture=True).decode().strip()
+        output = utils.run_command(cmd, capture=True).decode().strip()
         path = Path(output)
         self.assertTrue(path.exists(), msg=f"Expected bin path {path} to exist")
 
     def testCLIPathCMake(self):
         cmd = [sys.executable, "-m", "rocm_sdk", "path", "--cmake"]
-        output = utils.exec(cmd, capture=True).decode().strip()
+        output = utils.run_command(cmd, capture=True).decode().strip()
         path = Path(output)
         self.assertTrue(path.exists(), msg=f"Expected cmake path {path} to exist")
         hip_file = path / "hip" / "hip-config.cmake"
@@ -56,7 +56,7 @@ class ROCmDevelTest(unittest.TestCase):
 
     def testCLIPathRoot(self):
         cmd = [sys.executable, "-m", "rocm_sdk", "path", "--root"]
-        output = utils.exec(cmd, capture=True).decode().strip()
+        output = utils.run_command(cmd, capture=True).decode().strip()
         path = Path(output)
         self.assertTrue(path.exists(), msg=f"Expected root path {path} to exist")
         bin_path = path / "bin"
@@ -69,14 +69,14 @@ class ROCmDevelTest(unittest.TestCase):
         # We had a bug where the root llvm/ symlink, which is for backwards compat,
         # was not materialized. Verify it is.
         cmd = [sys.executable, "-m", "rocm_sdk", "path", "--root"]
-        output = utils.exec(cmd, capture=True).decode().strip()
+        output = utils.run_command(cmd, capture=True).decode().strip()
         path = Path(output) / "llvm" / "bin" / "clang++"
         self.assertTrue(path.exists(), msg=f"Expected {path} to exist")
 
     def testSharedLibrariesLoad(self):
         # Make sure the devel package is expanded.
         cmd = [sys.executable, "-m", "rocm_sdk", "path", "--root"]
-        _ = utils.exec(cmd, capture=True).decode().strip()
+        _ = utils.run_command(cmd, capture=True).decode().strip()
 
         # Ensure that the platform package exists now.
         mod_name = di.ALL_PACKAGES["devel"].get_py_package_name(

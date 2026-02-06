@@ -25,18 +25,18 @@ class ROCmBaseTest(unittest.TestCase):
 
     def testCLI(self):
         cmd = [sys.executable, "-m", "rocm_sdk", "--help"]
-        output = utils.exec(cmd, capture=True).decode()
+        output = utils.run_command(cmd, capture=True).decode()
         self.assertIn("usage:", output)
 
     def testVersion(self):
         cmd = [sys.executable, "-m", "rocm_sdk", "version"]
-        output = utils.exec(cmd, capture=True).decode().strip()
+        output = utils.run_command(cmd, capture=True).decode().strip()
         self.assertTrue(output)
         self.assertIn(".", output)
 
     def testTargets(self):
         cmd = [sys.executable, "-m", "rocm_sdk", "targets"]
-        output = utils.exec(cmd, capture=True).decode().strip()
+        output = utils.run_command(cmd, capture=True).decode().strip()
         self.assertTrue(output)
         self.assertIn("gfx", output)
 
