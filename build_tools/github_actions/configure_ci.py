@@ -84,31 +84,22 @@ THEROCK_DIR = THIS_SCRIPT_DIR.parent.parent
 # --------------------------------------------------------------------------- #
 
 
-def _get_external_repo_cwd(repo_name: str) -> str:
-    """Working directory for git diff when running for this external repo."""
-    return str(get_external_repo_path(repo_name))
-
-
-def _get_external_skip_patterns(repo_name: str) -> Optional[list]:
-    """Skip patterns for this external repo, or None for path_filters default."""
-    return get_skip_patterns(repo_name) or None
-
-
 def _should_skip_external_build_due_to_paths(
     repo_name: str,
     base_ref: str,
     github_event_name: str,
 ) -> bool:
     """True if build should be skipped. Gets paths here, then calls path_filters.is_ci_run_required."""
-    cwd = _get_external_repo_cwd(repo_name)
+    cwd = str(get_external_repo_path(repo_name))
     paths = get_git_modified_paths(base_ref, cwd=cwd)
     if paths is not None:
         paths = list(paths)
     print("modified_paths (max 200):", paths[:200] if paths else paths)
     print(f"Checking modified files since this had a {github_event_name} trigger")
+    skip_patterns = get_skip_patterns(repo_name) or None
     should_build = is_ci_run_required(
         paths,
-        skip_patterns=_get_external_skip_patterns(repo_name),
+        skip_patterns=skip_patterns,
     )
     return not should_build
 
@@ -185,7 +176,7 @@ def apply_external_repo_cross_product(
     """Apply cross-product of external repo configs with GPU variants."""
     if not linux_configs and not windows_configs:
         return linux_variants, windows_variants
-    print("\n=== External repo detected: applying cross-product ===")
+    print("\nExternal repo detected: applying cross-product")
     print(
         f"Linux configs: {len(linux_configs)}, Windows configs: {len(windows_configs)}"
     )
@@ -203,24 +194,6 @@ def apply_external_repo_cross_product(
     print(f"Final Windows matrix: {len(updated_windows)} entries")
     print("")
     return updated_linux, updated_windows
-
-
-def output_empty_matrix_and_exit():
-    """Output empty CI matrix when no projects detected for external repo and exit.
-
-    This indicates to the workflow that no jobs should run (enable_build_jobs: false).
-    """
-    print("No projects to build - outputting empty matrix")
-    output = {
-        "linux_variants": json.dumps([]),
-        "linux_test_labels": json.dumps([]),
-        "windows_variants": json.dumps([]),
-        "windows_test_labels": json.dumps([]),
-        "enable_build_jobs": json.dumps(False),
-        "test_type": "smoke",
-    }
-    gha_set_output(output)
-    sys.exit(0)
 
 
 def detect_external_repo_projects_to_build(
@@ -255,7 +228,7 @@ def setup_external_repo_configs(
     """Configure external repository settings when EXTERNAL_REPO_NAME is set.
 
     Returns None if not an external repo, or a dict with external project configs.
-    If no projects are detected, outputs empty matrix and exits (indicating no jobs should run).
+    Returns empty dict if external repo but no projects detected (main() handles early exit).
     """
     repo_name = (os.environ.get("EXTERNAL_REPO_NAME") or "").strip()
     if not repo_name:
@@ -264,7 +237,7 @@ def setup_external_repo_configs(
         get_repo_config(repo_name)
     except ValueError:
         return None
-    print(f"\n=== External repository: {repo_name} ===")
+    print(f"\nExternal repository: {repo_name}")
     project_detection = detect_external_repo_projects_to_build(
         repo_name=repo_name,
         base_ref=base_args["base_ref"],
@@ -276,8 +249,6 @@ def setup_external_repo_configs(
     print(
         f"Project detection result: Linux={len(linux_configs)}, Windows={len(windows_configs)}"
     )
-    if not linux_configs and not windows_configs:
-        output_empty_matrix_and_exit()
     return {
         "linux_external_project_configs": linux_configs,
         "windows_external_project_configs": windows_configs,
@@ -825,16 +796,27 @@ def main(base_args, linux_families, windows_families):
     # Check if external repo project configs exist and apply cross-product
     linux_external_configs = base_args.get("linux_external_project_configs", [])
     windows_external_configs = base_args.get("windows_external_project_configs", [])
+    is_external_repo = bool(os.environ.get("EXTERNAL_REPO_NAME"))
+
+    # External repo with no projects: output empty matrix and exit early
+    if is_external_repo and not linux_external_configs and not windows_external_configs:
+        print("No projects to build - outputting empty matrix")
+        output = {
+            "linux_variants": json.dumps([]),
+            "linux_test_labels": json.dumps([]),
+            "windows_variants": json.dumps([]),
+            "windows_test_labels": json.dumps([]),
+            "enable_build_jobs": json.dumps(False),
+            "test_type": "smoke",
+        }
+        gha_set_output(output)
+        sys.exit(0)
 
     linux_variants_output, windows_variants_output = apply_external_repo_cross_product(
         linux_external_configs,
         windows_external_configs,
         linux_variants_output,
         windows_variants_output,
-    )
-
-    has_external_project_configs = bool(
-        linux_external_configs or windows_external_configs
     )
 
     test_type = "smoke"
@@ -845,9 +827,9 @@ def main(base_args, linux_families, windows_families):
         enable_build_jobs = True
         test_type = "full"
         test_type_reason = "scheduled run triggers full tests"
-    # When external repos explicitly call TheRock's CI, honor their request without checking modified paths
-    elif has_external_project_configs:
-        print("External repo requesting builds - enabling without path checks")
+    # External repos: path checking already done in detect_external_repo_projects_to_build()
+    # If we have configs here, paths indicated we should build
+    elif is_external_repo:
         enable_build_jobs = True
         test_type_reason = "external repo build request"
         # If tests are specified, run full tests
