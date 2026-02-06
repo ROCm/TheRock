@@ -251,7 +251,7 @@ framework.
 ### Installing PyTorch Python packages
 
 Using the index pages [listed above](#installing-rocm-python-packages), you can
-also install `torch`, `torchaudio`, ` and `torchvision`.
+also install `torch`, `torchaudio`, and `torchvision`.
 
 > [!NOTE]
 > By default, pip will install the latest stable versions of each package.
@@ -271,7 +271,7 @@ also install `torch`, `torchaudio`, ` and `torchvision`.
 >   For example, `torch` 2.7.1 and compatible wheels can be installed by specifying
 >
 >   ```
->   >   torch==2.7.1 torchaudio==2.7.1a0 torchvision==0.22.1
+>   torch==2.7.1 torchaudio==2.7.1a0 torchvision==0.22.1
 >   ```
 >
 >   See also
