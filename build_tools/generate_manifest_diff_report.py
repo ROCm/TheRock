@@ -34,7 +34,7 @@ sys.path.insert(0, str(THIS_SCRIPT_DIR))
 # Local imports
 from github_actions.github_actions_utils import (
     gha_query_last_successful_workflow_run,
-    gha_query_workflow_run_information,
+    gha_query_workflow_run_by_id,
     gha_send_request,
 )
 
@@ -212,16 +212,14 @@ def resolve_commits(args: argparse.Namespace) -> tuple[str, str]:
             )
         start_sha = last_run["head_sha"]
     elif args.workflow_mode:
-        workflow_info = gha_query_workflow_run_information(
-            therock_repo_full, args.start
-        )
+        workflow_info = gha_query_workflow_run_by_id(therock_repo_full, args.start)
         start_sha = workflow_info.get("head_sha")
     else:
         start_sha = args.start
 
     # Resolve end commit
     if args.workflow_mode:
-        workflow_info = gha_query_workflow_run_information(therock_repo_full, args.end)
+        workflow_info = gha_query_workflow_run_by_id(therock_repo_full, args.end)
         end_sha = workflow_info.get("head_sha")
     else:
         end_sha = args.end
