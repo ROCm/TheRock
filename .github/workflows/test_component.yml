@@ -107,6 +107,10 @@ jobs:
         run: |
           python ./build_tools/print_driver_gpu_info.py
 
+      - name: Setup Test
+        run: |
+          ${{ fromJSON(inputs.component).setup_script }}
+
       - name: Test
         timeout-minutes: ${{ fromJSON(inputs.component).timeout_minutes }}
         env:
