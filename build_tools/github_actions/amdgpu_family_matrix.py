@@ -68,7 +68,7 @@ amdgpu_family_info_matrix_presubmit = {
             "family": "gfx110X-all",
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
-            "sanity_check_only_for_family": True,
+            # "sanity_check_only_for_family": True,
         },
         "windows": {
             "test-runs-on": "windows-gfx110X-gpu-rocm",
@@ -107,8 +107,8 @@ amdgpu_family_info_matrix_presubmit = {
         },
         "windows": {
             # TODO(#2962): Re-enable machine once sanity checks work with this architecture
-            # Label is windows-gfx120X-gpu-rocm
-            "test-runs-on": "",
+            # Label is 
+            "test-runs-on": "windows-gfx120X-gpu-rocm",
             "family": "gfx120X-all",
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
