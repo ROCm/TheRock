@@ -5,8 +5,11 @@
 """
 Full installation test script for ROCm native packages.
 
-This script downloads packages from S3, installs them on the system,
-and verifies that the installation was successful.
+This version installs packages directly from ROCm nightly repositories using
+native package managers (apt/dnf) instead of downloading from S3 first.
+
+Supports nightly builds only:
+- Nightly builds: https://rocm.nightlies.amd.com/
 """
 
 import argparse
@@ -14,8 +17,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import List, Optional
-import json
+from typing import Optional
 
 
 class PackageFullTester:
@@ -24,205 +26,296 @@ class PackageFullTester:
     def __init__(
         self,
         package_type: str,
-        s3_bucket: str,
-        artifact_group: str,
+        repo_base_url: str,
         artifact_id: str,
         rocm_version: str,
-        download_dir: str,
+        os_profile: str,
+        date: str,
         install_prefix: str = "/opt/rocm",
-        s3_path: Optional[str] = None,
+        gfx_arch: Optional[str] = None,
     ):
         """Initialize the package full tester.
 
         Args:
             package_type: Type of package ('deb' or 'rpm')
-            s3_bucket: S3 bucket name containing packages
-            artifact_group: GPU architecture group (e.g., gfx94X-dcgpu)
+            repo_base_url: Base URL for nightly repository (e.g., https://rocm.nightlies.amd.com)
             artifact_id: Artifact run ID
             rocm_version: ROCm version
-            download_dir: Directory to download packages to
+            os_profile: OS profile (e.g., ubuntu2404, rhel8)
+            date: Build date in YYYYMMDD format (required for nightly builds)
             install_prefix: Installation prefix (default: /opt/rocm)
-            s3_path: Optional custom S3 path
+            gfx_arch: GPU architecture (default: gfx94x)
         """
         self.package_type = package_type.lower()
-        self.s3_bucket = s3_bucket
-        self.artifact_group = artifact_group
+        self.repo_base_url = repo_base_url.rstrip('/')
         self.artifact_id = artifact_id
         self.rocm_version = rocm_version
-        self.download_dir = Path(download_dir)
+        self.os_profile = os_profile
+        self.date = date
         self.install_prefix = install_prefix
-        self.s3_path = s3_path
+        self.gfx_arch = gfx_arch.lower()
 
         # Validate inputs
         if self.package_type not in ["deb", "rpm"]:
             raise ValueError(f"Invalid package type: {package_type}. Must be 'deb' or 'rpm'")
 
-        # Create download directory
-        self.download_dir.mkdir(parents=True, exist_ok=True)
+        if not self.date or len(self.date) != 8:
+            raise ValueError(f"Invalid date format: {date}. Must be YYYYMMDD (e.g., 20260204)")
 
-    def construct_s3_path(self) -> str:
-        """Construct the S3 path for package download.
+        # Construct repository URL for nightly builds: base_url/{deb|rpm}/YYYYMMDD-RUNID/
+        self.repo_url = f"{self.repo_base_url}/{self.package_type}/{self.date}-{self.artifact_id}/"
+
+    def construct_repo_url_with_os(self) -> str:
+        """Construct the full repository URL including OS profile for nightly builds.
 
         Returns:
-            S3 path string
+            Full repository URL
         """
-        if self.s3_path:
-            return self.s3_path
+        if self.package_type == "deb":
+            pool_dir="pool/main"
+            # Nightly DEB repository structure: base_url/deb/YYYYMMDD-RUNID/pool/main/
+            return f"{self.repo_url}{pool_dir}/"
+        else:  # rpm
+            # Nightly RPM repository structure: base_url/rpm/YYYYMMDD-RUNID/os_profile/x86_64/
+            return f"{self.repo_url}x86_64/"
 
-        # Standard path structure: s3://bucket/artifact_group/artifact_id/
-        return f"s3://{self.s3_bucket}/{self.artifact_group}/{self.artifact_id}/"
-
-    def download_packages_from_s3(self) -> List[Path]:
-        """Download packages from S3 bucket.
-
-        Returns:
-            List of downloaded package file paths
-
-        Raises:
-            RuntimeError: If download fails
-        """
-        print("\n" + "=" * 80)
-        print("DOWNLOADING PACKAGES FROM S3")
-        print("=" * 80)
-
-        s3_path = self.construct_s3_path()
-        print(f"\nS3 Path: {s3_path}")
-        print(f"Download Directory: {self.download_dir}")
-
-        # Download packages using AWS CLI
-        extension = "deb" if self.package_type == "deb" else "rpm"
-        
-        # Try to sync the entire directory
-        cmd = [
-            "aws", "s3", "sync",
-            s3_path,
-            str(self.download_dir),
-            "--exclude", "*",
-            "--include", f"*.{extension}"
-        ]
-
-        print(f"\nRunning: {' '.join(cmd)}\n")
-
-        try:
-            result = subprocess.run(
-                cmd,
-                check=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-            )
-            print(result.stdout)
-        except subprocess.CalledProcessError as e:
-            print(f"Failed to download packages from S3")
-            print(f"Error output:\n{e.stdout}")
-            raise RuntimeError(f"S3 download failed: {e}")
-
-        # List downloaded packages
-        packages = list(self.download_dir.glob(f"*.{extension}"))
-        
-        if not packages:
-            raise RuntimeError(f"No {extension} packages found after download")
-
-        print(f"\nDownloaded {len(packages)} packages:")
-        for pkg in sorted(packages):
-            file_size = pkg.stat().st_size / (1024 * 1024)  # MB
-            print(f"   - {pkg.name} ({file_size:.2f} MB)")
-
-        return sorted(packages)
-
-    def install_deb_packages(self, packages: List[Path]) -> bool:
-        """Install DEB packages using apt.
-
-        Args:
-            packages: List of package file paths to install
+    def setup_deb_repository(self) -> bool:
+        """Setup DEB repository on the system.
 
         Returns:
-            True if installation successful, False otherwise
+            True if setup successful, False otherwise
         """
         print("\n" + "=" * 80)
-        print("INSTALLING DEB PACKAGES")
+        print("SETTING UP DEB REPOSITORY")
         print("=" * 80)
 
-        # Convert to absolute paths
-        package_paths = [str(pkg.absolute()) for pkg in packages]
+        repo_url = self.construct_repo_url_with_os()
+        print(f"\nRepository URL: {repo_url}")
+        print(f"OS Profile: {self.os_profile}")
 
-        print(f"\nPackages to install ({len(package_paths)}):")
-        for pkg in package_paths:
-            print(f"   - {Path(pkg).name}")
+        # Add repository to sources list
+        print("\nAdding ROCm repository...")
+        sources_list = f"/etc/apt/sources.list.d/rocm-test.list"
 
-        # Update apt cache first
-        print("\nUpdating apt cache...")
-        try:
-            subprocess.run(
-                ["apt", "update"],
-                check=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-            )
-        except subprocess.CalledProcessError as e:
-            print(f"Warning: apt update failed (may be expected in some environments)")
-
-        # Install using apt
-        cmd = ["apt", "install", "-y"] + package_paths
-
-        print(f"\nRunning: {' '.join(cmd)}\n")
+        repo_entry = f"deb [arch=amd64] {repo_url} ./\n"
 
         try:
-            result = subprocess.run(
-                cmd,
-                check=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-            )
-            print(result.stdout)
-            print("\nDEB packages installed successfully")
-            return True
-        except subprocess.CalledProcessError as e:
-            print(f"\nFailed to install DEB packages")
-            print(f"Error output:\n{e.stdout}")
+            with open(sources_list, "w") as f:
+                f.write(repo_entry)
+            print(f"[PASS] Repository added to {sources_list}")
+            print(f"       {repo_entry.strip()}")
+        except Exception as e:
+            print(f"[FAIL] Failed to add repository: {e}")
             return False
 
-    def install_rpm_packages(self, packages: List[Path]) -> bool:
-        """Install RPM packages using dnf.
+        # Update package lists
+        print("\nUpdating package lists...")
+        print("=" * 80)
+        try:
+            # Use Popen to stream output in real-time
+            process = subprocess.Popen(
+                ["apt", "update"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,  # Line buffered
+            )
 
-        Args:
-            packages: List of package file paths to install
+            # Stream output line by line
+            for line in process.stdout:
+                line = line.rstrip()
+                print(line)  # Print immediately
+                sys.stdout.flush()  # Ensure immediate display
+
+            # Wait for process to complete
+            return_code = process.wait(timeout=120)
+
+            if return_code == 0:
+                print("\n[PASS] Package lists updated")
+                return True
+            else:
+                print(f"\n[FAIL] Failed to update package lists (exit code: {return_code})")
+                return False
+        except subprocess.TimeoutExpired:
+            process.kill()
+            print(f"\n[FAIL] apt update timed out")
+            return False
+        except Exception as e:
+            print(f"[FAIL] Error updating package lists: {e}")
+            return False
+
+    def setup_rpm_repository(self) -> bool:
+        """Setup RPM repository on the system.
+
+        Returns:
+            True if setup successful, False otherwise
+        """
+        print("\n" + "=" * 80)
+        print("SETTING UP RPM REPOSITORY")
+        print("=" * 80)
+
+        repo_url = self.construct_repo_url_with_os()
+        print(f"\nRepository URL: {repo_url}")
+        print(f"OS Profile: {self.os_profile}")
+
+        # Create repository file
+        print("\nCreating ROCm repository file...")
+        repo_file = "/etc/yum.repos.d/rocm-test.repo"
+
+        repo_content = f"""[rocm-test]
+name=ROCm Test Repository
+baseurl={repo_url}
+enabled=1
+gpgcheck=0
+"""
+
+        try:
+            with open(repo_file, "w") as f:
+                f.write(repo_content)
+            print(f"[PASS] Repository file created: {repo_file}")
+            print(f"\nRepository configuration:")
+            print(repo_content)
+        except Exception as e:
+            print(f"[FAIL] Failed to create repository file: {e}")
+            return False
+
+        # Clean dnf cache
+        print("\nCleaning dnf cache...")
+        try:
+            result = subprocess.run(
+                ["dnf", "clean", "all"],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                timeout=60,
+            )
+            print("[PASS] dnf cache cleaned")
+            return True
+        except subprocess.CalledProcessError as e:
+            print(f"[FAIL] Failed to clean dnf cache")
+            print(f"Error: {e.stdout}")
+            return False
+        except subprocess.TimeoutExpired:
+            print(f"[FAIL] dnf clean timed out")
+            return False
+
+    def install_deb_packages(self) -> bool:
+        """Install ROCm DEB packages from repository.
 
         Returns:
             True if installation successful, False otherwise
         """
         print("\n" + "=" * 80)
-        print("INSTALLING RPM PACKAGES")
+        print("INSTALLING DEB PACKAGES FROM REPOSITORY")
         print("=" * 80)
 
-        # Convert to absolute paths
-        package_paths = [str(pkg.absolute()) for pkg in packages]
+        # Construct package name
+        package_name = f"amdrocm-{self.gfx_arch}"
+        print(f"\nPackage to install: {package_name}")
 
-        print(f"\nPackages to install ({len(package_paths)}):")
-        for pkg in package_paths:
-            print(f"   - {Path(pkg).name}")
-
-        # Install using dnf
-        cmd = ["dnf", "install", "-y"] + package_paths
-
-        print(f"\nRunning: {' '.join(cmd)}\n")
+        # Install using apt
+        cmd = ["apt", "install", "-y", package_name]
+        print(f"\nRunning: {' '.join(cmd)}")
+        print("=" * 80)
+        print("Installation progress (streaming output):\n")
 
         try:
-            result = subprocess.run(
+            # Use Popen to stream output in real-time
+            process = subprocess.Popen(
                 cmd,
-                check=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
+                bufsize=1,  # Line buffered
             )
-            print(result.stdout)
-            print("\nRPM packages installed successfully")
-            return True
-        except subprocess.CalledProcessError as e:
-            print(f"\nFailed to install RPM packages")
-            print(f"Error output:\n{e.stdout}")
+
+            # Stream output line by line
+            output_lines = []
+            for line in process.stdout:
+                line = line.rstrip()
+                print(line)  # Print immediately
+                output_lines.append(line)
+                sys.stdout.flush()  # Ensure immediate display
+
+            # Wait for process to complete
+            return_code = process.wait(timeout=1800)  # 30 minute timeout
+
+            if return_code == 0:
+                print("\n" + "=" * 80)
+                print("[PASS] DEB packages installed successfully from repository")
+                return True
+            else:
+                print("\n" + "=" * 80)
+                print(f"[FAIL] Failed to install DEB packages (exit code: {return_code})")
+                return False
+
+        except subprocess.TimeoutExpired:
+            process.kill()
+            print("\n" + "=" * 80)
+            print("[FAIL] Installation timed out after 30 minutes")
+            return False
+        except Exception as e:
+            print(f"\n[FAIL] Error during installation: {e}")
+            return False
+
+    def install_rpm_packages(self) -> bool:
+        """Install ROCm RPM packages from repository.
+
+        Returns:
+            True if installation successful, False otherwise
+        """
+        print("\n" + "=" * 80)
+        print("INSTALLING RPM PACKAGES FROM REPOSITORY")
+        print("=" * 80)
+
+        # Construct package name
+        package_name = f"amdrocm-{self.gfx_arch}"
+        print(f"\nPackage to install: {package_name}")
+
+        # Install using dnf
+        cmd = ["dnf", "install", "-y", package_name]
+        print(f"\nRunning: {' '.join(cmd)}")
+        print("=" * 80)
+        print("Installation progress (streaming output):\n")
+
+        try:
+            # Use Popen to stream output in real-time
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,  # Line buffered
+            )
+
+            # Stream output line by line
+            output_lines = []
+            for line in process.stdout:
+                line = line.rstrip()
+                print(line)  # Print immediately
+                output_lines.append(line)
+                sys.stdout.flush()  # Ensure immediate display
+
+            # Wait for process to complete
+            return_code = process.wait(timeout=1800)  # 30 minute timeout
+
+            if return_code == 0:
+                print("\n" + "=" * 80)
+                print("[PASS] RPM packages installed successfully from repository")
+                return True
+            else:
+                print("\n" + "=" * 80)
+                print(f"[FAIL] Failed to install RPM packages (exit code: {return_code})")
+                return False
+
+        except subprocess.TimeoutExpired:
+            process.kill()
+            print("\n" + "=" * 80)
+            print("[FAIL] Installation timed out after 30 minutes")
+            return False
+        except Exception as e:
+            print(f"\n[FAIL] Error during installation: {e}")
             return False
 
     def verify_rocm_installation(self) -> bool:
@@ -238,10 +331,10 @@ class PackageFullTester:
         # Check if installation prefix exists
         install_path = Path(self.install_prefix)
         if not install_path.exists():
-            print(f"\nInstallation directory not found: {self.install_prefix}")
+            print(f"\n[FAIL] Installation directory not found: {self.install_prefix}")
             return False
 
-        print(f"\nInstallation directory exists: {self.install_prefix}")
+        print(f"\n[PASS] Installation directory exists: {self.install_prefix}")
 
         # List of key components to check
         key_components = [
@@ -258,10 +351,10 @@ class PackageFullTester:
         for component in key_components:
             component_path = install_path / component
             if component_path.exists():
-                print(f"   ✅ {component}")
+                print(f"   [PASS] {component}")
                 found_count += 1
             else:
-                print(f"   ⚠️  {component} (not found)")
+                print(f"   [WARN] {component} (not found)")
                 all_found = False
 
         print(f"\nComponents found: {found_count}/{len(key_components)}")
@@ -283,10 +376,10 @@ class PackageFullTester:
                 stderr=subprocess.PIPE,
                 text=True,
             )
-            
+
             rocm_packages = [line for line in result.stdout.split('\n') if grep_pattern.lower() in line.lower()]
             print(f"   Found {len(rocm_packages)} ROCm packages installed")
-            
+
             if rocm_packages:
                 print("\n   Sample packages:")
                 for pkg in rocm_packages[:5]:  # Show first 5
@@ -295,7 +388,7 @@ class PackageFullTester:
                     print(f"      ... and {len(rocm_packages) - 5} more")
 
         except subprocess.CalledProcessError as e:
-            print(f"Could not query installed packages")
+            print(f"   [WARN] Could not query installed packages")
 
         # Try to run rocminfo if available
         rocminfo_path = install_path / "bin" / "rocminfo"
@@ -310,7 +403,7 @@ class PackageFullTester:
                     text=True,
                     timeout=30,
                 )
-                print("rocminfo executed successfully")
+                print("   [PASS] rocminfo executed successfully")
                 # Print first few lines of output
                 lines = result.stdout.split('\n')[:10]
                 print("\n   First few lines of rocminfo output:")
@@ -318,18 +411,18 @@ class PackageFullTester:
                     if line.strip():
                         print(f"      {line}")
             except subprocess.TimeoutExpired:
-                print(f"rocminfo timed out (may require GPU hardware)")
+                print("   [WARN] rocminfo timed out (may require GPU hardware)")
             except subprocess.CalledProcessError as e:
-                print(f"rocminfo failed (may require GPU hardware)")
+                print(f"   [WARN] rocminfo failed (may require GPU hardware)")
             except Exception as e:
-                print(f"Could not run rocminfo: {e}")
+                print(f"   [WARN] Could not run rocminfo: {e}")
 
         # Return success if at least some components were found
         if found_count >= 2:  # Require at least 2 key components
-            print("\nROCm installation verification PASSED")
+            print("\n[PASS] ROCm installation verification PASSED")
             return True
         else:
-            print("\nROCm installation verification FAILED")
+            print("\n[FAIL] ROCm installation verification FAILED")
             return False
 
     def run(self) -> bool:
@@ -342,22 +435,30 @@ class PackageFullTester:
         print("FULL INSTALLATION TEST - NATIVE LINUX PACKAGES")
         print("=" * 80)
         print(f"\nPackage Type: {self.package_type.upper()}")
-        print(f"S3 Bucket: {self.s3_bucket}")
-        print(f"Artifact Group: {self.artifact_group}")
+        print(f"Repository Base URL: {self.repo_base_url}")
         print(f"Artifact ID: {self.artifact_id}")
+        print(f"Build Date: {self.date}")
         print(f"ROCm Version: {self.rocm_version}")
-        print(f"Download Directory: {self.download_dir}")
+        print(f"OS Profile: {self.os_profile}")
+        print(f"GPU Architecture: {self.gfx_arch}")
         print(f"Install Prefix: {self.install_prefix}")
+        print(f"\nRepository URL: {self.construct_repo_url_with_os()}")
 
         try:
-            # Step 1: Download packages from S3
-            packages = self.download_packages_from_s3()
+            # Step 1: Setup repository
+            if self.package_type == "deb":
+                setup_success = self.setup_deb_repository()
+            else:  # rpm
+                setup_success = self.setup_rpm_repository()
+
+            if not setup_success:
+                return False
 
             # Step 2: Install packages
             if self.package_type == "deb":
-                install_success = self.install_deb_packages(packages)
+                install_success = self.install_deb_packages()
             else:  # rpm
-                install_success = self.install_rpm_packages(packages)
+                install_success = self.install_rpm_packages()
 
             if not install_success:
                 return False
@@ -368,16 +469,16 @@ class PackageFullTester:
             # Print final status
             print("\n" + "=" * 80)
             if install_success and verification_success:
-                print("FULL INSTALLATION TEST PASSED")
-                print("\nROCm has been successfully installed and verified!")
+                print("[PASS] FULL INSTALLATION TEST PASSED")
+                print("\nROCm has been successfully installed from repository and verified!")
             else:
-                print("FULL INSTALLATION TEST FAILED")
+                print("[FAIL] FULL INSTALLATION TEST FAILED")
             print("=" * 80 + "\n")
 
             return install_success and verification_success
 
         except Exception as e:
-            print(f"\nError during full installation test: {e}")
+            print(f"\n[FAIL] Error during full installation test: {e}")
             import traceback
             traceback.print_exc()
             return False
@@ -390,25 +491,35 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Download and install DEB packages from S3
-  python package_full_test.py \\
+  # Install from nightly DEB repository (Ubuntu 24.04)
+  python package_full_test_v2.py \\
       --package-type deb \\
-      --s3-bucket therock-dev-packages \\
-      --artifact-group gfx94X-dcgpu \\
-      --artifact-id 12345 \\
+      --repo-base-url https://rocm.nightlies.amd.com \\
+      --artifact-id 21658678136 \\
+      --date 20260204 \\
       --rocm-version 8.0.0 \\
-      --download-dir /tmp/rocm_packages
+      --os-profile ubuntu2404 \\
+      --gfx-arch gfx94x
 
-  # Download and install RPM packages with custom S3 path
-  python package_full_test.py \\
+  # Install from nightly RPM repository (RHEL 8)
+  python package_full_test_v2.py \\
       --package-type rpm \\
-      --s3-bucket therock-nightly-packages \\
-      --artifact-group gfx110X-all \\
-      --artifact-id 67890 \\
-      --rocm-version 8.0.1 \\
-      --download-dir /tmp/rocm_packages \\
-      --install-prefix /opt/rocm \\
-      --s3-path s3://custom-bucket/custom/path/
+      --repo-base-url https://rocm.nightlies.amd.com \\
+      --artifact-id 21658678136 \\
+      --date 20260204 \\
+      --rocm-version 8.0.0 \\
+      --os-profile rhel8 \\
+      --gfx-arch gfx94x
+
+  # Install from nightly for different GPU (Strix Halo)
+  python package_full_test_v2.py \\
+      --package-type deb \\
+      --repo-base-url https://rocm.nightlies.amd.com \\
+      --artifact-id 21658678136 \\
+      --date 20260204 \\
+      --rocm-version 8.0.0 \\
+      --os-profile ubuntu2404 \\
+      --gfx-arch gfx1151
         """,
     )
 
@@ -421,38 +532,38 @@ Examples:
     )
 
     parser.add_argument(
-        "--s3-bucket",
+        "--repo-base-url",
         type=str,
         required=True,
-        help="S3 bucket name containing packages",
-    )
-
-    parser.add_argument(
-        "--artifact-group",
-        type=str,
-        required=True,
-        help="GPU architecture group (e.g., gfx94X-dcgpu, gfx110X-all)",
+        help="Base URL for nightly repository (e.g., https://rocm.nightlies.amd.com)",
     )
 
     parser.add_argument(
         "--artifact-id",
         type=str,
         required=True,
-        help="Artifact run ID",
+        help="Artifact run ID (e.g., 21658678136)",
     )
 
     parser.add_argument(
         "--rocm-version",
         type=str,
         required=True,
-        help="ROCm version (e.g., 8.0.0, 8.0.1rc1)",
+        help="ROCm version (e.g., 8.0.0, 7.9.0rc1)",
     )
 
     parser.add_argument(
-        "--download-dir",
+        "--os-profile",
         type=str,
         required=True,
-        help="Directory to download packages to",
+        help="OS profile (e.g., ubuntu2404, rhel8, debian12, sles16)",
+    )
+
+    parser.add_argument(
+        "--gfx-arch",
+        type=str,
+        default="gfx94x",
+        help="GPU architecture (default: gfx94x). Examples: gfx94x, gfx110x, gfx1151",
     )
 
     parser.add_argument(
@@ -463,23 +574,54 @@ Examples:
     )
 
     parser.add_argument(
-        "--s3-path",
+        "--date",
         type=str,
-        help="Optional custom S3 path (overrides standard path construction)",
+        required=True,
+        help="Build date in YYYYMMDD format (required for nightly builds, e.g., 20260204)",
     )
 
     args = parser.parse_args()
 
-    # Create tester and run
+    # Validate and normalize parameters
+    if not args.artifact_id or not args.artifact_id.strip():
+        parser.error("Artifact ID cannot be empty")
+
+    if not args.rocm_version or not args.rocm_version.strip():
+        parser.error("ROCm version cannot be empty")
+
+    if not args.os_profile or not args.os_profile.strip():
+        parser.error("OS profile cannot be empty")
+
+    if not args.date or not args.date.strip():
+        parser.error("Build date cannot be empty")
+
+    if len(args.date) != 8 or not args.date.isdigit():
+        parser.error(f"Invalid date format: {args.date}. Must be YYYYMMDD (e.g., 20260204)")
+
+    # Print configuration
+    print("\n" + "=" * 80)
+    print("CONFIGURATION")
+    print("=" * 80)
+    print(f"Package Type: {args.package_type}")
+    print(f"Repository Base URL: {args.repo_base_url}")
+    print(f"Artifact ID: {args.artifact_id}")
+    print(f"Build Date: {args.date}")
+    print(f"ROCm Version: {args.rocm_version}")
+    print(f"OS Profile: {args.os_profile}")
+    print(f"GPU Architecture: {args.gfx_arch}")
+    print(f"Install Prefix: {args.install_prefix}")
+    print("=" * 80)
+
+    # Create installer and run
     tester = PackageFullTester(
         package_type=args.package_type,
-        s3_bucket=args.s3_bucket,
-        artifact_group=args.artifact_group,
+        repo_base_url=args.repo_base_url,
         artifact_id=args.artifact_id,
         rocm_version=args.rocm_version,
-        download_dir=args.download_dir,
+        os_profile=args.os_profile,
+        date=args.date,
         install_prefix=args.install_prefix,
-        s3_path=args.s3_path,
+        gfx_arch=args.gfx_arch,
     )
 
     success = tester.run()

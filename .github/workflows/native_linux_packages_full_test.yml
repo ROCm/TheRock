@@ -3,10 +3,6 @@ name: Full Test of Native Linux Packages
 on:
   workflow_call:
     inputs:
-      artifact_group:
-        description: gfx arch group for the s3 server
-        type: string
-        default: gfx94X-dcgpu
       artifact_run_id:
         description: workflow run id to download the artifacts from.
         required: true
@@ -19,27 +15,38 @@ on:
         description: Specify whether debian or rpm packages are needed (deb or rpm).
         required: true
         type: string
-      release_type:
-        description: The type of release to test ("dev", "nightly", or "prerelease").
+      os_profile:
+        description: OS profile (e.g., ubuntu2404, rhel8, debian12, sles16).
+        required: true
+        type: string
+      gfx_arch:
+        description: GPU architecture (e.g., gfx94x, gfx110x, gfx1151).
+        type: string
+        default: gfx94x
+      build_date:
+        description: Build date in YYYYMMDD format (e.g., 20260204). If not provided, will use current date.
         required: false
         type: string
-      s3_download_path:
-        description: S3 path to download packages from (optional, defaults to standard location).
+      repo_base_url:
+        description: Base URL for nightly repository (defaults to https://rocm.nightlies.amd.com).
         required: false
         type: string
+        default: https://rocm.nightlies.amd.com
+      install_prefix:
+        description: Installation prefix path (optional, defaults to /opt/rocm/core).
+        required: false
+        type: string
+        default: /opt/rocm/core
   workflow_dispatch:
     inputs:
-      artifact_group:
-        type: string
-        default: gfx94X-dcgpu
       artifact_run_id:
-        description: workflow run id to download the artifacts from
+        description: workflow run ID for nightly build (e.g., 21658678136)
         required: true
         type: string
       rocm_version:
         description: ROCm version to append to the package (8.0.0, 8.0.1rc1, ...).
         type: string
-        default: "0.0.1"
+        default: "8.0.0"
       native_package_type:
         description: Specify whether debian or rpm packages are needed (deb or rpm).
         required: true
@@ -48,23 +55,45 @@ on:
           - rpm
           - deb
         default: "deb"
-      release_type:
-        description: The type of release to test ("dev", "nightly", or "prerelease").
+      os_profile:
+        description: OS profile (e.g., ubuntu2404, rhel8, debian12, sles16).
+        required: true
+        type: choice
+        options:
+          - ubuntu2404
+          - ubuntu2204
+          - debian12
+          - rhel8
+          - rhel9
+          - sles16
+        default: "ubuntu2404"
+      gfx_arch:
+        description: GPU architecture (e.g., gfx94x, gfx110x, gfx1151).
         type: string
-        default: "dev"
-      s3_download_path:
-        description: S3 path to download packages from (optional).
+        default: "gfx94x"
+      build_date:
+        description: Build date in YYYYMMDD format (e.g., 20260204). Leave empty to use current date.
         type: string
+        required: false
+      repo_base_url:
+        description: Base URL for nightly repository.
+        type: string
+        default: "https://rocm.nightlies.amd.com"
+        required: false
+      install_prefix:
+        description: Installation prefix path (defaults to /opt/rocm).
+        type: string
+        default: "/opt/rocm"
         required: false
 
 permissions:
   id-token: write
   contents: read
 
-run-name: Full Test - Native Linux packages (${{ inputs.artifact_group }}, ${{ inputs.rocm_version }}, ${{ inputs.native_package_type }}, ${{ inputs.release_type }})
+run-name: Full Test - Native Linux packages (${{ inputs.os_profile }}, ${{ inputs.rocm_version }}, ${{ inputs.native_package_type }}, ${{ inputs.gfx_arch }})
 
 jobs:
-  full_test_native_packages:
+  full_test_native_linux_packages:
     name: Full Installation Test - ${{ inputs.native_package_type }}
     strategy:
       fail-fast: false
@@ -78,13 +107,12 @@ jobs:
     env:
       ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id }}
       ROCM_VERSION: ${{ inputs.rocm_version }}
-      ARTIFACT_GROUP: ${{ inputs.artifact_group }}
+      OS_PROFILE: ${{ inputs.os_profile }}
       PACKAGE_TYPE: ${{ inputs.native_package_type }}
-      RELEASE_TYPE: ${{ inputs.release_type || 'dev' }}
-      S3_BUCKET_NATIVE: "therock-${{ inputs.release_type }}-packages"
-      S3_DOWNLOAD_PATH: ${{ inputs.s3_download_path }}
-      PACKAGE_DOWNLOAD_DIR: /tmp/rocm_packages
-      INSTALL_PREFIX: /opt/rocm
+      GFX_ARCH: ${{ inputs.gfx_arch || 'gfx94x' }}
+      REPO_BASE_URL: ${{ inputs.repo_base_url || 'https://rocm.nightlies.amd.com' }}
+      BUILD_DATE: ${{ inputs.build_date }}
+      INSTALL_PREFIX: ${{ inputs.install_prefix || '/opt/rocm/core' }}
     steps:
       - name: Install System Prerequisites
         run: |
@@ -100,7 +128,6 @@ jobs:
               curl \
               ca-certificates \
               git \
-              gnupg \
               lsb-release
           else
             # RHEL/CentOS/AlmaLinux prerequisites
@@ -124,18 +151,19 @@ jobs:
 
       - name: Install Python Dependencies
         run: |
-          pip3 install --break-system-packages boto3 pyelftools requests
+          pip3 install --break-system-packages pyelftools requests
 
-      - name: Install AWS CLI
+      - name: Determine Build Date
+        id: build-date
         run: |
-          cd /tmp/TheRock
-          bash ./dockerfiles/install_awscli.sh
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
-        with:
-          aws-region: us-east-2
-          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}
+          if [ -n "${{ inputs.build_date }}" ]; then
+            BUILD_DATE="${{ inputs.build_date }}"
+          else
+            # Use current date in YYYYMMDD format
+            BUILD_DATE=$(date +%Y%m%d)
+          fi
+          echo "date=$BUILD_DATE" >> $GITHUB_OUTPUT
+          echo "Using build date: $BUILD_DATE"
 
       - name: Full Package Installation Test
         id: full-test
@@ -144,23 +172,30 @@ jobs:
           echo "FULL INSTALLATION TEST - NATIVE LINUX PACKAGES"
           echo "=========================================================================="
           echo "Package Type: ${{ inputs.native_package_type }}"
-          echo "Artifact Group: ${{ inputs.artifact_group }}"
+          echo "OS Profile: ${{ inputs.os_profile }}"
           echo "Artifact Run ID: ${{ inputs.artifact_run_id }}"
+          echo "Build Date: ${{ steps.build-date.outputs.date }}"
           echo "ROCm Version: ${{ inputs.rocm_version }}"
-          echo "Release Type: ${{ inputs.release_type }}"
-          echo "S3 Bucket: ${{ env.S3_BUCKET_NATIVE }}"
+          echo "GPU Architecture: ${{ env.GFX_ARCH }}"
+          echo "Repository Base URL: ${{ env.REPO_BASE_URL }}"
+          echo "Install Prefix: ${{ env.INSTALL_PREFIX }}"
           echo "=========================================================================="
           echo ""
           
-          python3 /tmp/TheRock/build_tools/packaging/linux/package_full_test.py \
-            --package-type ${{ inputs.native_package_type }} \
-            --s3-bucket ${{ env.S3_BUCKET_NATIVE }} \
-            --artifact-group ${{ inputs.artifact_group }} \
-            --artifact-id ${{ env.ARTIFACT_RUN_ID }} \
-            --rocm-version ${{ inputs.rocm_version }} \
-            --download-dir ${{ env.PACKAGE_DOWNLOAD_DIR }} \
-            --install-prefix ${{ env.INSTALL_PREFIX }} \
-            --s3-path "${{ inputs.s3_download_path }}"
+          # Build command for package_full_test.py
+          CMD="python3 /tmp/TheRock/build_tools/packaging/linux/package_full_test.py"
+          CMD="$CMD --package-type ${{ inputs.native_package_type }}"
+          CMD="$CMD --repo-base-url ${{ env.REPO_BASE_URL }}"
+          CMD="$CMD --artifact-id ${{ env.ARTIFACT_RUN_ID }}"
+          CMD="$CMD --date ${{ steps.build-date.outputs.date }}"
+          CMD="$CMD --rocm-version ${{ inputs.rocm_version }}"
+          CMD="$CMD --os-profile ${{ inputs.os_profile }}"
+          CMD="$CMD --gfx-arch ${{ env.GFX_ARCH }}"
+          CMD="$CMD --install-prefix ${{ env.INSTALL_PREFIX }}"
+
+          echo "Executing: $CMD"
+          echo ""
+          eval $CMD
 
       - name: Verify ROCm Installation
         if: always() && steps.full-test.outcome == 'success'
@@ -168,15 +203,17 @@ jobs:
           echo "=========================================================================="
           echo "VERIFYING ROCM INSTALLATION"
           echo "=========================================================================="
-          
+          echo "Install Prefix: ${{ env.INSTALL_PREFIX }}"
+          echo ""
+
           # Check if ROCm directory exists
           if [ -d "${{ env.INSTALL_PREFIX }}" ]; then
-            echo "✅ ROCm installation directory exists: ${{ env.INSTALL_PREFIX }}"
+            echo "ROCm installation directory exists: ${{ env.INSTALL_PREFIX }}"
             echo ""
             echo "Directory structure:"
             ls -la ${{ env.INSTALL_PREFIX }}
           else
-            echo "❌ ROCm installation directory not found: ${{ env.INSTALL_PREFIX }}"
+            echo "ROCm installation directory not found: ${{ env.INSTALL_PREFIX }}"
             exit 1
           fi
           
@@ -195,9 +232,9 @@ jobs:
           for comp in "${components[@]}"; do
             full_path="${{ env.INSTALL_PREFIX }}/${comp}"
             if [ -e "$full_path" ]; then
-              echo "  ✅ $comp"
+              echo "  $comp"
             else
-              echo "  ⚠️  $comp (not found)"
+              echo "  $comp (not found)"
               all_found=false
             fi
           done
@@ -222,15 +259,16 @@ jobs:
             echo "FULL INSTALLATION TEST PASSED"
             echo ""
             echo "Summary:"
-            echo "  - Packages downloaded from S3: SUCCESS"
-            echo "  - Package installation: SUCCESS"
+            echo "  - Repository setup: SUCCESS"
+            echo "  - Package installation from repository: SUCCESS"
             echo "  - ROCm verification: SUCCESS"
             echo ""
             echo "ROCm ${{ inputs.rocm_version }} is successfully installed at ${{ env.INSTALL_PREFIX }}"
+            echo "Installed from: ${{ env.REPO_BASE_URL }}/${{ inputs.native_package_type }}/${{ steps.build-date.outputs.date }}-${{ inputs.artifact_run_id }}/${{ inputs.os_profile }}/"
           else
             echo "FULL INSTALLATION TEST FAILED"
             echo ""
-            echo "The test failed during package download or installation."
+            echo "The test failed during repository setup or package installation."
             echo "Please check the logs above for detailed error messages."
             exit 1
           fi
