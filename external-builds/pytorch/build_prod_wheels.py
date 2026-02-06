@@ -28,6 +28,7 @@ during the build step.
 # in the former.
 python pytorch_torch_repo.py checkout
 python pytorch_audio_repo.py checkout
+python pytorch_apex_repo.py checkout
 python pytorch_vision_repo.py checkout
 python pytorch_triton_repo.py checkout
 
@@ -352,6 +353,7 @@ def do_build(args: argparse.Namespace):
     pytorch_dir: Path | None = args.pytorch_dir
     pytorch_audio_dir: Path | None = args.pytorch_audio_dir
     pytorch_vision_dir: Path | None = args.pytorch_vision_dir
+    apex_dir: Path | None = args.apex_dir
 
     rocm_sdk_version = get_rocm_sdk_version()
     cmake_prefix = get_rocm_path("cmake")
@@ -507,6 +509,13 @@ def do_build(args: argparse.Namespace):
         do_build_pytorch_vision(args, pytorch_vision_dir, dict(env))
     else:
         print("--- Not build pytorch-vision (no --pytorch-vision-dir)")
+
+    # Build apex.
+    if args.build_apex or (args.build_apex is None and apex_dir):
+        assert apex_dir, "Must specify --apex-dir if --build-apex"
+        do_build_apex(args, apex_dir, dict(env))
+    else:
+        print("--- Not build apex (no --apex-dir)")
 
     print("--- Builds all completed")
 
@@ -939,6 +948,36 @@ def do_build_pytorch_vision(
     copy_to_output(args, built_wheel)
 
 
+def do_build_apex(args: argparse.Namespace, apex_dir: Path, env: dict[str, str]):
+    # Compute version.
+    build_version = (apex_dir / "version.txt").read_text().strip()
+    build_version += args.version_suffix
+    print(f"  Default apex BUILD_VERSION: {build_version}")
+    env["BUILD_VERSION"] = build_version
+    env["BUILD_NUMBER"] = args.pytorch_build_number
+
+    remove_dir_if_exists(apex_dir / "dist")
+    if args.clean:
+        remove_dir_if_exists(apex_dir / "build")
+
+    run_command(
+        [
+            sys.executable,
+            "-m",
+            "build",
+            "--wheel",
+            "--no-isolation",
+            "-C--build-option=--cpp_ext",
+            "-C--build-option=--cuda_ext",
+        ],
+        cwd=apex_dir,
+        env=env,
+    )
+    built_wheel = find_built_wheel(apex_dir / "dist", "apex")
+    print(f"Found built wheel: {built_wheel}")
+    copy_to_output(args, built_wheel)
+
+
 def main(argv: list[str]):
     p = argparse.ArgumentParser(prog="build_prod_wheels.py")
 
@@ -1011,6 +1050,12 @@ def main(argv: list[str]):
         help="pinned triton directory",
     )
     build_p.add_argument(
+        "--apex-dir",
+        default=directory_if_exists(script_dir / "apex"),
+        type=Path,
+        help="apex source directory",
+    )
+    build_p.add_argument(
         "--pytorch-rocm-arch",
         help="gfx arch to build pytorch with (defaults to rocm-sdk targets)",
     )
@@ -1034,6 +1079,12 @@ def main(argv: list[str]):
         action=argparse.BooleanOptionalAction,
         default=None,
         help="Enable building of torch vision (requires --pytorch-vision-dir)",
+    )
+    build_p.add_argument(
+        "--build-apex",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Enable building of apex (requires --apex-dir)",
     )
     build_p.add_argument(
         "--enable-pytorch-flash-attention-windows",

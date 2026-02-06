@@ -46,7 +46,6 @@
   * Detailed information for CI maintainers
 """
 
-import fnmatch
 import json
 import os
 from pathlib import Path
@@ -60,163 +59,15 @@ from amdgpu_family_matrix import (
 )
 from fetch_test_configurations import test_matrix
 
+from configure_ci_path_filters import (
+    get_git_modified_paths,
+    get_git_submodule_paths,
+    is_ci_run_required,
+)
 from github_actions_utils import *
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = THIS_SCRIPT_DIR.parent.parent
-
-# --------------------------------------------------------------------------- #
-# Filtering by modified paths
-# --------------------------------------------------------------------------- #
-
-
-def get_modified_paths(base_ref: str) -> Optional[Iterable[str]]:
-    """Returns the paths of modified files relative to the base reference."""
-    try:
-        return subprocess.run(
-            ["git", "diff", "--name-only", base_ref],
-            stdout=subprocess.PIPE,
-            check=True,
-            text=True,
-            timeout=60,
-        ).stdout.splitlines()
-    except TimeoutError:
-        print(
-            "Computing modified files timed out. Not using PR diff to determine"
-            " jobs to run.",
-            file=sys.stderr,
-        )
-        return None
-
-
-def get_therock_submodule_paths() -> Optional[Iterable[str]]:
-    """Returns TheRock submodules paths."""
-    try:
-        response = subprocess.run(
-            ["git", "submodule", "status"],
-            stdout=subprocess.PIPE,
-            check=True,
-            text=True,
-            timeout=60,
-            cwd=THEROCK_DIR,
-        ).stdout.splitlines()
-
-        submodule_paths = []
-        for line in response:
-            submodule_data_array = line.split()
-            # The line will be "{commit-hash} {path} {branch}". We will retrieve the path.
-            submodule_paths.append(submodule_data_array[1])
-        return submodule_paths
-    except TimeoutError:
-        print(
-            "Computing modified files timed out. Not using PR diff to determine"
-            " jobs to run.",
-            file=sys.stderr,
-        )
-        return []
-
-
-# Paths matching any of these patterns are considered to have no influence over
-# build or test workflows so any related jobs can be skipped if all paths
-# modified by a commit/PR match a pattern in this list.
-SKIPPABLE_PATH_PATTERNS = [
-    "docs/*",
-    "*.gitignore",
-    "*.md",
-    "*.pre-commit-config.*",
-    ".github/dependabot.yml",
-    "*CODEOWNERS",
-    "*LICENSE",
-    # Changes to 'external-builds/' (e.g. PyTorch) do not affect "CI" workflows.
-    # At time of writing, workflows run in this sequence:
-    #   `ci.yml`
-    #   `ci_linux.yml`
-    #   `build_linux_artifacts.yml`
-    #   `test_artifacts.yml`
-    #   `test_component.yml`
-    # If we add external-builds tests there, we can revisit this, maybe leaning
-    # on options like LINUX_USE_PREBUILT_ARTIFACTS or sufficient caching to keep
-    # workflows efficient when only nodes closer to the edges of the build graph
-    # are changed.
-    "external-builds/*",
-    # Changes to dockerfiles do not currently affect CI workflows directly.
-    # Docker images are built and published after commits are pushed, then
-    # workflows can be updated to use the new image sha256 values.
-    "dockerfiles/*",
-    # Changes to experimental code do not run standard build/test workflows.
-    "experimental/*",
-]
-
-
-def is_path_skippable(path: str) -> bool:
-    """Determines if a given relative path to a file matches any skippable patterns."""
-    return any(fnmatch.fnmatch(path, pattern) for pattern in SKIPPABLE_PATH_PATTERNS)
-
-
-def check_for_non_skippable_path(paths: Optional[Iterable[str]]) -> bool:
-    """Returns true if at least one path is not in the skippable set."""
-    if paths is None:
-        return False
-    return any(not is_path_skippable(p) for p in paths)
-
-
-GITHUB_WORKFLOWS_CI_PATTERNS = [
-    "setup.yml",
-    "ci*.yml",
-    "multi_arch*.yml",
-    "build*artifact*.yml",
-    "build*python_packages.yml",
-    "test*artifacts.yml",
-    "test_sanity_check.yml",
-    "test_component.yml",
-]
-
-
-def is_path_workflow_file_related_to_ci(path: str) -> bool:
-    return any(
-        fnmatch.fnmatch(path, ".github/workflows/" + pattern)
-        for pattern in GITHUB_WORKFLOWS_CI_PATTERNS
-    )
-
-
-def check_for_workflow_file_related_to_ci(paths: Optional[Iterable[str]]) -> bool:
-    if paths is None:
-        return False
-    return any(is_path_workflow_file_related_to_ci(p) for p in paths)
-
-
-def should_ci_run_given_modified_paths(paths: Optional[Iterable[str]]) -> bool:
-    """Returns true if CI workflows should run given a list of modified paths."""
-
-    if paths is None:
-        print("No files were modified, skipping build jobs")
-        return False
-
-    paths_set = set(paths)
-    github_workflows_paths = set(
-        [p for p in paths if p.startswith(".github/workflows")]
-    )
-    other_paths = paths_set - github_workflows_paths
-
-    related_to_ci = check_for_workflow_file_related_to_ci(github_workflows_paths)
-    contains_other_non_skippable_files = check_for_non_skippable_path(other_paths)
-
-    print("should_ci_run_given_modified_paths findings:")
-    print(f"  related_to_ci: {related_to_ci}")
-    print(f"  contains_other_non_skippable_files: {contains_other_non_skippable_files}")
-
-    if related_to_ci:
-        print("Enabling build jobs since a related workflow file was modified")
-        return True
-    elif contains_other_non_skippable_files:
-        print("Enabling build jobs since a non-skippable path was modified")
-        return True
-    else:
-        print(
-            "Only unrelated and/or skippable paths were modified, skipping build jobs"
-        )
-        return False
-
 
 # --------------------------------------------------------------------------- #
 # Matrix creation logic based on PR, push, or workflow_dispatch
@@ -765,16 +616,16 @@ def main(base_args, linux_families, windows_families):
         test_type = "full"
         test_type_reason = "scheduled run triggers full tests"
     else:
-        modified_paths = get_modified_paths(base_ref)
+        modified_paths = get_git_modified_paths(base_ref)
         print("modified_paths (max 200):", modified_paths[:200])
         print(f"Checking modified files since this had a {github_event_name} trigger")
         # TODO(#199): other behavior changes
         #     * workflow_dispatch or workflow_call with inputs controlling enabled jobs?
-        enable_build_jobs = should_ci_run_given_modified_paths(modified_paths)
+        enable_build_jobs = is_ci_run_required(modified_paths)
 
         # If the modified path contains any git submodules, we want to run a full test suite.
         # Otherwise, we just run smoke tests
-        submodule_paths = get_therock_submodule_paths()
+        submodule_paths = get_git_submodule_paths(repo_root=THEROCK_DIR)
         matching_submodule_paths = list(set(submodule_paths) & set(modified_paths))
         if matching_submodule_paths:
             test_type = "full"
