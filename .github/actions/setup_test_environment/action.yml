@@ -62,8 +62,7 @@ runs:
       if: ${{ runner.os == 'Windows' }}
       shell: bash
       run: |
-        choco install --no-progress -y ninja
-        choco install --no-progress -y awscli
+        choco install --no-progress -y ninja awscli
         echo "$PATH;C:\Program Files\Amazon\AWSCLIV2" >> $GITHUB_PATH
 
     - name: Download and Unpack Artifacts
