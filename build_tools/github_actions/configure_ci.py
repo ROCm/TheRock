@@ -205,8 +205,11 @@ def apply_external_repo_cross_product(
     return updated_linux, updated_windows
 
 
-def output_empty_matrix_and_exit(gha_set_output_func):
-    """Output empty CI matrix when no projects detected for external repo."""
+def output_empty_matrix_and_exit():
+    """Output empty CI matrix when no projects detected for external repo and exit.
+
+    This indicates to the workflow that no jobs should run (enable_build_jobs: false).
+    """
     print("No projects to build - outputting empty matrix")
     output = {
         "linux_variants": json.dumps([]),
@@ -216,7 +219,7 @@ def output_empty_matrix_and_exit(gha_set_output_func):
         "enable_build_jobs": json.dumps(False),
         "test_type": "smoke",
     }
-    gha_set_output_func(output)
+    gha_set_output(output)
     sys.exit(0)
 
 
@@ -248,9 +251,12 @@ def detect_external_repo_projects_to_build(
 
 def setup_external_repo_configs(
     base_args: dict,
-    output_empty_matrix_and_exit_func,
 ) -> Optional[dict]:
-    """Configure external repository settings when EXTERNAL_REPO_NAME is set."""
+    """Configure external repository settings when EXTERNAL_REPO_NAME is set.
+
+    Returns None if not an external repo, or a dict with external project configs.
+    If no projects are detected, outputs empty matrix and exits (indicating no jobs should run).
+    """
     repo_name = (os.environ.get("EXTERNAL_REPO_NAME") or "").strip()
     if not repo_name:
         return None
@@ -271,7 +277,7 @@ def setup_external_repo_configs(
         f"Project detection result: Linux={len(linux_configs)}, Windows={len(windows_configs)}"
     )
     if not linux_configs and not windows_configs:
-        output_empty_matrix_and_exit_func()
+        output_empty_matrix_and_exit()
     return {
         "linux_external_project_configs": linux_configs,
         "windows_external_project_configs": windows_configs,
@@ -962,9 +968,6 @@ if __name__ == "__main__":
     # Detect if we're running for an external repository and configure accordingly
     external_configs = setup_external_repo_configs(
         base_args=base_args,
-        output_empty_matrix_and_exit_func=lambda: output_empty_matrix_and_exit(
-            gha_set_output
-        ),
     )
     if external_configs:
         base_args.update(external_configs)
