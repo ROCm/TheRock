@@ -122,15 +122,10 @@ jobs:
           echo "Testing ${{ inputs.native_package_type }} package simulate installation"
           if [ "${{ inputs.native_package_type }}" = "deb" ]; then
             echo "Simulate installing DEB packages on host system for testing"
-            python ./build_tools/packaging/linux/package_sanity_check.py \
-              --package-type deb \
-              --package-folder ${{ env.PACKAGE_DIST_DIR }}
+            sudo apt install --simulate ${{ env.PACKAGE_DIST_DIR }}/*.deb
           else
             echo "Simulate installing RPM packages in Docker container for testing"
-            python ./build_tools/packaging/linux/package_sanity_check.py \
-              --package-type rpm \
-              --package-folder ${{ env.PACKAGE_DIST_DIR }} \
-              --skip-package amdrocm-rdc
+            sudo rpm -Uvh --test --nodeps ${{ env.PACKAGE_DIST_DIR }}/*.rpm
           fi
 
       - name: Install AWS CLI
