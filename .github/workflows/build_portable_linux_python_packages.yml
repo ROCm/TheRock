@@ -38,43 +38,37 @@ jobs:
     name: Build Python | ${{ inputs.artifact_group }}
     # Note: GitHub-hosted runners run out of disk space for some gpu families
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
+    container:
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:db2b63f938941dde2abc80b734e64b45b9995a282896d513a0f3525d4591d6cb
     env:
-      BUILD_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:db2b63f938941dde2abc80b734e64b45b9995a282896d513a0f3525d4591d6cb
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       ARTIFACTS_DIR: "${{ github.workspace }}/artifacts"
       PACKAGES_DIR: "${{ github.workspace }}/packages"
-      MANYLINUX: 1
+      IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
 
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
-        with:
-          python-version: '3.12'
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Install Python requirements
-        run: pip install boto3 packaging piprepo setuptools
+        run: pip install -r requirements.txt
 
       # Note: we could fetch "all" artifacts if we wanted to include more files
       - name: Fetch artifacts
-        env:
-          IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
         run: |
           python ./build_tools/fetch_artifacts.py \
-            --run-github-repo=${{ inputs.artifact_github_repo }} \
-            --run-id=${{ env.ARTIFACT_RUN_ID }} \
-            --artifact-group=${{ inputs.artifact_group }} \
-            --output-dir=${{ env.ARTIFACTS_DIR }} \
+            --run-github-repo="${{ inputs.artifact_github_repo }}" \
+            --run-id="${{ env.ARTIFACT_RUN_ID }}" \
+            --artifact-group="${{ inputs.artifact_group }}" \
+            --output-dir="${{ env.ARTIFACTS_DIR }}" \
             _dev_ _lib_ _run_
 
       - name: Build Python packages
         run: |
-          ./build_tools/linux_portable_build.py \
-            --image=${{ env.BUILD_IMAGE }} \
-            --output-dir=${{ env.PACKAGES_DIR }} \
-            --artifact-dir=${{ env.ARTIFACTS_DIR }} \
-            --build-python-only \
-            -- \
-            "--version=${{ inputs.package_version }}"
+          python ./build_tools/build_python_packages.py \
+            --artifact-dir="${{ env.ARTIFACTS_DIR }}" \
+            --dest-dir="${{ env.PACKAGES_DIR }}" \
+            --version="${{ inputs.package_version }}"
 
       - name: Inspect Python packages
         run: |
