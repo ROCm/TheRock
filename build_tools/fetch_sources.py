@@ -357,11 +357,16 @@ def apply_patches(args, projects, override_submodule=None, override_source_dir=N
             )
             continue
 
+        is_external_repo = (
+            patch_project_dir.name == override_submodule and override_source_dir
+        )
+
         # Use override path for external source, otherwise use submodule path
-        if patch_project_dir.name == override_submodule and override_source_dir:
+        if is_external_repo:
             project_dir = override_source_dir
-            submodule_url = get_submodule_url(patch_project_dir.name)
-            # For external sources, we don't have a submodule revision in the same way
+            # For external sources, we don't have submodule metadata
+            submodule_path = None
+            submodule_url = None
             submodule_revision = None
         else:
             submodule_path = get_submodule_path(patch_project_dir.name)
@@ -405,7 +410,7 @@ def apply_patches(args, projects, override_submodule=None, override_source_dir=N
         )
         # Since it is in a patched state, make it invisible to changes.
         # Skip this for external sources since they're not submodules
-        if not (patch_project_dir.name == override_submodule and override_source_dir):
+        if not is_external_repo:
             run_command(
                 ["git", "update-index", "--skip-worktree", "--", submodule_path],
                 cwd=THEROCK_DIR,
@@ -422,7 +427,8 @@ def apply_patches(args, projects, override_submodule=None, override_source_dir=N
         # Note that this does not track the dirty state of the tree. If full
         # fidelity hashes of the tree state are needed for development/dirty
         # trees, then another mechanism must be used.
-        if submodule_revision:  # Only for submodules, not external sources
+        # Only generate .smrev files for submodules, not external repos
+        if submodule_revision:
             patches_hash = hashlib.sha1()
             for patch_file in patch_files:
                 patch_contents = Path(patch_file).read_bytes()
