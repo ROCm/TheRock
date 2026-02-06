@@ -41,6 +41,7 @@ jobs:
         --device /dev/kfd
         --device /dev/dri
         --group-add 992
+        --group-add 110
         --ulimit memlock=-1:-1
         --security-opt seccomp=unconfined
         --env-file /etc/podinfo/gha-gpu-isolation-settings
