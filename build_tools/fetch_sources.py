@@ -177,8 +177,14 @@ def fetch_nested_submodules(args, projects):
 def _detect_external_source_override():
     """Detect external source checkout configuration from environment variables.
 
+    When external repos (rocm-libraries, rocm-systems) are checked out separately
+    instead of as git submodules, this function identifies which project name
+    corresponds to the submodule being replaced and where the external source is located.
+
     Returns:
-        tuple: (override_submodule: str|None, override_source_dir: Path|None)
+        tuple: (external_repo_name: str|None, external_source_dir: Path|None)
+            external_repo_name: Name of the external repo (e.g., "rocm-libraries")
+            external_source_dir: Path to the external repo checkout directory
     """
     if os.environ.get("EXTERNAL_SOURCE_CHECKOUT", "").lower() != "true":
         return None, None
@@ -192,26 +198,29 @@ def _detect_external_source_override():
         return None, None
 
     # Extract repo name (e.g., "ROCm/rocm-libraries" -> "rocm-libraries")
-    override_submodule = repo_override.split("/")[-1]
-    override_source_dir = Path(external_source_path)
+    external_repo_name = repo_override.split("/")[-1]
+    external_source_dir = Path(external_source_path)
 
-    log(f"External source detected: {override_submodule}")
-    log(f"External source path: {override_source_dir}")
-    log(f"Skipping submodule update for: {override_submodule}")
+    log(f"External source detected: {external_repo_name}")
+    log(f"External source path: {external_source_dir}")
+    log(f"Skipping submodule update for: {external_repo_name}")
 
-    return override_submodule, override_source_dir
+    return external_repo_name, external_source_dir
 
 
 def run(args):
-    override_submodule, override_source_dir = _detect_external_source_override()
+    # Detect if we're using an external repo checkout instead of a git submodule
+    # external_repo_name: name of the external repo (e.g., "rocm-libraries")
+    # external_source_dir: path to the external repo checkout directory
+    external_repo_name, external_source_dir = _detect_external_source_override()
 
     projects = get_enabled_projects(args)
 
-    # Build submodule list, excluding override if present
+    # Build submodule list, excluding external repo if present
     submodule_paths = ALWAYS_SUBMODULE_PATHS + [
         get_submodule_path(project)
         for project in projects
-        if project != override_submodule
+        if project != external_repo_name
     ]
 
     # TODO(scotttodd): Check for git lfs?
@@ -243,7 +252,7 @@ def run(args):
     # patches are aged out, the tree is restored to normal.
     # Skip external repos since they're not submodules.
     submodule_paths = [
-        get_submodule_path(name) for name in projects if name != override_submodule
+        get_submodule_path(name) for name in projects if name != external_repo_name
     ]
     if submodule_paths:
         run_command(
@@ -251,19 +260,20 @@ def run(args):
             cwd=THEROCK_DIR,
         )
 
-    remove_smrev_files(args, projects, override_submodule)
+    # Remove any stale .smrev files.
+    remove_smrev_files(args, projects, external_repo_name)
 
     if args.apply_patches:
-        apply_patches(args, projects, override_submodule, override_source_dir)
+        apply_patches(args, projects, external_repo_name, external_source_dir)
 
     if args.dvc_projects:
         pull_large_files(
-            args.dvc_projects, projects, override_submodule, override_source_dir
+            args.dvc_projects, projects, external_repo_name, external_source_dir
         )
 
 
 def pull_large_files(
-    dvc_projects, projects, override_submodule=None, override_source_dir=None
+    dvc_projects, projects, external_repo_name=None, external_source_dir=None
 ):
     if not dvc_projects:
         print("No DVC projects specified, skipping large file pull.")
@@ -281,9 +291,9 @@ def pull_large_files(
         if not project in projects:
             continue
 
-        # Use override path for external source, otherwise use submodule path
-        if project == override_submodule and override_source_dir:
-            project_dir = override_source_dir
+        # Use external source path if this is the external repo, otherwise use submodule path
+        if project == external_repo_name and external_source_dir:
+            project_dir = external_source_dir
         else:
             submodule_path = get_submodule_path(project)
             project_dir = THEROCK_DIR / submodule_path
@@ -296,9 +306,9 @@ def pull_large_files(
             log(f"WARNING: dvc config not found in {project_dir}, when expected.")
 
 
-def remove_smrev_files(args, projects, override_submodule=None):
+def remove_smrev_files(args, projects, external_repo_name=None):
     for project in projects:
-        if project == override_submodule:
+        if project == external_repo_name:
             continue  # Skip external repos
         submodule_path = get_submodule_path(project)
         project_dir = THEROCK_DIR / submodule_path
@@ -309,7 +319,7 @@ def remove_smrev_files(args, projects, override_submodule=None):
 
 
 def _filter_patches_by_skip_list(
-    patch_files: list[Path], project_name: str, override_submodule: str | None
+    patch_files: list[Path], project_name: str, external_repo_name: str | None
 ) -> list[Path]:
     """Filter patch files based on SKIP_PATCHES environment variable.
 
@@ -319,7 +329,7 @@ def _filter_patches_by_skip_list(
     Args:
         patch_files: List of patch file paths to filter
         project_name: Name of the project being patched (e.g., "rocm-libraries")
-        override_submodule: External repo submodule name, if any
+        external_repo_name: External repo name, if any
 
     Returns:
         Filtered list of patch files with skipped patches removed
@@ -328,7 +338,7 @@ def _filter_patches_by_skip_list(
     skip_patches = [p.strip() for p in skip_patches_str.split(",") if p.strip()]
 
     # Only apply SKIP_PATCHES when processing the external repo that set it
-    if not skip_patches or project_name != override_submodule:
+    if not skip_patches or project_name != external_repo_name:
         return patch_files
 
     filtered = []
@@ -340,7 +350,7 @@ def _filter_patches_by_skip_list(
     return filtered
 
 
-def apply_patches(args, projects, override_submodule=None, override_source_dir=None):
+def apply_patches(args, projects, external_repo_name=None, external_source_dir=None):
     if not args.patch_tag:
         log("Not patching (no --patch-tag specified)")
 
@@ -358,12 +368,12 @@ def apply_patches(args, projects, override_submodule=None, override_source_dir=N
             continue
 
         is_external_repo = (
-            patch_project_dir.name == override_submodule and override_source_dir
+            patch_project_dir.name == external_repo_name and external_source_dir
         )
 
-        # Use override path for external source, otherwise use submodule path
+        # Use external source path if this is the external repo, otherwise use submodule path
         if is_external_repo:
-            project_dir = override_source_dir
+            project_dir = external_source_dir
             # For external sources, we don't have submodule metadata
             submodule_path = None
             submodule_url = None
@@ -384,7 +394,7 @@ def apply_patches(args, projects, override_submodule=None, override_source_dir=N
 
         # Filter patches based on SKIP_PATCHES environment variable
         patch_files = _filter_patches_by_skip_list(
-            patch_files, patch_project_dir.name, override_submodule
+            patch_files, patch_project_dir.name, external_repo_name
         )
 
         if not patch_files:
