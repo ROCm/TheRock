@@ -171,6 +171,7 @@ base/           # rocm-systems (driver, runtime foundations)
 compiler/       # LLVM/Clang/LLD, device libraries
 core/           # HIP, CLR, ROCr
 math-libs/      # rocBLAS, rocFFT, etc.
+media-libs/     # rocdecode, and rocJPEG
 ml-libs/        # MIOpen, composable_kernel
 comm-libs/      # RCCL
 profiler/       # rocprofiler, roctracer
