@@ -227,7 +227,7 @@ jobs:
           # Check for key ROCm components
           echo ""
           echo "Checking for key ROCm components:"
-          
+
           components=(
             "bin/rocminfo"
             "bin/hipcc"
