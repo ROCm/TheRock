@@ -486,6 +486,8 @@ def main(argv):
         type=str,
         default=[
             "half",
+            "rccl",
+            "rccl-tests",
             "rocm-cmake",
             "rocprof-trace-decoder",
         ],
