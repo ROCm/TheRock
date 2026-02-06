@@ -78,9 +78,8 @@ class PackageFullTester:
             Full repository URL
         """
         if self.package_type == "deb":
-            pool_dir="pool/main"
             # Nightly DEB repository structure: base_url/deb/YYYYMMDD-RUNID/pool/main/
-            return f"{self.repo_url}{pool_dir}/"
+            return self.repo_url
         else:  # rpm
             # Nightly RPM repository structure: base_url/rpm/YYYYMMDD-RUNID/os_profile/x86_64/
             return f"{self.repo_url}x86_64/"
@@ -103,7 +102,7 @@ class PackageFullTester:
         print("\nAdding ROCm repository...")
         sources_list = f"/etc/apt/sources.list.d/rocm-test.list"
 
-        repo_entry = f"deb [arch=amd64] [trusted=yes] {repo_url} ./\n"
+        repo_entry = f"deb [arch=amd64 trusted=yes] {repo_url} stable main\n"
 
         try:
             with open(sources_list, "w") as f:
