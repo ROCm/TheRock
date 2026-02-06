@@ -2,26 +2,28 @@
 
 ## Overview
 
-This document describes the **Full Test of Native Linux Packages** workflow and supporting tools for testing ROCm package installation from S3.
+This document describes the **Full Test of Native Linux Packages** workflow and supporting tools for testing ROCm package installation from ROCm nightly build repositories.
+
+The test workflow installs packages directly from ROCm nightly repositories using native package managers (apt/dnf)
 
 ## Files Created
 
 ### 1. Workflow File
-**Location:** `.github/workflows/Full_Test.yml`
+**Location:** `.github/workflows/native_linux_packages_full_test.yml`
 
 **Purpose:** GitHub Actions workflow that performs complete end-to-end testing of ROCm packages by:
-- Downloading packages from S3
-- Installing them in a clean container environment
-- Verifying the installation
+- Setting up ROCm nightly repositories
+- Installing packages using native package managers (apt/dnf)
+- Verifying the installation in a clean container environment
 
 ### 2. Python Test Script
 **Location:** `build_tools/packaging/linux/package_full_test.py`
 
-**Purpose:** Python script that handles the actual package download, installation, and verification.
+**Purpose:** Python script that handles repository setup, package installation, and verification.
 
 ---
 
-## Workflow: Full_Test.yml
+## Workflow: native_linux_packages_full_test.yml
 
 ### Trigger Methods
 
@@ -32,45 +34,40 @@ This document describes the **Full Test of Native Linux Packages** workflow and 
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `artifact_group` | No | `gfx94X-dcgpu` | GPU architecture group |
-| `artifact_run_id` | Yes | - | Workflow run ID to download artifacts from |
-| `rocm_version` | Yes | `0.0.1` | ROCm version (e.g., 8.0.0, 8.0.1rc1) |
+| `artifact_id` | Yes | - | Artifact run ID (e.g., 21658678136) |
+| `rocm_version` | Yes | - | ROCm version (e.g., 8.0.0, 8.0.1rc1) |
 | `native_package_type` | Yes | `deb` | Package type: `deb` or `rpm` |
-| `release_type` | No | `dev` | Release type: dev/nightly/prerelease |
-| `s3_download_path` | No | - | Custom S3 path (optional) |
+| `os_profile` | Yes | - | OS profile (e.g., ubuntu2404, rhel8, debian12, sles16) |
+| `date` | Yes | - | Build date in YYYYMMDD format (e.g., 20260204) |
+| `gfx_arch` | No | `gfx94x` | GPU architecture (e.g., gfx94x, gfx110x, gfx1151) |
+| `repo_base_url` | No | `https://rocm.nightlies.amd.com` | Base URL for nightly repository |
+| `install_prefix` | No | `/opt/rocm/core` | Installation prefix |
 
 ### Workflow Steps
 
 #### Step 1: Install System Prerequisites
-- Installs Python, git, curl, AWS CLI dependencies
-- Different packages based on DEB (Ubuntu) vs RPM (AlmaLinux)
+- Installs Python, git, curl
+- Different packages based on DEB (Ubuntu) vs RPM (AlmaLinux/RHEL)
 
 #### Step 2: Checkout Repository
 - Clones TheRock repository into container
 - Checks out the correct branch
 
 #### Step 3: Install Python Dependencies
-- Installs: `boto3`, `pyelftools`, `requests`
+- Installs: `boto3`, `pyelftools`, `requests` (if needed)
 
-#### Step 4: Install AWS CLI
-- Uses TheRock's install script for AWS CLI
-
-#### Step 5: Configure AWS Credentials
-- Authenticates with AWS using OIDC
-- Assumes role: `therock-{release_type}`
-
-#### Step 6: Full Package Installation Test
+#### Step 4: Full Package Installation Test
 - **Main test step** - Runs `package_full_test.py`
-- Downloads packages from S3
-- Installs packages using apt/dnf
+- Sets up ROCm nightly repository
+- Installs packages using apt/dnf from repository
 - Verifies installation
 
-#### Step 7: Verify ROCm Installation
+#### Step 5: Verify ROCm Installation
 - Checks for ROCm directory structure
 - Validates key components exist
 - Attempts to run rocminfo
 
-#### Step 8: Test Report
+#### Step 6: Test Report
 - Generates summary report
 - Shows success/failure status
 
@@ -79,7 +76,7 @@ This document describes the **Full Test of Native Linux Packages** workflow and 
 | Package Type | Container Image | Purpose |
 |--------------|----------------|---------|
 | DEB | `ubuntu:24.04` | Test Debian packages on Ubuntu |
-| RPM | `almalinux:9` | Test RPM packages on AlmaLinux |
+| RPM | `almalinux:9` or `rhel:8` | Test RPM packages on AlmaLinux/RHEL |
 
 **Note:** Containers run in `--privileged` mode for full system access
 
@@ -96,61 +93,97 @@ Main class that handles the full installation test process.
 ```python
 PackageFullTester(
     package_type: str,          # 'deb' or 'rpm'
-    s3_bucket: str,             # S3 bucket name
-    artifact_group: str,        # GPU architecture group
+    repo_base_url: str,         # Base URL for nightly repository
     artifact_id: str,           # Artifact run ID
     rocm_version: str,          # ROCm version
-    download_dir: str,          # Download directory path
-    install_prefix: str,        # Installation prefix (default: /opt/rocm)
-    s3_path: Optional[str]      # Custom S3 path (optional)
+    os_profile: str,            # OS profile (e.g., ubuntu2404, rhel8)
+    date: str,                  # Build date in YYYYMMDD format
+    install_prefix: str,        # Installation prefix (default: /opt/rocm/core)
+    gfx_arch: str              # GPU architecture (default: gfx94x)
 )
 ```
 
 ### Key Methods
 
-#### 1. `download_packages_from_s3() -> List[Path]`
+#### 1. `construct_repo_url_with_os() -> str`
 
-**Purpose:** Downloads packages from S3 bucket
+**Purpose:** Constructs the full repository URL including OS profile for nightly builds
+
+**Repository Structure:**
+- Base URL: `{repo_base_url}/{package_type}/{YYYYMMDD-RUNID}/`
+- DEB: `{repo_url}pool/main/`
+- RPM: `{repo_url}x86_64/`
+
+**Example:**
+```
+https://rocm.nightlies.amd.com/deb/20260204-21658678136/pool/main/
+https://rocm.nightlies.amd.com/rpm/20260204-21658678136/x86_64/
+```
+
+#### 2. `setup_deb_repository() -> bool`
+
+**Purpose:** Sets up DEB repository on the system
 
 **Process:**
-1. Constructs S3 path (or uses custom path)
-2. Uses AWS CLI `s3 sync` to download packages
-3. Filters by file extension (.deb or .rpm)
-4. Returns list of downloaded package paths
+1. Constructs repository URL
+2. Adds repository to `/etc/apt/sources.list.d/rocm-test.list`
+3. Updates apt package lists
+4. Returns success/failure
 
-**S3 Path Structure:**
+**Repository Entry Format:**
 ```
-s3://{bucket}/{artifact_group}/{artifact_id}/
-```
-
-Example:
-```
-s3://therock-dev-packages/gfx94X-dcgpu/12345/
+deb [arch=amd64] {repo_url}pool/main/ ./
 ```
 
-#### 2. `install_deb_packages(packages: List[Path]) -> bool`
+#### 3. `setup_rpm_repository() -> bool`
 
-**Purpose:** Installs DEB packages using apt
+**Purpose:** Sets up RPM repository on the system
 
 **Process:**
-1. Updates apt cache
-2. Runs `apt install -y {packages}`
-3. Returns success/failure
+1. Constructs repository URL
+2. Creates repository file `/etc/yum.repos.d/rocm-test.repo`
+3. Cleans dnf cache
+4. Returns success/failure
 
-#### 3. `install_rpm_packages(packages: List[Path]) -> bool`
+**Repository File Format:**
+```
+[rocm-test]
+name=ROCm Test Repository
+baseurl={repo_url}x86_64/
+enabled=1
+gpgcheck=0
+```
 
-**Purpose:** Installs RPM packages using dnf
+#### 4. `install_deb_packages() -> bool`
+
+**Purpose:** Installs ROCm DEB packages from repository
 
 **Process:**
-1. Runs `dnf install -y {packages}`
-2. Returns success/failure
+1. Constructs package name: `amdrocm-{gfx_arch}`
+2. Runs `apt install -y amdrocm-{gfx_arch}`
+3. Streams installation output in real-time
+4. Returns success/failure
 
-#### 4. `verify_rocm_installation() -> bool`
+**Timeout:** 30 minutes
+
+#### 5. `install_rpm_packages() -> bool`
+
+**Purpose:** Installs ROCm RPM packages from repository
+
+**Process:**
+1. Constructs package name: `amdrocm-{gfx_arch}`
+2. Runs `dnf install -y amdrocm-{gfx_arch}`
+3. Streams installation output in real-time
+4. Returns success/failure
+
+**Timeout:** 30 minutes
+
+#### 6. `verify_rocm_installation() -> bool`
 
 **Purpose:** Verifies ROCm installation
 
 **Checks:**
-- ✅ Installation directory exists (`/opt/rocm`)
+- ✅ Installation directory exists (default: `/opt/rocm/core`)
 - ✅ Key components present:
   - `bin/rocminfo`
   - `bin/hipcc`
@@ -161,84 +194,52 @@ s3://therock-dev-packages/gfx94X-dcgpu/12345/
 
 **Success Criteria:** At least 2 out of 4 key components found
 
-#### 5. `run() -> bool`
+#### 7. `run() -> bool`
 
 **Purpose:** Main execution method
 
 **Process:**
-1. Download packages from S3
-2. Install packages
+1. Setup repository (apt/dnf)
+2. Install packages from repository
 3. Verify installation
 4. Return overall success/failure
 
 ### Command Line Usage
 
 ```bash
-# DEB packages
+# DEB packages (Ubuntu 24.04)
 python package_full_test.py \
     --package-type deb \
-    --s3-bucket therock-dev-packages \
-    --artifact-group gfx94X-dcgpu \
-    --artifact-id 12345 \
+    --repo-base-url https://rocm.nightlies.amd.com \
+    --artifact-id 21658678136 \
+    --date 20260204 \
     --rocm-version 8.0.0 \
-    --download-dir /tmp/rocm_packages
+    --os-profile ubuntu2404 \
+    --gfx-arch gfx94x
 
-# RPM packages
+# RPM packages (RHEL 8)
 python package_full_test.py \
     --package-type rpm \
-    --s3-bucket therock-nightly-packages \
-    --artifact-group gfx110X-all \
-    --artifact-id 67890 \
-    --rocm-version 8.0.1 \
-    --download-dir /tmp/rocm_packages \
-    --install-prefix /opt/rocm
+    --repo-base-url https://rocm.nightlies.amd.com \
+    --artifact-id 21658678136 \
+    --date 20260204 \
+    --rocm-version 8.0.0 \
+    --os-profile rhel8 \
+    --gfx-arch gfx94x
+
+# Different GPU architecture (Strix Halo)
+python package_full_test.py \
+    --package-type deb \
+    --repo-base-url https://rocm.nightlies.amd.com \
+    --artifact-id 21658678136 \
+    --date 20260204 \
+    --rocm-version 8.0.0 \
+    --os-profile ubuntu2404 \
+    --gfx-arch gfx1151 \
+    --install-prefix /opt/rocm/core
 ```
 
 ---
-
-## Workflow Comparison
-
-### Test.yml (Simulation Test)
-- ✅ Fast (~30 seconds)
-- ✅ Uses `--simulate` (no actual install)
-- ✅ Validates package metadata
-- ✅ Checks dependencies
-- ❌ Doesn't test actual installation
-- ❌ Doesn't verify file placement
-
-### Full_Test.yml (Full Installation Test)
-- ⏱️ Slower (~5-15 minutes)
-- ✅ Downloads from S3
-- ✅ Actually installs packages
-- ✅ Verifies file placement
-- ✅ Tests real installation
-- ✅ Runs in clean container
-
----
-
-## Complete Testing Pipeline
-
-```
-┌─────────────────────────────────────────────────────────┐
-│  build_native_linux_packages.yml                        │
-│  - Builds DEB/RPM packages                              │
-│  - Uploads to S3                                        │
-└────────────────┬────────────────────────────────────────┘
-                 │
-                 ├──────────────┬─────────────────────────┐
-                 ▼              ▼                         ▼
-    ┌────────────────┐  ┌──────────────┐    ┌────────────────────┐
-    │   Test.yml     │  │ Full_Test    │    │  Production       │
-    │   (Simulate)   │  │  .yml        │    │  Deployment       │
-    │                │  │  (Full Test) │    │                   │
-    │ Quick check    │  │ Complete     │    │ After all tests   │
-    │ Dependencies   │  │ Installation │    │ pass              │
-    │ Conflicts      │  │ Verification │    │                   │
-    └────────────────┘  └──────────────┘    └────────────────────┘
-```
-
----
-
 ## Usage Examples
 
 ### Manual Workflow Trigger
@@ -247,11 +248,13 @@ python package_full_test.py \
 2. Select "Full Test of Native Linux Packages"
 3. Click "Run workflow"
 4. Fill in parameters:
-   - `artifact_group`: `gfx94X-dcgpu`
-   - `artifact_run_id`: `12345` (from build workflow)
+   - `artifact_id`: `21658678136` (from build workflow)
    - `rocm_version`: `8.0.0`
    - `native_package_type`: `deb` or `rpm`
-   - `release_type`: `dev`
+   - `os_profile`: `ubuntu2404` (for DEB) or `rhel8` (for RPM)
+   - `date`: `20260204` (build date in YYYYMMDD format)
+   - `gfx_arch`: `gfx94x` (optional, default: gfx94x)
+   - `repo_base_url`: `https://rocm.nightlies.amd.com` (optional)
 5. Click "Run workflow"
 
 ### Expected Output
@@ -260,53 +263,85 @@ python package_full_test.py \
 ==========================================================================
 FULL INSTALLATION TEST - NATIVE LINUX PACKAGES
 ==========================================================================
+
 Package Type: DEB
-Artifact Group: gfx94X-dcgpu
-Artifact Run ID: 12345
+Repository Base URL: https://rocm.nightlies.amd.com
+Artifact ID: 21658678136
+Build Date: 20260204
 ROCm Version: 8.0.0
-Release Type: dev
-S3 Bucket: therock-dev-packages
-==========================================================================
+OS Profile: ubuntu2404
+GPU Architecture: gfx94x
+Install Prefix: /opt/rocm/core
 
-==========================================================================
-DOWNLOADING PACKAGES FROM S3
-==========================================================================
-S3 Path: s3://therock-dev-packages/gfx94X-dcgpu/12345/
-Download Directory: /tmp/rocm_packages
+Repository URL: https://rocm.nightlies.amd.com/deb/20260204-21658678136/pool/main/
 
-✅ Downloaded 25 packages:
-   - amdrocm-core_8.0.0-12345_amd64.deb (15.23 MB)
-   - amdrocm-hip_8.0.0-12345_amd64.deb (125.45 MB)
-   ...
+================================================================================
+SETTING UP DEB REPOSITORY
+================================================================================
 
-==========================================================================
-INSTALLING DEB PACKAGES
-==========================================================================
-Packages to install (25):
-   - amdrocm-core_8.0.0-12345_amd64.deb
-   - amdrocm-hip_8.0.0-12345_amd64.deb
-   ...
+Repository URL: https://rocm.nightlies.amd.com/deb/20260204-21658678136/pool/main/
+OS Profile: ubuntu2404
 
-✅ DEB packages installed successfully
+Adding ROCm repository...
+[PASS] Repository added to /etc/apt/sources.list.d/rocm-test.list
+       deb [arch=amd64] https://rocm.nightlies.amd.com/deb/20260204-21658678136/pool/main/ ./
 
-==========================================================================
+Updating package lists...
+================================================================================
+[PASS] Package lists updated
+
+================================================================================
+INSTALLING DEB PACKAGES FROM REPOSITORY
+================================================================================
+
+Package to install: amdrocm-gfx94x
+
+Running: apt install -y amdrocm-gfx94x
+================================================================================
+Installation progress (streaming output):
+
+Reading package lists...
+Building dependency tree...
+...
+[PASS] DEB packages installed successfully from repository
+
+================================================================================
 VERIFYING ROCM INSTALLATION
-==========================================================================
-✅ Installation directory exists: /opt/rocm
+================================================================================
+
+[PASS] Installation directory exists: /opt/rocm/core
 
 Checking for key ROCm components:
-   ✅ bin/rocminfo
-   ✅ bin/hipcc
-   ✅ include/hip/hip_runtime.h
-   ✅ lib/libamdhip64.so
+   [PASS] bin/rocminfo
+   [PASS] bin/hipcc
+   [PASS] include/hip/hip_runtime.h
+   [PASS] lib/libamdhip64.so
 
 Components found: 4/4
 
-✅ ROCm installation verification PASSED
+Checking installed packages:
+   Found 25 ROCm packages installed
 
-==========================================================================
-✅ FULL INSTALLATION TEST PASSED
-==========================================================================
+   Sample packages:
+      amdrocm-core
+      amdrocm-hip
+      amdrocm-gfx94x
+      ...
+
+Trying to run rocminfo...
+   [PASS] rocminfo executed successfully
+
+   First few lines of rocminfo output:
+      ROCm version: 8.0.0
+      ...
+
+[PASS] ROCm installation verification PASSED
+
+================================================================================
+[PASS] FULL INSTALLATION TEST PASSED
+
+ROCm has been successfully installed from repository and verified!
+================================================================================
 ```
 
 ---
@@ -315,47 +350,59 @@ Components found: 4/4
 
 ### Common Errors and Solutions
 
-#### 1. S3 Download Fails
+#### 1. Repository Setup Fails
 ```
-❌ Failed to download packages from S3
+[FAIL] Failed to add repository
 ```
 **Solutions:**
-- Check AWS credentials are configured
-- Verify S3 bucket exists
-- Confirm artifact_run_id is correct
-- Check S3 path structure
+- Check repository URL is accessible
+- Verify date and artifact_id are correct
+- Check network connectivity
+- Verify OS profile matches container image
 
 #### 2. Package Installation Fails
 ```
-❌ Failed to install DEB/RPM packages
+[FAIL] Failed to install DEB/RPM packages
 ```
 **Solutions:**
 - Check for dependency issues
 - Verify package compatibility with OS
 - Check disk space
 - Review package metadata
+- Verify gfx_arch matches available packages
+- Check repository URL structure
 
 #### 3. Verification Fails
 ```
-❌ ROCm installation verification FAILED
+[FAIL] ROCm installation verification FAILED
 ```
 **Solutions:**
 - Check installation logs
-- Verify install prefix is correct
+- Verify install prefix is correct (default: `/opt/rocm/core`)
 - Check file permissions
 - Review package contents
+- Verify at least 2 key components are found
+
+#### 4. Date Format Error
+```
+Invalid date format: {date}. Must be YYYYMMDD (e.g., 20260204)
+```
+**Solutions:**
+- Ensure date is exactly 8 digits
+- Format: YYYYMMDD (e.g., 20260204 for February 4, 2026)
+- No dashes or slashes
 
 ---
 
 ## Key Features
 
 ### ✅ Complete End-to-End Testing
-- Downloads real packages from S3
-- Installs in clean environment
-- Verifies actual installation
+- Sets up real ROCm nightly repositories
+- Installs packages using native package managers
+- Verifies actual installation in clean environment
 
 ### ✅ Container Isolation
-- Tests in Ubuntu 24.04 (DEB) or AlmaLinux 9 (RPM)
+- Tests in Ubuntu 24.04 (DEB) or AlmaLinux 9/RHEL 8 (RPM)
 - No impact on host system
 - Reproducible environment
 
@@ -366,9 +413,38 @@ Components found: 4/4
 - Reports detailed status
 
 ### ✅ Flexible Configuration
-- Supports custom S3 paths
-- Configurable install prefix
-- Works with dev/nightly/prerelease
+- Supports multiple OS profiles
+- Configurable install prefix (default: `/opt/rocm/core`)
+- Works with different GPU architectures
+- Supports custom repository base URLs
+
+### ✅ Real-Time Output
+- Streams installation progress
+- Shows detailed repository setup
+- Provides immediate feedback
+
+---
+
+## Supported OS Profiles
+
+### DEB (Debian-based)
+- `ubuntu2404` - Ubuntu 24.04
+- `ubuntu2204` - Ubuntu 22.04
+- `debian12` - Debian 12
+
+### RPM (Red Hat-based)
+- `rhel8` - Red Hat Enterprise Linux 8
+- `rhel9` - Red Hat Enterprise Linux 9
+- `sles16` - SUSE Linux Enterprise Server 16
+
+---
+
+## Supported GPU Architectures
+
+- `gfx94x` - Default (e.g., MI300 series)
+- `gfx110x` - RDNA 3 (e.g., RX 7900 series)
+- `gfx1151` - Strix Halo
+- Other architectures as available
 
 ---
 
@@ -376,10 +452,12 @@ Components found: 4/4
 
 1. **Run Full Test after building packages**
    - Ensures packages work before production
-   
+   - Validates repository structure
+
 2. **Integrate into CI/CD pipeline**
-   - Call Full_Test.yml after Test.yml passes
-   
+   - Call native_linux_packages_full_test.yml after build_native_linux_packages.yml  passes
+   - Automate testing for all supported OS profiles
+
 3. **Add GPU-specific tests**
    - If GPU hardware available, run rocminfo
    - Test HIP compilation
@@ -390,11 +468,14 @@ Components found: 4/4
    - Check package sizes
    - Verify startup time
 
+5. **Expand OS profile support**
+   - Add more OS profiles as needed
+   - Test compatibility across distributions
+
 ---
 
 ## Author
 
 Created for ROCm/TheRock project  
 Branch: users/acheruva/build_test_J27
-
 
