@@ -52,8 +52,8 @@ cmake_config_cmd = [
     "-G",
     "Ninja",
     f"-DCMAKE_PREFIX_PATH={THEROCK_PATH};{THEROCK_LIB_PATH}/rocm_sysdeps",
-    f"-DCMAKE_HIP_COMPILER={THEROCK_PATH}/llvm/bin/amdclang++",
-    f"-DHIP_HIPCC_EXECUTABLE={THEROCK_PATH}/bin/hipcc",
+    # f"-DCMAKE_HIP_COMPILER={THEROCK_PATH}/llvm/bin/amdclang++",
+    # f"-DHIP_HIPCC_EXECUTABLE={THEROCK_PATH}/bin/hipcc",
 ]
 
 logging.info(
