@@ -233,9 +233,11 @@ endif(THEROCK_BUILD_TESTING)
         -DROCPROFSYS_BUILD_LIBIBERTY=ON
         -DROCPROFSYS_BUILD_BOOST=ON
         -DROCPROFSYS_BUILD_DYNINST=ON
+        -DROCPROFSYS_BUILD_SPDLOG=OFF
       INSTALL_RPATH_DIRS
         "lib"
         "lib/rocprofiler-systems"
+        "llvm/lib"
       CMAKE_INCLUDES
         therock_explicit_finders.cmake
       RUNTIME_DEPS
@@ -244,6 +246,8 @@ endif(THEROCK_BUILD_TESTING)
         hip-clr
         rocprofiler-register
         rocprofiler-sdk
+        therock-spdlog
+        therock-fmt
         ${THEROCK_BUNDLED_LIBDRM}
         ${THEROCK_BUNDLED_SQLITE3}
     )

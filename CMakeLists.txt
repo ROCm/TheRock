@@ -125,7 +125,11 @@ option(THEROCK_BUNDLE_SYSDEPS "Builds bundled system deps for portable builds in
 option(THEROCK_ENABLE_MPI "Enables building components with Message Passing Interface (MPI) support" OFF)
 option(THEROCK_ENABLE_LLVM_TESTS "Enables building LLVM LIT tests" OFF)
 
-set(THEROCK_SANITIZER "" CACHE STRING "Enable project wide sanitizer build (e.g. 'ASAN')")
+set(THEROCK_SANITIZER "" CACHE STRING "Enable project wide sanitizer build ('ASAN' for host+device, 'HOST_ASAN' for host-only)")
+
+# Options to control the concurrency for building LLVM.
+set(FLANG_PARALLEL_COMPILE_JOBS "" CACHE STRING "Limit parallel compile jobs for Flang (reduces memory usage on systems with many cores)")
+set(LLVM_PARALLEL_LINK_JOBS "" CACHE STRING "Limit parallel link jobs for LLVM (reduces memory usage on systems with many cores)")
 
 # List of python executables to use for multi-version python builds
 set(THEROCK_DIST_PYTHON_EXECUTABLES "" CACHE STRING "Build for multiple python versions in supported projects (default to Python3_EXECUTABLE if empty)")
@@ -286,26 +290,6 @@ if(THEROCK_FLAG_INCLUDE_PROFILER)
   )
 endif()
 
-# Optional sub-features that control behavior within artifacts
-
-# Math library sub-components (control what gets built within BLAS artifact)
-therock_add_feature(SPARSE
-  GROUP MATH_LIBS
-  DESCRIPTION "Enables sparse libraries (hipsparse, hipsparselt, rocsparse) within BLAS"
-  REQUIRES BLAS PRIM
-)
-
-if(NOT WIN32)
-  set(_solver_platform_requirements "HOST_SUITE_SPARSE")
-else()
-  set(_solver_platform_requirements "")
-endif()
-therock_add_feature(SOLVER
-  GROUP MATH_LIBS
-  DESCRIPTION "Enables solver libraries (hipsolver, rocsolver) within BLAS"
-  REQUIRES BLAS PRIM SPARSE ${_solver_platform_requirements}
-)
-
 # Finalize all feature flags.
 therock_finalize_features()
 therock_report_features()
@@ -368,6 +352,7 @@ set(THEROCK_BUNDLED_BZIP2)
 set(THEROCK_BUNDLED_ELFUTILS)
 set(THEROCK_BUNDLED_EXPAT)
 set(THEROCK_BUNDLED_GMP)
+set(THEROCK_BUNDLED_HWLOC)
 set(THEROCK_BUNDLED_LIBBACKTRACE)
 set(THEROCK_BUNDLED_LIBCAP)
 set(THEROCK_BUNDLED_LIBDRM)
@@ -392,15 +377,38 @@ if(THEROCK_BUNDLE_SYSDEPS)
     endif()
     set(THEROCK_BUNDLED_BZIP2 therock-bzip2)
     set(THEROCK_BUNDLED_ELFUTILS therock-elfutils)
-    set(THEROCK_BUNDLED_EXPAT, therock-expat)
-    set(THEROCK_BUNDLED_GMP, therock-gmp)
+    set(THEROCK_BUNDLED_EXPAT therock-expat)
+    set(THEROCK_BUNDLED_GMP therock-gmp)
+    set(THEROCK_BUNDLED_HWLOC therock-hwloc)
     set(THEROCK_BUNDLED_LIBBACKTRACE therock-libbacktrace)
     set(THEROCK_BUNDLED_LIBCAP therock-libcap)
     set(THEROCK_BUNDLED_LIBDRM therock-libdrm)
     set(THEROCK_BUNDLED_LIBLZMA therock-liblzma)
+    set(THEROCK_BUNDLED_MPFR therock-mpfr)
+    set(THEROCK_BUNDLED_NCURSES therock-ncurses)
+    set(THEROCK_BUNDLED_NUMACTL therock-numactl)
+    set(THEROCK_BUNDLED_SQLITE3 therock-sqlite3)
+    set(THEROCK_BUNDLED_ZLIB therock-zlib)
+    set(THEROCK_BUNDLED_ZSTD therock-zstd)
+  elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    # macOS uses install_name_tool (from Xcode) instead of patchelf
+    find_program(INSTALL_NAME_TOOL install_name_tool)
+    if(NOT INSTALL_NAME_TOOL)
+      message(FATAL_ERROR "Building with THEROCK_BUNDLE_SYSDEPS=ON on macOS requires `install_name_tool` (install Xcode Command Line Tools)")
+    endif()
+    find_program(MESON_BUILD meson)
+    if(NOT MESON_BUILD)
+      message(FATAL_ERROR "Building with THEROCK_BUNDLE_SYSDEPS=ON on macOS requires `meson` (easiest: `pip install meson`)")
+    endif()
+    # macOS bundled deps - note: libcap, libdrm, numactl are Linux-specific
+    set(THEROCK_BUNDLED_BZIP2 therock-bzip2)
+    set(THEROCK_BUNDLED_ELFUTILS therock-elfutils)
+    set(THEROCK_BUNDLED_EXPAT, therock-expat)
+    set(THEROCK_BUNDLED_GMP, therock-gmp)
+    set(THEROCK_BUNDLED_LIBBACKTRACE therock-libbacktrace)
+    set(THEROCK_BUNDLED_LIBLZMA therock-liblzma)
     set(THEROCK_BUNDLED_MPFR, therock-mpfr)
     set(THEROCK_BUNDLED_NCURSES, therock-ncurses)
-    set(THEROCK_BUNDLED_NUMACTL therock-numactl)
     set(THEROCK_BUNDLED_SQLITE3 therock-sqlite3)
     set(THEROCK_BUNDLED_ZLIB therock-zlib)
     set(THEROCK_BUNDLED_ZSTD therock-zstd)
