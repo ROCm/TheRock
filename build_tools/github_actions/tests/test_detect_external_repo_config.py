@@ -15,7 +15,7 @@ from detect_external_repo_config import (
     get_repo_config,
     get_external_repo_path,
     import_external_repo_module,
-    get_skip_patterns,
+    get_skip_patterns_for_ci,
     get_test_list,
     main as detect_external_repo_config_main,
     output_github_actions_vars,
@@ -262,7 +262,7 @@ class TestImportExternalRepoModule(unittest.TestCase):
 
 
 class TestGetSkipPatterns(unittest.TestCase):
-    """Tests for get_skip_patterns function"""
+    """Tests for get_skip_patterns_for_ci function"""
 
     @patch("detect_external_repo_config.import_external_repo_module")
     def test_get_skip_patterns_success(self, mock_import):
@@ -271,7 +271,7 @@ class TestGetSkipPatterns(unittest.TestCase):
         mock_module.SKIPPABLE_PATH_PATTERNS = ["pattern1/*", "pattern2/*"]
         mock_import.return_value = mock_module
 
-        result = get_skip_patterns("rocm-libraries")
+        result = get_skip_patterns_for_ci("rocm-libraries")
         self.assertEqual(result, ["pattern1/*", "pattern2/*"])
 
     @patch("detect_external_repo_config.import_external_repo_module")
@@ -279,7 +279,7 @@ class TestGetSkipPatterns(unittest.TestCase):
         """Test when module cannot be imported"""
         mock_import.return_value = None
 
-        result = get_skip_patterns("rocm-libraries")
+        result = get_skip_patterns_for_ci("rocm-libraries")
         self.assertEqual(result, [])
 
     @patch("detect_external_repo_config.import_external_repo_module")
@@ -289,7 +289,7 @@ class TestGetSkipPatterns(unittest.TestCase):
         del mock_module.SKIPPABLE_PATH_PATTERNS  # Ensure attribute doesn't exist
         mock_import.return_value = mock_module
 
-        result = get_skip_patterns("rocm-libraries")
+        result = get_skip_patterns_for_ci("rocm-libraries")
         self.assertEqual(result, [])
 
 

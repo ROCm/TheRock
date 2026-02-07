@@ -16,35 +16,35 @@ from configure_ci import (
 
 class TestParseProjectsInput(unittest.TestCase):
 
-    def test_empty_input_returns_empty_list(self):
-        """Test that empty or whitespace input returns empty list."""
-        self.assertEqual(parse_projects_input(""), [])
-        self.assertEqual(parse_projects_input("   "), [])
-        self.assertEqual(parse_projects_input("all"), [])
+    def test_empty_input_returns_empty_string(self):
+        """Test that empty or whitespace input returns empty string."""
+        self.assertEqual(parse_projects_input(""), "")
+        self.assertEqual(parse_projects_input("   "), "")
+        self.assertEqual(parse_projects_input("all"), "")
 
     def test_single_project(self):
         result = parse_projects_input("rocprim")
-        self.assertEqual(result, ["rocprim"])
+        self.assertEqual(result, "rocprim")
 
     def test_multiple_projects(self):
         """Test parsing multiple comma-separated projects."""
         result = parse_projects_input("rocprim,rocblas,rocfft")
-        self.assertEqual(result, ["rocprim", "rocblas", "rocfft"])
+        self.assertEqual(result, "rocprim,rocblas,rocfft")
 
     def test_strips_projects_prefix(self):
         """Test that 'projects/' prefix is stripped."""
         result = parse_projects_input("projects/rocprim,projects/rocblas")
-        self.assertEqual(result, ["rocprim", "rocblas"])
+        self.assertEqual(result, "rocprim,rocblas")
 
     def test_handles_whitespace(self):
         """Test that whitespace around commas is handled."""
         result = parse_projects_input("rocprim , rocblas , rocfft")
-        self.assertEqual(result, ["rocprim", "rocblas", "rocfft"])
+        self.assertEqual(result, "rocprim,rocblas,rocfft")
 
     def test_mixed_prefixes(self):
         """Test handling of mixed prefixed and non-prefixed projects."""
         result = parse_projects_input("rocprim,projects/rocblas")
-        self.assertEqual(result, ["rocprim", "rocblas"])
+        self.assertEqual(result, "rocprim,rocblas")
 
 
 class TestCrossProductProjectsWithGpuVariants(unittest.TestCase):
@@ -165,7 +165,7 @@ class TestCrossProductProjectsWithGpuVariants(unittest.TestCase):
         self.assertEqual(result[0]["projects_to_test"], "rocprim")
 
     def test_no_cmake_options_in_result(self):
-        """Test that cmake_options are NOT included in result (full builds only)."""
+        """Test that cmake_options from project_config are NOT included in result."""
         project_configs = [
             {"projects_to_test": "rocprim", "cmake_options": "-DROCBLAS=ON"}
         ]
@@ -178,7 +178,7 @@ class TestCrossProductProjectsWithGpuVariants(unittest.TestCase):
         self.assertEqual(result[0]["projects_to_test"], "rocprim")
 
     def test_complex_gpu_variant_structure(self):
-        """Test with complex GPU variant structure."""
+        """Test with complex GPU variant structure and verify exact pairings."""
         project_configs = [
             {"projects_to_test": "rocprim,rocblas"},
             {"projects_to_test": "rocfft"},
@@ -201,14 +201,38 @@ class TestCrossProductProjectsWithGpuVariants(unittest.TestCase):
         result = cross_product_projects_with_gpu_variants(project_configs, gpu_variants)
 
         self.assertEqual(len(result), 4)  # 2 projects * 2 variants
-        # Verify structure is preserved
-        for r in result:
-            self.assertIn("family", r)
-            self.assertIn("platform", r)
-            self.assertIn("build_variant", r)
-            self.assertIn("test_labels", r)
-            self.assertIn("projects_to_test", r)
-            self.assertNotIn("cmake_options", r)
+        # Verify exact pairings
+        expected = [
+            {
+                "projects_to_test": "rocprim,rocblas",
+                "family": "gfx94x",
+                "platform": "linux",
+                "build_variant": "release",
+                "test_labels": ["smoke"],
+            },
+            {
+                "projects_to_test": "rocprim,rocblas",
+                "family": "gfx110x",
+                "platform": "windows",
+                "build_variant": "debug",
+                "test_labels": ["full"],
+            },
+            {
+                "projects_to_test": "rocfft",
+                "family": "gfx94x",
+                "platform": "linux",
+                "build_variant": "release",
+                "test_labels": ["smoke"],
+            },
+            {
+                "projects_to_test": "rocfft",
+                "family": "gfx110x",
+                "platform": "windows",
+                "build_variant": "debug",
+                "test_labels": ["full"],
+            },
+        ]
+        self.assertEqual(result, expected)
 
 
 if __name__ == "__main__":

@@ -64,7 +64,7 @@ from amdgpu_family_matrix import (
 from detect_external_repo_config import (
     get_external_repo_path,
     get_repo_config,
-    get_skip_patterns,
+    get_skip_patterns_for_ci,
     get_test_list,
 )
 from fetch_test_configurations import test_matrix
@@ -96,7 +96,7 @@ def _should_skip_external_build_due_to_paths(
         paths = list(paths)
     print("modified_paths (max 200):", paths[:200] if paths else paths)
     print(f"Checking modified files since this had a {github_event_name} trigger")
-    skip_patterns = get_skip_patterns(repo_name) or None
+    skip_patterns = get_skip_patterns_for_ci(repo_name) or None
     should_build = is_ci_run_required(
         paths,
         skip_patterns=skip_patterns,
@@ -109,7 +109,7 @@ def should_build_external_repo(
     base_ref: str,
     github_event_name: str,
     projects_input: str,
-    specific_projects: list,
+    specific_projects: str,
 ) -> bool:
     """Determine if external repo build should run."""
     if github_event_name == "schedule":
@@ -126,10 +126,13 @@ def should_build_external_repo(
     )
 
 
-def parse_projects_input(projects_input: str) -> list:
-    """Parse comma-separated projects input, stripping 'projects/' prefix."""
+def parse_projects_input(projects_input: str) -> str:
+    """Parse comma-separated projects input, stripping 'projects/' prefix.
+
+    Returns a comma-separated string (empty string if input is 'all' or empty).
+    """
     if not projects_input or projects_input.strip().lower() in ["all", ""]:
-        return []
+        return ""
     projects = [
         p.strip().replace("projects/", "")
         for p in projects_input.split(",")
@@ -137,18 +140,21 @@ def parse_projects_input(projects_input: str) -> list:
     ]
     if projects:
         print(f"Specific projects requested: {projects}")
-    return projects
+    return ",".join(projects)
 
 
-def get_test_list_for_build(specific_projects: list, repo_name: str) -> list:
-    """Determine which tests to run for a build."""
+def get_test_list_for_build(specific_projects: str, repo_name: str) -> str:
+    """Determine which tests to run for a build.
+
+    Returns a comma-separated string of project names.
+    """
     if specific_projects:
         return specific_projects
     test_list = get_test_list(repo_name)
     if not test_list:
         print("Using default test list: ['all']")
-        return ["all"]
-    return test_list
+        return "all"
+    return ",".join(test_list)
 
 
 def cross_product_projects_with_gpu_variants(
@@ -214,8 +220,8 @@ def detect_external_repo_projects_to_build(
     )
     if not should_build:
         return {"linux_projects": [], "windows_projects": []}
-    test_list = get_test_list_for_build(specific_projects, repo_name)
-    test_config = {"projects_to_test": ",".join(test_list)}
+    projects_to_test = get_test_list_for_build(specific_projects, repo_name)
+    test_config = {"projects_to_test": projects_to_test}
     return {
         "linux_projects": [test_config],
         "windows_projects": [test_config],

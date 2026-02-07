@@ -221,8 +221,8 @@ def import_external_repo_module(repo_name: str, module_name: str) -> Optional[An
         raise
 
 
-def get_skip_patterns(repo_name: str) -> list[str]:
-    """Get skip patterns from external repo's therock_configure_ci.py.
+def get_skip_patterns_for_ci(repo_name: str) -> list[str]:
+    """Get CI skip patterns from external repo's therock_configure_ci.py.
 
     These are file path patterns that, when ALL modified files in a PR match at least
     one pattern, indicate the changes have no impact on CI workflows. When this occurs,
