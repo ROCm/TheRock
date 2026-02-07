@@ -299,9 +299,8 @@ def do_install_rocm(args: argparse.Namespace):
 
     # Because the rocm package caches current GPU selection and such, we
     # always purge it to ensure a clean rebuild.
-
     run_command(
-        [sys.executable, "-m", "pip", "cache", "remove", "rocm_sdk"] + cache_dir_args,
+        [sys.executable, "-m", "pip", "cache", "remove", "rocm"] + cache_dir_args,
         cwd=Path.cwd(),
     )
 
