@@ -19,39 +19,8 @@ else()
   set(LLVM_BUILD_LLVM_DYLIB ON)
   set(LLVM_LINK_LLVM_DYLIB ON)
   set(LLVM_ENABLE_LIBCXX ON)
-  set(LLVM_ENABLE_PROJECTS "clang;lld;clang-tools-extra;flang" CACHE STRING "Enable LLVM projects" FORCE)
-  set(LLVM_ENABLE_RUNTIMES "compiler-rt;libunwind;libcxx;libcxxabi;openmp;offload" CACHE STRING "Enabled runtimes" FORCE)
-  if("offload" IN_LIST LLVM_ENABLE_RUNTIMES)
-    set(OPENMP_ENABLE_LIBOMPTARGET ON)
-    set(LIBOMPTARGET_BUILD_DEVICE_FORTRT ON)
-    set(LIBOMPTARGET_ENABLE_DEBUG ON)
-    set(LIBOMPTARGET_NO_SANITIZER_AMDGPU ON)
-    set(LIBOMP_INSTALL_RPATH "\$ORIGIN:\$ORIGIN/../lib:\$ORIGIN/../../lib:\$ORIGIN/../../../lib")
-    set(LIBOMPTARGET_EXTERNAL_PROJECT_HSA_PATH "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime")
-    set(OFFLOAD_EXTERNAL_PROJECT_UNIFIED_ROCR ON)
-    # There is an issue with finding the zstd config built by TheRock when zstd
-    # is searched for in the llvm config. LLVM has a FindZSTD.cmake that is
-    # found in module mode, which ultimately fails to locate the library.
-    # For now we will switch the priorty for find_package to first search in
-    # CONFIG mode.
-    set(RUNTIMES_CMAKE_ARGS "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON")
-
-    # TODO: Guard for amd-staging only. Remove condition when compiler branch is updated.
-    if(EXISTS "${THEROCK_SOURCE_DIR}/compiler/amd-llvm/openmp/device/CMakeLists.txt")
-      list(APPEND LLVM_ENABLE_RUNTIMES "flang-rt")
-      set(LLVM_RUNTIME_TARGETS "default;amdgcn-amd-amdhsa")
-      set(RUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_RUNTIMES "openmp")
-      set(RUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_PER_TARGET_RUNTIME_DIR ON)
-      set(FLANG_RUNTIME_F128_MATH_LIB "libquadmath")
-      set(LIBOMPTARGET_BUILD_DEVICE_FORTRT ON)
-      #TODO: Enable when HWLOC dependency is figured out
-      #set(LIBOMP_USE_HWLOC ON)
-    endif()
-  endif()
-  # Setting "LIBOMP_COPY_EXPORTS" to `OFF` "aids parallel builds to not interfere
-  # with each other" as libomp and generated headers are copied into the original
-  # source otherwise. Defaults to `ON`.
-  set(LIBOMP_COPY_EXPORTS OFF)
+  set(LLVM_ENABLE_PROJECTS "clang;lld;clang-tools-extra" CACHE STRING "Enable LLVM projects" FORCE)
+  set(LLVM_ENABLE_RUNTIMES "compiler-rt;libunwind;libcxx;libcxxabi" CACHE STRING "Enabled runtimes" FORCE)
 endif()
 
 # Set the LLVM_ENABLE_PROJECTS variable before including LLVM's CMakeLists.txt
