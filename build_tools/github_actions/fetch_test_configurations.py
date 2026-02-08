@@ -47,6 +47,12 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_rocblas.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 1,
+        "exclude_family": {
+            # TODO(#3299): Re-enable test once enough gfx1151 capacity is provided
+            "windows": [
+                "gfx1151",
+            ],
+        },
     },
     "rocroller": {
         "job_name": "rocroller",
@@ -79,6 +85,12 @@ test_matrix = {
         "platform": ["linux", "windows"],
         # TODO(#2616): Enable full tests once known machine issues are resolved
         "total_shards": 1,
+        "exclude_family": {
+            # TODO(#3299): Re-enable test once enough gfx1151 capacity is provided
+            "windows": [
+                "gfx1151",
+            ],
+        },
     },
     "hipblaslt": {
         "job_name": "hipblaslt",
@@ -96,6 +108,12 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_hipsolver.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 1,
+        "exclude_family": {
+            # TODO(#3299): Re-enable test once enough gfx1151 capacity is provided
+            "windows": [
+                "gfx1151",
+            ],
+        },
     },
     "rocsolver": {
         "job_name": "rocsolver",
@@ -114,6 +132,12 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_rocprim.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 2,
+        "exclude_family": {
+            # TODO(#3299): Re-enable test once enough gfx1151 capacity is provided
+            "windows": [
+                "gfx1151",
+            ],
+        },
     },
     "hipcub": {
         "job_name": "hipcub",
@@ -122,6 +146,12 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_hipcub.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 1,
+        "exclude_family": {
+            # TODO(#3299): Re-enable test once enough gfx1151 capacity is provided
+            "windows": [
+                "gfx1151",
+            ],
+        },
     },
     "rocthrust": {
         "job_name": "rocthrust",
@@ -130,6 +160,12 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_rocthrust.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 1,
+        "exclude_family": {
+            # TODO(#3299): Re-enable test once enough gfx1151 capacity is provided
+            "windows": [
+                "gfx1151",
+            ],
+        },
     },
     # SPARSE tests
     "hipsparse": {
@@ -139,6 +175,12 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_hipsparse.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 2,
+        "exclude_family": {
+            # TODO(#3299): Re-enable test once enough gfx1151 capacity is provided
+            "windows": [
+                "gfx1151",
+            ],
+        },
     },
     "rocsparse": {
         "job_name": "rocsparse",
@@ -147,6 +189,12 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_rocsparse.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 1,
+        "exclude_family": {
+            # TODO(#3299): Re-enable test once enough gfx1151 capacity is provided
+            "windows": [
+                "gfx1151",
+            ],
+        },
     },
     "hipsparselt": {
         "job_name": "hipsparselt",
@@ -165,6 +213,12 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_rocrand.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 1,
+        "exclude_family": {
+            # TODO(#3299): Re-enable test once enough gfx1151 capacity is provided
+            "windows": [
+                "gfx1151",
+            ],
+        },
     },
     "hiprand": {
         "job_name": "hiprand",
@@ -173,6 +227,12 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_hiprand.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 1,
+        "exclude_family": {
+            # TODO(#3299): Re-enable test once enough gfx1151 capacity is provided
+            "windows": [
+                "gfx1151",
+            ],
+        },
     },
     # FFT tests
     "rocfft": {
@@ -191,6 +251,12 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_hipfft.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 1,
+        "exclude_family": {
+            # TODO(#3299): Re-enable test once enough gfx1151 capacity is provided
+            "windows": [
+                "gfx1151",
+            ],
+        },
     },
     # MIOpen tests
     "miopen": {
@@ -220,6 +286,12 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_hipdnn.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 1,
+        "exclude_family": {
+            # TODO(#3299): Re-enable test once enough gfx1151 capacity is provided
+            "windows": [
+                "gfx1151",
+            ],
+        },
     },
     # hipDNN install/consumption tests
     "hipdnn_install": {
@@ -228,6 +300,12 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_hipdnn_install.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 1,
+        "exclude_family": {
+            # TODO(#3299): Re-enable test once enough gfx1151 capacity is provided
+            "windows": [
+                "gfx1151",
+            ],
+        },
     },
     # hipDNN samples tests
     "hipdnn-samples": {
@@ -237,6 +315,12 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_hipdnn_samples.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 1,
+        "exclude_family": {
+            # TODO(#3299): Re-enable test once enough gfx1151 capacity is provided
+            "windows": [
+                "gfx1151",
+            ],
+        },
     },
     # MIOpen plugin tests
     "miopen_plugin": {
@@ -246,6 +330,12 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_miopen_plugin.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 1,
+        "exclude_family": {
+            # TODO(#3299): Re-enable test once enough gfx1151 capacity is provided
+            "windows": [
+                "gfx1151",
+            ],
+        },
     },
     # TODO(iree-org/fusilli/issues/57): Enable fusilli tests once build is
     # enabled by default.
@@ -265,6 +355,12 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_rocwmma.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 5,
+        "exclude_family": {
+            # TODO(#3299): Re-enable test once enough gfx1151 capacity is provided
+            "windows": [
+                "gfx1151",
+            ],
+        },
     },
     # libhipcxx hipcc tests
     "libhipcxx_hipcc": {
