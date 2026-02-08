@@ -444,6 +444,14 @@ feature_name = "CORE_RUNTIME"
 feature_group = "CORE"
 disable_platforms = ["windows"]
 
+[artifacts.core-amdsmi]
+artifact_group = "core-amdsmi"
+type = "target-neutral"
+artifact_deps = ["base", "sysdeps"]
+feature_name = "CORE_AMDSMI"
+feature_group = "CORE"
+disable_platforms = ["windows"]
+
 [artifacts.core-hip]
 artifact_group = "hip-runtime"
 type = "target-neutral"
@@ -610,7 +618,7 @@ disable_platforms = ["windows"]
 [artifacts.rdc]
 artifact_group = "dctools-core"
 type = "target-neutral"
-artifact_deps = ["core-hip", "rocprofiler-sdk", "sysdeps"]
+artifact_deps = ["core-hip", "rocprofiler-sdk", "sysdeps", "core-amdsmi"]
 feature_group = "DC_TOOLS"  # Part of DC tools, enabled by default via THEROCK_ENABLE_ALL
 disable_platforms = ["windows"]
 
