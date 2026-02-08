@@ -30,9 +30,6 @@ test_type = os.getenv("TEST_TYPE", "full")
 # TODO(#2823): Re-enable test once flaky issue is resolved
 TESTS_TO_IGNORE = ["unpack_util_test"]
 
-# If there are devices for which the full set is too slow, we can
-# programatically set test_type to "regression" here.
-
 test_subdir = ""
 timeout = "3600"
 if test_type == "smoke":
@@ -44,13 +41,18 @@ elif test_type == "regression":
     test_subdir = "/regression"
     timeout = "720"
 
+# Make per-device adjustments
+ctest_parallelism = "2"
+if AMDGPU_FAMILIES == "gfx1153":
+    ctest_parallelism = "1"
+
 cmd = [
     "ctest",
     "--test-dir",
     f"{THEROCK_BIN_DIR}/rocwmma{test_subdir}",
     "--output-on-failure",
     "--parallel",
-    "8",
+    ctest_parallelism,
     "--timeout",
     timeout,
     "--exclude-regex",
