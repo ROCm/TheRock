@@ -27,7 +27,7 @@ from typing import Iterable, Optional
 
 
 def get_git_modified_paths(
-    base_ref: str, cwd: Optional[str] = None
+    base_ref: str, external_repo_root_path: Optional[str] = None
 ) -> Optional[Iterable[str]]:
     """Returns the paths of files modified since the base reference commit.
 
@@ -36,8 +36,8 @@ def get_git_modified_paths(
 
     Args:
         base_ref: Git reference (commit SHA, branch name, or HEAD^1) to compare against
-        cwd: Optional directory to run git diff from (e.g. external repo root).
-             If None, uses current working directory (TheRock).
+        external_repo_root_path: Optional directory to run git diff from (external repo root).
+                                If None, uses current working directory (TheRock).
 
     Returns:
         List of relative file paths that were modified, or None if the operation times out
@@ -49,7 +49,7 @@ def get_git_modified_paths(
             check=True,
             text=True,
             timeout=60,
-            cwd=cwd,
+            cwd=external_repo_root_path,
         ).stdout.splitlines()
     except TimeoutError:
         print(
@@ -98,7 +98,6 @@ def get_git_submodule_paths(repo_root: Optional[str] = None) -> Optional[Iterabl
 
 def is_ci_run_required(
     paths: Optional[Iterable[str]] = None,
-    *,
     skip_patterns: Optional[list[str]] = None,
 ) -> bool:
     """Checks if a CI run is required based on modified file paths.
@@ -202,6 +201,7 @@ _GITHUB_WORKFLOWS_CI_PATTERNS = [
     "test_sanity_check.yml",
     "test_component.yml",
     # External repos (rocm-libraries, rocm-systems) that call TheRock use this naming.
+    # Changes to these workflow files should trigger CI as they affect how TheRock's CI is invoked.
     "therock-*.yml",
 ]
 
@@ -212,7 +212,14 @@ _GITHUB_WORKFLOWS_CI_PATTERNS = [
 
 
 def _is_path_skippable(path: str, skip_patterns: Optional[list[str]] = None) -> bool:
-    """Checks if a single file path matches any skippable pattern."""
+    """Checks if a single file path matches any skippable pattern.
+
+    Args:
+        path: File path to check.
+        skip_patterns: Optional glob patterns for skippable paths. If None (default),
+                      uses TheRock's default patterns (_SKIPPABLE_PATH_PATTERNS).
+                      Only needs to be set for external repos that have custom skip patterns.
+    """
     patterns = skip_patterns if skip_patterns is not None else _SKIPPABLE_PATH_PATTERNS
     return any(fnmatch.fnmatch(path, pattern) for pattern in patterns)
 

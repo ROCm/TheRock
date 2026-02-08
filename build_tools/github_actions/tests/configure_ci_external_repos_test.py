@@ -17,7 +17,7 @@ from configure_ci import (
 class TestParseProjectsInput(unittest.TestCase):
 
     def test_empty_input_returns_empty_string(self):
-        """Test that empty or whitespace input returns empty string."""
+        """Test that empty, whitespace, or 'all' input returns empty string (build all projects)."""
         self.assertEqual(parse_projects_input(""), "")
         self.assertEqual(parse_projects_input("   "), "")
         self.assertEqual(parse_projects_input("all"), "")
@@ -50,6 +50,10 @@ class TestParseProjectsInput(unittest.TestCase):
 class TestCrossProductProjectsWithGpuVariants(unittest.TestCase):
 
     def test_single_project_single_variant(self):
+        """Test that projects_to_test is preserved as a comma-separated string.
+
+        Also verifies that cmake_options are not included (standardized full builds for all ROCm PRs).
+        """
         project_configs = [{"projects_to_test": "rocprim,rocblas"}]
         gpu_variants = [{"family": "gfx94x", "platform": "linux"}]
 
@@ -116,14 +120,30 @@ class TestCrossProductProjectsWithGpuVariants(unittest.TestCase):
         result = cross_product_projects_with_gpu_variants(project_configs, gpu_variants)
 
         self.assertEqual(len(result), 4)  # 2 projects * 2 variants = 4
-        # Verify all combinations exist
-        combinations = [
-            (r["projects_to_test"], r["family"], r["platform"]) for r in result
+        # Verify exact pairings
+        expected = [
+            {
+                "projects_to_test": "rocprim",
+                "family": "gfx94x",
+                "platform": "linux",
+            },
+            {
+                "projects_to_test": "rocprim",
+                "family": "gfx110x",
+                "platform": "linux",
+            },
+            {
+                "projects_to_test": "rocblas",
+                "family": "gfx94x",
+                "platform": "linux",
+            },
+            {
+                "projects_to_test": "rocblas",
+                "family": "gfx110x",
+                "platform": "linux",
+            },
         ]
-        self.assertIn(("rocprim", "gfx94x", "linux"), combinations)
-        self.assertIn(("rocprim", "gfx110x", "linux"), combinations)
-        self.assertIn(("rocblas", "gfx94x", "linux"), combinations)
-        self.assertIn(("rocblas", "gfx110x", "linux"), combinations)
+        self.assertEqual(result, expected)
 
     def test_empty_project_configs(self):
         """Test cross-product with empty project configs."""
@@ -165,7 +185,11 @@ class TestCrossProductProjectsWithGpuVariants(unittest.TestCase):
         self.assertEqual(result[0]["projects_to_test"], "rocprim")
 
     def test_no_cmake_options_in_result(self):
-        """Test that cmake_options from project_config are NOT included in result."""
+        """Test that cmake_options from project_config are NOT included in result (only projects_to_test is copied).
+
+        We exclude cmake_options to standardize full builds for all ROCm PRs, ensuring consistent
+        build configurations across external repositories.
+        """
         project_configs = [
             {"projects_to_test": "rocprim", "cmake_options": "-DROCBLAS=ON"}
         ]

@@ -61,7 +61,7 @@ def _log_warning(message: str) -> None:
     print(f"WARNING: {message}", file=sys.stderr)
 
 
-def get_repo_config(repo_name: str) -> Dict[str, Any]:
+def get_external_repo_config(repo_name: str) -> Dict[str, Any]:
     """Returns config for a known external repo name."""
     if repo_name not in REPO_CONFIGS:
         raise ValueError(
@@ -94,7 +94,7 @@ def get_external_repo_path(repo_name: str) -> Path:
         ValueError: If the external repo path cannot be determined
     """
     try:
-        repo_config = get_repo_config(repo_name)
+        repo_config = get_external_repo_config(repo_name)
     except ValueError as e:
         raise ValueError(f"Unknown repository: {repo_name}") from e
 
@@ -249,7 +249,7 @@ def get_skip_patterns_for_ci(repo_name: str) -> list[str]:
     return []
 
 
-def get_test_list(repo_name: str) -> list[str]:
+def get_external_repo_test_list(repo_name: str) -> list[str]:
     """Get test list from external repo's therock_matrix.py project_map.
 
     Args:
@@ -372,7 +372,7 @@ def main(argv=None):
         return 1
 
     try:
-        config = get_repo_config(args.repository)
+        config = get_external_repo_config(args.repository)
 
         # Log to stderr for visibility in CI logs
         print(f"Detected repository: {args.repository}", file=sys.stderr)

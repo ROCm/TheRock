@@ -25,8 +25,9 @@
   * PR_LABELS (optional) : JSON list of PR label names.
   * BASE_REF  (required) : base commit SHA of the PR.
 
-  Environment variables (for external repo runs; set by workflows that invoke this for rocm-libraries, etc.):
-  * EXTERNAL_REPO_NAME (optional): Repo name (e.g. "rocm-libraries"). When set, config is built for that external repo.
+  Environment variables (external repo only; ignored for TheRock's own CI):
+  * EXTERNAL_REPO_NAME (required for external repos): Repo name (e.g. "rocm-libraries").
+    When set, config is built for that external repo. Must be set for external repo workflows.
   * PROJECTS (optional): Comma-separated project list or "all" (e.g. "projects/rocprim,projects/rocblas").
 
   Local git history with at least fetch-depth of 2 for file diffing.
@@ -63,9 +64,9 @@ from amdgpu_family_matrix import (
 )
 from detect_external_repo_config import (
     get_external_repo_path,
-    get_repo_config,
+    get_external_repo_config,
     get_skip_patterns_for_ci,
-    get_test_list,
+    get_external_repo_test_list,
 )
 from fetch_test_configurations import test_matrix
 
@@ -84,34 +85,14 @@ THEROCK_DIR = THIS_SCRIPT_DIR.parent.parent
 # --------------------------------------------------------------------------- #
 
 
-def _should_skip_external_build_due_to_paths(
-    repo_name: str,
-    base_ref: str,
-    github_event_name: str,
-) -> bool:
-    """True if build should be skipped. Gets paths here, then calls path_filters.is_ci_run_required."""
-    cwd = str(get_external_repo_path(repo_name))
-    paths = get_git_modified_paths(base_ref, cwd=cwd)
-    if paths is not None:
-        paths = list(paths)
-    print("modified_paths (max 200):", paths[:200] if paths else paths)
-    print(f"Checking modified files since this had a {github_event_name} trigger")
-    skip_patterns = get_skip_patterns_for_ci(repo_name) or None
-    should_build = is_ci_run_required(
-        paths,
-        skip_patterns=skip_patterns,
-    )
-    return not should_build
-
-
-def should_build_external_repo(
+def requires_external_repo_build(
     repo_name: str,
     base_ref: str,
     github_event_name: str,
     projects_input: str,
     specific_projects: str,
 ) -> bool:
-    """Determine if external repo build should run."""
+    """Determine if external repo build is required."""
     if github_event_name == "schedule":
         print("Schedule event detected - building all")
         return True
@@ -121,9 +102,17 @@ def should_build_external_repo(
     if specific_projects:
         print(f"Building specific projects: {specific_projects}")
         return True
-    return not _should_skip_external_build_due_to_paths(
-        repo_name, base_ref, github_event_name
+    # Check modified paths to determine if build should run
+    external_repo_root = str(get_external_repo_path(repo_name))
+    paths = get_git_modified_paths(base_ref, external_repo_root_path=external_repo_root)
+    print("modified_paths (max 200):", list(paths)[:200] if paths else paths)
+    print(f"Checking modified files since this had a {github_event_name} trigger")
+    skip_patterns = get_skip_patterns_for_ci(repo_name) or None
+    requires_build = is_ci_run_required(
+        paths,
+        skip_patterns=skip_patterns,
     )
+    return requires_build
 
 
 def parse_projects_input(projects_input: str) -> str:
@@ -150,7 +139,7 @@ def get_test_list_for_build(specific_projects: str, repo_name: str) -> str:
     """
     if specific_projects:
         return specific_projects
-    test_list = get_test_list(repo_name)
+    test_list = get_external_repo_test_list(repo_name)
     if not test_list:
         print("Using default test list: ['all']")
         return "all"
@@ -211,14 +200,14 @@ def detect_external_repo_projects_to_build(
 ) -> dict:
     """Determine which projects to build for an external repository."""
     specific_projects = parse_projects_input(projects_input)
-    should_build = should_build_external_repo(
+    requires_build = requires_external_repo_build(
         repo_name,
         base_ref,
         github_event_name,
         projects_input,
         specific_projects,
     )
-    if not should_build:
+    if not requires_build:
         return {"linux_projects": [], "windows_projects": []}
     projects_to_test = get_test_list_for_build(specific_projects, repo_name)
     test_config = {"projects_to_test": projects_to_test}
@@ -240,7 +229,7 @@ def setup_external_repo_configs(
     if not repo_name:
         return None
     try:
-        get_repo_config(repo_name)
+        get_external_repo_config(repo_name)
     except ValueError:
         return None
     print(f"\nExternal repository: {repo_name}")

@@ -5,9 +5,7 @@ import unittest
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
-from configure_ci_path_filters import (
-    is_ci_run_required,
-)
+from configure_ci_path_filters import is_ci_run_required
 
 
 class ConfigureCIPathFiltersTest(unittest.TestCase):
@@ -41,6 +39,11 @@ class ConfigureCIPathFiltersTest(unittest.TestCase):
         self.assertTrue(run_ci)
 
         paths = [".github/workflows/build_artifact.yml"]
+        run_ci = is_ci_run_required(paths)
+        self.assertTrue(run_ci)
+
+        # External repos use therock-*.yml naming
+        paths = [".github/workflows/therock-ci.yml"]
         run_ci = is_ci_run_required(paths)
         self.assertTrue(run_ci)
 
