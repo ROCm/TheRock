@@ -97,10 +97,12 @@ endif()
 set(hipBLASLt_optional_deps)
 if(NOT WIN32)
   # hipBLASLt is hard-coded to not expect rocm-smi and amdsmi on Windows.
-  list(APPEND hipBLASLt_optional_deps
-    amdsmi
-    rocm_smi_lib
-  )
+  if(TARGET amdsmi)
+    list(APPEND hipBLASLt_optional_deps amdsmi)
+  endif()
+  if(TARGET rocm_smi_lib)
+    list(APPEND hipBLASLt_optional_deps rocm_smi_lib)
+  endif()
 endif()
 
 set(hipBLASLt_rocRoller_deps)
@@ -165,7 +167,9 @@ list(APPEND _blas_subproject_names hipBLASLt)
 set(rocBLAS_optional_runtime_deps)
 if(NOT WIN32)
   # rocBLAS is hard-coded to not expect rocm-smi.
-  list(APPEND rocBLAS_optional_runtime_deps rocm_smi_lib)
+  if(TARGET rocm_smi_lib)
+    list(APPEND rocBLAS_optional_runtime_deps rocm_smi_lib)
+  endif()
 elseif(THEROCK_BUILD_TESTING)
   list(APPEND rocBLAS_optional_runtime_deps therock-host-blas)
 endif()
@@ -290,12 +294,12 @@ if(THEROCK_ENABLE_SPARSE)
 
   if(NOT WIN32) # Remove this block once hipSPARSELt is supported on Windows
     set(hipSPARSELt_optional_deps)
-    if(NOT WIN32)
-      # hipSPARSELt is hard-coded to not expect rocm-smi and amdsmi on Windows.
-      list(APPEND hipSPARSELt_optional_deps
-        amdsmi
-        rocm_smi_lib
-      )
+    # hipSPARSELt is hard-coded to not expect rocm-smi and amdsmi on Windows.
+    if(TARGET amdsmi)
+      list(APPEND hipSPARSELt_optional_deps amdsmi)
+    endif()
+    if(TARGET rocm_smi_lib)
+      list(APPEND hipSPARSELt_optional_deps rocm_smi_lib)
     endif()
 
     therock_cmake_subproject_declare(hipSPARSELt
