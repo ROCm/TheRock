@@ -99,11 +99,12 @@ def get_git_submodule_paths(repo_root: Optional[str] = None) -> Optional[Iterabl
 def is_ci_run_required(
     paths: Optional[Iterable[str]] = None,
     skip_patterns: Optional[list[str]] = None,
+    ci_workflow_patterns: Optional[list[str]] = None,
 ) -> bool:
     """Checks if a CI run is required based on modified file paths.
 
     Callers provide paths (e.g. from get_git_modified_paths). For external repos,
-    callers pass skip_patterns from config.
+    callers pass skip_patterns and ci_workflow_patterns from config.
 
     CI will run if:
     - At least one CI-related workflow file was modified, OR
@@ -117,6 +118,8 @@ def is_ci_run_required(
     Args:
         paths: Iterable of file paths to evaluate, or None if no files modified.
         skip_patterns: Optional glob patterns for skippable paths. None = use internal default.
+        ci_workflow_patterns: Optional workflow file patterns for CI-related workflows.
+                            None = use internal default (_GITHUB_WORKFLOWS_CI_PATTERNS).
 
     Returns:
         True if CI run is required, False if CI can be skipped
@@ -131,7 +134,9 @@ def is_ci_run_required(
     )
     other_paths = paths_set - github_workflows_paths
 
-    related_to_ci = _check_for_workflow_file_related_to_ci(github_workflows_paths)
+    related_to_ci = _check_for_workflow_file_related_to_ci(
+        github_workflows_paths, ci_workflow_patterns
+    )
     contains_other_non_skippable_files = _check_for_non_skippable_path(
         other_paths, skip_patterns
     )
@@ -200,9 +205,6 @@ _GITHUB_WORKFLOWS_CI_PATTERNS = [
     "test*artifacts.yml",
     "test_sanity_check.yml",
     "test_component.yml",
-    # External repos (rocm-libraries, rocm-systems) that call TheRock use this naming.
-    # Changes to these workflow files should trigger CI as they affect how TheRock's CI is invoked.
-    "therock-*.yml",
 ]
 
 
@@ -230,26 +232,58 @@ def _check_for_non_skippable_path(
 ) -> bool:
     """Checks if any path in the collection is non-skippable.
 
-    Returns True if at least one path doesn't match any skippable pattern.
+    Args:
+        paths: Collection of file paths to check.
+        skip_patterns: Optional glob patterns for skippable paths. If None (default),
+                      uses TheRock's default patterns (_SKIPPABLE_PATH_PATTERNS).
+                      Only needs to be set for external repos that have custom skip patterns.
+
+    Returns:
+        True if at least one path doesn't match any skippable pattern.
     """
     if paths is None:
         return False
     return any(not _is_path_skippable(p, skip_patterns) for p in paths)
 
 
-def _is_path_workflow_file_related_to_ci(path: str) -> bool:
-    """Checks if a single path is a CI-related workflow file."""
+def _is_path_workflow_file_related_to_ci(
+    path: str, ci_workflow_patterns: Optional[list[str]] = None
+) -> bool:
+    """Checks if a single path is a CI-related workflow file.
+
+    Args:
+        path: File path to check.
+        ci_workflow_patterns: Optional workflow file patterns. If None (default),
+                             uses TheRock's default patterns (_GITHUB_WORKFLOWS_CI_PATTERNS).
+                             Only needs to be set for external repos that have custom workflow patterns.
+    """
+    if ci_workflow_patterns is not None:
+        # Use external repo's patterns (even if empty list)
+        patterns = ci_workflow_patterns
+    else:
+        # Use TheRock's default patterns (for TheRock's own CI)
+        patterns = _GITHUB_WORKFLOWS_CI_PATTERNS
     return any(
-        fnmatch.fnmatch(path, ".github/workflows/" + pattern)
-        for pattern in _GITHUB_WORKFLOWS_CI_PATTERNS
+        fnmatch.fnmatch(path, ".github/workflows/" + pattern) for pattern in patterns
     )
 
 
-def _check_for_workflow_file_related_to_ci(paths: Optional[Iterable[str]]) -> bool:
+def _check_for_workflow_file_related_to_ci(
+    paths: Optional[Iterable[str]], ci_workflow_patterns: Optional[list[str]] = None
+) -> bool:
     """Checks if any path in the collection is a CI-related workflow file.
 
-    Returns True if at least one path matches a CI workflow pattern.
+    Args:
+        paths: Collection of file paths to check.
+        ci_workflow_patterns: Optional workflow file patterns. If None (default),
+                            uses TheRock's default patterns (_GITHUB_WORKFLOWS_CI_PATTERNS).
+                            Only needs to be set for external repos that have custom workflow patterns.
+
+    Returns:
+        True if at least one path matches a CI workflow pattern.
     """
     if paths is None:
         return False
-    return any(_is_path_workflow_file_related_to_ci(p) for p in paths)
+    return any(
+        _is_path_workflow_file_related_to_ci(p, ci_workflow_patterns) for p in paths
+    )

@@ -16,6 +16,7 @@ from detect_external_repo_config import (
     get_external_repo_path,
     import_external_repo_module,
     get_skip_patterns_for_ci,
+    get_workflow_patterns_for_ci,
     get_external_repo_test_list,
     main as detect_external_repo_config_main,
     output_github_actions_vars,
@@ -290,6 +291,38 @@ class TestGetSkipPatternsForCi(unittest.TestCase):
         mock_import.return_value = mock_module
 
         result = get_skip_patterns_for_ci("rocm-libraries")
+        self.assertEqual(result, [])
+
+
+class TestGetWorkflowPatternsForCi(unittest.TestCase):
+    """Tests for get_workflow_patterns_for_ci function"""
+
+    @patch("detect_external_repo_config.import_external_repo_module")
+    def test_get_workflow_patterns_for_ci_success(self, mock_import):
+        """Test successful retrieval of workflow patterns"""
+        mock_module = MagicMock()
+        mock_module.GITHUB_WORKFLOWS_CI_PATTERNS = ["therock-*.yml"]
+        mock_import.return_value = mock_module
+
+        result = get_workflow_patterns_for_ci("rocm-libraries")
+        self.assertEqual(result, ["therock-*.yml"])
+
+    @patch("detect_external_repo_config.import_external_repo_module")
+    def test_get_workflow_patterns_for_ci_no_module(self, mock_import):
+        """Test when module cannot be imported"""
+        mock_import.return_value = None
+
+        result = get_workflow_patterns_for_ci("rocm-libraries")
+        self.assertEqual(result, [])
+
+    @patch("detect_external_repo_config.import_external_repo_module")
+    def test_get_workflow_patterns_for_ci_no_attribute(self, mock_import):
+        """Test when module doesn't have GITHUB_WORKFLOWS_CI_PATTERNS attribute"""
+        mock_module = MagicMock(spec=[])
+        del mock_module.GITHUB_WORKFLOWS_CI_PATTERNS  # Ensure attribute doesn't exist
+        mock_import.return_value = mock_module
+
+        result = get_workflow_patterns_for_ci("rocm-libraries")
         self.assertEqual(result, [])
 
 

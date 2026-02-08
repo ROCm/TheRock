@@ -66,6 +66,7 @@ from detect_external_repo_config import (
     get_external_repo_path,
     get_external_repo_config,
     get_skip_patterns_for_ci,
+    get_workflow_patterns_for_ci,
     get_external_repo_test_list,
 )
 from fetch_test_configurations import test_matrix
@@ -107,10 +108,14 @@ def requires_external_repo_build(
     paths = get_git_modified_paths(base_ref, external_repo_root_path=external_repo_root)
     print("modified_paths (max 200):", list(paths)[:200] if paths else paths)
     print(f"Checking modified files since this had a {github_event_name} trigger")
+    # Get external repo's skip patterns (optional - falls back to TheRock's defaults if not defined)
     skip_patterns = get_skip_patterns_for_ci(repo_name) or None
+    # Get external repo's workflow patterns (optional - falls back to TheRock's defaults if not defined)
+    external_ci_patterns = get_workflow_patterns_for_ci(repo_name) or None
     requires_build = is_ci_run_required(
         paths,
         skip_patterns=skip_patterns,
+        ci_workflow_patterns=external_ci_patterns,
     )
     return requires_build
 

@@ -230,6 +230,11 @@ def get_skip_patterns_for_ci(repo_name: str) -> list[str]:
 
     Example patterns: ["*.md", "docs/*", ".github/workflows/*"]
 
+    Note: External repos are recommended to define SKIPPABLE_PATH_PATTERNS in their
+    therock_configure_ci.py file. If not defined, an empty list is returned
+    and TheRock's default skip patterns will be used. For consistency and
+    explicit control, external repos are encouraged to define their own patterns.
+
     See: https://github.com/ROCm/rocm-libraries/blob/develop/.github/scripts/therock_configure_ci.py
 
     Args:
@@ -243,6 +248,39 @@ def get_skip_patterns_for_ci(repo_name: str) -> list[str]:
         patterns = configure_module.SKIPPABLE_PATH_PATTERNS
         print(
             f"Loaded {len(patterns)} skip patterns from {repo_name}",
+            file=sys.stderr,
+        )
+        return patterns
+    return []
+
+
+def get_workflow_patterns_for_ci(repo_name: str) -> list[str]:
+    """Get workflow file patterns from external repo's therock_configure_ci.py.
+
+    These are workflow file patterns that, when matched, indicate the workflow file
+    changes affect CI and should trigger a build. Patterns are relative to
+    `.github/workflows/` directory.
+
+    Example patterns: ["therock-*.yml"]
+
+    Note: External repos are recommended to define GITHUB_WORKFLOWS_CI_PATTERNS in their
+    therock_configure_ci.py file. If not defined, an empty list is returned
+    and TheRock's default workflow patterns will be used. For consistency and
+    explicit control, external repos are encouraged to define their own patterns.
+
+    See: https://github.com/ROCm/rocm-libraries/blob/develop/.github/scripts/therock_configure_ci.py
+
+    Args:
+        repo_name (str): Repository name (e.g., "rocm-libraries", "rocm-systems")
+
+    Returns:
+        list[str]: List of CI workflow patterns, or empty list if not found
+    """
+    configure_module = import_external_repo_module(repo_name, "therock_configure_ci")
+    if configure_module and hasattr(configure_module, "GITHUB_WORKFLOWS_CI_PATTERNS"):
+        patterns = configure_module.GITHUB_WORKFLOWS_CI_PATTERNS
+        print(
+            f"Loaded {len(patterns)} CI workflow patterns from {repo_name}",
             file=sys.stderr,
         )
         return patterns
