@@ -1,1 +1,4 @@
 .{{path}}/*  {{path}}
+{% if has_hidden_dir %}
+.{{path}}/.[!.]*  {{path}}
+{% endif %}
