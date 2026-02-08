@@ -31,8 +31,7 @@ all_build_variants = {
         "asan": {
             "build_variant_label": "asan",
             "build_variant_suffix": "asan",
-            "build_variant_cmake_preset": "linux-release-asan",
-            "expect_failure": True,
+            "build_variant_cmake_preset": "linux-release-asan"
         },
     },
     "windows": {
