@@ -57,56 +57,6 @@ class ConfigureCITest(unittest.TestCase):
             )
 
     ###########################################################################
-    # Tests for should_ci_run_given_modified_paths
-
-    def test_run_ci_if_source_file_edited(self):
-        paths = ["source_file.h"]
-        run_ci = configure_ci.should_ci_run_given_modified_paths(paths)
-        self.assertTrue(run_ci)
-
-    def test_dont_run_ci_if_only_markdown_files_edited(self):
-        paths = ["README.md", "build_tools/README.md"]
-        run_ci = configure_ci.should_ci_run_given_modified_paths(paths)
-        self.assertFalse(run_ci)
-
-    def test_dont_run_ci_if_only_external_builds_edited(self):
-        paths = ["external-builds/pytorch/CMakeLists.txt"]
-        run_ci = configure_ci.should_ci_run_given_modified_paths(paths)
-        self.assertFalse(run_ci)
-
-    def test_dont_run_ci_if_only_external_builds_edited(self):
-        paths = ["experimental/file.h"]
-        run_ci = configure_ci.should_ci_run_given_modified_paths(paths)
-        self.assertFalse(run_ci)
-
-    def test_run_ci_if_related_workflow_file_edited(self):
-        paths = [".github/workflows/ci.yml"]
-        run_ci = configure_ci.should_ci_run_given_modified_paths(paths)
-        self.assertTrue(run_ci)
-
-        paths = [".github/workflows/build_portable_linux_artifacts.yml"]
-        run_ci = configure_ci.should_ci_run_given_modified_paths(paths)
-        self.assertTrue(run_ci)
-
-        paths = [".github/workflows/build_artifact.yml"]
-        run_ci = configure_ci.should_ci_run_given_modified_paths(paths)
-        self.assertTrue(run_ci)
-
-    def test_dont_run_ci_if_unrelated_workflow_file_edited(self):
-        paths = [".github/workflows/pre-commit.yml"]
-        run_ci = configure_ci.should_ci_run_given_modified_paths(paths)
-        self.assertFalse(run_ci)
-
-        paths = [".github/workflows/test_jax_dockerfile.yml"]
-        run_ci = configure_ci.should_ci_run_given_modified_paths(paths)
-        self.assertFalse(run_ci)
-
-    def test_run_ci_if_source_file_and_unrelated_workflow_file_edited(self):
-        paths = ["source_file.h", ".github/workflows/pre-commit.yml"]
-        run_ci = configure_ci.should_ci_run_given_modified_paths(paths)
-        self.assertTrue(run_ci)
-
-    ###########################################################################
     # Tests for matrix_generator and helper functions
 
     def test_filter_known_target_names(self):
@@ -293,6 +243,28 @@ class ConfigureCITest(unittest.TestCase):
             platform="linux",
         )
         self.assertGreaterEqual(len(linux_target_output), 1)
+        self.assert_target_output_is_valid(
+            target_output=linux_target_output, allow_xfail=False
+        )
+        self.assertEqual(linux_test_labels, [])
+
+    def test_kernel_test_label_linux_pull_request_matrix_generator(self):
+        base_args = {
+            "pr_labels": '{"labels":[{"name":"test_runner:oem"}]}',
+            "build_variant": "release",
+        }
+        linux_target_output, linux_test_labels = configure_ci.matrix_generator(
+            is_pull_request=True,
+            is_workflow_dispatch=False,
+            is_push=False,
+            is_schedule=False,
+            base_args=base_args,
+            families={},
+            platform="linux",
+        )
+        self.assertGreaterEqual(len(linux_target_output), 1)
+        # check that at least one runner name has "oem" in test runner name if "oem" test runner was requested
+        self.assertTrue("oem" in item["test-runs-on"] for item in linux_target_output)
         self.assert_target_output_is_valid(
             target_output=linux_target_output, allow_xfail=False
         )

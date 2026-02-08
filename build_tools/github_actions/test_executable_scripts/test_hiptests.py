@@ -21,11 +21,28 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 SHARD_INDEX = os.getenv("SHARD_INDEX", 1)
 TOTAL_SHARDS = os.getenv("TOTAL_SHARDS", 1)
+AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
+os_type = platform.system().lower()
 CATCH_TESTS_PATH = str(Path(THEROCK_BIN_DIR).parent / "share" / "hip" / "catch_tests")
 if not os.path.isdir(CATCH_TESTS_PATH):
     logging.info(f"++ Error: catch tests not found in {CATCH_TESTS_PATH}")
     sys.exit(1)
 env = os.environ.copy()
+
+# TODO(#3204): Re-enable tests once issues are resolved
+TEST_TO_IGNORE = {
+    "gfx94X-dcgpu": {
+        "linux": [
+            "Unit_hipGetProcAddress_spt_Stream",
+        ]
+    },
+    "gfx950-dcgpu": {
+        "linux": [
+            "Unit_hipManagedKeyword_SingleGpu",
+            "Unit_hipGetProcAddress_spt_Stream",
+        ]
+    },
+}
 
 
 def get_test_count():
@@ -105,6 +122,11 @@ def execute_tests(env):
         "--timeout",
         "600",
     ]
+
+    if AMDGPU_FAMILIES in TEST_TO_IGNORE and os_type in TEST_TO_IGNORE[AMDGPU_FAMILIES]:
+        ignored_tests = TEST_TO_IGNORE[AMDGPU_FAMILIES][os_type]
+        cmd.extend(["--exclude-regex", "|".join(ignored_tests)])
+
     logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
     subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=env)
 

@@ -240,6 +240,7 @@ endif(THEROCK_BUILD_TESTING)
         -DROCPROFSYS_BUILD_DYNINST=ON
         -DROCPROFSYS_BUILD_FOR_THEROCK=ON
         -DROCPROFSYS_GFX_TARGETS="${_ROCPROFSYS_GFX_TARGETS_ESCAPED}"
+        -DROCPROFSYS_BUILD_SPDLOG=OFF
       INSTALL_RPATH_DIRS
         "lib"
         "lib/rocprofiler-systems"
@@ -252,6 +253,8 @@ endif(THEROCK_BUILD_TESTING)
         hip-clr
         rocprofiler-register
         rocprofiler-sdk
+        therock-spdlog
+        therock-fmt
         ${THEROCK_BUNDLED_LIBDRM}
         ${THEROCK_BUNDLED_SQLITE3}
     )
