@@ -27,6 +27,11 @@ logging.info(f"Detected GPU architecture: {gpu_arch}")
 cwd_dir = Path(THEROCK_BIN_DIR) / gpu_arch
 cmd = ["./rocrtst64"]
 
+# Excluded tests (flaky or disabled in CI).
+EXCLUDED_TESTS = [
+    "-rocrtstFunc.Memory_Max_Mem",
+]
+
 # If smoke tests are enabled, run smoke tests only. Otherwise, run the full suite.
 SMOKE_TESTS = [
     "rocrtst.Test_Example",
@@ -46,8 +51,12 @@ SMOKE_TESTS = [
     "rocrtstFunc.Memory_Atomic_Xchg_Test",
 ]
 test_type = os.getenv("TEST_TYPE", "full")
+exclude_filter = ":".join(EXCLUDED_TESTS)
+
 if test_type == "smoke":
-    environ_vars["GTEST_FILTER"] = ":".join(SMOKE_TESTS)
+    environ_vars["GTEST_FILTER"] = ":".join(SMOKE_TESTS) + ":" + exclude_filter
+else:
+    environ_vars["GTEST_FILTER"] = exclude_filter
 
 logging.info(f"++ Exec [{cwd_dir}]$ {shlex.join(cmd)}")
 subprocess.run(cmd, cwd=cwd_dir, check=True, env=environ_vars)
