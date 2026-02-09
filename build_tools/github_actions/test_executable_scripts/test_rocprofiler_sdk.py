@@ -22,27 +22,18 @@ environ_vars = os.environ.copy()
 environ_vars["ROCM_PATH"] = str(THEROCK_PATH)
 environ_vars["HIP_PATH"] = str(THEROCK_PATH)
 
-# Set up ROCPROFILER_SDK_TEST_METRICS_PATH
-environ_vars["ROCPROFILER_SDK_TEST_METRICS_PATH"] = str(ROCPROFILER_SDK_DIRECTORY)
-
 # Env setup
 environ_vars["HIP_PLATFORM"] = "amd"
 
-# Set up LD_LIBRARY_PATH / ROCPROFILER_SDK_TEST_LD_LIBRARY_PATH
+# Set up LD_LIBRARY_PATH
 old_ld_lib_path = os.getenv("LD_LIBRARY_PATH", "")
 sysdeps_path = f"{THEROCK_LIB_PATH}/rocm_sysdeps/lib"
 if old_ld_lib_path:
     environ_vars["LD_LIBRARY_PATH"] = (
         f"{THEROCK_LIB_PATH}:{sysdeps_path}:{old_ld_lib_path}"
     )
-    environ_vars["ROCPROFILER_SDK_TEST_LD_LIBRARY_PATH"] = (
-        f"{THEROCK_LIB_PATH}:{sysdeps_path}:{old_ld_lib_path}"
-    )
 else:
     environ_vars["LD_LIBRARY_PATH"] = f"{THEROCK_LIB_PATH}:{sysdeps_path}"
-    environ_vars["ROCPROFILER_SDK_TEST_LD_LIBRARY_PATH"] = (
-        f"{THEROCK_LIB_PATH}:{sysdeps_path}"
-    )
 
 # CMake Configuration
 cmake_config_cmd = [
