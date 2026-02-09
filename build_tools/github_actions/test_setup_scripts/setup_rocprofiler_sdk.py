@@ -12,8 +12,8 @@ environ_vars = os.environ.copy()
 
 requirements_dir = f"{THEROCK_OUTPUT_DIR}/share/rocprofiler-sdk/tests"
 cmd = [
-    "CC=clang"
-    "CXX=clang++"
+    "CC=clang",
+    "CXX=clang++",
     "pip",
     "install",
     "-r",
