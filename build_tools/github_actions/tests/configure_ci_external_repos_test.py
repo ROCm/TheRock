@@ -17,7 +17,12 @@ from configure_ci import (
 class TestParseProjectsInput(unittest.TestCase):
 
     def test_empty_input_returns_empty_string(self):
-        """Test that empty, whitespace, or 'all' input returns empty string (build all projects)."""
+        """Test that empty, whitespace, or 'all' input returns empty string.
+
+        Empty string result means no specific projects requested. Path-based checking
+        determines if build is needed; if build runs, all projects are built using
+        full test list from external repo config.
+        """
         self.assertEqual(parse_projects_input(""), "")
         self.assertEqual(parse_projects_input("   "), "")
         self.assertEqual(parse_projects_input("all"), "")

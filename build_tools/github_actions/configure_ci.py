@@ -106,7 +106,8 @@ def requires_external_repo_build(
     # Check modified paths to determine if build should run
     external_repo_root = str(get_external_repo_path(repo_name))
     paths = get_git_modified_paths(base_ref, external_repo_root_path=external_repo_root)
-    print("modified_paths (max 200):", list(paths)[:200] if paths else paths)
+    if paths is not None:
+        print("modified_paths (max 200):", paths[:200])
     print(f"Checking modified files since this had a {github_event_name} trigger")
     # Get external repo's skip patterns (optional - falls back to TheRock's defaults if not defined)
     skip_patterns = get_skip_patterns_for_ci(repo_name) or None
