@@ -17,21 +17,19 @@ THEROCK_BIN_DIR = Path(os.getenv("THEROCK_BIN_DIR")).resolve()
 
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 
+# Importing is_asan from github_actions_utils.py
+sys.path.append(str(THIS_DIR.parent / "build_tools" / "github_actions"))
+from github_actions_utils import is_asan
+
 
 def is_windows():
     return "windows" == platform.system().lower()
 
 
-def is_asan():
-    ARTIFACT_GROUP = os.getenv("ARTIFACT_GROUP")
-    return "asan" in ARTIFACT_GROUP
-
-
 def run_command(command: list[str], cwd=None):
     logger.info(f"++ Run [{cwd}]$ {shlex.join(command)}")
-    env = os.environ.copy()
     process = subprocess.run(
-        command, capture_output=True, cwd=cwd, shell=is_windows(), text=True, env=env
+        command, capture_output=True, cwd=cwd, shell=is_windows(), text=True
     )
     if process.returncode != 0:
         logger.error(f"Command failed!")
@@ -125,17 +123,16 @@ class TestROCmSanity:
 
         # Compiling .cpp file using hipcc
         hipcc_check_executable_file = f"hipcc_check{platform_executable_suffix}"
-        hipcc_command = [
-            f"{THEROCK_BIN_DIR}/hipcc",
-            str(THIS_DIR / "hipcc_check.cpp"),
-            "-Xlinker",
-            f"-rpath={THEROCK_BIN_DIR}/../lib/",
-            f"--offload-arch={offload_arch}",
-            "-o",
-            hipcc_check_executable_file,
-        ]
         run_command(
-            hipcc_command,
+            [
+                f"{THEROCK_BIN_DIR}/hipcc",
+                str(THIS_DIR / "hipcc_check.cpp"),
+                "-Xlinker",
+                f"-rpath={THEROCK_BIN_DIR}/../lib/",
+                f"--offload-arch={offload_arch}",
+                "-o",
+                hipcc_check_executable_file,
+            ],
             cwd=str(THEROCK_BIN_DIR),
         )
 

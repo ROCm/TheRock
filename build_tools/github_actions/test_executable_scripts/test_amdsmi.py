@@ -31,14 +31,6 @@ logging.basicConfig(level=logging.INFO)
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
-# Importing get_asan_lib_path from github_actions_utils.py
-sys.path.append(str(SCRIPT_DIR.parent))
-from github_actions_utils import get_asan_lib_path
-
-def is_asan():
-    ARTIFACT_GROUP = os.getenv("ARTIFACT_GROUP")
-    return "asan" in ARTIFACT_GROUP
-
 AMDSMITST_BIN = (
     THEROCK_DIR / "build" / "share" / "amd_smi" / "tests" / "amdsmitst"
 ).resolve()
@@ -49,10 +41,6 @@ AMDSMITST_BIN = (
 SHARD_INDEX = os.getenv("SHARD_INDEX", "1")
 TOTAL_SHARDS = os.getenv("TOTAL_SHARDS", "1")
 env = os.environ.copy()
-
-if is_asan():
-    asan_lib_path = get_asan_lib_path(THEROCK_DIR / "build" / "bin")
-    env["LD_PRELOAD"] = asan_lib_path
 
 # Convert to 0-based index for GTest
 env["GTEST_SHARD_INDEX"] = str(int(SHARD_INDEX) - 1)

@@ -8,7 +8,6 @@ from enum import Enum, auto
 import json
 import os
 from pathlib import Path
-import platform
 import re
 import shutil
 import subprocess
@@ -668,15 +667,8 @@ def get_visible_gpu_count(env=None, therock_bin_dir: str | None = None) -> int:
 
     return sum(1 for line in result.stdout.splitlines() if pattern.match(line.strip()))
 
-def get_asan_lib_path(THEROCK_BIN_DIR):
-    """Find ASAN library path using clang++ --print-file-name."""
-    arch = platform.machine()
-    CLANG_PATH = str(Path(THEROCK_BIN_DIR).parent / "lib" / "llvm" / "bin" / "clang++")
-    cmd = [f"{CLANG_PATH}", f"--print-file-name=libclang_rt.asan-{arch}.so"]
-    result = subprocess.run(
-        cmd,
-        check=True,
-        text=True,
-        capture_output=True,
-    )
-    return result.stdout.strip()
+
+def is_asan():
+    """Using artifact_group, determines if this is an asan build"""
+    ARTIFACT_GROUP = os.getenv("ARTIFACT_GROUP")
+    return "asan" in ARTIFACT_GROUP
