@@ -168,15 +168,9 @@ if(NOT WIN32)
   list(APPEND rocBLAS_optional_runtime_deps rocm_smi_lib)
 endif()
 if(THEROCK_BUILD_TESTING)
-  # CPU reference BLAS libraries for rocBLAS clients/tests
+  # CPU reference BLAS libraries for rocBLAS clients/tests (mirror OpenBLAS: runtime dep only)
   list(APPEND rocBLAS_optional_runtime_deps therock-host-blas)       # OpenBLAS
   list(APPEND rocBLAS_optional_runtime_deps therock-aocl-blas)       # AOCL-BLAS (Linux & Windows)
-endif()
-
-# AOCL-BLAS is a static library that must be built before rocBLAS links against it
-set(rocBLAS_optional_build_deps)
-if(THEROCK_BUILD_TESTING)
-  list(APPEND rocBLAS_optional_build_deps therock-aocl-blas)
 endif()
 
 therock_cmake_subproject_declare(rocBLAS
@@ -210,7 +204,6 @@ therock_cmake_subproject_declare(rocBLAS
     rocm-cmake
     therock-googletest
     therock-msgpack-cxx
-    ${rocBLAS_optional_build_deps}
   RUNTIME_DEPS
     hip-clr
     hipBLASLt

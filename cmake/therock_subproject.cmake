@@ -785,14 +785,14 @@ function(therock_cmake_subproject_activate target_name)
     string(APPEND _init_contents "set(${_var_name} \"@${_var_name}@\" CACHE STRING \"\" FORCE)\n")
   endforeach()
   # Process dependencies. We process runtime deps first so that they take precedence
-  # over build deps (first wins). Both come from the dist directory because if
-  # build tools are needed from them, only the dist dir is guaranteed to have
-  # all runtime deps met.
+  # over build deps (first wins). Runtime deps use DIST_DIR (merged layout).
+  # Build deps use STAGE_DIR so find_package configs are found from the dep's
+  # install tree as soon as the dep has staged (no reliance on dist merge).
   string(APPEND _init_contents "set(THEROCK_PROVIDED_PACKAGES)\n")
   set(_deps_contents)
   set(_deps_provided)
   _therock_cmake_subproject_setup_deps(_deps_contents _deps_provided THEROCK_DIST_DIR ${_runtime_deps})
-  _therock_cmake_subproject_setup_deps(_deps_contents _deps_provided THEROCK_DIST_DIR ${_build_deps})
+  _therock_cmake_subproject_setup_deps(_deps_contents _deps_provided THEROCK_STAGE_DIR ${_build_deps})
 
   string(APPEND _init_contents "${_deps_contents}")
   string(APPEND _init_contents "set(THEROCK_IGNORE_PACKAGES \"@_ignore_packages@\")\n")
