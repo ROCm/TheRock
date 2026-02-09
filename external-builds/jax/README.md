@@ -33,8 +33,8 @@ For upstream JAX development references, see:
 Support for JAX is provided via stable release branches of
 [ROCm/rocm-jax](https://github.com/ROCm/rocm-jax).
 
-| JAX version | Linux                                                                                                          | Windows          |
-| ----------- | -------------------------------------------------------------------------------------------------------------- | ---------------- |
+| JAX version | Linux                                                                                                           | Windows          |
+| ----------- | --------------------------------------------------------------------------------------------------------------- | ---------------- |
 | 0.8.0       | ✅ Supported via [ROCm/rocm-jax `rocm-jaxlib-v0.8.0`](https://github.com/ROCm/rocm-jax/tree/rocm-jaxlib-v0.8.0) | ❌ Not supported |
 
 See also:
@@ -82,14 +82,14 @@ provide it via **tarballs** with arbitrary install locations.
    pushd rocm-jax
    ```
 
-2. Choose your configuration:
+1. Choose your configuration:
 
    - **Python version**: e.g. `3.12`
    - **TheRock tarball**: A tarball URL, a local tarball file path, or a
      directory containing a ROCm installation. Nightly tarballs are available
      at <https://rocm.nightlies.amd.com/tarball/>.
 
-3. Build all wheels:
+1. Build all wheels:
 
    ```bash
    python3 build/ci_build \
@@ -100,7 +100,7 @@ provide it via **tarballs** with arbitrary install locations.
      dist_wheels
    ```
 
-4. Locate built wheels:
+1. Locate built wheels:
 
    After a successful build, wheels will be available in:
 
@@ -131,20 +131,20 @@ For more detailed build options (including building `jax_rocm7_plugin` and
    popd
    ```
 
-2. Create a virtual environment:
+1. Create a virtual environment:
 
    ```bash
    python3 -m venv jax_test_env
    source jax_test_env/bin/activate
    ```
 
-3. Install requirements:
+1. Install requirements:
 
    ```bash
    pip install -r external-builds/jax/requirements-jax.txt
    ```
 
-4. Install ROCm from TheRock tarball:
+1. Install ROCm from TheRock tarball:
 
    ```bash
    python build_tools/install_rocm_from_artifacts.py \
@@ -156,7 +156,7 @@ For more detailed build options (including building `jax_rocm7_plugin` and
    For detailed instructions and example usage, see the
    [TheRock RELEASES.md](https://github.com/ROCm/TheRock/blob/main/RELEASES.md#installing-tarballs-using-install_rocm_from_artifactspy).
 
-5. Install JAX wheels from the package index:
+1. Install JAX wheels from the package index:
 
    ```bash
    # Install jaxlib, jax_rocm7_plugin, and jax_rocm7_pjrt from the GPU-family index
@@ -167,7 +167,7 @@ For more detailed build options (including building `jax_rocm7_plugin` and
    pip install jax==<jax_version>
    ```
 
-6. Run JAX tests:
+1. Run JAX tests:
 
    ```bash
    pytest jax_tests/tests/multi_device_test.py -q --log-cli-level=INFO
