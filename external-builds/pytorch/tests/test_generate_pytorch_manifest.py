@@ -123,31 +123,29 @@ class GeneratePyTorchSourcesManifestTest(unittest.TestCase):
         self.assertTrue(manifest_path.exists(), f"Missing manifest: {manifest_path}")
 
         data = json.loads(manifest_path.read_text(encoding="utf-8"))
-        self.assertEqual(set(data.keys()), {"sources", "therock"})
 
-        sources = data["sources"]
-
-        self.assertEqual(sources["pytorch"]["commit"], pytorch_head)
+        # Flattened schema: sources are top-level alongside therock.
         self.assertEqual(
-            sources["pytorch"]["repo"], "https://github.com/ROCm/pytorch.git"
+            set(data.keys()),
+            {"pytorch", "pytorch_audio", "pytorch_vision", "triton", "therock"},
         )
 
-        self.assertEqual(sources["pytorch_audio"]["commit"], audio_head)
+        self.assertEqual(data["pytorch"]["commit"], pytorch_head)
+        self.assertEqual(data["pytorch"]["repo"], "https://github.com/ROCm/pytorch.git")
+
+        self.assertEqual(data["pytorch_audio"]["commit"], audio_head)
         self.assertEqual(
-            sources["pytorch_audio"]["repo"], "https://github.com/pytorch/audio.git"
+            data["pytorch_audio"]["repo"], "https://github.com/pytorch/audio.git"
         )
 
-        self.assertEqual(sources["pytorch_vision"]["commit"], vision_head)
+        self.assertEqual(data["pytorch_vision"]["commit"], vision_head)
         self.assertEqual(
-            sources["pytorch_vision"]["repo"], "https://github.com/pytorch/vision.git"
+            data["pytorch_vision"]["repo"], "https://github.com/pytorch/vision.git"
         )
 
-        self.assertEqual(sources["triton"]["commit"], triton_head)
-        self.assertEqual(
-            sources["triton"]["repo"], "https://github.com/ROCm/triton.git"
-        )
+        self.assertEqual(data["triton"]["commit"], triton_head)
+        self.assertEqual(data["triton"]["repo"], "https://github.com/ROCm/triton.git")
 
-        # Your script appends ".git" to therock repo.
         self.assertEqual(data["therock"]["repo"], "https://github.com/ROCm/TheRock.git")
         self.assertEqual(
             data["therock"]["commit"], "b3eda956a19d0151cbb4699739eb71f62596c8bb"
@@ -193,7 +191,12 @@ class GeneratePyTorchSourcesManifestTest(unittest.TestCase):
         self.assertTrue(manifest_path.exists(), f"Missing manifest: {manifest_path}")
 
         data = json.loads(manifest_path.read_text(encoding="utf-8"))
-        self.assertNotIn("triton", data["sources"])
+
+        self.assertIn("therock", data)
+        self.assertIn("pytorch", data)
+        self.assertIn("pytorch_audio", data)
+        self.assertIn("pytorch_vision", data)
+        self.assertNotIn("triton", data)
 
 
 if __name__ == "__main__":

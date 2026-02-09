@@ -153,17 +153,18 @@ def main() -> None:
         )
     branch = ref[len(prefix) :]
 
-    manifest = {
-        "sources": sources,
-        "therock": {
-            "repo": f"{server_url}/{repo}.git",
-            "commit": sha,
-            "branch": branch,
-        },
+    manifest: dict[str, object] = {}
+    manifest.update(sources)
+
+    # Add TheRock Last
+    manifest["therock"] = {
+        "repo": f"{server_url}/{repo}.git",
+        "commit": sha,
+        "branch": branch,
     }
 
     out_path.write_text(
-        json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        json.dumps(manifest, indent=2, sort_keys=False) + "\n", encoding="utf-8"
     )
     print(f"[pytorch-sources-manifest] wrote {out_path}")
 
