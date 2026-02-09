@@ -45,6 +45,7 @@ on:
       jax_ref:
         description: "rocm-jax repository ref/branch to check out"
         type: string
+        default: "rocm-jaxlib-v0.8.0"
   workflow_dispatch:
     inputs:
       amdgpu_family:
@@ -282,6 +283,9 @@ jobs:
           echo "Copying exact tested wheels to release S3 bucket..."
           # Sanitize ROCM_VERSION: replace '+' with '.' for PEP 440 compliance
           # (local version label can only contain alphanumerics and periods)
+          # Example:
+          #   ROCM_VERSION="7.12.0.dev0+e1a5d395eeb7c6c168724df06a05d0ea8e5dde0f"
+          #   SANITIZED_ROCM_VERSION="7.12.0.dev0.e1a5d395eeb7c6c168724df06a05d0ea8e5dde0f"
           SANITIZED_ROCM_VERSION=$(echo "${ROCM_VERSION}" | tr '+' '.')
           aws s3 cp \
             s3://${S3_BUCKET_PY}/${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}/ \
