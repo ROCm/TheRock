@@ -137,7 +137,6 @@ artifact_groups = ["third-party-sysdeps", "base"]
 description = "Compiler, runtimes, and core profiling"
 artifact_groups = [
     "compiler",
-    "core-amdsmi",
     "core-runtime",
     "third-party-libs",
     "hip-runtime",
@@ -209,12 +208,6 @@ type = "generic"
 artifact_group_deps = ["base", "third-party-sysdeps"]
 source_sets = ["rocm-systems"]
 
-[artifact_groups.core-amdsmi]
-description = "AMD SMI tool (amdsmi)"
-type = "generic"
-artifact_group_deps = ["base", "third-party-sysdeps"]
-source_sets = ["rocm-systems"]
-
 [artifact_groups.compiler]
 description = "AMD LLVM toolchain and compiler infrastructure"
 type = "generic"
@@ -274,9 +267,9 @@ source_sets = ["rocm-systems"]  # rocprofiler-sdk is in rocm-systems
 [artifact_groups.dctools-core]
 description = "Data center management tools with minimal dependencies"
 type = "generic"
-artifact_group_deps = ["core-runtime", "core-amdsmi", "profiler-core"]
+artifact_group_deps = ["core-runtime", "profiler-core"]
 # TODO: rocm-systems included for projects/hip/VERSION (see CMakeLists.txt)
-source_sets = ["base", "rocm-systems"]  # RDC uses amdsmi from core-amdsmi
+source_sets = ["base", "rocm-systems"]  # RDC uses amdsmi from base
 
 # Future artifact groups
 # [artifact_groups.dctools-rocm]
@@ -441,14 +434,6 @@ artifact_group = "core-runtime"
 type = "target-neutral"
 artifact_deps = ["base", "sysdeps", "amd-llvm"]
 feature_name = "CORE_RUNTIME"
-feature_group = "CORE"
-disable_platforms = ["windows"]
-
-[artifacts.core-amdsmi]
-artifact_group = "core-amdsmi"
-type = "target-neutral"
-artifact_deps = ["base", "sysdeps"]
-feature_name = "CORE_AMDSMI"
 feature_group = "CORE"
 disable_platforms = ["windows"]
 
