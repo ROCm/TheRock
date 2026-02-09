@@ -113,6 +113,7 @@ jobs:
           TOTAL_SHARDS: ${{ fromJSON(inputs.component).total_shards }}
           TEST_TYPE: ${{ fromJSON(inputs.component).test_type }}
           ASAN_OPTIONS: "detect_odr_violation=0:quarantine_size_mb=600"
+          HSA_XNACK: 1
         run: |
           ${{ fromJSON(inputs.component).test_script }}
 
