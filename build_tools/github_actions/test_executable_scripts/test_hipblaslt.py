@@ -26,7 +26,7 @@ environ_vars["GTEST_SHARD_INDEX"] = str(int(SHARD_INDEX) - 1)
 environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 
 if is_asan():
-    environ_vars["HSA_XNACK"] = 1
+    environ_vars["HSA_XNACK"] = "1"
 
 # If smoke tests are enabled, we run smoke tests only.
 # Otherwise, we run the normal test suite
