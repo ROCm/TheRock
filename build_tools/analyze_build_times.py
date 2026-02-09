@@ -25,6 +25,7 @@ CI Usage:
 """
 
 import argparse
+import json
 import os
 import re
 import sys
@@ -280,6 +281,101 @@ def analyze_tasks(
     return projects
 
 
+def generate_timeline_data(
+    tasks: List[Task], build_dir: Path
+) -> tuple[str, int, int]:
+    """Generate timeline data for visualization.
+    
+    Returns:
+        tuple: (JSON string of timeline data, min_time, max_time)
+    """
+    projects_timeline: Dict[str, Dict[str, List[tuple]]] = defaultdict(
+        lambda: defaultdict(list)
+    )
+    seen = set()
+    build_prefix = str(build_dir.resolve())
+    
+    # Collect all tasks by project and phase
+    for task in tasks:
+        output = task.output
+        if output.startswith(build_prefix):
+            output = output[len(build_prefix):].lstrip("/")
+            
+        key = (output, task.start, task.end)
+        if key in seen:
+            continue
+        seen.add(key)
+        
+        name, category, phase = parse_output_path(output)
+        if not name or not phase:
+            continue
+            
+        projects_timeline[name][phase].append((task.start, task.end))
+    
+    # Calculate overall time bounds
+    if not tasks:
+        return "[]", 0, 0
+        
+    min_time = min(task.start for task in tasks)
+    max_time = max(task.end for task in tasks)
+    
+    # Build timeline items with merged phases
+    timeline_items = []
+    for project_name, phases in projects_timeline.items():
+        project_item = {
+            "name": project_name,
+            "phases": []
+        }
+        
+        # Process each phase
+        for phase_name, intervals in phases.items():
+            if not intervals:
+                continue
+                
+            # Merge overlapping intervals to get accurate phase timeline
+            merged = merge_intervals(intervals)
+            
+            for start, end in merged:
+                project_item["phases"].append({
+                    "phase": phase_name,
+                    "start": start,
+                    "end": end,
+                    "duration": end - start
+                })
+        
+        if project_item["phases"]:
+            # Sort phases by start time
+            project_item["phases"].sort(key=lambda x: x["start"])
+            # Calculate total duration
+            project_item["total_duration"] = sum(p["duration"] for p in project_item["phases"])
+            timeline_items.append(project_item)
+    
+    # Sort by total duration (descending)
+    timeline_items.sort(key=lambda x: x["total_duration"], reverse=True)
+    
+    return json.dumps(timeline_items), min_time, max_time
+
+
+def merge_intervals(intervals: List[tuple[int, int]]) -> List[tuple[int, int]]:
+    """Merge overlapping time intervals."""
+    if not intervals:
+        return []
+    
+    sorted_intervals = sorted(intervals)
+    merged = [sorted_intervals[0]]
+    
+    for current in sorted_intervals[1:]:
+        last = merged[-1]
+        if current[0] <= last[1]:
+            # Overlapping - merge
+            merged[-1] = (last[0], max(last[1], current[1]))
+        else:
+            # Non-overlapping - add new
+            merged.append(current)
+    
+    return merged
+
+
 # =============================================================================
 # Report Generation
 # =============================================================================
@@ -444,6 +540,9 @@ def generate_report(
 
     # Generate build info (system info + build times)
     system_html = generate_system_info_html(tasks)
+    
+    # Generate timeline data
+    timeline_json, min_time, max_time = generate_timeline_data(tasks, build_dir)
 
     # Load template and generate output
     template_path = Path(__file__).resolve().parent / "report_build_time_template.html"
@@ -455,6 +554,9 @@ def generate_report(
             .replace("{{ROCM_TABLE}}", rocm_html)
             .replace("{{DEP_TABLE}}", dep_html)
             .replace("{{COMP_SUMMARY}}", comp_summary_html)
+            .replace("{{TIMELINE_DATA}}", timeline_json)
+            .replace("{{MIN_TIME}}", str(min_time))
+            .replace("{{MAX_TIME}}", str(max_time))
         )
         output_file.write_text(html)
         print(f"HTML report generated at: {output_file}")

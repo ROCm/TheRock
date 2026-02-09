@@ -18,6 +18,203 @@
         .system-info p { margin: 5px 0; color: #555; }
         .system-info span { font-weight: bold; color: #2980b9; }
         .footer { margin-top: 30px; text-align: center; font-size: 0.9em; color: #777; }
+        
+        /* Timeline styles */
+        .timeline-container { 
+            background-color: white; 
+            padding: 20px; 
+            border-radius: 8px; 
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1); 
+            margin-top: 20px;
+            position: relative;
+        }
+        
+        .timeline-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .timeline-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        .fullscreen-btn, .filter-btn {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s;
+        }
+        
+        .fullscreen-btn:hover, .filter-btn:hover {
+            background-color: #2980b9;
+        }
+        
+        .filter-input {
+            padding: 6px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            width: 200px;
+        }
+        
+        .timeline-view {
+            overflow-x: auto;
+            overflow-y: auto;
+            max-height: 600px;
+        }
+        
+        .timeline-axis {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            padding: 0 150px 0 10px;
+            font-size: 12px;
+            color: #666;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 5px;
+        }
+        
+        .timeline-items {
+            position: relative;
+        }
+        
+        .timeline-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            min-height: 30px;
+        }
+        
+        .timeline-label {
+            width: 150px;
+            padding-right: 10px;
+            font-size: 13px;
+            font-weight: 500;
+            color: #2c3e50;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            flex-shrink: 0;
+        }
+        
+        .timeline-bar-container {
+            flex-grow: 1;
+            height: 30px;
+            position: relative;
+            background-color: #f8f8f8;
+            border-radius: 4px;
+        }
+        
+        .timeline-bar {
+            position: absolute;
+            height: 100%;
+            display: flex;
+            border-radius: 4px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+        
+        .phase-segment {
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            color: white;
+            font-weight: 500;
+            transition: opacity 0.2s;
+            cursor: pointer;
+            position: relative;
+        }
+        
+        .phase-segment:hover {
+            opacity: 0.8;
+        }
+        
+        .phase-segment.configure { background-color: #3498db; }
+        .phase-segment.build { background-color: #e74c3c; }
+        .phase-segment.install { background-color: #2ecc71; }
+        .phase-segment.package { background-color: #f39c12; }
+        .phase-segment.download { background-color: #9b59b6; }
+        .phase-segment.update { background-color: #1abc9c; }
+        
+        .phase-tooltip {
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            white-space: nowrap;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+            z-index: 1000;
+            margin-bottom: 5px;
+        }
+        
+        .phase-segment:hover .phase-tooltip {
+            opacity: 1;
+        }
+        
+        .timeline-legend {
+            display: flex;
+            gap: 20px;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #ddd;
+            flex-wrap: wrap;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+        }
+        
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 3px;
+        }
+        
+        /* Fullscreen styles */
+        .timeline-container.fullscreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            max-width: 100vw;
+            max-height: 100vh;
+            margin: 0;
+            border-radius: 0;
+            z-index: 9999;
+            overflow: auto;
+        }
+        
+        .timeline-container.fullscreen .timeline-view {
+            max-height: calc(100vh - 200px);
+        }
+        
+        .no-results {
+            text-align: center;
+            padding: 20px;
+            color: #999;
+            font-style: italic;
+        }
     </style>
 </head>
 <body>
@@ -25,6 +222,51 @@
 
     <!-- Build Information -->
     {{SYSTEM_INFO}}
+
+    <!-- Timeline Visualization -->
+    <h2>Build Timeline Visualization</h2>
+    <div class="timeline-container" id="timeline-container">
+        <div class="timeline-header">
+            <div class="timeline-controls">
+                <input type="text" class="filter-input" id="timeline-filter" placeholder="Filter projects...">
+                <button class="filter-btn" onclick="applyFilter()">Filter</button>
+                <button class="filter-btn" onclick="resetFilter()">Reset</button>
+            </div>
+            <button class="fullscreen-btn" onclick="toggleFullscreen()">⛶ Fullscreen</button>
+        </div>
+        
+        <div class="timeline-view">
+            <div class="timeline-axis" id="timeline-axis"></div>
+            <div class="timeline-items" id="timeline-items"></div>
+        </div>
+        
+        <div class="timeline-legend">
+            <div class="legend-item">
+                <div class="legend-color configure"></div>
+                <span>Configure</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color build"></div>
+                <span>Build</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color install"></div>
+                <span>Install</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color package"></div>
+                <span>Package</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color download"></div>
+                <span>Download</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color update"></div>
+                <span>Update</span>
+            </div>
+        </div>
+    </div>
 
     <!-- ROCm Components Table Placeholder -->
     {{ROCM_TABLE}}
@@ -36,5 +278,129 @@
     {{COMP_SUMMARY}}
 
     <div class="footer">Generated by analyze_build_times.py</div>
+    
+    <script>
+        // Timeline data injected from Python
+        const timelineData = {{TIMELINE_DATA}};
+        const minTime = {{MIN_TIME}};
+        const maxTime = {{MAX_TIME}};
+        const totalDuration = maxTime - minTime;
+        
+        let filteredData = [...timelineData];
+        
+        function formatTime(ms) {
+            const minutes = ms / 60000;
+            const hours = Math.floor(minutes / 60);
+            const mins = Math.floor(minutes % 60);
+            const secs = Math.floor((ms % 60000) / 1000);
+            
+            if (hours > 0) {
+                return `${hours}h ${mins}m`;
+            } else if (mins > 0) {
+                return `${mins}m ${secs}s`;
+            } else {
+                return `${secs}s`;
+            }
+        }
+        
+        function renderTimeline() {
+            const axisContainer = document.getElementById('timeline-axis');
+            const itemsContainer = document.getElementById('timeline-items');
+            
+            // Render time axis
+            const numTicks = 10;
+            let axisHTML = '';
+            for (let i = 0; i <= numTicks; i++) {
+                const time = minTime + (totalDuration * i / numTicks);
+                const relativeTime = time - minTime;
+                axisHTML += `<span>${formatTime(relativeTime)}</span>`;
+            }
+            axisContainer.innerHTML = axisHTML;
+            
+            // Render timeline items
+            if (filteredData.length === 0) {
+                itemsContainer.innerHTML = '<div class="no-results">No projects match the filter</div>';
+                return;
+            }
+            
+            let itemsHTML = '';
+            filteredData.forEach(project => {
+                itemsHTML += `<div class="timeline-item">`;
+                itemsHTML += `<div class="timeline-label" title="${project.name}">${project.name}</div>`;
+                itemsHTML += `<div class="timeline-bar-container">`;
+                
+                // Create segments for each phase
+                let segmentsHTML = '';
+                project.phases.forEach(phase => {
+                    const startPercent = ((phase.start - minTime) / totalDuration) * 100;
+                    const widthPercent = (phase.duration / totalDuration) * 100;
+                    const phaseClass = phase.phase.toLowerCase();
+                    
+                    // Only show label if segment is wide enough
+                    const showLabel = widthPercent > 3;
+                    const label = showLabel ? phase.phase : '';
+                    
+                    segmentsHTML += `
+                        <div class="phase-segment ${phaseClass}" 
+                             style="left: ${startPercent}%; width: ${widthPercent}%;">
+                            ${label}
+                            <div class="phase-tooltip">
+                                ${phase.phase}: ${formatTime(phase.duration)}
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                itemsHTML += `<div class="timeline-bar">${segmentsHTML}</div>`;
+                itemsHTML += `</div></div>`;
+            });
+            
+            itemsContainer.innerHTML = itemsHTML;
+        }
+        
+        function applyFilter() {
+            const filterText = document.getElementById('timeline-filter').value.toLowerCase();
+            if (!filterText) {
+                filteredData = [...timelineData];
+            } else {
+                filteredData = timelineData.filter(project => 
+                    project.name.toLowerCase().includes(filterText)
+                );
+            }
+            renderTimeline();
+        }
+        
+        function resetFilter() {
+            document.getElementById('timeline-filter').value = '';
+            filteredData = [...timelineData];
+            renderTimeline();
+        }
+        
+        function toggleFullscreen() {
+            const container = document.getElementById('timeline-container');
+            container.classList.toggle('fullscreen');
+            
+            const btn = event.target;
+            if (container.classList.contains('fullscreen')) {
+                btn.textContent = '✕ Exit Fullscreen';
+            } else {
+                btn.textContent = '⛶ Fullscreen';
+            }
+        }
+        
+        // Handle ESC key to exit fullscreen
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                const container = document.getElementById('timeline-container');
+                if (container.classList.contains('fullscreen')) {
+                    container.classList.remove('fullscreen');
+                    document.querySelector('.fullscreen-btn').textContent = '⛶ Fullscreen';
+                }
+            }
+        });
+        
+        // Initialize timeline on page load
+        renderTimeline();
+    </script>
 </body>
 </html>
