@@ -15,6 +15,17 @@ environ_vars = os.environ.copy()
 environ_vars["CC"] = "clang"
 environ_vars["CXX"] = "clang++"
 
+# Set up pip
+setup_cmd = [
+    f"{PYTHON_EXECUTABLE}",
+    "-m",
+    "ensurepip",
+    "--upgrade",
+]
+logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(setup_cmd)}")
+subprocess.run(setup_cmd, cwd=THEROCK_DIR, check=True, env=environ_vars)
+
+# Install requirements
 requirements_dir = f"{THEROCK_OUTPUT_DIR}/share/rocprofiler-sdk/tests"
 cmd = [
     f"{PYTHON_EXECUTABLE}",
