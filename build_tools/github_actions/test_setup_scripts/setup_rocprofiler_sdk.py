@@ -3,11 +3,13 @@ import os
 import shlex
 import subprocess
 from pathlib import Path
-import sys
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 THEROCK_OUTPUT_DIR = str(THEROCK_DIR / "build")
+
+VENV_DIR = os.getenv("VENV_DIR")
+PYTHON_EXECUTABLE = VENV_DIR + "/bin/python"
 
 environ_vars = os.environ.copy()
 environ_vars["CC"] = "clang"
@@ -15,7 +17,7 @@ environ_vars["CXX"] = "clang++"
 
 requirements_dir = f"{THEROCK_OUTPUT_DIR}/share/rocprofiler-sdk/tests"
 cmd = [
-    sys.executable,
+    f"{PYTHON_EXECUTABLE}",
     "-m",
     "pip",
     "install",
