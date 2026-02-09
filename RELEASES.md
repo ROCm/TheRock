@@ -278,13 +278,14 @@ also install `torch`, `torchaudio`, and `torchvision`.
 >
 >   - [Supported PyTorch versions in TheRock](https://github.com/ROCm/TheRock/tree/main/external-builds/pytorch#supported-pytorch-versions)
 >   - [Installing previous versions of PyTorch](https://pytorch.org/get-started/previous-versions/)
->   - [torchvision installation - compatixbility matrix](https://github.com/pytorch/vision?tab=readme-ov-file#installation)
->   - [torchaudio installation - compatixbility matrix](https://docs.pytorch.org/audio/main/installation.html#compatibility-matrix)
+>   - [torchvision installation - compatibility matrix](https://github.com/pytorch/vision?tab=readme-ov-file#installation)
+>   - [torchaudio installation - compatibility matrix](https://docs.pytorch.org/audio/main/installation.html#compatibility-matrix)
 
-> [!TIP]
-> The `torch` packages depend on `rocm[libraries]`, so ROCm packages should
-> be installed automatically for you and you do not need to explicitly install
-> ROCm first.
+> [!WARNING]
+> The `torch` packages depend on `rocm[libraries]`, so the compatible ROCm packages
+> should be installed automatically for you and you do not need to explicitly install
+> ROCm first. If ROCm is already installed this may result in a downgrade if the
+> `torch` wheel to be installed requires a different version.
 
 > [!TIP]
 > If you previously installed PyTorch with the `pytorch-triton-rocm` package,
