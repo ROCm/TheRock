@@ -94,6 +94,14 @@ endif()
 # hipBLASLt
 ##############################################################################
 
+if(NOT WIN32)
+  if(NOT THEROCK_ENABLE_CORE_AMDSMI)
+    message(FATAL_ERROR
+      "hipBLASLt requires THEROCK_ENABLE_CORE_AMDSMI on Linux (amd_smi package)."
+    )
+  endif()
+endif()
+
 set(hipBLASLt_optional_deps)
 if(NOT WIN32)
   # hipBLASLt is hard-coded to not expect rocm-smi and amdsmi on Windows.

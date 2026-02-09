@@ -287,7 +287,7 @@ source_sets = ["base", "rocm-systems"]  # RDC uses amdsmi from core-amdsmi
 [artifact_groups.profiler-apps]
 description = "Profiler applications and analysis tools"
 type = "generic"
-artifact_group_deps = ["profiler-core", "compiler"]
+artifact_group_deps = ["profiler-core", "compiler", "core-amdsmi"]
 source_sets = ["rocm-systems", "profiler-extras"]  # rocprofiler-systems + trace decoder
 
 [artifact_groups.iree-libs]
@@ -494,7 +494,7 @@ feature_group = "CORE"  # Part of core, enabled by default
 [artifacts.blas]
 artifact_group = "math-libs"
 type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip", "host-blas", "host-suite-sparse", "rocprofiler-sdk"]
+artifact_deps = ["core-runtime", "core-hip", "core-amdsmi", "host-blas", "host-suite-sparse", "rocprofiler-sdk"]
 split_databases = ["rocblas", "hipblaslt"]
 
 [artifacts.fft]
@@ -578,7 +578,7 @@ disable_platforms = ["windows"]
 [artifacts.rccl]
 artifact_group = "comm-libs"
 type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip", "hipify", "rocprofiler-sdk"]
+artifact_deps = ["core-runtime", "core-hip", "hipify", "rocprofiler-sdk", "core-amdsmi"]
 disable_platforms = ["windows"]
 
 # --- Profiler Tools ---
@@ -608,7 +608,7 @@ disable_platforms = ["windows"]
 [artifacts.rocprofiler-systems]
 artifact_group = "profiler-apps"
 type = "target-neutral"
-artifact_deps = ["amd-llvm", "core-hip", "rocprofiler-sdk"]
+artifact_deps = ["amd-llvm", "core-hip", "rocprofiler-sdk", "core-amdsmi"]
 feature_name = "ROCPROFSYS"
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
