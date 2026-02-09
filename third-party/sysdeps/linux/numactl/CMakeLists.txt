@@ -62,7 +62,7 @@ if(NOT PATCHELF)
 endif()
 
 # Find static libatomic to avoid runtime dependency on libatomic.so.1
-# Only attempt this with GCC 
+# Only attempt this with GCC
 if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
     execute_process(
       COMMAND ${CMAKE_C_COMPILER} -print-file-name=libatomic.a
