@@ -77,11 +77,11 @@ logging.basicConfig(level=logging.INFO)
 ##############################################
 
 
-def get_available_gpu_exclusion_tests():
+def get_available_gpu_suite_tests():
     """
-    Get all available GPU exclusion test architectures from ctest -N.
+    Get all available specific GPU tests from ctest -N.
 
-    Parses test names in the format: {target_name}-{category}-{gpu_arch}-exclude
+    Parses test names in the format: {target_name}-{category}-{gpu_arch}-suite
     Returns a set of gpu_arch strings (e.g., 'gfx1150', 'gfx11X', 'gfx950').
     """
     try:
@@ -94,20 +94,19 @@ def get_available_gpu_exclusion_tests():
 
         gpu_archs = set()
         # Parse output for test names
-        # Looking for pattern: Test #N: name-category-gpuarch-exclude
-        # Example: Test #123: miopen_gtest-quick-gfx1150-exclude
+        # Looking for pattern: Test #N: name-category-gpuarch-suite
+        # Example: Test #123: miopen_gtest-quick-gfx1150-suite
         for line in result.stdout.split("\n"):
-            # Look for lines containing test names with "-exclude" suffix
-            if "-exclude" in line and "Test #" in line:
+            # Look for lines containing test names with "-suite" suffix
+            if "-suite" in line and "Test #" in line:
                 # Extract the test name
-                # Format: "Test #123: miopen_gtest-quick-gfx1150-exclude"
                 match = re.search(r"Test\s+#\d+:\s+(.+)", line)
                 if match:
                     test_name = match.group(1).strip()
-                    # Extract gpu_arch from pattern: *-{category}-{gpu_arch}-exclude
+                    # Extract gpu_arch from pattern: *-{category}-{gpu_arch}-suite
                     # Split from the right to get the parts
                     parts = test_name.split("-")
-                    if len(parts) >= 3 and parts[-1] == "exclude":
+                    if len(parts) >= 3 and parts[-1] == "suite":
                         # The gpu_arch is the second-to-last part
                         gpu_arch = parts[-2]
                         # Verify it looks like a GPU arch (starts with gfx)
@@ -182,22 +181,22 @@ def build_ctest_command(category, gpu_arch, available_gpu_archs):
     )
 
     if gpu_arch.lower() in ["generic", "none", ""]:
-        # For generic/unspecified GPU, exclude all GPU-specific tests
+        # For generic/unspecified GPU, exclude all GPU-specific suite tests
         cmd.extend(["-LE", "ex_gpu"])
         return cmd
 
-    # Find the appropriate GPU exclusion architecture
+    # Find the appropriate GPU suite
     matching_arch = find_matching_gpu_arch(gpu_arch, available_gpu_archs)
 
     if matching_arch:
-        # Run the specific GPU exclusion test using the ex_gpu label
+        # Run the specific GPU suite using the ex_gpu label
         gpu_label = f"ex_gpu_{matching_arch}"
         cmd.extend(["-L", gpu_label])
-        print(f"# Using GPU exclusion label: {gpu_label}")
+        print(f"# Using GPU suite label: {gpu_label}")
     else:
-        # No specific GPU exclusion found, run standard tests excluding all GPU-specific ones
+        # No specific GPU suite found, run standard tests excluding all GPU-specific ones
         cmd.extend(["-LE", "ex_gpu"])
-        print(f"# No GPU exclusion found for {gpu_arch}, excluding all ex_gpu tests")
+        print(f"# No GPU suite found for {gpu_arch}, excluding all ex_gpu tests")
 
     return cmd
 
@@ -229,15 +228,15 @@ def main():
     print(f"# AMDGPU_FAMILIES: {AMDGPU_FAMILIES} -> GPU Architecture: {gpu_arch}")
     print()
 
-    # Get available GPU exclusion tests from ctest
-    print("# Discovering available GPU exclusion tests...")
-    available_gpu_archs = get_available_gpu_exclusion_tests()
+    # Get available GPU suite tests from ctest
+    print("# Discovering available GPU suite tests...")
+    available_gpu_archs = get_available_gpu_suite_tests()
 
     if available_gpu_archs:
-        print(f"# Found {len(available_gpu_archs)} GPU exclusion test(s)")
+        print(f"# Found {len(available_gpu_archs)} GPU suite test(s)")
         print(f"# Available GPU architectures: {sorted(available_gpu_archs)}")
     else:
-        print("# Warning: No GPU exclusion tests found")
+        print("# Warning: No GPU specific test suites available")
     print()
 
     # Build the ctest command
