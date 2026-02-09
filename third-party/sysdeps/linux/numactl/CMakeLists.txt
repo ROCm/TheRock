@@ -62,17 +62,24 @@ if(NOT PATCHELF)
 endif()
 
 # Find static libatomic to avoid runtime dependency on libatomic.so.1
-execute_process(
-  COMMAND ${CMAKE_C_COMPILER} -print-file-name=libatomic.a
-  OUTPUT_VARIABLE LIBATOMIC_STATIC
-  OUTPUT_STRIP_TRAILING_WHITESPACE
-  ERROR_QUIET
-)
-if(LIBATOMIC_STATIC AND EXISTS "${LIBATOMIC_STATIC}")
-  message(STATUS "Found static libatomic: ${LIBATOMIC_STATIC}")
-  set(NUMACTL_LIBS "${LIBATOMIC_STATIC}")
+# Only attempt this with GCC 
+if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
+    execute_process(
+      COMMAND ${CMAKE_C_COMPILER} -print-file-name=libatomic.a
+      OUTPUT_VARIABLE LIBATOMIC_STATIC
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      ERROR_QUIET
+    )
+    if(LIBATOMIC_STATIC AND EXISTS "${LIBATOMIC_STATIC}")
+      message(STATUS "Found static libatomic: ${LIBATOMIC_STATIC}")
+      set(NUMACTL_LIBS "${LIBATOMIC_STATIC}")
+    else()
+      message(STATUS "Static libatomic not found, will use system default if needed")
+      set(NUMACTL_LIBS "")
+    endif()
 else()
-  message(STATUS "Static libatomic not found, will use system default if needed")
+  # Non-GCC compiler - skip static libatomic lookup
+  message(WARNING "Non-GCC compiler, so skipping static libatomic linking")
   set(NUMACTL_LIBS "")
 endif()
 
