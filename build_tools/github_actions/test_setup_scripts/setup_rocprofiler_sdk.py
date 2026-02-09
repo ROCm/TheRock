@@ -9,11 +9,11 @@ THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 THEROCK_OUTPUT_DIR = str(THEROCK_DIR / "build")
 
 environ_vars = os.environ.copy()
+environ_vars["CC"] = "clang"
+environ_vars["CXX"] = "clang++"
 
 requirements_dir = f"{THEROCK_OUTPUT_DIR}/share/rocprofiler-sdk/tests"
 cmd = [
-    "CC=clang",
-    "CXX=clang++",
     "pip",
     "install",
     "-r",
