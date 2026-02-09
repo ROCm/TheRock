@@ -18,10 +18,21 @@ THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
+# Environment setup
+environ_vars = os.environ.copy()
 platform = os.getenv("RUNNER_OS", "linux").lower()
 is_windows = platform == "windows"
 
 origami_test_dir = Path(THEROCK_BIN_DIR).resolve() / "origami"
+
+# Set PYTHONPATH to help Python find the origami module
+python_paths = [
+    str(origami_test_dir),  # Where origami Python module is staged
+    environ_vars.get("PYTHONPATH", ""),
+]
+environ_vars["PYTHONPATH"] = os.pathsep.join(p for p in python_paths if p)
+
+logging.info(f"PYTHONPATH: {environ_vars.get('PYTHONPATH', '')}")
 
 # CTest runs both C++ (Catch2) tests and Python (pytest) tests
 cmd = [
@@ -37,4 +48,4 @@ if is_windows:
     cmd.extend(["-R", "origami-tests"])
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-subprocess.run(cmd, cwd=THEROCK_DIR, check=True)
+subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=environ_vars)
