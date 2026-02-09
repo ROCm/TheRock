@@ -94,22 +94,22 @@ endif()
 # hipBLASLt
 ##############################################################################
 
-if(NOT WIN32)
-  if(NOT THEROCK_ENABLE_CORE_AMDSMI)
-    message(FATAL_ERROR
-      "hipBLASLt requires THEROCK_ENABLE_CORE_AMDSMI on Linux (amd_smi package)."
-    )
-  endif()
+# hipBLASLt expects amd_smi on Linux.
+# It is only available if CORE_AMDSMI is enabled.
+if(NOT WIN32 AND NOT THEROCK_ENABLE_CORE_AMDSMI)
+  message(FATAL_ERROR
+    "hipBLASLt requires THEROCK_ENABLE_CORE_AMDSMI=ON on Linux (provides amd_smi package)."
+  )
 endif()
 
-set(hipBLASLt_optional_deps)
+set(hipBLASLt_runtime_deps)
 if(NOT WIN32)
-  # hipBLASLt is hard-coded to not expect rocm-smi and amdsmi on Windows.
-  if(TARGET amdsmi)
-    list(APPEND hipBLASLt_optional_deps amdsmi)
-  endif()
+  # Required on Linux.
+  list(APPEND hipBLASLt_runtime_deps amdsmi)
+
+  # rocm_smi_lib remains optional (guarded).
   if(TARGET rocm_smi_lib)
-    list(APPEND hipBLASLt_optional_deps rocm_smi_lib)
+    list(APPEND hipBLASLt_runtime_deps rocm_smi_lib)
   endif()
 endif()
 
@@ -156,11 +156,11 @@ therock_cmake_subproject_declare(hipBLASLt
     hip-clr
     therock-host-blas
     ${hipBLASLt_rocRoller_runtime_deps}
-    ${hipBLASLt_optional_deps}
+    ${hipBLASLt_runtime_deps}
     ${optional_profiler_deps}
 )
 therock_cmake_subproject_glob_c_sources(hipBLASLt
-SUBDIRS
+  SUBDIRS
     .
 )
 therock_cmake_subproject_provide_package(hipBLASLt hipblaslt lib/cmake/hipblaslt)
@@ -301,13 +301,22 @@ if(THEROCK_ENABLE_SPARSE)
   ##############################################################################
 
   if(NOT WIN32) # Remove this block once hipSPARSELt is supported on Windows
-    set(hipSPARSELt_optional_deps)
-    # hipSPARSELt is hard-coded to not expect rocm-smi and amdsmi on Windows.
-    if(TARGET amdsmi)
-      list(APPEND hipSPARSELt_optional_deps amdsmi)
+    # hipSPARSELt expects amd_smi on Linux.
+    # It is only available if CORE_AMDSMI is enabled.
+    if(NOT THEROCK_ENABLE_CORE_AMDSMI)
+      message(FATAL_ERROR
+        "hipSPARSELt requires THEROCK_ENABLE_CORE_AMDSMI=ON on Linux (provides amd_smi package)."
+      )
     endif()
+
+    set(hipSPARSELt_runtime_deps)
+
+    # Required on Linux.
+    list(APPEND hipSPARSELt_runtime_deps amdsmi)
+
+    # rocm_smi_lib is optional.
     if(TARGET rocm_smi_lib)
-      list(APPEND hipSPARSELt_optional_deps rocm_smi_lib)
+      list(APPEND hipSPARSELt_runtime_deps rocm_smi_lib)
     endif()
 
     therock_cmake_subproject_declare(hipSPARSELt
@@ -332,7 +341,7 @@ if(THEROCK_ENABLE_SPARSE)
       RUNTIME_DEPS
         hip-clr
         therock-host-blas
-        ${hipSPARSELt_optional_deps}
+        ${hipSPARSELt_runtime_deps}
         ${optional_profiler_deps}
     )
     therock_cmake_subproject_glob_c_sources(hipSPARSELt
