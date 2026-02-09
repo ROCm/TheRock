@@ -4,8 +4,12 @@ Upload the generated PyTorch manifest JSON to S3.
 """
 
 import argparse
+import os
+import platform
 import subprocess
 from pathlib import Path
+
+from github_actions.github_actions_utils import retrieve_bucket_info
 
 
 def run_command(cmd: list[str]) -> None:
@@ -21,7 +25,6 @@ def main() -> None:
         required=True,
         help="Wheel dist dir (contains manifests/).",
     )
-    ap.add_argument("--bucket", required=True, help="S3 bucket name (no s3:// prefix).")
     ap.add_argument("--run-id", required=True, help="GitHub run id (used in prefix).")
     ap.add_argument(
         "--platform",
@@ -64,10 +67,10 @@ def main() -> None:
     if not manifest_path.is_file():
         raise FileNotFoundError(f"Manifest not found: {manifest_path}")
 
-    dest_uri = (
-        f"s3://{args.bucket}/"
-        f"{args.run_id}-{args.platform}/manifests/{args.amdgpu_family}/{manifest_name}"
-    )
+    external_repo_path, bucket = retrieve_bucket_info()
+    bucket_uri = f"s3://{bucket}/{external_repo_path}{args.run_id}-{args.platform}"
+    dest_uri = f"{bucket_uri}/manifests/{args.amdgpu_family}/{manifest_name}"
+
     run_command(["aws", "s3", "cp", str(manifest_path), dest_uri])
 
 

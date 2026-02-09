@@ -106,7 +106,6 @@ jobs:
       # Note the \ here instead of /. This should be used from 'cmd' not 'bash'!
       PACKAGE_DIST_DIR: ${{ github.workspace }}\output\packages\dist
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
-      S3_BUCKET_ARTIFACTS: "therock-${{ inputs.release_type }}-artifacts"
       optional_build_prod_arguments: ""
     outputs:
       cp_version: ${{ env.cp_version }}
@@ -262,7 +261,6 @@ jobs:
         run: |
           python build_tools/github_actions/upload_pytorch_manifest.py \
             --dist-dir "${{ env.PACKAGE_DIST_DIR }}" \
-            --bucket "${{ env.S3_BUCKET_ARTIFACTS }}" \
             --run-id "${{ github.run_id }}" \
             --platform windows \
             --amdgpu-family "${{ inputs.amdgpu_family }}" \
