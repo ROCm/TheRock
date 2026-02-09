@@ -8,7 +8,7 @@ if(THEROCK_ENABLE_RCCL AND THEROCK_SANITIZER STREQUAL "")
   endif()
 
   # RCCL can optionally use amdsmi/rocm_smi_lib on Linux, but those may not be
-  # enabled/declared depending on feature selection (especially after moving amdsmi).
+  # enabled/declared depending on feature selection.
   set(_rccl_optional_runtime_deps)
   if(NOT WIN32)
     if(TARGET amdsmi)
