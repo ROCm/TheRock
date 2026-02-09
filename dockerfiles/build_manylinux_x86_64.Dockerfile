@@ -62,7 +62,6 @@ RUN ./install_googletest.sh "${GOOGLE_TEST_VERSION}" && rm -rf /install-googlete
 #
 # Development tool dependencies:
 #   texinfo, flag: rocprofiler-systems
-#   texinfo-tex: rocgdb
 RUN yum install -y epel-release && \
     yum remove -y gcc-toolset* && \
     yum install -y \
@@ -77,7 +76,6 @@ RUN yum install -y epel-release && \
       git-lfs \
     && yum install -y \
       texinfo \
-      texinfo-tex \
       flex \
     && yum clean all && \
     rm -rf /var/cache/yum
