@@ -18,7 +18,7 @@ FROM quay.io/pypa/manylinux_2_28_x86_64@sha256:d632b5e68ab39e59e128dcf0e59e438b2
 ENV PATH="/usr/local/therock-tools/bin:/opt/python/cp312-cp312/bin:${PATH}"
 
 ######## Pip Packages ########
-RUN pip install --upgrade pip setuptools==69.1.1 wheel==0.42.0 && \
+RUN pip install --upgrade pip setuptools==69.1.1 wheel==0.46.2 && \
 pip install CppHeaderParser==2.7.4 meson==1.7.0 tomli==2.2.1 PyYAML==6.0.2
 
 ######## Repo ########
@@ -62,7 +62,6 @@ RUN ./install_googletest.sh "${GOOGLE_TEST_VERSION}" && rm -rf /install-googlete
 #
 # Development tool dependencies:
 #   texinfo, flag: rocprofiler-systems
-#   texinfo-tex: rocgdb
 RUN yum install -y epel-release && \
     yum remove -y gcc-toolset* && \
     yum install -y \
@@ -77,7 +76,6 @@ RUN yum install -y epel-release && \
       git-lfs \
     && yum install -y \
       texinfo \
-      texinfo-tex \
       flex \
     && yum clean all && \
     rm -rf /var/cache/yum
@@ -89,6 +87,9 @@ RUN yum install -y epel-release && \
 # more dvc features may be used in upcoming sequenced builds
 # Also pinning pathspec because a new version of it breaks the private _DIR_MARK
 # API that dvc uses. When upgrading past ~3.64.0, then pin can likely be removed.
+#
+# Note: dvc[s3] version locking currently limits boto3>=1.41.0,<1.42.0
+#       in requirements.txt
 RUN pip install 'pathspec<0.13.0' 'dvc[s3]==3.62.0' && \
     which dvc && dvc --version || true
 

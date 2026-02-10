@@ -3,12 +3,14 @@ import os
 import shlex
 import subprocess
 from pathlib import Path
+import platform
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
+os_type = platform.system().lower()
 
 # GTest sharding
 SHARD_INDEX = os.getenv("SHARD_INDEX", 1)
@@ -27,7 +29,87 @@ logging.basicConfig(level=logging.INFO)
 
 ###########################################
 
+positive_filter = []
 negative_filter = []
+
+# Fusion #
+positive_filter.append("*Fusion*")
+
+# Batch Normalization #
+positive_filter.append("*/GPU_BNBWD*_*")
+positive_filter.append("*/GPU_BNOCLBWD*_*")
+positive_filter.append("*/GPU_BNFWD*_*")
+positive_filter.append("*/GPU_BNOCLFWD*_*")
+positive_filter.append("*/GPU_BNInfer*_*")
+positive_filter.append("*/GPU_BNActivInfer_*")
+positive_filter.append("*/GPU_BNOCLInfer*_*")
+positive_filter.append("*/GPU_bn_infer*_*")
+
+# CPU tests
+positive_filter.append("CPU_*")  # tests without a suite
+positive_filter.append("*/CPU_*")  # tests with a suite
+
+# Different
+positive_filter.append("*/GPU_Cat_*")
+positive_filter.append("*/GPU_ConvBiasActiv*")
+
+# Convolutions
+positive_filter.append("*/GPU_Conv*")
+positive_filter.append("*/GPU_conv*")
+
+# Solvers
+positive_filter.append("*/GPU_UnitTestConv*")
+
+# Misc
+
+positive_filter.append("*/GPU_GetitemBwd*")
+positive_filter.append("*/GPU_GLU_*")
+
+positive_filter.append("*/GPU_GroupConv*")
+positive_filter.append("*/GPU_GroupNorm_*")
+positive_filter.append("*/GPU_GRUExtra_*")
+positive_filter.append("*/GPU_TestActivation*")
+positive_filter.append("*/GPU_HipBLASLtGEMMTest*")
+positive_filter.append("*/GPU_KernelTuningNetTestConv*")
+positive_filter.append("*/GPU_Kthvalue_*")
+positive_filter.append("*/GPU_LayerNormTest*")
+positive_filter.append("*/GPU_LayoutTransposeTest_*")
+positive_filter.append("*/GPU_Lrn*")
+positive_filter.append("*/GPU_lstm_extra*")
+
+positive_filter.append("*/GPU_MultiMarginLoss_*")
+positive_filter.append("*/GPU_ConvNonpack*")
+positive_filter.append("*/GPU_PerfConfig_HipImplicitGemm*")
+positive_filter.append("*/GPU_AsymPooling2d_*")
+positive_filter.append("*/GPU_WidePooling2d_*")
+positive_filter.append("*/GPU_PReLU_*")
+positive_filter.append("*/GPU_Reduce*")
+positive_filter.append("*/GPU_reduce_custom_*")
+positive_filter.append("*/GPU_regression_issue_*")
+positive_filter.append("*/GPU_RNNExtra_*")
+positive_filter.append("*/GPU_RoPE*")
+positive_filter.append("*/GPU_SoftMarginLoss*")
+positive_filter.append("*/GPU_T5LayerNormTest_*")
+positive_filter.append("*/GPU_Op4dTensorGenericTest_*")
+positive_filter.append("*/GPU_TernaryTensorOps_*")
+positive_filter.append("*/GPU_unaryTensorOps_*")
+positive_filter.append("*/GPU_Transformers*")
+positive_filter.append("*/GPU_TunaNetTest_*")
+positive_filter.append("*/GPU_UnitTestActivationDescriptor_*")
+positive_filter.append("*/GPU_FinInterfaceTest*")
+positive_filter.append("*/GPU_VecAddTest_*")
+
+positive_filter.append("*/GPU_KernelTuningNetTest*")
+
+positive_filter.append("*/GPU_Bwd_Mha_*")
+positive_filter.append("*/GPU_Fwd_Mha_*")
+positive_filter.append("*/GPU_Softmax*")
+positive_filter.append("*/GPU_Dropout*")
+positive_filter.append("*/GPU_MhaBackward_*")
+positive_filter.append("*/GPU_MhaForward_*")
+positive_filter.append("*GPU_TestMhaFind20*")
+
+#############################################
 
 negative_filter.append("*DeepBench*")
 negative_filter.append("*MIOpenTestConv*")
@@ -69,9 +151,22 @@ negative_filter.append("Full/GPU_ConvGrpActivInfer3D_FP32*")  # 0 min 22 sec
 negative_filter.append("Full/GPU_ConvGrpActivInfer3D_FP16*")  # 0 min 16 sec
 
 # Flaky tests
-negative_filter.append(
-    "Smoke/GPU_UnitTestConvSolverHipImplicitGemmV4R1Fwd_BFP16.ConvHipImplicitGemmV4R1Fwd/0"
-)  # https://github.com/ROCm/TheRock/issues/1682
+TEST_TO_IGNORE = {
+    "gfx1151": {
+        # TODO(#3202): Re-enable tests once issues are resolved
+        "windows": ["Full/GPU_UnitTestConvSolverGemmBwdRestBwd_FP16.GemmBwdRest/0"]
+    }
+}
+
+if AMDGPU_FAMILIES in TEST_TO_IGNORE and os_type in TEST_TO_IGNORE[AMDGPU_FAMILIES]:
+    ignored_tests = TEST_TO_IGNORE[AMDGPU_FAMILIES][os_type]
+    for ignored_test in ignored_tests:
+        negative_filter.append(ignored_test)
+
+
+# Don't run while investigating to allow CI to pass
+# Jira Ticket ALMIOPEN-990
+negative_filter.append("*/GPU_MIOpenDriver*")
 
 # TODO(rocm-libraries#2266): re-enable test for gfx950-dcgpu
 if AMDGPU_FAMILIES == "gfx950-dcgpu":
@@ -144,6 +239,7 @@ smoke_filter = [
 # TODO(rocm-libraries#2266): re-enable test for gfx950-dcgpu
 if AMDGPU_FAMILIES != "gfx950-dcgpu":
     smoke_filter.append("*DBSync*")
+    positive_filter.append("*DBSync*")
 
 ####################################################
 
@@ -153,7 +249,9 @@ test_type = os.getenv("TEST_TYPE", "full")
 if test_type == "smoke":
     test_filter = "--gtest_filter=" + ":".join(smoke_filter)
 else:
-    test_filter = "--gtest_filter=" + ":*" + "-" + ":".join(negative_filter)
+    test_filter = (
+        "--gtest_filter=" + ":".join(positive_filter) + "-" + ":".join(negative_filter)
+    )
 #############################################
 
 cmd = [f"{THEROCK_BIN_DIR}/miopen_gtest", test_filter]

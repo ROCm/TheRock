@@ -135,3 +135,32 @@ jobs:
       artifact_run_id: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       artifact_group: ${{ inputs.artifact_group }}
       package_version: ${{ inputs.rocm_package_version }}
+    permissions:
+      contents: read
+      id-token: write
+
+  test_rocm_wheels:
+    needs: [build_portable_linux_python_packages]
+    name: Test Python
+    # Run tests if:
+    # - Build succeeded (or using prebuilt artifacts)
+    # - Not expecting failure
+    # - Test runner is available (test_runs_on is set)
+    if: >-
+      ${{
+        !failure() &&
+        !cancelled() &&
+        (
+          inputs.use_prebuilt_artifacts == 'false' ||
+          inputs.use_prebuilt_artifacts == 'true'
+        ) &&
+        inputs.expect_failure == false &&
+        inputs.test_runs_on != ''
+      }}
+    uses: ./.github/workflows/test_rocm_wheels.yml
+    with:
+      amdgpu_family: ${{ inputs.artifact_group }}
+      test_runs_on: ${{ inputs.test_runs_on }}
+      package_find_links_url: ${{ needs.build_portable_linux_python_packages.outputs.package_find_links_url }}
+      python_version: "3.12"
+      rocm_version: ${{ inputs.rocm_package_version }}
