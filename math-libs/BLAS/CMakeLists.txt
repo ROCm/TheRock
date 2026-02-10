@@ -94,14 +94,6 @@ endif()
 # hipBLASLt
 ##############################################################################
 
-# hipBLASLt expects amd_smi on Linux.
-# It is only available if CORE_AMDSMI is enabled.
-if(NOT WIN32 AND NOT THEROCK_ENABLE_CORE_AMDSMI)
-  message(FATAL_ERROR
-    "hipBLASLt requires THEROCK_ENABLE_CORE_AMDSMI=ON on Linux (provides amd_smi package)."
-  )
-endif()
-
 set(hipBLASLt_runtime_deps)
 if(NOT WIN32)
   # Required on Linux.
@@ -302,13 +294,6 @@ if(THEROCK_ENABLE_SPARSE)
 
   if(NOT WIN32) # Remove this block once hipSPARSELt is supported on Windows
     # hipSPARSELt expects amd_smi on Linux.
-    # It is only available if CORE_AMDSMI is enabled.
-    if(NOT THEROCK_ENABLE_CORE_AMDSMI)
-      message(FATAL_ERROR
-        "hipSPARSELt requires THEROCK_ENABLE_CORE_AMDSMI=ON on Linux (provides amd_smi package)."
-      )
-    endif()
-
     set(hipSPARSELt_runtime_deps)
 
     # Required on Linux.
