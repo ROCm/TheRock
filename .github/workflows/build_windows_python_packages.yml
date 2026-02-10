@@ -27,14 +27,24 @@ on:
         type: string
       package_version:
         type: string
+    outputs:
+      package_find_links_url:
+        description: URL for pip --find-links to install built packages
+        value: ${{ jobs.build_rocm_wheels.outputs.package_find_links_url }}
 
 permissions:
   contents: read
 
+run-name: Build Windows Python Packages (${{ inputs.artifact_group }}, ${{ inputs.package_version }})
+
 jobs:
-  build:
+  build_rocm_wheels:
     name: Build Python | ${{ inputs.artifact_group }}
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-windows-scale-rocm' || 'windows-2022' }}
+    permissions:
+      id-token: write
+    outputs:
+      package_find_links_url: ${{ steps.upload.outputs.package_find_links_url }}
     env:
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       ARTIFACTS_DIR: "${{ github.workspace }}/artifacts"
@@ -52,17 +62,23 @@ jobs:
           python-version: '3.12'
 
       - name: Install Python requirements
-        run: pip install boto3 packaging piprepo setuptools
+        run: pip install -r requirements.txt
 
-      # Note: we could fetch "all" artifacts if we wanted to include more files
+      - name: Install AWS CLI
+        # The first two lines removes the default commmunity feed and uses the internal proxy feed
+        run: |
+          choco source disable -n=chocolatey
+          choco source add -n=internal -s http://10.0.167.96:8081/repository/choco-group/ --priority=1
+          choco install --no-progress -y awscli
+          echo "$PATH;C:\Program Files\Amazon\AWSCLIV2" >> $GITHUB_PATH
+
       - name: Fetch artifacts
         run: |
           python ./build_tools/fetch_artifacts.py \
-            --run-github-repo=${{ inputs.artifact_github_repo }} \
-            --run-id=${{ env.ARTIFACT_RUN_ID }} \
-            --artifact-group=${{ inputs.artifact_group }} \
-            --output-dir="${{ env.ARTIFACTS_DIR }}" \
-            _dev_ _lib_ _run_
+            --run-github-repo="${{ inputs.artifact_github_repo }}" \
+            --run-id="${{ env.ARTIFACT_RUN_ID }}" \
+            --artifact-group="${{ inputs.artifact_group }}" \
+            --output-dir="${{ env.ARTIFACTS_DIR }}"
 
       - name: Build Python packages
         run: |
@@ -71,15 +87,21 @@ jobs:
             --dest-dir="${{ env.PACKAGES_DIR }}" \
             --version="${{ inputs.package_version }}"
 
-      - name: Inspect Python packages
-        run: |
-          ls -la "${{ env.PACKAGES_DIR }}"
+      - name: Configure AWS Credentials for non-forked repos
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-ci
+          special-characters-workaround: true
 
-      - name: Sanity check Python packages
+      # NOTE: we use `github.run_id` and NOT `env.ARTIFACT_RUN_ID` here!
+      # This ensures that if they are different we _download_ artifacts from the
+      # input run's subdirectory and _upload_ to our current run's subdirectory.
+      - name: Upload Python packages
+        id: upload
         run: |
-          piprepo build "${{ env.PACKAGES_DIR }}/dist"
-          pip install rocm[libraries,devel]==${{ inputs.package_version }} \
-            --extra-index-url "${{ env.PACKAGES_DIR }}/dist/simple/"
-          rocm-sdk test
-
-      # TODO(#1559): upload packages to artifacts S3 bucket and/or a dedicated Python packages bucket
+          python build_tools/github_actions/upload_python_packages.py \
+            --input-packages-dir="${{ env.PACKAGES_DIR }}" \
+            --artifact-group="${{ inputs.artifact_group }}" \
+            --run-id="${{ github.run_id }}"
