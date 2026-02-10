@@ -63,13 +63,6 @@ def main() -> None:
     #   "users/alice/experiment"-> "users-alice-experiment"
     track = args.pytorch_git_ref.replace("/", "-")
 
-    if args.pytorch_git_ref == "nightly":
-        track = "nightly"
-    elif args.pytorch_git_ref.startswith("release/"):
-        track = args.pytorch_git_ref.replace("/", "-", 1)
-    else:
-        track = args.pytorch_git_ref.replace("/", "-")
-
     manifest_name = f"therock-manifest_torch_py{py}_{track}.json"
     manifest_path = (args.dist_dir / "manifests" / manifest_name).resolve()
 
