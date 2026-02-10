@@ -27,6 +27,10 @@ on:
         type: string
       package_version:
         type: string
+    outputs:
+      package_find_links_url:
+        description: URL for pip --find-links to install built packages
+        value: ${{ jobs.build_rocm_wheels.outputs.package_find_links_url }}
 
 permissions:
   contents: read
@@ -34,13 +38,19 @@ permissions:
 run-name: Build portable Linux Python Packages (${{ inputs.artifact_group }}, ${{ inputs.package_version }})
 
 jobs:
-  build:
+  build_rocm_wheels:
     name: Build Python | ${{ inputs.artifact_group }}
     # Note: GitHub-hosted runners run out of disk space for some gpu families
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
+    permissions:
+      id-token: write
     container:
       image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:db2b63f938941dde2abc80b734e64b45b9995a282896d513a0f3525d4591d6cb
+      options: -v /runner/config:/home/awsconfig/
+    outputs:
+      package_find_links_url: ${{ steps.upload.outputs.package_find_links_url }}
     env:
+      AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       ARTIFACTS_DIR: "${{ github.workspace }}/artifacts"
       PACKAGES_DIR: "${{ github.workspace }}/packages"
@@ -53,15 +63,13 @@ jobs:
       - name: Install Python requirements
         run: pip install -r requirements.txt
 
-      # Note: we could fetch "all" artifacts if we wanted to include more files
       - name: Fetch artifacts
         run: |
           python ./build_tools/fetch_artifacts.py \
             --run-github-repo="${{ inputs.artifact_github_repo }}" \
             --run-id="${{ env.ARTIFACT_RUN_ID }}" \
             --artifact-group="${{ inputs.artifact_group }}" \
-            --output-dir="${{ env.ARTIFACTS_DIR }}" \
-            _dev_ _lib_ _run_
+            --output-dir="${{ env.ARTIFACTS_DIR }}"
 
       - name: Build Python packages
         run: |
@@ -70,17 +78,20 @@ jobs:
             --dest-dir="${{ env.PACKAGES_DIR }}" \
             --version="${{ inputs.package_version }}"
 
-      - name: Inspect Python packages
+      - name: Configure AWS Credentials for non-forked repos
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-ci
+
+      # NOTE: we use `github.run_id` and NOT `env.ARTIFACT_RUN_ID` here!
+      # This ensures that if they are different we _download_ artifacts from the
+      # input run's subdirectory and _upload_ to our current run's subdirectory.
+      - name: Upload Python packages
+        id: upload
         run: |
-          ls -la "${{ env.PACKAGES_DIR }}"
-
-      # TODO(#1559): Sanity check (Linux can't find the directories, maybe Docker issues?)
-
-      # - name: Sanity check Python packages
-      #   run: |
-      #     piprepo build "${{ env.PACKAGES_DIR }}/dist"
-      #     pip install rocm[devel]==${{ inputs.package_version }} \
-      #       --extra-index-url "${{ env.PACKAGES_DIR }}/dist/simple/"
-      #     rocm-sdk test
-
-      # TODO(#1559): upload packages to artifacts S3 bucket and/or a dedicated Python packages bucket
+          python build_tools/github_actions/upload_python_packages.py \
+            --input-packages-dir="${{ env.PACKAGES_DIR }}" \
+            --artifact-group="${{ inputs.artifact_group }}" \
+            --run-id="${{ github.run_id }}"
