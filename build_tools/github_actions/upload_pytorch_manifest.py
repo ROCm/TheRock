@@ -70,7 +70,7 @@ def main() -> None:
     manifest_name = f"therock-manifest_torch_py{py}_{track}.json"
     manifest_path = (args.dist_dir / "manifests" / manifest_name).resolve()
 
-    print(f"Manifest expected at: {manifest_path}", flush=True)
+    log(f"Manifest expected at: {manifest_path}")
     if not manifest_path.is_file():
         raise FileNotFoundError(f"Manifest not found: {manifest_path}")
 
