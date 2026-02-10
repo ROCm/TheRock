@@ -32,6 +32,9 @@ on:
         type: string
       sanity_check_only_for_family:
         type: boolean
+      build_pytorch:
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -165,8 +168,6 @@ jobs:
       python_version: "3.12"
       rocm_version: ${{ inputs.rocm_package_version }}
 
-  # TODO(#3291): Make pytorch jobs configurable
-  #   (opt-out/opt-in, build/test for more pytorch versions, etc.)
   # TODO(#3291): Add test_pytorch_wheels job
   build_portable_linux_pytorch_wheels_ci:
     needs: [build_portable_linux_python_packages]
@@ -179,7 +180,7 @@ jobs:
           inputs.use_prebuilt_artifacts == 'false' ||
           inputs.use_prebuilt_artifacts == 'true'
         ) &&
-        inputs.expect_failure == false
+        inputs.build_pytorch == true
       }}
     uses: ./.github/workflows/build_portable_linux_pytorch_wheels_ci.yml
     with:
