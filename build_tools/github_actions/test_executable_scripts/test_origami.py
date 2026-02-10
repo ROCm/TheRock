@@ -10,6 +10,7 @@ import logging
 import os
 import shlex
 import subprocess
+import sys
 from pathlib import Path
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
@@ -30,11 +31,13 @@ origami_test_dir = bin_dir / "origami"
 # Path separator is different on Windows vs Linux
 path_sep = ";" if is_windows else ":"
 
+# The origami Python package is installed to lib/pythonX.Y/site-packages/origami/
+site_packages_dir = lib_dir / f"python{sys.version_info.major}.{sys.version_info.minor}" / "site-packages"
+
 # LD_LIBRARY_PATH is needed for Python tests to find liborigami.so
 if platform == "linux":
     ld_paths = [
         str(lib_dir),
-        str(origami_test_dir),
         environ_vars.get("LD_LIBRARY_PATH", ""),
     ]
     environ_vars["LD_LIBRARY_PATH"] = path_sep.join(p for p in ld_paths if p)
@@ -42,14 +45,13 @@ elif is_windows:
     dll_paths = [
         str(bin_dir),
         str(lib_dir),
-        str(origami_test_dir),
         environ_vars.get("PATH", ""),
     ]
     environ_vars["PATH"] = path_sep.join(p for p in dll_paths if p)
 
-# Set PYTHONPATH to help Python find the origami module
+# Set PYTHONPATH so Python can find the origami package in site-packages
 python_paths = [
-    str(origami_test_dir),  # Where origami Python module is staged
+    str(site_packages_dir),
     environ_vars.get("PYTHONPATH", ""),
 ]
 environ_vars["PYTHONPATH"] = path_sep.join(p for p in python_paths if p)
