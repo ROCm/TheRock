@@ -28,6 +28,7 @@ during the build step.
 # in the former.
 python pytorch_torch_repo.py checkout
 python pytorch_audio_repo.py checkout
+python pytorch_apex_repo.py checkout
 python pytorch_vision_repo.py checkout
 python pytorch_triton_repo.py checkout
 
@@ -109,11 +110,10 @@ inline system deps into the audio and vision wheels as needed.
 """
 
 import argparse
-from datetime import date
 import json
 import os
 from pathlib import Path
-from packaging.version import Version, parse
+from packaging.version import parse
 import platform
 import shutil
 import shlex
@@ -164,7 +164,7 @@ WINDOWS_LIBRARY_PRELOADS = [
 ]
 
 
-def exec(args: list[str | Path], cwd: Path, env: dict[str, str] | None = None):
+def run_command(args: list[str | Path], cwd: Path, env: dict[str, str] | None = None):
     args = [str(arg) for arg in args]
     full_env = dict(os.environ)
     print(f"++ Exec [{cwd}]$ {shlex.join(args)}")
@@ -219,6 +219,19 @@ def get_installed_package_version(dist_package_name: str) -> str:
     raise ValueError(
         f"Did not find Version for installed package '{dist_package_name}' in output:\n{joined_lines}"
     )
+
+
+def get_version_suffix_for_installed_rocm_package() -> str:
+    rocm_version = get_installed_package_version("rocm")
+    print(f"Computing version suffix for installed rocm package: {rocm_version}")
+    # Compute a version suffix to be used as a local version identifier:
+    # https://packaging.python.org/en/latest/specifications/version-specifiers/#local-version-identifiers
+    # This logic is copied from build_tools/github_actions/determine_version.py.
+    parsed_version = parse(rocm_version)
+    base_name = "devrocm" if "dev" in rocm_version else "rocm"
+    version_suffix = f"+{base_name}{str(parsed_version).replace('+','-')}"
+    print(f"Version suffix is: {version_suffix}")
+    return version_suffix
 
 
 def get_rocm_path(path_name: str) -> Path:
@@ -286,9 +299,8 @@ def do_install_rocm(args: argparse.Namespace):
 
     # Because the rocm package caches current GPU selection and such, we
     # always purge it to ensure a clean rebuild.
-
-    exec(
-        [sys.executable, "-m", "pip", "cache", "remove", "rocm_sdk"] + cache_dir_args,
+    run_command(
+        [sys.executable, "-m", "pip", "cache", "remove", "rocm"] + cache_dir_args,
         cwd=Path.cwd(),
     )
 
@@ -309,7 +321,7 @@ def do_install_rocm(args: argparse.Namespace):
     pip_args += cache_dir_args
     rocm_sdk_version = args.rocm_sdk_version if args.rocm_sdk_version else ""
     pip_args.extend([f"rocm[libraries,devel]{rocm_sdk_version}"])
-    exec(pip_args, cwd=Path.cwd())
+    run_command(pip_args, cwd=Path.cwd())
     print(f"Installed version: {get_rocm_sdk_version()}")
 
 
@@ -333,10 +345,14 @@ def do_build(args: argparse.Namespace):
     if args.install_rocm:
         do_install_rocm(args)
 
+    if not args.version_suffix:
+        args.version_suffix = get_version_suffix_for_installed_rocm_package()
+
     triton_dir: Path | None = args.triton_dir
     pytorch_dir: Path | None = args.pytorch_dir
     pytorch_audio_dir: Path | None = args.pytorch_audio_dir
     pytorch_vision_dir: Path | None = args.pytorch_vision_dir
+    apex_dir: Path | None = args.apex_dir
 
     rocm_sdk_version = get_rocm_sdk_version()
     cmake_prefix = get_rocm_path("cmake")
@@ -380,7 +396,7 @@ def do_build(args: argparse.Namespace):
         print("Building with ccache, clearing stats first")
         env["CMAKE_C_COMPILER_LAUNCHER"] = "ccache"
         env["CMAKE_CXX_COMPILER_LAUNCHER"] = "ccache"
-        exec(["ccache", "--zero-stats"], cwd=tempfile.gettempdir())
+        run_command(["ccache", "--zero-stats"], cwd=tempfile.gettempdir())
 
     # GLOO enabled for only Linux
     if not is_windows:
@@ -493,6 +509,13 @@ def do_build(args: argparse.Namespace):
     else:
         print("--- Not build pytorch-vision (no --pytorch-vision-dir)")
 
+    # Build apex.
+    if args.build_apex or (args.build_apex is None and apex_dir):
+        assert apex_dir, "Must specify --apex-dir if --build-apex"
+        do_build_apex(args, apex_dir, dict(env))
+    else:
+        print("--- Not build apex (no --apex-dir)")
+
     print("--- Builds all completed")
 
     if args.use_ccache:
@@ -537,7 +560,7 @@ def do_build_triton(
 
     triton_wheel_name = env.get("TRITON_WHEEL_NAME", "triton")
     print(f"+++ Uninstall {triton_wheel_name}")
-    exec(
+    run_command(
         [sys.executable, "-m", "pip", "uninstall", triton_wheel_name, "-y"],
         cwd=tempfile.gettempdir(),
     )
@@ -545,7 +568,7 @@ def do_build_triton(
     pip_install_args = []
     if args.pip_cache_dir:
         pip_install_args.extend(["--cache-dir", args.pip_cache_dir])
-    exec(
+    run_command(
         [
             sys.executable,
             "-m",
@@ -566,13 +589,15 @@ def do_build_triton(
     remove_dir_if_exists(triton_python_dir / "dist")
     if args.clean:
         remove_dir_if_exists(triton_python_dir / "build")
-    exec([sys.executable, "setup.py", "bdist_wheel"], cwd=triton_python_dir, env=env)
+    run_command(
+        [sys.executable, "setup.py", "bdist_wheel"], cwd=triton_python_dir, env=env
+    )
     built_wheel = find_built_wheel(triton_python_dir / "dist", triton_wheel_name)
     print(f"Found built wheel: {built_wheel}")
     copy_to_output(args, built_wheel)
 
     print("+++ Installing built triton:")
-    exec(
+    run_command(
         [sys.executable, "-m", "pip", "install", built_wheel], cwd=tempfile.gettempdir()
     )
 
@@ -629,24 +654,38 @@ def do_build_pytorch(
     pytorch_build_version = (pytorch_dir / "version.txt").read_text().strip()
     pytorch_build_version += args.version_suffix
     pytorch_build_version_parsed = parse(pytorch_build_version)
-    print(f"  Default PYTORCH_BUILD_VERSION: {pytorch_build_version}")
+    print(f"  Using PYTORCH_BUILD_VERSION: {pytorch_build_version}")
 
-    ## Disable FBGEMM_GENAI on Linux for PyTorch, as not available for 2.7 on rocm/pytorch
-    ## and causes build failures for PyTorch >= 2.8.
+    # Detect exactly PyTorch 2.9.x
+    is_pytorch_2_9 = pytorch_build_version_parsed.release[:2] == (2, 9)
+
+    ## Enable FBGEMM_GENAI on Linux for PyTorch, as it is available only for 2.9 on rocm/pytorch
+    ## and causes build failures for other PyTorch versions
     ## Warn user when enabling it manually.
     ## https://github.com/ROCm/TheRock/issues/2056
     if not is_windows:
         # Enabling/Disabling FBGEMM_GENAI based on Pytorch version in Linux
-        if args.enable_pytorch_fbgemm_genai_linux is None:
-            use_fbgemm_genai = "OFF"
+        if is_pytorch_2_9:
+            # Default ON for 2.9.x, unless explicitly disabled
+            # args.enable_pytorch_fbgemm_genai_linux can be set to false
+            # by passing --no-enable-pytorch-fbgemm-genai-linux as input
+            if args.enable_pytorch_fbgemm_genai_linux is False:
+                use_fbgemm_genai = "OFF"
+                print(f"  [WARN] User-requested override to set FBGEMM_GENAI = OFF.")
+            else:
+                use_fbgemm_genai = "ON"
         else:
-            # Explicit override: user has set the flag to true/false
-            use_fbgemm_genai = "ON" if args.enable_pytorch_fbgemm_genai_linux else "OFF"
+            # Default OFF for all other versions, unless explicitly enabled
+            if args.enable_pytorch_fbgemm_genai_linux is True:
+                use_fbgemm_genai = "ON"
+            else:
+                use_fbgemm_genai = "OFF"
+
             if use_fbgemm_genai == "ON":
                 print(f"  [WARN] User-requested override to set FBGEMM_GENAI = ON.")
                 print(
                     f"""  [WARN] Please note that FBGEMM_GENAI is not available for PyTorch 2.7, and enabling it may cause build failures
-for PyTorch >= 2.8. See status of issue https://github.com/ROCm/TheRock/issues/2056
+                    for PyTorch >= 2.8 (Except 2.9). See status of issue https://github.com/ROCm/TheRock/issues/2056
                       """
                 )
 
@@ -656,8 +695,15 @@ for PyTorch >= 2.8. See status of issue https://github.com/ROCm/TheRock/issues/2
         if args.enable_pytorch_flash_attention_linux is None:
             # Default behavior — determined by if triton is build
             use_flash_attention = "ON" if triton_requirement else "OFF"
-            if "gfx103" in env["PYTORCH_ROCM_ARCH"]:
-                # no aotriton support for gfx103X
+
+            # no aotriton support for gfx103X
+            #
+            # temporarily disable aotriton for gfx1152/53 until pytorch
+            # uses a commit that enables it ( https://github.com/ROCm/aotriton/pull/142 )
+            AOTRITON_UNSUPPORTED_ARCHS = ["gfx103", "gfx1152", "gfx1153"]
+            if any(
+                arch in env["PYTORCH_ROCM_ARCH"] for arch in AOTRITON_UNSUPPORTED_ARCHS
+            ):
                 use_flash_attention = "OFF"
             print(
                 f"Flash Attention default behavior (based on triton and gpu): {use_flash_attention}"
@@ -709,9 +755,18 @@ for PyTorch >= 2.8. See status of issue https://github.com/ROCm/TheRock/issues/2
     if is_windows:
         copy_msvc_libomp_to_torch_lib(pytorch_dir)
 
-        use_flash_attention = (
-            "1" if args.enable_pytorch_flash_attention_windows else "0"
-        )
+        use_flash_attention = "0"
+
+        # no aotriton support for gfx103X
+        #
+        # temporarily prevent enabling aotriton for gfx1152/53 until pytorch
+        # uses a commit that enables it ( https://github.com/ROCm/aotriton/pull/142 )
+        AOTRITON_UNSUPPORTED_ARCHS = ["gfx103", "gfx1152", "gfx1153"]
+        if args.enable_pytorch_flash_attention_windows and not any(
+            arch in env["PYTORCH_ROCM_ARCH"] for arch in AOTRITON_UNSUPPORTED_ARCHS
+        ):
+            use_flash_attention = "1"
+
         env.update(
             {
                 "USE_FLASH_ATTENTION": use_flash_attention,
@@ -752,7 +807,7 @@ for PyTorch >= 2.8. See status of issue https://github.com/ROCm/TheRock/issues/2
         os.environ["LD_LIBRARY_PATH"] = f"{sysdeps_dir / 'lib'}"
 
     print("+++ Uninstalling pytorch:")
-    exec(
+    run_command(
         [sys.executable, "-m", "pip", "uninstall", "torch", "-y"],
         cwd=tempfile.gettempdir(),
     )
@@ -761,7 +816,7 @@ for PyTorch >= 2.8. See status of issue https://github.com/ROCm/TheRock/issues/2
     pip_install_args = []
     if args.pip_cache_dir:
         pip_install_args.extend(["--cache-dir", args.pip_cache_dir])
-    exec(
+    run_command(
         [
             sys.executable,
             "-m",
@@ -779,7 +834,7 @@ for PyTorch >= 2.8. See status of issue https://github.com/ROCm/TheRock/issues/2
         # * https://pypi.org/project/ninja/#history
         # * https://github.com/ninja-build/ninja/releases
         # Version 1.11.1 is buggy on Windows (looping without making progress):
-        exec(
+        run_command(
             [
                 sys.executable,
                 "-m",
@@ -794,13 +849,13 @@ for PyTorch >= 2.8. See status of issue https://github.com/ROCm/TheRock/issues/2
     remove_dir_if_exists(pytorch_dir / "dist")
     if args.clean:
         remove_dir_if_exists(pytorch_dir / "build")
-    exec([sys.executable, "setup.py", "bdist_wheel"], cwd=pytorch_dir, env=env)
+    run_command([sys.executable, "setup.py", "bdist_wheel"], cwd=pytorch_dir, env=env)
     built_wheel = find_built_wheel(pytorch_dir / "dist", "torch")
     print(f"Found built wheel: {built_wheel}")
     copy_to_output(args, built_wheel)
 
     print("+++ Installing built torch:")
-    exec(
+    run_command(
         [sys.executable, "-m", "pip", "install", built_wheel], cwd=tempfile.gettempdir()
     )
 
@@ -821,7 +876,7 @@ def do_build_pytorch_audio(
     # Compute version.
     build_version = (pytorch_audio_dir / "version.txt").read_text().strip()
     build_version += args.version_suffix
-    print(f"  Default pytorch audio BUILD_VERSION: {build_version}")
+    print(f"  pytorch audio BUILD_VERSION: {build_version}")
     env["BUILD_VERSION"] = build_version
     env["BUILD_NUMBER"] = args.pytorch_build_number
 
@@ -835,11 +890,20 @@ def do_build_pytorch_audio(
         }
     )
 
+    if is_windows:
+        env.update(
+            {
+                "DISTUTILS_USE_SDK": "1",
+            }
+        )
+
     remove_dir_if_exists(pytorch_audio_dir / "dist")
     if args.clean:
         remove_dir_if_exists(pytorch_audio_dir / "build")
 
-    exec([sys.executable, "setup.py", "bdist_wheel"], cwd=pytorch_audio_dir, env=env)
+    run_command(
+        [sys.executable, "setup.py", "bdist_wheel"], cwd=pytorch_audio_dir, env=env
+    )
     built_wheel = find_built_wheel(pytorch_audio_dir / "dist", "torchaudio")
     print(f"Found built wheel: {built_wheel}")
     copy_to_output(args, built_wheel)
@@ -851,7 +915,7 @@ def do_build_pytorch_vision(
     # Compute version.
     build_version = (pytorch_vision_dir / "version.txt").read_text().strip()
     build_version += args.version_suffix
-    print(f"  Default pytorch vision BUILD_VERSION: {build_version}")
+    print(f"  pytorch vision BUILD_VERSION: {build_version}")
     env["BUILD_VERSION"] = build_version
     env["VERSION_NAME"] = build_version
     env["BUILD_NUMBER"] = args.pytorch_build_number
@@ -875,8 +939,40 @@ def do_build_pytorch_vision(
     if args.clean:
         remove_dir_if_exists(pytorch_vision_dir / "build")
 
-    exec([sys.executable, "setup.py", "bdist_wheel"], cwd=pytorch_vision_dir, env=env)
+    run_command(
+        [sys.executable, "setup.py", "bdist_wheel"], cwd=pytorch_vision_dir, env=env
+    )
     built_wheel = find_built_wheel(pytorch_vision_dir / "dist", "torchvision")
+    print(f"Found built wheel: {built_wheel}")
+    copy_to_output(args, built_wheel)
+
+
+def do_build_apex(args: argparse.Namespace, apex_dir: Path, env: dict[str, str]):
+    # Compute version.
+    build_version = (apex_dir / "version.txt").read_text().strip()
+    build_version += args.version_suffix
+    print(f"  Default apex BUILD_VERSION: {build_version}")
+    env["BUILD_VERSION"] = build_version
+    env["BUILD_NUMBER"] = args.pytorch_build_number
+
+    remove_dir_if_exists(apex_dir / "dist")
+    if args.clean:
+        remove_dir_if_exists(apex_dir / "build")
+
+    run_command(
+        [
+            sys.executable,
+            "-m",
+            "build",
+            "--wheel",
+            "--no-isolation",
+            "-C--build-option=--cpp_ext",
+            "-C--build-option=--cuda_ext",
+        ],
+        cwd=apex_dir,
+        env=env,
+    )
+    built_wheel = find_built_wheel(apex_dir / "dist", "apex")
     print(f"Found built wheel: {built_wheel}")
     copy_to_output(args, built_wheel)
 
@@ -953,6 +1049,12 @@ def main(argv: list[str]):
         help="pinned triton directory",
     )
     build_p.add_argument(
+        "--apex-dir",
+        default=directory_if_exists(script_dir / "apex"),
+        type=Path,
+        help="apex source directory",
+    )
+    build_p.add_argument(
         "--pytorch-rocm-arch",
         help="gfx arch to build pytorch with (defaults to rocm-sdk targets)",
     )
@@ -978,6 +1080,12 @@ def main(argv: list[str]):
         help="Enable building of torch vision (requires --pytorch-vision-dir)",
     )
     build_p.add_argument(
+        "--build-apex",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Enable building of apex (requires --apex-dir)",
+    )
+    build_p.add_argument(
         "--enable-pytorch-flash-attention-windows",
         action=argparse.BooleanOptionalAction,
         default=None,
@@ -995,12 +1103,9 @@ def main(argv: list[str]):
         default=None,
         help="Enable building of torch fbgemm_genai on Linux (enabled by default, sets USE_FBGEMM_GENAI=ON)",
     )
-    today = date.today()
-    formatted_date = today.strftime("%Y%m%d")
     build_p.add_argument(
         "--version-suffix",
-        default=f"+rocmsdk{formatted_date}",
-        help="PyTorch version suffix",
+        help="Explicit PyTorch version suffix (e.g. `+rocm7.10.0a20251124`). Typically computed with build_tools/github_actions/determine_version.py. If omitted it will be derived from the installed rocm package",
     )
     build_p.add_argument(
         "--clean",

@@ -122,26 +122,27 @@ skip_tests = {
         "cuda": [
             "test_cpp_warnings_have_python_context_cuda",
         ],
-        "binary_ufuncs": [
-            # AssertionError: Tensor-likes are not close!
-            "test_contig_vs_every_other___rpow___cuda_complex64",
-            # AssertionError: Tensor-likes are not close!
-            "test_contig_vs_every_other__refs_pow_cuda_complex64",
-            # AssertionError: Tensor-likes are not close!
-            "test_contig_vs_every_other_pow_cuda_complex64",
-            # AssertionError: Tensor-likes are not close!
-            "test_non_contig___rpow___cuda_complex64",
-            # AssertionError: Tensor-likes are not close!
-            "test_non_contig__refs_pow_cuda_complex64",
-            # AssertionError: Tensor-likes are not close!
-            "test_non_contig_pow_cuda_complex64",
-        ],
+    },
+    "windows": {
         "torch": [
-            # SEGMENTATION FAULT!!!!!
-            # Kernel Name: _ZN2at6native13reduce_kernelILi512ELi1ENS0_8ReduceOpIbNS0_14func_wrapper_tIbZZZNS0_15and_kernel_cudaERNS_14TensorIteratorEENKUlvE_clEvENKUlvE10_clEvEUlbbE_EEjbLi4ELi4EEEEEvT1_
-            # :0:rocdevice.cpp            :3603: 1544877169487 us:  Callback: Queue 0x7f599b800000 Aborting with error : HSA_STATUS_ERROR_OUT_OF_RESOURCES: The runtime failed to allocate the necessary resources. This error may also occur when the core runtime library needs to spawn threads or create internal OS-specific events. Code: 0x1008 Available Free mem : 17592186044276 MB
-            # see pytorch_2.9.py for more details
-            "test_masked_scatter_cuda_uint8 "
+            # Windows fatal exception: access violation
+            #   pointing to common_cuda.py `_create_scaling_models_optimizers`
+            "test_grad_scaling_autocast_foreach0_fused0_Adam_cuda_float32",
+        ],
+        "cuda": [
+            # This test uses subprocess.run, so it hangs.
+            # See https://github.com/ROCm/TheRock/issues/999.
+            "test_pinned_memory_use_background_threads",
+            # Windows fatal exception: access violation
+            #   pointing to amdhip64_7.dll ? (happened on CI machine but not local?)
+            # Concerning... the code is just this:
+            #     x = [torch.randn(4, 4).cuda(), torch.cuda.FloatTensor()]
+            #     with tempfile.NamedTemporaryFile() as f:
+            #       torch.save(x, f)
+            #       f.seek(0)
+            #       x_copy = torch.load(f)
+            "test_serialization_array_with_empty",
+            "test_serialization_array_with_storage",
         ],
     },
 }

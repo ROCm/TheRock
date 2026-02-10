@@ -7,40 +7,52 @@
 # 4. comm-libs (per-arch) - RCCL (parallel to math-libs)
 # 5. dctools-core (generic) - RDC (parallel to math-libs)
 # 6. profiler-apps (generic) - rocprofiler-systems (parallel to math-libs)
+# 7. media (generic) - sysdeps-amd-mesa, rocdecode (todo), rocjpeg (todo)
 #
 # Artifacts flow between stages via S3 using the artifact_manager.py tool.
+#
+# TODO: When kpack splitting is permanently enabled, change fetch commands to use
+# --generic-only instead of --amdgpu-families for efficiency. Subsequent build
+# stages only need generic (host) artifacts; device-specific kpacks are not
+# needed until final packaging.
 
 name: Multi-Arch Build (Linux)
 
 on:
   workflow_call:
     inputs:
-      amdgpu_families_json:
-        type: string
-        required: true
-        description: "JSON array of GPU families for per-arch stages"
       artifact_group:
         type: string
-        required: true
-        description: "Artifact group identifier"
-      build_variant:
+      matrix_per_family_json:
         type: string
-        required: true
-        description: "Build variant (release, asan)"
-      package_version:
+        description: "JSON array of {amdgpu_family, test-runs-on} objects for per-arch stages"
+      dist_amdgpu_families:
         type: string
-        required: true
-        description: "Package version string"
-      enabled_stages:
+        description: "Semicolon-separated list of all GPU families for dist targets"
+      build_variant_label:
         type: string
-        required: true
-        description: "Comma-separated list of enabled stages"
+      build_variant_cmake_preset:
+        type: string
+      build_variant_suffix:
+        type: string
+      test_labels:
+        type: string
+      artifact_run_id:
+        type: string
+      expect_failure:
+        type: boolean
+      use_prebuilt_artifacts:
+        type: string
+      rocm_package_version:
+        type: string
+      test_type:
+        type: string
 
 permissions:
   contents: read
 
 env:
-  CONTAINER_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:583d473f263a289222c48d4b493e2956b2354a45796f09dee6f2c8ecd4504ab6
+  CONTAINER_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:db2b63f938941dde2abc80b734e64b45b9995a282896d513a0f3525d4591d6cb
   CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
   CACHE_DIR: ${{ github.workspace }}/.container-cache
   TEATIME_FORCE_INTERACTIVE: 0
@@ -51,20 +63,20 @@ jobs:
   # ==========================================================================
   foundation:
     name: Stage - Foundation
-    if: contains(inputs.enabled_stages, 'foundation')
+    # Always run all stages
     runs-on: azure-linux-scale-rocm
     timeout-minutes: 180  # 3 hours
     permissions:
       id-token: write
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:583d473f263a289222c48d4b493e2956b2354a45796f09dee6f2c8ecd4504ab6
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:db2b63f938941dde2abc80b734e64b45b9995a282896d513a0f3525d4591d6cb
       options: -v /runner/config:/home/awsconfig/
     env:
       AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
       STAGE_NAME: foundation
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Install python deps
         run: pip install -r requirements.txt
@@ -87,30 +99,31 @@ jobs:
 
       - name: Fetch sources
         timeout-minutes: 30
-        run: ./build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12
+        run: ./build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12 --depth 1
 
       - name: Get stage configuration
         id: stage_config
         run: |
           python build_tools/configure_stage.py \
             --stage ${STAGE_NAME} \
+            --dist-amdgpu-families "${{ inputs.dist_amdgpu_families }}" \
             --gha-output
+
+      - name: Install stage python deps
+        if: ${{ steps.stage_config.outputs.pip_install_cmd }}
+        run: pip install ${{ steps.stage_config.outputs.pip_install_cmd }}
 
       - name: Configure
         run: |
           cmake -B build -S . -GNinja \
-            -DTHEROCK_PACKAGE_VERSION=${{ inputs.package_version }} \
+            -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             ${{ steps.stage_config.outputs.cmake_args }}
 
       - name: Build stage
         run: |
-          cmake --build build --target stage-${STAGE_NAME} -- -k 0
-
-      - name: Create artifact directories
-        run: |
-          cmake --build build --target therock-artifacts -- -k 0
+          cmake --build build --target stage-${STAGE_NAME} therock-artifacts -- -k 0
 
       - name: Report
         if: ${{ !cancelled() }}
@@ -122,18 +135,17 @@ jobs:
 
       - name: Configure AWS Credentials
         if: ${{ always() && !github.event.pull_request.head.repo.fork }}
-        uses: aws-actions/configure-aws-credentials@00943011d9042930efac3dcd3a170e4273319bc8 # v5.1.0
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-ci
 
       - name: Push stage artifacts
-        if: ${{ always() && !github.event.pull_request.head.repo.fork }}
+        if: ${{ !github.event.pull_request.head.repo.fork }}
         run: |
-          python build_tools/artifact_manager.py push \
+          python build_tools/artifact_manager.py push --run-id ${{ github.run_id }} \
             --stage ${STAGE_NAME} \
-            --build-dir build \
-            --run-id ${{ github.run_id }}
+            --build-dir build
 
   # ==========================================================================
   # STAGE: compiler-runtime (generic)
@@ -141,25 +153,19 @@ jobs:
   compiler-runtime:
     name: Stage - Compiler Runtime
     needs: foundation
-    if: >-
-      ${{
-        always() &&
-        (needs.foundation.result == 'success' || needs.foundation.result == 'skipped') &&
-        contains(inputs.enabled_stages, 'compiler-runtime')
-      }}
     runs-on: azure-linux-scale-rocm
     timeout-minutes: 480  # 8 hours (compiler is big)
     permissions:
       id-token: write
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:583d473f263a289222c48d4b493e2956b2354a45796f09dee6f2c8ecd4504ab6
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:db2b63f938941dde2abc80b734e64b45b9995a282896d513a0f3525d4591d6cb
       options: -v /runner/config:/home/awsconfig/
     env:
       AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
       STAGE_NAME: compiler-runtime
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Install python deps
         run: pip install -r requirements.txt
@@ -182,7 +188,7 @@ jobs:
 
       - name: Configure AWS Credentials
         if: ${{ !github.event.pull_request.head.repo.fork }}
-        uses: aws-actions/configure-aws-credentials@00943011d9042930efac3dcd3a170e4273319bc8 # v5.1.0
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-ci
@@ -190,38 +196,38 @@ jobs:
       - name: Fetch inbound artifacts
         if: ${{ !github.event.pull_request.head.repo.fork }}
         run: |
-          python build_tools/artifact_manager.py fetch \
+          python build_tools/artifact_manager.py fetch --run-id ${{ github.run_id }} \
             --stage ${STAGE_NAME} \
             --output-dir build \
-            --run-id ${{ github.run_id }} \
             --bootstrap
 
       - name: Fetch sources
         timeout-minutes: 30
-        run: ./build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12
+        run: ./build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12 --depth 1
 
       - name: Get stage configuration
         id: stage_config
         run: |
           python build_tools/configure_stage.py \
             --stage ${STAGE_NAME} \
+            --dist-amdgpu-families "${{ inputs.dist_amdgpu_families }}" \
             --gha-output
+
+      - name: Install stage python deps
+        if: ${{ steps.stage_config.outputs.pip_install_cmd }}
+        run: pip install ${{ steps.stage_config.outputs.pip_install_cmd }}
 
       - name: Configure
         run: |
           cmake -B build -S . -GNinja \
-            -DTHEROCK_PACKAGE_VERSION=${{ inputs.package_version }} \
+            -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             ${{ steps.stage_config.outputs.cmake_args }}
 
       - name: Build stage
         run: |
-          cmake --build build --target stage-${STAGE_NAME} -- -k 0
-
-      - name: Create artifact directories
-        run: |
-          cmake --build build --target therock-artifacts -- -k 0
+          cmake --build build --target stage-${STAGE_NAME} therock-artifacts -- -k 0
 
       - name: Report
         if: ${{ !cancelled() }}
@@ -231,44 +237,44 @@ jobs:
           echo "Artifacts:"
           ls -lh build/artifacts/*.tar.xz 2>/dev/null || echo "No artifacts found"
 
+      - name: Configure AWS Credentials (refresh for push)
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-ci
+
       - name: Push stage artifacts
-        if: ${{ always() && !github.event.pull_request.head.repo.fork }}
+        if: ${{ !github.event.pull_request.head.repo.fork }}
         run: |
-          python build_tools/artifact_manager.py push \
+          python build_tools/artifact_manager.py push --run-id ${{ github.run_id }} \
             --stage ${STAGE_NAME} \
-            --build-dir build \
-            --run-id ${{ github.run_id }}
+            --build-dir build
 
   # ==========================================================================
   # STAGE: math-libs (per-arch)
   # ==========================================================================
   math-libs:
-    name: Stage - Math Libs (${{ matrix.family }})
+    name: Stage - Math Libs (${{ matrix.family_info.amdgpu_family }})
     needs: compiler-runtime
-    if: >-
-      ${{
-        always() &&
-        (needs.compiler-runtime.result == 'success' || needs.compiler-runtime.result == 'skipped') &&
-        contains(inputs.enabled_stages, 'math-libs')
-      }}
     strategy:
       fail-fast: false
       matrix:
-        family: ${{ fromJSON(inputs.amdgpu_families_json) }}
+        family_info: ${{ fromJSON(inputs.matrix_per_family_json) }}
     runs-on: azure-linux-scale-rocm
     timeout-minutes: 480  # 8 hours
     permissions:
       id-token: write
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:583d473f263a289222c48d4b493e2956b2354a45796f09dee6f2c8ecd4504ab6
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:db2b63f938941dde2abc80b734e64b45b9995a282896d513a0f3525d4591d6cb
       options: -v /runner/config:/home/awsconfig/
     env:
       AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
       STAGE_NAME: math-libs
-      AMDGPU_FAMILIES: ${{ matrix.family }}
+      AMDGPU_FAMILIES: ${{ matrix.family_info.amdgpu_family }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Install python deps
         run: pip install -r requirements.txt
@@ -291,7 +297,7 @@ jobs:
 
       - name: Configure AWS Credentials
         if: ${{ !github.event.pull_request.head.repo.fork }}
-        uses: aws-actions/configure-aws-credentials@00943011d9042930efac3dcd3a170e4273319bc8 # v5.1.0
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-ci
@@ -299,41 +305,41 @@ jobs:
       - name: Fetch inbound artifacts
         if: ${{ !github.event.pull_request.head.repo.fork }}
         run: |
-          python build_tools/artifact_manager.py fetch \
+          python build_tools/artifact_manager.py fetch --run-id ${{ github.run_id }} \
             --stage ${STAGE_NAME} \
-            --amdgpu-families ${{ matrix.family }} \
+            --amdgpu-families ${{ matrix.family_info.amdgpu_family }} \
             --output-dir build \
-            --run-id ${{ github.run_id }} \
             --bootstrap
 
       - name: Fetch sources
         timeout-minutes: 30
-        run: ./build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12
+        run: ./build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12 --depth 1
 
       - name: Get stage configuration
         id: stage_config
         run: |
           python build_tools/configure_stage.py \
             --stage ${STAGE_NAME} \
-            --amdgpu-families ${{ matrix.family }} \
+            --amdgpu-families ${{ matrix.family_info.amdgpu_family }} \
+            --dist-amdgpu-families "${{ inputs.dist_amdgpu_families }}" \
             --gha-output
+
+      - name: Install stage python deps
+        if: ${{ steps.stage_config.outputs.pip_install_cmd }}
+        run: pip install ${{ steps.stage_config.outputs.pip_install_cmd }}
 
       - name: Configure
         run: |
           cmake -B build -S . -GNinja \
-            -DTHEROCK_PACKAGE_VERSION=${{ inputs.package_version }} \
-            -DTHEROCK_AMDGPU_FAMILIES=${{ matrix.family }} \
+            -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
+            -DTHEROCK_AMDGPU_FAMILIES=${{ matrix.family_info.amdgpu_family }} \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             ${{ steps.stage_config.outputs.cmake_args }}
 
       - name: Build stage
         run: |
-          cmake --build build --target stage-${STAGE_NAME} -- -k 0
-
-      - name: Create artifact directories
-        run: |
-          cmake --build build --target therock-artifacts -- -k 0
+          cmake --build build --target stage-${STAGE_NAME} therock-artifacts -- -k 0
 
       - name: Report
         if: ${{ !cancelled() }}
@@ -343,45 +349,44 @@ jobs:
           echo "Artifacts:"
           ls -lh build/artifacts/*.tar.xz 2>/dev/null || echo "No artifacts found"
 
+      - name: Configure AWS Credentials (refresh for push)
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-ci
+
       - name: Push stage artifacts
-        if: ${{ always() && !github.event.pull_request.head.repo.fork }}
+        if: ${{ !github.event.pull_request.head.repo.fork }}
         run: |
-          python build_tools/artifact_manager.py push \
+          python build_tools/artifact_manager.py push --run-id ${{ github.run_id }} \
             --stage ${STAGE_NAME} \
-            --amdgpu-families ${{ matrix.family }} \
-            --build-dir build \
-            --run-id ${{ github.run_id }}
+            --build-dir build
 
   # ==========================================================================
   # STAGE: comm-libs (per-arch, parallel to math-libs)
   # ==========================================================================
   comm-libs:
-    name: Stage - Comm Libs (${{ matrix.family }})
+    name: Stage - Comm Libs (${{ matrix.family_info.amdgpu_family }})
     needs: compiler-runtime
-    if: >-
-      ${{
-        always() &&
-        (needs.compiler-runtime.result == 'success' || needs.compiler-runtime.result == 'skipped') &&
-        contains(inputs.enabled_stages, 'comm-libs')
-      }}
     strategy:
       fail-fast: false
       matrix:
-        family: ${{ fromJSON(inputs.amdgpu_families_json) }}
+        family_info: ${{ fromJSON(inputs.matrix_per_family_json) }}
     runs-on: azure-linux-scale-rocm
     timeout-minutes: 240  # 4 hours
     permissions:
       id-token: write
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:583d473f263a289222c48d4b493e2956b2354a45796f09dee6f2c8ecd4504ab6
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:db2b63f938941dde2abc80b734e64b45b9995a282896d513a0f3525d4591d6cb
       options: -v /runner/config:/home/awsconfig/
     env:
       AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
       STAGE_NAME: comm-libs
-      AMDGPU_FAMILIES: ${{ matrix.family }}
+      AMDGPU_FAMILIES: ${{ matrix.family_info.amdgpu_family }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Install python deps
         run: pip install -r requirements.txt
@@ -404,7 +409,7 @@ jobs:
 
       - name: Configure AWS Credentials
         if: ${{ !github.event.pull_request.head.repo.fork }}
-        uses: aws-actions/configure-aws-credentials@00943011d9042930efac3dcd3a170e4273319bc8 # v5.1.0
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-ci
@@ -412,41 +417,41 @@ jobs:
       - name: Fetch inbound artifacts
         if: ${{ !github.event.pull_request.head.repo.fork }}
         run: |
-          python build_tools/artifact_manager.py fetch \
+          python build_tools/artifact_manager.py fetch --run-id ${{ github.run_id }} \
             --stage ${STAGE_NAME} \
-            --amdgpu-families ${{ matrix.family }} \
+            --amdgpu-families ${{ matrix.family_info.amdgpu_family }} \
             --output-dir build \
-            --run-id ${{ github.run_id }} \
             --bootstrap
 
       - name: Fetch sources
         timeout-minutes: 30
-        run: ./build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12
+        run: ./build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12 --depth 1
 
       - name: Get stage configuration
         id: stage_config
         run: |
           python build_tools/configure_stage.py \
             --stage ${STAGE_NAME} \
-            --amdgpu-families ${{ matrix.family }} \
+            --amdgpu-families ${{ matrix.family_info.amdgpu_family }} \
+            --dist-amdgpu-families "${{ inputs.dist_amdgpu_families }}" \
             --gha-output
+
+      - name: Install stage python deps
+        if: ${{ steps.stage_config.outputs.pip_install_cmd }}
+        run: pip install ${{ steps.stage_config.outputs.pip_install_cmd }}
 
       - name: Configure
         run: |
           cmake -B build -S . -GNinja \
-            -DTHEROCK_PACKAGE_VERSION=${{ inputs.package_version }} \
-            -DTHEROCK_AMDGPU_FAMILIES=${{ matrix.family }} \
+            -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
+            -DTHEROCK_AMDGPU_FAMILIES=${{ matrix.family_info.amdgpu_family }} \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             ${{ steps.stage_config.outputs.cmake_args }}
 
       - name: Build stage
         run: |
-          cmake --build build --target stage-${STAGE_NAME} -- -k 0
-
-      - name: Create artifact directories
-        run: |
-          cmake --build build --target therock-artifacts -- -k 0
+          cmake --build build --target stage-${STAGE_NAME} therock-artifacts -- -k 0
 
       - name: Report
         if: ${{ !cancelled() }}
@@ -456,14 +461,19 @@ jobs:
           echo "Artifacts:"
           ls -lh build/artifacts/*.tar.xz 2>/dev/null || echo "No artifacts found"
 
+      - name: Configure AWS Credentials (refresh for push)
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-ci
+
       - name: Push stage artifacts
-        if: ${{ always() && !github.event.pull_request.head.repo.fork }}
+        if: ${{ !github.event.pull_request.head.repo.fork }}
         run: |
-          python build_tools/artifact_manager.py push \
+          python build_tools/artifact_manager.py push --run-id ${{ github.run_id }} \
             --stage ${STAGE_NAME} \
-            --amdgpu-families ${{ matrix.family }} \
-            --build-dir build \
-            --run-id ${{ github.run_id }}
+            --build-dir build
 
   # ==========================================================================
   # STAGE: dctools-core (generic, parallel to math-libs)
@@ -471,25 +481,19 @@ jobs:
   dctools-core:
     name: Stage - DC Tools Core
     needs: compiler-runtime
-    if: >-
-      ${{
-        always() &&
-        (needs.compiler-runtime.result == 'success' || needs.compiler-runtime.result == 'skipped') &&
-        contains(inputs.enabled_stages, 'dctools-core')
-      }}
     runs-on: azure-linux-scale-rocm
     timeout-minutes: 120  # 2 hours
     permissions:
       id-token: write
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:583d473f263a289222c48d4b493e2956b2354a45796f09dee6f2c8ecd4504ab6
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:db2b63f938941dde2abc80b734e64b45b9995a282896d513a0f3525d4591d6cb
       options: -v /runner/config:/home/awsconfig/
     env:
       AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
       STAGE_NAME: dctools-core
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Install python deps
         run: pip install -r requirements.txt
@@ -512,7 +516,7 @@ jobs:
 
       - name: Configure AWS Credentials
         if: ${{ !github.event.pull_request.head.repo.fork }}
-        uses: aws-actions/configure-aws-credentials@00943011d9042930efac3dcd3a170e4273319bc8 # v5.1.0
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-ci
@@ -520,38 +524,38 @@ jobs:
       - name: Fetch inbound artifacts
         if: ${{ !github.event.pull_request.head.repo.fork }}
         run: |
-          python build_tools/artifact_manager.py fetch \
+          python build_tools/artifact_manager.py fetch --run-id ${{ github.run_id }} \
             --stage ${STAGE_NAME} \
             --output-dir build \
-            --run-id ${{ github.run_id }} \
             --bootstrap
 
       - name: Fetch sources
         timeout-minutes: 30
-        run: ./build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12
+        run: ./build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12 --depth 1
 
       - name: Get stage configuration
         id: stage_config
         run: |
           python build_tools/configure_stage.py \
             --stage ${STAGE_NAME} \
+            --dist-amdgpu-families "${{ inputs.dist_amdgpu_families }}" \
             --gha-output
+
+      - name: Install stage python deps
+        if: ${{ steps.stage_config.outputs.pip_install_cmd }}
+        run: pip install ${{ steps.stage_config.outputs.pip_install_cmd }}
 
       - name: Configure
         run: |
           cmake -B build -S . -GNinja \
-            -DTHEROCK_PACKAGE_VERSION=${{ inputs.package_version }} \
+            -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             ${{ steps.stage_config.outputs.cmake_args }}
 
       - name: Build stage
         run: |
-          cmake --build build --target stage-${STAGE_NAME} -- -k 0
-
-      - name: Create artifact directories
-        run: |
-          cmake --build build --target therock-artifacts -- -k 0
+          cmake --build build --target stage-${STAGE_NAME} therock-artifacts -- -k 0
 
       - name: Report
         if: ${{ !cancelled() }}
@@ -561,13 +565,19 @@ jobs:
           echo "Artifacts:"
           ls -lh build/artifacts/*.tar.xz 2>/dev/null || echo "No artifacts found"
 
+      - name: Configure AWS Credentials (refresh for push)
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-ci
+
       - name: Push stage artifacts
-        if: ${{ always() && !github.event.pull_request.head.repo.fork }}
+        if: ${{ !github.event.pull_request.head.repo.fork }}
         run: |
-          python build_tools/artifact_manager.py push \
+          python build_tools/artifact_manager.py push --run-id ${{ github.run_id }} \
             --stage ${STAGE_NAME} \
-            --build-dir build \
-            --run-id ${{ github.run_id }}
+            --build-dir build
 
   # ==========================================================================
   # STAGE: profiler-apps (generic, parallel to math-libs)
@@ -575,25 +585,19 @@ jobs:
   profiler-apps:
     name: Stage - Profiler Apps
     needs: compiler-runtime
-    if: >-
-      ${{
-        always() &&
-        (needs.compiler-runtime.result == 'success' || needs.compiler-runtime.result == 'skipped') &&
-        contains(inputs.enabled_stages, 'profiler-apps')
-      }}
     runs-on: azure-linux-scale-rocm
     timeout-minutes: 180  # 3 hours
     permissions:
       id-token: write
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:583d473f263a289222c48d4b493e2956b2354a45796f09dee6f2c8ecd4504ab6
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:db2b63f938941dde2abc80b734e64b45b9995a282896d513a0f3525d4591d6cb
       options: -v /runner/config:/home/awsconfig/
     env:
       AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
       STAGE_NAME: profiler-apps
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Install python deps
         run: pip install -r requirements.txt
@@ -616,7 +620,7 @@ jobs:
 
       - name: Configure AWS Credentials
         if: ${{ !github.event.pull_request.head.repo.fork }}
-        uses: aws-actions/configure-aws-credentials@00943011d9042930efac3dcd3a170e4273319bc8 # v5.1.0
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-ci
@@ -624,38 +628,38 @@ jobs:
       - name: Fetch inbound artifacts
         if: ${{ !github.event.pull_request.head.repo.fork }}
         run: |
-          python build_tools/artifact_manager.py fetch \
+          python build_tools/artifact_manager.py fetch --run-id ${{ github.run_id }} \
             --stage ${STAGE_NAME} \
             --output-dir build \
-            --run-id ${{ github.run_id }} \
             --bootstrap
 
       - name: Fetch sources
         timeout-minutes: 30
-        run: ./build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12
+        run: ./build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12 --depth 1
 
       - name: Get stage configuration
         id: stage_config
         run: |
           python build_tools/configure_stage.py \
             --stage ${STAGE_NAME} \
+            --dist-amdgpu-families "${{ inputs.dist_amdgpu_families }}" \
             --gha-output
+
+      - name: Install stage python deps
+        if: ${{ steps.stage_config.outputs.pip_install_cmd }}
+        run: pip install ${{ steps.stage_config.outputs.pip_install_cmd }}
 
       - name: Configure
         run: |
           cmake -B build -S . -GNinja \
-            -DTHEROCK_PACKAGE_VERSION=${{ inputs.package_version }} \
+            -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             ${{ steps.stage_config.outputs.cmake_args }}
 
       - name: Build stage
         run: |
-          cmake --build build --target stage-${STAGE_NAME} -- -k 0
-
-      - name: Create artifact directories
-        run: |
-          cmake --build build --target therock-artifacts -- -k 0
+          cmake --build build --target stage-${STAGE_NAME} therock-artifacts -- -k 0
 
       - name: Report
         if: ${{ !cancelled() }}
@@ -665,10 +669,120 @@ jobs:
           echo "Artifacts:"
           ls -lh build/artifacts/*.tar.xz 2>/dev/null || echo "No artifacts found"
 
+      - name: Configure AWS Credentials (refresh for push)
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-ci
+
       - name: Push stage artifacts
-        if: ${{ always() && !github.event.pull_request.head.repo.fork }}
+        if: ${{ !github.event.pull_request.head.repo.fork }}
         run: |
-          python build_tools/artifact_manager.py push \
+          python build_tools/artifact_manager.py push --run-id ${{ github.run_id }} \
             --stage ${STAGE_NAME} \
-            --build-dir build \
-            --run-id ${{ github.run_id }}
+            --build-dir build
+
+  # ==========================================================================
+  # STAGE: media (generic)
+  # ==========================================================================
+  media:
+    name: Stage - Media
+    needs: foundation
+    runs-on: azure-linux-scale-rocm
+    timeout-minutes: 180  # 3 hours
+    permissions:
+      id-token: write
+    container:
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:db2b63f938941dde2abc80b734e64b45b9995a282896d513a0f3525d4591d6cb
+      options: -v /runner/config:/home/awsconfig/
+    env:
+      AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
+      STAGE_NAME: media
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install python deps
+        run: pip install -r requirements.txt
+
+      - name: Adjust git config
+        run: |
+          git config --global --add safe.directory $PWD
+          git config fetch.parallel 10
+
+      - name: Setup ccache
+        run: |
+          ./build_tools/setup_ccache.py \
+            --config-preset "github-oss-presubmit" \
+            --dir "$(dirname $CCACHE_CONFIGPATH)" \
+            --local-path "$CACHE_DIR/ccache"
+
+      - name: Runner health status
+        run: |
+          ./build_tools/health_status.py
+
+      - name: Configure AWS Credentials
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-ci
+
+      - name: Fetch inbound artifacts
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        run: |
+          python build_tools/artifact_manager.py fetch --run-id ${{ github.run_id }} \
+            --stage ${STAGE_NAME} \
+            --output-dir build \
+            --bootstrap
+
+      - name: Fetch sources
+        timeout-minutes: 30
+        run: ./build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12 --depth 1
+
+      - name: Get stage configuration
+        id: stage_config
+        run: |
+          python build_tools/configure_stage.py \
+            --stage ${STAGE_NAME} \
+            --dist-amdgpu-families "${{ inputs.dist_amdgpu_families }}" \
+            --gha-output
+
+      - name: Install stage python deps
+        if: ${{ steps.stage_config.outputs.pip_install_cmd }}
+        run: pip install ${{ steps.stage_config.outputs.pip_install_cmd }}
+
+      - name: Configure
+        run: |
+          cmake -B build -S . -GNinja \
+            -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            ${{ steps.stage_config.outputs.cmake_args }}
+
+      - name: Build stage
+        run: |
+          cmake --build build --target stage-${STAGE_NAME} therock-artifacts -- -k 0
+
+      - name: Report
+        if: ${{ !cancelled() }}
+        run: |
+          echo "CCache Stats:"
+          ccache -s -v
+          echo "Artifacts:"
+          ls -lh build/artifacts/*.tar.xz 2>/dev/null || echo "No artifacts found"
+
+      - name: Configure AWS Credentials
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-ci
+
+      - name: Push stage artifacts
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        run: |
+          python build_tools/artifact_manager.py push --run-id ${{ github.run_id }} \
+            --stage ${STAGE_NAME} \
+            --build-dir build

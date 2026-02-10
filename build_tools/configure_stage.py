@@ -86,6 +86,7 @@ def get_stage_features(topology: BuildTopology, stage_name: str) -> Set[str]:
 def generate_cmake_args(
     stage_name: str,
     amdgpu_families: str,
+    dist_amdgpu_families: str,
     topology: BuildTopology,
     include_comments: bool = False,
 ) -> List[str]:
@@ -93,7 +94,8 @@ def generate_cmake_args(
 
     Args:
         stage_name: Name of the build stage
-        amdgpu_families: Comma-separated GPU families
+        amdgpu_families: Comma-separated GPU families for shard-specific targets
+        dist_amdgpu_families: Semicolon-separated GPU families for dist targets
         topology: BuildTopology instance
         include_comments: Include comment lines explaining each flag
 
@@ -106,9 +108,14 @@ def generate_cmake_args(
         args.append(f"# CMake arguments for stage: {stage_name}")
         args.append("")
 
-    # GPU families
+    # GPU families for shard-specific targets
     if amdgpu_families:
         args.append(f"-DTHEROCK_AMDGPU_FAMILIES={amdgpu_families}")
+
+    # GPU families for dist targets (all architectures in the distribution)
+    # Quote the value since it contains semicolons (CMake list separator)
+    if dist_amdgpu_families:
+        args.append(f'-DTHEROCK_DIST_AMDGPU_FAMILIES="{dist_amdgpu_families}"')
 
     # Disable all features by default, then enable only what we need
     if include_comments:
@@ -145,7 +152,13 @@ def main(argv: List[str] = None):
         "--amdgpu-families",
         type=str,
         default="",
-        help="Comma-separated GPU families (e.g., gfx94X-dcgpu,gfx110X-all)",
+        help="Comma-separated GPU families for shard-specific targets (e.g., gfx94X-dcgpu)",
+    )
+    parser.add_argument(
+        "--dist-amdgpu-families",
+        type=str,
+        default="",
+        help="Semicolon-separated GPU families for dist targets (e.g., gfx94X-dcgpu;gfx110X-all)",
     )
     parser.add_argument(
         "--output-cmake-args",
@@ -199,6 +212,7 @@ def main(argv: List[str] = None):
     cmake_args = generate_cmake_args(
         stage_name=args.stage,
         amdgpu_families=args.amdgpu_families,
+        dist_amdgpu_families=args.dist_amdgpu_families,
         topology=topology,
         include_comments=args.comments and not args.oneline,
     )
@@ -214,7 +228,10 @@ def main(argv: List[str] = None):
         output = "\n".join(cmake_args)
 
     if args.gha_output:
-        gha_set_output({"cmake_args": output})
+        # Get python requirements for this stage
+        python_requires = topology.get_python_requires_for_stage(args.stage)
+        pip_install_cmd = " ".join(python_requires) if python_requires else ""
+        gha_set_output({"cmake_args": output, "pip_install_cmd": pip_install_cmd})
     elif args.output_cmake_args:
         args.output_cmake_args.write_text(output + "\n")
         log(f"Wrote CMake arguments to {args.output_cmake_args}")

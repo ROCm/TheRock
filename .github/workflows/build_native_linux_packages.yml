@@ -12,7 +12,7 @@ on:
         required: true
         type: string
       rocm_version:
-        description: ROCm version to append to the package(8.0.0, 8.0.1rc1, ... ).
+        description: ROCm version to append to the package (8.0.0, 8.0.1rc1, ...).
         required: true
         type: string
       native_package_type:
@@ -20,11 +20,11 @@ on:
         required: true
         type: string
       package_suffix:
-        description: The suffix to be added to package name (asan, static or rpath).
+        description: The suffix to be added to package name (asan, tsan, static or rpath).
         required: false
         type: string
       release_type:
-        description: The type of build version to produce (nightly, prerelease or dev).
+        description: The type of release to build ("dev", "nightly", or "prerelease"). All developer-triggered jobs should use "dev"!
         required: false
         type: string
   workflow_dispatch:
@@ -48,11 +48,11 @@ on:
           - deb
         default: "rpm"
       package_suffix:
-        description: The suffix to be added to package name (asan, static or rpath).
+        description: The suffix to be added to package name (asan, tsan, static or rpath).
         type: string
         required: false
       release_type:
-        description: The type of build version to produce (nightly, prerelease or dev).
+        description: The type of release to build ("dev", "nightly", or "prerelease"). All developer-triggered jobs should use "dev"!
         type: string
         default: "dev"
 
@@ -69,16 +69,17 @@ jobs:
       fail-fast: false
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     env:
-      BUILD_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:583d473f263a289222c48d4b493e2956b2354a45796f09dee6f2c8ecd4504ab6
+      BUILD_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:db2b63f938941dde2abc80b734e64b45b9995a282896d513a0f3525d4591d6cb
       ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id || github.run_id }}
       PACKAGE_SUFFIX: ${{ inputs.package_suffix != '' && inputs.package_suffix || '' }}
       OUTPUT_DIR: ${{ github.workspace }}/output
       ARTIFACTS_DIR: ${{ github.workspace }}/output/artifacts
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages
       RELEASE_TYPE: ${{ inputs.release_type || '' }}
+      S3_BUCKET_NATIVE: "therock-${{ inputs.release_type }}-packages"
     steps:
-      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
-      - uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: '3.12'
       - name: Install Python requirements
@@ -113,23 +114,24 @@ jobs:
             --target  ${{ inputs.artifact_group }} \
             --artifacts-dir ${{ env.ARTIFACTS_DIR }} \
             --pkg-type ${{ inputs.native_package_type }} \
-            --version-suffix ${{ env.PACKAGE_SUFFIX }}
+            --version-suffix ${{ env.ARTIFACT_RUN_ID }}
 
       - name: Install AWS CLI
         run: bash ./dockerfiles/install_awscli.sh
 
       - name: Configure AWS Credentials for non-forked repos
-        uses: aws-actions/configure-aws-credentials@00943011d9042930efac3dcd3a170e4273319bc8 # v5.1.0
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
         with:
           aws-region: us-east-2
-          role-to-assume: arn:aws:iam::692859939525:role/therock-artifacts-external
+          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}
 
       - name: Upload Package repo to S3
         id: upload-packages
         run: |
-          echo "Uploading to s3 bucket"
+          echo "Uploading to s3 bucket : ${{ inputs.release_type }}"
           python ./build_tools/packaging/linux/upload_package_repo.py \
             --pkg-type ${{ inputs.native_package_type }} \
-            --s3-bucket therock-deb-rpm-test \
+            --s3-bucket ${{ env.S3_BUCKET_NATIVE }} \
             --amdgpu-family ${{ inputs.artifact_group }} \
-            --artifact-id ${{ env.ARTIFACT_RUN_ID }}
+            --artifact-id ${{ env.ARTIFACT_RUN_ID }} \
+            --job ${{ inputs.release_type }}

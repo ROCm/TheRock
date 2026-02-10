@@ -12,6 +12,7 @@ if(THEROCK_ENABLE_RDC)
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rdc"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rdc"
     BACKGROUND_BUILD
+    USE_DIST_AMDGPU_TARGETS
 
     CMAKE_ARGS
       -DBUILD_PROFILER=ON
@@ -35,6 +36,13 @@ if(THEROCK_ENABLE_RDC)
 
     INSTALL_DESTINATION
       portable-rdc
+
+    # RDC's INSTALL_DESTINATION (portable-rdc/) is flattened away by artifact-flatten.
+    # RPATH must be relative to the final flattened location (bin/, lib/).
+    INSTALL_RPATH_EXECUTABLE_DIR
+      bin
+    INSTALL_RPATH_LIBRARY_DIR
+      lib
 
     INTERFACE_LINK_DIRS
       lib

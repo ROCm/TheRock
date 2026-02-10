@@ -57,11 +57,51 @@ def log(msg: str):
     print(msg, flush=True)
 
 
-def get_topology() -> BuildTopology:
-    """Load the BUILD_TOPOLOGY.toml from the repository root."""
+def _delay_for_retry(seconds: float):
+    """Sleep for retry delay. Mockable for testing."""
+    time.sleep(seconds)
+
+
+def _get_pyzstd():
+    """Lazy import pyzstd with helpful error message."""
+    try:
+        import pyzstd
+
+        return pyzstd
+    except ModuleNotFoundError:
+        raise ModuleNotFoundError(
+            "pyzstd is required for zstd artifact decompression. "
+            "Install it with: pip install pyzstd"
+        )
+
+
+def _open_archive_for_read(path: Path) -> tarfile.TarFile:
+    """Open a tar archive for reading, auto-detecting compression type."""
+    if path.name.endswith(".tar.zst"):
+        pyzstd = _get_pyzstd()
+        zstd_file = pyzstd.ZstdFile(path, mode="rb")
+        return tarfile.TarFile(fileobj=zstd_file, mode="r")
+    elif path.name.endswith(".tar.xz"):
+        return tarfile.TarFile.open(path, mode="r:xz")
+    else:
+        raise ValueError(f"Unknown archive format: {path}")
+
+
+def get_default_topology_path() -> Path:
+    """Get the default BUILD_TOPOLOGY.toml path from the repository root."""
     script_dir = Path(__file__).parent
     repo_root = script_dir.parent
-    topology_path = repo_root / "BUILD_TOPOLOGY.toml"
+    return repo_root / "BUILD_TOPOLOGY.toml"
+
+
+def get_topology(topology_path: Optional[Path] = None) -> BuildTopology:
+    """Load the BUILD_TOPOLOGY.toml.
+
+    Args:
+        topology_path: Path to topology file. If None, uses default location.
+    """
+    if topology_path is None:
+        topology_path = get_default_topology_path()
     if not topology_path.exists():
         raise FileNotFoundError(f"BUILD_TOPOLOGY.toml not found at {topology_path}")
     return BuildTopology(str(topology_path))
@@ -115,7 +155,7 @@ def download_artifact(request: DownloadRequest) -> Optional[Path]:
                 log(
                     f"  ++ Retry {attempt + 1}/{MAX_RETRIES} for {request.artifact_key}: {e}"
                 )
-                time.sleep(delay)
+                _delay_for_retry(delay)
             else:
                 log(f"  !! Failed to download {request.artifact_key}: {e}")
                 return None
@@ -138,7 +178,7 @@ class BootstrappingPopulator(ArtifactPopulator):
         cleaned_paths_lock: Optional[threading.Lock] = None,
     ):
         super().__init__(output_path=output_path, verbose=verbose, flatten=False)
-        self.created_markers: list[Path] = []
+        self.created_markers: List[Path] = []
         self._cleaned_paths = cleaned_paths if cleaned_paths is not None else set()
         self._lock = (
             cleaned_paths_lock if cleaned_paths_lock is not None else threading.Lock()
@@ -194,7 +234,7 @@ def extract_artifact(request: ExtractRequest) -> Optional[Path]:
             if output_dir.exists():
                 shutil.rmtree(output_dir)
             log(f"  ++ Extracting {archive_path.name}")
-            with tarfile.TarFile.open(archive_path, mode="r:xz") as tf:
+            with _open_archive_for_read(archive_path) as tf:
                 tf.extractall(output_dir, filter="tar")
 
         if request.delete_archive:
@@ -208,27 +248,35 @@ def extract_artifact(request: ExtractRequest) -> Optional[Path]:
 
 def do_fetch(args: argparse.Namespace):
     """Fetch inbound artifacts for a stage with parallel download and extract."""
-    topology = get_topology()
+    topology = get_topology(args.topology)
 
-    # Validate stage
-    if args.stage not in topology.build_stages:
-        log(f"ERROR: Stage '{args.stage}' not found")
-        log(f"Available stages: {', '.join(topology.build_stages.keys())}")
-        sys.exit(1)
+    # Determine which artifacts to fetch
+    if args.stage == "all":
+        # Fetch all artifacts in the topology
+        inbound = set(topology.artifacts.keys())
+        log(f"Fetching all {len(inbound)} artifacts")
+    else:
+        # Validate stage
+        if args.stage not in topology.build_stages:
+            log(f"ERROR: Stage '{args.stage}' not found")
+            log(f"Available stages: {', '.join(topology.build_stages.keys())}")
+            sys.exit(1)
 
-    # Get inbound artifacts for this stage
-    inbound = topology.get_inbound_artifacts(args.stage)
-    if not inbound:
-        log(f"Stage '{args.stage}' has no inbound artifacts")
-        return
+        # Get inbound artifacts for this stage
+        inbound = topology.get_inbound_artifacts(args.stage)
+        if not inbound:
+            log(f"Stage '{args.stage}' has no inbound artifacts")
+            return
 
-    log(
-        f"Stage '{args.stage}' needs {len(inbound)} artifacts: {', '.join(sorted(inbound))}"
-    )
+        log(
+            f"Stage '{args.stage}' needs {len(inbound)} artifacts: {', '.join(sorted(inbound))}"
+        )
 
-    # Determine target families
+    # Determine target families to fetch
     target_families = ["generic"]
-    if args.amdgpu_families:
+    if args.generic_only:
+        log("Fetching generic (host) artifacts only")
+    elif args.amdgpu_families:
         target_families.extend(args.amdgpu_families.split(","))
 
     # Create backend
@@ -253,15 +301,18 @@ def do_fetch(args: argparse.Namespace):
     for artifact_name in sorted(inbound):
         for tf in target_families:
             for comp in components:
-                filename = f"{artifact_name}_{comp}_{tf}.tar.xz"
-                if filename in available:
-                    download_requests.append(
-                        DownloadRequest(
-                            artifact_key=filename,
-                            dest_path=download_dir / filename,
-                            backend=backend,
+                # Try zstd first (new format), then xz (legacy format)
+                for ext in [".tar.zst", ".tar.xz"]:
+                    filename = f"{artifact_name}_{comp}_{tf}{ext}"
+                    if filename in available:
+                        download_requests.append(
+                            DownloadRequest(
+                                artifact_key=filename,
+                                dest_path=download_dir / filename,
+                                backend=backend,
+                            )
                         )
-                    )
+                        break  # Found this artifact, don't check other extensions
 
     if not download_requests:
         log("No matching artifacts found to download")
@@ -342,6 +393,23 @@ def do_fetch(args: argparse.Namespace):
     if download_dir.exists() and not args.no_extract:
         shutil.rmtree(download_dir)
 
+    # Fail if any downloads failed
+    total_requested = len(download_requests)
+    if downloaded_count < total_requested:
+        log(
+            f"ERROR: Only downloaded {downloaded_count}/{total_requested} artifacts - "
+            f"{total_requested - downloaded_count} failed"
+        )
+        sys.exit(1)
+
+    # Fail if any extractions failed (when extraction was requested)
+    if not args.no_extract and extracted_count < downloaded_count:
+        log(
+            f"ERROR: Only extracted {extracted_count}/{downloaded_count} artifacts - "
+            f"{downloaded_count - extracted_count} failed"
+        )
+        sys.exit(1)
+
 
 # =============================================================================
 # Push (Compress + Upload) with Parallel Processing
@@ -354,7 +422,10 @@ class CompressRequest:
 
     source_dir: Path
     archive_path: Path
-    compression_level: int = 6
+    compression_type: str = "zstd"
+    compression_level: Optional[int] = (
+        None  # None = use algorithm default (3 for zstd, 6 for xz)
+    )
 
 
 @dataclass
@@ -384,12 +455,18 @@ def compress_artifact(request: CompressRequest) -> Optional[Path]:
             "artifact-archive",
             "-o",
             str(request.archive_path),
-            "--compression-level",
-            str(request.compression_level),
-            "--hash-file",
-            str(request.archive_path) + ".sha256sum",
-            str(request.source_dir),
+            "--compression-type",
+            request.compression_type,
         ]
+        if request.compression_level is not None:
+            cmd.extend(["--compression-level", str(request.compression_level)])
+        cmd.extend(
+            [
+                "--hash-file",
+                str(request.archive_path) + ".sha256sum",
+                str(request.source_dir),
+            ]
+        )
 
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
@@ -429,7 +506,7 @@ def upload_artifact(request: UploadRequest) -> bool:
                 log(
                     f"  ++ Retry {attempt + 1}/{MAX_RETRIES} for {request.artifact_key}: {e}"
                 )
-                time.sleep(delay)
+                _delay_for_retry(delay)
             else:
                 log(f"  !! Failed to upload {request.artifact_key}: {e}")
                 return False
@@ -438,7 +515,7 @@ def upload_artifact(request: UploadRequest) -> bool:
 
 def do_push(args: argparse.Namespace):
     """Push produced artifacts after building with parallel compress and upload."""
-    topology = get_topology()
+    topology = get_topology(args.topology)
 
     # Validate stage
     if args.stage not in topology.build_stages:
@@ -470,13 +547,11 @@ def do_push(args: argparse.Namespace):
         log(f"ERROR: Artifacts directory not found: {artifacts_dir}")
         sys.exit(1)
 
-    # Determine target families
-    target_families = ["generic"]
-    if args.amdgpu_families:
-        target_families.extend(args.amdgpu_families.split(","))
-
     # Find artifact directories to compress and upload
     # Check for both pre-compressed archives and exploded directories
+    # Note: We push all artifacts produced by this stage regardless of target family.
+    # The build system already determined what to build; filtering here is redundant
+    # and breaks with kpack splitting (which produces individual arch artifacts).
     upload_dir = build_dir / ".upload_cache"
     upload_dir.mkdir(parents=True, exist_ok=True)
 
@@ -491,28 +566,25 @@ def do_push(args: argparse.Namespace):
                 continue
             if an.name not in produced:
                 continue
-            if an.target_family not in target_families:
-                continue
 
-            archive_name = f"{item.name}.tar.xz"
-            # Use low compression for arch-specific artifacts since device
-            # code is already compressed
-            compression = 1 if an.target_family != "generic" else args.compression_level
+            ext = ".tar.zst" if args.compression_type == "zstd" else ".tar.xz"
+            archive_name = f"{item.name}{ext}"
             compress_requests.append(
                 CompressRequest(
                     source_dir=item,
                     archive_path=upload_dir / archive_name,
-                    compression_level=compression,
+                    compression_type=args.compression_type,
+                    compression_level=args.compression_level,
                 )
             )
-        elif item.suffix == ".xz" and item.name.endswith(".tar.xz"):
+        elif (item.suffix == ".xz" and item.name.endswith(".tar.xz")) or (
+            item.suffix == ".zst" and item.name.endswith(".tar.zst")
+        ):
             # Pre-compressed archive - direct upload
             an = ArtifactName.from_path(item)
             if not an:
                 continue
             if an.name not in produced:
-                continue
-            if an.target_family not in target_families:
                 continue
 
             direct_upload_requests.append(
@@ -581,6 +653,14 @@ def do_push(args: argparse.Namespace):
     if upload_dir.exists():
         shutil.rmtree(upload_dir)
 
+    # Fail if any artifacts failed to upload
+    if uploaded_count < total_artifacts:
+        log(
+            f"ERROR: Only uploaded {uploaded_count}/{total_artifacts} artifacts - "
+            f"{total_artifacts - uploaded_count} failed"
+        )
+        sys.exit(1)
+
 
 # =============================================================================
 # Info Commands
@@ -589,7 +669,7 @@ def do_push(args: argparse.Namespace):
 
 def do_info(args: argparse.Namespace):
     """Show information about stage artifact requirements."""
-    topology = get_topology()
+    topology = get_topology(args.topology)
 
     stage = topology.build_stages.get(args.stage)
     if not stage:
@@ -631,7 +711,7 @@ def do_info(args: argparse.Namespace):
 
 def do_list_stages(args: argparse.Namespace):
     """List all build stages."""
-    topology = get_topology()
+    topology = get_topology(args.topology)
 
     log("Build stages:")
     for stage in topology.get_build_stages():
@@ -649,13 +729,19 @@ def do_list_stages(args: argparse.Namespace):
 # =============================================================================
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Stage-aware artifact manager for multi-stage CI/CD pipeline",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
+def _add_common_args(parser: argparse.ArgumentParser):
+    """Add common arguments shared by all subcommands."""
+    parser.add_argument(
+        "--topology",
+        type=Path,
+        default=None,
+        help="Path to BUILD_TOPOLOGY.toml (default: auto-detect from repo root)",
     )
 
-    # Common arguments
+
+def _add_backend_args(parser: argparse.ArgumentParser):
+    """Add common backend-related arguments to a subparser."""
+    _add_common_args(parser)
     parser.add_argument(
         "--run-id",
         type=str,
@@ -675,19 +761,36 @@ def main():
         help="Local staging directory (sets THEROCK_LOCAL_STAGING_DIR)",
     )
 
+
+def main(argv: Optional[List[str]] = None):
+    parser = argparse.ArgumentParser(
+        description="Stage-aware artifact manager for multi-stage CI/CD pipeline",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     # fetch command
     fetch_parser = subparsers.add_parser(
         "fetch", help="Fetch inbound artifacts for a stage"
     )
+    _add_backend_args(fetch_parser)
     fetch_parser.add_argument(
-        "--stage", type=str, required=True, help="Build stage name"
+        "--stage",
+        type=str,
+        default="all",
+        help="Build stage name (default: 'all' fetches all artifacts)",
     )
-    fetch_parser.add_argument(
+    fetch_target_group = fetch_parser.add_mutually_exclusive_group()
+    fetch_target_group.add_argument(
         "--amdgpu-families",
         type=str,
-        help="Comma-separated GPU families (e.g., gfx94X-dcgpu,gfx110X-all)",
+        help="Comma-separated GPU families to fetch (e.g., gfx94X-dcgpu,gfx1100)",
+    )
+    fetch_target_group.add_argument(
+        "--generic-only",
+        action="store_true",
+        help="Only fetch generic (host) artifacts, skip device-specific artifacts",
     )
     fetch_parser.add_argument(
         "--output-dir",
@@ -715,7 +818,7 @@ def main():
         "--extract-concurrency",
         type=int,
         default=None,
-        help="Number of concurrent extractions (default: CPU count)",
+        help="Number of concurrent extractions (default: auto)",
     )
     fetch_parser.set_defaults(func=do_fetch)
 
@@ -723,13 +826,9 @@ def main():
     push_parser = subparsers.add_parser(
         "push", help="Push produced artifacts after building"
     )
+    _add_backend_args(push_parser)
     push_parser.add_argument(
         "--stage", type=str, required=True, help="Build stage name"
-    )
-    push_parser.add_argument(
-        "--amdgpu-families",
-        type=str,
-        help="Comma-separated GPU families (e.g., gfx94X-dcgpu,gfx110X-all)",
     )
     push_parser.add_argument(
         "--build-dir",
@@ -738,17 +837,23 @@ def main():
         help="Build directory containing artifacts/",
     )
     push_parser.add_argument(
+        "--compression-type",
+        type=str,
+        default="zstd",
+        choices=["zstd", "xz"],
+        help="Compression algorithm (default: zstd)",
+    )
+    push_parser.add_argument(
         "--compression-level",
         type=int,
-        default=6,
-        choices=range(0, 10),
-        help="XZ compression level 0-9 (default: 6)",
+        default=None,
+        help="Compression level (default: 3 for zstd, 6 for xz)",
     )
     push_parser.add_argument(
         "--compress-concurrency",
         type=int,
         default=None,
-        help="Number of concurrent compressions (default: CPU count)",
+        help="Number of concurrent compressions (default: auto)",
     )
     push_parser.add_argument(
         "--upload-concurrency",
@@ -762,6 +867,7 @@ def main():
     info_parser = subparsers.add_parser(
         "info", help="Show information about stage artifact requirements"
     )
+    _add_common_args(info_parser)
     info_parser.add_argument(
         "--stage", type=str, required=True, help="Build stage name"
     )
@@ -774,13 +880,15 @@ def main():
 
     # list-stages command
     list_parser = subparsers.add_parser("list-stages", help="List all build stages")
+    _add_common_args(list_parser)
     list_parser.set_defaults(func=do_list_stages)
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
-    # Set environment variable if --local-staging-dir provided
-    if args.local_staging_dir:
-        os.environ["THEROCK_LOCAL_STAGING_DIR"] = str(args.local_staging_dir)
+    # Set environment variable if --local-staging-dir provided (only on fetch/push)
+    local_staging_dir = getattr(args, "local_staging_dir", None)
+    if local_staging_dir:
+        os.environ["THEROCK_LOCAL_STAGING_DIR"] = str(local_staging_dir)
 
     args.func(args)
 

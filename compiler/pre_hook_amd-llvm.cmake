@@ -55,7 +55,48 @@ else()
 endif()
 
 # Set the LLVM_ENABLE_PROJECTS variable before including LLVM's CMakeLists.txt
-set(BUILD_TESTING OFF CACHE BOOL "DISABLE BUILDING TESTS IN SUBPROJECTS" FORCE)
+# Only enable BUILD_TESTING if LLVM tests are explicitly enabled
+if(THEROCK_ENABLE_LLVM_TESTS)
+  set(BUILD_TESTING ON CACHE BOOL "Enable building LLVM tests" FORCE)
+  set(LLVM_BUILD_TOOLS ON CACHE BOOL "Build LLVM tools required for tests" FORCE)
+  set(LLVM_INSTALL_UTILS ON CACHE BOOL "Install LLVM utility binaries like FileCheck" FORCE)
+
+  # Install llvm-lit script and the lit Python module for running LIT tests.
+  # LLVM_INSTALL_UTILS only installs C++ utilities (FileCheck, not, etc.),
+  # but llvm-lit is a Python script that requires separate handling.
+  install(PROGRAMS "${CMAKE_CURRENT_BINARY_DIR}/bin/llvm-lit" DESTINATION bin)
+
+  # Install the lit Python module. This is needed for llvm-lit to function.
+  # We install it to a lib/python subdirectory and set PYTHONPATH in llvm-lit.
+  set(_lit_source_dir "${CMAKE_CURRENT_SOURCE_DIR}/../llvm/utils/lit")
+  install(DIRECTORY "${_lit_source_dir}/lit"
+    DESTINATION "lib/python"
+    PATTERN "__pycache__" EXCLUDE
+    PATTERN "*.pyc" EXCLUDE
+  )
+
+  # Create a wrapper script that sets PYTHONPATH before invoking the real llvm-lit
+  file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/llvm-lit-wrapper" [=[#!/usr/bin/env bash
+# Wrapper script for llvm-lit that sets up PYTHONPATH
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+export PYTHONPATH="${SCRIPT_DIR}/../lib/python:${PYTHONPATH}"
+exec "${SCRIPT_DIR}/llvm-lit.real" "$@"
+]=])
+  # Install the wrapper and rename the original
+  install(CODE "
+    # Rename the original llvm-lit to llvm-lit.real
+    file(RENAME \"\${CMAKE_INSTALL_PREFIX}/bin/llvm-lit\" \"\${CMAKE_INSTALL_PREFIX}/bin/llvm-lit.real\" )
+    # Install the wrapper script as llvm-lit
+    file(COPY \"${CMAKE_CURRENT_BINARY_DIR}/llvm-lit-wrapper\" DESTINATION \"\${CMAKE_INSTALL_PREFIX}/bin\")
+    file(RENAME \"\${CMAKE_INSTALL_PREFIX}/bin/llvm-lit-wrapper\" \"\${CMAKE_INSTALL_PREFIX}/bin/llvm-lit\")
+    file(CHMOD \"\${CMAKE_INSTALL_PREFIX}/bin/llvm-lit\" PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+  ")
+else()
+  set(BUILD_TESTING OFF CACHE BOOL "DISABLE BUILDING TESTS IN SUBPROJECTS" FORCE)
+endif()
+# we have never enabled benchmarks,
+# disabling more explicitly after a bug fix enabled.
+set(LLVM_INCLUDE_BENCHMARKS OFF)
 set(LLVM_TARGETS_TO_BUILD "AMDGPU;X86" CACHE STRING "Enable LLVM Targets" FORCE)
 
 # Packaging.
@@ -119,48 +160,54 @@ function(therock_set_implicit_llvm_options type tools_dir required_tool_names)
   endforeach()
 endfunction()
 
-block()
-  # This list contains the minimum tooling that must be enabled to build LLVM.
-  # It is empically derived (either configure or ninja invocation will fail
-  # on a missing tool).
-  set(_llvm_required_tools
-    LLVM_AR
-    LLVM_CONFIG
-    LLVM_DWARFDUMP
-    LLVM_JITLINK
-    LLVM_LINK
-    LLVM_MC
-    LLVM_NM
-    LLVM_SHLIB
-    LLVM_OBJCOPY
-    LLVM_OBJDUMP
-    OPT
-    YAML2OBJ
-  )
-  if(WIN32)
-    # These can be provided by the "C++ Clang tools for Windows" in MSVC, but
-    # we might as well build them from source ourselves.
-    list(APPEND _llvm_required_tools "LLVM_DLLTOOL")
-    list(APPEND _llvm_required_tools "LLVM_LIB")
-    list(APPEND _llvm_required_tools "LLVM_RANLIB")
-  endif()
-  therock_set_implicit_llvm_options(LLVM "${CMAKE_CURRENT_SOURCE_DIR}/tools" "${_llvm_required_tools}")
+# When LLVM tests are enabled, build all tools (don't selectively disable).
+# Otherwise, only build the minimum required tools for production.
+if(NOT THEROCK_ENABLE_LLVM_TESTS)
+  block()
+    # This list contains the minimum tooling that must be enabled to build LLVM.
+    # It is empically derived (either configure or ninja invocation will fail
+    # on a missing tool).
+    set(_llvm_required_tools
+      LLVM_AR
+      LLVM_CONFIG
+      LLVM_DWARFDUMP
+      LLVM_LINK
+      LLVM_MC
+      LLVM_NM
+      LLVM_OFFLOAD_BINARY
+      LLVM_SHLIB
+      LLVM_OBJCOPY
+      LLVM_OBJDUMP
+      LLVM_SYMBOLIZER
+      OPT
+      YAML2OBJ
+    )
+    if(WIN32)
+      # These can be provided by the "C++ Clang tools for Windows" in MSVC, but
+      # we might as well build them from source ourselves.
+      list(APPEND _llvm_required_tools "LLVM_DLLTOOL")
+      list(APPEND _llvm_required_tools "LLVM_LIB")
+      list(APPEND _llvm_required_tools "LLVM_RANLIB")
+    endif()
+    therock_set_implicit_llvm_options(LLVM "${CMAKE_CURRENT_SOURCE_DIR}/tools" "${_llvm_required_tools}")
 
-  # Clang tools that are required.
-  set(_clang_required_tools
-    CLANG_HIP
-    CLANG_OFFLOAD_BUNDLER
-    CLANG_OFFLOAD_PACKAGER
-    CLANG_OFFLOAD_WRAPPER
-    CLANG_LINKER_WRAPPER
-    CLANG_SHLIB
-    DRIVER
-    OFFLOAD_ARCH
-  )
-  if(WIN32)
-    # These can be provided by the "C++ Clang tools for Windows" in MSVC, but
-    # we might as well build them from source ourselves.
-    list(APPEND _clang_required_tools "CLANG_SCAN_DEPS")
-  endif()
-  therock_set_implicit_llvm_options(CLANG "${CMAKE_CURRENT_SOURCE_DIR}/../clang/tools" "${_clang_required_tools}")
-endblock()
+    # Clang tools that are required.
+    set(_clang_required_tools
+      CLANG_HIP
+      CLANG_OFFLOAD_BUNDLER
+      CLANG_OFFLOAD_PACKAGER
+      CLANG_OFFLOAD_WRAPPER
+      CLANG_LINKER_WRAPPER
+      CLANG_SHLIB
+      DRIVER
+      LIBCLANG
+      OFFLOAD_ARCH
+    )
+    if(WIN32)
+      # These can be provided by the "C++ Clang tools for Windows" in MSVC, but
+      # we might as well build them from source ourselves.
+      list(APPEND _clang_required_tools "CLANG_SCAN_DEPS")
+    endif()
+    therock_set_implicit_llvm_options(CLANG "${CMAKE_CURRENT_SOURCE_DIR}/../clang/tools" "${_clang_required_tools}")
+  endblock()
+endif()

@@ -64,8 +64,8 @@ PACKAGE_ALLOW_LIST = {x.lower() for x in [
     "rocm_sdk",
     "rocm_sdk_core",
     "rocm_sdk_devel",
-    # ---- triton ROCm ----
-    "pytorch_triton_rocm",
+    # ---- triton ----
+    "triton",
     # ---- triton additional packages ----
     "Arpeggio",
     "caliper_reader",
@@ -87,6 +87,7 @@ PACKAGE_ALLOW_LIST = {x.lower() for x in [
     "zipp",
     # ----
     "Pillow",
+    "apex",
     "certifi",
     "charset_normalizer",
     "cmake",

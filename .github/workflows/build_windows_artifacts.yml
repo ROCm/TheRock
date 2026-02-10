@@ -75,9 +75,9 @@ jobs:
       IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
     steps:
       - name: "Checking out repository"
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: 3.12
 
@@ -97,6 +97,7 @@ jobs:
           choco install --no-progress -y strawberryperl
           echo "$PATH;C:\Strawberry\c\bin" >> $GITHUB_PATH
           choco install --no-progress -y awscli
+          choco install --no-progress -y pkgconfiglite
           echo "$PATH;C:\Program Files\Amazon\AWSCLIV2" >> $GITHUB_PATH
 
       - uses: iterative/setup-dvc@4bdfd2b0f6f1ad7e08afadb03b1a895c352a5239 # v2.0.0
@@ -112,14 +113,10 @@ jobs:
           ccache --zero-stats
           python ./build_tools/health_status.py
 
-      - name: Test build_tools
-        run: |
-          python -m pytest build_tools/tests build_tools/github_actions/tests
-
       # TODO: We shouldn't be using a cache on actual release branches, but it
       # really helps for iteration time.
       - name: Enable cache
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache/restore@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.2
         with:
           path: ${{ env.CACHE_DIR }}
           key: windows-build-packages-v4-${{ inputs.amdgpu_families }}-${{ github.sha }}
@@ -182,7 +179,7 @@ jobs:
 
       - name: Configure AWS Credentials for non-forked repos
         if: ${{ always() && !github.event.pull_request.head.repo.fork }}
-        uses: aws-actions/configure-aws-credentials@00943011d9042930efac3dcd3a170e4273319bc8 # v5.1.0
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-ci
@@ -198,7 +195,7 @@ jobs:
             --upload
 
       - name: Save cache
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache/save@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.2
         if: ${{ !cancelled() }}
         with:
           path: ${{ env.CACHE_DIR }}
