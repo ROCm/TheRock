@@ -17,30 +17,25 @@
 /**
  * @file smi_client.c
  * @brief Remote AMD SMI client implementation
+ *
+ * Cross-platform: Works on Windows, macOS, and Linux.
  */
 
 #include "smi_remote/smi_remote_client.h"
 #include "hip_remote/hip_remote_protocol.h"
+#include "hip_remote/hip_remote_platform.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
-#include <errno.h>
-#include <netdb.h>
-#include <sys/socket.h>
-#include <sys/time.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <pthread.h>
 
 /* ============================================================================
  * Client State
  * ============================================================================ */
 
 typedef struct {
-    int socket_fd;
-    pthread_mutex_t lock;
+    hip_socket_t socket_fd;
+    hip_mutex_t lock;
     uint32_t next_request_id;
     bool connected;
     bool debug_enabled;
@@ -50,7 +45,8 @@ typedef struct {
 } SmiClientState;
 
 static SmiClientState g_client = {
-    .socket_fd = -1,
+    .socket_fd = HIP_INVALID_SOCKET,
+    .lock = HIP_MUTEX_INIT,
     .next_request_id = 1,
     .connected = false,
     .debug_enabled = false,
@@ -58,7 +54,7 @@ static SmiClientState g_client = {
     .initialized = false,
 };
 
-static pthread_once_t g_init_once = PTHREAD_ONCE_INIT;
+static hip_once_t g_init_once = HIP_ONCE_INIT;
 
 /* ============================================================================
  * Logging
@@ -77,16 +73,16 @@ static pthread_once_t g_init_once = PTHREAD_ONCE_INIT;
  * Network Helpers
  * ============================================================================ */
 
-static int send_all(int fd, const void* data, size_t len) {
+static int send_all(hip_socket_t fd, const void* data, size_t len) {
     const uint8_t* p = (const uint8_t*)data;
     while (len > 0) {
-        ssize_t n = send(fd, p, len, 0);
+        int n = hip_send(fd, p, len, 0);
         if (n < 0) {
-            if (errno == EINTR) continue;
+            int err = hip_socket_errno();
+            if (err == HIP_EINTR) continue;
             return -1;
         }
         if (n == 0) {
-            errno = EPIPE;
             return -1;
         }
         p += (size_t)n;
@@ -95,16 +91,16 @@ static int send_all(int fd, const void* data, size_t len) {
     return 0;
 }
 
-static int recv_all(int fd, void* data, size_t len) {
+static int recv_all(hip_socket_t fd, void* data, size_t len) {
     uint8_t* p = (uint8_t*)data;
     while (len > 0) {
-        ssize_t n = recv(fd, p, len, 0);
+        int n = hip_recv(fd, p, len, 0);
         if (n < 0) {
-            if (errno == EINTR) continue;
+            int err = hip_socket_errno();
+            if (err == HIP_EINTR) continue;
             return -1;
         }
         if (n == 0) {
-            errno = ECONNRESET;
             return -1;
         }
         p += (size_t)n;
@@ -118,7 +114,8 @@ static int recv_all(int fd, void* data, size_t len) {
  * ============================================================================ */
 
 static void init_client_state(void) {
-    pthread_mutex_init(&g_client.lock, NULL);
+    /* Initialize socket subsystem */
+    hip_socket_init();
 
     /* Read configuration from environment */
     const char* host = getenv("TF_WORKER_HOST");
@@ -142,9 +139,9 @@ static void init_client_state(void) {
 }
 
 static int ensure_connected(void) {
-    pthread_once(&g_init_once, init_client_state);
+    hip_call_once(&g_init_once, init_client_state);
 
-    if (g_client.connected && g_client.socket_fd >= 0) {
+    if (g_client.connected && g_client.socket_fd != HIP_INVALID_SOCKET) {
         return 0;
     }
 
@@ -166,31 +163,27 @@ static int ensure_connected(void) {
 
     int err = getaddrinfo(g_client.worker_host, port_str, &hints, &result);
     if (err != 0) {
-        LOG_ERROR("Failed to resolve %s: %s", g_client.worker_host, gai_strerror(err));
+        LOG_ERROR("Failed to resolve %s", g_client.worker_host);
         return -1;
     }
 
     /* Create socket */
     g_client.socket_fd = socket(result->ai_family, result->ai_socktype, result->ai_protocol);
-    if (g_client.socket_fd < 0) {
-        LOG_ERROR("socket() failed: %s", strerror(errno));
+    if (g_client.socket_fd == HIP_INVALID_SOCKET) {
+        LOG_ERROR("socket() failed: %s", hip_socket_strerror(hip_socket_errno()));
         freeaddrinfo(result);
         return -1;
     }
 
     /* Set socket options */
-    int nodelay = 1;
-    setsockopt(g_client.socket_fd, IPPROTO_TCP, TCP_NODELAY, &nodelay, sizeof(nodelay));
-
-    struct timeval tv = { .tv_sec = 30, .tv_usec = 0 };
-    setsockopt(g_client.socket_fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-    setsockopt(g_client.socket_fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+    hip_set_nodelay(g_client.socket_fd);
+    hip_set_socket_timeout(g_client.socket_fd, 30);
 
     /* Connect */
-    if (connect(g_client.socket_fd, result->ai_addr, result->ai_addrlen) < 0) {
-        LOG_ERROR("connect() failed: %s", strerror(errno));
-        close(g_client.socket_fd);
-        g_client.socket_fd = -1;
+    if (connect(g_client.socket_fd, result->ai_addr, (int)result->ai_addrlen) != 0) {
+        LOG_ERROR("connect() failed: %s", hip_socket_strerror(hip_socket_errno()));
+        hip_close_socket(g_client.socket_fd);
+        g_client.socket_fd = HIP_INVALID_SOCKET;
         freeaddrinfo(result);
         return -1;
     }
@@ -203,9 +196,9 @@ static int ensure_connected(void) {
 }
 
 static void disconnect(void) {
-    if (g_client.socket_fd >= 0) {
-        close(g_client.socket_fd);
-        g_client.socket_fd = -1;
+    if (g_client.socket_fd != HIP_INVALID_SOCKET) {
+        hip_close_socket(g_client.socket_fd);
+        g_client.socket_fd = HIP_INVALID_SOCKET;
     }
     g_client.connected = false;
 }
@@ -221,10 +214,10 @@ static smi_remote_status_t send_request(
     void* response,
     size_t response_size
 ) {
-    pthread_mutex_lock(&g_client.lock);
+    hip_mutex_lock(&g_client.lock);
 
     if (ensure_connected() != 0) {
-        pthread_mutex_unlock(&g_client.lock);
+        hip_mutex_unlock(&g_client.lock);
         return SMI_STATUS_IO_ERROR;
     }
 
@@ -242,18 +235,18 @@ static smi_remote_status_t send_request(
 
     /* Send header */
     if (send_all(g_client.socket_fd, &header, sizeof(header)) < 0) {
-        LOG_ERROR("Failed to send header: %s", strerror(errno));
+        LOG_ERROR("Failed to send header: %s", hip_socket_strerror(hip_socket_errno()));
         disconnect();
-        pthread_mutex_unlock(&g_client.lock);
+        hip_mutex_unlock(&g_client.lock);
         return SMI_STATUS_IO_ERROR;
     }
 
     /* Send payload */
     if (request_size > 0 && request) {
         if (send_all(g_client.socket_fd, request, request_size) < 0) {
-            LOG_ERROR("Failed to send payload: %s", strerror(errno));
+            LOG_ERROR("Failed to send payload: %s", hip_socket_strerror(hip_socket_errno()));
             disconnect();
-            pthread_mutex_unlock(&g_client.lock);
+            hip_mutex_unlock(&g_client.lock);
             return SMI_STATUS_IO_ERROR;
         }
     }
@@ -261,9 +254,9 @@ static smi_remote_status_t send_request(
     /* Receive response header */
     HipRemoteHeader resp_header;
     if (recv_all(g_client.socket_fd, &resp_header, sizeof(resp_header)) < 0) {
-        LOG_ERROR("Failed to receive response header: %s", strerror(errno));
+        LOG_ERROR("Failed to receive response header: %s", hip_socket_strerror(hip_socket_errno()));
         disconnect();
-        pthread_mutex_unlock(&g_client.lock);
+        hip_mutex_unlock(&g_client.lock);
         return SMI_STATUS_IO_ERROR;
     }
 
@@ -271,7 +264,7 @@ static smi_remote_status_t send_request(
     if (resp_header.magic != HIP_REMOTE_MAGIC) {
         LOG_ERROR("Invalid response magic");
         disconnect();
-        pthread_mutex_unlock(&g_client.lock);
+        hip_mutex_unlock(&g_client.lock);
         return SMI_STATUS_IO_ERROR;
     }
 
@@ -280,22 +273,22 @@ static smi_remote_status_t send_request(
     if (recv_size > response_size) {
         LOG_ERROR("Response too large: %zu > %zu", recv_size, response_size);
         disconnect();
-        pthread_mutex_unlock(&g_client.lock);
+        hip_mutex_unlock(&g_client.lock);
         return SMI_STATUS_IO_ERROR;
     }
 
     if (recv_size > 0 && response) {
         if (recv_all(g_client.socket_fd, response, recv_size) < 0) {
-            LOG_ERROR("Failed to receive response payload: %s", strerror(errno));
+            LOG_ERROR("Failed to receive response payload: %s", hip_socket_strerror(hip_socket_errno()));
             disconnect();
-            pthread_mutex_unlock(&g_client.lock);
+            hip_mutex_unlock(&g_client.lock);
             return SMI_STATUS_IO_ERROR;
         }
     }
 
     LOG_DEBUG("Received response: %zu bytes", recv_size);
 
-    pthread_mutex_unlock(&g_client.lock);
+    hip_mutex_unlock(&g_client.lock);
     return SMI_STATUS_SUCCESS;
 }
 
@@ -304,19 +297,20 @@ static smi_remote_status_t send_request(
  * ============================================================================ */
 
 smi_remote_status_t smi_remote_init(void) {
-    pthread_once(&g_init_once, init_client_state);
+    hip_call_once(&g_init_once, init_client_state);
 
-    pthread_mutex_lock(&g_client.lock);
+    hip_mutex_lock(&g_client.lock);
 
     if (g_client.initialized) {
-        pthread_mutex_unlock(&g_client.lock);
+        hip_mutex_unlock(&g_client.lock);
         return SMI_STATUS_SUCCESS;
     }
 
-    pthread_mutex_unlock(&g_client.lock);
+    hip_mutex_unlock(&g_client.lock);
 
     /* Send SMI_OP_INIT to worker */
-    SmiRemoteInitRequest req = { .init_flags = 0 };
+    SmiRemoteInitRequest req;
+    memset(&req, 0, sizeof(req));
     HipRemoteResponseHeader resp;
 
     smi_remote_status_t status = send_request(SMI_OP_INIT, &req, sizeof(req),
@@ -330,22 +324,21 @@ smi_remote_status_t smi_remote_init(void) {
         return SMI_STATUS_API_FAILED;
     }
 
-    pthread_mutex_lock(&g_client.lock);
+    hip_mutex_lock(&g_client.lock);
     g_client.initialized = true;
-    pthread_mutex_unlock(&g_client.lock);
+    hip_mutex_unlock(&g_client.lock);
 
     LOG_DEBUG("SMI initialized on remote worker");
     return SMI_STATUS_SUCCESS;
 }
 
 void smi_remote_shutdown(void) {
-    pthread_mutex_lock(&g_client.lock);
+    hip_mutex_lock(&g_client.lock);
 
-    /* Just disconnect - don't send a shutdown request as it can block */
     disconnect();
     g_client.initialized = false;
 
-    pthread_mutex_unlock(&g_client.lock);
+    hip_mutex_unlock(&g_client.lock);
 }
 
 bool smi_remote_is_connected(void) {
@@ -380,7 +373,9 @@ smi_remote_status_t smi_remote_get_gpu_metrics(
         return SMI_STATUS_INVALID_ARGS;
     }
 
-    SmiRemoteProcessorRequest req = { .processor_index = processor_index };
+    SmiRemoteProcessorRequest req;
+    memset(&req, 0, sizeof(req));
+    req.processor_index = processor_index;
     SmiRemoteGpuMetricsResponse resp;
 
     smi_remote_status_t status = send_request(SMI_OP_GET_GPU_METRICS,
@@ -419,7 +414,9 @@ smi_remote_status_t smi_remote_get_power_info(
         return SMI_STATUS_INVALID_ARGS;
     }
 
-    SmiRemoteProcessorRequest req = { .processor_index = processor_index };
+    SmiRemoteProcessorRequest req;
+    memset(&req, 0, sizeof(req));
+    req.processor_index = processor_index;
     SmiRemotePowerInfoResponse resp;
 
     smi_remote_status_t status = send_request(SMI_OP_GET_POWER_INFO,
@@ -450,7 +447,9 @@ smi_remote_status_t smi_remote_get_asic_info(
         return SMI_STATUS_INVALID_ARGS;
     }
 
-    SmiRemoteProcessorRequest req = { .processor_index = processor_index };
+    SmiRemoteProcessorRequest req;
+    memset(&req, 0, sizeof(req));
+    req.processor_index = processor_index;
     SmiRemoteAsicInfoResponse resp;
 
     smi_remote_status_t status = send_request(SMI_OP_GET_ASIC_INFO,
@@ -482,7 +481,9 @@ smi_remote_status_t smi_remote_get_vram_usage(
         return SMI_STATUS_INVALID_ARGS;
     }
 
-    SmiRemoteProcessorRequest req = { .processor_index = processor_index };
+    SmiRemoteProcessorRequest req;
+    memset(&req, 0, sizeof(req));
+    req.processor_index = processor_index;
     SmiRemoteVramUsageResponse resp;
 
     smi_remote_status_t status = send_request(SMI_OP_GET_VRAM_USAGE,
@@ -511,7 +512,9 @@ smi_remote_status_t smi_remote_get_gpu_activity(
         return SMI_STATUS_INVALID_ARGS;
     }
 
-    SmiRemoteProcessorRequest req = { .processor_index = processor_index };
+    SmiRemoteProcessorRequest req;
+    memset(&req, 0, sizeof(req));
+    req.processor_index = processor_index;
     SmiRemoteGpuActivityResponse resp;
 
     smi_remote_status_t status = send_request(SMI_OP_GET_GPU_ACTIVITY,

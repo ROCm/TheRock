@@ -28,17 +28,22 @@
  *   info      - Show ASIC information
  *
  * Examples:
- *   TF_WORKER_HOST=sharkmi300x smi-remote list
- *   TF_WORKER_HOST=sharkmi300x smi-remote metrics
- *   TF_WORKER_HOST=sharkmi300x smi-remote metrics 0
+ *   smi-remote --host sharkmi300x list
+ *   smi-remote --host sharkmi300x metrics
+ *   smi-remote --host sharkmi300x metrics 0
  */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <getopt.h>
 
 #include "smi_remote/smi_remote_client.h"
+
+#ifdef _WIN32
+#define hip_cli_setenv(name, value) _putenv_s(name, value)
+#else
+#define hip_cli_setenv(name, value) setenv(name, value, 1)
+#endif
 
 static void print_usage(const char* prog) {
     fprintf(stderr, "Usage: %s [OPTIONS] COMMAND [ARGS]\n\n", prog);
@@ -55,8 +60,8 @@ static void print_usage(const char* prog) {
     fprintf(stderr, "  info [N]       Show ASIC information\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "Examples:\n");
-    fprintf(stderr, "  TF_WORKER_HOST=myserver %s list\n", prog);
-    fprintf(stderr, "  TF_WORKER_HOST=myserver %s metrics 0\n", prog);
+    fprintf(stderr, "  %s --host myserver list\n", prog);
+    fprintf(stderr, "  %s --host myserver metrics 0\n", prog);
     fprintf(stderr, "\n");
 }
 
@@ -222,7 +227,7 @@ static int cmd_info(int gpu_index) {
     status = smi_remote_get_processor_count(&count);
     if (status != SMI_STATUS_SUCCESS) {
         fprintf(stderr, "Failed to get processor count: %s\n", smi_remote_status_string(status));
-        return 1;
+        return 0;
     }
 
     if (gpu_index >= 0 && (uint32_t)gpu_index >= count) {
@@ -258,42 +263,41 @@ static int cmd_info(int gpu_index) {
 }
 
 int main(int argc, char** argv) {
-    static struct option long_options[] = {
-        {"host", required_argument, 0, 'H'},
-        {"port", required_argument, 0, 'P'},
-        {"help", no_argument, 0, 'h'},
-        {0, 0, 0, 0}
-    };
+    const char* command = NULL;
+    int gpu_index = -1;  /* -1 means all GPUs */
+    int argi = 1;
 
-    int opt;
-    while ((opt = getopt_long(argc, argv, "hH:P:", long_options, NULL)) != -1) {
-        switch (opt) {
-            case 'H':
-                setenv("TF_WORKER_HOST", optarg, 1);
-                break;
-            case 'P':
-                setenv("TF_WORKER_PORT", optarg, 1);
-                break;
-            case 'h':
-                print_usage(argv[0]);
-                return 0;
-            default:
-                print_usage(argv[0]);
-                return 1;
+    /* Parse options */
+    while (argi < argc) {
+        if (strcmp(argv[argi], "--host") == 0 && argi + 1 < argc) {
+            hip_cli_setenv("TF_WORKER_HOST", argv[argi + 1]);
+            argi += 2;
+        } else if (strcmp(argv[argi], "--port") == 0 && argi + 1 < argc) {
+            hip_cli_setenv("TF_WORKER_PORT", argv[argi + 1]);
+            argi += 2;
+        } else if (strcmp(argv[argi], "-h") == 0 || strcmp(argv[argi], "--help") == 0) {
+            print_usage(argv[0]);
+            return 0;
+        } else if (argv[argi][0] == '-') {
+            fprintf(stderr, "Unknown option: %s\n\n", argv[argi]);
+            print_usage(argv[0]);
+            return 1;
+        } else {
+            /* First non-option argument is the command */
+            command = argv[argi];
+            argi++;
+            /* Second non-option argument (if any) is GPU index */
+            if (argi < argc) {
+                gpu_index = atoi(argv[argi]);
+            }
+            break;
         }
     }
 
-    if (optind >= argc) {
+    if (!command) {
         fprintf(stderr, "Error: No command specified\n\n");
         print_usage(argv[0]);
         return 1;
-    }
-
-    const char* command = argv[optind];
-    int gpu_index = -1;  /* -1 means all GPUs */
-
-    if (optind + 1 < argc) {
-        gpu_index = atoi(argv[optind + 1]);
     }
 
     int result = 0;

@@ -21,8 +21,8 @@
 
 #include "hip_remote/hip_remote_client.h"
 #include "hip_remote/hip_remote_protocol.h"
+#include "hip_remote/hip_remote_platform.h"
 
-#include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -43,16 +43,16 @@ typedef struct {
 
 static FunctionInfo g_function_info[MAX_TRACKED_FUNCTIONS];
 static uint32_t g_function_count = 0;
-static pthread_mutex_t g_function_lock = PTHREAD_MUTEX_INITIALIZER;
+static hip_mutex_t g_function_lock = HIP_MUTEX_INIT;
 
 static void store_function_info(hipFunction_t function, uint32_t num_args) {
-    pthread_mutex_lock(&g_function_lock);
+    hip_mutex_lock(&g_function_lock);
 
     /* Check if already exists */
     for (uint32_t i = 0; i < g_function_count; i++) {
         if (g_function_info[i].function == function) {
             g_function_info[i].num_args = num_args;
-            pthread_mutex_unlock(&g_function_lock);
+            hip_mutex_unlock(&g_function_lock);
             return;
         }
     }
@@ -64,21 +64,21 @@ static void store_function_info(hipFunction_t function, uint32_t num_args) {
         g_function_count++;
     }
 
-    pthread_mutex_unlock(&g_function_lock);
+    hip_mutex_unlock(&g_function_lock);
 }
 
 static uint32_t get_function_num_args(hipFunction_t function) {
-    pthread_mutex_lock(&g_function_lock);
+    hip_mutex_lock(&g_function_lock);
 
     for (uint32_t i = 0; i < g_function_count; i++) {
         if (g_function_info[i].function == function) {
             uint32_t num_args = g_function_info[i].num_args;
-            pthread_mutex_unlock(&g_function_lock);
+            hip_mutex_unlock(&g_function_lock);
             return num_args;
         }
     }
 
-    pthread_mutex_unlock(&g_function_lock);
+    hip_mutex_unlock(&g_function_lock);
     return 0; /* Unknown function - return 0 args */
 }
 

@@ -26,8 +26,8 @@
 #define HIP_REMOTE_CLIENT_H
 
 #include "hip_remote_protocol.h"
+#include "hip_remote_platform.h"
 #include <stdbool.h>
-#include <pthread.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -152,8 +152,8 @@ typedef void* hipStream_t;
  * Client connection state
  */
 typedef struct {
-    int socket_fd;                  /**< Socket file descriptor */
-    pthread_mutex_t lock;           /**< Mutex for thread safety */
+    hip_socket_t socket_fd;         /**< Socket handle */
+    hip_mutex_t lock;               /**< Mutex for thread safety */
     uint32_t next_request_id;       /**< Next request ID */
     bool connected;                 /**< Connection status */
     bool debug_enabled;             /**< Debug logging enabled */

@@ -26,8 +26,7 @@
  * Stream Operations
  * ============================================================================ */
 
-/* Stream handle type (opaque) */
-typedef void* hipStream_t;
+/* Stream/event handle types (opaque) - already defined in hip_remote_client.h as void* */
 typedef void* hipEvent_t;
 
 hipError_t hipStreamCreate(hipStream_t* stream) {

@@ -1,17 +1,19 @@
 ################################################################################
 # hip-remote-client
 #
-# Remote HIP runtime client library for macOS.
+# Remote HIP runtime client library.
 # This library implements the HIP API by forwarding calls to a remote
 # HIP worker service running on a Linux system with AMD GPUs.
+#
+# Supported platforms: Windows, macOS, Linux (without native AMD GPU)
 ################################################################################
 
 cmake_minimum_required(VERSION 3.25)
 project(hip-remote-client VERSION 1.0.0 LANGUAGES C)
 
-# Only build on macOS (or when explicitly requested for testing)
-if(NOT APPLE AND NOT HIP_REMOTE_FORCE_BUILD)
-  message(STATUS "hip-remote-client: Skipping (not macOS)")
+# Build on macOS, Windows, or when explicitly requested
+if(NOT APPLE AND NOT WIN32 AND NOT HIP_REMOTE_FORCE_BUILD)
+  message(STATUS "hip-remote-client: Skipping (not macOS/Windows, set HIP_REMOTE_FORCE_BUILD=ON to force)")
   return()
 endif()
 
@@ -32,6 +34,7 @@ set(HIP_REMOTE_SOURCES
 set(HIP_REMOTE_HEADERS
   include/hip_remote/hip_remote_protocol.h
   include/hip_remote/hip_remote_client.h
+  include/hip_remote/hip_remote_platform.h
 )
 
 add_library(amdhip64 SHARED ${HIP_REMOTE_SOURCES})
@@ -53,19 +56,23 @@ set_target_properties(amdhip64 PROPERTIES
   POSITION_INDEPENDENT_CODE ON
 )
 
-# macOS-specific settings
+# Platform-specific settings
 if(APPLE)
   set_target_properties(amdhip64 PROPERTIES
     INSTALL_NAME_DIR "@rpath"
     BUILD_WITH_INSTALL_RPATH ON
     MACOSX_RPATH ON
   )
+  target_link_libraries(amdhip64 PRIVATE pthread)
+elseif(WIN32)
+  target_link_libraries(amdhip64 PRIVATE ws2_32)
+  # Export all symbols for the DLL
+  set_target_properties(amdhip64 PROPERTIES
+    WINDOWS_EXPORT_ALL_SYMBOLS ON
+  )
+else()
+  target_link_libraries(amdhip64 PRIVATE pthread)
 endif()
-
-# Link against system libraries
-target_link_libraries(amdhip64 PRIVATE
-  pthread
-)
 
 ################################################################################
 # Install

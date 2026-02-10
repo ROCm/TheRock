@@ -17,33 +17,26 @@
 /**
  * @file hip_client.c
  * @brief Core client implementation for remote HIP execution
+ *
+ * Cross-platform: Works on Windows, macOS, and Linux.
  */
-
-#define _POSIX_C_SOURCE 200809L
 
 #include "hip_remote/hip_remote_client.h"
 #include "hip_remote/hip_remote_protocol.h"
+#include "hip_remote/hip_remote_platform.h"
 
-#include <arpa/inet.h>
-#include <errno.h>
-#include <netdb.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/socket.h>
-#include <sys/time.h>
-#include <unistd.h>
 
 /* ============================================================================
  * Global State
  * ============================================================================ */
 
 static HipRemoteClientState g_client_state = {
-    .socket_fd = -1,
-    .lock = PTHREAD_MUTEX_INITIALIZER,
+    .socket_fd = HIP_INVALID_SOCKET,
+    .lock = HIP_MUTEX_INIT,
     .next_request_id = 1,
     .connected = false,
     .debug_enabled = false,
@@ -54,7 +47,8 @@ static HipRemoteClientState g_client_state = {
     .last_error = hipSuccess
 };
 
-static pthread_once_t g_init_once = PTHREAD_ONCE_INIT;
+static hip_once_t g_init_once = HIP_ONCE_INIT;
+static int g_wsa_initialized = 0;
 
 /* ============================================================================
  * Logging
@@ -88,20 +82,16 @@ void hip_remote_log_error(const char* fmt, ...) {
 /**
  * Send all bytes, handling partial sends.
  */
-static int send_all(int fd, const void* buf, size_t len) {
+static int send_all(hip_socket_t fd, const void* buf, size_t len) {
     const uint8_t* p = (const uint8_t*)buf;
     while (len > 0) {
-#ifdef MSG_NOSIGNAL
-        ssize_t n = send(fd, p, len, MSG_NOSIGNAL);
-#else
-        ssize_t n = send(fd, p, len, 0);
-#endif
+        int n = hip_send(fd, p, len, HIP_MSG_NOSIGNAL);
         if (n < 0) {
-            if (errno == EINTR) continue;
+            int err = hip_socket_errno();
+            if (err == HIP_EINTR) continue;
             return -1;
         }
         if (n == 0) {
-            errno = EPIPE;
             return -1;
         }
         p += (size_t)n;
@@ -113,16 +103,16 @@ static int send_all(int fd, const void* buf, size_t len) {
 /**
  * Receive all bytes, handling partial receives.
  */
-static int recv_all(int fd, void* buf, size_t len) {
+static int recv_all(hip_socket_t fd, void* buf, size_t len) {
     uint8_t* p = (uint8_t*)buf;
     while (len > 0) {
-        ssize_t n = recv(fd, p, len, 0);
+        int n = hip_recv(fd, p, len, 0);
         if (n < 0) {
-            if (errno == EINTR) continue;
+            int err = hip_socket_errno();
+            if (err == HIP_EINTR) continue;
             return -1;
         }
         if (n == 0) {
-            errno = ECONNRESET;
             return -1;
         }
         p += (size_t)n;
@@ -136,13 +126,14 @@ static int recv_all(int fd, void* buf, size_t len) {
  */
 static void mark_disconnected_locked(const char* reason) {
     if (reason) {
+        int err = hip_socket_errno();
         hip_remote_log_debug("Disconnected: %s (errno=%d: %s)",
-                             reason, errno, strerror(errno));
+                             reason, err, hip_socket_strerror(err));
     }
-    if (g_client_state.socket_fd >= 0) {
-        close(g_client_state.socket_fd);
+    if (g_client_state.socket_fd != HIP_INVALID_SOCKET) {
+        hip_close_socket(g_client_state.socket_fd);
     }
-    g_client_state.socket_fd = -1;
+    g_client_state.socket_fd = HIP_INVALID_SOCKET;
     g_client_state.connected = false;
 }
 
@@ -150,6 +141,13 @@ static void mark_disconnected_locked(const char* reason) {
  * Initialize client state from environment.
  */
 static void init_from_environment(void) {
+    /* Initialize socket subsystem (Winsock on Windows, no-op on POSIX) */
+    if (hip_socket_init() != 0) {
+        hip_remote_log_error("Failed to initialize socket subsystem");
+    } else {
+        g_wsa_initialized = 1;
+    }
+
     const char* debug = getenv("TF_DEBUG");
     if (debug && strcmp(debug, "1") == 0) {
         g_client_state.debug_enabled = true;
@@ -201,48 +199,46 @@ static int connect_to_worker_locked(void) {
     hip_remote_log_debug("Connecting to %s:%d...",
                          g_client_state.worker_host, g_client_state.worker_port);
 
+    /* Resolve hostname using getaddrinfo (cross-platform) */
+    struct addrinfo hints, *result = NULL;
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_protocol = IPPROTO_TCP;
+
+    char port_str[16];
+    snprintf(port_str, sizeof(port_str), "%d", g_client_state.worker_port);
+
+    int gai_err = getaddrinfo(g_client_state.worker_host, port_str, &hints, &result);
+    if (gai_err != 0) {
+        hip_remote_log_error("Failed to resolve host: %s", g_client_state.worker_host);
+        return -1;
+    }
+
     /* Create socket */
-    g_client_state.socket_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (g_client_state.socket_fd < 0) {
-        hip_remote_log_error("Failed to create socket: %s", strerror(errno));
+    g_client_state.socket_fd = socket(result->ai_family, result->ai_socktype, result->ai_protocol);
+    if (g_client_state.socket_fd == HIP_INVALID_SOCKET) {
+        hip_remote_log_error("Failed to create socket: %s",
+                             hip_socket_strerror(hip_socket_errno()));
+        freeaddrinfo(result);
         return -1;
     }
 
     /* Set socket options */
-    int nodelay = 1;
-    setsockopt(g_client_state.socket_fd, IPPROTO_TCP, TCP_NODELAY,
-               &nodelay, sizeof(nodelay));
-
-    struct timeval timeout;
-    timeout.tv_sec = g_client_state.io_timeout_sec;
-    timeout.tv_usec = 0;
-    setsockopt(g_client_state.socket_fd, SOL_SOCKET, SO_RCVTIMEO,
-               &timeout, sizeof(timeout));
-    setsockopt(g_client_state.socket_fd, SOL_SOCKET, SO_SNDTIMEO,
-               &timeout, sizeof(timeout));
-
-    /* Resolve hostname */
-    struct hostent* server = gethostbyname(g_client_state.worker_host);
-    if (!server) {
-        hip_remote_log_error("Failed to resolve host: %s", g_client_state.worker_host);
-        mark_disconnected_locked("resolve");
-        return -1;
-    }
+    hip_set_nodelay(g_client_state.socket_fd);
+    hip_set_socket_timeout(g_client_state.socket_fd, g_client_state.io_timeout_sec);
 
     /* Connect */
-    struct sockaddr_in server_addr;
-    memset(&server_addr, 0, sizeof(server_addr));
-    server_addr.sin_family = AF_INET;
-    memcpy(&server_addr.sin_addr.s_addr, server->h_addr_list[0], server->h_length);
-    server_addr.sin_port = htons((uint16_t)g_client_state.worker_port);
-
     if (connect(g_client_state.socket_fd,
-                (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
-        hip_remote_log_error("Failed to connect: %s", strerror(errno));
+                result->ai_addr, (int)result->ai_addrlen) != 0) {
+        hip_remote_log_error("Failed to connect: %s",
+                             hip_socket_strerror(hip_socket_errno()));
         mark_disconnected_locked("connect");
+        freeaddrinfo(result);
         return -1;
     }
 
+    freeaddrinfo(result);
     g_client_state.connected = true;
     hip_remote_log_debug("Connected successfully");
 
@@ -271,9 +267,9 @@ static int connect_to_worker_locked(void) {
 
     if (resp_header.payload_length > 0) {
         HipRemoteResponseHeader resp;
-        if (recv_all(g_client_state.socket_fd, &resp,
-                     sizeof(resp) < resp_header.payload_length ?
-                     sizeof(resp) : resp_header.payload_length) != 0) {
+        size_t to_read = sizeof(resp) < resp_header.payload_length ?
+                         sizeof(resp) : resp_header.payload_length;
+        if (recv_all(g_client_state.socket_fd, &resp, to_read) != 0) {
             mark_disconnected_locked("recv init body");
             return -1;
         }
@@ -293,21 +289,21 @@ static int connect_to_worker_locked(void) {
  * ============================================================================ */
 
 HipRemoteClientState* hip_remote_get_client_state(void) {
-    pthread_once(&g_init_once, init_from_environment);
+    hip_call_once(&g_init_once, init_from_environment);
     return &g_client_state;
 }
 
 int hip_remote_ensure_connected(void) {
-    pthread_once(&g_init_once, init_from_environment);
+    hip_call_once(&g_init_once, init_from_environment);
 
-    pthread_mutex_lock(&g_client_state.lock);
+    hip_mutex_lock(&g_client_state.lock);
     int result = connect_to_worker_locked();
-    pthread_mutex_unlock(&g_client_state.lock);
+    hip_mutex_unlock(&g_client_state.lock);
     return result;
 }
 
 void hip_remote_disconnect(void) {
-    pthread_mutex_lock(&g_client_state.lock);
+    hip_mutex_lock(&g_client_state.lock);
 
     if (g_client_state.connected) {
         /* Send shutdown message (best effort) */
@@ -318,13 +314,13 @@ void hip_remote_disconnect(void) {
         mark_disconnected_locked("shutdown");
     }
 
-    pthread_mutex_unlock(&g_client_state.lock);
+    hip_mutex_unlock(&g_client_state.lock);
 }
 
 bool hip_remote_is_connected(void) {
-    pthread_mutex_lock(&g_client_state.lock);
+    hip_mutex_lock(&g_client_state.lock);
     bool connected = g_client_state.connected;
-    pthread_mutex_unlock(&g_client_state.lock);
+    hip_mutex_unlock(&g_client_state.lock);
     return connected;
 }
 
@@ -335,13 +331,13 @@ hipError_t hip_remote_request(
     void* response,
     size_t response_size
 ) {
-    pthread_once(&g_init_once, init_from_environment);
+    hip_call_once(&g_init_once, init_from_environment);
 
-    pthread_mutex_lock(&g_client_state.lock);
+    hip_mutex_lock(&g_client_state.lock);
 
     /* Ensure connected */
     if (connect_to_worker_locked() != 0) {
-        pthread_mutex_unlock(&g_client_state.lock);
+        hip_mutex_unlock(&g_client_state.lock);
         g_client_state.last_error = hipErrorNotInitialized;
         return hipErrorNotInitialized;
     }
@@ -358,7 +354,7 @@ hipError_t hip_remote_request(
 
     if (send_all(g_client_state.socket_fd, &header, sizeof(header)) != 0) {
         mark_disconnected_locked("send header");
-        pthread_mutex_unlock(&g_client_state.lock);
+        hip_mutex_unlock(&g_client_state.lock);
         g_client_state.last_error = hipErrorNotInitialized;
         return hipErrorNotInitialized;
     }
@@ -366,7 +362,7 @@ hipError_t hip_remote_request(
     if (request && request_size > 0) {
         if (send_all(g_client_state.socket_fd, request, request_size) != 0) {
             mark_disconnected_locked("send payload");
-            pthread_mutex_unlock(&g_client_state.lock);
+            hip_mutex_unlock(&g_client_state.lock);
             g_client_state.last_error = hipErrorNotInitialized;
             return hipErrorNotInitialized;
         }
@@ -376,14 +372,14 @@ hipError_t hip_remote_request(
     HipRemoteHeader resp_header;
     if (recv_all(g_client_state.socket_fd, &resp_header, sizeof(resp_header)) != 0) {
         mark_disconnected_locked("recv header");
-        pthread_mutex_unlock(&g_client_state.lock);
+        hip_mutex_unlock(&g_client_state.lock);
         g_client_state.last_error = hipErrorNotInitialized;
         return hipErrorNotInitialized;
     }
 
     if (hip_remote_validate_header(&resp_header) != 0) {
         mark_disconnected_locked("invalid header");
-        pthread_mutex_unlock(&g_client_state.lock);
+        hip_mutex_unlock(&g_client_state.lock);
         g_client_state.last_error = hipErrorInvalidValue;
         return hipErrorInvalidValue;
     }
@@ -395,7 +391,7 @@ hipError_t hip_remote_request(
                          resp_header.payload_length : response_size;
         if (recv_all(g_client_state.socket_fd, response, to_read) != 0) {
             mark_disconnected_locked("recv payload");
-            pthread_mutex_unlock(&g_client_state.lock);
+            hip_mutex_unlock(&g_client_state.lock);
             g_client_state.last_error = hipErrorNotInitialized;
             return hipErrorNotInitialized;
         }
@@ -408,7 +404,7 @@ hipError_t hip_remote_request(
                 size_t chunk = extra < sizeof(drain) ? extra : sizeof(drain);
                 if (recv_all(g_client_state.socket_fd, drain, chunk) != 0) {
                     mark_disconnected_locked("drain");
-                    pthread_mutex_unlock(&g_client_state.lock);
+                    hip_mutex_unlock(&g_client_state.lock);
                     g_client_state.last_error = hipErrorNotInitialized;
                     return hipErrorNotInitialized;
                 }
@@ -425,7 +421,7 @@ hipError_t hip_remote_request(
                          hip_remote_op_name(op_code), result);
 
     g_client_state.last_error = result;
-    pthread_mutex_unlock(&g_client_state.lock);
+    hip_mutex_unlock(&g_client_state.lock);
     return result;
 }
 
@@ -438,12 +434,12 @@ hipError_t hip_remote_request_with_data(
     void* response,
     size_t response_size
 ) {
-    pthread_once(&g_init_once, init_from_environment);
+    hip_call_once(&g_init_once, init_from_environment);
 
-    pthread_mutex_lock(&g_client_state.lock);
+    hip_mutex_lock(&g_client_state.lock);
 
     if (connect_to_worker_locked() != 0) {
-        pthread_mutex_unlock(&g_client_state.lock);
+        hip_mutex_unlock(&g_client_state.lock);
         g_client_state.last_error = hipErrorNotInitialized;
         return hipErrorNotInitialized;
     }
@@ -461,7 +457,7 @@ hipError_t hip_remote_request_with_data(
 
     if (send_all(g_client_state.socket_fd, &header, sizeof(header)) != 0) {
         mark_disconnected_locked("send header");
-        pthread_mutex_unlock(&g_client_state.lock);
+        hip_mutex_unlock(&g_client_state.lock);
         g_client_state.last_error = hipErrorNotInitialized;
         return hipErrorNotInitialized;
     }
@@ -469,7 +465,7 @@ hipError_t hip_remote_request_with_data(
     if (request && request_size > 0) {
         if (send_all(g_client_state.socket_fd, request, request_size) != 0) {
             mark_disconnected_locked("send payload");
-            pthread_mutex_unlock(&g_client_state.lock);
+            hip_mutex_unlock(&g_client_state.lock);
             g_client_state.last_error = hipErrorNotInitialized;
             return hipErrorNotInitialized;
         }
@@ -478,7 +474,7 @@ hipError_t hip_remote_request_with_data(
     if (data && data_size > 0) {
         if (send_all(g_client_state.socket_fd, data, data_size) != 0) {
             mark_disconnected_locked("send data");
-            pthread_mutex_unlock(&g_client_state.lock);
+            hip_mutex_unlock(&g_client_state.lock);
             g_client_state.last_error = hipErrorNotInitialized;
             return hipErrorNotInitialized;
         }
@@ -488,14 +484,14 @@ hipError_t hip_remote_request_with_data(
     HipRemoteHeader resp_header;
     if (recv_all(g_client_state.socket_fd, &resp_header, sizeof(resp_header)) != 0) {
         mark_disconnected_locked("recv header");
-        pthread_mutex_unlock(&g_client_state.lock);
+        hip_mutex_unlock(&g_client_state.lock);
         g_client_state.last_error = hipErrorNotInitialized;
         return hipErrorNotInitialized;
     }
 
     if (hip_remote_validate_header(&resp_header) != 0) {
         mark_disconnected_locked("invalid header");
-        pthread_mutex_unlock(&g_client_state.lock);
+        hip_mutex_unlock(&g_client_state.lock);
         g_client_state.last_error = hipErrorInvalidValue;
         return hipErrorInvalidValue;
     }
@@ -506,7 +502,7 @@ hipError_t hip_remote_request_with_data(
                          resp_header.payload_length : response_size;
         if (recv_all(g_client_state.socket_fd, response, to_read) != 0) {
             mark_disconnected_locked("recv payload");
-            pthread_mutex_unlock(&g_client_state.lock);
+            hip_mutex_unlock(&g_client_state.lock);
             g_client_state.last_error = hipErrorNotInitialized;
             return hipErrorNotInitialized;
         }
@@ -516,7 +512,7 @@ hipError_t hip_remote_request_with_data(
     }
 
     g_client_state.last_error = result;
-    pthread_mutex_unlock(&g_client_state.lock);
+    hip_mutex_unlock(&g_client_state.lock);
     return result;
 }
 
@@ -529,12 +525,12 @@ hipError_t hip_remote_request_receive_data(
     void* data_out,
     size_t data_size
 ) {
-    pthread_once(&g_init_once, init_from_environment);
+    hip_call_once(&g_init_once, init_from_environment);
 
-    pthread_mutex_lock(&g_client_state.lock);
+    hip_mutex_lock(&g_client_state.lock);
 
     if (connect_to_worker_locked() != 0) {
-        pthread_mutex_unlock(&g_client_state.lock);
+        hip_mutex_unlock(&g_client_state.lock);
         g_client_state.last_error = hipErrorNotInitialized;
         return hipErrorNotInitialized;
     }
@@ -551,7 +547,7 @@ hipError_t hip_remote_request_receive_data(
 
     if (send_all(g_client_state.socket_fd, &header, sizeof(header)) != 0) {
         mark_disconnected_locked("send header");
-        pthread_mutex_unlock(&g_client_state.lock);
+        hip_mutex_unlock(&g_client_state.lock);
         g_client_state.last_error = hipErrorNotInitialized;
         return hipErrorNotInitialized;
     }
@@ -559,7 +555,7 @@ hipError_t hip_remote_request_receive_data(
     if (request && request_size > 0) {
         if (send_all(g_client_state.socket_fd, request, request_size) != 0) {
             mark_disconnected_locked("send payload");
-            pthread_mutex_unlock(&g_client_state.lock);
+            hip_mutex_unlock(&g_client_state.lock);
             g_client_state.last_error = hipErrorNotInitialized;
             return hipErrorNotInitialized;
         }
@@ -569,14 +565,14 @@ hipError_t hip_remote_request_receive_data(
     HipRemoteHeader resp_header;
     if (recv_all(g_client_state.socket_fd, &resp_header, sizeof(resp_header)) != 0) {
         mark_disconnected_locked("recv header");
-        pthread_mutex_unlock(&g_client_state.lock);
+        hip_mutex_unlock(&g_client_state.lock);
         g_client_state.last_error = hipErrorNotInitialized;
         return hipErrorNotInitialized;
     }
 
     if (hip_remote_validate_header(&resp_header) != 0) {
         mark_disconnected_locked("invalid header");
-        pthread_mutex_unlock(&g_client_state.lock);
+        hip_mutex_unlock(&g_client_state.lock);
         g_client_state.last_error = hipErrorInvalidValue;
         return hipErrorInvalidValue;
     }
@@ -586,7 +582,7 @@ hipError_t hip_remote_request_receive_data(
     if (response && response_size > 0) {
         if (recv_all(g_client_state.socket_fd, response, response_size) != 0) {
             mark_disconnected_locked("recv response");
-            pthread_mutex_unlock(&g_client_state.lock);
+            hip_mutex_unlock(&g_client_state.lock);
             g_client_state.last_error = hipErrorNotInitialized;
             return hipErrorNotInitialized;
         }
@@ -602,7 +598,7 @@ hipError_t hip_remote_request_receive_data(
         if (to_read > 0) {
             if (recv_all(g_client_state.socket_fd, data_out, to_read) != 0) {
                 mark_disconnected_locked("recv data");
-                pthread_mutex_unlock(&g_client_state.lock);
+                hip_mutex_unlock(&g_client_state.lock);
                 g_client_state.last_error = hipErrorNotInitialized;
                 return hipErrorNotInitialized;
             }
@@ -610,13 +606,40 @@ hipError_t hip_remote_request_receive_data(
     }
 
     g_client_state.last_error = result;
-    pthread_mutex_unlock(&g_client_state.lock);
+    hip_mutex_unlock(&g_client_state.lock);
     return result;
 }
 
 /* ============================================================================
- * Library Constructor/Destructor
+ * Library Init/Cleanup
+ *
+ * On POSIX: __attribute__((constructor/destructor))
+ * On Windows: DllMain or explicit init via first API call
  * ============================================================================ */
+
+#ifdef _WIN32
+
+/* On Windows, DllMain handles init/cleanup for DLL builds.
+ * For static/exe builds, we rely on hip_call_once in each API call. */
+BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved) {
+    (void)hinstDLL; (void)lpReserved;
+    switch (fdwReason) {
+        case DLL_PROCESS_ATTACH:
+            init_from_environment();
+            hip_remote_log_debug("Remote HIP client library loaded");
+            break;
+        case DLL_PROCESS_DETACH:
+            hip_remote_disconnect();
+            if (g_wsa_initialized) {
+                hip_socket_cleanup();
+            }
+            hip_remote_log_debug("Remote HIP client library unloaded");
+            break;
+    }
+    return TRUE;
+}
+
+#else
 
 __attribute__((constructor))
 static void hip_remote_client_init(void) {
@@ -629,3 +652,5 @@ static void hip_remote_client_cleanup(void) {
     hip_remote_disconnect();
     hip_remote_log_debug("Remote HIP client library unloaded");
 }
+
+#endif

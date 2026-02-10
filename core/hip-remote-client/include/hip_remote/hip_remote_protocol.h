@@ -34,6 +34,18 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <string.h>
+
+/* Cross-platform struct packing */
+#ifdef _MSC_VER
+#define HIP_PACK_PUSH __pragma(pack(push, 1))
+#define HIP_PACK_POP  __pragma(pack(pop))
+#define HIP_PACKED_ATTR
+#else
+#define HIP_PACK_PUSH
+#define HIP_PACK_POP
+#define HIP_PACKED_ATTR __attribute__((packed))
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -183,6 +195,7 @@ typedef enum {
 /** Has inline data - payload contains bulk data after structured payload */
 #define HIP_REMOTE_FLAG_HAS_INLINE_DATA (1u << 2)
 
+HIP_PACK_PUSH
 /* ============================================================================
  * Protocol Header
  * ============================================================================ */
@@ -191,14 +204,14 @@ typedef enum {
  * Common header for all protocol messages.
  * Total size: 20 bytes
  */
-typedef struct __attribute__((packed)) {
+typedef struct {
     uint32_t magic;           /**< Must be HIP_REMOTE_MAGIC */
     uint16_t version;         /**< Protocol version */
     uint16_t op_code;         /**< Operation code (HipRemoteOpCode) */
     uint32_t request_id;      /**< Correlation ID for async matching */
     uint32_t payload_length;  /**< Bytes following this header */
     uint32_t flags;           /**< Message flags */
-} HipRemoteHeader;
+} HIP_PACKED_ATTR HipRemoteHeader;
 
 /* ============================================================================
  * Common Response Header
@@ -207,44 +220,44 @@ typedef struct __attribute__((packed)) {
 /**
  * Common response header included in all responses.
  */
-typedef struct __attribute__((packed)) {
+typedef struct {
     int32_t error_code;       /**< hipError_t value */
-} HipRemoteResponseHeader;
+} HIP_PACKED_ATTR HipRemoteResponseHeader;
 
 /* ============================================================================
  * Device Operations
  * ============================================================================ */
 
 /* HIP_OP_SET_DEVICE / HIP_OP_GET_DEVICE / HIP_OP_DEVICE_GET_ATTRIBUTE */
-typedef struct __attribute__((packed)) {
+typedef struct {
     int32_t device_id;
-} HipRemoteDeviceRequest;
+} HIP_PACKED_ATTR HipRemoteDeviceRequest;
 
-typedef struct __attribute__((packed)) {
+typedef struct {
     int32_t device_id;
     int32_t attribute;        /**< For HIP_OP_DEVICE_GET_ATTRIBUTE */
-} HipRemoteDeviceAttributeRequest;
+} HIP_PACKED_ATTR HipRemoteDeviceAttributeRequest;
 
 /* HIP_OP_GET_DEVICE_COUNT response */
-typedef struct __attribute__((packed)) {
+typedef struct {
     HipRemoteResponseHeader header;
     int32_t count;
-} HipRemoteDeviceCountResponse;
+} HIP_PACKED_ATTR HipRemoteDeviceCountResponse;
 
 /* HIP_OP_GET_DEVICE response */
-typedef struct __attribute__((packed)) {
+typedef struct {
     HipRemoteResponseHeader header;
     int32_t device_id;
-} HipRemoteGetDeviceResponse;
+} HIP_PACKED_ATTR HipRemoteGetDeviceResponse;
 
 /* HIP_OP_DEVICE_GET_ATTRIBUTE response */
-typedef struct __attribute__((packed)) {
+typedef struct {
     HipRemoteResponseHeader header;
     int32_t value;
-} HipRemoteDeviceAttributeResponse;
+} HIP_PACKED_ATTR HipRemoteDeviceAttributeResponse;
 
 /* HIP_OP_GET_DEVICE_PROPERTIES response */
-typedef struct __attribute__((packed)) {
+typedef struct {
     HipRemoteResponseHeader header;
     /* Device properties - matches hipDeviceProp_t layout for key fields */
     char name[256];
@@ -271,122 +284,122 @@ typedef struct __attribute__((packed)) {
     int32_t can_map_host_memory;
     int32_t concurrent_kernels;
     char gcn_arch_name[256];
-} HipRemoteDevicePropertiesResponse;
+} HIP_PACKED_ATTR HipRemoteDevicePropertiesResponse;
 
 /* ============================================================================
  * Memory Operations
  * ============================================================================ */
 
 /* HIP_OP_MALLOC / HIP_OP_MALLOC_HOST / HIP_OP_MALLOC_MANAGED */
-typedef struct __attribute__((packed)) {
+typedef struct {
     uint64_t size;
     uint32_t flags;           /**< For managed memory flags */
-} HipRemoteMallocRequest;
+} HIP_PACKED_ATTR HipRemoteMallocRequest;
 
-typedef struct __attribute__((packed)) {
+typedef struct {
     HipRemoteResponseHeader header;
     uint64_t device_ptr;      /**< Remote device pointer (opaque handle) */
-} HipRemoteMallocResponse;
+} HIP_PACKED_ATTR HipRemoteMallocResponse;
 
 /* HIP_OP_FREE / HIP_OP_FREE_HOST */
-typedef struct __attribute__((packed)) {
+typedef struct {
     uint64_t device_ptr;
-} HipRemoteFreeRequest;
+} HIP_PACKED_ATTR HipRemoteFreeRequest;
 
 /* HIP_OP_MEMCPY / HIP_OP_MEMCPY_ASYNC */
-typedef struct __attribute__((packed)) {
+typedef struct {
     uint64_t dst;             /**< Destination pointer */
     uint64_t src;             /**< Source pointer */
     uint64_t size;            /**< Size in bytes */
     int32_t kind;             /**< hipMemcpyKind */
     uint64_t stream;          /**< Stream handle (0 for default) */
-} HipRemoteMemcpyRequest;
+} HIP_PACKED_ATTR HipRemoteMemcpyRequest;
 
 /* For H2D copies, inline data follows this header */
 /* For D2H copies, response includes inline data */
 
-typedef struct __attribute__((packed)) {
+typedef struct {
     HipRemoteResponseHeader header;
     /* For D2H: inline data follows of size 'size' from request */
-} HipRemoteMemcpyResponse;
+} HIP_PACKED_ATTR HipRemoteMemcpyResponse;
 
 /* HIP_OP_MEMSET / HIP_OP_MEMSET_ASYNC */
-typedef struct __attribute__((packed)) {
+typedef struct {
     uint64_t dst;
     int32_t value;
     uint64_t size;
     uint64_t stream;
-} HipRemoteMemsetRequest;
+} HIP_PACKED_ATTR HipRemoteMemsetRequest;
 
 /* HIP_OP_MEM_GET_INFO response */
-typedef struct __attribute__((packed)) {
+typedef struct {
     HipRemoteResponseHeader header;
     uint64_t free_bytes;
     uint64_t total_bytes;
-} HipRemoteMemGetInfoResponse;
+} HIP_PACKED_ATTR HipRemoteMemGetInfoResponse;
 
 /* ============================================================================
  * Stream Operations
  * ============================================================================ */
 
 /* HIP_OP_STREAM_CREATE / HIP_OP_STREAM_CREATE_WITH_FLAGS */
-typedef struct __attribute__((packed)) {
+typedef struct {
     uint32_t flags;
     int32_t priority;         /**< For HIP_OP_STREAM_CREATE_WITH_PRIORITY */
-} HipRemoteStreamCreateRequest;
+} HIP_PACKED_ATTR HipRemoteStreamCreateRequest;
 
-typedef struct __attribute__((packed)) {
+typedef struct {
     HipRemoteResponseHeader header;
     uint64_t stream;          /**< Remote stream handle */
-} HipRemoteStreamCreateResponse;
+} HIP_PACKED_ATTR HipRemoteStreamCreateResponse;
 
 /* HIP_OP_STREAM_DESTROY / HIP_OP_STREAM_SYNCHRONIZE / HIP_OP_STREAM_QUERY */
-typedef struct __attribute__((packed)) {
+typedef struct {
     uint64_t stream;
-} HipRemoteStreamRequest;
+} HIP_PACKED_ATTR HipRemoteStreamRequest;
 
 /* HIP_OP_STREAM_WAIT_EVENT */
-typedef struct __attribute__((packed)) {
+typedef struct {
     uint64_t stream;
     uint64_t event;
     uint32_t flags;
-} HipRemoteStreamWaitEventRequest;
+} HIP_PACKED_ATTR HipRemoteStreamWaitEventRequest;
 
 /* ============================================================================
  * Event Operations
  * ============================================================================ */
 
 /* HIP_OP_EVENT_CREATE / HIP_OP_EVENT_CREATE_WITH_FLAGS */
-typedef struct __attribute__((packed)) {
+typedef struct {
     uint32_t flags;
-} HipRemoteEventCreateRequest;
+} HIP_PACKED_ATTR HipRemoteEventCreateRequest;
 
-typedef struct __attribute__((packed)) {
+typedef struct {
     HipRemoteResponseHeader header;
     uint64_t event;           /**< Remote event handle */
-} HipRemoteEventCreateResponse;
+} HIP_PACKED_ATTR HipRemoteEventCreateResponse;
 
 /* HIP_OP_EVENT_DESTROY / HIP_OP_EVENT_SYNCHRONIZE / HIP_OP_EVENT_QUERY */
-typedef struct __attribute__((packed)) {
+typedef struct {
     uint64_t event;
-} HipRemoteEventRequest;
+} HIP_PACKED_ATTR HipRemoteEventRequest;
 
 /* HIP_OP_EVENT_RECORD */
-typedef struct __attribute__((packed)) {
+typedef struct {
     uint64_t event;
     uint64_t stream;
-} HipRemoteEventRecordRequest;
+} HIP_PACKED_ATTR HipRemoteEventRecordRequest;
 
 /* HIP_OP_EVENT_ELAPSED_TIME */
-typedef struct __attribute__((packed)) {
+typedef struct {
     uint64_t start_event;
     uint64_t end_event;
-} HipRemoteEventElapsedTimeRequest;
+} HIP_PACKED_ATTR HipRemoteEventElapsedTimeRequest;
 
-typedef struct __attribute__((packed)) {
+typedef struct {
     HipRemoteResponseHeader header;
     float milliseconds;
-} HipRemoteEventElapsedTimeResponse;
+} HIP_PACKED_ATTR HipRemoteEventElapsedTimeResponse;
 
 /* ============================================================================
  * Module Operations
@@ -395,33 +408,33 @@ typedef struct __attribute__((packed)) {
 /* HIP_OP_MODULE_LOAD_DATA
  * Payload: module data (code object) follows immediately after this struct
  */
-typedef struct __attribute__((packed)) {
+typedef struct {
     uint64_t data_size;       /**< Size of code object data */
     /* Code object data follows */
-} HipRemoteModuleLoadRequest;
+} HIP_PACKED_ATTR HipRemoteModuleLoadRequest;
 
-typedef struct __attribute__((packed)) {
+typedef struct {
     HipRemoteResponseHeader header;
     uint64_t module;          /**< Remote module handle */
-} HipRemoteModuleLoadResponse;
+} HIP_PACKED_ATTR HipRemoteModuleLoadResponse;
 
 /* HIP_OP_MODULE_UNLOAD */
-typedef struct __attribute__((packed)) {
+typedef struct {
     uint64_t module;
-} HipRemoteModuleUnloadRequest;
+} HIP_PACKED_ATTR HipRemoteModuleUnloadRequest;
 
 /* HIP_OP_MODULE_GET_FUNCTION */
-typedef struct __attribute__((packed)) {
+typedef struct {
     uint64_t module;
     char function_name[256];
-} HipRemoteModuleGetFunctionRequest;
+} HIP_PACKED_ATTR HipRemoteModuleGetFunctionRequest;
 
-typedef struct __attribute__((packed)) {
+typedef struct {
     HipRemoteResponseHeader header;
     uint64_t function;        /**< Remote function handle */
     uint32_t num_args;        /**< Number of kernel arguments (from kernel metadata) */
     uint32_t reserved;        /**< Reserved for future use (alignment) */
-} HipRemoteModuleGetFunctionResponse;
+} HIP_PACKED_ATTR HipRemoteModuleGetFunctionResponse;
 
 /* ============================================================================
  * Kernel Launch
@@ -430,16 +443,16 @@ typedef struct __attribute__((packed)) {
 /**
  * Kernel argument descriptor
  */
-typedef struct __attribute__((packed)) {
+typedef struct {
     uint32_t size;            /**< Argument size in bytes */
     uint32_t offset;          /**< Offset into arg_data array */
-} HipRemoteKernelArg;
+} HIP_PACKED_ATTR HipRemoteKernelArg;
 
 /**
  * HIP_OP_LAUNCH_KERNEL
  * Variable-size message: arg_data follows the fixed portion
  */
-typedef struct __attribute__((packed)) {
+typedef struct {
     uint64_t function;        /**< Function handle from MODULE_GET_FUNCTION */
     uint32_t grid_dim_x;
     uint32_t grid_dim_y;
@@ -452,54 +465,54 @@ typedef struct __attribute__((packed)) {
     uint32_t num_args;
     /* HipRemoteKernelArg args[num_args] follows */
     /* uint8_t arg_data[] follows (concatenated argument values) */
-} HipRemoteLaunchKernelRequest;
+} HIP_PACKED_ATTR HipRemoteLaunchKernelRequest;
 
 /* ============================================================================
  * Error Handling
  * ============================================================================ */
 
 /* HIP_OP_GET_ERROR_STRING / HIP_OP_GET_ERROR_NAME */
-typedef struct __attribute__((packed)) {
+typedef struct {
     int32_t error_code;
-} HipRemoteErrorStringRequest;
+} HIP_PACKED_ATTR HipRemoteErrorStringRequest;
 
-typedef struct __attribute__((packed)) {
+typedef struct {
     HipRemoteResponseHeader header;
     char error_string[256];
-} HipRemoteErrorStringResponse;
+} HIP_PACKED_ATTR HipRemoteErrorStringResponse;
 
 /* ============================================================================
  * Runtime Info
  * ============================================================================ */
 
 /* HIP_OP_RUNTIME_GET_VERSION / HIP_OP_DRIVER_GET_VERSION response */
-typedef struct __attribute__((packed)) {
+typedef struct {
     HipRemoteResponseHeader header;
     int32_t version;
-} HipRemoteVersionResponse;
+} HIP_PACKED_ATTR HipRemoteVersionResponse;
 
 /* ============================================================================
  * AMD SMI Operations
  * ============================================================================ */
 
 /* SMI_OP_INIT request */
-typedef struct __attribute__((packed)) {
+typedef struct {
     uint64_t init_flags;          /**< amdsmi_init_flags_t */
-} SmiRemoteInitRequest;
+} HIP_PACKED_ATTR SmiRemoteInitRequest;
 
 /* SMI_OP_GET_PROCESSOR_COUNT response */
-typedef struct __attribute__((packed)) {
+typedef struct {
     HipRemoteResponseHeader header;
     uint32_t processor_count;
-} SmiRemoteProcessorCountResponse;
+} HIP_PACKED_ATTR SmiRemoteProcessorCountResponse;
 
 /* Request with processor index (used by most SMI queries) */
-typedef struct __attribute__((packed)) {
+typedef struct {
     uint32_t processor_index;     /**< Maps to remote amdsmi_processor_handle */
-} SmiRemoteProcessorRequest;
+} HIP_PACKED_ATTR SmiRemoteProcessorRequest;
 
 /* SMI_OP_GET_GPU_METRICS response - summary of key metrics */
-typedef struct __attribute__((packed)) {
+typedef struct {
     HipRemoteResponseHeader header;
     int32_t temperature_edge;     /**< Edge temperature (C) */
     int32_t temperature_hotspot;  /**< Hotspot/junction temperature (C) */
@@ -517,10 +530,10 @@ typedef struct __attribute__((packed)) {
     uint32_t pcie_bandwidth;      /**< PCIe bandwidth (MB/s) */
     uint32_t throttle_status;     /**< Throttle status flags */
     uint32_t reserved;            /**< Padding for alignment */
-} SmiRemoteGpuMetricsResponse;
+} HIP_PACKED_ATTR SmiRemoteGpuMetricsResponse;
 
 /* SMI_OP_GET_POWER_INFO response */
-typedef struct __attribute__((packed)) {
+typedef struct {
     HipRemoteResponseHeader header;
     uint32_t current_socket_power;/**< Current socket power (W) */
     uint32_t average_socket_power;/**< Average socket power (W) */
@@ -528,16 +541,16 @@ typedef struct __attribute__((packed)) {
     uint32_t soc_voltage;         /**< SOC voltage (mV) */
     uint32_t mem_voltage;         /**< Memory voltage (mV) */
     uint32_t power_limit;         /**< Power limit/cap (W) */
-} SmiRemotePowerInfoResponse;
+} HIP_PACKED_ATTR SmiRemotePowerInfoResponse;
 
 /* SMI_OP_GET_CLOCK_INFO request */
-typedef struct __attribute__((packed)) {
+typedef struct {
     uint32_t processor_index;
     uint32_t clock_type;          /**< amdsmi_clk_type_t */
-} SmiRemoteClockInfoRequest;
+} HIP_PACKED_ATTR SmiRemoteClockInfoRequest;
 
 /* SMI_OP_GET_CLOCK_INFO response */
-typedef struct __attribute__((packed)) {
+typedef struct {
     HipRemoteResponseHeader header;
     uint32_t current_clk;         /**< Current clock (MHz) */
     uint32_t min_clk;             /**< Minimum clock (MHz) */
@@ -545,38 +558,38 @@ typedef struct __attribute__((packed)) {
     uint8_t clk_locked;           /**< Clock locked flag */
     uint8_t clk_deep_sleep;       /**< Deep sleep flag */
     uint16_t reserved;            /**< Padding */
-} SmiRemoteClockInfoResponse;
+} HIP_PACKED_ATTR SmiRemoteClockInfoResponse;
 
 /* SMI_OP_GET_TEMP_METRIC request */
-typedef struct __attribute__((packed)) {
+typedef struct {
     uint32_t processor_index;
     uint32_t sensor_type;         /**< amdsmi_temperature_type_t */
-} SmiRemoteTempMetricRequest;
+} HIP_PACKED_ATTR SmiRemoteTempMetricRequest;
 
 /* SMI_OP_GET_TEMP_METRIC response */
-typedef struct __attribute__((packed)) {
+typedef struct {
     HipRemoteResponseHeader header;
     int32_t temperature;          /**< Temperature (milli-Celsius) */
-} SmiRemoteTempMetricResponse;
+} HIP_PACKED_ATTR SmiRemoteTempMetricResponse;
 
 /* SMI_OP_GET_GPU_ACTIVITY response */
-typedef struct __attribute__((packed)) {
+typedef struct {
     HipRemoteResponseHeader header;
     uint32_t gfx_activity;        /**< GFX activity (%) */
     uint32_t umc_activity;        /**< Memory controller activity (%) */
     uint32_t mm_activity;         /**< Multimedia activity (%) */
     uint32_t reserved;            /**< Padding */
-} SmiRemoteGpuActivityResponse;
+} HIP_PACKED_ATTR SmiRemoteGpuActivityResponse;
 
 /* SMI_OP_GET_VRAM_USAGE response */
-typedef struct __attribute__((packed)) {
+typedef struct {
     HipRemoteResponseHeader header;
     uint64_t vram_total;          /**< Total VRAM (bytes) */
     uint64_t vram_used;           /**< Used VRAM (bytes) */
-} SmiRemoteVramUsageResponse;
+} HIP_PACKED_ATTR SmiRemoteVramUsageResponse;
 
 /* SMI_OP_GET_ASIC_INFO response */
-typedef struct __attribute__((packed)) {
+typedef struct {
     HipRemoteResponseHeader header;
     char market_name[256];        /**< Marketing name (e.g., "AMD Instinct MI300X") */
     uint32_t vendor_id;           /**< PCI vendor ID */
@@ -584,7 +597,9 @@ typedef struct __attribute__((packed)) {
     uint32_t rev_id;              /**< Revision ID */
     uint32_t num_compute_units;   /**< Number of compute units */
     char asic_serial[64];         /**< ASIC serial number */
-} SmiRemoteAsicInfoResponse;
+} HIP_PACKED_ATTR SmiRemoteAsicInfoResponse;
+
+HIP_PACK_POP
 
 /* ============================================================================
  * Utility Functions
