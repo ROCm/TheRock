@@ -659,6 +659,12 @@ def do_build_pytorch(
     # Detect exactly PyTorch 2.9.x
     is_pytorch_2_9 = pytorch_build_version_parsed.release[:2] == (2, 9)
 
+    # Architectures where aotriton is not supported.
+    # gfx103X: https://github.com/ROCm/TheRock/pull/3164
+    # gfx1152/53: temporarily disabled until pytorch uses a commit that
+    #   enables it (https://github.com/ROCm/aotriton/pull/142)
+    AOTRITON_UNSUPPORTED_ARCHS = ["gfx103", "gfx1152", "gfx1153"]
+
     ## Enable FBGEMM_GENAI on Linux for PyTorch, as it is available only for 2.9 on rocm/pytorch
     ## and causes build failures for other PyTorch versions
     ## Warn user when enabling it manually.
@@ -696,11 +702,6 @@ def do_build_pytorch(
             # Default behavior — determined by if triton is build
             use_flash_attention = "ON" if triton_requirement else "OFF"
 
-            # no aotriton support for gfx103X
-            #
-            # temporarily disable aotriton for gfx1152/53 until pytorch
-            # uses a commit that enables it ( https://github.com/ROCm/aotriton/pull/142 )
-            AOTRITON_UNSUPPORTED_ARCHS = ["gfx103", "gfx1152", "gfx1153"]
             if any(
                 arch in env["PYTORCH_ROCM_ARCH"] for arch in AOTRITON_UNSUPPORTED_ARCHS
             ):
@@ -757,11 +758,6 @@ def do_build_pytorch(
 
         use_flash_attention = "0"
 
-        # no aotriton support for gfx103X
-        #
-        # temporarily prevent enabling aotriton for gfx1152/53 until pytorch
-        # uses a commit that enables it ( https://github.com/ROCm/aotriton/pull/142 )
-        AOTRITON_UNSUPPORTED_ARCHS = ["gfx103", "gfx1152", "gfx1153"]
         if args.enable_pytorch_flash_attention_windows and not any(
             arch in env["PYTORCH_ROCM_ARCH"] for arch in AOTRITON_UNSUPPORTED_ARCHS
         ):
