@@ -416,7 +416,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--artifact-group",
         type=str,
-        default="ABC",
+        default=os.getenv("ARTIFACT_GROUP"),
         required=True,
         help="Artifact group to upload (default: $ARTIFACT_GROUP)",
     )
