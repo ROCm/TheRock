@@ -44,7 +44,8 @@ jobs:
       run: |
         python -m pytest -vv \
           build_tools/tests \
-          build_tools/github_actions/tests
+          build_tools/github_actions/tests \
+          external-builds/pytorch/tests
 
   # TODO(scotttodd): share code with ci_summary in ci.yml
   #   Could reuse this from prior projects:
