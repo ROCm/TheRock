@@ -36,17 +36,12 @@ file.
 
 ### What operating systems are supported for Strix Halo?
 
-Refer to the ROCm compatibility and system requirement tables at the links below:
+For the most complete and up-to-date information on supported GPU architectures
+and release history, please refer to the the [SUPPORTED_GPUs](https://github.com/ROCm/TheRock/blob/main/SUPPORTED_GPUS.md)
 
-- **Linux:**  
-  https://rocm.docs.amd.com/projects/install-on-linux/en/latest/reference/system-requirements.html
-
-- **Windows:**  
-  https://rocm.docs.amd.com/projects/install-on-windows/en/latest/reference/system-requirements.html
-
-> **Note:** On Linux, Strix Halo requires a kernel patch to function correctly.  
-> See the system optimization guide for the full OS compatibility details:  
-> https://rocm.docs.amd.com/en/latest/how-to/system-optimization/strixhalo-point.html#operating-system-support
+On Linux, Strix Halo requires a kernel patch to function correctly.  
+See the system optimization guide for the full OS compatibility details:  
+https://rocm.docs.amd.com/en/latest/how-to/system-optimization/strixhalo-point.html#operating-system-support
 
 ### Why does PyTorch use Graphics Translation Table (GTT) instead of VRAM on gfx1151?
 
