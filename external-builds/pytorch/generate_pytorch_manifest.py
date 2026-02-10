@@ -4,7 +4,7 @@ Generate a manifest for PyTorch external builds.
 
 Writes a JSON manifest containing:
   - sources: git commit + repo for each provided source checkout
-  - therock: repo/ref/commit from GitHub Actions env (or user-provided env)
+  - therock: repo/branch/commit from GitHub Actions env (or user-provided env)
 
 Filename format
   therock-manifest_torch_py<python_version>_<release_track>.json
@@ -92,7 +92,7 @@ def require_env(name: str) -> str:
     return value
 
 
-def main() -> None:
+def main(argv: list[str]) -> None:
     ap = argparse.ArgumentParser(description="Generate PyTorch manifest.")
     ap.add_argument(
         "--manifest-dir",
@@ -117,7 +117,7 @@ def main() -> None:
         "--triton-dir", type=Path, help="Optional triton checkout (Linux only)."
     )
 
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
     manifest_dir = args.manifest_dir.resolve()
     manifest_dir.mkdir(parents=True, exist_ok=True)
@@ -156,7 +156,7 @@ def main() -> None:
     manifest: dict[str, object] = {}
     manifest.update(sources)
 
-    # Add TheRock Last
+    # Add TheRock last.
     manifest["therock"] = {
         "repo": f"{server_url}/{repo}.git",
         "commit": sha,
@@ -170,4 +170,6 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+
+    main(sys.argv[1:])

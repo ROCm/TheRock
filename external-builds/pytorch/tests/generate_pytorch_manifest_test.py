@@ -52,12 +52,7 @@ class GeneratePyTorchSourcesManifestTest(unittest.TestCase):
             os.environ[key] = value
 
     def _run_main_with_args(self, argv: list[str]) -> None:
-        original_argv = sys.argv[:]
-        sys.argv = ["generate_pytorch_manifest.py", *argv]
-        try:
-            m.main()
-        finally:
-            sys.argv = original_argv
+        m.main(argv)
 
     def _init_git_repo(self, repo_dir: Path, *, remote_url: str) -> str:
         repo_dir.mkdir(parents=True, exist_ok=True)
@@ -124,7 +119,6 @@ class GeneratePyTorchSourcesManifestTest(unittest.TestCase):
 
         data = json.loads(manifest_path.read_text(encoding="utf-8"))
 
-        # Flattened schema: sources are top-level alongside therock.
         self.assertEqual(
             set(data.keys()),
             {"pytorch", "pytorch_audio", "pytorch_vision", "triton", "therock"},
@@ -191,7 +185,6 @@ class GeneratePyTorchSourcesManifestTest(unittest.TestCase):
         self.assertTrue(manifest_path.exists(), f"Missing manifest: {manifest_path}")
 
         data = json.loads(manifest_path.read_text(encoding="utf-8"))
-
         self.assertIn("therock", data)
         self.assertIn("pytorch", data)
         self.assertIn("pytorch_audio", data)
