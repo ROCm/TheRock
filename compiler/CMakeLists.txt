@@ -26,7 +26,7 @@ if(THEROCK_ENABLE_COMPILER)
   # computed git revision. If present, this will have a stable hash of
   # revision plus applied patches suitable for run to run compiler
   # fingerprinting.
-  set(LLVM_SMREV_FILE "${CMAKE_CURRENT_SOURCE_DIR}/.amd-llvm.smrev")
+  set(LLVM_SMREV_FILE "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/.amd-llvm.smrev")
   if(EXISTS "${LLVM_SMREV_FILE}")
     file(STRINGS "${LLVM_SMREV_FILE}" LLVM_SMREV_LINES)
     list(GET LLVM_SMREV_LINES 0 LLVM_SMREV_REPO)
@@ -82,14 +82,22 @@ if(THEROCK_ENABLE_COMPILER)
       -DCLANG_ENABLE_STATIC_ANALYZER=OFF
       -DCLANG_ENABLE_CLANGD=OFF
       -DCLANG_TIDY_ENABLE_STATIC_ANALYZER=OFF
-
+      -DCLANG_TOOL_CLANG_LINKER_WRAPPER_BUILD=ON
+      -DCLANG_TOOL_OFFLOAD_ARCH_BUILD=ON
+      -DOPENMP_ENABLE_LIBOMPTARGET=ON
+      -DLIBOMPTARGET_BUILD_DEVICE_FORTRT=ON
+      -DOFFLOAD_EXTERNAL_PROJECT_UNIFIED_ROCR=ON
+      -DLIBOMPTARGET_EXTERNAL_PROJECT_HSA_PATH=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/../rocm-systems/projects/rocr-runtime
+      -DFLANG_RUNTIME_F128_MATH_LIB=libquadmath
+      -DRUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_PER_TARGET_RUNTIME_DIR=ON
+      -DRUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_RUNTIMES=openmp
       # ASAN features.
       # Note that building AMDGPU ASAN extensions depends on various runtime headers
       # (since it instruments them). These paths must line up and will be an error
       # in the compiler-rt build if not found.
       "-DSANITIZER_AMDGPU=${THEROCK_CONDITION_IS_NON_WINDOWS}"
       "-DSANITIZER_HSA_INCLUDE_PATH=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/runtime/hsa-runtime/inc"
-      "-DSANITIZER_COMGR_INCLUDE_PATH=${CMAKE_CURRENT_SOURCE_DIR}/amd-llvm/amd/comgr/include"
+      "-DSANITIZER_COMGR_INCLUDE_PATH=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/amd-llvm/amd/comgr/include"
 
       # compiler-rt debug mode
       "-DCOMPILER_RT_DEBUG=${THEROCK_COMPILER_RT_DEBUG}"
