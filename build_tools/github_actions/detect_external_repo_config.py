@@ -61,7 +61,7 @@ def _log_warning(message: str) -> None:
     print(f"WARNING: {message}", file=sys.stderr)
 
 
-def get_repo_config(repo_name: str) -> Dict[str, Any]:
+def get_external_repo_config(repo_name: str) -> Dict[str, Any]:
     """Returns config for a known external repo name."""
     if repo_name not in REPO_CONFIGS:
         raise ValueError(
@@ -94,7 +94,7 @@ def get_external_repo_path(repo_name: str) -> Path:
         ValueError: If the external repo path cannot be determined
     """
     try:
-        repo_config = get_repo_config(repo_name)
+        repo_config = get_external_repo_config(repo_name)
     except ValueError as e:
         raise ValueError(f"Unknown repository: {repo_name}") from e
 
@@ -221,14 +221,19 @@ def import_external_repo_module(repo_name: str, module_name: str) -> Optional[An
         raise
 
 
-def get_skip_patterns(repo_name: str) -> list[str]:
-    """Get skip patterns from external repo's therock_configure_ci.py.
+def get_skip_patterns_for_ci(repo_name: str) -> list[str]:
+    """Get CI skip patterns from external repo's therock_configure_ci.py.
 
     These are file path patterns that, when ALL modified files in a PR match at least
     one pattern, indicate the changes have no impact on CI workflows. When this occurs,
     TheRock CI will skip build/test jobs to save resources.
 
     Example patterns: ["*.md", "docs/*", ".github/workflows/*"]
+
+    Note: External repos are recommended to define SKIPPABLE_PATH_PATTERNS in their
+    therock_configure_ci.py file. If not defined, an empty list is returned
+    and TheRock's default skip patterns will be used. For consistency and
+    explicit control, external repos are encouraged to define their own patterns.
 
     See: https://github.com/ROCm/rocm-libraries/blob/develop/.github/scripts/therock_configure_ci.py
 
@@ -249,7 +254,40 @@ def get_skip_patterns(repo_name: str) -> list[str]:
     return []
 
 
-def get_test_list(repo_name: str) -> list[str]:
+def get_workflow_patterns_for_ci(repo_name: str) -> list[str]:
+    """Get workflow file patterns from external repo's therock_configure_ci.py.
+
+    These are workflow file patterns that, when matched, indicate the workflow file
+    changes affect CI and should trigger a build. Patterns are relative to
+    `.github/workflows/` directory.
+
+    Example patterns: ["therock-*.yml"]
+
+    Note: External repos are recommended to define GITHUB_WORKFLOWS_CI_PATTERNS in their
+    therock_configure_ci.py file. If not defined, an empty list is returned
+    and TheRock's default workflow patterns will be used. For consistency and
+    explicit control, external repos are encouraged to define their own patterns.
+
+    See: https://github.com/ROCm/rocm-libraries/blob/develop/.github/scripts/therock_configure_ci.py
+
+    Args:
+        repo_name (str): Repository name (e.g., "rocm-libraries", "rocm-systems")
+
+    Returns:
+        list[str]: List of CI workflow patterns, or empty list if not found
+    """
+    configure_module = import_external_repo_module(repo_name, "therock_configure_ci")
+    if configure_module and hasattr(configure_module, "GITHUB_WORKFLOWS_CI_PATTERNS"):
+        patterns = configure_module.GITHUB_WORKFLOWS_CI_PATTERNS
+        print(
+            f"Loaded {len(patterns)} CI workflow patterns from {repo_name}",
+            file=sys.stderr,
+        )
+        return patterns
+    return []
+
+
+def get_external_repo_test_list(repo_name: str) -> list[str]:
     """Get test list from external repo's therock_matrix.py project_map.
 
     Args:
@@ -372,7 +410,7 @@ def main(argv=None):
         return 1
 
     try:
-        config = get_repo_config(args.repository)
+        config = get_external_repo_config(args.repository)
 
         # Log to stderr for visibility in CI logs
         print(f"Detected repository: {args.repository}", file=sys.stderr)
