@@ -656,15 +656,17 @@ def do_build_pytorch(
     pytorch_build_version_parsed = parse(pytorch_build_version)
     print(f"  Using PYTORCH_BUILD_VERSION: {pytorch_build_version}")
 
-    # Detect exactly PyTorch 2.9.x
     is_pytorch_2_9 = pytorch_build_version_parsed.release[:2] == (2, 9)
+    is_pytorch_2_11_or_later = pytorch_build_version_parsed.release[:2] >= (2, 11)
 
     # Architectures where aotriton is not supported.
     # gfx101X: https://github.com/ROCm/TheRock/issues/1925
     # gfx103X: https://github.com/ROCm/TheRock/pull/3164
-    # gfx1152/53: temporarily disabled until pytorch uses a commit that
-    #   enables it (https://github.com/ROCm/aotriton/pull/142)
-    AOTRITON_UNSUPPORTED_ARCHS = ["gfx101", "gfx103", "gfx1152", "gfx1153"]
+    AOTRITON_UNSUPPORTED_ARCHS = ["gfx101", "gfx103"]
+    # gfx1152/53: supported in aotriton 0.11.2b (https://github.com/ROCm/aotriton/pull/142),
+    #   which is pinned by pytorch >= 2.11. Older versions don't include it.
+    if not is_pytorch_2_11_or_later:
+        AOTRITON_UNSUPPORTED_ARCHS += ["gfx1152", "gfx1153"]
 
     ## Enable FBGEMM_GENAI on Linux for PyTorch, as it is available only for 2.9 on rocm/pytorch
     ## and causes build failures for other PyTorch versions
