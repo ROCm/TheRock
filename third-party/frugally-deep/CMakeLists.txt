@@ -13,6 +13,7 @@ therock_cmake_subproject_declare(therock-frugally-deep
   EXCLUDE_FROM_ALL
   NO_MERGE_COMPILE_COMMANDS
   OUTPUT_ON_FAILURE
+  THIRD_PARTY_DEP
   EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/source"
   BUILD_DEPS
     therock-eigen
