@@ -108,7 +108,7 @@ submodules = []
 
 [source_sets.comm-libs]
 description = "Communication library submodules"
-submodules = []
+submodules = ["rccl", "rccl-tests"]
 
 [source_sets.profiler-extras]
 description = "Additional profiler submodules"
@@ -353,6 +353,13 @@ artifact_deps = []
 feature_group = "CORE"
 disable_platforms = ["windows"]
 
+[artifacts.sysdeps-hwloc]
+artifact_group = "third-party-sysdeps"
+type = "target-neutral"
+artifact_deps = ["sysdeps", "sysdeps-libpciaccess"]  # hwloc depends on numactl (in core sysdeps) and libpciaccess
+feature_group = "CORE"
+disable_platforms = ["windows"]
+
 [artifacts.host-blas]
 artifact_group = "third-party-libs"
 type = "target-neutral"
@@ -490,6 +497,16 @@ artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip"]
 
+[artifacts.sparse]
+artifact_group = "math-libs"
+type = "target-specific"
+artifact_deps = ["blas", "prim"]
+
+[artifacts.solver]
+artifact_group = "math-libs"
+type = "target-specific"
+artifact_deps = ["blas", "prim", "sparse", "host-suite-sparse"]
+
 [artifacts.rocwmma]
 artifact_group = "math-libs"
 type = "target-specific"
@@ -527,6 +544,11 @@ artifact_deps = ["core-runtime", "core-hip"]
 artifact_group = "ml-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn"]
+
+[artifacts.hipblaslt-plugin]
+artifact_group = "ml-libs"
+type = "target-neutral"
+artifact_deps = ["core-runtime", "core-hip", "blas", "hipdnn"]
 
 [artifacts.hipdnn-samples]
 artifact_group = "ml-libs"
