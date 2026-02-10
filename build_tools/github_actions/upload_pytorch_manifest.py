@@ -6,9 +6,16 @@ Upload the generated PyTorch manifest JSON to S3.
 import argparse
 import shlex
 import subprocess
+import platform
 from pathlib import Path
+import sys
 
 from github_actions.github_actions_utils import retrieve_bucket_info
+
+
+def log(*args):
+    print(*args)
+    sys.stdout.flush()
 
 
 def run_command(cmd: list[str], cwd: Path):
@@ -26,12 +33,6 @@ def main() -> None:
     )
     ap.add_argument("--run-id", required=True, help="GitHub run id (used in prefix).")
     ap.add_argument(
-        "--platform",
-        required=True,
-        choices=["linux", "windows"],
-        help="Platform name for prefix.",
-    )
-    ap.add_argument(
         "--amdgpu-family",
         required=True,
         help="AMDGPU family (used in prefix).",
@@ -47,6 +48,10 @@ def main() -> None:
         help="PyTorch ref (e.g. nightly or release/2.8).",
     )
     args = ap.parse_args()
+
+    platform_name = platform.system().lower()
+    if platform_name not in {"linux", "windows"}:
+        raise RuntimeError(f"Unsupported platform: {platform_name}")
 
     # Normalize Python version for filenames:
     #   "py3.11" -> "3.11"
@@ -70,7 +75,7 @@ def main() -> None:
         raise FileNotFoundError(f"Manifest not found: {manifest_path}")
 
     external_repo_path, bucket = retrieve_bucket_info()
-    bucket_uri = f"s3://{bucket}/{external_repo_path}{args.run_id}-{args.platform}"
+    bucket_uri = f"s3://{bucket}/{external_repo_path}{args.run_id}-{platform_name}"
     dest_uri = f"{bucket_uri}/manifests/{args.amdgpu_family}/{manifest_name}"
 
     run_command(["aws", "s3", "cp", str(manifest_path), dest_uri])
