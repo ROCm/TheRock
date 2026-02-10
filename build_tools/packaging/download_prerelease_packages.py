@@ -243,7 +243,7 @@ def has_version_in_arch(
 
         for page in pages:
             if "Contents" not in page:
-                return False
+                continue
 
             for obj in page["Contents"]:
                 if version in obj["Key"]:
