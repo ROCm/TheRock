@@ -695,6 +695,43 @@ function(therock_cmake_subproject_activate target_name)
   list(APPEND _build_env_pairs "--unset=HIP_PATH")
   list(APPEND _build_env_pairs "--unset=HIP_DIR")
 
+  # On Windows, preserve critical MSVC and Windows SDK environment variables
+  # These are needed for CMake's compiler detection and FindOpenMP to work correctly
+  # in nested CMake invocations (like AOCL's build system).
+  if(WIN32)
+    # Preserve key Windows SDK and MSVC environment variables
+    foreach(_win_env_var
+      PATH
+      WindowsSdkDir
+      WindowsSDKVersion
+      WindowsSDKLibVersion
+      WindowsLibPath
+      VCToolsInstallDir
+      VCToolsRedistDir
+      UniversalCRTSdkDir
+      UCRTVersion
+      INCLUDE
+      LIB
+      LIBPATH
+      DevEnvDir
+      VisualStudioVersion
+      VSCMD_VER
+      VSCMD_ARG_HOST_ARCH
+      VSCMD_ARG_TGT_ARCH
+    )
+      if(DEFINED ENV{${_win_env_var}})
+        # Escape semicolons in the environment variable value to prevent CMake from
+        # treating them as list separators (critical for PATH, INCLUDE, LIB, etc.)
+        string(REPLACE ";" "\\;" _escaped_value "$ENV{${_win_env_var}}")
+        # Remove trailing backslashes to prevent them from escaping the closing quote
+        # This is critical for paths like "C:\Program Files\...\10\" where the trailing
+        # backslash would escape the quote and break argument parsing in cmake -E env
+        string(REGEX REPLACE "\\\\+$" "" _escaped_value "${_escaped_value}")
+        list(APPEND _build_env_pairs "${_win_env_var}=${_escaped_value}")
+      endif()
+    endforeach()
+  endif()
+
   # Handle compiler toolchain.
   set(_compiler_toolchain_addl_depends)
   set(_compiler_toolchain_init_contents)

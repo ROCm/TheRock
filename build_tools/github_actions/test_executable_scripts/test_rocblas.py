@@ -18,6 +18,11 @@ environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 
 logging.basicConfig(level=logging.INFO)
 
+# Cap OMP_NUM_THREADS for AOCL-BLAS in CI to avoid 60-100x slowdown from oversubscription.
+if "OMP_NUM_THREADS" not in environ_vars:
+    environ_vars["OMP_NUM_THREADS"] = "48"
+    logging.info("Set OMP_NUM_THREADS=48 for rocBLAS/AOCL tests")
+
 # If smoke tests are enabled, we run smoke tests only.
 # Otherwise, we run the normal test suite
 test_type = os.getenv("TEST_TYPE", "full")
@@ -33,5 +38,6 @@ logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 subprocess.run(
     cmd,
     cwd=THEROCK_DIR,
+    env=environ_vars,
     check=True,
 )
