@@ -70,21 +70,25 @@ rocm-sdk-profiler/
 
 1. **setup.py** - Similar to rocm-sdk-core but with profiler-specific entry points:
 ```python
-entry_points={
-    "console_scripts": [
-        # Only rocprofiler-systems and rocprofiler-compute tools
-        # Note: rocprofv3 and rocprof-attach stay in rocm-sdk-core
-        "rocprof-compute=rocm_sdk_profiler._cli:rocprof_compute",
-        "rocprof-sys-avail=rocm_sdk_profiler._cli:rocprof_sys_avail",
-        "rocprof-sys-causal=rocm_sdk_profiler._cli:rocprof_sys_causal",
-        "rocprof-sys-instrument=rocm_sdk_profiler._cli:rocprof_sys_instrument",
-        "rocprof-sys-run=rocm_sdk_profiler._cli:rocprof_sys_run",
-        "rocprof-sys-sample=rocm_sdk_profiler._cli:rocprof_sys_sample",
-    ]
-},
-install_requires=[
-    f"rocm-sdk-core=={dist_info.__version__}",
-],
+setup(
+    name="rocm-sdk-profiler",
+    version=dist_info.__version__,
+    # ... other fields ...
+    entry_points={
+        "console_scripts": [
+            # Only rocprofiler-systems and rocprofiler-compute tools
+            # Note: rocprofv3 and rocprof-attach stay in rocm-sdk-core
+            "rocprof-compute=rocm_sdk_profiler._cli:rocprof_compute",
+            "rocprof-sys-avail=rocm_sdk_profiler._cli:rocprof_sys_avail",
+            "rocprof-sys-causal=rocm_sdk_profiler._cli:rocprof_sys_causal",
+            "rocprof-sys-instrument=rocm_sdk_profiler._cli:rocprof_sys_instrument",
+            "rocprof-sys-run=rocm_sdk_profiler._cli:rocprof_sys_run",
+            "rocprof-sys-sample=rocm_sdk_profiler._cli:rocprof_sys_sample",
+        ]
+    },
+    # NO install_requires - following convention!
+    # Dependency managed by meta package (rocm)
+)
 ```
 
 2. **_cli.py** - Trampolines to platform binaries:
@@ -160,31 +164,35 @@ profiler.populate_runtime_files(
 - profiler package includes ONLY rocprofiler-systems and rocprofiler-compute
 - rocprofv3, rocprof-attach remain in rocm-sdk-core
 - No breaking changes for existing users
-- rocm-sdk-profiler will depend on rocm-sdk-core (see Phase 6)
+- NO install_requires dependency - follow existing convention (see Phase 6)
 
 This means:
-- `rocm-sdk-core` provides: rocprofv3, rocprof-attach, rocprofiler SDK libs
+- `rocm-sdk-core` provides: rocprofv3, rocprof-attach, rocprofiler SDK libs, roctx API
 - `rocm-sdk-profiler` provides: rocprof-sys-*, rocprof-compute
 
-### Phase 6: Add Dependencies to Profiler Package
+**Why rocprofiler-sdk stays in core:**
+- Provides roctx API (user-facing annotation library used by applications like PyTorch)
+- Root of the profiler dependency DAG (both compute and systems depend on it)
+- Non-optional infrastructure component
 
-**USER DECISION:** rocm-sdk-profiler should depend on rocm-sdk-core
+### Phase 6: Follow Meta Package Convention
 
-**File:** `/root/TheRock/build_tools/packaging/python/templates/rocm-sdk-profiler/setup.py`
+**DESIGN DECISION:** Do NOT add install_requires to rocm-sdk-profiler
 
-**Changes:**
-```python
-setup(
-    name="rocm-sdk-profiler",
-    version=dist_info.__version__,
-    # ... other fields ...
-    install_requires=[
-        f"rocm-sdk-core=={dist_info.__version__}",
-    ],
-)
-```
+**Rationale:**
+- Existing packages (rocm-sdk-libraries, rocm-sdk-devel) do NOT declare install_requires
+- All dependency management is handled by the meta package (`rocm`)
+- Users install via `pip install rocm[profiler]`, NOT `pip install rocm-sdk-profiler` directly
+- Meta package ensures rocm-sdk-core is always installed (via `required=True`)
+- Packages use RPATH to find dependencies, expecting co-installation in same site-packages
 
-This ensures that profiler binaries can find required ROCm libraries from core package.
+**How it works:**
+1. User runs: `pip install rocm[profiler]`
+2. Meta package installs rocm-sdk-core (from install_requires, because core has required=True)
+3. Meta package installs rocm-sdk-profiler (from extras_require["profiler"])
+4. Both packages installed in same site-packages, RPATH resolves dependencies
+
+**No changes needed to setup.py** - just omit install_requires like other packages do.
 
 ### Phase 7: Documentation Updates
 
@@ -250,10 +258,27 @@ rocprof-sys-run --help
 rocprof-compute --help
 ```
 
-## Questions for User
+## Decisions Made
 
-1. Should we MOVE all profiler tools (including rocprofv3) to the new profiler package, or KEEP rocprofv3 in core and only ADD systems/compute to profiler?
+1. ✅ **rocprofv3 location:** Keep in rocm-sdk-core (backward compatible)
+   - Rationale: rocprofiler-sdk provides roctx API used by applications, must remain in core
 
-2. Do we need to handle dependencies? Should rocm-sdk-profiler depend on rocm-sdk-core?
+2. ✅ **Dependencies:** NO install_requires in rocm-sdk-profiler
+   - Rationale: Follow existing convention - meta package handles all dependencies
 
-3. Are there other profiler-related artifacts we should include that I might have missed?
+3. ✅ **Artifacts:** Include rocprofiler-systems and rocprofiler-compute only
+   - rocprofv3, rocprof-attach stay in core with rocprofiler-sdk
+
+## Installation Pattern
+
+Users will install via:
+```bash
+pip install rocm[profiler]
+# Or combined with other extras:
+pip install rocm[libraries,devel,profiler]
+```
+
+NOT:
+```bash
+pip install rocm-sdk-profiler  # ❌ Not recommended - bypasses meta package
+```
