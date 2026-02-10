@@ -32,6 +32,9 @@ on:
         type: string
       sanity_check_only_for_family:
         type: boolean
+      monitor_interval:
+        type: string
+        default: "30"
 
 permissions:
   contents: read
@@ -50,6 +53,7 @@ jobs:
       build_variant_suffix: ${{ inputs.build_variant_suffix }}
       package_version: ${{ inputs.rocm_package_version }}
       expect_failure: ${{ inputs.expect_failure }}
+      monitor_interval: ${{ inputs.monitor_interval }}
     permissions:
       contents: read
       id-token: write

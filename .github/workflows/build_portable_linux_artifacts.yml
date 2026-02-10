@@ -29,6 +29,9 @@ on:
         default: false
       extra_cmake_options:
         type: string
+      monitor_interval:
+        type: string
+        default: "30"
 
   workflow_call:
     inputs:
@@ -49,6 +52,9 @@ on:
         type: boolean
       extra_cmake_options:
         type: string
+      monitor_interval:
+        type: string
+        default: "30"
 
 # See the details regarding permissions from the link:
 # https://github.com/aws-actions/configure-aws-credentials?tab=readme-ov-file#oidc
@@ -72,6 +78,7 @@ jobs:
       options: -v /runner/config:/home/awsconfig/ --cap-add=SYS_PTRACE --security-opt seccomp=unconfined
     env:
       AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
+      BUILD_DIR: build
       CACHE_DIR: ${{ github.workspace }}/.container-cache
       # The ccache.conf will be written by setup_ccache.py before this gets used.
       CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
@@ -118,39 +125,45 @@ jobs:
           amdgpu_families: ${{ inputs.amdgpu_families }}
           package_version: ${{ inputs.package_version }}
           extra_cmake_options: ${{ inputs.extra_cmake_options }}
-          BUILD_DIR: build
         run: |
           python3 build_tools/github_actions/build_configure.py --manylinux
 
       - name: Build therock-archives and therock-dist
+        env:
+          GITHUB_JOB_NAME: ${{ github.job }}
+          MEMORY_MONITOR_INTERVAL: ${{ inputs.monitor_interval }}
         run: |
-          cmake --build build --target therock-archives therock-dist -- -k 0
+          MONITOR_PID=$(bash build_tools/github_actions/start_memory_monitor.sh)
+          export MONITOR_PID
+          trap 'bash build_tools/github_actions/stop_memory_monitor.sh || true' EXIT
+
+          cmake --build ${{ env.BUILD_DIR }} --target therock-archives therock-dist -- -k 0
 
       - name: Test Packaging
         if: ${{ github.event.repository.name == 'TheRock' }}
         run: |
-          ctest --test-dir build --output-on-failure
+          ctest --test-dir ${{ env.BUILD_DIR }} --output-on-failure
 
       - name: Report
         if: ${{ !cancelled() }}
         shell: bash
         run: |
-          if [ -d "./build" ]; then
+          if [ -d "${{ env.BUILD_DIR }}" ]; then
             echo "Full SDK du:"
             echo "------------"
-            du -h -d 1 build/dist/rocm
+            du -h -d 1 ${{ env.BUILD_DIR }}/dist/rocm
             echo "Artifact Archives:"
             echo "------------------"
-            ls -lh build/artifacts/*.tar.xz
+            ls -lh ${{ env.BUILD_DIR }}/artifacts/*.tar.xz
             echo "Artifacts:"
             echo "----------"
-            du -h -d 1 build/artifacts
+            du -h -d 1 ${{ env.BUILD_DIR }}/artifacts
             echo "CCache Stats:"
             echo "-------------"
             ccache -s -v
-            tail -v -n +1 .ccache/compiler_check_cache/* > build/logs/ccache_compiler_check_cache.log
+            tail -v -n +1 .ccache/compiler_check_cache/* > ${{ env.BUILD_DIR }}/logs/ccache_compiler_check_cache.log
           else
-            echo "[ERROR] Build directory ./build does not exist. Skipping report!"
+            echo "[ERROR] Build directory ${{ env.BUILD_DIR }} does not exist. Skipping report!"
             echo "        This should only happen if the CI is cancelled before the build step."
             exit 1
           fi
@@ -175,5 +188,5 @@ jobs:
           python3 build_tools/github_actions/post_build_upload.py \
             --run-id ${{ github.run_id }} \
             --artifact-group "${{ inputs.artifact_group }}" \
-            --build-dir build \
+            --build-dir ${{ env.BUILD_DIR }} \
             --upload

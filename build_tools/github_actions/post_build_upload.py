@@ -134,7 +134,7 @@ def index_log_files(build_dir: Path, artifact_group: str):
 
     if log_dir.is_dir():
         log(
-            f"[INFO] Found '{log_dir}' directory. Indexing '*.log' and '*.tar.gz' files..."
+            f"[INFO] Found '{log_dir}' directory. Indexing '*.log', '*.tar.gz', and memory monitoring files..."
         )
         run_command(
             [
@@ -143,7 +143,9 @@ def index_log_files(build_dir: Path, artifact_group: str):
                 log_dir.as_posix(),  # unnamed path arg in front of -f
                 "-f",
                 "*.log",
-                "*.tar.gz",  # accepts nargs! Take care not to consume path
+                "*.tar.gz",
+                "*.jsonl",
+                "*.txt",  # accepts nargs! Take care not to consume path
             ],
             cwd=Path.cwd(),
         )
@@ -217,10 +219,17 @@ def upload_logs_to_s3(artifact_group: str, build_dir: Path, bucket_uri: str):
         log(f"[INFO] Log directory {log_dir} not found. Skipping upload.")
         return
 
-    # Upload .log files
-    log_files = list(log_dir.glob("*.log")) + list(log_dir.glob("*.tar.gz"))
+    # Upload .log files, .tar.gz archives, and memory monitoring files (.jsonl, .txt)
+    log_files = (
+        list(log_dir.glob("*.log"))
+        + list(log_dir.glob("*.tar.gz"))
+        + list(log_dir.glob("build_memory_log_*.jsonl"))
+        + list(log_dir.glob("monitor_output_*.txt"))
+    )
     if not log_files:
-        log("[WARN] No .log or .tar.gz files found. Skipping log upload.")
+        log(
+            "[WARN] No .log, .tar.gz, or memory monitoring files found. Skipping log upload."
+        )
     else:
         run_aws_cp(log_dir, s3_base_path, content_type="text/plain")
 
