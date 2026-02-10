@@ -55,4 +55,4 @@ repos:
     name: Enforce *_test.py naming for build_tools tests
     entry: "Test files must use the *_test.py naming convention, not test_*.py"
     language: fail
-    files: 'build_tools/(.*/)?tests/test_[^/]*\.py$'
+    files: '^build_tools/(.*/)?tests/test_[^/]*\.py$'
