@@ -147,12 +147,12 @@ amdgpu_family_info_matrix_nightly = {
         },
     },
     "gfx101x": {
-        # TODO(#1926): Resolve bgemm kernel hip file generation error
+        # TODO(#1926): Resolve bgemm kernel hip file generation error to enable PyTorch builds
         "linux": {
             "test-runs-on": "",
             "family": "gfx101X-dgpu",
-            "expect_failure": True,
             "build_variants": ["release"],
+            "expect_pytorch_failure": True,
         },
         "windows": {
             "test-runs-on": "",
