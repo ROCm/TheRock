@@ -34,14 +34,14 @@ file.
 
 ## gfx1151 (Strix Halo) specific questions
 
-### What operating systems are supported for Strix Halo?
+### Which linux are supported for Strix Halo?
 
-For the most complete and up-to-date information on supported GPU architectures
-and release history, please refer to the the [SUPPORTED_GPUs](https://github.com/ROCm/TheRock/blob/main/SUPPORTED_GPUS.md)
-
-On Linux, Strix Halo requires a kernel patch to function correctly.  
-See the system optimization guide for the full OS compatibility details:  
+On Linux, Strix Halo requires a kernel patch to function correctly. See the
+system optimization guide for the full linux kernel compatibility details:
 https://rocm.docs.amd.com/en/latest/how-to/system-optimization/strixhalo-point.html#operating-system-support
+
+Besides of that please use the [SUPPORTED_GPUs](https://github.com/ROCm/TheRock/blob/main/SUPPORTED_GPUS.md)
+page.
 
 ### Why does PyTorch use Graphics Translation Table (GTT) instead of VRAM on gfx1151?
 
