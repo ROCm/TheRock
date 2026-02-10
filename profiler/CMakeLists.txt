@@ -221,15 +221,6 @@ endif(THEROCK_BUILD_TESTING)
   # rocprofiler-systems requires GCC, but sanitizer builds use Clang.
   # Skip enabling rocprofiler-systems when building with sanitizers.
 
-  # rocprofiler-systems expects amd_smi on Linux (when enabled).
-  if(NOT WIN32 AND THEROCK_ENABLE_ROCPROFSYS AND THEROCK_SANITIZER STREQUAL "")
-    if(NOT THEROCK_ENABLE_CORE_AMDSMI)
-      message(FATAL_ERROR
-        "rocprofiler-systems requires THEROCK_ENABLE_CORE_AMDSMI on Linux (amd_smi package)."
-      )
-    endif()
-  endif()
-
   if (THEROCK_ENABLE_ROCPROFSYS AND THEROCK_SANITIZER STREQUAL "")
     therock_cmake_subproject_declare(rocprofiler-systems
       USE_DIST_AMDGPU_TARGETS
@@ -278,7 +269,6 @@ endif(THEROCK_BUILD_TESTING)
         run
       SUBPROJECT_DEPS
         amdsmi
-        aqlprofile
         rocprofiler-sdk
         rocprofiler-systems
       )
