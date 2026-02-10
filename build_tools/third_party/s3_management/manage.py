@@ -87,6 +87,7 @@ PACKAGE_ALLOW_LIST = {x.lower() for x in [
     "zipp",
     # ----
     "Pillow",
+    "apex",
     "certifi",
     "charset_normalizer",
     "cmake",
