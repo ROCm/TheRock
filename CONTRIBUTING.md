@@ -85,7 +85,7 @@ pull requests for review.
 For example:
 
 ```bash
-# Download.
+# Download (note: this is already included in requirements.txt).
 pip install pre-commit
 
 # Run locally on staged files.
@@ -109,6 +109,12 @@ a branch name following one of these patterns:
 These naming schemes allow for long-lived branches to be more easily sorted and
 possibly cleaned up by repository maintainers.
 
+List of long-lived branches:
+
+- [`main`](https://github.com/ROCm/TheRock/tree/main)
+- [`release/*`](https://github.com/ROCm/TheRock/branches/all?query=release%2F)
+- [`compiler/amd-staging`](https://github.com/ROCm/TheRock/tree/compiler/amd-staging)
+
 > [!TIP]
 > Most developer workflows are compatible with pull requests coming from forks.
 > Some good reasons to create branches in the shared repository are:
@@ -119,7 +125,12 @@ possibly cleaned up by repository maintainers.
 >   [workflow_dispatch](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow)
 >   and running on our self-hosted GitHub Actions runners
 
-### Style guide
+### Style guides
 
-We have a project-wide style guide with recommendations at
-[`docs/development/style_guide.md`](docs/development/style_guide.md).
+We have project-wide style guides with recommendations to follow at
+[`docs/development/style_guides/`](/docs/development/style_guides/):
+
+- [Bash Style Guide](/docs/development/style_guides/bash_style_guide.md)
+- [CMake Style Guide](/docs/development/style_guides/cmake_style_guide.md)
+- [GitHub Actions Style Guide](/docs/development/style_guides/github_actions_style_guide.md)
+- [Python Style Guide](/docs/development/style_guides/python_style_guide.md)

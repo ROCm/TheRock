@@ -7,6 +7,7 @@ from pathlib import Path
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
+AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 
 logging.basicConfig(level=logging.INFO)
 
@@ -20,6 +21,7 @@ cmd = [
     "--timeout",
     "60",
 ]
+
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 
 subprocess.run(

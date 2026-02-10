@@ -24,22 +24,9 @@ skip_tests = {
             "test_mempool_empty_cache_inactive",
             # RuntimeError: Error building extension 'dummy_allocator_v1'
             "test_mempool_limited_memory_with_allocator",
-        ]
-    },
-    "gfx950": {
-        "binary_ufuncs": [
-            # AssertionError: Tensor-likes are not close!
-            "test_contig_vs_every_other___rpow___cuda_complex64",
-            # AssertionError: Tensor-likes are not close!
-            "test_contig_vs_every_other__refs_pow_cuda_complex64",
-            # AssertionError: Tensor-likes are not close!
-            "test_contig_vs_every_other_pow_cuda_complex64",
-            # AssertionError: Tensor-likes are not close!
-            "test_non_contig___rpow___cuda_complex64",
-            # AssertionError: Tensor-likes are not close!
-            "test_non_contig__refs_pow_cuda_complex64",
-            # AssertionError: Tensor-likes are not close!
-            "test_non_contig_pow_cuda_complex64",
+            # This test was fixed in torch 2.9, see
+            # https://github.com/ROCm/TheRock/issues/2206
+            "test_hip_device_count",
         ]
     },
 }

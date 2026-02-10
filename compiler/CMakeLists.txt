@@ -18,7 +18,16 @@ if(THEROCK_ENABLE_COMPILER)
     message(STATUS "Flang build concurrency level set to ${FLANG_PARALLEL_COMPILE_JOBS}")
     list(APPEND _extra_llvm_cmake_args "-DFLANG_PARALLEL_COMPILE_JOBS=${FLANG_PARALLEL_COMPILE_JOBS}")
   else()
-     message(STATUS "Flang concurrency is unlimited. Memory usage may be much higher.")
+     message(WARNING "Flang concurrency is unlimited. Memory usage may be much higher. Set -DFLANG_PARALLEL_COMPILE_JOBS to reduce memory use.")
+  endif()
+
+  # LLVM linking is also very memory intensive. Allow users to adjust the number
+  # of parallel link jobs.
+  if(LLVM_PARALLEL_LINK_JOBS)
+    message(STATUS "LLVM parallel link jobs set to ${LLVM_PARALLEL_LINK_JOBS}")
+    list(APPEND _extra_llvm_cmake_args "-DLLVM_PARALLEL_LINK_JOBS=${LLVM_PARALLEL_LINK_JOBS}")
+  else()
+     message(WARNING "LLVM parallel link jobs is unlimited. Memory usage may be much higher. Set -DLLVM_PARALLEL_LINK_JOBS to reduce memory use.")
   endif()
 
   # If the compiler is not pristine (i.e. has patches), then there will be a
@@ -61,7 +70,7 @@ if(THEROCK_ENABLE_COMPILER)
       -DLIBCXXABI_ENABLE_STATIC=ON
 
       # Features
-      -DLLVM_INCLUDE_TESTS=OFF
+      -DLLVM_INCLUDE_TESTS=${THEROCK_ENABLE_LLVM_TESTS}
       -DLLVM_ENABLE_ZLIB=FORCE_ON
       -DLLVM_ENABLE_Z3_SOLVER=OFF
       -DLLVM_ENABLE_LIBXML2=OFF
@@ -71,6 +80,11 @@ if(THEROCK_ENABLE_COMPILER)
       -DCLANG_ENABLE_AMDCLANG=ON
       -DLLVM_INSTALL_TOOLCHAIN_ONLY=OFF
       -DLLVM_BUILD_LLVM_C_DYLIB=OFF
+
+      # Build optimizations
+      -DLLVM_BUILD_EXAMPLES=${THEROCK_ENABLE_LLVM_TESTS}
+      -DLLVM_INCLUDE_EXAMPLES=${THEROCK_ENABLE_LLVM_TESTS}
+      -DLLVM_TOOL_LLVM_JITLINK_BUILD=${THEROCK_ENABLE_LLVM_TESTS}
 
       # Clang features.
       -DCLANG_ENABLE_ARCMT=OFF
@@ -148,6 +162,10 @@ if(THEROCK_ENABLE_COMPILER)
     RUNTIME_DEPS
       amd-llvm
       ${THEROCK_BUNDLED_ZSTD}
+    INTERFACE_LINK_DIRS
+      "lib"
+    INTERFACE_INSTALL_RPATH_DIRS
+      "lib"
   )
   if(NOT THEROCK_FLAG_COMGR_DELAY_LOAD)
     therock_cmake_subproject_provide_package("${_amd_comgr_target_name}" amd_comgr lib/cmake/amd_comgr)
@@ -173,6 +191,7 @@ if(THEROCK_ENABLE_COMPILER)
 
   if(THEROCK_FLAG_COMGR_DELAY_LOAD)
     therock_cmake_subproject_declare("${_amd_comgr_stub_target_name}"
+      FPRINT_SOURCE_HASH
       USE_DIST_AMDGPU_TARGETS
       NO_INSTALL_RPATH
       LOGICAL_TARGET_NAME "amd-comgr-stub"
@@ -183,6 +202,10 @@ if(THEROCK_ENABLE_COMPILER)
         -DAMD_COMGR_STAGE_PATH=${CMAKE_CURRENT_BINARY_DIR}/amd-comgr/stage
       RUNTIME_DEPS
         "${_amd_comgr_target_name}"
+    INTERFACE_LINK_DIRS
+      "lib"
+    INTERFACE_INSTALL_RPATH_DIRS
+      "lib"
     )
     therock_cmake_subproject_glob_c_sources("${_amd_comgr_stub_target_name}" SUBDIRS src)
     therock_cmake_subproject_provide_package("${_amd_comgr_stub_target_name}" amd_comgr lib/cmake/amd_comgr_stub)

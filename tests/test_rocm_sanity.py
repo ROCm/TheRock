@@ -15,6 +15,8 @@ logger = logging.getLogger(__name__)
 
 THEROCK_BIN_DIR = Path(os.getenv("THEROCK_BIN_DIR")).resolve()
 
+AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
+
 
 def is_windows():
     return "windows" == platform.system().lower()
@@ -87,7 +89,25 @@ class TestROCmSanity:
             / offload_arch_executable_file
         ).resolve()
         process = run_command([str(offload_arch_path)])
-        offload_arch = process.stdout.splitlines()[0]
+
+        # Extract the arch from the command output, working around
+        # https://github.com/ROCm/TheRock/issues/1118. We only expect the output
+        # to contain 'gfx####` text but some ROCm releases contained stray
+        # "HIP Library Path" logging first.
+        # **Note**: this partly defaults the purpose of the sanity check, since
+        # that should really be a test failure. However, per discussion on
+        # https://github.com/ROCm/TheRock/pull/3257 we found that system
+        # installs of ROCm (DLLs in system32) take precedence over user
+        # installs (PATH env var) under certain conditions. Hopefully a
+        # different unit test elsewhere in ROCm catches that more directly.
+        offload_arch = None
+        for line in process.stdout.splitlines():
+            if "gfx" in line:
+                offload_arch = line
+                break
+        assert (
+            offload_arch is not None
+        ), f"Expected offload-arch to return gfx####, got:\n{process.stdout}"
 
         # Compiling .cpp file using hipcc
         hipcc_check_executable_file = f"hipcc_check{platform_executable_suffix}"
@@ -123,3 +143,74 @@ class TestROCmSanity:
         return_code = process.returncode
         check.equal(return_code, 0)
         check.is_true(output)
+
+    @pytest.mark.skipif(is_windows(), reason="amdsmitst is not supported on Windows")
+    # TODO(#2789): Remove skip once amdsmi supports gfx1151
+    @pytest.mark.skipif(
+        AMDGPU_FAMILIES == "gfx1151", reason="Linux gfx1151 does not support amdsmi yet"
+    )
+    def test_amdsmi_suite(self):
+        amdsmi_test_bin = (
+            THEROCK_BIN_DIR.parent / "share" / "amd_smi" / "tests" / "amdsmitst"
+        ).resolve()
+
+        assert (
+            amdsmi_test_bin.exists()
+        ), f"amdsmitst not found at expected location: {amdsmi_test_bin}"
+        assert os.access(
+            amdsmi_test_bin, os.X_OK
+        ), f"amdsmitst is not executable: {amdsmi_test_bin}"
+
+        include_tests = [
+            "amdsmitstReadOnly.*",
+            "amdsmitstReadWrite.FanReadWrite",
+            "amdsmitstReadWrite.TestOverdriveReadWrite",
+            "amdsmitstReadWrite.TestPciReadWrite",
+            "amdsmitstReadWrite.TestPowerReadWrite",
+            "amdsmitstReadWrite.TestPerfCntrReadWrite",
+            "amdsmitstReadWrite.TestEvtNotifReadWrite",
+            "AmdSmiDynamicMetricTest.*",
+        ]
+
+        exclude_tests = [
+            "amdsmitstReadOnly.TempRead",
+            "amdsmitstReadOnly.TestFrequenciesRead",
+            "amdsmitstReadWrite.TestPowerReadWrite",
+        ]
+
+        TESTS_TO_IGNORE = {
+            "gfx90X-dcgpu": {
+                # TODO(#2963): Re-enable once amdsmi tests are fixed for gfx90X-dcgpu
+                "linux": [
+                    "amdsmitstReadOnly.TestSysInfoRead",
+                    "amdsmitstReadOnly.TestIdInfoRead",
+                    "amdsmitstReadWrite.TestPciReadWrite",
+                ]
+            },
+            "gfx110X-all": {
+                # TODO(#2963): Re-enable once amdsmi tests are fixed for gfx110X-all
+                "linux": [
+                    "amdsmitstReadWrite.FanReadWrite",
+                ]
+            },
+        }
+
+        platform_key = "windows" if is_windows() else "linux"
+        if (
+            AMDGPU_FAMILIES in TESTS_TO_IGNORE
+            and platform_key in TESTS_TO_IGNORE[AMDGPU_FAMILIES]
+        ):
+            ignored_tests = TESTS_TO_IGNORE[AMDGPU_FAMILIES][platform_key]
+            exclude_tests.extend(ignored_tests)
+
+        gtest_filter = f"{':'.join(include_tests)}:-{':'.join(exclude_tests)}"
+        cmd = [str(amdsmi_test_bin), f"--gtest_filter={gtest_filter}"]
+
+        process = run_command(cmd, cwd=str(amdsmi_test_bin.parent))
+
+        combined = (process.stdout or "") + "\n" + (process.stderr or "")
+        for line in combined.splitlines():
+            if "[==========]" in line:
+                print(f"[amdsmitst-summary] {line}")
+
+        check.equal(process.returncode, 0)

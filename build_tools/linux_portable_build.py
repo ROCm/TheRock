@@ -5,13 +5,13 @@ Example usage:
 
     # Build for a specific family. Note that all options after the "--" are
     # passed verbatim to CMake.
-    python linux_build_portable.py -- -DTHEROCK_AMDGPU_FAMILIES=gfx110X-all
+    python linux_portable_build.py -- -DTHEROCK_AMDGPU_FAMILIES=gfx110X-all
 
     # Build with podman vs docker.
-    python linux_build_portable.py --docker=podman
+    python linux_portable_build.py --docker=podman
 
     # Enter an interactive shell set up like the build.
-    python linux_build_portable.py --interactive
+    python linux_portable_build.py --interactive
 
 Other options of note:
 
@@ -23,6 +23,7 @@ Other options of note:
 """
 
 import argparse
+import os
 from pathlib import Path
 import shlex
 import subprocess
@@ -33,7 +34,7 @@ THIS_DIR = Path(__file__).resolve().parent
 REPO_DIR = THIS_DIR.parent
 
 
-def exec(args: list[str | Path], cwd: Path):
+def run_command(args: list[str | Path], cwd: Path):
     args = [str(arg) for arg in args]
     print(f"++ Exec [{cwd}]$ {shlex.join(args)}")
     subprocess.check_call(args, cwd=str(cwd))
@@ -41,7 +42,7 @@ def exec(args: list[str | Path], cwd: Path):
 
 def do_build(args: argparse.Namespace, *, rest_args: list[str]):
     if args.pull:
-        exec([args.docker, "pull", args.image], cwd=THIS_DIR)
+        run_command([args.docker, "pull", args.image], cwd=THIS_DIR)
     output_dir: Path = args.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
     cl = [
@@ -61,6 +62,18 @@ def do_build(args: argparse.Namespace, *, rest_args: list[str]):
             f"type=bind,src={args.repo_dir},dst=/therock/src",
         ]
     )
+
+    # Pass through environment variables that control build behavior.
+    # These are set by CI workflows to enable features like build profiling.
+    passthrough_env_vars = [
+        "EXTRA_C_COMPILER_LAUNCHER",
+        "EXTRA_CXX_COMPILER_LAUNCHER",
+        "THEROCK_BUILD_PROF_LOG_DIR",
+    ]
+    for var in passthrough_env_vars:
+        if var in os.environ:
+            cl.extend(["-e", f"{var}={os.environ[var]}"])
+
     if args.build_python_only:
         cl.extend(
             [
@@ -128,7 +141,7 @@ def main(argv: list[str]):
     p.add_argument("--docker", default="docker", help="Docker or podman binary")
     p.add_argument(
         "--image",
-        default="ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:4af52d56d91ef6ef8b7d0a13c6115af1ab2c9bf4a8a85d9267b489ecb737ed25",
+        default="ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:db2b63f938941dde2abc80b734e64b45b9995a282896d513a0f3525d4591d6cb",
         help="Build docker image",
     )
     p.add_argument(

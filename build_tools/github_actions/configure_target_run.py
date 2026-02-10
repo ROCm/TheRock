@@ -4,21 +4,20 @@ Environment variable inputs:
     * 'TARGET': A GPU family like 'gfx95X-dcgpu' or 'gfx1151', corresponding
                 to a release index.
     * 'PLATFORM': "linux" or "windows"
+    * ROCM_THEROCK_TEST_RUNNERS (optional): Test runner JSON object, coming from ROCm organization
+    * LOAD_TEST_RUNNERS_FROM_VAR (optional): boolean env variable that loads in ROCm org data if enabled
 """
 
 import os
-from amdgpu_family_matrix import (
-    amdgpu_family_info_matrix_presubmit,
-    amdgpu_family_info_matrix_postsubmit,
-)
+from amdgpu_family_matrix import get_all_families_for_trigger_types
 
 from github_actions_utils import *
 
 
 def get_runner_label(target: str, platform: str) -> str:
     print(f"Searching for a runner for target '{target}' on platform '{platform}'")
-    amdgpu_family_info_matrix = (
-        amdgpu_family_info_matrix_presubmit | amdgpu_family_info_matrix_postsubmit
+    amdgpu_family_info_matrix = get_all_families_for_trigger_types(
+        ["presubmit", "postsubmit"]
     )
     for key, info_for_key in amdgpu_family_info_matrix.items():
         print(f"Cheecking key '{key}' with info:\n  {info_for_key}")
@@ -51,8 +50,8 @@ def get_runner_label(target: str, platform: str) -> str:
 
 def get_upload_label(target: str, platform: str) -> str:
     print(f"Searching for a runner for target '{target}' on platform '{platform}'")
-    amdgpu_family_info_matrix = (
-        amdgpu_family_info_matrix_presubmit | amdgpu_family_info_matrix_postsubmit
+    amdgpu_family_info_matrix = get_all_families_for_trigger_types(
+        ["presubmit", "postsubmit"]
     )
     for key, info_for_key in amdgpu_family_info_matrix.items():
         print(f"Cheecking key '{key}' with info:\n  {info_for_key}")
