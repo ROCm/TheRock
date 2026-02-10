@@ -1,6 +1,7 @@
 import logging
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
@@ -8,68 +9,37 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
 logging.basicConfig(level=logging.INFO)
+rocm_base = Path(THEROCK_BIN_DIR).resolve().parent
 
+# Environment variables
+environ_vars = os.environ.copy()
+ld_paths = [
+    # Libraries used by examples
+    rocm_base
+    / "share"
+    / "rocprofiler-systems"
+    / "examples"
+    / "lib",
+]
 
-class TestRocprofsys:
-    @staticmethod
-    def configure_paths():
-        """Configure environment path variables for rocprofiler-systems tests"""
+environ_vars["PATH"] = THEROCK_BIN_DIR
+environ_vars["ROCM_PATH"] = str(rocm_base)
+environ_vars["LD_LIBRARY_PATH"] = ":".join(str(p) for p in ld_paths)
+# Required to force the pytest package to use install mode
+environ_vars["ROCPROFSYS_INSTALL_DIR"] = str(rocm_base)
 
-        # Everything that we need should be in here
-        rocm_base = Path(THEROCK_BIN_DIR).resolve().parent
+# Execute tests
+pytest_package_exec = (
+    rocm_base / "share" / "rocprofiler-systems" / "tests" / "rocprofsys-tests.pyz"
+)
 
-        # PATH
-        existing_path = os.environ.get("PATH", "")
-        if existing_path:
-            os.environ["PATH"] = f"{THEROCK_BIN_DIR}:{existing_path}"
-        else:
-            os.environ["PATH"] = THEROCK_BIN_DIR
+cmd = [
+    sys.executable,
+    str(pytest_package_exec),
+    "--junit-xml=junit.xml",
+    "--ci-mode",
+    "--log-cli-level=info",
+]
 
-        # ROCM_PATH
-        os.environ["ROCM_PATH"] = str(rocm_base)
-
-        # LD_LIBRARY_PATH
-        ld_paths = [
-            # Libraries used by examples
-            rocm_base
-            / "share"
-            / "rocprofiler-systems"
-            / "examples"
-            / "lib",
-        ]
-        new_ld_path = ":".join(str(p) for p in ld_paths)
-        existing_ld_path = os.environ.get("LD_LIBRARY_PATH", "")
-        if existing_ld_path:
-            os.environ["LD_LIBRARY_PATH"] = f"{new_ld_path}:{existing_ld_path}"
-        else:
-            os.environ["LD_LIBRARY_PATH"] = new_ld_path
-
-        # Required to force pytest to use install mode
-        os.environ["ROCPROFSYS_INSTALL_DIR"] = str(rocm_base)
-
-    @staticmethod
-    def run_pytest_package():
-        TestRocprofsys.configure_paths()
-
-        pytest_package_exec = (
-            Path(THEROCK_BIN_DIR).resolve().parent
-            / "share"
-            / "rocprofiler-systems"
-            / "tests"
-            / "rocprofsys-tests.pyz"
-        )
-
-        cmd = [
-            "python3",
-            str(pytest_package_exec),
-            "--junit-xml=junit.xml",
-            "--ci-mode",
-            "--log-cli-level=info",
-        ]
-
-        logging.info(f"++ Exec: {' '.join(cmd)}")
-        subprocess.run(cmd, cwd=THEROCK_DIR, check=True)
-
-
-if __name__ == "__main__":
-    TestRocprofsys.run_pytest_package()
+logging.info(f"++ Exec: {' '.join(cmd)}")
+subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=environ_vars)
