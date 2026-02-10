@@ -540,7 +540,7 @@ artifact_group = "ml-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip"]
 
-[artifacts.miopen-provider]
+[artifacts.miopenprovider]
 artifact_group = "ml-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn"]
@@ -553,7 +553,7 @@ artifact_deps = ["core-runtime", "core-hip", "blas", "hipdnn"]
 [artifacts.hipdnn-samples]
 artifact_group = "ml-libs"
 type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "miopen-plugin"]
+artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "miopenprovider"]
 
 # --- IREE Integration ---
 

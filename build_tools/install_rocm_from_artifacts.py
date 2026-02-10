@@ -23,7 +23,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--hipdnn | --no-hipdnn]
     [--hipdnn-samples | --no-hipdnn-samples]
     [--miopen | --no-miopen]
-    [--miopen-plugin | --no-miopen-plugin]
+    [--miopenprovider | --no-miopenprovider]
     [--fusilli-plugin | --no-fusilli-plugin]
     [--hipblaslt-plugin | --no-hipblaslt-plugin]
     [--prim | --no-prim]
@@ -335,7 +335,7 @@ def retrieve_artifacts_by_run_id(args):
             args.hipdnn,
             args.hipdnn_samples,
             args.miopen,
-            args.miopen_plugin,
+            args.miopenprovider,
             args.fusilli_plugin,
             args.hipblaslt_plugin,
             args.prim,
@@ -384,8 +384,8 @@ def retrieve_artifacts_by_run_id(args):
             argv.append("miopen_run")
             # Also need these for runtime kernel compilation (rocrand includes).
             argv.append("rand_dev")
-        if args.miopen_plugin:
-            extra_artifacts.append("miopen-plugin")
+        if args.miopenprovider:
+            extra_artifacts.append("miopenprovider")
         if args.fusilli_plugin:
             extra_artifacts.append("fusilli-plugin")
         if args.hipblaslt_plugin:
@@ -643,9 +643,9 @@ def main(argv):
     )
 
     artifacts_group.add_argument(
-        "--miopen-plugin",
+        "--miopenprovider",
         default=False,
-        help="Include 'miopen-plugin' artifacts",
+        help="Include 'miopenprovider' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
