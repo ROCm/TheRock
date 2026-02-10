@@ -368,9 +368,9 @@ def run(args):
 
     external_repo_path, bucket = retrieve_bucket_info()
     run_id = args.run_id
-    bucket_uri = f"s3://{bucket}/{external_repo_path}{run_id}-{PLATFORM}"
+    bucket_uri = f"s3://abc/{external_repo_path}{run_id}-{PLATFORM}"
     bucket_url = (
-        f"https://{bucket}.s3.amazonaws.com/{external_repo_path}{run_id}-{PLATFORM}"
+        f"https://abc.s3.amazonaws.com/{external_repo_path}{run_id}-{PLATFORM}"
     )
 
     log("Write Windows time sync log")
