@@ -34,6 +34,20 @@ file.
 
 ## gfx1151 (Strix Halo) specific questions
 
+### What operating systems are supported for Strix Halo?
+
+Refer to the ROCm compatibility and system requirement tables at the links below:
+
+- **Linux:**  
+  https://rocm.docs.amd.com/projects/install-on-linux/en/latest/reference/system-requirements.html
+
+- **Windows:**  
+  https://rocm.docs.amd.com/projects/install-on-windows/en/latest/reference/system-requirements.html
+
+> **Note:** On Linux, Strix Halo requires a kernel patch to function correctly.  
+> See the system optimization guide for the full OS compatibility details:  
+> https://rocm.docs.amd.com/en/latest/how-to/system-optimization/strixhalo-point.html#operating-system-support
+
 ### Why does PyTorch use Graphics Translation Table (GTT) instead of VRAM on gfx1151?
 
 On Strix Halo GPUs (gfx1151) memory access is handled through GPU Virtual Memory
