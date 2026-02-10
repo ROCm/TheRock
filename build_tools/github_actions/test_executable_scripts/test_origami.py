@@ -32,7 +32,11 @@ origami_test_dir = bin_dir / "origami"
 path_sep = ";" if is_windows else ":"
 
 # The origami Python package is installed to lib/pythonX.Y/site-packages/origami/
-site_packages_dir = lib_dir / f"python{sys.version_info.major}.{sys.version_info.minor}" / "site-packages"
+site_packages_dir = (
+    lib_dir
+    / f"python{sys.version_info.major}.{sys.version_info.minor}"
+    / "site-packages"
+)
 
 # LD_LIBRARY_PATH is needed for Python tests to find liborigami.so
 if platform == "linux":
