@@ -545,6 +545,11 @@ artifact_group = "ml-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn"]
 
+[artifacts.hipblaslt-plugin]
+artifact_group = "ml-libs"
+type = "target-neutral"
+artifact_deps = ["core-runtime", "core-hip", "blas", "hipdnn"]
+
 [artifacts.hipdnn-samples]
 artifact_group = "ml-libs"
 type = "target-specific"
