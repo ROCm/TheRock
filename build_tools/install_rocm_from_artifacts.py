@@ -399,6 +399,8 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("rccl")
         if args.rocprofiler_compute:
             extra_artifacts.append("rocprofiler-compute")
+            # rocprofiler-compute has a runtime dependency on rocprofiler-sdk
+            argv.append("rocprofiler-sdk_run")
         if args.rocprofiler_sdk:
             extra_artifacts.append("rocprofiler-sdk")
         if args.rocprofiler_systems:

@@ -30,12 +30,7 @@ include = [
 ]
 [components.test."profiler/rocprofiler-sdk/stage"]
 include = [
-  "bin/**",
-  "share/rocprofiler-sdk/**",
-  "share/rocprofiler-sdk-rocpd/**",
-  "share/rocprofiler-sdk-roctx/**",
   "share/rocprofiler-sdk/tests/**",
-  "lib/python*/**",
 ]
 
 # roctracer
