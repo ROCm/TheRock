@@ -220,7 +220,6 @@ endif(THEROCK_BUILD_TESTING)
   ##############################################################################
   # rocprofiler-systems requires GCC, but sanitizer builds use Clang.
   # Skip enabling rocprofiler-systems when building with sanitizers.
-
   if (THEROCK_ENABLE_ROCPROFSYS AND THEROCK_SANITIZER STREQUAL "")
     therock_cmake_subproject_declare(rocprofiler-systems
       USE_DIST_AMDGPU_TARGETS
