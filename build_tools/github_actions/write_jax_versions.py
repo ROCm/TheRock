@@ -80,9 +80,7 @@ def get_all_jax_wheel_versions(
         raise FileNotFoundError("Did not find jax_rocm7_pjrt wheel")
 
     # Base JAX version (without +rocm suffix) for installing jax from PyPI.
-    all_versions = all_versions | {
-        "jax_version": jaxlib_version.split("+")[0]
-    }
+    all_versions = all_versions | {"jax_version": jaxlib_version.split("+")[0]}
 
     return all_versions
 

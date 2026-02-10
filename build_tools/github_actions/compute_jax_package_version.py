@@ -45,9 +45,7 @@ def extract_jax_version_from_requirements(requirements_path: str) -> str:
             if match:
                 return match.group(2)
 
-    raise ValueError(
-        f"Could not find jax or jaxlib version in '{requirements_path}'"
-    )
+    raise ValueError(f"Could not find jax or jaxlib version in '{requirements_path}'")
 
 
 def main(argv: list[str]):
