@@ -84,6 +84,8 @@ def execute_tests(env):
         "--output-on-failure",
         "--timeout",
         "600",
+        "--parallel",
+        "8",
         # shards the tests by running a specific set of tests based on starting test (shard_index) and stride (total_shards)
         "--tests-information",
         f"{shard_index},,{total_shards}",
