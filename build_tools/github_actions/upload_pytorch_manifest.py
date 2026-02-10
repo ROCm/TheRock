@@ -49,9 +49,19 @@ def main() -> None:
     )
     args = ap.parse_args()
 
+    # Normalize Python version for filenames:
+    #   "py3.11" -> "3.11"
+    #   "3.11"   -> "3.11"
     py = args.python_version.strip()
     if py.startswith("py"):
         py = py[2:]
+
+    # Normalize git ref for filenames by replacing path separators.
+    # Examples:
+    #   "nightly"               -> "nightly"
+    #   "release/2.7"           -> "release-2.7"
+    #   "users/alice/experiment"-> "users-alice-experiment"
+    track = args.pytorch_git_ref.replace("/", "-")
 
     if args.pytorch_git_ref == "nightly":
         track = "nightly"
