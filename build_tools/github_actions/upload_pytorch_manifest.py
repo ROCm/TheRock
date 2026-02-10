@@ -4,17 +4,16 @@ Upload the generated PyTorch manifest JSON to S3.
 """
 
 import argparse
-import os
-import platform
+import shlex
 import subprocess
 from pathlib import Path
 
 from github_actions.github_actions_utils import retrieve_bucket_info
 
 
-def run_command(cmd: list[str]) -> None:
-    print("++", " ".join(cmd), flush=True)
-    subprocess.check_call(cmd)
+def run_command(cmd: list[str], cwd: Path):
+    log(f"++ Exec [{cwd}]$ {shlex.join(cmd)}")
+    subprocess.run(cmd, check=True)
 
 
 def main() -> None:
