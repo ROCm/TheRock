@@ -4,12 +4,14 @@ Upload the generated PyTorch manifest JSON to S3.
 """
 
 import argparse
+import os
+from pathlib import Path
+import platform
 import shlex
 import subprocess
-import platform
-from pathlib import Path
 import sys
 
+sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 from github_actions.github_actions_utils import retrieve_bucket_info
 
 
