@@ -49,6 +49,10 @@ else:
 # AIPROFSDK-36: rocr issue causing test to fail
 EXCLUDED_TESTS = "test_profile_pc_sampling"
 
+# Sharding
+shard_index = int(os.getenv("SHARD_INDEX", "1")) - 1
+total_shards = int(os.getenv("TOTAL_SHARDS", "1"))
+
 # Run tests
 cmd = [
     "ctest",
@@ -58,6 +62,8 @@ cmd = [
     "--verbose",
     "-E",
     f"{EXCLUDED_TESTS}",
+    "--tests-information",
+    f"{shard_index},,{total_shards}",
 ]
 logging.info(f"++ Exec [{THEROCK_PATH}]$ {shlex.join(cmd)}")
 subprocess.run(
