@@ -25,6 +25,7 @@ include(therock_compiler_config)
 include(therock_external_source)
 include(therock_features)
 include(therock_sanitizers)
+include(therock_setup_linker)
 include(therock_subproject)
 include(therock_job_pools)
 include(therock_testing)
@@ -153,6 +154,23 @@ therock_enable_external_source("composable-kernel" "${THEROCK_SOURCE_DIR}/ml-lib
 
 # Overall build settings.
 option(THEROCK_VERBOSE "Enables verbose CMake statuses" OFF)
+
+# LLD configuration for projects not built with amd-llvm toolchain
+cmake_dependent_option(THEROCK_USE_LLD
+  "Links compiler subproject with system lld when available"
+  ON "NOT WIN32" OFF)
+cmake_dependent_option(THEROCK_FORCE_CMAKE_LINKER
+  "Force CMAKE_LINKER to system LLD in sub-projects not built with amd-llvm toolchain."
+  OFF THEROCK_USE_LLD OFF)
+
+if(THEROCK_USE_LLD)
+  set(SYSTEM_LLD_PATH)
+  therock_setup_linker(SYSTEM_LLD_PATH)
+  if(NOT SYSTEM_LLD_PATH)
+    message(WARNING "THEROCK_USE_LLD set to ON but no system LLD found - setting to OFF")
+    set(THEROCK_USE_LLD OFF CACHE BOOL "Links compiler subproject with system lld when available" FORCE)
+  endif()
+endif()
 
 # Initialize the install directory.
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
