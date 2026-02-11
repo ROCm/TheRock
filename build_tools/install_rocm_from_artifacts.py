@@ -24,7 +24,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--hipdnn-samples | --no-hipdnn-samples]
     [--miopen | --no-miopen]
     [--miopen-plugin | --no-miopen-plugin]
-    [--composablekernel]
+    [--composablekernel | --no-composablekernel]
     [--fusilli-plugin | --no-fusilli-plugin]
     [--hipblaslt-plugin | --no-hipblaslt-plugin]
     [--prim | --no-prim]
