@@ -46,10 +46,16 @@ validate_executable() {
     executable="$1"
     log_message ""
     log_message "Validating $executable"
-    if ! command -v "$executable" >/dev/null 2>&1; then
+    if [ ! -f "$executable" ]; then
         log_message "Executable $executable not found."
         return 1
     fi
+
+    if [ ! -x "$executable" ]; then
+        log_message "Executable $executable is marked executable."
+        return 1
+    fi
+
     if "$executable" --version >/dev/null 2>&1; then
         log_message "Running $executable --version works."
         return 0
@@ -85,7 +91,7 @@ log_message ""
 log_message "rocgdb command for active python version: ${gdb_executable}"
 
 # Validate that our rocgdb executable for the active python version works.
-if validate_executable $gdb_executable; then
+if validate_executable "$gdb_executable"; then
     log_message "Executing: $gdb_executable $@"
     if [ "${ROCGDB_WRAPPER_DEBUG}" = "0" ]; then
         exec "$gdb_executable" "$@"
@@ -94,9 +100,11 @@ fi
 
 # The active python version rocgdb did not work. Look for alternatives by
 # checking all the other rocgdb executables except rocgdb-pynone.
-working_rocgdb=""
-find "$GDB_BIN_DIR" -name "rocgdb-py*" ! -name "rocgdb-pynone" | sort -r | while read gdb_executable
+working_gdb=""
+for gdb_executable in $(find "$GDB_BIN_DIR" -name "rocgdb-py*" ! -name "rocgdb-pynone" | sort -r)
 do
+    # We check working_gdb last as that gives a chance for the dry-run mode
+    # to output every executable evaluation.
     if validate_executable "$gdb_executable" && [ -z "$working_gdb" ]; then
         working_gdb="$gdb_executable"
         log_message "Chosen rocgdb executable: $working_gdb"
