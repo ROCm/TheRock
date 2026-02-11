@@ -316,6 +316,8 @@ def do_install_rocm(args: argparse.Namespace):
         pip_args.extend(["--pre"])
     if args.index_url:
         pip_args.extend(["--index-url", args.index_url])
+    if args.find_links:
+        pip_args.extend(["--find-links", args.find_links])
     if args.pip_cache_dir:
         pip_args.extend(["--cache-dir", args.pip_cache_dir])
     pip_args += cache_dir_args
@@ -982,6 +984,10 @@ def main(argv: list[str]):
 
     def add_common(p: argparse.ArgumentParser):
         p.add_argument("--index-url", help="Base URL of the Python Package Index.")
+        p.add_argument(
+            "--find-links",
+            help="URL or path for pip --find-links (flat package index).",
+        )
         p.add_argument("--pip-cache-dir", type=Path, help="Pip cache dir")
         # Note that we default to >1.0 because at the time of writing, we had
         # 0.1.0 release placeholder packages out on pypi and we don't want them
