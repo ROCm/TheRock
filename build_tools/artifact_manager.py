@@ -233,10 +233,10 @@ def extract_artifact(request: ExtractRequest) -> Optional[Path]:
         elif request.flatten:
             output_dir = request.output_dir
             log(f"  ++ Flattening {archive_path.name} to {output_dir}")
-            populator = ArtifactPopulator(
+            flattener = ArtifactPopulator(
                 output_path=output_dir, verbose=False, flatten=True
             )
-            populator(archive_path)
+            flattener(archive_path)
         else:
             output_dir = request.output_dir / artifact_name
             if output_dir.exists():
