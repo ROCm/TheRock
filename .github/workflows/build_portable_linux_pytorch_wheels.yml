@@ -310,7 +310,7 @@ jobs:
             --include "torch-${TORCH_VERSION}-${CP_VERSION}-linux_x86_64.whl" \
             --include "torchaudio-${TORCHAUDIO_VERSION}-${CP_VERSION}-linux_x86_64.whl" \
             --include "torchvision-${TORCHVISION_VERSION}-${CP_VERSION}-linux_x86_64.whl" \
-            --include "triton-${TRITON_VERSION}-${CP_VERSION}-linux_x86_64.whl"
+            --include "triton-${TRITON_VERSION}-${CP_VERSION}-linux_x86_64.whl" \
             --include "apex-${APEX_VERSION}-${CP_VERSION}-linux_x86_64.whl"
 
       - name: (Re-)Generate Python package release index
