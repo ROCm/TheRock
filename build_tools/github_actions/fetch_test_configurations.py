@@ -260,7 +260,7 @@ test_matrix = {
         "fetch_artifact_args": "--composablekernel --tests",
         "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_composablekernel.py')}",
-        "platform": ["linux, windows"],
+        "platform": ["linux", "windows"],
         "total_shards": 4,
     },
     # TODO(iree-org/fusilli/issues/57): Enable fusilli tests once build is
