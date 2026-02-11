@@ -32,7 +32,7 @@ RUN ./install_ccache.sh "4.11.2" && rm -rf /install-ccache
 ######## SCCache ########
 WORKDIR /install-sccache
 COPY install_sccache.sh ./
-RUN ./install_sccache.sh "0.13.0" && rm -rf /install-sccache
+RUN ./install_sccache.sh "0.14.0" && rm -rf /install-sccache
 
 ######## CMake ########
 WORKDIR /install-cmake
