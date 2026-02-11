@@ -27,6 +27,7 @@ environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 
 if is_asan():
     environ_vars["HSA_XNACK"] = "1"
+    environ_vars["OMP_NUM_THREADS"] = "1"
 
 # If smoke tests are enabled, we run smoke tests only.
 # Otherwise, we run the normal test suite
