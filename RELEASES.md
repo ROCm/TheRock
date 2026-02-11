@@ -261,7 +261,7 @@ also install `torch`, `torchaudio`, `torchvision`, and `apex`.
 > - If you want to install other versions, take note of the compatibility
 >   matrix:
 >
->   | torch version | torchaudio version | torchvision version | apex version | 
+>   | torch version | torchaudio version | torchvision version | apex version |
 >   | ------------- | ------------------ | ------------------- | ------------ |
 >   | 2.10          | 2.10               | 0.25                | 1.10.0       |
 >   | 2.9           | 2.9                | 0.24                | 1.9.0        |
@@ -280,7 +280,8 @@ also install `torch`, `torchaudio`, `torchvision`, and `apex`.
 >   - [Installing previous versions of PyTorch](https://pytorch.org/get-started/previous-versions/)
 >   - [torchvision installation - compatibility matrix](https://github.com/pytorch/vision?tab=readme-ov-file#installation)
 >   - [torchaudio installation - compatibility matrix](https://docs.pytorch.org/audio/main/installation.html#compatibility-matrix)
-> - [apex installation - compatibility matrix](https://github.com/ROCm/apex/tree/master?tab=readme-ov-file#supported-versions) 
+>
+> - [apex installation - compatibility matrix](https://github.com/ROCm/apex/tree/master?tab=readme-ov-file#supported-versions)
 
 > [!WARNING]
 > The `torch` packages depend on `rocm[libraries]`, so the compatible ROCm packages
@@ -308,8 +309,8 @@ Supported devices in this family:
 
 ```bash
 pip install --index-url https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/ torch torchaudio torchvision
-# Optional additional packages on Linux: 
-#   apex 
+# Optional additional packages on Linux:
+#   apex
 ```
 
 #### torch for gfx950-dcgpu
@@ -322,8 +323,8 @@ Supported devices in this family:
 
 ```bash
 pip install --index-url https://rocm.nightlies.amd.com/v2/gfx950-dcgpu/ torch torchaudio torchvision
-# Optional additional packages on Linux: 
-#   apex 
+# Optional additional packages on Linux:
+#   apex
 ```
 
 #### torch for gfx110X-all
@@ -339,8 +340,8 @@ Supported devices in this family:
 
 ```bash
 pip install --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ torch torchaudio torchvision
-# Optional additional packages on Linux: 
-#   apex 
+# Optional additional packages on Linux:
+#   apex
 ```
 
 #### torch for gfx1151
@@ -353,8 +354,8 @@ Supported devices in this family:
 
 ```bash
 pip install --index-url https://rocm.nightlies.amd.com/v2/gfx1151/ torch torchaudio torchvision
-# Optional additional packages on Linux: 
-#   apex 
+# Optional additional packages on Linux:
+#   apex
 ```
 
 #### torch for gfx120X-all
@@ -368,8 +369,8 @@ Supported devices in this family:
 
 ```bash
 pip install --index-url https://rocm.nightlies.amd.com/v2/gfx120X-all/ torch torchaudio torchvision
-# Optional additional packages on Linux: 
-#   apex 
+# Optional additional packages on Linux:
+#   apex
 ```
 
 ### Using PyTorch Python packages
