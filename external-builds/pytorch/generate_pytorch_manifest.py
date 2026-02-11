@@ -101,7 +101,9 @@ def build_sources(
     sources: dict[str, dict[str, str]] = {
         "pytorch": git_head(pytorch_dir, label="pytorch").to_dict(),
         "pytorch_audio": git_head(pytorch_audio_dir, label="pytorch_audio").to_dict(),
-        "pytorch_vision": git_head(pytorch_vision_dir, label="pytorch_vision").to_dict(),
+        "pytorch_vision": git_head(
+            pytorch_vision_dir, label="pytorch_vision"
+        ).to_dict(),
     }
     if triton_dir is not None:
         sources["triton"] = git_head(triton_dir, label="triton").to_dict()
