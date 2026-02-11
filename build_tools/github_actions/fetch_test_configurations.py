@@ -262,7 +262,7 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_composablekernel.py')}",
         "platform": ["linux, windows"],
         "total_shards": 4,
-    }
+    },
     # TODO(iree-org/fusilli/issues/57): Enable fusilli tests once build is
     # enabled by default.
     # "fusilli_plugin": {
