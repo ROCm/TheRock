@@ -125,7 +125,7 @@ submodules = ["iree", "fusilli"]
 
 [source_sets.media-libs]
 description = "ROCm media libraries submodules"
-submodules = ["rocdecode", "rocjpeg"]
+submodules = []
 disable_platforms = ["windows"]
 
 # ==============================================================================
