@@ -80,7 +80,7 @@ def main() -> None:
     bucket_uri = f"s3://{bucket}/{external_repo_path}{args.run_id}-{platform_name}"
     dest_uri = f"{bucket_uri}/manifests/{args.amdgpu_family}/{manifest_name}"
 
-    run_command(["aws", "s3", "cp", str(manifest_path), dest_uri])
+    run_command(["aws", "s3", "cp", str(manifest_path), dest_uri], cwd=Path.cwd())
 
 
 if __name__ == "__main__":
