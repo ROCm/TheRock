@@ -16,6 +16,9 @@ on:
         type: string
       component:
         type: string
+      monitor_interval:
+        type: string
+        default: "30"
 
 permissions:
   contents: read
@@ -61,6 +64,9 @@ jobs:
       OUTPUT_ARTIFACTS_DIR: "./build"
       THEROCK_BIN_DIR: "./build/bin"
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+      BUILD_DIR: "./build"
+      JOB_NAME: ${{ github.job }}_shard_${{ matrix.shard }}
+      MEMORY_MONITOR_INTERVAL: ${{ inputs.monitor_interval }}
       # Benchmark results database API endpoints for performance metrics collection
       # NOTE: These secrets are only required for benchmark results submission in nightly CI runs.
       # For PR/push workflows, secret retrieval will fail gracefully and benchmarks will skip API submission.
@@ -114,8 +120,23 @@ jobs:
           SHARD_INDEX: ${{ matrix.shard }}
           TOTAL_SHARDS: ${{ fromJSON(inputs.component).total_shards }}
           TEST_TYPE: ${{ fromJSON(inputs.component).test_type }}
+          GITHUB_JOB: ${{ github.job }}_shard_${{ matrix.shard }}
+          PHASE: "Test Phase"
         run: |
+          if [ "${{ inputs.platform }}" == "linux" ]; then
+            MONITOR_PID=$(bash build_tools/github_actions/start_memory_monitor.sh)
+            export MONITOR_PID
+            echo "Memory monitor PID: $MONITOR_PID"
+            trap 'if [ -n "$MONITOR_PID" ]; then echo "Stopping memory monitoring..."; bash build_tools/github_actions/stop_memory_monitor.sh || true; fi' EXIT
+          else
+            bash build_tools/github_actions/start_memory_monitor_win.sh
+          fi
+
           ${{ fromJSON(inputs.component).test_script }}
+
+          if [ "${{ inputs.platform }}" == "windows" ]; then
+            bash build_tools/github_actions/stop_memory_monitor_win.sh
+          fi
 
       # GitHub's 'Complete job' step is unaware of launched executables
       # and will fail to clean up orphan processes.
