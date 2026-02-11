@@ -34,6 +34,60 @@
         "THEROCK_FLAG_COMGR_DELAY_LOAD": "OFF",
         "THEROCK_SANITIZER": "ASAN",
         "amd-llvm_SANITIZER": "OFF",
+        "amd-comgr_SANITIZER": "ASAN",
+        "amd-comgr-impl_SANITIZER": "ASAN",
+        "hipcc_SANITIZER": "OFF",
+        "hipify_SANITIZER": "OFF",
+        "aqlprofile_SANITIZER": "OFF",
+        "rocprof-trace-decoder_SANITIZER": "OFF",
+        "rocprofiler-sdk_SANITIZER": "OFF",
+        "roctracer_SANITIZER": "OFF",
+        "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -g1",
+        "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O2 -g1",
+        "CMAKE_CXX_FLAGS": "-g1",
+        "CMAKE_C_FLAGS": "-g1"
+      }
+    },
+    {
+      "name": "linux-release-host-asan",
+      "displayName": "Linux release host-only asan build",
+      "description": "Ninja generator, default compiler, RelWithDebInfo with host-side ASAN only (no device-side instrumentation)",
+      "generator": "Ninja",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "amd-llvm_BUILD_TYPE": "Release",
+        "therock-host-blas_BUILD_TYPE": "Release",
+        "therock-SuiteSparse_BUILD_TYPE": "Release",
+        "THEROCK_FLAG_COMGR_DELAY_LOAD": "OFF",
+        "THEROCK_SANITIZER": "HOST_ASAN",
+        "amd-llvm_SANITIZER": "OFF",
+        "amd-comgr_SANITIZER": "HOST_ASAN",
+        "amd-comgr-impl_SANITIZER": "HOST_ASAN",
+        "hipcc_SANITIZER": "OFF",
+        "hipify_SANITIZER": "OFF",
+        "aqlprofile_SANITIZER": "OFF",
+        "rocprof-trace-decoder_SANITIZER": "OFF",
+        "rocprofiler-sdk_SANITIZER": "OFF",
+        "roctracer_SANITIZER": "OFF",
+        "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -g1",
+        "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O2 -g1",
+        "CMAKE_CXX_FLAGS": "-g1",
+        "CMAKE_C_FLAGS": "-g1"
+      }
+    },
+    {
+      "name": "linux-release-tsan",
+      "displayName": "Linux release tsan build",
+      "description": "Ninja generator, default compiler, RelWithDebInfo and TSAN for most runtime subprojects",
+      "generator": "Ninja",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "amd-llvm_BUILD_TYPE": "Release",
+        "therock-host-blas_BUILD_TYPE": "Release",
+        "therock-SuiteSparse_BUILD_TYPE": "Release",
+        "THEROCK_FLAG_COMGR_DELAY_LOAD": "OFF",
+        "THEROCK_SANITIZER": "TSAN",
+        "amd-llvm_SANITIZER": "OFF",
         "amd-comgr_SANITIZER": "OFF",
         "amd-comgr-impl_SANITIZER": "OFF",
         "hipcc_SANITIZER": "OFF",
@@ -41,7 +95,11 @@
         "aqlprofile_SANITIZER": "OFF",
         "rocprof-trace-decoder_SANITIZER": "OFF",
         "rocprofiler-sdk_SANITIZER": "OFF",
-        "roctracer_SANITIZER": "OFF"
+        "roctracer_SANITIZER": "OFF",
+        "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -g1",
+        "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O2 -g1",
+        "CMAKE_CXX_FLAGS": "-g1",
+        "CMAKE_C_FLAGS": "-g1"
       }
     },
     {

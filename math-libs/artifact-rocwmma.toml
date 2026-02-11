@@ -1,0 +1,22 @@
+# rocWMMA
+[components.dbg."math-libs/rocWMMA/stage"]
+optional = true
+[components.dev."math-libs/rocWMMA/stage"]
+include = [
+  "include/rocwmma/*",
+]
+[components.lib."math-libs/rocWMMA/stage"]
+optional = true
+[components.test."math-libs/rocWMMA/stage"]
+optional = true
+include = [
+  # Samples
+  "bin/simple_*",
+  "bin/perf_*",
+  "bin/hipRTC_gemm*",
+  # Tests
+  "bin/*_test*",
+  "bin/*-validate*",
+  "bin/rocwmma/CTestTestfile.cmake",
+  "bin/rocwmma/*/CTestTestfile.cmake",
+]

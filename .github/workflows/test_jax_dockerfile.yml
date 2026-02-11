@@ -35,21 +35,20 @@ on:
         required: false
         type: string
       jax_plugin_branch:
-        required: true
         description: JAX plugin branch to checkout to use for test scripts
         type: string
-        default: "rocm-jaxlib-v0.6.0"
+        default: "rocm-jaxlib-v0.8.0"
 
 permissions:
   contents: read
 
 jobs:
   test_wheels:
-    name: Test | ${{ inputs.amdgpu_family }}
+    name: Test
     runs-on: ${{ inputs.test_runs_on }}
     steps:
       - name: Checkout
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repo: rocm/rocm-jax
       # TODO: Add steps for creating the JAX docker image with an install of TheRock and then running JAX tests on the container

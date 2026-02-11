@@ -6,22 +6,16 @@
 
 add_custom_target(therock-third-party)
 
-# googletest is currently included explicitly ahead of the rest of this folder
-# by the base CMakeLists.txt since since amdsmi in base/ depends on it and
-# base/ is included before compiler/. To resolve that, we may want to move
-# amdsmi from base/ to core/, after which we can turn googletest back into a
-# typical third-party package.
-# add_subdirectory(googletest)
-add_dependencies(therock-third-party therock-googletest)
-
 # No-dep third party libraries (alphabetical)
 add_subdirectory(boost)
 add_subdirectory(eigen)
 add_subdirectory(flatbuffers)
 add_subdirectory(fmt)
+add_subdirectory(googletest)
 add_subdirectory(libdivide)
 add_subdirectory(msgpack-cxx)
 add_subdirectory(nlohmann-json)
+add_subdirectory(simde)
 add_subdirectory(yaml-cpp)
 add_subdirectory(Catch2)
 add_subdirectory(FunctionalPlus)
@@ -40,3 +34,7 @@ endif()
 if(THEROCK_ENABLE_HOST_SUITE_SPARSE)
   add_subdirectory(SuiteSparse)
 endif()
+
+# gRPC: Static library for RDC (built on-demand when depended upon)
+# See: docs/rfcs/RFC0007-rdc-therock-integration.md
+add_subdirectory(grpc)

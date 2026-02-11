@@ -2,6 +2,14 @@ name: Setup
 
 on:
   workflow_call:
+    inputs:
+      build_variant:
+        type: string
+        default: "release"
+      multi_arch:
+        type: boolean
+        default: false
+        description: "If true, group all families into one entry per build_variant instead of expanding cross-product"
     outputs:
       enable_build_jobs:
         description: Whether to enable build jobs.
@@ -45,7 +53,7 @@ jobs:
       rocm_package_version: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
     steps:
       - name: Checking out repository
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           # We need the parent commit to do a diff
           fetch-depth: 2
@@ -67,6 +75,12 @@ jobs:
           INPUT_WINDOWS_AMDGPU_FAMILIES: ${{ github.event.inputs.windows_amdgpu_families }}
           WINDOWS_TEST_LABELS: ${{ github.event.inputs.windows_test_labels }}
           WINDOWS_USE_PREBUILT_ARTIFACTS: ${{ github.event.inputs.windows_use_prebuilt_artifacts }}
+          ADDITIONAL_LABEL_OPTIONS: ${{ github.event.inputs.additional_label_options }}
+          BUILD_VARIANT: ${{ inputs.build_variant }}
+          MULTI_ARCH: ${{ inputs.multi_arch }}
+          # Variable comes from ROCm organization variable 'ROCM_THEROCK_TEST_RUNNERS'
+          ROCM_THEROCK_TEST_RUNNERS: ${{ vars.ROCM_THEROCK_TEST_RUNNERS }}
+          LOAD_TEST_RUNNERS_FROM_VAR: false
         run: ./build_tools/github_actions/configure_ci.py
 
       - name: Compute package version

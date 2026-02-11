@@ -38,12 +38,12 @@ ACCEPTED_FILE_EXTENSIONS = ("whl", "zip", "tar.gz")
 PREFIXES = [
     # Note: v2-staging first, in case issues are observed while the script runs
     # and the developer wants to more safely cancel the script.
-    "v2-staging/gfx110X-dgpu",
+    "v2-staging/gfx110X-all",
     "v2-staging/gfx1151",
     "v2-staging/gfx120X-all",
     "v2-staging/gfx94X-dcgpu",
     "v2-staging/gfx950-dcgpu",
-    "v2/gfx110X-dgpu",
+    "v2/gfx110X-all",
     "v2/gfx1151",
     "v2/gfx120X-all",
     "v2/gfx94X-dcgpu",
@@ -64,8 +64,8 @@ PACKAGE_ALLOW_LIST = {x.lower() for x in [
     "rocm_sdk",
     "rocm_sdk_core",
     "rocm_sdk_devel",
-    # ---- triton ROCm ----
-    "pytorch_triton_rocm",
+    # ---- triton ----
+    "triton",
     # ---- triton additional packages ----
     "Arpeggio",
     "caliper_reader",
@@ -87,6 +87,7 @@ PACKAGE_ALLOW_LIST = {x.lower() for x in [
     "zipp",
     # ----
     "Pillow",
+    "apex",
     "certifi",
     "charset_normalizer",
     "cmake",

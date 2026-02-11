@@ -4,6 +4,8 @@ Environment variable inputs:
     * 'AMDGPU_FAMILIES': A comma separated list of AMD GPU families, e.g.
                     `gfx94X,gfx103x`, or empty for the default list
     * 'THEROCK_PACKAGE_PLATFORM': "linux" or "windows"
+    * ROCM_THEROCK_TEST_RUNNERS (optional): Test runner JSON object, coming from ROCm organization
+    * LOAD_TEST_RUNNERS_FROM_VAR (optional): boolean env variable that loads in ROCm org data if enabled
 
 Outputs written to GITHUB_OUTPUT:
     * 'package_targets': JSON list of the form
@@ -15,7 +17,7 @@ Outputs written to GITHUB_OUTPUT:
                 "expect_pytorch_failure": false
             },
             {
-                "amdgpu_family": "gfx110X-dgpu",
+                "amdgpu_family": "gfx110X-all",
                 "test_machine": "",
                 "expect_failure": false,
                 "expect_pytorch_failure": true
@@ -51,7 +53,9 @@ jobs:
 
 import os
 import json
-from amdgpu_family_matrix import amdgpu_family_info_matrix_all
+from amdgpu_family_matrix import (
+    get_all_families_for_trigger_types,
+)
 import string
 
 from github_actions_utils import *
@@ -62,8 +66,12 @@ def determine_package_targets(args):
     package_platform = args.get("THEROCK_PACKAGE_PLATFORM")
     test_harness_target_fetch = args.get("TEST_HARNESS_TARGET_FETCH", False)
 
-    matrix = amdgpu_family_info_matrix_all
-    family_matrix = amdgpu_family_info_matrix_all
+    # Use trigger-specific matrix lookup with presubmit priority.
+    # When a family appears in multiple trigger types (e.g., gfx110x in both presubmit and nightly),
+    # the presubmit configuration takes priority. This ensures consistent behavior across all
+    # packaging workflows.
+    matrix = get_all_families_for_trigger_types(["presubmit", "postsubmit", "nightly"])
+    family_matrix = matrix
     package_targets = []
     # If the workflow does specify AMD GPU family, package those. Otherwise, then package all families
     if amdgpu_families:

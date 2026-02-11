@@ -42,3 +42,57 @@ if(MSVC AND CMAKE_SIZEOF_VOID_P EQUAL 4)
     "development tools and rebuild.\n"
     "  Detected CMAKE_CXX_COMPILER: ${CMAKE_CXX_COMPILER}")
 endif()
+
+
+if(UNIX AND NOT APPLE AND NOT THEROCK_DISABLE_GNU_CHECK)
+  # Linux-specific check.
+  if(THEROCK_ENABLE_ROCPROFSYS AND (NOT CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR NOT CMAKE_C_COMPILER_ID STREQUAL "GNU"))
+   # Currently, the Dyninst dependency in rocprofiler-systems requires GNU compilers (gcc/g++).
+    message(FATAL_ERROR
+        "Currently, rocprofiler-systems requires GNU compilers (gcc/g++).\n"
+        "  Detected CMAKE_C_COMPILER_ID: ${CMAKE_C_COMPILER_ID}\n"
+        "  Detected CMAKE_CXX_COMPILER_ID: ${CMAKE_CXX_COMPILER_ID}\n"
+        "  Detected CMAKE_C_COMPILER: ${CMAKE_C_COMPILER}\n"
+        "  Detected CMAKE_CXX_COMPILER: ${CMAKE_CXX_COMPILER}\n"
+        "To use GNU compilers, set:\n"
+        "  -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++\n"
+        "To disable rocprofiler-systems, set:\n"
+        "  -DTHEROCK_ENABLE_ROCPROFSYS=OFF\n"
+        "Set THEROCK_DISABLE_GNU_CHECK to bypass this check.")
+  endif()
+endif()
+
+# macOS-specific compiler checks
+if(APPLE)
+  # Verify we're using AppleClang or Clang on macOS
+  if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND NOT THEROCK_DISABLE_APPLECLANG_CHECK)
+    message(FATAL_ERROR
+        "macOS builds require AppleClang or Clang compiler.\n"
+        "  Detected CMAKE_C_COMPILER_ID: ${CMAKE_C_COMPILER_ID}\n"
+        "  Detected CMAKE_CXX_COMPILER_ID: ${CMAKE_CXX_COMPILER_ID}\n"
+        "  Detected CMAKE_C_COMPILER: ${CMAKE_C_COMPILER}\n"
+        "  Detected CMAKE_CXX_COMPILER: ${CMAKE_CXX_COMPILER}\n"
+        "Ensure Xcode Command Line Tools are installed:\n"
+        "  xcode-select --install\n"
+        "Set THEROCK_DISABLE_APPLECLANG_CHECK to bypass this check.")
+  endif()
+
+  # Check for minimum macOS deployment target (13.0 Ventura)
+  if(DEFINED CMAKE_OSX_DEPLOYMENT_TARGET AND CMAKE_OSX_DEPLOYMENT_TARGET VERSION_LESS "13.0")
+    message(WARNING
+        "macOS deployment target is ${CMAKE_OSX_DEPLOYMENT_TARGET}.\n"
+        "TheRock recommends macOS 13.0 (Ventura) or later for best compatibility.")
+  endif()
+
+  # Default to ARM64 on Apple Silicon
+  if(NOT DEFINED CMAKE_OSX_ARCHITECTURES)
+    set(CMAKE_OSX_ARCHITECTURES "arm64" CACHE STRING "macOS architecture")
+  endif()
+
+  message(STATUS "macOS build configuration:")
+  message(STATUS "  Compiler: ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
+  message(STATUS "  Architecture: ${CMAKE_OSX_ARCHITECTURES}")
+  if(DEFINED CMAKE_OSX_DEPLOYMENT_TARGET)
+    message(STATUS "  Deployment target: ${CMAKE_OSX_DEPLOYMENT_TARGET}")
+  endif()
+endif()

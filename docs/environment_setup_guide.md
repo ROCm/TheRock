@@ -49,7 +49,7 @@ If having trouble building on a system, we will typically want to eliminate envi
 
 ## Alternative Configurations
 
-### Manylinux x84-64
+### Manylinux x86-64
 
 Our open-source binaries are typically built within a [manylinux container](https://github.com/pypa/manylinux) (see [the docker file](../dockerfiles/build_manylinux_x86_64.Dockerfile)). These images are versioned by the glibc version they target, and if dependencies are controlled carefully, binaries built on them should work on systems with the same or higher glibc version.
 
@@ -58,7 +58,7 @@ Based on upstream: AlmaLinux 8 with gcc toolset 13
 
 While this generally implies that the project should build on similarly versioned alternative EL distributions, do note that we install several upgraded tools (see dockerfile above) in our standard CI pipelines.
 
-Reference image: `ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:4443d9d710b9471e8ef658d509358bd92602498e67161b9280474bce0bb0decd`
+Reference image: `ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:6e8242d347af7e0c43c82d5031a3ac67b669f24898ea8dc2f1d5b7e4798b66bd`
 
 ### Ubuntu 22.04
 

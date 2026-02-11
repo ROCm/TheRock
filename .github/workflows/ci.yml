@@ -18,6 +18,7 @@ on:
   push:
     branches:
       - main
+      - release/therock-*
   workflow_dispatch:
     inputs:
       linux_amdgpu_families:
@@ -42,6 +43,10 @@ on:
       windows_use_prebuilt_artifacts:
         type: boolean
         description: "If enabled, the CI will pull Windows artifacts using artifact_run_id and only run tests"
+      additional_label_options:
+        type: string
+        description: "If enabled, these additional labels options will be applied. ex: test_runner:oem"
+        default: ""
       artifact_run_id:
         type: string
         description: "If provided, the tests will run on this artifact ID"
@@ -66,6 +71,8 @@ concurrency:
 jobs:
   setup:
     uses: ./.github/workflows/setup.yml
+    with:
+      build_variant: "release"
 
   linux_build_and_test:
     name: Linux::${{ matrix.variant.family }}::${{ matrix.variant.build_variant_label }}
@@ -95,6 +102,7 @@ jobs:
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
       sanity_check_only_for_family: ${{ matrix.variant.sanity_check_only_for_family == true }}
+      build_pytorch: ${{ matrix.variant.build_pytorch == true }}
     permissions:
       contents: read
       id-token: write

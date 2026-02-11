@@ -24,16 +24,21 @@ if(THEROCK_ENABLE_ROCPROFV3)
   # aqlprofile
   ##############################################################################
   therock_cmake_subproject_declare(aqlprofile
-    # TODO: Tests do not build properly for explicit targets: Switch to
-    # USE_DIST_AMDGPU_TARGETS once fixed.
-    # See: https://github.com/ROCm/aqlprofile/issues/2
-    DISABLE_AMDGPU_TARGETS
+    USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/aqlprofile"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/aqlprofile"
     BACKGROUND_BUILD
+    CMAKE_ARGS
+      -DAQLPROFILE_BUILD_TESTS=${THEROCK_BUILD_TESTING}
+      -DHIP_PLATFORM="amd"
+    COMPILER_TOOLCHAIN
+      amd-hip
     INTERFACE_LINK_DIRS
       lib  # So that dependents can find the aqlprofile library via find_library
+    BUILD_DEPS
+      therock-googletest
     RUNTIME_DEPS
+      hip-clr
       amd-llvm
       ROCR-Runtime
   )
@@ -41,6 +46,16 @@ if(THEROCK_ENABLE_ROCPROFV3)
     SUBDIRS .
   )
   therock_cmake_subproject_activate(aqlprofile)
+
+if(THEROCK_BUILD_TESTING)
+  therock_provide_artifact(aqlprofile-tests
+    DESCRIPTOR artifact-aqlprofile.toml
+    COMPONENTS
+      test
+    SUBPROJECT_DEPS
+      aqlprofile
+  )
+endif(THEROCK_BUILD_TESTING)
 
   ##############################################################################
   # rocprofiler-sdk
@@ -71,6 +86,8 @@ if(THEROCK_ENABLE_ROCPROFV3)
       -DROCPROFILER_PYTHON_VERSIONS:STRING="${_detected_python_versions_str}"
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
+    COMPILER_TOOLCHAIN
+      amd-hip
     RUNTIME_DEPS
       aqlprofile
       hip-clr
@@ -79,13 +96,51 @@ if(THEROCK_ENABLE_ROCPROFV3)
       ${THEROCK_BUNDLED_ELFUTILS}
       ${THEROCK_BUNDLED_LIBDRM}
       ${THEROCK_BUNDLED_SQLITE3}
+    INTERFACE_LINK_DIRS
+      lib
+      lib/rocm_sysdeps/lib
+    INTERFACE_INSTALL_RPATH_DIRS
+      lib
+      lib/rocm_sysdeps/lib
   )
   therock_cmake_subproject_glob_c_sources(rocprofiler-sdk
     SUBDIRS .
   )
   therock_cmake_subproject_provide_package(rocprofiler-sdk rocprofiler-sdk lib/cmake/rocprofiler-sdk)
   therock_cmake_subproject_provide_package(rocprofiler-sdk rocprofiler-sdk-roctx lib/cmake/rocprofiler-sdk-roctx)
+  therock_cmake_subproject_provide_package(rocprofiler-sdk rocprofiler-sdk-rocpd lib/cmake/rocprofiler-sdk-rocpd)
   therock_cmake_subproject_activate(rocprofiler-sdk)
+
+  ##############################################################################
+  # rocprofiler-compute
+  ##############################################################################
+  therock_cmake_subproject_declare(rocprofiler-compute
+    USE_DIST_AMDGPU_TARGETS
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-compute"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-compute"
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      -DHIP_PLATFORM=amd
+      -DCHECK_PYTHON_DEPS=OFF
+    CMAKE_INCLUDES
+      therock_explicit_finders.cmake
+    COMPILER_TOOLCHAIN
+      amd-hip
+    RUNTIME_DEPS
+      rocprofiler-sdk
+      aqlprofile
+      hip-clr
+      rocprofiler-register
+      ${_rocprofiler_sdk_optional_deps}
+      ${THEROCK_BUNDLED_ELFUTILS}
+      ${THEROCK_BUNDLED_LIBDRM}
+      ${THEROCK_BUNDLED_SQLITE3}
+    )
+    therock_cmake_subproject_glob_c_sources(rocprofiler-compute
+      SUBDIRS .
+    )
+
+    therock_cmake_subproject_activate(rocprofiler-compute)
 
   ##############################################################################
   # roctracer
@@ -122,6 +177,10 @@ if(THEROCK_ENABLE_ROCPROFV3)
   )
   therock_cmake_subproject_activate(roctracer)
 
+  ##############################################################################
+  # Artifacts
+  ##############################################################################
+
   therock_provide_artifact(rocprofiler-sdk
     TARGET_NEUTRAL
     DESCRIPTOR artifact-rocprofiler-sdk.toml
@@ -138,4 +197,79 @@ if(THEROCK_ENABLE_ROCPROFV3)
       ${_rocprofiler_sdk_optional_deps}
   )
 
+  therock_provide_artifact(rocprofiler-compute
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-rocprofiler-compute.toml
+    COMPONENTS
+      dbg
+      dev
+      doc
+      lib
+      run
+      test
+    SUBPROJECT_DEPS
+      aqlprofile
+      rocprofiler-sdk
+      rocprofiler-compute
+      roctracer
+      ${_rocprofiler_sdk_optional_deps}
+  )
+
+  ##############################################################################
+  # rocprofiler-systems
+  ##############################################################################
+  # rocprofiler-systems requires GCC, but sanitizer builds use Clang.
+  # Skip enabling rocprofiler-systems when building with sanitizers.
+  if (THEROCK_ENABLE_ROCPROFSYS AND THEROCK_SANITIZER STREQUAL "")
+    therock_cmake_subproject_declare(rocprofiler-systems
+      USE_DIST_AMDGPU_TARGETS
+      EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-systems"
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-systems"
+      BACKGROUND_BUILD
+      CMAKE_ARGS
+        -DHIP_PLATFORM=amd
+        -DROCPROFSYS_BUILD_ELFUTILS=ON
+        -DROCPROFSYS_BUILD_TBB=ON
+        -DROCPROFSYS_BUILD_LIBIBERTY=ON
+        -DROCPROFSYS_BUILD_BOOST=ON
+        -DROCPROFSYS_BUILD_DYNINST=ON
+        -DROCPROFSYS_BUILD_SPDLOG=OFF
+      INSTALL_RPATH_DIRS
+        "lib"
+        "lib/rocprofiler-systems"
+        "llvm/lib"
+      CMAKE_INCLUDES
+        therock_explicit_finders.cmake
+      RUNTIME_DEPS
+        amdsmi
+        aqlprofile
+        hip-clr
+        rocprofiler-register
+        rocprofiler-sdk
+        therock-spdlog
+        therock-fmt
+        ${THEROCK_BUNDLED_LIBDRM}
+        ${THEROCK_BUNDLED_SQLITE3}
+    )
+    therock_cmake_subproject_glob_c_sources(rocprofiler-systems
+      SUBDIRS .
+    )
+
+    therock_cmake_subproject_activate(rocprofiler-systems)
+
+    therock_provide_artifact(rocprofiler-systems
+      TARGET_NEUTRAL
+      DESCRIPTOR artifact-rocprofiler-systems.toml
+      COMPONENTS
+        dbg
+        dev
+        doc
+        lib
+        run
+      SUBPROJECT_DEPS
+        amdsmi
+        rocprofiler-sdk
+        rocprofiler-systems
+      )
+  endif(THEROCK_ENABLE_ROCPROFSYS AND THEROCK_SANITIZER STREQUAL "")
 endif(THEROCK_ENABLE_ROCPROFV3)

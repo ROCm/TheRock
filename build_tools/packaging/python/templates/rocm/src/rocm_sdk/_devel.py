@@ -189,7 +189,6 @@ def _lock_and_expand(
                         parent_path = dest_path.parent
                         if parent_path not in clean_dir_paths:
                             _clean_dir(parent_path)
-                        tf.extract(ti, path=site_lib_path)
                         if ti.name not in dist_file_path_names:
                             # CSV record:
                             #   path
@@ -202,10 +201,13 @@ def _lock_and_expand(
                             # on systems without as robust symlink support.
                             # As needed, we could also generate tarfiles with
                             # copies instead of symlinks, at the cost of disk space.
-                            symlink_target = dest_path.readlink()
+                            # Creating symlinks on Windows also requires admin privileges.
+                            parent_path.mkdir(parents=True, exist_ok=True)
+                            symlink_target = ti.linkname
                             hardlink_target = dest_path.parent / symlink_target
-                            dest_path.unlink()
                             dest_path.hardlink_to(hardlink_target)
+                        else:
+                            tf.extract(ti, path=site_lib_path)
                     elif ti.isdir():
                         # We don't generally have directory entries, but handle
                         # them if we do.

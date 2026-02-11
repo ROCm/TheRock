@@ -15,12 +15,13 @@ set_property(GLOBAL PROPERTY THEROCK_DEFAULT_CMAKE_VARS
   CMAKE_PROGRAM_PATH
   CMAKE_PLATFORM_NO_VERSIONED_SONAME
   Python3_EXECUTABLE
-  Python3_FIND_VIRTUALENV
   THEROCK_SOURCE_DIR
   THEROCK_BINARY_DIR
   THEROCK_ROCM_LIBRARIES_SOURCE_DIR
   THEROCK_ROCM_SYSTEMS_SOURCE_DIR
   THEROCK_BUILD_TESTING
+  THEROCK_ENABLE_LLVM_TESTS
+  LLVM_LIT_ARGS
   THEROCK_USE_SAFE_DEPENDENCY_PROVIDER
   ROCM_SYMLINK_LIBS
 
@@ -40,13 +41,6 @@ set_property(GLOBAL PROPERTY THEROCK_DEFAULT_CMAKE_VARS
 # resolver).
 set_property(GLOBAL PROPERTY THEROCK_ALL_PROVIDED_PACKAGES)
 
-# Some sub-projects do not react well to not having any GPU targets to build.
-# In this case, we build them with a default target. This should only happen
-# with target filtering for non-production, single target builds, and we will
-# warn about it.
-set(THEROCK_SUBPROJECTS_REQUIRING_DEFAULT_GPU_TARGETS hipBLASLt)
-set(THEROCK_DEFAULT_GPU_TARGETS "gfx1100")
-
 set_property(GLOBAL PROPERTY THEROCK_SUBPROJECT_COMPILE_COMMANDS_FILES)
 
 if(CMAKE_C_VISIBILITY_PRESET)
@@ -54,6 +48,9 @@ if(CMAKE_C_VISIBILITY_PRESET)
 endif()
 if(CMAKE_CXX_VISIBILITY_PRESET)
   list(APPEND THEROCK_DEFAULT_CMAKE_VARS ${CMAKE_CXX_VISIBILITY_PRESET})
+endif()
+if(Python3_FIND_VIRTUALENV)
+  list(APPEND THEROCK_DEFAULT_CMAKE_VARS Python3_FIND_VIRTUALENV)
 endif()
 
 # CXX flags that we hard-code in the toolchain file when building projects
@@ -188,6 +185,14 @@ function(therock_subproject_fetch target_name)
     ${_extra}
     ${ARG_UNPARSED_ARGUMENTS}
   )
+
+  # Write a .smrev file that is used to compute fingerprints. This matches the
+  # logic for the source code control system when it is providing a stable hash
+  # for patched source checkouts.
+  cmake_path(GET ARG_SOURCE_DIR PARENT_PATH _source_parent)
+  cmake_path(GET ARG_SOURCE_DIR FILENAME _source_basename)
+  set(_smrev_file "${_source_parent}/.${_source_basename}.smrev")
+  file(WRITE "${_smrev_file}" "${_extra};${ARG_UNPARSED_ARGUMENTS}")
 endfunction()
 
 # therock_cmake_subproject_declare
@@ -209,6 +214,12 @@ endfunction()
 # DISABLE_AMDGPU_TARGETS: Do not set any GPU_TARGETS or AMDGPU_TARGETS variables
 #   in the project. This is largely used for broken projects that cannot
 #   build with an explicit target list.
+# DEFAULT_GPU_TARGETS: List of GPU targets to use as a fallback when all targets
+#   are excluded via EXCLUDE_TARGET_PROJECTS in therock_amdgpu_targets.cmake.
+#   Most projects should NOT set this and will default to an empty list. Only
+#   set this for projects that cannot build with an empty target list. This
+#   should only be needed during bringup of new targets and is not intended
+#   for production use.
 # NO_MERGE_COMPILE_COMMANDS: Option to disable merging of this project's
 #   compile_commands.json into the overall project. This is useful for
 #   third-party projects that are excluded from all as it eliminates a
@@ -296,12 +307,29 @@ endfunction()
 #
 # Note that all transitive keywords (i.e. "INTERFACE_" prefixes) only consider
 # transitive deps along their RUNTIME_DEPS edges, not BUILD_DEPS.
+#
+# Fingerprinting:
+# Various build system caching approaches require each sub-project to be able
+# to compute a stable fingerprint (fprint). For normal git-based sub-projects,
+# this requires no further configuration. But for exotic situations, more control
+# is available:
+#
+# FPRINT_SOURCE_DIR: Derive the source directory fingerprint from an alternative
+#   directory. This uses the usual heuristics of looking for a ".{basename}.smrev"
+#   file as a stable fingerprint (this is populated by some source systems and from
+#   therock_subproject_fetch). If not given, then the expolitic EXTERNAL_SOURCE_DIR
+#   or implicit source dir is used.
+# FPRINT_FILE_GLOBS: List of additional file globs to include in the fingerprint.
+# FPRINT_SOURCE_HASH: If present, indicates that the source directory should have
+#   all files hashed instead of querying the source control system. This is used for
+#   certain small, in-tree directories where we don't want them fingerprinted from
+#   TheRock's commit but based on content.
 function(therock_cmake_subproject_declare target_name)
   cmake_parse_arguments(
     PARSE_ARGV 1 ARG
-    "ACTIVATE;USE_DIST_AMDGPU_TARGETS;DISABLE_AMDGPU_TARGETS;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH"
-    "EXTERNAL_SOURCE_DIR;BINARY_DIR;DIR_PREFIX;INSTALL_DESTINATION;COMPILER_TOOLCHAIN;INTERFACE_PROGRAM_DIRS;CMAKE_LISTS_RELPATH;INTERFACE_PKG_CONFIG_DIRS;INSTALL_RPATH_EXECUTABLE_DIR;INSTALL_RPATH_LIBRARY_DIR;LOGICAL_TARGET_NAME"
-    "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS"
+    "ACTIVATE;USE_DIST_AMDGPU_TARGETS;DISABLE_AMDGPU_TARGETS;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH;FPRINT_SOURCE_HASH"
+    "EXTERNAL_SOURCE_DIR;BINARY_DIR;DIR_PREFIX;INSTALL_DESTINATION;COMPILER_TOOLCHAIN;INTERFACE_PROGRAM_DIRS;CMAKE_LISTS_RELPATH;INTERFACE_PKG_CONFIG_DIRS;INSTALL_RPATH_EXECUTABLE_DIR;INSTALL_RPATH_LIBRARY_DIR;LOGICAL_TARGET_NAME;FPRINT_SOURCE_DIR"
+    "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS;DEFAULT_GPU_TARGETS;FPRINT_FILE_GLOBS"
   )
   if(TARGET "${target_name}")
     message(FATAL_ERROR "Cannot declare subproject '${target_name}': a target with that name already exists")
@@ -354,11 +382,20 @@ function(therock_cmake_subproject_declare target_name)
   set(_prefix_dir "${ARG_BINARY_DIR}/${ARG_DIR_PREFIX}prefix")
   make_directory("${_prefix_dir}")
 
-  # Collect LINK_DIRS and PROGRAM_DIRS from explicit args and RUNTIME_DEPS.
-  _therock_cmake_subproject_collect_runtime_deps(
-      _private_include_dirs _private_link_dirs _private_program_dirs _private_pkg_config_dirs _interface_install_rpath_dirs
-      _transitive_runtime_deps
+  # Collect transitive requirements from runtime and build deps.
+  # Include, link, program, pkgconfig and configure depends are derived transitively
+  # from build and runtime deps. RPATH and transitive runtime deps are only
+  # collected from runtime deps.
+  _therock_cmake_subproject_collect_build_deps(
+      _private_include_dirs
+      _private_link_dirs
+      _private_program_dirs
+      _private_pkg_config_dirs
       _transitive_configure_depend_files
+      ${ARG_RUNTIME_DEPS} ${ARG_BUILD_DEPS})
+  _therock_cmake_subproject_collect_runtime_deps(
+      _interface_install_rpath_dirs
+      _transitive_runtime_deps
       ${ARG_RUNTIME_DEPS})
 
   # Include dirs
@@ -442,6 +479,7 @@ function(therock_cmake_subproject_declare target_name)
     THEROCK_SUBPROJECT cmake
     THEROCK_BUILD_POOL "${_build_pool}"
     THEROCK_AMDGPU_TARGETS "${_gpu_targets}"
+    THEROCK_DEFAULT_GPU_TARGETS "${ARG_DEFAULT_GPU_TARGETS}"
     THEROCK_DISABLE_AMDGPU_TARGETS "${ARG_DISABLE_AMDGPU_TARGETS}"
     THEROCK_EXCLUDE_FROM_ALL "${ARG_EXCLUDE_FROM_ALL}"
     THEROCK_NO_MERGE_COMPILE_COMMANDS "${ARG_NO_MERGE_COMPILE_COMMANDS}"
@@ -490,6 +528,11 @@ function(therock_cmake_subproject_declare target_name)
     THEROCK_PRIVATE_INSTALL_RPATH_DIRS "${_private_install_rpath_dirs}"
     THEROCK_INSTALL_RPATH_EXECUTABLE_DIR "${ARG_INSTALL_RPATH_EXECUTABLE_DIR}"
     THEROCK_INSTALL_RPATH_LIBRARY_DIR "${ARG_INSTALL_RPATH_LIBRARY_DIR}"
+
+    # Fingeprinting
+    THEROCK_FPRINT_SOURCE_DIR "${ARG_FPRINT_SOURCE_DIR}"
+    THEROCK_FPRINT_FILE_GLOBS "${ARG_FPRINT_FILE_GLOBS}"
+    THEROCK_FPRINT_SOURCE_HASH "${ARG_FPRINT_SOURCE_HASH}"
   )
 
   if(ARG_ACTIVATE)
@@ -519,6 +562,21 @@ get_property(existing_packages GLOBAL PROPERTY THEROCK_ALL_PROVIDED_PACKAGES)
   if(THEROCK_VERBOSE)
     message(STATUS "PROVIDE ${package_name} = ${relative_path} (from ${target_name})")
   endif()
+endfunction()
+
+# therock_cmake_subproject_require_program
+# Requires that find_program finds a named program at super-project configure time.
+# This is to avoid downstream errors that would otherwise only show up at build time.
+# Only to be used by programs that must exist on the host in order to build. Programs
+# that are built as part of the project are resolved internally.
+function(therock_cmake_subproject_require_host_program target_name)
+  _therock_assert_is_cmake_subproject("${target_name}")
+  foreach(prog IN LISTS ARGN)
+    find_program(found "${prog}" OPTIONAL)
+    if(NOT found)
+      message(FATAL_ERROR "Building sub-project ${target_name} requires program '${prog}' on the system path but it is not found")
+    endif()
+  endforeach()
 endfunction()
 
 # therock_cmake_subproject_activate
@@ -565,6 +623,14 @@ function(therock_cmake_subproject_activate target_name)
   get_target_property(THEROCK_INSTALL_RPATH_EXECUTABLE_DIR "${target_name}" THEROCK_INSTALL_RPATH_EXECUTABLE_DIR)
   get_target_property(THEROCK_INSTALL_RPATH_LIBRARY_DIR "${target_name}" THEROCK_INSTALL_RPATH_LIBRARY_DIR)
 
+  # Fingerprint properties.
+  get_target_property(_fprint_source_dir "${target_name}" THEROCK_FPRINT_SOURCE_DIR)
+  get_target_property(_fprint_file_globs "${target_name}" THEROCK_FPRINT_FILE_GLOBS)
+  get_target_property(_fprint_source_hash "${target_name}" THEROCK_FPRINT_SOURCE_HASH)
+  if(NOT _fprint_source_dir)
+    set(_fprint_source_dir "${_external_source_dir}")
+  endif()
+
   # Stamp file paths.
   set(_configure_stamp_file "${_stamp_dir}/configure.stamp")
   set(_build_stamp_file "${_stamp_dir}/build.stamp")
@@ -579,13 +645,38 @@ function(therock_cmake_subproject_activate target_name)
   set(_configure_comment_suffix)
   set(_build_comment_suffix)
 
+  # Fingerprint management.
+  # List of files and content that participates in fingerprinting.
+  set(_fprint_is_valid TRUE)
+  set(_fprint_files)
+  set(_fprint_content)
+  if(NOT _fprint_source_hash)
+    _therock_subproject_fprint_source_dir(_fprint_src "${_fprint_source_dir}")
+    if(_fprint_src)
+      list(APPEND _fprint_content "SOURCE=${_fprint_src}")
+    else()
+      set(_fprint_is_valid FALSE)
+    endif()
+  else()
+    file(GLOB_RECURSE _fprint_source_globs "${_fprint_source_dir}/*")
+    list(APPEND _fprint_files ${_fprint_source_globs})
+  endif()
+  if(_fprint_file_globs)
+    file(GLOB_RECURSE _fprint_file_globs_resolved ${_fprint_file_globs})
+    list(APPEND _fprint_files ${_fprint_file_globs_resolved})
+  endif()
+
   # Detect pre/post hooks.
   set(_pre_hook_path "${CMAKE_CURRENT_SOURCE_DIR}/pre_hook_${_logical_target_name}.cmake")
-  if(NOT EXISTS "${_pre_hook_path}")
+  if(EXISTS "${_pre_hook_path}")
+    list(APPEND _fprint_files "${_pre_hook_path}")
+  else()
     set(_pre_hook_path)
   endif()
   set(_post_hook_path "${CMAKE_CURRENT_SOURCE_DIR}/post_hook_${_logical_target_name}.cmake")
-  if(NOT EXISTS "${_post_hook_path}")
+  if(EXISTS "${_post_hook_path}")
+    list(APPEND _fprint_files "${_post_hook_path}")
+  else()
     set(_post_hook_path)
   endif()
 
@@ -624,6 +715,7 @@ function(therock_cmake_subproject_activate target_name)
   set(_compiler_toolchain_init_contents)
   _therock_cmake_subproject_setup_toolchain("${target_name}"
     "${_compiler_toolchain}" "${_cmake_project_toolchain_file}")
+  list(APPEND _fprint_files "${_cmake_project_toolchain_file}")
 
   # Customize any other super-project CMake variables that are captured by
   # _init.cmake.
@@ -640,6 +732,20 @@ function(therock_cmake_subproject_activate target_name)
   set(_dep_provider_file)
   if(_build_deps OR _runtime_deps)
     set(_dep_provider_file "${THEROCK_SOURCE_DIR}/cmake/therock_subproject_dep_provider.cmake")
+    list(APPEND _fprint_files "${_dep_provider_file}")
+
+    # Get sub-project dep content.
+    foreach(_dep_target ${_build_deps} ${_runtime_deps})
+      get_target_property(_dep_fprint "${_dep_target}" THEROCK_FPRINT)
+      if(_dep_fprint)
+        list(APPEND _fprint_content "DEP ${_dep_target}=${_dep_fprint}")
+      else()
+        set(_fprint_is_valid FALSE)
+        if(THEROCK_VERBOSE)
+          message(STATUS "  DEP FPRINT INVALID: ${_dep_target}")
+        endif()
+      endif()
+    endforeach()
   endif()
 
   set(_init_contents)
@@ -692,13 +798,13 @@ function(therock_cmake_subproject_activate target_name)
     string(APPEND _init_contents "list(APPEND CMAKE_LIBRARY_PATH \"${_private_link_dir}\")\n")
     if(NOT MSVC)
       # The normal way.
-      string(APPEND _init_contents "string(APPEND CMAKE_EXE_LINKER_FLAGS \" -L ${_private_link_dir} -Wl,-rpath-link,${_private_link_dir}\")\n")
-      string(APPEND _init_contents "string(APPEND CMAKE_SHARED_LINKER_FLAGS \" -L ${_private_link_dir} -Wl,-rpath-link,${_private_link_dir}\")\n")
+      string(APPEND _init_contents "string(APPEND CMAKE_EXE_LINKER_FLAGS \" -L${_private_link_dir} -Wl,-rpath-link,${_private_link_dir}\")\n")
+      string(APPEND _init_contents "string(APPEND CMAKE_SHARED_LINKER_FLAGS \" -L${_private_link_dir} -Wl,-rpath-link,${_private_link_dir}\")\n")
     elseif(_compiler_toolchain STREQUAL "amd-llvm" OR _compiler_toolchain STREQUAL "amd-hip")
       # The Windows but using a clang-based toolchain way.
       #   Working around "lld-link: warning: ignoring unknown argument '-rpath-link'"
-      string(APPEND _init_contents "string(APPEND CMAKE_EXE_LINKER_FLAGS \" -L ${_private_link_dir} \")\n")
-      string(APPEND _init_contents "string(APPEND CMAKE_SHARED_LINKER_FLAGS \" -L ${_private_link_dir} \")\n")
+      string(APPEND _init_contents "string(APPEND CMAKE_EXE_LINKER_FLAGS \" -L${_private_link_dir} \")\n")
+      string(APPEND _init_contents "string(APPEND CMAKE_SHARED_LINKER_FLAGS \" -L${_private_link_dir} \")\n")
     else()
       # The MSVC way.
       string(APPEND _init_contents "string(APPEND CMAKE_EXE_LINKER_FLAGS \" /LIBPATH:${_private_link_dir}\")\n")
@@ -732,6 +838,7 @@ function(therock_cmake_subproject_activate target_name)
     string(APPEND _init_contents "include(\"${_addl_cmake_include}\")\n")
   endforeach()
   file(CONFIGURE OUTPUT "${_cmake_project_init_file}" CONTENT "${_init_contents}" @ONLY ESCAPE_QUOTES)
+  list(APPEND _fprint_files "${_cmake_project_init_file}")
 
   # Transform build and run deps from target form (i.e. 'ROCR-Runtime' to a dependency
   # on the stage.stamp file). These are a dependency for configure.
@@ -757,8 +864,15 @@ function(therock_cmake_subproject_activate target_name)
   endif()
 
   set(_fileset_tool "${THEROCK_SOURCE_DIR}/build_tools/fileset_tool.py")
+  list(APPEND _fprint_files "${_fileset_tool}")
   _therock_cmake_subproject_get_stage_dirs(
     _dist_source_dirs "${target_name}" ${_runtime_deps})
+
+  # Map THEROCK_VERBOSE to fileset_tool.py
+  set(_fileset_verbose_arg "")
+  if(THEROCK_VERBOSE)
+    set(_fileset_verbose_arg --verbose)
+  endif()
 
   if(EXISTS "${_prebuilt_file}")
     # If pre-built, just touch the stamp files, conditioned on the prebuilt
@@ -813,6 +927,20 @@ function(therock_cmake_subproject_activate target_name)
       LABEL "${target_name} configure"
       OUTPUT_ON_FAILURE "${_output_on_failure}"
     )
+
+    # Finger-print vital configure content.
+    cmake_path(RELATIVE_PATH _stage_dir BASE_DIRECTORY "${THEROCK_BINARY_DIR}" OUTPUT_VARIABLE _rel_stage_dir)
+    cmake_path(RELATIVE_PATH _stage_destination_dir BASE_DIRECTORY "${THEROCK_BINARY_DIR}" OUTPUT_VARIABLE _rel_stage_destination_dir)
+    cmake_path(RELATIVE_PATH _cmake_source_dir BASE_DIRECTORY "${THEROCK_SOURCE_DIR}" OUTPUT_VARIABLE _rel_cmake_source_dir)
+    list(APPEND _fprint_content
+      "CONFIGURE"
+      "CMAKE_BUILD_TYPE=${_cmake_build_type}"
+      "CMAKE_SOURCE_DIR=${_rel_cmake_source_dir}"
+      "STAGE_DIR=${_rel_stage_dir}"
+      "STAGE_DESTINATION_DIR=${_rel_stage_destination_dir}"
+    )
+
+    # Configure command.
     add_custom_command(
       OUTPUT "${_configure_stamp_file}"
       COMMAND
@@ -943,6 +1071,20 @@ function(therock_cmake_subproject_activate target_name)
       ${CMAKE_COMMAND} -E rm -rf "${_binary_dir}" "${_stage_dir}" "${_stamp_dir}" "${_dist_dir}"
   )
   add_dependencies(therock-expunge "${target_name}+expunge")
+
+  # Process fingerprints.
+  _therock_subproject_fprint_files(_fprint_content "${_fprint_files}")
+  set(_fprint)
+  if(_fprint_is_valid)
+    string(SHA256 _fprint "${_fprint_content}")
+  endif()
+  set_target_properties("${target_name}" PROPERTIES
+    THEROCK_FPRINT "${_fprint}"
+  )
+  if(THEROCK_VERBOSE)
+    message(STATUS "  FPRINT = ${_fprint}")
+    message(STATUS "  FPRINT CONTENT = ${_fprint_content}")
+  endif()
 endfunction()
 
 # therock_cmake_subproject_glob_c_sources
@@ -964,6 +1106,7 @@ function(therock_cmake_subproject_glob_c_sources target_name)
     set(_s "${_project_source_dir}/${_subdir}")
     list(APPEND _globs
       "${_s}/*.h"
+      "${_s}/*.hh"
       "${_s}/*.hpp"
       "${_s}/*.inc"
       "${_s}/*.cc"
@@ -1109,19 +1252,18 @@ function(_therock_cmake_subproject_deps_to_stamp out_stamp_files stamp_name)
   set(${out_stamp_files} "${_stamp_files}" PARENT_SCOPE)
 endfunction()
 
-# For a list of targets, gets absolute paths for all interface link directories
-# and transitive runtime deps. Both lists may contain duplicates if the DAG
-# includes the same dep multiple times.
-function(_therock_cmake_subproject_collect_runtime_deps
-    out_include_dirs out_link_dirs out_program_dirs out_pkg_config_dirs out_install_rpath_dirs
-    out_transitive_deps
+# For a list of targets, resolves several transitive properties relavent to build
+# and runtime deps.
+function(_therock_cmake_subproject_collect_build_deps
+    out_include_dirs
+    out_link_dirs
+    out_program_dirs
+    out_pkg_config_dirs
     out_transitive_configure_depend_files)
   set(_include_dirs)
-  set(_install_rpath_dirs)
   set(_link_dirs)
   set(_program_dirs)
   set(_pkg_config_dirs)
-  set(_transitive_deps)
   set(_transitive_configure_depend_files)
   foreach(target_name ${ARGN})
     _therock_assert_is_cmake_subproject("${target_name}")
@@ -1137,10 +1279,6 @@ function(_therock_cmake_subproject_collect_runtime_deps
     get_target_property(_link_dir "${target_name}" THEROCK_INTERFACE_LINK_DIRS)
     list(APPEND _link_dirs ${_link_dir})
 
-    # Transitive runtime target deps.
-    get_target_property(_deps "${target_name}" THEROCK_RUNTIME_DEPS)
-    list(APPEND _transitive_deps ${_deps} ${target_name})
-
     # Depend on stage installation.
     get_target_property(_program_dir "${target_name}" THEROCK_INTERFACE_PROGRAM_DIRS)
     if(_program_dir)
@@ -1153,6 +1291,27 @@ function(_therock_cmake_subproject_collect_runtime_deps
     if(_pkg_config_dir)
       list(APPEND _pkg_config_dirs ${_pkg_config_dir})
     endif()
+  endforeach()
+  set("${out_include_dirs}" "${_include_dirs}" PARENT_SCOPE)
+  set("${out_link_dirs}" "${_link_dirs}" PARENT_SCOPE)
+  set("${out_program_dirs}" "${_program_dirs}" PARENT_SCOPE)
+  set("${out_pkg_config_dirs}" "${_pkg_config_dirs}" PARENT_SCOPE)
+  set("${out_transitive_configure_depend_files}" "${_transitive_configure_depend_files}" PARENT_SCOPE)
+endfunction()
+
+# For a list of targets, resolves transitive properties relavent only to runtime
+# deps.
+function(_therock_cmake_subproject_collect_runtime_deps
+    out_install_rpath_dirs
+    out_transitive_deps)
+  set(_install_rpath_dirs)
+  set(_transitive_deps)
+  foreach(target_name ${ARGN})
+    _therock_assert_is_cmake_subproject("${target_name}")
+
+    # Transitive runtime target deps.
+    get_target_property(_deps "${target_name}" THEROCK_RUNTIME_DEPS)
+    list(APPEND _transitive_deps ${_deps} ${target_name})
 
     # RPATH dirs.
     get_target_property(_install_rpath_dir "${target_name}" THEROCK_INTERFACE_INSTALL_RPATH_DIRS)
@@ -1160,13 +1319,8 @@ function(_therock_cmake_subproject_collect_runtime_deps
       list(APPEND _install_rpath_dirs ${_install_rpath_dir})
     endif()
   endforeach()
-  set("${out_include_dirs}" "${_include_dirs}" PARENT_SCOPE)
   set("${out_install_rpath_dirs}" "${_install_rpath_dirs}" PARENT_SCOPE)
-  set("${out_link_dirs}" "${_link_dirs}" PARENT_SCOPE)
-  set("${out_program_dirs}" "${_program_dirs}" PARENT_SCOPE)
-  set("${out_pkg_config_dirs}" "${_pkg_config_dirs}" PARENT_SCOPE)
   set("${out_transitive_deps}" "${_transitive_deps}" PARENT_SCOPE)
-  set("${out_transitive_configure_depend_files}" "${_transitive_configure_depend_files}" PARENT_SCOPE)
 endfunction()
 
 # Transforms a list to be absolute paths if not already.
@@ -1198,11 +1352,12 @@ function(_therock_filter_project_gpu_targets out_var target_name)
   endif()
 
   if(NOT _filtered)
-    if("${target_name}" IN_LIST THEROCK_SUBPROJECTS_REQUIRING_DEFAULT_GPU_TARGETS)
-      set(_filtered ${THEROCK_DEFAULT_GPU_TARGETS})
+    get_target_property(_default_gpu_targets "${target_name}" THEROCK_DEFAULT_GPU_TARGETS)
+    if(_default_gpu_targets)
+      set(_filtered ${_default_gpu_targets})
       message(WARNING
         "Project ${target_name} cannot build with no gpu targets but was "
-        "instructed to do so. Overriding to the default ${_filtered}. "
+        "instructed to do so. Overriding to the project-specific default ${_filtered}. "
         "This message should never appear for production/supported gfx targets."
       )
     endif()
@@ -1231,9 +1386,30 @@ function(_therock_cmake_subproject_setup_toolchain
   set(_filtered_gpu_targets)
   if(NOT _disable_amdgpu_targets)
     _therock_filter_project_gpu_targets(_filtered_gpu_targets "${target_name}")
+
+    # Check for sentinel values indicating no targets were configured.
+    # This is a lazy error - we only fail when actually building a subproject
+    # that needs targets, not at top-level configuration time.
+    if("${_filtered_gpu_targets}" MATCHES "-NOTFOUND$")
+      if("${_filtered_gpu_targets}" STREQUAL "THEROCK_AMDGPU_TARGETS-NOTFOUND")
+        message(FATAL_ERROR
+          "Subproject ${target_name} requires AMDGPU targets but none were selected. "
+          "Set THEROCK_AMDGPU_FAMILIES or THEROCK_AMDGPU_TARGETS.")
+      elseif("${_filtered_gpu_targets}" STREQUAL "THEROCK_DIST_AMDGPU_TARGETS-NOTFOUND")
+        message(FATAL_ERROR
+          "Subproject ${target_name} requires dist AMDGPU targets but none were set. "
+          "Set THEROCK_DIST_AMDGPU_FAMILIES.")
+      else()
+        message(FATAL_ERROR
+          "Internal error: Subproject ${target_name} received unexpected NOTFOUND sentinel "
+          "'${_filtered_gpu_targets}'. This is a bug in TheRock's AMDGPU target handling.")
+      endif()
+    endif()
+
     # TODO: AMDGPU_TARGETS is being deprecated. For now we set both.
     string(APPEND _toolchain_contents "set(AMDGPU_TARGETS @_filtered_gpu_targets@ CACHE STRING \"From super-project\" FORCE)\n")
     string(APPEND _toolchain_contents "set(GPU_TARGETS @_filtered_gpu_targets@ CACHE STRING \"From super-project\" FORCE)\n")
+    string(APPEND _toolchain_contents "set(CMAKE_HIP_ARCHITECTURES @_filtered_gpu_targets@ CACHE STRING \"From super-project\" FORCE)\n")
   endif()
 
   # General settings applicable to all toolchains.
@@ -1378,4 +1554,90 @@ function(_therock_cmake_subproject_setup_toolchain
   set(_compiler_toolchain_init_contents "${_compiler_toolchain_init_contents}" PARENT_SCOPE)
   set(_build_env_pairs "${_build_env_pairs}" PARENT_SCOPE)
   file(CONFIGURE OUTPUT "${toolchain_file}" CONTENT "${_toolchain_contents}" @ONLY ESCAPE_QUOTES)
+endfunction()
+
+
+# Fingerprints a source directory. If the source directory is considered dirty
+# then the output fingerprint will be the empty string (invalid).
+function(_therock_subproject_fprint_source_dir out_fprint dir)
+  set(fprint)
+  cmake_path(GET dir PARENT_PATH _source_parent)
+  cmake_path(GET dir FILENAME _source_basename)
+  set(_smrev_file "${_source_parent}/.${_source_basename}.smrev")
+
+  if(EXISTS "${_smrev_file}")
+    # The source control system has hard-coded a stable fingerprint that should
+    # be taken verbatim.
+    file(READ "${_smrev_file}" fprint)
+  endif()
+
+  # Determine if a git repo.
+  execute_process(
+      COMMAND git rev-parse --git-dir
+      WORKING_DIRECTORY "${dir}"
+      RESULT_VARIABLE GIT_CHECK_RESULT
+      OUTPUT_QUIET
+      ERROR_QUIET
+  )
+  if(GIT_CHECK_RESULT EQUAL 0)
+      set(IN_GIT_REPO TRUE)
+  else()
+      set(IN_GIT_REPO FALSE)
+  endif()
+
+  # Handle git repo.
+  if(IN_GIT_REPO)
+    if(NOT fprint)
+      # Process as git directory.
+      # Get the HEAD commit hash
+      execute_process(
+        COMMAND git rev-parse HEAD
+        WORKING_DIRECTORY "${dir}"
+        OUTPUT_VARIABLE GIT_COMMIT_HASH
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        RESULT_VARIABLE GIT_HASH_RESULT
+        ERROR_QUIET
+      )
+      if(GIT_HASH_RESULT EQUAL 0)
+        set(fprint "${GIT_COMMIT_HASH}")
+      else()
+        if(THEROCK_VERBOSE)
+          message(STATUS "  FPRINT: Could not read git commit")
+        endif()
+        set(fprint)
+      endif()
+    endif()
+
+    # Check if working tree is pristine (no modified tracked files)
+    # TODO: Consider changing this incantation to instead consider the
+    # sub-tree, not the whole repo. See comments on:
+    # https://github.com/ROCm/TheRock/pull/2432
+    execute_process(
+      COMMAND git diff --quiet --ignore-submodules HEAD
+      WORKING_DIRECTORY "${dir}"
+      RESULT_VARIABLE GIT_DIFF_RESULT
+    )
+
+    if(NOT GIT_DIFF_RESULT EQUAL 0)
+        if(THEROCK_VERBOSE)
+          message(STATUS "  FPRINT: Git directory is dirty: ${dir}")
+        endif()
+      set(fprint)
+    endif()
+  endif()
+
+  if(THEROCK_VERBOSE)
+    message(STATUS "  FPRINT: '${fprint}'")
+  endif()
+  set("${out_fprint}" "${fprint}" PARENT_SCOPE)
+endfunction()
+
+function(_therock_subproject_fprint_files out_content files)
+  set(content "${${out_content}}")
+  foreach(file ${files})
+    file(SHA256 "${file}" fprint)
+    cmake_path(GET file FILENAME basename)
+    list(APPEND content "${basename}=${fprint}")
+  endforeach()
+  set("${out_content}" "${content}" PARENT_SCOPE)
 endfunction()

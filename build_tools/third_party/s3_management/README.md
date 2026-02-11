@@ -15,7 +15,7 @@ The Python package buckets we maintain are:
 
 S3 bucket name | S3 URL | User-facing URLs
 -- | -- | --
-`therock-dev-python` | https://therock-dev-python.s3.amazonaws.com/ | <ul><li>https://d25kgig7rdsyks.cloudfront.net/v2/</li><li>https://d25kgig7rdsyks.cloudfront.net/v2-staging/</li></ul>
+`therock-dev-python` | https://therock-dev-python.s3.amazonaws.com/ | <ul><li>https://rocm.devreleases.amd.com/v2/</li><li>https://rocm.devreleases.amd.com/v2-staging/</li></ul>
 `therock-nightly-python` | https://therock-nightly-python.s3.amazonaws.com/ | <ul><li>https://rocm.nightlies.amd.com/v2/</li><li>https://rocm.nightlies.amd.com/v2-staging/</li></ul>
 
 Each bucket has `v2` and `v2-staging` top level folders at the moment. This may
@@ -96,7 +96,7 @@ those changes to the dev bucket:
     ```
 
 1. Visit the URL to check that the index pages look as expected and include the
-  new dep. For example: https://d25kgig7rdsyks.cloudfront.net/v2/gfx120X-all/.
+  new dep. For example: https://rocm.devreleases.amd.com/v2/gfx120X-all/.
 
 Finally, repeat those steps for the nightly bucket:
 
