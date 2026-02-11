@@ -147,6 +147,15 @@ Every kpack file within a BLAS artifact uses the **same filename** (e.g. `blas_l
 
 ---
 
+#### Issue #4: Not all modules have kpack files
+
+Kpack files are only produced for **rocBLAS**. Other BLAS modules (e.g. **hipBLASLt**, hipSPARSELt, rocSPARSE, hipSPARSE, rocSOLVER, hipSOLVER) do not have `.kpack` archives in the artifacts—only `.kpm` manifest files may be present, or no kpack output at all.
+
+**Example:** In the gfx1151 artifact, only `rocBLAS/stage/.kpack/blas_lib_gfx1151.kpack` exists; hipBLASLt has no corresponding `.kpack` file.
+
+---
+
+
 ### 2.2 Analysis and Suggestions
 
 **Analysis**
