@@ -19,7 +19,11 @@ jobs:
     with:
       DOCKER_FILE_NAME: no_rocm_image_ubuntu24_04
       DOCKER_IMAGE_NAME: no_rocm_image_ubuntu24_04
+  # The image no_rocm_image_ubuntu24_04_extended is an extension of
+  # no_rocm_image_ubuntu24_04, so make sure we rebuild the _extended
+  # version whenever the base version changes.
   publish_no_rocm_image_ubuntu24_04_extended:
+    needs: [publish_no_rocm_image_ubuntu24_04]
     uses: ./.github/workflows/publish_dockerfile.yml
     with:
       DOCKER_FILE_NAME: no_rocm_image_ubuntu24_04_extended
