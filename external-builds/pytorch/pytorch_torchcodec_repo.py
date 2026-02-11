@@ -115,10 +115,10 @@ def main(cl_args: list[str]):
             help="Directory of the torch checkout, for loading the related_commits file that can populate alternate default values for --gitrepo-origin and --repo-hashtag. If missing then fallback/upstream defaults will be used",
         )
 
-    p = argparse.ArgumentParser("pytorch_audio_repo.py")
+    p = argparse.ArgumentParser("pytorch_torchcodec_repo.py")
     sub_p = p.add_subparsers(required=True)
     checkout_p = sub_p.add_parser(
-        "checkout", help="Clone PyTorch Audio locally and checkout"
+        "checkout", help="Clone PyTorch torchcodec locally and checkout"
     )
     add_common(checkout_p)
     checkout_p.add_argument("--depth", type=int, help="Fetch depth")
