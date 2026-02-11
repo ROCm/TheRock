@@ -111,15 +111,15 @@ jobs:
       - name: Create pip cache directory
         run: mkdir -p /tmp/pipcache
 
-      - name: Determine optional arguments
+      # Note: determine_version.py sets optional_build_prod_arguments in
+      # GITHUB_ENV, which includes --rocm-sdk-version and --version-suffix.
+      - name: Determine optional arguments passed to `build_prod_wheels.py`
         if: ${{ inputs.rocm_version }}
         run: |
           pip install packaging
           python build_tools/github_actions/determine_version.py \
             --rocm-version ${{ inputs.rocm_version }}
 
-      # Note: determine_version.py sets optional_build_prod_arguments in
-      # GITHUB_ENV, which includes --rocm-sdk-version and --version-suffix.
       - name: Build PyTorch wheels
         run: |
           ./external-builds/pytorch/build_prod_wheels.py \
