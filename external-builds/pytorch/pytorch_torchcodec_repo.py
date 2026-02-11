@@ -31,7 +31,7 @@ import repo_management
 THIS_MAIN_REPO_NAME = "pytorch_torchcodec"
 THIS_DIR = Path(__file__).resolve().parent
 
-DEFAULT_ORIGIN = "https://github.com/pytorch/torchcodec.git"
+DEFAULT_ORIGIN = "https://github.com/meta-pytorch/torchcodec.git"
 DEFAULT_HASHTAG = "nightly"
 
 
