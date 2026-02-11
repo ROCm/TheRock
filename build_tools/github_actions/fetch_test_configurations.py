@@ -240,18 +240,18 @@ test_matrix = {
     # hipDNN samples tests
     "hipdnn-samples": {
         "job_name": "hipdnn-samples",
-        "fetch_artifact_args": "--blas --miopen --hipdnn --miopen-plugin --hipdnn-samples --tests",
+        "fetch_artifact_args": "--blas --miopen --hipdnn --miopenprovider --hipdnn-samples --tests",
         "timeout_minutes": 5,
         "test_script": f"python {_get_script_path('test_hipdnn_samples.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 1,
     },
-    # MIOpen plugin tests
-    "miopen_plugin": {
-        "job_name": "miopen_plugin",
-        "fetch_artifact_args": "--blas --miopen --hipdnn --miopen-plugin --tests",
+    # MIOpen provider tests
+    "miopenprovider": {
+        "job_name": "miopenprovider",
+        "fetch_artifact_args": "--blas --miopen --hipdnn --miopenprovider --tests",
         "timeout_minutes": 15,
-        "test_script": f"python {_get_script_path('test_miopen_plugin.py')}",
+        "test_script": f"python {_get_script_path('test_miopenprovider.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 1,
     },

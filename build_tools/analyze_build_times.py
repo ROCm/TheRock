@@ -52,7 +52,7 @@ NAME_MAPPING = {
     "support": "mxDataGenerator",
     "host-suite-sparse": "SuiteSparse",
     "rocwmma": "rocWMMA",
-    "miopen-plugin": "miopen_plugin",
+    "miopenprovider": "miopenprovider",
 }
 
 # Top-level directories for ROCm components
