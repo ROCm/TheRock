@@ -126,6 +126,7 @@ jobs:
       # packages, for example via `pip install torch==${TORCH_VERSION}`.
       torch_version: ${{ steps.build-pytorch-wheels.outputs.torch_version }}
       torchaudio_version: ${{ steps.build-pytorch-wheels.outputs.torchaudio_version }}
+      apex_version: ${{ steps.build-pytorch-wheels.outputs.apex_version }}
       torchvision_version: ${{ steps.build-pytorch-wheels.outputs.torchvision_version }}
       triton_version: ${{ steps.build-pytorch-wheels.outputs.triton_version }}
     steps:
@@ -160,6 +161,7 @@ jobs:
         run: |
           ./external-builds/pytorch/pytorch_torch_repo.py checkout --repo-hashtag nightly
           ./external-builds/pytorch/pytorch_audio_repo.py checkout --repo-hashtag nightly
+          ./external-builds/pytorch/pytorch_apex_repo.py checkout --repo-hashtag master
           ./external-builds/pytorch/pytorch_vision_repo.py checkout --repo-hashtag nightly
           ./external-builds/pytorch/pytorch_triton_repo.py checkout
 
@@ -169,6 +171,7 @@ jobs:
         run: |
           ./external-builds/pytorch/pytorch_torch_repo.py checkout --gitrepo-origin https://github.com/ROCm/pytorch.git --repo-hashtag ${{ inputs.pytorch_git_ref }}
           ./external-builds/pytorch/pytorch_audio_repo.py checkout --require-related-commit
+          ./external-builds/pytorch/pytorch_apex_repo.py checkout --require-related-commit
           ./external-builds/pytorch/pytorch_vision_repo.py checkout --require-related-commit
           ./external-builds/pytorch/pytorch_triton_repo.py checkout
 
@@ -267,6 +270,7 @@ jobs:
     env:
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
       CP_VERSION: "${{ needs.build_pytorch_wheels.outputs.cp_version }}"
+      APEX_VERSION: "${{ needs.build_pytorch_wheels.outputs.apex_version }}"
       TORCH_VERSION: "${{ needs.build_pytorch_wheels.outputs.torch_version }}"
       TORCHAUDIO_VERSION: "${{ needs.build_pytorch_wheels.outputs.torchaudio_version }}"
       TORCHVISION_VERSION: "${{ needs.build_pytorch_wheels.outputs.torchvision_version }}"
@@ -307,6 +311,7 @@ jobs:
             --include "torchaudio-${TORCHAUDIO_VERSION}-${CP_VERSION}-linux_x86_64.whl" \
             --include "torchvision-${TORCHVISION_VERSION}-${CP_VERSION}-linux_x86_64.whl" \
             --include "triton-${TRITON_VERSION}-${CP_VERSION}-linux_x86_64.whl"
+            --include "apex-${APEX_VERSION}-${CP_VERSION}-linux_x86_64.whl"
 
       - name: (Re-)Generate Python package release index
         if: ${{ env.upload == 'true' }}

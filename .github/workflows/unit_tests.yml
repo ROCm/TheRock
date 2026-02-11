@@ -39,12 +39,21 @@ jobs:
     #   build_tools/github_actions/benchmarks/scripts/
     #   build_tools/github_actions/test_executable_scripts/
     # We could move them if we want a simple `pytest build_tools/` to work.
-    # TODO(scotttodd): enable code coverage collection/reporting here
     - name: Test build_tools
+      working-directory: build_tools
       run: |
         python -m pytest -vv \
-          build_tools/tests \
-          build_tools/github_actions/tests
+          --cov --cov-report=term-missing --cov-report=html
+
+    # TODO: upload to AWS S3 instead (so reports are hosted and don't require
+    #       a download step to view).
+    #       We could also use https://about.codecov.io/ instead of custom infra.
+    - name: Upload coverage report
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: coverage-report-${{ matrix.runs-on }}
+        path: build/coverage-html/
 
   # TODO(scotttodd): share code with ci_summary in ci.yml
   #   Could reuse this from prior projects:
