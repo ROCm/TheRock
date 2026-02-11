@@ -175,9 +175,6 @@ jobs:
           ./external-builds/pytorch/pytorch_vision_repo.py checkout --require-related-commit
           ./external-builds/pytorch/pytorch_triton_repo.py checkout
 
-      - name: Create pip cache directory
-        run: mkdir -p /tmp/pipcache
-
       # Note: determine_version.py sets optional_build_prod_arguments in
       # GITHUB_ENV, which includes --rocm-sdk-version and --version-suffix.
       - name: Determine optional arguments passed to `build_prod_wheels.py`
@@ -194,7 +191,6 @@ jobs:
           ./external-builds/pytorch/build_prod_wheels.py \
             build \
             --install-rocm \
-            --pip-cache-dir /tmp/pipcache \
             --index-url "${{ inputs.cloudfront_url }}/${{ inputs.amdgpu_family }}/" \
             --clean \
             --output-dir ${{ env.PACKAGE_DIST_DIR }} ${{ env.optional_build_prod_arguments }}

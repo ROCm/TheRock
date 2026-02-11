@@ -108,9 +108,6 @@ jobs:
             --gitrepo-origin https://github.com/ROCm/pytorch.git \
             --repo-hashtag ${{ inputs.pytorch_git_ref }}
 
-      - name: Create pip cache directory
-        run: mkdir -p /tmp/pipcache
-
       # Note: determine_version.py sets optional_build_prod_arguments in
       # GITHUB_ENV, which includes --rocm-sdk-version and --version-suffix.
       - name: Determine optional arguments passed to `build_prod_wheels.py`
@@ -126,7 +123,6 @@ jobs:
             build \
             --install-rocm \
             --find-links "${{ inputs.rocm_package_find_links_url }}" \
-            --pip-cache-dir /tmp/pipcache \
             --clean \
             --output-dir ${{ env.PACKAGE_DIST_DIR }} \
             ${{ env.optional_build_prod_arguments }}
