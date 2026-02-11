@@ -1,0 +1,81 @@
+name: Unit Tests
+
+on:
+  push:
+    branches:
+      - main
+      - release/therock-*
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unit_tests:
+    name: "Unit Tests :: ${{ matrix.runs-on}}"
+    strategy:
+      fail-fast: false
+      matrix:
+        runs-on: [ubuntu-24.04, windows-2022]
+    runs-on: ${{ matrix.runs-on }}
+    defaults:
+      run:
+        shell: bash
+    env:
+        GITHUB_TOKEN: ${{ github.token }}
+
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+    - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+      with:
+        python-version: 3.12
+
+    - name: Install python deps
+      run: pip install -r requirements-test.txt
+
+    # Note: build_tools/github_actions/ contains complicated tests in some
+    # subdirectories that do not support pytest:
+    #   build_tools/github_actions/benchmarks/scripts/
+    #   build_tools/github_actions/test_executable_scripts/
+    # We could move them if we want a simple `pytest build_tools/` to work.
+    - name: Test build_tools
+      working-directory: build_tools
+      run: |
+        python -m pytest -vv \
+          --cov --cov-report=term-missing --cov-report=html
+
+    # TODO: upload to AWS S3 instead (so reports are hosted and don't require
+    #       a download step to view).
+    #       We could also use https://about.codecov.io/ instead of custom infra.
+    - name: Upload coverage report
+      if: always()
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+      with:
+        name: coverage-report-${{ matrix.runs-on }}
+        path: build/coverage-html/
+
+  # TODO(scotttodd): share code with ci_summary in ci.yml
+  #   Could reuse this from prior projects:
+  #   https://github.com/iree-org/iree/blob/main/.github/workflows/workflow_summary.yml
+  #   (including support for sending alerts on failures)
+  unit_tests_summary:
+    name: Unit Tests Summary
+    if: always()
+    needs:
+      - unit_tests
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Output failed jobs
+        run: |
+          echo '${{ toJson(needs) }}'
+          FAILED_JOBS="$(echo '${{ toJson(needs) }}' \
+            | jq --raw-output \
+            'map_values(select(.result!="success" and .result!="skipped")) | keys | join(",")' \
+          )"
+          if [[ "${FAILED_JOBS}" != "" ]]; then
+            echo "The following jobs failed: ${FAILED_JOBS}"
+            exit 1
+          else
+            echo "All required jobs succeeded."
+          fi

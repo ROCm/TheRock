@@ -117,8 +117,6 @@ def build_configure(manylinux=False):
     # Adding manylinux Python executables if --manylinux is set
     if manylinux:
         python_executables = (
-            "/opt/python/cp38-cp38/bin/python;"
-            "/opt/python/cp39-cp39/bin/python;"
             "/opt/python/cp310-cp310/bin/python;"
             "/opt/python/cp311-cp311/bin/python;"
             "/opt/python/cp312-cp312/bin/python;"
@@ -126,6 +124,17 @@ def build_configure(manylinux=False):
         )
         cmd.append(f"-DTHEROCK_DIST_PYTHON_EXECUTABLES={python_executables}")
         cmd.append("-DTHEROCK_ENABLE_SYSDEPS_AMD_MESA=ON")
+
+        # Python executables with shared libpython support. This is needed for
+        # ROCgdb.
+        python_shared_executables = (
+            "/opt/python-shared/cp310-cp310/bin/python3;"
+            "/opt/python-shared/cp311-cp311/bin/python3;"
+            "/opt/python-shared/cp312-cp312/bin/python3;"
+            "/opt/python-shared/cp313-cp313/bin/python3;"
+            "/opt/python-shared/cp314-cp314/bin/python3"
+        )
+        cmd.append(f"-DTHEROCK_SHARED_PYTHON_EXECUTABLES={python_shared_executables}")
 
     if PLATFORM == "windows":
         # VCToolsInstallDir is required for build. Throwing an error if environment variable doesn't exist

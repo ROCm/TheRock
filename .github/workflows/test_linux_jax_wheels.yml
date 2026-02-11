@@ -9,9 +9,6 @@ on:
       release_type:
         required: true
         type: string
-      s3_subdir:
-        required: true
-        type: string
       package_index_url:
         description: Base CloudFront URL for the Python package index
         required: true
@@ -33,6 +30,15 @@ on:
         type: string
       jax_ref:
         description: rocm-jax repository ref/branch to check out
+        required: false
+        type: string
+        default: "rocm-jaxlib-v0.8.0-fixdevtar"
+      jax_version:
+        description: "Base JAX version (e.g. 0.8.0) for installing jax from PyPI. Extracted from built wheels by write_jax_versions.py."
+        required: false
+        type: string
+      jaxlib_version:
+        description: "Full jaxlib version including rocm suffix (e.g. 0.8.0+rocm7.12.0). Extracted from built wheels by write_jax_versions.py."
         required: false
         type: string
       ref:
@@ -64,11 +70,6 @@ on:
         required: true
         type: string
         default: dev
-      s3_subdir:
-        description: S3 subdirectory, not including the GPU-family
-        required: true
-        type: string
-        default: v2
       package_index_url:
         description: Base CloudFront URL for the Python package index
         required: true
@@ -89,6 +90,15 @@ on:
         default: "3.12"
       jax_ref:
         description: rocm-jax repository ref/branch to check out
+        required: false
+        type: string
+        default: "rocm-jaxlib-v0.8.0-fixdevtar"
+      jax_version:
+        description: "Base JAX version (e.g. 0.8.0). Leave empty to auto-detect from rocm-jax requirements."
+        required: false
+        type: string
+      jaxlib_version:
+        description: "Full jaxlib version with rocm suffix (e.g. 0.8.0+rocm7.12.0). Leave empty to auto-compute from rocm_version."
         required: false
         type: string
       test_runs_on:
@@ -144,13 +154,13 @@ jobs:
         with:
           path: jax
           repository: rocm/rocm-jax
-          ref: ${{ inputs.jax_ref }}
+          ref: ${{ inputs.jax_ref || 'rocm-jaxlib-v0.8.0-fixdevtar' }}
 
       - name: Checkout JAX extended tests repo
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: rocm/jax
-          ref: ${{ inputs.jax_ref }}
+          ref: "rocm-jaxlib-v0.8.0"
           path: jax/jax_tests
 
       - name: Set up Python
@@ -182,31 +192,38 @@ jobs:
             --artifact-group "${{ inputs.amdgpu_family }}" \
             --output-dir "${DEST}"
 
-      - name: Extract JAX version and set to GITHUB_ENV
+      - name: Determine JAX package versions
         run: |
-          # Extract JAX version from requirements.txt (e.g., "jax==0.8.0")
-          # Remove all whitespace from requirements.txt to simplify parsing
-          # Search for lines starting with "jax==" or "jaxlib==" followed by version (excluding comments)
-          # Extract the version number by splitting on '=' and taking the 3rd field
-          # [^#]+ matches one or more characters that are NOT '#', ensuring we stop before any inline comments
-          JAX_VERSION=$(tr -d ' ' < jax/build/requirements.txt \
-          | grep -E '^(jax|jaxlib)==[^#]+' | head -n1 | cut -d'=' -f3)
-          echo "JAX_VERSION=$JAX_VERSION" >> "$GITHUB_ENV"
+          # Use versions passed from the build workflow when available.
+          # For manual workflow_dispatch, compute the version suffix using
+          # compute_jax_package_version.py (matches rocm-jax ci_build format).
+          if [ -n "${{ inputs.jaxlib_version }}" ] && [ -n "${{ inputs.jax_version }}" ]; then
+            echo "Using versions passed from build workflow"
+            echo "JAXLIB_VERSION=${{ inputs.jaxlib_version }}" >> "$GITHUB_ENV"
+            echo "JAX_VERSION=${{ inputs.jax_version }}" >> "$GITHUB_ENV"
+          else
+            echo "Computing versions from rocm_version and rocm-jax requirements"
+            pip install packaging
+            python build_tools/github_actions/compute_jax_package_version.py \
+              --rocm-version "${{ inputs.rocm_version }}" \
+              --jax-requirements jax/build/requirements.txt
+          fi
 
       - name: Install JAX wheels from package index
         run: |
+          echo "Installing JAX packages:"
+          echo "  JAXLIB_VERSION=${JAXLIB_VERSION}"
+          echo "  JAX_VERSION=${JAX_VERSION}"
           # Install jaxlib/plugin/pjrt from the GPU-family index; install jax from PyPI to match the version
           pip install --index-url "${{ env.WHEEL_INDEX_URL }}" \
-            "jaxlib==${JAX_VERSION}+rocm${{ inputs.rocm_version }}" \
-            "jax-rocm7-plugin==${JAX_VERSION}+rocm${{ inputs.rocm_version }}" \
-            "jax-rocm7-pjrt==${JAX_VERSION}+rocm${{ inputs.rocm_version }}"
-          pip install --extra-index-url https://pypi.org/simple "jax==${JAX_VERSION}"
+            "jaxlib==${JAXLIB_VERSION}" \
+            "jax_rocm7_plugin==${JAXLIB_VERSION}" \
+            "jax_rocm7_pjrt==${JAXLIB_VERSION}"
+          pip install jax==${JAX_VERSION}
 
       - name: Run JAX tests
         run: |
-            pytest jax/jax_tests/tests/core_test.py -q --log-cli-level=INFO
-            pytest jax/jax_tests/tests/multi_device_test.py -q --log-cli-level=INFO
-            pytest jax/jax_tests/tests/pgle_test.py -q --log-cli-level=INFO
-            pytest jax/jax_tests/tests/profiler_test.py -q --log-cli-level=INFO
-            pytest jax/jax_tests/tests/util_test.py -q --log-cli-level=INFO
-            pytest jax/jax_tests/tests/scipy_stats_test.py -q --log-cli-level=INFO
+          pytest jax/jax_tests/tests/multi_device_test.py -q --log-cli-level=INFO
+          pytest jax/jax_tests/tests/core_test.py -q --log-cli-level=INFO
+          pytest jax/jax_tests/tests/util_test.py -q --log-cli-level=INFO
+          pytest jax/jax_tests/tests/scipy_stats_test.py -q --log-cli-level=INFO

@@ -432,5 +432,136 @@ class TestFetchFailureExitCode(ArtifactManagerTestBase):
         mock_extract.assert_called_once()
 
 
+class TestFetchFlatten(ArtifactManagerTestBase):
+    """Tests that fetch command correctly flattens artifacts."""
+
+    def test_fetch_flatten_merges_artifacts_into_single_directory(self):
+        """Test that fetch --flatten merges all artifacts into a single directory."""
+        import artifact_manager
+
+        # Create two staged artifacts
+        self._create_staged_artifact("test-artifact", "lib", "generic")
+        self._create_staged_artifact("test-artifact", "run", "generic")
+
+        # Mock extract_artifact to just verify it was called with flatten=True
+        extract_calls = []
+
+        def mock_extract(request):
+            extract_calls.append(request)
+            # Return success
+            return request.output_dir
+
+        with mock.patch("artifact_manager.extract_artifact", mock_extract):
+            argv = [
+                "fetch",
+                "--stage",
+                "downstream-stage",
+                "--output-dir",
+                str(self.output_dir),
+                "--topology",
+                str(self.topology_path),
+                "--local-staging-dir",
+                str(self.staging_dir),
+                "--platform",
+                TEST_PLATFORM,
+                "--run-id",
+                "local",
+                "--flatten",
+            ]
+
+            artifact_manager.main(argv)
+
+            # Verify extract was called with flatten=True
+            self.assertGreater(
+                len(extract_calls), 0, "extract_artifact should have been called"
+            )
+            for request in extract_calls:
+                self.assertTrue(
+                    request.flatten,
+                    "With --flatten, ExtractRequest.flatten should be True",
+                )
+                self.assertEqual(
+                    request.output_dir,
+                    self.output_dir,
+                    "With --flatten, output should be directly to output_dir (not artifacts/ subdirectory)",
+                )
+
+    def test_fetch_without_flatten_creates_artifact_subdirectories(self):
+        """Test that fetch without --flatten creates separate artifact subdirectories."""
+        import artifact_manager
+
+        self._create_staged_artifact("test-artifact", "lib", "generic")
+
+        argv = [
+            "fetch",
+            "--stage",
+            "downstream-stage",
+            "--output-dir",
+            str(self.output_dir),
+            "--topology",
+            str(self.topology_path),
+            "--local-staging-dir",
+            str(self.staging_dir),
+            "--platform",
+            TEST_PLATFORM,
+            "--run-id",
+            "local",
+        ]
+
+        with mock.patch("artifact_manager.extract_artifact") as mock_extract:
+            # Make extract_artifact return success
+            mock_extract.return_value = (
+                self.output_dir / "artifacts" / "test-artifact_lib_generic"
+            )
+
+            artifact_manager.main(argv)
+
+            # Verify extract_artifact was called
+            mock_extract.assert_called_once()
+
+            # Verify the ExtractRequest had correct output_dir (artifacts subdirectory)
+            call_args = mock_extract.call_args[0][0]
+            self.assertEqual(
+                call_args.output_dir,
+                self.output_dir / "artifacts",
+                "Without --flatten, artifacts should be extracted to 'artifacts/' subdirectory",
+            )
+            self.assertFalse(
+                call_args.flatten,
+                "Without --flatten, ExtractRequest.flatten should be False",
+            )
+
+    def test_flatten_and_bootstrap_are_mutually_exclusive(self):
+        """Test that --flatten and --bootstrap cannot be used together."""
+        import artifact_manager
+
+        self._create_staged_artifact("test-artifact", "lib", "generic")
+
+        argv = [
+            "fetch",
+            "--stage",
+            "downstream-stage",
+            "--output-dir",
+            str(self.output_dir),
+            "--topology",
+            str(self.topology_path),
+            "--local-staging-dir",
+            str(self.staging_dir),
+            "--platform",
+            TEST_PLATFORM,
+            "--run-id",
+            "local",
+            "--flatten",
+            "--bootstrap",
+        ]
+
+        # argparse should reject this combination
+        with self.assertRaises(SystemExit) as ctx:
+            artifact_manager.main(argv)
+
+        # Exit code 2 is used by argparse for command-line syntax errors
+        self.assertEqual(ctx.exception.code, 2)
+
+
 if __name__ == "__main__":
     unittest.main()

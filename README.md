@@ -182,6 +182,7 @@ minimal build):
 | `-DTHEROCK_ENABLE_MIOPEN_PLUGIN=ON`    | Enables MIOpen_plugin                          |
 | `-DTHEROCK_ENABLE_HIPDNN_SAMPLES=ON`   | Enables hipDNN samples (hipDNN Usage Examples) |
 | `-DTHEROCK_ENABLE_HIPDNN=ON`           | Enables hipDNN                                 |
+| `-DTHEROCK_ENABLE_HIPBLASLT_PLUGIN=ON` | Enables hipBLASLt Plugin                       |
 | `-DTHEROCK_ENABLE_ROCWMMA=ON`          | Enables rocWMMA                                |
 | `-DTHEROCK_ENABLE_RDC=ON`              | Enables ROCm Data Center Tool (Linux only)     |
 | `-DTHEROCK_ENABLE_FUSILLI_PLUGIN=ON`   | Enables Fusilli Plugin                         |
@@ -202,11 +203,7 @@ For some components, external sources can be used instead.
 | External source settings                        | Description                                    |
 | ----------------------------------------------- | ---------------------------------------------- |
 | `-DTHEROCK_USE_EXTERNAL_COMPOSABLE_KERNEL=OFF`  | Use external composable-kernel source location |
-| `-DTHEROCK_USE_EXTERNAL_RCCL=OFF`               | Use external rccl source location              |
-| `-DTHEROCK_USE_EXTERNAL_RCCL_TESTS=OFF`         | Use external rccl-tests source location        |
 | `-DTHEROCK_COMPOSABLE_KERNEL_SOURCE_DIR=<PATH>` | Path to composable-kernel sources              |
-| `-DTHEROCK_RCCL_SOURCE_DIR=<PATH>`              | Path to rccl sources                           |
-| `-DTHEROCK_RCCL_TESTS_SOURCE_DIR=<PATH>`        | Path to rccl-tests sources                     |
 
 Further flags allow to build components with specific features enabled.
 
@@ -289,7 +286,7 @@ separately.
 - [Environment Setup Guide](docs/environment_setup_guide.md): Comprehensive guide for setting up a build environment, known workarounds, and other operating specific information.
 - [Git Chores](docs/development/git_chores.md): Procedures for managing the codebase, specifically focused on version control, upstream/downstream, etc.
 - [Dependencies](docs/development/dependencies.md): Further specifications on ROCm-wide standards for depending on various components.
-- [Build Containers](docs/development/build_containers.md): Further information about containers used for building TheRock on CI.
+- [Dockerfiles for TheRock](dockerfiles/README.md): Information about containers used for building, testing, and distributing ROCm using TheRock.
 - [Build Artifacts](docs/development/artifacts.md): Documentation about the outputs of the build system.
 - [Releases Page](RELEASES.md): Documentation for how to leverage our build artifacts.
 - [Roadmap for Support](ROADMAP.md): Documentation for our prioritized roadmap to support AMD GPUs.

@@ -13,11 +13,11 @@ well as supporting scripts.
 | [`build_manylinux_rccl_x86_64.Dockerfile`](build_manylinux_rccl_x86_64.Dockerfile) | https://github.com/ROCm/TheRock/pkgs/container/therock_build_manylinux_rccl_x86_64 |
 
 These Dockerfiles are used to build ROCm, PyTorch, and other packages for
-release across multiple Linux distributions. They are derived from
+release across a wide variety of Linux distributions. They are derived from
 [manylinux](https://github.com/pypa/manylinux) Docker images which are based on
-older RHEL derivatives, provide a minimal set of development libraries, and
-support building binaries compatible with most Linux distributions that use
-glibc 2.39 or greater.
+older RHEL (Red Hat Enterprise Linux) derivatives, provide a minimal set of
+development libraries, and support building binaries compatible with most Linux
+distributions that use glibc 2.39 or greater.
 
 Requirements for these files:
 
