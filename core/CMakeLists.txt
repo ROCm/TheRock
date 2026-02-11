@@ -450,8 +450,13 @@ if(THEROCK_BUILD_TESTING)
         ROCR-Runtime
         rocprofiler-register
         ${THEROCK_BUNDLED_ELFUTILS}
+        ${THEROCK_BUNDLED_HWLOC}
         ${THEROCK_BUNDLED_LIBDRM}
         ${THEROCK_BUNDLED_NUMACTL}
+      INTERFACE_LINK_DIRS
+        "lib/rocm_sysdeps/lib"
+      INTERFACE_INSTALL_RPATH_DIRS
+        "lib/rocm_sysdeps/lib"
     )
     therock_cmake_subproject_glob_c_sources(rocrtst SUBDIRS .)
     therock_cmake_subproject_activate(rocrtst)
