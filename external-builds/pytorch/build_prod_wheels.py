@@ -292,17 +292,22 @@ def directory_if_exists(dir: Path) -> Path | None:
 
 
 def do_install_rocm(args: argparse.Namespace):
-    # Optional cache dir arguments
+    # Because the rocm package caches current GPU selection and such, we
+    # always purge it to ensure a clean rebuild.
+    #
+    # This can fail in environments where the pip cache is disabled or
+    # unwritable (e.g. manylinux containers), which is fine — if there's no
+    # cache, there's nothing stale to purge.
     cache_dir_args = (
         ["--cache-dir", str(args.pip_cache_dir)] if args.pip_cache_dir else []
     )
-
-    # Because the rocm package caches current GPU selection and such, we
-    # always purge it to ensure a clean rebuild.
-    run_command(
-        [sys.executable, "-m", "pip", "cache", "remove", "rocm"] + cache_dir_args,
-        cwd=Path.cwd(),
-    )
+    try:
+        run_command(
+            [sys.executable, "-m", "pip", "cache", "remove", "rocm"] + cache_dir_args,
+            cwd=Path.cwd(),
+        )
+    except subprocess.CalledProcessError:
+        print("Warning: pip cache remove failed (cache may be disabled), continuing")
 
     # Do the main pip install.
     pip_args = [
@@ -319,8 +324,7 @@ def do_install_rocm(args: argparse.Namespace):
     if args.find_links:
         pip_args.extend(["--find-links", args.find_links])
     if args.pip_cache_dir:
-        pip_args.extend(["--cache-dir", args.pip_cache_dir])
-    pip_args += cache_dir_args
+        pip_args.extend(["--cache-dir", str(args.pip_cache_dir)])
     rocm_sdk_version = args.rocm_sdk_version if args.rocm_sdk_version else ""
     pip_args.extend([f"rocm[libraries,devel]{rocm_sdk_version}"])
     run_command(pip_args, cwd=Path.cwd())
