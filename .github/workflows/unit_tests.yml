@@ -43,7 +43,8 @@ jobs:
       working-directory: build_tools
       run: |
         python -m pytest -vv \
-          --cov --cov-report=term-missing --cov-report=html
+          --cov --cov-report=term-missing --cov-report=html \
+          external-builds/pytorch/tests
 
     # TODO: upload to AWS S3 instead (so reports are hosted and don't require
     #       a download step to view).
