@@ -1,0 +1,137 @@
+# CI variant of build_portable_linux_pytorch_wheels.yml.
+#
+# Key differences from the release workflow:
+#   - Installs ROCm packages via --find-links (CI artifacts) instead of
+#     --index-url (release index)
+#   - Builds torch only (no torchvision, torchaudio, or triton)
+#   - No S3 upload, staging, testing, or promotion — just build + sanity check
+#   - (Not yet implemented) this can use an explict separate sccache bucket
+#
+# TODO(#3291): Build more packages (torchvision, torchaudio, triton, etc.)
+# TODO(#3291): Upload packages to S3 (via upload_python_packages.py?)
+#
+# Both workflows share build_prod_wheels.py for the actual build logic.
+# See https://github.com/ROCm/TheRock/issues/3291 for convergence plans.
+
+name: Build Portable Linux PyTorch Wheels (CI)
+
+on:
+  workflow_call:
+    inputs:
+      artifact_group:
+        type: string
+        required: true
+      python_version:
+        type: string
+        default: "3.12"
+      pytorch_git_ref:
+        description: PyTorch ref to checkout (typically "release/X.Y")
+        type: string
+        default: "release/2.10"
+      rocm_package_find_links_url:
+        description: URL for pip --find-links to install ROCm packages
+        type: string
+        required: true
+      rocm_version:
+        description: ROCm package version to install and build against (e.g. 7.10.0.dev0)
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      artifact_group:
+        description: "The artifact group to build (e.g. gfx94X-dcgpu, gfx120X-all)"
+        type: string
+        default: gfx94X-dcgpu
+      python_version:
+        type: string
+        default: "3.12"
+      pytorch_git_ref:
+        description: PyTorch ref to checkout (typically "release/X.Y")
+        type: string
+        default: "release/2.10"
+      rocm_package_find_links_url:
+        description: URL for pip --find-links to install ROCm packages
+        type: string
+        required: true
+      rocm_version:
+        description: ROCm package version to install and build against (e.g. 7.10.0.dev0)
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+run-name: Build portable Linux PyTorch Wheels CI (${{ inputs.artifact_group }}, py${{ inputs.python_version }}, ${{ inputs.pytorch_git_ref }})
+
+jobs:
+  build_pytorch_wheels:
+    name: Build PyTorch | ${{ inputs.artifact_group }} | torch ${{ inputs.pytorch_git_ref }} | py${{ inputs.python_version }}
+    runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
+    container:
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:db2b63f938941dde2abc80b734e64b45b9995a282896d513a0f3525d4591d6cb
+    env:
+      PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages/dist
+      optional_build_prod_arguments: ""
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Configure Git Identity
+        run: |
+          git config --global user.name "therockbot"
+          git config --global user.email "therockbot@amd.com"
+
+      - name: Select Python version
+        run: |
+          python build_tools/github_actions/python_to_cp_version.py \
+            --python-version ${{ inputs.python_version }}
+
+      - name: Add selected Python version to PATH
+        run: |
+          python_dir="/opt/python/${{ env.cp_version }}"
+          if ! [ -x "${python_dir}/bin/python" ]; then
+            echo "ERROR: Could not find python: ${python_dir}"
+            exit 1
+          fi
+          echo "${python_dir}/bin" >> "$GITHUB_PATH"
+
+      - name: Checkout PyTorch source (nightly)
+        if: ${{ inputs.pytorch_git_ref == 'nightly' }}
+        run: |
+          ./external-builds/pytorch/pytorch_torch_repo.py checkout \
+            --repo-hashtag nightly
+
+      - name: Checkout PyTorch source (stable)
+        if: ${{ inputs.pytorch_git_ref != 'nightly' }}
+        run: |
+          ./external-builds/pytorch/pytorch_torch_repo.py checkout \
+            --gitrepo-origin https://github.com/ROCm/pytorch.git \
+            --repo-hashtag ${{ inputs.pytorch_git_ref }}
+
+      - name: Create pip cache directory
+        run: mkdir -p /tmp/pipcache
+
+      # Note: determine_version.py sets optional_build_prod_arguments in
+      # GITHUB_ENV, which includes --rocm-sdk-version and --version-suffix.
+      - name: Determine optional arguments passed to `build_prod_wheels.py`
+        if: ${{ inputs.rocm_version }}
+        run: |
+          pip install packaging
+          python build_tools/github_actions/determine_version.py \
+            --rocm-version ${{ inputs.rocm_version }}
+
+      - name: Build PyTorch wheels
+        run: |
+          ./external-builds/pytorch/build_prod_wheels.py \
+            build \
+            --install-rocm \
+            --find-links "${{ inputs.rocm_package_find_links_url }}" \
+            --pip-cache-dir /tmp/pipcache \
+            --clean \
+            --output-dir ${{ env.PACKAGE_DIST_DIR }} \
+            ${{ env.optional_build_prod_arguments }}
+
+      - name: Sanity check wheel
+        run: |
+          python external-builds/pytorch/sanity_check_wheel.py \
+            ${{ env.PACKAGE_DIST_DIR }}/
