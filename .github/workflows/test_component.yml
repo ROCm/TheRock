@@ -88,6 +88,7 @@ jobs:
         uses: './.github/actions/setup_test_environment'
         with:
           ARTIFACT_RUN_ID: ${{ env.ARTIFACT_RUN_ID }}
+          # TODO(#3381): revert back to `inputs.artifact_group` once issue is resolved
           ARTIFACT_GROUP: ${{ inputs.amdgpu_families }}
           OUTPUT_ARTIFACTS_DIR: ${{ env.OUTPUT_ARTIFACTS_DIR }}
           VENV_DIR: ${{ env.VENV_DIR }}
