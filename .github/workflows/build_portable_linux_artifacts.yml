@@ -11,7 +11,7 @@ on:
         default: gfx94X-dcgpu
       build_variant_label:
         type: string
-        description: "A label for the build variant (ex: 'release', 'asan')"
+        description: "A label for the build variant (ex: 'release', 'asan', 'tsan')"
         default: "release"
       build_variant_suffix:
         type: string
@@ -59,15 +59,17 @@ jobs:
   build_portable_linux_artifacts:
     name: Build (xfail ${{ inputs.expect_failure }})
     # azure-linux-scale-rocm are used for regular CI builds
-    # azure-linux-scale-rocm-heavy are used for CI builds that require more resources (ex: ASAN builds)
-    runs-on: ${{ inputs.build_variant_label == 'asan' && 'azure-linux-u2404-hx176-cpu-rocm' || 'azure-linux-scale-rocm' }}
+    # azure-linux-scale-rocm-heavy are used for CI builds that require more resources (ex: ASAN and TSAN builds)
+    runs-on: ${{ (contains(inputs.build_variant_label, 'asan') || contains(inputs.build_variant_label, 'tsan')) && 'azure-linux-scale-rocm-heavy' || 'azure-linux-scale-rocm' }}
     continue-on-error: ${{ inputs.expect_failure }}
     timeout-minutes: 720 # 12 hour timeout
     permissions:
       id-token: write
     container:
       image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:db2b63f938941dde2abc80b734e64b45b9995a282896d513a0f3525d4591d6cb
-      options: -v /runner/config:/home/awsconfig/
+      # --cap-add=SYS_PTRACE : to enable ptrace insided the build container for tsan builds
+      # --security-opt seccomp=unconfined : to disable the system call filtering for tsan builds
+      options: -v /runner/config:/home/awsconfig/ --cap-add=SYS_PTRACE --security-opt seccomp=unconfined
     env:
       AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
       CACHE_DIR: ${{ github.workspace }}/.container-cache

@@ -187,6 +187,12 @@ class TestROCmSanity:
                     "amdsmitstReadWrite.TestPciReadWrite",
                 ]
             },
+            "gfx110X-all": {
+                # TODO(#2963): Re-enable once amdsmi tests are fixed for gfx110X-all
+                "linux": [
+                    "amdsmitstReadWrite.FanReadWrite",
+                ]
+            },
         }
 
         platform_key = "windows" if is_windows() else "linux"

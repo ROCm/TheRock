@@ -42,6 +42,10 @@ on:
       ref:
         description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
         type: string
+      jax_ref:
+        description: "rocm-jax repository ref/branch to check out"
+        type: string
+        default: "rocm-jaxlib-v0.8.0-fixdevtar"
   workflow_dispatch:
     inputs:
       amdgpu_family:
@@ -93,10 +97,14 @@ on:
         description: CloudFront base URL pointing to staging Python index
         type: string
         default: "https://rocm.devreleases.amd.com/v2-staging"
+      ref:
+        description: TheRock repository ref/branch to check out
+        type: string
+        default: ""
       jax_ref:
         description: rocm-jax repository ref/branch to check out
         type: string
-        default: rocm-jaxlib-v0.8.0
+        default: "rocm-jaxlib-v0.8.0-fixdevtar"
 
 permissions:
   id-token: write
@@ -108,7 +116,7 @@ jobs:
   build_jax_wheels:
     strategy:
       matrix:
-        jax_ref: [rocm-jaxlib-v0.8.0]
+        jax_ref: [rocm-jaxlib-v0.8.0-fixdevtar]
     name: Build Linux JAX Wheels | ${{ inputs.amdgpu_family }} | Python ${{ inputs.python_version }}
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     env:
@@ -116,7 +124,11 @@ jobs:
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
     outputs:
       cp_version: ${{ env.cp_version }}
-      jax_version: ${{ steps.extract_jax_version.outputs.jax_version }}
+      jax_version: ${{ steps.write_jax_versions.outputs.jax_version }}
+      jaxlib_version: ${{ steps.write_jax_versions.outputs.jaxlib_version }}
+      jax_plugin_version: ${{ steps.write_jax_versions.outputs.jax_plugin_version }}
+      jax_pjrt_version: ${{ steps.write_jax_versions.outputs.jax_pjrt_version }}
+      jax_ref: ${{ matrix.jax_ref }}
     steps:
       - name: Checkout TheRock
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -156,17 +168,11 @@ jobs:
             --therock-path="${{ inputs.tar_url }}" \
             dist_wheels
 
-      - name: Extract JAX version
-        id: extract_jax_version
+      - name: Extract JAX versions from built wheels
+        id: write_jax_versions
         run: |
-            # Extract JAX version from requirements.txt (e.g., "jax==0.8.0")
-            # Remove all whitespace from requirements.txt to simplify parsing
-            # Search for lines starting with "jax==" or "jaxlib==" followed by version (excluding comments)
-            # Extract the version number by splitting on '=' and taking the 3rd field
-            # [^#]+ matches one or more characters that are NOT '#', ensuring we stop before any inline comments
-            JAX_VERSION=$(tr -d ' ' < jax/build/requirements.txt \
-            | grep -E '^(jax|jaxlib)==[^#]+' | head -n1 | cut -d'=' -f3)
-            echo "jax_version=$JAX_VERSION" >> "$GITHUB_OUTPUT"
+          python ./build_tools/github_actions/write_jax_versions.py \
+            --dist-dir ${{ env.PACKAGE_DIST_DIR }}
 
       - name: Install AWS CLI
         if: always()
@@ -226,14 +232,15 @@ jobs:
     with:
       amdgpu_family: ${{ inputs.amdgpu_family }}
       release_type: ${{ inputs.release_type }}
-      s3_subdir: ${{ inputs.s3_subdir }}
       package_index_url: ${{ inputs.cloudfront_staging_url }}
       rocm_version: ${{ inputs.rocm_version }}
       tar_url: ${{ inputs.tar_url }}
       python_version: ${{ inputs.python_version }}
       repository: ${{ inputs.repository || github.repository }}
       ref: ${{ inputs.ref || '' }}
-      jax_ref: ${{ inputs.jax_ref }}
+      jax_ref: ${{ needs.build_jax_wheels.outputs.jax_ref }}
+      jax_version: ${{ needs.build_jax_wheels.outputs.jax_version }}
+      jaxlib_version: ${{ needs.build_jax_wheels.outputs.jaxlib_version }}
       test_runs_on: ${{ needs.generate_target_to_run.outputs.test_runs_on }}
 
   upload_jax_wheels:
@@ -243,8 +250,9 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
-      JAX_VERSION: "${{ needs.build_jax_wheels.outputs.jax_version }}"
-      ROCM_VERSION: "${{ inputs.rocm_version }}"
+      JAXLIB_VERSION: "${{ needs.build_jax_wheels.outputs.jaxlib_version }}"
+      JAX_PLUGIN_VERSION: "${{ needs.build_jax_wheels.outputs.jax_plugin_version }}"
+      JAX_PJRT_VERSION: "${{ needs.build_jax_wheels.outputs.jax_pjrt_version }}"
       CP_VERSION: "${{ needs.build_jax_wheels.outputs.cp_version }}"
 
     steps:
@@ -273,14 +281,17 @@ jobs:
         if: ${{ env.upload == 'true' }}
         run: |
           echo "Copying exact tested wheels to release S3 bucket..."
+          echo "  JAXLIB_VERSION=${JAXLIB_VERSION}"
+          echo "  JAX_PLUGIN_VERSION=${JAX_PLUGIN_VERSION}"
+          echo "  JAX_PJRT_VERSION=${JAX_PJRT_VERSION}"
           aws s3 cp \
             s3://${S3_BUCKET_PY}/${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}/ \
             s3://${S3_BUCKET_PY}/${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}/ \
             --recursive \
             --exclude "*" \
-            --include "jaxlib-${JAX_VERSION}+rocm${ROCM_VERSION}-${CP_VERSION}-manylinux_2_27_x86_64.whl" \
-            --include "jax_rocm7_plugin-${JAX_VERSION}+rocm${ROCM_VERSION}-${CP_VERSION}-manylinux_2_28_x86_64.whl" \
-            --include "jax_rocm7_pjrt-${JAX_VERSION}+rocm${ROCM_VERSION}-py3-none-manylinux_2_28_x86_64.whl"
+            --include "jaxlib-${JAXLIB_VERSION}-${CP_VERSION}-manylinux_2_27_x86_64.whl" \
+            --include "jax_rocm7_plugin-${JAX_PLUGIN_VERSION}-${CP_VERSION}-manylinux_2_28_x86_64.whl" \
+            --include "jax_rocm7_pjrt-${JAX_PJRT_VERSION}-py3-none-manylinux_2_28_x86_64.whl"
 
       - name: (Re-)Generate Python package release index
         if: ${{ env.upload == 'true' }}
