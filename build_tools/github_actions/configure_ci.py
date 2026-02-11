@@ -494,7 +494,7 @@ def matrix_generator(
                     matrix_row["expect_failure"] = True
 
                 # Enable pytorch builds for families without known build failures.
-                # TODO(#3291): add finer-grained controls over when pytorch is built
+                # TODO(#3291): Add finer-grained controls over when pytorch is built
                 expect_failure = matrix_row.get("expect_failure", False)
                 expect_pytorch_failure = matrix_row.get("expect_pytorch_failure", False)
                 matrix_row["build_pytorch"] = (
