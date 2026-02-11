@@ -653,7 +653,7 @@ def main(argv):
         action=argparse.BooleanOptionalAction,
     )
 
-        artifacts_group.add_argument(
+    artifacts_group.add_argument(
         "--composablekernel",
         default=False,
         help="Include 'composablekernel' artifacts",
