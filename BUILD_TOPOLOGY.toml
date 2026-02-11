@@ -528,7 +528,7 @@ artifact_deps = []
 [artifacts.composable-kernel]
 artifact_group = "ml-libs"
 type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip"]
+artifact_deps = ["core-runtime", "core-hip", "rand", "rocprofiler-sdk"]
 
 [artifacts.miopen]
 artifact_group = "ml-libs"

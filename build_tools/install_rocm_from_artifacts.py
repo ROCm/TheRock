@@ -24,6 +24,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--hipdnn-samples | --no-hipdnn-samples]
     [--miopen | --no-miopen]
     [--miopen-plugin | --no-miopen-plugin]
+    [--composablekernel]
     [--fusilli-plugin | --no-fusilli-plugin]
     [--hipblaslt-plugin | --no-hipblaslt-plugin]
     [--prim | --no-prim]
@@ -336,6 +337,7 @@ def retrieve_artifacts_by_run_id(args):
             args.hipdnn_samples,
             args.miopen,
             args.miopen_plugin,
+            args.composablekernel,
             args.fusilli_plugin,
             args.hipblaslt_plugin,
             args.prim,
@@ -386,6 +388,8 @@ def retrieve_artifacts_by_run_id(args):
             argv.append("rand_dev")
         if args.miopen_plugin:
             extra_artifacts.append("miopen-plugin")
+        if args.composablekernel:
+            extra_artifacts.append("composablekernel")
         if args.fusilli_plugin:
             extra_artifacts.append("fusilli-plugin")
         if args.hipblaslt_plugin:
@@ -646,6 +650,13 @@ def main(argv):
         "--miopen-plugin",
         default=False,
         help="Include 'miopen-plugin' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+        artifacts_group.add_argument(
+        "--composablekernel",
+        default=False,
+        help="Include 'composablekernel' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 

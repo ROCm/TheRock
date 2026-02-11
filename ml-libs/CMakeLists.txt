@@ -25,16 +25,21 @@ if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
   ##############################################################################
   # TODO: Move this to math-libs
 
+  # In the context of building miopen, do a narrow build of CK.
+  set(optional_ck_cmake_args)
+  if(THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL)
+    list(APPEND optional_ck_cmake_args -DMIOPEN_REQ_LIBS_ONLY=ON)
+  endif()
+
   therock_cmake_subproject_declare(composable_kernel
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/composablekernel"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/composable_kernel"
-    BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
       -DROCM_PATH=
       -DROCM_DIR=
       "-DBUILD_TESTING=${THEROCK_BUILD_TESTING}"
-      -DMIOPEN_REQ_LIBS_ONLY=ON
+      ${optional_ck_cmake_args}
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
