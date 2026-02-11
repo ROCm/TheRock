@@ -685,6 +685,10 @@ def main(argv):
         "--rocjpeg",
         default=False,
         help="Include 'rocjpeg' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
         "--hipblaslt-plugin",
         default=False,
         help="Include 'hipblaslt-plugin' artifacts",
