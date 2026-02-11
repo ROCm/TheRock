@@ -86,8 +86,8 @@ sudo docker run -it \
 > pip install --index-url=https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu 'rocm[libraries,devel]'
 > ```
 
-| Source .Dockerfile                                                                               | Published package                                                                 |
-| ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| Source .Dockerfile                                                                           | Published package                                                               |
+| -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
 | [`no_rocm_image_ubuntu24_04_rocgdb.Dockerfile`](no_rocm_image_ubuntu24_04_rocgdb.Dockerfile) | https://github.com/ROCm/TheRock/pkgs/container/no_rocm_image_ubuntu24_04_rocgdb |
 
 Extended version of no_rocm_image_ubuntu24_04.Dockerfile, containing additional
