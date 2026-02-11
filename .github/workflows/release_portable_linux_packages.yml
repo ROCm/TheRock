@@ -354,7 +354,8 @@ jobs:
               "cloudfront_url": "${{ needs.setup_metadata.outputs.cloudfront_url }}",
               "cloudfront_staging_url": "${{ needs.setup_metadata.outputs.cloudfront_staging_url }}",
               "rocm_version": "${{ needs.setup_metadata.outputs.version }}",
-              "tar_url": "${{ steps.url-encode-tar.outputs.tar_url }}"
+              "tar_url": "${{ steps.url-encode-tar.outputs.tar_url }}",
+              "ref": "${{ inputs.ref || '' }}"
             }
 
       - name: Trigger build native rpm package

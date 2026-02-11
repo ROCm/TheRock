@@ -34,6 +34,49 @@ def relativize_pc_file(pc_file: Path) -> None:
     pc_file.write_text(content)
 
 
+def symlink_or_copy(existing_path, new_link):
+    """Create symlink if the destination filesystem supports it. Create a copy otherwise.
+    Exists to support Windows, where only modern systems might support symlinks.
+    """
+    existing_path = Path(existing_path)
+    new_link = Path(new_link)
+    new_link.parent.mkdir(parents=True, exist_ok=True)
+
+    if new_link.exists() or new_link.is_symlink():
+        if new_link.is_dir() and not new_link.is_symlink():
+            shutil.rmtree(new_link)
+        else:
+            new_link.unlink()
+
+    try:
+        rel_target = os.path.relpath(existing_path, start=new_link.parent)
+        new_link.symlink_to(rel_target, target_is_directory=existing_path.is_dir())
+        return
+    except OSError:
+        pass
+
+    if existing_path.is_dir():
+        shutil.copytree(existing_path, new_link)
+    else:
+        shutil.copy2(existing_path, new_link)
+
+
+def link_header_files_under_dir(source_dir, dest_dir):
+    """Support applications referencing ncurses header through
+    both `<ncurses.h>` and `<ncursesw/ncurses.h>` by making
+
+    """
+    source_dir = Path(source_dir)
+    dest_dir = Path(dest_dir)
+    if not source_dir.exists():
+        return
+    dest_dir.mkdir(parents=True, exist_ok=True)
+
+    for header_path in source_dir.iterdir():
+        if header_path.is_file() and header_path.suffix == ".h":
+            symlink_or_copy(header_path, dest_dir / header_path.name)
+
+
 # Fetch an environment variable or exit if it is not found.
 def get_env_or_exit(var_name):
     value = os.environ.get(var_name)
@@ -56,6 +99,13 @@ install_prefix = sys.argv[1]
 therock_source_dir = Path(get_env_or_exit("THEROCK_SOURCE_DIR"))
 python_exe = get_env_or_exit("Python3_EXECUTABLE")
 patchelf_exe = get_env_or_exit("PATCHELF")
+
+# Make headers available under <ncursesw/> e.g.
+# `<ncurses.h>` and `<ncursesw/ncurses.h>`
+# This follows Ubuntu and Fedora packaging
+include_dir = Path(install_prefix) / "include"
+ncursesw_dir = include_dir / "ncursesw"
+link_header_files_under_dir(include_dir, ncursesw_dir)
 
 if platform.system() == "Linux":
     # Specify the directory
