@@ -6,4 +6,8 @@
 include = [
   "share/composable_kernel/**",
 ]
+[components.test."ml-libs/composable_kernel/stage"]
+include = [
+  "bin/test_*",
+]
 [components.run."ml-libs/composable_kernel/stage"]
