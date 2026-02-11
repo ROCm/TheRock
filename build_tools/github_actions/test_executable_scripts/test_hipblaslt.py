@@ -19,6 +19,7 @@ environ_vars = os.environ.copy()
 # For display purposes in the GitHub Action UI, the shard array is 1th indexed. However for shard indexes, we convert it to 0th index.
 environ_vars["GTEST_SHARD_INDEX"] = str(int(SHARD_INDEX) - 1)
 environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
+environ_vars["OMP_NUM_THREADS"] = "1"
 
 # If smoke tests are enabled, we run smoke tests only.
 # Otherwise, we run the normal test suite
