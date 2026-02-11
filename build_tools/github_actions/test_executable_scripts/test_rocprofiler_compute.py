@@ -53,6 +53,40 @@ EXCLUDED_TESTS = "test_profile_pc_sampling"
 shard_index = int(os.getenv("SHARD_INDEX", "1")) - 1
 total_shards = int(os.getenv("TOTAL_SHARDS", "1"))
 
+# Smoke Tests Setup
+SMOKE_TESTS = [
+    "test_autogen_config",
+    "test_utils",
+    "test_num_xcds_cli_output",
+    "test_num_xcds_spec_class",
+    "test_L1_cache_counters",
+    "test_analyze_workloads",
+    "test_analyze_commands",
+    "test_metric_validation",
+    # "test_profile_iteration_multiplexing_stochastic",
+    # "test_profile_iteration_multiplexing_2",
+    # "test_profile_iteration_multiplexing_1",
+    # "test_profile_live_attach_detach",
+    # "test_profile_sets_func",
+    # "test_profile_pc_sampling",
+    # "test_profile_section",
+    # "test_profile_roofline_2",
+    # "test_profile_roofline_1",
+    # "test_profile_path",
+    # "test_profile_misc",
+    # "test_profile_sort",
+    # "test_profile_join",
+    # "test_profile_mem",
+    # "test_profile_dispatch",
+    # "test_profile_kernel_execution",
+]
+
+# If smoke tests are enabled, we run smoke tests only.
+# Otherwise, we run the normal test suite
+test_type = os.getenv("TEST_TYPE", "full")
+if test_type == "smoke":
+    environ_vars["GTEST_FILTER"] = ":".join(SMOKE_TESTS)
+
 # Run tests
 cmd = [
     "ctest",
