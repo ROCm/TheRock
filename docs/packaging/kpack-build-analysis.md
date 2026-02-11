@@ -116,7 +116,7 @@ The generic hipSPARSELt artifact contains several **gfx-specific** files. In par
 
 The `.kpm` (kpack manifest) index is wrong in two ways:
 
-1. **Architecture reference:** The kpm file points to a **gfx942** kpack file, not a generic or multi-arch index.
+1. **Architecture reference:** The kpm file points to a **gfx942** kpack file, not the expected *gfx1151*.
 2. **Prefix path:** The prefix in the kpm is the **artifact path**. The final packaging path should be `lib/.kpack/blas_lib.kpm`.
 
 **File:** `blas_lib_generic/math-libs/BLAS/rocBLAS/stage/.kpack/blas_lib.kpm`
