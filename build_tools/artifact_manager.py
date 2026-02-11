@@ -13,6 +13,14 @@ Usage:
         --run-id 12345 \
         --output-dir build/
 
+    # Fetch and flatten artifacts into single directory structure
+    python stage_artifact_manager.py fetch \
+        --stage math-libs \
+        --amdgpu-families gfx94X-dcgpu \
+        --run-id 12345 \
+        --output-dir build/ \
+        --flatten
+
     # Push produced artifacts after building (compresses and uploads in parallel)
     python stage_artifact_manager.py push \
         --stage math-libs \
@@ -224,7 +232,7 @@ def extract_artifact(request: ExtractRequest) -> Optional[Path]:
             populator(archive_path)
         elif request.flatten:
             output_dir = request.output_dir
-            log(f"  ++ Flattening {archive_path.name}")
+            log(f"  ++ Flattening {archive_path.name} to {output_dir}")
             flattener = ArtifactPopulator(
                 output_path=output_dir, verbose=False, flatten=True
             )
@@ -364,13 +372,13 @@ def do_fetch(args: argparse.Namespace):
                                 archive_path=downloaded_path,
                                 output_dir=(
                                     output_dir / "artifacts"
-                                    if not args.bootstrap
+                                    if not args.bootstrap and not args.flatten
                                     else output_dir
                                 ),
                                 # Don't delete during parallel extraction - cleanup
                                 # happens after all extractions complete
                                 delete_archive=False,
-                                flatten=False,
+                                flatten=args.flatten,
                                 bootstrap=args.bootstrap,
                                 cleaned_paths=(
                                     bootstrap_cleaned_paths if args.bootstrap else None
@@ -798,10 +806,16 @@ def main(argv: Optional[List[str]] = None):
         required=True,
         help="Output directory for fetched artifacts",
     )
-    fetch_parser.add_argument(
+    fetch_extract_group = fetch_parser.add_mutually_exclusive_group()
+    fetch_extract_group.add_argument(
         "--bootstrap",
         action="store_true",
         help="Bootstrap build directory (flatten artifacts and create prebuilt markers)",
+    )
+    fetch_extract_group.add_argument(
+        "--flatten",
+        action="store_true",
+        help="Flatten artifacts into a single directory structure (merge all artifacts)",
     )
     fetch_parser.add_argument(
         "--no-extract",
