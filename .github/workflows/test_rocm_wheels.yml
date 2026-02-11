@@ -13,11 +13,13 @@ on:
         required: true
         type: string
         default: "linux-mi325-1gpu-ossci-rocm-frac"
-      package_index_url:
+      package_index_url_base:
         description: Base Python package index URL (without GPU family subdir)
-        required: true
         type: string
         default: "https://rocm.nightlies.amd.com/v2"
+      package_find_links_url:
+        description: Full Python package index URL for use with --find-links (usually instead of package_index_url_base)
+        type: string
       python_version:
         required: true
         type: string
@@ -35,20 +37,15 @@ on:
       test_runs_on:
         required: true
         type: string
-      package_index_url:
-        required: true
+      package_index_url_base:
+        type: string
+      package_find_links_url:
         type: string
       python_version:
         required: true
         type: string
       rocm_version:
         required: true
-        type: string
-      repository:
-        description: "Repository to checkout. Otherwise, defaults to `github.repository`."
-        type: string
-      ref:
-        description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
         type: string
 
 permissions:
@@ -58,17 +55,23 @@ run-name: Test ROCm Wheels (${{ inputs.amdgpu_family }}, ${{ inputs.rocm_version
 
 jobs:
   test_wheels:
-    name: Test ROCm Wheels | ${{ inputs.amdgpu_family }}
+    name: Test ${{ matrix.packages }} wheels | ${{ inputs.amdgpu_family }}
     runs-on: ${{ inputs.test_runs_on }}
+    timeout-minutes: 30
     container:
       image: ${{ contains(inputs.test_runs_on, 'linux') && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26' || null }}
       options: --ipc host
         --group-add video
         --device /dev/kfd
         --device /dev/dri
+        --group-add 992
         --group-add 110
         --env-file /etc/podinfo/gha-gpu-isolation-settings
         --user 0:0 # Running as root, by recommendation of GitHub: https://docs.github.com/en/actions/reference/workflows-and-actions/dockerfile-support#user
+    strategy:
+      fail-fast: false
+      matrix:
+        packages: ["rocm[libraries]", "rocm[libraries,devel]"]
     defaults:
       run:
         shell: bash
@@ -77,28 +80,27 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
-        with:
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || '' }}
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Set up Python
-        uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: ${{ inputs.python_version }}
 
-      - name: Set up virtual environment and install ROCm packages
+      - name: Setup venv and install '${{ matrix.packages }}'
         run: |
           python build_tools/setup_venv.py ${VENV_DIR} \
-            --packages "rocm[libraries,devel]==${{ inputs.rocm_version }}" \
-            --index-url=${{ inputs.package_index_url }} \
+            --packages "${{ matrix.packages }}==${{ inputs.rocm_version }}" \
+            --index-url=${{ inputs.package_index_url_base }} \
             --index-subdir=${{ inputs.amdgpu_family }} \
+            --find-links=${{ inputs.package_find_links_url }} \
             --activate-in-future-github-actions-steps
 
       - name: Show installed packages
         run: |
           pip freeze
 
-      - name: Run rocm-sdk sanity tests
+      - name: Run 'rocm-sdk test' with '${{ matrix.packages }}' installed
+        timeout-minutes: 5
         run: |
           rocm-sdk test

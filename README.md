@@ -26,10 +26,10 @@ TheRock includes:
 
 Packages and Python wheels:
 
-| Platform |                                                                                                                                                                                                                                                   Prebuilt tarballs and ROCm Python packages |                                                                                                                                                                                                                                                        PyTorch Python packages |
-| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
-| Linux    | [![Release portable Linux packages](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_packages.yml/badge.svg?branch=main&event=schedule)](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_packages.yml?query=branch%3Amain+event%3Aschedule) | [![Release Portable Linux PyTorch Wheels](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_pytorch_wheels.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_pytorch_wheels.yml?query=branch%3Amain) |
-| Windows  |                      [![Release Windows packages](https://github.com/ROCm/TheRock/actions/workflows/release_windows_packages.yml/badge.svg?branch=main&event=schedule)](https://github.com/ROCm/TheRock/actions/workflows/release_windows_packages.yml?query=branch%3Amain+event%3Aschedule) |                      [![Release Windows PyTorch Wheels](https://github.com/ROCm/TheRock/actions/workflows/release_windows_pytorch_wheels.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/release_windows_pytorch_wheels.yml?query=branch%3Amain) |
+| Platform |                                                                                                                                                                                                                                                   Prebuilt tarballs and ROCm Python packages |                                                                                                                                                                                                                                                        PyTorch Python packages | Native Packages                                                                                                                                                                                                                                  |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Linux    | [![Release portable Linux packages](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_packages.yml/badge.svg?branch=main&event=schedule)](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_packages.yml?query=branch%3Amain+event%3Aschedule) | [![Release Portable Linux PyTorch Wheels](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_pytorch_wheels.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/release_portable_linux_pytorch_wheels.yml?query=branch%3Amain) | [![Build Native Linux Packages](https://github.com/ROCm/TheRock/actions/workflows/build_native_linux_packages.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/build_native_linux_packages.yml?query=branch%3Amain) |
+| Windows  |                      [![Release Windows packages](https://github.com/ROCm/TheRock/actions/workflows/release_windows_packages.yml/badge.svg?branch=main&event=schedule)](https://github.com/ROCm/TheRock/actions/workflows/release_windows_packages.yml?query=branch%3Amain+event%3Aschedule) |                      [![Release Windows PyTorch Wheels](https://github.com/ROCm/TheRock/actions/workflows/release_windows_pytorch_wheels.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/release_windows_pytorch_wheels.yml?query=branch%3Amain) | —                                                                                                                                                                                                                                                |
 
 ## Building from source
 
@@ -160,31 +160,33 @@ Individual features can be controlled separately (typically in combination with
 `-DTHEROCK_ENABLE_ALL=OFF` or `-DTHEROCK_RESET_FEATURES=ON` to force a
 minimal build):
 
-| Component flag                         | Description                                   |
-| -------------------------------------- | --------------------------------------------- |
-| `-DTHEROCK_ENABLE_AMD_DBGAPI=ON`       | Enables the ROCm debug API library            |
-| `-DTHEROCK_ENABLE_COMPILER=ON`         | Enables the GPU+host compiler toolchain       |
-| `-DTHEROCK_ENABLE_HIPIFY=ON`           | Enables the hipify tool                       |
-| `-DTHEROCK_ENABLE_CORE_RUNTIME=ON`     | Enables the core runtime components and tools |
-| `-DTHEROCK_ENABLE_HIP_RUNTIME=ON`      | Enables the HIP runtime components            |
-| `-DTHEROCK_ENABLE_OCL_RUNTIME=ON`      | Enables the OpenCL runtime components         |
-| `-DTHEROCK_ENABLE_ROCGDB=ON`           | Enables the ROCm debugger (ROCgdb)            |
-| `-DTHEROCK_ENABLE_ROCPROFV3=ON`        | Enables rocprofv3                             |
-| `-DTHEROCK_ENABLE_ROCPROFSYS=ON`       | Enables rocprofiler-systems                   |
-| `-DTHEROCK_ENABLE_RCCL=ON`             | Enables RCCL                                  |
-| `-DTHEROCK_ENABLE_ROCR_DEBUG_AGENT=ON` | Enables the ROCR debug agent library          |
-| `-DTHEROCK_ENABLE_PRIM=ON`             | Enables the PRIM library                      |
-| `-DTHEROCK_ENABLE_BLAS=ON`             | Enables the BLAS libraries                    |
-| `-DTHEROCK_ENABLE_RAND=ON`             | Enables the RAND libraries                    |
-| `-DTHEROCK_ENABLE_SOLVER=ON`           | Enables the SOLVER libraries                  |
-| `-DTHEROCK_ENABLE_SPARSE=ON`           | Enables the SPARSE libraries                  |
-| `-DTHEROCK_ENABLE_MIOPEN=ON`           | Enables MIOpen                                |
-| `-DTHEROCK_ENABLE_MIOPEN_PLUGIN=ON`    | Enables MIOpen_plugin                         |
-| `-DTHEROCK_ENABLE_HIPDNN=ON`           | Enables hipDNN                                |
-| `-DTHEROCK_ENABLE_ROCWMMA=ON`          | Enables rocWMMA                               |
-| `-DTHEROCK_ENABLE_RDC=ON`              | Enables ROCm Data Center Tool (Linux only)    |
-| `-DTHEROCK_ENABLE_FUSILLI_PLUGIN=ON`   | Enables Fusilli Plugin                        |
-| `-DTHEROCK_ENABLE_LIBHIPCXX=ON`        | Enables libhipcxx                             |
+| Component flag                         | Description                                    |
+| -------------------------------------- | ---------------------------------------------- |
+| `-DTHEROCK_ENABLE_AMD_DBGAPI=ON`       | Enables the ROCm debug API library             |
+| `-DTHEROCK_ENABLE_COMPILER=ON`         | Enables the GPU+host compiler toolchain        |
+| `-DTHEROCK_ENABLE_HIPIFY=ON`           | Enables the hipify tool                        |
+| `-DTHEROCK_ENABLE_CORE_RUNTIME=ON`     | Enables the core runtime components and tools  |
+| `-DTHEROCK_ENABLE_HIP_RUNTIME=ON`      | Enables the HIP runtime components             |
+| `-DTHEROCK_ENABLE_OCL_RUNTIME=ON`      | Enables the OpenCL runtime components          |
+| `-DTHEROCK_ENABLE_ROCGDB=ON`           | Enables the ROCm debugger (ROCgdb)             |
+| `-DTHEROCK_ENABLE_ROCPROFV3=ON`        | Enables rocprofv3                              |
+| `-DTHEROCK_ENABLE_ROCPROFSYS=ON`       | Enables rocprofiler-systems                    |
+| `-DTHEROCK_ENABLE_RCCL=ON`             | Enables RCCL                                   |
+| `-DTHEROCK_ENABLE_ROCR_DEBUG_AGENT=ON` | Enables the ROCR debug agent library           |
+| `-DTHEROCK_ENABLE_PRIM=ON`             | Enables the PRIM library                       |
+| `-DTHEROCK_ENABLE_BLAS=ON`             | Enables the BLAS libraries                     |
+| `-DTHEROCK_ENABLE_RAND=ON`             | Enables the RAND libraries                     |
+| `-DTHEROCK_ENABLE_SOLVER=ON`           | Enables the SOLVER libraries                   |
+| `-DTHEROCK_ENABLE_SPARSE=ON`           | Enables the SPARSE libraries                   |
+| `-DTHEROCK_ENABLE_MIOPEN=ON`           | Enables MIOpen                                 |
+| `-DTHEROCK_ENABLE_MIOPEN_PLUGIN=ON`    | Enables MIOpen_plugin                          |
+| `-DTHEROCK_ENABLE_HIPDNN_SAMPLES=ON`   | Enables hipDNN samples (hipDNN Usage Examples) |
+| `-DTHEROCK_ENABLE_HIPDNN=ON`           | Enables hipDNN                                 |
+| `-DTHEROCK_ENABLE_HIPBLASLT_PLUGIN=ON` | Enables hipBLASLt Plugin                       |
+| `-DTHEROCK_ENABLE_ROCWMMA=ON`          | Enables rocWMMA                                |
+| `-DTHEROCK_ENABLE_RDC=ON`              | Enables ROCm Data Center Tool (Linux only)     |
+| `-DTHEROCK_ENABLE_FUSILLI_PLUGIN=ON`   | Enables Fusilli Plugin                         |
+| `-DTHEROCK_ENABLE_LIBHIPCXX=ON`        | Enables libhipcxx                              |
 
 > [!TIP]
 > Enabling any features will implicitly enable their *minimum* dependencies. Some
@@ -288,7 +290,7 @@ separately.
 - [Environment Setup Guide](docs/environment_setup_guide.md): Comprehensive guide for setting up a build environment, known workarounds, and other operating specific information.
 - [Git Chores](docs/development/git_chores.md): Procedures for managing the codebase, specifically focused on version control, upstream/downstream, etc.
 - [Dependencies](docs/development/dependencies.md): Further specifications on ROCm-wide standards for depending on various components.
-- [Build Containers](docs/development/build_containers.md): Further information about containers used for building TheRock on CI.
+- [Dockerfiles for TheRock](dockerfiles/README.md): Information about containers used for building, testing, and distributing ROCm using TheRock.
 - [Build Artifacts](docs/development/artifacts.md): Documentation about the outputs of the build system.
 - [Releases Page](RELEASES.md): Documentation for how to leverage our build artifacts.
 - [Roadmap for Support](ROADMAP.md): Documentation for our prioritized roadmap to support AMD GPUs.
