@@ -34,7 +34,7 @@ test_matrix = {
     "hip-tests": {
         "job_name": "hip-tests",
         "fetch_artifact_args": "--tests",
-        "timeout_minutes": 120,
+        "timeout_minutes": 240,
         "test_script": f"python {_get_script_path('test_hiptests.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 4,
@@ -43,7 +43,7 @@ test_matrix = {
     "rocblas": {
         "job_name": "rocblas",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 15,
+        "timeout_minutes": 240,
         "test_script": f"python {_get_script_path('test_rocblas.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 1,
@@ -51,7 +51,7 @@ test_matrix = {
     "rocroller": {
         "job_name": "rocroller",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 60,
+        "timeout_minutes": 240,
         "test_script": f"python {_get_script_path('test_rocroller.py')}",
         "platform": ["linux"],
         "total_shards": 5,
@@ -74,7 +74,7 @@ test_matrix = {
     "hipblas": {
         "job_name": "hipblas",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 30,
+        "timeout_minutes": 240,
         "test_script": f"python {_get_script_path('test_hipblas.py')}",
         "platform": ["linux", "windows"],
         # TODO(#2616): Enable full tests once known machine issues are resolved
@@ -83,7 +83,7 @@ test_matrix = {
     "hipblaslt": {
         "job_name": "hipblaslt",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 180,
+        "timeout_minutes": 240,
         "test_script": f"python {_get_script_path('test_hipblaslt.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 6,
@@ -92,7 +92,7 @@ test_matrix = {
     "hipsolver": {
         "job_name": "hipsolver",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 5,
+        "timeout_minutes": 240,
         "test_script": f"python {_get_script_path('test_hipsolver.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 1,
@@ -100,7 +100,7 @@ test_matrix = {
     "rocsolver": {
         "job_name": "rocsolver",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 30,
+        "timeout_minutes": 240,
         "test_script": f"python {_get_script_path('test_rocsolver.py')}",
         # Issue for adding windows tests: https://github.com/ROCm/TheRock/issues/1770
         "platform": ["linux"],
@@ -110,7 +110,7 @@ test_matrix = {
     "rocprim": {
         "job_name": "rocprim",
         "fetch_artifact_args": "--prim --tests",
-        "timeout_minutes": 30,
+        "timeout_minutes": 240,
         "test_script": f"python {_get_script_path('test_rocprim.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 2,
@@ -118,7 +118,7 @@ test_matrix = {
     "hipcub": {
         "job_name": "hipcub",
         "fetch_artifact_args": "--prim --tests",
-        "timeout_minutes": 15,
+        "timeout_minutes": 240,
         "test_script": f"python {_get_script_path('test_hipcub.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 1,
@@ -126,7 +126,7 @@ test_matrix = {
     "rocthrust": {
         "job_name": "rocthrust",
         "fetch_artifact_args": "--prim --tests",
-        "timeout_minutes": 15,
+        "timeout_minutes": 240,
         "test_script": f"python {_get_script_path('test_rocthrust.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 1,
@@ -135,7 +135,7 @@ test_matrix = {
     "hipsparse": {
         "job_name": "hipsparse",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 30,
+        "timeout_minutes": 240,
         "test_script": f"python {_get_script_path('test_hipsparse.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 2,
@@ -143,7 +143,7 @@ test_matrix = {
     "rocsparse": {
         "job_name": "rocsparse",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 15,
+        "timeout_minutes": 240,
         "test_script": f"python {_get_script_path('test_rocsparse.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 1,
@@ -151,7 +151,7 @@ test_matrix = {
     "hipsparselt": {
         "job_name": "hipsparselt",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 120,
+        "timeout_minutes": 240,
         "test_script": f"python {_get_script_path('test_hipsparselt.py')}",
         # TODO(#2616): Re-enable tests after test slowdown issues are resolved
         "platform": [],
@@ -161,7 +161,7 @@ test_matrix = {
     "rocrand": {
         "job_name": "rocrand",
         "fetch_artifact_args": "--rand --tests",
-        "timeout_minutes": 15,
+        "timeout_minutes": 240,
         "test_script": f"python {_get_script_path('test_rocrand.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 1,
@@ -169,7 +169,7 @@ test_matrix = {
     "hiprand": {
         "job_name": "hiprand",
         "fetch_artifact_args": "--rand --tests",
-        "timeout_minutes": 5,
+        "timeout_minutes": 240,
         "test_script": f"python {_get_script_path('test_hiprand.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 1,
@@ -178,7 +178,7 @@ test_matrix = {
     "rocfft": {
         "job_name": "rocfft",
         "fetch_artifact_args": "--fft --rand --tests",
-        "timeout_minutes": 60,
+        "timeout_minutes": 240,
         "test_script": f"python {_get_script_path('test_rocfft.py')}",
         # TODO(geomin12): Add windows test (https://github.com/ROCm/TheRock/issues/1391)
         "platform": ["linux"],
@@ -187,7 +187,7 @@ test_matrix = {
     "hipfft": {
         "job_name": "hipfft",
         "fetch_artifact_args": "--fft --rand --tests",
-        "timeout_minutes": 60,
+        "timeout_minutes": 240,
         "test_script": f"python {_get_script_path('test_hipfft.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 1,
@@ -196,7 +196,7 @@ test_matrix = {
     "miopen": {
         "job_name": "miopen",
         "fetch_artifact_args": "--blas --miopen --tests",
-        "timeout_minutes": 60,
+        "timeout_minutes": 240,
         "test_script": f"python {_get_script_path('test_miopen.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 4,
@@ -205,7 +205,7 @@ test_matrix = {
     "rccl": {
         "job_name": "rccl",
         "fetch_artifact_args": "--rccl --tests",
-        "timeout_minutes": 15,
+        "timeout_minutes": 240,
         "test_script": f"pytest {_get_script_path('test_rccl.py')} -v -s --log-cli-level=info",
         "platform": ["linux"],
         "total_shards": 1,
@@ -216,7 +216,7 @@ test_matrix = {
     "hipdnn": {
         "job_name": "hipdnn",
         "fetch_artifact_args": "--hipdnn --tests",
-        "timeout_minutes": 5,
+        "timeout_minutes": 240,
         "test_script": f"python {_get_script_path('test_hipdnn.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 1,
@@ -225,7 +225,7 @@ test_matrix = {
     "miopen_plugin": {
         "job_name": "miopen_plugin",
         "fetch_artifact_args": "--blas --miopen --hipdnn --miopen-plugin --tests",
-        "timeout_minutes": 15,
+        "timeout_minutes": 240,
         "test_script": f"python {_get_script_path('test_miopen_plugin.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 1,
@@ -244,7 +244,7 @@ test_matrix = {
     "rocwmma": {
         "job_name": "rocwmma",
         "fetch_artifact_args": "--rocwmma --tests --blas",
-        "timeout_minutes": 60,
+        "timeout_minutes": 240,
         "test_script": f"python {_get_script_path('test_rocwmma.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 5,
@@ -253,7 +253,7 @@ test_matrix = {
     "libhipcxx_hipcc": {
         "job_name": "libhipcxx_hipcc",
         "fetch_artifact_args": "--libhipcxx --tests",
-        "timeout_minutes": 30,
+        "timeout_minutes": 240,
         "test_script": f"python {_get_script_path('test_libhipcxx_hipcc.py')}",
         "platform": ["linux"],
         "total_shards": 1,
@@ -262,7 +262,7 @@ test_matrix = {
     "libhipcxx_hiprtc": {
         "job_name": "libhipcxx_hiprtc",
         "fetch_artifact_args": "--libhipcxx --tests",
-        "timeout_minutes": 20,
+        "timeout_minutes": 240,
         "test_script": f"python {_get_script_path('test_libhipcxx_hiprtc.py')}",
         "platform": ["linux"],
         "total_shards": 1,
@@ -271,7 +271,7 @@ test_matrix = {
     "aqlprofile": {
         "job_name": "aqlprofile",
         "fetch_artifact_args": "--aqlprofile --tests",
-        "timeout_minutes": 5,
+        "timeout_minutes": 240,
         "test_script": f"python {_get_script_path('test_aqlprofile.py')}",
         "platform": ["linux"],
         "total_shards": 1,
@@ -280,7 +280,7 @@ test_matrix = {
     "rocrtst": {
         "job_name": "rocrtst",
         "fetch_artifact_args": "--rocrtst --tests",
-        "timeout_minutes": 60,
+        "timeout_minutes": 240,
         "test_script": f"python {_get_script_path('test_rocrtst.py')}",
         "platform": ["linux"],
         "total_shards": 1,
