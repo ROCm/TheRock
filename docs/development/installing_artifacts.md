@@ -138,7 +138,7 @@ Nightly tarballs are built daily and follow the naming pattern: `MAJOR.MINOR.aYY
 
 **To find and use a nightly release:**
 
-1. Visit the [nightly tarball S3 bucket](https://therock-nightly-tarball.s3.amazonaws.com/index.html)
+1. Visit the [nightly tarball index](https://rocm.nightlies.amd.com/tarball/)
 1. Look for files matching your GPU family. Files are named: `therock-dist-linux-{GPU_FAMILY}-{VERSION}.tar.gz`
    - Example: `therock-dist-linux-gfx110X-all-7.11.0a20251124.tar.gz`
 1. Extract the version from the filename (the part after the last hyphen, before `.tar.gz`)
@@ -162,7 +162,7 @@ Dev tarballs are built from specific commits and follow the naming pattern: `MAJ
 
 **To find and use a dev release:**
 
-1. Visit the [dev tarball S3 bucket](https://therock-dev-tarball.s3.amazonaws.com/index.html)
+1. Visit the [dev tarball index](https://rocm.devreleases.amd.com/tarball/)
 1. Look for files matching your GPU family. Files are named: `therock-dist-linux-{GPU_FAMILY}-{VERSION}.tar.gz`
    - Example: `therock-dist-linux-gfx94X-dcgpu-6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9.tar.gz`
 1. Extract the version from the filename (the part after the last hyphen, before `.tar.gz`)
@@ -181,7 +181,7 @@ Dev tarballs are built from specific commits and follow the naming pattern: `MAJ
 - `{HASH}` = full Git commit hash (40 characters)
 
 > [!TIP]
-> You can browse the S3 buckets directly in your browser to see all available versions and GPU families.
+> You can browse the tarball indexes directly in your browser to see all available versions and GPU families.
 > The version string to use with `--release` is always the portion of the filename between the GPU family and `.tar.gz`.
 
 #### Using The Latest Release
