@@ -220,7 +220,7 @@ if AMDGPU_FAMILIES in ["gfx110X-all", "gfx1150", "gfx1151", "gfx120X-all"]:
         "*CPU_UnitTestConvSolverImplicitGemmGroupWrwXdlopsDevApplicability_FP16.ConvHipImplicitGemmGroupWrwXdlops*"
     )
 
-    # Diable long running tests on windows gfx1151
+    # Disable long running tests
     negative_filter.append("Full/GPU_Softmax_FP32*")  # 24 min
     negative_filter.append("Full/GPU_Softmax_BFP16*")  # 13 min
     negative_filter.append("Full/GPU_Softmax_FP16*")  # 11.5 min
