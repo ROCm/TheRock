@@ -1,0 +1,26 @@
+# LLVM deviates from the defaults in some key ways:
+#   lib/llvm/clang : Contains a prefix like tree that must always be
+#     accessible for library use, regardless of file type/association
+#     (and should be excluded from other components).
+# Note that we do not distribute development files for flang.
+[components.dbg."compiler/amd-llvm-flang/stage"]
+[components.doc."compiler/amd-llvm-flang/stage"]
+[components.lib."compiler/amd-llvm-flang/stage"]
+force_include = [
+  "lib/llvm/lib/clang/**",
+]
+[components.run."compiler/amd-llvm-flang/stage"]
+include = [
+  "lib/llvm/bin/**",
+  "lib/llvm/libexec/**",
+]
+exclude = [
+  "lib/llvm/lib/clang/**",
+]
+
+# Offload runtimes follow a similar pattern.
+[components.dbg."compiler/amd-llvm-offload-runtimes/stage"]
+[components.lib."compiler/amd-llvm-offload-runtimes/stage"]
+force_include = [
+  "lib/llvm/lib/clang/**",
+]

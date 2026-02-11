@@ -214,6 +214,12 @@ type = "generic"
 artifact_group_deps = ["third-party-sysdeps"]
 source_sets = ["compilers"]
 
+[artifact_groups.compiler-extras]
+description = "AMD LLVM Extra Projects (beyond core toolchain)"
+type = "generic"
+artifact_group_deps = ["compiler", "core-runtime"]
+source_sets = ["compilers"]
+
 [artifact_groups.debug-tools]
 description = "ROCm debug tools"
 type = "generic"
@@ -421,14 +427,6 @@ artifact_deps = ["sysdeps"]
 feature_name = "COMPILER"
 feature_group = "ALL"
 
-[artifacts.hipify]
-artifact_group = "compiler"
-type = "target-neutral"
-artifact_deps = ["amd-llvm"]  # Built on top of amd-llvm
-feature_group = "ALL"
-
-# --- Runtime Artifacts ---
-
 [artifacts.core-runtime]
 artifact_group = "core-runtime"
 type = "target-neutral"
@@ -436,6 +434,22 @@ artifact_deps = ["base", "sysdeps", "amd-llvm"]
 feature_name = "CORE_RUNTIME"
 feature_group = "CORE"
 disable_platforms = ["windows"]
+
+[artifacts.hipify]
+artifact_group = "compiler"
+type = "target-neutral"
+artifact_deps = ["amd-llvm"]  # Built on top of amd-llvm
+feature_group = "ALL"
+
+[artifacts.amd-llvm-extras]
+artifact_group = "compiler-extras"
+type = "target-neutral"
+artifact_deps = ["amd-llvm", "core-runtime"]  # Built on top of amd-llvm
+feature_name = "COMPILER_EXTRAS"
+feature_group = "ALL"
+disable_platforms = ["windows"]
+
+# --- Runtime Artifacts ---
 
 [artifacts.core-hip]
 artifact_group = "hip-runtime"
