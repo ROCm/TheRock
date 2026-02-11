@@ -4,7 +4,7 @@ Generate a manifest for PyTorch external builds.
 
 Writes a JSON manifest containing:
   - pytorch/pytorch_audio/pytorch_vision(/triton): git commit + origin repo
-  - therock: repo + commit + branch from GitHub Actions env
+  - therock: repo + commit + branch from GitHub Actions env (best-effort)
 
 Filename format:
   therock-manifest_torch_py<python_version>_<release_track>.json
@@ -85,28 +85,6 @@ def normalize_py(python_version: str) -> str:
     return py
 
 
-def parse_branch_from_github_ref(ref: str) -> str:
-    """Parse branch name from a GitHub Actions ref like 'refs/heads/<branch>'."""
-    prefix = "refs/heads/"
-    if not ref.startswith(prefix):
-        raise RuntimeError(
-            f"Unexpected GITHUB_REF: {ref}\n"
-            "Expected a branch ref of the form refs/heads/<branch>."
-        )
-    return ref[len(prefix) :]
-
-
-def require_env(name: str) -> str:
-    """Read required env var or fail fast with a clear error."""
-    value = os.environ.get(name, "")
-    if not value:
-        raise RuntimeError(
-            f"Missing required environment variable: {name}\n"
-            "Set it (or run under GitHub Actions) to populate TheRock metadata."
-        )
-    return value
-
-
 def manifest_filename(*, python_version: str, pytorch_git_ref: str) -> str:
     py = normalize_py(python_version)
     track = normalize_release_track(pytorch_git_ref)
@@ -123,9 +101,7 @@ def build_sources(
     sources: dict[str, dict[str, str]] = {
         "pytorch": git_head(pytorch_dir, label="pytorch").to_dict(),
         "pytorch_audio": git_head(pytorch_audio_dir, label="pytorch_audio").to_dict(),
-        "pytorch_vision": git_head(
-            pytorch_vision_dir, label="pytorch_vision"
-        ).to_dict(),
+        "pytorch_vision": git_head(pytorch_vision_dir, label="pytorch_vision").to_dict(),
     }
     if triton_dir is not None:
         sources["triton"] = git_head(triton_dir, label="triton").to_dict()
@@ -198,18 +174,29 @@ def main(argv: list[str]) -> None:
         triton_dir=args.triton_dir,
     )
 
-    server_url = require_env("GITHUB_SERVER_URL")
-    repo = require_env("GITHUB_REPOSITORY")
-    sha = require_env("GITHUB_SHA")
-    ref = require_env("GITHUB_REF")
+    server_url = os.environ.get("GITHUB_SERVER_URL")
+    repo = os.environ.get("GITHUB_REPOSITORY")
+    sha = os.environ.get("GITHUB_SHA")
+    ref = os.environ.get("GITHUB_REF")
 
-    therock_branch = parse_branch_from_github_ref(ref)
-    therock_repo = f"{server_url}/{repo}.git"
+    therock_repo = "unknown"
+    if server_url and repo:
+        therock_repo = f"{server_url}/{repo}.git"
+
+    therock_commit = sha or "unknown"
+
+    therock_branch = "unknown"
+    if ref:
+        if ref.startswith("refs/heads/"):
+            therock_branch = ref[len("refs/heads/") :]
+        else:
+            # Could be refs/tags/<tag>, refs/pull/<id>/merge, or a SHA, etc.
+            therock_branch = ref
 
     manifest = build_manifest(
         sources=sources,
         therock_repo=therock_repo,
-        therock_commit=sha,
+        therock_commit=therock_commit,
         therock_branch=therock_branch,
     )
 
