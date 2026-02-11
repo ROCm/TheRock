@@ -76,7 +76,8 @@ def main() -> None:
     if not manifest_path.is_file():
         raise FileNotFoundError(f"Manifest not found: {manifest_path}")
 
-    external_repo_path, bucket = retrieve_bucket_info()
+    external_repo_path, bucket = retrieve_bucket_info(workflow_run_id=args.run_id)
+
     bucket_uri = f"s3://{bucket}/{external_repo_path}{args.run_id}-{platform_name}"
     dest_uri = f"{bucket_uri}/manifests/{args.amdgpu_family}/{manifest_name}"
 
