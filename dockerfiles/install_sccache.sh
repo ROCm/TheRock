@@ -9,20 +9,11 @@ set -euo pipefail
 SCCACHE_VERSION="$1"
 
 ARCH="$(uname -m)"
-
-# Map architecture to sccache release naming convention
-case "${ARCH}" in
-    x86_64)
-        SCCACHE_ARCH="x86_64-unknown-linux-musl"
-        ;;
-    aarch64)
-        SCCACHE_ARCH="aarch64-unknown-linux-musl"
-        ;;
-    *)
-        echo "Unsupported architecture: ${ARCH}"
-        exit 1
-        ;;
-esac
+if [ "${ARCH}" != "x86_64" ]; then
+    echo "Unsupported architecture: ${ARCH}. Only x86_64 is supported."
+    exit 1
+fi
+SCCACHE_ARCH="x86_64-unknown-linux-musl"
 
 SCCACHE_TARBALL="sccache-v${SCCACHE_VERSION}-${SCCACHE_ARCH}.tar.gz"
 SCCACHE_URL="https://github.com/mozilla/sccache/releases/download/v${SCCACHE_VERSION}/${SCCACHE_TARBALL}"
