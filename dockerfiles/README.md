@@ -88,10 +88,10 @@ sudo docker run -it \
 
 | Source .Dockerfile                                                                               | Published package                                                                 |
 | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
-| [`no_rocm_image_ubuntu24_04_extended.Dockerfile`](no_rocm_image_ubuntu24_04_extended.Dockerfile) | https://github.com/ROCm/TheRock/pkgs/container/no_rocm_image_ubuntu24_04_extended |
+| [`no_rocm_image_ubuntu24_04_rocgdb.Dockerfile`](no_rocm_image_ubuntu24_04_rocgdb.Dockerfile) | https://github.com/ROCm/TheRock/pkgs/container/no_rocm_image_ubuntu24_04_rocgdb |
 
 Extended version of no_rocm_image_ubuntu24_04.Dockerfile, containing additional
-packages and tools required for validation.
+packages and tools required for validation of rocgdb.
 
 This includes dejagnu, make, gcc, g++ and gfortran.
 
