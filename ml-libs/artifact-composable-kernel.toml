@@ -8,6 +8,6 @@ include = [
 ]
 [components.test."ml-libs/composable_kernel/stage"]
 include = [
-  "bin/test_",
+  "bin/test_*",
 ]
 [components.run."ml-libs/composable_kernel/stage"]
