@@ -20,7 +20,7 @@ on:
         required: true
         type: string
       package_suffix:
-        description: The suffix to be added to package name (asan, static or rpath).
+        description: The suffix to be added to package name (asan, tsan, static or rpath).
         required: false
         type: string
       release_type:
@@ -48,7 +48,7 @@ on:
           - deb
         default: "rpm"
       package_suffix:
-        description: The suffix to be added to package name (asan, static or rpath).
+        description: The suffix to be added to package name (asan, tsan, static or rpath).
         type: string
         required: false
       release_type:
@@ -69,7 +69,7 @@ jobs:
       fail-fast: false
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     env:
-      BUILD_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:6e8242d347af7e0c43c82d5031a3ac67b669f24898ea8dc2f1d5b7e4798b66bd
+      BUILD_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:db2b63f938941dde2abc80b734e64b45b9995a282896d513a0f3525d4591d6cb
       ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id || github.run_id }}
       PACKAGE_SUFFIX: ${{ inputs.package_suffix != '' && inputs.package_suffix || '' }}
       OUTPUT_DIR: ${{ github.workspace }}/output
@@ -78,8 +78,8 @@ jobs:
       RELEASE_TYPE: ${{ inputs.release_type || '' }}
       S3_BUCKET_NATIVE: "therock-${{ inputs.release_type }}-packages"
     steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
-      - uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: '3.12'
       - name: Install Python requirements
@@ -120,7 +120,7 @@ jobs:
         run: bash ./dockerfiles/install_awscli.sh
 
       - name: Configure AWS Credentials for non-forked repos
-        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}
