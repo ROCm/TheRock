@@ -293,6 +293,15 @@ test_matrix = {
         "platform": ["linux"],
         "total_shards": 1,
     },
+    # comgr tests
+    "comgr_mock": {
+        "job_name": "comgr_mock",
+        "fetch_artifact_args": " --tests",
+        "timeout_minutes": 5,
+        "test_script": f"python {_get_script_path('test_comgr_mock.py')}",
+        "platform": ["linux"],
+        "total_shards": 1,
+    },
 }
 
 
