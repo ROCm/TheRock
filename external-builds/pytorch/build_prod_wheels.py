@@ -404,131 +404,198 @@ def do_build(args: argparse.Namespace):
         env["CMAKE_CXX_COMPILER_LAUNCHER"] = "ccache"
         run_command(["ccache", "--zero-stats"], cwd=tempfile.gettempdir())
 
-    # GLOO enabled for only Linux
-    if not is_windows:
-        env["USE_GLOO"] = "ON"
+    # Track whether sccache wrapping was attempted (for cleanup in finally block)
+    sccache_setup_attempted = False
 
-    # At checkout, we compute some additional env vars that influence the way that
-    # the wheel is named/versioned.
-    if triton_dir:
-        triton_env_file = triton_dir / "build_env.json"
-        if triton_env_file.exists():
-            with open(triton_env_file, "r") as f:
-                addl_triton_env = json.load(f)
-                print(f"-- Additional triton build env vars: {addl_triton_env}")
-            env.update(addl_triton_env)
-        # With `CMAKE_PREFIX_PATH` set, `find_package(LLVM)` (called in
-        # `MLIRConfig.cmake` shipped as part of the LLVM bundled with
-        # trition) may pick up TheRock's LLVM instead of triton's.
-        # Here, `CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH` is set
-        # and passed via `TRITON_APPEND_CMAKE_ARGS` to avoid this.
-        # See also https://github.com/ROCm/TheRock/issues/1999.
-        env["TRITON_APPEND_CMAKE_ARGS"] = (
-            "-DCMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH=FALSE"
+    if args.use_sccache:
+        print("Setting up sccache with ROCm compiler wrapping...")
+        # Add script directory to path for importing setup_sccache_rocm
+        sys.path.insert(0, str(script_dir))
+
+        try:
+            from setup_sccache_rocm import (
+                setup_rocm_sccache,
+                restore_rocm_compilers,
+                find_sccache,
+            )
+
+            sccache_path = find_sccache()
+            if not sccache_path:
+                raise RuntimeError(
+                    "sccache not found. Please install it:\n"
+                    "  - Linux: sccache should be pre-installed in the Docker image\n"
+                    "  - Windows: choco install sccache"
+                )
+            sccache_setup_attempted = True  # Mark before wrapping starts
+            setup_rocm_sccache(rocm_dir, sccache_path)
+
+            # Set CMAKE launchers for C/C++ compilers only
+            # Note: CMAKE_HIP_COMPILER_LAUNCHER is NOT set because:
+            # - On Linux: sccache returns "Compiler not supported" error
+            # - On Windows: doesn't help with HIP linker flag issues
+            # HIP caching on Linux is handled by wrapper scripts instead
+            env["CMAKE_C_COMPILER_LAUNCHER"] = str(sccache_path)
+            env["CMAKE_CXX_COMPILER_LAUNCHER"] = str(sccache_path)
+
+            # Start sccache server to warm it up
+            try:
+                run_command(
+                    [str(sccache_path), "--start-server"], cwd=tempfile.gettempdir()
+                )
+            except subprocess.CalledProcessError:
+                # Server may already be running, ignore
+                pass
+
+            # Zero sccache stats
+            run_command([str(sccache_path), "--zero-stats"], cwd=tempfile.gettempdir())
+
+        except Exception as e:
+            raise RuntimeError(f"sccache setup failed: {e}") from e
+
+    # Wrap ALL remaining code in try/finally to ensure sccache cleanup
+    # This must cover everything after compiler wrapping to handle any exception
+    try:
+        # GLOO enabled for only Linux
+        if not is_windows:
+            env["USE_GLOO"] = "ON"
+
+        # At checkout, we compute some additional env vars that influence the way that
+        # the wheel is named/versioned.
+        if triton_dir:
+            triton_env_file = triton_dir / "build_env.json"
+            if triton_env_file.exists():
+                with open(triton_env_file, "r") as f:
+                    addl_triton_env = json.load(f)
+                    print(f"-- Additional triton build env vars: {addl_triton_env}")
+                env.update(addl_triton_env)
+            # With `CMAKE_PREFIX_PATH` set, `find_package(LLVM)` (called in
+            # `MLIRConfig.cmake` shipped as part of the LLVM bundled with
+            # trition) may pick up TheRock's LLVM instead of triton's.
+            # Here, `CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH` is set
+            # and passed via `TRITON_APPEND_CMAKE_ARGS` to avoid this.
+            # See also https://github.com/ROCm/TheRock/issues/1999.
+            env["TRITON_APPEND_CMAKE_ARGS"] = (
+                "-DCMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH=FALSE"
+            )
+
+        if is_windows:
+            llvm_dir = rocm_dir / "lib" / "llvm" / "bin"
+            env.update(
+                {
+                    "HIP_CLANG_PATH": str(llvm_dir.resolve().as_posix()),
+                    "CC": str((llvm_dir / "clang-cl.exe").resolve()),
+                    "CXX": str((llvm_dir / "clang-cl.exe").resolve()),
+                }
+            )
+        else:
+            env.update(
+                {
+                    # Workaround GCC12 compiler flags.
+                    "CXXFLAGS": " -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict ",
+                    "CPPFLAGS": " -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict ",
+                }
+            )
+
+        # Workaround missing devicelib bitcode
+        # TODO: When "ROCM_PATH" and/or "ROCM_HOME" is set in the environment, the
+        # clang frontend ignores its default heuristics and (depending on version)
+        # finds the wrong path to the device library. This is bad/annoying. But
+        # the PyTorch build shouldn't even need these to be set. Unfortunately, it
+        # has been hardcoded for a long time. So we use a clang env var to force
+        # a specific device lib path to workaround the hack to get pytorch to build.
+        # This may or may not only affect the Python wheels with their own quirks
+        # on directory layout.
+        # Obviously, this should be completely burned with fire once the root causes
+        # are eliminted.
+        hip_device_lib_path = (
+            get_rocm_path("root") / "lib" / "llvm" / "amdgcn" / "bitcode"
         )
+        if not hip_device_lib_path.exists():
+            print(
+                "WARNING: Default location of device libs not found. Relying on "
+                "clang heuristics which are known to be buggy in this configuration"
+            )
+        else:
+            env["HIP_DEVICE_LIB_PATH"] = str(hip_device_lib_path)
 
-    if is_windows:
-        llvm_dir = rocm_dir / "lib" / "llvm" / "bin"
-        env.update(
-            {
-                "HIP_CLANG_PATH": str(llvm_dir.resolve().as_posix()),
-                "CC": str((llvm_dir / "clang-cl.exe").resolve()),
-                "CXX": str((llvm_dir / "clang-cl.exe").resolve()),
-            }
-        )
-    else:
-        env.update(
-            {
-                # Workaround GCC12 compiler flags.
-                "CXXFLAGS": " -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict ",
-                "CPPFLAGS": " -Wno-error=maybe-uninitialized -Wno-error=uninitialized -Wno-error=restrict ",
-            }
-        )
+        # OpenBLAS path setup
+        host_math_path = get_rocm_path("root") / "lib" / "host-math"
+        if not host_math_path.exists():
+            print(
+                "WARNING: Default location of host-math not found. "
+                "Will not build with OpenBLAS support."
+            )
+        else:
+            env["BLAS"] = "OpenBLAS"
+            env["OpenBLAS_HOME"] = str(host_math_path)
+            env["OpenBLAS_LIB_NAME"] = "rocm-openblas"
 
-    # Workaround missing devicelib bitcode
-    # TODO: When "ROCM_PATH" and/or "ROCM_HOME" is set in the environment, the
-    # clang frontend ignores its default heuristics and (depending on version)
-    # finds the wrong path to the device library. This is bad/annoying. But
-    # the PyTorch build shouldn't even need these to be set. Unfortunately, it
-    # has been hardcoded for a long time. So we use a clang env var to force
-    # a specific device lib path to workaround the hack to get pytorch to build.
-    # This may or may not only affect the Python wheels with their own quirks
-    # on directory layout.
-    # Obviously, this should be completely burned with fire once the root causes
-    # are eliminted.
-    hip_device_lib_path = get_rocm_path("root") / "lib" / "llvm" / "amdgcn" / "bitcode"
-    if not hip_device_lib_path.exists():
-        print(
-            "WARNING: Default location of device libs not found. Relying on "
-            "clang heuristics which are known to be buggy in this configuration"
-        )
-    else:
-        env["HIP_DEVICE_LIB_PATH"] = str(hip_device_lib_path)
+        # Build triton.
+        triton_requirement = None
+        if args.build_triton or (args.build_triton is None and triton_dir):
+            assert triton_dir, "Must specify --triton-dir if --build-triton"
+            triton_requirement = do_build_triton(args, triton_dir, dict(env))
+        else:
+            print("--- Not building triton (no --triton-dir)")
 
-    # OpenBLAS path setup
-    host_math_path = get_rocm_path("root") / "lib" / "host-math"
-    if not host_math_path.exists():
-        print(
-            "WARNING: Default location of host-math not found. "
-            "Will not build with OpenBLAS support."
-        )
-    else:
-        env["BLAS"] = "OpenBLAS"
-        env["OpenBLAS_HOME"] = str(host_math_path)
-        env["OpenBLAS_LIB_NAME"] = "rocm-openblas"
+        # Build pytorch.
+        if pytorch_dir:
+            do_build_pytorch(
+                args, pytorch_dir, dict(env), triton_requirement=triton_requirement
+            )
+        else:
+            print("--- Not building pytorch (no --pytorch-dir)")
 
-    # Build triton.
-    triton_requirement = None
-    if args.build_triton or (args.build_triton is None and triton_dir):
-        assert triton_dir, "Must specify --triton-dir if --build-triton"
-        triton_requirement = do_build_triton(args, triton_dir, dict(env))
-    else:
-        print("--- Not building triton (no --triton-dir)")
+        # Build pytorch audio.
+        if args.build_pytorch_audio or (
+            args.build_pytorch_audio is None and pytorch_audio_dir
+        ):
+            assert (
+                pytorch_audio_dir
+            ), "Must specify --pytorch-audio-dir if --build-pytorch-audio"
+            do_build_pytorch_audio(args, pytorch_audio_dir, dict(env))
+        else:
+            print("--- Not build pytorch-audio (no --pytorch-audio-dir)")
 
-    # Build pytorch.
-    if pytorch_dir:
-        do_build_pytorch(
-            args, pytorch_dir, dict(env), triton_requirement=triton_requirement
-        )
-    else:
-        print("--- Not building pytorch (no --pytorch-dir)")
+        # Build pytorch vision.
+        if args.build_pytorch_vision or (
+            args.build_pytorch_vision is None and pytorch_vision_dir
+        ):
+            assert (
+                pytorch_vision_dir
+            ), "Must specify --pytorch-vision-dir if --build-pytorch-vision"
+            do_build_pytorch_vision(args, pytorch_vision_dir, dict(env))
+        else:
+            print("--- Not build pytorch-vision (no --pytorch-vision-dir)")
 
-    # Build pytorch audio.
-    if args.build_pytorch_audio or (
-        args.build_pytorch_audio is None and pytorch_audio_dir
-    ):
-        assert (
-            pytorch_audio_dir
-        ), "Must specify --pytorch-audio-dir if --build-pytorch-audio"
-        do_build_pytorch_audio(args, pytorch_audio_dir, dict(env))
-    else:
-        print("--- Not build pytorch-audio (no --pytorch-audio-dir)")
+        # Build apex.
+        if args.build_apex or (args.build_apex is None and apex_dir):
+            assert apex_dir, "Must specify --apex-dir if --build-apex"
+            do_build_apex(args, apex_dir, dict(env))
+        else:
+            print("--- Not build apex (no --apex-dir)")
 
-    # Build pytorch vision.
-    if args.build_pytorch_vision or (
-        args.build_pytorch_vision is None and pytorch_vision_dir
-    ):
-        assert (
-            pytorch_vision_dir
-        ), "Must specify --pytorch-vision-dir if --build-pytorch-vision"
-        do_build_pytorch_vision(args, pytorch_vision_dir, dict(env))
-    else:
-        print("--- Not build pytorch-vision (no --pytorch-vision-dir)")
+        print("--- Builds all completed")
 
-    # Build apex.
-    if args.build_apex or (args.build_apex is None and apex_dir):
-        assert apex_dir, "Must specify --apex-dir if --build-apex"
-        do_build_apex(args, apex_dir, dict(env))
-    else:
-        print("--- Not build apex (no --apex-dir)")
+        if args.use_ccache:
+            ccache_stats_output = capture(
+                ["ccache", "--show-stats"], cwd=tempfile.gettempdir()
+            )
+            print(f"ccache --show-stats output:\n{ccache_stats_output}")
 
-    print("--- Builds all completed")
+        if args.use_sccache:
+            sccache_stats_output = capture(
+                [str(sccache_path), "--show-stats"], cwd=tempfile.gettempdir()
+            )
+            print(f"sccache --show-stats output:\n{sccache_stats_output}")
 
-    if args.use_ccache:
-        ccache_stats_output = capture(
-            ["ccache", "--show-stats"], cwd=tempfile.gettempdir()
-        )
-        print(f"ccache --show-stats output:\n{ccache_stats_output}")
+    finally:
+        # Always restore original compilers, even on build failure
+        if sccache_setup_attempted:
+            print("Restoring original ROCm compilers...")
+            from setup_sccache_rocm import restore_rocm_compilers
+
+            restore_rocm_compilers(rocm_dir)
 
 
 def do_build_triton(
@@ -1027,10 +1094,16 @@ def main(argv: list[str]):
         required=True,
         help="Directory to copy built wheels to",
     )
-    build_p.add_argument(
+    cache_group = build_p.add_mutually_exclusive_group()
+    cache_group.add_argument(
         "--use-ccache",
-        action=argparse.BooleanOptionalAction,
-        help="Use ccache as the compiler launcher",
+        action="store_true",
+        help="Use ccache as the compiler launcher (for host code only)",
+    )
+    cache_group.add_argument(
+        "--use-sccache",
+        action="store_true",
+        help="Use sccache with ROCm compiler wrapping (comprehensive caching for HIP code)",
     )
     build_p.add_argument(
         "--pytorch-dir",
