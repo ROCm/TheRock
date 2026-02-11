@@ -68,10 +68,15 @@ def git_head(dirpath: Path, *, label: str) -> GitSourceInfo:
 
 
 def normalize_release_track(pytorch_git_ref: str) -> str:
-    if pytorch_git_ref == "nightly":
-        return "nightly"
-    if pytorch_git_ref.startswith("release/"):
-        return pytorch_git_ref.replace("/", "-", 1)
+    """
+    Normalize a git ref for safe use in filenames.
+
+    Examples:
+      nightly                -> nightly
+      release/2.7            -> release-2.7
+      users/john/experiment -> users-john-experiment
+      tags/v2.7.1            -> tags-v2.7.1
+    """
     return pytorch_git_ref.replace("/", "-")
 
 
