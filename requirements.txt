@@ -5,7 +5,9 @@ pre-commit>=4.3.0
 python-magic>=0.4.27; platform_system != "Windows"
 PyYAML==6.0.2
 pyzstd>=0.16.0
-setuptools>=80.9.0
+# `pkg_resources` has been removed from Setuptools in version 82.0.0
+# but it still a dependency in some environments (issue#3311)
+setuptools>=80.9.0,<82.0.0
 tomli==2.2.1; python_version <= '3.10'
 pytest-cmake==0.13.0
 mako>=1.1.3

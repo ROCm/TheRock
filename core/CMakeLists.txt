@@ -113,6 +113,14 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
     )
   endif()
 
+  # Conditional rocm-kpack support for kpack split artifacts
+  set(_hip_clr_kpack_runtime_deps)
+  set(_hip_clr_kpack_cmake_args)
+  if(THEROCK_KPACK_SPLIT_ARTIFACTS)
+    list(APPEND _hip_clr_kpack_runtime_deps rocm-kpack)
+    list(APPEND _hip_clr_kpack_cmake_args "-DROCM_KPACK_ENABLED=ON")
+  endif()
+
   therock_cmake_subproject_declare(hip-clr
     USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/clr"
@@ -130,6 +138,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       # and can use local machine tools.
       "-DHIPCC_BIN_DIR="
       ${HIP_CLR_CMAKE_ARGS}
+      ${_hip_clr_kpack_cmake_args}
     BUILD_DEPS
       rocm-cmake
       therock-simde
@@ -139,6 +148,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       hipcc     # For hipconfig
       rocm-core
       ${HIP_CLR_RUNTIME_DEPS}
+      ${_hip_clr_kpack_runtime_deps}
     INTERFACE_LINK_DIRS
       "lib"
     INTERFACE_INSTALL_RPATH_DIRS

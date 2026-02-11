@@ -1,16 +1,20 @@
-"""Writes torch_version, torchaudio_version, torchvision_version, triton_version, and apex_version to GITHUB_OUTPUT.
+#!/usr/bin/env python
+"""Writes jaxlib_version, jax_plugin_version, jax_pjrt_version, and jax_version to GITHUB_OUTPUT.
 
-Fails if any wheels that were expected for the platform were not set.
+Fails if any expected JAX wheels are not found.
 
-Currently,
-* Windows expects torch, torchaudio, and torchvision
-* Linux expects torch, torchaudio, torchvision, triton, and apex
+Expected wheels:
+* jaxlib
+* jax_rocm7_plugin
+* jax_rocm7_pjrt
+
+The jax_version output is the base version (without the +rocm suffix),
+suitable for installing the `jax` package from PyPI.
 """
 
 import argparse
-import os
 import glob
-import platform
+import os
 from github_actions_utils import *
 
 
@@ -19,12 +23,12 @@ def _log(*args, **kwargs):
     sys.stdout.flush()
 
 
-def parse_version_from_wheel(wheel_path: Path) -> str:
+def parse_version_from_wheel(wheel_path: str) -> str:
     return wheel_path.split("-")[1]
 
 
 def get_wheel_version(package_dist_dir: Path, wheel_name: str) -> str | None:
-    _log(f"Looking for '{wheel_name} in '{package_dist_dir}'")
+    _log(f"Looking for '{wheel_name}' in '{package_dist_dir}'")
     wheel_glob_pattern = f"{wheel_name}-*.whl"
     wheel_paths = glob.glob(wheel_glob_pattern, root_dir=package_dist_dir)
 
@@ -44,8 +48,8 @@ def get_wheel_version(package_dist_dir: Path, wheel_name: str) -> str | None:
     return wheel_version
 
 
-def get_all_wheel_versions(
-    package_dist_dir: Path, os: str = platform.system()
+def get_all_jax_wheel_versions(
+    package_dist_dir: Path,
 ) -> Mapping[str, str | Path]:
     _log(f"Looking for wheels in '{package_dist_dir}'")
     all_files = list(package_dist_dir.glob("*"))
@@ -55,48 +59,35 @@ def get_all_wheel_versions(
 
     _log("")
     all_versions = {}
-    torch_version = get_wheel_version(package_dist_dir, "torch")
-    torchaudio_version = get_wheel_version(package_dist_dir, "torchaudio")
-    torchvision_version = get_wheel_version(package_dist_dir, "torchvision")
-    triton_version = get_wheel_version(package_dist_dir, "triton")
-    apex_version = get_wheel_version(package_dist_dir, "apex")
+    jaxlib_version = get_wheel_version(package_dist_dir, "jaxlib")
+    jax_plugin_version = get_wheel_version(package_dist_dir, "jax_rocm7_plugin")
+    jax_pjrt_version = get_wheel_version(package_dist_dir, "jax_rocm7_pjrt")
     _log("")
 
-    if torch_version:
-        all_versions = all_versions | {"torch_version": torch_version}
+    if jaxlib_version:
+        all_versions = all_versions | {"jaxlib_version": jaxlib_version}
     else:
-        raise FileNotFoundError("Did not find torch wheel")
+        raise FileNotFoundError("Did not find jaxlib wheel")
 
-    if torchaudio_version:
-        all_versions = all_versions | {"torchaudio_version": torchaudio_version}
+    if jax_plugin_version:
+        all_versions = all_versions | {"jax_plugin_version": jax_plugin_version}
     else:
-        raise FileNotFoundError("Did not find torchaudio wheel")
+        raise FileNotFoundError("Did not find jax_rocm7_plugin wheel")
 
-    if torchvision_version:
-        all_versions = all_versions | {"torchvision_version": torchvision_version}
+    if jax_pjrt_version:
+        all_versions = all_versions | {"jax_pjrt_version": jax_pjrt_version}
     else:
-        raise FileNotFoundError("Did not find torchvision wheel")
+        raise FileNotFoundError("Did not find jax_rocm7_pjrt wheel")
 
-    if triton_version:
-        all_versions = all_versions | {"triton_version": triton_version}
-    elif os.lower() == "windows":
-        _log("Did not find triton (that's okay, is not currently built on Windows)")
-    else:
-        raise FileNotFoundError("Did not find triton wheel")
-
-    if apex_version:
-        all_versions = all_versions | {"apex_version": apex_version}
-    elif os.lower() == "windows":
-        _log("Did not find apex (that's okay, is not currently built on Windows)")
-    else:
-        raise FileNotFoundError("Did not find apex wheel")
+    # Base JAX version (without +rocm suffix) for installing jax from PyPI.
+    all_versions = all_versions | {"jax_version": jaxlib_version.split("+")[0]}
 
     return all_versions
 
 
 def main(argv: list[str]):
     env_dist_dir = os.getenv("PACKAGE_DIST_DIR")
-    p = argparse.ArgumentParser(prog="write_torch_versions.py")
+    p = argparse.ArgumentParser(prog="write_jax_versions.py")
     p.add_argument(
         "--dist-dir",
         type=Path,
@@ -115,7 +106,7 @@ def main(argv: list[str]):
 
     if not args.dist_dir.exists():
         raise FileNotFoundError(f"Dist dir '{args.dist_dir}' does not exist")
-    all_versions = get_all_wheel_versions(args.dist_dir)
+    all_versions = get_all_jax_wheel_versions(args.dist_dir)
     _log("")
     gha_set_output(all_versions)
 
