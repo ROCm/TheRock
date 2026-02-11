@@ -15,6 +15,7 @@ from dataclasses import dataclass
 import json
 import os
 from pathlib import Path
+import shlex
 import subprocess
 import sys
 
@@ -30,21 +31,18 @@ class GitSourceInfo:
         return {"commit": self.commit, "repo": self.repo}
 
 
-def capture(cmd: list[str], *, cwd: Path) -> str:
-    """Run a command and return stdout, failing fast on errors."""
-    try:
-        return subprocess.check_output(
-            cmd,
+def capture(args: list[str | Path], cwd: Path) -> str:
+    args = [str(arg) for arg in args]
+    print(f"++ Exec [{cwd}]$ {shlex.join(args)}")
+    return (
+        subprocess.check_output(
+            args,
             cwd=str(cwd),
-            stderr=subprocess.STDOUT,
-            text=True,
-        ).strip()
-    except subprocess.CalledProcessError as e:
-        output = (e.output or "").strip()
-        raise RuntimeError(
-            f"Command failed ({e.returncode}): {' '.join(cmd)}\n"
-            + (f"Output:\n{output}" if output else "")
-        ) from e
+            stdin=subprocess.DEVNULL,
+        )
+        .decode()
+        .strip()
+    )
 
 
 def git_head(dirpath: Path, *, label: str) -> GitSourceInfo:

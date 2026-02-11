@@ -83,7 +83,6 @@ class GeneratePyTorchSourcesManifestTest(unittest.TestCase):
 
         return _side_effect
 
-
     def test_normalize_release_track(self) -> None:
         self.assertEqual(m.normalize_release_track("nightly"), "nightly")
         self.assertEqual(m.normalize_release_track("release/2.7"), "release-2.7")
