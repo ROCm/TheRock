@@ -366,6 +366,14 @@ type = "target-neutral"
 artifact_deps = []
 feature_group = "HOST_MATH"  # Controlled by THEROCK_ENABLE_HOST_MATH (OFF by default)
 
+[artifacts.host-aocl-blas]
+artifact_group = "third-party-libs"
+type = "target-neutral"
+artifact_deps = []
+feature_group = "HOST_MATH"  # Controlled by THEROCK_ENABLE_HOST_MATH (OFF by default)
+disable_platforms = ["windows"]  # AOCL requires different toolchain on Windows
+# AOCL-BLAS provides BLIS/BLAS/CBLAS functions for CPU reference BLAS in testing
+
 [artifacts.host-suite-sparse]
 artifact_group = "third-party-libs"
 type = "target-neutral"
@@ -479,7 +487,7 @@ feature_group = "CORE"  # Part of core, enabled by default
 [artifacts.blas]
 artifact_group = "math-libs"
 type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip", "host-blas", "host-suite-sparse", "rocprofiler-sdk"]
+artifact_deps = ["core-runtime", "core-hip", "host-blas", "host-aocl-blas", "host-suite-sparse", "rocprofiler-sdk"]
 split_databases = ["rocblas", "hipblaslt"]
 
 [artifacts.fft]
