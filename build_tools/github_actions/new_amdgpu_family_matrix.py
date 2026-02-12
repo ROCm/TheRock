@@ -52,52 +52,9 @@ Generic targets of a family are "all", "dcgpu", "dgpu", ...
 Cmake targets are defined in: cmake/therock_amdgpu_targets.cmake
 """
 
-# blueprint = {
-# "linux": {
-#                 "build": {
-#                   "expect_failure": False,
-#                   "build_variants": ["release"],
-#                 },
-#                 "test": {
-#                     "run_tests": False,
-#                     "runs_on": {
-#                         "test": "",
-#                         "test-multi-gpu": "",
-#                         "benchmark": "",
-#                     },
-#                     "sanity_check_only_for_family": False,
-#                     "expect_pytorch_failure": False,
-#                 },
-#                 "release": {
-#                     "push_on_success": False,
-#                     "bypass_tests_for_releases": False,
-#                 }
-#             },
-#             "windows": {
-#                 "build": {
-#                     "expect_failure": False,
-#                     "build_variants": ["release"],
-#                 },
-#                 "test": {
-#                     "run_tests": False,
-#                     "runs_on": {
-#                         "test": "",
-#                         "test-multi-gpu": "",
-#                         "benchmark": "",
-#                     },
-#                     "sanity_check_only_for_family": False,
-#                     "expect_pytorch_failure": False,
-#                 },
-#                 "release": {
-#                     "push_on_success": False,
-#                     "bypass_tests_for_releases": False
-#                 }
-#             },
-# }
-
-#######
+##########################################################################################
 # NOTE: when doing changes here, also check that they are done in amdgpu_family_matrix.py
-#######
+##########################################################################################
 
 amdgpu_family_predefined_groups = {
     # The 'presubmit' matrix runs on 'pull_request' triggers (on all PRs).
@@ -208,7 +165,10 @@ amdgpu_family_info_matrix_all = {
                     },
                     "sanity_check_only_for_family": True,
                 },
-                "release": {"push_on_success": True, "bypass_tests_for_releases": True},
+                "release": {
+                    "push_on_success": True,
+                    "bypass_tests_for_releases": True,
+                },
             },
         }
     },
@@ -405,7 +365,10 @@ amdgpu_family_info_matrix_all = {
                         "test": "windows-gfx120X-gpu-rocm",
                     },
                 },
-                "release": {"push_on_success": True, "bypass_tests_for_releases": True},
+                "release": {
+                    "push_on_success": True,
+                    "bypass_tests_for_releases": True,
+                },
             },
         }
     },
@@ -449,7 +412,6 @@ amdgpu_family_info_matrix_all = {
         "dgpu": {
             "linux": {
                 "build": {
-                    "expect_failure": True,
                     "build_variants": ["release"],
                 },
                 "test": {
@@ -471,8 +433,6 @@ amdgpu_family_info_matrix_all = {
                 "test": {
                     "run_tests": False,
                     "runs_on": {},
-                    # TODO(#1925): Enable arch for aotriton to enable PyTorch build
-                    "expect_pytorch_failure": True,
                 },
                 "release": {
                     "push_on_success": False,
