@@ -119,10 +119,13 @@ jobs:
           (
             while true; do
               echo "--- $(date) ---"
+              echo "Memory check"
               free -h
+              echo "Thread check"
               top -b -n1 | head -20
-              df -h /
-              sleep 15
+              echo "Disk space check"
+              df -h
+              sleep 10
             done
           ) &
           
