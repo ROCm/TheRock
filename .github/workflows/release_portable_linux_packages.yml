@@ -231,8 +231,11 @@ jobs:
         env:
           amdgpu_families: ${{ matrix.target_bundle.amdgpu_family }}
           BUILD_DIR: ${{ env.OUTPUT_DIR }}/build
+          package_version: ${{ needs.setup_metadata.outputs.version }}
+          extra_cmake_options: ''
+          cmake_preset: ''
         run: |
-          python3 build_tools/github_actions/build_configure.py
+          python3 ./build_tools/github_actions/build_configure.py
 
       - name: Build Projects
         run: |
