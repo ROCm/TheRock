@@ -101,7 +101,7 @@ jobs:
       fail-fast: false
       matrix:
         python_version: ["3.12"]
-        jax_ref: ["rocm-jaxlib-v0.8.0-fixdevtar"]
+        jax_ref: ["rocm-jaxlib-v0.8.2-tarfix"]
 
     uses: ./.github/workflows/build_linux_jax_wheels.yml
     with:
