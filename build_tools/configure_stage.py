@@ -119,9 +119,9 @@ def _get_windows_platform_cmake_args() -> List[str]:
     vctools_dir = vctools_dir.replace("\\", "/").rstrip("/")
     args.extend(
         [
-            f"-DCMAKE_C_COMPILER={vctools_dir}/bin/Hostx64/x64/cl.exe",
-            f"-DCMAKE_CXX_COMPILER={vctools_dir}/bin/Hostx64/x64/cl.exe",
-            f"-DCMAKE_LINKER={vctools_dir}/bin/Hostx64/x64/link.exe",
+            f'"-DCMAKE_C_COMPILER={vctools_dir}/bin/Hostx64/x64/cl.exe"',
+            f'"-DCMAKE_CXX_COMPILER={vctools_dir}/bin/Hostx64/x64/cl.exe"',
+            f'"-DCMAKE_LINKER={vctools_dir}/bin/Hostx64/x64/link.exe"',
         ]
     )
 
