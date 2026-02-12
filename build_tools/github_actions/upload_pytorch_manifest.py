@@ -131,9 +131,6 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 def main(argv: list[str]) -> None:
     args = parse_args(argv)
 
-    if PLATFORM not in {"linux", "windows"}:
-        raise RuntimeError(f"Unsupported platform: {PLATFORM}")
-
     py = normalize_python_version_for_filename(args.python_version)
     track = sanitize_ref_for_filename(args.pytorch_git_ref)
 
