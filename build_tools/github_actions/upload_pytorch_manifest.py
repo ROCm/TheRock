@@ -4,10 +4,6 @@ Upload the generated PyTorch manifest JSON to S3.
 
 Upload layout:
   s3://{bucket}/{external_repo}{run_id}-{platform}/manifests/{amdgpu_family}/{manifest_name}
-
-Bucket selection:
-  By default, uses retrieve_bucket_info() to choose a bucket based on workflow context.
-  Use --bucket to override.
 """
 
 import argparse
@@ -18,9 +14,9 @@ import shlex
 import subprocess
 import sys
 
-# Match other build_tools/github_actions scripts: make github_actions_utils importable.
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from github_actions.github_actions_utils import retrieve_bucket_info  # noqa: E402
+from github_actions.github_actions_utils import retrieve_bucket_info
 
 
 PLATFORM = platform.system().lower()
@@ -90,7 +86,9 @@ def build_upload_path_for_workflow_run(
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Upload a PyTorch manifest JSON to S3.")
+    parser = argparse.ArgumentParser(
+        description="Upload a PyTorch manifest JSON to S3."
+    )
     parser.add_argument(
         "--dist-dir",
         type=Path,
