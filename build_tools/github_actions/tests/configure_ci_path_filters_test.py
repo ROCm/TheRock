@@ -20,12 +20,7 @@ class ConfigureCIPathFiltersTest(unittest.TestCase):
         run_ci = is_ci_run_required(paths)
         self.assertFalse(run_ci)
 
-    def test_dont_run_ci_if_only_external_builds_edited(self):
-        paths = ["external-builds/pytorch/CMakeLists.txt"]
-        run_ci = is_ci_run_required(paths)
-        self.assertFalse(run_ci)
-
-    def test_dont_run_ci_if_only_external_builds_edited(self):
+    def test_dont_run_ci_if_only_experimental_files_edited(self):
         paths = ["experimental/file.h"]
         run_ci = is_ci_run_required(paths)
         self.assertFalse(run_ci)

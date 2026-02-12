@@ -164,3 +164,6 @@ jobs:
       package_find_links_url: ${{ needs.build_windows_python_packages.outputs.package_find_links_url }}
       python_version: "3.12"
       rocm_version: ${{ inputs.rocm_package_version }}
+
+  # TODO(#3291): Add build_windows_pytorch_wheels_ci
+  # TODO(#3291): Add test_pytorch_wheels job

@@ -1,0 +1,126 @@
+#!/usr/bin/env bash
+
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# ROCgdb wrapper script
+#
+# This script selects and launches an appropriate ROCgdb executable based on
+# the active Python version. It tries the Python-matching rocgdb binary first,
+# falls back to other Python-enabled binaries, and finally to the Python-less
+# version. It also configures TERMINFO for ncurses TUI mode.
+#
+# Debugging output can be enabled by setting ROCGDB_WRAPPER_DEBUG=1. The wrapper
+# will run through the logic but not actually execute rocgdb, like a dry run.
+#
+# This mode is for debugging purposes only. The launcher outputs its searching
+# logic so it is clear what particular rocgdb executable is being picked and
+# why.
+
+# Handle debugging output. Always disabled unless ROCGDB_WRAPPER_DEBUG is set to 1.
+: "${ROCGDB_WRAPPER_DEBUG:=0}"
+
+# Prints debug messages if ROCGDB_WRAPPER_DEBUG is 1.
+#
+log_message() {
+    if [ "${ROCGDB_WRAPPER_DEBUG}" == "1" ]; then
+        if [ "x$1" == "x" ]; then
+            echo ""
+        else
+            echo "[DEBUG] -> $1" >&2
+        fi
+    fi
+}
+
+# Determines whether the given executable exists and can run with
+# the `--version` option without errors.
+#
+# Arguments:
+#   $1 - Path or name of the rocgdb executable to test.
+#
+# Returns:
+#   0 - Executable exists and responds successfully to `--version`.
+#   1 - Executable not found, not executable, or fails the `--version` check.
+#
+validate_executable() {
+    local executable="$1"
+    log_message ""
+    log_message "Validating $executable"
+    if ! command -v "$executable" >/dev/null 2>&1; then
+        log_message "Executable $executable not found."
+        return 1
+    fi
+    if "$executable" --version >/dev/null 2>&1; then
+        log_message "Running $executable --version works."
+        return 0
+    else
+        log_message "Running $executable --version does not work."
+        return 1
+    fi
+}
+
+# Find the active python version
+python_version=$(python3 --version 2>&1 | sed -n 's/^Python \([0-9]\+\.[0-9]\+\).*$/\1/p' )
+log_message "Python version found: ${python_version}"
+
+# Find the BIN directory where rocgdb executables live.
+GDB_BIN_DIR="$(dirname "$(realpath -e "${BASH_SOURCE[0]}")")"
+log_message "GDB_BIN_DIR set to ${GDB_BIN_DIR}"
+
+# Set the ncurses TERMINFO lookup directory if it isn't set already.
+# This is used to locate our own terminfo database in a relative path, since
+# ncurses doesn't support relative path lookups as a configure option.
+#
+# ROCgdb TUI mode requires this information.
+log_message "Checking if TERMINFO is defined."
+if [ -z "$TERMINFO" ]; then
+    export TERMINFO="$GDB_BIN_DIR/../lib/rocm_sysdeps/share/terminfo"
+    log_message "TERMINFO not defined. Setting it to ${TERMINFO}"
+fi
+
+# Create a rocgdb command with the active python version.
+gdb_executable="$GDB_BIN_DIR/rocgdb-py$python_version"
+log_message ""
+log_message "rocgdb command for active python version: ${gdb_executable}"
+
+# Validate that our rocgdb executable for the active python version works.
+if validate_executable $gdb_executable; then
+    log_message "Executing: $gdb_executable $@"
+    if [ "${ROCGDB_WRAPPER_DEBUG}" == "0" ]; then
+        exec "$gdb_executable" "$@"
+    fi
+fi
+
+# The active python version rocgdb did not work. Look for alternatives by
+# checking all the other rocgdb executables except rocgdb-pynone.
+while read -r gdb_executable
+do
+    if validate_executable "$gdb_executable"; then
+        log_message "Executing: $gdb_executable $@"
+        if [ "${ROCGDB_WRAPPER_DEBUG}" == "0" ]; then
+            exec "$gdb_executable" "$@"
+        fi
+    fi
+done < <(find "$GDB_BIN_DIR" -name "rocgdb-py*" ! -name "rocgdb-pynone" | sort -r)
+
+# None of the python-enabled rocgdb executables worked. As a fallback run the
+# pythonless version of rocgdb.
+
+log_message ""
+log_message "No working python-enabled rocgdb executables found."
+log_message "Attempting to execute rocgdb without python support."
+
+gdb_executable="$GDB_BIN_DIR/rocgdb-pynone"
+if validate_executable "$gdb_executable"; then
+    log_message "Executing: $gdb_executable $@"
+    if [ "${ROCGDB_WRAPPER_DEBUG}" == "0" ]; then
+        exec "$gdb_executable" "$@"
+    fi
+fi
+
+log_message "None of the rocgdb executables worked."
+
+if [ "${ROCGDB_WRAPPER_DEBUG}" == "0" ]; then
+  echo "Could not find any working rocgdb executables."
+  echo "Please check your installation and system for missing files and required dependencies."
+fi
