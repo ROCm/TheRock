@@ -103,6 +103,9 @@ def _get_windows_platform_cmake_args() -> List[str]:
 
     # Set MSVC explicitly. Sometimes gcc or clang can get on the PATH
     # and CMake picks the wrong compiler.
+    # TODO(scotttodd): see if the 'windows-*' CMake presets are sufficient or
+    #   if this is still actually  load bearing. (Multi-arch pipelines have
+    #   `build_variant_cmake_preset` but don't use them)
     vctools_dir = os.environ.get("VCToolsInstallDir")
     if not vctools_dir:
         raise RuntimeError(
