@@ -21,3 +21,34 @@ cmake -GNinja -B build -DTHEROCK_AMDGPU_FAMILIES=gfx1100 -DTHEROCK_ENABLE_ALL=OF
 cd build
 ninja
 ```
+
+Easily Reproducing CI Failures
+------------------------------
+
+To debug a CI failure, the quick and dirty way is to switch your
+`llvm-project` checkout in the `compiler/amd-llvm` directory to your
+PR's branch.  Then, follow the instructions above, making sure to set
+`-DTHEROCK_AMDGPU_FAMILIES` to the same GPU family as the family that
+failed in the CI.  Check the logs for the CI for the failing command
+since it will have the correct GPU family.  It should not be necessary
+to use a Docker instance, but you can get the Docker from the CI logs
+if you want it.  The line you need looks like this:
+
+```
+2026-02-07T20:07:46.1202126Z ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:6e8242d347af7e0c43c82d5031a3ac67b669f24898ea8dc2f1d5b7e4798b66bd: Pulling from rocm/therock_build_manylinux_x86_64``
+```
+
+Reproducing CI Failures the Hard Way
+------------------------------------
+
+One thing to watch out for, which may or may not cause a problem, is
+that the CI does autopatch `llvm-project` by putting a few commits on
+top of your PR's branch.  To handle this, run the command:
+```
+git update-index --cacheinfo 160000,$PR_SHA,compiler/amd-llvm
+```
+
+Replacing $PR_SHA with your PR's SHA.  Then, re-run:
+```
+python ./build_tools/fetch_sources.py
+```
