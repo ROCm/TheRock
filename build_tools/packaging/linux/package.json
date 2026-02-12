@@ -1911,6 +1911,159 @@
     "Homepage": "https://github.com/ROCm/rocm-libraries",
     "Metapackage": "True",
     "Gfxarch": "True"
+  },
+  {
+    "Package": "amdrocm-sysdeps-amd-mesa",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-sysdeps"
+    ],
+    "RPMRequires": [
+      "amdrocm-sysdeps"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "ROCm amd mesa system dependencies ",
+    "Description_Long": "ROCm amd mesa system dependencies ",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/mesa-fork/tree/amd-decode-only",
+    "Artifactory": [
+      {
+        "Artifact": "sysdeps-amd-mesa",
+        "Artifact_Subdir": [
+          {
+            "Name": "sysdeps-amd-mesa",
+            "Components": [
+              "lib",
+              "dev"
+            ]
+          }
+        ]
+      }
+    ],
+
+    "Gfxarch": "False",
+    "Disable_DWZ": "True",
+    "Disable_DEB_STRIP": "True"
+  },
+  {
+    "Package": "amdrocm-rocdecode",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-runtime",
+      "amdrocm-base",
+      "amdrocm-sysdeps-amd-mesa"
+    ],
+    "RPMRequires": [
+      "amdrocm-runtime",
+      "amdrocm-base",
+      "amdrocm-sysdeps-amd-mesa"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "ROCm media - rocdecode ",
+    "Description_Long": "ROCm media - rocdecode ",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocdecode",
+    "Artifactory": [
+      {
+        "Artifact": "rocdecode",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocdecode",
+            "Components": [
+              "lib",
+              "dev",
+              "test"
+            ]
+          }
+        ]
+      }
+    ],
+
+    "Gfxarch": "False",
+    "Disable_DWZ": "True",
+    "Disable_DEB_STRIP": "True"
+  },
+  {
+    "Package": "amdrocm-rocjpeg",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-runtime",
+      "amdrocm-base",
+      "amdrocm-sysdeps-amd-mesa"
+    ],
+    "RPMRequires": [
+      "amdrocm-runtime",
+      "amdrocm-base",
+      "amdrocm-sysdeps-amd-mesa"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "ROCm media - rocjpeg ",
+    "Description_Long": "ROCm media - rocjpeg ",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocjpeg",
+    "Artifactory": [
+      {
+        "Artifact": "rocjpeg",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocjpeg",
+            "Components": [
+              "lib",
+              "dev",
+              "test"
+            ]
+          }
+        ]
+      }
+    ],
+
+    "Gfxarch": "False",
+    "Disable_DWZ": "True",
+    "Disable_DEB_STRIP": "True"
+  },
+  {
+    "Package": "amdrocm-media",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-rocdecode",
+      "amdrocm-rocjpeg"
+    ],
+    "RPMRequires": [
+      "amdrocm-rocdecode",
+      "amdrocm-rocjpeg"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "AMD ROCm Media Libraries",
+    "Description_Long": "ROCm Media",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "media-libs",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocDecode",
+    "Metapackage": "True",
+    "Gfxarch": "False",
+    "DisablePackaging": "True"
   }
 
 ]

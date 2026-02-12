@@ -1,0 +1,105 @@
+import logging
+import os
+import shlex
+import subprocess
+from pathlib import Path
+import sys
+import platform
+
+logging.basicConfig(level=logging.INFO)
+THEROCK_BIN_DIR_STR = os.getenv("THEROCK_BIN_DIR")
+if THEROCK_BIN_DIR_STR is None:
+    logging.info(
+        "++ Error: env(THEROCK_BIN_DIR) is not set. Please set it before executing tests."
+    )
+    sys.exit(1)
+THEROCK_BIN_DIR = Path(THEROCK_BIN_DIR_STR)
+SCRIPT_DIR = Path(__file__).resolve().parent
+THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
+THEROCK_TEST_DIR = Path(THEROCK_DIR) / "build"
+
+ROCDECODE_TEST_PATH = str(
+    Path(THEROCK_BIN_DIR).resolve().parent / "share" / "rocdecode" / "test"
+)
+if not os.path.isdir(ROCDECODE_TEST_PATH):
+    logging.info(f"++ Error: rocdecode tests not found in {ROCDECODE_TEST_PATH}")
+    sys.exit(1)
+else:
+    logging.info(f"++ INFO: rocdecode tests found in {ROCDECODE_TEST_PATH}")
+env = os.environ.copy()
+
+
+# set env variables required for tests
+def setup_env(env):
+    ROCM_PATH = Path(THEROCK_BIN_DIR).resolve().parent
+    env["ROCM_PATH"] = str(ROCM_PATH)
+    logging.info(f"++ rocdecode setting ROCM_PATH={ROCM_PATH}")
+    if platform.system() == "Linux":
+        HIP_LIB_PATH = Path(THEROCK_BIN_DIR).resolve().parent / "lib"
+        logging.info(f"++ rocdecode setting LD_LIBRARY_PATH={HIP_LIB_PATH}")
+        if "LD_LIBRARY_PATH" in env:
+            env["LD_LIBRARY_PATH"] = f"{HIP_LIB_PATH}:{env['LD_LIBRARY_PATH']}"
+        else:
+            env["LD_LIBRARY_PATH"] = str(HIP_LIB_PATH)
+    else:
+        logging.info(f"++ rocdecode tests only supported on Linux")
+        exit()
+
+
+def execute_tests(env):
+    ROCDECODE_TEST_DIR = Path(THEROCK_TEST_DIR) / "rocdecode-test"
+    ROCM_LIB_PATH = Path(THEROCK_BIN_DIR).resolve().parent / "lib"
+    ROCDECODE_LIB = ROCM_LIB_PATH / "librocdecode.so"
+    ROCM_SYSDEPS_PATH = ROCM_LIB_PATH / "rocm_sysdeps" / "lib"
+    RADEON_SI_LIB = ROCM_SYSDEPS_PATH / "radeonsi_drv_video.so"
+
+    cmd = [
+        "mkdir",
+        "-p",
+        "rocdecode-test",
+    ]
+    logging.info(f"++ Exec [{THEROCK_TEST_DIR}]$ {shlex.join(cmd)}")
+    subprocess.run(cmd, cwd=THEROCK_TEST_DIR, check=True, env=env)
+
+    cmd = [
+        "ldd",
+        str(ROCDECODE_LIB),
+    ]
+    logging.info(f"++ Exec [{ROCDECODE_TEST_DIR}]$ {shlex.join(cmd)}")
+    subprocess.run(cmd, cwd=ROCDECODE_TEST_DIR, check=True, env=env)
+
+    cmd = [
+        "ldd",
+        str(RADEON_SI_LIB),
+    ]
+    logging.info(f"++ Exec [{ROCDECODE_TEST_DIR}]$ {shlex.join(cmd)}")
+    subprocess.run(cmd, cwd=ROCDECODE_TEST_DIR, check=True, env=env)
+
+    cmd = [
+        "ls",
+        "-xl",
+        str(ROCM_SYSDEPS_PATH),
+    ]
+    logging.info(f"++ Exec [{ROCDECODE_TEST_DIR}]$ {shlex.join(cmd)}")
+    subprocess.run(cmd, cwd=ROCDECODE_TEST_DIR, check=True, env=env)
+
+    cmd = [
+        "cmake",
+        "-GNinja",
+        ROCDECODE_TEST_PATH,
+    ]
+    logging.info(f"++ Exec [{ROCDECODE_TEST_DIR}]$ {shlex.join(cmd)}")
+    subprocess.run(cmd, cwd=ROCDECODE_TEST_DIR, check=True, env=env)
+
+    cmd = [
+        "ctest",
+        "-VV",
+        "--output-on-failure",
+    ]
+    logging.info(f"++ Exec [{ROCDECODE_TEST_DIR}]$ {shlex.join(cmd)}")
+    subprocess.run(cmd, cwd=ROCDECODE_TEST_DIR, check=True, env=env)
+
+
+if __name__ == "__main__":
+    setup_env(env)
+    execute_tests(env)

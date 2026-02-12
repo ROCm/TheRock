@@ -124,6 +124,8 @@ def build_configure(manylinux=False):
         )
         cmd.append(f"-DTHEROCK_DIST_PYTHON_EXECUTABLES={python_executables}")
         cmd.append("-DTHEROCK_ENABLE_SYSDEPS_AMD_MESA=ON")
+        cmd.append("-DTHEROCK_ENABLE_ROCDECODE=ON")
+        cmd.append("-DTHEROCK_ENABLE_ROCJPEG=ON")
 
         # Python executables with shared libpython support. This is needed for
         # ROCgdb.

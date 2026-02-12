@@ -74,6 +74,14 @@ def run(args: argparse.Namespace):
         tarball_compression=args.devel_tarball_compression,
     )
 
+    # populate the media package
+    media = PopulatedDistPackage(params, logical_name="media")
+    media.populate_runtime_files(
+        params.filter_artifacts(
+            filter=functools.partial(media_artifact_filter),
+        )
+    )
+
     if args.build_packages:
         build_packages(args.dest_dir, wheel_compression=args.wheel_compression)
 
@@ -125,6 +133,15 @@ def libraries_artifact_filter(target_family: str, an: ArtifactName) -> bool:
         and an.target_family == target_family
     )
     return libraries
+
+
+def media_artifact_filter(an: ArtifactName) -> bool:
+    media = an.name in [
+        "rocdecode",
+        "rocjpeg",
+        "sysdeps-amd-mesa",
+    ]
+    return media
 
 
 def main(argv: list[str]):

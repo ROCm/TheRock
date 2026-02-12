@@ -301,6 +301,24 @@ test_matrix = {
         "platform": ["linux"],
         "total_shards": 1,
     },
+    # rocdecode
+    "rocdecode": {
+        "job_name": "rocdecode",
+        "fetch_artifact_args": "--rocdecode",
+        "timeout_minutes": 10,
+        "test_script": f"python {_get_script_path('test_rocdecode.py')}",
+        "platform": ["linux"],
+        "total_shards": 1,
+    },
+    # rocjpeg
+    "rocjpeg": {
+        "job_name": "rocjpeg",
+        "fetch_artifact_args": "--rocjpeg",
+        "timeout_minutes": 10,
+        "test_script": f"python {_get_script_path('test_rocjpeg.py')}",
+        "platform": ["linux"],
+        "total_shards": 1,
+    },
     # aqlprofile tests
     "aqlprofile": {
         "job_name": "aqlprofile",

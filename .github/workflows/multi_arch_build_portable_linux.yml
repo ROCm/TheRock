@@ -7,7 +7,7 @@
 # 4. comm-libs (per-arch) - RCCL (parallel to math-libs)
 # 5. dctools-core (generic) - RDC (parallel to math-libs)
 # 6. profiler-apps (generic) - rocprofiler-systems (parallel to math-libs)
-# 7. media (generic) - sysdeps-amd-mesa, rocdecode (todo), rocjpeg (todo)
+# 7. media-libs (generic) - sysdeps-amd-mesa, rocdecode, rocjpeg
 #
 # Artifacts flow between stages via S3 using the artifact_manager.py tool.
 #
@@ -684,10 +684,10 @@ jobs:
             --build-dir build
 
   # ==========================================================================
-  # STAGE: media (generic)
+  # STAGE: media-libs (generic)
   # ==========================================================================
-  media:
-    name: Stage - Media
+  media-libs:
+    name: Stage - Media Libs
     needs: foundation
     runs-on: azure-linux-scale-rocm
     timeout-minutes: 180  # 3 hours
@@ -698,7 +698,7 @@ jobs:
       options: -v /runner/config:/home/awsconfig/
     env:
       AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
-      STAGE_NAME: media
+      STAGE_NAME: media-libs
     steps:
       - name: Checkout Repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
