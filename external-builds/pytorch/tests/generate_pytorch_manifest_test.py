@@ -95,16 +95,6 @@ class GeneratePyTorchSourcesManifestTest(unittest.TestCase):
         self.assertEqual(m.normalize_py("py3.11"), "3.11")
         self.assertEqual(m.normalize_py(" py3.12 "), "3.12")
 
-    def test_parse_branch_from_github_ref(self) -> None:
-        self.assertEqual(m.parse_branch_from_github_ref("refs/heads/main"), "main")
-        self.assertEqual(
-            m.parse_branch_from_github_ref("refs/heads/users/foo/bar"), "users/foo/bar"
-        )
-        with self.assertRaises(RuntimeError):
-            m.parse_branch_from_github_ref("refs/tags/v1.0.0")
-        with self.assertRaises(RuntimeError):
-            m.parse_branch_from_github_ref("")
-
     def test_manifest_filename(self) -> None:
         name = m.manifest_filename(python_version="3.11", pytorch_git_ref="release/2.7")
         self.assertEqual(name, "therock-manifest_torch_py3.11_release-2.7.json")

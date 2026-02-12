@@ -128,6 +128,48 @@ def build_manifest(
     return manifest
 
 
+def generate_manifest_dict(
+    *,
+    pytorch_dir: Path,
+    pytorch_audio_dir: Path,
+    pytorch_vision_dir: Path,
+    triton_dir: Path | None,
+) -> dict[str, object]:
+    """Generate the manifest dictionary"""
+    sources = build_sources(
+        pytorch_dir=pytorch_dir,
+        pytorch_audio_dir=pytorch_audio_dir,
+        pytorch_vision_dir=pytorch_vision_dir,
+        triton_dir=triton_dir,
+    )
+
+    server_url = os.environ.get("GITHUB_SERVER_URL")
+    repo = os.environ.get("GITHUB_REPOSITORY")
+    sha = os.environ.get("GITHUB_SHA")
+    ref = os.environ.get("GITHUB_REF")
+
+    therock_repo = "unknown"
+    if server_url and repo:
+        therock_repo = f"{server_url}/{repo}.git"
+
+    therock_commit = sha or "unknown"
+
+    therock_branch = "unknown"
+    if ref:
+        if ref.startswith("refs/heads/"):
+            therock_branch = ref[len("refs/heads/") :]
+        else:
+            # Could be refs/tags/<tag>, refs/pull/<id>/merge, or a SHA, etc.
+            therock_branch = ref
+
+    return build_manifest(
+        sources=sources,
+        therock_repo=therock_repo,
+        therock_commit=therock_commit,
+        therock_branch=therock_branch,
+    )
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     ap = argparse.ArgumentParser(description="Generate PyTorch manifest.")
     ap.add_argument(
@@ -169,37 +211,11 @@ def main(argv: list[str]) -> None:
     )
     out_path = manifest_dir / name
 
-    sources = build_sources(
+    manifest = generate_manifest_dict(
         pytorch_dir=args.pytorch_dir,
         pytorch_audio_dir=args.pytorch_audio_dir,
         pytorch_vision_dir=args.pytorch_vision_dir,
         triton_dir=args.triton_dir,
-    )
-
-    server_url = os.environ.get("GITHUB_SERVER_URL")
-    repo = os.environ.get("GITHUB_REPOSITORY")
-    sha = os.environ.get("GITHUB_SHA")
-    ref = os.environ.get("GITHUB_REF")
-
-    therock_repo = "unknown"
-    if server_url and repo:
-        therock_repo = f"{server_url}/{repo}.git"
-
-    therock_commit = sha or "unknown"
-
-    therock_branch = "unknown"
-    if ref:
-        if ref.startswith("refs/heads/"):
-            therock_branch = ref[len("refs/heads/") :]
-        else:
-            # Could be refs/tags/<tag>, refs/pull/<id>/merge, or a SHA, etc.
-            therock_branch = ref
-
-    manifest = build_manifest(
-        sources=sources,
-        therock_repo=therock_repo,
-        therock_commit=therock_commit,
-        therock_branch=therock_branch,
     )
 
     out_path.write_text(
