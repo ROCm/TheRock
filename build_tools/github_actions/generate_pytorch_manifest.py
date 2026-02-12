@@ -3,7 +3,7 @@
 Generate a manifest for PyTorch external builds.
 
 Writes a JSON manifest containing:
-  - pytorch/pytorch_audio/pytorch_vision(/triton): git commit + origin repo
+  - pytorch/pytorch_audio/pytorch_vision(/triton): git commit + origin repo (+ branch best-effort)
   - therock: repo + commit + branch from GitHub Actions env (best-effort)
 
 Filename format:
@@ -26,9 +26,13 @@ class GitSourceInfo:
 
     commit: str
     repo: str
+    branch: str | None = None
 
     def to_dict(self) -> dict[str, str]:
-        return {"commit": self.commit, "repo": self.repo}
+        d = {"commit": self.commit, "repo": self.repo}
+        if self.branch is not None:
+            d["branch"] = self.branch
+        return d
 
 
 def capture(args: list[str | Path], cwd: Path) -> str:
@@ -43,6 +47,26 @@ def capture(args: list[str | Path], cwd: Path) -> str:
         .decode()
         .strip()
     )
+
+
+def capture_optional(args: list[str | Path], cwd: Path) -> str | None:
+    """Like capture(), but returns None on failure."""
+    args = [str(arg) for arg in args]
+    print(f"++ Exec [{cwd}]$ {shlex.join(args)}")
+    try:
+        out = (
+            subprocess.check_output(
+                args,
+                cwd=str(cwd),
+                stdin=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            .decode()
+            .strip()
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return None
+    return out or None
 
 
 def git_head(dirpath: Path, *, label: str) -> GitSourceInfo:
@@ -64,6 +88,34 @@ def git_head(dirpath: Path, *, label: str) -> GitSourceInfo:
     commit = capture(["git", "rev-parse", "HEAD"], cwd=dirpath)
     repo = capture(["git", "remote", "get-url", "origin"], cwd=dirpath)
     return GitSourceInfo(commit=commit, repo=repo)
+
+
+def git_branch_best_effort(dirpath: Path) -> str | None:
+    """Return current branch name if on a real branch; None if detached/unknown."""
+    dirpath = dirpath.resolve()
+
+    # Most reliable when on a branch; fails in detached HEAD.
+    b = capture_optional(
+        ["git", "symbolic-ref", "--quiet", "--short", "HEAD"], cwd=dirpath
+    )
+    if b and b != "HEAD":
+        return b
+
+    # Fallback. Returns empty on detached.
+    b = capture_optional(["git", "branch", "--show-current"], cwd=dirpath)
+    if b and b != "HEAD":
+        return b
+
+    return None
+
+
+def resolve_branch(*, inferred: str | None, provided: str | None) -> str | None:
+    """Choose inferred branch if available; else provided; else None."""
+    if inferred:
+        return inferred
+    if provided:
+        return provided
+    return None
 
 
 def normalize_release_track(pytorch_git_ref: str) -> str:
@@ -97,16 +149,50 @@ def build_sources(
     pytorch_audio_dir: Path,
     pytorch_vision_dir: Path,
     triton_dir: Path | None,
+    pytorch_git_ref: str,
+    pytorch_audio_git_ref: str | None,
+    pytorch_vision_git_ref: str | None,
+    triton_git_ref: str | None,
 ) -> dict[str, dict[str, str]]:
+    pt = git_head(pytorch_dir, label="pytorch")
+    aud = git_head(pytorch_audio_dir, label="pytorch_audio")
+    vis = git_head(pytorch_vision_dir, label="pytorch_vision")
+
+    pt_branch = resolve_branch(
+        inferred=git_branch_best_effort(pytorch_dir),
+        provided=pytorch_git_ref,
+    )
+    aud_branch = resolve_branch(
+        inferred=git_branch_best_effort(pytorch_audio_dir),
+        provided=pytorch_audio_git_ref,
+    )
+    vis_branch = resolve_branch(
+        inferred=git_branch_best_effort(pytorch_vision_dir),
+        provided=pytorch_vision_git_ref,
+    )
+
     sources: dict[str, dict[str, str]] = {
-        "pytorch": git_head(pytorch_dir, label="pytorch").to_dict(),
-        "pytorch_audio": git_head(pytorch_audio_dir, label="pytorch_audio").to_dict(),
-        "pytorch_vision": git_head(
-            pytorch_vision_dir, label="pytorch_vision"
+        "pytorch": GitSourceInfo(
+            commit=pt.commit, repo=pt.repo, branch=pt_branch
+        ).to_dict(),
+        "pytorch_audio": GitSourceInfo(
+            commit=aud.commit, repo=aud.repo, branch=aud_branch
+        ).to_dict(),
+        "pytorch_vision": GitSourceInfo(
+            commit=vis.commit, repo=vis.repo, branch=vis_branch
         ).to_dict(),
     }
+
     if triton_dir is not None:
-        sources["triton"] = git_head(triton_dir, label="triton").to_dict()
+        tri = git_head(triton_dir, label="triton")
+        tri_branch = resolve_branch(
+            inferred=git_branch_best_effort(triton_dir),
+            provided=triton_git_ref,
+        )
+        sources["triton"] = GitSourceInfo(
+            commit=tri.commit, repo=tri.repo, branch=tri_branch
+        ).to_dict()
+
     return sources
 
 
@@ -134,6 +220,10 @@ def generate_manifest_dict(
     pytorch_audio_dir: Path,
     pytorch_vision_dir: Path,
     triton_dir: Path | None,
+    pytorch_git_ref: str,
+    pytorch_audio_git_ref: str | None,
+    pytorch_vision_git_ref: str | None,
+    triton_git_ref: str | None,
 ) -> dict[str, object]:
     """Generate the manifest dictionary"""
     sources = build_sources(
@@ -141,6 +231,10 @@ def generate_manifest_dict(
         pytorch_audio_dir=pytorch_audio_dir,
         pytorch_vision_dir=pytorch_vision_dir,
         triton_dir=triton_dir,
+        pytorch_git_ref=pytorch_git_ref,
+        pytorch_audio_git_ref=pytorch_audio_git_ref,
+        pytorch_vision_git_ref=pytorch_vision_git_ref,
+        triton_git_ref=triton_git_ref,
     )
 
     server_url = os.environ.get("GITHUB_SERVER_URL")
@@ -188,6 +282,18 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         required=True,
         help="PyTorch ref for manifest naming (e.g. nightly or release/2.8).",
     )
+    ap.add_argument(
+        "--pytorch-audio-git-ref",
+        help="Optional ref for pytorch_audio branch field (used if detached).",
+    )
+    ap.add_argument(
+        "--pytorch-vision-git-ref",
+        help="Optional ref for pytorch_vision branch field (used if detached).",
+    )
+    ap.add_argument(
+        "--triton-git-ref",
+        help="Optional ref for triton branch field (used if detached).",
+    )
     ap.add_argument("--pytorch-dir", type=Path, required=True)
     ap.add_argument("--pytorch-audio-dir", type=Path, required=True)
     ap.add_argument("--pytorch-vision-dir", type=Path, required=True)
@@ -216,6 +322,10 @@ def main(argv: list[str]) -> None:
         pytorch_audio_dir=args.pytorch_audio_dir,
         pytorch_vision_dir=args.pytorch_vision_dir,
         triton_dir=args.triton_dir,
+        pytorch_git_ref=args.pytorch_git_ref,
+        pytorch_audio_git_ref=args.pytorch_audio_git_ref,
+        pytorch_vision_git_ref=args.pytorch_vision_git_ref,
+        triton_git_ref=args.triton_git_ref,
     )
 
     out_path.write_text(

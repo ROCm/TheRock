@@ -1,5 +1,5 @@
 """
-Unit tests for external-builds/pytorch/generate_pytorch_manifest.py
+Unit tests for build_tools/github_actions/generate_pytorch_manifest.py
 """
 
 import json
@@ -142,7 +142,7 @@ class GeneratePyTorchSourcesManifestTest(unittest.TestCase):
 
         with mock.patch.object(
             m, "capture", side_effect=self._mock_capture_for_repos(capture_map)
-        ):
+        ), mock.patch.object(m, "git_branch_best_effort", return_value=None):
             self._run_main_with_args(
                 [
                     "--manifest-dir",
@@ -173,19 +173,23 @@ class GeneratePyTorchSourcesManifestTest(unittest.TestCase):
 
         self.assertEqual(data["pytorch"]["commit"], pytorch_head)
         self.assertEqual(data["pytorch"]["repo"], "https://github.com/ROCm/pytorch.git")
+        self.assertEqual(data["pytorch"]["branch"], "release/2.7")
 
         self.assertEqual(data["pytorch_audio"]["commit"], audio_head)
         self.assertEqual(
             data["pytorch_audio"]["repo"], "https://github.com/pytorch/audio.git"
         )
+        self.assertNotIn("branch", data["pytorch_audio"])
 
         self.assertEqual(data["pytorch_vision"]["commit"], vision_head)
         self.assertEqual(
             data["pytorch_vision"]["repo"], "https://github.com/pytorch/vision.git"
         )
+        self.assertNotIn("branch", data["pytorch_vision"])
 
         self.assertEqual(data["triton"]["commit"], triton_head)
         self.assertEqual(data["triton"]["repo"], "https://github.com/ROCm/triton.git")
+        self.assertNotIn("branch", data["triton"])
 
         self.assertEqual(data["therock"]["repo"], "https://github.com/ROCm/TheRock.git")
         self.assertEqual(
@@ -226,7 +230,7 @@ class GeneratePyTorchSourcesManifestTest(unittest.TestCase):
 
         with mock.patch.object(
             m, "capture", side_effect=self._mock_capture_for_repos(capture_map)
-        ):
+        ), mock.patch.object(m, "git_branch_best_effort", return_value=None):
             self._run_main_with_args(
                 [
                     "--manifest-dir",
@@ -253,6 +257,10 @@ class GeneratePyTorchSourcesManifestTest(unittest.TestCase):
         self.assertIn("pytorch_audio", data)
         self.assertIn("pytorch_vision", data)
         self.assertNotIn("triton", data)
+
+        self.assertEqual(data["pytorch"]["branch"], "nightly")
+        self.assertNotIn("branch", data["pytorch_audio"])
+        self.assertNotIn("branch", data["pytorch_vision"])
 
 
 if __name__ == "__main__":
