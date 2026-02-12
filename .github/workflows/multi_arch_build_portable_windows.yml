@@ -25,6 +25,8 @@ on:
         description: "Semicolon-separated list of all GPU families for dist targets"
       build_variant_label:
         type: string
+      build_variant_cmake_preset:
+        type: string
       build_variant_suffix:
         type: string
       expect_failure:
