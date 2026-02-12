@@ -280,8 +280,7 @@ also install `torch`, `torchaudio`, `torchvision`, and `apex`.
 >   - [Installing previous versions of PyTorch](https://pytorch.org/get-started/previous-versions/)
 >   - [torchvision installation - compatibility matrix](https://github.com/pytorch/vision?tab=readme-ov-file#installation)
 >   - [torchaudio installation - compatibility matrix](https://docs.pytorch.org/audio/main/installation.html#compatibility-matrix)
->
-> - [apex installation - compatibility matrix](https://github.com/ROCm/apex/tree/master?tab=readme-ov-file#supported-versions)
+>   - [apex installation - compatibility matrix](https://github.com/ROCm/apex/tree/master?tab=readme-ov-file#supported-versions)
 
 > [!WARNING]
 > The `torch` packages depend on `rocm[libraries]`, so the compatible ROCm packages
