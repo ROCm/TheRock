@@ -121,7 +121,8 @@ jobs:
               echo "--- $(date) ---"
               free -h
               top -b -n1 | head -20
-              sleep 30
+              df -h /
+              sleep 15
             done
           ) &
           
