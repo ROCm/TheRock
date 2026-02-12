@@ -251,7 +251,7 @@ framework.
 ### Installing PyTorch Python packages
 
 Using the index pages [listed above](#installing-rocm-python-packages), you can
-also install `torch`, `torchaudio`, and `torchvision`.
+also install `torch`, `torchaudio`, `torchvision`, and `apex`.
 
 > [!NOTE]
 > By default, pip will install the latest stable versions of each package.
@@ -261,17 +261,17 @@ also install `torch`, `torchaudio`, and `torchvision`.
 > - If you want to install other versions, take note of the compatibility
 >   matrix:
 >
->   | torch version | torchaudio version | torchvision version |
->   | ------------- | ------------------ | ------------------- |
->   | 2.10          | 2.10               | 0.25                |
->   | 2.9           | 2.9                | 0.24                |
->   | 2.8           | 2.8                | 0.23                |
->   | 2.7           | 2.7.1a0            | 0.22.1              |
+>   | torch version | torchaudio version | torchvision version | apex version |
+>   | ------------- | ------------------ | ------------------- | ------------ |
+>   | 2.10          | 2.10               | 0.25                | 1.10.0       |
+>   | 2.9           | 2.9                | 0.24                | 1.9.0        |
+>   | 2.8           | 2.8                | 0.23                | 1.8.0        |
+>   | 2.7           | 2.7.1a0            | 0.22.1              | 1.7.0        |
 >
 >   For example, `torch` 2.7.1 and compatible wheels can be installed by specifying
 >
 >   ```
->   torch==2.7.1 torchaudio==2.7.1a0 torchvision==0.22.1
+>   torch==2.7.1 torchaudio==2.7.1a0 torchvision==0.22.1 apex==1.7.0
 >   ```
 >
 >   See also
@@ -280,6 +280,7 @@ also install `torch`, `torchaudio`, and `torchvision`.
 >   - [Installing previous versions of PyTorch](https://pytorch.org/get-started/previous-versions/)
 >   - [torchvision installation - compatibility matrix](https://github.com/pytorch/vision?tab=readme-ov-file#installation)
 >   - [torchaudio installation - compatibility matrix](https://docs.pytorch.org/audio/main/installation.html#compatibility-matrix)
+>   - [apex installation - compatibility matrix](https://github.com/ROCm/apex/tree/master?tab=readme-ov-file#supported-versions)
 
 > [!WARNING]
 > The `torch` packages depend on `rocm[libraries]`, so the compatible ROCm packages
@@ -307,6 +308,8 @@ Supported devices in this family:
 
 ```bash
 pip install --index-url https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/ torch torchaudio torchvision
+# Optional additional packages on Linux:
+#   apex
 ```
 
 #### torch for gfx950-dcgpu
@@ -319,6 +322,8 @@ Supported devices in this family:
 
 ```bash
 pip install --index-url https://rocm.nightlies.amd.com/v2/gfx950-dcgpu/ torch torchaudio torchvision
+# Optional additional packages on Linux:
+#   apex
 ```
 
 #### torch for gfx110X-all
@@ -334,6 +339,8 @@ Supported devices in this family:
 
 ```bash
 pip install --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ torch torchaudio torchvision
+# Optional additional packages on Linux:
+#   apex
 ```
 
 #### torch for gfx1151
@@ -346,6 +353,8 @@ Supported devices in this family:
 
 ```bash
 pip install --index-url https://rocm.nightlies.amd.com/v2/gfx1151/ torch torchaudio torchvision
+# Optional additional packages on Linux:
+#   apex
 ```
 
 #### torch for gfx120X-all
@@ -359,6 +368,8 @@ Supported devices in this family:
 
 ```bash
 pip install --index-url https://rocm.nightlies.amd.com/v2/gfx120X-all/ torch torchaudio torchvision
+# Optional additional packages on Linux:
+#   apex
 ```
 
 ### Using PyTorch Python packages
