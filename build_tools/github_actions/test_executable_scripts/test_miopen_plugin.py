@@ -18,7 +18,9 @@ print(f"RAM:  {mem.used/1024**3:.1f}/{mem.total/1024**3:.1f} GB ({mem.percent}%)
 print(f"Swap: {swap.used/1024**3:.1f}/{swap.total/1024**3:.1f} GB ({swap.percent}%)")
 
 print("All process data")
-for proc in psutil.process_iter(['pid', 'name', 'ppid', 'memory_info', 'cpu_percent', 'create_time']):
+for proc in psutil.process_iter(
+    ['pid', 'name', 'ppid', 'memory_info', 'cpu_percent', 'create_time']
+):
     print(proc.info)
 
 print("##[endgroup]")
@@ -70,7 +72,9 @@ print(f"RAM:  {mem.used/1024**3:.1f}/{mem.total/1024**3:.1f} GB ({mem.percent}%)
 print(f"Swap: {swap.used/1024**3:.1f}/{swap.total/1024**3:.1f} GB ({swap.percent}%)")
 
 print("All process data")
-for proc in psutil.process_iter(['pid', 'name', 'ppid', 'memory_info', 'cpu_percent', 'create_time']):
+for proc in psutil.process_iter(
+    ['pid', 'name', 'ppid', 'memory_info', 'cpu_percent', 'create_time']
+):
     print(proc.info)
 
 print("##[endgroup]")
