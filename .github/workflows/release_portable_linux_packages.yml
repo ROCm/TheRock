@@ -187,7 +187,7 @@ jobs:
       MANYLINUX: 1
       EXTRA_C_COMPILER_LAUNCHER: /therock/src/build_tools/resource_info.py
       EXTRA_CXX_COMPILER_LAUNCHER: /therock/src/build_tools/resource_info.py
-      THEROCK_BUILD_PROF_LOG_DIR: ${{ OUTPUT_DIR }}/build/logs/therock-build-prof
+      THEROCK_BUILD_PROF_LOG_DIR: ${{ github.workspace }}/output/build/logs/therock-build-prof
 
     steps:
       - name: "Checking out repository"
