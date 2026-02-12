@@ -52,12 +52,16 @@ def get_topology() -> BuildTopology:
     return BuildTopology(str(topology_path))
 
 
-def get_stage_features(topology: BuildTopology, stage_name: str) -> Set[str]:
+def get_stage_features(
+    topology: BuildTopology, stage_name: str, platform_name: str = ""
+) -> Set[str]:
     """Get the set of feature names that should be enabled for a stage.
 
     This includes:
     1. Features for artifacts produced by this stage
     2. Features for artifacts that are inbound dependencies (needed but prebuilt)
+
+    Artifacts whose disable_platforms includes platform_name are excluded.
 
     Note: The inbound dependencies will be marked as prebuilt via buildctl.py bootstrap,
     but CMake still needs their features enabled for dependency resolution.
@@ -79,6 +83,8 @@ def get_stage_features(topology: BuildTopology, stage_name: str) -> Set[str]:
     for artifact_name in all_artifacts:
         if artifact_name in topology.artifacts:
             artifact = topology.artifacts[artifact_name]
+            if platform_name and platform_name in artifact.disable_platforms:
+                continue
             feature_name = topology.get_artifact_feature_name(artifact)
             features.add(feature_name)
 
@@ -203,7 +209,7 @@ def generate_cmake_args(
     args.append("-DTHEROCK_ENABLE_ALL=OFF")
 
     # Get features to enable for this stage
-    features = get_stage_features(topology, stage_name)
+    features = get_stage_features(topology, stage_name, platform_name=platform_name)
 
     if include_comments:
         args.append("")
