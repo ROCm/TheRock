@@ -666,3 +666,9 @@ def get_visible_gpu_count(env=None, therock_bin_dir: str | None = None) -> int:
     pattern = re.compile(r"^\s*Name:\s+gfx[0-9a-z]+$", re.IGNORECASE)
 
     return sum(1 for line in result.stdout.splitlines() if pattern.match(line.strip()))
+
+
+def is_asan():
+    """Using artifact_group, determines if this is an asan build"""
+    ARTIFACT_GROUP = os.getenv("ARTIFACT_GROUP")
+    return "asan" in ARTIFACT_GROUP
