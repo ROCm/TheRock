@@ -11,8 +11,7 @@ from pathlib import Path
 from unittest import mock
 
 THIS_DIR = Path(__file__).resolve().parent
-PYTORCH_DIR = THIS_DIR.parent
-sys.path.insert(0, os.fspath(PYTORCH_DIR))
+sys.path.insert(0, os.fspath(THIS_DIR))
 
 import generate_pytorch_manifest as m
 
@@ -32,8 +31,7 @@ class GeneratePyTorchSourcesManifestTest(unittest.TestCase):
                 self._saved_env[key] = os.environ[key]
 
         for key in self._gha_keys:
-            if key in os.environ:
-                del os.environ[key]
+            os.environ.pop(key, None)
 
         os.environ["GITHUB_SERVER_URL"] = "https://github.com"
         os.environ["GITHUB_REPOSITORY"] = "ROCm/TheRock"
@@ -46,42 +44,12 @@ class GeneratePyTorchSourcesManifestTest(unittest.TestCase):
 
     def tearDown(self) -> None:
         for key in self._gha_keys:
-            if key in os.environ:
-                del os.environ[key]
+            os.environ.pop(key, None)
         for key, value in self._saved_env.items():
             os.environ[key] = value
 
     def _run_main_with_args(self, argv: list[str]) -> None:
         m.main(argv)
-
-    def _make_fake_git_checkout(self, d: Path) -> None:
-        """Create a minimal directory that passes git_head() checks."""
-        d.mkdir(parents=True, exist_ok=True)
-        (d / ".git").mkdir(parents=True, exist_ok=True)
-
-    def _mock_capture_for_repos(self, mapping: dict[Path, dict[str, str]]):
-        """
-        Returns a side_effect function for m.capture().
-
-        mapping[path]["head"]   -> returned for: git rev-parse HEAD
-        mapping[path]["origin"] -> returned for: git remote get-url origin
-        """
-
-        def _side_effect(cmd: list[str], *, cwd: Path) -> str:
-            cwd = cwd.resolve()
-
-            if cwd not in mapping:
-                raise AssertionError(f"Unexpected cwd passed to capture(): {cwd}")
-
-            if cmd == ["git", "rev-parse", "HEAD"]:
-                return mapping[cwd]["head"]
-
-            if cmd == ["git", "remote", "get-url", "origin"]:
-                return mapping[cwd]["origin"]
-
-            raise AssertionError(f"Unexpected git command: {cmd}")
-
-        return _side_effect
 
     def test_normalize_release_track(self) -> None:
         self.assertEqual(m.normalize_release_track("nightly"), "nightly")
@@ -111,37 +79,33 @@ class GeneratePyTorchSourcesManifestTest(unittest.TestCase):
         vision_repo = self.tmp_path / "src_vision"
         triton_repo = self.tmp_path / "src_triton"
 
-        self._make_fake_git_checkout(pytorch_repo)
-        self._make_fake_git_checkout(audio_repo)
-        self._make_fake_git_checkout(vision_repo)
-        self._make_fake_git_checkout(triton_repo)
-
         pytorch_head = "1111111111111111111111111111111111111111"
         audio_head = "2222222222222222222222222222222222222222"
         vision_head = "3333333333333333333333333333333333333333"
         triton_head = "4444444444444444444444444444444444444444"
 
-        capture_map = {
-            pytorch_repo.resolve(): {
-                "head": pytorch_head,
-                "origin": "https://github.com/ROCm/pytorch.git",
-            },
-            audio_repo.resolve(): {
-                "head": audio_head,
-                "origin": "https://github.com/pytorch/audio.git",
-            },
-            vision_repo.resolve(): {
-                "head": vision_head,
-                "origin": "https://github.com/pytorch/vision.git",
-            },
-            triton_repo.resolve(): {
-                "head": triton_head,
-                "origin": "https://github.com/ROCm/triton.git",
-            },
-        }
+        def fake_git_head(dirpath: Path, *, label: str) -> m.GitSourceInfo:
+            p = dirpath.resolve()
+            if p == pytorch_repo.resolve():
+                return m.GitSourceInfo(
+                    commit=pytorch_head, repo="https://github.com/ROCm/pytorch.git"
+                )
+            if p == audio_repo.resolve():
+                return m.GitSourceInfo(
+                    commit=audio_head, repo="https://github.com/pytorch/audio.git"
+                )
+            if p == vision_repo.resolve():
+                return m.GitSourceInfo(
+                    commit=vision_head, repo="https://github.com/pytorch/vision.git"
+                )
+            if p == triton_repo.resolve():
+                return m.GitSourceInfo(
+                    commit=triton_head, repo="https://github.com/ROCm/triton.git"
+                )
+            raise AssertionError(f"Unexpected repo path: {p}")
 
         with mock.patch.object(
-            m, "capture", side_effect=self._mock_capture_for_repos(capture_map)
+            m, "git_head", side_effect=fake_git_head
         ), mock.patch.object(m, "git_branch_best_effort", return_value=None):
             self._run_main_with_args(
                 [
@@ -166,6 +130,7 @@ class GeneratePyTorchSourcesManifestTest(unittest.TestCase):
         self.assertTrue(manifest_path.exists(), f"Missing manifest: {manifest_path}")
 
         data = json.loads(manifest_path.read_text(encoding="utf-8"))
+
         self.assertEqual(
             set(data.keys()),
             {"pytorch", "pytorch_audio", "pytorch_vision", "triton", "therock"},
@@ -205,31 +170,28 @@ class GeneratePyTorchSourcesManifestTest(unittest.TestCase):
         audio_repo = self.tmp_path / "src_audio2"
         vision_repo = self.tmp_path / "src_vision2"
 
-        self._make_fake_git_checkout(pytorch_repo)
-        self._make_fake_git_checkout(audio_repo)
-        self._make_fake_git_checkout(vision_repo)
-
         pytorch_head = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         audio_head = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
         vision_head = "cccccccccccccccccccccccccccccccccccccccc"
 
-        capture_map = {
-            pytorch_repo.resolve(): {
-                "head": pytorch_head,
-                "origin": "https://github.com/ROCm/pytorch.git",
-            },
-            audio_repo.resolve(): {
-                "head": audio_head,
-                "origin": "https://github.com/pytorch/audio.git",
-            },
-            vision_repo.resolve(): {
-                "head": vision_head,
-                "origin": "https://github.com/pytorch/vision.git",
-            },
-        }
+        def fake_git_head(dirpath: Path, *, label: str) -> m.GitSourceInfo:
+            p = dirpath.resolve()
+            if p == pytorch_repo.resolve():
+                return m.GitSourceInfo(
+                    commit=pytorch_head, repo="https://github.com/ROCm/pytorch.git"
+                )
+            if p == audio_repo.resolve():
+                return m.GitSourceInfo(
+                    commit=audio_head, repo="https://github.com/pytorch/audio.git"
+                )
+            if p == vision_repo.resolve():
+                return m.GitSourceInfo(
+                    commit=vision_head, repo="https://github.com/pytorch/vision.git"
+                )
+            raise AssertionError(f"Unexpected repo path: {p}")
 
         with mock.patch.object(
-            m, "capture", side_effect=self._mock_capture_for_repos(capture_map)
+            m, "git_head", side_effect=fake_git_head
         ), mock.patch.object(m, "git_branch_best_effort", return_value=None):
             self._run_main_with_args(
                 [
