@@ -90,6 +90,7 @@ on:
 permissions:
   id-token: write
   contents: read
+  packages: read
 
 run-name: Release portable Linux JAX Wheels (${{ inputs.amdgpu_family }}, ${{ inputs.release_type }}, ${{ inputs.rocm_version }})
 
