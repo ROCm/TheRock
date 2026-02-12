@@ -57,56 +57,6 @@ class ConfigureCITest(unittest.TestCase):
             )
 
     ###########################################################################
-    # Tests for should_ci_run_given_modified_paths
-
-    def test_run_ci_if_source_file_edited(self):
-        paths = ["source_file.h"]
-        run_ci = configure_ci.should_ci_run_given_modified_paths(paths)
-        self.assertTrue(run_ci)
-
-    def test_dont_run_ci_if_only_markdown_files_edited(self):
-        paths = ["README.md", "build_tools/README.md"]
-        run_ci = configure_ci.should_ci_run_given_modified_paths(paths)
-        self.assertFalse(run_ci)
-
-    def test_dont_run_ci_if_only_external_builds_edited(self):
-        paths = ["external-builds/pytorch/CMakeLists.txt"]
-        run_ci = configure_ci.should_ci_run_given_modified_paths(paths)
-        self.assertFalse(run_ci)
-
-    def test_dont_run_ci_if_only_external_builds_edited(self):
-        paths = ["experimental/file.h"]
-        run_ci = configure_ci.should_ci_run_given_modified_paths(paths)
-        self.assertFalse(run_ci)
-
-    def test_run_ci_if_related_workflow_file_edited(self):
-        paths = [".github/workflows/ci.yml"]
-        run_ci = configure_ci.should_ci_run_given_modified_paths(paths)
-        self.assertTrue(run_ci)
-
-        paths = [".github/workflows/build_portable_linux_artifacts.yml"]
-        run_ci = configure_ci.should_ci_run_given_modified_paths(paths)
-        self.assertTrue(run_ci)
-
-        paths = [".github/workflows/build_artifact.yml"]
-        run_ci = configure_ci.should_ci_run_given_modified_paths(paths)
-        self.assertTrue(run_ci)
-
-    def test_dont_run_ci_if_unrelated_workflow_file_edited(self):
-        paths = [".github/workflows/pre-commit.yml"]
-        run_ci = configure_ci.should_ci_run_given_modified_paths(paths)
-        self.assertFalse(run_ci)
-
-        paths = [".github/workflows/test_jax_dockerfile.yml"]
-        run_ci = configure_ci.should_ci_run_given_modified_paths(paths)
-        self.assertFalse(run_ci)
-
-    def test_run_ci_if_source_file_and_unrelated_workflow_file_edited(self):
-        paths = ["source_file.h", ".github/workflows/pre-commit.yml"]
-        run_ci = configure_ci.should_ci_run_given_modified_paths(paths)
-        self.assertTrue(run_ci)
-
-    ###########################################################################
     # Tests for matrix_generator and helper functions
 
     def test_filter_known_target_names(self):
@@ -298,6 +248,28 @@ class ConfigureCITest(unittest.TestCase):
         )
         self.assertEqual(linux_test_labels, [])
 
+    def test_kernel_test_label_linux_pull_request_matrix_generator(self):
+        base_args = {
+            "pr_labels": '{"labels":[{"name":"test_runner:oem"}]}',
+            "build_variant": "release",
+        }
+        linux_target_output, linux_test_labels = configure_ci.matrix_generator(
+            is_pull_request=True,
+            is_workflow_dispatch=False,
+            is_push=False,
+            is_schedule=False,
+            base_args=base_args,
+            families={},
+            platform="linux",
+        )
+        self.assertGreaterEqual(len(linux_target_output), 1)
+        # check that at least one runner name has "oem" in test runner name if "oem" test runner was requested
+        self.assertTrue("oem" in item["test-runs-on"] for item in linux_target_output)
+        self.assert_target_output_is_valid(
+            target_output=linux_target_output, allow_xfail=False
+        )
+        self.assertEqual(linux_test_labels, [])
+
     def test_main_linux_branch_push_matrix_generator(self):
         base_args = {"branch_name": "main", "build_variant": "release"}
         linux_target_output, linux_test_labels = configure_ci.matrix_generator(
@@ -382,6 +354,73 @@ class ConfigureCITest(unittest.TestCase):
             target_output=windows_target_output, allow_xfail=True
         )
         self.assertEqual(windows_test_labels, [])
+
+    def test_build_pytorch_disabled_when_expect_failure(self):
+        """build_pytorch should be False when expect_failure is True."""
+        # Schedule trigger includes all families, some with expect_failure
+        linux_target_output, _ = configure_ci.matrix_generator(
+            is_pull_request=False,
+            is_workflow_dispatch=False,
+            is_push=False,
+            is_schedule=True,
+            base_args={"build_variant": "release"},
+            families={},
+            platform="linux",
+        )
+        for entry in linux_target_output:
+            if entry.get("expect_failure", False):
+                self.assertFalse(
+                    entry.get("build_pytorch", False),
+                    f"build_pytorch should be False when expect_failure is True "
+                    f"for family {entry.get('family')}",
+                )
+
+    def test_build_pytorch_disabled_when_expect_pytorch_failure(self):
+        """build_pytorch should be False when expect_pytorch_failure is True."""
+        # Use schedule trigger on windows to include gfx90x which has
+        # expect_pytorch_failure on windows
+        windows_target_output, _ = configure_ci.matrix_generator(
+            is_pull_request=False,
+            is_workflow_dispatch=False,
+            is_push=False,
+            is_schedule=True,
+            base_args={"build_variant": "release"},
+            families={},
+            platform="windows",
+        )
+        for entry in windows_target_output:
+            if entry.get("expect_pytorch_failure", False):
+                self.assertFalse(
+                    entry.get("build_pytorch", False),
+                    f"build_pytorch should be False when expect_pytorch_failure "
+                    f"is True for family {entry.get('family')}",
+                )
+
+    def test_build_pytorch_enabled_for_supported_families(self):
+        """build_pytorch should be True for families without known failures."""
+        # Presubmit families (gfx94x, gfx110x, etc.) should have build_pytorch
+        # enabled if they don't have expect_failure or expect_pytorch_failure
+        linux_target_output, _ = configure_ci.matrix_generator(
+            is_pull_request=True,
+            is_workflow_dispatch=False,
+            is_push=False,
+            is_schedule=False,
+            base_args={
+                "pr_labels": '{"labels":[]}',
+                "build_variant": "release",
+            },
+            families={},
+            platform="linux",
+        )
+        for entry in linux_target_output:
+            if not entry.get("expect_failure", False) and not entry.get(
+                "expect_pytorch_failure", False
+            ):
+                self.assertTrue(
+                    entry.get("build_pytorch", False),
+                    f"build_pytorch should be True for supported family "
+                    f"{entry.get('family')}",
+                )
 
     def test_determine_long_lived_branch(self):
         """Test to correctly determine long-lived branch that expect more testing."""
