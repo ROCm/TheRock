@@ -43,9 +43,6 @@ permissions:
 
 env:
   BUILD_DIR: B:\build
-  CACHE_DIR: "${{ github.workspace }}/.cache"
-  CCACHE_DIR: "${{ github.workspace }}/.cache/ccache"
-  CCACHE_MAXSIZE: "4000M"
   TEATIME_FORCE_INTERACTIVE: 0
 
 jobs:
@@ -78,7 +75,6 @@ jobs:
         run: |
           choco source disable -n=chocolatey
           choco source add -n=internal -s http://10.0.167.96:8081/repository/choco-group/ --priority=1
-          choco install --no-progress -y ccache
           # ninja pinned due to a bug in the 1.13.0 release:
           # https://github.com/ninja-build/ninja/issues/2616
           choco install --no-progress -y ninja --version 1.12.1
@@ -104,17 +100,7 @@ jobs:
           git config fetch.parallel 10
 
       - name: Runner health status
-        run: |
-          ccache --zero-stats
-          python ./build_tools/health_status.py
-
-      - name: Enable cache
-        uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
-        with:
-          path: ${{ env.CACHE_DIR }}
-          key: windows-multi-arch-foundation-${{ github.sha }}
-          restore-keys: |
-            windows-multi-arch-foundation-
+        run: python ./build_tools/health_status.py
 
       - name: Fetch sources
         timeout-minutes: 30
@@ -137,8 +123,6 @@ jobs:
           cmake -B "$BUILD_DIR" -S . -GNinja \
             --preset ${{ inputs.build_variant_cmake_preset }} \
             -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
-            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             ${{ steps.stage_config.outputs.cmake_args }}
 
       - name: Build stage
@@ -147,8 +131,6 @@ jobs:
       - name: Report
         if: ${{ !cancelled() }}
         run: |
-          echo "CCache Stats:"
-          ccache -s
           echo "Artifacts:"
           ls -lh "$BUILD_DIR"/artifacts/*.tar.xz 2>/dev/null || echo "No artifacts found"
 
@@ -166,13 +148,6 @@ jobs:
           python build_tools/artifact_manager.py push --run-id ${{ github.run_id }} \
             --stage ${STAGE_NAME} \
             --build-dir "$BUILD_DIR"
-
-      - name: Save cache
-        uses: actions/cache/save@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
-        if: ${{ !cancelled() }}
-        with:
-          path: ${{ env.CACHE_DIR }}
-          key: windows-multi-arch-foundation-${{ github.sha }}
 
   # ==========================================================================
   # STAGE: compiler-runtime (generic)
@@ -204,7 +179,6 @@ jobs:
         run: |
           choco source disable -n=chocolatey
           choco source add -n=internal -s http://10.0.167.96:8081/repository/choco-group/ --priority=1
-          choco install --no-progress -y ccache
           choco install --no-progress -y ninja --version 1.12.1
           choco install --no-progress -y strawberryperl
           echo "C:\Strawberry\c\bin" >> $GITHUB_PATH
@@ -227,17 +201,7 @@ jobs:
           git config fetch.parallel 10
 
       - name: Runner health status
-        run: |
-          ccache --zero-stats
-          python ./build_tools/health_status.py
-
-      - name: Enable cache
-        uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
-        with:
-          path: ${{ env.CACHE_DIR }}
-          key: windows-multi-arch-compiler-runtime-${{ github.sha }}
-          restore-keys: |
-            windows-multi-arch-compiler-runtime-
+        run: python ./build_tools/health_status.py
 
       - name: Configure AWS Credentials
         if: ${{ !github.event.pull_request.head.repo.fork }}
@@ -276,8 +240,6 @@ jobs:
           cmake -B "$BUILD_DIR" -S . -GNinja \
             --preset ${{ inputs.build_variant_cmake_preset }} \
             -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
-            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             ${{ steps.stage_config.outputs.cmake_args }}
 
       - name: Build stage
@@ -286,8 +248,6 @@ jobs:
       - name: Report
         if: ${{ !cancelled() }}
         run: |
-          echo "CCache Stats:"
-          ccache -s
           echo "Artifacts:"
           ls -lh "$BUILD_DIR"/artifacts/*.tar.xz 2>/dev/null || echo "No artifacts found"
 
@@ -305,13 +265,6 @@ jobs:
           python build_tools/artifact_manager.py push --run-id ${{ github.run_id }} \
             --stage ${STAGE_NAME} \
             --build-dir "$BUILD_DIR"
-
-      - name: Save cache
-        uses: actions/cache/save@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
-        if: ${{ !cancelled() }}
-        with:
-          path: ${{ env.CACHE_DIR }}
-          key: windows-multi-arch-compiler-runtime-${{ github.sha }}
 
   # ==========================================================================
   # STAGE: math-libs (per-arch)
@@ -348,7 +301,6 @@ jobs:
         run: |
           choco source disable -n=chocolatey
           choco source add -n=internal -s http://10.0.167.96:8081/repository/choco-group/ --priority=1
-          choco install --no-progress -y ccache
           choco install --no-progress -y ninja --version 1.12.1
           choco install --no-progress -y strawberryperl
           echo "C:\Strawberry\c\bin" >> $GITHUB_PATH
@@ -371,17 +323,7 @@ jobs:
           git config fetch.parallel 10
 
       - name: Runner health status
-        run: |
-          ccache --zero-stats
-          python ./build_tools/health_status.py
-
-      - name: Enable cache
-        uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
-        with:
-          path: ${{ env.CACHE_DIR }}
-          key: windows-multi-arch-math-libs-${{ matrix.family_info.amdgpu_family }}-${{ github.sha }}
-          restore-keys: |
-            windows-multi-arch-math-libs-${{ matrix.family_info.amdgpu_family }}-
+        run: python ./build_tools/health_status.py
 
       - name: Configure AWS Credentials
         if: ${{ !github.event.pull_request.head.repo.fork }}
@@ -423,9 +365,6 @@ jobs:
             --preset ${{ inputs.build_variant_cmake_preset }} \
             -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
             -DTHEROCK_AMDGPU_FAMILIES=${{ matrix.family_info.amdgpu_family }} \
-            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-            -DTHEROCK_BACKGROUND_BUILD_JOBS=4 \
             ${{ steps.stage_config.outputs.cmake_args }}
 
       - name: Build stage
@@ -434,8 +373,6 @@ jobs:
       - name: Report
         if: ${{ !cancelled() }}
         run: |
-          echo "CCache Stats:"
-          ccache -s
           echo "Artifacts:"
           ls -lh "$BUILD_DIR"/artifacts/*.tar.xz 2>/dev/null || echo "No artifacts found"
 
@@ -453,10 +390,3 @@ jobs:
           python build_tools/artifact_manager.py push --run-id ${{ github.run_id }} \
             --stage ${STAGE_NAME} \
             --build-dir "$BUILD_DIR"
-
-      - name: Save cache
-        uses: actions/cache/save@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
-        if: ${{ !cancelled() }}
-        with:
-          path: ${{ env.CACHE_DIR }}
-          key: windows-multi-arch-math-libs-${{ matrix.family_info.amdgpu_family }}-${{ github.sha }}
