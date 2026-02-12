@@ -16,7 +16,7 @@ import time
 from os import path, makedirs, getenv
 from collections import defaultdict
 from typing import Iterable, List, Type, Dict, Set, TypeVar, Optional
-from re import sub, match, search
+from re import sub, match
 from packaging.version import parse as _parse_version, Version, InvalidVersion
 
 import boto3
@@ -284,9 +284,12 @@ class S3Index:
                 attributes = (
                     f' data-dist-info-metadata="{pep658_sha}" data-core-metadata="{pep658_sha}"'
                 )
-            # Ugly hack: mark networkx-3.3, 3.4.2 as Python-3.10+ only to unblock https://github.com/pytorch/pytorch/issues/152191
-            if any(obj.key.endswith(x) for x in ("networkx-3.3-py3-none-any.whl", "networkx-3.4.2-py3-none-any.whl")):
+            # Mark networkx versions with Python requirements (pytorch/pytorch#152191)
+            # networkx 3.4.2 for Python 3.10, 3.5+ for Python 3.11+
+            if obj.key.endswith("networkx-3.4.2-py3-none-any.whl"):
                 attributes += ' data-requires-python="&gt;=3.10"'
+            elif "networkx-" in obj.key and obj.key.endswith("-py3-none-any.whl"):
+                attributes += ' data-requires-python="&gt;=3.11"'
 
             stripped_key = obj.key.split("/")[-1]
 
