@@ -107,7 +107,7 @@ jobs:
     env:
       OUTPUT_DIR: ${{ github.workspace }}/output
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages/dist
-      RELEASE_TYPE: ${{ inputs.release_type }} 
+      RELEASE_TYPE: ${{ inputs.release_type }}
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
       optional_build_prod_arguments: ""
     outputs:
