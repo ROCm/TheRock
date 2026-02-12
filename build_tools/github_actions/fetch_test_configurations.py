@@ -246,6 +246,15 @@ test_matrix = {
         "platform": ["linux", "windows"],
         "total_shards": 1,
     },
+    # hipDNN integration tests
+    "hipdnn_integration_tests": {
+        "job_name": "hipdnn_integration_tests",
+        "fetch_artifact_args": "--blas --miopen --hipdnn --miopen-plugin --hipdnn-integration-tests --tests",
+        "timeout_minutes": 10,
+        "test_script": f"python {_get_script_path('test_hipdnn_integration_tests.py')}",
+        "platform": ["linux"],
+        "total_shards": 1,
+    },
     # MIOpen plugin tests
     "miopen_plugin": {
         "job_name": "miopen_plugin",
