@@ -594,30 +594,3 @@ def filter_components_fromartifactory(pkg_name, artifacts_dir, gfx_arch):
                     continue
 
     return sourcedir_list
-
-
-def is_hidden_directories(dir_list):
-    """Check if hidden files or directories exist in the given directories.
-
-    Parameters:
-    dir_list: List of directories to check for hidden files/directories
-
-    Returns:
-    bool: True if hidden files or directories are found, False otherwise
-    """
-    if not dir_list:
-        return False
-
-    for source_path in dir_list:
-        source_dir = Path(source_path)
-
-        if source_dir.exists() and source_dir.is_dir():
-            try:
-                # Only check the immediate directory contents (no recursion)
-                for name in os.listdir(source_dir):
-                    if name.startswith(".") and name not in [".", ".."]:
-                        return True
-            except (OSError, PermissionError):
-                pass
-
-    return False
