@@ -27,7 +27,6 @@ The script generates flags like:
 """
 
 import argparse
-import os
 import platform as platform_module
 import sys
 from pathlib import Path
@@ -102,40 +101,12 @@ def _get_linux_platform_cmake_args() -> List[str]:
 def _get_windows_platform_cmake_args() -> List[str]:
     """Generate Windows-specific CMake arguments.
 
-    Sets MSVC compiler/linker paths from VCToolsInstallDir and limits
-    background build jobs to avoid OOM.
+    Compiler/linker selection is handled by the 'windows-base' CMake preset
+    (see CMakePresets.json). This function only adds runtime flags.
     """
-    args: List[str] = []
-
-    # Set MSVC explicitly. Sometimes gcc or clang can get on the PATH
-    # and CMake picks the wrong compiler.
-    # TODO(scotttodd): see if the 'windows-*' CMake presets are sufficient or
-    #   if this is still actually  load bearing. (Multi-arch pipelines have
-    #   `build_variant_cmake_preset` but don't use them)
-    vctools_dir = os.environ.get("VCToolsInstallDir")
-    if not vctools_dir:
-        raise RuntimeError(
-            "VCToolsInstallDir environment variable is not set. "
-            "Run from a Visual Studio Developer Command Prompt or after "
-            "ilammy/msvc-dev-cmd in CI. See "
-            "https://github.com/ROCm/TheRock/blob/main/docs/development/windows_support.md"
-        )
-
-    # Normalize to forward slashes for CMake and strip trailing slash
-    vctools_dir = vctools_dir.replace("\\", "/").rstrip("/")
-    args.extend(
-        [
-            f'"-DCMAKE_C_COMPILER={vctools_dir}/bin/Hostx64/x64/cl.exe"',
-            f'"-DCMAKE_CXX_COMPILER={vctools_dir}/bin/Hostx64/x64/cl.exe"',
-            f'"-DCMAKE_LINKER={vctools_dir}/bin/Hostx64/x64/link.exe"',
-        ]
-    )
-
     # Limit parallel background build jobs on Windows to avoid OOM.
     # See https://github.com/ROCm/TheRock/pull/599 — may be worth re-evaluating.
-    args.append("-DTHEROCK_BACKGROUND_BUILD_JOBS=4")
-
-    return args
+    return ["-DTHEROCK_BACKGROUND_BUILD_JOBS=4"]
 
 
 def get_platform_cmake_args(

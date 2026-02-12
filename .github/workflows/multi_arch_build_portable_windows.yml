@@ -121,6 +121,7 @@ jobs:
       - name: Configure
         run: |
           cmake -B "$BUILD_DIR" -S . -GNinja \
+            --preset ${{ inputs.build_variant_cmake_preset }} \
             -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
             ${{ steps.stage_config.outputs.cmake_args }}
 
@@ -238,6 +239,7 @@ jobs:
       - name: Configure
         run: |
           cmake -B "$BUILD_DIR" -S . -GNinja \
+            --preset ${{ inputs.build_variant_cmake_preset }} \
             -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
             ${{ steps.stage_config.outputs.cmake_args }}
 
@@ -362,6 +364,7 @@ jobs:
       - name: Configure
         run: |
           cmake -B "$BUILD_DIR" -S . -GNinja \
+            --preset ${{ inputs.build_variant_cmake_preset }} \
             -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
             -DTHEROCK_AMDGPU_FAMILIES=${{ matrix.family_info.amdgpu_family }} \
             ${{ steps.stage_config.outputs.cmake_args }}
