@@ -3,6 +3,7 @@
 #   atomic
 #   filesystem
 #   multi_index
+#   program_options
 #   system
 #   Static libraries only
 #   Release build
@@ -29,7 +30,7 @@ therock_cmake_subproject_declare(therock-boost
   OUTPUT_ON_FAILURE
   CMAKE_ARGS
     "-DBOOST_SOURCE_DIR=${_source_dir}"
-    "-DTHEROCK_BOOST_LIBRARIES=atomic,filesystem,multi_index,system"
+    "-DTHEROCK_BOOST_LIBRARIES=atomic,filesystem,multi_index,program_options,system"
   EXTRA_DEPENDS
     "${_download_stamp}"
 )
@@ -43,6 +44,7 @@ therock_cmake_subproject_provide_package(therock-boost Boost "lib/cmake/Boost-${
 therock_cmake_subproject_provide_package(therock-boost boost_atomic "lib/cmake/boost_atomic-${_boost_version}")
 therock_cmake_subproject_provide_package(therock-boost boost_filesystem "lib/cmake/boost_filesystem-${_boost_version}")
 therock_cmake_subproject_provide_package(therock-boost boost_headers "lib/cmake/boost_headers-${_boost_version}")
+therock_cmake_subproject_provide_package(therock-boost boost_program_options "lib/cmake/boost_program_options-${_boost_version}")
 therock_cmake_subproject_provide_package(therock-boost boost_system "lib/cmake/boost_system-${_boost_version}")
 therock_cmake_subproject_activate(therock-boost)
 
