@@ -179,7 +179,7 @@ minimal build):
 | `-DTHEROCK_ENABLE_SOLVER=ON`           | Enables the SOLVER libraries                   |
 | `-DTHEROCK_ENABLE_SPARSE=ON`           | Enables the SPARSE libraries                   |
 | `-DTHEROCK_ENABLE_MIOPEN=ON`           | Enables MIOpen                                 |
-| `-DTHEROCK_ENABLE_MIOPENPROVIDER=ON`   | Enables MIOpen provider                        |
+| `-DTHEROCK_ENABLE_MIOPENPROVIDER=ON`   | Enables hipDNN MIOpen-provider plugin          |
 | `-DTHEROCK_ENABLE_HIPDNN_SAMPLES=ON`   | Enables hipDNN samples (hipDNN Usage Examples) |
 | `-DTHEROCK_ENABLE_HIPDNN=ON`           | Enables hipDNN                                 |
 | `-DTHEROCK_ENABLE_HIPBLASLT_PLUGIN=ON` | Enables hipBLASLt Plugin                       |
