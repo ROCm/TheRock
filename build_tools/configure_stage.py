@@ -27,6 +27,8 @@ The script generates flags like:
 """
 
 import argparse
+import os
+import platform as platform_module
 import sys
 from pathlib import Path
 from typing import List, Set
@@ -83,12 +85,84 @@ def get_stage_features(topology: BuildTopology, stage_name: str) -> Set[str]:
     return features
 
 
+def _get_linux_platform_cmake_args() -> List[str]:
+    """Generate Linux-specific CMake arguments.
+
+    Currently empty — Linux builds use container defaults.
+    """
+    return []
+
+
+def _get_windows_platform_cmake_args() -> List[str]:
+    """Generate Windows-specific CMake arguments.
+
+    Sets MSVC compiler/linker paths from VCToolsInstallDir and limits
+    background build jobs to avoid OOM.
+    """
+    args: List[str] = []
+
+    # Set MSVC explicitly. Sometimes gcc or clang can get on the PATH
+    # and CMake picks the wrong compiler.
+    vctools_dir = os.environ.get("VCToolsInstallDir")
+    if not vctools_dir:
+        raise RuntimeError(
+            "VCToolsInstallDir environment variable is not set. "
+            "Run from a Visual Studio Developer Command Prompt or after "
+            "ilammy/msvc-dev-cmd in CI. See "
+            "https://github.com/ROCm/TheRock/blob/main/docs/development/windows_support.md"
+        )
+
+    # Normalize to forward slashes for CMake and strip trailing slash
+    vctools_dir = vctools_dir.replace("\\", "/").rstrip("/")
+    args.extend(
+        [
+            f"-DCMAKE_C_COMPILER={vctools_dir}/bin/Hostx64/x64/cl.exe",
+            f"-DCMAKE_CXX_COMPILER={vctools_dir}/bin/Hostx64/x64/cl.exe",
+            f"-DCMAKE_LINKER={vctools_dir}/bin/Hostx64/x64/link.exe",
+        ]
+    )
+
+    # Limit parallel background build jobs on Windows to avoid OOM.
+    # See https://github.com/ROCm/TheRock/pull/599 — may be worth re-evaluating.
+    args.append("-DTHEROCK_BACKGROUND_BUILD_JOBS=4")
+
+    return args
+
+
+def get_platform_cmake_args(
+    platform_name: str,
+    include_comments: bool = False,
+) -> List[str]:
+    """Generate platform-specific CMake arguments.
+
+    Args:
+        platform_name: Platform name ("windows", "linux", etc.).
+        include_comments: Include comment lines explaining each flag.
+
+    Returns:
+        List of CMake argument strings for the given platform.
+    """
+    comment = (
+        ["", f"# {platform_name.capitalize()} platform options"]
+        if include_comments
+        else []
+    )
+
+    if platform_name == "linux":
+        return comment + _get_linux_platform_cmake_args()
+    elif platform_name == "windows":
+        return comment + _get_windows_platform_cmake_args()
+    else:
+        return []
+
+
 def generate_cmake_args(
     stage_name: str,
     amdgpu_families: str,
     dist_amdgpu_families: str,
     topology: BuildTopology,
     include_comments: bool = False,
+    platform_name: str = platform_module.system().lower(),
 ) -> List[str]:
     """Generate CMake arguments for building a specific stage.
 
@@ -98,6 +172,8 @@ def generate_cmake_args(
         dist_amdgpu_families: Semicolon-separated GPU families for dist targets
         topology: BuildTopology instance
         include_comments: Include comment lines explaining each flag
+        platform_name: Platform name for platform-specific args (e.g., "windows",
+            "linux"). Defaults to the current platform.
 
     Returns:
         List of CMake argument strings
@@ -132,6 +208,14 @@ def generate_cmake_args(
 
     for feature in sorted(features):
         args.append(f"-DTHEROCK_ENABLE_{feature}=ON")
+
+    # Platform-specific options (e.g., MSVC paths on Windows)
+    args.extend(
+        get_platform_cmake_args(
+            platform_name=platform_name,
+            include_comments=include_comments,
+        )
+    )
 
     return args
 
@@ -191,6 +275,12 @@ def main(argv: List[str] = None):
         action="store_true",
         help="Write cmake_args to GITHUB_OUTPUT (for GitHub Actions)",
     )
+    parser.add_argument(
+        "--platform",
+        type=str,
+        default=platform_module.system().lower(),
+        help=f"Platform for platform-specific CMake args (default: {platform_module.system().lower()})",
+    )
 
     args = parser.parse_args(argv)
 
@@ -215,6 +305,7 @@ def main(argv: List[str] = None):
         dist_amdgpu_families=args.dist_amdgpu_families,
         topology=topology,
         include_comments=args.comments and not args.oneline,
+        platform_name=args.platform,
     )
 
     # Filter out comments if not requested

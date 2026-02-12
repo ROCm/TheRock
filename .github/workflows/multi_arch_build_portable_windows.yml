@@ -139,7 +139,6 @@ jobs:
             -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-            -DTHEROCK_BACKGROUND_BUILD_JOBS=4 \
             ${{ steps.stage_config.outputs.cmake_args }}
 
       - name: Build stage
@@ -279,7 +278,6 @@ jobs:
             -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-            -DTHEROCK_BACKGROUND_BUILD_JOBS=4 \
             ${{ steps.stage_config.outputs.cmake_args }}
 
       - name: Build stage
