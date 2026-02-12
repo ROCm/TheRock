@@ -391,7 +391,7 @@ def retrieve_artifacts_by_run_id(args):
         if args.miopen_plugin:
             extra_artifacts.append("miopen-plugin")
         if args.composablekernel:
-            extra_artifacts.append("composablekernel")
+            extra_artifacts.append("composable-kernel")
         if args.fusilli_plugin:
             extra_artifacts.append("fusilli-plugin")
         if args.hipblaslt_plugin:
