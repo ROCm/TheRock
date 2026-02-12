@@ -255,11 +255,11 @@ test_matrix = {
         "platform": ["linux", "windows"],
         "total_shards": 1,
     },
-    "composable_kernel": {
-        "job_name": "composable_kernel",
-        "fetch_artifact_args": "--composable_kernel --tests",
+    "composablekernel": {
+        "job_name": "composablekernel",
+        "fetch_artifact_args": "--composablekernel --tests",
         "timeout_minutes": 60,
-        "test_script": f"python {_get_script_path('test_composable_kernel.py')}",
+        "test_script": f"python {_get_script_path('test_composablekernel.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 1,
     },
