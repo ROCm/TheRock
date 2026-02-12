@@ -220,6 +220,13 @@ if AMDGPU_FAMILIES in ["gfx110X-all", "gfx1150", "gfx1151", "gfx120X-all"]:
         "*CPU_UnitTestConvSolverImplicitGemmGroupWrwXdlopsDevApplicability_FP16.ConvHipImplicitGemmGroupWrwXdlops*"
     )
 
+    # Disable long running tests
+    negative_filter.append("Full/GPU_Softmax_FP32*")  # 24 min
+    negative_filter.append("Full/GPU_Softmax_BFP16*")  # 13 min
+    negative_filter.append("Full/GPU_Softmax_FP16*")  # 11.5 min
+    negative_filter.append("Smoke/GPU_Reduce_FP32*")  # 6.5 min
+    negative_filter.append("Smoke/GPU_Reduce_FP16*")  # 4.5 min
+
 ####################################################
 
 # Creating a smoke test filter
