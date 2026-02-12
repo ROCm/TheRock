@@ -355,6 +355,73 @@ class ConfigureCITest(unittest.TestCase):
         )
         self.assertEqual(windows_test_labels, [])
 
+    def test_build_pytorch_disabled_when_expect_failure(self):
+        """build_pytorch should be False when expect_failure is True."""
+        # Schedule trigger includes all families, some with expect_failure
+        linux_target_output, _ = configure_ci.matrix_generator(
+            is_pull_request=False,
+            is_workflow_dispatch=False,
+            is_push=False,
+            is_schedule=True,
+            base_args={"build_variant": "release"},
+            families={},
+            platform="linux",
+        )
+        for entry in linux_target_output:
+            if entry.get("expect_failure", False):
+                self.assertFalse(
+                    entry.get("build_pytorch", False),
+                    f"build_pytorch should be False when expect_failure is True "
+                    f"for family {entry.get('family')}",
+                )
+
+    def test_build_pytorch_disabled_when_expect_pytorch_failure(self):
+        """build_pytorch should be False when expect_pytorch_failure is True."""
+        # Use schedule trigger on windows to include gfx90x which has
+        # expect_pytorch_failure on windows
+        windows_target_output, _ = configure_ci.matrix_generator(
+            is_pull_request=False,
+            is_workflow_dispatch=False,
+            is_push=False,
+            is_schedule=True,
+            base_args={"build_variant": "release"},
+            families={},
+            platform="windows",
+        )
+        for entry in windows_target_output:
+            if entry.get("expect_pytorch_failure", False):
+                self.assertFalse(
+                    entry.get("build_pytorch", False),
+                    f"build_pytorch should be False when expect_pytorch_failure "
+                    f"is True for family {entry.get('family')}",
+                )
+
+    def test_build_pytorch_enabled_for_supported_families(self):
+        """build_pytorch should be True for families without known failures."""
+        # Presubmit families (gfx94x, gfx110x, etc.) should have build_pytorch
+        # enabled if they don't have expect_failure or expect_pytorch_failure
+        linux_target_output, _ = configure_ci.matrix_generator(
+            is_pull_request=True,
+            is_workflow_dispatch=False,
+            is_push=False,
+            is_schedule=False,
+            base_args={
+                "pr_labels": '{"labels":[]}',
+                "build_variant": "release",
+            },
+            families={},
+            platform="linux",
+        )
+        for entry in linux_target_output:
+            if not entry.get("expect_failure", False) and not entry.get(
+                "expect_pytorch_failure", False
+            ):
+                self.assertTrue(
+                    entry.get("build_pytorch", False),
+                    f"build_pytorch should be True for supported family "
+                    f"{entry.get('family')}",
+                )
+
     def test_determine_long_lived_branch(self):
         """Test to correctly determine long-lived branch that expect more testing."""
 

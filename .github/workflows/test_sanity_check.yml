@@ -68,6 +68,7 @@ jobs:
       OUTPUT_ARTIFACTS_DIR: ${{ github.workspace }}/build
       THEROCK_BIN_DIR: ${{ github.workspace }}/build/bin
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+      ARTIFACT_GROUP: ${{ inputs.artifact_group }}
     steps:
       - name: "Fetch 'build_tools' from repository"
         if: ${{ runner.os == 'Windows' }}

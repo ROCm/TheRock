@@ -215,6 +215,8 @@ def generate_multi_arch_matrix(
         # Extract family names for dist_amdgpu_families
         family_names = [f["amdgpu_family"] for f in family_info_list]
 
+        expect_failure = info.get("expect_failure", False)
+        expect_pytorch_failure = info.get("expect_pytorch_failure", False)
         matrix_row = {
             "matrix_per_family_json": json.dumps(family_info_list),
             "dist_amdgpu_families": ";".join(family_names),
@@ -222,7 +224,8 @@ def generate_multi_arch_matrix(
             "build_variant_label": info["build_variant_label"],
             "build_variant_suffix": info["build_variant_suffix"],
             "build_variant_cmake_preset": info["build_variant_cmake_preset"],
-            "expect_failure": info.get("expect_failure", False),
+            "expect_failure": expect_failure,
+            "build_pytorch": not expect_failure and not expect_pytorch_failure,
         }
         matrix_output.append(matrix_row)
 
@@ -489,6 +492,15 @@ def matrix_generator(
                 # But if not, honor what is already there.
                 if build_variant_info.get("expect_failure", False):
                     matrix_row["expect_failure"] = True
+
+                # Enable pytorch builds for families without known build failures.
+                # TODO(#3291): Add finer-grained controls over when pytorch is built
+                expect_failure = matrix_row.get("expect_failure", False)
+                expect_pytorch_failure = matrix_row.get("expect_pytorch_failure", False)
+                matrix_row["build_pytorch"] = (
+                    not expect_failure and not expect_pytorch_failure
+                )
+
                 del matrix_row["build_variants"]
                 matrix_row.update(build_variant_info)
 
@@ -644,7 +656,16 @@ def main(base_args, linux_families, windows_families):
         result = []
         for item in variants:
             if "family" in item:
-                result.append(item["family"])
+                label = item["family"]
+                # Also show flags for the family, if any.
+                flags = []
+                if item.get("expect_failure"):
+                    flags.append("expect_failure")
+                if item.get("build_pytorch"):
+                    flags.append("build_pytorch")
+                if flags:
+                    label += f" ({', '.join(flags)})"
+                result.append(label)
             elif "matrix_per_family_json" in item:
                 # Multi-arch mode: show the families from the JSON
                 families = json.loads(item["matrix_per_family_json"])

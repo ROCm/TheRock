@@ -292,17 +292,22 @@ def directory_if_exists(dir: Path) -> Path | None:
 
 
 def do_install_rocm(args: argparse.Namespace):
-    # Optional cache dir arguments
+    # Because the rocm package caches current GPU selection and such, we
+    # always purge it to ensure a clean rebuild.
+    #
+    # This can fail in environments where the pip cache is disabled or
+    # unwritable (e.g. manylinux containers), which is fine — if there's no
+    # cache, there's nothing stale to purge.
     cache_dir_args = (
         ["--cache-dir", str(args.pip_cache_dir)] if args.pip_cache_dir else []
     )
-
-    # Because the rocm package caches current GPU selection and such, we
-    # always purge it to ensure a clean rebuild.
-    run_command(
-        [sys.executable, "-m", "pip", "cache", "remove", "rocm"] + cache_dir_args,
-        cwd=Path.cwd(),
-    )
+    try:
+        run_command(
+            [sys.executable, "-m", "pip", "cache", "remove", "rocm"] + cache_dir_args,
+            cwd=Path.cwd(),
+        )
+    except subprocess.CalledProcessError:
+        print("Warning: pip cache remove failed (cache may be disabled), continuing")
 
     # Do the main pip install.
     pip_args = [
@@ -319,8 +324,7 @@ def do_install_rocm(args: argparse.Namespace):
     if args.find_links:
         pip_args.extend(["--find-links", args.find_links])
     if args.pip_cache_dir:
-        pip_args.extend(["--cache-dir", args.pip_cache_dir])
-    pip_args += cache_dir_args
+        pip_args.extend(["--cache-dir", str(args.pip_cache_dir)])
     rocm_sdk_version = args.rocm_sdk_version if args.rocm_sdk_version else ""
     pip_args.extend([f"rocm[libraries,devel]{rocm_sdk_version}"])
     run_command(pip_args, cwd=Path.cwd())
@@ -658,8 +662,16 @@ def do_build_pytorch(
     pytorch_build_version_parsed = parse(pytorch_build_version)
     print(f"  Using PYTORCH_BUILD_VERSION: {pytorch_build_version}")
 
-    # Detect exactly PyTorch 2.9.x
     is_pytorch_2_9 = pytorch_build_version_parsed.release[:2] == (2, 9)
+    is_pytorch_2_11_or_later = pytorch_build_version_parsed.release[:2] >= (2, 11)
+
+    # aotriton is not supported on certain architectures yet.
+    # gfx101X/gfx103X: https://github.com/ROCm/TheRock/issues/1925
+    AOTRITON_UNSUPPORTED_ARCHS = ["gfx101", "gfx103"]
+    # gfx1152/53: supported in aotriton 0.11.2b+ (https://github.com/ROCm/aotriton/pull/142),
+    #   which is pinned by pytorch >= 2.11. Older versions don't include it.
+    if not is_pytorch_2_11_or_later:
+        AOTRITON_UNSUPPORTED_ARCHS += ["gfx1152", "gfx1153"]
 
     ## Enable FBGEMM_GENAI on Linux for PyTorch, as it is available only for 2.9 on rocm/pytorch
     ## and causes build failures for other PyTorch versions
@@ -698,11 +710,6 @@ def do_build_pytorch(
             # Default behavior — determined by if triton is build
             use_flash_attention = "ON" if triton_requirement else "OFF"
 
-            # no aotriton support for gfx103X
-            #
-            # temporarily disable aotriton for gfx1152/53 until pytorch
-            # uses a commit that enables it ( https://github.com/ROCm/aotriton/pull/142 )
-            AOTRITON_UNSUPPORTED_ARCHS = ["gfx103", "gfx1152", "gfx1153"]
             if any(
                 arch in env["PYTORCH_ROCM_ARCH"] for arch in AOTRITON_UNSUPPORTED_ARCHS
             ):
@@ -759,11 +766,6 @@ def do_build_pytorch(
 
         use_flash_attention = "0"
 
-        # no aotriton support for gfx103X
-        #
-        # temporarily prevent enabling aotriton for gfx1152/53 until pytorch
-        # uses a commit that enables it ( https://github.com/ROCm/aotriton/pull/142 )
-        AOTRITON_UNSUPPORTED_ARCHS = ["gfx103", "gfx1152", "gfx1153"]
         if args.enable_pytorch_flash_attention_windows and not any(
             arch in env["PYTORCH_ROCM_ARCH"] for arch in AOTRITON_UNSUPPORTED_ARCHS
         ):
