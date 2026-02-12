@@ -2,10 +2,6 @@
 
 This directory provides tooling for building JAX with ROCm Python wheels.
 
-> [!TIP]
-> If you want to install our prebuilt JAX packages instead of building them
-> from source, see [RELEASES.md](/RELEASES.md) instead.
-
 Table of contents:
 
 - [Support status](#support-status)
