@@ -191,11 +191,11 @@ By default the pytorch directory is determined based on this script's location
     )
 
     parser.add_argument(
-        "--cache",
-        default=True,
+        "--no-cache",
+        default=False,
         required=False,
         action=argparse.BooleanOptionalAction,
-        help="""Enable pytest caching (default: enabled). Use --no-cache to disable, useful when only having read-only access to pytorch directory""",
+        help="""Disable pytest caching. Useful when only having read-only access to pytorch directory""",
     )
 
     args = parser.parse_args(argv)
@@ -264,7 +264,7 @@ def main() -> int:
             #         Forced to 0 (disabled) when used with --pdb.
         ]
 
-        if not args.cache:
+        if args.no_cache:
             pytest_args += [
                 "-p",
                 "no:cacheprovider",  # Disable caching: useful when running in a container

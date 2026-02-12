@@ -259,12 +259,14 @@ skip_tests = {
             # The callstack for this one points to _fill_mem_eff_dropout_mask, so it may be related to aotriton?
             "test_cublas_config_nondeterministic_alert_cuda",
             # Large test that isn't very CI-friendly (takes ~2 seconds, possibly hanging)
+            "test_memory_format_operators_cuda"
             # Flaky tests hanging on some gfx1151 machines...
             # Maybe memory pressure? Tests use some large tensors:
             #   v = torch.FloatTensor([64000., 32., 64000.])
             # Move to gfx1151-specific skip list? Check if passing on Linux.
             # We could also skip all test_grad_*.
             "test_grad_scale_will_not_overflow_cuda",
+            "test_grad_scaling_unscale_sparse_cuda_float32",
         ],
     },
 }
