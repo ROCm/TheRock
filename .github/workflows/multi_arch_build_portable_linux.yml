@@ -52,7 +52,7 @@ permissions:
   contents: read
 
 env:
-  CONTAINER_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:6e8242d347af7e0c43c82d5031a3ac67b669f24898ea8dc2f1d5b7e4798b66bd
+  CONTAINER_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:db2b63f938941dde2abc80b734e64b45b9995a282896d513a0f3525d4591d6cb
   CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
   CACHE_DIR: ${{ github.workspace }}/.container-cache
   TEATIME_FORCE_INTERACTIVE: 0
@@ -69,14 +69,14 @@ jobs:
     permissions:
       id-token: write
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:6e8242d347af7e0c43c82d5031a3ac67b669f24898ea8dc2f1d5b7e4798b66bd
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:db2b63f938941dde2abc80b734e64b45b9995a282896d513a0f3525d4591d6cb
       options: -v /runner/config:/home/awsconfig/
     env:
       AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
       STAGE_NAME: foundation
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Install python deps
         run: pip install -r requirements.txt
@@ -135,7 +135,7 @@ jobs:
 
       - name: Configure AWS Credentials
         if: ${{ always() && !github.event.pull_request.head.repo.fork }}
-        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-ci
@@ -158,14 +158,14 @@ jobs:
     permissions:
       id-token: write
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:6e8242d347af7e0c43c82d5031a3ac67b669f24898ea8dc2f1d5b7e4798b66bd
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:db2b63f938941dde2abc80b734e64b45b9995a282896d513a0f3525d4591d6cb
       options: -v /runner/config:/home/awsconfig/
     env:
       AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
       STAGE_NAME: compiler-runtime
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Install python deps
         run: pip install -r requirements.txt
@@ -188,7 +188,7 @@ jobs:
 
       - name: Configure AWS Credentials
         if: ${{ !github.event.pull_request.head.repo.fork }}
-        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-ci
@@ -239,7 +239,7 @@ jobs:
 
       - name: Configure AWS Credentials (refresh for push)
         if: ${{ !github.event.pull_request.head.repo.fork }}
-        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-ci
@@ -266,7 +266,7 @@ jobs:
     permissions:
       id-token: write
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:6e8242d347af7e0c43c82d5031a3ac67b669f24898ea8dc2f1d5b7e4798b66bd
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:db2b63f938941dde2abc80b734e64b45b9995a282896d513a0f3525d4591d6cb
       options: -v /runner/config:/home/awsconfig/
     env:
       AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
@@ -274,7 +274,7 @@ jobs:
       AMDGPU_FAMILIES: ${{ matrix.family_info.amdgpu_family }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Install python deps
         run: pip install -r requirements.txt
@@ -297,7 +297,7 @@ jobs:
 
       - name: Configure AWS Credentials
         if: ${{ !github.event.pull_request.head.repo.fork }}
-        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-ci
@@ -351,7 +351,7 @@ jobs:
 
       - name: Configure AWS Credentials (refresh for push)
         if: ${{ !github.event.pull_request.head.repo.fork }}
-        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-ci
@@ -378,7 +378,7 @@ jobs:
     permissions:
       id-token: write
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:6e8242d347af7e0c43c82d5031a3ac67b669f24898ea8dc2f1d5b7e4798b66bd
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:db2b63f938941dde2abc80b734e64b45b9995a282896d513a0f3525d4591d6cb
       options: -v /runner/config:/home/awsconfig/
     env:
       AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
@@ -386,7 +386,7 @@ jobs:
       AMDGPU_FAMILIES: ${{ matrix.family_info.amdgpu_family }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Install python deps
         run: pip install -r requirements.txt
@@ -409,7 +409,7 @@ jobs:
 
       - name: Configure AWS Credentials
         if: ${{ !github.event.pull_request.head.repo.fork }}
-        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-ci
@@ -463,7 +463,7 @@ jobs:
 
       - name: Configure AWS Credentials (refresh for push)
         if: ${{ !github.event.pull_request.head.repo.fork }}
-        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-ci
@@ -486,14 +486,14 @@ jobs:
     permissions:
       id-token: write
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:6e8242d347af7e0c43c82d5031a3ac67b669f24898ea8dc2f1d5b7e4798b66bd
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:db2b63f938941dde2abc80b734e64b45b9995a282896d513a0f3525d4591d6cb
       options: -v /runner/config:/home/awsconfig/
     env:
       AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
       STAGE_NAME: dctools-core
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Install python deps
         run: pip install -r requirements.txt
@@ -516,7 +516,7 @@ jobs:
 
       - name: Configure AWS Credentials
         if: ${{ !github.event.pull_request.head.repo.fork }}
-        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-ci
@@ -567,7 +567,7 @@ jobs:
 
       - name: Configure AWS Credentials (refresh for push)
         if: ${{ !github.event.pull_request.head.repo.fork }}
-        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-ci
@@ -590,14 +590,14 @@ jobs:
     permissions:
       id-token: write
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:6e8242d347af7e0c43c82d5031a3ac67b669f24898ea8dc2f1d5b7e4798b66bd
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:db2b63f938941dde2abc80b734e64b45b9995a282896d513a0f3525d4591d6cb
       options: -v /runner/config:/home/awsconfig/
     env:
       AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
       STAGE_NAME: profiler-apps
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Install python deps
         run: pip install -r requirements.txt
@@ -620,7 +620,7 @@ jobs:
 
       - name: Configure AWS Credentials
         if: ${{ !github.event.pull_request.head.repo.fork }}
-        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-ci
@@ -671,7 +671,7 @@ jobs:
 
       - name: Configure AWS Credentials (refresh for push)
         if: ${{ !github.event.pull_request.head.repo.fork }}
-        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-ci
@@ -694,14 +694,14 @@ jobs:
     permissions:
       id-token: write
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:6e8242d347af7e0c43c82d5031a3ac67b669f24898ea8dc2f1d5b7e4798b66bd
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:db2b63f938941dde2abc80b734e64b45b9995a282896d513a0f3525d4591d6cb
       options: -v /runner/config:/home/awsconfig/
     env:
       AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
       STAGE_NAME: media
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Install python deps
         run: pip install -r requirements.txt
@@ -724,7 +724,7 @@ jobs:
 
       - name: Configure AWS Credentials
         if: ${{ !github.event.pull_request.head.repo.fork }}
-        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-ci
@@ -775,7 +775,7 @@ jobs:
 
       - name: Configure AWS Credentials
         if: ${{ !github.event.pull_request.head.repo.fork }}
-        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-ci

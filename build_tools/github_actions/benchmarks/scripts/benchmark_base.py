@@ -1,16 +1,20 @@
 """Base class for benchmark tests with common functionality."""
 
 import os
+import shlex
+import shutil
+import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple, Any
+from typing import Dict, List, Tuple, Any, IO
 from prettytable import PrettyTable
 
 # Add parent directory to path for utils import
 sys.path.insert(0, str(Path(__file__).parent.parent))  # benchmarks/
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))  # github_actions/
-from utils import BenchmarkClient
+from utils import BenchmarkClient, HardwareDetector
 from utils.logger import log
+from utils.exceptions import TestExecutionError
 from github_actions_utils import gha_append_step_summary
 
 
@@ -35,9 +39,93 @@ class BenchmarkBase:
         self.artifact_run_id = os.getenv("ARTIFACT_RUN_ID")
         self.amdgpu_families = os.getenv("AMDGPU_FAMILIES")
         self.script_dir = Path(__file__).resolve().parent
+        self.therock_dir = self.script_dir.parent.parent.parent.parent
 
         # Initialize test client (will be set in run())
         self.client = None
+
+    def execute_command(
+        self, cmd: List[str], log_file_handle: IO, env: Dict[str, str] = None
+    ) -> int:
+        """Execute a command and stream output to log file.
+
+        Args:
+            cmd: Command list to execute
+            log_file_handle: File handle to write output
+            env: Optional environment variables to set
+
+        Returns:
+            Exit code from the command
+        """
+        log.info(f"++ Exec [{self.therock_dir}]$ {shlex.join(cmd)}")
+        log_file_handle.write(f"{shlex.join(cmd)}\n")
+
+        # Merge custom env with current environment
+        process_env = os.environ.copy()
+        if env:
+            process_env.update(env)
+
+        process = subprocess.Popen(
+            cmd,
+            cwd=self.therock_dir,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            env=process_env,
+        )
+
+        for line in process.stdout:
+            log.info(line.strip())
+            log_file_handle.write(f"{line}")
+
+        process.wait()
+        return process.returncode
+
+    def _detect_gpu_count(self) -> int:
+        """Detect the number of available GPUs using HardwareDetector.
+
+        Returns:
+            Number of GPUs detected
+
+        Raises:
+            RuntimeError: If no GPUs detected or detection fails
+        """
+        try:
+            detector = HardwareDetector()
+            gpu_list = detector.detect_gpu()
+            gpu_count = len(gpu_list)
+
+            if gpu_count == 0:
+                raise RuntimeError(
+                    "No GPUs detected. Benchmarks require at least one GPU. "
+                    "Ensure ROCm drivers are installed and GPU devices are accessible."
+                )
+
+            log.info(f"Detected {gpu_count} GPU(s)")
+            return gpu_count
+
+        except RuntimeError:
+            # Re-raise RuntimeError as-is
+            raise
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to detect GPUs: {e}. "
+                "Ensure ROCm drivers are installed and GPU devices are accessible."
+            ) from e
+
+    def _validate_openmpi(self) -> None:
+        """Check if OpenMPI is installed and available in the system.
+
+        Raises:
+            TestExecutionError: If OpenMPI (mpirun) is not found
+        """
+        if not shutil.which("mpirun"):
+            raise TestExecutionError(
+                "OpenMPI not found in system\n"
+                "Ensure OpenMPI is installed and 'mpirun' is available in PATH"
+            )
+        log.info("OpenMPI validated: mpirun found in system")
 
     def create_test_result(
         self,
@@ -148,49 +236,78 @@ class BenchmarkBase:
 
         return success
 
-    def compare_with_lkg(self, table: PrettyTable) -> PrettyTable:
+    def compare_with_lkg(self, tables: Any) -> Any:
         """Compare results with Last Known Good baseline."""
         log.info("Comparing results with LKG")
+
+        if isinstance(tables, list):
+            # Compare each table with LKG
+            final_tables = []
+            for table in tables:
+                if table._rows:
+                    final_table = self.client.compare_results(
+                        test_name=self.benchmark_name, table=table
+                    )
+                    log.info(f"\n{final_table}")
+                    final_tables.append(final_table)
+                else:
+                    log.warning(f"Table '{table.title}' has no results, skipping")
+            return final_tables
+
+        # Single table
         final_table = self.client.compare_results(
-            test_name=self.benchmark_name, table=table
+            test_name=self.benchmark_name, table=tables
         )
         log.info(f"\n{final_table}")
         return final_table
 
-    def write_step_summary(
-        self, stats: Dict[str, Any], final_table: PrettyTable
-    ) -> None:
+    def write_step_summary(self, stats: Dict[str, Any], final_tables: Any) -> None:
         """Write results to GitHub Actions step summary."""
-        gha_append_step_summary(
+        summary = (
             f"## {self.display_name} Benchmark Results\n\n"
             f"**Status:** {stats['overall_status']} | "
             f"**Passed:** {stats['passed']}/{stats['total']} | "
             f"**Failed:** {stats['failed']}/{stats['total']}\n\n"
-            f"<details>\n"
-            f"<summary>View detailed results ({stats['total']} tests)</summary>\n\n"
-            f"```\n{final_table}\n```\n\n"
-            f"</details>"
         )
 
-    def determine_final_status(self, final_table: PrettyTable) -> str:
-        """Determine final test status from results table."""
-        if "FinalResult" not in final_table.field_names:
-            raise ValueError("The table does not have a 'FinalResult' column.")
-
-        final_result_index = final_table.field_names.index("FinalResult")
-        has_fail = any(row[final_result_index] == "FAIL" for row in final_table._rows)
-        has_unknown = any(
-            row[final_result_index] == "UNKNOWN" for row in final_table._rows
-        )
-
-        final_status = "FAIL" if has_fail else ("UNKNOWN" if has_unknown else "PASS")
-
-        if has_unknown and not has_fail:
-            log.warning(
-                "Some results have UNKNOWN status (no LKG data available for comparison)"
+        if isinstance(final_tables, list):
+            # Multiple tables - add each one
+            for table in final_tables:
+                summary += (
+                    f"<details>\n"
+                    f"<summary>{table.title}</summary>\n\n"
+                    f"```\n{table}\n```\n\n"
+                    f"</details>\n\n"
+                )
+        else:
+            # Single table
+            summary += (
+                f"<details>\n"
+                f"<summary>View detailed results ({stats['total']} tests)</summary>\n\n"
+                f"```\n{final_tables}\n```\n\n"
+                f"</details>"
             )
 
-        return final_status
+        gha_append_step_summary(summary)
+
+    def determine_final_status(self, final_tables: Any) -> str:
+        """Determine final test status from results table(s)."""
+        tables = final_tables if isinstance(final_tables, list) else [final_tables]
+
+        has_fail = has_unknown = False
+        for table in tables:
+            if "FinalResult" not in table.field_names:
+                raise ValueError(f"Table '{table.title}' missing 'FinalResult' column")
+
+            idx = table.field_names.index("FinalResult")
+            results = [row[idx] for row in table._rows]
+            has_fail = has_fail or "FAIL" in results
+            has_unknown = has_unknown or "UNKNOWN" in results
+
+        if has_unknown and not has_fail:
+            log.warning("Some results have UNKNOWN status (no LKG data available)")
+
+        return "FAIL" if has_fail else ("UNKNOWN" if has_unknown else "PASS")
 
     def run(self) -> int:
         """Execute benchmark workflow and return exit code (0=PASS, 1=FAIL)."""
@@ -204,7 +321,7 @@ class BenchmarkBase:
         self.run_benchmarks()
 
         # Parse results (implemented by child class)
-        test_results, table = self.parse_results()
+        test_results, tables = self.parse_results()
 
         if not test_results:
             log.error("No test results found")
@@ -217,14 +334,14 @@ class BenchmarkBase:
         # Upload results
         self.upload_results(test_results, stats)
 
-        # Compare with LKG
-        final_table = self.compare_with_lkg(table)
+        # Compare with LKG (compares each table individually and prints results)
+        final_tables = self.compare_with_lkg(tables)
 
         # Write to GitHub Actions step summary
-        self.write_step_summary(stats, final_table)
+        self.write_step_summary(stats, final_tables)
 
         # Determine final status
-        final_status = self.determine_final_status(final_table)
+        final_status = self.determine_final_status(final_tables)
         log.info(f"Final Status: {final_status}")
 
         # Return 0 only if PASS, otherwise return 1

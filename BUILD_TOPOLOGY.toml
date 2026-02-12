@@ -98,13 +98,17 @@ submodules = ["rocm-systems"]
 description = "ROCm libraries monorepo (math libs)"
 submodules = ["rocm-libraries"]
 
+[source_sets.math-libs]
+description = "Additional math library submodules"
+submodules = ["libhipcxx"]
+
 [source_sets.ml-frameworks]
 description = "ML framework submodules"
-submodules = ["composable_kernel"]
+submodules = []
 
 [source_sets.comm-libs]
 description = "Communication library submodules"
-submodules = ["rccl", "rccl-tests"]
+submodules = []
 
 [source_sets.profiler-extras]
 description = "Additional profiler submodules"
@@ -133,6 +137,7 @@ artifact_groups = ["third-party-sysdeps", "base"]
 description = "Compiler, runtimes, and core profiling"
 artifact_groups = [
     "compiler",
+    "core-amdsmi",
     "core-runtime",
     "third-party-libs",
     "hip-runtime",
@@ -204,6 +209,12 @@ type = "generic"
 artifact_group_deps = ["base", "third-party-sysdeps"]
 source_sets = ["rocm-systems"]
 
+[artifact_groups.core-amdsmi]
+description = "AMD SMI tool (amdsmi)"
+type = "generic"
+artifact_group_deps = ["base", "third-party-sysdeps"]
+source_sets = ["rocm-systems"]
+
 [artifact_groups.compiler]
 description = "AMD LLVM toolchain and compiler infrastructure"
 type = "generic"
@@ -239,7 +250,7 @@ description = "Math libraries (BLAS, FFT, RAND, etc.)"
 type = "per-arch"  # Built per GPU architecture
 artifact_group_deps = ["hip-runtime", "profiler-core"]
 # TODO: rocm-systems included for projects/hip/VERSION (see CMakeLists.txt)
-source_sets = ["rocm-libraries", "rocm-systems"]
+source_sets = ["rocm-libraries", "rocm-systems", "math-libs"]
 
 [artifact_groups.ml-libs]
 description = "Machine learning libraries"
@@ -263,9 +274,9 @@ source_sets = ["rocm-systems"]  # rocprofiler-sdk is in rocm-systems
 [artifact_groups.dctools-core]
 description = "Data center management tools with minimal dependencies"
 type = "generic"
-artifact_group_deps = ["core-runtime", "profiler-core"]
+artifact_group_deps = ["core-runtime", "core-amdsmi", "profiler-core"]
 # TODO: rocm-systems included for projects/hip/VERSION (see CMakeLists.txt)
-source_sets = ["base", "rocm-systems"]  # RDC uses amdsmi from base
+source_sets = ["base", "rocm-systems"]  # RDC uses amdsmi from core-amdsmi
 
 # Future artifact groups
 # [artifact_groups.dctools-rocm]
@@ -276,7 +287,7 @@ source_sets = ["base", "rocm-systems"]  # RDC uses amdsmi from base
 [artifact_groups.profiler-apps]
 description = "Profiler applications and analysis tools"
 type = "generic"
-artifact_group_deps = ["profiler-core", "compiler"]
+artifact_group_deps = ["profiler-core", "compiler", "core-amdsmi"]
 source_sets = ["rocm-systems", "profiler-extras"]  # rocprofiler-systems + trace decoder
 
 [artifact_groups.iree-libs]
@@ -339,6 +350,20 @@ disable_platforms = ["windows"]
 artifact_group = "third-party-sysdeps"
 type = "target-neutral"
 artifact_deps = []
+feature_group = "CORE"
+disable_platforms = ["windows"]
+
+[artifacts.sysdeps-libpciaccess]
+artifact_group = "third-party-sysdeps"
+type = "target-neutral"
+artifact_deps = []
+feature_group = "CORE"
+disable_platforms = ["windows"]
+
+[artifacts.sysdeps-hwloc]
+artifact_group = "third-party-sysdeps"
+type = "target-neutral"
+artifact_deps = ["sysdeps", "sysdeps-libpciaccess"]  # hwloc depends on numactl (in core sysdeps) and libpciaccess
 feature_group = "CORE"
 disable_platforms = ["windows"]
 
@@ -419,6 +444,14 @@ feature_name = "CORE_RUNTIME"
 feature_group = "CORE"
 disable_platforms = ["windows"]
 
+[artifacts.core-amdsmi]
+artifact_group = "core-amdsmi"
+type = "target-neutral"
+artifact_deps = ["base", "sysdeps"]
+feature_name = "CORE_AMDSMI"
+feature_group = "CORE"
+disable_platforms = ["windows"]
+
 [artifacts.core-hip]
 artifact_group = "hip-runtime"
 type = "target-neutral"
@@ -436,7 +469,7 @@ feature_group = "CORE"  # Part of core, enabled by default
 [artifacts.rocrtst]
 artifact_group = "rocrtst"
 type = "target-neutral"
-artifact_deps = ["core-runtime", "core-ocl"]
+artifact_deps = ["core-runtime", "core-ocl", "sysdeps-hwloc"]
 feature_name = "CORE_RUNTIME_TESTS"
 feature_group = "CORE"
 disable_platforms = ["windows"]
@@ -452,7 +485,7 @@ feature_group = "CORE"  # Part of core, enabled by default
 
 [artifacts.core-hiptests]
 artifact_group = "hip-runtime"
-type = "target-neutral"
+type = "target-specific"
 artifact_deps = ["core-hip"]
 feature_group = "CORE"  # Part of core, enabled by default
 
@@ -461,7 +494,7 @@ feature_group = "CORE"  # Part of core, enabled by default
 [artifacts.blas]
 artifact_group = "math-libs"
 type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip", "host-blas", "host-suite-sparse", "rocprofiler-sdk"]
+artifact_deps = ["core-runtime", "core-hip", "core-amdsmi", "host-blas", "host-suite-sparse", "rocprofiler-sdk"]
 split_databases = ["rocblas", "hipblaslt"]
 
 [artifacts.fft]
@@ -478,6 +511,16 @@ artifact_deps = ["core-runtime", "core-hip"]
 artifact_group = "math-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip"]
+
+[artifacts.sparse]
+artifact_group = "math-libs"
+type = "target-specific"
+artifact_deps = ["blas", "prim"]
+
+[artifacts.solver]
+artifact_group = "math-libs"
+type = "target-specific"
+artifact_deps = ["blas", "prim", "sparse", "host-suite-sparse"]
 
 [artifacts.rocwmma]
 artifact_group = "math-libs"
@@ -517,6 +560,16 @@ artifact_group = "ml-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn"]
 
+[artifacts.hipblaslt-plugin]
+artifact_group = "ml-libs"
+type = "target-neutral"
+artifact_deps = ["core-runtime", "core-hip", "blas", "hipdnn"]
+
+[artifacts.hipdnn-samples]
+artifact_group = "ml-libs"
+type = "target-specific"
+artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "miopen-plugin"]
+
 # --- IREE Integration ---
 
 [artifacts.fusilli-plugin]
@@ -530,7 +583,7 @@ disable_platforms = ["windows"]
 [artifacts.rccl]
 artifact_group = "comm-libs"
 type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip", "hipify", "rocprofiler-sdk"]
+artifact_deps = ["core-runtime", "core-hip", "hipify", "rocprofiler-sdk", "core-amdsmi"]
 disable_platforms = ["windows"]
 
 # --- Profiler Tools ---
@@ -540,6 +593,13 @@ artifact_group = "profiler-core"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "base"]  # rocprofiler-register is in base
 feature_name = "ROCPROFV3"
+feature_group = "PROFILER"
+disable_platforms = ["windows"]
+
+[artifacts.aqlprofile-tests]
+artifact_group = "profiler-core"
+type = "target-specific"
+artifact_deps = ["core-runtime"]
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
 
@@ -553,7 +613,7 @@ disable_platforms = ["windows"]
 [artifacts.rocprofiler-systems]
 artifact_group = "profiler-apps"
 type = "target-neutral"
-artifact_deps = ["amd-llvm", "core-hip", "rocprofiler-sdk"]
+artifact_deps = ["amd-llvm", "core-hip", "rocprofiler-sdk", "core-amdsmi"]
 feature_name = "ROCPROFSYS"
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
@@ -563,7 +623,7 @@ disable_platforms = ["windows"]
 [artifacts.rdc]
 artifact_group = "dctools-core"
 type = "target-neutral"
-artifact_deps = ["core-hip", "rocprofiler-sdk", "sysdeps"]
+artifact_deps = ["core-hip", "rocprofiler-sdk", "sysdeps", "core-amdsmi"]
 feature_group = "DC_TOOLS"  # Part of DC tools, enabled by default via THEROCK_ENABLE_ALL
 disable_platforms = ["windows"]
 

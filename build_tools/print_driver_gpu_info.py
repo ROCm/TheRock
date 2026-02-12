@@ -22,7 +22,8 @@ import sys
 from typing import List, Optional
 
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
-unsupported_amdsmi_families = ["gfx1151"]
+# TODO(#2964): Remove gfx950-dcgpu once amdsmi static does not timeout
+unsupported_amdsmi_families = ["gfx1151", "gfx950-dcgpu"]
 
 
 def log(*args, **kwargs):
@@ -118,6 +119,12 @@ def run_sanity(os_name: str) -> None:
             label="rocminfo",
             command="rocminfo",
             args=[],
+            extra_command_search_paths=[bin_dir],
+        )
+        run_command_with_search(
+            label="Kernel version",
+            command="uname",
+            args=["-r"],
             extra_command_search_paths=[bin_dir],
         )
 
