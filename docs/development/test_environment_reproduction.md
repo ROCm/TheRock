@@ -14,7 +14,7 @@ $ docker run -i \
     -t ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98 /bin/bash
 $ curl -LsSf https://astral.sh/uv/install.sh | bash && source $HOME/.local/bin/env
 $ git clone https://github.com/ROCm/TheRock.git && cd TheRock
-$ python3 build_tools/setup_venv.py .venv --use-uv && source .venv/bin/activate
+$ uv venv .venv && source .venv/bin/activate
 $ uv pip install -r requirements-test.txt
 $ GITHUB_REPOSITORY={GITHUB_REPO} python build_tools/install_rocm_from_artifacts.py --run-id {CI_RUN_ID} --amdgpu-family {GPU_FAMILY} --tests
 $ export THEROCK_BIN_DIR=./therock-build/bin
