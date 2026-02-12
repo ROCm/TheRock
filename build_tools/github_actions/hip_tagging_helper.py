@@ -55,7 +55,9 @@ def tag_exists_for_commit(commit_hash, pat):
 
     for tag in repo.get_tags():
         if tag.commit.sha == commit_hash:
-            print(f"[INFO] Tag '{tag.name}' already exists for commit {commit_hash}. Skipping.")
+            print(
+                f"[INFO] Tag '{tag.name}' already exists for commit {commit_hash}. Skipping."
+            )
             return True
     return False
 
@@ -73,13 +75,10 @@ def create_tag(commit_hash, tag_name, pat):
         tag=tag_name,
         message=f"Tag for build {tag_name}",
         object=commit_hash,
-        type="commit"
+        type="commit",
     )
 
-    repo.create_git_ref(
-        ref=f"refs/tags/{tag_name}",
-        sha=tag.sha
-    )
+    repo.create_git_ref(ref=f"refs/tags/{tag_name}", sha=tag.sha)
 
     print("[INFO] Tag created successfully.")
 
