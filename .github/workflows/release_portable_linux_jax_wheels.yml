@@ -1,6 +1,10 @@
 name: Release portable Linux JAX Wheels
 
 on:
+  pull_request:
+    paths:
+      - '.github/workflows/*jax*.yml'
+      - 'build_tools/github_actions/*jax*.py'
   workflow_call:
     inputs:
       amdgpu_family:
@@ -100,14 +104,14 @@ jobs:
 
     uses: ./.github/workflows/build_linux_jax_wheels.yml
     with:
-      amdgpu_family: ${{ inputs.amdgpu_family }}
+      amdgpu_family: ${{ inputs.amdgpu_family || 'gfx94X-dcgpu' }}
       python_version: ${{ matrix.python_version }}
-      release_type: ${{ inputs.release_type }}
-      s3_subdir: ${{ inputs.s3_subdir }}
-      s3_staging_subdir: ${{ inputs.s3_staging_subdir }}
-      cloudfront_url: ${{ inputs.cloudfront_url }}
-      cloudfront_staging_url: ${{ inputs.cloudfront_staging_url }}
-      rocm_version: ${{ inputs.rocm_version }}
-      tar_url: ${{ inputs.tar_url }}
+      release_type: ${{ inputs.release_type || 'dev' }}
+      s3_subdir: ${{ inputs.s3_subdir || 'v2' }}
+      s3_staging_subdir: ${{ inputs.s3_staging_subdir || 'v2-staging' }}
+      cloudfront_url: ${{ inputs.cloudfront_url || 'https://rocm.devreleases.amd.com/v2' }}
+      cloudfront_staging_url: ${{ inputs.cloudfront_staging_url || 'https://rocm.devreleases.amd.com/v2-staging' }}
+      rocm_version: ${{ inputs.rocm_version || '7.12.0.dev0+a47588d6b2d3271d7779a0c3e980d779828d722b' }}
+      tar_url: ${{ inputs.tar_url || 'https://rocm.devreleases.amd.com/tarball/therock-dist-linux-gfx94X-dcgpu-7.12.0.dev0%2Ba47588d6b2d3271d7779a0c3e980d779828d722b.tar.gz' }}
       jax_ref: ${{ matrix.jax_ref }}
       ref: ${{ inputs.ref || '' }}
