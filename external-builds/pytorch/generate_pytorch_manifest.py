@@ -121,8 +121,8 @@ def build_manifest(
     manifest: dict[str, object] = {}
     manifest.update(sources)
     manifest["therock"] = {
-        "repo": therock_repo,
         "commit": therock_commit,
+        "repo": therock_repo,
         "branch": therock_branch,
     }
     return manifest
