@@ -164,7 +164,7 @@ jobs:
           ROCM_VERSION: ${{ inputs.rocm_version }}
         run: |
           ls -lah
-          pushd jax
+          pushd rocm-jax
           python3 build/ci_build \
             --compiler=clang \
             --python-versions="${{ inputs.python_version }}" \
