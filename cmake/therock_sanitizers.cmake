@@ -31,8 +31,8 @@ function(therock_sanitizer_configure
     string(APPEND _stanza "set(THEROCK_SANITIZER \"ASAN\")\n")
     # TODO: Support ASAN_STATIC to use static ASAN linkage. Shared is almost always the right thing,
     # so make "ASAN" imply shared linkage.
-    string(APPEND _stanza "string(APPEND CMAKE_CXX_FLAGS \" -fsanitize=address -fno-omit-frame-pointer -g\")\n")
-    string(APPEND _stanza "string(APPEND CMAKE_C_FLAGS \" -fsanitize=address -fno-omit-frame-pointer -g\")\n")
+    string(APPEND _stanza "string(APPEND CMAKE_CXX_FLAGS \" -fsanitize=address -fno-omit-frame-pointer -ggdb -gz\")\n")
+    string(APPEND _stanza "string(APPEND CMAKE_C_FLAGS \" -fsanitize=address -fno-omit-frame-pointer -ggdb -gz\")\n")
     # Sharp edge: The -shared-libsan flag is compiler frontend specific:
     #   gcc (and gfortran): defaults to shared sanitizer linkage
     #   clang: defaults to static linkage and requires -shared-libsan to link shared
