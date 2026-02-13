@@ -41,8 +41,8 @@ function(therock_add_amdgpu_target gfx_target product_name)
   endforeach()
 endfunction()
 
-# gfx90X family
-therock_add_amdgpu_target(gfx906 "Radeon VII / MI50 CDNA" FAMILY dgpu-all gfx90X-all gfx90X-dgpu gfx90X-dcgpu
+# gfx906 (separate family - different instruction support from gfx908/gfx90a)
+therock_add_amdgpu_target(gfx906 "Radeon VII / MI50 CDNA" FAMILY dgpu-all gfx906-dgpu
   EXCLUDE_TARGET_PROJECTS
     hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
@@ -50,12 +50,16 @@ therock_add_amdgpu_target(gfx906 "Radeon VII / MI50 CDNA" FAMILY dgpu-all gfx90X
     rocWMMA # https://github.com/ROCm/TheRock/issues/1944
     libhipcxx # https://github.com/ROCm/TheRock/issues/2504
 )
-therock_add_amdgpu_target(gfx908 "MI100 CDNA" FAMILY gfx90X-all dcgpu-all gfx90X-dcgpu
+
+# gfx908 (separate family - different instruction support from gfx906/gfx90a)
+therock_add_amdgpu_target(gfx908 "MI100 CDNA" FAMILY dcgpu-all gfx908-dcgpu
   EXCLUDE_TARGET_PROJECTS
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
     libhipcxx # https://github.com/ROCm/TheRock/issues/2504
 )
-therock_add_amdgpu_target(gfx90a "MI210/250 CDNA" FAMILY gfx90X-all dcgpu-all gfx90X-dcgpu
+
+# gfx90a (separate family - different instruction support from gfx906/gfx908)
+therock_add_amdgpu_target(gfx90a "MI210/250 CDNA" FAMILY dcgpu-all gfx90a-dcgpu
   EXCLUDE_TARGET_PROJECTS
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
 )
