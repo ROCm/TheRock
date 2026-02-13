@@ -236,10 +236,11 @@ jobs:
           cmake_preset: ''
         run: |
           python3 ./build_tools/github_actions/build_configure.py
+          ls -laRt ${{ env.OUTPUT_DIR }} || true
 
       - name: Build Projects
         run: |
-          mkdir -p ${{ env.OUTPUT_DIR }}/build
+          mkdir -p ${{ env.OUTPUT_DIR }}/build/dist/rocm
           cmake --build ${{ env.OUTPUT_DIR }}/build --target therock-archives therock-dist
           cd ${{ env.OUTPUT_DIR }}/build/dist/rocm
           echo "Building ${{ env.DIST_ARCHIVE }}"
