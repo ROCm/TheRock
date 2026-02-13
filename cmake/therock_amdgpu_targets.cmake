@@ -161,7 +161,6 @@ therock_add_amdgpu_target(gfx1103 "AMD Radeon 780M Laptop iGPU" FAMILY igpu-all 
   EXCLUDE_TARGET_PROJECTS
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
     rccl  # https://github.com/ROCm/TheRock/issues/150
-    rocWMMA # https://github.com/ROCm/TheRock/issues/1944
     libhipcxx # https://github.com/ROCm/TheRock/issues/2504
 )
 
