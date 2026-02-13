@@ -302,6 +302,32 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
 endif(THEROCK_ENABLE_HIP_RUNTIME)
 
 ################################################################################
+# Remote HIP (macOS)
+#
+# On macOS, we build a remote HIP client that forwards API calls to a Linux
+# GPU server instead of using the local CLR runtime.
+################################################################################
+
+if(APPLE AND THEROCK_ENABLE_HIP_RUNTIME)
+  message(STATUS "macOS detected: Building remote HIP client instead of CLR")
+
+  # The remote HIP client is a drop-in replacement for libamdhip64
+  add_subdirectory(hip-remote-client)
+
+  # Note: hip-remote-worker is only built on Linux (requires real HIP)
+  # It's included here for completeness but will skip on macOS
+  if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/hip-remote-worker/CMakeLists.txt")
+    add_subdirectory(hip-remote-worker)
+  endif()
+endif()
+
+# On Linux, optionally build the worker service for remote clients
+if(THEROCK_CONDITION_IS_LINUX AND THEROCK_ENABLE_REMOTE_HIP_WORKER)
+  message(STATUS "Building remote HIP worker service")
+  add_subdirectory(hip-remote-worker)
+endif()
+
+################################################################################
 # ocl-icd
 ################################################################################
 
