@@ -1,6 +1,7 @@
 import logging
 import os
 import shlex
+import resource
 import subprocess
 from pathlib import Path
 
@@ -39,3 +40,5 @@ subprocess.run(
     cwd=THEROCK_DIR,
     check=True,
 )
+peak_rss = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
+logging.info(f"Peak RSS (children): {peak_rss} KB = {peak_rss / 1024 / 1024:.1f} Gi")
