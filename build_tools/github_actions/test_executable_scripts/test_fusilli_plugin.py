@@ -1,6 +1,7 @@
 import logging
 import os
 import shlex
+import resource
 import subprocess
 import tempfile
 import venv
@@ -84,3 +85,5 @@ with tempfile.TemporaryDirectory(prefix="fusilli_test_venv_") as venv_dir:
         check=True,
         env=environ_vars,
     )
+    peak_rss = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
+    logging.info(f"Peak RSS (children): {peak_rss} KB = {peak_rss / 1024 / 1024:.1f} Gi")

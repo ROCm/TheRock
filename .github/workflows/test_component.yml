@@ -117,6 +117,26 @@ jobs:
         run: |
           ${{ fromJSON(inputs.component).test_script }}
 
+      - name: Report memory usage
+        if: always()
+        run: |
+          echo "=== cgroup memory ==="
+          if [ -f /sys/fs/cgroup/memory.current ]; then
+            echo "cgroup v2 detected"
+            awk '{printf "Current: %.1f Gi\n", $1/1073741824}' /sys/fs/cgroup/memory.current
+            awk '{printf "Peak:    %.1f Gi\n", $1/1073741824}' /sys/fs/cgroup/memory.peak 2>/dev/null || true
+            awk '{printf "Limit:   %.1f Gi\n", $1/1073741824}' /sys/fs/cgroup/memory.max
+            echo "--- memory.events ---"
+            cat /sys/fs/cgroup/memory.events
+          elif [ -f /sys/fs/cgroup/memory/memory.usage_in_bytes ]; then
+            echo "cgroup v1 detected"
+            awk '{printf "Current:     %.1f Gi\n", $1/1073741824}' /sys/fs/cgroup/memory/memory.usage_in_bytes
+            awk '{printf "Max usage:   %.1f Gi\n", $1/1073741824}' /sys/fs/cgroup/memory/memory.max_usage_in_bytes
+            awk '{printf "Limit:       %.1f Gi\n", $1/1073741824}' /sys/fs/cgroup/memory/memory.limit_in_bytes
+          else
+            echo "No cgroup memory info found"
+          fi
+
       # GitHub's 'Complete job' step is unaware of launched executables
       # and will fail to clean up orphan processes.
       - name: Post-job cleanup processes on Windows

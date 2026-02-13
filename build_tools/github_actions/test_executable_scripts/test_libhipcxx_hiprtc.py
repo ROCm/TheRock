@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import shlex
+import resource
 import subprocess
 from pathlib import Path
 
@@ -94,3 +95,5 @@ cmd = [
 logging.info(f"++ Exec [{os.getcwd()}]$ {shlex.join(cmd)}")
 
 subprocess.run(cmd, check=True, env=environ_vars)
+peak_rss = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
+logging.info(f"Peak RSS (children): {peak_rss} KB = {peak_rss / 1024 / 1024:.1f} Gi")

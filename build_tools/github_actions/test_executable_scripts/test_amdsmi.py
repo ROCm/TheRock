@@ -22,6 +22,7 @@ pytestmark = pytest.mark.skip("Manual execution only — requires GPU device acc
 import logging
 import os
 import shlex
+import resource
 import subprocess
 from pathlib import Path
 import sys
@@ -95,3 +96,5 @@ subprocess.run(
     env=env,
     check=True,
 )
+peak_rss = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
+logging.info(f"Peak RSS (children): {peak_rss} KB = {peak_rss / 1024 / 1024:.1f} Gi")

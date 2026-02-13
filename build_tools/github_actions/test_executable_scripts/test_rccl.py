@@ -1,6 +1,7 @@
 import logging
 import os
 import shlex
+import resource
 import subprocess
 import sys
 from pathlib import Path
@@ -35,6 +36,8 @@ class TestRCCL:
         cmd = [f"{THEROCK_BIN_DIR}/rccl-UnitTests"]
         logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
         result = subprocess.run(cmd, cwd=THEROCK_DIR, check=False, env=environ_vars)
+        peak_rss = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
+        logging.info(f"Peak RSS (children): {peak_rss} KB = {peak_rss / 1024 / 1024:.1f} Gi")
         assert result.returncode == 0
 
     # Executing rccl performance and correctness tests from rccl-tests repo
@@ -62,4 +65,6 @@ class TestRCCL:
             cwd=THEROCK_DIR,
             check=False,
         )
+        peak_rss = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
+        logging.info(f"Peak RSS (children): {peak_rss} KB = {peak_rss / 1024 / 1024:.1f} Gi")
         assert result.returncode == 0

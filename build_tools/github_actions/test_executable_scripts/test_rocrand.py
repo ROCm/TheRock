@@ -1,6 +1,7 @@
 import logging
 import os
 import shlex
+import resource
 import subprocess
 from pathlib import Path
 
@@ -102,3 +103,5 @@ if test_type == "smoke":
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 
 subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=environ_vars)
+peak_rss = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
+logging.info(f"Peak RSS (children): {peak_rss} KB = {peak_rss / 1024 / 1024:.1f} Gi")

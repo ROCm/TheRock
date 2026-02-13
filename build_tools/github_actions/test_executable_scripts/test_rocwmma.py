@@ -1,5 +1,6 @@
 import logging
 import os
+import resource
 import shlex
 import subprocess
 from pathlib import Path
@@ -64,3 +65,5 @@ subprocess.run(
     check=True,
     env=environ_vars,
 )
+peak_rss = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
+logging.info(f"Peak RSS (children): {peak_rss} KB = {peak_rss / 1024 / 1024:.1f} Gi")
