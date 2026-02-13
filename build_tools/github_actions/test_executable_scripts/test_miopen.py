@@ -32,6 +32,13 @@ negative_filter = []
 negative_filter.append("*DeepBench*")
 negative_filter.append("*MIOpenTestConv*")
 
+# Temporary filter for test that is fixed in the future but not in Radha's ASAN branch.
+# (Cherry-picking the test pulls in conflicts and this test does not fail because of
+# ASAN and is not customer visible, and so is not needed.)
+#
+# DO NOT MERGE
+negative_filter.append("*GPU_TestMhaFind20_FP32*")
+
 # For sake of time saving on pre-commit step
 ####################################################
 negative_filter.append("Full/GPU_Reduce_FP64*")  # 4 min 19 sec
