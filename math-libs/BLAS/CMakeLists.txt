@@ -141,6 +141,7 @@ therock_cmake_subproject_declare(hipBLASLt
   BUILD_DEPS
     hipBLAS-common
     rocm-cmake
+    therock-boost
     therock-googletest
     therock-msgpack-cxx
     ${hipBLASLt_rocRoller_build_deps}
@@ -321,6 +322,7 @@ if(THEROCK_ENABLE_SPARSE)
         rocm-cmake
         hipSPARSE
         rocSPARSE
+        therock-boost
         therock-googletest
         therock-msgpack-cxx
       RUNTIME_DEPS
