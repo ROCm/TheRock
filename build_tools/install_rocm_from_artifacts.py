@@ -339,7 +339,7 @@ def retrieve_artifacts_by_run_id(args):
             args.hipdnn_samples,
             args.miopen,
             args.miopen_plugin,
-            args.composablekernel,
+            args.composable_kernel,
             args.fusilli_plugin,
             args.hipblaslt_plugin,
             args.prim,
@@ -390,7 +390,7 @@ def retrieve_artifacts_by_run_id(args):
             argv.append("rand_dev")
         if args.miopen_plugin:
             extra_artifacts.append("miopen-plugin")
-        if args.composablekernel:
+        if args.composable_kernel:
             extra_artifacts.append("composable-kernel")
         if args.fusilli_plugin:
             extra_artifacts.append("fusilli-plugin")
