@@ -13,7 +13,7 @@ if(WIN32)
   # TODO(#36): Enable libunwind, libcxx, and libcxxabi on Windows?
   #     Should they be supported? What depends on them?
   set(LLVM_ENABLE_LIBCXX OFF)
-  set(LLVM_ENABLE_RUNTIMES "libcxx;libcxxabi;libunwind;openmp;offload;compiler-rt;flang-rt" CACHE STRING "Enabled runtimes" FORCE)
+  set(LLVM_ENABLE_RUNTIMES "libcxx;libcxxabi;libunwind;openmp;offload;compiler-rt" CACHE STRING "Enabled runtimes" FORCE)
   set(LLVM_ENABLE_PROJECTS "clang;lld;clang-tools-extra" CACHE STRING "Enable LLVM projects" FORCE)
 else()
   set(LLVM_BUILD_LLVM_DYLIB ON)
