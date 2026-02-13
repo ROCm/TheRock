@@ -71,16 +71,13 @@ amdgpu_family_info_matrix_presubmit = {
             # Label is linux-gfx110X-gpu-rocm
             "test-runs-on": "",
             "family": "gfx110X-all",
-            "bypass_tests_for_releases": True,
             "build_variants": ["release"],
-            "sanity_check_only_for_family": True,
         },
         "windows": {
             "test-runs-on": "windows-gfx110X-gpu-rocm",
             "family": "gfx110X-all",
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
-            "sanity_check_only_for_family": True,
         },
     },
     "gfx1151": {
@@ -90,9 +87,7 @@ amdgpu_family_info_matrix_presubmit = {
                 "oem": "linux-strix-halo-gpu-rocm-oem",
             },
             "family": "gfx1151",
-            "bypass_tests_for_releases": True,
             "build_variants": ["release"],
-            "sanity_check_only_for_family": True,
         },
         "windows": {
             "test-runs-on": "windows-gfx1151-gpu-rocm",
@@ -106,9 +101,7 @@ amdgpu_family_info_matrix_presubmit = {
         "linux": {
             "test-runs-on": "linux-gfx120X-gpu-rocm",
             "family": "gfx120X-all",
-            "bypass_tests_for_releases": True,
             "build_variants": ["release"],
-            "sanity_check_only_for_family": True,
         },
         "windows": {
             # TODO(#2962): Re-enable machine once sanity checks work with this architecture
@@ -138,7 +131,6 @@ amdgpu_family_info_matrix_nightly = {
         "linux": {
             "test-runs-on": "linux-gfx90X-gpu-rocm",
             "family": "gfx90X-dcgpu",
-            "sanity_check_only_for_family": True,
             "build_variants": ["release"],
         },
         # TODO(#1927): Resolve error generating file `torch_hip_generated_int4mm.hip.obj`, to enable PyTorch builds
@@ -168,7 +160,6 @@ amdgpu_family_info_matrix_nightly = {
             "test-runs-on": "linux-gfx1030-gpu-rocm",
             "family": "gfx103X-dgpu",
             "build_variants": ["release"],
-            "sanity_check_only_for_family": True,
         },
         "windows": {
             # TODO(#3200): Re-enable machine once it is stable
@@ -176,7 +167,6 @@ amdgpu_family_info_matrix_nightly = {
             "test-runs-on": "",
             "family": "gfx103X-dgpu",
             "build_variants": ["release"],
-            "sanity_check_only_for_family": True,
         },
     },
     "gfx1150": {
@@ -186,7 +176,6 @@ amdgpu_family_info_matrix_nightly = {
             "test-runs-on": "",
             "family": "gfx1150",
             "build_variants": ["release"],
-            "sanity_check_only_for_family": True,
         },
         "windows": {
             "test-runs-on": "",
@@ -213,7 +202,6 @@ amdgpu_family_info_matrix_nightly = {
             "test-runs-on": "",
             "family": "gfx1153",
             "build_variants": ["release"],
-            "sanity_check_only_for_family": True,
         },
         "windows": {
             "test-runs-on": "",
