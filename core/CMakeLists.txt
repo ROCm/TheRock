@@ -302,6 +302,72 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
 endif(THEROCK_ENABLE_HIP_RUNTIME)
 
 ################################################################################
+# Remote HIP (macOS)
+#
+# On macOS, we build a remote HIP client that forwards API calls to a Linux
+# GPU server instead of using the local CLR runtime.
+#
+# The hip-remote-client and hip-remote-worker projects are in rocm-systems.
+################################################################################
+
+if(APPLE AND THEROCK_ENABLE_HIP_RUNTIME)
+  message(STATUS "macOS detected: Building remote HIP client instead of CLR")
+
+  # hip-remote-client: drop-in replacement for libamdhip64 on macOS
+  therock_cmake_subproject_declare(hip-remote-client
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hip-remote-client"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hip-remote-client"
+    CMAKE_ARGS
+      "-DCMAKE_VERBOSE_MAKEFILE=OFF"
+    INTERFACE_LINK_DIRS
+      "lib"
+    INTERFACE_INSTALL_RPATH_DIRS
+      "lib"
+  )
+  therock_cmake_subproject_provide_package(hip-remote-client hip lib/cmake/hip)
+  therock_cmake_subproject_activate(hip-remote-client)
+endif()
+
+# On Linux, optionally build the worker service for remote clients
+if(THEROCK_CONDITION_IS_LINUX AND THEROCK_ENABLE_REMOTE_HIP_WORKER)
+  message(STATUS "Building remote HIP worker service")
+
+  # hip-remote-worker: Linux service that handles remote HIP requests
+  therock_cmake_subproject_declare(hip-remote-worker
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hip-remote-worker"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hip-remote-worker"
+    BUILD_DEPS
+      hip-clr
+    CMAKE_ARGS
+      "-DCMAKE_VERBOSE_MAKEFILE=OFF"
+  )
+  therock_cmake_subproject_activate(hip-remote-worker)
+endif()
+
+################################################################################
+# Remote SMI Client
+#
+# Remote AMD SMI client for GPU monitoring on systems without local GPUs.
+################################################################################
+
+if(THEROCK_ENABLE_REMOTE_SMI)
+  message(STATUS "Building remote SMI client")
+
+  therock_cmake_subproject_declare(smi-remote-client
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/smi-remote-client"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/smi-remote-client"
+    CMAKE_ARGS
+      "-DCMAKE_VERBOSE_MAKEFILE=OFF"
+    INTERFACE_LINK_DIRS
+      "lib"
+    INTERFACE_INSTALL_RPATH_DIRS
+      "lib"
+  )
+  therock_cmake_subproject_provide_package(smi-remote-client amd_smi lib/cmake/amd_smi)
+  therock_cmake_subproject_activate(smi-remote-client)
+endif()
+
+################################################################################
 # ocl-icd
 ################################################################################
 
