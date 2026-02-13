@@ -27,7 +27,7 @@ if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
 
   # In the context of building miopen, do a narrow build of CK.
   set(optional_ck_cmake_args)
-  if(THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL)
+  if(THEROCK_ENABLE_MIOPEN AND THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL)
     list(APPEND optional_ck_cmake_args -DMIOPEN_REQ_LIBS_ONLY=ON)
   endif()
 
