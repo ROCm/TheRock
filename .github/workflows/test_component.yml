@@ -137,6 +137,15 @@ jobs:
             echo "No cgroup memory info found"
           fi
 
+          echo ""
+          echo "=== ephemeral storage (disk) ==="
+          df -h / 2>/dev/null || true
+          echo ""
+          echo "--- workspace usage ---"
+          du -sh ${{ github.workspace }} 2>/dev/null || true
+          echo "--- /tmp usage ---"
+          du -sh /tmp 2>/dev/null || true
+
       # GitHub's 'Complete job' step is unaware of launched executables
       # and will fail to clean up orphan processes.
       - name: Post-job cleanup processes on Windows
