@@ -229,6 +229,7 @@ jobs:
 
       - name: Configure Projects
         env:
+          cmake_preset: windows-release
           amdgpu_families: ${{ matrix.target_bundle.amdgpu_family }}
           package_version: "ADHOCBUILD"
           extra_cmake_options: ${{ inputs.extra_cmake_options }}

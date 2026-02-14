@@ -200,8 +200,11 @@ If you prefer to install tools manually, you will need:
 >   running `vcvars64.bat` in an existing shell.
 > - If you build from an editor like VSCode, CMake can discover the compiler
 >   among other "kits".
+> - Our `windows-base` or `windows-release` presets in
+>   [CMakePresets.json](/CMakePresets.json) set the CMake compiler and linker
+>   for you.
 > - You can also tell CMake to use MSVC's tools explicitly with
->   `-DCMAKE_C_COMPILER=cl.exe -DCMAKE_CXX_COMPILER=cl.exe -DCMAKE_LINKER=link.exe`
+>   `-DCMAKE_C_COMPILER=cl.exe -DCMAKE_CXX_COMPILER=cl.exe -DCMAKE_LINKER=link.exe`.
 
 ### Set the locale
 

@@ -35,7 +35,6 @@ amdgpu_families = os.getenv("amdgpu_families")
 package_version = os.getenv("package_version")
 extra_cmake_options = os.getenv("extra_cmake_options")
 build_dir = os.getenv("BUILD_DIR")
-vctools_install_dir = os.getenv("VCToolsInstallDir")
 github_workspace = os.getenv("GITHUB_WORKSPACE")
 extra_c_compiler_launcher = os.getenv("EXTRA_C_COMPILER_LAUNCHER", "")
 extra_cxx_compiler_launcher = os.getenv("EXTRA_CXX_COMPILER_LAUNCHER", "")
@@ -77,9 +76,6 @@ def build_compiler_launcher(
 
 platform_options = {
     "windows": [
-        f"-DCMAKE_C_COMPILER={vctools_install_dir}/bin/Hostx64/x64/cl.exe",
-        f"-DCMAKE_CXX_COMPILER={vctools_install_dir}/bin/Hostx64/x64/cl.exe",
-        f"-DCMAKE_LINKER={vctools_install_dir}/bin/Hostx64/x64/link.exe",
         "-DTHEROCK_BACKGROUND_BUILD_JOBS=4",
     ],
 }
@@ -135,13 +131,6 @@ def build_configure(manylinux=False):
             "/opt/python-shared/cp314-cp314/bin/python3"
         )
         cmd.append(f"-DTHEROCK_SHARED_PYTHON_EXECUTABLES={python_shared_executables}")
-
-    if PLATFORM == "windows":
-        # VCToolsInstallDir is required for build. Throwing an error if environment variable doesn't exist
-        if not vctools_install_dir:
-            raise Exception(
-                "Environment variable VCToolsInstallDir is not set. Please see https://github.com/ROCm/TheRock/blob/main/docs/development/windows_support.md#important-tool-settings about Windows tool configurations. Exiting."
-            )
 
     # Splitting cmake options into an array (ex: "-flag X" -> ["-flag", "X"]) for subprocess.run
     cmake_options_arr = extra_cmake_options.split()
