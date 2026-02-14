@@ -423,7 +423,18 @@ def main(argv):
         "--nested-submodules",
         nargs="+",
         type=parse_nested_submodules,
-        default=[("iree", ["third_party/flatcc", "third_party/benchmark"])],
+        default=[
+            (
+                "iree",
+                [
+                    "third_party/flatcc",
+                    "third_party/benchmark",
+                    "third_party/llvm-project",
+                    "third_party/stablehlo",
+                    "third_party/torch-mlir",
+                ],
+            )
+        ],
         help="Specify which nested submodules to fetch (e.g., project1:nested_in_project1_1,nested_in_project1_2 project2:nested_in_project2)",
     )
     parser.add_argument(

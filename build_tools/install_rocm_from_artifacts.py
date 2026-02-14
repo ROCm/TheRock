@@ -339,6 +339,7 @@ def retrieve_artifacts_by_run_id(args):
             args.miopen,
             args.miopen_plugin,
             args.fusilli_plugin,
+            args.iree_compiler,
             args.hipblaslt_plugin,
             args.prim,
             args.rand,
@@ -390,6 +391,8 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("miopen-plugin")
         if args.fusilli_plugin:
             extra_artifacts.append("fusilli-plugin")
+        if args.iree_compiler:
+            extra_artifacts.append("iree-compiler")
         if args.hipblaslt_plugin:
             extra_artifacts.append("hipblaslt-plugin")
         if args.prim:
@@ -655,6 +658,13 @@ def main(argv):
         "--fusilli-plugin",
         default=False,
         help="Include 'fusilli-plugin' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--iree-compiler",
+        default=False,
+        help="Include 'iree-compiler' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
