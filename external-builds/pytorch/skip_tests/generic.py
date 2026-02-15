@@ -49,15 +49,6 @@ skip_tests = {
             # ----------------
         ],
         "nn": [
-            # external-builds/pytorch/pytorch/test/test_nn.py::TestNN::test_RNN_dropout_state MIOpen(HIP): Error [Compile] 'hiprtcCompileProgram(prog.get(), c_options.size(), c_options.data())' MIOpenDropoutHIP.cpp: HIPRTC_ERROR_COMPILATION (6)
-            # MIOpen(HIP): Error [BuildHip] HIPRTC status = HIPRTC_ERROR_COMPILATION (6), source file: MIOpenDropoutHIP.cpp
-            # MIOpen(HIP): Warning [BuildHip] In file included from /tmp/comgr-01c423/input/MIOpenDropoutHIP.cpp:32:
-            # /tmp/comgr-01c423/include/miopen_rocrand.hpp:45:10: fatal error: 'rocrand/rocrand_xorwow.h' file not found
-            # 45 | #include <rocrand/rocrand_xorwow.h>
-            #     |          ^~~~~~~~~~~~~~~~~~~~~~~~~~
-            # 1 error generated when compiling for gfx942.
-            # MIOpen Error: /therock/src/rocm-libraries/projects/miopen/src/hipoc/hipoc_program.cpp:299: Code object build failed. Source: MIOpenDropoutHIP.cpp
-            "test_RNN_dropout_state",
             # AssertionError: "Input and parameter tensors are not at the same device" does not match "Expected all tensors
             # to be on the same device, but got weight is on cpu, different from other tensors on cuda:0 (when checking
             # argument in method wrapper_CUDA__miopen_rnn)"
