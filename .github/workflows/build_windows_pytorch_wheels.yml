@@ -156,7 +156,7 @@ jobs:
         run: |
           choco install --no-progress -y ninja --version 1.13.1
           choco install --no-progress -y awscli
-          echo "$PATH;C:\Program Files\Amazon\AWSCLIV2" >> $GITHUB_PATH
+          echo "C:\Program Files\Amazon\AWSCLIV2" >> $GITHUB_PATH
 
       # After other installs, so MSVC get priority in the PATH.
       - name: Configure MSVC
