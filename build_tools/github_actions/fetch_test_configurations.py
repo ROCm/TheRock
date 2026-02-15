@@ -123,6 +123,16 @@ test_matrix = {
         "platform": ["linux", "windows"],
         "total_shards": 1,
     },
+    "rocgdb": {
+        "job_name": "rocgdb",
+        "fetch_artifact_args": "--debug-tools --tests",
+        "timeout_minutes": 30,
+        "test_script": f"python {_get_script_path('test_rocgdb.py')}",
+        "platform": ["linux"],
+        "total_shards": 1,
+        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_extended@sha256:78879bd2813eda99e144b8ed76eda8dae969bd062c6d412f3c02fc90d989e29f",
+        "container_options": "--cap-add=SYS_PTRACE --security-opt seccomp=unconfined",
+    },
     "rocr-debug-agent": {
         "job_name": "rocr-debug-agent",
         "fetch_artifact_args": "--debug-tools --tests",
