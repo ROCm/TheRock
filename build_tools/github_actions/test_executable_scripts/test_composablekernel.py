@@ -15,3 +15,4 @@ logging.basicConfig(level=logging.INFO)
 cmd = [f"{THEROCK_BIN_DIR}/test_ck_tile_pooling"]
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=environ_vars)
+
