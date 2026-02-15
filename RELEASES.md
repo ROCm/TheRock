@@ -80,6 +80,7 @@ project layouts.**
 
 | Product Name                       | GFX Target | GFX Family   | Install instructions                                               |
 | ---------------------------------- | ---------- | ------------ | ------------------------------------------------------------------ |
+| MI210/MI250                        | gfx90a     | gfx90a-dcgpu | [rocm](#rocm-for-gfx90a-dcgpu) // [torch](#torch-for-gfx90a-dcgpu) |
 | MI300A/MI300X                      | gfx942     | gfx94X-dcgpu | [rocm](#rocm-for-gfx94X-dcgpu) // [torch](#torch-for-gfx94X-dcgpu) |
 | MI350X/MI355X                      | gfx950     | gfx950-dcgpu | [rocm](#rocm-for-gfx950-dcgpu) // [torch](#torch-for-gfx950-dcgpu) |
 | AMD RX 7900 XTX                    | gfx1100    | gfx110X-all  | [rocm](#rocm-for-gfx110X-all) // [torch](#torch-for-gfx110X-all)   |
