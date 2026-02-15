@@ -100,6 +100,12 @@ therock_add_amdgpu_target(gfx1030 "AMD RX 6800 / XT" FAMILY dgpu-all gfx103X-all
     rocWMMA # https://github.com/ROCm/TheRock/issues/1944
     libhipcxx # https://github.com/ROCm/TheRock/issues/2504
 )
+therock_add_amdgpu_target(gfx1031 "AMD RX 6700 / XT" FAMILY dgpu-all gfx103X-all gfx103X-dgpu
+  EXCLUDE_TARGET_PROJECTS
+  hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
+  hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
+  rocWMMA # https://github.com/ROCm/TheRock/issues/1944
+)
 therock_add_amdgpu_target(gfx1032 "AMD RX 6600" FAMILY dgpu-all gfx103X-all gfx103X-dgpu
   EXCLUDE_TARGET_PROJECTS
     hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
@@ -107,7 +113,20 @@ therock_add_amdgpu_target(gfx1032 "AMD RX 6600" FAMILY dgpu-all gfx103X-all gfx1
     rocWMMA # https://github.com/ROCm/TheRock/issues/1944
     libhipcxx # https://github.com/ROCm/TheRock/issues/2504
 )
-therock_add_amdgpu_target(gfx1035 "AMD Radeon 680M Laptop iGPU" igpu-all FAMILY gfx103X-all gfx103X-igpu
+therock_add_amdgpu_target(gfx1033 "AMD Van Gogh iGPU" FAMILY igpu-all gfx103X-all gfx103X-igpu
+  EXCLUDE_TARGET_PROJECTS
+    hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
+    hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
+    rocWMMA # https://github.com/ROCm/TheRock/issues/1944
+    composable_kernel
+)
+therock_add_amdgpu_target(gfx1034 "AMD RX 6500 XT" FAMILY dgpu-all gfx103X-all gfx103X-dgpu
+  EXCLUDE_TARGET_PROJECTS
+    hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
+    hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
+    rocWMMA # https://github.com/ROCm/TheRock/issues/1944
+)
+therock_add_amdgpu_target(gfx1035 "AMD Radeon 680M Laptop iGPU" FAMILY igpu-all gfx103X-all gfx103X-igpu
   EXCLUDE_TARGET_PROJECTS
     hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
@@ -239,12 +258,12 @@ function(therock_validate_amdgpu_targets)
   endforeach()
 
   # Expand dist families (THEROCK_DIST_AMDGPU_FAMILIES -> THEROCK_DIST_AMDGPU_TARGETS).
-  # If THEROCK_DIST_AMDGPU_FAMILIES is not set, it defaults to THEROCK_AMDGPU_FAMILIES.
+  # If THEROCK_DIST_AMDGPU_FAMILIES is not set, it defaults to all supported families.
+  set(_dist_expanded_targets "${THEROCK_DIST_AMDGPU_TARGETS}")
   set(_dist_families "${THEROCK_DIST_AMDGPU_FAMILIES}")
-  if(NOT _dist_families)
-    set(_dist_families "${THEROCK_AMDGPU_FAMILIES}")
+  if(NOT _dist_families AND NOT _dist_expanded_targets)
+    set(_dist_expanded_targets "${_available_targets}")
   endif()
-  set(_dist_expanded_targets)
   foreach(_family ${_dist_families})
     if(NOT "${_family}" IN_LIST _available_families)
       string(JOIN " " _families_pretty ${_available_families})
@@ -259,7 +278,7 @@ function(therock_validate_amdgpu_targets)
 
   # Report dist targets if different from per-arch targets.
   if(_dist_expanded_targets AND NOT "${_dist_expanded_targets}" STREQUAL "${_expanded_targets}")
-    message(STATUS "Dist targets: ${_dist_expanded_targets}")
+    message(STATUS "* Dist targets: ${_dist_expanded_targets}")
   endif()
 
   # Handle the case where per-arch targets are empty but dist targets exist.
