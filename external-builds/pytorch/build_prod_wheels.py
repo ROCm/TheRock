@@ -347,18 +347,23 @@ def find_dir_containing(file_name: str, *possible_paths: Path) -> Path:
     raise ValueError(f"No directory contains {file_name}: {possible_paths}")
 
 
-def _do_build_wheels_core(
-    args: argparse.Namespace,
-    env: dict[str, str],
-    triton_dir: Path | None,
-    pytorch_dir: Path | None,
-    pytorch_audio_dir: Path | None,
-    pytorch_vision_dir: Path | None,
-    apex_dir: Path | None,
+def _setup_common_build_env(
+    cmake_prefix: Path,
     rocm_dir: Path,
+    pytorch_rocm_arch: str,
+    triton_dir: Path | None,
     is_windows: bool,
-) -> None:
-    """Run the main wheel build steps (env setup, triton, pytorch, audio, vision, apex, stats)."""
+) -> dict[str, str]:
+    """Construct the common environment dict shared by all wheel builds."""
+    env: dict[str, str] = {
+        "PYTHONUTF8": "1",  # Some build files use utf8 characters, force IO encoding
+        "CMAKE_PREFIX_PATH": str(cmake_prefix),
+        "ROCM_HOME": str(rocm_dir),
+        "ROCM_PATH": str(rocm_dir),
+        "PYTORCH_ROCM_ARCH": pytorch_rocm_arch,
+        "USE_KINETO": os.environ.get("USE_KINETO", "ON" if not is_windows else "OFF"),
+    }
+
     # GLOO enabled for only Linux
     if not is_windows:
         env["USE_GLOO"] = "ON"
@@ -432,6 +437,19 @@ def _do_build_wheels_core(
         env["OpenBLAS_HOME"] = str(host_math_path)
         env["OpenBLAS_LIB_NAME"] = "rocm-openblas"
 
+    return env
+
+
+def _do_build_wheels_core(
+    args: argparse.Namespace,
+    env: dict[str, str],
+    triton_dir: Path | None,
+    pytorch_dir: Path | None,
+    pytorch_audio_dir: Path | None,
+    pytorch_vision_dir: Path | None,
+    apex_dir: Path | None,
+) -> None:
+    """Execute all wheel builds (triton, pytorch, audio, vision, apex)."""
     # Build triton.
     triton_requirement = None
     if args.build_triton or (args.build_triton is None and triton_dir):
@@ -479,12 +497,6 @@ def _do_build_wheels_core(
 
     print("--- Builds all completed")
 
-    if args.use_ccache:
-        ccache_stats_output = capture(
-            ["ccache", "--show-stats"], cwd=tempfile.gettempdir()
-        )
-        print(f"ccache --show-stats output:\n{ccache_stats_output}")
-
 
 def do_build(args: argparse.Namespace):
     if args.install_rocm:
@@ -528,14 +540,9 @@ def do_build(args: argparse.Namespace):
             "Please specify --pytorch-rocm-arch (e.g., gfx942)."
         )
 
-    env: dict[str, str] = {
-        "PYTHONUTF8": "1",  # Some build files use utf8 characters, force IO encoding
-        "CMAKE_PREFIX_PATH": str(cmake_prefix),
-        "ROCM_HOME": str(rocm_dir),
-        "ROCM_PATH": str(rocm_dir),
-        "PYTORCH_ROCM_ARCH": pytorch_rocm_arch,
-        "USE_KINETO": os.environ.get("USE_KINETO", "ON" if not is_windows else "OFF"),
-    }
+    env = _setup_common_build_env(
+        cmake_prefix, rocm_dir, pytorch_rocm_arch, triton_dir, is_windows
+    )
 
     if args.use_ccache:
         print("Building with ccache, clearing stats first")
@@ -551,9 +558,13 @@ def do_build(args: argparse.Namespace):
         pytorch_audio_dir,
         pytorch_vision_dir,
         apex_dir,
-        rocm_dir,
-        is_windows,
     )
+
+    if args.use_ccache:
+        ccache_stats_output = capture(
+            ["ccache", "--show-stats"], cwd=tempfile.gettempdir()
+        )
+        print(f"ccache --show-stats output:\n{ccache_stats_output}")
 
 
 def do_build_triton(
