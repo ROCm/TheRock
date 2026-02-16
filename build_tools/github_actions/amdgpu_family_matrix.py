@@ -18,6 +18,10 @@ from github_actions_utils import str2bool
 import json
 import os
 
+#############################################################################################
+# NOTE: when doing changes here, also check that they are done in new_amdgpu_family_matrix.py
+#############################################################################################
+
 all_build_variants = {
     "linux": {
         "release": {

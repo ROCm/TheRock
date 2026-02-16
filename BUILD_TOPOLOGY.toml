@@ -481,11 +481,11 @@ platform = "windows"
 artifact_deps = ["core-hip"]
 feature_group = "CORE"  # Part of core, enabled by default
 
-# --- hip-tests (per-arch) ---
+# --- hip-tests ---
 
 [artifacts.core-hiptests]
 artifact_group = "hip-runtime"
-type = "target-specific"
+type = "target-neutral"
 artifact_deps = ["core-hip"]
 feature_group = "CORE"  # Part of core, enabled by default
 
@@ -598,7 +598,7 @@ disable_platforms = ["windows"]
 
 [artifacts.aqlprofile-tests]
 artifact_group = "profiler-core"
-type = "target-specific"
+type = "target-neutral"
 artifact_deps = ["core-runtime"]
 feature_group = "PROFILER"
 disable_platforms = ["windows"]

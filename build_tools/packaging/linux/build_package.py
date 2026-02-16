@@ -143,14 +143,16 @@ def create_versioned_deb_package(pkg_name, config: PackageConfig):
     if not sourcedir_list:
         print(f"{pkg_name} is a Meta package")
     else:
-        # Install file is required for non-meta packages
-        generate_install_file(pkg_info, deb_dir, config)
+        # Copy package contents first
         dest_dir = package_dir / Path(config.install_prefix).relative_to("/")
         for source_path in sourcedir_list:
             copy_package_contents(source_path, dest_dir)
 
         if config.enable_rpath:
             convert_runpath_to_rpath(package_dir)
+
+        # Generate install file after copying, so we can check for hidden files
+        generate_install_file(pkg_info, deb_dir, config, dest_dir)
 
     package_with_dpkg_build(package_dir)
 
@@ -199,13 +201,14 @@ def generate_changelog_file(pkg_info, deb_dir, config: PackageConfig):
         f.write(template.render(context))
 
 
-def generate_install_file(pkg_info, deb_dir, config: PackageConfig):
+def generate_install_file(pkg_info, deb_dir, config: PackageConfig, dest_dir=None):
     """Generate a Debian install entry in `debian/install`.
 
     Parameters:
     pkg_info : Package details from the Json file
     deb_dir: Directory where debian package control file is saved
     config: Configuration object containing package metadata
+    dest_dir: Optional path to check for hidden files
 
     Returns: None
     """
@@ -214,11 +217,29 @@ def generate_install_file(pkg_info, deb_dir, config: PackageConfig):
     # May be required in future to populate any context
     install_file = Path(deb_dir) / "install"
 
+    # Check if hidden files and regular files exist in the destination directory
+    has_hidden_files = False
+    has_regular_files = False
+    if dest_dir and Path(dest_dir).exists():
+        for item in Path(dest_dir).iterdir():
+            name = item.name  # get the filename as a string
+            # Skip "." and ".."
+            if name in [".", ".."]:
+                continue
+
+            # Hidden entry
+            if name.startswith("."):
+                has_hidden_files = True
+            else:
+                has_regular_files = True
+
     env = Environment(loader=FileSystemLoader(str(SCRIPT_DIR)))
     template = env.get_template("template/debian_install.j2")
     # Prepare your context dictionary
     context = {
         "path": config.install_prefix,
+        "has_hidden_files": has_hidden_files,
+        "has_regular_files": has_regular_files,
     }
 
     with install_file.open("w", encoding="utf-8") as f:

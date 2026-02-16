@@ -307,8 +307,15 @@ therock_report_features()
 ################################################################################
 
 set(THEROCK_AMDGPU_FAMILIES "" CACHE STRING "AMDGPU target families to build for")
-set(THEROCK_AMDGPU_TARGETS "" CACHE STRING "AMDGPU targets to build for")
+set(THEROCK_AMDGPU_TARGETS "" CACHE STRING "AMDGPU targets to build for (individual gfx targets in addition to those expanded from THEROCK_AMDGPU_FAMILIES)")
 set(THEROCK_AMDGPU_DIST_BUNDLE_NAME "" CACHE STRING "Distribution bundle name for AMDGPU packages")
+
+# Note that if THEROCK_DIST_AMDGPU_FAMILIES and THEROCK_DIST_AMDGPU_TARGETS are empty, then
+# this defaults to all supported targets. These "dist" targets are used for runtime
+# libraries that embed device code and are marked as target-neutral (which typically means
+# generate for all supported architectures).
+set(THEROCK_DIST_AMDGPU_FAMILIES "" CACHE STRING "AMDGPU target families to use for target-neutral projects")
+set(THEROCK_DIST_AMDGPU_TARGETS "" CACHE STRING "AMDGPU targets to build for (individual gfx targets in addition to those expanded from THEROCK_DIST_AMDGPU_FAMILIES)")
 
 therock_validate_amdgpu_targets()
 
