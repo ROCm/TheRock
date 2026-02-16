@@ -1,17 +1,17 @@
 # Functional Testing Framework
 
-Functional tests validate correctness, API contracts, and expected behavior of ROCm libraries.
+Functional tests validate correctness that verify expected behavior without performance measurements.
 
 ## Overview
 
-Functional tests are designed to verify that libraries work correctly and meet their API specifications. Unlike benchmark tests which measure performance, functional tests focus on correctness validation.
+Functional tests validate **correctness and behavior**:
 
-| Aspect | Functional Tests |
-|--------|------------------|
-| **Purpose** | Correctness validation and API testing |
-| **Result Types** | PASS/FAIL/ERROR/SKIP |
-| **When to Use** | Verify expected behavior (nightly CI) |
-| **Frequency** | Nightly CI only |
+| Aspect           | Functional Tests                       |
+| ---------------- | -------------------------------------- |
+| **Purpose**      | Correctness validation and API testing |
+| **Result Types** | PASS/FAIL/ERROR/SKIP                   |
+| **When to Use**  | Verify expected behavior (nightly CI)  |
+| **Frequency**    | Nightly CI only                        |
 
 ## Status
 
@@ -31,15 +31,6 @@ functional/
 ├── functional_test_matrix.py  # Functional test matrix
 └── README.md                  # This file
 ```
-
-## Adding Functional Tests
-
-Functional tests will be added in follow-up PRs. When implemented, they will:
-
-1. Inherit from `FunctionalBase` class (similar to `BenchmarkBase`)
-2. Implement test execution and result validation logic
-3. Use shared utilities from `extended_tests/utils/`
-4. Be integrated into nightly CI workflows
 
 ## Related Documentation
 
