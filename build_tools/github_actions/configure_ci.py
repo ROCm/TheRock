@@ -17,7 +17,7 @@
   * WINDOWS_TEST_LABELS (optional): Comma-separated list of test labels to test
   * WINDOWS_USE_PREBUILT_ARTIFACTS (optional): If enabled, CI will only run Windows tests
   * BRANCH_NAME (optional): The branch name
-  * BUILD_VARIANT (optional): The build variant to run (ex: release, asan)
+  * BUILD_VARIANT (optional): The build variant to run (ex: release, asan, tsan)
   * ROCM_THEROCK_TEST_RUNNERS (optional): Test runner JSON object, coming from ROCm organization
   * LOAD_TEST_RUNNERS_FROM_VAR (optional): boolean env variable that loads in ROCm org data if enabled
 
@@ -46,7 +46,6 @@
   * Detailed information for CI maintainers
 """
 
-import fnmatch
 import json
 import os
 from pathlib import Path
@@ -60,162 +59,15 @@ from amdgpu_family_matrix import (
 )
 from fetch_test_configurations import test_matrix
 
+from configure_ci_path_filters import (
+    get_git_modified_paths,
+    get_git_submodule_paths,
+    is_ci_run_required,
+)
 from github_actions_utils import *
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = THIS_SCRIPT_DIR.parent.parent
-
-# --------------------------------------------------------------------------- #
-# Filtering by modified paths
-# --------------------------------------------------------------------------- #
-
-
-def get_modified_paths(base_ref: str) -> Optional[Iterable[str]]:
-    """Returns the paths of modified files relative to the base reference."""
-    try:
-        return subprocess.run(
-            ["git", "diff", "--name-only", base_ref],
-            stdout=subprocess.PIPE,
-            check=True,
-            text=True,
-            timeout=60,
-        ).stdout.splitlines()
-    except TimeoutError:
-        print(
-            "Computing modified files timed out. Not using PR diff to determine"
-            " jobs to run.",
-            file=sys.stderr,
-        )
-        return None
-
-
-def get_therock_submodule_paths() -> Optional[Iterable[str]]:
-    """Returns TheRock submodules paths."""
-    try:
-        response = subprocess.run(
-            ["git", "submodule", "status"],
-            stdout=subprocess.PIPE,
-            check=True,
-            text=True,
-            timeout=60,
-            cwd=THEROCK_DIR,
-        ).stdout.splitlines()
-
-        submodule_paths = []
-        for line in response:
-            submodule_data_array = line.split()
-            # The line will be "{commit-hash} {path} {branch}". We will retrieve the path.
-            submodule_paths.append(submodule_data_array[1])
-        return submodule_paths
-    except TimeoutError:
-        print(
-            "Computing modified files timed out. Not using PR diff to determine"
-            " jobs to run.",
-            file=sys.stderr,
-        )
-        return []
-
-
-# Paths matching any of these patterns are considered to have no influence over
-# build or test workflows so any related jobs can be skipped if all paths
-# modified by a commit/PR match a pattern in this list.
-SKIPPABLE_PATH_PATTERNS = [
-    "docs/*",
-    "*.gitignore",
-    "*.md",
-    "*.pre-commit-config.*",
-    ".github/dependabot.yml",
-    "*CODEOWNERS",
-    "*LICENSE",
-    # Changes to 'external-builds/' (e.g. PyTorch) do not affect "CI" workflows.
-    # At time of writing, workflows run in this sequence:
-    #   `ci.yml`
-    #   `ci_linux.yml`
-    #   `build_linux_artifacts.yml`
-    #   `test_artifacts.yml`
-    #   `test_component.yml`
-    # If we add external-builds tests there, we can revisit this, maybe leaning
-    # on options like LINUX_USE_PREBUILT_ARTIFACTS or sufficient caching to keep
-    # workflows efficient when only nodes closer to the edges of the build graph
-    # are changed.
-    "external-builds/*",
-    # Changes to dockerfiles do not currently affect CI workflows directly.
-    # Docker images are built and published after commits are pushed, then
-    # workflows can be updated to use the new image sha256 values.
-    "dockerfiles/*",
-    # Changes to experimental code do not run standard build/test workflows.
-    "experimental/*",
-]
-
-
-def is_path_skippable(path: str) -> bool:
-    """Determines if a given relative path to a file matches any skippable patterns."""
-    return any(fnmatch.fnmatch(path, pattern) for pattern in SKIPPABLE_PATH_PATTERNS)
-
-
-def check_for_non_skippable_path(paths: Optional[Iterable[str]]) -> bool:
-    """Returns true if at least one path is not in the skippable set."""
-    if paths is None:
-        return False
-    return any(not is_path_skippable(p) for p in paths)
-
-
-GITHUB_WORKFLOWS_CI_PATTERNS = [
-    "setup.yml",
-    "ci*.yml",
-    "multi_arch*.yml",
-    "build*artifact*.yml",
-    "test*artifacts.yml",
-    "test_sanity_check.yml",
-    "test_component.yml",
-]
-
-
-def is_path_workflow_file_related_to_ci(path: str) -> bool:
-    return any(
-        fnmatch.fnmatch(path, ".github/workflows/" + pattern)
-        for pattern in GITHUB_WORKFLOWS_CI_PATTERNS
-    )
-
-
-def check_for_workflow_file_related_to_ci(paths: Optional[Iterable[str]]) -> bool:
-    if paths is None:
-        return False
-    return any(is_path_workflow_file_related_to_ci(p) for p in paths)
-
-
-def should_ci_run_given_modified_paths(paths: Optional[Iterable[str]]) -> bool:
-    """Returns true if CI workflows should run given a list of modified paths."""
-
-    if paths is None:
-        print("No files were modified, skipping build jobs")
-        return False
-
-    paths_set = set(paths)
-    github_workflows_paths = set(
-        [p for p in paths if p.startswith(".github/workflows")]
-    )
-    other_paths = paths_set - github_workflows_paths
-
-    related_to_ci = check_for_workflow_file_related_to_ci(github_workflows_paths)
-    contains_other_non_skippable_files = check_for_non_skippable_path(other_paths)
-
-    print("should_ci_run_given_modified_paths findings:")
-    print(f"  related_to_ci: {related_to_ci}")
-    print(f"  contains_other_non_skippable_files: {contains_other_non_skippable_files}")
-
-    if related_to_ci:
-        print("Enabling build jobs since a related workflow file was modified")
-        return True
-    elif contains_other_non_skippable_files:
-        print("Enabling build jobs since a non-skippable path was modified")
-        return True
-    else:
-        print(
-            "Only unrelated and/or skippable paths were modified, skipping build jobs"
-        )
-        return False
-
 
 # --------------------------------------------------------------------------- #
 # Matrix creation logic based on PR, push, or workflow_dispatch
@@ -308,10 +160,10 @@ def generate_multi_arch_matrix(
         - matrix_per_family_json: JSON array of {amdgpu_family, test-runs-on} objects
           for per-architecture job matrix expansion
         - dist_amdgpu_families: Semicolon-separated family names for THEROCK_DIST_AMDGPU_TARGETS
-        - build_variant_label: Human-readable label (e.g., "Release", "ASAN")
-        - build_variant_suffix: Suffix for artifact naming (e.g., "", "asan"). Empty string
+        - build_variant_label: Human-readable label (e.g., "Release", "ASAN", "TSAN")
+        - build_variant_suffix: Suffix for artifact naming (e.g., "", "asan", "tsan"). Empty string
           for release builds, short identifier for other variants.
-        - build_variant_cmake_preset: CMake preset name (e.g., "release", "asan")
+        - build_variant_cmake_preset: CMake preset name (e.g., "release", "asan", "tsan")
         - expect_failure: If True, job failure is non-blocking (continue-on-error)
         - artifact_group: Unique identifier for artifact grouping, formatted as
           "multi-arch-{suffix}" where suffix defaults to "release" if empty
@@ -363,6 +215,8 @@ def generate_multi_arch_matrix(
         # Extract family names for dist_amdgpu_families
         family_names = [f["amdgpu_family"] for f in family_info_list]
 
+        expect_failure = info.get("expect_failure", False)
+        expect_pytorch_failure = info.get("expect_pytorch_failure", False)
         matrix_row = {
             "matrix_per_family_json": json.dumps(family_info_list),
             "dist_amdgpu_families": ";".join(family_names),
@@ -370,7 +224,8 @@ def generate_multi_arch_matrix(
             "build_variant_label": info["build_variant_label"],
             "build_variant_suffix": info["build_variant_suffix"],
             "build_variant_cmake_preset": info["build_variant_cmake_preset"],
-            "expect_failure": info.get("expect_failure", False),
+            "expect_failure": expect_failure,
+            "build_pytorch": not expect_failure and not expect_pytorch_failure,
         }
         matrix_output.append(matrix_row)
 
@@ -620,7 +475,7 @@ def matrix_generator(
             for build_variant_name in build_variant_names:
                 # We have custom build variants for specific CI flows.
                 # For CI, we use the release build variant (for PRs, pushes to main, nightlies)
-                # For CI ASAN, we use the ASAN build variant (for pushes to main)
+                # For CI ASAN/TSAN, we use the ASAN/TSAN build variant (for pushes to main)
                 # In the case that the build variant is not requested, we skip it
                 if build_variant_name != base_args.get("build_variant"):
                     continue
@@ -637,6 +492,15 @@ def matrix_generator(
                 # But if not, honor what is already there.
                 if build_variant_info.get("expect_failure", False):
                     matrix_row["expect_failure"] = True
+
+                # Enable pytorch builds for families without known build failures.
+                # TODO(#3291): Add finer-grained controls over when pytorch is built
+                expect_failure = matrix_row.get("expect_failure", False)
+                expect_pytorch_failure = matrix_row.get("expect_pytorch_failure", False)
+                matrix_row["build_pytorch"] = (
+                    not expect_failure and not expect_pytorch_failure
+                )
+
                 del matrix_row["build_variants"]
                 matrix_row.update(build_variant_info)
 
@@ -764,16 +628,16 @@ def main(base_args, linux_families, windows_families):
         test_type = "full"
         test_type_reason = "scheduled run triggers full tests"
     else:
-        modified_paths = get_modified_paths(base_ref)
+        modified_paths = get_git_modified_paths(base_ref)
         print("modified_paths (max 200):", modified_paths[:200])
         print(f"Checking modified files since this had a {github_event_name} trigger")
         # TODO(#199): other behavior changes
         #     * workflow_dispatch or workflow_call with inputs controlling enabled jobs?
-        enable_build_jobs = should_ci_run_given_modified_paths(modified_paths)
+        enable_build_jobs = is_ci_run_required(modified_paths)
 
         # If the modified path contains any git submodules, we want to run a full test suite.
         # Otherwise, we just run smoke tests
-        submodule_paths = get_therock_submodule_paths()
+        submodule_paths = get_git_submodule_paths(repo_root=THEROCK_DIR)
         matching_submodule_paths = list(set(submodule_paths) & set(modified_paths))
         if matching_submodule_paths:
             test_type = "full"
@@ -792,7 +656,16 @@ def main(base_args, linux_families, windows_families):
         result = []
         for item in variants:
             if "family" in item:
-                result.append(item["family"])
+                label = item["family"]
+                # Also show flags for the family, if any.
+                flags = []
+                if item.get("expect_failure"):
+                    flags.append("expect_failure")
+                if item.get("build_pytorch"):
+                    flags.append("build_pytorch")
+                if flags:
+                    label += f" ({', '.join(flags)})"
+                result.append(label)
             elif "matrix_per_family_json" in item:
                 # Multi-arch mode: show the families from the JSON
                 families = json.loads(item["matrix_per_family_json"])

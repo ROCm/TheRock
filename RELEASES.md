@@ -28,8 +28,9 @@ Table of contents:
   - [Installing PyTorch Python packages](#installing-pytorch-python-packages)
   - [Using PyTorch Python packages](#using-pytorch-python-packages)
 - [Installing from tarballs](#installing-from-tarballs)
-  - [Release tarballs](#release-tarballs)
-  - [Automated installation](#automated-installation)
+  - [Browsing release tarballs](#browsing-release-tarballs)
+  - [Manual tarball extraction](#manual-tarball-extraction)
+  - [Automated tarball extraction](#automated-tarball-extraction)
   - [Using installed tarballs](#using-installed-tarballs)
 - [Verifying your installation](#verifying-your-installation)
 
@@ -250,7 +251,7 @@ framework.
 ### Installing PyTorch Python packages
 
 Using the index pages [listed above](#installing-rocm-python-packages), you can
-also install `torch`, `torchaudio`, and `torchvision`.
+also install `torch`, `torchaudio`, `torchvision`, and `apex`.
 
 > [!NOTE]
 > By default, pip will install the latest stable versions of each package.
@@ -260,30 +261,32 @@ also install `torch`, `torchaudio`, and `torchvision`.
 > - If you want to install other versions, take note of the compatibility
 >   matrix:
 >
->   | torch version | torchaudio version | torchvision version |
->   | ------------- | ------------------ | ------------------- |
->   | 2.10          | 2.10               | 0.25                |
->   | 2.9           | 2.9                | 0.24                |
->   | 2.8           | 2.8                | 0.23                |
->   | 2.7           | 2.7.1a0            | 0.22.1              |
+>   | torch version | torchaudio version | torchvision version | apex version |
+>   | ------------- | ------------------ | ------------------- | ------------ |
+>   | 2.10          | 2.10               | 0.25                | 1.10.0       |
+>   | 2.9           | 2.9                | 0.24                | 1.9.0        |
+>   | 2.8           | 2.8                | 0.23                | 1.8.0        |
+>   | 2.7           | 2.7.1a0            | 0.22.1              | 1.7.0        |
 >
 >   For example, `torch` 2.7.1 and compatible wheels can be installed by specifying
 >
 >   ```
->   torch==2.7.1 torchaudio==2.7.1a0 torchvision==0.22.1
+>   torch==2.7.1 torchaudio==2.7.1a0 torchvision==0.22.1 apex==1.7.0
 >   ```
 >
 >   See also
 >
 >   - [Supported PyTorch versions in TheRock](https://github.com/ROCm/TheRock/tree/main/external-builds/pytorch#supported-pytorch-versions)
 >   - [Installing previous versions of PyTorch](https://pytorch.org/get-started/previous-versions/)
->   - [torchvision installation - compatixbility matrix](https://github.com/pytorch/vision?tab=readme-ov-file#installation)
->   - [torchaudio installation - compatixbility matrix](https://docs.pytorch.org/audio/main/installation.html#compatibility-matrix)
+>   - [torchvision installation - compatibility matrix](https://github.com/pytorch/vision?tab=readme-ov-file#installation)
+>   - [torchaudio installation - compatibility matrix](https://docs.pytorch.org/audio/main/installation.html#compatibility-matrix)
+>   - [apex installation - compatibility matrix](https://github.com/ROCm/apex/tree/master?tab=readme-ov-file#supported-versions)
 
-> [!TIP]
-> The `torch` packages depend on `rocm[libraries]`, so ROCm packages should
-> be installed automatically for you and you do not need to explicitly install
-> ROCm first.
+> [!WARNING]
+> The `torch` packages depend on `rocm[libraries]`, so the compatible ROCm packages
+> should be installed automatically for you and you do not need to explicitly install
+> ROCm first. If ROCm is already installed this may result in a downgrade if the
+> `torch` wheel to be installed requires a different version.
 
 > [!TIP]
 > If you previously installed PyTorch with the `pytorch-triton-rocm` package,
@@ -305,6 +308,8 @@ Supported devices in this family:
 
 ```bash
 pip install --index-url https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/ torch torchaudio torchvision
+# Optional additional packages on Linux:
+#   apex
 ```
 
 #### torch for gfx950-dcgpu
@@ -317,6 +322,8 @@ Supported devices in this family:
 
 ```bash
 pip install --index-url https://rocm.nightlies.amd.com/v2/gfx950-dcgpu/ torch torchaudio torchvision
+# Optional additional packages on Linux:
+#   apex
 ```
 
 #### torch for gfx110X-all
@@ -332,6 +339,8 @@ Supported devices in this family:
 
 ```bash
 pip install --index-url https://rocm.nightlies.amd.com/v2/gfx110X-all/ torch torchaudio torchvision
+# Optional additional packages on Linux:
+#   apex
 ```
 
 #### torch for gfx1151
@@ -344,6 +353,8 @@ Supported devices in this family:
 
 ```bash
 pip install --index-url https://rocm.nightlies.amd.com/v2/gfx1151/ torch torchaudio torchvision
+# Optional additional packages on Linux:
+#   apex
 ```
 
 #### torch for gfx120X-all
@@ -357,6 +368,8 @@ Supported devices in this family:
 
 ```bash
 pip install --index-url https://rocm.nightlies.amd.com/v2/gfx120X-all/ torch torchaudio torchvision
+# Optional additional packages on Linux:
+#   apex
 ```
 
 ### Using PyTorch Python packages
@@ -379,42 +392,65 @@ instructions in the AMD ROCm documentation.
 
 ## Installing from tarballs
 
-> [!NOTE]
+Standalone "ROCm SDK tarballs" are a flattened view of ROCm
+[artifacts](docs/development/artifacts.md) matching the familiar folder
+structure seen with system installs on Linux to `/opt/rocm/` or on Windows via
+the HIP SDK:
+
+```bash
+install/  # Extracted tarball location, file path of your choosing
+  .info/
+  bin/
+  clients/
+  include/
+  lib/
+  libexec/
+  share/
+```
+
+Tarballs are _just_ these raw files. They do not come with "install" steps
+such as setting environment variables.
+
+> [!WARNING]
 > Tarballs and per-commit CI artifacts are primarily intended for developers
-> and CI workflows. For most users, we recommend
-> [installing ROCm via pip](#installing-releases-using-pip) as the more
-> stable and well-tested installation path.
+> and CI workflows.
+>
+> For most users, we recommend installing via package managers:
+>
+> - [Installing releases using pip](#installing-releases-using-pip)
+> - (TODO) Installing native Linux deb/RPM packages
 
-Standalone "ROCm SDK tarballs" are assembled from the same
-[artifacts](docs/development/artifacts.md) as the Python packages which can be
-[installed using pip](#installing-releases-using-pip), without the additional
-wrapper Python wheels or utility scripts.
+### Browsing release tarballs
 
-### Release tarballs
+Release tarballs are uploaded to the following locations:
 
-Release tarballs are automatically uploaded to AWS S3 buckets.
+| Tarball index                             | S3 bucket                                                                                | Description                                        |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| https://repo.amd.com/rocm/tarball/        | (not publicly accessible)                                                                | Stable releases                                    |
+| https://rocm.nightlies.amd.com/tarball/   | [`therock-nightly-tarball`](https://therock-nightly-tarball.s3.amazonaws.com/index.html) | Nightly builds from the default development branch |
+| https://rocm.prereleases.amd.com/tarball/ | (not publicly accessible)                                                                | ⚠️ Prerelease builds for QA testing ⚠️             |
+| https://rocm.devreleases.amd.com/tarball/ | [`therock-dev-tarball`](https://therock-dev-tarball.s3.amazonaws.com/index.html)         | ⚠️ Development builds from project maintainers ⚠️  |
 
-| S3 bucket                                                                              | Description                                       |
-| -------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| [therock-nightly-tarball](https://therock-nightly-tarball.s3.amazonaws.com/index.html) | Nightly builds from the `main` branch             |
-| [therock-dev-tarball](https://therock-dev-tarball.s3.amazonaws.com/index.html)         | ⚠️ Development builds from project maintainers ⚠️ |
+### Manual tarball extraction
 
-After downloading, simply extract the release tarball into place:
+To download a tarball and extract it into place manually:
 
 ```bash
 mkdir therock-tarball && cd therock-tarball
 # For example...
-wget https://therock-nightly-tarball.s3.us-east-2.amazonaws.com/therock-dist-linux-gfx110X-all-6.5.0rc20250610.tar.gz
+wget https://rocm.nightlies.amd.com/tarball/therock-dist-linux-gfx110X-all-7.12.0a20260202.tar.gz
 mkdir install && tar -xf *.tar.gz -C install
 ```
 
-### Automated installation
+### Automated tarball extraction
 
 For more control over artifact installation—including per-commit CI builds,
 specific release versions, the latest nightly release, and component
 selection—see the
 [Installing Artifacts](docs/development/installing_artifacts.md) developer
-documentation. The [`install_rocm_from_artifacts.py`](build_tools/install_rocm_from_artifacts.py) script can be used to install artifacts from a variety of sources.
+documentation. The
+[`install_rocm_from_artifacts.py`](build_tools/install_rocm_from_artifacts.py)
+script can be used to install artifacts from a variety of sources.
 
 ### Using installed tarballs
 
@@ -430,8 +466,31 @@ ls install
 ./install/bin/test_hip_api
 ```
 
-You may also want to add the install directory to your `PATH` or set other
-environment variables like `ROCM_HOME`.
+> [!TIP]
+> You may also want to add parts of the install directory to your `PATH` or set
+> other environment variables like `ROCM_HOME`.
+>
+> See also [this issue](https://github.com/ROCm/TheRock/issues/1658) discussing
+> relevant environment variables.
+
+> [!TIP]
+> After extracting a tarball, metadata about which commits were used to build
+> TheRock can be found in the `share/therock/therock_manifest.json` file:
+>
+> ```bash
+> cat install/share/therock/therock_manifest.json
+> # {
+> #   "the_rock_commit": "567dd890a3bc3261ffb26ae38b582378df298374",
+> #   "submodules": [
+> #     {
+> #       "submodule_name": "half",
+> #       "submodule_path": "base/half",
+> #       "submodule_url": "https://github.com/ROCm/half.git",
+> #       "pin_sha": "207ee58595a64b5c4a70df221f1e6e704b807811",
+> #       "patches": []
+> #     },
+> #     ...
+> ```
 
 ## Verifying your installation
 
