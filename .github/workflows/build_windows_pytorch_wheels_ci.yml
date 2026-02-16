@@ -40,7 +40,7 @@ on:
       artifact_group:
         description: "The artifact group to build (e.g. gfx110X-all, gfx120X-all)"
         type: string
-        default: gfx110X-all
+        default: gfx1151
       python_version:
         type: string
         default: "3.12"
