@@ -57,12 +57,11 @@ jobs:
   # STAGE: foundation (generic)
   # ==========================================================================
   foundation:
-    name: Stage - Foundation
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts_generic.yml
     secrets: inherit
     with:
       stage_name: foundation
-      stage_display_name: "Foundation"
+      stage_display_name: "Stage - Foundation"
       timeout_minutes: 180  # 3 hours
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
@@ -74,13 +73,12 @@ jobs:
   # STAGE: compiler-runtime (generic)
   # ==========================================================================
   compiler-runtime:
-    name: Stage - Compiler Runtime
     needs: foundation
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts_generic.yml
     secrets: inherit
     with:
       stage_name: compiler-runtime
-      stage_display_name: "Compiler Runtime"
+      stage_display_name: "Stage - Compiler Runtime"
       timeout_minutes: 480  # 8 hours (compiler is big)
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
@@ -92,7 +90,6 @@ jobs:
   # STAGE: math-libs (per-arch)
   # ==========================================================================
   math-libs:
-    name: Stage - Math Libs (${{ matrix.family_info.amdgpu_family }})
     needs: compiler-runtime
     strategy:
       fail-fast: false
@@ -102,7 +99,7 @@ jobs:
     secrets: inherit
     with:
       stage_name: math-libs
-      stage_display_name: "Math Libs (${{ matrix.family_info.amdgpu_family }})"
+      stage_display_name: "Stage - Math Libs (${{ matrix.family_info.amdgpu_family }})"
       timeout_minutes: 480  # 8 hours
       amdgpu_family: ${{ matrix.family_info.amdgpu_family }}
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
@@ -115,7 +112,6 @@ jobs:
   # STAGE: comm-libs (per-arch, parallel to math-libs)
   # ==========================================================================
   comm-libs:
-    name: Stage - Comm Libs (${{ matrix.family_info.amdgpu_family }})
     needs: compiler-runtime
     strategy:
       fail-fast: false
@@ -125,7 +121,7 @@ jobs:
     secrets: inherit
     with:
       stage_name: comm-libs
-      stage_display_name: "Comm Libs (${{ matrix.family_info.amdgpu_family }})"
+      stage_display_name: "Stage - Comm Libs (${{ matrix.family_info.amdgpu_family }})"
       timeout_minutes: 240  # 4 hours
       amdgpu_family: ${{ matrix.family_info.amdgpu_family }}
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
@@ -138,13 +134,12 @@ jobs:
   # STAGE: dctools-core (generic, parallel to math-libs)
   # ==========================================================================
   dctools-core:
-    name: Stage - DC Tools Core
     needs: compiler-runtime
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts_generic.yml
     secrets: inherit
     with:
       stage_name: dctools-core
-      stage_display_name: "DC Tools Core"
+      stage_display_name: "Stage - DC Tools Core"
       timeout_minutes: 120  # 2 hours
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
@@ -156,13 +151,12 @@ jobs:
   # STAGE: profiler-apps (generic, parallel to math-libs)
   # ==========================================================================
   profiler-apps:
-    name: Stage - Profiler Apps
     needs: compiler-runtime
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts_generic.yml
     secrets: inherit
     with:
       stage_name: profiler-apps
-      stage_display_name: "Profiler Apps"
+      stage_display_name: "Stage - Profiler Apps"
       timeout_minutes: 180  # 3 hours
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
@@ -174,13 +168,12 @@ jobs:
   # STAGE: media (generic)
   # ==========================================================================
   media:
-    name: Stage - Media
     needs: foundation
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts_generic.yml
     secrets: inherit
     with:
       stage_name: media
-      stage_display_name: "Media"
+      stage_display_name: "Stage - Media"
       timeout_minutes: 180  # 3 hours
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
