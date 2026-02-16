@@ -10,8 +10,8 @@ from typing import Dict, List, Tuple, Any, IO
 from prettytable import PrettyTable
 
 # Add parent directory to path for utils import
-sys.path.insert(0, str(Path(__file__).parent.parent))  # benchmarks/
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))  # github_actions/
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))  # extended_tests/
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))  # github_actions/
 from utils import BenchmarkClient, HardwareDetector
 from utils.logger import log
 from utils.exceptions import TestExecutionError

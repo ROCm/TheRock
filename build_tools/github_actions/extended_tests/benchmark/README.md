@@ -26,12 +26,12 @@ Automated benchmark testing framework for ROCm libraries with system detection, 
 
 ### Available Benchmarks
 
-- `benchmarks/scripts/test_hipblaslt_benchmark.py` - hipBLASLt benchmark suite
-- `benchmarks/scripts/test_rccl_benchmark.py` - RCCL collective communication benchmarks (requires OpenMPI)
-- `benchmarks/scripts/test_rocblas_benchmark.py` - rocBLAS benchmark suite
-- `benchmarks/scripts/test_rocfft_benchmark.py` - ROCfft benchmark suite
-- `benchmarks/scripts/test_rocrand_benchmark.py` - ROCrand benchmark suite
-- `benchmarks/scripts/test_rocsolver_benchmark.py` - ROCsolver benchmark suite
+- `extended_tests/benchmark/scripts/test_hipblaslt_benchmark.py` - hipBLASLt benchmark suite
+- `extended_tests/benchmark/scripts/test_rccl_benchmark.py` - RCCL collective communication benchmarks (requires OpenMPI)
+- `extended_tests/benchmark/scripts/test_rocblas_benchmark.py` - rocBLAS benchmark suite
+- `extended_tests/benchmark/scripts/test_rocfft_benchmark.py` - ROCfft benchmark suite
+- `extended_tests/benchmark/scripts/test_rocrand_benchmark.py` - ROCrand benchmark suite
+- `extended_tests/benchmark/scripts/test_rocsolver_benchmark.py` - ROCsolver benchmark suite
 
 ## Project Structure
 
@@ -55,7 +55,7 @@ build_tools/github_actions/
 │   │   └── rocfft.json         # ROCfft benchmark config
 │   │
 │   ├── utils/                  # Benchmark utilities
-│   │   ├── benchmark_client.py # Main client API
+│   │   ├── test_client.py      # Main client API (in utils/)
 │   │   ├── logger.py           # Logging utilities
 │   │   ├── config/             # Configuration management
 │   │   ├── system/             # System detection (GPU, ROCm, OS)
@@ -196,7 +196,7 @@ To add a new benchmark test to the nightly CI:
 
 ### 1. Create Benchmark Script
 
-Create `benchmarks/scripts/test_your_benchmark.py`. Reference existing benchmarks like `test_rocfft_benchmark.py` as a template.
+Create `extended_tests/benchmark/scripts/test_your_benchmark.py`. Reference existing benchmarks like `test_rocfft_benchmark.py` as a template.
 
 Key components:
 
@@ -276,7 +276,7 @@ export ARTIFACT_RUN_ID=local-test
 export AMDGPU_FAMILIES=gfx950-dcgpu
 
 # Run the benchmark
-python3 build_tools/github_actions/benchmarks/scripts/test_your_benchmark.py
+python3 build_tools/github_actions/extended_tests/benchmark/scripts/test_your_benchmark.py
 ```
 
 ## Related Documentation

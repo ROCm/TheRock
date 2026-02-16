@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Dict, List, Tuple, Any
 from prettytable import PrettyTable
 
-sys.path.insert(0, str(Path(__file__).parent.parent))  # For utils
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))  # For utils (extended_tests/)
 sys.path.insert(0, str(Path(__file__).parent))  # For benchmark_base
 from benchmark_base import BenchmarkBase, run_benchmark_main
 from utils.logger import log
