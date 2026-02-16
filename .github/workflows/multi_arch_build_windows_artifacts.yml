@@ -2,7 +2,7 @@
 #
 # This workflow builds TheRock stage artifacts for all stages.
 # Handles both generic stages (foundation, compiler-runtime, etc.) and
-# per-arch stages (math-libs, comm-libs) using conditional logic.
+# per-arch stages (math-libs) using conditional logic.
 #
 # Artifacts flow between stages via S3 using the artifact_manager.py tool.
 #
@@ -47,44 +47,60 @@ on:
 jobs:
   build_stage:
     name: ${{ inputs.stage_display_name }}
-    runs-on: azure-linux-scale-rocm
+    runs-on: azure-windows-scale-rocm
     timeout-minutes: ${{ inputs.timeout_minutes }}
     permissions:
       id-token: write
-    container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:d6ae5712a9c7e8b88281d021e907b312cd8a26295b95690baef3e8dde4805858
-      options: -v /runner/config:/home/awsconfig/
+    defaults:
+      run:
+        shell: bash
     env:
-      AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
       STAGE_NAME: ${{ inputs.stage_name }}
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_family }}
-      BUILD_DIR: build
-      CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
-      CACHE_DIR: ${{ github.workspace }}/.container-cache
+      BUILD_DIR: B:\build
       TEATIME_FORCE_INTERACTIVE: 0
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.12"
+
       - name: Install python deps
         run: pip install -r requirements.txt
 
+      - name: Install requirements
+        run: |
+          choco source disable -n=chocolatey
+          choco source add -n=internal -s http://10.0.167.96:8081/repository/choco-group/ --priority=1
+          # ninja pinned due to a bug in the 1.13.0 release:
+          # https://github.com/ninja-build/ninja/issues/2616
+          choco install --no-progress -y ninja --version 1.12.1
+          choco install --no-progress -y strawberryperl
+          echo "$PATH;C:\Strawberry\c\bin" >> $GITHUB_PATH
+          choco install --no-progress -y awscli
+          choco install --no-progress -y pkgconfiglite
+          echo "C:\Program Files\Amazon\AWSCLIV2" >> $GITHUB_PATH
+
+      - uses: iterative/setup-dvc@4bdfd2b0f6f1ad7e08afadb03b1a895c352a5239 # v2.0.0
+        with:
+          version: '3.62.0'
+
+      # After other installs, so MSVC gets priority in the PATH.
+      - name: Configure MSVC
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+
       - name: Adjust git config
         run: |
-          git config --global --add safe.directory $PWD
+          git config --global core.symlinks true
+          git config --global core.longpaths true
           git config fetch.parallel 10
-
-      - name: Setup ccache
-        run: |
-          ./build_tools/setup_ccache.py \
-            --config-preset "github-oss-presubmit" \
-            --dir "$(dirname $CCACHE_CONFIGPATH)" \
-            --local-path "$CACHE_DIR/ccache"
 
       - name: Runner health status
         run: |
-          ./build_tools/health_status.py
+          python build_tools/health_status.py
 
       - name: Configure AWS Credentials
         if: ${{ !github.event.pull_request.head.repo.fork }}
@@ -92,11 +108,12 @@ jobs:
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-ci
+          special-characters-workaround: true
 
       - name: Fetch inbound artifacts
-        if: ${{ !github.event.pull_request.head.repo.fork }}
         run: |
-          python build_tools/artifact_manager.py fetch --run-id ${{ github.run_id }} \
+          python build_tools/artifact_manager.py fetch \
+            --run-id="${{ github.run_id }}" \
             --stage="${STAGE_NAME}" \
             --amdgpu-families="${{ inputs.amdgpu_family }}" \
             --output-dir="${BUILD_DIR}" \
@@ -104,13 +121,13 @@ jobs:
 
       - name: Fetch sources
         timeout-minutes: 30
-        run: ./build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12 --depth 1
+        run: python build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12 --depth 1
 
       - name: Get stage configuration
         id: stage_config
         run: |
           python build_tools/configure_stage.py \
-            --stage="${STAGE_NAME}" \
+            --stage=${STAGE_NAME} \
             --amdgpu-families="${{ inputs.amdgpu_family }}" \
             --dist-amdgpu-families="${{ inputs.dist_amdgpu_families }}" \
             --gha-output
@@ -124,8 +141,6 @@ jobs:
           cmake -B "${BUILD_DIR}" -S . -GNinja \
             --preset=${{ inputs.build_variant_cmake_preset }} \
             -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
-            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             ${{ steps.stage_config.outputs.cmake_args }}
 
       - name: Build stage
@@ -135,8 +150,6 @@ jobs:
       - name: Report
         if: ${{ !cancelled() }}
         run: |
-          echo "CCache Stats:"
-          ccache -s -v
           echo "Artifacts:"
           ls -lh "${BUILD_DIR}"/artifacts/*.tar.xz 2>/dev/null || echo "No artifacts found"
 
@@ -146,9 +159,9 @@ jobs:
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-ci
+          special-characters-workaround: true
 
       - name: Push stage artifacts
-        if: ${{ !github.event.pull_request.head.repo.fork }}
         run: |
           python build_tools/artifact_manager.py push --run-id ${{ github.run_id }} \
             --stage="${STAGE_NAME}" \

@@ -8,13 +8,6 @@
 # 5. dctools-core (generic) - RDC (parallel to math-libs)
 # 6. profiler-apps (generic) - rocprofiler-systems (parallel to math-libs)
 # 7. media (generic) - sysdeps-amd-mesa, rocdecode (todo), rocjpeg (todo)
-#
-# Artifacts flow between stages via S3 using the artifact_manager.py tool.
-#
-# TODO: When kpack splitting is permanently enabled, change fetch commands to use
-# --generic-only instead of --amdgpu-families for efficiency. Subsequent build
-# stages only need generic (host) artifacts; device-specific kpacks are not
-# needed until final packaging.
 
 name: Multi-Arch Build (Linux)
 
@@ -64,6 +57,7 @@ jobs:
       stage_display_name: "Stage - Foundation"
       timeout_minutes: 180  # 3 hours
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
+      build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
     permissions:
       contents: read
@@ -81,6 +75,7 @@ jobs:
       stage_display_name: "Stage - Compiler Runtime"
       timeout_minutes: 480  # 8 hours (compiler is big)
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
+      build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
     permissions:
       contents: read
@@ -103,6 +98,7 @@ jobs:
       timeout_minutes: 480  # 8 hours
       amdgpu_family: ${{ matrix.family_info.amdgpu_family }}
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
+      build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
     permissions:
       contents: read
@@ -125,6 +121,7 @@ jobs:
       timeout_minutes: 240  # 4 hours
       amdgpu_family: ${{ matrix.family_info.amdgpu_family }}
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
+      build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
     permissions:
       contents: read
@@ -142,6 +139,7 @@ jobs:
       stage_display_name: "Stage - DC Tools Core"
       timeout_minutes: 120  # 2 hours
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
+      build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
     permissions:
       contents: read
@@ -159,6 +157,7 @@ jobs:
       stage_display_name: "Stage - Profiler Apps"
       timeout_minutes: 180  # 3 hours
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
+      build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
     permissions:
       contents: read
@@ -176,6 +175,7 @@ jobs:
       stage_display_name: "Stage - Media"
       timeout_minutes: 180  # 3 hours
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
+      build_variant_cmake_preset: ${{ inputs.build_variant_cmake_preset }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
     permissions:
       contents: read
