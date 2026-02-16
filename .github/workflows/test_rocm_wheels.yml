@@ -13,11 +13,13 @@ on:
         required: true
         type: string
         default: "linux-mi325-1gpu-ossci-rocm-frac"
-      package_index_url:
+      package_index_url_base:
         description: Base Python package index URL (without GPU family subdir)
-        required: true
         type: string
         default: "https://rocm.nightlies.amd.com/v2"
+      package_find_links_url:
+        description: Full Python package index URL for use with --find-links (usually instead of package_index_url_base)
+        type: string
       python_version:
         required: true
         type: string
@@ -35,20 +37,15 @@ on:
       test_runs_on:
         required: true
         type: string
-      package_index_url:
-        required: true
+      package_index_url_base:
+        type: string
+      package_find_links_url:
         type: string
       python_version:
         required: true
         type: string
       rocm_version:
         required: true
-        type: string
-      repository:
-        description: "Repository to checkout. Otherwise, defaults to `github.repository`."
-        type: string
-      ref:
-        description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
         type: string
 
 permissions:
@@ -84,9 +81,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || '' }}
 
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
@@ -97,8 +91,9 @@ jobs:
         run: |
           python build_tools/setup_venv.py ${VENV_DIR} \
             --packages "${{ matrix.packages }}==${{ inputs.rocm_version }}" \
-            --index-url=${{ inputs.package_index_url }} \
+            --index-url=${{ inputs.package_index_url_base }} \
             --index-subdir=${{ inputs.amdgpu_family }} \
+            --find-links=${{ inputs.package_find_links_url }} \
             --activate-in-future-github-actions-steps
 
       - name: Show installed packages
