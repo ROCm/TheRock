@@ -870,6 +870,17 @@
             ]
           }
         ]
+      },
+      {
+        "Artifact": "libhipcxx",
+        "Artifact_Subdir": [
+          {
+            "Name": "libhipcxx",
+            "Components": [
+              "dev"
+            ]
+          }
+        ]
       }
     ],
 
@@ -1300,8 +1311,19 @@
             ]
           }
         ]
+      },
+      {
+        "Artifact": "rocwmma",
+        "Artifact_Gfxarch": "True",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocWMMA",
+            "Components": [
+              "dev"
+            ]
+          }
+        ]
       }
-
     ],
 
     "Gfxarch": "False"
