@@ -439,10 +439,9 @@ endif()
 
 # Add subdirectories in dependency DAG order (which happens to be semi-alpha:
 # don't be fooled).
-add_subdirectory(third-party/sysdeps)
+add_subdirectory(third-party)
 add_subdirectory(base)
 add_subdirectory(compiler)
-add_subdirectory(third-party)
 add_subdirectory(core)
 add_subdirectory(debug-tools)
 # Note that rocprofiler-register is in base and is what higher level clients

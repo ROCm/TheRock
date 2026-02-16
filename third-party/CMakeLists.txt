@@ -1,9 +1,3 @@
-# Subdirectory load order here is carefully balanced - see usage from the root
-# CMakeLists.txt. Notably this file does *not* include the sysdeps subdirectory,
-# which is expected to be included *first*. This allows for bootstrapping
-# compiler/, so other projects in this directory can use the amd-llvm compiler
-# toolchain if they so wish (most should eventually).
-
 add_custom_target(therock-third-party)
 
 # No-dep third party libraries (alphabetical)
@@ -33,6 +27,15 @@ if(THEROCK_ENABLE_HOST_BLAS)
 endif()
 if(THEROCK_ENABLE_HOST_SUITE_SPARSE)
   add_subdirectory(SuiteSparse)
+endif()
+
+# TODO: Relocate non header-only libraries here (i.e. boost, host-blas).
+if(THEROCK_BUNDLE_SYSDEPS)
+  if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    add_subdirectory(sysdeps/linux)
+  elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    add_subdirectory(sysdeps/windows)
+  endif()
 endif()
 
 # gRPC: Static library for RDC (built on-demand when depended upon)
