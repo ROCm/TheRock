@@ -45,7 +45,7 @@ on:
       jax_ref:
         description: "rocm-jax repository ref/branch to check out"
         type: string
-        default: "rocm-jaxlib-v0.8.0-fixdevtar"
+        default: "rocm-jaxlib-v0.8.2"
   workflow_dispatch:
     inputs:
       amdgpu_family:
