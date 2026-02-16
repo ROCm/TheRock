@@ -66,6 +66,9 @@ jobs:
       timeout_minutes: 180  # 3 hours
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
+    permissions:
+      contents: read
+      id-token: write
 
   # ==========================================================================
   # STAGE: compiler-runtime (generic)
@@ -81,6 +84,9 @@ jobs:
       timeout_minutes: 480  # 8 hours (compiler is big)
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
+    permissions:
+      contents: read
+      id-token: write
 
   # ==========================================================================
   # STAGE: math-libs (per-arch)
@@ -101,6 +107,9 @@ jobs:
       amdgpu_family: ${{ matrix.family_info.amdgpu_family }}
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
+    permissions:
+      contents: read
+      id-token: write
 
   # ==========================================================================
   # STAGE: comm-libs (per-arch, parallel to math-libs)
@@ -121,6 +130,9 @@ jobs:
       amdgpu_family: ${{ matrix.family_info.amdgpu_family }}
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
+    permissions:
+      contents: read
+      id-token: write
 
   # ==========================================================================
   # STAGE: dctools-core (generic, parallel to math-libs)
@@ -136,6 +148,9 @@ jobs:
       timeout_minutes: 120  # 2 hours
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
+    permissions:
+      contents: read
+      id-token: write
 
   # ==========================================================================
   # STAGE: profiler-apps (generic, parallel to math-libs)
@@ -151,6 +166,9 @@ jobs:
       timeout_minutes: 180  # 3 hours
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
+    permissions:
+      contents: read
+      id-token: write
 
   # ==========================================================================
   # STAGE: media (generic)
@@ -166,3 +184,6 @@ jobs:
       timeout_minutes: 180  # 3 hours
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
+    permissions:
+      contents: read
+      id-token: write
