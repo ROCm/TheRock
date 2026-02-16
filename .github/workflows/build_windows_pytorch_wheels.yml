@@ -105,6 +105,7 @@ jobs:
       OUTPUT_DIR: ${{ github.workspace }}/output
       # Note the \ here instead of /. This should be used from 'cmd' not 'bash'!
       PACKAGE_DIST_DIR: ${{ github.workspace }}\output\packages\dist
+      RELEASE_TYPE: ${{ inputs.release_type }}
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
       optional_build_prod_arguments: ""
     outputs:
@@ -131,7 +132,7 @@ jobs:
         shell: bash
     steps:
       - name: Checkout
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
@@ -141,7 +142,7 @@ jobs:
           git config --global user.name "therockbot"
           git config --global user.email "therockbot@amd.com"
 
-      - uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: ${{ inputs.python_version }}
 
@@ -195,6 +196,8 @@ jobs:
               --torch-dir ${{ env.CHECKOUT_ROOT }}/torch \
               --require-related-commit
 
+      # Note: determine_version.py sets optional_build_prod_arguments in
+      # GITHUB_ENV, which includes --rocm-sdk-version and --version-suffix.
       - name: Determine optional arguments passed to `build_prod_wheels.py`
         if: ${{ inputs.rocm_version }}
         run: |
@@ -227,12 +230,23 @@ jobs:
         run: |
           python external-builds/pytorch/sanity_check_wheel.py ${{ env.PACKAGE_DIST_DIR }}
 
+      - name: Generate PyTorch manifest
+        shell: bash
+        run: |
+          python build_tools/github_actions/generate_pytorch_manifest.py \
+            --manifest-dir "${PACKAGE_DIST_DIR}/manifests" \
+            --python-version "${{ inputs.python_version }}" \
+            --pytorch-git-ref "${{ inputs.pytorch_git_ref }}" \
+            --pytorch-dir "${CHECKOUT_ROOT}/torch" \
+            --pytorch-audio-dir "${CHECKOUT_ROOT}/audio" \
+            --pytorch-vision-dir "${CHECKOUT_ROOT}/vision"
+
       - name: Configure AWS Credentials
         if: always()
-        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
         with:
           aws-region: us-east-2
-          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}-releases
+          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}
           special-characters-workaround: true
 
       - name: Upload wheels to S3 staging
@@ -243,6 +257,17 @@ jobs:
           aws s3 cp ${{ env.PACKAGE_DIST_DIR }}/ ^
             s3://${{ env.S3_BUCKET_PY }}/${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}/ ^
             --recursive --exclude "*" --include "*.whl"
+
+      - name: Upload PyTorch manifest to S3 artifacts
+        if: ${{ github.repository_owner == 'ROCm' }}
+        shell: bash
+        run: |
+          python build_tools/github_actions/upload_pytorch_manifest.py \
+            --dist-dir "${{ env.PACKAGE_DIST_DIR }}" \
+            --run-id "${{ github.run_id }}" \
+            --amdgpu-family "${{ inputs.amdgpu_family }}" \
+            --python-version "${{ inputs.python_version }}" \
+            --pytorch-git-ref "${{ inputs.pytorch_git_ref }}"
 
       - name: (Re-)Generate Python package release index for staging
         if: ${{ github.repository_owner == 'ROCm' }}
@@ -262,7 +287,7 @@ jobs:
       bypass_tests_for_releases: ${{ steps.configure.outputs.bypass_tests_for_releases }}
     steps:
       - name: Checking out repository
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
@@ -305,17 +330,17 @@ jobs:
       TORCHVISION_VERSION: "${{ needs.build_pytorch_wheels.outputs.torchvision_version }}"
     steps:
       - name: Checkout
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
 
       - name: Configure AWS Credentials
         if: always()
-        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
         with:
           aws-region: us-east-2
-          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}-releases
+          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}
           special-characters-workaround: true
 
       - name: Determine upload flag

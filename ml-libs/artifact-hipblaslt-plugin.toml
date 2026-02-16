@@ -1,0 +1,11 @@
+# hipblaslt_plugin
+[components.dbg."ml-libs/hipblaslt_plugin/stage"]
+[components.lib."ml-libs/hipblaslt_plugin/stage"]
+exclude = [
+  "lib/*.a",
+]
+[components.test."ml-libs/hipblaslt_plugin/stage"]
+include = [
+  "bin/hipblaslt_*_test*",
+  "bin/hipblaslt_plugin/CTestTestfile.cmake",
+]
