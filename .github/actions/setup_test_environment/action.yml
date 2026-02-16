@@ -24,11 +24,6 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: "Setting up Python"
-      uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
-      with:
-        python-version: 3.12
-
     - name: "Install UV"
       shell: bash
       run: |
@@ -43,7 +38,7 @@ runs:
       env:
         VENV_DIR: ${{ inputs.VENV_DIR }}
       run: |
-        python build_tools/setup_venv.py ${VENV_DIR} \
+        python3 build_tools/setup_venv.py ${VENV_DIR} \
           --activate-in-future-github-actions-steps \
           --use-uv
 
@@ -75,7 +70,7 @@ runs:
         GITHUB_TOKEN: ${{ github.token }}
         IS_PR_FROM_FORK: ${{ inputs.IS_PR_FROM_FORK }}
       run: |
-        python ./build_tools/install_rocm_from_artifacts.py \
+        python3 ./build_tools/install_rocm_from_artifacts.py \
           --run-id=${ARTIFACT_RUN_ID} \
           --artifact-group=${ARTIFACT_GROUP} \
           --output-dir=${OUTPUT_ARTIFACTS_DIR} \
