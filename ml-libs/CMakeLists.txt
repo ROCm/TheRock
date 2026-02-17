@@ -254,14 +254,14 @@ if(THEROCK_ENABLE_MIOPENPROVIDER)
   )
 endif(THEROCK_ENABLE_MIOPENPROVIDER)
 
-if(THEROCK_ENABLE_HIPBLASLT_PLUGIN)
+if(THEROCK_ENABLE_HIPBLASLTPROVIDER)
   ##############################################################################
-  # hipDNN hipBLASlt plugin
+  # hipDNN hipBLASLt provider
   ##############################################################################
 
-  therock_cmake_subproject_declare(hipBLASLt_plugin
+  therock_cmake_subproject_declare(hipblasltprovider
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/dnn-providers/hipblaslt-provider"
-    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipblaslt_plugin"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipblasltprovider"
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
@@ -283,23 +283,23 @@ if(THEROCK_ENABLE_HIPBLASLT_PLUGIN)
       hipBLAS-common
       hipBLASLt
   )
-  therock_cmake_subproject_glob_c_sources(hipBLASLt_plugin
+  therock_cmake_subproject_glob_c_sources(hipblasltprovider
   SUBDIRS
     .
   )
-  therock_cmake_subproject_activate(hipBLASLt_plugin)
+  therock_cmake_subproject_activate(hipblasltprovider)
 
-  therock_provide_artifact(hipblaslt-plugin
+  therock_provide_artifact(hipblasltprovider
     TARGET_NEUTRAL
-    DESCRIPTOR artifact-hipblaslt-plugin.toml
+    DESCRIPTOR artifact-hipblasltprovider.toml
     COMPONENTS
       dbg
       lib
       test
     SUBPROJECT_DEPS
-      hipBLASLt_plugin
+      hipblasltprovider
   )
-endif(THEROCK_ENABLE_HIPBLASLT_PLUGIN)
+endif(THEROCK_ENABLE_HIPBLASLTPROVIDER)
 
 if(THEROCK_ENABLE_HIPDNN_SAMPLES)
   ##############################################################################

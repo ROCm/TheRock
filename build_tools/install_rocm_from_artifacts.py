@@ -25,7 +25,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--miopen | --no-miopen]
     [--miopenprovider | --no-miopenprovider]
     [--fusilli-plugin | --no-fusilli-plugin]
-    [--hipblaslt-plugin | --no-hipblaslt-plugin]
+    [--hipblasltprovider | --no-hipblasltprovider]
     [--prim | --no-prim]
     [--rand | --no-rand]
     [--rccl | --no-rccl]
@@ -339,7 +339,7 @@ def retrieve_artifacts_by_run_id(args):
             args.miopen,
             args.miopenprovider,
             args.fusilli_plugin,
-            args.hipblaslt_plugin,
+            args.hipblasltprovider,
             args.prim,
             args.rand,
             args.rccl,
@@ -390,8 +390,8 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("miopenprovider")
         if args.fusilli_plugin:
             extra_artifacts.append("fusilli-plugin")
-        if args.hipblaslt_plugin:
-            extra_artifacts.append("hipblaslt-plugin")
+        if args.hipblasltprovider:
+            extra_artifacts.append("hipblasltprovider")
         if args.prim:
             extra_artifacts.append("prim")
         if args.rand:
@@ -659,9 +659,9 @@ def main(argv):
     )
 
     artifacts_group.add_argument(
-        "--hipblaslt-plugin",
+        "--hipblasltprovider",
         default=False,
-        help="Include 'hipblaslt-plugin' artifacts",
+        help="Include 'hipblasltprovider' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 

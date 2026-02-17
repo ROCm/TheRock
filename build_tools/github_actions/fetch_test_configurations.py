@@ -265,12 +265,12 @@ test_matrix = {
     #     "platform": ["linux"],
     #     "total_shards": 1,
     # },
-    # hipBLASLt plugin tests
-    "hipblaslt_plugin": {
-        "job_name": "hipblaslt_plugin",
-        "fetch_artifact_args": "--blas --hipdnn --hipblaslt-plugin --tests",
+    # hipBLASLt provider tests
+    "hipblasltprovider": {
+        "job_name": "hipblasltprovider",
+        "fetch_artifact_args": "--blas --hipdnn --hipblasltprovider --tests",
         "timeout_minutes": 15,
-        "test_script": f"python {_get_script_path('test_hipblaslt_plugin.py')}",
+        "test_script": f"python {_get_script_path('test_hipblasltprovider.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 1,
     },

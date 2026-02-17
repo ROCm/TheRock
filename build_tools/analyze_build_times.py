@@ -53,6 +53,7 @@ NAME_MAPPING = {
     "host-suite-sparse": "SuiteSparse",
     "rocwmma": "rocWMMA",
     "miopenprovider": "miopenprovider",
+    "hipblasltprovider": "hipblasltprovider",
 }
 
 # Top-level directories for ROCm components
