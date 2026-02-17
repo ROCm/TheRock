@@ -345,6 +345,7 @@ def retrieve_artifacts_by_run_id(args):
             args.rand,
             args.rccl,
             args.rocprofiler_compute,
+            args.rocprofiler_sdk,
             args.rocprofiler_systems,
             args.rocwmma,
             args.libhipcxx,
