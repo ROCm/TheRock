@@ -320,7 +320,7 @@ test_matrix = {
         "setup_script": f"python {_get_script_path('setup_rocprofiler_compute.py', True)}",
         "test_script": f"python {_get_script_path('test_rocprofiler_compute.py')} -v",
         "platform": ["linux"],
-        "total_shards": 1,
+        "total_shards": 2,
     },
     # libhipcxx hipcc tests
     "libhipcxx_hipcc": {
