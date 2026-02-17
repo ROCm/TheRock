@@ -33,10 +33,67 @@ HIP_VISIBLE_DEVICES : str, optional
 """
 
 import argparse
+import re
 import subprocess
 import sys
 import textwrap
 from pathlib import Path
+
+
+def extract_render_summary(blender_output: str) -> dict[str, str]:
+    """Extract key information from Blender's captured output.
+
+    Parses GPU device, render time, kernel compilation time, and
+    sample count from Blender's debug output.
+
+    Returns:
+        Dict with extracted fields (missing fields omitted).
+    """
+    summary: dict[str, str] = {}
+
+    # GPU device: 'Added device "AMD Radeon RX 6950 XT"'
+    match = re.search(r'Added device "([^"]+)"', blender_output)
+    if match:
+        summary["gpu"] = match.group(1)
+
+    # Total render time: 'Total render time: 12.9499'
+    match = re.search(r"Total render time:\s+([\d.]+)", blender_output)
+    if match:
+        summary["total_time"] = f"{float(match.group(1)):.2f}s"
+
+    # Path tracing time: 'Path Tracing  4.937481  0.019287'
+    match = re.search(r"Path Tracing\s+([\d.]+)\s+([\d.]+)", blender_output)
+    if match:
+        summary["render_time"] = f"{float(match.group(1)):.2f}s"
+
+    # Kernel compilation: 'Kernel compilation finished in 45.3s.'
+    match = re.search(r"Kernel compilation finished in ([\d.]+)s", blender_output)
+    if match:
+        summary["kernel_compile"] = f"{float(match.group(1)):.2f}s"
+
+    # Samples: 'Rendered 256 samples' (use last match for final count)
+    sample_matches = re.findall(r"Rendered (\d+) samples", blender_output)
+    if sample_matches:
+        summary["samples"] = sample_matches[-1]
+
+    return summary
+
+
+def print_render_summary(summary: dict[str, str]) -> None:
+    """Print a brief render summary to the main log."""
+    parts = []
+    if "gpu" in summary:
+        parts.append(f"GPU: {summary['gpu']}")
+    if "samples" in summary:
+        parts.append(f"Samples: {summary['samples']}")
+    if "render_time" in summary:
+        parts.append(f"Render: {summary['render_time']}")
+    if "total_time" in summary:
+        parts.append(f"Total: {summary['total_time']}")
+    if "kernel_compile" in summary:
+        parts.append(f"Kernel compile: {summary['kernel_compile']}")
+    if parts:
+        print(f"  {', '.join(parts)}")
 
 
 def compare_images(
@@ -134,11 +191,11 @@ def render_scene(
     scene_name: str,
     frame: int,
     timeout_seconds: int,
-) -> tuple[int, Path]:
+) -> tuple[int, Path, str]:
     """Render a single Blender scene with Cycles HIP.
 
     Returns:
-        Tuple of (return_code, expected_output_path).
+        Tuple of (return_code, expected_output_path, captured_output).
     """
     output_dir.mkdir(parents=True, exist_ok=True)
     output_prefix = output_dir / f"{scene_name}_"
@@ -167,16 +224,19 @@ def render_scene(
         result = subprocess.run(
             cmd,
             timeout=timeout_seconds,
-            capture_output=False,
+            capture_output=True,
+            text=True,
         )
         return_code = result.returncode
-    except subprocess.TimeoutExpired:
+        output = result.stdout + result.stderr
+    except subprocess.TimeoutExpired as e:
         print(f"  ERROR: Blender timed out after {timeout_seconds}s")
         return_code = -1
+        output = (e.stdout or "") + (e.stderr or "")
 
     # Blender names output as <prefix><frame_padded>.png
     expected_output = output_dir / f"{scene_name}_{frame:03d}.png"
-    return return_code, expected_output
+    return return_code, expected_output, output
 
 
 def run_tests(args: argparse.Namespace) -> int:
@@ -226,7 +286,7 @@ def run_tests(args: argparse.Namespace) -> int:
             )
             continue
 
-        render_rc, output_path = render_scene(
+        render_rc, output_path, blender_output = render_scene(
             blender_bin=blender_bin,
             scene_file=scene_file,
             output_dir=args.output_dir,
@@ -235,8 +295,16 @@ def run_tests(args: argparse.Namespace) -> int:
             timeout_seconds=args.timeout,
         )
 
+        # Save per-scene log for all outcomes (success or failure)
+        log_path = args.output_dir / f"{scene_name}_{frame:03d}.log"
+        log_path.write_text(blender_output)
+        print(f"  Log: {log_path}")
+
         if render_rc != 0:
             print(f"  Blender exited with code {render_rc}")
+            print("  --- Blender output ---")
+            print(blender_output)
+            print("  --- End of Blender output ---")
             results.append(
                 {
                     "scene": scene_name,
@@ -266,6 +334,8 @@ def run_tests(args: argparse.Namespace) -> int:
             continue
 
         print(f"  Render succeeded: {output_path}")
+        render_summary = extract_render_summary(blender_output)
+        print_render_summary(render_summary)
 
         # Check for reference image
         ref_path = None

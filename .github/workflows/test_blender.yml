@@ -85,6 +85,8 @@ jobs:
       VENV_DIR: ${{ github.workspace }}/.venv
       AMDGPU_FAMILY: ${{ inputs.amdgpu_family }}
       BLENDER_VERSION: ${{ inputs.blender_version }}
+      SCENES_URL: ${{ inputs.scenes_url }}
+      ROCM_PACKAGE_FIND_LINKS_URL: ${{ inputs.rocm_package_find_links_url }}
 
     steps:
       - name: Checkout
@@ -102,7 +104,7 @@ jobs:
         run: |
           python build_tools/setup_venv.py ${VENV_DIR} \
             --packages rocm \
-            --find-links=${{ inputs.rocm_package_find_links_url }} \
+            --find-links="${ROCM_PACKAGE_FIND_LINKS_URL}" \
             --activate-in-future-github-actions-steps
 
       - name: Install test dependencies
@@ -128,12 +130,19 @@ jobs:
         if: ${{ inputs.scenes_url != '' }}
         run: |
           mkdir -p scenes
-          echo "Downloading scenes from ${{ inputs.scenes_url }}"
-          wget -q -O scenes.tar.xz "${{ inputs.scenes_url }}"
+          echo "Downloading scenes from ${SCENES_URL}"
+          wget -q -O scenes.tar.xz "${SCENES_URL}"
           tar xf scenes.tar.xz -C scenes
           rm scenes.tar.xz
-          echo "Scene files:"
-          ls -la scenes/
+
+          BLEND_COUNT=$(find scenes -name "*.blend" | wc -l)
+          if [ "${BLEND_COUNT}" -eq 0 ]; then
+            echo "ERROR: No .blend files found after unpacking scene archive"
+            ls -laR scenes/
+            exit 1
+          fi
+          echo "Found ${BLEND_COUNT} scene file(s):"
+          find scenes -name "*.blend"
 
       - name: Run rocm-sdk sanity tests
         run: |
@@ -144,12 +153,10 @@ jobs:
           SCENES_DIR="scenes"
           REF_ARGS=""
 
-          # If scenes weren't downloaded, check if scenes.txt references
-          # anything useful for a dry run
           if [ ! -d "${SCENES_DIR}" ]; then
-            echo "WARNING: No scenes directory found. Skipping Blender tests."
+            echo "ERROR: No scenes directory found."
             echo "Set scenes_url input to provide scene files."
-            exit 0
+            exit 1
           fi
 
           # Use reference images if available
@@ -161,4 +168,12 @@ jobs:
             --blender-dir "./blender-${BLENDER_VERSION}-linux-x64" \
             --scenes-dir "${SCENES_DIR}" \
             --scenes-file external-builds/blender/scenes.txt \
+            --output-dir blender-test-results \
             ${REF_ARGS}
+
+      - name: Upload Blender test results
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: blender-test-results-${{ inputs.amdgpu_family }}
+          path: blender-test-results/
