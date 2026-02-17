@@ -1,3 +1,4 @@
+iff
 name: Release portable Linux packages
 
 on:
@@ -237,6 +238,8 @@ jobs:
         run: |
           python3 ./build_tools/github_actions/build_configure.py
           ls -laRt ${{ env.OUTPUT_DIR }} || true
+          ls -alrtR  /__w/TheRock/TheRock/output/build || true
+          ls -alrt 
 
       - name: Build Projects
         run: |
