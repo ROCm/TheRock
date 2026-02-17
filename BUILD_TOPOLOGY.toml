@@ -382,7 +382,7 @@ feature_group = "HOST_MATH"  # Controlled by THEROCK_ENABLE_HOST_MATH (OFF by de
 [artifacts.host-suite-sparse]
 artifact_group = "third-party-libs"
 type = "target-neutral"
-artifact_deps = ["host-blas"]  # SuiteSparse depends on BLAS
+artifact_deps = ["amd-llvm", "host-blas"]  # SuiteSparse depends on BLAS
 feature_name = "HOST_SUITE_SPARSE"
 feature_group = "HOST_MATH"  # Controlled by THEROCK_ENABLE_HOST_MATH (OFF by default)
 disable_platforms = ["windows"]
@@ -390,25 +390,25 @@ disable_platforms = ["windows"]
 [artifacts.fftw3]
 artifact_group = "third-party-libs"
 type = "target-neutral"
-artifact_deps = []
+artifact_deps = ["amd-llvm"]
 feature_group = "HOST_MATH"  # Controlled by THEROCK_ENABLE_HOST_MATH (OFF by default)
 
 [artifacts.flatbuffers]
 artifact_group = "third-party-libs"
 type = "target-neutral"
-artifact_deps = []
+artifact_deps = ["amd-llvm"]
 feature_group = "CORE"
 
 [artifacts.fmt]
 artifact_group = "third-party-libs"
 type = "target-neutral"
-artifact_deps = []
+artifact_deps = ["amd-llvm"]
 feature_group = "CORE"
 
 [artifacts.nlohmann-json]
 artifact_group = "third-party-libs"
 type = "target-neutral"
-artifact_deps = []
+artifact_deps = ["amd-llvm"]
 feature_group = "CORE"
 
 [artifacts.spdlog]

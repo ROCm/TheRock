@@ -15,7 +15,8 @@ therock_cmake_subproject_declare(therock-grpc
   NO_MERGE_COMPILE_COMMANDS
   BACKGROUND_BUILD
   OUTPUT_ON_FAILURE
-
+  COMPILER_TOOLCHAIN
+    amd-llvm
   CMAKE_ARGS
     # Static linking configuration
     -DBUILD_SHARED_LIBS=OFF

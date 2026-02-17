@@ -11,6 +11,8 @@ therock_cmake_subproject_declare(therock-nlohmann-json
   NO_MERGE_COMPILE_COMMANDS
   OUTPUT_ON_FAILURE
   EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/source"
+  COMPILER_TOOLCHAIN
+    amd-llvm
   CMAKE_ARGS
     -DJSON_BuildTests=OFF
     -DJSON_MultipleHeaders=ON

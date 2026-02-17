@@ -19,6 +19,8 @@ therock_cmake_subproject_declare(therock-fftw3
   NO_MERGE_COMPILE_COMMANDS
   OUTPUT_ON_FAILURE
   EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/source"
+  COMPILER_TOOLCHAIN
+    amd-llvm
   CMAKE_ARGS
     -DBUILD_SHARED_LIBS=ON
     -DENABLE_THREADS=${_fftw3_enable_threads}
@@ -38,6 +40,8 @@ therock_cmake_subproject_declare(therock-fftw3f
   NO_MERGE_COMPILE_COMMANDS
   OUTPUT_ON_FAILURE
   EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/source"
+  COMPILER_TOOLCHAIN
+    amd-llvm
   CMAKE_ARGS
     -DENABLE_FLOAT=ON
     -DBUILD_SHARED_LIBS=ON
