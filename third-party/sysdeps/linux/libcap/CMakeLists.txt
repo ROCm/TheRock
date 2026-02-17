@@ -99,6 +99,7 @@ add_custom_target(
     "${CMAKE_CURRENT_SOURCE_DIR}/patch_source.sh"
     "${CMAKE_CURRENT_SOURCE_DIR}/patch_install.sh"
     "${CMAKE_CURRENT_SOURCE_DIR}/libcap.map"
+    "${CMAKE_CURRENT_SOURCE_DIR}/libpsx.map"
   VERBATIM
 )
 

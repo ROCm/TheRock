@@ -7,7 +7,7 @@ on:
     inputs:
       linux_amdgpu_families:
         type: string
-        description: "Insert comma-separated list of Linux GPU families to build and test. ex: gfx94X, gfx1201X"
+        description: "Insert comma-separated list of Linux GPU families to build and test. ex: gfx94X, gfx120X"
         default: ""
       linux_use_prebuilt_artifacts:
         type: boolean
