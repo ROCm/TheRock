@@ -117,7 +117,7 @@ jobs:
     name: Build Linux JAX Wheels | ${{ inputs.amdgpu_family }} | Python ${{ inputs.python_version }}
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     env:
-      PACKAGE_DIST_DIR: ${{ github.workspace }}/jax/jax_rocm_plugin/wheelhouse
+      PACKAGE_DIST_DIR: ${{ github.workspace }}/rocm-jax/jax_rocm_plugin/wheelhouse
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
     outputs:
       cp_version: ${{ env.cp_version }}
@@ -130,19 +130,19 @@ jobs:
       - name: Checkout TheRock
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Checkout JAX
+      - name: Checkout rocm-jax
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           path: rocm-jax
-          repository: rocm/rocm-jax
+          repository: ROCm/rocm-jax
           ref: ${{ inputs.jax_ref }}
-      
-      - name: Checkout JAX extended repo
+
+      - name: Checkout JAX (source for jaxlib build)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           path: jax
-          repository: rocm/jax
-          ref: ${{ matrix.jax_ref }}
+          repository: ROCm/jax
+          ref: ${{ inputs.jax_ref }}
 
       - name: Configure Git Identity
         run: |
