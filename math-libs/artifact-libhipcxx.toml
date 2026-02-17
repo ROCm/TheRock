@@ -12,7 +12,7 @@ include = [
   "libhipcxx/**/*",
 ]
 exclude = [
-  # Exclude folders not needed for testing 
+  # Exclude folders not needed for testing
   "libhipcxx/._upstream/**",
   "libhipcxx/docs/**",
 ]
