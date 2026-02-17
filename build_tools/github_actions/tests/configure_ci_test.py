@@ -1,4 +1,3 @@
-import copy
 import json
 from pathlib import Path
 import os
@@ -564,38 +563,48 @@ class ConfigureCITest(unittest.TestCase):
             self.assertIn("amdgpu_family", family_info)
             self.assertIn("test-runs-on", family_info)
 
-    def test_multi_arch_mixed_sanity_check_families(self):
-        """Test multi_arch mode with mix of families with/without sanity_check_only_for_family."""
-        # Get real matrix and modify it to ensure we have mixed sanity_check_only_for_family values
-        original_matrix = configure_ci.get_all_families_for_trigger_types(["presubmit"])
+    def test_multi_arch_sanity_check_field_propagation_logic(self):
+        """Unit test: Verify sanity_check_only_for_family field is correctly propagated.
 
-        # Deep copy to avoid mutating the original module-level dict
-        modified_matrix = copy.deepcopy(original_matrix)
+        Uses synthetic data to test the code logic in isolation.
+        This test should never need updates unless the code behavior changes.
+        """
+        # Synthetic minimal test matrix
+        # Use naming convention matching real matrix (e.g., gfx94x, gfx110x - no underscores)
+        synthetic_matrix = {
+            "testfamily1": {
+                "linux": {
+                    "family": "testfamily1-stable",
+                    "test-runs-on": "linux-stable-runner",
+                    "build_variants": ["release"],
+                    # Field not present - should default to False
+                }
+            },
+            "testfamily2": {
+                "linux": {
+                    "family": "testfamily2-experimental",
+                    "test-runs-on": "linux-experimental-runner",
+                    "build_variants": ["release"],
+                    "sanity_check_only_for_family": True,
+                }
+            },
+            "testfamily3": {
+                "linux": {
+                    "family": "testfamily3-explicit-false",
+                    "test-runs-on": "linux-another-runner",
+                    "build_variants": ["release"],
+                    "sanity_check_only_for_family": False,  # Explicit False
+                }
+            },
+        }
 
-        # Pick two stable families from presubmit
-        # Assume gfx94x will always have sanity_check_only_for_family=False (default)
-        if "gfx94x" not in modified_matrix:
-            self.skipTest("Test family gfx94x not in matrix")
-        if "gfx110x" not in modified_matrix:
-            self.skipTest("Test family gfx110x not in matrix")
-
-        # Override gfx110x to ensure it has sanity_check_only_for_family=True
-        modified_matrix["gfx110x"]["linux"]["sanity_check_only_for_family"] = True
-
-        # Extract expected family names from matrix
-        gfx94x_family = modified_matrix["gfx94x"]["linux"][
-            "family"
-        ]  # e.g., "gfx94X-dcgpu"
-        gfx110x_family = modified_matrix["gfx110x"]["linux"][
-            "family"
-        ]  # e.g., "gfx110X-all"
-
-        # Patch the function to return our modified matrix
         with patch(
             "configure_ci.get_all_families_for_trigger_types",
-            return_value=modified_matrix,
+            return_value=synthetic_matrix,
         ):
-            build_families = {"amdgpu_families": "gfx94x, gfx110x"}
+            build_families = {
+                "amdgpu_families": "testfamily1, testfamily2, testfamily3"
+            }
             linux_target_output, linux_test_labels = configure_ci.matrix_generator(
                 is_pull_request=False,
                 is_workflow_dispatch=True,
@@ -610,25 +619,151 @@ class ConfigureCITest(unittest.TestCase):
                 platform="linux",
                 multi_arch=True,
             )
+
+            # Validate multi-arch structure
             self.assertEqual(len(linux_target_output), 1)
             self.assert_multi_arch_output_is_valid(
                 target_output=linux_target_output, allow_xfail=True
             )
 
+            # Parse and validate field propagation
             entry = linux_target_output[0]
             family_info_list = json.loads(entry["matrix_per_family_json"])
-            self.assertEqual(len(family_info_list), 2)
+            self.assertEqual(len(family_info_list), 3)
 
-            # Find and validate both families
             family_dict = {f["amdgpu_family"]: f for f in family_info_list}
 
-            # gfx94X should have sanity_check_only_for_family=False
-            self.assertIn(gfx94x_family, family_dict)
-            self.assertFalse(family_dict[gfx94x_family]["sanity_check_only_for_family"])
+            # Verify field is correctly propagated with proper defaults
+            self.assertIn("testfamily1-stable", family_dict)
+            self.assertFalse(
+                family_dict["testfamily1-stable"]["sanity_check_only_for_family"],
+                "Missing field should default to False",
+            )
 
-            # gfx110X should have sanity_check_only_for_family=True
-            self.assertIn(gfx110x_family, family_dict)
-            self.assertTrue(family_dict[gfx110x_family]["sanity_check_only_for_family"])
+            self.assertIn("testfamily2-experimental", family_dict)
+            self.assertTrue(
+                family_dict["testfamily2-experimental"]["sanity_check_only_for_family"],
+                "Explicit True should be preserved",
+            )
+
+            self.assertIn("testfamily3-explicit-false", family_dict)
+            self.assertFalse(
+                family_dict["testfamily3-explicit-false"][
+                    "sanity_check_only_for_family"
+                ],
+                "Explicit False should be preserved",
+            )
+
+            # Verify all entries have the field (even if False)
+            for family_info in family_info_list:
+                self.assertIn("sanity_check_only_for_family", family_info)
+                self.assertIsInstance(family_info["sanity_check_only_for_family"], bool)
+
+    def test_multi_arch_production_sanity_check_configuration(self):
+        """Integration test: Verify production matrix sanity_check configuration.
+
+        This documents our expected production configuration and catches unintentional changes.
+
+        When this test fails:
+        1. Check if the architecture matured (expected) → update expected_families
+        2. Check if someone accidentally changed the matrix (bug) → revert the change
+
+        Update this test when architectures are promoted/demoted intentionally.
+        """
+        # Get actual production matrix
+        matrix = configure_ci.get_all_families_for_trigger_types(["presubmit"])
+
+        # Document expected production configuration as of 2025-02
+        # Update these when architectures mature or new experimental archs are added
+        expected_families = {
+            # Stable architectures - should NOT have sanity_check flag
+            "stable": ["gfx94x"],
+            # Experimental architectures - SHOULD have sanity_check flag
+            "experimental": ["gfx110x", "gfx1151"],
+        }
+
+        # Verify stable architectures
+        for family in expected_families["stable"]:
+            if family not in matrix:
+                self.fail(
+                    f"Stable family '{family}' not in presubmit matrix. "
+                    f"If removed intentionally, update expected_families in this test."
+                )
+            linux_info = matrix[family].get("linux", {})
+            sanity_check = linux_info.get("sanity_check_only_for_family", False)
+            self.assertFalse(
+                sanity_check,
+                f"Stable family '{family}' should not have sanity_check_only_for_family=True",
+            )
+
+        # Verify experimental architectures
+        for family in expected_families["experimental"]:
+            if family not in matrix:
+                # Allow experimental families to be removed without breaking CI
+                print(
+                    f"WARNING: Experimental family '{family}' not in matrix (may have been promoted/removed)"
+                )
+                continue
+            linux_info = matrix[family].get("linux", {})
+            sanity_check = linux_info.get("sanity_check_only_for_family", False)
+            self.assertTrue(
+                sanity_check,
+                f"Experimental family '{family}' should have sanity_check_only_for_family=True. "
+                f"If promoted to stable, move to 'stable' list in expected_families.",
+            )
+
+        # Now test end-to-end: pick one stable + one experimental and verify propagation
+        if not expected_families["stable"] or not expected_families["experimental"]:
+            self.skipTest("Need at least one stable and one experimental family")
+
+        stable_family = expected_families["stable"][0]
+        experimental_family = expected_families["experimental"][0]
+
+        # Skip if experimental family was removed
+        if experimental_family not in matrix:
+            self.skipTest(f"Experimental family {experimental_family} not available")
+
+        build_families = {"amdgpu_families": f"{stable_family}, {experimental_family}"}
+        linux_target_output, _ = configure_ci.matrix_generator(
+            is_pull_request=False,
+            is_workflow_dispatch=True,
+            is_push=False,
+            is_schedule=False,
+            base_args={
+                "workflow_dispatch_linux_test_labels": "",
+                "workflow_dispatch_windows_test_labels": "",
+                "build_variant": "release",
+            },
+            families=build_families,
+            platform="linux",
+            multi_arch=True,
+        )
+
+        self.assertEqual(len(linux_target_output), 1)
+        self.assert_multi_arch_output_is_valid(
+            target_output=linux_target_output, allow_xfail=True
+        )
+
+        # Verify the production values are correctly propagated
+        entry = linux_target_output[0]
+        family_info_list = json.loads(entry["matrix_per_family_json"])
+
+        stable_arch_name = matrix[stable_family]["linux"]["family"]
+        experimental_arch_name = matrix[experimental_family]["linux"]["family"]
+
+        family_dict = {f["amdgpu_family"]: f for f in family_info_list}
+
+        self.assertIn(stable_arch_name, family_dict)
+        self.assertFalse(
+            family_dict[stable_arch_name]["sanity_check_only_for_family"],
+            f"Stable family {stable_arch_name} should have sanity_check=False",
+        )
+
+        self.assertIn(experimental_arch_name, family_dict)
+        self.assertTrue(
+            family_dict[experimental_arch_name]["sanity_check_only_for_family"],
+            f"Experimental family {experimental_arch_name} should have sanity_check=True",
+        )
 
     def test_rocm_org_var_names(self):
         os.environ["LOAD_TEST_RUNNERS_FROM_VAR"] = "false"
