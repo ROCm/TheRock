@@ -131,7 +131,7 @@ jobs:
       - name: Setup Test
         run: |
           ${{ fromJSON(inputs.component).setup_script }}
-          
+
       - name: Test
         timeout-minutes: ${{ fromJSON(inputs.component).timeout_minutes }}
         env:
