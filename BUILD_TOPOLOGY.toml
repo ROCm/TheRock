@@ -194,6 +194,7 @@ type = "generic"
 [artifact_groups.third-party-libs]
 description = "Optional third-party libraries (for tests/specific features)"
 type = "generic"
+artifact_group_deps = ["compiler"]
 source_sets = []  # No submodules - uses vendored/in-tree deps
 
 [artifact_groups.base]
@@ -408,7 +409,7 @@ feature_group = "CORE"
 [artifacts.spdlog]
 artifact_group = "third-party-libs"
 type = "target-neutral"
-artifact_deps = []
+artifact_deps = ["amd-llvm"]
 feature_group = "CORE"
 
 # --- Base Infrastructure ---

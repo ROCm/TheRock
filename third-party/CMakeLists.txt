@@ -24,8 +24,10 @@ add_subdirectory(fftw3)
 # frugally-deep depends on eigen, FunctionalPlus and nlohmann-json
 add_subdirectory(frugally-deep)
 
-# spdlog depends on fmt.
-add_subdirectory(spdlog)
+# spdlog depends on fmt and amd-llvm toolchain.
+if(THEROCK_ENABLE_SPDLOG)
+  add_subdirectory(spdlog)
+endif()
 
 # Host math libraries.
 if(THEROCK_ENABLE_HOST_BLAS)
