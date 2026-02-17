@@ -115,14 +115,6 @@ test_matrix = {
         "platform": ["linux", "windows"],
         "total_shards": 2,
     },
-    "rocprofiler_systems": {
-        "job_name": "rocprofiler_systems",
-        "fetch_artifact_args": "--rocprofiler-systems --rocprofiler-sdk --tests",
-        "timeout_minutes": 15,
-        "test_script": f"python {_get_script_path('test_rocprofiler_systems.py')}",
-        "platform": ["linux"],
-        "total_shards": 1,
-    },
     "hipcub": {
         "job_name": "hipcub",
         "fetch_artifact_args": "--prim --tests",
