@@ -39,13 +39,13 @@ site_packages_dir = (
 )
 
 # LD_LIBRARY_PATH is needed for Python tests to find liborigami.so
-if platform == "linux":
+if not is_windows:
     ld_paths = [
         str(lib_dir),
         environ_vars.get("LD_LIBRARY_PATH", ""),
     ]
     environ_vars["LD_LIBRARY_PATH"] = path_sep.join(p for p in ld_paths if p)
-elif is_windows:
+else:
     dll_paths = [
         str(bin_dir),
         str(lib_dir),
