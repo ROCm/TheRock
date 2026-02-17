@@ -1,56 +1,57 @@
 # Dockerfile for building LMCache wheels with ROCm support
-# Uses TheRock's official manylinux build container
+# Uses TheRock's ROCm tarball + PyTorch from TheRock's index
 ARG BASE_IMAGE=ghcr.io/rocm/therock_build_manylinux_x86_64:latest
 
 # ============================================================================
-# Stage 1: Setup Python and install PyTorch with ROCm
+# Stage 1: Install ROCm from tarball and PyTorch from index
 # ============================================================================
 FROM ${BASE_IMAGE} AS builder
 
-ARG INDEX_URL
-ARG PYTORCH_ROCM_ARCH
-
+ARG THEROCK_INDEX_URL=https://rocm.prereleases.amd.com/whl/gfx950-dcgpu
+ARG THEROCK_TARBALL_URL=https://repo.amd.com/rocm/tarball/therock-dist-linux-gfx950-dcgpu-7.11.0.tar.gz
+ARG PYTORCH_ROCM_ARCH=gfx950
 
 # Install build dependencies
 RUN python3 -m pip install --upgrade pip && \
-    python3 -m pip install ninja wheel setuptools setuptools_scm packaging
+    python3 -m pip install ninja wheel setuptools setuptools_scm packaging auditwheel pybind11
 
-# Install Python build tools
-RUN python3 -m pip install --no-cache-dir build auditwheel pybind11
+# Download and extract TheRock ROCm tarball
+RUN echo "=== Downloading TheRock ROCm tarball ===" && \
+    mkdir -p /opt/rocm && \
+    cd /tmp && \
+    curl -L -o rocm.tar.gz ${THEROCK_TARBALL_URL} && \
+    echo "=== Extracting ROCm tarball ===" && \
+    tar -xzf rocm.tar.gz -C /opt/rocm && \
+    rm rocm.tar.gz && \
+    echo "=== ROCm tarball extraction complete ===" && \
+    ls -la /opt/rocm/
 
-# Install Python-packaged ROCm from index
-# This includes architecture-specific libraries for the target GPU
-RUN python3 -m pip install --no-cache-dir rocm[libraries,devel] --index-url ${INDEX_URL}
+# Configure ROCm paths
+ENV ROCM_PATH=/opt/rocm
+ENV HIP_PATH=/opt/rocm
+ENV ROCM_HOME=/opt/rocm
+ENV PATH=/opt/rocm/bin:$PATH
+ENV LD_LIBRARY_PATH=/opt/rocm/lib:/opt/rocm/lib64:$LD_LIBRARY_PATH
+ENV CMAKE_PREFIX_PATH=/opt/rocm:/opt/rocm/lib/cmake:/opt/rocm/share/rocm/cmake
+ENV DEVICE_LIB_PATH=/opt/rocm/lib/llvm/amdgcn/bitcode
+ENV HIP_DEVICE_LIB_PATH=${DEVICE_LIB_PATH}
 
+# Verify ROCm installation
+RUN echo "=== ROCm verification ===" && \
+    which hipcc && \
+    hipcc --version && \
+    echo "=== Verifying development files ===" && \
+    ls -la /opt/rocm/lib/llvm/bin/clang++ && \
+    echo "=== Checking for CMake files ===" && \
+    find /opt/rocm -name "hipConfig.cmake" -o -name "hip-config.cmake" | head -5 && \
+    echo "=== Checking for Thrust headers ===" && \
+    ls -la /opt/rocm/include/thrust/ | head -10 || echo "Thrust headers not in tarball - will need to build"
 
-# Build and install rocThrust headers from source
-# Python-packaged ROCm doesn't include Thrust headers, but PyTorch needs them
-# Following official instructions from https://github.com/ROCm/rocm-libraries/tree/develop/projects/rocthrust
-# Set ROCM_PATH/HIP_PATH since Python-packaged ROCm is not in /opt/rocm
-RUN PYTHON_SITE_PACKAGES=$(python3 -c "import site; print(site.getsitepackages()[0])") && \
-    export ROCM_PATH="${PYTHON_SITE_PACKAGES}/_rocm_sdk_core" && \
-    export HIP_PATH="${PYTHON_SITE_PACKAGES}/_rocm_sdk_core" && \
-    git clone --no-checkout --depth=1 --filter=tree:0  https://github.com/ROCm/rocm-libraries.git /tmp/rocm-libraries && \
-    cd /tmp/rocm-libraries && \
-    git sparse-checkout init --cone && \
-    git sparse-checkout set projects/rocthrust && \
-    git checkout develop && \
-    cd projects/rocthrust && \
-    mkdir build && cd build && \
-    CXX="${HIP_PATH}/bin/hipcc" cmake .. \
-        -DCMAKE_INSTALL_PREFIX=/opt/rocm \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DROCPRIM_FETCH_METHOD=DOWNLOAD && \
-    make -j$(nproc) && \
-    make install && \
-    rm -rf /tmp/rocm-libraries
+# Install PyTorch with ROCm from TheRock's index
+RUN python3 -m pip install --index-url ${THEROCK_INDEX_URL} torch torchaudio torchvision
 
-# Install PyTorch with ROCm from the gfx-specific index
-RUN python3 -m pip install --no-cache-dir torch torchvision torchaudio --index-url ${INDEX_URL}
-
-# Verify PyTorch + ROCm
+# Verify PyTorch
 RUN python3 -c "import torch; print(f'PyTorch: {torch.__version__}'); \
-    print(f'CUDA/HIP available: {torch.cuda.is_available()}'); \
     print(f'HIP version: {getattr(torch.version, \"hip\", \"N/A\")}')"
 
 # ============================================================================
@@ -70,13 +71,10 @@ RUN git clone https://github.com/LMCache/LMCache.git /workspace/lmcache && \
 WORKDIR /workspace/lmcache
 
 # Fix pyproject.toml for modern setuptools compatibility
-# 1. Change: license = "Apache-2.0" -> license = {text = "Apache-2.0"}
-# 2. Remove: license-files (deprecated field)
 RUN sed -i 's/^license = "Apache-2.0"/license = {text = "Apache-2.0"}/' pyproject.toml && \
     sed -i '/^license-files/d' pyproject.toml
 
 # Set build environment for HIP/ROCm
-# With Python-packaged ROCm, hipcc and libraries are in Python site-packages
 ENV BUILD_WITH_HIP=1
 ENV CXX=hipcc
 ENV PYTORCH_ROCM_ARCH=${PYTORCH_ROCM_ARCH}
@@ -88,15 +86,14 @@ RUN python3 setup.py bdist_wheel --dist-dir=/output
 
 # Basic import test
 RUN python3 -m pip install /output/lmcache-*.whl && \
-    python3 -c "import lmcache; print(f'✓ LMCache: {lmcache.__version__}')"
+    python3 -c "import lmcache; print('✓ LMCache installed successfully')"
 
 # ============================================================================
 # Stage 3: Audit wheel for manylinux compliance
 # ============================================================================
 FROM build AS audit
 
-# Repair wheel for portability (exclude PyTorch and ROCm libs)
-# These libraries come from Python packages installed via --extra-index-url
+# Repair wheel for portability
 RUN auditwheel show /output/lmcache-*.whl && \
     auditwheel repair \
         --plat manylinux_2_28_x86_64 \

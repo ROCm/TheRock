@@ -2,19 +2,25 @@
 r"""Builds production LMCache wheel with ROCm support.
 
 LMCache requires PyTorch with ROCm as a build dependency. The build process
-uses TheRock's manylinux build container with Python-packaged ROCm.
+uses TheRock's manylinux build container with ROCm from TheRock tarballs.
 
 ## Building
 
-Typical usage to build:
+Find the latest tarball for your GPU architecture at:
+https://rocm.nightlies.amd.com/tarball/
+
+Example for gfx950:
 
 ```
 python build_prod_wheels.py \
     --output-dir outputs \
-    --index-url https://rocm.prereleases.amd.com/whl/gfx94X-dcgpu
+    --therock-index-url https://rocm.prereleases.amd.com/whl/gfx950-dcgpu \
+    --therock-tarball-url https://repo.amd.com/rocm/tarball/therock-dist-linux-gfx950-dcgpu-7.11.0.tar.gz \
+    --rocm-arch gfx950
 ```
 
-The index URL should point to Python-packaged ROCm for your GPU's gfx architecture.
+The tarball provides the complete ROCm SDK with all headers and CMake files.
+The index URL provides PyTorch built for the same architecture.
 
 ## Building Linux portable wheels
 
@@ -52,6 +58,9 @@ def find_built_wheel(dist_dir: Path) -> Path:
 def do_build(args: argparse.Namespace):
     """Build LMCache wheel using Docker."""
     
+    print(f"++ Using TheRock index: {args.therock_index_url}")
+    print(f"++ Using TheRock tarball: {args.therock_tarball_url}")
+    
     # Build using Docker
     print("++ Building LMCache wheel in Docker container...")
     
@@ -59,11 +68,11 @@ def do_build(args: argparse.Namespace):
     
     build_cmd = [
         "docker", "build",
-        "--progress=plain",  # Show full build output including RUN command stdout
         "--target", "export",
         "--output", f"type=local,dest={args.output_dir}",
         "--build-arg", f"PYTHON_VERSION={args.python_version}",
-        "--build-arg", f"INDEX_URL={args.index_url}",
+        "--build-arg", f"THEROCK_INDEX_URL={args.therock_index_url}",
+        "--build-arg", f"THEROCK_TARBALL_URL={args.therock_tarball_url}",
         "--build-arg", f"PYTORCH_ROCM_ARCH={args.rocm_arch}",
         "--build-arg", f"LMCACHE_BRANCH={args.lmcache_branch}",
         "-f", "Dockerfile",
@@ -86,13 +95,13 @@ def do_build(args: argparse.Namespace):
     print(f"{'='*80}\n")
     
     print("To install:")
-    print(f"  pip install --extra-index-url {args.index_url} {built_wheel.name}")
+    print(f"  pip install {built_wheel}")
 
 
 def main(argv: list[str]):
     parser = argparse.ArgumentParser(
         prog="build_prod_wheels.py",
-        description="Build LMCache wheels with ROCm support"
+        description="Build LMCache wheels with ROCm support from TheRock"
     )
     
     parser.add_argument(
@@ -102,20 +111,27 @@ def main(argv: list[str]):
         help="Directory to copy built wheels to",
     )
     parser.add_argument(
+        "--therock-index-url",
+        type=str,
+        required=True,
+        help="TheRock Python index URL for PyTorch (e.g., https://rocm.prereleases.amd.com/whl/gfx950-dcgpu)",
+    )
+    parser.add_argument(
+        "--therock-tarball-url",
+        type=str,
+        required=True,
+        help="TheRock ROCm tarball URL (e.g., https://repo.amd.com/rocm/tarball/therock-dist-linux-gfx950-dcgpu-7.11.0.tar.gz)",
+    )
+    parser.add_argument(
         "--python-version",
         default=".".join(platform.python_version_tuple()[:2]),
         type=str,
         help="Python version to use for the build (e.g., 3.10, 3.11, 3.12)",
     )
     parser.add_argument(
-        "--index-url",
-        required=True,
-        help="Index URL for Python-packaged ROCm matching your GPU's gfx arch (e.g., https://rocm.prereleases.amd.com/whl/gfx94X-dcgpu)",
-    )
-    parser.add_argument(
         "--rocm-arch",
         default="gfx90a;gfx942;gfx950;gfx1100;gfx1101;gfx1200;gfx1201",
-        help="ROCm GPU architectures (semicolon-separated)",
+        help="ROCm GPU architectures for LMCache build (semicolon-separated)",
     )
     parser.add_argument(
         "--lmcache-branch",
