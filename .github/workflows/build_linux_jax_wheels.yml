@@ -176,7 +176,7 @@ jobs:
             --jax-track "${{ inputs.jax_ref }}" \
             --jax-git-ref "${{ inputs.jax_ref }}" \
             --jax-dir "${{ github.workspace }}/jax"
-          ls -lah "${{ env.PACKAGE_DIST_DIR }}/manifests
+          ls -lah "${{ env.PACKAGE_DIST_DIR }}/manifests"
 
       - name: Extract JAX versions from built wheels
         id: write_jax_versions
