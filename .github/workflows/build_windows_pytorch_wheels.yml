@@ -105,6 +105,7 @@ jobs:
       OUTPUT_DIR: ${{ github.workspace }}/output
       # Note the \ here instead of /. This should be used from 'cmd' not 'bash'!
       PACKAGE_DIST_DIR: ${{ github.workspace }}\output\packages\dist
+      RELEASE_TYPE: ${{ inputs.release_type }}
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
       optional_build_prod_arguments: ""
     outputs:
@@ -229,6 +230,17 @@ jobs:
         run: |
           python external-builds/pytorch/sanity_check_wheel.py ${{ env.PACKAGE_DIST_DIR }}
 
+      - name: Generate PyTorch manifest
+        shell: bash
+        run: |
+          python build_tools/github_actions/generate_pytorch_manifest.py \
+            --manifest-dir "${PACKAGE_DIST_DIR}/manifests" \
+            --python-version "${{ inputs.python_version }}" \
+            --pytorch-git-ref "${{ inputs.pytorch_git_ref }}" \
+            --pytorch-dir "${CHECKOUT_ROOT}/torch" \
+            --pytorch-audio-dir "${CHECKOUT_ROOT}/audio" \
+            --pytorch-vision-dir "${CHECKOUT_ROOT}/vision"
+
       - name: Configure AWS Credentials
         if: always()
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
@@ -245,6 +257,17 @@ jobs:
           aws s3 cp ${{ env.PACKAGE_DIST_DIR }}/ ^
             s3://${{ env.S3_BUCKET_PY }}/${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}/ ^
             --recursive --exclude "*" --include "*.whl"
+
+      - name: Upload PyTorch manifest to S3 artifacts
+        if: ${{ github.repository_owner == 'ROCm' }}
+        shell: bash
+        run: |
+          python build_tools/github_actions/upload_pytorch_manifest.py \
+            --dist-dir "${{ env.PACKAGE_DIST_DIR }}" \
+            --run-id "${{ github.run_id }}" \
+            --amdgpu-family "${{ inputs.amdgpu_family }}" \
+            --python-version "${{ inputs.python_version }}" \
+            --pytorch-git-ref "${{ inputs.pytorch_git_ref }}"
 
       - name: (Re-)Generate Python package release index for staging
         if: ${{ github.repository_owner == 'ROCm' }}
