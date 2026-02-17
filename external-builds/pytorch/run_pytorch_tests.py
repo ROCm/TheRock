@@ -290,11 +290,9 @@ def force_exit_with_code(retcode):
     # TODO(#2258): output a test report file that can be inspected on both
     #              Linux and Windows then remove this special file
     retcode_file = Path("run_pytorch_tests_exit_code.txt")
-    # Convert to int in case retcode is a pytest.ExitCode enum
-    retcode_int = int(retcode)
-    print(f"Writing retcode {retcode_int} to '{retcode_file}'")
+    print(f"Writing retcode {retcode} to '{retcode_file}'")
     with open(retcode_file, "w") as f:
-        f.write(str(retcode_int))
+        f.write(str(retcode))
 
     print("Forcefully terminating to avoid https://github.com/ROCm/TheRock/issues/999")
 

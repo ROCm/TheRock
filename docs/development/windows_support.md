@@ -26,6 +26,7 @@ mainline, in open source, using MSVC, etc.).
 | Component subset    | Subproject                                                                                                               | Supported | Notes                                         |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------ | --------- | --------------------------------------------- |
 | base                | aux-overlay                                                                                                              | ✅        |                                               |
+| base                | [amdsmi](https://github.com/ROCm/amdsmi)                                                                                 | ❌        | Unsupported                                   |
 | base                | [rocm-cmake](https://github.com/ROCm/rocm-cmake)                                                                         | ✅        |                                               |
 | base                | [rocm-core](https://github.com/ROCm/rocm-core)                                                                           | ✅        |                                               |
 | base                | [rocm_smi_lib](https://github.com/ROCm/rocm_smi_lib)                                                                     | ❌        | Unsupported                                   |
@@ -37,7 +38,6 @@ mainline, in open source, using MSVC, etc.).
 | compiler            | [hipcc](https://github.com/ROCm/llvm-project/tree/amd-staging/amd/hipcc)                                                 | ✅        |                                               |
 | compiler            | [hipify](https://github.com/ROCm/HIPIFY)                                                                                 | ✅        |                                               |
 |                     |                                                                                                                          |           |                                               |
-| core                | [amdsmi](https://github.com/ROCm/amdsmi)                                                                                 | ❌        | Unsupported                                   |
 | core                | [ROCR-Runtime](https://github.com/ROCm/ROCR-Runtime)                                                                     | ❌        | Unsupported                                   |
 | core                | [rocminfo](https://github.com/ROCm/rocminfo)                                                                             | ❌        | Unsupported                                   |
 | core                | [hipInfo from hip-tests](https://github.com/ROCm/hip-tests)                                                              | ✅        |                                               |
@@ -79,7 +79,6 @@ mainline, in open source, using MSVC, etc.).
 | ml-libs             | [MIOpen](https://github.com/ROCm/MIOpen)                                                                                 | ✅        |                                               |
 | ml-libs             | [hipDNN](https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipdnn)                                            | ✅        |                                               |
 | ml-libs             | [MIOpen Legacy Plugin](https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipdnn/plugins/miopen_legacy_plugin) | ✅        |                                               |
-| ml-libs             | [hipBLASLt Plugin](https://github.com/ROCm/rocm-libraries/tree/develop/dnn-providers/hipblaslt-provider)                 | ✅        |                                               |
 
 ## Building TheRock from source
 
@@ -200,11 +199,8 @@ If you prefer to install tools manually, you will need:
 >   running `vcvars64.bat` in an existing shell.
 > - If you build from an editor like VSCode, CMake can discover the compiler
 >   among other "kits".
-> - Our `windows-base` or `windows-release` presets in
->   [CMakePresets.json](/CMakePresets.json) set the CMake compiler and linker
->   for you.
 > - You can also tell CMake to use MSVC's tools explicitly with
->   `-DCMAKE_C_COMPILER=cl.exe -DCMAKE_CXX_COMPILER=cl.exe -DCMAKE_LINKER=link.exe`.
+>   `-DCMAKE_C_COMPILER=cl.exe -DCMAKE_CXX_COMPILER=cl.exe -DCMAKE_LINKER=link.exe`
 
 ### Set the locale
 

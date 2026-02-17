@@ -49,10 +49,7 @@ Conflicts: {{ conflicts }}
 %install
 mkdir -p $RPM_BUILD_ROOT{{ install_prefix }}
 {% for path in sourcedir_list %}
-{
-   shopt -s dotglob
-   cp -R "{{ path }}"/* "$RPM_BUILD_ROOT{{ install_prefix }}/"
-}
+cp -R {{ path }}/* $RPM_BUILD_ROOT{{ install_prefix }}
 {% endfor %}
 
 %files

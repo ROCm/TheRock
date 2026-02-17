@@ -24,8 +24,6 @@ python build_tools/install_rocm_from_artifacts.py
     [--hipdnn-samples | --no-hipdnn-samples]
     [--miopen | --no-miopen]
     [--miopen-plugin | --no-miopen-plugin]
-    [--fusilli-plugin | --no-fusilli-plugin]
-    [--hipblaslt-plugin | --no-hipblaslt-plugin]
     [--prim | --no-prim]
     [--rand | --no-rand]
     [--rccl | --no-rccl]
@@ -317,8 +315,6 @@ def retrieve_artifacts_by_run_id(args):
         "base_lib",
         "amd-llvm_run",
         "amd-llvm_lib",
-        "core-amdsmi_run",
-        "core-amdsmi_lib",
         "core-hip_lib",
         "core-hip_dev",
         "core-ocl_lib",
@@ -340,7 +336,6 @@ def retrieve_artifacts_by_run_id(args):
             args.miopen,
             args.miopen_plugin,
             args.fusilli_plugin,
-            args.hipblaslt_plugin,
             args.prim,
             args.rand,
             args.rccl,
@@ -392,26 +387,18 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("miopen-plugin")
         if args.fusilli_plugin:
             extra_artifacts.append("fusilli-plugin")
-        if args.hipblaslt_plugin:
-            extra_artifacts.append("hipblaslt-plugin")
         if args.prim:
             extra_artifacts.append("prim")
         if args.rand:
             extra_artifacts.append("rand")
         if args.rccl:
             extra_artifacts.append("rccl")
-        if args.rocprofiler_sdk:
-            extra_artifacts.append("rocprofiler-sdk")
-            # Contains rocprofiler-sdk-rocpd
-            argv.append("rocprofiler-sdk_run")
         if args.rocprofiler_compute:
             extra_artifacts.append("rocprofiler-compute")
         if args.rocprofiler_sdk:
             extra_artifacts.append("rocprofiler-sdk")
         if args.rocprofiler_systems:
             extra_artifacts.append("rocprofiler-systems")
-            # Contains executables (rocprof-sys-run, rocprof-sys-instrument, etc.)
-            argv.append("rocprofiler-systems_run")
         if args.rocwmma:
             extra_artifacts.append("rocwmma")
         if args.libhipcxx:
@@ -669,13 +656,6 @@ def main(argv):
     )
 
     artifacts_group.add_argument(
-        "--hipblaslt-plugin",
-        default=False,
-        help="Include 'hipblaslt-plugin' artifacts",
-        action=argparse.BooleanOptionalAction,
-    )
-
-    artifacts_group.add_argument(
         "--prim",
         default=False,
         help="Include 'prim' artifacts",
@@ -714,13 +694,6 @@ def main(argv):
         "--rocprofiler-systems",
         default=False,
         help="Include 'rocprofiler-systems' artifacts",
-        action=argparse.BooleanOptionalAction,
-    )
-
-    artifacts_group.add_argument(
-        "--rocprofiler-sdk",
-        default=False,
-        help="Include 'rocprofiler-sdk' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 

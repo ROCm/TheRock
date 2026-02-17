@@ -132,29 +132,18 @@ PACKAGES_TO_PROMOTE = {
     "triton",
 }
 
-# copied from build_tools/third_party/s3_management/update_dependencies.py PACKAGES_PER_PROJECT
-# Note: replace - in package names with _ to match the filename patterns in S3
 DEPENDENCY_PACKAGES = {
-    # no jax in release, yet
-    # "dbus_python",
-    # "flatbuffers",
-    # "ml_dtypes",
-    # "opt_einsum",
-    # "tomli",
-    #
-    # "torch"
-    "sympy",
-    "mpmath",
-    "pillow",
-    "networkx",
-    "numpy",
-    "jinja2",
-    "markupsafe",
     "filelock",
     "fsspec",
-    "typing_extensions",
-    # "rocm"
+    "jinja2",
+    "markupsafe",
+    "mpmath",
+    "networkx",
+    "numpy",
+    "pillow",
     "setuptools",
+    "sympy",
+    "typing_extensions",
 }
 
 
@@ -196,17 +185,17 @@ def list_architectures(
 
     # List all "directories" in the bucket prefix
     try:
-        response = s3_client.list_objects_v2(
-            Bucket=bucket_name,
-            Prefix=bucket_prefix,
-            Delimiter="/",
-            MaxKeys=MAX_S3_KEYS_CHECK,
+        paginator = s3_client.get_paginator("list_objects_v2")
+        pages = paginator.paginate(
+            Bucket=bucket_name, Prefix=bucket_prefix, Delimiter="/"
         )
 
         architectures = []
-        if "CommonPrefixes" in response.keys():
+        for page in pages:
+            if "CommonPrefixes" not in page:
+                continue  # Skip empty pages, keep processing
             # "CommonPrefixes" is a list of prefixes that are the "directories" in the S3 bucket
-            for prefix in response["CommonPrefixes"]:
+            for prefix in page["CommonPrefixes"]:
                 arch = prefix["Prefix"].replace(bucket_prefix, "").rstrip("/")
                 # Check if the arch folder contains files with the specified version
                 if has_version_in_arch(
@@ -238,16 +227,18 @@ def has_version_in_arch(
 ) -> bool:
     """Check if an architecture folder contains files with the specified version."""
     try:
-        paginator = s3_client.get_paginator("list_objects_v2")
-        pages = paginator.paginate(Bucket=bucket_name, Prefix=f"{bucket_prefix}{arch}/")
+        response = s3_client.list_objects_v2(
+            Bucket=bucket_name,
+            Prefix=f"{bucket_prefix}{arch}/",
+            MaxKeys=MAX_S3_KEYS_CHECK,
+        )
 
-        for page in pages:
-            if "Contents" not in page:
-                continue
+        if "Contents" not in response:
+            return False
 
-            for obj in page["Contents"]:
-                if version in obj["Key"]:
-                    return True
+        for obj in response["Contents"]:
+            if version in obj["Key"]:
+                return True
 
         return False
     except ClientError:
@@ -914,7 +905,7 @@ def download_prerelease_packages(
         print("\nWARNING: Some downloads failed!")
         sys.exit(1)
 
-    print("\nFor next steps check: build_tools/packaging/how_to_do_release.md")
+    print("\nFor next steps check: how_to_do_release.md")
     print("=" * 80)
 
     return total_success, total_fail, architectures

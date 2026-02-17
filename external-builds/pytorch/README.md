@@ -28,25 +28,14 @@ This incorporates advice from:
 
 ### Project and feature support status
 
-The following projects and features are packaged and released through TheRock's
-stable, nightly, and dev release channels.
-
-| Project / feature | Linux support | Windows support  |
-| ----------------- | ------------- | ---------------- |
-| torch             | ✅ Supported  | ✅ Supported     |
-| ↳ aotriton        | ✅ Supported  | ✅ Supported     |
-| ↳ FBGEMM GenAI    | ✅ Supported  | ❌ Not supported |
-| torchaudio        | ✅ Supported  | ✅ Supported     |
-| torchvision       | ✅ Supported  | ✅ Supported     |
-| apex              | ✅ Supported  | ❌ Not supported |
-
-The following projects are not currently packaged and released by TheRock, functionality may vary.
-
-| Project       | Linux support        | Windows support  | Notes                                                                     |
-| ------------- | -------------------- | ---------------- | ------------------------------------------------------------------------- |
-| torch-scatter | ✅ Community support | ❌ Not supported | [ROCm enablement in upstream](https://github.com/rusty1s/pytorch_scatter) |
-| torch-sparse  | ✅ Community support | ❌ Not supported | [ROCm enablement in upstream](https://github.com/rusty1s/pytorch_sparse)  |
-| torchcodec    | ❌ Not supported     | ❌ Not supported | See Issue [#1490](https://github.com/ROCm/TheRock/issues/1490)            |
+| Project / feature              | Linux support                                                                     | Windows support  |
+| ------------------------------ | --------------------------------------------------------------------------------- | ---------------- |
+| torch                          | ✅ Supported                                                                      | ✅ Supported     |
+| torchaudio                     | ✅ Supported                                                                      | ✅ Supported     |
+| torchvision                    | ✅ Supported                                                                      | ✅ Supported     |
+| apex                           | ✅ Supported                                                                      | ❌ Not supported |
+| Flash attention via [ao]triton | ✅ Supported                                                                      | ✅ Supported     |
+| FBGEMM GenAI                   | ❌ Not supported (see Issue [#2056](https://github.com/ROCm/TheRock/issues/2056)) | ❌ Not supported |
 
 ### Supported PyTorch versions
 
@@ -101,7 +90,7 @@ detailed instructions. That information is summarized here.
 
 ### Prerequisites and setup
 
-You will need a supported Python version (3.10+) on a system which we build the
+You will need a supported Python version (3.11+) on a system which we build the
 `rocm[libraries,devel]` packages for. See the
 [`RELEASES.md`: Installing releases using pip](../../RELEASES.md#installing-releases-using-pip)
 and [Python Packaging](../../docs/packaging/python_packaging.md) documentation

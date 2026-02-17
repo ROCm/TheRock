@@ -128,8 +128,7 @@ def wheel_change_extra_files(new_dir_path: pathlib.Path, old_version, new_versio
 
     print("    Changing ROCm-specific files that contain the version")
 
-    # rocm packages
-    if new_dir_path.name.startswith("rocm"):
+    if not "torch" in new_dir_path.name:  # rocm packages
         files_to_change = [
             new_dir_path / package_name_no_version / "_dist_info.py",
         ]

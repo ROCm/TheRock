@@ -1,0 +1,36 @@
+From 926d3aec2cb96b615f70e29c7c8ea3a99c97d136 Mon Sep 17 00:00:00 2001
+From: Stella Laurenzo <stellaraccident@gmail.com>
+Date: Thu, 13 Feb 2025 17:58:53 -0800
+Subject: [PATCH 3/8] HACK: Handle ROCM installation layout of
+ lib/llvm/bin/clang++.
+
+---
+ clang/lib/Driver/ToolChains/AMDGPU.cpp | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/clang/lib/Driver/ToolChains/AMDGPU.cpp b/clang/lib/Driver/ToolChains/AMDGPU.cpp
+index 798ea8aad6de..c45f07a6e285 100644
+--- a/clang/lib/Driver/ToolChains/AMDGPU.cpp
++++ b/clang/lib/Driver/ToolChains/AMDGPU.cpp
+@@ -244,8 +244,17 @@ RocmInstallationDetector::getInstallationPathCandidates() {
+ 
+     // Some versions of the rocm llvm package install to /opt/rocm/llvm/bin
+     // Some versions of the aomp package install to /opt/rocm/aomp/bin
+-    if (ParentName == "llvm" || ParentName.starts_with("aomp"))
++    if (ParentName == "llvm" || ParentName.starts_with("aomp")) {
+       ParentDir = llvm::sys::path::parent_path(ParentDir);
++      ParentName = llvm::sys::path::filename(ParentDir);
++
++      // Some versions of the rocm llvm package install to 
++      // /opt/rocm/lib/llvm/bin, so also back up if within the lib dir still.
++      if (ParentName == "lib") {
++        ParentDir = llvm::sys::path::parent_path(ParentDir);
++      }
++    }
++
+     // Some versions of the aomp package install to /opt/rocm/aomp/bin
+     // and it seems ParentDir is already pointing to correct place.
+     return Candidate(ParentDir.str(), /*StrictChecking=*/true);
+-- 
+2.48.1
+

@@ -132,14 +132,6 @@ test_matrix = {
         "platform": ["linux", "windows"],
         "total_shards": 2,
     },
-    "rocprofiler_systems": {
-        "job_name": "rocprofiler_systems",
-        "fetch_artifact_args": "--rocprofiler-systems --rocprofiler-sdk --tests",
-        "timeout_minutes": 15,
-        "test_script": f"python {_get_script_path('test_rocprofiler_systems.py')}",
-        "platform": ["linux"],
-        "total_shards": 1,
-    },
     "hipcub": {
         "job_name": "hipcub",
         "fetch_artifact_args": "--prim --tests",
@@ -147,14 +139,6 @@ test_matrix = {
         "setup_script": "",
         "test_script": f"python {_get_script_path('test_hipcub.py')}",
         "platform": ["linux", "windows"],
-        "total_shards": 1,
-    },
-    "rocr-debug-agent": {
-        "job_name": "rocr-debug-agent",
-        "fetch_artifact_args": "--debug-tools --tests",
-        "timeout_minutes": 10,
-        "test_script": f"python {_get_script_path('test_rocr-debug-agent.py')}",
-        "platform": ["linux"],
         "total_shards": 1,
     },
     "rocthrust": {
@@ -315,15 +299,6 @@ test_matrix = {
     #     "platform": ["linux"],
     #     "total_shards": 1,
     # },
-    # hipBLASLt plugin tests
-    "hipblaslt_plugin": {
-        "job_name": "hipblaslt_plugin",
-        "fetch_artifact_args": "--blas --hipdnn --hipblaslt-plugin --tests",
-        "timeout_minutes": 15,
-        "test_script": f"python {_get_script_path('test_hipblaslt_plugin.py')}",
-        "platform": ["linux", "windows"],
-        "total_shards": 1,
-    },
     # rocWMMA tests
     "rocwmma": {
         "job_name": "rocwmma",

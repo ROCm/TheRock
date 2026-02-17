@@ -41,7 +41,6 @@ import sys
 
 from github_actions_utils import (
     gha_append_step_summary,
-    gha_set_output,
     retrieve_bucket_info,
 )
 
@@ -265,14 +264,8 @@ def run(args: argparse.Namespace):
     )
 
     if not args.output_dir:
-        index_url = f"{upload_path.s3_url}/index.html"
-
-        log("Set github actions output")
-        log("-------------------------")
-        gha_set_output({"package_find_links_url": index_url})
-
         log("Write github actions build summary")
-        log("----------------------------------")
+        log("------------------")
         write_gha_upload_summary(upload_path)
 
     log("")
