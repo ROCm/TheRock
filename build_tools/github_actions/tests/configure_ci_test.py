@@ -771,6 +771,22 @@ class ConfigureCITest(unittest.TestCase):
         self.assertIn("linux-gfx110X-gpu-rocm-test", json.dumps(test_matrix))
         self.assertIn("windows-gfx110X-gpu-rocm-test", json.dumps(test_matrix))
 
+    # TODO(#3433): Remove sandbox logic once ASAN tests are passing and environment is no longer required
+    def test_sandbox_test_runner_with_asan(self):
+        base_args = {"build_variant": "asan"}
+        build_families = {"amdgpu_families": "gfx94X"}
+        linux_target_output, linux_test_labels = configure_ci.matrix_generator(
+            is_pull_request=True,
+            is_workflow_dispatch=False,
+            is_push=False,
+            is_schedule=False,
+            base_args=base_args,
+            families=build_families,
+            platform="linux",
+        )
+        entry = linux_target_output[0]
+        self.assertEqual(entry["test-runs-on"], "linux-mi325-8gpu-ossci-rocm-sandbox")
+
 
 if __name__ == "__main__":
     unittest.main()
