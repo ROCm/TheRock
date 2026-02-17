@@ -209,6 +209,8 @@ jobs:
         id: build-pytorch-wheels
         # Using 'cmd' here is load bearing! There are configuration issues when
         # run under 'bash': https://github.com/ROCm/TheRock/issues/827#issuecomment-3025858800
+        #
+        # Disabled apex until #3457 is resolved and apex wheels build successfully again
         shell: cmd
         run: |
           echo "Building PyTorch wheels for ${{ inputs.amdgpu_family }}"
@@ -222,6 +224,7 @@ jobs:
             --enable-pytorch-flash-attention-windows ^
             --clean ^
             --output-dir ${{ env.PACKAGE_DIST_DIR }} ^
+            --no-build-apex ^
             ${{ env.optional_build_prod_arguments }}
           python ./build_tools/github_actions/write_torch_versions.py --dist-dir ${{ env.PACKAGE_DIST_DIR }}
 
