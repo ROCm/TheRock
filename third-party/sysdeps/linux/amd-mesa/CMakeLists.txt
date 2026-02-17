@@ -18,6 +18,8 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         therock-libdrm
       INSTALL_DESTINATION
         lib/rocm_sysdeps
+      INTERFACE_INCLUDE_DIRS
+        lib/rocm_sysdeps/include
       INTERFACE_LINK_DIRS
         lib/rocm_sysdeps/lib
       INTERFACE_INSTALL_RPATH_DIRS
