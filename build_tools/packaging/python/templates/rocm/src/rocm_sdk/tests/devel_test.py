@@ -39,25 +39,14 @@ class ROCmDevelTest(unittest.TestCase):
         )
 
     def testCLIPathBin(self):
-        output = (
-            utils.run_command(
-                [sys.executable, "-P", "-m", "rocm_sdk", "path", "--bin"], capture=True
-            )
-            .decode()
-            .strip()
-        )
+        cmd = [sys.executable, "-m", "rocm_sdk", "path", "--bin"]
+        output = utils.run_command(cmd, capture=True).decode().strip()
         path = Path(output)
         self.assertTrue(path.exists(), msg=f"Expected bin path {path} to exist")
 
     def testCLIPathCMake(self):
-        output = (
-            utils.run_command(
-                [sys.executable, "-P", "-m", "rocm_sdk", "path", "--cmake"],
-                capture=True,
-            )
-            .decode()
-            .strip()
-        )
+        cmd = [sys.executable, "-m", "rocm_sdk", "path", "--cmake"]
+        output = utils.run_command(cmd, capture=True).decode().strip()
         path = Path(output)
         self.assertTrue(path.exists(), msg=f"Expected cmake path {path} to exist")
         hip_file = path / "hip" / "hip-config.cmake"
@@ -66,13 +55,8 @@ class ROCmDevelTest(unittest.TestCase):
         )
 
     def testCLIPathRoot(self):
-        output = (
-            utils.run_command(
-                [sys.executable, "-P", "-m", "rocm_sdk", "path", "--root"], capture=True
-            )
-            .decode()
-            .strip()
-        )
+        cmd = [sys.executable, "-m", "rocm_sdk", "path", "--root"]
+        output = utils.run_command(cmd, capture=True).decode().strip()
         path = Path(output)
         self.assertTrue(path.exists(), msg=f"Expected root path {path} to exist")
         bin_path = path / "bin"
@@ -84,25 +68,15 @@ class ROCmDevelTest(unittest.TestCase):
     def testRootLLVMSymlinkExists(self):
         # We had a bug where the root llvm/ symlink, which is for backwards compat,
         # was not materialized. Verify it is.
-        output = (
-            utils.run_command(
-                [sys.executable, "-P", "-m", "rocm_sdk", "path", "--root"], capture=True
-            )
-            .decode()
-            .strip()
-        )
+        cmd = [sys.executable, "-m", "rocm_sdk", "path", "--root"]
+        output = utils.run_command(cmd, capture=True).decode().strip()
         path = Path(output) / "llvm" / "bin" / "clang++"
         self.assertTrue(path.exists(), msg=f"Expected {path} to exist")
 
     def testSharedLibrariesLoad(self):
         # Make sure the devel package is expanded.
-        _ = (
-            utils.run_command(
-                [sys.executable, "-P", "-m", "rocm_sdk", "path", "--root"], capture=True
-            )
-            .decode()
-            .strip()
-        )
+        cmd = [sys.executable, "-m", "rocm_sdk", "path", "--root"]
+        _ = utils.run_command(cmd, capture=True).decode().strip()
 
         # Ensure that the platform package exists now.
         mod_name = di.ALL_PACKAGES["devel"].get_py_package_name(
@@ -161,6 +135,5 @@ class ROCmDevelTest(unittest.TestCase):
                 # are designed to load into the same process (i.e. LLVM runtime libs,
                 # etc).
                 command = "import ctypes; import sys; ctypes.CDLL(sys.argv[1])"
-                subprocess.check_call(
-                    [sys.executable, "-P", "-c", command, str(so_path)]
-                )
+                cmd = [sys.executable, "-c", command, str(so_path)]
+                subprocess.check_call(cmd)
