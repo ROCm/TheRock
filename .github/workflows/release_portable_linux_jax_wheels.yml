@@ -112,7 +112,7 @@ jobs:
       s3_staging_subdir: ${{ inputs.s3_staging_subdir || 'v2-staging' }}
       cloudfront_url: ${{ inputs.cloudfront_url || 'https://rocm.devreleases.amd.com/v2' }}
       cloudfront_staging_url: ${{ inputs.cloudfront_staging_url || 'https://rocm.devreleases.amd.com/v2-staging' }}
-      rocm_version: ${{ inputs.rocm_version || '7.12.0.dev0+a47588d6b2d3271d7779a0c3e980d779828d722b' }}
-      tar_url: ${{ inputs.tar_url || 'https://rocm.devreleases.amd.com/tarball/therock-dist-linux-gfx94X-dcgpu-7.12.0.dev0%2Ba47588d6b2d3271d7779a0c3e980d779828d722b.tar.gz' }}
+      rocm_version: ${{ inputs.rocm_version || '7.12.0a20260217' }}
+      tar_url: ${{ inputs.tar_url || 'https://rocm.nightlies.amd.com/tarball/therock-dist-linux-gfx120X-all-7.12.0a20260217.tar.gz' }}
       jax_ref: ${{ matrix.jax_ref }}
       ref: ${{ inputs.ref || '' }}

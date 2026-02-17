@@ -154,14 +154,14 @@ jobs:
         with:
           path: rocm-jax
           repository: ROCm/rocm-jax
-          ref: ${{ inputs.jax_ref || 'rocm-jaxlib-v0.8.2' }}
+          ref: ${{ inputs.jax_ref }}
 
       - name: Checkout JAX extended tests repo
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           path: jax
           repository: ROCm/jax
-          ref: ${{ inputs.jax_ref || 'rocm-jaxlib-v0.8.2' }}
+          ref: ${{ inputs.jax_ref }}
 
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
