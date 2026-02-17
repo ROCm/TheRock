@@ -317,6 +317,8 @@ def retrieve_artifacts_by_run_id(args):
         "base_lib",
         "amd-llvm_run",
         "amd-llvm_lib",
+        "core-amdsmi_run",
+        "core-amdsmi_lib",
         "core-hip_lib",
         "core-hip_dev",
         "core-ocl_lib",
@@ -397,6 +399,10 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("rand")
         if args.rccl:
             extra_artifacts.append("rccl")
+        if args.rocprofiler_sdk:
+            extra_artifacts.append("rocprofiler-sdk")
+            # Contains rocprofiler-sdk-rocpd
+            argv.append("rocprofiler-sdk_run")
         if args.rocprofiler_compute:
             extra_artifacts.append("rocprofiler-compute")
             # rocprofiler-compute has a runtime dependency on rocprofiler-sdk
@@ -405,6 +411,8 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("rocprofiler-sdk")
         if args.rocprofiler_systems:
             extra_artifacts.append("rocprofiler-systems")
+            # Contains executables (rocprof-sys-run, rocprof-sys-instrument, etc.)
+            argv.append("rocprofiler-systems_run")
         if args.rocwmma:
             extra_artifacts.append("rocwmma")
         if args.libhipcxx:
@@ -707,6 +715,13 @@ def main(argv):
         "--rocprofiler-systems",
         default=False,
         help="Include 'rocprofiler-systems' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--rocprofiler-sdk",
+        default=False,
+        help="Include 'rocprofiler-sdk' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 

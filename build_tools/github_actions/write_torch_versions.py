@@ -1,10 +1,10 @@
-"""Writes torch_version, torchaudio_version, torchvision_version, and triton_version to GITHUB_OUTPUT.
+"""Writes torch_version, torchaudio_version, torchvision_version, triton_version, and apex_version to GITHUB_OUTPUT.
 
 Fails if any wheels that were expected for the platform were not set.
 
 Currently,
 * Windows expects torch, torchaudio, and torchvision
-* Linux expects torch, torchaudio, torchvision, and triton
+* Linux expects torch, torchaudio, torchvision, triton, and apex
 """
 
 import argparse
@@ -59,6 +59,7 @@ def get_all_wheel_versions(
     torchaudio_version = get_wheel_version(package_dist_dir, "torchaudio")
     torchvision_version = get_wheel_version(package_dist_dir, "torchvision")
     triton_version = get_wheel_version(package_dist_dir, "triton")
+    apex_version = get_wheel_version(package_dist_dir, "apex")
     _log("")
 
     if torch_version:
@@ -82,6 +83,13 @@ def get_all_wheel_versions(
         _log("Did not find triton (that's okay, is not currently built on Windows)")
     else:
         raise FileNotFoundError("Did not find triton wheel")
+
+    if apex_version:
+        all_versions = all_versions | {"apex_version": apex_version}
+    elif os.lower() == "windows":
+        _log("Did not find apex (that's okay, is not currently built on Windows)")
+    else:
+        raise FileNotFoundError("Did not find apex wheel")
 
     return all_versions
 
