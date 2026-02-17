@@ -23,6 +23,7 @@ logging.basicConfig(level=logging.INFO)
 # more explicit, or use absolute paths.
 SCRIPT_DIR = Path("./build_tools/github_actions")
 
+
 def _get_script_path(script_name: str, is_setup: bool = False) -> str:
     script_folder = (
         "setup_executable_scripts" if is_setup else "test_executable_scripts"
@@ -32,6 +33,7 @@ def _get_script_path(script_name: str, is_setup: bool = False) -> str:
     # 'bash' as the shell on Linux and Windows.
     posix_path = platform_path.as_posix()
     return str(posix_path)
+
 
 test_matrix = {
     # hip-tests
