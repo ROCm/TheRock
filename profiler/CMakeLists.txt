@@ -96,6 +96,8 @@ endif(THEROCK_BUILD_TESTING)
       ${THEROCK_BUNDLED_ELFUTILS}
       ${THEROCK_BUNDLED_LIBDRM}
       ${THEROCK_BUNDLED_SQLITE3}
+    INTERFACE_INCLUDE_DIRS
+      include
     INTERFACE_LINK_DIRS
       lib
       lib/rocm_sysdeps/lib
@@ -221,6 +223,9 @@ endif(THEROCK_BUILD_TESTING)
   # rocprofiler-systems requires GCC, but sanitizer builds use Clang.
   # Skip enabling rocprofiler-systems when building with sanitizers.
   if (THEROCK_ENABLE_ROCPROFSYS AND THEROCK_SANITIZER STREQUAL "")
+    # Escape semicolons in GPU targets list to prevent shell interpretation
+    string(REPLACE ";" "\\;" _ROCPROFSYS_GFX_TARGETS_ESCAPED "${THEROCK_AMDGPU_TARGETS}")
+
     therock_cmake_subproject_declare(rocprofiler-systems
       USE_DIST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-systems"
@@ -233,6 +238,8 @@ endif(THEROCK_BUILD_TESTING)
         -DROCPROFSYS_BUILD_LIBIBERTY=ON
         -DROCPROFSYS_BUILD_BOOST=ON
         -DROCPROFSYS_BUILD_DYNINST=ON
+        -DROCPROFSYS_BUILD_FOR_THEROCK=ON
+        -DROCPROFSYS_GFX_TARGETS="${_ROCPROFSYS_GFX_TARGETS_ESCAPED}"
         -DROCPROFSYS_BUILD_SPDLOG=OFF
       INSTALL_RPATH_DIRS
         "lib"

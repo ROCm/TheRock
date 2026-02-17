@@ -149,8 +149,6 @@ cmake_path(ABSOLUTE_PATH THEROCK_ROCM_SYSTEMS_SOURCE_DIR NORMALIZE)
 
 # Allow to specify alternative source locations instead of using
 # repositories tracked in TheRock's `.gitmodules`.
-therock_enable_external_source("rccl" "${THEROCK_SOURCE_DIR}/comm-libs/rccl" OFF)
-therock_enable_external_source("rccl-tests" "${THEROCK_SOURCE_DIR}/comm-libs/rccl-tests" OFF)
 therock_enable_external_source("composable-kernel" "${THEROCK_SOURCE_DIR}/ml-libs/composable_kernel" OFF)
 
 # Overall build settings.
