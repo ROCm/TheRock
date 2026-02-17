@@ -195,17 +195,25 @@ def _lock_and_expand(
                             #   hash (empty)
                             #   size (empty)
                             record_file.write(f"{ti.name},,\n")
-                        if _is_windows() and ti.issym():
-                            # Convert symlinks into hardlinks on Windows.
-                            # This saves disk space while improving compatibility
-                            # on systems without as robust symlink support.
+                        if ti.issym():
+                            # Convert file symlinks into hardlinks on all platforms.
+                            # This saves disk space while improving compatibility.
+                            # On Windows: symlinks require admin privileges.
+                            # On Linux: native binaries that use readlink(/proc/self/exe)
+                            #   to determine their location will resolve symlinks and
+                            #   report the wrong path (e.g., _rocm_sdk_core instead of
+                            #   _rocm_sdk_devel). Hardlinks avoid this issue.
                             # As needed, we could also generate tarfiles with
                             # copies instead of symlinks, at the cost of disk space.
-                            # Creating symlinks on Windows also requires admin privileges.
                             parent_path.mkdir(parents=True, exist_ok=True)
                             symlink_target = ti.linkname
                             hardlink_target = dest_path.parent / symlink_target
-                            dest_path.hardlink_to(hardlink_target)
+                            # Only create hardlinks for files, not directories
+                            if hardlink_target.is_file():
+                                dest_path.hardlink_to(hardlink_target)
+                            else:
+                                # For directory symlinks, extract as normal
+                                tf.extract(ti, path=site_lib_path)
                         else:
                             tf.extract(ti, path=site_lib_path)
                     elif ti.isdir():
