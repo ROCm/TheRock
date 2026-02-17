@@ -2,7 +2,7 @@
 """
 Upload the generated JAX manifest JSON to S3.
 
-Upload layout (same style as torch manifests):
+Upload layout:
   s3://{bucket}/{external_repo}{run_id}-{platform}/manifests/{amdgpu_family}/{manifest_name}
 
 The bucket and external_repo prefix are resolved via retrieve_bucket_info() unless
