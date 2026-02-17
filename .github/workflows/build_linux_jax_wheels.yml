@@ -170,16 +170,13 @@ jobs:
 
       - name: Generate JAX manifest
         run: |
-          python3 external-builds/jax/generate_jax_manifest.py \
-            --output-dir "${{ env.PACKAGE_DIST_DIR }}" \
-            --artifact-group "jax-wheels" \
-            --rocm-sdk-version "${{ inputs.rocm_version }}" \
-            --amdgpu-family "${{ inputs.amdgpu_family }}" \
-            --therock-tar-url "${{ inputs.tar_url }}" \
-            --jax-dir "${{ github.workspace }}/jax" \
-            --jax-ref "${{ matrix.jax_ref }}"
-          echo "Manifest dir contents:"
-          ls -lah "${{ env.PACKAGE_DIST_DIR }}/manifests"
+          python3 build_tools/github_actions/generate_jax_manifest.py \
+            --manifest-dir "${{ env.PACKAGE_DIST_DIR }}/manifests" \
+            --python-version "${{ inputs.python_version }}" \
+            --jax-track "${{ inputs.jax_ref }}" \
+            --jax-git-ref "${{ inputs.jax_ref }}" \
+            --jax-dir "${{ github.workspace }}/jax"
+          ls -lah "${{ env.PACKAGE_DIST_DIR }}/manifests
 
       - name: Extract JAX versions from built wheels
         id: write_jax_versions
