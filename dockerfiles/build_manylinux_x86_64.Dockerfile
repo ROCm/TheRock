@@ -29,6 +29,11 @@ WORKDIR /install-ccache
 COPY install_ccache.sh ./
 RUN ./install_ccache.sh "4.11.2" && rm -rf /install-ccache
 
+######## SCCache ########
+WORKDIR /install-sccache
+COPY install_sccache.sh ./
+RUN ./install_sccache.sh "0.14.0" && rm -rf /install-sccache
+
 ######## CMake ########
 WORKDIR /install-cmake
 ENV CMAKE_VERSION="3.27.9"
@@ -62,7 +67,6 @@ RUN ./install_googletest.sh "${GOOGLE_TEST_VERSION}" && rm -rf /install-googlete
 #
 # Development tool dependencies:
 #   texinfo, flag: rocprofiler-systems
-#   texinfo-tex: rocgdb
 RUN yum install -y epel-release && \
     yum remove -y gcc-toolset* && \
     yum install -y \
@@ -77,7 +81,6 @@ RUN yum install -y epel-release && \
       git-lfs \
     && yum install -y \
       texinfo \
-      texinfo-tex \
       flex \
     && yum clean all && \
     rm -rf /var/cache/yum

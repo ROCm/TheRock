@@ -24,7 +24,7 @@
     "Homepage": "https://github.com/ROCm/rocm-systems",
     "Artifactory": [
       {
-        "Artifact": "base",
+        "Artifact": "core-amdsmi",
         "Artifact_Subdir": [
           {
             "Name": "amdsmi",
@@ -459,14 +459,7 @@
               "doc"
             ]
           },
-          {
-            "Name": "origami",
-            "Components": [
-              "lib",
-              "run",
-              "doc"
-            ]
-          },
+
           {
             "Name": "hipBLASLt",
             "Components": [
