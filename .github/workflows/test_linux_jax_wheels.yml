@@ -32,7 +32,7 @@ on:
         description: rocm-jax repository ref/branch to check out
         required: false
         type: string
-        default: "rocm-jaxlib-v0.8.0-fixdevtar"
+        default: "rocm-jaxlib-v0.8.2"
       jax_version:
         description: "Base JAX version (e.g. 0.8.0) for installing jax from PyPI. Extracted from built wheels by write_jax_versions.py."
         required: false
@@ -92,7 +92,7 @@ on:
         description: rocm-jax repository ref/branch to check out
         required: false
         type: string
-        default: "rocm-jaxlib-v0.8.0-fixdevtar"
+        default: "rocm-jaxlib-v0.8.2"
       jax_version:
         description: "Base JAX version (e.g. 0.8.0). Leave empty to auto-detect from rocm-jax requirements."
         required: false
@@ -152,16 +152,16 @@ jobs:
       - name: Checkout rocm-jax (plugin + build scripts)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          path: jax
-          repository: rocm/rocm-jax
-          ref: ${{ inputs.jax_ref || 'rocm-jaxlib-v0.8.0-fixdevtar' }}
+          path: rocm-jax
+          repository: ROCm/rocm-jax
+          ref: ${{ inputs.jax_ref || 'rocm-jaxlib-v0.8.2' }}
 
       - name: Checkout JAX extended tests repo
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          repository: rocm/jax
-          ref: "rocm-jaxlib-v0.8.0"
-          path: jax/jax_tests
+          repository: ROCm/jax
+          ref: ${{ inputs.jax_ref || 'rocm-jaxlib-v0.8.2' }}
+          path: rocm-jax/jax_tests
 
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
@@ -206,7 +206,7 @@ jobs:
             pip install packaging
             python build_tools/github_actions/compute_jax_package_version.py \
               --rocm-version "${{ inputs.rocm_version }}" \
-              --jax-requirements jax/build/requirements.txt
+              --jax-requirements rocm-jax/build/requirements.txt
           fi
 
       - name: Install JAX wheels from package index
@@ -223,7 +223,7 @@ jobs:
 
       - name: Run JAX tests
         run: |
-          pytest jax/jax_tests/tests/multi_device_test.py -q --log-cli-level=INFO
-          pytest jax/jax_tests/tests/core_test.py -q --log-cli-level=INFO
-          pytest jax/jax_tests/tests/util_test.py -q --log-cli-level=INFO
-          pytest jax/jax_tests/tests/scipy_stats_test.py -q --log-cli-level=INFO
+          pytest rocm-jax/jax_tests/tests/multi_device_test.py -q --log-cli-level=INFO
+          pytest rocm-jax/jax_tests/tests/core_test.py -q --log-cli-level=INFO
+          pytest rocm-jax/jax_tests/tests/util_test.py -q --log-cli-level=INFO
+          pytest rocm-jax/jax_tests/tests/scipy_stats_test.py -q --log-cli-level=INFO
