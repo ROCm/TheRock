@@ -210,7 +210,7 @@ jobs:
         # Using 'cmd' here is load bearing! There are configuration issues when
         # run under 'bash': https://github.com/ROCm/TheRock/issues/827#issuecomment-3025858800
         #
-        # Disabled apex until #3457 is resolved and apex wheels build successfully again
+        # Disabled apex until #3413 is resolved and apex wheels build successfully again
         shell: cmd
         run: |
           echo "Building PyTorch wheels for ${{ inputs.amdgpu_family }}"

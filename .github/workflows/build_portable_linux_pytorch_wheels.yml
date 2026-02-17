@@ -185,7 +185,7 @@ jobs:
           python build_tools/github_actions/determine_version.py \
             --rocm-version ${{ inputs.rocm_version }}
 
-      # Disabled apex until #3457 is resolved and apex wheels build successfully again
+      # Disabled apex until #3413 is resolved and apex wheels build successfully again
       - name: Build PyTorch Wheels
         id: build-pytorch-wheels
         run: |
