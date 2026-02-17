@@ -1,0 +1,11 @@
+# Blender Cycles HIP test scenes manifest.
+# Format: <scene_name_without_extension> <frame_number>
+#
+# Scene .blend files should be placed in the scenes directory.
+# Reference images (optional) should be placed in the ref/ subdirectory
+# with naming: <scene_name>_<frame_padded_3digits>.png
+#
+# Example: "290skydemo_release 1" renders 290skydemo_release.blend frame 1,
+# producing 290skydemo_release_001.png, compared against ref/290skydemo_release_001.png
+
+290skydemo_release 5

@@ -35,6 +35,15 @@ on:
       build_pytorch:
         type: boolean
         default: false
+      test_blender:
+        type: boolean
+        default: false
+      blender_version:
+        type: string
+        default: "4.5.6"
+      blender_scenes_url:
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -189,3 +198,31 @@ jobs:
       pytorch_git_ref: "release/2.10"
       rocm_package_find_links_url: ${{ needs.build_portable_linux_python_packages.outputs.package_find_links_url }}
       rocm_version: ${{ inputs.rocm_package_version }}
+
+  test_blender_hip:
+    needs: [build_portable_linux_python_packages]
+    name: Test Blender HIP
+    # Run Blender HIP rendering tests if:
+    # - Build succeeded (or using prebuilt artifacts)
+    # - Not expecting failure
+    # - test_blender is enabled
+    # - Test runner is available (test_runs_on is set)
+    if: >-
+      ${{
+        !failure() &&
+        !cancelled() &&
+        (
+          inputs.use_prebuilt_artifacts == 'false' ||
+          inputs.use_prebuilt_artifacts == 'true'
+        ) &&
+        inputs.expect_failure == false &&
+        inputs.test_blender == true &&
+        inputs.test_runs_on != ''
+      }}
+    uses: ./.github/workflows/test_blender.yml
+    with:
+      amdgpu_family: ${{ inputs.artifact_group }}
+      test_runs_on: ${{ inputs.test_runs_on }}
+      blender_version: ${{ inputs.blender_version }}
+      scenes_url: ${{ inputs.blender_scenes_url }}
+      rocm_package_find_links_url: ${{ needs.build_portable_linux_python_packages.outputs.package_find_links_url }}
