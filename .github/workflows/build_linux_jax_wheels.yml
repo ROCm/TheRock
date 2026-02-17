@@ -133,11 +133,18 @@ jobs:
       - name: Checkout TheRock
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Checkout JAX
+      - name: Checkout for rocm-jax
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          path: rocm-jax
+          repository: ROCm/rocm-jax
+          ref: ${{ matrix.jax_ref }}
+
+      - name: Checkout from jax
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           path: jax
-          repository: rocm/rocm-jax
+          repository: ROCm/jax
           ref: ${{ matrix.jax_ref }}
 
       - name: Configure Git Identity
@@ -160,12 +167,13 @@ jobs:
           ROCM_VERSION: ${{ inputs.rocm_version }}
         run: |
           ls -lah
-          pushd jax
+          pushd rocm-jax
           python3 build/ci_build \
             --compiler=clang \
             --python-versions="${{ inputs.python_version }}" \
             --rocm-version="${ROCM_VERSION}" \
             --therock-path="${{ inputs.tar_url }}" \
+            --jax-source-dir ${{ github.workspace }}/jax \
             dist_wheels
 
       - name: Extract JAX versions from built wheels
