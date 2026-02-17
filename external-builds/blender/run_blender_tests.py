@@ -421,13 +421,15 @@ def run_tests(args: argparse.Namespace) -> int:
 def cmd_arguments(argv: list[str]) -> argparse.Namespace:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description=textwrap.dedent("""\
+        description=textwrap.dedent(
+            """\
             Run Blender Cycles HIP rendering tests.
 
             Renders scenes listed in a manifest file using Blender's Cycles engine
             with the HIP backend. Optionally compares rendered output against
             reference images using SSIM and MSE metrics.
-        """),
+        """
+        ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 

@@ -9,8 +9,8 @@ The test runner (`run_blender_tests.py`) does the following for each scene
 listed in `scenes.txt`:
 
 1. Renders the scene using `blender --engine CYCLES -- --cycles-device HIP`
-2. Verifies Blender exits successfully and produces output
-3. Optionally compares the rendered image against a reference using SSIM and
+1. Verifies Blender exits successfully and produces output
+1. Optionally compares the rendered image against a reference using SSIM and
    MSE metrics
 
 ## Prerequisites
@@ -114,7 +114,7 @@ adjusted via `--ssim-threshold` and `--mse-threshold` command-line arguments.
 ## Adding New Scenes
 
 1. Download or create a `.blend` file that uses the Cycles render engine
-2. Place it in the scenes directory
-3. Add a line to `scenes.txt`: `<filename_without_ext> <frame_to_render>`
-4. Optionally generate a reference image from a known-good render and place it
+1. Place it in the scenes directory
+1. Add a line to `scenes.txt`: `<filename_without_ext> <frame_to_render>`
+1. Optionally generate a reference image from a known-good render and place it
    in `ref/<filename>_<frame_padded>.png`
