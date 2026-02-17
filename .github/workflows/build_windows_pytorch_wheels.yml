@@ -195,6 +195,8 @@ jobs:
               --torch-dir ${{ env.CHECKOUT_ROOT }}/torch \
               --require-related-commit
 
+      # Note: determine_version.py sets optional_build_prod_arguments in
+      # GITHUB_ENV, which includes --rocm-sdk-version and --version-suffix.
       - name: Determine optional arguments passed to `build_prod_wheels.py`
         if: ${{ inputs.rocm_version }}
         run: |
@@ -229,7 +231,7 @@ jobs:
 
       - name: Configure AWS Credentials
         if: always()
-        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}
@@ -312,7 +314,7 @@ jobs:
 
       - name: Configure AWS Credentials
         if: always()
-        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}
