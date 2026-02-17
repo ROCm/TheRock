@@ -1,0 +1,106 @@
+name: Test ROCm Wheels
+
+on:
+  workflow_dispatch:
+    inputs:
+      amdgpu_family:
+        description: GPU family to test (e.g., gfx94X-dcgpu, gfx110X-all)
+        required: true
+        type: string
+        default: "gfx94X-dcgpu"
+      test_runs_on:
+        description: Runner label to use. The selected runner should have a GPU supported by amdgpu_family
+        required: true
+        type: string
+        default: "linux-mi325-1gpu-ossci-rocm-frac"
+      package_index_url_base:
+        description: Base Python package index URL (without GPU family subdir)
+        type: string
+        default: "https://rocm.nightlies.amd.com/v2"
+      package_find_links_url:
+        description: Full Python package index URL for use with --find-links (usually instead of package_index_url_base)
+        type: string
+      python_version:
+        required: true
+        type: string
+        default: "3.12"
+      rocm_version:
+        description: ROCm version to pip install (e.g. "7.10.0a20251124")
+        required: true
+        type: string
+
+  workflow_call:
+    inputs:
+      amdgpu_family:
+        required: true
+        type: string
+      test_runs_on:
+        required: true
+        type: string
+      package_index_url_base:
+        type: string
+      package_find_links_url:
+        type: string
+      python_version:
+        required: true
+        type: string
+      rocm_version:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+run-name: Test ROCm Wheels (${{ inputs.amdgpu_family }}, ${{ inputs.rocm_version }}, ${{ inputs.test_runs_on }})
+
+jobs:
+  test_wheels:
+    name: Test ${{ matrix.packages }} wheels | ${{ inputs.amdgpu_family }}
+    runs-on: ${{ inputs.test_runs_on }}
+    timeout-minutes: 30
+    container:
+      image: ${{ contains(inputs.test_runs_on, 'linux') && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26' || null }}
+      options: --ipc host
+        --group-add video
+        --device /dev/kfd
+        --device /dev/dri
+        --group-add 992
+        --group-add 110
+        --env-file /etc/podinfo/gha-gpu-isolation-settings
+        --user 0:0 # Running as root, by recommendation of GitHub: https://docs.github.com/en/actions/reference/workflows-and-actions/dockerfile-support#user
+    strategy:
+      fail-fast: false
+      matrix:
+        packages: ["rocm[libraries]", "rocm[libraries,devel]"]
+    defaults:
+      run:
+        shell: bash
+    env:
+      VENV_DIR: ${{ github.workspace }}/.venv
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: ${{ inputs.python_version }}
+
+      - name: Setup venv and install '${{ matrix.packages }}'
+        run: |
+          python build_tools/setup_venv.py ${VENV_DIR} \
+            --packages "${{ matrix.packages }}==${{ inputs.rocm_version }}" \
+            --index-url=${{ inputs.package_index_url_base }} \
+            --index-subdir=${{ inputs.amdgpu_family }} \
+            --find-links=${{ inputs.package_find_links_url }} \
+            --activate-in-future-github-actions-steps
+
+      - name: Show installed packages
+        run: |
+          pip freeze
+
+      - name: Run 'rocm-sdk test' with '${{ matrix.packages }}' installed
+        timeout-minutes: 5
+        run: |
+          rocm-sdk test
