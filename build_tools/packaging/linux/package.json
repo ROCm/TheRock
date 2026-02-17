@@ -325,11 +325,13 @@
     "DEBDepends": [
       "libc6",
       "amdrocm-runtime",
-      "amdrocm-sysdeps"
+      "amdrocm-sysdeps",
+      "amdrocm-fft"
     ],
     "RPMRequires": [
       "amdrocm-runtime",
-      "amdrocm-sysdeps"
+      "amdrocm-sysdeps",
+      "amdrocm-fft"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "ROCm FFT library",
@@ -531,10 +533,12 @@
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "amdrocm-runtime"
+      "amdrocm-runtime",
+      "amdrocm-blas"
     ],
     "RPMRequires": [
-      "amdrocm-runtime"
+      "amdrocm-runtime",
+      "amdrocm-blas"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "AMD library for BLAS in ROCm",
@@ -1538,11 +1542,13 @@
     "DEBDepends": [
       "libc6",
       "amdrocm-base",
-      "amdrocm-profiler-base"
+      "amdrocm-profiler-base",
+      "amdrocm-rccl"
     ],
     "RPMRequires": [
       "amdrocm-base",
-      "amdrocm-profiler-base"
+      "amdrocm-profiler-base",
+      "amdrocm-rccl"
     ],
     "Maintainer": "RCCL Maintainer <rccl-maintainer@amd.com>",
     "Description_Short": "ROCm Communication Collectives Library. Optimized primitives for collective multi-GPU communication",
