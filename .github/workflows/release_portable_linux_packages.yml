@@ -185,6 +185,7 @@ jobs:
       S3_SUBDIR: ${{ inputs.s3_subdir || 'v2' }}
       S3_STAGING_SUBDIR: ${{ inputs.s3_staging_subdir || 'v2-staging' }}
       MANYLINUX: 1
+      BUILD_DIR:  ${{ github.workspace }}/output/build
       EXTRA_C_COMPILER_LAUNCHER: /therock/src/build_tools/resource_info.py
       EXTRA_CXX_COMPILER_LAUNCHER: /therock/src/build_tools/resource_info.py
       THEROCK_BUILD_PROF_LOG_DIR: ${{ github.workspace }}/output/build/logs/therock-build-prof
@@ -230,7 +231,6 @@ jobs:
       - name: Configure Projects
         env:
           amdgpu_families: ${{ matrix.target_bundle.amdgpu_family }}
-          BUILD_DIR: ${{ env.OUTPUT_DIR }}/build
           package_version: ${{ needs.setup_metadata.outputs.version }}
           extra_cmake_options: ''
           cmake_preset: ''
@@ -238,12 +238,13 @@ jobs:
           python3 ./build_tools/github_actions/build_configure.py
           ls -laRt ${{ env.OUTPUT_DIR }} || true
           ls -alrtR  /__w/TheRock/TheRock/output/build || true
-          ls -alrt 
+          ls -alrt || true
+          pwd || true
 
       - name: Build Projects
         run: |
           mkdir -p ${{ env.OUTPUT_DIR }}/build/dist/rocm
-          cmake --build ${{ env.OUTPUT_DIR }}/build --target therock-archives therock-dist
+          cmake --build ${{ env.OUTPUT_DIR }}/build --target therock-archives therock-dist || echo "Build failed. Dumping ninja log:"
           cd ${{ env.OUTPUT_DIR }}/build/dist/rocm
           echo "Building ${{ env.DIST_ARCHIVE }}"
           tar cfz "${{ env.DIST_ARCHIVE }}" .
