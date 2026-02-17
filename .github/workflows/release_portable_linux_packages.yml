@@ -186,8 +186,8 @@ jobs:
       S3_STAGING_SUBDIR: ${{ inputs.s3_staging_subdir || 'v2-staging' }}
       MANYLINUX: 1
       BUILD_DIR:  ${{ github.workspace }}/output/build
-      EXTRA_C_COMPILER_LAUNCHER: /therock/src/build_tools/resource_info.py
-      EXTRA_CXX_COMPILER_LAUNCHER: /therock/src/build_tools/resource_info.py
+      EXTRA_C_COMPILER_LAUNCHER: "${{ github.workspace }}/build_tools/resource_info.py"
+      EXTRA_CXX_COMPILER_LAUNCHER: "${{ github.workspace }}/build_tools/resource_info.py"
       THEROCK_BUILD_PROF_LOG_DIR: ${{ github.workspace }}/output/build/logs/therock-build-prof
 
     steps:
