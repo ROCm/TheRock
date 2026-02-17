@@ -195,11 +195,10 @@ jobs:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}
 
-      - name: Upload wheels to python S3
+      - name: Upload wheels to S3
         if: ${{ github.repository_owner == 'ROCm' }}
         run: |
-          aws s3 cp "${{ env.PACKAGE_DIST_DIR }}/" \
-            "s3://${{ env.S3_BUCKET_PY }}/${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}/" \
+          aws s3 cp "${{ env.PACKAGE_DIST_DIR }}/" "s3://${{ env.S3_BUCKET_PY }}/${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}/" \
             --recursive --exclude "*" --include "*.whl"
 
       - name: Upload JAX manifest to artifacts S3
