@@ -111,6 +111,40 @@ def setup_env():
     if environ_vars.get("HIP_VISIBLE_DEVICES"):
         environ_vars.pop("GPU_DEVICE_ORDINAL", None)
 
+#--------------------------------------------------
+
+#test_therock.py
+test_therock_cmd = [
+    sys.executable,
+    str(SCRIPT_DIR / "test_therock.py"),
+    "--source-dir",
+    ROCPROFILER_SDK_TESTS_DIRECTORY,
+    "--binary-dir",
+    str(Path(ROCPROFILER_SDK_TESTS_DIRECTORY) / "build"),
+]
+
+logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(test_therock_cmd)}")
+subprocess.run(
+    test_therock_cmd, 
+    cwd=THEROCK_DIR, 
+    check=True,
+    env=environ_vars,)
+sys.exit(0)
+
+#--------------------------------------------------
+
+# CMake Configuration
+cmake_config_cmd = [
+    "cmake",
+    "-B",
+    "build",
+    "-G",
+    "Ninja",
+    f"-DCMAKE_PREFIX_PATH={THEROCK_PATH};{THEROCK_LIB_PATH}/rocm_sysdeps",
+    f"-DCMAKE_HIP_COMPILER={THEROCK_PATH}/llvm/bin/amdclang++",
+    f"-DCMAKE_C_COMPILER={THEROCK_PATH}/llvm/bin/amdclang",
+    f"-DCMAKE_CXX_COMPILER={THEROCK_PATH}/llvm/bin/amdclang++",
+]
 
 def cmake_config():
     cmake_config_cmd = [
@@ -145,17 +179,17 @@ def cmake_config():
     )
 
 
-# SDK requires test binaries to be built on the gfx architecture being tested on
-# Certain tests are enabled/disabled based on the GPU architecture.
-# Ensuring that these tests build properly against an install is also part of the overall test coverage for SDK (emulates tool developers building tools with rocprofiler-sdk)
-def cmake_build():
-    cmake_build_cmd = [
-        "cmake",
-        "--build",
-        "build",
-        "--parallel",
-        "8",
-    ]
+# CTest
+import os
+
+ctest_cmd = [
+    "ctest",
+    "--test-dir",
+    "build",
+    "--output-on-failure",
+    "-j",
+    str(os.cpu_count() or 1),
+]
 
     logging.info(
         f"++ Exec [{ROCPROFILER_SDK_TESTS_PATH}]$ {shlex.join(cmake_build_cmd)}"
