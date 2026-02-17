@@ -26,6 +26,7 @@ import subprocess
 
 logging.basicConfig(level=logging.INFO)
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
+print(f"This script is located at: {THIS_SCRIPT_DIR}")
 THEROCK_DIR = THIS_SCRIPT_DIR.parent.parent
 
 PLATFORM = platform.system().lower()
@@ -35,7 +36,11 @@ amdgpu_families = os.getenv("amdgpu_families")
 package_version = os.getenv("package_version")
 extra_cmake_options = os.getenv("extra_cmake_options")
 build_dir = os.getenv("BUILD_DIR")
-print(  f"Using build directory: {build_dir}")
+print(f"Using build directory: {build_dir}")
+print(f"Using: {os.getcwd()} as current working directory")
+print(f"THEROCK_DIR is set to: {THEROCK_DIR}")
+print(f"PLATFORM is detected as: {PLATFORM}")
+print(f"get content of the PWD: {os.listdir(os.getcwd())}")
 vctools_install_dir = os.getenv("VCToolsInstallDir")
 github_workspace = os.getenv("GITHUB_WORKSPACE")
 extra_c_compiler_launcher = os.getenv("EXTRA_C_COMPILER_LAUNCHER", "")
