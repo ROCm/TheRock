@@ -117,7 +117,6 @@ jobs:
           python build_tools/github_actions/determine_version.py \
             --rocm-version ${{ inputs.rocm_version }}
 
-      # Disabled apex until #3413 is resolved and apex wheels build successfully again
       - name: Build PyTorch wheels
         run: |
           ./external-builds/pytorch/build_prod_wheels.py \
@@ -126,7 +125,6 @@ jobs:
             --find-links "${{ inputs.rocm_package_find_links_url }}" \
             --clean \
             --output-dir ${{ env.PACKAGE_DIST_DIR }} \
-            --no-build-apex \
             ${{ env.optional_build_prod_arguments }}
 
       - name: Sanity check wheel

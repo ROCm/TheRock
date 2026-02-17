@@ -516,6 +516,27 @@ def do_build(args: argparse.Namespace):
         print("--- Not build pytorch-vision (no --pytorch-vision-dir)")
 
     # Build apex.
+    # Changed default behavior:
+    # Only build apex for torch 2.10 and disable otherwise until #3413 is resolved
+    if args.build_apex is None and apex_dir:
+        if pytorch_dir:
+            # < this is just copied from do_build_pytorch() >
+            # Compute version.
+            pytorch_build_version = (pytorch_dir / "version.txt").read_text().strip()
+            pytorch_build_version += args.version_suffix
+            pytorch_build_version_parsed = parse(pytorch_build_version)
+
+            is_pytorch_2_10 = pytorch_build_version_parsed.release[:2] == (2, 10)
+
+            args.build_apex = False
+            if is_pytorch_2_10:
+                args.build_apex = True
+        else:
+            print(
+                f"""WARNING: Cannot determine whether to build apex without pytorch_dir.
+Defaulting to building apex."""
+            )
+    # remove above if #3413 is resolved
     if args.build_apex or (args.build_apex is None and apex_dir):
         assert apex_dir, "Must specify --apex-dir if --build-apex"
         do_build_apex(args, apex_dir, dict(env))

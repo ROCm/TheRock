@@ -185,7 +185,6 @@ jobs:
           python build_tools/github_actions/determine_version.py \
             --rocm-version ${{ inputs.rocm_version }}
 
-      # Disabled apex until #3413 is resolved and apex wheels build successfully again
       - name: Build PyTorch Wheels
         id: build-pytorch-wheels
         run: |
@@ -195,7 +194,6 @@ jobs:
             --install-rocm \
             --index-url "${{ inputs.cloudfront_url }}/${{ inputs.amdgpu_family }}/" \
             --clean \
-            --no-build-apex \
             --output-dir ${{ env.PACKAGE_DIST_DIR }} ${{ env.optional_build_prod_arguments }}
           python ./build_tools/github_actions/write_torch_versions.py --dist-dir ${{ env.PACKAGE_DIST_DIR }}
 
