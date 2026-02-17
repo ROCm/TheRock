@@ -301,6 +301,8 @@ def retrieve_artifacts_by_run_id(args):
         str(args.output_dir),
         "--flatten",
     ]
+    if args.amdgpu_targets:
+        argv.extend(["--amdgpu-targets", args.amdgpu_targets])
     if args.dry_run:
         argv.append("--dry-run")
     if args.run_github_repo:
@@ -729,6 +731,13 @@ def main(argv):
         "--input-dir",
         type=str,
         help="Pass in an existing directory of TheRock to provision and test",
+    )
+
+    parser.add_argument(
+        "--amdgpu-targets",
+        type=str,
+        default="",
+        help="Comma-separated individual GPU targets for fetching split artifacts (e.g. 'gfx942')",
     )
 
     parser.add_argument(
