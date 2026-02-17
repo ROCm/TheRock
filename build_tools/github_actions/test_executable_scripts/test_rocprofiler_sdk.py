@@ -3,6 +3,7 @@ import os
 import shlex
 import subprocess
 from pathlib import Path
+import sys
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 OUTPUT_ARTIFACTS_DIR = os.getenv("OUTPUT_ARTIFACTS_DIR")
@@ -34,6 +35,28 @@ if old_ld_lib_path:
     )
 else:
     environ_vars["LD_LIBRARY_PATH"] = f"{THEROCK_LIB_PATH}:{sysdeps_path}"
+
+#--------------------------------------------------
+
+#test_therock.py
+test_therock_cmd = [
+    sys.executable,
+    str(SCRIPT_DIR / "test_therock.py"),
+    "--source-dir",
+    ROCPROFILER_SDK_TESTS_DIRECTORY,
+    "--binary-dir",
+    str(Path(ROCPROFILER_SDK_TESTS_DIRECTORY) / "build"),
+]
+
+logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(test_therock_cmd)}")
+subprocess.run(
+    test_therock_cmd, 
+    cwd=THEROCK_DIR, 
+    check=True,
+    env=environ_vars,)
+sys.exit(0)
+
+#--------------------------------------------------
 
 # CMake Configuration
 cmake_config_cmd = [
@@ -77,11 +100,15 @@ subprocess.run(
 )
 
 # CTest
+import os
+
 ctest_cmd = [
     "ctest",
     "--test-dir",
     "build",
     "--output-on-failure",
+    "-j",
+    str(os.cpu_count() or 1),
 ]
 
 logging.info(f"++ Exec [{ROCPROFILER_SDK_TESTS_DIRECTORY}]$ {shlex.join(ctest_cmd)}")
