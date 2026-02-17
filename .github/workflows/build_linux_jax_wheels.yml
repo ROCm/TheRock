@@ -173,7 +173,7 @@ jobs:
             --python-versions="${{ inputs.python_version }}" \
             --rocm-version="${ROCM_VERSION}" \
             --therock-path="${{ inputs.tar_url }}" \
-            --jax-source-dir ${{ github.workspace }}/jax \
+            --jax-source-dir="${{ github.workspace }}/jax" \
             dist_wheels
 
       - name: Extract JAX versions from built wheels
