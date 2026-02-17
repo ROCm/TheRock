@@ -248,13 +248,25 @@ def get_package_list(artifact_dir):
     skipped_list  : list of package names excluded due to missing artifacts
     """
     pkg_list = []
-    skipped = []
+    skipped_list = []
+    artifact_path = Path(artifact_dir)
     data = read_package_json_file()
 
     try:
-        dir_entries = os.listdir(artifact_dir)
+        artifact_dirs = {path.name for path in artifact_path.iterdir() if path.is_dir()}
     except FileNotFoundError:
-        sys.exit(f"{artifact_dir}: Artifactory directory doesn not exist, Exiting")
+        sys.exit(f"{artifact_dir}: Artifactory directory does not exist, exiting")
+
+    # Create a dictionary
+    prefix_index = {}
+    SUFFIX_MARKERS = ["_dbg_", "_dev_", "_doc_", "_lib_", "_run_", "_test_"]
+
+    for dirname in artifact_dirs:
+        for marker in SUFFIX_MARKERS:
+            if marker in dirname:
+                prefix = dirname.split(marker, 1)[0]
+                prefix_index[prefix] = True
+                break  # stop after first matching marker
 
     for pkg_info in data:
         pkg_name = pkg_info["Package"]
@@ -262,36 +274,23 @@ def get_package_list(artifact_dir):
         if is_packaging_disabled(pkg_info):
             continue
 
-        # metapackages don't need artifact lookup
+        # Metapackages don't need artifact lookup
         if is_meta_package(pkg_info):
             pkg_list.append(pkg_name)
             continue
 
-        artifactory_list = pkg_info.get("Artifactory", [])
-        artifact_found = False
-
-        for artifactory in artifactory_list:
-            artifact_name = artifactory.get("Artifact")
-            if not artifact_name:
-                continue
-
-            # Look for directories starting with the artifact name
-            for entry in dir_entries:
-                path = Path(artifact_dir) / entry
-
-                if entry.startswith(artifact_name) and path.is_dir():
-                    artifact_found = True
-                    break
-
-            if artifact_found:
-                break
+        # Check if any artifact matches a known prefix
+        artifact_found = any(
+            (artifact := art.get("Artifact")) and prefix_index.get(artifact)
+            for art in pkg_info.get("Artifactory", [])
+        )
 
         if artifact_found:
             pkg_list.append(pkg_name)
         else:
-            skipped.append(pkg_name)
+            skipped_list.append(pkg_name)
 
-    return pkg_list, skipped
+    return pkg_list, skipped_list
 
 
 def remove_dir(dir_name):

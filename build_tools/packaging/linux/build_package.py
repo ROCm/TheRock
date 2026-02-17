@@ -55,11 +55,13 @@ def create_deb_package(pkg_name, config: PackageConfig):
     print_function_name()
     print(f"Package Name: {pkg_name}")
 
-    # Non-versioned packages are not required for RPATH packages
+    # Build the versioned Debian package
+    create_versioned_deb_package(pkg_name, config)
+    # Build the non‑versioned Debian package only when RPATH is disabled
+    # (Non‑versioned packages do not require RPATH handling)
     if not config.enable_rpath:
         create_nonversioned_deb_package(pkg_name, config)
 
-    create_versioned_deb_package(pkg_name, config)
     output_list = move_packages_to_destination(pkg_name, config)
     # Clean debian build directory
     remove_dir(Path(config.dest_dir) / config.pkg_type)
@@ -482,10 +484,15 @@ def create_rpm_package(pkg_name, config: PackageConfig):
     print_function_name()
     print(f"Package Name: {pkg_name}")
 
+    # Build the versioned RPM package
+    create_versioned_rpm_package(pkg_name, config)
+
+    # Build the non‑versioned RPM package only when RPATH is disabled
+    # (Non‑versioned packages do not require RPATH handling)
     if not config.enable_rpath:
         create_nonversioned_rpm_package(pkg_name, config)
 
-    create_versioned_rpm_package(pkg_name, config)
+    # Move all generated package files into the destination directory
     output_list = move_packages_to_destination(pkg_name, config)
     # Clean rpm build directory
     remove_dir(Path(config.dest_dir) / config.pkg_type)

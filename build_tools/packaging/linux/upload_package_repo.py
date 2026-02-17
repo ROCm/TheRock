@@ -74,7 +74,7 @@ def generate_index_html(directory):
     except PermissionError:
         return
 
-    with open(os.path.join(directory, "index.html"), "w") as f:
+    with open(os.path.join(directory, "index.html"), "w", encoding="utf-8") as f:
         f.write(HTML_HEAD + "\n".join(rows) + HTML_FOOT)
 
 
@@ -157,7 +157,7 @@ def regenerate_rpm_metadata_from_s3(s3, bucket, prefix, uploaded_packages):
 
             # Generate repodata for new packages with clean paths (no baseurl)
             run_command(
-                "createrepo_c --no-database --simple-md-filenames .",
+                ["createrepo_c", "--no-database", "--simple-md-filenames", "."],
                 cwd=str(new_arch_dir),
             )
             print("✅ Generated metadata for uploaded packages")
@@ -184,9 +184,18 @@ def regenerate_rpm_metadata_from_s3(s3, bucket, prefix, uploaded_packages):
             # mergerepo_c merges repodata without needing actual RPM files!
             # Use --no-database, --simple-md-filenames, and --omit-baseurl to ensure clean paths
             run_command(
-                f"mergerepo_c --no-database --simple-md-filenames --omit-baseurl "
-                f'--repo "{old_repo_dir}" --repo "{new_repo_dir / "x86_64"}" '
-                f'--outputdir "{merged_arch_dir}"',
+                [
+                    "mergerepo_c",
+                    "--no-database",
+                    "--simple-md-filenames",
+                    "--omit-baseurl",
+                    "--repo",
+                    str(old_repo_dir),
+                    "--repo",
+                    str(new_repo_dir / "x86_64"),
+                    "--outputdir",
+                    str(merged_arch_dir),
+                ],
                 cwd=str(temp_path),
             )
             print("✅ Merged repository metadata")
@@ -259,7 +268,7 @@ def generate_release_file_with_checksums(release_file, job_type, dists_dir):
         sha256_entries.append(f" {sha256_hash.hexdigest()} {file_size:16d} {rel_path}")
 
     # Write Release file
-    with open(release_file, "w") as f:
+    with open(release_file, "w", encoding="utf-8") as f:
         # Header fields
         f.write(
             f"""Origin: AMD ROCm
@@ -366,7 +375,7 @@ def regenerate_deb_metadata_from_s3(
                 f"Downloading existing Packages file from S3: s3://{bucket}/{packages_s3_key}"
             )
             s3.download_file(bucket, packages_s3_key, str(existing_packages))
-            with open(existing_packages, "r") as f:
+            with open(existing_packages, "r", encoding="utf-8") as f:
                 content = f.read()
                 pkg_count = content.count("\nPackage: ")
             print(f"✅ Downloaded existing Packages file ({pkg_count} packages)")
@@ -386,17 +395,26 @@ def regenerate_deb_metadata_from_s3(
 
             # Generate Packages entries for uploaded packages
             new_packages = dists_dir / "Packages.new"
-            run_command(
-                f'dpkg-scanpackages -m pool/main /dev/null > "{new_packages}"',
-                cwd=str(temp_path),
-            )
+            with open(new_packages, "w", encoding="utf-8") as packages_file:
+                subprocess.run(
+                    ["dpkg-scanpackages", "-m", "pool/main", "/dev/null"],
+                    cwd=str(temp_path),
+                    stdout=packages_file,
+                    check=True,
+                )
             print("✅ Generated Packages entries for uploaded packages")
         else:
             print("No new DEB packages uploaded (all deduplicated)")
             if existing_packages and existing_packages.exists():
                 print("Preserving existing metadata...")
                 shutil.copy2(existing_packages, dists_dir / "Packages")
-                run_command("gzip -9c Packages > Packages.gz", cwd=str(dists_dir))
+                with open(dists_dir / "Packages.gz", "wb") as gz_file:
+                    subprocess.run(
+                        ["gzip", "-9c", "Packages"],
+                        cwd=str(dists_dir),
+                        stdout=gz_file,
+                        check=True,
+                    )
 
                 # Generate Release file with checksums
                 release_dir = temp_path / "dists" / "stable"
@@ -418,7 +436,7 @@ def regenerate_deb_metadata_from_s3(
             def parse_packages_file(filepath):
                 """Parse Packages file into dict keyed by Filename"""
                 packages = {}
-                with open(filepath, "r") as f:
+                with open(filepath, "r", encoding="utf-8") as f:
                     current_entry = []
                     current_filename = None
 
@@ -449,7 +467,7 @@ def regenerate_deb_metadata_from_s3(
             merged = old_packages.copy()
             merged.update(new_packages_dict)
 
-            with open(merged_packages, "w") as outfile:
+            with open(merged_packages, "w", encoding="utf-8") as outfile:
                 for filename in sorted(merged.keys()):
                     outfile.write(merged[filename])
                     outfile.write("\n")
@@ -460,7 +478,13 @@ def regenerate_deb_metadata_from_s3(
             shutil.copy2(new_packages, merged_packages)
 
         # Compress Packages file
-        run_command("gzip -9c Packages > Packages.gz", cwd=str(dists_dir))
+        with open(dists_dir / "Packages.gz", "wb") as gz_file:
+            subprocess.run(
+                ["gzip", "-9c", "Packages"],
+                cwd=str(dists_dir),
+                stdout=gz_file,
+                check=True,
+            )
 
         # Step 4: Generate Release file with checksums
         release_dir = temp_path / "dists" / "stable"
@@ -695,9 +719,9 @@ def generate_index_from_s3(s3, bucket, prefix, max_depth=None):
     print(f"Generated and uploaded {uploaded_indexes} index files from S3 state")
 
 
-def run_command(cmd, cwd=None):
-    print(f"Running: {cmd}")
-    subprocess.run(cmd, shell=True, check=True, cwd=cwd)
+def run_command(cmd: list[str], cwd=None):
+    print(f"Running: {' '.join(cmd)}")
+    subprocess.run(cmd, check=True, cwd=cwd)
 
 
 def find_package_dir():
@@ -734,14 +758,24 @@ def create_deb_repo(package_dir, job_type):
         if f.endswith(".deb"):
             shutil.move(os.path.join(package_dir, f), os.path.join(pool, f))
 
-    run_command(
-        "dpkg-scanpackages -m pool/main /dev/null > dists/stable/main/binary-amd64/Packages",
-        cwd=package_dir,
-    )
-    run_command("gzip -9c Packages > Packages.gz", cwd=dists)
+    packages_path = os.path.join(dists, "Packages")
+    with open(packages_path, "w", encoding="utf-8") as packages_file:
+        subprocess.run(
+            ["dpkg-scanpackages", "-m", "pool/main", "/dev/null"],
+            cwd=package_dir,
+            stdout=packages_file,
+            check=True,
+        )
+    with open(os.path.join(dists, "Packages.gz"), "wb") as gz_file:
+        subprocess.run(
+            ["gzip", "-9c", "Packages"],
+            cwd=dists,
+            stdout=gz_file,
+            check=True,
+        )
 
     release = os.path.join(package_dir, "dists", "stable", "Release")
-    with open(release, "w") as f:
+    with open(release, "w", encoding="utf-8") as f:
         f.write(
             f"""Origin: AMD ROCm
 Label: ROCm {job_type} Packages
@@ -773,7 +807,9 @@ def create_rpm_repo(package_dir):
 
     # Generate initial repodata from local packages with clean paths (no baseurl)
     # This will be regenerated from S3 state after upload
-    run_command("createrepo_c --no-database --simple-md-filenames .", cwd=arch_dir)
+    run_command(
+        ["createrepo_c", "--no-database", "--simple-md-filenames", "."], cwd=arch_dir
+    )
 
     # Index generation now happens from S3 state after upload
 
