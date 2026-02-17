@@ -42,7 +42,7 @@ Benchmark scripts add `extended_tests/` to `sys.path`, then import:
 
 ```python
 # Import path setup (already done in benchmark_base.py)
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))  # Adds extended_tests/ to path
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # Adds extended_tests/ to path
 
 # Core utilities
 from utils.logger import log

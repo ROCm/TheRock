@@ -12,7 +12,9 @@ from prettytable import PrettyTable
 # Add parent directory to path for utils import
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 # Add build_tools/github_actions to path for github_actions_utils
-sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "build_tools" / "github_actions"))
+sys.path.insert(
+    0, str(Path(__file__).resolve().parents[4] / "build_tools" / "github_actions")
+)
 from utils import BenchmarkClient, HardwareDetector
 from utils.logger import log
 from utils.exceptions import TestExecutionError

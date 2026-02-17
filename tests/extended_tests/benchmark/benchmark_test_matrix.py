@@ -8,7 +8,7 @@ Benchmark tests run only on nightly CI builds and are merged into test_matrix by
 from pathlib import Path
 
 # Note: these paths are relative to the repository root.
-SCRIPT_DIR = (Path("tests") / "extended_tests" / "benchmark" / "scripts")
+SCRIPT_DIR = Path("tests") / "extended_tests" / "benchmark" / "scripts"
 
 
 def _get_benchmark_script_path(script_name: str) -> str:
