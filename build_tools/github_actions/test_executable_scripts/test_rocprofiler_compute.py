@@ -47,7 +47,9 @@ else:
 
 # Set up excluded tests (include Jiras)
 # AIPROFSDK-36: rocr issue causing test to fail
-EXCLUDED_TESTS = "test_profile_pc_sampling"
+BASE_EXCLUDED_TESTS = [
+    "test_profile_pc_sampling",
+]
 
 # Sharding
 shard_index = int(os.getenv("SHARD_INDEX", "1")) - 1
@@ -63,29 +65,32 @@ SMOKE_TESTS = [
     "test_analyze_workloads",
     "test_analyze_commands",
     "test_metric_validation",
-    # "test_profile_iteration_multiplexing_stochastic",
-    # "test_profile_iteration_multiplexing_2",
-    # "test_profile_iteration_multiplexing_1",
-    # "test_profile_live_attach_detach",
-    # "test_profile_sets_func",
-    # "test_profile_pc_sampling",
-    # "test_profile_section",
-    # "test_profile_roofline_2",
-    # "test_profile_roofline_1",
-    # "test_profile_path",
-    # "test_profile_misc",
-    # "test_profile_sort",
-    # "test_profile_join",
-    # "test_profile_mem",
-    # "test_profile_dispatch",
-    # "test_profile_kernel_execution",
+]
+SMOKE_EXCLUDED_TESTS = [
+    "test_profile_iteration_multiplexing_stochastic",
+    "test_profile_iteration_multiplexing_2",
+    "test_profile_iteration_multiplexing_1",
+    "test_profile_live_attach_detach",
+    "test_profile_sets_func",
+    "test_profile_pc_sampling",
+    "test_profile_section",
+    "test_profile_roofline_2",
+    "test_profile_roofline_1",
+    "test_profile_path",
+    "test_profile_misc",
+    "test_profile_sort",
+    "test_profile_join",
+    "test_profile_mem",
+    "test_profile_dispatch",
+    "test_profile_kernel_execution",
 ]
 
 # If smoke tests are enabled, we run smoke tests only.
 # Otherwise, we run the normal test suite
 test_type = os.getenv("TEST_TYPE", "full")
+excluded_tests = BASE_EXCLUDED_TESTS
 if test_type == "smoke":
-    environ_vars["GTEST_FILTER"] = ":".join(SMOKE_TESTS)
+    excluded_tests = excluded_tests + SMOKE_EXCLUDED_TESTS
 
 # Run tests
 cmd = [
@@ -95,7 +100,7 @@ cmd = [
     "--output-on-failure",
     "--verbose",
     "-E",
-    f"{EXCLUDED_TESTS}",
+    f"{"|".join(excluded_tests)}",
     "--tests-information",
     f"{shard_index},,{total_shards}",
 ]
