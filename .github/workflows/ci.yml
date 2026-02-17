@@ -103,6 +103,7 @@ jobs:
       test_type: ${{ needs.setup.outputs.test_type }}
       sanity_check_only_for_family: ${{ matrix.variant.sanity_check_only_for_family == true }}
       build_pytorch: ${{ matrix.variant.build_pytorch == true }}
+      test_blender: ${{ matrix.variant.test_blender == true }}
     permissions:
       contents: read
       id-token: write
