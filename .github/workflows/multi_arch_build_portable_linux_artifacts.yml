@@ -37,8 +37,6 @@ on:
         type: string
         required: true
         description: "Semicolon-separated list of all GPU families for dist targets"
-      build_variant_cmake_preset:
-        type: string
       rocm_package_version:
         type: string
         required: true
@@ -119,14 +117,9 @@ jobs:
         if: ${{ steps.stage_config.outputs.pip_install_cmd }}
         run: pip install ${{ steps.stage_config.outputs.pip_install_cmd }}
 
-      # TODO: Move --preset into configure_stage.py OR resolve
-      # https://github.com/ROCm/TheRock/issues/1781 in
-      # build_tools/github_actions/amdgpu_family_matrix.py so
-      # the `linux-release-package` preset is used instead of empty string
       - name: Configure
         run: |
           cmake -B "${BUILD_DIR}" -S . -GNinja \
-            --preset=${{ inputs.build_variant_cmake_preset }} \
             -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
