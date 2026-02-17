@@ -110,9 +110,18 @@ jobs:
         run: |
           python ./build_tools/print_driver_gpu_info.py
 
-      - name: Setup Test
+      - name: Setup Requirements
         run: |
-          ${{ fromJSON(inputs.component).setup_script }}
+          REQUIREMENTS_FILES = ${{ fromJSON(inputs.component).requirements_files }}
+          DELIMITER=","
+          IFS="$DELIMITER" read -r -a array <<< "$STRING"
+
+          ${{ github.workspace }}/.venv/bin/python -m ensurepip --upgrade
+
+          for file in "${array[@]}"; do
+              echo "Installing Requirements File: $file"
+              ${{ github.workspace }}/.venv/bin/python -m pip install -r ${{ env.OUTPUT_ARTIFACTS_DIR }}/$file
+          done
 
       - name: Test
         timeout-minutes: ${{ fromJSON(inputs.component).timeout_minutes }}
