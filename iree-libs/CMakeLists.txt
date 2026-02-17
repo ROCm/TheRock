@@ -1,4 +1,4 @@
-if(THEROCK_ENABLE_FUSILLI_PLUGIN)
+if(THEROCK_ENABLE_FUSILLIPROVIDER)
   ##############################################################################
   # fusilli library
   ##############################################################################
@@ -33,12 +33,12 @@ if(THEROCK_ENABLE_FUSILLI_PLUGIN)
   therock_cmake_subproject_activate(fusilli)
 
   ##############################################################################
-  # fusilli hipDNN plugin
+  # fusilli hipDNN provider
   ##############################################################################
-  therock_cmake_subproject_declare(fusilli-plugin
+  therock_cmake_subproject_declare(fusilliprovider
     USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/fusilli/plugins/hipdnn-plugin"
-    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/fusilli-plugin"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/fusilliprovider"
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DFUSILLI_PLUGIN_SKIP_TESTS=$<NOT:$<BOOL:${THEROCK_BUILD_TESTING}>>
@@ -60,19 +60,19 @@ if(THEROCK_ENABLE_FUSILLI_PLUGIN)
       hipDNN
       rocminfo  # Provides rocm_agent_enumerator
   )
-  therock_cmake_subproject_glob_c_sources(fusilli-plugin
+  therock_cmake_subproject_glob_c_sources(fusilliprovider
     SUBDIRS
       .
   )
-  therock_cmake_subproject_activate(fusilli-plugin)
+  therock_cmake_subproject_activate(fusilliprovider)
 
-  therock_provide_artifact(fusilli-plugin
-    DESCRIPTOR artifact-fusilli-plugin.toml
+  therock_provide_artifact(fusilliprovider
+    DESCRIPTOR artifact-fusilliprovider.toml
     COMPONENTS
       dbg
       lib
       test
     SUBPROJECT_DEPS
-      fusilli-plugin
+      fusilliprovider
   )
-endif(THEROCK_ENABLE_FUSILLI_PLUGIN)
+endif(THEROCK_ENABLE_FUSILLIPROVIDER)
