@@ -235,7 +235,8 @@ jobs:
           extra_cmake_options: ''
           cmake_preset: ''
         run: |
-          python3 ./build_tools/github_actions/build_configure.py
+          python3 ./build_tools/github_actions/build_configure.py \
+            --build-dir ${{ env.BUILD_DIR }}
           ls -laRt ${{ env.OUTPUT_DIR }} || true
           ls -alrtR  /__w/TheRock/TheRock/output/build || true
           ls -alrt || true
