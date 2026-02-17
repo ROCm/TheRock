@@ -524,12 +524,12 @@ def do_build(args: argparse.Namespace):
             # Compute version.
             pytorch_build_version = (pytorch_dir / "version.txt").read_text().strip()
             pytorch_build_version += args.version_suffix
-            pytorch_build_version_parsed = parse(pytorch_build_version)
+            pytorch_build_vers_parsed = parse(pytorch_build_version)
 
-            is_pytorch_2_10 = pytorch_build_version_parsed.release[:2] == (2, 10)
+            is_pytorch_2_10_or_later = pytorch_build_vers_parsed.release[:2] >= (2, 10)
 
             args.build_apex = False
-            if is_pytorch_2_10:
+            if is_pytorch_2_10_or_later:
                 args.build_apex = True
         else:
             print(
