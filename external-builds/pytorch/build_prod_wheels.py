@@ -573,23 +573,24 @@ def do_build(args: argparse.Namespace):
         sccache_setup_attempted = True
         setup_rocm_sccache(rocm_dir, sccache_path)
 
-        # CMAKE launchers for C/C++ host code.
-        # CMAKE_HIP_COMPILER_LAUNCHER is NOT set because sccache returns
-        # "Compiler not supported" — HIP caching on Linux is handled by
-        # the wrapper scripts created by setup_rocm_sccache() instead.
-        env["CMAKE_C_COMPILER_LAUNCHER"] = str(sccache_path)
-        env["CMAKE_CXX_COMPILER_LAUNCHER"] = str(sccache_path)
-
-        try:
-            run_command(
-                [str(sccache_path), "--start-server"], cwd=tempfile.gettempdir()
-            )
-        except subprocess.CalledProcessError:
-            pass  # Server may already be running
-
-        run_command([str(sccache_path), "--zero-stats"], cwd=tempfile.gettempdir())
-
     try:
+        if args.use_sccache and sccache_setup_attempted:
+            # CMAKE launchers for C/C++ host code.
+            # CMAKE_HIP_COMPILER_LAUNCHER is NOT set because sccache returns
+            # "Compiler not supported" — HIP caching on Linux is handled by
+            # the wrapper scripts created by setup_rocm_sccache() instead.
+            env["CMAKE_C_COMPILER_LAUNCHER"] = str(sccache_path)
+            env["CMAKE_CXX_COMPILER_LAUNCHER"] = str(sccache_path)
+
+            try:
+                run_command(
+                    [str(sccache_path), "--start-server"], cwd=tempfile.gettempdir()
+                )
+            except subprocess.CalledProcessError:
+                pass  # Server may already be running
+
+            run_command([str(sccache_path), "--zero-stats"], cwd=tempfile.gettempdir())
+
         _do_build_wheels_core(
             args,
             env,
@@ -611,11 +612,11 @@ def do_build(args: argparse.Namespace):
             )
             print(f"sccache --show-stats output:\n{sccache_stats}")
 
-    if args.use_ccache:
-        ccache_stats_output = capture(
-            ["ccache", "--show-stats"], cwd=tempfile.gettempdir()
-        )
-        print(f"ccache --show-stats output:\n{ccache_stats_output}")
+        if args.use_ccache:
+            ccache_stats_output = capture(
+                ["ccache", "--show-stats"], cwd=tempfile.gettempdir()
+            )
+            print(f"ccache --show-stats output:\n{ccache_stats_output}")
 
 
 def do_build_triton(
