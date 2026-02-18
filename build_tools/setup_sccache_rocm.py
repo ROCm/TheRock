@@ -117,11 +117,7 @@ def create_sccache_wrapper(compiler_path: Path, sccache_path: Path) -> None:
         try:
             wrapper_temp.write_text(wrapper_content)
             wrapper_temp.chmod(
-                stat.S_IRWXU
-                | stat.S_IRGRP
-                | stat.S_IXGRP
-                | stat.S_IROTH
-                | stat.S_IXOTH
+                stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH
             )
         except (OSError, PermissionError) as e:
             raise RuntimeError(
@@ -142,11 +138,7 @@ def create_sccache_wrapper(compiler_path: Path, sccache_path: Path) -> None:
         else:
             compiler_path.write_text(wrapper_content)
             compiler_path.chmod(
-                stat.S_IRWXU
-                | stat.S_IRGRP
-                | stat.S_IXGRP
-                | stat.S_IROTH
-                | stat.S_IXOTH
+                stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH
             )
             print(
                 f"  Created sccache wrapper: {compiler_path} -> sccache {real_compiler}"
@@ -185,7 +177,7 @@ def restore_compiler(compiler_path: Path) -> None:
         compiler_path.unlink()
 
     if path_info.startswith("symlink:"):
-        symlink_target = path_info[len("symlink:"):]
+        symlink_target = path_info[len("symlink:") :]
         compiler_path.symlink_to(symlink_target)
         print(f"  Restored symlink {compiler_path} -> {symlink_target}")
     elif path_info.startswith("binary:"):
