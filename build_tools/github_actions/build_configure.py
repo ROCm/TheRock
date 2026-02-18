@@ -26,7 +26,6 @@ import subprocess
 
 logging.basicConfig(level=logging.INFO)
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
-print(f"This script is located at: {THIS_SCRIPT_DIR}")
 THEROCK_DIR = THIS_SCRIPT_DIR.parent.parent
 
 PLATFORM = platform.system().lower()
@@ -35,10 +34,6 @@ cmake_preset = os.getenv("cmake_preset")
 amdgpu_families = os.getenv("amdgpu_families")
 package_version = os.getenv("package_version")
 extra_cmake_options = os.getenv("extra_cmake_options")
-print(f"Using: {os.getcwd()} as current working directory")
-print(f"THEROCK_DIR is set to: {THEROCK_DIR}")
-print(f"PLATFORM is detected as: {PLATFORM}")
-print(f"get content of the PWD: {os.listdir(os.getcwd())}")
 vctools_install_dir = os.getenv("VCToolsInstallDir")
 github_workspace = os.getenv("GITHUB_WORKSPACE")
 extra_c_compiler_launcher = os.getenv("EXTRA_C_COMPILER_LAUNCHER", "")
@@ -172,5 +167,4 @@ if __name__ == "__main__":
     # Support both command-line flag and environment variable
     manylinux = args.manylinux or os.getenv("MANYLINUX") in ["1", "true"]
     build_dir = args.build_dir or os.getenv("BUILD_DIR")
-    print(f"Using build directory: {build_dir}")
     build_configure(manylinux=manylinux)

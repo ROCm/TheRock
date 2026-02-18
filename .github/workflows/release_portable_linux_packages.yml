@@ -252,7 +252,6 @@ jobs:
             --dest-dir=${{ env.OUTPUT_DIR }}/packages \
             "--version=${{ needs.setup_metadata.outputs.version }}"
 
-          ls -la ${{ env.OUTPUT_DIR }}/packages/dist/ || true
       - name: Build Report
         if: ${{ !cancelled() }}
         run: |
