@@ -211,13 +211,13 @@ jobs:
 
       # TODO: We shouldn't be using a cache on actual release branches, but it
       # really helps for iteration time.
-      # - name: Enable cache
-      #   uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
-      #   with:
-      #     path: ${{ env.OUTPUT_DIR }}/caches
-      #     key: portable-linux-package-matrix-v1-${{ matrix.target_bundle.amdgpu_family }}-${{ github.sha }}
-      #     restore-keys: |
-      #       portable-linux-package-matrix-v1-${{ matrix.target_bundle.amdgpu_family }}-
+      - name: Enable cache
+        uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        with:
+          path: ${{ env.OUTPUT_DIR }}/caches
+          key: portable-linux-package-matrix-v1-${{ matrix.target_bundle.amdgpu_family }}-${{ github.sha }}
+          restore-keys: |
+            portable-linux-package-matrix-v1-${{ matrix.target_bundle.amdgpu_family }}-
 
       - name: Install the AWS tool
         run: ./dockerfiles/install_awscli.sh
@@ -237,15 +237,10 @@ jobs:
         run: |
           python3 ./build_tools/github_actions/build_configure.py \
             --build-dir ${{ env.BUILD_DIR }}
-          ls -laRt ${{ env.OUTPUT_DIR }} || true
-          ls -alrtR  /__w/TheRock/TheRock/output/build || true
-          ls -alrt || true
-          pwd || true
 
       - name: Build Projects
         run: |
-          mkdir -p ${{ env.OUTPUT_DIR }}/build/dist/rocm
-          cmake --build ${{ env.OUTPUT_DIR }}/build --target therock-archives therock-dist || echo "Build failed. Dumping ninja log:"
+          cmake --build ${{ env.OUTPUT_DIR }}/build --target therock-archives therock-dist
           cd ${{ env.OUTPUT_DIR }}/build/dist/rocm
           echo "Building ${{ env.DIST_ARCHIVE }}"
           tar cfz "${{ env.DIST_ARCHIVE }}" .
@@ -400,9 +395,9 @@ jobs:
               "native_package_type": "deb"
             }
 
-      # - name: Save cache
-      #   uses: actions/cache/save@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
-      #   if: ${{ !cancelled() }}
-      #   with:
-      #     path: ${{ env.OUTPUT_DIR }}/caches
-      #     key: portable-linux-package-matrix-v1-${{ matrix.target_bundle.amdgpu_family }}-${{ github.sha }}
+      - name: Save cache
+        uses: actions/cache/save@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        if: ${{ !cancelled() }}
+        with:
+          path: ${{ env.OUTPUT_DIR }}/caches
+          key: portable-linux-package-matrix-v1-${{ matrix.target_bundle.amdgpu_family }}-${{ github.sha }}
