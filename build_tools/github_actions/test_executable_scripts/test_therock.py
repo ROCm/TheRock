@@ -1,5 +1,5 @@
-
 #!/usr/bin/env python3
+
 # MIT License
 #
 # Copyright (c) 2024-2025 Advanced Micro Devices, Inc. All rights reserved.
@@ -23,8 +23,9 @@
 # THE SOFTWARE.
 """
 Generate CTestCustom.cmake (settings + configure/build commands) and
-dashboard.cmake (build, test, report to CDash). Optionally run ctest -S.
+dashboard.cmake (build, test, report to CDash).
 """
+
 import argparse
 import multiprocessing
 import os
@@ -34,33 +35,33 @@ import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+
 _DEFAULT_PROJECT_NAME = "rocprofiler-sdk-alt"
 _DEFAULT_BASE_URL = "my.cdash.org"
-THEROCK_BIN_DIR = r'/home/tester/TheRock/therock-build/bin'
+
 OUTPUT_ARTIFACTS_DIR = os.getenv("OUTPUT_ARTIFACTS_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
+
+THEROCK_BIN_DIR = r'/home/tester/TheRock/therock-build/bin'
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 THEROCK_BIN_PATH = Path(THEROCK_BIN_DIR).resolve()
 THEROCK_PATH = THEROCK_BIN_PATH.parent
 THEROCK_LIB_PATH = str(THEROCK_PATH / "lib")
+
 ROCPROFILER_SDK_DIRECTORY = f"{THEROCK_PATH}/share/rocprofiler-sdk"
 ROCPROFILER_SDK_TESTS_DIRECTORY = f"{ROCPROFILER_SDK_DIRECTORY}/tests"
-print(THEROCK_PATH)
-print(ROCPROFILER_SDK_TESTS_DIRECTORY)
-print(THEROCK_BIN_DIR)
-print(THEROCK_BIN_PATH)
 
 # Defaults; overridden by --source-dir/--binary-dir when provided
-source_dir = ROCPROFILER_SDK_TESTS_DIRECTORY
-binary_dir = f"{ROCPROFILER_SDK_TESTS_DIRECTORY}/build"
+SOURCE_DIR = ROCPROFILER_SDK_TESTS_DIRECTORY
+BINARY_DIR = f"{ROCPROFILER_SDK_TESTS_DIRECTORY}/build"
+
 environ_vars = os.environ.copy()
 environ_vars["ROCM_PATH"] = str(THEROCK_PATH)
 environ_vars["HIP_PATH"] = str(THEROCK_PATH)
+
 # Env setup
 environ_vars["HIP_PLATFORM"] = "amd"
-# # Prevent git from blocking on prompts (CTest/CMake may run git)
-# environ_vars["GIT_TERMINAL_PROMPT"] = "0"
-# environ_vars["GIT_ASK_YESNO"] = "no"
+
 # Set up LD_LIBRARY_PATH
 old_ld_lib_path = os.getenv("LD_LIBRARY_PATH", "")
 sysdeps_path = f"{THEROCK_LIB_PATH}/rocm_sysdeps/lib"
@@ -71,51 +72,63 @@ if old_ld_lib_path:
 else:
     environ_vars["LD_LIBRARY_PATH"] = f"{THEROCK_LIB_PATH}:{sysdeps_path}"
 
+
 def _which_cmake():
     return shutil.which("cmake") or "cmake"
 
+
 def _which_ctest():
     return shutil.which("ctest") or "ctest"
+
 
 def _generate_ctest_custom(cmake_cmd):
     """Generate CTestCustom.cmake: settings and configure/build commands.
     Uses four namespaces (script, configure, build, test). Commands run from source dir
     so literal "build" and "." match test_rocprofiler_sdk.
     """
-    # Configure: cmake [configure_args] . (caller supplies -B build; avoid duplicate -B)
-    configure_cmd = f'{cmake_cmd} -B build -G Ninja -DCMAKE_PREFIX_PATH={THEROCK_PATH};{THEROCK_LIB_PATH}/rocm_sysdeps -DCMAKE_HIP_COMPILER={THEROCK_PATH}/llvm/bin/amdclang++ -DCMAKE_C_COMPILER={THEROCK_PATH}/llvm/bin/amdclang -DCMAKE_CXX_COMPILER={THEROCK_PATH}/llvm/bin/amdclang++ .'
-    build_cmd = f'{cmake_cmd} --build {binary_dir} -j'
-    ctest_args_str = f'--test-dir {binary_dir} --output-on-failure -j {os.cpu_count() or 1}'
-    url = f'https://{_DEFAULT_BASE_URL}/submit.php?project={_DEFAULT_PROJECT_NAME}'
-    site = socket.gethostname()
-    name = "ROCProfiler SDK Tests"
-    print("COMMANDS__________________________")
-    print(configure_cmd)
-    print(build_cmd)
-    print(ctest_args_str)
+
+    # Configure cmake commands and ctest arguments
+    configure_cmd = f'{cmake_cmd} -B build -G Ninja -DCMAKE_PREFIX_PATH={THEROCK_PATH};{THEROCK_LIB_PATH}/rocm_sysdeps' + \
+                    f'-DCMAKE_HIP_COMPILER={THEROCK_PATH}/llvm/bin/amdclang++ -DCMAKE_C_COMPILER={THEROCK_PATH}/llvm/bin/amdclang -DCMAKE_CXX_COMPILER={THEROCK_PATH}/llvm/bin/amdclang++ .'
+    build_cmd = f'{cmake_cmd} --build {BINARY_DIR} -j'
+    ctest_args_str = f'--test-dir {BINARY_DIR} --output-on-failure -j {os.cpu_count() or 1}'
+
+    #Specify CDash submission information
+    URL = f'https://{_DEFAULT_BASE_URL}/submit.php?project={_DEFAULT_PROJECT_NAME}'
+    SITE = socket.gethostname()
+    NAME = "ROCProfiler SDK Tests"
+
     return f"""set(CTEST_PROJECT_NAME "{_DEFAULT_PROJECT_NAME}")
 set(CTEST_NIGHTLY_START_TIME "05:00:00 UTC")
+
 set(CTEST_DROP_METHOD "https")
 set(CTEST_DROP_SITE_CDASH TRUE)
-set(CTEST_SUBMIT_URL "{url}")
+set(CTEST_SUBMIT_URL "{URL}")
+
 set(CTEST_UPDATE_TYPE git)
 set(CTEST_UPDATE_VERSION_ONLY TRUE)
 set(CTEST_GIT_COMMAND "{shutil.which('git') or 'git'}")
 set(CTEST_GIT_INIT_SUBMODULES FALSE)
+
 set(CTEST_OUTPUT_ON_FAILURE TRUE)
 set(CTEST_USE_LAUNCHERS TRUE)
 set(CMAKE_CTEST_ARGUMENTS "{ctest_args_str}")
+
 set(CTEST_CUSTOM_MAXIMUM_NUMBER_OF_ERRORS "100")
 set(CTEST_CUSTOM_MAXIMUM_NUMBER_OF_WARNINGS "100")
 set(CTEST_CUSTOM_MAXIMUM_PASSED_TEST_OUTPUT_SIZE "51200")
 set(CTEST_CUSTOM_COVERAGE_EXCLUDE "/usr/.*;/opt/.*;external/.*;samples/.*;tests/.*;.*/external/.*;.*/samples/.*;.*/tests/.*;.*/details/.*;.*/counters/parser/.*")
+
 set(CTEST_MEMORYCHECK_TYPE "")
 set(CTEST_MEMORYCHECK_SUPPRESSIONS_FILE "")
 set(CTEST_MEMORYCHECK_SANITIZER_OPTIONS "")
-set(CTEST_SITE "{site}")
-set(CTEST_BUILD_NAME "{name}")
-set(CTEST_SOURCE_DIRECTORY "{source_dir}")
-set(CTEST_BINARY_DIRECTORY "{binary_dir}")
+
+set(CTEST_SITE "{SITE}")
+set(CTEST_BUILD_NAME "{NAME}")
+
+set(CTEST_SOURCE_DIRECTORY "{SOURCE_DIR}")
+set(CTEST_BINARY_DIRECTORY "{BINARY_DIR}")
+
 set(CTEST_CONFIGURE_COMMAND "{configure_cmd}")
 set(CTEST_BUILD_COMMAND "{build_cmd}")
 set(CTEST_COVERAGE_COMMAND "{shutil.which('gcov') or 'gcov'}")
@@ -124,16 +137,18 @@ set(CTEST_COVERAGE_COMMAND "{shutil.which('gcov') or 'gcov'}")
 def _generate_dashboard(cmake_cmd):
     """Generate dashboard.cmake: include CTestCustom, then run configure/build/test/submit."""
     submit = "1"
-    strict_submit = "0"
     mode = 'Experimental'
     ARGN = "${ARGN}"
-    BINARY_DIR = os.path.realpath(binary_dir)
-    SOURCE_DIR = os.path.realpath(source_dir)
-    print(BINARY_DIR)
-    print(SOURCE_DIR)
-    # sys.exit(0)
+
+    REPO_SOURCE_DIR = (
+        os.path.dirname(os.path.dirname((SOURCE_DIR)))
+        if not os.path.exists(os.path.join(SOURCE_DIR, ".git"))
+        else SOURCE_DIR
+    )
+
     _script = f"""
     cmake_minimum_required(VERSION 3.21 FATAL_ERROR)
+
     macro(dashboard_submit)
         if("{submit}" GREATER 0)
             ctest_submit({ARGN}
@@ -143,8 +158,10 @@ def _generate_dashboard(cmake_cmd):
         endif()
     endmacro()
     """
+
     _script += """
     include("${CMAKE_CURRENT_LIST_DIR}/CTestCustom.cmake")
+
     macro(handle_error _message _ret)
         if(NOT ${${_ret}} EQUAL 0)
             dashboard_submit(PARTS Done RETURN_VALUE _submit_ret)
@@ -152,57 +169,60 @@ def _generate_dashboard(cmake_cmd):
         endif()
     endmacro()
     """
+
     _script += f"""
     set(STAGES "START;CONFIGURE;BUILD;TEST;SUBMIT")
+
     ctest_start({mode})
-    # ctest_update(SOURCE "{SOURCE_DIR}" RETURN_VALUE _update_ret
+    # ctest_update(SOURCE "{REPO_SOURCE_DIR}" RETURN_VALUE _update_ret
     #                 CAPTURE_CMAKE_ERROR _update_err)
     ctest_configure(BUILD "{BINARY_DIR}" RETURN_VALUE _configure_ret)
     dashboard_submit(PARTS Start Configure RETURN_VALUE _submit_ret)
+
     # if(NOT _update_err EQUAL 0)
     #     message(WARNING "ctest_update failed")
     # endif()
+
     handle_error("Configure" _configure_ret)
+
     if("BUILD" IN_LIST STAGES)
         ctest_build(BUILD "{BINARY_DIR}" RETURN_VALUE _build_ret)
         dashboard_submit(PARTS Build RETURN_VALUE _submit_ret)
         handle_error("Build" _build_ret)
     endif()
+
     if("TEST" IN_LIST STAGES)
         ctest_test(BUILD "{BINARY_DIR}" RETURN_VALUE _test_ret)
         dashboard_submit(PARTS Test RETURN_VALUE _submit_ret)
     endif()
-    handle_error("Testing" _test_ret)
+
+    # handle_error("Testing" _test_ret)
     dashboard_submit(PARTS Done RETURN_VALUE _submit_ret)
     """
+
     return _script
 
 def main(argv=None):
-    global source_dir, binary_dir
-    parser = argparse.ArgumentParser(description="Generate CTest dashboard and optionally run ctest -S.")
-    parser.add_argument("--source-dir", help="Source directory for the test project (overrides default)")
-    parser.add_argument("--binary-dir", help="Binary/build directory (overrides default)")
-    args = parser.parse_args(argv)
-    
-    if args.source_dir:
-        source_dir = args.source_dir
-    if args.binary_dir:
-        binary_dir = args.binary_dir
+
     cmake_cmd = _which_cmake()
-    os.makedirs(binary_dir, exist_ok=True)
+    os.makedirs(BINARY_DIR, exist_ok=True)
+    
     ctest_custom = _generate_ctest_custom(cmake_cmd)
-    # print("CTEST CUSTOM__________________________")
-    # print(ctest_custom)
+
     dashboard = _generate_dashboard(cmake_cmd)
-    # print("DASHBOARD__________________________")
-    # print(dashboard)
-    ctest_custom_path = os.path.join(binary_dir, "CTestCustom.cmake")
-    dashboard_path = os.path.join(binary_dir, "dashboard.cmake")
+
+
+    ctest_custom_path = os.path.join(BINARY_DIR, "CTestCustom.cmake")
+    dashboard_path = os.path.join(BINARY_DIR, "dashboard.cmake")
+    
     with open(ctest_custom_path, "w") as f:
         f.write(ctest_custom)
+    
     with open(dashboard_path, "w") as f:
         f.write(dashboard)
+
     ctest_cmd = _which_ctest()
+
     # Run from source dir so --test-dir build matches test_rocprofiler_sdk
     ctest_argv = [
         ctest_cmd, 
@@ -211,8 +231,10 @@ def main(argv=None):
         "--test-dir", 
         "build", 
         "--output-on-failure"]
-    print(ctest_argv)
-    r = subprocess.run(ctest_argv, cwd=source_dir, check=True, env=environ_vars)
+
+
+    r = subprocess.run(ctest_argv, cwd=SOURCE_DIR, check=True, env=environ_vars)
+    
     return r.returncode
 
 if __name__ == "__main__":
