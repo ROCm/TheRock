@@ -88,7 +88,7 @@ submodules = ["llvm-project", "HIPIFY", "spirv-llvm-translator"]
 
 [source_sets.debug-tools]
 description = "ROCm debug tools submodules"
-submodules = ["amd-dbgapi", "rocgdb", "rocr-debug-agent", "rocr-debug-agent-tests"]
+submodules = ["amd-dbgapi", "rocgdb", "rocr-debug-agent"]
 
 [source_sets.rocm-systems]
 description = "ROCm systems monorepo (runtime, profiler, etc.)"
@@ -225,6 +225,8 @@ source_sets = ["compilers"]
 description = "ROCm debug tools"
 type = "generic"
 artifact_group_deps = ["compiler", "hip-runtime", "third-party-sysdeps"]
+# TODO: rocm-systems included for projects/hip/VERSION (see CMakeLists.txt)
+source_sets = ["debug-tools", "rocm-systems"]
 disable_platforms = ["windows"]
 
 [artifact_groups.hip-runtime]
