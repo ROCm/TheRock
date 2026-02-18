@@ -402,6 +402,7 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("rocprofiler-systems")
         if args.rocwmma:
             extra_artifacts.append("rocwmma")
+            argv.append("rocwmma_dev")
         if args.libhipcxx:
             extra_artifacts.append("libhipcxx")
             argv.append("amd-llvm_dev")
