@@ -224,6 +224,7 @@ jobs:
 
   test_jax_wheels:
     name: Test JAX wheels | ${{ inputs.amdgpu_family }} | ${{ needs.generate_target_to_run.outputs.test_runs_on }}
+    if: ${{ needs.generate_target_to_run.outputs.test_runs_on != '' }}
     needs: [build_jax_wheels, generate_target_to_run]
     permissions:
       contents: read
