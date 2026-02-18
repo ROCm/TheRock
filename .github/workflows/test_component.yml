@@ -114,7 +114,7 @@ jobs:
         run: |
           REQUIREMENTS_FILES=${{ fromJSON(inputs.component).requirements_files }}
           DELIMITER=","
-          IFS="$DELIMITER" read -r -a array <<< "$STRING"
+          IFS="$DELIMITER" read -r -a array <<< "$REQUIREMENTS_FILES"
 
           python -m ensurepip --upgrade
 
