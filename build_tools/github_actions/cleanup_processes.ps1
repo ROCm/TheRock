@@ -136,18 +136,18 @@ if ($currentUser -match "NT AUTHORITY") {
     foreach ($httpCacheDir in $pipHttpCacheDirs) {
         if (Test-Path $httpCacheDir) {
             echo "[*] > Checking pip http-v2 cache under: $httpCacheDir"
-            
+
             $oneDayAgo = (Get-Date).AddDays(-1)
             $oldFiles = @(Get-ChildItem -Path $httpCacheDir -File -Recurse -ErrorAction SilentlyContinue |
                 Where-Object { $_.LastWriteTime -lt $oneDayAgo })
-            
+
             $oldFileCount = $oldFiles.Count
             $oldFileBytes = ($oldFiles | Measure-Object -Property Length -Sum).Sum
             if ($null -eq $oldFileBytes) { $oldFileBytes = 0 }
             $oldFileMB = [math]::Round($oldFileBytes / 1MB, 2)
-            
+
             echo "[*] >> Found $oldFileCount file(s) older than 1 day, total size: $oldFileMB MB"
-            
+
             if ($oldFileCount -gt 0) {
                 try {
                     $oldFiles | Remove-Item -Force -ErrorAction Stop
