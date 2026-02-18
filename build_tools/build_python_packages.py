@@ -72,9 +72,7 @@ def run(args: argparse.Namespace):
             "rocwmma",
             # Third party dependencies needed by hipDNN consumers.
             "flatbuffers",
-            "fmt",
             "nlohmann-json",
-            "spdlog",
         ],
         tarball_compression=args.devel_tarball_compression,
     )

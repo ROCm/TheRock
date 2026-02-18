@@ -96,7 +96,7 @@ class ROCmLibrariesTest(unittest.TestCase):
                 )
 
                 subprocess.check_call(
-                    [sys.executable, "-P", "-c", command, str(so_path)]
+                    [sys.executable, "-c", command, str(so_path)]
                 )
 
     def testConsoleScripts(self):
