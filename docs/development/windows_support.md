@@ -28,6 +28,8 @@ mainline, in open source, using MSVC, etc.).
 > `rocm-libraries` and `rocm-systems`, while others remain standalone repos.
 > The table below lists the canonical upstream location for each component.
 
+<div style="overflow-x:auto">
+
 | Component Group     | Component            | Upstream       | Upstream Location                                                                                | Supported | Notes                                         |
 | ------------------- | -------------------- | -------------- | ------------------------------------------------------------------------------------------------ | --------- | --------------------------------------------- |
 | base                | aux-overlay          | therock        | (in-tree)                                                                                        | ✅        |                                               |
@@ -85,6 +87,8 @@ mainline, in open source, using MSVC, etc.).
 | ml-libs             | hipDNN               | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipdnn                              | ✅        |                                               |
 | ml-libs             | MIOpen Legacy Plugin | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipdnn/plugins/miopen_legacy_plugin | ✅        |                                               |
 | ml-libs             | hipBLASLt Plugin     | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/dnn-providers/hipblaslt-provider             | ✅        |                                               |
+
+</div>
 
 ## Building TheRock from source
 
