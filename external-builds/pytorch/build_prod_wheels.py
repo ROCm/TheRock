@@ -518,6 +518,7 @@ def do_build(args: argparse.Namespace):
     # Build apex.
     # Changed default behavior:
     # Only build apex for torch 2.10 and disable otherwise until #3413 is resolved
+    # changes were also needed in: build_tools/github_actions/write_torch_versions.py
     if args.build_apex is None and apex_dir:
         if pytorch_dir:
             # < this is just copied from do_build_pytorch() >

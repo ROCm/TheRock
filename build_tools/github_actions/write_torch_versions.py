@@ -11,6 +11,7 @@ import argparse
 import os
 import glob
 import platform
+from packaging.version import parse
 from github_actions_utils import *
 
 
@@ -89,7 +90,15 @@ def get_all_wheel_versions(
     elif os.lower() == "windows":
         _log("Did not find apex (that's okay, is not currently built on Windows)")
     else:
-        raise FileNotFoundError("Did not find apex wheel")
+        # Apex is only built for torch >= 2.10 and disabled otherwise until #3413 is resolved
+        torch_version_parsed = parse(torch_version)
+        is_torch_less_than_2_10 = torch_version_parsed.release[:2] < (2, 10)
+        if is_torch_less_than_2_10:
+            _log(
+                "Did not find apex (that's okay, apex is not built for torch versions < 2.10  on linux)"
+            )
+        else:
+            raise FileNotFoundError("Did not find apex wheel")
 
     return all_versions
 
