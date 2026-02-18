@@ -94,7 +94,8 @@ jobs:
       - name: Fetch inbound artifacts
         if: ${{ !github.event.pull_request.head.repo.fork }}
         run: |
-          python build_tools/artifact_manager.py fetch --run-id ${{ github.run_id }} \
+          python build_tools/artifact_manager.py fetch \
+            --run-id=${{ github.run_id }} \
             --stage="${STAGE_NAME}" \
             --amdgpu-families="${{ inputs.amdgpu_family }}" \
             --output-dir="${BUILD_DIR}" \
