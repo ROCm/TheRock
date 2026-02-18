@@ -1,0 +1,3 @@
+Package: *
+Pin: release o=Artifactory
+Pin-Priority: 600
