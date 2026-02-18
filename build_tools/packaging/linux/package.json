@@ -175,8 +175,7 @@
       }
     ],
     "Gfxarch": "False",
-    "Disable_RPM_STRIP": "True",
-    "Disable_DEB_STRIP": "True"
+    "Disable_RPM_STRIP": "True"
   },
   {
     "Package": "amdrocm-runtime",
