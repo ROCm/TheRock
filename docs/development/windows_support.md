@@ -28,63 +28,63 @@ mainline, in open source, using MSVC, etc.).
 > `rocm-libraries` and `rocm-systems`, while others remain standalone repos.
 > The table below lists the canonical upstream location for each component.
 
-| Component Group | Component | Upstream | Upstream Location | Supported | Notes |
-| ------------------- | --------------------------- | -------------- | ------------------------------------------------------------------------------------------------- | --------- | --------------------------------------------- |
-| base | aux-overlay | therock | (in-tree) | ✅ | |
-| base | rocm-cmake | standalone | https://github.com/ROCm/rocm-cmake | ✅ | |
-| base | rocm-core | rocm-systems | https://github.com/ROCm/rocm-systems/tree/develop/projects/rocm-core | ✅ | |
-| base | rocm_smi_lib | rocm-systems | https://github.com/ROCm/rocm-systems/tree/develop/projects/rocm-smi-lib | ❌ | Unsupported |
-| base | rocprofiler-register | rocm-systems | https://github.com/ROCm/rocm-systems/tree/develop/projects/rocprofiler-register | ❌ | Unsupported |
-| base | rocm-half | standalone | https://github.com/ROCm/half | ✅ | |
-| | | | | | |
-| compiler | amd-llvm | llvm-project | https://github.com/ROCm/llvm-project | ✅ | Limited runtimes |
-| compiler | amd-comgr | llvm-project | https://github.com/ROCm/llvm-project/tree/amd-staging/amd/comgr | ✅ | |
-| compiler | hipcc | llvm-project | https://github.com/ROCm/llvm-project/tree/amd-staging/amd/hipcc | ✅ | |
-| compiler | hipify | standalone | https://github.com/ROCm/HIPIFY | ✅ | |
-| | | | | | |
-| core | amdsmi | rocm-systems | https://github.com/ROCm/rocm-systems/tree/develop/projects/amdsmi | ❌ | Unsupported |
-| core | ROCR-Runtime | rocm-systems | https://github.com/ROCm/rocm-systems/tree/develop/projects/rocr-runtime | ❌ | Unsupported |
-| core | rocminfo | rocm-systems | https://github.com/ROCm/rocm-systems/tree/develop/projects/rocminfo | ❌ | Unsupported |
-| core | hipInfo (hip-tests) | rocm-systems | https://github.com/ROCm/rocm-systems/tree/develop/projects/hip-tests | ✅ | |
-| core | clr | rocm-systems | https://github.com/ROCm/rocm-systems/tree/develop/projects/clr | 🟡 | Needs a folder with prebuilt static libraries |
-| | | | | | |
-| debug-tools | amd-dbgapi | standalone | https://github.com/ROCm/ROCdbgapi | ❌ | Unsupported |
-| debug-tools | rocr-debug-agent | standalone | https://github.com/ROCm/rocr_debug_agent | ❌ | Unsupported |
-| debug-tools | rocgdb | standalone | https://github.com/ROCm/rocgdb | ❌ | Unsupported |
-| | | | | | |
-| profiler | aqlprofile | rocm-systems | https://github.com/ROCm/rocm-systems/tree/develop/projects/aqlprofile | ❌ | Unsupported |
-| profiler | rocprofiler-sdk | rocm-systems | https://github.com/ROCm/rocm-systems/tree/develop/projects/rocprofiler-sdk | ❌ | Unsupported |
-| profiler | rocprofiler-compute | rocm-systems | https://github.com/ROCm/rocm-systems/tree/develop/projects/rocprofiler-compute | ❌ | Unsupported |
-| profiler | rocprofiler-systems | rocm-systems | https://github.com/ROCm/rocm-systems/tree/develop/projects/rocprofiler-systems | ❌ | Unsupported |
-| | | | | | |
-| comm-libs | rccl | rocm-systems | https://github.com/ROCm/rocm-systems/tree/develop/projects/rccl | ❌ | Unsupported |
-| | | | | | |
-| math-libs | rocRAND | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/projects/rocrand | ✅ | |
-| math-libs | hipRAND | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/projects/hiprand | ✅ | |
-| math-libs | rocPRIM | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/projects/rocprim | ✅ | |
-| math-libs | hipCUB | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipcub | ✅ | |
-| math-libs | rocThrust | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/projects/rocthrust | ✅ | |
-| math-libs | rocFFT | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/projects/rocfft | ✅ | |
-| math-libs | hipFFT | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipfft | ✅ | |
-| math-libs (support) | mxDataGenerator | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/shared/mxdatagenerator | ❌ | Unsupported |
-| math-libs (BLAS) | hipBLAS-common | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipblas-common | ✅ | |
-| math-libs (BLAS) | rocRoller | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/shared/rocroller | ❌ | Unsupported |
-| math-libs (BLAS) | hipBLASLt | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipblaslt | ✅ | |
-| math-libs (BLAS) | rocBLAS | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/projects/rocblas | ✅ | |
-| math-libs (BLAS) | rocSPARSE | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/projects/rocsparse | ✅ | |
-| math-libs (BLAS) | hipSPARSE | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipsparse | ✅ | |
-| math-libs (BLAS) | hipSPARSELt | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipsparselt | ❌ | Unsupported |
-| math-libs (BLAS) | rocSOLVER | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/projects/rocsolver | ✅ | |
-| math-libs (BLAS) | hipSOLVER | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipsolver | ✅ | |
-| math-libs (BLAS) | hipBLAS | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipblas | ✅ | |
-| math-libs | rocWMMA | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/projects/rocwmma | ✅ | |
-| math-libs | libhipcxx | standalone | https://github.com/ROCm/libhipcxx | ❌ | Unsupported |
-| | | | | | |
-| ml-libs | Composable Kernel | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/projects/composablekernel | ❌ | Unsupported |
-| ml-libs | MIOpen | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/projects/miopen | ✅ | |
-| ml-libs | hipDNN | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipdnn | ✅ | |
-| ml-libs | MIOpen Legacy Plugin | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipdnn/plugins/miopen_legacy_plugin | ✅ | |
-| ml-libs | hipBLASLt Plugin | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/dnn-providers/hipblaslt-provider | ✅ | |
+| Component Group     | Component            | Upstream       | Upstream Location                                                                                | Supported | Notes                                         |
+| ------------------- | -------------------- | -------------- | ------------------------------------------------------------------------------------------------ | --------- | --------------------------------------------- |
+| base                | aux-overlay          | therock        | (in-tree)                                                                                        | ✅        |                                               |
+| base                | rocm-cmake           | standalone     | https://github.com/ROCm/rocm-cmake                                                               | ✅        |                                               |
+| base                | rocm-core            | rocm-systems   | https://github.com/ROCm/rocm-systems/tree/develop/projects/rocm-core                             | ✅        |                                               |
+| base                | rocm_smi_lib         | rocm-systems   | https://github.com/ROCm/rocm-systems/tree/develop/projects/rocm-smi-lib                          | ❌        | Unsupported                                   |
+| base                | rocprofiler-register | rocm-systems   | https://github.com/ROCm/rocm-systems/tree/develop/projects/rocprofiler-register                  | ❌        | Unsupported                                   |
+| base                | rocm-half            | standalone     | https://github.com/ROCm/half                                                                     | ✅        |                                               |
+|                     |                      |                |                                                                                                  |           |                                               |
+| compiler            | amd-llvm             | llvm-project   | https://github.com/ROCm/llvm-project                                                             | ✅        | Limited runtimes                              |
+| compiler            | amd-comgr            | llvm-project   | https://github.com/ROCm/llvm-project/tree/amd-staging/amd/comgr                                  | ✅        |                                               |
+| compiler            | hipcc                | llvm-project   | https://github.com/ROCm/llvm-project/tree/amd-staging/amd/hipcc                                  | ✅        |                                               |
+| compiler            | hipify               | standalone     | https://github.com/ROCm/HIPIFY                                                                   | ✅        |                                               |
+|                     |                      |                |                                                                                                  |           |                                               |
+| core                | amdsmi               | rocm-systems   | https://github.com/ROCm/rocm-systems/tree/develop/projects/amdsmi                                | ❌        | Unsupported                                   |
+| core                | ROCR-Runtime         | rocm-systems   | https://github.com/ROCm/rocm-systems/tree/develop/projects/rocr-runtime                          | ❌        | Unsupported                                   |
+| core                | rocminfo             | rocm-systems   | https://github.com/ROCm/rocm-systems/tree/develop/projects/rocminfo                              | ❌        | Unsupported                                   |
+| core                | hipInfo (hip-tests)  | rocm-systems   | https://github.com/ROCm/rocm-systems/tree/develop/projects/hip-tests                             | ✅        |                                               |
+| core                | clr                  | rocm-systems   | https://github.com/ROCm/rocm-systems/tree/develop/projects/clr                                   | 🟡        | Needs a folder with prebuilt static libraries |
+|                     |                      |                |                                                                                                  |           |                                               |
+| debug-tools         | amd-dbgapi           | standalone     | https://github.com/ROCm/ROCdbgapi                                                                | ❌        | Unsupported                                   |
+| debug-tools         | rocr-debug-agent     | standalone     | https://github.com/ROCm/rocr_debug_agent                                                         | ❌        | Unsupported                                   |
+| debug-tools         | rocgdb               | standalone     | https://github.com/ROCm/rocgdb                                                                   | ❌        | Unsupported                                   |
+|                     |                      |                |                                                                                                  |           |                                               |
+| profiler            | aqlprofile           | rocm-systems   | https://github.com/ROCm/rocm-systems/tree/develop/projects/aqlprofile                            | ❌        | Unsupported                                   |
+| profiler            | rocprofiler-sdk      | rocm-systems   | https://github.com/ROCm/rocm-systems/tree/develop/projects/rocprofiler-sdk                       | ❌        | Unsupported                                   |
+| profiler            | rocprofiler-compute  | rocm-systems   | https://github.com/ROCm/rocm-systems/tree/develop/projects/rocprofiler-compute                   | ❌        | Unsupported                                   |
+| profiler            | rocprofiler-systems  | rocm-systems   | https://github.com/ROCm/rocm-systems/tree/develop/projects/rocprofiler-systems                   | ❌        | Unsupported                                   |
+|                     |                      |                |                                                                                                  |           |                                               |
+| comm-libs           | rccl                 | rocm-systems   | https://github.com/ROCm/rocm-systems/tree/develop/projects/rccl                                  | ❌        | Unsupported                                   |
+|                     |                      |                |                                                                                                  |           |                                               |
+| math-libs           | rocRAND              | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/projects/rocrand                             | ✅        |                                               |
+| math-libs           | hipRAND              | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/projects/hiprand                             | ✅        |                                               |
+| math-libs           | rocPRIM              | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/projects/rocprim                             | ✅        |                                               |
+| math-libs           | hipCUB               | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipcub                              | ✅        |                                               |
+| math-libs           | rocThrust            | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/projects/rocthrust                           | ✅        |                                               |
+| math-libs           | rocFFT               | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/projects/rocfft                              | ✅        |                                               |
+| math-libs           | hipFFT               | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipfft                              | ✅        |                                               |
+| math-libs (support) | mxDataGenerator      | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/shared/mxdatagenerator                       | ❌        | Unsupported                                   |
+| math-libs (BLAS)    | hipBLAS-common       | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipblas-common                      | ✅        |                                               |
+| math-libs (BLAS)    | rocRoller            | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/shared/rocroller                             | ❌        | Unsupported                                   |
+| math-libs (BLAS)    | hipBLASLt            | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipblaslt                           | ✅        |                                               |
+| math-libs (BLAS)    | rocBLAS              | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/projects/rocblas                             | ✅        |                                               |
+| math-libs (BLAS)    | rocSPARSE            | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/projects/rocsparse                           | ✅        |                                               |
+| math-libs (BLAS)    | hipSPARSE            | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipsparse                           | ✅        |                                               |
+| math-libs (BLAS)    | hipSPARSELt          | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipsparselt                         | ❌        | Unsupported                                   |
+| math-libs (BLAS)    | rocSOLVER            | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/projects/rocsolver                           | ✅        |                                               |
+| math-libs (BLAS)    | hipSOLVER            | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipsolver                           | ✅        |                                               |
+| math-libs (BLAS)    | hipBLAS              | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipblas                             | ✅        |                                               |
+| math-libs           | rocWMMA              | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/projects/rocwmma                             | ✅        |                                               |
+| math-libs           | libhipcxx            | standalone     | https://github.com/ROCm/libhipcxx                                                                | ❌        | Unsupported                                   |
+|                     |                      |                |                                                                                                  |           |                                               |
+| ml-libs             | Composable Kernel    | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/projects/composablekernel                    | ❌        | Unsupported                                   |
+| ml-libs             | MIOpen               | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/projects/miopen                              | ✅        |                                               |
+| ml-libs             | hipDNN               | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipdnn                              | ✅        |                                               |
+| ml-libs             | MIOpen Legacy Plugin | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipdnn/plugins/miopen_legacy_plugin | ✅        |                                               |
+| ml-libs             | hipBLASLt Plugin     | rocm-libraries | https://github.com/ROCm/rocm-libraries/tree/develop/dnn-providers/hipblaslt-provider             | ✅        |                                               |
 
 ## Building TheRock from source
 
