@@ -114,6 +114,7 @@ amdgpu_family_info_matrix_all = {
                         # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
                         "benchmark": "linux-mi325-8gpu-ossci-rocm",
                     },
+                    "test_blender": True,
                 },
                 "release": {
                     "push_on_success": True,

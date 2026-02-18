@@ -1,0 +1,19 @@
+# Blender Cycles HIP test scenes
+# Format: <scene_name_without_extension> <frame_number>
+#
+# The scenes archive is expected to have the following layout:
+#   <scenes-dir>/
+#   ├── <scene_name>.blend            # Scene files (top level)
+#   ├── <scene_name>_flags.abc        # Alembic cache (optional)
+#   ├── pabellon_barcelona/           # Scene with external textures (optional)
+#   │   ├── pavillon_barcelone_gpu.blend
+#   │   └── textures/
+#   └── ref/                          # Reference images (optional)
+#       └── <scene_name>_<frame>.png  # <frame> is zero-padded to 3 digits, e.g. 001
+
+290skydemo_release 1
+barbershop_interior_gpu 1
+flat-archiviz 1
+laundromat 1
+monster_under_the_bed_sss_demo_by_metin_seven 1
+pabellon_barcelona/pavillon_barcelone_gpu 1

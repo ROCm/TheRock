@@ -501,6 +501,9 @@ def matrix_generator(
                     not expect_failure and not expect_pytorch_failure
                 )
 
+                # Propagate test_blender flag from the family matrix.
+                matrix_row["test_blender"] = matrix_row.get("test_blender", False)
+
                 del matrix_row["build_variants"]
                 matrix_row.update(build_variant_info)
 

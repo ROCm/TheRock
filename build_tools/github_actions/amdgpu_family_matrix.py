@@ -65,6 +65,7 @@ amdgpu_family_info_matrix_presubmit = {
             "benchmark-runs-on": "linux-mi325-8gpu-ossci-rocm",
             "family": "gfx94X-dcgpu",
             "build_variants": ["release", "asan", "tsan"],
+            "test_blender": True,
         }
     },
     "gfx110x": {

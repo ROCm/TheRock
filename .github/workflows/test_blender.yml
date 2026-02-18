@@ -1,0 +1,179 @@
+name: Test Blender HIP Rendering
+
+on:
+  workflow_dispatch:
+    inputs:
+      amdgpu_family:
+        description: GPU family to test
+        required: true
+        type: string
+        default: "gfx94X-dcgpu"
+      test_runs_on:
+        description: Runner label to use. The selected runner should have a GPU supported by amdgpu_family
+        required: true
+        type: string
+        default: "linux-mi325-1gpu-ossci-rocm"
+      blender_version:
+        description: Blender version to download (e.g. "4.5.6")
+        required: true
+        type: string
+        default: "4.5.6"
+      scenes_url:
+        description: URL to download scene files archive (.tar.xz). Must contain .blend files and optionally a ref/ directory with reference images
+        required: false
+        type: string
+        default: ""
+      rocm_package_find_links_url:
+        description: URL for ROCm Python package find-links
+        required: true
+        type: string
+
+  workflow_call:
+    inputs:
+      amdgpu_family:
+        required: true
+        type: string
+      test_runs_on:
+        required: true
+        type: string
+      blender_version:
+        type: string
+        default: "4.5.6"
+      scenes_url:
+        description: URL to download scene files archive (.tar.xz)
+        type: string
+        default: ""
+      rocm_package_find_links_url:
+        required: true
+        type: string
+      repository:
+        description: "Repository to checkout. Otherwise, defaults to `github.repository`."
+        type: string
+      ref:
+        description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
+        type: string
+
+permissions:
+  contents: read
+
+run-name: Test Blender HIP (${{ inputs.amdgpu_family }}, blender-${{ inputs.blender_version }}, ${{ inputs.test_runs_on }})
+
+jobs:
+  test_blender:
+    name: Test Blender HIP | ${{ inputs.amdgpu_family }}
+    runs-on: ${{ inputs.test_runs_on }}
+    container:
+      image: ${{ contains(inputs.test_runs_on, 'linux') && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26' || null }}
+      # --ulimit memlock=-1:-1 - Required for HSA (ROCm runtime) initialization
+      # --security-opt seccomp=unconfined - enables memory mapping for HPC workloads
+      # --env-file /etc/podinfo/gha-gpu-isolation-settings - Required for GPU isolation on OSSCI runners
+      # --user 0:0 - Running as root, by recommendation of GitHub
+      options: --ipc host
+        --group-add video
+        --device /dev/kfd
+        --device /dev/dri
+        --group-add 992
+        --group-add 110
+        --ulimit memlock=-1:-1
+        --security-opt seccomp=unconfined
+        --env-file /etc/podinfo/gha-gpu-isolation-settings
+        --user 0:0
+    defaults:
+      run:
+        shell: bash
+    env:
+      VENV_DIR: ${{ github.workspace }}/.venv
+      AMDGPU_FAMILY: ${{ inputs.amdgpu_family }}
+      BLENDER_VERSION: ${{ inputs.blender_version }}
+      SCENES_URL: ${{ inputs.scenes_url }}
+      ROCM_PACKAGE_FIND_LINKS_URL: ${{ inputs.rocm_package_find_links_url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || '' }}
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: 3.12
+
+      - name: Set up virtual environment
+        run: |
+          python build_tools/setup_venv.py ${VENV_DIR} \
+            --packages rocm \
+            --find-links="${ROCM_PACKAGE_FIND_LINKS_URL}" \
+            --activate-in-future-github-actions-steps
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install -r external-builds/blender/requirements.txt
+          pip freeze
+
+      - name: Download Blender
+        run: |
+          BLENDER_MAJOR_MINOR=$(echo "${BLENDER_VERSION}" | cut -d. -f1,2)
+          BLENDER_TARBALL="blender-${BLENDER_VERSION}-linux-x64.tar.xz"
+          BLENDER_URL="https://download.blender.org/release/Blender${BLENDER_MAJOR_MINOR}/${BLENDER_TARBALL}"
+
+          echo "Downloading Blender ${BLENDER_VERSION} from ${BLENDER_URL}"
+          wget -q "${BLENDER_URL}"
+          tar xf "${BLENDER_TARBALL}"
+          rm "${BLENDER_TARBALL}"
+
+          echo "Blender extracted to: blender-${BLENDER_VERSION}-linux-x64/"
+          ls -la "blender-${BLENDER_VERSION}-linux-x64/"
+
+      - name: Download scene files
+        if: ${{ inputs.scenes_url != '' }}
+        run: |
+          mkdir -p scenes
+          echo "Downloading scenes from ${SCENES_URL}"
+          wget -q -O scenes.tar.xz "${SCENES_URL}"
+          tar xf scenes.tar.xz -C scenes
+          rm scenes.tar.xz
+
+          BLEND_COUNT=$(find scenes -name "*.blend" | wc -l)
+          if [ "${BLEND_COUNT}" -eq 0 ]; then
+            echo "ERROR: No .blend files found after unpacking scene archive"
+            ls -laR scenes/
+            exit 1
+          fi
+          echo "Found ${BLEND_COUNT} scene file(s):"
+          find scenes -name "*.blend"
+
+      - name: Run rocm-sdk sanity tests
+        run: |
+          rocm-sdk test
+
+      - name: Run Blender HIP tests
+        run: |
+          SCENES_DIR="scenes"
+          REF_ARGS=""
+
+          if [ ! -d "${SCENES_DIR}" ]; then
+            echo "ERROR: No scenes directory found."
+            echo "Set scenes_url input to provide scene files."
+            exit 1
+          fi
+
+          # Use reference images if available
+          if [ -d "${SCENES_DIR}/ref" ]; then
+            REF_ARGS="--ref-dir ${SCENES_DIR}/ref"
+          fi
+
+          python external-builds/blender/run_blender_tests.py \
+            --blender-dir "./blender-${BLENDER_VERSION}-linux-x64" \
+            --scenes-dir "${SCENES_DIR}" \
+            --scenes-file external-builds/blender/scenes.txt \
+            --output-dir blender-test-results \
+            ${REF_ARGS}
+
+      - name: Upload Blender test results
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: blender-test-results-${{ inputs.amdgpu_family }}
+          path: blender-test-results/
