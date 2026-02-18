@@ -160,7 +160,7 @@ if ($currentUser -match "NT AUTHORITY") {
                 $emptyDirs = @(Get-ChildItem -Path $httpCacheDir -Directory -Recurse -ErrorAction SilentlyContinue |
                     Where-Object { (Get-ChildItem -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue).Count -eq 0 } |
                     Sort-Object -Property FullName -Descending)
-                
+
                 if ($emptyDirs.Count -gt 0) {
                     try {
                         $emptyDirs | Remove-Item -Force -ErrorAction Stop
