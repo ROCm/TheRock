@@ -1,0 +1,40 @@
+name: Hip tagging automation
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  tag-rocm-systems:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout ROCm/TheRock
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
+        with:
+          python-version: '3.11'
+
+      - name: Generate GitHub App token
+        uses: actions/create-github-app-token@7e473efe3cb98aa54f8d4bac15400b15fad77d94 # v2.2.0
+        id: generate-token
+        with:
+          app-id: ${{ secrets.PULL_REQUEST_APP_ID }}
+          private-key: ${{ secrets.PULL_REQUEST_APP_KEY }}
+
+      - name: Install dependencies
+        run: |
+          pip install PyGithub
+
+      - name: Run tagging script
+        run: |
+          python build_tools/github_actions/hip_tagging_helper.py \
+            --repo "${{ github.repository }}" \
+            --before "${{ github.event.before }}" \
+            --after "${{ github.sha }}" \
+            --pat "${{ steps.generate-token.outputs.token }}"
