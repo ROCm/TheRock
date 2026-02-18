@@ -2,8 +2,8 @@ name: Build Linux Runfile Installer
 
 on:
   push: 
-  # workflow_call:
-  #   inputs:
+  workflow_call:
+    inputs:
   #     artifact_group:
   #       description: gfx arch group for the s3 server
   #       type: string
@@ -16,12 +16,12 @@ on:
   #       description: ROCm version to append to the package (8.0.0, 8.0.1rc1, ...).
   #       required: true
   #       type: string
-  #     release_type:
-  #       description: The type of release to build ("dev", "nightly", or "prerelease"). All developer-triggered jobs should use "dev"!
-  #       required: false
-  #       type: string
-  # workflow_dispatch:
-  #   inputs:
+      release_type:
+        description: The type of release to build ("dev", "nightly", or "prerelease"). All developer-triggered jobs should use "dev"!
+        required: false
+        type: string
+  workflow_dispatch:
+    inputs:
   #     artifact_group:
   #       type: string
   #       default: gfx94X-dcgpu
@@ -32,17 +32,17 @@ on:
   #       description: ROCm version to append to the package (8.0.0, 8.0.1rc1, ...).
   #       type: string
   #       default: "0.0.1"
-  #     release_type:
-  #       description: The type of release to build ("dev", "nightly", or "prerelease"). All developer-triggered jobs should use "dev"!
-  #       type: string
-  #       default: "dev"
+      release_type:
+        description: The type of release to build ("dev", "nightly", or "prerelease"). All developer-triggered jobs should use "dev"!
+        type: string
+        default: "dev"
 
 permissions:
   id-token: write
   contents: read
 
 # run-name: Build Linux Runfile Installer (${{ inputs.artifact_group }}, ${{ inputs.rocm_version }}, ${{ inputs.native_package_type }}, ${{ inputs.package_suffix }}, ${{ inputs.release_type }})
-run-name: Build Linux Runfile Installer Test job
+run-name: Build Linux Runfile Installer Test job ${{ inputs.release_type }})
 
 jobs:
   build_linux_runfile_installer:
@@ -101,10 +101,12 @@ jobs:
       #       --version-suffix ${{ env.ARTIFACT_RUN_ID }}
 
       - name: Run setup-installer.sh
-        run: bash ./build_tools/packaging/runfile-installer/setup-installer.sh rocm rocm-archs=gfx110x pull=prereleases pullbuild=7.11 pullrocmver=7.11
+        run: |
+          pushd build_tools/packaging/runfile-installer/
+          bash setup-installer.sh rocm rocm-archs=gfx110x pull=prereleases pullbuild=7.11 pullrocmver=7.11
       
       - name: Run build-installer.sh
-        run: bash ./build_tools/packaging/runfile-installer/build-installer.sh noamdgpu
+        run: bash build-installer.sh noamdgpu
 
       - name: Show .run file
         run: find . -name "*.run" -type f
