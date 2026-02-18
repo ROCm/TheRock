@@ -7,7 +7,7 @@
 # 4. comm-libs (per-arch) - RCCL (parallel to math-libs)
 # 5. dctools-core (generic) - RDC (parallel to math-libs)
 # 6. profiler-apps (generic) - rocprofiler-systems (parallel to math-libs)
-# 7. media (generic) - sysdeps-amd-mesa, rocdecode (todo), rocjpeg (todo)
+# 7. media-libs (generic) - sysdeps-amd-mesa, rocdecode, rocjpeg
 
 name: Multi-Arch Build (Linux)
 
@@ -160,13 +160,13 @@ jobs:
   # ==========================================================================
   # STAGE: media-libs (generic)
   # ==========================================================================
-  media:
+  media-libs:
     needs: foundation
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
-      stage_name: media
-      stage_display_name: "Stage - Media"
+      stage_name: media-libs
+      stage_display_name: "Stage - Media Libs"
       timeout_minutes: 180  # 3 hours
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
