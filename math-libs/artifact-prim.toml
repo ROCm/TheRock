@@ -22,6 +22,9 @@ include = [
 # rocThrust
 [components.dbg."math-libs/rocThrust/stage"]
 [components.dev."math-libs/rocThrust/stage"]
+include = [
+  "thrust/*",
+]
 [components.doc."math-libs/rocThrust/stage"]
 [components.test."math-libs/rocThrust/stage"]
 include = [
