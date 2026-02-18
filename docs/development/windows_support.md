@@ -24,9 +24,11 @@ Windows. Some subprojects may need extra patches to build within TheRock (on
 mainline, in open source, using MSVC, etc.).
 
 > [!NOTE]
-> Some ROCm components are now developed inside super-repositories such as
-> `rocm-libraries` and `rocm-systems`, while others remain standalone repos.
-> The table below lists the canonical upstream location for each component.
+> Many ROCm components are now developed inside super-repositories such as
+> [rocm-libraries](https://github.com/ROCm/rocm-libraries) and
+> [rocm-systems](https://github.com/ROCm/rocm-systems), while others remain
+> standalone repositories. The table below lists the canonical upstream location for
+> each component.
 
 | Component group     | Component                                                                                                                | Upstream       | Supported | Notes                                         |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------ | -------------- | --------- | --------------------------------------------- |
