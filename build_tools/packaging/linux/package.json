@@ -528,6 +528,98 @@
     "Gfxarch": "True"
   },
   {
+    "Package": "amdrocm-solver-test",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-runtime",
+      "amdrocm-blas"
+    ],
+    "RPMRequires": [
+      "amdrocm-runtime",
+      "amdrocm-blas"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "AMD library for BLAS in ROCm",
+    "Description_Long": "BLAS libraries which includes hipBlAS, rocBLAS, hipBLASLt and hipSPARSELt",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Artifactory": [
+      {
+        "Artifact": "blas",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocSOLVER",
+            "Components": [
+              "test"
+            ]
+          },
+          {
+            "Name": "hipSOLVER",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "True"
+  },
+  {
+    "Package": "amdrocm-sparse-test",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-runtime",
+      "amdrocm-blas"
+    ],
+    "RPMRequires": [
+      "amdrocm-runtime",
+      "amdrocm-blas"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "AMD library for BLAS in ROCm",
+    "Description_Long": "BLAS libraries which includes hipBlAS, rocBLAS, hipBLASLt and hipSPARSELt",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Artifactory": [
+      {
+        "Artifact": "blas",
+        "Artifact_Subdir": [
+          {
+            "Name": "hipSPARSELt",
+            "Components": [
+              "test"
+            ]
+          },
+          {
+            "Name": "rocSPARSE",
+            "Components": [
+              "test"
+            ]
+          },
+          {
+            "Name": "hipSPARSE",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "True"
+  },
+  {
     "Package": "amdrocm-blas-test",
     "Version": "",
     "Architecture": "amd64",
@@ -574,36 +666,6 @@
 
           {
             "Name": "hipBLASLt",
-            "Components": [
-              "test"
-            ]
-          },
-          {
-            "Name": "hipSPARSELt",
-            "Components": [
-              "test"
-            ]
-          },
-          {
-            "Name": "rocSOLVER",
-            "Components": [
-              "test"
-            ]
-          },
-          {
-            "Name": "hipSOLVER",
-            "Components": [
-              "test"
-            ]
-          },
-          {
-            "Name": "rocSPARSE",
-            "Components": [
-              "test"
-            ]
-          },
-          {
-            "Name": "hipSPARSE",
             "Components": [
               "test"
             ]
