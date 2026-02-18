@@ -544,21 +544,72 @@ def do_build(args: argparse.Namespace):
         cmake_prefix, rocm_dir, pytorch_rocm_arch, triton_dir, is_windows
     )
 
+    sccache_setup_attempted = False
+
     if args.use_ccache:
         print("Building with ccache, clearing stats first")
         env["CMAKE_C_COMPILER_LAUNCHER"] = "ccache"
         env["CMAKE_CXX_COMPILER_LAUNCHER"] = "ccache"
         run_command(["ccache", "--zero-stats"], cwd=tempfile.gettempdir())
+    elif args.use_sccache:
+        print("Setting up sccache with ROCm compiler wrapping...")
+        build_tools_dir = Path(__file__).resolve().parent.parent.parent / "build_tools"
+        sys.path.insert(0, str(build_tools_dir))
 
-    _do_build_wheels_core(
-        args,
-        env,
-        triton_dir,
-        pytorch_dir,
-        pytorch_audio_dir,
-        pytorch_vision_dir,
-        apex_dir,
-    )
+        from setup_sccache_rocm import (
+            find_sccache,
+            restore_rocm_compilers,
+            setup_rocm_sccache,
+        )
+
+        sccache_path = find_sccache()
+        if not sccache_path:
+            raise RuntimeError(
+                "sccache not found. Please install it:\n"
+                "  - Linux: sccache should be pre-installed in the Docker image\n"
+                "  - Windows: choco install sccache"
+            )
+
+        sccache_setup_attempted = True
+        setup_rocm_sccache(rocm_dir, sccache_path)
+
+        # CMAKE launchers for C/C++ host code.
+        # CMAKE_HIP_COMPILER_LAUNCHER is NOT set because sccache returns
+        # "Compiler not supported" — HIP caching on Linux is handled by
+        # the wrapper scripts created by setup_rocm_sccache() instead.
+        env["CMAKE_C_COMPILER_LAUNCHER"] = str(sccache_path)
+        env["CMAKE_CXX_COMPILER_LAUNCHER"] = str(sccache_path)
+
+        try:
+            run_command(
+                [str(sccache_path), "--start-server"], cwd=tempfile.gettempdir()
+            )
+        except subprocess.CalledProcessError:
+            pass  # Server may already be running
+
+        run_command([str(sccache_path), "--zero-stats"], cwd=tempfile.gettempdir())
+
+    try:
+        _do_build_wheels_core(
+            args,
+            env,
+            triton_dir,
+            pytorch_dir,
+            pytorch_audio_dir,
+            pytorch_vision_dir,
+            apex_dir,
+        )
+    finally:
+        if args.use_sccache and sccache_setup_attempted:
+            print("Restoring ROCm compilers after sccache build...")
+            try:
+                restore_rocm_compilers(rocm_dir)
+            except Exception as e:
+                print(f"Warning: Failed to restore compilers: {e}")
+            sccache_stats = capture(
+                [str(sccache_path), "--show-stats"], cwd=tempfile.gettempdir()
+            )
+            print(f"sccache --show-stats output:\n{sccache_stats}")
 
     if args.use_ccache:
         ccache_stats_output = capture(
@@ -1063,10 +1114,18 @@ def main(argv: list[str]):
         required=True,
         help="Directory to copy built wheels to",
     )
-    build_p.add_argument(
+    cache_group = build_p.add_mutually_exclusive_group()
+    cache_group.add_argument(
         "--use-ccache",
-        action=argparse.BooleanOptionalAction,
+        action="store_true",
+        default=False,
         help="Use ccache as the compiler launcher",
+    )
+    cache_group.add_argument(
+        "--use-sccache",
+        action="store_true",
+        default=False,
+        help="Use sccache as the compiler launcher (with ROCm compiler wrapping on Linux)",
     )
     build_p.add_argument(
         "--pytorch-dir",
