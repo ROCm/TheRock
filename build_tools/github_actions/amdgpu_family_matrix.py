@@ -18,6 +18,10 @@ from github_actions_utils import str2bool
 import json
 import os
 
+#############################################################################################
+# NOTE: when doing changes here, also check that they are done in new_amdgpu_family_matrix.py
+#############################################################################################
+
 all_build_variants = {
     "linux": {
         "release": {
@@ -54,6 +58,8 @@ amdgpu_family_info_matrix_presubmit = {
     "gfx94x": {
         "linux": {
             "test-runs-on": "linux-mi325-1gpu-ossci-rocm",
+            # TODO(#3433): Remove sandbox label once ASAN tests are passing
+            "test-runs-on-sandbox": "linux-mi325-8gpu-ossci-rocm-sandbox",
             "test-runs-on-multi-gpu": "linux-mi325-8gpu-ossci-rocm",
             # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
             "benchmark-runs-on": "linux-mi325-8gpu-ossci-rocm",

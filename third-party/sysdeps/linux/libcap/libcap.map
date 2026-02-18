@@ -81,8 +81,6 @@ LIBCAP_2.69 {
     cap_copy_int_check;
 
     /* System calls - cap_proc.c and libc wrappers */
-    capget;
-    capset;
     capgetp;
     capsetp;
 

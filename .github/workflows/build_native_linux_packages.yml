@@ -69,7 +69,7 @@ jobs:
       fail-fast: false
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     env:
-      BUILD_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:db2b63f938941dde2abc80b734e64b45b9995a282896d513a0f3525d4591d6cb
+      BUILD_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:d6ae5712a9c7e8b88281d021e907b312cd8a26295b95690baef3e8dde4805858
       ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id || github.run_id }}
       PACKAGE_SUFFIX: ${{ inputs.package_suffix != '' && inputs.package_suffix || '' }}
       OUTPUT_DIR: ${{ github.workspace }}/output
