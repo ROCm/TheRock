@@ -547,6 +547,11 @@ def do_build(args: argparse.Namespace):
     sccache_setup_attempted = False
 
     if args.use_ccache:
+        if not shutil.which("ccache"):
+            raise RuntimeError(
+                "ccache not found but --use-ccache was specified. "
+                "Please install ccache before building."
+            )
         print("Building with ccache, clearing stats first")
         env["CMAKE_C_COMPILER_LAUNCHER"] = "ccache"
         env["CMAKE_CXX_COMPILER_LAUNCHER"] = "ccache"
