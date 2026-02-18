@@ -17,6 +17,10 @@ THEROCK_BIN_DIR = Path(os.getenv("THEROCK_BIN_DIR")).resolve()
 
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 
+# Importing is_asan from github_actions_utils.py
+sys.path.append(str(THIS_DIR.parent / "build_tools" / "github_actions"))
+from github_actions_utils import is_asan
+
 
 def is_windows():
     return "windows" == platform.system().lower()
@@ -50,6 +54,10 @@ def rocm_info_output():
 
 class TestROCmSanity:
     @pytest.mark.skipif(is_windows(), reason="rocminfo is not supported on Windows")
+    # TODO(#3312): Re-enable once rocminfo test is fixed for ASAN builds
+    @pytest.mark.skipif(
+        is_asan(), reason="rocminfo test fails with ASAN build, see TheRock#3312"
+    )
     @pytest.mark.parametrize(
         "to_search",
         [
@@ -71,6 +79,10 @@ class TestROCmSanity:
             f"Failed to search for {to_search} in rocminfo output",
         )
 
+    # TODO(#3313): Re-enable once hipcc test is fixed for ASAN builds
+    @pytest.mark.skipif(
+        is_asan(), reason="hipcc test fails with ASAN build, see TheRock#3313"
+    )
     def test_hip_printf(self):
         platform_executable_suffix = ".exe" if is_windows() else ""
 

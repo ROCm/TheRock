@@ -159,6 +159,14 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
     )
   endif()
 
+  # Conditional rocm-kpack support for kpack split artifacts
+  set(_hip_clr_kpack_runtime_deps)
+  set(_hip_clr_kpack_cmake_args)
+  if(THEROCK_KPACK_SPLIT_ARTIFACTS)
+    list(APPEND _hip_clr_kpack_runtime_deps rocm-kpack)
+    list(APPEND _hip_clr_kpack_cmake_args "-DROCM_KPACK_ENABLED=ON")
+  endif()
+
   therock_cmake_subproject_declare(hip-clr
     USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/clr"
@@ -176,6 +184,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       # and can use local machine tools.
       "-DHIPCC_BIN_DIR="
       ${HIP_CLR_CMAKE_ARGS}
+      ${_hip_clr_kpack_cmake_args}
     BUILD_DEPS
       rocm-cmake
       therock-simde
@@ -185,6 +194,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       hipcc     # For hipconfig
       rocm-core
       ${HIP_CLR_RUNTIME_DEPS}
+      ${_hip_clr_kpack_runtime_deps}
     INTERFACE_LINK_DIRS
       "lib"
     INTERFACE_INSTALL_RPATH_DIRS
@@ -336,6 +346,9 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
       rocprofiler-register
       ROCR-Runtime
     )
+    list(APPEND OCL_CLR_CMAKE_ARGS
+      "-DBUILD_TESTS=${THEROCK_BUILD_TESTING}"
+    )
   endif()
 
   therock_cmake_subproject_declare(ocl-clr
@@ -379,6 +392,7 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
       doc
       lib
       run
+      test
     SUBPROJECT_DEPS
       ocl-clr
   )
@@ -436,8 +450,13 @@ if(THEROCK_BUILD_TESTING)
         ROCR-Runtime
         rocprofiler-register
         ${THEROCK_BUNDLED_ELFUTILS}
+        ${THEROCK_BUNDLED_HWLOC}
         ${THEROCK_BUNDLED_LIBDRM}
         ${THEROCK_BUNDLED_NUMACTL}
+      INTERFACE_LINK_DIRS
+        "lib/rocm_sysdeps/lib"
+      INTERFACE_INSTALL_RPATH_DIRS
+        "lib/rocm_sysdeps/lib"
     )
     therock_cmake_subproject_glob_c_sources(rocrtst SUBDIRS .)
     therock_cmake_subproject_activate(rocrtst)

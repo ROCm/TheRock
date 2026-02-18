@@ -18,6 +18,10 @@ from github_actions_utils import str2bool
 import json
 import os
 
+#############################################################################################
+# NOTE: when doing changes here, also check that they are done in new_amdgpu_family_matrix.py
+#############################################################################################
+
 all_build_variants = {
     "linux": {
         "release": {
@@ -32,7 +36,6 @@ all_build_variants = {
             "build_variant_label": "asan",
             "build_variant_suffix": "asan",
             "build_variant_cmake_preset": "linux-release-asan",
-            "expect_failure": True,
         },
         "tsan": {
             "build_variant_label": "tsan",
@@ -55,6 +58,8 @@ amdgpu_family_info_matrix_presubmit = {
     "gfx94x": {
         "linux": {
             "test-runs-on": "linux-mi325-1gpu-ossci-rocm",
+            # TODO(#3433): Remove sandbox label once ASAN tests are passing
+            "test-runs-on-sandbox": "linux-mi325-8gpu-ossci-rocm-sandbox",
             "test-runs-on-multi-gpu": "linux-mi325-8gpu-ossci-rocm",
             # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
             "benchmark-runs-on": "linux-mi325-8gpu-ossci-rocm",
@@ -64,7 +69,9 @@ amdgpu_family_info_matrix_presubmit = {
     },
     "gfx110x": {
         "linux": {
-            "test-runs-on": "linux-gfx110X-gpu-rocm",
+            # TODO(#3298): Re-enable machine once HSA_STATUS_ERROR_OUT_OF_RESOURCES issues are resolved
+            # Label is linux-gfx110X-gpu-rocm
+            "test-runs-on": "",
             "family": "gfx110X-all",
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
@@ -145,20 +152,17 @@ amdgpu_family_info_matrix_nightly = {
         },
     },
     "gfx101x": {
-        # TODO(#1926): Resolve bgemm kernel hip file generation error, to enable PyTorch builds
+        # TODO(#1926): Resolve bgemm kernel hip file generation error to enable PyTorch builds
         "linux": {
             "test-runs-on": "",
             "family": "gfx101X-dgpu",
-            "expect_failure": True,
             "build_variants": ["release"],
             "expect_pytorch_failure": True,
         },
-        # TODO(#1925): Enable arch for aotriton to enable PyTorch builds
         "windows": {
             "test-runs-on": "",
             "family": "gfx101X-dgpu",
             "build_variants": ["release"],
-            "expect_pytorch_failure": True,
         },
     },
     "gfx103x": {

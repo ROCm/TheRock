@@ -53,17 +53,11 @@ runs:
         uv pip install -r requirements-test.txt
         uv pip freeze
 
-    - name: Install the AWS tool
-      if: ${{ runner.os == 'Linux' }}
-      shell: bash
-      run: ./dockerfiles/install_awscli.sh
-
     - name: Install Choco tools
       if: ${{ runner.os == 'Windows' }}
       shell: bash
       run: |
-        choco install --no-progress -y ninja awscli
-        echo "$PATH;C:\Program Files\Amazon\AWSCLIV2" >> $GITHUB_PATH
+        choco install --no-progress -y ninja
 
     - name: Download and Unpack Artifacts
       shell: bash
