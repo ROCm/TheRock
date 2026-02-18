@@ -411,6 +411,12 @@ type = "target-neutral"
 artifact_deps = []
 feature_group = "CORE"
 
+[artifacts.openmpi]
+artifact_group = "third-party-libs"
+type = "target-neutral"
+artifact_deps = []
+feature_group = "CORE"
+
 # --- Base Infrastructure ---
 
 [artifacts.base]

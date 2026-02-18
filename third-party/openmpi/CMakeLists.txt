@@ -31,6 +31,17 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     therock_cmake_subproject_provide_package(therock-openmpi MPI lib/cmake/openmpi)
 
     therock_cmake_subproject_activate(therock-openmpi)
+
+    therock_provide_artifact(openmpi
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-openmpi.toml
+    COMPONENTS
+      dev
+      lib
+      run
+    SUBPROJECT_DEPS
+      therock-openmpi
+    )
     return()
 endif()
 
