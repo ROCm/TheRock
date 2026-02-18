@@ -5,11 +5,12 @@
 """
 Full installation test script for ROCm native packages.
 
-This version installs packages directly from ROCm nightly repositories using
+This version installs packages directly from ROCm repositories using
 native package managers (apt/dnf) instead of downloading from S3 first.
 
-Supports nightly builds only:
+Supports both nightly and prerelease builds:
 - Nightly builds: https://rocm.nightlies.amd.com/
+- Prerelease builds: https://rocm.prereleases.amd.com/packages/
 """
 
 import argparse
@@ -27,33 +28,33 @@ class PackageFullTester:
         self,
         package_type: str,
         repo_base_url: str,
-        artifact_id: str,
+        repo_sub_folder: Optional[str],
         rocm_version: str,
         os_profile: str,
-        date: str,
-        install_prefix: str = "/opt/rocm",
+        release_type: str = "nightly",
+        install_prefix: str = "/opt/rocm/core",
         gfx_arch: Optional[str] = None,
     ):
         """Initialize the package full tester.
 
         Args:
             package_type: Type of package ('deb' or 'rpm')
-            repo_base_url: Base URL for nightly repository (e.g., https://rocm.nightlies.amd.com)
-            artifact_id: Artifact run ID
+            repo_base_url: Base URL for repository
+            repo_sub_folder: Repository Sub Folder (required for nightly build URL only)
             rocm_version: ROCm version
             os_profile: OS profile (e.g., ubuntu2404, rhel8)
-            date: Build date in YYYYMMDD format (required for nightly builds)
+            release_type: Type of release ('nightly' or 'prerelease')
             install_prefix: Installation prefix (default: /opt/rocm)
             gfx_arch: GPU architecture (default: gfx94x)
         """
         self.package_type = package_type.lower()
         self.repo_base_url = repo_base_url.rstrip("/")
-        self.artifact_id = artifact_id
+        self.repo_sub_folder = repo_sub_folder
         self.rocm_version = rocm_version
         self.os_profile = os_profile
-        self.date = date
+        self.release_type = release_type.lower()
         self.install_prefix = install_prefix
-        self.gfx_arch = gfx_arch.lower()
+        self.gfx_arch = gfx_arch.lower() if gfx_arch else "gfx94x"
 
         # Validate inputs
         if self.package_type not in ["deb", "rpm"]:
@@ -61,15 +62,25 @@ class PackageFullTester:
                 f"Invalid package type: {package_type}. Must be 'deb' or 'rpm'"
             )
 
-        if not self.date or len(self.date) != 8:
+        if self.release_type not in ["nightly", "prerelease"]:
             raise ValueError(
-                f"Invalid date format: {date}. Must be YYYYMMDD (e.g., 20260204)"
+                f"Invalid release type: {release_type}. Must be 'nightly' or 'prerelease'"
             )
 
-        # Construct repository URL for nightly builds: base_url/{deb|rpm}/YYYYMMDD-RUNID/
-        self.repo_url = (
-            f"{self.repo_base_url}/{self.package_type}/{self.date}-{self.artifact_id}/"
-        )
+        if self.release_type == "nightly":
+            # Construct repository URL for nightly builds: base_url/{deb|rpm}/YYYYMMDD-RUNID/
+            self.repo_url = (
+                f"{self.repo_base_url}/{self.package_type}/{self.repo_sub_folder}/"
+            )
+        else:  # prerelease
+            # For prerelease, repo_base_url should already include /packages
+            # Construct repository URL for prerelease builds
+            if self.package_type == "deb":
+                # Prerelease DEB: base_url/<os_profile>
+                self.repo_url = f"{self.repo_base_url}/{self.os_profile}"
+            else:  # rpm
+                # Prerelease RPM: base_url/<os_profile>/x86_64/
+                self.repo_url = f"{self.repo_base_url}/{self.os_profile}/x86_64/"
 
     def construct_repo_url_with_os(self) -> str:
         """Construct the full repository URL including OS profile for nightly builds.
@@ -77,12 +88,86 @@ class PackageFullTester:
         Returns:
             Full repository URL
         """
-        if self.package_type == "deb":
-            # Nightly DEB repository structure: base_url/deb/YYYYMMDD-RUNID/pool/main/
+        if self.release_type == "nightly":
+            if self.package_type == "deb":
+                # Nightly DEB repository structure: base_url/deb/YYYYMMDD-RUNID/pool/main/
+                return self.repo_url
+            else:  # rpm
+                # Nightly RPM repository structure: base_url/rpm/YYYYMMDD-RUNID/os_profile/x86_64/
+                return f"{self.repo_url}x86_64/"
+        else:  # prerelease
+            # Prerelease URLs are already constructed correctly in __init__
             return self.repo_url
+
+    def setup_gpg_key(self) -> bool:
+        """Setup GPG key for prerelease repositories.
+
+        Returns:
+            True if setup successful, False otherwise
+        """
+        if self.release_type != "prerelease":
+            return True  # Not needed for nightly
+
+        print("\n" + "=" * 80)
+        print("SETTING UP GPG KEY FOR PRERELEASE")
+        print("=" * 80)
+
+        gpg_key_url = f"{self.repo_base_url}/gpg/rocm.gpg"
+        print(f"\nGPG Key URL: {gpg_key_url}")
+
+        if self.package_type == "deb":
+            # For DEB, import GPG key
+            keyring_dir = "/etc/apt/keyrings"
+            keyring_file = f"{keyring_dir}/rocm.gpg"
+
+            try:
+                # Create keyring directory
+                os.makedirs(keyring_dir, mode=0o755, exist_ok=True)
+                print(f"[PASS] Created keyring directory: {keyring_dir}")
+
+                # Download and import GPG key
+                print(f"\nDownloading GPG key from {gpg_key_url}...")
+                result = subprocess.run(
+                    ["wget", "-q", "-O", "-", gpg_key_url],
+                    check=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    timeout=30,
+                )
+
+                # Import using gpg --dearmor
+                dearmor_process = subprocess.Popen(
+                    ["gpg", "--dearmor"],
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                )
+                stdout, stderr = dearmor_process.communicate(
+                    input=result.stdout, timeout=30
+                )
+
+                if dearmor_process.returncode != 0:
+                    print(f"[FAIL] Failed to dearmor GPG key: {stderr.decode()}")
+                    return False
+
+                # Write to keyring file
+                with open(keyring_file, "wb") as f:
+                    f.write(stdout)
+
+                os.chmod(keyring_file, 0o644)
+                print(f"[PASS] GPG key imported to {keyring_file}")
+                return True
+
+            except subprocess.CalledProcessError as e:
+                print(f"[FAIL] Failed to download GPG key: {e}")
+                return False
+            except Exception as e:
+                print(f"[FAIL] Error setting up GPG key: {e}")
+                return False
         else:  # rpm
-            # Nightly RPM repository structure: base_url/rpm/YYYYMMDD-RUNID/os_profile/x86_64/
-            return f"{self.repo_url}x86_64/"
+            # For RPM, GPG key URL is specified in repo file
+            # No need to download separately
+            return True
 
     def setup_deb_repository(self) -> bool:
         """Setup DEB repository on the system.
@@ -97,12 +182,26 @@ class PackageFullTester:
         repo_url = self.construct_repo_url_with_os()
         print(f"\nRepository URL: {repo_url}")
         print(f"OS Profile: {self.os_profile}")
+        print(f"Release Type: {self.release_type}")
+
+        # Setup GPG key for prerelease
+        if self.release_type == "prerelease":
+            if not self.setup_gpg_key():
+                return False
 
         # Add repository to sources list
         print("\nAdding ROCm repository...")
         sources_list = f"/etc/apt/sources.list.d/rocm-test.list"
 
-        repo_entry = f"deb [arch=amd64 trusted=yes] {repo_url} stable main\n"
+        if self.release_type == "prerelease":
+            # Prerelease: use GPG key
+            keyring_file = "/etc/apt/keyrings/rocm.gpg"
+            repo_entry = (
+                f"deb [arch=amd64 signed-by={keyring_file}] {repo_url} stable main\n"
+            )
+        else:
+            # Nightly: trusted=yes (no GPG check)
+            repo_entry = f"deb [arch=amd64 trusted=yes] {repo_url} stable main\n"
 
         try:
             with open(sources_list, "w") as f:
@@ -164,13 +263,26 @@ class PackageFullTester:
         repo_url = self.construct_repo_url_with_os()
         print(f"\nRepository URL: {repo_url}")
         print(f"OS Profile: {self.os_profile}")
+        print(f"Release Type: {self.release_type}")
 
         # Create repository file
         print("\nCreating ROCm repository file...")
         repo_file = "/etc/yum.repos.d/rocm-test.repo"
 
-        repo_content = f"""[rocm-test]
-name=ROCm Test Repository
+        if self.release_type == "prerelease":
+            # Prerelease: use GPG key
+            gpg_key_url = f"{self.repo_base_url}/gpg/rocm.gpg"
+            repo_content = f"""[rocm-test]
+name=ROCm Prerelease Repository
+baseurl={repo_url}
+enabled=1
+gpgcheck=1
+gpgkey={gpg_key_url}
+"""
+        else:
+            # Nightly: no GPG check
+            repo_content = f"""[pkg-test]
+name=Native Linux Package Test Repository
 baseurl={repo_url}
 enabled=1
 gpgcheck=0
@@ -495,7 +607,7 @@ gpgcheck=0
                         print(f"      {line}")
             return True
         except subprocess.TimeoutExpired:
-            print("   [WARN] rdhc.py --alltimed out")
+            print("   [WARN] rdhc.py --all timed out")
             # Try without arguments
             return self._try_rdhc_without_args(cmd, install_path)
         except subprocess.CalledProcessError:
@@ -565,9 +677,10 @@ gpgcheck=0
         print("FULL INSTALLATION TEST - NATIVE LINUX PACKAGES")
         print("=" * 80)
         print(f"\nPackage Type: {self.package_type.upper()}")
+        print(f"Release Type: {self.release_type.upper()}")
         print(f"Repository Base URL: {self.repo_base_url}")
-        print(f"Artifact ID: {self.artifact_id}")
-        print(f"Build Date: {self.date}")
+        if self.release_type == "nightly":
+            print(f"Repository Sub Folder: {self.repo_sub_folder}")
         print(f"ROCm Version: {self.rocm_version}")
         print(f"OS Profile: {self.os_profile}")
         print(f"GPU Architecture: {self.gfx_arch}")
@@ -612,8 +725,10 @@ gpgcheck=0
         except Exception as e:
             print(f"\n[FAIL] Error during full installation test: {e}")
             import traceback
+
             traceback.print_exc()
             return False
+
 
 def main():
     """Main entry point for the script."""
@@ -623,34 +738,44 @@ def main():
         epilog="""
 Examples:
   # Install from nightly DEB repository (Ubuntu 24.04)
-  python package_full_test_v2.py \\
+  python package_full_test.py \\
       --package-type deb \\
       --repo-base-url https://rocm.nightlies.amd.com \\
-      --artifact-id 21658678136 \\
-      --date 20260204 \\
+      --repo-sub-folder 20260204-21658678136 \\
       --rocm-version 8.0.0 \\
       --os-profile ubuntu2404 \\
-      --gfx-arch gfx94x
+      --gfx-arch gfx94x \\
+      --release-type nightly
+
+  # Install from prerelease DEB repository (Ubuntu 24.04)
+  python package_full_test.py \\
+      --package-type deb \\
+      --repo-base-url https://rocm.prereleases.amd.com/packages \\
+      --repo-sub-folder 20260204-21658678136 \\
+      --rocm-version 8.0.0 \\
+      --os-profile ubuntu2404 \\
+      --gfx-arch gfx94x \\
+      --release-type prerelease
 
   # Install from nightly RPM repository (RHEL 8)
-  python package_full_test_v2.py \\
+  python package_full_test.py \\
       --package-type rpm \\
       --repo-base-url https://rocm.nightlies.amd.com \\
-      --artifact-id 21658678136 \\
-      --date 20260204 \\
+      --repo-sub-folder 20260204-21658678136 \\
       --rocm-version 8.0.0 \\
       --os-profile rhel8 \\
-      --gfx-arch gfx94x
+      --gfx-arch gfx94x \\
+      --release-type nightly
 
-  # Install from nightly for different GPU (Strix Halo)
-  python package_full_test_v2.py \\
-      --package-type deb \\
-      --repo-base-url https://rocm.nightlies.amd.com \\
-      --artifact-id 21658678136 \\
-      --date 20260204 \\
+  # Install from prerelease RPM repository (RHEL 8)
+  python package_full_test.py \\
+      --package-type rpm \\
+      --repo-base-url https://rocm.prereleases.amd.com/packages \\
+      --repo-sub-folder 20260204-21658678136 \\
       --rocm-version 8.0.0 \\
-      --os-profile ubuntu2404 \\
-      --gfx-arch gfx1151
+      --os-profile rhel8 \\
+      --gfx-arch gfx94x \\
+      --release-type prerelease
         """,
     )
 
@@ -660,20 +785,6 @@ Examples:
         required=True,
         choices=["deb", "rpm"],
         help="Type of package to test (deb or rpm)",
-    )
-
-    parser.add_argument(
-        "--repo-base-url",
-        type=str,
-        required=True,
-        help="Base URL for nightly repository (e.g., https://rocm.nightlies.amd.com)",
-    )
-
-    parser.add_argument(
-        "--artifact-id",
-        type=str,
-        required=True,
-        help="Artifact run ID (e.g., 21658678136)",
     )
 
     parser.add_argument(
@@ -691,10 +802,11 @@ Examples:
     )
 
     parser.add_argument(
-        "--gfx-arch",
+        "--release-type",
         type=str,
-        default="gfx94x",
-        help="GPU architecture (default: gfx94x). Examples: gfx94x, gfx110x, gfx1151",
+        required=True,
+        choices=["nightly", "prerelease"],
+        help="Type of release: 'nightly' or 'prerelease'",
     )
 
     parser.add_argument(
@@ -705,17 +817,33 @@ Examples:
     )
 
     parser.add_argument(
-        "--date",
+        "--repo-base-url",
         type=str,
         required=True,
-        help="Build date in YYYYMMDD format (required for nightly builds, e.g., 20260204)",
+        help="Base URL for repository (e.g., https://rocm.nightlies.amd.com or https://rocm.prereleases.amd.com/packages)",
+    )
+
+    parser.add_argument(
+        "--gfx-arch",
+        type=str,
+        default="gfx94x",
+        help="GPU architecture (default: gfx94x). Examples: gfx94x, gfx110x, gfx1151",
+    )
+
+    parser.add_argument(
+        "--repo-sub-folder",
+        type=str,
+        help="Repository Sub Folder (required for nightly)",
     )
 
     args = parser.parse_args()
 
     # Validate and normalize parameters
-    if not args.artifact_id or not args.artifact_id.strip():
-        parser.error("Artifact ID cannot be empty")
+    if not args.release_type or not args.release_type.strip():
+        parser.error("Release Type cannot be empty")
+
+    if not args.package_type or not args.package_type.strip():
+        parser.error("Package Type cannot be empty")
 
     if not args.rocm_version or not args.rocm_version.strip():
         parser.error("ROCm version cannot be empty")
@@ -723,21 +851,14 @@ Examples:
     if not args.os_profile or not args.os_profile.strip():
         parser.error("OS profile cannot be empty")
 
-    if not args.date or not args.date.strip():
-        parser.error("Build date cannot be empty")
-
-    if len(args.date) != 8 or not args.date.isdigit():
-        parser.error(
-            f"Invalid date format: {args.date}. Must be YYYYMMDD (e.g., 20260204)"
-        )
     # Print configuration
     print("\n" + "=" * 80)
     print("CONFIGURATION")
     print("=" * 80)
     print(f"Package Type: {args.package_type}")
+    print(f"Release Type: {args.release_type}")
     print(f"Repository Base URL: {args.repo_base_url}")
-    print(f"Artifact ID: {args.artifact_id}")
-    print(f"Build Date: {args.date}")
+    print(f"Repository Sub Folder: {args.repo_sub_folder}")
     print(f"ROCm Version: {args.rocm_version}")
     print(f"OS Profile: {args.os_profile}")
     print(f"GPU Architecture: {args.gfx_arch}")
@@ -748,10 +869,10 @@ Examples:
     tester = PackageFullTester(
         package_type=args.package_type,
         repo_base_url=args.repo_base_url,
-        artifact_id=args.artifact_id,
+        repo_sub_folder=args.repo_sub_folder,
         rocm_version=args.rocm_version,
         os_profile=args.os_profile,
-        date=args.date,
+        release_type=args.release_type,
         install_prefix=args.install_prefix,
         gfx_arch=args.gfx_arch,
     )

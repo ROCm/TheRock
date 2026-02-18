@@ -3,8 +3,8 @@ name: Full Test of Native Linux Packages
 on:
   workflow_call:
     inputs:
-      artifact_run_id:
-        description: workflow run id to download the artifacts from.
+      repo_sub_folder:
+        description: "Repository sub folder (e.g., 20260204-21658678136). Format: build_date-artifact_run_id"
         required: true
         type: string
       rocm_version:
@@ -15,6 +15,7 @@ on:
         description: Specify whether debian or rpm packages are needed (deb or rpm).
         required: true
         type: string
+        default: "deb"
       os_profile:
         description: OS profile (e.g., ubuntu2404, rhel8, debian12, sles16).
         required: true
@@ -22,25 +23,20 @@ on:
       gfx_arch:
         description: GPU architecture (e.g., gfx94x, gfx110x, gfx1151).
         type: string
-        default: gfx94x
-      build_date:
-        description: Build date in YYYYMMDD format (e.g., 20260204). If not provided, will use current date.
-        required: false
+      release_type:
+        description: The type of release to test ("nightly" or "prerelease").
+        required: true
         type: string
-      repo_base_url:
-        description: Base URL for nightly repository (defaults to https://rocm.nightlies.amd.com).
-        required: false
-        type: string
-        default: https://rocm.nightlies.amd.com
+        default: "nightly"
       install_prefix:
         description: Installation prefix path (optional, defaults to /opt/rocm/core).
         required: false
         type: string
-        default: /opt/rocm/core
+        default: "/opt/rocm/core"
   workflow_dispatch:
     inputs:
-      artifact_run_id:
-        description: workflow run ID for nightly build (e.g., 21658678136)
+      repo_sub_folder:
+        description: "Repository Sub Folder (e.g., 20260204-21658678136). Format: build_date-artifact_run_id."
         required: true
         type: string
       rocm_version:
@@ -52,8 +48,8 @@ on:
         required: true
         type: choice
         options:
-          - rpm
           - deb
+          - rpm
         default: "deb"
       os_profile:
         description: OS profile (e.g., ubuntu2404, rhel8, debian12, sles16).
@@ -71,20 +67,33 @@ on:
         description: GPU architecture (e.g., gfx94x, gfx110x, gfx1151).
         type: string
         default: "gfx94x"
-      build_date:
-        description: Build date in YYYYMMDD format (e.g., 20260204). Leave empty to use current date.
-        type: string
-        required: false
-      repo_base_url:
-        description: Base URL for nightly repository.
-        type: string
-        default: "https://rocm.nightlies.amd.com"
-        required: false
+      release_type:
+        description: The type of release to test ("nightly" or "prerelease"). All developer-triggered jobs should use "nightly"!
+        type: choice
+        required: true
+        options:
+          - nightly
+          - prerelease
+        default: "nightly"
       install_prefix:
-        description: Installation prefix path (defaults to /opt/rocm).
+        description: Installation prefix path (defaults to /opt/rocm/core).
         type: string
-        default: "/opt/rocm"
+        default: "/opt/rocm/core"
         required: false
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - '.github/workflows/native_linux_packages_full_test.yml'
+      - 'build_tools/**'
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - '.github/workflows/native_linux_packages_full_test.yml'
+      - 'build_tools/**'
 
 permissions:
   id-token: write
@@ -98,20 +107,18 @@ jobs:
     strategy:
       fail-fast: false
     # Use appropriate runner based on package type
-    #runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
-    runs-on: ${{ inputs.native_package_type == 'deb' && 'ubuntu-24.04' || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     container:
       # Use container matching the package type
       image: ${{ inputs.native_package_type == 'deb' && 'ubuntu:24.04' || 'almalinux:9' }}
       options: --privileged
     env:
-      ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id }}
+      REPO_SUB_FOLDER: ${{ inputs.repo_sub_folder }}
       ROCM_VERSION: ${{ inputs.rocm_version }}
       OS_PROFILE: ${{ inputs.os_profile }}
       PACKAGE_TYPE: ${{ inputs.native_package_type }}
       GFX_ARCH: ${{ inputs.gfx_arch || 'gfx94x' }}
-      REPO_BASE_URL: ${{ inputs.repo_base_url || 'https://rocm.nightlies.amd.com' }}
-      BUILD_DATE: ${{ inputs.build_date }}
+      RELEASE_TYPE: ${{ inputs.release_type || 'nightly' }}
       INSTALL_PREFIX: ${{ inputs.install_prefix || '/opt/rocm/core' }}
     steps:
       - name: Install System Prerequisites
@@ -142,13 +149,8 @@ jobs:
               dnf-plugins-core
           fi
 
-      - name: Checkout Repository
-        run: |
-          echo "Cloning TheRock repository"
-          cd /tmp
-          git clone https://github.com/ROCm/TheRock.git
-          cd TheRock
-          git checkout ${{ github.ref_name }}
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Install Python Dependencies
         run: |
@@ -159,17 +161,18 @@ jobs:
             # RHEL/CentOS/AlmaLinux: no --break-system-packages flag needed
             pip3 install pyelftools requests
           fi
-      - name: Determine Build Date
-        id: build-date
+
+      - name: Set Repository Base URL
+        id: set-repo-url
         run: |
-          if [ -n "${{ inputs.build_date }}" ]; then
-            BUILD_DATE="${{ inputs.build_date }}"
+          if [ "${{ env.RELEASE_TYPE }}" = "prerelease" ]; then
+            echo "REPO_BASE_URL=https://rocm.prereleases.amd.com/packages" >> $GITHUB_ENV
+            echo "Using prerelease repository: https://rocm.prereleases.amd.com/packages"
           else
-            # Use current date in YYYYMMDD format
-            BUILD_DATE=$(date +%Y%m%d)
+            echo "REPO_BASE_URL=https://rocm.nightlies.amd.com" >> $GITHUB_ENV
+            echo "Using nightly repository: https://rocm.nightlies.amd.com"
           fi
-          echo "date=$BUILD_DATE" >> $GITHUB_OUTPUT
-          echo "Using build date: $BUILD_DATE"
+          echo "Release Type: ${{ env.RELEASE_TYPE }}"
 
       - name: Full Package Installation Test
         id: full-test
@@ -179,8 +182,8 @@ jobs:
           echo "=========================================================================="
           echo "Package Type: ${{ inputs.native_package_type }}"
           echo "OS Profile: ${{ inputs.os_profile }}"
-          echo "Artifact Run ID: ${{ inputs.artifact_run_id }}"
-          echo "Build Date: ${{ steps.build-date.outputs.date }}"
+          echo "Repository Sub Folder: ${{ inputs.repo_sub_folder }}"
+          echo "Release Type: ${{ env.RELEASE_TYPE }}"
           echo "ROCm Version: ${{ inputs.rocm_version }}"
           echo "GPU Architecture: ${{ env.GFX_ARCH }}"
           echo "Repository Base URL: ${{ env.REPO_BASE_URL }}"
@@ -188,16 +191,24 @@ jobs:
           echo "=========================================================================="
           echo ""
 
+          # repo_sub_folder format: build_date-artifact_run_id (e.g., 20260204-21658678136)
+          REPO_SUB_FOLDER="${{ inputs.repo_sub_folder }}"
+
+          # For prerelease,  repository sub folder not needed
+          if [ -z "$REPO_SUB_FOLDER" ] && [ "${{ env.RELEASE_TYPE }}" = "prerelease" ]; then
+            REPO_SUB_FOLDER=""
+          fi
+
           # Build command for package_full_test.py
-          CMD="python3 /tmp/TheRock/build_tools/packaging/linux/package_full_test.py"
+          CMD="python3 build_tools/packaging/linux/package_full_test.py"
           CMD="$CMD --package-type ${{ inputs.native_package_type }}"
+          CMD="$CMD --repo-sub-folder ${{ inputs.repo_sub_folder }}"
           CMD="$CMD --repo-base-url ${{ env.REPO_BASE_URL }}"
-          CMD="$CMD --artifact-id ${{ env.ARTIFACT_RUN_ID }}"
-          CMD="$CMD --date ${{ steps.build-date.outputs.date }}"
           CMD="$CMD --rocm-version ${{ inputs.rocm_version }}"
           CMD="$CMD --os-profile ${{ inputs.os_profile }}"
           CMD="$CMD --gfx-arch ${{ env.GFX_ARCH }}"
           CMD="$CMD --install-prefix ${{ env.INSTALL_PREFIX }}"
+          CMD="$CMD --release-type ${{ env.RELEASE_TYPE }}"
 
           echo "Executing: $CMD"
           echo ""
@@ -266,12 +277,17 @@ jobs:
             echo "FULL INSTALLATION TEST PASSED"
             echo ""
             echo "Summary:"
+            echo "  - Release Type: ${{ env.RELEASE_TYPE }}"
             echo "  - Repository setup: SUCCESS"
             echo "  - Package installation from repository: SUCCESS"
             echo "  - ROCm verification: SUCCESS"
             echo ""
             echo "ROCm ${{ inputs.rocm_version }} is successfully installed at ${{ env.INSTALL_PREFIX }}"
-            echo "Installed from: ${{ env.REPO_BASE_URL }}/${{ inputs.native_package_type }}/${{ steps.build-date.outputs.date }}-${{ inputs.artifact_run_id }}/${{ inputs.os_profile }}/"
+            if [ "${{ env.RELEASE_TYPE }}" = "prerelease" ]; then
+              echo "Installed from: ${{ env.REPO_BASE_URL }}/${{ inputs.os_profile }}/"
+            else
+              echo "Installed from: ${{ env.REPO_BASE_URL }}/${{ inputs.native_package_type }}/${{ inputs.repo_sub_folder }}/${{ inputs.os_profile }}/"
+            fi
           else
             echo "FULL INSTALLATION TEST FAILED"
             echo ""
