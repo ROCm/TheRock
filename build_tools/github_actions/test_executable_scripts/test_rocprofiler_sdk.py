@@ -42,10 +42,35 @@ else:
 test_therock_cmd = [
     sys.executable,
     str(SCRIPT_DIR / "test_therock.py"),
-    "--source-dir",
-    ROCPROFILER_SDK_TESTS_DIRECTORY,
-    "--binary-dir",
-    str(Path(ROCPROFILER_SDK_TESTS_DIRECTORY) / "build"),
+    # "--source-dir",
+    # ROCPROFILER_SDK_TESTS_DIRECTORY,
+    # "--binary-dir",
+    # str(Path(ROCPROFILER_SDK_TESTS_DIRECTORY) / "build"),
+
+    # "--",  # Separator for arguments corresponding to cmake_config_cmd
+
+    # "-B",
+    # "build",
+    # "-G",
+    # "Ninja",
+    # f"-DCMAKE_PREFIX_PATH={THEROCK_PATH};{THEROCK_LIB_PATH}/rocm_sysdeps",
+    # f"-DCMAKE_HIP_COMPILER={THEROCK_PATH}/llvm/bin/amdclang++",
+    # f"-DCMAKE_C_COMPILER={THEROCK_PATH}/llvm/bin/amdclang",
+    # f"-DCMAKE_CXX_COMPILER={THEROCK_PATH}/llvm/bin/amdclang++",
+
+    # "--",  # Separator for arguments corresponding to cmake_build_cmd
+
+    # "--build",
+    # "build",
+    # "-j",
+
+    # '--', # Separator for arguments corresponding to ctest_cmd
+
+    # "--test-dir",
+    # "build",
+    # "--output-on-failure",
+    # "-j",
+    # str(os.cpu_count() or 1),
 ]
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(test_therock_cmd)}")
