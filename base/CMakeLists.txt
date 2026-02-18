@@ -80,8 +80,9 @@ therock_cmake_subproject_declare(amdsmi
   INTERFACE_INSTALL_RPATH_DIRS
     lib
 )
+# Config is installed to lib/cmake/amd_smi/ (see amdsmi CMakeLists DESTINATION)
 therock_cmake_subproject_provide_package(amdsmi
-  amd_smi lib/cmake)
+  amd_smi lib/cmake/amd_smi)
 therock_cmake_subproject_activate(amdsmi)
 list(APPEND _optional_artifact_deps amdsmi)
 
