@@ -38,6 +38,7 @@ class ConfigureCITest(unittest.TestCase):
         for entry in target_output:
             family_info_list = json.loads(entry["matrix_per_family_json"])
             self.assertTrue(all("amdgpu_family" in f for f in family_info_list))
+            self.assertTrue(all("amdgpu_targets" in f for f in family_info_list))
             self.assertTrue(all("test-runs-on" in f for f in family_info_list))
             self.assertTrue(
                 all("sanity_check_only_for_family" in f for f in family_info_list)
