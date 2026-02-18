@@ -380,14 +380,17 @@ def run_tests(args: argparse.Namespace) -> int:
         print()
 
     # Print summary table
-    print("=" * 80)
+    name_col = max((len(r["scene"]) for r in results), default=5)
+    name_col = max(name_col, 5)  # minimum width for "Scene" header
+    table_width = name_col + 42  # fixed columns: Frame+RC+SSIM+MSE+Result+spacing
+    print("=" * table_width)
     print("BLENDER HIP TEST SUMMARY")
-    print("=" * 80)
-    header = (
-        f"{'Scene':<30} {'Frame':>5} {'RC':>4} {'SSIM':>8} {'MSE':>10} {'Result':>8}"
+    print("=" * table_width)
+    print(
+        f"{'Scene':<{name_col}} {'Frame':>5} {'RC':>4}"
+        f" {'SSIM':>8} {'MSE':>10} {'Result':>8}"
     )
-    print(header)
-    print("-" * 80)
+    print("-" * table_width)
 
     all_passed = True
     for r in results:
@@ -397,18 +400,18 @@ def run_tests(args: argparse.Namespace) -> int:
         if not r["passed"]:
             all_passed = False
         print(
-            f"{r['scene']:<30} {r['frame']:>5} {r['render_rc']:>4} "
+            f"{r['scene']:<{name_col}} {r['frame']:>5} {r['render_rc']:>4} "
             f"{ssim_str:>8} {mse_str:>10} {status:>8}"
         )
         if r["reason"] and not r["passed"]:
             print(f"  -> {r['reason']}")
 
-    print("-" * 80)
+    print("-" * table_width)
     total = len(results)
     passed = sum(1 for r in results if r["passed"])
     failed = total - passed
     print(f"Total: {total}, Passed: {passed}, Failed: {failed}")
-    print("=" * 80)
+    print("=" * table_width)
 
     if all_passed:
         print("\nAll Blender HIP tests passed.")
