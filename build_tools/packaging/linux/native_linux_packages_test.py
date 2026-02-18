@@ -183,9 +183,7 @@ class NativeLinuxPackagesTester:
         if self.release_type == "prerelease":
             # Prerelease: use GPG key
             keyring_file = "/etc/apt/keyrings/rocm.gpg"
-            repo_entry = (
-                f"deb [arch=amd64 signed-by={keyring_file}] {self.repo_url} stable main\n"
-            )
+            repo_entry = f"deb [arch=amd64 signed-by={keyring_file}] {self.repo_url} stable main\n"
         else:
             # Nightly: trusted=yes (no GPG check)
             repo_entry = f"deb [arch=amd64 trusted=yes] {self.repo_url} stable main\n"
@@ -265,8 +263,14 @@ class NativeLinuxPackagesTester:
                 )
                 print("[INFO] zypper is available, using SLES-specific setup")
                 return self._setup_sles_repository()
-            except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
-                print("[WARN] zypper not available. Falling back to dnf for SLES testing.")
+            except (
+                subprocess.CalledProcessError,
+                subprocess.TimeoutExpired,
+                FileNotFoundError,
+            ):
+                print(
+                    "[WARN] zypper not available. Falling back to dnf for SLES testing."
+                )
                 print("[WARN] This is a compatibility test, not a true SLES test.")
                 return self._setup_dnf_repository()
         else:
@@ -535,9 +539,15 @@ gpgcheck=0
                 )
                 cmd = ["zypper", "install", "-y", self.package_name]
                 print("[INFO] Using zypper for SLES package installation")
-            except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
+            except (
+                subprocess.CalledProcessError,
+                subprocess.TimeoutExpired,
+                FileNotFoundError,
+            ):
                 cmd = ["dnf", "install", "-y", self.package_name]
-                print("[WARN] zypper not available, using dnf as fallback for SLES testing")
+                print(
+                    "[WARN] zypper not available, using dnf as fallback for SLES testing"
+                )
         else:
             cmd = ["dnf", "install", "-y", self.package_name]
         print(f"\nRunning: {' '.join(cmd)}")
@@ -644,7 +654,11 @@ gpgcheck=0
                     )
                     cmd = ["zypper", "search", "-i", "rocm"]
                     grep_pattern = "rocm"
-                except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
+                except (
+                    subprocess.CalledProcessError,
+                    subprocess.TimeoutExpired,
+                    FileNotFoundError,
+                ):
                     # Fallback to rpm for SLES testing on AlmaLinux
                     cmd = ["rpm", "-qa"]
                     grep_pattern = "rocm"
@@ -1026,5 +1040,3 @@ Examples:
 
 if __name__ == "__main__":
     main()
-
-
