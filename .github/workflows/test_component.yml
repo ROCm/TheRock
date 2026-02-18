@@ -116,11 +116,11 @@ jobs:
           DELIMITER=","
           IFS="$DELIMITER" read -r -a array <<< "$STRING"
 
-          ${{ github.workspace }}/.venv/bin/python -m ensurepip --upgrade
+          python -m ensurepip --upgrade
 
           for file in "${array[@]}"; do
               echo "Installing Requirements File: $file"
-              ${{ github.workspace }}/.venv/bin/python -m pip install -r ${{ env.OUTPUT_ARTIFACTS_DIR }}/$file
+              python -m pip install -r ${{ env.OUTPUT_ARTIFACTS_DIR }}/$file
           done
 
       - name: Test
