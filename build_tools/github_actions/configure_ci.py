@@ -193,9 +193,13 @@ def generate_multi_arch_matrix(
                 f["amdgpu_family"] for f in variant_to_family_info[build_variant_name]
             ]
             if family_name not in existing_families:
+                # fetch-gfx-targets: individual GPU arch(s) on the test runner,
+                # used for fetching split (per-target) artifacts.
+                fetch_gfx_targets = platform_info.get("fetch-gfx-targets", [])
                 variant_to_family_info[build_variant_name].append(
                     {
                         "amdgpu_family": family_name,
+                        "amdgpu_targets": ",".join(fetch_gfx_targets),
                         "test-runs-on": test_runs_on,
                         "sanity_check_only_for_family": platform_info.get(
                             "sanity_check_only_for_family", False
