@@ -112,7 +112,7 @@ jobs:
 
       - name: Setup Requirements
         run: |
-          REQUIREMENTS_FILES = ${{ fromJSON(inputs.component).requirements_files }}
+          REQUIREMENTS_FILES=${{ fromJSON(inputs.component).requirements_files }}
           DELIMITER=","
           IFS="$DELIMITER" read -r -a array <<< "$STRING"
 
