@@ -24,6 +24,11 @@ environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 if is_asan():
     environ_vars["HSA_XNACK"] = "1"
 
+# Limit OpenBLAS/OpenMP threads in CI to avoid overallocation (e.g. 150 threads on
+# high core-count visibility) which can cause contention and 2x+ slower test runs.
+environ_vars["OPENBLAS_NUM_THREADS"] = "48"
+environ_vars["OMP_NUM_THREADS"] = "48"
+
 logging.basicConfig(level=logging.INFO)
 
 # Common args for CI (xml output for reporting, color for logs)
