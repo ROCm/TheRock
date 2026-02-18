@@ -154,17 +154,17 @@ generate_package_lists() {
         rpm_version_suffix=""  # Will use embedded version format
         deb_version_suffix=""  # Will use embedded version format
         echo "Using default version pattern (latest): ${PULL_CONFIG_ROCM_VER_PKG}"
-        echo "  Format: amdrocm-amdsmi${PULL_CONFIG_ROCM_VER_PKG}-{arch}"
+        echo "  Format: amdrocm-amdsmi${PULL_CONFIG_ROCM_VER_PKG}"
     fi
 
     # Build RPM package list
     for gfx_arch in "${ROCM_GFX_ARCHS[@]}"; do
         if [[ -z "$rpm_version_suffix" ]]; then
-            # Default: version embedded in package name (amdrocm-amdsmi7.11-gfx950)
-            rpm_packages="$rpm_packages amdrocm-amdsmi${PULL_CONFIG_ROCM_VER_PKG}-${gfx_arch}"
+            # Default: version embedded in package name (amdrocm-amdsmi7.11)
+            rpm_packages="$rpm_packages amdrocm-amdsmi${PULL_CONFIG_ROCM_VER_PKG}"
         else
             # Explicit version: embedded version format (amdrocm-amdsmi7.11-gfx950-7.11.0-2)
-            rpm_packages="$rpm_packages amdrocm-amdsmi${PULL_CONFIG_ROCM_VER_PKG}-${gfx_arch}${rpm_version_suffix}"
+            rpm_packages="$rpm_packages amdrocm-amdsmi${PULL_CONFIG_ROCM_VER_PKG}-${rpm_version_suffix}"
         fi
     done
 
@@ -172,10 +172,10 @@ generate_package_lists() {
     for gfx_arch in "${ROCM_GFX_ARCHS[@]}"; do
         if [[ -z "$deb_version_suffix" ]]; then
             # Default: version embedded in package name (amdrocm-amdsmi7.11-gfx950)
-            deb_packages="$deb_packages amdrocm-amdsmi${PULL_CONFIG_ROCM_VER_PKG}-${gfx_arch}"
+            deb_packages="$deb_packages amdrocm-amdsmi${PULL_CONFIG_ROCM_VER_PKG}"
         else
             # Explicit version: embedded version + APT pinning (amdrocm-amdsmi7.11-gfx950=7.11.0-2)
-            deb_packages="$deb_packages amdrocm-amdsmi${PULL_CONFIG_ROCM_VER_PKG}-${gfx_arch}${deb_version_suffix}"
+            deb_packages="$deb_packages amdrocm-amdsmi${PULL_CONFIG_ROCM_VER_PKG}${deb_version_suffix}"
         fi
     done
 
