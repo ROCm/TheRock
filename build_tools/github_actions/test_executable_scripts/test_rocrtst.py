@@ -22,8 +22,6 @@ environ_vars["GTEST_SHARD_INDEX"] = str(int(SHARD_INDEX) - 1)
 environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 
 gpu_arch = get_first_gpu_architecture(env=environ_vars, therock_bin_dir=THEROCK_BIN_DIR)
-logging.info(f"Detected GPU architecture: {gpu_arch}")
-
 cwd_dir = Path(THEROCK_BIN_DIR) / gpu_arch
 cmd = ["./rocrtst64"]
 

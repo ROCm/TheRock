@@ -6,6 +6,7 @@ See also https://pypi.org/project/github-action-utils/.
 from datetime import datetime, timezone
 from enum import Enum, auto
 import json
+import logging
 import os
 from pathlib import Path
 import re
@@ -650,7 +651,7 @@ def str2bool(value: str | None) -> bool:
     raise ValueError(f"Invalid string value for boolean conversion: {value}")
 
 
-# TODO: Refactor get_visible_gpu_count and get_first_gpu_architecture to share a
+# TODO(#3489): Refactor get_visible_gpu_count and get_first_gpu_architecture to share a
 # common helper that runs rocminfo and returns matching lines; both functions duplicate the first ~12 lines.
 def get_visible_gpu_count(env=None, therock_bin_dir: str | None = None) -> int:
     rocminfo = Path(therock_bin_dir) / "rocminfo"
@@ -688,7 +689,9 @@ def get_first_gpu_architecture(env=None, therock_bin_dir: str | None = None) -> 
     for line in result.stdout.splitlines():
         m = pattern.match(line.strip())
         if m:
-            return m.group(1).lower()
+            gpu_arch = m.group(1).lower()
+            logging.info(f"Detected GPU architecture: {gpu_arch}")
+            return gpu_arch
     raise RuntimeError("No GPU architecture found in rocminfo output")
 
 
