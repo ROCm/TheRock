@@ -155,7 +155,7 @@ if ($currentUser -match "NT AUTHORITY") {
                 } catch {
                     echo "[-] >> Warning: Failed to remove old http-v2 cache files: $_"
                 }
-                
+
                 # Remove empty directories
                 $emptyDirs = @(Get-ChildItem -Path $httpCacheDir -Directory -Recurse -ErrorAction SilentlyContinue |
                     Where-Object { (Get-ChildItem -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue).Count -eq 0 } |
@@ -174,7 +174,6 @@ if ($currentUser -match "NT AUTHORITY") {
             echo "[*] > Pip http-v2 cache not found at: $httpCacheDir"
         }
     }
-    
 } else {
     echo "[*] Not Running as a Windows Service (NT AUTHORITY\*) - skipping system environment cleanup"
 }
