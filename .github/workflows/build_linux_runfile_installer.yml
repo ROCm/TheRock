@@ -42,7 +42,7 @@ permissions:
   contents: read
 
 # run-name: Build Linux Runfile Installer (${{ inputs.artifact_group }}, ${{ inputs.rocm_version }}, ${{ inputs.native_package_type }}, ${{ inputs.package_suffix }}, ${{ inputs.release_type }})
-run-name: Build Linux Runfile Installer Test job ${{ inputs.release_type }})
+run-name: Build Linux Runfile Installer Test job (${{ inputs.release_type }})
 
 jobs:
   build_linux_runfile_installer:
@@ -64,8 +64,7 @@ jobs:
       # ARTIFACTS_DIR: ${{ github.workspace }}/build/artifacts
       # PACKAGE_DIST_DIR: ${{ github.workspace }}/build/packages
       RUNFILE_BUILD_DIR: ${{ github.workspace }}/build
-      RELEASE_TYPE: ${{ inputs.release_type || '' }}
-      S3_BUCKET_NATIVE: "therock-${{ inputs.release_type }}-runfile"
+      RELEASE_TYPE: ${{ inputs.release_type || 'dev' }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       # - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
@@ -114,22 +113,28 @@ jobs:
       - name: Show .run file
         run: find . -name "*.run" -type f
 
-      # - name: Install AWS CLI
-      #   run: bash ./dockerfiles/install_awscli.sh
+      - name: Install AWS CLI
+        working-directory: ${{ github.workspace }}
+        run: bash ./dockerfiles/install_awscli.sh
 
-      # - name: Configure AWS Credentials for non-forked repos
-      #   uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
-      #   with:
-      #     aws-region: us-east-2
-      #     role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}
+      - name: Configure AWS Credentials
+        if: ${{ github.repository_owner == 'ROCm' }}
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type || 'dev' }}
 
-      # - name: Upload Package repo to S3
-      #   id: upload-packages
-      #   run: |
-      #     echo "Uploading to s3 bucket : ${{ inputs.release_type }}"
-      #     python ./build_tools/packaging/linux/upload_package_repo.py \
-      #       --pkg-type ${{ inputs.native_package_type }} \
-      #       --s3-bucket ${{ env.S3_BUCKET_NATIVE }} \
-      #       --amdgpu-family ${{ inputs.artifact_group }} \
-      #       --artifact-id ${{ env.ARTIFACT_RUN_ID }} \
-      #       --job ${{ inputs.release_type }}
+      - name: Upload runfile to S3
+        if: ${{ github.repository_owner == 'ROCm' }}
+        env:
+          # S3_BUCKET_RUNFILE: "therock-${{ inputs.release_type }}-runfile"
+          S3_BUCKET_RUNFILE: "therock-${{ env.RELEASE_TYPE }}-runfile"
+          S3_SUBDIR: "$(date -u +%Y%m%d)-${{ github.run_id }}"
+        run: |
+          RUNFILE=$(find . -name "*.run" -type f | head -1)
+          if [ -z "$RUNFILE" ]; then
+            echo "ERROR: No .run file found"
+            exit 1
+          fi
+          echo "Uploading $RUNFILE to s3://${{ env.S3_BUCKET_RUNFILE }}/$(date -u +%Y%m%d)-${{ github.run_id }}/"
+          aws s3 cp "$RUNFILE" "s3://${{ env.S3_BUCKET_RUNFILE }}/$(date -u +%Y%m%d)-${{ github.run_id }}/"
