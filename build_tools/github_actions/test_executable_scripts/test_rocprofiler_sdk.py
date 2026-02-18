@@ -3,6 +3,7 @@ import os
 import shlex
 import subprocess
 from pathlib import Path
+import sys
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 OUTPUT_ARTIFACTS_DIR = os.getenv("OUTPUT_ARTIFACTS_DIR")
@@ -35,9 +36,7 @@ if old_ld_lib_path:
 else:
     environ_vars["LD_LIBRARY_PATH"] = f"{THEROCK_LIB_PATH}:{sysdeps_path}"
 
-python3_path = shutil.which("python3")
-if not python3_path:
-    raise RuntimeError("Could not find python3 in PATH")
+python3_path = sys.executable
 
 # CMake Configuration
 cmake_config_cmd = [
