@@ -104,6 +104,7 @@ function(therock_provide_artifact slice_name)
         "dist-${ARG_DISTRIBUTION}+expunge"
         COMMAND
           "${CMAKE_COMMAND}" -E rm -rf "${_dist_dir}"
+        VERBATIM
       )
       add_dependencies(therock-expunge "dist-${ARG_DISTRIBUTION}+expunge")
 
@@ -123,6 +124,7 @@ function(therock_provide_artifact slice_name)
             --component "${ARG_DISTRIBUTION}"
         DEPENDS
           "dist-${ARG_DISTRIBUTION}"
+        VERBATIM
       )
     endif()
   endif()
@@ -207,6 +209,7 @@ function(therock_provide_artifact slice_name)
       ${_stamp_file_deps}
       "${ARG_DESCRIPTOR}"
       "${_fileset_tool}"
+    VERBATIM
   )
 
   # When splitting is enabled, run split_artifacts.py on each component
@@ -246,6 +249,7 @@ function(therock_provide_artifact slice_name)
         DEPENDS
           "${_unsplit_manifest}"
           "${_split_tool}"
+        VERBATIM
       )
     endforeach()
 
@@ -274,6 +278,7 @@ function(therock_provide_artifact slice_name)
         DEPENDS
           ${_split_manifest_files}
           "${_fileset_tool}"
+        VERBATIM
       )
     endif()
 
@@ -367,6 +372,7 @@ function(therock_provide_artifact slice_name)
       DEPENDS
         "${_manifest_file}"
         "${_fileset_tool}"
+      VERBATIM
     )
   endforeach()
   add_custom_target("${_archive_target_name}" DEPENDS ${_archive_files})
@@ -377,6 +383,7 @@ function(therock_provide_artifact slice_name)
     "${_archive_target_name}+expunge"
     COMMAND
       "${CMAKE_COMMAND}" -E rm -f ${_archive_files} ${_archive_sha_files}
+    VERBATIM
   )
   add_dependencies(therock-expunge "${_archive_target_name}+expunge")
 
@@ -389,6 +396,7 @@ function(therock_provide_artifact slice_name)
     "${_target_name}+expunge"
     COMMAND
       "${CMAKE_COMMAND}" -E rm -rf ${_expunge_paths}
+    VERBATIM
   )
   add_dependencies(therock-expunge "${_target_name}+expunge")
   add_dependencies("dist-${ARG_DISTRIBUTION}+expunge" "${_target_name}+expunge")
