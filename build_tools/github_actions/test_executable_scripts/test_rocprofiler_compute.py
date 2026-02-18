@@ -65,11 +65,11 @@ SMOKE_TESTS = [
     "test_analyze_workloads",
     "test_analyze_commands",
     "test_metric_validation",
+    "test_profile_iteration_multiplexing_1",
 ]
 SMOKE_EXCLUDED_TESTS = [
     "test_profile_iteration_multiplexing_stochastic",
     "test_profile_iteration_multiplexing_2",
-    "test_profile_iteration_multiplexing_1",
     "test_profile_live_attach_detach",
     "test_profile_sets_func",
     "test_profile_pc_sampling",
