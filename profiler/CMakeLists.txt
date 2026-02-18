@@ -118,7 +118,10 @@ endif(THEROCK_BUILD_TESTING)
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
-      -DROCPROFILER_THEROCK_PACKAGING=ON
+      -DROCPROFILER_BUILD_CI=OFF
+      -DROCPROFILER_BUILD_TESTS=ON
+      -DROCPROFILER_BUILD_INTEGRATION_TESTS=OFF
+      -DROCPROFILER_BUILD_SAMPLES=OFF
       -DCMAKE_PREFIX_PATH="${THEROCK_BINARY_DIR}/dist/rocm"
       -DROCM_PATH="${THEROCK_BINARY_DIR}/dist/rocm"
       -DROCPROFILER_PYTHON_VERSIONS:STRING="${_detected_python_versions_str}"
@@ -253,8 +256,11 @@ endif(THEROCK_BUILD_TESTING)
         -DROCPROFSYS_BUILD_LIBIBERTY=ON
         -DROCPROFSYS_BUILD_BOOST=ON
         -DROCPROFSYS_BUILD_DYNINST=ON
+<<<<<<< HEAD
         -DROCPROFSYS_BUILD_FOR_THEROCK=ON
         -DROCPROFSYS_GFX_TARGETS="${_ROCPROFSYS_GFX_TARGETS_ESCAPED}"
+=======
+>>>>>>> 84a0da7c (get latests changes from prev PR)
         -DROCPROFSYS_BUILD_SPDLOG=OFF
       INSTALL_RPATH_DIRS
         "lib"
@@ -268,6 +274,8 @@ endif(THEROCK_BUILD_TESTING)
         hip-clr
         rocprofiler-register
         rocprofiler-sdk
+        therock-spdlog
+        therock-fmt
         ${THEROCK_BUNDLED_LIBDRM}
         ${THEROCK_BUNDLED_SQLITE3}
     )
