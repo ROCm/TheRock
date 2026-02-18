@@ -35,6 +35,10 @@ if old_ld_lib_path:
 else:
     environ_vars["LD_LIBRARY_PATH"] = f"{THEROCK_LIB_PATH}:{sysdeps_path}"
 
+python3_path = shutil.which("python3")
+if not python3_path:
+    raise RuntimeError("Could not find python3 in PATH")
+
 # CMake Configuration
 cmake_config_cmd = [
     "cmake",
@@ -46,6 +50,7 @@ cmake_config_cmd = [
     f"-DCMAKE_HIP_COMPILER={THEROCK_PATH}/llvm/bin/amdclang++",
     f"-DCMAKE_C_COMPILER={THEROCK_PATH}/llvm/bin/amdclang",
     f"-DCMAKE_CXX_COMPILER={THEROCK_PATH}/llvm/bin/amdclang++",
+    f"-DPython3_EXECUTABLE={python3_path}",
 ]
 
 logging.info(
