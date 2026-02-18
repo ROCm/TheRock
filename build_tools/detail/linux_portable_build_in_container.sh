@@ -35,7 +35,7 @@ fi
 PYTHON_EXECUTABLES_ARG=""
 PYTHON_SHARED_EXECUTABLES_ARG=""
 if [ "${MANYLINUX}" = "1" ] || [ "${MANYLINUX}" = "true" ]; then
-  PYTHON_EXECUTABLES_ARG="-DTHEROCK_DIST_PYTHON_EXECUTABLES=/opt/python/cp38-cp38/bin/python;/opt/python/cp39-cp39/bin/python;/opt/python/cp310-cp310/bin/python;/opt/python/cp311-cp311/bin/python;/opt/python/cp312-cp312/bin/python;/opt/python/cp313-cp313/bin/python"
+  PYTHON_EXECUTABLES_ARG="-DTHEROCK_DIST_PYTHON_EXECUTABLES=/opt/python/cp310-cp310/bin/python;/opt/python/cp311-cp311/bin/python;/opt/python/cp312-cp312/bin/python;/opt/python/cp313-cp313/bin/python"
   PYTHON_SHARED_EXECUTABLES_ARG="-DTHEROCK_SHARED_PYTHON_EXECUTABLES=/opt/python-shared/cp310-cp310/bin/python3;/opt/python-shared/cp311-cp311/bin/python3;/opt/python-shared/cp312-cp312/bin/python3;/opt/python-shared/cp313-cp313/bin/python3;/opt/python-shared/cp314-cp314/bin/python3"
 fi
 

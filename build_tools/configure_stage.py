@@ -27,6 +27,7 @@ The script generates flags like:
 """
 
 import argparse
+import platform as platform_module
 import sys
 from pathlib import Path
 from typing import List, Set
@@ -50,12 +51,16 @@ def get_topology() -> BuildTopology:
     return BuildTopology(str(topology_path))
 
 
-def get_stage_features(topology: BuildTopology, stage_name: str) -> Set[str]:
+def get_stage_features(
+    topology: BuildTopology, stage_name: str, platform_name: str = ""
+) -> Set[str]:
     """Get the set of feature names that should be enabled for a stage.
 
     This includes:
     1. Features for artifacts produced by this stage
     2. Features for artifacts that are inbound dependencies (needed but prebuilt)
+
+    Artifacts whose disable_platforms includes platform_name are excluded.
 
     Note: The inbound dependencies will be marked as prebuilt via buildctl.py bootstrap,
     but CMake still needs their features enabled for dependency resolution.
@@ -77,6 +82,8 @@ def get_stage_features(topology: BuildTopology, stage_name: str) -> Set[str]:
     for artifact_name in all_artifacts:
         if artifact_name in topology.artifacts:
             artifact = topology.artifacts[artifact_name]
+            if platform_name and platform_name in artifact.disable_platforms:
+                continue
             feature_name = topology.get_artifact_feature_name(artifact)
             features.add(feature_name)
 
@@ -89,6 +96,7 @@ def generate_cmake_args(
     dist_amdgpu_families: str,
     topology: BuildTopology,
     include_comments: bool = False,
+    platform_name: str = platform_module.system().lower(),
 ) -> List[str]:
     """Generate CMake arguments for building a specific stage.
 
@@ -98,6 +106,8 @@ def generate_cmake_args(
         dist_amdgpu_families: Semicolon-separated GPU families for dist targets
         topology: BuildTopology instance
         include_comments: Include comment lines explaining each flag
+        platform_name: Platform name for platform-specific args (e.g., "windows",
+            "linux"). Defaults to the current platform.
 
     Returns:
         List of CMake argument strings
@@ -124,7 +134,7 @@ def generate_cmake_args(
     args.append("-DTHEROCK_ENABLE_ALL=OFF")
 
     # Get features to enable for this stage
-    features = get_stage_features(topology, stage_name)
+    features = get_stage_features(topology, stage_name, platform_name=platform_name)
 
     if include_comments:
         args.append("")
@@ -191,6 +201,12 @@ def main(argv: List[str] = None):
         action="store_true",
         help="Write cmake_args to GITHUB_OUTPUT (for GitHub Actions)",
     )
+    parser.add_argument(
+        "--platform",
+        type=str,
+        default=platform_module.system().lower(),
+        help=f"Platform for platform-specific CMake args (default: {platform_module.system().lower()})",
+    )
 
     args = parser.parse_args(argv)
 
@@ -215,6 +231,7 @@ def main(argv: List[str] = None):
         dist_amdgpu_families=args.dist_amdgpu_families,
         topology=topology,
         include_comments=args.comments and not args.oneline,
+        platform_name=args.platform,
     )
 
     # Filter out comments if not requested
