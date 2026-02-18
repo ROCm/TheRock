@@ -5,9 +5,9 @@ Utility modules organized into logical subdirectories for maintainability and sc
 ## Structure
 
 ```
-benchmarks/utils/
+extended_tests/utils/
 ├── __init__.py              # Public exports
-├── benchmark_client.py      # Main BenchmarkClient API
+├── test_client.py           # Main BenchmarkClient API
 ├── constants.py             # Framework constants
 ├── exceptions.py            # Custom exceptions
 ├── logger.py                # Logging configuration
@@ -38,11 +38,13 @@ benchmarks/utils/
 
 ### From Benchmark Scripts
 
-Benchmark scripts add `benchmarks/` to `sys.path`, then import:
+Benchmark scripts add `extended_tests/` to `sys.path`, then import:
 
 ```python
 # Import path setup (already done in benchmark_base.py)
-sys.path.insert(0, str(Path(__file__).parent.parent))  # Adds benchmarks/ to path
+sys.path.insert(
+    0, str(Path(__file__).resolve().parents[2])
+)  # Adds extended_tests/ to path
 
 # Core utilities
 from utils.logger import log
@@ -50,7 +52,7 @@ from utils.constants import Constants
 from utils.exceptions import ConfigurationError
 
 # Main API classes
-from utils.benchmark_client import BenchmarkClient
+from utils.test_client import BenchmarkClient
 from utils.system.system_detector import SystemDetector
 from utils.config.config_helper import ConfigHelper
 from utils.results.results_handler import ResultsHandler
@@ -81,7 +83,7 @@ from utils.results import ResultsHandler, ResultsAPI
 - **constants.py** - Framework constants and defaults
 - **exceptions.py** - Custom exception classes
 - **logger.py** - Logging configuration
-- **benchmark_client.py** - Main BenchmarkClient API
+- **test_client.py** - Main BenchmarkClient API
 
 ### Config
 
@@ -128,9 +130,9 @@ Test results formatting, saving, and API submission.
 cd /path/to/TheRock
 
 # Run a benchmark test (imports are handled internally)
-python build_tools/github_actions/benchmarks/scripts/test_rocfft_benchmark.py
+python tests/extended_tests/benchmark/scripts/test_rocfft_benchmark.py
 
 # Verify utils imports work
-cd build_tools/github_actions/benchmarks
+cd tests/extended_tests
 python -c "from utils.logger import log; print('Utils imports working')"
 ```
