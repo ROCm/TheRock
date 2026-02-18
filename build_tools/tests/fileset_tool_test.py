@@ -290,7 +290,6 @@ class FilesetToolTest(unittest.TestCase):
         self.assertEqual(os.stat(flat_orig).st_ino, os.stat(flat_link).st_ino)
         self.assertEqual(flat_orig.read_text(), "hardlink test content")
 
-
     def testArtifactFlattenSplit(self):
         """Test artifact-flatten-split discovers and flattens split artifact dirs."""
         artifacts_dir = self.temp_dir / "artifacts"
