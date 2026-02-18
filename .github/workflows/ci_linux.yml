@@ -32,6 +32,9 @@ on:
         type: string
       sanity_check_only_for_family:
         type: boolean
+      build_pytorch:
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -163,4 +166,26 @@ jobs:
       test_runs_on: ${{ inputs.test_runs_on }}
       package_find_links_url: ${{ needs.build_portable_linux_python_packages.outputs.package_find_links_url }}
       python_version: "3.12"
+      rocm_version: ${{ inputs.rocm_package_version }}
+
+  # TODO(#3291): Add test_pytorch_wheels job
+  build_portable_linux_pytorch_wheels_ci:
+    needs: [build_portable_linux_python_packages]
+    name: Build PyTorch
+    if: >-
+      ${{
+        !failure() &&
+        !cancelled() &&
+        (
+          inputs.use_prebuilt_artifacts == 'false' ||
+          inputs.use_prebuilt_artifacts == 'true'
+        ) &&
+        inputs.build_pytorch == true
+      }}
+    uses: ./.github/workflows/build_portable_linux_pytorch_wheels_ci.yml
+    with:
+      artifact_group: ${{ inputs.artifact_group }}
+      python_version: "3.12"
+      pytorch_git_ref: "release/2.10"
+      rocm_package_find_links_url: ${{ needs.build_portable_linux_python_packages.outputs.package_find_links_url }}
       rocm_version: ${{ inputs.rocm_package_version }}

@@ -18,8 +18,6 @@
   * WINDOWS_USE_PREBUILT_ARTIFACTS (optional): If enabled, CI will only run Windows tests
   * BRANCH_NAME (optional): The branch name
   * BUILD_VARIANT (optional): The build variant to run (ex: release, asan, tsan)
-  * ROCM_THEROCK_TEST_RUNNERS (optional): Test runner JSON object, coming from ROCm organization
-  * LOAD_TEST_RUNNERS_FROM_VAR (optional): boolean env variable that loads in ROCm org data if enabled
 
   Environment variables (for pull requests):
   * PR_LABELS (optional) : JSON list of PR label names.
@@ -215,6 +213,8 @@ def generate_multi_arch_matrix(
         # Extract family names for dist_amdgpu_families
         family_names = [f["amdgpu_family"] for f in family_info_list]
 
+        expect_failure = info.get("expect_failure", False)
+        expect_pytorch_failure = info.get("expect_pytorch_failure", False)
         matrix_row = {
             "matrix_per_family_json": json.dumps(family_info_list),
             "dist_amdgpu_families": ";".join(family_names),
@@ -222,7 +222,8 @@ def generate_multi_arch_matrix(
             "build_variant_label": info["build_variant_label"],
             "build_variant_suffix": info["build_variant_suffix"],
             "build_variant_cmake_preset": info["build_variant_cmake_preset"],
-            "expect_failure": info.get("expect_failure", False),
+            "expect_failure": expect_failure,
+            "build_pytorch": not expect_failure and not expect_pytorch_failure,
         }
         matrix_output.append(matrix_row)
 
@@ -489,6 +490,15 @@ def matrix_generator(
                 # But if not, honor what is already there.
                 if build_variant_info.get("expect_failure", False):
                     matrix_row["expect_failure"] = True
+
+                # Enable pytorch builds for families without known build failures.
+                # TODO(#3291): Add finer-grained controls over when pytorch is built
+                expect_failure = matrix_row.get("expect_failure", False)
+                expect_pytorch_failure = matrix_row.get("expect_pytorch_failure", False)
+                matrix_row["build_pytorch"] = (
+                    not expect_failure and not expect_pytorch_failure
+                )
+
                 del matrix_row["build_variants"]
                 matrix_row.update(build_variant_info)
 
@@ -525,6 +535,14 @@ def matrix_generator(
                             if "test-runs-on-multi-gpu" in platform_info:
                                 matrix_row["test-runs-on-multi-gpu"] = ""
                         break
+
+                # TODO(#3433): Remove sandbox logic once ASAN tests are passing and environment is no longer required
+                # To avoid impact on the production environment, we use the custom sandbox runners if this is an ASAN test run
+                if (
+                    "asan" in base_args.get("build_variant")
+                    and "test-runs-on-sandbox" in matrix_row
+                ):
+                    matrix_row["test-runs-on"] = matrix_row["test-runs-on-sandbox"]
 
                 matrix_output.append(matrix_row)
 
@@ -644,7 +662,16 @@ def main(base_args, linux_families, windows_families):
         result = []
         for item in variants:
             if "family" in item:
-                result.append(item["family"])
+                label = item["family"]
+                # Also show flags for the family, if any.
+                flags = []
+                if item.get("expect_failure"):
+                    flags.append("expect_failure")
+                if item.get("build_pytorch"):
+                    flags.append("build_pytorch")
+                if flags:
+                    label += f" ({', '.join(flags)})"
+                result.append(label)
             elif "matrix_per_family_json" in item:
                 # Multi-arch mode: show the families from the JSON
                 families = json.loads(item["matrix_per_family_json"])
