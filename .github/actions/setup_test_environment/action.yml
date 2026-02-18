@@ -79,13 +79,9 @@ runs:
         GITHUB_TOKEN: ${{ github.token }}
         IS_PR_FROM_FORK: ${{ inputs.IS_PR_FROM_FORK }}
       run: |
-        AMDGPU_TARGETS_ARG=""
-        if [ -n "${AMDGPU_TARGETS}" ]; then
-          AMDGPU_TARGETS_ARG="--amdgpu-targets=${AMDGPU_TARGETS}"
-        fi
         python ./build_tools/install_rocm_from_artifacts.py \
           --run-id=${ARTIFACT_RUN_ID} \
           --artifact-group=${ARTIFACT_GROUP} \
-          ${AMDGPU_TARGETS_ARG} \
+          --amdgpu-targets=${AMDGPU_TARGETS} \
           --output-dir=${OUTPUT_ARTIFACTS_DIR} \
           ${FETCH_ARTIFACT_ARGS}

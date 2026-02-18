@@ -71,7 +71,7 @@ amdgpu_family_info_matrix_presubmit = {
     "gfx110x": {
         "linux": {
             # TODO(#3298): Re-enable machine once HSA_STATUS_ERROR_OUT_OF_RESOURCES issues are resolved
-            # Label is linux-gfx110X-gpu-rocm
+            # Label is linux-gfx110X-gpu-rocm, fetch-gfx-targets should be ["gfx1100"]
             "test-runs-on": "",
             "family": "gfx110X-all",
             "fetch-gfx-targets": [],
@@ -113,14 +113,14 @@ amdgpu_family_info_matrix_presubmit = {
         "linux": {
             "test-runs-on": "linux-gfx120X-gpu-rocm",
             "family": "gfx120X-all",
-            "fetch-gfx-targets": ["gfx1201"],
+            "fetch-gfx-targets": ["gfx1200", "gfx1201"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
             "sanity_check_only_for_family": True,
         },
         "windows": {
             # TODO(#2962): Re-enable machine once sanity checks work with this architecture
-            # Label is windows-gfx120X-gpu-rocm
+            # Label is windows-gfx120X-gpu-rocm, fetch-gfx-targets should be ["gfx1200", "gfx1201"]
             "test-runs-on": "",
             "family": "gfx120X-all",
             "fetch-gfx-targets": [],
