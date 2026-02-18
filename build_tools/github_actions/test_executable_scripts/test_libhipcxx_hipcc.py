@@ -73,6 +73,15 @@ logging.info(f"ROCm version: {ROCM_VERSION}")
 
 environ_vars = os.environ.copy()
 
+
+def prepend_env_path(env: dict, var_name: str, new_path: str):
+    existing = env.get(var_name)
+    if existing:
+        env[var_name] = f"{new_path}{os.pathsep}{existing}"
+    else:
+        env[var_name] = new_path
+
+
 # Resolve absolute paths
 OUTPUT_ARTIFACTS_PATH = Path(OUTPUT_ARTIFACTS_DIR).resolve()
 THEROCK_BIN_PATH = Path(THEROCK_BIN_DIR).resolve()
@@ -90,17 +99,11 @@ environ_vars["CMAKE_GENERATOR"] = "Ninja"
 
 # Add ROCm binaries to PATH
 rocm_bin = str(THEROCK_BIN_PATH)
-if "PATH" in environ_vars:
-    environ_vars["PATH"] = f"{rocm_bin}:{environ_vars['PATH']}"
-else:
-    environ_vars["PATH"] = rocm_bin
+prepend_env_path(environ_vars, "PATH", rocm_bin)
 
 # Set library paths
 rocm_lib = str(OUTPUT_ARTIFACTS_PATH / "lib")
-if "LD_LIBRARY_PATH" in environ_vars:
-    environ_vars["LD_LIBRARY_PATH"] = f"{rocm_lib}:{environ_vars['LD_LIBRARY_PATH']}"
-else:
-    environ_vars["LD_LIBRARY_PATH"] = rocm_lib
+prepend_env_path(environ_vars, "LD_LIBRARY_PATH", rocm_lib)
 
 logging.info(f"ROCM_PATH: {environ_vars['ROCM_PATH']}")
 logging.info(f"HIP_PATH: {environ_vars['HIP_PATH']}")
