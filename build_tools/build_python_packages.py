@@ -65,23 +65,35 @@ def run(args: argparse.Namespace):
             )
         )
 
-    # And populate the devel package, which catches everything else.
-    devel = PopulatedDistPackage(params, logical_name="devel")
-    devel.populate_devel_files(
-        addl_artifact_names=[
-            # Since prim and rocwmma are header only libraries, they are not
-            # included in runtime packages, but we still want them in the devel package.
-            "prim",
-            "rocwmma",
-            # Third party dependencies needed by hipDNN consumers.
-            "flatbuffers",
-            "nlohmann-json",
-        ],
-        tarball_compression=args.devel_tarball_compression,
-    )
-
+    # Build non-devel wheels first — the rocm-sdk-devel staging dir does not exist yet,
+    # so the default scan in build_packages will not accidentally include it.
     if args.build_packages:
         build_packages(args.dest_dir, wheel_compression=args.wheel_compression)
+
+    # One devel package per target family, each built to its own dist subdirectory.
+    for target_family in sorted(params.all_target_families):
+        devel = PopulatedDistPackage(
+            params, logical_name="devel", target_family=target_family
+        )
+        devel.populate_devel_files(
+            addl_artifact_names=[
+                # Since prim and rocwmma are header only libraries, they are not
+                # included in runtime packages, but we still want them in the devel package.
+                "prim",
+                "rocwmma",
+                # Third party dependencies needed by hipDNN consumers.
+                "flatbuffers",
+                "nlohmann-json",
+            ],
+            tarball_compression=args.devel_tarball_compression,
+        )
+        if args.build_packages:
+            build_packages(
+                args.dest_dir,
+                package_dirs=[devel.path],
+                dist_dir=args.dest_dir / "dist" / target_family,
+                wheel_compression=args.wheel_compression,
+            )
 
     print(
         f"::: Finished building packages at '{args.dest_dir}' with version '{args.version}'"

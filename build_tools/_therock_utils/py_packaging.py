@@ -404,10 +404,7 @@ class PopulatedDistPackage:
                 # We didn't generate a runtime artifact for it, so no devel
                 # artifact.
                 return False
-            if (
-                an.target_family != "generic"
-                and an.target_family != self.params.default_target_family
-            ):
+            if an.target_family != "generic" and an.target_family != self.target_family:
                 # We only materialize the default target family for devel packages.
                 return False
             return True
@@ -444,18 +441,41 @@ class PopulatedDistPackage:
     def _find_populated(
         self, relpath: str
     ) -> "tuple[PopulatedDistPackage, Path] | None":
-        """Search all populated runtime packages for a materialized relpath."""
+        """Search all populated runtime packages for a materialized relpath.
+
+        When this devel package is target-family-specific, skip runtime packages
+        that belong to a different (non-None) target family so that symlinks point
+        into the correct arch's libraries package.
+        """
         for pkg in self.params.populated_packages:
-            if pkg.files.has(relpath):
-                return pkg.files.materialized_relpaths[relpath]
+            if not pkg.files.has(relpath):
+                continue
+            if (
+                self.target_family is not None
+                and pkg.target_family is not None
+                and pkg.target_family != self.target_family
+            ):
+                continue
+            return pkg.files.materialized_relpaths[relpath]
         return None
 
     def _find_soname_alias(self, relpath: str) -> "str | None":
-        """Search all populated runtime packages for a soname alias."""
+        """Search all populated runtime packages for a soname alias.
+
+        When this devel package is target-family-specific, skip runtime packages
+        that belong to a different (non-None) target family.
+        """
         for pkg in self.params.populated_packages:
             alias = pkg.files.soname_aliases.get(relpath)
-            if alias is not None:
-                return alias
+            if alias is None:
+                continue
+            if (
+                self.target_family is not None
+                and pkg.target_family is not None
+                and pkg.target_family != self.target_family
+            ):
+                continue
+            return alias
         return None
 
     def _populate_devel_file(
@@ -575,13 +595,22 @@ def get_soname(sofile: Path) -> str:
     )
 
 
-def build_packages(dest_dir: Path, *, wheel_compression: bool = True):
-    dist_dir = dest_dir / "dist"
-    for child_path in dest_dir.iterdir():
-        if not child_path.is_dir():
-            continue
-        if not (child_path / "pyproject.toml").exists():
-            continue
+def build_packages(
+    dest_dir: Path,
+    *,
+    wheel_compression: bool = True,
+    package_dirs: list[Path] | None = None,
+    dist_dir: Path | None = None,
+):
+    effective_dist_dir = dist_dir or (dest_dir / "dist")
+    effective_dist_dir.mkdir(parents=True, exist_ok=True)
+    if package_dirs is None:
+        package_dirs = [
+            p
+            for p in dest_dir.iterdir()
+            if p.is_dir() and (p / "pyproject.toml").exists()
+        ]
+    for child_path in package_dirs:
         child_name = child_path.name
 
         # Some of our packages build as sdists and some as wheels.
@@ -589,7 +618,6 @@ def build_packages(dest_dir: Path, *, wheel_compression: bool = True):
         # because the "build frontends" have an impossible compatibility matrix
         # and opinions about how to pass arguments to the backends. So we skip
         # the frontends for such a closed case as this.
-        build_args = [sys.executable, "-m", "build", "-v", "--outdir", str(dist_dir)]
         setuppy_path = child_path / "setup.py"
         build_args = [
             sys.executable,
@@ -606,7 +634,7 @@ def build_packages(dest_dir: Path, *, wheel_compression: bool = True):
             [
                 "-v",
                 "--dist-dir",
-                str(dist_dir.resolve()),
+                str(effective_dist_dir.resolve()),
             ]
         )
 
