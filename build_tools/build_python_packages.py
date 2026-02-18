@@ -49,7 +49,7 @@ def run(args: argparse.Namespace):
     )
 
     # Populate each target-specific library package.
-    for target_family in params.all_target_families:
+    for target_family in sorted(params.all_target_families):
         lib = PopulatedDistPackage(
             params, logical_name="libraries", target_family=target_family
         )

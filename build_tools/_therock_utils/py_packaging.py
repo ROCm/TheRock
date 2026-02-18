@@ -78,7 +78,7 @@ class Parameters:
         self.artifacts = artifacts
         self.all_target_families = artifacts.all_target_families
         self.default_target_family = sorted(self.all_target_families)[0]
-        self.files = PopulatedFiles()
+        self.populated_packages: list["PopulatedDistPackage"] = []
         self.runtime_artifact_names: set[str] = set()
 
         # Load and interpolate the _dist_info.py template.
@@ -136,6 +136,7 @@ class PopulatedDistPackage:
             )
 
         self.rpath_deps: list[tuple["PopulatedDistPackage", str]] = []
+        self.files = PopulatedFiles()
 
         # Augment the dist_info with THIS_TARGET_FAMILY and THIS_PACKAGE_ENTRY
         dist_info_contents = self.params.dist_info_contents
@@ -234,10 +235,9 @@ class PopulatedDistPackage:
             # This will be used later to restrict devel packages to only these.
             self.params.runtime_artifact_names.add(an.name)
 
-        files = self.params.files
         package_dest_dir = self.platform_dir
         for relpath, dir_entry in artifacts.pm.matches():
-            if files.has(relpath):
+            if self.files.has(relpath):
                 continue
             dest_path = package_dest_dir / relpath
             if dir_entry.is_symlink():
@@ -256,10 +256,11 @@ class PopulatedDistPackage:
                                 relpath, dest_path, dir_entry, resolve_src=True
                             )
                         else:
-                            self.params.files.soname_aliases[relpath] = soname
+                            self.files.soname_aliases[relpath] = soname
                         continue
                 # Otherwise, just copy the file.
                 self._populate_file(relpath, dest_path, dir_entry, resolve_src=True)
+        self.params.populated_packages.append(self)
         return self
 
     def _populate_runtime_symlink(
@@ -281,7 +282,7 @@ class PopulatedDistPackage:
             if soname == src_entry.name:
                 self._populate_file(relpath, dest_path, src_entry, resolve_src=True)
             else:
-                self.params.files.soname_aliases[relpath] = soname
+                self.files.soname_aliases[relpath] = soname
             return
         # Case 3: Executable.
         if file_type == "exe":
@@ -289,7 +290,7 @@ class PopulatedDistPackage:
             raw_link_target = os.readlink(src_entry.path)
             log(f"  EXESTUB: {relpath} (from {raw_link_target})", vlog=2)
             generate_exe_link_stub(dest_path, raw_link_target)
-            self.params.files.mark_populated(self, relpath, dest_path)
+            self.files.mark_populated(self, relpath, dest_path)
             return
         # Case 4: Copy.
         self._populate_file(relpath, dest_path, src_entry, resolve_src=True)
@@ -319,10 +320,10 @@ class PopulatedDistPackage:
         # We have to patch many files, so we do not hard-link: always copy.
         log(f"  MATERIALIZE: {relpath} (from {src_path})", vlog=2)
         shutil.copy2(src_path, dest_path)
-        if self.params.files.has(relpath):
+        if self.files.has(relpath):
             log(f"WARNING: Path already materialized: {relpath}")
         else:
-            self.params.files.mark_populated(self, relpath, dest_path)
+            self.files.mark_populated(self, relpath, dest_path)
 
         if not is_windows:
             # Update RPATHs on Linux.
@@ -437,6 +438,23 @@ class PopulatedDistPackage:
                     tf.add(file_path, arcname=arcname, recursive=False)
         shutil.rmtree(package_path)
 
+    def _find_populated(
+        self, relpath: str
+    ) -> "tuple[PopulatedDistPackage, Path] | None":
+        """Search all populated runtime packages for a materialized relpath."""
+        for pkg in self.params.populated_packages:
+            if pkg.files.has(relpath):
+                return pkg.files.materialized_relpaths[relpath]
+        return None
+
+    def _find_soname_alias(self, relpath: str) -> "str | None":
+        """Search all populated runtime packages for a soname alias."""
+        for pkg in self.params.populated_packages:
+            alias = pkg.files.soname_aliases.get(relpath)
+            if alias is not None:
+                return alias
+        return None
+
     def _populate_devel_file(
         self, relpath: str, dest_path: Path, src_entry: os.DirEntry[str]
     ):
@@ -445,18 +463,17 @@ class PopulatedDistPackage:
             return
 
         # Re-add soname aliases.
-        soname_alias = self.params.files.soname_aliases.get(relpath)
+        soname_alias = self._find_soname_alias(relpath)
         if soname_alias is not None:
             # This file is an alias to the proper soname. Just emit a relative
             # link.
             dest_path.symlink_to(soname_alias)
             return
 
-        if self.params.files.has(relpath):
+        populated = self._find_populated(relpath)
+        if populated is not None:
             # Already materialized: Link to it.
-            populated_package, populated_path = self.params.files.materialized_relpaths[
-                relpath
-            ]
+            populated_package, populated_path = populated
             # Materialize as a symlink to the original placement. This is tricky
             # because the symlink needs to be correct with respect to the install
             # placement, which is something like:
