@@ -63,6 +63,8 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         -DDYNAMIC_ARCH=${_enable_dynamicArch}
         -DBUILD_TESTING=OFF
         -DUSE_OPENMP=ON
+      COMPILER_TOOLCHAIN
+        amd-hip
       EXTRA_DEPENDS
         "${_download_stamp}"
     )
