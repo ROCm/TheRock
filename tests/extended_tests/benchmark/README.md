@@ -26,50 +26,37 @@ Automated benchmark testing framework for ROCm libraries with system detection, 
 
 ### Available Benchmarks
 
-- `benchmarks/scripts/test_hipblaslt_benchmark.py` - hipBLASLt benchmark suite
-- `benchmarks/scripts/test_rccl_benchmark.py` - RCCL collective communication benchmarks (requires OpenMPI)
-- `benchmarks/scripts/test_rocblas_benchmark.py` - rocBLAS benchmark suite
-- `benchmarks/scripts/test_rocfft_benchmark.py` - ROCfft benchmark suite
-- `benchmarks/scripts/test_rocrand_benchmark.py` - ROCrand benchmark suite
-- `benchmarks/scripts/test_rocsolver_benchmark.py` - ROCsolver benchmark suite
+- `extended_tests/benchmark/scripts/test_hipblaslt_benchmark.py` - hipBLASLt benchmark suite
+- `extended_tests/benchmark/scripts/test_rccl_benchmark.py` - RCCL collective communication benchmarks (requires OpenMPI)
+- `extended_tests/benchmark/scripts/test_rocblas_benchmark.py` - rocBLAS benchmark suite
+- `extended_tests/benchmark/scripts/test_rocfft_benchmark.py` - ROCfft benchmark suite
+- `extended_tests/benchmark/scripts/test_rocrand_benchmark.py` - ROCrand benchmark suite
+- `extended_tests/benchmark/scripts/test_rocsolver_benchmark.py` - ROCsolver benchmark suite
 
 ## Project Structure
 
 ```
-build_tools/github_actions/
-├── benchmarks/                 # All benchmark-related code
-│   ├── scripts/                # Benchmark test implementations
-│   │   ├── benchmark_base.py   # Base class for all benchmarks
-│   │   ├── test_hipblaslt_benchmark.py
-│   │   ├── test_rccl_benchmark.py
-│   │   ├── test_rocblas_benchmark.py
-│   │   ├── test_rocfft_benchmark.py
-│   │   ├── test_rocrand_benchmark.py
-│   │   └── test_rocsolver_benchmark.py
-│   │
-│   ├── configs/                # Benchmark configs
-│   │   ├── config.yml          # Framework configuration
-│   │   ├── hipblaslt.json      # hipBLASLt benchmark config
-│   │   ├── rccl.json           # RCCL benchmark config
-│   │   ├── rocblas.json        # rocBLAS benchmark config
-│   │   └── rocfft.json         # ROCfft benchmark config
-│   │
-│   ├── utils/                  # Benchmark utilities
-│   │   ├── benchmark_client.py # Main client API
-│   │   ├── logger.py           # Logging utilities
-│   │   ├── config/             # Configuration management
-│   │   ├── system/             # System detection (GPU, ROCm, OS)
-│   │   └── results/            # Results API client & schemas
-│   │
-│   ├── benchmark_test_matrix.py  # Benchmark matrix definitions
-│   └── README.md               # This file
+extended_tests/benchmark/                       # Benchmark test directory
+├── scripts/                     # Benchmark test implementations
+│   ├── benchmark_base.py        # Base class for all benchmarks
+│   ├── test_hipblaslt_benchmark.py
+│   ├── test_rccl_benchmark.py
+│   ├── test_rocblas_benchmark.py
+│   ├── test_rocfft_benchmark.py
+│   ├── test_rocrand_benchmark.py
+│   └── test_rocsolver_benchmark.py
 │
-├── test_executable_scripts/    # Regular functional tests
+├── configs/                     # Benchmark-specific configs
+│   ├── hipblaslt.json           # hipBLASLt benchmark config
+│   ├── rccl.json                # RCCL benchmark config
+│   ├── rocblas.json             # rocBLAS benchmark config
+│   └── rocfft.json              # ROCfft benchmark config
 │
-├── configure_ci.py             # CI workflow orchestration
-├── fetch_test_configurations.py  # Test matrix builder
-└── github_actions_utils.py     # GitHub Actions utilities
+├── benchmark_test_matrix.py     # Benchmark matrix definitions
+└── README.md                    # This file
 ```
+
+> **Note:** For the overall extended_tests structure including shared utilities (`utils/`), configuration (`configs/`), and other test types, see the [main extended_tests README](../README.md).
 
 ## CI/CD Integration
 
@@ -107,7 +94,7 @@ ci_nightly.yml → ci_linux.yml
 
 ### Available Benchmark Tests in CI
 
-The following benchmark tests are defined in `benchmarks/benchmark_test_matrix.py`:
+The following benchmark tests are defined in `tests/extended_tests/benchmark/benchmark_test_matrix.py`:
 
 | Test Name         | Library   | Platform       | Timeout | Shards |
 | ----------------- | --------- | -------------- | ------- | ------ |
@@ -196,7 +183,7 @@ To add a new benchmark test to the nightly CI:
 
 ### 1. Create Benchmark Script
 
-Create `benchmarks/scripts/test_your_benchmark.py`. Reference existing benchmarks like `test_rocfft_benchmark.py` as a template.
+Create `extended_tests/benchmark/scripts/test_your_benchmark.py`. Reference existing benchmarks like `test_rocfft_benchmark.py` as a template.
 
 Key components:
 
@@ -213,7 +200,7 @@ from pathlib import Path
 from typing import Dict, List, Tuple, Any
 from prettytable import PrettyTable
 
-sys.path.insert(0, str(Path(__file__).parent.parent))  # For utils
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # For extended_tests/utils
 sys.path.insert(0, str(Path(__file__).parent))  # For benchmark_base
 from benchmark_base import BenchmarkBase, run_benchmark_main
 from utils.logger import log
@@ -245,7 +232,7 @@ if __name__ == "__main__":
 
 ### 2. Add to Benchmark Test Matrix
 
-Edit `benchmarks/benchmark_test_matrix.py`:
+Edit `tests/extended_tests/benchmark/benchmark_test_matrix.py`:
 
 ```python
 "your_benchmark": {
@@ -276,11 +263,11 @@ export ARTIFACT_RUN_ID=local-test
 export AMDGPU_FAMILIES=gfx950-dcgpu
 
 # Run the benchmark
-python3 build_tools/github_actions/benchmarks/scripts/test_your_benchmark.py
+python3 tests/extended_tests/benchmark/scripts/test_your_benchmark.py
 ```
 
 ## Related Documentation
 
-- [Utils Module Documentation](utils/README.md) - Utility modules reference
+- [Utils Module Documentation](../utils/README.md) - Utility modules reference
 - [CI Nightly Workflow](https://github.com/ROCm/TheRock/actions/workflows/ci_nightly.yml) - GitHub Actions
 - [Test Benchmarks Workflow](../../.github/workflows/test_benchmarks.yml) - Benchmark execution workflow
