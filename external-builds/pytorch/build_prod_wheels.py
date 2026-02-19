@@ -82,6 +82,25 @@ python build_prod_wheels.py build ^
     --pytorch-vision-dir C:/b/vision
 ```
 
+4. Compiler caching (optional):
+
+```
+# Use ccache:
+python build_prod_wheels.py build --use-ccache --output-dir ...
+
+# Use sccache with ROCm compiler wrapping (caches host + HIP device code):
+python build_prod_wheels.py build --use-sccache --output-dir ...
+
+# Use sccache without compiler wrapping (caches host C/C++ only):
+python build_prod_wheels.py build --use-sccache --sccache-no-wrap --output-dir ...
+```
+
+``--use-ccache`` and ``--use-sccache`` are mutually exclusive.
+``--sccache-no-wrap`` is a modifier for ``--use-sccache`` that skips ROCm compiler
+wrapping — useful for developers who want basic caching without modifying compiler
+binaries. See ``build_tools/setup_sccache_rocm.py`` for details on the wrapping
+mechanism.
+
 ## Building Linux portable wheels
 
 On Linux, production wheels are typically built in a manylinux container and must have

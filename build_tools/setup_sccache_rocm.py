@@ -29,6 +29,10 @@ Usage:
     # Restore original compilers
     python setup_sccache_rocm.py --rocm-path /path/to/rocm --restore
 
+    # When called from build_prod_wheels.py:
+    #   --use-sccache                 wraps compilers + sets CMAKE launchers
+    #   --use-sccache --sccache-no-wrap   sets CMAKE launchers only (no wrapping)
+
 Prerequisites:
     sccache must be installed and available in PATH.
     Install: https://github.com/mozilla/sccache#installation
