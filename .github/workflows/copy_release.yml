@@ -65,8 +65,8 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Install the AWS tool
-        run: ./dockerfiles/install_awscli.sh
+      - name: Install boto3
+        run: pip install boto3
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
@@ -81,18 +81,44 @@ jobs:
 
       - name: Copy ROCm packages between S3 buckets
         run: |
-          aws s3 cp \
-            s3://therock-${{ inputs.sourcebucket }}-python/${{ inputs.sourcesubdir }}/${{ inputs.amdgpu_family }}/ \
-            s3://therock-${{ inputs.destbucket }}-python/${{ inputs.destsubdir }}/${{ inputs.amdgpu_family }}/ \
-            --recursive --exclude "*"  --include "rocm*${{ inputs.rocm_version }}*"
+          python3 << 'EOF'
+          import boto3, fnmatch
+          client = boto3.client('s3')
+          src_bucket = 'therock-${{ inputs.sourcebucket }}-python'
+          dst_bucket = 'therock-${{ inputs.destbucket }}-python'
+          src_prefix = '${{ inputs.sourcesubdir }}/${{ inputs.amdgpu_family }}/'
+          dst_prefix = '${{ inputs.destsubdir }}/${{ inputs.amdgpu_family }}/'
+          pattern = 'rocm*${{ inputs.rocm_version }}*'
+          paginator = client.get_paginator('list_objects_v2')
+          for page in paginator.paginate(Bucket=src_bucket, Prefix=src_prefix):
+              for obj in page.get('Contents', []):
+                  name = obj['Key'].rsplit('/', 1)[-1]
+                  if fnmatch.fnmatch(name, pattern):
+                      dst_key = f'{dst_prefix}{name}'
+                      print(f"Copying s3://{src_bucket}/{obj['Key']} -> s3://{dst_bucket}/{dst_key}")
+                      client.copy_object(Bucket=dst_bucket, CopySource={'Bucket': src_bucket, 'Key': obj['Key']}, Key=dst_key)
+          EOF
 
       - name: Copy torch wheels between S3 buckets
         if: ${{ inputs.include_torch }}
         run: |
-          aws s3 cp \
-            s3://therock-${{ inputs.sourcebucket }}-python/${{ inputs.sourcesubdir }}/${{ inputs.amdgpu_family }}/ \
-            s3://therock-${{ inputs.destbucket }}-python/${{ inputs.destsubdir }}/${{ inputs.amdgpu_family }}/ \
-            --recursive --exclude "*"  --include "*torch*${{ inputs.rocm_version }}*${{ env.cp_version }}*"
+          python3 << 'EOF'
+          import boto3, fnmatch, os
+          client = boto3.client('s3')
+          src_bucket = 'therock-${{ inputs.sourcebucket }}-python'
+          dst_bucket = 'therock-${{ inputs.destbucket }}-python'
+          src_prefix = '${{ inputs.sourcesubdir }}/${{ inputs.amdgpu_family }}/'
+          dst_prefix = '${{ inputs.destsubdir }}/${{ inputs.amdgpu_family }}/'
+          pattern = f"*torch*${{ inputs.rocm_version }}*{os.environ['cp_version']}*"
+          paginator = client.get_paginator('list_objects_v2')
+          for page in paginator.paginate(Bucket=src_bucket, Prefix=src_prefix):
+              for obj in page.get('Contents', []):
+                  name = obj['Key'].rsplit('/', 1)[-1]
+                  if fnmatch.fnmatch(name, pattern):
+                      dst_key = f'{dst_prefix}{name}'
+                      print(f"Copying s3://{src_bucket}/{obj['Key']} -> s3://{dst_bucket}/{dst_key}")
+                      client.copy_object(Bucket=dst_bucket, CopySource={'Bucket': src_bucket, 'Key': obj['Key']}, Key=dst_key)
+          EOF
 
       - name: (Re-)Generate Python package release index
         env:

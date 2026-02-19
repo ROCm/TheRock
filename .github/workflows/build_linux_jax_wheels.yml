@@ -179,9 +179,9 @@ jobs:
           python ./build_tools/github_actions/write_jax_versions.py \
             --dist-dir ${{ env.PACKAGE_DIST_DIR }}
 
-      - name: Install AWS CLI
+      - name: Install boto3
         if: always()
-        run: bash ./dockerfiles/install_awscli.sh
+        run: pip install boto3
 
       - name: Configure AWS Credentials
         if: always()
@@ -193,8 +193,19 @@ jobs:
       - name: Upload wheels to S3
         if: ${{ github.repository_owner == 'ROCm' }}
         run: |
-          aws s3 cp ${{ env.PACKAGE_DIST_DIR }}/ s3://${{ env.S3_BUCKET_PY }}/${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}/ \
-            --recursive --exclude "*" --include "*.whl"
+          python3 << 'EOF'
+          import boto3, pathlib
+          client = boto3.client('s3')
+          src = pathlib.Path('${{ env.PACKAGE_DIST_DIR }}')
+          bucket = '${{ env.S3_BUCKET_PY }}'
+          prefix = '${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}'
+          for f in sorted(src.rglob('*.whl')):
+              if not f.is_file():
+                  continue
+              key = f'{prefix}/{f.name}'
+              print(f'Uploading {f} -> s3://{bucket}/{key}')
+              client.upload_file(str(f), bucket, key)
+          EOF
 
       - name: (Re-)Generate Python package release index
         if: ${{ github.repository_owner == 'ROCm' }}
@@ -286,14 +297,27 @@ jobs:
           echo "  JAXLIB_VERSION=${JAXLIB_VERSION}"
           echo "  JAX_PLUGIN_VERSION=${JAX_PLUGIN_VERSION}"
           echo "  JAX_PJRT_VERSION=${JAX_PJRT_VERSION}"
-          aws s3 cp \
-            s3://${S3_BUCKET_PY}/${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}/ \
-            s3://${S3_BUCKET_PY}/${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}/ \
-            --recursive \
-            --exclude "*" \
-            --include "jaxlib-${JAXLIB_VERSION}-${CP_VERSION}-manylinux_2_27_x86_64.whl" \
-            --include "jax_rocm7_plugin-${JAX_PLUGIN_VERSION}-${CP_VERSION}-manylinux_2_28_x86_64.whl" \
-            --include "jax_rocm7_pjrt-${JAX_PJRT_VERSION}-py3-none-manylinux_2_28_x86_64.whl"
+          pip install boto3
+          python3 << 'EOF'
+          import boto3, os, fnmatch
+          client = boto3.client('s3')
+          bucket = os.environ['S3_BUCKET_PY']
+          src_prefix = '${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}/'
+          dst_prefix = '${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}/'
+          patterns = [
+              f"jaxlib-{os.environ['JAXLIB_VERSION']}-{os.environ['CP_VERSION']}-manylinux_2_27_x86_64.whl",
+              f"jax_rocm7_plugin-{os.environ['JAX_PLUGIN_VERSION']}-{os.environ['CP_VERSION']}-manylinux_2_28_x86_64.whl",
+              f"jax_rocm7_pjrt-{os.environ['JAX_PJRT_VERSION']}-py3-none-manylinux_2_28_x86_64.whl",
+          ]
+          paginator = client.get_paginator('list_objects_v2')
+          for page in paginator.paginate(Bucket=bucket, Prefix=src_prefix):
+              for obj in page.get('Contents', []):
+                  name = obj['Key'].rsplit('/', 1)[-1]
+                  if any(fnmatch.fnmatch(name, p) for p in patterns):
+                      dst_key = f'{dst_prefix}{name}'
+                      print(f"Copying s3://{bucket}/{obj['Key']} -> s3://{bucket}/{dst_key}")
+                      client.copy_object(Bucket=bucket, CopySource={'Bucket': bucket, 'Key': obj['Key']}, Key=dst_key)
+          EOF
 
       - name: (Re-)Generate Python package release index
         if: ${{ env.upload == 'true' }}

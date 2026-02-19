@@ -129,19 +129,30 @@ def generate_index(dist_dir: Path, dry_run: bool = False):
 
 
 # TODO: share helper with post_build_upload.py? (that accepts files or dirs)
-# TODO: switch to boto3? (just matching existing upload behavior for now)
-def run_aws_cp(source_path: Path, s3_destination: str, dry_run: bool = False):
-    """Uploads a directory to S3."""
+def run_s3_upload(source_path: Path, bucket: str, prefix: str, dry_run: bool = False):
+    """Uploads a directory to S3 using boto3."""
     if not source_path.is_dir():
         raise ValueError(f"source_path must be a directory: {source_path}")
 
-    cmd = ["aws", "s3", "cp", str(source_path), s3_destination, "--recursive"]
-
     if dry_run:
-        log(f"[DRY RUN] Would run: {shlex.join(cmd)}")
+        log(f"[DRY RUN] Would upload {source_path} to s3://{bucket}/{prefix}")
         return
 
-    run_command(cmd)
+    import boto3
+    import mimetypes
+
+    client = boto3.client("s3")
+    prefix = prefix.rstrip("/")
+
+    for file_path in sorted(source_path.rglob("*")):
+        if not file_path.is_file():
+            continue
+        relative = file_path.relative_to(source_path).as_posix()
+        key = f"{prefix}/{relative}"
+        ct, _ = mimetypes.guess_type(str(file_path))
+        extra_args = {"ContentType": ct} if ct else None
+        log(f"Uploading {file_path} -> s3://{bucket}/{key}")
+        client.upload_file(str(file_path), bucket, key, ExtraArgs=extra_args)
 
 
 # TODO: share helper with post_build_upload.py?
@@ -204,9 +215,10 @@ def upload_packages(
             dry_run=dry_run,
         )
     else:
-        run_aws_cp(
+        run_s3_upload(
             source_path=dist_dir,
-            s3_destination=upload_path.s3_uri,
+            bucket=upload_path.bucket,
+            prefix=upload_path.prefix,
             dry_run=dry_run,
         )
 

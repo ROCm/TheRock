@@ -203,8 +203,8 @@ jobs:
           restore-keys: |
             portable-linux-package-matrix-v1-${{ matrix.target_bundle.amdgpu_family }}-
 
-      - name: Install the AWS tool
-        run: ./dockerfiles/install_awscli.sh
+      - name: Install boto3
+        run: pip install boto3
 
       - name: Fetch sources
         timeout-minutes: 30
@@ -276,11 +276,21 @@ jobs:
       - name: Upload Releases to staging S3
         if: ${{ github.repository_owner == 'ROCm' }}
         run: |
-          aws s3 cp ${{ env.OUTPUT_DIR }}/packages/dist/ s3://${{ env.S3_BUCKET_PY }}/${{ env.S3_STAGING_SUBDIR }}/${{ matrix.target_bundle.amdgpu_family }}/ \
-          --recursive --no-follow-symlinks \
-          --exclude "*" \
-          --include "*.whl" \
-          --include "*.tar.gz"
+          python3 << 'EOF'
+          import boto3, pathlib
+          client = boto3.client('s3')
+          src = pathlib.Path('${{ env.OUTPUT_DIR }}/packages/dist/')
+          bucket = '${{ env.S3_BUCKET_PY }}'
+          prefix = '${{ env.S3_STAGING_SUBDIR }}/${{ matrix.target_bundle.amdgpu_family }}'
+          for f in sorted(src.rglob('*')):
+              if not f.is_file() or f.is_symlink():
+                  continue
+              if not (f.name.endswith('.whl') or f.name.endswith('.tar.gz')):
+                  continue
+              key = f'{prefix}/{f.name}'
+              print(f'Uploading {f} -> s3://{bucket}/{key}')
+              client.upload_file(str(f), bucket, key)
+          EOF
 
       - name: (Re-)Generate Python package release index for staging
         if: ${{ github.repository_owner == 'ROCm' }}
@@ -295,12 +305,28 @@ jobs:
       - name: Upload Releases to S3
         if: ${{ github.repository_owner == 'ROCm' }}
         run: |
-          aws s3 cp ${{ env.DIST_ARCHIVE }} s3://${{ env.S3_BUCKET_TAR }}/${{ env.S3_SUBDIR_TAR }}
-          aws s3 cp ${{ env.OUTPUT_DIR }}/packages/dist/ s3://${{ env.S3_BUCKET_PY }}/${{ env.S3_SUBDIR }}/${{ matrix.target_bundle.amdgpu_family }}/ \
-          --recursive --no-follow-symlinks \
-          --exclude "*" \
-          --include "*.whl" \
-          --include "*.tar.gz"
+          python3 << 'EOF'
+          import boto3, pathlib
+          client = boto3.client('s3')
+          # Upload dist archive
+          archive = pathlib.Path('${{ env.DIST_ARCHIVE }}')
+          tar_bucket = '${{ env.S3_BUCKET_TAR }}'
+          tar_key = '${{ env.S3_SUBDIR_TAR }}' + archive.name
+          print(f'Uploading {archive} -> s3://{tar_bucket}/{tar_key}')
+          client.upload_file(str(archive), tar_bucket, tar_key)
+          # Upload wheels and sdists
+          src = pathlib.Path('${{ env.OUTPUT_DIR }}/packages/dist/')
+          py_bucket = '${{ env.S3_BUCKET_PY }}'
+          prefix = '${{ env.S3_SUBDIR }}/${{ matrix.target_bundle.amdgpu_family }}'
+          for f in sorted(src.rglob('*')):
+              if not f.is_file() or f.is_symlink():
+                  continue
+              if not (f.name.endswith('.whl') or f.name.endswith('.tar.gz')):
+                  continue
+              key = f'{prefix}/{f.name}'
+              print(f'Uploading {f} -> s3://{py_bucket}/{key}')
+              client.upload_file(str(f), py_bucket, key)
+          EOF
 
       - name: (Re-)Generate release index pages
         if: ${{ github.repository_owner == 'ROCm' }}

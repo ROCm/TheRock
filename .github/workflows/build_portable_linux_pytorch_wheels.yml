@@ -222,8 +222,20 @@ jobs:
       - name: Upload wheels to S3 staging
         if: ${{ github.repository_owner == 'ROCm' }}
         run: |
-          aws s3 cp ${{ env.PACKAGE_DIST_DIR }}/ s3://${{ env.S3_BUCKET_PY }}/${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}/ \
-            --recursive --exclude "*" --include "*.whl"
+          pip install boto3
+          python3 << 'EOF'
+          import boto3, pathlib
+          client = boto3.client('s3')
+          src = pathlib.Path('${{ env.PACKAGE_DIST_DIR }}')
+          bucket = '${{ env.S3_BUCKET_PY }}'
+          prefix = '${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}'
+          for f in sorted(src.rglob('*.whl')):
+              if not f.is_file():
+                  continue
+              key = f'{prefix}/{f.name}'
+              print(f'Uploading {f} -> s3://{bucket}/{key}')
+              client.upload_file(str(f), bucket, key)
+          EOF
 
       - name: Upload PyTorch manifest to S3 artifacts
         if: ${{ github.repository_owner == 'ROCm' }}
@@ -319,16 +331,29 @@ jobs:
         if: ${{ env.upload == 'true' }}
         run: |
           echo "Copying exact tested wheels to release S3 bucket..."
-          aws s3 cp \
-            s3://${S3_BUCKET_PY}/${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}/ \
-            s3://${S3_BUCKET_PY}/${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}/ \
-            --recursive \
-            --exclude "*" \
-            --include "torch-${TORCH_VERSION}-${CP_VERSION}-linux_x86_64.whl" \
-            --include "torchaudio-${TORCHAUDIO_VERSION}-${CP_VERSION}-linux_x86_64.whl" \
-            --include "torchvision-${TORCHVISION_VERSION}-${CP_VERSION}-linux_x86_64.whl" \
-            --include "triton-${TRITON_VERSION}-${CP_VERSION}-linux_x86_64.whl" \
-            --include "apex-${APEX_VERSION}-${CP_VERSION}-linux_x86_64.whl"
+          pip install boto3
+          python3 << 'EOF'
+          import boto3, os, fnmatch
+          client = boto3.client('s3')
+          bucket = os.environ['S3_BUCKET_PY']
+          src_prefix = '${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}/'
+          dst_prefix = '${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}/'
+          patterns = [
+              f"torch-{os.environ['TORCH_VERSION']}-{os.environ['CP_VERSION']}-linux_x86_64.whl",
+              f"torchaudio-{os.environ['TORCHAUDIO_VERSION']}-{os.environ['CP_VERSION']}-linux_x86_64.whl",
+              f"torchvision-{os.environ['TORCHVISION_VERSION']}-{os.environ['CP_VERSION']}-linux_x86_64.whl",
+              f"triton-{os.environ['TRITON_VERSION']}-{os.environ['CP_VERSION']}-linux_x86_64.whl",
+              f"apex-{os.environ['APEX_VERSION']}-{os.environ['CP_VERSION']}-linux_x86_64.whl",
+          ]
+          paginator = client.get_paginator('list_objects_v2')
+          for page in paginator.paginate(Bucket=bucket, Prefix=src_prefix):
+              for obj in page.get('Contents', []):
+                  name = obj['Key'].rsplit('/', 1)[-1]
+                  if any(fnmatch.fnmatch(name, p) for p in patterns):
+                      dst_key = f'{dst_prefix}{name}'
+                      print(f"Copying s3://{bucket}/{obj['Key']} -> s3://{bucket}/{dst_key}")
+                      client.copy_object(Bucket=bucket, CopySource={'Bucket': bucket, 'Key': obj['Key']}, Key=dst_key)
+          EOF
 
       - name: (Re-)Generate Python package release index
         if: ${{ env.upload == 'true' }}

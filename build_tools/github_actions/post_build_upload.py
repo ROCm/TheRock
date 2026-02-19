@@ -83,17 +83,35 @@ def write_time_sync_log():
 
 
 def run_aws_cp(source_path: Path, s3_destination: str, content_type: str = None):
-    if source_path.is_dir():
-        cmd = ["aws", "s3", "cp", str(source_path), s3_destination, "--recursive"]
-    else:
-        cmd = ["aws", "s3", "cp", str(source_path), s3_destination]
+    """Upload a file or directory to S3 using boto3."""
+    import boto3
+    import mimetypes
 
-    if content_type:
-        cmd += ["--content-type", content_type]
+    # Parse s3://bucket/key from the destination URI
+    without_scheme = s3_destination[len("s3://"):]
+    bucket, _, key = without_scheme.partition("/")
+    client = boto3.client("s3")
+
     try:
-        log(f"[INFO] Running: {' '.join(cmd)}")
-        subprocess.run(cmd, check=True)
-    except subprocess.CalledProcessError as e:
+        if source_path.is_dir():
+            log(f"[INFO] Uploading directory {source_path} -> {s3_destination}")
+            key = key.rstrip("/")
+            for file_path in sorted(source_path.rglob("*")):
+                if not file_path.is_file():
+                    continue
+                relative = file_path.relative_to(source_path).as_posix()
+                file_key = f"{key}/{relative}"
+                ct = content_type
+                if ct is None:
+                    ct, _ = mimetypes.guess_type(str(file_path))
+                extra_args = {"ContentType": ct} if ct else None
+                log(f"Uploading {file_path} -> s3://{bucket}/{file_key}")
+                client.upload_file(str(file_path), bucket, file_key, ExtraArgs=extra_args)
+        else:
+            log(f"[INFO] Uploading file {source_path} -> {s3_destination}")
+            extra_args = {"ContentType": content_type} if content_type else None
+            client.upload_file(str(source_path), bucket, key, ExtraArgs=extra_args)
+    except Exception as e:
         log(f"[ERROR] Failed to upload {source_path} to {s3_destination}: {e}")
 
 
@@ -179,34 +197,35 @@ def index_artifact_files(build_dir: Path):
 
 def upload_artifacts(artifact_group: str, build_dir: Path, bucket_uri: str):
     log("Uploading artifacts to S3")
+    import boto3
+    from fnmatch import fnmatch
+
+    # Parse bucket and prefix from the s3:// URI
+    without_scheme = bucket_uri[len("s3://"):]
+    bucket, _, prefix = without_scheme.partition("/")
+    client = boto3.client("s3")
+    prefix = prefix.rstrip("/")
 
     # Uploading artifacts to S3 bucket
-    cmd = [
-        "aws",
-        "s3",
-        "cp",
-        str(build_dir / "artifacts"),
-        bucket_uri,
-        "--recursive",
-        "--no-follow-symlinks",
-        "--exclude",
-        "*",
-        "--include",
-        "*.tar.xz*",
-        "--region",
-        "us-east-2",
-    ]
-    run_command(cmd, cwd=Path.cwd())
+    artifacts_dir = build_dir / "artifacts"
+    log(f"[INFO] Uploading artifacts from {artifacts_dir} -> {bucket_uri}")
+    for file_path in sorted(artifacts_dir.rglob("*")):
+        if not file_path.is_file():
+            continue
+        if file_path.is_symlink():
+            continue
+        if not fnmatch(file_path.name, "*.tar.xz*"):
+            continue
+        relative = file_path.relative_to(artifacts_dir).as_posix()
+        key = f"{prefix}/{relative}"
+        log(f"Uploading {file_path} -> s3://{bucket}/{key}")
+        client.upload_file(str(file_path), bucket, key)
 
     # Uploading index.html to S3 bucket
-    cmd = [
-        "aws",
-        "s3",
-        "cp",
-        str(build_dir / "artifacts" / "index.html"),
-        f"{bucket_uri}/index-{artifact_group}.html",
-    ]
-    run_command(cmd, cwd=Path.cwd())
+    index_path = build_dir / "artifacts" / "index.html"
+    index_key = f"{prefix}/index-{artifact_group}.html"
+    log(f"[INFO] Uploading {index_path} -> s3://{bucket}/{index_key}")
+    client.upload_file(str(index_path), bucket, index_key)
 
 
 def upload_logs_to_s3(artifact_group: str, build_dir: Path, bucket_uri: str):
@@ -370,11 +389,6 @@ if __name__ == "__main__":
     if args.upload:
         if not args.run_id:
             parser.error("when --upload is true, --run_id must also be set")
-
-        if not shutil.which("aws"):
-            raise FileNotFoundError(
-                "AWS CLI 'aws' not found on PATH, uploading requires it"
-            )
 
     if not args.build_dir.is_dir():
         raise FileNotFoundError(

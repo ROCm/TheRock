@@ -146,9 +146,17 @@ def main(argv: list[str]) -> None:
         amdgpu_family=args.amdgpu_family,
         bucket_override=args.bucket,
     )
-    dest_uri = f"{upload_path.s3_uri}/{manifest_name}"
+    import boto3
 
-    run_command(["aws", "s3", "cp", str(manifest_path), dest_uri], cwd=Path.cwd())
+    s3_key = f"{upload_path.prefix}/{manifest_name}"
+    client = boto3.client("s3")
+    log(f"Uploading {manifest_path} -> s3://{upload_path.bucket}/{s3_key}")
+    client.upload_file(
+        str(manifest_path),
+        upload_path.bucket,
+        s3_key,
+        ExtraArgs={"ContentType": "application/json"},
+    )
 
 
 if __name__ == "__main__":
