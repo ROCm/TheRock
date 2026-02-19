@@ -11,6 +11,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tests"))
 import configure_ci
 from extended_tests.benchmark.benchmark_test_matrix import benchmark_matrix
 
+therock_test_runner_dict = {
+    "gfx110x": {
+        "linux": "linux-gfx110X-gpu-rocm-test",
+        "windows": "windows-gfx110X-gpu-rocm-test",
+    },
+}
+
+os.environ["ROCM_THEROCK_TEST_RUNNERS"] = json.dumps(therock_test_runner_dict)
+
 
 class ConfigureCITest(unittest.TestCase):
     def assert_target_output_is_valid(self, target_output, allow_xfail):
@@ -758,6 +767,12 @@ class ConfigureCITest(unittest.TestCase):
             family_dict[experimental_arch_name]["sanity_check_only_for_family"],
             f"Experimental family {experimental_arch_name} should have sanity_check=True",
         )
+
+    def test_rocm_org_var_names(self):
+        os.environ["LOAD_TEST_RUNNERS_FROM_VAR"] = "false"
+        test_matrix = configure_ci.get_all_families_for_trigger_types(["presubmit"])
+        self.assertIn("linux-gfx110X-gpu-rocm-test", json.dumps(test_matrix))
+        self.assertIn("windows-gfx110X-gpu-rocm-test", json.dumps(test_matrix))
 
     # TODO(#3433): Remove sandbox logic once ASAN tests are passing and environment is no longer required
     def test_sandbox_test_runner_with_asan(self):
