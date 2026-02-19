@@ -34,7 +34,6 @@ cmake_preset = os.getenv("cmake_preset")
 amdgpu_families = os.getenv("amdgpu_families")
 package_version = os.getenv("package_version")
 extra_cmake_options = os.getenv("extra_cmake_options")
-build_dir = os.getenv("BUILD_DIR")
 github_workspace = os.getenv("GITHUB_WORKSPACE")
 extra_c_compiler_launcher = os.getenv("EXTRA_C_COMPILER_LAUNCHER", "")
 extra_cxx_compiler_launcher = os.getenv("EXTRA_CXX_COMPILER_LAUNCHER", "")
@@ -150,13 +149,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--build-dir",
         type=str,
-        help="Directory to use for build files (overrides BUILD_DIR environment variable)",
+        default=os.getenv("BUILD_DIR", ""),
+        help="Directory to use for build files",
     )
     args = parser.parse_args()
 
     # Support both command-line flag and environment variable
     manylinux = args.manylinux or os.getenv("MANYLINUX") in ["1", "true"]
 
-    if args.build_dir:
-        build_dir = args.build_dir
     build_configure(manylinux=manylinux)
