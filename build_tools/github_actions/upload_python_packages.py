@@ -12,7 +12,7 @@ Usage:
     --artifact-group ARTIFACT_GROUP
     --run-id RUN_ID
     [--output-dir OUTPUT_DIR]  # Local output instead of S3
-    [--bucket BUCKET]          # Override bucket selection (defaults to retrieve_bucket_info())
+    [--bucket BUCKET]          # Override bucket selection (defaults to auto-select)
     [--dry-run]                # Print what would happen without taking action
 
 Modes:
@@ -39,10 +39,11 @@ import shutil
 import subprocess
 import sys
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from _therock_utils.run_outputs import RunOutputRoot
 from github_actions_utils import (
     gha_append_step_summary,
     gha_set_output,
-    retrieve_bucket_info,
 )
 
 THEROCK_DIR = Path(__file__).resolve().parent.parent.parent
@@ -91,19 +92,20 @@ def build_upload_path_for_workflow_run(
     Args:
         run_id: Workflow run ID (e.g., "21440027240")
         artifact_group: Artifact group (e.g., "gfx110X-all")
-        bucket_override: Optional bucket name (skips retrieve_bucket_info)
+        bucket_override: Optional bucket name (skips auto-selection)
 
     Returns:
         UploadPath configured for Python packages
     """
     if bucket_override:
-        external_repo = ""
-        bucket = bucket_override
+        run_root = RunOutputRoot(
+            bucket=bucket_override, external_repo="", run_id=run_id, platform=PLATFORM
+        )
     else:
-        external_repo, bucket = retrieve_bucket_info()
+        run_root = RunOutputRoot.from_workflow_run(run_id=run_id, platform=PLATFORM)
 
-    prefix = f"{external_repo}{run_id}-{PLATFORM}/python/{artifact_group}"
-    return UploadPath(bucket=bucket, prefix=prefix)
+    prefix = f"{run_root.prefix}/python/{artifact_group}"
+    return UploadPath(bucket=run_root.bucket, prefix=prefix)
 
 
 def generate_index(dist_dir: Path, dry_run: bool = False):
@@ -311,7 +313,7 @@ def main():
         "--bucket",
         type=str,
         default=None,
-        help="Override S3 bucket (default: auto-select via retrieve_bucket_info)",
+        help="Override S3 bucket (default: auto-select from workflow run)",
     )
     parser.add_argument(
         "--dry-run",

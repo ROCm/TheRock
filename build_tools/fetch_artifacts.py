@@ -41,8 +41,8 @@ from _therock_utils.artifacts import (
     ArtifactPopulator,
     _open_archive_for_read,
 )
+from _therock_utils.run_outputs import RunOutputRoot
 from artifact_manager import DownloadRequest, download_artifact
-from github_actions.github_actions_utils import retrieve_bucket_info
 
 
 # TODO(geomin12): switch out logging library
@@ -185,16 +185,12 @@ def run(args):
     artifact_group = args.artifact_group
     output_dir = args.output_dir
 
-    external_repo, bucket = retrieve_bucket_info(
-        github_repository=run_github_repo,
-        workflow_run_id=run_id,
-    )
-    backend = S3Backend(
-        bucket=bucket,
+    run_root = RunOutputRoot.from_workflow_run(
         run_id=run_id,
         platform=args.platform,
-        external_repo=external_repo,
+        github_repository=run_github_repo,
     )
+    backend = S3Backend(run_root=run_root)
 
     # Parse individual GPU targets (comma-separated string to list).
     amdgpu_targets = (

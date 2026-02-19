@@ -16,7 +16,7 @@ import sys
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from github_actions.github_actions_utils import retrieve_bucket_info
+from _therock_utils.run_outputs import RunOutputRoot
 
 
 PLATFORM = platform.system().lower()
@@ -75,14 +75,14 @@ def build_upload_path_for_workflow_run(
     bucket_override: str | None,
 ) -> UploadPath:
     if bucket_override:
-        external_repo = ""
-        bucket = bucket_override
+        run_root = RunOutputRoot(
+            bucket=bucket_override, external_repo="", run_id=run_id, platform=PLATFORM
+        )
     else:
-        # Prefer explicit run_id so retrieve_bucket_info can query the workflow run if needed.
-        external_repo, bucket = retrieve_bucket_info(workflow_run_id=run_id)
+        run_root = RunOutputRoot.from_workflow_run(run_id=run_id, platform=PLATFORM)
 
-    prefix = f"{external_repo}{run_id}-{PLATFORM}/manifests/{amdgpu_family}"
-    return UploadPath(bucket=bucket, prefix=prefix)
+    prefix = f"{run_root.prefix}/manifests/{amdgpu_family}"
+    return UploadPath(bucket=run_root.bucket, prefix=prefix)
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -123,7 +123,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         "--bucket",
         type=str,
         default=None,
-        help="Override S3 bucket (default: auto-select via retrieve_bucket_info).",
+        help="Override S3 bucket (default: auto-select from workflow run).",
     )
     return parser.parse_args(argv)
 
