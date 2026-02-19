@@ -553,8 +553,6 @@ def main(argv):
             if is_windows()
             else [
                 # Linux only projects.
-                "amd-dbgapi",
-                "rocr-debug-agent",
                 "rocgdb",
             ]
         ),
