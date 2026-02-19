@@ -104,7 +104,6 @@ function(therock_provide_artifact slice_name)
         "dist-${ARG_DISTRIBUTION}+expunge"
         COMMAND
           "${CMAKE_COMMAND}" -E rm -rf "${_dist_dir}"
-        VERBATIM
       )
       add_dependencies(therock-expunge "dist-${ARG_DISTRIBUTION}+expunge")
 
@@ -124,7 +123,6 @@ function(therock_provide_artifact slice_name)
             --component "${ARG_DISTRIBUTION}"
         DEPENDS
           "dist-${ARG_DISTRIBUTION}"
-        VERBATIM
       )
     endif()
   endif()
@@ -190,11 +188,7 @@ function(therock_provide_artifact slice_name)
     )
   endforeach()
   # Populate the corresponding build/dist/DISTRIBUTION directory.
-  # Only flatten in the populate command for non-split artifacts.
-  # Split artifacts get a post-split flatten step below (artifact-flatten-split)
-  # that reads from split outputs (new inodes) instead of from the
-  # multiply-aliased unsplit hardlinks.
-  if(ARG_DISTRIBUTION AND NOT _should_split)
+  if(ARG_DISTRIBUTION)
     list(APPEND _flatten_command_list
       COMMAND "${Python3_EXECUTABLE}" "${_fileset_tool}" artifact-flatten
         -o "${_dist_dir}" ${_component_dirs}
@@ -209,7 +203,6 @@ function(therock_provide_artifact slice_name)
       ${_stamp_file_deps}
       "${ARG_DESCRIPTOR}"
       "${_fileset_tool}"
-    VERBATIM
   )
 
   # When splitting is enabled, run split_artifacts.py on each component
@@ -249,38 +242,8 @@ function(therock_provide_artifact slice_name)
         DEPENDS
           "${_unsplit_manifest}"
           "${_split_tool}"
-        VERBATIM
       )
     endforeach()
-
-    # Flatten split artifacts to dist/DISTRIBUTION after all splits complete.
-    # This uses artifact-flatten-split which discovers split output dirs by
-    # globbing at build time (per-target dir names can't be predicted at
-    # configure time due to xnack suffixes and clang defaults).
-    # Reading from split outputs (new inodes via shutil.copy2) instead of
-    # from artifacts-unsplit/ (hardlinks aliased to stage/) breaks the
-    # aliasing chain that caused intermittent SIGBUS/truncation in #3447.
-    if(ARG_DISTRIBUTION)
-      set(_artifact_prefixes)
-      foreach(_component ${ARG_COMPONENTS})
-        list(APPEND _artifact_prefixes "${slice_name}_${_component}")
-      endforeach()
-
-      set(_flatten_stamp "${THEROCK_BINARY_DIR}/artifacts/.flatten-${slice_name}.stamp")
-      add_custom_command(
-        OUTPUT "${_flatten_stamp}"
-        COMMENT "Flatten split artifacts for ${slice_name} to dist/${ARG_DISTRIBUTION}"
-        COMMAND "${Python3_EXECUTABLE}" "${_fileset_tool}" artifact-flatten-split
-          -o "${_dist_dir}"
-          --artifacts-dir "${THEROCK_BINARY_DIR}/artifacts"
-          ${_artifact_prefixes}
-        COMMAND "${CMAKE_COMMAND}" -E touch "${_flatten_stamp}"
-        DEPENDS
-          ${_split_manifest_files}
-          "${_fileset_tool}"
-        VERBATIM
-      )
-    endif()
 
     # IMPORTANT: Redirect downstream targets to depend on split artifacts.
     #
@@ -295,11 +258,6 @@ function(therock_provide_artifact slice_name)
     # - This is acceptable since arch-specific artifacts are derived outputs
     set(_manifest_files ${_split_manifest_files})
     set(_component_dirs ${_split_component_dirs})
-    # Also depend on the flatten stamp so dist/DISTRIBUTION is populated
-    # before the artifact target is considered complete.
-    if(ARG_DISTRIBUTION)
-      list(APPEND _manifest_files "${_flatten_stamp}")
-    endif()
   endif()
 
   # If target exists from topology, create a helper target for file dependencies
@@ -372,7 +330,6 @@ function(therock_provide_artifact slice_name)
       DEPENDS
         "${_manifest_file}"
         "${_fileset_tool}"
-      VERBATIM
     )
   endforeach()
   add_custom_target("${_archive_target_name}" DEPENDS ${_archive_files})
@@ -383,20 +340,14 @@ function(therock_provide_artifact slice_name)
     "${_archive_target_name}+expunge"
     COMMAND
       "${CMAKE_COMMAND}" -E rm -f ${_archive_files} ${_archive_sha_files}
-    VERBATIM
   )
   add_dependencies(therock-expunge "${_archive_target_name}+expunge")
 
   # Generate expunge targets.
-  set(_expunge_paths ${_component_dirs})
-  if(_should_split AND ARG_DISTRIBUTION)
-    list(APPEND _expunge_paths "${THEROCK_BINARY_DIR}/artifacts/.flatten-${slice_name}.stamp")
-  endif()
   add_custom_target(
     "${_target_name}+expunge"
     COMMAND
-      "${CMAKE_COMMAND}" -E rm -rf ${_expunge_paths}
-    VERBATIM
+      "${CMAKE_COMMAND}" -E rm -rf ${_component_dirs}
   )
   add_dependencies(therock-expunge "${_target_name}+expunge")
   add_dependencies("dist-${ARG_DISTRIBUTION}+expunge" "${_target_name}+expunge")
