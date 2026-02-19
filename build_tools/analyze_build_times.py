@@ -10,7 +10,7 @@ Usage:
 Arguments:
     --build-dir     Path to the build directory containing .ninja_log (required)
     --output        Path to output HTML file (optional)
-                    Default: <build-dir>/logs/build_time_analysis.html
+                    Default: <build-dir>/logs/build_observability.html
 
 Examples:
     # Generate report with default output path
@@ -154,17 +154,14 @@ def parse_output_path(
     parts = output_path.split("/")
     top_dir = parts[0] if parts else ""
 
-    # Artifact files
+    # Artifact files - return category=None to inherit from other paths
     if output_path.startswith("artifacts/"):
         name = extract_name_from_artifact(parts[1])
         if not name:
             return None, None, None
-        category = (
-            CATEGORY_DEP
-            if ("sysdeps" in name or "fftw3" in name or name.startswith("host-"))
-            else CATEGORY_ROCM
-        )
-        return NAME_MAPPING.get(name, name), category, phase
+        # Don't determine category here; let analyze_tasks inherit it from
+        # the project's other paths (e.g., third-party/ or component dirs)
+        return NAME_MAPPING.get(name, name), None, phase
 
     # Third-party dependencies
     if top_dir == "third-party":
@@ -212,29 +209,73 @@ def parse_output_path(
 # =============================================================================
 
 
+def load_comp_summary(build_dir: Path) -> str:
+    """Load comp-summary.html body content if available."""
+    path = build_dir / "logs" / "therock-build-prof" / "comp-summary.html"
+    if not path.exists():
+        return ""
+    content = path.read_text()
+    match = re.search(r"<body>(.*)</body>", content, re.DOTALL)
+    if not match:
+        return ""
+    body = match.group(1).strip()
+    # Remove table border attribute to match template style
+    body = re.sub(r"<table[^>]*border=['\"]?\d['\"]?[^>]*>", "<table>", body)
+    # Remove original h1 title to avoid duplication
+    body = re.sub(r"<h1>.*?</h1>", "", body, flags=re.DOTALL)
+    # Remove horizontal rule
+    body = re.sub(r"<hr\s*/?>", "", body)
+    return body
+
+
 def analyze_tasks(
     tasks: List[Task], build_dir: Path
 ) -> Dict[str, Dict[str, Dict[str, int]]]:
-    """Aggregate task durations by category/name/phase."""
+    """Aggregate task durations by category/name/phase.
+
+    Uses two-phase processing:
+    1. First pass: Collect project categories from non-artifact paths
+    2. Second pass: Process all tasks, with artifacts inheriting categories
+    """
     projects: Dict[str, Dict[str, Dict[str, int]]] = defaultdict(
         lambda: defaultdict(lambda: defaultdict(int))
     )
     seen = set()
     build_prefix = str(build_dir.resolve())
 
+    # Single pass: process non-artifact tasks immediately, defer artifact tasks
+    project_categories: Dict[str, str] = {}  # {name: category}
+    deferred_artifacts: List[tuple] = []  # [(name, phase, duration)]
+
     for task in tasks:
+        # Normalize path (strip build prefix)
         output = task.output
         if output.startswith(build_prefix):
             output = output[len(build_prefix) :].lstrip("/")
 
+        # Dedup
         key = (output, task.start, task.end)
         if key in seen:
             continue
         seen.add(key)
 
         name, category, phase = parse_output_path(output)
-        if name:
+        if not name:
+            continue
+
+        if category is None:
+            # Artifact path: defer processing until all categories are collected
+            deferred_artifacts.append((name, phase, task.duration))
+        else:
+            # Non-artifact path: process immediately and record category
+            if name not in project_categories:
+                project_categories[name] = category
             projects[category][name][phase] += task.duration
+
+    # Process deferred artifacts using collected categories
+    for name, phase, duration in deferred_artifacts:
+        category = project_categories.get(name, CATEGORY_ROCM)
+        projects[category][name][phase] += duration
 
     return projects
 
@@ -356,7 +397,9 @@ def generate_html_table(title: str, headers: List[str], rows: List[tuple]) -> st
     return "\n".join(lines) + "\n"
 
 
-def generate_report(projects: Dict, tasks: List[Task], output_file: Path):
+def generate_report(
+    projects: Dict, tasks: List[Task], output_file: Path, build_dir: Path
+):
     """Generate HTML report from analyzed project data."""
     # ROCm Components table
     rocm_data = projects.get(CATEGORY_ROCM, {})
@@ -364,7 +407,7 @@ def generate_report(projects: Dict, tasks: List[Task], output_file: Path):
         rocm_data, ["Configure", "Build", "Install", "Package"]
     )
     rocm_html = generate_html_table(
-        "ROCm Components",
+        "ROCm Components Build Time",
         [
             "Sub-Project",
             "Configure (min)",
@@ -387,7 +430,7 @@ def generate_report(projects: Dict, tasks: List[Task], output_file: Path):
         }
     dep_rows = build_table_rows(dep_data, ["Download", "Configure", "Build", "Install"])
     dep_html = generate_html_table(
-        "Dependencies",
+        "ROCm Dependency Build Time",
         [
             "Sub-Project",
             "Download (min)",
@@ -404,12 +447,14 @@ def generate_report(projects: Dict, tasks: List[Task], output_file: Path):
 
     # Load template and generate output
     template_path = Path(__file__).resolve().parent / "report_build_time_template.html"
+    comp_summary_html = load_comp_summary(build_dir)
     try:
         template = template_path.read_text()
         html = (
             template.replace("{{SYSTEM_INFO}}", system_html)
             .replace("{{ROCM_TABLE}}", rocm_html)
             .replace("{{DEP_TABLE}}", dep_html)
+            .replace("{{COMP_SUMMARY}}", comp_summary_html)
         )
         output_file.write_text(html)
         print(f"HTML report generated at: {output_file}")
@@ -440,9 +485,9 @@ def main():
     tasks = parse_ninja_log(ninja_log)
     projects = analyze_tasks(tasks, args.build_dir)
 
-    output_file = args.output or args.build_dir / "logs" / "build_time_analysis.html"
+    output_file = args.output or args.build_dir / "logs" / "build_observability.html"
     output_file.parent.mkdir(parents=True, exist_ok=True)
-    generate_report(projects, tasks, output_file)
+    generate_report(projects, tasks, output_file, args.build_dir)
 
 
 if __name__ == "__main__":

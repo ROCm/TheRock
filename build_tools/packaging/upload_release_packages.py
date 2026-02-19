@@ -292,9 +292,9 @@ Safety Features:
 
     if args.use_release_buckets:
         args.bucket = "therock-release-python"
-        args.bucket_prefix = "v3/whl/"
+        args.bucket_prefix = "v3/rocm/whl/"
         args.tarball_bucket = "therock-release-tarball"
-        args.tarball_bucket_prefix = "v3/tarball/"
+        args.tarball_bucket_prefix = "v3/rocm/tarball/"
 
     # Validate input directory
     if not args.input_dir.exists():

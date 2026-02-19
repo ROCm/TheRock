@@ -73,6 +73,9 @@ include = [
   "bin/hipblaslt_gentest.py",
   "bin/hipblaslt_gtest.data",
   "bin/hipblaslt_*.yaml",
+  # hipblaslt-perf and python modules
+  "bin/hipblaslt-perf",
+  "share/hipblaslt/performance/**",
   # Built samples (may want these in a samples component at some point).
   "libexec/hipblaslt-samples/**",
 ]
