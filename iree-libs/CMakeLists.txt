@@ -12,8 +12,9 @@ if(THEROCK_ENABLE_IREE_COMPILER)
       -DIREE_TARGET_BACKEND_DEFAULTS=OFF
       -DIREE_TARGET_BACKEND_ROCM=ON
       -DIREE_TARGET_BACKEND_LLVM_CPU=ON
-      -DIREE_INPUT_STABLEHLO=OFF
+      # Only enable input dialects Fusilli generates
       -DIREE_INPUT_TORCH=ON
+      -DIREE_INPUT_STABLEHLO=OFF
       # Use HIP headers from TheRock's build
       -DIREE_USE_SYSTEM_DEPS=ON
       # In this targeted build, several submodules aren't needed
