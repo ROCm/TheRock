@@ -219,6 +219,7 @@ jobs:
           ./build_tools/linux_portable_build.py \
             --image=${{ env.BUILD_IMAGE }} \
             --output-dir=${{ env.OUTPUT_DIR }} \
+            --enable-ccache \
             -- \
             "-DTHEROCK_AMDGPU_FAMILIES=${{ matrix.target_bundle.amdgpu_family }}"
           cd ${{ env.OUTPUT_DIR }}/build/dist/rocm
