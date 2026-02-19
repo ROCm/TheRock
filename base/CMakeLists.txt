@@ -56,7 +56,6 @@ therock_cmake_subproject_provide_package(rocm-core rocm-core lib/cmake/rocm-core
 therock_cmake_subproject_activate(rocm-core)
 
 
-
 ################################################################################
 # rocm_smi_lib
 ################################################################################

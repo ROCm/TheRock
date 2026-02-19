@@ -166,12 +166,14 @@ list(APPEND _blas_subproject_names hipBLASLt)
 
 set(rocBLAS_optional_runtime_deps)
 if(NOT WIN32)
-  # rocBLAS is hard-coded to not expect rocm-smi.
   if(TARGET rocm_smi_lib)
     list(APPEND rocBLAS_optional_runtime_deps rocm_smi_lib)
   endif()
-elseif(THEROCK_BUILD_TESTING)
-  list(APPEND rocBLAS_optional_runtime_deps therock-host-blas)
+endif()
+if(THEROCK_BUILD_TESTING)
+  # CPU reference BLAS libraries for rocBLAS clients/tests (mirror OpenBLAS: runtime dep only)
+  list(APPEND rocBLAS_optional_runtime_deps therock-host-blas)       # OpenBLAS
+  list(APPEND rocBLAS_optional_runtime_deps therock-aocl-blas)       # AOCL-BLAS (Linux & Windows)
 endif()
 
 therock_cmake_subproject_declare(rocBLAS
@@ -183,6 +185,9 @@ therock_cmake_subproject_declare(rocBLAS
     -DROCM_PATH=
     -DROCM_DIR=
     -Dhipblaslt_path=
+    # BUILD_DIR: Custom variable used by rocBLAS clients to locate bundled dependencies
+    # Set to rocBLAS's build directory so it can find deps/ subdirectory
+    "-DBUILD_DIR=${CMAKE_CURRENT_BINARY_DIR}/rocBLAS/build"
     -DBUILD_WITH_TENSILE=ON
     -DBUILD_WITH_HIPBLASLT=ON
     # TODO: With `Tensile_TEST_LOCAL_PATH` set, the resulting build path is ${Tensile_TEST_LOCAL_PATH}/build.
@@ -192,7 +197,7 @@ therock_cmake_subproject_declare(rocBLAS
     -DTENSILE_VERSION=
     -DBUILD_CLIENTS_TESTS=${THEROCK_BUILD_TESTING}
     -DBUILD_CLIENTS_BENCHMARKS=${THEROCK_BUILD_TESTING}
-    -DLINK_BLIS=OFF
+    -DLINK_BLIS=${THEROCK_BUILD_TESTING}  # Links AOCL-BLAS (libaocl.a) for CPU BLAS
   CMAKE_INCLUDES
     therock_explicit_finders.cmake
   COMPILER_TOOLCHAIN
