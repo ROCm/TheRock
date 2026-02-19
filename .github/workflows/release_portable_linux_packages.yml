@@ -188,6 +188,8 @@ jobs:
       EXTRA_C_COMPILER_LAUNCHER: "${{ github.workspace }}/build_tools/resource_info.py"
       EXTRA_CXX_COMPILER_LAUNCHER: "${{ github.workspace }}/build_tools/resource_info.py"
       THEROCK_BUILD_PROF_LOG_DIR: ${{ github.workspace }}/output/build/logs/therock-build-prof
+      CCACHE_DIR: ${{ github.workspace }}/output/caches/ccache
+      PIP_CACHE_DIR: ${{ github.workspace }}/output/caches/pip
 
     steps:
       - name: "Checking out repository"
