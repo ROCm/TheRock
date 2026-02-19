@@ -59,15 +59,19 @@ amdgpu_family_info_matrix_presubmit = {
             # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
             "benchmark-runs-on": "linux-mi325-8gpu-ossci-rocm",
             "family": "gfx94X-dcgpu",
+            # Individual GPU target(s) on the test runner, for fetching split artifacts.
+            # TODO(#3444): ASAN variants may need xnack suffix expansion (e.g. gfx942:xnack+).
+            "fetch-gfx-targets": ["gfx942"],
             "build_variants": ["release", "asan", "tsan"],
         }
     },
     "gfx110x": {
         "linux": {
             # TODO(#3298): Re-enable machine once HSA_STATUS_ERROR_OUT_OF_RESOURCES issues are resolved
-            # Label is linux-gfx110X-gpu-rocm
+            # Label is linux-gfx110X-gpu-rocm, fetch-gfx-targets should be ["gfx1100"]
             "test-runs-on": "",
             "family": "gfx110X-all",
+            "fetch-gfx-targets": [],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
             "sanity_check_only_for_family": True,
@@ -75,6 +79,7 @@ amdgpu_family_info_matrix_presubmit = {
         "windows": {
             "test-runs-on": "windows-gfx110X-gpu-rocm",
             "family": "gfx110X-all",
+            "fetch-gfx-targets": ["gfx1100"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
             "sanity_check_only_for_family": True,
@@ -87,6 +92,7 @@ amdgpu_family_info_matrix_presubmit = {
                 "oem": "linux-strix-halo-gpu-rocm-oem",
             },
             "family": "gfx1151",
+            "fetch-gfx-targets": ["gfx1151"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
             "sanity_check_only_for_family": True,
@@ -96,6 +102,7 @@ amdgpu_family_info_matrix_presubmit = {
             # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
             "benchmark-runs-on": "windows-gfx1151-gpu-rocm",
             "family": "gfx1151",
+            "fetch-gfx-targets": ["gfx1151"],
             "build_variants": ["release"],
         },
     },
@@ -103,15 +110,17 @@ amdgpu_family_info_matrix_presubmit = {
         "linux": {
             "test-runs-on": "linux-gfx120X-gpu-rocm",
             "family": "gfx120X-all",
+            "fetch-gfx-targets": ["gfx1200", "gfx1201"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
             "sanity_check_only_for_family": True,
         },
         "windows": {
             # TODO(#2962): Re-enable machine once sanity checks work with this architecture
-            # Label is windows-gfx120X-gpu-rocm
+            # Label is windows-gfx120X-gpu-rocm, fetch-gfx-targets should be ["gfx1200", "gfx1201"]
             "test-runs-on": "",
             "family": "gfx120X-all",
+            "fetch-gfx-targets": [],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
         },
@@ -124,6 +133,7 @@ amdgpu_family_info_matrix_postsubmit = {
         "linux": {
             "test-runs-on": "linux-mi355-1gpu-ossci-rocm",
             "family": "gfx950-dcgpu",
+            "fetch-gfx-targets": ["gfx950"],
             "build_variants": ["release", "asan", "tsan"],
         }
     },
@@ -135,6 +145,7 @@ amdgpu_family_info_matrix_nightly = {
         "linux": {
             "test-runs-on": "linux-gfx90X-gpu-rocm",
             "family": "gfx90X-dcgpu",
+            "fetch-gfx-targets": ["gfx90a"],
             "sanity_check_only_for_family": True,
             "build_variants": ["release"],
         },
@@ -142,6 +153,7 @@ amdgpu_family_info_matrix_nightly = {
         "windows": {
             "test-runs-on": "",
             "family": "gfx90X-dcgpu",
+            "fetch-gfx-targets": [],
             "build_variants": ["release"],
             "expect_pytorch_failure": True,
         },
@@ -151,12 +163,14 @@ amdgpu_family_info_matrix_nightly = {
         "linux": {
             "test-runs-on": "",
             "family": "gfx101X-dgpu",
+            "fetch-gfx-targets": [],
             "build_variants": ["release"],
             "expect_pytorch_failure": True,
         },
         "windows": {
             "test-runs-on": "",
             "family": "gfx101X-dgpu",
+            "fetch-gfx-targets": [],
             "build_variants": ["release"],
         },
     },
@@ -164,6 +178,7 @@ amdgpu_family_info_matrix_nightly = {
         "linux": {
             "test-runs-on": "linux-gfx1030-gpu-rocm",
             "family": "gfx103X-dgpu",
+            "fetch-gfx-targets": ["gfx1030"],
             "build_variants": ["release"],
             "sanity_check_only_for_family": True,
         },
@@ -172,6 +187,7 @@ amdgpu_family_info_matrix_nightly = {
             # Label is "windows-gfx1030-gpu-rocm"
             "test-runs-on": "",
             "family": "gfx103X-dgpu",
+            "fetch-gfx-targets": [],
             "build_variants": ["release"],
             "sanity_check_only_for_family": True,
         },
@@ -182,12 +198,14 @@ amdgpu_family_info_matrix_nightly = {
             # Label is "linux-gfx1150-gpu-rocm"
             "test-runs-on": "",
             "family": "gfx1150",
+            "fetch-gfx-targets": [],
             "build_variants": ["release"],
             "sanity_check_only_for_family": True,
         },
         "windows": {
             "test-runs-on": "",
             "family": "gfx1150",
+            "fetch-gfx-targets": [],
             "build_variants": ["release"],
         },
     },
@@ -195,11 +213,13 @@ amdgpu_family_info_matrix_nightly = {
         "linux": {
             "test-runs-on": "",
             "family": "gfx1152",
+            "fetch-gfx-targets": [],
             "build_variants": ["release"],
         },
         "windows": {
             "test-runs-on": "",
             "family": "gfx1152",
+            "fetch-gfx-targets": [],
             "build_variants": ["release"],
         },
     },
@@ -209,12 +229,14 @@ amdgpu_family_info_matrix_nightly = {
             # Label is "linux-gfx1153-gpu-rocm"
             "test-runs-on": "",
             "family": "gfx1153",
+            "fetch-gfx-targets": [],
             "build_variants": ["release"],
             "sanity_check_only_for_family": True,
         },
         "windows": {
             "test-runs-on": "",
             "family": "gfx1153",
+            "fetch-gfx-targets": [],
             "build_variants": ["release"],
         },
     },

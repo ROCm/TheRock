@@ -11,6 +11,9 @@ on:
       amdgpu_families:
         type: string
         default: ""
+      amdgpu_targets:
+        type: string
+        default: ""
       test_runs_on:
         type: string
       platform:
@@ -23,6 +26,9 @@ on:
         type: string
         default: ""
       amdgpu_families:
+        type: string
+        default: ""
+      amdgpu_targets:
         type: string
         default: ""
       test_runs_on:
@@ -68,6 +74,7 @@ jobs:
       OUTPUT_ARTIFACTS_DIR: ${{ github.workspace }}/build
       THEROCK_BIN_DIR: ${{ github.workspace }}/build/bin
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
+      AMDGPU_TARGETS: ${{ inputs.amdgpu_targets }}
       ARTIFACT_GROUP: ${{ inputs.artifact_group }}
     steps:
       - name: "Fetch 'build_tools' from repository"
@@ -100,6 +107,7 @@ jobs:
         uses: './.github/actions/setup_test_environment'
         with:
           ARTIFACT_GROUP: ${{ inputs.artifact_group }}
+          AMDGPU_TARGETS: ${{ inputs.amdgpu_targets }}
           ARTIFACT_RUN_ID: ${{ env.ARTIFACT_RUN_ID }}
           OUTPUT_ARTIFACTS_DIR: ${{ env.OUTPUT_ARTIFACTS_DIR }}
           VENV_DIR: ${{ env.VENV_DIR }}
