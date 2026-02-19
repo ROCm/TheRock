@@ -106,7 +106,7 @@ jobs:
           docker network prune -f || true
 
       - name: Run setup test environment workflow
-        timeout-minutes: 10
+        timeout-minutes: 15
         uses: './.github/actions/setup_test_environment'
         with:
           ARTIFACT_GROUP: ${{ inputs.artifact_group }}
