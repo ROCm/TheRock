@@ -32,50 +32,50 @@ def git_root() -> Path:
     return repo_root
 
 
-def list_submodules_via_gitconfig(repo_dir: Path):
+def list_submodules_via_gitconfig(repo_dir: Path, commit: str = "HEAD"):
     """
-    Read path/url/branch for all submodules from .gitmodules using a single git-config call.
+    Read path/url/branch for all submodules from .gitmodules at a specific commit.
+
+    Args:
+        repo_dir: Path to the repository root.
+        commit: The commit/ref to read .gitmodules from (default: HEAD).
+                This is important when inspecting historical commits where submodules
+                may have been added or removed since.
+
     Returns: [{name, path, url, branch}]
     """
-    gitconfig_output = _run(
-        [
-            "git",
-            "config",
-            "-f",
-            ".gitmodules",
-            "--get-regexp",
-            r"^submodule\..*\.(path|url|branch)$",
-        ],
+    gitmodules_content = _run(
+        ["git", "show", f"{commit}:.gitmodules"],
         cwd=repo_dir,
         check=False,
     )
-    if not gitconfig_output:
+    if not gitmodules_content:
         return []
 
-    submodules_by_name = (
-        {}
-    )  # name -> {"name": ..., "path": ..., "url": ..., "branch": ...}
-    for line in gitconfig_output.splitlines():
+    submodules_by_name = {}
+    current_name = None
+
+    for line in gitmodules_content.splitlines():
         line = line.strip()
         if not line:
             continue
-        try:
-            full_key, raw_value = line.split(None, 1)
-        except ValueError:
-            continue
 
-        m = re.match(r"^submodule\.(?P<name>.+)\.(?P<attr>path|url|branch)$", full_key)
-        if not m:
-            continue
-
-        name = m.group("name")
-        attr = m.group("attr")
-        value = raw_value.strip()
-
-        rec = submodules_by_name.setdefault(
-            name, {"name": name, "path": None, "url": None, "branch": None}
-        )
-        rec[attr] = value
+        if line.startswith("[submodule"):
+            match = re.search(r'"([^"]+)"', line)
+            if match:
+                current_name = match.group(1)
+                submodules_by_name[current_name] = {
+                    "name": current_name,
+                    "path": None,
+                    "url": None,
+                    "branch": None,
+                }
+        elif current_name and "=" in line:
+            key, _, value = line.partition("=")
+            key = key.strip()
+            value = value.strip()
+            if key in ("path", "url", "branch"):
+                submodules_by_name[current_name][key] = value
 
     results = [
         {"name": n, "path": r["path"], "url": r["url"], "branch": r["branch"]}
@@ -119,8 +119,10 @@ def patches_for_submodule_by_name(repo_dir: Path, sub_name: str):
 
 def build_manifest_schema(repo_root: Path, the_rock_commit: str) -> dict:
 
-    # Enumerate submodules via .gitmodules
-    entries = list_submodules_via_gitconfig(repo_root)
+    # Enumerate submodules from .gitmodules at the specified commit.
+    # This ensures we get the correct submodule list even for historical commits
+    # where submodules may have been added or removed since.
+    entries = list_submodules_via_gitconfig(repo_root, the_rock_commit)
 
     # Build rows with pins (from tree) and patch lists
     rows = []
