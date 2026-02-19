@@ -36,6 +36,10 @@ from github_actions_utils import *
 THEROCK_DIR = Path(__file__).resolve().parent.parent.parent
 PLATFORM = platform.system().lower()
 
+# Add build_tools to path for _therock_utils imports.
+sys.path.insert(0, str(THEROCK_DIR / "build_tools"))
+from _therock_utils.run_outputs import RunOutputRoot
+
 # Importing indexer.py
 sys.path.append(str(THEROCK_DIR / "third-party" / "indexer"))
 import indexer
@@ -177,16 +181,17 @@ def index_artifact_files(build_dir: Path):
     indexer.process_dir(artifacts_dir, indexer_args)
 
 
-def upload_artifacts(artifact_group: str, build_dir: Path, bucket_uri: str):
+def upload_artifacts(artifact_group: str, build_dir: Path, run_root: RunOutputRoot):
     log("Uploading artifacts to S3")
 
     # Uploading artifacts to S3 bucket
+    artifact_base_uri = f"s3://{run_root.bucket}/{run_root.prefix}"
     cmd = [
         "aws",
         "s3",
         "cp",
         str(build_dir / "artifacts"),
-        bucket_uri,
+        artifact_base_uri,
         "--recursive",
         "--no-follow-symlinks",
         "--exclude",
@@ -204,13 +209,13 @@ def upload_artifacts(artifact_group: str, build_dir: Path, bucket_uri: str):
         "s3",
         "cp",
         str(build_dir / "artifacts" / "index.html"),
-        f"{bucket_uri}/index-{artifact_group}.html",
+        run_root.artifact_index(artifact_group).s3_uri,
     ]
     run_command(cmd, cwd=Path.cwd())
 
 
-def upload_logs_to_s3(artifact_group: str, build_dir: Path, bucket_uri: str):
-    s3_base_path = f"{bucket_uri}/logs/{artifact_group}"
+def upload_logs_to_s3(artifact_group: str, build_dir: Path, run_root: RunOutputRoot):
+    s3_base_path = run_root.log_dir(artifact_group).s3_uri
     log_dir = build_dir / "logs"
 
     if not log_dir.is_dir():
@@ -233,61 +238,61 @@ def upload_logs_to_s3(artifact_group: str, build_dir: Path, bucket_uri: str):
         ]:
             file_path = resource_prof_dir / filename
             if file_path.is_file():
-                s3_dest = f"{s3_base_path}/{filename}"
+                s3_dest = run_root.log_file(artifact_group, filename).s3_uri
                 run_aws_cp(file_path, s3_dest, content_type=content_type)
                 log(f"[INFO] Uploaded {file_path} to {s3_dest}")
 
     # Build Time Analysis is only generated on Linux
     analysis_path = log_dir / "build_observability.html"
     if analysis_path.is_file():
-        analysis_s3_dest = f"{s3_base_path}/build_observability.html"
+        analysis_s3_dest = run_root.build_observability(artifact_group).s3_uri
         run_aws_cp(analysis_path, analysis_s3_dest, content_type="text/html")
         log(f"[INFO] Uploaded {analysis_path} to {analysis_s3_dest}")
 
     # Upload index.html
     index_path = log_dir / "index.html"
     if index_path.is_file():
-        index_s3_dest = f"{s3_base_path}/index.html"
+        index_s3_dest = run_root.log_index(artifact_group).s3_uri
         run_aws_cp(index_path, index_s3_dest, content_type="text/html")
         log(f"[INFO] Uploaded {index_path} to {index_s3_dest}")
     else:
         log(f"[INFO] No index.html found at {log_dir}. Skipping index upload.")
 
 
-def upload_manifest_to_s3(artifact_group: str, build_dir: Path, bucket_uri: str):
-    """
-    Upload therock_manifest.json to:
-      <bucket_uri>/manifests/<artifact_group>/therock_manifest.json
-    """
-
+def upload_manifest_to_s3(
+    artifact_group: str, build_dir: Path, run_root: RunOutputRoot
+):
+    """Upload therock_manifest.json to S3."""
     manifest_path = (
         build_dir / "base" / "aux-overlay" / "build" / "therock_manifest.json"
     )
     if not manifest_path.is_file():
         raise FileNotFoundError(f"therock_manifest.json not found at {manifest_path}")
 
-    dest = f"{bucket_uri}/manifests/{artifact_group}/therock_manifest.json"
+    dest = run_root.manifest(artifact_group).s3_uri
     log(f"[INFO] Uploading manifest {manifest_path} -> {dest}")
     run_aws_cp(manifest_path, dest, content_type="application/json")
 
 
-def write_gha_build_summary(artifact_group: str, bucket_url: str, job_status: str):
-    log(f"Adding links to job summary to bucket {bucket_url}")
+def write_gha_build_summary(
+    artifact_group: str, run_root: RunOutputRoot, job_status: str
+):
+    log(f"Adding links to job summary for {run_root.prefix}")
 
-    log_index_url = f"{bucket_url}/logs/{artifact_group}/index.html"
+    log_index_url = run_root.log_index(artifact_group).https_url
     gha_append_step_summary(f"[Build Logs]({log_index_url})")
 
     # Build Time Analysis is only generated on Linux
     if PLATFORM == "linux":
-        analysis_url = f"{bucket_url}/logs/{artifact_group}/build_observability.html"
+        analysis_url = run_root.build_observability(artifact_group).https_url
         gha_append_step_summary(f"[Build Observability]({analysis_url})")
 
     # Only add artifact links if the job not failed
     if not job_status or job_status == "success":
-        artifact_url = f"{bucket_url}/index-{artifact_group}.html"
+        artifact_url = run_root.artifact_index(artifact_group).https_url
         gha_append_step_summary(f"[Artifacts]({artifact_url})")
 
-    manifest_url = f"{bucket_url}/manifests/{artifact_group}/therock_manifest.json"
+    manifest_url = run_root.manifest(artifact_group).https_url
     gha_append_step_summary(f"[TheRock Manifest]({manifest_url})")
 
 
@@ -307,12 +312,7 @@ def run(args):
     if not args.upload:
         return
 
-    external_repo_path, bucket = retrieve_bucket_info()
-    run_id = args.run_id
-    bucket_uri = f"s3://{bucket}/{external_repo_path}{run_id}-{PLATFORM}"
-    bucket_url = (
-        f"https://{bucket}.s3.amazonaws.com/{external_repo_path}{run_id}-{PLATFORM}"
-    )
+    run_root = RunOutputRoot.from_workflow_run(run_id=args.run_id, platform=PLATFORM)
 
     log("Write Windows time sync log")
     log("----------------------")
@@ -322,19 +322,19 @@ def run(args):
     if not args.job_status or args.job_status == "success":
         log("Upload build artifacts")
         log("----------------------")
-        upload_artifacts(args.artifact_group, args.build_dir, bucket_uri)
+        upload_artifacts(args.artifact_group, args.build_dir, run_root)
 
     log("Upload log")
     log("----------")
-    upload_logs_to_s3(args.artifact_group, args.build_dir, bucket_uri)
+    upload_logs_to_s3(args.artifact_group, args.build_dir, run_root)
 
     log("Upload manifest")
     log("----------------")
-    upload_manifest_to_s3(args.artifact_group, args.build_dir, bucket_uri)
+    upload_manifest_to_s3(args.artifact_group, args.build_dir, run_root)
 
     log("Write github actions build summary")
     log("--------------------")
-    write_gha_build_summary(args.artifact_group, bucket_url, args.job_status)
+    write_gha_build_summary(args.artifact_group, run_root, args.job_status)
 
 
 if __name__ == "__main__":

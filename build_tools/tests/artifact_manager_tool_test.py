@@ -17,6 +17,7 @@ from unittest import mock
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from _therock_utils.artifact_backend import ArtifactBackend, LocalDirectoryBackend
+from _therock_utils.run_outputs import RunOutputRoot
 
 # Minimal topology TOML for testing push/fetch behavior.
 # Defines two stages: upstream-stage produces artifacts, downstream-stage consumes them.
@@ -90,10 +91,10 @@ class FailingBackend(ArtifactBackend):
 
         # Use a real backend for successful operations
         if staging_dir:
+            run_root = RunOutputRoot.for_local(run_id=run_id, platform=platform)
             self._real_backend = LocalDirectoryBackend(
                 staging_dir=staging_dir,
-                run_id=run_id,
-                platform=platform,
+                run_root=run_root,
             )
         else:
             self._real_backend = None
@@ -208,10 +209,10 @@ class ArtifactManagerTestBase(unittest.TestCase):
         self, name: str, component: str, target_family: str, run_id: str = "local"
     ) -> str:
         """Create a fake artifact in the staging directory."""
+        run_root = RunOutputRoot.for_local(run_id=run_id, platform=TEST_PLATFORM)
         backend = LocalDirectoryBackend(
             staging_dir=self.staging_dir,
-            run_id=run_id,
-            platform=TEST_PLATFORM,
+            run_root=run_root,
         )
 
         archive_name = f"{name}_{component}_{target_family}.tar.zst"
@@ -318,10 +319,10 @@ class TestPushFailureExitCode(ArtifactManagerTestBase):
         artifact_manager.main(argv)
 
         # Verify artifacts were uploaded
+        run_root = RunOutputRoot.for_local(run_id="local", platform=TEST_PLATFORM)
         backend = LocalDirectoryBackend(
             staging_dir=self.staging_dir,
-            run_id="local",
-            platform=TEST_PLATFORM,
+            run_root=run_root,
         )
         self.assertTrue(backend.artifact_exists("test-artifact_lib_generic.tar.zst"))
 
