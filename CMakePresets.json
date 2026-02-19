@@ -48,7 +48,8 @@
         "CMAKE_CXX_FLAGS": "-g1",
         "CMAKE_C_FLAGS": "-g1",
         "THEROCK_ENABLE_LIBHIPCXX": "OFF",
-        "MIOPEN_REQ_LIBS_ONLY": "OFF"
+        "MIOPEN_REQ_LIBS_ONLY": "OFF",
+        "THEROCK_ENABLE_RCCL": "OFF"
       }
     },
     {
