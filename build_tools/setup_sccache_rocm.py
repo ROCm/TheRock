@@ -8,6 +8,20 @@ hipcc invokes clang via absolute paths, bypassing CMAKE_*_COMPILER_LAUNCHER.
 The approach mirrors what pytorch/pytorch does in their CI:
 https://github.com/pytorch/pytorch/blob/main/.ci/docker/common/install_cache.sh
 
+WARNING — Side effects (setup_rocm_sccache):
+    This script **modifies the ROCm installation in-place**:
+    1. Backs up original compilers (or symlink targets) into a
+       ``backup_for_sccache/`` directory alongside the LLVM bin dir.
+    2. Replaces clang/clang++ with shell wrapper scripts that invoke
+       ``sccache <real-compiler> "$@"``.
+    3. You MUST call ``--restore`` (CLI) or ``restore_rocm_compilers()``
+       (API) to undo the wrapping. When used via build_prod_wheels.py,
+       the try/finally block handles this automatically.
+
+TODO: Once HIP_CLANG_LAUNCHER lands in hipcc (ROCm/llvm-project#72,
+ROCm/llvm-project#1490), this wrapper approach can be replaced by
+setting the HIP_CLANG_LAUNCHER env var. See also ROCm/ROCm#2817.
+
 Usage:
     # Wrap ROCm compilers with sccache
     python setup_sccache_rocm.py --rocm-path /path/to/rocm
@@ -17,8 +31,9 @@ Usage:
 
 Prerequisites:
     sccache must be installed and available in PATH.
-    On Linux CI, sccache is pre-installed in the Docker image.
-    On Windows, install via: choco install sccache
+    Install: https://github.com/mozilla/sccache#installation
+    For CI, sccache is pre-installed in the manylinux build image:
+      https://github.com/ROCm/TheRock/tree/main/dockerfiles
 """
 
 import argparse
@@ -63,19 +78,26 @@ def create_sccache_wrapper(compiler_path: Path, sccache_path: Path) -> None:
 
     Replaces the compiler (or symlink) with a wrapper script that invokes
     sccache with the resolved absolute path to the real compiler binary.
+
+    Side effects on the filesystem:
+      - Creates ``<llvm-bin>/backup_for_sccache/`` directory
+      - Moves real binaries (or records symlink targets) into that directory
+      - Replaces the compiler at ``compiler_path`` with a shell script
+
+    Use ``restore_compiler()`` to reverse these changes.
     """
     if not compiler_path.exists():
         print(f"  Skipping {compiler_path} (does not exist)")
         return
 
     compiler_dir = compiler_path.parent
-    original_dir = compiler_dir / "original"
-    original_dir.mkdir(exist_ok=True)
+    backup_dir = compiler_dir / "backup_for_sccache"
+    backup_dir.mkdir(exist_ok=True)
 
-    original_path_file = original_dir / f"{compiler_path.name}.path"
+    backup_path_file = backup_dir / f"{compiler_path.name}.path"
 
-    if original_path_file.exists():
-        print(f"  {compiler_path} already wrapped (path file exists)")
+    if backup_path_file.exists():
+        print(f"  {compiler_path} already wrapped (backup path file exists)")
         return
 
     try:
@@ -97,10 +119,10 @@ def create_sccache_wrapper(compiler_path: Path, sccache_path: Path) -> None:
     try:
         if is_symlink:
             original_target = os.readlink(compiler_path)
-            original_path_file.write_text(f"symlink:{original_target}")
+            backup_path_file.write_text(f"symlink:{original_target}")
         else:
-            original_path_file.write_text(f"binary:{real_compiler}")
-            original_binary = original_dir / compiler_path.name
+            backup_path_file.write_text(f"binary:{real_compiler}")
+            original_binary = backup_dir / compiler_path.name
     except (OSError, PermissionError) as e:
         raise RuntimeError(
             f"Failed to save compiler metadata for {compiler_path}: {e}"
@@ -163,15 +185,15 @@ def restore_compiler(compiler_path: Path) -> None:
     """Restore original compiler by removing sccache wrapper (Linux only)."""
     compiler_name = compiler_path.name
     compiler_dir = compiler_path.parent
-    original_dir = compiler_dir / "original"
-    original_path_file = original_dir / f"{compiler_name}.path"
-    original_binary = original_dir / compiler_name
+    backup_dir = compiler_dir / "backup_for_sccache"
+    backup_path_file = backup_dir / f"{compiler_name}.path"
+    backup_binary = backup_dir / compiler_name
 
-    if not original_path_file.exists():
-        print(f"  {compiler_path}: no path file to restore from")
+    if not backup_path_file.exists():
+        print(f"  {compiler_path}: no backup path file to restore from")
         return
 
-    path_info = original_path_file.read_text().strip()
+    path_info = backup_path_file.read_text().strip()
 
     if compiler_path.exists() or compiler_path.is_symlink():
         compiler_path.unlink()
@@ -181,16 +203,16 @@ def restore_compiler(compiler_path: Path) -> None:
         compiler_path.symlink_to(symlink_target)
         print(f"  Restored symlink {compiler_path} -> {symlink_target}")
     elif path_info.startswith("binary:"):
-        if original_binary.exists():
-            shutil.move(original_binary, compiler_path)
-            print(f"  Restored binary {original_binary} -> {compiler_path}")
+        if backup_binary.exists():
+            shutil.move(backup_binary, compiler_path)
+            print(f"  Restored binary {backup_binary} -> {compiler_path}")
         else:
-            print(f"  Warning: Original binary not found: {original_binary}")
+            print(f"  Warning: Original binary not found: {backup_binary}")
 
-    original_path_file.unlink()
+    backup_path_file.unlink()
 
     try:
-        original_dir.rmdir()
+        backup_dir.rmdir()
     except OSError:
         pass
 
@@ -283,9 +305,10 @@ def main():
         sccache_path = find_sccache()
         if not sccache_path:
             raise RuntimeError(
-                "sccache not found. Please install it:\n"
-                "  - Linux: sccache should be pre-installed in the Docker image\n"
-                "  - Windows: choco install sccache"
+                "sccache not found.\n"
+                "Install: https://github.com/mozilla/sccache#installation\n"
+                "For CI, sccache is pre-installed in the manylinux build image:\n"
+                "  https://github.com/ROCm/TheRock/tree/main/dockerfiles"
             )
 
     print(f"Using sccache: {sccache_path}")

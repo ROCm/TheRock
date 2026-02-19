@@ -544,8 +544,6 @@ def do_build(args: argparse.Namespace):
         cmake_prefix, rocm_dir, pytorch_rocm_arch, triton_dir, is_windows
     )
 
-    sccache_setup_attempted = False
-
     if args.use_ccache:
         if not shutil.which("ccache"):
             raise RuntimeError(
@@ -557,7 +555,6 @@ def do_build(args: argparse.Namespace):
         env["CMAKE_CXX_COMPILER_LAUNCHER"] = "ccache"
         run_command(["ccache", "--zero-stats"], cwd=tempfile.gettempdir())
     elif args.use_sccache:
-        print("Setting up sccache with ROCm compiler wrapping...")
         build_tools_dir = Path(__file__).resolve().parent.parent.parent / "build_tools"
         sys.path.insert(0, str(build_tools_dir))
 
@@ -570,20 +567,22 @@ def do_build(args: argparse.Namespace):
         sccache_path = find_sccache()
         if not sccache_path:
             raise RuntimeError(
-                "sccache not found. Please install it:\n"
-                "  - Linux: sccache should be pre-installed in the Docker image\n"
-                "  - Windows: choco install sccache"
+                "sccache not found but --use-sccache was specified.\n"
+                "Install: https://github.com/mozilla/sccache#installation\n"
+                "For CI, sccache is pre-installed in the manylinux build image:\n"
+                "  https://github.com/ROCm/TheRock/tree/main/dockerfiles"
             )
 
-        sccache_setup_attempted = True
-        setup_rocm_sccache(rocm_dir, sccache_path)
+        sccache_wrapped = False
+        if args.sccache_no_wrap:
+            print("Setting up sccache (CMAKE launchers only, no compiler wrapping)...")
+        else:
+            print("Setting up sccache with ROCm compiler wrapping...")
+            setup_rocm_sccache(rocm_dir, sccache_path)
+            sccache_wrapped = True
 
     try:
-        if args.use_sccache and sccache_setup_attempted:
-            # CMAKE launchers for C/C++ host code.
-            # CMAKE_HIP_COMPILER_LAUNCHER is NOT set because sccache returns
-            # "Compiler not supported" — HIP caching on Linux is handled by
-            # the wrapper scripts created by setup_rocm_sccache() instead.
+        if args.use_sccache:
             env["CMAKE_C_COMPILER_LAUNCHER"] = str(sccache_path)
             env["CMAKE_CXX_COMPILER_LAUNCHER"] = str(sccache_path)
 
@@ -606,12 +605,13 @@ def do_build(args: argparse.Namespace):
             apex_dir,
         )
     finally:
-        if args.use_sccache and sccache_setup_attempted:
-            print("Restoring ROCm compilers after sccache build...")
-            try:
-                restore_rocm_compilers(rocm_dir)
-            except Exception as e:
-                print(f"Warning: Failed to restore compilers: {e}")
+        if args.use_sccache:
+            if sccache_wrapped:
+                print("Restoring ROCm compilers after sccache build...")
+                try:
+                    restore_rocm_compilers(rocm_dir)
+                except Exception as e:
+                    print(f"Warning: Failed to restore compilers: {e}")
             sccache_stats = capture(
                 [str(sccache_path), "--show-stats"], cwd=tempfile.gettempdir()
             )
@@ -1132,6 +1132,13 @@ def main(argv: list[str]):
         action="store_true",
         default=False,
         help="Use sccache as the compiler launcher (with ROCm compiler wrapping on Linux)",
+    )
+    build_p.add_argument(
+        "--sccache-no-wrap",
+        action="store_true",
+        default=False,
+        help="With --use-sccache: skip compiler wrapping, only set CMAKE launchers "
+        "(caches host C/C++ but not HIP device code)",
     )
     build_p.add_argument(
         "--pytorch-dir",
