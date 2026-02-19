@@ -13,7 +13,7 @@ THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 THEROCK_BIN_PATH = Path(THEROCK_BIN_DIR).resolve()
 THEROCK_PATH = THEROCK_BIN_PATH.parent
 THEROCK_LIB_PATH = str(THEROCK_PATH / "lib")
-ROCPROFILER_COMPUTE_DIRECTORY = f"{THEROCK_PATH}" / "libexec" / "rocprofiler-compute"
+ROCPROFILER_COMPUTE_DIRECTORY = THEROCK_PATH / "libexec" / "rocprofiler-compute"
 
 # Set up ROCM_PATH
 environ_vars = os.environ.copy()
@@ -21,7 +21,7 @@ environ_vars["ROCM_PATH"] = str(THEROCK_PATH)
 
 # Set up PYTHONPATH
 old_pythonpath = os.getenv("PYTHONPATH", "")
-module_dir = f"{ROCPROFILER_COMPUTE_DIRECTORY}" / "tests"
+module_dir = ROCPROFILER_COMPUTE_DIRECTORY / "tests"
 if old_pythonpath:
     environ_vars["PYTHONPATH"] = f"{module_dir}:{old_pythonpath}"
 else:
