@@ -21,6 +21,11 @@ environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 # Enable GTest "brief" output: only show failures and the final results
 environ_vars["GTEST_BRIEF"] = str(1)
 
+# Some of our runtime kernel compilations have been relying on either ROCM_PATH being set, or ROCm being installed at
+# /opt/rocm. Neither of these is true in TheRock so we need to supply ROCM_PATH to our tests.
+ROCM_PATH = Path(THEROCK_BIN_DIR).resolve().parent
+environ_vars["ROCM_PATH"] = str(ROCM_PATH)
+
 logging.basicConfig(level=logging.INFO)
 
 # If smoke tests are enabled, we run smoke tests only.
