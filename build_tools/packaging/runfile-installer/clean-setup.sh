@@ -1,5 +1,21 @@
 #!/bin/bash
 
+# #############################################################################
+# ROCm Runfile Installer - Cleanup Script
+#
+# This script cleans up build artifacts and downloaded packages from the
+# ROCm runfile installer build process.
+#
+# Directory Structure (for reference):
+#   build-installer/        - Build scripts (setup-installer.sh, build-installer.sh)
+#   package-puller/         - Package download scripts and downloaded packages
+#   package-extractor/      - Downloaded packages (before extraction)
+#   rocm-installer/         - Extracted components (after extraction)
+#   build/                  - Final .run installer output
+#   build-UI/               - UI build directory
+#   build-config/           - Generated configuration files
+# #############################################################################
+
 # Get the directory where this script is located
 OFFLINE_SELF_BASE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -164,14 +180,41 @@ if [ $CLEAN_BUILD -eq 1 ]; then
     echo ""
     echo ">>> Cleaning build artifacts..."
 
-    if [ -d "makeself-2.4.5" ]; then
-        echo -e "\e[93mRemoving: makeself-2.4.5\e[0m"
-        $SUDO rm -r makeself-2.4.5
-    fi
+    # Remove makeself installation (check both root and build-installer directories)
+    # Handle any version pattern: makeself-*
+    for makeself_dir in makeself-*; do
+        if [ -d "$makeself_dir" ]; then
+            echo -e "\e[93mRemoving: $makeself_dir\e[0m"
+            $SUDO rm -r "$makeself_dir"
+        fi
+    done
 
-    if [ -f "makeself-2.4.5.run" ]; then
-        echo -e "\e[93mRemoving: makeself-2.4.5.run\e[0m"
-        $SUDO rm makeself-2.4.5.run
+    for makeself_dir in build-installer/makeself-*; do
+        if [ -d "$makeself_dir" ]; then
+            echo -e "\e[93mRemoving: $makeself_dir\e[0m"
+            $SUDO rm -r "$makeself_dir"
+        fi
+    done
+
+    # Remove makeself .run installers
+    for makeself_run in makeself-*.run; do
+        if [ -f "$makeself_run" ]; then
+            echo -e "\e[93mRemoving: $makeself_run\e[0m"
+            $SUDO rm "$makeself_run"
+        fi
+    done
+
+    for makeself_run in build-installer/makeself-*.run; do
+        if [ -f "$makeself_run" ]; then
+            echo -e "\e[93mRemoving: $makeself_run\e[0m"
+            $SUDO rm "$makeself_run"
+        fi
+    done
+
+    # Remove VERSION file from root if it exists (shouldn't be there)
+    if [ -f "VERSION" ]; then
+        echo -e "\e[93mRemoving: VERSION (should only be in build-installer/)\e[0m"
+        $SUDO rm VERSION
     fi
 
     if [ -d "build-UI" ]; then
@@ -250,6 +293,7 @@ if [ $CLEAN_BUILD -eq 1 ]; then
         $SUDO rm -r logs
     fi
 
+    # Note: VERSION file is copied from build-installer/VERSION to rocm-installer/VERSION during build
     if [ -f "rocm-installer/VERSION" ]; then
         echo -e "\e[93mRemoving: rocm-installer/VERSION\e[0m"
         $SUDO rm rocm-installer/VERSION
@@ -319,6 +363,24 @@ if [ $CLEAN_BUILD -eq 1 ]; then
     if [ -d "test/CMakeFiles" ]; then
         echo -e "\e[93mRemoving: test/CMakeFiles\e[0m"
         $SUDO rm -r test/CMakeFiles
+    fi
+
+    # Clean temporary files in build-installer directory
+    if [ -f "build-installer/CMakeCache.txt" ]; then
+        echo -e "\e[93mRemoving: build-installer/CMakeCache.txt\e[0m"
+        $SUDO rm build-installer/CMakeCache.txt
+    fi
+
+    if [ -d "build-installer/CMakeFiles" ]; then
+        echo -e "\e[93mRemoving: build-installer/CMakeFiles\e[0m"
+        $SUDO rm -r build-installer/CMakeFiles
+    fi
+
+    # Reset VERSION file to only contain installer version (first line)
+    if [ -f "build-installer/VERSION" ]; then
+        echo -e "\e[93mResetting: build-installer/VERSION (keeping only installer version)\e[0m"
+        INSTALLER_VERSION=$(head -1 build-installer/VERSION)
+        echo "$INSTALLER_VERSION" > build-installer/VERSION
     fi
 fi
 

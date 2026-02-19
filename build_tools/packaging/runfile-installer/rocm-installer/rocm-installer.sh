@@ -31,7 +31,7 @@ EXTRACT_ROCM_DIR="$PWD/component-rocm"
 EXTRACT_AMDGPU_DIR="$PWD/component-amdgpu"
 
 # Target install directories
-TARGET_ROCM_DEFAULT_DIR="$PWD"
+TARGET_ROCM_DEFAULT_DIR="/opt"
 TARGET_ROCM_DIR="$TARGET_ROCM_DEFAULT_DIR"
 TARGET_AMDGPU_DIR="/"
 
@@ -60,7 +60,7 @@ POSTINST_COUNT=0
 PRERM_COUNT=0
 POSTRM_COUNT=0
 PROMPT_USER=0
-POST_ROCM_INSTALL=0
+POST_ROCM_INSTALL=1
 VERBOSE=0
 
 # Installer preqreqs
@@ -106,10 +106,10 @@ Usage: bash $PROG [options]
                <directory> = Target directory path for ROCm component install.
 
         gfx=<arch>
-            <arch> = GPU architecture to install (e.g., 94x, 950, etc.)
+            <arch> = GPU architecture to install (e.g., gfx94x, gfx950, etc.)
                      Installs base components plus architecture-specific components.
                      If not specified, only base components are installed.
-                     Available architectures: 94x, 950
+                     Available architectures: gfx94x, gfx950
 
         compo=<component_list>
             <component_list> = Comma-separated list of ROCm components to install.
@@ -126,12 +126,18 @@ Usage: bash $PROG [options]
 
     Post Install:
     -------------
-        postrocm     = Run post ROCm installation configuration (scripts, symlink create, etc.)
-                       Note: When used with 'rocm', postrocm processes components specified by compo=
-                       When used standalone, requires target= and uses compo= and gfx= to determine
-                       which component scriptlets to execute.
-                       IMPORTANT: For standalone postrocm, you must specify the same compo= and gfx=
-                       arguments that were used during installation (defaults: compo=core, no gfx)
+        Post-install configuration runs by default after ROCm installation (scripts, symlink create, etc.)
+
+        postrocm     = Run post ROCm installation configuration.
+                       Use this to run post-install after installing with 'nopostrocm'.
+                       Default target: /opt (can override with target=<path>)
+                       Optional: compo= and gfx= to match original installation args
+                       If compo=/gfx= not specified, auto-detects installed components
+
+        nopostrocm   = Disable post ROCm installation configuration.
+                       By default, post-install runs automatically with 'rocm'.
+                       Use this flag to skip post-install processing.
+
         amdgpu-start = Start the amdgpu driver after install.
 
         gpu-access=<access_type>
@@ -146,7 +152,7 @@ Usage: bash $PROG [options]
                               <directory/rocm-ver> = ROCm version target directory path for uninstall.
                                          rocm-ver  = ROCm version directory: rocm-x.y.z (x=major, y=minor, patch number)
 
-                             * If target=<directory/rocm-ver> is not provided, uninstall will be from $PWD/rocm-x.y.z
+                             * If target=<directory/rocm-ver> is not provided, uninstall will be from /opt/rocm-x.y.z
                              * Optional: Use compo= and gfx= for selective uninstall (same args as install)
                              * If compo=/gfx= not specified, auto-detects and uninstalls all installed components
       
@@ -166,77 +172,67 @@ Usage examples:
     
 # ROCm installation (no Dependency install)
 
-    * ROCm install location (default) => $PWD/rocm-x.y.z
-        bash $PROG rocm
-    
+    * ROCm install location (default) => /opt/rocm-x.y.z
+        bash $PROG gfx=gfx94x rocm
+
 # ROCm + Dependency installation
-    
-    * ROCm install location (default) => $PWD/rocm-x.y.z
-        bash $PROG deps=install rocm
-    
+
+    * ROCm install location (default) => /opt/rocm-x.y.z
+        bash $PROG deps=install gfx=gfx94x rocm
+
 # ROCm + Dependency installation + ROCm target location
-    
-    * ROCm install location => /opt/rocm-x.y.z
-        bash $PROG deps=install target="/" rocm
- 
+
     * ROCm install location => $HOME/myrocm/rocm-x.y.z
-        bash $PROG deps=install target="$HOME/myrocm" rocm
-    
-# ROCm + Dependency installation + ROCm target location + Post ROCm configuration
+        bash $PROG deps=install target="$HOME/myrocm" gfx=gfx94x rocm
 
-    bash $PROG deps=install target="/" rocm postrocm
-    bash $PROG deps=install target="$HOME/myrocm" rocm postrocm
+# ROCm + Dependency installation + gpu access (post-install runs by default)
 
-# ROCm + Dependency installation + ROCm target location + Post ROCm configuration + gpu access (all)
+    bash $PROG deps=install gfx=gfx94x rocm gpu-access=all
+    bash $PROG deps=install target="$HOME/myrocm" gfx=gfx94x rocm gpu-access=all
 
-    bash $PROG deps=install target="/" rocm postrocm gpu-access=all
-    bash $PROG deps=install target="$HOME/myrocm" rocm postrocm gpu-access=all
+# ROCm + Component selection (post-install runs by default)
 
-# ROCm + Component selection + Post install
+    * Install core + dev-tools
+        bash $PROG compo=core,dev-tools gfx=gfx94x rocm
 
-    * Install core + dev-tools with post-install configuration
-        bash $PROG compo=core,dev-tools rocm postrocm
+    * Install core-sdk with gfx support
+        bash $PROG compo=core-sdk gfx=gfx94x rocm
 
-    * Install core-sdk with gfx support and post-install
-        bash $PROG compo=core-sdk gfx=94x rocm postrocm
+    * Install without post-install processing
+        bash $PROG gfx=gfx94x rocm nopostrocm
 
-    * Standalone post-install for previously installed core components (base only)
-        bash $PROG target=/opt/rocm-7.11 postrocm
-
-    * Standalone post-install for core + gfx950 (must match original install args)
-        bash $PROG target=/opt/rocm-7.11 gfx=950 postrocm
-
-    * Standalone post-install for dev-tools at custom location
-        bash $PROG compo=dev-tools target="$HOME/myrocm/rocm-7.11" postrocm
-
-    * Standalone post-install for core-sdk with gfx94x (must match original install args)
-        bash $PROG compo=core-sdk gfx=94x target=/opt/rocm-7.11 postrocm
+    * Run post-install later (after installing with nopostrocm)
+        bash $PROG postrocm                                      # Auto-detect, uses default /opt
+        bash $PROG target=/custom/path postrocm                  # Auto-detect, custom location
+        bash $PROG gfx=gfx94x postrocm                           # Explicit gfx, uses default /opt
+        bash $PROG compo=core-sdk gfx=gfx94x postrocm            # With component selection
+        bash $PROG target=/custom/path gfx=gfx94x postrocm       # Custom location with gfx
 
 # ROCm + GFX architecture-specific installation
 
     * Install base ROCm + gfx94x components to default location
-        bash $PROG gfx=94x rocm
+        bash $PROG gfx=gfx94x rocm
 
     * Install base ROCm + gfx950 components with dependencies
-        bash $PROG deps=install gfx=950 rocm
+        bash $PROG deps=install gfx=gfx950 rocm
 
-    * Install base ROCm + gfx94x components to custom location with post-install
-        bash $PROG deps=install target="/" gfx=94x rocm postrocm
+    * Install base ROCm + gfx94x components to custom location
+        bash $PROG deps=install target="$HOME/myrocm" gfx=gfx94x rocm
 
 # ROCm + Component selection
 
     * Install core components only (default)
-        bash $PROG rocm
-        bash $PROG compo=core rocm
+        bash $PROG gfx=gfx94x rocm
+        bash $PROG compo=core gfx=gfx94x rocm
 
     * Install core + developer tools
-        bash $PROG compo=core,dev-tools rocm
+        bash $PROG compo=core,dev-tools gfx=gfx94x rocm
 
     * Install core SDK with gfx94x support
-        bash $PROG compo=core-sdk gfx=94x rocm
+        bash $PROG compo=core-sdk gfx=gfx94x rocm
 
     * Install core development components with dependencies
-        bash $PROG deps=install compo=core-dev gfx=950 rocm
+        bash $PROG deps=install compo=core-dev gfx=gfx950 rocm
 
     ** Recommended ***
 
@@ -250,8 +246,8 @@ Usage examples:
     
 # Combined Installation
 
-    bash $PROG deps=install target="/" rocm amdgpu postrocm gpu-access=all
-    bash $PROG deps=install target=$HOME/myrocm" rocm amdgpu postrocm gpu-access=all
+    bash $PROG deps=install gfx=gfx94x rocm amdgpu gpu-access=all
+    bash $PROG deps=install target="$HOME/myrocm" gfx=gfx94x rocm amdgpu gpu-access=all
     
 # Uninstall
 
@@ -260,8 +256,8 @@ Usage examples:
         bash $PROG target="$HOME/myrocm/rocm-x.y.z" uninstall-rocm
 
     * Selective uninstall (specify same compo=/gfx= as install)
-        bash $PROG target=/opt/rocm-7.11 compo=core gfx=950 uninstall-rocm
-        bash $PROG target=/opt/rocm-7.11 compo=core-sdk gfx=94x uninstall-rocm
+        bash $PROG target=/opt/rocm-7.11 compo=core gfx=gfx950 uninstall-rocm
+        bash $PROG target=/opt/rocm-7.11 compo=core-sdk gfx=gfx94x uninstall-rocm
 
     * Uninstall amdgpu driver
         bash $PROG uninstall-amdgpu
@@ -596,7 +592,82 @@ dump_rocm_state() {
     echo -e "\e[95mInstalled Components:\e[0m"
     echo "Base: $COMPONENTS"
     if [[ -n $COMPONENTS_GFX ]]; then
-        echo "GFX (gfx${INSTALL_GFX}): $COMPONENTS_GFX"
+        echo "GFX (${INSTALL_GFX}): $COMPONENTS_GFX"
+    fi
+}
+
+get_available_gfx_archs() {
+    # Scan for available GFX architectures in the installer
+    local archs=()
+    for gfx_dir in "$EXTRACT_ROCM_DIR"/gfx*/; do
+        if [ -d "$gfx_dir" ]; then
+            gfx_name=$(basename "$gfx_dir")
+            archs+=("$gfx_name")
+        fi
+    done
+    echo "${archs[@]}"
+}
+
+validate_gfx_arg() {
+    # Validate gfx= argument for ROCm installation
+
+    # Check if gfx= is required but not provided
+    # Only required when actually installing ROCm components (not deps-only)
+    if [[ $ROCM_INSTALL == 1 && "$DEPS_ARG" != "install-only" ]]; then
+        if [[ -z "$INSTALL_GFX" ]]; then
+            # Get available architectures from installer
+            local available_archs=($(get_available_gfx_archs))
+            print_err "The gfx= argument is required when installing ROCm."
+            echo "Example: $PROG gfx=gfx94x rocm"
+            if [ ${#available_archs[@]} -gt 0 ]; then
+                echo "Available architectures: ${available_archs[*]}"
+            else
+                echo "Available architectures: gfx94x, gfx950"
+            fi
+            exit 1
+        fi
+    fi
+
+    # Validate gfx= format and value if provided
+    if [[ -n "$INSTALL_GFX" ]]; then
+        # Check for multiple architectures (commas or spaces)
+        if [[ "$INSTALL_GFX" == *,* ]] || [[ "$INSTALL_GFX" == *" "* ]]; then
+            print_err "The gfx= argument must specify only ONE architecture."
+            echo "Invalid: gfx=$INSTALL_GFX"
+            echo "Example: gfx=gfx94x (not gfx=gfx94x,gfx950)"
+            exit 1
+        fi
+
+        # Validate format: must start with "gfx" followed by alphanumeric
+        if [[ ! "$INSTALL_GFX" =~ ^gfx[0-9a-z]+$ ]]; then
+            local available_archs=($(get_available_gfx_archs))
+            print_err "Invalid gfx= format: $INSTALL_GFX"
+            echo "The architecture must be in format: gfx<arch>"
+            if [ ${#available_archs[@]} -gt 0 ]; then
+                echo "Available architectures: ${available_archs[*]}"
+            else
+                echo "Examples: gfx94x, gfx950, gfx103x"
+            fi
+            exit 1
+        fi
+
+        # Validate against available architectures in installer
+        local available_archs=($(get_available_gfx_archs))
+        if [ ${#available_archs[@]} -gt 0 ]; then
+            local valid_arch=0
+            for arch in "${available_archs[@]}"; do
+                if [[ "$INSTALL_GFX" == "$arch" ]]; then
+                    valid_arch=1
+                    break
+                fi
+            done
+
+            if [ $valid_arch -eq 0 ]; then
+                print_err "Architecture '$INSTALL_GFX' is not available in this installer."
+                echo "Available architectures: ${available_archs[*]}"
+                exit 1
+            fi
+        fi
     fi
 }
 
@@ -1602,7 +1673,7 @@ configure_rocm_install() {
 
             if [[ -n $INSTALL_GFX ]]; then
                 # GFX-specific installation
-                local gfx_meta_file="$COMPO_META_DIR/${meta_base}-gfx${INSTALL_GFX}-meta.config"
+                local gfx_meta_file="$COMPO_META_DIR/${meta_base}-${INSTALL_GFX}-meta.config"
 
                 if [ -f "$gfx_meta_file" ]; then
                     echo "  Reading GFX meta config: $gfx_meta_file"
@@ -1613,7 +1684,7 @@ configure_rocm_install() {
                             if [[ ! " $COMPONENTS " =~ " $pkg " ]]; then
                                 COMPONENTS="$COMPONENTS $pkg"
                             fi
-                        elif [ -d "$EXTRACT_ROCM_DIR/gfx${INSTALL_GFX}/$pkg" ]; then
+                        elif [ -d "$EXTRACT_ROCM_DIR/${INSTALL_GFX}/$pkg" ]; then
                             # Package is in gfx directory
                             if [[ ! " $COMPONENTS_GFX " =~ " $pkg " ]]; then
                                 COMPONENTS_GFX="$COMPONENTS_GFX $pkg"
@@ -1626,7 +1697,7 @@ configure_rocm_install() {
                     for gfx_dir in "$EXTRACT_ROCM_DIR"/gfx*/; do
                         if [ -d "$gfx_dir" ]; then
                             gfx_name=$(basename "$gfx_dir")
-                            echo "  - ${gfx_name#gfx}"
+                            echo "  - $gfx_name"
                         fi
                     done
                     exit 1
@@ -1725,10 +1796,10 @@ install_rocm() {
 
     # Install GFX-specific components from component-rocm/gfxXYZ if specified
     if [[ -n $INSTALL_GFX ]]; then
-        local gfx_extract_dir="$EXTRACT_ROCM_DIR/gfx${INSTALL_GFX}"
+        local gfx_extract_dir="$EXTRACT_ROCM_DIR/${INSTALL_GFX}"
         for compo in ${COMPONENTS_GFX[@]}; do
             echo ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-            echo -e "\e[32mInstalling GFX component (gfx${INSTALL_GFX}): $compo\e[0m"
+            echo -e "\e[32mInstalling GFX component (${INSTALL_GFX}): $compo\e[0m"
             install_rocm_component $compo "$gfx_extract_dir"
             echo ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
         done
@@ -1777,6 +1848,14 @@ uninstall_rocm_target() {
             # ROCm version info should already be set by setup_rocm_version_info() called earlier
             # If not set, that's okay for uninstall - we can still try based on directory structure
 
+            # For auto-detection, we need to use component-rocm which has content/ directories.
+            # component-rocm-deb only has scriptlets but no content, so detection cannot match files.
+            # Save the scriptlet directory and temporarily switch to component-rocm for detection.
+            local saved_extract_rocm_dir="$EXTRACT_ROCM_DIR"
+            if [ -d "$PWD/component-rocm" ]; then
+                EXTRACT_ROCM_DIR="$PWD/component-rocm"
+            fi
+
             # Step 1: Detect which base components are actually installed at the target
             detect_installed_base_components "$rocm_ver_dir"
 
@@ -1785,6 +1864,9 @@ uninstall_rocm_target() {
 
             # Step 3: Detect which GFX components are installed for each architecture
             detect_installed_gfx_components "$rocm_ver_dir"
+
+            # Restore the scriptlet directory for running removal scripts
+            EXTRACT_ROCM_DIR="$saved_extract_rocm_dir"
 
             # Step 4: Detect meta packages with scriptlets
             detect_meta_packages
@@ -2230,15 +2312,33 @@ install_postint_scriptlets() {
     echo Running post install scripts...
 
     # Run post-install scripts for base components
-    for compo in ${COMPONENTS[@]}; do
-        install_postinst_scriptlet $compo "$EXTRACT_ROCM_DIR/base"
-    done
+    if [[ -n "$COMPONENTS" ]]; then
+        echo "postinst executing for base components...."
+        for compo in ${COMPONENTS[@]}; do
+            install_postinst_scriptlet $compo "$EXTRACT_ROCM_DIR/base"
+        done
+    fi
 
-    # Run post-install scripts for GFX-specific components if specified
+    # Run post-install scripts for GFX-specific components
+    # Handle both explicit gfx= specification and auto-detected GFX components
     if [[ -n $INSTALL_GFX ]]; then
-        local gfx_extract_dir="$EXTRACT_ROCM_DIR/gfx${INSTALL_GFX}"
+        # Explicit gfx= was specified
+        local gfx_extract_dir="$EXTRACT_ROCM_DIR/${INSTALL_GFX}"
+        echo "postinst executing for GFX components ($INSTALL_GFX)...."
         for compo in ${COMPONENTS_GFX[@]}; do
             install_postinst_scriptlet $compo "$gfx_extract_dir"
+        done
+    elif [ ${#gfx_components[@]} -gt 0 ]; then
+        # Auto-detected GFX components (from uninstall-like detection)
+        echo "postinst executing for auto-detected GFX components...."
+        for entry in "${gfx_components[@]}"; do
+            local comps="${entry%|*}"
+            local gfx_extract_dir="${entry#*|}"
+            gfx_extract_dir="${gfx_extract_dir%/}"  # Remove trailing slash
+
+            for compo in $comps; do
+                install_postinst_scriptlet "$compo" "$gfx_extract_dir"
+            done
         done
     fi
 
@@ -2272,23 +2372,42 @@ install_post_rocm_extras() {
     local content_etc_dir=
 
     # Process base components
-    for compo in ${COMPONENTS[@]}; do
-        content_etc_dir="$EXTRACT_ROCM_DIR/base/$compo/content-etc"
-        if [ -d "$content_etc_dir" ]; then
-            echo "/etc content for component: $compo"
-            install_post_rocm_etc "$compo" "$content_etc_dir"
-        fi
-    done
+    if [[ -n "$COMPONENTS" ]]; then
+        for compo in ${COMPONENTS[@]}; do
+            content_etc_dir="$EXTRACT_ROCM_DIR/base/$compo/content-etc"
+            if [ -d "$content_etc_dir" ]; then
+                echo "/etc content for component: $compo"
+                install_post_rocm_etc "$compo" "$content_etc_dir"
+            fi
+        done
+    fi
 
-    # Process GFX-specific components if specified
+    # Process GFX-specific components
+    # Handle both explicit gfx= specification and auto-detected GFX components
     if [[ -n $INSTALL_GFX ]]; then
-        local gfx_extract_dir="$EXTRACT_ROCM_DIR/gfx${INSTALL_GFX}"
+        # Explicit gfx= was specified
+        local gfx_extract_dir="$EXTRACT_ROCM_DIR/${INSTALL_GFX}"
         for compo in ${COMPONENTS_GFX[@]}; do
             content_etc_dir="$gfx_extract_dir/$compo/content-etc"
             if [ -d "$content_etc_dir" ]; then
                 echo "/etc content for GFX component: $compo"
                 install_post_rocm_etc "$compo" "$content_etc_dir"
             fi
+        done
+    elif [ ${#gfx_components[@]} -gt 0 ]; then
+        # Auto-detected GFX components (from uninstall-like detection)
+        for entry in "${gfx_components[@]}"; do
+            local comps="${entry%|*}"
+            local gfx_extract_dir="${entry#*|}"
+            gfx_extract_dir="${gfx_extract_dir%/}"  # Remove trailing slash
+
+            for compo in $comps; do
+                content_etc_dir="$gfx_extract_dir/$compo/content-etc"
+                if [ -d "$content_etc_dir" ]; then
+                    echo "/etc content for auto-detected GFX component: $compo"
+                    install_post_rocm_etc "$compo" "$content_etc_dir"
+                fi
+            done
         done
     fi
 
@@ -2331,10 +2450,10 @@ install_post_rocm() {
     else
         echo ROCm post-install for target...
 
-        # check if the target arg is used
+        # Use default target if not specified
         if [[ -z "$INSTALL_TARGET" ]]; then
-            print_err "target= argument required."
-            exit 1
+            echo "No target specified, using default: $TARGET_ROCM_DEFAULT_DIR"
+            TARGET_ROCM_DIR="$TARGET_ROCM_DEFAULT_DIR"
         fi
 
         set_rocm_target
@@ -2358,11 +2477,49 @@ install_post_rocm() {
         rocm_ver_dir="$ROCM_DIR"
         TARGET_DIR="${TARGET_DIR%/\rocm-[0-9]*}"
 
-        # Configure the rocm components based on COMPO_INSTALL setting
-        # This will populate COMPONENTS and COMPONENTS_GFX based on the compo= argument
-        # and also detect the ROCM_VER from the base directory
-        echo "Configuring components for post-install based on compo=$COMPO_INSTALL"
-        configure_rocm_install
+        # Check if user explicitly specified compo= or gfx= for selective post-install
+        if [[ $USER_SPECIFIED_COMPO -eq 1 || $USER_SPECIFIED_GFX -eq 1 ]]; then
+            # Selective post-install: use compo= and gfx= arguments (same as install)
+            echo "Selective post-install using compo=$COMPO_INSTALL gfx=${INSTALL_GFX:-none}"
+            configure_rocm_install
+        else
+            # Auto-detect post-install: configure everything that's actually installed
+            echo "Auto-detecting installed components for post-install..."
+
+            # ROCm version info should already be set by setup_rocm_version_info() called earlier
+            # If not set, that's okay for post-install - we can still try based on directory structure
+
+            # For auto-detection, we need to use component-rocm which has content/ directories.
+            # component-rocm-deb only has scriptlets but no content, so detection cannot match files.
+            # Save the scriptlet directory and temporarily switch to component-rocm for detection.
+            local saved_extract_rocm_dir="$EXTRACT_ROCM_DIR"
+            if [ -d "$PWD/component-rocm" ]; then
+                EXTRACT_ROCM_DIR="$PWD/component-rocm"
+                echo "Using component-rocm for auto-detection (has content/ directories)"
+            fi
+
+            # Step 1: Detect which base components are actually installed at the target
+            detect_installed_base_components "$rocm_ver_dir"
+
+            # Step 2: Detect which GFX architectures are actually installed at the target
+            detect_installed_gfx_architectures "$rocm_ver_dir"
+
+            # Step 3: Detect which GFX components are installed for each architecture
+            detect_installed_gfx_components "$rocm_ver_dir"
+
+            # Restore the scriptlet directory for running post-install scripts
+            EXTRACT_ROCM_DIR="$saved_extract_rocm_dir"
+
+            # Step 4: Detect meta packages with scriptlets
+            detect_meta_packages
+
+            # Build COMPONENTS_GFX string from gfx_components array for display
+            COMPONENTS_GFX=""
+            for entry in "${gfx_components[@]}"; do
+                local comps="${entry%|*}"
+                COMPONENTS_GFX="$COMPONENTS_GFX $comps"
+            done
+        fi
 
         # Now check if the target rocm version matches the installer rocm version
         local rocm_ver_name=$(basename "${rocm_install[0]}")
@@ -2393,15 +2550,6 @@ install_post_rocm() {
     echo "  Base components: $COMPONENTS"
     if [[ -n "$COMPONENTS_GFX" ]]; then
         echo "  GFX components: $COMPONENTS_GFX"
-    else
-        # Warn if no GFX components but GFX files might be installed
-        if [[ -z "$INSTALL_GFX" && -d "$rocm_ver_dir/lib" ]]; then
-            if find "$rocm_ver_dir/lib" -type f -name "*gfx*" 2>/dev/null | head -1 | grep -q .; then
-                print_warning "GFX-specific files detected in installation, but gfx= not specified."
-                echo "If you installed with gfx=<arch>, you should run postrocm with the same gfx= argument."
-                echo "Example: $PROG target=$TARGET_DIR gfx=950 postrocm"
-            fi
-        fi
     fi
 
     # Set the PREFIX variable for rpm-based extracted scriptlets if required
@@ -2568,6 +2716,11 @@ do
         POST_ROCM_INSTALL=1
         shift
         ;;
+    nopostrocm)
+        echo "Disabling Post ROCm install."
+        POST_ROCM_INSTALL=0
+        shift
+        ;;
     gpu-access=*)
         GPU_ACCESS="${1#*=}"
         echo Setting GPU access: $GPU_ACCESS
@@ -2624,6 +2777,7 @@ do
         DEPS_ARG=
         ROCM_INSTALL=0
         AMDGPU_INSTALL=0
+        POST_ROCM_INSTALL=0
         GPU_ACCESS=
         shift
         ;;
@@ -2644,6 +2798,9 @@ do
         ;;
     esac
 done
+
+# Validate gfx= argument
+validate_gfx_arg
 
 get_version
 

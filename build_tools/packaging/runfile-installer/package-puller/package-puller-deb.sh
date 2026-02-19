@@ -113,6 +113,28 @@ print_err() {
     echo -e "\e[31m++++++++++++++++++++++++++++++++++++\e[0m"
 }
 
+print_str() {
+    local msg=$1
+    local clr=$2
+    local color_code=""
+
+    if [[ $clr == 1 ]]; then
+        color_code="\e[93m"  # yellow
+    elif [[ $clr == 2 ]]; then
+        color_code="\e[32m"  # green
+    elif [[ $clr == 3 ]]; then
+        color_code="\e[31m"  # red
+    elif [[ $clr == 4 ]]; then
+        color_code="\e[35m"  # purple
+    elif [[ $clr == 5 ]]; then
+        color_code="\e[36m"  # cyan
+    fi
+
+    echo -e "${color_code}++++++++++++++++++++++++++++++++++++\e[0m"
+    echo -e "${color_code}$msg\e[0m"
+    echo -e "${color_code}++++++++++++++++++++++++++++++++++++\e[0m"
+}
+
 prompt_user() {
     if [[ $PROMPT_USER == 1 ]]; then
         read -p "$1" option
@@ -424,7 +446,7 @@ check_package_owner() {
             cp $pkgName $PWD/packages-other
         fi
         
-        print_err "$NON_AMD_COUNT: 3rd Party PACKAGE"
+        print_str "$NON_AMD_COUNT: 3rd Party PACKAGE" 4
     fi
 }
 

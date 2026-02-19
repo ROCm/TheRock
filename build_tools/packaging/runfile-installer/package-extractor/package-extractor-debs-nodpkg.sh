@@ -295,7 +295,7 @@ write_version() {
     echo Writing version...
 
     i=0
-    VERSION_FILE="../VERSION"
+    VERSION_FILE="../build-installer/VERSION"
 
     while IFS= read -r line; do
         case $i in
