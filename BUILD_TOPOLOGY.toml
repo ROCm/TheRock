@@ -653,7 +653,7 @@ disable_platforms = ["windows"]
 
 [artifacts.rocr-debug-agent-tests]
 artifact_group = "debug-tools"
-type = "target-specific"
+type = "target-neutral"
 artifact_deps = ["rocr-debug-agent", "core-hip"]
 feature_group = "DEBUG_TOOLS"  # Part of DEBUG_TOOLS, enabled by default via THEROCK_ENABLE_ALL
 disable_platforms = ["windows"]

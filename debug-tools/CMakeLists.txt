@@ -133,6 +133,7 @@ if(THEROCK_ENABLE_ROCR_DEBUG_AGENT_TESTS)
 
   if(THEROCK_BUILD_TESTING)
     therock_cmake_subproject_declare(rocr-debug-agent-tests
+      USE_DIST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR "rocr-debug-agent/test"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocr-debug-agent-tests"
       CMAKE_ARGS
@@ -157,6 +158,7 @@ if(THEROCK_ENABLE_ROCR_DEBUG_AGENT_TESTS)
 
     # The artifacts provided by rocr-debug-agent-tests.
     therock_provide_artifact(rocr-debug-agent-tests
+      TARGET_NEUTRAL
       DESCRIPTOR artifact-rocr-debug-agent-tests.toml
       COMPONENTS
         doc
