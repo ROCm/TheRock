@@ -32,6 +32,7 @@ if test_type == "smoke":
     environ_vars["GTEST_FILTER"] = "-Full*"
 
 # As a sanity check, verify libIREECompiler.so is available in the build artifacts.
+# TODO: check for .dll on windows
 iree_compiler_lib = THEROCK_BIN_DIR.parent / "lib" / "libIREECompiler.so"
 if not iree_compiler_lib.exists():
     raise RuntimeError(
