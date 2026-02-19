@@ -86,6 +86,7 @@ jobs:
 
       - name: Pre-job cleanup processes on Windows
         if: ${{ runner.os == 'Windows' }}
+        timeout-minutes: 5
         shell: powershell
         run: . '${{ github.workspace }}\prejob\build_tools\github_actions\cleanup_processes.ps1'
 
@@ -96,6 +97,7 @@ jobs:
 
       - name: Pre-job cleanup Docker containers on Linux
         if: ${{ runner.os == 'Linux' }}
+        timeout-minutes: 5
         shell: bash
         run: |
           # Remove any stopped containers
@@ -104,6 +106,7 @@ jobs:
           docker network prune -f || true
 
       - name: Run setup test environment workflow
+        timeout-minutes: 10
         uses: './.github/actions/setup_test_environment'
         with:
           ARTIFACT_GROUP: ${{ inputs.artifact_group }}
@@ -143,5 +146,6 @@ jobs:
 
       - name: Post-job cleanup processes on Windows
         if: ${{ always() && runner.os == 'Windows' }}
+        timeout-minutes: 5
         shell: powershell
         run: . '${{ github.workspace }}\build_tools\github_actions\cleanup_processes.ps1'
