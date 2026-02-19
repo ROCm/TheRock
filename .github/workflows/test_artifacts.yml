@@ -10,6 +10,9 @@ on:
         default: ""
       amdgpu_families:
         type: string
+      amdgpu_targets:
+        type: string
+        default: ""
       test_runs_on:
         type: string
       sanity_check_only_for_family:
@@ -28,6 +31,9 @@ on:
         default: ""
       amdgpu_families:
         type: string
+      amdgpu_targets:
+        type: string
+        default: ""
       test_runs_on:
         type: string
       sanity_check_only_for_family:
@@ -94,6 +100,7 @@ jobs:
       artifact_group: ${{ inputs.artifact_group }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
       amdgpu_families: ${{ inputs.amdgpu_families }}
+      amdgpu_targets: ${{ inputs.amdgpu_targets }}
       test_runs_on: ${{ inputs.test_runs_on }}
       platform: ${{ needs.configure_test_matrix.outputs.platform }}
 
@@ -111,6 +118,7 @@ jobs:
       artifact_run_id: ${{ inputs.artifact_run_id }}
       artifact_group: ${{ inputs.artifact_group }}
       amdgpu_families: ${{ inputs.amdgpu_families }}
+      amdgpu_targets: ${{ inputs.amdgpu_targets }}
       # If the test requires a multi GPU, use the multi GPU test runner
       # Otherwise, use the standard test runner
       test_runs_on: >-

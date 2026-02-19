@@ -1,4 +1,4 @@
-name: Multi-Arch CI - Linux
+name: Multi-Arch CI - Windows
 
 on:
   workflow_call:
@@ -37,7 +37,7 @@ jobs:
   build_multi_arch_stages:
     name: Build Multi-Arch Stages
     if: ${{ inputs.use_prebuilt_artifacts == 'false' }}
-    uses: ./.github/workflows/multi_arch_build_portable_linux.yml
+    uses: ./.github/workflows/multi_arch_build_windows.yml
     secrets: inherit
     with:
       matrix_per_family_json: ${{ inputs.matrix_per_family_json }}
@@ -80,7 +80,6 @@ jobs:
       # Use architecture-specific artifact group for fetching per-arch artifacts
       artifact_group: ${{ matrix.family_info.amdgpu_family }}
       amdgpu_families: ${{ matrix.family_info.amdgpu_family }}
-      amdgpu_targets: ${{ matrix.family_info.amdgpu_targets }}
       test_runs_on: ${{ matrix.family_info.test-runs-on }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
       test_type: ${{ inputs.test_type }}
