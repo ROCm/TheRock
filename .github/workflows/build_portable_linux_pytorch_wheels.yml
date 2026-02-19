@@ -172,7 +172,10 @@ jobs:
         run: |
           ./external-builds/pytorch/pytorch_torch_repo.py checkout --gitrepo-origin https://github.com/ROCm/pytorch.git --repo-hashtag ${{ inputs.pytorch_git_ref }}
           ./external-builds/pytorch/pytorch_audio_repo.py checkout --require-related-commit
-          ./external-builds/pytorch/pytorch_apex_repo.py checkout --require-related-commit
+          # Only checkout apex for PyTorch 2.10 and newer (skip for 2.9 and older)
+          if [[ "${{ inputs.pytorch_git_ref }}" != "release/2.7" && "${{ inputs.pytorch_git_ref }}" != "release/2.8" && "${{ inputs.pytorch_git_ref }}" != "release/2.9" ]]; then
+            ./external-builds/pytorch/pytorch_apex_repo.py checkout --require-related-commit
+          fi
           ./external-builds/pytorch/pytorch_vision_repo.py checkout --require-related-commit
           ./external-builds/pytorch/pytorch_triton_repo.py checkout
 
@@ -189,11 +192,17 @@ jobs:
         id: build-pytorch-wheels
         run: |
           echo "Building PyTorch wheels for ${{ inputs.amdgpu_family }}"
+          # Disable apex build for PyTorch 2.9 and older
+          APEX_FLAG=""
+          if [[ "${{ inputs.pytorch_git_ref }}" == "release/2.7" || "${{ inputs.pytorch_git_ref }}" == "release/2.8" || "${{ inputs.pytorch_git_ref }}" == "release/2.9" ]]; then
+            APEX_FLAG="--no-build-apex"
+          fi
           ./external-builds/pytorch/build_prod_wheels.py \
             build \
             --install-rocm \
             --index-url "${{ inputs.cloudfront_url }}/${{ inputs.amdgpu_family }}/" \
             --clean \
+            ${APEX_FLAG} \
             --output-dir ${{ env.PACKAGE_DIST_DIR }} ${{ env.optional_build_prod_arguments }}
           python ./build_tools/github_actions/write_torch_versions.py --dist-dir ${{ env.PACKAGE_DIST_DIR }}
 
