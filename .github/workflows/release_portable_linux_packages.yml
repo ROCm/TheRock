@@ -184,7 +184,6 @@ jobs:
       S3_BUCKET_PY: "therock-${{ needs.setup_metadata.outputs.release_type }}-python"
       S3_SUBDIR: ${{ inputs.s3_subdir || 'v2' }}
       S3_STAGING_SUBDIR: ${{ inputs.s3_staging_subdir || 'v2-staging' }}
-      MANYLINUX: 1
       BUILD_DIR:  ${{ github.workspace }}/output/build
       EXTRA_C_COMPILER_LAUNCHER: "${{ github.workspace }}/build_tools/resource_info.py"
       EXTRA_CXX_COMPILER_LAUNCHER: "${{ github.workspace }}/build_tools/resource_info.py"
@@ -226,7 +225,6 @@ jobs:
         timeout-minutes: 30
         run: |
           ./build_tools/fetch_sources.py --jobs 10
-          wait
 
       - name: Configure Projects
         env:
@@ -236,7 +234,8 @@ jobs:
           cmake_preset: ''
         run: |
           python3 ./build_tools/github_actions/build_configure.py \
-            --build-dir ${{ env.BUILD_DIR }}
+            --build-dir ${{ env.BUILD_DIR }} \
+            --manylinux
 
       - name: Build Projects
         run: |
