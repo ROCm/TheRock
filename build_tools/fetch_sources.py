@@ -430,7 +430,6 @@ def main(argv):
                     "third_party/flatcc",
                     "third_party/benchmark",
                     "third_party/llvm-project",
-                    "third_party/stablehlo",
                     "third_party/torch-mlir",
                 ],
             )
