@@ -774,10 +774,12 @@ def run(args: argparse.Namespace):
     minor = re.match(r"^\d+", parts[1])
     modified_rocm_version = f"{major.group()}.{minor.group()}"
 
+    prefix = args.install_prefix
+
     # Append rocm version to default install prefix
     # TBD: Do we need to append rocm_version to other prefix?
-    if args.install_prefix == f"{DEFAULT_INSTALL_PREFIX}":
-        prefix = args.install_prefix + "-" + modified_rocm_version
+    if prefix == DEFAULT_INSTALL_PREFIX:
+        prefix = f"{prefix}-{modified_rocm_version}"
 
     # Populate package config details from user arguments
     config = PackageConfig(
