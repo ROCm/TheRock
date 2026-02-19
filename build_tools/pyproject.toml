@@ -1,0 +1,29 @@
+[tool.pytest.ini_options]
+testpaths = [
+    "tests",
+    "github_actions/tests",
+]
+python_files = ["*_test.py"]
+addopts = "-ra"
+
+[tool.coverage.run]
+data_file = "../build/.coverage"
+source = ["."]
+omit = [
+    "tests/*",
+    "github_actions/tests/*",
+    "*/__pycache__/*",
+]
+
+[tool.coverage.report]
+show_missing = true
+precision = 2
+sort = "Cover"
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]
+
+[tool.coverage.html]
+directory = "../build/coverage-html"

@@ -8,10 +8,13 @@ Required environment variables:
 import json
 import logging
 import os
+import sys
 from pathlib import Path
 
+# Add tests directory to path for extended_tests imports
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tests"))
 from github_actions_utils import *
-from benchmarks.benchmark_test_matrix import benchmark_matrix
+from extended_tests.benchmark.benchmark_test_matrix import benchmark_matrix
 from amdgpu_family_matrix import get_all_families_for_trigger_types
 
 logging.basicConfig(level=logging.INFO)
@@ -71,14 +74,6 @@ test_matrix = {
             ],
         },
     },
-    "origami": {
-        "job_name": "origami",
-        "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 5,
-        "test_script": f"python {_get_script_path('test_origami.py')}",
-        "platform": ["linux", "windows"],
-        "total_shards": 1,
-    },
     "hipblas": {
         "job_name": "hipblas",
         "fetch_artifact_args": "--blas --tests",
@@ -123,12 +118,28 @@ test_matrix = {
         "platform": ["linux", "windows"],
         "total_shards": 2,
     },
+    "rocprofiler_systems": {
+        "job_name": "rocprofiler_systems",
+        "fetch_artifact_args": "--rocprofiler-systems --rocprofiler-sdk --tests",
+        "timeout_minutes": 15,
+        "test_script": f"python {_get_script_path('test_rocprofiler_systems.py')}",
+        "platform": ["linux"],
+        "total_shards": 1,
+    },
     "hipcub": {
         "job_name": "hipcub",
         "fetch_artifact_args": "--prim --tests",
         "timeout_minutes": 15,
         "test_script": f"python {_get_script_path('test_hipcub.py')}",
         "platform": ["linux", "windows"],
+        "total_shards": 1,
+    },
+    "rocr-debug-agent": {
+        "job_name": "rocr-debug-agent",
+        "fetch_artifact_args": "--debug-tools --tests",
+        "timeout_minutes": 10,
+        "test_script": f"python {_get_script_path('test_rocr-debug-agent.py')}",
+        "platform": ["linux"],
         "total_shards": 1,
     },
     "rocthrust": {
@@ -265,6 +276,15 @@ test_matrix = {
     #     "platform": ["linux"],
     #     "total_shards": 1,
     # },
+    # hipBLASLt plugin tests
+    "hipblaslt_plugin": {
+        "job_name": "hipblaslt_plugin",
+        "fetch_artifact_args": "--blas --hipdnn --hipblaslt-plugin --tests",
+        "timeout_minutes": 15,
+        "test_script": f"python {_get_script_path('test_hipblaslt_plugin.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards": 1,
+    },
     # rocWMMA tests
     "rocwmma": {
         "job_name": "rocwmma",

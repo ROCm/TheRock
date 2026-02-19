@@ -13,10 +13,9 @@ For presubmit, postsubmit and nightly family selection:
 TODO(#2200): clarify AMD GPU family selection
 """
 
-from github_actions_utils import str2bool
-
-import json
-import os
+#############################################################################################
+# NOTE: when doing changes here, also check that they are done in new_amdgpu_family_matrix.py
+#############################################################################################
 
 all_build_variants = {
     "linux": {
@@ -32,6 +31,11 @@ all_build_variants = {
             "build_variant_label": "asan",
             "build_variant_suffix": "asan",
             "build_variant_cmake_preset": "linux-release-asan",
+        },
+        "tsan": {
+            "build_variant_label": "tsan",
+            "build_variant_suffix": "tsan",
+            "build_variant_cmake_preset": "linux-release-tsan",
             "expect_failure": True,
         },
     },
@@ -49,19 +53,25 @@ amdgpu_family_info_matrix_presubmit = {
     "gfx94x": {
         "linux": {
             "test-runs-on": "linux-mi325-1gpu-ossci-rocm",
+            # TODO(#3433): Remove sandbox label once ASAN tests are passing
+            "test-runs-on-sandbox": "linux-mi325-8gpu-ossci-rocm-sandbox",
             "test-runs-on-multi-gpu": "linux-mi325-8gpu-ossci-rocm",
             # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
             "benchmark-runs-on": "linux-mi325-8gpu-ossci-rocm",
             "family": "gfx94X-dcgpu",
-            "build_variants": ["release", "asan"],
+            # Individual GPU target(s) on the test runner, for fetching split artifacts.
+            # TODO(#3444): ASAN variants may need xnack suffix expansion (e.g. gfx942:xnack+).
+            "fetch-gfx-targets": ["gfx942"],
+            "build_variants": ["release", "asan", "tsan"],
         }
     },
     "gfx110x": {
         "linux": {
-            # TODO(#2740): Re-enable machine once `amdsmi` test is fixed
-            # Label is "linux-gfx110X-gpu-rocm"
+            # TODO(#3298): Re-enable machine once HSA_STATUS_ERROR_OUT_OF_RESOURCES issues are resolved
+            # Label is linux-gfx110X-gpu-rocm, fetch-gfx-targets should be ["gfx1100"]
             "test-runs-on": "",
             "family": "gfx110X-all",
+            "fetch-gfx-targets": [],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
             "sanity_check_only_for_family": True,
@@ -69,6 +79,7 @@ amdgpu_family_info_matrix_presubmit = {
         "windows": {
             "test-runs-on": "windows-gfx110X-gpu-rocm",
             "family": "gfx110X-all",
+            "fetch-gfx-targets": ["gfx1100"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
             "sanity_check_only_for_family": True,
@@ -81,6 +92,7 @@ amdgpu_family_info_matrix_presubmit = {
                 "oem": "linux-strix-halo-gpu-rocm-oem",
             },
             "family": "gfx1151",
+            "fetch-gfx-targets": ["gfx1151"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
             "sanity_check_only_for_family": True,
@@ -90,6 +102,7 @@ amdgpu_family_info_matrix_presubmit = {
             # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
             "benchmark-runs-on": "windows-gfx1151-gpu-rocm",
             "family": "gfx1151",
+            "fetch-gfx-targets": ["gfx1151"],
             "build_variants": ["release"],
         },
     },
@@ -97,15 +110,17 @@ amdgpu_family_info_matrix_presubmit = {
         "linux": {
             "test-runs-on": "linux-gfx120X-gpu-rocm",
             "family": "gfx120X-all",
+            "fetch-gfx-targets": ["gfx1200", "gfx1201"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
             "sanity_check_only_for_family": True,
         },
         "windows": {
             # TODO(#2962): Re-enable machine once sanity checks work with this architecture
-            # Label is windows-gfx120X-gpu-rocm
+            # Label is windows-gfx120X-gpu-rocm, fetch-gfx-targets should be ["gfx1200", "gfx1201"]
             "test-runs-on": "",
             "family": "gfx120X-all",
+            "fetch-gfx-targets": [],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
         },
@@ -118,7 +133,8 @@ amdgpu_family_info_matrix_postsubmit = {
         "linux": {
             "test-runs-on": "linux-mi355-1gpu-ossci-rocm",
             "family": "gfx950-dcgpu",
-            "build_variants": ["release", "asan"],
+            "fetch-gfx-targets": ["gfx950"],
+            "build_variants": ["release", "asan", "tsan"],
         }
     },
 }
@@ -129,6 +145,7 @@ amdgpu_family_info_matrix_nightly = {
         "linux": {
             "test-runs-on": "linux-gfx90X-gpu-rocm",
             "family": "gfx90X-dcgpu",
+            "fetch-gfx-targets": ["gfx90a"],
             "sanity_check_only_for_family": True,
             "build_variants": ["release"],
         },
@@ -136,33 +153,32 @@ amdgpu_family_info_matrix_nightly = {
         "windows": {
             "test-runs-on": "",
             "family": "gfx90X-dcgpu",
+            "fetch-gfx-targets": [],
             "build_variants": ["release"],
             "expect_pytorch_failure": True,
         },
     },
     "gfx101x": {
-        # TODO(#1926): Resolve bgemm kernel hip file generation error, to enable PyTorch builds
+        # TODO(#1926): Resolve bgemm kernel hip file generation error to enable PyTorch builds
         "linux": {
             "test-runs-on": "",
             "family": "gfx101X-dgpu",
-            "expect_failure": True,
+            "fetch-gfx-targets": [],
             "build_variants": ["release"],
             "expect_pytorch_failure": True,
         },
-        # TODO(#1925): Enable arch for aotriton to enable PyTorch builds
         "windows": {
             "test-runs-on": "",
             "family": "gfx101X-dgpu",
+            "fetch-gfx-targets": [],
             "build_variants": ["release"],
-            "expect_pytorch_failure": True,
         },
     },
     "gfx103x": {
         "linux": {
-            # TODO(#2740): Re-enable machine once it is stable
-            # Label is "linux-gfx1030-gpu-rocm"
-            "test-runs-on": "",
+            "test-runs-on": "linux-gfx1030-gpu-rocm",
             "family": "gfx103X-dgpu",
+            "fetch-gfx-targets": ["gfx1030"],
             "build_variants": ["release"],
             "sanity_check_only_for_family": True,
         },
@@ -171,6 +187,7 @@ amdgpu_family_info_matrix_nightly = {
             # Label is "windows-gfx1030-gpu-rocm"
             "test-runs-on": "",
             "family": "gfx103X-dgpu",
+            "fetch-gfx-targets": [],
             "build_variants": ["release"],
             "sanity_check_only_for_family": True,
         },
@@ -181,12 +198,14 @@ amdgpu_family_info_matrix_nightly = {
             # Label is "linux-gfx1150-gpu-rocm"
             "test-runs-on": "",
             "family": "gfx1150",
+            "fetch-gfx-targets": [],
             "build_variants": ["release"],
             "sanity_check_only_for_family": True,
         },
         "windows": {
             "test-runs-on": "",
             "family": "gfx1150",
+            "fetch-gfx-targets": [],
             "build_variants": ["release"],
         },
     },
@@ -194,11 +213,13 @@ amdgpu_family_info_matrix_nightly = {
         "linux": {
             "test-runs-on": "",
             "family": "gfx1152",
+            "fetch-gfx-targets": [],
             "build_variants": ["release"],
         },
         "windows": {
             "test-runs-on": "",
             "family": "gfx1152",
+            "fetch-gfx-targets": [],
             "build_variants": ["release"],
         },
     },
@@ -208,52 +229,18 @@ amdgpu_family_info_matrix_nightly = {
             # Label is "linux-gfx1153-gpu-rocm"
             "test-runs-on": "",
             "family": "gfx1153",
+            "fetch-gfx-targets": [],
             "build_variants": ["release"],
             "sanity_check_only_for_family": True,
         },
         "windows": {
             "test-runs-on": "",
             "family": "gfx1153",
+            "fetch-gfx-targets": [],
             "build_variants": ["release"],
         },
     },
 }
-
-
-def load_test_runner_from_gh_variables():
-    """
-    As test runner names are frequently updated, we are pulling the runner label data from the ROCm organization variable called "ROCM_THEROCK_TEST_RUNNERS"
-
-    For more info, go to 'docs/development/test_runner_info.md'
-    """
-    test_runner_json_str = os.getenv("ROCM_THEROCK_TEST_RUNNERS", "{}")
-    test_runner_dict = json.loads(test_runner_json_str)
-    for key in test_runner_dict.keys():
-        for platform in test_runner_dict[key].keys():
-            # Checking in presubmit dictionary
-            if (
-                key in amdgpu_family_info_matrix_presubmit
-                and platform in amdgpu_family_info_matrix_presubmit[key]
-            ):
-                amdgpu_family_info_matrix_presubmit[key][platform]["test-runs-on"] = (
-                    test_runner_dict[key][platform]
-                )
-            # Checking in postsubmit dictionary
-            if (
-                key in amdgpu_family_info_matrix_postsubmit
-                and platform in amdgpu_family_info_matrix_postsubmit[key]
-            ):
-                amdgpu_family_info_matrix_postsubmit[key][platform]["test-runs-on"] = (
-                    test_runner_dict[key][platform]
-                )
-            # Checking in nightly dictionary
-            if (
-                key in amdgpu_family_info_matrix_nightly
-                and platform in amdgpu_family_info_matrix_nightly[key]
-            ):
-                amdgpu_family_info_matrix_nightly[key][platform]["test-runs-on"] = (
-                    test_runner_dict[key][platform]
-                )
 
 
 def get_all_families_for_trigger_types(trigger_types):
@@ -261,12 +248,6 @@ def get_all_families_for_trigger_types(trigger_types):
     Returns a combined family matrix for the specified trigger types.
     trigger_types: list of strings, e.g. ['presubmit', 'postsubmit', 'nightly']
     """
-    # Load in test runners from ROCm organization variable "ROCM_THEROCK_TEST_RUNNERS"
-    load_test_runners_from_var = str2bool(
-        os.getenv("LOAD_TEST_RUNNERS_FROM_VAR", "true")
-    )
-    if load_test_runners_from_var:
-        load_test_runner_from_gh_variables()
     result = {}
     matrix_map = {
         "presubmit": amdgpu_family_info_matrix_presubmit,

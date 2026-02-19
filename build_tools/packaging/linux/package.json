@@ -24,7 +24,7 @@
     "Homepage": "https://github.com/ROCm/rocm-systems",
     "Artifactory": [
       {
-        "Artifact": "base",
+        "Artifact": "core-amdsmi",
         "Artifact_Subdir": [
           {
             "Name": "amdsmi",
@@ -102,7 +102,8 @@
       }
     ],
     "Gfxarch": "False",
-    "Disable_DWZ": "True"
+    "Disable_DWZ": "True",
+    "Disable_RPM_STRIP": "True"
   },
   {
     "Package": "amdrocm-llvm-devel",
@@ -459,14 +460,7 @@
               "doc"
             ]
           },
-          {
-            "Name": "origami",
-            "Components": [
-              "lib",
-              "run",
-              "doc"
-            ]
-          },
+
           {
             "Name": "hipBLASLt",
             "Components": [
