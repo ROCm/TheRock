@@ -138,6 +138,10 @@ class TestRunOutputRootLocations(unittest.TestCase):
 
     # -- Manifests --
 
+    def test_manifest_dir(self):
+        loc = self.root.manifest_dir("gfx94X-dcgpu")
+        self._assert_relative_path(loc, "99999-linux/manifests/gfx94X-dcgpu")
+
     def test_manifest(self):
         loc = self.root.manifest("gfx94X-dcgpu")
         self._assert_relative_path(

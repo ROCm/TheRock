@@ -98,6 +98,7 @@ root.log_dir("gfx94X-dcgpu")
 root.log_file("gfx94X-dcgpu", "build.log")
 root.log_index("gfx94X-dcgpu")
 root.build_observability("gfx94X-dcgpu")
+root.manifest_dir("gfx94X-dcgpu")
 root.manifest("gfx94X-dcgpu")
 root.python_packages("gfx110X-all")
 ```

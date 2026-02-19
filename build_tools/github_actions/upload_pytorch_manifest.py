@@ -7,7 +7,6 @@ Upload layout:
 """
 
 import argparse
-from dataclasses import dataclass
 from pathlib import Path
 import platform
 import shlex
@@ -16,7 +15,7 @@ import sys
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from _therock_utils.run_outputs import RunOutputRoot
+from _therock_utils.run_outputs import OutputLocation, RunOutputRoot
 
 
 PLATFORM = platform.system().lower()
@@ -30,18 +29,6 @@ def log(*args):
 def run_command(cmd: list[str], cwd: Path) -> None:
     log(f"++ Exec [{cwd}]$ {shlex.join(cmd)}")
     subprocess.run(cmd, check=True)
-
-
-@dataclass(frozen=True)
-class UploadPath:
-    """Tracks upload paths and provides S3 URI computation."""
-
-    bucket: str
-    prefix: str  # e.g. "{external_repo}{run_id}-{platform}/manifests/gfx110X-all"
-
-    @property
-    def s3_uri(self) -> str:
-        return f"s3://{self.bucket}/{self.prefix}"
 
 
 def normalize_python_version_for_filename(python_version: str) -> str:
@@ -68,21 +55,12 @@ def sanitize_ref_for_filename(pytorch_git_ref: str) -> str:
     return pytorch_git_ref.replace("/", "-")
 
 
-def build_upload_path_for_workflow_run(
-    *,
-    run_id: str,
-    amdgpu_family: str,
-    bucket_override: str | None,
-) -> UploadPath:
+def _make_run_root(run_id: str, bucket_override: str | None = None) -> RunOutputRoot:
     if bucket_override:
-        run_root = RunOutputRoot(
+        return RunOutputRoot(
             bucket=bucket_override, external_repo="", run_id=run_id, platform=PLATFORM
         )
-    else:
-        run_root = RunOutputRoot.from_workflow_run(run_id=run_id, platform=PLATFORM)
-
-    prefix = f"{run_root.prefix}/manifests/{amdgpu_family}"
-    return UploadPath(bucket=run_root.bucket, prefix=prefix)
+    return RunOutputRoot.from_workflow_run(run_id=run_id, platform=PLATFORM)
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -141,12 +119,9 @@ def main(argv: list[str]) -> None:
     if not manifest_path.is_file():
         raise FileNotFoundError(f"Manifest not found: {manifest_path}")
 
-    upload_path = build_upload_path_for_workflow_run(
-        run_id=args.run_id,
-        amdgpu_family=args.amdgpu_family,
-        bucket_override=args.bucket,
-    )
-    dest_uri = f"{upload_path.s3_uri}/{manifest_name}"
+    run_root = _make_run_root(args.run_id, bucket_override=args.bucket)
+    manifest_loc = run_root.manifest_dir(args.amdgpu_family)
+    dest_uri = f"{manifest_loc.s3_uri}/{manifest_name}"
 
     run_command(["aws", "s3", "cp", str(manifest_path), dest_uri], cwd=Path.cwd())
 

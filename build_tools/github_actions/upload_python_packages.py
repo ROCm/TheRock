@@ -31,7 +31,6 @@ Installation:
 """
 
 import argparse
-from dataclasses import dataclass
 from pathlib import Path
 import platform
 import shlex
@@ -40,7 +39,7 @@ import subprocess
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from _therock_utils.run_outputs import RunOutputRoot
+from _therock_utils.run_outputs import OutputLocation, RunOutputRoot
 from github_actions_utils import (
     gha_append_step_summary,
     gha_set_output,
@@ -61,51 +60,12 @@ def run_command(cmd: list[str], cwd: Path = Path.cwd()):
     subprocess.run(cmd, check=True)
 
 
-# TODO: centralize path construction within "run outputs"
-# TODO: document the structure (artifacts, logs, packages, etc.)
-@dataclass
-class UploadPath:
-    """Tracks upload paths and provides S3 URI/URL computation."""
-
-    bucket: str
-    prefix: str  # e.g., "21440027240-windows/python/gfx110X-all"
-
-    @property
-    def s3_uri(self) -> str:
-        """S3 URI for use with aws cli (s3://bucket/prefix)."""
-        return f"s3://{self.bucket}/{self.prefix}"
-
-    # TODO: switch to a CDN (cloudfront), downloads direct from S3 are slowww
-    @property
-    def s3_url(self) -> str:
-        """S3 URL for browser/pip access."""
-        return f"https://{self.bucket}.s3.amazonaws.com/{self.prefix}"
-
-
-def build_upload_path_for_workflow_run(
-    run_id: str,
-    artifact_group: str,
-    bucket_override: str | None = None,
-) -> UploadPath:
-    """Creates an UploadPath for Python package uploads.
-
-    Args:
-        run_id: Workflow run ID (e.g., "21440027240")
-        artifact_group: Artifact group (e.g., "gfx110X-all")
-        bucket_override: Optional bucket name (skips auto-selection)
-
-    Returns:
-        UploadPath configured for Python packages
-    """
+def _make_run_root(run_id: str, bucket_override: str | None = None) -> RunOutputRoot:
     if bucket_override:
-        run_root = RunOutputRoot(
+        return RunOutputRoot(
             bucket=bucket_override, external_repo="", run_id=run_id, platform=PLATFORM
         )
-    else:
-        run_root = RunOutputRoot.from_workflow_run(run_id=run_id, platform=PLATFORM)
-
-    prefix = f"{run_root.prefix}/python/{artifact_group}"
-    return UploadPath(bucket=run_root.bucket, prefix=prefix)
+    return RunOutputRoot.from_workflow_run(run_id=run_id, platform=PLATFORM)
 
 
 def generate_index(dist_dir: Path, dry_run: bool = False):
@@ -178,14 +138,14 @@ def find_package_files(dist_dir: Path) -> list[Path]:
 
 def upload_packages(
     dist_dir: Path,
-    upload_path: UploadPath,
+    packages_loc: OutputLocation,
     output_dir: Path | None = None,
     dry_run: bool = False,
 ):
     """Uploads package files to S3 or local directory.
 
     Uploads to a local directory if output_dir is set.
-    Otherwise uploads to upload_path.s3_uri.
+    Otherwise uploads to packages_loc.s3_uri.
     """
     package_files = find_package_files(dist_dir)
     if not package_files:
@@ -199,7 +159,7 @@ def upload_packages(
     # the whole directory. We could check for unexpected/loose files first.
 
     if output_dir:
-        local_dist_path = output_dir / upload_path.prefix
+        local_dist_path = packages_loc.local_path(output_dir)
         run_local_cp(
             source_path=dist_dir,
             dest_path=local_dist_path,
@@ -208,13 +168,13 @@ def upload_packages(
     else:
         run_aws_cp(
             source_path=dist_dir,
-            s3_destination=upload_path.s3_uri,
+            s3_destination=packages_loc.s3_uri,
             dry_run=dry_run,
         )
 
 
-def write_gha_upload_summary(upload_path: UploadPath):
-    index_url = f"{upload_path.s3_url}/index.html"
+def write_gha_upload_summary(packages_loc: OutputLocation):
+    index_url = f"{packages_loc.https_url}/index.html"
     install_instructions_markdown = f"""[ROCm Python packages]({index_url})
 ```bash
 pip install rocm[libraries,devel] --pre {LINE_CONTINUATION_CHAR}
@@ -250,24 +210,21 @@ def run(args: argparse.Namespace):
     log("---------------------")
     generate_index(dist_dir, dry_run=args.dry_run)
 
-    upload_path = build_upload_path_for_workflow_run(
-        run_id=args.run_id,
-        artifact_group=args.artifact_group,
-        bucket_override=args.bucket,
-    )
+    run_root = _make_run_root(args.run_id, bucket_override=args.bucket)
+    packages_loc = run_root.python_packages(args.artifact_group)
 
     log("")
     log("Uploading packages")
     log("------------------")
     upload_packages(
         dist_dir=dist_dir,
-        upload_path=upload_path,
+        packages_loc=packages_loc,
         output_dir=args.output_dir,
         dry_run=args.dry_run,
     )
 
     if not args.output_dir:
-        index_url = f"{upload_path.s3_url}/index.html"
+        index_url = f"{packages_loc.https_url}/index.html"
 
         log("Set github actions output")
         log("-------------------------")
@@ -275,7 +232,7 @@ def run(args: argparse.Namespace):
 
         log("Write github actions build summary")
         log("----------------------------------")
-        write_gha_upload_summary(upload_path)
+        write_gha_upload_summary(packages_loc)
 
     log("")
     log("[INFO] Done!")

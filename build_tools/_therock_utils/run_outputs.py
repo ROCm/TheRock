@@ -187,6 +187,14 @@ class RunOutputRoot:
 
     # -- Manifests --------------------------------------------------------------
 
+    def manifest_dir(self, artifact_group: str) -> OutputLocation:
+        """Location for the manifests directory for an artifact group.
+
+        Args:
+            artifact_group: Build variant (e.g., 'gfx94X-dcgpu')
+        """
+        return OutputLocation(self.bucket, f"{self.prefix}/manifests/{artifact_group}")
+
     def manifest(self, artifact_group: str) -> OutputLocation:
         """Location for therock_manifest.json.
 
