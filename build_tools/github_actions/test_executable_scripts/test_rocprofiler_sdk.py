@@ -94,7 +94,7 @@ ctest_cmd = [
     "--test-dir",
     "build",
     "--output-on-failure",
-    "-E", 
+    "-E",
     CTEST_EXCLUDE,
 ]
 
