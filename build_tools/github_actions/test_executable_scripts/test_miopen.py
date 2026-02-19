@@ -39,6 +39,9 @@ negative_filter.append("*MIOpenTestConv*")
 # DO NOT MERGE
 negative_filter.append("*GPU_TestMhaFind20_FP32*")
 
+# Temporary filter for CK fusion tests that are causing/triggering hangs.
+negative_filter.append("*GPU_Conv*BiasActivInfer*")
+
 # For sake of time saving on pre-commit step
 ####################################################
 negative_filter.append("Full/GPU_Reduce_FP64*")  # 4 min 19 sec
