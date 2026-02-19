@@ -154,8 +154,9 @@ class NativeLinuxPackagesTester:
                 print(f"[FAIL] Error setting up GPG key: {e}")
                 return False
         else:  # rpm
-            # For RPM, GPG key URL is specified in repo file
-            # No need to download separately
+            # For RPM (including SLES), GPG key URL is specified in repo file
+            # zypper will automatically fetch and use the GPG key from the URL
+            # No need to download or import separately (following official ROCm documentation)
             return True
 
     def setup_deb_repository(self) -> bool:
@@ -249,30 +250,9 @@ class NativeLinuxPackagesTester:
         print(f"Release Type: {self.release_type}")
         print(f"OS Profile: {self.os_profile}")
 
-        # SLES uses zypper, but fallback to dnf if zypper is not available
-        # (e.g., when testing SLES packages on AlmaLinux container)
+        # SLES uses zypper, others use dnf/yum
         if self._is_sles():
-            # Check if zypper is actually available
-            try:
-                subprocess.run(
-                    ["zypper", "--version"],
-                    check=True,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    timeout=5,
-                )
-                print("[INFO] zypper is available, using SLES-specific setup")
-                return self._setup_sles_repository()
-            except (
-                subprocess.CalledProcessError,
-                subprocess.TimeoutExpired,
-                FileNotFoundError,
-            ):
-                print(
-                    "[WARN] zypper not available. Falling back to dnf for SLES testing."
-                )
-                print("[WARN] This is a compatibility test, not a true SLES test.")
-                return self._setup_dnf_repository()
+            return self._setup_sles_repository()
         else:
             return self._setup_dnf_repository()
 
@@ -282,52 +262,55 @@ class NativeLinuxPackagesTester:
         Returns:
             True if setup successful, False otherwise
         """
-        print("\nUsing zypper for SLES repository setup...")
-
         repo_name = "rocm-test"
+        repo_file = f"/etc/zypp/repos.d/{repo_name}.repo"
 
         # Remove existing repository if it exists
         print(f"\nRemoving existing repository '{repo_name}' if it exists...")
         subprocess.run(
-            ["zypper", "removerepo", repo_name],
+            ["zypper", "--non-interactive", "removerepo", repo_name],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )  # Ignore errors if repo doesn't exist
 
-        # Add repository using zypper
-        print(f"\nAdding ROCm repository using zypper...")
-        zypper_cmd = ["zypper", "addrepo", self.repo_url, repo_name]
-
+        # Create repository file following official ROCm documentation format
+        # Reference: https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/install-methods/package-manager/package-manager-sles.html
+        print(f"\nCreating ROCm repository file at {repo_file}...")
         if self.release_type == "prerelease" and self.gpg_key_url:
-            # For prerelease, we might need to handle GPG key separately
-            # zypper addrepo doesn't directly support gpgkey parameter
-            # We'll add the repo first, then handle GPG if needed
-            pass
+            # Prerelease: use GPG key (gpgcheck=1)
+            repo_content = f"""[{repo_name}]
+name=ROCm {self.release_type} repository
+baseurl={self.repo_url}
+enabled=1
+gpgcheck=1
+gpgkey={self.gpg_key_url}
+"""
+        else:
+            # Nightly: no GPG check (gpgcheck=0)
+            repo_content = f"""[{repo_name}]
+name=ROCm {self.release_type} repository
+baseurl={self.repo_url}
+enabled=1
+gpgcheck=0
+"""
 
         try:
-            result = subprocess.run(
-                zypper_cmd,
-                check=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                timeout=60,
-            )
-            print(f"[PASS] Repository added: {repo_name}")
-            print(f"Repository URL: {self.repo_url}")
-        except subprocess.CalledProcessError as e:
-            print(f"[FAIL] Failed to add repository: {e}")
-            print(f"Error: {e.stdout}")
-            return False
-        except subprocess.TimeoutExpired:
-            print(f"[FAIL] zypper addrepo timed out")
+            with open(repo_file, "w") as f:
+                f.write(repo_content)
+            print(f"[PASS] Repository file created: {repo_file}")
+            print(f"\nRepository configuration:")
+            print(repo_content)
+        except Exception as e:
+            print(f"[FAIL] Failed to create repository file: {e}")
             return False
 
         # Refresh repository metadata
         print("\nRefreshing repository metadata...")
         try:
+            # Use --non-interactive to avoid prompts
+            refresh_cmd = ["zypper", "--non-interactive", "refresh", repo_name]
             process = subprocess.Popen(
-                ["zypper", "refresh", repo_name],
+                refresh_cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
@@ -382,7 +365,7 @@ gpgkey={self.gpg_key_url}
 """
         else:
             # Nightly: no GPG check
-            repo_content = f"""[pkg-test]
+            repo_content = f"""[rocm-test]
 name=Native Linux Package Test Repository
 baseurl={self.repo_url}
 enabled=1
@@ -525,29 +508,27 @@ gpgcheck=0
 
         print(f"\nPackage to install: {self.package_name}")
 
-        # Use zypper for SLES if available, otherwise fallback to dnf
-        # (e.g., when testing SLES packages on AlmaLinux container)
+        # Use zypper for SLES, dnf for others
         if self._is_sles():
-            # Check if zypper is actually available
-            try:
-                subprocess.run(
-                    ["zypper", "--version"],
-                    check=True,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    timeout=5,
-                )
-                cmd = ["zypper", "install", "-y", self.package_name]
-                print("[INFO] Using zypper for SLES package installation")
-            except (
-                subprocess.CalledProcessError,
-                subprocess.TimeoutExpired,
-                FileNotFoundError,
-            ):
-                cmd = ["dnf", "install", "-y", self.package_name]
-                print(
-                    "[WARN] zypper not available, using dnf as fallback for SLES testing"
-                )
+            # For nightly builds, skip GPG checks during installation
+            if self.release_type == "nightly":
+                cmd = [
+                    "zypper",
+                    "--non-interactive",
+                    "--no-gpg-checks",
+                    "install",
+                    "-y",
+                    self.package_name,
+                ]
+            else:
+                cmd = [
+                    "zypper",
+                    "--non-interactive",
+                    "install",
+                    "-y",
+                    self.package_name,
+                ]
+            print("[INFO] Using zypper for SLES package installation")
         else:
             cmd = ["dnf", "install", "-y", self.package_name]
         print(f"\nRunning: {' '.join(cmd)}")
@@ -643,25 +624,9 @@ gpgcheck=0
                 cmd = ["dpkg", "-l"]
                 grep_pattern = "rocm"
             elif self._is_sles():
-                # Use zypper for SLES if available, otherwise fallback to rpm
-                try:
-                    subprocess.run(
-                        ["zypper", "--version"],
-                        check=True,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                        timeout=5,
-                    )
-                    cmd = ["zypper", "search", "-i", "rocm"]
-                    grep_pattern = "rocm"
-                except (
-                    subprocess.CalledProcessError,
-                    subprocess.TimeoutExpired,
-                    FileNotFoundError,
-                ):
-                    # Fallback to rpm for SLES testing on AlmaLinux
-                    cmd = ["rpm", "-qa"]
-                    grep_pattern = "rocm"
+                # Use zypper for SLES to list installed packages
+                cmd = ["zypper", "--non-interactive", "search", "-i", "rocm"]
+                grep_pattern = "rocm"
             else:
                 # Use rpm for other RPM-based systems (RHEL, AlmaLinux, CentOS)
                 cmd = ["rpm", "-qa"]
