@@ -270,8 +270,94 @@ def get_rocm_init_contents(args: argparse.Namespace):
     library_preloads_formatted = ", ".join(f"'{s}'" for s in library_preloads)
     return textwrap.dedent(
         f"""
+        def _setup_hip_remote():
+            \"\"\"If TF_WORKER_HOST is set, configure hip-remote proxy DLLs.
+
+            This loads our hip-remote proxy (amdhip64_7.dll) and hiprtc proxy
+            (hiprtc0702.dll) BEFORE the real SDK DLLs, so that PyTorch and
+            its dependencies route HIP calls to a remote GPU worker.
+
+            The proxy DLLs are expected alongside this file (in torch/lib/)
+            or in a path specified by HIP_REMOTE_LIB_DIR.
+
+            No SDK files are modified — the originals remain untouched.
+            \"\"\"
+            import os
+            import platform
+
+            if platform.system() != "Windows":
+                return {{}}
+
+            worker_host = os.environ.get("TF_WORKER_HOST")
+            if not worker_host:
+                return {{}}
+
+            import ctypes
+            from ctypes import cdll
+            from pathlib import Path
+
+            # Locate proxy DLLs: HIP_REMOTE_LIB_DIR or torch/lib/
+            proxy_dir = Path(os.environ.get(
+                "HIP_REMOTE_LIB_DIR",
+                str(Path(__file__).resolve().parent / "lib"),
+            ))
+
+            # Locate the real SDK DLLs (never modified)
+            import rocm_sdk
+            sdk_paths = rocm_sdk.find_libraries("amdhip64", "hiprtc")
+            sdk_hip_path = sdk_paths[0]      # _rocm_sdk_core/bin/amdhip64_7.dll
+            sdk_hiprtc_path = sdk_paths[1]    # _rocm_sdk_core/bin/hiprtc0702.dll
+            sdk_bin_dir = sdk_hip_path.parent  # _rocm_sdk_core/bin/
+
+            # Ensure SDK bin dir is in the DLL search path so sub-dependencies
+            # resolve from the SDK rather than System32.
+            os.add_dll_directory(str(sdk_bin_dir))
+
+            preloaded = {{}}
+
+            # Load our HIP proxy DLL
+            hip_proxy = proxy_dir / "amdhip64_7.dll"
+            if hip_proxy.exists():
+                hip_cdll = ctypes.CDLL(str(hip_proxy))
+                preloaded["amdhip64"] = hip_cdll
+
+                # Signal that DLL loading is complete and network is ready
+                if hasattr(hip_cdll, "hip_remote_mark_ready"):
+                    hip_cdll.hip_remote_mark_ready()
+
+                # Query the remote device's GCN architecture name so hipRTC
+                # compiles for the correct target (no hardcoded arch).
+                try:
+                    buf = ctypes.create_string_buffer(256)
+                    err = hip_cdll.hipDeviceGetGcnArchName(buf, 0)
+                    if err == 0 and buf.value:
+                        arch = buf.value.decode().split(":")[0]
+                        os.environ["HIP_REMOTE_TARGET_ARCH"] = arch
+                except Exception:
+                    pass
+
+            # Load our hipRTC proxy DLL (injects --offload-arch for remote GPU)
+            hiprtc_proxy = proxy_dir / "hiprtc0702.dll"
+            if hiprtc_proxy.exists():
+                # Tell the proxy where to find the real hipRTC DLL
+                os.environ["_HIPRTC_REAL_PATH"] = str(sdk_hiprtc_path)
+                hiprtc_cdll = ctypes.CDLL(str(hiprtc_proxy))
+                preloaded["hiprtc"] = hiprtc_cdll
+
+            return preloaded
+
+
         def initialize():
             import rocm_sdk
+
+            # Set up hip-remote proxies if TF_WORKER_HOST is configured.
+            preloaded = _setup_hip_remote()
+
+            # Insert pre-loaded proxy DLLs into rocm_sdk's cache so
+            # initialize_process() doesn't load the real ones over them.
+            for shortname, handle in preloaded.items():
+                rocm_sdk._ALL_CDLLS[shortname] = handle
+
             rocm_sdk.initialize_process(
                 preload_shortnames=[{library_preloads_formatted}],
                 check_version='{sdk_version}')
