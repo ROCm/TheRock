@@ -90,7 +90,7 @@ on:
         description: PyTorch ref to checkout. (typically "nightly", or "release/X.Y")
         required: true
         type: string
-        default: "release/2.7"
+        default: "release/2.8"
 
 permissions:
   id-token: write
