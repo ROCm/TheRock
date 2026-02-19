@@ -12,6 +12,8 @@ if(THEROCK_ENABLE_IREE_COMPILER)
       -DIREE_TARGET_BACKEND_DEFAULTS=OFF
       -DIREE_TARGET_BACKEND_ROCM=ON
       -DIREE_TARGET_BACKEND_LLVM_CPU=ON
+      -DIREE_INPUT_STABLEHLO=OFF
+      -DIREE_INPUT_TORCH=ON
       # Use HIP headers from TheRock's build
       -DIREE_USE_SYSTEM_DEPS=ON
       # In this targeted build, several submodules aren't needed
@@ -24,7 +26,6 @@ if(THEROCK_ENABLE_IREE_COMPILER)
       # Disable runtime, it's built into fusilli, we only need the compiler
       -DIREE_HAL_DRIVER_DEFAULTS=OFF
     BUILD_DEPS
-      rocm-cmake
       hip-clr  # Provides HIP headers for IREE_USE_SYSTEM_DEPS
   )
   therock_cmake_subproject_activate(iree-compiler)
