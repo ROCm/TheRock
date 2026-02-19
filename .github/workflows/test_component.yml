@@ -112,6 +112,7 @@ jobs:
 
       - name: Setup Requirements
         run: |
+          # Sets up IFS (Internal Field Separator) to read comma separated REQUIREMENTS_FILES and output filenames to an array
           REQUIREMENTS_FILES=${{ fromJSON(inputs.component).requirements_files }}
           DELIMITER=","
           IFS="$DELIMITER" read -r -a array <<< "$REQUIREMENTS_FILES"
