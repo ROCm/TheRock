@@ -138,6 +138,7 @@ jobs:
           # Enable verbose logging, see
           # https://rocm.docs.amd.com/projects/HIP/en/latest/how-to/debugging.html
           AMD_LOG_LEVEL: 4
+          ROCM_KPACK_DEBUG: "1"
         run: |
           pytest tests/ --log-cli-level=info --timeout=300
 
