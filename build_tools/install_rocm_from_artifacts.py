@@ -32,6 +32,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--rocdecode | --no-rocdecode]
     [--rocjpeg | --no-rocjpeg]
     [--rocprofiler-compute | --no-rocprofiler-compute]
+    [--rocprofiler-sdk | --no-rocprofiler-sdk ]
     [--rocprofiler-systems | --no-rocprofiler-systems]
     [--rocrtst | --no-rocrtst]
     [--rocwmma | --no-rocwmma]
@@ -352,6 +353,7 @@ def retrieve_artifacts_by_run_id(args):
             args.rocdecode,
             args.rocjpeg,
             args.rocprofiler_compute,
+            args.rocprofiler_sdk,
             args.rocprofiler_systems,
             args.rocrtst,
             args.rocwmma,
@@ -429,6 +431,8 @@ def retrieve_artifacts_by_run_id(args):
             argv.append("rocprofiler-sdk_run")
         if args.rocprofiler_compute:
             extra_artifacts.append("rocprofiler-compute")
+        if args.rocprofiler_sdk:
+            extra_artifacts.append("rocprofiler-sdk")
         if args.rocprofiler_systems:
             extra_artifacts.append("rocprofiler-systems")
             # Contains executables (rocprof-sys-run, rocprof-sys-instrument, etc.)
@@ -748,6 +752,13 @@ def main(argv):
         "--rocprofiler-compute",
         default=False,
         help="Include 'rocprofiler-compute' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--rocprofiler-sdk",
+        default=False,
+        help="Include 'rocprofiler-sdk' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
