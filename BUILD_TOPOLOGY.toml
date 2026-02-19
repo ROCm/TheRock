@@ -304,8 +304,8 @@ source_sets = ["iree-libs"]
 [artifact_groups.media-libs]
 description = "Media Libraries"
 type = "generic"
-artifact_group_deps = ["third-party-sysdeps", "base"]
-source_sets = ["amd-mesa", "media-libs"]
+artifact_group_deps = ["third-party-sysdeps", "base", "core-runtime", "hip-runtime"]
+source_sets = ["amd-mesa", "rocm-systems"]
 
 # ==============================================================================
 # ARTIFACTS - The actual build outputs that can be transmitted between stages
