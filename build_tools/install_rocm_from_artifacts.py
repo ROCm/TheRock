@@ -29,6 +29,8 @@ python build_tools/install_rocm_from_artifacts.py
     [--prim | --no-prim]
     [--rand | --no-rand]
     [--rccl | --no-rccl]
+    [--rocdecode | --no-rocdecode]
+    [--rocjpeg | --no-rocjpeg]
     [--rocprofiler-compute | --no-rocprofiler-compute]
     [--rocprofiler-systems | --no-rocprofiler-systems]
     [--rocwmma | --no-rocwmma]
@@ -345,6 +347,8 @@ def retrieve_artifacts_by_run_id(args):
             args.prim,
             args.rand,
             args.rccl,
+            args.rocdecode,
+            args.rocjpeg,
             args.rocprofiler_compute,
             args.rocprofiler_systems,
             args.rocwmma,
@@ -392,6 +396,20 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("miopenprovider")
         if args.fusilliprovider:
             extra_artifacts.append("fusilliprovider")
+        if args.rocdecode:
+            extra_artifacts.append("sysdeps-amd-mesa")
+            extra_artifacts.append("rocdecode")
+            argv.append("rocdecode_dev")
+            argv.append("rocdecode_test")
+            argv.append("base_dev")
+            argv.append("amd-llvm_dev")
+        if args.rocjpeg:
+            extra_artifacts.append("sysdeps-amd-mesa")
+            extra_artifacts.append("rocjpeg")
+            argv.append("rocjpeg_dev")
+            argv.append("rocjpeg_test")
+            argv.append("base_dev")
+            argv.append("amd-llvm_dev")
         if args.hipblasltprovider:
             extra_artifacts.append("hipblasltprovider")
         if args.prim:
@@ -663,6 +681,20 @@ def main(argv):
         "--fusilliprovider",
         default=False,
         help="Include 'fusilliprovider' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--rocdecode",
+        default=False,
+        help="Include 'rocdecode' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--rocjpeg",
+        default=False,
+        help="Include 'rocjpeg' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
