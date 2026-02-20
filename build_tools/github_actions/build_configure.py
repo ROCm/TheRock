@@ -80,13 +80,13 @@ platform_options = {
 }
 
 
-def build_configure(manylinux=False):
+def build_configure(build_dir, manylinux=False):
     logging.info(f"Building package {package_version}")
 
     cmd = [
         "cmake",
         "-B",
-        args.build_dir,
+        build_dir,
         "-GNinja",
         ".",
     ]
@@ -157,4 +157,4 @@ if __name__ == "__main__":
     # Support both command-line flag and environment variable
     manylinux = args.manylinux or os.getenv("MANYLINUX") in ["1", "true"]
 
-    build_configure(manylinux=manylinux)
+    build_configure(args.build_dir, manylinux=manylinux)
