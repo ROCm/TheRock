@@ -46,4 +46,4 @@ time cmake -GNinja -S /therock/src -B "$OUTPUT_DIR/build" \
   ${PYTHON_EXECUTABLES_ARG} \
   ${PYTHON_SHARED_EXECUTABLES_ARG} \
   "$@"
-time cmake --build "$OUTPUT_DIR/build" --target amdsmi
+time cmake --build "$OUTPUT_DIR/build" --target therock-archives therock-dist
