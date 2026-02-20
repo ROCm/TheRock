@@ -238,6 +238,7 @@ option(THEROCK_ENABLE_MATH_LIBS "Enable building of math libraries" "${THEROCK_E
 option(THEROCK_ENABLE_ML_LIBS "Enable building of ML libraries" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_PROFILER "Enable building the profiler libraries" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_DC_TOOLS "Enable building of data center tools" "${THEROCK_ENABLE_ALL}")
+option(THEROCK_ENABLE_MEDIA_LIBS "Enable building of Media libraries" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_HOST_MATH "Build all bundled host math libraries by default" OFF)
 option(THEROCK_RESET_FEATURES "One-shot flag which forces all feature flags to their default state for this configuration run" OFF)
 # TODO(iree-org/fusilli/issues/57): Enable fusilli build once multi-arch support lands.
@@ -307,15 +308,8 @@ therock_report_features()
 ################################################################################
 
 set(THEROCK_AMDGPU_FAMILIES "" CACHE STRING "AMDGPU target families to build for")
-set(THEROCK_AMDGPU_TARGETS "" CACHE STRING "AMDGPU targets to build for (individual gfx targets in addition to those expanded from THEROCK_AMDGPU_FAMILIES)")
+set(THEROCK_AMDGPU_TARGETS "" CACHE STRING "AMDGPU targets to build for")
 set(THEROCK_AMDGPU_DIST_BUNDLE_NAME "" CACHE STRING "Distribution bundle name for AMDGPU packages")
-
-# Note that if THEROCK_DIST_AMDGPU_FAMILIES and THEROCK_DIST_AMDGPU_TARGETS are empty, then
-# this defaults to all supported targets. These "dist" targets are used for runtime
-# libraries that embed device code and are marked as target-neutral (which typically means
-# generate for all supported architectures).
-set(THEROCK_DIST_AMDGPU_FAMILIES "" CACHE STRING "AMDGPU target families to use for target-neutral projects")
-set(THEROCK_DIST_AMDGPU_TARGETS "" CACHE STRING "AMDGPU targets to build for (individual gfx targets in addition to those expanded from THEROCK_DIST_AMDGPU_FAMILIES)")
 
 therock_validate_amdgpu_targets()
 
@@ -362,6 +356,8 @@ set(THEROCK_BUNDLED_NUMACTL)
 set(THEROCK_BUNDLED_SQLITE3)
 set(THEROCK_BUNDLED_ZLIB)
 set(THEROCK_BUNDLED_ZSTD)
+set(THEROCK_BUNDLED_AMDMESA)
+
 
 if(THEROCK_BUNDLE_SYSDEPS)
   message(STATUS "Building with bundled system dependencies enabled")
@@ -389,6 +385,9 @@ if(THEROCK_BUNDLE_SYSDEPS)
     set(THEROCK_BUNDLED_SQLITE3 therock-sqlite3)
     set(THEROCK_BUNDLED_ZLIB therock-zlib)
     set(THEROCK_BUNDLED_ZSTD therock-zstd)
+    if(THEROCK_ENABLE_SYSDEPS_AMD_MESA)
+      set(THEROCK_BUNDLED_AMDMESA therock-amd-mesa)
+    endif()
   elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     # macOS uses install_name_tool (from Xcode) instead of patchelf
     find_program(INSTALL_NAME_TOOL install_name_tool)
@@ -454,6 +453,7 @@ add_subdirectory(comm-libs)
 add_subdirectory(math-libs)
 add_subdirectory(ml-libs)
 add_subdirectory(iree-libs)
+add_subdirectory(media-libs)
 
 if(THEROCK_BUILD_TESTING)
   add_subdirectory(examples)

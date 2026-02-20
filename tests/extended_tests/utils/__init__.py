@@ -32,7 +32,7 @@ __all__ = [
 ]
 
 # Import main API
-from .benchmark_client import BenchmarkClient
+from .test_client import BenchmarkClient
 
 # Export commonly used classes from subdirectories
 from .system import (
