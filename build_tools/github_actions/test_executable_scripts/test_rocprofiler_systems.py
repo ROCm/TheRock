@@ -44,9 +44,6 @@ pytest_package_exec = (
 cmd = [
     sys.executable,
     str(pytest_package_exec),
-    # TODO: Once OpenMP target tests are fixed, remove the two lines below
-    "-k",
-    "not TestOpenMPTarget",
     "--junit-xml=junit.xml",
     "--ci-mode",
     "--log-cli-level=info",
