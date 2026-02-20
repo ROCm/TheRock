@@ -169,10 +169,15 @@ string(REPLACE ";" ":" PKG_CONFIG_PATH_ENV_VAR "${THEROCK_PKG_CONFIG_DIRS}")
 set(ROCGDB_EXPAT_FLAG "")
 set(ROCGDB_GMP_FLAG "")
 set(ROCGDB_MPFR_FLAG "")
+# RPATH segment for the bundled sysdeps lib directory. CMake expands this
+# variable into the install(CODE) strings at configure time; bare $ORIGIN is
+# not a CMake variable reference so it is preserved literally.
+set(ROCGDB_SYSDEPS_RPATH_SEGMENT "")
 if(THEROCK_BUNDLE_SYSDEPS)
   set(ROCGDB_EXPAT_FLAG "--with-expat-prefix=${EXPAT_PREFIX}")
   set(ROCGDB_GMP_FLAG "--with-gmp=${GMP_PREFIX}")
   set(ROCGDB_MPFR_FLAG "--with-mpfr=${MPFR_PREFIX}")
+  set(ROCGDB_SYSDEPS_RPATH_SEGMENT ":$ORIGIN/../lib/rocm_sysdeps/lib")
 endif()
 
 # Set some global variables for the configure/build.
@@ -374,7 +379,7 @@ macro(add_python_variant minor_version configure_flags libpython_dir)
   # Register RPATH patching for this rocgdb variant.
   message(STATUS "Registering fixup of ${CMAKE_INSTALL_PREFIX}/bin/rocgdb-py${minor_version}")
   install(CODE "execute_process(
-      COMMAND \"${PATCHELF}\" --set-rpath \"\$ORIGIN:\$ORIGIN/../lib:\$ORIGIN/../lib/rocm_sysdeps/lib${LIBPYTHON_RPATH}\"
+      COMMAND \"${PATCHELF}\" --set-rpath \"\$ORIGIN:\$ORIGIN/../lib${ROCGDB_SYSDEPS_RPATH_SEGMENT}${LIBPYTHON_RPATH}\"
       \"${CMAKE_INSTALL_PREFIX}/bin/rocgdb-py${minor_version}\"
       COMMAND_ERROR_IS_FATAL ANY
     )"
@@ -479,7 +484,7 @@ foreach(rocgdb_exec_filename ${ROCGDB_EXECS_TO_PATCH})
 
   # Patch in the RUNPATH.
   install(CODE "execute_process(
-      COMMAND \"${PATCHELF}\" --set-rpath \"\$ORIGIN:\$ORIGIN/../lib:\$ORIGIN/../lib/rocm_sysdeps/lib\"
+      COMMAND \"${PATCHELF}\" --set-rpath \"\$ORIGIN:\$ORIGIN/../lib${ROCGDB_SYSDEPS_RPATH_SEGMENT}\"
       \"${rocgdb_exec_file}\"
       COMMAND_ERROR_IS_FATAL ANY
   )"
