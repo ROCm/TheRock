@@ -198,11 +198,14 @@ jobs:
 
       - name: (Re-)Generate Python package release index
         if: ${{ github.repository_owner == 'ROCm' }}
+        env:
+          # Environment variables to be set for `manage.py`
+          CUSTOM_PREFIX: "${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}"
         run: |
           python3 -m venv .venv
           source .venv/bin/activate
           pip3 install boto3 packaging
-          python3 ./build_tools/third_party/s3_management/manage.py ${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}
+          python3 ./build_tools/third_party/s3_management/manage.py ${{ env.CUSTOM_PREFIX }}
 
   generate_target_to_run:
     name: Generate target_to_run
@@ -303,8 +306,4 @@ jobs:
           CUSTOM_PREFIX: "${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}"
         run: |
           pip install boto3 packaging
-          env | sort
-          echo "CUSTOM_PREFIX (shell): $CUSTOM_PREFIX"
-          echo "CUSTOM_PREFIX (expr): ${{ env.CUSTOM_PREFIX }}"
-          env | sort
           python ./build_tools/third_party/s3_management/manage.py "$CUSTOM_PREFIX"
