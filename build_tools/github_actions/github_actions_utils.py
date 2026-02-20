@@ -6,6 +6,7 @@ See also https://pypi.org/project/github-action-utils/.
 from datetime import datetime, timezone
 from enum import Enum, auto
 import json
+import logging
 import os
 from pathlib import Path
 import re
@@ -650,6 +651,8 @@ def str2bool(value: str | None) -> bool:
     raise ValueError(f"Invalid string value for boolean conversion: {value}")
 
 
+# TODO(#3489): Refactor get_visible_gpu_count and get_first_gpu_architecture to share a
+# common helper that runs rocminfo and returns matching lines; both functions duplicate the first ~12 lines.
 def get_visible_gpu_count(env=None, therock_bin_dir: str | None = None) -> int:
     rocminfo = Path(therock_bin_dir) / "rocminfo"
     rocminfo_cmd = str(rocminfo) if rocminfo.exists() else "rocminfo"
@@ -666,6 +669,30 @@ def get_visible_gpu_count(env=None, therock_bin_dir: str | None = None) -> int:
     pattern = re.compile(r"^\s*Name:\s+gfx[0-9a-z]+$", re.IGNORECASE)
 
     return sum(1 for line in result.stdout.splitlines() if pattern.match(line.strip()))
+
+
+def get_first_gpu_architecture(env=None, therock_bin_dir: str | None = None) -> str:
+    """Return the first visible GPU architecture (e.g. 'gfx942') from rocminfo."""
+    rocminfo = Path(therock_bin_dir) / "rocminfo"
+    rocminfo_cmd = str(rocminfo) if rocminfo.exists() else "rocminfo"
+
+    result = subprocess.run(
+        [rocminfo_cmd],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=env,
+        check=True,
+    )
+
+    pattern = re.compile(r"^\s*Name:\s+(gfx[0-9a-z]+)$", re.IGNORECASE)
+    for line in result.stdout.splitlines():
+        m = pattern.match(line.strip())
+        if m:
+            gpu_arch = m.group(1).lower()
+            logging.info(f"Detected GPU architecture: {gpu_arch}")
+            return gpu_arch
+    raise RuntimeError("No GPU architecture found in rocminfo output")
 
 
 def is_asan():

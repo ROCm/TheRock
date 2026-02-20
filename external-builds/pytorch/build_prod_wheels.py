@@ -82,6 +82,25 @@ python build_prod_wheels.py build ^
     --pytorch-vision-dir C:/b/vision
 ```
 
+4. Compiler caching (optional):
+
+```
+# Use ccache:
+python build_prod_wheels.py build --use-ccache --output-dir ...
+
+# Use sccache with ROCm compiler wrapping (caches host + HIP device code):
+python build_prod_wheels.py build --use-sccache --output-dir ...
+
+# Use sccache without compiler wrapping (caches host C/C++ only):
+python build_prod_wheels.py build --use-sccache --sccache-no-wrap --output-dir ...
+```
+
+``--use-ccache`` and ``--use-sccache`` are mutually exclusive.
+``--sccache-no-wrap`` is a modifier for ``--use-sccache`` that skips ROCm compiler
+wrapping — useful for developers who want basic caching without modifying compiler
+binaries. See ``build_tools/setup_sccache_rocm.py`` for details on the wrapping
+mechanism.
+
 ## Building Linux portable wheels
 
 On Linux, production wheels are typically built in a manylinux container and must have
@@ -545,26 +564,83 @@ def do_build(args: argparse.Namespace):
     )
 
     if args.use_ccache:
+        if not shutil.which("ccache"):
+            raise RuntimeError(
+                "ccache not found but --use-ccache was specified. "
+                "Please install ccache before building."
+            )
         print("Building with ccache, clearing stats first")
         env["CMAKE_C_COMPILER_LAUNCHER"] = "ccache"
         env["CMAKE_CXX_COMPILER_LAUNCHER"] = "ccache"
         run_command(["ccache", "--zero-stats"], cwd=tempfile.gettempdir())
+    elif args.use_sccache:
+        build_tools_dir = Path(__file__).resolve().parent.parent.parent / "build_tools"
+        sys.path.insert(0, str(build_tools_dir))
 
-    _do_build_wheels_core(
-        args,
-        env,
-        triton_dir,
-        pytorch_dir,
-        pytorch_audio_dir,
-        pytorch_vision_dir,
-        apex_dir,
-    )
-
-    if args.use_ccache:
-        ccache_stats_output = capture(
-            ["ccache", "--show-stats"], cwd=tempfile.gettempdir()
+        from setup_sccache_rocm import (
+            find_sccache,
+            restore_rocm_compilers,
+            setup_rocm_sccache,
         )
-        print(f"ccache --show-stats output:\n{ccache_stats_output}")
+
+        sccache_path = find_sccache()
+        if not sccache_path:
+            raise RuntimeError(
+                "sccache not found but --use-sccache was specified.\n"
+                "Install: https://github.com/mozilla/sccache#installation\n"
+                "For CI, sccache is pre-installed in the manylinux build image:\n"
+                "  https://github.com/ROCm/TheRock/tree/main/dockerfiles"
+            )
+
+        sccache_wrapped = False
+        if args.sccache_no_wrap:
+            print("Setting up sccache (CMAKE launchers only, no compiler wrapping)...")
+        else:
+            print("Setting up sccache with ROCm compiler wrapping...")
+            setup_rocm_sccache(rocm_dir, sccache_path)
+            sccache_wrapped = True
+
+    try:
+        if args.use_sccache:
+            env["CMAKE_C_COMPILER_LAUNCHER"] = str(sccache_path)
+            env["CMAKE_CXX_COMPILER_LAUNCHER"] = str(sccache_path)
+
+            try:
+                run_command(
+                    [str(sccache_path), "--start-server"], cwd=tempfile.gettempdir()
+                )
+            except subprocess.CalledProcessError:
+                pass  # Server may already be running
+
+            run_command([str(sccache_path), "--zero-stats"], cwd=tempfile.gettempdir())
+
+        _do_build_wheels_core(
+            args,
+            env,
+            triton_dir,
+            pytorch_dir,
+            pytorch_audio_dir,
+            pytorch_vision_dir,
+            apex_dir,
+        )
+    finally:
+        if args.use_sccache:
+            if sccache_wrapped:
+                print("Restoring ROCm compilers after sccache build...")
+                try:
+                    restore_rocm_compilers(rocm_dir)
+                except Exception as e:
+                    print(f"Warning: Failed to restore compilers: {e}")
+            sccache_stats = capture(
+                [str(sccache_path), "--show-stats"], cwd=tempfile.gettempdir()
+            )
+            print(f"sccache --show-stats output:\n{sccache_stats}")
+
+        if args.use_ccache:
+            ccache_stats_output = capture(
+                ["ccache", "--show-stats"], cwd=tempfile.gettempdir()
+            )
+            print(f"ccache --show-stats output:\n{ccache_stats_output}")
 
 
 def do_build_triton(
@@ -1063,10 +1139,25 @@ def main(argv: list[str]):
         required=True,
         help="Directory to copy built wheels to",
     )
-    build_p.add_argument(
+    cache_group = build_p.add_mutually_exclusive_group()
+    cache_group.add_argument(
         "--use-ccache",
-        action=argparse.BooleanOptionalAction,
+        action="store_true",
+        default=False,
         help="Use ccache as the compiler launcher",
+    )
+    cache_group.add_argument(
+        "--use-sccache",
+        action="store_true",
+        default=False,
+        help="Use sccache as the compiler launcher (with ROCm compiler wrapping on Linux)",
+    )
+    build_p.add_argument(
+        "--sccache-no-wrap",
+        action="store_true",
+        default=False,
+        help="With --use-sccache: skip compiler wrapping, only set CMAKE launchers "
+        "(caches host C/C++ but not HIP device code)",
     )
     build_p.add_argument(
         "--pytorch-dir",
