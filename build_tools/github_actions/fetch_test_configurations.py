@@ -47,7 +47,7 @@ test_matrix = {
         "timeout_minutes": 240,
         "test_script": f"python {_get_script_path('test_rocblas.py')}",
         # "platform": ["linux", "windows"],
-        "platform": [""],
+        "platform": ["linux"],
         "total_shards": 1,
     },
     "rocroller": {
@@ -100,7 +100,7 @@ test_matrix = {
         "timeout_minutes": 240,
         "test_script": f"python {_get_script_path('test_hipsolver.py')}",
         # "platform": ["linux", "windows"],
-        "platform": ["linux"],
+        "platform": [],
         "total_shards": 1,
     },
     "rocsolver": {
@@ -110,7 +110,7 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_rocsolver.py')}",
         # Issue for adding windows tests: https://github.com/ROCm/TheRock/issues/1770
         # "platform": ["linux"],
-        "platform": ["linux"],
+        "platform": [],
         "total_shards": 2,
     },
     # PRIM tests
@@ -216,7 +216,7 @@ test_matrix = {
         "timeout_minutes": 240,
         "test_script": f"python {_get_script_path('test_miopen.py')}",
         # "platform": ["linux", "windows"],
-        "platform": ["linux"],
+        "platform": [],
         "total_shards": 4,
     },
     # RCCL tests
