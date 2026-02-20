@@ -30,7 +30,7 @@ functional_matrix = {
     },
     "test_ucx": {
         "job_name": "test_ucx",
-        "fetch_artifact_args": "--core",
+        "fetch_artifact_args": "--base-only --tests",
         "timeout_minutes": 60,
         "test_script": f"python {_get_functional_script_path('test_ucx.py')}",
         # TODO(lajagapp): Add windows support (https://github.com/ROCm/TheRock/issues/3207)
