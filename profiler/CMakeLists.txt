@@ -229,7 +229,7 @@ endif(THEROCK_BUILD_TESTING)
     else()
       string(REPLACE ";" "\\;" _ROCPROFSYS_GFX_TARGETS_ESCAPED "${THEROCK_DIST_AMDGPU_TARGETS}")
     endif()
-    
+
     set(_rocprofiler_systems_optional_deps)
     if(THEROCK_ENABLE_MPI)
       set(_rocprofiler_systems_optional_deps therock-openmpi)
