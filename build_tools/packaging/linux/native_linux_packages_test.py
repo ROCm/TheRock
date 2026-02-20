@@ -90,16 +90,16 @@ class NativeLinuxPackagesTester:
             )
 
     def setup_gpg_key(self) -> bool:
-        """Setup GPG key for prerelease repositories.
+        """Setup GPG key for repositories that require GPG verification.
 
         Returns:
             True if setup successful, False otherwise
         """
-        if self.release_type != "prerelease" or not self.gpg_key_url:
-            return True  # Not needed for nightly
+        if not self.gpg_key_url:
+            return True  # Not needed if no GPG key URL provided
 
         print("\n" + "=" * 80)
-        print("SETTING UP GPG KEY FOR PRERELEASE")
+        print("SETTING UP GPG KEY")
         print("=" * 80)
 
         print(f"\nGPG Key URL: {self.gpg_key_url}")
@@ -172,8 +172,8 @@ class NativeLinuxPackagesTester:
         print(f"\nRepository URL: {self.repo_url}")
         print(f"Release Type: {self.release_type}")
 
-        # Setup GPG key for prerelease
-        if self.release_type == "prerelease":
+        # Setup GPG key if GPG key URL is provided
+        if self.gpg_key_url:
             if not self.setup_gpg_key():
                 return False
 
@@ -181,12 +181,12 @@ class NativeLinuxPackagesTester:
         print("\nAdding ROCm repository...")
         sources_list = f"/etc/apt/sources.list.d/rocm-test.list"
 
-        if self.release_type == "prerelease":
-            # Prerelease: use GPG key
+        if self.gpg_key_url:
+            # Use GPG key verification
             keyring_file = "/etc/apt/keyrings/rocm.gpg"
             repo_entry = f"deb [arch=amd64 signed-by={keyring_file}] {self.repo_url} stable main\n"
         else:
-            # Nightly: trusted=yes (no GPG check)
+            # No GPG check (trusted=yes)
             repo_entry = f"deb [arch=amd64 trusted=yes] {self.repo_url} stable main\n"
 
         try:
@@ -250,9 +250,9 @@ class NativeLinuxPackagesTester:
         print(f"Release Type: {self.release_type}")
         print(f"OS Profile: {self.os_profile}")
 
-        # Setup GPG key for prerelease (only needed for non-SLES systems)
+        # Setup GPG key if GPG key URL is provided (only needed for non-SLES systems)
         # SLES uses --gpg-auto-import-keys flag which handles it automatically
-        if self.release_type == "prerelease" and not self._is_sles():
+        if self.gpg_key_url and not self._is_sles():
             if not self.setup_gpg_key():
                 return False
 
@@ -282,8 +282,8 @@ class NativeLinuxPackagesTester:
         # Create repository file following official ROCm documentation format
         # Reference: https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/install-methods/package-manager/package-manager-sles.html
         print(f"\nCreating ROCm repository file at {repo_file}...")
-        if self.release_type == "prerelease" and self.gpg_key_url:
-            # Prerelease: use GPG key (gpgcheck=1)
+        if self.gpg_key_url:
+            # Use GPG key verification (gpgcheck=1)
             repo_content = f"""[{repo_name}]
 name=ROCm {self.release_type} repository
 baseurl={self.repo_url}
@@ -292,7 +292,7 @@ gpgcheck=1
 gpgkey={self.gpg_key_url}
 """
         else:
-            # Nightly: no GPG check (gpgcheck=0)
+            # No GPG check (gpgcheck=0)
             repo_content = f"""[{repo_name}]
 name=ROCm {self.release_type} repository
 baseurl={self.repo_url}
@@ -314,9 +314,9 @@ gpgcheck=0
         print("\nRefreshing repository metadata...")
         try:
             # Use --non-interactive to avoid prompts
-            # For prerelease, use --gpg-auto-import-keys to automatically import and trust GPG keys
+            # If GPG key URL is provided, use --gpg-auto-import-keys to automatically import and trust GPG keys
             refresh_cmd = ["zypper", "--non-interactive"]
-            if self.release_type == "prerelease" and self.gpg_key_url:
+            if self.gpg_key_url:
                 refresh_cmd.append("--gpg-auto-import-keys")
             refresh_cmd.append("refresh")
             refresh_cmd.append(repo_name)
@@ -365,17 +365,17 @@ gpgcheck=0
         print("\nCreating ROCm repository file...")
         repo_file = "/etc/yum.repos.d/rocm-test.repo"
 
-        if self.release_type == "prerelease" and self.gpg_key_url:
-            # Prerelease: use GPG key
+        if self.gpg_key_url:
+            # Use GPG key verification
             repo_content = f"""[rocm-test]
-name=ROCm Prerelease Repository
+name=ROCm Repository
 baseurl={self.repo_url}
 enabled=1
 gpgcheck=1
 gpgkey={self.gpg_key_url}
 """
         else:
-            # Nightly: no GPG check
+            # No GPG check
             repo_content = f"""[rocm-test]
 name=Native Linux Package Test Repository
 baseurl={self.repo_url}
@@ -521,8 +521,8 @@ gpgcheck=0
 
         # Use zypper for SLES, dnf for others
         if self._is_sles():
-            # For nightly builds, skip GPG checks during installation
-            if self.release_type == "nightly":
+            # If no GPG key URL, skip GPG checks during installation
+            if not self.gpg_key_url:
                 cmd = [
                     "zypper",
                     "--non-interactive",
@@ -532,7 +532,7 @@ gpgcheck=0
                     self.package_name,
                 ]
             else:
-                # For prerelease, use --gpg-auto-import-keys to automatically import and trust GPG keys
+                # If GPG key URL is provided, use --gpg-auto-import-keys to automatically import and trust GPG keys
                 cmd = [
                     "zypper",
                     "--non-interactive",
