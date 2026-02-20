@@ -29,7 +29,7 @@ class NativeLinuxPackagesTester:
         """Derive package type from OS profile.
 
         Args:
-            os_profile: OS profile (e.g., ubuntu2404, rhel8, debian12, sles16)
+            os_profile: OS profile (e.g., ubuntu2404, rhel8, debian12, sles16, azl3)
 
         Returns:
             Package type ('deb' or 'rpm')
@@ -37,12 +37,14 @@ class NativeLinuxPackagesTester:
         os_profile_lower = os_profile.lower()
         if os_profile_lower.startswith(("ubuntu", "debian")):
             return "deb"
-        elif os_profile_lower.startswith(("rhel", "sles", "almalinux", "centos")):
+        elif os_profile_lower.startswith(
+            ("rhel", "sles", "almalinux", "centos", "azl")
+        ):
             return "rpm"
         else:
             raise ValueError(
                 f"Unable to derive package type from OS profile: {os_profile}. "
-                "Supported profiles: ubuntu*, debian*, rhel*, sles*, almalinux*, centos*"
+                "Supported profiles: ubuntu*, debian*, rhel*, sles*, almalinux*, centos*, azl*"
             )
 
     def _is_sles(self) -> bool:
@@ -66,7 +68,7 @@ class NativeLinuxPackagesTester:
 
         Args:
             repo_url: Full repository URL (constructed in YAML)
-            os_profile: OS profile (e.g., ubuntu2404, rhel8, debian12, sles16)
+            os_profile: OS profile (e.g., ubuntu2404, rhel8, debian12, sles16, azl3)
             release_type: Type of release ('nightly' or 'prerelease')
             install_prefix: Installation prefix (default: /opt/rocm/core)
             gfx_arch: GPU architecture (default: gfx94x)
@@ -926,7 +928,7 @@ Examples:
         "--os-profile",
         type=str,
         required=True,
-        help="OS profile (e.g., ubuntu2404, rhel8, debian12, sles16). Package type is derived from this.",
+        help="OS profile (e.g., ubuntu2404, rhel8, debian12, sles16, azl3). Package type is derived from this.",
     )
 
     parser.add_argument(
