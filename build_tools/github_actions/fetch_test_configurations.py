@@ -37,7 +37,7 @@ test_matrix = {
         "timeout_minutes": 240,
         "test_script": f"python {_get_script_path('test_hiptests.py')}",
         # "platform": ["linux", "windows"],
-        "platform": [],
+        "platform": ["linux"],
         "total_shards": 4,
     },
     # BLAS tests
@@ -216,7 +216,7 @@ test_matrix = {
         "timeout_minutes": 240,
         "test_script": f"python {_get_script_path('test_miopen.py')}",
         # "platform": ["linux", "windows"],
-        "platform": ["linux"],
+        "platform": [],
         "total_shards": 4,
     },
     # RCCL tests
