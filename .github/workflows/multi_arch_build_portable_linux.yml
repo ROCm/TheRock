@@ -161,7 +161,7 @@ jobs:
   # STAGE: media-libs (generic)
   # ==========================================================================
   media-libs:
-    needs: foundation
+    needs: compiler-runtime
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
