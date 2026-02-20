@@ -50,6 +50,8 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_rocblas.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 1,
+        # Architectures that we have multi GPU setup for testing
+        "multi_gpu": {"linux": ["gfx94X-dcgpu"]},
     },
     "rocroller": {
         "job_name": "rocroller",
@@ -202,6 +204,8 @@ test_matrix = {
         # TODO(geomin12): Add windows test (https://github.com/ROCm/TheRock/issues/1391)
         "platform": ["linux"],
         "total_shards": 1,
+        # Architectures that we have multi GPU setup for testing
+        "multi_gpu": {"linux": ["gfx94X-dcgpu"]},
     },
     "hipfft": {
         "job_name": "hipfft",

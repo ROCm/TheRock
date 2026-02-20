@@ -10,6 +10,9 @@ THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
 logging.basicConfig(level=logging.INFO)
 
+# Runner information
+RUNNER_NAME = os.getenv("RUNNER_NAME", "")
+
 # GTest sharding
 SHARD_INDEX = os.getenv("SHARD_INDEX", 1)
 TOTAL_SHARDS = os.getenv("TOTAL_SHARDS", 1)
@@ -27,10 +30,12 @@ else:
     # "--test_prob" is the probability that a given test will run.
     # Due to the large number of tests for rocFFT, we only run a subset.
     test_filter = [
-        "--gtest_filter=-*multi_gpu*",
         "--test_prob",
         "0.02",
     ]
+    # If the runner is not multi-gpu, we ignore multi-gpu tests
+    if "8gpu" not in RUNNER_NAME:
+        test_filter.append("--gtest_filter=-*multi_gpu*")
 
 cmd = [f"{THEROCK_BIN_DIR}/rocfft-test"] + test_filter
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")

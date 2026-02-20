@@ -13,6 +13,9 @@ THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
 from github_actions_utils import is_asan
 
+# Runner information
+RUNNER_NAME = os.getenv("RUNNER_NAME", "")
+
 # GTest sharding
 SHARD_INDEX = os.getenv("SHARD_INDEX", 1)
 TOTAL_SHARDS = os.getenv("TOTAL_SHARDS", 1)
@@ -33,7 +36,7 @@ if test_type == "smoke":
     test_filter = ["--yaml", f"{THEROCK_BIN_DIR}/rocblas_smoke.yaml"]
 else:
     # only running smoke tests due to openBLAS issue: https://github.com/ROCm/TheRock/issues/1605
-    test_filter = ["--yaml", f"{THEROCK_BIN_DIR}/rocblas_smoke.yaml"]
+    test_filter = ["--gtest_filter=*quick*:*pre_checkin*-*known_bug*"]
 
 cmd = [f"{THEROCK_BIN_DIR}/rocblas-test"] + test_filter
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
