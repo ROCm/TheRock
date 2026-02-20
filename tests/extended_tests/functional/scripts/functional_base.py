@@ -165,7 +165,7 @@ class FunctionalBase:
 
         process.wait()
         return process.returncode
-        
+
     def clone_repository(
         self,
         git_url: str,
@@ -218,8 +218,7 @@ class FunctionalBase:
             raise
         except Exception as e:
             raise TestExecutionError(
-                f"Git clone failed: {e}\n"
-                f"URL: {git_url}{branch_info}"
+                f"Git clone failed: {e}\n" f"URL: {git_url}{branch_info}"
             ) from e
 
     def get_rocm_env(self, additional_paths: List[Path] = None) -> Dict[str, str]:
