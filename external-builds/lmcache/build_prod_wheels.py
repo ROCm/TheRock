@@ -14,8 +14,7 @@ Example for gfx950:
 ```
 python build_prod_wheels.py \
     --output-dir outputs \
-    --therock-index-url https://rocm.prereleases.amd.com/whl/gfx950-dcgpu \
-    --therock-tarball-url https://repo.amd.com/rocm/tarball/therock-dist-linux-gfx950-dcgpu-7.11.0.tar.gz \
+    --rocm-index-url https://rocm.prereleases.amd.com/whl/gfx950-dcgpu \
     --rocm-arch gfx950
 ```
 
@@ -46,20 +45,22 @@ def run_command(args: list[str | Path], cwd: Path = None):
 
 
 def find_built_wheel(dist_dir: Path) -> Path:
-    """Find the built LMCache wheel."""
+    """Find the built LMCache wheel (returns newest if multiple exist)."""
     all_wheels = list(dist_dir.glob("lmcache-*.whl"))
     if not all_wheels:
         raise RuntimeError(f"No LMCache wheels found in {dist_dir}")
-    if len(all_wheels) != 1:
-        raise RuntimeError(f"Found multiple wheels in {dist_dir}: {all_wheels}")
+    if len(all_wheels) > 1:
+        # Return the most recently modified wheel
+        newest = max(all_wheels, key=lambda p: p.stat().st_mtime)
+        print(f"++ Found multiple wheels, using newest: {newest.name}")
+        return newest
     return all_wheels[0]
 
 
 def do_build(args: argparse.Namespace):
     """Build LMCache wheel using Docker."""
     
-    print(f"++ Using TheRock index: {args.therock_index_url}")
-    print(f"++ Using TheRock tarball: {args.therock_tarball_url}")
+    print(f"++ Using ROCm index: {args.rocm_index_url}")
     
     # Build using Docker
     print("++ Building LMCache wheel in Docker container...")
@@ -69,13 +70,13 @@ def do_build(args: argparse.Namespace):
     build_cmd = [
         "docker", "build",
         "--target", "export",
+        "--progress", "plain",
         "--output", f"type=local,dest={args.output_dir}",
         "--build-arg", f"PYTHON_VERSION={args.python_version}",
-        "--build-arg", f"THEROCK_INDEX_URL={args.therock_index_url}",
-        "--build-arg", f"THEROCK_TARBALL_URL={args.therock_tarball_url}",
+        "--build-arg", f"ROCM_INDEX_URL={args.rocm_index_url}",
         "--build-arg", f"PYTORCH_ROCM_ARCH={args.rocm_arch}",
         "--build-arg", f"LMCACHE_BRANCH={args.lmcache_branch}",
-        "-f", "Dockerfile",
+        "-f", "Dockerfile.dev",
         ".",
     ]
     
@@ -101,7 +102,7 @@ def do_build(args: argparse.Namespace):
 def main(argv: list[str]):
     parser = argparse.ArgumentParser(
         prog="build_prod_wheels.py",
-        description="Build LMCache wheels with ROCm support from TheRock"
+        description="Build LMCache wheels with ROCm support"
     )
     
     parser.add_argument(
@@ -111,16 +112,10 @@ def main(argv: list[str]):
         help="Directory to copy built wheels to",
     )
     parser.add_argument(
-        "--therock-index-url",
+        "--rocm-index-url",
         type=str,
         required=True,
-        help="TheRock Python index URL for PyTorch (e.g., https://rocm.prereleases.amd.com/whl/gfx950-dcgpu)",
-    )
-    parser.add_argument(
-        "--therock-tarball-url",
-        type=str,
-        required=True,
-        help="TheRock ROCm tarball URL (e.g., https://repo.amd.com/rocm/tarball/therock-dist-linux-gfx950-dcgpu-7.11.0.tar.gz)",
+        help="ROCm Python index URL for PyTorch (e.g., https://rocm.prereleases.amd.com/whl/gfx950-dcgpu)",
     )
     parser.add_argument(
         "--python-version",
