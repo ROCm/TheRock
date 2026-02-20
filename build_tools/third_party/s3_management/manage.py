@@ -43,23 +43,11 @@ PREFIXES = [
     "v2-staging/gfx120X-all",
     "v2-staging/gfx94X-dcgpu",
     "v2-staging/gfx950-dcgpu",
-    "v2-staging/gfx101X-dgpu",
-    "v2-staging/gfx1150",
-    "v2-staging/gfx1152",
-    "v2-staging/gfx1153",
-    "v2-staging/gfx90X-dcgpu",
-    "v2-staging/gfx103X-dgpu",
     "v2/gfx110X-all",
     "v2/gfx1151",
     "v2/gfx120X-all",
     "v2/gfx94X-dcgpu",
-    "v2/gfx950-dcgpu",
-    "v2/gfx101X-dgpu",
-    "v2/gfx1150",
-    "v2/gfx1152",
-    "v2/gfx1153",
-    "v2/gfx90X-dcgpu",
-    "v2/gfx103X-dgpu"
+    "v2/gfx950-dcgpu"
 ]
 
 CUSTOM_PREFIX = getenv('CUSTOM_PREFIX')
