@@ -306,4 +306,4 @@ jobs:
           CUSTOM_PREFIX: "${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}"
         run: |
           pip install boto3 packaging
-          python ./build_tools/third_party/s3_management/manage.py "$CUSTOM_PREFIX"
+          python ./build_tools/third_party/s3_management/manage.py ${{ env.CUSTOM_PREFIX }}

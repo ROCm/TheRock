@@ -47,7 +47,7 @@ PREFIXES = [
     "v2/gfx1151",
     "v2/gfx120X-all",
     "v2/gfx94X-dcgpu",
-    "v2/gfx950-dcgpu"
+    "v2/gfx950-dcgpu",
 ]
 
 CUSTOM_PREFIX = getenv('CUSTOM_PREFIX')
