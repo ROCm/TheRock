@@ -47,7 +47,7 @@ test_matrix = {
         "timeout_minutes": 240,
         "test_script": f"python {_get_script_path('test_rocblas.py')}",
         # "platform": ["linux", "windows"],
-        "platform": ["linux"],
+        "platform": [],
         "total_shards": 1,
     },
     "rocroller": {
@@ -80,7 +80,7 @@ test_matrix = {
         "timeout_minutes": 240,
         "test_script": f"python {_get_script_path('test_hipblas.py')}",
         # "platform": ["linux", "windows"],
-        "platform": [""],
+        "platform": [],
         # TODO(#2616): Enable full tests once known machine issues are resolved
         "total_shards": 1,
     },
@@ -90,7 +90,7 @@ test_matrix = {
         "timeout_minutes": 240,
         "test_script": f"python {_get_script_path('test_hipblaslt.py')}",
         # "platform": ["linux", "windows"],
-        "platform": ["linux"],
+        "platform": [],
         "total_shards": 6,
     },
     # SOLVER tests
@@ -216,7 +216,7 @@ test_matrix = {
         "timeout_minutes": 240,
         "test_script": f"python {_get_script_path('test_miopen.py')}",
         # "platform": ["linux", "windows"],
-        "platform": [],
+        "platform": ["linux"],
         "total_shards": 4,
     },
     # RCCL tests
@@ -308,7 +308,7 @@ test_matrix = {
         "timeout_minutes": 240,
         "test_script": f"python {_get_script_path('test_rocrtst.py')}",
         # "platform": ["linux"],
-        "platform": ["linux"],
+        "platform": [],
         "total_shards": 1,
     },
 }
