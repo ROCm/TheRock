@@ -105,50 +105,49 @@ class NativeLinuxPackagesTester:
         print(f"\nGPG Key URL: {self.gpg_key_url}")
 
         if self.package_type == "deb":
-            # For DEB, import GPG key
+            # For DEB, import GPG key using pipeline approach
             keyring_dir = "/etc/apt/keyrings"
             keyring_file = f"{keyring_dir}/rocm.gpg"
 
             try:
                 # Create keyring directory
-                os.makedirs(keyring_dir, mode=0o755, exist_ok=True)
-                print(f"[PASS] Created keyring directory: {keyring_dir}")
-
-                # Download and import GPG key
-                print(f"\nDownloading GPG key from {self.gpg_key_url}...")
+                print(f"\nCreating keyring directory: {keyring_dir}...")
                 result = subprocess.run(
-                    ["wget", "-q", "-O", "-", self.gpg_key_url],
+                    ["mkdir", "--parents", "--mode=0755", keyring_dir],
                     check=True,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
-                    timeout=30,
+                    timeout=10,
+                )
+                print(f"[PASS] Created keyring directory: {keyring_dir}")
+
+                # Download, dearmor, and write GPG key using pipeline
+                # wget URL -O - | gpg --dearmor | tee keyring_file > /dev/null
+                print(f"\nDownloading and importing GPG key from {self.gpg_key_url}...")
+                pipeline_cmd = (
+                    f"wget -q -O - {self.gpg_key_url} | "
+                    f"gpg --dearmor | "
+                    f"tee {keyring_file} > /dev/null"
                 )
 
-                # Import using gpg --dearmor
-                dearmor_process = subprocess.Popen(
-                    ["gpg", "--dearmor"],
-                    stdin=subprocess.PIPE,
+                result = subprocess.run(
+                    pipeline_cmd,
+                    shell=True,
+                    check=True,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
-                )
-                stdout, stderr = dearmor_process.communicate(
-                    input=result.stdout, timeout=30
+                    timeout=60,
                 )
 
-                if dearmor_process.returncode != 0:
-                    print(f"[FAIL] Failed to dearmor GPG key: {stderr.decode()}")
-                    return False
-
-                # Write to keyring file
-                with open(keyring_file, "wb") as f:
-                    f.write(stdout)
-
+                # Set proper permissions on the keyring file
                 os.chmod(keyring_file, 0o644)
                 print(f"[PASS] GPG key imported to {keyring_file}")
                 return True
 
             except subprocess.CalledProcessError as e:
-                print(f"[FAIL] Failed to download GPG key: {e}")
+                print(f"[FAIL] Failed to setup GPG key: {e}")
+                if e.stderr:
+                    print(f"Error output: {e.stderr.decode()}")
                 return False
             except Exception as e:
                 print(f"[FAIL] Error setting up GPG key: {e}")
