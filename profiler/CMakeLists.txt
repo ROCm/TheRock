@@ -230,6 +230,27 @@ endif(THEROCK_BUILD_TESTING)
       string(REPLACE ";" "\\;" _ROCPROFSYS_GFX_TARGETS_ESCAPED "${THEROCK_DIST_AMDGPU_TARGETS}")
     endif()
 
+    # rocprofiler-systems requires Development.Embed (libpython) for pybind11.
+    # On manylinux, /opt/python/ lacks libpython but /opt/python-shared/ has it.
+    # For each detected Python, try its shared counterpart first, then the original.
+    set(_rocprofsys_python_versions)
+    set(_rocprofsys_python_root_dirs)
+    foreach(_exe _ver IN ZIP_LISTS _detected_python_executables _detected_python_versions)
+      cmake_path(GET _exe PARENT_PATH _bin_dir)
+      cmake_path(GET _bin_dir PARENT_PATH _root_dir)
+      # Try the shared Python counterpart
+      string(REPLACE "/opt/python/" "/opt/python-shared/" _shared_root "${_root_dir}")
+      if(EXISTS "${_shared_root}/lib" AND NOT "${_shared_root}" STREQUAL "${_root_dir}")
+        list(APPEND _rocprofsys_python_versions "${_ver}")
+        list(APPEND _rocprofsys_python_root_dirs "${_shared_root}")
+      elseif(EXISTS "${_root_dir}/lib")
+        list(APPEND _rocprofsys_python_versions "${_ver}")
+        list(APPEND _rocprofsys_python_root_dirs "${_root_dir}")
+      endif()
+    endforeach()
+    list(JOIN _rocprofsys_python_versions "\;" _rocprofsys_python_versions_str)
+    list(JOIN _rocprofsys_python_root_dirs "\;" _rocprofsys_python_root_dirs_str)
+
     therock_cmake_subproject_declare(rocprofiler-systems
       USE_DIST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-systems"
@@ -245,6 +266,9 @@ endif(THEROCK_BUILD_TESTING)
         -DROCPROFSYS_BUILD_FOR_THEROCK=ON
         -DROCPROFSYS_GFX_TARGETS="${_ROCPROFSYS_GFX_TARGETS_ESCAPED}"
         -DROCPROFSYS_BUILD_SPDLOG=OFF
+        -DROCPROFSYS_USE_PYTHON=ON
+        -DROCPROFSYS_PYTHON_VERSIONS:STRING="${_rocprofsys_python_versions_str}"
+        -DROCPROFSYS_PYTHON_ROOT_DIRS:STRING="${_rocprofsys_python_root_dirs_str}"
       INSTALL_RPATH_DIRS
         "lib"
         "lib/rocprofiler-systems"
