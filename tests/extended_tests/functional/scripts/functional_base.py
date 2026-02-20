@@ -56,6 +56,11 @@ class FunctionalBase:
         # Initialize test client (will be set in run())
         self.client = None
 
+    @property
+    def rocm_path(self) -> Path:
+        """ROCm installation path (parent of therock_bin_dir)."""
+        return Path(self.therock_bin_dir).resolve().parent
+
     def load_config(self, config_filename: str) -> Dict[str, Any]:
         """Load test configuration from JSON file.
 
@@ -216,6 +221,31 @@ class FunctionalBase:
                 f"Git clone failed: {e}\n"
                 f"URL: {git_url}{branch_info}"
             ) from e
+
+    def get_rocm_env(self, additional_paths: List[Path] = None) -> Dict[str, str]:
+        """Get environment with LD_LIBRARY_PATH set for ROCm libraries.
+
+        Args:
+            additional_paths: Additional library paths to include
+
+        Returns:
+            Environment dictionary with LD_LIBRARY_PATH configured
+        """
+        env = os.environ.copy()
+        rocm_lib = self.rocm_path / "lib"
+
+        # Build list of library paths
+        lib_paths = [str(rocm_lib)]
+        if additional_paths:
+            lib_paths.extend(str(p) for p in additional_paths)
+
+        # Append existing LD_LIBRARY_PATH if present
+        existing = env.get("LD_LIBRARY_PATH", "")
+        if existing:
+            lib_paths.append(existing)
+
+        env["LD_LIBRARY_PATH"] = ":".join(lib_paths)
+        return env
 
     def create_test_result(
         self,

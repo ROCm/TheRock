@@ -25,7 +25,8 @@ class UcxTest(FunctionalBase):
 
         self.log_file = self.script_dir / "ucx.log"
         self.results_json = self.script_dir / "ucx_results.json"
-        self.ucx_dir = Path(self.therock_bin_dir) / "ucx"
+        # Resolve to absolute path (required by configure --prefix)
+        self.ucx_dir = self.rocm_path / "bin" / "ucx"
         self.ucx_build_dir = self.ucx_dir / "build"
 
         # Load test configuration from JSON
@@ -37,9 +38,6 @@ class UcxTest(FunctionalBase):
     def _build_ucx(self) -> None:
         """Build UCX with ROCm support."""
         log.info("Building UCX with ROCm support")
-
-        # ROCm path is parent of therock_bin_dir (e.g., /path/to/therock/bin -> /path/to/therock)
-        rocm_path = Path(self.therock_bin_dir).parent
 
         build_steps = [
             {
@@ -63,7 +61,7 @@ class UcxTest(FunctionalBase):
                     f"--prefix={self.ucx_build_dir}",
                     "--without-knem",
                     "--without-cuda",
-                    f"--with-rocm={rocm_path}",
+                    f"--with-rocm={self.rocm_path}",
                     "--enable-gtest",
                     "--without-gdrcopy",
                     "--without-java",
@@ -125,7 +123,16 @@ class UcxTest(FunctionalBase):
             f"--gtest_output=json:{self.results_json}",
         ]
 
-        self.execute_command(cmd, cwd=self.ucx_build_dir)
+        # Set LD_LIBRARY_PATH to find ROCm libraries
+        env = self.get_rocm_env()
+        return_code = self.execute_command(cmd, cwd=self.ucx_build_dir, env=env)
+
+        if return_code != 0:
+            raise TestExecutionError(
+                f"UCX gtest execution failed with return code {return_code}\n"
+                f"Check logs for details"
+            )
+
         log.info(f"{self.display_name} execution complete")
 
     def parse_results(self) -> List[Dict[str, Any]]:
