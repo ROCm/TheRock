@@ -160,6 +160,62 @@ class FunctionalBase:
 
         process.wait()
         return process.returncode
+        
+    def clone_repository(
+        self,
+        git_url: str,
+        target_dir: Path,
+        branch: str = None,
+        skip_if_exists: bool = True,
+    ) -> None:
+        """Clone a git repository.
+
+        Args:
+            git_url: Git repository URL
+            target_dir: Directory to clone into
+            branch: Branch to clone (optional, uses default branch if not specified)
+            skip_if_exists: Skip cloning if target_dir already exists (default: True)
+
+        Raises:
+            TestExecutionError: If git clone fails
+        """
+        if skip_if_exists and target_dir.exists():
+            log.info(f"Directory already exists at {target_dir}, skipping clone")
+            return
+
+        # Build git clone command
+        branch_info = f" (branch: {branch})" if branch else " (default branch)"
+        log.info(f"Cloning {git_url}{branch_info} to {target_dir}")
+
+        cmd = ["git", "clone"]
+        if branch:
+            cmd.extend(["--branch", branch])
+        cmd.extend([git_url, str(target_dir)])
+
+        log.info(f"++ Exec: {shlex.join(cmd)}")
+
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+            )
+
+            if result.returncode != 0:
+                raise TestExecutionError(
+                    f"Failed to clone repository: {result.stderr}\n"
+                    f"URL: {git_url}{branch_info}"
+                )
+
+            log.info(f"Clone completed: {target_dir}")
+
+        except TestExecutionError:
+            raise
+        except Exception as e:
+            raise TestExecutionError(
+                f"Git clone failed: {e}\n"
+                f"URL: {git_url}{branch_info}"
+            ) from e
 
     def create_test_result(
         self,

@@ -1,0 +1,5 @@
+{
+  "git_url": "https://github.com/openucx/ucx",
+  "git_branch": "master",
+  "gtest_filter": "*rocm*"
+}

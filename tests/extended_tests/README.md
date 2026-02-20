@@ -79,9 +79,10 @@ extended_tests/
 ├── functional/                     # Functional/correctness tests
 │   ├── scripts/                   # Test implementations
 │   │   ├── functional_base.py     # Base class for functional tests
-│   │   └── test_*.py  # Individual tests
+│   │   └── test_*.py              # Individual tests
 │   ├── configs/                   # Test-specific configurations
-│   │   └── miopendriver_conv.json
+│   │   ├── miopendriver_conv.json
+│   │   └── ucx.json
 │   ├── functional_test_matrix.py  # Functional test matrix
 │   └── README.md                  # Functional-specific docs
 │

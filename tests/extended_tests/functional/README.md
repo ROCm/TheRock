@@ -17,6 +17,7 @@ Functional tests validate correctness and verify expected behavior without perfo
 | Test Script                 | Library | Platform | Timeout | Description                        |
 | --------------------------- | ------- | -------- | ------- | ---------------------------------- |
 | `test_miopendriver_conv.py` | MIOpen  | Linux    | 30 min  | Convolution forward/backward tests |
+| `test_ucx.py`               | UCX     | Linux    | 60 min  | UCX ROCm integration tests         |
 
 ## CI Configuration
 
@@ -31,10 +32,12 @@ Functional tests validate correctness and verify expected behavior without perfo
 functional/
 ├── scripts/
 │   ├── functional_base.py        # Base class for all functional tests
-│   └── test_miopendriver_conv.py # MIOpen convolution test
+│   ├── test_miopendriver_conv.py # MIOpen convolution test
+│   └── test_ucx.py               # UCX test
 │
 ├── configs/
-│   └── miopendriver_conv.json    # Test configuration
+│   ├── miopendriver_conv.json    # MIOpen test configuration
+│   └── ucx.json                  # UCX test configuration
 │
 ├── functional_test_matrix.py     # CI test matrix definitions
 └── README.md                     # This file
@@ -159,6 +162,7 @@ if __name__ == "__main__":
 - `self.load_config(filename)` → Load JSON config from `configs/` directory
 - `self.get_gpu_architecture()` → Get GPU gfx version (e.g., 'gfx942')
 - `self.execute_command(cmd, cwd, env, log_file_handle)` → Execute command with streaming output
+- `self.clone_repository(git_url, target_dir, branch)` → Clone git repository
 - `self.create_test_result(...)` → Create standardized result dictionary
 
 ### 2. Create Configuration File
