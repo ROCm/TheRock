@@ -67,6 +67,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         -DTARGET=HASWELL
         -DDYNAMIC_ARCH=${_enable_dynamicArch}
         -DBUILD_TESTING=OFF
+        -DCMAKE_C_FLAGS_RELEASE="-O1"
       EXTRA_DEPENDS
         "${_download_stamp}"
     )
