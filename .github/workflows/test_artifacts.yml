@@ -43,6 +43,9 @@ on:
         type: string
       test_labels:
         type: string
+      multi_arch_test:
+        type: boolean
+        default: false
   push:
     branches:
       - ADHOCBUILD
@@ -54,7 +57,15 @@ jobs:
   configure_test_matrix:
     name: "Configure test matrix (${{ inputs.amdgpu_families }})"
     # if there is a test machine available
-    if: ${{ inputs.test_runs_on != '' }}
+    # TODO(TheRock#3288): Re-enable gfx950-dcgpu runners once we get more capacity
+    if: >-
+      ${{
+        inputs.test_runs_on != '' &&
+        !(
+          inputs.amdgpu_families == 'gfx950-dcgpu' &&
+          inputs.multi_arch_test == true
+        )
+      }}
     runs-on: ${{ inputs.test_runs_on }}
     outputs:
       components: ${{ steps.configure.outputs.components }}
