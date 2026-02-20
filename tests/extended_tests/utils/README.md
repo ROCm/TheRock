@@ -7,7 +7,7 @@ Utility modules organized into logical subdirectories for maintainability and sc
 ```
 extended_tests/utils/
 ├── __init__.py              # Public exports
-├── test_client.py           # Main TestClient API
+├── extended_test_client.py  # Main ExtendedTestClient API
 ├── constants.py             # Framework constants
 ├── exceptions.py            # Custom exceptions
 ├── logger.py                # Logging configuration
@@ -52,7 +52,7 @@ from utils.constants import Constants
 from utils.exceptions import ConfigurationError
 
 # Main API classes
-from utils.test_client import TestClient
+from utils.extended_test_client import ExtendedTestClient
 from utils.system.system_detector import SystemDetector
 from utils.config.config_helper import ConfigHelper
 from utils.results.results_handler import ResultsHandler
@@ -83,7 +83,7 @@ from utils.results import ResultsHandler, ResultsAPI
 - **constants.py** - Framework constants and defaults
 - **exceptions.py** - Custom exception classes
 - **logger.py** - Logging configuration
-- **test_client.py** - Main TestClient API
+- **extended_test_client.py** - Main ExtendedTestClient API
 
 ### Config
 

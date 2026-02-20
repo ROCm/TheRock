@@ -1,4 +1,4 @@
-"""Test Client for system detection and result reporting.
+"""Extended Test Client for system detection and result reporting.
 
 Unified interface for collecting system information (OS, hardware, ROCm) and
 uploading test results to API or local storage.
@@ -19,7 +19,7 @@ from .config import ConfigHelper
 from .results import ResultsHandler
 
 
-class TestClient:
+class ExtendedTestClient:
     """Client for system detection, result collection, and API upload.
 
     Attributes:
@@ -29,7 +29,7 @@ class TestClient:
         system_context: SystemContext with detected info (or None if not detected)
 
     Example:
-        >>> client = TestClient()
+        >>> client = ExtendedTestClient()
         >>> results = [{"test_name": "fft_1024", "score": 1234.5, "unit": "GFLOPS"}]
         >>> client.upload_results("rocfft_benchmark", results)
     """

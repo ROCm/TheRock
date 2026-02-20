@@ -33,11 +33,13 @@ The test framework provides infrastructure for two test types:
 
 ### Environment Setup
 
-All tests require these environment variables. **Note:** These are automatically configured in CI runs. For local testing, adjust values based on your setup:
+All tests require these environment variables. **Note:** These are automatically configured in CI runs. For local testing, adjust values based on your setup.
+
+> **Getting TheRock Artifacts:** [Install from releases](../../RELEASES.md) via pip or tarballs, [build from source](../../README.md#building-from-source), or [download CI artifacts](../../docs/development/installing_artifacts.md).
 
 ```bash
-# Required: Update to your actual TheRock build directory
-export THEROCK_BIN_DIR=/path/to/therock/build/bin
+# Required: Path to TheRock bin/ directory (see above for how to obtain)
+export THEROCK_BIN_DIR=/path/to/therock/install/bin
 
 # Optional: Unique identifier for this test run (default: local-test)
 export ARTIFACT_RUN_ID=local-test
@@ -88,7 +90,7 @@ extended_tests/
 └── utils/                          # SHARED utilities for all test types
     ├── exceptions.py              # Custom exception classes
     ├── logger.py                  # Logging utilities
-    ├── test_client.py             # Test execution client
+    ├── extended_test_client.py    # ExtendedTestClient API
     ├── constants.py               # Global constants
     │
     ├── config/                    # Configuration parsers
