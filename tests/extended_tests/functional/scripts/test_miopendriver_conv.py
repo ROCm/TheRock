@@ -57,6 +57,9 @@ class MIOpenDriverConvTest(FunctionalBase):
                 f"Ensure MIOpen is installed correctly"
             )
 
+        # Setup environment with LD_LIBRARY_PATH for ROCm libraries
+        env = self.get_rocm_env()
+
         # Calculate total number of tests for progress indicator
         total_tests = sum(len(self.tests_cmd[suite]) for suite in self.tests_list)
         current_test = 0
@@ -89,7 +92,7 @@ class MIOpenDriverConvTest(FunctionalBase):
 
                 error_message = None
                 try:
-                    return_code = self.execute_command(cmd)
+                    return_code = self.execute_command(cmd, env=env)
                 except Exception as e:
                     log.error(f"Error running command: {e}")
                     error_message = str(e)
