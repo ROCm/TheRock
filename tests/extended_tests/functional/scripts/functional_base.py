@@ -174,11 +174,12 @@ class FunctionalBase:
             test_name: Test name
             subtest_name: Specific test/suite identifier
             status: Test status ('PASS', 'FAIL', 'ERROR', 'SKIP')
-            **kwargs: Additional test-specific parameters (pass_count, fail_count, etc.)
+            **kwargs: Additional test-specific parameters (suite, command, etc.)
 
         Returns:
             Dict[str, Any]: Test result dictionary
         """
+        # test_config required by API schema
         test_config = {
             "test_name": test_name,
             "sub_test_name": subtest_name,
@@ -186,16 +187,12 @@ class FunctionalBase:
             "environment_dependencies": [],
         }
 
-        # Add any additional kwargs to test_config
-        for key, value in kwargs.items():
-            test_config[key] = value
-
         return {
             "test_name": test_name,
             "subtest": subtest_name,
             "status": status,
             "test_config": test_config,
-            **kwargs,  # Include pass_count, fail_count, etc. at top level too
+            **kwargs,
         }
 
     def calculate_statistics(
@@ -226,18 +223,34 @@ class FunctionalBase:
             "overall_status": overall_status,
         }
 
-    def create_summary_table(
-        self, stats: Dict[str, Any], num_suites: int
-    ) -> PrettyTable:
-        """Create overall summary table with all statistics.
+    def create_result_tables(
+        self, test_results: List[Dict[str, Any]], stats: Dict[str, Any]
+    ) -> tuple:
+        """Create detailed and summary result tables.
 
         Args:
+            test_results: List of test result dictionaries
             stats: Test statistics dictionary
-            num_suites: Number of test suites
 
         Returns:
-            PrettyTable with summary statistics
+            tuple: (detailed_table, summary_table)
         """
+        # Build detailed table and count suites
+        detailed_table = PrettyTable()
+        detailed_table.field_names = ["TestSuite", "TestCase", "Status"]
+
+        suites = set()
+        for result in test_results:
+            suite = result.get(
+                "suite", result.get("test_config", {}).get("suite", "unknown")
+            )
+            subtest = result.get("subtest", "unknown")
+            status = result.get("status", "FAIL")
+
+            suites.add(suite)
+            detailed_table.add_row([suite, subtest, status])
+
+        # Build summary table
         summary_table = PrettyTable()
         summary_table.field_names = [
             "Total TestSuites",
@@ -249,13 +262,12 @@ class FunctionalBase:
             "Final Result",
         ]
 
-        # Set consistent column width for uniform appearance
         for field in summary_table.field_names:
             summary_table.min_width[field] = 17
 
         summary_table.add_row(
             [
-                num_suites,
+                len(suites),
                 stats["total"],
                 stats["passed"],
                 stats["failed"],
@@ -265,7 +277,7 @@ class FunctionalBase:
             ]
         )
 
-        return summary_table
+        return detailed_table, summary_table
 
     def upload_results(
         self, test_results: List[Dict[str, Any]], stats: Dict[str, Any]
@@ -326,7 +338,7 @@ class FunctionalBase:
         self.run_tests()
 
         # Parse results (implemented by child class)
-        test_results, detailed_table, num_suites = self.parse_results()
+        test_results = self.parse_results()
 
         # Validate test results structure
         if not test_results:
@@ -335,11 +347,9 @@ class FunctionalBase:
                 "Check if tests executed successfully and results were saved to file"
             )
 
-        # Calculate statistics
+        # Generate statistics and tables
         stats = self.calculate_statistics(test_results)
-
-        # Create summary table
-        summary_table = self.create_summary_table(stats, num_suites)
+        detailed_table, summary_table = self.create_result_tables(test_results, stats)
 
         # Display results
         log.info("DETAILED RESULTS")

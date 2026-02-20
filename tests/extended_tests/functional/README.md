@@ -78,8 +78,7 @@ Create `scripts/test_your_test.py`:
 
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple, Any
-from prettytable import PrettyTable
+from typing import Any, Dict, List
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # For utils
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # For functional_base
@@ -121,12 +120,9 @@ class YourTest(FunctionalBase):
         with open(self.results_json, "w") as f:
             json.dump(all_results, f, indent=2)
 
-    def parse_results(self) -> Tuple[List[Dict[str, Any]], PrettyTable, int]:
-        """Parse results and return (test_results, detailed_table, num_suites)."""
+    def parse_results(self) -> List[Dict[str, Any]]:
+        """Parse results and return test_results list."""
         log.info("Parsing Results")
-
-        detailed_table = PrettyTable()
-        detailed_table.field_names = ["TestCase", "Status"]
 
         test_results = []
 
@@ -134,16 +130,16 @@ class YourTest(FunctionalBase):
             json_results = json.load(f)
 
         for result in json_results:
-            detailed_table.add_row([result["test_case"], result["status"]])
             test_results.append(
                 self.create_test_result(
                     test_name=self.test_name,
                     subtest_name=result["test_case"],
                     status=result["status"],
+                    suite=result.get("test_suite", "default"),
                 )
             )
 
-        return test_results, detailed_table, 1  # num_suites
+        return test_results
 
 
 if __name__ == "__main__":
@@ -153,15 +149,16 @@ if __name__ == "__main__":
 **Required Methods:**
 
 - `run_tests()` → Execute tests and save results to JSON
-- `parse_results()` → Returns `(test_results_list, detailed_table, num_suites)`
-  - Must use `self.create_test_result(test_name, subtest_name, status, **kwargs)`
+- `parse_results()` → Returns `List[Dict]` of test results
+  - Must use `self.create_test_result(test_name, subtest_name, status, suite, **kwargs)`
   - Status must be: `"PASS"`, `"FAIL"`, `"ERROR"`, or `"SKIP"`
+  - Base class generates detailed table and calculates num_suites automatically
 
 **Available Helper Methods (from FunctionalBase):**
 
 - `self.load_config(filename)` → Load JSON config from `configs/` directory
 - `self.get_gpu_architecture()` → Get GPU gfx version (e.g., 'gfx942')
-- `self.execute_command(cmd, cwd, env, log_handle)` → Execute command with streaming output
+- `self.execute_command(cmd, cwd, env, log_file_handle)` → Execute command with streaming output
 - `self.create_test_result(...)` → Create standardized result dictionary
 
 ### 2. Create Configuration File

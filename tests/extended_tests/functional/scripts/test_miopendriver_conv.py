@@ -9,8 +9,7 @@ import json
 import shlex
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
-from prettytable import PrettyTable
+from typing import Any, Dict, List
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # For utils
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # For functional_base
@@ -121,64 +120,17 @@ class MIOpenDriverConvTest(FunctionalBase):
         log.info(f"{self.display_name} results saved to {self.results_json}")
         log.info(f"{self.display_name} test execution complete")
 
-    def parse_results(self) -> Tuple[List[Dict[str, Any]], PrettyTable, int]:
+    def parse_results(self) -> List[Dict[str, Any]]:
         """Parse test results from JSON file.
 
         Returns:
-            tuple: (test_results list, detailed PrettyTable, number of test suites)
+            List of test result dictionaries
         """
         log.info(f"Parsing {self.display_name} Results")
 
-        # Setup detailed table - show each individual test case
-        detailed_table = PrettyTable()
-        detailed_table.field_names = ["TestSuite", "TestCase", "Status"]
-
-        test_results = []
-
         try:
-            # Read results from JSON file
             with open(self.results_json, "r") as f:
                 json_results = json.load(f)
-
-            if not isinstance(json_results, list):
-                raise TestExecutionError(
-                    "Results JSON is not a list\n" "Check results file format"
-                )
-
-            # Process each result with safe key access
-            for idx, result in enumerate(json_results):
-                if not isinstance(result, dict):
-                    log.warning(f"Result {idx} is not a dictionary, skipping")
-                    continue
-
-                # Use .get() with defaults to handle missing keys gracefully
-                test_suite = result.get("test_suite", "unknown_suite")
-                test_case = result.get("test_case", f"unknown_case_{idx}")
-                status = result.get("status", "FAIL")  # Default to FAIL if unknown
-                command = result.get("command", "")
-                command_index = result.get("command_index", idx + 1)
-
-                # Log warning if critical keys are missing
-                if "test_suite" not in result or "test_case" not in result:
-                    log.warning(
-                        f"Result {idx} missing critical keys (test_suite/test_case)"
-                    )
-
-                # Add to detailed table
-                detailed_table.add_row([test_suite, test_case, status])
-
-                # Add to results list using helper
-                test_results.append(
-                    self.create_test_result(
-                        test_name=self.test_name,
-                        subtest_name=test_case,
-                        status=status,
-                        suite=test_suite,
-                        command_index=command_index,
-                        command=command,
-                    )
-                )
-
         except FileNotFoundError:
             raise TestExecutionError(
                 f"Results JSON file not found: {self.results_json}\n"
@@ -189,20 +141,21 @@ class MIOpenDriverConvTest(FunctionalBase):
                 f"Error parsing results JSON: {e}\n"
                 f"Check if results file is valid JSON"
             )
-        except OSError as e:
-            raise TestExecutionError(
-                f"Error reading results file: {e}\n"
-                f"Check file permissions and disk space"
+
+        test_results = []
+        for result in json_results:
+            test_results.append(
+                self.create_test_result(
+                    test_name=self.test_name,
+                    subtest_name=result["test_case"],
+                    status=result["status"],
+                    suite=result["test_suite"],
+                    command_index=result.get("command_index"),
+                    command=result.get("command", ""),
+                )
             )
 
-        if not test_results:
-            raise TestExecutionError(
-                "No valid test results found in JSON file\n"
-                "Check if tests executed successfully and results were saved"
-            )
-
-        num_suites = len(self.tests_list)
-        return test_results, detailed_table, num_suites
+        return test_results
 
 
 if __name__ == "__main__":
