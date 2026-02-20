@@ -106,8 +106,8 @@ def get_enabled_projects(args) -> List[str]:
         projects.extend(["rocm-systems"])
     if args.include_ml_frameworks:
         projects.extend(args.ml_framework_projects)
-    if args.include_rocm_media:
-        projects.extend(args.rocm_media_projects)
+    if args.include_media_libs:
+        projects.extend(args.media_libs_projects)
     if args.include_iree_libs:
         projects.extend(args.iree_libs_projects)
     if args.include_math_libraries:
@@ -423,7 +423,17 @@ def main(argv):
         "--nested-submodules",
         nargs="+",
         type=parse_nested_submodules,
-        default=[("iree", ["third_party/flatcc", "third_party/benchmark"])],
+        default=[
+            (
+                "iree",
+                [
+                    "third_party/flatcc",
+                    "third_party/benchmark",
+                    "third_party/llvm-project",
+                    "third_party/torch-mlir",
+                ],
+            )
+        ],
         help="Specify which nested submodules to fetch (e.g., project1:nested_in_project1_1,nested_in_project1_2 project2:nested_in_project2)",
     )
     parser.add_argument(
@@ -463,7 +473,7 @@ def main(argv):
         help="Include machine learning frameworks that are part of ROCM",
     )
     parser.add_argument(
-        "--include-rocm-media",
+        "--include-media-libs",
         default=True,
         action=argparse.BooleanOptionalAction,
         help="Include media projects that are part of ROCM",
@@ -507,7 +517,7 @@ def main(argv):
         default=[],
     )
     parser.add_argument(
-        "--rocm-media-projects",
+        "--media-libs-projects",
         nargs="+",
         type=str,
         default=(
@@ -553,8 +563,6 @@ def main(argv):
             if is_windows()
             else [
                 # Linux only projects.
-                "amd-dbgapi",
-                "rocr-debug-agent",
                 "rocgdb",
             ]
         ),
