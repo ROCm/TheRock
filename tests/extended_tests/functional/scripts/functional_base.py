@@ -12,7 +12,7 @@ import shlex
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Dict, IO, List
+from typing import Any, Dict, IO, List, Tuple
 from prettytable import PrettyTable
 
 # Add parent directory to path for utils import
@@ -56,6 +56,11 @@ class FunctionalBase:
         # Initialize test client (will be set in run())
         self.client = None
 
+    @property
+    def rocm_path(self) -> Path:
+        """ROCm installation path (parent of therock_bin_dir)."""
+        return Path(self.therock_bin_dir).resolve().parent
+
     def load_config(self, config_filename: str) -> Dict[str, Any]:
         """Load test configuration from JSON file.
 
@@ -84,30 +89,29 @@ class FunctionalBase:
                 f"Check JSON syntax in {config_filename}"
             )
 
-    def get_gpu_architecture(self) -> str:
-        """Detect GPU architecture using HardwareDetector.
+    def get_gpu_architecture(self) -> Tuple[int, str]:
+        """Detect GPU count and architecture using HardwareDetector.
 
         Returns:
-            GPU architecture string (e.g., 'gfx942', 'gfx1100')
+            Tuple of (gpu_count, gfx_version) e.g., (8, 'gfx942')
 
         Raises:
             TestExecutionError: If GPU detection fails or returns unknown
         """
         try:
             detector = HardwareDetector()
-            gfx_id = detector.get_gpu_architecture()
+            gpu_count, gfx_version = detector.get_gpu_architecture()
 
-            if not gfx_id or gfx_id == "unknown":
+            if not gfx_version or gfx_version == "unknown":
                 raise TestExecutionError(
                     "Could not detect GPU architecture.\n"
                     "Ensure ROCm drivers are installed and GPU is accessible."
                 )
 
-            log.info(f"Detected GPU architecture: {gfx_id}")
-            return gfx_id
+            log.info(f"Detected {gpu_count} GPU(s), architecture: {gfx_version}")
+            return gpu_count, gfx_version
 
         except TestExecutionError:
-            # Re-raise TestExecutionError as-is
             raise
         except Exception as e:
             raise TestExecutionError(
@@ -121,17 +125,22 @@ class FunctionalBase:
         cwd: Path = None,
         env: Dict[str, str] = None,
         log_file_handle: IO = None,
-    ) -> int:
-        """Execute a command and stream output.
+        timeout: int = None,
+        stream: bool = True,
+    ) -> Tuple[int, str]:
+        """Execute a command with optional streaming output.
 
         Args:
             cmd: Command list to execute
             cwd: Working directory (default: self.therock_dir)
             env: Optional environment variables to set
             log_file_handle: Optional file handle to write output
+            timeout: Timeout in seconds (only used when stream=False)
+            stream: If True (default), streams output to log while capturing.
+                    If False, captures silently with timeout support.
 
         Returns:
-            Exit code from the command
+            Tuple of (exit_code, output)
         """
         work_dir = cwd or self.therock_dir
         log.info(f"++ Exec [{work_dir}]$ {shlex.join(cmd)}")
@@ -143,23 +152,149 @@ class FunctionalBase:
         if env:
             process_env.update(env)
 
-        process = subprocess.Popen(
-            cmd,
-            cwd=work_dir,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,
-            env=process_env,
-        )
+        if stream:
+            # Stream output to log while capturing
+            process = subprocess.Popen(
+                cmd,
+                cwd=work_dir,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                env=process_env,
+            )
 
-        for line in process.stdout:
-            log.info(line.strip())
-            if log_file_handle:
-                log_file_handle.write(f"{line}")
+            output_lines = []
+            for line in process.stdout:
+                log.info(line.rstrip())
+                output_lines.append(line)
+                if log_file_handle:
+                    log_file_handle.write(line)
 
-        process.wait()
-        return process.returncode
+            process.wait()
+            return process.returncode, "".join(output_lines)
+        else:
+            # Silent capture with timeout support
+            try:
+                result = subprocess.run(
+                    cmd,
+                    cwd=work_dir,
+                    env=process_env,
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout,
+                )
+                return result.returncode, result.stdout + result.stderr
+
+            except subprocess.TimeoutExpired:
+                log.error(f"Command timed out after {timeout}s")
+                return -1, f"Command timed out after {timeout} seconds"
+            except Exception as e:
+                log.error(f"Command failed: {e}")
+                return -1, str(e)
+
+    def clone_repository(
+        self,
+        git_url: str,
+        target_dir: Path,
+        branch: str = None,
+        skip_if_exists: bool = True,
+        update_submodules: bool = False,
+    ) -> None:
+        """Clone a git repository.
+
+        Args:
+            git_url: Git repository URL
+            target_dir: Directory to clone into
+            branch: Branch to clone (optional, uses default branch if not specified)
+            skip_if_exists: Skip cloning if target_dir already exists (default: True)
+            update_submodules: Run git submodule update --init --recursive after clone
+
+        Raises:
+            TestExecutionError: If git clone or submodule update fails
+        """
+        if skip_if_exists and target_dir.exists():
+            log.info(f"Directory already exists at {target_dir}, skipping clone")
+            return
+
+        # Build git clone command
+        branch_info = f" (branch: {branch})" if branch else " (default branch)"
+        log.info(f"Cloning {git_url}{branch_info} to {target_dir}")
+
+        cmd = ["git", "clone"]
+        if branch:
+            cmd.extend(["--branch", branch])
+        cmd.extend([git_url, str(target_dir)])
+
+        log.info(f"++ Exec: {shlex.join(cmd)}")
+
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+            )
+
+            if result.returncode != 0:
+                raise TestExecutionError(
+                    f"Failed to clone repository: {result.stderr}\n"
+                    f"URL: {git_url}{branch_info}"
+                )
+
+            log.info(f"Clone completed: {target_dir}")
+
+            # Update submodules if requested
+            if update_submodules:
+                log.info("Updating git submodules")
+                submodule_cmd = ["git", "submodule", "update", "--init", "--recursive"]
+                log.info(f"++ Exec [{target_dir}]$ {shlex.join(submodule_cmd)}")
+
+                result = subprocess.run(
+                    submodule_cmd,
+                    cwd=target_dir,
+                    capture_output=True,
+                    text=True,
+                )
+
+                if result.returncode != 0:
+                    raise TestExecutionError(
+                        f"Failed to update submodules: {result.stderr}\n"
+                        f"Repository: {target_dir}"
+                    )
+
+                log.info("Submodules updated")
+
+        except TestExecutionError:
+            raise
+        except Exception as e:
+            raise TestExecutionError(
+                f"Git clone failed: {e}\n" f"URL: {git_url}{branch_info}"
+            ) from e
+
+    def get_rocm_env(self, additional_paths: List[Path] = None) -> Dict[str, str]:
+        """Get environment with LD_LIBRARY_PATH set for ROCm libraries.
+
+        Args:
+            additional_paths: Additional library paths to include
+
+        Returns:
+            Environment dictionary with LD_LIBRARY_PATH configured
+        """
+        env = os.environ.copy()
+        rocm_lib = self.rocm_path / "lib"
+
+        # Build list of library paths
+        lib_paths = [str(rocm_lib)]
+        if additional_paths:
+            lib_paths.extend(str(p) for p in additional_paths)
+
+        # Append existing LD_LIBRARY_PATH if present
+        existing = env.get("LD_LIBRARY_PATH", "")
+        if existing:
+            lib_paths.append(existing)
+
+        env["LD_LIBRARY_PATH"] = ":".join(lib_paths)
+        return env
 
     def create_test_result(
         self,

@@ -28,4 +28,13 @@ functional_matrix = {
         "platform": ["linux"],
         "total_shards": 1,
     },
+    "test_rbt": {
+        "job_name": "test_rbt",
+        "fetch_artifact_args": "--core",
+        "timeout_minutes": 60,
+        "test_script": f"python {_get_functional_script_path('test_rbt.py')}",
+        # TODO(lajagapp): Add windows support (https://github.com/ROCm/TheRock/issues/3207)
+        "platform": ["linux"],
+        "total_shards": 1,
+    },
 }

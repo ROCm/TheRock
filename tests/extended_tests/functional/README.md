@@ -17,6 +17,7 @@ Functional tests validate correctness and verify expected behavior without perfo
 | Test Script                 | Library | Platform | Timeout | Description                        |
 | --------------------------- | ------- | -------- | ------- | ---------------------------------- |
 | `test_miopendriver_conv.py` | MIOpen  | Linux    | 30 min  | Convolution forward/backward tests |
+| `test_rbt.py`               | ROCm    | Linux    | 60 min  | ROCm Bandwidth Test validation     |
 
 ## CI Configuration
 
@@ -31,10 +32,12 @@ Functional tests validate correctness and verify expected behavior without perfo
 functional/
 ├── scripts/
 │   ├── functional_base.py        # Base class for all functional tests
-│   └── test_miopendriver_conv.py # MIOpen convolution test
+│   ├── test_miopendriver_conv.py # MIOpen convolution test
+│   └── test_rbt.py               # ROCm Bandwidth Test
 │
 ├── configs/
-│   └── miopendriver_conv.json    # Test configuration
+│   ├── miopendriver_conv.json    # MIOpen test configuration
+│   └── rbt.json                  # RBT test configuration
 │
 ├── functional_test_matrix.py     # CI test matrix definitions
 └── README.md                     # This file
@@ -102,8 +105,8 @@ class YourTest(FunctionalBase):
         """Run functional tests and save results to JSON."""
         log.info(f"Running {self.display_name}")
 
-        # Optional: Get GPU architecture for GPU-specific behavior
-        gfx_id = self.get_gpu_architecture()
+        # Optional: Get GPU count and architecture for GPU-specific behavior
+        gpu_count, gfx_id = self.get_gpu_architecture()
 
         all_results = []
         for test_case in self.test_cases:
@@ -157,8 +160,13 @@ if __name__ == "__main__":
 **Available Helper Methods (from FunctionalBase):**
 
 - `self.load_config(filename)` → Load JSON config from `configs/` directory
-- `self.get_gpu_architecture()` → Get GPU gfx version (e.g., 'gfx942')
-- `self.execute_command(cmd, cwd, env, log_file_handle)` → Execute command with streaming output
+- `self.get_gpu_architecture()` → Get `(gpu_count, gfx_version)` e.g., `(8, 'gfx942')`
+- `self.execute_command(cmd, cwd, env, log_file_handle, timeout, stream)` → Execute command
+  - `stream=True` (default): Streams output to log while capturing
+  - `stream=False`: Silent capture with timeout support
+  - Returns `(exit_code, output)` tuple
+- `self.clone_repository(git_url, target_dir, branch, skip_if_exists, update_submodules)` → Clone git repo
+- `self.get_rocm_env(additional_paths)` → Get environment with ROCm library paths
 - `self.create_test_result(...)` → Create standardized result dictionary
 
 ### 2. Create Configuration File

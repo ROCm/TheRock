@@ -48,7 +48,7 @@ class MIOpenDriverConvTest(FunctionalBase):
         log.info(f"Running {self.display_name} Tests")
 
         # Detect GPU architecture (use ROCR_VISIBLE_DEVICES to control which GPU if needed)
-        gfx_id = self.get_gpu_architecture()
+        _, gfx_id = self.get_gpu_architecture()
 
         miopen_driver = Path(self.therock_bin_dir) / "MIOpenDriver"
         if not miopen_driver.exists():
@@ -89,7 +89,7 @@ class MIOpenDriverConvTest(FunctionalBase):
 
                 error_message = None
                 try:
-                    return_code = self.execute_command(cmd)
+                    return_code, _ = self.execute_command(cmd)
                 except Exception as e:
                     log.error(f"Error running command: {e}")
                     error_message = str(e)
