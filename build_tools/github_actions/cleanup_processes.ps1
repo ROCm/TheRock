@@ -27,12 +27,14 @@
 
 #### Helper functions ####
 
-function Get-Process-Filter ([String]$RegexStr)  {
-    Get-Process | Where-Object { $_.MainModule.FileName -Match $RegexStr }
+function Get-Process-Filter ([String]$RegexStr) {
+    Get-CimInstance Win32_Process | Where-Object {
+        ($_.ExecutablePath -and $_.ExecutablePath -match $RegexStr) -or
+        ($_.CommandLine -and $_.CommandLine -match $RegexStr)
+    }
 }
 function Get-Process-Info ($PSobj) {
-    # Note in powershell this output gets buffered and returned from this function
-    return "[pid:$($PSobj.id)][HasExited:$($PSobj.HasExited)] $($PSobj.MainModule.ModuleName)"
+    return "[pid:$($PSobj.ProcessId)] $($PSobj.Name)"
 }
 function Wait-Process-Filter ([String]$RegexStr, [int] $Tries, [int] $Seconds = 1) {
     Write-Host "[*] Waiting up to $($Tries * $Seconds) seconds for processes to stop..."
@@ -214,7 +216,7 @@ echo "[*] Attempting to stop executable(s) with WMI: "
 $ps_list | ForEach-Object {
     #https://stackoverflow.com/questions/40585754/powershell-wont-terminate-hung-process
     echo "    > $(Get-Process-Info $_)"
-    (Get-WmiObject win32_process -Filter "ProcessId = '$($_.id)'").Terminate() | Out-Null
+    Invoke-CimMethod -InputObject $_ -MethodName Terminate | Out-Null
 }
 $IsAllStopped = Wait-Process-Filter -RegexStr $regex_build_exe -Tries 5
 
@@ -227,7 +229,7 @@ if(!$IsAllStopped) {
         $ps_list | ForEach-Object {
             #https://stackoverflow.com/questions/40585754/powershell-wont-terminate-hung-process
             echo "    > $(Get-Process-Info $_)"
-            Stop-Process $_ -Force
+            Stop-Process -Id $_.ProcessId -Force
         }
     }
     $IsAllStopped = Wait-Process-Filter -RegexStr $regex_build_exe -Tries 5
