@@ -15,6 +15,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tests"))
 from github_actions_utils import *
 from extended_tests.benchmark.benchmark_test_matrix import benchmark_matrix
+from extended_tests.functional.functional_test_matrix import functional_matrix
 from amdgpu_family_matrix import get_all_families_for_trigger_types
 
 logging.basicConfig(level=logging.INFO)
@@ -322,6 +323,9 @@ test_matrix = {
         "total_shards": 1,
     },
 }
+
+# Merge functional tests into test_matrix (use test:test_miopendriver_conv label to trigger)
+test_matrix.update(functional_matrix)
 
 
 def run():
