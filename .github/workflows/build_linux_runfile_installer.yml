@@ -121,7 +121,7 @@ jobs:
         if: ${{ github.repository_owner == 'ROCm' }}
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
         with:
-          aws-region: us-east-2
+          aws-region: us-east-1
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type || 'dev' }}
 
       - name: Upload runfile to S3
