@@ -166,18 +166,16 @@ string(REPLACE ";" ":" PKG_CONFIG_PATH_ENV_VAR "${THEROCK_PKG_CONFIG_DIRS}")
 
 # Set conditional configure flags for bundled sysdep prefixes. When using system
 # libraries, these are left empty so autotools discovers them via pkg-config.
+# Furthermore, set an RPATH segment for the bundled sysdeps lib directory.
 set(ROCGDB_EXPAT_FLAG "")
 set(ROCGDB_GMP_FLAG "")
 set(ROCGDB_MPFR_FLAG "")
-# RPATH segment for the bundled sysdeps lib directory. CMake expands this
-# variable into the install(CODE) strings at configure time; bare $ORIGIN is
-# not a CMake variable reference so it is preserved literally.
 set(ROCGDB_SYSDEPS_RPATH_SEGMENT "")
 if(THEROCK_BUNDLE_SYSDEPS)
   set(ROCGDB_EXPAT_FLAG "--with-expat-prefix=${EXPAT_PREFIX}")
   set(ROCGDB_GMP_FLAG "--with-gmp=${GMP_PREFIX}")
   set(ROCGDB_MPFR_FLAG "--with-mpfr=${MPFR_PREFIX}")
-  set(ROCGDB_SYSDEPS_RPATH_SEGMENT ":$ORIGIN/../lib/rocm_sysdeps/lib")
+  set(ROCGDB_SYSDEPS_RPATH_SEGMENT ":\\\$ORIGIN/../lib/rocm_sysdeps/lib")
 endif()
 
 # Set some global variables for the configure/build.
