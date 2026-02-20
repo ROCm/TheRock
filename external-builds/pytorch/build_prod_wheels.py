@@ -261,7 +261,7 @@ def get_rocm_init_contents(args: argparse.Namespace):
             The proxy DLLs are expected alongside this file (in torch/lib/)
             or in a path specified by HIP_REMOTE_LIB_DIR.
 
-            No SDK files are modified — the originals remain untouched.
+            No SDK files are modified - the originals remain untouched.
             \"\"\"
             import os
             import platform
