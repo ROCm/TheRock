@@ -75,6 +75,11 @@ jobs:
       fail-fast: false
       matrix:
         family_info: ${{ fromJSON(inputs.matrix_per_family_json) }}
+        # TODO(TheRock#3288): Re-enable gfx950-dcgpu runners once we get more capacity
+        exclude:
+        - family_info:
+            amdgpu_family: gfx950-dcgpu
+
     uses: ./.github/workflows/test_artifacts.yml
     with:
       # Use architecture-specific artifact group for fetching per-arch artifacts
@@ -86,4 +91,3 @@ jobs:
       test_type: ${{ inputs.test_type }}
       test_labels: ${{ inputs.test_labels }}
       sanity_check_only_for_family: ${{ matrix.family_info.sanity_check_only_for_family }}
-      multi_arch_test: true
