@@ -50,7 +50,7 @@ therock_cmake_subproject_declare(therock-grpc
     -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 
   RUNTIME_DEPS
-    therock-zlib
+    ${THEROCK_BUNDLED_ZLIB}
 )
 therock_cmake_subproject_provide_package(therock-grpc gRPC lib/cmake/grpc)
 therock_cmake_subproject_provide_package(therock-grpc protobuf lib/cmake/protobuf)
