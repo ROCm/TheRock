@@ -112,8 +112,6 @@ def setup_env(env):
         # For ASAN mode, we preload it for test count query and test running
         if ASAN_OPTIONS:
             env["LD_PRELOAD"] = get_asan_lib_path()
-            # TODO: enable this when we have symbolizer patch in
-            # env["ASAN_SYMBOLIZER_PATH"] = str(Path(THEROCK_BIN_DIR).parent / "lib" / "llvm" / "bin" / "llvm-symbolizer")
     else:
         copy_dlls_exe_path()
 

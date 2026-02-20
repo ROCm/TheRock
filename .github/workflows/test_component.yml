@@ -106,6 +106,10 @@ jobs:
         run: |
           python ./build_tools/print_driver_gpu_info.py
 
+      - name: Add LLVM toolchain to PATH for sanitizer symbolization
+        run: |
+          echo "$THEROCK_BIN_DIR/../lib/llvm/bin" >> $GITHUB_PATH
+
       - name: Test
         timeout-minutes: ${{ fromJSON(inputs.component).timeout_minutes }}
         env:
