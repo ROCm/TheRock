@@ -19,7 +19,7 @@ if(THEROCK_ENABLE_AMD_DBGAPI)
       -DTHE_ROCK_BUILD=ON
     BUILD_DEPS
       ROCR-Runtime
-      therock-libbacktrace
+      ${THEROCK_BUNDLED_LIBBACKTRACE}
     RUNTIME_DEPS
       amd-comgr
     INTERFACE_LINK_DIRS
@@ -205,14 +205,14 @@ if(THEROCK_ENABLE_ROCGDB)
     RUNTIME_DEPS
       amd-comgr
       amd-dbgapi
-      therock-bzip2
-      therock-gmp
-      therock-mpfr
-      therock-expat
-      therock-ncurses
-      therock-liblzma
-      therock-zlib
-      therock-zstd
+      ${THEROCK_BUNDLED_BZIP2}
+      ${THEROCK_BUNDLED_GMP}
+      ${THEROCK_BUNDLED_MPFR}
+      ${THEROCK_BUNDLED_EXPAT}
+      ${THEROCK_BUNDLED_NCURSES}
+      ${THEROCK_BUNDLED_LIBLZMA}
+      ${THEROCK_BUNDLED_ZLIB}
+      ${THEROCK_BUNDLED_ZSTD}
     INTERFACE_PROGRAM_DIRS
       "bin"
     INTERFACE_LINK_DIRS
@@ -244,14 +244,14 @@ if(THEROCK_ENABLE_ROCGDB)
     SUBPROJECT_DEPS
       amd-comgr
       amd-dbgapi
-      therock-bzip2
-      therock-expat
-      therock-gmp
-      therock-mpfr
-      therock-ncurses
-      therock-liblzma
-      therock-zlib
-      therock-zstd
+      ${THEROCK_BUNDLED_BZIP2}
+      ${THEROCK_BUNDLED_EXPAT}
+      ${THEROCK_BUNDLED_GMP}
+      ${THEROCK_BUNDLED_MPFR}
+      ${THEROCK_BUNDLED_NCURSES}
+      ${THEROCK_BUNDLED_LIBLZMA}
+      ${THEROCK_BUNDLED_ZLIB}
+      ${THEROCK_BUNDLED_ZSTD}
       rocgdb
   )
 endif()
