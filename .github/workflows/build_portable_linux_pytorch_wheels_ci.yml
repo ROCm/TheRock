@@ -37,7 +37,8 @@ on:
         type: string
         required: true
       cache_type:
-        description: "Compiler cache type: sccache (S3-backed), ccache, or none"
+        description: "Compiler cache type (sccache, ccache, or none)"
+        required: false
         type: string
         default: "sccache"
   workflow_dispatch:
@@ -62,7 +63,7 @@ on:
         type: string
         required: true
       cache_type:
-        description: "Compiler cache type: sccache (S3-backed), ccache, or none"
+        description: "Compiler cache type"
         type: choice
         options:
           - sccache
@@ -85,11 +86,13 @@ jobs:
     env:
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages/dist
       optional_build_prod_arguments: ""
-      SCCACHE_BUCKET: therock-sccache
+      SCCACHE_BUCKET: therock-ci-pytorch-sccache
       SCCACHE_REGION: us-east-2
       SCCACHE_S3_KEY_PREFIX: "linux/${{ inputs.artifact_group }}/"
       SCCACHE_S3_USE_SSL: "true"
+      SCCACHE_S3_SERVER_SIDE_ENCRYPTION: "true"
       SCCACHE_IDLE_TIMEOUT: "0"
+      SCCACHE_LOG: warn
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -173,11 +176,11 @@ jobs:
           if [ "${{ inputs.cache_type }}" = "sccache" ]; then
             echo "sccache stats:"
             echo "--------------"
-            sccache --show-stats
+            sccache --show-stats || true
           elif [ "${{ inputs.cache_type }}" = "ccache" ]; then
             echo "ccache stats:"
             echo "-------------"
-            ccache -s -v
+            ccache -s -v || true
           fi
 
       - name: Sanity check wheel

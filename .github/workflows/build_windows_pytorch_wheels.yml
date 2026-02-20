@@ -37,7 +37,8 @@ on:
         required: true
         type: string
       cache_type:
-        description: "Compiler cache type: sccache (S3-backed), ccache, or none"
+        description: "Compiler cache type (sccache, ccache, or none)"
+        required: false
         type: string
         default: "sccache"
       repository:
@@ -96,7 +97,7 @@ on:
         type: string
         default: "release/2.9"
       cache_type:
-        description: "Compiler cache type: sccache (S3-backed), ccache, or none"
+        description: "Compiler cache type"
         type: choice
         options:
           - sccache
@@ -120,11 +121,13 @@ jobs:
       RELEASE_TYPE: ${{ inputs.release_type }}
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
       optional_build_prod_arguments: ""
-      SCCACHE_BUCKET: therock-sccache
+      SCCACHE_BUCKET: "therock-${{ inputs.release_type }}-pytorch-sccache"
       SCCACHE_REGION: us-east-2
       SCCACHE_S3_KEY_PREFIX: "windows/${{ inputs.amdgpu_family }}/"
       SCCACHE_S3_USE_SSL: "true"
+      SCCACHE_S3_SERVER_SIDE_ENCRYPTION: "true"
       SCCACHE_IDLE_TIMEOUT: "0"
+      SCCACHE_LOG: warn
     outputs:
       cp_version: ${{ env.cp_version }}
       # The following are python package versions produced by the build. The
@@ -274,11 +277,11 @@ jobs:
           if [ "${{ inputs.cache_type }}" = "sccache" ]; then
             echo "sccache stats:"
             echo "--------------"
-            sccache --show-stats
+            sccache --show-stats || true
           elif [ "${{ inputs.cache_type }}" = "ccache" ]; then
             echo "ccache stats:"
             echo "-------------"
-            ccache -s -v
+            ccache -s -v || true
           fi
 
       - name: Sanity Check Wheel
