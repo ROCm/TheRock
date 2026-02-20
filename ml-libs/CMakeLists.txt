@@ -28,6 +28,7 @@ if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
   therock_cmake_subproject_declare(composable_kernel
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/composablekernel"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/composable_kernel"
+    BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
       -DROCM_PATH=
