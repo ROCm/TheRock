@@ -161,7 +161,7 @@ if __name__ == "__main__":
 
 - `self.load_config(filename)` → Load JSON config from `configs/` directory
 - `self.get_gpu_architecture()` → Get GPU gfx version (e.g., 'gfx942')
-- `self.execute_command(cmd, log_handle, env)` → Execute command with logging
+- `self.execute_command(cmd, cwd, env, log_handle)` → Execute command with streaming output
 - `self.create_test_result(...)` → Create standardized result dictionary
 
 ### 2. Create Configuration File

@@ -12,7 +12,7 @@ import shlex
 import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple, Any, IO
+from typing import Any, Dict, IO, List
 from prettytable import PrettyTable
 
 # Add parent directory to path for utils import
@@ -116,20 +116,27 @@ class FunctionalBase:
             ) from e
 
     def execute_command(
-        self, cmd: List[str], log_file_handle: IO, env: Dict[str, str] = None
+        self,
+        cmd: List[str],
+        cwd: Path = None,
+        env: Dict[str, str] = None,
+        log_file_handle: IO = None,
     ) -> int:
-        """Execute a command and stream output to log file.
+        """Execute a command and stream output.
 
         Args:
             cmd: Command list to execute
-            log_file_handle: File handle to write output
+            cwd: Working directory (default: self.therock_dir)
             env: Optional environment variables to set
+            log_file_handle: Optional file handle to write output
 
         Returns:
             Exit code from the command
         """
-        log.info(f"++ Exec [{self.therock_dir}]$ {shlex.join(cmd)}")
-        log_file_handle.write(f"{shlex.join(cmd)}\n")
+        work_dir = cwd or self.therock_dir
+        log.info(f"++ Exec [{work_dir}]$ {shlex.join(cmd)}")
+        if log_file_handle:
+            log_file_handle.write(f"{shlex.join(cmd)}\n")
 
         # Merge custom env with current environment
         process_env = os.environ.copy()
@@ -138,7 +145,7 @@ class FunctionalBase:
 
         process = subprocess.Popen(
             cmd,
-            cwd=self.therock_dir,
+            cwd=work_dir,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
@@ -148,7 +155,8 @@ class FunctionalBase:
 
         for line in process.stdout:
             log.info(line.strip())
-            log_file_handle.write(f"{line}")
+            if log_file_handle:
+                log_file_handle.write(f"{line}")
 
         process.wait()
         return process.returncode

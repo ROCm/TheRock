@@ -7,10 +7,9 @@ correct functionality across different GPU architectures.
 
 import json
 import shlex
-import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple, Any
+from typing import Any, Dict, List, Tuple
 from prettytable import PrettyTable
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # For utils
@@ -88,27 +87,10 @@ class MIOpenDriverConvTest(FunctionalBase):
                 # Progress indicator
                 test_case_name = f"{test_suite}_case{i}"
                 log.info(f"[{current_test}/{total_tests}] Running {test_case_name}")
-                log.info(f"++ Exec [{self.therock_dir}]$ {shlex.join(cmd)}")
 
-                return_code = None
                 error_message = None
-
                 try:
-                    process = subprocess.Popen(
-                        cmd,
-                        cwd=self.therock_dir,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.STDOUT,
-                        text=True,
-                        bufsize=1,
-                    )
-
-                    for line in process.stdout:
-                        log.info(line.strip())
-
-                    process.wait()
-                    return_code = process.returncode
-
+                    return_code = self.execute_command(cmd)
                 except Exception as e:
                     log.error(f"Error running command: {e}")
                     error_message = str(e)
