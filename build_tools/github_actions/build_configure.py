@@ -86,7 +86,7 @@ def build_configure(manylinux=False):
     cmd = [
         "cmake",
         "-B",
-        build_dir,
+        args.build_dir,
         "-GNinja",
         ".",
     ]

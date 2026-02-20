@@ -248,7 +248,7 @@ jobs:
 
       - name: Build Python Packages
         run: |
-          time python ./build_tools/build_python_packages.py \
+          python ./build_tools/build_python_packages.py \
             --artifact-dir=${{ env.OUTPUT_DIR }}/build/artifacts \
             --dest-dir=${{ env.OUTPUT_DIR }}/packages \
             "--version=${{ needs.setup_metadata.outputs.version }}"
