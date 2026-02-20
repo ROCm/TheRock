@@ -23,6 +23,7 @@ Output (GitHub Actions format):
     cmake_source_var=THEROCK_ROCM_LIBRARIES_SOURCE_DIR
     submodule_path=rocm-libraries
     fetch_exclusion=--no-include-rocm-libraries
+    extra_cmake_options=-DTHEROCK_ROCM_LIBRARIES_SOURCE_DIR=/path -DOPTION1=value1 (merged from workspace and EXTRA_CMAKE_OPTIONS)
 """
 
 import argparse
@@ -320,6 +321,37 @@ def get_external_repo_test_list(repo_name: str) -> list[str]:
     return []
 
 
+def get_extra_cmake_options_for_ci(repo_name: str) -> str:
+    """Get extra CMake options from external repo's therock_configure_ci.py.
+
+    External repos can define EXTRA_CMAKE_OPTIONS in their therock_configure_ci.py
+    file to provide additional CMake configuration options that will be passed
+    to the build system.
+
+    Example in external repo's therock_configure_ci.py:
+        EXTRA_CMAKE_OPTIONS = "-DOPTION1=value1 -DOPTION2=value2"
+
+    Note: These options will be merged with any workspace-based CMake options
+    (e.g., source directory path) and workflow-provided extra_cmake_options.
+
+    Args:
+        repo_name (str): Repository name (e.g., "rocm-libraries", "rocm-systems")
+
+    Returns:
+        str: Space-separated CMake options string, or empty string if not found
+    """
+    configure_module = import_external_repo_module(repo_name, "therock_configure_ci")
+    if configure_module and hasattr(configure_module, "EXTRA_CMAKE_OPTIONS"):
+        options = configure_module.EXTRA_CMAKE_OPTIONS
+        if options:
+            print(
+                f"Loaded extra CMake options from {repo_name}: {options}",
+                file=sys.stderr,
+            )
+            return options
+    return ""
+
+
 def output_github_actions_vars(config: Dict[str, Any]) -> None:
     """Writes config as GitHub Actions outputs using the standard utility.
 
@@ -361,7 +393,9 @@ def main(argv=None):
             "Output Format (GitHub Actions):\n"
             "  cmake_source_var=THEROCK_ROCM_LIBRARIES_SOURCE_DIR\n"
             "  submodule_path=rocm-libraries\n"
-            "  fetch_exclusion=--no-include-rocm-libraries"
+            "  fetch_exclusion=--no-include-rocm-libraries\n"
+            "  extra_cmake_options=-DTHEROCK_ROCM_LIBRARIES_SOURCE_DIR=/path -DOPTION1=value1\n"
+            "    (merged from --workspace path and EXTRA_CMAKE_OPTIONS in therock_configure_ci.py)"
         ),
         epilog=(
             "Examples:\n"
@@ -416,15 +450,32 @@ def main(argv=None):
         print(f"Detected repository: {args.repository}", file=sys.stderr)
         print(f"Configuration: {config}", file=sys.stderr)
 
-        # Format the full CMake option if workspace path provided
+        # Collect CMake options from multiple sources
+        cmake_options_parts = []
+
+        # 1. Workspace-based CMake option (if workspace path provided)
         if args.workspace:
             workspace_path = Path(args.workspace)
             if not workspace_path.is_absolute():
                 _log_warning("Workspace path is not absolute, using as-is")
             cmake_var = config["cmake_source_var"]
-            config["extra_cmake_options"] = f"-D{cmake_var}={args.workspace}"
+            workspace_option = f"-D{cmake_var}={args.workspace}"
+            cmake_options_parts.append(workspace_option)
             print(
-                f"Generated CMake option: {config['extra_cmake_options']}",
+                f"Generated CMake option from workspace: {workspace_option}",
+                file=sys.stderr,
+            )
+
+        # 2. External repo-defined CMake options
+        repo_cmake_options = get_extra_cmake_options_for_ci(args.repository)
+        if repo_cmake_options:
+            cmake_options_parts.append(repo_cmake_options)
+
+        # Combine all CMake options
+        if cmake_options_parts:
+            config["extra_cmake_options"] = " ".join(cmake_options_parts)
+            print(
+                f"Combined CMake options: {config['extra_cmake_options']}",
                 file=sys.stderr,
             )
 
