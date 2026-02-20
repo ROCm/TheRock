@@ -202,7 +202,21 @@ class GitHubAPI:
             with urlopen(request, timeout=timeout_seconds) as response:
                 body = response.read().decode("utf-8")
         except HTTPError as e:
+            # Try to read the error response body for more context
+            error_body = ""
+            try:
+                error_body = e.read().decode("utf-8")
+            except Exception:
+                pass  # If we can't read it, continue with generic message
+
             if e.code == 403:
+                # Check if this is a rate limit error
+                if "rate limit" in error_body.lower():
+                    raise GitHubAPIError(
+                        f"GitHub API rate limit exceeded for {url}. "
+                        f"Authenticate with `gh auth login` or set GITHUB_TOKEN to increase limits. "
+                        f"See https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api"
+                    ) from e
                 raise GitHubAPIError(
                     f"Access denied (403 Forbidden) for {url}. "
                     f"Check if your token has the necessary permissions (e.g., `repo`, `workflow`)."
@@ -458,6 +472,37 @@ def gha_query_last_successful_workflow_run(
     return None
 
 
+def gha_query_recent_branch_commits(
+    github_repository_name: str = "ROCm/TheRock",
+    branch: str = "main",
+    max_count: int = 50,
+) -> list[str]:
+    """Gets the list of recent commit SHAs for a branch via the GitHub API.
+
+    Commits could also be enumerated via local `git log` commands, but using
+    the API ensures that we get the latest commits regardless of local
+    repository state.
+
+    Args:
+        github_repository_name: Repository in "owner/repo" format
+        branch: Branch name (default: "main")
+        max_count: Maximum number of commits to retrieve
+                   (max 100 per API, without pagination)
+
+    Returns:
+        List of commit SHAs, most recent first.
+    """
+    if max_count > 100:
+        _log(
+            f"Warning: max_count of {max_count} commits to query exceeds API per_page limit of 100"
+        )
+
+    url = f"https://api.github.com/repos/{github_repository_name}/commits?sha={branch}&per_page={max_count}"
+    response = gha_send_request(url)
+
+    return [commit["sha"] for commit in response]
+
+
 def retrieve_bucket_info(
     github_repository: str | None = None,
     workflow_run_id: str | None = None,
@@ -621,3 +666,9 @@ def get_visible_gpu_count(env=None, therock_bin_dir: str | None = None) -> int:
     pattern = re.compile(r"^\s*Name:\s+gfx[0-9a-z]+$", re.IGNORECASE)
 
     return sum(1 for line in result.stdout.splitlines() if pattern.match(line.strip()))
+
+
+def is_asan():
+    """Using artifact_group, determines if this is an asan build"""
+    ARTIFACT_GROUP = os.getenv("ARTIFACT_GROUP")
+    return "asan" in ARTIFACT_GROUP

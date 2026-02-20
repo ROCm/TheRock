@@ -8,10 +8,13 @@ Required environment variables:
 import json
 import logging
 import os
+import sys
 from pathlib import Path
 
+# Add tests directory to path for extended_tests imports
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tests"))
 from github_actions_utils import *
-from benchmarks.benchmark_test_matrix import benchmark_matrix
+from extended_tests.benchmark.benchmark_test_matrix import benchmark_matrix
 from amdgpu_family_matrix import get_all_families_for_trigger_types
 
 logging.basicConfig(level=logging.INFO)
@@ -115,12 +118,28 @@ test_matrix = {
         "platform": ["linux", "windows"],
         "total_shards": 2,
     },
+    "rocprofiler_systems": {
+        "job_name": "rocprofiler_systems",
+        "fetch_artifact_args": "--rocprofiler-systems --rocprofiler-sdk --tests",
+        "timeout_minutes": 15,
+        "test_script": f"python {_get_script_path('test_rocprofiler_systems.py')}",
+        "platform": ["linux"],
+        "total_shards": 1,
+    },
     "hipcub": {
         "job_name": "hipcub",
         "fetch_artifact_args": "--prim --tests",
         "timeout_minutes": 15,
         "test_script": f"python {_get_script_path('test_hipcub.py')}",
         "platform": ["linux", "windows"],
+        "total_shards": 1,
+    },
+    "rocr-debug-agent": {
+        "job_name": "rocr-debug-agent",
+        "fetch_artifact_args": "--debug-tools --tests",
+        "timeout_minutes": 10,
+        "test_script": f"python {_get_script_path('test_rocr-debug-agent.py')}",
+        "platform": ["linux"],
         "total_shards": 1,
     },
     "rocthrust": {
@@ -221,6 +240,23 @@ test_matrix = {
         "platform": ["linux", "windows"],
         "total_shards": 1,
     },
+    # hipDNN install/consumption tests
+    "hipdnn_install": {
+        "job_name": "hipdnn_install",
+        "timeout_minutes": 10,
+        "test_script": f"python {_get_script_path('test_hipdnn_install.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards": 1,
+    },
+    # hipDNN samples tests
+    "hipdnn-samples": {
+        "job_name": "hipdnn-samples",
+        "fetch_artifact_args": "--blas --miopen --hipdnn --miopen-plugin --hipdnn-samples --tests",
+        "timeout_minutes": 5,
+        "test_script": f"python {_get_script_path('test_hipdnn_samples.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards": 1,
+    },
     # MIOpen plugin tests
     "miopen_plugin": {
         "job_name": "miopen_plugin",
@@ -240,6 +276,15 @@ test_matrix = {
     #     "platform": ["linux"],
     #     "total_shards": 1,
     # },
+    # hipBLASLt plugin tests
+    "hipblaslt_plugin": {
+        "job_name": "hipblaslt_plugin",
+        "fetch_artifact_args": "--blas --hipdnn --hipblaslt-plugin --tests",
+        "timeout_minutes": 15,
+        "test_script": f"python {_get_script_path('test_hipblaslt_plugin.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards": 1,
+    },
     # rocWMMA tests
     "rocwmma": {
         "job_name": "rocwmma",
@@ -281,13 +326,13 @@ test_matrix = {
 
 def run():
     platform = os.getenv("RUNNER_OS").lower()
-    project_to_test = os.getenv("project_to_test", "*")
+    projects_to_test = os.getenv("PROJECTS_TO_TEST", "*")
     amdgpu_families = os.getenv("AMDGPU_FAMILIES")
     test_type = os.getenv("TEST_TYPE", "full")
-    test_labels = json.loads(os.getenv("TEST_LABELS", "[]"))
+    test_labels = json.loads(os.getenv("TEST_LABELS") or "[]")
     is_benchmark_workflow = str2bool(os.getenv("IS_BENCHMARK_WORKFLOW", "false"))
 
-    logging.info(f"Selecting projects: {project_to_test}")
+    logging.info(f"Selecting projects: {projects_to_test}")
 
     # Determine which test matrix to use
     if is_benchmark_workflow:
@@ -301,7 +346,7 @@ def run():
         selected_matrix = test_matrix.copy()
 
     # This string -> array conversion ensures no partial strings are detected during test selection (ex: "hipblas" in ["hipblaslt", "rocblas"] = false)
-    project_array = [item.strip() for item in project_to_test.split(",")]
+    project_array = [item.strip() for item in projects_to_test.split(",")]
 
     output_matrix = []
     for key in selected_matrix:
