@@ -426,10 +426,6 @@ def retrieve_artifacts_by_run_id(args):
             argv.append("rocprofiler-sdk_run")
         if args.rocprofiler_compute:
             extra_artifacts.append("rocprofiler-compute")
-            # rocprofiler-compute has a runtime dependency on rocprofiler-sdk
-            argv.append("rocprofiler-sdk_run")
-        if args.rocprofiler_sdk:
-            extra_artifacts.append("rocprofiler-sdk")
         if args.rocprofiler_systems:
             extra_artifacts.append("rocprofiler-systems")
             # Contains executables (rocprof-sys-run, rocprof-sys-instrument, etc.)
@@ -750,13 +746,6 @@ def main(argv):
         "--rocprofiler-systems",
         default=False,
         help="Include 'rocprofiler-systems' artifacts",
-        action=argparse.BooleanOptionalAction,
-    )
-
-    artifacts_group.add_argument(
-        "--rocprofiler-sdk",
-        default=False,
-        help="Include 'rocprofiler-sdk' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
