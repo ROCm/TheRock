@@ -80,6 +80,7 @@ jobs:
 
       - name: Pre-job cleanup processes on Windows
         if: ${{ runner.os == 'Windows' }}
+        timeout-minutes: 5
         shell: powershell
         run: . '${{ github.workspace }}\prejob\build_tools\github_actions\cleanup_processes.ps1'
 
@@ -89,6 +90,7 @@ jobs:
           repository: "ROCm/TheRock"
 
       - name: Run setup test environment workflow
+        timeout-minutes: 15
         uses: './.github/actions/setup_test_environment'
         with:
           ARTIFACT_RUN_ID: ${{ env.ARTIFACT_RUN_ID }}
@@ -128,5 +130,6 @@ jobs:
       # and will fail to clean up orphan processes.
       - name: Post-job cleanup processes on Windows
         if: ${{ always() && runner.os == 'Windows' }}
+        timeout-minutes: 5
         shell: powershell
         run: . '${{ github.workspace }}\build_tools\github_actions\cleanup_processes.ps1'

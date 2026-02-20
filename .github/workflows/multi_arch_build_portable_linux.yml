@@ -8,7 +8,7 @@
 # 5. debug-tools (generic) - amd-dbgapi, rocr-debug-agent, rocgdb (parallel to math-libs)
 # 6. dctools-core (generic) - RDC (parallel to math-libs)
 # 7. profiler-apps (generic) - rocprofiler-systems (parallel to math-libs)
-# 8. media (generic) - sysdeps-amd-mesa, rocdecode (todo), rocjpeg (todo)
+# 8. media-libs (generic) - sysdeps-amd-mesa, rocdecode, rocjpeg
 
 name: Multi-Arch Build (Linux)
 
@@ -176,15 +176,15 @@ jobs:
       id-token: write
 
   # ==========================================================================
-  # STAGE: media (generic)
+  # STAGE: media-libs (generic)
   # ==========================================================================
-  media:
-    needs: foundation
+  media-libs:
+    needs: compiler-runtime
     uses: ./.github/workflows/multi_arch_build_portable_linux_artifacts.yml
     secrets: inherit
     with:
-      stage_name: media
-      stage_display_name: "Stage - Media"
+      stage_name: media-libs
+      stage_display_name: "Stage - Media Libs"
       timeout_minutes: 180  # 3 hours
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
