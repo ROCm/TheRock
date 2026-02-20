@@ -250,6 +250,12 @@ class NativeLinuxPackagesTester:
         print(f"Release Type: {self.release_type}")
         print(f"OS Profile: {self.os_profile}")
 
+        # Setup GPG key for prerelease (only needed for non-SLES systems)
+        # SLES uses --gpg-auto-import-keys flag which handles it automatically
+        if self.release_type == "prerelease" and not self._is_sles():
+            if not self.setup_gpg_key():
+                return False
+
         # SLES uses zypper, others use dnf/yum
         if self._is_sles():
             return self._setup_sles_repository()
@@ -308,7 +314,12 @@ gpgcheck=0
         print("\nRefreshing repository metadata...")
         try:
             # Use --non-interactive to avoid prompts
-            refresh_cmd = ["zypper", "--non-interactive", "refresh", repo_name]
+            # For prerelease, use --gpg-auto-import-keys to automatically import and trust GPG keys
+            refresh_cmd = ["zypper", "--non-interactive"]
+            if self.release_type == "prerelease" and self.gpg_key_url:
+                refresh_cmd.append("--gpg-auto-import-keys")
+            refresh_cmd.append("refresh")
+            refresh_cmd.append(repo_name)
             process = subprocess.Popen(
                 refresh_cmd,
                 stdout=subprocess.PIPE,
@@ -521,9 +532,11 @@ gpgcheck=0
                     self.package_name,
                 ]
             else:
+                # For prerelease, use --gpg-auto-import-keys to automatically import and trust GPG keys
                 cmd = [
                     "zypper",
                     "--non-interactive",
+                    "--gpg-auto-import-keys",
                     "install",
                     "-y",
                     self.package_name,
