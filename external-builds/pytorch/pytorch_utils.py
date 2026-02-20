@@ -221,6 +221,8 @@ def get_all_supported_devices(amdgpu_family: str = "") -> dict[str, list[int]]:
             result[arch] = []
         result[arch].append(sys_idx)
 
+    result = {arch: sorted(indices) for arch, indices in sorted(result.items())}
+
     print(f"Detected PyTorch supported architecture at device indices: {result}")
     return result
 

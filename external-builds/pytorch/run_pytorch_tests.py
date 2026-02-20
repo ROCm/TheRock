@@ -204,25 +204,29 @@ By default the pytorch directory is determined based on this script's location
         help="""Disable pytest caching. Useful when only having read-only access to pytorch directory""",
     )
 
+    # GPU selection happens in two stages:
+    #   1. --device-query  decides which GPUs enter the candidate set.
+    #   2. --gpu-policy    decides how many candidates are made visible to tests.
+        parser.add_argument(
+        "--device-query",
+        type=str,
+        choices=["unique", "all"],
+        default="unique",
+        help="""Stage 1: which GPUs enter the candidate set (see --gpu-policy for stage 2).
+- "unique": one device per architecture (default). E.g. {gfx942:[0], gfx1100:[2]}.
+- "all": every device of each architecture. E.g. {gfx942:[0,1], gfx1100:[2]}.""",
+    )
+
     parser.add_argument(
         "--gpu-policy",
         type=str,
         choices=["single", "all"],
         default="single",
-        help="""GPU execution policy for test runs.
-- "single": Use a single GPU (default). Suitable for most unit tests.
-- "all": Use all supported GPUs. Useful for multi-GPU tests.""",
+        help="""Stage 2: how many candidate GPUs to make visible (see --device-query for stage 1).
+- "single": one GPU visible at a time (default). Suitable for most unit tests.
+- "all": all candidate GPUs visible at once. Useful for multi-GPU tests.""",
     )
 
-    parser.add_argument(
-        "--device-query",
-        type=str,
-        choices=["unique", "all"],
-        default="unique",
-        help="""Device query mode for discovering GPUs.
-- "unique": One device per architecture (default). Uses get_unique_supported_devices().
-- "all": All devices of each architecture. Uses get_all_supported_devices().""",
-    )
 
     args = parser.parse_args(argv)
 
@@ -260,7 +264,7 @@ def main() -> int:
         )
 
         # Collect unique architectures from selected devices
-        selected_archs = list[str]({arch for arch, _ in selected_devices})
+        selected_archs = sorted({arch for arch, _ in selected_devices})
         print(f"Using AMDGPU families: {selected_archs}")
 
         # Determine PyTorch version
