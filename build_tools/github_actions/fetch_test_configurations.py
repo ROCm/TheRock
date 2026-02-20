@@ -15,6 +15,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tests"))
 from github_actions_utils import *
 from extended_tests.benchmark.benchmark_test_matrix import benchmark_matrix
+from extended_tests.functional.functional_test_matrix import functional_matrix
 from amdgpu_family_matrix import get_all_families_for_trigger_types
 
 logging.basicConfig(level=logging.INFO)
@@ -270,7 +271,7 @@ test_matrix = {
     # enabled by default.
     # "fusilli_plugin": {
     #     "job_name": "fusilli_plugin",
-    #     "fetch_artifact_args": "--hipdnn --fusilli-plugin --tests",
+    #     "fetch_artifact_args": "--hipdnn --fusilli-plugin --iree-compiler --tests",
     #     "timeout_minutes": 15,
     #     "test_script": f"python {_get_script_path('test_fusilli_plugin.py')}",
     #     "platform": ["linux"],
@@ -321,6 +322,15 @@ test_matrix = {
         "platform": ["linux"],
         "total_shards": 1,
     },
+    # rocrtst tests
+    "rocrtst": {
+        "job_name": "rocrtst",
+        "fetch_artifact_args": "--rocrtst --tests",
+        "timeout_minutes": 15,
+        "test_script": f"python {_get_script_path('test_rocrtst.py')}",
+        "platform": ["linux"],
+        "total_shards": 1,
+    },
 }
 
 
@@ -331,6 +341,7 @@ def run():
     test_type = os.getenv("TEST_TYPE", "full")
     test_labels = json.loads(os.getenv("TEST_LABELS") or "[]")
     is_benchmark_workflow = str2bool(os.getenv("IS_BENCHMARK_WORKFLOW", "false"))
+    is_functional_workflow = str2bool(os.getenv("IS_FUNCTIONAL_WORKFLOW", "false"))
 
     logging.info(f"Selecting projects: {projects_to_test}")
 
@@ -340,6 +351,10 @@ def run():
         # Benchmarks don't use test_type/test_labels (all have total_shards=1, no filtering)
         logging.info("Using benchmark_matrix only (benchmark tests)")
         selected_matrix = benchmark_matrix.copy()
+    elif is_functional_workflow:
+        # For functional workflow, use ONLY functional_matrix
+        logging.info("Using functional_matrix only (functional tests)")
+        selected_matrix = functional_matrix.copy()
     else:
         # For regular workflow, use ONLY test_matrix
         logging.info("Using test_matrix only (regular tests)")

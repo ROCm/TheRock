@@ -88,7 +88,7 @@ submodules = ["llvm-project", "HIPIFY", "spirv-llvm-translator"]
 
 [source_sets.debug-tools]
 description = "ROCm debug tools submodules"
-submodules = ["amd-dbgapi", "rocgdb", "rocr-debug-agent"]
+submodules = ["rocgdb"]
 
 [source_sets.rocm-systems]
 description = "ROCm systems monorepo (runtime, profiler, etc.)"
@@ -199,6 +199,7 @@ type = "generic"
 [artifact_groups.third-party-libs]
 description = "Optional third-party libraries (for tests/specific features)"
 type = "generic"
+artifact_group_deps = ["compiler"]
 source_sets = []  # No submodules - uses vendored/in-tree deps
 
 [artifact_groups.base]
@@ -413,7 +414,7 @@ feature_group = "CORE"
 [artifacts.spdlog]
 artifact_group = "third-party-libs"
 type = "target-neutral"
-artifact_deps = []
+artifact_deps = ["amd-llvm"]
 feature_group = "CORE"
 
 # --- Base Infrastructure ---
@@ -499,7 +500,7 @@ feature_group = "CORE"  # Part of core, enabled by default
 [artifacts.blas]
 artifact_group = "math-libs"
 type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip", "core-amdsmi", "host-blas", "host-suite-sparse", "rocprofiler-sdk"]
+artifact_deps = ["core-runtime", "core-hip", "core-amdsmi", "host-blas", "host-suite-sparse", "rocprofiler-sdk", "spdlog"]
 split_databases = ["rocblas", "hipblaslt"]
 
 [artifacts.fft]
@@ -559,29 +560,35 @@ split_databases = ["miopen"]
 [artifacts.hipdnn]
 artifact_group = "ml-libs"
 type = "target-neutral"
-artifact_deps = ["core-runtime", "core-hip"]
+artifact_deps = ["core-runtime", "core-hip", "spdlog"]
 
 [artifacts.miopen-plugin]
 artifact_group = "ml-libs"
 type = "target-neutral"
-artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn"]
+artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "spdlog"]
 
 [artifacts.hipblaslt-plugin]
 artifact_group = "ml-libs"
 type = "target-neutral"
-artifact_deps = ["core-runtime", "core-hip", "blas", "hipdnn"]
+artifact_deps = ["core-runtime", "core-hip", "blas", "hipdnn", "spdlog"]
 
 [artifacts.hipdnn-samples]
 artifact_group = "ml-libs"
 type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "miopen-plugin"]
+artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "miopen-plugin", "spdlog"]
 
 # --- IREE Integration ---
+
+[artifacts.iree-compiler]
+artifact_group = "iree-libs"
+type = "target-neutral"
+artifact_deps = ["core-hip"]
+disable_platforms = ["windows"]
 
 [artifacts.fusilli-plugin]
 artifact_group = "iree-libs"
 type = "target-neutral"
-artifact_deps = ["core-runtime", "core-hip", "hipdnn"]
+artifact_deps = ["core-runtime", "core-hip", "hipdnn", "spdlog", "iree-compiler"]
 disable_platforms = ["windows"]
 
 # --- Media Integration ---
@@ -635,7 +642,7 @@ disable_platforms = ["windows"]
 [artifacts.rocprofiler-systems]
 artifact_group = "profiler-apps"
 type = "target-neutral"
-artifact_deps = ["amd-llvm", "core-hip", "rocprofiler-sdk", "core-amdsmi"]
+artifact_deps = ["amd-llvm", "core-hip", "rocprofiler-sdk", "core-amdsmi", "spdlog"]
 feature_name = "ROCPROFSYS"
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
