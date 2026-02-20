@@ -3,6 +3,7 @@
 """Installation package tests for the core package."""
 
 import importlib
+import os
 from pathlib import Path
 import platform
 import subprocess
@@ -130,10 +131,32 @@ class ROCmDevelTest(unittest.TestCase):
                 # We use OpenCL ICD from distro rather than TheRock
                 # and we do not build it
                 continue
+
+            extra_setup = ""
+            if (
+                "hipdnn_plugins" in str(so_path) or "test_plugins" in str(so_path)
+            ) and sys.platform == "win32":
+                # hipdnn plugins have dependencies on other libraries (e.g. miopen).
+                # In a real-world scenario, hipdnn_backend loads these plugins, and
+                # the dependencies are found because they reside in the same directory
+                # (or are otherwise resolvable).
+                # To simulate this loading behavior in the test:
+                # - On Linux, RPATH ($ORIGIN/../../) handles dependency resolution.
+                # - On Windows, we must manually add the library directory (calculated
+                #   relative to the plugin) via add_dll_directory, as there is no RPATH equivalent.
+                # We assume the plugin is at .../{lib|bin}/hipdnn_plugins/engines/plugin.so
+                # and the dependencies are at .../{lib|bin}.
+                lib_dir = str(so_path.parents[2]).replace("\\", "\\\\")
+                extra_setup = f"import os; os.add_dll_directory('{lib_dir}') if hasattr(os, 'add_dll_directory') else None; "
+
             with self.subTest(msg="Check shared library loads", so_path=so_path):
                 # Load each in an isolated process because not all libraries in the tree
                 # are designed to load into the same process (i.e. LLVM runtime libs,
                 # etc).
-                command = "import ctypes; import sys; ctypes.CDLL(sys.argv[1])"
-                cmd = [sys.executable, "-c", command, str(so_path)]
-                subprocess.check_call(cmd)
+                command = (
+                    extra_setup + "import ctypes; import sys; ctypes.CDLL(sys.argv[1])"
+                )
+
+                subprocess.check_call(
+                    [sys.executable, "-c", command, str(so_path)]
+                )

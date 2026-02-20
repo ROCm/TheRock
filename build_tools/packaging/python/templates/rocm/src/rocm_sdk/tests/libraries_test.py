@@ -3,6 +3,7 @@
 """Installation package tests for the core package."""
 
 import importlib
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -61,6 +62,21 @@ class ROCmLibrariesTest(unittest.TestCase):
                     # Though this is not needed for the amd-smi client.
                     continue
 
+                extra_setup = ""
+                if "hipdnn_plugins" in str(so_path) and sys.platform == "win32":
+                    # hipdnn plugins have dependencies on other libraries (e.g. miopen).
+                    # In a real-world scenario, hipdnn_backend loads these plugins, and
+                    # the dependencies are found because they reside in the same directory
+                    # (or are otherwise resolvable).
+                    # To simulate this loading behavior in the test:
+                    # - On Linux, RPATH ($ORIGIN/../../) handles dependency resolution.
+                    # - On Windows, we must manually add the library directory (calculated
+                    #   relative to the plugin) via add_dll_directory, as there is no RPATH equivalent.
+                    # We assume the plugin is at .../{lib|bin}/hipdnn_plugins/engines/plugin.so
+                    # and the dependencies are at .../{lib|bin}.
+                    lib_dir = str(so_path.parents[2]).replace("\\", "\\\\")
+                    extra_setup = f"import os; os.add_dll_directory('{lib_dir}') if hasattr(os, 'add_dll_directory') else None; "
+
                 # For Windows compatibility, we first preload libraries (DLLs)
                 # that are not co-located. Specifically this is for
                 # the "libraries" like hipfft, rocblas, etc. which are siblings
@@ -74,11 +90,14 @@ class ROCmLibrariesTest(unittest.TestCase):
                 # are designed to load into the same process (i.e. LLVM runtime libs,
                 # etc).
                 command = (
-                    preload_command
+                    extra_setup
+                    + preload_command
                     + " import ctypes; import sys; ctypes.CDLL(sys.argv[1])"
                 )
-                cmd = [sys.executable, "-c", command, str(so_path)]
-                subprocess.check_call(cmd)
+
+                subprocess.check_call(
+                    [sys.executable, "-c", command, str(so_path)]
+                )
 
     def testConsoleScripts(self):
         for script_name, cl, expected_text, required in CONSOLE_SCRIPT_TESTS:
