@@ -33,6 +33,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import uuid
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -56,8 +57,8 @@ SOURCE_DIR = ROCPROFILER_SDK_TESTS_DIRECTORY
 BINARY_DIR = f"{ROCPROFILER_SDK_TESTS_DIRECTORY}/build"
 
 environ_vars = os.environ.copy()
-environ_vars["ROCM_PATH"] = str(THEROCK_PATH)
-environ_vars["HIP_PATH"] = str(THEROCK_PATH)
+environ_vars["ROCM_PATH"] = os.path.realpath(str(THEROCK_PATH))
+environ_vars["HIP_PATH"] = os.path.realpath(str(THEROCK_PATH))
 
 # Env setup
 environ_vars["HIP_PLATFORM"] = "amd"
@@ -87,16 +88,27 @@ def _generate_ctest_custom(cmake_cmd):
     so literal "build" and "." match test_rocprofiler_sdk.
     """
 
-    # Configure cmake commands and ctest arguments
-    configure_cmd = f'{cmake_cmd} -B build -G Ninja -DCMAKE_PREFIX_PATH={THEROCK_PATH};{THEROCK_LIB_PATH}/rocm_sysdeps' + \
-                    f'-DCMAKE_HIP_COMPILER={THEROCK_PATH}/llvm/bin/amdclang++ -DCMAKE_C_COMPILER={THEROCK_PATH}/llvm/bin/amdclang -DCMAKE_CXX_COMPILER={THEROCK_PATH}/llvm/bin/amdclang++ .'
+    # Configure cmake commands and ctest arguments (semicolon after CMAKE_PREFIX_PATH
+    # so the next -D is not merged into the path)
+    configure_cmd = (
+        f"{cmake_cmd} -B {BINARY_DIR} -G Ninja "
+        f"-DCMAKE_PREFIX_PATH={THEROCK_PATH};{THEROCK_LIB_PATH}/rocm_sysdeps "
+        f"-DCMAKE_HIP_COMPILER={THEROCK_PATH}/llvm/bin/amdclang++ "
+        f"-DCMAKE_C_COMPILER={THEROCK_PATH}/llvm/bin/amdclang "
+        f"-DCMAKE_CXX_COMPILER={THEROCK_PATH}/llvm/bin/amdclang++ ."
+    )
     build_cmd = f'{cmake_cmd} --build {BINARY_DIR} -j'
     ctest_args_str = f'--test-dir {BINARY_DIR} --output-on-failure -j {os.cpu_count() or 1}'
 
-    #Specify CDash submission information
+    # Specify CDash submission information. Include a unique run ID in the build
+    # name so each run appears as a separate build on the dashboard.
+    run_id = os.getenv("GITHUB_RUN_ID") or os.getenv("THEROCK_RUN_ID")
+    if not run_id:
+        run_id = f"local-{uuid.uuid4().hex}"
+    NAME = f"ROCProfiler SDK Tests - {run_id}"
+
     URL = f'https://{_DEFAULT_BASE_URL}/submit.php?project={_DEFAULT_PROJECT_NAME}'
     SITE = socket.gethostname()
-    NAME = "ROCProfiler SDK Tests"
 
     return f"""set(CTEST_PROJECT_NAME "{_DEFAULT_PROJECT_NAME}")
 set(CTEST_NIGHTLY_START_TIME "05:00:00 UTC")
