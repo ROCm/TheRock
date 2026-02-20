@@ -8,6 +8,7 @@ and peer-to-peer communication functionality.
 
 import json
 import os
+import re
 import shlex
 import sys
 from pathlib import Path
@@ -32,7 +33,8 @@ class RBTTest(FunctionalBase):
         # RBT directory paths
         self.rbt_dir = self.rocm_path / "bin" / "rbt"
         self.rbt_build_dir = self.rbt_dir / "build"
-        self.rbt_install_dir = self.rbt_build_dir / "install"
+        # Install directly to rocm_path so plugins are found correctly
+        self.rbt_install_dir = self.rocm_path
 
         # Load test configuration from JSON
         config = self.load_config("rbt.json")
@@ -47,9 +49,42 @@ class RBTTest(FunctionalBase):
         self.tests_by_type = config.get("tests", {})
         self.test_definitions = config.get("test_definitions", {})
 
-    def _build_rbt(self) -> None:
-        """Build ROCm Bandwidth Test."""
-        log.info("Building ROCm Bandwidth Test")
+    def _patch_transferbench_cmake(self, gpu_target: str) -> bool:
+        """Patch TransferBench CMakeLists.txt to build only for detected GPU.
+
+        Args:
+            gpu_target: GPU architecture to build for (e.g., 'gfx942')
+
+        Returns:
+            True if patched successfully, False otherwise
+        """
+        cmake_file = self.rbt_dir / "plugins" / "tb" / "transferbench" / "CMakeLists.txt"
+        if not cmake_file.exists():
+            log.warning(f"TransferBench CMakeLists.txt not found: {cmake_file}")
+            return False
+
+        content = cmake_file.read_text()
+        pattern = r'set\(DEFAULT_GPUS[^)]+\)'
+        new_section = f"set(DEFAULT_GPUS\n      {gpu_target})"
+
+        if re.search(pattern, content, re.DOTALL):
+            cmake_file.write_text(re.sub(pattern, new_section, content, flags=re.DOTALL))
+            log.info(f"Patched TransferBench CMakeLists.txt for GPU: {gpu_target}")
+            return True
+
+        log.warning("Could not find DEFAULT_GPUS section to patch")
+        return False
+
+    def _build_rbt(self, gpu_target: str) -> None:
+        """Build ROCm Bandwidth Test.
+
+        Args:
+            gpu_target: GPU architecture to build for (e.g., 'gfx942')
+        """
+        log.info(f"Building ROCm Bandwidth Test for {gpu_target}")
+
+        # Patch TransferBench to build only for current GPU (more reliable than -DGPU_TARGETS)
+        self._patch_transferbench_cmake(gpu_target)
 
         # Setup environment for build
         env = self.get_rocm_env()
@@ -81,13 +116,13 @@ class RBTTest(FunctionalBase):
         # CMake configure
         cmake_args = [
             "cmake",
-            f"-DCMAKE_BUILD_TYPE=Release",
+            "-DCMAKE_BUILD_TYPE=Release",
             "-DAMD_APP_STANDALONE_BUILD_PACKAGE=OFF",
             "-DAMD_APP_ROCM_BUILD_PACKAGE=ON",
             f"-DCMAKE_PREFIX_PATH={self.rocm_path}",
             f"-DROCM_PATH={self.rocm_path}",
             f"-DCMAKE_INSTALL_PREFIX={self.rbt_install_dir}",
-            f'-DCMAKE_INSTALL_RPATH={lib_rpath}',
+            f"-DCMAKE_INSTALL_RPATH={lib_rpath}",
             "-DCMAKE_BUILD_WITH_INSTALL_RPATH=ON",
             "-DCMAKE_SKIP_BUILD_RPATH=OFF",
             "-DAMD_APP_BUILD_TESTS=OFF",
@@ -112,7 +147,7 @@ class RBTTest(FunctionalBase):
             },
         ]
 
-        with open(self.log_file, "a") as f:
+        with open(self.log_file, "w") as f:
             for step in build_steps:
                 log.info(f"Running build step: {step['name']}")
                 f.write(f"\n=== {step['name']} ===\n")
@@ -133,12 +168,17 @@ class RBTTest(FunctionalBase):
         """Clone, build, and run RBT tests, save results to JSON."""
         log.info(f"Running {self.display_name}")
 
+        # Get GPU info first (needed for build target selection)
+        num_gpus, gfx_version = self.get_gpu_architecture()
+        has_gfx94x = gfx_version.startswith("gfx94") if gfx_version else False
+        log.info(f"Detected {num_gpus} GPU(s), arch: {gfx_version}")
+
         # Check if RBT binary already exists in ROCm bin
         system_rbt = self.rocm_path / "bin" / "rocm-bandwidth-test"
         if system_rbt.exists():
             log.info(f"RBT binary found at {system_rbt}, skipping build")
             self.rbt_binary = system_rbt
-            bin_path = self.rocm_path / "bin"
+            rbt_root = self.rocm_path  # For ROCM_PATH and lib paths
         else:
             log.info("RBT binary not found in ROCm, building from source")
             # Clone RBT repository and update submodules
@@ -149,12 +189,12 @@ class RBTTest(FunctionalBase):
                 update_submodules=True,
             )
 
-            # Build RBT
-            self._build_rbt()
+            # Build RBT for current GPU target only
+            self._build_rbt(gpu_target=gfx_version)
 
             # Set binary path
             self.rbt_binary = self.rbt_install_dir / "bin" / "rocm-bandwidth-test"
-            bin_path = self.rbt_install_dir / "bin"
+            rbt_root = self.rbt_install_dir  # For ROCM_PATH and lib paths
 
             if not self.rbt_binary.exists():
                 raise TestExecutionError(
@@ -162,14 +202,11 @@ class RBTTest(FunctionalBase):
                     f"Build may have failed, check {self.log_file}"
                 )
 
-        # Setup environment with ROCm libraries
-        env = self.get_rocm_env()
-        env["PATH"] = f"{bin_path}:{env.get('PATH', '')}"
-
-        # Get GPU info
-        num_gpus, gfx_version = self.get_gpu_architecture()
-        has_gfx94x = gfx_version.startswith("gfx94") if gfx_version else False
-        log.info(f"Detected {num_gpus} GPU(s), arch: {gfx_version}")
+        # Setup environment - RBT needs ROCM_PATH to find plugins
+        rbt_lib = rbt_root / "lib"
+        env = self.get_rocm_env(additional_paths=[rbt_lib] if rbt_lib.exists() else None)
+        env["ROCM_PATH"] = str(rbt_root)
+        env["PATH"] = f"{rbt_root / 'bin'}:{env.get('PATH', '')}"
 
         # Get tests to run based on test type (from config)
         rbt = str(self.rbt_binary)
@@ -215,13 +252,11 @@ class RBTTest(FunctionalBase):
             # Note: RBT doesn't support JSON/CSV output for test results.
             # For functional verification, exit code check is sufficient.
             return_code, output = self.execute_command(
-                cmd, env=test_env, timeout=300, stream=False
+                cmd, env=test_env, timeout=300, stream=True
             )
             passed = return_code == 0
 
             log.info(f"{'PASS' if passed else 'FAIL'}: {test_name}")
-            if self.verbose and output:
-                log.info(f"Output:\n{output[:1000]}")
 
             all_results.append({
                 "test_name": test_name,

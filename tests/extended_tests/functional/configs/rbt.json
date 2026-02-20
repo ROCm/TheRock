@@ -1,6 +1,6 @@
 {
   "git_url": "https://github.com/ROCm/rocm_bandwidth_test.git",
-  "git_branch": "master",
+  "git_branch": "amd-mainline",
   "test_type": "full",
   "tests": {
     "smoke": ["Plugin_List", "Hello"],
