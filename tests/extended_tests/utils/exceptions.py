@@ -39,6 +39,12 @@ class TestExecutionError(FrameworkException):
     pass
 
 
+class TestResultError(FrameworkException):
+    """Test result failures (tests ran successfully but results show failures)."""
+
+    pass
+
+
 class ValidationError(FrameworkException):
     """Data or input validation failures."""
 
