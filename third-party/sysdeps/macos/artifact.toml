@@ -1,0 +1,6 @@
+# macOS System Dependencies Artifact
+# Core system libraries built from source for portable macOS ROCm builds
+
+[artifact]
+name = "sysdeps"
+description = "Core system dependencies for macOS"
