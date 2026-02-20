@@ -78,7 +78,7 @@ jobs:
         # TODO(TheRock#3288): Re-enable gfx950-dcgpu runners once we get more capacity
         exclude:
           - family_info:
-              amdgpu_family: gfx950-dcgpu
+            amdgpu_family: gfx950-dcgpu
 
     uses: ./.github/workflows/test_artifacts.yml
     with:
