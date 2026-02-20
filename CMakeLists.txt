@@ -331,6 +331,28 @@ if(CMAKE_CXX_VISIBILITY_PRESET)
 endif()
 
 ################################################################################
+# patchelf / install_name_tool
+# Building with bundled sysdep or rocGDB requires patchelf on Linux and
+# install_name_tool on macOS to set RPATH.
+################################################################################
+
+if(THEROCK_BUNDLE_SYSDEPS OR THEROCK_ENABLE_ROCGDB)
+  if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    find_program(PATCHELF patchelf)
+    if(NOT PATCHELF)
+      message(FATAL_ERROR "Building with THEROCK_BUNDLE_SYSDEPS=ON or THEROCK_ENABLE_ROCGDB=ON on Linux requires `patchelf`")
+    endif()
+    message(FATAL_ERROR "!/!")
+  elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    # macOS uses install_name_tool (from Xcode) instead of patchelf
+    find_program(INSTALL_NAME_TOOL install_name_tool)
+    if(NOT INSTALL_NAME_TOOL)
+      message(FATAL_ERROR "Building with THEROCK_BUNDLE_SYSDEPS=ON or THEROCK_ENABLE_ROCGDB=ON on macOS requires `install_name_tool` (install Xcode Command Line Tools)")
+    endif()
+  endif()
+endif()
+
+################################################################################
 # Sysdep bundling
 # Each available bundled sysdep is made available with a global variable like
 # `THEROCK_BUNDLED_{name}`. This can be included in subproject RUNTIME_DEPS.
@@ -362,10 +384,6 @@ set(THEROCK_BUNDLED_AMDMESA)
 if(THEROCK_BUNDLE_SYSDEPS)
   message(STATUS "Building with bundled system dependencies enabled")
   if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    find_program(PATCHELF patchelf)
-    if(NOT PATCHELF)
-      message(FATAL_ERROR "Building with THEROCK_BUNDLE_SYSDEPS=ON on Linux requires `patchelf`")
-    endif()
     find_program(MESON_BUILD meson)
     if(NOT MESON_BUILD)
       message(FATAL_ERROR "Building with THEROCK_BUNDLE_SYSDEPS=ON on Linux requires (easiest: `pip install meson`)")
@@ -389,11 +407,6 @@ if(THEROCK_BUNDLE_SYSDEPS)
       set(THEROCK_BUNDLED_AMDMESA therock-amd-mesa)
     endif()
   elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-    # macOS uses install_name_tool (from Xcode) instead of patchelf
-    find_program(INSTALL_NAME_TOOL install_name_tool)
-    if(NOT INSTALL_NAME_TOOL)
-      message(FATAL_ERROR "Building with THEROCK_BUNDLE_SYSDEPS=ON on macOS requires `install_name_tool` (install Xcode Command Line Tools)")
-    endif()
     find_program(MESON_BUILD meson)
     if(NOT MESON_BUILD)
       message(FATAL_ERROR "Building with THEROCK_BUNDLE_SYSDEPS=ON on macOS requires `meson` (easiest: `pip install meson`)")
