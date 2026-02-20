@@ -332,7 +332,7 @@ jobs:
           # Upload dist archive
           archive = pathlib.Path(r'${{ env.DIST_ARCHIVE }}')
           tar_bucket = '${{ env.S3_BUCKET_TAR }}'
-          tar_key = '${{ env.S3_SUBDIR_TAR }}' + archive.name
+          tar_key = f"${{ env.S3_SUBDIR_TAR }}{archive.name}"
           print(f'Uploading {archive} -> s3://{tar_bucket}/{tar_key}')
           client.upload_file(str(archive), tar_bucket, tar_key)
           # Upload wheels and sdists
