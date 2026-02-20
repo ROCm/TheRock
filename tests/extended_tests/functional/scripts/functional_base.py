@@ -385,7 +385,7 @@ class FunctionalBase:
             )
 
 
-def run_functional_test_main(test_instance):
+def run_functional_main(test_instance):
     """Run functional test.
 
     Raises exceptions on failure, returns normally on success.

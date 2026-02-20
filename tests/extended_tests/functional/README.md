@@ -82,7 +82,7 @@ from typing import Any, Dict, List
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # For utils
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # For functional_base
-from functional_base import FunctionalBase, run_functional_test_main
+from functional_base import FunctionalBase, run_functional_main
 from utils.logger import log
 from utils.exceptions import TestExecutionError
 
@@ -143,7 +143,7 @@ class YourTest(FunctionalBase):
 
 
 if __name__ == "__main__":
-    run_functional_test_main(YourTest())
+    run_functional_main(YourTest())
 ```
 
 **Required Methods:**
