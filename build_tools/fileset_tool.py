@@ -159,6 +159,42 @@ def _do_artifact_flatten(args):
             print(relpath)
 
 
+def _do_artifact_flatten_split(args):
+    """Flatten split artifacts discovered by globbing at build time.
+
+    Split artifacts produce directories like:
+      artifacts/miopen_lib_generic/
+      artifacts/miopen_lib_gfx1201/
+    The exact per-target names can't be predicted at CMake configure time
+    (xnack suffixes, clang defaults), so we discover them by globbing.
+    """
+    artifacts_dir: Path = args.artifacts_dir
+    discovered_dirs: list[Path] = []
+    for prefix in args.prefixes:
+        for candidate in sorted(artifacts_dir.glob(f"{prefix}_*")):
+            if candidate.is_dir() and (candidate / "artifact_manifest.txt").exists():
+                discovered_dirs.append(candidate)
+    if not discovered_dirs:
+        print(
+            f"Warning: no split artifact dirs found in {artifacts_dir} "
+            f"for prefixes: {args.prefixes}"
+        )
+        return
+    if args.verbose:
+        print(f"Discovered {len(discovered_dirs)} split artifact dirs:")
+        for d in discovered_dirs:
+            print(f"  {d.name}")
+    flattener = ArtifactPopulator(
+        output_path=args.o, verbose=args.verbose, flatten=True
+    )
+    flattener(*discovered_dirs)
+    relpaths = list(flattener.relpaths)
+    relpaths.sort()
+    if args.verbose:
+        for relpath in relpaths:
+            print(relpath)
+
+
 def main(cl_args: list[str]):
     def add_pattern_matcher_args(p: argparse.ArgumentParser):
         p.add_argument("basedir", type=Path, nargs="*", help="Base directories to scan")
@@ -281,6 +317,30 @@ def main(cl_args: list[str]):
         "--verbose", action="store_true", help="Print verbose status"
     )
     artifact_flatten_p.set_defaults(func=_do_artifact_flatten)
+
+    # 'artifact-flatten-split' command
+    artifact_flatten_split_p = sub_p.add_parser(
+        "artifact-flatten-split",
+        help="Flatten split artifact directories discovered by globbing",
+    )
+    artifact_flatten_split_p.add_argument(
+        "prefixes",
+        nargs="+",
+        help="Artifact prefixes to match (e.g., miopen_lib miopen_dev)",
+    )
+    artifact_flatten_split_p.add_argument(
+        "-o", type=Path, required=True, help="Output directory"
+    )
+    artifact_flatten_split_p.add_argument(
+        "--artifacts-dir",
+        type=Path,
+        required=True,
+        help="Base directory containing split artifact dirs",
+    )
+    artifact_flatten_split_p.add_argument(
+        "--verbose", action="store_true", help="Print verbose status"
+    )
+    artifact_flatten_split_p.set_defaults(func=_do_artifact_flatten_split)
 
     args = p.parse_args(cl_args)
     args.func(args)

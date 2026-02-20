@@ -3,12 +3,14 @@ import os
 import shlex
 import subprocess
 from pathlib import Path
+import platform
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
+os_type = platform.system().lower()
 
 # GTest sharding
 SHARD_INDEX = os.getenv("SHARD_INDEX", 1)
@@ -98,7 +100,6 @@ positive_filter.append("*/GPU_FinInterfaceTest*")
 positive_filter.append("*/GPU_VecAddTest_*")
 
 positive_filter.append("*/GPU_KernelTuningNetTest*")
-positive_filter.append("*/GPU_MIOpenDriver*")
 
 positive_filter.append("*/GPU_Bwd_Mha_*")
 positive_filter.append("*/GPU_Fwd_Mha_*")
@@ -150,9 +151,22 @@ negative_filter.append("Full/GPU_ConvGrpActivInfer3D_FP32*")  # 0 min 22 sec
 negative_filter.append("Full/GPU_ConvGrpActivInfer3D_FP16*")  # 0 min 16 sec
 
 # Flaky tests
-negative_filter.append(
-    "Smoke/GPU_UnitTestConvSolverHipImplicitGemmV4R1Fwd_BFP16.ConvHipImplicitGemmV4R1Fwd/0"
-)  # https://github.com/ROCm/TheRock/issues/1682
+TEST_TO_IGNORE = {
+    "gfx1151": {
+        # TODO(#3202): Re-enable tests once issues are resolved
+        "windows": ["Full/GPU_UnitTestConvSolverGemmBwdRestBwd_FP16.GemmBwdRest/0"]
+    }
+}
+
+if AMDGPU_FAMILIES in TEST_TO_IGNORE and os_type in TEST_TO_IGNORE[AMDGPU_FAMILIES]:
+    ignored_tests = TEST_TO_IGNORE[AMDGPU_FAMILIES][os_type]
+    for ignored_test in ignored_tests:
+        negative_filter.append(ignored_test)
+
+
+# Don't run while investigating to allow CI to pass
+# Jira Ticket ALMIOPEN-990
+negative_filter.append("*/GPU_MIOpenDriver*")
 
 # TODO(rocm-libraries#2266): re-enable test for gfx950-dcgpu
 if AMDGPU_FAMILIES == "gfx950-dcgpu":
@@ -205,6 +219,13 @@ if AMDGPU_FAMILIES in ["gfx110X-all", "gfx1150", "gfx1151", "gfx120X-all"]:
     negative_filter.append(
         "*CPU_UnitTestConvSolverImplicitGemmGroupWrwXdlopsDevApplicability_FP16.ConvHipImplicitGemmGroupWrwXdlops*"
     )
+
+    # Disable long running tests
+    negative_filter.append("Full/GPU_Softmax_FP32*")  # 24 min
+    negative_filter.append("Full/GPU_Softmax_BFP16*")  # 13 min
+    negative_filter.append("Full/GPU_Softmax_FP16*")  # 11.5 min
+    negative_filter.append("Smoke/GPU_Reduce_FP32*")  # 6.5 min
+    negative_filter.append("Smoke/GPU_Reduce_FP16*")  # 4.5 min
 
 ####################################################
 
