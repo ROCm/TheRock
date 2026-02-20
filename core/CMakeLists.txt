@@ -129,7 +129,8 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
 
 endif(THEROCK_ENABLE_CORE_RUNTIME)
 
-if(THEROCK_ENABLE_HIP_RUNTIME)
+# On macOS, we use hip-remote-client instead of CLR (see below around line 313)
+if(THEROCK_ENABLE_HIP_RUNTIME AND NOT APPLE)
   ##############################################################################
   # clr
   # The primary HIP compiler and runtime target. This is also the project used
@@ -299,7 +300,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
     )
     list(APPEND _hip_tests_subproject_names hip-tests)
   endif(THEROCK_BUILD_TESTING)
-endif(THEROCK_ENABLE_HIP_RUNTIME)
+endif(THEROCK_ENABLE_HIP_RUNTIME AND NOT APPLE)
 
 ################################################################################
 # Remote HIP (macOS)
