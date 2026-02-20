@@ -6,8 +6,10 @@ import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
+# Add tests directory to path for extended_tests imports
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tests"))
 import configure_ci
-from benchmarks.benchmark_test_matrix import benchmark_matrix
+from extended_tests.benchmark.benchmark_test_matrix import benchmark_matrix
 
 
 class ConfigureCITest(unittest.TestCase):
@@ -36,6 +38,7 @@ class ConfigureCITest(unittest.TestCase):
         for entry in target_output:
             family_info_list = json.loads(entry["matrix_per_family_json"])
             self.assertTrue(all("amdgpu_family" in f for f in family_info_list))
+            self.assertTrue(all("amdgpu_targets" in f for f in family_info_list))
             self.assertTrue(all("test-runs-on" in f for f in family_info_list))
             self.assertTrue(
                 all("sanity_check_only_for_family" in f for f in family_info_list)

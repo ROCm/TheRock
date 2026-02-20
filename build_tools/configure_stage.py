@@ -155,7 +155,7 @@ def main(argv: List[str] = None):
     parser.add_argument(
         "--stage",
         type=str,
-        required=True,
+        default=None,
         help="Build stage name (e.g., foundation, compiler-runtime, math-libs)",
     )
     parser.add_argument(
@@ -209,6 +209,9 @@ def main(argv: List[str] = None):
     )
 
     args = parser.parse_args(argv)
+
+    if not args.list_stages and args.stage is None:
+        parser.error("--stage is required unless --list-stages is specified")
 
     topology = get_topology()
 
