@@ -23,7 +23,6 @@ class UcxTest(FunctionalBase):
     def __init__(self):
         super().__init__(test_name="ucx", display_name="UCX Test")
 
-        self.log_file = self.script_dir / "ucx.log"
         self.results_json = self.script_dir / "ucx_results.json"
         # Resolve to absolute path (required by configure --prefix)
         self.ucx_dir = self.rocm_path / "bin" / "ucx"
@@ -80,20 +79,13 @@ class UcxTest(FunctionalBase):
             },
         ]
 
-        with open(self.log_file, "w") as f:
-            for step in build_steps:
-                log.info(f"Running build step: {step['name']}")
-                f.write(f"\n=== {step['name']} ===\n")
+        for step in build_steps:
+            log.info(f"Running build step: {step['name']}")
 
-                return_code = self.execute_command(
-                    step["cmd"], cwd=step["cwd"], log_file_handle=f
-                )
+            return_code = self.execute_command(step["cmd"], cwd=step["cwd"])
 
-                if return_code != 0:
-                    raise TestExecutionError(
-                        f"UCX build failed at step '{step['name']}'\n"
-                        f"Check {self.log_file} for details"
-                    )
+            if return_code != 0:
+                raise TestExecutionError(f"UCX build failed at step '{step['name']}'")
 
         log.info("UCX build completed")
 
