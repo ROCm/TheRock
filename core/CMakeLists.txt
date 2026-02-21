@@ -9,6 +9,17 @@ if(WIN32)
   set(_system_toolchain "")
 endif()
 
+# Optional dependencies that may not be available on all platforms
+set(_optional_rocm_core)
+if(TARGET rocm-core)
+  set(_optional_rocm_core rocm-core)
+endif()
+
+set(_optional_rocprofiler_register)
+if(TARGET rocprofiler-register)
+  set(_optional_rocprofiler_register rocprofiler-register)
+endif()
+
 if(THEROCK_ENABLE_CORE_AMDSMI)
 
   ################################################################################
@@ -73,7 +84,7 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
       amd-llvm
       therock-simde
     RUNTIME_DEPS
-      rocprofiler-register
+      ${_optional_rocprofiler_register}
       ${THEROCK_BUNDLED_ELFUTILS}
       ${THEROCK_BUNDLED_LIBDRM}
       ${THEROCK_BUNDLED_NUMACTL}
@@ -155,7 +166,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME AND NOT APPLE)
     # Non-Windows CLR options.
     list(APPEND HIP_CLR_RUNTIME_DEPS
       rocminfo  # Various things expect to be able to find the rocminfo tools
-      rocprofiler-register
+      ${_optional_rocprofiler_register}
       ROCR-Runtime
     )
   endif()
@@ -410,7 +421,7 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
     # Non-Windows CLR options.
     list(APPEND OCL_CLR_RUNTIME_DEPS
       rocminfo  # Various things expect to be able to find the rocminfo tools
-      rocprofiler-register
+      ${_optional_rocprofiler_register}
       ROCR-Runtime
     )
     list(APPEND OCL_CLR_CMAKE_ARGS
@@ -515,7 +526,7 @@ if(THEROCK_BUILD_TESTING)
         ${_rocrtst_build_deps}
       RUNTIME_DEPS
         ROCR-Runtime
-        rocprofiler-register
+        ${_optional_rocprofiler_register}
         ${THEROCK_BUNDLED_ELFUTILS}
         ${THEROCK_BUNDLED_HWLOC}
         ${THEROCK_BUNDLED_LIBDRM}
