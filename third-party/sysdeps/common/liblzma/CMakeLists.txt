@@ -77,7 +77,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   set(symbol_versioning_option -DXZ_SYMBOL_VERSIONING=generic)
 elseif(APPLE)
   # macOS doesn't support symbol versioning
-  set(symbol_versioning_option -DXZ_SYMBOL_VERSIONING=OFF)
+  set(symbol_versioning_option -DXZ_SYMBOL_VERSIONING=no)
 endif()
 
 # xz/liblzma provides a CMakeLists.txt, however, we have to do some post-processing
