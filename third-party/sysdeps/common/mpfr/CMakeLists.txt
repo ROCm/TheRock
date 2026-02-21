@@ -85,6 +85,15 @@ else()
     message(SEND_ERROR "Did not find a path containing '/gmp/build/stage' in CMAKE_LIBRARY_PATH.")
 endif()
 
+# Platform-specific linker flags
+if(APPLE)
+  set(_version_script_flag "")
+  set(_needs_patchelf FALSE)
+else()
+  set(_version_script_flag "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds")
+  set(_needs_patchelf TRUE)
+endif()
+
 add_custom_target(
   build ALL
   WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
@@ -98,7 +107,7 @@ add_custom_target(
       # escaping going on (cmake, configure, shell, libtool), and making
       # our $ORIGIN string survive through all that is complex and
       # potentially fragile. We use a patchelf step instead.
-      "LDFLAGS=${CMAKE_SHARED_LINKER_FLAGS} -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
+      "LDFLAGS=${CMAKE_SHARED_LINKER_FLAGS} ${_version_script_flag}"
       --
     "${SOURCE_DIR}/configure"
       --prefix "${CMAKE_INSTALL_PREFIX}"
@@ -107,9 +116,9 @@ add_custom_target(
     make V=1
   COMMAND
     make install
-  COMMAND
-    # Patch in the RUNPATH.
-    ${PATCHELF} --set-rpath '\$\$ORIGIN:\$\$ORIGIN/rocm_sysdeps/lib' ${CMAKE_INSTALL_PREFIX}/lib/libmpfr.so
+  $<$<BOOL:${_needs_patchelf}>:COMMAND
+    # Patch in the RUNPATH (Linux only).
+    ${PATCHELF} --set-rpath '\$\$ORIGIN:\$\$ORIGIN/rocm_sysdeps/lib' ${CMAKE_INSTALL_PREFIX}/lib/libmpfr.so>
   COMMAND
     "${CMAKE_COMMAND}" -E env
       "PATCHELF=${PATCHELF}"

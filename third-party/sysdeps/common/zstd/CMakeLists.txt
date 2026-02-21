@@ -72,6 +72,13 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         "Python3_EXECUTABLE=${Python3_EXECUTABLE}" --
       bash "${CMAKE_CURRENT_SOURCE_DIR}/patch_install.sh" ${CMAKE_INSTALL_PREFIX}
   )
+elseif(APPLE)
+  # On macOS we do a shared library build without version-script.
+  set(CONFIGURE_ARGS
+    -DZSTD_BUILD_STATIC=OFF
+    -DZSTD_BUILD_SHARED=ON
+  )
+  set(POST_INSTALL_COMMANDS)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
   # On Windows, we build static.
   set(CONFIGURE_ARGS
