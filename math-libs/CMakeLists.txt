@@ -146,6 +146,7 @@ if(THEROCK_ENABLE_PRIM)
       rocm-cmake
       rocPRIM
       therock-googletest
+      therock-tbb
     RUNTIME_DEPS
       hip-clr
   )
