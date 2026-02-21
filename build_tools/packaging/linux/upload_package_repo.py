@@ -31,6 +31,14 @@ import shutil
 import datetime
 from pathlib import Path
 
+# Repository configuration
+DEB_SUITE = "stable"  # Distribution suite name
+DEB_COMPONENT = "main"  # Repository component
+DEB_ARCHITECTURE = "binary-amd64"  # Architecture directory name
+CPU_ARCHITECTURE = (
+    "x86_64"  # CPU architecture directory for packages (both DEB and RPM)
+)
+
 SVG_DEFS = """<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
 <defs>
   <symbol id="file" viewBox="0 0 265 323">
@@ -117,13 +125,13 @@ def regenerate_rpm_metadata_from_s3(s3, bucket, prefix, uploaded_packages):
         old_repodata_dir.mkdir(parents=True, exist_ok=True)
 
         print(
-            f"Downloading existing repository metadata from S3: s3://{bucket}/{prefix}/x86_64/repodata/"
+            f"Downloading existing repository metadata from S3: s3://{bucket}/{prefix}/{CPU_ARCHITECTURE}/repodata/"
         )
         repodata_files = []
         try:
             paginator = s3.get_paginator("list_objects_v2")
             for page in paginator.paginate(
-                Bucket=bucket, Prefix=f"{prefix}/x86_64/repodata/"
+                Bucket=bucket, Prefix=f"{prefix}/{CPU_ARCHITECTURE}/repodata/"
             ):
                 if "Contents" not in page:
                     continue
@@ -150,7 +158,7 @@ def regenerate_rpm_metadata_from_s3(s3, bucket, prefix, uploaded_packages):
                 f"Generating metadata for {len(rpm_packages)} uploaded RPM packages..."
             )
             # Copy uploaded RPMs to temp dir
-            new_arch_dir = new_repo_dir / "x86_64"
+            new_arch_dir = new_repo_dir / CPU_ARCHITECTURE
             new_arch_dir.mkdir(parents=True, exist_ok=True)
             for rpm_file in rpm_packages:
                 shutil.copy2(rpm_file, new_arch_dir / Path(rpm_file).name)
@@ -169,14 +177,16 @@ def regenerate_rpm_metadata_from_s3(s3, bucket, prefix, uploaded_packages):
                 # Just re-upload the existing repodata we downloaded
                 for metadata_file in old_repodata_dir.iterdir():
                     if metadata_file.is_file():
-                        s3_key = f"{prefix}/x86_64/repodata/{metadata_file.name}"
+                        s3_key = (
+                            f"{prefix}/{CPU_ARCHITECTURE}/repodata/{metadata_file.name}"
+                        )
                         s3.upload_file(str(metadata_file), bucket, s3_key)
                         print(f"  Uploaded: {metadata_file.name}")
                 print("✅ RPM repository metadata preserved")
             return
 
         # Step 3: Merge repositories using mergerepo_c (no need to download all RPMs!)
-        merged_arch_dir = merged_repo_dir / "x86_64"
+        merged_arch_dir = merged_repo_dir / CPU_ARCHITECTURE
         merged_arch_dir.mkdir(parents=True, exist_ok=True)
 
         if repodata_files:  # If we have existing metadata
@@ -185,7 +195,7 @@ def regenerate_rpm_metadata_from_s3(s3, bucket, prefix, uploaded_packages):
             # Use --no-database, --simple-md-filenames, and --omit-baseurl to ensure clean paths
             run_command(
                 f"mergerepo_c --no-database --simple-md-filenames --omit-baseurl "
-                f'--repo "{old_repo_dir}" --repo "{new_repo_dir / "x86_64"}" '
+                f'--repo "{old_repo_dir}" --repo "{new_repo_dir / CPU_ARCHITECTURE}" '
                 f'--outputdir "{merged_arch_dir}"',
                 cwd=str(temp_path),
             )
@@ -193,7 +203,8 @@ def regenerate_rpm_metadata_from_s3(s3, bucket, prefix, uploaded_packages):
         else:  # First upload, no existing metadata
             print("First upload - using new repository metadata")
             shutil.copytree(
-                new_repo_dir / "x86_64" / "repodata", merged_arch_dir / "repodata"
+                new_repo_dir / CPU_ARCHITECTURE / "repodata",
+                merged_arch_dir / "repodata",
             )
 
         # Step 4: Upload merged repodata to S3
@@ -203,7 +214,9 @@ def regenerate_rpm_metadata_from_s3(s3, bucket, prefix, uploaded_packages):
             uploaded_metadata = []
             for metadata_file in merged_repodata.iterdir():
                 if metadata_file.is_file():
-                    s3_key = f"{prefix}/x86_64/repodata/{metadata_file.name}"
+                    s3_key = (
+                        f"{prefix}/{CPU_ARCHITECTURE}/repodata/{metadata_file.name}"
+                    )
                     s3.upload_file(str(metadata_file), bucket, s3_key)
                     uploaded_metadata.append(metadata_file.name)
                     print(f"  Uploaded: {metadata_file.name}")
@@ -221,10 +234,10 @@ def generate_release_file_with_checksums(release_file, job_type, dists_dir):
     import hashlib
     import datetime
 
-    # Files to hash (relative paths from dists/stable/)
+    # Files to hash (relative paths from dists/<suite>)
     files_to_hash = [
-        (dists_dir / "Packages", "main/binary-amd64/Packages"),
-        (dists_dir / "Packages.gz", "main/binary-amd64/Packages.gz"),
+        (dists_dir / "Packages", f"{DEB_COMPONENT}/{DEB_ARCHITECTURE}/Packages"),
+        (dists_dir / "Packages.gz", f"{DEB_COMPONENT}/{DEB_ARCHITECTURE}/Packages.gz"),
     ]
 
     # Calculate all hashes
@@ -264,10 +277,10 @@ def generate_release_file_with_checksums(release_file, job_type, dists_dir):
         f.write(
             f"""Origin: AMD ROCm
 Label: ROCm {job_type} Packages
-Suite: stable
-Codename: stable
+Suite: {DEB_SUITE}
+Codename: {DEB_SUITE}
 Architectures: amd64
-Components: main
+Components: {DEB_COMPONENT}
 Description: ROCm APT Repository
 Date: {datetime.datetime.utcnow():%a, %d %b %Y %H:%M:%S UTC}
 """
@@ -309,19 +322,23 @@ def upload_deb_metadata_to_s3(s3, bucket, prefix, dists_dir, release_file):
 
     uploaded_count = 0
     if packages_file.exists():
-        s3_key = f"{prefix}/dists/stable/main/binary-amd64/Packages"
+        s3_key = (
+            f"{prefix}/dists/{DEB_SUITE}/{DEB_COMPONENT}/{DEB_ARCHITECTURE}/Packages"
+        )
         s3.upload_file(str(packages_file), bucket, s3_key)
         print(f"  Uploaded: Packages")
         uploaded_count += 1
 
     if packages_gz.exists():
-        s3_key = f"{prefix}/dists/stable/main/binary-amd64/Packages.gz"
+        s3_key = (
+            f"{prefix}/dists/{DEB_SUITE}/{DEB_COMPONENT}/{DEB_ARCHITECTURE}/Packages.gz"
+        )
         s3.upload_file(str(packages_gz), bucket, s3_key)
         print(f"  Uploaded: Packages.gz")
         uploaded_count += 1
 
     if release_file.exists():
-        s3_key = f"{prefix}/dists/stable/Release"
+        s3_key = f"{prefix}/dists/{DEB_SUITE}/Release"
         s3.upload_file(str(release_file), bucket, s3_key)
         print(f"  Uploaded: Release")
         uploaded_count += 1
@@ -352,15 +369,17 @@ def regenerate_deb_metadata_from_s3(
         temp_path = Path(temp_dir)
 
         # Setup directories
-        dists_dir = temp_path / "dists" / "stable" / "main" / "binary-amd64"
+        dists_dir = temp_path / "dists" / DEB_SUITE / DEB_COMPONENT / DEB_ARCHITECTURE
         dists_dir.mkdir(parents=True, exist_ok=True)
 
-        pool_dir = temp_path / "pool" / "main"
+        pool_dir = temp_path / CPU_ARCHITECTURE
         pool_dir.mkdir(parents=True, exist_ok=True)
 
         # Step 1: Download existing Packages file from S3 (SMALL FILE - efficient!)
         existing_packages = dists_dir / "Packages.old"
-        packages_s3_key = f"{prefix}/dists/stable/main/binary-amd64/Packages"
+        packages_s3_key = (
+            f"{prefix}/dists/{DEB_SUITE}/{DEB_COMPONENT}/{DEB_ARCHITECTURE}/Packages"
+        )
         try:
             print(
                 f"Downloading existing Packages file from S3: s3://{bucket}/{packages_s3_key}"
@@ -387,7 +406,7 @@ def regenerate_deb_metadata_from_s3(
             # Generate Packages entries for uploaded packages
             new_packages = dists_dir / "Packages.new"
             run_command(
-                f'dpkg-scanpackages -m pool/main /dev/null > "{new_packages}"',
+                f'dpkg-scanpackages -m {CPU_ARCHITECTURE} /dev/null > "{new_packages}"',
                 cwd=str(temp_path),
             )
             print("✅ Generated Packages entries for uploaded packages")
@@ -399,7 +418,7 @@ def regenerate_deb_metadata_from_s3(
                 run_command("gzip -9c Packages > Packages.gz", cwd=str(dists_dir))
 
                 # Generate Release file with checksums
-                release_dir = temp_path / "dists" / "stable"
+                release_dir = temp_path / "dists" / DEB_SUITE
                 release_dir.mkdir(parents=True, exist_ok=True)
                 release_file = release_dir / "Release"
 
@@ -463,7 +482,7 @@ def regenerate_deb_metadata_from_s3(
         run_command("gzip -9c Packages > Packages.gz", cwd=str(dists_dir))
 
         # Step 4: Generate Release file with checksums
-        release_dir = temp_path / "dists" / "stable"
+        release_dir = temp_path / "dists" / DEB_SUITE
         release_dir.mkdir(parents=True, exist_ok=True)
         release_file = release_dir / "Release"
 
@@ -724,8 +743,10 @@ def s3_object_exists(s3, bucket, key):
 def create_deb_repo(package_dir, job_type):
     print("Creating APT repository...")
 
-    dists = os.path.join(package_dir, "dists", "stable", "main", "binary-amd64")
-    pool = os.path.join(package_dir, "pool", "main")
+    dists = os.path.join(
+        package_dir, "dists", DEB_SUITE, DEB_COMPONENT, DEB_ARCHITECTURE
+    )
+    pool = os.path.join(package_dir, CPU_ARCHITECTURE)
 
     os.makedirs(dists, exist_ok=True)
     os.makedirs(pool, exist_ok=True)
@@ -735,20 +756,20 @@ def create_deb_repo(package_dir, job_type):
             shutil.move(os.path.join(package_dir, f), os.path.join(pool, f))
 
     run_command(
-        "dpkg-scanpackages -m pool/main /dev/null > dists/stable/main/binary-amd64/Packages",
+        f"dpkg-scanpackages -m {CPU_ARCHITECTURE} /dev/null > dists/{DEB_SUITE}/{DEB_COMPONENT}/{DEB_ARCHITECTURE}/Packages",
         cwd=package_dir,
     )
     run_command("gzip -9c Packages > Packages.gz", cwd=dists)
 
-    release = os.path.join(package_dir, "dists", "stable", "Release")
+    release = os.path.join(package_dir, "dists", DEB_SUITE, "Release")
     with open(release, "w") as f:
         f.write(
             f"""Origin: AMD ROCm
 Label: ROCm {job_type} Packages
-Suite: stable
-Codename: stable
+Suite: {DEB_SUITE}
+Codename: {DEB_SUITE}
 Architectures: amd64
-Components: main
+Components: {DEB_COMPONENT}
 Date: {datetime.datetime.utcnow():%a, %d %b %Y %H:%M:%S UTC}
 """
         )
@@ -764,7 +785,7 @@ def create_rpm_repo(package_dir):
     """
     print("Creating RPM repository...")
 
-    arch_dir = os.path.join(package_dir, "x86_64")
+    arch_dir = os.path.join(package_dir, CPU_ARCHITECTURE)
     os.makedirs(arch_dir, exist_ok=True)
 
     for f in os.listdir(package_dir):
