@@ -338,4 +338,19 @@ jobs:
           CUSTOM_PREFIX: "${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}"
         run: |
           pip install boto3 packaging
-          python ./build_tools/third_party/s3_management/manage.py ${{ env.CUSTOM_PREFIX }}
+          python ./build_tools/third_party/s3_management/manage.py ${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}
+  
+  build_pytorch_docker:
+    name: Build PyTorch Docker Image
+    needs: [build_pytorch_wheels, upload_pytorch_wheels]
+    uses: ./.github/workflows/build_pytorch_docker.yml
+    with:
+      torch_version: ${{ needs.build_pytorch_wheels.outputs.torch_version }}
+      python_version: ${{ inputs.python_version }}
+      rocm_version: ${{ inputs.rocm_version }}
+      package_index_url: ${{ inputs.cloudfront_url }}
+      amdgpu_family: ${{ inputs.amdgpu_family }}
+      repository: ${{ inputs.repository || github.repository }}
+      ref: ${{ inputs.ref || '' }}
+      vllm_ref: ${{ inputs.ref || github.ref }}
+    secrets: inherit

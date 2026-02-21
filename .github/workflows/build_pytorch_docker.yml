@@ -1,0 +1,184 @@
+name: Build PyTorch Docker
+
+on:
+  workflow_call:
+    inputs:
+      torch_version:
+        description: Torch version to install inside the docker image
+        required: true
+        type: string
+      python_version:
+        description: Python version to use in the docker image
+        type: string
+      rocm_version:
+        description: ROCm version to install inside the docker image
+        required: true
+        type: string
+      package_index_url:
+        description: Base URL for the Python package index
+        type: string
+      amdgpu_family:
+        description: AMD GPU family to select the wheel index subdir
+        required: true
+        type: string
+      push:
+        description: Whether to push the built image to Docker Hub
+        required: false
+        type: boolean
+        default: true
+      repository:
+        description: "Repository to checkout. Defaults to caller repo."
+        required: false
+        type: string
+        default: ""
+      ref:
+        description: "Branch, tag or SHA to checkout. Defaults to the same ref as the caller."
+        required: false
+        type: string
+        default: ""
+      vllm_ref:
+        description: "Commit SHA, branch, or tag to checkout in ROCm/vllm"
+        required: true
+        type: string
+    outputs:
+      pytorch_tag:
+        description: "The full PyTorch image tag that was built/pushed"
+        value: ${{ jobs.build.outputs.pytorch_tag }}
+      vllm_tag:
+        description: "Alias of the same full tag for VLLM usage"
+        value: ${{ jobs.vllm.outputs.vllm_tag }}
+
+  workflow_dispatch:
+    inputs:
+      torch_version:
+        type: string
+        required: true
+      python_version:
+        type: string
+        required: true
+        default: "3.12"
+      rocm_version:
+        type: string
+        required: true
+        default: "7.9.0rc20251008"
+      package_index_url:
+        type: string
+        required: true
+        default: "https://d25kgig7rdsyks.cloudfront.net/v2/"
+      amdgpu_family:
+        type: string
+        required: true
+        default: "gfx94X-dcgpu"
+      push:
+        type: boolean
+        default: true
+      repository:
+        type: string
+        default: ""
+      ref:
+        type: string
+        default: ""
+      vllm_ref:
+        type: string
+        required: true
+        description: "Commit SHA, branch, or tag to checkout for vLLM"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build PyTorch Docker Image
+    runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
+    outputs:
+      pytorch_tag: ${{ steps.dockertag.outputs.pytorch_tag }}
+    env:
+      REGISTRY: docker.io
+      TORCH_VERSION: ${{ inputs.torch_version }}
+      PYTHON_VERSION: ${{ inputs.python_version }}
+      ROCM_VERSION: ${{ inputs.rocm_version }}
+      PACKAGE_INDEX_URL: ${{ inputs.package_index_url }}
+      AMDGPU_FAMILY: ${{ inputs.amdgpu_family }}
+
+    steps:
+      - name: Checkout repo/ref as caller
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python_version }}
+
+      - name: Compute image tag
+        id: dockertag
+        shell: bash
+        run: |
+          safe() { echo "$1" | tr '[:upper:]' '[:lower:]' | tr '/ +' '_' ; }
+          ROCM_TAG="rocm$(safe "${ROCM_VERSION}")"
+          TORCH_BASE_VERSION="$(safe "${TORCH_VERSION%%+*}")"
+          PY_MAJ_MIN="$(echo "${PYTHON_VERSION}" | awk -F. '{print $1"."$2}')"
+          PY_MAJ_MIN="$(safe "${PY_MAJ_MIN}")"
+          GPU_FAMILY="$(safe "${AMDGPU_FAMILY}")"
+          VERSION_TAG="${ROCM_TAG}_pytorch_${TORCH_BASE_VERSION}_py_${PY_MAJ_MIN}_${GPU_FAMILY}"
+          IMAGE_NAME="rocm/pytorch-private"
+          PYTORCH_TAG="${IMAGE_NAME}:${VERSION_TAG}"
+          echo "Computed tag: ${PYTORCH_TAG}"
+          echo "pytorch_tag=${PYTORCH_TAG}" >> "$GITHUB_OUTPUT"
+          echo "py_maj_min=${PY_MAJ_MIN}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3.7.1
+
+      - name: Check Docker version
+        run: |
+          docker --version
+          echo "Docker version checked successfully."
+
+      - name: Build image via Python script
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          pwd
+          ls -al
+          python3 ./build_tools/pytorch_docker_build_push.py \
+            --context . \
+            --dockerfile dockerfiles/pytorch_base.Dockerfile \
+            --tag "${{ steps.dockertag.outputs.pytorch_tag }}" \
+            --PYTHON_VERSION "${{ steps.dockertag.outputs.py_maj_min }}" \
+            --TORCH_VERSION "${TORCH_VERSION}" \
+            --ROCM_VERSION "${ROCM_VERSION}" \
+            --PACKAGE_INDEX_URL "${PACKAGE_INDEX_URL}" \
+            --AMDGPU_FAMILY "${AMDGPU_FAMILY}"
+      
+      - name: Log in to Docker Hub
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.DOCKERHUB_USER }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+      
+      - name: Push image
+        if: ${{ inputs.push }}
+        run: |
+          docker push "${{ steps.dockertag.outputs.pytorch_tag }}"
+
+      - name: Summary and export tag
+        shell: bash
+        run: |
+          echo "pytorch_tag=${{ steps.dockertag.outputs.pytorch_tag }}" >> "$GITHUB_ENV"
+
+  vllm:
+    name: Trigger VLLM Docker Workflow
+    needs: [build]
+    uses: ./.github/workflows/build_vllm_docker.yml
+    with:
+      pytorch_base_image: ${{ needs.build.outputs.pytorch_tag }}
+      rocm_version: ${{ inputs.rocm_version }}
+      amdgpu_family: ${{ inputs.amdgpu_family }}
+      push: ${{ inputs.push }}
+      vllm_ref: ${{ inputs.vllm_ref }}
+    secrets: inherit
