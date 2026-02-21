@@ -66,34 +66,7 @@ project(rocgdb C CXX)
 
 include(ExternalProject)
 include(ProcessorCount)
-
-# Function to extract a single path that matches a given regex pattern
-# from a list of paths.
-#
-# Usage:
-#   fetch_library_prefix(<input_path_list> <pattern> <output_var>)
-#
-# Example:
-#   fetch_library_prefix(CMAKE_PREFIX_PATH "gmp" GMP_PREFIX)
-#
-function(fetch_library_prefix input_path_list pattern output_var)
-  # Access the list contents using the input variable name
-  set(_input_list "${${input_path_list}}")
-
-  # Filter the list using the provided pattern
-  list(FILTER _input_list INCLUDE REGEX "${pattern}")
-
-  # Check if a match was found.
-  if(_input_list)
-    # Store the first match in the output variable provided by the caller.
-    list(GET _input_list 0 _result_path)
-    set(${output_var} "${_result_path}" PARENT_SCOPE)
-    message(STATUS "Extracted path for pattern '${pattern}': ${_result_path}")
-  else()
-    # No match found, issue a fatal error.
-    message(SEND_ERROR "Did not find a path containing '${pattern}' in ${input_list_var_name}.")
-  endif()
-endfunction()
+include(therock_subproject_utils)
 
 # By default install the ROCgdb testsuite files.
 option(ENABLE_TESTS "Enable installation of ROCgdb testsuite files" OFF)
@@ -131,11 +104,11 @@ endif()
 message(STATUS "Build type set to: ${CMAKE_BUILD_TYPE}")
 
 # Fetch the install prefixes for the library and executables rocgdb
-# depends on.
-fetch_library_prefix(CMAKE_PREFIX_PATH "/gmp/build/stage" GMP_PREFIX)
-fetch_library_prefix(CMAKE_PREFIX_PATH "/mpfr/build/stage" MPFR_PREFIX)
-fetch_library_prefix(CMAKE_PREFIX_PATH "/expat/build/stage" EXPAT_PREFIX)
-fetch_library_prefix(CMAKE_PREFIX_PATH "/ncurses/build/stage" NCURSES_PREFIX)
+# Depends on and uses therock_fetch_library_prefix from therock_subproject_utils.cmake.
+therock_fetch_library_prefix(CMAKE_PREFIX_PATH "/gmp/build/stage" GMP_PREFIX)
+therock_fetch_library_prefix(CMAKE_PREFIX_PATH "/mpfr/build/stage" MPFR_PREFIX)
+therock_fetch_library_prefix(CMAKE_PREFIX_PATH "/expat/build/stage" EXPAT_PREFIX)
+therock_fetch_library_prefix(CMAKE_PREFIX_PATH "/ncurses/build/stage" NCURSES_PREFIX)
 
 # We need to explicitly pass ncurses' include path and set the rpath for
 # the library. The reason we need to explicitly pass rpath is because gdb's

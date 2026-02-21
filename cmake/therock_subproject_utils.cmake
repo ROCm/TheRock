@@ -45,6 +45,35 @@ function(therock_set_install_rpath)
 endfunction()
 
 
+# Extracts a dependency prefix path from a path list (typically CMAKE_PREFIX_PATH)
+# by filtering for a specific pattern. This is useful for autotools-based builds
+# that require explicit --with-* configure flags, as autotools doesn't use
+# CMAKE_PREFIX_PATH directly.
+# Args:
+#   input_path_list: Name of the variable containing the list of paths (e.g., "CMAKE_PREFIX_PATH")
+#   pattern: Regex pattern to filter the paths (e.g., "/gmp/build/stage")
+#   output_var: Name of the variable to store the result in
+# Example:
+#   fetch_library_prefix(CMAKE_PREFIX_PATH "/gmp/build/stage" GMP_PREFIX)
+#   # Sets GMP_PREFIX to the first path in CMAKE_PREFIX_PATH matching the pattern
+function(therock_fetch_library_prefix input_path_list pattern output_var)
+  # Access the list contents using the input variable name
+  set(_input_list "${${input_path_list}}")
+  # Filter the list to include only items matching the pattern
+  list(FILTER _input_list INCLUDE REGEX "${pattern}")
+  # Check if a match was found
+  if(_input_list)
+    # Get the first match and return it
+    list(GET _input_list 0 _result_path)
+    set(${output_var} "${_result_path}" PARENT_SCOPE)
+    message(STATUS "Extracted path for pattern '${pattern}': ${_result_path}")
+  else()
+    # Error if no match found
+    message(SEND_ERROR "Did not find a path containing '${pattern}' in ${input_path_list}.")
+  endif()
+endfunction()
+
+
 # Replaces a library linked with `-l` with a CMake target.
 # Args:
 # OLD_LIBRARY: Deprecated library linked with `-l`
