@@ -61,7 +61,8 @@ endif()
 cmake_minimum_required(VERSION 3.25)
 project(LIBBACKTRACE_BUILD VERSION "1.0.0")
 
-if(NOT PATCHELF)
+# PATCHELF is only needed on Linux for fixing RPATHs
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT PATCHELF)
   message(FATAL_ERROR "Missing PATCHELF from super-project")
 endif()
 
@@ -87,7 +88,7 @@ add_custom_target(
     make install
   COMMAND
     "${CMAKE_COMMAND}" -E env
-      "PATCHELF=${PATCHELF}"
+      "PATCHELF=$<IF:$<BOOL:${PATCHELF}>,${PATCHELF},>"
       "THEROCK_SOURCE_DIR=${THEROCK_SOURCE_DIR}"
       "Python3_EXECUTABLE=${Python3_EXECUTABLE}" --
     "${CMAKE_CURRENT_SOURCE_DIR}/patch_install.sh" ${CMAKE_INSTALL_PREFIX}

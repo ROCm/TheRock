@@ -20,6 +20,11 @@ if(TARGET rocprofiler-register)
   set(_optional_rocprofiler_register rocprofiler-register)
 endif()
 
+set(_optional_ocl_icd)
+if(TARGET ocl-icd)
+  set(_optional_ocl_icd ocl-icd)
+endif()
+
 if(THEROCK_ENABLE_CORE_AMDSMI)
 
   ################################################################################
@@ -383,23 +388,26 @@ endif()
 # ocl-icd
 ################################################################################
 
-therock_cmake_subproject_declare(ocl-icd
-  USE_DIST_AMDGPU_TARGETS
-  EXTERNAL_SOURCE_DIR
-    "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/clr/opencl/khronos/icd"
-    "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/OpenCL-Headers"
-  BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/opencl/icd"
-  BACKGROUND_BUILD
-  CMAKE_ARGS
-    "-DOPENCL_ICD_LOADER_REQUIRE_WDK=OFF"
-    "-DOPENCL_ICD_LOADER_HEADERS_DIR=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/clr/opencl/khronos/headers/opencl2.2"
+# ocl-icd has Linux-specific code in loader/linux/ - only build on Linux and Windows
+if(NOT APPLE)
+  therock_cmake_subproject_declare(ocl-icd
+    USE_DIST_AMDGPU_TARGETS
+    EXTERNAL_SOURCE_DIR
+      "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/clr/opencl/khronos/icd"
+      "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/OpenCL-Headers"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/opencl/icd"
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      "-DOPENCL_ICD_LOADER_REQUIRE_WDK=OFF"
+      "-DOPENCL_ICD_LOADER_HEADERS_DIR=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/clr/opencl/khronos/headers/opencl2.2"
 
-  INTERFACE_LINK_DIRS
-    "lib"
-  INTERFACE_INSTALL_RPATH_DIRS
-    "lib"
-)
-therock_cmake_subproject_activate(ocl-icd)
+    INTERFACE_LINK_DIRS
+      "lib"
+    INTERFACE_INSTALL_RPATH_DIRS
+      "lib"
+  )
+  therock_cmake_subproject_activate(ocl-icd)
+endif()
 
 if(THEROCK_ENABLE_OCL_RUNTIME)
   set(OCL_CLR_CMAKE_ARGS)
@@ -445,8 +453,8 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
     RUNTIME_DEPS
       amd-llvm
       amd-comgr
-      rocm-core
-      ocl-icd
+      ${_optional_rocm_core}
+      ${_optional_ocl_icd}
       ${OCL_CLR_RUNTIME_DEPS}
     INSTALL_RPATH_LIBRARY_DIR
       "lib/opencl"
