@@ -24,7 +24,7 @@ from pathlib import Path
 import pytest
 
 from pytorch_utils import (
-    get_unique_supported_devices_count,
+    get_unique_supported_devices,
     set_gpu_execution_policy,
 )
 
@@ -87,11 +87,11 @@ def main() -> int:
             print(f"ERROR: Directory at '{smoke_tests_dir}' does not exist.")
             sys.exit(1)
 
-        # CRITICAL: Query unique device count for iteration.
+        # CRITICAL: Query unique devices for iteration.
         # HIP_VISIBLE_DEVICES will be set inside set_gpu_execution_policy.
-        unique_device_count = get_unique_supported_devices_count(args.amdgpu_family)
+        unique_devices = get_unique_supported_devices(args.amdgpu_family)
 
-        print(f"Will run smoke tests on {unique_device_count} unique device(s)")
+        print(f"Will run smoke tests on {len(unique_devices)} unique device(s)")
 
         # Track overall success
         overall_retcode = 0
@@ -104,10 +104,10 @@ def main() -> int:
         pytest_args.extend(passthrough_pytest_args)
 
         # Run smoke tests for each unique device iteratively using offset
-        for offset in range(unique_device_count):
-            # Set HIP_VISIBLE_DEVICES for this specific device using "unique-single" policy
+        for offset in range(len(unique_devices)):
+            # Set HIP_VISIBLE_DEVICES for this specific device using "single" policy
             ((arch, device_idx),) = set_gpu_execution_policy(
-                args.amdgpu_family, policy="unique-single", offset=offset
+                unique_devices, policy="single", offset=offset
             )
 
             print(f"\n{'='*60}")
