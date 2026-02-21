@@ -61,7 +61,7 @@ add_library(
   ${SOURCE_DIR}/sqlite3.c
 )
 
-if(NOT WIN32)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     add_custom_command(
     TARGET rocm_sysdeps_sqlite3
     POST_BUILD
@@ -71,6 +71,15 @@ if(NOT WIN32)
     BYPRODUCTS libsqlite3.so
     )
     target_link_options(rocm_sysdeps_sqlite3 PRIVATE "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds")
+elseif(APPLE)
+    add_custom_command(
+    TARGET rocm_sysdeps_sqlite3
+    POST_BUILD
+    COMMAND
+        "${CMAKE_COMMAND}" -E create_symlink librocm_sysdeps_sqlite3.dylib
+        ${CMAKE_CURRENT_BINARY_DIR}/libsqlite3.dylib
+    BYPRODUCTS libsqlite3.dylib
+    )
 endif()
 target_link_libraries(rocm_sysdeps_sqlite3 PRIVATE
   ${CMAKE_DL_LIBS}
@@ -78,8 +87,10 @@ target_link_libraries(rocm_sysdeps_sqlite3 PRIVATE
 )
 
 install(TARGETS rocm_sysdeps_sqlite3)
-if(NOT WIN32)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     install(FILES ${CMAKE_CURRENT_BINARY_DIR}/libsqlite3.so TYPE LIB)
+elseif(APPLE)
+    install(FILES ${CMAKE_CURRENT_BINARY_DIR}/libsqlite3.dylib TYPE LIB)
 endif()
 install(FILES "${SOURCE_DIR}/sqlite3.h" TYPE INCLUDE)
 install(FILES "${SOURCE_DIR}/sqlite3ext.h" TYPE INCLUDE)

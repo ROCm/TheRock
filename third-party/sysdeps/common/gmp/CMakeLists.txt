@@ -65,6 +65,15 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT PATCHELF)
   message(FATAL_ERROR "Missing PATCHELF from super-project")
 endif()
 
+# Platform-specific linker flags
+if(APPLE)
+  set(_rpath_flag "-Wl,-rpath,@loader_path")
+  set(_version_script_flag "")
+else()
+  set(_rpath_flag "-Wl,-rpath=\\'\\$$\\$$ORIGIN\\'")
+  set(_version_script_flag "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds")
+endif()
+
 add_custom_target(
   build ALL
   WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
@@ -79,7 +88,7 @@ add_custom_target(
       #
       # '$$ORIGIN' does make its way to LDFLAGS correctly, but doesn't survive
       # making it to the shared library's RUNPATH.
-      "LDFLAGS=${CMAKE_SHARED_LINKER_FLAGS} -Wl,-rpath=\\'\\$$\\$$ORIGIN\\' -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
+      "LDFLAGS=${CMAKE_SHARED_LINKER_FLAGS} ${_rpath_flag} ${_version_script_flag}"
       "CPPFLAGS=${EXTRA_CPPFLAGS}"
       --
     "${SOURCE_DIR}/configure"

@@ -104,6 +104,15 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT PATCHELF)
   message(FATAL_ERROR "Missing PATCHELF from super-project")
 endif()
 
+# Platform-specific linker flags
+if(APPLE)
+  set(_rpath_flag "-Wl,-rpath,@loader_path -Wl,-rpath,@loader_path/../lib")
+  set(_version_script_flag "")
+else()
+  set(_rpath_flag "-Wl,-rpath=\\'\\$$\\$$ORIGIN:\\$$\\$$ORIGIN/../lib\\'")
+  set(_version_script_flag "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds")
+endif()
+
 add_custom_target(
   build ALL
   WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
@@ -115,7 +124,7 @@ add_custom_target(
       "PKG_CONFIG_PATH=$ENV{PKG_CONFIG_PATH}"
       # Escaping: Double $ to satisfy CMake, then double $ to satisfy configure,
       # then escaped single quotes to make it to the linker command line.
-      "LDFLAGS=${CMAKE_SHARED_LINKER_FLAGS} -Wl,-rpath=\\'\\$$\\$$ORIGIN:\\$$\\$$ORIGIN/../lib\\' -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
+      "LDFLAGS=${CMAKE_SHARED_LINKER_FLAGS} ${_rpath_flag} ${_version_script_flag}"
       # Add -std=gnu17 so workaround GCC 15 build issues for now.
       # See https://github.com/conan-io/conan-center-index/issues/28083
       "CPPFLAGS=${EXTRA_CPPFLAGS} -std=gnu17"
