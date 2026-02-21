@@ -149,8 +149,6 @@ def upload_missing_whls(
             continue
         if "cp313t" in pkg:
             continue
-        if "cp314" in pkg:
-            continue
         if "cp314t" in pkg:
             continue
         print(f"Downloading {pkg}")
