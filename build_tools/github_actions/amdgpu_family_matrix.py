@@ -141,18 +141,54 @@ amdgpu_family_info_matrix_postsubmit = {
 
 # The 'nightly' matrix runs on 'schedule' triggers.
 amdgpu_family_info_matrix_nightly = {
-    "gfx90x": {
+    # gfx906/908/90a split into separate families - each has different instruction
+    # support (e.g., fp8 variants, WMMA) so CK/MIOpen need to build/test individually.
+    "gfx906": {
         "linux": {
-            "test-runs-on": "linux-gfx90X-gpu-rocm",
-            "family": "gfx90X-dcgpu",
-            "fetch-gfx-targets": ["gfx90a"],
+            # Disabled due to hardware availability
+            "test-runs-on": "",
+            "family": "gfx906",
+            "fetch-gfx-targets": [],
             "sanity_check_only_for_family": True,
             "build_variants": ["release"],
         },
         # TODO(#1927): Resolve error generating file `torch_hip_generated_int4mm.hip.obj`, to enable PyTorch builds
         "windows": {
             "test-runs-on": "",
-            "family": "gfx90X-dcgpu",
+            "family": "gfx906",
+            "fetch-gfx-targets": [],
+            "build_variants": ["release"],
+            "expect_pytorch_failure": True,
+        },
+    },
+    "gfx908": {
+        "linux": {
+            # Disabled due to hardware availability
+            "test-runs-on": "",
+            "family": "gfx908",
+            "fetch-gfx-targets": [],
+            "sanity_check_only_for_family": True,
+            "build_variants": ["release"],
+        },
+        "windows": {
+            "test-runs-on": "",
+            "family": "gfx908",
+            "fetch-gfx-targets": [],
+            "build_variants": ["release"],
+            "expect_pytorch_failure": True,
+        },
+    },
+    "gfx90a": {
+        "linux": {
+            "test-runs-on": "linux-gfx90a-gpu-rocm",
+            "family": "gfx90a",
+            "fetch-gfx-targets": ["gfx90a"],
+            "sanity_check_only_for_family": True,
+            "build_variants": ["release"],
+        },
+        "windows": {
+            "test-runs-on": "",
+            "family": "gfx90a",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
             "expect_pytorch_failure": True,
