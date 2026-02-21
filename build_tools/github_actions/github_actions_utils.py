@@ -599,6 +599,8 @@ def retrieve_bucket_info(
             and not is_pr_from_fork
         ):
             bucket = "therock-artifacts-internal"
+        elif (repo_name == "rocm-npi-dev" and owner == "AMD-ROCm-Internal"):
+            bucket = "therock-npi-tarball"
         else:
             bucket = "therock-ci-artifacts-external"
             if curr_commit_dt and curr_commit_dt <= commit_to_compare_dt:
