@@ -69,6 +69,17 @@ endif()
 cmake_minimum_required(VERSION 3.25)
 project(EXPAT_BUILD VERSION "2.7.3")
 
+# Platform-specific linker flags
+if(APPLE)
+  # macOS: use @loader_path and no version script
+  set(_rpath_flag "-Wl,-rpath,@loader_path")
+  set(_version_script_flag "")
+else()
+  # Linux: use $ORIGIN and version script
+  set(_rpath_flag "-Wl,-rpath=\\'\\$$\\$$ORIGIN\\'")
+  set(_version_script_flag "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds")
+endif()
+
 add_custom_target(
   build ALL
   WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
@@ -80,7 +91,7 @@ add_custom_target(
       "PKG_CONFIG_PATH=$ENV{PKG_CONFIG_PATH}"
       # Escaping: Double $ to satisfy CMake, then double $ to satisfy configure,
       # then escaped single quotes to make it to the linker command line.
-      "LDFLAGS=${CMAKE_SHARED_LINKER_FLAGS} -Wl,-rpath=\\'\\$$\\$$ORIGIN\\' -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
+      "LDFLAGS=${CMAKE_SHARED_LINKER_FLAGS} ${_rpath_flag} ${_version_script_flag}"
       "CPPFLAGS=${EXTRA_CPPFLAGS}"
       --
     "${SOURCE_DIR}/configure"

@@ -84,6 +84,11 @@ add_library(
 )
 target_link_libraries(rocm_sysdeps_bz2 PRIVATE bz2_objects)
 
+# Version script for Linux only (macOS doesn't support it)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  target_link_options(rocm_sysdeps_bz2 PRIVATE "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds")
+endif()
+
 # We also provide linked bzip2 executables that we include in the
 # development package. This will hardly ever be needed on Linux but is somewhat
 # harder to ensure on Windows, so we just build it.
@@ -93,7 +98,11 @@ foreach(bz2_exe_name bzip2 bzcat bunzip2)
     ${SOURCE_DIR}/bzip2.c
   )
   target_link_libraries("${bz2_exe_name}" PRIVATE rocm_sysdeps_bz2)
-  set_target_properties("${bz2_exe_name}" PROPERTIES INSTALL_RPATH "\$ORIGIN/../lib")
+  if(APPLE)
+    set_target_properties("${bz2_exe_name}" PROPERTIES INSTALL_RPATH "@loader_path/../lib")
+  else()
+    set_target_properties("${bz2_exe_name}" PROPERTIES INSTALL_RPATH "\$ORIGIN/../lib")
+  endif()
   install(TARGETS "${bz2_exe_name}")
 endforeach()
 
@@ -106,7 +115,6 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         ${CMAKE_CURRENT_BINARY_DIR}/libbz2.so
     BYPRODUCTS libbz2.so
   )
-  target_link_options(rocm_sysdeps_bz2 PRIVATE "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds")
   install(FILES ${CMAKE_CURRENT_BINARY_DIR}/libbz2.so TYPE LIB)
 endif()
 
