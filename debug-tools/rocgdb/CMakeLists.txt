@@ -64,6 +64,8 @@
 cmake_minimum_required(VERSION 3.25)
 project(rocgdb C CXX)
 
+option(THEROCK_BUNDLE_SYSDEPS "Use TheRock bundled sysdeps instead of system libs" OFF)
+
 include(ExternalProject)
 include(ProcessorCount)
 
@@ -90,8 +92,8 @@ function(fetch_library_prefix input_path_list pattern output_var)
     set(${output_var} "${_result_path}" PARENT_SCOPE)
     message(STATUS "Extracted path for pattern '${pattern}': ${_result_path}")
   else()
-    # No match found, issue a fatal error.
-    message(SEND_ERROR "Did not find a path containing '${pattern}' in ${input_list_var_name}.")
+    message(STATUS "No path containing '${pattern}' found in CMAKE_PREFIX_PATH; will use system detection.")
+    set(${output_var} "" PARENT_SCOPE)
   endif()
 endfunction()
 
@@ -131,30 +133,50 @@ endif()
 message(STATUS "Build type set to: ${CMAKE_BUILD_TYPE}")
 
 # Fetch the install prefixes for the library and executables rocgdb
-# depends on.
-fetch_library_prefix(CMAKE_PREFIX_PATH "/gmp/build/stage" GMP_PREFIX)
-fetch_library_prefix(CMAKE_PREFIX_PATH "/mpfr/build/stage" MPFR_PREFIX)
-fetch_library_prefix(CMAKE_PREFIX_PATH "/expat/build/stage" EXPAT_PREFIX)
-fetch_library_prefix(CMAKE_PREFIX_PATH "/ncurses/build/stage" NCURSES_PREFIX)
+# depends on. When THEROCK_BUNDLE_SYSDEPS is OFF, these are left empty and
+# GDB's configure script discovers the libraries via pkg-config instead.
+set(NCURSES_RPATH "")
+if(THEROCK_BUNDLE_SYSDEPS)
+  fetch_library_prefix(CMAKE_PREFIX_PATH "/gmp/build/stage" GMP_PREFIX)
+  fetch_library_prefix(CMAKE_PREFIX_PATH "/mpfr/build/stage" MPFR_PREFIX)
+  fetch_library_prefix(CMAKE_PREFIX_PATH "/expat/build/stage" EXPAT_PREFIX)
+  fetch_library_prefix(CMAKE_PREFIX_PATH "/ncurses/build/stage" NCURSES_PREFIX)
 
-# We need to explicitly pass ncurses' include path and set the rpath for
-# the library. The reason we need to explicitly pass rpath is because gdb's
-# configure assumes ncurses is always picked up from the default system
-# location, or that the library is always within reach.
-#
-# Since we're building our own ncurses and it is in a non-standard location,
-# the rpath assures the configure tests properly locate the library.
-set(NCURSES_RPATH "-Wl,-rpath,${NCURSES_PREFIX}/lib")
-set(NCURSES_INCLUDE "-I${NCURSES_PREFIX}/include")
+  # We need to explicitly pass ncurses' include path and set the rpath for
+  # the library. The reason we need to explicitly pass rpath is because gdb's
+  # configure assumes ncurses is always picked up from the default system
+  # location, or that the library is always within reach.
+  #
+  # Since we're building our own ncurses and it is in a non-standard location,
+  # the rpath assures the configure tests properly locate the library.
+  set(NCURSES_RPATH "-Wl,-rpath,${NCURSES_PREFIX}/lib")
+  set(NCURSES_INCLUDE "-I${NCURSES_PREFIX}/include")
 
-# Adjust the compilation flags and LDFLAGS.
-set(CUSTOM_C_FLAGS "${CUSTOM_C_FLAGS} ${NCURSES_INCLUDE}")
-set(CUSTOM_CXX_FLAGS "${CUSTOM_CXX_FLAGS} ${NCURSES_INCLUDE}")
+  # Adjust the compilation flags with the bundled ncurses include path.
+  set(CUSTOM_C_FLAGS "${CUSTOM_C_FLAGS} ${NCURSES_INCLUDE}")
+  set(CUSTOM_CXX_FLAGS "${CUSTOM_CXX_FLAGS} ${NCURSES_INCLUDE}")
+endif()
+
+# Adjust LDFLAGS. NCURSES_RPATH is empty when not using bundled sysdeps.
 set(LDFLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${NCURSES_RPATH} -Wl,--enable-new-dtags")
 
 # Replace all semicolons (the CMake separator) with colons (the ENV separator).
 # We need this to pass it on to rocgdb's configure.
 string(REPLACE ";" ":" PKG_CONFIG_PATH_ENV_VAR "${THEROCK_PKG_CONFIG_DIRS}")
+
+# Set conditional configure flags for bundled sysdep prefixes. When using system
+# libraries, these are left empty so autotools discovers them via pkg-config.
+# Furthermore, set an RPATH segment for the bundled sysdeps lib directory.
+set(ROCGDB_EXPAT_FLAG "")
+set(ROCGDB_GMP_FLAG "")
+set(ROCGDB_MPFR_FLAG "")
+set(ROCGDB_SYSDEPS_RPATH_SEGMENT "")
+if(THEROCK_BUNDLE_SYSDEPS)
+  set(ROCGDB_EXPAT_FLAG "--with-expat-prefix=${EXPAT_PREFIX}")
+  set(ROCGDB_GMP_FLAG "--with-gmp=${GMP_PREFIX}")
+  set(ROCGDB_MPFR_FLAG "--with-mpfr=${MPFR_PREFIX}")
+  set(ROCGDB_SYSDEPS_RPATH_SEGMENT ":\\\$ORIGIN/../lib/rocm_sysdeps/lib")
+endif()
 
 # Set some global variables for the configure/build.
 set(ROCGDB_BUG_URL "https://github.com/ROCm-Developer-Tools/ROCgdb/issues")
@@ -241,11 +263,11 @@ macro(add_python_variant minor_version configure_flags libpython_dir)
 
         --with-amd-dbgapi
         "--with-bugurl=${ROCGDB_BUG_URL}"
-        "--with-expat-prefix=${EXPAT_PREFIX}"
+        ${ROCGDB_EXPAT_FLAG}
         "--with-gdb-datadir=${ROCGDB_DATA_DIR}"
-        "--with-gmp=${GMP_PREFIX}"
+        ${ROCGDB_GMP_FLAG}
         --with-lzma
-        "--with-mpfr=${MPFR_PREFIX}"
+        ${ROCGDB_MPFR_FLAG}
         "--with-pkgversion=${ROCM_BUILD_ID}"
         "--with-separate-debug-dir=${ROCGDB_SEPARATE_DEBUG_INFO_DIR}"
         --with-system-zlib
@@ -355,7 +377,7 @@ macro(add_python_variant minor_version configure_flags libpython_dir)
   # Register RPATH patching for this rocgdb variant.
   message(STATUS "Registering fixup of ${CMAKE_INSTALL_PREFIX}/bin/rocgdb-py${minor_version}")
   install(CODE "execute_process(
-      COMMAND \"${PATCHELF}\" --set-rpath \"\$ORIGIN:\$ORIGIN/../lib:\$ORIGIN/../lib/rocm_sysdeps/lib${LIBPYTHON_RPATH}\"
+      COMMAND \"${PATCHELF}\" --set-rpath \"\$ORIGIN:\$ORIGIN/../lib${ROCGDB_SYSDEPS_RPATH_SEGMENT}${LIBPYTHON_RPATH}\"
       \"${CMAKE_INSTALL_PREFIX}/bin/rocgdb-py${minor_version}\"
       COMMAND_ERROR_IS_FATAL ANY
     )"
@@ -460,7 +482,7 @@ foreach(rocgdb_exec_filename ${ROCGDB_EXECS_TO_PATCH})
 
   # Patch in the RUNPATH.
   install(CODE "execute_process(
-      COMMAND \"${PATCHELF}\" --set-rpath \"\$ORIGIN:\$ORIGIN/../lib:\$ORIGIN/../lib/rocm_sysdeps/lib\"
+      COMMAND \"${PATCHELF}\" --set-rpath \"\$ORIGIN:\$ORIGIN/../lib${ROCGDB_SYSDEPS_RPATH_SEGMENT}\"
       \"${rocgdb_exec_file}\"
       COMMAND_ERROR_IS_FATAL ANY
   )"
