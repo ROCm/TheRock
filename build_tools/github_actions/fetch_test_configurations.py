@@ -259,7 +259,7 @@ test_matrix = {
         "fetch_artifact_args": "--tests",
         "timeout_minutes": 15,
         "setup_script": f"python {_get_script_path('setup_rocprofiler_sdk.py', True)}",
-        "test_script": f"pytest {_get_script_path('test_rocprofiler_sdk.py')} -vv -s --log-cli-level=info",
+        "test_script": f"python {_get_script_path('test_rocprofiler_sdk.py')} -vv -s --log-cli-level=info",
         "platform": ["linux"],
         "total_shards": 1,
     },
