@@ -231,29 +231,24 @@ endif(THEROCK_BUILD_TESTING)
     endif()
 
     # rocprofiler-systems requires Development.Embed (libpython) for pybind11.
-    # /opt/python-shared/ has it.
-    set(_rocprofsys_python_versions)
+    # On manylinux, /opt/python/ lacks libpython but /opt/python-shared/ has it.
+    # For each detected Python, try its shared counterpart first, then the original.
     set(_rocprofsys_python_root_dirs)
-    foreach(_exe _ver IN ZIP_LISTS _detected_python_executables _detected_python_versions)
+    foreach(_exe IN LISTS _detected_python_executables)
       cmake_path(GET _exe PARENT_PATH _bin_dir)
       cmake_path(GET _bin_dir PARENT_PATH _root_dir)
       string(REPLACE "/opt/python/" "/opt/python-shared/" _shared_root "${_root_dir}")
       if(EXISTS "${_shared_root}/lib" AND NOT "${_shared_root}" STREQUAL "${_root_dir}")
-        list(APPEND _rocprofsys_python_versions "${_ver}")
         list(APPEND _rocprofsys_python_root_dirs "${_shared_root}")
       elseif(EXISTS "${_root_dir}/lib")
-        list(APPEND _rocprofsys_python_versions "${_ver}")
         list(APPEND _rocprofsys_python_root_dirs "${_root_dir}")
       endif()
     endforeach()
     list(JOIN _rocprofsys_python_root_dirs "\;" _rocprofsys_python_root_dirs_str)
 
-    # TheRock injects Python3_EXECUTABLE into every subproject via
-    # THEROCK_DEFAULT_CMAKE_VARS, but rocprofiler-systems needs to call
-    # find_package(Python3) independently for each Python version to build
-    # per-version pybind11 modules.
-    # Also set ROCPROFSYS_PYTHON_VERSIONS as a non-cache variable
-    # so it does not get unset by rocprofiler_systems_watch_for_change().
+    # Clear the injected executable and CMake's internal
+    # ROOT_DIR tracking so rocprofiler-systems can auto-discover
+    # each Python version from ROCPROFSYS_PYTHON_ROOT_DIRS.
     set(_rocprofsys_python_config
       "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-systems/rocprofsys_python_config.cmake")
     file(WRITE "${_rocprofsys_python_config}"
@@ -261,7 +256,6 @@ endif(THEROCK_BUILD_TESTING)
       "# can discover each Python version independently for pybind11 modules.\n"
       "unset(Python3_EXECUTABLE CACHE)\n"
       "unset(_Python3_ROOT_DIR_LAST CACHE)\n"
-      "set(ROCPROFSYS_PYTHON_VERSIONS \"${_rocprofsys_python_versions}\")\n"
     )
 
     therock_cmake_subproject_declare(rocprofiler-systems
