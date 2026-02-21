@@ -31,7 +31,7 @@ if(THEROCK_ENABLE_CORE_AMDSMI)
   # amdsmi
   ################################################################################
 
-  if(NOT WIN32)  # TODO(#36): Enable on Windows and/or make subproject inclusion generally optional
+  if(CMAKE_SYSTEM_NAME STREQUAL "Linux")  # amdsmi requires libdrm which is Linux-specific
 
     therock_cmake_subproject_declare(amdsmi
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/amdsmi"
@@ -67,7 +67,7 @@ if(THEROCK_ENABLE_CORE_AMDSMI)
         amdsmi
     )
 
-  endif() # NOT WIN32
+  endif() # Linux only
 endif(THEROCK_ENABLE_CORE_AMDSMI)
 
 
