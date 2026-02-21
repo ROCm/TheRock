@@ -562,12 +562,12 @@ artifact_group = "ml-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "spdlog"]
 
-[artifacts.miopen-plugin]
+[artifacts.miopenprovider]
 artifact_group = "ml-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "spdlog"]
 
-[artifacts.hipblaslt-plugin]
+[artifacts.hipblasltprovider]
 artifact_group = "ml-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "blas", "hipdnn", "spdlog"]
@@ -575,7 +575,7 @@ artifact_deps = ["core-runtime", "core-hip", "blas", "hipdnn", "spdlog"]
 [artifacts.hipdnn-samples]
 artifact_group = "ml-libs"
 type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "miopen-plugin", "spdlog"]
+artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "miopenprovider", "spdlog"]
 
 # --- IREE Integration ---
 
@@ -585,7 +585,7 @@ type = "target-neutral"
 artifact_deps = ["core-hip"]
 disable_platforms = ["windows"]
 
-[artifacts.fusilli-plugin]
+[artifacts.fusilliprovider]
 artifact_group = "iree-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "hipdnn", "spdlog", "iree-compiler"]
