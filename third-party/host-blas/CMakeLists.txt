@@ -23,8 +23,8 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       CMAKE_PROJECT
       SOURCE_DIR "${_source_dir}"
       # Originally mirrored from: https://github.com/OpenMathLib/OpenBLAS/releases/download/v0.3.29/OpenBLAS-0.3.29.tar.gz
-      URL https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/OpenBLAS-0.3.30.tar.gz
-      URL_HASH SHA256=27342cff518646afb4c2b976d809102e368957974c250a25ccc965e53063c95d
+      URL https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/OpenBLAS-0.3.31.tar.gz
+      URL_HASH SHA256=6dd2a63ac9d32643b7cc636eab57bf4e57d0ed1fff926dfbc5d3d97f2d2be3a6
       # Originally posted MD5 was recomputed as SHA256 manually:
       # URL_HASH MD5=853a0c5c0747c5943e7ef4bbb793162d
       TOUCH "${_download_stamp}"
@@ -40,8 +40,13 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       set(_enable_dynamicArch "ON")
     endif()
 
+    ##############################################################################
+    # LP64 OpenBLAS
+    ##############################################################################
+    set(_host_blas_subproject_names)
     therock_cmake_subproject_declare(therock-host-blas
       USE_DIST_AMDGPU_TARGETS
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/host-blas"
       BACKGROUND_BUILD
       EXCLUDE_FROM_ALL
       NO_MERGE_COMPILE_COMMANDS
@@ -62,6 +67,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         -DTARGET=HASWELL
         -DDYNAMIC_ARCH=${_enable_dynamicArch}
         -DBUILD_TESTING=OFF
+        -DCMAKE_C_FLAGS_RELEASE="-O1"
       EXTRA_DEPENDS
         "${_download_stamp}"
     )
@@ -70,9 +76,52 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     therock_cmake_subproject_activate(therock-host-blas)
 
     therock_test_validate_shared_lib(
-      PATH dist/lib/host-math/lib
+      PATH host-blas/dist/lib/host-math/lib
       LIB_NAMES librocm-openblas.so
     )
+
+    list(APPEND _host_blas_subproject_names therock-host-blas)
+
+    ##############################################################################
+    # ILP64 OpenBLAS
+    ##############################################################################
+    therock_cmake_subproject_declare(therock-host-blas64
+      USE_DIST_AMDGPU_TARGETS
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/host-blas64"
+      BACKGROUND_BUILD
+      EXCLUDE_FROM_ALL
+      NO_MERGE_COMPILE_COMMANDS
+      OUTPUT_ON_FAILURE
+      EXTERNAL_SOURCE_DIR .
+      INTERFACE_LINK_DIRS "lib/host-math/lib"
+      # RPATH logic needs to know that executables/libs for this project are in
+      # a non-default location.
+      INSTALL_RPATH_EXECUTABLE_DIR "lib/host-math/bin"
+      INSTALL_RPATH_LIBRARY_DIR "lib/host-math/lib"
+      INTERFACE_INSTALL_RPATH_DIRS "lib/host-math/lib"
+      CMAKE_ARGS
+        "-DSOURCE_DIR=${_source_dir}"
+        -DBUILD_SHARED_LIBS=ON
+        -DC_LAPACK=ON
+        # https://github.com/OpenMathLib/OpenBLAS?tab=readme-ov-file#x86x86-64
+        # Picking HASWELL as a baseline that supports modern AMD and Intel CPUs
+        -DTARGET=HASWELL
+        -DDYNAMIC_ARCH=${_enable_dynamicArch}
+        -DBUILD_TESTING=OFF
+        -DINTERFACE64=1
+      EXTRA_DEPENDS
+        "${_download_stamp}"
+    )
+    therock_cmake_subproject_provide_package(therock-host-blas64 OpenBLAS64 lib/host-math/lib/cmake/OpenBLAS64)
+    therock_cmake_subproject_provide_package(therock-host-blas64 cblas64 lib/host-math/lib/cmake/OpenBLAS64)
+    therock_cmake_subproject_activate(therock-host-blas64)
+
+    therock_test_validate_shared_lib(
+      PATH host-blas64/dist/lib/host-math/lib
+      LIB_NAMES librocm-openblas64.so
+    )
+
+    list(APPEND _host_blas_subproject_names therock-host-blas64)
 
     therock_provide_artifact(host-blas
       DESCRIPTOR artifact-host-OpenBLAS.toml
@@ -83,7 +132,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         doc
         lib
         run
-      SUBPROJECT_DEPS therock-host-blas
+      SUBPROJECT_DEPS ${_host_blas_subproject_names}
     )
     return()
 endif()
@@ -91,6 +140,11 @@ endif()
 # Otherwise, this is the sub-project build.
 cmake_minimum_required(VERSION 3.25)
 project(OpenBLAS_BUILD)
+
+if(INTERFACE64)
+  set(_SUFFIX64 64)
+  set(_SUFFIX64_UNDERSCORE _64)
+endif()
 
 # Note that we install to the top-level but want our development assets and Posix
 # runfiles to install to lib/host-math. Since we are building shared, on Windows,
@@ -110,11 +164,11 @@ add_subdirectory(${SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/build-openblas)
 # We would like this to be a library scoped to ROCm, so give it a custom
 # name.
 # TODO: Also set Linux symbol versioning flags.
-set_target_properties(openblas_shared PROPERTIES
+set_target_properties(openblas${_SUFFIX64_UNDERSCORE}_shared PROPERTIES
   # Private SONAME/DLL name.
-  OUTPUT_NAME rocm-openblas
+  OUTPUT_NAME rocm-openblas${_SUFFIX64}
   # Install location in the library is hard-coded to include in the install root.
-  INTERFACE_INCLUDE_DIRECTORIES $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/openblas>
+  INTERFACE_INCLUDE_DIRECTORIES $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/openblas${_SUFFIX64}>
 )
 
 # Some of the test targets do not build with an altered library name on
@@ -124,7 +178,7 @@ set_target_properties(openblas_utest_ext PROPERTIES EXCLUDE_FROM_ALL TRUE)
 
 configure_file(
   ${CMAKE_CURRENT_SOURCE_DIR}/cblas-config.cmake.in
-  ${CMAKE_CURRENT_BINARY_DIR}/cblas-config.cmake
+  ${CMAKE_CURRENT_BINARY_DIR}/cblas${_SUFFIX64}-config.cmake
   @ONLY
 )
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/cblas-config.cmake" DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/OpenBLAS)
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/cblas${_SUFFIX64}-config.cmake" DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/OpenBLAS${_SUFFIX64})

@@ -1,5 +1,11 @@
-# SuiteSparse
-[components.dbg."third-party/host-blas/stage"]
-[components.dev."third-party/host-blas/stage"]
-[components.doc."third-party/host-blas/stage"]
-[components.lib."third-party/host-blas/stage"]
+# therock-host-blas
+[components.dbg."third-party/host-blas/host-blas/stage"]
+[components.dev."third-party/host-blas/host-blas/stage"]
+[components.doc."third-party/host-blas/host-blas/stage"]
+[components.lib."third-party/host-blas/host-blas/stage"]
+
+# therock-host-blas64
+[components.dbg."third-party/host-blas/host-blas64/stage"]
+[components.dev."third-party/host-blas/host-blas64/stage"]
+[components.doc."third-party/host-blas/host-blas64/stage"]
+[components.lib."third-party/host-blas/host-blas64/stage"]
