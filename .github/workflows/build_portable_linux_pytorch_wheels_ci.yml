@@ -5,7 +5,7 @@
 #     --index-url (release index)
 #   - Builds torch only (no torchvision, torchaudio, or triton)
 #   - No S3 upload, staging, testing, or promotion — just build + sanity check
-#   - (Not yet implemented) this can use an explict separate sccache bucket
+#   - Uses sccache with S3-backed storage (configurable via cache_type input)
 #
 # TODO(#3291): Build more packages (torchvision, torchaudio, triton, etc.)
 # TODO(#3291): Upload packages to S3 (via upload_python_packages.py?)
@@ -36,6 +36,11 @@ on:
         description: ROCm package version to install and build against (e.g. 7.10.0.dev0)
         type: string
         required: true
+      cache_type:
+        description: "Compiler cache type (sccache, ccache, or none)"
+        required: false
+        type: string
+        default: "sccache"
   workflow_dispatch:
     inputs:
       artifact_group:
@@ -57,8 +62,17 @@ on:
         description: ROCm package version to install and build against (e.g. 7.10.0.dev0)
         type: string
         required: true
+      cache_type:
+        description: "Compiler cache type"
+        type: choice
+        options:
+          - sccache
+          - ccache
+          - none
+        default: sccache
 
 permissions:
+  id-token: write
   contents: read
 
 run-name: Build portable Linux PyTorch Wheels CI (${{ inputs.artifact_group }}, py${{ inputs.python_version }}, ${{ inputs.pytorch_git_ref }})
@@ -72,6 +86,13 @@ jobs:
     env:
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages/dist
       optional_build_prod_arguments: ""
+      SCCACHE_BUCKET: therock-ci-pytorch-sccache
+      SCCACHE_REGION: us-east-2
+      SCCACHE_S3_KEY_PREFIX: "linux/${{ inputs.artifact_group }}/"
+      SCCACHE_S3_USE_SSL: "true"
+      SCCACHE_S3_SERVER_SIDE_ENCRYPTION: "true"
+      SCCACHE_IDLE_TIMEOUT: "0"
+      SCCACHE_LOG: warn
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -117,15 +138,50 @@ jobs:
           python build_tools/github_actions/determine_version.py \
             --rocm-version ${{ inputs.rocm_version }}
 
+      - name: Configure AWS Credentials for sccache
+        if: ${{ inputs.cache_type == 'sccache' && github.repository_owner == 'ROCm' }}
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-ci
+
+      - name: Verify sccache
+        if: ${{ inputs.cache_type == 'sccache' }}
+        run: |
+          echo "sccache version: $(sccache --version)"
+          echo "SCCACHE_BUCKET=${SCCACHE_BUCKET}"
+          echo "SCCACHE_S3_KEY_PREFIX=${SCCACHE_S3_KEY_PREFIX}"
+
       - name: Build PyTorch wheels
         run: |
+          cache_flag=""
+          if [ "${{ inputs.cache_type }}" = "sccache" ]; then
+            cache_flag="--use-sccache"
+          elif [ "${{ inputs.cache_type }}" = "ccache" ]; then
+            cache_flag="--use-ccache"
+          fi
+
           ./external-builds/pytorch/build_prod_wheels.py \
             build \
             --install-rocm \
             --find-links "${{ inputs.rocm_package_find_links_url }}" \
             --clean \
             --output-dir ${{ env.PACKAGE_DIST_DIR }} \
+            ${cache_flag} \
             ${{ env.optional_build_prod_arguments }}
+
+      - name: Report cache stats
+        if: ${{ !cancelled() && inputs.cache_type != 'none' }}
+        run: |
+          if [ "${{ inputs.cache_type }}" = "sccache" ]; then
+            echo "sccache stats:"
+            echo "--------------"
+            sccache --show-stats || true
+          elif [ "${{ inputs.cache_type }}" = "ccache" ]; then
+            echo "ccache stats:"
+            echo "-------------"
+            ccache -s -v || true
+          fi
 
       - name: Sanity check wheel
         run: |
