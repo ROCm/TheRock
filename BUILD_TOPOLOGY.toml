@@ -193,11 +193,11 @@ artifact_groups = ["media-libs"]
 # These define build dependencies and source requirements
 
 [artifact_groups.third-party-sysdeps]
-description = "Critical system dependencies (always needed)"
+description = "Third-party system libraries bundled for portable distribution"
 type = "generic"
 
 [artifact_groups.third-party-libs]
-description = "Optional third-party libraries (for tests/specific features)"
+description = "Third-party libraries (typically internal dependencies, not distributed as sysdeps are)"
 type = "generic"
 artifact_group_deps = ["compiler"]
 source_sets = []  # No submodules - uses vendored/in-tree deps
@@ -316,7 +316,10 @@ source_sets = ["amd-mesa", "rocm-systems"]
 # Artifacts are the fundamental packaging units
 # Each artifact produces components: dbg, dev, doc, lib, run, test
 
-# --- Third-party Dependencies ---
+# --- Sysdeps: Bundled system libraries ---
+# Libraries built from source with SONAME rewriting and symbol versioning
+# for portable distribution. Installed into lib/rocm_sysdeps/.
+# See docs/development/dependencies.md.
 
 [artifacts.sysdeps]
 artifact_group = "third-party-sysdeps"
@@ -372,6 +375,9 @@ type = "target-neutral"
 artifact_deps = ["sysdeps", "sysdeps-libpciaccess"]  # hwloc depends on numactl (in core sysdeps) and libpciaccess
 feature_group = "CORE"
 disable_platforms = ["windows"]
+
+# --- Third-party libraries ---
+# Unlike third-party-sysdeps, these libraries are built as normal CMake targets.
 
 [artifacts.host-blas]
 artifact_group = "third-party-libs"
