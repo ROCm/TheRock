@@ -78,11 +78,13 @@ class GeneratePyTorchSourcesManifestTest(unittest.TestCase):
         audio_repo = self.tmp_path / "src_audio"
         vision_repo = self.tmp_path / "src_vision"
         triton_repo = self.tmp_path / "src_triton"
+        apex_repo = self.tmp_path / "src_apex"
 
         pytorch_head = "1111111111111111111111111111111111111111"
         audio_head = "2222222222222222222222222222222222222222"
         vision_head = "3333333333333333333333333333333333333333"
         triton_head = "4444444444444444444444444444444444444444"
+        apex_head = "5555555555555555555555555555555555555555"
 
         def fake_git_head(dirpath: Path, *, label: str) -> m.GitSourceInfo:
             p = dirpath.resolve()
@@ -101,6 +103,10 @@ class GeneratePyTorchSourcesManifestTest(unittest.TestCase):
             if p == triton_repo.resolve():
                 return m.GitSourceInfo(
                     commit=triton_head, repo="https://github.com/ROCm/triton.git"
+                )
+            if p == apex_repo.resolve():
+                return m.GitSourceInfo(
+                    commit=apex_head, repo="https://github.com/ROCm/apex.git"
                 )
             raise AssertionError(f"Unexpected repo path: {p}")
 
@@ -123,6 +129,8 @@ class GeneratePyTorchSourcesManifestTest(unittest.TestCase):
                     str(vision_repo),
                     "--triton-dir",
                     str(triton_repo),
+                    "--apex-dir",
+                    str(apex_repo),
                 ]
             )
 
@@ -133,7 +141,7 @@ class GeneratePyTorchSourcesManifestTest(unittest.TestCase):
 
         self.assertEqual(
             set(data.keys()),
-            {"pytorch", "pytorch_audio", "pytorch_vision", "triton", "therock"},
+            {"pytorch", "pytorch_audio", "pytorch_vision", "triton", "apex", "therock"},
         )
 
         self.assertEqual(data["pytorch"]["commit"], pytorch_head)
@@ -155,6 +163,10 @@ class GeneratePyTorchSourcesManifestTest(unittest.TestCase):
         self.assertEqual(data["triton"]["commit"], triton_head)
         self.assertEqual(data["triton"]["repo"], "https://github.com/ROCm/triton.git")
         self.assertNotIn("branch", data["triton"])
+
+        self.assertEqual(data["apex"]["commit"], apex_head)
+        self.assertEqual(data["apex"]["repo"], "https://github.com/ROCm/apex.git")
+        self.assertNotIn("branch", data["apex"])
 
         self.assertEqual(data["therock"]["repo"], "https://github.com/ROCm/TheRock.git")
         self.assertEqual(
@@ -219,6 +231,7 @@ class GeneratePyTorchSourcesManifestTest(unittest.TestCase):
         self.assertIn("pytorch_audio", data)
         self.assertIn("pytorch_vision", data)
         self.assertNotIn("triton", data)
+        self.assertNotIn("apex", data)
 
         self.assertEqual(data["pytorch"]["branch"], "nightly")
         self.assertNotIn("branch", data["pytorch_audio"])

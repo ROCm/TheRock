@@ -19,6 +19,10 @@ on:
         type: string
       component:
         type: string
+      default_container_image:
+        type: string
+        default: "ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98"
+
 
 permissions:
   contents: read
@@ -34,7 +38,13 @@ jobs:
     continue-on-error: ${{ fromJSON(inputs.component).expect_failure == true }}
     timeout-minutes: 210
     container:
-      image: ${{ inputs.platform == 'linux' && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98' || null }}
+      # If the component has specified an alternate image, honor that option.
+      # Otherwise use the default image.
+      image: >-
+        ${{ inputs.platform == 'linux' &&
+            (fromJSON(inputs.component).container_image || inputs.default_container_image)
+            || null
+        }}
       # --ulimit memlock=-1:-1 - Prevents memory allocation issues with ROCm inside container
       # --security-opt seccomp=unconfined - enables memory mapping, and is recommended for containers running in HPC environments
       # --env-file /etc/podinfo/gha-gpu-isolation-settings - Required for GPU isolation on OSSCI MIXXX runners
@@ -49,6 +59,7 @@ jobs:
         --security-opt seccomp=unconfined
         --env-file /etc/podinfo/gha-gpu-isolation-settings
         --user 0:0
+        ${{ fromJSON(inputs.component).container_options }}
     strategy:
       fail-fast: false
       matrix:
@@ -80,6 +91,7 @@ jobs:
 
       - name: Pre-job cleanup processes on Windows
         if: ${{ runner.os == 'Windows' }}
+        timeout-minutes: 5
         shell: powershell
         run: . '${{ github.workspace }}\prejob\build_tools\github_actions\cleanup_processes.ps1'
 
@@ -89,6 +101,7 @@ jobs:
           repository: "ROCm/TheRock"
 
       - name: Run setup test environment workflow
+        timeout-minutes: 15
         uses: './.github/actions/setup_test_environment'
         with:
           ARTIFACT_RUN_ID: ${{ env.ARTIFACT_RUN_ID }}
@@ -128,5 +141,6 @@ jobs:
       # and will fail to clean up orphan processes.
       - name: Post-job cleanup processes on Windows
         if: ${{ always() && runner.os == 'Windows' }}
+        timeout-minutes: 5
         shell: powershell
         run: . '${{ github.workspace }}\build_tools\github_actions\cleanup_processes.ps1'

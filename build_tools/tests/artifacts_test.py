@@ -456,6 +456,16 @@ class ComponentScannerTest(TmpDirTestCase):
         self.assertTrue(
             (self.temp_dir / "out" / "b" / "stage" / "lib" / "libbar.so.1").exists()
         )
+        # Artifact files must be copies, not hardlinks to the source.
+        # Hardlinks cause race conditions when the split pipeline modifies
+        # files still referenced by stage/dist (#3447).
+        self.assertFalse(
+            os.path.samefile(
+                self.temp_dir / "src" / "a" / "stage" / "lib" / "libfoo.so.1",
+                self.temp_dir / "out" / "a" / "stage" / "lib" / "libfoo.so.1",
+            ),
+            "artifact should be a copy, not a hardlink",
+        )
 
     def testNonOptionalNotExists(self):
         self.write_indented(
