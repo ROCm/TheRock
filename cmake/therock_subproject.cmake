@@ -832,7 +832,7 @@ function(therock_cmake_subproject_activate target_name)
   string(APPEND _init_contents "cmake_language(DEFER CALL include \"@_global_post_include@\")\n")
   foreach(_addl_cmake_include ${_cmake_includes})
     if(NOT IS_ABSOLUTE)
-      find_path(_addl_cmake_include_path "${addl_cmake_include}" NO_CACHE NO_DEFAULT_PATH PATHS ${CMAKE_MODULE_PATH} REQUIRED)
+      find_path(_addl_cmake_include_path "${_addl_cmake_include}" NO_CACHE NO_DEFAULT_PATH PATHS ${CMAKE_MODULE_PATH} REQUIRED)
       cmake_path(ABSOLUTE_PATH _addl_cmake_include BASE_DIRECTORY "${_addl_cmake_include_path}")
     endif()
     string(APPEND _init_contents "include(\"${_addl_cmake_include}\")\n")
@@ -1477,6 +1477,18 @@ function(_therock_cmake_subproject_setup_toolchain
       "${CMAKE_CXX_COMPILER}"
       "${compiler_toolchain}"
       "${target_name}")
+
+    # Configure system LLD
+    if(THEROCK_USE_LLD)
+      if(NOT WIN32)
+        string(APPEND _toolchain_contents "string(APPEND CMAKE_EXE_LINKER_FLAGS_INIT \" -fuse-ld=lld\")\n")
+        string(APPEND _toolchain_contents "string(APPEND CMAKE_SHARED_LINKER_FLAGS_INIT \" -fuse-ld=lld\")\n")
+        string(APPEND _toolchain_contents "string(APPEND CMAKE_MODULE_LINKER_FLAGS_INIT \" -fuse-ld=lld\")\n")
+      endif()
+      if(WIN32 OR THEROCK_FORCE_CMAKE_LINKER)
+        string(APPEND _toolchain_contents "set(CMAKE_LINKER \"@SYSTEM_LLD_PATH@\" CACHE FILEPATH \"Path to system LLD\" FORCE)\n")
+      endif()
+    endif()
   elseif(compiler_toolchain STREQUAL "amd-llvm" OR compiler_toolchain STREQUAL "amd-hip")
     # The "amd-llvm" and "amd-hip" toolchains are configured very similarly so
     # we commingle them, but they are different:
