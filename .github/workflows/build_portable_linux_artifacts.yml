@@ -122,6 +122,9 @@ jobs:
         run: |
           python3 build_tools/github_actions/build_configure.py --manylinux
 
+      - name: Collect Workflow Telemetry
+        uses: catchpoint/workflow-telemetry-action@94c3c3d9567a0205de6da68a76c428ce4e769af1  # v2
+
       - name: Build therock-archives and therock-dist
         run: |
           cmake --build build --target therock-archives therock-dist -- -k 0
