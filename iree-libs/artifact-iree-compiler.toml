@@ -4,3 +4,5 @@
 [components.lib."iree-libs/iree-compiler/stage"]
 
 [components.dbg."iree-libs/iree-compiler/stage"]
+
+[components.dev."iree-libs/iree-compiler/stage"]
