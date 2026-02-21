@@ -81,10 +81,7 @@ subprocess.run(
 )
 
 CTEST_EXCLUDE = (
-    r"(rocprofiler_sdk\.unit\.aql_helpers\.get_query_info_compare_v1|"
-    r"tests\.integration\.execute\.thread-trace-api-agent-test|"
-    r"tests\.integration\.execute\.thread-trace-api-large-buffer-test|"
-    r"tests\.integration\.execute\.rocprofv3-test-attachment-attach-once|"
+    r"(tests\.integration\.execute\.rocprofv3-test-attachment-attach-once|"
     r"tests\.integration\.validate\.rocprofv3-test-attachment-attach-once)"
 )
 
