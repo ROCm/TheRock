@@ -76,7 +76,7 @@ def do_build(args: argparse.Namespace):
         "--build-arg", f"ROCM_INDEX_URL={args.rocm_index_url}",
         "--build-arg", f"PYTORCH_ROCM_ARCH={args.rocm_arch}",
         "--build-arg", f"LMCACHE_BRANCH={args.lmcache_branch}",
-        "-f", "Dockerfile.dev",
+        "-f", "Dockerfile",
         ".",
     ]
     
