@@ -1,0 +1,58 @@
+Installation started: 2026-01-21 13:02:25.240935
+Directory: /home/jonatluu/TheRock/install_test
+Total files: 3
+
+
+============================================================
+Installing: amdrocm-amdsmi7.11_7.11.0~20260114-20982316015_amd64.deb
+============================================================
+Status: FAILED
+Error:
+dpkg: dependency problems prevent configuration of amdrocm-amdsmi7.11:
+ amdrocm-amdsmi7.11 depends on amdrocm-sysdeps7.11; however:
+  Package amdrocm-sysdeps7.11 is not installed.
+
+dpkg: error processing package amdrocm-amdsmi7.11 (--install):
+ dependency problems - leaving unconfigured
+Errors were encountered while processing:
+ amdrocm-amdsmi7.11
+
+
+============================================================
+Installing: amdrocm-base7.11_7.11.0~20260114-20982316015_amd64.deb
+============================================================
+Status: FAILED
+Error:
+dpkg: dependency problems prevent configuration of amdrocm-base7.11:
+ amdrocm-base7.11 depends on amdrocm-runtime7.11; however:
+  Package amdrocm-runtime7.11 is not installed.
+
+dpkg: error processing package amdrocm-base7.11 (--install):
+ dependency problems - leaving unconfigured
+Errors were encountered while processing:
+ amdrocm-base7.11
+
+
+============================================================
+Installing: amdrocm-amdsmi_7.11.0~20260114-20982316015_amd64.deb
+============================================================
+Status: FAILED
+Error:
+dpkg: dependency problems prevent configuration of amdrocm-amdsmi:
+ amdrocm-amdsmi depends on amdrocm-amdsmi7.11; however:
+  Package amdrocm-amdsmi7.11 is not configured yet.
+
+dpkg: error processing package amdrocm-amdsmi (--install):
+ dependency problems - leaving unconfigured
+Errors were encountered while processing:
+ amdrocm-amdsmi
+
+
+============================================================
+INSTALLATION SUMMARY
+============================================================
+Total: 3
+Successful: 0
+Failed: 3
+
+Completed: 2026-01-21 13:02:26.317062
