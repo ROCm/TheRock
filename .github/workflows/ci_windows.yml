@@ -117,6 +117,35 @@ jobs:
       test_runs_on: ${{ inputs.benchmark_runs_on }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
 
+  test_windows_functional:
+    needs: [build_windows_artifacts]
+    name: Test Windows Functional
+    # Run functional tests if:
+    # - Build succeeded (or using prebuilt artifacts)
+    # - Not expecting failure
+    # - Test runner is available (test_runs_on is set)
+    if: >-
+      ${{
+        !failure() &&
+        !cancelled() &&
+        (
+          inputs.use_prebuilt_artifacts == 'false' ||
+          inputs.use_prebuilt_artifacts == 'true'
+        ) &&
+        inputs.expect_failure == false &&
+        inputs.test_runs_on != ''
+      }}
+    uses: ./.github/workflows/test_artifacts.yml
+    secrets: inherit
+    with:
+      artifact_group: ${{ inputs.artifact_group }}
+      amdgpu_families: ${{ inputs.amdgpu_families }}
+      test_runs_on: ${{ inputs.test_runs_on }}
+      artifact_run_id: ${{ inputs.artifact_run_id }}
+      test_type: ${{ inputs.test_type }}
+      test_labels: ${{ inputs.test_labels }}
+      run_functional_tests: true
+
   build_windows_python_packages:
     needs: [build_windows_artifacts]
     name: Build Python
