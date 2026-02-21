@@ -22,9 +22,6 @@ on:
       benchmark_runs_on:
         type: string
         default: ""
-      run_functional_tests:
-        type: boolean
-        default: false
       expect_failure:
         type: boolean
       use_prebuilt_artifacts:
@@ -127,7 +124,6 @@ jobs:
     # - Build succeeded (or using prebuilt artifacts)
     # - Not expecting failure
     # - Test runner is available (test_runs_on is set)
-    # - Functional flag is enabled (only set to true in ci_nightly.yml)
     if: >-
       ${{
         !failure() &&
@@ -137,16 +133,18 @@ jobs:
           inputs.use_prebuilt_artifacts == 'true'
         ) &&
         inputs.expect_failure == false &&
-        inputs.test_runs_on != '' &&
-        inputs.run_functional_tests == true
+        inputs.test_runs_on != ''
       }}
-    uses: ./.github/workflows/test_functional.yml
+    uses: ./.github/workflows/test_artifacts.yml
     secrets: inherit
     with:
       artifact_group: ${{ inputs.artifact_group }}
       amdgpu_families: ${{ inputs.amdgpu_families }}
       test_runs_on: ${{ inputs.test_runs_on }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
+      test_type: ${{ inputs.test_type }}
+      test_labels: ${{ inputs.test_labels }}
+      run_functional_tests: true
 
   build_windows_python_packages:
     needs: [build_windows_artifacts]
