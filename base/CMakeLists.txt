@@ -100,7 +100,9 @@ endif()
 # This is a stub that helps runtime libraries and profiles rendezvous
 ################################################################################
 
-if(NOT WIN32)  # TODO(#36): Enable on Windows?
+# rocprofiler-register has Linux-specific features (e.g., /proc filesystem access)
+# Only build on Linux for now
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 
 therock_cmake_subproject_declare(rocprofiler-register
   EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-register"
@@ -120,8 +122,12 @@ therock_cmake_subproject_glob_c_sources(rocprofiler-register
 therock_cmake_subproject_provide_package(rocprofiler-register
   rocprofiler-register lib/cmake/rocprofiler-register)
 therock_cmake_subproject_activate(rocprofiler-register)
-list(APPEND _optional_artifact_deps rocprofiler-register)
 
+endif()
+
+# Add to optional deps whether it was built or not - this makes it conditional
+if(TARGET rocprofiler-register)
+  list(APPEND _optional_artifact_deps rocprofiler-register)
 endif()
 
 ################################################################################
