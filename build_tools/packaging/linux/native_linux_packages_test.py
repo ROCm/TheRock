@@ -29,7 +29,7 @@ class NativeLinuxPackagesTester:
         """Derive package type from OS profile.
 
         Args:
-            os_profile: OS profile (e.g., ubuntu2404, rhel8, debian12, sles16, azl3)
+            os_profile: OS profile (e.g., ubuntu2404, rhel8, debian12, sles16, almalinux9, centos7, azl3)
 
         Returns:
             Package type ('deb' or 'rpm')
@@ -68,7 +68,7 @@ class NativeLinuxPackagesTester:
 
         Args:
             repo_url: Full repository URL (constructed in YAML)
-            os_profile: OS profile (e.g., ubuntu2404, rhel8, debian12, sles16, azl3)
+            os_profile: OS profile (e.g., ubuntu2404, rhel8, debian12, sles16, almalinux9, centos7, azl3)
             release_type: Type of release ('nightly' or 'prerelease')
             install_prefix: Installation prefix (default: /opt/rocm/core)
             gfx_arch: GPU architecture (default: gfx94x)
@@ -642,7 +642,7 @@ gpgcheck=0
                 cmd = ["zypper", "--non-interactive", "search", "-i", "rocm"]
                 grep_pattern = "rocm"
             else:
-                # Use rpm for other RPM-based systems (RHEL, AlmaLinux, CentOS)
+                # Use rpm for other RPM-based systems (RHEL, AlmaLinux, CentOS, AZL)
                 cmd = ["rpm", "-qa"]
                 grep_pattern = "rocm"
 
@@ -928,7 +928,7 @@ Examples:
         "--os-profile",
         type=str,
         required=True,
-        help="OS profile (e.g., ubuntu2404, rhel8, debian12, sles16, azl3). Package type is derived from this.",
+        help="OS profile (e.g., ubuntu2404, rhel8, debian12, sles16, almalinux9, centos7, azl3). Package type is derived from this.",
     )
 
     parser.add_argument(
