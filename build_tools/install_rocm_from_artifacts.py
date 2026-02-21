@@ -32,6 +32,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--rocdecode | --no-rocdecode]
     [--rocjpeg | --no-rocjpeg]
     [--rocprofiler-compute | --no-rocprofiler-compute]
+    [--rocprofiler-sdk | --no-rocprofiler-sdk ]
     [--rocprofiler-systems | --no-rocprofiler-systems]
     [--rocrtst | --no-rocrtst]
     [--rocwmma | --no-rocwmma]
@@ -352,6 +353,7 @@ def retrieve_artifacts_by_run_id(args):
             args.rocdecode,
             args.rocjpeg,
             args.rocprofiler_compute,
+            args.rocprofiler_sdk,
             args.rocprofiler_systems,
             args.rocrtst,
             args.rocwmma,
