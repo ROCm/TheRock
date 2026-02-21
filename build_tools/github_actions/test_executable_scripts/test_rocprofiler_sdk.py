@@ -80,10 +80,10 @@ subprocess.run(
     env=environ_vars,
 )
 
-CTEST_EXCLUDE = (
-    r"(tests\.integration\.execute\.rocprofv3-test-attachment-attach-once|"
-    r"tests\.integration\.validate\.rocprofv3-test-attachment-attach-once)"
-)
+# CTEST_EXCLUDE = (
+#     r"(tests\.integration\.execute\.rocprofv3-test-attachment-attach-once|"
+#     r"tests\.integration\.validate\.rocprofv3-test-attachment-attach-once)"
+# )
 
 # CTest
 ctest_cmd = [
@@ -91,8 +91,8 @@ ctest_cmd = [
     "--test-dir",
     "build",
     "--output-on-failure",
-    "-E",
-    CTEST_EXCLUDE,
+    # "-E",
+    # CTEST_EXCLUDE,
 ]
 
 logging.info(f"++ Exec [{ROCPROFILER_SDK_TESTS_DIRECTORY}]$ {shlex.join(ctest_cmd)}")
