@@ -7,7 +7,7 @@ endif()
 
 # limit use of composable kernel to the GPU families it is valid for
 if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
-  set(_ck_supported_gfx_targets gfx908 gfx90a gfx942 gfx950 gfx1150 gfx1151 gfx1200 gfx1201)
+  set(_ck_supported_gfx_targets gfx908 gfx90a gfx942 gfx950 gfx1150 gfx1151 gfx1152 gfx1153 gfx1200 gfx1201)
   foreach(_gfx_target ${THEROCK_AMDGPU_TARGETS})
     if(NOT ${_gfx_target} IN_LIST _ck_supported_gfx_targets)
       message(WARNING
@@ -35,6 +35,7 @@ if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
       -DROCM_DIR=
       "-DBUILD_TESTING=${THEROCK_BUILD_TESTING}"
       -DMIOPEN_REQ_LIBS_ONLY=ON
+      -DHIPTENSOR_REQ_LIBS_ONLY=ON
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
@@ -59,7 +60,6 @@ if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
       dev
       doc
       lib
-      run
     SUBPROJECT_DEPS
       composable_kernel
   )

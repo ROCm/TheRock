@@ -8,10 +8,13 @@ Required environment variables:
 import json
 import logging
 import os
+import sys
 from pathlib import Path
 
+# Add tests directory to path for extended_tests imports
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tests"))
 from github_actions_utils import *
-from benchmarks.benchmark_test_matrix import benchmark_matrix
+from extended_tests.benchmark.benchmark_test_matrix import benchmark_matrix
 from amdgpu_family_matrix import get_all_families_for_trigger_types
 
 logging.basicConfig(level=logging.INFO)
@@ -71,6 +74,14 @@ test_matrix = {
             ],
         },
     },
+    "origami": {
+        "job_name": "origami",
+        "fetch_artifact_args": "--blas --tests",
+        "timeout_minutes": 5,
+        "test_script": f"python {_get_script_path('test_origami.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards": 1,
+    },
     "hipblas": {
         "job_name": "hipblas",
         "fetch_artifact_args": "--blas --tests",
@@ -114,6 +125,14 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_rocprim.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 2,
+    },
+    "rocprofiler_systems": {
+        "job_name": "rocprofiler_systems",
+        "fetch_artifact_args": "--rocprofiler-systems --rocprofiler-sdk --tests",
+        "timeout_minutes": 15,
+        "test_script": f"python {_get_script_path('test_rocprofiler_systems.py')}",
+        "platform": ["linux"],
+        "total_shards": 1,
     },
     "hipcub": {
         "job_name": "hipcub",
@@ -259,7 +278,7 @@ test_matrix = {
     # enabled by default.
     # "fusilli_plugin": {
     #     "job_name": "fusilli_plugin",
-    #     "fetch_artifact_args": "--hipdnn --fusilli-plugin --tests",
+    #     "fetch_artifact_args": "--hipdnn --fusilli-plugin --iree-compiler --tests",
     #     "timeout_minutes": 15,
     #     "test_script": f"python {_get_script_path('test_fusilli_plugin.py')}",
     #     "platform": ["linux"],
@@ -307,6 +326,15 @@ test_matrix = {
         "fetch_artifact_args": "--aqlprofile --tests",
         "timeout_minutes": 5,
         "test_script": f"python {_get_script_path('test_aqlprofile.py')}",
+        "platform": ["linux"],
+        "total_shards": 1,
+    },
+    # rocrtst tests
+    "rocrtst": {
+        "job_name": "rocrtst",
+        "fetch_artifact_args": "--rocrtst --tests",
+        "timeout_minutes": 15,
+        "test_script": f"python {_get_script_path('test_rocrtst.py')}",
         "platform": ["linux"],
         "total_shards": 1,
     },

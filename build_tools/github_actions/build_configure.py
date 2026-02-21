@@ -34,7 +34,6 @@ cmake_preset = os.getenv("cmake_preset")
 amdgpu_families = os.getenv("amdgpu_families")
 package_version = os.getenv("package_version")
 extra_cmake_options = os.getenv("extra_cmake_options")
-build_dir = os.getenv("BUILD_DIR")
 github_workspace = os.getenv("GITHUB_WORKSPACE")
 extra_c_compiler_launcher = os.getenv("EXTRA_C_COMPILER_LAUNCHER", "")
 extra_cxx_compiler_launcher = os.getenv("EXTRA_CXX_COMPILER_LAUNCHER", "")
@@ -81,7 +80,7 @@ platform_options = {
 }
 
 
-def build_configure(manylinux=False):
+def build_configure(build_dir, manylinux=False):
     logging.info(f"Building package {package_version}")
 
     cmd = [
@@ -120,6 +119,8 @@ def build_configure(manylinux=False):
         )
         cmd.append(f"-DTHEROCK_DIST_PYTHON_EXECUTABLES={python_executables}")
         cmd.append("-DTHEROCK_ENABLE_SYSDEPS_AMD_MESA=ON")
+        cmd.append("-DTHEROCK_ENABLE_ROCDECODE=ON")
+        cmd.append("-DTHEROCK_ENABLE_ROCJPEG=ON")
 
         # Python executables with shared libpython support. This is needed for
         # ROCgdb.
@@ -147,9 +148,15 @@ if __name__ == "__main__":
         action="store_true",
         help="Enable manylinux build with multiple Python versions",
     )
+    parser.add_argument(
+        "--build-dir",
+        type=str,
+        default=os.getenv("BUILD_DIR", ""),
+        help="Directory to use for build files",
+    )
     args = parser.parse_args()
 
     # Support both command-line flag and environment variable
     manylinux = args.manylinux or os.getenv("MANYLINUX") in ["1", "true"]
 
-    build_configure(manylinux=manylinux)
+    build_configure(args.build_dir, manylinux=manylinux)

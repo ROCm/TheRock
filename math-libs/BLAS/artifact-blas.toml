@@ -19,6 +19,19 @@ include = [
 ]
 optional = true
 
+# origami
+[components.dbg."math-libs/BLAS/origami/stage"]
+[components.dev."math-libs/BLAS/origami/stage"]
+[components.lib."math-libs/BLAS/origami/stage"]
+include = [
+  "lib/**",
+]
+[components.test."math-libs/BLAS/origami/stage"]
+include = [
+  "bin/origami-tests*",
+  "bin/origami/**",
+]
+
 # hipBLAS
 [components.dbg."math-libs/BLAS/hipBLAS/stage"]
 [components.dev."math-libs/BLAS/hipBLAS/stage"]
@@ -73,6 +86,9 @@ include = [
   "bin/hipblaslt_gentest.py",
   "bin/hipblaslt_gtest.data",
   "bin/hipblaslt_*.yaml",
+  # hipblaslt-perf and python modules
+  "bin/hipblaslt-perf",
+  "share/hipblaslt/performance/**",
   # Built samples (may want these in a samples component at some point).
   "libexec/hipblaslt-samples/**",
 ]

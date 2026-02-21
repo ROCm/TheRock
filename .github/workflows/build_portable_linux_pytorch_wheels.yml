@@ -210,7 +210,8 @@ jobs:
             --pytorch-dir "external-builds/pytorch/pytorch" \
             --pytorch-audio-dir "external-builds/pytorch/pytorch_audio" \
             --pytorch-vision-dir "external-builds/pytorch/pytorch_vision" \
-            --triton-dir "external-builds/pytorch/triton"
+            --triton-dir "external-builds/pytorch/triton" \
+            --apex-dir "external-builds/pytorch/apex"
 
       - name: Configure AWS Credentials
         if: always()
@@ -262,9 +263,6 @@ jobs:
         env:
           TARGET: ${{ inputs.amdgpu_family }}
           PLATFORM: "linux"
-          # Variable comes from ROCm organization variable 'ROCM_THEROCK_TEST_RUNNERS'
-          ROCM_THEROCK_TEST_RUNNERS: ${{ vars.ROCM_THEROCK_TEST_RUNNERS }}
-          LOAD_TEST_RUNNERS_FROM_VAR: false
         run: python ./build_tools/github_actions/configure_target_run.py
 
   test_pytorch_wheels:
