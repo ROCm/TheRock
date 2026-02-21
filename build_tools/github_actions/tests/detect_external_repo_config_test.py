@@ -12,23 +12,24 @@ from unittest.mock import patch, MagicMock, mock_open
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from detect_external_repo_config import (
-    get_repo_config,
+    get_external_repo_config,
     get_external_repo_path,
     import_external_repo_module,
-    get_skip_patterns,
-    get_test_list,
+    get_skip_patterns_for_ci,
+    get_workflow_patterns_for_ci,
+    get_external_repo_test_list,
     main as detect_external_repo_config_main,
     output_github_actions_vars,
     REPO_CONFIGS,
 )
 
 
-class TestGetRepoConfig(unittest.TestCase):
-    """Tests for get_repo_config function"""
+class TestGetExternalRepoConfig(unittest.TestCase):
+    """Tests for get_external_repo_config function"""
 
     def test_rocm_libraries_config(self):
         """Test rocm-libraries configuration"""
-        config = get_repo_config("rocm-libraries")
+        config = get_external_repo_config("rocm-libraries")
         self.assertEqual(
             config["cmake_source_var"], "THEROCK_ROCM_LIBRARIES_SOURCE_DIR"
         )
@@ -37,7 +38,7 @@ class TestGetRepoConfig(unittest.TestCase):
 
     def test_rocm_systems_config(self):
         """Test rocm-systems configuration"""
-        config = get_repo_config("rocm-systems")
+        config = get_external_repo_config("rocm-systems")
         self.assertEqual(config["cmake_source_var"], "THEROCK_ROCM_SYSTEMS_SOURCE_DIR")
         self.assertEqual(config["submodule_path"], "rocm-systems")
         self.assertEqual(config["fetch_exclusion"], "--no-include-rocm-systems")
@@ -45,7 +46,7 @@ class TestGetRepoConfig(unittest.TestCase):
     def test_unknown_repo_raises_error(self):
         """Test that unknown repository raises ValueError"""
         with self.assertRaises(ValueError) as context:
-            get_repo_config("unknown-repo")
+            get_external_repo_config("unknown-repo")
         self.assertIn("Unknown external repository", str(context.exception))
         self.assertIn("unknown-repo", str(context.exception))
 
@@ -261,43 +262,75 @@ class TestImportExternalRepoModule(unittest.TestCase):
         self.assertIsNone(result)
 
 
-class TestGetSkipPatterns(unittest.TestCase):
-    """Tests for get_skip_patterns function"""
+class TestGetSkipPatternsForCi(unittest.TestCase):
+    """Tests for get_skip_patterns_for_ci function"""
 
     @patch("detect_external_repo_config.import_external_repo_module")
-    def test_get_skip_patterns_success(self, mock_import):
+    def test_get_skip_patterns_for_ci_success(self, mock_import):
         """Test successful retrieval of skip patterns"""
         mock_module = MagicMock()
         mock_module.SKIPPABLE_PATH_PATTERNS = ["pattern1/*", "pattern2/*"]
         mock_import.return_value = mock_module
 
-        result = get_skip_patterns("rocm-libraries")
+        result = get_skip_patterns_for_ci("rocm-libraries")
         self.assertEqual(result, ["pattern1/*", "pattern2/*"])
 
     @patch("detect_external_repo_config.import_external_repo_module")
-    def test_get_skip_patterns_no_module(self, mock_import):
+    def test_get_skip_patterns_for_ci_no_module(self, mock_import):
         """Test when module cannot be imported"""
         mock_import.return_value = None
 
-        result = get_skip_patterns("rocm-libraries")
+        result = get_skip_patterns_for_ci("rocm-libraries")
         self.assertEqual(result, [])
 
     @patch("detect_external_repo_config.import_external_repo_module")
-    def test_get_skip_patterns_no_attribute(self, mock_import):
+    def test_get_skip_patterns_for_ci_no_attribute(self, mock_import):
         """Test when module doesn't have SKIPPABLE_PATH_PATTERNS attribute"""
         mock_module = MagicMock(spec=[])
         del mock_module.SKIPPABLE_PATH_PATTERNS  # Ensure attribute doesn't exist
         mock_import.return_value = mock_module
 
-        result = get_skip_patterns("rocm-libraries")
+        result = get_skip_patterns_for_ci("rocm-libraries")
         self.assertEqual(result, [])
 
 
-class TestGetTestList(unittest.TestCase):
-    """Tests for get_test_list function"""
+class TestGetWorkflowPatternsForCi(unittest.TestCase):
+    """Tests for get_workflow_patterns_for_ci function"""
 
     @patch("detect_external_repo_config.import_external_repo_module")
-    def test_get_test_list_success(self, mock_import):
+    def test_get_workflow_patterns_for_ci_success(self, mock_import):
+        """Test successful retrieval of workflow patterns"""
+        mock_module = MagicMock()
+        mock_module.GITHUB_WORKFLOWS_CI_PATTERNS = ["therock-*.yml"]
+        mock_import.return_value = mock_module
+
+        result = get_workflow_patterns_for_ci("rocm-libraries")
+        self.assertEqual(result, ["therock-*.yml"])
+
+    @patch("detect_external_repo_config.import_external_repo_module")
+    def test_get_workflow_patterns_for_ci_no_module(self, mock_import):
+        """Test when module cannot be imported"""
+        mock_import.return_value = None
+
+        result = get_workflow_patterns_for_ci("rocm-libraries")
+        self.assertEqual(result, [])
+
+    @patch("detect_external_repo_config.import_external_repo_module")
+    def test_get_workflow_patterns_for_ci_no_attribute(self, mock_import):
+        """Test when module doesn't have GITHUB_WORKFLOWS_CI_PATTERNS attribute"""
+        mock_module = MagicMock(spec=[])
+        del mock_module.GITHUB_WORKFLOWS_CI_PATTERNS  # Ensure attribute doesn't exist
+        mock_import.return_value = mock_module
+
+        result = get_workflow_patterns_for_ci("rocm-libraries")
+        self.assertEqual(result, [])
+
+
+class TestGetExternalRepoTestList(unittest.TestCase):
+    """Tests for get_external_repo_test_list function"""
+
+    @patch("detect_external_repo_config.import_external_repo_module")
+    def test_get_external_repo_test_list_success(self, mock_import):
         """Test successful retrieval of test list"""
         mock_module = MagicMock()
         mock_module.project_map = {
@@ -306,26 +339,26 @@ class TestGetTestList(unittest.TestCase):
         }
         mock_import.return_value = mock_module
 
-        result = get_test_list("rocm-libraries")
+        result = get_external_repo_test_list("rocm-libraries")
         # Result is a sorted list from a set, so order may vary
         self.assertEqual(set(result), {"test1", "test2", "test3"})
 
     @patch("detect_external_repo_config.import_external_repo_module")
-    def test_get_test_list_no_module(self, mock_import):
+    def test_get_external_repo_test_list_no_module(self, mock_import):
         """Test when module cannot be imported"""
         mock_import.return_value = None
 
-        result = get_test_list("rocm-libraries")
+        result = get_external_repo_test_list("rocm-libraries")
         self.assertEqual(result, [])
 
     @patch("detect_external_repo_config.import_external_repo_module")
-    def test_get_test_list_no_attribute(self, mock_import):
+    def test_get_external_repo_test_list_no_attribute(self, mock_import):
         """Test when module doesn't have project_map attribute"""
         mock_module = MagicMock(spec=[])
         del mock_module.project_map  # Ensure attribute doesn't exist
         mock_import.return_value = mock_module
 
-        result = get_test_list("rocm-libraries")
+        result = get_external_repo_test_list("rocm-libraries")
         self.assertEqual(result, [])
 
 

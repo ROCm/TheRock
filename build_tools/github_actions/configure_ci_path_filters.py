@@ -1,15 +1,18 @@
 """CI path filtering logic for determining whether to run CI based on modified files.
 
-This module provides utilities to:
-- Get modified file paths from git
+This module provides utilities for both TheRock and external repositories (e.g.
+rocm-libraries, rocm-systems) that call TheRock's workflows:
+
+- Get modified file paths from git (TheRock root or external repo directory)
 - Filter paths based on skippable patterns (docs, markdown, etc.)
-- Identify CI-related workflow files
+- Identify CI-related workflow files (TheRock)
 - Decide whether CI should run based on the modified paths
 
 Public API:
-    get_git_modified_paths() - Get modified files from git diff compared to worktree
+    get_git_modified_paths() - Get modified files from git diff (optional cwd for external repos)
     get_git_submodule_paths() - Get list of git submodule paths in the repository
-    is_ci_run_required() - Check if CI run is required based on modified paths
+    is_ci_run_required() - Check if CI run is required. Callers pass paths and, for external
+        repos, skip_patterns from config.
 """
 
 import fnmatch
@@ -23,7 +26,9 @@ from typing import Iterable, Optional
 # ============================================================================
 
 
-def get_git_modified_paths(base_ref: str) -> Optional[Iterable[str]]:
+def get_git_modified_paths(
+    base_ref: str, external_repo_root_path: Optional[str] = None
+) -> Optional[Iterable[str]]:
     """Returns the paths of files modified since the base reference commit.
 
     Uses `git diff --name-only` to find files that have changed between the
@@ -31,6 +36,8 @@ def get_git_modified_paths(base_ref: str) -> Optional[Iterable[str]]:
 
     Args:
         base_ref: Git reference (commit SHA, branch name, or HEAD^1) to compare against
+        external_repo_root_path: Optional directory to run git diff from (external repo root).
+                                If None, uses current working directory (TheRock).
 
     Returns:
         List of relative file paths that were modified, or None if the operation times out
@@ -42,6 +49,7 @@ def get_git_modified_paths(base_ref: str) -> Optional[Iterable[str]]:
             check=True,
             text=True,
             timeout=60,
+            cwd=external_repo_root_path,
         ).stdout.splitlines()
     except TimeoutError:
         print(
@@ -88,8 +96,15 @@ def get_git_submodule_paths(repo_root: Optional[str] = None) -> Optional[Iterabl
         return []
 
 
-def is_ci_run_required(paths: Optional[Iterable[str]]) -> bool:
+def is_ci_run_required(
+    paths: Optional[Iterable[str]] = None,
+    skip_patterns: Optional[list[str]] = None,
+    ci_workflow_patterns: Optional[list[str]] = None,
+) -> bool:
     """Checks if a CI run is required based on modified file paths.
+
+    Callers provide paths (e.g. from get_git_modified_paths). For external repos,
+    callers pass skip_patterns and ci_workflow_patterns from config.
 
     CI will run if:
     - At least one CI-related workflow file was modified, OR
@@ -101,7 +116,10 @@ def is_ci_run_required(paths: Optional[Iterable[str]]) -> bool:
     - Only non-CI workflow files were modified that are skippable.
 
     Args:
-        paths: Iterable of file paths to evaluate, or None if no files modified
+        paths: Iterable of file paths to evaluate, or None if no files modified.
+        skip_patterns: Optional glob patterns for skippable paths. None = use internal default.
+        ci_workflow_patterns: Optional workflow file patterns for CI-related workflows.
+                            None = use internal default (_GITHUB_WORKFLOWS_CI_PATTERNS).
 
     Returns:
         True if CI run is required, False if CI can be skipped
@@ -116,8 +134,12 @@ def is_ci_run_required(paths: Optional[Iterable[str]]) -> bool:
     )
     other_paths = paths_set - github_workflows_paths
 
-    related_to_ci = _check_for_workflow_file_related_to_ci(github_workflows_paths)
-    contains_other_non_skippable_files = _check_for_non_skippable_path(other_paths)
+    related_to_ci = _check_for_workflow_file_related_to_ci(
+        github_workflows_paths, ci_workflow_patterns
+    )
+    contains_other_non_skippable_files = _check_for_non_skippable_path(
+        other_paths, skip_patterns
+    )
 
     print("is_ci_run_required findings:")
     print(f"  related_to_ci: {related_to_ci}")
@@ -142,7 +164,7 @@ def is_ci_run_required(paths: Optional[Iterable[str]]) -> bool:
 
 # File path patterns that don't trigger CI runs.
 # Changes to files matching these patterns are considered documentation/configuration
-# that don't affect build or test workflows.
+# that don't affect build or test workflows. Used by is_ci_run_required() when skip_patterns=None.
 _SKIPPABLE_PATH_PATTERNS = [
     "docs/*",
     "*.gitignore",
@@ -181,34 +203,77 @@ _GITHUB_WORKFLOWS_CI_PATTERNS = [
 # ============================================================================
 
 
-def _is_path_skippable(path: str) -> bool:
-    """Checks if a single file path matches any skippable pattern."""
-    return any(fnmatch.fnmatch(path, pattern) for pattern in _SKIPPABLE_PATH_PATTERNS)
+def _is_path_skippable(path: str, skip_patterns: Optional[list[str]] = None) -> bool:
+    """Checks if a single file path matches any skippable pattern.
+
+    Args:
+        path: File path to check.
+        skip_patterns: Optional glob patterns for skippable paths. If None (default),
+                      uses TheRock's default patterns (_SKIPPABLE_PATH_PATTERNS).
+                      Only needs to be set for external repos that have custom skip patterns.
+    """
+    patterns = skip_patterns if skip_patterns is not None else _SKIPPABLE_PATH_PATTERNS
+    return any(fnmatch.fnmatch(path, pattern) for pattern in patterns)
 
 
-def _check_for_non_skippable_path(paths: Optional[Iterable[str]]) -> bool:
+def _check_for_non_skippable_path(
+    paths: Optional[Iterable[str]],
+    skip_patterns: Optional[list[str]] = None,
+) -> bool:
     """Checks if any path in the collection is non-skippable.
 
-    Returns True if at least one path doesn't match any skippable pattern.
+    Args:
+        paths: Collection of file paths to check.
+        skip_patterns: Optional glob patterns for skippable paths. If None (default),
+                      uses TheRock's default patterns (_SKIPPABLE_PATH_PATTERNS).
+                      Only needs to be set for external repos that have custom skip patterns.
+
+    Returns:
+        True if at least one path doesn't match any skippable pattern.
     """
     if paths is None:
         return False
-    return any(not _is_path_skippable(p) for p in paths)
+    return any(not _is_path_skippable(p, skip_patterns) for p in paths)
 
 
-def _is_path_workflow_file_related_to_ci(path: str) -> bool:
-    """Checks if a single path is a CI-related workflow file."""
+def _is_path_workflow_file_related_to_ci(
+    path: str, ci_workflow_patterns: Optional[list[str]] = None
+) -> bool:
+    """Checks if a single path is a CI-related workflow file.
+
+    Args:
+        path: File path to check.
+        ci_workflow_patterns: Optional workflow file patterns. If None (default),
+                             uses TheRock's default patterns (_GITHUB_WORKFLOWS_CI_PATTERNS).
+                             Only needs to be set for external repos that have custom workflow patterns.
+    """
+    if ci_workflow_patterns is not None:
+        # Use external repo's patterns (even if empty list)
+        patterns = ci_workflow_patterns
+    else:
+        # Use TheRock's default patterns (for TheRock's own CI)
+        patterns = _GITHUB_WORKFLOWS_CI_PATTERNS
     return any(
-        fnmatch.fnmatch(path, ".github/workflows/" + pattern)
-        for pattern in _GITHUB_WORKFLOWS_CI_PATTERNS
+        fnmatch.fnmatch(path, ".github/workflows/" + pattern) for pattern in patterns
     )
 
 
-def _check_for_workflow_file_related_to_ci(paths: Optional[Iterable[str]]) -> bool:
+def _check_for_workflow_file_related_to_ci(
+    paths: Optional[Iterable[str]], ci_workflow_patterns: Optional[list[str]] = None
+) -> bool:
     """Checks if any path in the collection is a CI-related workflow file.
 
-    Returns True if at least one path matches a CI workflow pattern.
+    Args:
+        paths: Collection of file paths to check.
+        ci_workflow_patterns: Optional workflow file patterns. If None (default),
+                            uses TheRock's default patterns (_GITHUB_WORKFLOWS_CI_PATTERNS).
+                            Only needs to be set for external repos that have custom workflow patterns.
+
+    Returns:
+        True if at least one path matches a CI workflow pattern.
     """
     if paths is None:
         return False
-    return any(_is_path_workflow_file_related_to_ci(p) for p in paths)
+    return any(
+        _is_path_workflow_file_related_to_ci(p, ci_workflow_patterns) for p in paths
+    )

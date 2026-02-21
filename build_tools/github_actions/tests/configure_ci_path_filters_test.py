@@ -2,7 +2,6 @@ from pathlib import Path
 import os
 import sys
 import unittest
-from unittest.mock import patch
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
@@ -38,6 +37,19 @@ class ConfigureCIPathFiltersTest(unittest.TestCase):
         run_ci = is_ci_run_required(paths)
         self.assertTrue(run_ci)
 
+    def test_run_ci_if_external_repo_workflow_file_edited(self):
+        """Test that external repo workflow files trigger CI when using external repo patterns."""
+        # External repos use therock-*.yml naming
+        paths = [".github/workflows/therock-ci.yml"]
+        # Use external repo patterns (includes therock-*.yml)
+        run_ci = is_ci_run_required(paths, ci_workflow_patterns=["therock-*.yml"])
+        self.assertTrue(run_ci)
+
+        # TheRock's own patterns don't include therock-*.yml
+        paths = [".github/workflows/therock-ci.yml"]
+        run_ci = is_ci_run_required(paths)  # Uses TheRock's default patterns
+        self.assertFalse(run_ci)
+
     def test_dont_run_ci_if_unrelated_workflow_file_edited(self):
         paths = [".github/workflows/pre-commit.yml"]
         run_ci = is_ci_run_required(paths)
@@ -51,6 +63,71 @@ class ConfigureCIPathFiltersTest(unittest.TestCase):
         paths = ["source_file.h", ".github/workflows/pre-commit.yml"]
         run_ci = is_ci_run_required(paths)
         self.assertTrue(run_ci)
+
+    def test_is_ci_run_required_with_none_paths_skips_build(self):
+        """Test that None paths (git diff failure) skips build for internal repos."""
+        run_ci = is_ci_run_required(paths=None)
+        self.assertFalse(run_ci)
+
+    def test_is_ci_run_required_with_external_repo_skip_patterns(self):
+        """Test that external repo custom skip patterns are used correctly."""
+        # External repo provides custom skip pattern
+        custom_skip_patterns = ["custom-docs/*", "*.rst"]
+
+        # Path matching custom pattern should skip
+        paths = ["custom-docs/README.rst"]
+        run_ci = is_ci_run_required(paths, skip_patterns=custom_skip_patterns)
+        self.assertFalse(run_ci)
+
+        # Path not matching custom pattern should trigger build
+        paths = ["source_file.cpp"]
+        run_ci = is_ci_run_required(paths, skip_patterns=custom_skip_patterns)
+        self.assertTrue(run_ci)
+
+        # Path matching default pattern but not custom pattern should trigger build
+        # (custom patterns override defaults)
+        paths = ["README.md"]  # Would be skipped by default, but not by custom patterns
+        run_ci = is_ci_run_required(paths, skip_patterns=custom_skip_patterns)
+        self.assertTrue(run_ci)
+
+    def test_is_ci_run_required_with_external_repo_ci_workflow_patterns(self):
+        """Test that external repo custom CI workflow patterns are used correctly."""
+        # External repo provides custom CI workflow pattern
+        custom_ci_patterns = ["custom-ci*.yml", "therock-*.yml"]
+
+        # Workflow file matching custom pattern should trigger build
+        paths = [".github/workflows/custom-ci.yml"]
+        run_ci = is_ci_run_required(paths, ci_workflow_patterns=custom_ci_patterns)
+        self.assertTrue(run_ci)
+
+        # Workflow file matching therock pattern should trigger build
+        paths = [".github/workflows/therock-ci.yml"]
+        run_ci = is_ci_run_required(paths, ci_workflow_patterns=custom_ci_patterns)
+        self.assertTrue(run_ci)
+
+        # Workflow file not matching custom pattern should not trigger build
+        paths = [".github/workflows/pre-commit.yml"]
+        run_ci = is_ci_run_required(paths, ci_workflow_patterns=custom_ci_patterns)
+        self.assertFalse(run_ci)
+
+        # Non-workflow file should not trigger build (even with custom patterns)
+        paths = ["source_file.cpp"]
+        run_ci = is_ci_run_required(paths, ci_workflow_patterns=custom_ci_patterns)
+        self.assertTrue(run_ci)  # But triggers because it's a source file
+
+    def test_is_ci_run_required_with_empty_skip_patterns_does_not_skip(self):
+        """Test that empty skip_patterns list means no patterns to skip (all paths trigger build)."""
+        # Empty list means no skip patterns, so all paths trigger build
+        paths = [
+            "README.md"
+        ]  # Would be skipped by default patterns, but empty list = no skipping
+        run_ci = is_ci_run_required(paths, skip_patterns=[])
+        self.assertTrue(run_ci)
+
+        # None means use defaults
+        paths = ["README.md"]  # Should be skipped by default patterns
+        run_ci = is_ci_run_required(paths, skip_patterns=None)
+        self.assertFalse(run_ci)
 
 
 if __name__ == "__main__":

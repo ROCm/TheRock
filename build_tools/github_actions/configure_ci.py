@@ -23,6 +23,11 @@
   * PR_LABELS (optional) : JSON list of PR label names.
   * BASE_REF  (required) : base commit SHA of the PR.
 
+  Environment variables (external repo only; ignored for TheRock's own CI):
+  * EXTERNAL_REPO_NAME (required for external repos): Repo name (e.g. "rocm-libraries").
+    When set, config is built for that external repo. Must be set for external repo workflows.
+  * PROJECTS (optional): Comma-separated project list or "all" (e.g. "projects/rocprim,projects/rocblas").
+
   Local git history with at least fetch-depth of 2 for file diffing.
 
 -----------
@@ -55,6 +60,13 @@ from amdgpu_family_matrix import (
     all_build_variants,
     get_all_families_for_trigger_types,
 )
+from detect_external_repo_config import (
+    get_external_repo_path,
+    get_external_repo_config,
+    get_skip_patterns_for_ci,
+    get_workflow_patterns_for_ci,
+    get_external_repo_test_list,
+)
 from fetch_test_configurations import test_matrix
 
 from configure_ci_path_filters import (
@@ -66,6 +78,181 @@ from github_actions_utils import *
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = THIS_SCRIPT_DIR.parent.parent
+
+# --------------------------------------------------------------------------- #
+# External repository (rocm-libraries, etc.) - orchestration
+# --------------------------------------------------------------------------- #
+
+
+def requires_external_repo_build(
+    repo_name: str,
+    base_ref: str,
+    github_event_name: str,
+    projects_input: str,
+    specific_projects: str,
+) -> bool:
+    """Determine if external repo build is required."""
+    if github_event_name == "schedule":
+        print("Schedule event detected - building all")
+        return True
+    if projects_input and projects_input.strip().lower() == "all":
+        print("Projects override: building all")
+        return True
+    if specific_projects:
+        print(f"Building specific projects: {specific_projects}")
+        return True
+    # Check modified paths to determine if build should run
+    external_repo_root = str(get_external_repo_path(repo_name))
+    paths = get_git_modified_paths(base_ref, external_repo_root_path=external_repo_root)
+    if paths is not None:
+        print("modified_paths (max 200):", paths[:200])
+    print(f"Checking modified files since this had a {github_event_name} trigger")
+    # Get external repo's skip patterns (optional - falls back to TheRock's defaults if not defined)
+    skip_patterns = get_skip_patterns_for_ci(repo_name) or None
+    # Get external repo's workflow patterns (optional - falls back to TheRock's defaults if not defined)
+    external_ci_patterns = get_workflow_patterns_for_ci(repo_name) or None
+    requires_build = is_ci_run_required(
+        paths,
+        skip_patterns=skip_patterns,
+        ci_workflow_patterns=external_ci_patterns,
+    )
+    return requires_build
+
+
+def parse_projects_input(projects_input: str) -> str:
+    """Parse comma-separated projects input, stripping 'projects/' prefix.
+
+    Returns a comma-separated string (empty string if input is 'all' or empty).
+    """
+    if not projects_input or projects_input.strip().lower() in ["all", ""]:
+        return ""
+    projects = [
+        p.strip().replace("projects/", "")
+        for p in projects_input.split(",")
+        if p.strip()
+    ]
+    if projects:
+        print(f"Specific projects requested: {projects}")
+    return ",".join(projects)
+
+
+def get_test_list_for_build(specific_projects: str, repo_name: str) -> str:
+    """Determine which tests to run for a build.
+
+    Returns a comma-separated string of project names.
+    """
+    if specific_projects:
+        return specific_projects
+    test_list = get_external_repo_test_list(repo_name)
+    if not test_list:
+        print("Using default test list: ['all']")
+        return "all"
+    return ",".join(test_list)
+
+
+def cross_product_projects_with_gpu_variants(
+    project_configs: list, gpu_variants: list
+) -> list:
+    """Cross-products external repo project configs with GPU family variants."""
+    final_variants = []
+    for project_config in project_configs:
+        for gpu_variant in gpu_variants:
+            final_variants.append(
+                {
+                    **gpu_variant,
+                    "projects_to_test": project_config["projects_to_test"],
+                }
+            )
+    return final_variants
+
+
+def apply_external_repo_cross_product(
+    linux_configs: list,
+    windows_configs: list,
+    linux_variants: list,
+    windows_variants: list,
+) -> tuple:
+    """Apply cross-product of external repo configs with GPU variants."""
+    if not linux_configs and not windows_configs:
+        return linux_variants, windows_variants
+    print("\nExternal repo detected: applying cross-product")
+    print(
+        f"Linux configs: {len(linux_configs)}, Windows configs: {len(windows_configs)}"
+    )
+    updated_linux = linux_variants
+    updated_windows = windows_variants
+    if linux_configs:
+        updated_linux = cross_product_projects_with_gpu_variants(
+            linux_configs, linux_variants
+        )
+    if windows_configs:
+        updated_windows = cross_product_projects_with_gpu_variants(
+            windows_configs, windows_variants
+        )
+    print(f"Final Linux matrix: {len(updated_linux)} entries")
+    print(f"Final Windows matrix: {len(updated_windows)} entries")
+    print("")
+    return updated_linux, updated_windows
+
+
+def detect_external_repo_projects_to_build(
+    *,
+    repo_name: str,
+    base_ref: str,
+    github_event_name: str,
+    projects_input: str = "",
+) -> dict:
+    """Determine which projects to build for an external repository."""
+    specific_projects = parse_projects_input(projects_input)
+    requires_build = requires_external_repo_build(
+        repo_name,
+        base_ref,
+        github_event_name,
+        projects_input,
+        specific_projects,
+    )
+    if not requires_build:
+        return {"linux_projects": [], "windows_projects": []}
+    projects_to_test = get_test_list_for_build(specific_projects, repo_name)
+    test_config = {"projects_to_test": projects_to_test}
+    return {
+        "linux_projects": [test_config],
+        "windows_projects": [test_config],
+    }
+
+
+def setup_external_repo_configs(
+    base_args: dict,
+) -> Optional[dict]:
+    """Configure external repository settings when EXTERNAL_REPO_NAME is set.
+
+    Returns None if not an external repo, or a dict with external project configs.
+    Returns empty dict if external repo but no projects detected (main() handles early exit).
+    """
+    repo_name = (os.environ.get("EXTERNAL_REPO_NAME") or "").strip()
+    if not repo_name:
+        return None
+    try:
+        get_external_repo_config(repo_name)
+    except ValueError:
+        return None
+    print(f"\nExternal repository: {repo_name}")
+    project_detection = detect_external_repo_projects_to_build(
+        repo_name=repo_name,
+        base_ref=base_args["base_ref"],
+        github_event_name=base_args.get("github_event_name", ""),
+        projects_input=os.environ.get("PROJECTS", ""),
+    )
+    linux_configs = project_detection.get("linux_projects", [])
+    windows_configs = project_detection.get("windows_projects", [])
+    print(
+        f"Project detection result: Linux={len(linux_configs)}, Windows={len(windows_configs)}"
+    )
+    return {
+        "linux_external_project_configs": linux_configs,
+        "windows_external_project_configs": windows_configs,
+    }
+
 
 # --------------------------------------------------------------------------- #
 # Matrix creation logic based on PR, push, or workflow_dispatch
@@ -629,6 +816,32 @@ def main(base_args, linux_families, windows_families):
     )
     print("")
 
+    # Check if external repo project configs exist and apply cross-product
+    linux_external_configs = base_args.get("linux_external_project_configs", [])
+    windows_external_configs = base_args.get("windows_external_project_configs", [])
+    is_external_repo = bool(os.environ.get("EXTERNAL_REPO_NAME"))
+
+    # External repo with no projects: output empty matrix and exit early
+    if is_external_repo and not linux_external_configs and not windows_external_configs:
+        print("No projects to build - outputting empty matrix")
+        output = {
+            "linux_variants": json.dumps([]),
+            "linux_test_labels": json.dumps([]),
+            "windows_variants": json.dumps([]),
+            "windows_test_labels": json.dumps([]),
+            "enable_build_jobs": json.dumps(False),
+            "test_type": "smoke",
+        }
+        gha_set_output(output)
+        sys.exit(0)
+
+    linux_variants_output, windows_variants_output = apply_external_repo_cross_product(
+        linux_external_configs,
+        windows_external_configs,
+        linux_variants_output,
+        windows_variants_output,
+    )
+
     test_type = "smoke"
     test_type_reason = "default (smoke tests)"
 
@@ -637,27 +850,45 @@ def main(base_args, linux_families, windows_families):
         enable_build_jobs = True
         test_type = "full"
         test_type_reason = "scheduled run triggers full tests"
+    # External repos: path checking already done in detect_external_repo_projects_to_build()
+    # If we have configs here, paths indicated we should build
+    elif is_external_repo:
+        enable_build_jobs = True
+        test_type_reason = "external repo build request"
+        # If tests are specified, run full tests
+        if linux_test_output or windows_test_output:
+            test_type = "full"
+            test_type_reason = "external repo with test labels"
     else:
         modified_paths = get_git_modified_paths(base_ref)
-        print("modified_paths (max 200):", modified_paths[:200])
-        print(f"Checking modified files since this had a {github_event_name} trigger")
-        # TODO(#199): other behavior changes
-        #     * workflow_dispatch or workflow_call with inputs controlling enabled jobs?
-        enable_build_jobs = is_ci_run_required(modified_paths)
+        if modified_paths is None:
+            # Align with external: when paths cannot be determined, skip build (no submodule/test logic)
+            enable_build_jobs = False
+            test_type_reason = "could not determine modified paths, skipping build"
+        else:
+            print("modified_paths (max 200):", modified_paths[:200])
+            print(
+                f"Checking modified files since this had a {github_event_name} trigger"
+            )
+            # TODO(#199): other behavior changes
+            #     * workflow_dispatch or workflow_call with inputs controlling enabled jobs?
+            enable_build_jobs = is_ci_run_required(modified_paths)
 
-        # If the modified path contains any git submodules, we want to run a full test suite.
-        # Otherwise, we just run smoke tests
-        submodule_paths = get_git_submodule_paths(repo_root=THEROCK_DIR)
-        matching_submodule_paths = list(set(submodule_paths) & set(modified_paths))
-        if matching_submodule_paths:
-            test_type = "full"
-            test_type_reason = f"submodule(s) changed: {matching_submodule_paths}"
+            # If the modified path contains any git submodules, we want to run a full test suite.
+            # Otherwise, we just run smoke tests
+            submodule_paths = get_git_submodule_paths(repo_root=THEROCK_DIR)
+            matching_submodule_paths = list(set(submodule_paths) & set(modified_paths))
+            if matching_submodule_paths:
+                test_type = "full"
+                test_type_reason = f"submodule(s) changed: {matching_submodule_paths}"
 
-        # If any test label is included, run full test suite for specified tests
-        if linux_test_output or windows_test_output:
-            combined_test_labels = list(set(linux_test_output + windows_test_output))
-            test_type = "full"
-            test_type_reason = f"test label(s) specified: {combined_test_labels}"
+            # If any test label is included, run full test suite for specified tests
+            if linux_test_output or windows_test_output:
+                combined_test_labels = list(
+                    set(linux_test_output + windows_test_output)
+                )
+                test_type = "full"
+                test_type_reason = f"test label(s) specified: {combined_test_labels}"
 
     print(f"test_type decision: '{test_type}' (reason: {test_type_reason})")
 
@@ -747,5 +978,12 @@ if __name__ == "__main__":
     )
     base_args["build_variant"] = os.getenv("BUILD_VARIANT", "release")
     base_args["multi_arch"] = os.environ.get("MULTI_ARCH", "false") == "true"
+
+    # Detect if we're running for an external repository and configure accordingly
+    external_configs = setup_external_repo_configs(
+        base_args=base_args,
+    )
+    if external_configs:
+        base_args.update(external_configs)
 
     main(base_args, linux_families, windows_families)

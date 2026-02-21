@@ -23,6 +23,7 @@ Output (GitHub Actions format):
     cmake_source_var=THEROCK_ROCM_LIBRARIES_SOURCE_DIR
     submodule_path=rocm-libraries
     fetch_exclusion=--no-include-rocm-libraries
+    extra_cmake_options=-DTHEROCK_ROCM_LIBRARIES_SOURCE_DIR=/path -DOPTION1=value1 (merged from workspace and EXTRA_CMAKE_OPTIONS)
 """
 
 import argparse
@@ -61,7 +62,7 @@ def _log_warning(message: str) -> None:
     print(f"WARNING: {message}", file=sys.stderr)
 
 
-def get_repo_config(repo_name: str) -> Dict[str, Any]:
+def get_external_repo_config(repo_name: str) -> Dict[str, Any]:
     """Returns config for a known external repo name."""
     if repo_name not in REPO_CONFIGS:
         raise ValueError(
@@ -94,7 +95,7 @@ def get_external_repo_path(repo_name: str) -> Path:
         ValueError: If the external repo path cannot be determined
     """
     try:
-        repo_config = get_repo_config(repo_name)
+        repo_config = get_external_repo_config(repo_name)
     except ValueError as e:
         raise ValueError(f"Unknown repository: {repo_name}") from e
 
@@ -221,14 +222,19 @@ def import_external_repo_module(repo_name: str, module_name: str) -> Optional[An
         raise
 
 
-def get_skip_patterns(repo_name: str) -> list[str]:
-    """Get skip patterns from external repo's therock_configure_ci.py.
+def get_skip_patterns_for_ci(repo_name: str) -> list[str]:
+    """Get CI skip patterns from external repo's therock_configure_ci.py.
 
     These are file path patterns that, when ALL modified files in a PR match at least
     one pattern, indicate the changes have no impact on CI workflows. When this occurs,
     TheRock CI will skip build/test jobs to save resources.
 
     Example patterns: ["*.md", "docs/*", ".github/workflows/*"]
+
+    Note: External repos are recommended to define SKIPPABLE_PATH_PATTERNS in their
+    therock_configure_ci.py file. If not defined, an empty list is returned
+    and TheRock's default skip patterns will be used. For consistency and
+    explicit control, external repos are encouraged to define their own patterns.
 
     See: https://github.com/ROCm/rocm-libraries/blob/develop/.github/scripts/therock_configure_ci.py
 
@@ -249,7 +255,40 @@ def get_skip_patterns(repo_name: str) -> list[str]:
     return []
 
 
-def get_test_list(repo_name: str) -> list[str]:
+def get_workflow_patterns_for_ci(repo_name: str) -> list[str]:
+    """Get workflow file patterns from external repo's therock_configure_ci.py.
+
+    These are workflow file patterns that, when matched, indicate the workflow file
+    changes affect CI and should trigger a build. Patterns are relative to
+    `.github/workflows/` directory.
+
+    Example patterns: ["therock-*.yml"]
+
+    Note: External repos are recommended to define GITHUB_WORKFLOWS_CI_PATTERNS in their
+    therock_configure_ci.py file. If not defined, an empty list is returned
+    and TheRock's default workflow patterns will be used. For consistency and
+    explicit control, external repos are encouraged to define their own patterns.
+
+    See: https://github.com/ROCm/rocm-libraries/blob/develop/.github/scripts/therock_configure_ci.py
+
+    Args:
+        repo_name (str): Repository name (e.g., "rocm-libraries", "rocm-systems")
+
+    Returns:
+        list[str]: List of CI workflow patterns, or empty list if not found
+    """
+    configure_module = import_external_repo_module(repo_name, "therock_configure_ci")
+    if configure_module and hasattr(configure_module, "GITHUB_WORKFLOWS_CI_PATTERNS"):
+        patterns = configure_module.GITHUB_WORKFLOWS_CI_PATTERNS
+        print(
+            f"Loaded {len(patterns)} CI workflow patterns from {repo_name}",
+            file=sys.stderr,
+        )
+        return patterns
+    return []
+
+
+def get_external_repo_test_list(repo_name: str) -> list[str]:
     """Get test list from external repo's therock_matrix.py project_map.
 
     Args:
@@ -280,6 +319,37 @@ def get_test_list(repo_name: str) -> list[str]:
         return test_list
 
     return []
+
+
+def get_extra_cmake_options_for_ci(repo_name: str) -> str:
+    """Get extra CMake options from external repo's therock_configure_ci.py.
+
+    External repos can define EXTRA_CMAKE_OPTIONS in their therock_configure_ci.py
+    file to provide additional CMake configuration options that will be passed
+    to the build system.
+
+    Example in external repo's therock_configure_ci.py:
+        EXTRA_CMAKE_OPTIONS = "-DOPTION1=value1 -DOPTION2=value2"
+
+    Note: These options will be merged with any workspace-based CMake options
+    (e.g., source directory path) and workflow-provided extra_cmake_options.
+
+    Args:
+        repo_name (str): Repository name (e.g., "rocm-libraries", "rocm-systems")
+
+    Returns:
+        str: Space-separated CMake options string, or empty string if not found
+    """
+    configure_module = import_external_repo_module(repo_name, "therock_configure_ci")
+    if configure_module and hasattr(configure_module, "EXTRA_CMAKE_OPTIONS"):
+        options = configure_module.EXTRA_CMAKE_OPTIONS
+        if options:
+            print(
+                f"Loaded extra CMake options from {repo_name}: {options}",
+                file=sys.stderr,
+            )
+            return options
+    return ""
 
 
 def output_github_actions_vars(config: Dict[str, Any]) -> None:
@@ -323,7 +393,9 @@ def main(argv=None):
             "Output Format (GitHub Actions):\n"
             "  cmake_source_var=THEROCK_ROCM_LIBRARIES_SOURCE_DIR\n"
             "  submodule_path=rocm-libraries\n"
-            "  fetch_exclusion=--no-include-rocm-libraries"
+            "  fetch_exclusion=--no-include-rocm-libraries\n"
+            "  extra_cmake_options=-DTHEROCK_ROCM_LIBRARIES_SOURCE_DIR=/path -DOPTION1=value1\n"
+            "    (merged from --workspace path and EXTRA_CMAKE_OPTIONS in therock_configure_ci.py)"
         ),
         epilog=(
             "Examples:\n"
@@ -372,21 +444,38 @@ def main(argv=None):
         return 1
 
     try:
-        config = get_repo_config(args.repository)
+        config = get_external_repo_config(args.repository)
 
         # Log to stderr for visibility in CI logs
         print(f"Detected repository: {args.repository}", file=sys.stderr)
         print(f"Configuration: {config}", file=sys.stderr)
 
-        # Format the full CMake option if workspace path provided
+        # Collect CMake options from multiple sources
+        cmake_options_parts = []
+
+        # 1. Workspace-based CMake option (if workspace path provided)
         if args.workspace:
             workspace_path = Path(args.workspace)
             if not workspace_path.is_absolute():
                 _log_warning("Workspace path is not absolute, using as-is")
             cmake_var = config["cmake_source_var"]
-            config["extra_cmake_options"] = f"-D{cmake_var}={args.workspace}"
+            workspace_option = f"-D{cmake_var}={args.workspace}"
+            cmake_options_parts.append(workspace_option)
             print(
-                f"Generated CMake option: {config['extra_cmake_options']}",
+                f"Generated CMake option from workspace: {workspace_option}",
+                file=sys.stderr,
+            )
+
+        # 2. External repo-defined CMake options
+        repo_cmake_options = get_extra_cmake_options_for_ci(args.repository)
+        if repo_cmake_options:
+            cmake_options_parts.append(repo_cmake_options)
+
+        # Combine all CMake options
+        if cmake_options_parts:
+            config["extra_cmake_options"] = " ".join(cmake_options_parts)
+            print(
+                f"Combined CMake options: {config['extra_cmake_options']}",
                 file=sys.stderr,
             )
 
