@@ -69,6 +69,13 @@ endif()
 include(ProcessorCount)
 ProcessorCount(PAR_JOBS)
 
+# Platform-specific linker flags
+if(APPLE)
+  set(_rpath_flag "-Wl,-rpath,@loader_path")
+else()
+  set(_rpath_flag "-Wl,-rpath=\\'\\$$\\$$ORIGIN\\'")
+endif()
+
 add_custom_target(
   build ALL
   WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
@@ -77,7 +84,7 @@ add_custom_target(
       "PKG_CONFIG_PATH=$ENV{PKG_CONFIG_PATH}"
       # Escaping: Double $ to satisfy CMake, then double $ to satisfy configure,
       # then escaped single quotes to make it to the linker command line.
-      "LDFLAGS=${CMAKE_SHARED_LINKER_FLAGS} -Wl,-rpath=\\'\\$$\\$$ORIGIN\\'"
+      "LDFLAGS=${CMAKE_SHARED_LINKER_FLAGS} ${_rpath_flag}"
       --
     "${SOURCE_DIR}/configure"
       --prefix "${CMAKE_INSTALL_PREFIX}"

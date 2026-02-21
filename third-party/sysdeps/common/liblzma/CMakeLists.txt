@@ -67,6 +67,19 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   list(APPEND patch_source_commands   COMMAND
     bash "${CMAKE_CURRENT_SOURCE_DIR}/patch_source.sh" "${CMAKE_CURRENT_BINARY_DIR}/s")
 endif()
+
+# Platform-specific symbol versioning
+set(version_map_commands)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  # Provide our own version map with private symbol versions (Linux only).
+  set(version_map_commands COMMAND
+    "${CMAKE_COMMAND}" -E copy "${CMAKE_CURRENT_SOURCE_DIR}/version.lds" "${CMAKE_CURRENT_BINARY_DIR}/s/src/liblzma/liblzma_generic.map")
+  set(symbol_versioning_option -DXZ_SYMBOL_VERSIONING=generic)
+elseif(APPLE)
+  # macOS doesn't support symbol versioning
+  set(symbol_versioning_option -DXZ_SYMBOL_VERSIONING=OFF)
+endif()
+
 # xz/liblzma provides a CMakeLists.txt, however, we have to do some post-processing
 # of the libraries in order to prepare them for our use, so we invoke it as
 # a sub-build. We do this uniformly across all platforms because it is easier
@@ -81,9 +94,7 @@ add_custom_target(
     "${CMAKE_COMMAND}" -E copy_directory "${SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/s"
   COMMAND
     ${patch_source_commands}
-  COMMAND
-    # Provide our own version map with private symbol versions.
-    "${CMAKE_COMMAND}" -E copy "${CMAKE_CURRENT_SOURCE_DIR}/version.lds" "${CMAKE_CURRENT_BINARY_DIR}/s/src/liblzma/liblzma_generic.map"
+  ${version_map_commands}
   COMMAND
     "${CMAKE_COMMAND}"
       "-G${CMAKE_GENERATOR}"
@@ -101,8 +112,8 @@ add_custom_target(
       "-DCREATE_LZMA_SYMLINKS=OFF"
       # Disable writing pc files: we will do so ourselves.
       -DSKIP_INSTALL_FILES=ON
-      # Set versioning to generic to override with a private map
-      -DXZ_SYMBOL_VERSIONING=generic
+      # Set versioning based on platform
+      ${symbol_versioning_option}
 
   COMMAND
     "${CMAKE_COMMAND}" --build "${CMAKE_CURRENT_BINARY_DIR}/b"
@@ -117,10 +128,13 @@ add_custom_target(
 
 
 # Output cmake and pkgconfig files. Note that the library names are different
-# on windows vs linux.
+# on windows vs linux vs macOS.
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   set(LIBLZMA_TYPE "SHARED")
   set(LIBLZMA_IMPORTED_LOCATION "lib/librocm_sysdeps_liblzma.so.5")
+elseif(APPLE)
+  set(LIBLZMA_TYPE "SHARED")
+  set(LIBLZMA_IMPORTED_LOCATION "lib/librocm_sysdeps_liblzma.5.dylib")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
   set(LIBLZMA_TYPE "STATIC")
   set(LIBLZMA_IMPORTED_LOCATION "lib/liblzmastatic.lib")
