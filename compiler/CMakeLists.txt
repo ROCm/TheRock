@@ -94,20 +94,21 @@ if(THEROCK_ENABLE_COMPILER)
 
       -DCLANG_TOOL_CLANG_LINKER_WRAPPER_BUILD=${THEROCK_CONDITION_IS_NON_WINDOWS}
       -DCLANG_TOOL_OFFLOAD_ARCH_BUILD=${THEROCK_CONDITION_IS_NON_WINDOWS}
-      -DOPENMP_ENABLE_LIBOMPTARGET=${THEROCK_CONDITION_IS_NON_WINDOWS}
-      -DLIBOMPTARGET_BUILD_DEVICE_FORTRT=${THEROCK_CONDITION_IS_NON_WINDOWS}
+      # OpenMP offload requires ROCr runtime, so disable on macOS
+      -DOPENMP_ENABLE_LIBOMPTARGET=${THEROCK_CONDITION_IS_LINUX}
+      -DLIBOMPTARGET_BUILD_DEVICE_FORTRT=${THEROCK_CONDITION_IS_LINUX}
       -DOFFLOAD_EXTERNAL_PROJECT_UNIFIED_ROCR=${THEROCK_CONDITION_IS_LINUX}
-      -DLIBOMPTARGET_EXTERNAL_PROJECT_HSA_PATH=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime
+      $<$<BOOL:${THEROCK_CONDITION_IS_LINUX}>:-DLIBOMPTARGET_EXTERNAL_PROJECT_HSA_PATH=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime>
       -DFLANG_RUNTIME_F128_MATH_LIB=libquadmath
-      -DRUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_PER_TARGET_RUNTIME_DIR=${THEROCK_CONDITION_IS_NON_WINDOWS}
-      -DRUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_RUNTIMES=openmp
+      -DRUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_PER_TARGET_RUNTIME_DIR=${THEROCK_CONDITION_IS_LINUX}
+      $<$<BOOL:${THEROCK_CONDITION_IS_LINUX}>:-DRUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_RUNTIMES=openmp>
       # ASAN features.
       # Note that building AMDGPU ASAN extensions depends on various runtime headers
       # (since it instruments them). These paths must line up and will be an error
       # in the compiler-rt build if not found.
       # These require rocr-runtime which is Linux-only.
       "-DSANITIZER_AMDGPU=${THEROCK_CONDITION_IS_LINUX}"
-      "-DSANITIZER_HSA_INCLUDE_PATH=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/runtime/hsa-runtime/inc"
+      $<$<BOOL:${THEROCK_CONDITION_IS_LINUX}>:"-DSANITIZER_HSA_INCLUDE_PATH=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/runtime/hsa-runtime/inc">
       "-DSANITIZER_COMGR_INCLUDE_PATH=${CMAKE_CURRENT_SOURCE_DIR}/amd-llvm/amd/comgr/include"
 
       # compiler-rt debug mode
