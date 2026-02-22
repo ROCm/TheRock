@@ -106,15 +106,6 @@ skip_tests = {
             "test_cublas_allow_fp16_reduced_precision_reduction_get_set",
             "test_allocator_settings",
         ],
-        "nn": [
-            # Is now skipped.. on pytorch side
-            # RuntimeError: miopenStatusUnknownError
-            # MIOpen(HIP): Warning [BuildHip] In file included from /tmp/comgr-f75870/input/MIOpenDropoutHIP.cpp:32:
-            # /tmp/comgr-f75870/include/miopen_rocrand.hpp:45:10: fatal error: 'rocrand/rocrand_xorwow.h' file not found
-            # 45 | #include <rocrand/rocrand_xorwow.h>
-            #     |          ^~~~~~~~~~~~~~~~~~~~~~~~~~
-            "test_cudnn_rnn_dropout_states_device",
-        ],
         "torch": [
             "test_terminate_handler_on_crash",  # flaky !! hangs forever or works... can need up to 30 sec to pass
         ],
