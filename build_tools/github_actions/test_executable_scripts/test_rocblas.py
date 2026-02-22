@@ -24,22 +24,33 @@ environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 if is_asan():
     environ_vars["HSA_XNACK"] = "1"
 
+# Limit OpenBLAS/OpenMP threads in CI to avoid overallocation (e.g. 150 threads on
+# high core-count visibility) which can cause contention and 2x+ slower test runs.
+environ_vars["OPENBLAS_NUM_THREADS"] = "48"
+environ_vars["OMP_NUM_THREADS"] = "48"
+
 logging.basicConfig(level=logging.INFO)
 
-# If smoke tests are enabled, we run smoke tests only.
-# Otherwise, we run the normal test suite
+# Common args for CI (xml output for reporting, color for logs)
+cmd = [
+    f"{THEROCK_BIN_DIR}/rocblas-test",
+    "--gtest_output=xml",
+    "--gtest_color=yes",
+]
+
+# If smoke tests are enabled, use the YAML filter. Otherwise run quick + pre_checkin (exclude known_bug),
+# matching rocBLAS upstream CI: *quick*:*pre_checkin*-*known_bug*
 test_type = os.getenv("TEST_TYPE", "full")
 if test_type == "smoke":
-    test_filter = ["--yaml", f"{THEROCK_BIN_DIR}/rocblas_smoke.yaml"]
+    cmd += ["--yaml", f"{THEROCK_BIN_DIR}/rocblas_smoke.yaml"]
 else:
-    # only running smoke tests due to openBLAS issue: https://github.com/ROCm/TheRock/issues/1605
-    test_filter = ["--yaml", f"{THEROCK_BIN_DIR}/rocblas_smoke.yaml"]
+    cmd += ["--gtest_filter=*quick*:*pre_checkin*-*known_bug*"]
 
-cmd = [f"{THEROCK_BIN_DIR}/rocblas-test"] + test_filter
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 
 subprocess.run(
     cmd,
     cwd=THEROCK_DIR,
+    env=environ_vars,
     check=True,
 )
