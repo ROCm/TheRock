@@ -70,6 +70,8 @@ def run(args: argparse.Namespace):
             # included in runtime packages, but we still want them in the devel package.
             "prim",
             "rocwmma",
+            "rocprofiler-compute",
+            "rocprofiler-systems",
         ],
         tarball_compression=args.devel_tarball_compression,
     )
