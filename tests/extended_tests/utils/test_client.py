@@ -1,7 +1,7 @@
-"""Benchmark Client for system detection and result reporting.
+"""Test Client for system detection and result reporting.
 
 Unified interface for collecting system information (OS, hardware, ROCm) and
-uploading benchmark results to API or local storage.
+uploading test results to API or local storage.
 """
 
 import time
@@ -19,7 +19,7 @@ from .config import ConfigHelper
 from .results import ResultsHandler
 
 
-class BenchmarkClient:
+class TestClient:
     """Client for system detection, result collection, and API upload.
 
     Attributes:
@@ -29,7 +29,7 @@ class BenchmarkClient:
         system_context: SystemContext with detected info (or None if not detected)
 
     Example:
-        >>> client = BenchmarkClient()
+        >>> client = TestClient()
         >>> results = [{"test_name": "fft_1024", "score": 1234.5, "unit": "GFLOPS"}]
         >>> client.upload_results("rocfft_benchmark", results)
     """

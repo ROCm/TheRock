@@ -887,3 +887,33 @@ class HardwareDetector:
             List[GpuInfo]: List of detected GPUs
         """
         return self.gpu_list
+
+    def get_gpu_architecture(self) -> Tuple[int, str]:
+        """Get GPU count and architecture (gfx version) of the first GPU.
+
+        Detection hierarchy:
+        1. amd-smi (quick, preferred for modern ROCm)
+        2. rocminfo (fallback, works with older ROCm)
+        3. lspci (last resort, cannot determine architecture)
+
+        Returns:
+            Tuple[int, str]: (gpu_count, gfx_version) e.g., (8, 'gfx942')
+                             Returns (0, 'unknown') if detection fails
+        """
+        # Try amd-smi first (returns both count and gfx)
+        gpu_count, gfx_version = self.get_gpu_info_from_amd_smi()
+        if gpu_count > 0 and gfx_version:
+            return gpu_count, gfx_version
+
+        # Fall back to full detection (tries amd-smi, rocminfo, lspci)
+        if not self.gpu_list:
+            self.detect_gpu()
+
+        if self.gpu_list:
+            gpu_count = len(self.gpu_list)
+            arch = self.gpu_list[0].target_graphics_version
+            # Normalize "Unknown" to "unknown" for consistency
+            if arch and arch.lower() != "unknown":
+                return gpu_count, arch
+
+        return 0, "unknown"
