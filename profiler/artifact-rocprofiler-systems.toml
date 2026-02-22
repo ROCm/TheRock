@@ -14,5 +14,4 @@ include = [
 include = [
   "bin/**",
   "share/rocprofiler-systems/**",
-  "lib/python*/**",
 ]
