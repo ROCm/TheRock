@@ -247,10 +247,10 @@ setup_gpg_in_chroot() {
     echo "========================================="
 
     if [[ $ROCM_REPO =~ "amdrocm.gpg" ]] || [[ $ROCM_REPO =~ "rocm.gpg" ]]; then
-        # Determine GPG key URL based on repo type (release vs prereleases)
+        # Determine GPG key URL based on repo type (release vs prerelease)
         if [[ $ROCM_REPO =~ "rocm.prereleases.amd.com" ]]; then
             GPG_KEY_URL="https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg"
-            echo "Using prereleases GPG key: $GPG_KEY_URL"
+            echo "Using prerelease GPG key: $GPG_KEY_URL"
         else
             GPG_KEY_URL="https://repo.amd.com/rocm/packages/gpg/rocm.gpg"
             echo "Using release GPG key: $GPG_KEY_URL"

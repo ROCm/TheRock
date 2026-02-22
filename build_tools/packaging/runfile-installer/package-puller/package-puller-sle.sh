@@ -152,10 +152,15 @@ copy_rpms() {
 install_prereqs() {
     echo ++++++++++++++++++++++++++++++++
     echo Installing prereqs...
-    
-    echo Updating zypper...
-    $SUDO zypper install -y zypper
-    
+
+    # Check if zypper is already up to date
+    if rpm -q zypper > /dev/null 2>&1; then
+        echo "zypper already installed"
+    else
+        echo "Installing zypper"
+        $SUDO zypper install -y zypper
+    fi
+
     echo Installing prereqs...Complete.
 }
 

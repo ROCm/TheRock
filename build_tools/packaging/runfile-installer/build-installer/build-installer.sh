@@ -36,8 +36,9 @@ VERSION_FILE="$SCRIPT_DIR/VERSION"
 
 INSTALLER_VERSION=
 ROCM_VER=
-BUILD_NUMBER="${BUILD_NUMBER:-1}"
-ROCK_RELEASE_TAG="${ROCK_RELEASE_TAG:-prerelease}"
+BUILD_TAG="1"
+BUILD_RUNID="99999"
+BUILD_PULL_TAG=""
 BUILD_INSTALLER_NAME=
 
 AMDGPU_DKMS_FILE="../rocm-installer/component-amdgpu/amdgpu-dkms-ver.txt"
@@ -53,7 +54,9 @@ EXTRACT_AMDGPU_MODE="all"
 MAKESELF_OPT="--notemp --threads $(nproc)"
 MAKESELF_OPT_CLEANUP=
 MAKESELF_OPT_HEADER="--header ./rocm-makeself-header-pre.sh --help-header ../rocm-installer/VERSION"
-MAKESELF_OPT_TAR=""  # EL8 does not support GNU tar format
+MAKESELF_OPT_TAR=""        # EL8 does not support GNU tar format
+MAKESELF_COMPRESS_MODE=""  # Compression mode (set by mscomp: dev1, dev2, etc.)
+MAKESELF_OPT_COMPRESS=""   # Compression setting used by makeself
 
 
 ###### Functions ###############################################################
@@ -63,18 +66,47 @@ cat <<END_USAGE
 Usage: $PROG [options]
 
 [options}:
-    help               = Display this help information.
-    noextract          = Disable package extraction.
-    norocm             = Disable ROCm package extraction.
-    noamdgpu           = Disable AMDGPU package extraction.
-    noextractcontent   = Disable package extraction content. (Extract only deps and scriptlets)
-    contentlist        = List all files extracted to content directories during package extraction.
-    norunfile          = Disable makeself build of installer runfile.
-    nogui              = Disable GUI building.
+    help                 = Display this help information.
 
-Supported build systems:
-    - Ubuntu (DEB packages)
-    - AlmaLinux 8 (RPM packages - ManyLinux)
+    config=<file>        = Load configuration from file (command-line args override config).
+                           Preset configs available in config/ directory:
+                           - config/nightly.config
+                           - config/prerelease.config
+                           - config/release.config
+                           - config/dev.config
+
+    noextract            = Disable package extraction.
+    norocm               = Disable ROCm package extraction.
+    noamdgpu             = Disable AMDGPU package extraction.
+    noextractcontent     = Disable package extraction content. (Extract only deps and scriptlets)
+    contentlist          = List all files extracted to content directories during package extraction.
+    norunfile            = Disable makeself build of installer runfile.
+    nogui                = Disable GUI building.
+    buildtag=<tag>       = Set the build tag (default: 1).
+    buildrunid=<id>      = Set the Runfile build run ID (default: 99999).
+    buildpulltag=<tag>   = Set a tag/name for the builds package pull information. (ie. pulltag-pullid)
+    mscomp=<mode>        = Makeself compression mode (build speed vs file size):
+
+                           Mode       Speed    Size      Compatibility    Use Case
+                           ---------  -------  --------  ---------------  ------------------
+                           prodsmall  Slowest  Smallest  Standard (xz)    Max compression
+                                      xz       ~70%      Most systems     Smallest file size
+
+                           prodmedium Slower   Smaller   Universal        Balanced production
+                                      pbzip2   ~80-85%   (bzip2)          Near-xz compression
+
+                           normal     Slow     Small     Universal        Standard default
+                                      gzip -9  100%      (gzip)           Reliable baseline
+
+                           prodfast   3-4x     Same      Universal        Fast production
+                                      pigz -9  ~100%     (gzip)           Recommended for CI
+
+                           dev        5-6x     Larger    Universal        Development
+                                      pigz -6  ~105%     (gzip)           Fast iteration
+
+                           Universal (gzip/bzip2): Works on all Linux systems including minimal installs
+                           Standard (xz): Requires xz-utils on target (may not be in minimal installs)
+
 END_USAGE
 }
 
@@ -122,6 +154,44 @@ os_release() {
     echo "Build running on $DISTRO_NAME $DISTRO_VER (tag: $DISTRO_TAG)."
 }
 
+read_config() {
+    # Check for config= argument and source it BEFORE parsing other args
+    # This allows command-line args to override config file values
+    local CONFIG_FILE=""
+
+    for arg in "$@"; do
+        case "$arg" in
+            config=*)
+                CONFIG_FILE="${arg#*=}"
+                break
+                ;;
+        esac
+    done
+
+    if [[ -n "$CONFIG_FILE" ]]; then
+        echo -------------------------------------------------------------
+        echo "Loading configuration from: $CONFIG_FILE"
+
+        # Check if file exists
+        if [[ ! -f "$CONFIG_FILE" ]]; then
+            echo -e "\e[31mERROR: Config file not found: $CONFIG_FILE\e[0m"
+            exit 1
+        fi
+
+        # Check if file is readable
+        if [[ ! -r "$CONFIG_FILE" ]]; then
+            echo -e "\e[31mERROR: Config file not readable: $CONFIG_FILE\e[0m"
+            exit 1
+        fi
+
+        # Source the config file
+        source "$CONFIG_FILE"
+        echo "Configuration loaded successfully."
+        echo "Note: Command-line arguments will override config values."
+        echo -------------------------------------------------------------
+    fi
+}
+
 get_version() {
     i=0
     
@@ -135,16 +205,14 @@ get_version() {
     done < "$VERSION_FILE"
 }
 
-setup_version() {
+write_version() {
     echo -------------------------------------------------------------
     echo Setting version and build info...
-    
-    BUILD_INFO=$BUILD_NUMBER-$ROCK_RELEASE_TAG
 
     get_version
-    
-     # set the runfile installer name
-    BUILD_INSTALLER_NAME="rocm-installer_$INSTALLER_VERSION.$ROCM_VER-$BUILD_INFO"
+
+    # Set the runfile installer name
+    BUILD_INSTALLER_NAME="rocm-installer-$ROCM_VER-$BUILD_TAG-$BUILD_RUNID"
 
     # get the amdgpu-dkms build/version info
     if [ -f "$AMDGPU_DKMS_FILE" ]; then
@@ -153,17 +221,20 @@ setup_version() {
 
     echo "INSTALLER_VERSION        = $INSTALLER_VERSION"
     echo "ROCM_VER                 = $ROCM_VER"
-    echo "BUILD_NUMBER             = $BUILD_NUMBER"
-    echo "ROCK_RELEASE_TAG         = $ROCK_RELEASE_TAG"
+    echo "BUILD_TAG                = $BUILD_TAG"
+    echo "BUILD_RUNID              = $BUILD_RUNID"
+    echo "BUILD_PULL_TAG           = $BUILD_PULL_TAG"
     echo "AMDGPU_DKMS_BUILD_NUM    = $AMDGPU_DKMS_BUILD_NUM"
-    echo "BUILD_INSTALLER_NAME     = $BUILD_INSTALLER_NAME"
 
     # Update the version file
     echo "$INSTALLER_VERSION" > "$VERSION_FILE"
     echo "$ROCM_VER" >> "$VERSION_FILE"
-    echo "$ROCK_RELEASE_TAG" >> "$VERSION_FILE"
+    echo "$BUILD_TAG" >> "$VERSION_FILE"
+    echo "$BUILD_RUNID" >> "$VERSION_FILE"
+    echo "$BUILD_PULL_TAG" >> "$VERSION_FILE"
     echo "$AMDGPU_DKMS_BUILD_NUM" >> "$VERSION_FILE"
-    echo "$BUILD_INSTALLER_NAME" >> "$VERSION_FILE"
+
+    echo "Installer name: $BUILD_INSTALLER_NAME"
 }
 
 print_directory_size() {
@@ -178,26 +249,109 @@ print_directory_size() {
     fi
 }
 
+generate_component_lists() {
+    echo -------------------------------------------------------------
+    echo Scanning components to build embedded lists...
+
+    GFX_LIST=""
+    COMPO_LIST=""
+
+    local component_dir="../rocm-installer/component-rocm"
+
+    if [ ! -d "$component_dir" ]; then
+        echo "WARNING: component-rocm directory not found at: $component_dir"
+        echo "GFX list will be empty."
+    else
+        # Extract GFX architectures (e.g., gfx94x, gfx942, gfx1030)
+        # Look for patterns like gfx followed by numbers and optional letters
+        GFX_LIST=$(ls "$component_dir" 2>/dev/null | grep -oP 'gfx[0-9]+[a-z]*' | sort -u | tr '\n' ' ')
+
+        # Trim trailing spaces
+        GFX_LIST=$(echo "$GFX_LIST" | sed 's/ *$//')
+    fi
+
+    # Component categories are fixed (defined in rocm-installer.sh)
+    # These map to meta packages, not individual extracted packages
+    COMPO_LIST="core core-dev dev-tools core-sdk opencl"
+
+    echo "GFX architectures detected: ${GFX_LIST:-<none>}"
+    echo "Component categories: $COMPO_LIST"
+}
+
+generate_headers() {
+    echo -------------------------------------------------------------
+    echo Generating makeself headers with embedded component lists...
+
+    # Generate modern header (for non-EL8 distros)
+    if [ -f "rocm-makeself-header.sh.template" ]; then
+        sed -e "s|@@GFX_ARCHS_LIST@@|$GFX_LIST|g" \
+            -e "s|@@COMPONENTS_LIST@@|$COMPO_LIST|g" \
+            rocm-makeself-header.sh.template > rocm-makeself-header.sh
+        echo "Generated: rocm-makeself-header.sh"
+    else
+        echo "ERROR: rocm-makeself-header.sh.template not found!"
+        exit 1
+    fi
+
+    # Generate pre/EL8 header
+    if [ -f "rocm-makeself-header-pre.sh.template" ]; then
+        sed -e "s|@@GFX_ARCHS_LIST@@|$GFX_LIST|g" \
+            -e "s|@@COMPONENTS_LIST@@|$COMPO_LIST|g" \
+            rocm-makeself-header-pre.sh.template > rocm-makeself-header-pre.sh
+        echo "Generated: rocm-makeself-header-pre.sh"
+    else
+        echo "ERROR: rocm-makeself-header-pre.sh.template not found!"
+        exit 1
+    fi
+}
+
 install_makeself() {
     echo ----------------------
-    echo -e "\e[32mInstalling makeself...\e[0m"
-    
+    echo "Installing makeself..."
+
+    # Check if makeself command is already available
+    if command -v makeself &> /dev/null; then
+        local makeself_version=$(makeself --version)
+        echo -e "\e[32mmakeself already installed\e[0m"
+        echo -e "\e[32mVersion: $makeself_version\e[0m"
+        return 0
+    fi
+
+    # Try to install from package manager first
+    echo "Attempting to install makeself from package manager..."
+    if [ "$BUILD_DISTRO_PACKAGE_TYPE" == "deb" ]; then
+        $SUDO apt-get install -y makeself
+    elif [ "$BUILD_DISTRO_PACKAGE_TYPE" == "rpm" ]; then
+        $SUDO dnf install -y makeself
+    fi
+
+    # Check if package manager install succeeded
+    if command -v makeself &> /dev/null; then
+        local makeself_version=$(makeself --version)
+        echo -e "\e[32mmakeself installed successfully from package manager\e[0m"
+        echo -e "\e[32mVersion: $makeself_version\e[0m"
+        return 0
+    fi
+
+    # Package manager install failed, download and install from GitHub
+    echo "Package manager install failed. Downloading makeself from GitHub..."
+
     local makeself_ver="2.4.5"
     local makeself_url="https://github.com/megastep/makeself/releases/download/release-$makeself_ver/makeself-$makeself_ver.run"
-    
+
     # Download the makeself package
     echo "Downloading makeself package from github..."
     wget -q "$makeself_url"
-    
+
     if [[ $? -ne 0 ]]; then
         echo -e "\e[31mmakeself package not found: $makeself_url.\e[0m"
         exit 1
     fi
-    
+
     $SUDO chmod +x "makeself-$makeself_ver.run"
 
     # Install the makeself package
-    echo -e "\e[32mInstalling makeself package...\e[0m"
+    echo "Installing makeself package..."
     bash "makeself-$makeself_ver.run"
 
     # Clean up
@@ -211,11 +365,114 @@ install_makeself() {
     echo Installing makeself...Complete
 }
 
+install_pigz() {
+    echo ----------------------
+    echo -e "\e[32mInstalling pigz (parallel gzip)...\e[0m"
+
+    # Check if pigz is already installed
+    if command -v pigz &> /dev/null; then
+        echo "pigz is already installed: $(pigz --version 2>&1 | head -1)"
+        return 0
+    fi
+
+    # Install pigz for AlmaLinux (build system)
+    # Note: Creates gzip-compatible archives that decompress with standard gzip on ANY target system
+    if [[ "$DISTRO_NAME" != "almalinux" ]]; then
+        echo -e "\e[33mWARNING: Build system must be AlmaLinux\e[0m"
+        echo "Falling back to standard gzip compression"
+        return 1
+    fi
+
+    echo "Installing pigz via dnf..."
+    $SUDO dnf install -y pigz
+
+    # Verify installation
+    if command -v pigz &> /dev/null; then
+        echo "pigz installed successfully: $(pigz --version 2>&1 | head -1)"
+        echo "Target system requirement: gzip (universally available)"
+        return 0
+    else
+        echo -e "\e[33mWARNING: pigz installation failed\e[0m"
+        return 1
+    fi
+}
+
+install_xz() {
+    echo ----------------------
+    echo -e "\e[32mInstalling xz (best compression)...\e[0m"
+
+    # Check if xz is already installed
+    if command -v xz &> /dev/null; then
+        echo "xz is already installed: $(xz --version 2>&1 | head -1)"
+        return 0
+    fi
+
+    # Install xz for AlmaLinux (build system)
+    # Note: Creates xz-compressed archives that decompress with standard xz on ANY target system
+    if [[ "$DISTRO_NAME" != "almalinux" ]]; then
+        echo -e "\e[33mWARNING: Build system must be AlmaLinux\e[0m"
+        echo "Falling back to standard gzip compression"
+        return 1
+    fi
+
+    echo "Installing xz via dnf..."
+    $SUDO dnf install -y xz
+
+    # Verify installation
+    if command -v xz &> /dev/null; then
+        echo "xz installed successfully: $(xz --version 2>&1 | head -1)"
+        echo "Target system requirement: xz (universally available)"
+        return 0
+    else
+        echo -e "\e[33mWARNING: xz installation failed\e[0m"
+        return 1
+    fi
+}
+
+install_pbzip2() {
+    echo ----------------------
+    echo -e "\e[32mInstalling pbzip2 (parallel bzip2)...\e[0m"
+
+    # Check if pbzip2 is already installed
+    if command -v pbzip2 &> /dev/null; then
+        echo "pbzip2 is already installed: $(pbzip2 --version 2>&1 | head -1)"
+        return 0
+    fi
+
+    # Install pbzip2 for AlmaLinux (build system)
+    # Note: Creates bzip2-compatible archives that decompress with standard bzip2 on ANY target system
+    if [[ "$DISTRO_NAME" != "almalinux" ]]; then
+        echo -e "\e[33mWARNING: Build system must be AlmaLinux\e[0m"
+        echo "Falling back to standard gzip compression"
+        return 1
+    fi
+
+    echo "Installing pbzip2 via dnf..."
+    $SUDO dnf install -y pbzip2
+
+    # Verify installation
+    if command -v pbzip2 &> /dev/null; then
+        echo "pbzip2 installed successfully: $(pbzip2 --version 2>&1 | head -1)"
+        echo "Target system requirement: bzip2 (universally available)"
+        return 0
+    else
+        echo -e "\e[33mWARNING: pbzip2 installation failed\e[0m"
+        return 1
+    fi
+}
+
+
 install_ncurses_deb() {
     echo Installing ncurses libraries...
 
-    # Install ncurses development libraries
-    $SUDO apt-get install -y libncurses5-dev libncurses-dev
+    # Check if ncurses development libraries are already installed
+    if dpkg -l libncurses5-dev 2>/dev/null | grep -q "^ii" && \
+       dpkg -l libncurses-dev 2>/dev/null | grep -q "^ii"; then
+        echo "ncurses development libraries already installed"
+    else
+        echo "Installing ncurses development libraries"
+        $SUDO apt-get install -y libncurses5-dev libncurses-dev
+    fi
 
     # Verify static libraries exist
     if [ ! -f /usr/lib/x86_64-linux-gnu/libncurses.a ]; then
@@ -231,16 +488,25 @@ install_ncurses_deb() {
 install_ncurses_el() {
     echo Installing ncurses libraries...
 
-    # Install ncurses development libraries
-    $SUDO dnf install -y ncurses-devel
+    # Check if ncurses-devel is already installed
+    if rpm -q ncurses-devel > /dev/null 2>&1; then
+        echo "ncurses-devel already installed"
+    else
+        echo "Installing ncurses-devel"
+        $SUDO dnf install -y ncurses-devel
+    fi
 
     # For AlmaLinux 8, install ncurses-static from devel repo
     if [[ $DISTRO_NAME == "almalinux" ]] && [[ $DISTRO_VER == 8* ]]; then
-        echo "Installing ncurses-static for AlmaLinux 8..."
+        # Check if ncurses-static is already installed
+        if rpm -q ncurses-static > /dev/null 2>&1; then
+            echo "ncurses-static already installed"
+        else
+            echo "Installing ncurses-static for AlmaLinux 8..."
 
-        # Create AlmaLinux Devel repository configuration
-        echo "Creating AlmaLinux Devel repository configuration..."
-        $SUDO tee /etc/yum.repos.d/almalinux-devel.repo > /dev/null <<'EOF'
+            # Create AlmaLinux Devel repository configuration
+            echo "Creating AlmaLinux Devel repository configuration..."
+            $SUDO tee /etc/yum.repos.d/almalinux-devel.repo > /dev/null <<'EOF'
 [devel]
 name=AlmaLinux $releasever - Devel
 baseurl=https://repo.almalinux.org/almalinux/$releasever/devel/$basearch/os/
@@ -252,35 +518,40 @@ metadata_expire=86400
 enabled_metadata=1
 EOF
 
-        echo "Devel repository configuration created."
+            echo "Devel repository configuration created."
 
-        # Force metadata refresh
-        echo "Refreshing repository metadata..."
-        $SUDO dnf clean metadata
-        $SUDO dnf makecache
+            # Force metadata refresh
+            echo "Refreshing repository metadata..."
+            $SUDO dnf clean metadata
+            $SUDO dnf makecache
 
-        # Check if package is now available
-        echo "Checking if ncurses-static is available..."
-        dnf list ncurses-static || echo "WARNING: ncurses-static not found in package lists"
+            # Check if package is now available
+            echo "Checking if ncurses-static is available..."
+            dnf list ncurses-static || echo "WARNING: ncurses-static not found in package lists"
 
-        # Install from devel repository
-        echo "Installing ncurses-static from devel repository..."
-        $SUDO dnf install -y ncurses-static || {
-            echo "ERROR: Failed to install ncurses-static"
-            return 1
-        }
+            # Install from devel repository
+            echo "Installing ncurses-static from devel repository..."
+            $SUDO dnf install -y ncurses-static || {
+                echo "ERROR: Failed to install ncurses-static"
+                return 1
+            }
 
-        # Verify installation
-        if rpm -q ncurses-static >/dev/null 2>&1; then
-            echo "SUCCESS: ncurses-static installed from devel repository"
-        else
-            echo "ERROR: ncurses-static package not found after installation"
-            return 1
+            # Verify installation
+            if rpm -q ncurses-static >/dev/null 2>&1; then
+                echo "SUCCESS: ncurses-static installed from devel repository"
+            else
+                echo "ERROR: ncurses-static package not found after installation"
+                return 1
+            fi
         fi
     else
-        # For other EL distros, try standard install
-        echo "Installing ncurses-static..."
-        $SUDO dnf install -y ncurses-static || echo "WARNING: ncurses-static not available"
+        # For other EL distros, check if ncurses-static is already installed
+        if rpm -q ncurses-static > /dev/null 2>&1; then
+            echo "ncurses-static already installed"
+        else
+            echo "Installing ncurses-static..."
+            $SUDO dnf install -y ncurses-static || echo "WARNING: ncurses-static not available"
+        fi
     fi
 
     # Verify static libraries
@@ -299,33 +570,51 @@ EOF
 install_tools_deb() {
     echo Installing DEB tools...
 
-    # Install wget for downloading packages
-    $SUDO apt-get install -y wget
+    # Define required tools to check (command names)
+    local required_cmds=(wget cmake gcc g++ ar)
 
-    # Install tools for UI (including ncurses libraries)
-    $SUDO apt-get install -y cmake
-    $SUDO apt-get install -y gcc g++
+    # Define packages to install (package names)
+    local required_pkgs=(wget cmake gcc g++ binutils)
 
-    # Install ncurses libraries
-    install_ncurses_deb
+    # Check if all required tools are already installed
+    local all_installed=1
+    for cmd in "${required_cmds[@]}"; do
+        if ! command -v "$cmd" &> /dev/null; then
+            all_installed=0
+            break
+        fi
+    done
 
-    # Install binutils for ar command
-    $SUDO apt-get install -y binutils
-
-    # Install makeself for .run creation
-    $SUDO apt-get install -y makeself > /dev/null 2>&1
-    if [[ $? -ne 0 ]]; then
-        install_makeself
+    if [ $all_installed -eq 1 ]; then
+        echo "All core build tools are already installed"
+    else
+        # One or more tools missing, install all
+        echo "Installing core build tools: ${required_pkgs[*]}"
+        $SUDO apt-get install -y "${required_pkgs[@]}"
     fi
 
-    # Check the version of makeself and enable cleanup script support if >= 2.4.2
-    makeself_version_min=2.4.2
-    makeself_version=$(makeself --version)
-    makeself_version=${makeself_version#Makeself version }
+    # Install ncurses libraries (only if UI build is enabled)
+    if [ "$BUILD_UI" == "yes" ]; then
+        install_ncurses_deb
+    else
+        echo "Skipping ncurses installation (GUI build disabled)"
+    fi
 
-    if [[ "$(printf '%s\n' "$makeself_version_min" "$makeself_version" | sort -V | head -n1)" = "$makeself_version_min" ]]; then
-        MAKESELF_OPT_CLEANUP+="--cleanup ../rocm-installer/cleanup-install.sh"
-        echo Enabling cleanup script support.
+    # Install makeself for .run creation (only if runfile build is enabled)
+    if [ "$BUILD_INSTALLER" == "yes" ]; then
+        install_makeself
+
+        # Check the version of makeself and enable cleanup script support if >= 2.4.2
+        makeself_version_min=2.4.2
+        makeself_version=$(makeself --version)
+        makeself_version=${makeself_version#Makeself version }
+
+        if [[ "$(printf '%s\n' "$makeself_version_min" "$makeself_version" | sort -V | head -n1)" = "$makeself_version_min" ]]; then
+            MAKESELF_OPT_CLEANUP+="--cleanup ../rocm-installer/cleanup-install.sh"
+            echo Enabling cleanup script support.
+        fi
+    else
+        echo "Skipping makeself installation (runfile build disabled)"
     fi
 
     echo Installing DEB tools...Complete
@@ -334,36 +623,60 @@ install_tools_deb() {
 install_tools_el(){
     echo Installing EL tools...
 
-    # Install wget for downloading packages
-    $SUDO dnf install -y wget binutils tar rpm-build cpio dpkg
-    
-    # Install tools for UI (including ncurses libraries)
-    $SUDO dnf install -y cmake 2>/dev/null || echo "cmake already installed or using custom build"
-    $SUDO dnf install -y gcc gcc-c++
+    # Define required tools to check (command names)
+    local required_cmds=(wget ar tar rpmbuild cpio dpkg cmake gcc g++)
 
-    # Install ncurses libraries
-    install_ncurses_el
+    # Define packages to install (package names)
+    local required_pkgs=(wget binutils tar rpm-build cpio dpkg cmake gcc gcc-c++)
+
+    # Check if all required tools are already installed
+    local all_installed=1
+    for cmd in "${required_cmds[@]}"; do
+        if ! command -v "$cmd" &> /dev/null; then
+            all_installed=0
+            break
+        fi
+    done
+
+    if [ $all_installed -eq 1 ]; then
+        echo "All core build tools are already installed"
+    else
+        # One or more tools missing, install all
+        echo "Installing core build tools: ${required_pkgs[*]}"
+        $SUDO dnf install -y "${required_pkgs[@]}"
+    fi
+
+    # Install ncurses libraries (only if UI build is enabled)
+    if [ "$BUILD_UI" == "yes" ]; then
+        install_ncurses_el
+    else
+        echo "Skipping ncurses installation (GUI build disabled)"
+    fi
 
     if [[ $DISTRO_NAME == "amzn" ]]; then
-        $SUDO dnf install -y tar bzip2
+        # Amazon Linux may need additional packages
+        if ! command -v bzip2 &> /dev/null; then
+            $SUDO dnf install -y tar bzip2
+        fi
     fi
-    
-    # Install makself for .run creation either from repos or directly from github
-    $SUDO dnf install -y makeself > /dev/null 2>&1
-    if [[ $? -ne 0 ]]; then
-        install_makeself
-    fi
-    
-    # Check the version of makself and enable cleanup script support if >= 2.4.2
-    makeself_version_min=2.4.2
-    makeself_version=$(makeself --version)
-    makeself_version=${makeself_version#Makeself version }
 
-    if [[ "$(printf '%s\n' "$makeself_version_min" "$makeself_version" | sort -V | head -n1)" = "$makeself_version_min" ]]; then
-        MAKESELF_OPT_CLEANUP+="--cleanup ../rocm-installer/cleanup-install.sh"
-        echo Enabling cleanup script support.
+    # Install makeself for .run creation (only if runfile build is enabled)
+    if [ "$BUILD_INSTALLER" == "yes" ]; then
+        install_makeself
+
+        # Check the version of makeself and enable cleanup script support if >= 2.4.2
+        makeself_version_min=2.4.2
+        makeself_version=$(makeself --version)
+        makeself_version=${makeself_version#Makeself version }
+
+        if [[ "$(printf '%s\n' "$makeself_version_min" "$makeself_version" | sort -V | head -n1)" = "$makeself_version_min" ]]; then
+            MAKESELF_OPT_CLEANUP+="--cleanup ../rocm-installer/cleanup-install.sh"
+            echo Enabling cleanup script support.
+        fi
+    else
+        echo "Skipping makeself installation (runfile build disabled)"
     fi
-    
+
     echo Installing EL tools...Complete
 }
 
@@ -381,6 +694,78 @@ install_tools() {
     fi
 
     echo Installing tools...Complete
+}
+
+configure_compression() {
+    echo -------------------------------------------------------------
+    echo Configuring makeself compression...
+
+    case "$MAKESELF_COMPRESS_MODE" in
+        normal)
+            # Explicit normal: standard gzip with level 9 (maximum compression)
+            # SAFE: Universal compatibility
+            MAKESELF_OPT_COMPRESS=""
+            echo "Compression: Gzip level 9 (normal, universal)"
+            ;;
+        dev)
+            # Install and use pigz with compression level 6 (balanced)
+            # SAFE: gzip-compatible, works on all target systems
+            install_pigz
+            if [ $? -eq 0 ]; then
+                MAKESELF_OPT_COMPRESS="--pigz --complevel 6"
+                echo "Compression: Pigz level 6 (fast, universal gzip-compatible)"
+            else
+                MAKESELF_OPT_COMPRESS="--complevel 6"
+                echo "Compression: Gzip level 6 (pigz not available, universal)"
+            fi
+            ;;
+        prodfast)
+            # Install and use pigz (production-fast, gzip-compatible)
+            # SAFE: gzip-compatible, works on all target systems
+            install_pigz
+            if [ $? -eq 0 ]; then
+                MAKESELF_OPT_COMPRESS="--pigz"
+                echo "Compression: Pigz (production-fast, universal gzip-compatible)"
+            else
+                MAKESELF_OPT_COMPRESS=""
+                echo "Compression: Standard Gzip (pigz not available, universal)"
+            fi
+            ;;
+        prodmedium)
+            # Install and use pbzip2 (parallel bzip2, better compression than gzip)
+            # SAFE: bzip2-compatible, works on all target systems
+            install_pbzip2
+            if [ $? -eq 0 ]; then
+                MAKESELF_OPT_COMPRESS="--pbzip2"
+                echo "Compression: Pbzip2 (parallel bzip2, near-xz compression, universal)"
+            else
+                MAKESELF_OPT_COMPRESS="--bzip2"
+                echo "Compression: Standard Bzip2 (pbzip2 not available, universal)"
+            fi
+            ;;
+        prodsmall)
+            # Install and use xz (best compression, slowest build)
+            # SAFE: xz-compatible, works on most target systems
+            install_xz
+            if [ $? -eq 0 ]; then
+                MAKESELF_OPT_COMPRESS="--xz"
+                echo "Compression: XZ (best compression, standard xz-compatible)"
+            else
+                MAKESELF_OPT_COMPRESS=""
+                echo "Compression: Standard Gzip (xz not available, universal)"
+            fi
+            ;;
+        "")
+            # No argument: standard gzip with level 9 (maximum compression)
+            # SAFE: Universal compatibility
+            MAKESELF_OPT_COMPRESS=""
+            echo "Compression: Gzip level 9 (normal, universal)"
+            ;;
+        *)
+            echo -e "\e[31mERROR: Invalid compression mode: $MAKESELF_COMPRESS_MODE\e[0m"
+            exit 1
+            ;;
+    esac
 }
 
 extract_rocm_packages_deb() {
@@ -639,12 +1024,13 @@ build_installer() {
     if [ $BUILD_INSTALLER == "yes" ]; then
         echo Building installer runfile...
         
-        echo "MAKESELF_OPT_HEADER  = $MAKESELF_OPT_HEADER"
-        echo "MAKESELF_OPT         = $MAKESELF_OPT"
-        echo "MAKESELF_OPT_CLEANUP = $MAKESELF_OPT_CLEANUP"
-        echo "MAKESELF_OPT_TAR     = $MAKESELF_OPT_TAR"
-        
-        makeself $MAKESELF_OPT_HEADER $MAKESELF_OPT $MAKESELF_OPT_CLEANUP $MAKESELF_OPT_TAR ../rocm-installer "./$BUILD_DIR/$BUILD_INSTALLER_NAME.run" "ROCm Runfile Installer" ./install-init.sh
+        echo "MAKESELF_OPT_HEADER   = $MAKESELF_OPT_HEADER"
+        echo "MAKESELF_OPT          = $MAKESELF_OPT"
+        echo "MAKESELF_OPT_COMPRESS = $MAKESELF_OPT_COMPRESS"
+        echo "MAKESELF_OPT_CLEANUP  = $MAKESELF_OPT_CLEANUP"
+        echo "MAKESELF_OPT_TAR      = $MAKESELF_OPT_TAR"
+
+        makeself $MAKESELF_OPT_HEADER $MAKESELF_OPT $MAKESELF_OPT_COMPRESS $MAKESELF_OPT_CLEANUP $MAKESELF_OPT_TAR ../rocm-installer "./$BUILD_DIR/$BUILD_INSTALLER_NAME.run" "ROCm Runfile Installer" ./install-init.sh
         if [[ $? -ne 0 ]]; then
             echo -e "\e[31mFailed makeself build.\e[0m"
             exit 1
@@ -660,7 +1046,7 @@ build_installer() {
             echo ""
             echo -e "\e[32m========================================\e[0m"
             echo -e "\e[32mBuilt runfile: $BUILD_INSTALLER_NAME.run\e[0m"
-            echo -e "\e[32mSize: $RUNFILE_SIZE ($RUNFILE_SIZE_BYTES bytes)\e[0m"
+            echo -e "\e[95mSize: $RUNFILE_SIZE ($RUNFILE_SIZE_BYTES bytes)\e[0m"
             echo -e "\e[32m========================================\e[0m"
         fi
     else
@@ -685,10 +1071,18 @@ echo SUDO: $SUDO
 
 os_release
 
+# Load config file if specified (allows command-line args to override)
+read_config "$@"
+
 # parse args
 while (($#))
 do
     case "$1" in
+    config=*)
+        # Already processed before argument parsing loop
+        # Skip to allow other args to override config values
+        shift
+        ;;
     help)
         usage
         exit 0
@@ -728,6 +1122,47 @@ do
         BUILD_UI="no"
         shift
         ;;
+    buildtag=*)
+        BUILD_TAG="${1#*=}"
+        echo "Setting BUILD_TAG = $BUILD_TAG"
+        shift
+        ;;
+    buildrunid=*)
+        BUILD_RUNID="${1#*=}"
+        echo "Setting BUILD_RUNID = $BUILD_RUNID"
+        shift
+        ;;
+    buildpulltag=*)
+        BUILD_PULL_TAG="${1#*=}"
+        echo "Setting BUILD_PULL_TAG = $BUILD_PULL_TAG"
+        shift
+        ;;
+    mscomp=*)
+        MAKESELF_COMPRESS_MODE="${1#*=}"
+        case "$MAKESELF_COMPRESS_MODE" in
+            normal)
+                echo "Setting compression mode: normal (gzip -9)"
+                ;;
+            dev)
+                echo "Setting compression mode: dev (pigz + complevel 6)"
+                ;;
+            prodfast)
+                echo "Setting compression mode: prodfast (pigz - production fast)"
+                ;;
+            prodmedium)
+                echo "Setting compression mode: prodmedium (pbzip2 - balanced production)"
+                ;;
+            prodsmall)
+                echo "Setting compression mode: prodsmall (xz - best compression)"
+                ;;
+            *)
+                echo -e "\e[31mERROR: Invalid mscomp value: $MAKESELF_COMPRESS_MODE\e[0m"
+                echo "Valid options: normal, dev, prodfast, prodmedium, prodsmall"
+                exit 1
+                ;;
+        esac
+        shift
+        ;;
     *)
         echo "Unknown option: $1"
         shift
@@ -738,11 +1173,18 @@ done
 # Install any required tools for the build
 install_tools
 
+# Configure compression (install pigz/lz4 if needed)
+configure_compression
+
 # Extract all ROCm/AMDGPU packages
 extract_packages
 
 # Setup version/build info
-setup_version
+write_version
+
+# Generate component lists and headers
+generate_component_lists
+generate_headers
 
 # Build the UI
 build_UI
@@ -763,6 +1205,6 @@ echo ""
 echo ==============================
 echo "Build completed successfully!"
 echo "=============================="
-echo -e "\e[32mTotal build time: ${BUILD_HOURS}h ${BUILD_MINUTES}m ${BUILD_SECONDS}s (${BUILD_ELAPSED} seconds)\e[0m"
+echo -e "\e[36mTotal build time: ${BUILD_HOURS}h ${BUILD_MINUTES}m ${BUILD_SECONDS}s (${BUILD_ELAPSED} seconds)\e[0m"
 echo ==============================
 echo ""

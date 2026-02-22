@@ -219,16 +219,22 @@ setup_epel_crb() {
 install_prereqs() {
     echo ++++++++++++++++++++++++++++++++
     echo Installing prereqs...
-    
-    $SUDO dnf install -y dnf-plugin-config-manager
-    
+
+    # Check if dnf-plugin-config-manager is already installed
+    if rpm -q dnf-plugins-core > /dev/null 2>&1; then
+        echo "dnf-plugin-config-manager already installed"
+    else
+        echo "Installing dnf-plugin-config-manager"
+        $SUDO dnf install -y dnf-plugins-core
+    fi
+
     if [[ $EPEL_SETUP == 1 ]]; then
         setup_epel_crb
     fi
-    
+
     # Update the dnf.conf for faster mirrors etc.
     update_dnf_conf
-    
+
     echo Installing prereqs...Complete.
 }
 

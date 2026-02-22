@@ -39,7 +39,7 @@ TARGET_AMDGPU_DIR="/"
 COMPO_ROCM_FILE="$EXTRACT_ROCM_DIR/base/rocm-packages.config"
 COMPO_ROCM_LIST="$EXTRACT_ROCM_DIR/base/components.txt"
 COMPO_AMDGPU_FILE=""  # Set dynamically after os_release() determines distro
-COMPO_INSTALL="core"  # Default component: core, core-dev, dev-tools, core-sdk (comma-separated)
+COMPO_INSTALL="core"  # Default component: core, core-dev, dev-tools, core-sdk, opencl (comma-separated)
 COMPO_META_DIR="$EXTRACT_ROCM_DIR/meta"
 USER_SPECIFIED_COMPO=0  # Track if user explicitly specified compo= argument
 USER_SPECIFIED_GFX=0    # Track if user explicitly specified gfx= argument
@@ -109,20 +109,24 @@ Usage: bash $PROG [options]
             <arch> = GPU architecture to install (e.g., gfx94x, gfx950, etc.)
                      Installs base components plus architecture-specific components.
                      If not specified, only base components are installed.
+                     Use gfx=list to see available architectures in this installer.
                      Available architectures: gfx94x, gfx950
 
         compo=<component_list>
             <component_list> = Comma-separated list of ROCm components to install.
                                If not specified, defaults to 'core'.
+                               Use compo=list to see available component categories.
                                Available components:
                                    core      = Core ROCm components (amdrocm-core)
                                    core-dev  = Core development components (amdrocm-core-devel)
                                    dev-tools = Developer tools (amdrocm-developer-tools)
                                    core-sdk  = Core SDK components (amdrocm-core-sdk)
+                                   opencl    = OpenCL runtime (amdrocm-opencl)
                                Examples:
                                    compo=core
                                    compo=core,dev-tools
                                    compo=core-sdk,dev-tools
+                                   compo=opencl
 
     Post Install:
     -------------
@@ -399,7 +403,7 @@ setup_rocm_version_info() {
     echo "Setting up ROCm version information from base directory..."
 
     # Find the ROCm version directory in the base directory
-    ROCM_CORE_VER_DIR=$(find "$EXTRACT_ROCM_DIR/base/amdrocm-base"*/content/rocm -type d -name "core*" -print -quit)
+    ROCM_CORE_VER_DIR=$(find "$EXTRACT_ROCM_DIR/base/amdrocm-"*/content/rocm -type d -name "core*" -print -quit)
 
     if [[ -n "$ROCM_CORE_VER_DIR" ]]; then
         # Extract the relative path from content/ (e.g., rocm/core-7.11)
@@ -608,23 +612,58 @@ get_available_gfx_archs() {
     echo "${archs[@]}"
 }
 
+get_available_components() {
+    # Return list of available component categories
+    # These are the high-level component categories, not individual packages
+    local components=("core" "core-dev" "dev-tools" "core-sdk" "opencl")
+    echo "${components[@]}"
+}
+
 validate_gfx_arg() {
     # Validate gfx= argument for ROCm installation
+    #
+    # GFX requirement logic:
+    #   - Components requiring gfx= (have architecture variants): core, core-dev, core-sdk
+    #   - Components NOT requiring gfx= (base-only): dev-tools, opencl
+    #   - If ANY component requires gfx=, then gfx= must be provided
+    #   - If ALL components are base-only, gfx= is optional
 
     # Check if gfx= is required but not provided
-    # Only required when actually installing ROCm components (not deps-only)
-    if [[ $ROCM_INSTALL == 1 && "$DEPS_ARG" != "install-only" ]]; then
+    # Only required when actually installing ROCm components
+    # Skip validation for: deps=install-only, deps=list, deps=validate
+    if [[ $ROCM_INSTALL == 1 && "$DEPS_ARG" != "install-only" && "$DEPS_ARG" != "list" && "$DEPS_ARG" != "validate" ]]; then
         if [[ -z "$INSTALL_GFX" ]]; then
-            # Get available architectures from installer
-            local available_archs=($(get_available_gfx_archs))
-            print_err "The gfx= argument is required when installing ROCm."
-            echo "Example: $PROG gfx=gfx94x rocm"
-            if [ ${#available_archs[@]} -gt 0 ]; then
-                echo "Available architectures: ${available_archs[*]}"
-            else
-                echo "Available architectures: gfx94x, gfx950"
+            # Check if ALL requested components are base-only (don't require gfx)
+            # Base-only components: dev-tools, opencl
+            local base_only_install=1
+            IFS=',' read -ra COMPO_ARRAY <<< "$COMPO_INSTALL"
+            for compo in "${COMPO_ARRAY[@]}"; do
+                compo=$(echo "$compo" | xargs)  # trim whitespace
+                # If ANY component is NOT base-only, gfx= is required
+                if [[ "$compo" != "dev-tools" && "$compo" != "opencl" ]]; then
+                    base_only_install=0
+                    break
+                fi
+            done
+
+            # Require gfx= if ANY component needs architecture-specific variants
+            # (i.e., if NOT all components are base-only)
+            if [[ $base_only_install == 0 ]]; then
+                # Get available architectures from installer
+                local available_archs=($(get_available_gfx_archs))
+                print_err "The gfx= argument is required when installing ROCm components with architecture variants."
+                echo "Requested components: $COMPO_INSTALL"
+                echo "Example: $PROG compo=$COMPO_INSTALL gfx=gfx94x rocm"
+                echo ""
+                if [ ${#available_archs[@]} -gt 0 ]; then
+                    echo "Available architectures: ${available_archs[*]}"
+                else
+                    echo "Available architectures: gfx94x, gfx950"
+                fi
+                echo ""
+                echo "Note: gfx= is not required for base-only components (dev-tools, opencl)"
+                exit 1
             fi
-            exit 1
         fi
     fi
 
@@ -667,6 +706,41 @@ validate_gfx_arg() {
                 echo "Available architectures: ${available_archs[*]}"
                 exit 1
             fi
+        fi
+    fi
+}
+
+validate_compo_arg() {
+    # Validate compo= argument for ROCm installation
+    # Only validate when actually installing ROCm components (not deps-only)
+    if [[ $ROCM_INSTALL == 1 && "$DEPS_ARG" != "install-only" ]]; then
+        if [[ -n "$COMPO_INSTALL" ]]; then
+            # Get available component categories
+            local available_compos=($(get_available_components))
+
+            # Split comma-separated component list
+            IFS=',' read -ra compo_list <<< "$COMPO_INSTALL"
+
+            # Validate each component
+            for compo_name in "${compo_list[@]}"; do
+                # Trim whitespace
+                compo_name=$(echo "$compo_name" | xargs)
+
+                # Check if component is valid
+                local valid_compo=0
+                for valid in "${available_compos[@]}"; do
+                    if [[ "$compo_name" == "$valid" ]]; then
+                        valid_compo=1
+                        break
+                    fi
+                done
+
+                if [ $valid_compo -eq 0 ]; then
+                    print_err "Component '$compo_name' is not available in this installer."
+                    echo "Available components: ${available_compos[*]}"
+                    exit 1
+                fi
+            done
         fi
     fi
 }
@@ -1082,7 +1156,7 @@ detect_installed_base_components() {
     done
 
     if [ -n "$COMPONENTS" ]; then
-        echo "Found $(echo $COMPONENTS | wc -w) installed base component(s)"
+        echo -e "\e[32mFound $(echo $COMPONENTS | wc -w) installed base component(s)\e[0m"
     else
         echo "No installed base components detected"
     fi
@@ -1166,14 +1240,14 @@ detect_installed_gfx_architectures() {
             fi
 
             if [ $gfx_files_found -eq 1 ]; then
-                echo "Detected installed GFX architecture: gfx${gfx_arch}"
+                echo -e "Detected installed GFX architecture: \e[32mgfx${gfx_arch}\e[0m"
                 gfx_dirs+=("$gfx_dir")
             fi
         fi
     done
 
     if [ ${#gfx_dirs[@]} -gt 0 ]; then
-        echo "Found ${#gfx_dirs[@]} installed GFX architecture(s)"
+        echo -e "\e[32mFound ${#gfx_dirs[@]} installed GFX architecture(s)\e[0m"
     else
         echo "No installed GFX architectures detected"
     fi
@@ -1239,7 +1313,7 @@ detect_installed_gfx_components() {
     done
 
     if [ ${#gfx_components[@]} -gt 0 ]; then
-        echo "Found GFX components in ${#gfx_components[@]} architecture(s)"
+        echo -e "\e[32mFound GFX components in ${#gfx_components[@]} architecture(s)\e[0m"
     else
         echo "No GFX components detected"
     fi
@@ -1643,15 +1717,18 @@ configure_rocm_install() {
             core-sdk)
                 local meta_base="amdrocm-core-sdk${ROCM_VER}"
                 ;;
+            opencl)
+                local meta_base="amdrocm-opencl${ROCM_VER}"
+                ;;
             *)
                 print_err "Unknown component: $compo_name"
-                echo "Valid components: core, core-dev, dev-tools, core-sdk"
+                echo "Valid components: core, core-dev, dev-tools, core-sdk, opencl"
                 exit 1
                 ;;
         esac
 
-        # Read base meta config (for dev-tools and base components)
-        if [[ "$compo_name" == "dev-tools" ]]; then
+        # Read base meta config (for dev-tools, opencl, and other base components)
+        if [[ "$compo_name" == "dev-tools" || "$compo_name" == "opencl" ]]; then
             # dev-tools is base-only (no gfx variant)
             local base_meta_file="$COMPO_META_DIR/${meta_base}-meta.config"
             if [ -f "$base_meta_file" ]; then
@@ -1843,7 +1920,7 @@ uninstall_rocm_target() {
             configure_rocm_install
         else
             # Auto-detect uninstall: remove everything that's actually installed
-            echo "Auto-detecting installed components for complete uninstall..."
+            echo "Auto-detecting installed components for uninstall..."
 
             # ROCm version info should already be set by setup_rocm_version_info() called earlier
             # If not set, that's okay for uninstall - we can still try based on directory structure
@@ -2691,12 +2768,63 @@ do
         ;;
     gfx=*)
         INSTALL_GFX="${1#*=}"
+
+        # Handle gfx=list to show available architectures
+        if [[ "$INSTALL_GFX" == "list" ]]; then
+            echo "========================================="
+            echo "Available GFX Architectures"
+            echo "========================================="
+
+            # Get available architectures from installer
+            available_archs=($(get_available_gfx_archs))
+
+            if [ ${#available_archs[@]} -gt 0 ]; then
+                echo ""
+                for arch in "${available_archs[@]}"; do
+                    echo "  $arch"
+                done
+                echo ""
+                echo "Usage: $PROG gfx=<arch> rocm"
+                echo "Example: $PROG gfx=${available_archs[0]} rocm"
+            else
+                echo ""
+                echo "No GFX architectures found in installer."
+                echo ""
+            fi
+            echo "========================================="
+            exit 0
+        fi
+
         USER_SPECIFIED_GFX=1
         echo Using GFX architecture: $INSTALL_GFX
         shift
         ;;
     compo=*)
         COMPO_INSTALL="${1#*=}"
+
+        # Handle compo=list to show available component categories
+        if [[ "$COMPO_INSTALL" == "list" ]]; then
+            echo "========================================="
+            echo "Available Component Categories"
+            echo "========================================="
+            echo ""
+            echo "  core         Core ROCm components (default)"
+            echo "  core-dev     Core development components"
+            echo "  dev-tools    Developer tools"
+            echo "  core-sdk     Core SDK components"
+            echo ""
+            echo "Component categories can be combined with commas:"
+            echo ""
+            echo "Usage: $PROG compo=<category>[,<category>,...] gfx=<arch> rocm"
+            echo ""
+            echo "Examples:"
+            echo "  $PROG compo=core gfx=gfx110x rocm"
+            echo "  $PROG compo=core,dev-tools gfx=gfx110x rocm"
+            echo "  $PROG compo=core-sdk gfx=gfx110x rocm"
+            echo "========================================="
+            exit 0
+        fi
+
         USER_SPECIFIED_COMPO=1
         echo Using component installation: $COMPO_INSTALL
         shift
@@ -2799,8 +2927,9 @@ do
     esac
 done
 
-# Validate gfx= argument
+# Validate arguments
 validate_gfx_arg
+validate_compo_arg
 
 get_version
 

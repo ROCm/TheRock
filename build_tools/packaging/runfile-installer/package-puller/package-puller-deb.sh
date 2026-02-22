@@ -220,10 +220,15 @@ config_create() {
 install_tools() {
     echo ++++++++++++++++++++++++++++++++
     echo Installing tools...
-    
-    # Install dpkg-dev for Package file creation
-    $SUDO apt-get install -y dpkg-dev
-    
+
+    # Check if dpkg-dev is already installed
+    if dpkg -l dpkg-dev 2>/dev/null | grep -q "^ii"; then
+        echo "dpkg-dev already installed"
+    else
+        echo "Installing dpkg-dev"
+        $SUDO apt-get install -y dpkg-dev
+    fi
+
     echo Installing tools...Complete.
 }
 
@@ -234,10 +239,10 @@ setup_apt() {
     if [[ $ROCM_REPO =~ "amdrocm.gpg" ]] || [[ $ROCM_REPO =~ "rocm.gpg" ]]; then
         sudo mkdir --parents --mode=0755 /etc/apt/keyrings
 
-        # Determine GPG key URL based on repo type (release vs prereleases)
+        # Determine GPG key URL based on repo type (release vs prerelease)
         if [[ $ROCM_REPO =~ "rocm.prereleases.amd.com" ]]; then
             GPG_KEY_URL="https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg"
-            echo "Using prereleases GPG key: $GPG_KEY_URL"
+            echo "Using prerelease GPG key: $GPG_KEY_URL"
         else
             GPG_KEY_URL="https://repo.amd.com/rocm/packages/gpg/rocm.gpg"
             echo "Using release GPG key: $GPG_KEY_URL"

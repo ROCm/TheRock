@@ -88,12 +88,12 @@ typedef struct _POST_MENU_CONFIG
 typedef struct _OFFLINE_INSTALL_CONFIG
 {
     // Version info read from VERSION file at runtime
-    char installerVersion[64];      // Line 1 from VERSION file
-    char rocmVersion[64];            // Line 2 from VERSION file
-    char distroVersionBuild[64];     // Line 3 from VERSION file
-    char rocmBuildNum[64];           // Line 4 from VERSION file
-    char amdgpuDkmsBuild[64];        // Line 5 from VERSION file
-    char buildInstallerName[256];    // Line 6 from VERSION file
+    char installerVersion[64];      // Line 1: INSTALLER_VERSION (e.g., "2.0.0")
+    char rocmVersion[64];            // Line 2: ROCM_VER (e.g., "7.11.0")
+    char buildTag[64];               // Line 3: BUILD_TAG (e.g., "1", "rc1", "nightly")
+    char buildRunId[64];             // Line 4: BUILD_RUNID (e.g., "99999", "1")
+    char buildPullTag[64];           // Line 5: BUILD_PULL_TAG (e.g., "20260219-22188089855")
+    char amdgpuDkmsBuild[64];        // Line 6: AMDGPU_DKMS_BUILD_NUM (e.g., "6.18.4-2286447")
 
     // Runtime distro detection
     char distroName[64];

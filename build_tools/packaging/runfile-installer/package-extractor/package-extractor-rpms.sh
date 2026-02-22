@@ -35,9 +35,6 @@ PACKAGE_AMDGPU_DIR="${PACKAGE_AMDGPU_DIR:-$PWD/packages-amdgpu-${EXTRACT_FORMAT}
 EXTRACT_ROCM_DIR="$PWD/component-rocm-${EXTRACT_FORMAT}"
 EXTRACT_AMDGPU_DIR="$PWD/component-amdgpu-${EXTRACT_FORMAT}"
 
-# Extra install setup
-EXTRACT_TAR_DIR="$PWD/setup-install"
-
 # Extraction Files
 EXTRACT_ROCM_PKG_CONFIG_FILE="rocm-packages.config"
 EXTRACT_AMDGPU_PKG_CONFIG_FILE="amdgpu-packages.config"
@@ -48,6 +45,19 @@ EXTRACT_COMPO_LIST_FILE="components.txt"          # list the component version o
 EXTRACT_PACKAGE_LIST_FILE="packages.txt"          # list all extracted packages
 EXTRACT_REQUIRED_DEPS_FILE="required_deps.txt"    # list only required dependencies (non-amd deps)
 EXTRACT_GLOBAL_DEPS_FILE="global_deps.txt"        # list all extracted dependencies
+
+# Meta packages - GFX-specific (extracted from gfxXYZ directories)
+GFX_META_PACKAGES=(
+    "amdrocm-core"
+    "amdrocm-core-sdk"
+    "amdrocm-core-devel"
+)
+
+# Meta packages - Base (extracted from base directory)
+BASE_META_PACKAGES=(
+    "amdrocm-developer-tools"
+    "amdrocm-opencl"
+)
 
 # Extra/Installer dependencies
 EXTRA_DEPS=()
@@ -162,24 +172,57 @@ prompt_user() {
     fi
 }
 
+install_tools_el() {
+    if [[ "$DISTRO_NAME" = "rocky" ]]; then
+        # Rocky Linux - use cpio and diffutils instead of rpmdevtools
+        if rpm -q cpio > /dev/null 2>&1; then
+            echo "cpio already installed"
+        else
+            echo "Installing cpio"
+            $SUDO dnf install -y cpio
+        fi
+
+        if rpm -q diffutils > /dev/null 2>&1; then
+            echo "diffutils already installed"
+        else
+            echo "Installing diffutils"
+            $SUDO dnf install -y diffutils
+        fi
+    else
+        # RHEL, Oracle, AlmaLinux, Amazon - use rpmdevtools
+        if rpm -q rpmdevtools > /dev/null 2>&1; then
+            echo "rpmdevtools already installed"
+        else
+            echo "Installing rpmdevtools"
+            $SUDO dnf install -y rpmdevtools
+        fi
+    fi
+}
+
+install_tools_sle() {
+    # SLES - use rpmdevtools
+    if rpm -q rpmdevtools > /dev/null 2>&1; then
+        echo "rpmdevtools already installed"
+    else
+        echo "Installing rpmdevtools"
+        $SUDO zypper install -y rpmdevtools
+    fi
+}
+
 install_tools() {
     echo ++++++++++++++++++++++++++++++++
     echo Installing tools...
-   
+
     # Install rpmdevtools for dep version
     if [ $EXTRACT_DISTRO_TYPE == "el" ]; then
-        if [[ "$DISTRO_NAME" = "rocky" ]]; then
-            $SUDO dnf install -y cpio diffutils
-        else
-            $SUDO dnf install -y rpmdevtools
-        fi
+        install_tools_el
     elif [ $EXTRACT_DISTRO_TYPE == "sle" ]; then
-        $SUDO zypper install -y rpmdevtools
+        install_tools_sle
     else
         echo Unsupported extract type.
         exit 1
     fi
-    
+
     echo Installing tools...Complete.
 }
 
@@ -245,31 +288,6 @@ write_out_list() {
     local file=$2
     
     echo "$list" | tr ' ' '\n' > "$file"
-}
-
-write_version() {
-    echo -------------------------------------------------------------
-    echo Writing version...
-
-    i=0
-    VERSION_FILE="../build-installer/VERSION"
-
-    while IFS= read -r line; do
-        case $i in
-            0) INSTALLER_VERSION="$line" ;;
-        esac
-        
-        i=$((i+1))
-    done < "$VERSION_FILE"
-     
-    if [[ -n $ROCM_VER ]]; then
-        echo "INSTALLER_VERSION = $INSTALLER_VERSION"
-        echo "ROCM_VER          = $ROCM_VER"
-    
-        # Update the version file
-        echo "$INSTALLER_VERSION" > "$VERSION_FILE"
-        echo "$ROCM_VER" >> "$VERSION_FILE"
-    fi
 }
 
 move_opt_contents() {
@@ -390,7 +408,7 @@ extract_version() {
     if echo "$pkg" | grep -q 'amdrocm-base'; then
         echo "--------------------------------"
         echo "Extract rocm versioning..."
-    
+
         # Extract version from package filename
         local pkg_basename=$(basename "$pkg")
         local pattern='amdrocm-base([0-9]+\.[0-9]+)-'
@@ -402,10 +420,8 @@ extract_version() {
             echo VERSION_INFO = $VERSION_INFO
             ROCM_VER=$(echo "$VERSION_INFO" | cut -d '.' -f 1-2)
         fi
-        
+
         echo "ROCM_VER = $ROCM_VER"
-        
-        write_version
     fi
 }
 
@@ -1105,18 +1121,6 @@ extract_meta_packages() {
         mkdir -p "$meta_dir"
     fi
 
-    # Define the specific meta packages for gfxXYZ directories
-    local gfx_meta_packages=(
-        "amdrocm-core"
-        "amdrocm-core-sdk"
-        "amdrocm-core-devel"
-    )
-
-    # Define the specific meta packages for base directory
-    local base_meta_packages=(
-        "amdrocm-developer-tools"
-    )
-
     # Process each gfxXYZ directory
     for gfx_dir in ../rocm-installer/component-rocm/gfx*; do
         if [ ! -d "$gfx_dir" ]; then
@@ -1128,7 +1132,7 @@ extract_meta_packages() {
         echo "Processing $gfx_tag directory..."
 
         # Process each specific meta package
-        for meta_pkg_base in "${gfx_meta_packages[@]}"; do
+        for meta_pkg_base in "${GFX_META_PACKAGES[@]}"; do
             # Construct the full meta package name: e.g., amdrocm-core7.12-gfx94x
             local meta_pkg_name="${meta_pkg_base}${ROCM_VER}-${gfx_tag}"
             local meta_pkg_dir="$gfx_dir/$meta_pkg_name"
@@ -1155,7 +1159,7 @@ extract_meta_packages() {
         echo "Processing base directory for non-gfx meta packages..."
 
         # Process each specific meta package
-        for meta_pkg_base in "${base_meta_packages[@]}"; do
+        for meta_pkg_base in "${BASE_META_PACKAGES[@]}"; do
             # Construct the full meta package name: e.g., amdrocm-developer-tools7.12
             local meta_pkg_name="${meta_pkg_base}${ROCM_VER}"
             local meta_pkg_dir="$base_dir/$meta_pkg_name"
@@ -1205,6 +1209,14 @@ extract_rocm_rpms() {
         return 1
     fi
 
+    # Clean component-rocm directory before extraction to ensure fresh build
+    if [ -d "$EXTRACT_ROCM_DIR" ]; then
+        echo -e "\e[93mROCm component directory exists. Removing: $EXTRACT_ROCM_DIR\e[0m"
+        $SUDO rm -rf "$EXTRACT_ROCM_DIR"
+    fi
+    echo "Creating ROCm component directory: $EXTRACT_ROCM_DIR"
+    mkdir -p "$EXTRACT_ROCM_DIR"
+
     echo "Processing packages from: $PACKAGE_DIR"
     echo "Organizing by gfx tag into component-rocm subdirectories..."
     
@@ -1244,7 +1256,7 @@ extract_rocm_rpms() {
         echo "=========================================="
 
         # Set extract directory for this gfx tag
-        EXTRACT_DIR="../rocm-installer/component-rocm/$gfx_tag"
+        EXTRACT_DIR="${EXTRACT_ROCM_DIR}/$gfx_tag"
 
         echo "EXTRACT_DIR = $EXTRACT_DIR"
         echo -----------------------------------------
@@ -1368,37 +1380,6 @@ extract_amdgpu_rpms() {
     echo "Reordered packages written to '$config_file'."
 }
 
-extract_tar_setup() {
-    echo ===================================================
-    echo Extracting Tar Setup...
-    
-    echo -----------------------------------------
-    echo "EXTRACT_TAR_DIR = $EXTRACT_TAR_DIR"
-    echo ------------------------------------------
-    
-    SCRIPT_NAME="setup-rocm.sh"
-    SCRIPT_DIR="$EXTRACT_ROCM_DIR/setup/script/rocm-$ROCM_VER"
-
-    echo "Script           = $SCRIPT_NAME"
-    echo "Script Directory = $SCRIPT_DIR"
-    
-    if [ -f "$EXTRACT_TAR_DIR/$SCRIPT_NAME" ]; then
-        # copy the setup script into the rocm directory for untarring
-        if [ ! -d $SCRIPT_DIR ]; then
-            echo Create directory $SCRIPT_DIR
-            mkdir -p $SCRIPT_DIR
-        fi
-        
-        echo "Copying tar setup script to rocm directory."
-        
-        cp "$EXTRACT_TAR_DIR/$SCRIPT_NAME" "$SCRIPT_DIR/"
-    else
-        echo "Tar setup script not found."
-    fi
-    
-    echo Extracting Tar Setup...Complete.
-}
-
 write_extract_info() {
     dump_extract_stats "$EXTRACT_DIR"
     
@@ -1502,8 +1483,6 @@ install_tools
 
 if [[ $ROCM_EXTRACT == 1 ]]; then
     extract_rocm_rpms
-
-    extract_tar_setup
 fi
 
 if [[ $AMDGPU_EXTRACT == 1 ]]; then

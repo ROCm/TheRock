@@ -39,9 +39,6 @@ PACKAGE_AMDGPU_DIR="${PACKAGE_AMDGPU_DIR:-$PWD/packages-amdgpu-${EXTRACT_FORMAT}
 EXTRACT_ROCM_DIR="../rocm-installer/component-rocm"
 EXTRACT_AMDGPU_DIR="$PWD/component-amdgpu-${EXTRACT_FORMAT}"
 
-# Extra install setup
-EXTRACT_TAR_DIR="$PWD/setup-install"
-
 # Extraction Files
 EXTRACT_ROCM_PKG_CONFIG_FILE="rocm-packages.config"
 EXTRACT_AMDGPU_PKG_CONFIG_FILE="amdgpu-packages.config"
@@ -290,31 +287,6 @@ write_out_list() {
     echo "$list" | tr ' ' '\n' > "$file"
 }
 
-write_version() {
-    echo -------------------------------------------------------------
-    echo Writing version...
-
-    i=0
-    VERSION_FILE="../build-installer/VERSION"
-
-    while IFS= read -r line; do
-        case $i in
-            0) INSTALLER_VERSION="$line" ;;
-        esac
-
-        i=$((i+1))
-    done < "$VERSION_FILE"
-
-    if [[ -n $ROCM_VER ]]; then
-        echo "INSTALLER_VERSION = $INSTALLER_VERSION"
-        echo "ROCM_VER          = $ROCM_VER"
-
-        # Update the version file
-        echo "$INSTALLER_VERSION" > "$VERSION_FILE"
-        echo "$ROCM_VER" >> "$VERSION_FILE"
-    fi
-}
-
 move_opt_contents() {
     local content_dir="$1"
     local dir="$2"
@@ -450,8 +422,6 @@ extract_version() {
         fi
 
         echo "ROCM_VER = $ROCM_VER"
-
-        write_version
     fi
 }
 
@@ -1074,9 +1044,6 @@ extract_rocm_debs() {
         echo -e "\e[93m========================================\e[0m"
     done
 
-    # Write version information
-    write_version
-
     # Combine dependencies from all component-rocm subdirectories
     echo ""
     combine_deps
@@ -1173,37 +1140,6 @@ extract_amdgpu_debs() {
     # Write the reordered packages back to the config file
     echo "$reordered_packages" > "$config_file"
     echo "Reordered packages written to '$config_file'."
-}
-
-extract_tar_setup() {
-    echo ===================================================
-    echo Extracting Tar Setup...
-    
-    echo -----------------------------------------
-    echo "EXTRACT_TAR_DIR = $EXTRACT_TAR_DIR"
-    echo ------------------------------------------
-    
-    SCRIPT_NAME="setup-rocm.sh"
-    SCRIPT_DIR="$EXTRACT_ROCM_DIR/setup/script/rocm-$ROCM_VER"
-
-    echo "Script           = $SCRIPT_NAME"
-    echo "Script Directory = $SCRIPT_DIR"
-    
-    if [ -f "$EXTRACT_TAR_DIR/$SCRIPT_NAME" ]; then
-        # copy the setup script into the rocm directory for untarring
-        if [ ! -d $SCRIPT_DIR ]; then
-            echo Create directory $SCRIPT_DIR
-            mkdir -p $SCRIPT_DIR
-        fi
-        
-        echo "Copying tar setup script to rocm directory."
-        
-        cp "$EXTRACT_TAR_DIR/$SCRIPT_NAME" "$SCRIPT_DIR/"
-    else
-        echo "Tar setup script not found."
-    fi
-    
-    echo Extracting Tar Setup...Complete.
 }
 
 write_extract_info() {
@@ -1304,8 +1240,6 @@ fi
 
 if [[ $ROCM_EXTRACT == 1 ]]; then
     extract_rocm_debs
-
-    extract_tar_setup
 fi
 
 if [[ $AMDGPU_EXTRACT == 1 ]]; then

@@ -25,12 +25,16 @@
 # Package Puller Input Config
 
 # ROCm configuration type and version
-PULL_CONFIG_ROCM="prereleases"         # nightlies / prereleases / release
-PULL_CONFIG_ROCM_BUILDNUM="7.11"       # 20260211-21893116598 / 7.11 (repo url)
-PULL_CONFIG_ROCM_VER_PKG="7.11"        # 7.11 (package name)
+PULL_CONFIG_RELEASE_TYPE=""            # dev / nightly / prerelease / release
+PULL_CONFIG_TAG=""                     # Build tag (e.g., rc0, 20260211)
+PULL_CONFIG_RUNID=""                   # Run ID (21893116598 for nightly)
+PULL_CONFIG_ROCM_VER=""                # 7.11.0
+PULL_CONFIG_PKG="amdrocm-core-sdk"     # Base package name (e.g., amdrocm-core-sdk, amdrocm-dev-tools)
+PULL_CONFIG_PKG_TYPE="arch"            # Package type: "arch" (has -gfxXYZ suffix) or "base" (no suffix)
+PULL_CONFIG_PKG_EXTRA=()               # Additional packages (array, comma-separated via pullpkgextra=)
 
 # ROCm package version control (optional - defaults to latest)
-PULL_ROCM_PKG_VERSION=""               # Explicit package version (e.g., 7.11.0-2 for release, 7.11.0~0-21265702726 for prereleases)
+PULL_ROCM_PKG_VERSION=""               # Explicit package version (e.g., 7.11.0-2 for release, 7.11.0~0-21265702726 for prerelease)
 
 # AMDGPU configuration type and version
 PULL_CONFIG_AMDGPU="release"            # release / hidden
@@ -38,9 +42,9 @@ PULL_CONFIG_AMDGPU_BUILDNUM="31.10"     # 3x.xx.xx / .3x.xx.xx
 PULL_CONFIG_AMDGPU_HASH=""              # Hash for hidden repos (only used when PULL_CONFIG_AMDGPU="hidden")
 
 # Package configs (relative to package-puller directory)
-# These will be dynamically generated from templates by setup_puller_config()
-PULLER_CONFIG_DEB="../build-config/rocm-${PULL_CONFIG_ROCM}-${PULL_CONFIG_ROCM_BUILDNUM}-deb.config"
-PULLER_CONFIG_RPM="../build-config/rocm-${PULL_CONFIG_ROCM}-${PULL_CONFIG_ROCM_BUILDNUM}-rpm.config"
+# These will be dynamically generated from templates by setup_puller_config_rocm()
+PULLER_CONFIG_DEB=""
+PULLER_CONFIG_RPM=""
 PULLER_CONFIG_DIR_AMDGPU="../build-config"
 
 # Package Puller Output directories - separate for DEB and RPM
@@ -65,6 +69,9 @@ SETUP_AMDGPU=0
 SETUP_AMDGPU_MODE="all"  # Default: all distros
 SETUP_ROCM_MODE="chroot" # Default: native (use current OS), Options: native, chroot
 
+# Configuration
+ROCM_RELEASE_TYPES=(dev nightly prerelease release)
+
 
 ###### Functions ###############################################################
 
@@ -75,40 +82,69 @@ Usage: $PROG [options]
 [options]:
     help                  = Display this help information.
 
+    config=<file>         = Load configuration from file (command-line args override config).
+                            Preset configs available in config/ directory:
+                            - config/nightly.config
+                            - config/prerelease.config
+                            - config/release.config
+                            - config/dev.config
+
     rocm                  = Setup only ROCm packages (skip AMDGPU).
     amdgpu                = Setup only AMDGPU packages (skip ROCm).
 
     amdgpu-mode=all       = Setup AMDGPU packages for all supported distributions (default).
     amdgpu-mode=single    = Setup AMDGPU packages for current distro only.
 
-    rocm-mode=native      = Pull DEB packages using native OS (default).
-    rocm-mode=chroot      = Pull DEB packages using Ubuntu chroot (for use on RPM-based OS).
+    rocm-mode=native      = Pull DEB packages using native OS.
+    rocm-mode=chroot      = Pull DEB packages using Ubuntu chroot.
     rocm-archs=<archs>    = Set GPU architectures to pull (comma-separated or single, e.g., gfx94x,gfx950 or gfx94x). Default: gfx94x,gfx950.
 
-    pull=nightlies        = Pull ROCm packages from nightlies repository.
-    pull=prereleases      = Pull ROCm packages from prereleases repository.
-    pullbuild=<version>      = Set ROCm build number to pull (e.g., 7.11 for prereleases, 20260123-21274498502 for nightlies).
-    pullrocmver=<version>    = Set ROCm version for package names (e.g., 7.12, 7.11). Default: 7.11.
-    pullrocmpkgver=<version> = Set explicit package version for both RPM and DEB. Examples:
-                               - Release: 7.11.0-2
-                               - Prerelease: 7.11.0~0-21265702726 (use ~N- format, auto-converts to ~rcN/~preN)
-                               If not specified, pulls latest from configured repo.
+    pull=<release-type>   = Pull ROCm packages from specified repository (dev, nightly, prerelease, release).
+    pulltag=<tag>            = Set ROCm build tag (e.g., 20260123 for nightly).
+    pullrunid=<runid>        = Set ROCm run ID (e.g., 21274498502 for nightly).
+    pullrocmver=<version>    = Set ROCm version for package names (e.g., 7.12.0, 7.11.0).
+    pullpkg=<package>        = Set base package name with optional type prefix (default: amdrocm-core-sdk).
+                               Syntax: pullpkg=[type:]<package>
+                               - arch:<package> = Architecture-specific (has -gfxXYZ suffix, default)
+                                 Example: pullpkg=arch:amdrocm-core-sdk or pullpkg=amdrocm-core-sdk
+                               - base:<package> = Base package (no -gfxXYZ suffix)
+                                 Example: pullpkg=base:amdrocm-amdsmi
+                               Other options: amdrocm-dev-tools, amdrocm-core, etc.
+    pullpkgextra=<packages>  = Add extra packages to pull (comma-separated) with optional type prefix.
+                               Syntax: pullpkgextra=[type:]pkg1,[type:]pkg2
+                               - arch:<package> = Architecture-specific (has -gfxXYZ suffix, default)
+                               - base:<package> = Base package (no -gfxXYZ suffix)
+                               Example: pullpkgextra=arch:amdrocm-opencl,base:amdrocm-llvm
+                               Or without prefix: pullpkgextra=rocm-llvm,rocm-device-libs (defaults to arch)
+    pullrocmpkgver=<version> = DISABLED - Support for version package pull - disabled.
 
 Examples:
+    # Basic usage
     ./setup-installer.sh                                      # Setup both ROCm and AMDGPU for all distros (default)
     ./setup-installer.sh rocm                                 # Setup only ROCm packages
     ./setup-installer.sh amdgpu                               # Setup only AMDGPU packages for all distros
     ./setup-installer.sh amdgpu amdgpu-mode=single            # Setup AMDGPU for current distro only
-    
-    ./setup-installer.sh rocm rocm-mode=chroot                # Pull DEB packages using chroot on AlmaLinux
-    ./setup-installer.sh rocm-archs=gfx94x,gfx950,gfx103x     # Pull for specific GPU architectures
-    ./setup-installer.sh rocm-archs=gfx94x                    # Pull for single GPU architecture
-    
-    ./setup-installer.sh pull=nightlies pullbuild=20260123-21274498502  # Pull from nightlies with specific build
-    ./setup-installer.sh pull=prereleases pullbuild=7.11      # Pull from prereleases build 7.11
-    ./setup-installer.sh pullrocmver=7.11                     # Use ROCm 7.11 package names
-    ./setup-installer.sh pullrocmpkgver=7.11.0-2              # Pull specific release version
-    ./setup-installer.sh pull=prereleases pullrocmpkgver=7.11.0~0-21265702726  # Pull specific prerelease build
+
+    # GPU architectures
+    ./setup-installer.sh rocm-archs=gfx94x,gfx950             # Pull for specific GPU architectures
+    ./setup-installer.sh rocm-archs=gfx110x                   # Pull for single GPU architecture
+
+    # Using preset configs
+    ./setup-installer.sh config=config/nightly.config         # Use nightly preset
+    ./setup-installer.sh config=config/dev.config             # Use dev preset
+    ./setup-installer.sh config=config/prerelease.config      # Use prerelease preset
+    ./setup-installer.sh config=config/release.config         # Use release preset
+
+    # Pull from specific builds (with actual values from preset configs)
+    ./setup-installer.sh pull=nightly pulltag=20260212 pullrunid=21933875966 pullrocmver=7.12.0    # Nightly build
+    ./setup-installer.sh pull=dev pulltag=20260219 pullrunid=22188089855 pullrocmver=7.12.0        # Dev build
+    ./setup-installer.sh pull=prerelease pulltag=rc0 pullrocmver=7.11.0                            # Prerelease RC0
+    ./setup-installer.sh pull=release pullrocmver=7.11.0                                            # Release build
+
+    # Custom packages
+    ./setup-installer.sh pullpkg=arch:amdrocm-core                                                  # Arch-specific package
+    ./setup-installer.sh pullpkg=base:amdrocm-amdsmi                                                # Base package
+    ./setup-installer.sh pullpkgextra=arch:amdrocm-opencl,base:amdrocm-llvm                         # Extra packages
 
 END_USAGE
 }
@@ -151,6 +187,133 @@ os_release() {
     echo "Setup running on $DISTRO_NAME $DISTRO_VER."
 }
 
+read_config() {
+    # Check for config= argument and source it BEFORE parsing other args
+    # This allows command-line args to override config file values
+    local CONFIG_FILE=""
+
+    for arg in "$@"; do
+        case "$arg" in
+            config=*)
+                CONFIG_FILE="${arg#*=}"
+                break
+                ;;
+        esac
+    done
+
+    if [[ -n "$CONFIG_FILE" ]]; then
+        echo -------------------------------------------------------------
+        echo "Loading configuration from: $CONFIG_FILE"
+
+        # Check if file exists
+        if [[ ! -f "$CONFIG_FILE" ]]; then
+            echo -e "\e[31mERROR: Config file not found: $CONFIG_FILE\e[0m"
+            exit 1
+        fi
+
+        # Check if file is readable
+        if [[ ! -r "$CONFIG_FILE" ]]; then
+            echo -e "\e[31mERROR: Config file not readable: $CONFIG_FILE\e[0m"
+            exit 1
+        fi
+
+        # Source the config file
+        source "$CONFIG_FILE"
+        echo "Configuration loaded successfully."
+        echo "Note: Command-line arguments will override config values."
+        echo -------------------------------------------------------------
+    fi
+}
+
+validate_args() {
+    echo -------------------------------------------------------------
+    echo "Validating configuration arguments..."
+
+    local validation_failed=0
+
+    # Validate PULL_CONFIG_RELEASE_TYPE is set and valid
+    if [[ -z "$PULL_CONFIG_RELEASE_TYPE" ]]; then
+        echo -e "\e[31mERROR: PULL_CONFIG_RELEASE_TYPE not set. Use pull= argument.\e[0m"
+        echo "Valid values: ${ROCM_RELEASE_TYPES[*]}"
+        validation_failed=1
+    elif [[ ! " ${ROCM_RELEASE_TYPES[@]} " =~ " ${PULL_CONFIG_RELEASE_TYPE} " ]]; then
+        echo -e "\e[31mERROR: Invalid pull= value: $PULL_CONFIG_RELEASE_TYPE\e[0m"
+        echo "Valid values: ${ROCM_RELEASE_TYPES[*]}"
+        validation_failed=1
+    fi
+
+    # Validate PULL_CONFIG_TAG based on release type
+    case "$PULL_CONFIG_RELEASE_TYPE" in
+        dev|nightly)
+            if [[ -z "$PULL_CONFIG_TAG" ]]; then
+                echo -e "\e[31mERROR: pulltag= required for $PULL_CONFIG_RELEASE_TYPE builds (8 characters)\e[0m"
+                echo "Example: pulltag=20260123"
+                validation_failed=1
+            elif [[ ${#PULL_CONFIG_TAG} -gt 8 ]]; then
+                echo "WARNING: Tag longer than 8 characters, truncating to: ${PULL_CONFIG_TAG:0:8}"
+                PULL_CONFIG_TAG="${PULL_CONFIG_TAG:0:8}"
+            elif [[ ${#PULL_CONFIG_TAG} -lt 8 ]]; then
+                echo -e "\e[31mERROR: Tag must be 8 characters, got: $PULL_CONFIG_TAG (${#PULL_CONFIG_TAG} characters)\e[0m"
+                validation_failed=1
+            fi
+            ;;
+        prerelease|release)
+            [[ -z "$PULL_CONFIG_TAG" ]] && echo "Note: pulltag not set (optional for $PULL_CONFIG_RELEASE_TYPE)"
+            ;;
+    esac
+
+    # Validate PULL_CONFIG_RUNID based on release type
+    # Only required for dev and nightly builds
+    case "$PULL_CONFIG_RELEASE_TYPE" in
+        dev|nightly)
+            if [[ -z "$PULL_CONFIG_RUNID" ]]; then
+                echo -e "\e[31mERROR: pullrunid= required for $PULL_CONFIG_RELEASE_TYPE builds\e[0m"
+                echo "Example: pullrunid=21893116598"
+                validation_failed=1
+            fi
+            ;;
+    esac
+
+    # Validate PULL_CONFIG_ROCM_VER is set
+    if [[ -z "$PULL_CONFIG_ROCM_VER" ]]; then
+        echo -e "\e[31mERROR: PULL_CONFIG_ROCM_VER not set. Use pullrocmver= argument.\e[0m"
+        echo "Example: pullrocmver=7.11.0"
+        validation_failed=1
+    fi
+
+    if [ $validation_failed -eq 1 ]; then
+        echo -e "\e[31mValidation failed. Exiting.\e[0m"
+        exit 1
+    fi
+
+    echo "Configuration arguments validated successfully."
+}
+
+write_version() {
+    echo -------------------------------------------------------------
+    echo Writing version...
+
+    i=0
+    VERSION_FILE="VERSION"
+
+    while IFS= read -r line; do
+        case $i in
+            0) INSTALLER_VERSION="$line" ;;
+        esac
+
+        i=$((i+1))
+    done < "$VERSION_FILE"
+
+    if [[ -n $PULL_CONFIG_ROCM_VER ]]; then
+        echo "INSTALLER_VERSION = $INSTALLER_VERSION"
+        echo "ROCM_VER          = $PULL_CONFIG_ROCM_VER"
+
+        # Update the version file
+        echo "$INSTALLER_VERSION" > "$VERSION_FILE"
+        echo "$PULL_CONFIG_ROCM_VER" >> "$VERSION_FILE"
+    fi
+}
+
 install_tools() {
     echo -------------------------------------------------------------
     echo "Installing required tools for $DISTRO_NAME $DISTRO_VER..."
@@ -158,19 +321,118 @@ install_tools() {
     if [ $PULL_DISTRO_TYPE == "el" ]; then
         echo "Installing tools for EL-based system..."
 
-        # Install sudo package
-        dnf install -y sudo wget
-        if [[ $? -ne 0 ]]; then
-            echo -e "\e[31mERROR: Failed to install sudo package.\e[0m"
-            exit 1
+        # Check if all required tools are already installed
+        if command -v sudo &> /dev/null && command -v wget &> /dev/null; then
+            echo "All required tools are already installed (sudo, wget)"
+        else
+            # One or more tools missing, install all
+            echo "Installing required tools: sudo wget"
+            dnf install -y sudo wget
+            if [[ $? -ne 0 ]]; then
+                echo -e "\e[31mERROR: Failed to install tools.\e[0m"
+                exit 1
+            fi
+            echo "Tools installed successfully"
         fi
-
-        echo "sudo package installed successfully."
     else
         echo "Skipping tool installation (only EL-based systems supported)."
     fi
 
     echo "Installing required tools...Complete"
+}
+
+normalize_package_name() {
+    # Normalize package names for RPM vs DEB conventions
+    # RPM uses "-devel" suffix, DEB uses "-dev" suffix
+    # Args: $1 = package name
+    # Returns: "rpm_name|deb_name" via echo
+
+    local pkg_name="$1"
+    local pull_pkg_rpm="$pkg_name"
+    local pull_pkg_deb="$pkg_name"
+
+    # Only match -devel or -dev as a suffix or followed by a digit (e.g., -dev-tools, -devel7.11)
+    # This prevents false matches in words like "device"
+    if [[ "$pkg_name" =~ -devel([^a-z]|$) ]]; then
+        # Package contains "-devel" - keep for RPM, convert to "-dev" for DEB
+        pull_pkg_deb="${pkg_name//-devel/-dev}"
+    elif [[ "$pkg_name" =~ -dev([^a-z]|$) ]]; then
+        # Package contains "-dev" (but not "-devel") - keep for DEB, convert to "-devel" for RPM
+        pull_pkg_rpm="${pkg_name//-dev/-devel}"
+    fi
+
+    # Return both values separated by pipe
+    echo "${pull_pkg_rpm}|${pull_pkg_deb}"
+}
+
+generate_package_lists_base() {
+    # Generate package lists for base packages (no architecture suffix)
+    # Args: $1=rpm_pkg, $2=deb_pkg, $3=rocm_ver, $4=rpm_version_suffix, $5=deb_version_suffix
+    # Returns: Sets GENERATED_RPM_PACKAGES and GENERATED_DEB_PACKAGES
+
+    local pull_pkg_rpm="$1"
+    local pull_pkg_deb="$2"
+    local rocm_ver="$3"
+    local rpm_version_suffix="$4"
+    local deb_version_suffix="$5"
+
+    # Build single package WITHOUT architecture suffix
+    if [[ -z "$rpm_version_suffix" ]]; then
+        # Default: version embedded in package name (amdrocm-amdsmi7.11)
+        GENERATED_RPM_PACKAGES="${pull_pkg_rpm}${rocm_ver}"
+    else
+        # Explicit version: embedded version format (amdrocm-amdsmi7.11-7.11.0-2)
+        GENERATED_RPM_PACKAGES="${pull_pkg_rpm}${rocm_ver}${rpm_version_suffix}"
+    fi
+
+    if [[ -z "$deb_version_suffix" ]]; then
+        # Default: version embedded in package name (amdrocm-amdsmi7.11)
+        GENERATED_DEB_PACKAGES="${pull_pkg_deb}${rocm_ver}"
+    else
+        # Explicit version: embedded version + APT pinning (amdrocm-amdsmi7.11=7.11.0-2)
+        GENERATED_DEB_PACKAGES="${pull_pkg_deb}${rocm_ver}${deb_version_suffix}"
+    fi
+}
+
+generate_package_lists_arch() {
+    # Generate package lists for architecture-specific packages (with -gfxXYZ suffix)
+    # Args: $1=rpm_pkg, $2=deb_pkg, $3=rocm_ver, $4=rpm_version_suffix, $5=deb_version_suffix
+    # Returns: Sets GENERATED_RPM_PACKAGES and GENERATED_DEB_PACKAGES
+
+    local pull_pkg_rpm="$1"
+    local pull_pkg_deb="$2"
+    local rocm_ver="$3"
+    local rpm_version_suffix="$4"
+    local deb_version_suffix="$5"
+
+    local rpm_packages=""
+    local deb_packages=""
+
+    # Build RPM package list with architecture suffixes
+    for gfx_arch in "${ROCM_GFX_ARCHS[@]}"; do
+        if [[ -z "$rpm_version_suffix" ]]; then
+            # Default: version embedded in package name (amdrocm-core-sdk7.11-gfx950)
+            rpm_packages="$rpm_packages ${pull_pkg_rpm}${rocm_ver}-${gfx_arch}"
+        else
+            # Explicit version: embedded version format (amdrocm-core-sdk7.11-gfx950-7.11.0-2)
+            rpm_packages="$rpm_packages ${pull_pkg_rpm}${rocm_ver}-${gfx_arch}${rpm_version_suffix}"
+        fi
+    done
+
+    # Build DEB package list with architecture suffixes
+    for gfx_arch in "${ROCM_GFX_ARCHS[@]}"; do
+        if [[ -z "$deb_version_suffix" ]]; then
+            # Default: version embedded in package name (amdrocm-core-sdk7.11-gfx950)
+            deb_packages="$deb_packages ${pull_pkg_deb}${rocm_ver}-${gfx_arch}"
+        else
+            # Explicit version: embedded version + APT pinning (amdrocm-core-sdk7.11-gfx950=7.11.0-2)
+            deb_packages="$deb_packages ${pull_pkg_deb}${rocm_ver}-${gfx_arch}${deb_version_suffix}"
+        fi
+    done
+
+    # Trim leading spaces
+    GENERATED_RPM_PACKAGES="${rpm_packages# }"
+    GENERATED_DEB_PACKAGES="${deb_packages# }"
 }
 
 generate_package_lists() {
@@ -180,8 +442,22 @@ generate_package_lists() {
     # RPM and DEB have different package naming conventions
     # We need to build separate lists for each
 
+    # Strip patch version (XX.YY.ZZ -> XX.YY) for package list creation
+    # Package names use major.minor format only (e.g., amdrocm-core-sdk7.11-gfx950)
+    local rocm_ver="${PULL_CONFIG_ROCM_VER%.*}"
+
     local rpm_packages=""
     local deb_packages=""
+
+    # Handle RPM vs DEB package naming conventions (RPM uses "devel", DEB uses "dev")
+    local normalized=$(normalize_package_name "$PULL_CONFIG_PKG")
+    local pull_pkg_rpm="${normalized%|*}"
+    local pull_pkg_deb="${normalized#*|}"
+
+    # Only show message if names differ
+    if [[ "$pull_pkg_rpm" != "$pull_pkg_deb" ]]; then
+        echo "Package naming: RPM uses '$pull_pkg_rpm', DEB uses '$pull_pkg_deb'"
+    fi
 
     # Determine version patterns for RPM and DEB
     local rpm_version_suffix=""
@@ -209,35 +485,26 @@ generate_package_lists() {
 
     else
         # Default: use base version (pulls latest available)
-        # Both RPM and DEB use same format: amdrocm-core-sdk{version}-{arch}
+        # RPM and DEB may use different package names (e.g., "devel" vs "dev")
         # This matches the original behavior before version control was added
         rpm_version_suffix=""  # Will use embedded version format
         deb_version_suffix=""  # Will use embedded version format
-        echo "Using default version pattern (latest): ${PULL_CONFIG_ROCM_VER_PKG}"
-        echo "  Format: amdrocm-core-sdk${PULL_CONFIG_ROCM_VER_PKG}-{arch}"
+        echo "Using default version pattern (latest): ${rocm_ver}"
     fi
 
-    # Build RPM package list
-    for gfx_arch in "${ROCM_GFX_ARCHS[@]}"; do
-        if [[ -z "$rpm_version_suffix" ]]; then
-            # Default: version embedded in package name (amdrocm-core-sdk7.11-gfx950)
-            rpm_packages="$rpm_packages amdrocm-core-sdk${PULL_CONFIG_ROCM_VER_PKG}-${gfx_arch}"
-        else
-            # Explicit version: embedded version format (amdrocm-core-sdk7.11-gfx950-7.11.0-2)
-            rpm_packages="$rpm_packages amdrocm-core-sdk${PULL_CONFIG_ROCM_VER_PKG}-${gfx_arch}${rpm_version_suffix}"
-        fi
-    done
-
-    # Build DEB package list
-    for gfx_arch in "${ROCM_GFX_ARCHS[@]}"; do
-        if [[ -z "$deb_version_suffix" ]]; then
-            # Default: version embedded in package name (amdrocm-core-sdk7.11-gfx950)
-            deb_packages="$deb_packages amdrocm-core-sdk${PULL_CONFIG_ROCM_VER_PKG}-${gfx_arch}"
-        else
-            # Explicit version: embedded version + APT pinning (amdrocm-core-sdk7.11-gfx950=7.11.0-2)
-            deb_packages="$deb_packages amdrocm-core-sdk${PULL_CONFIG_ROCM_VER_PKG}-${gfx_arch}${deb_version_suffix}"
-        fi
-    done
+    # Check package type and build appropriate package lists
+    if [[ "$PULL_CONFIG_PKG_TYPE" == "base" ]]; then
+        echo "Package type: base (no -gfxXYZ suffix)"
+        generate_package_lists_base "$pull_pkg_rpm" "$pull_pkg_deb" "$rocm_ver" "$rpm_version_suffix" "$deb_version_suffix"
+        rpm_packages="$GENERATED_RPM_PACKAGES"
+        deb_packages="$GENERATED_DEB_PACKAGES"
+    else
+        # Default: arch type (architecture-specific packages with -gfxXYZ suffix)
+        echo "Package type: arch (with -gfxXYZ suffix)"
+        generate_package_lists_arch "$pull_pkg_rpm" "$pull_pkg_deb" "$rocm_ver" "$rpm_version_suffix" "$deb_version_suffix"
+        rpm_packages="$GENERATED_RPM_PACKAGES"
+        deb_packages="$GENERATED_DEB_PACKAGES"
+    fi
 
     # Trim leading spaces
     rpm_packages="${rpm_packages# }"
@@ -253,48 +520,133 @@ generate_package_lists() {
     echo "Generating ROCm package lists...Complete"
 }
 
-setup_puller_config() {
+generate_package_lists_extra() {
     echo -------------------------------------------------------------
-    echo "Setting up package puller configuration files..."
+    echo "Adding extra ROCm packages to package lists..."
+
+    # Check if there are any extra packages
+    if [ ${#PULL_CONFIG_PKG_EXTRA[@]} -eq 0 ]; then
+        echo "No extra packages specified."
+        echo "Adding extra packages...Complete"
+        return
+    fi
+
+    # Strip patch version (XX.YY.ZZ -> XX.YY) for package list creation
+    local rocm_ver="${PULL_CONFIG_ROCM_VER%.*}"
+
+    local rpm_packages=""
+    local deb_packages=""
+
+    # Process each extra package
+    echo "Processing extra packages: ${PULL_CONFIG_PKG_EXTRA[*]}"
+    for pkg_with_type in "${PULL_CONFIG_PKG_EXTRA[@]}"; do
+        # Parse optional type prefix (base: or arch:)
+        local pkg_type="arch"  # Default type
+        local pkg_name="$pkg_with_type"
+
+        if [[ "$pkg_with_type" =~ ^(base|arch):(.+)$ ]]; then
+            pkg_type="${BASH_REMATCH[1]}"
+            pkg_name="${BASH_REMATCH[2]}"
+        fi
+
+        echo "  Package: $pkg_name (type: $pkg_type)"
+
+        # Normalize package name for RPM/DEB
+        local normalized=$(normalize_package_name "$pkg_name")
+        local pull_pkg_rpm="${normalized%|*}"
+        local pull_pkg_deb="${normalized#*|}"
+
+        # Show normalization if names differ
+        if [[ "$pull_pkg_rpm" != "$pull_pkg_deb" ]]; then
+            echo "    RPM='$pull_pkg_rpm', DEB='$pull_pkg_deb'"
+        fi
+
+        # Generate package names based on type
+        if [[ "$pkg_type" == "base" ]]; then
+            # Base package: no architecture suffix
+            rpm_packages="$rpm_packages ${pull_pkg_rpm}${rocm_ver}"
+            deb_packages="$deb_packages ${pull_pkg_deb}${rocm_ver}"
+        else
+            # Arch-specific package: add architecture suffix for each GPU arch
+            for gfx_arch in "${ROCM_GFX_ARCHS[@]}"; do
+                rpm_packages="$rpm_packages ${pull_pkg_rpm}${rocm_ver}-${gfx_arch}"
+                deb_packages="$deb_packages ${pull_pkg_deb}${rocm_ver}-${gfx_arch}"
+            done
+        fi
+    done
+
+    # Trim leading spaces
+    rpm_packages="${rpm_packages# }"
+    deb_packages="${deb_packages# }"
+
+    # Append to existing package lists
+    PULLER_PACKAGES_RPM="$PULLER_PACKAGES_RPM $rpm_packages"
+    PULLER_PACKAGES_DEB="$PULLER_PACKAGES_DEB $deb_packages"
+
+    # Trim any extra spaces
+    PULLER_PACKAGES_RPM="${PULLER_PACKAGES_RPM# }"
+    PULLER_PACKAGES_DEB="${PULLER_PACKAGES_DEB# }"
+
+    echo "Extra packages added (${#PULL_CONFIG_PKG_EXTRA[@]} package(s))"
+    echo "Updated RPM Packages: $PULLER_PACKAGES_RPM"
+    echo "Updated DEB Packages: $PULLER_PACKAGES_DEB"
+    echo "Adding extra packages...Complete"
+}
+
+setup_puller_config_rocm() {
+    echo -------------------------------------------------------------
+    echo "Setting up ROCm package puller configuration files..."
 
     # Ensure build-config directory exists
     BUILD_CONFIG_DIR="../build-config"
     mkdir -p "$BUILD_CONFIG_DIR"
 
     # Template directory for ROCm configs
-    TEMPLATE_DIR="../package-puller/config/therock/rocm/${PULL_CONFIG_ROCM}"
+    TEMPLATE_DIR="../package-puller/config/therock/rocm/${PULL_CONFIG_RELEASE_TYPE}"
 
     # Template files
-    TEMPLATE_DEB="${TEMPLATE_DIR}/rocm-${PULL_CONFIG_ROCM}-deb.config"
-    TEMPLATE_RPM="${TEMPLATE_DIR}/rocm-${PULL_CONFIG_ROCM}-rpm.config"
+    TEMPLATE_DEB="${TEMPLATE_DIR}/rocm-${PULL_CONFIG_RELEASE_TYPE}-deb.config"
+    TEMPLATE_RPM="${TEMPLATE_DIR}/rocm-${PULL_CONFIG_RELEASE_TYPE}-rpm.config"
 
-    # Output files (in build-config directory)
-    OUTPUT_DEB="${BUILD_CONFIG_DIR}/rocm-${PULL_CONFIG_ROCM}-${PULL_CONFIG_ROCM_BUILDNUM}-deb.config"
-    OUTPUT_RPM="${BUILD_CONFIG_DIR}/rocm-${PULL_CONFIG_ROCM}-${PULL_CONFIG_ROCM_BUILDNUM}-rpm.config"
+    # Build version string from tag and runid
+    local version_string=""
+    if [[ -n "${PULL_CONFIG_TAG}" ]] && [[ -n "${PULL_CONFIG_RUNID}" ]]; then
+        version_string="${PULL_CONFIG_TAG}-${PULL_CONFIG_RUNID}"
+    elif [[ -n "${PULL_CONFIG_TAG}" ]]; then
+        version_string="${PULL_CONFIG_TAG}"
+    elif [[ -n "${PULL_CONFIG_RUNID}" ]]; then
+        version_string="${PULL_CONFIG_RUNID}"
+    fi
+
+    # Set output config file paths
+    PULLER_CONFIG_DEB="${BUILD_CONFIG_DIR}/rocm-${PULL_CONFIG_RELEASE_TYPE}-${version_string}-deb.config"
+    PULLER_CONFIG_RPM="${BUILD_CONFIG_DIR}/rocm-${PULL_CONFIG_RELEASE_TYPE}-${version_string}-rpm.config"
 
     # Check if templates exist
     if [ ! -f "$TEMPLATE_DEB" ]; then
         echo -e "\e[31mERROR: Template file not found: $TEMPLATE_DEB\e[0m"
         exit 1
     fi
+    
     if [ ! -f "$TEMPLATE_RPM" ]; then
         echo -e "\e[31mERROR: Template file not found: $TEMPLATE_RPM\e[0m"
         exit 1
     fi
 
-    echo "Using ROCm config type: ${PULL_CONFIG_ROCM}"
-    echo "Using ROCm version: ${PULL_CONFIG_ROCM_BUILDNUM}"
+    echo "Using ROCm config type: ${PULL_CONFIG_RELEASE_TYPE}"
+    echo "Using ROCm tag        : ${PULL_CONFIG_TAG}"
+    echo "Using ROCm run ID     : ${PULL_CONFIG_RUNID}"
 
     # Generate DEB config from template
-    echo "Generating DEB config: $OUTPUT_DEB"
-    sed "s/{{ROCM_VERSION}}/${PULL_CONFIG_ROCM_BUILDNUM}/g" "$TEMPLATE_DEB" > "$OUTPUT_DEB"
+    echo "Generating DEB config: $PULLER_CONFIG_DEB"
+    sed "s/{{VERSION_STRING}}/${version_string}/g" "$TEMPLATE_DEB" > "$PULLER_CONFIG_DEB"
 
     # Generate RPM config from template
-    echo "Generating RPM config: $OUTPUT_RPM"
-    sed "s/{{ROCM_VERSION}}/${PULL_CONFIG_ROCM_BUILDNUM}/g" "$TEMPLATE_RPM" > "$OUTPUT_RPM"
+    echo "Generating RPM config: $PULLER_CONFIG_RPM"
+    sed "s/{{VERSION_STRING}}/${version_string}/g" "$TEMPLATE_RPM" > "$PULLER_CONFIG_RPM"
 
     echo -e "\e[32mROCm package puller configuration files generated successfully.\e[0m"
-    echo "Setting up package puller configuration files...Complete"
+    echo "Setting up ROCm package puller configuration files...Complete"
 }
 
 setup_puller_config_amdgpu() {
@@ -604,6 +956,9 @@ setup_amdgpu_all() {
 
 ####### Main script ###############################################################
 
+# Record start time
+SETUP_START_TIME=$(date +%s)
+
 echo ============================
 echo SETUP INSTALLER
 echo ============================
@@ -613,10 +968,18 @@ echo SUDO: $SUDO
 
 os_release
 
+# Load config file if specified (allows command-line args to override)
+read_config "$@"
+
 # parse args
 while (($#))
 do
     case "$1" in
+    config=*)
+        # Already processed before argument parsing loop
+        # Skip to allow other args to override config values
+        shift
+        ;;
     help)
         usage
         exit 0
@@ -652,23 +1015,50 @@ do
         shift
         ;;
     pull=*)
-        PULL_CONFIG_ROCM="${1#*=}"
-        if [[ "$PULL_CONFIG_ROCM" != "nightlies" && "$PULL_CONFIG_ROCM" != "prereleases" ]]; then
-            echo "ERROR: Invalid pull type: $PULL_CONFIG_ROCM"
-            echo "Valid options: pull=nightlies or pull=prereleases"
-            exit 1
-        fi
-        echo "ROCm pull config type set to: $PULL_CONFIG_ROCM"
+        PULL_CONFIG_RELEASE_TYPE="${1#*=}"
+        echo "ROCm pull config type set to: $PULL_CONFIG_RELEASE_TYPE"
         shift
         ;;
-    pullbuild=*)
-        PULL_CONFIG_ROCM_BUILDNUM="${1#*=}"
-        echo "ROCm pull config build number set to: $PULL_CONFIG_ROCM_BUILDNUM"
+    pulltag=*)
+        PULL_CONFIG_TAG="${1#*=}"
+        echo "ROCm pull config tag set to: $PULL_CONFIG_TAG"
+        shift
+        ;;
+    pullrunid=*)
+        PULL_CONFIG_RUNID="${1#*=}"
+        echo "ROCm pull config run ID set to: $PULL_CONFIG_RUNID"
         shift
         ;;
     pullrocmver=*)
-        PULL_CONFIG_ROCM_VER_PKG="${1#*=}"
-        echo "ROCm version set to: $PULL_CONFIG_ROCM_VER_PKG"
+        PULL_CONFIG_ROCM_VER="${1#*=}"
+        echo "ROCm version set to: $PULL_CONFIG_ROCM_VER"
+        shift
+        ;;
+    pullpkg=*)
+        # Parse package name with optional type prefix (e.g., "base:amdrocm-amdsmi" or "arch:amdrocm-core-sdk")
+        # Default type is "arch" if no prefix specified
+        pkg_arg="${1#*=}"
+
+        if [[ "$pkg_arg" =~ ^(base|arch):(.+)$ ]]; then
+            # Type prefix specified (e.g., "base:amdrocm-amdsmi")
+            PULL_CONFIG_PKG_TYPE="${BASH_REMATCH[1]}"
+            PULL_CONFIG_PKG="${BASH_REMATCH[2]}"
+            echo "ROCm package set to: $PULL_CONFIG_PKG (type: $PULL_CONFIG_PKG_TYPE)"
+        else
+            # No prefix, default to "arch" type for backward compatibility
+            PULL_CONFIG_PKG="$pkg_arg"
+            PULL_CONFIG_PKG_TYPE="arch"
+            echo "ROCm package set to: $PULL_CONFIG_PKG (type: arch - default)"
+        fi
+        shift
+        ;;
+    pullpkgextra=*)
+        PKGS_INPUT="${1#*=}"
+        # Convert comma-separated string to array
+        # Each element can have optional type prefix (e.g., "base:pkg" or "arch:pkg")
+        IFS=',' read -ra PULL_CONFIG_PKG_EXTRA <<< "$PKGS_INPUT"
+        echo "Extra ROCm packages set to: ${PULL_CONFIG_PKG_EXTRA[*]}"
+        echo "Note: Use [type:]package syntax - arch:package (default) or base:package"
         shift
         ;;
     rocm-archs=*)
@@ -679,9 +1069,8 @@ do
         shift
         ;;
     pullrocmpkgver=*)
-        PULL_ROCM_PKG_VERSION="${1#*=}"
-        echo "ROCm package version set to: $PULL_ROCM_PKG_VERSION"
-        shift
+        echo -e "\e[31mERROR: Support for version package pull - disabled.\e[0m"
+        exit 1
         ;;
     *)
         echo "Unknown option: $1"
@@ -697,9 +1086,10 @@ if [[ $SETUP_ROCM == 0 && $SETUP_AMDGPU == 0 ]]; then
     SETUP_AMDGPU=1
 fi
 
-# Rebuild config file paths after parsing arguments (in case pullbuild changed the version)
-PULLER_CONFIG_DEB="../build-config/rocm-${PULL_CONFIG_ROCM}-${PULL_CONFIG_ROCM_BUILDNUM}-deb.config"
-PULLER_CONFIG_RPM="../build-config/rocm-${PULL_CONFIG_ROCM}-${PULL_CONFIG_ROCM_BUILDNUM}-rpm.config"
+# Validate required arguments if ROCm setup is enabled
+if [[ $SETUP_ROCM == 1 ]]; then
+    validate_args
+fi
 
 # Recreate build-config directory (clean slate for each run)
 BUILD_CONFIG_DIR="../build-config"
@@ -710,17 +1100,20 @@ fi
 mkdir -p "$BUILD_CONFIG_DIR"
 echo "Created $BUILD_CONFIG_DIR directory"
 
+# Install required tools
+install_tools
+
 # Generate ROCm package lists from GPU architecture array
 generate_package_lists
 
-# Install required tools
-install_tools
+# Add extra packages to the package lists
+generate_package_lists_extra
 
 echo Running Package Puller...
 
 if [[ $SETUP_ROCM == 1 ]]; then
     # Generate ROCm package puller configuration files from templates
-    setup_puller_config
+    setup_puller_config_rocm
     setup_rocm
 fi
 
@@ -737,5 +1130,27 @@ if [[ $SETUP_AMDGPU == 1 ]]; then
     fi
 fi
 
+# Write ROCM_VER to VERSION file if ROCm setup was performed
+if [[ $SETUP_ROCM == 1 ]]; then
+    write_version
+fi
+
 echo Running Package Puller...Complete
+
+# Calculate and display setup time
+SETUP_END_TIME=$(date +%s)
+SETUP_ELAPSED=$((SETUP_END_TIME - SETUP_START_TIME))
+
+# Convert seconds to hours, minutes, seconds
+SETUP_HOURS=$((SETUP_ELAPSED / 3600))
+SETUP_MINUTES=$(((SETUP_ELAPSED % 3600) / 60))
+SETUP_SECONDS=$((SETUP_ELAPSED % 60))
+
+echo ""
+echo ==============================
+echo "Setup completed successfully!"
+echo "=============================="
+echo -e "\e[36mTotal setup time: ${SETUP_HOURS}h ${SETUP_MINUTES}m ${SETUP_SECONDS}s (${SETUP_ELAPSED} seconds)\e[0m"
+echo ==============================
+echo ""
 

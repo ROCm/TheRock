@@ -550,8 +550,7 @@ void print_version(MENU_DATA *pMenuData)
     OFFLINE_INSTALL_CONFIG *pConfig = pMenuData->pConfig;
     if (pConfig != NULL)
     {
-        mvwprintw(pMenuData->pMenuWindow, 28, 72, "v%s-%s",
-                  pConfig->installerVersion, pConfig->rocmVersion);
+        mvwprintw(pMenuData->pMenuWindow, 28, 70, "v%s-%s", pConfig->installerVersion, pConfig->rocmVersion);
     }
 }
 

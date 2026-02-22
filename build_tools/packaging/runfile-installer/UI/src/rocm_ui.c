@@ -183,12 +183,12 @@ int get_os_info(OFFLINE_INSTALL_CONFIG *pConfig)
  * @pConfig: Pointer to configuration structure to populate
  *
  * Reads the VERSION file with format:
- *   Line 1: Installer version (e.g., "1.2.6")
- *   Line 2: ROCm version (e.g., "7.11.0~20260106")
- *   Line 3: Distro version for build (e.g., "8.10" or "universal")
- *   Line 4: ROCm build number (e.g., "15702")
- *   Line 5: AMDGPU DKMS build (e.g., "6.8.0-90-generic")
- *   Line 6: Full installer name
+ *   Line 1: INSTALLER_VERSION (e.g., "2.0.0")
+ *   Line 2: ROCM_VER (e.g., "7.11.0")
+ *   Line 3: BUILD_TAG (e.g., "1", "rc1", "nightly")
+ *   Line 4: BUILD_RUNID (e.g., "99999", "1")
+ *   Line 5: BUILD_PULL_TAG (e.g., "20260219-22188089855")
+ *   Line 6: AMDGPU_DKMS_BUILD_NUM (e.g., "6.18.4-2286447")
  *
  * Returns: 0 on success, -1 on failure
  */
@@ -229,20 +229,20 @@ int read_version_file(OFFLINE_INSTALL_CONFIG *pConfig)
                 pConfig->rocmVersion[sizeof(pConfig->rocmVersion) - 1] = '\0';
                 break;
             case 2:
-                strncpy(pConfig->distroVersionBuild, line, sizeof(pConfig->distroVersionBuild) - 1);
-                pConfig->distroVersionBuild[sizeof(pConfig->distroVersionBuild) - 1] = '\0';
+                strncpy(pConfig->buildTag, line, sizeof(pConfig->buildTag) - 1);
+                pConfig->buildTag[sizeof(pConfig->buildTag) - 1] = '\0';
                 break;
             case 3:
-                strncpy(pConfig->rocmBuildNum, line, sizeof(pConfig->rocmBuildNum) - 1);
-                pConfig->rocmBuildNum[sizeof(pConfig->rocmBuildNum) - 1] = '\0';
+                strncpy(pConfig->buildRunId, line, sizeof(pConfig->buildRunId) - 1);
+                pConfig->buildRunId[sizeof(pConfig->buildRunId) - 1] = '\0';
                 break;
             case 4:
-                strncpy(pConfig->amdgpuDkmsBuild, line, sizeof(pConfig->amdgpuDkmsBuild) - 1);
-                pConfig->amdgpuDkmsBuild[sizeof(pConfig->amdgpuDkmsBuild) - 1] = '\0';
+                strncpy(pConfig->buildPullTag, line, sizeof(pConfig->buildPullTag) - 1);
+                pConfig->buildPullTag[sizeof(pConfig->buildPullTag) - 1] = '\0';
                 break;
             case 5:
-                strncpy(pConfig->buildInstallerName, line, sizeof(pConfig->buildInstallerName) - 1);
-                pConfig->buildInstallerName[sizeof(pConfig->buildInstallerName) - 1] = '\0';
+                strncpy(pConfig->amdgpuDkmsBuild, line, sizeof(pConfig->amdgpuDkmsBuild) - 1);
+                pConfig->amdgpuDkmsBuild[sizeof(pConfig->amdgpuDkmsBuild) - 1] = '\0';
                 break;
         }
         line_num++;
