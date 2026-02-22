@@ -43,6 +43,10 @@ endif()
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/overlay/" DESTINATION ".")
 
 # Generate distribution info.
+# GPU_TARGETS comes from THEROCK_DIST_AMDGPU_TARGETS (set via therock_subproject.cmake
+# for USE_DIST_AMDGPU_TARGETS projects). This is read by downstream tools via
+# `rocm-sdk targets` to determine which architectures to build for (e.g. PyTorch
+# sets PYTORCH_ROCM_ARCH from this).
 string(JSON dist_info_json_str SET "{}"
   "dist_amdgpu_targets" "\"${GPU_TARGETS}\""
 )
