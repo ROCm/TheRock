@@ -1,6 +1,48 @@
-# macOS System Dependencies Artifact
-# Core system libraries built from source for portable macOS ROCm builds
+[options]
+unmatched_exclude = [
+  "lib/rocm_sysdeps/share/locale/**",
+  "lib/rocm_sysdeps/share/man/**",
+]
 
-[artifact]
-name = "sysdeps"
-description = "Core system dependencies for macOS"
+# bzip2
+[components.dev."third-party/sysdeps/macos/bzip2/build/stage"]
+include = [
+  "**/bin/*"
+]
+[components.lib."third-party/sysdeps/macos/bzip2/build/stage"]
+
+# expat
+[components.dev."third-party/sysdeps/macos/expat/build/stage"]
+[components.lib."third-party/sysdeps/macos/expat/build/stage"]
+
+# gmp
+[components.dev."third-party/sysdeps/macos/gmp/build/stage"]
+[components.lib."third-party/sysdeps/macos/gmp/build/stage"]
+
+# libbacktrace
+[components.dev."third-party/sysdeps/macos/libbacktrace/build/stage"]
+[components.lib."third-party/sysdeps/macos/libbacktrace/build/stage"]
+
+# liblzma
+[components.dev."third-party/sysdeps/macos/liblzma/build/stage"]
+[components.lib."third-party/sysdeps/macos/liblzma/build/stage"]
+
+# mpfr
+[components.dev."third-party/sysdeps/macos/mpfr/build/stage"]
+[components.lib."third-party/sysdeps/macos/mpfr/build/stage"]
+
+# ncurses
+[components.dev."third-party/sysdeps/macos/ncurses/build/stage"]
+[components.lib."third-party/sysdeps/macos/ncurses/build/stage"]
+
+# sqlite3
+[components.dev."third-party/sysdeps/macos/sqlite3/build/stage"]
+[components.lib."third-party/sysdeps/macos/sqlite3/build/stage"]
+
+# zlib
+[components.dev."third-party/sysdeps/macos/zlib/build/stage"]
+[components.lib."third-party/sysdeps/macos/zlib/build/stage"]
+
+# zstd
+[components.dev."third-party/sysdeps/macos/zstd/build/stage"]
+[components.lib."third-party/sysdeps/macos/zstd/build/stage"]
