@@ -106,13 +106,13 @@ add_custom_target(
 
 
 # Output cmake and pkgconfig files. Note that the library names are different
-# on windows vs linux.
+# on windows vs linux vs macOS.
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   set(ZLIB_TYPE "SHARED")
   set(ZLIB_IMPORTED_LOCATION "lib/librocm_sysdeps_z.so.1")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
   set(ZLIB_TYPE "SHARED")
-  set(ZLIB_IMPORTED_LOCATION "lib/librocm_sysdeps_z.1.dylib")
+  set(ZLIB_IMPORTED_LOCATION "lib/libz.1.dylib")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
   set(ZLIB_TYPE "STATIC")
   set(ZLIB_IMPORTED_LOCATION "lib/zlibstatic.lib")
