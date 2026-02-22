@@ -112,18 +112,8 @@ set(LLVM_EXTERNAL_ROCM_DEVICE_LIBS_SOURCE_DIR "${THEROCK_SOURCE_DIR}/compiler/am
 set(LLVM_EXTERNAL_SPIRV_LLVM_TRANSLATOR_SOURCE_DIR "${THEROCK_SOURCE_DIR}/compiler/spirv-llvm-translator")
 set(LLVM_EXTERNAL_PROJECTS "rocm-device-libs;spirv-llvm-translator" CACHE STRING "Enable extra projects" FORCE)
 
-# TODO2: This mechanism has races in certain situations, failing to create a
-# symlink. Revisit once devicemanager code is made more robust.
-# TODO: Arrange for the devicelibs to be installed to the clange resource dir
-# by default. This corresponds to the layout for ROCM>=7. However, not all
-# code (specifically the AMDDeviceLibs.cmake file) has adapted to the new
-# location, so we have to also make them available at amdgcn. There are cache
-# options to manage this transition but they require knowing the clange resource
-# dir. In order to avoid drift, we just fixate that too. This can all be
-# removed in a future version.
-# set(CLANG_RESOURCE_DIR "../lib/clang/${LLVM_VERSION_MAJOR}" CACHE STRING "Resource dir" FORCE)
-# set(ROCM_DEVICE_LIBS_BITCODE_INSTALL_LOC_NEW "lib/clang/${LLVM_VERSION_MAJOR}/amdgcn" CACHE STRING "New devicelibs loc" FORCE)
-# set(ROCM_DEVICE_LIBS_BITCODE_INSTALL_LOC_OLD "amdgcn" CACHE STRING "Old devicelibs loc" FORCE)
+# Arrange for the devicelibs to be installed to the clange resource dir
+set(CLANG_RESOURCE_DIR "../lib/clang/${LLVM_VERSION_MAJOR}" CACHE STRING "Resource dir" FORCE)
 
 # Setup the install rpath (let CMake handle build RPATH per usual):
 # * Executables and libraries can always search their adjacent lib directory
