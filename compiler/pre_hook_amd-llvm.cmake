@@ -116,6 +116,9 @@ if(APPLE)
     OUTPUT_STRIP_TRAILING_WHITESPACE
   )
   set(LLVM_DEFAULT_TARGET_TRIPLE "${LLVM_DEFAULT_TARGET_TRIPLE}" CACHE STRING "Default target triple" FORCE)
+  # Only build compiler-rt for the host architecture, not universal binaries
+  # This avoids issues with cross-compiling i386 on ARM64 macOS
+  set(COMPILER_RT_DEFAULT_TARGET_ONLY ON CACHE BOOL "Only build compiler-rt for default target" FORCE)
 endif()
 
 # Packaging.
