@@ -40,6 +40,14 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       set(_enable_dynamicArch "ON")
     endif()
 
+    # Note: not using
+    #   COMPILER_TOOLCHAIN
+    #     amd-llvm
+    # below due to these errors (at least on Windows)
+    #   TheRock/build/third-party/host-blas/source/lapack-netlib/INSTALL/second_INT_ETIME.c:30:64:
+    #   error: invalid operands to binary expression
+    #   ('real' (aka 'float') and '_Fcomplex' (aka 'struct _C_float_complex'))
+
     therock_cmake_subproject_declare(therock-host-blas
       USE_DIST_AMDGPU_TARGETS
       BACKGROUND_BUILD

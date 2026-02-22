@@ -12,6 +12,8 @@ therock_cmake_subproject_declare(therock-msgpack-cxx
   NO_MERGE_COMPILE_COMMANDS
   OUTPUT_ON_FAILURE
   EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/source"
+  COMPILER_TOOLCHAIN
+    amd-llvm
   CMAKE_ARGS
     -DMSGPACK_USE_BOOST=OFF
 )

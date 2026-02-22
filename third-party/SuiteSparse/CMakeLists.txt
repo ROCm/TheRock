@@ -12,6 +12,8 @@ therock_cmake_subproject_declare(therock-SuiteSparse
   NO_MERGE_COMPILE_COMMANDS
   OUTPUT_ON_FAILURE
   EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/source"
+  COMPILER_TOOLCHAIN
+    amd-llvm
   INSTALL_DESTINATION "lib/host-math"
   # RPATH logic needs to know that executables/libs for this project are in
   # a non-default location.

@@ -27,6 +27,8 @@ therock_cmake_subproject_declare(therock-boost
   NO_MERGE_COMPILE_COMMANDS
   BACKGROUND_BUILD
   OUTPUT_ON_FAILURE
+  COMPILER_TOOLCHAIN
+    amd-llvm
   CMAKE_ARGS
     "-DBOOST_SOURCE_DIR=${_source_dir}"
     "-DTHEROCK_BOOST_LIBRARIES=atomic,filesystem,multi_index,system"
