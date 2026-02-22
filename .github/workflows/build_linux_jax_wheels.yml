@@ -190,7 +190,7 @@ jobs:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}
 
-      - name: Upload wheels to S3
+      - name: Upload wheels to staging S3
         if: ${{ github.repository_owner == 'ROCm' }}
         run: |
           aws s3 cp ${{ env.PACKAGE_DIST_DIR }}/ s3://${{ env.S3_BUCKET_PY }}/${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}/ \
@@ -198,11 +198,14 @@ jobs:
 
       - name: (Re-)Generate Python package release index
         if: ${{ github.repository_owner == 'ROCm' }}
+        env:
+          # Environment variables to be set for `manage.py`
+          CUSTOM_PREFIX: "${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}"
         run: |
           python3 -m venv .venv
           source .venv/bin/activate
           pip3 install boto3 packaging
-          python3 ./build_tools/third_party/s3_management/manage.py ${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}
+          python3 ./build_tools/third_party/s3_management/manage.py ${{ env.CUSTOM_PREFIX }}
 
   generate_target_to_run:
     name: Generate target_to_run
@@ -226,6 +229,7 @@ jobs:
 
   test_jax_wheels:
     name: Test JAX wheels | ${{ inputs.amdgpu_family }} | ${{ needs.generate_target_to_run.outputs.test_runs_on }}
+    if: ${{ needs.generate_target_to_run.outputs.test_runs_on != '' }}
     needs: [build_jax_wheels, generate_target_to_run]
     permissions:
       contents: read
