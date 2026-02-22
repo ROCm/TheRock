@@ -107,6 +107,17 @@ endif()
 set(LLVM_INCLUDE_BENCHMARKS OFF)
 set(LLVM_TARGETS_TO_BUILD "AMDGPU;X86" CACHE STRING "Enable LLVM Targets" FORCE)
 
+# On macOS, compiler-rt builtins require a proper default target triple
+if(APPLE)
+  # Get the host triple and use it as the default target
+  execute_process(
+    COMMAND ${CMAKE_C_COMPILER} -dumpmachine
+    OUTPUT_VARIABLE LLVM_DEFAULT_TARGET_TRIPLE
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
+  set(LLVM_DEFAULT_TARGET_TRIPLE "${LLVM_DEFAULT_TARGET_TRIPLE}" CACHE STRING "Default target triple" FORCE)
+endif()
+
 # Packaging.
 set(PACKAGE_VENDOR "AMD" CACHE STRING "Vendor" FORCE)
 
