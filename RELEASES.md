@@ -266,12 +266,11 @@ also install `torch`, `torchaudio`, `torchvision`, and `apex`.
 >   | 2.10          | 2.10               | 0.25                | 1.10.0       |
 >   | 2.9           | 2.9                | 0.24                | 1.9.0        |
 >   | 2.8           | 2.8                | 0.23                | 1.8.0        |
->   | 2.7           | 2.7.1a0            | 0.22.1              | 1.7.0        |
 >
->   For example, `torch` 2.7.1 and compatible wheels can be installed by specifying
+>   For example, `torch` 2.8 and compatible wheels can be installed by specifying
 >
 >   ```
->   torch==2.7.1 torchaudio==2.7.1a0 torchvision==0.22.1 apex==1.7.0
+>   torch==2.8 torchaudio==2.8 torchvision==0.23 apex==1.8.0
 >   ```
 >
 >   See also
