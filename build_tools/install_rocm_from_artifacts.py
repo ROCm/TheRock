@@ -40,7 +40,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--base-only]
 
 Examples:
-- Downloads and unpacks the gfx94X S3 artifacts from GitHub CI workflow run 14474448215
+- Downloads and unpacks the gfx94X artifacts from GitHub CI workflow run 14474448215
   (from https://github.com/ROCm/TheRock/actions/runs/14474448215) to the
   default output directory `therock-build`:
     ```
@@ -50,7 +50,7 @@ Examples:
         --tests
     ```
 - Downloads and unpacks the version `6.4.0rc20250416` gfx110X artifacts from
-  release tag `nightly-tarball` to the specified output directory `build`:
+  the nightly tarball distribution to the specified output directory `build`:
     ```
     python build_tools/install_rocm_from_artifacts.py \
         --release 6.4.0rc20250416 \
@@ -58,13 +58,13 @@ Examples:
         --output-dir build
     ```
 - Downloads and unpacks the version `6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9`
-  gfx120X artifacts from release tag `dev-tarball` to the default output directory `therock-build`:
+  gfx120X artifacts from the dev tarball distribution to the default output directory `therock-build`:
     ```
     python build_tools/install_rocm_from_artifacts.py \
         --release 6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9 \
         --amdgpu-family gfx120X-all
     ```
-- Downloads and unpacks the gfx94X S3 artifacts from GitHub CI workflow run 19644138192
+- Downloads and unpacks the gfx94X artifacts from GitHub CI workflow run 19644138192
   (from https://github.com/ROCm/rocm-libraries/actions/runs/19644138192) in the `ROCm/rocm-libraries` repository to the
   default output directory `therock-build`:
     ```
@@ -108,14 +108,13 @@ is passed, it will overwrite the default "therock-build" directory.
 """
 
 import argparse
-import boto3
-from botocore import UNSIGNED
-from botocore.config import Config
-from datetime import datetime
+from datetime import datetime, timezone
 from fetch_artifacts import main as fetch_artifacts_main
+import json
 from pathlib import Path
 import platform
 import re
+import requests
 import shutil
 import subprocess
 import sys
@@ -123,17 +122,105 @@ import tarfile
 from typing import Optional
 
 PLATFORM = platform.system().lower()
-s3_client = boto3.client(
-    "s3",
-    verify=False,
-    config=Config(max_pool_connections=100, signature_version=UNSIGNED),
-)
-# S3 bucket names for TheRock releases.
-# NOTE: These buckets will be restricted to CloudFront-only access in the future.
-# When that happens, direct S3 API calls (list_objects, download_fileobj) will fail
-# and this script will need to be updated to use CloudFront URLs instead.
-NIGHTLY_BUCKET_NAME = "therock-nightly-tarball"
-DEV_BUCKET_NAME = "therock-dev-tarball"
+
+# Distribution URLs for TheRock release tarballs.
+TARBALL_NIGHTLY_URL = "https://rocm.nightlies.amd.com/tarball"
+TARBALL_DEV_URL = "https://rocm.devreleases.amd.com/tarball"
+TARBALL_PRERELEASE_URL = "https://rocm.prereleases.amd.com/tarball"
+
+# Mapping from release type to tarball distribution URL
+RELEASE_TYPE_TO_URL = {
+    "nightly": TARBALL_NIGHTLY_URL,
+    "dev": TARBALL_DEV_URL,
+    "prerelease": TARBALL_PRERELEASE_URL,
+}
+
+
+def _fetch_remote_listing(base_url: str, prefix: str = "") -> list[dict]:
+    """
+    Fetch directory listing from the remote tarball distribution.
+
+    The distribution server returns HTML pages with embedded JavaScript
+    containing a JSON array of files. The format is:
+        const files = [{"name": "filename.tar.gz", "mtime": 1234567890.0}, ...]
+
+    # TODO: The distribution server currently returns HTML with embedded JSON.
+    # Once a standalone JSON manifest (e.g., index.json) is available,
+    # switch to fetching that directly instead of parsing HTML.
+
+    Args:
+        base_url: Base distribution URL (e.g., https://rocm.nightlies.amd.com/tarball)
+        prefix: Optional prefix to filter files by name
+
+    Returns:
+        List of dicts with 'Key' and 'LastModified' for each object matching the prefix.
+    """
+    # URL must end with "/" for directory listing
+    listing_url = base_url.rstrip("/") + "/"
+
+    response = requests.get(listing_url, timeout=60)
+    response.raise_for_status()
+
+    # Extract the JSON array from the HTML response
+    # Format: const files = [{"name": "...", "mtime": ...}, ...]
+    content = response.text
+    match = re.search(r"const files = (\[.*?\]);", content, re.DOTALL)
+    if not match:
+        log("Warning: Could not find files listing in remote response")
+        return []
+
+    try:
+        files_json = json.loads(match.group(1))
+    except json.JSONDecodeError as e:
+        log(f"Warning: Failed to parse remote files listing: {e}")
+        return []
+
+    objects: list[dict] = []
+    for file_info in files_json:
+        name = file_info.get("name", "")
+        if not name:
+            continue
+
+        # Apply prefix filter if specified
+        if prefix and not name.startswith(prefix):
+            continue
+
+        obj = {"Key": name}
+        mtime = file_info.get("mtime")
+        if mtime:
+            obj["LastModified"] = datetime.fromtimestamp(mtime, tz=timezone.utc)
+        objects.append(obj)
+
+    return objects
+
+
+def _download_artifact(base_url: str, asset_name: str, destination: Path):
+    """
+    Download a file from the remote tarball distribution.
+
+    Args:
+        base_url: Base distribution URL (e.g., https://rocm.nightlies.amd.com/tarball)
+        asset_name: Name of the asset to download
+        destination: Local path to save the downloaded file
+    """
+    url = f"{base_url}/{asset_name}"
+    log(f"Downloading from {url}")
+
+    response = requests.get(url, stream=True, timeout=300)
+    response.raise_for_status()
+
+    # Download to a temporary file first, then rename on success.
+    # This prevents partial/corrupt files from being left on disk
+    # if the download is interrupted.
+    tmp_destination = destination.with_suffix(destination.suffix + ".tmp")
+    try:
+        with open(tmp_destination, "wb") as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
+        tmp_destination.rename(destination)
+    except BaseException:
+        tmp_destination.unlink(missing_ok=True)
+        raise
 
 
 def parse_nightly_version(version: str) -> Optional[datetime]:
@@ -164,20 +251,21 @@ def extract_version_from_asset_name(
 
 def list_available_nightly_gpu_families(platform_str: str = PLATFORM) -> set[str]:
     """
-    Query S3 to find all GPU families that have nightly releases.
+    Query the remote distribution to find all GPU families that have nightly releases.
     Useful for error messages when an invalid GPU family is specified.
     """
     prefix = f"therock-dist-{platform_str}-"
-
-    paginator = s3_client.get_paginator("list_objects_v2")
     families: set[str] = set()
 
-    for page in paginator.paginate(Bucket=NIGHTLY_BUCKET_NAME, Prefix=prefix):
-        for obj in page.get("Contents", []):
+    try:
+        objects = _fetch_remote_listing(TARBALL_NIGHTLY_URL, prefix)
+        for obj in objects:
             # Extract family from: therock-dist-linux-{family}-{version}.tar.gz
             match = re.match(rf"{prefix}([\w-]+)-", obj["Key"])
             if match:
                 families.add(match.group(1))
+    except requests.RequestException as e:
+        log(f"Warning: Failed to list GPU families from remote: {e}")
 
     return families
 
@@ -187,19 +275,18 @@ def _fetch_and_sort_nightly_releases(
     platform_str: str = PLATFORM,
 ) -> list[dict]:
     """
-    Fetch and sort nightly releases from S3 bucket for a given artifact group.
+    Fetch and sort nightly releases from the remote distribution for a given artifact group.
 
     Returns:
         List of dicts with keys: version, asset_name, last_modified, size, parsed_date
         Sorted by recency (newest first).
     """
     prefix = f"therock-dist-{platform_str}-{artifact_group}-"
-
-    paginator = s3_client.get_paginator("list_objects_v2")
     releases: list[dict] = []
 
-    for page in paginator.paginate(Bucket=NIGHTLY_BUCKET_NAME, Prefix=prefix):
-        for obj in page.get("Contents", []):
+    try:
+        objects = _fetch_remote_listing(TARBALL_NIGHTLY_URL, prefix)
+        for obj in objects:
             key = obj["Key"]
             if not key.endswith(".tar.gz"):
                 continue
@@ -209,11 +296,14 @@ def _fetch_and_sort_nightly_releases(
                     {
                         "version": version,
                         "asset_name": key,
-                        "last_modified": obj["LastModified"],
-                        "size": obj["Size"],
+                        "last_modified": obj.get("LastModified", datetime.min),
+                        "size": obj.get("Size", 0),
                         "parsed_date": parse_nightly_version(version),
                     }
                 )
+    except requests.RequestException as e:
+        log(f"Warning: Failed to fetch releases from remote: {e}")
+        return []
 
     # Sort by parsed date (newest first), falling back to last_modified
     releases.sort(
@@ -232,7 +322,7 @@ def discover_latest_release(
     platform_str: str = PLATFORM,
 ) -> Optional[tuple[str, str]]:
     """
-    Query S3 bucket to find the latest nightly release for given artifact group.
+    Query the remote distribution to find the latest nightly release for given artifact group.
 
     Returns:
         Tuple of (version_string, full_asset_name) or None if not found.
@@ -254,7 +344,7 @@ def _untar_files(output_dir: Path, destination: Path):
     """
     log(f"Extracting {destination.name} to {str(output_dir)}")
     with tarfile.open(destination) as extracted_tar_file:
-        extracted_tar_file.extractall(output_dir)
+        extracted_tar_file.extractall(output_dir, filter="tar")
     destination.unlink()
 
 
@@ -273,17 +363,22 @@ def _create_output_directory(output_dir: Path):
     log(f"Created output directory '{output_dir.resolve()}'")
 
 
-def _retrieve_s3_release_assets(
-    release_bucket, artifact_group, release_version, output_dir
+def _retrieve_remote_assets(
+    base_url: str, artifact_group: str, release_version: str, output_dir: Path
 ):
     """
-    Makes an API call to retrieve the release's assets, then retrieves the asset matching the amdgpu family
+    Downloads release assets from the remote tarball distribution.
+
+    Args:
+        base_url: Base distribution URL for the release type
+        artifact_group: The artifact group (e.g., 'gfx110X-all')
+        release_version: The release version string
+        output_dir: Directory to save and extract the assets
     """
     asset_name = f"therock-dist-{PLATFORM}-{artifact_group}-{release_version}.tar.gz"
     destination = output_dir / asset_name
 
-    with open(destination, "wb") as f:
-        s3_client.download_fileobj(release_bucket, asset_name, f)
+    _download_artifact(base_url, asset_name, destination)
 
     # After downloading the asset, untar-ing the file
     _untar_files(output_dir, destination)
@@ -473,24 +568,24 @@ def retrieve_artifacts_by_release(args):
         "(\\d+\\.)?(\\d+\\.)?(\\*|\\d+)(a|rc)(\\d{4})(\\d{2})(\\d{2})"
     )
     dev_regex_expression = "(\\d+\\.)?(\\d+\\.)?(\\*|\\d+).dev0+"
-    nightly_release = re.search(nightly_regex_expression, args.release) != None
-    dev_release = re.search(dev_regex_expression, args.release) != None
+    nightly_release = re.search(nightly_regex_expression, args.release) is not None
+    dev_release = re.search(dev_regex_expression, args.release) is not None
     if not nightly_release and not dev_release:
         log("This script requires a nightly-tarball or dev-tarball version.")
         log("Please retrieve the correct release version from:")
         log(
-            "\t - https://therock-nightly-tarball.s3.amazonaws.com/ (nightly-tarball examples: 6.4.0rc20250416, 7.10.0a20251024)"
+            f"\t - {TARBALL_NIGHTLY_URL} (nightly-tarball examples: 6.4.0rc20250416, 7.10.0a20251024)"
         )
         log(
-            "\t - https://therock-dev-tarball.s3.amazonaws.com/ (dev-tarball example: 6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9)"
+            f"\t - {TARBALL_DEV_URL} (dev-tarball example: 6.4.0.dev0+8f6cdfc0d95845f4ca5a46de59d58894972a29a9)"
         )
         log("Exiting...")
         return
 
-    release_bucket = NIGHTLY_BUCKET_NAME if nightly_release else DEV_BUCKET_NAME
+    base_url = TARBALL_NIGHTLY_URL if nightly_release else TARBALL_DEV_URL
     release_version = args.release
 
-    log(f"Retrieving artifacts from release bucket {release_bucket}")
+    log(f"Retrieving artifacts from {base_url}")
 
     if args.dry_run:
         asset_name = (
@@ -499,9 +594,7 @@ def retrieve_artifacts_by_release(args):
         log(f"[DRY RUN] Would download: {asset_name} (version {release_version})")
         return
 
-    _retrieve_s3_release_assets(
-        release_bucket, artifact_group, release_version, output_dir
-    )
+    _retrieve_remote_assets(base_url, artifact_group, release_version, output_dir)
 
 
 def retrieve_artifacts_by_input_dir(args):
@@ -537,7 +630,7 @@ def retrieve_artifacts_by_input_dir(args):
 
 def retrieve_artifacts_by_latest_release(args):
     """
-    Find and retrieve the latest nightly release from S3.
+    Find and retrieve the latest nightly release from the remote distribution.
     """
     log(f"Finding latest nightly release for {args.artifact_group}...")
 
@@ -546,7 +639,7 @@ def retrieve_artifacts_by_latest_release(args):
     if result is None:
         log(f"ERROR: No nightly release found for '{args.artifact_group}'")
         log("")
-        log("Available GPU families in the nightly bucket:")
+        log("Available GPU families in the nightly distribution:")
         available = list_available_nightly_gpu_families()
         for family in sorted(available):
             log(f"  - {family}")
@@ -560,8 +653,8 @@ def retrieve_artifacts_by_latest_release(args):
         return
 
     # Reuse existing download logic
-    _retrieve_s3_release_assets(
-        release_bucket=NIGHTLY_BUCKET_NAME,
+    _retrieve_remote_assets(
+        base_url=TARBALL_NIGHTLY_URL,
         artifact_group=args.artifact_group,
         release_version=version,
         output_dir=args.output_dir,
