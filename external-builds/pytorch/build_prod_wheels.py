@@ -251,8 +251,94 @@ def get_rocm_init_contents(args: argparse.Namespace):
     library_preloads_formatted = ", ".join(f"'{s}'" for s in library_preloads)
     return textwrap.dedent(
         f"""
+        def _setup_hip_remote():
+            \"\"\"If TF_WORKER_HOST is set, configure hip-remote proxy DLLs.
+
+            This loads our hip-remote proxy (amdhip64_7.dll) and hiprtc proxy
+            (hiprtc0702.dll) BEFORE the real SDK DLLs, so that PyTorch and
+            its dependencies route HIP calls to a remote GPU worker.
+
+            The proxy DLLs are expected alongside this file (in torch/lib/)
+            or in a path specified by HIP_REMOTE_LIB_DIR.
+
+            No SDK files are modified - the originals remain untouched.
+            \"\"\"
+            import os
+            import platform
+
+            if platform.system() != "Windows":
+                return {{}}
+
+            worker_host = os.environ.get("TF_WORKER_HOST")
+            if not worker_host:
+                return {{}}
+
+            import ctypes
+            from ctypes import cdll
+            from pathlib import Path
+
+            # Locate proxy DLLs: HIP_REMOTE_LIB_DIR or torch/lib/
+            proxy_dir = Path(os.environ.get(
+                "HIP_REMOTE_LIB_DIR",
+                str(Path(__file__).resolve().parent / "lib"),
+            ))
+
+            # Locate the real SDK DLLs (never modified)
+            import rocm_sdk
+            sdk_paths = rocm_sdk.find_libraries("amdhip64", "hiprtc")
+            sdk_hip_path = sdk_paths[0]      # _rocm_sdk_core/bin/amdhip64_7.dll
+            sdk_hiprtc_path = sdk_paths[1]    # _rocm_sdk_core/bin/hiprtc0702.dll
+            sdk_bin_dir = sdk_hip_path.parent  # _rocm_sdk_core/bin/
+
+            # Ensure SDK bin dir is in the DLL search path so sub-dependencies
+            # resolve from the SDK rather than System32.
+            os.add_dll_directory(str(sdk_bin_dir))
+
+            preloaded = {{}}
+
+            # Load our HIP proxy DLL
+            hip_proxy = proxy_dir / "amdhip64_7.dll"
+            if hip_proxy.exists():
+                hip_cdll = ctypes.CDLL(str(hip_proxy))
+                preloaded["amdhip64"] = hip_cdll
+
+                # Signal that DLL loading is complete and network is ready
+                if hasattr(hip_cdll, "hip_remote_mark_ready"):
+                    hip_cdll.hip_remote_mark_ready()
+
+                # Query the remote device's GCN architecture name so hipRTC
+                # compiles for the correct target (no hardcoded arch).
+                try:
+                    buf = ctypes.create_string_buffer(256)
+                    err = hip_cdll.hipDeviceGetGcnArchName(buf, 0)
+                    if err == 0 and buf.value:
+                        arch = buf.value.decode().split(":")[0]
+                        os.environ["HIP_REMOTE_TARGET_ARCH"] = arch
+                except Exception:
+                    pass
+
+            # Load our hipRTC proxy DLL (injects --offload-arch for remote GPU)
+            hiprtc_proxy = proxy_dir / "hiprtc0702.dll"
+            if hiprtc_proxy.exists():
+                # Tell the proxy where to find the real hipRTC DLL
+                os.environ["_HIPRTC_REAL_PATH"] = str(sdk_hiprtc_path)
+                hiprtc_cdll = ctypes.CDLL(str(hiprtc_proxy))
+                preloaded["hiprtc"] = hiprtc_cdll
+
+            return preloaded
+
+
         def initialize():
             import rocm_sdk
+
+            # Set up hip-remote proxies if TF_WORKER_HOST is configured.
+            preloaded = _setup_hip_remote()
+
+            # Insert pre-loaded proxy DLLs into rocm_sdk's cache so
+            # initialize_process() doesn't load the real ones over them.
+            for shortname, handle in preloaded.items():
+                rocm_sdk._ALL_CDLLS[shortname] = handle
+
             rocm_sdk.initialize_process(
                 preload_shortnames=[{library_preloads_formatted}],
                 check_version='{sdk_version}')
@@ -347,48 +433,14 @@ def find_dir_containing(file_name: str, *possible_paths: Path) -> Path:
     raise ValueError(f"No directory contains {file_name}: {possible_paths}")
 
 
-def do_build(args: argparse.Namespace):
-    if args.install_rocm:
-        do_install_rocm(args)
-
-    if not args.version_suffix:
-        args.version_suffix = get_version_suffix_for_installed_rocm_package()
-
-    triton_dir: Path | None = args.triton_dir
-    pytorch_dir: Path | None = args.pytorch_dir
-    pytorch_audio_dir: Path | None = args.pytorch_audio_dir
-    pytorch_vision_dir: Path | None = args.pytorch_vision_dir
-    apex_dir: Path | None = args.apex_dir
-
-    rocm_sdk_version = get_rocm_sdk_version()
-    cmake_prefix = get_rocm_path("cmake")
-    bin_dir = get_rocm_path("bin")
-    rocm_dir = get_rocm_path("root")
-
-    print(f"rocm version {rocm_sdk_version}:")
-    print(f"  PYTHON VERSION: {sys.version}")
-    print(f"  CMAKE_PREFIX_PATH = {cmake_prefix}")
-    print(f"  BIN = {bin_dir}")
-    print(f"  ROCM_HOME = {rocm_dir}")
-
-    system_path = str(bin_dir) + os.path.pathsep + os.environ.get("PATH", "")
-    print(f"  PATH = {system_path}")
-
-    pytorch_rocm_arch = args.pytorch_rocm_arch
-    if pytorch_rocm_arch is None:
-        pytorch_rocm_arch = get_rocm_sdk_targets()
-        print(
-            f"  Using default PYTORCH_ROCM_ARCH from rocm-sdk targets: {pytorch_rocm_arch}"
-        )
-    else:
-        print(f"  Using provided PYTORCH_ROCM_ARCH: {pytorch_rocm_arch}")
-
-    if not pytorch_rocm_arch:
-        raise ValueError(
-            "No --pytorch-rocm-arch provided and rocm-sdk targets returned empty. "
-            "Please specify --pytorch-rocm-arch (e.g., gfx942)."
-        )
-
+def _setup_common_build_env(
+    cmake_prefix: Path,
+    rocm_dir: Path,
+    pytorch_rocm_arch: str,
+    triton_dir: Path | None,
+    is_windows: bool,
+) -> dict[str, str]:
+    """Construct the common environment dict shared by all wheel builds."""
     env: dict[str, str] = {
         "PYTHONUTF8": "1",  # Some build files use utf8 characters, force IO encoding
         "CMAKE_PREFIX_PATH": str(cmake_prefix),
@@ -397,12 +449,6 @@ def do_build(args: argparse.Namespace):
         "PYTORCH_ROCM_ARCH": pytorch_rocm_arch,
         "USE_KINETO": os.environ.get("USE_KINETO", "ON" if not is_windows else "OFF"),
     }
-
-    if args.use_ccache:
-        print("Building with ccache, clearing stats first")
-        env["CMAKE_C_COMPILER_LAUNCHER"] = "ccache"
-        env["CMAKE_CXX_COMPILER_LAUNCHER"] = "ccache"
-        run_command(["ccache", "--zero-stats"], cwd=tempfile.gettempdir())
 
     # GLOO enabled for only Linux
     if not is_windows:
@@ -456,7 +502,7 @@ def do_build(args: argparse.Namespace):
     # on directory layout.
     # Obviously, this should be completely burned with fire once the root causes
     # are eliminted.
-    hip_device_lib_path = get_rocm_path("root") / "lib" / "llvm" / "amdgcn" / "bitcode"
+    hip_device_lib_path = rocm_dir / "lib" / "llvm" / "amdgcn" / "bitcode"
     if not hip_device_lib_path.exists():
         print(
             "WARNING: Default location of device libs not found. Relying on "
@@ -466,7 +512,7 @@ def do_build(args: argparse.Namespace):
         env["HIP_DEVICE_LIB_PATH"] = str(hip_device_lib_path)
 
     # OpenBLAS path setup
-    host_math_path = get_rocm_path("root") / "lib" / "host-math"
+    host_math_path = rocm_dir / "lib" / "host-math"
     if not host_math_path.exists():
         print(
             "WARNING: Default location of host-math not found. "
@@ -477,6 +523,19 @@ def do_build(args: argparse.Namespace):
         env["OpenBLAS_HOME"] = str(host_math_path)
         env["OpenBLAS_LIB_NAME"] = "rocm-openblas"
 
+    return env
+
+
+def _do_build_wheels_core(
+    args: argparse.Namespace,
+    env: dict[str, str],
+    triton_dir: Path | None,
+    pytorch_dir: Path | None,
+    pytorch_audio_dir: Path | None,
+    pytorch_vision_dir: Path | None,
+    apex_dir: Path | None,
+) -> None:
+    """Execute all wheel builds (triton, pytorch, audio, vision, apex)."""
     # Build triton.
     triton_requirement = None
     if args.build_triton or (args.build_triton is None and triton_dir):
@@ -523,6 +582,69 @@ def do_build(args: argparse.Namespace):
         print("--- Not build apex (no --apex-dir)")
 
     print("--- Builds all completed")
+
+
+def do_build(args: argparse.Namespace):
+    if args.install_rocm:
+        do_install_rocm(args)
+
+    if not args.version_suffix:
+        args.version_suffix = get_version_suffix_for_installed_rocm_package()
+
+    triton_dir: Path | None = args.triton_dir
+    pytorch_dir: Path | None = args.pytorch_dir
+    pytorch_audio_dir: Path | None = args.pytorch_audio_dir
+    pytorch_vision_dir: Path | None = args.pytorch_vision_dir
+    apex_dir: Path | None = args.apex_dir
+
+    rocm_sdk_version = get_rocm_sdk_version()
+    cmake_prefix = get_rocm_path("cmake")
+    bin_dir = get_rocm_path("bin")
+    rocm_dir = get_rocm_path("root")
+
+    print(f"rocm version {rocm_sdk_version}:")
+    print(f"  PYTHON VERSION: {sys.version}")
+    print(f"  CMAKE_PREFIX_PATH = {cmake_prefix}")
+    print(f"  BIN = {bin_dir}")
+    print(f"  ROCM_HOME = {rocm_dir}")
+
+    system_path = str(bin_dir) + os.path.pathsep + os.environ.get("PATH", "")
+    print(f"  PATH = {system_path}")
+
+    pytorch_rocm_arch = args.pytorch_rocm_arch
+    if pytorch_rocm_arch is None:
+        pytorch_rocm_arch = get_rocm_sdk_targets()
+        print(
+            f"  Using default PYTORCH_ROCM_ARCH from rocm-sdk targets: {pytorch_rocm_arch}"
+        )
+    else:
+        print(f"  Using provided PYTORCH_ROCM_ARCH: {pytorch_rocm_arch}")
+
+    if not pytorch_rocm_arch:
+        raise ValueError(
+            "No --pytorch-rocm-arch provided and rocm-sdk targets returned empty. "
+            "Please specify --pytorch-rocm-arch (e.g., gfx942)."
+        )
+
+    env = _setup_common_build_env(
+        cmake_prefix, rocm_dir, pytorch_rocm_arch, triton_dir, is_windows
+    )
+
+    if args.use_ccache:
+        print("Building with ccache, clearing stats first")
+        env["CMAKE_C_COMPILER_LAUNCHER"] = "ccache"
+        env["CMAKE_CXX_COMPILER_LAUNCHER"] = "ccache"
+        run_command(["ccache", "--zero-stats"], cwd=tempfile.gettempdir())
+
+    _do_build_wheels_core(
+        args,
+        env,
+        triton_dir,
+        pytorch_dir,
+        pytorch_audio_dir,
+        pytorch_vision_dir,
+        apex_dir,
+    )
 
     if args.use_ccache:
         ccache_stats_output = capture(

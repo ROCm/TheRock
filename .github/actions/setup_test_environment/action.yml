@@ -12,6 +12,9 @@ inputs:
   ARTIFACT_GROUP:
     description: (string) Artifact group (e.g. `gfx110X-all`)
     required: true
+  AMDGPU_TARGETS:
+    description: (string) Comma-separated individual GPU targets for fetching split artifacts (e.g. `gfx942`)
+    default: ""
   ARTIFACT_RUN_ID:
     description: (string) Run ID to download artifacts from (`env.ARTIFACT_RUN_ID` or a value like `19716407405`)
     required: true
@@ -64,6 +67,7 @@ runs:
       env:
         OUTPUT_ARTIFACTS_DIR: ${{ inputs.OUTPUT_ARTIFACTS_DIR }}
         ARTIFACT_GROUP: ${{ inputs.ARTIFACT_GROUP }}
+        AMDGPU_TARGETS: ${{ inputs.AMDGPU_TARGETS }}
         ARTIFACT_RUN_ID: ${{ inputs.ARTIFACT_RUN_ID }}
         FETCH_ARTIFACT_ARGS: ${{ inputs.FETCH_ARTIFACT_ARGS }}
         GITHUB_TOKEN: ${{ github.token }}
@@ -72,5 +76,6 @@ runs:
         python ./build_tools/install_rocm_from_artifacts.py \
           --run-id=${ARTIFACT_RUN_ID} \
           --artifact-group=${ARTIFACT_GROUP} \
+          --amdgpu-targets=${AMDGPU_TARGETS} \
           --output-dir=${OUTPUT_ARTIFACTS_DIR} \
           ${FETCH_ARTIFACT_ARGS}
