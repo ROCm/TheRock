@@ -127,3 +127,13 @@ jobs:
   # build_python_packages:
   #   name: Build Python Packages
   #   uses: ./.github/workflows/build_python_packages.yml
+
+  generate_manifest_diff:
+    name: Generate Manifest Diff Report
+    uses: ./.github/workflows/manifest-diff.yml
+    with:
+      end_commit: ${{ github.sha }}
+      find_last_successful: "ci_nightly.yml"
+    permissions:
+      contents: read
+      id-token: write
