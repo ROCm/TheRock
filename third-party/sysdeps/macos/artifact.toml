@@ -31,9 +31,9 @@ include = [
 [components.dev."third-party/sysdeps/macos/mpfr/build/stage"]
 [components.lib."third-party/sysdeps/macos/mpfr/build/stage"]
 
-# ncurses
-[components.dev."third-party/sysdeps/macos/ncurses/build/stage"]
-[components.lib."third-party/sysdeps/macos/ncurses/build/stage"]
+# ncurses - disabled on macOS due to terminfo compilation issues
+# [components.dev."third-party/sysdeps/macos/ncurses/build/stage"]
+# [components.lib."third-party/sysdeps/macos/ncurses/build/stage"]
 
 # sqlite3
 [components.dev."third-party/sysdeps/macos/sqlite3/build/stage"]
