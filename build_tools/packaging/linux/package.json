@@ -319,6 +319,52 @@
     "Gfxarch": "False"
   },
   {
+    "Package": "amdrocm-fft-test",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "libc6",
+      "amdrocm-runtime",
+      "amdrocm-sysdeps",
+      "amdrocm-fft"
+    ],
+    "RPMRequires": [
+      "amdrocm-runtime",
+      "amdrocm-sysdeps",
+      "amdrocm-fft"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "ROCm FFT library",
+    "Description_Long": "rocfft and hipfft library files",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Artifactory": [
+      {
+        "Artifact": "fft",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocFFT",
+            "Components": [
+              "test"
+            ]
+          },
+          {
+            "Name": "hipFFT",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "True"
+  },
+  {
     "Package": "amdrocm-fft",
     "Version": "",
     "Architecture": "amd64",
@@ -482,6 +528,154 @@
               "lib",
               "run",
               "doc"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "True"
+  },
+  {
+    "Package": "amdrocm-solver-test",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-runtime",
+      "amdrocm-blas"
+    ],
+    "RPMRequires": [
+      "amdrocm-runtime",
+      "amdrocm-blas"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "AMD library for BLAS in ROCm",
+    "Description_Long": "BLAS libraries which includes hipBlAS, rocBLAS, hipBLASLt and hipSPARSELt",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Artifactory": [
+      {
+        "Artifact": "blas",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocSOLVER",
+            "Components": [
+              "test"
+            ]
+          },
+          {
+            "Name": "hipSOLVER",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "True"
+  },
+  {
+    "Package": "amdrocm-sparse-test",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-runtime",
+      "amdrocm-blas"
+    ],
+    "RPMRequires": [
+      "amdrocm-runtime",
+      "amdrocm-blas"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "AMD library for BLAS in ROCm",
+    "Description_Long": "BLAS libraries which includes hipBlAS, rocBLAS, hipBLASLt and hipSPARSELt",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Artifactory": [
+      {
+        "Artifact": "blas",
+        "Artifact_Subdir": [
+          {
+            "Name": "hipSPARSELt",
+            "Components": [
+              "test"
+            ]
+          },
+          {
+            "Name": "rocSPARSE",
+            "Components": [
+              "test"
+            ]
+          },
+          {
+            "Name": "hipSPARSE",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "True"
+  },
+  {
+    "Package": "amdrocm-blas-test",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-runtime",
+      "amdrocm-blas"
+    ],
+    "RPMRequires": [
+      "amdrocm-runtime",
+      "amdrocm-blas"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "AMD library for BLAS in ROCm",
+    "Description_Long": "BLAS libraries which includes hipBlAS, rocBLAS, hipBLASLt and hipSPARSELt",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Artifactory": [
+      {
+        "Artifact": "blas",
+        "Artifact_Subdir": [
+          {
+            "Name": "hipBLAS",
+            "Components": [
+              "test"
+            ]
+          },
+          {
+            "Name": "rocBLAS",
+            "Components": [
+              "test"
+            ]
+          },
+          {
+            "Name": "rocRoller",
+            "Components": [
+              "test"
+            ]
+          },
+
+          {
+            "Name": "hipBLASLt",
+            "Components": [
+              "test"
             ]
           }
         ]
@@ -784,6 +978,48 @@
     "Gfxarch": "True"
   },
 
+  {
+    "Package": "amdrocm-rand-test",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "libc6",
+      "amdrocm-rand"
+    ],
+    "RPMRequires": [
+      "amdrocm-rand"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "ROCm random number generation library",
+    "Description_Long": "Contains rocrand and hiprand developement header files",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Artifactory": [
+      {
+        "Artifact": "rand",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocRAND",
+            "Components": [
+              "test"
+            ]
+          },
+          {
+            "Name": "hipRAND",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "True"
+  },
   {
     "Package": "amdrocm-rand-devel",
     "Version": "",
@@ -1369,6 +1605,48 @@
   },
 
   {
+    "Package": "amdrocm-rccl-test",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "libc6",
+      "amdrocm-base",
+      "amdrocm-profiler-base",
+      "amdrocm-rccl"
+    ],
+    "RPMRequires": [
+      "amdrocm-base",
+      "amdrocm-profiler-base",
+      "amdrocm-rccl"
+    ],
+    "Maintainer": "RCCL Maintainer <rccl-maintainer@amd.com>",
+    "Description_Short": "ROCm Communication Collectives Library. Optimized primitives for collective multi-GPU communication",
+    "Description_Long": "ROCm Communication Collectives Library. Optimized primitives for collective multi-GPU communication",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rccl",
+    "Artifactory": [
+      {
+        "Artifact": "rccl",
+        "Artifact_Subdir": [
+          {
+            "Name": "rccl",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
+      }
+    ],
+
+    "Gfxarch": "True"
+  },
+
+  {
     "Package": "amdrocm-rccl",
     "Version": "",
     "Architecture": "amd64",
@@ -1449,6 +1727,7 @@
 
     "Gfxarch": "True"
   },
+
   {
     "Package": "amdrocm-dnn",
     "Version": "",
@@ -1501,6 +1780,54 @@
       }
     ],
 
+    "Gfxarch": "True"
+  },
+
+  {
+    "Package": "amdrocm-dnn-test",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "amdrocm-dnn"
+    ],
+    "RPMRequires": [
+      "amdrocm-dnn"
+    ],
+    "Maintainer": "MIOpen Maintainer <miopen-lib.support@amd.com>",
+    "Description_Short": "AMD DNN Library",
+    "Description_Long": "Provides development files for miopen library",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-libraries",
+    "Artifactory": [
+      {
+        "Artifact": "hipdnn",
+        "Artifact_Gfxarch": "False",
+        "Artifact_Subdir": [
+          {
+            "Name": "hipDNN",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "miopen",
+        "Artifact_Subdir": [
+          {
+            "Name": "MIOpen",
+            "Components": [
+              "test"
+            ]
+          }
+        ]
+      }
+    ],
     "Gfxarch": "True"
   },
 
