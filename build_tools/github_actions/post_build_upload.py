@@ -264,7 +264,11 @@ def upload_manifest_to_s3(artifact_group: str, build_dir: Path, bucket_uri: str)
         build_dir / "base" / "aux-overlay" / "build" / "therock_manifest.json"
     )
     if not manifest_path.is_file():
-        raise FileNotFoundError(f"therock_manifest.json not found at {manifest_path}")
+        log(
+            f"[WARN] therock_manifest.json not found at {manifest_path}. "
+            "Skipping manifest upload (aux-overlay may not be part of this build)."
+        )
+        return
 
     dest = f"{bucket_uri}/manifests/{artifact_group}/therock_manifest.json"
     log(f"[INFO] Uploading manifest {manifest_path} -> {dest}")
