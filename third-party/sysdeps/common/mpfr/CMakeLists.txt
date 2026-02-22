@@ -94,12 +94,8 @@ else()
   set(_needs_patchelf TRUE)
 endif()
 
-add_custom_target(
-  build ALL
-  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-  #
-  # OPTIONAL: Patching of the sources should happen here.
-  #
+# Build the command list conditionally instead of using generator expressions
+set(_build_commands
   COMMAND
     "${CMAKE_COMMAND}" -E env
       "PKG_CONFIG_PATH=$ENV{PKG_CONFIG_PATH}"
@@ -108,6 +104,8 @@ add_custom_target(
       # our $ORIGIN string survive through all that is complex and
       # potentially fragile. We use a patchelf step instead.
       "LDFLAGS=${CMAKE_SHARED_LINKER_FLAGS} ${_version_script_flag}"
+      # On macOS, clang no longer supports <varargs.h>, so force HAVE_STDARG
+      "CFLAGS=-DHAVE_STDARG=1"
       --
     "${SOURCE_DIR}/configure"
       --prefix "${CMAKE_INSTALL_PREFIX}"
@@ -116,15 +114,29 @@ add_custom_target(
     make V=1
   COMMAND
     make install
-  $<$<BOOL:${_needs_patchelf}>:COMMAND
-    # Patch in the RUNPATH (Linux only).
-    ${PATCHELF} --set-rpath '\$\$ORIGIN:\$\$ORIGIN/rocm_sysdeps/lib' ${CMAKE_INSTALL_PREFIX}/lib/libmpfr.so>
+)
+
+if(_needs_patchelf)
+  list(APPEND _build_commands
+    COMMAND
+      # Patch in the RUNPATH (Linux only).
+      ${PATCHELF} --set-rpath '\$\$ORIGIN:\$\$ORIGIN/rocm_sysdeps/lib' ${CMAKE_INSTALL_PREFIX}/lib/libmpfr.so
+  )
+endif()
+
+list(APPEND _build_commands
   COMMAND
     "${CMAKE_COMMAND}" -E env
       "PATCHELF=${PATCHELF}"
       "THEROCK_SOURCE_DIR=${THEROCK_SOURCE_DIR}"
       "Python3_EXECUTABLE=${Python3_EXECUTABLE}" --
     "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/patch_install.py" ${CMAKE_INSTALL_PREFIX}
+)
+
+add_custom_target(
+  build ALL
+  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  ${_build_commands}
 )
 
 configure_file(

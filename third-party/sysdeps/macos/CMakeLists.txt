@@ -5,7 +5,8 @@ add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/expat" "${CMAKE_CURRENT_
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/gmp" "${CMAKE_CURRENT_BINARY_DIR}/gmp")
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/libbacktrace" "${CMAKE_CURRENT_BINARY_DIR}/libbacktrace")
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/liblzma" "${CMAKE_CURRENT_BINARY_DIR}/liblzma")
-add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/ncurses" "${CMAKE_CURRENT_BINARY_DIR}/ncurses")
+# ncurses is disabled on macOS due to persistent terminfo compilation issues
+# add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/ncurses" "${CMAKE_CURRENT_BINARY_DIR}/ncurses")
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/sqlite3" "${CMAKE_CURRENT_BINARY_DIR}/sqlite3")
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/zlib" "${CMAKE_CURRENT_BINARY_DIR}/zlib")
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common/zstd" "${CMAKE_CURRENT_BINARY_DIR}/zstd")
