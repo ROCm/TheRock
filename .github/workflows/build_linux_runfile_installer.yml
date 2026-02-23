@@ -35,7 +35,7 @@ on:
         type: string
       
       pull_pkg:
-        description: Set base package name with optional type prefix (default: amdrocm-core-sdk). Can set it to base:amdrocm-amdsmi to quickly test your code. Otherwise, leave empty.
+        description: Set base package name with optional type prefix. Can set it to base:amdrocm-amdsmi to quickly test your code. Otherwise, leave empty. If left empty, value of pullpkg inside runfile-installer is automatically set to 'amdrocm-core-sdk'
         required: false
         type: string
 
