@@ -44,7 +44,7 @@ test_matrix = {
         "job_name": "rocblas",
         "fetch_artifact_args": "--blas --tests",
         "timeout_minutes": 15,
-        "test_script": f"python {_get_script_path('test_rocblas.py')}",
+        "test_script": f"python {_get_script_path('test_filters.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 1,
     },
