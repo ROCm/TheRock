@@ -1,0 +1,63 @@
+import argparse
+import logging
+import os
+import shlex
+import subprocess
+from pathlib import Path
+import sys
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+THEROCK_DIR = SCRIPT_DIR.parent
+THEROCK_OUTPUT_DIR = str(THEROCK_DIR / "build")
+
+
+def setup_pip():
+    environ_vars = os.environ.copy()
+
+    setup_cmd = [
+        sys.executable,
+        "-m",
+        "ensurepip",
+        "--upgrade",
+    ]
+    logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(setup_cmd)}")
+    subprocess.run(setup_cmd, cwd=THEROCK_DIR, check=True, env=environ_vars)
+
+
+def install_requirements(input: str):
+    environ_vars = os.environ.copy()
+
+    requirements_files = input.split(",")
+
+    for file in requirements_files:
+        cmd = [
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "-r",
+            f"{THEROCK_OUTPUT_DIR}/{file}",
+        ]
+        logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
+        subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=environ_vars)
+
+
+def main(argv):
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--requirements-files",
+        type=str,
+        default="",
+        help="A comma separated list of requirements.txt files to install",
+    )
+    args = parser.parse_args(argv)
+    if not args.requirements_files:
+        logging.info("No requirements files found. Exiting install_requirements.py...")
+        sys.exit(1)
+
+    setup_pip()
+    install_requirements(str(args.requirements_files))
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

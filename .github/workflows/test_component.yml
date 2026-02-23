@@ -119,17 +119,8 @@ jobs:
 
       - name: Setup Requirements
         run: |
-          # Sets up IFS (Internal Field Separator) to read comma separated REQUIREMENTS_FILES and output filenames to an array
-          REQUIREMENTS_FILES=${{ fromJSON(inputs.component).requirements_files }}
-          DELIMITER=","
-          IFS="$DELIMITER" read -r -a array <<< "$REQUIREMENTS_FILES"
-
-          python -m ensurepip --upgrade
-
-          for file in "${array[@]}"; do
-              echo "Installing Requirements File: $file"
-              python -m pip install -r ${{ env.OUTPUT_ARTIFACTS_DIR }}/$file
-          done
+          python ./build_tools/install_requirements.py \
+            --requirements_files=${{ fromJSON(inputs.component).requirements_files }}
 
       - name: Test
         timeout-minutes: ${{ fromJSON(inputs.component).timeout_minutes }}
