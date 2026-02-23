@@ -342,7 +342,6 @@ if(THEROCK_BUNDLE_SYSDEPS OR THEROCK_ENABLE_ROCGDB)
     if(NOT PATCHELF)
       message(FATAL_ERROR "Building with THEROCK_BUNDLE_SYSDEPS=ON or THEROCK_ENABLE_ROCGDB=ON on Linux requires `patchelf`")
     endif()
-    message(FATAL_ERROR "!/!")
   elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     # macOS uses install_name_tool (from Xcode) instead of patchelf
     find_program(INSTALL_NAME_TOOL install_name_tool)
