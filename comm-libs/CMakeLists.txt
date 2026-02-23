@@ -127,7 +127,7 @@ if(THEROCK_ENABLE_ROCSHMEM)
       -DGDA_MLX5=ON
       -DGDA_BNXT=ON
       -DGDA_IONIC=ON
-      -DUSE_EXTERNAL_MPI=OFF
+      -DUSE_EXTERNAL_MPI=OFF # ONLY WORKS WITH Open MPI, other MPI implementations are not supported
       -DCMAKE_POSITION_INDEPENDENT_CODE=ON
       -DHIP_PLATFORM=amd
       -DROCM_PATH=
@@ -144,6 +144,7 @@ if(THEROCK_ENABLE_ROCSHMEM)
       therock-googletest
     RUNTIME_DEPS
       hip-clr
+      ${optional_profiler_deps}
   )
   therock_cmake_subproject_glob_c_sources(rocshmem
     SUBDIRS
