@@ -195,14 +195,9 @@ Edit `functional_test_matrix.py`:
 
 ### 4. Test Locally
 
-> **Full Setup Guide:** See [Extended Tests Framework Overview](../README.md#quick-start) for complete environment setup, including how to obtain TheRock build artifacts.
+> **Environment Setup:** See [Extended Tests Framework Overview](../README.md#environment-setup) for required environment variables and setup instructions.
 
 ```bash
-# Required environment variables
-export THEROCK_BIN_DIR=/path/to/therock/build/bin  # Path to TheRock build output
-export AMDGPU_FAMILIES=gfx94X-dcgpu                # Your GPU family (gfx942, gfx1100, etc.)
-export ARTIFACT_RUN_ID=local-test                  # Optional: test run identifier
-
 # Run the test
 python3 tests/extended_tests/functional/scripts/test_your_test.py
 ```

@@ -52,6 +52,7 @@ class FunctionalBase:
         self.amdgpu_families = os.getenv("AMDGPU_FAMILIES")
         self.script_dir = Path(__file__).resolve().parent
         self.therock_dir = Path(__file__).resolve().parents[4]
+        self.rocm_path = Path(self.therock_bin_dir).resolve().parent if self.therock_bin_dir else None
 
         # Initialize test client (will be set in run())
         self.client = None
@@ -85,11 +86,6 @@ class FunctionalBase:
                 f"Failed to detect GPU architecture: {e}\n"
                 "Ensure ROCm drivers are installed and GPU is accessible."
             ) from e
-
-    @property
-    def rocm_path(self) -> Path:
-        """ROCm installation path (parent of therock_bin_dir)."""
-        return Path(self.therock_bin_dir).resolve().parent
 
     def get_rocm_env(self, additional_paths: List[Path] = None) -> Dict[str, str]:
         """Get environment with LD_LIBRARY_PATH set for ROCm libraries.
