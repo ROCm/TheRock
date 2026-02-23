@@ -12,14 +12,32 @@ on:
   #       description: workflow run id to download the artifacts from.
   #       required: true
   #       type: string
-  #     rocm_version:
-  #       description: ROCm version to append to the package (8.0.0, 8.0.1rc1, ...).
-  #       required: true
-  #       type: string
-      release_type:
-        description: The type of release to build ("dev", "nightly", or "prerelease"). All developer-triggered jobs should use "dev"!
+
+      # isdev:
+      #   description: Set to True if this is a developer triggered job. Ensures any binaries are uploaded to rocm.devreleases.amd.com
+      #   default: true
+      pull_tag:
+        description: Set build date in the format (YYYYMMDD) to specify nightly build to build runfile installer off of. Only needed if release_type is nightly.
         required: false
         type: string
+      pull_run_id:
+        description: Workflow run id of deb and rpm packages used to build runfile installer off of. Only needed if release_type is nightly.
+        required: false
+        type: string
+      rocm_version:
+        # description: ROCm version to append to the package (8.0.0, 8.0.1rc1, ...).
+        description: ROCm version used to build runfile installer (7.12.0~20260218 for nightly, 7.11.0~rc2 for 7.11 prerelease RC2 or 7.12.0 if you're triggering the job manually)
+        required: true
+        type: string
+      release_type:
+        description: The type of release to build ("dev", "nightly", or "prerelease"). All developer-triggered jobs should use "dev"!
+        # required: false
+        type: string
+        default: "dev"
+      pull_type:
+        description: Specify where you want to pull packages from ("nightly" or "prereleases") which pull from rocm.nightlies.amd.com or rocm.prereleases.amd.com
+        type: string
+        default: "nightly"
   workflow_dispatch:
     inputs:
   #     artifact_group:
@@ -32,10 +50,34 @@ on:
   #       description: ROCm version to append to the package (8.0.0, 8.0.1rc1, ...).
   #       type: string
   #       default: "0.0.1"
-      release_type:
-        description: The type of release to build ("dev", "nightly", or "prerelease"). All developer-triggered jobs should use "dev"!
+      rocm_version:
+        # description: ROCm version to append to the package (8.0.0, 8.0.1rc1, ...).
+        description: ROCm version used to build runfile installer (7.12.0~20260218 for nightly, 7.11.0~rc2 for 7.11 prerelease RC2 or 7.12.0 if you're triggering the job manually).
+        required: true
         type: string
+      release_type:
+        description: The type of release to build. All developer-triggered jobs should use "dev"!
+        type: choice
+        options:
+          - dev
+          - nightly
+          - prerelease
         default: "dev"
+      pull_tag:
+        description: Set build date in the format (YYYYMMDD) to specify nightly build to build runfile installer off of. Only needed if release_type is nightly.
+        required: false
+        type: string
+      pull_run_id:
+        description: Workflow run id of deb and rpm packages used to build runfile installer off of. Only needed if release_type is nightly.
+        required: false
+        type: string
+      pull_type:
+        description: Specify where you want to pull packages from, which pull from rocm.nightlies.amd.com or rocm.prereleases.amd.com
+        type: choice
+        options:
+          - nightly
+          - prerelease
+        default: "nightly"
 
 permissions:
   id-token: write
@@ -58,57 +100,66 @@ jobs:
         working-directory: build_tools/packaging/runfile-installer
     env:
       BUILD_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:d6ae5712a9c7e8b88281d021e907b312cd8a26295b95690baef3e8dde4805858
-      ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id || github.run_id }}
-      PACKAGE_SUFFIX: ${{ inputs.package_suffix != '' && inputs.package_suffix || '' }}
+      # ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id || github.run_id }}
+      BUILD_RUN_ID: ${{ github.run_id }}
       OUTPUT_DIR: ${{ github.workspace }}/build
       # ARTIFACTS_DIR: ${{ github.workspace }}/build/artifacts
       # PACKAGE_DIST_DIR: ${{ github.workspace }}/build/packages
       RUNFILE_BUILD_DIR: ${{ github.workspace }}/build
-      RELEASE_TYPE: ${{ inputs.release_type || 'dev' }}
+      RELEASE_TYPE: ${{ inputs.release_type }}
+      PULL_TAG: ${{ inputs.pull_tag }}
+      PULL_RUN_ID: ${{ inputs.pull_run_id }}
+      PULL_TYPE: ${{ inputs.pull_type }}
+
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      # - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
-      #   with:
-      #     python-version: '3.12'
-      # - name: Install Python requirements
-      #   run: |
-      #     pip install pyelftools boto3 jinja2
 
-      # - name: Install System requirements
-      #   run: |
-      #     # Install the needed tools for creating rpm / deb packages
-      #     # Also install tools for creating repo files
-      #     sudo apt update
-      #     sudo apt install -y llvm
-      #     sudo apt install -y rpm debhelper-compat build-essential
-      #     sudo apt install -y dpkg-dev createrepo-c
+      - name: Set ROCM_VERSION
+        run: |
+          ROCM_VERSION=$(echo "${{ inputs.rocm_version }}" | cut -d'~' -f1)
+          echo "Set value of ROCM_VERSION = '$ROCM_VERSION'"
+          echo "ROCM_VERSION=$ROCM_VERSION" >> $GITHUB_ENV
+        
+      - name: Set PULL_TAG
+        run: |
+          if [[ -z $PULL_TAG ]]; then
+            PULL_TAG=$(echo "${{ inputs.rocm_version }}" | cut -d'~' -f2)
+            echo "Set value of PULL_TAG = '$PULL_TAG'"
+            echo "PULL_TAG=$PULL_TAG" >> $GITHUB_ENV
+          fi
+        
+      - name: Set mscomp
+        run: |
+          if [[ $RELEASE_TYPE == "dev" ]]; then
+            MSCOMP=dev
+          else
+            MSCOMP=normal
+          fi
 
-      # - name: Fetch Artifacts
-      #   run: |
-      #     echo "Fetching artifacts for build ${{ inputs.artifact_run_id }}"
-      #     python ./build_tools/fetch_artifacts.py \
-      #       --run-id=${{ env.ARTIFACT_RUN_ID }} \
-      #       --run-github-repo="ROCm/TheRock" \
-      #       --artifact-group=${{ inputs.artifact_group }} \
-      #       --output-dir=${{ env.ARTIFACTS_DIR }}
+          echo "Set value of MSCOMP = '$MSCOMP'"
+          echo "MSCOMP=$MSCOMP" >> $GITHUB_ENV
 
-      # - name: Build Packages
-      #   id: build-packages
-      #   run: |
-      #     echo "Building ${{ inputs.native_package_type }} packages for ${{ inputs.artifact_group }} ${{ inputs.artifact_run_id }}"
-      #     python ./build_tools/packaging/linux/build_package.py \
-      #       --dest-dir ${{ env.PACKAGE_DIST_DIR }} \
-      #       --rocm-version  ${{ inputs.rocm_version }} \
-      #       --target  ${{ inputs.artifact_group }} \
-      #       --artifacts-dir ${{ env.ARTIFACTS_DIR }} \
-      #       --pkg-type ${{ inputs.native_package_type }} \
-      #       --version-suffix ${{ env.ARTIFACT_RUN_ID }}
+      # - name: Run setup-installer.sh
+      #   run: bash setup-installer.sh rocm rocm-archs=gfx110x pull=prereleases pullbuild=7.11 pullrocmver=7.11
 
-      - name: Run setup-installer.sh
-        run: bash setup-installer.sh rocm rocm-archs=gfx110x pull=prereleases pullbuild=7.11 pullrocmver=7.11
+      - name: Run build-runfile-installer.sh (nightly)
+        if: ${{ inputs.pull_type == 'nightly' }}
+        # env:
+        #   PULL_TYPE: nightly
+        run: |
+          bash build-runfile-installer.sh rocm rocm-archs=gfx110x pull=$PULL_TYPE pulltag=$PULL_TAG pullrunid=$PULL_RUN_ID buildrunid=$BUILD_RUN_ID pullrocmver=$ROCM_VERSION pullpkg=base:amdrocm-amdsmi noamdgpu nogui mscomp=$MSCOMP
+
+          # bash build-runfile-installer.sh rocm rocm-archs=gfx110x pull=nightly pulltag=20260212 pullrunid=21933875966 buildrunid=1234 pullrocmver=7.12.0 pullpkg=base:amdrocm-amdsmi noamdgpu nogui mscomp=dev
+
+      - name: Run build-runfile-installer.sh (prerelease)
+        if: ${{ inputs.pull_type == 'prerelease' }}
+        # env:
+        #   PULL_TYPE: prerelease
+        run: |
+          bash build-runfile-installer.sh rocm rocm-archs=gfx110x pull=$PULL_TYPE pullrocmver=$ROCM_VERSION pulltag=$PULL_TAG buildrunid=$BUILD_RUN_ID pullpkg=base:amdrocm-amdsmi noamdgpu nogui mscomp=$MSCOMP
       
-      - name: Run build-installer.sh
-        run: bash build-installer.sh noamdgpu
+      # - name: Run build-installer.sh
+      #   run: bash build-installer.sh noamdgpu
 
       - name: Show .run file
         run: find . -name "*.run" -type f
