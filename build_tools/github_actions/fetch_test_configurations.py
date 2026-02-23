@@ -252,6 +252,7 @@ test_matrix = {
         "setup_script": f"python {_get_script_path('setup_rocprofiler_sdk.py', True)}",
         "test_script": f"python {_get_script_path('test_rocprofiler_sdk.py')} -vv -s --log-cli-level=info",
         "platform": ["linux"],
+        "container_options": "--cap-add=SYS_PTRACE",
         "total_shards": 1,
     },
     # hipDNN tests
