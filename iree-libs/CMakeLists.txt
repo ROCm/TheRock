@@ -1,8 +1,51 @@
+##############################################################################
+# IREE Compiler - builds libIREECompiler.so
+##############################################################################
+if(THEROCK_ENABLE_IREE_COMPILER)
+  therock_cmake_subproject_declare(iree-compiler
+    NO_MERGE_COMPILE_COMMANDS
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/iree-compiler"
+    EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/iree"
+    CMAKE_ARGS
+      # Build the compiler
+      -DIREE_BUILD_COMPILER=ON
+      -DIREE_TARGET_BACKEND_DEFAULTS=OFF
+      -DIREE_TARGET_BACKEND_ROCM=ON
+      -DIREE_TARGET_BACKEND_LLVM_CPU=ON
+      # Only enable input dialects Fusilli generates
+      -DIREE_INPUT_TORCH=ON
+      -DIREE_INPUT_STABLEHLO=OFF
+      # Use HIP headers from TheRock's build
+      -DIREE_USE_SYSTEM_DEPS=ON
+      # In this targeted build, several submodules aren't needed
+      -DIREE_ERROR_ON_MISSING_SUBMODULES=OFF
+      # Disable tests, samples, and bindings
+      -DIREE_BUILD_TESTS=OFF
+      -DIREE_BUILD_SAMPLES=OFF
+      -DIREE_BUILD_BINDINGS_TFLITE=OFF
+      -DIREE_BUILD_BINDINGS_TFLITE_JAVA=OFF
+      # Disable runtime, it's built into fusilli, we only need the compiler
+      -DIREE_HAL_DRIVER_DEFAULTS=OFF
+    BUILD_DEPS
+      hip-clr  # Provides HIP headers for IREE_USE_SYSTEM_DEPS
+  )
+  therock_cmake_subproject_activate(iree-compiler)
+
+  therock_provide_artifact(iree-compiler
+    TARGET_NEUTRAL
+    DESCRIPTOR artifact-iree-compiler.toml
+    COMPONENTS
+      lib
+      dbg
+    SUBPROJECT_DEPS
+      iree-compiler
+  )
+endif()
+
 if(THEROCK_ENABLE_FUSILLI_PLUGIN)
   ##############################################################################
   # fusilli library
   ##############################################################################
-
   therock_cmake_subproject_declare(fusilli
     USE_DIST_AMDGPU_TARGETS
     BACKGROUND_BUILD
@@ -58,6 +101,7 @@ if(THEROCK_ENABLE_FUSILLI_PLUGIN)
     RUNTIME_DEPS
       hip-clr
       hipDNN
+      iree-compiler  # Provides libIREECompiler.so for CAPI compilation
       rocminfo  # Provides rocm_agent_enumerator
   )
   therock_cmake_subproject_glob_c_sources(fusilli-plugin
