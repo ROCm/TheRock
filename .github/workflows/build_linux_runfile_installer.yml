@@ -147,6 +147,8 @@ jobs:
         # env:
         #   PULL_TYPE: nightly
         run: |
+          echo "Run command: bash build-runfile-installer.sh rocm rocm-archs=gfx110x pull=$PULL_TYPE pulltag=$PULL_TAG pullrunid=$PULL_RUN_ID buildrunid=$BUILD_RUN_ID pullrocmver=$ROCM_VERSION pullpkg=base:amdrocm-amdsmi noamdgpu nogui mscomp=$MSCOMP"
+
           bash build-runfile-installer.sh rocm rocm-archs=gfx110x pull=$PULL_TYPE pulltag=$PULL_TAG pullrunid=$PULL_RUN_ID buildrunid=$BUILD_RUN_ID pullrocmver=$ROCM_VERSION pullpkg=base:amdrocm-amdsmi noamdgpu nogui mscomp=$MSCOMP
 
           # bash build-runfile-installer.sh rocm rocm-archs=gfx110x pull=nightly pulltag=20260212 pullrunid=21933875966 buildrunid=1234 pullrocmver=7.12.0 pullpkg=base:amdrocm-amdsmi noamdgpu nogui mscomp=dev
@@ -156,6 +158,8 @@ jobs:
         # env:
         #   PULL_TYPE: prerelease
         run: |
+          echo "Run command: bash build-runfile-installer.sh rocm rocm-archs=gfx110x pull=$PULL_TYPE pullrocmver=$ROCM_VERSION pulltag=$PULL_TAG buildrunid=$BUILD_RUN_ID pullpkg=base:amdrocm-amdsmi noamdgpu nogui mscomp=$MSCOMP"
+          
           bash build-runfile-installer.sh rocm rocm-archs=gfx110x pull=$PULL_TYPE pullrocmver=$ROCM_VERSION pulltag=$PULL_TAG buildrunid=$BUILD_RUN_ID pullpkg=base:amdrocm-amdsmi noamdgpu nogui mscomp=$MSCOMP
       
       # - name: Run build-installer.sh
