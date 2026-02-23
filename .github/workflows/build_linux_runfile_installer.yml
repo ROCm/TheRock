@@ -40,7 +40,7 @@ on:
       release_type:
         description: The type of release to build. All developer-triggered jobs should use "dev"!
         type: choice
-        options:required
+        options:
           - dev
           - nightly
           - prerelease
