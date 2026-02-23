@@ -33,13 +33,11 @@ on:
         description: ROCm version used to build runfile installer (7.12.0~20260218 for nightly, 7.11.0~rc2 for 7.11 prerelease RC2 or 7.12.0 if you're triggering the job manually).
         required: true
         type: string
-      
       pull_pkg:
         description: Set base package name with optional type prefix. Can set it to base:amdrocm-amdsmi to quickly test your code. Otherwise, leave empty. To see what values are valid, run command "bash build-runfile-installer.sh help"
         required: false
         type: string
         default: "amdrocm-core-sdk"
-
       release_type:
         description: The type of release to build. All developer-triggered jobs should use "dev"!
         type: choice
@@ -49,7 +47,7 @@ on:
           - prerelease
         default: "dev"
       pull_tag:
-        description: Set build date in the format (YYYYMMDD) to specify nightly build to build runfile installer off of. Only needed if release_type is nightly.
+        description: Set build date in the format (YYYYMMDD) to specify nightly build to build runfile installer off of if pull_type = nightly. Set to rc[BUILD_NUM] if pull_type = prerelease.
         required: false
         type: string
       pull_run_id:
@@ -123,21 +121,21 @@ jobs:
           echo "Set value of MSCOMP = '$MSCOMP'"
           echo "MSCOMP=$MSCOMP" >> $GITHUB_ENV
       
-      - name: Run build-runfile-installer.sh (pull_type=nightly)
-        if: ${{ inputs.pull_type == 'nightly' }}
+      - name: Run build-runfile-installer.sh
+        # if: ${{ inputs.pull_type == 'nightly' }}
         run: |
-          echo "Run command: bash build-runfile-installer.sh rocm amdgpu rocm-archs=gfx110x pull=$PULL_TYPE pulltag=$PULL_TAG pullrunid=$PULL_RUN_ID buildrunid=$BUILD_RUNID pullrocmver=$ROCM_VERSION pullpkg=$PULL_PKG noamdgpu nogui mscomp=$MSCOMP"
+          echo "Run command: bash build-runfile-installer.sh rocm amdgpu rocm-archs=gfx110x pull=$PULL_TYPE pulltag=$PULL_TAG pullrunid=$PULL_RUN_ID pullrocmver=$ROCM_VERSION pullpkg=$PULL_PKG buildrunid=$BUILD_RUNID noamdgpu nogui mscomp=$MSCOMP"
 
-          bash build-runfile-installer.sh rocm amdgpu rocm-archs=gfx110x pull=$PULL_TYPE pulltag=$PULL_TAG pullrunid=$PULL_RUN_ID buildrunid=$BUILD_RUNID pullrocmver=$ROCM_VERSION pullpkg=$PULL_PKG noamdgpu nogui mscomp=$MSCOMP
+          bash build-runfile-installer.sh rocm amdgpu rocm-archs=gfx110x pull=$PULL_TYPE pulltag=$PULL_TAG pullrunid=$PULL_RUN_ID pullrocmver=$ROCM_VERSION pullpkg=$PULL_PKG buildrunid=$BUILD_RUNID noamdgpu nogui mscomp=$MSCOMP
 
           # bash build-runfile-installer.sh rocm rocm-archs=gfx110x pull=nightly pulltag=20260212 pullrunid=21933875966 buildrunid=1234 pullrocmver=7.12.0 pullpkg=base:amdrocm-amdsmi noamdgpu nogui mscomp=dev
 
-      - name: Run build-runfile-installer.sh (pull_type=prerelease)
-        if: ${{ inputs.pull_type == 'prerelease' }}
-        run: |
-          echo "Run command: bash build-runfile-installer.sh rocm amdgpu rocm-archs=gfx110x pull=$PULL_TYPE pullrocmver=$ROCM_VERSION pulltag=$PULL_TAG buildrunid=$BUILD_RUNID pullpkg=$PULL_PKG noamdgpu nogui mscomp=$MSCOMP"
+      # - name: Run build-runfile-installer.sh (pull_type=prerelease)
+      #   if: ${{ inputs.pull_type == 'prerelease' }}
+      #   run: |
+      #     echo "Run command: "
 
-          bash build-runfile-installer.sh rocm amdgpu rocm-archs=gfx110x pull=$PULL_TYPE pullrocmver=$ROCM_VERSION pulltag=$PULL_TAG buildrunid=$BUILD_RUNID pullpkg=$PULL_PKG noamdgpu nogui mscomp=$MSCOMP
+      #     bash build-runfile-installer.sh rocm amdgpu rocm-archs=gfx110x pull=$PULL_TYPE pulltag=$PULL_TAG pullrunid=$PULL_RUN_ID pullrocmver=$ROCM_VERSION pullpkg=$PULL_PKG buildrunid=$BUILD_RUNID noamdgpu nogui mscomp=$MSCOMP
 
       - name: Show .run file
         run: find . -name "*.run" -type f -exec ls -lctrh {} \;
