@@ -217,47 +217,47 @@ jobs:
           ./build_tools/fetch_sources.py --jobs 10
           wait
 
-      - name: Build Projects
-        run: |
-          ./build_tools/linux_portable_build.py \
-            --image=${{ env.BUILD_IMAGE }} \
-            --output-dir=${{ env.OUTPUT_DIR }} \
-            -- \
-            "-DTHEROCK_AMDGPU_FAMILIES=${{ matrix.target_bundle.amdgpu_family }}"
-          cd ${{ env.OUTPUT_DIR }}/build/dist/rocm
-          echo "Building ${{ env.DIST_ARCHIVE }}"
-          tar cfz "${{ env.DIST_ARCHIVE }}" .
+      # - name: Build Projects
+      #   run: |
+      #     ./build_tools/linux_portable_build.py \
+      #       --image=${{ env.BUILD_IMAGE }} \
+      #       --output-dir=${{ env.OUTPUT_DIR }} \
+      #       -- \
+      #       "-DTHEROCK_AMDGPU_FAMILIES=${{ matrix.target_bundle.amdgpu_family }}"
+      #     cd ${{ env.OUTPUT_DIR }}/build/dist/rocm
+      #     echo "Building ${{ env.DIST_ARCHIVE }}"
+      #     tar cfz "${{ env.DIST_ARCHIVE }}" .
 
-      - name: Build Python Packages
-        run: |
-          ./build_tools/linux_portable_build.py \
-            --image=${{ env.BUILD_IMAGE }} \
-            --output-dir=${{ env.OUTPUT_DIR }}/packages \
-            --build-python-only \
-            --artifact-dir=${{ env.OUTPUT_DIR }}/build/artifacts \
-            -- \
-            "--version=${{ needs.setup_metadata.outputs.version }}"
+      # - name: Build Python Packages
+      #   run: |
+      #     ./build_tools/linux_portable_build.py \
+      #       --image=${{ env.BUILD_IMAGE }} \
+      #       --output-dir=${{ env.OUTPUT_DIR }}/packages \
+      #       --build-python-only \
+      #       --artifact-dir=${{ env.OUTPUT_DIR }}/build/artifacts \
+      #       -- \
+      #       "--version=${{ needs.setup_metadata.outputs.version }}"
 
       - name: Grant ownership over output directory
         if: ${{ !cancelled() }}
         run: |
           sudo chown -R $(whoami) ${{ env.OUTPUT_DIR }}
 
-      - name: Build Report
-        if: ${{ !cancelled() }}
-        run: |
-          echo "Full SDK du:"
-          echo "------------"
-          du -h -d 1 ${{ env.OUTPUT_DIR }}/build/dist/rocm
+      # - name: Build Report
+      #   if: ${{ !cancelled() }}
+      #   run: |
+      #     echo "Full SDK du:"
+      #     echo "------------"
+      #     du -h -d 1 ${{ env.OUTPUT_DIR }}/build/dist/rocm
 
-      # Analyze ninja build log to generate per-component timing report
-      - name: Analyze Build Times
-        if: ${{ !cancelled() }}
-        env:
-          THEROCK_BUILD_PROF_LOG_DIR: ${{ env.OUTPUT_DIR }}/build/logs/therock-build-prof
-        run: |
-          python3 build_tools/resource_info.py --finalize
-          python3 build_tools/analyze_build_times.py --build-dir ${{ env.OUTPUT_DIR }}/build
+      # # Analyze ninja build log to generate per-component timing report
+      # - name: Analyze Build Times
+      #   if: ${{ !cancelled() }}
+      #   env:
+      #     THEROCK_BUILD_PROF_LOG_DIR: ${{ env.OUTPUT_DIR }}/build/logs/therock-build-prof
+      #   run: |
+      #     python3 build_tools/resource_info.py --finalize
+      #     python3 build_tools/analyze_build_times.py --build-dir ${{ env.OUTPUT_DIR }}/build
 
       - name: Configure AWS Credentials
         if: ${{ github.repository_owner == 'ROCm' && !cancelled() }}
@@ -266,44 +266,44 @@ jobs:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ env.RELEASE_TYPE }}
 
-      - name: Post Build Upload
-        if: ${{ github.repository_owner == 'ROCm' && !cancelled() }}
-        run: |
-          python3 build_tools/github_actions/post_build_upload.py \
-            --run-id ${{ github.run_id }} \
-            --artifact-group "${{ matrix.target_bundle.amdgpu_family }}" \
-            --build-dir ${{ env.OUTPUT_DIR }}/build \
-            --upload \
-            --job-status ${{ job.status }}
+      # - name: Post Build Upload
+      #   if: ${{ github.repository_owner == 'ROCm' && !cancelled() }}
+      #   run: |
+      #     python3 build_tools/github_actions/post_build_upload.py \
+      #       --run-id ${{ github.run_id }} \
+      #       --artifact-group "${{ matrix.target_bundle.amdgpu_family }}" \
+      #       --build-dir ${{ env.OUTPUT_DIR }}/build \
+      #       --upload \
+      #       --job-status ${{ job.status }}
 
-      - name: Upload Releases to staging S3
-        if: ${{ github.repository_owner == 'ROCm' }}
-        run: |
-          aws s3 cp ${{ env.OUTPUT_DIR }}/packages/dist/ s3://${{ env.S3_BUCKET_PY }}/${{ env.S3_STAGING_SUBDIR }}/${{ matrix.target_bundle.amdgpu_family }}/ \
-          --recursive --no-follow-symlinks \
-          --exclude "*" \
-          --include "*.whl" \
-          --include "*.tar.gz"
+      # - name: Upload Releases to staging S3
+      #   if: ${{ github.repository_owner == 'ROCm' }}
+      #   run: |
+      #     aws s3 cp ${{ env.OUTPUT_DIR }}/packages/dist/ s3://${{ env.S3_BUCKET_PY }}/${{ env.S3_STAGING_SUBDIR }}/${{ matrix.target_bundle.amdgpu_family }}/ \
+      #     --recursive --no-follow-symlinks \
+      #     --exclude "*" \
+      #     --include "*.whl" \
+      #     --include "*.tar.gz"
 
-      - name: (Re-)Generate Python package release index for staging
-        if: ${{ github.repository_owner == 'ROCm' }}
-        env:
-          # Environment variable to be set for `manage.py`
-          CUSTOM_PREFIX: "${{ env.S3_STAGING_SUBDIR }}/${{ matrix.target_bundle.amdgpu_family }}"
-        run: |
-          pip install boto3 packaging
-          python ./build_tools/third_party/s3_management/manage.py ${{ env.CUSTOM_PREFIX }}
+      # - name: (Re-)Generate Python package release index for staging
+      #   if: ${{ github.repository_owner == 'ROCm' }}
+      #   env:
+      #     # Environment variable to be set for `manage.py`
+      #     CUSTOM_PREFIX: "${{ env.S3_STAGING_SUBDIR }}/${{ matrix.target_bundle.amdgpu_family }}"
+      #   run: |
+      #     pip install boto3 packaging
+      #     python ./build_tools/third_party/s3_management/manage.py ${{ env.CUSTOM_PREFIX }}
 
-      ## TODO: Restrict uploading to the non-staging S3 directory until ROCm sanity checks and all validation tests have successfully passed.
-      - name: Upload Releases to S3
-        if: ${{ github.repository_owner == 'ROCm' }}
-        run: |
-          aws s3 cp ${{ env.DIST_ARCHIVE }} s3://${{ env.S3_BUCKET_TAR }}/${{ env.S3_SUBDIR_TAR }}
-          aws s3 cp ${{ env.OUTPUT_DIR }}/packages/dist/ s3://${{ env.S3_BUCKET_PY }}/${{ env.S3_SUBDIR }}/${{ matrix.target_bundle.amdgpu_family }}/ \
-          --recursive --no-follow-symlinks \
-          --exclude "*" \
-          --include "*.whl" \
-          --include "*.tar.gz"
+      # ## TODO: Restrict uploading to the non-staging S3 directory until ROCm sanity checks and all validation tests have successfully passed.
+      # - name: Upload Releases to S3
+      #   if: ${{ github.repository_owner == 'ROCm' }}
+      #   run: |
+      #     aws s3 cp ${{ env.DIST_ARCHIVE }} s3://${{ env.S3_BUCKET_TAR }}/${{ env.S3_SUBDIR_TAR }}
+      #     aws s3 cp ${{ env.OUTPUT_DIR }}/packages/dist/ s3://${{ env.S3_BUCKET_PY }}/${{ env.S3_SUBDIR }}/${{ matrix.target_bundle.amdgpu_family }}/ \
+      #     --recursive --no-follow-symlinks \
+      #     --exclude "*" \
+      #     --include "*.whl" \
+      #     --include "*.tar.gz"
 
       - name: (Re-)Generate release index pages
         if: ${{ github.repository_owner == 'ROCm' }}
@@ -318,48 +318,49 @@ jobs:
             --directory ${{ env.S3_SUBDIR_TAR }} \
             --upload
 
-      - name: Trigger building PyTorch wheels
-        if: ${{ github.repository_owner == 'ROCm' && matrix.target_bundle.expect_pytorch_failure == false }}
-        uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc # v1.2.4
-        with:
-          workflow: release_portable_linux_pytorch_wheels.yml
-          inputs: |
-            { "amdgpu_family": "${{ matrix.target_bundle.amdgpu_family }}",
-              "release_type": "${{ env.RELEASE_TYPE }}",
-              "s3_subdir": "${{ env.S3_SUBDIR }}",
-              "s3_staging_subdir": "${{ env.S3_STAGING_SUBDIR }}",
-              "cloudfront_url": "${{ needs.setup_metadata.outputs.cloudfront_url }}",
-              "cloudfront_staging_url": "${{ needs.setup_metadata.outputs.cloudfront_staging_url }}",
-              "rocm_version": "${{ needs.setup_metadata.outputs.version }}",
-              "ref": "${{ inputs.ref || '' }}"
-            }
+      # - name: Trigger building PyTorch wheels
+      #   if: ${{ github.repository_owner == 'ROCm' && matrix.target_bundle.expect_pytorch_failure == false }}
+      #   uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc # v1.2.4
+      #   with:
+      #     workflow: release_portable_linux_pytorch_wheels.yml
+      #     inputs: |
+      #       { "amdgpu_family": "${{ matrix.target_bundle.amdgpu_family }}",
+      #         "release_type": "${{ env.RELEASE_TYPE }}",
+      #         "s3_subdir": "${{ env.S3_SUBDIR }}",
+      #         "s3_staging_subdir": "${{ env.S3_STAGING_SUBDIR }}",
+      #         "cloudfront_url": "${{ needs.setup_metadata.outputs.cloudfront_url }}",
+      #         "cloudfront_staging_url": "${{ needs.setup_metadata.outputs.cloudfront_staging_url }}",
+      #         "rocm_version": "${{ needs.setup_metadata.outputs.version }}",
+      #         "ref": "${{ inputs.ref || '' }}"
+            # }
 
-      - name: URL-encode .tar URL
-        # TODO: Enable JAX wheels for prereleases
-        if: ${{ env.RELEASE_TYPE != 'prerelease' }}
-        id: url-encode-tar
-        run: python -c "from urllib.parse import quote; print('tar_url=${{ needs.setup_metadata.outputs.cloudfront_base_url }}/tarball/' + quote('${{ env.FILE_NAME }}'))" >> ${GITHUB_OUTPUT}
+      # - name: URL-encode .tar URL
+      #   # TODO: Enable JAX wheels for prereleases
+      #   if: ${{ env.RELEASE_TYPE != 'prerelease' }}
+      #   id: url-encode-tar
+      #   run: python -c "from urllib.parse import quote; print('tar_url=${{ needs.setup_metadata.outputs.cloudfront_base_url }}/tarball/' + quote('${{ env.FILE_NAME }}'))" >> ${GITHUB_OUTPUT}
 
-      - name: Trigger build JAX wheels
-        # TODO: Enable JAX wheels for prereleases
-        if: ${{ env.RELEASE_TYPE != 'prerelease' && github.repository_owner == 'ROCm' }}
-        uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc # v1.2.4
-        with:
-          workflow: build_linux_jax_wheels.yml
-          inputs: |
-            { "amdgpu_family": "${{ matrix.target_bundle.amdgpu_family }}",
-              "python_version": "3.12",
-              "release_type": "${{ env.RELEASE_TYPE }}",
-              "s3_subdir": "${{ env.S3_SUBDIR }}",
-              "s3_staging_subdir": "${{ env.S3_STAGING_SUBDIR }}",
-              "cloudfront_url": "${{ needs.setup_metadata.outputs.cloudfront_url }}",
-              "cloudfront_staging_url": "${{ needs.setup_metadata.outputs.cloudfront_staging_url }}",
-              "rocm_version": "${{ needs.setup_metadata.outputs.version }}",
-              "tar_url": "${{ steps.url-encode-tar.outputs.tar_url }}",
-              "ref": "${{ inputs.ref || '' }}"
-            }
+      # - name: Trigger build JAX wheels
+      #   # TODO: Enable JAX wheels for prereleases
+      #   if: ${{ env.RELEASE_TYPE != 'prerelease' && github.repository_owner == 'ROCm' }}
+      #   uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc # v1.2.4
+      #   with:
+      #     workflow: build_linux_jax_wheels.yml
+      #     inputs: |
+      #       { "amdgpu_family": "${{ matrix.target_bundle.amdgpu_family }}",
+      #         "python_version": "3.12",
+      #         "release_type": "${{ env.RELEASE_TYPE }}",
+      #         "s3_subdir": "${{ env.S3_SUBDIR }}",
+      #         "s3_staging_subdir": "${{ env.S3_STAGING_SUBDIR }}",
+      #         "cloudfront_url": "${{ needs.setup_metadata.outputs.cloudfront_url }}",
+      #         "cloudfront_staging_url": "${{ needs.setup_metadata.outputs.cloudfront_staging_url }}",
+      #         "rocm_version": "${{ needs.setup_metadata.outputs.version }}",
+      #         "tar_url": "${{ steps.url-encode-tar.outputs.tar_url }}",
+      #         "ref": "${{ inputs.ref || '' }}"
+            # }
 
       - name: Trigger build native rpm package
+        id: trigger_rpm
         if: ${{ github.repository_owner == 'ROCm' }}
         uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc # v1.2.4
         with:
@@ -373,6 +374,7 @@ jobs:
             }
 
       - name: Trigger build native debian package
+        id: trigger_deb
         if: ${{ github.repository_owner == 'ROCm' }}
         uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc # v1.2.4
         with:
@@ -385,9 +387,59 @@ jobs:
               "native_package_type": "deb"
             }
 
+      - name: Record successful native package trigger
+        if: ${{ steps.trigger_rpm.outcome == 'success' && steps.trigger_deb.outcome == 'success' }}
+        run: |
+          echo "${{ matrix.target_bundle.amdgpu_family }}" > successful_gfx_arch.txt
+          echo "Recorded successful native package triggers for: ${{ matrix.target_bundle.amdgpu_family }}"
+
+      - name: Upload successful gfx arch artifact
+        if: ${{ steps.trigger_rpm.outcome == 'success' && steps.trigger_deb.outcome == 'success' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: successful-gfx-arch-${{ matrix.target_bundle.amdgpu_family }}
+          path: successful_gfx_arch.txt
+          retention-days: 1
+
       - name: Save cache
         uses: actions/cache/save@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         if: ${{ !cancelled() }}
         with:
           path: ${{ env.OUTPUT_DIR }}/caches
           key: portable-linux-package-matrix-v1-${{ matrix.target_bundle.amdgpu_family }}-${{ github.sha }}
+
+  # Aggregate all GPU families that successfully triggered both RPM and DEB native package builds
+  aggregate_successful_gfx_archs:
+    name: Aggregate Successful GFX Architectures
+    runs-on: ubuntu-24.04
+    needs: [portable_linux_packages]
+    if: ${{ always() && needs.portable_linux_packages.result != 'cancelled' }}
+    outputs:
+      successful_gfx_arch: ${{ steps.aggregate.outputs.successful_gfx_arch }}
+    steps:
+      - name: Download all successful gfx arch artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: successful-gfx-arch-*
+          path: gfx_archs/
+        continue-on-error: true
+
+      - name: Aggregate successful GFX architectures
+        id: aggregate
+        run: |
+          SUCCESSFUL_GFX_ARCH=""
+          if [ -d "gfx_archs/" ]; then
+            for f in gfx_archs/*/successful_gfx_arch.txt; do
+              if [ -f "$f" ]; then
+                ARCH=$(cat "$f")
+                if [ -z "$SUCCESSFUL_GFX_ARCH" ]; then
+                  SUCCESSFUL_GFX_ARCH="$ARCH"
+                else
+                  SUCCESSFUL_GFX_ARCH="${SUCCESSFUL_GFX_ARCH},${ARCH}"
+                fi
+              fi
+            done
+          fi
+          echo "successful_gfx_arch=${SUCCESSFUL_GFX_ARCH}" >> $GITHUB_OUTPUT
+          echo "SUCCESSFUL_GFX_ARCH=${SUCCESSFUL_GFX_ARCH}" >> $GITHUB_ENV
+          echo "Aggregated successful GFX architectures: ${SUCCESSFUL_GFX_ARCH}"
