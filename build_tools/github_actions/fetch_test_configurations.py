@@ -181,7 +181,7 @@ test_matrix = {
         "timeout_minutes": 120,
         "test_script": f"python {_get_script_path('test_hipsparselt.py')}",
         # TODO(#2616): Re-enable tests after test slowdown issues are resolved
-        "platform": [],
+        "platform": ["linux"],
         "total_shards": 4,
     },
     # RAND tests
