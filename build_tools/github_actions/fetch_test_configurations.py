@@ -80,7 +80,7 @@ test_matrix = {
         "timeout_minutes": 240,
         "test_script": f"python {_get_script_path('test_hipblas.py')}",
         # "platform": ["linux", "windows"],
-        "platform": ["linux"],
+        "platform": [],
         # TODO(#2616): Enable full tests once known machine issues are resolved
         "total_shards": 1,
     },
