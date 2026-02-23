@@ -35,7 +35,6 @@ AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 # and need to be mapped to the actual directory names in THEROCK_BIN_DIR
 COMPONENT_DIR_MAPPING = {
     "miopen": "MIOpen",
-    "rocblas": "rocblas",
     "rocrand": "rocRAND",
     "hiprand": "hipRAND",
     "rocthrust": "rocthrust",
