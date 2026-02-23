@@ -47,7 +47,7 @@ test_matrix = {
         "timeout_minutes": 240,
         "test_script": f"python {_get_script_path('test_rocblas.py')}",
         # "platform": ["linux", "windows"],
-        "platform": [],
+        "platform": ["linux"],
         "total_shards": 1,
     },
     "rocroller": {
@@ -80,7 +80,7 @@ test_matrix = {
         "timeout_minutes": 240,
         "test_script": f"python {_get_script_path('test_hipblas.py')}",
         # "platform": ["linux", "windows"],
-        "platform": [],
+        "platform": ["linux"],
         # TODO(#2616): Enable full tests once known machine issues are resolved
         "total_shards": 1,
     },
@@ -90,7 +90,7 @@ test_matrix = {
         "timeout_minutes": 240,
         "test_script": f"python {_get_script_path('test_hipblaslt.py')}",
         # "platform": ["linux", "windows"],
-        "platform": [],
+        "platform": ["linux"],
         "total_shards": 6,
     },
     # SOLVER tests
@@ -226,7 +226,7 @@ test_matrix = {
         "timeout_minutes": 240,
         "test_script": f"pytest {_get_script_path('test_rccl.py')} -v -s --log-cli-level=info",
         # "platform": ["linux"],
-        "platform": [],
+        "platform": ["linux"],
         "total_shards": 1,
         # Architectures that we have multi GPU setup for testing
         "multi_gpu": {"linux": ["gfx94X-dcgpu"]},
@@ -308,7 +308,7 @@ test_matrix = {
         "timeout_minutes": 240,
         "test_script": f"python {_get_script_path('test_rocrtst.py')}",
         # "platform": ["linux"],
-        "platform": [],
+        "platform": ["linux"],
         "total_shards": 1,
     },
 }
