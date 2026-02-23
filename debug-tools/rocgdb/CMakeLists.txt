@@ -423,67 +423,11 @@ add_custom_target(build_all_rocgdb ALL DEPENDS ${ALL_ROCGDB_TARGETS})
 ################################
 
 # Since we potentially have multiple versions of python, and each rocgdb
-# executable links against a specific version of libpython, we have to
-# generate a convenience script that automatically detects the version and
-# fires up the most appropriate rocgdb executable. This makes the python
-# selection process transparent to the end user.
-set(ROCGDB_SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/rocgdb")
-
-# We use [=[ to capture the exact script content.
-set(ROCGDB_SCRIPT_CONTENT [=[#!/usr/bin/env bash
-
-## Copyright (c) 2026 Advanced Micro Devices, Inc.
-##
-## Permission is hereby granted, free of charge, to any person obtaining a copy
-## of this software and associated documentation files (the "Software"), to
-## deal in the Software without restriction, including without limitation the
-## rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
-## sell copies of the Software, and to permit persons to whom the Software is
-## furnished to do so, subject to the following conditions:
-##
-## The above copyright notice and this permission notice shall be included in
-## all copies or substantial portions of the Software.
-##
-## THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-## IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-## FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-## AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-## LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-## FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
-## IN THE SOFTWARE.
-
-# Find the active python version
-python_version=$(python3 --version 2>&1 | sed -n 's/^Python \([0-9]\+\.[0-9]\+\).*$/\1/p' )
-GDB_BIN_DIR="$(dirname "$(realpath -e "${BASH_SOURCE[0]}")")"
-
-# Set the ncurses TERMINFO lookup directory if it isn't set already.
-# This is used to locate our own terminfo database in a relative path, since
-# ncurses doesn't support relative path lookups as a configure option.
-#
-# ROCgdb TUI mode requires this information.
-if [ -z "$TERMINFO" ]; then
-    export TERMINFO="$GDB_BIN_DIR/../lib/rocm_sysdeps/share/terminfo"
-fi
-
-# Create a rocgdb command with the active python version.
-gdb_command="rocgdb-py$python_version"
-if ! [ -f "$GDB_BIN_DIR/$gdb_command" ]; then
-    # If we were built without python support, then try the -pynone binary.
-    gdb_command="rocgdb-pynone"
-fi
-if [ -f "$GDB_BIN_DIR/$gdb_command" ]; then
-    # If the command works (returns 0), exec the rocgdb-py<version> binary.
-    "$GDB_BIN_DIR/$gdb_command" --version > /dev/null 2>&1
-    if [ $? == 0 ]; then
-        exec "$GDB_BIN_DIR/$gdb_command" "$@"
-    fi
-fi
-
-echo "rocgdb execution failed. Possible unsupported python version ${python_version} in the system."
-]=])
-
-# Generate the script file.
-file(GENERATE OUTPUT "${ROCGDB_SCRIPT}" CONTENT "${ROCGDB_SCRIPT_CONTENT}")
+# executable links against a specific version of libpython, we have a
+# convenience script that automatically detects the version and fires up
+# the most appropriate rocgdb executable. This makes the python selection
+# process transparent to the end user.
+set(ROCGDB_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/rocgdb")
 
 # Install the generated script.
 install(PROGRAMS ${ROCGDB_SCRIPT}

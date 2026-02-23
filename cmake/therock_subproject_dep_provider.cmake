@@ -154,14 +154,21 @@ endif()
 # Needed for both ASAN and HOST_ASAN modes.
 block(PROPAGATE THEROCK_SANITIZER_LAUNCHER)
   set(THEROCK_SANITIZER_LAUNCHER)
-  if(LINUX AND (THEROCK_SANITIZER STREQUAL "ASAN" OR THEROCK_SANITIZER STREQUAL "HOST_ASAN"))
+  if(LINUX AND THEROCK_SANITIZER)
+    if(THEROCK_SANITIZER STREQUAL "ASAN" OR THEROCK_SANITIZER STREQUAL "HOST_ASAN")
+      set(_suffix "asan")
+    elseif(THEROCK_SANITIZER STREQUAL "TSAN" OR THEROCK_SANITIZER STREQUAL "HOST_TSAN")
+      set(_suffix "tsan")
+    else()
+      message(FATAL_ERROR "Unknown Sanitizer: ${THEROCK_SANITIZER}")
+    endif()
     if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64" OR CMAKE_SYSTEM_PROCESSOR STREQUAL "amd64")
       set(_arch_suffix "x86_64")
     else()
       message(FATAL_ERROR "Unknown processor ${CMAKE_SYSTEM_PROCESSOR}")
     endif()
     execute_process(
-      COMMAND ${CMAKE_CXX_COMPILER} "--print-file-name=libclang_rt.asan-${_arch_suffix}.so"
+      COMMAND ${CMAKE_CXX_COMPILER} "--print-file-name=libclang_rt.${_suffix}-${_arch_suffix}.so"
       OUTPUT_VARIABLE _rt_path
       OUTPUT_STRIP_TRAILING_WHITESPACE
       COMMAND_ERROR_IS_FATAL ANY
