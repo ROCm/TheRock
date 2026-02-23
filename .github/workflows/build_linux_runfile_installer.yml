@@ -4,18 +4,6 @@ on:
   push: 
   workflow_call:
     inputs:
-  #     artifact_group:
-  #       description: gfx arch group for the s3 server
-  #       type: string
-  #       default: gfx110x
-  #     artifact_run_id:
-  #       description: workflow run id to download the artifacts from.
-  #       required: true
-  #       type: string
-
-      # isdev:
-      #   description: Set to True if this is a developer triggered job. Ensures any binaries are uploaded to rocm.devreleases.amd.com
-      #   default: true
       pull_tag:
         description: Set build date in the format (YYYYMMDD) to specify nightly build to build runfile installer off of. Only needed if release_type is nightly.
         required: false
@@ -40,16 +28,6 @@ on:
         default: "nightly"
   workflow_dispatch:
     inputs:
-  #     artifact_group:
-  #       type: string
-  #       default: gfx94X-dcgpu
-  #     artifact_run_id:
-  #       description: workflow run id to download the artifacts from
-  #       type: string
-  #     rocm_version:
-  #       description: ROCm version to append to the package (8.0.0, 8.0.1rc1, ...).
-  #       type: string
-  #       default: "0.0.1"
       rocm_version:
         # description: ROCm version to append to the package (8.0.0, 8.0.1rc1, ...).
         description: ROCm version used to build runfile installer (7.12.0~20260218 for nightly, 7.11.0~rc2 for 7.11 prerelease RC2 or 7.12.0 if you're triggering the job manually).
