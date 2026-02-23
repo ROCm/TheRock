@@ -75,8 +75,6 @@ def do_build(args: argparse.Namespace, *, rest_args: list[str]):
         if var in os.environ:
             cl.extend(["-e", f"{var}={os.environ[var]}"])
 
-    cl.extend(["-e", f"ENABLE_CCACHE={'true' if args.enable_ccache else 'false'}"])
-
     if args.build_python_only:
         cl.extend(
             [
@@ -183,12 +181,6 @@ def main(argv: list[str]):
         default=Path(REPO_DIR / "output-linux-portable" / "build" / "artifacts"),
         type=Path,
         help="Source artifacts/ dir from a build",
-    )
-    p.add_argument(
-        "--enable-ccache",
-        action="store_true",
-        default=False,
-        help="Enable ccache for faster builds",
     )
 
     args = p.parse_args(argv)
