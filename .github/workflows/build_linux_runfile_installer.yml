@@ -15,7 +15,7 @@ on:
         default: "dev"
       pull_type:
         description: Specify where you want to pull packages from ("nightly" or "prereleases") which pull from rocm.nightlies.amd.com or rocm.prereleases.amd.com
-        requireid: true
+        required: true
         type: string
         default: "nightly"
       pull_tag:
@@ -40,7 +40,7 @@ on:
       release_type:
         description: The type of release to build. All developer-triggered jobs should use "dev"!
         type: choice
-        options:
+        options:required
           - dev
           - nightly
           - prerelease
