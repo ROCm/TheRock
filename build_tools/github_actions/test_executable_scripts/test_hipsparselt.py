@@ -25,9 +25,7 @@ test_type = os.getenv("TEST_TYPE", "full")
 
 test_filter = []
 if test_type == "smoke":
-    test_filter.append(
-        "--gtest_filter=*smoke*"
-    )
+    test_filter.append("--gtest_filter=*smoke*")
 elif test_type == "full":
     test_filter.append("--gtest_filter=*quick*")
 
