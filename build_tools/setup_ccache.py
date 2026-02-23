@@ -30,7 +30,8 @@ THIS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = THIS_DIR.parent
 POSIX_CCACHE_COMPILER_CHECK_PATH = THIS_DIR / "posix_ccache_compiler_check.py"
 POSIX_COMPILER_CHECK_SCRIPT = POSIX_CCACHE_COMPILER_CHECK_PATH.read_text()
-CACHE_SRV = "http://bazelremote-svc.bazelremote-ns.svc.cluster.local:8080|layout=bazel|connect-timeout=50"
+CACHE_SRV_DEV = "http://bazelremote-svc.bazelremote-ns.svc.cluster.local:8080|layout=bazel|connect-timeout=50"
+CACHE_SRV_REL = "http://bazelremote-svc.bazelremote-ns.svc.cluster.local:8080|layout=bazel|connect-timeout=50"
 
 # See https://ccache.dev/manual/4.6.1.html#_configuration
 CONFIG_PRESETS_MAP = {
@@ -38,13 +39,13 @@ CONFIG_PRESETS_MAP = {
     # Moving build_*_packages.yml CCACHE Env variables to here (linux for now)
     # For initial implementation, pre and post submit will be the same
     "github-oss-presubmit": {
-        "secondary_storage": CACHE_SRV,
+        "secondary_storage": CACHE_SRV_DEV,
         "log_file": REPO_ROOT / "build/logs/ccache.log",
         "stats_log": REPO_ROOT / "build/logs/ccache_stats.log",
         "max_size": "5G",
     },
     "github-oss-postsubmit": {
-        "secondary_storage": CACHE_SRV,
+        "secondary_storage": CACHE_SRV_REL,
         "log_file": REPO_ROOT / "build/logs/ccache.log",
         "stats_log": REPO_ROOT / "build/logs/ccache_stats.log",
         "max_size": "5G",
