@@ -29,8 +29,8 @@ if test_type == "smoke":
         "--gtest_filter=*smoke*"
     )
 elif test_type == "full":
-    # TODO(#2616): Enable correct filter once known test set is reduced to appropriate amount
-    test_filter.append("--gtest_filter=*quick*")
+    # test_filter.append("--gtest_filter=*quick*")
+    test_filter.append("--gtest_filter=*smoke*")
 
 cmd = [f"{THEROCK_BIN_DIR}/hipsparselt-test"] + test_filter
 
