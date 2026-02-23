@@ -12,12 +12,15 @@ therock_cmake_subproject_declare(therock-spdlog
   NO_MERGE_COMPILE_COMMANDS
   OUTPUT_ON_FAILURE
   EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/source"
+  COMPILER_TOOLCHAIN
+    amd-llvm
   BUILD_DEPS
     therock-fmt
   CMAKE_ARGS
     -DSPDLOG_BUILD_EXAMPLE=OFF
     -DSPDLOG_INSTALL=ON
     -DSPDLOG_FMT_EXTERNAL=ON
+    -DSPDLOG_BUILD_PIC=ON
 )
 therock_cmake_subproject_provide_package(therock-spdlog spdlog lib/cmake)
 therock_cmake_subproject_activate(therock-spdlog)

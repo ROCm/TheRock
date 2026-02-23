@@ -35,7 +35,7 @@ def capture(args: list[str | Path], cwd: Path = FILESET_TOOL.parent) -> str:
     ).decode()
 
 
-def exec(args: list[str | Path], cwd: Path = FILESET_TOOL.parent):
+def run_command(args: list[str | Path], cwd: Path = FILESET_TOOL.parent):
     args = [str(arg) for arg in args]
     print(f"++ Exec [{cwd}]$ {shlex.join(args)}")
     return subprocess.check_call(args, cwd=str(cwd), stdin=subprocess.DEVNULL)
@@ -107,7 +107,7 @@ class FilesetToolTest(unittest.TestCase):
             Path(input_dir / "example" / "stage" / "include" / "foobar.h"), "foobar"
         )
 
-        exec(
+        run_command(
             [
                 sys.executable,
                 FILESET_TOOL,
@@ -148,7 +148,7 @@ class FilesetToolTest(unittest.TestCase):
             )
 
         # Archive it.
-        exec(
+        run_command(
             [
                 sys.executable,
                 FILESET_TOOL,
@@ -167,7 +167,7 @@ class FilesetToolTest(unittest.TestCase):
         self.assertEqual(expected_digest, actual_digest)
 
         # Flatten the raw directory and verify.
-        exec(
+        run_command(
             [
                 sys.executable,
                 FILESET_TOOL,
@@ -242,7 +242,7 @@ class FilesetToolTest(unittest.TestCase):
         self.assertEqual(os.stat(orig_file).st_ino, os.stat(link_file).st_ino)
 
         # Create artifact
-        exec(
+        run_command(
             [
                 sys.executable,
                 FILESET_TOOL,
@@ -259,7 +259,7 @@ class FilesetToolTest(unittest.TestCase):
         )
 
         # Archive it
-        exec(
+        run_command(
             [
                 sys.executable,
                 FILESET_TOOL,
@@ -271,7 +271,7 @@ class FilesetToolTest(unittest.TestCase):
         )
 
         # Flatten from archive
-        exec(
+        run_command(
             [
                 sys.executable,
                 FILESET_TOOL,
@@ -289,6 +289,93 @@ class FilesetToolTest(unittest.TestCase):
         self.assertTrue(flat_link.exists())
         self.assertEqual(os.stat(flat_orig).st_ino, os.stat(flat_link).st_ino)
         self.assertEqual(flat_orig.read_text(), "hardlink test content")
+
+    def testArtifactFlattenSplit(self):
+        """Test artifact-flatten-split discovers and flattens split artifact dirs."""
+        artifacts_dir = self.temp_dir / "artifacts"
+        output_dir = self.temp_dir / "flat_split"
+
+        # Simulate split artifact directories as produced by the artifact splitter.
+        # Each has an artifact_manifest.txt and files under manifest-listed prefixes.
+        for suffix in ["generic", "gfx1201"]:
+            art_dir = artifacts_dir / f"miopen_lib_{suffix}"
+            manifest_prefix = f"miopen_lib_{suffix}/stage"
+            write_text(art_dir / "artifact_manifest.txt", manifest_prefix + "\n")
+            write_text(
+                art_dir / manifest_prefix / "lib" / f"libMIOpen_{suffix}.so",
+                f"lib_{suffix}",
+            )
+
+        # A second prefix with one variant.
+        dev_dir = artifacts_dir / "miopen_dev_generic"
+        write_text(dev_dir / "artifact_manifest.txt", "miopen_dev_generic/stage\n")
+        write_text(
+            dev_dir / "miopen_dev_generic" / "stage" / "include" / "miopen.h",
+            "header",
+        )
+
+        # A directory that should NOT be discovered (no manifest).
+        stray = artifacts_dir / "miopen_lib_stray"
+        stray.mkdir(parents=True)
+        write_text(stray / "something.txt", "no manifest here")
+
+        # Run artifact-flatten-split with verbose to capture discovered dirs.
+        output = capture(
+            [
+                sys.executable,
+                FILESET_TOOL,
+                "artifact-flatten-split",
+                "miopen_lib",
+                "miopen_dev",
+                "--artifacts-dir",
+                artifacts_dir,
+                "--verbose",
+                "-o",
+                output_dir,
+            ]
+        )
+
+        # Verify verbose output lists discovered dirs.
+        self.assertIn("miopen_lib_generic", output)
+        self.assertIn("miopen_lib_gfx1201", output)
+        self.assertIn("miopen_dev_generic", output)
+        self.assertNotIn("miopen_lib_stray", output)
+
+        # Verify flattened files from all three artifact dirs.
+        self.assertEqual(
+            (output_dir / "lib" / "libMIOpen_generic.so").read_text(),
+            "lib_generic",
+        )
+        self.assertEqual(
+            (output_dir / "lib" / "libMIOpen_gfx1201.so").read_text(),
+            "lib_gfx1201",
+        )
+        self.assertEqual(
+            (output_dir / "include" / "miopen.h").read_text(),
+            "header",
+        )
+
+    def testArtifactFlattenSplitNoMatch(self):
+        """Test artifact-flatten-split warns when no dirs match."""
+        artifacts_dir = self.temp_dir / "empty_artifacts"
+        artifacts_dir.mkdir(parents=True)
+        output_dir = self.temp_dir / "flat_empty"
+
+        # Should not fail, just warn.
+        output = capture(
+            [
+                sys.executable,
+                FILESET_TOOL,
+                "artifact-flatten-split",
+                "nonexistent_prefix",
+                "--artifacts-dir",
+                artifacts_dir,
+                "-o",
+                output_dir,
+            ]
+        )
+        self.assertIn("Warning", output)
+        self.assertIn("nonexistent_prefix", output)
 
 
 if __name__ == "__main__":

@@ -11,7 +11,7 @@ if(THEROCK_ENABLE_AMD_DBGAPI)
 
   therock_cmake_subproject_declare(amd-dbgapi
     USE_DIST_AMDGPU_TARGETS
-    EXTERNAL_SOURCE_DIR "amd-dbgapi"
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocdbgapi"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/amd-dbgapi"
     COMPILER_TOOLCHAIN
       amd-llvm
@@ -75,7 +75,7 @@ if(THEROCK_ENABLE_ROCR_DEBUG_AGENT)
   # for each gfx level that is requested by the build.
   therock_cmake_subproject_declare(rocr-debug-agent
     USE_DIST_AMDGPU_TARGETS
-    EXTERNAL_SOURCE_DIR "rocr-debug-agent"
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-debug-agent"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocr-debug-agent"
     CMAKE_ARGS
       "-DENABLE_TESTS=OFF"
@@ -133,7 +133,8 @@ if(THEROCK_ENABLE_ROCR_DEBUG_AGENT_TESTS)
 
   if(THEROCK_BUILD_TESTING)
     therock_cmake_subproject_declare(rocr-debug-agent-tests
-      EXTERNAL_SOURCE_DIR "rocr-debug-agent/test"
+      USE_DIST_AMDGPU_TARGETS
+      EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-debug-agent/test"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocr-debug-agent-tests"
       CMAKE_ARGS
         "-DHIP_PLATFORM=amd"
@@ -157,6 +158,7 @@ if(THEROCK_ENABLE_ROCR_DEBUG_AGENT_TESTS)
 
     # The artifacts provided by rocr-debug-agent-tests.
     therock_provide_artifact(rocr-debug-agent-tests
+      TARGET_NEUTRAL
       DESCRIPTOR artifact-rocr-debug-agent-tests.toml
       COMPONENTS
         doc

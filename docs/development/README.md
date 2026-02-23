@@ -9,7 +9,6 @@
 ### Build system
 
 - [Artifacts](artifacts.md)
-- [Build Containers](build_containers.md)
 - [Build System](build_system.md)
 - [Dependencies](dependencies.md)
 - [Development Guide](development_guide.md)
@@ -20,6 +19,7 @@
 
 - [Adding tests](adding_tests.md)
 - [Test Debugging](test_debugging.md)
+- [Test Filtering](test_filtering.md)
 - [Test Environment Reproduction](test_environment_reproduction.md)
 - [Test Runner Info](test_runner_info.md)
 - [TheRock Test Harness](therock_test_harness.md)

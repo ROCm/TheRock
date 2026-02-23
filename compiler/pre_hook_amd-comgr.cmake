@@ -6,9 +6,18 @@ endif()
 
 set(COMGR_DISABLE_SPIRV OFF)
 
-# The comgr tests have a circular dependency on the HIP runtime.
-# https://github.com/ROCm/TheRock/issues/67
-set(BUILD_TESTING OFF CACHE BOOL "DISABLE BUILDING TESTS IN SUBPROJECTS" FORCE)
+# Enable ASAN for Comgr when THEROCK_SANITIZER is set to ASAN or HOST_ASAN
+if(THEROCK_SANITIZER STREQUAL "ASAN" OR THEROCK_SANITIZER STREQUAL "HOST_ASAN")
+  set(ADDRESS_SANITIZER ON)
+  message(STATUS "Enabling ASAN for Comgr (THEROCK_SANITIZER=${THEROCK_SANITIZER})")
+endif()
+
+# Enable comgr tests when LLVM tests are enabled.
+if(THEROCK_ENABLE_LLVM_TESTS)
+  set(BUILD_TESTING ON CACHE BOOL "Enable comgr tests" FORCE)
+else()
+  set(BUILD_TESTING OFF CACHE BOOL "DISABLE BUILDING TESTS IN SUBPROJECTS" FORCE)
+endif()
 
 set(CMAKE_INSTALL_RPATH "$ORIGIN;$ORIGIN/llvm/lib;$ORIGIN/rocm_sysdeps/lib")
 
