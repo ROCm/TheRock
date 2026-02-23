@@ -85,11 +85,8 @@ jobs:
         working-directory: build_tools/packaging/runfile-installer
     env:
       BUILD_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:d6ae5712a9c7e8b88281d021e907b312cd8a26295b95690baef3e8dde4805858
-      # ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id || github.run_id }}
       BUILD_RUNID: ${{ github.run_id }}
       OUTPUT_DIR: ${{ github.workspace }}/build
-      # ARTIFACTS_DIR: ${{ github.workspace }}/build/artifacts
-      # PACKAGE_DIST_DIR: ${{ github.workspace }}/build/packages
       RUNFILE_BUILD_DIR: ${{ github.workspace }}/build
       RELEASE_TYPE: ${{ inputs.release_type }}
       PULL_TAG: ${{ inputs.pull_tag }}
