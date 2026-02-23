@@ -29,8 +29,7 @@ if test_type == "smoke":
         "--gtest_filter=*smoke*"
     )
 elif test_type == "full":
-    # test_filter.append("--gtest_filter=*quick*")
-    test_filter.append("--gtest_filter=*smoke*")
+    test_filter.append("--gtest_filter=*quick*")
 
 cmd = [f"{THEROCK_BIN_DIR}/hipsparselt-test"] + test_filter
 
