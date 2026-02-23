@@ -203,6 +203,13 @@ PackageEntry(
     template_directory="rocm-sdk-devel",
     required=False,
 )
+PackageEntry(
+    "profiler",
+    "rocm-sdk-profiler",
+    pure_py_package_name="rocm_sdk_profiler",
+    template_directory="rocm-sdk-profiler",
+    required=False,
+)
 
 # TODO(#703,#1057): Use patterns for version suffixes and platform differences too?
 
