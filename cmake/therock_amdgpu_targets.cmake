@@ -42,6 +42,14 @@ function(therock_add_amdgpu_target gfx_target product_name)
 endfunction()
 
 # gfx90X family
+therock_add_amdgpu_target(gfx900 "Vega 10 / MI25" FAMILY dgpu-all gfx90X-all gfx90X-dgpu
+  EXCLUDE_TARGET_PROJECTS
+    hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
+    hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
+    composable_kernel # https://github.com/ROCm/TheRock/issues/1245
+    rocWMMA # https://github.com/ROCm/TheRock/issues/1944
+    libhipcxx # https://github.com/ROCm/TheRock/issues/2504
+)
 therock_add_amdgpu_target(gfx906 "Radeon VII / MI50 CDNA" FAMILY dgpu-all gfx90X-all gfx90X-dgpu gfx90X-dcgpu
   EXCLUDE_TARGET_PROJECTS
     hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
