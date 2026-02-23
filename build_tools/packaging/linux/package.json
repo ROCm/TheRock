@@ -326,17 +326,17 @@
       "libc6",
       "amdrocm-runtime",
       "amdrocm-sysdeps",
-      "amdrocm-fft"
+      "amdrocm-fft-devel"
     ],
     "RPMRequires": [
       "amdrocm-runtime",
       "amdrocm-sysdeps",
-      "amdrocm-fft"
+      "amdrocm-fft-devel"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "ROCm FFT library",
-    "Description_Long": "rocfft and hipfft library files",
-    "Section": "devel",
+    "Description_Short": "ROCm FFT test files",
+    "Description_Long": "rocfft and hipfft test files",
+    "Section": "test",
     "Priority": "optional",
     "Group": "unknown",
     "License": "MIT",
@@ -534,16 +534,16 @@
     "BuildArch": "x86_64",
     "DEBDepends": [
       "amdrocm-runtime",
-      "amdrocm-blas"
+      "amdrocm-solver-devel"
     ],
     "RPMRequires": [
       "amdrocm-runtime",
-      "amdrocm-blas"
+      "amdrocm-solver-devel"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "AMD library for BLAS in ROCm",
-    "Description_Long": "BLAS libraries which includes hipBlAS, rocBLAS, hipBLASLt and hipSPARSELt",
-    "Section": "devel",
+    "Description_Short": "AMD test files for solver in ROCm",
+    "Description_Long": "rocsolver and hipsolver test files ",
+    "Section": "test",
     "Priority": "optional",
     "Group": "unknown",
     "License": "MIT",
@@ -577,16 +577,16 @@
     "BuildArch": "x86_64",
     "DEBDepends": [
       "amdrocm-runtime",
-      "amdrocm-blas"
+      "amdrocm-sparse-devel"
     ],
     "RPMRequires": [
       "amdrocm-runtime",
-      "amdrocm-blas"
+      "amdrocm-sparse-devel"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "AMD library for BLAS in ROCm",
-    "Description_Long": "BLAS libraries which includes hipBlAS, rocBLAS, hipBLASLt and hipSPARSELt",
-    "Section": "devel",
+    "Description_Short": "AMD test files for sparse  in ROCm",
+    "Description_Long": "rocSPARSE and hipSPARSE test files",
+    "Section": "test",
     "Priority": "optional",
     "Group": "unknown",
     "License": "MIT",
@@ -633,9 +633,9 @@
       "amdrocm-blas"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "AMD library for BLAS in ROCm",
-    "Description_Long": "BLAS libraries which includes hipBlAS, rocBLAS, hipBLASLt and hipSPARSELt",
-    "Section": "devel",
+    "Description_Short": "AMD test files for BLAS in ROCm",
+    "Description_Long": "BLAS test files which includes hipBlAS, rocBLAS, and hipBLASLt",
+    "Section": "test",
     "Priority": "optional",
     "Group": "unknown",
     "License": "MIT",
@@ -983,9 +983,9 @@
       "amdrocm-rand"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
-    "Description_Short": "ROCm random number generation library",
-    "Description_Long": "Contains rocrand and hiprand developement header files",
-    "Section": "devel",
+    "Description_Short": "ROCm random number generation library test files",
+    "Description_Long": "Contains rocrand and hiprand developement header files and test files",
+    "Section": "test",
     "Priority": "optional",
     "Group": "unknown",
     "License": "MIT",
@@ -1613,9 +1613,9 @@
       "amdrocm-rccl"
     ],
     "Maintainer": "RCCL Maintainer <rccl-maintainer@amd.com>",
-    "Description_Short": "ROCm Communication Collectives Library. Optimized primitives for collective multi-GPU communication",
-    "Description_Long": "ROCm Communication Collectives Library. Optimized primitives for collective multi-GPU communication",
-    "Section": "devel",
+    "Description_Short": "ROCm Communication Collectives test files. Optimized primitives for collective multi-GPU communication",
+    "Description_Long": "ROCm Communication Collectives test files. Optimized primitives for collective multi-GPU communication",
+    "Section": "test",
     "Priority": "optional",
     "Group": "unknown",
     "License": "MIT",
@@ -1787,9 +1787,9 @@
       "amdrocm-dnn"
     ],
     "Maintainer": "MIOpen Maintainer <miopen-lib.support@amd.com>",
-    "Description_Short": "AMD DNN Library",
-    "Description_Long": "Provides development files for miopen library",
-    "Section": "devel",
+    "Description_Short": "AMD DNN test files",
+    "Description_Long": "Provides test files for miopen library",
+    "Section": "test",
     "Priority": "optional",
     "Group": "unknown",
     "License": "MIT",
