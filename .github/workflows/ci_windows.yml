@@ -188,5 +188,8 @@ jobs:
       pytorch_git_ref: "release/2.10"
       rocm_package_find_links_url: ${{ needs.build_windows_python_packages.outputs.package_find_links_url }}
       rocm_version: ${{ inputs.rocm_package_version }}
+    permissions:
+      contents: read
+      id-token: write
 
   # TODO(#3291): Add test_pytorch_wheels job
