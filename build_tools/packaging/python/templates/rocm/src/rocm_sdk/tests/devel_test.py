@@ -157,6 +157,4 @@ class ROCmDevelTest(unittest.TestCase):
                     extra_setup + "import ctypes; import sys; ctypes.CDLL(sys.argv[1])"
                 )
 
-                subprocess.check_call(
-                    [sys.executable, "-c", command, str(so_path)]
-                )
+                subprocess.check_call([sys.executable, "-c", command, str(so_path)])
