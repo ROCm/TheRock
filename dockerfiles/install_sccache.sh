@@ -23,9 +23,13 @@ curl --silent --fail --show-error --location \
     "${SCCACHE_URL}" \
     --output sccache.tar.gz
 
+INSTALL_DIR="/opt/sccache/bin"
+mkdir -p "${INSTALL_DIR}"
+
 tar xf sccache.tar.gz
-cp "sccache-v${SCCACHE_VERSION}-${SCCACHE_ARCH}/sccache" /usr/local/bin/
-chmod +x /usr/local/bin/sccache
+cp "sccache-v${SCCACHE_VERSION}-${SCCACHE_ARCH}/sccache" "${INSTALL_DIR}/"
+chmod +x "${INSTALL_DIR}/sccache"
 
 echo "sccache installed successfully:"
-sccache --version
+"${INSTALL_DIR}/sccache" --version
+echo "Installed to ${INSTALL_DIR} (not on PATH by default)"
