@@ -521,7 +521,8 @@
         ]
       }
     ],
-    "Gfxarch": "True"
+    "Gfxarch": "True",
+    "Disable_DEB_STRIP": "True"
   },
   {
     "Package": "amdrocm-solver-test",
