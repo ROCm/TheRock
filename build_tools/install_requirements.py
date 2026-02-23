@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import argparse
 import logging
 import os
@@ -52,7 +54,9 @@ def main(argv):
     )
     args = parser.parse_args(argv)
     if not args.requirements_files:
-        logging.info("No requirements files found. Exiting install_requirements.py...")
+        logging.info(
+            "No requirements file(s) found. Exiting install_requirements.py..."
+        )
         sys.exit(1)
 
     setup_pip()

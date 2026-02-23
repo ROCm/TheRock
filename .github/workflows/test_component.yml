@@ -120,7 +120,7 @@ jobs:
       - name: Setup Requirements
         run: |
           python ./build_tools/install_requirements.py \
-            --requirements_files=${{ fromJSON(inputs.component).requirements_files }}
+            --requirements-files=${{ fromJSON(inputs.component).requirements_files }}
 
       - name: Test
         timeout-minutes: ${{ fromJSON(inputs.component).timeout_minutes }}
