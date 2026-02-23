@@ -57,7 +57,7 @@ def main(argv):
         logging.info(
             "No requirements file(s) found. Exiting install_requirements.py..."
         )
-        sys.exit(1)
+        sys.exit(0)
 
     setup_pip()
     install_requirements(str(args.requirements_files))
