@@ -128,8 +128,10 @@ jobs:
       
       - name: Set BUILD_TAG for dev branch
         if: ${{ inputs.release_type == 'dev' }}
-        run: BUILD_TAG="dev-$(git rev-parse --short HEAD)"
-      
+        run: |
+          BUILD_TAG="dev-$(git rev-parse --short HEAD)"
+          echo "BUILD_TAG=$BUILD_TAG" >> $GITHUB_ENV
+
       - name: Run build-runfile-installer.sh
         # if: ${{ inputs.pull_type == 'nightly' }}
         run: |
