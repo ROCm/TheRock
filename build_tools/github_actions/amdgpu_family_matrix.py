@@ -144,7 +144,7 @@ amdgpu_family_info_matrix_nightly = {
     "gfx90x": {
         "linux": {
             "test-runs-on": "linux-gfx90X-gpu-rocm",
-            "family": "gfx90X-dcgpu",
+            "family": "gfx90X-all",
             "fetch-gfx-targets": ["gfx90a"],
             "sanity_check_only_for_family": True,
             "build_variants": ["release"],
