@@ -126,18 +126,18 @@ jobs:
       - name: Run build-runfile-installer.sh (pull_type=nightly)
         if: ${{ inputs.pull_type == 'nightly' }}
         run: |
-          echo "Run command: bash build-runfile-installer.sh rocm rocm-archs=gfx110x pull=$PULL_TYPE pulltag=$PULL_TAG pullrunid=$PULL_RUN_ID buildrunid=$BUILD_RUNID pullrocmver=$ROCM_VERSION pullpkg=$PULL_PKG noamdgpu nogui mscomp=$MSCOMP"
+          echo "Run command: bash build-runfile-installer.sh rocm amdgpu rocm-archs=gfx110x pull=$PULL_TYPE pulltag=$PULL_TAG pullrunid=$PULL_RUN_ID buildrunid=$BUILD_RUNID pullrocmver=$ROCM_VERSION pullpkg=$PULL_PKG noamdgpu nogui mscomp=$MSCOMP"
 
-          bash build-runfile-installer.sh rocm rocm-archs=gfx110x pull=$PULL_TYPE pulltag=$PULL_TAG pullrunid=$PULL_RUN_ID buildrunid=$BUILD_RUNID pullrocmver=$ROCM_VERSION pullpkg=$PULL_PKG noamdgpu nogui mscomp=$MSCOMP
+          bash build-runfile-installer.sh rocm amdgpu rocm-archs=gfx110x pull=$PULL_TYPE pulltag=$PULL_TAG pullrunid=$PULL_RUN_ID buildrunid=$BUILD_RUNID pullrocmver=$ROCM_VERSION pullpkg=$PULL_PKG noamdgpu nogui mscomp=$MSCOMP
 
           # bash build-runfile-installer.sh rocm rocm-archs=gfx110x pull=nightly pulltag=20260212 pullrunid=21933875966 buildrunid=1234 pullrocmver=7.12.0 pullpkg=base:amdrocm-amdsmi noamdgpu nogui mscomp=dev
 
       - name: Run build-runfile-installer.sh (pull_type=prerelease)
         if: ${{ inputs.pull_type == 'prerelease' }}
         run: |
-          echo "Run command: bash build-runfile-installer.sh rocm rocm-archs=gfx110x pull=$PULL_TYPE pullrocmver=$ROCM_VERSION pulltag=$PULL_TAG buildrunid=$BUILD_RUNID pullpkg=$PULL_PKG noamdgpu nogui mscomp=$MSCOMP"
+          echo "Run command: bash build-runfile-installer.sh rocm amdgpu rocm-archs=gfx110x pull=$PULL_TYPE pullrocmver=$ROCM_VERSION pulltag=$PULL_TAG buildrunid=$BUILD_RUNID pullpkg=$PULL_PKG noamdgpu nogui mscomp=$MSCOMP"
 
-          bash build-runfile-installer.sh rocm rocm-archs=gfx110x pull=$PULL_TYPE pullrocmver=$ROCM_VERSION pulltag=$PULL_TAG buildrunid=$BUILD_RUNID pullpkg=$PULL_PKG noamdgpu nogui mscomp=$MSCOMP
+          bash build-runfile-installer.sh rocm amdgpu rocm-archs=gfx110x pull=$PULL_TYPE pullrocmver=$ROCM_VERSION pulltag=$PULL_TAG buildrunid=$BUILD_RUNID pullpkg=$PULL_PKG noamdgpu nogui mscomp=$MSCOMP
 
       - name: Show .run file
         run: find . -name "*.run" -type f -exec ls -lctrh {} \;
