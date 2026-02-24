@@ -3,6 +3,7 @@
 
 import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -95,7 +96,6 @@ class TestRunOutputRootRoot(unittest.TestCase):
 
 class TestLocalUploadBackendUploadFile(unittest.TestCase):
     def test_copies_file(self):
-        import tempfile
 
         with tempfile.TemporaryDirectory() as staging, tempfile.TemporaryDirectory() as src:
             staging_dir = Path(staging)
@@ -113,7 +113,6 @@ class TestLocalUploadBackendUploadFile(unittest.TestCase):
             self.assertEqual(target.read_text(), "content")
 
     def test_creates_parent_dirs(self):
-        import tempfile
 
         with tempfile.TemporaryDirectory() as staging, tempfile.TemporaryDirectory() as src:
             staging_dir = Path(staging)
@@ -130,7 +129,6 @@ class TestLocalUploadBackendUploadFile(unittest.TestCase):
             self.assertTrue(target.is_file())
 
     def test_dry_run_does_not_copy(self):
-        import tempfile
 
         with tempfile.TemporaryDirectory() as staging, tempfile.TemporaryDirectory() as src:
             staging_dir = Path(staging)
@@ -167,7 +165,6 @@ class TestLocalUploadBackendUploadDirectory(unittest.TestCase):
         (sub / "nested.html").write_text("<html/>")
 
     def test_upload_all_files(self):
-        import tempfile
 
         with tempfile.TemporaryDirectory() as staging, tempfile.TemporaryDirectory() as src:
             staging_dir = Path(staging)
@@ -187,7 +184,6 @@ class TestLocalUploadBackendUploadDirectory(unittest.TestCase):
             self.assertTrue((staging_dir / "run-1" / "sub" / "nested.html").is_file())
 
     def test_upload_with_include_filter(self):
-        import tempfile
 
         with tempfile.TemporaryDirectory() as staging, tempfile.TemporaryDirectory() as src:
             staging_dir = Path(staging)
@@ -208,7 +204,6 @@ class TestLocalUploadBackendUploadDirectory(unittest.TestCase):
             self.assertFalse((staging_dir / "run-1" / "sub" / "nested.html").exists())
 
     def test_preserves_subdirectory_structure(self):
-        import tempfile
 
         with tempfile.TemporaryDirectory() as staging, tempfile.TemporaryDirectory() as src:
             staging_dir = Path(staging)
@@ -226,7 +221,6 @@ class TestLocalUploadBackendUploadDirectory(unittest.TestCase):
             )
 
     def test_skips_symlinks(self):
-        import tempfile
 
         with tempfile.TemporaryDirectory() as staging, tempfile.TemporaryDirectory() as src:
             staging_dir = Path(staging)
@@ -247,7 +241,6 @@ class TestLocalUploadBackendUploadDirectory(unittest.TestCase):
             self.assertFalse((staging_dir / "run-1" / "link.tar.xz").exists())
 
     def test_nonexistent_source_raises(self):
-        import tempfile
 
         with tempfile.TemporaryDirectory() as staging:
             staging_dir = Path(staging)
@@ -258,7 +251,6 @@ class TestLocalUploadBackendUploadDirectory(unittest.TestCase):
                 backend.upload_directory(Path("/nonexistent"), dest)
 
     def test_dry_run_does_not_copy(self):
-        import tempfile
 
         with tempfile.TemporaryDirectory() as staging, tempfile.TemporaryDirectory() as src:
             staging_dir = Path(staging)
@@ -275,7 +267,6 @@ class TestLocalUploadBackendUploadDirectory(unittest.TestCase):
             self.assertFalse((staging_dir / "run-1").exists())
 
     def test_empty_directory_returns_zero(self):
-        import tempfile
 
         with tempfile.TemporaryDirectory() as staging, tempfile.TemporaryDirectory() as src:
             staging_dir = Path(staging)

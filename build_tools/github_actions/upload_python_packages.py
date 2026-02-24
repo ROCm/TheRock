@@ -39,7 +39,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from _therock_utils.run_outputs import OutputLocation, RunOutputRoot
-from _therock_utils.upload_backend import create_upload_backend
+from _therock_utils.upload_backend import UploadBackend, create_upload_backend
 from github_actions_utils import (
     gha_append_step_summary,
     gha_set_output,
@@ -99,7 +99,9 @@ def find_package_files(dist_dir: Path) -> list[Path]:
     return sorted(files)
 
 
-def upload_packages(dist_dir: Path, packages_loc: OutputLocation, backend):
+def upload_packages(
+    dist_dir: Path, packages_loc: OutputLocation, backend: UploadBackend
+):
     """Upload package files using the provided backend."""
     package_files = find_package_files(dist_dir)
     if not package_files:
