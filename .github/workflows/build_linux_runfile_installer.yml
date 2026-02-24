@@ -82,7 +82,7 @@ jobs:
       image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:d6ae5712a9c7e8b88281d021e907b312cd8a26295b95690baef3e8dde4805858
     defaults:
       run:
-        working-directory: build_tools/packaging/runfile-installer
+        working-directory: ${{ github.workspace}}/build_tools/packaging/runfile-installer
     env:
       BUILD_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:d6ae5712a9c7e8b88281d021e907b312cd8a26295b95690baef3e8dde4805858
       BUILD_RUNID: ${{ github.run_id }}
@@ -169,8 +169,9 @@ jobs:
       
       - name: Generate index.html needed to display runfile installers.
         if: ${{ github.repository_owner == 'ROCm' }}
+        working-directory: ${{ github.workspace }}/build_tools
         run: |
           python -m venv .venv
           source .venv/bin/activate
           pip install boto3
-          python ./build_tools/index_generation_s3_tar.py --bucket ${{ env.S3_BUCKET_TAR }} --upload
+          python index_generation_s3_runfile.py --bucket ${{ env.S3_BUCKET_TAR }} --upload
