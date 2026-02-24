@@ -318,7 +318,7 @@ jobs:
           resolved = []
           for p in patterns:
               for var in ["JAXLIB_VERSION", "JAX_PLUGIN_VERSION", "JAX_PJRT_VERSION", "CP_VERSION"]:
-                  p = p.replace(f"${{{var}}}", os.environ.get(var, ""))
+                  p = p.replace("${" + var + "}", os.environ.get(var, ""))
               resolved.append(p)
 
           s3 = boto3.client("s3")
