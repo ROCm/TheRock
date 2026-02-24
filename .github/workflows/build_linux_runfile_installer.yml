@@ -162,8 +162,16 @@ jobs:
             echo "ERROR: No .run file found"
             exit 1
           fi
+          RUNFILE_NAME=$(basename "$RUNFILE")
           echo "Uploading $RUNFILE to s3://${{ env.S3_BUCKET_RUNFILE }}/"
           aws s3 cp "$RUNFILE" "s3://${{ env.S3_BUCKET_RUNFILE }}/"
+          
+          # Append to GitHub Actions summary
+          echo "## ✅ Runfile Uploaded to S3" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**File:** \`${RUNFILE_NAME}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**S3 Bucket:** \`${{ env.S3_BUCKET_RUNFILE }}\`" >> $GITHUB_STEP_SUMMARY
       
       - name: Generate index.html needed to display runfile installers.
         if: ${{ github.repository_owner == 'ROCm' }}
