@@ -101,6 +101,7 @@ def generate_index_s3(s3_client, bucket_name, prefix: str, upload=False):
     else:
         page_title = "ROCm SDK runfile installers"
 
+    gha_append_step_summary("### Index file generation")
     gha_append_step_summary(
         f"Found {len(files)} .run files in bucket '{bucket_name}'."
     )
