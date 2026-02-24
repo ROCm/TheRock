@@ -232,9 +232,9 @@ def create_upload_backend(
     """Create an upload backend.
 
     Args:
-        staging_dir: If provided, returns a :class:`LocalUploadBackend`
+        staging_dir: If provided, returns a `LocalUploadBackend`
             that copies files under this directory.  Otherwise returns an
-            :class:`S3UploadBackend`.
+            `S3UploadBackend`.
         dry_run: If ``True``, the backend logs actions without writing.
     """
     if staging_dir is not None:

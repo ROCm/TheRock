@@ -110,7 +110,7 @@ class RunOutputRoot:
     """Root location for all outputs from a single CI workflow run.
 
     This is the single source of truth for computing paths to CI run outputs.
-    Each method returns an :class:`OutputLocation` that can be resolved to
+    Each method returns an `OutputLocation` that can be resolved to
     S3 URIs, HTTPS URLs, or local paths as needed.
 
     The class is immutable (frozen) to ensure path computation is deterministic.
