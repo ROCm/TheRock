@@ -122,13 +122,13 @@ jobs:
           echo "Set value of MSCOMP = '$MSCOMP'"
           echo "MSCOMP=$MSCOMP" >> $GITHUB_ENV
       
-      # - name: Set BUILD_TAG for dev branch
-      #   if: ${{ inputs.release_type == 'dev' }}
-      #   run: |
-      #     git config --global --add safe.directory "$GITHUB_WORKSPACE"
-      #     BUILD_TAG="dev-$(git rev-parse --short HEAD)"
-      #     echo "Set value of BUILD_TAG = '$BUILD_TAG'"
-      #     echo "BUILD_TAG=$BUILD_TAG" >> $GITHUB_ENV
+      - name: Set BUILD_TAG for dev branch
+        if: ${{ inputs.release_type == 'dev' }}
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          BUILD_TAG="dev-$(git rev-parse --short HEAD)"
+          echo "Set value of BUILD_TAG = '$BUILD_TAG'"
+          echo "BUILD_TAG=$BUILD_TAG" >> $GITHUB_ENV
 
       - name: Run build-runfile-installer.sh
         run: |
@@ -148,7 +148,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
         with:
           aws-region: us-east-1
-          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}
+          role-to-assume: arn:aws:iam::317668459450:role/therock-${{ inputs.release_type }}-runfile-s3-oidc
 
       - name: Upload runfile to S3
         if: ${{ github.repository_owner == 'ROCm' }}
