@@ -82,13 +82,15 @@ def generate_index_s3(s3_client, bucket_name, prefix: str, upload=False):
                     filename = key.removeprefix(f"{prefix}/")
                 else:
                     filename = key
-                files.append(filename)
+                # Store filename and last modified date
+                last_modified = obj["LastModified"]
+                files.append((filename, last_modified))
 
     if not files:
         raise FileNotFoundError(f"No .run files found in bucket {bucket_name}.")
 
-    # Sort files alphabetically
-    files.sort()
+    # Sort files by last modified date (newest first)
+    files.sort(key=lambda x: x[1], reverse=True)
 
     # Page title based on bucket name
     bucket_lower = bucket_name.lower()
@@ -106,9 +108,9 @@ def generate_index_s3(s3_client, bucket_name, prefix: str, upload=False):
         f"Found {len(files)} .run files in bucket '{bucket_name}'."
     )
 
-    # Generate bare-bones HTML with links
+    # Generate bare-bones HTML with links (sorted by modified time, newest first)
     links_html = ""
-    for filename in files:
+    for filename, last_modified in files:
         href = quote(filename, safe="/")
         links_html += f'    <a href="{href}">{filename}</a><br/>\n'
 
@@ -190,9 +192,21 @@ if __name__ == "__main__":
         default="",
         help="Directory to index. Defaults to the top level directory.",
     )
+    parser.add_argument(
+        "--no-verify-ssl",
+        action="store_true",
+        help="Disable SSL certificate verification (use for local testing only)",
+    )
     args = parser.parse_args()
 
-    s3 = boto3.client("s3", region_name=args.region)
+    # Create S3 client with optional SSL verification disable
+    if args.no_verify_ssl:
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        s3 = boto3.client("s3", region_name=args.region, verify=False)
+    else:
+        s3 = boto3.client("s3", region_name=args.region)
+    
     generate_index_s3(
         s3_client=s3, bucket_name=args.bucket, prefix=args.directory, upload=args.upload
     )
