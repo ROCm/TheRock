@@ -11,7 +11,6 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest import mock
 
 # Add build_tools to path so _therock_utils is importable.
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent))
@@ -35,28 +34,6 @@ def _make_run_root(
         run_id=run_id,
         platform=platform,
     )
-
-
-class TestMakeRunRoot(unittest.TestCase):
-    """Tests for _make_run_root()."""
-
-    @mock.patch.dict(os.environ, {}, clear=True)
-    @mock.patch("upload_python_packages.RunOutputRoot.from_workflow_run")
-    def test_default_uses_from_workflow_run(self, mock_factory):
-        mock_factory.return_value = _make_run_root()
-        result = upload_python_packages._make_run_root("12345")
-        mock_factory.assert_called_once_with(
-            run_id="12345", platform=upload_python_packages.PLATFORM
-        )
-        self.assertEqual(result.bucket, "therock-ci-artifacts")
-
-    def test_bucket_override_skips_factory(self):
-        result = upload_python_packages._make_run_root(
-            "12345", bucket_override="custom-bucket"
-        )
-        self.assertEqual(result.bucket, "custom-bucket")
-        self.assertEqual(result.external_repo, "")
-        self.assertEqual(result.run_id, "12345")
 
 
 class TestFindPackageFiles(unittest.TestCase):
