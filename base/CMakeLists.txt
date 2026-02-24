@@ -162,7 +162,7 @@ therock_cmake_subproject_declare(rocm-kpack
   BUILD_DEPS
     therock-msgpack-cxx
   RUNTIME_DEPS
-    therock-zstd
+    ${THEROCK_BUNDLED_ZSTD}
   INTERFACE_LINK_DIRS
     lib
   INTERFACE_INSTALL_RPATH_DIRS
