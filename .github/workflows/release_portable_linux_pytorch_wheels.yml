@@ -84,9 +84,7 @@ permissions:
 run-name: Release portable Linux PyTorch Wheels (${{ inputs.amdgpu_family }}, ${{ inputs.release_type }}, ${{ inputs.rocm_version }})
 
 jobs:
-  # all archs but gfx1153
   release:
-    if: ${{ inputs.amdgpu_family != 'gfx1153' }}
     name: Release | ${{ inputs.amdgpu_family }} | py ${{ matrix.python_version }} | torch ${{ matrix.pytorch_git_ref }}
     strategy:
       fail-fast: false
