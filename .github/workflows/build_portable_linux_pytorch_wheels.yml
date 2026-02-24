@@ -95,7 +95,7 @@ on:
         description: PyTorch ref to checkout. (typically "nightly", or "release/X.Y")
         required: true
         type: string
-        default: "release/2.7"
+        default: "release/2.8"
       cache_type:
         description: "Compiler cache type"
         type: choice
@@ -266,7 +266,8 @@ jobs:
             --pytorch-dir "external-builds/pytorch/pytorch" \
             --pytorch-audio-dir "external-builds/pytorch/pytorch_audio" \
             --pytorch-vision-dir "external-builds/pytorch/pytorch_vision" \
-            --triton-dir "external-builds/pytorch/triton"
+            --triton-dir "external-builds/pytorch/triton" \
+            --apex-dir "external-builds/pytorch/apex"
 
       - name: Configure AWS Credentials
         if: always()
