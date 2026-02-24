@@ -37,7 +37,7 @@ test_matrix = {
         "timeout_minutes": 240,
         "test_script": f"python {_get_script_path('test_hiptests.py')}",
         # "platform": ["linux", "windows"],
-        "platform": ["linux"],
+        "platform": [],
         "total_shards": 4,
     },
     # BLAS tests
@@ -226,7 +226,7 @@ test_matrix = {
         "timeout_minutes": 240,
         "test_script": f"pytest {_get_script_path('test_rccl.py')} -v -s --log-cli-level=info",
         # "platform": ["linux"],
-        "platform": [],
+        "platform": ["linux"],
         "total_shards": 1,
         # Architectures that we have multi GPU setup for testing
         "multi_gpu": {"linux": ["gfx94X-dcgpu"]},
@@ -308,7 +308,7 @@ test_matrix = {
         "timeout_minutes": 240,
         "test_script": f"python {_get_script_path('test_rocrtst.py')}",
         # "platform": ["linux"],
-        "platform": [],
+        "platform": ["linux"],
         "total_shards": 1,
     },
 }
