@@ -102,6 +102,26 @@ class PackageEntry:
         return self.dist_package_template
 
 
+def _core_library_present(so_pattern: str, dll_pattern: str, posix_relpath: str = "lib") -> bool:
+    """Checks whether a core library file exists in the installed core package."""
+    core_package = ALL_PACKAGES["core"]
+    core_spec = importlib.util.find_spec(core_package.get_py_package_name())
+    if core_spec is None or core_spec.origin is None:
+        return False
+
+    core_root = Path(core_spec.origin).parent
+    if os.name == "nt":
+        if not dll_pattern:
+            return False
+        search_root = core_root / "bin"
+        pattern = dll_pattern
+    else:
+        search_root = core_root / posix_relpath
+        pattern = so_pattern
+
+    return any(search_root.glob(pattern))
+
+
 def discover_current_target_family() -> str | None:
     """Attempts to query the current target family via the 'offload-arch' tool."""
 
@@ -229,6 +249,12 @@ LibraryEntry(
     "lib/host-math/lib",
 )
 LibraryEntry("amd_comgr", "core", "libamd_comgr.so*", "amd_comgr*.dll")
+# Media libraries are optional (gated by THEROCK_ENABLE_MEDIA_LIBS and mesa sysdeps).
+# Only register them if they are present in the installed core package.
+if _core_library_present("librocdecode.so*", ""):
+    LibraryEntry("rocdecode", "core", "librocdecode.so*", "")
+if _core_library_present("librocjpeg.so*", ""):
+    LibraryEntry("rocjpeg", "core", "librocjpeg.so*", "")
 LibraryEntry("hipblas", "libraries", "libhipblas.so*", "*hipblas*.dll")
 LibraryEntry("hipblaslt", "libraries", "libhipblaslt.so*", "*hipblaslt*.dll")
 LibraryEntry("hipfft", "libraries", "libhipfft.so*", "hipfft*.dll")
