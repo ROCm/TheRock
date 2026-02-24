@@ -9,13 +9,12 @@ Upload layout:
 import argparse
 from pathlib import Path
 import platform
-import shlex
-import subprocess
 import sys
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from _therock_utils.run_outputs import OutputLocation, RunOutputRoot
+from _therock_utils.upload_backend import create_upload_backend
 
 
 PLATFORM = platform.system().lower()
@@ -24,11 +23,6 @@ PLATFORM = platform.system().lower()
 def log(*args):
     print(*args)
     sys.stdout.flush()
-
-
-def run_command(cmd: list[str], cwd: Path) -> None:
-    log(f"++ Exec [{cwd}]$ {shlex.join(cmd)}")
-    subprocess.run(cmd, check=True)
 
 
 def normalize_python_version_for_filename(python_version: str) -> str:
@@ -103,6 +97,17 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         default=None,
         help="Override S3 bucket (default: auto-select from workflow run).",
     )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="Output to local directory instead of S3 (for testing).",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print what would be uploaded without actually uploading.",
+    )
     return parser.parse_args(argv)
 
 
@@ -120,10 +125,14 @@ def main(argv: list[str]) -> None:
         raise FileNotFoundError(f"Manifest not found: {manifest_path}")
 
     run_root = _make_run_root(args.run_id, bucket_override=args.bucket)
-    manifest_loc = run_root.manifest_dir(args.amdgpu_family)
-    dest_uri = f"{manifest_loc.s3_uri}/{manifest_name}"
+    manifest_dir_loc = run_root.manifest_dir(args.amdgpu_family)
+    dest = OutputLocation(
+        manifest_dir_loc.bucket,
+        f"{manifest_dir_loc.relative_path}/{manifest_name}",
+    )
 
-    run_command(["aws", "s3", "cp", str(manifest_path), dest_uri], cwd=Path.cwd())
+    backend = create_upload_backend(staging_dir=args.output_dir, dry_run=args.dry_run)
+    backend.upload_file(manifest_path, dest)
 
 
 if __name__ == "__main__":

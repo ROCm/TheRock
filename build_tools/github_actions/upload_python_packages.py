@@ -34,12 +34,12 @@ import argparse
 from pathlib import Path
 import platform
 import shlex
-import shutil
 import subprocess
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from _therock_utils.run_outputs import OutputLocation, RunOutputRoot
+from _therock_utils.upload_backend import create_upload_backend
 from github_actions_utils import (
     gha_append_step_summary,
     gha_set_output,
@@ -90,43 +90,6 @@ def generate_index(dist_dir: Path, dry_run: bool = False):
     run_command(cmd)
 
 
-# TODO: share helper with post_build_upload.py? (that accepts files or dirs)
-# TODO: switch to boto3? (just matching existing upload behavior for now)
-def run_aws_cp(source_path: Path, s3_destination: str, dry_run: bool = False):
-    """Uploads a directory to S3."""
-    if not source_path.is_dir():
-        raise ValueError(f"source_path must be a directory: {source_path}")
-
-    cmd = ["aws", "s3", "cp", str(source_path), s3_destination, "--recursive"]
-
-    if dry_run:
-        log(f"[DRY RUN] Would run: {shlex.join(cmd)}")
-        return
-
-    run_command(cmd)
-
-
-# TODO: share helper with post_build_upload.py?
-def run_local_cp(source_path: Path, dest_path: Path, dry_run: bool = False):
-    """Copies a directory to a local destination.
-
-    This creates dest_path and its parents as needed.
-    """
-    if not source_path.is_dir():
-        raise ValueError(f"source_path must be a directory: {source_path}")
-
-    if dry_run:
-        log(f"[DRY RUN] Would copy {source_path} -> {dest_path}")
-        return
-
-    log(f"[INFO] Copying {source_path} -> {dest_path}")
-    dest_path.parent.mkdir(parents=True, exist_ok=True)
-
-    if dest_path.exists():
-        shutil.rmtree(dest_path)
-    shutil.copytree(source_path, dest_path)
-
-
 def find_package_files(dist_dir: Path) -> list[Path]:
     """Finds all wheel, sdist, and index files in the dist directory."""
     files = []
@@ -136,17 +99,8 @@ def find_package_files(dist_dir: Path) -> list[Path]:
     return sorted(files)
 
 
-def upload_packages(
-    dist_dir: Path,
-    packages_loc: OutputLocation,
-    output_dir: Path | None = None,
-    dry_run: bool = False,
-):
-    """Uploads package files to S3 or local directory.
-
-    Uploads to a local directory if output_dir is set.
-    Otherwise uploads to packages_loc.s3_uri.
-    """
+def upload_packages(dist_dir: Path, packages_loc: OutputLocation, backend):
+    """Upload package files using the provided backend."""
     package_files = find_package_files(dist_dir)
     if not package_files:
         raise FileNotFoundError(f"No package files found in {dist_dir}")
@@ -155,22 +109,8 @@ def upload_packages(
     for f in package_files:
         log(f"  - {f.relative_to(dist_dir)}")
 
-    # Note: we're not using 'package_files' here, we're just copying/uploading
-    # the whole directory. We could check for unexpected/loose files first.
-
-    if output_dir:
-        local_dist_path = packages_loc.local_path(output_dir)
-        run_local_cp(
-            source_path=dist_dir,
-            dest_path=local_dist_path,
-            dry_run=dry_run,
-        )
-    else:
-        run_aws_cp(
-            source_path=dist_dir,
-            s3_destination=packages_loc.s3_uri,
-            dry_run=dry_run,
-        )
+    count = backend.upload_directory(dist_dir, packages_loc)
+    log(f"[INFO] Uploaded {count} files")
 
 
 def write_gha_upload_summary(packages_loc: OutputLocation):
@@ -212,16 +152,12 @@ def run(args: argparse.Namespace):
 
     run_root = _make_run_root(args.run_id, bucket_override=args.bucket)
     packages_loc = run_root.python_packages(args.artifact_group)
+    backend = create_upload_backend(staging_dir=args.output_dir, dry_run=args.dry_run)
 
     log("")
     log("Uploading packages")
     log("------------------")
-    upload_packages(
-        dist_dir=dist_dir,
-        packages_loc=packages_loc,
-        output_dir=args.output_dir,
-        dry_run=args.dry_run,
-    )
+    upload_packages(dist_dir=dist_dir, packages_loc=packages_loc, backend=backend)
 
     if not args.output_dir:
         index_url = f"{packages_loc.https_url}/index.html"
