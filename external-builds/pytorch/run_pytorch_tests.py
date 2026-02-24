@@ -227,7 +227,6 @@ By default the pytorch directory is determined based on this script's location
 - "all": all candidate GPUs visible at once. Useful for multi-GPU tests.""",
     )
 
-
     args = parser.parse_args(argv)
 
     if not args.pytorch_dir.exists():
