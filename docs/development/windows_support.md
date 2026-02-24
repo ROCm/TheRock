@@ -50,8 +50,8 @@ mainline, in open source, using MSVC, etc.).
 | core                | [hipInfo (hip-tests)](https://github.com/ROCm/rocm-systems/tree/develop/projects/hip-tests)                              | rocm-systems   | ✅        |                                               |
 | core                | [clr](https://github.com/ROCm/rocm-systems/tree/develop/projects/clr)                                                    | rocm-systems   | 🟡        | Needs a folder with prebuilt static libraries |
 |                     |                                                                                                                          |                |           |                                               |
-| debug-tools         | [amd-dbgapi](https://github.com/ROCm/ROCdbgapi)                                                                          | standalone     | ❌        | Unsupported                                   |
-| debug-tools         | [rocr-debug-agent](https://github.com/ROCm/rocr_debug_agent)                                                             | standalone     | ❌        | Unsupported                                   |
+| debug-tools         | [amd-dbgapi](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocdbgapi)                                       | rocm-systems   | ❌        | Unsupported                                   |
+| debug-tools         | [rocr-debug-agent](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocr-debug-agent)                          | rocm-systems   | ❌        | Unsupported                                   |
 | debug-tools         | [rocgdb](https://github.com/ROCm/rocgdb)                                                                                 | standalone     | ❌        | Unsupported                                   |
 |                     |                                                                                                                          |                |           |                                               |
 | profiler            | [aqlprofile](https://github.com/ROCm/rocm-systems/tree/develop/projects/aqlprofile)                                      | rocm-systems   | ❌        | Unsupported                                   |
@@ -85,8 +85,9 @@ mainline, in open source, using MSVC, etc.).
 | ml-libs             | [Composable Kernel](https://github.com/ROCm/rocm-libraries/tree/develop/projects/composablekernel)                       | rocm-libraries | ✅        |                                               |
 | ml-libs             | [MIOpen](https://github.com/ROCm/rocm-libraries/tree/develop/projects/miopen)                                            | rocm-libraries | ✅        |                                               |
 | ml-libs             | [hipDNN](https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipdnn)                                            | rocm-libraries | ✅        |                                               |
+| ml-libs             | [MIOpen Provider](https://github.com/ROCm/rocm-libraries/tree/develop/dnn-providers/miopen-provider)                     | rocm-libraries | ✅        |                                               |
 | ml-libs             | [MIOpen Legacy Plugin](https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipdnn/plugins/miopen_legacy_plugin) | rocm-libraries | ✅        |                                               |
-| ml-libs             | [hipBLASLt Plugin](https://github.com/ROCm/rocm-libraries/tree/develop/dnn-providers/hipblaslt-provider)                 | rocm-libraries | ✅        |                                               |
+| ml-libs             | [hipBLASLt Provider](https://github.com/ROCm/rocm-libraries/tree/develop/dnn-providers/hipblaslt-provider)               | rocm-libraries | ✅        |                                               |
 
 ## Building TheRock from source
 

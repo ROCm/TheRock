@@ -863,6 +863,17 @@
             ]
           }
         ]
+      },
+      {
+        "Artifact": "libhipcxx",
+        "Artifact_Subdir": [
+          {
+            "Name": "libhipcxx",
+            "Components": [
+              "dev"
+            ]
+          }
+        ]
       }
     ],
 
@@ -988,6 +999,7 @@
       }
     ],
 
+    "Disable_DWZ": "True",
     "Gfxarch": "False"
   },
   {
@@ -1293,8 +1305,19 @@
             ]
           }
         ]
+      },
+      {
+        "Artifact": "rocwmma",
+        "Artifact_Gfxarch": "True",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocWMMA",
+            "Components": [
+              "dev"
+            ]
+          }
+        ]
       }
-
     ],
 
     "Gfxarch": "False"
