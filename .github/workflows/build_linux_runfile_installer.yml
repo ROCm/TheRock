@@ -1,7 +1,6 @@
 name: Build Linux Runfile Installer
 
-on:
-  push: 
+on: 
   workflow_call:
     inputs:
       rocm_version:
