@@ -63,22 +63,21 @@ def upload_test_report(report_dir: Path, bucket_uri: str, log_destination: str):
         report_dir,
         dest_uri,
     )
-    # Use a single AWS CLI call to copy only *.html files recursively
-    cmd = [
-        "aws",
-        "s3",
-        "cp",
-        str(report_dir),
-        dest_uri,
-        "--recursive",
-        "--exclude",
-        "*",
-        "--include",
-        "*.html",
-        "--content-type",
-        "text/html",
-    ]
-    run_command(cmd, cwd=Path.cwd())
+    import boto3
+
+    # Parse bucket and key from s3://bucket/key
+    parts = dest_uri.replace("s3://", "").split("/", 1)
+    bucket = parts[0]
+    dest_prefix = parts[1] if len(parts) > 1 else ""
+
+    s3 = boto3.client("s3")
+    for file_path in report_dir.rglob("*.html"):
+        if not file_path.is_file():
+            continue
+        key = f"{dest_prefix}/{file_path.relative_to(report_dir)}" if dest_prefix else str(file_path.relative_to(report_dir))
+        logging.info("Uploading %s -> s3://%s/%s", file_path, bucket, key)
+        s3.upload_file(str(file_path), bucket, key, ExtraArgs={"ContentType": "text/html"})
+
     logging.info("Uploaded all .html files from %s to %s", report_dir, bucket_uri)
 
 
