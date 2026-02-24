@@ -460,14 +460,7 @@
               "doc"
             ]
           },
-          {
-            "Name": "origami",
-            "Components": [
-              "lib",
-              "run",
-              "doc"
-            ]
-          },
+
           {
             "Name": "hipBLASLt",
             "Components": [
@@ -1006,6 +999,7 @@
       }
     ],
 
+    "Disable_DWZ": "True",
     "Gfxarch": "False"
   },
   {
