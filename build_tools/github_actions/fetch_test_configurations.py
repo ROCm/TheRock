@@ -74,6 +74,14 @@ test_matrix = {
             ],
         },
     },
+    "origami": {
+        "job_name": "origami",
+        "fetch_artifact_args": "--blas --tests",
+        "timeout_minutes": 5,
+        "test_script": f"python {_get_script_path('test_origami.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards": 1,
+    },
     "hipblas": {
         "job_name": "hipblas",
         "fetch_artifact_args": "--blas --tests",
@@ -170,11 +178,10 @@ test_matrix = {
     "hipsparselt": {
         "job_name": "hipsparselt",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 120,
+        "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_hipsparselt.py')}",
-        # TODO(#2616): Re-enable tests after test slowdown issues are resolved
-        "platform": [],
-        "total_shards": 4,
+        "platform": ["linux"],
+        "total_shards": 1,
     },
     # RAND tests
     "rocrand": {
@@ -270,7 +277,7 @@ test_matrix = {
     # enabled by default.
     # "fusilli_plugin": {
     #     "job_name": "fusilli_plugin",
-    #     "fetch_artifact_args": "--hipdnn --fusilli-plugin --tests",
+    #     "fetch_artifact_args": "--hipdnn --fusilli-plugin --iree-compiler --tests",
     #     "timeout_minutes": 15,
     #     "test_script": f"python {_get_script_path('test_fusilli_plugin.py')}",
     #     "platform": ["linux"],
@@ -328,6 +335,15 @@ test_matrix = {
         "fetch_artifact_args": "--aqlprofile --tests",
         "timeout_minutes": 5,
         "test_script": f"python {_get_script_path('test_aqlprofile.py')}",
+        "platform": ["linux"],
+        "total_shards": 1,
+    },
+    # rocrtst tests
+    "rocrtst": {
+        "job_name": "rocrtst",
+        "fetch_artifact_args": "--rocrtst --tests",
+        "timeout_minutes": 15,
+        "test_script": f"python {_get_script_path('test_rocrtst.py')}",
         "platform": ["linux"],
         "total_shards": 1,
     },
