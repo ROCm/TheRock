@@ -22,7 +22,7 @@ import os
 import shutil
 import time
 from abc import ABC, abstractmethod
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
 from _therock_utils.run_outputs import OutputLocation
 
@@ -92,24 +92,15 @@ class UploadBackend(ABC):
         if not source_dir.is_dir():
             raise FileNotFoundError(f"Source directory not found: {source_dir}")
 
-        if include:
-            files: set[Path] = set()
-            for pattern in include:
-                files.update(
-                    f
-                    for f in source_dir.rglob(pattern)
-                    if f.is_file() and not f.is_symlink()
-                )
-            sorted_files = sorted(files)
-        else:
-            sorted_files = sorted(
-                f for f in source_dir.rglob("*") if f.is_file() and not f.is_symlink()
-            )
+        patterns = include or ["*"]
+        files: set[Path] = set()
+        for pattern in patterns:
+            files.update(source_dir.rglob(pattern))
+        sorted_files = sorted(f for f in files if f.is_file() and not f.is_symlink())
 
         count = 0
         for f in sorted_files:
-            # Use PurePosixPath for forward slashes in S3 keys on Windows.
-            rel = PurePosixPath(f.relative_to(source_dir))
+            rel = f.relative_to(source_dir).as_posix()
             file_dest = OutputLocation(dest.bucket, f"{dest.relative_path}/{rel}")
             self.upload_file(f, file_dest)
             count += 1
