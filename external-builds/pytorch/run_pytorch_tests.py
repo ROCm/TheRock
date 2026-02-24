@@ -207,7 +207,7 @@ By default the pytorch directory is determined based on this script's location
     # GPU selection happens in two stages:
     #   1. --device-query  decides which GPUs enter the candidate set.
     #   2. --gpu-policy    decides how many candidates are made visible to tests.
-        parser.add_argument(
+    parser.add_argument(
         "--device-query",
         type=str,
         choices=["unique", "all"],
