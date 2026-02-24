@@ -154,9 +154,9 @@ def run(args: argparse.Namespace):
 
 
 def check_bazel_remote_availability():
-    CACHE_SRV_REL = "http://bazelremote-svc-rel.bazelremote-ns.svc.cluster.local:8081|layout=bazel|connect-timeout=50"
+    CACHE_SRV_REL = "http://bazelremote-svc-rel.bazelremote-ns.svc.cluster.local:8080|layout=bazel|connect-timeout=50"
     status_endpoint = f"{CACHE_SRV_REL.split('|')[0]}/status"
-    import requests
+    import requests,sys
 
     try:
             print(f"Checking Bazel Remote Cache status at: {status_endpoint}")
@@ -168,9 +168,10 @@ def check_bazel_remote_availability():
             else:
                 print(f"Unexpected response code: {response.status_code}")
                 print("Response:", response.text)
+                sys.exit(1)
     except Exception as e:
             print(f"Failed to reach Bazel Remote Cache: {e}")
-            return False
+            sys.exit(1)
 
 
 def main(argv: list[str]):
