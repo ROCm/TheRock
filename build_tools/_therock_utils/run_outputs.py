@@ -237,6 +237,7 @@ class RunOutputRoot:
         platform: str,
         github_repository: str | None = None,
         workflow_run: dict | None = None,
+        lookup_workflow_run: bool = False,
     ) -> "RunOutputRoot":
         """Create from CI workflow context.
 
@@ -249,11 +250,20 @@ class RunOutputRoot:
             github_repository: Repository in 'owner/repo' format. If None,
                 reads GITHUB_REPOSITORY env var (default: 'ROCm/TheRock').
             workflow_run: Optional workflow run dict from GitHub API. If
-                provided, avoids a GitHub API call.
+                provided, uses it directly for fork detection and bucket
+                cutover dating (no API call).
+            lookup_workflow_run: If True and ``workflow_run`` is not provided,
+                fetches the workflow run from the GitHub API using ``run_id``.
+                Most callers running inside their own CI workflow do not need
+                this — environment variables suffice. Set this when looking up
+                another repository's workflow run (e.g. fetching artifacts).
         """
+        workflow_run_id = (
+            run_id if lookup_workflow_run and workflow_run is None else None
+        )
         external_repo, bucket = _retrieve_bucket_info(
             github_repository=github_repository,
-            workflow_run_id=run_id,
+            workflow_run_id=workflow_run_id,
             workflow_run=workflow_run,
         )
         return cls(

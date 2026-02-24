@@ -189,6 +189,7 @@ def run(args):
         run_id=run_id,
         platform=args.platform,
         github_repository=run_github_repo,
+        lookup_workflow_run=True,
     )
     backend = S3Backend(run_root=run_root)
 

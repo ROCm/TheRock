@@ -265,7 +265,8 @@ class TestRunOutputRootFromWorkflowRun(unittest.TestCase):
     """Test from_workflow_run() with mocked _retrieve_bucket_info."""
 
     @mock.patch("_therock_utils.run_outputs._retrieve_bucket_info")
-    def test_basic(self, mock_retrieve):
+    def test_basic_does_not_trigger_api(self, mock_retrieve):
+        """By default, run_id is NOT passed as workflow_run_id."""
         mock_retrieve.return_value = ("", "therock-ci-artifacts")
         root = RunOutputRoot.from_workflow_run(run_id="12345", platform="linux")
         self.assertEqual(root.bucket, "therock-ci-artifacts")
@@ -274,17 +275,19 @@ class TestRunOutputRootFromWorkflowRun(unittest.TestCase):
         self.assertEqual(root.platform, "linux")
         mock_retrieve.assert_called_once_with(
             github_repository=None,
-            workflow_run_id="12345",
+            workflow_run_id=None,
             workflow_run=None,
         )
 
     @mock.patch("_therock_utils.run_outputs._retrieve_bucket_info")
-    def test_with_explicit_repo(self, mock_retrieve):
+    def test_lookup_workflow_run_triggers_api(self, mock_retrieve):
+        """With lookup_workflow_run=True, run_id IS passed as workflow_run_id."""
         mock_retrieve.return_value = ("Fork-Repo/", "therock-ci-artifacts-external")
         root = RunOutputRoot.from_workflow_run(
             run_id="99999",
             platform="windows",
             github_repository="SomeUser/TheRock",
+            lookup_workflow_run=True,
         )
         self.assertEqual(root.external_repo, "Fork-Repo/")
         self.assertEqual(root.bucket, "therock-ci-artifacts-external")
@@ -296,6 +299,7 @@ class TestRunOutputRootFromWorkflowRun(unittest.TestCase):
 
     @mock.patch("_therock_utils.run_outputs._retrieve_bucket_info")
     def test_with_workflow_run_dict(self, mock_retrieve):
+        """When workflow_run is provided, it's passed through (no API call)."""
         mock_retrieve.return_value = ("", "therock-ci-artifacts")
         fake_run = {"id": 12345, "updated_at": "2026-01-01T00:00:00Z"}
         root = RunOutputRoot.from_workflow_run(
@@ -305,7 +309,26 @@ class TestRunOutputRootFromWorkflowRun(unittest.TestCase):
         )
         mock_retrieve.assert_called_once_with(
             github_repository=None,
-            workflow_run_id="12345",
+            workflow_run_id=None,
+            workflow_run=fake_run,
+        )
+
+    @mock.patch("_therock_utils.run_outputs._retrieve_bucket_info")
+    def test_lookup_ignored_when_workflow_run_provided(self, mock_retrieve):
+        """lookup_workflow_run is irrelevant when workflow_run is provided."""
+        mock_retrieve.return_value = ("", "therock-ci-artifacts")
+        fake_run = {"id": 12345, "updated_at": "2026-01-01T00:00:00Z"}
+        root = RunOutputRoot.from_workflow_run(
+            run_id="12345",
+            platform="linux",
+            workflow_run=fake_run,
+            lookup_workflow_run=True,
+        )
+        # workflow_run_id is still None because workflow_run was provided
+        # directly — no API lookup needed.
+        mock_retrieve.assert_called_once_with(
+            github_repository=None,
+            workflow_run_id=None,
             workflow_run=fake_run,
         )
 
@@ -319,19 +342,35 @@ class TestRetrieveBucketInfo(unittest.TestCase):
     """Test _retrieve_bucket_info with mocked environment."""
 
     def setUp(self):
-        # Patch gha_query_workflow_run_by_id so we never make real API calls
+        # Patch gha_query_workflow_run_by_id so we never make real API calls.
         self.api_patcher = mock.patch(
             "_therock_utils.run_outputs.gha_query_workflow_run_by_id"
         )
         self.mock_api = self.api_patcher.start()
 
+        # Isolate from ambient env vars that _retrieve_bucket_info reads.
+        # mock.patch.dict records the original state; individual tests add
+        # specific vars via @mock.patch.dict decorators on top.
+        self.env_patcher = mock.patch.dict(os.environ)
+        self.env_patcher.start()
+        os.environ.pop("GITHUB_REPOSITORY", None)
+        os.environ.pop("IS_PR_FROM_FORK", None)
+        os.environ.pop("RELEASE_TYPE", None)
+
     def tearDown(self):
+        self.env_patcher.stop()
         self.api_patcher.stop()
 
     def _call(self, **kwargs):
         from _therock_utils.run_outputs import _retrieve_bucket_info
 
         return _retrieve_bucket_info(**kwargs)
+
+    def test_no_env_defaults_to_rocm_therock(self):
+        """When GITHUB_REPOSITORY is not set, defaults to ROCm/TheRock."""
+        external_repo, bucket = self._call()
+        self.assertEqual(external_repo, "")
+        self.assertEqual(bucket, "therock-ci-artifacts")
 
     @mock.patch.dict(os.environ, {"GITHUB_REPOSITORY": "ROCm/TheRock"}, clear=False)
     def test_rocm_therock_default(self):
