@@ -364,6 +364,12 @@ def _retrieve_bucket_info(
 
     release_type = os.environ.get("RELEASE_TYPE")
     if release_type:
+        _VALID_RELEASE_TYPES = {"dev", "nightly", "prerelease"}
+        if release_type not in _VALID_RELEASE_TYPES:
+            raise ValueError(
+                f"Invalid RELEASE_TYPE={release_type!r}, "
+                f"expected one of {sorted(_VALID_RELEASE_TYPES)}"
+            )
         _log(f"  (implicit) RELEASE_TYPE: {release_type}")
         bucket = f"therock-{release_type}-artifacts"
     else:

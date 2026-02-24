@@ -406,13 +406,23 @@ class TestRetrieveBucketInfo(unittest.TestCase):
 
     @mock.patch.dict(
         os.environ,
-        {"GITHUB_REPOSITORY": "ROCm/TheRock", "RELEASE_TYPE": "release"},
+        {"GITHUB_REPOSITORY": "ROCm/TheRock", "RELEASE_TYPE": "prerelease"},
         clear=False,
     )
-    def test_release_type_release(self):
+    def test_release_type_prerelease(self):
         external_repo, bucket = self._call()
         self.assertEqual(external_repo, "")
-        self.assertEqual(bucket, "therock-release-artifacts")
+        self.assertEqual(bucket, "therock-prerelease-artifacts")
+
+    @mock.patch.dict(
+        os.environ,
+        {"GITHUB_REPOSITORY": "ROCm/TheRock", "RELEASE_TYPE": "bogus"},
+        clear=False,
+    )
+    def test_release_type_invalid_raises(self):
+        with self.assertRaises(ValueError) as cm:
+            self._call()
+        self.assertIn("bogus", str(cm.exception))
 
     def test_with_workflow_run_recent(self):
         """Recent workflow run should use therock-ci-artifacts."""

@@ -92,7 +92,8 @@ RELEASE_TYPE set?
 ```
 
 "Pre-cutover" means the workflow run's `updated_at` timestamp is before
-2025-11-11 (TheRock #2046). `RELEASE_TYPE` is typically `nightly` or `release`.
+2025-11-11 (TheRock #2046). Valid `RELEASE_TYPE` values are `dev`, `nightly`,
+and `prerelease`.
 
 ## Python API
 
