@@ -94,7 +94,7 @@ jobs:
       PULL_TYPE: ${{ inputs.pull_type }}
       PULL_PKG: ${{ inputs.pull_pkg }}
       BUILD_TAG: ${{ inputs.pull_tag }}
-      S3_BUCKET_RUNFILE: "therock-${{ env.RELEASE_TYPE }}-runfile"
+      S3_BUCKET_RUNFILE: therock-${{ env.RELEASE_TYPE }}-runfile
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
