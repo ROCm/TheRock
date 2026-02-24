@@ -8,10 +8,13 @@ Required environment variables:
 import json
 import logging
 import os
+import sys
 from pathlib import Path
 
+# Add tests directory to path for extended_tests imports
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tests"))
 from github_actions_utils import *
-from benchmarks.benchmark_test_matrix import benchmark_matrix
+from extended_tests.benchmark.benchmark_test_matrix import benchmark_matrix
 from amdgpu_family_matrix import get_all_families_for_trigger_types
 
 logging.basicConfig(level=logging.INFO)
@@ -123,6 +126,14 @@ test_matrix = {
         "platform": ["linux", "windows"],
         "total_shards": 2,
     },
+    "rocprofiler_systems": {
+        "job_name": "rocprofiler_systems",
+        "fetch_artifact_args": "--rocprofiler-systems --rocprofiler-sdk --tests",
+        "timeout_minutes": 15,
+        "test_script": f"python {_get_script_path('test_rocprofiler_systems.py')}",
+        "platform": ["linux"],
+        "total_shards": 1,
+    },
     "hipcub": {
         "job_name": "hipcub",
         "fetch_artifact_args": "--prim --tests",
@@ -167,11 +178,10 @@ test_matrix = {
     "hipsparselt": {
         "job_name": "hipsparselt",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 120,
+        "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_hipsparselt.py')}",
-        # TODO(#2616): Re-enable tests after test slowdown issues are resolved
-        "platform": [],
-        "total_shards": 4,
+        "platform": ["linux"],
+        "total_shards": 1,
     },
     # RAND tests
     "rocrand": {
@@ -248,37 +258,37 @@ test_matrix = {
     # hipDNN samples tests
     "hipdnn-samples": {
         "job_name": "hipdnn-samples",
-        "fetch_artifact_args": "--blas --miopen --hipdnn --miopen-plugin --hipdnn-samples --tests",
+        "fetch_artifact_args": "--blas --miopen --hipdnn --miopenprovider --hipdnn-samples --tests",
         "timeout_minutes": 5,
         "test_script": f"python {_get_script_path('test_hipdnn_samples.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 1,
     },
-    # MIOpen plugin tests
-    "miopen_plugin": {
-        "job_name": "miopen_plugin",
-        "fetch_artifact_args": "--blas --miopen --hipdnn --miopen-plugin --tests",
+    # MIOpen provider tests
+    "miopenprovider": {
+        "job_name": "miopenprovider",
+        "fetch_artifact_args": "--blas --miopen --hipdnn --miopenprovider --tests",
         "timeout_minutes": 15,
-        "test_script": f"python {_get_script_path('test_miopen_plugin.py')}",
+        "test_script": f"python {_get_script_path('test_miopenprovider.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 1,
     },
     # TODO(iree-org/fusilli/issues/57): Enable fusilli tests once build is
     # enabled by default.
-    # "fusilli_plugin": {
-    #     "job_name": "fusilli_plugin",
-    #     "fetch_artifact_args": "--hipdnn --fusilli-plugin --tests",
+    # "fusilliprovider": {
+    #     "job_name": "fusilliprovider",
+    #     "fetch_artifact_args": "--hipdnn --fusilliprovider --iree-compiler --tests",
     #     "timeout_minutes": 15,
-    #     "test_script": f"python {_get_script_path('test_fusilli_plugin.py')}",
+    #     "test_script": f"python {_get_script_path('test_fusilliprovider.py')}",
     #     "platform": ["linux"],
     #     "total_shards": 1,
     # },
-    # hipBLASLt plugin tests
-    "hipblaslt_plugin": {
-        "job_name": "hipblaslt_plugin",
-        "fetch_artifact_args": "--blas --hipdnn --hipblaslt-plugin --tests",
+    # hipBLASLt provider tests
+    "hipblasltprovider": {
+        "job_name": "hipblasltprovider",
+        "fetch_artifact_args": "--blas --hipdnn --hipblasltprovider --tests",
         "timeout_minutes": 15,
-        "test_script": f"python {_get_script_path('test_hipblaslt_plugin.py')}",
+        "test_script": f"python {_get_script_path('test_hipblasltprovider.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 1,
     },
@@ -315,6 +325,15 @@ test_matrix = {
         "fetch_artifact_args": "--aqlprofile --tests",
         "timeout_minutes": 5,
         "test_script": f"python {_get_script_path('test_aqlprofile.py')}",
+        "platform": ["linux"],
+        "total_shards": 1,
+    },
+    # rocrtst tests
+    "rocrtst": {
+        "job_name": "rocrtst",
+        "fetch_artifact_args": "--rocrtst --tests",
+        "timeout_minutes": 15,
+        "test_script": f"python {_get_script_path('test_rocrtst.py')}",
         "platform": ["linux"],
         "total_shards": 1,
     },

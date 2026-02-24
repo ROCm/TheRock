@@ -21,6 +21,11 @@ environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 # Enable GTest "brief" output: only show failures and the final results
 environ_vars["GTEST_BRIEF"] = str(1)
 
+# Some of our runtime kernel compilations have been relying on either ROCM_PATH being set, or ROCm being installed at
+# /opt/rocm. Neither of these is true in TheRock so we need to supply ROCM_PATH to our tests.
+ROCM_PATH = Path(THEROCK_BIN_DIR).resolve().parent
+environ_vars["ROCM_PATH"] = str(ROCM_PATH)
+
 logging.basicConfig(level=logging.INFO)
 
 # If smoke tests are enabled, we run smoke tests only.
@@ -29,9 +34,6 @@ test_type = os.getenv("TEST_TYPE", "full")
 
 # TODO(#2823): Re-enable test once flaky issue is resolved
 TESTS_TO_IGNORE = ["unpack_util_test"]
-
-# If there are devices for which the full set is too slow, we can
-# programatically set test_type to "regression" here.
 
 test_subdir = ""
 timeout = "3600"
@@ -44,13 +46,18 @@ elif test_type == "regression":
     test_subdir = "/regression"
     timeout = "720"
 
+# Make per-device adjustments
+ctest_parallelism = "2"
+if AMDGPU_FAMILIES == "gfx1153":
+    ctest_parallelism = "1"
+
 cmd = [
     "ctest",
     "--test-dir",
     f"{THEROCK_BIN_DIR}/rocwmma{test_subdir}",
     "--output-on-failure",
     "--parallel",
-    "8",
+    ctest_parallelism,
     "--timeout",
     timeout,
     "--exclude-regex",

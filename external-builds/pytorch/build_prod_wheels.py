@@ -82,6 +82,25 @@ python build_prod_wheels.py build ^
     --pytorch-vision-dir C:/b/vision
 ```
 
+4. Compiler caching (optional):
+
+```
+# Use ccache:
+python build_prod_wheels.py build --use-ccache --output-dir ...
+
+# Use sccache with ROCm compiler wrapping (caches host + HIP device code):
+python build_prod_wheels.py build --use-sccache --output-dir ...
+
+# Use sccache without compiler wrapping (caches host C/C++ only):
+python build_prod_wheels.py build --use-sccache --sccache-no-wrap --output-dir ...
+```
+
+``--use-ccache`` and ``--use-sccache`` are mutually exclusive.
+``--sccache-no-wrap`` is a modifier for ``--use-sccache`` that skips ROCm compiler
+wrapping — useful for developers who want basic caching without modifying compiler
+binaries. See ``build_tools/setup_sccache_rocm.py`` for details on the wrapping
+mechanism.
+
 ## Building Linux portable wheels
 
 On Linux, production wheels are typically built in a manylinux container and must have
@@ -347,48 +366,14 @@ def find_dir_containing(file_name: str, *possible_paths: Path) -> Path:
     raise ValueError(f"No directory contains {file_name}: {possible_paths}")
 
 
-def do_build(args: argparse.Namespace):
-    if args.install_rocm:
-        do_install_rocm(args)
-
-    if not args.version_suffix:
-        args.version_suffix = get_version_suffix_for_installed_rocm_package()
-
-    triton_dir: Path | None = args.triton_dir
-    pytorch_dir: Path | None = args.pytorch_dir
-    pytorch_audio_dir: Path | None = args.pytorch_audio_dir
-    pytorch_vision_dir: Path | None = args.pytorch_vision_dir
-    apex_dir: Path | None = args.apex_dir
-
-    rocm_sdk_version = get_rocm_sdk_version()
-    cmake_prefix = get_rocm_path("cmake")
-    bin_dir = get_rocm_path("bin")
-    rocm_dir = get_rocm_path("root")
-
-    print(f"rocm version {rocm_sdk_version}:")
-    print(f"  PYTHON VERSION: {sys.version}")
-    print(f"  CMAKE_PREFIX_PATH = {cmake_prefix}")
-    print(f"  BIN = {bin_dir}")
-    print(f"  ROCM_HOME = {rocm_dir}")
-
-    system_path = str(bin_dir) + os.path.pathsep + os.environ.get("PATH", "")
-    print(f"  PATH = {system_path}")
-
-    pytorch_rocm_arch = args.pytorch_rocm_arch
-    if pytorch_rocm_arch is None:
-        pytorch_rocm_arch = get_rocm_sdk_targets()
-        print(
-            f"  Using default PYTORCH_ROCM_ARCH from rocm-sdk targets: {pytorch_rocm_arch}"
-        )
-    else:
-        print(f"  Using provided PYTORCH_ROCM_ARCH: {pytorch_rocm_arch}")
-
-    if not pytorch_rocm_arch:
-        raise ValueError(
-            "No --pytorch-rocm-arch provided and rocm-sdk targets returned empty. "
-            "Please specify --pytorch-rocm-arch (e.g., gfx942)."
-        )
-
+def _setup_common_build_env(
+    cmake_prefix: Path,
+    rocm_dir: Path,
+    pytorch_rocm_arch: str,
+    triton_dir: Path | None,
+    is_windows: bool,
+) -> dict[str, str]:
+    """Construct the common environment dict shared by all wheel builds."""
     env: dict[str, str] = {
         "PYTHONUTF8": "1",  # Some build files use utf8 characters, force IO encoding
         "CMAKE_PREFIX_PATH": str(cmake_prefix),
@@ -397,12 +382,6 @@ def do_build(args: argparse.Namespace):
         "PYTORCH_ROCM_ARCH": pytorch_rocm_arch,
         "USE_KINETO": os.environ.get("USE_KINETO", "ON" if not is_windows else "OFF"),
     }
-
-    if args.use_ccache:
-        print("Building with ccache, clearing stats first")
-        env["CMAKE_C_COMPILER_LAUNCHER"] = "ccache"
-        env["CMAKE_CXX_COMPILER_LAUNCHER"] = "ccache"
-        run_command(["ccache", "--zero-stats"], cwd=tempfile.gettempdir())
 
     # GLOO enabled for only Linux
     if not is_windows:
@@ -456,7 +435,7 @@ def do_build(args: argparse.Namespace):
     # on directory layout.
     # Obviously, this should be completely burned with fire once the root causes
     # are eliminted.
-    hip_device_lib_path = get_rocm_path("root") / "lib" / "llvm" / "amdgcn" / "bitcode"
+    hip_device_lib_path = rocm_dir / "lib" / "llvm" / "amdgcn" / "bitcode"
     if not hip_device_lib_path.exists():
         print(
             "WARNING: Default location of device libs not found. Relying on "
@@ -466,7 +445,7 @@ def do_build(args: argparse.Namespace):
         env["HIP_DEVICE_LIB_PATH"] = str(hip_device_lib_path)
 
     # OpenBLAS path setup
-    host_math_path = get_rocm_path("root") / "lib" / "host-math"
+    host_math_path = rocm_dir / "lib" / "host-math"
     if not host_math_path.exists():
         print(
             "WARNING: Default location of host-math not found. "
@@ -477,6 +456,19 @@ def do_build(args: argparse.Namespace):
         env["OpenBLAS_HOME"] = str(host_math_path)
         env["OpenBLAS_LIB_NAME"] = "rocm-openblas"
 
+    return env
+
+
+def _do_build_wheels_core(
+    args: argparse.Namespace,
+    env: dict[str, str],
+    triton_dir: Path | None,
+    pytorch_dir: Path | None,
+    pytorch_audio_dir: Path | None,
+    pytorch_vision_dir: Path | None,
+    apex_dir: Path | None,
+) -> None:
+    """Execute all wheel builds (triton, pytorch, audio, vision, apex)."""
     # Build triton.
     triton_requirement = None
     if args.build_triton or (args.build_triton is None and triton_dir):
@@ -524,11 +516,131 @@ def do_build(args: argparse.Namespace):
 
     print("--- Builds all completed")
 
-    if args.use_ccache:
-        ccache_stats_output = capture(
-            ["ccache", "--show-stats"], cwd=tempfile.gettempdir()
+
+def do_build(args: argparse.Namespace):
+    if args.install_rocm:
+        do_install_rocm(args)
+
+    if not args.version_suffix:
+        args.version_suffix = get_version_suffix_for_installed_rocm_package()
+
+    triton_dir: Path | None = args.triton_dir
+    pytorch_dir: Path | None = args.pytorch_dir
+    pytorch_audio_dir: Path | None = args.pytorch_audio_dir
+    pytorch_vision_dir: Path | None = args.pytorch_vision_dir
+    apex_dir: Path | None = args.apex_dir
+
+    rocm_sdk_version = get_rocm_sdk_version()
+    cmake_prefix = get_rocm_path("cmake")
+    bin_dir = get_rocm_path("bin")
+    rocm_dir = get_rocm_path("root")
+
+    print(f"rocm version {rocm_sdk_version}:")
+    print(f"  PYTHON VERSION: {sys.version}")
+    print(f"  CMAKE_PREFIX_PATH = {cmake_prefix}")
+    print(f"  BIN = {bin_dir}")
+    print(f"  ROCM_HOME = {rocm_dir}")
+
+    system_path = str(bin_dir) + os.path.pathsep + os.environ.get("PATH", "")
+    print(f"  PATH = {system_path}")
+
+    pytorch_rocm_arch = args.pytorch_rocm_arch
+    if pytorch_rocm_arch is None:
+        pytorch_rocm_arch = get_rocm_sdk_targets()
+        print(
+            f"  Using default PYTORCH_ROCM_ARCH from rocm-sdk targets: {pytorch_rocm_arch}"
         )
-        print(f"ccache --show-stats output:\n{ccache_stats_output}")
+    else:
+        print(f"  Using provided PYTORCH_ROCM_ARCH: {pytorch_rocm_arch}")
+
+    if not pytorch_rocm_arch:
+        raise ValueError(
+            "No --pytorch-rocm-arch provided and rocm-sdk targets returned empty. "
+            "Please specify --pytorch-rocm-arch (e.g., gfx942)."
+        )
+
+    env = _setup_common_build_env(
+        cmake_prefix, rocm_dir, pytorch_rocm_arch, triton_dir, is_windows
+    )
+
+    if args.use_ccache:
+        if not shutil.which("ccache"):
+            raise RuntimeError(
+                "ccache not found but --use-ccache was specified. "
+                "Please install ccache before building."
+            )
+        print("Building with ccache, clearing stats first")
+        env["CMAKE_C_COMPILER_LAUNCHER"] = "ccache"
+        env["CMAKE_CXX_COMPILER_LAUNCHER"] = "ccache"
+        run_command(["ccache", "--zero-stats"], cwd=tempfile.gettempdir())
+    elif args.use_sccache:
+        build_tools_dir = Path(__file__).resolve().parent.parent.parent / "build_tools"
+        sys.path.insert(0, str(build_tools_dir))
+
+        from setup_sccache_rocm import (
+            find_sccache,
+            restore_rocm_compilers,
+            setup_rocm_sccache,
+        )
+
+        sccache_path = find_sccache()
+        if not sccache_path:
+            raise RuntimeError(
+                "sccache not found but --use-sccache was specified.\n"
+                "Install: https://github.com/mozilla/sccache#installation\n"
+                "For CI, sccache is pre-installed in the manylinux build image:\n"
+                "  https://github.com/ROCm/TheRock/tree/main/dockerfiles"
+            )
+
+        sccache_wrapped = False
+        if args.sccache_no_wrap:
+            print("Setting up sccache (CMAKE launchers only, no compiler wrapping)...")
+        else:
+            print("Setting up sccache with ROCm compiler wrapping...")
+            setup_rocm_sccache(rocm_dir, sccache_path)
+            sccache_wrapped = True
+
+    try:
+        if args.use_sccache:
+            env["CMAKE_C_COMPILER_LAUNCHER"] = str(sccache_path)
+            env["CMAKE_CXX_COMPILER_LAUNCHER"] = str(sccache_path)
+
+            try:
+                run_command(
+                    [str(sccache_path), "--start-server"], cwd=tempfile.gettempdir()
+                )
+            except subprocess.CalledProcessError:
+                pass  # Server may already be running
+
+            run_command([str(sccache_path), "--zero-stats"], cwd=tempfile.gettempdir())
+
+        _do_build_wheels_core(
+            args,
+            env,
+            triton_dir,
+            pytorch_dir,
+            pytorch_audio_dir,
+            pytorch_vision_dir,
+            apex_dir,
+        )
+    finally:
+        if args.use_sccache:
+            if sccache_wrapped:
+                print("Restoring ROCm compilers after sccache build...")
+                try:
+                    restore_rocm_compilers(rocm_dir)
+                except Exception as e:
+                    print(f"Warning: Failed to restore compilers: {e}")
+            sccache_stats = capture(
+                [str(sccache_path), "--show-stats"], cwd=tempfile.gettempdir()
+            )
+            print(f"sccache --show-stats output:\n{sccache_stats}")
+
+        if args.use_ccache:
+            ccache_stats_output = capture(
+                ["ccache", "--show-stats"], cwd=tempfile.gettempdir()
+            )
+            print(f"ccache --show-stats output:\n{ccache_stats_output}")
 
 
 def do_build_triton(
@@ -1027,10 +1139,25 @@ def main(argv: list[str]):
         required=True,
         help="Directory to copy built wheels to",
     )
-    build_p.add_argument(
+    cache_group = build_p.add_mutually_exclusive_group()
+    cache_group.add_argument(
         "--use-ccache",
-        action=argparse.BooleanOptionalAction,
+        action="store_true",
+        default=False,
         help="Use ccache as the compiler launcher",
+    )
+    cache_group.add_argument(
+        "--use-sccache",
+        action="store_true",
+        default=False,
+        help="Use sccache as the compiler launcher (with ROCm compiler wrapping on Linux)",
+    )
+    build_p.add_argument(
+        "--sccache-no-wrap",
+        action="store_true",
+        default=False,
+        help="With --use-sccache: skip compiler wrapping, only set CMAKE launchers "
+        "(caches host C/C++ but not HIP device code)",
     )
     build_p.add_argument(
         "--pytorch-dir",

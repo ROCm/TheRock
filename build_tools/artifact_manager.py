@@ -280,12 +280,18 @@ def do_fetch(args: argparse.Namespace):
             f"Stage '{args.stage}' needs {len(inbound)} artifacts: {', '.join(sorted(inbound))}"
         )
 
-    # Determine target families to fetch
+    # Determine target families to fetch (inclusive: both family names and
+    # individual targets are tried, whichever is in the bucket gets fetched).
     target_families = ["generic"]
     if args.generic_only:
         log("Fetching generic (host) artifacts only")
-    elif args.amdgpu_families:
-        target_families.extend(args.amdgpu_families.split(","))
+    else:
+        if args.amdgpu_families:
+            target_families.extend(args.amdgpu_families.split(","))
+        if args.amdgpu_targets:
+            target_families.extend(
+                t.strip() for t in args.amdgpu_targets.split(",") if t.strip()
+            )
 
     # Create backend
     backend = create_backend_from_env(
@@ -799,6 +805,12 @@ def main(argv: Optional[List[str]] = None):
         "--generic-only",
         action="store_true",
         help="Only fetch generic (host) artifacts, skip device-specific artifacts",
+    )
+    fetch_parser.add_argument(
+        "--amdgpu-targets",
+        type=str,
+        default="",
+        help="Comma-separated individual GPU targets for fetching split artifacts (e.g. 'gfx942')",
     )
     fetch_parser.add_argument(
         "--output-dir",
