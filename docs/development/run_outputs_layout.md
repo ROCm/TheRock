@@ -130,16 +130,16 @@ root = RunOutputRoot.from_workflow_run(
 root = RunOutputRoot.for_local(run_id="local", platform="linux")
 
 # Location methods — each returns an OutputLocation
-root.root()  # run output root directory
-root.artifact("blas_lib_gfx94X.tar.xz")
-root.artifact_index("gfx94X-dcgpu")
-root.log_dir("gfx94X-dcgpu")
-root.log_file("gfx94X-dcgpu", "build.log")
-root.log_index("gfx94X-dcgpu")
-root.build_observability("gfx94X-dcgpu")
-root.manifest_dir("gfx94X-dcgpu")
-root.manifest("gfx94X-dcgpu")
-root.python_packages("gfx110X-all")
+root.root()
+root.artifact(filename="blas_lib_gfx94X.tar.xz")
+root.artifact_index(artifact_group="gfx94X-dcgpu")
+root.log_dir(artifact_group="gfx94X-dcgpu")
+root.log_file(artifact_group="gfx94X-dcgpu", filename="build.log")
+root.log_index(artifact_group="gfx94X-dcgpu")
+root.build_observability(artifact_group="gfx94X-dcgpu")
+root.manifest_dir(artifact_group="gfx94X-dcgpu")
+root.manifest(artifact_group="gfx94X-dcgpu")
+root.python_packages(artifact_group="gfx110X-all")
 ```
 
 The `lookup_workflow_run` parameter controls whether `from_workflow_run()` calls
@@ -172,25 +172,25 @@ Content-type is inferred from file extension — callers don't need to specify i
 To add a new output type:
 
 1. Add a method to `RunOutputRoot` that returns `OutputLocation`
-1. Add tests to `build_tools/tests/run_outputs_test.py`
+1. Add tests to [`build_tools/tests/run_outputs_test.py`](/build_tools/tests/run_outputs_test.py)
 1. Update this document
 
 ## Consumers
 
 ### Upload scripts
 
-| File                           | Uses                                                                 |
-| ------------------------------ | -------------------------------------------------------------------- |
-| `post_build_upload.py`         | `RunOutputRoot` + `UploadBackend` for artifacts, logs, manifests     |
-| `upload_python_packages.py`    | `RunOutputRoot` + `UploadBackend` for Python wheels and index        |
-| `upload_pytorch_manifest.py`   | `RunOutputRoot` + `UploadBackend` for PyTorch manifests              |
-| `upload_test_report_script.py` | `RunOutputRoot` for S3 base URI (upload not yet migrated to backend) |
+| File                                                                                       | Uses                                                                 |
+| ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
+| [`post_build_upload.py`](/build_tools/github_actions/post_build_upload.py)                 | `RunOutputRoot` + `UploadBackend` for artifacts, logs, manifests     |
+| [`upload_python_packages.py`](/build_tools/github_actions/upload_python_packages.py)       | `RunOutputRoot` + `UploadBackend` for Python wheels and index        |
+| [`upload_pytorch_manifest.py`](/build_tools/github_actions/upload_pytorch_manifest.py)     | `RunOutputRoot` + `UploadBackend` for PyTorch manifests              |
+| [`upload_test_report_script.py`](/build_tools/github_actions/upload_test_report_script.py) | `RunOutputRoot` for S3 base URI (upload not yet migrated to backend) |
 
 ### Download scripts
 
-| File                           | Uses                                                                      |
-| ------------------------------ | ------------------------------------------------------------------------- |
-| `fetch_artifacts.py`           | `RunOutputRoot.from_workflow_run(lookup_workflow_run=True)` + `S3Backend` |
-| `find_artifacts_for_commit.py` | `RunOutputRoot.from_workflow_run(workflow_run=...)` for bucket/prefix     |
-| `artifact_backend.py`          | `RunOutputRoot` for `S3Backend` construction                              |
-| `artifact_manager.py`          | Via `create_backend_from_env()`                                           |
+| File                                                                        | Uses                                                                      |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| [`fetch_artifacts.py`](/build_tools/fetch_artifacts.py)                     | `RunOutputRoot.from_workflow_run(lookup_workflow_run=True)` + `S3Backend` |
+| [`find_artifacts_for_commit.py`](/build_tools/find_artifacts_for_commit.py) | `RunOutputRoot.from_workflow_run(workflow_run=...)` for bucket/prefix     |
+| [`artifact_backend.py`](/build_tools/_therock_utils/artifact_backend.py)    | `RunOutputRoot` for `S3Backend` construction                              |
+| [`artifact_manager.py`](/build_tools/artifact_manager.py)                   | Via `create_backend_from_env()`                                           |
