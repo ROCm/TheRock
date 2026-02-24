@@ -152,7 +152,7 @@ amdgpu_family_info_matrix_nightly = {
         # TODO(#1927): Resolve error generating file `torch_hip_generated_int4mm.hip.obj`, to enable PyTorch builds
         "windows": {
             "test-runs-on": "",
-            "family": "gfx90X-dcgpu",
+            "family": "gfx90X-all",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
             "expect_pytorch_failure": True,
