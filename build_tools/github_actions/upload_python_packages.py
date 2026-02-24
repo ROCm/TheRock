@@ -64,15 +64,10 @@ def run_command(cmd: list[str], cwd: Path = Path.cwd()):
 # TODO: document the structure (artifacts, logs, packages, etc.)
 @dataclass
 class UploadPath:
-    """Tracks upload paths and provides S3 URI/URL computation."""
+    """Tracks upload paths and provides S3 URL computation."""
 
     bucket: str
     prefix: str  # e.g., "21440027240-windows/python/gfx110X-all"
-
-    @property
-    def s3_uri(self) -> str:
-        """S3 URI for use with aws cli (s3://bucket/prefix)."""
-        return f"s3://{self.bucket}/{self.prefix}"
 
     # TODO: switch to a CDN (cloudfront), downloads direct from S3 are slowww
     @property
@@ -128,20 +123,27 @@ def generate_index(dist_dir: Path, dry_run: bool = False):
     run_command(cmd)
 
 
-# TODO: share helper with post_build_upload.py? (that accepts files or dirs)
-# TODO: switch to boto3? (just matching existing upload behavior for now)
-def run_aws_cp(source_path: Path, s3_destination: str, dry_run: bool = False):
-    """Uploads a directory to S3."""
+def run_s3_upload(source_path: Path, bucket: str, prefix: str, dry_run: bool = False):
+    """Uploads a directory to S3 using boto3."""
     if not source_path.is_dir():
         raise ValueError(f"source_path must be a directory: {source_path}")
 
-    cmd = ["aws", "s3", "cp", str(source_path), s3_destination, "--recursive"]
-
     if dry_run:
-        log(f"[DRY RUN] Would run: {shlex.join(cmd)}")
+        log(f"[DRY RUN] Would upload {source_path} to s3://{bucket}/{prefix}")
         return
 
-    run_command(cmd)
+    import boto3
+    import mimetypes
+
+    s3 = boto3.client("s3")
+    for file_path in source_path.rglob("*"):
+        if not file_path.is_file():
+            continue
+        key = f"{prefix}/{file_path.relative_to(source_path)}"
+        ct, _ = mimetypes.guess_type(str(file_path))
+        extra_args = {"ContentType": ct} if ct else {}
+        log(f"[INFO] Uploading {file_path} -> s3://{bucket}/{key}")
+        s3.upload_file(str(file_path), bucket, key, ExtraArgs=extra_args)
 
 
 # TODO: share helper with post_build_upload.py?
@@ -183,7 +185,7 @@ def upload_packages(
     """Uploads package files to S3 or local directory.
 
     Uploads to a local directory if output_dir is set.
-    Otherwise uploads to upload_path.s3_uri.
+    Otherwise uploads to the S3 bucket/prefix specified by upload_path.
     """
     package_files = find_package_files(dist_dir)
     if not package_files:
@@ -204,9 +206,10 @@ def upload_packages(
             dry_run=dry_run,
         )
     else:
-        run_aws_cp(
+        run_s3_upload(
             source_path=dist_dir,
-            s3_destination=upload_path.s3_uri,
+            bucket=upload_path.bucket,
+            prefix=upload_path.prefix,
             dry_run=dry_run,
         )
 
