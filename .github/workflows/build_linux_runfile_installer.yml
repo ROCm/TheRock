@@ -167,7 +167,7 @@ jobs:
           aws s3 cp "$RUNFILE" "s3://${{ env.S3_BUCKET_RUNFILE }}/"
           
           # Append to GitHub Actions summary
-          echo "## ✅ Runfile Uploaded to S3" >> $GITHUB_STEP_SUMMARY
+          echo "### Runfile Uploaded to S3" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**File:** \`${RUNFILE_NAME}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
