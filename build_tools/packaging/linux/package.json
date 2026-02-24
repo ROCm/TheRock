@@ -977,10 +977,10 @@
     "BuildArch": "x86_64",
     "DEBDepends": [
       "libc6",
-      "amdrocm-rand"
+      "amdrocm-rand-devel"
     ],
     "RPMRequires": [
-      "amdrocm-rand"
+      "amdrocm-rand-devel"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "ROCm random number generation library test files",
@@ -1605,12 +1605,12 @@
       "libc6",
       "amdrocm-base",
       "amdrocm-profiler-base",
-      "amdrocm-rccl"
+      "amdrocm-rccl-devel"
     ],
     "RPMRequires": [
       "amdrocm-base",
       "amdrocm-profiler-base",
-      "amdrocm-rccl"
+      "amdrocm-rccl-devel"
     ],
     "Maintainer": "RCCL Maintainer <rccl-maintainer@amd.com>",
     "Description_Short": "ROCm Communication Collectives test files. Optimized primitives for collective multi-GPU communication",
