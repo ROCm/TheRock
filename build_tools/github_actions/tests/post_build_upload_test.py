@@ -3,7 +3,7 @@
 
 Tests verify that the upload functions pass correct OutputLocations to the
 UploadBackend, producing the expected file layout. Uses LocalUploadBackend
-with a temp directory so no mocking of subprocess or AWS CLI is needed.
+with a temp directory so no mocking of subprocess or boto3 is needed.
 """
 
 import os
@@ -259,11 +259,18 @@ class TestWriteGhaBuildSummary(unittest.TestCase):
     """Tests for write_gha_build_summary()."""
 
     @mock.patch("post_build_upload.gha_append_step_summary")
-    @mock.patch("post_build_upload.PLATFORM", "linux")
-    def test_summary_urls_linux(self, mock_summary):
-        """Verify all HTTPS URLs in build summary on Linux."""
+    def test_summary_with_observability(self, mock_summary):
+        """Verify observability link included when the report exists."""
         run_root = _make_run_root()
-        post_build_upload.write_gha_build_summary("gfx94X-dcgpu", run_root, "success")
+        with tempfile.TemporaryDirectory() as tmp:
+            build_dir = Path(tmp)
+            log_dir = build_dir / "logs"
+            log_dir.mkdir()
+            (log_dir / "build_observability.html").write_text("<html></html>")
+
+            post_build_upload.write_gha_build_summary(
+                "gfx94X-dcgpu", build_dir, run_root, "success"
+            )
 
         calls = [c[0][0] for c in mock_summary.call_args_list]
         self.assertEqual(len(calls), 4)  # logs, observability, artifacts, manifest
@@ -286,25 +293,35 @@ class TestWriteGhaBuildSummary(unittest.TestCase):
         )
 
     @mock.patch("post_build_upload.gha_append_step_summary")
-    @mock.patch("post_build_upload.PLATFORM", "windows")
-    def test_summary_urls_windows_no_observability(self, mock_summary):
-        """Verify build observability is skipped on Windows."""
-        run_root = _make_run_root(platform="windows")
-        post_build_upload.write_gha_build_summary("gfx115X-all", run_root, "success")
+    def test_summary_without_observability(self, mock_summary):
+        """Verify observability link omitted when the report was not generated."""
+        run_root = _make_run_root()
+        with tempfile.TemporaryDirectory() as tmp:
+            build_dir = Path(tmp)
+
+            post_build_upload.write_gha_build_summary(
+                "gfx94X-dcgpu", build_dir, run_root, "success"
+            )
 
         calls = [c[0][0] for c in mock_summary.call_args_list]
-        self.assertEqual(len(calls), 3)  # logs, artifacts, manifest (no observability)
+        self.assertEqual(len(calls), 3)  # logs, artifacts, manifest
 
-        # No build_observability link
         for call in calls:
             self.assertNotIn("build_observability", call)
 
     @mock.patch("post_build_upload.gha_append_step_summary")
-    @mock.patch("post_build_upload.PLATFORM", "linux")
     def test_summary_failure_skips_artifacts(self, mock_summary):
         """Verify artifact link is skipped when job failed."""
         run_root = _make_run_root()
-        post_build_upload.write_gha_build_summary("gfx94X-dcgpu", run_root, "failure")
+        with tempfile.TemporaryDirectory() as tmp:
+            build_dir = Path(tmp)
+            log_dir = build_dir / "logs"
+            log_dir.mkdir()
+            (log_dir / "build_observability.html").write_text("<html></html>")
+
+            post_build_upload.write_gha_build_summary(
+                "gfx94X-dcgpu", build_dir, run_root, "failure"
+            )
 
         calls = [c[0][0] for c in mock_summary.call_args_list]
         self.assertEqual(len(calls), 3)  # logs, observability, manifest (no artifacts)
@@ -313,14 +330,18 @@ class TestWriteGhaBuildSummary(unittest.TestCase):
             self.assertNotIn("index-gfx94X-dcgpu.html", call)
 
     @mock.patch("post_build_upload.gha_append_step_summary")
-    @mock.patch("post_build_upload.PLATFORM", "linux")
     def test_summary_with_external_repo(self, mock_summary):
         """Verify external_repo prefix appears in summary URLs."""
         run_root = _make_run_root(
             external_repo="Fork-TheRock/",
             bucket="therock-ci-artifacts-external",
         )
-        post_build_upload.write_gha_build_summary("gfx94X-dcgpu", run_root, "success")
+        with tempfile.TemporaryDirectory() as tmp:
+            build_dir = Path(tmp)
+
+            post_build_upload.write_gha_build_summary(
+                "gfx94X-dcgpu", build_dir, run_root, "success"
+            )
 
         calls = [c[0][0] for c in mock_summary.call_args_list]
         for call in calls:

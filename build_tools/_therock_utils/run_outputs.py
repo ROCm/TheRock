@@ -156,9 +156,17 @@ class RunOutputRoot:
         return OutputLocation(self.bucket, f"{self.prefix}/index-{artifact_group}.html")
 
     # -- Logs -------------------------------------------------------------------
+    #
+    # The log directory contains all build logs, reports, and profiling data
+    # for an artifact group. log_dir() gives the directory root; the
+    # remaining methods address well-known files within that subtree.
 
     def log_dir(self, artifact_group: str) -> OutputLocation:
         """Location for a log directory.
+
+        The directory typically contains build.log, ninja_logs.tar.gz,
+        build_observability.html (when generated), index.html, and a
+        therock-build-prof/ subdirectory with resource profiling data.
 
         Args:
             artifact_group: Build variant (e.g., 'gfx94X-dcgpu')
@@ -166,7 +174,7 @@ class RunOutputRoot:
         return OutputLocation(self.bucket, f"{self.prefix}/logs/{artifact_group}")
 
     def log_file(self, artifact_group: str, filename: str) -> OutputLocation:
-        """Location for a specific log file.
+        """Location for a specific file within the log_dir() subtree.
 
         Args:
             artifact_group: Build variant (e.g., 'gfx94X-dcgpu')
@@ -177,13 +185,13 @@ class RunOutputRoot:
         )
 
     def log_index(self, artifact_group: str) -> OutputLocation:
-        """Location for the log directory index HTML."""
+        """Location for the log directory index HTML (within log_dir())."""
         return OutputLocation(
             self.bucket, f"{self.prefix}/logs/{artifact_group}/index.html"
         )
 
     def build_observability(self, artifact_group: str) -> OutputLocation:
-        """Location for build observability HTML (Linux only)."""
+        """Location for build observability HTML (within log_dir())."""
         return OutputLocation(
             self.bucket,
             f"{self.prefix}/logs/{artifact_group}/build_observability.html",
@@ -296,7 +304,7 @@ def _retrieve_bucket_info(
     """Determine S3 bucket and external_repo prefix for a workflow run.
 
     This is an internal implementation detail — use
-    :meth:`RunOutputRoot.from_workflow_run` instead.
+    `RunOutputRoot.from_workflow_run` instead.
 
     Returns:
         Tuple of ``(external_repo, bucket)`` where:
