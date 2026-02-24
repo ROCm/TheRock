@@ -34,14 +34,10 @@ def run_command(cmd: list[str], cwd: Path) -> None:
 
 @dataclass(frozen=True)
 class UploadPath:
-    """Tracks upload paths and provides S3 URI computation."""
+    """Tracks upload paths for S3."""
 
     bucket: str
     prefix: str  # e.g. "{external_repo}{run_id}-{platform}/manifests/gfx110X-all"
-
-    @property
-    def s3_uri(self) -> str:
-        return f"s3://{self.bucket}/{self.prefix}"
 
 
 def normalize_python_version_for_filename(python_version: str) -> str:
@@ -146,9 +142,13 @@ def main(argv: list[str]) -> None:
         amdgpu_family=args.amdgpu_family,
         bucket_override=args.bucket,
     )
-    dest_uri = f"{upload_path.s3_uri}/{manifest_name}"
 
-    run_command(["aws", "s3", "cp", str(manifest_path), dest_uri], cwd=Path.cwd())
+    import boto3
+
+    s3 = boto3.client("s3")
+    key = f"{upload_path.prefix}/{manifest_name}"
+    log(f"[INFO] Uploading {manifest_path} -> s3://{upload_path.bucket}/{key}")
+    s3.upload_file(str(manifest_path), upload_path.bucket, key, ExtraArgs={"ContentType": "application/json"})
 
 
 if __name__ == "__main__":
