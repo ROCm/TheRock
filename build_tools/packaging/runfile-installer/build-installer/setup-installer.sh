@@ -99,9 +99,14 @@ Usage: $PROG [options]
     rocm-mode=chroot      = Pull DEB packages using Ubuntu chroot.
     rocm-archs=<archs>    = Set GPU architectures to pull (comma-separated or single, e.g., gfx94x,gfx950 or gfx94x). Default: gfx94x,gfx950.
 
-    pull=<release-type>   = Pull ROCm packages from specified repository (dev, nightly, prerelease, release).
-    pulltag=<tag>            = Set ROCm build tag (e.g., 20260123 for nightly).
-    pullrunid=<runid>        = Set ROCm run ID (e.g., 21274498502 for nightly).
+    pull=<release-type>   = Pull ROCm packages from specified repository (required).
+                            Valid types: dev, nightly, prerelease, release
+    pulltag=<tag>         = Set ROCm build tag (required for all builds).
+                            - dev/nightly: Valid build date (YYYYMMDD format, e.g., 20260123)
+                            - prerelease: RC tag (e.g., rc0, rc1, rc2)
+                            - release: "release" or version number
+    pullrunid=<runid>     = Set ROCm run ID (required for all builds).
+                            Examples: pullrunid=21274498502 (nightly/dev), pullrunid=21843385957 (prerelease), pullrunid=99999 (release)
     pullrocmver=<version>    = Set ROCm version for package names (e.g., 7.12.0, 7.11.0).
     pullpkg=<package>        = Set base package name with optional type prefix (default: amdrocm-core-sdk).
                                Syntax: pullpkg=[type:]<package>
@@ -136,10 +141,10 @@ Examples:
     ./setup-installer.sh config=config/release.config         # Use release preset
 
     # Pull from specific builds (with actual values from preset configs)
-    ./setup-installer.sh pull=nightly pulltag=20260212 pullrunid=21933875966 pullrocmver=7.12.0    # Nightly build
-    ./setup-installer.sh pull=dev pulltag=20260219 pullrunid=22188089855 pullrocmver=7.12.0        # Dev build
-    ./setup-installer.sh pull=prerelease pulltag=rc0 pullrocmver=7.11.0                            # Prerelease RC0
-    ./setup-installer.sh pull=release pullrocmver=7.11.0                                            # Release build
+    ./setup-installer.sh pull=nightly pulltag=20260212 pullrunid=21933875966 pullrocmver=7.12.0      # Nightly build
+    ./setup-installer.sh pull=dev pulltag=20260219 pullrunid=22188089855 pullrocmver=7.12.0          # Dev build
+    ./setup-installer.sh pull=prerelease pulltag=rc2 pullrunid=21843385957 pullrocmver=7.11.0        # Prerelease RC2
+    ./setup-installer.sh pull=release pulltag=release pullrunid=99999 pullrocmver=7.11.0             # Release build
 
     # Custom packages
     ./setup-installer.sh pullpkg=arch:amdrocm-core                                                  # Arch-specific package
@@ -231,7 +236,7 @@ validate_args() {
 
     local validation_failed=0
 
-    # Validate PULL_CONFIG_RELEASE_TYPE is set and valid
+    # Validate PULL_CONFIG_RELEASE_TYPE (Arg: pull=)
     if [[ -z "$PULL_CONFIG_RELEASE_TYPE" ]]; then
         echo -e "\e[31mERROR: PULL_CONFIG_RELEASE_TYPE not set. Use pull= argument.\e[0m"
         echo "Valid values: ${ROCM_RELEASE_TYPES[*]}"
@@ -242,39 +247,41 @@ validate_args() {
         validation_failed=1
     fi
 
-    # Validate PULL_CONFIG_TAG based on release type
-    case "$PULL_CONFIG_RELEASE_TYPE" in
-        dev|nightly)
-            if [[ -z "$PULL_CONFIG_TAG" ]]; then
-                echo -e "\e[31mERROR: pulltag= required for $PULL_CONFIG_RELEASE_TYPE builds (8 characters)\e[0m"
+    # Validate PULL_CONFIG_TAG (Arg: pulltag=) - required for all release types
+    if [[ -z "$PULL_CONFIG_TAG" ]]; then
+        echo -e "\e[31mERROR: pulltag= required for all builds\e[0m"
+        case "$PULL_CONFIG_RELEASE_TYPE" in
+            dev|nightly)
                 echo "Example: pulltag=20260123"
-                validation_failed=1
-            elif [[ ${#PULL_CONFIG_TAG} -gt 8 ]]; then
-                echo "WARNING: Tag longer than 8 characters, truncating to: ${PULL_CONFIG_TAG:0:8}"
-                PULL_CONFIG_TAG="${PULL_CONFIG_TAG:0:8}"
-            elif [[ ${#PULL_CONFIG_TAG} -lt 8 ]]; then
-                echo -e "\e[31mERROR: Tag must be 8 characters, got: $PULL_CONFIG_TAG (${#PULL_CONFIG_TAG} characters)\e[0m"
-                validation_failed=1
-            fi
-            ;;
-        prerelease|release)
-            [[ -z "$PULL_CONFIG_TAG" ]] && echo "Note: pulltag not set (optional for $PULL_CONFIG_RELEASE_TYPE)"
-            ;;
-    esac
+                ;;
+            prerelease)
+                echo "Example: pulltag=rc0"
+                ;;
+            release)
+                echo "Example: pulltag=release or pulltag=7.11.0"
+                ;;
+        esac
+        validation_failed=1
+    fi
 
-    # Validate PULL_CONFIG_RUNID based on release type
-    # Only required for dev and nightly builds
-    case "$PULL_CONFIG_RELEASE_TYPE" in
-        dev|nightly)
-            if [[ -z "$PULL_CONFIG_RUNID" ]]; then
-                echo -e "\e[31mERROR: pullrunid= required for $PULL_CONFIG_RELEASE_TYPE builds\e[0m"
+    # Validate PULL_CONFIG_RUNID (Arg: pullrunid=) - required for all release types
+    if [[ -z "$PULL_CONFIG_RUNID" ]]; then
+        echo -e "\e[31mERROR: pullrunid= required for all builds\e[0m"
+        case "$PULL_CONFIG_RELEASE_TYPE" in
+            dev|nightly)
                 echo "Example: pullrunid=21893116598"
-                validation_failed=1
-            fi
-            ;;
-    esac
+                ;;
+            prerelease)
+                echo "Example: pullrunid=21843385957"
+                ;;
+            release)
+                echo "Example: pullrunid=1 or pullrunid=99999"
+                ;;
+        esac
+        validation_failed=1
+    fi
 
-    # Validate PULL_CONFIG_ROCM_VER is set
+    # Validate PULL_CONFIG_ROCM_VER (Arg: pullrocmver=)
     if [[ -z "$PULL_CONFIG_ROCM_VER" ]]; then
         echo -e "\e[31mERROR: PULL_CONFIG_ROCM_VER not set. Use pullrocmver= argument.\e[0m"
         echo "Example: pullrocmver=7.11.0"

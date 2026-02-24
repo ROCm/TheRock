@@ -131,11 +131,6 @@ if [ $CLEAN_SETUP -eq 1 ]; then
         fi
     done
 
-    if [ -d "package-extractor/packages-rocm" ]; then
-        echo -e "\e[93mRemoving: package-extractor/packages-rocm\e[0m"
-        $SUDO rm -r package-extractor/packages-rocm
-    fi
-
     if [ -d "package-extractor/packages-rocm-deb" ]; then
         echo -e "\e[93mRemoving: package-extractor/packages-rocm-deb\e[0m"
         $SUDO rm -r package-extractor/packages-rocm-deb
@@ -144,11 +139,6 @@ if [ $CLEAN_SETUP -eq 1 ]; then
     if [ -d "package-extractor/packages-rocm-rpm" ]; then
         echo -e "\e[93mRemoving: package-extractor/packages-rocm-rpm\e[0m"
         $SUDO rm -r package-extractor/packages-rocm-rpm
-    fi
-
-    if [ -d "package-extractor/packages-rocdecode" ]; then
-        echo -e "\e[93mRemoving: package-extractor/packages-rocdecode\e[0m"
-        $SUDO rm -r package-extractor/packages-rocdecode
     fi
 
     if [ -d "build-config" ]; then
@@ -180,15 +170,8 @@ if [ $CLEAN_BUILD -eq 1 ]; then
     echo ""
     echo ">>> Cleaning build artifacts..."
 
-    # Remove makeself installation (check both root and build-installer directories)
+    # Remove makeself installation in build-installer directory
     # Handle any version pattern: makeself-*
-    for makeself_dir in makeself-*; do
-        if [ -d "$makeself_dir" ]; then
-            echo -e "\e[93mRemoving: $makeself_dir\e[0m"
-            $SUDO rm -r "$makeself_dir"
-        fi
-    done
-
     for makeself_dir in build-installer/makeself-*; do
         if [ -d "$makeself_dir" ]; then
             echo -e "\e[93mRemoving: $makeself_dir\e[0m"
@@ -196,14 +179,7 @@ if [ $CLEAN_BUILD -eq 1 ]; then
         fi
     done
 
-    # Remove makeself .run installers
-    for makeself_run in makeself-*.run; do
-        if [ -f "$makeself_run" ]; then
-            echo -e "\e[93mRemoving: $makeself_run\e[0m"
-            $SUDO rm "$makeself_run"
-        fi
-    done
-
+    # Remove makeself .run installers in build-installer directory
     for makeself_run in build-installer/makeself-*.run; do
         if [ -f "$makeself_run" ]; then
             echo -e "\e[93mRemoving: $makeself_run\e[0m"
@@ -278,11 +254,6 @@ if [ $CLEAN_BUILD -eq 1 ]; then
         fi
     done
 
-    if [ -d "rocm-installer/component_deps" ]; then
-        echo -e "\e[93mRemoving: rocm-installer/component_deps\e[0m"
-        $SUDO rm -r rocm-installer/component_deps
-    fi
-
     if [ -d "rocm-installer/logs" ]; then
         echo -e "\e[93mRemoving: rocm-installer/logs\e[0m"
         $SUDO rm -r rocm-installer/logs
@@ -313,26 +284,6 @@ if [ $CLEAN_BUILD -eq 1 ]; then
     if [ -d "rocm-installer/test-logs" ]; then
         echo -e "\e[93mRemoving: rocm-installer/test-logs\e[0m"
         $SUDO rm -r rocm-installer/test-logs
-    fi
-
-    if [ -d "rocm-installer/rocm" ]; then
-        echo -e "\e[93mRemoving: rocm-installer/rocm\e[0m"
-        $SUDO rm -r rocm-installer/rocm
-    fi
-
-    if [ -d "rocm-installer/build" ]; then
-        echo -e "\e[93mRemoving: rocm-installer/build\e[0m"
-        $SUDO rm -r rocm-installer/build
-    fi
-
-    if [ -d "rocm-installer/dist" ]; then
-        echo -e "\e[93mRemoving: rocm-installer/dist\e[0m"
-        $SUDO rm -r rocm-installer/dist
-    fi
-
-    if [ -d "rocm-installer/amdsmi.egg-info" ]; then
-        echo -e "\e[93mRemoving: rocm-installer/amdsmi.egg-info\e[0m"
-        $SUDO rm -r rocm-installer/amdsmi.egg-info
     fi
 
     if [ -d "test/rocm-examples" ]; then
@@ -374,6 +325,17 @@ if [ $CLEAN_BUILD -eq 1 ]; then
     if [ -d "build-installer/CMakeFiles" ]; then
         echo -e "\e[93mRemoving: build-installer/CMakeFiles\e[0m"
         $SUDO rm -r build-installer/CMakeFiles
+    fi
+
+    # Clean generated makeself headers (regenerated from .template files during build)
+    if [ -f "build-installer/rocm-makeself-header.sh" ]; then
+        echo -e "\e[93mRemoving: build-installer/rocm-makeself-header.sh (generated)\e[0m"
+        $SUDO rm build-installer/rocm-makeself-header.sh
+    fi
+
+    if [ -f "build-installer/rocm-makeself-header-pre.sh" ]; then
+        echo -e "\e[93mRemoving: build-installer/rocm-makeself-header-pre.sh (generated)\e[0m"
+        $SUDO rm build-installer/rocm-makeself-header-pre.sh
     fi
 
     # Reset VERSION file to only contain installer version (first line)

@@ -187,7 +187,7 @@ int get_os_info(OFFLINE_INSTALL_CONFIG *pConfig)
  *   Line 2: ROCM_VER (e.g., "7.11.0")
  *   Line 3: BUILD_TAG (e.g., "1", "rc1", "nightly")
  *   Line 4: BUILD_RUNID (e.g., "99999", "1")
- *   Line 5: BUILD_PULL_TAG (e.g., "20260219-22188089855")
+ *   Line 5: BUILD_TAG_INFO (e.g., "20260219-22188089855")
  *   Line 6: AMDGPU_DKMS_BUILD_NUM (e.g., "6.18.4-2286447")
  *
  * Returns: 0 on success, -1 on failure
@@ -237,8 +237,8 @@ int read_version_file(OFFLINE_INSTALL_CONFIG *pConfig)
                 pConfig->buildRunId[sizeof(pConfig->buildRunId) - 1] = '\0';
                 break;
             case 4:
-                strncpy(pConfig->buildPullTag, line, sizeof(pConfig->buildPullTag) - 1);
-                pConfig->buildPullTag[sizeof(pConfig->buildPullTag) - 1] = '\0';
+                strncpy(pConfig->buildTagInfo, line, sizeof(pConfig->buildTagInfo) - 1);
+                pConfig->buildTagInfo[sizeof(pConfig->buildTagInfo) - 1] = '\0';
                 break;
             case 5:
                 strncpy(pConfig->amdgpuDkmsBuild, line, sizeof(pConfig->amdgpuDkmsBuild) - 1);

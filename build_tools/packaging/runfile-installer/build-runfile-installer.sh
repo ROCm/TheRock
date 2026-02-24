@@ -44,7 +44,7 @@ PULL_TAG="${PULL_TAG:-}"
 PULL_RUNID="${PULL_RUNID:-}"
 BUILD_TAG="${BUILD_TAG:-}"
 BUILD_RUNID="${BUILD_RUNID:-}"
-BUILD_PULL_TAG="${BUILD_PULL_TAG:-}"
+BUILD_TAG_INFO="${BUILD_TAG_INFO:-}"
 
 ###### Functions ###############################################################
 
@@ -76,9 +76,14 @@ This script performs a complete ROCm runfile installer build:
     rocm-mode=chroot      = Pull DEB packages using Ubuntu chroot (for RPM-based OS).
     rocm-archs=<archs>    = Set GPU architectures to pull (e.g., gfx94x,gfx950). Default: gfx94x,gfx950.
     
-    pull=<release-type>   = Pull ROCm packages from specified repository (dev, nightly, prerelease, release).
-    pulltag=<tag>         = Set ROCm build tag (e.g., 20260123 for nightly).
-    pullrunid=<runid>     = Set ROCm component build run ID (e.g., 21274498502 for nightly).
+    pull=<release-type>   = Pull ROCm packages from specified repository (required).
+                            Valid types: dev, nightly, prerelease, release
+    pulltag=<tag>         = Set ROCm build tag (required for all builds).
+                            - dev/nightly: Valid build date (YYYYMMDD format, e.g., 20260123)
+                            - prerelease: RC tag (e.g., rc0, rc1, rc2)
+                            - release: "release" or version number
+    pullrunid=<runid>     = Set ROCm component build run ID (required for all builds).
+                            Examples: pullrunid=21274498502 (nightly/dev), pullrunid=21843385957 (prerelease), pullrunid=99999 (release)
     pullrocmver=<version> = Set ROCm version for package names (e.g., 7.12, 7.11).
     pullpkg=<package>     = Set base package name with optional type prefix (default: amdrocm-core-sdk).
                             Syntax: pullpkg=[type:]<package>
@@ -100,9 +105,9 @@ This script performs a complete ROCm runfile installer build:
     contentlist           = List all files extracted to content directories.
     norunfile             = Disable makeself build of installer runfile.
     nogui                 = Disable GUI building.
-    buildtag=<tag>        = Set the build tag (default: 1).
+    buildtag=<tag>        = Set the build tag (optional, defaults to pulltag value if not provided).
     buildrunid=<id>       = Set the Runfile build run ID (default: 99999).
-    buildpulltag=<tag>    = Set a tag/name for the builds package pull information. (ie. pulltag-pullid)
+    buildtaginfo=<tag>    = Set a tag/name for the builds package pull information (optional, auto-constructed as pulltag-pullrunid if not provided).
     mscomp=<mode>         = Makeself compression (build speed vs file size):
                             prodsmall  = XZ (slowest, ~30% smaller, requires xz-utils)
                             prodmedium = Pbzip2 (slower, ~15-20% smaller, universal)
@@ -128,10 +133,10 @@ Examples:
     $0 amdgpu amdgpu-mode=single                              # AMDGPU for current distro only
 
     # Pull from specific builds (with actual values from preset configs)
-    $0 pull=nightly pulltag=20260212 pullrunid=21933875966 pullrocmver=7.12.0     # Nightly
-    $0 pull=dev pulltag=20260219 pullrunid=22188089855 pullrocmver=7.12.0         # Dev
-    $0 pull=prerelease pulltag=rc0 pullrocmver=7.11.0                             # Prerelease RC0
-    $0 pull=release pullrocmver=7.11.0                                            # Release
+    $0 pull=nightly pulltag=20260212 pullrunid=21933875966 pullrocmver=7.12.0        # Nightly
+    $0 pull=dev pulltag=20260219 pullrunid=22188089855 pullrocmver=7.12.0            # Dev
+    $0 pull=prerelease pulltag=rc2 pullrunid=21843385957 pullrocmver=7.11.0          # Prerelease RC2
+    $0 pull=release pulltag=release pullrunid=99999 pullrocmver=7.11.0               # Release
 
     # GPU architectures
     $0 rocm-archs=gfx110x,gfx94x                              # Specific GPU architectures
@@ -213,8 +218,9 @@ while (($#)); do
         BUILD_ARGS+=("$1")
         shift
         ;;
-    buildpulltag=*)
-        BUILD_PULL_TAG="${1#*=}"
+    buildtaginfo=*)
+        BUILD_TAG_INFO="${1#*=}"
+        BUILD_ARGS+=("$1")
         shift
         ;;
     amdgpu-mode=*|rocm-mode=*|rocm-archs=*|pull=*|pullrocmver=*|pullpkg=*|pullpkgextra=*|pullrocmpkgver=*)
@@ -322,22 +328,16 @@ if [ $SKIP_BUILD -eq 0 ]; then
     echo "------------------------------------------------------------------------"
     echo ""
 
-    # Set buildtag to value of pulltag if former isn't set.
-    if [ -z "$BUILD_TAG" ] && [ -n "$PULL_TAG" ]; then
+    # Set buildtag to value of pulltag if not already set
+    if [ -z "$BUILD_TAG" ]; then
         BUILD_TAG="$PULL_TAG"
         BUILD_ARGS+=("buildtag=$BUILD_TAG")
     fi
 
-    # Construct buildpulltag if not already provided
-    if [ -z "$BUILD_PULL_TAG" ]; then
-        if [ -n "$PULL_TAG" ] && [ -n "$PULL_RUNID" ]; then
-            BUILD_PULL_TAG="$PULL_TAG-$PULL_RUNID"
-        fi
-    fi
-
-    # Add buildpulltag if set (but not if it's empty or just a dash)
-    if [ -n "$BUILD_PULL_TAG" ] && [ "$BUILD_PULL_TAG" != "-" ]; then
-        BUILD_ARGS+=("buildpulltag=$BUILD_PULL_TAG")
+    # Construct buildtaginfo if not already provided
+    if [ -z "$BUILD_TAG_INFO" ]; then
+        BUILD_TAG_INFO="$PULL_TAG-$PULL_RUNID"
+        BUILD_ARGS+=("buildtaginfo=$BUILD_TAG_INFO")
     fi
 
     echo "Build Configuration:"

@@ -92,7 +92,7 @@ typedef struct _OFFLINE_INSTALL_CONFIG
     char rocmVersion[64];            // Line 2: ROCM_VER (e.g., "7.11.0")
     char buildTag[64];               // Line 3: BUILD_TAG (e.g., "1", "rc1", "nightly")
     char buildRunId[64];             // Line 4: BUILD_RUNID (e.g., "99999", "1")
-    char buildPullTag[64];           // Line 5: BUILD_PULL_TAG (e.g., "20260219-22188089855")
+    char buildTagInfo[64];           // Line 5: BUILD_TAG_INFO (e.g., "20260219-22188089855")
     char amdgpuDkmsBuild[64];        // Line 6: AMDGPU_DKMS_BUILD_NUM (e.g., "6.18.4-2286447")
 
     // Runtime distro detection

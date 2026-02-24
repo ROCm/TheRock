@@ -38,7 +38,7 @@ INSTALLER_VERSION=
 ROCM_VER=
 BUILD_TAG="1"
 BUILD_RUNID="99999"
-BUILD_PULL_TAG=""
+BUILD_TAG_INFO=""
 BUILD_INSTALLER_NAME=
 
 AMDGPU_DKMS_FILE="../rocm-installer/component-amdgpu/amdgpu-dkms-ver.txt"
@@ -84,7 +84,7 @@ Usage: $PROG [options]
     nogui                = Disable GUI building.
     buildtag=<tag>       = Set the build tag (default: 1).
     buildrunid=<id>      = Set the Runfile build run ID (default: 99999).
-    buildpulltag=<tag>   = Set a tag/name for the builds package pull information. (ie. pulltag-pullid)
+    buildtaginfo=<tag>   = Set a tag/name for the builds package pull information. (ie. pulltag-pullid)
     mscomp=<mode>        = Makeself compression mode (build speed vs file size):
 
                            Mode       Speed    Size      Compatibility    Use Case
@@ -223,7 +223,7 @@ write_version() {
     echo "ROCM_VER                 = $ROCM_VER"
     echo "BUILD_TAG                = $BUILD_TAG"
     echo "BUILD_RUNID              = $BUILD_RUNID"
-    echo "BUILD_PULL_TAG           = $BUILD_PULL_TAG"
+    echo "BUILD_TAG_INFO           = $BUILD_TAG_INFO"
     echo "AMDGPU_DKMS_BUILD_NUM    = $AMDGPU_DKMS_BUILD_NUM"
 
     # Update the version file
@@ -231,7 +231,7 @@ write_version() {
     echo "$ROCM_VER" >> "$VERSION_FILE"
     echo "$BUILD_TAG" >> "$VERSION_FILE"
     echo "$BUILD_RUNID" >> "$VERSION_FILE"
-    echo "$BUILD_PULL_TAG" >> "$VERSION_FILE"
+    echo "$BUILD_TAG_INFO" >> "$VERSION_FILE"
     echo "$AMDGPU_DKMS_BUILD_NUM" >> "$VERSION_FILE"
 
     echo "Installer name: $BUILD_INSTALLER_NAME"
@@ -1132,9 +1132,9 @@ do
         echo "Setting BUILD_RUNID = $BUILD_RUNID"
         shift
         ;;
-    buildpulltag=*)
-        BUILD_PULL_TAG="${1#*=}"
-        echo "Setting BUILD_PULL_TAG = $BUILD_PULL_TAG"
+    buildtaginfo=*)
+        BUILD_TAG_INFO="${1#*=}"
+        echo "Setting BUILD_TAG_INFO = $BUILD_TAG_INFO"
         shift
         ;;
     mscomp=*)
