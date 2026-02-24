@@ -377,7 +377,7 @@ feature_group = "CORE"
 disable_platforms = ["windows"]
 
 # --- Third-party libraries ---
-# Unlike third-party-sysdeps, these libraries are built as normal CMake targets.
+# Unlike third-party-sysdeps, these libraries are not given special treatment for portable distribution.
 
 [artifacts.host-blas]
 artifact_group = "third-party-libs"

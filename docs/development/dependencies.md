@@ -12,10 +12,9 @@ the build topology):
 1. **Other third-party libraries** ([`third-party/`](/third-party/)) — libraries
    used as build dependencies that are not exposed externally and/or are not
    typically available as system packages (fmt, spdlog, flatbuffers,
-   googletest, etc.). These are built as normal CMake targets without special
-   packaging treatment. Most are `CORE` dependencies required by some subproject
-   unconditionally while the `HOST_MATH` libraries (host-blas, SuiteSparse, fftw3)
-   are optional.
+   googletest, etc.). These are not given special packaging treatment. Most are
+   `CORE` dependencies required by some subproject unconditionally while the
+   `HOST_MATH` libraries (host-blas, SuiteSparse, fftw3) are optional.
 
 The rest of this document covers the sysdeps in detail.
 
