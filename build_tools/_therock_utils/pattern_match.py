@@ -2,10 +2,83 @@ from typing import Generator, Sequence
 
 import os
 from pathlib import Path, PurePosixPath
+import platform
 import re
 import shutil
 import sys
 import time
+
+_IS_WINDOWS = platform.system() == "Windows"
+
+
+# ---------------------------------------------------------------------------
+# File copy strategies for copy_to.
+#
+# Three mutually exclusive strategies for placing a regular file at destpath:
+#
+#   1. _hardlink_or_copy_from_source: hardlink dest to src (shares inode with
+#      source), falling back to copy on failure (e.g. cross-device).
+#      Used by default to avoid redundant copies within a build tree.
+#
+#   2. _copy_preserving_hardlink_groups: copy file content (new inode), but
+#      re-hardlink files that shared an inode in the source so they still
+#      share an inode in the destination. Used for artifact populate where
+#      we must break sharing with the source tree but preserve internal
+#      hardlink structure (e.g. libfoo.so.1 <-> libfoo.so.1.0.0).
+#      Not available on Windows (st_dev/st_ino unreliable).
+#
+#   3. _plain_copy: shutil.copy2, no inode tracking. Used on Windows with
+#      always_copy, where we can't reliably detect hardlink groups.
+# ---------------------------------------------------------------------------
+
+
+def _hardlink_or_copy_from_source(src: str, destpath: Path, verbose: bool) -> None:
+    """Hardlink destpath to src, falling back to copy on failure."""
+    try:
+        if verbose:
+            print(f"hardlink {src} -> {destpath}", file=sys.stderr, end="")
+        os.link(src, destpath, follow_symlinks=False)
+    except OSError:
+        if verbose:
+            print(" (falling back to copy) ", file=sys.stderr, end="")
+        _plain_copy(src, destpath, verbose)
+
+
+def _copy_preserving_hardlink_groups(
+    src: str,
+    destpath: Path,
+    verbose: bool,
+    copied_inodes: dict[tuple[int, int], Path],
+) -> None:
+    """Copy file, but hardlink to a previous copy if the source inode matches.
+
+    This gives tar-like behavior: files hardlinked together in the source
+    remain hardlinked together in the destination, but no destination file
+    shares an inode with the source.
+    """
+    src_stat = os.stat(src)
+    inode_key = (src_stat.st_dev, src_stat.st_ino)
+    prev_dest = copied_inodes.get(inode_key)
+    if prev_dest is not None:
+        if verbose:
+            print(
+                f"hardlink (internal) {prev_dest} -> {destpath}",
+                file=sys.stderr,
+                end="",
+            )
+        os.link(prev_dest, destpath)
+        return
+    # First time seeing this inode: copy and record.
+    if verbose:
+        print(f"copy {src} -> {destpath}", file=sys.stderr, end="")
+    shutil.copy2(src, destpath, follow_symlinks=False)
+    copied_inodes[inode_key] = destpath
+
+
+def _plain_copy(src: str, destpath: Path, verbose: bool) -> None:
+    if verbose:
+        print(f"copy {src} -> {destpath}", file=sys.stderr, end="")
+    shutil.copy2(src, destpath, follow_symlinks=False)
 
 
 class RecursiveGlobPattern:
@@ -117,103 +190,109 @@ class PatternMatcher:
         remove_dest: bool = True,
     ):
         if remove_dest and destdir.exists():
-            for attempt in range(self.max_attempts):
-                try:
-                    shutil.rmtree(destdir)
-                    if verbose:
-                        print(f"rmtree {destdir}", file=sys.stderr)
-                    break
-                except PermissionError:
-                    wait_time = self.retry_delay_seconds * (attempt + 2)
-                    if verbose:
-                        print(
-                            f"PermissionError calling shutil.rmtree('{destdir}') retrying after {wait_time}s",
-                            file=sys.stderr,
-                        )
-                    time.sleep(wait_time)
-                    if attempt == self.max_attempts - 1:
-                        if verbose:
-                            print(
-                                f"rmtree failed after {self.max_attempts} attempts, failing",
-                                file=sys.stderr,
-                            )
-                        raise
+            self._rmtree_with_retry(destdir, verbose)
         destdir.mkdir(parents=True, exist_ok=True)
+
+        # Inode tracking for _copy_preserving_hardlink_groups.
+        copied_inodes: dict[tuple[int, int], Path] = {}
 
         for relpath, direntry in self.matches():
             try:
                 destpath = destdir / PurePosixPath(destprefix + relpath)
                 if direntry.is_dir() and not direntry.is_symlink():
-                    # Directory.
                     if verbose:
                         print(f"mkdir {destpath}", file=sys.stderr, end="")
                     destpath.mkdir(parents=True, exist_ok=True)
                 elif direntry.is_symlink():
-                    # Symlink.
-                    if not remove_dest and (destpath.exists() or destpath.is_symlink()):
-                        os.unlink(destpath)
-                    targetpath = os.readlink(direntry.path)
-                    if verbose:
-                        print(
-                            f"symlink {targetpath} -> {destpath}",
-                            file=sys.stderr,
-                            end="",
-                        )
-                    destpath.parent.mkdir(parents=True, exist_ok=True)
-                    os.symlink(targetpath, destpath)
+                    self._copy_symlink(direntry, destpath, remove_dest, verbose)
                 else:
-                    # Regular file.
-
-                    # Sometimes multiple processes try to link the same file.
-                    # On Unix, we can safely unlink/remove a file and overwrite
-                    # it. However, on Windows a file that is in use cannot be
-                    # removed: https://docs.python.org/3/library/os.html#os.remove.
-                    # Here we check if the inode matches (true for hardlinks)
-                    # and avoid the unlink/link step in that case.
-                    if (
-                        destpath.exists()
-                        and not always_copy
-                        and os.stat(destpath).st_ino == os.stat(direntry.path).st_ino
-                    ):
-                        if verbose:
-                            print(
-                                f"skipping unlink and link for existing hardlink {direntry.path} -> {destpath}",
-                                file=sys.stderr,
-                                end="",
-                            )
-                        continue
-
-                    if not remove_dest and (destpath.exists() or destpath.is_symlink()):
-                        # Hopefully safe even on Windows given the check above.
-                        os.unlink(destpath)
-
-                    destpath.parent.mkdir(parents=True, exist_ok=True)
-                    linked_file = False
-                    if not always_copy:
-                        # Attempt to link
-                        try:
-                            if verbose:
-                                print(
-                                    f"hardlink {direntry.path} -> {destpath}",
-                                    file=sys.stderr,
-                                    end="",
-                                )
-                            os.link(direntry.path, destpath, follow_symlinks=False)
-                            linked_file = True
-                        except OSError:
-                            if verbose:
-                                print(
-                                    " (falling back to copy) ", file=sys.stderr, end=""
-                                )
-                    if not linked_file:
-                        # Make a copy instead.
-                        if verbose:
-                            print(
-                                f"copy {direntry.path} -> {destpath}",
-                                file=sys.stderr,
-                                end="",
-                            )
-                        shutil.copy2(direntry.path, destpath, follow_symlinks=False)
+                    self._copy_regular_file(
+                        direntry,
+                        destpath,
+                        always_copy,
+                        remove_dest,
+                        verbose,
+                        copied_inodes,
+                    )
             finally:
                 if verbose:
                     print("", file=sys.stderr)
+
+    def _rmtree_with_retry(self, path: Path, verbose: bool) -> None:
+        for attempt in range(self.max_attempts):
+            try:
+                shutil.rmtree(path)
+                if verbose:
+                    print(f"rmtree {path}", file=sys.stderr)
+                return
+            except PermissionError:
+                wait_time = self.retry_delay_seconds * (attempt + 2)
+                if verbose:
+                    print(
+                        f"PermissionError calling shutil.rmtree('{path}') "
+                        f"retrying after {wait_time}s",
+                        file=sys.stderr,
+                    )
+                time.sleep(wait_time)
+                if attempt == self.max_attempts - 1:
+                    if verbose:
+                        print(
+                            f"rmtree failed after {self.max_attempts} "
+                            f"attempts, failing",
+                            file=sys.stderr,
+                        )
+                    raise
+
+    @staticmethod
+    def _copy_symlink(
+        direntry: os.DirEntry[str],
+        destpath: Path,
+        remove_dest: bool,
+        verbose: bool,
+    ) -> None:
+        if not remove_dest and (destpath.exists() or destpath.is_symlink()):
+            os.unlink(destpath)
+        targetpath = os.readlink(direntry.path)
+        if verbose:
+            print(f"symlink {targetpath} -> {destpath}", file=sys.stderr, end="")
+        destpath.parent.mkdir(parents=True, exist_ok=True)
+        os.symlink(targetpath, destpath)
+
+    @staticmethod
+    def _copy_regular_file(
+        direntry: os.DirEntry[str],
+        destpath: Path,
+        always_copy: bool,
+        remove_dest: bool,
+        verbose: bool,
+        copied_inodes: dict[tuple[int, int], Path],
+    ) -> None:
+        # When hardlinking to source, another process may have already
+        # created the link. On Windows files in use can't be removed, so
+        # detect this and skip.
+        if (
+            not always_copy
+            and destpath.exists()
+            and os.stat(destpath).st_ino == os.stat(direntry.path).st_ino
+        ):
+            if verbose:
+                print(
+                    f"skipping (already hardlinked) {direntry.path}",
+                    file=sys.stderr,
+                    end="",
+                )
+            return
+
+        if not remove_dest and (destpath.exists() or destpath.is_symlink()):
+            os.unlink(destpath)
+        destpath.parent.mkdir(parents=True, exist_ok=True)
+
+        # Dispatch to the appropriate strategy.
+        if not always_copy:
+            _hardlink_or_copy_from_source(direntry.path, destpath, verbose)
+        elif _IS_WINDOWS:
+            _plain_copy(direntry.path, destpath, verbose)
+        else:
+            _copy_preserving_hardlink_groups(
+                direntry.path, destpath, verbose, copied_inodes
+            )
