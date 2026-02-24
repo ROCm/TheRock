@@ -14,7 +14,7 @@ THIS_DIR = Path(__file__).resolve().parent
 
 sys.path.insert(0, os.fspath(THIS_DIR.parent))
 
-import generate_jax_manifest as m
+import generate_jax_manifest as jax_manifest
 
 
 class GenerateJaxManifestTest(unittest.TestCase):
@@ -54,21 +54,21 @@ class GenerateJaxManifestTest(unittest.TestCase):
             os.environ[key] = value
 
     def _run_main_with_args(self, argv: list[str]) -> None:
-        m.main(argv)
+        jax_manifest.main(argv)
 
     def test_normalize_py(self) -> None:
-        self.assertEqual(m.normalize_py("3.12"), "3.12")
-        self.assertEqual(m.normalize_py("py3.12"), "3.12")
-        self.assertEqual(m.normalize_py(" py3.13 "), "3.13")
+        self.assertEqual(jax_manifest.normalize_py("3.12"), "3.12")
+        self.assertEqual(jax_manifest.normalize_py("py3.12"), "3.12")
+        self.assertEqual(jax_manifest.normalize_py(" py3.13 "), "3.13")
 
     def test_manifest_filename(self) -> None:
-        name = m.manifest_filename(
+        name = jax_manifest.manifest_filename(
             python_version="3.12",
             jax_track="release/0.4.28",
         )
         self.assertEqual(name, "therock-manifest_jax_py3.12_release-0.4.28.json")
 
-        name = m.manifest_filename(
+        name = jax_manifest.manifest_filename(
             python_version="py3.12",
             jax_track="nightly",
         )
@@ -81,18 +81,18 @@ class GenerateJaxManifestTest(unittest.TestCase):
         jax_repo = self.tmp_path / "src_jax"
         jax_head = "1111111111111111111111111111111111111111"
 
-        def fake_git_head(dirpath: Path, *, label: str) -> m.GitSourceInfo:
+        def fake_git_head(dirpath: Path, *, label: str) -> jax_manifest.GitSourceInfo:
             p = dirpath.resolve()
             if p == jax_repo.resolve():
-                return m.GitSourceInfo(
+                return jax_manifest.GitSourceInfo(
                     commit=jax_head,
                     repo="https://github.com/ROCm/rocm-jax.git",
                 )
             raise AssertionError(f"Unexpected repo path: {p}")
 
         with mock.patch.object(
-            m, "git_head", side_effect=fake_git_head
-        ), mock.patch.object(m, "git_branch_best_effort", return_value=None):
+            jax_manifest, "git_head", side_effect=fake_git_head
+        ), mock.patch.object(jax_manifest, "git_branch_best_effort", return_value=None):
             self._run_main_with_args(
                 [
                     "--manifest-dir",
@@ -133,18 +133,18 @@ class GenerateJaxManifestTest(unittest.TestCase):
         jax_repo = self.tmp_path / "src_jax2"
         jax_head = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
-        def fake_git_head(dirpath: Path, *, label: str) -> m.GitSourceInfo:
+        def fake_git_head(dirpath: Path, *, label: str) -> jax_manifest.GitSourceInfo:
             p = dirpath.resolve()
             if p == jax_repo.resolve():
-                return m.GitSourceInfo(
+                return jax_manifest.GitSourceInfo(
                     commit=jax_head,
                     repo="https://github.com/ROCm/rocm-jax.git",
                 )
             raise AssertionError(f"Unexpected repo path: {p}")
 
         with mock.patch.object(
-            m, "git_head", side_effect=fake_git_head
-        ), mock.patch.object(m, "git_branch_best_effort", return_value=None):
+            jax_manifest, "git_head", side_effect=fake_git_head
+        ), mock.patch.object(jax_manifest, "git_branch_best_effort", return_value=None):
             self._run_main_with_args(
                 [
                     "--manifest-dir",
