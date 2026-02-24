@@ -23,8 +23,8 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       CMAKE_PROJECT
       SOURCE_DIR "${_source_dir}"
       # Originally mirrored from: https://github.com/OpenMathLib/OpenBLAS/releases/download/v0.3.29/OpenBLAS-0.3.29.tar.gz
-      URL https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/OpenBLAS-0.3.31.tar.gz
-      URL_HASH SHA256=6dd2a63ac9d32643b7cc636eab57bf4e57d0ed1fff926dfbc5d3d97f2d2be3a6
+      URL https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/OpenBLAS-18638c7.tar.gz
+      URL_HASH SHA256=5d81882fdf45a92a190bda2be2922d3372fef19af8f4442f720c0ebc4d10eba8
       # Originally posted MD5 was recomputed as SHA256 manually:
       # URL_HASH MD5=853a0c5c0747c5943e7ef4bbb793162d
       TOUCH "${_download_stamp}"
@@ -67,7 +67,6 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         -DTARGET=HASWELL
         -DDYNAMIC_ARCH=${_enable_dynamicArch}
         -DBUILD_TESTING=OFF
-        -DCMAKE_C_FLAGS_RELEASE="-O1"
       EXTRA_DEPENDS
         "${_download_stamp}"
     )
