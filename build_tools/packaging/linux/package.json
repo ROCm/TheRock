@@ -323,14 +323,9 @@
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "libc6",
-      "amdrocm-runtime",
-      "amdrocm-sysdeps",
       "amdrocm-fft-devel"
     ],
     "RPMRequires": [
-      "amdrocm-runtime",
-      "amdrocm-sysdeps",
       "amdrocm-fft-devel"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
@@ -626,11 +621,11 @@
     "BuildArch": "x86_64",
     "DEBDepends": [
       "amdrocm-runtime",
-      "amdrocm-blas"
+      "amdrocm-blas-devel"
     ],
     "RPMRequires": [
       "amdrocm-runtime",
-      "amdrocm-blas"
+      "amdrocm-blas-devel"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "AMD test files for BLAS in ROCm",
@@ -1781,10 +1776,10 @@
     "Architecture": "amd64",
     "BuildArch": "x86_64",
     "DEBDepends": [
-      "amdrocm-dnn"
+      "amdrocm-dnn-devel"
     ],
     "RPMRequires": [
-      "amdrocm-dnn"
+      "amdrocm-dnn-devel"
     ],
     "Maintainer": "MIOpen Maintainer <miopen-lib.support@amd.com>",
     "Description_Short": "AMD DNN test files",
