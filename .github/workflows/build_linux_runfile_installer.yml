@@ -174,4 +174,4 @@ jobs:
           python -m venv .venv
           source .venv/bin/activate
           pip install boto3
-          python index_generation_s3_runfile.py --bucket ${{ env.S3_BUCKET_TAR }} --upload
+          python index_generation_s3_runfile.py --bucket ${{ env.S3_BUCKET_RUNFILE }} --upload
