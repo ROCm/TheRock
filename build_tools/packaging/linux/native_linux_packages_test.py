@@ -3,14 +3,54 @@
 # SPDX-License-Identifier: MIT
 
 """
-Full installation test script for ROCm native packages (V2 - Optimized).
+Full installation test script for ROCm native packages.
 
-This optimized version reduces the number of parameters by moving URL generation
-and package name construction logic to the YAML workflow file.
+This script sets up the package-manager repository, installs ROCm native packages
+(amdrocm-{gfx_arch}), and verifies the installation. URL generation and package
+name construction are delegated to the YAML workflow when run from CI.
+
+Prerequisites:
+- This script does NOT start Docker or a VM. You must run it inside an existing
+  container or VM that matches the target OS (e.g., Ubuntu for deb, AlmaLinux/RHEL
+  for rpm, SLES container for sles). Start the appropriate Docker image or VM
+  first, then invoke this script from inside that environment.
+- Root or sudo is required (repository setup, package install, keyring writes).
+- System packages: python3, pip, wget, curl; pip packages: pyelftools, requests,
+  prettytable, PyYAML.
 
 Supports both nightly and prerelease builds:
-- Nightly builds: https://rocm.nightlies.amd.com/
-- Prerelease builds: https://rocm.prereleases.amd.com/packages/
+- Nightly: https://rocm.nightlies.amd.com/
+- Prerelease: https://rocm.prereleases.amd.com/packages/
+
+Example invocations:
+
+  # Nightly DEB (Ubuntu 24.04) - run inside ubuntu:24.04 container or VM
+  python3 native_linux_packages_test.py \\
+    --os-profile ubuntu2404 \\
+    --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
+    --gfx-arch gfx94x \\
+    --release-type nightly
+
+  # Prerelease DEB with GPG verification
+  python3 native_linux_packages_test.py \\
+    --os-profile ubuntu2404 \\
+    --repo-url https://rocm.prereleases.amd.com/packages/ubuntu2404 \\
+    --release-type prerelease \\
+    --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
+
+  # Nightly RPM (RHEL 8) - run inside rhel8/almalinux container or VM
+  python3 native_linux_packages_test.py \\
+    --os-profile rhel8 \\
+    --repo-url https://rocm.nightlies.amd.com/rpm/20260204-21658678136/x86_64/ \\
+    --gfx-arch gfx94x \\
+    --release-type nightly
+
+  # Prerelease RPM (SLES 16)
+  python3 native_linux_packages_test.py \\
+    --os-profile sles16 \\
+    --repo-url https://rocm.prereleases.amd.com/packages/sles16/x86_64/ \\
+    --release-type prerelease \\
+    --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
 """
 
 import argparse
@@ -22,7 +62,7 @@ from typing import Optional
 
 
 class NativeLinuxPackagesTester:
-    """Full installation tester for ROCm native Linux packages with minimal parameters."""
+    """Full installation tester for ROCm native Linux packages."""
 
     @staticmethod
     def _derive_package_type(os_profile: str) -> str:
@@ -237,32 +277,6 @@ class NativeLinuxPackagesTester:
             print(f"[FAIL] Error updating package lists: {e}")
             return False
 
-    def setup_rpm_repository(self) -> bool:
-        """Setup RPM repository on the system.
-
-        Returns:
-            True if setup successful, False otherwise
-        """
-        print("\n" + "=" * 80)
-        print("SETTING UP RPM REPOSITORY")
-        print("=" * 80)
-
-        print(f"\nRepository URL: {self.repo_url}")
-        print(f"Release Type: {self.release_type}")
-        print(f"OS Profile: {self.os_profile}")
-
-        # Setup GPG key if GPG key URL is provided (only needed for non-SLES systems)
-        # SLES uses --gpg-auto-import-keys flag which handles it automatically
-        if self.gpg_key_url and not self._is_sles():
-            if not self.setup_gpg_key():
-                return False
-
-        # SLES uses zypper, others use dnf/yum
-        if self._is_sles():
-            return self._setup_sles_repository()
-        else:
-            return self._setup_dnf_repository()
-
     def _setup_sles_repository(self) -> bool:
         """Setup repository for SLES using zypper.
 
@@ -448,6 +462,33 @@ gpgcheck=0
         except Exception as e:
             print(f"[FAIL] Error refreshing repository metadata: {e}")
             return False
+
+    def setup_rpm_repository(self) -> bool:
+        """Setup RPM repository on the system.
+
+        Returns:
+            True if setup successful, False otherwise
+        """
+        print("\n" + "=" * 80)
+        print("SETTING UP RPM REPOSITORY")
+        print("=" * 80)
+
+        print(f"\nRepository URL: {self.repo_url}")
+        print(f"Release Type: {self.release_type}")
+        print(f"OS Profile: {self.os_profile}")
+
+        # Setup GPG key if GPG key URL is provided (only needed for non-SLES systems)
+        # SLES uses --gpg-auto-import-keys flag which handles it automatically
+        if self.gpg_key_url and not self._is_sles():
+            if not self.setup_gpg_key():
+                return False
+
+        # SLES uses zypper, others use dnf/yum
+        if self._is_sles():
+            return self._setup_sles_repository()
+        else:
+            return self._setup_dnf_repository()
+
 
     def install_deb_packages(self) -> bool:
         """Install ROCm DEB packages from repository.
@@ -828,7 +869,7 @@ gpgcheck=0
             True if all operations successful, False otherwise
         """
         print("\n" + "=" * 80)
-        print("FULL INSTALLATION TEST - NATIVE LINUX PACKAGES (V2 - OPTIMIZED)")
+        print("FULL INSTALLATION TEST - NATIVE LINUX PACKAGES")
         print("=" * 80)
         print(f"\nOS Profile: {self.os_profile}")
         print(f"Package Type (derived): {self.package_type.upper()}")
@@ -884,7 +925,7 @@ gpgcheck=0
 def main():
     """Main entry point for the script."""
     parser = argparse.ArgumentParser(
-        description="Full installation test for ROCm native packages (V2 - Optimized with minimal parameters)",
+        description="Full installation test for ROCm native packages",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
