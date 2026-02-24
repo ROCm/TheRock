@@ -82,13 +82,15 @@ def generate_index_s3(s3_client, bucket_name, prefix: str, upload=False):
                     filename = key.removeprefix(f"{prefix}/")
                 else:
                     filename = key
-                files.append(filename)
+                # Store filename and last modified date
+                last_modified = obj["LastModified"]
+                files.append((filename, last_modified))
 
     if not files:
         raise FileNotFoundError(f"No .run files found in bucket {bucket_name}.")
 
-    # Sort files alphabetically
-    files.sort()
+    # Sort files by last modified date (newest first)
+    files.sort(key=lambda x: x[1], reverse=True)
 
     # Page title based on bucket name
     bucket_lower = bucket_name.lower()
@@ -105,11 +107,12 @@ def generate_index_s3(s3_client, bucket_name, prefix: str, upload=False):
         f"Found {len(files)} .run files in bucket '{bucket_name}'."
     )
 
-    # Generate bare-bones HTML with links
+    # Generate bare-bones HTML with links and dates
     links_html = ""
-    for filename in files:
+    for filename, last_modified in files:
         href = quote(filename, safe="/")
-        links_html += f'    <a href="{href}">{filename}</a><br/>\n'
+        date_str = last_modified.strftime("%Y-%m-%d %H:%M UTC")
+        links_html += f'    <a href="{href}">{filename}</a> <small>({date_str})</small><br/>\n'
 
     html_content = f"""<!DOCTYPE html>
 <html>
@@ -139,7 +142,7 @@ def generate_index_s3(s3_client, bucket_name, prefix: str, upload=False):
             )
 
             # URL to the uploaded index.html
-            region = s3_client.meta.region_name or "us-east-2"
+            region = s3_client.meta.region_name or "us-east-1"
             if region == "us-east-1":
                 bucket_url = (
                     f"https://{bucket_name}.s3.amazonaws.com/{upload_prefix}index.html"
