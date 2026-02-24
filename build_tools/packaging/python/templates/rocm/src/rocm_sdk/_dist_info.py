@@ -204,10 +204,10 @@ PackageEntry(
     required=False,
 )
 PackageEntry(
-    "profiler",
-    "rocm-sdk-profiler",
-    pure_py_package_name="rocm_sdk_profiler",
-    template_directory="rocm-sdk-profiler",
+    "profilers",
+    "rocm-sdk-profilers",
+    pure_py_package_name="rocm_sdk_profilers",
+    template_directory="rocm-sdk-profilers",
     required=False,
 )
 
