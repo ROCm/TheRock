@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 """Unit tests for post_build_upload.py upload functions.
 
-Tests verify that the migrated upload functions construct correct S3 URIs
-and HTTPS URLs from RunOutputRoot, and pass them to subprocess/AWS CLI.
+Tests verify that the upload functions pass correct OutputLocations to the
+UploadBackend, producing the expected file layout. Uses LocalUploadBackend
+with a temp directory so no mocking of subprocess or AWS CLI is needed.
 """
 
 import os
@@ -18,6 +19,7 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent))
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from _therock_utils.run_outputs import RunOutputRoot
+from _therock_utils.upload_backend import LocalUploadBackend
 import post_build_upload
 
 
@@ -38,178 +40,218 @@ def _make_run_root(
 class TestUploadArtifacts(unittest.TestCase):
     """Tests for upload_artifacts()."""
 
-    @mock.patch("post_build_upload.run_command")
-    def test_s3_uris(self, mock_run_cmd):
-        """Verify artifact upload uses correct S3 URIs."""
+    def test_uploads_tar_xz_files(self):
+        """Verify only .tar.xz and .tar.xz.sha256sum files are uploaded."""
         run_root = _make_run_root()
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as staging:
             build_dir = Path(tmp)
-            (build_dir / "artifacts").mkdir()
-            (build_dir / "artifacts" / "index.html").write_text("<html></html>")
+            staging_dir = Path(staging)
+            artifacts = build_dir / "artifacts"
+            artifacts.mkdir()
+            (artifacts / "core_lib_gfx94X.tar.xz").write_bytes(b"data")
+            (artifacts / "core_lib_gfx94X.tar.xz.sha256sum").write_text("abc")
+            (artifacts / "some_dir").mkdir()
+            (artifacts / "some_dir" / "file.txt").write_text("ignore")
+            (artifacts / "index.html").write_text("<html></html>")
 
-            post_build_upload.upload_artifacts("gfx94X-dcgpu", build_dir, run_root)
+            backend = LocalUploadBackend(staging_dir)
+            post_build_upload.upload_artifacts(
+                "gfx94X-dcgpu", build_dir, run_root, backend
+            )
 
-        self.assertEqual(mock_run_cmd.call_count, 2)
+            # .tar.xz and .sha256sum should be at the run root
+            self.assertTrue(
+                (staging_dir / "12345-linux" / "core_lib_gfx94X.tar.xz").is_file()
+            )
+            self.assertTrue(
+                (
+                    staging_dir / "12345-linux" / "core_lib_gfx94X.tar.xz.sha256sum"
+                ).is_file()
+            )
+            # index.html goes to the artifact index path
+            self.assertTrue(
+                (staging_dir / "12345-linux" / "index-gfx94X-dcgpu.html").is_file()
+            )
+            # Non-matching files should NOT be uploaded
+            self.assertFalse(
+                (staging_dir / "12345-linux" / "some_dir" / "file.txt").exists()
+            )
 
-        # First call: recursive artifact upload
-        recursive_cmd = mock_run_cmd.call_args_list[0][0][0]
-        self.assertIn("s3://therock-ci-artifacts/12345-linux", recursive_cmd)
-
-        # Second call: index.html upload
-        index_cmd = mock_run_cmd.call_args_list[1][0][0]
-        self.assertIn(
-            "s3://therock-ci-artifacts/12345-linux/index-gfx94X-dcgpu.html",
-            index_cmd,
-        )
-
-    @mock.patch("post_build_upload.run_command")
-    def test_external_repo_prefix(self, mock_run_cmd):
-        """Verify external_repo propagates into S3 URIs."""
+    def test_external_repo_prefix(self):
+        """Verify external_repo propagates into paths."""
         run_root = _make_run_root(
             external_repo="Fork-TheRock/",
             bucket="therock-ci-artifacts-external",
         )
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as staging:
             build_dir = Path(tmp)
-            (build_dir / "artifacts").mkdir()
-            (build_dir / "artifacts" / "index.html").write_text("<html></html>")
+            staging_dir = Path(staging)
+            artifacts = build_dir / "artifacts"
+            artifacts.mkdir()
+            (artifacts / "lib.tar.xz").write_bytes(b"data")
+            (artifacts / "index.html").write_text("<html></html>")
 
-            post_build_upload.upload_artifacts("gfx94X-dcgpu", build_dir, run_root)
+            backend = LocalUploadBackend(staging_dir)
+            post_build_upload.upload_artifacts(
+                "gfx94X-dcgpu", build_dir, run_root, backend
+            )
 
-        recursive_cmd = mock_run_cmd.call_args_list[0][0][0]
-        self.assertIn(
-            "s3://therock-ci-artifacts-external/Fork-TheRock/12345-linux",
-            recursive_cmd,
-        )
+            self.assertTrue(
+                (staging_dir / "Fork-TheRock" / "12345-linux" / "lib.tar.xz").is_file()
+            )
 
-
-class TestUploadLogsToS3(unittest.TestCase):
-    """Tests for upload_logs_to_s3()."""
-
-    @mock.patch("post_build_upload.run_aws_cp")
-    def test_log_dir_uri(self, mock_aws_cp):
-        """Verify log upload uses log_dir S3 URI."""
+    def test_no_artifacts_dir_skips(self):
+        """Verify no error when artifacts/ doesn't exist."""
         run_root = _make_run_root()
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as staging:
             build_dir = Path(tmp)
+            staging_dir = Path(staging)
+            backend = LocalUploadBackend(staging_dir)
+            # Should not raise
+            post_build_upload.upload_artifacts(
+                "gfx94X-dcgpu", build_dir, run_root, backend
+            )
+
+
+class TestUploadLogs(unittest.TestCase):
+    """Tests for upload_logs()."""
+
+    def test_uploads_log_files(self):
+        """Verify log files end up at the correct paths."""
+        run_root = _make_run_root()
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as staging:
+            build_dir = Path(tmp)
+            staging_dir = Path(staging)
             log_dir = build_dir / "logs"
             log_dir.mkdir()
             (log_dir / "build.log").write_text("build output")
+            (log_dir / "ninja_logs.tar.gz").write_bytes(b"gzip")
 
-            post_build_upload.upload_logs_to_s3("gfx94X-dcgpu", build_dir, run_root)
+            backend = LocalUploadBackend(staging_dir)
+            post_build_upload.upload_logs("gfx94X-dcgpu", build_dir, run_root, backend)
 
-        # The main log upload call
-        mock_aws_cp.assert_called_once_with(
-            log_dir,
-            "s3://therock-ci-artifacts/12345-linux/logs/gfx94X-dcgpu",
-            content_type="text/plain",
-        )
+            base = staging_dir / "12345-linux" / "logs" / "gfx94X-dcgpu"
+            self.assertTrue((base / "build.log").is_file())
+            self.assertTrue((base / "ninja_logs.tar.gz").is_file())
 
-    @mock.patch("post_build_upload.run_aws_cp")
-    def test_build_observability_uri(self, mock_aws_cp):
-        """Verify build_observability upload uses correct S3 URI."""
+    def test_build_observability_uploaded(self):
+        """Verify build_observability.html ends up in the log directory."""
         run_root = _make_run_root()
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as staging:
             build_dir = Path(tmp)
+            staging_dir = Path(staging)
             log_dir = build_dir / "logs"
             log_dir.mkdir()
             (log_dir / "build_observability.html").write_text("<html></html>")
 
-            post_build_upload.upload_logs_to_s3("gfx94X-dcgpu", build_dir, run_root)
+            backend = LocalUploadBackend(staging_dir)
+            post_build_upload.upload_logs("gfx94X-dcgpu", build_dir, run_root, backend)
 
-        # Find the build_observability upload call
-        obs_calls = [
-            c for c in mock_aws_cp.call_args_list if "build_observability" in str(c)
-        ]
-        self.assertEqual(len(obs_calls), 1)
-        self.assertEqual(
-            obs_calls[0][0][1],
-            "s3://therock-ci-artifacts/12345-linux/logs/gfx94X-dcgpu/build_observability.html",
-        )
+            self.assertTrue(
+                (
+                    staging_dir
+                    / "12345-linux"
+                    / "logs"
+                    / "gfx94X-dcgpu"
+                    / "build_observability.html"
+                ).is_file()
+            )
 
-    @mock.patch("post_build_upload.run_aws_cp")
-    def test_log_index_uri(self, mock_aws_cp):
-        """Verify log index upload uses correct S3 URI."""
+    def test_log_index_uploaded(self):
+        """Verify log index.html ends up in the log directory."""
         run_root = _make_run_root()
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as staging:
             build_dir = Path(tmp)
+            staging_dir = Path(staging)
             log_dir = build_dir / "logs"
             log_dir.mkdir()
             (log_dir / "index.html").write_text("<html></html>")
 
-            post_build_upload.upload_logs_to_s3("gfx94X-dcgpu", build_dir, run_root)
+            backend = LocalUploadBackend(staging_dir)
+            post_build_upload.upload_logs("gfx94X-dcgpu", build_dir, run_root, backend)
 
-        index_calls = [c for c in mock_aws_cp.call_args_list if "index.html" in str(c)]
-        self.assertEqual(len(index_calls), 1)
-        self.assertEqual(
-            index_calls[0][0][1],
-            "s3://therock-ci-artifacts/12345-linux/logs/gfx94X-dcgpu/index.html",
-        )
+            self.assertTrue(
+                (
+                    staging_dir / "12345-linux" / "logs" / "gfx94X-dcgpu" / "index.html"
+                ).is_file()
+            )
 
-    @mock.patch("post_build_upload.run_aws_cp")
-    def test_resource_profiler_uris(self, mock_aws_cp):
-        """Verify resource profiler files use log_file S3 URI."""
+    def test_resource_profiler_flattened(self):
+        """Verify resource profiler files are uploaded both in subdirectory and flattened."""
         run_root = _make_run_root()
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as staging:
             build_dir = Path(tmp)
+            staging_dir = Path(staging)
             log_dir = build_dir / "logs"
             prof_dir = log_dir / "therock-build-prof"
             prof_dir.mkdir(parents=True)
             (prof_dir / "comp-summary.html").write_text("<html></html>")
             (prof_dir / "comp-summary.md").write_text("# Summary")
 
-            post_build_upload.upload_logs_to_s3("gfx94X-dcgpu", build_dir, run_root)
+            backend = LocalUploadBackend(staging_dir)
+            post_build_upload.upload_logs("gfx94X-dcgpu", build_dir, run_root, backend)
 
-        html_calls = [
-            c for c in mock_aws_cp.call_args_list if "comp-summary.html" in str(c)
-        ]
-        self.assertEqual(len(html_calls), 1)
-        self.assertEqual(
-            html_calls[0][0][1],
-            "s3://therock-ci-artifacts/12345-linux/logs/gfx94X-dcgpu/comp-summary.html",
-        )
+            base = staging_dir / "12345-linux" / "logs" / "gfx94X-dcgpu"
 
-    @mock.patch("post_build_upload.run_aws_cp")
-    def test_no_log_dir_skips(self, mock_aws_cp):
+            # Subdirectory copy (from upload_directory)
+            self.assertTrue(
+                (base / "therock-build-prof" / "comp-summary.html").is_file()
+            )
+            self.assertTrue((base / "therock-build-prof" / "comp-summary.md").is_file())
+
+            # Flattened copy (explicit upload_file calls)
+            self.assertTrue((base / "comp-summary.html").is_file())
+            self.assertTrue((base / "comp-summary.md").is_file())
+
+    def test_no_log_dir_skips(self):
         """Verify no uploads happen when log dir doesn't exist."""
         run_root = _make_run_root()
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as staging:
             build_dir = Path(tmp)
-            # No logs/ directory created
-            post_build_upload.upload_logs_to_s3("gfx94X-dcgpu", build_dir, run_root)
+            staging_dir = Path(staging)
+            backend = LocalUploadBackend(staging_dir)
+            # Should not raise
+            post_build_upload.upload_logs("gfx94X-dcgpu", build_dir, run_root, backend)
 
-        mock_aws_cp.assert_not_called()
 
+class TestUploadManifest(unittest.TestCase):
+    """Tests for upload_manifest()."""
 
-class TestUploadManifestToS3(unittest.TestCase):
-    """Tests for upload_manifest_to_s3()."""
-
-    @mock.patch("post_build_upload.run_aws_cp")
-    def test_manifest_uri(self, mock_aws_cp):
-        """Verify manifest upload uses correct S3 URI."""
+    def test_manifest_uploaded(self):
+        """Verify manifest ends up at the correct path."""
         run_root = _make_run_root()
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as staging:
             build_dir = Path(tmp)
+            staging_dir = Path(staging)
             manifest_dir = build_dir / "base" / "aux-overlay" / "build"
             manifest_dir.mkdir(parents=True)
             (manifest_dir / "therock_manifest.json").write_text("{}")
 
-            post_build_upload.upload_manifest_to_s3("gfx94X-dcgpu", build_dir, run_root)
+            backend = LocalUploadBackend(staging_dir)
+            post_build_upload.upload_manifest(
+                "gfx94X-dcgpu", build_dir, run_root, backend
+            )
 
-        mock_aws_cp.assert_called_once()
-        self.assertEqual(
-            mock_aws_cp.call_args[0][1],
-            "s3://therock-ci-artifacts/12345-linux/manifests/gfx94X-dcgpu/therock_manifest.json",
-        )
+            self.assertTrue(
+                (
+                    staging_dir
+                    / "12345-linux"
+                    / "manifests"
+                    / "gfx94X-dcgpu"
+                    / "therock_manifest.json"
+                ).is_file()
+            )
 
     def test_missing_manifest_raises(self):
         """Verify FileNotFoundError when manifest doesn't exist."""
         run_root = _make_run_root()
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as staging:
             build_dir = Path(tmp)
+            staging_dir = Path(staging)
+            backend = LocalUploadBackend(staging_dir)
             with self.assertRaises(FileNotFoundError):
-                post_build_upload.upload_manifest_to_s3(
-                    "gfx94X-dcgpu", build_dir, run_root
+                post_build_upload.upload_manifest(
+                    "gfx94X-dcgpu", build_dir, run_root, backend
                 )
 
 
