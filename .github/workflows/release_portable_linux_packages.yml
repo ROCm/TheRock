@@ -217,8 +217,8 @@ jobs:
           restore-keys: |
             portable-linux-package-matrix-v1-${{ matrix.target_bundle.amdgpu_family }}-
 
-      - name: Install the AWS tool
-        run: ./dockerfiles/install_awscli.sh
+      - name: Install boto3
+        run: pip install boto3
 
       - name: Fetch sources
         timeout-minutes: 30
@@ -286,11 +286,26 @@ jobs:
       - name: Upload Releases to staging S3
         if: ${{ github.repository_owner == 'ROCm' }}
         run: |
-          aws s3 cp ${{ env.OUTPUT_DIR }}/packages/dist/ s3://${{ env.S3_BUCKET_PY }}/${{ env.S3_STAGING_SUBDIR }}/${{ matrix.target_bundle.amdgpu_family }}/ \
-          --recursive --no-follow-symlinks \
-          --exclude "*" \
-          --include "*.whl" \
-          --include "*.tar.gz"
+          python3 << 'EOF'
+          import boto3, mimetypes
+          from pathlib import Path
+
+          bucket = "${{ env.S3_BUCKET_PY }}"
+          prefix = "${{ env.S3_STAGING_SUBDIR }}/${{ matrix.target_bundle.amdgpu_family }}"
+          dist_dir = Path("${{ env.OUTPUT_DIR }}/packages/dist")
+          s3 = boto3.client("s3")
+
+          for f in dist_dir.rglob("*"):
+              if not f.is_file() or f.is_symlink():
+                  continue
+              if not (f.name.endswith(".whl") or f.name.endswith(".tar.gz")):
+                  continue
+              key = f"{prefix}/{f.relative_to(dist_dir)}"
+              ct, _ = mimetypes.guess_type(str(f))
+              extra = {"ContentType": ct} if ct else {}
+              print(f"Uploading {f} -> s3://{bucket}/{key}")
+              s3.upload_file(str(f), bucket, key, ExtraArgs=extra)
+          EOF
 
       - name: (Re-)Generate Python package release index for staging
         if: ${{ github.repository_owner == 'ROCm' }}
@@ -305,12 +320,35 @@ jobs:
       - name: Upload Releases to S3
         if: ${{ github.repository_owner == 'ROCm' }}
         run: |
-          aws s3 cp ${{ env.DIST_ARCHIVE }} s3://${{ env.S3_BUCKET_TAR }}/${{ env.S3_SUBDIR_TAR }}
-          aws s3 cp ${{ env.OUTPUT_DIR }}/packages/dist/ s3://${{ env.S3_BUCKET_PY }}/${{ env.S3_SUBDIR }}/${{ matrix.target_bundle.amdgpu_family }}/ \
-          --recursive --no-follow-symlinks \
-          --exclude "*" \
-          --include "*.whl" \
-          --include "*.tar.gz"
+          python3 << 'EOF'
+          import boto3, mimetypes
+          from pathlib import Path
+
+          s3 = boto3.client("s3")
+
+          # Upload tar archive
+          archive = Path("${{ env.DIST_ARCHIVE }}")
+          tar_bucket = "${{ env.S3_BUCKET_TAR }}"
+          tar_key = f"${{ env.S3_SUBDIR_TAR }}{archive.name}"
+          print(f"Uploading {archive} -> s3://{tar_bucket}/{tar_key}")
+          s3.upload_file(str(archive), tar_bucket, tar_key)
+
+          # Upload wheels and sdists
+          bucket = "${{ env.S3_BUCKET_PY }}"
+          prefix = "${{ env.S3_SUBDIR }}/${{ matrix.target_bundle.amdgpu_family }}"
+          dist_dir = Path("${{ env.OUTPUT_DIR }}/packages/dist")
+
+          for f in dist_dir.rglob("*"):
+              if not f.is_file() or f.is_symlink():
+                  continue
+              if not (f.name.endswith(".whl") or f.name.endswith(".tar.gz")):
+                  continue
+              key = f"{prefix}/{f.relative_to(dist_dir)}"
+              ct, _ = mimetypes.guess_type(str(f))
+              extra = {"ContentType": ct} if ct else {}
+              print(f"Uploading {f} -> s3://{bucket}/{key}")
+              s3.upload_file(str(f), bucket, key, ExtraArgs=extra)
+          EOF
 
       - name: (Re-)Generate release index pages
         if: ${{ github.repository_owner == 'ROCm' }}
