@@ -19,14 +19,6 @@ ROCPROFILER_COMPUTE_DIRECTORY = THEROCK_PATH / "libexec" / "rocprofiler-compute"
 environ_vars = os.environ.copy()
 environ_vars["ROCM_PATH"] = str(THEROCK_PATH)
 
-# Set up PYTHONPATH
-old_pythonpath = os.getenv("PYTHONPATH", "")
-module_dir = ROCPROFILER_COMPUTE_DIRECTORY / "tests"
-if old_pythonpath:
-    environ_vars["PYTHONPATH"] = f"{module_dir}:{old_pythonpath}"
-else:
-    environ_vars["PYTHONPATH"] = module_dir
-
 # Set up PATH
 old_path = os.getenv("PATH", "")
 rocm_bin = str(THEROCK_BIN_PATH)
