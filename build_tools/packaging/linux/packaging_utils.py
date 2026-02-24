@@ -713,6 +713,18 @@ def resolve_versioned_dependencies(dep_list, config: PackageConfig, is_meta):
         # Arch-specific metapackage: preserve architecture for gfxarch dependencies
         deps = convert_to_versiondependency(dep_list, config, preserve_arch=True)
         deps = append_version_suffix(deps, config)
+    elif config.enable_multi_arch and not is_meta and config.gfx_arch != GFX_GENERIC:
+        # Gfx-specific non-meta package:
+        # dep_list[0] is the versioned-dependency (resolved as generic)
+        # dep_list[1:] are gfxarch dependencies (resolved with arch suffix)
+        version_deps = convert_to_versiondependency([dep_list[0]], config)
+        if len(dep_list) > 1:
+            gfx_deps = convert_to_versiondependency(
+                dep_list[1:], config, preserve_arch=True
+            )
+            deps = f"{version_deps}, {gfx_deps}"
+        else:
+            deps = version_deps
     else:
         # Normal path: convert dependencies and add version suffix
         deps = convert_to_versiondependency(dep_list, config)
@@ -746,10 +758,28 @@ def get_dependency_list_for_multiarch(pkg_info, dep_key, config: PackageConfig):
         else:
             # Arch-specific metapackage: depend on actual runtime packages
             return pkg_info.get(dep_key, [])
+    elif config.enable_multi_arch and config.gfx_arch == GFX_GENERIC:
+        # Generic package in multi-arch mode:
+        # Only include non-gfxarch dependencies
+        # Gfxarch deps are pulled via the gfx-specific package
+        dep_list = pkg_info.get(dep_key, [])
+        return [
+            dep
+            for dep in dep_list
+            if not is_gfxarch_package(
+                get_package_info(dep) or {}, config.enable_multi_arch
+            )
+        ]
     elif config.enable_multi_arch and config.gfx_arch != GFX_GENERIC:
-        # For regular (non-meta) packages in multi-arch mode:
-        # Non-generic packages only depend on themselves
-        return [pkg_name]
+        # Gfx-specific package in multi-arch mode:
+        # Depend on generic self + gfxarch dependencies with arch suffix
+        dep_list = pkg_info.get(dep_key, [])
+        gfxarch_deps = [
+            dep
+            for dep in dep_list
+            if is_gfxarch_package(get_package_info(dep) or {}, config.enable_multi_arch)
+        ]
+        return [pkg_name] + gfxarch_deps
     else:
-        # Single-arch mode or generic packages: use full dependencies
+        # Single-arch mode: use full dependencies
         return pkg_info.get(dep_key, [])
