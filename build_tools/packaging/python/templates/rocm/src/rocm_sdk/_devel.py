@@ -46,8 +46,8 @@ def get_devel_root() -> Path:
         import rocm_sdk_devel
     except ModuleNotFoundError as e:
         raise ModuleNotFoundError(
-            "ROCm SDK development package is not installed. This can typically be "
-            "obtained by installing `rocm[devel]` from your package manager"
+            "rocm_sdk_devel module for the ROCm SDK development package is not installed. "
+            "This can typically be obtained by installing `rocm[devel]` from your package manager"
         ) from e
     rocm_sdk_devel_path = _get_package_path(rocm_sdk_devel)
     if rocm_sdk_devel_path is None:
@@ -123,7 +123,7 @@ def _expand_devel_contents(rocm_sdk_devel_path: Path, site_lib_path: Path):
         raise ImportError(
             "Cannot expand the `rocm[devel]` package because it was not installed "
             "by a user-mode package manager and is managed by the system. Please "
-            "install the `rocm-sdk` in a virtual environment."
+            "install `rocm[devel]` in a virtual environment."
         )
 
     if dist_name is None or record_pkg_file is None:
