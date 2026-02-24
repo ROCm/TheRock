@@ -17,17 +17,22 @@ Usage::
 
     from _therock_utils.run_outputs import RunOutputRoot
 
-    # From CI environment
+    # Inside a CI workflow (env vars provide bucket info, no API call)
     root = RunOutputRoot.from_workflow_run(run_id="12345", platform="linux")
+
+    # Fetching artifacts from another run (API call for fork/cutover detection)
+    root = RunOutputRoot.from_workflow_run(
+        run_id="12345", platform="linux", lookup_workflow_run=True
+    )
+
+    # For local development/testing
+    root = RunOutputRoot.for_local(run_id="local", platform="linux")
 
     # Get locations for various outputs
     loc = root.artifact("blas_lib_gfx94X.tar.xz")
     print(loc.s3_uri)       # s3://therock-ci-artifacts/12345-linux/blas_lib_gfx94X.tar.xz
     print(loc.https_url)    # https://therock-ci-artifacts.s3.amazonaws.com/...
     print(loc.local_path(Path("/tmp/staging")))  # /tmp/staging/12345-linux/...
-
-    # For local development/testing
-    root = RunOutputRoot.for_local(run_id="local", platform="linux")
 """
 
 import os
