@@ -133,6 +133,10 @@ class RunOutputRoot:
         """
         return f"{self.external_repo}{self.run_id}-{self.platform}"
 
+    def root(self) -> OutputLocation:
+        """Location for the run output root (where build artifacts live)."""
+        return OutputLocation(self.bucket, self.prefix)
+
     # -- Build artifacts --------------------------------------------------------
 
     def artifact(self, filename: str) -> OutputLocation:
