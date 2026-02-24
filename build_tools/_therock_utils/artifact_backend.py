@@ -205,7 +205,7 @@ class S3Backend(ArtifactBackend):
 
     @property
     def base_uri(self) -> str:
-        return self.run_root.artifact("").s3_uri.rstrip("/")
+        return self.run_root.root().s3_uri
 
     def list_artifacts(self, name_filter: Optional[str] = None) -> List[str]:
         """List S3 artifacts."""
@@ -271,13 +271,11 @@ def create_backend_from_env(
     """
     import platform as platform_module
 
-    local_staging = os.environ.get("THEROCK_LOCAL_STAGING_DIR")
-    platform_name = platform or os.environ.get(
+    local_staging = os.getenv("THEROCK_LOCAL_STAGING_DIR")
+    platform_name = platform or os.getenv(
         "THEROCK_PLATFORM", platform_module.system().lower()
     )
-    run_id = run_id or os.environ.get(
-        "THEROCK_RUN_ID", os.environ.get("GITHUB_RUN_ID", "local")
-    )
+    run_id = run_id or os.getenv("THEROCK_RUN_ID", os.getenv("GITHUB_RUN_ID", "local"))
 
     if local_staging:
         run_root = RunOutputRoot.for_local(run_id=run_id, platform=platform_name)

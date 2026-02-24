@@ -1,8 +1,8 @@
 """Upload backend abstraction for CI run outputs.
 
 Provides a unified interface for uploading files and directories to S3 or
-local staging directories. Content-type is inferred from file extension
-so callers don't need to specify it.
+local staging directories. Content types for known file extensions are set
+during upload.
 
 Usage::
 
@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 # Content-type inference
 # ---------------------------------------------------------------------------
 
-# Extensions where mimetypes gives wrong or missing results.
+# Explicit content-type overrides for extensions we know about.
 _CONTENT_TYPE_OVERRIDES: dict[str, str] = {
     ".gz": "application/gzip",
     ".log": "text/plain",
@@ -47,8 +47,8 @@ _DEFAULT_CONTENT_TYPE = "application/octet-stream"
 def infer_content_type(path: Path) -> str:
     """Infer MIME content-type from a file's extension.
 
-    Uses ``mimetypes`` for common types, with overrides for extensions
-    that the stdlib gets wrong or doesn't know about.
+    Uses explicit overrides for extensions we know about, falling back
+    to ``mimetypes`` for everything else.
     """
     suffix = path.suffix.lower()
     if suffix in _CONTENT_TYPE_OVERRIDES:
