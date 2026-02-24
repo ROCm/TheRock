@@ -48,6 +48,15 @@ test_matrix = {
             "windows": 4,
         },
     },
+    # ocltest
+    "ocltst": {
+        "job_name": "ocltst",
+        "fetch_artifact_args": "--tests",
+        "timeout_minutes": 120,
+        "test_script": f"python {_get_script_path('test_ocltst.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards": 4,
+    },
     # BLAS tests
     "rocblas": {
         "job_name": "rocblas",
