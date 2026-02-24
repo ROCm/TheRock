@@ -9,7 +9,6 @@ import os
 import subprocess
 from pathlib import Path
 
-
 CACHED_TARGET_FAMILY: str | None = None
 
 
@@ -102,7 +101,9 @@ class PackageEntry:
         return self.dist_package_template
 
 
-def _core_library_present(so_pattern: str, dll_pattern: str, posix_relpath: str = "lib") -> bool:
+def _core_library_present(
+    so_pattern: str, dll_pattern: str, posix_relpath: str = "lib"
+) -> bool:
     """Checks whether a core library file exists in the installed core package."""
     core_package = ALL_PACKAGES["core"]
     core_spec = importlib.util.find_spec(core_package.get_py_package_name())
