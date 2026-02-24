@@ -140,6 +140,10 @@ jobs:
 
           bash build-runfile-installer.sh rocm amdgpu rocm-archs=gfx110x pull=$PULL_TYPE pulltag=$PULL_TAG pullrunid=$PULL_RUN_ID pullrocmver=$ROCM_VERSION pullpkg=$PULL_PKG buildtag=$BUILD_TAG buildrunid=$BUILD_RUNID noamdgpu nogui mscomp=$MSCOMP
 
+          echo "### Runfile Build Options" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "bash build-runfile-installer.sh rocm amdgpu rocm-archs=gfx110x pull=$PULL_TYPE pulltag=$PULL_TAG pullrunid=$PULL_RUN_ID pullrocmver=$ROCM_VERSION pullpkg=$PULL_PKG buildtag=$BUILD_TAG buildrunid=$BUILD_RUNID noamdgpu nogui mscomp=$MSCOMP >> $GITHUB_STEP_SUMMARY
+
       - name: Show .run file
         run: find . -name "*.run" -type f -exec ls -lctrh {} \;
 
