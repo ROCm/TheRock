@@ -73,14 +73,26 @@ The `comp-summary.*` files appear both in the `therock-build-prof/` subdirectory
 
 ### Bucket selection
 
-The bucket is determined by `_retrieve_bucket_info()` based on:
+The bucket is determined by `_retrieve_bucket_info()`:
 
-- **`ROCm/TheRock` (main repo):** `therock-ci-artifacts`
-- **Fork PRs:** `therock-ci-artifacts-external`
-- **Nightly releases:** `therock-nightly-artifacts`
-- **Stable releases:** `therock-release-artifacts`
-- **Internal releases:** `therock-artifacts-internal`
-- **Pre-cutover runs (before 2025-11-11):** `therock-artifacts` / `therock-artifacts-external`
+```
+RELEASE_TYPE set?
+├─ Yes ──> therock-{RELEASE_TYPE}-artifacts
+└─ No
+   └─ ROCm/TheRock and not fork?
+      ├─ Yes
+      │  └─ Pre-cutover? ─Yes─> therock-artifacts
+      │                  ─No──> therock-ci-artifacts
+      └─ No
+         └─ ROCm/therock-releases-internal and not fork?
+            ├─ Yes ──> therock-artifacts-internal
+            └─ No
+               └─ Pre-cutover? ─Yes─> therock-artifacts-external
+                               ─No──> therock-ci-artifacts-external
+```
+
+"Pre-cutover" means the workflow run's `updated_at` timestamp is before
+2025-11-11 (TheRock #2046). `RELEASE_TYPE` is typically `nightly` or `release`.
 
 ## Python API
 
