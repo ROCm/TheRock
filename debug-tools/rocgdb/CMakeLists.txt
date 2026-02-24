@@ -64,8 +64,6 @@
 cmake_minimum_required(VERSION 3.25)
 project(rocgdb C CXX)
 
-option(THEROCK_BUNDLE_SYSDEPS "Use TheRock bundled sysdeps instead of system libs" OFF)
-
 include(ExternalProject)
 include(ProcessorCount)
 
