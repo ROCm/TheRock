@@ -24,7 +24,7 @@
     "Homepage": "https://github.com/ROCm/rocm-systems",
     "Artifactory": [
       {
-        "Artifact": "base",
+        "Artifact": "core-amdsmi",
         "Artifact_Subdir": [
           {
             "Name": "amdsmi",
@@ -102,7 +102,8 @@
       }
     ],
     "Gfxarch": "False",
-    "Disable_DWZ": "True"
+    "Disable_DWZ": "True",
+    "Disable_RPM_STRIP": "True"
   },
   {
     "Package": "amdrocm-llvm-devel",
@@ -862,6 +863,17 @@
             ]
           }
         ]
+      },
+      {
+        "Artifact": "libhipcxx",
+        "Artifact_Subdir": [
+          {
+            "Name": "libhipcxx",
+            "Components": [
+              "dev"
+            ]
+          }
+        ]
       }
     ],
 
@@ -987,6 +999,7 @@
       }
     ],
 
+    "Disable_DWZ": "True",
     "Gfxarch": "False"
   },
   {
@@ -1292,8 +1305,19 @@
             ]
           }
         ]
+      },
+      {
+        "Artifact": "rocwmma",
+        "Artifact_Gfxarch": "True",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocWMMA",
+            "Components": [
+              "dev"
+            ]
+          }
+        ]
       }
-
     ],
 
     "Gfxarch": "False"

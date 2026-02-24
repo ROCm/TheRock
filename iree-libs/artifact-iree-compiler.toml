@@ -1,0 +1,6 @@
+# IREE Compiler artifact descriptor
+# Produces libIREECompiler.so for use by Fusilli
+
+[components.lib."iree-libs/iree-compiler/stage"]
+
+[components.dbg."iree-libs/iree-compiler/stage"]

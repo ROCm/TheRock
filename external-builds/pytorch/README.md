@@ -28,14 +28,25 @@ This incorporates advice from:
 
 ### Project and feature support status
 
-| Project / feature              | Linux support                                                                     | Windows support  |
-| ------------------------------ | --------------------------------------------------------------------------------- | ---------------- |
-| torch                          | ✅ Supported                                                                      | ✅ Supported     |
-| torchaudio                     | ✅ Supported                                                                      | ✅ Supported     |
-| torchvision                    | ✅ Supported                                                                      | ✅ Supported     |
-| apex                           | ✅ Supported                                                                      | ❌ Not supported |
-| Flash attention via [ao]triton | ✅ Supported                                                                      | ✅ Supported     |
-| FBGEMM GenAI                   | ❌ Not supported (see Issue [#2056](https://github.com/ROCm/TheRock/issues/2056)) | ❌ Not supported |
+The following projects and features are packaged and released through TheRock's
+stable, nightly, and dev release channels.
+
+| Project / feature | Linux support | Windows support  |
+| ----------------- | ------------- | ---------------- |
+| torch             | ✅ Supported  | ✅ Supported     |
+| ↳ aotriton        | ✅ Supported  | ✅ Supported     |
+| ↳ FBGEMM GenAI    | ✅ Supported  | ❌ Not supported |
+| torchaudio        | ✅ Supported  | ✅ Supported     |
+| torchvision       | ✅ Supported  | ✅ Supported     |
+| apex              | ✅ Supported  | ❌ Not supported |
+
+The following projects are not currently packaged and released by TheRock, functionality may vary.
+
+| Project       | Linux support        | Windows support  | Notes                                                                     |
+| ------------- | -------------------- | ---------------- | ------------------------------------------------------------------------- |
+| torch-scatter | ✅ Community support | ❌ Not supported | [ROCm enablement in upstream](https://github.com/rusty1s/pytorch_scatter) |
+| torch-sparse  | ✅ Community support | ❌ Not supported | [ROCm enablement in upstream](https://github.com/rusty1s/pytorch_sparse)  |
+| torchcodec    | ❌ Not supported     | ❌ Not supported | See Issue [#1490](https://github.com/ROCm/TheRock/issues/1490)            |
 
 ### Supported PyTorch versions
 
@@ -71,7 +82,7 @@ See the following table for how each version is supported:
 | 2.9             | ✅ Using downstream ROCm/pytorch fork<br><ul><li>[ROCm/pytorch `release/2.9` branch](https://github.com/ROCm/pytorch/tree/release/2.9)<ul><li>[ROCm/triton](https://github.com/ROCm/triton) - [`ci_commit_pins/triton.txt`](https://github.com/ROCm/pytorch/blob/release/2.9/.ci/docker/ci_commit_pins/triton.txt)</li></ul></li><li>[pytorch/audio](https://github.com/pytorch/audio) - ["rocm related commit"](https://github.com/ROCm/pytorch/blob/release/2.9/related_commits)</li><li>[pytorch/vision](https://github.com/pytorch/vision) - ["rocm related commit"](https://github.com/ROCm/pytorch/blob/release/2.9/related_commits)</li><li>[ROCm/apex `release/1.9.0` branch](https://github.com/ROCm/apex/tree/release/1.9.0) - ["rocm related commit"](https://github.com/ROCm/pytorch/blob/release/2.9/related_commits)</li></ul>         | ✅ Using downstream ROCm/pytorch fork<br><ul><li>[ROCm/pytorch `release/2.9` branch](https://github.com/ROCm/pytorch/tree/release/2.9)</li><li>[pytorch/audio](https://github.com/pytorch/audio) - ["rocm related commit"](https://github.com/ROCm/pytorch/blob/release/2.9/related_commits)</li><li>[pytorch/vision](https://github.com/pytorch/vision) - ["rocm related commit"](https://github.com/ROCm/pytorch/blob/release/2.9/related_commits)</li></ul>     |
 | 2.9 alpha       | Previously built                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Previously built                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | 2.8             | ✅ Using downstream ROCm/pytorch fork<br><ul><li>[ROCm/pytorch `release/2.8` branch](https://github.com/ROCm/pytorch/tree/release/2.8)<ul><li>[ROCm/triton](https://github.com/ROCm/triton) - [`ci_commit_pins/triton.txt`](https://github.com/ROCm/pytorch/blob/release/2.8/.ci/docker/ci_commit_pins/triton.txt)</li></ul></li><li>[pytorch/audio](https://github.com/pytorch/audio) - ["rocm related commit"](https://github.com/ROCm/pytorch/blob/release/2.8/related_commits)</li><li>[pytorch/vision](https://github.com/pytorch/vision) - ["rocm related commit"](https://github.com/ROCm/pytorch/blob/release/2.8/related_commits)</li><li>[ROCm/apex `release/1.8.0` branch](https://github.com/ROCm/apex/tree/release/1.8.0) - ["rocm related commit"](https://github.com/ROCm/pytorch/blob/release/2.8/related_commits)</li></ul>         | Unsupported                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| 2.7             | ✅ Using downstream ROCm/pytorch fork<br><ul><li>[ROCm/pytorch `release/2.7` branch](https://github.com/ROCm/pytorch/tree/release/2.7)<ul><li>[ROCm/triton](https://github.com/ROCm/triton) - [`ci_commit_pins/triton.txt`](https://github.com/ROCm/pytorch/blob/release/2.7/.ci/docker/ci_commit_pins/triton.txt)</li></ul></li><li>[pytorch/audio](https://github.com/pytorch/audio) - ["rocm related commit"](https://github.com/ROCm/pytorch/blob/release/2.7/related_commits)</li><li>[pytorch/vision](https://github.com/pytorch/vision) - ["rocm related commit"](https://github.com/ROCm/pytorch/blob/release/2.7/related_commits)</li><li>[ROCm/apex `release/1.7.0` branch](https://github.com/ROCm/apex/tree/release/1.7.0) - ["rocm related commit"](https://github.com/ROCm/pytorch/blob/release/2.7/related_commits)</li></ul>         | Unsupported                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| 2.7             | Previously built                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Unsupported                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 
 See also:
 
@@ -90,7 +101,7 @@ detailed instructions. That information is summarized here.
 
 ### Prerequisites and setup
 
-You will need a supported Python version (3.11+) on a system which we build the
+You will need a supported Python version (3.10+) on a system which we build the
 `rocm[libraries,devel]` packages for. See the
 [`RELEASES.md`: Installing releases using pip](../../RELEASES.md#installing-releases-using-pip)
 and [Python Packaging](../../docs/packaging/python_packaging.md) documentation
@@ -438,7 +449,6 @@ In order to check out and build one of these, use the following instructions:
 #   release/2.10
 #   release/2.9
 #   release/2.8
-#   release/2.7
 python pytorch_torch_repo.py checkout \
   --gitrepo-origin https://github.com/ROCm/pytorch.git \
   --repo-hashtag release/2.9
