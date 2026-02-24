@@ -20,6 +20,11 @@ import subprocess
 import sys
 
 
+def _log(*args, **kwargs):
+    print(*args, **kwargs)
+    sys.stdout.flush()
+
+
 @dataclass(frozen=True)
 class GitSourceInfo:
     """Git commit and origin repo for a source checkout."""
@@ -37,7 +42,7 @@ class GitSourceInfo:
 
 def capture(args: list[str | Path], cwd: Path) -> str:
     args = [str(arg) for arg in args]
-    print(f"++ Exec [{cwd}]$ {shlex.join(args)}")
+    _log(f"++ Exec [{cwd}]$ {shlex.join(args)}")
     return (
         subprocess.check_output(
             args,
@@ -52,7 +57,7 @@ def capture(args: list[str | Path], cwd: Path) -> str:
 def capture_optional(args: list[str | Path], cwd: Path) -> str | None:
     """Like capture(), but returns None on failure."""
     args = [str(arg) for arg in args]
-    print(f"++ Exec [{cwd}]$ {shlex.join(args)}")
+    _log(f"++ Exec [{cwd}]$ {shlex.join(args)}")
     try:
         out = (
             subprocess.check_output(
@@ -270,7 +275,7 @@ def main(argv: list[str]) -> None:
     if out_path.stat().st_size == 0:
         raise RuntimeError(f"Manifest is empty: {out_path}")
 
-    print(f"[jax-sources-manifest] wrote {out_path}")
+    _log(f"[jax-sources-manifest] wrote {out_path}")
 
 
 if __name__ == "__main__":
