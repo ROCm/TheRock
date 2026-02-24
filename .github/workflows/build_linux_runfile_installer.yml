@@ -97,16 +97,16 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      # - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
-      #   with:
-      #     python-version: 3.12
-
       - name: Set ROCM_VERSION
         run: |
           ROCM_VERSION=$(echo "${{ inputs.rocm_version }}" | cut -d'~' -f1)
           echo "Set value of ROCM_VERSION = '$ROCM_VERSION'"
           echo "ROCM_VERSION=$ROCM_VERSION" >> $GITHUB_ENV
-        
+      
+      # Value of inputs.rocm_version for daily nightly job would be in the format 7.12.0~20260218.
+      # We need the 20260218 and set it to pull_tag
+      # Value of inputs.rocm_version for prerelease job would be in the format 7.12.0~rc2.
+      # We need the rc2 and set it to pull_tag.
       - name: Set PULL_TAG
         run: |
           if [[ -z $PULL_TAG ]]; then
@@ -136,14 +136,11 @@ jobs:
 
       - name: Run build-runfile-installer.sh
         run: |
-          echo "Run command: bash build-runfile-installer.sh rocm amdgpu rocm-archs=gfx110x pull=$PULL_TYPE pulltag=$PULL_TAG pullrunid=$PULL_RUN_ID pullrocmver=$ROCM_VERSION pullpkg=$PULL_PKG buildtag=$BUILD_TAG buildrunid=$BUILD_RUNID noamdgpu nogui mscomp=$MSCOMP"
-
-          bash build-runfile-installer.sh rocm amdgpu rocm-archs=gfx110x pull=$PULL_TYPE pulltag=$PULL_TAG pullrunid=$PULL_RUN_ID pullrocmver=$ROCM_VERSION pullpkg=$PULL_PKG buildtag=$BUILD_TAG buildrunid=$BUILD_RUNID noamdgpu nogui mscomp=$MSCOMP
-
           echo "### Runfile Build Options" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "\`bash build-runfile-installer.sh rocm amdgpu rocm-archs=gfx110x pull=$PULL_TYPE pulltag=$PULL_TAG pullrunid=$PULL_RUN_ID pullrocmver=$ROCM_VERSION pullpkg=$PULL_PKG buildtag=$BUILD_TAG buildrunid=$BUILD_RUNID noamdgpu nogui mscomp=$MSCOMP\`" >> $GITHUB_STEP_SUMMARY
+          echo "\`bash build-runfile-installer.sh rocm amdgpu rocm-archs=gfx110x pull=$PULL_TYPE pulltag=$PULL_TAG pullrunid=$PULL_RUN_ID pullrocmver=$ROCM_VERSION pullpkg=$PULL_PKG buildtag=$BUILD_TAG buildrunid=$BUILD_RUNID  mscomp=$MSCOMP\`" >> $GITHUB_STEP_SUMMARY
 
+          bash build-runfile-installer.sh rocm amdgpu rocm-archs=gfx110x pull=$PULL_TYPE pulltag=$PULL_TAG pullrunid=$PULL_RUN_ID pullrocmver=$ROCM_VERSION pullpkg=$PULL_PKG buildtag=$BUILD_TAG buildrunid=$BUILD_RUNID  mscomp=$MSCOMP
       - name: Show .run file
         run: find . -name "*.run" -type f -exec ls -lctrh {} \;
 
