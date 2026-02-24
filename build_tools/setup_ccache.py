@@ -153,27 +153,6 @@ def run(args: argparse.Namespace):
     print(f"export CCACHE_CONFIGPATH={config_file}")
 
 
-def check_bazel_remote_availability():
-    CACHE_SRV_REL = "http://bazelremote-svc-rel.bazelremote-ns.svc.cluster.local:8080|layout=bazel|connect-timeout=50"
-    status_endpoint = f"{CACHE_SRV_REL.split('|')[0]}/status"
-    import requests,sys
-
-    try:
-            print(f"Checking Bazel Remote Cache status at: {status_endpoint}")
-            response = requests.get(status_endpoint, timeout=5)
-
-            if response.status_code == 200:
-                print("Bazel Remote Cache is reachable and healthy.")
-                print("Response:", response.text)
-            else:
-                print(f"Unexpected response code: {response.status_code}")
-                print("Response:", response.text)
-                sys.exit(1)
-    except Exception as e:
-            print(f"Failed to reach Bazel Remote Cache: {e}")
-            sys.exit(1)
-
-
 def main(argv: list[str]):
     p = argparse.ArgumentParser()
     p.add_argument(
@@ -219,7 +198,6 @@ def main(argv: list[str]):
     )
 
     args = p.parse_args(argv)
-    check_bazel_remote_availability()
     run(args)
 
 
