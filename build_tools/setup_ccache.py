@@ -31,7 +31,7 @@ REPO_ROOT = THIS_DIR.parent
 POSIX_CCACHE_COMPILER_CHECK_PATH = THIS_DIR / "posix_ccache_compiler_check.py"
 POSIX_COMPILER_CHECK_SCRIPT = POSIX_CCACHE_COMPILER_CHECK_PATH.read_text()
 CACHE_SRV_DEV = "http://bazelremote-svc.bazelremote-ns.svc.cluster.local:8080|layout=bazel|connect-timeout=50"
-CACHE_SRV_REL = "http://bazelremote-svc.bazelremote-ns.svc.cluster.local:8080|layout=bazel|connect-timeout=50"
+CACHE_SRV_REL = "http://bazelremote-svc-rel.bazelremote-ns.svc.cluster.local:8081|layout=bazel|connect-timeout=50"
 
 # See https://ccache.dev/manual/4.6.1.html#_configuration
 CONFIG_PRESETS_MAP = {
@@ -153,6 +153,26 @@ def run(args: argparse.Namespace):
     print(f"export CCACHE_CONFIGPATH={config_file}")
 
 
+def check_bazel_remote_availability():
+    CACHE_SRV_REL = "http://bazelremote-svc-rel.bazelremote-ns.svc.cluster.local:8081|layout=bazel|connect-timeout=50"
+    status_endpoint = f"{CACHE_SRV_REL.split('|')[0]}/status"
+    import requests
+
+    try:
+            print(f"Checking Bazel Remote Cache status at: {status_endpoint}")
+            response = requests.get(status_endpoint, timeout=5)
+
+            if response.status_code == 200:
+                print("Bazel Remote Cache is reachable and healthy.")
+                print("Response:", response.text)
+            else:
+                print(f"Unexpected response code: {response.status_code}")
+                print("Response:", response.text)
+    except Exception as e:
+            print(f"Failed to reach Bazel Remote Cache: {e}")
+            return False
+
+
 def main(argv: list[str]):
     p = argparse.ArgumentParser()
     p.add_argument(
@@ -198,6 +218,7 @@ def main(argv: list[str]):
     )
 
     args = p.parse_args(argv)
+    check_bazel_remote_availability()
     run(args)
 
 
