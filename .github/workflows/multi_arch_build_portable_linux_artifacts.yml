@@ -3,6 +3,13 @@
 # This workflow builds TheRock stage artifacts for all stages.
 # Handles both generic stages (foundation, compiler-runtime, etc.) and
 # per-arch stages (math-libs, comm-libs) using conditional logic.
+#
+# Artifacts flow between stages via S3 using the artifact_manager.py tool.
+#
+# TODO: When kpack splitting is permanently enabled, change fetch commands to use
+# --generic-only instead of --amdgpu-families for efficiency. Subsequent build
+# stages only need generic (host) artifacts; device-specific kpacks are not
+# needed until final packaging.
 
 name: Build Stage Artifacts
 
@@ -49,6 +56,7 @@ jobs:
       AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
       STAGE_NAME: ${{ inputs.stage_name }}
       AMDGPU_FAMILIES: ${{ inputs.amdgpu_family }}
+      BUILD_DIR: build
       CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
       CACHE_DIR: ${{ github.workspace }}/.container-cache
       TEATIME_FORCE_INTERACTIVE: 0
@@ -86,10 +94,11 @@ jobs:
       - name: Fetch inbound artifacts
         if: ${{ !github.event.pull_request.head.repo.fork }}
         run: |
-          python build_tools/artifact_manager.py fetch --run-id ${{ github.run_id }} \
-            --stage ${STAGE_NAME} \
+          python build_tools/artifact_manager.py fetch \
+            --run-id=${{ github.run_id }} \
+            --stage="${STAGE_NAME}" \
             --amdgpu-families="${{ inputs.amdgpu_family }}" \
-            --output-dir build \
+            --output-dir="${BUILD_DIR}" \
             --bootstrap
 
       - name: Fetch sources
@@ -100,9 +109,9 @@ jobs:
         id: stage_config
         run: |
           python build_tools/configure_stage.py \
-            --stage ${STAGE_NAME} \
+            --stage="${STAGE_NAME}" \
             --amdgpu-families="${{ inputs.amdgpu_family }}" \
-            --dist-amdgpu-families "${{ inputs.dist_amdgpu_families }}" \
+            --dist-amdgpu-families="${{ inputs.dist_amdgpu_families }}" \
             --gha-output
 
       - name: Install stage python deps
@@ -111,7 +120,7 @@ jobs:
 
       - name: Configure
         run: |
-          cmake -B build -S . -GNinja \
+          cmake -B "${BUILD_DIR}" -S . -GNinja \
             -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
@@ -119,7 +128,7 @@ jobs:
 
       - name: Build stage
         run: |
-          cmake --build build --target stage-${STAGE_NAME} therock-artifacts -- -k 0
+          cmake --build "${BUILD_DIR}" --target stage-${STAGE_NAME} therock-artifacts -- -k 0
 
       - name: Report
         if: ${{ !cancelled() }}
@@ -127,7 +136,7 @@ jobs:
           echo "CCache Stats:"
           ccache -s -v
           echo "Artifacts:"
-          ls -lh build/artifacts/*.tar.xz 2>/dev/null || echo "No artifacts found"
+          ls -lh "${BUILD_DIR}"/artifacts/*.tar.xz 2>/dev/null || echo "No artifacts found"
 
       - name: Configure AWS Credentials (refresh for push)
         if: ${{ !github.event.pull_request.head.repo.fork }}
@@ -140,5 +149,5 @@ jobs:
         if: ${{ !github.event.pull_request.head.repo.fork }}
         run: |
           python build_tools/artifact_manager.py push --run-id ${{ github.run_id }} \
-            --stage ${STAGE_NAME} \
-            --build-dir build
+            --stage="${STAGE_NAME}" \
+            --build-dir="${BUILD_DIR}"

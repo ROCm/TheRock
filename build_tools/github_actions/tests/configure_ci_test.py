@@ -6,17 +6,10 @@ import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
+# Add tests directory to path for extended_tests imports
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tests"))
 import configure_ci
-from benchmarks.benchmark_test_matrix import benchmark_matrix
-
-therock_test_runner_dict = {
-    "gfx110x": {
-        "linux": "linux-gfx110X-gpu-rocm-test",
-        "windows": "windows-gfx110X-gpu-rocm-test",
-    },
-}
-
-os.environ["ROCM_THEROCK_TEST_RUNNERS"] = json.dumps(therock_test_runner_dict)
+from extended_tests.benchmark.benchmark_test_matrix import benchmark_matrix
 
 
 class ConfigureCITest(unittest.TestCase):
@@ -45,6 +38,7 @@ class ConfigureCITest(unittest.TestCase):
         for entry in target_output:
             family_info_list = json.loads(entry["matrix_per_family_json"])
             self.assertTrue(all("amdgpu_family" in f for f in family_info_list))
+            self.assertTrue(all("amdgpu_targets" in f for f in family_info_list))
             self.assertTrue(all("test-runs-on" in f for f in family_info_list))
             self.assertTrue(
                 all("sanity_check_only_for_family" in f for f in family_info_list)
@@ -264,6 +258,26 @@ class ConfigureCITest(unittest.TestCase):
         self.assertGreaterEqual(len(linux_target_output), 1)
         # check that at least one runner name has "oem" in test runner name if "oem" test runner was requested
         self.assertTrue("oem" in item["test-runs-on"] for item in linux_target_output)
+        self.assert_target_output_is_valid(
+            target_output=linux_target_output, allow_xfail=False
+        )
+        self.assertEqual(linux_test_labels, [])
+
+    def test_skip_ci_label(self):
+        base_args = {
+            "pr_labels": '{"labels":[{"name":"skip-ci"},{"name":"test:hipblaslt"},{"name":"test:rocblas"},{"name":"gfx94X-linux"},{"name":"gfx110X-linux"},{"name":"gfx110X-windows"},{"name":"test_runner:oem"}]}',
+            "build_variant": "release",
+        }
+        linux_target_output, linux_test_labels = configure_ci.matrix_generator(
+            is_pull_request=True,
+            is_workflow_dispatch=False,
+            is_push=False,
+            is_schedule=False,
+            base_args=base_args,
+            families={},
+            platform="linux",
+        )
+        self.assertEqual(len(linux_target_output), 0)
         self.assert_target_output_is_valid(
             target_output=linux_target_output, allow_xfail=False
         )
@@ -765,11 +779,21 @@ class ConfigureCITest(unittest.TestCase):
             f"Experimental family {experimental_arch_name} should have sanity_check=True",
         )
 
-    def test_rocm_org_var_names(self):
-        os.environ["LOAD_TEST_RUNNERS_FROM_VAR"] = "false"
-        test_matrix = configure_ci.get_all_families_for_trigger_types(["presubmit"])
-        self.assertIn("linux-gfx110X-gpu-rocm-test", json.dumps(test_matrix))
-        self.assertIn("windows-gfx110X-gpu-rocm-test", json.dumps(test_matrix))
+    # TODO(#3433): Remove sandbox logic once ASAN tests are passing and environment is no longer required
+    def test_sandbox_test_runner_with_asan(self):
+        base_args = {"build_variant": "asan"}
+        build_families = {"amdgpu_families": "gfx94X"}
+        linux_target_output, linux_test_labels = configure_ci.matrix_generator(
+            is_pull_request=True,
+            is_workflow_dispatch=False,
+            is_push=False,
+            is_schedule=False,
+            base_args=base_args,
+            families=build_families,
+            platform="linux",
+        )
+        entry = linux_target_output[0]
+        self.assertEqual(entry["test-runs-on"], "linux-mi325-8gpu-ossci-rocm-sandbox")
 
 
 if __name__ == "__main__":

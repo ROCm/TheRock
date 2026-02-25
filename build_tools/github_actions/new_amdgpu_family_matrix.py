@@ -114,6 +114,7 @@ amdgpu_family_info_matrix_all = {
                         # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
                         "benchmark": "linux-mi325-8gpu-ossci-rocm",
                     },
+                    "fetch-gfx-targets": ["gfx942"],
                 },
                 "release": {
                     "push_on_success": True,
@@ -127,6 +128,7 @@ amdgpu_family_info_matrix_all = {
                 "test": {
                     "run_tests": False,
                     "runs_on": {},
+                    "fetch-gfx-targets": [],
                 },
                 "release": {
                     "push_on_success": False,
@@ -143,10 +145,12 @@ amdgpu_family_info_matrix_all = {
                 },
                 "test": {
                     # TODO(#2740): Re-enable machine once `amdsmi` test is fixed
+                    # fetch-gfx-targets should be ["gfx1100"] when re-enabled
                     "run_tests": False,
                     "runs_on": {
                         "test": "linux-gfx110X-gpu-rocm",
                     },
+                    "fetch-gfx-targets": [],
                     "sanity_check_only_for_family": True,
                 },
                 "release": {
@@ -163,6 +167,7 @@ amdgpu_family_info_matrix_all = {
                     "runs_on": {
                         "test": "windows-gfx110X-gpu-rocm",
                     },
+                    "fetch-gfx-targets": ["gfx1100"],
                     "sanity_check_only_for_family": True,
                 },
                 "release": {
@@ -184,6 +189,7 @@ amdgpu_family_info_matrix_all = {
                     "runs_on": {
                         "test": "linux-gfx1150-gpu-rocm",
                     },
+                    "fetch-gfx-targets": [],
                     "sanity_check_only_for_family": True,
                 },
                 "release": {
@@ -198,6 +204,7 @@ amdgpu_family_info_matrix_all = {
                 "test": {
                     "run_tests": False,
                     "runs_on": {},
+                    "fetch-gfx-targets": [],
                 },
                 "release": {
                     "push_on_success": False,
@@ -216,6 +223,7 @@ amdgpu_family_info_matrix_all = {
                         "test": "linux-gfx1151-gpu-rocm",
                         "oem": "linux-strix-halo-gpu-rocm-oem",
                     },
+                    "fetch-gfx-targets": ["gfx1151"],
                     "sanity_check_only_for_family": True,
                 },
                 "release": {
@@ -234,6 +242,7 @@ amdgpu_family_info_matrix_all = {
                         # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
                         "benchmark": "windows-gfx1151-gpu-rocm",
                     },
+                    "fetch-gfx-targets": ["gfx1151"],
                 },
                 "release": {
                     "push_on_success": False,
@@ -250,6 +259,7 @@ amdgpu_family_info_matrix_all = {
                 "test": {
                     "run_tests": False,
                     "runs_on": {},
+                    "fetch-gfx-targets": [],
                 },
                 "release": {
                     "push_on_success": False,
@@ -264,6 +274,7 @@ amdgpu_family_info_matrix_all = {
                 "test": {
                     "run_tests": False,
                     "runs_on": {},
+                    "fetch-gfx-targets": [],
                 },
                 "release": {
                     "push_on_success": False,
@@ -283,6 +294,7 @@ amdgpu_family_info_matrix_all = {
                     "runs_on": {
                         "test": "linux-gfx1153-gpu-rocm",
                     },
+                    "fetch-gfx-targets": [],
                     "sanity_check_only_for_family": True,
                 },
                 "release": {
@@ -298,6 +310,7 @@ amdgpu_family_info_matrix_all = {
                 "test": {
                     "run_tests": False,
                     "runs_on": {},
+                    "fetch-gfx-targets": [],
                 },
                 "release": {
                     "push_on_success": False,
@@ -315,6 +328,7 @@ amdgpu_family_info_matrix_all = {
                 "test": {
                     "run_tests": True,
                     "runs_on": {"test": "linux-mi355-1gpu-ossci-rocm"},
+                    "fetch-gfx-targets": ["gfx950"],
                 },
                 "release": {
                     "push_on_success": False,
@@ -328,6 +342,7 @@ amdgpu_family_info_matrix_all = {
                 "test": {
                     "run_tests": False,
                     "runs_on": {},
+                    "fetch-gfx-targets": [],
                 },
                 "release": {
                     "push_on_success": False,
@@ -347,6 +362,7 @@ amdgpu_family_info_matrix_all = {
                     "runs_on": {
                         "test": "linux-gfx120X-gpu-rocm",
                     },
+                    "fetch-gfx-targets": ["gfx1200", "gfx1201"],
                     "sanity_check_only_for_family": True,
                 },
                 "release": {
@@ -360,10 +376,12 @@ amdgpu_family_info_matrix_all = {
                 },
                 "test": {
                     # TODO(#2962): Re-enable machine once sanity checks work with this architecture
+                    # fetch-gfx-targets should be ["gfx1200", "gfx1201"] when re-enabled
                     "run_tests": False,
                     "runs_on": {
                         "test": "windows-gfx120X-gpu-rocm",
                     },
+                    "fetch-gfx-targets": [],
                 },
                 "release": {
                     "push_on_success": True,
@@ -383,6 +401,7 @@ amdgpu_family_info_matrix_all = {
                     "runs_on": {
                         "test": "linux-gfx90X-gpu-rocm",
                     },
+                    "fetch-gfx-targets": ["gfx90a"],
                     "sanity_check_only_for_family": True,
                 },
                 "release": {
@@ -399,6 +418,7 @@ amdgpu_family_info_matrix_all = {
                 "test": {
                     "run_tests": False,
                     "runs_on": {},
+                    "fetch-gfx-targets": [],
                     "expect_pytorch_failure": True,
                 },
                 "release": {
@@ -417,6 +437,7 @@ amdgpu_family_info_matrix_all = {
                 "test": {
                     "run_tests": False,
                     "runs_on": {},
+                    "fetch-gfx-targets": [],
                     # TODO(#1926): Resolve bgemm kernel hip file generation error,
                     # to enable PyTorch builds
                     "expect_pytorch_failure": True,
@@ -433,6 +454,7 @@ amdgpu_family_info_matrix_all = {
                 "test": {
                     "run_tests": False,
                     "runs_on": {},
+                    "fetch-gfx-targets": [],
                 },
                 "release": {
                     "push_on_success": False,
@@ -449,10 +471,12 @@ amdgpu_family_info_matrix_all = {
                 },
                 "test": {
                     # TODO(#2740): Re-enable machine once `amdsmi` test is fixed
+                    # fetch-gfx-targets should be ["gfx1030"] when re-enabled
                     "run_tests": False,
                     "runs_on": {
                         "test": "linux-gfx1030-gpu-rocm",
                     },
+                    "fetch-gfx-targets": [],
                     "sanity_check_only_for_family": True,
                 },
                 "release": {
@@ -470,6 +494,7 @@ amdgpu_family_info_matrix_all = {
                     "runs_on": {
                         "test": "windows-gfx1030-gpu-rocm",
                     },
+                    "fetch-gfx-targets": [],
                     "sanity_check_only_for_family": True,
                     "expect_pytorch_failure": True,
                 },

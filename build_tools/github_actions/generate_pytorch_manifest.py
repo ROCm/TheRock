@@ -3,7 +3,7 @@
 Generate a manifest for PyTorch external builds.
 
 Writes a JSON manifest containing:
-  - pytorch/pytorch_audio/pytorch_vision(/triton): git commit + origin repo (+ branch best-effort)
+  - pytorch/pytorch_audio/pytorch_vision(/triton)(/apex): git commit + origin repo (+ branch best-effort)
   - therock: repo + commit + branch from GitHub Actions env (best-effort)
 
 Filename format:
@@ -149,10 +149,12 @@ def build_sources(
     pytorch_audio_dir: Path,
     pytorch_vision_dir: Path,
     triton_dir: Path | None,
+    apex_dir: Path | None,
     pytorch_git_ref: str,
     pytorch_audio_git_ref: str | None,
     pytorch_vision_git_ref: str | None,
     triton_git_ref: str | None,
+    apex_git_ref: str | None,
 ) -> dict[str, dict[str, str]]:
     pt = git_head(pytorch_dir, label="pytorch")
     aud = git_head(pytorch_audio_dir, label="pytorch_audio")
@@ -193,6 +195,16 @@ def build_sources(
             commit=tri.commit, repo=tri.repo, branch=tri_branch
         ).to_dict()
 
+    if apex_dir is not None:
+        ax = git_head(apex_dir, label="apex")
+        ax_branch = resolve_branch(
+            inferred=git_branch_best_effort(apex_dir),
+            provided=apex_git_ref,
+        )
+        sources["apex"] = GitSourceInfo(
+            commit=ax.commit, repo=ax.repo, branch=ax_branch
+        ).to_dict()
+
     return sources
 
 
@@ -220,10 +232,12 @@ def generate_manifest_dict(
     pytorch_audio_dir: Path,
     pytorch_vision_dir: Path,
     triton_dir: Path | None,
+    apex_dir: Path | None,
     pytorch_git_ref: str,
     pytorch_audio_git_ref: str | None,
     pytorch_vision_git_ref: str | None,
     triton_git_ref: str | None,
+    apex_git_ref: str | None,
 ) -> dict[str, object]:
     """Generate the manifest dictionary"""
     sources = build_sources(
@@ -231,10 +245,12 @@ def generate_manifest_dict(
         pytorch_audio_dir=pytorch_audio_dir,
         pytorch_vision_dir=pytorch_vision_dir,
         triton_dir=triton_dir,
+        apex_dir=apex_dir,
         pytorch_git_ref=pytorch_git_ref,
         pytorch_audio_git_ref=pytorch_audio_git_ref,
         pytorch_vision_git_ref=pytorch_vision_git_ref,
         triton_git_ref=triton_git_ref,
+        apex_git_ref=apex_git_ref,
     )
 
     server_url = os.environ.get("GITHUB_SERVER_URL")
@@ -294,6 +310,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         "--triton-git-ref",
         help="Optional ref for triton branch field (used if detached).",
     )
+    ap.add_argument(
+        "--apex-git-ref",
+        help="Optional ref for apex branch field (used if detached).",
+    )
     ap.add_argument("--pytorch-dir", type=Path, required=True)
     ap.add_argument("--pytorch-audio-dir", type=Path, required=True)
     ap.add_argument("--pytorch-vision-dir", type=Path, required=True)
@@ -301,6 +321,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         "--triton-dir",
         type=Path,
         help="Optional triton checkout (Linux only).",
+    )
+    ap.add_argument(
+        "--apex-dir",
+        type=Path,
+        help="Optional apex checkout (Linux only).",
     )
     return ap.parse_args(argv)
 
@@ -322,10 +347,12 @@ def main(argv: list[str]) -> None:
         pytorch_audio_dir=args.pytorch_audio_dir,
         pytorch_vision_dir=args.pytorch_vision_dir,
         triton_dir=args.triton_dir,
+        apex_dir=args.apex_dir,
         pytorch_git_ref=args.pytorch_git_ref,
         pytorch_audio_git_ref=args.pytorch_audio_git_ref,
         pytorch_vision_git_ref=args.pytorch_vision_git_ref,
         triton_git_ref=args.triton_git_ref,
+        apex_git_ref=args.apex_git_ref,
     )
 
     out_path.write_text(
