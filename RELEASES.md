@@ -491,9 +491,69 @@ ls install
 > #     ...
 > ```
 
+## Installing from native packages
+
+In addition to Python wheels and tarballs, ROCm native Linux packages are
+published for Debian-based and RPM-based distributions.
+
+> [!WARNING]   
+> These builds are primarily intended for development and testing and are currently **unsigned**.
+
+
+### Installing on Debian-based systems (Ubuntu, Debian, etc.)
+
+1. Install prerequisites:
+
+```bash
+sudo apt update
+sudo apt install -y ca-certificates
+```
+2. Add the nightly repository
+
+```bash
+echo "deb [trusted=yes] https://rocm.nightlies.amd.com/deb/<YYYYMMDD>-<action-run-id> stable main" \
+  | sudo tee /etc/apt/sources.list.d/rocm-nightly.list
+```
+3. Update package lists:
+
+```bash
+sudo apt update
+```
+
+4. Install ROCm packages:
+
+```bash
+sudo apt install amdrocm-<GPU-ARCH> #Change GPU arch based on your machine ex: gfx94x
+```
+### Installing on RPM-based systems (RHEL, SLES, AlmaLinux etc.)
+1. Install prerequisites:
+
+```bash
+sudo dnf install -y ca-certificates
+```
+
+2. Create a repository file:
+
+```bash
+sudo tee /etc/yum.repos.d/rocm-nightly.repo <<EOF
+[rocm-nightly]
+name=ROCm Nightly Repository
+baseurl=https://rocm.nightlies.amd.com/rpm/<YYYYMMDD>-<action-run-id>/x86_64
+enabled=1
+gpgcheck=0
+repo_gpgcheck=0
+EOF
+```
+
+3. Install ROCm packages:
+
+```bash
+sudo dnf install amdrocm-<GPU-ARCH> #Change GPU arch based on your machine ex: gfx94x
+```
+
 ## Verifying your installation
 
-After installing ROCm via either pip packages or tarballs, you can verify that
+After installing ROCm via either pip packages, tarballs or native packages, you can verify that
 your GPU is properly recognized.
 
 ### Linux
