@@ -121,7 +121,7 @@ jobs:
           large-packages: true
           swap-storage: true
     
-     - name: Get space (after)
+      - name: Get space (after)
         run: df -h
       
       - name: Set ROCM_VERSION
