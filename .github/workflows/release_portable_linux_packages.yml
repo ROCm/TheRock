@@ -433,6 +433,8 @@ jobs:
     runs-on: ubuntu-24.04
     needs: [portable_linux_packages]
     if: ${{ always() && needs.portable_linux_packages.result != 'cancelled' }}
+    permissions:
+      actions: write # Required to trigger workflows
     outputs:
       successful_native_families: ${{ steps.aggregate.outputs.successful_native_families }}
     # Downloads artifacts with the directory structure: 
