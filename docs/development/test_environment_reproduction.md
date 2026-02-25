@@ -12,11 +12,10 @@ $ docker run -i \
     --device /dev/kfd \
     --device /dev/dri \
     -t ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98 /bin/bash
-$ sudo apt-get update && sudo apt install python3.12-venv
-$ git clone https://github.com/ROCm/TheRock.git
-$ cd TheRock
-$ python -m venv .venv && source .venv/bin/activate
-$ pip install -r requirements-test.txt
+$ curl -LsSf https://astral.sh/uv/install.sh | bash && source $HOME/.local/bin/env
+$ git clone https://github.com/ROCm/TheRock.git && cd TheRock
+$ uv venv .venv && source .venv/bin/activate
+$ uv pip install -r requirements-test.txt
 $ GITHUB_REPOSITORY={GITHUB_REPO} python build_tools/install_rocm_from_artifacts.py --run-id {CI_RUN_ID} --amdgpu-family {GPU_FAMILY} --tests
 $ export THEROCK_BIN_DIR=./therock-build/bin
 # The python test scripts are in directory "build_tools/github_actions/test_executable_scripts/"
