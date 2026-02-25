@@ -195,7 +195,7 @@ By default the pytorch directory is determined based on this script's location
         default=True,
         required=False,
         action=argparse.BooleanOptionalAction,
-        help="""Enable pytest caching. Use --no-cache when only having read-only access to pytorch directory""",
+        help="""Enable pytest caching (default). Use --no-cache when only having read-only access to pytorch directory""",
     )
 
     args = parser.parse_args(argv)
