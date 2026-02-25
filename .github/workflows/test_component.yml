@@ -132,7 +132,7 @@ jobs:
         if: ${{ fromJSON(inputs.component).additional_requirements_files != '' }}
         run: |
           python ./build_tools/install_additional_requirements.py \
-            --requirements-files=${{ fromJSON(inputs.component).additional_requirements_files }}
+            --requirements-files=${{ join(fromJSON(inputs.component).additional_requirements_files, ',') }}
 
       - name: Test
         timeout-minutes: ${{ fromJSON(inputs.component).timeout_minutes }}
