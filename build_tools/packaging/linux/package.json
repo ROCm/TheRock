@@ -1459,6 +1459,11 @@
             "Components": [
               "lib",
               "dev"
+            ]
+          }
+        ]
+      },
+      {
         "Artifact": "sysdeps-ncurses",
         "Artifact_Subdir": [
           {
