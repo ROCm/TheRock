@@ -42,8 +42,8 @@ using one of the following methods:
 - [Install using pip](https://github.com/ROCm/TheRock/blob/main/RELEASES.md#installing-releases-using-pip)
 - [Install from tarballs](https://github.com/ROCm/TheRock/blob/main/RELEASES.md#installing-from-tarballs)
 
-Please refer to the RELEASES page for detailed installation instructions and
-version information.
+Please refer to the [RELEASES page](https://github.com/ROCm/TheRock/blob/main/RELEASES.md)
+for detailed installation instructions and version information.
 
 ## gfx1151 (Strix Halo) specific questions
 
@@ -88,19 +88,20 @@ For more information, see the
 
 Within GPUVM, two commonly referenced limits exist:
 
-- GART: Defines the amount of platform address space (system RAM or
-  Memory-Mapped I/O) that can be mapped into the GPU virtual address space used
-  by the kernel driver. On systems with physically shared CPU and GPU memory,
-  such as Strix Halo, this mapped system memory effectively serves as VRAM for
-  the GPU. GART is typically kept relatively small to limit the GPU's page-table size
-  and is mainly used for driver-internal operations.
+- GART (Graphics Address Remapping Table): Defines the amount of platform
+  address space (system RAM or Memory-Mapped I/O) that can be mapped into the
+  GPU virtual address space used by the kernel driver. On systems with
+  physically shared CPU and GPU memory, such as Strix Halo, this mapped system
+  memory effectively serves as VRAM for the GPU. GART is typically kept
+  relatively small to limit GPU page-table size and is mainly used for
+  driver-internal operations.
 
-- GTT: Defines the amount of system RAM that can be mapped into GPU virtual
-  address spaces for user processes. This is the memory pool used by
-  applications such as PyTorch and other AI/compute workloads. GTT allocations
-  are dynamic and are not permanently reserved, allowing the operating system to
-  reclaim memory when it is not actively used by the GPU. By default, the GTT
-  limit is set to approximately 50% of total system RAM.
+- GTT (Graphics Translation Table): Defines the amount of system RAM that can be
+  mapped into GPU virtual address spaces for user processes. This is the memory
+  pool used by applications such as PyTorch and other AI/compute workloads.
+  GTT allocations are dynamic and are not permanently reserved, allowing the
+  operating system to reclaim memory when it is not actively used by the GPU.
+  By default, the GTT limit is set to approximately 50% of total system RAM.
 
 For more information, see the
 [Strix Halo system optimization page – Memory settings](https://rocm.docs.amd.com/en/latest/how-to/system-optimization/strixhalo.html#memory-settings)
@@ -122,8 +123,8 @@ For information on configuring GTT size, see the next question.
 ### How do I configure shared memory allocation on Linux?
 
 For GPUs using unified memory (including gfx1151/Strix Halo APUs), you can
-adjust the Graphics Translation Table (GTT) size allocation. See the official
-ROCm documentation on [configuring shared memory](https://rocm.docs.amd.com/en/latest/how-to/system-optimization/strixhalo.html#configuring-shared-memory-limits-on-linux).
+adjust the GTT size allocation. See the official ROCm documentation on
+[configuring shared memory](https://rocm.docs.amd.com/en/latest/how-to/system-optimization/strixhalo.html#configuring-shared-memory-limits-on-linux).
 
 Note: This applies to Linux systems only and is relevant for any GPU using shared
 memory, not just Strix Halo.
@@ -140,3 +141,4 @@ section in RELEASES.md for platform-specific instructions.
 Check your GTT configuration, ensure sufficient system memory is available, and
 verify that kernel parameters are correctly set. Review system logs using
 `dmesg | grep amdgpu` for specific error messages.
+ 
