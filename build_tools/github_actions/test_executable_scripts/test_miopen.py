@@ -108,6 +108,7 @@ positive_filter.append("*/GPU_Dropout*")
 positive_filter.append("*/GPU_MhaBackward_*")
 positive_filter.append("*/GPU_MhaForward_*")
 positive_filter.append("*GPU_TestMhaFind20*")
+positive_filter.append("*/GPU_MIOpenDriver*")
 
 #############################################
 
