@@ -466,24 +466,35 @@ jobs:
           echo "successful_native_families=${SUCCESSFUL_NATIVE_FAMILIES}" >> $GITHUB_OUTPUT
           echo "SUCCESSFUL_NATIVE_FAMILIES=${SUCCESSFUL_NATIVE_FAMILIES}" >> $GITHUB_ENV
           echo "Aggregated successful native package families: ${SUCCESSFUL_NATIVE_FAMILIES}"
-          echo "Hello world"
-          echo "Value of SUCCESSFUL_NATIVE_FAMILIES=$XSUCCESSFUL_NATIVE_FAMILIES"
 
-      - name: Trigger build runfile installer
-        if: ${{ github.repository_owner == 'ROCm' }}
-        uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc # v1.2.4
-        with:
-          workflow: build_linux_runfile_installer.yml
-          # inputs: |
-          #   { "rocm_version": "${{ needs.setup_metadata.outputs.deb_version }}",
-          #     "release_type": "${{ env.RELEASE_TYPE }}",
-          #     "pull_type": "${{ env.RELEASE_TYPE }}",
-          #     "pull_run_id": "${{ github.run_id }}"
-          #   }
-          inputs: |
-            { "rocm_version": "7.12.0~20260212",
-              "release_type": "dev",
-              "pull_type": "nightly",
-              "gfx_archs": "${{ env.SUCCESSFUL_NATIVE_FAMILIES }}",
-              "pull_run_id": "21933875966" 
-            }
+  # Call build_linux_runfile_installer.yml as a reusable workflow
+  build_runfile_installer:
+    name: Build Runfile Installer
+    needs: [setup_metadata, aggregate_successful_native_families]
+    if: ${{ github.repository_owner == 'ROCm' && needs.aggregate_successful_native_families.outputs.successful_native_families != '' }}
+    uses: ./.github/workflows/build_linux_runfile_installer.yml
+    with:
+      rocm_version: 7.12.0~20260212
+      release_type: dev
+      gfx_archs: ${{ env.successful_native_families }}
+      pull_type: nightly
+      pull_run_id: 21933875966
+
+  # - name: Trigger build runfile installer
+  #       if: ${{ github.repository_owner == 'ROCm' }}
+  #       uses: benc-uk/workflow-dispatch@e2e5e9a103e331dad343f381a29e654aea3cf8fc # v1.2.4
+  #       with:
+  #         workflow: build_linux_runfile_installer.yml
+  #         # inputs: |
+  #         #   { "rocm_version": "${{ needs.setup_metadata.outputs.deb_version }}",
+  #         #     "release_type": "${{ env.RELEASE_TYPE }}",
+  #         #     "pull_type": "${{ env.RELEASE_TYPE }}",
+  #         #     "pull_run_id": "${{ github.run_id }}"
+  #         #   }
+  #         inputs: |
+  #           { "rocm_version": "7.12.0~20260212",
+  #             "release_type": "dev",
+  #             "pull_type": "nightly",
+  #             "gfx_archs": "${{ env.SUCCESSFUL_NATIVE_FAMILIES }}",
+  #             "pull_run_id": "21933875966" 
+  #           }
