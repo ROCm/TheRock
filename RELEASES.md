@@ -496,9 +496,8 @@ ls install
 In addition to Python wheels and tarballs, ROCm native Linux packages are
 published for Debian-based and RPM-based distributions.
 
-> [!WARNING]   
+> [!WARNING]
 > These builds are primarily intended for development and testing and are currently **unsigned**.
-
 
 ### Installing on Debian-based systems (Ubuntu, Debian, etc.)
 
@@ -508,12 +507,14 @@ published for Debian-based and RPM-based distributions.
 sudo apt update
 sudo apt install -y ca-certificates
 ```
+
 2. Add the nightly repository
 
 ```bash
 echo "deb [trusted=yes] https://rocm.nightlies.amd.com/deb/<YYYYMMDD>-<action-run-id> stable main" \
   | sudo tee /etc/apt/sources.list.d/rocm-nightly.list
 ```
+
 3. Update package lists:
 
 ```bash
@@ -525,7 +526,9 @@ sudo apt update
 ```bash
 sudo apt install amdrocm-<GPU-ARCH> #Change GPU arch based on your machine ex: gfx94x
 ```
+
 ### Installing on RPM-based systems (RHEL, SLES, AlmaLinux etc.)
+
 1. Install prerequisites:
 
 ```bash
