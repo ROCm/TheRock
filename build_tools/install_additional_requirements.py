@@ -13,19 +13,6 @@ THEROCK_DIR = SCRIPT_DIR.parent
 THEROCK_OUTPUT_DIR = str(THEROCK_DIR / "build")
 
 
-def setup_pip():
-    environ_vars = os.environ.copy()
-
-    setup_cmd = [
-        sys.executable,
-        "-m",
-        "ensurepip",
-        "--upgrade",
-    ]
-    logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(setup_cmd)}")
-    subprocess.run(setup_cmd, cwd=THEROCK_DIR, check=True, env=environ_vars)
-
-
 def install_requirements(input: str):
     environ_vars = os.environ.copy()
 
@@ -58,7 +45,6 @@ def main(argv):
         )
         sys.exit(0)
 
-    setup_pip()
     install_requirements(str(args.requirements_files))
 
 
