@@ -465,7 +465,7 @@ jobs:
           echo "SUCCESSFUL_NATIVE_FAMILIES=${SUCCESSFUL_NATIVE_FAMILIES}" >> $GITHUB_ENV
           echo "Aggregated successful native package families: ${SUCCESSFUL_NATIVE_FAMILIES}"
           echo "Hello world"
-          echo "Value of SUCCESSFUL_NATIVE_FAMILIES=$SUCCESSFUL_NATIVE_FAMILIES"
+          echo "Value of SUCCESSFUL_NATIVE_FAMILIES=$XSUCCESSFUL_NATIVE_FAMILIES"
 
       - name: Trigger build runfile installer
         if: ${{ github.repository_owner == 'ROCm' }}
@@ -482,5 +482,6 @@ jobs:
             { "rocm_version": "7.12.0~20260212",
               "release_type": "dev",
               "pull_type": "nightly",
-              "pull_run_id": "21933875966"
+              "gfx_archs": "$SUCCESSFUL_NATIVE_FAMILIES",
+              "pull_run_id": "21933875966" 
             }
