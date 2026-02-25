@@ -33,8 +33,7 @@ def install_requirements(input: str):
 
     for file in requirements_files:
         cmd = [
-            sys.executable,
-            "-m",
+            "uv",
             "pip",
             "install",
             "-r",
@@ -55,7 +54,7 @@ def main(argv):
     args = parser.parse_args(argv)
     if not args.requirements_files:
         logging.info(
-            "No requirements file(s) found. Exiting install_requirements.py..."
+            "No requirements file(s) provided. Exiting install_additional_requirements.py..."
         )
         sys.exit(0)
 
