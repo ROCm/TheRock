@@ -32,7 +32,8 @@ RUN sudo apt-get update -y \
     psmisc \
     libgfortran5 \
     valgrind \
-    ocl-icd-libopencl1
+    ocl-icd-libopencl1 \
+    ocl-icd-opencl-dev
 
 RUN curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | sudo bash && \
     sudo apt-get install git-lfs
