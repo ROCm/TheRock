@@ -31,7 +31,7 @@ REPO_ROOT = THIS_DIR.parent
 POSIX_CCACHE_COMPILER_CHECK_PATH = THIS_DIR / "posix_ccache_compiler_check.py"
 POSIX_COMPILER_CHECK_SCRIPT = POSIX_CCACHE_COMPILER_CHECK_PATH.read_text()
 CACHE_SRV_DEV = "http://bazelremote-svc.bazelremote-ns.svc.cluster.local:8080|layout=bazel|connect-timeout=50"
-CACHE_SRV_REL = "http://bazelremote-svc-rel.bazelremote-ns.svc.cluster.local:8081|layout=bazel|connect-timeout=50"
+CACHE_SRV_REL = "http://bazelremote-svc-rel.bazelremote-ns.svc.cluster.local:8080|layout=bazel|connect-timeout=50"
 
 # See https://ccache.dev/manual/4.6.1.html#_configuration
 CONFIG_PRESETS_MAP = {
