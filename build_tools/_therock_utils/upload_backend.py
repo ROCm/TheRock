@@ -119,11 +119,11 @@ _S3_INITIAL_BACKOFF_SECONDS = 1.0
 class S3UploadBackend(UploadBackend):
     """Upload files to AWS S3 using boto3.
 
-    The S3 client is lazily initialized on first use.  If
-    ``AWS_ACCESS_KEY_ID``, ``AWS_SECRET_ACCESS_KEY``, and
-    ``AWS_SESSION_TOKEN`` are all set, an authenticated client is created;
-    otherwise an unsigned client is used (matching the pattern in
-    ``artifact_backend.S3Backend``).
+    The S3 client is lazily initialized on first use.  Credentials are
+    resolved through boto3's default credential chain, which checks (in
+    order): environment variables, shared credentials file
+    (``AWS_SHARED_CREDENTIALS_FILE``), instance metadata, etc.  This
+    matches how the ``aws`` CLI resolves credentials.
     """
 
     def __init__(self, *, dry_run: bool = False):
@@ -136,27 +136,7 @@ class S3UploadBackend(UploadBackend):
         if self._s3_client is None:
             import boto3
 
-            access_key = os.environ.get("AWS_ACCESS_KEY_ID")
-            secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
-            session_token = os.environ.get("AWS_SESSION_TOKEN")
-
-            if None not in (access_key, secret_key, session_token):
-                self._s3_client = boto3.client(
-                    "s3",
-                    verify=True,
-                    aws_access_key_id=access_key,
-                    aws_secret_access_key=secret_key,
-                    aws_session_token=session_token,
-                )
-            else:
-                from botocore import UNSIGNED
-                from botocore.config import Config
-
-                self._s3_client = boto3.client(
-                    "s3",
-                    verify=True,
-                    config=Config(signature_version=UNSIGNED),
-                )
+            self._s3_client = boto3.client("s3")
         return self._s3_client
 
     def upload_file(self, source: Path, dest: OutputLocation) -> None:

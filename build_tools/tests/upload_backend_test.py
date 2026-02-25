@@ -57,7 +57,7 @@ class TestInferContentType(unittest.TestCase):
         )
 
     def test_sha256sum(self):
-        # .sha256sum is not a known extension — falls to default.
+        # .sha256sum is not a known extension - falls to default.
         ct = infer_content_type(Path("core.tar.xz.sha256sum"))
         # The suffix is ".sha256sum", not ".xz".
         self.assertEqual(ct, "application/octet-stream")
@@ -362,8 +362,51 @@ class TestS3UploadBackendUploadFile(unittest.TestCase):
         mock_client.upload_file.assert_not_called()
 
 
-class TestS3UploadBackendClientInit(unittest.TestCase):
-    def test_authenticated_client_when_env_vars_set(self):
+class TestS3UploadBackendCredentialResolution(unittest.TestCase):
+    """Verify the S3 client uses boto3's default credential chain.
+
+    CI runners provide credentials via AWS_SHARED_CREDENTIALS_FILE (a
+    credentials.ini mounted into the container).  The explicit env vars
+    (AWS_ACCESS_KEY_ID, etc.) may or may not be set depending on whether
+    the configure-aws-credentials step ran.
+
+    The S3 client must use boto3's default credential chain so that all
+    credential sources are respected - matching how the ``aws`` CLI
+    resolves credentials.  Falling back to UNSIGNED when the explicit
+    env vars are absent would bypass the credentials file entirely.
+    """
+
+    def _assert_not_unsigned(self, mock_boto3):
+        """Assert that boto3.client was NOT called with UNSIGNED config."""
+        from botocore import UNSIGNED
+
+        for call in mock_boto3.call_args_list:
+            config = call.kwargs.get("config")
+            self.assertTrue(
+                config is None or config.signature_version != UNSIGNED,
+                "S3 client must not use UNSIGNED signatures - this bypasses "
+                "the credential chain and breaks uploads on CI runners that "
+                "provide credentials via AWS_SHARED_CREDENTIALS_FILE.",
+            )
+
+    def test_shared_credentials_file_only(self):
+        """When only AWS_SHARED_CREDENTIALS_FILE is set (no explicit
+        key/secret/token), the client must still use the default
+        credential chain - not UNSIGNED."""
+        env = {"AWS_SHARED_CREDENTIALS_FILE": "/home/awsconfig/credentials.ini"}
+        cleared = ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"]
+        with mock.patch.dict(os.environ, env, clear=False):
+            for var in cleared:
+                os.environ.pop(var, None)
+            with mock.patch("boto3.client") as mock_boto3:
+                backend = S3UploadBackend()
+                _ = backend.s3_client
+
+                self._assert_not_unsigned(mock_boto3)
+
+    def test_explicit_env_vars(self):
+        """When explicit credential env vars are set (e.g. by
+        configure-aws-credentials), the default chain picks them up."""
         env = {
             "AWS_ACCESS_KEY_ID": "key",
             "AWS_SECRET_ACCESS_KEY": "secret",
@@ -374,28 +417,26 @@ class TestS3UploadBackendClientInit(unittest.TestCase):
                 backend = S3UploadBackend()
                 _ = backend.s3_client
 
-                mock_boto3.assert_called_once()
-                call_kwargs = mock_boto3.call_args
-                self.assertEqual(call_kwargs.kwargs["aws_access_key_id"], "key")
+                self._assert_not_unsigned(mock_boto3)
 
-    def test_unsigned_client_when_env_vars_missing(self):
-        env = {
-            "AWS_ACCESS_KEY_ID": "",
-            "AWS_SECRET_ACCESS_KEY": "",
-            "AWS_SESSION_TOKEN": "",
-        }
-        with mock.patch.dict(os.environ, env, clear=False):
-            # Ensure the vars are effectively missing (empty string != None).
-            # We need to remove them entirely.
-            for k in env:
-                os.environ.pop(k, None)
+    def test_no_credentials_at_all(self):
+        """Even with no credential sources, the client must not use
+        UNSIGNED - it should let boto3 raise a clear auth error at
+        call time rather than silently making anonymous requests."""
+        cleared = [
+            "AWS_ACCESS_KEY_ID",
+            "AWS_SECRET_ACCESS_KEY",
+            "AWS_SESSION_TOKEN",
+            "AWS_SHARED_CREDENTIALS_FILE",
+        ]
+        with mock.patch.dict(os.environ, {}, clear=False):
+            for var in cleared:
+                os.environ.pop(var, None)
             with mock.patch("boto3.client") as mock_boto3:
                 backend = S3UploadBackend()
                 _ = backend.s3_client
 
-                mock_boto3.assert_called_once()
-                call_kwargs = mock_boto3.call_args
-                self.assertIn("config", call_kwargs.kwargs)
+                self._assert_not_unsigned(mock_boto3)
 
 
 # ---------------------------------------------------------------------------
