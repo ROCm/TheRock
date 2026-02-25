@@ -21,15 +21,15 @@ on:
         required: true
         type: string
         default: "nightly"
-      pulltag:
+      pull_tag:
         description: Set build date in the format (YYYYMMDD) to specify nightly build to build runfile installer off of if pull_type = nightly. Set to rc[BUILD_NUM] if pull_type = prerelease.
         required: false
         type: string
-      pullrunid:
-        description: Workflow run id of deb and rpm packages used to build runfile installer off of.
+      pull_run_id:
+        description: Workflow run id of deb and rpm packages used to build runfile installer off of. Only needed if release_type is nightly.
         required: false
         type: string
-      pullpkg:
+      pull_pkg:
         description: Set base package name with optional type prefix. Can set it to base:amdrocm-amdsmi to quickly test your code. Otherwise, leave empty. To see what values are valid, run command "bash build-runfile-installer.sh help"
         required: false
         type: string
@@ -60,15 +60,15 @@ on:
           - nightly
           - prerelease
         default: "nightly"
-      pulltag:
+      pull_tag:
         description: Set build date in the format (YYYYMMDD) to specify nightly build to build runfile installer off of if pull_type = nightly. Set to rc[BUILD_NUM] if pull_type = prerelease.
         required: false
         type: string
-      pullrunid:
+      pull_run_id:
         description: Workflow run id of deb and rpm packages used to build runfile installer off of. Only needed if release_type is nightly.
         required: false
         type: string
-      pullpkg:
+      pull_pkg:
         description: Set base package name with optional type prefix. Can set it to base:amdrocm-amdsmi to quickly test your code. Otherwise, leave empty. To see what values are valid, run command "bash build-runfile-installer.sh help"
         required: false
         type: string
@@ -77,7 +77,7 @@ permissions:
   id-token: write
   contents: read
 
-run-name: Build Linux Runfile Installer Test job (${{ inputs.rocm_version }}, ${{ inputs.release_type }}, ${{ inputs.pull_type }}, ${{ inputs.pulltag }}, ${{ inputs.pullrunid }})
+run-name: Build Linux Runfile Installer Test job (${{ inputs.rocm_version }}, ${{ inputs.release_type }}, ${{ inputs.pull_type }}, ${{ inputs.pull_tag }}, ${{ inputs.pull_run_id }})
 
 jobs:
   build_linux_runfile_installer:
@@ -97,11 +97,11 @@ jobs:
       OUTPUT_DIR: ${{ github.workspace }}/build
       RUNFILE_BUILD_DIR: ${{ github.workspace }}/build
       RELEASE_TYPE: ${{ inputs.release_type }}
-      PULL_TAG: ${{ inputs.pulltag }}
-      PULL_RUN_ID: ${{ inputs.pullrunid }}
+      PULL_TAG: ${{ inputs.pull_tag }}
+      PULL_RUN_ID: ${{ inputs.pull_run_id }}
       PULL_TYPE: ${{ inputs.pull_type }}
-      PULL_PKG: ${{ inputs.pullpkg }}
-      BUILD_TAG: ${{ inputs.pulltag }}
+      PULL_PKG: ${{ inputs.pull_pkg }}
+      BUILD_TAG: ${{ inputs.pull_tag }}
       GFX_ARCHS: ${{ inputs.gfx_archs }}
       S3_BUCKET_RUNFILE: therock-${{ inputs.release_type }}-runfile
     steps:
@@ -114,9 +114,9 @@ jobs:
           echo "ROCM_VERSION=$ROCM_VERSION" >> $GITHUB_ENV
       
       # Value of inputs.rocm_version for daily nightly job would be in the format 7.12.0~20260218.
-      # We need the 20260218 and set it to pulltag
+      # We need the 20260218 and set it to pull_tag
       # Value of inputs.rocm_version for prerelease job would be in the format 7.12.0~rc2.
-      # We need the rc2 and set it to pulltag.
+      # We need the rc2 and set it to pull_tag.
       - name: Set PULL_TAG
         run: |
           if [[ -z $PULL_TAG ]]; then
@@ -132,7 +132,6 @@ jobs:
           else
             MSCOMP=prodmedium
           fi
-
           echo "Set value of MSCOMP = '$MSCOMP'"
           echo "MSCOMP=$MSCOMP" >> $GITHUB_ENV
       
@@ -143,13 +142,11 @@ jobs:
           BUILD_TAG="dev-$(git rev-parse --short HEAD)"
           echo "Set value of BUILD_TAG = '$BUILD_TAG'"
           echo "BUILD_TAG=$BUILD_TAG" >> $GITHUB_ENV
-
       - name: Run build-runfile-installer.sh
         run: |
           echo "### Runfile Build Options" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "\`bash build-runfile-installer.sh rocm amdgpu rocm-archs=$GFX_ARCHS pull=$PULL_TYPE pulltag=$PULL_TAG pullrunid=$PULL_RUN_ID pullrocmver=$ROCM_VERSION pullpkg=$PULL_PKG buildtag=$BUILD_TAG buildrunid=$BUILD_RUNID mscomp=$MSCOMP\`" >> $GITHUB_STEP_SUMMARY
-
           bash build-runfile-installer.sh rocm amdgpu rocm-archs=$GFX_ARCHS pull=$PULL_TYPE pulltag=$PULL_TAG pullrunid=$PULL_RUN_ID pullrocmver=$ROCM_VERSION pullpkg=$PULL_PKG buildtag=$BUILD_TAG buildrunid=$BUILD_RUNID mscomp=$MSCOMP
       - name: Show .run file
         run: find . -name "*.run" -type f -exec ls -lctrh {} \;
