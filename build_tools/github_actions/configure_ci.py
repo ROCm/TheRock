@@ -385,6 +385,8 @@ def matrix_generator(
                 print(f"    Label 'skip-ci' detected -> skipping all builds and tests")
                 selected_target_names = []
                 selected_test_names = []
+                requested_target_names = []
+                requested_test_names = []
                 break
             if "run-all-archs-ci" == label:
                 print(

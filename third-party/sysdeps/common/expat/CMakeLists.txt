@@ -69,12 +69,21 @@ endif()
 cmake_minimum_required(VERSION 3.25)
 project(EXPAT_BUILD VERSION "2.7.3")
 
+# Apply patch source only on Linux
+set(patch_source_commands)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  list(APPEND patch_source_commands   COMMAND
+    bash "${CMAKE_CURRENT_SOURCE_DIR}/patch_source.sh" "${SOURCE_DIR}")
+endif()
+
 add_custom_target(
   build ALL
   WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   #
   # OPTIONAL: Patching of the sources should happen here.
   #
+  COMMAND
+    ${patch_source_commands}
   COMMAND
     "${CMAKE_COMMAND}" -E env
       "PKG_CONFIG_PATH=$ENV{PKG_CONFIG_PATH}"
