@@ -84,8 +84,8 @@ jobs:
     name: Build and Release Linux Runfile Installer
     strategy:
       fail-fast: false
-    # runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
-    runs-on: ubuntu-24.04
+    runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' }}
+    # runs-on: ubuntu-24.04
     container:
       image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:d6ae5712a9c7e8b88281d021e907b312cd8a26295b95690baef3e8dde4805858
     defaults:
@@ -107,17 +107,14 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Get space (before)
+      - name: Get space
         run: | 
           df -h
-          sudo swapoff -a
-          sudo rm -f /swapfile
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
-          sudo docker system prune --all --force
-          df -h
-
-      - name: Get space (after)
-        run: df -h
+      #     sudo swapoff -a
+      #     sudo rm -f /swapfile
+      #     sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+      #     sudo docker system prune --all --force
+      #     df -h
       
       - name: Set ROCM_VERSION
         run: |
