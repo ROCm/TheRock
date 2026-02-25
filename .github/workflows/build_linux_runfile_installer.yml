@@ -77,7 +77,7 @@ permissions:
   id-token: write
   contents: read
 
-run-name: Build Linux Runfile Installer Test job (${{ inputs.rocm_version }}, ${{ inputs.release_type }}, ${{ inputs.pull_type }}, ${{ inputs.pull_tag }}, ${{ inputs.pull_run_id }})
+run-name: Build Linux Runfile Installer Test job (${{ inputs.rocm_version }}, ${{ inputs.release_type }}, ${{ inputs.pull_type }}, ${{ inputs.pull_tag }}, ${{ inputs.gfx_archs }}, ${{ inputs.pull_run_id }})
 
 jobs:
   build_linux_runfile_installer:
@@ -142,12 +142,14 @@ jobs:
           BUILD_TAG="dev-$(git rev-parse --short HEAD)"
           echo "Set value of BUILD_TAG = '$BUILD_TAG'"
           echo "BUILD_TAG=$BUILD_TAG" >> $GITHUB_ENV
+
       - name: Run build-runfile-installer.sh
         run: |
           echo "### Runfile Build Options" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "\`bash build-runfile-installer.sh rocm amdgpu rocm-archs=$GFX_ARCHS pull=$PULL_TYPE pulltag=$PULL_TAG pullrunid=$PULL_RUN_ID pullrocmver=$ROCM_VERSION pullpkg=$PULL_PKG buildtag=$BUILD_TAG buildrunid=$BUILD_RUNID mscomp=$MSCOMP\`" >> $GITHUB_STEP_SUMMARY
           bash build-runfile-installer.sh rocm amdgpu rocm-archs=$GFX_ARCHS pull=$PULL_TYPE pulltag=$PULL_TAG pullrunid=$PULL_RUN_ID pullrocmver=$ROCM_VERSION pullpkg=$PULL_PKG buildtag=$BUILD_TAG buildrunid=$BUILD_RUNID mscomp=$MSCOMP
+
       - name: Show .run file
         run: find . -name "*.run" -type f -exec ls -lctrh {} \;
 
