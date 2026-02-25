@@ -49,7 +49,7 @@ def setup_env(env):
 def execute_tests(env):
     if platform.system() == "Linux":
         cmd = [
-            "./ocltst", "-J", "-m", "oclruntime", "-A", "oclruntime.exclude",
+            "./ocltst", "-J", "-m", "oclruntime.so", "-A", "oclruntime.exclude",
         ]
     elif platform.system() == "Windows":
         cmd = [
