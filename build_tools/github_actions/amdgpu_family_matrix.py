@@ -104,6 +104,8 @@ amdgpu_family_info_matrix_presubmit = {
             "family": "gfx1151",
             "fetch-gfx-targets": ["gfx1151"],
             "build_variants": ["release"],
+            # TODO(#3299): Re-enable smoke tests once capacity is available for Windows gfx1151
+            "run-full-tests-only": True,
         },
     },
     "gfx120x": {
