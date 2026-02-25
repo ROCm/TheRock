@@ -175,9 +175,13 @@ artifact_groups = ["dctools-core"]
 # artifact_groups = ["dctools-rocm"]
 # depends_on = ["math-libs"]  # Will need math/ML libraries
 
-[build_stages.iree-libs]
-description = "IREE and Fusilli integration"
-artifact_groups = ["iree-libs"]
+[build_stages.iree-compiler]
+description = "IREE compiler (parallel to math-libs)"
+artifact_groups = ["iree-compiler"]
+
+[build_stages.fusilli-libs]
+description = "Fusilli hipdnn provider (needs math-libs + iree-compiler)"
+artifact_groups = ["fusilli-libs"]
 
 [build_stages.profiler-apps]
 description = "Profiler applications (depends on profiler-core)"
@@ -298,11 +302,19 @@ type = "generic"
 artifact_group_deps = ["profiler-core", "compiler", "core-amdsmi"]
 source_sets = ["rocm-systems", "profiler-extras"]  # rocprofiler-systems + trace decoder
 
-[artifact_groups.iree-libs]
-description = "IREE and Fusilli integration"
+[artifact_groups.iree-compiler]
+description = "IREE compiler"
 type = "generic"
 artifact_group_deps = ["hip-runtime"]
-source_sets = ["iree-libs"]
+# TODO: rocm-systems included for projects/hip/VERSION (see CMakeLists.txt)
+source_sets = ["iree-libs", "rocm-systems"]
+
+[artifact_groups.fusilli-libs]
+description = "Fusilli hipdnn provider"
+type = "generic"
+artifact_group_deps = ["hip-runtime", "iree-compiler"]
+# TODO: rocm-systems included for projects/hip/VERSION (see CMakeLists.txt)
+source_sets = ["iree-libs", "rocm-systems"]
 
 [artifact_groups.media-libs]
 description = "Media Libraries"
@@ -586,16 +598,18 @@ artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "miopenprovider
 # --- IREE Integration ---
 
 [artifacts.iree-compiler]
-artifact_group = "iree-libs"
+artifact_group = "iree-compiler"
 type = "target-neutral"
 artifact_deps = ["core-hip"]
 disable_platforms = ["windows"]
+feature_group = "IREE_LIBS"
 
 [artifacts.fusilliprovider]
-artifact_group = "iree-libs"
+artifact_group = "fusilli-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "hipdnn", "spdlog", "iree-compiler"]
 disable_platforms = ["windows"]
+feature_group = "IREE_LIBS"
 
 # --- Media Integration ---
 

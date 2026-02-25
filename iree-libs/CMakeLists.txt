@@ -3,6 +3,7 @@
 ##############################################################################
 if(THEROCK_ENABLE_IREE_COMPILER)
   therock_cmake_subproject_declare(iree-compiler
+    USE_DIST_AMDGPU_TARGETS
     NO_MERGE_COMPILE_COMMANDS
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/iree-compiler"
     EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/iree"
