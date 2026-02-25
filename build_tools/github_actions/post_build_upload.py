@@ -22,6 +22,7 @@ For AWS credentials to upload, reach out to the #rocm-ci channel in the AMD Deve
 
 import argparse
 from datetime import datetime
+import json
 import os
 from pathlib import Path
 import platform
@@ -330,7 +331,28 @@ def run(args):
 
     log("Upload manifest")
     log("----------------")
-    upload_manifest_to_s3(args.artifact_group, args.build_dir, bucket_uri)
+    # For debugging.
+
+    artifact_group1 = args.artifact_group
+    artifact_group2 = os.getenv("ARTIFACT_GROUP")
+    job_id = os.getenv("GITHUB_JOB")
+    plat = (os.getenv("RUNNER_OS") or PLATFORM or "").lower()
+
+    # Read rocm-version from version.json
+    try:
+        with open(THEROCK_DIR / "version.json", "r", encoding="utf-8") as f:
+            rocm_version = json.load(f)["rocm-version"].strip()
+    except Exception:
+        rocm_version = None
+
+    run_id = args.run_id or os.getenv("GITHUB_RUN_ID")
+
+    log(f"       artifact_group1 = {artifact_group1}")
+    log(f"       artifact_group2 = {artifact_group2}")
+    log(f"       job_id          = {job_id}")
+    log(f"       platform        = {plat}")
+    log(f"       rocm_version    = {rocm_version}")
+    log(f"       run_id          = {run_id}")
 
     log("Write github actions build summary")
     log("--------------------")
