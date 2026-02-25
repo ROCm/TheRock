@@ -472,13 +472,16 @@ jobs:
     name: Build Runfile Installer
     needs: [setup_metadata, aggregate_successful_native_families]
     if: ${{ github.repository_owner == 'ROCm' && needs.aggregate_successful_native_families.outputs.successful_native_families != '' }}
+    permissions:
+      id-token: write  # Required for AWS OIDC authentication in the called workflow
+      contents: read
     uses: ./.github/workflows/build_linux_runfile_installer.yml
     with:
       rocm_version: 7.12.0~20260212
       release_type: dev
       gfx_archs: ${{ needs.aggregate_successful_native_families.outputs.successful_native_families }}
       pull_type: nightly
-      pull_run_id: 21933875966
+      pull_run_id: "21933875966"
 
   # - name: Trigger build runfile installer
   #       if: ${{ github.repository_owner == 'ROCm' }}
