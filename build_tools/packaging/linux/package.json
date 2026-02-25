@@ -1455,7 +1455,7 @@
         "Artifact": "sysdeps-amd-mesa",
         "Artifact_Subdir": [
           {
-            "Name": "sysdeps-amd-mesa",
+            "Name": "amd-mesa",
             "Components": [
               "lib",
               "dev"
