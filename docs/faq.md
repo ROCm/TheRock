@@ -34,17 +34,6 @@ file.
 
 For hardware-specific notes and tuning guidance, see the [System optimization pages](https://rocm.docs.amd.com/en/latest/how-to/system-optimization/index.html)
 
-### Can I try the latest nightly without building TheRock?
-
-Yes. Prebuilt nightly and release artifacts are available. You can install them
-using one of the following methods:
-
-- [Install using pip](https://github.com/ROCm/TheRock/blob/main/RELEASES.md#installing-releases-using-pip)
-- [Install from tarballs](https://github.com/ROCm/TheRock/blob/main/RELEASES.md#installing-from-tarballs)
-
-Please refer to the [RELEASES page](https://github.com/ROCm/TheRock/blob/main/RELEASES.md)
-for detailed installation instructions and version information.
-
 ## gfx1151 (Strix Halo) specific questions
 
 Strix Halo specific notes and optimization guidance information are collected on
@@ -52,8 +41,9 @@ the [Strix Halo system optimization page](https://rocm.docs.amd.com/en/latest/ho
 
 ### Which OS are supported for Strix Halo?
 
-On Linux, Strix Halo requires a kernel patch to function correctly. See the
-system optimization guide for the full linux kernel compatibility details:
+On Linux with kernel versions earlier than 6.18.4, Strix Halo requires a kernel
+patch to function correctly. See the system optimization guide for the full
+linux kernel compatibility details:
 https://rocm.docs.amd.com/en/latest/how-to/system-optimization/strixhalo-point.html#operating-system-support
 
 Additionally, please use the [SUPPORTED_GPUs](https://github.com/ROCm/TheRock/blob/main/SUPPORTED_GPUS.md)
