@@ -20,10 +20,6 @@ THEROCK_BIN_DIR = Path(THEROCK_BIN_DIR_STR)
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 os_type = platform.system().lower()
-OCLTST_PATH = str(Path(THEROCK_BIN_DIR).parent / "share" / "opencl" / "ocltst")
-if not os.path.isdir(OCLTST_PATH):
-    logging.info(f"++ Error: ocltst not found in {OCLTST_PATH}")
-    sys.exit(1)
 env = os.environ.copy()
 
 
@@ -48,10 +44,12 @@ def setup_env(env):
 
 def execute_tests(env):
     if platform.system() == "Linux":
+        OCLTST_PATH = str(Path(THEROCK_BIN_DIR).parent / "share" / "opencl" / "ocltst")
         cmd = [
             "./ocltst", "-J", "-m", "oclruntime.so", "-A", "oclruntime.exclude",
         ]
     elif platform.system() == "Windows":
+        OCLTST_PATH = str(Path(THEROCK_BIN_DIR).parent / "tests" / "ocltst")
         cmd = [
             "ocltst.exe", "-J", "-m", "oclruntime.dll", "-A", "oclruntime.exclude",
         ]
