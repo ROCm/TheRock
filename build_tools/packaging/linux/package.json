@@ -1450,6 +1450,65 @@
             ]
           }
         ]
+      },
+      {
+        "Artifact": "sysdeps-ncurses",
+        "Artifact_Subdir": [
+          {
+            "Name": "ncurses",
+            "Components": [
+              "lib",
+              "dev",
+              "doc",
+              "run"
+            ]
+          }
+        ]
+      },
+
+      {
+        "Artifact": "sysdeps-mpfr",
+        "Artifact_Subdir": [
+          {
+            "Name": "mpfr",
+            "Components": [
+              "lib",
+              "dev",
+              "doc",
+              "run"
+            ]
+          }
+        ]
+      },
+
+      {
+        "Artifact": "sysdeps-gmp",
+        "Artifact_Subdir": [
+          {
+            "Name": "gmp",
+            "Components": [
+              "lib",
+              "dev",
+              "doc",
+              "run"
+            ]
+          }
+        ]
+      },
+
+      {
+        "Artifact": "sysdeps-expat",
+        "Artifact_Subdir": [
+          {
+            "Name": "expat",
+            "Components": [
+              "lib",
+              "dev",
+              "doc",
+              "run"
+            ]
+          }
+        ]
       }
     ],
 
@@ -2000,8 +2059,7 @@
       }
 
     ],
-    "Gfxarch": "False",
-    "DisablePackaging": "True"
+    "Gfxarch": "False"
   },
 
   {
@@ -2015,6 +2073,7 @@
       "amdrocm-sysdeps",
       "amdrocm-llvm",
       "amdrocm-runtime",
+      "amdrocm-debugger",
       "amdrocm-blas",
       "amdrocm-fft",
       "amdrocm-solver",
@@ -2031,6 +2090,7 @@
       "amdrocm-sysdeps",
       "amdrocm-llvm",
       "amdrocm-runtime",
+      "amdrocm-debugger",
       "amdrocm-blas",
       "amdrocm-fft",
       "amdrocm-solver",
