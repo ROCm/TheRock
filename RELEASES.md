@@ -417,7 +417,6 @@ such as setting environment variables.
 > For most users, we recommend installing via package managers:
 >
 > - [Installing releases using pip](#installing-releases-using-pip)
-> - (TODO) Installing native Linux deb/RPM packages
 
 ### Browsing release tarballs
 
