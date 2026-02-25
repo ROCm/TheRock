@@ -2,9 +2,8 @@
 
 """Generate index.html files for package repositories.
 
-This script contains the index generation logic previously embedded in
-upload_package_repo.py. It is split out to enable running index generation
-server-side in the future.
+This script contains index generation logic.
+TODO(#3329) Enable running index generation at server-side.
 
 It can be used as a standalone tool:
 
