@@ -180,6 +180,10 @@ optional = true
 include = [
   "**/*.cmake"
 ]
+exclude = [
+  "share/hipsparse/test/**/*.cmake",   # Exclude test cmake files
+  "clients/matrices/**/*.cmake",        # Exclude test matrix cmake files
+]
 [components.doc."math-libs/BLAS/hipSPARSE/stage"]
 optional = true
 [components.lib."math-libs/BLAS/hipSPARSE/stage"]

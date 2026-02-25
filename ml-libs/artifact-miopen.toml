@@ -6,6 +6,9 @@
 include = [
   "share/miopen/**",
 ]
+exclude = [
+  "bin/miopen_gtest*",
+]
 [components.test."ml-libs/MIOpen/stage"]
 include = [
   "bin/miopen_gtest*",
