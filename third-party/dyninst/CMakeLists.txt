@@ -25,7 +25,7 @@ therock_cmake_subproject_activate(therock-dyninst)
 add_dependencies(therock-third-party therock-dyninst)
 
 therock_provide_artifact(dyninst
-  DESCRIPTOR artifact_dyninst.toml
+  DESCRIPTOR artifact-dyninst.toml
   TARGET_NEUTRAL
   COMPONENTS
     dbg
