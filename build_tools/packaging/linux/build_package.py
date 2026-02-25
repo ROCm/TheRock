@@ -56,8 +56,10 @@ def create_deb_package(pkg_name, config: PackageConfig):
     print(f"Package Name: {pkg_name}")
 
     # Non-versioned packages are not required for RPATH packages
+    # In multi-arch mode, only create non-versioned packages for generic architecture
     if not config.enable_rpath:
-        create_nonversioned_deb_package(pkg_name, config)
+        if not config.enable_multi_arch or config.gfx_arch == GFX_GENERIC:
+            create_nonversioned_deb_package(pkg_name, config)
 
     create_versioned_deb_package(pkg_name, config)
     output_list = move_packages_to_destination(pkg_name, config)
@@ -132,7 +134,7 @@ def create_versioned_deb_package(pkg_name, config: PackageConfig):
 
     sourcedir_list = []
     dir_list = filter_components_fromartifactory(
-        pkg_name, config.artifacts_dir, config.gfx_arch
+        pkg_name, config.artifacts_dir, config.gfx_arch, config.enable_multi_arch
     )
     sourcedir_list.extend(dir_list)
 
@@ -293,6 +295,7 @@ def generate_control_file(pkg_info, deb_dir, config: PackageConfig):
     control_file = Path(deb_dir) / "control"
 
     pkg_name = pkg_info.get("Package")
+    is_meta = is_meta_package(pkg_info)
     provides = ""
     replaces = ""
     conflicts = ""
@@ -305,7 +308,7 @@ def generate_control_file(pkg_info, deb_dir, config: PackageConfig):
         suggests_list = pkg_info.get("DEBSuggests", [])
         debsuggests = convert_to_versiondependency(suggests_list, config)
 
-        depends_list = pkg_info.get("DEBDepends", [])
+        depends_list = get_dependency_list_for_multiarch(pkg_info, "DEBDepends", config)
     else:
         depends_list = [pkg_name]
         provides_list = [
@@ -324,9 +327,7 @@ def generate_control_file(pkg_info, deb_dir, config: PackageConfig):
         ]
         conflicts = ", ".join(conflicts_list)
 
-    depends = convert_to_versiondependency(depends_list, config)
-    if is_meta_package(pkg_info):
-        depends = append_version_suffix(depends, config)
+    depends = resolve_versioned_dependencies(depends_list, config, is_meta)
 
     pkg_name = update_package_name(pkg_name, config)
     env = Environment(loader=FileSystemLoader(str(SCRIPT_DIR)))
@@ -372,7 +373,7 @@ def generate_debian_postscripts(pkg_info, deb_dir, config: PackageConfig):
     parts = config.rocm_version.split(".")
     if len(parts) < 3:
         raise ValueError(
-            f"Version string '{config.rocm_version}' does not have major.minor.patch versions"
+            f"Version string '{args.rocm_version}' does not have major.minor.patch versions"
         )
 
     env = Environment(loader=FileSystemLoader(str(SCRIPT_DIR)))
@@ -449,16 +450,20 @@ def package_with_dpkg_build(pkg_dir):
     Returns: None
     """
     print_function_name()
+    current_dir = Path.cwd()
+    os.chdir(Path(pkg_dir))
     # Build the command
     cmd = ["dpkg-buildpackage", "-uc", "-us", "-b"]
 
     # Execute the command
     try:
-        subprocess.run(cmd, check=True, cwd=pkg_dir)
+        subprocess.run(cmd, check=True)
         print(f"Deb Package built successfully: {os.path.basename(pkg_dir)}")
     except subprocess.CalledProcessError as e:
-        print(f"Error building deb package: {os.path.basename(pkg_dir)}: {e}")
+        print(f"Error building deb package{os.path.basename(pkg_dir)}: {e}")
         sys.exit(e.returncode)
+
+    os.chdir(current_dir)
 
 
 ######################## RPM package creation ####################
@@ -478,8 +483,11 @@ def create_rpm_package(pkg_name, config: PackageConfig):
     print_function_name()
     print(f"Package Name: {pkg_name}")
 
+    # Non-versioned packages are not required for RPATH packages
+    # In multi-arch mode, only create non-versioned packages for generic architecture
     if not config.enable_rpath:
-        create_nonversioned_rpm_package(pkg_name, config)
+        if not config.enable_multi_arch or config.gfx_arch == GFX_GENERIC:
+            create_nonversioned_rpm_package(pkg_name, config)
 
     create_versioned_rpm_package(pkg_name, config)
     output_list = move_packages_to_destination(pkg_name, config)
@@ -558,16 +566,19 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
     rpmsuggests = ""
     sourcedir_list = []
     rpm_scripts = []
+    is_meta = is_meta_package(pkg_info)
     if config.versioned_pkg:
         recommends_list = pkg_info.get("RPMRecommends", [])
         rpmrecommends = convert_to_versiondependency(recommends_list, config)
         suggests_list = pkg_info.get("RPMSuggests", [])
         rpmsuggests = convert_to_versiondependency(suggests_list, config)
 
-        requires_list = pkg_info.get("RPMRequires", [])
+        requires_list = get_dependency_list_for_multiarch(
+            pkg_info, "RPMRequires", config
+        )
 
         dir_list = filter_components_fromartifactory(
-            pkg_name, config.artifacts_dir, config.gfx_arch
+            pkg_name, config.artifacts_dir, config.gfx_arch, config.enable_multi_arch
         )
         sourcedir_list.extend(dir_list)
 
@@ -588,9 +599,7 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
         conflicts = ", ".join(pkg_info.get("Conflicts", []) or [])
         requires_list = [pkg_name]
 
-    requires = convert_to_versiondependency(requires_list, config)
-    if is_meta_package(pkg_info):
-        requires = append_version_suffix(requires, config)
+    requires = resolve_versioned_dependencies(requires_list, config, is_meta)
 
     # Update package name with version details and gfxarch
     pkg_name = update_package_name(pkg_name, config)
@@ -732,32 +741,19 @@ def parse_input_package_list(pkg_name, artifact_dir):
     return pkg_list, skipped_list
 
 
-def clean_package_build_dir(config: PackageConfig):
-    """Clean the package build directories
-
-    If artifactory directory is provided, clean the same as well
-
-    Parameters:
-    config: Configuration object containing package metadata
-
-    Returns: None
-    """
-    print_function_name()
-    PYCACHE_DIR = Path(SCRIPT_DIR) / "__pycache__"
-    remove_dir(PYCACHE_DIR)
-
-    # NOTE: Remove only the build directory
-    # Make sure the destination directory is not removed
-    remove_dir(Path(config.dest_dir) / config.pkg_type)
-    # TBD:
-    # Currently RPATH packages are created by modifying the artifacts dir
-    # So artifacts dir clean up is required
-    # remove_dir(artifacts_dir)
-
-
 def run(args: argparse.Namespace):
     # Set the global variables
     dest_dir = Path(args.dest_dir).expanduser().resolve()
+
+    # Configure architecture based on multi-arch mode
+    if args.enable_multi_arch:
+        # Multi-arch mode: use generic default, targets for gfxarch packages
+        default_gfx_arch = GFX_GENERIC
+        gfxarch_list = args.target
+    else:
+        # Single-arch mode: use first target as default, no additional arch list
+        default_gfx_arch = args.target[0]
+        gfxarch_list = []
 
     # Split version passed to use only major and minor version for prefix folder
     # Split by dot and take first two components
@@ -785,8 +781,10 @@ def run(args: argparse.Namespace):
         rocm_version=args.rocm_version,
         version_suffix=args.version_suffix,
         install_prefix=prefix,
-        gfx_arch=args.target,
+        gfx_arch=default_gfx_arch,
         enable_rpath=args.rpath_pkg,
+        enable_multi_arch=args.enable_multi_arch,
+        gfxarch_list=gfxarch_list,
     )
 
     # Clean the packaging build directories
@@ -805,16 +803,37 @@ def run(args: argparse.Namespace):
 
     try:
         built_pkglist = []
+        failed_pkglist = []
+
         for pkg_name in pkg_list:
             print(f"Create {pkg_type} package.")
-            if pkg_type == "rpm":
-                output_list = create_rpm_package(pkg_name, config)
-            else:
-                output_list = create_deb_package(pkg_name, config)
 
-            if output_list:
-                built_pkglist.extend(output_list)
-                print(f"Built package List: {built_pkglist}")
+            pkg_info = get_package_info(pkg_name)
+            # Check the package is marked as gfxarch package OR meta package
+            if is_gfxarch_package(
+                pkg_info, config.enable_multi_arch
+            ) or is_meta_package(pkg_info):
+                # Use all gfxarch values
+                loop_list = gfxarch_list + [default_gfx_arch]
+            else:
+                # Only use default architecture
+                loop_list = [default_gfx_arch]
+
+            pkg_built = False
+            for gfxarch in loop_list:
+                config.gfx_arch = gfxarch
+                if pkg_type == "rpm":
+                    output_list = create_rpm_package(pkg_name, config)
+                else:
+                    output_list = create_deb_package(pkg_name, config)
+
+                if output_list:
+                    built_pkglist.extend(output_list)
+                    pkg_built = True
+                    print(f"Built package List: {built_pkglist}")
+
+            if not pkg_built:
+                failed_pkglist.append(pkg_name)
 
         # Clean the build directories
         clean_package_build_dir(config)
@@ -823,6 +842,7 @@ def run(args: argparse.Namespace):
             total=pkg_list,
             built=built_pkglist,
             skipped=skipped_list,
+            failed=failed_pkglist,
         )
 
         # Print build summary
@@ -834,6 +854,7 @@ def run(args: argparse.Namespace):
             total=pkg_list,
             built=built_pkglist,
             skipped=skipped_list,
+            failed=failed_pkglist,
         )
         print_build_summary(config, pkglist_status)
         # Stop the program
@@ -859,8 +880,9 @@ def main(argv: list[str]):
     p.add_argument(
         "--target",
         type=str,
+        nargs="+",
         required=True,
-        help="Graphics architecture used for the artifacts",
+        help="Graphics architecture(s) used for the artifacts (can specify multiple)",
     )
 
     p.add_argument(
@@ -891,6 +913,12 @@ def main(argv: list[str]):
         "--rpath-pkg",
         action="store_true",
         help="Enable rpath-pkg mode",
+    )
+
+    p.add_argument(
+        "--enable-multi-arch",
+        action="store_true",
+        help="Enable multi-architecture package generation",
     )
 
     p.add_argument(
