@@ -460,3 +460,5 @@ jobs:
           echo "successful_native_families=${SUCCESSFUL_NATIVE_FAMILIES}" >> $GITHUB_OUTPUT
           echo "SUCCESSFUL_NATIVE_FAMILIES=${SUCCESSFUL_NATIVE_FAMILIES}" >> $GITHUB_ENV
           echo "Aggregated successful native package families: ${SUCCESSFUL_NATIVE_FAMILIES}"
+          echo "Hello world"
+          echo "Value of SUCCESSFUL_NATIVE_FAMILIES=$SUCCESSFUL_NATIVE_FAMILIES"
