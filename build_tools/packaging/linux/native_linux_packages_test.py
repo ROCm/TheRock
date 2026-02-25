@@ -58,7 +58,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional, Union
 
 
 class NativeLinuxPackagesTester:
@@ -101,7 +101,7 @@ class NativeLinuxPackagesTester:
         os_profile: str,
         release_type: str = "nightly",
         install_prefix: str = "/opt/rocm/core",
-        gfx_arch: Optional[str] = None,
+        gfx_arch: Optional[Union[str, List[str]]] = None,
         gpg_key_url: Optional[str] = None,
     ):
         """Initialize the package full tester.
@@ -111,7 +111,8 @@ class NativeLinuxPackagesTester:
             os_profile: OS profile (e.g., ubuntu2404, rhel8, debian12, sles16, almalinux9, centos7, azl3)
             release_type: Type of release ('nightly' or 'prerelease')
             install_prefix: Installation prefix (default: /opt/rocm/core)
-            gfx_arch: GPU architecture (default: gfx94x)
+            gfx_arch: GPU architecture(s) as a single value or list (default: gfx94x).
+                Only the first element is used for package name and installation.
             gpg_key_url: GPG key URL (only needed for prerelease)
         """
         self.os_profile = os_profile.lower()
@@ -119,10 +120,19 @@ class NativeLinuxPackagesTester:
         self.repo_url = repo_url.rstrip("/")
         self.release_type = release_type.lower()
         self.install_prefix = install_prefix
-        self.gfx_arch = gfx_arch.lower() if gfx_arch else "gfx94x"
+        # Normalize to list; only the first element is used for now
+        if gfx_arch is None:
+            self.gfx_arch_list: List[str] = ["gfx94x"]
+        elif isinstance(gfx_arch, str):
+            self.gfx_arch_list = [gfx_arch] if gfx_arch.strip() else ["gfx94x"]
+        else:
+            self.gfx_arch_list = [a for a in gfx_arch if a and str(a).strip()] or [
+                "gfx94x"
+            ]
+        self.gfx_arch = self.gfx_arch_list[0].lower()
         self.gpg_key_url = gpg_key_url
 
-        # Construct package name from gfx_arch
+        # Construct package name from first gfx_arch (only first element used for now)
         self.package_name = f"amdrocm-{self.gfx_arch}"
 
         # Validate inputs
@@ -488,7 +498,6 @@ gpgcheck=0
             return self._setup_sles_repository()
         else:
             return self._setup_dnf_repository()
-
 
     def install_deb_packages(self) -> bool:
         """Install ROCm DEB packages from repository.
@@ -875,7 +884,9 @@ gpgcheck=0
         print(f"Package Type (derived): {self.package_type.upper()}")
         print(f"Release Type: {self.release_type.upper()}")
         print(f"Repository URL: {self.repo_url}")
-        print(f"GPU Architecture: {self.gfx_arch}")
+        print(
+            f"GPU Architecture(s): {self.gfx_arch_list} (using first: {self.gfx_arch})"
+        )
         print(f"Package Name: {self.package_name}")
         print(f"Install Prefix: {self.install_prefix}")
 
@@ -982,8 +993,10 @@ Examples:
     parser.add_argument(
         "--gfx-arch",
         type=str,
-        default="gfx94x",
-        help="GPU architecture (default: gfx94x). Examples: gfx94x, gfx110x, gfx1151",
+        nargs="*",
+        default=["gfx94x"],
+        metavar="ARCH",
+        help="GPU architecture(s) as a list (default: gfx94x). Only the first is used for now. Examples: gfx94x, gfx110x gfx1151",
     )
 
     parser.add_argument(
@@ -1019,8 +1032,8 @@ Examples:
     if not args.repo_url or not args.repo_url.strip():
         parser.error("Repository URL cannot be empty")
 
-    if not args.gfx_arch or not args.gfx_arch.strip():
-        parser.error("GPU architecture cannot be empty")
+    if not args.gfx_arch or not args.gfx_arch[0].strip():
+        parser.error("GPU architecture list cannot be empty; first element is required")
 
     # Derive package type from OS profile
     try:
@@ -1038,7 +1051,7 @@ Examples:
     print(f"Package Type (derived): {derived_package_type}")
     print(f"Release Type: {args.release_type}")
     print(f"Repository URL: {args.repo_url}")
-    print(f"GPU Architecture: {args.gfx_arch}")
+    print(f"GPU Architecture(s): {args.gfx_arch} (using first: {args.gfx_arch[0]})")
     print(f"Install Prefix: {args.install_prefix}")
     if args.gpg_key_url:
         print(f"GPG Key URL: {args.gpg_key_url}")
