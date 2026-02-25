@@ -476,7 +476,7 @@ jobs:
     with:
       rocm_version: 7.12.0~20260212
       release_type: dev
-      gfx_archs: ${{ env.successful_native_families }}
+      gfx_archs: ${{ env.SUCCESSFUL_NATIVE_FAMILIES }}
       pull_type: nightly
       pull_run_id: 21933875966
 
