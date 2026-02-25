@@ -306,7 +306,7 @@ test_matrix = {
         "job_name": "rocprofiler_compute",
         "fetch_artifact_args": "--rocprofiler-compute --rocprofiler-sdk --tests",
         "timeout_minutes": 60,
-        "requirements_files": [
+        "additional_requirements_files": [
             "libexec/rocprofiler-compute/requirements.txt",
             "libexec/rocprofiler-compute/requirements-test.txt",
         ],
