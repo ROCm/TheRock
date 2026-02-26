@@ -30,17 +30,26 @@ class FetchPackageTargetsTest(unittest.TestCase):
         self.assertGreater(len(produced_families), 0)
 
         # Find all workflows with amdgpu_family as type: choice and check.
-        errors = []
+        choice_workflows = {}
         for workflow_path in sorted(WORKFLOWS_DIR.glob("*.yml")):
             workflow = load_workflow(workflow_path)
             options = get_choice_options(workflow, "amdgpu_family")
-            if options is None:
-                continue
+            if options is not None:
+                choice_workflows[workflow_path.name] = options
 
+        self.assertGreater(
+            len(choice_workflows),
+            0,
+            "No workflows found with amdgpu_family as type: choice - "
+            "was the input renamed?",
+        )
+
+        errors = []
+        for name, options in choice_workflows.items():
             missing = produced_families - set(options)
             if missing:
                 errors.append(
-                    f"{workflow_path.name} is missing amdgpu_family options "
+                    f"{name} is missing amdgpu_family options "
                     f"that fetch_package_targets can produce: {sorted(missing)}"
                 )
 
