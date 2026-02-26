@@ -85,7 +85,7 @@ jobs:
       ARTIFACTS_DIR: ${{ github.workspace }}/output/artifacts
       PACKAGE_DIST_DIR: ${{ github.workspace }}/output/packages
       RELEASE_TYPE: ${{ inputs.release_type || '' }}
-      S3_BUCKET_NATIVE: "therock-${{ inputs.release_type }}-packages"
+      S3_BUCKET_NATIVE: "therock-dev-packages"
     steps:
       - name: "Checking out repository"
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
@@ -141,7 +141,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
         with:
           aws-region: us-east-2
-          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}
+          role-to-assume: arn:aws:iam::692859939525:role/therock-dev
 
       - name: Upload Package repo to S3
         id: upload-packages
@@ -152,4 +152,4 @@ jobs:
             --s3-bucket ${{ env.S3_BUCKET_NATIVE }} \
             --amdgpu-family ${{ inputs.artifact_group_list }} \
             --artifact-id ${{ env.ARTIFACT_RUN_ID }} \
-            --job ${{ inputs.release_type }}
+            --job "dev"
