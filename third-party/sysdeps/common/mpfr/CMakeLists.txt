@@ -85,6 +85,13 @@ else()
     message(SEND_ERROR "Did not find a path containing '/gmp/build/stage' in CMAKE_LIBRARY_PATH.")
 endif()
 
+# Apply patch source only on Linux
+set(patch_source_commands)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  list(APPEND patch_source_commands   COMMAND
+    bash "${CMAKE_CURRENT_SOURCE_DIR}/patch_source.sh" "${SOURCE_DIR}")
+endif()
+
 add_custom_target(
   build ALL
   WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
@@ -92,6 +99,9 @@ add_custom_target(
   # OPTIONAL: Patching of the sources should happen here.
   #
   COMMAND
+    ${patch_source_commands}
+  COMMAND
+
     "${CMAKE_COMMAND}" -E env
       "PKG_CONFIG_PATH=$ENV{PKG_CONFIG_PATH}"
       # We don't insert rpath here because there are multiple layers of
@@ -109,7 +119,7 @@ add_custom_target(
     make install
   COMMAND
     # Patch in the RUNPATH.
-    ${PATCHELF} --set-rpath '\$\$ORIGIN:\$\$ORIGIN/rocm_sysdeps/lib' ${CMAKE_INSTALL_PREFIX}/lib/libmpfr.so
+    ${PATCHELF} --set-rpath '\$\$ORIGIN:\$\$ORIGIN/rocm_sysdeps/lib' ${CMAKE_INSTALL_PREFIX}/lib/librocm_sysdeps_mpfr.so
   COMMAND
     "${CMAKE_COMMAND}" -E env
       "PATCHELF=${PATCHELF}"

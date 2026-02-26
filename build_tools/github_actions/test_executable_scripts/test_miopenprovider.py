@@ -13,7 +13,7 @@ logging.basicConfig(level=logging.INFO)
 cmd = [
     "ctest",
     "--test-dir",
-    f"{THEROCK_BIN_DIR}/miopen_legacy_plugin",
+    f"{THEROCK_BIN_DIR}/miopen_plugin",
     "--output-on-failure",
     "--parallel",
     "8",
