@@ -16,6 +16,7 @@ on:
         description: gfx architectures to build (eg "gfx90x", "gfx94x", "gfx950", "gfx110x", "gfx1150", "gfx1151", "gfx1152", "gfx120x")
         required: true
         type: string
+        default: "gfx90x,gfx94x,gfx950,gfx110x,gfx1150,gfx1151,gfx1152,gfx120x"
       pull_type:
         description: Specify where you want to pull packages from ("nightly" or "prereleases") which pull from rocm.nightlies.amd.com or rocm.prereleases.amd.com
         required: true
@@ -52,7 +53,7 @@ on:
         description: gfx architectures to build (eg "gfx90x", "gfx94x", "gfx950", "gfx110x", "gfx1150", "gfx1151", "gfx1152", "gfx120x")
         required: true
         type: string
-        default: "gfx110x"
+        default: "gfx90x,gfx94x,gfx950,gfx110x,gfx1150,gfx1151,gfx1152,gfx120x"
       pull_type:
         description: Specify where you want to pull packages from, which pull from rocm.nightlies.amd.com or rocm.prereleases.amd.com
         type: choice
