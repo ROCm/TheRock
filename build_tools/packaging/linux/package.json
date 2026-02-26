@@ -1452,6 +1452,18 @@
         ]
       },
       {
+        "Artifact": "sysdeps-amd-mesa",
+        "Artifact_Subdir": [
+          {
+            "Name": "amd-mesa",
+            "Components": [
+              "lib",
+              "dev"
+            ]
+          }
+        ]
+      },
+      {
         "Artifact": "sysdeps-ncurses",
         "Artifact_Subdir": [
           {
@@ -2061,6 +2073,154 @@
     ],
     "Gfxarch": "False"
   },
+  {
+    "Package": "amdrocm-decode",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "libc6",
+      "amdrocm-runtime",
+      "amdrocm-sysdeps"
+    ],
+    "RPMRequires": [
+      "amdrocm-runtime",
+      "amdrocm-sysdeps"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "AMD ROCm video decode library",
+    "Description_Long": "rocdecode provides high-performance video decoding on AMD GPUs using VA-API",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Artifactory": [
+      {
+        "Artifact": "rocdecode",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocdecode",
+            "Components": [
+              "lib"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "False"
+  },
+  {
+    "Package": "amdrocm-decode-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "libc6",
+      "amdrocm-decode"
+    ],
+    "RPMRequires": [
+      "amdrocm-decode"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "AMD ROCm video decode library development files",
+    "Description_Long": "rocdecode development header files",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Artifactory": [
+      {
+        "Artifact": "rocdecode",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocdecode",
+            "Components": [
+              "dev"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "False"
+  },
+  {
+    "Package": "amdrocm-jpeg",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "libc6",
+      "amdrocm-runtime",
+      "amdrocm-sysdeps"
+    ],
+    "RPMRequires": [
+      "amdrocm-runtime",
+      "amdrocm-sysdeps"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "AMD ROCm JPEG decode library",
+    "Description_Long": "rocjpeg provides high-performance JPEG decoding on AMD GPUs using VA-API",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Artifactory": [
+      {
+        "Artifact": "rocjpeg",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocjpeg",
+            "Components": [
+              "lib"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "False"
+  },
+  {
+    "Package": "amdrocm-jpeg-devel",
+    "Version": "",
+    "Architecture": "amd64",
+    "BuildArch": "x86_64",
+    "DEBDepends": [
+      "libc6",
+      "amdrocm-jpeg"
+    ],
+    "RPMRequires": [
+      "amdrocm-jpeg"
+    ],
+    "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
+    "Description_Short": "AMD ROCm JPEG decode library development files",
+    "Description_Long": "rocjpeg development header files",
+    "Section": "devel",
+    "Priority": "optional",
+    "Group": "unknown",
+    "License": "MIT",
+    "Vendor": "Advanced Micro Devices, Inc",
+    "Homepage": "https://github.com/ROCm/rocm-systems",
+    "Artifactory": [
+      {
+        "Artifact": "rocjpeg",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocjpeg",
+            "Components": [
+              "dev"
+            ]
+          }
+        ]
+      }
+    ],
+    "Gfxarch": "False"
+  },
 
   {
     "Comments": "Meta Package defintions start from here. There will not be any artifactory for meta packages.",
@@ -2083,7 +2243,9 @@
       "amdrocm-rccl",
       "amdrocm-math-common",
       "amdrocm-amdsmi",
-      "amdrocm-hipify"
+      "amdrocm-hipify",
+      "amdrocm-decode",
+      "amdrocm-jpeg"
     ],
     "RPMRequires": [
       "amdrocm-base",
@@ -2100,7 +2262,9 @@
       "amdrocm-rccl",
       "amdrocm-math-common",
       "amdrocm-amdsmi",
-      "amdrocm-hipify"
+      "amdrocm-hipify",
+      "amdrocm-decode",
+      "amdrocm-jpeg"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "AMD ROCm core metapackage",
@@ -2156,8 +2320,9 @@
       "amdrocm-opencl-devel",
       "amdrocm-hipblas-common-devel",
       "amdrocm-rccl-devel",
-      "amdrocm-dnn-devel"
-
+      "amdrocm-dnn-devel",
+      "amdrocm-decode-devel",
+      "amdrocm-jpeg-devel"
     ],
     "RPMRequires": [
       "amdrocm-core",
@@ -2172,7 +2337,9 @@
       "amdrocm-opencl-devel",
       "amdrocm-hipblas-common-devel",
       "amdrocm-rccl-devel",
-      "amdrocm-dnn-devel"
+      "amdrocm-dnn-devel",
+      "amdrocm-decode-devel",
+      "amdrocm-jpeg-devel"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
     "Description_Short": "AMD ROCm core development metapackage",
