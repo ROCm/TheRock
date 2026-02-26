@@ -126,7 +126,7 @@ def execute_tests(env):
         cmd.extend(["--exclude-regex", "|".join(ignored_tests)])
 
     if is_asan():
-        cmd.extend(["--repeat", "--unitl-pass:2"])
+        cmd.extend(["--repeat", "until-pass:2"])
 
     logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
     subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=env)
