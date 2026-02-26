@@ -41,13 +41,15 @@ the [Strix Halo system optimization page](https://rocm.docs.amd.com/en/latest/ho
 
 ### Which OS are supported for Strix Halo?
 
-On Linux with kernel versions earlier than 6.18.4, Strix Halo requires a kernel
-patch to function correctly. See the system optimization guide for the full
-linux kernel compatibility details:
-https://rocm.docs.amd.com/en/latest/how-to/system-optimization/strixhalo-point.html#operating-system-support
-
-Additionally, please use the [SUPPORTED_GPUs](https://github.com/ROCm/TheRock/blob/main/SUPPORTED_GPUS.md)
+The most current list of compatible GPU architectures is available on the
+[SUPPORTED_GPUs](https://github.com/ROCm/TheRock/blob/main/SUPPORTED_GPUS.md)
 page.
+
+For Linux systems running kernel versions earlier than 6.18.4, Strix Halo
+requires an additional kernel patch to operate properly. For complete details
+on Linux kernel compatibility and required configurations, refer to the system
+optimization guide:
+https://rocm.docs.amd.com/en/latest/how-to/system-optimization/strixhalo.html#required-kernel-version
 
 ### Why does PyTorch use Graphics Translation Table (GTT) instead of VRAM on gfx1151?
 
