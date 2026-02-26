@@ -405,22 +405,10 @@ type = "target-neutral"
 artifact_deps = []
 feature_group = "CORE"
 
-[artifacts.fmt]
-artifact_group = "third-party-libs"
-type = "target-neutral"
-artifact_deps = []
-feature_group = "CORE"
-
 [artifacts.nlohmann-json]
 artifact_group = "third-party-libs"
 type = "target-neutral"
 artifact_deps = []
-feature_group = "CORE"
-
-[artifacts.spdlog]
-artifact_group = "third-party-libs"
-type = "target-neutral"
-artifact_deps = ["amd-llvm"]
 feature_group = "CORE"
 
 # --- Base Infrastructure ---
