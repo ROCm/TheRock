@@ -624,7 +624,7 @@ disable_platforms = ["windows"]
 [artifacts.rccl]
 artifact_group = "comm-libs"
 type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip", "hipify", "rocprofiler-sdk", "core-amdsmi"]
+artifact_deps = ["core-runtime", "core-hip", "hipify", "rocprofiler-sdk", "core-amdsmi", "openmpi"]
 disable_platforms = ["windows"]
 
 # --- Profiler Tools ---
