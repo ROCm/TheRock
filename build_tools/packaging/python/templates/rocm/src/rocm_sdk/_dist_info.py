@@ -7,7 +7,13 @@ of bootstrapping, we are including it inline for the moment.
 import importlib.util
 import os
 import subprocess
+import sys
 from pathlib import Path
+
+# Some downstream users of these APIs do not expect or handle
+# stdout/stderr output from this code, so logging is disabled by default.
+# See https://github.com/ROCm/TheRock/issues/3109.
+_VERBOSE = os.getenv("ROCM_SDK_VERBOSE", "0") == "1"
 
 CACHED_TARGET_FAMILY: str | None = None
 
@@ -117,9 +123,11 @@ def discover_current_target_family() -> str | None:
         # It might also be provided by an install of LLVM (e.g. as part of
         # Visual Studio on Windows), so prepend the scripts dir to PATH.
         scripts_path = Path(sysconfig.get_path("scripts"))
-        env = os.environ
+        env = os.environ.copy()
         env["PATH"] = str(scripts_path) + os.path.pathsep + env.get("PATH", "")
-        result = subprocess.check_output(["offload-arch"], env=env, text=True)
+        result = subprocess.check_output(
+            ["offload-arch"], env=env, text=True, stderr=subprocess.STDOUT
+        )
 
         if result:
             arch_set = set(result.strip().split("\n"))
@@ -135,12 +143,14 @@ def discover_current_target_family() -> str | None:
                 if arch in AVAILABLE_TARGET_FAMILIES:
                     return arch
     except subprocess.CalledProcessError as e:
-        print(f"[WARNING] offload-arch failed with return code {e.returncode}")
-        print(f"[stderr] {e.output}")
+        if _VERBOSE:
+            print(f"[rocm_sdk] offload-arch failed: {e.returncode}", file=sys.stderr)
     except FileNotFoundError:
-        print(f"[WARNING] failed to run offload-arch: binary not found.")
+        if _VERBOSE:
+            print("[rocm_sdk] offload-arch not found", file=sys.stderr)
     except Exception as e:
-        print(f"[WARNING] Unexpected error running offload-arch: {e}")
+        if _VERBOSE:
+            print(f"[rocm_sdk] offload-arch error: {e}", file=sys.stderr)
     return None
 
 
