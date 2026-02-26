@@ -17,6 +17,11 @@ on:
         required: true
         type: string
         default: "gfx90x,gfx94x,gfx950,gfx110x,gfx1150,gfx1151,gfx1152,gfx120x"
+      pull_amdgpu:
+        description: Version of amdgpu to be packaged into runfile installer. To see valid values for parameter, run command "bash build-runfile-installer.sh help
+        required: true
+        type: string
+        default: "release,31.10"
       pull_type:
         description: Specify where you want to pull packages from ("nightly" or "prereleases") which pull from rocm.nightlies.amd.com or rocm.prereleases.amd.com
         required: true
@@ -27,7 +32,7 @@ on:
         required: false
         type: string
       pull_run_id:
-        description: Workflow run id of deb and rpm packages used to build runfile installer off of. Only needed if release_type is nightly.
+        description: Workflow run id of deb and rpm packages used to build runfile installer off of.
         required: false
         type: string
       pull_pkg:
@@ -54,6 +59,11 @@ on:
         required: true
         type: string
         default: "gfx90x,gfx94x,gfx950,gfx110x,gfx1150,gfx1151,gfx1152,gfx120x"
+      pull_amdgpu:
+        description: Version of amdgpu to be packaged into runfile installer.
+        required: true
+        type: string
+        default: "release,31.10"
       pull_type:
         description: Specify where you want to pull packages from, which pull from rocm.nightlies.amd.com or rocm.prereleases.amd.com
         type: choice
@@ -104,6 +114,7 @@ jobs:
       PULL_PKG: ${{ inputs.pull_pkg }}
       BUILD_TAG: ${{ inputs.pull_tag }}
       GFX_ARCHS: ${{ inputs.gfx_archs }}
+      PULL_AMDGPU: ${{ inputs.pull_amdgpu }}
       S3_BUCKET_RUNFILE: therock-${{ inputs.release_type }}-runfile
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -157,8 +168,8 @@ jobs:
         run: |
           echo "### Runfile Build Options" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "\`bash build-runfile-installer.sh rocm amdgpu rocm-archs=$GFX_ARCHS pull=$PULL_TYPE pulltag=$PULL_TAG pullrunid=$PULL_RUN_ID pullrocmver=$ROCM_VERSION pullpkg=$PULL_PKG buildtag=$BUILD_TAG buildrunid=$BUILD_RUNID mscomp=$MSCOMP\`" >> $GITHUB_STEP_SUMMARY
-          bash build-runfile-installer.sh rocm amdgpu rocm-archs=$GFX_ARCHS pull=$PULL_TYPE pulltag=$PULL_TAG pullrunid=$PULL_RUN_ID pullrocmver=$ROCM_VERSION pullpkg=$PULL_PKG buildtag=$BUILD_TAG buildrunid=$BUILD_RUNID mscomp=$MSCOMP
+          echo "\`bash build-runfile-installer.sh rocm amdgpu rocm-archs=$GFX_ARCHS pullamdgpu=$PULL_AMDGPU pull=$PULL_TYPE pulltag=$PULL_TAG pullrunid=$PULL_RUN_ID pullrocmver=$ROCM_VERSION pullpkg=$PULL_PKG buildtag=$BUILD_TAG buildrunid=$BUILD_RUNID mscomp=$MSCOMP\`" >> $GITHUB_STEP_SUMMARY
+          bash build-runfile-installer.sh rocm amdgpu rocm-archs=$GFX_ARCHS pullamdgpu=$PULL_AMDGPU pull=$PULL_TYPE pulltag=$PULL_TAG pullrunid=$PULL_RUN_ID pullrocmver=$ROCM_VERSION pullpkg=$PULL_PKG buildtag=$BUILD_TAG buildrunid=$BUILD_RUNID mscomp=$MSCOMP
 
       - name: Show .run file
         run: find . -name "*.run" -type f -exec ls -lctrh {} \;
