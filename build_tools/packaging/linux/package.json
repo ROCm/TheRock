@@ -521,8 +521,7 @@
         ]
       }
     ],
-    "Gfxarch": "True",
-    "Disable_DEB_STRIP": "True"
+    "Gfxarch": "True"
   },
   {
     "Package": "amdrocm-solver-test",
@@ -1718,6 +1717,12 @@
         "Artifact_Subdir": [
           {
             "Name": "rccl",
+            "Components": [
+              "test"
+            ]
+          },
+          {
+            "Name": "rccl-tests",
             "Components": [
               "test"
             ]
