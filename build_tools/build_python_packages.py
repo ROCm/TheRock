@@ -70,8 +70,12 @@ def run(args: argparse.Namespace):
     if args.build_packages:
         build_packages(args.dest_dir, wheel_compression=args.wheel_compression)
 
-    # One devel package per target family, each built to its own dist subdirectory.
-    for target_family in sorted(params.all_target_families):
+    # One devel package per target family. In a multi-arch build each wheel goes into
+    # dist/{target_family}/ so callers can distinguish them; in a single-arch build
+    # the wheel goes directly to dist/ (no subdirectory).
+    all_target_families = sorted(params.all_target_families)
+    multi_arch = len(all_target_families) > 1
+    for target_family in all_target_families:
         devel = PopulatedDistPackage(
             params, logical_name="devel", target_family=target_family
         )
@@ -91,7 +95,7 @@ def run(args: argparse.Namespace):
             build_packages(
                 args.dest_dir,
                 package_dirs=[devel.path],
-                dist_dir=args.dest_dir / "dist" / target_family,
+                dist_dir=args.dest_dir / "dist" / target_family if multi_arch else None,
                 wheel_compression=args.wheel_compression,
             )
 
