@@ -155,6 +155,9 @@ jobs:
   portable_linux_packages:
     name: ${{ matrix.target_bundle.amdgpu_family }}::Build Portable Linux
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
+    container:
+      image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:d6ae5712a9c7e8b88281d021e907b312cd8a26295b95690baef3e8dde4805858
+      options: -v /runner/config:/home/awsconfig/
     continue-on-error: ${{ matrix.target_bundle.expect_failure == true }} # for GPU families that are flaky, we mark as xfail
     timeout-minutes: 720 # 12 hour timeout
     needs: [setup_metadata]
@@ -169,18 +172,21 @@ jobs:
     env:
       TEATIME_LABEL_GH_GROUP: 1
       OUTPUT_DIR: ${{ github.workspace }}/output
-      BUILD_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:d6ae5712a9c7e8b88281d021e907b312cd8a26295b95690baef3e8dde4805858
       DIST_ARCHIVE: "${{ github.workspace }}/output/therock-dist-linux-${{ matrix.target_bundle.amdgpu_family }}${{ inputs.package_suffix }}-${{ needs.setup_metadata.outputs.version }}.tar.gz"
       FILE_NAME: "therock-dist-linux-${{ matrix.target_bundle.amdgpu_family }}${{ inputs.package_suffix }}-${{ needs.setup_metadata.outputs.version }}.tar.gz"
       RELEASE_TYPE: "${{ needs.setup_metadata.outputs.release_type }}"
+      AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
       S3_BUCKET_TAR: "therock-${{ needs.setup_metadata.outputs.release_type }}-tarball"
       S3_SUBDIR_TAR: ${{ needs.setup_metadata.outputs.s3_subdir_tar }}
       S3_BUCKET_PY: "therock-${{ needs.setup_metadata.outputs.release_type }}-python"
       S3_SUBDIR: ${{ inputs.s3_subdir || 'v2' }}
       S3_STAGING_SUBDIR: ${{ inputs.s3_staging_subdir || 'v2-staging' }}
-      MANYLINUX: 1
-      EXTRA_C_COMPILER_LAUNCHER: /therock/src/build_tools/resource_info.py
-      EXTRA_CXX_COMPILER_LAUNCHER: /therock/src/build_tools/resource_info.py
+      BUILD_DIR:  ${{ github.workspace }}/output/build
+      EXTRA_C_COMPILER_LAUNCHER: "${{ github.workspace }}/build_tools/resource_info.py"
+      EXTRA_CXX_COMPILER_LAUNCHER: "${{ github.workspace }}/build_tools/resource_info.py"
+      THEROCK_BUILD_PROF_LOG_DIR: ${{ github.workspace }}/output/build/logs/therock-build-prof
+      CCACHE_DIR: ${{ github.workspace }}/output/caches/ccache
+      PIP_CACHE_DIR: ${{ github.workspace }}/output/caches/pip
 
     steps:
       - name: "Checking out repository"
@@ -189,9 +195,17 @@ jobs:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
 
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
-        with:
-          python-version: 3.12
+      - name: Install Python requirements
+        run: pip install -r requirements.txt
+
+      - name: Adjust git config
+        run: |
+          git config --global --add safe.directory $PWD
+          git config fetch.parallel 10
+
+      - name: Runner health status
+        run: |
+          ./build_tools/health_status.py
 
       # TODO: We shouldn't be using a cache on actual release branches, but it
       # really helps for iteration time.
@@ -209,36 +223,32 @@ jobs:
       - name: Fetch sources
         timeout-minutes: 30
         run: |
-          # Prefetch docker container in background.
-          docker pull ${{ env.BUILD_IMAGE }} &
           ./build_tools/fetch_sources.py --jobs 10
-          wait
+
+      - name: Configure Projects
+        env:
+          amdgpu_families: ${{ matrix.target_bundle.amdgpu_family }}
+          package_version: ${{ needs.setup_metadata.outputs.version }}
+          extra_cmake_options: ''
+          cmake_preset: ''
+        run: |
+          python3 ./build_tools/github_actions/build_configure.py \
+            --build-dir ${{ env.BUILD_DIR }} \
+            --manylinux
 
       - name: Build Projects
         run: |
-          ./build_tools/linux_portable_build.py \
-            --image=${{ env.BUILD_IMAGE }} \
-            --output-dir=${{ env.OUTPUT_DIR }} \
-            -- \
-            "-DTHEROCK_AMDGPU_FAMILIES=${{ matrix.target_bundle.amdgpu_family }}"
+          cmake --build ${{ env.OUTPUT_DIR }}/build --target therock-archives therock-dist
           cd ${{ env.OUTPUT_DIR }}/build/dist/rocm
           echo "Building ${{ env.DIST_ARCHIVE }}"
           tar cfz "${{ env.DIST_ARCHIVE }}" .
 
       - name: Build Python Packages
         run: |
-          ./build_tools/linux_portable_build.py \
-            --image=${{ env.BUILD_IMAGE }} \
-            --output-dir=${{ env.OUTPUT_DIR }}/packages \
-            --build-python-only \
+          python ./build_tools/build_python_packages.py \
             --artifact-dir=${{ env.OUTPUT_DIR }}/build/artifacts \
-            -- \
+            --dest-dir=${{ env.OUTPUT_DIR }}/packages \
             "--version=${{ needs.setup_metadata.outputs.version }}"
-
-      - name: Grant ownership over output directory
-        if: ${{ !cancelled() }}
-        run: |
-          sudo chown -R $(whoami) ${{ env.OUTPUT_DIR }}
 
       - name: Build Report
         if: ${{ !cancelled() }}

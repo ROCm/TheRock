@@ -48,7 +48,9 @@ on:
           - gfx1152
           - gfx1153
           - gfx120X-all
-          - gfx90X-dcgpu
+          - gfx906
+          - gfx908
+          - gfx90a
           - gfx94X-dcgpu
           - gfx950-dcgpu
         default: gfx94X-dcgpu
@@ -96,7 +98,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python_version: ["3.12"]
+        python_version: ["3.11", "3.12", "3.13", "3.14"]
         jax_ref: ["rocm-jaxlib-v0.8.2"]
 
     uses: ./.github/workflows/build_linux_jax_wheels.yml

@@ -85,8 +85,9 @@ mainline, in open source, using MSVC, etc.).
 | ml-libs             | [Composable Kernel](https://github.com/ROCm/rocm-libraries/tree/develop/projects/composablekernel)                       | rocm-libraries | ✅        |                                               |
 | ml-libs             | [MIOpen](https://github.com/ROCm/rocm-libraries/tree/develop/projects/miopen)                                            | rocm-libraries | ✅        |                                               |
 | ml-libs             | [hipDNN](https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipdnn)                                            | rocm-libraries | ✅        |                                               |
+| ml-libs             | [MIOpen Provider](https://github.com/ROCm/rocm-libraries/tree/develop/dnn-providers/miopen-provider)                     | rocm-libraries | ✅        |                                               |
 | ml-libs             | [MIOpen Legacy Plugin](https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipdnn/plugins/miopen_legacy_plugin) | rocm-libraries | ✅        |                                               |
-| ml-libs             | [hipBLASLt Plugin](https://github.com/ROCm/rocm-libraries/tree/develop/dnn-providers/hipblaslt-provider)                 | rocm-libraries | ✅        |                                               |
+| ml-libs             | [hipBLASLt Provider](https://github.com/ROCm/rocm-libraries/tree/develop/dnn-providers/hipblaslt-provider)               | rocm-libraries | ✅        |                                               |
 
 ## Building TheRock from source
 
