@@ -63,6 +63,17 @@ test_type = os.getenv("TEST_TYPE", "full")
 if test_type == "smoke":
     environ_vars["GTEST_FILTER"] = ":".join(SMOKE_TESTS)
 
+# Ensure that LD_LIBRARY_PATH contains the path to
+# libamdhip64.so, which the resource spec generation (below)
+# will use.
+THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
+rocm_base = Path(THEROCK_BIN_DIR).resolve().parent
+ld_path_str = f"{rocm_base}/lib"
+existing_ld_path = os.environ.get("LD_LIBRARY_PATH", "")
+environ_vars["LD_LIBRARY_PATH"] = (
+    f"{ld_path_str}:{existing_ld_path}" if existing_ld_path else ld_path_str
+)
+
 # Generate the resource spec file for ctest
 resource_spec_file = "resources.json"
 
