@@ -78,8 +78,20 @@ def get_required_workflow_dispatch_inputs(workflow: dict) -> set:
 def get_choice_options(workflow: dict, input_name: str) -> list | None:
     """Extracts the options list for a type: choice workflow_dispatch input.
 
+    For a workflow with:
+        on:
+          workflow_dispatch:
+            inputs:
+              amdgpu_family:
+                type: choice
+                options:
+                  - gfx94X-dcgpu
+                  - gfx110X-all
+
+    get_choice_options(workflow, "amdgpu_family") returns:
+        ["gfx94X-dcgpu", "gfx110X-all"]
+
     Returns None if the input doesn't exist or isn't type: choice.
-    Returns the list of option strings if it is.
     """
     dispatch = _get_workflow_dispatch_block(workflow)
     if dispatch is None:
