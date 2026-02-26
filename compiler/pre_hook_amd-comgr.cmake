@@ -12,7 +12,6 @@ if(THEROCK_SANITIZER STREQUAL "ASAN" OR THEROCK_SANITIZER STREQUAL "HOST_ASAN")
   message(STATUS "Enabling ASAN for Comgr (THEROCK_SANITIZER=${THEROCK_SANITIZER})")
 endif()
 
-# Enable comgr tests when explicitly enabled.
 if(THEROCK_ENABLE_COMGR_TESTS)
   set(BUILD_TESTING ON CACHE BOOL "Enable comgr tests" FORCE)
 else()
