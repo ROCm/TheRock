@@ -385,6 +385,8 @@ def matrix_generator(
                 print(f"    Label 'skip-ci' detected -> skipping all builds and tests")
                 selected_target_names = []
                 selected_test_names = []
+                requested_target_names = []
+                requested_test_names = []
                 break
             if "run-all-archs-ci" == label:
                 print(
@@ -658,6 +660,11 @@ def main(base_args, linux_families, windows_families):
             combined_test_labels = list(set(linux_test_output + windows_test_output))
             test_type = "full"
             test_type_reason = f"test label(s) specified: {combined_test_labels}"
+
+    # If the "run-full-tests-only" flag is set for this family, we do not run tests if it is a smoke test type
+    for matrix_row in linux_variants_output + windows_variants_output:
+        if matrix_row.get("run-full-tests-only", False) and test_type == "smoke":
+            matrix_row["test-runs-on"] = ""
 
     print(f"test_type decision: '{test_type}' (reason: {test_type_reason})")
 
