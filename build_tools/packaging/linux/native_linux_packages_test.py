@@ -828,64 +828,14 @@ gpgcheck=0
             return True
         except subprocess.TimeoutExpired:
             print("   [WARN] rdhc.py --all timed out")
-            # Try without arguments
-            return self._try_rdhc_without_args(cmd, install_path)
+            return False
         except subprocess.CalledProcessError:
-            print("   [WARN] rdhc.py --all failed, trying without arguments...")
-            # Try without arguments
-            return self._try_rdhc_without_args(cmd, install_path)
-        except Exception as e:
-            print(f"   [WARN] Could not run rdhc.py: {e}")
-            return False
-
-    def _try_rdhc_without_args(self, cmd: list, install_path: Path) -> bool:
-        """Try running rdhc.py without arguments.
-
-        Args:
-            cmd: Command to run (without arguments)
-            install_path: Installation prefix path
-
-        Returns:
-            True if successful, False otherwise
-        """
-        print(f"\nTrying to run rdhc.py without arguments...")
-        print(f"Command: {' '.join(cmd)}")
-
-        try:
-            result = subprocess.run(
-                cmd,
-                cwd=str(install_path),
-                check=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                timeout=30,
-            )
-            print("   [PASS] rdhc.py executed successfully")
-            if result.stdout:
-                # Print first few lines of output
-                lines = result.stdout.split("\n")[:5]
-                print("\n   First few lines of output:")
-                for line in lines:
-                    if line.strip():
-                        print(f"      {line}")
-            return True
-        except subprocess.TimeoutExpired:
-            print("   [WARN] rdhc.py timed out")
-            return False
-        except subprocess.CalledProcessError as e:
-            print(f"   [WARN] rdhc.py failed (return code: {e.returncode})")
-            if e.stdout:
-                # Print first few lines of error output
-                lines = e.stdout.split("\n")[:3]
-                print("\n   Error output:")
-                for line in lines:
-                    if line.strip():
-                        print(f"      {line}")
+            print("   [WARN] rdhc.py --all failed")
             return False
         except Exception as e:
             print(f"   [WARN] Could not run rdhc.py: {e}")
             return False
+
 
     def run(self) -> bool:
         """Execute the full installation test process.
@@ -1008,10 +958,10 @@ def main():
     parser.add_argument(
         "--gfx-arch",
         type=str,
-        nargs="*",
-        default=["gfx94x"],
+        nargs="+",
+        required=True,
         metavar="ARCH",
-        help="GPU architecture(s) as a list (default: gfx94x). Only the first is used for now. Examples: gfx94x, gfx110x gfx1151",
+        help="GPU architecture(s) as a list. Only the first is used for now. Examples: gfx94x, gfx110x gfx1151",
     )
 
     parser.add_argument(
@@ -1025,14 +975,14 @@ def main():
     parser.add_argument(
         "--install-prefix",
         type=str,
-        default="/opt/rocm/core",
-        help="Installation prefix (default: /opt/rocm/core)",
+        required=True,
+        help="Installation prefix (e.g. /opt/rocm/core)",
     )
 
     parser.add_argument(
         "--gpg-key-url",
         type=str,
-        help="GPG key URL (only needed for prerelease)",
+        help="GPG key URL",
     )
 
     args = parser.parse_args()
