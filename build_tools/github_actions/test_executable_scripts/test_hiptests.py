@@ -11,24 +11,30 @@ import platform
 
 logging.basicConfig(level=logging.INFO)
 THEROCK_BIN_DIR_STR = os.getenv("THEROCK_BIN_DIR")
+THEROCK_BIN_DIR = Path(THEROCK_BIN_DIR_STR)
+SCRIPT_DIR = Path(__file__).resolve().parent
+THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
+SHARD_INDEX = int(os.getenv("SHARD_INDEX", 1)) - 1
+TOTAL_SHARDS = int(os.getenv("TOTAL_SHARDS", 1))
+AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
+os_type = platform.system().lower()
+CATCH_TESTS_PATH = str(Path(THEROCK_BIN_DIR).parent / "share" / "hip" / "catch_tests")
+
+# Importing is_asan from github_actions_utils.py
+sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
+from github_actions_utils import is_asan
+
+env = os.environ.copy()
+
 if THEROCK_BIN_DIR_STR is None:
     logging.info(
         "++ Error: env(THEROCK_BIN_DIR) is not set. Please set it before executing tests."
     )
     sys.exit(1)
-ASAN_OPTIONS = os.getenv("ASAN_OPTIONS", "")
-THEROCK_BIN_DIR = Path(THEROCK_BIN_DIR_STR)
-SCRIPT_DIR = Path(__file__).resolve().parent
-THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
-SHARD_INDEX = os.getenv("SHARD_INDEX", 1)
-TOTAL_SHARDS = os.getenv("TOTAL_SHARDS", 1)
-AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
-os_type = platform.system().lower()
-CATCH_TESTS_PATH = str(Path(THEROCK_BIN_DIR).parent / "share" / "hip" / "catch_tests")
+
 if not os.path.isdir(CATCH_TESTS_PATH):
     logging.info(f"++ Error: catch tests not found in {CATCH_TESTS_PATH}")
     sys.exit(1)
-env = os.environ.copy()
 
 # TODO(#3204): Re-enable tests once issues are resolved
 TEST_TO_IGNORE = {
@@ -58,39 +64,6 @@ def get_asan_lib_path():
         capture_output=True,
     )
     return result.stdout.strip()
-
-
-# If we have built tests in ASAN mode
-# We need t supress the leak messages when we detect the number of test cases for sharding purpose
-# We make a copy of env and override the options
-def get_test_count(env):
-    tc_env = env
-    if ASAN_OPTIONS:
-        tc_env["ASAN_OPTIONS"] = "detect_leaks=0"
-    cmd = ["ctest", "--show-only=json-v1"]
-    result = subprocess.run(
-        cmd,
-        cwd=CATCH_TESTS_PATH,
-        check=True,
-        capture_output=True,
-        env=tc_env,
-    )
-    jdata = json.loads(result.stdout)
-    tests = jdata["tests"]
-    return len(tests)
-
-
-def get_test_range_per_shard(total_test_count: int, total_shards, shard_index):
-    tests_per_shard = int(total_test_count / total_shards)
-    current_index = (tests_per_shard * (shard_index - 1)) + 1
-    end_index = current_index + tests_per_shard - 1
-    if shard_index == total_shards:
-        # Retrieve remaining tests
-        end_index = total_test_count
-    logging.info(
-        f"""++ hip-tests ctest: shard {shard_index} / {total_shards}. Running:{tests_per_shard} tests"""
-    )
-    return [current_index, end_index]
 
 
 def copy_dlls_exe_path():
@@ -126,7 +99,7 @@ def setup_env(env):
         else:
             env["LD_LIBRARY_PATH"] = HIP_LIB_PATH
         # For ASAN mode, we preload it for test count query and test running
-        if ASAN_OPTIONS:
+        if is_asan():
             env["LD_PRELOAD"] = get_asan_lib_path()
             # TODO: enable this when we have symbolizer patch in
             # env["ASAN_SYMBOLIZER_PATH"] = str(Path(THEROCK_BIN_DIR).parent / "lib" / "llvm" / "bin" / "llvm-symbolizer")
@@ -135,24 +108,25 @@ def setup_env(env):
 
 
 def execute_tests(env):
-    total_tests = get_test_count(env)
-    index_start, index_end = get_test_range_per_shard(
-        total_tests, int(TOTAL_SHARDS), int(SHARD_INDEX)
-    )
+    # Allow for more time in ASAN mode to run the tests.
+    timeout = 1500 if is_asan() else 600
     cmd = [
         "ctest",
-        "-I",
-        f"{index_start},{index_end}",
+        "--tests-information",
+        f"{SHARD_INDEX},,{TOTAL_SHARDS}",
         "--test-dir",
         CATCH_TESTS_PATH,
         "--output-on-failure",
         "--timeout",
-        "600",
+        f"{timeout}",
     ]
 
     if AMDGPU_FAMILIES in TEST_TO_IGNORE and os_type in TEST_TO_IGNORE[AMDGPU_FAMILIES]:
         ignored_tests = TEST_TO_IGNORE[AMDGPU_FAMILIES][os_type]
         cmd.extend(["--exclude-regex", "|".join(ignored_tests)])
+
+    if is_asan():
+        cmd.extend(["--repeat", "--unitl-pass:2"])
 
     logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
     subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=env)
