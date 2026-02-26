@@ -131,4 +131,3 @@ section in RELEASES.md for platform-specific instructions.
 Check your GTT configuration, ensure sufficient system memory is available, and
 verify that kernel parameters are correctly set. Review system logs using
 `dmesg | grep amdgpu` for specific error messages.
- 
