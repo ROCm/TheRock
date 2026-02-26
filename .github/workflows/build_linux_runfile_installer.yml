@@ -169,6 +169,31 @@ jobs:
           echo "### Runfile Build Options" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "\`bash build-runfile-installer.sh rocm amdgpu rocm-archs=$GFX_ARCHS pullamdgpu=$PULL_AMDGPU pull=$PULL_TYPE pulltag=$PULL_TAG pullrunid=$PULL_RUN_ID pullrocmver=$ROCM_VERSION pullpkg=$PULL_PKG buildtag=$BUILD_TAG buildrunid=$BUILD_RUNID mscomp=$MSCOMP\`" >> $GITHUB_STEP_SUMMARY
+          
+          dnf install -y rpm-build
+          cat > /tmp/python312-provides.spec << 'EOF'
+          Name:           python312-provides
+          Version:        1.0
+          Release:        1%{?dist}
+          Summary:        Provides python3.12 path for ROCm packages
+          License:        MIT
+          BuildArch:      noarch
+
+          Provides:       /opt/python/cp312-cp312/bin/python3.12
+
+          %description
+          Dummy package that provides the python3.12 path requirement.
+
+          %files
+          # No files, just provides
+
+          %changelog
+          EOF
+
+          # Build and install it
+          rpmbuild -bb /tmp/python312-provides.spec
+          sudo rpm -ivh ~/rpmbuild/RPMS/noarch/python312-provides-1.0-1.el8.noarch.rpm
+          
           bash build-runfile-installer.sh rocm amdgpu rocm-archs=$GFX_ARCHS pullamdgpu=$PULL_AMDGPU pull=$PULL_TYPE pulltag=$PULL_TAG pullrunid=$PULL_RUN_ID pullrocmver=$ROCM_VERSION pullpkg=$PULL_PKG buildtag=$BUILD_TAG buildrunid=$BUILD_RUNID mscomp=$MSCOMP
 
       - name: Show .run file
