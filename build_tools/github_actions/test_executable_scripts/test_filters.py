@@ -27,7 +27,7 @@ from pathlib import Path
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
-TEST_TYPE = os.getenv("TEST_TYPE", "quick")
+TEST_TYPE = os.getenv("TEST_TYPE", "smoke")
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 
 # Map job names to actual test directory names
@@ -84,6 +84,11 @@ def get_available_gpu_suite_tests():
     Parses test names in the format: {target_name}-{category}-{gpu_arch}-suite
     Returns a set of gpu_arch strings (e.g., 'gfx1150', 'gfx11X', 'gfx950').
     """
+    test_dir = Path(THEROCK_BIN_DIR) / TEST_COMPONENT
+    if not test_dir.exists() or not test_dir.is_dir():
+        print(f"Error: Test directory does not exist: {test_dir}", file=sys.stderr)
+        sys.exit(1)
+
     try:
         result = subprocess.run(
             ["ctest", "-N", "--test-dir", f"{THEROCK_BIN_DIR}/{TEST_COMPONENT}"],
