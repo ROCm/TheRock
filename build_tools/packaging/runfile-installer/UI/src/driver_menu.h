@@ -30,8 +30,9 @@
 #define DRIVER_MENU_FORM_ROW        DRIVER_MENU_ITEM_START_Y  // starting row for driver menu form
 #define DRIVER_MENU_FORM_COL        29                        // staring column for driver menu form
 
-#define DRIVER_HELP_MENU_DESC_STARTX    22
-#define DRIVER_HELP_MENU_DESC_STARTY    5
+// Driver menu help setup
+#define DRIVER_MENU_HELP_TITLE         "Driver Options Help"
+#define DRIVER_MENU_HELP_FILE          "./UI/rocm_menus/driver_help"
 
 // menu item indicies
 #define DRIVER_MENU_ITEM_INSTALL_DRIVER_INDEX   0

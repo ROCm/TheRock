@@ -54,7 +54,7 @@ MENU_PROP driverMenuProps = {
     .numLines = ARRAY_SIZE(driverMenuOps) - 1,
     .numCols = MAX_MENU_ITEM_COLS,
     .starty = DRIVER_MENU_ITEM_START_Y,
-    .startx = DRIVER_MENU_ITEM_START_X, 
+    .startx = DRIVER_MENU_ITEM_START_X,
     .numItems = ARRAY_SIZE(driverMenuOps)
 };
 
@@ -65,48 +65,10 @@ ITEMLIST_PARAMS driverMenuItems = {
     .pItemListDesp      = driverMenuDesc
 };
 
-// verbose help menu variables
-// Spaces added/deleted from HelpOps and HelpDesc to ensure whole words aren't
-// cut off between lines when displaying help menu.
-char *driverMenuHelpOps[] = {
-    "Install Driver",
-    "Start on install",
-    "Uninstall Driver",
-    (char*)NULL,
-};
-
-char *driverMenuHelpDesc[] = {
-    "Enable/Disable the inclusion the amdgpu driver         as part of the installation.",
-    "Enable/Disable starting the amdgpu driver after        installation.",
-    "Uninstall runfile-based amdgpu driver installation.    This is not available for package installed drivers.",
-    (char*)NULL,
-};
-
-MENU_PROP driverMenuHelpProps = {
-    .pMenuTitle = "Driver Options Help",
-    .pMenuControlMsg = DEFAULT_VERBOSE_HELP_CONTROL_MSG,
-    .numLines = 0,
-    .numCols = MAX_MENU_ITEM_COLS,
-    .starty = DRIVER_MENU_ITEM_START_Y,
-    .startx = DRIVER_MENU_ITEM_START_X, 
-    .numItems = 0
-};
-
-ITEMLIST_PARAMS driverMenuHelpItems = {
-    .numItems           = 0,
-    .pItemListTitle     = "Driver Install Settings Description:",
-    .pItemListChoices   = 0,
-    .pItemListDesp      = 0
-};
-
-
 void process_driver_menu();
 
 // menu draw/config
 void driver_menu_toggle_grey_items(bool enable);
-
-// sub-menus
-void create_driver_help_menu_window();
 
 // menu draw
 void driver_menu_draw();
@@ -122,12 +84,8 @@ void create_driver_menu_window(WINDOW *pMenuWindow, OFFLINE_INSTALL_CONFIG *pCon
     // Create the driver options menu
     create_menu(&menuDriver, pMenuWindow, &driverMenuProps, &driverMenuItems, pConfig);
 
-    // create verbose help menu
-    menuDriver.pHelpMenu = calloc(1, sizeof(MENU_DATA));
-    if (menuDriver.pHelpMenu)
-    {
-        create_driver_help_menu_window();
-    }
+    // Create help menu
+    create_help_menu_window(&menuDriver, DRIVER_MENU_HELP_TITLE, DRIVER_MENU_HELP_FILE);
 
     // Set pointer to draw menu function when window is resized
     menuDriver.drawMenuFunc = driver_menu_draw;
@@ -136,14 +94,14 @@ void create_driver_menu_window(WINDOW *pMenuWindow, OFFLINE_INSTALL_CONFIG *pCon
     set_menu_userptr(menuDriver.pMenu, process_driver_menu);
 
     // set items to non-selectable
-    set_menu_grey(menuDriver.pMenu, COLOR_PAIR(5));
+    set_menu_grey(menuDriver.pMenu, BLUE);
     menu_set_item_select(&menuDriver, menuDriver.itemList[0].numItems - 4, false);    // space before help
     driver_menu_toggle_grey_items(false);
 }
 
 void destroy_driver_menu_window()
 {
-    destroy_help_menu(menuDriver.pHelpMenu);
+    destroy_help_menu(&menuDriver);
     destroy_menu(&menuDriver);
 }
 
@@ -255,7 +213,7 @@ void driver_status_draw()
     // check for the driver status and draw
     if (pDriverConfig->driver_install_type == 0)
     {
-        print_menu_msg(&menuDriver, COLOR_PAIR(4), "amdgpu driver not installed.");
+        print_menu_msg(&menuDriver, GREEN, "amdgpu driver not installed.");
     }
     else if (pDriverConfig->driver_install_type == eINSTALL_PACKAGE)
     {
@@ -353,7 +311,7 @@ void process_driver_menu()
             // execute the amdgpu uninstall command
             if (execute_cmd("./rocm-installer.sh", "uninstall-amdgpu", pWin) == 0)
             {
-                print_menu_msg(&menuDriver, COLOR_PAIR(4), "Uninstall Complete. Reboot required.");
+                print_menu_msg(&menuDriver, GREEN, "Uninstall Complete. Reboot required.");
 
                 // driver install success, disable the uninstall item on the driver menu and reset driver install status
                 menu_set_item_select(&menuDriver, DRIVER_MENU_ITEM_UNINSTALL_DRIVER_INDEX, false);
@@ -376,18 +334,4 @@ void process_driver_menu()
     }
 
     driver_menu_draw(&menuDriver);
-}
-
-void create_driver_help_menu_window()
-{
-    MENU_DATA *pMenuData = menuDriver.pHelpMenu;
-    WINDOW *pMenuWindow = menuDriver.pMenuWindow;
-    
-    // Create menu window w/ border and title
-    create_menu(pMenuData, pMenuWindow, &driverMenuHelpProps, &driverMenuHelpItems, NULL);
-
-    menu_opts_off(pMenuData->pMenu, O_SHOWDESC);
-
-    // create form that displays verbose help menu
-    create_help_form(pMenuData, pMenuWindow, DRIVER_HELP_MENU_DESC_STARTX, DRIVER_HELP_MENU_DESC_STARTY, HELP_MENU_DESC_WIDTH, HELP_MENU_OP_STARTX, HELP_MENU_OP_WIDTH, driverMenuHelpOps, driverMenuHelpDesc); 
 }

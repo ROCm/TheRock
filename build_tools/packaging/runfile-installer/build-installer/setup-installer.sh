@@ -37,8 +37,8 @@ PULL_CONFIG_PKG_EXTRA=()               # Additional packages (array, comma-separ
 PULL_ROCM_PKG_VERSION=""               # Explicit package version (e.g., 7.11.0-2 for release, 7.11.0~0-21265702726 for prerelease)
 
 # AMDGPU configuration type and version
-PULL_CONFIG_AMDGPU="release"            # release / hidden
-PULL_CONFIG_AMDGPU_BUILDNUM="31.10"     # 3x.xx.xx / .3x.xx.xx
+PULL_CONFIG_AMDGPU=""                   # release / hidden / internal (must be set via config file or command-line args)
+PULL_CONFIG_AMDGPU_BUILDNUM=""          # For release/hidden: 3x.xx.xx / .3x.xx.xx | For internal: build number (e.g., 2232928, 2296104)
 PULL_CONFIG_AMDGPU_HASH=""              # Hash for hidden repos (only used when PULL_CONFIG_AMDGPU="hidden")
 
 # Package configs (relative to package-puller directory)
@@ -54,9 +54,7 @@ PULLER_OUTPUT_DIR_AMDGPU_BASE="../package-extractor/packages-amdgpu"
 
 # GPU architectures to include in package pulls
 # Modify this array to control which GPU architectures are downloaded
-ROCM_GFX_ARCHS=(gfx94x gfx950)
-# Full list of available architectures:
-# ROCM_GFX_ARCHS=(gfx90x gfx94x gfx950 gfx103x gfx110x gfx1150 gfx1151 gfx1152 gfx1153 gfx120x)
+ROCM_GFX_ARCHS=(gfx90x gfx94x gfx950 gfx110x gfx1150 gfx1151 gfx1152 gfx120x)
 
 # Packages list (will be generated dynamically by generate_package_lists function)
 PULLER_PACKAGES_DEB=""
@@ -89,6 +87,10 @@ Usage: $PROG [options]
                             - config/release.config
                             - config/dev.config
 
+                            NOTE: When running via build-runfile-installer.sh, the same config
+                            is sourced by both parent and child scripts. Each script sources
+                            independently, then applies command-line overrides.
+
     rocm                  = Setup only ROCm packages (skip AMDGPU).
     amdgpu                = Setup only AMDGPU packages (skip ROCm).
 
@@ -97,7 +99,8 @@ Usage: $PROG [options]
 
     rocm-mode=native      = Pull DEB packages using native OS.
     rocm-mode=chroot      = Pull DEB packages using Ubuntu chroot.
-    rocm-archs=<archs>    = Set GPU architectures to pull (comma-separated or single, e.g., gfx94x,gfx950 or gfx94x). Default: gfx94x,gfx950.
+    rocm-archs=<archs>    = Set GPU architectures to pull (comma-separated or single, e.g., gfx94x,gfx950 or gfx94x).
+                            Default: gfx90x,gfx94x,gfx950,gfx110x,gfx1150,gfx1151,gfx1152,gfx120x
 
     pull=<release-type>   = Pull ROCm packages from specified repository (required).
                             Valid types: dev, nightly, prerelease, release
@@ -679,6 +682,15 @@ setup_puller_config_amdgpu() {
         echo "Using AMDGPU hash: ${PULL_CONFIG_AMDGPU_HASH}"
     fi
 
+    # If using internal config type, validate build number is provided
+    if [[ "${PULL_CONFIG_AMDGPU}" == "internal" ]]; then
+        if [[ -z "${PULL_CONFIG_AMDGPU_BUILDNUM}" ]]; then
+            echo -e "\e[31mERROR: PULL_CONFIG_AMDGPU_BUILDNUM must be set when using internal config type\e[0m"
+            exit 1
+        fi
+        echo "Using AMDGPU internal build number: ${PULL_CONFIG_AMDGPU_BUILDNUM}"
+    fi
+
     # Determine EL9 version format based on AMDGPU major version
     # Extract major version (first number before first dot)
     AMDGPU_MAJOR_VER="${PULL_CONFIG_AMDGPU_BUILDNUM%%.*}"
@@ -712,6 +724,7 @@ setup_puller_config_amdgpu() {
         sed -e "s/{{AMDGPU_VERSION}}/${PULL_CONFIG_AMDGPU_BUILDNUM}/g" \
             -e "s/{{EL9_VERSION}}/${EL9_VERSION}/g" \
             -e "s/{{AMDGPU_HASH}}/${PULL_CONFIG_AMDGPU_HASH}/g" \
+            -e "s/{{PULL_CONFIG_AMDGPU_BUILDNUM}}/${PULL_CONFIG_AMDGPU_BUILDNUM}/g" \
             "$TEMPLATE_FILE" > "$OUTPUT_FILE"
     done
 
@@ -946,6 +959,12 @@ setup_amdgpu_all() {
         echo "Pulling AMDGPU packages for all supported distributions..."
         echo "========================================="
 
+        # Clean up existing AMDGPU packages before pulling new ones
+        if [ -d "$PULLER_OUTPUT_DIR_AMDGPU_BASE" ]; then
+            echo -e "\e[93mCleaning up existing AMDGPU packages directory: $PULLER_OUTPUT_DIR_AMDGPU_BASE\e[0m"
+            $SUDO rm -rf "$PULLER_OUTPUT_DIR_AMDGPU_BASE"
+        fi
+
         # Call the multi-distro package puller with config variables
         AMDGPU_CONFIG_TYPE="$PULL_CONFIG_AMDGPU" AMDGPU_CONFIG_VER="$PULL_CONFIG_AMDGPU_BUILDNUM" ./package-puller-amdgpu-all.sh
 
@@ -1041,6 +1060,26 @@ do
         echo "ROCm version set to: $PULL_CONFIG_ROCM_VER"
         shift
         ;;
+    pullamdgpu=*)
+        amdgpu_arg="${1#*=}"
+        # Split on comma: type,buildnum (e.g., release,31.10 or internal,2296104)
+        if [[ "$amdgpu_arg" =~ ^([^,]+),(.+)$ ]]; then
+            PULL_CONFIG_AMDGPU="${BASH_REMATCH[1]}"
+            PULL_CONFIG_AMDGPU_BUILDNUM="${BASH_REMATCH[2]}"
+            echo "AMDGPU config type set to: $PULL_CONFIG_AMDGPU"
+            echo "AMDGPU version/buildnum set to: $PULL_CONFIG_AMDGPU_BUILDNUM"
+        else
+            echo -e "\e[31mERROR: Invalid pullamdgpu format. Use: pullamdgpu=<type>,<version|buildnum>\e[0m"
+            echo "Examples: pullamdgpu=release,31.10 or pullamdgpu=internal,2296104"
+            exit 1
+        fi
+        shift
+        ;;
+    pullamdgpuhash=*)
+        PULL_CONFIG_AMDGPU_HASH="${1#*=}"
+        echo "AMDGPU hash set to: $PULL_CONFIG_AMDGPU_HASH"
+        shift
+        ;;
     pullpkg=*)
         # Parse package name with optional type prefix (e.g., "base:amdrocm-amdsmi" or "arch:amdrocm-core-sdk")
         # Default type is "arch" if no prefix specified
@@ -1125,6 +1164,18 @@ if [[ $SETUP_ROCM == 1 ]]; then
 fi
 
 if [[ $SETUP_AMDGPU == 1 ]]; then
+    # Validate AMDGPU configuration is set
+    if [[ -z "$PULL_CONFIG_AMDGPU" ]]; then
+        echo -e "\e[31mERROR: PULL_CONFIG_AMDGPU must be set when setting up AMDGPU packages\e[0m"
+        echo "Set via config file or command-line: pullamdgpu=<release|hidden|internal>"
+        exit 1
+    fi
+    if [[ -z "$PULL_CONFIG_AMDGPU_BUILDNUM" ]]; then
+        echo -e "\e[31mERROR: PULL_CONFIG_AMDGPU_BUILDNUM must be set when setting up AMDGPU packages\e[0m"
+        echo "Set via config file or command-line: pullamdgpuver=<version|buildnum>"
+        exit 1
+    fi
+
     # Generate AMDGPU package puller configuration files from templates
     setup_puller_config_amdgpu
     if [[ "$SETUP_AMDGPU_MODE" == "all" ]]; then

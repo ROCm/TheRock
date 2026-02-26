@@ -30,6 +30,18 @@
 #include <libgen.h>
 #include <ctype.h>
 
+
+void exit_error(char *pError)
+{
+    // exit ncurses with an error string to stderr
+
+    endwin();
+    
+    fprintf(stderr, "%s\n", pError);
+    
+    exit(1);
+}
+
 int calculate_text_height(char *desc, int width)
 {
     int desc_length = strlen(desc);

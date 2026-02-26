@@ -75,6 +75,10 @@ Usage: $PROG [options]
                            - config/release.config
                            - config/dev.config
 
+                           NOTE: When running via build-runfile-installer.sh, the same config
+                           is sourced by both parent and child scripts. Each script sources
+                           independently, then applies command-line overrides.
+
     noextract            = Disable package extraction.
     norocm               = Disable ROCm package extraction.
     noamdgpu             = Disable AMDGPU package extraction.

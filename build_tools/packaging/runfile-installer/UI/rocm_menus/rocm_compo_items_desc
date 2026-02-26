@@ -1,0 +1,4 @@
+Core ROCm components (amdrocm-core)
+Core development components (amdrocm-core-devel)
+Developer tools (amdrocm-developer-tools)
+OpenCL runtime (amdrocm-opencl)

@@ -60,7 +60,7 @@ POSTINST_COUNT=0
 PRERM_COUNT=0
 POSTRM_COUNT=0
 PROMPT_USER=0
-POST_ROCM_INSTALL=1
+POST_ROCM_INSTALL=0
 VERBOSE=0
 
 # Installer preqreqs
@@ -360,7 +360,7 @@ get_version() {
     # Read VERSION file (written by package-extractor and build-installer)
     # Line 1: Installer version (from package-extractor)
     # Line 2: ROCm version (from package-extractor)
-    # Line 3: Rock release tag (from build-installer)
+    # Line 3: Build Tag (from build-installer)
     # Line 4: AMDGPU DKMS build number (from build-installer)
     # Line 5: Build installer name (from build-installer)
     if [ -n "$version_file" ]; then
@@ -368,9 +368,10 @@ get_version() {
             case $i in
                 0) INSTALLER_VERSION="$line" ;;
                 1) ROCM_VERSION="$line" ;;
-                2) ROCK_RELEASE_TAG="$line" ;;
-                3) AMDGPU_DKMS_BUILD_NUM="$line" ;;
-                4) BUILD_INSTALLER_NAME="$line" ;;
+                2) BUILD_TAG="$line" ;;
+                3) BUILD_RUNID="$line" ;; 
+                4) BUILD_TAG_INFO="$line" ;;
+                5) AMDGPU_DKMS_BUILD_NUM="$line" ;;
             esac
             i=$((i+1))
         done < "$version_file"
@@ -389,14 +390,10 @@ get_version() {
 
     echo "Installer Version: $INSTALLER_VERSION"
     echo "ROCm Version     : $ROCM_VERSION"
-    echo "Rock Release     : $ROCK_RELEASE_TAG"
+    echo "Build Tag        : $BUILD_TAG"
+    echo "Build Run ID     : $BUILD_RUNID"
+    echo "Build Tag Info   : $BUILD_TAG_INFO"
     echo "AMDGPU Build     : $AMDGPU_DKMS_BUILD_NUM"
-    echo "Installer Name   : $BUILD_INSTALLER_NAME"
-
-    # Update PROG if running from runfile
-    if [[ $RUNFILE_INSTALL == 1 && -n "$BUILD_INSTALLER_NAME" ]]; then
-        PROG="$BUILD_INSTALLER_NAME"
-    fi
 }
 
 setup_rocm_version_info() {
@@ -1049,7 +1046,7 @@ uninstall_prerm_scriptlet_amdgpu() {
             echo "Patching prerm scriptlet $prerm_scriptlet"
             patch_scriptlet_version $prerm_scriptlet $AMDGPU_DKMS_BUILD_NUM $INSTALLED_AMDGPU_DKMS_BUILD_NUM
         fi
-        
+
         if [[ $VERBOSE == 1 ]]; then
             cat "$prerm_scriptlet"
         fi
@@ -1061,9 +1058,9 @@ uninstall_prerm_scriptlet_amdgpu() {
         else
             $SUDO_OPTS "$prerm_scriptlet" "$UNINSTALL_SCRIPTLET_ARG"
         fi
-        
+
         echo -e "\e[92mComplete: $?\e[0m"
-        
+
         PRERM_COUNT=$((PRERM_COUNT+1))
 
         if [[ $FORCE_UNINSTALL_AMDGPU == 1 ]]; then
@@ -2176,6 +2173,35 @@ query_prev_driver_version() {
     done < <(echo $dkms_output)
 }
 
+get_amdgpu_version_from_scriptlet() {
+    # Get the full AMDGPU version (with distro suffix) from the postinst scriptlet
+    # This ensures we use the correct version for the current distro
+    # Different distros store the version differently:
+    #   - Ubuntu/Debian: CVERSION=6.18.4-2286447.24.04
+    #   - EL (RHEL/Rocky): $postinst amdgpu 6.18.4-2286447.el10
+    #   - SLES: $postinst amdgpu 6.18.4-2286447
+
+    local scriptlet_file="$EXTRACT_AMDGPU_DIR/amdgpu-dkms/scriptlets/postinst"
+
+    if [[ -f "$scriptlet_file" ]]; then
+        # Try Ubuntu/Debian pattern: CVERSION=...
+        local version=$(grep "^CVERSION=" "$scriptlet_file" | cut -d'=' -f2)
+
+        if [[ -z "$version" ]]; then
+            # Try RPM pattern: $postinst amdgpu <version>
+            version=$(grep '\$postinst amdgpu' "$scriptlet_file" | awk '{print $3}')
+        fi
+
+        if [[ -n "$version" ]]; then
+            echo "$version"
+            return 0
+        fi
+    fi
+
+    # Fallback: return empty if scriptlet not found or version not extracted
+    return 1
+}
+
 preinstall_amdgpu() {
     echo --------------------------------
     echo Preinstall amdgpu...
@@ -2330,6 +2356,14 @@ uninstall_amdgpu() {
         echo "Please install amdgpu using the Runfile installer."
         echo "Usage: bash $PROG amdgpu"
         exit 1
+    fi
+
+    # Get the full AMDGPU version (with distro suffix) from the scriptlet
+    # This overrides the version from VERSION file which has suffix stripped
+    local scriptlet_version=$(get_amdgpu_version_from_scriptlet)
+    if [[ -n "$scriptlet_version" ]]; then
+        AMDGPU_DKMS_BUILD_NUM="$scriptlet_version"
+        echo "Using AMDGPU version from scriptlet: $AMDGPU_DKMS_BUILD_NUM"
     fi
 
     echo "Installed amdgpu version $INSTALLED_AMDGPU_DKMS_BUILD_NUM"
@@ -2751,6 +2785,11 @@ do
     rocm)
         ROCM_INSTALL=1
         ROCM_ARG="all"
+        # Only enable POST_ROCM_INSTALL if nopostrocm is not in the arguments
+        if [[ ! " $* " =~ " nopostrocm " ]]; then
+            POST_ROCM_INSTALL=1
+            echo "Enabling Post ROCm install."
+        fi
         echo "Using ROCm args : $ROCM_ARG"
         shift
         ;;
@@ -2832,11 +2871,6 @@ do
     force)
         FORCE_INSTALL=1
         echo "Forcing install."
-        shift
-        ;;
-    runfile)
-        RUNFILE_INSTALL=1
-        echo "install from runfile."
         shift
         ;;
     postrocm)

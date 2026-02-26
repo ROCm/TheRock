@@ -1,0 +1,35 @@
+Select the ROCm component categories you want to install. You can select
+multiple components for a customized installation.
+
+[H1]Component Categories:
+
+[H2]core
+    Core ROCm components required for basic ROCm functionality.
+    Includes base libraries and runtime components.
+
+[H2]core-dev
+    Core development components for building ROCm applications.
+    Includes development headers and libraries.
+
+[H2]dev-tools
+    Developer tools for ROCm application development and debugging.
+    Includes profilers, debuggers, and development utilities.
+
+[H2]opencl
+    OpenCL runtime support for ROCm.
+    Enables OpenCL applications to run on AMD GPUs.
+
+[H2]core-sdk (Select All)
+    Complete ROCm SDK with all components above.
+    Selecting this option automatically includes core, core-dev, dev-tools,
+    and opencl. Recommended for full ROCm development environment.
+
+[H1]Usage:
+
+You can select individual components for a customized installation, or
+select 'core-sdk' to install all components at once.
+
+The 'core' component is recommended as the minimum installation.
+
+Use Space or Enter to select/deselect items.
+Press <DONE> when finished to return to the ROCm Options menu.

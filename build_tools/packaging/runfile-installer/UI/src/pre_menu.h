@@ -27,8 +27,9 @@
 #define PRE_MENU_ITEM_START_Y    9   // minimum starting y/row
 #define PRE_MENU_ITEM_START_X    2   // minimum starting x/col
 
-#define PRE_HELP_MENU_DESC_STARTX    28
-#define PRE_HELP_MENU_DESC_STARTY    5
+// Pre-menu help setup
+#define PRE_MENU_HELP_TITLE         "Pre-Install Configuration Help"
+#define PRE_MENU_HELP_FILE          "./UI/rocm_menus/preinstall_help"
 
 // menu item indices
 

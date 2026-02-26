@@ -53,7 +53,7 @@ MENU_PROP postMenuProps = {
     .numLines = ARRAY_SIZE(postMenuOps) - 1,
     .numCols = MAX_MENU_ITEM_COLS,
     .starty = POST_MENU_ITEM_START_Y,
-    .startx = POST_MENU_ITEM_START_X, 
+    .startx = POST_MENU_ITEM_START_X,
     .numItems = ARRAY_SIZE(postMenuOps)
 };
 
@@ -64,50 +64,7 @@ ITEMLIST_PARAMS postMenuItems = {
     .pItemListDesp      = postMenuDesc
 };
 
-// verbose help menu variables
-// Spaces added/deleted from HelpOps and HelpDesc to ensure whole words aren't
-// cut off between lines when displaying help menu.
-char *postMenuHelpOps[] = {
-    "GPU Access Permissions",
-    "    Current User",
-    "    All Users"
-    SKIPPABLE_MENU_ITEM,
-    SKIPPABLE_MENU_ITEM,
-    "Post ROCm Install",
-    (char*)NULL,
-};
-
-char *postMenuHelpDesc[] = {
-    " ",
-    "Add the current user to the video,render group         for access to GPU resources.",
-    "Grant GPU access to all users on the system via        udev rules.",
-    "Note, this is an option for system admins.",
-    "Execute all ROCm install scripts setting up ROCm       symbolic links, etc.",
-    (char*)NULL,
-};
-
-MENU_PROP postMenuHelpProps = {
-    .pMenuTitle = "Post-Install Configuration Help",
-    .pMenuControlMsg = DEFAULT_VERBOSE_HELP_CONTROL_MSG,
-    .numLines = 0,
-    .numCols = MAX_MENU_ITEM_COLS,
-    .starty = POST_MENU_ITEM_START_Y,
-    .startx = POST_MENU_ITEM_START_X, 
-    .numItems = 0
-};
-
-ITEMLIST_PARAMS postMenuHelpItems = {
-    .numItems           = 0,
-    .pItemListTitle     = "Post-Install Settings Description:",
-    .pItemListChoices   = 0,
-    .pItemListDesp      = 0
-};
-
-
 void process_post_menu();
-
-// sub-menus
-void create_post_help_menu_window();
 
 // menu draw
 void post_menu_draw();
@@ -122,12 +79,8 @@ void create_post_menu_window(WINDOW *pMenuWindow, OFFLINE_INSTALL_CONFIG *pConfi
     // Create the post install options menu
     create_menu(&menuPost, pMenuWindow, &postMenuProps, &postMenuItems, pConfig);
 
-    // create verbose help menu
-    menuPost.pHelpMenu = calloc(1, sizeof(MENU_DATA));
-    if (menuPost.pHelpMenu)
-    {
-        create_post_help_menu_window();
-    }
+    // Create help menu
+    create_help_menu_window(&menuPost, POST_MENU_HELP_TITLE, POST_MENU_HELP_FILE);
 
     // Set pointer to draw menu function when window is resized
     menuPost.drawMenuFunc = post_menu_draw;
@@ -136,13 +89,13 @@ void create_post_menu_window(WINDOW *pMenuWindow, OFFLINE_INSTALL_CONFIG *pConfi
     set_menu_userptr(menuPost.pMenu, process_post_menu);
 
     // set items to non-selectable
-    set_menu_grey(menuPost.pMenu, COLOR_PAIR(5));
+    set_menu_grey(menuPost.pMenu, BLUE);
     menu_set_item_select(&menuPost, menuPost.itemList[0].numItems - 4, false);    // space before help
 }
 
 void destroy_post_menu_window()
 {
-    destroy_help_menu(menuPost.pHelpMenu);
+    destroy_help_menu(&menuPost);
     destroy_menu(&menuPost);
 }
 
@@ -151,9 +104,9 @@ void post_menu_draw()
     WINDOW *pWin = menuPost.pMenuWindow;
     POST_MENU_CONFIG *pPostConfig = &(menuPost.pConfig)->post_config;
 
-    wattron(pWin, COLOR_PAIR(3) | A_BOLD);
+    wattron(pWin, WHITE | A_BOLD);
     mvwprintw(pWin, 5, 4, "%s", "Set GPU access permissions");
-    wattroff(pWin, COLOR_PAIR(3) | A_BOLD);
+    wattroff(pWin, WHITE | A_BOLD);
 
     menu_draw(&menuPost);
 
@@ -238,18 +191,4 @@ void process_post_menu()
     }
 
     post_menu_draw(&menuPost);
-}
-
-void create_post_help_menu_window()
-{
-    MENU_DATA *pMenuData = menuPost.pHelpMenu;
-    WINDOW *pMenuWindow = menuPost.pMenuWindow;
-    
-    // Create menu window w/ border and title
-    create_menu(pMenuData, pMenuWindow, &postMenuHelpProps, &postMenuHelpItems, NULL);
-
-    menu_opts_off(pMenuData->pMenu, O_SHOWDESC);
-
-    // create form that displays verbose help menu
-    create_help_form(pMenuData, pMenuWindow, POST_HELP_MENU_DESC_STARTX, POST_HELP_MENU_DESC_STARTY, HELP_MENU_DESC_WIDTH, HELP_MENU_OP_STARTX, HELP_MENU_OP_WIDTH, postMenuHelpOps, postMenuHelpDesc); 
 }

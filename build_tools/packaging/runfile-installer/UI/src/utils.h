@@ -30,6 +30,8 @@
 #define TOGGLE_FALSE(val, bitIndx) val &= ~(1 << bitIndx) 
 
 
+void exit_error(char *pError);
+
 int calculate_text_height(char *desc, int width);
 int get_char_array_size(char *array[]);
 bool is_field_empty(char *text);

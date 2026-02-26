@@ -30,8 +30,9 @@
 #define POST_MENU_FORM_ROW        9       // starting row for post menu form
 #define POST_MENU_FORM_COL        32      // staring column for post menu form
 
-#define POST_HELP_MENU_DESC_STARTX  27
-#define POST_HELP_MENU_DESC_STARTY  5
+// Post-menu help setup
+#define POST_MENU_HELP_TITLE         "Post-Install Configuration Help"
+#define POST_MENU_HELP_FILE          "./UI/rocm_menus/postinstall_help"
 
 // menu item indicies
 #define POST_MENU_ITEM_CUR_USER_INDEX       0

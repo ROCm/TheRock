@@ -1,0 +1,21 @@
+[H1]Dependency Selection:
+
+[H2]ROCm
+  Enabled/Disable ROCm required dependencies for display/validate/install.
+
+[H2]Driver
+  Enabled/Disable amdgpu Driver required dependencies for
+  display/validate/install.
+
+[H1]Dependency Management:
+
+[H2]Display Dependencies
+  Display a list of all 1st-level dependencies required for ROCm/amdgpu
+  functionality.
+
+[H2]Validate Dependencies
+  Validate the currently installed 1st-level dependencies for ROCm/amdgpu
+  on the system.
+
+[H2]Install Dependencies
+  Install 1st-level dependencies required for ROCm/amdgpu on the system.

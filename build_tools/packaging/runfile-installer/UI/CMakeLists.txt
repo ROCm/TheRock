@@ -123,4 +123,7 @@ add_dependencies(rocm_installer rocm_ui)
 
 add_custom_command(TARGET rocm_ui
                   COMMAND echo "Copying UI to installer directory"
-                  COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/rocm_ui ${INSTALLER_DIRECTORY}/)
+                  COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/rocm_ui ${INSTALLER_DIRECTORY}/
+                  COMMAND echo "Copying rocm_menus directory to installer/UI"
+                  COMMAND ${CMAKE_COMMAND} -E make_directory ${INSTALLER_DIRECTORY}/UI
+                  COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/rocm_menus ${INSTALLER_DIRECTORY}/UI/rocm_menus/)

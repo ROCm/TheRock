@@ -24,6 +24,25 @@
 
 #include "install_types.h"
 
+// Color pair definitions for ncurses UI
+// Single colors (foreground on black background)
+#define RED                                 COLOR_PAIR(1)
+#define CYAN                                COLOR_PAIR(2)
+#define WHITE                               COLOR_PAIR(3)
+#define GREEN                               COLOR_PAIR(4)
+#define BLUE                                COLOR_PAIR(5)
+#define MAGENTA                             COLOR_PAIR(6)
+#define YELLOW                              COLOR_PAIR(7)
+
+// White foreground on colored backgrounds
+#define WHITE_ON_RED                        COLOR_PAIR(8)
+#define WHITE_ON_BLUE                       COLOR_PAIR(9)
+#define WHITE_ON_YELLOW                     COLOR_PAIR(10)
+
+// Black foreground on colored backgrounds
+#define BLACK_ON_GREEN                      COLOR_PAIR(11)
+#define BLACK_ON_WHITE                      COLOR_PAIR(12)
+#define BLACK_ON_MAGENTA                    COLOR_PAIR(13)
 
 /* Pre Install Menu Configuration ****************************************************************/
 
@@ -50,6 +69,9 @@ typedef struct _ROCM_MENU_CONFIG
     INTSTALL_TYPE rocm_install_type;
     char rocm_paths[MAX_PATHS][LARGE_CHAR_SIZE];
     int  rocm_count;
+
+    char rocm_device[DEFAULT_CHAR_SIZE];
+    char rocm_components[DEFAULT_CHAR_SIZE];
 
     // Pointer to parent config for accessing version info
     struct _OFFLINE_INSTALL_CONFIG *pConfig;

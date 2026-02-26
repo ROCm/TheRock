@@ -173,6 +173,6 @@ if [ -z "$ARGS" ]; then
     ./rocm_ui
 else
     echo Using ROCm Installer script with args: "$ARGS"
-    ./rocm-installer.sh runfile $ARGS
+    ./rocm-installer.sh $ARGS
 fi
 

@@ -275,6 +275,11 @@ if [ $CLEAN_BUILD -eq 1 ]; then
         $SUDO rm rocm-installer/rocm_ui
     fi
 
+    if [ -d "rocm-installer/UI" ]; then
+        echo -e "\e[93mRemoving: rocm-installer/UI\e[0m"
+        $SUDO rm -r rocm-installer/UI
+    fi
+
     if [ -f "rocm-installer/deps_list.txt" ]; then
         echo -e "\e[93mRemoving: rocm-installer/deps_list.txt\e[0m"
         $SUDO rm rocm-installer/deps_list.txt

@@ -271,8 +271,8 @@ void main_menu_draw(MENU_DATA *pMenuData, OFFLINE_INSTALL_CONFIG *pConfig)
     // size in case user resized terminal window
     resize_and_reposition_window_and_subwindow(pMenuData, WIN_NUM_LINES, WIN_WIDTH_COLS);
 
-    print_menu_title(pMenuData, MENU_TITLE_Y, MENU_TITLE_X, WIN_WIDTH_COLS, "ROCm Runfile Installer", COLOR_PAIR(2));
-    print_menu_item_title(pMenuData, 3, 2, installer_build, COLOR_PAIR(9));
+    print_menu_title(pMenuData, MENU_TITLE_Y, MENU_TITLE_X, WIN_WIDTH_COLS, "ROCm Runfile Installer", CYAN);
+    print_menu_item_title(pMenuData, 3, 2, installer_build, MAGENTA);
 
     print_menu_control_msg(pMenuData);
 
@@ -302,11 +302,15 @@ void config_install(OFFLINE_INSTALL_CONFIG *pConfig, char *cmdArgs)
 {
     char installcomps[SMALL_CHAR_SIZE];
     char target[LARGE_CHAR_SIZE];
+    char gfx[LARGE_CHAR_SIZE];
+    char compo[LARGE_CHAR_SIZE];
     char postrocm[SMALL_CHAR_SIZE];
     char postinstall[SMALL_CHAR_SIZE];
 
     clear_str(installcomps);
     clear_str(target);
+    clear_str(gfx);
+    clear_str(compo);
     clear_str(postrocm);
     clear_str(postinstall);
 
@@ -315,6 +319,18 @@ void config_install(OFFLINE_INSTALL_CONFIG *pConfig, char *cmdArgs)
     {
         sprintf(installcomps, "rocm");
         sprintf(target, "target=%s", pConfig->rocm_config.rocm_install_path);
+
+        // Add gfx device selection if specified
+        if (strlen(pConfig->rocm_config.rocm_device) > 0)
+        {
+            sprintf(gfx, "gfx=%s", pConfig->rocm_config.rocm_device);
+        }
+
+        // Add component selection if specified
+        if (strlen(pConfig->rocm_config.rocm_components) > 0)
+        {
+            sprintf(compo, "compo=%s", pConfig->rocm_config.rocm_components);
+        }
 
         // add rocm post-install if required
         if (pConfig->post_config.rocm_post)
@@ -345,7 +361,7 @@ void config_install(OFFLINE_INSTALL_CONFIG *pConfig, char *cmdArgs)
         sprintf(postinstall, "%s", "gpu-access=all");
     }
 
-    sprintf(cmdArgs, "%s %s %s %s", installcomps, target, postrocm, postinstall);
+    sprintf(cmdArgs, "%s %s %s %s %s %s", installcomps, target, gfx, compo, postrocm, postinstall);
 }
 
 void set_install_state(MENU_DATA *pMenuData, OFFLINE_INSTALL_CONFIG *pConfig)
@@ -440,22 +456,25 @@ int main()
     curs_set(0);
     
     // init colors
+    
+    // Single colors (foreground on black background)
     init_pair(1, COLOR_RED, COLOR_BLACK);
     init_pair(2, COLOR_CYAN, COLOR_BLACK);
-
     init_pair(3, COLOR_WHITE, COLOR_BLACK);
     init_pair(4, COLOR_GREEN, COLOR_BLACK);
     init_pair(5, COLOR_BLUE, COLOR_BLACK);
+    init_pair(6, COLOR_MAGENTA, COLOR_BLACK);
+    init_pair(7, COLOR_YELLOW, COLOR_BLACK);
 
-    init_pair(6, COLOR_WHITE, COLOR_RED);
-    init_pair(7, COLOR_BLACK, COLOR_GREEN);
-    init_pair(8, COLOR_BLACK, COLOR_WHITE);
+    // White foreground on colored backgrounds
+    init_pair(8, COLOR_WHITE, COLOR_RED);
+    init_pair(9, COLOR_WHITE, COLOR_BLUE);
+    init_pair(10, COLOR_WHITE, COLOR_YELLOW);
 
-    init_pair(9, COLOR_MAGENTA, COLOR_BLACK);
-    init_pair(10, COLOR_YELLOW, COLOR_BLACK);
-    init_pair(11, COLOR_BLACK, COLOR_MAGENTA);
-    init_pair(12, COLOR_WHITE, COLOR_BLUE);
-    init_pair(13, COLOR_WHITE, COLOR_YELLOW);
+    // Black foreground on colored backgrounds
+    init_pair(11, COLOR_BLACK, COLOR_GREEN);
+    init_pair(12, COLOR_BLACK, COLOR_WHITE);
+    init_pair(13, COLOR_BLACK, COLOR_MAGENTA);
 
     // Create the window to be associated with the menu
     menuWindow = newwin(WIN_NUM_LINES, WIN_WIDTH_COLS, WIN_START_Y, WIN_START_X);
@@ -467,7 +486,7 @@ int main()
     pMenu = menuMain.pMenu;
 
     // set items to non-selectable for the main menu
-    set_menu_grey(pMenu, COLOR_PAIR(5));
+    set_menu_grey(pMenu, BLUE);
     menu_set_item_select(&menuMain, MAIN_MENU_ITEM_INSTALL_INDEX, false);  // install
 
     // Create the various main option menus

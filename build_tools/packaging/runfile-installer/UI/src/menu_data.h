@@ -40,7 +40,9 @@
 // Menu Item Settings
 #define MAX_NUM_ITEM_LIST       5   // max number of items list per menu
 #define MAX_MENU_ITEM_COLS      80
-#define MAX_MENU_ITEMS          20
+#define MAX_MENU_ITEMS          50
+#define MAX_MENU_ITEMS_DISPLAY  23  // max number of items displayed (scroll limit)
+#define MAX_MENU_ITEM_NAME      MAX_MENU_ITEM_COLS - 1
 
 // Menu Item/list region coordinates
 #define ITEM_TITLE_Y            3   // item list title row
@@ -126,6 +128,8 @@ typedef struct _MENU_DATA
     ITEM_DATA   itemList[MAX_NUM_ITEM_LIST];
     uint32_t    itemSelections;
     int         curItemSelection;
+    int         startListIndex;
+    int         endListIndex;
 
     // forms (one for now)
     FORM_DATA   pFormList;
@@ -137,7 +141,10 @@ typedef struct _MENU_DATA
 
     // global configuration state for the installer
     OFFLINE_INSTALL_CONFIG *pConfig;
+
+    // Help submenu for menu (optional)
     void *pHelpMenu;
+    char helpMenuFile[LARGE_CHAR_SIZE];
 
     // pointer to menu main draw function
     void *drawMenuFunc;
@@ -155,6 +162,10 @@ int create_menu(MENU_DATA *pMenuData,  WINDOW *pMenuWin, MENU_PROP *pProperties,
 void destroy_menu(MENU_DATA *pMenuData);
 
 int add_menu_items(MENU_DATA *pMenuData, int itemListIndex, ITEMLIST_PARAMS *pItemListParams);
+int read_file_for_items(const char *filename, char lines[MAX_MENU_ITEMS][MAX_MENU_ITEM_NAME]);
+int read_menu_items_from_files(char *itemFile, char *itemDescFile,
+                                char itemOps[MAX_MENU_ITEMS][MAX_MENU_ITEM_NAME],
+                                char itemDesc[MAX_MENU_ITEMS][MAX_MENU_ITEM_NAME]);
 
 void menu_loop(MENU_DATA *pMenuData);
 void menu_draw(MENU_DATA *pMenuData);
@@ -176,8 +187,11 @@ void print_menu_dbg_msg(MENU_DATA *pMenuData, const char *fmt, ...);
 void print_menu_control_msg(MENU_DATA *pMenuData);
 void remove_menu_item_selection_description(MENU_DATA *pMenuData, int starty, int startx);
 
-void skip_menu_item_down_if_skippable(MENU *pMenu);
-void skip_menu_item_up_if_skippable(MENU *pMenu);
+bool is_skippable_menu_item(ITEM* item);
+bool skip_menu_item_down_if_skippable(MENU *pMenu);
+bool skip_menu_item_up_if_skippable(MENU *pMenu);
+void menu_scroll_update_selections(MENU_DATA *pMenuData, int current_index);
+void print_menu_scroll_info(MENU_DATA *pMenuData);
 
 // Functions to add/delete selection mark that gives user instant feedback
 // if a menu item has been selected/deselected

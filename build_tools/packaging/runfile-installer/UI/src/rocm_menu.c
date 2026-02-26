@@ -29,7 +29,8 @@
 /***************** ROCm Main Menu Setup *****************/
 char *rocmMenuMainOp[] = {
     "Install ROCm",
-    "   ROCm Component List",
+    "   ROCm Device",
+    "   ROCm Components",
     "   ROCm Install Path",
     SKIPPABLE_MENU_ITEM,
     "Uninstall ROCm",
@@ -41,7 +42,8 @@ char *rocmMenuMainOp[] = {
 
 char *rocmMenuMainDesc[] = {
     "Enable/Disable ROCm install.  Enabling will search for ROCm.",
-    "Display a list of ROCm components included in the installation.",
+    "Select the ROCm device for installation.",
+    "Select the ROCm components for installation.",
     "Set ROCm Install Target Directory.",
     SKIPPABLE_MENU_ITEM,
     "Uninstall runfile ROCm.",
@@ -68,62 +70,63 @@ ITEMLIST_PARAMS rocmMenuMainItems = {
     .pItemListDesp      = rocmMenuMainDesc
 };
 
-/***************** ROCm Help Sub-Menu Setup *****************/
-char *rocmHelpMenuOp[] = {
-    "Install ROCm",
-    "ROCm Component List",
-    "ROCm Install Path",
-    "Uninstall ROCm",
-    SKIPPABLE_MENU_ITEM,
-    (char*)NULL,
-};
+// Forms
+void process_rocm_menu_form(MENU_DATA *pMenuData);
 
-char *rocmHelpMenuDesc[] = {
-    "Enable/Disable the inclusion of ROCm components        as part of the installation.",
-    "List all ROCm components included                      in the ROCm install.",
-    "The location on the system where ROCm components       will be installed.",
-    "Uninstall runfile-based ROCm installation.             This is not available for package installed ROCm.",
-    " ",
-    (char*)NULL,
-};
+// Menu draw/config
+void rocm_menu_toggle_grey_items(bool enable);
+void rocm_status_draw();
+void rocm_menu_draw();
+void rocm_menu_submenu_draw(MENU_DATA *pMenuData);
 
-MENU_PROP rocmHelpMenuProps  = {
-    .pMenuTitle = "ROCm Options Help",
-    .pMenuControlMsg = DEFAULT_VERBOSE_HELP_CONTROL_MSG,
-    .numLines = 0,
-    .numCols = MAX_MENU_ITEM_COLS, 
-    .starty = ROCM_MENU_ITEM_START_Y, 
-    .startx = ROCM_MENU_ITEM_START_X, 
-    .numItems = 0
-};
-
-ITEMLIST_PARAMS rocmHelpMenuItems = {
-    .numItems           = 0,
-    .pItemListTitle     = "ROCm Install Settings Description:",
-    .pItemListChoices   = NULL,
-    .pItemListDesp      = NULL
-};
-
+// ROCm Menu
 void process_rocm_menu();
+
+// ROCm Device Menu
+void create_rocm_menu_device_window(WINDOW *pMenuWindow, OFFLINE_INSTALL_CONFIG *pConfig);
+void destroy_rocm_menu_device_window();
+void do_rocm_menu_device();
+void process_rocm_device_menu();
+void update_rocm_device_name();
+void reset_rocm_device_name();
+
+// ROCm Component Menu
+void create_rocm_menu_compo_window(WINDOW *pMenuWindow, OFFLINE_INSTALL_CONFIG *pConfig);
+void destroy_rocm_menu_compo_window();
+void do_rocm_menu_compo();
+void process_rocm_compo_menu();
+void set_rocm_components_name(int index);
+void clear_rocm_components_name();
+void update_rocm_components_name();
+void reset_rocm_components_name();
+
+// ROCm Uninstall Menu
+void create_rocm_uninstall_window(WINDOW *pMenuWindow, OFFLINE_INSTALL_CONFIG *pConfig);
+void destroy_rocm_uninstall_menu_window();
+void do_rocm_uninstall_menu();
 void process_rocm_uninstall_menu();
 void process_rocm_uninstall_item();
 void update_rocm_uinstall_menu();
 
-// forms
-void process_rocm_menu_form(MENU_DATA *pMenuData);
+// ROCm menus
+MENU_DATA menuROCm = {0};
+MENU_DATA menuROCmUninstall = {0};
+bool gRocmStatusCheck = false;
 
-// menu draw/config
-void rocm_menu_toggle_grey_items(bool enable);
-void rocm_status_draw();
-void rocm_menu_draw();
+// ROCm Device Menu
+MENU_DATA menuROCmDevice = {0};
+MENU_DATA menuHelpROCmDevice = {0};
+MENU_PROP rocmMenuDeviceProps = {0};
+ITEMLIST_PARAMS rocmMenuDeviceItems = {0};
+char rocmMenuDeviceOps[MAX_MENU_ITEMS][MAX_MENU_ITEM_NAME] = {0};
+char rocmMenuDeviceDesc[MAX_MENU_ITEMS][MAX_MENU_ITEM_NAME] = {0};
 
-// sub-menus
-void create_rocm_help_menu_window();
-
-void create_rocm_uninstall_window(WINDOW *pMenuWindow, OFFLINE_INSTALL_CONFIG *pConfig);
-void destroy_rocm_uninstall_menu_window();
-void do_rocm_uninstall_menu();
-
+// ROCm Component Menu
+MENU_DATA menuROCmCompo = {0};
+MENU_PROP rocmMenuCompoProps = {0};
+ITEMLIST_PARAMS rocmMenuCompoItems = {0};
+char rocmMenuCompoOps[MAX_MENU_ITEMS][MAX_MENU_ITEM_NAME] = {0};
+char rocmMenuCompoDesc[MAX_MENU_ITEMS][MAX_MENU_ITEM_NAME] = {0};
 
 // ROCM Uninstall Menu
 uint8_t rocm_paths_uninstall_state[MAX_PATHS] = {0};
@@ -138,11 +141,6 @@ int g_uninstall_rocm_runfile_index = -1;
 int g_uninstall_start_index = 0;
 int g_uninstall_end_index = 19;
 
-// ROCm menus
-MENU_DATA menuROCm = {0};
-MENU_DATA menuROCmUninstall = {0};
-bool gRocmStatusCheck = false;
-
 
 /**************** ROCm MENU **********************************************************************************/
 
@@ -153,12 +151,14 @@ void create_rocm_menu_window(WINDOW *pMenuWindow, OFFLINE_INSTALL_CONFIG *pConfi
     // Create the ROCm options menu
     create_menu(&menuROCm, pMenuWindow, &rocmMenuMainProps, &rocmMenuMainItems, pConfig);
 
-    // Create verbose help menu
-    menuROCm.pHelpMenu = calloc(1, sizeof(MENU_DATA));
-    if (menuROCm.pHelpMenu)
-    {
-        create_rocm_help_menu_window();
-    }
+    // Create help menu
+    create_help_menu_window(&menuROCm, ROCM_MENU_HELP_TITLE, ROCM_MENU_HELP_FILE);
+
+    // Create the rocm device menu
+    create_rocm_menu_device_window(pMenuWindow, pConfig);
+
+    // Create the rocm component menu
+    create_rocm_menu_compo_window(pMenuWindow, pConfig);
 
     // Set pointer to draw menu function when window is resized
     menuROCm.drawMenuFunc = rocm_menu_draw;
@@ -174,7 +174,7 @@ void create_rocm_menu_window(WINDOW *pMenuWindow, OFFLINE_INSTALL_CONFIG *pConfi
     pRocmConfig->is_rocm_path_valid = true; // default path "/" is valid
 
     // set items to non-selectable
-    set_menu_grey(menuROCm.pMenu, COLOR_PAIR(5));
+    set_menu_grey(menuROCm.pMenu, BLUE);
     menu_set_item_select(&menuROCm, menuROCm.itemList[0].numItems - 4, false);  // space before done
     rocm_menu_toggle_grey_items(false);
     
@@ -191,7 +191,11 @@ void create_rocm_menu_window(WINDOW *pMenuWindow, OFFLINE_INSTALL_CONFIG *pConfi
 
 void destroy_rocm_menu_window()
 {
-    destroy_help_menu(menuROCm.pHelpMenu);
+    // destroy the sub-menus
+    destroy_rocm_menu_device_window();
+    destroy_rocm_menu_compo_window();
+
+    destroy_help_menu(&menuROCm);
     destroy_menu(&menuROCmUninstall);
     destroy_menu(&menuROCm);
 }
@@ -202,14 +206,16 @@ void rocm_menu_toggle_grey_items(bool enable)
     {
         // enable all rocm option fields
         menu_set_item_select(&menuROCm, ROCM_MENU_ITEM_INSTALL_ROCM_INDEX, true);
-        menu_set_item_select(&menuROCm, ROCM_MENU_ITEM_LIST_INDEX, true);
+        menu_set_item_select(&menuROCm, ROCM_MENU_ITEM_DEVICE_INDEX, true);
+        menu_set_item_select(&menuROCm, ROCM_MENU_ITEM_COMPO_INDEX, true);
         menu_set_item_select(&menuROCm, ROCM_MENU_ITEM_ROCM_PATH_INDEX, true);
     }
     else
     {
         // disable all rocm option fields
         menu_set_item_select(&menuROCm, ROCM_MENU_ITEM_INSTALL_ROCM_INDEX, false);
-        menu_set_item_select(&menuROCm, ROCM_MENU_ITEM_LIST_INDEX, false);
+        menu_set_item_select(&menuROCm, ROCM_MENU_ITEM_DEVICE_INDEX, false);
+        menu_set_item_select(&menuROCm, ROCM_MENU_ITEM_COMPO_INDEX, false);
         menu_set_item_select(&menuROCm, ROCM_MENU_ITEM_ROCM_PATH_INDEX, false);
         menu_set_item_select(&menuROCm, ROCM_MENU_ITEM_UNINSTALL_ROCM_INDEX, false);
     }
@@ -441,7 +447,7 @@ void rocm_status_draw()
         // check for the ROCm status and draw
         if (pRocmConfig->rocm_install_type == eINSTALL_NONE)
         {
-            print_menu_msg(&menuROCm, COLOR_PAIR(4), "ROCm %s not installed.", pConfig->rocmVersion);
+            print_menu_msg(&menuROCm, GREEN, "ROCm %s: Install Path valid.", pConfig->rocmVersion);
         }
         else if (pRocmConfig->rocm_install_type == eINSTALL_PACKAGE)
         {
@@ -474,9 +480,37 @@ void rocm_menu_draw()
     field_trim(pRocmConfig->rocm_install_path, drawName, ROCM_MENU_FORM_FIELD_WIDTH);
     mvwprintw(pMenuWindow, ROCM_MENU_FORM_ROW,  ROCM_MENU_FORM_COL, "%s", drawName);
 
+    // draw the rocm device info
+    if (pRocmConfig->install_rocm)
+    {
+        mvwprintw(pMenuWindow, ROCM_MENU_ITEM_DEVICE_ROW, ROCM_MENU_ITEM_DEVICE_COL, "%s", pRocmConfig->rocm_device);
+    }
+    else
+    {
+        wmove(pMenuWindow, ROCM_MENU_ITEM_DEVICE_ROW, ROCM_MENU_ITEM_DEVICE_COL);
+        wclrtoeol(pMenuWindow);
+    }
+
+    // draw the rocm compoment info
+    if (pRocmConfig->install_rocm)
+    {
+        mvwprintw(pMenuWindow, ROCM_MENU_ITEM_COMPO_ROW, ROCM_MENU_ITEM_COMPO_COL, "%s", pRocmConfig->rocm_components);
+    }
+    else
+    {
+        wmove(pMenuWindow, ROCM_MENU_ITEM_COMPO_ROW, ROCM_MENU_ITEM_COMPO_COL);
+        wclrtoeol(pMenuWindow);
+    }
+
     rocm_status_draw();
 
     menu_draw(&menuROCm);
+}
+
+void rocm_menu_submenu_draw(MENU_DATA *pMenuData)
+{
+    wclear(pMenuData->pMenuWindow);
+    menu_draw(pMenuData);
 }
 
 void do_rocm_menu()
@@ -516,26 +550,40 @@ void process_rocm_menu()
         rocm_menu_toggle_grey_items(pRocmConfig->install_rocm);
         menu_info_draw_bool(&menuROCm, ROCM_MENU_ITEM_INSTALL_ROCM_ROW, ROCM_MENU_FORM_COL, pRocmConfig->install_rocm);
 
-        // reset the rocm install check if install rocm toggled off
+        // reset any state on rocm install toggle off
         if (!pRocmConfig->install_rocm)
         {
+            // reset the rocm install check
             gRocmStatusCheck = false;
-            
             if (pRocmConfig->rocm_install_type == eINSTALL_NONE)
             {
                 clear_menu_msg(&menuROCm);
             }
+
+            // reset the rocm device selection
+            reset_rocm_device_name();
+
+            // reset the rocm component selection
+            reset_rocm_components_name();
         }
     }
-    else if (index == ROCM_MENU_ITEM_LIST_INDEX)
+    else if (index == ROCM_MENU_ITEM_DEVICE_INDEX)
     {
+        // Display ROCm Device menu if ROCm is enabled
         if (pRocmConfig->install_rocm)
         {
-            OFFLINE_INSTALL_CONFIG *pConfig = pRocmConfig->pConfig;
-            char rocm_comp_ver[LARGE_CHAR_SIZE];
-            sprintf(rocm_comp_ver, " ROCm %s Components:", pConfig->rocmVersion);
-
-            display_scroll_window("Component List", rocm_comp_ver, "./component-rocm/components.txt", NULL);
+            // switch to the rocm device sub-menu
+            unpost_menu(pMenu);
+            do_rocm_menu_device();
+        }
+    }
+    else if (index == ROCM_MENU_ITEM_COMPO_INDEX)
+    {
+        // Display ROCm Component menu if ROCm is enabled
+        if (pRocmConfig->install_rocm)
+        {
+            unpost_menu(pMenu);
+            do_rocm_menu_compo();
         }
     }
     else if (index == ROCM_MENU_ITEM_ROCM_PATH_INDEX)
@@ -630,22 +678,9 @@ void process_rocm_menu_form(MENU_DATA *pMenuData)
     DEBUG_UI_MSG(pMenuData, "ROCM path =%s", pRocmConfig->rocm_install_path);
 }
 
-/**************** ROCM HELP MENU *****************************************************************************/
 
-void create_rocm_help_menu_window()
-{
-    MENU_DATA *pMenuData = menuROCm.pHelpMenu;
-    WINDOW *pMenuWindow = menuROCm.pMenuWindow;
+/**************** ROCM Uninstall MENU ************************************************************************/
 
-    // Create menu window w/ border and title
-    create_menu(pMenuData, pMenuWindow, &rocmHelpMenuProps, &rocmHelpMenuItems, NULL);
-    menu_opts_off(pMenuData->pMenu, O_SHOWDESC);
-
-    // Create form that displays verbose help menu
-    create_help_form(pMenuData, pMenuWindow, ROCM_HELP_MENU_DESC_STARTX, ROCM_HELP_MENU_DESC_STARTY, HELP_MENU_DESC_WIDTH, HELP_MENU_OP_STARTX, HELP_MENU_OP_WIDTH, rocmHelpMenuOp, rocmHelpMenuDesc); 
-}
-
-/**************** ROCM Uninstall MENU **************************************************************************/
 void draw_rocm_uninstall_types()
 {
     WINDOW *pWin = menuROCmUninstall.pMenuWindow;
@@ -661,17 +696,17 @@ void draw_rocm_uninstall_types()
             if (i == g_uninstall_rocm_pkg_index)
             {
                 // package manager install
-                wattron(pWin, COLOR_PAIR(6) | A_BOLD);
+                wattron(pWin, WHITE_ON_RED | A_BOLD);
                 mvwprintw(pWin, ROCM_MENU_ITEM_START_Y+draw_index, 3, "P");
-                wattroff(pWin, COLOR_PAIR(6) | A_BOLD);
+                wattroff(pWin, WHITE_ON_RED | A_BOLD);
             }
             else if (i == g_uninstall_rocm_runfile_index)
             {
                 // runfile install with conflict - matches installers rocm version
                 OFFLINE_INSTALL_CONFIG *pConfig = pRocmConfig->pConfig;
-                wattron(pWin, COLOR_PAIR(10) | A_BOLD);
+                wattron(pWin, YELLOW | A_BOLD);
                 mvwprintw(pWin, ROCM_MENU_ITEM_START_Y+draw_index, 3, "C");
-                wattroff(pWin, COLOR_PAIR(10) | A_BOLD);
+                wattroff(pWin, YELLOW | A_BOLD);
 
                 char drawName[DEFAULT_CHAR_SIZE];
                 field_trim(pRocmConfig->rocm_paths[i], drawName, 30);
@@ -681,9 +716,9 @@ void draw_rocm_uninstall_types()
             else
             {
                 // runfile install - different from installer rocm version
-                wattron(pWin, COLOR_PAIR(4) | A_BOLD);
+                wattron(pWin, GREEN | A_BOLD);
                 mvwprintw(pWin, ROCM_MENU_ITEM_START_Y+draw_index, 3, "R");
-                wattroff(pWin, COLOR_PAIR(4) | A_BOLD);
+                wattroff(pWin, GREEN | A_BOLD);
             }
 
             draw_index++;
@@ -702,29 +737,29 @@ void rocm_uninstall_menu_draw()
     draw_rocm_uninstall_types();
 
     // draw the uninstall legend
-    wattron(pWin, COLOR_PAIR(3) | A_UNDERLINE);
+    wattron(pWin, WHITE | A_UNDERLINE);
     mvwprintw(pWin, 22, 65, "  Install type   ");
-    wattroff(pWin, COLOR_PAIR(3) | A_UNDERLINE);
+    wattroff(pWin, WHITE | A_UNDERLINE);
 
-    wattron(pWin, COLOR_PAIR(6) | A_BOLD);
+    wattron(pWin, WHITE_ON_RED | A_BOLD);
     mvwprintw(pWin, 23, 65, "P");
-    wattroff(pWin, COLOR_PAIR(6) | A_BOLD);
+    wattroff(pWin, WHITE_ON_RED | A_BOLD);
     mvwprintw(pWin, 23, 66, " Package manager");
 
-    wattron(pWin, COLOR_PAIR(10) | A_BOLD);
+    wattron(pWin, YELLOW | A_BOLD);
     mvwprintw(pWin, 24, 65, "C");
-    wattroff(pWin, COLOR_PAIR(10) | A_BOLD);
+    wattroff(pWin, YELLOW | A_BOLD);
     mvwprintw(pWin, 24, 66, " Runfile Conflict");
 
-    wattron(pWin, COLOR_PAIR(4) | A_BOLD);
+    wattron(pWin, GREEN | A_BOLD);
     mvwprintw(pWin, 25, 65, "R");
-    wattroff(pWin, COLOR_PAIR(4) | A_BOLD);
+    wattroff(pWin, GREEN | A_BOLD);
     mvwprintw(pWin, 25, 66, " Runfile");
 
     ITEM **items = menu_items(menuROCmUninstall.pMenu);
     if(item_value(items[menuROCmUninstall.curItemSelection]) == TRUE)
     {
-        print_menu_msg(&menuROCmUninstall, COLOR_PAIR(3), "Uninstall: %s", pRocmConfig->rocm_paths[menuROCmUninstall.curItemSelection]);
+        print_menu_msg(&menuROCmUninstall, WHITE, "Uninstall: %s", pRocmConfig->rocm_paths[menuROCmUninstall.curItemSelection]);
     }
 }
 
@@ -777,7 +812,7 @@ void create_rocm_uninstall_window(WINDOW *pMenuWindow, OFFLINE_INSTALL_CONFIG *p
         rocm_paths_items[i] = "<DONE>";
         rocm_paths_item_desc[i++] = " Exit to ROCm Options Menu";
 
-        int numItems = i + 1;
+        int numItems = i;
 
         rocmPathsProps = (MENU_PROP) {
             .pMenuTitle = "ROCm Uninstall",
@@ -808,11 +843,11 @@ void create_rocm_uninstall_window(WINDOW *pMenuWindow, OFFLINE_INSTALL_CONFIG *p
         // Make the menu multi valued
         menu_opts_off(menuROCmUninstall.pMenu, O_ONEVALUE);
 
-        // set items to non-selectable for the menu
-        set_menu_fore(menuROCmUninstall.pMenu, COLOR_PAIR(3) | A_BOLD); // white/bold
+        // set colour for item selection in the menu
+        set_menu_fore(menuROCmUninstall.pMenu, WHITE | A_BOLD); // white/bold
 
         // Disable items from being selectable
-        set_menu_grey(menuROCmUninstall.pMenu, COLOR_PAIR(5));
+        set_menu_grey(menuROCmUninstall.pMenu, BLUE);
 
         // set item userptrs
         ITEM **items = menu_items(menuROCmUninstall.pMenu);
@@ -907,7 +942,7 @@ void uninstall_rocm_paths()
         // execute the ROCm uninstall command
         if (execute_cmd("./rocm-installer.sh", target, pWin) == 0)
         {
-            print_menu_msg(&menuROCm, COLOR_PAIR(4), "Uninstall Complete.");
+            print_menu_msg(&menuROCm, GREEN, "Uninstall Complete.");
 
             // update the state for the uninstalled item
             menu_set_item_select(&menuROCmUninstall, uninstall_index, false);
@@ -970,14 +1005,14 @@ void process_rocm_uninstall_item()
     draw_rocm_uninstall_types();
 
     // white/bold
-    set_menu_fore(menuROCmUninstall.pMenu, COLOR_PAIR(3) | A_BOLD);
+    set_menu_fore(menuROCmUninstall.pMenu, WHITE | A_BOLD);
 
     // set any selected item to the select colour (cyan)
     for(i = 0; i < item_count(pMenu); ++i)
     {
         if(item_value(items[i]) == TRUE)
         {
-            set_menu_fore(menuROCmUninstall.pMenu, COLOR_PAIR(2) | A_BOLD); 
+            set_menu_fore(menuROCmUninstall.pMenu, CYAN | A_BOLD); 
         }
     }
 }
@@ -1015,4 +1050,480 @@ void process_rocm_uninstall_menu()
     }
 
     rocm_uninstall_menu_draw();
+}
+
+
+/**************** ROCm Device MENU ***************************************************************************/
+
+void create_rocm_menu_device_window(WINDOW *pMenuWindow, OFFLINE_INSTALL_CONFIG *pConfig)
+{
+    int i, item_count;
+    char *rocmMenuDeviceOpsPtrs[MAX_MENU_ITEMS];
+    char *rocmMenuDeviceDescPtrs[MAX_MENU_ITEMS];
+
+    // Read the item file and descriptions
+    item_count = read_menu_items_from_files(ROCM_MENU_DEVICE_ITEMS_FILE, ROCM_MENU_DEVICE_ITEMDECS_FILE,
+                                            rocmMenuDeviceOps, rocmMenuDeviceDesc);
+
+    // Setup and create the device menu
+    if (item_count != 0) 
+    {
+        for (int j = 0; j < MAX_MENU_ITEMS; j++)
+        {
+            rocmMenuDeviceOpsPtrs[j] = rocmMenuDeviceOps[j];
+            rocmMenuDeviceDescPtrs[j] = rocmMenuDeviceDesc[j];
+        }
+
+        i = item_count;
+
+        // Add menu system items - add one blank line for spacing before HELP
+        strcpy(rocmMenuDeviceOps[i], " ");
+        strcpy(rocmMenuDeviceDesc[i++], " ");
+
+        strcpy(rocmMenuDeviceOps[i], "<HELP>");
+        strcpy(rocmMenuDeviceDesc[i++], DEFAULT_VERBOSE_HELP_WINDOW_MSG);
+
+        strcpy(rocmMenuDeviceOps[i], "<DONE>");
+        strcpy(rocmMenuDeviceDesc[i++], " Exit to ROCm Options Menu");
+
+        int numItems = i + 1;  // +1 for consistency with static arrays that include NULL terminator
+
+        rocmMenuDeviceProps = (MENU_PROP) {
+            .pMenuTitle = "ROCm Device Configuration",
+            .pMenuControlMsg = "<DONE> to exit : Space/Enter to select/unselect device. Up/Down to scroll.",
+            .numLines = numItems - 1,
+            .numCols = MAX_MENU_ITEM_COLS,
+            .starty = ROCM_MENU_ITEM_START_Y,
+            .startx = 4,
+            .numItems = numItems
+        };
+
+        rocmMenuDeviceItems = (ITEMLIST_PARAMS) {
+            .numItems           = numItems,
+            .pItemListTitle     = "Select which ROCm device you wish to install:",
+            .pItemListChoices   = rocmMenuDeviceOpsPtrs,
+            .pItemListDesp      = rocmMenuDeviceDescPtrs
+        };
+
+        // Create the ROCm Device Menu
+        create_menu(&menuROCmDevice, pMenuWindow, &rocmMenuDeviceProps, &rocmMenuDeviceItems, pConfig);
+
+        menuROCmDevice.enableMultiSelection = false;   // single selection
+        menuROCmDevice.isMenuItemsSelectable = true;   // items are selectable
+
+        // Set pointer to draw menu function when window is resized
+        menuROCmDevice.drawMenuFunc = rocm_menu_submenu_draw;
+
+        // Make the menu multi valued
+        menu_opts_off(menuROCmDevice.pMenu, O_ONEVALUE);
+
+        // set colour for item selection in the menu
+        set_menu_fore(menuROCmDevice.pMenu, WHITE_ON_BLUE);
+
+        // Create the ROCm Device help menu
+        create_help_menu_window(&menuROCmDevice, ROCM_MENU_DEVICE_HELP_TITLE, ROCM_MENU_DEVICE_HELP_FILE);
+
+        // Set user pointer for 'ENTER' events
+        set_menu_userptr(menuROCmDevice.pMenu, process_rocm_device_menu);
+
+        menuROCmDevice.clearErrMsgAfterUpOrDownKeyPress = true;
+    }
+}
+
+void destroy_rocm_menu_device_window()
+{
+    destroy_help_menu(&menuROCmDevice);
+    destroy_menu(&menuROCmDevice);
+
+    memset(&menuROCmDevice, 0, sizeof(menuROCmDevice));
+    memset(rocmMenuDeviceOps, 0, sizeof(rocmMenuDeviceOps));
+    memset(rocmMenuDeviceDesc, 0, sizeof(rocmMenuDeviceDesc));
+}
+
+void do_rocm_menu_device()
+{
+    MENU *pMenu = menuROCmDevice.pMenu;
+
+    rocm_menu_submenu_draw(&menuROCmDevice);
+
+    // Skip past any initial skippable items (family headers) to first selectable item
+    skip_menu_item_down_if_skippable(pMenu);
+    print_menu_item_selection(&menuROCmDevice, MENU_SEL_START_Y, MENU_SEL_START_X);
+
+    // ROCm device menu loop
+    menu_loop(&menuROCmDevice);
+
+    // Update the ROCm device config on exit
+    update_rocm_device_name();
+
+    unpost_menu(pMenu);
+
+    // Clear the X that's added when user selects devices
+    wclear(menuROCmDevice.pMenuWindow);
+}
+
+void process_rocm_device_menu()
+{
+    MENU *pMenu = menuROCmDevice.pMenu;
+
+    ITEM *pCurrentItem = current_item(pMenu);
+    int index = item_index(pCurrentItem);
+
+    DEBUG_UI_MSG(&menuROCmDevice, "ROCM Device Menu: %d, itemlist %d", index, menuROCmDevice.curItemListIndex);
+
+    if (index == 0)
+    {
+        
+    }
+    else
+    {
+        DEBUG_UI_MSG(&menuROCm, "Unknown item index");
+    }
+}
+
+// Extract gfx code/group from item name like "    MI325X/MI300X/MI300A (gfx94x)"
+// Returns pointer to gfx code within the string, or NULL if not found
+const char* extract_gfx_code(const char *item_name)
+{
+    // Find opening parenthesis
+    const char *start = strchr(item_name, '(');
+    if (!start) return NULL;
+
+    start++; // Move past '('
+
+    // Check if it starts with "gfx"
+    if (strncmp(start, "gfx", 3) != 0) return NULL;
+
+    // Find closing parenthesis to validate format
+    const char *end = strchr(start, ')');
+    if (!end) return NULL;
+
+    // Return pointer to gfx code/group (e.g., "gfx94x", "gfx950")
+    return start;
+}
+
+void set_rocm_device_name(int index)
+{
+    ROCM_MENU_CONFIG *pRocmConfig = &(menuROCmDevice.pConfig)->rocm_config;
+    ITEM **items = menuROCmDevice.itemList[0].items;
+    const char *full_item_name = item_name(items[index]);
+
+    // Extract gfx code/group from format like "    MI325X/MI300X/MI300A (gfx94x)"
+    const char *gfx_code = extract_gfx_code(full_item_name);
+
+    if (gfx_code)
+    {
+        // Copy just the gfx code/group (e.g., "gfx94x", "gfx110x", "gfx950")
+        const char *end = strchr(gfx_code, ')');
+        size_t len = end - gfx_code;
+
+        if (len < DEFAULT_CHAR_SIZE)
+        {
+            strncpy(pRocmConfig->rocm_device, gfx_code, len);
+            pRocmConfig->rocm_device[len] = '\0';
+        }
+    }
+    else
+    {
+        // Fallback: use full item name (for legacy compatibility)
+        strcpy(pRocmConfig->rocm_device, full_item_name);
+    }
+}
+
+void clear_rocm_device_name()
+{
+    ROCM_MENU_CONFIG *pRocmConfig = &(menuROCmDevice.pConfig)->rocm_config;
+
+    // clear the driver version and driver rocm version names
+    clear_str(pRocmConfig->rocm_device);
+}
+
+void update_rocm_device_name()
+{
+    int i;
+    MENU_DATA *pMenuData = &menuROCmDevice;
+
+    MENU *pMenu = pMenuData->pMenu;
+    ITEM **items = pMenuData->itemList[0].items;
+
+    clear_rocm_device_name();
+
+    // check for any selected items in the menu
+    for(i = 0; i < item_count(pMenu); ++i)
+    {
+        if(item_value(items[i]) == TRUE)
+        {
+            set_rocm_device_name(i);
+            break;
+        }
+    }
+}
+
+void reset_rocm_device_name()
+{
+    ITEM **items;
+
+    if (menuROCmDevice.pMenu)
+    {
+        // reset the rocm device item selections
+        items = menu_items(menuROCmDevice.pMenu);
+
+        for (int i = 0; i < item_count(menuROCmDevice.pMenu); i++)
+        {
+            if (item_value(items[i]) == TRUE)
+            {
+                set_item_value(items[i], false);
+            }
+
+            delete_menu_item_selection_mark(&menuROCmDevice, items[i]);
+        }
+
+        menuROCmDevice.itemSelections = 0;
+
+        // clear the rocm device
+        clear_rocm_device_name();
+    }
+}
+
+
+/**************** ROCm Component MENU ************************************************************************/
+
+void create_rocm_menu_compo_window(WINDOW *pMenuWindow, OFFLINE_INSTALL_CONFIG *pConfig)
+{
+    int i, item_count;
+    char *rocmMenuCompoOpsPtrs[MAX_MENU_ITEMS];
+    char *rocmMenuCompoDescPtrs[MAX_MENU_ITEMS];
+
+    // Read the item file and descriptions
+    item_count = read_menu_items_from_files(ROCM_MENU_COMPO_ITEMS_FILE, ROCM_MENU_COMPO_ITEMDECS_FILE,
+                                            rocmMenuCompoOps, rocmMenuCompoDesc);
+
+    // Setup and create the component menu
+    if (item_count != 0)
+    {
+        for (int j = 0; j < MAX_MENU_ITEMS; j++)
+        {
+            rocmMenuCompoOpsPtrs[j] = rocmMenuCompoOps[j];
+            rocmMenuCompoDescPtrs[j] = rocmMenuCompoDesc[j];
+        }
+
+        i = item_count;
+
+        // Add blank separator before core-sdk
+        strcpy(rocmMenuCompoOps[i], " ");
+        strcpy(rocmMenuCompoDesc[i++], " ");
+
+        // Add core-sdk item
+        strcpy(rocmMenuCompoOps[i], "core-sdk");
+        strcpy(rocmMenuCompoDesc[i++], "Complete SDK (includes all components above)");
+
+        // Add menu system items
+        strcpy(rocmMenuCompoOps[i], " ");
+        strcpy(rocmMenuCompoDesc[i++], " ");
+
+        strcpy(rocmMenuCompoOps[i], "<HELP>");
+        strcpy(rocmMenuCompoDesc[i++], DEFAULT_VERBOSE_HELP_WINDOW_MSG);
+
+        strcpy(rocmMenuCompoOps[i], "<DONE>");
+        strcpy(rocmMenuCompoDesc[i++], " Exit to ROCm Options Menu");
+
+        int numItems = i + 1;  // +1 for consistency with static arrays that include NULL terminator
+
+        rocmMenuCompoProps = (MENU_PROP) {
+            .pMenuTitle = "ROCm Component Selection",
+            .pMenuControlMsg = "<DONE> to exit : Space/Enter to select/unselect components. Up/Down to scroll.",
+            .numLines = numItems - 1,
+            .numCols = MAX_MENU_ITEM_COLS,
+            .starty = ROCM_MENU_ITEM_START_Y,
+            .startx = 4,
+            .numItems = numItems
+        };
+
+        rocmMenuCompoItems = (ITEMLIST_PARAMS) {
+            .numItems           = numItems,
+            .pItemListTitle     = "Select which component(s) you wish to install:",
+            .pItemListChoices   = rocmMenuCompoOpsPtrs,
+            .pItemListDesp      = rocmMenuCompoDescPtrs
+        };
+
+        // Create the ROCm Component Menu
+        create_menu(&menuROCmCompo, pMenuWindow, &rocmMenuCompoProps, &rocmMenuCompoItems, pConfig);
+        menuROCmCompo.isMenuItemsSelectable = true;   // items are selectable
+
+        // Set pointer to draw menu function when window is resized
+        menuROCmCompo.drawMenuFunc = rocm_menu_submenu_draw;
+
+        // Make the menu multi valued
+        menu_opts_off(menuROCmCompo.pMenu, O_ONEVALUE);
+
+        // set colour for item selection in the menu
+        set_menu_fore(menuROCmCompo.pMenu, WHITE_ON_BLUE);
+
+        // Create the ROCm Component help menu
+        create_help_menu_window(&menuROCmCompo, ROCM_MENU_COMPO_HELP_TITLE, ROCM_MENU_COMPO_HELP_FILE);
+
+        // Set user pointer for 'ENTER' events
+        set_menu_userptr(menuROCmCompo.pMenu, process_rocm_compo_menu);
+
+        menuROCmCompo.clearErrMsgAfterUpOrDownKeyPress = true;
+    }
+}
+
+void destroy_rocm_menu_compo_window()
+{
+    destroy_help_menu(&menuROCmCompo);
+    destroy_menu(&menuROCmCompo);
+
+    memset(&menuROCmCompo, 0, sizeof(menuROCmCompo));
+    memset(rocmMenuCompoOps, 0, sizeof(rocmMenuCompoOps));
+    memset(rocmMenuCompoDesc, 0, sizeof(rocmMenuCompoDesc));
+}
+
+void update_rocm_compo_selection_state()
+{
+    MENU *pMenu = menuROCmCompo.pMenu;
+    ITEM **items = menuROCmCompo.itemList[0].items;
+    int core_sdk_index = 5;  // core-sdk is now at index 5 (after blank separator)
+
+    // Check if core-sdk is selected
+    bool core_sdk_selected = item_value(items[core_sdk_index]);
+
+    if (core_sdk_selected)
+    {
+        // Clear all X marks first
+        for (int i = 0; i < item_count(pMenu); i++)
+        {
+            delete_menu_item_selection_mark(&menuROCmCompo, items[i]);
+        }
+
+        // Disable and highlight other components to show they're included
+        for (int i = 0; i < core_sdk_index; i++)
+        {
+            item_opts_off(items[i], O_SELECTABLE);
+            set_item_value(items[i], TRUE);  // Auto-select them
+        }
+
+        // Set disabled items to WHITE_ON_BLUE (same as cursor)
+        set_menu_grey(pMenu, WHITE_ON_BLUE);
+
+        // Redraw X marks for all selected items
+        for (int i = 0; i < item_count(pMenu); i++)
+        {
+            if (item_value(items[i]))
+            {
+                add_menu_item_selection_mark(&menuROCmCompo, items[i]);
+            }
+        }
+    }
+    else
+    {
+        // Re-enable other components
+        for (int i = 0; i < core_sdk_index; i++)
+        {
+            item_opts_on(items[i], O_SELECTABLE);
+        }
+        // Restore normal grey color for disabled items
+        set_menu_grey(pMenu, BLUE);
+    }
+}
+
+void do_rocm_menu_compo()
+{
+    MENU *pMenu = menuROCmCompo.pMenu;
+
+    rocm_menu_submenu_draw(&menuROCmCompo);
+
+    // ROCm component menu loop
+    menu_loop(&menuROCmCompo);
+
+    // Update the ROCm components config on exit
+    update_rocm_components_name();
+
+    unpost_menu(pMenu);
+
+    // Clear the X that's added when user selects components
+    wclear(menuROCmCompo.pMenuWindow);
+}
+
+void process_rocm_compo_menu()
+{
+#if ENABLE_MENU_DEBUG
+    MENU *pMenu = menuROCmCompo.pMenu;
+    ITEM *pCurrentItem = current_item(pMenu);
+    int index = item_index(pCurrentItem);
+    DEBUG_UI_MSG(&menuROCmCompo, "ROCM Component Menu: %d, itemlist %d", index, menuROCmCompo.curItemListIndex);
+#endif
+
+    // Update selection state after any selection change
+    update_rocm_compo_selection_state();
+}
+
+void set_rocm_components_name(int index)
+{
+    ROCM_MENU_CONFIG *pRocmConfig = &(menuROCmCompo.pConfig)->rocm_config;
+    ITEM **items = menuROCmCompo.itemList[0].items;
+
+    // update the rocm components name
+    strcpy(pRocmConfig->rocm_components, item_name(items[index]));
+}
+
+void clear_rocm_components_name()
+{
+    ROCM_MENU_CONFIG *pRocmConfig = &(menuROCmCompo.pConfig)->rocm_config;
+
+    // clear the rocm components name
+    clear_str(pRocmConfig->rocm_components);
+}
+
+void update_rocm_components_name()
+{
+    int i;
+    MENU_DATA *pMenuData = &menuROCmCompo;
+
+    MENU *pMenu = pMenuData->pMenu;
+    ITEM **items = pMenuData->itemList[0].items;
+     ROCM_MENU_CONFIG *pRocmConfig = &(menuROCmCompo.pConfig)->rocm_config;
+
+    clear_rocm_components_name();
+
+    // check for any selected items in the menu
+    for(i = 0; i < item_count(pMenu); ++i)
+    {
+        if(item_value(items[i]) == TRUE)
+        {
+            strcat(pRocmConfig->rocm_components, item_name(items[i]));
+            strcat(pRocmConfig->rocm_components, ",");
+        }
+    }
+
+    if (strlen(pRocmConfig->rocm_components) != 0)
+    {
+        pRocmConfig->rocm_components[strlen(pRocmConfig->rocm_components)-1] = '\0';
+    }
+}
+
+void reset_rocm_components_name()
+{
+    ITEM **items;
+
+    if (menuROCmCompo.pMenu)
+    {
+        // reset the rocm component item selections
+        items = menu_items(menuROCmCompo.pMenu);
+
+        for (int i = 0; i < item_count(menuROCmCompo.pMenu); i++)
+        {
+            if (item_value(items[i]) == TRUE)
+            {
+                set_item_value(items[i], false);
+            }
+
+            delete_menu_item_selection_mark(&menuROCmCompo, items[i]);
+        }
+
+        menuROCmCompo.itemSelections = 0;
+
+        // clear the rocm components
+        clear_rocm_components_name();
+    }
 }

@@ -20,18 +20,10 @@
  *
  * ************************************************************************ */
 #include "menu_data.h"
-#define HELP_MENU_DESC_STARTX   28
-#define HELP_MENU_DESC_STARTY   5
-#define HELP_MENU_DESC_WIDTH    55
 
-#define HELP_MENU_OP_STARTX     4
-#define HELP_MENU_OP_WIDTH      22
+#define HELP_MENU_ITEM_START_Y              5   // minimum starting y/row
+#define HELP_MENU_ITEM_START_X              1   // minimum starting x/col
 
-#define HELP_MENU_ITEM_START_Y        5   // minimum starting y/row
-#define HELP_MENU_ITEM_START_X        3   // minimum starting x/col
-
-void create_help_form(MENU_DATA *pMenuData, WINDOW *pMenuWin, int menuDescStartx, int manuDescStarty, int menuDescWidth, int menuOpStartx, int menuOptWidth, char *helpMenuOps[], char *helpMenuDesc[]);
-
-void do_help_menu(MENU_DATA *pMenuData);
-void help_menu_draw(MENU_DATA *pMenuData);
+int create_help_menu_window(MENU_DATA *pMenuData, char *helpTile, char *helpFile);
 void destroy_help_menu(MENU_DATA *pMenuData);
+void do_help_menu(MENU_DATA *pMenuData);

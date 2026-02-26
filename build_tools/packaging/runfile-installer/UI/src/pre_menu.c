@@ -58,7 +58,7 @@ MENU_PROP preMenuProps = {
     .numLines = ARRAY_SIZE(preMenuOps) - 1,
     .numCols = MAX_MENU_ITEM_COLS,
     .starty = PRE_MENU_ITEM_START_Y,
-    .startx = PRE_MENU_ITEM_START_X, 
+    .startx = PRE_MENU_ITEM_START_X,
     .numItems = ARRAY_SIZE(preMenuOps)
 };
 
@@ -69,52 +69,8 @@ ITEMLIST_PARAMS preMenuItems = {
     .pItemListDesp      = preMenuDesc
 };
 
-// verbose help menu variables
-// Spaces added/deleted from HelpOps and HelpDesc to ensure whole words aren't
-// cut off between lines when displaying help menu.
-char *preMenuHelpOps[] = {
-    "ROCm",
-    "Driver",
-    " ",
-    "Display  Dependencies",
-    "Validate Dependencies",
-    "Install Dependencies",
-    (char*)NULL,
-};
-
-char *preMenuHelpDesc[] = {
-    "Enabled/Disable ROCm required dependencies             for display/validate/install.",
-    "Enabled/Disable amdgpu Driver required                 dependencies for display/validate/install.",
-    " ",
-    "Display a list of all 1st-level dependencies           required for ROCm/amdgpu functionality.",
-    "Validate the currently installed 1st-level             dependencies for ROCm/amdgpu on the system.",
-    "Install 1st-level dependencies required                for ROCm/amdgpu on the system.",
-    (char*)NULL,
-};
-
-MENU_PROP preMenuHelpProps = {
-    .pMenuTitle = "Pre-Install Configuration Help",
-    .pMenuControlMsg = DEFAULT_VERBOSE_HELP_CONTROL_MSG,
-    .numLines = 0,
-    .numCols = MAX_MENU_ITEM_COLS,
-    .starty = PRE_MENU_ITEM_START_Y,
-    .startx = PRE_MENU_ITEM_START_X, 
-    .numItems = 0
-};
-
-ITEMLIST_PARAMS preMenuHelpItems = {
-    .numItems           = 0,
-    .pItemListTitle     = "Pre-install Settings Description:",
-    .pItemListChoices   = 0,
-    .pItemListDesp      = 0
-};
-
-
 void process_pre_menu();
 void process_item();
-
-// sub-menus
-void create_pre_help_menu_window();
 
 // menu draw
 void pre_menu_toggle_grey_items(bool enable);
@@ -131,12 +87,8 @@ void create_pre_menu_window(WINDOW *pMenuWindow, OFFLINE_INSTALL_CONFIG *pConfig
     // Create the pre install options menu
     create_menu(&menuPre, pMenuWindow, &preMenuProps, &preMenuItems, pConfig);
 
-    // create verbose help menu
-    menuPre.pHelpMenu = calloc(1, sizeof(MENU_DATA));
-    if (menuPre.pHelpMenu)
-    {
-        create_pre_help_menu_window();
-    }
+    // Create help menu
+    create_help_menu_window(&menuPre, PRE_MENU_HELP_TITLE, PRE_MENU_HELP_FILE);
 
     // Set pointer to draw menu function when window is resized
     menuPre.drawMenuFunc = pre_menu_draw;
@@ -151,14 +103,14 @@ void create_pre_menu_window(WINDOW *pMenuWindow, OFFLINE_INSTALL_CONFIG *pConfig
     set_menu_userptr(menuPre.pMenu, process_pre_menu);
 
     // set items to non-selectable
-    set_menu_grey(menuPre.pMenu, COLOR_PAIR(5));
+    set_menu_grey(menuPre.pMenu, BLUE);
     menu_set_item_select(&menuPre, menuPre.itemList[0].numItems - 4, false);    // space before help
     pre_menu_toggle_grey_items(false);
 }
 
 void destroy_pre_menu_window()
 {
-    destroy_help_menu(menuPre.pHelpMenu);
+    destroy_help_menu(&menuPre);
     destroy_menu(&menuPre);
 }
 
@@ -217,9 +169,9 @@ void pre_menu_draw()
     getcwd(cwd, sizeof(cwd));
     sprintf(depsPath, "%s/%s", cwd, DEPS_OUT_FILE);
 
-    wattron(pWin, COLOR_PAIR(3) | A_BOLD);
+    wattron(pWin, WHITE | A_BOLD);
     mvwprintw(pWin, 5, 3, "%s", "Dependencies");
-    wattroff(pWin, COLOR_PAIR(3) | A_BOLD);
+    wattroff(pWin, WHITE | A_BOLD);
 
     wattron(pWin, A_BOLD);
     
@@ -274,9 +226,9 @@ void draw_window_title(WINDOW *pWin, char *pTitle)
 
     box(pWin, 0, 0);
     
-    wattron(pWin, COLOR_PAIR(2) | A_BOLD);
+    wattron(pWin, CYAN | A_BOLD);
     mvwprintw(pWin, 1, (int)temp, "%s", pTitle);
-    wattroff(pWin, COLOR_PAIR(2) | A_BOLD);
+    wattroff(pWin, CYAN | A_BOLD);
     mvwhline(pWin, 2, 2, ACS_HLINE, WIN_WIDTH_COLS - 4);
 
     wrefresh(pWin);
@@ -338,9 +290,9 @@ int execute_cmd_with_progress(const char *script, const char *arg1, const char *
 
 void wait_for_user_input(WINDOW *pWin, int y, int x, char *output)
 {
-    wattron(pWin, COLOR_PAIR(4) | A_BOLD);
+    wattron(pWin, GREEN | A_BOLD);
     mvwprintw(pWin, y, x, "%s", output);
-    wattroff(pWin, COLOR_PAIR(4) | A_BOLD);
+    wattroff(pWin, GREEN | A_BOLD);
 
     // clear the process bar
     wmove(pWin, 28, 1);
@@ -442,7 +394,7 @@ void process_pre_menu()
             }
 
             sprintf(depsMsg, "%d Dependencies required. %s written.", numDeps, DEPS_OUT_FILE);
-            print_menu_msg(&menuPre, COLOR_PAIR(3), depsMsg);
+            print_menu_msg(&menuPre, WHITE, depsMsg);
         }
         else if (index == PRE_MENU_ITEM_DEPS_VALIDATE_INDEX) // validate
         {
@@ -485,7 +437,7 @@ void process_pre_menu()
                 if (display_scroll_window("Validate Dependencies", "Missing:", DEPS_OUT_FILE, &numDeps) != 0)
                 {
                     wait_for_user_input(pWin, 3, 1, "All dependencies installed.");
-                    print_menu_msg(&menuPre, COLOR_PAIR(4), "All dependencies installed.");
+                    print_menu_msg(&menuPre, GREEN, "All dependencies installed.");
                 }
                 else
                 {
@@ -508,7 +460,7 @@ void process_pre_menu()
             // run the dependency install command
             if (execute_cmd("./rocm-installer.sh", args, pWin) == 0)
             {
-                print_menu_msg(&menuPre, COLOR_PAIR(4), "All dependencies installed.");
+                print_menu_msg(&menuPre, GREEN, "All dependencies installed.");
             }
             else
             {
@@ -525,19 +477,5 @@ void process_pre_menu()
     }
 
     pre_menu_draw();
-}
-
-void create_pre_help_menu_window()
-{
-    MENU_DATA *pMenuData = menuPre.pHelpMenu;
-    WINDOW *pMenuWindow = menuPre.pMenuWindow;
-
-    // Create menu window w/ border and title
-    create_menu(pMenuData, pMenuWindow, &preMenuHelpProps, &preMenuHelpItems, NULL);
-
-    menu_opts_off(pMenuData->pMenu, O_SHOWDESC);
-
-    // create form that displays verbose help menu
-    create_help_form(pMenuData, pMenuWindow, PRE_HELP_MENU_DESC_STARTX, PRE_HELP_MENU_DESC_STARTY, HELP_MENU_DESC_WIDTH, HELP_MENU_OP_STARTX, HELP_MENU_OP_WIDTH, preMenuHelpOps, preMenuHelpDesc); 
 }
 

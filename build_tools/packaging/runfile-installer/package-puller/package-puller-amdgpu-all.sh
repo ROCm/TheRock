@@ -124,15 +124,23 @@ download_deb_packages() {
     mkdir -p "$output_dir"
 
     # Extract the repository URL from the AMDGPU_REPO format
-    # Format: "deb https://repo.radeon.com/amdgpu/30.20.1/ubuntu jammy main"
+    # Standard format: "deb https://repo.radeon.com/amdgpu/30.20.1/ubuntu jammy main"
+    # Internal format: "deb https://artifactory-cdn.amd.com/artifactory/list/amdgpu-deb-remote 2296104 jammy"
     REPO_URL=$(echo "$AMDGPU_REPO" | awk '{print $2}')
-    DISTRO_CODENAME=$(echo "$AMDGPU_REPO" | awk '{print $3}')
+    DISTRO_NAME=$(echo "$AMDGPU_REPO" | awk '{print $3}')
+    COMPONENT=$(echo "$AMDGPU_REPO" | awk '{print $4}')
+
+    # If no component specified (field $4), default to "main"
+    if [ -z "$COMPONENT" ]; then
+        COMPONENT="main"
+    fi
 
     print_status "Repository: $REPO_URL"
-    print_status "Distro codename: $DISTRO_CODENAME"
+    print_status "Distribution: $DISTRO_NAME"
+    print_status "Component: $COMPONENT"
 
     # Download Packages file to get package information
-    PACKAGES_URL="${REPO_URL}/dists/${DISTRO_CODENAME}/main/binary-amd64/Packages.gz"
+    PACKAGES_URL="${REPO_URL}/dists/${DISTRO_NAME}/${COMPONENT}/binary-amd64/Packages.gz"
 
     print_status "Downloading package index from: $PACKAGES_URL"
     wget -q -O "$output_dir/Packages.gz" "$PACKAGES_URL"

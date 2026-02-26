@@ -45,15 +45,17 @@ int create_menu(MENU_DATA *pMenuData, WINDOW *pMenuWin, MENU_PROP *pProperties, 
     add_menu_items(pMenuData, 0, pItemListParams);
     pMenuData->curItemListIndex = 0;
 
-    // set the menu format
-    subwin_numlines = WIN_NUM_LINES - 5 - pProperties->starty;   // number of win lines minus control/status minus start row
-    set_menu_format(pMenuData->pMenu, subwin_numlines, 1);
-
     // Create menu for the primary item list (0)
     pMenuData->pMenu = new_menu((ITEM**)pMenuData->itemList[0].items);
 
+    // set the menu format
+    subwin_numlines = MAX_MENU_ITEMS_DISPLAY - pProperties->starty;   // number of win lines minus control/status minus start row
+    set_menu_format(pMenuData->pMenu, subwin_numlines, 1);
+    pMenuData->startListIndex = 0;
+    pMenuData->endListIndex = subwin_numlines;
+
     // set the default menu item colours (white with black backgroud)
-    set_menu_fore(pMenuData->pMenu, COLOR_PAIR(3) | A_BOLD);
+    set_menu_fore(pMenuData->pMenu, WHITE | A_BOLD);
 
     // Set menu mark to the string
     set_menu_mark(pMenuData->pMenu, " > ");
@@ -82,7 +84,8 @@ int add_menu_items(MENU_DATA *pMenuData, int itemListIndex, ITEMLIST_PARAMS *pIt
     numItems = pItemListParams->numItems;
 
     pMenuData->itemList[itemListIndex].numItems = numItems;
-    pMenuData->itemList[itemListIndex].items = (ITEM**)calloc(numItems, sizeof(ITEM*));
+    // Allocate numItems + 1 to include NULL terminator required by new_menu()
+    pMenuData->itemList[itemListIndex].items = (ITEM**)calloc(numItems + 1, sizeof(ITEM*));
 
     int itemListTitleLen = strlen(pItemListParams->pItemListTitle);
 
@@ -100,8 +103,8 @@ int add_menu_items(MENU_DATA *pMenuData, int itemListIndex, ITEMLIST_PARAMS *pIt
             pMenuData->itemList[itemListIndex].items[i] = new_item(pItemListParams->pItemListChoices[i], pItemListParams->pItemListDesp[i]);
         }
 
-        pMenuData->itemList[itemListIndex].doneItemIndex = numItems - 2;      // done item is the last item
-        pMenuData->itemList[itemListIndex].helpItemIndex = numItems - 3;      // help item is the second last item
+        pMenuData->itemList[itemListIndex].doneItemIndex = numItems - 2;      // done item is the second-to-last item
+        pMenuData->itemList[itemListIndex].helpItemIndex = numItems - 3;      // help item is the third-to-last item
     }
     else
     {
@@ -110,6 +113,72 @@ int add_menu_items(MENU_DATA *pMenuData, int itemListIndex, ITEMLIST_PARAMS *pIt
     }
     
     return 0;
+}
+
+int read_file_for_items(const char *filename, char lines[MAX_MENU_ITEMS][MAX_MENU_ITEM_NAME])
+{
+    FILE *file = fopen(filename, "r");
+    if (file == NULL)
+    {
+        fprintf(stderr, "Error: failed to open file %s", filename);
+        return -1;
+    }
+
+    char buffer[MAX_MENU_ITEM_NAME];
+    int line_count = 0;
+
+    // Read the file line by line
+    while (fgets(buffer, sizeof(buffer), file))
+    {
+        // Check if we've reached the maximum number of lines
+        if (line_count >= MAX_MENU_ITEMS)
+        {
+            fprintf(stderr, "Error: Exceeded maximum number of lines (%d).\n", MAX_MENU_ITEMS);
+            fclose(file);
+            return -1;
+        }
+
+        // Remove the newline character, if present
+        buffer[strcspn(buffer, "\n")] = '\0';
+
+        // Copy the line into the pre-allocated array
+        strncpy(lines[line_count], buffer, MAX_MENU_ITEM_NAME - 1);
+        lines[line_count][MAX_MENU_ITEM_NAME - 1] = '\0'; // Ensure null termination
+
+        line_count++;
+    }
+
+    fclose(file);
+    return line_count; // Return the number of lines read
+}
+
+int read_menu_items_from_files(char *itemFile, char *itemDescFile,
+                                char itemOps[MAX_MENU_ITEMS][MAX_MENU_ITEM_NAME],
+                                char itemDesc[MAX_MENU_ITEMS][MAX_MENU_ITEM_NAME])
+{
+    int item_count, item_desc_count;
+
+    // Read the item file
+    item_count = read_file_for_items(itemFile, itemOps);
+    if (item_count == -1)
+    {
+        exit_error("Failed to read menu items file.");
+    }
+
+    // Read the item description file
+    item_desc_count = read_file_for_items(itemDescFile, itemDesc);
+    if (item_desc_count == -1)
+    {
+        exit_error("Failed to read menu item descriptions file.");
+    }
+
+    // Validate that item count matches description count
+    if (item_count != item_desc_count)
+    {
+        exit_error("Item count mismatch: items and descriptions files have different counts");
+    }
+
+    return item_count;
 }
 
 void destroy_menu(MENU_DATA *pMenuData)
@@ -148,22 +217,173 @@ void destroy_menu(MENU_DATA *pMenuData)
 bool is_skippable_menu_item(ITEM* item)
 {
     const char *name = item_name(item);
-    return (strcmp(name, SKIPPABLE_MENU_ITEM) == 0) ? true : false;
+
+    // Original blank line check
+    if (strcmp(name, SKIPPABLE_MENU_ITEM) == 0)
+        return true;
+
+    // Check for family headers (lines ending with ':' and no leading spaces)
+    size_t len = strlen(name);
+    if (len > 0 && name[len - 1] == ':' && name[0] != ' ')
+        return true;
+
+    return false;
 }
 
-void skip_menu_item_down_if_skippable(MENU *pMenu)
+bool skip_menu_item_down_if_skippable(MENU *pMenu)
 {
-    if (is_skippable_menu_item(current_item(pMenu)))
-    {
-        menu_driver(pMenu, REQ_DOWN_ITEM);
-    }
-}
+    if (!is_skippable_menu_item(current_item(pMenu)))
+        return false;
 
-void skip_menu_item_up_if_skippable(MENU *pMenu)
-{
-    if (is_skippable_menu_item(current_item(pMenu)))
+    ITEM *prev_item = current_item(pMenu);
+    menu_driver(pMenu, REQ_DOWN_ITEM);
+    ITEM *curr_item = current_item(pMenu);
+
+    // If we didn't move (at boundary), undo by moving back up once
+    if (curr_item == prev_item)
     {
         menu_driver(pMenu, REQ_UP_ITEM);
+        return false;
+    }
+
+    // If we moved to another skippable item, recursively skip it
+    if (is_skippable_menu_item(curr_item))
+    {
+        return skip_menu_item_down_if_skippable(pMenu);
+    }
+
+    return true;
+}
+
+bool skip_menu_item_up_if_skippable(MENU *pMenu)
+{
+    if (!is_skippable_menu_item(current_item(pMenu)))
+        return false;
+
+    ITEM *prev_item = current_item(pMenu);
+    menu_driver(pMenu, REQ_UP_ITEM);
+    ITEM *curr_item = current_item(pMenu);
+
+    // If we didn't move (at boundary), undo by moving back down once
+    if (curr_item == prev_item)
+    {
+        menu_driver(pMenu, REQ_DOWN_ITEM);
+        return false;
+    }
+
+    // If we moved to another skippable item, recursively skip it
+    if (is_skippable_menu_item(curr_item))
+    {
+        return skip_menu_item_up_if_skippable(pMenu);
+    }
+
+    return true;
+}
+
+void menu_scroll_update_selections(MENU_DATA *pMenuData, int current_index)
+{
+    MENU *pMenu = pMenuData->pMenu;
+    ITEM **items = menu_items(pMenu);
+
+    if (current_index >= pMenuData->endListIndex)
+    {
+        // delete all marked selections on the menu
+        for (int i = 0; i < item_count(pMenu); i++) delete_menu_item_selection_mark(pMenuData, items[i]);
+
+        // Always scroll by exactly 1 - the display window moves one row at a time
+        // even if cursor skipped multiple items
+        pMenuData->startListIndex += 1;
+        pMenuData->endListIndex += 1;
+
+        // add all marked selections for the updated locations
+        for (int i = 0; i < item_count(pMenu); i++)
+        {
+            if (item_value(items[i])) add_menu_item_selection_mark(pMenuData, items[i]);
+        }
+    }
+    else if (current_index < pMenuData->startListIndex)
+    {
+        // delete all marked selections on the menu
+        for (int i = 0; i < item_count(pMenu); i++) delete_menu_item_selection_mark(pMenuData, items[i]);
+
+        // Always scroll by exactly 1 - the display window moves one row at a time
+        // even if cursor skipped multiple items
+        pMenuData->startListIndex -= 1;
+        pMenuData->endListIndex -= 1;
+
+        // add all marked selections for the updated locations
+        for (int i = 0; i < item_count(pMenu); i++)
+        {
+            if (item_value(items[i])) add_menu_item_selection_mark(pMenuData, items[i]);
+        }
+    }
+    else if (current_index == 1 && pMenuData->startListIndex == 1 &&
+             items[0] && is_skippable_menu_item(items[0]))
+    {
+        // Special case: Cursor at index 1, startListIndex at 1, but item 0 is skippable header
+        // This means we tried to scroll up to index 0, ncurses showed it, then we skipped back
+        // Display now shows index 0 at top, so adjust startListIndex and redraw marks
+
+        // delete all marked selections
+        for (int i = 0; i < item_count(pMenu); i++) delete_menu_item_selection_mark(pMenuData, items[i]);
+
+        // Update indices to reflect that index 0 is now visible at top
+        pMenuData->startListIndex = 0;
+        pMenuData->endListIndex = pMenuData->startListIndex + (MAX_MENU_ITEMS_DISPLAY - pMenuData->pMenuProps->starty);
+
+        // redraw all marked selections with new indices
+        for (int i = 0; i < item_count(pMenu); i++)
+        {
+            if (item_value(items[i])) add_menu_item_selection_mark(pMenuData, items[i]);
+        }
+    }
+
+    print_menu_scroll_info(pMenuData);
+}
+
+void print_menu_scroll_info(MENU_DATA *pMenuData)
+{
+    WINDOW *pMenuWindow = pMenuData->pMenuWindow;
+
+    int totalItems = pMenuData->itemList[0].numItems - 2;  // Exclude HELP and DONE from count
+
+    // Check if there's any content above the visible area (including skippable headers)
+    bool has_content_above = (pMenuData->startListIndex > 0);
+
+    bool has_content_below = (pMenuData->endListIndex <= totalItems);
+
+    if (has_content_above || has_content_below)
+    {
+        int window_height = getmaxy(pMenuWindow);
+        int window_width = getmaxx(pMenuWindow);
+        int indicator_y = window_height - 5;  // Position above control message area
+        int indicator_x = window_width - 8;   // Fixed position for all indicators
+
+        wattron(pMenuWindow, BLACK_ON_WHITE | A_BOLD);
+
+        if (has_content_above && has_content_below)
+        {
+            mvwprintw(pMenuWindow, indicator_y, indicator_x, " MORE ");
+        }
+        else if (has_content_above)
+        {
+            mvwprintw(pMenuWindow, indicator_y, indicator_x, "  UP  ");
+        }
+        else // has_content_below
+        {
+            mvwprintw(pMenuWindow, indicator_y, indicator_x, " DOWN ");
+        }
+
+        wattroff(pMenuWindow, BLACK_ON_WHITE | A_BOLD);
+    }
+    else
+    {
+        // Clear the indicator area if no scrolling needed
+        int window_height = getmaxy(pMenuWindow);
+        int window_width = getmaxx(pMenuWindow);
+        int indicator_y = window_height - 5;
+        int indicator_x = window_width - 8;
+        mvwprintw(pMenuWindow, indicator_y, indicator_x, "      ");
     }
 }
 
@@ -225,6 +445,7 @@ void menu_loop(MENU_DATA *pMenuData)
     int c;
     int done = 0;
     int listIndex = pMenuData->curItemListIndex;
+    bool is_skipped = false;
 
     WINDOW *pMenuWindow = pMenuData->pMenuWindow;
     MENU *pMenu = pMenuData->pMenu;
@@ -259,10 +480,11 @@ void menu_loop(MENU_DATA *pMenuData)
                 break;
 
             case KEY_DOWN:
+            {
                 menu_driver(pMenu, REQ_DOWN_ITEM);
 
-                skip_menu_item_down_if_skippable(pMenu);
-                
+                is_skipped = skip_menu_item_down_if_skippable(pMenu);
+
                 pCurrentItem = current_item(pMenu);
 
                 if (pMenuData->clearErrMsgAfterUpOrDownKeyPress)
@@ -272,20 +494,45 @@ void menu_loop(MENU_DATA *pMenuData)
 
                 print_menu_item_selection(pMenuData, MENU_SEL_START_Y, MENU_SEL_START_X);
 
+                // update menu scrolling position
+                menu_scroll_update_selections(pMenuData, item_index(pCurrentItem));
+
                 p = item_userptr(pCurrentItem);
                 if (NULL != p)
                 {
                     p((MENU_DATA*)pMenuData);
                 }
-                
+
                 break;
+            }
 
             case KEY_UP:
+            {
                 menu_driver(pMenu, REQ_UP_ITEM);
 
-                skip_menu_item_up_if_skippable(pMenu);
+                is_skipped = skip_menu_item_up_if_skippable(pMenu);
 
                 pCurrentItem = current_item(pMenu);
+
+                // Special case: if we skipped at top boundary, ncurses scrolled to show index 0
+                // but cursor moved back to index 1. Update startListIndex to reflect display.
+                if (is_skipped && item_index(pCurrentItem) == 1 && pMenuData->startListIndex == 1)
+                {
+                    // Index 0 is now visible at top of display
+                    pMenuData->startListIndex = 0;
+                    pMenuData->endListIndex = pMenuData->startListIndex + (MAX_MENU_ITEMS_DISPLAY - pMenuData->pMenuProps->starty);
+
+                    // Redraw all X marks with updated indices
+                    ITEM **items = menu_items(pMenu);
+                    for (int i = 0; i < item_count(pMenu); i++)
+                    {
+                        delete_menu_item_selection_mark(pMenuData, items[i]);
+                    }
+                    for (int i = 0; i < item_count(pMenu); i++)
+                    {
+                        if (item_value(items[i])) add_menu_item_selection_mark(pMenuData, items[i]);
+                    }
+                }
 
                 if (pMenuData->clearErrMsgAfterUpOrDownKeyPress)
                 {
@@ -294,6 +541,9 @@ void menu_loop(MENU_DATA *pMenuData)
 
                 print_menu_item_selection(pMenuData, MENU_SEL_START_Y, MENU_SEL_START_X);
 
+                // update menu scrolling position
+                menu_scroll_update_selections(pMenuData, item_index(pCurrentItem));
+
                 p = item_userptr(pCurrentItem);
                 if (NULL != p)
                 {
@@ -301,7 +551,8 @@ void menu_loop(MENU_DATA *pMenuData)
                 }
 
                 break;
-            
+            }
+
             case ' ':
                 // Don't do anything if item isn't selectable.
                 if (item_opts(pCurrentItem) != O_SELECTABLE) continue;
@@ -337,9 +588,12 @@ void menu_loop(MENU_DATA *pMenuData)
                     {
                         if (pMenuData->pHelpMenu)
                         {
-                            MENU_DATA *helpMenu = (MENU_DATA *)pMenuData->pHelpMenu;
-                            unpost_menu(pMenu); 
-                            do_help_menu(helpMenu);
+                            // switch to the current menu's help menu
+                            do_help_menu(pMenuData);
+
+                            // switch back to current menu : redraw and post
+                            menu_draw(pMenuData);
+                            post_menu(pMenu);
                         }
                     }
                     else if (pMenuData->isMenuItemsSelectable && // rocm usecases or rocm versions menu
@@ -380,12 +634,11 @@ void menu_draw(MENU_DATA *pMenuData)
 
     int curItemListIndex = pMenuData->curItemListIndex;
 
-    // resizes pMenuWindow and subwindow that displays menu items to its original
-    // size in case user resized terminal window
+    // resizes pMenuWindow and subwindow that displays menu items to its original size in case user resized terminal window
     resize_and_reposition_window_and_subwindow(pMenuData, WIN_NUM_LINES, WIN_WIDTH_COLS);
 
-    print_menu_title(pMenuData, MENU_TITLE_Y, MENU_TITLE_X, WIN_WIDTH_COLS, pMenuData->menuTitle, COLOR_PAIR(2));
-    print_menu_item_title(pMenuData,  ITEM_TITLE_Y, ITEM_TITLE_X, pMenuData->itemList[curItemListIndex].itemTitle, COLOR_PAIR(9));
+    print_menu_title(pMenuData, MENU_TITLE_Y, MENU_TITLE_X, WIN_WIDTH_COLS, pMenuData->menuTitle, CYAN);
+    print_menu_item_title(pMenuData,  ITEM_TITLE_Y, ITEM_TITLE_X, pMenuData->itemList[curItemListIndex].itemTitle, MAGENTA);
     
     print_menu_item_selection(pMenuData, MENU_SEL_START_Y, MENU_SEL_START_X);
     print_menu_control_msg(pMenuData);
@@ -398,7 +651,7 @@ void menu_draw(MENU_DATA *pMenuData)
     if (pMenuData->itemSelections)
     {
         ITEM **items = menu_items(pMenu);
-        
+
         for(int i = 0; i < pMenuData->itemList[0].numItems; ++i)
         {
             if ( ((pMenuData->itemSelections) & (1 << i)) && (item_opts(items[i]) == O_SELECTABLE) )
@@ -408,6 +661,8 @@ void menu_draw(MENU_DATA *pMenuData)
             }
         }
     }
+
+    print_menu_scroll_info(pMenuData);
 
     print_version(pMenuData);
 }
@@ -420,15 +675,15 @@ void menu_info_draw_bool(MENU_DATA *pMenuData, int starty, int startx, bool val)
 
     if (val)
     {
-        wattron(pMenuWindow, COLOR_PAIR(4));
+        wattron(pMenuWindow, GREEN);
         mvwprintw(pMenuWindow, starty, startx, "%s", "yes ");
-        wattroff(pMenuWindow, COLOR_PAIR(4));
+        wattroff(pMenuWindow, GREEN);
     }
     else
     {
-        wattron(pMenuWindow, COLOR_PAIR(1));
+        wattron(pMenuWindow, RED);
         mvwprintw(pMenuWindow, starty, startx, "%s", "no ");
-        wattroff(pMenuWindow, COLOR_PAIR(1));
+        wattroff(pMenuWindow, RED);
     }
 }
 
@@ -541,7 +796,11 @@ void print_menu_item_selection(MENU_DATA *pMenuData, int starty, int startx)
 {
     ITEM *pItem = current_item(pMenuData->pMenu);
     
-    print_menu_item_selection_opt(pMenuData, starty, startx, item_description(pItem));
+    // draw the item description if present
+    if (item_description(pItem))
+    {
+        print_menu_item_selection_opt(pMenuData, starty, startx, item_description(pItem));
+    }
 }
 
 void print_version(MENU_DATA *pMenuData)
@@ -609,9 +868,9 @@ void print_menu_warning_msg(MENU_DATA *pMenuData, const char *fmt, ...)
 
     wmove(pMenuWindow, y, x);
     wclrtoeol(pMenuWindow);
-    wattron(pMenuWindow, COLOR_PAIR(10) | A_BOLD);
+    wattron(pMenuWindow, YELLOW | A_BOLD);
     mvwprintw(pMenuWindow, y, x, "WARNING: %s", string);
-    wattroff(pMenuWindow, COLOR_PAIR(10) | A_BOLD);
+    wattroff(pMenuWindow, YELLOW | A_BOLD);
 
     print_border_around_item_description(pMenuWindow, y-1);
     print_version(pMenuData);
@@ -640,9 +899,9 @@ void print_menu_err_msg(MENU_DATA *pMenuData, const char *fmt, ...)
     wmove(pMenuWindow, y, x);
     wclrtoeol(pMenuWindow);
     
-    wattron(pMenuWindow, COLOR_PAIR(1) | A_BOLD);
+    wattron(pMenuWindow, RED | A_BOLD);
     mvwprintw(pMenuWindow, y, x, "ERROR: %s", string);
-    wattroff(pMenuWindow, COLOR_PAIR(1) | A_BOLD);
+    wattroff(pMenuWindow, RED | A_BOLD);
 
     print_border_around_item_description(pMenuWindow, y-1);
     print_version(pMenuData);
@@ -876,16 +1135,62 @@ void reset_window_before_resizing(MENU_DATA *pMenuData)
 
 void add_menu_item_selection_mark(MENU_DATA *pMenuData, ITEM *pCurrentItem)
 {
-    WINDOW *pSubMenuWindow = menu_sub(pMenuData->pMenu); 
-    mvwprintw(pMenuData->pMenuWindow, getpary(pSubMenuWindow) + item_index(pCurrentItem), 2, " ");
+    WINDOW *pSubMenuWindow = menu_sub(pMenuData->pMenu);
+
+    int itemIndex = item_index(pCurrentItem);
+    int actual_top_row = top_row(pMenuData->pMenu);
+    int index = itemIndex - actual_top_row;
+    int y = getpary(pSubMenuWindow);
+
+    // Only draw if item is in the visible area
+    if (index >= 0 && index < (pMenuData->endListIndex - pMenuData->startListIndex))
+    {
+        mvwprintw(pMenuData->pMenuWindow, y + index, 2, "X");
+    }
 }
 
 void delete_menu_item_selection_mark(MENU_DATA *pMenuData, ITEM *pCurrentItem)
 {
     WINDOW *pSubMenuWindow = menu_sub(pMenuData->pMenu);
-    mvwprintw(pMenuData->pMenuWindow, getpary(pSubMenuWindow) + item_index(pCurrentItem), 2, " ");
+
+    int itemIndex = item_index(pCurrentItem);
+
+    // Use ncurses' own top_row to get actual displayed top row
+    int actual_top_row = top_row(pMenuData->pMenu);
+    int index = itemIndex - actual_top_row;
+    int y = getpary(pSubMenuWindow);
+
+    mvwprintw(pMenuData->pMenuWindow, y + index, 2, " ");
 }
 
+/*
+ * Display help text from a file in a scrollable window.
+ *
+ * Supports heading tags for formatted text display:
+ *
+ * Color Scheme Table:
+ * +---------+-----------+------------+---------------------------+
+ * | Tag     | Color     | Attributes | Use Case                  |
+ * +---------+-----------+------------+---------------------------+
+ * | [H1]    | Cyan      | Bold       | Main page title           |
+ * | [H2]    | Magenta   | Bold       | Major section headers     |
+ * | [H3]    | Yellow    | Bold       | Subsection headers, items |
+ * +---------+-----------+------------+---------------------------+
+ *
+ * Usage in help files:
+ *   [H1]Page Title
+ *   Introduction text...
+ *
+ *   [H2]Section Header
+ *   Section content...
+ *
+ *   [H3]Subsection Header
+ *     Detailed information...
+ *
+ *   Regular text without formatting.
+ *
+ * Tags are automatically stripped from display output.
+ */
 int display_help_scroll_window(MENU_DATA *pMenuData, char *filename)
 {
     WINDOW *win;
@@ -897,7 +1202,7 @@ int display_help_scroll_window(MENU_DATA *pMenuData, char *filename)
     size_t line_length = 0;
     ssize_t read;
 
-    int start_y = ITEM_TITLE_Y + 1;
+    int start_y = ITEM_TITLE_Y;
     int start_line = 0;
     int num_lines = start_y;
     int c;
@@ -911,7 +1216,6 @@ int display_help_scroll_window(MENU_DATA *pMenuData, char *filename)
         return -1;
     }
 
-    help_menu_draw(pMenuData);
     win = pMenuData->pMenuWindow;
 
     scrollok(win, TRUE);
@@ -961,24 +1265,105 @@ int display_help_scroll_window(MENU_DATA *pMenuData, char *filename)
     while( done == 0 )
     {
         // Display all the lines of text up until the size of the window
-        for (int i = start_y; i < max_win_lines - 1; i++) 
+        for (int i = start_y; i < max_win_lines - 1; i++)
         {
             if (lines != NULL)
             {
                 if (lines[start_line + i] != NULL)
                 {
-                    mvwprintw(win, i+1, 1, lines[start_line + i], "%s");
+                    char *line_text = lines[start_line + i];
+                    char *display_text = line_text;
+                    int heading_type = 0;
+
+                    // Check for heading tags [H1], [H2], [H3]
+                    if (strncmp(line_text, "[H1]", 4) == 0)
+                    {
+                        heading_type = 1;
+                        display_text = line_text + 4;  // Skip the tag
+                    }
+                    else if (strncmp(line_text, "[H2]", 4) == 0)
+                    {
+                        heading_type = 2;
+                        display_text = line_text + 4;  // Skip the tag
+                    }
+                    else if (strncmp(line_text, "[H3]", 4) == 0)
+                    {
+                        heading_type = 3;
+                        display_text = line_text + 4;  // Skip the tag
+                    }
+
+                    // Apply formatting based on heading type
+                    if (heading_type == 1)
+                    {
+                        wattron(win, CYAN | A_BOLD);  // Heading 1: Cyan + Bold
+                        mvwprintw(win, i+1, 1, display_text, "%s");
+                        wattroff(win, CYAN | A_BOLD);
+                    }
+                    else if (heading_type == 2)
+                    {
+                        wattron(win, MAGENTA | A_BOLD);  // Heading 2: Magenta + Bold
+                        mvwprintw(win, i+1, 1, display_text, "%s");
+                        wattroff(win, MAGENTA | A_BOLD);
+                    }
+                    else if (heading_type == 3)
+                    {
+                        wattron(win, YELLOW | A_BOLD);  // Heading 3: Yellow + Bold
+                        mvwprintw(win, i+1, 1, display_text, "%s");
+                        wattroff(win, YELLOW | A_BOLD);
+                    }
+                    else
+                    {
+                        mvwprintw(win, i+1, 1, line_text, "%s");
+                    }
                 }
             }
-        } 
-        
+        }
+
         box(win, 0, 0);
+
+        // Draw scroll indicators at bottom right corner (inside the box)
+        int window_height = getmaxy(win);
+        int window_width = getmaxx(win);
+
+        // Check if there's more content above or below
+        bool has_content_above = (start_line > 0);
+        bool has_content_below = (start_line < num_lines - (max_win_lines - 1));
+
+        if (has_content_above || has_content_below)
+        {
+            int indicator_y = window_height - 2;  // 1 line above bottom border
+            int indicator_x = window_width - 8;   // Fixed position for all indicators
+
+            wattron(win, BLACK_ON_WHITE | A_BOLD);
+
+            if (has_content_above && has_content_below)
+            {
+                mvwprintw(win, indicator_y, indicator_x, " MORE ");
+            }
+            else if (has_content_above)
+            {
+                mvwprintw(win, indicator_y, indicator_x, "  UP  ");
+            }
+            else // has_content_below
+            {
+                mvwprintw(win, indicator_y, indicator_x, " DOWN ");
+            }
+
+            wattroff(win, BLACK_ON_WHITE | A_BOLD);
+        }
 
         wrefresh(win);
 
         c = wgetch(win);
         switch (c) 
         {
+            case KEY_RESIZE:
+                if (should_window_be_resized(win, WIN_NUM_LINES,WIN_WIDTH_COLS))
+                {
+                    wclear(win);
+                    menu_draw(pMenuData);
+                }
+                break;
             case KEY_DOWN:
                 if (start_line < num_lines - (max_win_lines-1))
                 {
@@ -1001,7 +1386,7 @@ int display_help_scroll_window(MENU_DATA *pMenuData, char *filename)
 
     if (lines != NULL)
     {
-        for (int i = start_y; i < num_lines; i++) 
+        for (int i = start_y; i < num_lines; i++)
         {
             if (lines[i] != NULL) free(lines[i]);
         }
@@ -1048,18 +1433,18 @@ int display_scroll_window(char *windowTitle, char *listTitle, char *filename, in
     // Draw the window title
     temp = (WIN_WIDTH_COLS - strlen(windowTitle))/ 2;
     
-    wattron(win, COLOR_PAIR(2) | A_BOLD);
+    wattron(win, CYAN | A_BOLD);
     mvwprintw(win, 1, (int)temp, "%s", windowTitle);
-    wattroff(win, COLOR_PAIR(2) | A_BOLD);
+    wattroff(win, CYAN | A_BOLD);
 
     mvwhline(win, 2, 2, ACS_HLINE, WIN_WIDTH_COLS - 4);
 
     // Draw the secondary title for the list
     if (listTitle)
     {
-        wattron(win, COLOR_PAIR(9) | A_BOLD);
+        wattron(win, MAGENTA | A_BOLD);
         mvwprintw(win, 3, 10, "%s", listTitle);
-        wattroff(win, COLOR_PAIR(9) | A_BOLD);
+        wattroff(win, MAGENTA | A_BOLD);
     }
 
     // Draw the control msg
@@ -1108,9 +1493,9 @@ int display_scroll_window(char *windowTitle, char *listTitle, char *filename, in
     }
 
     // Draw the total number of lines for the scroll window
-    wattron(win, COLOR_PAIR(11) | A_BOLD);
+    wattron(win, BLACK_ON_MAGENTA | A_BOLD);
     mvwprintw(win, 3, 1, "Total %d", num_lines);
-    wattroff(win, COLOR_PAIR(11) | A_BOLD);
+    wattroff(win, BLACK_ON_MAGENTA | A_BOLD);
     
     // Draw the contents of the file line-by-line
     while( done == 0 )
@@ -1133,9 +1518,9 @@ int display_scroll_window(char *windowTitle, char *listTitle, char *filename, in
         {
             move(WIN_NUM_LINES + 4, 0);
             clrtoeol();
-            attron(COLOR_PAIR(8) | A_BOLD);
+            attron(BLACK_ON_WHITE | A_BOLD);
             mvprintw(WIN_NUM_LINES + 4, 4, "<< %d, %d >>", currentLine, num_lines);
-            attroff(COLOR_PAIR(8) | A_BOLD);
+            attroff(BLACK_ON_WHITE | A_BOLD);
             refresh();
         }
 

@@ -38,6 +38,9 @@ SHOW_HELP=0
 SKIP_SETUP=0
 SKIP_BUILD=0
 
+# Config file control
+USE_CONFIG_FILE=0
+
 # Build tag and run ID (captured from pulltag and pullrunid)
 # Note: These may be pre-set by config files, so only initialize if not already set
 PULL_TAG="${PULL_TAG:-}"
@@ -74,7 +77,8 @@ This script performs a complete ROCm runfile installer build:
     
     rocm-mode=native      = Pull DEB packages using native OS (default).
     rocm-mode=chroot      = Pull DEB packages using Ubuntu chroot (for RPM-based OS).
-    rocm-archs=<archs>    = Set GPU architectures to pull (e.g., gfx94x,gfx950). Default: gfx94x,gfx950.
+    rocm-archs=<archs>    = Set GPU architectures to pull (e.g., gfx94x,gfx950).
+                            Default: gfx90x,gfx94x,gfx950,gfx110x,gfx1150,gfx1151,gfx1152,gfx120x
     
     pull=<release-type>   = Pull ROCm packages from specified repository (required).
                             Valid types: dev, nightly, prerelease, release
@@ -85,6 +89,12 @@ This script performs a complete ROCm runfile installer build:
     pullrunid=<runid>     = Set ROCm component build run ID (required for all builds).
                             Examples: pullrunid=21274498502 (nightly/dev), pullrunid=21843385957 (prerelease), pullrunid=99999 (release)
     pullrocmver=<version> = Set ROCm version for package names (e.g., 7.12, 7.11).
+    pullamdgpu=<type>,<ver> = Set AMDGPU config type and version (required when pulling AMDGPU).
+                            Format: <type>,<version|buildnum>
+                            - release: pullamdgpu=release,31.10
+                            - internal: pullamdgpu=internal,2296104
+                            - hidden: pullamdgpu=hidden,31.10 (also requires pullamdgpuhash)
+    pullamdgpuhash=<hash> = Set AMDGPU hash (only for hidden type).
     pullpkg=<package>     = Set base package name with optional type prefix (default: amdrocm-core-sdk).
                             Syntax: pullpkg=[type:]<package>
                             - arch:<package> = Architecture-specific (has -gfxXYZ suffix, default)
@@ -130,7 +140,7 @@ Examples:
     # Basic builds
     $0                                                        # Default build (both ROCm and AMDGPU)
     $0 rocm                                                   # ROCm only build
-    $0 amdgpu amdgpu-mode=single                              # AMDGPU for current distro only
+    $0 amdgpu amdgpu-mode=single pullamdgpu=release,31.10    # AMDGPU for current distro only
 
     # Pull from specific builds (with actual values from preset configs)
     $0 pull=nightly pulltag=20260212 pullrunid=21933875966 pullrocmver=7.12.0        # Nightly
@@ -141,6 +151,11 @@ Examples:
     # GPU architectures
     $0 rocm-archs=gfx110x,gfx94x                              # Specific GPU architectures
     $0 rocm-archs=gfx110x                                     # Single GPU architecture
+
+    # AMDGPU configuration
+    $0 pullamdgpu=release,31.10                               # AMDGPU release 31.10
+    $0 pullamdgpu=internal,2296104                            # AMDGPU internal build 2296104
+    $0 pullamdgpu=hidden,31.10 pullamdgpuhash=abc123          # AMDGPU hidden repo
 
     # Custom packages
     $0 pullpkg=arch:amdrocm-core                              # Custom main package
@@ -172,11 +187,48 @@ if [ ! -d "$BUILD_INSTALLER_DIR" ]; then
     exit 1
 fi
 
+# Source config file if provided (before parsing other args so they can override)
+for arg in "$@"; do
+    case "$arg" in
+        config=*)
+            CONFIG_FILE="${arg#*=}"
+            # Make path relative to build-installer directory if not absolute
+            if [[ "$CONFIG_FILE" != /* ]]; then
+                CONFIG_FILE="$BUILD_INSTALLER_DIR/$CONFIG_FILE"
+            fi
+
+            if [[ ! -f "$CONFIG_FILE" ]]; then
+                echo -e "\e[31mERROR: Config file not found: $CONFIG_FILE\e[0m"
+                exit 1
+            fi
+
+            if [[ ! -r "$CONFIG_FILE" ]]; then
+                echo -e "\e[31mERROR: Config file not readable: $CONFIG_FILE\e[0m"
+                exit 1
+            fi
+
+            echo "Loading configuration from: $CONFIG_FILE"
+            source "$CONFIG_FILE"
+
+            # Map config variables to script variables for use in this script
+            # (Child scripts will source the config themselves and get these directly)
+            PULL_TAG="${PULL_CONFIG_TAG:-}"
+            PULL_RUNID="${PULL_CONFIG_RUNID:-}"
+            # BUILD_TAG, BUILD_RUNID, BUILD_TAG_INFO already set by config directly
+
+            echo "Configuration loaded. Command-line arguments will override config values."
+            echo ""
+            USE_CONFIG_FILE=1
+            break
+            ;;
+    esac
+done
+
 # Parse arguments and categorize them
 while (($#)); do
     case "$1" in
     config=*)
-        # Forward to both setup and build scripts
+        # Forward to both setup and build scripts so they can source it too
         SETUP_ARGS+=("$1")
         BUILD_ARGS+=("$1")
         shift
@@ -223,7 +275,7 @@ while (($#)); do
         BUILD_ARGS+=("$1")
         shift
         ;;
-    amdgpu-mode=*|rocm-mode=*|rocm-archs=*|pull=*|pullrocmver=*|pullpkg=*|pullpkgextra=*|pullrocmpkgver=*)
+    amdgpu-mode=*|rocm-mode=*|rocm-archs=*|pull=*|pullrocmver=*|pullpkg=*|pullpkgextra=*|pullrocmpkgver=*|pullamdgpu=*|pullamdgpuhash=*)
         SETUP_ARGS+=("$1")
         shift
         ;;
