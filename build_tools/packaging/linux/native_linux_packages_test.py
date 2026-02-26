@@ -86,6 +86,7 @@ YUM_REPOS_DIR = _env("ROCM_YUM_REPOS_DIR", "/etc/yum.repos.d")
 VERIFY_KEY_COMPONENTS = [
     "bin/rocminfo",
     "bin/hipcc",
+    "bin/clinfo",
     "include/hip/hip_runtime.h",
     "lib/libamdhip64.so",
 ]
@@ -145,7 +146,7 @@ class NativeLinuxPackagesTester:
             install_prefix: Installation prefix (default: /opt/rocm/core)
             gfx_arch: GPU architecture(s) as a single value or list (default: gfx94x).
                 Only the first element is used for package name and installation.
-            gpg_key_url: GPG key URL (only needed for prerelease)
+            gpg_key_url: GPG key URL
         """
         self.os_profile = os_profile.lower()
         self.package_type = self._derive_package_type(os_profile)
@@ -835,7 +836,6 @@ gpgcheck=0
         except Exception as e:
             print(f"   [WARN] Could not run rdhc.py: {e}")
             return False
-
 
     def run(self) -> bool:
         """Execute the full installation test process.
