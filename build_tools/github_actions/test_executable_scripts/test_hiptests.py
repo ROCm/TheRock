@@ -125,9 +125,6 @@ def execute_tests(env):
         ignored_tests = TEST_TO_IGNORE[AMDGPU_FAMILIES][os_type]
         cmd.extend(["--exclude-regex", "|".join(ignored_tests)])
 
-    if is_asan():
-        cmd.extend(["--repeat", "until-pass:2"])
-
     logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
     subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=env)
 
