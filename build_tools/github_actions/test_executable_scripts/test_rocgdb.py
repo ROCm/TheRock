@@ -91,7 +91,7 @@ CATEGORY_DISPLAY = {
 }
 
 
-def log_error_and_exit(message: str, exit_code: int = 1) -> None:
+def _log_error_and_exit(message: str, exit_code: int = 1) -> None:
     """
     Log an error message and exit the program.
 
@@ -103,7 +103,7 @@ def log_error_and_exit(message: str, exit_code: int = 1) -> None:
     sys.exit(exit_code)
 
 
-def run_command(
+def _run_command(
     cmd: List[str],
     cwd: Optional[Path] = None,
     env: Optional[Dict[str, str]] = None,
@@ -139,11 +139,11 @@ def run_command(
         )
     except subprocess.CalledProcessError as e:
         if error_msg:
-            log_error_and_exit(f"{error_msg}: {e}")
+            _log_error_and_exit(f"{error_msg}: {e}")
         raise
 
 
-def read_file_lines(file_path: Path, error_context: str = "") -> List[str]:
+def _read_file_lines(file_path: Path, error_context: str = "") -> List[str]:
     """
     Read file lines with error handling.
 
@@ -158,12 +158,12 @@ def read_file_lines(file_path: Path, error_context: str = "") -> List[str]:
         with open(file_path, encoding="utf-8") as f:
             return [line.strip() for line in f]
     except FileNotFoundError:
-        log_error_and_exit(
+        _log_error_and_exit(
             f"{file_path} not found{'. ' + error_context if error_context else ''}"
         )
 
 
-def extract_test_file_from_name(test_name: str) -> str:
+def _extract_test_file_from_name(test_name: str) -> str:
     """
     Extract test file path from full test name.
 
@@ -214,11 +214,6 @@ def parse_arguments() -> argparse.Namespace:
         "--group-results",
         action="store_true",
         help="Group test results in summary output. Default is off.",
-    )
-    parser.add_argument(
-        "--install-packages",
-        action="store_true",
-        help="Install required packages before running tests. Default is off.",
     )
     parser.add_argument(
         "--max-failed-retries",
@@ -278,7 +273,7 @@ def parse_arguments() -> argparse.Namespace:
 
     # Enforce both testsuite-dir and rocgdb-bin being provided together.
     if (args.testsuite_dir is None) != (args.rocgdb_bin is None):
-        log_error_and_exit(
+        _log_error_and_exit(
             "Both --testsuite-dir and --rocgdb-bin must be provided together, or neither."
         )
 
@@ -289,13 +284,13 @@ def parse_arguments() -> argparse.Namespace:
 
     # Validate timeout value.
     if not (0 < args.timeout <= 600):
-        log_error_and_exit(
+        _log_error_and_exit(
             f"Timeout must be between 1 and 600 seconds. Got {args.timeout}."
         )
 
     # Validate max_failed_retries value.
     if args.max_failed_retries < 0:
-        log_error_and_exit(
+        _log_error_and_exit(
             f"Max failed retries must be non-negative. Got {args.max_failed_retries}."
         )
 
@@ -366,7 +361,7 @@ class TestResults:
         errors_dict = defaultdict(list)
         current_test_file = None
 
-        for line in read_file_lines(Path(results_file), "during error extraction"):
+        for line in _read_file_lines(Path(results_file), "during error extraction"):
             # Detect the start of a test case.
             match = re.search(r"Running\s+(\S+\.exp)", line)
             if match:
@@ -403,14 +398,14 @@ class TestResults:
         )
         timeout_regex = re.compile(r"\(timeout\)")
 
-        for line in read_file_lines(Path(results_file), "during results update"):
+        for line in _read_file_lines(Path(results_file), "during results update"):
             if not line:
                 continue
 
             match = result_regex.match(line)
             if match:
                 status, test_name = match.groups()
-                test_file = extract_test_file_from_name(test_name)
+                test_file = _extract_test_file_from_name(test_name)
                 is_timeout = timeout_regex.search(test_name)
 
                 # Add the entry to our test results database.
@@ -605,7 +600,7 @@ class TestResults:
 
         for compiler_label in all_compilers:
             failed_test_files = {
-                extract_test_file_from_name(test)
+                _extract_test_file_from_name(test)
                 for test in self.failed_tests.get(compiler_label, set())
             }
             compiler_xfailed = set(xfailed_tests.get(compiler_label, []))
@@ -781,23 +776,7 @@ def validate_required_files(required_files: Dict[str, Path]) -> None:
             all_valid = False
 
     if not all_valid:
-        log_error_and_exit("One or more required files are missing.")
-
-
-def install_required_packages() -> None:
-    """
-    Install dejagnu, gcc, and g++ using apt.
-
-    Returns:
-        None
-
-    Exits:
-        Code 1 if installation fails.
-    """
-    logger.info("Installing dejagnu, gcc, and g++...")
-    cmd = ["sudo", "apt", "install", "dejagnu", "gcc", "g++", "-y"]
-    logger.info(f"Executing: {shlex.join(cmd)}")
-    run_command(cmd, error_msg="Failed to install required packages")
+        _log_error_and_exit("One or more required files are missing.")
 
 
 def setup_environment(artifacts_dir: Path) -> Dict[str, str]:
@@ -875,7 +854,7 @@ def check_executables(executables: List[str]) -> None:
             logger.info(f"{STATUS_FAIL} {exe:15} NOT found on PATH")
 
     if missing:
-        log_error_and_exit(f"Missing {len(missing)} executables required for testing.")
+        _log_error_and_exit(f"Missing {len(missing)} executables required for testing.")
 
 
 def set_core_file_limit() -> bool:
@@ -927,7 +906,7 @@ def cleanup_test_suite(
     logger.info("Cleaning test suite directory...")
     cmd = ["make", "clean"]
     logger.info(f"Executing cleanup: {shlex.join(cmd)}")
-    run_command(
+    _run_command(
         cmd,
         cwd=test_suite_dir,
         env=env_vars,
@@ -942,7 +921,7 @@ def cleanup_test_suite(
     logger.info("Creating site.exp...")
     cmd = ["make", "site.exp"]
     logger.info(f"Executing cleanup: {shlex.join(cmd)}")
-    run_command(
+    _run_command(
         cmd,
         cwd=test_suite_dir,
         env=env_vars,
@@ -971,7 +950,7 @@ def configure_test_suite(
     configure_script = test_suite_dir / "configure"
     cmd = ["sh", str(configure_script)]
     logger.info(f"Executing: {shlex.join(cmd)}")
-    run_command(
+    _run_command(
         cmd,
         cwd=test_suite_dir,
         env=env_vars,
@@ -1003,10 +982,10 @@ def set_test_timeout(test_suite_dir: Path, timeout_value: int) -> None:
             f"{STATUS_PASS} Successfully set gdb_test_timeout to {timeout_value} in {site_exp_file}"
         )
     except (FileNotFoundError, IOError) as e:
-        log_error_and_exit(f"Failed to write timeout to {site_exp_file}: {e}")
+        _log_error_and_exit(f"Failed to write timeout to {site_exp_file}: {e}")
 
 
-def extract_test_files(test_names: List[str]) -> List[str]:
+def _extract_test_files(test_names: List[str]) -> List[str]:
     """
     Extract unique test file paths from full test names.
 
@@ -1016,7 +995,7 @@ def extract_test_files(test_names: List[str]) -> List[str]:
     Returns:
         Sorted list of unique test file paths without descriptions.
     """
-    return sorted(set(extract_test_file_from_name(name) for name in test_names))
+    return sorted(set(_extract_test_file_from_name(name) for name in test_names))
 
 
 def expand_test_paths(test_list: List[str], testsuite_dir: Path) -> str:
@@ -1054,7 +1033,7 @@ def expand_test_paths(test_list: List[str], testsuite_dir: Path) -> str:
     for file_path in expanded_tests:
         abs_path = testsuite_dir / file_path
         if not abs_path.is_file():
-            log_error_and_exit(f"Missing or invalid test file: {file_path}")
+            _log_error_and_exit(f"Missing or invalid test file: {file_path}")
 
     return " ".join(expanded_tests)
 
@@ -1089,9 +1068,9 @@ def validate_path(path: Path, is_dir: bool = False, is_file: bool = False) -> No
     resolved_path = path.resolve()
 
     if is_dir and not resolved_path.is_dir():
-        log_error_and_exit(f"Directory does not exist: {resolved_path}")
+        _log_error_and_exit(f"Directory does not exist: {resolved_path}")
     if is_file and not resolved_path.is_file():
-        log_error_and_exit(f"File does not exist: {resolved_path}")
+        _log_error_and_exit(f"File does not exist: {resolved_path}")
 
 
 def validate_rocgdb(rocgdb_bin: Path) -> None:
@@ -1114,7 +1093,7 @@ def validate_rocgdb(rocgdb_bin: Path) -> None:
     try:
         # First invoke the rocgdb launcher in debug mode.
         print_section("ROCgdb launcher start", border_char="-", inline=True)
-        result = run_command(
+        result = _run_command(
             [str(rocgdb_bin), "--version"], env=env, capture_output=True
         )
 
@@ -1124,7 +1103,7 @@ def validate_rocgdb(rocgdb_bin: Path) -> None:
 
         # Now validate that we can launch rocgdb at all.
         print_section("ROCgdb executable start", border_char="-", inline=True)
-        result = run_command([str(rocgdb_bin), "--version"], capture_output=True)
+        result = _run_command([str(rocgdb_bin), "--version"], capture_output=True)
 
         for line in result.stdout.splitlines():
             logger.info(line)
@@ -1153,7 +1132,7 @@ def validate_rocgdb(rocgdb_bin: Path) -> None:
     )
 
     try:
-        result = run_command(
+        result = _run_command(
             [str(rocgdb_bin), "-batch", "-ex", f"python {py_cmd}"],
             capture_output=True,
             check=False,
@@ -1223,7 +1202,7 @@ def run_tests(
 
         start_time = time.perf_counter()
 
-        runtestflags_str = build_runtestflags(
+        runtestflags_str = _build_runtestflags(
             rocgdb_bin, cc, cxx, fc, args.optimization, args.runtestflags
         )
 
@@ -1239,7 +1218,7 @@ def run_tests(
         logger.info(
             f"Executing tests with {compiler_label} - Iteration {iteration}: {shlex.join(cmd)}"
         )
-        run_command(
+        _run_command(
             cmd,
             cwd=test_suite_dir,
             env=env_vars,
@@ -1261,7 +1240,7 @@ def run_tests(
 
         # Detect flaky tests: tests that were failing in previous iteration but now pass.
         if iteration > 1:
-            failed_test_files = set(extract_test_files(failed_tests))
+            failed_test_files = set(_extract_test_files(failed_tests))
             newly_passed = tests_in_iteration - failed_test_files
             if newly_passed:
                 test_results.mark_flaky_tests(compiler_label, newly_passed)
@@ -1273,7 +1252,7 @@ def run_tests(
             break
         elif iteration < max_iterations:
             # Only rerun failed tests next time.
-            current_tests = " ".join(extract_test_files(failed_tests))
+            current_tests = " ".join(_extract_test_files(failed_tests))
             logger.info(
                 f"{STATUS_FAIL}  {len(failed_tests)} failing test(s) found for {compiler_label}. "
                 f"Proceeding to iteration {iteration + 1} with only failed tests."
@@ -1288,7 +1267,7 @@ def run_tests(
             if args.dump_failed_test_log:
                 gdb_log_file = test_suite_dir / "gdb.log"
                 print_section("Contents of gdb.log")
-                for line in read_file_lines(gdb_log_file, "during gdb.log dump"):
+                for line in _read_file_lines(gdb_log_file, "during gdb.log dump"):
                     logger.info(line)
 
 
@@ -1343,10 +1322,6 @@ def main() -> None:
         # Set core dump file limit.
         set_core_file_limit()
 
-        # Install packages if requested via CLI.
-        if args.install_packages:
-            install_required_packages()
-
     # Prepare environment for tests.
     env_vars = setup_environment(artifacts_dir)
 
@@ -1362,7 +1337,7 @@ def main() -> None:
     tests = expand_test_paths(args.tests, rocgdb_testsuite_dir)
 
     if not tests:
-        log_error_and_exit("No test files found")
+        _log_error_and_exit("No test files found")
 
     # Compiler configurations.
     compilers = [
@@ -1414,11 +1389,11 @@ def validate_env_var(var_name: str) -> Path:
     """
     value = os.getenv(var_name)
     if value is None:
-        log_error_and_exit(f"{var_name} environment variable is not set")
+        _log_error_and_exit(f"{var_name} environment variable is not set")
     return Path(value).resolve()
 
 
-def build_runtestflags(
+def _build_runtestflags(
     rocgdb_bin: Path,
     cc: str,
     cxx: str,
