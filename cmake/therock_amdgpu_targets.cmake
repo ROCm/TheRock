@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Target metadata is maintained as global properties:
 #   THEROCK_AMDGPU_TARGETS: List of gfx target names
 #   THEROCK_AMDGPU_TARGET_FAMILIES: List of target families (may contain duplicates)

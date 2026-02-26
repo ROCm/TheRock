@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Given ROCm artifacts directories, performs surgery to re-layout them for
 distribution as Python packages and builds sdists and wheels as appropriate.
 

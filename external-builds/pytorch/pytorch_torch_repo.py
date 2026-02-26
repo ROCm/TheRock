@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Checks out PyTorch.
 
 There is nothing that this script does which you couldn't do by hand, but because of

@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 therock_subproject_fetch(therock-FunctionalPlus-sources
   CMAKE_PROJECT
   # Originally mirrored from: https://github.com/Dobiasd/FunctionalPlus/archive/refs/tags/v0.2.25.tar.gz

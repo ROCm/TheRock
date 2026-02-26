@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Module and CLI script for finding CI artifacts for a given commit.
 
 This script queries the GitHub API to find workflow runs for a commit and

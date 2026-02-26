@@ -1,8 +1,9 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
 
 #
 #   TheRock Project building system pre-build diagnosis script
-#   License follows TheRock project
 #
 #   This script doesn't raise/throw back warnings/errors.
 #   If running this script has errors, please report it as a new issue.
