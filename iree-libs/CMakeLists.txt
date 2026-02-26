@@ -113,6 +113,7 @@ if(THEROCK_ENABLE_FUSILLIPROVIDER)
   therock_cmake_subproject_activate(fusilliprovider)
 
   therock_provide_artifact(fusilliprovider
+    TARGET_NEUTRAL
     DESCRIPTOR artifact-fusilliprovider.toml
     COMPONENTS
       dbg
