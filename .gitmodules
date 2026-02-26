@@ -44,11 +44,11 @@
 [submodule "rocm-kpack"]
 	path = base/rocm-kpack
 	url = https://github.com/ROCm/rocm-kpack.git
-[submodule "rocgdb"]
-	path = debug-tools/rocgdb/source
-	url = https://github.com/ROCm/rocgdb.git
-	branch = amd-staging
 [submodule "libhipcxx"]
 	path = math-libs/libhipcxx
 	url = https://github.com/ROCm/libhipcxx.git
 	branch = amd-develop
+[submodule "rocgdb"]
+	path = debug-tools/rocgdb/source
+	url = https://github.com/ROCm/rocgdb.git
+	branch = amd-staging-rocgdb-16
