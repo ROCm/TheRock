@@ -140,7 +140,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             "bench1": {
                 "job_name": "bench1",
                 "platform": ["linux"],
-                "total_shards": 1,
+                "total_shards_dict": {"linux": 1},
             }
         }
 
