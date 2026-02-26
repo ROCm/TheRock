@@ -23,6 +23,7 @@ import os
 import shutil
 import subprocess
 import sys
+import traceback
 
 from datetime import datetime, timezone
 from email.utils import format_datetime
@@ -140,7 +141,15 @@ def create_versioned_deb_package(pkg_name, config: PackageConfig):
 
     print(f"sourcedir_list:\n  {sourcedir_list}")
     if not sourcedir_list and not is_meta:
-        sys.exit(f"{pkg_name}: Empty sourcedir_list and not a meta package, exiting")
+        if config.enable_multi_arch:
+            print(
+                f"ERROR: {pkg_name}: Empty sourcedir_list and not a meta package, skipping"
+            )
+            return []
+        else:
+            sys.exit(
+                f"{pkg_name}: Empty sourcedir_list and not a meta package, exiting"
+            )
 
     if not sourcedir_list:
         print(f"{pkg_name} is a Meta package")
@@ -264,6 +273,11 @@ def generate_rules_file(pkg_info, deb_dir, config: PackageConfig):
     disable_dwz = is_key_defined(pkg_info, "Disable_DWZ")
     # Get package name for changelog installation
     pkg_name = update_package_name(pkg_info.get("Package"), config)
+
+    # Disable debian dh_strip for multi-arch buillds
+    # TODO: Fix required for dh_strip error in multi-arch builds
+    if config.enable_multi_arch:
+        disable_dh_strip = "True"
 
     env = Environment(loader=FileSystemLoader(str(SCRIPT_DIR)))
     template = env.get_template("template/debian_rules.j2")
@@ -586,6 +600,17 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
         # Filter out non-existing directories
         sourcedir_list = [path for path in sourcedir_list if os.path.isdir(path)]
 
+        # Warn if we have no artifacts for non-meta packages
+        if not sourcedir_list and not is_meta:
+            if config.enable_multi_arch:
+                print(
+                    f"WARNING: {pkg_name}: Empty sourcedir_list and not a meta package, creating empty RPM"
+                )
+            else:
+                sys.exit(
+                    f"{pkg_name}: Empty sourcedir_list and not a meta package, exiting"
+                )
+
         if is_postinstallscripts_available(pkg_info):
             rpm_scripts = generate_rpm_postscripts(pkg_info, config)
 
@@ -803,11 +828,12 @@ def run(args: argparse.Namespace):
             f"Invalid package type: {config.pkg_type}. Must be 'deb' or 'rpm'."
         )
 
+    current_pkg_idx = 0
     try:
         built_pkglist = []
         failed_pkglist = []
 
-        for pkg_name in pkg_list:
+        for current_pkg_idx, pkg_name in enumerate(pkg_list):
             print(f"Create {pkg_type} package.")
 
             pkg_info = get_package_info(pkg_name)
@@ -833,6 +859,14 @@ def run(args: argparse.Namespace):
                     built_pkglist.extend(output_list)
                     pkg_built = True
                     print(f"Built package List: {built_pkglist}")
+                else:
+                    # Add failed architecture variant to failed list
+                    variant_name = (
+                        f"{pkg_name}-{gfxarch}"
+                        if gfxarch != default_gfx_arch
+                        else pkg_name
+                    )
+                    failed_pkglist.append(variant_name)
 
             if not pkg_built:
                 failed_pkglist.append(pkg_name)
@@ -849,9 +883,18 @@ def run(args: argparse.Namespace):
 
         # Print build summary
         print_build_summary(config, pkglist_status)
-    except SystemExit:
+    except SystemExit as e:
         # Build aborted somewhere inside create_* functions
-        print("\n❌ Build aborted due to an error.\n")
+        tb = traceback.extract_tb(sys.exc_info()[2])
+        if tb:
+            filename, line_no, func, text = tb[-1]
+            print(f"\n❌ Build aborted due to an error at {filename}:{line_no}: {e}\n")
+        else:
+            print(f"\n❌ Build aborted due to an error: {e}\n")
+        # Record failed package and all pending packages
+        failed_pkglist.append(pkg_list[current_pkg_idx])
+        pending_pkgs = pkg_list[current_pkg_idx + 1 :]
+        failed_pkglist.extend(pending_pkgs)
         pkglist_status = PackageList(
             total=pkg_list,
             built=built_pkglist,
