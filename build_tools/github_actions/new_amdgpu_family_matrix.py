@@ -391,6 +391,40 @@ amdgpu_family_info_matrix_all = {
         }
     },
     "gfx90X": {
+        "all": {
+            "linux": {
+                "build": {
+                    "build_variants": ["release"],
+                },
+                "test": {
+                    "run_tests": True,
+                    "runs_on": {
+                        "test": "linux-gfx90X-gpu-rocm",
+                    },
+                    "fetch-gfx-targets": ["gfx90a"],
+                    "sanity_check_only_for_family": True,
+                },
+                "release": {
+                    "push_on_success": False,
+                    "bypass_tests_for_releases": False,
+                },
+            },
+            "windows": {
+                "build": {
+                    "build_variants": ["release"],
+                },
+                "test": {
+                    "run_tests": False,
+                    "runs_on": {},
+                    "fetch-gfx-targets": [],
+                    "expect_pytorch_failure": True,
+                },
+                "release": {
+                    "push_on_success": False,
+                    "bypass_tests_for_releases": False,
+                },
+            },
+        },
         "dcgpu": {
             "linux": {
                 "build": {
