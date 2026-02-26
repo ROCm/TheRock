@@ -89,11 +89,14 @@ sudo docker run -it \
 | Source .Dockerfile                                                                           | Published package                                                               |
 | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
 | [`no_rocm_image_ubuntu24_04_rocgdb.Dockerfile`](no_rocm_image_ubuntu24_04_rocgdb.Dockerfile) | https://github.com/ROCm/TheRock/pkgs/container/no_rocm_image_ubuntu24_04_rocgdb |
+| [`no_rocm_image_ubuntu24_04_runtime.Dockerfile`](no_rocm_image_ubuntu24_04_runtime.Dockerfile) | https://github.com/ROCm/TheRock/pkgs/container/no_rocm_image_ubuntu24_04_runtime |
 
-Extended version of no_rocm_image_ubuntu24_04.Dockerfile, containing additional
+no_rocm_image_ubuntu24_04_rocgdb - Extended version of no_rocm_image_ubuntu24_04.Dockerfile, containing additional
 packages and tools required for validation of rocgdb.
-
 This includes dejagnu, make, gcc, g++ and gfortran.
+
+no_rocm_image_ubuntu24_04_runtime - Used in ocltst execution. It installs OCL ICD package required
+by ocltst
 
 ### `rocm_runtime.Dockerfile`
 
