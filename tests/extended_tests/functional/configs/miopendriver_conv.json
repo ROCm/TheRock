@@ -1,0 +1,48 @@
+{
+  "description": "MIOpen Driver Convolution Test Configurations",
+  "test_suites": {
+    "Forward_Conv_1": {
+      "algorithm": "ConvAsmImplicitGemmV4R1DynamicFwd",
+      "commands": [
+        "conv -n 16 -c 16 -H 56 -W 56 -k 64 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -F 1 -t 1",
+        "conv -n 16 -c 64 -H 34 -W 34 -k 64 -y 3 -x 3 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -F 1 -t 1",
+        "conv -n 32 -c 32 -H 17 -W 17 -k 32 -y 1 -x 7 -p 0 -q 3 -u 1 -v 1 -l 1 -j 1 -F 1 -t 1",
+        "conv -n 64 -c 256 -H 34 -W 34 -k 256 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -F 1 -t 1",
+        "conv -n 128 -c 128 -H 35 -W 35 -k 128 -y 3 -x 3 -p 0 -q 0 -u 2 -v 2 -l 1 -j 1 -F 1 -t 1",
+        "conv -n 128 -c 48 -H 7 -W 7 -k 128 -y 5 -x 5 -p 2 -q 2 -u 1 -v 1 -l 1 -j 1 -F 1 -t 1"
+      ]
+    },
+    "Forward_Conv_2": {
+      "algorithm": "ConvAsmImplicitGemmV4R1DynamicFwd_1x1",
+      "commands": [
+        "conv -n 16 -c 16 -H 56 -W 56 -k 64 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -F 1 -t 1",
+        "conv -n 128 -c 256 -H 28 -W 28 -k 128 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -F 1 -t 1",
+        "conv -n 64 -c 1536 -H 8 -W 8 -k 256 -y 1 -x 1 -p 0 -q 3 -u 1 -v 1 -l 1 -j 1 -F 1 -t 1"
+      ]
+    },
+    "Backward_Conv_1": {
+      "algorithm": "ConvAsmImplicitGemmV4R1DynamicBwd",
+      "commands": [
+        "conv -n 64 -c 64 -H 28 -W 28 -k 16 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -F 2 -t 1",
+        "conv -n 64 -c 64 -H 56 -W 56 -k 256 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -F 2 -t 1",
+        "conv -n 16 -c 128 -H 36 -W 36 -k 32 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -F 2 -t 1",
+        "conv -n 32 -c 128 -H 34 -W 34 -k 64 -y 3 -x 3 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -F 2 -t 1",
+        "conv -n 128 -c 128 -H 35 -W 35 -k 128 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -F 2 -t 1"
+      ]
+    },
+    "Backward_Conv_2": {
+      "algorithm": "ConvAsmImplicitGemmV4R1DynamicWrw",
+      "commands": [
+        "conv -n 64 -c 64 -H 28 -W 28 -k 32 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -F 4 -t 1",
+        "conv -n 32 -c 128 -H 34 -W 34 -k 64 -y 3 -x 3 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -F 4 -t 1",
+        "conv -n 128 -c 128 -H 35 -W 35 -k 128 -y 3 -x 3 -p 1 -q 1 -u 1 -v 1 -l 1 -j 1 -F 4 -t 1",
+        "conv -n 128 -c 256 -H 56 -W 56 -k 64 -y 1 -x 1 -p 0 -q 0 -u 1 -v 1 -l 1 -j 1 -F 4 -t 1"
+      ]
+    }
+  },
+  "gpu_specific_flags": {
+    "gfx906": {
+      "backward_flags": "-V 0"
+    }
+  }
+}
