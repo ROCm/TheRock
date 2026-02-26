@@ -117,7 +117,9 @@ endif()
 
 option(THEROCK_BUNDLE_SYSDEPS "Builds bundled system deps for portable builds into lib/rocm_sysdeps" ON)
 option(THEROCK_ENABLE_MPI "Enables building components with Message Passing Interface (MPI) support" OFF)
+option(THEROCK_ENABLE_LLVM_TOOLS "Enables building all LLVM tools (not just minimum required)" OFF)
 option(THEROCK_ENABLE_LLVM_TESTS "Enables building LLVM LIT tests" OFF)
+option(THEROCK_ENABLE_COMGR_TESTS "Enables building Comgr tests" OFF)
 
 set(THEROCK_SANITIZER "" CACHE STRING "Enable project wide sanitizer build ('ASAN' for host+device, 'HOST_ASAN' for host-only)")
 
