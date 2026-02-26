@@ -282,7 +282,10 @@ class ComponentContents:
     def write_artifact(self, destdir: Path):
         for basedir_relpath, pm in self.basedir_contents.items():
             pm.copy_to(
-                destdir=destdir, destprefix=basedir_relpath + "/", remove_dest=False
+                destdir=destdir,
+                destprefix=basedir_relpath + "/",
+                remove_dest=False,
+                always_copy=True,
             )
         # Write a manifest containing relative paths of all base directories.
         manifest_path = destdir / "artifact_manifest.txt"

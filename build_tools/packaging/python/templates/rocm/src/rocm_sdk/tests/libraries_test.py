@@ -77,9 +77,8 @@ class ROCmLibrariesTest(unittest.TestCase):
                     preload_command
                     + " import ctypes; import sys; ctypes.CDLL(sys.argv[1])"
                 )
-                subprocess.check_call(
-                    [sys.executable, "-P", "-c", command, str(so_path)]
-                )
+                cmd = [sys.executable, "-c", command, str(so_path)]
+                subprocess.check_call(cmd)
 
     def testConsoleScripts(self):
         for script_name, cl, expected_text, required in CONSOLE_SCRIPT_TESTS:

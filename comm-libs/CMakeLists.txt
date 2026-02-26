@@ -7,13 +7,25 @@ if(THEROCK_ENABLE_RCCL AND THEROCK_SANITIZER STREQUAL "")
     list(APPEND optional_profiler_deps roctracer rocprofiler-sdk)
   endif()
 
+  # RCCL can optionally use amdsmi/rocm_smi_lib on Linux, but those may not be
+  # enabled/declared depending on feature selection.
+  set(_rccl_optional_runtime_deps)
+  if(NOT WIN32)
+    if(TARGET amdsmi)
+      list(APPEND _rccl_optional_runtime_deps amdsmi)
+    endif()
+    if(TARGET rocm_smi_lib)
+      list(APPEND _rccl_optional_runtime_deps rocm_smi_lib)
+    endif()
+  endif()
+
   ##############################################################################
   # rccl
   ##############################################################################
   set(_rccl_subproject_names)
 
   therock_cmake_subproject_declare(rccl
-    EXTERNAL_SOURCE_DIR "${THEROCK_RCCL_SOURCE_DIR}"
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rccl"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rccl"
     # High latency LTO link of a single library.
     BACKGROUND_BUILD
@@ -37,8 +49,8 @@ if(THEROCK_ENABLE_RCCL AND THEROCK_SANITIZER STREQUAL "")
     RUNTIME_DEPS
       hip-clr
       hipify
-      rocm_smi_lib
       rocprofiler-register
+      ${_rccl_optional_runtime_deps}
       ${optional_profiler_deps}
   )
   therock_cmake_subproject_glob_c_sources(rccl
@@ -51,7 +63,7 @@ if(THEROCK_ENABLE_RCCL AND THEROCK_SANITIZER STREQUAL "")
 
   if(THEROCK_BUILD_TESTING)
     therock_cmake_subproject_declare(rccl-tests
-      EXTERNAL_SOURCE_DIR "${THEROCK_RCCL_TESTS_SOURCE_DIR}"
+      EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rccl-tests"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rccl-tests"
       BACKGROUND_BUILD
       CMAKE_ARGS

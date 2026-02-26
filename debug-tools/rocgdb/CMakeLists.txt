@@ -90,8 +90,8 @@ function(fetch_library_prefix input_path_list pattern output_var)
     set(${output_var} "${_result_path}" PARENT_SCOPE)
     message(STATUS "Extracted path for pattern '${pattern}': ${_result_path}")
   else()
-    # No match found, issue a fatal error.
-    message(SEND_ERROR "Did not find a path containing '${pattern}' in ${input_list_var_name}.")
+    message(STATUS "No path containing '${pattern}' found in CMAKE_PREFIX_PATH; will use system detection.")
+    set(${output_var} "" PARENT_SCOPE)
   endif()
 endfunction()
 
@@ -131,36 +131,53 @@ endif()
 message(STATUS "Build type set to: ${CMAKE_BUILD_TYPE}")
 
 # Fetch the install prefixes for the library and executables rocgdb
-# depends on.
-fetch_library_prefix(CMAKE_PREFIX_PATH "/gmp/build/stage" GMP_PREFIX)
-fetch_library_prefix(CMAKE_PREFIX_PATH "/mpfr/build/stage" MPFR_PREFIX)
-fetch_library_prefix(CMAKE_PREFIX_PATH "/expat/build/stage" EXPAT_PREFIX)
-fetch_library_prefix(CMAKE_PREFIX_PATH "/ncurses/build/stage" NCURSES_PREFIX)
+# depends on. When THEROCK_BUNDLE_SYSDEPS is OFF, these are left empty and
+# GDB's configure script discovers the libraries via pkg-config instead.
+set(NCURSES_RPATH "")
+if(THEROCK_BUNDLE_SYSDEPS)
+  fetch_library_prefix(CMAKE_PREFIX_PATH "/gmp/build/stage" GMP_PREFIX)
+  fetch_library_prefix(CMAKE_PREFIX_PATH "/mpfr/build/stage" MPFR_PREFIX)
+  fetch_library_prefix(CMAKE_PREFIX_PATH "/expat/build/stage" EXPAT_PREFIX)
+  fetch_library_prefix(CMAKE_PREFIX_PATH "/ncurses/build/stage" NCURSES_PREFIX)
 
-# We need to explicitly pass ncurses' include path and set the rpath for
-# the library. The reason we need to explicitly pass rpath is because gdb's
-# configure assumes ncurses is always picked up from the default system
-# location, or that the library is always within reach.
-#
-# Since we're building our own ncurses and it is in a non-standard location,
-# the rpath assures the configure tests properly locate the library.
-set(NCURSES_RPATH "-Wl,-rpath,${NCURSES_PREFIX}/lib")
-set(NCURSES_INCLUDE "-I${NCURSES_PREFIX}/include")
+  # We need to explicitly pass ncurses' include path and set the rpath for
+  # the library. The reason we need to explicitly pass rpath is because gdb's
+  # configure assumes ncurses is always picked up from the default system
+  # location, or that the library is always within reach.
+  #
+  # Since we're building our own ncurses and it is in a non-standard location,
+  # the rpath assures the configure tests properly locate the library.
+  set(NCURSES_RPATH "-Wl,-rpath,${NCURSES_PREFIX}/lib")
+  set(NCURSES_INCLUDE "-I${NCURSES_PREFIX}/include")
 
-# Adjust the compilation flags and LDFLAGS.
-set(CUSTOM_C_FLAGS "${CUSTOM_C_FLAGS} ${NCURSES_INCLUDE}")
-set(CUSTOM_CXX_FLAGS "${CUSTOM_CXX_FLAGS} ${NCURSES_INCLUDE}")
+  # Adjust the compilation flags with the bundled ncurses include path.
+  set(CUSTOM_C_FLAGS "${CUSTOM_C_FLAGS} ${NCURSES_INCLUDE}")
+  set(CUSTOM_CXX_FLAGS "${CUSTOM_CXX_FLAGS} ${NCURSES_INCLUDE}")
+endif()
+
+# Adjust LDFLAGS. NCURSES_RPATH is empty when not using bundled sysdeps.
 set(LDFLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${NCURSES_RPATH} -Wl,--enable-new-dtags")
 
 # Replace all semicolons (the CMake separator) with colons (the ENV separator).
 # We need this to pass it on to rocgdb's configure.
 string(REPLACE ";" ":" PKG_CONFIG_PATH_ENV_VAR "${THEROCK_PKG_CONFIG_DIRS}")
 
+# Set conditional configure flags for bundled sysdep prefixes. When using system
+# libraries, these are left empty so autotools discovers them via pkg-config.
+# Furthermore, set an RPATH segment for the bundled sysdeps lib directory.
+set(ROCGDB_EXPAT_FLAG "")
+set(ROCGDB_GMP_FLAG "")
+set(ROCGDB_MPFR_FLAG "")
+set(ROCGDB_SYSDEPS_RPATH_SEGMENT "")
+if(THEROCK_BUNDLE_SYSDEPS)
+  set(ROCGDB_EXPAT_FLAG "--with-expat-prefix=${EXPAT_PREFIX}")
+  set(ROCGDB_GMP_FLAG "--with-gmp=${GMP_PREFIX}")
+  set(ROCGDB_MPFR_FLAG "--with-mpfr=${MPFR_PREFIX}")
+  set(ROCGDB_SYSDEPS_RPATH_SEGMENT ":\\\$ORIGIN/../lib/rocm_sysdeps/lib")
+endif()
+
 # Set some global variables for the configure/build.
 set(ROCGDB_BUG_URL "https://github.com/ROCm-Developer-Tools/ROCgdb/issues")
-set(ROCGDB_HTML_DIR "\\\${prefix}/share/html")
-set(ROCGDB_PDF_DIR "\\\${prefix}/share/doc")
-set(ROCGDB_INFO_DIR "\\\${prefix}/share/info/rocgdb")
 set(ROCGDB_SEPARATE_DEBUG_INFO_DIR "\\\${prefix}/lib/debug:/usr/lib/debug")
 set(ROCGDB_DATA_DIR "\\\${prefix}/share/rocgdb")
 set(ROCGDB_TARGETS "x86_64-linux-gnu,amdgcn-amd-amdhsa")
@@ -203,6 +220,13 @@ macro(add_python_variant minor_version configure_flags libpython_dir)
     message(STATUS "-> Extra RPATH: ${LIBPYTHON_RPATH}")
   endif()
 
+  # These directories are adjusted here so we don't have to escape
+  # ${prefix} and make it survive across multiple expansions from shells
+  # cmake and libtool.
+  set(ROCGDB_HTML_DIR "${ROCGDB_INTERMEDIATE_INSTALL_DIR}/share/html")
+  set(ROCGDB_PDF_DIR "${ROCGDB_INTERMEDIATE_INSTALL_DIR}/share/doc")
+  set(ROCGDB_INFO_DIR "${ROCGDB_INTERMEDIATE_INSTALL_DIR}/share/info/rocgdb")
+
   add_custom_target("${ROCGDB_TARGET_NAME}"
     ALL
     VERBATIM
@@ -237,11 +261,11 @@ macro(add_python_variant minor_version configure_flags libpython_dir)
 
         --with-amd-dbgapi
         "--with-bugurl=${ROCGDB_BUG_URL}"
-        "--with-expat-prefix=${EXPAT_PREFIX}"
+        ${ROCGDB_EXPAT_FLAG}
         "--with-gdb-datadir=${ROCGDB_DATA_DIR}"
-        "--with-gmp=${GMP_PREFIX}"
+        ${ROCGDB_GMP_FLAG}
         --with-lzma
-        "--with-mpfr=${MPFR_PREFIX}"
+        ${ROCGDB_MPFR_FLAG}
         "--with-pkgversion=${ROCM_BUILD_ID}"
         "--with-separate-debug-dir=${ROCGDB_SEPARATE_DEBUG_INFO_DIR}"
         --with-system-zlib
@@ -274,7 +298,7 @@ macro(add_python_variant minor_version configure_flags libpython_dir)
     # Install gdb docs.
     COMMAND
       ${CMAKE_COMMAND} -E chdir "${ROCGDB_BUILD_DIR}"
-      ${MAKE_EXECUTABLE} -s -C gdb install-pdf install-html
+      ${MAKE_EXECUTABLE} -s -C gdb install-html
     # Install binutils for coremerge and coremerge manpage.
     COMMAND
       ${CMAKE_COMMAND} -E chdir "${ROCGDB_BUILD_DIR}"
@@ -291,18 +315,67 @@ macro(add_python_variant minor_version configure_flags libpython_dir)
 
   list(APPEND ALL_ROCGDB_TARGETS ${ROCGDB_TARGET_NAME})
 
+  # We only want to install a subset of the files, so we list them here,
+  # relative to their intermediate install prefixes.
+  # For instance, we don't want to include any binutils files other than
+  # roccoremerge.
+
+  # Misc directories.
+  set(ROCGDB_MISC_DIRS_TO_INSTALL
+    "include"
+    "share/doc"
+    "share/man/man5"
+    "share/rocgdb"
+  )
+
+  # Executable files.
+  set(ROCGDB_EXEC_FILES_TO_INSTALL
+    "bin/roccoremerge"
+    "bin/rocgcore-py${minor_version}"
+    "bin/rocgdb-py${minor_version}"
+  )
+
+  # Misc files.
+  set(ROCGDB_MISC_FILES_TO_INSTALL
+    "share/info/rocgdb/annotate.info"
+    "share/info/rocgdb/gdb.info"
+    "share/man/man1/roccoremerge.1"
+    "share/man/man1/rocgdb.1"
+    "share/man/man1/rocgcore.1"
+    "share/man/man1/rocgdb-add-index.1"
+  )
+
   # Register the final installation step for this variant's files.
   # This basically moves the variant files from the intermediate install
   # prefix to the final installation location.
-  install(DIRECTORY ${ROCGDB_INTERMEDIATE_INSTALL_DIR}/
-          DESTINATION "."
-          USE_SOURCE_PERMISSIONS
-          COMPONENT rocgdb)
+  foreach(rocgdb_dir ${ROCGDB_MISC_DIRS_TO_INSTALL})
+    # The last "/" is important, as we want to copy the contents from the
+    # listed directory into another directory, and not the directory itself.
+    install(DIRECTORY ${ROCGDB_INTERMEDIATE_INSTALL_DIR}/${rocgdb_dir}/
+            DESTINATION "${rocgdb_dir}"
+            USE_SOURCE_PERMISSIONS
+            COMPONENT rocgdb)
+  endforeach()
+
+  foreach(rocgdb_file ${ROCGDB_EXEC_FILES_TO_INSTALL})
+    install(PROGRAMS ${ROCGDB_INTERMEDIATE_INSTALL_DIR}/${rocgdb_file}
+            DESTINATION bin
+            COMPONENT rocgdb)
+  endforeach()
+
+  foreach(rocgdb_file ${ROCGDB_MISC_FILES_TO_INSTALL})
+    # Get the directory part of the file.
+    get_filename_component(file_dir ${rocgdb_file} DIRECTORY)
+
+    install(FILES ${ROCGDB_INTERMEDIATE_INSTALL_DIR}/${rocgdb_file}
+      DESTINATION ${file_dir}
+      COMPONENT rocgdb)
+  endforeach()
 
   # Register RPATH patching for this rocgdb variant.
   message(STATUS "Registering fixup of ${CMAKE_INSTALL_PREFIX}/bin/rocgdb-py${minor_version}")
   install(CODE "execute_process(
-      COMMAND \"${PATCHELF}\" --set-rpath \"\$ORIGIN:\$ORIGIN/../lib:\$ORIGIN/../lib/rocm_sysdeps/lib${LIBPYTHON_RPATH}\"
+      COMMAND \"${PATCHELF}\" --set-rpath \"\$ORIGIN:\$ORIGIN/../lib${ROCGDB_SYSDEPS_RPATH_SEGMENT}${LIBPYTHON_RPATH}\"
       \"${CMAKE_INSTALL_PREFIX}/bin/rocgdb-py${minor_version}\"
       COMMAND_ERROR_IS_FATAL ANY
     )"
@@ -370,67 +443,11 @@ add_custom_target(build_all_rocgdb ALL DEPENDS ${ALL_ROCGDB_TARGETS})
 ################################
 
 # Since we potentially have multiple versions of python, and each rocgdb
-# executable links against a specific version of libpython, we have to
-# generate a convenience script that automatically detects the version and
-# fires up the most appropriate rocgdb executable. This makes the python
-# selection process transparent to the end user.
-set(ROCGDB_SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/rocgdb")
-
-# We use [=[ to capture the exact script content.
-set(ROCGDB_SCRIPT_CONTENT [=[#!/usr/bin/env bash
-
-## Copyright (c) 2026 Advanced Micro Devices, Inc.
-##
-## Permission is hereby granted, free of charge, to any person obtaining a copy
-## of this software and associated documentation files (the "Software"), to
-## deal in the Software without restriction, including without limitation the
-## rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
-## sell copies of the Software, and to permit persons to whom the Software is
-## furnished to do so, subject to the following conditions:
-##
-## The above copyright notice and this permission notice shall be included in
-## all copies or substantial portions of the Software.
-##
-## THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-## IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-## FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-## AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-## LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-## FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
-## IN THE SOFTWARE.
-
-# Find the active python version
-python_version=$(python3 --version 2>&1 | sed -n 's/^Python \([0-9]\+\.[0-9]\+\).*$/\1/p' )
-GDB_BIN_DIR="$(dirname "$(realpath -e "${BASH_SOURCE[0]}")")"
-
-# Set the ncurses TERMINFO lookup directory if it isn't set already.
-# This is used to locate our own terminfo database in a relative path, since
-# ncurses doesn't support relative path lookups as a configure option.
-#
-# ROCgdb TUI mode requires this information.
-if [ -z "$TERMINFO" ]; then
-    export TERMINFO="$GDB_BIN_DIR/../lib/rocm_sysdeps/share/terminfo"
-fi
-
-# Create a rocgdb command with the active python version.
-gdb_command="rocgdb-py$python_version"
-if ! [ -f "$GDB_BIN_DIR/$gdb_command" ]; then
-    # If we were built without python support, then try the -pynone binary.
-    gdb_command="rocgdb-pynone"
-fi
-if [ -f "$GDB_BIN_DIR/$gdb_command" ]; then
-    # If the command works (returns 0), exec the rocgdb-py<version> binary.
-    "$GDB_BIN_DIR/$gdb_command" --version > /dev/null 2>&1
-    if [ $? == 0 ]; then
-        exec "$GDB_BIN_DIR/$gdb_command" "$@"
-    fi
-fi
-
-echo "rocgdb execution failed. Possible unsupported python version ${python_version} in the system."
-]=])
-
-# Generate the script file.
-file(GENERATE OUTPUT "${ROCGDB_SCRIPT}" CONTENT "${ROCGDB_SCRIPT_CONTENT}")
+# executable links against a specific version of libpython, we have a
+# convenience script that automatically detects the version and fires up
+# the most appropriate rocgdb executable. This makes the python selection
+# process transparent to the end user.
+set(ROCGDB_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/rocgdb")
 
 # Install the generated script.
 install(PROGRAMS ${ROCGDB_SCRIPT}
@@ -454,19 +471,7 @@ endif()
 # List of all the files in bin we need to patch in RUNPATH's.
 # This excludes rocgdb executables as we patch those separately.
 set(ROCGDB_EXECS_TO_PATCH
-  "bin/rocaddr2line"
-  "bin/rocar"
-  "bin/rocc++filt"
   "bin/roccoremerge"
-  "bin/rocelfedit"
-  "bin/rocnm"
-  "bin/rocobjcopy"
-  "bin/rocobjdump"
-  "bin/rocranlib"
-  "bin/rocreadelf"
-  "bin/rocsize"
-  "bin/rocstrings"
-  "bin/rocstrip"
 )
 
 foreach(rocgdb_exec_filename ${ROCGDB_EXECS_TO_PATCH})
@@ -475,7 +480,7 @@ foreach(rocgdb_exec_filename ${ROCGDB_EXECS_TO_PATCH})
 
   # Patch in the RUNPATH.
   install(CODE "execute_process(
-      COMMAND \"${PATCHELF}\" --set-rpath \"\$ORIGIN:\$ORIGIN/../lib:\$ORIGIN/../lib/rocm_sysdeps/lib\"
+      COMMAND \"${PATCHELF}\" --set-rpath \"\$ORIGIN:\$ORIGIN/../lib${ROCGDB_SYSDEPS_RPATH_SEGMENT}\"
       \"${rocgdb_exec_file}\"
       COMMAND_ERROR_IS_FATAL ANY
   )"
@@ -496,7 +501,6 @@ if(BUILD_TESTING)
     "include/gdb/jit-reader.h"
     "share/info/rocgdb/gdb.info"
     "share/info/rocgdb/annotate.info"
-    "share/info/rocgdb/dir"
     "share/rocgdb/python/gdb/ptwrite.py"
     "share/rocgdb/python/gdb/__init__.py"
     "share/rocgdb/python/gdb/missing_objfile.py"
@@ -574,33 +578,9 @@ if(BUILD_TESTING)
     "share/rocgdb/system-gdbinit/wrs-linux.py"
     "share/man/man5/rocgdbinit.5"
     "share/man/man1/rocgdb-add-index.1"
-    "share/man/man1/rocdlltool.1"
-    "share/man/man1/rocsize.1"
-    "share/man/man1/rocobjdump.1"
-    "share/man/man1/rocstrings.1"
-    "share/man/man1/rocc++filt.1"
     "share/man/man1/rocgcore.1"
     "share/man/man1/rocgdb.1"
-    "share/man/man1/rocar.1"
-    "share/man/man1/rocnm.1"
-    "share/man/man1/rocelfedit.1"
-    "share/man/man1/rocwindmc.1"
-    "share/man/man1/rocgstack.1"
     "share/man/man1/roccoremerge.1"
-    "share/man/man1/rocobjcopy.1"
-    "share/man/man1/rocreadelf.1"
-    "share/man/man1/rocstrip.1"
-    "share/man/man1/rocaddr2line.1"
-    "share/man/man1/rocranlib.1"
-    "share/man/man1/rocwindres.1"
-    "share/man/man1/rocgdbserver.1"
-    "x86_64-pc-linux-gnu/bin/ar"
-    "x86_64-pc-linux-gnu/bin/nm"
-    "x86_64-pc-linux-gnu/bin/objcopy"
-    "x86_64-pc-linux-gnu/bin/objdump"
-    "x86_64-pc-linux-gnu/bin/ranlib"
-    "x86_64-pc-linux-gnu/bin/readelf"
-    "x86_64-pc-linux-gnu/bin/strip"
   )
 
   list(APPEND ROCGDB_BUILD_INTEGRITY_FILES ${ROCGDB_EXPECTED_FILES})

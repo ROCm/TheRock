@@ -6,7 +6,7 @@
 {% endif %}
 %global __objcopy /usr/bin/llvm-objcopy
 
-
+%global _buildshell /bin/bash
 %global _debugsource_template %{nil}
 %global debug_package %{nil}          # disables -debuginfo
 %define __brp_mangle_shebangs %{nil}
@@ -49,7 +49,10 @@ Conflicts: {{ conflicts }}
 %install
 mkdir -p $RPM_BUILD_ROOT{{ install_prefix }}
 {% for path in sourcedir_list %}
-cp -R {{ path }}/* $RPM_BUILD_ROOT{{ install_prefix }}
+{
+   shopt -s dotglob
+   cp -R "{{ path }}"/* "$RPM_BUILD_ROOT{{ install_prefix }}/"
+}
 {% endfor %}
 
 %files
