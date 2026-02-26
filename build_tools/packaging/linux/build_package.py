@@ -140,7 +140,9 @@ def create_versioned_deb_package(pkg_name, config: PackageConfig):
 
     print(f"sourcedir_list:\n  {sourcedir_list}")
     if not sourcedir_list and not is_meta:
-        sys.exit(f"{pkg_name}: Empty sourcedir_list and not a meta package, exiting")
+        #sys.exit(f"{pkg_name}: Empty sourcedir_list and not a meta package, exiting")
+        print(f"ERROR: {pkg_name}: Empty sourcedir_list and not a meta package, skipping")
+        return []
 
     if not sourcedir_list:
         print(f"{pkg_name} is a Meta package")
@@ -270,7 +272,7 @@ def generate_rules_file(pkg_info, deb_dir, config: PackageConfig):
     # Prepare  context dictionary
     context = {
         "disable_dwz": disable_dwz,
-        "disable_dh_strip": disable_dh_strip,
+        "disable_dh_strip": "True",
         "install_prefix": config.install_prefix,
         "pkg_name": pkg_name,
     }
