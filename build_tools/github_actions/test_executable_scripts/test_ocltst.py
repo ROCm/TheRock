@@ -3,9 +3,6 @@ import os
 import shlex
 import subprocess
 from pathlib import Path
-#import glob
-#import shutil
-#import json
 import sys
 import platform
 
@@ -17,9 +14,6 @@ if THEROCK_BIN_DIR_STR is None:
     )
     sys.exit(1)
 THEROCK_BIN_DIR = Path(THEROCK_BIN_DIR_STR)
-SCRIPT_DIR = Path(__file__).resolve().parent
-THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
-os_type = platform.system().lower()
 env = os.environ.copy()
 
 
@@ -58,7 +52,7 @@ def execute_tests(env):
         sys.exit(1)
 
     logging.info(f"++ Exec [{OCLTST_PATH}]$ {shlex.join(cmd)}")
-    subprocess.run(cmd, cwd=OCLTST_PATH, check=True, env=env)
+    subprocess.run(cmd, cwd=OCLTST_PATH, check=True, env=env, shell=True)
 
 
 if __name__ == "__main__":
