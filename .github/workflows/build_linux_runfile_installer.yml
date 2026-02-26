@@ -192,7 +192,7 @@ jobs:
 
           # Build and install it
           rpmbuild -bb /tmp/python312-provides.spec
-          sudo rpm -ivh ~/rpmbuild/RPMS/noarch/python312-provides-1.0-1.el8.noarch.rpm
+          rpm -ivh ~/rpmbuild/RPMS/noarch/python312-provides-1.0-1.el8.noarch.rpm
           
           bash build-runfile-installer.sh rocm amdgpu rocm-archs=$GFX_ARCHS pullamdgpu=$PULL_AMDGPU pull=$PULL_TYPE pulltag=$PULL_TAG pullrunid=$PULL_RUN_ID pullrocmver=$ROCM_VERSION pullpkg=$PULL_PKG buildtag=$BUILD_TAG buildrunid=$BUILD_RUNID mscomp=$MSCOMP
 
