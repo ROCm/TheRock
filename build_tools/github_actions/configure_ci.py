@@ -661,6 +661,11 @@ def main(base_args, linux_families, windows_families):
             test_type = "full"
             test_type_reason = f"test label(s) specified: {combined_test_labels}"
 
+    # If the "run-full-tests-only" flag is set for this family, we do not run tests if it is a smoke test type
+    for matrix_row in linux_variants_output + windows_variants_output:
+        if matrix_row.get("run-full-tests-only", False) and test_type == "smoke":
+            matrix_row["test-runs-on"] = ""
+
     print(f"test_type decision: '{test_type}' (reason: {test_type_reason})")
 
     # Format variants for summary - handle both regular and multi-arch modes
