@@ -135,7 +135,7 @@ class ROCmDevelTest(unittest.TestCase):
             extra_setup = ""
             if (
                 "hipdnn_plugins" in str(so_path) or "test_plugins" in str(so_path)
-            ) and sys.platform == "win32":
+            ) and platform.system() == "Windows":
                 # hipdnn plugins have dependencies on other libraries (e.g. miopen).
                 # In a real-world scenario, hipdnn_backend loads these plugins, and
                 # the dependencies are found because they reside in the same directory
