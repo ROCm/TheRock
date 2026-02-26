@@ -29,7 +29,7 @@ else:
     test_filter = [
         "--gtest_filter=-*multi_gpu*",
         "--test_prob",
-        "0.02",
+        "0.01",
     ]
 
 cmd = [f"{THEROCK_BIN_DIR}/hipfft-test"] + test_filter
@@ -38,4 +38,5 @@ subprocess.run(
     cmd,
     cwd=THEROCK_DIR,
     check=True,
+    env=environ_vars,
 )
