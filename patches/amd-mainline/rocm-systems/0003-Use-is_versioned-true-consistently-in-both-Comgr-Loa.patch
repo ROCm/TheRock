@@ -10,7 +10,7 @@ Prior to this, RTCProgram was using is_version = true and device initialization 
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/projects/clr/rocclr/device/device.cpp b/projects/clr/rocclr/device/device.cpp
-index 5d07c2dbba..91bcbb9d71 100644
+index a1585bb870..2141530d91 100644
 --- a/projects/clr/rocclr/device/device.cpp
 +++ b/projects/clr/rocclr/device/device.cpp
 @@ -777,7 +777,7 @@ Device::~Device() {
@@ -22,6 +22,6 @@ index 5d07c2dbba..91bcbb9d71 100644
    std::call_once(amd::Comgr::initialized, amd::Comgr::LoadLib, kComgrVersioned);
    return amd::Comgr::IsReady();
  }
+
 -- 
 2.43.0
-
