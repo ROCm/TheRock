@@ -481,7 +481,7 @@ def run():
             # This way, the test jobs will be split up into X shards. (ex: [1, 2, 3, 4] = 4 test shards)
             # For display purposes, we add "i + 1" for the job name (ex: 1 of 4). During the actual test sharding in the test executable, this array will become 0th index
             # Note: Benchmarks always have total_shards=1 (no sharding)
-            total_shards = job_config_data.get("total_shards_dict").get(platform)
+            total_shards = job_config_data.get("total_shards_dict", {}).get(platform, 1)
             job_config_data["shard_arr"] = [i + 1 for i in range(total_shards)]
             job_config_data["total_shards"] = total_shards
 
