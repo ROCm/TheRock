@@ -37,9 +37,6 @@ def run(args: argparse.Namespace):
         artifacts=ArtifactCatalog(args.artifact_dir),
     )
 
-    # Simple populate the top-level "rocm" package. This gets no platform files.
-    PopulatedDistPackage(params, logical_name="meta")
-
     # Populate each target neutral library package.
     core = PopulatedDistPackage(params, logical_name="core")
     core.rpath_dep(core, "lib/llvm/lib")
@@ -65,16 +62,38 @@ def run(args: argparse.Namespace):
             )
         )
 
-    # Build non-devel wheels first — the rocm-sdk-devel staging dir does not exist yet,
-    # so the default scan in build_packages will not accidentally include it.
+    # Compute these before the first build call so they can be shared with the
+    # meta and devel loops below.
+    all_target_families = sorted(params.all_target_families)
+    multi_arch = len(all_target_families) > 1
+
+    # Build non-devel, non-meta wheels first — the rocm and rocm-sdk-devel
+    # staging dirs do not exist yet, so the default scan in build_packages
+    # will not accidentally include them.
     if args.build_packages:
         build_packages(args.dest_dir, wheel_compression=args.wheel_compression)
+
+    # One meta (rocm) package per target family. In a multi-arch build each
+    # sdist goes to dist/{target_family}/ so callers can distinguish them; in a
+    # single-arch build the sdist goes directly to dist/ (no subdirectory).
+    for target_family in all_target_families:
+        meta = PopulatedDistPackage(
+            params,
+            logical_name="meta",
+            target_family=target_family,
+            restrict_families=True,
+        )
+        if args.build_packages:
+            build_packages(
+                args.dest_dir,
+                package_dirs=[meta.path],
+                dist_dir=args.dest_dir / "dist" / target_family if multi_arch else None,
+                wheel_compression=args.wheel_compression,
+            )
 
     # One devel package per target family. In a multi-arch build each wheel goes into
     # dist/{target_family}/ so callers can distinguish them; in a single-arch build
     # the wheel goes directly to dist/ (no subdirectory).
-    all_target_families = sorted(params.all_target_families)
-    multi_arch = len(all_target_families) > 1
     for target_family in all_target_families:
         devel = PopulatedDistPackage(
             params, logical_name="devel", target_family=target_family

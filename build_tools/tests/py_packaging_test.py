@@ -393,5 +393,139 @@ class MultiArchPackagingTest(TmpDirTestCase):
         )
 
 
+# ---------------------------------------------------------------------------
+# Unit tests for restrict_families (per-family meta package)
+# ---------------------------------------------------------------------------
+
+
+class RestrictFamiliesTest(TmpDirTestCase):
+    """Tests for restrict_families=True in PopulatedDistPackage.
+
+    These tests verify that per-family meta (rocm) packages bake the correct
+    DEFAULT_TARGET_FAMILY and AVAILABLE_TARGET_FAMILIES into _dist_info.py.
+    """
+
+    def _add_artifact(
+        self,
+        artifact_dir: Path,
+        name: str,
+        component: str,
+        target_family: str,
+    ):
+        """Create a minimal artifact directory (no files needed)."""
+        subdir = artifact_dir / f"{name}_{component}_{target_family}"
+        stage = subdir / "stage"
+        stage.mkdir(parents=True, exist_ok=True)
+        (subdir / "artifact_manifest.txt").write_text("stage\n")
+
+    def _make_params(self, artifact_dir: Path) -> Parameters:
+        dest_dir = self.temp_dir / "packages"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        return Parameters(
+            dest_dir=dest_dir,
+            version="0.0.1.test",
+            version_suffix="",
+            artifacts=ArtifactCatalog(artifact_dir),
+        )
+
+    def _exec_dist_info(self, meta: PopulatedDistPackage) -> dict:
+        """Read and exec the generated _dist_info.py; return the namespace."""
+        dist_info_path = (
+            meta.path / "src" / meta.entry.pure_py_package_name / "_dist_info.py"
+        )
+        content = dist_info_path.read_text()
+        ns: dict = {}
+        exec(content, ns)
+        return ns
+
+    def _make_two_family_params(self) -> Parameters:
+        artifact_dir = self.temp_dir / "artifacts"
+        self._add_artifact(artifact_dir, "base", "lib", "gfx120X-all")
+        self._add_artifact(artifact_dir, "base", "lib", "gfx94X-dcgpu")
+        return self._make_params(artifact_dir)
+
+    def test_restrict_families_gfx120x_only(self):
+        """restrict_families=True limits _dist_info.py to the requested family."""
+        params = self._make_two_family_params()
+
+        meta = PopulatedDistPackage(
+            params,
+            logical_name="meta",
+            target_family="gfx120X-all",
+            restrict_families=True,
+        )
+
+        ns = self._exec_dist_info(meta)
+        self.assertEqual(ns["DEFAULT_TARGET_FAMILY"], "gfx120X-all")
+        self.assertEqual(ns["AVAILABLE_TARGET_FAMILIES"], ["gfx120X-all"])
+
+    def test_restrict_families_gfx94x_only(self):
+        """restrict_families=True works for the second family as well."""
+        params = self._make_two_family_params()
+
+        meta = PopulatedDistPackage(
+            params,
+            logical_name="meta",
+            target_family="gfx94X-dcgpu",
+            restrict_families=True,
+        )
+
+        ns = self._exec_dist_info(meta)
+        self.assertEqual(ns["DEFAULT_TARGET_FAMILY"], "gfx94X-dcgpu")
+        self.assertEqual(ns["AVAILABLE_TARGET_FAMILIES"], ["gfx94X-dcgpu"])
+
+    def test_no_restrict_families_lists_all(self):
+        """Without restrict_families, _dist_info.py still lists all built families."""
+        params = self._make_two_family_params()
+
+        meta = PopulatedDistPackage(
+            params,
+            logical_name="meta",
+            target_family="gfx120X-all",
+            restrict_families=False,
+        )
+
+        ns = self._exec_dist_info(meta)
+        self.assertIn("gfx120X-all", ns["AVAILABLE_TARGET_FAMILIES"])
+        self.assertIn("gfx94X-dcgpu", ns["AVAILABLE_TARGET_FAMILIES"])
+        self.assertEqual(len(ns["AVAILABLE_TARGET_FAMILIES"]), 2)
+
+    def test_restrict_families_single_arch_build(self):
+        """In a single-arch build restrict_families is a no-op (only one family anyway)."""
+        artifact_dir = self.temp_dir / "artifacts"
+        self._add_artifact(artifact_dir, "base", "lib", "gfx120X-all")
+        params = self._make_params(artifact_dir)
+
+        meta = PopulatedDistPackage(
+            params,
+            logical_name="meta",
+            target_family="gfx120X-all",
+            restrict_families=True,
+        )
+
+        ns = self._exec_dist_info(meta)
+        self.assertEqual(ns["DEFAULT_TARGET_FAMILY"], "gfx120X-all")
+        self.assertEqual(ns["AVAILABLE_TARGET_FAMILIES"], ["gfx120X-all"])
+
+    def test_restrict_families_ignored_when_target_family_is_none(self):
+        """restrict_families=True with target_family=None must not modify families."""
+        params = self._make_two_family_params()
+
+        # This is a degenerate call (meta without a target family) but must not crash
+        # and must not restrict families (since there is no specific family to restrict to).
+        meta = PopulatedDistPackage(
+            params,
+            logical_name="meta",
+            target_family=None,
+            restrict_families=True,
+        )
+
+        ns = self._exec_dist_info(meta)
+        # Both families must still be present — the guard condition prevented restriction.
+        self.assertIn("gfx120X-all", ns["AVAILABLE_TARGET_FAMILIES"])
+        self.assertIn("gfx94X-dcgpu", ns["AVAILABLE_TARGET_FAMILIES"])
+        self.assertEqual(len(ns["AVAILABLE_TARGET_FAMILIES"]), 2)
+
+
 if __name__ == "__main__":
     unittest.main()

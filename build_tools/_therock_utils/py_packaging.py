@@ -127,6 +127,7 @@ class PopulatedDistPackage:
         *,
         logical_name: str,
         target_family: str | None = None,
+        restrict_families: bool = False,
     ):
         self.params = params
         self.logical_name = logical_name
@@ -147,6 +148,17 @@ class PopulatedDistPackage:
         dist_info_contents += (
             f"THIS_PACKAGE_ENTRY = ALL_PACKAGES[{repr(logical_name)}]\n"
         )
+
+        # For per-family packages (e.g. meta/rocm in multi-arch builds), restrict
+        # DEFAULT_TARGET_FAMILY and AVAILABLE_TARGET_FAMILIES to only this family
+        # so that determine_target_family() at install time only resolves to this
+        # family's packages.
+        if restrict_families and target_family is not None:
+            dist_info_contents += f"DEFAULT_TARGET_FAMILY = '{target_family}'\n"
+            dist_info_contents += "AVAILABLE_TARGET_FAMILIES.clear()\n"
+            dist_info_contents += (
+                f"AVAILABLE_TARGET_FAMILIES.append('{target_family}')\n"
+            )
 
         # Populate from template.
         self.path = self._copy_package_template(
