@@ -1,0 +1,14 @@
+[H1]Installation Options:
+
+[H2]Install Driver
+  Enable/Disable the inclusion the amdgpu driver as part of the
+  installation.
+
+[H2]Start on install
+  Enable/Disable starting the amdgpu driver after installation.
+
+[H1]Maintenance:
+
+[H2]Uninstall Driver
+  Uninstall runfile-based amdgpu driver installation. This is not
+  available for package installed drivers.

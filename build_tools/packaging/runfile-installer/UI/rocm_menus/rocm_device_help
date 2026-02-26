@@ -1,0 +1,46 @@
+[H1]Overview:
+Select the GPU architecture group that matches your hardware. ROCm uses
+gfx architecture groups (e.g., gfx94x, gfx110x) to install components
+optimized for your GPU.
+
+[H1]GPU Families:
+
+[H2]Instinct (Data Center):
+  MI355X/MI350 (gfx950)         - CDNA 4 architecture
+  MI325X/MI300X/MI300A (gfx94x) - CDNA 3 architecture
+  MI250X/MI250/MI210 (gfx90x)   - CDNA 2 architecture
+
+[H2]Radeon PRO (Professional Workstation):
+  W7900/W7800/W7700/V710 (gfx110x) - RDNA 3 workstation GPUs
+  AI PRO R9700/R9600D (gfx120x)    - RDNA 4 AI accelerators
+  W6800/V620 (gfx103x)             - RDNA 2 workstation/server
+
+[H2]Radeon RX (Consumer Gaming):
+  RX 7900 XTX/XT/GRE (gfx110x)     - RDNA 3 high-end gaming
+  RX 7800 XT/7700 XT/7700 (gfx110x)- RDNA 3 mid-range gaming
+  RX 9070 XT/GRE/9070 (gfx120x)    - RDNA 4 high-end gaming
+  RX 9060 XT/XT LP/9060 (gfx120x)  - RDNA 4 mid-range gaming
+
+[H2]Ryzen AI (Mobile APUs):
+  Max PRO+ 395/Max PRO 390/385/380 (gfx1151) - AI Max PRO APUs
+  Max+ 395/Max 390/385 (gfx1151)             - AI Max APUs
+  9 HX 375/370/9 365 (gfx1150)               - AI 300 APUs
+
+[H1]About GFX Groups:
+The 'x' in gfx codes (e.g., gfx94x, gfx110x) is a wildcard that covers
+multiple specific architectures. For example:
+  - gfx94x covers gfx940, gfx941, gfx942
+  - gfx110x covers gfx1100, gfx1101, gfx1102
+
+This ensures compatible components are installed for your GPU variant.
+
+[H1]Usage:
+Use Up/Down arrows to navigate. Family headers (Instinct:, Radeon PRO:, etc.)
+are automatically skipped during navigation.
+
+Press Space or Enter to select your GPU architecture group.
+Press <DONE> when finished to return to the ROCm Options menu.
+
+[H1]Finding Your GPU:
+Run 'rocminfo' or 'amd-smi' after installation to see your GPU's exact
+gfx architecture code.

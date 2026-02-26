@@ -1,0 +1,20 @@
+[H1]Installation Settings:
+
+[H2]Install ROCm
+  Enable/Disable the inclusion of ROCm components as part of the
+  installation.
+
+[H2]ROCm Device
+  Select ROCm device/component configuration.
+
+[H2]ROCm Component List
+  List all ROCm components included in the ROCm install.
+
+[H2]ROCm Install Path
+  The location on the system where ROCm components will be installed.
+
+[H1]Maintenance:
+
+[H2]Uninstall ROCm
+  Uninstall runfile-based ROCm installation. This is not available
+  for package installed ROCm.

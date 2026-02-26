@@ -1,0 +1,14 @@
+[H1]GPU Access Permissions:
+
+[H2]Current User
+  Add the current user to the video,render group for access to GPU
+  resources.
+
+[H2]All Users
+  Grant GPU access to all users on the system via udev rules.
+  Note, this is an option for system admins.
+
+[H1]ROCm Setup:
+
+[H2]Post ROCm Install
+  Execute all ROCm install scripts setting up ROCm symbolic links, etc.
