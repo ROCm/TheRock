@@ -32,14 +32,21 @@ All outputs for a given run live under a common prefix:
 s3://{bucket}/{external_repo}{run_id}-{platform}/
 ```
 
-| Component       | Example                   | Description                                       |
-| --------------- | ------------------------- | ------------------------------------------------- |
-| `bucket`        | `therock-ci-artifacts`    | Selected based on repo, fork status, release type |
-| `external_repo` | `""` or `"Fork-TheRock/"` | Non-empty for forks and non-TheRock repos         |
-| `run_id`        | `12345678901`             | GitHub Actions workflow run ID                    |
-| `platform`      | `linux` or `windows`      | Build platform                                    |
+| Component       | Example                         | Description                                                           |
+| --------------- | ------------------------------- | --------------------------------------------------------------------- |
+| `bucket`        | `therock-ci-artifacts`          | Selected based on repo, fork status, release type                     |
+| `external_repo` | `""` or `"githubuser-TheRock/"` | Non-empty for forks and non-TheRock repos (format: `{owner}-{repo}/`) |
+| `run_id`        | `12345678901`                   | GitHub Actions workflow run ID                                        |
+| `platform`      | `linux` or `windows`            | Build platform                                                        |
 
 ### Directory structure
+
+`artifact_group` is the CI matrix variant, composed of a target family plus an
+optional variant suffix (e.g., `gfx94X-dcgpu`, `gfx94X-dcgpu-asan`). It is
+used as the subdirectory key for logs, manifests, and packages. Artifact
+filenames contain the `target_family` (e.g., `gfx94X`); see
+[#3381](https://github.com/ROCm/TheRock/issues/3381) for ongoing work to
+propagate artifact group naming consistently.
 
 ```
 {prefix}/

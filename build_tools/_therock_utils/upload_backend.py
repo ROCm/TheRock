@@ -35,8 +35,10 @@ logger = logging.getLogger(__name__)
 # Explicit content-type overrides for extensions we know about.
 _CONTENT_TYPE_OVERRIDES: dict[str, str] = {
     ".gz": "application/gzip",
+    ".html": "text/html",
     ".log": "text/plain",
     ".md": "text/plain",
+    ".whl": "application/zip",
     ".xz": "application/x-xz",
     ".zst": "application/zstd",
 }
