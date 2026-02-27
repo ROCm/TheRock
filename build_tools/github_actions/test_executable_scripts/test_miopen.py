@@ -164,12 +164,6 @@ if AMDGPU_FAMILIES in TEST_TO_IGNORE and os_type in TEST_TO_IGNORE[AMDGPU_FAMILI
     for ignored_test in ignored_tests:
         negative_filter.append(ignored_test)
 
-
-# Don't run while investigating to allow CI to pass
-# Jira Ticket ALMIOPEN-990
-# Test to see if it's still failing due to missing miopendriver
-# negative_filter.append("*/GPU_MIOpenDriver*")
-
 # TODO(rocm-libraries#2266): re-enable test for gfx950-dcgpu
 if AMDGPU_FAMILIES == "gfx950-dcgpu":
     negative_filter.append("*DBSync*")
