@@ -160,6 +160,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "\`bash build-runfile-installer.sh rocm amdgpu rocm-archs=$GFX_ARCHS pullamdgpu=$PULL_AMDGPU pull=$PULL_TYPE pulltag=$PULL_TAG pullrunid=$PULL_RUN_ID pullrocmver=$ROCM_VERSION pullpkg=$PULL_PKG buildtag=$BUILD_TAG buildrunid=$BUILD_RUNID mscomp=$MSCOMP\`" >> $GITHUB_STEP_SUMMARY
           
+          # Add python3.12 in rpm database as a temporary workaround for ROCM-3946
           dnf install -y rpm-build
           cat > /tmp/python312-provides.spec << 'EOF'
           Name:           python312-provides
