@@ -109,6 +109,7 @@ therock_add_amdgpu_target(gfx1031 "AMD RX 6700 / XT" FAMILY dgpu-all gfx103X-all
   hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
   hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
   rocWMMA # https://github.com/ROCm/TheRock/issues/1944
+  rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
 )
 therock_add_amdgpu_target(gfx1032 "AMD RX 6600" FAMILY dgpu-all gfx103X-all gfx103X-dgpu
   EXCLUDE_TARGET_PROJECTS
@@ -122,6 +123,7 @@ therock_add_amdgpu_target(gfx1033 "AMD Van Gogh iGPU" FAMILY igpu-all gfx103X-al
     hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
     rocWMMA # https://github.com/ROCm/TheRock/issues/1944
+    rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
     composable_kernel
 )
 therock_add_amdgpu_target(gfx1034 "AMD RX 6500 XT" FAMILY dgpu-all gfx103X-all gfx103X-dgpu
@@ -129,6 +131,7 @@ therock_add_amdgpu_target(gfx1034 "AMD RX 6500 XT" FAMILY dgpu-all gfx103X-all g
     hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
     rocWMMA # https://github.com/ROCm/TheRock/issues/1944
+    rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
 )
 therock_add_amdgpu_target(gfx1035 "AMD Radeon 680M Laptop iGPU" FAMILY igpu-all gfx103X-all gfx103X-igpu
   EXCLUDE_TARGET_PROJECTS
