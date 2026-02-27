@@ -17,7 +17,6 @@ from generate_manifest_diff_report import (
     get_api_base_from_url,
     is_revert,
     parse_args,
-    parse_gitmodules,
     resolve_commits,
 )
 from github_actions.github_actions_utils import is_authenticated_github_api_available
@@ -34,43 +33,6 @@ def _skip_unless_authenticated_github_api_is_available(test_func):
 # =============================================================================
 # Pure Function Unit Tests
 # =============================================================================
-
-
-class ParseGitmodulesTest(unittest.TestCase):
-    """Tests for parse_gitmodules function."""
-
-    def test_parse_single_submodule(self):
-        """Parse a single submodule entry."""
-        content = """[submodule "llvm-project"]
-    path = llvm-project
-    url = https://github.com/ROCm/llvm-project.git
-"""
-        result = parse_gitmodules(content)
-
-        self.assertEqual(len(result), 1)
-        self.assertIn("llvm-project", result)
-        self.assertEqual(result["llvm-project"]["name"], "llvm-project")
-        self.assertEqual(
-            result["llvm-project"]["url"], "https://github.com/ROCm/llvm-project.git"
-        )
-        self.assertEqual(result["llvm-project"]["branch"], "main")  # Default
-
-    def test_parse_multiple_submodules_with_branch(self):
-        """Parse multiple submodules including one with explicit branch."""
-        content = """[submodule "llvm-project"]
-    path = llvm-project
-    url = https://github.com/ROCm/llvm-project.git
-
-[submodule "rocm-libraries"]
-    path = rocm-libraries
-    url = https://github.com/ROCm/rocm-libraries.git
-    branch = develop
-"""
-        result = parse_gitmodules(content)
-
-        self.assertEqual(len(result), 2)
-        self.assertEqual(result["llvm-project"]["branch"], "main")
-        self.assertEqual(result["rocm-libraries"]["branch"], "develop")
 
 
 class GetApiBaseFromUrlTest(unittest.TestCase):
