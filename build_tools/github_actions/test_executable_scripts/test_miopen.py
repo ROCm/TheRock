@@ -133,7 +133,7 @@ negative_filter.append("Full/GPU_UnitTestActivationDescriptor_FP16*")  # 1 min 0
 
 negative_filter.append(
     "Full/GPU_MIOpenDriverRegressionBigTensorTest_FP32"
-) # 0 min 59 sec
+)  # 0 min 59 sec
 
 negative_filter.append(
     "Smoke/GPU_BNOCLBWDLargeFusedActivation2D_BFP16*"
