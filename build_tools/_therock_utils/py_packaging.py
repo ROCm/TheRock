@@ -155,6 +155,12 @@ class PopulatedDistPackage:
         # family's packages.
         if restrict_families and target_family is not None:
             dist_info_contents += f"DEFAULT_TARGET_FAMILY = '{target_family}'\n"
+            # TODO: AVAILABLE_TARGET_FAMILIES.clear() is needed here because
+            # params.dist_info_contents already appended all built families.
+            # The .clear() + single append produces dead code in the generated
+            # file. Fix: split params.dist_info_contents into a base (no family
+            # lines) and a full version; restrict_families packages start from
+            # the base so no .clear() is needed.
             dist_info_contents += "AVAILABLE_TARGET_FAMILIES.clear()\n"
             dist_info_contents += (
                 f"AVAILABLE_TARGET_FAMILIES.append('{target_family}')\n"
