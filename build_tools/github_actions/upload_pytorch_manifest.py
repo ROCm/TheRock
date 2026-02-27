@@ -14,10 +14,8 @@ import shlex
 import subprocess
 import sys
 
-
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from github_actions.github_actions_utils import retrieve_bucket_info
-
 
 PLATFORM = platform.system().lower()
 
@@ -148,7 +146,12 @@ def main(argv: list[str]) -> None:
     s3 = boto3.client("s3")
     key = f"{upload_path.prefix}/{manifest_name}"
     log(f"[INFO] Uploading {manifest_path} -> s3://{upload_path.bucket}/{key}")
-    s3.upload_file(str(manifest_path), upload_path.bucket, key, ExtraArgs={"ContentType": "application/json"})
+    s3.upload_file(
+        str(manifest_path),
+        upload_path.bucket,
+        key,
+        ExtraArgs={"ContentType": "application/json"},
+    )
 
 
 if __name__ == "__main__":
