@@ -139,6 +139,7 @@ jobs:
       - name: Install test requirements
         run: |
           python -m pip install -r external-builds/pytorch/requirements-test.txt
+          python -m pip install -r external-builds/pytorch/pytorch/.ci/docker/requirements-ci.txt
           pip freeze
 
       - name: Run rocm-sdk sanity tests
