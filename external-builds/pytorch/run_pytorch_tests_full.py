@@ -59,7 +59,6 @@ def setup_env(pytorch_dir: Path, test_config: str) -> None:
     os.environ["PYTORCH_TESTING_DEVICE_ONLY_FOR"] = "cuda"
     os.environ["PYTORCH_PRINT_REPRO_ON_FAILURE"] = "0"
     os.environ["MIOPEN_CUSTOM_CACHE_DIR"] = tempfile.mkdtemp()
-    os.environ["NUM_PARALLEL_PROCS"] = "1"
 
     if test_config:
         os.environ["TEST_CONFIG"] = test_config
@@ -209,6 +208,8 @@ def build_run_test_cmd(
         cmd.append("--exclude-distributed-tests")
     if not args.no_exclude_quantization:
         cmd.append("--exclude-quantization-tests")
+
+    cmd.append("--keep-going")
 
     if args.verbose:
         cmd.append("--verbose")
