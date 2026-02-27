@@ -154,14 +154,6 @@ jobs:
       - name: (Linux) Run PyTorch tests
         if: ${{ runner.os == 'Linux' }}
         run: |
-          python ./external-builds/pytorch/run_pytorch_tests.py -- \
-            --continue-on-collection-errors \
-            --import-mode=importlib \
-            -v
-
-      - name: (Linux) Run full PyTorch test suite via run_test.py
-        if: ${{ runner.os == 'Linux' }}
-        run: |
           python ./external-builds/pytorch/run_pytorch_tests_full.py -- \
             --continue-on-collection-errors \
             --import-mode=importlib
