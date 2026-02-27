@@ -15,7 +15,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from _therock_utils.run_outputs import RunOutputRoot
 from _therock_utils.storage_location import StorageLocation
-from _therock_utils.upload_backend import create_upload_backend
+from _therock_utils.storage_backend import create_storage_backend
 
 
 PLATFORM = platform.system().lower()
@@ -132,7 +132,7 @@ def main(argv: list[str]) -> None:
         f"{manifest_dir_loc.relative_path}/{manifest_name}",
     )
 
-    backend = create_upload_backend(staging_dir=args.output_dir, dry_run=args.dry_run)
+    backend = create_storage_backend(staging_dir=args.output_dir, dry_run=args.dry_run)
     backend.upload_file(manifest_path, dest)
 
 

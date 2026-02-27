@@ -40,7 +40,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from _therock_utils.run_outputs import RunOutputRoot
 from _therock_utils.storage_location import StorageLocation
-from _therock_utils.upload_backend import UploadBackend, create_upload_backend
+from _therock_utils.storage_backend import StorageBackend, create_storage_backend
 from github_actions_utils import (
     gha_append_step_summary,
     gha_set_output,
@@ -101,7 +101,7 @@ def find_package_files(dist_dir: Path) -> list[Path]:
 
 
 def upload_packages(
-    dist_dir: Path, packages_loc: StorageLocation, backend: UploadBackend
+    dist_dir: Path, packages_loc: StorageLocation, backend: StorageBackend
 ):
     """Upload package files using the provided backend."""
     package_files = find_package_files(dist_dir)
@@ -155,7 +155,7 @@ def run(args: argparse.Namespace):
 
     run_root = _make_run_root(args.run_id, bucket_override=args.bucket)
     packages_loc = run_root.python_packages(args.artifact_group)
-    backend = create_upload_backend(staging_dir=args.output_dir, dry_run=args.dry_run)
+    backend = create_storage_backend(staging_dir=args.output_dir, dry_run=args.dry_run)
 
     log("")
     log("Uploading packages")

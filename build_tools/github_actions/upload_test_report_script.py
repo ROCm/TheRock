@@ -2,7 +2,7 @@
 """
 Uploads test reports to AWS S3 bucket for a GitHub run ID and AMD GPU family
 
-TODO: Migrate to UploadBackend (like post_build_upload.py) to replace the
+TODO: Migrate to StorageBackend (like post_build_upload.py) to replace the
 raw `aws s3 cp` calls and gain --output-dir / --dry-run support.
 """
 

@@ -10,18 +10,18 @@ Every CI workflow run produces a set of outputs (build artifacts, logs,
 manifests, python packages) that are uploaded to S3. Three modules in
 `_therock_utils` handle the path computation and I/O:
 
-| Module             | Role                         | Key types                                                |
-| ------------------ | ---------------------------- | -------------------------------------------------------- |
-| `storage_location` | Backend-agnostic location    | `StorageLocation`                                        |
-| `run_outputs`      | CI path computation (no I/O) | `RunOutputRoot`                                          |
-| `upload_backend`   | Upload I/O (write)           | `UploadBackend`, `S3UploadBackend`, `LocalUploadBackend` |
-| `artifact_backend` | Download I/O (read)          | `ArtifactBackend`, `S3Backend`, `LocalDirectoryBackend`  |
+| Module             | Role                         | Key types                                                   |
+| ------------------ | ---------------------------- | ----------------------------------------------------------- |
+| `storage_location` | Backend-agnostic location    | `StorageLocation`                                           |
+| `run_outputs`      | CI path computation (no I/O) | `RunOutputRoot`                                             |
+| `storage_backend`  | Upload I/O (write)           | `StorageBackend`, `S3StorageBackend`, `LocalStorageBackend` |
+| `artifact_backend` | Download I/O (read)          | `ArtifactBackend`, `S3Backend`, `LocalDirectoryBackend`     |
 
 `StorageLocation` is the bridge between path computation and I/O.
 `RunOutputRoot` produces `StorageLocation` instances; backends consume them.
 
 ```
-RunOutputRoot ──produces──> StorageLocation ──consumed by──> UploadBackend
+RunOutputRoot ──produces──> StorageLocation ──consumed by──> StorageBackend
                                                             ArtifactBackend
 ```
 
@@ -160,17 +160,17 @@ this — environment variables (`GITHUB_REPOSITORY`, `IS_PR_FROM_FORK`) suffice.
 Set `lookup_workflow_run=True` when looking up another repository's workflow
 run, e.g. when fetching artifacts.
 
-### UploadBackend
+### StorageBackend
 
 An abstract base class for uploading files to S3 or a local directory.
-Use `create_upload_backend()` to get the right implementation.
+Use `create_storage_backend()` to get the right implementation.
 
 ```python
-from _therock_utils.upload_backend import create_upload_backend
+from _therock_utils.storage_backend import create_storage_backend
 
-backend = create_upload_backend()  # S3 (default)
-backend = create_upload_backend(staging_dir=Path("/tmp/out"))  # local directory
-backend = create_upload_backend(dry_run=True)  # print only
+backend = create_storage_backend()  # S3 (default)
+backend = create_storage_backend(staging_dir=Path("/tmp/out"))  # local directory
+backend = create_storage_backend(dry_run=True)  # print only
 
 backend.upload_file(source_path, dest_location)
 backend.upload_directory(source_dir, dest_location, include=["*.tar.xz*"])
@@ -192,9 +192,9 @@ To add a new output type:
 
 | File                                                                                       | Uses                                                                 |
 | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
-| [`post_build_upload.py`](/build_tools/github_actions/post_build_upload.py)                 | `RunOutputRoot` + `UploadBackend` for artifacts, logs, manifests     |
-| [`upload_python_packages.py`](/build_tools/github_actions/upload_python_packages.py)       | `RunOutputRoot` + `UploadBackend` for Python wheels and index        |
-| [`upload_pytorch_manifest.py`](/build_tools/github_actions/upload_pytorch_manifest.py)     | `RunOutputRoot` + `UploadBackend` for PyTorch manifests              |
+| [`post_build_upload.py`](/build_tools/github_actions/post_build_upload.py)                 | `RunOutputRoot` + `StorageBackend` for artifacts, logs, manifests    |
+| [`upload_python_packages.py`](/build_tools/github_actions/upload_python_packages.py)       | `RunOutputRoot` + `StorageBackend` for Python wheels and index       |
+| [`upload_pytorch_manifest.py`](/build_tools/github_actions/upload_pytorch_manifest.py)     | `RunOutputRoot` + `StorageBackend` for PyTorch manifests             |
 | [`upload_test_report_script.py`](/build_tools/github_actions/upload_test_report_script.py) | `RunOutputRoot` for S3 base URI (upload not yet migrated to backend) |
 
 ### Download scripts

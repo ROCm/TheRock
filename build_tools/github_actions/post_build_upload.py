@@ -40,7 +40,7 @@ PLATFORM = platform.system().lower()
 # Add build_tools to path for _therock_utils imports.
 sys.path.insert(0, str(THEROCK_DIR / "build_tools"))
 from _therock_utils.run_outputs import RunOutputRoot
-from _therock_utils.upload_backend import UploadBackend, create_upload_backend
+from _therock_utils.storage_backend import StorageBackend, create_storage_backend
 
 # Importing indexer.py
 sys.path.append(str(THEROCK_DIR / "third-party" / "indexer"))
@@ -172,7 +172,7 @@ def upload_artifacts(
     artifact_group: str,
     build_dir: Path,
     run_root: RunOutputRoot,
-    backend: UploadBackend,
+    backend: StorageBackend,
 ):
     """Upload build artifacts (.tar.xz archives and checksums) and index."""
     artifacts_dir = build_dir / "artifacts"
@@ -196,7 +196,7 @@ def upload_logs(
     artifact_group: str,
     build_dir: Path,
     run_root: RunOutputRoot,
-    backend: UploadBackend,
+    backend: StorageBackend,
 ):
     """Upload build logs, resource profiling summaries, and observability reports."""
     log_dir = build_dir / "logs"
@@ -232,7 +232,7 @@ def upload_manifest(
     artifact_group: str,
     build_dir: Path,
     run_root: RunOutputRoot,
-    backend: UploadBackend,
+    backend: StorageBackend,
 ):
     """Upload therock_manifest.json."""
     manifest_path = (
@@ -289,7 +289,7 @@ def run(args):
         return
 
     run_root = RunOutputRoot.from_workflow_run(run_id=args.run_id, platform=PLATFORM)
-    backend = create_upload_backend(staging_dir=args.output_dir, dry_run=args.dry_run)
+    backend = create_storage_backend(staging_dir=args.output_dir, dry_run=args.dry_run)
 
     log("Write Windows time sync log")
     log("----------------------")

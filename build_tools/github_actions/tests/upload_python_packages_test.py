@@ -2,7 +2,7 @@
 """Unit tests for upload_python_packages.py.
 
 Tests verify that upload functions pass correct StorageLocations to the
-UploadBackend, producing the expected file layout. Uses LocalUploadBackend
+StorageBackend, producing the expected file layout. Uses LocalStorageBackend
 with a temp directory so no mocking of subprocess or boto3 is needed.
 """
 
@@ -18,7 +18,7 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent))
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from _therock_utils.run_outputs import RunOutputRoot
-from _therock_utils.upload_backend import LocalUploadBackend
+from _therock_utils.storage_backend import LocalStorageBackend
 import upload_python_packages
 
 
@@ -70,7 +70,7 @@ class TestUploadPackages(unittest.TestCase):
             (dist_dir / "rocm-1.0.tar.gz").write_bytes(b"sdist")
             (dist_dir / "index.html").write_text("<html></html>")
 
-            backend = LocalUploadBackend(staging_dir)
+            backend = LocalStorageBackend(staging_dir)
             upload_python_packages.upload_packages(dist_dir, packages_loc, backend)
 
             base = staging_dir / "12345-linux" / "python" / "gfx94X-dcgpu"
@@ -84,7 +84,7 @@ class TestUploadPackages(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as staging:
             dist_dir = Path(tmp)
             staging_dir = Path(staging)
-            backend = LocalUploadBackend(staging_dir)
+            backend = LocalStorageBackend(staging_dir)
             with self.assertRaises(FileNotFoundError):
                 upload_python_packages.upload_packages(dist_dir, packages_loc, backend)
 
@@ -99,7 +99,7 @@ class TestUploadPackages(unittest.TestCase):
             staging_dir = Path(staging)
             (dist_dir / "rocm-1.0.whl").write_bytes(b"whl")
 
-            backend = LocalUploadBackend(staging_dir)
+            backend = LocalStorageBackend(staging_dir)
             upload_python_packages.upload_packages(dist_dir, packages_loc, backend)
 
             self.assertTrue(

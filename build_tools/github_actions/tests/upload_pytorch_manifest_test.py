@@ -2,7 +2,7 @@
 """Unit tests for upload_pytorch_manifest.py.
 
 Tests verify that the manifest upload places files at the correct S3 paths
-and that helper functions normalize inputs correctly. Uses LocalUploadBackend
+and that helper functions normalize inputs correctly. Uses LocalStorageBackend
 with a temp directory so no mocking of subprocess or boto3 is needed.
 """
 
@@ -64,7 +64,7 @@ class TestSanitizeRefForFilename(unittest.TestCase):
 
 
 class TestMain(unittest.TestCase):
-    """Tests for main() end-to-end with LocalUploadBackend."""
+    """Tests for main() end-to-end with LocalStorageBackend."""
 
     def test_uploads_manifest_to_correct_path(self):
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as staging:

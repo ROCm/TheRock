@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Unit tests for upload_backend.py."""
+"""Unit tests for storage_backend.py."""
 
 import os
 import sys
@@ -12,11 +12,11 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from _therock_utils.run_outputs import RunOutputRoot
 from _therock_utils.storage_location import StorageLocation
-from _therock_utils.upload_backend import (
-    LocalUploadBackend,
-    S3UploadBackend,
-    UploadBackend,
-    create_upload_backend,
+from _therock_utils.storage_backend import (
+    LocalStorageBackend,
+    S3StorageBackend,
+    StorageBackend,
+    create_storage_backend,
     infer_content_type,
 )
 
@@ -91,11 +91,11 @@ class TestRunOutputRootRoot(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# LocalUploadBackend
+# LocalStorageBackend
 # ---------------------------------------------------------------------------
 
 
-class TestLocalUploadBackendUploadFile(unittest.TestCase):
+class TestLocalStorageBackendUploadFile(unittest.TestCase):
     def test_copies_file(self):
 
         with tempfile.TemporaryDirectory() as staging, tempfile.TemporaryDirectory() as src:
@@ -106,7 +106,7 @@ class TestLocalUploadBackendUploadFile(unittest.TestCase):
             source.write_text("content")
 
             dest = StorageLocation("bucket", "run-1/hello.txt")
-            backend = LocalUploadBackend(staging_dir)
+            backend = LocalStorageBackend(staging_dir)
             backend.upload_file(source, dest)
 
             target = staging_dir / "run-1" / "hello.txt"
@@ -123,7 +123,7 @@ class TestLocalUploadBackendUploadFile(unittest.TestCase):
             source.write_text("{}")
 
             dest = StorageLocation("bucket", "run-1/deep/nested/data.json")
-            backend = LocalUploadBackend(staging_dir)
+            backend = LocalStorageBackend(staging_dir)
             backend.upload_file(source, dest)
 
             target = staging_dir / "run-1" / "deep" / "nested" / "data.json"
@@ -139,14 +139,14 @@ class TestLocalUploadBackendUploadFile(unittest.TestCase):
             source.write_text("content")
 
             dest = StorageLocation("bucket", "run-1/hello.txt")
-            backend = LocalUploadBackend(staging_dir, dry_run=True)
+            backend = LocalStorageBackend(staging_dir, dry_run=True)
             backend.upload_file(source, dest)
 
             target = staging_dir / "run-1" / "hello.txt"
             self.assertFalse(target.exists())
 
 
-class TestLocalUploadBackendUploadDirectory(unittest.TestCase):
+class TestLocalStorageBackendUploadDirectory(unittest.TestCase):
     def _make_tree(self, base: Path):
         """Create a test directory tree:
 
@@ -173,7 +173,7 @@ class TestLocalUploadBackendUploadDirectory(unittest.TestCase):
             self._make_tree(source_dir)
 
             dest = StorageLocation("bucket", "run-1")
-            backend = LocalUploadBackend(staging_dir)
+            backend = LocalStorageBackend(staging_dir)
             count = backend.upload_directory(source_dir, dest)
 
             self.assertEqual(count, 4)
@@ -192,7 +192,7 @@ class TestLocalUploadBackendUploadDirectory(unittest.TestCase):
             self._make_tree(source_dir)
 
             dest = StorageLocation("bucket", "run-1")
-            backend = LocalUploadBackend(staging_dir)
+            backend = LocalStorageBackend(staging_dir)
             count = backend.upload_directory(source_dir, dest, include=["*.tar.xz*"])
 
             # Only .tar.xz and .tar.xz.sha256sum should match
@@ -212,7 +212,7 @@ class TestLocalUploadBackendUploadDirectory(unittest.TestCase):
             self._make_tree(source_dir)
 
             dest = StorageLocation("bucket", "run-1/logs/gfx94X")
-            backend = LocalUploadBackend(staging_dir)
+            backend = LocalStorageBackend(staging_dir)
             backend.upload_directory(source_dir, dest)
 
             self.assertTrue(
@@ -234,7 +234,7 @@ class TestLocalUploadBackendUploadDirectory(unittest.TestCase):
                 self.skipTest("Cannot create symlinks on this platform")
 
             dest = StorageLocation("bucket", "run-1")
-            backend = LocalUploadBackend(staging_dir)
+            backend = LocalStorageBackend(staging_dir)
             count = backend.upload_directory(source_dir, dest)
 
             self.assertEqual(count, 1)
@@ -246,7 +246,7 @@ class TestLocalUploadBackendUploadDirectory(unittest.TestCase):
         with tempfile.TemporaryDirectory() as staging:
             staging_dir = Path(staging)
             dest = StorageLocation("bucket", "run-1")
-            backend = LocalUploadBackend(staging_dir)
+            backend = LocalStorageBackend(staging_dir)
 
             with self.assertRaises(FileNotFoundError):
                 backend.upload_directory(Path("/nonexistent"), dest)
@@ -259,7 +259,7 @@ class TestLocalUploadBackendUploadDirectory(unittest.TestCase):
             self._make_tree(source_dir)
 
             dest = StorageLocation("bucket", "run-1")
-            backend = LocalUploadBackend(staging_dir, dry_run=True)
+            backend = LocalStorageBackend(staging_dir, dry_run=True)
             count = backend.upload_directory(source_dir, dest)
 
             # Count should reflect files that would be uploaded.
@@ -275,19 +275,19 @@ class TestLocalUploadBackendUploadDirectory(unittest.TestCase):
             source_dir.mkdir()
 
             dest = StorageLocation("bucket", "run-1")
-            backend = LocalUploadBackend(staging_dir)
+            backend = LocalStorageBackend(staging_dir)
             count = backend.upload_directory(source_dir, dest)
             self.assertEqual(count, 0)
 
 
 # ---------------------------------------------------------------------------
-# S3UploadBackend
+# S3StorageBackend
 # ---------------------------------------------------------------------------
 
 
-class TestS3UploadBackendUploadFile(unittest.TestCase):
+class TestS3StorageBackendUploadFile(unittest.TestCase):
     def test_calls_boto3_upload_file(self):
-        backend = S3UploadBackend()
+        backend = S3StorageBackend()
         mock_client = mock.MagicMock()
         backend._s3_client = mock_client
 
@@ -303,7 +303,7 @@ class TestS3UploadBackendUploadFile(unittest.TestCase):
         )
 
     def test_content_type_for_html(self):
-        backend = S3UploadBackend()
+        backend = S3StorageBackend()
         mock_client = mock.MagicMock()
         backend._s3_client = mock_client
 
@@ -319,7 +319,7 @@ class TestS3UploadBackendUploadFile(unittest.TestCase):
         )
 
     def test_retries_on_failure(self):
-        backend = S3UploadBackend()
+        backend = S3StorageBackend()
         mock_client = mock.MagicMock()
         mock_client.upload_file.side_effect = [
             Exception("transient"),
@@ -330,13 +330,13 @@ class TestS3UploadBackendUploadFile(unittest.TestCase):
         source = Path("/tmp/data.json")
         dest = StorageLocation("bucket", "run-1/data.json")
 
-        with mock.patch("_therock_utils.upload_backend.time.sleep"):
+        with mock.patch("_therock_utils.storage_backend.time.sleep"):
             backend.upload_file(source, dest)
 
         self.assertEqual(mock_client.upload_file.call_count, 2)
 
     def test_raises_after_max_retries(self):
-        backend = S3UploadBackend()
+        backend = S3StorageBackend()
         mock_client = mock.MagicMock()
         mock_client.upload_file.side_effect = Exception("persistent")
         backend._s3_client = mock_client
@@ -344,7 +344,7 @@ class TestS3UploadBackendUploadFile(unittest.TestCase):
         source = Path("/tmp/data.json")
         dest = StorageLocation("bucket", "run-1/data.json")
 
-        with mock.patch("_therock_utils.upload_backend.time.sleep"):
+        with mock.patch("_therock_utils.storage_backend.time.sleep"):
             with self.assertRaises(RuntimeError) as ctx:
                 backend.upload_file(source, dest)
 
@@ -352,7 +352,7 @@ class TestS3UploadBackendUploadFile(unittest.TestCase):
         self.assertEqual(mock_client.upload_file.call_count, 3)
 
     def test_dry_run_does_not_call_boto3(self):
-        backend = S3UploadBackend(dry_run=True)
+        backend = S3StorageBackend(dry_run=True)
         mock_client = mock.MagicMock()
         backend._s3_client = mock_client
 
@@ -363,7 +363,7 @@ class TestS3UploadBackendUploadFile(unittest.TestCase):
         mock_client.upload_file.assert_not_called()
 
 
-class TestS3UploadBackendCredentialResolution(unittest.TestCase):
+class TestS3StorageBackendCredentialResolution(unittest.TestCase):
     """Verify the S3 client uses boto3's default credential chain.
 
     CI runners provide credentials via AWS_SHARED_CREDENTIALS_FILE (a
@@ -400,7 +400,7 @@ class TestS3UploadBackendCredentialResolution(unittest.TestCase):
             for var in cleared:
                 os.environ.pop(var, None)
             with mock.patch("boto3.client") as mock_boto3:
-                backend = S3UploadBackend()
+                backend = S3StorageBackend()
                 _ = backend.s3_client
 
                 self._assert_not_unsigned(mock_boto3)
@@ -415,7 +415,7 @@ class TestS3UploadBackendCredentialResolution(unittest.TestCase):
         }
         with mock.patch.dict(os.environ, env):
             with mock.patch("boto3.client") as mock_boto3:
-                backend = S3UploadBackend()
+                backend = S3StorageBackend()
                 _ = backend.s3_client
 
                 self._assert_not_unsigned(mock_boto3)
@@ -434,7 +434,7 @@ class TestS3UploadBackendCredentialResolution(unittest.TestCase):
             for var in cleared:
                 os.environ.pop(var, None)
             with mock.patch("boto3.client") as mock_boto3:
-                backend = S3UploadBackend()
+                backend = S3StorageBackend()
                 _ = backend.s3_client
 
                 self._assert_not_unsigned(mock_boto3)
@@ -445,23 +445,23 @@ class TestS3UploadBackendCredentialResolution(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 
-class TestCreateUploadBackend(unittest.TestCase):
+class TestCreateStorageBackend(unittest.TestCase):
     def test_returns_s3_backend_by_default(self):
-        backend = create_upload_backend()
-        self.assertIsInstance(backend, S3UploadBackend)
+        backend = create_storage_backend()
+        self.assertIsInstance(backend, S3StorageBackend)
 
     def test_returns_local_backend_with_staging_dir(self):
-        backend = create_upload_backend(staging_dir=Path("/tmp/staging"))
-        self.assertIsInstance(backend, LocalUploadBackend)
+        backend = create_storage_backend(staging_dir=Path("/tmp/staging"))
+        self.assertIsInstance(backend, LocalStorageBackend)
 
     def test_dry_run_passed_through(self):
-        backend = create_upload_backend(dry_run=True)
-        self.assertIsInstance(backend, S3UploadBackend)
+        backend = create_storage_backend(dry_run=True)
+        self.assertIsInstance(backend, S3StorageBackend)
         self.assertTrue(backend._dry_run)
 
     def test_local_dry_run_passed_through(self):
-        backend = create_upload_backend(staging_dir=Path("/tmp/staging"), dry_run=True)
-        self.assertIsInstance(backend, LocalUploadBackend)
+        backend = create_storage_backend(staging_dir=Path("/tmp/staging"), dry_run=True)
+        self.assertIsInstance(backend, LocalStorageBackend)
         self.assertTrue(backend._dry_run)
 
 

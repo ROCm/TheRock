@@ -1,4 +1,4 @@
-"""Upload backend abstraction for CI run outputs.
+"""Storage backend abstraction for S3 and local file operations.
 
 Provides a unified interface for uploading files and directories to S3 or
 local staging directories. Content types for known file extensions are set
@@ -6,11 +6,11 @@ during upload.
 
 Usage::
 
-    from _therock_utils.upload_backend import create_upload_backend
+    from _therock_utils.storage_backend import create_storage_backend
 
-    backend = create_upload_backend()  # S3
-    backend = create_upload_backend(staging_dir=Path("/tmp/out"))  # local
-    backend = create_upload_backend(dry_run=True)  # print only
+    backend = create_storage_backend()  # S3
+    backend = create_storage_backend(staging_dir=Path("/tmp/out"))  # local
+    backend = create_storage_backend(dry_run=True)  # print only
 
     backend.upload_file(source, dest_location)
     backend.upload_directory(source_dir, dest_location, include=["*.tar.xz*"])
@@ -60,12 +60,12 @@ def infer_content_type(path: Path) -> str:
 
 
 # ---------------------------------------------------------------------------
-# UploadBackend ABC
+# StorageBackend ABC
 # ---------------------------------------------------------------------------
 
 
-class UploadBackend(ABC):
-    """Abstract base class for uploading files to a storage backend."""
+class StorageBackend(ABC):
+    """Abstract base class for storage operations."""
 
     @abstractmethod
     def upload_file(self, source: Path, dest: StorageLocation) -> None:
@@ -110,7 +110,7 @@ class UploadBackend(ABC):
 
 
 # ---------------------------------------------------------------------------
-# S3UploadBackend
+# S3StorageBackend
 # ---------------------------------------------------------------------------
 
 # Retry parameters for transient S3 errors.
@@ -118,7 +118,7 @@ _S3_MAX_RETRIES = 3
 _S3_INITIAL_BACKOFF_SECONDS = 1.0
 
 
-class S3UploadBackend(UploadBackend):
+class S3StorageBackend(StorageBackend):
     """Upload files to AWS S3 using boto3.
 
     The S3 client is lazily initialized on first use.  Credentials are
@@ -176,11 +176,11 @@ class S3UploadBackend(UploadBackend):
 
 
 # ---------------------------------------------------------------------------
-# LocalUploadBackend
+# LocalStorageBackend
 # ---------------------------------------------------------------------------
 
 
-class LocalUploadBackend(UploadBackend):
+class LocalStorageBackend(StorageBackend):
     """Copy files to a local staging directory.
 
     Mirrors the remote directory layout under *staging_dir* so that
@@ -206,19 +206,19 @@ class LocalUploadBackend(UploadBackend):
 # ---------------------------------------------------------------------------
 
 
-def create_upload_backend(
+def create_storage_backend(
     *,
     staging_dir: Path | None = None,
     dry_run: bool = False,
-) -> UploadBackend:
-    """Create an upload backend.
+) -> StorageBackend:
+    """Create a storage backend.
 
     Args:
-        staging_dir: If provided, returns a `LocalUploadBackend`
+        staging_dir: If provided, returns a ``LocalStorageBackend``
             that copies files under this directory.  Otherwise returns an
-            `S3UploadBackend`.
+            ``S3StorageBackend``.
         dry_run: If ``True``, the backend logs actions without writing.
     """
     if staging_dir is not None:
-        return LocalUploadBackend(staging_dir, dry_run=dry_run)
-    return S3UploadBackend(dry_run=dry_run)
+        return LocalStorageBackend(staging_dir, dry_run=dry_run)
+    return S3StorageBackend(dry_run=dry_run)

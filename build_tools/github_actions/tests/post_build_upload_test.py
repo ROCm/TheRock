@@ -2,7 +2,7 @@
 """Unit tests for post_build_upload.py upload functions.
 
 Tests verify that the upload functions pass correct StorageLocations to the
-UploadBackend, producing the expected file layout. Uses LocalUploadBackend
+StorageBackend, producing the expected file layout. Uses LocalStorageBackend
 with a temp directory so no mocking of subprocess or boto3 is needed.
 """
 
@@ -19,7 +19,7 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent))
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from _therock_utils.run_outputs import RunOutputRoot
-from _therock_utils.upload_backend import LocalUploadBackend
+from _therock_utils.storage_backend import LocalStorageBackend
 import post_build_upload
 
 
@@ -54,7 +54,7 @@ class TestUploadArtifacts(unittest.TestCase):
             (artifacts / "some_dir" / "file.txt").write_text("ignore")
             (artifacts / "index.html").write_text("<html></html>")
 
-            backend = LocalUploadBackend(staging_dir)
+            backend = LocalStorageBackend(staging_dir)
             post_build_upload.upload_artifacts(
                 "gfx94X-dcgpu", build_dir, run_root, backend
             )
@@ -91,7 +91,7 @@ class TestUploadArtifacts(unittest.TestCase):
             (artifacts / "lib.tar.xz").write_bytes(b"data")
             (artifacts / "index.html").write_text("<html></html>")
 
-            backend = LocalUploadBackend(staging_dir)
+            backend = LocalStorageBackend(staging_dir)
             post_build_upload.upload_artifacts(
                 "gfx94X-dcgpu", build_dir, run_root, backend
             )
@@ -106,7 +106,7 @@ class TestUploadArtifacts(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as staging:
             build_dir = Path(tmp)
             staging_dir = Path(staging)
-            backend = LocalUploadBackend(staging_dir)
+            backend = LocalStorageBackend(staging_dir)
             # Should not raise
             post_build_upload.upload_artifacts(
                 "gfx94X-dcgpu", build_dir, run_root, backend
@@ -127,7 +127,7 @@ class TestUploadLogs(unittest.TestCase):
             (log_dir / "build.log").write_text("build output")
             (log_dir / "ninja_logs.tar.gz").write_bytes(b"gzip")
 
-            backend = LocalUploadBackend(staging_dir)
+            backend = LocalStorageBackend(staging_dir)
             post_build_upload.upload_logs("gfx94X-dcgpu", build_dir, run_root, backend)
 
             base = staging_dir / "12345-linux" / "logs" / "gfx94X-dcgpu"
@@ -144,7 +144,7 @@ class TestUploadLogs(unittest.TestCase):
             log_dir.mkdir()
             (log_dir / "build_observability.html").write_text("<html></html>")
 
-            backend = LocalUploadBackend(staging_dir)
+            backend = LocalStorageBackend(staging_dir)
             post_build_upload.upload_logs("gfx94X-dcgpu", build_dir, run_root, backend)
 
             self.assertTrue(
@@ -167,7 +167,7 @@ class TestUploadLogs(unittest.TestCase):
             log_dir.mkdir()
             (log_dir / "index.html").write_text("<html></html>")
 
-            backend = LocalUploadBackend(staging_dir)
+            backend = LocalStorageBackend(staging_dir)
             post_build_upload.upload_logs("gfx94X-dcgpu", build_dir, run_root, backend)
 
             self.assertTrue(
@@ -188,7 +188,7 @@ class TestUploadLogs(unittest.TestCase):
             (prof_dir / "comp-summary.html").write_text("<html></html>")
             (prof_dir / "comp-summary.md").write_text("# Summary")
 
-            backend = LocalUploadBackend(staging_dir)
+            backend = LocalStorageBackend(staging_dir)
             post_build_upload.upload_logs("gfx94X-dcgpu", build_dir, run_root, backend)
 
             base = staging_dir / "12345-linux" / "logs" / "gfx94X-dcgpu"
@@ -209,7 +209,7 @@ class TestUploadLogs(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as staging:
             build_dir = Path(tmp)
             staging_dir = Path(staging)
-            backend = LocalUploadBackend(staging_dir)
+            backend = LocalStorageBackend(staging_dir)
             # Should not raise
             post_build_upload.upload_logs("gfx94X-dcgpu", build_dir, run_root, backend)
 
@@ -227,7 +227,7 @@ class TestUploadManifest(unittest.TestCase):
             manifest_dir.mkdir(parents=True)
             (manifest_dir / "therock_manifest.json").write_text("{}")
 
-            backend = LocalUploadBackend(staging_dir)
+            backend = LocalStorageBackend(staging_dir)
             post_build_upload.upload_manifest(
                 "gfx94X-dcgpu", build_dir, run_root, backend
             )
@@ -248,7 +248,7 @@ class TestUploadManifest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as staging:
             build_dir = Path(tmp)
             staging_dir = Path(staging)
-            backend = LocalUploadBackend(staging_dir)
+            backend = LocalStorageBackend(staging_dir)
             with self.assertRaises(FileNotFoundError):
                 post_build_upload.upload_manifest(
                     "gfx94X-dcgpu", build_dir, run_root, backend
