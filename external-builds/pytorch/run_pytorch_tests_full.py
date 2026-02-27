@@ -59,7 +59,6 @@ def setup_env(pytorch_dir: Path, test_config: str) -> None:
     os.environ["PYTORCH_TESTING_DEVICE_ONLY_FOR"] = "cuda"
     os.environ["PYTORCH_PRINT_REPRO_ON_FAILURE"] = "0"
     os.environ["MIOPEN_CUSTOM_CACHE_DIR"] = tempfile.mkdtemp()
-    os.environ.setdefault("OPENBLAS_NUM_THREADS", "64")
     os.environ["NUM_PARALLEL_PROCS"] = "1"
 
     if test_config:
