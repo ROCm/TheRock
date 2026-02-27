@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Unit tests for post_build_upload.py upload functions.
 
-Tests verify that the upload functions pass correct OutputLocations to the
+Tests verify that the upload functions pass correct StorageLocations to the
 UploadBackend, producing the expected file layout. Uses LocalUploadBackend
 with a temp directory so no mocking of subprocess or boto3 is needed.
 """

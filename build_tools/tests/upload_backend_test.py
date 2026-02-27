@@ -10,7 +10,8 @@ from unittest import mock
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
-from _therock_utils.run_outputs import OutputLocation, RunOutputRoot
+from _therock_utils.run_outputs import RunOutputRoot
+from _therock_utils.storage_location import StorageLocation
 from _therock_utils.upload_backend import (
     LocalUploadBackend,
     S3UploadBackend,
@@ -77,7 +78,7 @@ class TestRunOutputRootRoot(unittest.TestCase):
             bucket="my-bucket", external_repo="", run_id="123", platform="linux"
         )
         loc = rr.root()
-        self.assertIsInstance(loc, OutputLocation)
+        self.assertIsInstance(loc, StorageLocation)
         self.assertEqual(loc.bucket, "my-bucket")
         self.assertEqual(loc.relative_path, "123-linux")
 
@@ -104,7 +105,7 @@ class TestLocalUploadBackendUploadFile(unittest.TestCase):
             source = src_dir / "hello.txt"
             source.write_text("content")
 
-            dest = OutputLocation("bucket", "run-1/hello.txt")
+            dest = StorageLocation("bucket", "run-1/hello.txt")
             backend = LocalUploadBackend(staging_dir)
             backend.upload_file(source, dest)
 
@@ -121,7 +122,7 @@ class TestLocalUploadBackendUploadFile(unittest.TestCase):
             source = src_dir / "data.json"
             source.write_text("{}")
 
-            dest = OutputLocation("bucket", "run-1/deep/nested/data.json")
+            dest = StorageLocation("bucket", "run-1/deep/nested/data.json")
             backend = LocalUploadBackend(staging_dir)
             backend.upload_file(source, dest)
 
@@ -137,7 +138,7 @@ class TestLocalUploadBackendUploadFile(unittest.TestCase):
             source = src_dir / "hello.txt"
             source.write_text("content")
 
-            dest = OutputLocation("bucket", "run-1/hello.txt")
+            dest = StorageLocation("bucket", "run-1/hello.txt")
             backend = LocalUploadBackend(staging_dir, dry_run=True)
             backend.upload_file(source, dest)
 
@@ -171,7 +172,7 @@ class TestLocalUploadBackendUploadDirectory(unittest.TestCase):
             source_dir = Path(src) / "artifacts"
             self._make_tree(source_dir)
 
-            dest = OutputLocation("bucket", "run-1")
+            dest = StorageLocation("bucket", "run-1")
             backend = LocalUploadBackend(staging_dir)
             count = backend.upload_directory(source_dir, dest)
 
@@ -190,7 +191,7 @@ class TestLocalUploadBackendUploadDirectory(unittest.TestCase):
             source_dir = Path(src) / "artifacts"
             self._make_tree(source_dir)
 
-            dest = OutputLocation("bucket", "run-1")
+            dest = StorageLocation("bucket", "run-1")
             backend = LocalUploadBackend(staging_dir)
             count = backend.upload_directory(source_dir, dest, include=["*.tar.xz*"])
 
@@ -210,7 +211,7 @@ class TestLocalUploadBackendUploadDirectory(unittest.TestCase):
             source_dir = Path(src) / "logs"
             self._make_tree(source_dir)
 
-            dest = OutputLocation("bucket", "run-1/logs/gfx94X")
+            dest = StorageLocation("bucket", "run-1/logs/gfx94X")
             backend = LocalUploadBackend(staging_dir)
             backend.upload_directory(source_dir, dest)
 
@@ -232,7 +233,7 @@ class TestLocalUploadBackendUploadDirectory(unittest.TestCase):
             except OSError:
                 self.skipTest("Cannot create symlinks on this platform")
 
-            dest = OutputLocation("bucket", "run-1")
+            dest = StorageLocation("bucket", "run-1")
             backend = LocalUploadBackend(staging_dir)
             count = backend.upload_directory(source_dir, dest)
 
@@ -244,7 +245,7 @@ class TestLocalUploadBackendUploadDirectory(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as staging:
             staging_dir = Path(staging)
-            dest = OutputLocation("bucket", "run-1")
+            dest = StorageLocation("bucket", "run-1")
             backend = LocalUploadBackend(staging_dir)
 
             with self.assertRaises(FileNotFoundError):
@@ -257,7 +258,7 @@ class TestLocalUploadBackendUploadDirectory(unittest.TestCase):
             source_dir = Path(src) / "artifacts"
             self._make_tree(source_dir)
 
-            dest = OutputLocation("bucket", "run-1")
+            dest = StorageLocation("bucket", "run-1")
             backend = LocalUploadBackend(staging_dir, dry_run=True)
             count = backend.upload_directory(source_dir, dest)
 
@@ -273,7 +274,7 @@ class TestLocalUploadBackendUploadDirectory(unittest.TestCase):
             source_dir = Path(src) / "empty"
             source_dir.mkdir()
 
-            dest = OutputLocation("bucket", "run-1")
+            dest = StorageLocation("bucket", "run-1")
             backend = LocalUploadBackend(staging_dir)
             count = backend.upload_directory(source_dir, dest)
             self.assertEqual(count, 0)
@@ -291,7 +292,7 @@ class TestS3UploadBackendUploadFile(unittest.TestCase):
         backend._s3_client = mock_client
 
         source = Path("/tmp/build.log")
-        dest = OutputLocation("my-bucket", "run-1/logs/build.log")
+        dest = StorageLocation("my-bucket", "run-1/logs/build.log")
         backend.upload_file(source, dest)
 
         mock_client.upload_file.assert_called_once_with(
@@ -307,7 +308,7 @@ class TestS3UploadBackendUploadFile(unittest.TestCase):
         backend._s3_client = mock_client
 
         source = Path("/tmp/index.html")
-        dest = OutputLocation("my-bucket", "run-1/index.html")
+        dest = StorageLocation("my-bucket", "run-1/index.html")
         backend.upload_file(source, dest)
 
         mock_client.upload_file.assert_called_once_with(
@@ -327,7 +328,7 @@ class TestS3UploadBackendUploadFile(unittest.TestCase):
         backend._s3_client = mock_client
 
         source = Path("/tmp/data.json")
-        dest = OutputLocation("bucket", "run-1/data.json")
+        dest = StorageLocation("bucket", "run-1/data.json")
 
         with mock.patch("_therock_utils.upload_backend.time.sleep"):
             backend.upload_file(source, dest)
@@ -341,7 +342,7 @@ class TestS3UploadBackendUploadFile(unittest.TestCase):
         backend._s3_client = mock_client
 
         source = Path("/tmp/data.json")
-        dest = OutputLocation("bucket", "run-1/data.json")
+        dest = StorageLocation("bucket", "run-1/data.json")
 
         with mock.patch("_therock_utils.upload_backend.time.sleep"):
             with self.assertRaises(RuntimeError) as ctx:
@@ -356,7 +357,7 @@ class TestS3UploadBackendUploadFile(unittest.TestCase):
         backend._s3_client = mock_client
 
         source = Path("/tmp/build.log")
-        dest = OutputLocation("bucket", "run-1/build.log")
+        dest = StorageLocation("bucket", "run-1/build.log")
         backend.upload_file(source, dest)
 
         mock_client.upload_file.assert_not_called()

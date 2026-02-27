@@ -24,7 +24,7 @@ import time
 from abc import ABC, abstractmethod
 from pathlib import Path
 
-from _therock_utils.run_outputs import OutputLocation
+from _therock_utils.storage_location import StorageLocation
 
 logger = logging.getLogger(__name__)
 
@@ -68,14 +68,14 @@ class UploadBackend(ABC):
     """Abstract base class for uploading files to a storage backend."""
 
     @abstractmethod
-    def upload_file(self, source: Path, dest: OutputLocation) -> None:
+    def upload_file(self, source: Path, dest: StorageLocation) -> None:
         """Upload a single file to the given destination."""
         ...
 
     def upload_directory(
         self,
         source_dir: Path,
-        dest: OutputLocation,
+        dest: StorageLocation,
         include: list[str] | None = None,
     ) -> int:
         """Upload files from *source_dir* to *dest*, preserving relative paths.
@@ -103,7 +103,7 @@ class UploadBackend(ABC):
         count = 0
         for f in sorted_files:
             rel = f.relative_to(source_dir).as_posix()
-            file_dest = OutputLocation(dest.bucket, f"{dest.relative_path}/{rel}")
+            file_dest = StorageLocation(dest.bucket, f"{dest.relative_path}/{rel}")
             self.upload_file(f, file_dest)
             count += 1
         return count
@@ -141,7 +141,7 @@ class S3UploadBackend(UploadBackend):
             self._s3_client = boto3.client("s3")
         return self._s3_client
 
-    def upload_file(self, source: Path, dest: OutputLocation) -> None:
+    def upload_file(self, source: Path, dest: StorageLocation) -> None:
         content_type = infer_content_type(source)
         if self._dry_run:
             logger.info("[DRY RUN] %s -> %s (%s)", source, dest.s3_uri, content_type)
@@ -191,7 +191,7 @@ class LocalUploadBackend(UploadBackend):
         self._staging_dir = staging_dir
         self._dry_run = dry_run
 
-    def upload_file(self, source: Path, dest: OutputLocation) -> None:
+    def upload_file(self, source: Path, dest: StorageLocation) -> None:
         target = dest.local_path(self._staging_dir)
         if self._dry_run:
             logger.info("[DRY RUN] %s -> %s", source, target)

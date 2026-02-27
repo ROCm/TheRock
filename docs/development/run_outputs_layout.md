@@ -10,17 +10,18 @@ Every CI workflow run produces a set of outputs (build artifacts, logs,
 manifests, python packages) that are uploaded to S3. Three modules in
 `_therock_utils` handle the path computation and I/O:
 
-| Module             | Role                      | Key types                                                |
-| ------------------ | ------------------------- | -------------------------------------------------------- |
-| `run_outputs`      | Path computation (no I/O) | `RunOutputRoot`, `OutputLocation`                        |
-| `upload_backend`   | Upload I/O (write)        | `UploadBackend`, `S3UploadBackend`, `LocalUploadBackend` |
-| `artifact_backend` | Download I/O (read)       | `ArtifactBackend`, `S3Backend`, `LocalDirectoryBackend`  |
+| Module             | Role                         | Key types                                                |
+| ------------------ | ---------------------------- | -------------------------------------------------------- |
+| `storage_location` | Backend-agnostic location    | `StorageLocation`                                        |
+| `run_outputs`      | CI path computation (no I/O) | `RunOutputRoot`                                          |
+| `upload_backend`   | Upload I/O (write)           | `UploadBackend`, `S3UploadBackend`, `LocalUploadBackend` |
+| `artifact_backend` | Download I/O (read)          | `ArtifactBackend`, `S3Backend`, `LocalDirectoryBackend`  |
 
-`OutputLocation` is the bridge between path computation and I/O.
-`RunOutputRoot` produces `OutputLocation` instances; backends consume them.
+`StorageLocation` is the bridge between path computation and I/O.
+`RunOutputRoot` produces `StorageLocation` instances; backends consume them.
 
 ```
-RunOutputRoot ──produces──> OutputLocation ──consumed by──> UploadBackend
+RunOutputRoot ──produces──> StorageLocation ──consumed by──> UploadBackend
                                                             ArtifactBackend
 ```
 
@@ -104,14 +105,16 @@ and `prerelease`.
 
 ## Python API
 
-### OutputLocation
+### StorageLocation
 
-A frozen dataclass representing a single file or directory in the layout.
+A frozen dataclass representing a single file or directory in S3 (or a local
+staging directory). Backend-agnostic — usable for CI run outputs, release
+artifacts, or any S3 path.
 
 ```python
-from _therock_utils.run_outputs import OutputLocation
+from _therock_utils.storage_location import StorageLocation
 
-loc = OutputLocation(
+loc = StorageLocation(
     bucket="therock-ci-artifacts", relative_path="12345-linux/file.tar.xz"
 )
 loc.s3_uri  # "s3://therock-ci-artifacts/12345-linux/file.tar.xz"
@@ -121,7 +124,7 @@ loc.local_path(Path("/tmp/staging"))  # Path("/tmp/staging/12345-linux/file.tar.
 
 ### RunOutputRoot
 
-A frozen dataclass that computes `OutputLocation` for every output type.
+A frozen dataclass that computes `StorageLocation` for every output type.
 
 ```python
 from _therock_utils.run_outputs import RunOutputRoot
@@ -137,7 +140,7 @@ root = RunOutputRoot.from_workflow_run(
 # For local development (no API calls, no env vars needed)
 root = RunOutputRoot.for_local(run_id="local", platform="linux")
 
-# Location methods — each returns an OutputLocation
+# Location methods — each returns an StorageLocation
 root.root()
 root.artifact(filename="blas_lib_gfx94X.tar.xz")
 root.artifact_index(artifact_group="gfx94X-dcgpu")
@@ -179,7 +182,7 @@ Content-type is inferred from file extension — callers don't need to specify i
 
 To add a new output type:
 
-1. Add a method to `RunOutputRoot` that returns `OutputLocation`
+1. Add a method to `RunOutputRoot` that returns `StorageLocation`
 1. Add tests to [`build_tools/tests/run_outputs_test.py`](/build_tools/tests/run_outputs_test.py)
 1. Update this document
 

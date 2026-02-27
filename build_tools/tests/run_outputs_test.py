@@ -9,34 +9,35 @@ from unittest import mock
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
-from _therock_utils.run_outputs import OutputLocation, RunOutputRoot
+from _therock_utils.run_outputs import RunOutputRoot
+from _therock_utils.storage_location import StorageLocation
 
 
 # ---------------------------------------------------------------------------
-# OutputLocation
+# StorageLocation
 # ---------------------------------------------------------------------------
 
 
-class TestOutputLocation(unittest.TestCase):
+class TestStorageLocation(unittest.TestCase):
     def test_s3_uri(self):
-        loc = OutputLocation("my-bucket", "12345-linux/file.tar.xz")
+        loc = StorageLocation("my-bucket", "12345-linux/file.tar.xz")
         self.assertEqual(loc.s3_uri, "s3://my-bucket/12345-linux/file.tar.xz")
 
     def test_https_url(self):
-        loc = OutputLocation("my-bucket", "12345-linux/file.tar.xz")
+        loc = StorageLocation("my-bucket", "12345-linux/file.tar.xz")
         self.assertEqual(
             loc.https_url,
             "https://my-bucket.s3.amazonaws.com/12345-linux/file.tar.xz",
         )
 
     def test_local_path(self):
-        loc = OutputLocation("my-bucket", "12345-linux/logs/group/build.log")
+        loc = StorageLocation("my-bucket", "12345-linux/logs/group/build.log")
         result = loc.local_path(Path("/tmp/staging"))
         expected = Path("/tmp/staging/12345-linux/logs/group/build.log")
         self.assertEqual(result, expected)
 
     def test_frozen(self):
-        loc = OutputLocation("bucket", "path")
+        loc = StorageLocation("bucket", "path")
         with self.assertRaises(AttributeError):
             loc.bucket = "other"
 
@@ -91,8 +92,8 @@ class TestRunOutputRootLocations(unittest.TestCase):
             platform="linux",
         )
 
-    def _assert_relative_path(self, loc: OutputLocation, expected_path: str):
-        self.assertIsInstance(loc, OutputLocation)
+    def _assert_relative_path(self, loc: StorageLocation, expected_path: str):
+        self.assertIsInstance(loc, StorageLocation)
         self.assertEqual(loc.bucket, "therock-ci-artifacts")
         self.assertEqual(loc.relative_path, expected_path)
 
@@ -191,12 +192,12 @@ class TestRunOutputRootLocationsExternalRepo(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# RunOutputRoot — end-to-end (s3_uri, https_url, local_path via OutputLocation)
+# RunOutputRoot — end-to-end (s3_uri, https_url, local_path via StorageLocation)
 # ---------------------------------------------------------------------------
 
 
-class TestOutputLocationEndToEnd(unittest.TestCase):
-    """Verify the full chain: RunOutputRoot → OutputLocation → final strings."""
+class TestStorageLocationEndToEnd(unittest.TestCase):
+    """Verify the full chain: RunOutputRoot → StorageLocation → final strings."""
 
     def setUp(self):
         self.root = RunOutputRoot(

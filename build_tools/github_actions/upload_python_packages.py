@@ -38,7 +38,8 @@ import subprocess
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from _therock_utils.run_outputs import OutputLocation, RunOutputRoot
+from _therock_utils.run_outputs import RunOutputRoot
+from _therock_utils.storage_location import StorageLocation
 from _therock_utils.upload_backend import UploadBackend, create_upload_backend
 from github_actions_utils import (
     gha_append_step_summary,
@@ -100,7 +101,7 @@ def find_package_files(dist_dir: Path) -> list[Path]:
 
 
 def upload_packages(
-    dist_dir: Path, packages_loc: OutputLocation, backend: UploadBackend
+    dist_dir: Path, packages_loc: StorageLocation, backend: UploadBackend
 ):
     """Upload package files using the provided backend."""
     package_files = find_package_files(dist_dir)
@@ -115,7 +116,7 @@ def upload_packages(
     log(f"[INFO] Uploaded {count} files")
 
 
-def write_gha_upload_summary(packages_loc: OutputLocation):
+def write_gha_upload_summary(packages_loc: StorageLocation):
     index_url = f"{packages_loc.https_url}/index.html"
     install_instructions_markdown = f"""[ROCm Python packages]({index_url})
 ```bash

@@ -45,6 +45,7 @@ import platform as platform_module
 # Add build_tools to path for sibling package imports.
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
+from _therock_utils.storage_location import StorageLocation
 from github_actions.github_actions_utils import gha_query_workflow_run_by_id
 
 
@@ -52,52 +53,6 @@ def _log(*args, **kwargs):
     """Log to stdout with flush for CI visibility."""
     print(*args, **kwargs)
     sys.stdout.flush()
-
-
-# ---------------------------------------------------------------------------
-# OutputLocation
-# ---------------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class OutputLocation:
-    """A location that can be resolved to S3 URI, HTTPS URL, or local path.
-
-    Represents a single output file or directory in a backend-agnostic way.
-    Use the properties/methods to get the representation you need:
-
-    - ``.s3_uri`` — For AWS CLI uploads (``s3://bucket/path/file.tar.xz``)
-    - ``.https_url`` — For public links (``https://bucket.s3.amazonaws.com/...``)
-    - ``.local_path(staging_dir)`` — For local testing (``Path("/tmp/staging/...")``)
-    - ``.relative_path`` — Backend-agnostic relative path from the bucket/staging root
-    """
-
-    bucket: str
-    """S3 bucket name (used for S3 URI and HTTPS URL construction)."""
-
-    relative_path: str
-    """Relative path from bucket/staging root (e.g., '12345-linux/file.tar.xz')."""
-
-    @property
-    def s3_uri(self) -> str:
-        """S3 URI (e.g., ``s3://bucket/path/file``)."""
-        return f"s3://{self.bucket}/{self.relative_path}"
-
-    @property
-    def https_url(self) -> str:
-        """Public HTTPS URL for browser access."""
-        return f"https://{self.bucket}.s3.amazonaws.com/{self.relative_path}"
-
-    def local_path(self, staging_dir: Path) -> Path:
-        """Local filesystem path for this location.
-
-        Args:
-            staging_dir: Base directory for local staging.
-
-        Returns:
-            Full path: ``{staging_dir}/{relative_path}``
-        """
-        return staging_dir / self.relative_path
 
 
 # ---------------------------------------------------------------------------
@@ -110,7 +65,7 @@ class RunOutputRoot:
     """Root location for all outputs from a single CI workflow run.
 
     This is the single source of truth for computing paths to CI run outputs.
-    Each method returns an `OutputLocation` that can be resolved to
+    Each method returns a `StorageLocation` that can be resolved to
     S3 URIs, HTTPS URLs, or local paths as needed.
 
     The class is immutable (frozen) to ensure path computation is deterministic.
@@ -138,27 +93,29 @@ class RunOutputRoot:
         """
         return f"{self.external_repo}{self.run_id}-{self.platform}"
 
-    def root(self) -> OutputLocation:
+    def root(self) -> StorageLocation:
         """Location for the run output root (where build artifacts live)."""
-        return OutputLocation(self.bucket, self.prefix)
+        return StorageLocation(self.bucket, self.prefix)
 
     # -- Build artifacts --------------------------------------------------------
 
-    def artifact(self, filename: str) -> OutputLocation:
+    def artifact(self, filename: str) -> StorageLocation:
         """Location for a build artifact file.
 
         Args:
             filename: Artifact filename (e.g., 'blas_lib_gfx94X.tar.xz')
         """
-        return OutputLocation(self.bucket, f"{self.prefix}/{filename}")
+        return StorageLocation(self.bucket, f"{self.prefix}/{filename}")
 
-    def artifact_index(self, artifact_group: str) -> OutputLocation:
+    def artifact_index(self, artifact_group: str) -> StorageLocation:
         """Location for the per-group artifact index HTML.
 
         Args:
             artifact_group: Build variant (e.g., 'gfx94X-dcgpu')
         """
-        return OutputLocation(self.bucket, f"{self.prefix}/index-{artifact_group}.html")
+        return StorageLocation(
+            self.bucket, f"{self.prefix}/index-{artifact_group}.html"
+        )
 
     # -- Logs -------------------------------------------------------------------
     #
@@ -166,7 +123,7 @@ class RunOutputRoot:
     # for an artifact group. log_dir() gives the directory root; the
     # remaining methods address well-known files within that subtree.
 
-    def log_dir(self, artifact_group: str) -> OutputLocation:
+    def log_dir(self, artifact_group: str) -> StorageLocation:
         """Location for a log directory.
 
         The directory typically contains build.log, ninja_logs.tar.gz,
@@ -176,62 +133,62 @@ class RunOutputRoot:
         Args:
             artifact_group: Build variant (e.g., 'gfx94X-dcgpu')
         """
-        return OutputLocation(self.bucket, f"{self.prefix}/logs/{artifact_group}")
+        return StorageLocation(self.bucket, f"{self.prefix}/logs/{artifact_group}")
 
-    def log_file(self, artifact_group: str, filename: str) -> OutputLocation:
+    def log_file(self, artifact_group: str, filename: str) -> StorageLocation:
         """Location for a specific file within the log_dir() subtree.
 
         Args:
             artifact_group: Build variant (e.g., 'gfx94X-dcgpu')
             filename: Log filename (e.g., 'build.log', 'ninja_logs.tar.gz')
         """
-        return OutputLocation(
+        return StorageLocation(
             self.bucket, f"{self.prefix}/logs/{artifact_group}/{filename}"
         )
 
-    def log_index(self, artifact_group: str) -> OutputLocation:
+    def log_index(self, artifact_group: str) -> StorageLocation:
         """Location for the log directory index HTML (within log_dir())."""
-        return OutputLocation(
+        return StorageLocation(
             self.bucket, f"{self.prefix}/logs/{artifact_group}/index.html"
         )
 
-    def build_observability(self, artifact_group: str) -> OutputLocation:
+    def build_observability(self, artifact_group: str) -> StorageLocation:
         """Location for build observability HTML (within log_dir())."""
-        return OutputLocation(
+        return StorageLocation(
             self.bucket,
             f"{self.prefix}/logs/{artifact_group}/build_observability.html",
         )
 
     # -- Manifests --------------------------------------------------------------
 
-    def manifest_dir(self, artifact_group: str) -> OutputLocation:
+    def manifest_dir(self, artifact_group: str) -> StorageLocation:
         """Location for the manifests directory for an artifact group.
 
         Args:
             artifact_group: Build variant (e.g., 'gfx94X-dcgpu')
         """
-        return OutputLocation(self.bucket, f"{self.prefix}/manifests/{artifact_group}")
+        return StorageLocation(self.bucket, f"{self.prefix}/manifests/{artifact_group}")
 
-    def manifest(self, artifact_group: str) -> OutputLocation:
+    def manifest(self, artifact_group: str) -> StorageLocation:
         """Location for therock_manifest.json.
 
         Args:
             artifact_group: Build variant (e.g., 'gfx94X-dcgpu')
         """
-        return OutputLocation(
+        return StorageLocation(
             self.bucket,
             f"{self.prefix}/manifests/{artifact_group}/therock_manifest.json",
         )
 
     # -- Python packages --------------------------------------------------------
 
-    def python_packages(self, artifact_group: str) -> OutputLocation:
+    def python_packages(self, artifact_group: str) -> StorageLocation:
         """Location for the Python packages directory.
 
         Args:
             artifact_group: Build variant (e.g., 'gfx110X-all')
         """
-        return OutputLocation(self.bucket, f"{self.prefix}/python/{artifact_group}")
+        return StorageLocation(self.bucket, f"{self.prefix}/python/{artifact_group}")
 
     # -- Factories --------------------------------------------------------------
 

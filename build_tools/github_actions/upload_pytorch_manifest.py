@@ -13,7 +13,8 @@ import sys
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from _therock_utils.run_outputs import OutputLocation, RunOutputRoot
+from _therock_utils.run_outputs import RunOutputRoot
+from _therock_utils.storage_location import StorageLocation
 from _therock_utils.upload_backend import create_upload_backend
 
 
@@ -126,7 +127,7 @@ def main(argv: list[str]) -> None:
 
     run_root = _make_run_root(args.run_id, bucket_override=args.bucket)
     manifest_dir_loc = run_root.manifest_dir(args.amdgpu_family)
-    dest = OutputLocation(
+    dest = StorageLocation(
         manifest_dir_loc.bucket,
         f"{manifest_dir_loc.relative_path}/{manifest_name}",
     )
