@@ -538,6 +538,14 @@ def retrieve_bucket_info(
     If neither is provided, |is_pr_from_fork| is populated from the
     IS_PR_FROM_FORK environment variable.
 
+    Environment (optional override):
+      S3_BUCKET_ARTIFACTS: When set, use this bucket for the artifacts bucket
+        instead of the default chosen from repository/fork/release_type.
+
+    Security: Bucket permissions are enforced by AWS IAM, not by this code.
+      When using S3_BUCKET_ARTIFACTS, ensure the role assumed by the workflow
+      (e.g. via OIDC) is scoped so it can write only to intended buckets.
+
     Returns a tuple [EXTERNAL_REPO, BUCKET], where:
     - EXTERNAL_REPO = if CI is run on an external repo, we create a S3 sub-folder
                       to avoid conflicting run IDs
@@ -583,6 +591,15 @@ def retrieve_bucket_info(
         if repo_name == "TheRock" and owner == "ROCm" and not is_pr_from_fork
         else f"{owner}-{repo_name}/"
     )
+
+    # When set, use explicit artifacts bucket.
+    s3_bucket_artifacts = os.getenv("S3_BUCKET_ARTIFACTS", "").strip()
+    if s3_bucket_artifacts:
+        _log("  S3_BUCKET_ARTIFACTS is set, using explicit artifacts bucket")
+        _log("Retrieved bucket info:")
+        _log(f"  external_repo: {external_repo}")
+        _log(f"  bucket       : {s3_bucket_artifacts}")
+        return (external_repo, s3_bucket_artifacts)
 
     release_type = os.getenv("RELEASE_TYPE")
     if release_type:

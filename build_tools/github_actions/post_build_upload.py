@@ -7,6 +7,20 @@ post_build_upload.py [-h]
   [--build-dir BUILD_DIR]
   [--upload | --no-upload] (default enabled if the `CI` env var is set)
   [--run-id RUN_ID]
+  [--s3-subdir-artifacts PREFIX] [--s3-summary-base-url URL] [--s3-summary-path PREFIX]
+  [--skip-manifest]
+
+S3 path/URL arguments (--s3-subdir-artifacts, --s3-summary-base-url, --s3-summary-path):
+  Must not end with a forward slash. The script joins segments with "/".
+  --s3-subdir-artifacts is the path prefix in the S3 bucket; --s3-summary-path is
+  the corresponding path as it appears in the CloudFront (summary) URL. This
+  optional path aligns with the prerelease CloudFront layout used for tarballs
+  and wheels.
+
+  Example (CloudFront base URL for job summary links):
+    --s3-subdir-artifacts v3/artifacts
+    --s3-summary-base-url https://rocm.foobar.amd.com
+    --s3-summary-path artifacts
 
 This script runs after building TheRock, where this script does:
   1. Create log archives
@@ -309,10 +323,23 @@ def run(args):
 
     external_repo_path, bucket = retrieve_bucket_info()
     run_id = args.run_id
-    bucket_uri = f"s3://{bucket}/{external_repo_path}{run_id}-{PLATFORM}"
-    bucket_url = (
-        f"https://{bucket}.s3.amazonaws.com/{external_repo_path}{run_id}-{PLATFORM}"
+    path_suffix = (
+        f"{args.s3_subdir_artifacts}/{external_repo_path}{run_id}-{PLATFORM}"
+        if args.s3_subdir_artifacts
+        else f"{external_repo_path}{run_id}-{PLATFORM}"
     )
+    bucket_uri = f"s3://{bucket}/{path_suffix}"
+
+    if args.s3_summary_base_url:
+        run_suffix = f"{external_repo_path}{run_id}-{PLATFORM}"
+        summary_path = (
+            f"{args.s3_summary_path}/{run_suffix}"
+            if args.s3_summary_path
+            else path_suffix
+        )
+        bucket_url = f"{args.s3_summary_base_url}/{summary_path}"
+    else:
+        bucket_url = f"https://{bucket}.s3.amazonaws.com/{path_suffix}"
 
     log("Write Windows time sync log")
     log("----------------------")
@@ -328,9 +355,10 @@ def run(args):
     log("----------")
     upload_logs_to_s3(args.artifact_group, args.build_dir, bucket_uri)
 
-    log("Upload manifest")
-    log("----------------")
-    upload_manifest_to_s3(args.artifact_group, args.build_dir, bucket_uri)
+    if not args.skip_manifest:
+        log("Upload manifest")
+        log("----------------")
+        upload_manifest_to_s3(args.artifact_group, args.build_dir, bucket_uri)
 
     log("Write github actions build summary")
     log("--------------------")
@@ -362,6 +390,30 @@ if __name__ == "__main__":
     parser.add_argument("--run-id", type=str, help="GitHub run ID of this workflow run")
     parser.add_argument(
         "--job-status", type=str, help="Status of this Job ('success', 'failure')"
+    )
+    parser.add_argument(
+        "--s3-subdir-artifacts",
+        type=str,
+        default="",
+        help="S3 path prefix for artifacts (e.g. v3/artifacts). Must not end with /.",
+    )
+    parser.add_argument(
+        "--s3-summary-base-url",
+        type=str,
+        default="",
+        help="Base URL for job summary links (e.g. CloudFront). Must not end with /. If set, summary uses this instead of raw S3 URL.",
+    )
+    parser.add_argument(
+        "--s3-summary-path",
+        type=str,
+        default="",
+        help="Path prefix for summary URL when --s3-summary-base-url is set (e.g. artifacts). Must not end with /.",
+    )
+    parser.add_argument(
+        "--skip-manifest",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Skip manifest upload.",
     )
     args = parser.parse_args()
 
