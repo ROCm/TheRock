@@ -172,7 +172,9 @@ if(NOT THEROCK_ENABLE_LLVM_TESTS)
     # on a missing tool).
     set(_llvm_required_tools
       LLVM_AR
+      LLVM_AS
       LLVM_CONFIG
+      LLVM_DIS
       LLVM_DWARFDUMP
       LLVM_LINK
       LLVM_MC
