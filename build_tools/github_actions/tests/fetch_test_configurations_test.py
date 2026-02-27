@@ -115,6 +115,21 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             self.assertEqual(job["total_shards"], 1)
             self.assertEqual(job["shard_arr"], [1])
 
+    def test_platform_specific_shards(self):
+        os.environ["PROJECTS_TO_TEST"] = "hipblaslt"
+        fetch_test_configurations.run()
+        components = self._get_components()
+        hipblaslt_linux = components[0]
+
+        os.environ["RUNNER_OS"] = "Windows"
+        fetch_test_configurations.run()
+        components = self._get_components()
+        hipblaslt_windows = components[0]
+
+        self.assertNotEqual(
+            hipblaslt_linux["total_shards"], hipblaslt_windows["total_shards"]
+        )
+
     # -----------------------
     # Exclude-family logic
     # -----------------------
@@ -140,7 +155,7 @@ class FetchTestConfigurationsTest(unittest.TestCase):
             "bench1": {
                 "job_name": "bench1",
                 "platform": ["linux"],
-                "total_shards": 1,
+                "total_shards_dict": {"linux": 1},
             }
         }
 
