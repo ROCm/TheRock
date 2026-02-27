@@ -142,6 +142,7 @@ if(THEROCK_ENABLE_ROCSHMEM)
       rocm-cmake
       therock-fmt
       therock-googletest
+      ${THEROCK_BUNDLED_NUMACTL}
     RUNTIME_DEPS
       hip-clr
       ${optional_profiler_deps}
