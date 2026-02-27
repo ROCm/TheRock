@@ -31,7 +31,7 @@ AmdGpuFamilyMatrix
        ├─ PlatformConfig  per-platform config (linux / windows); all fields Optional
        │    ├─ BuildConfig
        │    ├─ TestConfig
-       │    │    └─ GpuRunners   runner labels (test, test_multi_gpu, benchmark, oem)
+       │    │    └─ GpuRunners   runner labels (test, test_multi_gpu, benchmark, extra)
        │    └─ ReleaseConfig
        └─ ...
 AllBuildVariants           CMake preset + artifact naming per platform and variant
@@ -78,7 +78,7 @@ Adding a new field
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Literal, Optional
 
 
 @dataclass
@@ -128,10 +128,10 @@ class BuildConfig:
     """If True, build failures for this entry are non-blocking."""
 
     def to_dict(self) -> dict:
-        d: dict = {"build_variants": list(self.build_variants)}
-        if self.expect_failure:
-            d["expect_failure"] = True
-        return d
+        return {
+            "build_variants": list(self.build_variants),
+            "expect_failure": self.expect_failure,
+        }
 
 
 @dataclass
@@ -144,29 +144,29 @@ class GpuRunners:
     """Label for the multi-GPU test runner."""
     benchmark: str = ""
     """Label for the benchmark runner."""
-    oem: str = ""
-    """Label for OEM-specific kernel test runner."""
+    extra: dict[str, str] = field(default_factory=dict)
+    """Additional runners not covered by the named fields above (e.g. temporary or
+    experimental runners). Keys are used as-is in the serialized output."""
 
     def __bool__(self) -> bool:
         # True if any runner is set; used by TestConfig.__post_init__ to infer run_tests.
-        return bool(self.test or self.test_multi_gpu or self.benchmark or self.oem)
+        return bool(self.test or self.test_multi_gpu or self.benchmark or self.extra)
 
     def to_dict(self) -> dict:
-        result: dict[str, str] = {}
-        if self.test:
-            result["test"] = self.test
-        if self.test_multi_gpu:
-            result["test-multi-gpu"] = self.test_multi_gpu
-        if self.benchmark:
-            result["benchmark"] = self.benchmark
-        if self.oem:
-            result["oem"] = self.oem
+        result: dict[str, str] = {
+            "test": self.test,
+            "test-multi-gpu": self.test_multi_gpu,
+            "benchmark": self.benchmark,
+        }
+        result.update(self.extra)
         return result
 
 
 @dataclass
 class TestConfig:
     """Test configuration for a single platform."""
+
+    __test__ = False  # Prevent pytest from collecting this as a test class.
 
     runs_on: GpuRunners = field(default_factory=GpuRunners)
     """Runner labels for test job types."""
@@ -177,6 +177,8 @@ class TestConfig:
     False otherwise. Can be set explicitly to False when a runner exists but is temporarily disabled."""
     sanity_check_only_for_family: bool = False
     """If True, only a sanity-check test subset is run, not the full suite."""
+    test_scope: Literal["all", "smoke", "full"] = "all"
+    """Which test subset to run: all (default), smoke (sanity only), full (skip smoke)."""
     expect_pytorch_failure: bool = False
     """If True, PyTorch builds are skipped because they are known to fail."""
 
@@ -187,30 +189,25 @@ class TestConfig:
             self.run_tests = bool(self.runs_on)
 
     def to_dict(self) -> dict:
-        d: dict = {
+        return {
             "run_tests": self.run_tests,
             "runs_on": self.runs_on.to_dict(),
             "fetch-gfx-targets": list(self.fetch_gfx_targets),
+            "sanity_check_only_for_family": self.sanity_check_only_for_family,
+            "test_scope": self.test_scope,
+            "expect_pytorch_failure": self.expect_pytorch_failure,
         }
-        if self.sanity_check_only_for_family:
-            d["sanity_check_only_for_family"] = True
-        if self.expect_pytorch_failure:
-            d["expect_pytorch_failure"] = True
-        return d
 
 
 @dataclass
 class ReleaseConfig:
     """Release configuration for a single platform."""
 
-    push_on_success: bool = False
-    """If True, artifacts are published after a successful build."""
     bypass_tests_for_releases: bool = False
     """If True, tests are skipped when creating release artifacts."""
 
     def to_dict(self) -> dict:
         return {
-            "push_on_success": self.push_on_success,
             "bypass_tests_for_releases": self.bypass_tests_for_releases,
         }
 
@@ -219,19 +216,16 @@ class ReleaseConfig:
 class PlatformConfig:
     """Complete configuration for one platform within a target entry."""
 
-    build: Optional[BuildConfig] = None
-    test: Optional[TestConfig] = None
-    release: Optional[ReleaseConfig] = None
+    build: BuildConfig = field(default_factory=BuildConfig)
+    test: TestConfig = field(default_factory=TestConfig)
+    release: ReleaseConfig = field(default_factory=ReleaseConfig)
 
     def to_dict(self) -> dict:
-        d: dict = {}
-        if self.build is not None:
-            d["build"] = self.build.to_dict()
-        if self.test is not None:
-            d["test"] = self.test.to_dict()
-        if self.release is not None:
-            d["release"] = self.release.to_dict()
-        return d
+        return {
+            "build": self.build.to_dict(),
+            "test": self.test.to_dict(),
+            "release": self.release.to_dict(),
+        }
 
 
 # Generic scope names that pair with the family name to form a lookup key.
@@ -298,16 +292,21 @@ class AmdGpuFamilyMatrix:
 
         If no exact match is found, treats the key as a family name and returns
         the default entry for that family (e.g. 'gfx950' → gfx950-dcgpu).
+        Lookup is case-insensitive.
         """
+        key_lower = key.lower()
         for entry in self.entries:
-            if entry.key == key:
+            if entry.key.lower() == key_lower:
                 return entry
         return self.get_default_for_family(key)
 
     def get_default_for_family(self, family: str) -> Optional[MatrixEntry]:
-        """Return the default entry for a family (e.g. 'gfx110X' → gfx110X-all entry)."""
+        """Return the default entry for a family (e.g. 'gfx110X' → gfx110X-all entry).
+        Lookup is case-insensitive.
+        """
+        family_lower = family.lower()
         for entry in self.entries:
-            if entry.family == family and entry.is_family_default:
+            if entry.family.lower() == family_lower and entry.is_family_default:
                 return entry
         return None
 

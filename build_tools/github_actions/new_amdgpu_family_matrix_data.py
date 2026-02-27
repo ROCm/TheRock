@@ -77,6 +77,11 @@ all_build_variants = AllBuildVariants(
             label="asan",
             suffix="asan",
             cmake_preset="linux-release-asan",
+        ),
+        "tsan": BuildVariantInfo(
+            label="tsan",
+            suffix="tsan",
+            cmake_preset="linux-release-tsan",
             expect_failure=True,
         ),
     },
@@ -100,7 +105,9 @@ amdgpu_family_predefined_groups = {
     "amdgpu_postsubmit": ["gfx950-dcgpu"],
     # The 'nightly' matrix runs on 'schedule' triggers.
     "amdgpu_nightly": [
-        "gfx90X-dcgpu",
+        "gfx906",
+        "gfx908",
+        "gfx90a",
         "gfx101X-dgpu",
         "gfx103X-dgpu",
         "gfx1150",
@@ -120,22 +127,49 @@ amdgpu_family_predefined_groups = {
 # scope = dcgpu, dgpu, all, ... or specific GPU name like gfx1151
 ##########################################################################################
 
-_GFX90X_DCGPU = MatrixEntry(
+# gfx906/908/90a split into separate families - each has different instruction
+# support (e.g., fp8 variants, WMMA) so CK/MIOpen need to build/test individually.
+_GFX906 = MatrixEntry(
     family="gfx90X",
-    scope="dcgpu",
-    is_family_default=True,
+    scope="gfx906",
     linux=PlatformConfig(
-        build=BuildConfig(),
+        # Test disabled due to hardware availability
         test=TestConfig(
-            runs_on=GpuRunners(test="linux-gfx90X-gpu-rocm"),
-            fetch_gfx_targets=["gfx90a"],
             sanity_check_only_for_family=True,
         ),
     ),
     # TODO(#1927): Resolve error generating file `torch_hip_generated_int4mm.hip.obj`,
     # to enable PyTorch builds
     windows=PlatformConfig(
-        build=BuildConfig(),
+        test=TestConfig(expect_pytorch_failure=True),
+    ),
+)
+
+_GFX908 = MatrixEntry(
+    family="gfx90X",
+    scope="gfx908",
+    linux=PlatformConfig(
+        # Test disabled due to hardware availability
+        test=TestConfig(
+            sanity_check_only_for_family=True,
+        ),
+    ),
+    windows=PlatformConfig(
+        test=TestConfig(expect_pytorch_failure=True),
+    ),
+)
+
+_GFX90A = MatrixEntry(
+    family="gfx90X",
+    scope="gfx90a",
+    linux=PlatformConfig(
+        test=TestConfig(
+            runs_on=GpuRunners(test="linux-gfx90a-gpu-rocm"),
+            fetch_gfx_targets=["gfx90a"],
+            sanity_check_only_for_family=True,
+        ),
+    ),
+    windows=PlatformConfig(
         test=TestConfig(expect_pytorch_failure=True),
     ),
 )
@@ -145,20 +179,18 @@ _GFX94X_DCGPU = MatrixEntry(
     scope="dcgpu",
     is_family_default=True,
     linux=PlatformConfig(
-        build=BuildConfig(build_variants=["release", "asan"]),
+        build=BuildConfig(build_variants=["release", "asan", "tsan"]),
         test=TestConfig(
             runs_on=GpuRunners(
                 test="linux-mi325-1gpu-ossci-rocm-frac",
                 test_multi_gpu="linux-mi325-8gpu-ossci-rocm",
                 # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
                 benchmark="linux-mi325-8gpu-ossci-rocm",
+                # TODO(#3433): Remove sandbox label once ASAN tests are passing
+                extra={"test-sandbox": "linux-mi325-8gpu-ossci-rocm-sandbox"},
             ),
             fetch_gfx_targets=["gfx942"],
         ),
-        release=ReleaseConfig(push_on_success=True),
-    ),
-    windows=PlatformConfig(
-        build=BuildConfig(),
     ),
 )
 
@@ -167,14 +199,11 @@ _GFX950_DCGPU = MatrixEntry(
     scope="dcgpu",
     is_family_default=True,
     linux=PlatformConfig(
-        build=BuildConfig(build_variants=["release", "asan"]),
+        build=BuildConfig(build_variants=["release", "asan", "tsan"]),
         test=TestConfig(
             runs_on=GpuRunners(test="linux-mi355-1gpu-ossci-rocm"),
             fetch_gfx_targets=["gfx950"],
         ),
-    ),
-    windows=PlatformConfig(
-        build=BuildConfig(),
     ),
 )
 
@@ -183,14 +212,11 @@ _GFX101X_DGPU = MatrixEntry(
     scope="dgpu",
     is_family_default=True,
     linux=PlatformConfig(
-        build=BuildConfig(),
         # TODO(#1926): Resolve bgemm kernel hip file generation error,
         # to enable PyTorch builds
         test=TestConfig(expect_pytorch_failure=True),
     ),
-    windows=PlatformConfig(
-        build=BuildConfig(),
-    ),
+    windows=PlatformConfig(),
 )
 
 _GFX103X_DGPU = MatrixEntry(
@@ -198,23 +224,18 @@ _GFX103X_DGPU = MatrixEntry(
     scope="dgpu",
     is_family_default=True,
     linux=PlatformConfig(
-        build=BuildConfig(),
         test=TestConfig(
-            # TODO(#2740): Re-enable machine once `amdsmi` test is fixed
-            # fetch_gfx_targets should be ["gfx1030"] when re-enabled
             runs_on=GpuRunners(test="linux-gfx1030-gpu-rocm"),
-            run_tests=False,
             sanity_check_only_for_family=True,
+            fetch_gfx_targets=["gfx1030"],
         ),
     ),
     windows=PlatformConfig(
-        build=BuildConfig(),
         test=TestConfig(
             # TODO(#3200): Re-enable machine once it is stable
-            runs_on=GpuRunners(test="windows-gfx1030-gpu-rocm"),
             run_tests=False,
+            runs_on=GpuRunners(test="windows-gfx1030-gpu-rocm"),
             sanity_check_only_for_family=True,
-            expect_pytorch_failure=True,
         ),
     ),
 )
@@ -224,24 +245,23 @@ _GFX110X_ALL = MatrixEntry(
     scope="all",
     is_family_default=True,
     linux=PlatformConfig(
-        build=BuildConfig(),
         test=TestConfig(
-            # TODO(#2740): Re-enable machine once `amdsmi` test is fixed
-            # fetch_gfx_targets should be ["gfx1100"] when re-enabled
-            runs_on=GpuRunners(test="linux-gfx110X-gpu-rocm"),
+            # TODO(#3298): Re-enable machine once HSA_STATUS_ERROR_OUT_OF_RESOURCES
+            # issues are resolved.
             run_tests=False,
+            runs_on=GpuRunners(test="linux-gfx110X-gpu-rocm"),
+            fetch_gfx_targets=["gfx1100"],
             sanity_check_only_for_family=True,
         ),
-        release=ReleaseConfig(push_on_success=True, bypass_tests_for_releases=True),
+        release=ReleaseConfig(bypass_tests_for_releases=True),
     ),
     windows=PlatformConfig(
-        build=BuildConfig(),
         test=TestConfig(
             runs_on=GpuRunners(test="windows-gfx110X-gpu-rocm"),
             fetch_gfx_targets=["gfx1100"],
             sanity_check_only_for_family=True,
         ),
-        release=ReleaseConfig(push_on_success=True, bypass_tests_for_releases=True),
+        release=ReleaseConfig(bypass_tests_for_releases=True),
     ),
 )
 
@@ -251,36 +271,31 @@ _GFX1150 = MatrixEntry(
     family="gfx115X",
     scope="gfx1150",
     linux=PlatformConfig(
-        build=BuildConfig(),
         test=TestConfig(
             # TODO(#3199): Re-enable machine once it is stable
-            runs_on=GpuRunners(test="linux-gfx1150-gpu-rocm"),
             run_tests=False,
+            runs_on=GpuRunners(test="linux-gfx1150-gpu-rocm"),
             sanity_check_only_for_family=True,
         ),
     ),
-    windows=PlatformConfig(
-        build=BuildConfig(),
-    ),
+    windows=PlatformConfig(),
 )
 
 _GFX1151 = MatrixEntry(
     family="gfx115X",
     scope="gfx1151",
     linux=PlatformConfig(
-        build=BuildConfig(),
         test=TestConfig(
             runs_on=GpuRunners(
                 test="linux-gfx1151-gpu-rocm",
-                oem="linux-strix-halo-gpu-rocm-oem",
+                extra={"oem": "linux-strix-halo-gpu-rocm-oem"},
             ),
             fetch_gfx_targets=["gfx1151"],
             sanity_check_only_for_family=True,
         ),
-        release=ReleaseConfig(push_on_success=True, bypass_tests_for_releases=True),
+        release=ReleaseConfig(bypass_tests_for_releases=True),
     ),
     windows=PlatformConfig(
-        build=BuildConfig(),
         test=TestConfig(
             runs_on=GpuRunners(
                 test="windows-gfx1151-gpu-rocm",
@@ -288,6 +303,8 @@ _GFX1151 = MatrixEntry(
                 benchmark="windows-gfx1151-gpu-rocm",
             ),
             fetch_gfx_targets=["gfx1151"],
+            # TODO(#3299): Re-enable smoke tests once capacity is available
+            test_scope="full",
         ),
     ),
 )
@@ -295,29 +312,22 @@ _GFX1151 = MatrixEntry(
 _GFX1152 = MatrixEntry(
     family="gfx115X",
     scope="gfx1152",
-    linux=PlatformConfig(
-        build=BuildConfig(expect_failure=True),
-    ),
-    windows=PlatformConfig(
-        build=BuildConfig(expect_failure=True),
-    ),
+    linux=PlatformConfig(),
+    windows=PlatformConfig(),
 )
 
 _GFX1153 = MatrixEntry(
     family="gfx115X",
     scope="gfx1153",
     linux=PlatformConfig(
-        build=BuildConfig(expect_failure=True),
         test=TestConfig(
             # TODO(#2682): Re-enable machine once it is stable
-            runs_on=GpuRunners(test="linux-gfx1153-gpu-rocm"),
             run_tests=False,
+            runs_on=GpuRunners(test="linux-gfx1153-gpu-rocm"),
             sanity_check_only_for_family=True,
         ),
     ),
-    windows=PlatformConfig(
-        build=BuildConfig(expect_failure=True),
-    ),
+    windows=PlatformConfig(),
 )
 
 _GFX120X_ALL = MatrixEntry(
@@ -325,23 +335,21 @@ _GFX120X_ALL = MatrixEntry(
     scope="all",
     is_family_default=True,
     linux=PlatformConfig(
-        build=BuildConfig(),
         test=TestConfig(
             runs_on=GpuRunners(test="linux-gfx120X-gpu-rocm"),
             fetch_gfx_targets=["gfx1200", "gfx1201"],
             sanity_check_only_for_family=True,
         ),
-        release=ReleaseConfig(push_on_success=True, bypass_tests_for_releases=True),
+        release=ReleaseConfig(bypass_tests_for_releases=True),
     ),
     windows=PlatformConfig(
-        build=BuildConfig(),
         test=TestConfig(
             # TODO(#2962): Re-enable machine once sanity checks work with this architecture
-            # fetch_gfx_targets should be ["gfx1200", "gfx1201"] when re-enabled
-            runs_on=GpuRunners(test="windows-gfx120X-gpu-rocm"),
             run_tests=False,
+            runs_on=GpuRunners(test="windows-gfx120X-gpu-rocm"),
+            fetch_gfx_targets=["gfx1200", "gfx1201"],
         ),
-        release=ReleaseConfig(push_on_success=True, bypass_tests_for_releases=True),
+        release=ReleaseConfig(bypass_tests_for_releases=True),
     ),
 )
 
