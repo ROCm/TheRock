@@ -60,6 +60,8 @@ add_custom_target(
     # This is required before patching because patch_source.sh modifies files in the libva subproject
     "${CMAKE_COMMAND}" -E env
       "LDFLAGS=-Wl,-rpath='$$ORIGIN' -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
+      "CC=${THEROCK_MESON_CC}"
+      "CXX=${THEROCK_MESON_CXX}"
       --
       "${MESON_BUILD}" setup
         --reconfigure
@@ -82,6 +84,8 @@ add_custom_target(
     # This ensures the build system uses the modified source files
     "${CMAKE_COMMAND}" -E env
       "LDFLAGS=-Wl,-rpath='$$ORIGIN' -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
+      "CC=${THEROCK_MESON_CC}"
+      "CXX=${THEROCK_MESON_CXX}"
       --
       "${MESON_BUILD}" setup
         --reconfigure

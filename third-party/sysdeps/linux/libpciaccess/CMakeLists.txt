@@ -66,6 +66,8 @@ add_custom_target(
     "${CMAKE_COMMAND}" -E env
       # Apply symbol versioning via version.lds. RPATH is set post-install via patch_install.py.
       "LDFLAGS=-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
+      "CC=${THEROCK_MESON_CC}"
+      "CXX=${THEROCK_MESON_CXX}"
       --
       "${MESON_BUILD}" setup "${CMAKE_CURRENT_BINARY_DIR}"
         --reconfigure

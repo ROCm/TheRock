@@ -1550,6 +1550,40 @@ function(_therock_cmake_subproject_setup_toolchain
   endif()
 
   string(APPEND _toolchain_contents "${_sanitizer_stanza}")
+
+  # Compute Meson-compatible CC/CXX env strings.
+  # To allow Meson-based subprojects to use the same compiler and launcher
+  # as CMake does, CC and CXX are passed. Otherweise, Meson auto-detects
+  # launchers and will use it automatically, resulting in not using the
+  # one selected in CMake-land.
+  # We mirror the toolchain selection logic above: amd-llvm/amd-hip
+  # subprojects use the built compiler, all others use the CMake-specified
+  # compiler.
+  if(compiler_toolchain STREQUAL "amd-llvm" OR compiler_toolchain STREQUAL "amd-hip")
+    set(_meson_actual_cc "${AMD_LLVM_C_COMPILER}")
+    set(_meson_actual_cxx "${AMD_LLVM_CXX_COMPILER}")
+  else()
+    set(_meson_actual_cc "${CMAKE_C_COMPILER}")
+    set(_meson_actual_cxx "${CMAKE_CXX_COMPILER}")
+  endif()
+  if(CMAKE_C_COMPILER_LAUNCHER)
+    # CMAKE_C_COMPILER_LAUNCHER is a CMake list (semicolon-separated) to support
+    # chained launchers (e.g. "ccache;distcc"). Meson expects a space-separated
+    # string, so convert before concatenating with the compiler path.
+    string(REPLACE ";" " " _meson_c_launcher "${CMAKE_C_COMPILER_LAUNCHER}")
+    set(_meson_cc "${_meson_c_launcher} ${_meson_actual_cc}")
+  else()
+    set(_meson_cc "${_meson_actual_cc}")
+  endif()
+  if(CMAKE_CXX_COMPILER_LAUNCHER)
+    string(REPLACE ";" " " _meson_cxx_launcher "${CMAKE_CXX_COMPILER_LAUNCHER}")
+    set(_meson_cxx "${_meson_cxx_launcher} ${_meson_actual_cxx}")
+  else()
+    set(_meson_cxx "${_meson_actual_cxx}")
+  endif()
+  string(APPEND _toolchain_contents "set(THEROCK_MESON_CC \"@_meson_cc@\")\n")
+  string(APPEND _toolchain_contents "set(THEROCK_MESON_CXX \"@_meson_cxx@\")\n")
+
   set(_compiler_toolchain_addl_depends "${_compiler_toolchain_addl_depends}" PARENT_SCOPE)
   set(_compiler_toolchain_init_contents "${_compiler_toolchain_init_contents}" PARENT_SCOPE)
   set(_build_env_pairs "${_build_env_pairs}" PARENT_SCOPE)
