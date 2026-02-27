@@ -5,6 +5,7 @@
 import importlib
 import os
 from pathlib import Path
+import platform
 import subprocess
 import sys
 import sysconfig
@@ -65,7 +66,7 @@ class ROCmLibrariesTest(unittest.TestCase):
                 extra_setup = ""
                 if (
                     "hipdnn_plugins" in str(so_path) or "test_plugins" in str(so_path)
-                ) and sys.platform.system() == "Windows":
+                ) and platform.system() == "Windows":
                     # hipdnn plugins have dependencies on other libraries (e.g. miopen).
                     # In a real-world scenario, hipdnn_backend loads these plugins, and
                     # the dependencies are found because they reside in the same directory
