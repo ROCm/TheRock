@@ -19,7 +19,6 @@ import shlex
 import shutil
 import subprocess
 import sys
-from typing import List, Optional
 import re
 
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
@@ -32,7 +31,7 @@ def log(*args, **kwargs):
     sys.stdout.flush()
 
 
-def run_command(args: List[str | Path], cwd: Optional[Path] = None) -> None:
+def run_command(args: list[str | Path], cwd: Path | None = None) -> None:
     args = [str(arg) for arg in args]
     if cwd is None:
         cwd = Path.cwd()
@@ -56,8 +55,8 @@ def run_command(args: List[str | Path], cwd: Optional[Path] = None) -> None:
 
 # Capture stdout while preserving existing "raw output" printing behavior.
 def run_command_capture_output(
-    args: List[str | Path], cwd: Optional[Path] = None
-) -> Optional[str]:
+    args: list[str | Path], cwd: Path | None = None
+) -> str | None:
     args = [str(arg) for arg in args]
     if cwd is None:
         cwd = Path.cwd()
@@ -84,8 +83,8 @@ def run_command_capture_output(
 def run_command_with_search(
     label: str,
     command: str,
-    args: List[str],
-    extra_command_search_paths: List[Path],
+    args: list[str],
+    extra_command_search_paths: list[Path],
 ) -> None:
     """
     Run a command, searching in extra paths first, then PATH.
@@ -121,9 +120,9 @@ def run_command_with_search(
 def run_command_with_search_capture(
     label: str,
     command: str,
-    args: List[str],
-    extra_command_search_paths: List[Path],
-) -> Optional[str]:
+    args: list[str],
+    extra_command_search_paths: list[Path],
+) -> str | None:
     for base in extra_command_search_paths:
         candidate = base / command
         if candidate.exists():
@@ -145,15 +144,15 @@ _BDF_RE = re.compile(r"^\s*BDF:\s*(\S+)\s*$")
 _BAR0_RE = re.compile(r"Region 0:.*\[\s*size=([^\]]+)\]", re.IGNORECASE)
 
 
-def _parse_bdfs_from_amd_smi_static(output: str) -> List[str]:
-    bdfs: List[str] = []
+def _parse_bdfs_from_amd_smi_static(output: str) -> list[str]:
+    bdfs: list[str] = []
     for line in output.splitlines():
         m = _BDF_RE.match(line)
         if m:
             bdfs.append(m.group(1))
     # preserve order; de-dup
     seen: set[str] = set()
-    out: List[str] = []
+    out: list[str] = []
     for b in bdfs:
         if b not in seen:
             out.append(b)
@@ -161,7 +160,7 @@ def _parse_bdfs_from_amd_smi_static(output: str) -> List[str]:
     return out
 
 
-def _get_bar0_size(bdf: str) -> Optional[str]:
+def _get_bar0_size(bdf: str) -> str | None:
     lspci = shutil.which("lspci")
     if not lspci:
         return None
@@ -191,7 +190,7 @@ def _get_bar0_size(bdf: str) -> Optional[str]:
     return m.group(1) if m else None
 
 
-def _is_large_bar(size: Optional[str]) -> bool:
+def _is_large_bar(size: str | None) -> bool:
     return bool(size and re.search(r"[GT]", size, re.IGNORECASE))
 
 
@@ -259,7 +258,7 @@ def run_sanity(os_name: str) -> None:
     log("\n=== End of sanity check ===")
 
 
-def main(argv: Optional[List[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     detected = platform.system()
     run_sanity(detected)
     return 0
