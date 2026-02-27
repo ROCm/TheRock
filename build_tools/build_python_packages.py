@@ -73,9 +73,15 @@ def run(args: argparse.Namespace):
     if args.build_packages:
         build_packages(args.dest_dir, wheel_compression=args.wheel_compression)
 
-    # One meta (rocm) package per target family. In a multi-arch build each
-    # sdist goes to dist/{target_family}/ so callers can distinguish them; in a
-    # single-arch build the sdist goes directly to dist/ (no subdirectory).
+    # One meta (rocm) sdist per target family. Each sdist is NOT generic:
+    # restrict_families=True bakes DEFAULT_TARGET_FAMILY and
+    # AVAILABLE_TARGET_FAMILIES for a single gfx family into _dist_info.py,
+    # so when pip installs the sdist (executing setup.py on the target
+    # machine to build a wheel), determine_target_family() can only resolve
+    # to that one family, and install_requires is hardcoded to that family's
+    # packages. In a multi-arch build each sdist goes to dist/{target_family}/
+    # so callers can distinguish them; in a single-arch build the sdist goes
+    # directly to dist/ (no subdirectory).
     for target_family in all_target_families:
         meta = PopulatedDistPackage(
             params,
@@ -91,9 +97,13 @@ def run(args: argparse.Namespace):
                 wheel_compression=args.wheel_compression,
             )
 
-    # One devel package per target family. In a multi-arch build each wheel goes into
-    # dist/{target_family}/ so callers can distinguish them; in a single-arch build
-    # the wheel goes directly to dist/ (no subdirectory).
+    # One rocm-sdk-devel wheel per target family. Each wheel is NOT generic:
+    # shared libraries already materialized by the libraries runtime package
+    # are embedded in the devel tarball as symlinks into that package's
+    # arch-specific platform directory (e.g. _rocm_sdk_libraries_gfx120x_all),
+    # so the tarball is only valid when the matching family's library wheel
+    # is co-installed. In a multi-arch build each wheel goes to
+    # dist/{target_family}/; in a single-arch build directly to dist/.
     for target_family in all_target_families:
         devel = PopulatedDistPackage(
             params, logical_name="devel", target_family=target_family
