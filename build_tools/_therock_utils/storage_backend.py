@@ -1,8 +1,8 @@
-"""Storage backend abstraction for S3 and local file operations.
+"""Storage backend abstraction for writing to S3 and local directories.
 
-Provides a unified interface for uploading files and directories to S3 or
-local staging directories. Content types for known file extensions are set
-during upload.
+Provides a unified interface for writing files to storage — uploading
+local files, copying between storage locations, etc.  Content types for
+known file extensions are set automatically during upload.
 
 Usage::
 
@@ -12,8 +12,12 @@ Usage::
     backend = create_storage_backend(staging_dir=Path("/tmp/out"))  # local
     backend = create_storage_backend(dry_run=True)  # print only
 
+    # Upload local files
     backend.upload_file(source, dest_location)
     backend.upload_directory(source_dir, dest_location, include=["*.tar.xz*"])
+
+    # Copy between storage locations (e.g. S3-to-S3 promotion)
+    backend.copy_file(source_location, dest_location)
 """
 
 import logging
@@ -65,11 +69,24 @@ def infer_content_type(path: Path) -> str:
 
 
 class StorageBackend(ABC):
-    """Abstract base class for storage operations."""
+    """Abstract base class for storage operations.
+
+    Subclasses implement the low-level file operations; the ABC provides
+    higher-level helpers like ``upload_directory``.
+    """
 
     @abstractmethod
     def upload_file(self, source: Path, dest: StorageLocation) -> None:
-        """Upload a single file to the given destination."""
+        """Upload a single local file to the given destination."""
+        ...
+
+    @abstractmethod
+    def copy_file(self, source: StorageLocation, dest: StorageLocation) -> None:
+        """Copy a file between two storage locations.
+
+        For S3 backends this is a server-side copy (no local download).
+        For local backends this copies between local paths.
+        """
         ...
 
     def upload_directory(
@@ -118,8 +135,33 @@ _S3_MAX_RETRIES = 3
 _S3_INITIAL_BACKOFF_SECONDS = 1.0
 
 
+def _s3_retry(operation: str, location: str, func, *args, **kwargs):
+    """Call *func* with retries and exponential backoff on failure."""
+    last_exc: Exception | None = None
+    for attempt in range(_S3_MAX_RETRIES):
+        try:
+            return func(*args, **kwargs)
+        except Exception as exc:
+            last_exc = exc
+            if attempt < _S3_MAX_RETRIES - 1:
+                wait = _S3_INITIAL_BACKOFF_SECONDS * (2**attempt)
+                logger.warning(
+                    "S3 %s attempt %d/%d failed for %s: %s. Retrying in %.1fs...",
+                    operation,
+                    attempt + 1,
+                    _S3_MAX_RETRIES,
+                    location,
+                    exc,
+                    wait,
+                )
+                time.sleep(wait)
+    raise RuntimeError(
+        f"S3 {operation} failed after {_S3_MAX_RETRIES} attempts: {location}"
+    ) from last_exc
+
+
 class S3StorageBackend(StorageBackend):
-    """Upload files to AWS S3 using boto3.
+    """S3 storage backend using boto3.
 
     The S3 client is lazily initialized on first use.  Credentials are
     resolved through boto3's default credential chain, which checks (in
@@ -147,32 +189,30 @@ class S3StorageBackend(StorageBackend):
             logger.info("[DRY RUN] %s -> %s (%s)", source, dest.s3_uri, content_type)
             return
 
-        last_exc: Exception | None = None
-        for attempt in range(_S3_MAX_RETRIES):
-            try:
-                self.s3_client.upload_file(
-                    str(source),
-                    dest.bucket,
-                    dest.relative_path,
-                    ExtraArgs={"ContentType": content_type},
-                )
-                return
-            except Exception as exc:
-                last_exc = exc
-                if attempt < _S3_MAX_RETRIES - 1:
-                    wait = _S3_INITIAL_BACKOFF_SECONDS * (2**attempt)
-                    logger.warning(
-                        "S3 upload attempt %d/%d failed for %s: %s. Retrying in %.1fs...",
-                        attempt + 1,
-                        _S3_MAX_RETRIES,
-                        dest.s3_uri,
-                        exc,
-                        wait,
-                    )
-                    time.sleep(wait)
-        raise RuntimeError(
-            f"S3 upload failed after {_S3_MAX_RETRIES} attempts: {dest.s3_uri}"
-        ) from last_exc
+        _s3_retry(
+            "upload",
+            dest.s3_uri,
+            self.s3_client.upload_file,
+            str(source),
+            dest.bucket,
+            dest.relative_path,
+            ExtraArgs={"ContentType": content_type},
+        )
+
+    def copy_file(self, source: StorageLocation, dest: StorageLocation) -> None:
+        if self._dry_run:
+            logger.info("[DRY RUN] copy %s -> %s", source.s3_uri, dest.s3_uri)
+            return
+
+        copy_source = {"Bucket": source.bucket, "Key": source.relative_path}
+        _s3_retry(
+            "copy",
+            f"{source.s3_uri} -> {dest.s3_uri}",
+            self.s3_client.copy_object,
+            Bucket=dest.bucket,
+            Key=dest.relative_path,
+            CopySource=copy_source,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -181,7 +221,7 @@ class S3StorageBackend(StorageBackend):
 
 
 class LocalStorageBackend(StorageBackend):
-    """Copy files to a local staging directory.
+    """Local filesystem storage backend.
 
     Mirrors the remote directory layout under *staging_dir* so that
     downstream tools can be tested against a local file tree.
@@ -199,6 +239,16 @@ class LocalStorageBackend(StorageBackend):
 
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, target)
+
+    def copy_file(self, source: StorageLocation, dest: StorageLocation) -> None:
+        src = source.local_path(self._staging_dir)
+        dst = dest.local_path(self._staging_dir)
+        if self._dry_run:
+            logger.info("[DRY RUN] copy %s -> %s", src, dst)
+            return
+
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dst)
 
 
 # ---------------------------------------------------------------------------

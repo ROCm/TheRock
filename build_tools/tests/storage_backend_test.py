@@ -280,6 +280,59 @@ class TestLocalStorageBackendUploadDirectory(unittest.TestCase):
             self.assertEqual(count, 0)
 
 
+class TestLocalStorageBackendCopyFile(unittest.TestCase):
+    def test_copies_between_locations(self):
+        with tempfile.TemporaryDirectory() as staging:
+            staging_dir = Path(staging)
+
+            # Create source file
+            src_path = staging_dir / "run-1" / "file.whl"
+            src_path.parent.mkdir(parents=True)
+            src_path.write_text("wheel-data")
+
+            source = StorageLocation("bucket", "run-1/file.whl")
+            dest = StorageLocation("bucket", "release/file.whl")
+
+            backend = LocalStorageBackend(staging_dir)
+            backend.copy_file(source, dest)
+
+            dst_path = staging_dir / "release" / "file.whl"
+            self.assertTrue(dst_path.is_file())
+            self.assertEqual(dst_path.read_text(), "wheel-data")
+
+    def test_creates_parent_dirs(self):
+        with tempfile.TemporaryDirectory() as staging:
+            staging_dir = Path(staging)
+
+            src_path = staging_dir / "a" / "b.txt"
+            src_path.parent.mkdir(parents=True)
+            src_path.write_text("data")
+
+            source = StorageLocation("bucket", "a/b.txt")
+            dest = StorageLocation("bucket", "x/y/z/b.txt")
+
+            backend = LocalStorageBackend(staging_dir)
+            backend.copy_file(source, dest)
+
+            self.assertTrue((staging_dir / "x" / "y" / "z" / "b.txt").is_file())
+
+    def test_dry_run_does_not_copy(self):
+        with tempfile.TemporaryDirectory() as staging:
+            staging_dir = Path(staging)
+
+            src_path = staging_dir / "run-1" / "file.whl"
+            src_path.parent.mkdir(parents=True)
+            src_path.write_text("wheel-data")
+
+            source = StorageLocation("bucket", "run-1/file.whl")
+            dest = StorageLocation("bucket", "release/file.whl")
+
+            backend = LocalStorageBackend(staging_dir, dry_run=True)
+            backend.copy_file(source, dest)
+
+            self.assertFalse((staging_dir / "release" / "file.whl").exists())
+
+
 # ---------------------------------------------------------------------------
 # S3StorageBackend
 # ---------------------------------------------------------------------------
@@ -361,6 +414,66 @@ class TestS3StorageBackendUploadFile(unittest.TestCase):
         backend.upload_file(source, dest)
 
         mock_client.upload_file.assert_not_called()
+
+
+class TestS3StorageBackendCopyFile(unittest.TestCase):
+    def test_calls_copy_object(self):
+        backend = S3StorageBackend()
+        mock_client = mock.MagicMock()
+        backend._s3_client = mock_client
+
+        source = StorageLocation("src-bucket", "run-1/file.whl")
+        dest = StorageLocation("dest-bucket", "release/file.whl")
+        backend.copy_file(source, dest)
+
+        mock_client.copy_object.assert_called_once_with(
+            Bucket="dest-bucket",
+            Key="release/file.whl",
+            CopySource={"Bucket": "src-bucket", "Key": "run-1/file.whl"},
+        )
+
+    def test_same_bucket_copy(self):
+        backend = S3StorageBackend()
+        mock_client = mock.MagicMock()
+        backend._s3_client = mock_client
+
+        source = StorageLocation("bucket", "staging/file.whl")
+        dest = StorageLocation("bucket", "release/file.whl")
+        backend.copy_file(source, dest)
+
+        mock_client.copy_object.assert_called_once_with(
+            Bucket="bucket",
+            Key="release/file.whl",
+            CopySource={"Bucket": "bucket", "Key": "staging/file.whl"},
+        )
+
+    def test_retries_on_failure(self):
+        backend = S3StorageBackend()
+        mock_client = mock.MagicMock()
+        mock_client.copy_object.side_effect = [
+            Exception("transient"),
+            None,
+        ]
+        backend._s3_client = mock_client
+
+        source = StorageLocation("src", "a.whl")
+        dest = StorageLocation("dst", "b.whl")
+
+        with mock.patch("_therock_utils.storage_backend.time.sleep"):
+            backend.copy_file(source, dest)
+
+        self.assertEqual(mock_client.copy_object.call_count, 2)
+
+    def test_dry_run_does_not_call_boto3(self):
+        backend = S3StorageBackend(dry_run=True)
+        mock_client = mock.MagicMock()
+        backend._s3_client = mock_client
+
+        source = StorageLocation("src", "a.whl")
+        dest = StorageLocation("dst", "b.whl")
+        backend.copy_file(source, dest)
+
+        mock_client.copy_object.assert_not_called()
 
 
 class TestS3StorageBackendCredentialResolution(unittest.TestCase):
