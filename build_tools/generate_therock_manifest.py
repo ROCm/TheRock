@@ -32,9 +32,12 @@ def git_root() -> Path:
     return repo_root
 
 
-def list_submodules_via_gitconfig(repo_dir: Path, commit: str = "HEAD"):
+def list_submodules_from_gitmodules_at_commit(repo_dir: Path, commit: str = "HEAD"):
     """
     Read path/url/branch for all submodules from .gitmodules at a specific commit.
+
+    Uses `git config --blob` to parse .gitmodules directly from git's object database.
+    This approach lets git handle all config file parsing edge cases and works with any valid submodule names.
 
     Args:
         repo_dir: Path to the repository root.
@@ -43,45 +46,54 @@ def list_submodules_via_gitconfig(repo_dir: Path, commit: str = "HEAD"):
                 may have been added or removed since.
 
     Returns: [{name, path, url, branch}]
+
+    Raises:
+        RuntimeError: If git command fails for reasons other than missing .gitmodules.
     """
-    gitmodules_content = _run(
-        ["git", "show", f"{commit}:.gitmodules"],
-        cwd=repo_dir,
-        check=False,
+    cmd = [
+        "git",
+        "config",
+        "--blob",
+        f"{commit}:.gitmodules",
+        "--get-regexp",
+        r"^submodule\.",
+    ]
+    result = subprocess.run(
+        cmd, cwd=repo_dir, text=True, capture_output=True, check=False
     )
-    if not gitmodules_content:
+
+    if result.returncode != 0:
+        stderr = result.stderr.strip()
+        # Exit code 1 with no stderr means no matches (no .gitmodules or no submodule entries)
+        # Exit code 1 with stderr means an actual error (invalid commit, etc.)
+        if stderr:
+            raise RuntimeError(f"Git command failed: {' '.join(cmd)}\n{stderr}")
         return []
 
     submodules_by_name = {}
-    current_name = None
 
-    for line in gitmodules_content.splitlines():
-        line = line.strip()
-        if not line:
-            continue
+    # Output format: submodule.<name>.<key> <value>
+    # Example: submodule.half.path base/half
+    # The regex uses (.+) for name to handle submodule names containing dots.
+    # The explicit \.(path|url|branch) ensures we match the last occurrence,
+    # correctly extracting names like "foo.bar" from "submodule.foo.bar.path".
+    pattern = re.compile(r"^submodule\.(.+)\.(path|url|branch)\s+(.+)$")
 
-        if line.startswith("[submodule"):
-            match = re.search(r'"([^"]+)"', line)
-            if match:
-                current_name = match.group(1)
-                submodules_by_name[current_name] = {
-                    "name": current_name,
+    for line in result.stdout.strip().splitlines():
+        match = pattern.match(line)
+        if match:
+            name, key, value = match.groups()
+            if name not in submodules_by_name:
+                submodules_by_name[name] = {
+                    "name": name,
                     "path": None,
                     "url": None,
                     "branch": None,
                 }
-        elif current_name and "=" in line:
-            key, _, value = line.partition("=")
-            key = key.strip()
-            value = value.strip()
-            if key in ("path", "url", "branch"):
-                submodules_by_name[current_name][key] = value
+            submodules_by_name[name][key] = value
 
-    results = [
-        {"name": n, "path": r["path"], "url": r["url"], "branch": r["branch"]}
-        for n, r in submodules_by_name.items()
-        if r["path"]
-    ]
+    # Filter out entries without a path and sort by path
+    results = [r for r in submodules_by_name.values() if r["path"]]
     results.sort(key=lambda r: r["path"])
     return results
 
@@ -120,9 +132,7 @@ def patches_for_submodule_by_name(repo_dir: Path, sub_name: str):
 def build_manifest_schema(repo_root: Path, the_rock_commit: str) -> dict:
 
     # Enumerate submodules from .gitmodules at the specified commit.
-    # This ensures we get the correct submodule list even for historical commits
-    # where submodules may have been added or removed since.
-    entries = list_submodules_via_gitconfig(repo_root, the_rock_commit)
+    entries = list_submodules_from_gitmodules_at_commit(repo_root, the_rock_commit)
 
     # Build rows with pins (from tree) and patch lists
     rows = []
