@@ -144,7 +144,11 @@ def discover_current_target_family() -> str | None:
                     return arch
     except subprocess.CalledProcessError as e:
         if _VERBOSE:
-            print(f"[rocm_sdk] offload-arch failed: {e.returncode}", file=sys.stderr)
+            print(
+                f"[rocm_sdk] offload-arch failed with return code {e.returncode}",
+                file=sys.stderr,
+            )
+            print(f"[rocm_sdk] output: {e.output}", file=sys.stderr)
     except FileNotFoundError:
         if _VERBOSE:
             print("[rocm_sdk] offload-arch not found", file=sys.stderr)
