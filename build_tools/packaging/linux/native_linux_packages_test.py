@@ -23,10 +23,6 @@ Prerequisites:
 - System packages: python3, pip, wget, curl; pip packages: pyelftools, requests,
   prettytable, PyYAML.
 
-Supports both nightly and prerelease builds:
-- Nightly: https://rocm.nightlies.amd.com/
-- Prerelease: https://rocm.prereleases.amd.com/packages/
-
 Example invocations:
 
   # Nightly DEB (Ubuntu 24.04) - run inside ubuntu:24.04 container or VM
@@ -170,12 +166,6 @@ class NativeLinuxPackagesTester:
             f"amdrocm-{self.gfx_arch}",
             f"amdrocm-core-sdk-{self.gfx_arch}",
         ]
-
-        # Validate inputs
-        if self.release_type not in ["nightly", "prerelease"]:
-            raise ValueError(
-                f"Invalid release type: {release_type}. Must be 'nightly' or 'prerelease'"
-            )
 
     def setup_gpg_key(self) -> bool:
         """Setup GPG key for repositories that require GPG verification.
@@ -967,7 +957,6 @@ def main():
     parser.add_argument(
         "--release-type",
         type=str,
-        required=True,
         choices=["nightly", "prerelease"],
         help="Type of release: 'nightly' or 'prerelease'",
     )
@@ -975,7 +964,6 @@ def main():
     parser.add_argument(
         "--install-prefix",
         type=str,
-        required=True,
         help="Installation prefix (e.g. /opt/rocm/core)",
     )
 
