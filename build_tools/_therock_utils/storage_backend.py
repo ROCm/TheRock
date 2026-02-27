@@ -69,11 +69,7 @@ def infer_content_type(path: Path) -> str:
 
 
 class StorageBackend(ABC):
-    """Abstract base class for storage operations.
-
-    Subclasses implement the low-level file operations; the ABC provides
-    higher-level helpers like ``upload_directory``.
-    """
+    """Abstract base class for storage operations."""
 
     @abstractmethod
     def upload_file(self, source: Path, dest: StorageLocation) -> None:
@@ -88,6 +84,10 @@ class StorageBackend(ABC):
         For local backends this copies between local paths.
         """
         ...
+
+    # TODO(scotttodd): Add copy_directory for bulk copies (e.g. release
+    # promotion). Needs a list_files method or similar — see ArtifactBackend
+    # consolidation TODO.
 
     def upload_directory(
         self,
@@ -107,6 +107,8 @@ class StorageBackend(ABC):
             Number of files uploaded.
 
         Symlinks are skipped. Subdirectory structure is preserved.
+
+        TODO(scotttodd): Upload files in parallel (perhaps in the derived classes)
         """
         if not source_dir.is_dir():
             raise FileNotFoundError(f"Source directory not found: {source_dir}")

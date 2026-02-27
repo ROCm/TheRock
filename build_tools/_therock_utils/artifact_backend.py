@@ -3,6 +3,10 @@
 This module provides a unified interface for artifact storage that works with
 both local directories (for prototyping/testing) and S3 (for CI/CD).
 
+TODO(scotttodd): Consolidate with StorageBackend in storage_backend.py? Both
+modules manage S3 clients and local directory mirroring. ArtifactBackend has
+download/list/exists operations that StorageBackend doesn't have yet.
+
 Environment-based switching:
 - THEROCK_LOCAL_STAGING_DIR set → use LocalDirectoryBackend
 - Otherwise → use S3Backend
