@@ -468,6 +468,8 @@ therock_cmake_subproject_declare(hipBLAS
     -DBUILD_CLIENTS_TESTS=${THEROCK_BUILD_TESTING}
     -DBUILD_CLIENTS_BENCHMARKS=${THEROCK_BUILD_TESTING}
     -DBUILD_CLIENTS_SAMPLES=${_blas_build_samples}
+    # TODO(#3672): Remove once CMAKE_Fortran_COMPILER and CMAKE_POSITION_INDEPENDENT_CODE
+    # are propagated to subprojects in therock_subproject.cmake.
     # Enable -fPIC for Fortran samples (required by ld.lld linker)
     "-DCMAKE_Fortran_FLAGS=-fPIC"
     -DLINK_BLIS=OFF
