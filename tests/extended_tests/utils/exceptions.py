@@ -41,7 +41,6 @@ class TestExecutionError(FrameworkException):
 
 class TestResultError(FrameworkException):
     """Test result failures (tests ran successfully but results show failures)."""
-
     pass
 
 

@@ -316,7 +316,7 @@ class BenchmarkBase:
         """Execute benchmark workflow and return exit code (0=PASS, 1=FAIL)."""
         log.info(f"Initializing {self.display_name} Benchmark Test")
 
-        # Initialize benchmark client and print system info
+        # Initialize extended test client and print system info
         self.client = ExtendedTestClient(auto_detect=True)
         self.client.print_system_summary()
 
