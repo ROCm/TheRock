@@ -71,13 +71,17 @@ void post_menu_draw();
 
 MENU_DATA menuPost = {0};
 
+// Global config pointers (defined in rocm_ui.c)
+extern OFFLINE_INSTALL_CONFIG *g_pConfig;
+extern POST_MENU_CONFIG *g_pPostConfig;
+
 
 /**************** Post-install MENU **********************************************************************************/
 
-void create_post_menu_window(WINDOW *pMenuWindow, OFFLINE_INSTALL_CONFIG *pConfig)
+void create_post_menu_window(WINDOW *pMenuWindow)
 {
     // Create the post install options menu
-    create_menu(&menuPost, pMenuWindow, &postMenuProps, &postMenuItems, pConfig);
+    create_menu(&menuPost, pMenuWindow, &postMenuProps, &postMenuItems, g_pConfig);
 
     // Create help menu
     create_help_menu_window(&menuPost, POST_MENU_HELP_TITLE, POST_MENU_HELP_FILE);
@@ -87,6 +91,9 @@ void create_post_menu_window(WINDOW *pMenuWindow, OFFLINE_INSTALL_CONFIG *pConfi
 
     // Set user pointers for 'ENTER' events
     set_menu_userptr(menuPost.pMenu, process_post_menu);
+
+    // Set default: post ROCm installation is enabled by default (matches rocm-installer.sh)
+    g_pPostConfig->rocm_post = true;
 
     // set items to non-selectable
     set_menu_grey(menuPost.pMenu, BLUE);
@@ -102,7 +109,6 @@ void destroy_post_menu_window()
 void post_menu_draw()
 {
     WINDOW *pWin = menuPost.pMenuWindow;
-    POST_MENU_CONFIG *pPostConfig = &(menuPost.pConfig)->post_config;
 
     wattron(pWin, WHITE | A_BOLD);
     mvwprintw(pWin, 5, 4, "%s", "Set GPU access permissions");
@@ -110,9 +116,9 @@ void post_menu_draw()
 
     menu_draw(&menuPost);
 
-    menu_info_draw_bool(&menuPost, POST_MENU_ITEM_CUR_USER_ROW, POST_MENU_FORM_COL, pPostConfig->current_user_grp);
-    menu_info_draw_bool(&menuPost, POST_MENU_ITEM_ALL_USER_ROW, POST_MENU_FORM_COL, pPostConfig->all_user_grp);
-    menu_info_draw_bool(&menuPost, POST_MENU_ITEM_POST_ROCM_ROW, POST_MENU_FORM_COL, pPostConfig->rocm_post);
+    menu_info_draw_bool(&menuPost, POST_MENU_ITEM_CUR_USER_ROW, POST_MENU_FORM_COL, g_pPostConfig->current_user_grp);
+    menu_info_draw_bool(&menuPost, POST_MENU_ITEM_ALL_USER_ROW, POST_MENU_FORM_COL, g_pPostConfig->all_user_grp);
+    menu_info_draw_bool(&menuPost, POST_MENU_ITEM_POST_ROCM_ROW, POST_MENU_FORM_COL, g_pPostConfig->rocm_post);
 }
 
 void do_post_menu()
@@ -134,8 +140,6 @@ void do_post_menu()
 void process_post_menu()
 {
     MENU *pMenu = menuPost.pMenu;
-    POST_MENU_CONFIG *pPostConfig = &(menuPost.pConfig)->post_config;
-    
     ITEM *pCurrentItem = current_item(pMenu);
 
     int index = item_index(pCurrentItem);
@@ -148,14 +152,14 @@ void process_post_menu()
     {
         if (index == POST_MENU_ITEM_CUR_USER_INDEX)
         {
-            pPostConfig->current_user_grp = !pPostConfig->current_user_grp;
-            menu_info_draw_bool(&menuPost, POST_MENU_ITEM_CUR_USER_ROW, POST_MENU_FORM_COL, pPostConfig->current_user_grp);
+            g_pPostConfig->current_user_grp = !g_pPostConfig->current_user_grp;
+            menu_info_draw_bool(&menuPost, POST_MENU_ITEM_CUR_USER_ROW, POST_MENU_FORM_COL, g_pPostConfig->current_user_grp);
         
-            if (pPostConfig->current_user_grp)
+            if (g_pPostConfig->current_user_grp)
             {
                 // disable udev and set to false
-                pPostConfig->all_user_grp = false;
-                menu_info_draw_bool(&menuPost, POST_MENU_ITEM_ALL_USER_ROW, POST_MENU_FORM_COL, pPostConfig->all_user_grp);
+                g_pPostConfig->all_user_grp = false;
+                menu_info_draw_bool(&menuPost, POST_MENU_ITEM_ALL_USER_ROW, POST_MENU_FORM_COL, g_pPostConfig->all_user_grp);
                 menu_set_item_select(&menuPost, POST_MENU_ITEM_ALL_USER_INDEX, false);
             }
             else
@@ -167,14 +171,14 @@ void process_post_menu()
         }
         else if (index == POST_MENU_ITEM_ALL_USER_INDEX)
         {
-            pPostConfig->all_user_grp = !pPostConfig->all_user_grp;
-            menu_info_draw_bool(&menuPost, POST_MENU_ITEM_ALL_USER_ROW, POST_MENU_FORM_COL, pPostConfig->all_user_grp);
+            g_pPostConfig->all_user_grp = !g_pPostConfig->all_user_grp;
+            menu_info_draw_bool(&menuPost, POST_MENU_ITEM_ALL_USER_ROW, POST_MENU_FORM_COL, g_pPostConfig->all_user_grp);
 
-            if (pPostConfig->all_user_grp)
+            if (g_pPostConfig->all_user_grp)
             {
                 // disable user and set to false
-                pPostConfig->current_user_grp = false;
-                menu_info_draw_bool(&menuPost, POST_MENU_ITEM_CUR_USER_ROW, POST_MENU_FORM_COL, pPostConfig->current_user_grp);
+                g_pPostConfig->current_user_grp = false;
+                menu_info_draw_bool(&menuPost, POST_MENU_ITEM_CUR_USER_ROW, POST_MENU_FORM_COL, g_pPostConfig->current_user_grp);
                 menu_set_item_select(&menuPost, POST_MENU_ITEM_CUR_USER_INDEX, false);
             }
             else
@@ -185,8 +189,8 @@ void process_post_menu()
         }
         else if (index == POST_MENU_ITEM_POST_ROCM_INDEX)
         {
-            pPostConfig->rocm_post = !pPostConfig->rocm_post;
-            menu_info_draw_bool(&menuPost, POST_MENU_ITEM_POST_ROCM_ROW, POST_MENU_FORM_COL, pPostConfig->rocm_post);
+            g_pPostConfig->rocm_post = !g_pPostConfig->rocm_post;
+            menu_info_draw_bool(&menuPost, POST_MENU_ITEM_POST_ROCM_ROW, POST_MENU_FORM_COL, g_pPostConfig->rocm_post);
         }
     }
 

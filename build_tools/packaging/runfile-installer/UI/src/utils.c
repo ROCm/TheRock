@@ -254,8 +254,7 @@ int find_rocm_installed(char *target, char fpaths[MAX_PATHS][LARGE_CHAR_SIZE], i
         return -1;
     }
 
-    // Command to find the "version" file in directories containing "opt/rocm/.info"
-    // and skip any directory paths containing "rocm-installer"
+    // Find rocm/core-* directories (same as rocm-installer.sh)
     char command[LARGE_CHAR_SIZE];
 
     // Search only from the target path if provided
@@ -278,7 +277,9 @@ int find_rocm_installed(char *target, char fpaths[MAX_PATHS][LARGE_CHAR_SIZE], i
         rocm_depth[0] = '\0';
     }
 
-    sprintf(command, "find %s %s -type f -path '*/rocm-*/.info/version' ! -path '*/rocm-installer/component-rocm/*' -print 2>/dev/null", search_path, rocm_depth);
+    // Use regex to match only paths ending in /rocm/core-* (not subdirectories)
+    // This matches the pattern used in rocm-installer.sh find_rocm_with_progress()
+    sprintf(command, "find %s %s -type d -regex '.*/rocm/core-[^/]*$' ! -path '*/rocm-installer/component-rocm/*' ! -path '*/component-rocm/base/*/rocm/core-*' ! -path '*/component-rocm/gfx*/*/rocm/core-*' -print 2>/dev/null", search_path, rocm_depth);
 
     // Open a pipe to the command
     fp = popen(command, "r");
@@ -300,12 +301,8 @@ int find_rocm_installed(char *target, char fpaths[MAX_PATHS][LARGE_CHAR_SIZE], i
         // Remove the newline character from the path
         path[strcspn(path, "\n")] = '\0';
 
-        // Remove the substring ".info/version" from the path
-        char *pos = strstr(path, ".info/version");
-        if (pos != NULL)
-        {
-            *pos = '\0'; // Terminate the string at the start of ".info/version"
-        }
+        // Keep the full path (same as rocm-installer.sh)
+        // Format: /path/to/install/rocm/core-<version>
 
         // Save the path to the temporary array
         if (*pCount < MAX_PATHS)

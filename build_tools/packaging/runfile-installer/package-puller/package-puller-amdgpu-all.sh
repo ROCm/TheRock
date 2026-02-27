@@ -125,7 +125,6 @@ download_deb_packages() {
 
     # Extract the repository URL from the AMDGPU_REPO format
     # Standard format: "deb https://repo.radeon.com/amdgpu/30.20.1/ubuntu jammy main"
-    # Internal format: "deb https://artifactory-cdn.amd.com/artifactory/list/amdgpu-deb-remote 2296104 jammy"
     REPO_URL=$(echo "$AMDGPU_REPO" | awk '{print $2}')
     DISTRO_NAME=$(echo "$AMDGPU_REPO" | awk '{print $3}')
     COMPONENT=$(echo "$AMDGPU_REPO" | awk '{print $4}')

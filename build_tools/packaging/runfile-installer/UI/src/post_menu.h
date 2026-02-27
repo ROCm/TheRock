@@ -45,7 +45,7 @@
 #define POST_MENU_ITEM_POST_ROCM_ROW        9
 
 
-void create_post_menu_window(WINDOW *pMenuWindow, OFFLINE_INSTALL_CONFIG *pConfig);
+void create_post_menu_window(WINDOW *pMenuWindow);
 void destroy_post_menu_window();
 void do_post_menu();
 

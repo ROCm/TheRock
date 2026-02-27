@@ -46,6 +46,13 @@
 #define MAIN_MENU_ITEM_POST_INDEX       5
 #define MAIN_MENU_ITEM_INSTALL_INDEX    7
 
+// Global config pointers
+OFFLINE_INSTALL_CONFIG *g_pConfig = NULL;
+ROCM_MENU_CONFIG *g_pRocmConfig = NULL;
+DRIVER_MENU_CONFIG *g_pDriverConfig = NULL;
+POST_MENU_CONFIG *g_pPostConfig = NULL;
+PRE_MENU_CONFIG *g_pPreConfig = NULL;
+
 
 // Main Menu Setup
 char *mainMenuOps[] = {
@@ -131,7 +138,7 @@ void get_os_release_value(char *key, char *value)
     }
 }
 
-int get_os_info(OFFLINE_INSTALL_CONFIG *pConfig)
+int get_os_info()
 {
     uint32_t i;
     struct utsname unameData;
@@ -140,38 +147,38 @@ int get_os_info(OFFLINE_INSTALL_CONFIG *pConfig)
     {
         return -1;
     }
-    
-    strcpy(pConfig->kernelVersion, unameData.release);
 
-    get_os_release_value("PRETTY_NAME", pConfig->distroName);
-    get_os_release_value("ID", pConfig->distroID);
-    get_os_release_value("VERSION_ID", pConfig->distroVersion);
+    strcpy(g_pConfig->kernelVersion, unameData.release);
+
+    get_os_release_value("PRETTY_NAME", g_pConfig->distroName);
+    get_os_release_value("ID", g_pConfig->distroID);
+    get_os_release_value("VERSION_ID", g_pConfig->distroVersion);
 
     char *debList[] = {"ubuntu", "debian"};
     char *elList[]  = {"rhel", "ol"};
     char *sleList[] = {"sles"};
 
-    for (i = 0; i < ARRAY_SIZE(debList); i++) 
+    for (i = 0; i < ARRAY_SIZE(debList); i++)
     {
-        if (strstr(pConfig->distroID, debList[i]) != NULL) 
+        if (strstr(g_pConfig->distroID, debList[i]) != NULL)
         {
-            pConfig->distroType = eDISTRO_TYPE_DEB;
+            g_pConfig->distroType = eDISTRO_TYPE_DEB;
         }
     }
 
-    for (i = 0; i < ARRAY_SIZE(elList); i++) 
+    for (i = 0; i < ARRAY_SIZE(elList); i++)
     {
-        if (strstr(pConfig->distroID, elList[i]) != NULL) 
+        if (strstr(g_pConfig->distroID, elList[i]) != NULL)
         {
-            pConfig->distroType = eDISTRO_TYPE_EL;
+            g_pConfig->distroType = eDISTRO_TYPE_EL;
         }
     }
 
-    for (i = 0; i < ARRAY_SIZE(sleList); i++) 
+    for (i = 0; i < ARRAY_SIZE(sleList); i++)
     {
-        if (strstr(pConfig->distroID, sleList[i]) != NULL) 
+        if (strstr(g_pConfig->distroID, sleList[i]) != NULL)
         {
-            pConfig->distroType = eDISTRO_TYPE_SLE;
+            g_pConfig->distroType = eDISTRO_TYPE_SLE;
         }
     }
 
@@ -192,7 +199,7 @@ int get_os_info(OFFLINE_INSTALL_CONFIG *pConfig)
  *
  * Returns: 0 on success, -1 on failure
  */
-int read_version_file(OFFLINE_INSTALL_CONFIG *pConfig)
+int read_version_file()
 {
     FILE *fp;
     char *line = NULL;
@@ -221,28 +228,28 @@ int read_version_file(OFFLINE_INSTALL_CONFIG *pConfig)
         switch(line_num)
         {
             case 0:
-                strncpy(pConfig->installerVersion, line, sizeof(pConfig->installerVersion) - 1);
-                pConfig->installerVersion[sizeof(pConfig->installerVersion) - 1] = '\0';
+                strncpy(g_pConfig->installerVersion, line, sizeof(g_pConfig->installerVersion) - 1);
+                g_pConfig->installerVersion[sizeof(g_pConfig->installerVersion) - 1] = '\0';
                 break;
             case 1:
-                strncpy(pConfig->rocmVersion, line, sizeof(pConfig->rocmVersion) - 1);
-                pConfig->rocmVersion[sizeof(pConfig->rocmVersion) - 1] = '\0';
+                strncpy(g_pConfig->rocmVersion, line, sizeof(g_pConfig->rocmVersion) - 1);
+                g_pConfig->rocmVersion[sizeof(g_pConfig->rocmVersion) - 1] = '\0';
                 break;
             case 2:
-                strncpy(pConfig->buildTag, line, sizeof(pConfig->buildTag) - 1);
-                pConfig->buildTag[sizeof(pConfig->buildTag) - 1] = '\0';
+                strncpy(g_pConfig->buildTag, line, sizeof(g_pConfig->buildTag) - 1);
+                g_pConfig->buildTag[sizeof(g_pConfig->buildTag) - 1] = '\0';
                 break;
             case 3:
-                strncpy(pConfig->buildRunId, line, sizeof(pConfig->buildRunId) - 1);
-                pConfig->buildRunId[sizeof(pConfig->buildRunId) - 1] = '\0';
+                strncpy(g_pConfig->buildRunId, line, sizeof(g_pConfig->buildRunId) - 1);
+                g_pConfig->buildRunId[sizeof(g_pConfig->buildRunId) - 1] = '\0';
                 break;
             case 4:
-                strncpy(pConfig->buildTagInfo, line, sizeof(pConfig->buildTagInfo) - 1);
-                pConfig->buildTagInfo[sizeof(pConfig->buildTagInfo) - 1] = '\0';
+                strncpy(g_pConfig->buildTagInfo, line, sizeof(g_pConfig->buildTagInfo) - 1);
+                g_pConfig->buildTagInfo[sizeof(g_pConfig->buildTagInfo) - 1] = '\0';
                 break;
             case 5:
-                strncpy(pConfig->amdgpuDkmsBuild, line, sizeof(pConfig->amdgpuDkmsBuild) - 1);
-                pConfig->amdgpuDkmsBuild[sizeof(pConfig->amdgpuDkmsBuild) - 1] = '\0';
+                strncpy(g_pConfig->amdgpuDkmsBuild, line, sizeof(g_pConfig->amdgpuDkmsBuild) - 1);
+                g_pConfig->amdgpuDkmsBuild[sizeof(g_pConfig->amdgpuDkmsBuild) - 1] = '\0';
                 break;
         }
         line_num++;
@@ -257,15 +264,13 @@ int read_version_file(OFFLINE_INSTALL_CONFIG *pConfig)
     return 0;
 }
 
-void main_menu_draw(MENU_DATA *pMenuData, OFFLINE_INSTALL_CONFIG *pConfig)
+void main_menu_draw(MENU_DATA *pMenuData)
 {
-    ROCM_MENU_CONFIG *pRocmConfig = &pConfig->rocm_config;
-
     WINDOW *pMenuWindow = pMenuData->pMenuWindow;
     wclear(pMenuWindow);
 
     char installer_build[DEFAULT_CHAR_SIZE];
-    sprintf(installer_build, "%s", pConfig->distroName);
+    sprintf(installer_build, "%s", g_pConfig->distroName);
 
     // resizes pMenuWindow and subwindow that displays menu items to its original
     // size in case user resized terminal window
@@ -279,15 +284,15 @@ void main_menu_draw(MENU_DATA *pMenuData, OFFLINE_INSTALL_CONFIG *pConfig)
     print_version(pMenuData);
 
     // Display a warning if ROCm is installed on the system
-    if (pRocmConfig->install_rocm && pRocmConfig->is_rocm_installed && pRocmConfig->is_rocm_path_valid)
+    if (g_pRocmConfig->install_rocm && g_pRocmConfig->is_rocm_installed && g_pRocmConfig->is_rocm_path_valid)
     {
-        if (pRocmConfig->rocm_install_type == eINSTALL_PACKAGE)
+        if (g_pRocmConfig->rocm_install_type == eINSTALL_PACKAGE)
         {
-            print_menu_err_msg(pMenuData, "ROCm %s package manager installed for target.", pConfig->rocmVersion);
+            print_menu_err_msg(pMenuData, "ROCm %s package manager installed for target.", g_pConfig->rocmVersion);
         }
         else
         {
-            print_menu_warning_msg(pMenuData, "ROCm %s installed for target", pConfig->rocmVersion);
+            print_menu_warning_msg(pMenuData, "ROCm %s installed for target", g_pConfig->rocmVersion);
         }
     }
     else
@@ -298,7 +303,7 @@ void main_menu_draw(MENU_DATA *pMenuData, OFFLINE_INSTALL_CONFIG *pConfig)
     box(pMenuData->pMenuWindow, 0, 0);
 }
 
-void config_install(OFFLINE_INSTALL_CONFIG *pConfig, char *cmdArgs)
+void config_install(char *cmdArgs)
 {
     char installcomps[SMALL_CHAR_SIZE];
     char target[LARGE_CHAR_SIZE];
@@ -315,48 +320,48 @@ void config_install(OFFLINE_INSTALL_CONFIG *pConfig, char *cmdArgs)
     clear_str(postinstall);
 
     // Check if rocm is being installed
-    if (pConfig->rocm_config.install_rocm)
+    if (g_pRocmConfig->install_rocm)
     {
         sprintf(installcomps, "rocm");
-        sprintf(target, "target=%s", pConfig->rocm_config.rocm_install_path);
+        sprintf(target, "target=%s", g_pRocmConfig->rocm_install_path);
 
         // Add gfx device selection if specified
-        if (strlen(pConfig->rocm_config.rocm_device) > 0)
+        if (strlen(g_pRocmConfig->rocm_device) > 0)
         {
-            sprintf(gfx, "gfx=%s", pConfig->rocm_config.rocm_device);
+            sprintf(gfx, "gfx=%s", g_pRocmConfig->rocm_device);
         }
 
         // Add component selection if specified
-        if (strlen(pConfig->rocm_config.rocm_components) > 0)
+        if (strlen(g_pRocmConfig->rocm_components) > 0)
         {
-            sprintf(compo, "compo=%s", pConfig->rocm_config.rocm_components);
+            sprintf(compo, "compo=%s", g_pRocmConfig->rocm_components);
         }
 
-        // add rocm post-install if required
-        if (pConfig->post_config.rocm_post)
+        // add nopostrocm to disable post rocm install - default is enabled in the installer
+        if (!g_pPostConfig->rocm_post)
         {
-            sprintf(postrocm, "%s", "postrocm");
+            sprintf(postrocm, "%s", "nopostrocm");
         }
     }
 
     // Check if amdgpu is being installed
-    if (pConfig->driver_config.install_driver)
+    if (g_pDriverConfig->install_driver)
     {
         strcat(installcomps, " amdgpu");
 
         // Check if for amdgpu start
-        if (pConfig->driver_config.start_driver)
+        if (g_pDriverConfig->start_driver)
         {
             strcat(installcomps, " amdgpu-start");
         }
     }
 
     // Set post-install gpu access args
-    if (pConfig->post_config.current_user_grp)
+    if (g_pPostConfig->current_user_grp)
     {
         sprintf(postinstall, "%s", "gpu-access=user");
     }
-    else if (pConfig->post_config.all_user_grp)
+    else if (g_pPostConfig->all_user_grp)
     {
         sprintf(postinstall, "%s", "gpu-access=all");
     }
@@ -364,26 +369,22 @@ void config_install(OFFLINE_INSTALL_CONFIG *pConfig, char *cmdArgs)
     sprintf(cmdArgs, "%s %s %s %s %s %s", installcomps, target, gfx, compo, postrocm, postinstall);
 }
 
-void set_install_state(MENU_DATA *pMenuData, OFFLINE_INSTALL_CONFIG *pConfig)
+void set_install_state(MENU_DATA *pMenuData)
 {
-    ROCM_MENU_CONFIG *pRocmConfig = &pConfig->rocm_config;
     bool installable = false;
 
-    if (pConfig->driver_config.install_driver)
+    if (g_pDriverConfig->install_driver)
     {
         installable = true;
     }
 
-    if (pRocmConfig->install_rocm)
+    if (g_pRocmConfig->install_rocm)
     {
-        if (pRocmConfig->is_rocm_path_valid && (pRocmConfig->rocm_pkg_path_index < 0) )
-        {
-            installable = true;
-        }
-        else
-        {
-            installable = false;   
-        }
+        installable = true;
+        installable &= g_pRocmConfig->is_rocm_path_valid;
+        installable &= (g_pRocmConfig->rocm_pkg_path_index < 0);
+        installable &= (strlen(g_pRocmConfig->rocm_device) > 0);
+        installable &= (strlen(g_pRocmConfig->rocm_components) > 0);
     }
 
     // update the install menu item if install is valid
@@ -396,7 +397,7 @@ void set_install_state(MENU_DATA *pMenuData, OFFLINE_INSTALL_CONFIG *pConfig)
         menu_set_item_select(pMenuData, MAIN_MENU_ITEM_INSTALL_INDEX, false);
     }
 
-    pConfig->install = installable;
+    g_pConfig->install = installable;
 }
 
 int main()
@@ -412,19 +413,22 @@ int main()
     int done = 0;
     int status = -1;
 
+    // Initialize global config pointers
+    g_pConfig       = &offlineConfig;
+    g_pRocmConfig   = &offlineConfig.rocm_config;
+    g_pDriverConfig = &offlineConfig.driver_config;
+    g_pPostConfig   = &offlineConfig.post_config;
+    g_pPreConfig    = &offlineConfig.pre_config;
+
     // Read VERSION file BEFORE ncurses init for error reporting
-    if (read_version_file(&offlineConfig) != 0)
+    if (read_version_file() != 0)
     {
         fprintf(stderr, "Failed to read VERSION file. Exiting.\n");
         return 1;
     }
 
     // Get distro/kernel info on the system
-    get_os_info(&offlineConfig);
-
-    // Initialize config pointers for submenus to access version info
-    offlineConfig.rocm_config.pConfig = &offlineConfig;
-    offlineConfig.driver_config.pConfig = &offlineConfig;
+    get_os_info();
 
     // Set TERMINFO path for static ncurses compatibility across distros
     // Static ncurses built on AlmaLinux 8.10 looks for terminfo in /usr/share/terminfo
@@ -490,13 +494,13 @@ int main()
     menu_set_item_select(&menuMain, MAIN_MENU_ITEM_INSTALL_INDEX, false);  // install
 
     // Create the various main option menus
-    create_pre_menu_window(menuWindow, &offlineConfig);
-    create_rocm_menu_window(menuWindow, &offlineConfig);
-    create_driver_menu_window(menuWindow, &offlineConfig);
-    create_post_menu_window(menuWindow, &offlineConfig);
+    create_pre_menu_window(menuWindow);
+    create_rocm_menu_window(menuWindow);
+    create_driver_menu_window(menuWindow);
+    create_post_menu_window(menuWindow);
 
     // Draw the main menu
-    main_menu_draw(&menuMain, &offlineConfig);
+    main_menu_draw(&menuMain);
 
     // Post the main menu
     post_menu(pMenu);
@@ -512,8 +516,8 @@ int main()
                 if (should_window_be_resized(menuWindow, WIN_NUM_LINES,WIN_WIDTH_COLS))
                 {
                     reset_window_before_resizing(&menuMain);
-                    
-                    main_menu_draw(&menuMain, &offlineConfig);
+
+                    main_menu_draw(&menuMain);
                     post_menu(pMenu);
                 }
                 break;
@@ -547,12 +551,12 @@ int main()
                 else if ( item_index(pCurrentItem) == MAIN_MENU_ITEM_ROCM_INDEX )
                 {
                     do_rocm_menu();
-                    set_install_state(&menuMain, &offlineConfig);
+                    set_install_state(&menuMain);
                 }
                 else if ( item_index(pCurrentItem) == MAIN_MENU_ITEM_DRIVER_INDEX )
                 {
                     do_driver_menu();
-                    set_install_state(&menuMain, &offlineConfig);
+                    set_install_state(&menuMain);
                 }
                 else if ( item_index(pCurrentItem) == MAIN_MENU_ITEM_POST_INDEX )
                 {
@@ -560,7 +564,7 @@ int main()
                 }
                 else if ( item_index(pCurrentItem) == MAIN_MENU_ITEM_INSTALL_INDEX )
                 {
-                    if (offlineConfig.install)
+                    if (g_pConfig->install)
                     {
                         done = 1;
                         status = 0;
@@ -572,7 +576,7 @@ int main()
                 }
 
                 // return to the main menu
-                main_menu_draw(&menuMain, &offlineConfig);
+                main_menu_draw(&menuMain);
                 post_menu(pMenu);
 
                 break;
@@ -600,7 +604,7 @@ int main()
         char cmdArgs[DEFAULT_CHAR_SIZE];
         clear_str(cmdArgs);
 
-        config_install(&offlineConfig, cmdArgs);
+        config_install(cmdArgs);
 
         sprintf(cmd, "./rocm-installer.sh %s", cmdArgs);
         printf("Running: %s\n", cmd);

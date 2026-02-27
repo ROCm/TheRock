@@ -1135,6 +1135,10 @@ void reset_window_before_resizing(MENU_DATA *pMenuData)
 
 void add_menu_item_selection_mark(MENU_DATA *pMenuData, ITEM *pCurrentItem)
 {
+    // Don't draw "X" if flag is set
+    if (pMenuData->disableSelectionMark)
+        return;
+
     WINDOW *pSubMenuWindow = menu_sub(pMenuData->pMenu);
 
     int itemIndex = item_index(pCurrentItem);

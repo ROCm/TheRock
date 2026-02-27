@@ -53,7 +53,7 @@
 #define DRIVER_DKMS_PATH    "/var/lib/dkms/amdgpu/"
 
 
-void create_driver_menu_window(WINDOW *pMenuWindow, OFFLINE_INSTALL_CONFIG *pConfig);
+void create_driver_menu_window(WINDOW *pMenuWindow);
 void destroy_driver_menu_window();
 void do_driver_menu();
 
