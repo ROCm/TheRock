@@ -247,7 +247,7 @@ def determine_long_lived_branch(branch_name: str) -> bool:
         is_long_lived_branch = True
 
     return is_long_lived_branch
-    
+
 
 def matrix_generator(
     is_pull_request=False,
@@ -672,7 +672,6 @@ def main(base_args, linux_families, windows_families):
             ):
                 matrix_row["sanity_check_only_for_family"] = True
 
-            
 
     print(f"test_type decision: '{test_type}' (reason: {test_type_reason})")
 
