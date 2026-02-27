@@ -9,7 +9,6 @@ import os
 import subprocess
 from pathlib import Path
 
-
 CACHED_TARGET_FAMILY: str | None = None
 
 
@@ -236,6 +235,8 @@ LibraryEntry(
     "lib/host-math/lib",
 )
 LibraryEntry("amd_comgr", "core", "libamd_comgr.so*", "amd_comgr*.dll")
+LibraryEntry("rocdecode", "core", "librocdecode.so*", "")
+LibraryEntry("rocjpeg", "core", "librocjpeg.so*", "")
 LibraryEntry("hipblas", "libraries", "libhipblas.so*", "*hipblas*.dll")
 LibraryEntry("hipblaslt", "libraries", "libhipblaslt.so*", "*hipblaslt*.dll")
 LibraryEntry("hipfft", "libraries", "libhipfft.so*", "hipfft*.dll")

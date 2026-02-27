@@ -28,7 +28,10 @@ benchmark_matrix = {
         "test_script": f"python {_get_benchmark_script_path('test_rocblas_benchmark.py')}",
         # TODO(lajagapp): Add windows support (https://github.com/ROCm/TheRock/issues/2478)
         "platform": ["linux"],
-        "total_shards": 1,
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
         # TODO: Remove xfail once dedicated performance servers are added in "benchmark-runs-on"
         "expect_failure": True,
     },
@@ -38,7 +41,10 @@ benchmark_matrix = {
         "timeout_minutes": 60,
         "test_script": f"python {_get_benchmark_script_path('test_hipblaslt_benchmark.py')}",
         "platform": ["linux", "windows"],
-        "total_shards": 1,
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
         # TODO: Remove xfail once dedicated performance servers are added in "benchmark-runs-on"
         "expect_failure": True,
     },
@@ -49,7 +55,10 @@ benchmark_matrix = {
         "timeout_minutes": 60,
         "test_script": f"python {_get_benchmark_script_path('test_rocsolver_benchmark.py')}",
         "platform": ["linux", "windows"],
-        "total_shards": 1,
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
         # TODO: Remove xfail once dedicated performance servers are added in "benchmark-runs-on"
         "expect_failure": True,
     },
@@ -60,7 +69,10 @@ benchmark_matrix = {
         "timeout_minutes": 90,
         "test_script": f"python {_get_benchmark_script_path('test_rocrand_benchmark.py')}",
         "platform": ["linux", "windows"],
-        "total_shards": 1,
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
         # TODO: Remove xfail once dedicated performance servers are added in "benchmark-runs-on"
         "expect_failure": True,
     },
@@ -71,7 +83,10 @@ benchmark_matrix = {
         "timeout_minutes": 60,
         "test_script": f"python {_get_benchmark_script_path('test_rocfft_benchmark.py')}",
         "platform": ["linux", "windows"],
-        "total_shards": 1,
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
         # TODO: Remove xfail once dedicated performance servers are added in "benchmark-runs-on"
         "expect_failure": True,
     },
