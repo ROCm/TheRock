@@ -10,14 +10,13 @@ Arguments:
   --workflow-mode          Treat --start and --end as workflow run IDs instead of commit SHAs
 
 Example usage:
-  python build_tools/generate_manifest_diff_refactored.py --start abc123 --end def456
-  python build_tools/generate_manifest_diff_refactored.py --end def456 --find-last-successful ci_nightly.yml
-  python build_tools/generate_manifest_diff_refactored.py --start 12345 --end 67890 --workflow-mode
+  python build_tools/generate_manifest_diff_report.py --start abc123 --end def456
+  python build_tools/generate_manifest_diff_report.py --end def456 --find-last-successful ci_nightly.yml
+  python build_tools/generate_manifest_diff_report.py --start 12345 --end 67890 --workflow-mode
 """
 
 # Standard library imports
 import argparse
-import base64
 import os
 import sys
 import urllib.parse
@@ -32,6 +31,7 @@ THEROCK_DIR = THIS_SCRIPT_DIR.parent
 sys.path.insert(0, str(THIS_SCRIPT_DIR))
 
 # Local imports
+from generate_therock_manifest import build_manifest_schema
 from github_actions.github_actions_utils import (
     gha_query_last_successful_workflow_run,
     gha_query_workflow_run_by_id,
@@ -49,9 +49,13 @@ SUPERREPO_NAMES = {"rocm-systems", "rocm-libraries"}
 # Directories to scan within superrepos for components (In case new directories are added, we need to add them here)
 SUPERREPO_COMPONENT_DIRS = ["shared", "projects"]
 
-# Pagination constants
-MAX_PAGES = 20
-PER_PAGE = 100
+# Pagination constants for GitHub API commit fetching.
+# MAX_PAGES * PER_PAGE = 2000 commits maximum.
+# This limit prevents excessive API calls while covering most reasonable commit ranges.
+# GitHub API returns commits in reverse chronological order, so we paginate until
+# we find the start commit or hit the limit.
+MAX_PAGES = 20  # Maximum number of API pages to fetch
+PER_PAGE = 100  # Commits per page (GitHub API maximum is 100)
 
 # Report identifiers
 UNASSIGNED_KEY = "Unassigned"
@@ -234,44 +238,6 @@ def resolve_commits(args: argparse.Namespace) -> tuple[str, str]:
 # =============================================================================
 # GitHub API Utilities
 # =============================================================================
-
-
-def parse_gitmodules(content: str) -> dict[str, dict[str, str]]:
-    """Parse .gitmodules content into path -> {name, url, branch} mapping."""
-    entries: dict[str, dict[str, str]] = {}
-    current_name = None
-    current_path = None
-    current_url = None
-    current_branch = None
-
-    for line in content.split("\n"):
-        line = line.strip()
-        if line.startswith("[submodule"):
-            if current_path and current_url:
-                entries[current_path] = {
-                    "name": current_name or current_path.split("/")[-1],
-                    "url": current_url,
-                    "branch": current_branch or "main",
-                }
-            # Extract name from [submodule "NAME"]
-            current_name = line.split('"')[1] if '"' in line else None
-            current_path = None
-            current_url = None
-            current_branch = None
-        elif line.startswith("path ="):
-            current_path = line.split("path =")[1].strip()
-        elif line.startswith("url ="):
-            current_url = line.split("url =")[1].strip()
-        elif line.startswith("branch ="):
-            current_branch = line.split("branch =")[1].strip()
-
-    if current_path and current_url:
-        entries[current_path] = {
-            "name": current_name or current_path.split("/")[-1],
-            "url": current_url,
-            "branch": current_branch or "main",
-        }
-    return entries
 
 
 def get_api_base_from_url(url: str, fallback_name: str) -> str:
@@ -466,40 +432,36 @@ def fetch_commits_by_directory(
 
 
 def load_submodules_at_commit(commit_sha: str) -> dict[str, dict[str, str]]:
-    """Load all submodules from TheRock at a specific commit."""
+    """Load all submodules from TheRock at a specific commit.
+
+    Uses build_manifest_schema from generate_therock_manifest to get submodule
+    information and converts it to the expected format.
+
+    Note: Requires the repository to be checked out with full history
+    (fetch-depth: 0) for historical commits to be accessible via local git.
+    """
     try:
-        tree_url = f"{GITHUB_API_BASE}/{ROCM_ORG}/{THEROCK_REPO}/git/trees/{commit_sha}?recursive=1"
-        tree_data = gha_send_request(tree_url)
+        manifest = build_manifest_schema(THEROCK_DIR, commit_sha)
 
-        gitmodules_url = f"{GITHUB_API_BASE}/{ROCM_ORG}/{THEROCK_REPO}/contents/.gitmodules?ref={commit_sha}"
-        gitmodules_data = gha_send_request(gitmodules_url)
-        content = base64.b64decode(gitmodules_data["content"]).decode("utf-8")
-        path_to_info = parse_gitmodules(content)
+        submodules: dict[str, dict[str, str]] = {}
+        for entry in manifest.get("submodules", []):
+            name = entry["submodule_name"]
+            url = entry["submodule_url"]
+            pin_sha = entry.get("pin_sha")
 
-        if not path_to_info:
-            print("No submodules found in .gitmodules")
-            return {}
-
-        print(f"Found {len(path_to_info)} submodule paths in .gitmodules")
-
-    except (KeyError, ValueError, TypeError) as e:
-        print(f"Error fetching submodule data: {e}")
-        return {}
-
-    submodules: dict[str, dict[str, str]] = {}
-    for entry in tree_data.get("tree", []):
-        if entry.get("type") == "commit":
-            path = entry["path"]
-            if path in path_to_info:
-                info = path_to_info[path]
-                name = info["name"]  # Use name from .gitmodules
+            if pin_sha:
                 submodules[name] = {
-                    "sha": entry["sha"],
-                    "api_base": get_api_base_from_url(info["url"], name),
-                    "branch": info["branch"],
+                    "sha": pin_sha,
+                    "api_base": get_api_base_from_url(url, name),
+                    "branch": None,  # Branch info not in manifest schema
                 }
 
-    return submodules
+        print(f"Found {len(submodules)} submodules in manifest for {commit_sha[:8]}")
+        return submodules
+
+    except (RuntimeError, KeyError) as e:
+        print(f"Error loading submodules for commit {commit_sha}: {e}")
+        return {}
 
 
 # =============================================================================
@@ -584,131 +546,185 @@ def process_regular_submodule(
     return submodule
 
 
+class SuperrepoProcessor:
+    """Processes a superrepo with component-level analysis."""
+
+    def __init__(
+        self,
+        name: str,
+        start_data: dict[str, str] | None,
+        end_data: dict[str, str] | None,
+    ):
+        self.name = name
+        self.start_data = start_data
+        self.end_data = end_data
+        self.old_sha = start_data["sha"] if start_data else None
+        self.new_sha = end_data["sha"] if end_data else None
+        data = end_data or start_data or {}
+        self.api_base = data.get("api_base", "")
+        self.branch = data.get("branch", "main")
+        self.superrepo: Superrepo | None = None
+        self.fetch_start: str | None = None
+        self.fetch_end: str | None = None
+
+    def process(self) -> Superrepo:
+        """Process the superrepo and return the result."""
+        self.init_superrepo()
+        print(f"  {self.name}: SUPERREPO ({self.superrepo.status})")
+
+        if self.superrepo.status == "removed":
+            return self.handle_removed()
+        elif self.superrepo.status == "added":
+            return self.handle_added()
+        elif self.superrepo.status == "unchanged":
+            return self.handle_unchanged()
+        else:
+            return self.handle_changed_or_reverted()
+
+    def init_superrepo(self) -> None:
+        """Initialize the Superrepo object with basic info."""
+        status, self.fetch_start, self.fetch_end = determine_status(
+            self.old_sha, self.new_sha, self.api_base
+        )
+        self.superrepo = Superrepo(
+            name=self.name,
+            sha=self.new_sha or self.old_sha or "",
+            api_base=self.api_base,
+            branch=self.branch,
+            status=status,
+            start_sha=self.old_sha or "",
+            end_sha=self.new_sha or "",
+        )
+
+    def handle_removed(self) -> Superrepo:
+        """Handle a removed superrepo."""
+        start_components = fetch_superrepo_components(
+            self.name, self.old_sha, self.api_base
+        )
+        print(f"    Removed superrepo had {len(start_components)} components")
+        for comp_path in start_components:
+            self.add_component(comp_path, status="removed")
+        return self.superrepo
+
+    def handle_added(self) -> Superrepo:
+        """Handle a newly added superrepo."""
+        end_components = fetch_superrepo_components(
+            self.name, self.new_sha, self.api_base
+        )
+        print(f"    Added superrepo with {len(end_components)} components")
+        print(f"    Fetching tip commits for each component...")
+        for comp_path in end_components:
+            tip_commits = self.fetch_tip_commit(comp_path)
+            self.add_component(comp_path, status="added", commits=tip_commits)
+        return self.superrepo
+
+    def handle_unchanged(self) -> Superrepo:
+        """Handle an unchanged superrepo."""
+        end_components = fetch_superrepo_components(
+            self.name, self.new_sha, self.api_base
+        )
+        print(f"    Unchanged superrepo with {len(end_components)} components")
+        for comp_path in end_components:
+            self.add_component(comp_path, status="unchanged")
+        return self.superrepo
+
+    def handle_changed_or_reverted(self) -> Superrepo:
+        """Handle a changed or reverted superrepo with full commit analysis."""
+        start_components = (
+            fetch_superrepo_components(self.name, self.old_sha, self.api_base)
+            if self.old_sha
+            else []
+        )
+        end_components = (
+            fetch_superrepo_components(self.name, self.new_sha, self.api_base)
+            if self.new_sha
+            else []
+        )
+
+        start_set = set(start_components)
+        end_set = set(end_components)
+        added_paths = end_set - start_set
+        removed_paths = start_set - end_set
+
+        print(
+            f"    Components: {len(start_components)} -> {len(end_components)} "
+            f"(+{len(added_paths)} -{len(removed_paths)})"
+        )
+
+        all_components = start_set | end_set
+        directories = [c + "/" if not c.endswith("/") else c for c in all_components]
+
+        allocation, all_commits = fetch_commits_by_directory(
+            repo_name=self.name,
+            start_sha=self.fetch_start,
+            end_sha=self.fetch_end,
+            api_base=self.api_base,
+            directories=directories,
+        )
+
+        self.superrepo.all_commits = all_commits
+        self.superrepo.commit_allocation = allocation
+
+        for comp_path in all_components:
+            comp_status, comp_commits = self.determine_component_status(
+                comp_path, added_paths, removed_paths, allocation
+            )
+            self.add_component(comp_path, status=comp_status, commits=comp_commits)
+
+        return self.superrepo
+
+    def determine_component_status(
+        self,
+        comp_path: str,
+        added_paths: set[str],
+        removed_paths: set[str],
+        allocation: dict[str, list[dict]],
+    ) -> tuple[str, list[dict]]:
+        """Determine the status and commits for a component."""
+        comp_key = comp_path.rstrip("/")
+
+        if comp_path in added_paths:
+            comp_commits = allocation.get(comp_key, [])
+            if comp_commits:
+                comp_commits = [comp_commits[0]]
+            return "added", comp_commits
+        elif comp_path in removed_paths:
+            return "removed", []
+        elif comp_key in allocation and allocation[comp_key]:
+            return "changed", allocation.get(comp_key, [])
+        else:
+            return "unchanged", []
+
+    def fetch_tip_commit(self, comp_path: str) -> list[dict]:
+        """Fetch the tip commit for a component."""
+        comp_name = comp_path.split("/")[-1]
+        try:
+            params = {"sha": self.new_sha, "path": comp_path, "per_page": 1}
+            url = f"{self.api_base}/commits?{urllib.parse.urlencode(params)}"
+            tip_data = gha_send_request(url)
+            if tip_data:
+                return [tip_data[0]]
+        except (KeyError, ValueError, TypeError, HTTPError) as e:
+            print(f"      Warning: Could not fetch tip for {comp_name}: {e}")
+        return []
+
+    def add_component(
+        self, comp_path: str, status: str, commits: list[dict] | None = None
+    ) -> None:
+        """Add a component to the superrepo."""
+        comp_name = comp_path.split("/")[-1]
+        self.superrepo.components[comp_path] = Component(
+            path=comp_path, name=comp_name, status=status, commits=commits or []
+        )
+
+
 def process_superrepo(
     name: str,
     start_data: dict[str, str] | None,
     end_data: dict[str, str] | None,
 ) -> Superrepo:
     """Process a superrepo with component-level analysis."""
-    old_sha = start_data["sha"] if start_data else None
-    new_sha = end_data["sha"] if end_data else None
-    data = end_data or start_data or {}
-    api_base = data.get("api_base", "")
-    branch = data.get("branch", "main")
-
-    status, fetch_start, fetch_end = determine_status(old_sha, new_sha, api_base)
-
-    superrepo = Superrepo(
-        name=name,
-        sha=new_sha or old_sha or "",
-        api_base=api_base,
-        branch=branch,
-        status=status,
-        start_sha=old_sha or "",
-        end_sha=new_sha or "",
-    )
-
-    print(f"  {name}: SUPERREPO ({status})")
-
-    if status == "removed":
-        # Fetch components that existed before removal
-        start_components = fetch_superrepo_components(name, old_sha, api_base)
-        print(f"    Removed superrepo had {len(start_components)} components")
-        for comp_path in start_components:
-            comp_name = comp_path.split("/")[-1]
-            superrepo.components[comp_path] = Component(
-                path=comp_path, name=comp_name, status="removed"
-            )
-        return superrepo
-
-    if status == "added":
-        end_components = fetch_superrepo_components(name, new_sha, api_base)
-        print(f"    Added superrepo with {len(end_components)} components")
-        print(f"    Fetching tip commits for each component...")
-        for comp_path in end_components:
-            comp_name = comp_path.split("/")[-1]
-            # Fetch tip commit for this component
-            tip_commits: list[dict] = []
-            try:
-                params = {"sha": new_sha, "path": comp_path, "per_page": 1}
-                url = f"{api_base}/commits?{urllib.parse.urlencode(params)}"
-                tip_data = gha_send_request(url)
-                if tip_data:
-                    tip_commits = [tip_data[0]]
-            except (KeyError, ValueError, TypeError, HTTPError) as e:
-                print(f"      Warning: Could not fetch tip for {comp_name}: {e}")
-            superrepo.components[comp_path] = Component(
-                path=comp_path, name=comp_name, status="added", commits=tip_commits
-            )
-        return superrepo
-
-    # For unchanged, changed, or reverted - get components from both sides
-    start_components = (
-        fetch_superrepo_components(name, old_sha, api_base) if old_sha else []
-    )
-    end_components = (
-        fetch_superrepo_components(name, new_sha, api_base) if new_sha else []
-    )
-
-    start_set = set(start_components)
-    end_set = set(end_components)
-    added = end_set - start_set
-    removed = start_set - end_set
-
-    if status == "unchanged":
-        print(f"    Unchanged superrepo with {len(end_components)} components")
-        for comp_path in end_components:
-            comp_name = comp_path.split("/")[-1]
-            superrepo.components[comp_path] = Component(
-                path=comp_path, name=comp_name, status="unchanged"
-            )
-        return superrepo
-
-    # Changed or reverted - need full commit analysis
-    print(
-        f"    Components: {len(start_components)} -> {len(end_components)} "
-        f"(+{len(added)} -{len(removed)})"
-    )
-
-    all_components = start_set | end_set
-    directories = [c + "/" if not c.endswith("/") else c for c in all_components]
-
-    allocation, all_commits = fetch_commits_by_directory(
-        repo_name=name,
-        start_sha=fetch_start,
-        end_sha=fetch_end,
-        api_base=api_base,
-        directories=directories,
-    )
-
-    superrepo.all_commits = all_commits
-    superrepo.commit_allocation = allocation
-
-    # Create Component objects with proper status
-    for comp_path in all_components:
-        comp_name = comp_path.split("/")[-1]
-        comp_key = comp_path.rstrip("/")
-
-        if comp_path in added:
-            comp_status = "added"
-            comp_commits = allocation.get(comp_key, [])
-            if comp_commits:
-                comp_commits = [comp_commits[0]]  # Only tip for newly added
-        elif comp_path in removed:
-            comp_status = "removed"
-            comp_commits = []
-        elif comp_key in allocation and allocation[comp_key]:
-            comp_status = "changed"
-            comp_commits = allocation.get(comp_key, [])
-        else:
-            comp_status = "unchanged"
-            comp_commits = []
-
-        superrepo.components[comp_path] = Component(
-            path=comp_path, name=comp_name, status=comp_status, commits=comp_commits
-        )
-
-    return superrepo
+    return SuperrepoProcessor(name, start_data, end_data).process()
 
 
 # =============================================================================
@@ -904,104 +920,122 @@ def generate_summary_html(items: dict[str, list[str]], summary_type: str) -> str
 # =============================================================================
 
 
-def generate_superrepo_html(
-    superrepo: Superrepo, removed_submodules: list[str] | None = None
-) -> str:
-    """Generate HTML for a superrepo section.
+class SuperrepoHtmlBuilder:
+    """Builds HTML for a superrepo section."""
 
-    Args:
-        superrepo: The Superrepo object to generate HTML for.
-        removed_submodules: Optional list of submodule names that were removed
-            (relevant when a new superrepo is added, replacing direct submodules).
-    """
-    print(f"  Generating HTML for {superrepo.name} ({superrepo.status})")
+    def __init__(
+        self, superrepo: Superrepo, removed_submodules: list[str] | None = None
+    ):
+        self.superrepo = superrepo
+        self.removed_submodules = removed_submodules
+        self.commit_to_projects: dict[str, set[str]] = {}
 
-    if not superrepo.components:
-        if superrepo.status == "removed":
+    def build(self) -> str:
+        """Build and return the complete HTML for the superrepo."""
+        print(f"  Generating HTML for {self.superrepo.name} ({self.superrepo.status})")
+
+        if not self.superrepo.components:
+            return self.build_empty_html()
+
+        self.build_commit_mapping()
+        status_banner = self.build_status_banner()
+        component_table = self.build_component_table()
+        history_html = self.build_history_table()
+
+        return status_banner + component_table + history_html
+
+    def build_empty_html(self) -> str:
+        """Build HTML for a superrepo with no components."""
+        if self.superrepo.status == "removed":
+            return f"<div class='removed'><strong>{self.superrepo.name}:</strong> REMOVED</div>"
+        return f"<div class='unchanged'><strong>{self.superrepo.name}:</strong> No components</div>"
+
+    def build_status_banner(self) -> str:
+        """Build the status banner for added/removed/reverted superrepos."""
+        if self.superrepo.status == "added":
+            replaced_note = ""
+            if self.removed_submodules:
+                replaced_list = ", ".join(sorted(self.removed_submodules))
+                replaced_note = (
+                    f"<div class='replaced-submodules'>Replaces direct submodules: "
+                    f"<code>{replaced_list}</code></div>"
+                )
             return (
-                f"<div class='removed'><strong>{superrepo.name}:</strong> REMOVED</div>"
+                "<div class='superrepo-status-banner added'>"
+                f"<strong>NEWLY ADDED SUPERREPO</strong> - "
+                f"This superrepo was newly added with {len(self.superrepo.components)} components. "
+                f"Showing tip commit for each component.{replaced_note}</div>"
             )
-        return f"<div class='unchanged'><strong>{superrepo.name}:</strong> No components</div>"
-
-    # Status banner for added/removed/reverted superrepos
-    status_banner = ""
-    if superrepo.status == "added":
-        replaced_note = ""
-        if removed_submodules:
-            replaced_list = ", ".join(sorted(removed_submodules))
-            replaced_note = (
-                f"<div class='replaced-submodules'>Replaces direct submodules: "
-                f"<code>{replaced_list}</code></div>"
+        elif self.superrepo.status == "removed":
+            return (
+                "<div class='superrepo-status-banner removed'>"
+                f"<strong>REMOVED SUPERREPO</strong> - "
+                f"This superrepo was removed. It previously contained "
+                f"{len(self.superrepo.components)} components.</div>"
             )
-        status_banner = (
-            "<div class='superrepo-status-banner added'>"
-            f"<strong>NEWLY ADDED SUPERREPO</strong> - "
-            f"This superrepo was newly added with {len(superrepo.components)} components. "
-            f"Showing tip commit for each component.{replaced_note}</div>"
-        )
-    elif superrepo.status == "removed":
-        status_banner = (
-            "<div class='superrepo-status-banner removed'>"
-            f"<strong>REMOVED SUPERREPO</strong> - "
-            f"This superrepo was removed. It previously contained {len(superrepo.components)} components.</div>"
-        )
-    elif superrepo.status == "reverted":
-        start_badge = create_commit_badge(superrepo.start_sha[:7], superrepo.name)
-        end_badge = create_commit_badge(superrepo.end_sha[:7], superrepo.name)
-        status_banner = (
-            "<div class='superrepo-status-banner reverted'>"
-            f"<strong>REVERTED SUPERREPO</strong> - "
-            f"This superrepo was reverted from {start_badge} back to {end_badge}. "
-            f"Commits shown below are being undone by this revert.</div>"
-        )
+        elif self.superrepo.status == "reverted":
+            start_badge = create_commit_badge(
+                self.superrepo.start_sha[:7], self.superrepo.name
+            )
+            end_badge = create_commit_badge(
+                self.superrepo.end_sha[:7], self.superrepo.name
+            )
+            return (
+                "<div class='superrepo-status-banner reverted'>"
+                f"<strong>REVERTED SUPERREPO</strong> - "
+                f"This superrepo was reverted from {start_badge} back to {end_badge}. "
+                f"Commits shown below are being undone by this revert.</div>"
+            )
+        return ""
 
-    # Build commit-to-projects mapping (use component name, not path)
-    commit_to_projects: dict[str, set[str]] = {}
-    for comp in superrepo.components.values():
-        for commit in comp.commits:
-            sha = commit.get("sha", "-")
-            if sha not in commit_to_projects:
-                commit_to_projects[sha] = set()
-            commit_to_projects[sha].add(comp.name)
+    def build_commit_mapping(self) -> None:
+        """Build mapping from commit SHA to component names."""
+        for comp in self.superrepo.components.values():
+            for commit in comp.commits:
+                sha = commit.get("sha", "-")
+                if sha not in self.commit_to_projects:
+                    self.commit_to_projects[sha] = set()
+                self.commit_to_projects[sha].add(comp.name)
 
-    # Build component table rows
-    rows = []
-    for comp in sorted(superrepo.components.values(), key=lambda c: c.path):
-        row_classes = []
-        status_class = None
+    def build_component_table(self) -> str:
+        """Build the component table HTML."""
+        rows = []
+        for comp in sorted(self.superrepo.components.values(), key=lambda c: c.path):
+            row_classes = []
+            status_class = None
 
-        if comp.status == "added":
-            status_class = "newly_added"
-        elif comp.status == "removed":
-            status_class = "removed"
-        elif comp.status == "unchanged":
-            row_classes.append("unchanged-row")
-        elif superrepo.status == "reverted" and comp.commits:
-            # Components with commits in a reverted superrepo are being undone
-            status_class = "reverted"
+            if comp.status == "added":
+                status_class = "newly_added"
+            elif comp.status == "removed":
+                status_class = "removed"
+            elif comp.status == "unchanged":
+                row_classes.append("unchanged-row")
+            elif self.superrepo.status == "reverted" and comp.commits:
+                status_class = "reverted"
 
-        commit_html = create_commit_list_html(
-            comp.commits, superrepo.name, status_class
-        )
-        row_class_attr = f" class='{' '.join(row_classes)}'" if row_classes else ""
-        rows.append(
-            f"<tr{row_class_attr}><td>{comp.name}</td><td>{commit_html}</td></tr>"
-        )
+            commit_html = create_commit_list_html(
+                comp.commits, self.superrepo.name, status_class
+            )
+            row_class_attr = f" class='{' '.join(row_classes)}'" if row_classes else ""
+            rows.append(
+                f"<tr{row_class_attr}><td>{comp.name}</td><td>{commit_html}</td></tr>"
+            )
 
-    component_table = create_table(["Component", "Commits"], rows)
-    component_table = status_banner + component_table
+        return create_table(["Component", "Commits"], rows)
 
-    # Build commit history table
-    history_html = ""
-    if superrepo.all_commits:
+    def build_history_table(self) -> str:
+        """Build the commit history table HTML."""
+        if not self.superrepo.all_commits:
+            return ""
+
         history_rows = []
-        for commit in superrepo.all_commits:
+        for commit in self.superrepo.all_commits:
             data = extract_commit_data(commit)
             projects = (
-                ", ".join(sorted(commit_to_projects.get(data["sha"], [])))
+                ", ".join(sorted(self.commit_to_projects.get(data["sha"], [])))
                 or "Unassigned"
             )
-            badge = create_commit_badge(data["sha"], superrepo.name)
+            badge = create_commit_badge(data["sha"], self.superrepo.name)
             history_rows.append(
                 f"<tr>"
                 f"<td class='date-col'>{data['date']}</td>"
@@ -1012,17 +1046,24 @@ def generate_superrepo_html(
                 f"</tr>"
             )
 
-        if history_rows:
-            history_html = (
-                "<div class='section-title' style='margin-top:16px;font-weight:bold;color:#1976D2;'>"
-                "Commit History (newest to oldest):</div>"
-                "<table class='commit-history-table'>"
-                "<tr><th class='col-date'>Date</th><th class='col-sha'>SHA</th>"
-                "<th class='col-author'>Author</th><th class='col-projects'>Project(s)</th>"
-                "<th>Message</th></tr>" + "".join(history_rows) + "</table>"
-            )
+        if not history_rows:
+            return ""
 
-    return component_table + history_html
+        return (
+            "<div class='section-title' style='margin-top:16px;font-weight:bold;color:#1976D2;'>"
+            "Commit History (newest to oldest):</div>"
+            "<table class='commit-history-table'>"
+            "<tr><th class='col-date'>Date</th><th class='col-sha'>SHA</th>"
+            "<th class='col-author'>Author</th><th class='col-projects'>Project(s)</th>"
+            "<th>Message</th></tr>" + "".join(history_rows) + "</table>"
+        )
+
+
+def generate_superrepo_html(
+    superrepo: Superrepo, removed_submodules: list[str] | None = None
+) -> str:
+    """Generate HTML for a superrepo section."""
+    return SuperrepoHtmlBuilder(superrepo, removed_submodules).build()
 
 
 # =============================================================================
@@ -1103,6 +1144,159 @@ def generate_non_superrepo_html(diff: ManifestDiff) -> str:
 # =============================================================================
 
 
+class HtmlReportGenerator:
+    """Generates HTML reports from ManifestDiff data."""
+
+    def __init__(self, diff: ManifestDiff, output_dir: Path | None = None):
+        """Initialize the generator.
+
+        Args:
+            diff: The manifest diff to generate the report from.
+            output_dir: Optional output directory. If provided, creates the directory
+                        and writes the report there. Otherwise writes to TheRock root.
+        """
+        self.diff = diff
+        self.output_dir = output_dir
+        self.html = ""
+        self.report_path: Path | None = None
+
+    def generate(self) -> Path:
+        """Generate the HTML report.
+
+        Returns:
+            Path to the generated report file.
+        """
+        print("\n=== Writing HTML Report ===")
+        self.load_template()
+        self.inject_commit_range()
+        self.inject_summaries()
+        self.inject_section_badges()
+        self.inject_section_content()
+        return self.write_report()
+
+    def load_template(self) -> None:
+        """Load the HTML template and determine output path."""
+        if self.output_dir:
+            self.output_dir.mkdir(parents=True, exist_ok=True)
+            self.report_path = self.output_dir / "TheRockReport.html"
+        else:
+            self.report_path = HTML_REPORT_PATH
+
+        if not HTML_TEMPLATE_PATH.exists():
+            print(f"  ERROR: Template not found at {HTML_TEMPLATE_PATH}")
+            raise FileNotFoundError(f"Template not found at {HTML_TEMPLATE_PATH}")
+
+        self.html = HTML_TEMPLATE_PATH.read_text(encoding="utf-8")
+
+    def inject_commit_range(self) -> None:
+        """Inject TheRock start and end commit badges into the template."""
+        self.html = self.html.replace(
+            '<span id="therock-start-commit">START_COMMIT</span>',
+            f'<span id="therock-start-commit">{self.diff.start_commit[:8]}</span>',
+        )
+        self.html = self.html.replace(
+            '<span id="therock-end-commit">END_COMMIT</span>',
+            f'<span id="therock-end-commit">{self.diff.end_commit[:8]}</span>',
+        )
+
+    def inject_summaries(self) -> None:
+        """Inject submodule and superrepo summary sections into the template."""
+        # Submodule summary
+        status_groups = self.diff.get_status_groups()
+        submodule_summary = generate_summary_html(status_groups, "submodules")
+        self.html = self.html.replace(
+            '<div id="submodule-content"></div>',
+            f'<div id="submodule-content">{submodule_summary}</div>',
+        )
+
+        # Superrepo summaries
+        superrepo_parts = []
+        for superrepo in self.diff.superrepos.values():
+            comp_groups = {
+                "added": superrepo.added_components,
+                "removed": superrepo.removed_components,
+                "changed": superrepo.changed_components,
+                "unchanged": superrepo.unchanged_components,
+            }
+            comp_summary = generate_summary_html(comp_groups, "components")
+            if comp_summary:
+                superrepo_parts.append(
+                    f"<div class='summary-section'><h2>{superrepo.name.title()} Components</h2>"
+                    f"{comp_summary}</div>"
+                )
+        self.html = self.html.replace(
+            '<div id="superrepo-content"></div>',
+            f'<div id="superrepo-content">{"".join(superrepo_parts)}</div>',
+        )
+
+    def inject_section_badges(self) -> None:
+        """Inject commit badges for each section header in the template."""
+        # Superrepo section badges
+        for repo_name in ["rocm-libraries", "rocm-systems"]:
+            superrepo = self.diff.superrepos.get(repo_name)
+            start_sha = superrepo.start_sha if superrepo else ""
+            end_sha = superrepo.end_sha if superrepo else ""
+            start_badge = (
+                create_commit_badge(start_sha, repo_name) if start_sha else "N/A"
+            )
+            end_badge = create_commit_badge(end_sha, repo_name) if end_sha else "N/A"
+            self.html = self.html.replace(
+                f'<span id="commit-diff-start-{repo_name}-superrepo"></span>',
+                f'<span id="commit-diff-start-{repo_name}-superrepo">{start_badge}</span>',
+            )
+            self.html = self.html.replace(
+                f'<span id="commit-diff-end-{repo_name}-superrepo"></span>',
+                f'<span id="commit-diff-end-{repo_name}-superrepo">{end_badge}</span>',
+            )
+
+        # Non-superrepo section badges
+        start_badge = create_commit_badge(self.diff.start_commit, THEROCK_REPO)
+        end_badge = create_commit_badge(self.diff.end_commit, THEROCK_REPO)
+        self.html = self.html.replace(
+            '<span id="commit-diff-start-non-superrepo"></span>',
+            f'<span id="commit-diff-start-non-superrepo">{start_badge}</span>',
+        )
+        self.html = self.html.replace(
+            '<span id="commit-diff-end-non-superrepo"></span>',
+            f'<span id="commit-diff-end-non-superrepo">{end_badge}</span>',
+        )
+
+    def inject_section_content(self) -> None:
+        """Inject detailed commit content for each section in the template."""
+        # Superrepo sections
+        for repo_name in ["rocm-libraries", "rocm-systems"]:
+            superrepo = self.diff.superrepos.get(repo_name)
+            if superrepo:
+                # Pass removed submodules if this superrepo was newly added
+                removed_subs = (
+                    self.diff.removed if superrepo.status == "added" else None
+                )
+                content = generate_superrepo_html(
+                    superrepo, removed_submodules=removed_subs
+                )
+            else:
+                content = ""
+            self.html = self.html.replace(
+                f'<div id="commit-diff-job-content-{repo_name}-superrepo" style="margin-top:8px;">\n      </div>',
+                f'<div id="commit-diff-job-content-{repo_name}-superrepo" style="margin-top:8px;">\n        {content}\n      </div>',
+            )
+
+        # Non-superrepo section
+        non_superrepo_html = generate_non_superrepo_html(self.diff)
+        self.html = self.html.replace(
+            '<div id="commit-diff-job-content-non-superrepo" style="margin-top:8px;">\n      </div>',
+            f'<div id="commit-diff-job-content-non-superrepo" style="margin-top:8px;">\n        {non_superrepo_html}\n      </div>',
+        )
+
+    def write_report(self) -> Path:
+        """Write the HTML report to disk and return the path."""
+        self.report_path.write_text(self.html, encoding="utf-8")
+        if not self.report_path.exists() or self.report_path.stat().st_size == 0:
+            raise RuntimeError(f"Failed to write HTML report to {self.report_path}")
+        print(f"  Report written to: {self.report_path}")
+        return self.report_path
+
+
 def generate_html_report(diff: ManifestDiff, output_dir: Path | None = None) -> Path:
     """Generate TheRockReport.html from template.
 
@@ -1114,114 +1308,7 @@ def generate_html_report(diff: ManifestDiff, output_dir: Path | None = None) -> 
     Returns:
         Path to the generated report file.
     """
-    print("\n=== Writing HTML Report ===")
-
-    # Determine output path
-    if output_dir:
-        output_dir.mkdir(parents=True, exist_ok=True)
-        report_path = output_dir / "TheRockReport.html"
-    else:
-        report_path = HTML_REPORT_PATH
-
-    if not HTML_TEMPLATE_PATH.exists():
-        print(f"  ERROR: Template not found at {HTML_TEMPLATE_PATH}")
-        raise FileNotFoundError(f"Template not found at {HTML_TEMPLATE_PATH}")
-
-    html = HTML_TEMPLATE_PATH.read_text(encoding="utf-8")
-
-    # Inject TheRock commit range
-    html = html.replace(
-        '<span id="therock-start-commit">START_COMMIT</span>',
-        f'<span id="therock-start-commit">{diff.start_commit[:8]}</span>',
-    )
-    html = html.replace(
-        '<span id="therock-end-commit">END_COMMIT</span>',
-        f'<span id="therock-end-commit">{diff.end_commit[:8]}</span>',
-    )
-
-    # Inject submodule summary
-    status_groups = diff.get_status_groups()
-    submodule_summary = generate_summary_html(status_groups, "submodules")
-    html = html.replace(
-        '<div id="submodule-content"></div>',
-        f'<div id="submodule-content">{submodule_summary}</div>',
-    )
-
-    # Inject superrepo summaries
-    superrepo_parts = []
-    for superrepo in diff.superrepos.values():
-        comp_groups = {
-            "added": superrepo.added_components,
-            "removed": superrepo.removed_components,
-            "changed": superrepo.changed_components,
-            "unchanged": superrepo.unchanged_components,
-        }
-        comp_summary = generate_summary_html(comp_groups, "components")
-        if comp_summary:
-            superrepo_parts.append(
-                f"<div class='summary-section'><h2>{superrepo.name.title()} Components</h2>"
-                f"{comp_summary}</div>"
-            )
-    html = html.replace(
-        '<div id="superrepo-content"></div>',
-        f'<div id="superrepo-content">{"".join(superrepo_parts)}</div>',
-    )
-
-    # Inject section commit badges
-    for repo_name in ["rocm-libraries", "rocm-systems"]:
-        superrepo = diff.superrepos.get(repo_name)
-        start_sha = superrepo.start_sha if superrepo else ""
-        end_sha = superrepo.end_sha if superrepo else ""
-        start_badge = create_commit_badge(start_sha, repo_name) if start_sha else "N/A"
-        end_badge = create_commit_badge(end_sha, repo_name) if end_sha else "N/A"
-        html = html.replace(
-            f'<span id="commit-diff-start-{repo_name}-superrepo"></span>',
-            f'<span id="commit-diff-start-{repo_name}-superrepo">{start_badge}</span>',
-        )
-        html = html.replace(
-            f'<span id="commit-diff-end-{repo_name}-superrepo"></span>',
-            f'<span id="commit-diff-end-{repo_name}-superrepo">{end_badge}</span>',
-        )
-
-    # Non-superrepo section badges
-    start_badge = create_commit_badge(diff.start_commit, THEROCK_REPO)
-    end_badge = create_commit_badge(diff.end_commit, THEROCK_REPO)
-    html = html.replace(
-        '<span id="commit-diff-start-non-superrepo"></span>',
-        f'<span id="commit-diff-start-non-superrepo">{start_badge}</span>',
-    )
-    html = html.replace(
-        '<span id="commit-diff-end-non-superrepo"></span>',
-        f'<span id="commit-diff-end-non-superrepo">{end_badge}</span>',
-    )
-
-    # Inject section content
-    for repo_name in ["rocm-libraries", "rocm-systems"]:
-        superrepo = diff.superrepos.get(repo_name)
-        if superrepo:
-            # Pass removed submodules if this superrepo was newly added
-            removed_subs = diff.removed if superrepo.status == "added" else None
-            content = generate_superrepo_html(
-                superrepo, removed_submodules=removed_subs
-            )
-        else:
-            content = ""
-        html = html.replace(
-            f'<div id="commit-diff-job-content-{repo_name}-superrepo" style="margin-top:8px;">\n      </div>',
-            f'<div id="commit-diff-job-content-{repo_name}-superrepo" style="margin-top:8px;">\n        {content}\n      </div>',
-        )
-
-    non_superrepo_html = generate_non_superrepo_html(diff)
-    html = html.replace(
-        '<div id="commit-diff-job-content-non-superrepo" style="margin-top:8px;">\n      </div>',
-        f'<div id="commit-diff-job-content-non-superrepo" style="margin-top:8px;">\n        {non_superrepo_html}\n      </div>',
-    )
-
-    report_path.write_text(html, encoding="utf-8")
-    if not report_path.exists() or report_path.stat().st_size == 0:
-        raise RuntimeError(f"Failed to write HTML report to {report_path}")
-    print(f"  Report written to: {report_path}")
-    return report_path
+    return HtmlReportGenerator(diff, output_dir).generate()
 
 
 def generate_step_summary(diff: ManifestDiff) -> None:
@@ -1303,7 +1390,7 @@ def generate_step_summary(diff: ManifestDiff) -> None:
                 )
             lines.append("")
 
-    lines.extend(["---", "*Generated by generate_manifest_diff_refactored.py*"])
+    lines.extend(["---", "*Generated by generate_manifest_diff_report.py*"])
 
     Path(step_summary_path).write_text("\n".join(lines), encoding="utf-8")
     print(f"  Step summary written ({len(lines)} lines)")
