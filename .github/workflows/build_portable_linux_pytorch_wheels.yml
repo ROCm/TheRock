@@ -40,7 +40,7 @@ on:
         description: "Compiler cache type (sccache, ccache, or none)"
         required: false
         type: string
-        default: "sccache"
+        default: "none"
       repository:
         description: "Repository to checkout. Otherwise, defaults to `github.repository`."
         type: string
@@ -100,14 +100,10 @@ on:
         description: "Compiler cache type"
         type: choice
         options:
+          - none
           - sccache
           - ccache
-          - none
-        default: sccache
-
-permissions:
-  id-token: write
-  contents: read
+        default: none
 
 run-name: Build portable Linux PyTorch Wheels (${{ inputs.amdgpu_family }}, ${{ inputs.python_version }}, ${{ inputs.release_type }})
 
@@ -115,6 +111,9 @@ jobs:
   build_pytorch_wheels:
     name: Build | ${{ inputs.amdgpu_family }} | py ${{ inputs.python_version }} | torch ${{ inputs.pytorch_git_ref }}
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
+    permissions:
+      id-token: write
+      contents: read
     container:
       image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:d6ae5712a9c7e8b88281d021e907b312cd8a26295b95690baef3e8dde4805858
     env:
@@ -128,7 +127,7 @@ jobs:
       SCCACHE_S3_KEY_PREFIX: "linux/${{ inputs.amdgpu_family }}/"
       SCCACHE_S3_USE_SSL: "true"
       SCCACHE_S3_SERVER_SIDE_ENCRYPTION: "true"
-      SCCACHE_IDLE_TIMEOUT: "0"
+      SCCACHE_IDLE_TIMEOUT: "600"
       SCCACHE_LOG: warn
     outputs:
       cp_version: ${{ env.cp_version }}
@@ -304,6 +303,8 @@ jobs:
   generate_target_to_run:
     name: Generate target_to_run
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     outputs:
       test_runs_on: ${{ steps.configure.outputs.test-runs-on }}
       bypass_tests_for_releases: ${{ steps.configure.outputs.bypass_tests_for_releases }}
@@ -325,6 +326,8 @@ jobs:
     name: Test | ${{ inputs.amdgpu_family }} | ${{ needs.generate_target_to_run.outputs.test_runs_on }}
     if: ${{ needs.generate_target_to_run.outputs.test_runs_on != '' }}
     needs: [build_pytorch_wheels, generate_target_to_run]
+    permissions:
+      contents: read
     uses: ./.github/workflows/test_pytorch_wheels.yml
     with:
       amdgpu_family: ${{ inputs.amdgpu_family }}
@@ -341,6 +344,9 @@ jobs:
     needs: [build_pytorch_wheels, generate_target_to_run, test_pytorch_wheels]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
+    permissions:
+      id-token: write
+      contents: read
     env:
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
       CP_VERSION: "${{ needs.build_pytorch_wheels.outputs.cp_version }}"

@@ -40,7 +40,7 @@ on:
         description: "Compiler cache type (sccache, ccache, or none)"
         required: false
         type: string
-        default: "sccache"
+        default: "none"
   workflow_dispatch:
     inputs:
       artifact_group:
@@ -66,14 +66,10 @@ on:
         description: "Compiler cache type"
         type: choice
         options:
+          - none
           - sccache
           - ccache
-          - none
-        default: sccache
-
-permissions:
-  id-token: write
-  contents: read
+        default: none
 
 run-name: Build portable Linux PyTorch Wheels CI (${{ inputs.artifact_group }}, py${{ inputs.python_version }}, ${{ inputs.pytorch_git_ref }})
 
@@ -81,6 +77,9 @@ jobs:
   build_pytorch_wheels:
     name: Build PyTorch | ${{ inputs.artifact_group }} | torch ${{ inputs.pytorch_git_ref }} | py${{ inputs.python_version }}
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
+    permissions:
+      id-token: write
+      contents: read
     container:
       image: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:d6ae5712a9c7e8b88281d021e907b312cd8a26295b95690baef3e8dde4805858
     env:
@@ -91,7 +90,7 @@ jobs:
       SCCACHE_S3_KEY_PREFIX: "linux/${{ inputs.artifact_group }}/"
       SCCACHE_S3_USE_SSL: "true"
       SCCACHE_S3_SERVER_SIDE_ENCRYPTION: "true"
-      SCCACHE_IDLE_TIMEOUT: "0"
+      SCCACHE_IDLE_TIMEOUT: "600"
       SCCACHE_LOG: warn
     steps:
       - name: Checkout
