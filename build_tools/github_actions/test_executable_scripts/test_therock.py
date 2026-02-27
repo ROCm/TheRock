@@ -1,29 +1,8 @@
 #!/usr/bin/env python3
-
-# MIT License
-#
 # Copyright (c) 2024-2025 Advanced Micro Devices, Inc. All rights reserved.
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-# THE SOFTWARE.
 """
-Generate CTestCustom.cmake (settings + configure/build commands) and
-dashboard.cmake (build, test, report to CDash).
+- Report rocprofiler SDK tests within TheRock to CDash.
+- Generate CTestCustom.cmake (settings + configure/build commands) and dashboard.cmake (build, test, report to CDash).
 """
 
 import argparse
@@ -36,6 +15,9 @@ import sys
 import uuid
 from pathlib import Path
 from types import SimpleNamespace
+import logging
+
+logging.basicConfig(level=logging.INFO)
 
 # Define default project name and CDash base URL
 _DEFAULT_PROJECT_NAME = "rocprofiler-sdk-alt"
@@ -60,16 +42,17 @@ ROCPROFILER_SDK_TESTS_DIRECTORY = f"{ROCPROFILER_SDK_DIRECTORY}/tests"
 SOURCE_DIR = ROCPROFILER_SDK_TESTS_DIRECTORY
 BINARY_DIR = f"{ROCPROFILER_SDK_TESTS_DIRECTORY}/build"
 
+# Set up environment variables
 environ_vars = os.environ.copy()
 environ_vars["ROCM_PATH"] = os.path.realpath(str(THEROCK_PATH))
 environ_vars["HIP_PATH"] = os.path.realpath(str(THEROCK_PATH))
-
-# Env setup
 environ_vars["HIP_PLATFORM"] = "amd"
 
 # Set up LD_LIBRARY_PATH
 old_ld_lib_path = os.getenv("LD_LIBRARY_PATH", "")
 sysdeps_path = f"{THEROCK_LIB_PATH}/rocm_sysdeps/lib"
+
+# Set up LD_LIBRARY_PATH. Add THEROCK_LIB_PATH, sysdeps_path, and old_ld_lib_path.
 if old_ld_lib_path:
     environ_vars["LD_LIBRARY_PATH"] = (
         f"{THEROCK_LIB_PATH}:{sysdeps_path}:{old_ld_lib_path}"
@@ -116,8 +99,8 @@ def _generate_ctest_custom(cmake_cmd: str) -> str:
     # name so each run appears as a separate build on the dashboard.
     run_id = os.getenv("GITHUB_RUN_ID") or os.getenv("THEROCK_RUN_ID")
     if not run_id:
-        run_id = f"local-{uuid.uuid4().hex}"
-    NAME = f"ROCProfiler SDK Tests - {run_id}"
+        run_id = f"[{uuid.uuid4().hex}]"
+    NAME = f"ROCProfiler SDK Tests {run_id}"
 
     #Specify dashboard URL and site/host name for CDash submission
     URL = f'https://{_DEFAULT_BASE_URL}/submit.php?project={_DEFAULT_PROJECT_NAME}'
@@ -175,7 +158,7 @@ def _generate_dashboard(cmake_cmd: str) -> str:
 
     # Define variables for dashboard submission
     submit = "1" # Submit to CDash or not
-    mode = 'Experimental' # Mode (Nightly, Experimental, Continuous, etc.)
+    mode = 'Continuous' # Mode (Nightly, Experimental, Continuous, etc.)
     ARGN = "${ARGN}" # Arguments for dashboard submission
 
     REPO_SOURCE_DIR = (
@@ -212,17 +195,17 @@ def _generate_dashboard(cmake_cmd: str) -> str:
 
     #Run stages for configure, build, test, and submit to CDash
     _script += f"""
-    set(STAGES "START;CONFIGURE;BUILD;TEST;SUBMIT")
+    set(STAGES "START;UPDATE;CONFIGURE;BUILD;TEST;SUBMIT")
 
     ctest_start({mode})
-    # ctest_update(SOURCE "{REPO_SOURCE_DIR}" RETURN_VALUE _update_ret
-    #                 CAPTURE_CMAKE_ERROR _update_err)
+    ctest_update(SOURCE "{REPO_SOURCE_DIR}" RETURN_VALUE _update_ret
+                    CAPTURE_CMAKE_ERROR _update_err)
     ctest_configure(BUILD "{BINARY_DIR}" RETURN_VALUE _configure_ret)
-    dashboard_submit(PARTS Start Configure RETURN_VALUE _submit_ret)
+    dashboard_submit(PARTS Start Update Configure RETURN_VALUE _submit_ret)
 
-    # if(NOT _update_err EQUAL 0)
-    #     message(WARNING "ctest_update failed")
-    # endif()
+    if(NOT _update_err EQUAL 0)
+        message(WARNING "ctest_update failed")
+    endif()
 
     handle_error("Configure" _configure_ret)
 
@@ -237,7 +220,7 @@ def _generate_dashboard(cmake_cmd: str) -> str:
         dashboard_submit(PARTS Test RETURN_VALUE _submit_ret)
     endif()
 
-    # handle_error("Testing" _test_ret)
+    handle_error("Testing" _test_ret)
     dashboard_submit(PARTS Done RETURN_VALUE _submit_ret)
     """
 
@@ -288,9 +271,13 @@ def main(argv: list[str] | None = None) -> int:
         "--output-on-failure"]
 
     # Run ctest with the generated dashboard.cmake script
-    r = subprocess.run(ctest_argv, cwd=SOURCE_DIR, check=True, env=environ_vars)
-    
-    return r.returncode
+    try:
+        r = subprocess.run(ctest_argv, cwd=SOURCE_DIR, check=True, env=environ_vars)
+
+    #Log error
+    except subprocess.CalledProcessError as e:
+        logging.error(f"ctest failed: {e}")
 
 if __name__ == "__main__":
-    sys.exit(main() or 0)
+    main()
+    sys.exit(0)
