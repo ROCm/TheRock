@@ -162,7 +162,6 @@ LINUX_LIBRARY_PRELOADS = [
     "rccl",  # Linux only for the moment.
     "hipblaslt",
     "miopen",
-    "hipdnn",
     "rocm_sysdeps_liblzma",
     "rocm-openblas",
 ]
@@ -180,7 +179,6 @@ WINDOWS_LIBRARY_PRELOADS = [
     "hipsolver",
     "hipblaslt",
     "miopen",
-    "hipdnn",
     "rocm-openblas",
 ]
 
