@@ -278,6 +278,7 @@ endif(THEROCK_BUILD_TESTING)
         doc
         lib
         run
+        test
       SUBPROJECT_DEPS
         amdsmi
         rocprofiler-sdk
