@@ -10,13 +10,15 @@ import sys
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent
-THEROCK_OUTPUT_DIR = str(THEROCK_DIR / "build")
+THEROCK_OUTPUT_DIR = str(
+    THEROCK_DIR / os.getenv("OUTPUT_ARTIFACTS_DIR").removeprefix("./")
+)
 
 
-def install_requirements(input: str):
+def install_requirements(req_files_list: str):
     environ_vars = os.environ.copy()
 
-    requirements_files = input.split(",")
+    requirements_files = req_files_list.split(",")
 
     for file in requirements_files:
         cmd = [
