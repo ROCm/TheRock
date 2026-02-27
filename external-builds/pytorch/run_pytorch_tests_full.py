@@ -27,7 +27,6 @@ from pytorch_utils import (
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 
-
 DISABLED_TESTS_URL = "https://ossci-metrics.s3.amazonaws.com/disabled-tests-condensed.json"
 DISABLED_TESTS_FILE = ".pytorch-disabled-tests.json"
 
@@ -53,11 +52,16 @@ def fetch_disabled_tests(test_dir: str) -> None:
         print(f"Warning: could not download disabled tests: {e}")
 
 
-def setup_env(pytorch_dir: Path) -> None:
-    os.environ["PYTORCH_PRINT_REPRO_ON_FAILURE"] = "0"
+def setup_env(pytorch_dir: Path, test_config: str) -> None:
+    os.environ["CI"] = "1"
+    os.environ["BUILD_ENVIRONMENT"] = "rocm"
     os.environ["PYTORCH_TEST_WITH_ROCM"] = "1"
-    os.environ["MIOPEN_CUSTOM_CACHE_DIR"] = tempfile.mkdtemp()
     os.environ["PYTORCH_TESTING_DEVICE_ONLY_FOR"] = "cuda"
+    os.environ["PYTORCH_PRINT_REPRO_ON_FAILURE"] = "0"
+    os.environ["MIOPEN_CUSTOM_CACHE_DIR"] = tempfile.mkdtemp()
+
+    if test_config:
+        os.environ["TEST_CONFIG"] = test_config
 
     test_dir = str(pytorch_dir / "test")
     old_pythonpath = os.getenv("PYTHONPATH", "")
@@ -99,6 +103,12 @@ def cmd_arguments(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
         help="Path to the PyTorch repository root.",
     )
     parser.add_argument(
+        "--test-config",
+        type=str,
+        default=os.getenv("TEST_CONFIG", "default"),
+        help='TEST_CONFIG value for run_test.py sharding/config logic (default: "default").',
+    )
+    parser.add_argument(
         "--shard",
         type=int,
         default=int(os.getenv("SHARD_NUMBER", "0")),
@@ -115,7 +125,7 @@ def cmd_arguments(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
         nargs="+",
         default=None,
         metavar="TEST",
-        help="Only run these test files (passed to run_test.py --include).",
+        help="Only run these test files (passed to run_test.py --include). Also reads TESTS_TO_INCLUDE env var.",
     )
     parser.add_argument(
         "--exclude",
@@ -215,11 +225,6 @@ def build_run_test_cmd(
     if tests_to_skip:
         cmd.extend(["-k", tests_to_skip])
 
-    cmd.extend([
-        "--import-disabled-tests",
-        "--import-slow-tests",
-    ])
-
     cmd.extend(passthrough_args)
     return cmd
 
@@ -248,7 +253,7 @@ def main() -> int:
                 create_skip_list=not args.debug,
             )
 
-        setup_env(args.pytorch_dir)
+        setup_env(args.pytorch_dir, args.test_config)
 
         cmd = build_run_test_cmd(args, tests_to_skip, passthrough_args)
         print(f"Executing: {' '.join(cmd)}")
