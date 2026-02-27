@@ -13,7 +13,6 @@ import subprocess
 import sys
 from github_actions.github_actions_utils import retrieve_bucket_info
 
-
 logging.basicConfig(level=logging.INFO)
 
 THEROCK_DIR = Path(__file__).resolve().parent.parent.parent
@@ -74,9 +73,15 @@ def upload_test_report(report_dir: Path, bucket_uri: str, log_destination: str):
     for file_path in report_dir.rglob("*.html"):
         if not file_path.is_file():
             continue
-        key = f"{dest_prefix}/{file_path.relative_to(report_dir)}" if dest_prefix else str(file_path.relative_to(report_dir))
+        key = (
+            f"{dest_prefix}/{file_path.relative_to(report_dir)}"
+            if dest_prefix
+            else str(file_path.relative_to(report_dir))
+        )
         logging.info("Uploading %s -> s3://%s/%s", file_path, bucket, key)
-        s3.upload_file(str(file_path), bucket, key, ExtraArgs={"ContentType": "text/html"})
+        s3.upload_file(
+            str(file_path), bucket, key, ExtraArgs={"ContentType": "text/html"}
+        )
 
     logging.info("Uploaded all .html files from %s to %s", report_dir, bucket_uri)
 
