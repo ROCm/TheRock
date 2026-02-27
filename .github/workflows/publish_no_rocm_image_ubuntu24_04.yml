@@ -28,3 +28,10 @@ jobs:
     with:
       DOCKER_FILE_NAME: no_rocm_image_ubuntu24_04_rocgdb
       DOCKER_IMAGE_NAME: no_rocm_image_ubuntu24_04_rocgdb
+  # image used in ocltst execution
+  publish_no_rocm_image_ubuntu24_04_ocl_rt:
+    needs: [publish_no_rocm_image_ubuntu24_04]
+    uses: ./.github/workflows/publish_dockerfile.yml
+    with:
+      DOCKER_FILE_NAME: no_rocm_image_ubuntu24_04_ocl_rt
+      DOCKER_IMAGE_NAME: no_rocm_image_ubuntu24_04_ocl_rt
