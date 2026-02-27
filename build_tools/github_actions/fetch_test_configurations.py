@@ -74,14 +74,6 @@ test_matrix = {
             ],
         },
     },
-    "origami": {
-        "job_name": "origami",
-        "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 5,
-        "test_script": f"python {_get_script_path('test_origami.py')}",
-        "platform": ["linux", "windows"],
-        "total_shards": 1,
-    },
     "hipblas": {
         "job_name": "hipblas",
         "fetch_artifact_args": "--blas --tests",
@@ -142,6 +134,16 @@ test_matrix = {
         "platform": ["linux", "windows"],
         "total_shards": 1,
     },
+    "rocgdb": {
+        "job_name": "rocgdb",
+        "fetch_artifact_args": "--debug-tools --tests",
+        "timeout_minutes": 30,
+        "test_script": f"python {_get_script_path('test_rocgdb.py')}",
+        "platform": ["linux"],
+        "total_shards": 1,
+        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_rocgdb@sha256:939b8e35887144d1ca4eca928dc2869991339cab869168790e495fc0a5907bbb",
+        "container_options": "--cap-add=SYS_PTRACE",
+    },
     "rocr-debug-agent": {
         "job_name": "rocr-debug-agent",
         "fetch_artifact_args": "--debug-tools --tests",
@@ -178,11 +180,10 @@ test_matrix = {
     "hipsparselt": {
         "job_name": "hipsparselt",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 120,
+        "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_hipsparselt.py')}",
-        # TODO(#2616): Re-enable tests after test slowdown issues are resolved
-        "platform": [],
-        "total_shards": 4,
+        "platform": ["linux"],
+        "total_shards": 1,
     },
     # RAND tests
     "rocrand": {
@@ -259,37 +260,37 @@ test_matrix = {
     # hipDNN samples tests
     "hipdnn-samples": {
         "job_name": "hipdnn-samples",
-        "fetch_artifact_args": "--blas --miopen --hipdnn --miopen-plugin --hipdnn-samples --tests",
+        "fetch_artifact_args": "--blas --miopen --hipdnn --miopenprovider --hipdnn-samples --tests",
         "timeout_minutes": 5,
         "test_script": f"python {_get_script_path('test_hipdnn_samples.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 1,
     },
-    # MIOpen plugin tests
-    "miopen_plugin": {
-        "job_name": "miopen_plugin",
-        "fetch_artifact_args": "--blas --miopen --hipdnn --miopen-plugin --tests",
+    # MIOpen provider tests
+    "miopenprovider": {
+        "job_name": "miopenprovider",
+        "fetch_artifact_args": "--blas --miopen --hipdnn --miopenprovider --tests",
         "timeout_minutes": 15,
-        "test_script": f"python {_get_script_path('test_miopen_plugin.py')}",
+        "test_script": f"python {_get_script_path('test_miopenprovider.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 1,
     },
     # TODO(iree-org/fusilli/issues/57): Enable fusilli tests once build is
     # enabled by default.
-    # "fusilli_plugin": {
-    #     "job_name": "fusilli_plugin",
-    #     "fetch_artifact_args": "--hipdnn --fusilli-plugin --iree-compiler --tests",
+    # "fusilliprovider": {
+    #     "job_name": "fusilliprovider",
+    #     "fetch_artifact_args": "--hipdnn --fusilliprovider --iree-compiler --tests",
     #     "timeout_minutes": 15,
-    #     "test_script": f"python {_get_script_path('test_fusilli_plugin.py')}",
+    #     "test_script": f"python {_get_script_path('test_fusilliprovider.py')}",
     #     "platform": ["linux"],
     #     "total_shards": 1,
     # },
-    # hipBLASLt plugin tests
-    "hipblaslt_plugin": {
-        "job_name": "hipblaslt_plugin",
-        "fetch_artifact_args": "--blas --hipdnn --hipblaslt-plugin --tests",
+    # hipBLASLt provider tests
+    "hipblasltprovider": {
+        "job_name": "hipblasltprovider",
+        "fetch_artifact_args": "--blas --hipdnn --hipblasltprovider --tests",
         "timeout_minutes": 15,
-        "test_script": f"python {_get_script_path('test_hipblaslt_plugin.py')}",
+        "test_script": f"python {_get_script_path('test_hipblasltprovider.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 1,
     },

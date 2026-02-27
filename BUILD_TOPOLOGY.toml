@@ -193,11 +193,11 @@ artifact_groups = ["media-libs"]
 # These define build dependencies and source requirements
 
 [artifact_groups.third-party-sysdeps]
-description = "Critical system dependencies (always needed)"
+description = "Third-party system libraries bundled for portable distribution"
 type = "generic"
 
 [artifact_groups.third-party-libs]
-description = "Optional third-party libraries (for tests/specific features)"
+description = "Third-party libraries (typically internal dependencies, not distributed as sysdeps are)"
 type = "generic"
 artifact_group_deps = ["compiler"]
 source_sets = []  # No submodules - uses vendored/in-tree deps
@@ -316,7 +316,10 @@ source_sets = ["amd-mesa", "rocm-systems"]
 # Artifacts are the fundamental packaging units
 # Each artifact produces components: dbg, dev, doc, lib, run, test
 
-# --- Third-party Dependencies ---
+# --- Sysdeps: Bundled system libraries ---
+# Libraries built from source with SONAME rewriting and symbol versioning
+# for portable distribution. Installed into lib/rocm_sysdeps/.
+# See docs/development/dependencies.md.
 
 [artifacts.sysdeps]
 artifact_group = "third-party-sysdeps"
@@ -372,6 +375,9 @@ type = "target-neutral"
 artifact_deps = ["sysdeps", "sysdeps-libpciaccess"]  # hwloc depends on numactl (in core sysdeps) and libpciaccess
 feature_group = "CORE"
 disable_platforms = ["windows"]
+
+# --- Third-party libraries ---
+# Unlike third-party-sysdeps, these libraries are not given special treatment for portable distribution.
 
 [artifacts.host-blas]
 artifact_group = "third-party-libs"
@@ -487,11 +493,11 @@ platform = "windows"
 artifact_deps = ["core-hip"]
 feature_group = "CORE"  # Part of core, enabled by default
 
-# --- hip-tests (per-arch) ---
+# --- hip-tests ---
 
 [artifacts.core-hiptests]
 artifact_group = "hip-runtime"
-type = "target-specific"
+type = "target-neutral"
 artifact_deps = ["core-hip"]
 feature_group = "CORE"  # Part of core, enabled by default
 
@@ -562,12 +568,12 @@ artifact_group = "ml-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "spdlog"]
 
-[artifacts.miopen-plugin]
+[artifacts.miopenprovider]
 artifact_group = "ml-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "spdlog"]
 
-[artifacts.hipblaslt-plugin]
+[artifacts.hipblasltprovider]
 artifact_group = "ml-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "blas", "hipdnn", "spdlog"]
@@ -575,7 +581,7 @@ artifact_deps = ["core-runtime", "core-hip", "blas", "hipdnn", "spdlog"]
 [artifacts.hipdnn-samples]
 artifact_group = "ml-libs"
 type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "miopen-plugin", "spdlog"]
+artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "miopenprovider", "spdlog"]
 
 # --- IREE Integration ---
 
@@ -585,7 +591,7 @@ type = "target-neutral"
 artifact_deps = ["core-hip"]
 disable_platforms = ["windows"]
 
-[artifacts.fusilli-plugin]
+[artifacts.fusilliprovider]
 artifact_group = "iree-libs"
 type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "hipdnn", "spdlog", "iree-compiler"]
@@ -627,7 +633,7 @@ disable_platforms = ["windows"]
 
 [artifacts.aqlprofile-tests]
 artifact_group = "profiler-core"
-type = "target-specific"
+type = "target-neutral"
 artifact_deps = ["core-runtime"]
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
