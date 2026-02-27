@@ -10,22 +10,10 @@
 	path = compiler/amd-llvm
 	url = https://github.com/ROCm/llvm-project.git
 	branch = amd-mainline
-[submodule "rccl"]
-	path = comm-libs/rccl
-	url = https://github.com/ROCm/rccl.git
-	branch = develop
 [submodule "rocm-cmake"]
 	path = base/rocm-cmake
 	url = https://github.com/ROCm/rocm-cmake.git
 	branch = mainline
-[submodule "rccl-tests"]
-	path = comm-libs/rccl-tests
-	url = https://github.com/ROCm/rccl-tests.git
-	branch = develop
-[submodule "composable_kernel"]
-	path = ml-libs/composable_kernel
-	url = https://github.com/ROCm/composable_kernel.git
-	branch = develop
 [submodule "rocprof-trace-decoder"]
 	path = profiler/rocprof-trace-decoder/binaries
 	url = https://github.com/ROCm/rocprof-trace-decoder.git
@@ -56,3 +44,11 @@
 [submodule "rocm-kpack"]
 	path = base/rocm-kpack
 	url = https://github.com/ROCm/rocm-kpack.git
+[submodule "libhipcxx"]
+	path = math-libs/libhipcxx
+	url = https://github.com/ROCm/libhipcxx.git
+	branch = amd-develop
+[submodule "rocgdb"]
+	path = debug-tools/rocgdb/source
+	url = https://github.com/ROCm/rocgdb.git
+	branch = amd-staging-rocgdb-16

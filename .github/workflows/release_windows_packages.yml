@@ -82,13 +82,13 @@ jobs:
       s3_subdir_tar: ${{ steps.release_information.outputs.s3_subdir_tar }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
 
       - name: Setup Python
-        uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: 3.12
 
@@ -132,9 +132,6 @@ jobs:
         env:
           AMDGPU_FAMILIES: ${{ inputs.families }}
           THEROCK_PACKAGE_PLATFORM: "windows"
-          # Variable comes from ROCm organization variable 'ROCM_THEROCK_TEST_RUNNERS'
-          ROCM_THEROCK_TEST_RUNNERS: ${{ vars.ROCM_THEROCK_TEST_RUNNERS }}
-          LOAD_TEST_RUNNERS_FROM_VAR: false
         run: python ./build_tools/github_actions/fetch_package_targets.py
 
   windows_packages:
@@ -170,12 +167,12 @@ jobs:
 
     steps:
       - name: "Checking out repository"
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
 
-      - uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: 3.12
 
@@ -212,7 +209,7 @@ jobs:
       # TODO: We shouldn't be using a cache on actual release branches, but it
       # really helps for iteration time.
       - name: Enable cache
-        uses: actions/cache/restore@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
+        uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
           path: ${{ env.CACHE_DIR }}
           key: windows-package-matrix-v1-${{ matrix.target_bundle.amdgpu_family }}-${{ github.sha }}
@@ -229,6 +226,7 @@ jobs:
 
       - name: Configure Projects
         env:
+          cmake_preset: windows-release
           amdgpu_families: ${{ matrix.target_bundle.amdgpu_family }}
           package_version: "ADHOCBUILD"
           extra_cmake_options: ${{ inputs.extra_cmake_options }}
@@ -276,7 +274,7 @@ jobs:
 
       - name: Configure AWS Credentials
         if: ${{ github.repository_owner == 'ROCm' && !cancelled() }}
-        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ env.RELEASE_TYPE }}
@@ -353,7 +351,7 @@ jobs:
             }
 
       - name: Save cache
-        uses: actions/cache/save@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
+        uses: actions/cache/save@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         if: ${{ !cancelled() }}
         with:
           path: ${{ env.CACHE_DIR }}

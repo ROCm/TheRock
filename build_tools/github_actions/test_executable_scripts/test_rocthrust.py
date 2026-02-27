@@ -82,7 +82,9 @@ SMOKE_TESTS = [
 
 # Some platforms are less capable than others.
 ctest_parallel_count = 8
-if AMDGPU_FAMILIES == "gfx1153":
+if AMDGPU_FAMILIES == "gfx1152":
+    ctest_parallel_count = 4
+elif AMDGPU_FAMILIES == "gfx1153":
     ctest_parallel_count = 4
 
 cmd = [

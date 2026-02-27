@@ -9,7 +9,10 @@
 #
 # This powershell script is used on non-ephemeral Windows runners to stop
 # any processes that still exist after a Github actions job has completed
-# typically due to timing out. It's written in powershell per the specifications
+# typically due to timing out. Additionally, it will clean up the system
+# environment to restore the system to a clean state for the next job.
+#
+# It's written in powershell per the specifications
 # for github pre or post job scripts in this article:
 # https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/run-scripts
 #
@@ -54,15 +57,132 @@ function Wait-Process-Filter ([String]$RegexStr, [int] $Tries, [int] $Seconds = 
 
 
 #### Script Start ####
-
-# Note use of single '\' for Windows path separator, but it's escaped as '\\' for regex
-$regex_build_exe = "\build\.*[.]exe"
-
+echo "[*] ==== Starting cleanup_processes.ps1 ===="
 # https://superuser.com/questions/749243/detect-if-powershell-is-running-as-administrator/756696#756696
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::
             GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
 $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
 echo "[*] Checking if elevated: $isAdmin | current user: $currentUser"
+
+#### Cleanup system environment ####
+# Only perform system environment cleanup if running as NT AUTHORITY\* (any windows service account)
+# as a safeguard from accidentally running this cleanup on a normal user account
+if ($currentUser -match "NT AUTHORITY") {
+    echo "[*] Running as a Windows Service (NT AUTHORITY\*) - Cleaning up system environment..."
+
+    # Remove ~/.gitconfig file in case it was corrupted during a previous job
+    $gitConfigPath = Join-Path $env:USERPROFILE ".gitconfig"
+
+    echo "[*] > Checking for `"~/.gitconfig`" file at: $gitConfigPath"
+    if (Test-Path $gitConfigPath) {
+        echo "[*] >> .gitconfig file found, removing after logging contents:"
+
+        # Returns non-zero exit code if invalid and outputs "fatal: bad config line 1..." to stderr
+        git config --global --list
+        try {
+            Remove-Item -Path $gitConfigPath -Force -ErrorAction Stop
+            echo "[+] >> Successfully removed .gitconfig"
+        } catch {
+            echo "[-] >> Warning: Failed to remove .gitconfig: $_"
+        }
+    } else {
+        echo "[*] >> .gitconfig file not found at: $gitConfigPath"
+    }
+
+    # Remove temp uv setup archives and empty folders
+    $uvTempDir = [System.IO.Path]::GetTempPath() # As System User: \Windows\SystemTemp
+    echo "[*] > Checking for uv.zip archives under: $uvTempDir"
+
+    $uvZipFiles = @(Get-ChildItem "$uvTempDir\**\uv.zip" -ErrorAction SilentlyContinue)
+    $uvZipCount = $uvZipFiles.Count
+    $uvZipBytes = ($uvZipFiles | Measure-Object -Property Length -Sum).Sum
+    if ($null -eq $uvZipBytes) { $uvZipBytes = 0 }
+    $uvZipMB = [math]::Round($uvZipBytes / 1MB, 2)
+    echo "[*] >> Found $uvZipCount uv.zip file(s), total size: $uvZipMB MB"
+
+    if ($uvZipCount -gt 0) {
+        try {
+            $uvZipFiles | Remove-Item -Force -ErrorAction Stop
+            echo "[+] >> Removed $uvZipCount uv.zip file(s)"
+        } catch {
+            echo "[-] >> Warning: Failed to remove uv.zip file(s): $_"
+        }
+    }
+
+    # Remove empty GUID-like directories in temp, that uv setup most likely created
+    echo "[*] > Checking for empty GUID directories under: $uvTempDir"
+    $guidDirs = Get-ChildItem -Path $uvTempDir -Directory -Recurse -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name.Length -eq 36 -and ($_.Name.Split("-").Count -eq 5) }
+    $emptyGuidDirs = @($guidDirs | Where-Object { (Get-ChildItem -LiteralPath $_.FullName).Count -eq 0 })
+    $emptyGuidCount = $emptyGuidDirs.Count
+    echo "[*] >> Found $emptyGuidCount empty GUID folder(s)"
+
+    if ($emptyGuidCount -gt 0) {
+        try {
+            $emptyGuidDirs | Remove-Item -Force -ErrorAction Stop
+            echo "[+] >> Removed $emptyGuidCount empty GUID folder(s)"
+        } catch {
+            echo "[-] >> Warning: Failed to remove empty GUID folder(s): $_"
+        }
+    }
+
+    # Remove pip cache http-v2 files older than 1 day
+    $pipHttpCacheDirs = @()
+    if ($env:PIP_CACHE_DIR) {
+        $pipHttpCacheDirs += Join-Path $env:PIP_CACHE_DIR "http-v2"
+    }
+    $pipHttpCacheDirs += Join-Path $env:LOCALAPPDATA "pip\cache\http-v2"
+
+    foreach ($httpCacheDir in $pipHttpCacheDirs) {
+        if (Test-Path $httpCacheDir) {
+            echo "[*] > Checking pip http-v2 cache under: $httpCacheDir"
+
+            $oneDayAgo = (Get-Date).AddDays(-1)
+            $oldFiles = @(Get-ChildItem -Path $httpCacheDir -File -Recurse -ErrorAction SilentlyContinue |
+                Where-Object { $_.LastWriteTime -lt $oneDayAgo })
+
+            $oldFileCount = $oldFiles.Count
+            $oldFileBytes = ($oldFiles | Measure-Object -Property Length -Sum).Sum
+            if ($null -eq $oldFileBytes) { $oldFileBytes = 0 }
+            $oldFileMB = [math]::Round($oldFileBytes / 1MB, 2)
+
+            echo "[*] >> Found $oldFileCount file(s) older than 1 day, total size: $oldFileMB MB"
+
+            if ($oldFileCount -gt 0) {
+                try {
+                    $oldFiles | Remove-Item -Force -ErrorAction Stop
+                    echo "[+] >> Removed $oldFileCount old file(s) from http-v2 cache"
+                } catch {
+                    echo "[-] >> Warning: Failed to remove old http-v2 cache files: $_"
+                }
+
+                # Remove empty directories
+                $emptyDirs = @(Get-ChildItem -Path $httpCacheDir -Directory -Recurse -ErrorAction SilentlyContinue |
+                    Where-Object { (Get-ChildItem -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue).Count -eq 0 } |
+                    Sort-Object -Property FullName -Descending)
+
+                if ($emptyDirs.Count -gt 0) {
+                    try {
+                        $emptyDirs | Remove-Item -Force -ErrorAction Stop
+                        echo "[+] >> Removed $($emptyDirs.Count) empty directory(ies) from http-v2 cache"
+                    } catch {
+                        echo "[-] >> Warning: Failed to remove empty directories: $_"
+                    }
+                }
+            }
+        } else {
+            echo "[*] > Pip http-v2 cache not found at: $httpCacheDir"
+        }
+    }
+} else {
+    echo "[*] Not Running as a Windows Service (NT AUTHORITY\*) - skipping system environment cleanup"
+}
+
+#### Cleanup Processes ####
+echo "[*] Cleaning up processes..."
+
+# Note use of single '\' for Windows path separator, but it's escaped as '\\' for regex
+$regex_build_exe = "\build\.*[.]exe"
 
 # Some test runners have been setup with differing working directories
 # etc. "C:\runner" vs "B:\actions-runner" so use the workspace env var

@@ -22,6 +22,7 @@ therock_cmake_subproject_declare(therock-fftw3
   CMAKE_ARGS
     -DBUILD_SHARED_LIBS=ON
     -DENABLE_THREADS=${_fftw3_enable_threads}
+    -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
     -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 )
 therock_cmake_subproject_provide_package(therock-fftw3 FFTW3 lib/cmake/fftw3)
@@ -41,6 +42,7 @@ therock_cmake_subproject_declare(therock-fftw3f
     -DENABLE_FLOAT=ON
     -DBUILD_SHARED_LIBS=ON
     -DENABLE_THREADS=${_fftw3_enable_threads}
+    -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
     -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 )
 therock_cmake_subproject_provide_package(therock-fftw3f FFTW3f lib/cmake/fftw3f)

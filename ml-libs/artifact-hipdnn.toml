@@ -13,4 +13,3 @@ include = [
   "bin/hipdnn/CTestTestfile.cmake",
   "lib/test_plugins/**",
 ]
-[components.run."ml-libs/hipDNN/stage"]

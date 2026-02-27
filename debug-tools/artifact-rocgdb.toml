@@ -1,0 +1,28 @@
+# rocgdb
+[components.dbg."debug-tools/rocgdb/stage"]
+[components.dev."debug-tools/rocgdb/stage"]
+[components.doc."debug-tools/rocgdb/stage"]
+include = [
+  "share/doc/**",
+  "share/html/**",
+  "share/info/**",
+  "share/man/**"
+]
+[components.lib."debug-tools/rocgdb/stage"]
+include = [
+  "lib/**"
+]
+# Also include share/ here since rocgdb depends on loading some of
+# these at runtime.
+[components.run."debug-tools/rocgdb/stage"]
+include = [
+  "**/bin/**",
+  "share/locale/**",
+  "share/rocgdb/python/**",
+  "share/rocgdb/syscalls/**",
+  "share/rocgdb/system-gdbinit/**"
+]
+[components.test."debug-tools/rocgdb/stage"]
+include = [
+  "tests/**"
+]

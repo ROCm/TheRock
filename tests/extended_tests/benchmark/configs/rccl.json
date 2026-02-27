@@ -1,0 +1,23 @@
+{
+  "benchmarks": [
+    "all_reduce_perf",
+    "all_gather_perf",
+    "broadcast_perf",
+    "reduce_perf",
+    "reduce_scatter_perf",
+    "alltoall_perf",
+    "scatter_perf",
+    "gather_perf"
+  ],
+  "data_types": [
+    "float"
+  ],
+  "min_size": "1G",
+  "max_size": "1G",
+  "step_factor": "2",
+  "warmup_iters": "75",
+  "test_iters": "1000",
+  "operations": [
+    "sum"
+  ]
+}

@@ -1,0 +1,166 @@
+# Reusable Workflow: Build Stage Artifacts
+#
+# This workflow builds TheRock stage artifacts for all stages.
+# Handles both generic stages (foundation, compiler-runtime, etc.) and
+# per-arch stages (math-libs) using conditional logic.
+#
+# Artifacts flow between stages via S3 using the artifact_manager.py tool.
+#
+# TODO: When kpack splitting is permanently enabled, change fetch commands to use
+# --generic-only instead of --amdgpu-families for efficiency. Subsequent build
+# stages only need generic (host) artifacts; device-specific kpacks are not
+# needed until final packaging.
+
+name: Build Stage Artifacts
+
+on:
+  workflow_call:
+    inputs:
+      stage_name:
+        type: string
+        required: true
+        description: "Stage name (e.g., foundation, math-libs, compiler-runtime)"
+      stage_display_name:
+        type: string
+        required: true
+        description: "Human-readable display name for the job"
+      timeout_minutes:
+        type: number
+        required: true
+        description: "Job timeout in minutes"
+      amdgpu_family:
+        type: string
+        required: false
+        default: ""
+        description: "GPU family for per-arch stages (empty for generic stages)"
+      dist_amdgpu_families:
+        type: string
+        required: true
+        description: "Semicolon-separated list of all GPU families for dist targets"
+      build_variant_cmake_preset:
+        type: string
+      rocm_package_version:
+        type: string
+        required: true
+        description: "ROCm package version string"
+
+jobs:
+  build_stage:
+    name: ${{ inputs.stage_display_name }}
+    runs-on: azure-windows-scale-rocm
+    timeout-minutes: ${{ inputs.timeout_minutes }}
+    permissions:
+      id-token: write
+    defaults:
+      run:
+        shell: bash
+    env:
+      STAGE_NAME: ${{ inputs.stage_name }}
+      AMDGPU_FAMILIES: ${{ inputs.amdgpu_family }}
+      BUILD_DIR: B:\build
+      TEATIME_FORCE_INTERACTIVE: 0
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Install python deps
+        run: pip install -r requirements.txt
+
+      - name: Install requirements
+        run: |
+          choco source disable -n=chocolatey
+          choco source add -n=internal -s http://10.0.167.96:8081/repository/choco-group/ --priority=1
+          # ninja pinned due to a bug in the 1.13.0 release:
+          # https://github.com/ninja-build/ninja/issues/2616
+          choco install --no-progress -y ninja --version 1.12.1
+          choco install --no-progress -y strawberryperl
+          echo "$PATH;C:\Strawberry\c\bin" >> $GITHUB_PATH
+          choco install --no-progress -y pkgconfiglite
+
+      - uses: iterative/setup-dvc@4bdfd2b0f6f1ad7e08afadb03b1a895c352a5239 # v2.0.0
+        with:
+          version: '3.62.0'
+
+      # After other installs, so MSVC gets priority in the PATH.
+      - name: Configure MSVC
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+
+      - name: Adjust git config
+        run: |
+          git config --global core.symlinks true
+          git config --global core.longpaths true
+          git config fetch.parallel 10
+
+      - name: Runner health status
+        run: |
+          python build_tools/health_status.py
+
+      - name: Configure AWS Credentials
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-ci
+          special-characters-workaround: true
+
+      - name: Fetch inbound artifacts
+        run: |
+          python build_tools/artifact_manager.py fetch \
+            --run-id="${{ github.run_id }}" \
+            --stage="${STAGE_NAME}" \
+            --amdgpu-families="${{ inputs.amdgpu_family }}" \
+            --output-dir="${BUILD_DIR}" \
+            --bootstrap
+
+      - name: Fetch sources
+        timeout-minutes: 30
+        run: python build_tools/fetch_sources.py --stage ${STAGE_NAME} --jobs 12 --depth 1
+
+      - name: Get stage configuration
+        id: stage_config
+        run: |
+          python build_tools/configure_stage.py \
+            --stage=${STAGE_NAME} \
+            --amdgpu-families="${{ inputs.amdgpu_family }}" \
+            --dist-amdgpu-families="${{ inputs.dist_amdgpu_families }}" \
+            --gha-output
+
+      - name: Install stage python deps
+        if: ${{ steps.stage_config.outputs.pip_install_cmd }}
+        run: pip install ${{ steps.stage_config.outputs.pip_install_cmd }}
+
+      - name: Configure
+        run: |
+          cmake -B "${BUILD_DIR}" -S . -GNinja \
+            --preset=${{ inputs.build_variant_cmake_preset }} \
+            -DTHEROCK_PACKAGE_VERSION=${{ inputs.rocm_package_version }} \
+            ${{ steps.stage_config.outputs.cmake_args }}
+
+      - name: Build stage
+        run: |
+          cmake --build "${BUILD_DIR}" --target stage-${STAGE_NAME} therock-artifacts -- -k 0
+
+      - name: Report
+        if: ${{ !cancelled() }}
+        run: |
+          echo "Artifacts:"
+          ls -lh "${BUILD_DIR}"/artifacts/*.tar.xz 2>/dev/null || echo "No artifacts found"
+
+      - name: Configure AWS Credentials (refresh for push)
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-ci
+          special-characters-workaround: true
+
+      - name: Push stage artifacts
+        run: |
+          python build_tools/artifact_manager.py push --run-id ${{ github.run_id }} \
+            --stage="${STAGE_NAME}" \
+            --build-dir="${BUILD_DIR}"

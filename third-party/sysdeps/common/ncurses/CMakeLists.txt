@@ -9,6 +9,10 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       URL "https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/ncurses-6.5.tar.gz"
       URL_HASH "SHA512=fc5a13409d2a530a1325776dcce3a99127ddc2c03999cfeb0065d0eee2d68456274fb1c7b3cc99c1937bc657d0e7fca97016e147f93c7821b5a4a6837db821e8"
       TOUCH "${_download_stamp}"
+      # We need DOWNLOAD_EXTRACT_TIMESTAMP set to TRUE to preserve the timestamp
+      # of the extracted sources, otherwise the build system will notice
+      # changes and will try to re-run autotools, causing issues.
+      DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     )
 
     therock_cmake_subproject_declare(therock-ncurses
@@ -100,20 +104,25 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT PATCHELF)
   message(FATAL_ERROR "Missing PATCHELF from super-project")
 endif()
 
-# Do builds from a copy of the source directory, in case we need to
-# patch the sources.
-set(SOURCE_COPY_DIR "${CMAKE_CURRENT_BINARY_DIR}/s")
+# Apply patch source only on Linux
+set(patch_source_commands)
+set(patch_build_commands)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  list(APPEND patch_source_commands   COMMAND
+    bash "${CMAKE_CURRENT_SOURCE_DIR}/patch_source.sh" "${SOURCE_DIR}")
+
+  list(APPEND patch_build_commands   COMMAND
+    bash "${CMAKE_CURRENT_SOURCE_DIR}/patch_source.sh" "${CMAKE_CURRENT_BINARY_DIR}")
+endif()
 
 add_custom_target(
   build ALL
   WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-  COMMAND
-    "${CMAKE_COMMAND}" -E rm -rf -- "${CMAKE_INSTALL_PREFIX}" "${SOURCE_COPY_DIR}"
-  COMMAND
-    "${CMAKE_COMMAND}" -E copy_directory "${SOURCE_DIR}" "${SOURCE_COPY_DIR}"
   #
   # OPTIONAL: Patching of the sources should happen here.
   #
+  COMMAND
+    ${patch_source_commands}
   COMMAND
     "${CMAKE_COMMAND}" -E env
       "PKG_CONFIG_PATH=$ENV{PKG_CONFIG_PATH}"
@@ -124,11 +133,15 @@ add_custom_target(
       # See https://github.com/conan-io/conan-center-index/issues/28083
       "CPPFLAGS=${EXTRA_CPPFLAGS} -std=gnu17"
       --
-    "${SOURCE_COPY_DIR}/configure"
+    "${SOURCE_DIR}/configure"
       --prefix "${CMAKE_INSTALL_PREFIX}"
       --with-shared
+      --without-ada
       --enable-widec
       --enable-pc-files
+      --with-form-libname=rocm_sysdeps_form
+      --with-menu-libname=rocm_sysdeps_menu
+      --with-panel-libname=rocm_sysdeps_panel
       # Without this, it will attempt to install pcfiles in the path reported
       # by pkgconfig (which is typically the system root, which is not what
       # we want).
@@ -140,6 +153,28 @@ add_custom_target(
       # This makes it so we install the ncurses headers in the include/
       # directory as opposed to a distinct subdirectory.
       --enable-overwrite
+      # Enable fallbacks. We are building our own ncurses library. Though we
+      # install it at a known place in our TheRock installation tree, the tree
+      # itself can be located anywhere (relocatable).
+      #
+      # The problem is that terminfo lookup logic in ncurses is rigid and
+      # expects (a list of) absolute directories, and we can't provide that.
+      #
+      # For this reason, the fallback should act as a mechanism that allows
+      # ROCgdb's TUI interface to work for the majority of the most common
+      # terminal types even when the terminfo database cannot be found.
+      --with-fallbacks="xterm,xterm-256color,vt100,linux,screen,screen-256color,tmux,tmux-256color,ansi"
+      # Since we have the fallback above, set the terminfo lookup paths to the
+      # standard installation prefixes. We hope the system will provide the
+      # additional required terminfo files if the fallbacks are not enough.
+      --with-terminfo-dirs="/usr/share/terminfo:/usr/lib/terminfo:/etc/terminfo:/lib/terminfo"
+      # Fix #3223: Override autoconf's pid_t detection which incorrectly
+      # defines pid_t as int on modern systems with GCC 14+. This conflicts
+      # with glibc's typedef, breaking wchar_t detection and causing
+      # --enable-widec to silently fail.
+      ac_cv_type_pid_t=yes
+  COMMAND
+    ${patch_build_commands}
   COMMAND
     make -j "${PAR_JOBS}" V=1
   COMMAND

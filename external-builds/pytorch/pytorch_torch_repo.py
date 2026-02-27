@@ -8,8 +8,6 @@ consists of multiple steps:
 * Sources must be pre-processed with HIPIFY, creating dirty git trees that are hard
   to develop on further.
 * Both the ROCM SDK and PyTorch are moving targets that are eventually consistent.
-  We maintain patches for recent PyTorch revisions to adapt to packaging and library
-  compatibility differences until all releases are done and available.
 
 Primary usage:
 
@@ -19,21 +17,10 @@ The checkout process combines the following activities:
 
 * Clones the pytorch repository into `THIS_MAIN_REPO_NAME` with a requested `--repo-hashtag`
   tag (default to latest release).
-* Configures PyTorch submodules to be ignored for any local changes (so that
-  the result is suitable for development with local patches).
-* Applies "base" patches to the pytorch repo and any submodules (by using
-  `git am` with patches from `patches/pytorch_ref_to_THIS_PATCHES_DIR_name(<repo-hashtag>)/<repo-name>/base`).
+* Configures PyTorch submodules to be ignored for any local changes.
 * Runs `hipify` to prepare sources for AMD GPU and commits the result to the
   main repo and any modified submodules.
-* Applies "hipified" patches to the pytorch repo and any submodules (by using
-  `git am` with patches from `patches/<repo-hashtag>/<repo-name>/hipified`).
-* Records some tag information for subsequent activities.
-
-For one-shot builds and CI use, the above is sufficient. But this tool can also
-be used to develop. Any commits made to PyTorch or any of its submodules can
-be saved locally in TheRock by running `./pybuild.py save-patches`. If checked
-in, CI runs for that revision will incorporate them the same as anyone
-interactively using this tool.
+* Records tag information for tracking upstream and hipify commits.
 """
 import argparse
 from pathlib import Path
@@ -46,7 +33,6 @@ THIS_DIR = Path(__file__).resolve().parent
 
 DEFAULT_ORIGIN = "https://github.com/pytorch/pytorch.git"
 DEFAULT_HASHTAG = "nightly"
-DEFAULT_PATCHES_DIR = THIS_DIR / "patches" / THIS_MAIN_REPO_NAME
 
 
 def main(cl_args: list[str]):
@@ -58,12 +44,6 @@ def main(cl_args: list[str]):
             help=f"Directory path where the git repo is cloned into. Default is {THIS_DIR / THIS_MAIN_REPO_NAME}",
         )
         command_parser.add_argument(
-            "--patch-dir",
-            type=Path,
-            default=DEFAULT_PATCHES_DIR,
-            help="Git repository patch path",
-        )
-        command_parser.add_argument(
             "--repo-name",
             type=Path,
             default=THIS_MAIN_REPO_NAME,
@@ -73,10 +53,6 @@ def main(cl_args: list[str]):
             "--repo-hashtag",
             default=DEFAULT_HASHTAG,
             help="Git repository ref/tag to checkout",
-        )
-        command_parser.add_argument(
-            "--patchset",
-            help="patch dir subdirectory (defaults to mangled --repo-hashtag)",
         )
 
     p = argparse.ArgumentParser("pytorch_torch_repo.py")
@@ -96,23 +72,11 @@ def main(cl_args: list[str]):
         default=True,
         help="Run hipify",
     )
-    checkout_p.add_argument(
-        "--patch",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Apply patches for the repo-hashtag",
-    )
     checkout_p.set_defaults(func=repo_management.do_checkout)
 
     hipify_p = sub_p.add_parser("hipify", help="Run HIPIFY on the project")
     add_common(hipify_p)
     hipify_p.set_defaults(func=repo_management.do_hipify)
-
-    save_patches_p = sub_p.add_parser(
-        "save-patches", help="Save local commits as patch files for later application"
-    )
-    add_common(save_patches_p)
-    save_patches_p.set_defaults(func=repo_management.do_save_patches)
 
     args = p.parse_args(cl_args)
     args.func(args)

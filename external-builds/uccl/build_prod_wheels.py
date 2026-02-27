@@ -55,7 +55,7 @@ script_dir = Path(__file__).resolve().parent
 is_windows = platform.system() == "Windows"
 
 
-def exec(args: list[str | Path], cwd: Path, env: dict[str, str] | None = None):
+def run_command(args: list[str | Path], cwd: Path, env: dict[str, str] | None = None):
     args = [str(arg) for arg in args]
     full_env = dict(os.environ)
     print(f"++ Exec [{cwd}]$ {shlex.join(args)}")
@@ -100,7 +100,7 @@ def do_build(args: argparse.Namespace):
 
     # Build UCCL
     if uccl_dir:
-        exec(
+        run_command(
             [
                 "./build.sh",
                 "therock",
@@ -124,7 +124,7 @@ def main(argv: list[str]):
 
     p.add_argument(
         "--image",
-        default="ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:583d473f263a289222c48d4b493e2956b2354a45796f09dee6f2c8ecd4504ab6",
+        default="ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:d6ae5712a9c7e8b88281d021e907b312cd8a26295b95690baef3e8dde4805858",
         help="Base docker image for UCCL's build",
     )
     p.add_argument(

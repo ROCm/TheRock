@@ -20,6 +20,7 @@ import shutil
 import subprocess
 import sys
 from typing import List
+import os
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = THIS_SCRIPT_DIR.parent
@@ -39,11 +40,13 @@ def log(*args, **kwargs):
     sys.stdout.flush()
 
 
-def exec(args: list[str | Path], cwd: Path):
+def run_command(args: list[str | Path], cwd: Path, env: dict[str, str] | None = None):
     args = [str(arg) for arg in args]
     log(f"++ Exec [{cwd}]$ {shlex.join(args)}")
     sys.stdout.flush()
-    subprocess.check_call(args, cwd=str(cwd), stdin=subprocess.DEVNULL)
+
+    full_env = {**os.environ, **(env or {})}
+    subprocess.check_call(args, cwd=str(cwd), env=full_env, stdin=subprocess.DEVNULL)
 
 
 def get_projects_from_topology(stage: str) -> List[str]:
@@ -95,16 +98,20 @@ def get_enabled_projects(args) -> List[str]:
         projects.extend(args.system_projects)
     if args.include_compilers:
         projects.extend(args.compiler_projects)
+    if args.include_debug_tools:
+        projects.extend(args.debug_tools)
     if args.include_rocm_libraries:
         projects.extend(["rocm-libraries"])
     if args.include_rocm_systems:
         projects.extend(["rocm-systems"])
     if args.include_ml_frameworks:
         projects.extend(args.ml_framework_projects)
-    if args.include_rocm_media:
-        projects.extend(args.rocm_media_projects)
+    if args.include_media_libs:
+        projects.extend(args.media_libs_projects)
     if args.include_iree_libs:
         projects.extend(args.iree_libs_projects)
+    if args.include_math_libraries:
+        projects.extend(args.math_library_projects)
     return projects
 
 
@@ -134,7 +141,7 @@ def fetch_nested_submodules(args, projects):
             get_submodule_path(nested_submodule, cwd=parent_dir)
             for nested_submodule in nested_submodules
         ]
-        exec(
+        run_command(
             ["git", "submodule", "update", "--init"]
             + update_args
             + ["--"]
@@ -159,7 +166,7 @@ def run(args):
     if args.remote:
         update_args += ["--remote"]
     if args.update_submodules:
-        exec(
+        run_command(
             ["git", "submodule", "update", "--init"]
             + update_args
             + ["--"]
@@ -178,7 +185,7 @@ def run(args):
     # then meaningless. Here on each fetch, we reset the flag so that if
     # patches are aged out, the tree is restored to normal.
     submodule_paths = [get_submodule_path(name) for name in projects]
-    exec(
+    run_command(
         ["git", "update-index", "--no-skip-worktree", "--"] + submodule_paths,
         cwd=THEROCK_DIR,
     )
@@ -211,7 +218,7 @@ def pull_large_files(dvc_projects, projects):
         dvc_config_file = project_dir / ".dvc" / "config"
         if dvc_config_file.exists():
             print(f"dvc detected in {project_dir}, running dvc pull")
-            exec(["dvc", "pull"], cwd=project_dir)
+            run_command(["dvc", "pull"], cwd=project_dir)
         else:
             log(f"WARNING: dvc config not found in {project_dir}, when expected.")
 
@@ -252,7 +259,7 @@ def apply_patches(args, projects):
         patch_files = list(patch_project_dir.glob("*.patch"))
         patch_files.sort()
         log(f"Applying {len(patch_files)} patches")
-        exec(
+        run_command(
             [
                 "git",
                 "-c",
@@ -264,9 +271,12 @@ def apply_patches(args, projects):
             ]
             + patch_files,
             cwd=project_dir,
+            env={
+                "GIT_COMMITTER_DATE": "Thu, 1 Jan 2099 00:00:00 +0000",
+            },
         )
         # Since it is in a patched state, make it invisible to changes.
-        exec(
+        run_command(
             ["git", "update-index", "--skip-worktree", "--", submodule_path],
             cwd=THEROCK_DIR,
         )
@@ -413,7 +423,17 @@ def main(argv):
         "--nested-submodules",
         nargs="+",
         type=parse_nested_submodules,
-        default=[("iree", ["third_party/flatcc", "third_party/benchmark"])],
+        default=[
+            (
+                "iree",
+                [
+                    "third_party/flatcc",
+                    "third_party/benchmark",
+                    "third_party/llvm-project",
+                    "third_party/torch-mlir",
+                ],
+            )
+        ],
         help="Specify which nested submodules to fetch (e.g., project1:nested_in_project1_1,nested_in_project1_2 project2:nested_in_project2)",
     )
     parser.add_argument(
@@ -427,6 +447,12 @@ def main(argv):
         default=True,
         action=argparse.BooleanOptionalAction,
         help="Include compilers",
+    )
+    parser.add_argument(
+        "--include-debug-tools",
+        default=True,
+        action=argparse.BooleanOptionalAction,
+        help="Include ROCm debugging tools",
     )
     parser.add_argument(
         "--include-rocm-libraries",
@@ -447,7 +473,7 @@ def main(argv):
         help="Include machine learning frameworks that are part of ROCM",
     )
     parser.add_argument(
-        "--include-rocm-media",
+        "--include-media-libs",
         default=True,
         action=argparse.BooleanOptionalAction,
         help="Include media projects that are part of ROCM",
@@ -459,13 +485,17 @@ def main(argv):
         help="Include IREE and related libraries",
     )
     parser.add_argument(
+        "--include-math-libraries",
+        default=True,
+        action=argparse.BooleanOptionalAction,
+        help="Include math libraries that are part of ROCM",
+    )
+    parser.add_argument(
         "--system-projects",
         nargs="+",
         type=str,
         default=[
             "half",
-            "rccl",
-            "rccl-tests",
             "rocm-cmake",
             "rocprof-trace-decoder",
         ],
@@ -484,12 +514,10 @@ def main(argv):
         "--ml-framework-projects",
         nargs="+",
         type=str,
-        default=[
-            "composable_kernel",
-        ],
+        default=[],
     )
     parser.add_argument(
-        "--rocm-media-projects",
+        "--media-libs-projects",
         nargs="+",
         type=str,
         default=(
@@ -523,6 +551,32 @@ def main(argv):
             if is_windows()
             else [
                 "rocm-libraries",
+            ]
+        ),
+    )
+    parser.add_argument(
+        "--debug-tools",
+        nargs="+",
+        type=str,
+        default=(
+            []
+            if is_windows()
+            else [
+                # Linux only projects.
+                "rocgdb",
+            ]
+        ),
+    )
+    parser.add_argument(
+        "--math-library-projects",
+        nargs="+",
+        type=str,
+        default=(
+            []
+            if is_windows()
+            else [
+                # Linux only projects.
+                "libhipcxx",
             ]
         ),
     )
