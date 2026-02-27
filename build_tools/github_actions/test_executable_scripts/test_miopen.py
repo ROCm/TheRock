@@ -117,6 +117,8 @@ negative_filter.append("*MIOpenTestConv*")
 
 # For sake of time saving on pre-commit step
 ####################################################
+negative_filter.append("Full/GPU_MIOpenDriverConv2dTransTest*")  # 4 min 45 sec
+negative_filter.append("Full/GPU_MIOpenDriverRegressionBigTensorTest_FP32") # 0 min 59 sec
 negative_filter.append("Full/GPU_Reduce_FP64*")  # 4 min 19 sec
 negative_filter.append("Full/GPU_BNOCLFWDTrainSerialRun3D_BFP16*")  # 3 min 37 sec
 negative_filter.append("Full/GPU_Lrn_FP32*")  # 2 min 50 sec
