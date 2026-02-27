@@ -247,7 +247,7 @@ def determine_long_lived_branch(branch_name: str) -> bool:
         is_long_lived_branch = True
 
     return is_long_lived_branch
-
+    
 
 def matrix_generator(
     is_pull_request=False,
@@ -661,14 +661,17 @@ def main(base_args, linux_families, windows_families):
             test_type = "full"
             test_type_reason = f"test label(s) specified: {combined_test_labels}"
 
-    for matrix_row in linux_variants_output + windows_variants_output:
-        # If the "run-full-tests-only" flag is set for this family, we do not run tests if it is a smoke test type
-        if matrix_row.get("run-full-tests-only", False) and test_type == "smoke":
-            matrix_row["test-runs-on"] = ""
-        # For nightly_check_only_for_family architectures, we want to run only full tests during nightly (scheduled) run
-        # Otherwise, we run sanity checks in all other scenarios (presubmit/postsubmit)
-        if not matrix_row.get("nightly_check_only_for_family", False) and (not is_schedule or not is_workflow_dispatch):
-            matrix_row["sanity_check_only_for_family"] = True
+        for matrix_row in linux_variants_output + windows_variants_output:
+            # If the "run-full-tests-only" flag is set for this family, we do not run tests if it is a smoke test type
+            if matrix_row.get("run-full-tests-only", False) and test_type == "smoke":
+                matrix_row["test-runs-on"] = ""
+            # For nightly_check_only_for_family architectures, we want to run only full tests during nightly (scheduled) run
+            # Otherwise, we run sanity checks in all other scenarios (presubmit/postsubmit)
+            if not matrix_row.get("nightly_check_only_for_family", False) and (
+                is_pull_request or is_push
+            ):
+                matrix_row["sanity_check_only_for_family"] = True
+
             
 
     print(f"test_type decision: '{test_type}' (reason: {test_type_reason})")
