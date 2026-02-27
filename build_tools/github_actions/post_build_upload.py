@@ -97,7 +97,11 @@ def run_aws_cp(source_path: Path, s3_destination: str, content_type: str = None)
         for file_path in source_path.rglob("*"):
             if not file_path.is_file():
                 continue
-            key = f"{dest_key}/{file_path.relative_to(source_path)}" if dest_key else str(file_path.relative_to(source_path))
+            key = (
+                f"{dest_key}/{file_path.relative_to(source_path)}"
+                if dest_key
+                else str(file_path.relative_to(source_path))
+            )
             ct = content_type
             if not ct:
                 ct_guess, _ = mimetypes.guess_type(str(file_path))
@@ -106,7 +110,11 @@ def run_aws_cp(source_path: Path, s3_destination: str, content_type: str = None)
             log(f"[INFO] Uploading {file_path} -> s3://{bucket}/{key}")
             s3.upload_file(str(file_path), bucket, key, ExtraArgs=extra_args)
     else:
-        key = f"{dest_key}/{source_path.name}" if dest_key and not dest_key.endswith(source_path.name) else dest_key
+        key = (
+            f"{dest_key}/{source_path.name}"
+            if dest_key and not dest_key.endswith(source_path.name)
+            else dest_key
+        )
         ct = content_type
         if not ct:
             ct_guess, _ = mimetypes.guess_type(str(source_path))
@@ -231,7 +239,9 @@ def upload_artifacts(artifact_group: str, build_dir: Path, bucket_uri: str):
     if index_file.is_file():
         key = f"{dest_prefix}/index-{artifact_group}.html"
         log(f"[INFO] Uploading {index_file} -> s3://{bucket}/{key}")
-        s3.upload_file(str(index_file), bucket, key, ExtraArgs={"ContentType": "text/html"})
+        s3.upload_file(
+            str(index_file), bucket, key, ExtraArgs={"ContentType": "text/html"}
+        )
 
 
 def upload_logs_to_s3(artifact_group: str, build_dir: Path, bucket_uri: str):
