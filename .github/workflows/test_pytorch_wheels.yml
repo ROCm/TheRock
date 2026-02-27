@@ -159,6 +159,13 @@ jobs:
             --import-mode=importlib \
             -v
 
+      - name: (Linux) Run full PyTorch test suite via run_test.py
+        if: ${{ runner.os == 'Linux' }}
+        run: |
+          python ./external-builds/pytorch/run_pytorch_tests_full.py -- \
+            --continue-on-collection-errors \
+            --import-mode=importlib
+
       # Windows testing is a recent addition and is being enabled incrementally.
       # See https://github.com/ROCm/TheRock/issues/2258.
       #
