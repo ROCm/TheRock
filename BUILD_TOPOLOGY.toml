@@ -624,7 +624,7 @@ disable_platforms = ["windows"]
 [artifacts.rocshmem]
 artifact_group = "comm-libs"
 type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip", "rocprofiler-sdk"]
+artifact_deps = ["core-runtime", "core-hip", "rocprofiler-sdk", "sysdeps"]
 disable_platforms = ["windows"]
 
 # --- Profiler Tools ---
