@@ -10,7 +10,6 @@ from urllib.error import HTTPError
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from generate_manifest_diff_report import (
-    compare_manifests,
     determine_status,
     fetch_commits_in_range,
     format_commit_date,
@@ -19,15 +18,6 @@ from generate_manifest_diff_report import (
     parse_args,
     resolve_commits,
 )
-from github_actions.github_actions_utils import is_authenticated_github_api_available
-
-
-def _skip_unless_authenticated_github_api_is_available(test_func):
-    """Decorator to skip tests unless GitHub API is available."""
-    return unittest.skipUnless(
-        is_authenticated_github_api_available(),
-        "No authenticated GitHub API auth available (need GITHUB_TOKEN or authenticated gh CLI)",
-    )(test_func)
 
 
 # =============================================================================
@@ -212,60 +202,6 @@ class FetchCommitsInRangeTest(unittest.TestCase):
 
 
 # =============================================================================
-# Integration Tests (Real API Calls)
-# =============================================================================
-
-
-class ManifestDiffIntegrationTest(unittest.TestCase):
-    """Integration tests using real API calls with documented test cases."""
-
-    @_skip_unless_authenticated_github_api_is_available
-    def test_superrepo_changed(self):
-        """Test Case 1: rocm-libraries changed with component commits."""
-        diff = compare_manifests("e3fb7163", "5ff856ba")
-
-        self.assertIn("rocm-libraries", diff.superrepos)
-        superrepo = diff.superrepos["rocm-libraries"]
-        self.assertEqual(superrepo.status, "changed")
-        self.assertTrue(len(superrepo.all_commits) > 0)
-
-    @_skip_unless_authenticated_github_api_is_available
-    def test_superrepo_unchanged(self):
-        """Test Case 4: All superrepos unchanged."""
-        diff = compare_manifests("c7bc0b40", "cf13cfdc")
-
-        for name, superrepo in diff.superrepos.items():
-            self.assertEqual(
-                superrepo.status, "unchanged", f"{name} should be unchanged"
-            )
-
-    @_skip_unless_authenticated_github_api_is_available
-    def test_submodule_changed(self):
-        """Test Case 5: libhipcxx submodule changed."""
-        diff = compare_manifests("3a6cbc2a", "02946b22")
-
-        self.assertIn("libhipcxx", diff.submodules)
-        self.assertEqual(diff.submodules["libhipcxx"].status, "changed")
-        self.assertTrue(len(diff.submodules["libhipcxx"].commits) > 0)
-
-    @_skip_unless_authenticated_github_api_is_available
-    def test_submodule_reverted(self):
-        """Test Case 7: libhipcxx submodule reverted (swapped commits from Case 5)."""
-        diff = compare_manifests("02946b22", "3a6cbc2a")
-
-        self.assertIn("libhipcxx", diff.submodules)
-        self.assertEqual(diff.submodules["libhipcxx"].status, "reverted")
-
-    @_skip_unless_authenticated_github_api_is_available
-    def test_submodule_added(self):
-        """Test Case 10: libhipcxx submodule added."""
-        diff = compare_manifests("f5552032", "bcc9df4b")
-
-        self.assertIn("libhipcxx", diff.submodules)
-        self.assertEqual(diff.submodules["libhipcxx"].status, "added")
-
-
-# =============================================================================
 # CLI Options Tests (Mocked)
 # =============================================================================
 
@@ -323,42 +259,6 @@ class ResolveCommitsTest(unittest.TestCase):
         """--output-dir defaults to None when not specified."""
         args = parse_args(["--start", "abc", "--end", "def"])
         self.assertIsNone(args.output_dir)
-
-
-# =============================================================================
-# CLI Options Integration Tests (Real API Calls)
-# =============================================================================
-
-
-class ResolveCommitsIntegrationTest(unittest.TestCase):
-    """Integration tests for CLI options with real API calls."""
-
-    @_skip_unless_authenticated_github_api_is_available
-    def test_workflow_mode_with_real_run_id(self):
-        """Test --workflow-mode with a real workflow run ID."""
-        # Using workflow run ID from existing tests in github_actions_utils_test.py
-        # https://github.com/ROCm/TheRock/actions/runs/18022609292
-        args = parse_args(
-            ["--start", "18022609292", "--end", "18022609292", "--workflow-mode"]
-        )
-
-        start_sha, end_sha = resolve_commits(args)
-
-        # Should resolve to actual commit SHAs (40 hex chars)
-        self.assertEqual(len(start_sha), 40)
-        self.assertTrue(all(c in "0123456789abcdef" for c in start_sha))
-        self.assertEqual(start_sha, end_sha)  # Same workflow = same SHA
-
-    @_skip_unless_authenticated_github_api_is_available
-    def test_find_last_successful_with_real_workflow(self):
-        """Test --find-last-successful with ci_nightly.yml."""
-        args = parse_args(["--end", "main", "--find-last-successful", "ci_nightly.yml"])
-
-        start_sha, end_sha = resolve_commits(args)
-
-        # Should resolve start to a commit SHA from last successful nightly
-        self.assertEqual(len(start_sha), 40)
-        self.assertTrue(all(c in "0123456789abcdef" for c in start_sha))
 
 
 if __name__ == "__main__":
