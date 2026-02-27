@@ -128,9 +128,6 @@ jobs:
         run: |
           python ./build_tools/print_driver_gpu_info.py
 
-      - name: Setup Test
-        run: |
-          ${{ fromJSON(inputs.component).setup_script }}
       - name: Setup Additional Requirements
         if: ${{ fromJSON(inputs.component).additional_requirements_files != '' }}
         run: |
