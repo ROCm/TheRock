@@ -82,14 +82,6 @@ on:
         description: "TheRock branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
         type: string
         default: ''
-      jax_ref:
-        description: "jax ref to build. 'all' = build both 0.8.0 and 0.8.2."
-        type: choice
-        options:
-          - all
-          - rocm-jaxlib-v0.8.0
-          - rocm-jaxlib-v0.8.2
-        default: all
 
 permissions:
   id-token: write
@@ -105,7 +97,7 @@ jobs:
       fail-fast: false
       matrix:
         python_version: ["3.11", "3.12", "3.13", "3.14"]
-        jax_ref: ${{ (inputs.jax_ref == '' || inputs.jax_ref == 'all') && fromJSON('["rocm-jaxlib-v0.8.0", "rocm-jaxlib-v0.8.2"]') || fromJSON(format('["{0}"]', inputs.jax_ref)) }}
+        jax_ref: ["rocm-jaxlib-v0.8.0", "rocm-jaxlib-v0.8.2"]
 
     uses: ./.github/workflows/build_linux_jax_wheels.yml
     with:
