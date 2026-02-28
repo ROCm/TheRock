@@ -1,0 +1,4 @@
+# rocm-kpack
+[components.dbg."core/rocm-kpack/stage"]
+[components.dev."core/rocm-kpack/stage"]
+[components.lib."core/rocm-kpack/stage"]
