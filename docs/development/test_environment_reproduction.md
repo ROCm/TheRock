@@ -28,7 +28,7 @@ $ python build_tools/github_actions/test_executable_scripts/test_rocblas.py
 - CI_RUN_ID is sourced from the CI run (ex: https://github.com/ROCm/TheRock/actions/runs/16948046392 -> CI_RUN_ID = 16948046392)
 - GPU_FAMILY is the LLVM target name (ex: gfx94X-dcgpu, gfx1151, gfx110X-all)
 - GITHUB_REPO is the GitHub repository that this CI run was executed. (ex: ROCm/rocm-libraries, ROCm/rccl)
-- ADDITIONAL FLAGS (optional) are found in [installing_artifacts.md](https://github.com/ROCm/TheRock/blob/085571a87f8050f94c77eb90454995b6d1b75658/docs/development/installing_artifacts.md#component-selection)
+- ADDITIONAL FLAGS (optional) are found in [installing_artifacts.md](https://github.com/ROCm/TheRock/blob/main/docs/development/installing_artifacts.md#component-selection)
   - In CI runs, all components use flags to install specific components (and avoid installing everything). Refer to the CI logs to see what flags are used
 
 To view which python test wrappers we have, please checkout [`test_executable_scripts/`](https://github.com/ROCm/TheRock/tree/main/build_tools/github_actions/test_executable_scripts)
