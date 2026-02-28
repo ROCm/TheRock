@@ -464,10 +464,17 @@ feature_name = "CORE_AMDSMI"
 feature_group = "CORE"
 disable_platforms = ["windows"]
 
+[artifacts.core-kpack]
+artifact_group = "hip-runtime"
+type = "target-neutral"
+artifact_deps = ["sysdeps"]
+feature_name = "KPACK"
+feature_group = "CORE"
+
 [artifacts.core-hip]
 artifact_group = "hip-runtime"
 type = "target-neutral"
-artifact_deps = ["core-runtime", "amd-llvm"]
+artifact_deps = ["core-runtime", "amd-llvm", "core-kpack"]
 feature_name = "HIP_RUNTIME"
 feature_group = "CORE"  # Part of core, enabled by default
 

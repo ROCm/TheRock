@@ -26,9 +26,7 @@ THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = THIS_SCRIPT_DIR.parent
 PATCHES_DIR = THEROCK_DIR / "patches"
 TOPOLOGY_PATH = THEROCK_DIR / "BUILD_TOPOLOGY.toml"
-ALWAYS_SUBMODULE_PATHS = [
-    "base/rocm-kpack",
-]
+ALWAYS_SUBMODULE_PATHS: list[str] = []
 
 
 def is_windows() -> bool:
