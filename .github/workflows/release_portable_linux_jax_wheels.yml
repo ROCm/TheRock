@@ -81,7 +81,7 @@ on:
         description: "URL to TheRock tarball to build (e.g. https://rocm.nightlies.amd.com/tarball/therock-dist-linux-gfx94X-dcgpu-7.10.0a20251124.tar.gz)"
         type: string
       ref:
-        description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
+        description: "TheRock branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
         type: string
         default: ''
 
@@ -99,7 +99,7 @@ jobs:
       fail-fast: false
       matrix:
         python_version: ["3.11", "3.12", "3.13", "3.14"]
-        jax_ref: ["rocm-jaxlib-v0.8.2"]
+        jax_ref: ["rocm-jaxlib-v0.8.0", "rocm-jaxlib-v0.8.2"]
 
     uses: ./.github/workflows/build_linux_jax_wheels.yml
     with:
