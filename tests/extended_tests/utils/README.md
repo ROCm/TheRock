@@ -46,11 +46,11 @@ shared infrastructure (command execution, GPU detection, result creation, statis
 # In benchmark_base.py / functional_base.py
 from utils.extended_test_base import ExtendedTestBase
 
-class BenchmarkBase(ExtendedTestBase):
-    ...
 
-class FunctionalBase(ExtendedTestBase):
-    ...
+class BenchmarkBase(ExtendedTestBase): ...
+
+
+class FunctionalBase(ExtendedTestBase): ...
 ```
 
 ### From Test Scripts

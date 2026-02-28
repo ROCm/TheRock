@@ -99,9 +99,7 @@ class ExtendedTestBase:
     def get_gpu_architecture(self) -> str:
         """Detect GPU architecture (e.g., 'gfx942') using rocminfo."""
         try:
-            gfx_id = get_first_gpu_architecture(
-                therock_bin_dir=self.therock_bin_dir
-            )
+            gfx_id = get_first_gpu_architecture(therock_bin_dir=self.therock_bin_dir)
             log.info(f"Detected GPU architecture: {gfx_id}")
             return gfx_id
         except Exception as e:
@@ -112,9 +110,7 @@ class ExtendedTestBase:
 
     def detect_gpu_count(self) -> int:
         """Detect the number of available GPUs using rocminfo."""
-        gpu_count = get_visible_gpu_count(
-            therock_bin_dir=self.therock_bin_dir
-        )
+        gpu_count = get_visible_gpu_count(therock_bin_dir=self.therock_bin_dir)
         if gpu_count == 0:
             raise RuntimeError(
                 "No GPUs detected. Tests require at least one GPU. "
@@ -186,9 +182,7 @@ class ExtendedTestBase:
                 key = "passed"
             elif key == "fail":
                 key = "failed"
-            counts[key] = sum(
-                1 for r in test_results if r.get("status") == status
-            )
+            counts[key] = sum(1 for r in test_results if r.get("status") == status)
 
         # Overall status: FAIL if any failures or errors
         failure_count = counts.get("failed", 0) + counts.get("error", 0)
@@ -235,8 +229,6 @@ class ExtendedTestBase:
         if success:
             log.info("Results uploaded successfully")
         else:
-            log.info(
-                "Results saved locally only (API upload disabled or failed)"
-            )
+            log.info("Results saved locally only (API upload disabled or failed)")
 
         return success
