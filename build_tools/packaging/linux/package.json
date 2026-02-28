@@ -2466,11 +2466,13 @@
     "DEBDepends": [
       "amdrocm-core-devel",
       "amdrocm-developer-tools",
+      "amdrocm-rdc",
       "amdrocm-opencl"
     ],
     "RPMRequires": [
       "amdrocm-core-devel",
       "amdrocm-developer-tools",
+      "amdrocm-rdc",
       "amdrocm-opencl"
     ],
     "Maintainer": "ROCm Dev Support <rocm-dev.support@amd.com>",
