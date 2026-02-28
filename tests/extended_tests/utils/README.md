@@ -7,7 +7,8 @@ Utility modules organized into logical subdirectories for maintainability and sc
 ```
 extended_tests/utils/
 ├── __init__.py              # Public exports
-├── extended_test_client.py  # Main ExtendedTestClient API
+├── extended_test_base.py    # ExtendedTestBase - shared base class for all tests
+├── extended_test_client.py  # ExtendedTestClient - system detection & result reporting
 ├── constants.py             # Framework constants
 ├── exceptions.py            # Custom exceptions
 ├── logger.py                # Logging configuration
@@ -36,12 +37,28 @@ extended_tests/utils/
 
 ## Usage
 
-### From Benchmark Scripts
+### From Test Base Classes
 
-Benchmark scripts add `extended_tests/` to `sys.path`, then import:
+Both `BenchmarkBase` and `FunctionalBase` inherit from `ExtendedTestBase`, which provides
+shared infrastructure (command execution, GPU detection, result creation, statistics, uploads):
 
 ```python
-# Import path setup (already done in benchmark_base.py)
+# In benchmark_base.py / functional_base.py
+from utils.extended_test_base import ExtendedTestBase
+
+class BenchmarkBase(ExtendedTestBase):
+    ...
+
+class FunctionalBase(ExtendedTestBase):
+    ...
+```
+
+### From Test Scripts
+
+Test scripts add `extended_tests/` to `sys.path`, then import:
+
+```python
+# Import path setup (already done in base classes)
 sys.path.insert(
     0, str(Path(__file__).resolve().parents[2])
 )  # Adds extended_tests/ to path
@@ -52,6 +69,7 @@ from utils.constants import Constants
 from utils.exceptions import ConfigurationError
 
 # Main API classes
+from utils.extended_test_base import ExtendedTestBase
 from utils.extended_test_client import ExtendedTestClient
 from utils.system.system_detector import SystemDetector
 from utils.config.config_helper import ConfigHelper
@@ -80,10 +98,11 @@ from utils.results import ResultsHandler, ResultsAPI
 
 ### Root Level
 
+- **extended_test_base.py** - `ExtendedTestBase` shared base class for benchmark and functional tests (command execution, GPU detection, test result creation, statistics, result uploads)
+- **extended_test_client.py** - `ExtendedTestClient` API for system detection and result reporting
 - **constants.py** - Framework constants and defaults
 - **exceptions.py** - Custom exception classes
 - **logger.py** - Logging configuration
-- **extended_test_client.py** - Main ExtendedTestClient API
 
 ### Config
 

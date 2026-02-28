@@ -23,7 +23,7 @@ class RCCLBenchmark(BenchmarkBase):
     def __init__(self):
         super().__init__(benchmark_name="rccl", display_name="RCCL")
         self.log_file = self.script_dir / "rccl_bench.log"
-        self.ngpu = self._detect_gpu_count()
+        self.ngpu = self.detect_gpu_count()
 
         # Validate OpenMPI is available (from base class)
         self._validate_openmpi()
