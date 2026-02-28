@@ -91,6 +91,7 @@ def core_artifact_filter(an: ArtifactName) -> bool:
         "base",
         "core-amdsmi",
         "core-hip",
+        "core-kpack",
         "core-ocl",
         "core-hipinfo",
         "core-runtime",

@@ -214,7 +214,7 @@ function(therock_provide_artifact slice_name)
 
   # When splitting is enabled, run split_artifacts.py on each component
   if(_should_split)
-    set(_split_tool "${THEROCK_KPACK_DIR}/python/rocm_kpack/tools/split_artifacts.py")
+    set(_split_tool "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/kpack/python/rocm_kpack/tools/split_artifacts.py")
     set(_bundler_path "${THEROCK_BINARY_DIR}/compiler/amd-llvm/dist/lib/llvm/bin/clang-offload-bundler")
     set(_split_manifest_files)
     set(_split_component_dirs)
@@ -244,7 +244,7 @@ function(therock_provide_artifact slice_name)
       add_custom_command(
         OUTPUT "${_split_manifest}"
         COMMENT "Splitting ${_artifact_prefix} into generic and arch-specific artifacts"
-        COMMAND "${CMAKE_COMMAND}" -E env "PYTHONPATH=${THEROCK_KPACK_DIR}/python"
+        COMMAND "${CMAKE_COMMAND}" -E env "PYTHONPATH=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/kpack/python"
           "${Python3_EXECUTABLE}" "${_split_tool}" ${_split_command_args}
         DEPENDS
           "${_unsplit_manifest}"
