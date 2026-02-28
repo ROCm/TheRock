@@ -167,12 +167,13 @@ jobs:
         run: |
           ls -lah
           pushd rocm-jax
+          [[ "${{ inputs.jax_ref }}" == *"0.8.2"* ]] && SOURCE_ARG="--jax-source-dir=${{ github.workspace }}/jax" || SOURCE_ARG=""
           python3 build/ci_build \
             --compiler=clang \
             --python-versions="${{ inputs.python_version }}" \
             --rocm-version="${ROCM_VERSION}" \
             --therock-path="${{ inputs.tar_url }}" \
-            --jax-source-dir="${{ github.workspace }}/jax" \
+            $SOURCE_ARG \
             dist_wheels
 
       - name: Extract JAX versions from built wheels

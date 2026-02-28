@@ -33,14 +33,16 @@ The test framework provides infrastructure for two test types:
 
 ### Environment Setup
 
-All tests require these environment variables. **Note:** These are automatically configured in CI runs. For local testing, adjust values based on your setup:
+All tests require these environment variables. **Note:** These are automatically configured in CI runs. For local testing, adjust values based on your setup.
+
+> **Setting Up Environment:** See [Test Environment Reproduction](../../docs/development/test_environment_reproduction.md) for instructions on reproducing the CI test environment, including how to obtain TheRock build artifacts from a CI run and get the `ARTIFACT_RUN_ID` (same as `CI_RUN_ID` in the document).
 
 ```bash
-# Required: Update to your actual TheRock build directory
+# Required: Path to TheRock bin/ directory (see above for how to obtain)
 export THEROCK_BIN_DIR=/path/to/therock/build/bin
 
-# Optional: Unique identifier for this test run (default: local-test)
-export ARTIFACT_RUN_ID=local-test
+# Required: GitHub Actions run ID (from CI run URL, e.g., https://github.com/ROCm/TheRock/actions/runs/16948046392)
+export ARTIFACT_RUN_ID=16948046392
 
 # Required: Update to match your GPU family (e.g., gfx908, gfx90a, gfx942, gfx950-dcgpu)
 export AMDGPU_FAMILIES=gfx950-dcgpu
@@ -86,7 +88,7 @@ extended_tests/
     │   └── FrameworkException        # Base exception
     │
     ├── logger.py                  # Logging utilities
-    ├── test_client.py             # Test execution client
+    ├── extended_test_client.py    # ExtendedTestClient API
     ├── constants.py               # Global constants
     │
     ├── config/                    # Configuration parsers

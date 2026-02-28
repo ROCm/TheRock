@@ -291,7 +291,6 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
     therock_cmake_subproject_activate(hip-tests)
     # Provide it as an artifact:
     therock_provide_artifact(core-hiptests
-      TARGET_NEUTRAL
       DESCRIPTOR artifact-core-hiptests.toml
       COMPONENTS
         test

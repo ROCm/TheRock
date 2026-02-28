@@ -97,8 +97,11 @@ def core_artifact_filter(an: ArtifactName) -> bool:
         "hipify",
         "host-blas",
         "host-suite-sparse",
+        "rocdecode",
+        "rocjpeg",
         "rocprofiler-sdk",
         "sysdeps",
+        "sysdeps-amd-mesa",
     ] and an.component in [
         "lib",
         "run",
