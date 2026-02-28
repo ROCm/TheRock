@@ -667,7 +667,7 @@ def main(base_args, linux_families, windows_families):
                 matrix_row["test-runs-on"] = ""
             # For nightly_check_only_for_family architectures, we want to run only full tests during nightly (scheduled) run
             # Otherwise, we run sanity checks in all other scenarios (presubmit/postsubmit)
-            if not matrix_row.get("nightly_check_only_for_family", False) and (
+            if matrix_row.get("nightly_check_only_for_family", False) and (
                 is_pull_request or is_push
             ):
                 matrix_row["sanity_check_only_for_family"] = True
