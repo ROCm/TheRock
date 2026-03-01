@@ -1,0 +1,51 @@
+From c7dcdeb057acd57e725a7b64fecff77d3b91000d Mon Sep 17 00:00:00 2001
+From: therockbot <therockbot@amd.com>
+Date: Sat, 14 Feb 2026 05:57:38 -0700
+Subject: [PATCH] rocblas: Prevent OpenMP CONFIG find from escaping build
+ sandbox
+
+When building rocBLAS clients with Clang and GCC 15 host headers,
+find_package(OpenMP CONFIG) without NO_DEFAULT_PATH allows CMake to
+discover system-installed OpenMP configs via PATH-derived prefixes
+(e.g. /opt/rocm/lib/cmake/openmp). The resulting OpenMP::omp target
+includes INTERFACE_INCLUDE_DIRECTORIES pointing to the Clang resource
+directory, which when added as -isystem to HIP device compilation
+causes GCC 15's <cstdint> to fail on the amdgcn target:
+
+  error: no member named 'int_fast8_t' in the global namespace
+
+This happens because the system stdint.h checks __x86_64__ (not
+defined for amdgcn), leading to missing type definitions.
+
+Adding NO_DEFAULT_PATH restricts the CONFIG search to the explicit
+HIP_CLANG_ROOT path. If that path doesn't contain an OpenMP config,
+the existing fallback to find_package(OpenMP) in MODULE mode correctly
+finds OpenMP without the problematic include directories.
+
+See-also: https://gcc.gnu.org/gcc-15/porting_to.html
+---
+ projects/rocblas/clients/CMakeLists.txt | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/projects/rocblas/clients/CMakeLists.txt b/projects/rocblas/clients/CMakeLists.txt
+index 8236d883b6..b6d654ffc6 100644
+--- a/projects/rocblas/clients/CMakeLists.txt
++++ b/projects/rocblas/clients/CMakeLists.txt
+@@ -114,8 +114,12 @@ set(THREADS_PREFER_PTHREAD_FLAG ON)
+ find_package(Threads REQUIRED)
+ 
+ if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+-  # Look for openmp config in ROCm install to populate openmp_LIB_DIR and openmp_LIB_INSTALL_DIR
+-  find_package(OpenMP CONFIG PATHS "${HIP_CLANG_ROOT}/lib/cmake")
++  # Look for openmp config in ROCm install to populate openmp_LIB_DIR and openmp_LIB_INSTALL_DIR.
++  # NO_DEFAULT_PATH prevents CMake from discovering system-installed OpenMP configs
++  # via PATH-derived prefixes (e.g. /opt/rocm), which can inject -isystem flags
++  # for the Clang resource directory, breaking HIP device compilation with GCC 15
++  # host headers on the amdgcn target.
++  find_package(OpenMP CONFIG NO_DEFAULT_PATH PATHS "${HIP_CLANG_ROOT}/lib/cmake")
+ endif()
+ 
+ if (CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND TARGET OpenMP::omp)
+-- 
+2.52.0
+
