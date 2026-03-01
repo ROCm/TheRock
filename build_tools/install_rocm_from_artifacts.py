@@ -20,19 +20,20 @@ python build_tools/install_rocm_from_artifacts.py
     [--blas | --no-blas]
     [--debug-tools | --no-debug-tools]
     [--fft | --no-fft]
+    [--composablekernel | --no-composablekernel]
     [--hipdnn | --no-hipdnn]
     [--hipdnn-samples | --no-hipdnn-samples]
     [--miopen | --no-miopen]
-    [--miopen-plugin | --no-miopen-plugin]
-    [--composablekernel | --no-composablekernel]
-    [--fusilli-plugin | --no-fusilli-plugin]
-    [--hipblaslt-plugin | --no-hipblaslt-plugin]
+    [--miopenprovider | --no-miopenprovider]
+    [--fusilliprovider | --no-fusilliprovider]
+    [--hipblasltprovider | --no-hipblasltprovider]
     [--prim | --no-prim]
     [--rand | --no-rand]
     [--rccl | --no-rccl]
     [--rocdecode | --no-rocdecode]
     [--rocjpeg | --no-rocjpeg]
     [--rocprofiler-compute | --no-rocprofiler-compute]
+    [--rocprofiler-sdk | --no-rocprofiler-sdk ]
     [--rocprofiler-systems | --no-rocprofiler-systems]
     [--rocrtst | --no-rocrtst]
     [--rocwmma | --no-rocwmma]
@@ -340,20 +341,21 @@ def retrieve_artifacts_by_run_id(args):
             args.blas,
             args.debug_tools,
             args.fft,
+            args.composablekernel,
             args.hipdnn,
             args.hipdnn_samples,
             args.miopen,
-            args.miopen_plugin,
-            args.composablekernel,
-            args.fusilli_plugin,
+            args.miopenprovider,
+            args.fusilliprovider,
             args.iree_compiler,
-            args.hipblaslt_plugin,
+            args.hipblasltprovider,
             args.prim,
             args.rand,
             args.rccl,
             args.rocdecode,
             args.rocjpeg,
             args.rocprofiler_compute,
+            args.rocprofiler_sdk,
             args.rocprofiler_systems,
             args.rocrtst,
             args.rocwmma,
@@ -387,6 +389,8 @@ def retrieve_artifacts_by_run_id(args):
         if args.fft:
             extra_artifacts.append("fft")
             extra_artifacts.append("fftw3")
+        if args.composablekernel:
+            extra_artifacts.append("composable-kernel")
         if args.hipdnn:
             extra_artifacts.append("hipdnn")
         if args.hipdnn_samples:
@@ -397,12 +401,10 @@ def retrieve_artifacts_by_run_id(args):
             argv.append("miopen_run")
             # Also need these for runtime kernel compilation (rocrand includes).
             argv.append("rand_dev")
-        if args.miopen_plugin:
-            extra_artifacts.append("miopen-plugin")
-        if args.composablekernel:
-            extra_artifacts.append("composable-kernel")
-        if args.fusilli_plugin:
-            extra_artifacts.append("fusilli-plugin")
+        if args.miopenprovider:
+            extra_artifacts.append("miopenprovider")
+        if args.fusilliprovider:
+            extra_artifacts.append("fusilliprovider")
         if args.iree_compiler:
             extra_artifacts.append("iree-compiler")
         if args.rocdecode:
@@ -419,8 +421,8 @@ def retrieve_artifacts_by_run_id(args):
             argv.append("rocjpeg_test")
             argv.append("base_dev")
             argv.append("amd-llvm_dev")
-        if args.hipblaslt_plugin:
-            extra_artifacts.append("hipblaslt-plugin")
+        if args.hipblasltprovider:
+            extra_artifacts.append("hipblasltprovider")
         if args.prim:
             extra_artifacts.append("prim")
         if args.rand:
@@ -663,6 +665,13 @@ def main(argv):
         help="Include 'fft' artifacts",
         action=argparse.BooleanOptionalAction,
     )
+    
+    artifacts_group.add_argument(
+        "--composablekernel",
+        default=False,
+        help="Include 'composablekernel' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
 
     artifacts_group.add_argument(
         "--hipdnn",
@@ -686,23 +695,16 @@ def main(argv):
     )
 
     artifacts_group.add_argument(
-        "--miopen-plugin",
+        "--miopenprovider",
         default=False,
-        help="Include 'miopen-plugin' artifacts",
+        help="Include 'miopenprovider' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
     artifacts_group.add_argument(
-        "--composablekernel",
+        "--fusilliprovider",
         default=False,
-        help="Include 'composablekernel' artifacts",
-        action=argparse.BooleanOptionalAction,
-    )
-
-    artifacts_group.add_argument(
-        "--fusilli-plugin",
-        default=False,
-        help="Include 'fusilli-plugin' artifacts",
+        help="Include 'fusilliprovider' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
@@ -728,9 +730,9 @@ def main(argv):
     )
 
     artifacts_group.add_argument(
-        "--hipblaslt-plugin",
+        "--hipblasltprovider",
         default=False,
-        help="Include 'hipblaslt-plugin' artifacts",
+        help="Include 'hipblasltprovider' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
@@ -763,16 +765,16 @@ def main(argv):
     )
 
     artifacts_group.add_argument(
-        "--rocprofiler-systems",
+        "--rocprofiler-sdk",
         default=False,
-        help="Include 'rocprofiler-systems' artifacts",
+        help="Include 'rocprofiler-sdk' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
     artifacts_group.add_argument(
-        "--rocprofiler-sdk",
+        "--rocprofiler-systems",
         default=False,
-        help="Include 'rocprofiler-sdk' artifacts",
+        help="Include 'rocprofiler-systems' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 

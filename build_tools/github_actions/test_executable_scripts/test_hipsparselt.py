@@ -25,13 +25,8 @@ test_type = os.getenv("TEST_TYPE", "full")
 
 test_filter = []
 if test_type == "smoke":
-    # Filter is absurdly long because hipsparselt's smoke tests are extensive
-    # This filter only runs specific sizes from the available operations
-    test_filter.append(
-        "--gtest_filter=*smoke*_8_8_16*:*smoke*16_16_32*:*smoke*128_128_128:*smoke*clippedrelu_0_n1*128*128*256*:*smoke*clippedrelu_0_1*128*128*256*:*smoke*clippedrelu_0p5_n1*128*128*256*:*smoke*clippedrelu_0p5_1*128*128*256*"
-    )
+    test_filter.append("--gtest_filter=*smoke*")
 elif test_type == "full":
-    # TODO(#2616): Enable correct filter once known test set is reduced to appropriate amount
     test_filter.append("--gtest_filter=*quick*")
 
 cmd = [f"{THEROCK_BIN_DIR}/hipsparselt-test"] + test_filter
