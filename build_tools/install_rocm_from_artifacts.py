@@ -665,7 +665,7 @@ def main(argv):
         help="Include 'fft' artifacts",
         action=argparse.BooleanOptionalAction,
     )
-    
+
     artifacts_group.add_argument(
         "--composablekernel",
         default=False,
