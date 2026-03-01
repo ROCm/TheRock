@@ -135,7 +135,6 @@ class ExtendedTestBase:
             test_name: Test name (e.g., 'rocfft')
             subtest_name: Specific test/suite identifier
             status: 'PASS', 'FAIL', 'ERROR', or 'SKIP'
-            **kwargs: Additional fields (e.g., score, unit, suite)
             **kwargs: Additional fields (e.g., score/unit/flag/batch_size/ngpu for benchmarks,
                 suite/command for functional tests).
         """
