@@ -552,6 +552,63 @@ class HardwareDetector:
             log.debug(f"lspci detection failed: {e}")
             return False
 
+
+    def get_gpu_architecture(self) -> str:
+        """Detect GPU architecture using rocminfo.
+
+        Returns:
+            str: GPU architecture ID (e.g., 'gfx908', 'gfx90a', 'gfx942')
+
+        Raises:
+            ValueError: If GPU architecture cannot be detected
+        Note:
+            Returns the first discrete AMD GPU architecture found. Integrated/CPU GPUs
+            are automatically filtered out (gfx000x). On multi-GPU nodes with homogeneous
+            GPUs (typical case), all GPUs have the same architecture. For heterogeneous
+            setups or to target a specific GPU, use ROCR_VISIBLE_DEVICES or
+            HIP_VISIBLE_DEVICES environment variables to control GPU visibility.
+        """
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.debug("Detecting GPU architecture...")
+
+        therock_bin_dir = os.getenv("THEROCK_BIN_DIR")
+        if therock_bin_dir:
+            rocminfo_path = os.path.join(therock_bin_dir, "rocminfo")
+        else:
+            rocminfo_path = "rocminfo"
+
+        try:
+            result = subprocess.run(
+                [rocminfo_path],
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=10,
+            )
+
+            for line in result.stdout.splitlines():
+                # Look for lines starting with "Name:" that contain "gfx"
+                if line.strip().startswith("Name:") and "gfx" in line:
+                    # Extract gfx ID from the end of the line
+                    arch = line.split(":")[-1].strip()
+                    # Filter for discrete GPU architectures (skip CPU/integrated)
+                    if arch.startswith("gfx") and not arch.startswith("gfx000"):
+                        logger.info(f"Detected GPU architecture: {arch}")
+                        return arch
+
+            raise ValueError("No discrete AMD GPUs found in rocminfo output")
+
+        except subprocess.CalledProcessError as e:
+            logger.error(f"rocminfo failed with return code {e.returncode}")
+            raise ValueError(f"Could not detect GPU architecture: {e}")
+        except FileNotFoundError:
+            raise ValueError(f"rocminfo not found at {rocminfo_path}")
+
+        raise ValueError("Could not detect GPU architecture from rocminfo output")
+
+
     def _detect_gpu_with_rocminfo(self) -> bool:
         """Detect GPUs using rocminfo (secondary method, ROCm runtime-based).
 
