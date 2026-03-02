@@ -42,13 +42,20 @@ jobs:
     name: Setup Parameters
     if: ${{ github.repository_owner == 'ROCm' || github.event_name != 'schedule' }}
     runs-on: ubuntu-24.04
+    env:
+      ROCM_VERSION: ${{ inputs.rocm_version }}
+      GFX_ARCHS: ${{ inputs.gfx_archs }}
+      PULL_AMDGPU: ${{ inputs.pull_amdgpu }}
+      PULL_TAG: ${{ inputs.pull_tag }}
+      PULL_RUN_ID: ${{ inputs.pull_run_id }}
+      PULL_PKG: ${{ inputs.pull_pkg }}
     outputs:
-      rocm_version: ${{ steps.params.outputs.rocm_version }}
-      pull_tag: ${{ steps.params.outputs.pull_tag }}
-      pull_run_id: ${{ steps.params.outputs.pull_run_id }}
-      gfx_archs: ${{ steps.params.outputs.gfx_archs }}
-      pull_amdgpu: ${{ steps.params.outputs.pull_amdgpu }}
-      pull_pkg: ${{ steps.params.outputs.pull_pkg }}
+      rocm_version: ${{ steps.setup.outputs.rocm_version || steps.auto_detect.outputs.rocm_version }}
+      pull_tag: ${{ steps.setup.outputs.pull_tag || steps.auto_detect.outputs.pull_tag }}
+      pull_run_id: ${{ steps.setup.outputs.pull_run_id || steps.auto_detect.outputs.pull_run_id }}
+      gfx_archs: ${{ steps.setup.outputs.gfx_archs || steps.auto_detect.outputs.gfx_archs }}
+      pull_amdgpu: ${{ steps.setup.outputs.pull_amdgpu }}
+      pull_pkg: ${{ steps.setup.outputs.pull_pkg }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -58,51 +65,22 @@ jobs:
         with:
           python-version: 3.12
 
-      - name: Determine parameters
-        id: params
+      - name: Setup parameters
+        id: setup
+        run: python ./build_tools/github_actions/setup_runfile_params.py
+
+      - name: Auto-detect nightly run
+        if: steps.setup.outputs.is_auto_detect_nightly_pull_run_id == 'true'
+        id: auto_detect
         run: |
-          # Set defaults from inputs or compute them
-          PULL_AMDGPU="${{ inputs.pull_amdgpu }}"
-          PULL_PKG="${{ inputs.pull_pkg }}"
-
-          echo "pull_amdgpu=$PULL_AMDGPU" >> $GITHUB_OUTPUT
-          echo "pull_pkg=$PULL_PKG" >> $GITHUB_OUTPUT
-
-          # Get rocm_version from input or version.json
-          if [ -n "${{ inputs.rocm_version }}" ]; then
-            ROCM_VERSION="${{ inputs.rocm_version }}"
-          else
-            ROCM_VERSION=$(cat version.json | grep -o '"rocm-version"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4)
+          ARGS=""
+          if [ "${{ steps.setup.outputs.is_auto_detect_gfx }}" == "true" ]; then
+            ARGS="--include-gfx-archs"
           fi
-          echo "rocm_version=$ROCM_VERSION" >> $GITHUB_OUTPUT
-          echo "Using ROCM_VERSION=$ROCM_VERSION"
-
-          # Get pull_run_id and pull_tag from input or auto-detect
-          if [ -n "${{ inputs.pull_run_id }}" ] && [ -n "${{ inputs.pull_tag }}" ]; then
-            echo "pull_run_id=${{ inputs.pull_run_id }}" >> $GITHUB_OUTPUT
-            echo "pull_tag=${{ inputs.pull_tag }}" >> $GITHUB_OUTPUT
-            echo "Using provided PULL_RUN_ID=${{ inputs.pull_run_id }}"
-            echo "Using provided PULL_TAG=${{ inputs.pull_tag }}"
-          else
-            # Auto-detect using Python script
-            PULL_TAG_ARG=""
-            if [ -n "${{ inputs.pull_tag }}" ]; then
-              PULL_TAG_ARG="--pull-tag ${{ inputs.pull_tag }}"
-            fi
-
-            GFX_ARG=""
-            if [ "${{ inputs.gfx_archs }}" = "all" ]; then
-              GFX_ARG="--include-gfx-archs"
-            fi
-
-            python ./build_tools/github_actions/fetch_nightly_run_id.py $PULL_TAG_ARG $GFX_ARG
-          
+          if [ -n "$PULL_TAG" ]; then
+            ARGS="$ARGS --pull-tag $PULL_TAG"
           fi
-
-          # Handle gfx_archs if not "all" (already handled by script if "all")
-          if [ "${{ inputs.gfx_archs }}" != "all" ]; then
-            echo "gfx_archs=${{ inputs.gfx_archs }}" >> $GITHUB_OUTPUT
-          fi
+          python ./build_tools/github_actions/fetch_nightly_run_id.py $ARGS
 
   # build_runfile_installer:
   #   name: Build Runfile Installer
