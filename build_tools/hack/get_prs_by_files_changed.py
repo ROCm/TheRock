@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
 
 """Returns list of PRs that change the same files matching a given pattern.
 Pattern is applied as partial matching for the full path name (= dir name + file name).

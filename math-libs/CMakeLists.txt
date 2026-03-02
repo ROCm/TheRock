@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 if(THEROCK_ENABLE_RAND)
   ##############################################################################
   # rocRAND
@@ -361,6 +364,7 @@ if(THEROCK_ENABLE_LIBHIPCXX)
     SUBDIRS
       .
   )
+  therock_cmake_subproject_require_host_program(libhipcxx lit)
   therock_cmake_subproject_activate(libhipcxx)
 
   therock_provide_artifact(libhipcxx

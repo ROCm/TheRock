@@ -29,6 +29,11 @@ WORKDIR /install-ccache
 COPY install_ccache.sh ./
 RUN ./install_ccache.sh "4.11.2" && rm -rf /install-ccache
 
+######## SCCache ########
+WORKDIR /install-sccache
+COPY install_sccache.sh ./
+RUN ./install_sccache.sh "0.14.0" && rm -rf /install-sccache
+
 ######## CMake ########
 WORKDIR /install-cmake
 ENV CMAKE_VERSION="3.27.9"

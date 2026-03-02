@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Get access to LLVM_VERSION_MAJOR
 include("${THEROCK_SOURCE_DIR}/compiler/amd-llvm/cmake/Modules/LLVMVersion.cmake")
 
@@ -40,8 +43,11 @@ else()
     if(EXISTS "${THEROCK_SOURCE_DIR}/compiler/amd-llvm/openmp/device/CMakeLists.txt")
       list(APPEND LLVM_ENABLE_RUNTIMES "flang-rt")
       set(LLVM_RUNTIME_TARGETS "default;amdgcn-amd-amdhsa")
-      set(RUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_RUNTIMES "openmp")
       set(RUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_PER_TARGET_RUNTIME_DIR ON)
+      set(RUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_RUNTIMES "compiler-rt;libc;libcxx;libcxxabi;flang-rt;openmp")
+      set(RUNTIMES_amdgcn-amd-amdhsa_FLANG_RT_LIBC_PROVIDER "llvm")
+      set(RUNTIMES_amdgcn-amd-amdhsa_FLANG_RT_LIBCXX_PROVIDER "llvm")
+      set(RUNTIMES_amdgcn-amd-amdhsa_CACHE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/../libcxx/cmake/caches/AMDGPU.cmake")
       set(FLANG_RUNTIME_F128_MATH_LIB "libquadmath")
       set(LIBOMPTARGET_BUILD_DEVICE_FORTRT ON)
       #TODO: Enable when HWLOC dependency is figured out
@@ -169,7 +175,9 @@ if(NOT THEROCK_ENABLE_LLVM_TESTS)
     # on a missing tool).
     set(_llvm_required_tools
       LLVM_AR
+      LLVM_AS
       LLVM_CONFIG
+      LLVM_DIS
       LLVM_DWARFDUMP
       LLVM_LINK
       LLVM_MC

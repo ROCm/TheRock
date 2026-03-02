@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # therock_subproject.cmake
 # Facilities for defining build subprojects. This has some similarity to the
 # built-in ExternalProject and FetchContent facilities, but it is intended to
@@ -562,6 +565,21 @@ get_property(existing_packages GLOBAL PROPERTY THEROCK_ALL_PROVIDED_PACKAGES)
   if(THEROCK_VERBOSE)
     message(STATUS "PROVIDE ${package_name} = ${relative_path} (from ${target_name})")
   endif()
+endfunction()
+
+# therock_cmake_subproject_require_program
+# Requires that find_program finds a named program at super-project configure time.
+# This is to avoid downstream errors that would otherwise only show up at build time.
+# Only to be used by programs that must exist on the host in order to build. Programs
+# that are built as part of the project are resolved internally.
+function(therock_cmake_subproject_require_host_program target_name)
+  _therock_assert_is_cmake_subproject("${target_name}")
+  foreach(prog IN LISTS ARGN)
+    find_program(found "${prog}" OPTIONAL)
+    if(NOT found)
+      message(FATAL_ERROR "Building sub-project ${target_name} requires program '${prog}' on the system path but it is not found")
+    endif()
+  endforeach()
 endfunction()
 
 # therock_cmake_subproject_activate

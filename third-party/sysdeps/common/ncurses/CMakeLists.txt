@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     # When included in TheRock, we download sources and set up the sub-project.
     set(_source_dir "${CMAKE_CURRENT_BINARY_DIR}/source")
@@ -104,12 +107,25 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT PATCHELF)
   message(FATAL_ERROR "Missing PATCHELF from super-project")
 endif()
 
+# Apply patch source only on Linux
+set(patch_source_commands)
+set(patch_build_commands)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  list(APPEND patch_source_commands   COMMAND
+    bash "${CMAKE_CURRENT_SOURCE_DIR}/patch_source.sh" "${SOURCE_DIR}")
+
+  list(APPEND patch_build_commands   COMMAND
+    bash "${CMAKE_CURRENT_SOURCE_DIR}/patch_source.sh" "${CMAKE_CURRENT_BINARY_DIR}")
+endif()
+
 add_custom_target(
   build ALL
   WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   #
   # OPTIONAL: Patching of the sources should happen here.
   #
+  COMMAND
+    ${patch_source_commands}
   COMMAND
     "${CMAKE_COMMAND}" -E env
       "PKG_CONFIG_PATH=$ENV{PKG_CONFIG_PATH}"
@@ -123,8 +139,12 @@ add_custom_target(
     "${SOURCE_DIR}/configure"
       --prefix "${CMAKE_INSTALL_PREFIX}"
       --with-shared
+      --without-ada
       --enable-widec
       --enable-pc-files
+      --with-form-libname=rocm_sysdeps_form
+      --with-menu-libname=rocm_sysdeps_menu
+      --with-panel-libname=rocm_sysdeps_panel
       # Without this, it will attempt to install pcfiles in the path reported
       # by pkgconfig (which is typically the system root, which is not what
       # we want).
@@ -156,6 +176,8 @@ add_custom_target(
       # with glibc's typedef, breaking wchar_t detection and causing
       # --enable-widec to silently fail.
       ac_cv_type_pid_t=yes
+  COMMAND
+    ${patch_build_commands}
   COMMAND
     make -j "${PAR_JOBS}" V=1
   COMMAND

@@ -1,4 +1,7 @@
 #!/bin/bash
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # See corresponding linux_portable_build.py which invokes this within a
 # container.
 set -e
@@ -31,16 +34,21 @@ else
   export CMAKE_CXX_COMPILER_LAUNCHER=ccache
 fi
 
-# Build manylinux Python executables argument if MANYLINUX is set
+# Build manylinux Python executables and Python shared executables argument if MANYLINUX is set
 PYTHON_EXECUTABLES_ARG=""
+PYTHON_SHARED_EXECUTABLES_ARG=""
 if [ "${MANYLINUX}" = "1" ] || [ "${MANYLINUX}" = "true" ]; then
-  PYTHON_EXECUTABLES_ARG="-DTHEROCK_DIST_PYTHON_EXECUTABLES=/opt/python/cp38-cp38/bin/python;/opt/python/cp39-cp39/bin/python;/opt/python/cp310-cp310/bin/python;/opt/python/cp311-cp311/bin/python;/opt/python/cp312-cp312/bin/python;/opt/python/cp313-cp313/bin/python"
+  PYTHON_EXECUTABLES_ARG="-DTHEROCK_DIST_PYTHON_EXECUTABLES=/opt/python/cp310-cp310/bin/python;/opt/python/cp311-cp311/bin/python;/opt/python/cp312-cp312/bin/python;/opt/python/cp313-cp313/bin/python"
+  PYTHON_SHARED_EXECUTABLES_ARG="-DTHEROCK_SHARED_PYTHON_EXECUTABLES=/opt/python-shared/cp310-cp310/bin/python3;/opt/python-shared/cp311-cp311/bin/python3;/opt/python-shared/cp312-cp312/bin/python3;/opt/python-shared/cp313-cp313/bin/python3;/opt/python-shared/cp314-cp314/bin/python3"
 fi
 
 set -o xtrace
 time cmake -GNinja -S /therock/src -B "$OUTPUT_DIR/build" \
   -DTHEROCK_BUNDLE_SYSDEPS=ON \
   -DTHEROCK_ENABLE_SYSDEPS_AMD_MESA=ON \
+  -DTHEROCK_ENABLE_ROCDECODE=ON \
+  -DTHEROCK_ENABLE_ROCJPEG=ON \
   ${PYTHON_EXECUTABLES_ARG} \
+  ${PYTHON_SHARED_EXECUTABLES_ARG} \
   "$@"
 time cmake --build "$OUTPUT_DIR/build" --target therock-archives therock-dist

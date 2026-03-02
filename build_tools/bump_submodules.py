@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Helper script to bump TheRock's submodules, doing the following:
  * (Optional) Creates a new branch
  * Updates submodules from remote using `fetch_sources.py`
@@ -14,10 +17,10 @@ Bump submpdules in base, core and profiler
     --components base core profiler
 ```
 
-Bump comm-lib submodules and create a branch
+Bump rocm-systems submodule and create a branch
 ```
 ./build_tools/bump_submodules.py \
-    --create-branch --branch-name shared/bump-comm-libs --components comm-libs
+    --create-branch --branch-name shared/bump-rocm-systems --components rocm-systems
 ```
 """
 
@@ -62,12 +65,6 @@ def parse_components(components: list[str]) -> list[list]:
             "rocm-cmake",
         ]
 
-    if "comm-libs" in components:
-        system_projects += [
-            "rccl",
-            "rccl-tests",
-        ]
-
     if "profiler" in components:
         system_projects += [
             "rocprof-trace-decoder",
@@ -104,10 +101,10 @@ def parse_components(components: list[str]) -> list[list]:
     else:
         arguments.append("--no-include-debug-tools")
 
-    if "rocm-media" in components:
-        arguments.append("--include-rocm-media")
+    if "media-libs" in components:
+        arguments.append("--include-media-libs")
     else:
-        arguments.append("--no-include-rocm-media")
+        arguments.append("--no-include-media-libs")
 
     if "math-libraries" in components:
         arguments.append("--include-math-libraries")
@@ -196,7 +193,6 @@ def main(argv):
         help="""List of components (subdirectories) to bump. Choices:
                   default,
                   base,
-                  comm-libs,
                   compiler,
                   ml-libs,
                   rocm-libraries,
@@ -204,7 +200,7 @@ def main(argv):
                   profiler,
                   iree-libs,
                   debug-tools,
-                  rocm-media,
+                  media-libs,
                   math-libraries
              """,
     )

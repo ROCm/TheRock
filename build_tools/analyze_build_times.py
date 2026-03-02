@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Analyze Ninja build times and generate HTML report.
 
 This script parses the .ninja_log file from a build directory and generates
@@ -52,7 +55,9 @@ NAME_MAPPING = {
     "support": "mxDataGenerator",
     "host-suite-sparse": "SuiteSparse",
     "rocwmma": "rocWMMA",
-    "miopen-plugin": "miopen_plugin",
+    "miopenprovider": "miopenprovider",
+    "hipblasltprovider": "hipblasltprovider",
+    "fusilliprovider": "fusilliprovider",
 }
 
 # Top-level directories for ROCm components
@@ -64,6 +69,7 @@ ROCM_COMPONENT_DIRS = {
     "dctools",
     "profiler",
     "ml-libs",
+    "media-libs",
 }
 
 # Regex to parse artifact filenames: <project>_<variant>[_suffix].tar.xz
