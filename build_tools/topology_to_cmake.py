@@ -45,7 +45,7 @@ from typing import TextIO
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
 
-from _therock_utils.build_topology import BuildTopology, Artifact, ArtifactGroup
+from _therock_utils.build_topology import BuildTopology, Artifact
 
 
 def write_cmake_header(f: TextIO):
@@ -213,8 +213,9 @@ def generate_feature_declarations(topology: BuildTopology, f: TextIO):
     # Build a set of groups that have features, for quick lookup
     group_feature_names: dict[str, str] = {}
     for group in topology.get_artifact_groups():
-        if group.feature_name:
-            group_feature_names[group.name] = group.feature_name
+        gfn = topology.get_group_feature_name(group)
+        if gfn:
+            group_feature_names[group.name] = gfn
 
     # We need to generate features in dependency order to satisfy CMake's requirement
     # that dependencies are defined before they're referenced.
@@ -231,7 +232,8 @@ def generate_feature_declarations(topology: BuildTopology, f: TextIO):
                 continue
 
             # Emit group feature if this group has one and we haven't already
-            if group.feature_name and group_name not in emitted_groups:
+            group_fn = topology.get_group_feature_name(group)
+            if group_fn and group_name not in emitted_groups:
                 emitted_groups.add(group_name)
                 # Resolve group artifact_deps to feature names
                 group_requires = []
@@ -243,7 +245,7 @@ def generate_feature_declarations(topology: BuildTopology, f: TextIO):
                         )
                 _write_feature(
                     f,
-                    feature_name=group.feature_name,
+                    feature_name=group_fn,
                     feature_group=group.feature_group or "ALL",
                     description=f"Enables {group_name} group",
                     requires=group_requires,

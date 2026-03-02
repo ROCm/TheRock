@@ -21,6 +21,7 @@ from _therock_utils.build_topology import (
     Artifact,
     BuildTopology,
 )
+from configure_stage import get_stage_features
 
 
 class BuildTopologyTest(unittest.TestCase):
@@ -687,6 +688,69 @@ class BuildTopologyTest(unittest.TestCase):
         # Foundation stage should need nothing
         foundation_inbound = topology.get_inbound_artifacts("foundation")
         self.assertEqual(len(foundation_inbound), 0)
+
+    def test_get_stage_features_includes_group_features(self):
+        """Test that get_stage_features includes group features for active groups."""
+        self.write_topology(
+            """
+            [build_stages.stage1]
+            description = "Stage 1"
+            artifact_groups = ["compiler"]
+
+            [build_stages.stage2]
+            description = "Stage 2"
+            artifact_groups = ["build-deps", "runtime"]
+
+            [artifact_groups.compiler]
+            description = "Compiler"
+            type = "generic"
+
+            [artifact_groups.build-deps]
+            description = "Internal build dependencies"
+            type = "generic"
+            artifact_group_deps = ["compiler"]
+            feature_name = "BUILD_DEPS"
+            feature_group = "CORE"
+            artifact_deps = ["llvm"]
+
+            [artifact_groups.runtime]
+            description = "Runtime"
+            type = "generic"
+            artifact_group_deps = ["compiler"]
+
+            [artifacts.llvm]
+            artifact_group = "compiler"
+            type = "target-neutral"
+            feature_name = "COMPILER"
+
+            [artifacts.some-build-dep]
+            artifact_group = "build-deps"
+            type = "target-neutral"
+            artifact_deps = ["llvm"]
+
+            [artifacts.core-rt]
+            artifact_group = "runtime"
+            type = "target-neutral"
+            artifact_deps = ["llvm"]
+            group_deps = ["build-deps"]
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+
+        # Stage2 has build-deps group artifacts, so BUILD_DEPS should appear
+        features = get_stage_features(topology, "stage2")
+        self.assertIn("BUILD_DEPS", features)
+        # Artifact features should also be present
+        self.assertIn("SOME_BUILD_DEP", features)
+        self.assertIn("CORE_RT", features)
+        # Inbound artifact feature from stage1
+        self.assertIn("COMPILER", features)
+
+        # Stage1 has no group with feature_name, so BUILD_DEPS should NOT appear
+        stage1_features = get_stage_features(topology, "stage1")
+        self.assertNotIn("BUILD_DEPS", stage1_features)
+        self.assertIn("COMPILER", stage1_features)
 
 
 if __name__ == "__main__":
