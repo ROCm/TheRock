@@ -25,6 +25,17 @@ def _get_workflow_dispatch_block(workflow: dict) -> dict | None:
     return dispatch
 
 
+def _get_dispatch_inputs(workflow: dict) -> dict:
+    """Returns the workflow_dispatch inputs dict, or empty dict."""
+    dispatch = _get_workflow_dispatch_block(workflow)
+    if dispatch is None:
+        return {}
+    inputs = dispatch.get("inputs")
+    if not isinstance(inputs, dict):
+        return {}
+    return inputs
+
+
 def get_workflow_dispatch_inputs(workflow: dict) -> set:
     """Extracts input names from a workflow's on.workflow_dispatch.inputs section.
 
@@ -37,13 +48,7 @@ def get_workflow_dispatch_inputs(workflow: dict) -> set:
 
     Returns: {"amdgpu_family", "release_type"}
     """
-    dispatch = _get_workflow_dispatch_block(workflow)
-    if dispatch is None:
-        return set()
-    inputs = dispatch.get("inputs")
-    if not isinstance(inputs, dict):
-        return set()
-    return set(inputs.keys())
+    return set(_get_dispatch_inputs(workflow).keys())
 
 
 def get_required_workflow_dispatch_inputs(workflow: dict) -> set:
@@ -61,14 +66,8 @@ def get_required_workflow_dispatch_inputs(workflow: dict) -> set:
 
     Returns: {"amdgpu_family"}  (release_type has a default)
     """
-    dispatch = _get_workflow_dispatch_block(workflow)
-    if dispatch is None:
-        return set()
-    inputs_def = dispatch.get("inputs")
-    if not isinstance(inputs_def, dict):
-        return set()
     required = set()
-    for name, props in inputs_def.items():
+    for name, props in _get_dispatch_inputs(workflow).items():
         if isinstance(props, dict):
             if props.get("required", False) and "default" not in props:
                 required.add(name)
@@ -93,13 +92,7 @@ def get_choice_options(workflow: dict, input_name: str) -> list | None:
 
     Returns None if the input doesn't exist or isn't type: choice.
     """
-    dispatch = _get_workflow_dispatch_block(workflow)
-    if dispatch is None:
-        return None
-    inputs = dispatch.get("inputs")
-    if not isinstance(inputs, dict):
-        return None
-    input_def = inputs.get(input_name)
+    input_def = _get_dispatch_inputs(workflow).get(input_name)
     if not isinstance(input_def, dict):
         return None
     if input_def.get("type") != "choice":
