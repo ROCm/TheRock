@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """CI path filtering logic for determining whether to run CI based on modified files.
 
 This module provides utilities to:
@@ -151,18 +154,6 @@ _SKIPPABLE_PATH_PATTERNS = [
     ".github/dependabot.yml",
     "*CODEOWNERS",
     "*LICENSE",
-    # Changes to 'external-builds/' (e.g. PyTorch) do not affect "CI" workflows.
-    # At time of writing, workflows run in this sequence:
-    #   `ci.yml`
-    #   `ci_linux.yml`
-    #   `build_linux_artifacts.yml`
-    #   `test_artifacts.yml`
-    #   `test_component.yml`
-    # If we add external-builds tests there, we can revisit this, maybe leaning
-    # on options like LINUX_USE_PREBUILT_ARTIFACTS or sufficient caching to keep
-    # workflows efficient when only nodes closer to the edges of the build graph
-    # are changed.
-    "external-builds/*",
     # Changes to dockerfiles do not currently affect CI workflows directly.
     # Docker images are built and published after commits are pushed, then
     # workflows can be updated to use the new image sha256 values.
@@ -179,8 +170,10 @@ _GITHUB_WORKFLOWS_CI_PATTERNS = [
     "ci*.yml",
     "multi_arch*.yml",
     "build*artifact*.yml",
+    "build*ci.yml",
     "build*python_packages.yml",
     "test*artifacts.yml",
+    "test_rocm_wheels.yml",
     "test_sanity_check.yml",
     "test_component.yml",
 ]

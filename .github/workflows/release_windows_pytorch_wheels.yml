@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 name: Release Windows PyTorch Wheels
 
 on:
@@ -45,7 +48,9 @@ on:
           - gfx1152
           - gfx1153
           - gfx120X-all
-          - gfx90X-dcgpu
+          - gfx906
+          - gfx908
+          - gfx90a
           - gfx94X-dcgpu
           - gfx950-dcgpu
         default: gfx1151
@@ -89,8 +94,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python_version: ["3.11", "3.12", "3.13"]
+        python_version: ["3.10", "3.11", "3.12", "3.13"]
         pytorch_git_ref: ["release/2.9", "release/2.10", "nightly"]
+        # redefine arch as inputs.x vars are not available in matrix context
+        arch: ["${{ inputs.amdgpu_family }}"]
+        exclude:
+        # gfx1153 support is only available in pytorch 2.10+
+        # see https://github.com/ROCm/TheRock/issues/2723
+        - arch: "gfx1153"
+          pytorch_git_ref: "release/2.9"
 
     uses: ./.github/workflows/build_windows_pytorch_wheels.yml
     with:

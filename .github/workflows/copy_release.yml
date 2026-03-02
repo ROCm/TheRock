@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 name: Copy release to dev bucket
 
 on:
@@ -17,7 +20,9 @@ on:
           - gfx1152
           - gfx1153
           - gfx120X-all
-          - gfx90X-dcgpu
+          - gfx906
+          - gfx908
+          - gfx90a
           - gfx94X-dcgpu
           - gfx950-dcgpu
         default: gfx94X-dcgpu
@@ -69,7 +74,7 @@ jobs:
         run: ./dockerfiles/install_awscli.sh
 
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.destbucket }}-releases

@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Trampoline for console scripts."""
 
 import importlib
@@ -85,3 +88,15 @@ def rocm_info():
 
 def rocm_smi():
     _exec("bin/rocm-smi")
+
+
+def rocprofv3():
+    _exec("bin/rocprofv3")
+
+
+def rocprofv3_attach():
+    _exec("bin/rocprofv3-attach")
+
+
+def rocprofv3_avail():
+    _exec("bin/rocprofv3-avail")
