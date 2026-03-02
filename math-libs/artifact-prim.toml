@@ -29,4 +29,5 @@ include = [
   "bin/*.hip",
   "bin/*.hip.exe", # Windows
   "bin/rocthrust/CTestTestfile.cmake",
+  "bin/rocthrust/generate_resource_spec*",
 ]

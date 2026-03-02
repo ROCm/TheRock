@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Adds a test for shared libraries under a common path.
 # PATH: Common path (relative to CMAKE_CURRENT_BINARY_DIR if not absolute)
 # LIB_NAMES: Library names to validate

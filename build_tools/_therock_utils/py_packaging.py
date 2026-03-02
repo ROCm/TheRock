@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Utilities for producing Python packages."""
 
 from typing import Callable, Sequence

@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Main ROCm SDK CLI for managing the Python installation."""
 
 import argparse

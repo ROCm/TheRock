@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # On Linux, we compile core libraries with our own LLVM. This gets us the
 # best optimizations and, most importantly, gives us uniform access to
 # sanitizers. Currently, some of these projects, though, are hard-coded
@@ -291,7 +294,6 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
     therock_cmake_subproject_activate(hip-tests)
     # Provide it as an artifact:
     therock_provide_artifact(core-hiptests
-      TARGET_NEUTRAL
       DESCRIPTOR artifact-core-hiptests.toml
       COMPONENTS
         test
