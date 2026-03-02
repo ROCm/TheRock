@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Auxiliary Overlay
 #
 # This project contains some odds and ends needed in order to complete

@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 if(THEROCK_ENABLE_ROCPROFV3)
   set(_rocprofiler_sdk_optional_deps)
 

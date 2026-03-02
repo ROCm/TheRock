@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Determines part of the path to the Python interpreter in a manylinux image, along
    with being used in populating the wheel names for Linux and Windows
 
