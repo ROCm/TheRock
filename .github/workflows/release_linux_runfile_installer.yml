@@ -136,7 +136,7 @@ jobs:
           echo "rpm gfx archs: $rpm_gfx"
 
           # Finds common gfx arch in both deb_gfx and rpm_gfx
-          COMMON_GFX_ARCHS=$(comm -12 <(echo "$DEB_GFX") <(echo "$RPM_GFX"))
+          COMMON_GFX_ARCHS=$(comm -12 <(echo "$deb_gfx") <(echo "$rpm_gfx"))
 
           # Convert newline separated string into a comma separate string.
           COMMON_GFX_ARCHS=$(echo "$COMMON_GFX_ARCHS" | tr '\n' ',' | sed 's/,$//')
