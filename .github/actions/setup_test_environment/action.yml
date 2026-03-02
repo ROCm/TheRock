@@ -57,6 +57,7 @@ runs:
         if command -v apt-get >/dev/null 2>&1; then
           sudo apt-get update -y
           sudo apt-get install -y pciutils
+        fi
 
     - name: Install test requirements
       shell: bash
