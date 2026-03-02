@@ -125,7 +125,7 @@ jobs:
           curl -s https://rocm.nightlies.amd.com/deb/${{ steps.params.outputs.pull_tag }}-${{ steps.params.outputs.pull_run_id }}/pool/main/index.html -o /tmp/deb_gfx_index.html
 
           # https://rocm.nightlies.amd.com/rpm/20260301-22536111812/x86_64/index.html
-          curl -s https://rocm.nightlies.amd.com/rpm/${{ steps.params.outputs.pull_tag }}-${{ steps.params.outputs.pull_run_id }}/x86_64/index.html -l /tmp/rpm_gfx_index.html
+          curl -s https://rocm.nightlies.amd.com/rpm/${{ steps.params.outputs.pull_tag }}-${{ steps.params.outputs.pull_run_id }}/x86_64/index.html -o /tmp/rpm_gfx_index.html
 
           deb_gfx=$(cat /tmp/deb_gfx_index.html | grep "amdrocm-core-sdk-" | awk -F '"' '{print $2}' | awk -F '-' '{print $4}' | awk -F '_' '{print $1}' | sort | uniq)
 
