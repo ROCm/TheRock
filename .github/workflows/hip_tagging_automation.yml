@@ -29,6 +29,8 @@ jobs:
         with:
           app-id: ${{ secrets.ROCM_SYSTEMS_APP_ID }}
           private-key: ${{ secrets.ROCM_SYSTEMS_APP_PRIVATE_KEY }}
+          owner: "ROCm"
+          repositories: "rocm-systems"
 
       - name: Install dependencies
         run: |
