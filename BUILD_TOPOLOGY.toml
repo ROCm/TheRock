@@ -653,6 +653,13 @@ feature_name = "ROCPROFSYS"
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
 
+[artifacts.rocprofiler-systems-examples]
+artifact_group = "profiler-apps"
+type = "target-specific"
+artifact_deps = ["rocprofiler-systems"]
+feature_group = "PROFILER"
+disable_platforms = ["windows"]
+
 # --- Data Center Tools ---
 
 [artifacts.rdc]

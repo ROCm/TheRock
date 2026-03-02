@@ -1,0 +1,5 @@
+# rocprofiler-systems-examples
+[components.test."profiler/rocprofiler-systems-examples/stage"]
+include = [
+  "share/rocprofiler-systems/**",
+]

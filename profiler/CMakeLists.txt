@@ -125,9 +125,9 @@ endif(THEROCK_BUILD_TESTING)
       gfx942
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
-      -DENABLE_TESTS=${THEROCK_BUILD_TESTING}
-      -DINSTALL_TESTS=${THEROCK_BUILD_TESTING}
-      -DTEST_FROM_INSTALL=${THEROCK_BUILD_TESTING}
+      -DENABLE_TESTS=OFF
+      -DINSTALL_TESTS=OFF
+      -DTEST_FROM_INSTALL=OFF
       -DCHECK_PYTHON_DEPS=OFF
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
@@ -227,12 +227,6 @@ endif(THEROCK_BUILD_TESTING)
   # rocprofiler-systems requires GCC, but sanitizer builds use Clang.
   # Skip enabling rocprofiler-systems when building with sanitizers.
   if (THEROCK_ENABLE_ROCPROFSYS AND THEROCK_SANITIZER STREQUAL "")
-    # Escape semicolons in GPU targets list to prevent shell interpretation
-    if (THEROCK_DIST_AMDGPU_TARGETS STREQUAL "THEROCK_DIST_AMDGPU_TARGETS-NOTFOUND")
-      set(_ROCPROFSYS_GFX_TARGETS_ESCAPED "")
-    else()
-      string(REPLACE ";" "\\;" _ROCPROFSYS_GFX_TARGETS_ESCAPED "${THEROCK_DIST_AMDGPU_TARGETS}")
-    endif()
 
     therock_cmake_subproject_declare(rocprofiler-systems
       USE_DIST_AMDGPU_TARGETS
@@ -247,7 +241,6 @@ endif(THEROCK_BUILD_TESTING)
         -DROCPROFSYS_BUILD_BOOST=ON
         -DROCPROFSYS_BUILD_DYNINST=ON
         -DROCPROFSYS_BUILD_FOR_THEROCK=ON
-        -DROCPROFSYS_GFX_TARGETS="${_ROCPROFSYS_GFX_TARGETS_ESCAPED}"
         -DROCPROFSYS_BUILD_SPDLOG=OFF
       INSTALL_RPATH_DIRS
         "lib"
@@ -269,7 +262,7 @@ endif(THEROCK_BUILD_TESTING)
     therock_cmake_subproject_glob_c_sources(rocprofiler-systems
       SUBDIRS .
     )
-
+    therock_cmake_subproject_provide_package(rocprofiler-systems rocprofiler-systems lib/cmake/rocprofiler-systems)
     therock_cmake_subproject_activate(rocprofiler-systems)
 
     therock_provide_artifact(rocprofiler-systems
@@ -281,10 +274,54 @@ endif(THEROCK_BUILD_TESTING)
         doc
         lib
         run
+        test
       SUBPROJECT_DEPS
         amdsmi
         rocprofiler-sdk
         rocprofiler-systems
       )
+
+    # Build the examples/ folder for tests. These are target-specific
+    if(THEROCK_BUILD_TESTING)
+
+      # Escape semicolons in GPU targets list to prevent shell interpretation
+      if (THEROCK_DIST_AMDGPU_TARGETS STREQUAL "THEROCK_DIST_AMDGPU_TARGETS-NOTFOUND")
+        set(_ROCPROFSYS_GFX_TARGETS_ESCAPED "")
+      else()
+        string(REPLACE ";" "\\;" _ROCPROFSYS_GFX_TARGETS_ESCAPED "${THEROCK_DIST_AMDGPU_TARGETS}")
+      endif()
+
+      therock_cmake_subproject_declare(rocprofiler-systems-examples
+        EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-systems/examples"
+        BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-systems-examples"
+        BACKGROUND_BUILD
+        INSTALL_DESTINATION "share/rocprofiler-systems"
+        CMAKE_ARGS
+          -DHIP_PLATFORM=amd
+          -DROCPROFSYS_GFX_TARGETS="${_ROCPROFSYS_GFX_TARGETS_ESCAPED}"
+          -DROCPROFSYS_BUILD_FOR_THEROCK="${THEROCK_BUILD_TESTING}"
+        INSTALL_RPATH_DIRS
+          "lib"
+          "lib/rocprofiler-systems"
+          "llvm/lib"
+        RUNTIME_DEPS
+          rocprofiler-systems
+      )
+      therock_cmake_subproject_glob_c_sources(rocprofiler-systems-examples
+        SUBDIRS .
+      )
+      therock_cmake_subproject_activate(rocprofiler-systems-examples)
+
+      therock_provide_artifact(rocprofiler-systems-examples
+        DESCRIPTOR artifact-rocprofiler-systems-examples.toml
+        COMPONENTS
+          test
+        SUBPROJECT_DEPS
+          rocprofiler-systems
+          rocprofiler-systems-examples
+      )
+
+    endif()
+
   endif(THEROCK_ENABLE_ROCPROFSYS AND THEROCK_SANITIZER STREQUAL "")
 endif(THEROCK_ENABLE_ROCPROFV3)
