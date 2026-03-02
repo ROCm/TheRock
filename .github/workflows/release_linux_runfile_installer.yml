@@ -69,19 +69,19 @@ jobs:
         id: params
         run: python ./build_tools/github_actions/setup_runfile_installer.py
 
-  # build_runfile_installer:
-  #   name: Build Runfile Installer
-  #   needs: setup
-  #   uses: ./.github/workflows/build_linux_runfile_installer.yml
-  #   with:
-  #     rocm_version: ${{ needs.setup.outputs.rocm_version }}
-  #     release_type: nightly
-  #     gfx_archs: ${{ needs.setup.outputs.gfx_archs }}
-  #     pull_amdgpu: ${{ needs.setup.outputs.pull_amdgpu }}
-  #     pull_type: nightly
-  #     pull_tag: ${{ needs.setup.outputs.pull_tag }}
-  #     pull_run_id: ${{ needs.setup.outputs.pull_run_id }}
-  #     pull_pkg: ${{ needs.setup.outputs.pull_pkg }}
-  #   permissions:
-  #     id-token: write
-  #     contents: read
+  build_runfile_installer:
+    name: Build Runfile Installer
+    needs: setup
+    uses: ./.github/workflows/build_linux_runfile_installer.yml
+    with:
+      rocm_version: ${{ needs.setup.outputs.rocm_version }}
+      release_type: dev
+      gfx_archs: ${{ needs.setup.outputs.gfx_archs }}
+      pull_amdgpu: ${{ needs.setup.outputs.pull_amdgpu }}
+      pull_type: nightly
+      pull_tag: ${{ needs.setup.outputs.pull_tag }}
+      pull_run_id: ${{ needs.setup.outputs.pull_run_id }}
+      pull_pkg: ${{ needs.setup.outputs.pull_pkg }}
+    permissions:
+      id-token: write
+      contents: read
