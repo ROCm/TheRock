@@ -214,10 +214,16 @@ include(therock_custom_amdgpu_targets OPTIONAL)
 
 # Validates and normalizes AMDGPU target selection cache variables.
 #
-# This function handles two separate target lists:
+# This function handles three separate target lists:
 #   THEROCK_AMDGPU_TARGETS: Per-architecture targets for architecture-specific builds
-#   THEROCK_DIST_AMDGPU_TARGETS: All targets for the distribution (used by
-#     runtime components that need to support all architectures)
+#   THEROCK_DIST_AMDGPU_TARGETS: Distribution targets (used by runtime components
+#     that embed device code for user-selected architectures). Controls what is
+#     reported in dist_info.json and consumed by downstream tools (e.g. PyTorch
+#     via `rocm-sdk targets`). Defaults to THEROCK_AMDGPU_FAMILIES.
+#   THEROCK_TEST_AMDGPU_TARGETS: Targets for test artifacts marked TARGET_NEUTRAL.
+#     Defaults to ALL available (registered) targets so that a single _generic
+#     test artifact works on any architecture, making upload races in classic CI
+#     harmless. Does NOT affect dist_info.json.
 #
 # In multi-arch CI, generic stages (those building architecture-independent code)
 # may have no per-arch targets but still need dist targets. In this case,
@@ -287,6 +293,34 @@ function(therock_validate_amdgpu_targets)
     message(STATUS "Dist targets: ${_dist_expanded_targets}")
   endif()
 
+  # Expand test families (THEROCK_TEST_AMDGPU_FAMILIES -> THEROCK_TEST_AMDGPU_TARGETS).
+  # If neither THEROCK_TEST_AMDGPU_FAMILIES nor THEROCK_TEST_AMDGPU_TARGETS is set,
+  # test targets default to ALL available targets so that a single _generic test
+  # artifact can be downloaded and run on any architecture, making the classic CI
+  # upload race harmless.
+  set(_test_families "${THEROCK_TEST_AMDGPU_FAMILIES}")
+  set(_test_expanded_targets "${THEROCK_TEST_AMDGPU_TARGETS}")
+  if(NOT _test_families AND NOT _test_expanded_targets)
+    set(_test_expanded_targets "${_available_targets}")
+  else()
+    foreach(_family ${_test_families})
+      if(NOT "${_family}" IN_LIST _available_families)
+        string(JOIN " " _families_pretty ${_available_families})
+        message(FATAL_ERROR
+          "THEROCK_TEST_AMDGPU_FAMILIES value '${_family}' unknown. Available: "
+          ${_families_pretty})
+      endif()
+      get_property(_family_targets GLOBAL PROPERTY "THEROCK_AMDGPU_TARGET_FAMILY_${_family}")
+      list(APPEND _test_expanded_targets ${_family_targets})
+    endforeach()
+    list(REMOVE_DUPLICATES _test_expanded_targets)
+  endif()
+
+  # Report test targets if different from per-arch targets.
+  if(_test_expanded_targets AND NOT "${_test_expanded_targets}" STREQUAL "${_expanded_targets}")
+    message(STATUS "Test targets: ${_test_expanded_targets}")
+  endif()
+
   # Handle the case where per-arch targets are empty but dist targets exist.
   # This is valid for generic stages in multi-arch CI that don't build
   # architecture-specific code but need to know about all dist targets.
@@ -314,6 +348,16 @@ function(therock_validate_amdgpu_targets)
   else()
     set(THEROCK_DIST_AMDGPU_TARGETS "THEROCK_DIST_AMDGPU_TARGETS-NOTFOUND" PARENT_SCOPE)
     set(THEROCK_DIST_AMDGPU_TARGETS_SPACES "" PARENT_SCOPE)
+  endif()
+
+  # Export test targets to parent scope.
+  if(_test_expanded_targets)
+    set(THEROCK_TEST_AMDGPU_TARGETS "${_test_expanded_targets}" PARENT_SCOPE)
+    string(JOIN " " _test_expanded_targets_spaces ${_test_expanded_targets})
+    set(THEROCK_TEST_AMDGPU_TARGETS_SPACES "${_test_expanded_targets_spaces}" PARENT_SCOPE)
+  else()
+    set(THEROCK_TEST_AMDGPU_TARGETS "THEROCK_TEST_AMDGPU_TARGETS-NOTFOUND" PARENT_SCOPE)
+    set(THEROCK_TEST_AMDGPU_TARGETS_SPACES "" PARENT_SCOPE)
   endif()
 
   if(NOT THEROCK_AMDGPU_DIST_BUNDLE_NAME)

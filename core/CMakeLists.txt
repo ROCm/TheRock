@@ -267,7 +267,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
     set(HIP_TESTS_CMAKE_ARGS)
     set(_hip_tests_subproject_names)
     therock_cmake_subproject_declare(hip-tests
-      USE_DIST_AMDGPU_TARGETS
+      USE_TEST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hip-tests/catch"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hip-tests"
       BACKGROUND_BUILD
@@ -294,6 +294,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
     therock_cmake_subproject_activate(hip-tests)
     # Provide it as an artifact:
     therock_provide_artifact(core-hiptests
+      TARGET_NEUTRAL
       DESCRIPTOR artifact-core-hiptests.toml
       COMPONENTS
         test

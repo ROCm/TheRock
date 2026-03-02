@@ -27,7 +27,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
   # aqlprofile
   ##############################################################################
   therock_cmake_subproject_declare(aqlprofile
-    USE_DIST_AMDGPU_TARGETS
+    USE_TEST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/aqlprofile"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/aqlprofile"
     BACKGROUND_BUILD
@@ -52,6 +52,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
 
 if(THEROCK_BUILD_TESTING)
   therock_provide_artifact(aqlprofile-tests
+    TARGET_NEUTRAL
     DESCRIPTOR artifact-aqlprofile.toml
     COMPONENTS
       test
