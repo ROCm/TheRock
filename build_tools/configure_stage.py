@@ -91,8 +91,6 @@ def get_stage_features(
             features.add(feature_name)
 
     # Include group features for groups that have active artifacts in this stage.
-    # This ensures e.g. -DTHEROCK_ENABLE_THIRD_PARTY_LIBS=ON appears when
-    # third-party-libs artifacts are produced or inbound.
     active_groups: set[str] = set()
     for artifact_name in all_artifacts:
         if artifact_name in topology.artifacts:
