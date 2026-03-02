@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Tests validating inputs to benc-uk/workflow-dispatch in workflow files.
 
 The https://github.com/benc-uk/workflow-dispatch action triggers workflows via
