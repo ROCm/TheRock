@@ -1,0 +1,135 @@
+# This workflow is the orchestrator for building Linux runfile installers on a schedule.
+# It runs daily at 8 AM UTC and calls the build_linux_runfile_installer.yml workflow
+# after determining the appropriate parameters from the nightly package indexes.
+
+name: Test Release Linux Runfile Installer
+
+on:
+  # schedule:
+  #   - cron: '0 8 * * *'  # 8 AM UTC daily
+  workflow_dispatch:
+    inputs:
+      rocm_version:
+        description: ROCm version (e.g., 7.12.0). If empty, will be read from version.json.
+        type: string
+      gfx_archs:
+        description: gfx architectures to build
+        type: string
+        # default: "gfx90x,gfx94x,gfx950,gfx110x,gfx1150,gfx1151,gfx1152,gfx120x"
+        default: "all"
+      pull_amdgpu:
+        description: Version of amdgpu to be packaged into runfile installer.
+        type: string
+        default: "release,31.10"
+      pull_tag:
+        description: Build date in format YYYYMMDD. If empty, will use today's date.
+        type: string
+      pull_run_id:
+        description: Workflow run id. If empty, will be auto-detected from nightly indexes.
+        type: string
+      pull_pkg:
+        description: Base package name with optional type prefix.
+        type: string
+        default: "amdrocm-core-sdk"
+
+permissions:
+  contents: read
+
+run-name: Release Linux Runfile Installer (${{ inputs.pull_tag || 'scheduled' }})
+
+jobs:
+  setup:
+    name: Setup Parameters
+    if: ${{ github.repository_owner == 'ROCm' || github.event_name != 'schedule' }}
+    runs-on: ubuntu-24.04
+    outputs:
+      rocm_version: ${{ steps.params.outputs.rocm_version }}
+      pull_tag: ${{ steps.params.outputs.pull_tag }}
+      pull_run_id: ${{ steps.params.outputs.pull_run_id }}
+      gfx_archs: ${{ steps.params.outputs.gfx_archs }}
+      pull_amdgpu: ${{ steps.params.outputs.pull_amdgpu }}
+      pull_pkg: ${{ steps.params.outputs.pull_pkg }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Determine parameters
+        id: params
+        run: |
+          # Set defaults from inputs or compute them
+          GFX_ARCHS="${{ inputs.gfx_archs }}"
+          PULL_AMDGPU="${{ inputs.pull_amdgpu"
+          PULL_PKG="${{ inputs.pull_pkg }}"
+          
+          echo "gfx_archs=$GFX_ARCHS" >> $GITHUB_OUTPUT
+          echo "pull_amdgpu=$PULL_AMDGPU" >> $GITHUB_OUTPUT
+          echo "pull_pkg=$PULL_PKG" >> $GITHUB_OUTPUT
+          
+          # Get rocm_version from input or version.json
+          if [ -n "${{ inputs.rocm_version }}" ]; then
+            ROCM_VERSION="${{ inputs.rocm_version }}"
+          else
+            ROCM_VERSION=$(cat version.json | grep -o '"rocm-version"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4)
+          fi
+          echo "rocm_version=$ROCM_VERSION" >> $GITHUB_OUTPUT
+          echo "Using ROCM_VERSION=$ROCM_VERSION"
+          
+          # Get pull_tag from input or use today's date
+          if [ -n "${{ inputs.pull_tag }}" ]; then
+            PULL_TAG="${{ inputs.pull_tag }}"
+          else
+            PULL_TAG=$(date -u +%Y%m%d)
+          fi
+          echo "pull_tag=$PULL_TAG" >> $GITHUB_OUTPUT
+          echo "Using PULL_TAG=$PULL_TAG"
+          
+          # Get pull_run_id from input or auto-detect from nightly indexes
+          if [ -n "${{ inputs.pull_run_id }}" ]; then
+            PULL_RUN_ID="${{ inputs.pull_run_id }}"
+            echo "Using provided PULL_RUN_ID=$PULL_RUN_ID"
+          else
+            echo "Fetching nightly index pages to auto-detect pull_run_id..."
+            curl -s https://rocm.nightlies.amd.com/rpm/ -o /tmp/rpm_index.html
+            curl -s https://rocm.nightlies.amd.com/deb/ -o /tmp/deb_index.html
+            
+            # Extract folder names in format YYYYMMDD-RUNID from both indexes
+            RPM_FOLDERS=$(grep -oE "${PULL_TAG}-[0-9]+" /tmp/rpm_index.html | sort -u)
+            DEB_FOLDERS=$(grep -oE "${PULL_TAG}-[0-9]+" /tmp/deb_index.html | sort -u)
+            
+            echo "RPM folders for $PULL_TAG: $RPM_FOLDERS"
+            echo "DEB folders for $PULL_TAG: $DEB_FOLDERS"
+            
+            # Find common folders (exist in both rpm and deb)
+            COMMON_FOLDERS=$(comm -12 <(echo "$RPM_FOLDERS" | sort) <(echo "$DEB_FOLDERS" | sort))
+            
+            if [ -z "$COMMON_FOLDERS" ]; then
+              echo "ERROR: No matching folders found for date $PULL_TAG in both rpm and deb indexes"
+              exit 1
+            fi
+            
+            # Get the latest folder (highest run ID)
+            LATEST_FOLDER=$(echo "$COMMON_FOLDERS" | sort -t'-' -k2 -n | tail -1)
+            echo "Found latest matching folder: $LATEST_FOLDER"
+            
+            # Extract the run ID
+            PULL_RUN_ID=$(echo "$LATEST_FOLDER" | cut -d'-' -f2)
+            echo "Auto-detected PULL_RUN_ID=$PULL_RUN_ID"
+          fi
+          echo "pull_run_id=$PULL_RUN_ID" >> $GITHUB_OUTPUT
+
+  # build_runfile_installer:
+  #   name: Build Runfile Installer
+  #   needs: setup
+  #   uses: ./.github/workflows/build_linux_runfile_installer.yml
+  #   with:
+  #     rocm_version: ${{ needs.setup.outputs.rocm_version }}
+  #     release_type: nightly
+  #     gfx_archs: ${{ needs.setup.outputs.gfx_archs }}
+  #     pull_amdgpu: ${{ needs.setup.outputs.pull_amdgpu }}
+  #     pull_type: nightly
+  #     pull_tag: ${{ needs.setup.outputs.pull_tag }}
+  #     pull_run_id: ${{ needs.setup.outputs.pull_run_id }}
+  #     pull_pkg: ${{ needs.setup.outputs.pull_pkg }}
+  #   permissions:
+  #     id-token: write
+  #     contents: read
