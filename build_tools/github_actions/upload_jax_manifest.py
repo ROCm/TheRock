@@ -25,14 +25,14 @@ from github_actions.github_actions_utils import retrieve_bucket_info
 PLATFORM = platform.system().lower()
 
 
-def log(*args: object) -> None:
+def _log(*args: object) -> None:
     print(*args)
     sys.stdout.flush()
 
 
 def run_command(cmd: list[str], cwd: Path) -> None:
-    log(f"++ Exec [{cwd}]$ {shlex.join(cmd)}")
-    subprocess.run(cmd, check=True)
+    _log(f"++ Exec [{cwd}]$ {shlex.join(cmd)}")
+    subprocess.run(cmd, check=True, cwd=str(cwd))
 
 
 @dataclass(frozen=True)
@@ -60,7 +60,7 @@ def normalize_py(python_version: str) -> str:
     return py
 
 
-def sanitize_ref_for_filename(jax_track: str) -> str:
+def sanitize_ref_for_filename(jax_git_ref: str) -> str:
     """Sanitize a git ref for filenames by replacing '/' with '-'.
 
     Examples:
@@ -68,7 +68,7 @@ def sanitize_ref_for_filename(jax_track: str) -> str:
       "release/0.4.28"         -> "release-0.4.28"
       "users/alice/experiment" -> "users-alice-experiment"
     """
-    return jax_track.replace("/", "-")
+    return jax_git_ref.replace("/", "-")
 
 
 def build_upload_path_for_workflow_run(
@@ -116,10 +116,13 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help="Python version (e.g. 3.12 or py3.12).",
     )
     parser.add_argument(
-        "--jax-track",
+        "--jax-git-ref",
         type=str,
         required=True,
-        help="JAX track used in manifest naming (e.g. nightly, release/0.4.28, rocm-jaxlib-v0.8.0-fixdevtar).",
+        help=(
+            "JAX git ref used in manifest naming "
+            '(e.g. "nightly", "release/0.4.28", "rocm-jaxlib-v0.8.2").'
+        ),
     )
     parser.add_argument(
         "--bucket",
@@ -134,12 +137,12 @@ def main(argv: list[str]) -> None:
     args = parse_args(argv)
 
     py = normalize_py(args.python_version)
-    track = sanitize_ref_for_filename(args.jax_track)
+    track = sanitize_ref_for_filename(args.jax_git_ref)
 
     manifest_name = f"therock-manifest_jax_py{py}_{track}.json"
     manifest_path = (args.dist_dir / "manifests" / manifest_name).resolve()
 
-    log(f"Manifest expected at: {manifest_path}")
+    _log(f"Manifest expected at: {manifest_path}")
     if not manifest_path.is_file():
         raise FileNotFoundError(f"Manifest not found: {manifest_path}")
 
@@ -150,7 +153,7 @@ def main(argv: list[str]) -> None:
     )
     dest_uri = f"{upload_path.s3_uri}/{manifest_name}"
 
-    log(f"Uploading to: {dest_uri}")
+    _log(f"Uploading to: {dest_uri}")
     run_command(["aws", "s3", "cp", str(manifest_path), dest_uri], cwd=Path.cwd())
 
 

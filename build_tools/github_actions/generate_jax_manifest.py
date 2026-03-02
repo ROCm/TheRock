@@ -7,7 +7,7 @@ Writes a JSON manifest containing:
   - therock: repo + commit + branch from GitHub Actions env (best-effort)
 
 Filename format:
-  therock-manifest_jax_py<python_version>_<jax_track>.json
+  therock-manifest_jax_py<python_version>_<jax_git_ref>.json
 """
 
 import argparse
@@ -123,7 +123,7 @@ def resolve_branch(*, inferred: str | None, provided: str | None) -> str | None:
     return None
 
 
-def normalize_release_track(track: str) -> str:
+def normalize_ref_for_filename(ref: str) -> str:
     """Normalize a git ref for filenames by replacing path separators.
 
     Examples:
@@ -131,7 +131,7 @@ def normalize_release_track(track: str) -> str:
       release/0.4.28          -> release-0.4.28
       users/alice/experiment  -> users-alice-experiment
     """
-    return track.replace("/", "-")
+    return ref.replace("/", "-")
 
 
 def normalize_py(python_version: str) -> str:
@@ -142,15 +142,13 @@ def normalize_py(python_version: str) -> str:
     return py
 
 
-def manifest_filename(*, python_version: str, jax_track: str) -> str:
+def manifest_filename(*, python_version: str, jax_git_ref: str) -> str:
     py = normalize_py(python_version)
-    track = normalize_release_track(jax_track)
-    return f"therock-manifest_jax_py{py}_{track}.json"
+    ref = normalize_ref_for_filename(jax_git_ref)
+    return f"therock-manifest_jax_py{py}_{ref}.json"
 
 
-def build_sources(
-    *, jax_dir: Path, jax_git_ref: str | None
-) -> dict[str, dict[str, str]]:
+def build_sources(*, jax_dir: Path, jax_git_ref: str) -> dict[str, dict[str, str]]:
     jax = git_head(jax_dir, label="jax")
 
     jax_branch = resolve_branch(
@@ -172,7 +170,6 @@ def build_manifest(
     therock_commit: str,
     therock_branch: str,
 ) -> dict[str, object]:
-    # Flattened schema: top-level source keys, plus therock last.
     manifest: dict[str, object] = {}
     manifest.update(sources)
     manifest["therock"] = {
@@ -187,8 +184,7 @@ def generate_manifest_dict(
     *,
     jax_dir: Path,
     python_version: str,
-    jax_track: str,
-    jax_git_ref: str | None,
+    jax_git_ref: str,
 ) -> tuple[str, dict[str, object]]:
     sources = build_sources(jax_dir=jax_dir, jax_git_ref=jax_git_ref)
 
@@ -208,12 +204,11 @@ def generate_manifest_dict(
         if ref.startswith("refs/heads/"):
             therock_branch = ref[len("refs/heads/") :]
         else:
-            # Could be refs/tags/<tag>, refs/pull/<id>/merge, or a SHA, etc.
             therock_branch = ref
 
     name = manifest_filename(
         python_version=python_version,
-        jax_track=jax_track,
+        jax_git_ref=jax_git_ref,
     )
 
     manifest = build_manifest(
@@ -239,13 +234,12 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help="Python version for manifest naming (e.g. 3.11 or py3.11).",
     )
     ap.add_argument(
-        "--jax-track",
-        required=True,
-        help="JAX track/ref for manifest naming (e.g. nightly or release/0.4.28).",
-    )
-    ap.add_argument(
         "--jax-git-ref",
-        help="Optional ref for jax branch field (used if detached).",
+        required=True,
+        help=(
+            "Git ref used for manifest naming and branch fallback "
+            "(e.g. nightly, release/0.4.28, rocm-jaxlib-v0.8.2)."
+        ),
     )
     ap.add_argument("--jax-dir", type=Path, required=True)
     return ap.parse_args(argv)
@@ -260,7 +254,6 @@ def main(argv: list[str]) -> None:
     name, manifest = generate_manifest_dict(
         jax_dir=args.jax_dir,
         python_version=args.python_version,
-        jax_track=args.jax_track,
         jax_git_ref=args.jax_git_ref,
     )
 

@@ -179,7 +179,6 @@ jobs:
           python3 build_tools/github_actions/generate_jax_manifest.py \
             --manifest-dir "${{ env.PACKAGE_DIST_DIR }}/manifests" \
             --python-version "${{ inputs.python_version }}" \
-            --jax-track "${{ inputs.jax_ref }}" \
             --jax-git-ref "${{ inputs.jax_ref }}" \
             --jax-dir "${{ github.workspace }}/jax"
 
@@ -214,7 +213,7 @@ jobs:
             --run-id "${{ github.run_id }}" \
             --amdgpu-family "${{ inputs.amdgpu_family }}" \
             --python-version "${{ inputs.python_version }}" \
-            --jax-track "${{ inputs.jax_ref }}"
+            --jax-git-ref "${{ inputs.jax_ref }}"
 
       - name: (Re-)Generate Python package release index
         if: ${{ github.repository_owner == 'ROCm' }}

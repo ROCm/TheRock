@@ -64,13 +64,13 @@ class GenerateJaxManifestTest(unittest.TestCase):
     def test_manifest_filename(self) -> None:
         name = jax_manifest.manifest_filename(
             python_version="3.12",
-            jax_track="release/0.4.28",
+            jax_git_ref="release/0.4.28",
         )
         self.assertEqual(name, "therock-manifest_jax_py3.12_release-0.4.28.json")
 
         name = jax_manifest.manifest_filename(
             python_version="py3.12",
-            jax_track="nightly",
+            jax_git_ref="nightly",
         )
         self.assertEqual(name, "therock-manifest_jax_py3.12_nightly.json")
 
@@ -99,8 +99,6 @@ class GenerateJaxManifestTest(unittest.TestCase):
                     str(manifest_dir),
                     "--python-version",
                     "3.12",
-                    "--jax-track",
-                    "release/0.0",
                     "--jax-git-ref",
                     "release/0.0",
                     "--jax-dir",
@@ -124,48 +122,6 @@ class GenerateJaxManifestTest(unittest.TestCase):
             data["therock"]["commit"], "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
         )
         self.assertEqual(data["therock"]["branch"], "users/test-branch")
-
-    def test_sources_only_manifest_without_jax_git_ref(self) -> None:
-        """If branch can't be inferred and no --jax-git-ref is provided, omit branch."""
-        manifest_dir = self.tmp_path / "manifests_no_ref"
-        manifest_dir.mkdir(parents=True, exist_ok=True)
-
-        jax_repo = self.tmp_path / "src_jax2"
-        jax_head = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-
-        def fake_git_head(dirpath: Path, *, label: str) -> jax_manifest.GitSourceInfo:
-            p = dirpath.resolve()
-            if p == jax_repo.resolve():
-                return jax_manifest.GitSourceInfo(
-                    commit=jax_head,
-                    repo="https://github.com/ROCm/rocm-jax.git",
-                )
-            raise AssertionError(f"Unexpected repo path: {p}")
-
-        with mock.patch.object(
-            jax_manifest, "git_head", side_effect=fake_git_head
-        ), mock.patch.object(jax_manifest, "git_branch_best_effort", return_value=None):
-            self._run_main_with_args(
-                [
-                    "--manifest-dir",
-                    str(manifest_dir),
-                    "--python-version",
-                    "3.12",
-                    "--jax-track",
-                    "nightly",
-                    "--jax-dir",
-                    str(jax_repo),
-                ]
-            )
-
-        manifest_path = manifest_dir / "therock-manifest_jax_py3.12_nightly.json"
-        self.assertTrue(manifest_path.exists(), f"Missing manifest: {manifest_path}")
-
-        data = json.loads(manifest_path.read_text(encoding="utf-8"))
-
-        self.assertIn("jax", data)
-        self.assertIn("therock", data)
-        self.assertNotIn("branch", data["jax"])
 
 
 if __name__ == "__main__":
