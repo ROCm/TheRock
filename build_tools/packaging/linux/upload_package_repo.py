@@ -603,7 +603,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--pkg-type", required=True, choices=["deb", "rpm"])
     parser.add_argument("--s3-bucket", required=True)
-    parser.add_argument("--amdgpu-family", required=False)  # Kept for backward compatibility, not used
+    parser.add_argument(
+        "--amdgpu-family", required=False
+    )  # Kept for backward compatibility, not used
     parser.add_argument("--artifact-id", required=True)
     parser.add_argument(
         "--job",
