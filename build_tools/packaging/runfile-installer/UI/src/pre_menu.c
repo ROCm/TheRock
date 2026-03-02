@@ -79,13 +79,17 @@ void draw_deps_selections();
 
 MENU_DATA menuPre = {0};
 
+// Global config pointers (defined in rocm_ui.c)
+extern OFFLINE_INSTALL_CONFIG *g_pConfig;
+extern PRE_MENU_CONFIG *g_pPreConfig;
+
 
 /**************** Pre-install MENU **********************************************************************************/
 
-void create_pre_menu_window(WINDOW *pMenuWindow, OFFLINE_INSTALL_CONFIG *pConfig)
+void create_pre_menu_window(WINDOW *pMenuWindow)
 {
     // Create the pre install options menu
-    create_menu(&menuPre, pMenuWindow, &preMenuProps, &preMenuItems, pConfig);
+    create_menu(&menuPre, pMenuWindow, &preMenuProps, &preMenuItems, g_pConfig);
 
     // Create help menu
     create_help_menu_window(&menuPre, PRE_MENU_HELP_TITLE, PRE_MENU_HELP_FILE);
@@ -137,10 +141,9 @@ void pre_menu_toggle_grey_items(bool enable)
 
 void draw_deps_selections()
 {
-    PRE_MENU_CONFIG *pPreConfig = &(menuPre.pConfig)->pre_config;
     WINDOW *pWin = menuPre.pMenuWindow;
 
-    if (pPreConfig->rocm_deps)
+    if (g_pPreConfig->rocm_deps)
     {
         mvwprintw(pWin, PRE_MENU_ITEM_START_Y+0, PRE_MENU_ITEM_START_X+11, "%s", "X");
     }
@@ -149,7 +152,7 @@ void draw_deps_selections()
         mvwprintw(pWin, PRE_MENU_ITEM_START_Y+0, PRE_MENU_ITEM_START_X+11, "%s", " ");
     }
 
-    if (pPreConfig->driver_deps)
+    if (g_pPreConfig->driver_deps)
     {
         mvwprintw(pWin, PRE_MENU_ITEM_START_Y+1, PRE_MENU_ITEM_START_X+11, "%s", "X");
     }
@@ -329,10 +332,8 @@ void process_pre_menu()
 {
     MENU *pMenu = menuPre.pMenu;
     WINDOW *pWin = menuPre.pMenuWindow;
-
-    PRE_MENU_CONFIG *pPreConfig = &(menuPre.pConfig)->pre_config;
-    
     ITEM *pCurrentItem = current_item(pMenu);
+    
     int index = item_index(pCurrentItem);
 
     int numDeps = 0;
@@ -352,35 +353,35 @@ void process_pre_menu()
     {
         if (index == PRE_MENU_ITEM_DEPS_ROCM_INDEX)
         {
-            pPreConfig->rocm_deps = !pPreConfig->rocm_deps;
+            g_pPreConfig->rocm_deps = !g_pPreConfig->rocm_deps;
             draw_deps_selections();
 
-            pre_menu_toggle_grey_items( (pPreConfig->rocm_deps | pPreConfig->driver_deps) );
+            pre_menu_toggle_grey_items( (g_pPreConfig->rocm_deps | g_pPreConfig->driver_deps) );
         }
         else if (index == PRE_MENU_ITEM_DEPS_DRIVER_INDEX)
         {
-            pPreConfig->driver_deps = !pPreConfig->driver_deps;
+            g_pPreConfig->driver_deps = !g_pPreConfig->driver_deps;
             draw_deps_selections();
 
-            pre_menu_toggle_grey_items( (pPreConfig->rocm_deps | pPreConfig->driver_deps) );
+            pre_menu_toggle_grey_items( (g_pPreConfig->rocm_deps | g_pPreConfig->driver_deps) );
         }
         else if (index == PRE_MENU_ITEM_DEPS_LIST_INDEX) // list
         {
             char *pTitle;
             
             // set the components to list
-            if (pPreConfig->rocm_deps)
+            if (g_pPreConfig->rocm_deps)
             {
                 strncat(components, "rocm ", SMALL_CHAR_SIZE - strlen(components) - 1);
                 pTitle = "ROCm Dependencies";
             }
-            if (pPreConfig->driver_deps) 
+            if (g_pPreConfig->driver_deps) 
             {
                 strncat(components, "amdgpu", SMALL_CHAR_SIZE - strlen(components) - 1);
                 pTitle = "amdgpu driver Dependencies";
             }
 
-            if (pPreConfig->rocm_deps && pPreConfig->driver_deps)
+            if (g_pPreConfig->rocm_deps && g_pPreConfig->driver_deps)
             {
                 pTitle = "ROCm and amdgpu driver Dependencies";
             }
@@ -411,13 +412,13 @@ void process_pre_menu()
             char *pArg2 = NULL;
 
             // set the components to validate
-            if (pPreConfig->rocm_deps) 
+            if (g_pPreConfig->rocm_deps) 
             {
                 strncat(arg1, "rocm", SMALL_CHAR_SIZE - strlen(arg1) - 1);
                 pArg1 = arg1;
             }
 
-            if (pPreConfig->driver_deps) 
+            if (g_pPreConfig->driver_deps) 
             {
                 if (strlen(arg1) > 0)
                 {
@@ -453,8 +454,8 @@ void process_pre_menu()
         else if (index == PRE_MENU_ITEM_DEPS_INSTALL_INDEX) // Install
         {
             // set the components to install
-            if (pPreConfig->rocm_deps) strncat(components, "rocm ", SMALL_CHAR_SIZE - strlen(components) - 1);
-            if (pPreConfig->driver_deps) strncat(components, "amdgpu", SMALL_CHAR_SIZE - strlen(components) - 1);
+            if (g_pPreConfig->rocm_deps) strncat(components, "rocm ", SMALL_CHAR_SIZE - strlen(components) - 1);
+            if (g_pPreConfig->driver_deps) strncat(components, "amdgpu", SMALL_CHAR_SIZE - strlen(components) - 1);
             sprintf(args, "deps=install-only %s", components);
 	        
             // run the dependency install command

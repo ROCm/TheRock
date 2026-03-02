@@ -93,8 +93,6 @@ This script performs a complete ROCm runfile installer build:
                             Format: <type>,<version|buildnum>
                             - release: pullamdgpu=release,31.10
                             - internal: pullamdgpu=internal,2296104
-                            - hidden: pullamdgpu=hidden,31.10 (also requires pullamdgpuhash)
-    pullamdgpuhash=<hash> = Set AMDGPU hash (only for hidden type).
     pullpkg=<package>     = Set base package name with optional type prefix (default: amdrocm-core-sdk).
                             Syntax: pullpkg=[type:]<package>
                             - arch:<package> = Architecture-specific (has -gfxXYZ suffix, default)
@@ -155,7 +153,6 @@ Examples:
     # AMDGPU configuration
     $0 pullamdgpu=release,31.10                               # AMDGPU release 31.10
     $0 pullamdgpu=internal,2296104                            # AMDGPU internal build 2296104
-    $0 pullamdgpu=hidden,31.10 pullamdgpuhash=abc123          # AMDGPU hidden repo
 
     # Custom packages
     $0 pullpkg=arch:amdrocm-core                              # Custom main package
@@ -275,7 +272,7 @@ while (($#)); do
         BUILD_ARGS+=("$1")
         shift
         ;;
-    amdgpu-mode=*|rocm-mode=*|rocm-archs=*|pull=*|pullrocmver=*|pullpkg=*|pullpkgextra=*|pullrocmpkgver=*|pullamdgpu=*|pullamdgpuhash=*)
+    amdgpu-mode=*|rocm-mode=*|rocm-archs=*|pull=*|pullrocmver=*|pullpkg=*|pullpkgextra=*|pullrocmpkgver=*|pullamdgpu=*)
         SETUP_ARGS+=("$1")
         shift
         ;;

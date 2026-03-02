@@ -37,9 +37,8 @@ PULL_CONFIG_PKG_EXTRA=()               # Additional packages (array, comma-separ
 PULL_ROCM_PKG_VERSION=""               # Explicit package version (e.g., 7.11.0-2 for release, 7.11.0~0-21265702726 for prerelease)
 
 # AMDGPU configuration type and version
-PULL_CONFIG_AMDGPU=""                   # release / hidden / internal (must be set via config file or command-line args)
-PULL_CONFIG_AMDGPU_BUILDNUM=""          # For release/hidden: 3x.xx.xx / .3x.xx.xx | For internal: build number (e.g., 2232928, 2296104)
-PULL_CONFIG_AMDGPU_HASH=""              # Hash for hidden repos (only used when PULL_CONFIG_AMDGPU="hidden")
+PULL_CONFIG_AMDGPU=""                   # release / internal (must be set via config file or command-line args)
+PULL_CONFIG_AMDGPU_BUILDNUM=""          # For release: 3x.xx.xx / .3x.xx.xx | For internal: build number (e.g., 2232928, 2296104)
 
 # Package configs (relative to package-puller directory)
 # These will be dynamically generated from templates by setup_puller_config_rocm()
@@ -673,15 +672,6 @@ setup_puller_config_amdgpu() {
     echo "Using AMDGPU config type: ${PULL_CONFIG_AMDGPU}"
     echo "Using AMDGPU version: ${PULL_CONFIG_AMDGPU_BUILDNUM}"
 
-    # If using hidden config type, validate hash is provided
-    if [[ "${PULL_CONFIG_AMDGPU}" == "hidden" ]]; then
-        if [[ -z "${PULL_CONFIG_AMDGPU_HASH}" ]]; then
-            echo -e "\e[31mERROR: PULL_CONFIG_AMDGPU_HASH must be set when using hidden config type\e[0m"
-            exit 1
-        fi
-        echo "Using AMDGPU hash: ${PULL_CONFIG_AMDGPU_HASH}"
-    fi
-
     # If using internal config type, validate build number is provided
     if [[ "${PULL_CONFIG_AMDGPU}" == "internal" ]]; then
         if [[ -z "${PULL_CONFIG_AMDGPU_BUILDNUM}" ]]; then
@@ -723,7 +713,6 @@ setup_puller_config_amdgpu() {
         echo "Generating AMDGPU config for ${distro_tag}: $OUTPUT_FILE"
         sed -e "s/{{AMDGPU_VERSION}}/${PULL_CONFIG_AMDGPU_BUILDNUM}/g" \
             -e "s/{{EL9_VERSION}}/${EL9_VERSION}/g" \
-            -e "s/{{AMDGPU_HASH}}/${PULL_CONFIG_AMDGPU_HASH}/g" \
             -e "s/{{PULL_CONFIG_AMDGPU_BUILDNUM}}/${PULL_CONFIG_AMDGPU_BUILDNUM}/g" \
             "$TEMPLATE_FILE" > "$OUTPUT_FILE"
     done
@@ -1075,11 +1064,6 @@ do
         fi
         shift
         ;;
-    pullamdgpuhash=*)
-        PULL_CONFIG_AMDGPU_HASH="${1#*=}"
-        echo "AMDGPU hash set to: $PULL_CONFIG_AMDGPU_HASH"
-        shift
-        ;;
     pullpkg=*)
         # Parse package name with optional type prefix (e.g., "base:amdrocm-amdsmi" or "arch:amdrocm-core-sdk")
         # Default type is "arch" if no prefix specified
@@ -1167,7 +1151,7 @@ if [[ $SETUP_AMDGPU == 1 ]]; then
     # Validate AMDGPU configuration is set
     if [[ -z "$PULL_CONFIG_AMDGPU" ]]; then
         echo -e "\e[31mERROR: PULL_CONFIG_AMDGPU must be set when setting up AMDGPU packages\e[0m"
-        echo "Set via config file or command-line: pullamdgpu=<release|hidden|internal>"
+        echo "Set via config file or command-line: pullamdgpu=<release|internal>"
         exit 1
     fi
     if [[ -z "$PULL_CONFIG_AMDGPU_BUILDNUM" ]]; then

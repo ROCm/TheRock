@@ -47,7 +47,7 @@
 #define DEP_FILE_X          5
 
 
-void create_pre_menu_window(WINDOW *pMenuWindow, OFFLINE_INSTALL_CONFIG *pConfig);
+void create_pre_menu_window(WINDOW *pMenuWindow);
 void destroy_pre_menu_window();
 void do_pre_menu();
 

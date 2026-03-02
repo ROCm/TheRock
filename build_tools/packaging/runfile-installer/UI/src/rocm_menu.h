@@ -74,17 +74,17 @@
 #define ROCM_MENU_ROCM_STATUS_ROW           5
 #define ROCM_MENU_ROCM_STATUS_COL           ROCM_MENU_FORM_COL + 6
 
-void create_rocm_menu_window(WINDOW *pMenuWindow, OFFLINE_INSTALL_CONFIG *pConfig);
+void create_rocm_menu_window(WINDOW *pMenuWindow);
 void destroy_rocm_menu_window();
 void do_rocm_menu();
 
 // ROCm Device Menu
-void create_rocm_menu_device_window(WINDOW *pMenuWindow, OFFLINE_INSTALL_CONFIG *pConfig);
+void create_rocm_menu_device_window(WINDOW *pMenuWindow);
 void do_rocm_menu_device();
 void destroy_rocm_menu_device_window();
 
 // ROCm Component Menu
-void create_rocm_menu_compo_window(WINDOW *pMenuWindow, OFFLINE_INSTALL_CONFIG *pConfig);
+void create_rocm_menu_compo_window(WINDOW *pMenuWindow);
 void do_rocm_menu_compo();
 void destroy_rocm_menu_compo_window();
 

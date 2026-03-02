@@ -137,7 +137,10 @@ typedef struct _MENU_DATA
     bool enableMultiSelection;
     
     // For menus where user can select/deselect items
-    bool isMenuItemsSelectable; 
+    bool isMenuItemsSelectable;
+
+    // Disable drawing "X" selection marks for multi-select menus
+    bool disableSelectionMark;
 
     // global configuration state for the installer
     OFFLINE_INSTALL_CONFIG *pConfig;

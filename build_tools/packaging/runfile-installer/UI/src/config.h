@@ -71,6 +71,7 @@ typedef struct _ROCM_MENU_CONFIG
     int  rocm_count;
 
     char rocm_device[DEFAULT_CHAR_SIZE];
+    char rocm_device_gpu[DEFAULT_CHAR_SIZE];
     char rocm_components[DEFAULT_CHAR_SIZE];
 
     // Pointer to parent config for accessing version info

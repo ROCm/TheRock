@@ -76,13 +76,17 @@ void driver_menu_draw();
 MENU_DATA menuDriver = {0};
 bool gDriverStatusCheck = false;
 
+// Global config pointers (defined in rocm_ui.c)
+extern OFFLINE_INSTALL_CONFIG *g_pConfig;
+extern DRIVER_MENU_CONFIG *g_pDriverConfig;
+
 
 /**************** Driver MENU **********************************************************************************/
 
-void create_driver_menu_window(WINDOW *pMenuWindow, OFFLINE_INSTALL_CONFIG *pConfig)
+void create_driver_menu_window(WINDOW *pMenuWindow)
 {
     // Create the driver options menu
-    create_menu(&menuDriver, pMenuWindow, &driverMenuProps, &driverMenuItems, pConfig);
+    create_menu(&menuDriver, pMenuWindow, &driverMenuProps, &driverMenuItems, g_pConfig);
 
     // Create help menu
     create_help_menu_window(&menuDriver, DRIVER_MENU_HELP_TITLE, DRIVER_MENU_HELP_FILE);
@@ -107,17 +111,15 @@ void destroy_driver_menu_window()
 
 void driver_menu_toggle_grey_items(bool enable)
 {
-    DRIVER_MENU_CONFIG *pDriverConfig = &(menuDriver.pConfig)->driver_config;
-
     if (enable)
     {
         // enable all driver option fields
-        if (pDriverConfig->install_driver)
+        if (g_pDriverConfig->install_driver)
         {
             menu_set_item_select(&menuDriver, DRIVER_MENU_ITEM_START_DRIVER_INDEX, true);
         }
 
-        if (pDriverConfig->is_driver_installed)
+        if (g_pDriverConfig->is_driver_installed)
         {
             menu_set_item_select(&menuDriver, DRIVER_MENU_ITEM_UNINSTALL_DRIVER_INDEX, true);
         }
@@ -133,63 +135,67 @@ void driver_menu_toggle_grey_items(bool enable)
 
 void check_driver_install_status()
 {
-    OFFLINE_INSTALL_CONFIG *pConfig = menuDriver.pConfig;
-    DRIVER_MENU_CONFIG *pDriverConfig = &(menuDriver.pConfig)->driver_config;
     char amdgpu_dkms_path[DEFAULT_CHAR_SIZE];
 
     gDriverStatusCheck = true;
 
     // check if dkms is installed first
-    if (is_dkms_pkg_installed(pConfig->distroType) == 0)
+    if (is_dkms_pkg_installed(g_pConfig->distroType) == 0)
     {
         // if no dkms - driver cannot be installed
         gDriverStatusCheck = false;
-        pDriverConfig->driver_install_type = eINSTALL_NODKMS;
-        pDriverConfig->is_driver_installed = true;
-        pDriverConfig->install_driver = false;
+        g_pDriverConfig->driver_install_type = eINSTALL_NODKMS;
+        g_pDriverConfig->is_driver_installed = true;
+        g_pDriverConfig->install_driver = false;
         menu_set_item_select(&menuDriver, DRIVER_MENU_ITEM_INSTALL_DRIVER_INDEX, false);
         return;
     }
-    
+
     // check if for package installation of amdgpu-dkms
-    if (is_amdgpu_dkms_pkg_installed(pConfig->distroType) > 0)
+    if (is_amdgpu_dkms_pkg_installed(g_pConfig->distroType) > 0)
     {
         // package is installed
-        pDriverConfig->driver_install_type = eINSTALL_PACKAGE;
-        pDriverConfig->is_driver_installed = true;
+        g_pDriverConfig->driver_install_type = eINSTALL_PACKAGE;
+        g_pDriverConfig->is_driver_installed = true;
     }
     else
     {
-        OFFLINE_INSTALL_CONFIG *pConfig = pDriverConfig->pConfig;
         strcpy(amdgpu_dkms_path, DRIVER_DKMS_PATH);
 
-        // if no package install, check for a runfile install - check for an amdgpu-dkms build
-        if ( is_dir_exist(amdgpu_dkms_path) )
+        // Check for runfile install - look for any amdgpu version in DKMS (same as rocm-installer.sh)
+        // Use check_dkms_status() which parses `dkms status` to detect any installed amdgpu driver
+        char dkms_output[LARGE_CHAR_SIZE];
+        if (check_dkms_status(dkms_output, LARGE_CHAR_SIZE) == 0)
         {
-            strcat(amdgpu_dkms_path, pConfig->amdgpuDkmsBuild);
-            if ( is_dir_exist(amdgpu_dkms_path) )
+            // Check if amdgpu is in the DKMS output
+            if (strstr(dkms_output, "amdgpu") != NULL)
             {
-                // there is a dkms amdgpu - not package installed
-                // if not package install, then there is a runfile dkms install of amdgpu
-                pDriverConfig->driver_install_type = eINSTALL_RUNFILE;
-                pDriverConfig->is_driver_installed = true;
+                // DKMS has amdgpu (runfile install, not package)
+                g_pDriverConfig->driver_install_type = eINSTALL_RUNFILE;
+                g_pDriverConfig->is_driver_installed = true;
+            }
+            else
+            {
+                // DKMS exists but no amdgpu driver
+                g_pDriverConfig->driver_install_type = eINSTALL_NONE;
+                g_pDriverConfig->is_driver_installed = false;
             }
         }
         else
         {
-            // no driver install
-            pDriverConfig->driver_install_type = eINSTALL_NONE;
-            pDriverConfig->is_driver_installed = false;
+            // DKMS check failed or no driver install
+            g_pDriverConfig->driver_install_type = eINSTALL_NONE;
+            g_pDriverConfig->is_driver_installed = false;
         }
     }
     
     // grey-out the driver install ops depending if the driver is installed or not
-    menu_set_item_select(&menuDriver, DRIVER_MENU_ITEM_INSTALL_DRIVER_INDEX, !pDriverConfig->is_driver_installed);
+    menu_set_item_select(&menuDriver, DRIVER_MENU_ITEM_INSTALL_DRIVER_INDEX, !g_pDriverConfig->is_driver_installed);
 
     // allow uninstall for runfile only
-    if (pDriverConfig->driver_install_type == eINSTALL_RUNFILE)
+    if (g_pDriverConfig->driver_install_type == eINSTALL_RUNFILE)
     {
-        menu_set_item_select(&menuDriver, DRIVER_MENU_ITEM_UNINSTALL_DRIVER_INDEX, pDriverConfig->is_driver_installed);
+        menu_set_item_select(&menuDriver, DRIVER_MENU_ITEM_UNINSTALL_DRIVER_INDEX, g_pDriverConfig->is_driver_installed);
     }
     else
     {
@@ -208,24 +214,22 @@ void driver_clear_status()
 void driver_status_draw()
 {
     WINDOW *pMenuWindow = menuDriver.pMenuWindow;
-    DRIVER_MENU_CONFIG *pDriverConfig = &(menuDriver.pConfig)->driver_config;
     
     // check for the driver status and draw
-    if (pDriverConfig->driver_install_type == 0)
+    if (g_pDriverConfig->driver_install_type == 0)
     {
         print_menu_msg(&menuDriver, GREEN, "amdgpu driver not installed.");
     }
-    else if (pDriverConfig->driver_install_type == eINSTALL_PACKAGE)
+    else if (g_pDriverConfig->driver_install_type == eINSTALL_PACKAGE)
     {
         print_menu_err_msg(&menuDriver, "amdgpu driver package install found. Uninstall required.");
     }
-    else if (pDriverConfig->driver_install_type == eINSTALL_RUNFILE)
+    else if (g_pDriverConfig->driver_install_type == eINSTALL_RUNFILE)
     {
-        OFFLINE_INSTALL_CONFIG *pConfig = pDriverConfig->pConfig;
-        mvwprintw(pMenuWindow, DRIVER_MENU_DRIVER_STATUS_INFO_ROW, DRIVER_MENU_DRIVER_STATUS_INFO_COL, "%s", pConfig->amdgpuDkmsBuild);
+        mvwprintw(pMenuWindow, DRIVER_MENU_DRIVER_STATUS_INFO_ROW, DRIVER_MENU_DRIVER_STATUS_INFO_COL, "%s", g_pConfig->amdgpuDkmsBuild);
         print_menu_err_msg(&menuDriver, "amdgpu driver runfile install found.  Uninstall required.");
     }
-    else if (pDriverConfig->driver_install_type == eINSTALL_NODKMS)
+    else if (g_pDriverConfig->driver_install_type == eINSTALL_NODKMS)
     {
         print_menu_err_msg(&menuDriver, "dkms is not installed. Unable to install amdgpu driver.");
     }
@@ -237,10 +241,9 @@ void driver_status_draw()
 
 void driver_menu_draw()
 {
-    DRIVER_MENU_CONFIG *pDriverConfig = &(menuDriver.pConfig)->driver_config;
 
-    menu_info_draw_bool(&menuDriver, DRIVER_MENU_ITEM_INSTALL_DRIVER_ROW, DRIVER_MENU_FORM_COL, pDriverConfig->install_driver);
-    menu_info_draw_bool(&menuDriver, DRIVER_MENU_ITEM_START_DRIVER_ROW, DRIVER_MENU_FORM_COL, pDriverConfig->start_driver);
+    menu_info_draw_bool(&menuDriver, DRIVER_MENU_ITEM_INSTALL_DRIVER_ROW, DRIVER_MENU_FORM_COL, g_pDriverConfig->install_driver);
+    menu_info_draw_bool(&menuDriver, DRIVER_MENU_ITEM_START_DRIVER_ROW, DRIVER_MENU_FORM_COL, g_pDriverConfig->start_driver);
 
     menu_draw(&menuDriver);
 }
@@ -265,9 +268,6 @@ void process_driver_menu()
 {
     MENU *pMenu = menuDriver.pMenu;
     WINDOW *pWin = menuDriver.pMenuWindow;
-
-    DRIVER_MENU_CONFIG *pDriverConfig = &(menuDriver.pConfig)->driver_config;
-    
     ITEM *pCurrentItem = current_item(pMenu);
 
     int index = item_index(pCurrentItem);
@@ -281,13 +281,13 @@ void process_driver_menu()
         driver_status_draw();
 
         // allow toggle of driver install if driver is not currently installed
-        if (!pDriverConfig->is_driver_installed)
+        if (!g_pDriverConfig->is_driver_installed)
         {
-            pDriverConfig->install_driver = !pDriverConfig->install_driver;
-            menu_info_draw_bool(&menuDriver, DRIVER_MENU_ITEM_INSTALL_DRIVER_ROW, DRIVER_MENU_FORM_COL, pDriverConfig->install_driver);
-            driver_menu_toggle_grey_items(pDriverConfig->install_driver);
+            g_pDriverConfig->install_driver = !g_pDriverConfig->install_driver;
+            menu_info_draw_bool(&menuDriver, DRIVER_MENU_ITEM_INSTALL_DRIVER_ROW, DRIVER_MENU_FORM_COL, g_pDriverConfig->install_driver);
+            driver_menu_toggle_grey_items(g_pDriverConfig->install_driver);
 
-            if (!pDriverConfig->install_driver)
+            if (!g_pDriverConfig->install_driver)
             {
                 gDriverStatusCheck = false; // reset the driver install check if install driver toggled off
                 clear_menu_msg(&menuDriver);
@@ -297,16 +297,16 @@ void process_driver_menu()
     else if (index == DRIVER_MENU_ITEM_START_DRIVER_INDEX)
     {
         // allow toggle of start driver only for driver install
-        if (pDriverConfig->install_driver)
+        if (g_pDriverConfig->install_driver)
         {
-            pDriverConfig->start_driver = !pDriverConfig->start_driver;
-            menu_info_draw_bool(&menuDriver, DRIVER_MENU_ITEM_START_DRIVER_ROW, DRIVER_MENU_FORM_COL, pDriverConfig->start_driver);
+            g_pDriverConfig->start_driver = !g_pDriverConfig->start_driver;
+            menu_info_draw_bool(&menuDriver, DRIVER_MENU_ITEM_START_DRIVER_ROW, DRIVER_MENU_FORM_COL, g_pDriverConfig->start_driver);
         }
     }
     else if (index == DRIVER_MENU_ITEM_UNINSTALL_DRIVER_INDEX)
     {
         // only uninstall if the driver is installed
-        if (pDriverConfig->is_driver_installed && (pDriverConfig->driver_install_type == eINSTALL_RUNFILE))
+        if (g_pDriverConfig->is_driver_installed && (g_pDriverConfig->driver_install_type == eINSTALL_RUNFILE))
         {
             // execute the amdgpu uninstall command
             if (execute_cmd("./rocm-installer.sh", "uninstall-amdgpu", pWin) == 0)
@@ -315,7 +315,7 @@ void process_driver_menu()
 
                 // driver install success, disable the uninstall item on the driver menu and reset driver install status
                 menu_set_item_select(&menuDriver, DRIVER_MENU_ITEM_UNINSTALL_DRIVER_INDEX, false);
-                pDriverConfig->is_driver_installed = false;
+                g_pDriverConfig->is_driver_installed = false;
                 gDriverStatusCheck = false;
 
                 driver_clear_status();
