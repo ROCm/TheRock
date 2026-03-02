@@ -480,7 +480,7 @@ feature_group = "CORE"  # Part of core, enabled by default
 
 [artifacts.rocrtst]
 artifact_group = "rocrtst"
-type = "target-neutral"
+type = "target-specific"
 artifact_deps = ["core-runtime", "core-ocl", "sysdeps-hwloc"]
 feature_name = "CORE_RUNTIME_TESTS"
 feature_group = "CORE"
