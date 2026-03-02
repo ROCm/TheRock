@@ -50,12 +50,12 @@ jobs:
       PULL_RUN_ID: ${{ inputs.pull_run_id }}
       PULL_PKG: ${{ inputs.pull_pkg }}
     outputs:
-      rocm_version: ${{ steps.setup.outputs.rocm_version || steps.auto_detect.outputs.rocm_version }}
-      pull_tag: ${{ steps.setup.outputs.pull_tag || steps.auto_detect.outputs.pull_tag }}
-      pull_run_id: ${{ steps.setup.outputs.pull_run_id || steps.auto_detect.outputs.pull_run_id }}
-      gfx_archs: ${{ steps.setup.outputs.gfx_archs || steps.auto_detect.outputs.gfx_archs }}
-      pull_amdgpu: ${{ steps.setup.outputs.pull_amdgpu }}
-      pull_pkg: ${{ steps.setup.outputs.pull_pkg }}
+      rocm_version: ${{ steps.params.outputs.rocm_version }}
+      pull_tag: ${{ steps.params.outputs.pull_tag }}
+      pull_run_id: ${{ steps.params.outputs.pull_run_id }}
+      gfx_archs: ${{ steps.params.outputs.gfx_archs }}
+      pull_amdgpu: ${{ steps.params.outputs.pull_amdgpu }}
+      pull_pkg: ${{ steps.params.outputs.pull_pkg }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -66,21 +66,8 @@ jobs:
           python-version: 3.12
 
       - name: Setup parameters
-        id: setup
-        run: python ./build_tools/github_actions/setup_runfile_params.py
-
-      - name: Auto-detect nightly run
-        if: steps.setup.outputs.is_auto_detect_nightly_pull_run_id == 'true'
-        id: auto_detect
-        run: |
-          ARGS=""
-          if [ "${{ steps.setup.outputs.is_auto_detect_gfx }}" == "true" ]; then
-            ARGS="--include-gfx-archs"
-          fi
-          if [ -n "$PULL_TAG" ]; then
-            ARGS="$ARGS --pull-tag $PULL_TAG"
-          fi
-          python ./build_tools/github_actions/fetch_nightly_run_id.py $ARGS
+        id: params
+        run: python ./build_tools/github_actions/setup_runfile_installer.py
 
   # build_runfile_installer:
   #   name: Build Runfile Installer
