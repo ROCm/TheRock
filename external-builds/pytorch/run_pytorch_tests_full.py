@@ -9,14 +9,12 @@ Mirrors how PyTorch CI's test.sh invokes test_python_shard():
 """
 
 import argparse
-import json
 import os
 import platform
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from urllib.request import urlopen
 
 from skip_tests.create_skip_tests import get_tests
 
@@ -26,30 +24,6 @@ from pytorch_utils import (
 )
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
-
-DISABLED_TESTS_URL = "https://ossci-metrics.s3.amazonaws.com/disabled-tests-condensed.json"
-DISABLED_TESTS_FILE = ".pytorch-disabled-tests.json"
-
-
-def fetch_disabled_tests(test_dir: str) -> None:
-    dest = os.path.join(test_dir, DISABLED_TESTS_FILE)
-    if os.path.exists(dest):
-        return
-    print(f"Downloading disabled tests from {DISABLED_TESTS_URL}")
-    try:
-        raw = urlopen(DISABLED_TESTS_URL, timeout=10).read().decode("utf-8")
-        data = json.loads(raw)
-        reenabled = os.getenv("REENABLED_ISSUES", "").split(",")
-        filtered = {
-            name: [link, platforms]
-            for name, (pr_num, link, platforms) in data.items()
-            if pr_num not in reenabled
-        }
-        with open(dest, "w") as f:
-            json.dump(filtered, f)
-        print(f"Wrote {len(filtered)} disabled tests to {dest}")
-    except Exception as e:
-        print(f"Warning: could not download disabled tests: {e}")
 
 
 def setup_env(pytorch_dir: Path, test_config: str) -> None:
@@ -69,8 +43,6 @@ def setup_env(pytorch_dir: Path, test_config: str) -> None:
         os.environ["PYTHONPATH"] = f"{test_dir}:{old_pythonpath}"
     else:
         os.environ["PYTHONPATH"] = test_dir
-
-    fetch_disabled_tests(test_dir)
 
 
 def cmd_arguments(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
