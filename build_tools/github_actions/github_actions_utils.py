@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Utilities for working with GitHub Actions from Python.
 
 See also https://pypi.org/project/github-action-utils/.

@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # therock_subproject.cmake
 # Facilities for defining build subprojects. This has some similarity to the
 # built-in ExternalProject and FetchContent facilities, but it is intended to

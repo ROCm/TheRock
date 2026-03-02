@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 if(THEROCK_ENABLE_ROCPROFV3)
   set(_rocprofiler_sdk_optional_deps)
 
@@ -49,7 +52,6 @@ if(THEROCK_ENABLE_ROCPROFV3)
 
 if(THEROCK_BUILD_TESTING)
   therock_provide_artifact(aqlprofile-tests
-    TARGET_NEUTRAL
     DESCRIPTOR artifact-aqlprofile.toml
     COMPONENTS
       test

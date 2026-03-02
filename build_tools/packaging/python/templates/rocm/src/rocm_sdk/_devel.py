@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Manages the rocm-sdk-devel package.
 
 The devel package is special in some key ways:

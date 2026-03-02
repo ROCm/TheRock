@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 therock_subproject_fetch(therock-spdlog-sources
   CMAKE_PROJECT
   # Originally mirrored from: https://github.com/gabime/spdlog/archive/refs/tags/v1.15.3.tar.gz

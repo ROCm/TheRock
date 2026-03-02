@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 set(DEBUG_TOOLS_DIR "${THEROCK_SOURCE_DIR}/debug-tools")
 
 if(THEROCK_ENABLE_AMD_DBGAPI)
