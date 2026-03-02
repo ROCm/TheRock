@@ -85,9 +85,17 @@ class Parameters:
         self.runtime_artifact_names: set[str] = set()
 
         # Load and interpolate the _dist_info.py template.
-        dist_info_contents = DIST_INFO_PATH.read_text()
-        dist_info_contents += f"__version__ = '{version}'\n"
-        dist_info_contents += f"PY_PACKAGE_SUFFIX_NONCE = '{version_suffix}'\n"
+        # Base: version and nonce only — no family lines. Used as the starting
+        # point for restrict_families packages so they can write clean family
+        # content without a .clear() dance.
+        dist_info_base = DIST_INFO_PATH.read_text()
+        dist_info_base += f"__version__ = '{version}'\n"
+        dist_info_base += f"PY_PACKAGE_SUFFIX_NONCE = '{version_suffix}'\n"
+        self.dist_info_base_contents = dist_info_base
+
+        # Full: base extended with all families. Used by most packages and by
+        # the dynamically loaded self.dist_info module below.
+        dist_info_contents = dist_info_base
         dist_info_contents += (
             f"DEFAULT_TARGET_FAMILY = '{self.default_target_family}'\n"
         )
@@ -142,8 +150,13 @@ class PopulatedDistPackage:
         self.rpath_deps: list[tuple["PopulatedDistPackage", str]] = []
         self.files = PopulatedFiles()
 
-        # Augment the dist_info with THIS_TARGET_FAMILY and THIS_PACKAGE_ENTRY
-        dist_info_contents = self.params.dist_info_contents
+        # restrict_families packages start from the base (no family lines) so
+        # the per-family overrides below write clean content without a .clear()
+        # dance. All other packages start from the full dist_info_contents.
+        if restrict_families and target_family is not None:
+            dist_info_contents = self.params.dist_info_base_contents
+        else:
+            dist_info_contents = self.params.dist_info_contents
         dist_info_contents += f"THIS_TARGET_FAMILY = {repr(target_family)}\n"
         dist_info_contents += (
             f"THIS_PACKAGE_ENTRY = ALL_PACKAGES[{repr(logical_name)}]\n"
@@ -152,16 +165,9 @@ class PopulatedDistPackage:
         # For per-family packages (e.g. meta/rocm in multi-arch builds), restrict
         # DEFAULT_TARGET_FAMILY and AVAILABLE_TARGET_FAMILIES to only this family
         # so that determine_target_family() at install time only resolves to this
-        # family's packages.
+        # family's packages. No .clear() needed — the base has an empty list.
         if restrict_families and target_family is not None:
             dist_info_contents += f"DEFAULT_TARGET_FAMILY = '{target_family}'\n"
-            # TODO: AVAILABLE_TARGET_FAMILIES.clear() is needed here because
-            # params.dist_info_contents already appended all built families.
-            # The .clear() + single append produces dead code in the generated
-            # file. Fix: split params.dist_info_contents into a base (no family
-            # lines) and a full version; restrict_families packages start from
-            # the base so no .clear() is needed.
-            dist_info_contents += "AVAILABLE_TARGET_FAMILIES.clear()\n"
             dist_info_contents += (
                 f"AVAILABLE_TARGET_FAMILIES.append('{target_family}')\n"
             )

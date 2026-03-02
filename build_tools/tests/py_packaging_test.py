@@ -526,6 +526,28 @@ class RestrictFamiliesTest(TmpDirTestCase):
         self.assertIn("gfx94X-dcgpu", ns["AVAILABLE_TARGET_FAMILIES"])
         self.assertEqual(len(ns["AVAILABLE_TARGET_FAMILIES"]), 2)
 
+    def test_restrict_families_no_dead_writes(self):
+        """restrict_families=True must not produce dead writes in _dist_info.py.
+
+        The generated file must contain no AVAILABLE_TARGET_FAMILIES.clear() and
+        must not append the non-selected family at all.
+        """
+        params = self._make_two_family_params()
+
+        meta = PopulatedDistPackage(
+            params,
+            logical_name="meta",
+            target_family="gfx120X-all",
+            restrict_families=True,
+        )
+
+        dist_info_path = (
+            meta.path / "src" / meta.entry.pure_py_package_name / "_dist_info.py"
+        )
+        content = dist_info_path.read_text()
+        self.assertNotIn("AVAILABLE_TARGET_FAMILIES.clear()", content)
+        self.assertNotIn("gfx94X-dcgpu", content)
+
 
 if __name__ == "__main__":
     unittest.main()
