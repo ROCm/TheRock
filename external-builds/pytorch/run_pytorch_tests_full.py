@@ -120,12 +120,22 @@ def cmd_arguments(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
         default=int(os.getenv("NUM_TEST_SHARDS", "0")),
         help="Total number of shards. Also reads NUM_TEST_SHARDS env var.",
     )
+    default_includes = [
+        "test_nn",
+        "test_torch",
+        "test_cuda",
+        "test_unary_ufuncs",
+        "test_binary_ufuncs",
+        "test_autograd",
+    ]
     parser.add_argument(
         "--include",
         nargs="+",
-        default=None,
+        default=default_includes,
         metavar="TEST",
-        help="Only run these test files (passed to run_test.py --include). Also reads TESTS_TO_INCLUDE env var.",
+        help="Only run these test files (passed to run_test.py --include). "
+        "Also reads TESTS_TO_INCLUDE env var. "
+        f"Default: {default_includes}",
     )
     parser.add_argument(
         "--exclude",
