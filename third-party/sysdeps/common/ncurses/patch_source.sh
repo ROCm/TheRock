@@ -1,4 +1,7 @@
 #!/usr/bin/bash
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 set -e
 
 echo "Patching ncurses sources to rename main library..."
