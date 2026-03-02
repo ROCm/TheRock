@@ -147,6 +147,45 @@ class FunctionalBase:
         process.wait()
         return process.returncode
 
+    def clone_repository(
+        self,
+        git_url: str,
+        target_dir: Path,
+        branch: str = None,
+        skip_if_exists: bool = True,
+        update_submodules: bool = False,
+    ) -> None:
+        """Clone a git repository, optionally skipping if it already exists."""
+        if skip_if_exists and target_dir.exists():
+            log.info(f"Directory already exists at {target_dir}, skipping clone")
+            return
+
+        branch_info = f" (branch: {branch})" if branch else " (default branch)"
+        log.info(f"Cloning {git_url}{branch_info} to {target_dir}")
+
+        cmd = ["git", "clone"]
+        if branch:
+            cmd.extend(["--branch", branch])
+        cmd.extend([git_url, str(target_dir)])
+
+        return_code = self.execute_command(cmd)
+        if return_code != 0:
+            raise TestExecutionError(
+                f"Failed to clone repository: {git_url}{branch_info}"
+            )
+
+        log.info(f"Clone completed: {target_dir}")
+
+        if update_submodules:
+            log.info("Updating git submodules")
+            submodule_cmd = ["git", "submodule", "update", "--init", "--recursive"]
+            return_code = self.execute_command(submodule_cmd, cwd=target_dir)
+            if return_code != 0:
+                raise TestExecutionError(
+                    f"Failed to update submodules: {target_dir}"
+                )
+            log.info("Submodules updated")
+
     def create_test_result(
         self,
         test_name: str,
