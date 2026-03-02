@@ -58,8 +58,9 @@ import argparse
 import os
 import subprocess
 import sys
+import traceback
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import Optional, Union
 
 
 def _env(key: str, default: str) -> str:
@@ -88,6 +89,41 @@ VERIFY_KEY_COMPONENTS = [
 ]
 # Relative path from install prefix to rdhc binary (script); overridable via ROCM_RDHC_REL_PATH
 RDHC_REL_PATH = _env("ROCM_RDHC_REL_PATH", "libexec/rocm-core/rdhc.py")
+
+# Timeouts (seconds) and verification threshold
+GPG_MKDIR_TIMEOUT_SEC = 10
+GPG_KEY_TIMEOUT_SEC = 60
+APT_UPDATE_TIMEOUT_SEC = 120
+ZYPP_CLEAN_TIMEOUT_SEC = 60
+ZYPP_REFRESH_TIMEOUT_SEC = 120
+DNF_CLEAN_TIMEOUT_SEC = 60
+INSTALL_TIMEOUT_SEC = 1800  # 30 minutes
+ROCMINFO_TIMEOUT_SEC = 30
+RDHC_TIMEOUT_SEC = 30
+VERIFY_MIN_COMPONENTS = 2
+
+
+def _run_streaming(cmd: list[str], timeout_sec: int) -> int:
+    """Run a command with streaming stdout/stderr and return its exit code.
+
+    Lines are printed as they are produced. Raises subprocess.TimeoutExpired
+    (after killing the process) or OSError on failure.
+    """
+    process = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
+    )
+    try:
+        for line in process.stdout:
+            print(line.rstrip())
+            sys.stdout.flush()
+        return process.wait(timeout=timeout_sec)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        raise
 
 
 class NativeLinuxPackagesTester:
@@ -130,7 +166,7 @@ class NativeLinuxPackagesTester:
         os_profile: str,
         release_type: str = "nightly",
         install_prefix: Optional[str] = None,
-        gfx_arch: Optional[Union[str, List[str]]] = None,
+        gfx_arch: Optional[Union[str, list[str]]] = None,
         gpg_key_url: Optional[str] = None,
     ):
         """Initialize the package full tester.
@@ -151,7 +187,7 @@ class NativeLinuxPackagesTester:
         self.install_prefix = install_prefix
         # Normalize to list; only the first element is used for now
         if gfx_arch is None:
-            self.gfx_arch_list: List[str] = ["gfx94x"]
+            self.gfx_arch_list: list[str] = ["gfx94x"]
         elif isinstance(gfx_arch, str):
             self.gfx_arch_list = [gfx_arch] if gfx_arch.strip() else ["gfx94x"]
         else:
@@ -195,7 +231,7 @@ class NativeLinuxPackagesTester:
                     check=True,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
-                    timeout=10,
+                    timeout=GPG_MKDIR_TIMEOUT_SEC,
                 )
                 print(f"[PASS] Created keyring directory: {keyring_dir}")
 
@@ -214,7 +250,7 @@ class NativeLinuxPackagesTester:
                     check=True,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
-                    timeout=60,
+                    timeout=GPG_KEY_TIMEOUT_SEC,
                 )
 
                 # Set proper permissions on the keyring file
@@ -227,7 +263,7 @@ class NativeLinuxPackagesTester:
                 if e.stderr:
                     print(f"Error output: {e.stderr.decode()}")
                 return False
-            except Exception as e:
+            except OSError as e:
                 print(f"[FAIL] Error setting up GPG key: {e}")
                 return False
         else:  # rpm
@@ -271,7 +307,7 @@ class NativeLinuxPackagesTester:
                 f.write(repo_entry)
             print(f"[PASS] Repository added to {sources_list}")
             print(f"       {repo_entry.strip()}")
-        except Exception as e:
+        except OSError as e:
             print(f"[FAIL] Failed to add repository: {e}")
             return False
 
@@ -279,37 +315,16 @@ class NativeLinuxPackagesTester:
         print("\nUpdating package lists...")
         print("=" * 80)
         try:
-            # Use Popen to stream output in real-time
-            process = subprocess.Popen(
-                ["apt", "update"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,  # Line buffered
-            )
-
-            # Stream output line by line
-            for line in process.stdout:
-                line = line.rstrip()
-                print(line)  # Print immediately
-                sys.stdout.flush()  # Ensure immediate display
-
-            # Wait for process to complete
-            return_code = process.wait(timeout=120)
-
+            return_code = _run_streaming(["apt", "update"], APT_UPDATE_TIMEOUT_SEC)
             if return_code == 0:
                 print("\n[PASS] Package lists updated")
                 return True
-            else:
-                print(
-                    f"\n[FAIL] Failed to update package lists (exit code: {return_code})"
-                )
-                return False
-        except subprocess.TimeoutExpired:
-            process.kill()
-            print(f"\n[FAIL] apt update timed out")
+            print(f"\n[FAIL] Failed to update package lists (exit code: {return_code})")
             return False
-        except Exception as e:
+        except subprocess.TimeoutExpired:
+            print("\n[FAIL] apt update timed out")
+            return False
+        except OSError as e:
             print(f"[FAIL] Error updating package lists: {e}")
             return False
 
@@ -320,7 +335,7 @@ class NativeLinuxPackagesTester:
             True if setup successful, False otherwise
         """
         repo_name = REPO_NAME
-        repo_file = os.path.join(ZYPP_REPOS_DIR, f"{repo_name}.repo")
+        repo_file = Path(ZYPP_REPOS_DIR) / f"{repo_name}.repo"
 
         # Remove existing repository if it exists
         print(f"\nRemoving existing repository '{repo_name}' if it exists...")
@@ -357,7 +372,7 @@ gpgcheck=0
             print(f"[PASS] Repository file created: {repo_file}")
             print(f"\nRepository configuration:")
             print(repo_content)
-        except Exception as e:
+        except OSError as e:
             print(f"[FAIL] Failed to create repository file: {e}")
             return False
 
@@ -369,7 +384,7 @@ gpgcheck=0
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
-                timeout=60,
+                timeout=ZYPP_CLEAN_TIMEOUT_SEC,
             )
             if result.returncode == 0:
                 print("[PASS] zypper cache cleaned")
@@ -379,7 +394,7 @@ gpgcheck=0
                 )
         except subprocess.TimeoutExpired:
             print(f"[WARN] zypper clean timed out (may not be critical)")
-        except Exception as e:
+        except (subprocess.CalledProcessError, OSError) as e:
             print(f"[WARN] zypper clean failed: {e} (may not be critical)")
 
         # Refresh repository metadata
@@ -390,38 +405,19 @@ gpgcheck=0
             refresh_cmd = ["zypper", "--non-interactive"]
             if self.gpg_key_url:
                 refresh_cmd.append("--gpg-auto-import-keys")
-            refresh_cmd.append("refresh")
-            refresh_cmd.append(repo_name)
-            process = subprocess.Popen(
-                refresh_cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,  # Line buffered
-            )
-
-            # Stream output line by line
-            for line in process.stdout:
-                line = line.rstrip()
-                print(line)  # Print immediately
-                sys.stdout.flush()  # Ensure immediate display
-
-            # Wait for process to complete
-            return_code = process.wait(timeout=120)
-
+            refresh_cmd.extend(["refresh", repo_name])
+            return_code = _run_streaming(refresh_cmd, ZYPP_REFRESH_TIMEOUT_SEC)
             if return_code == 0:
                 print("\n[PASS] Repository metadata refreshed")
                 return True
-            else:
-                print(
-                    f"\n[FAIL] Failed to refresh repository metadata (exit code: {return_code})"
-                )
-                return False
-        except subprocess.TimeoutExpired:
-            process.kill()
-            print(f"\n[FAIL] zypper refresh timed out")
+            print(
+                f"\n[FAIL] Failed to refresh repository metadata (exit code: {return_code})"
+            )
             return False
-        except Exception as e:
+        except subprocess.TimeoutExpired:
+            print("\n[FAIL] zypper refresh timed out")
+            return False
+        except OSError as e:
             print(f"[FAIL] Error refreshing repository metadata: {e}")
             return False
 
@@ -436,7 +432,7 @@ gpgcheck=0
         # Create repository file
         print("\nCreating ROCm repository file...")
         repo_name = REPO_NAME
-        repo_file = os.path.join(YUM_REPOS_DIR, f"{repo_name}.repo")
+        repo_file = Path(YUM_REPOS_DIR) / f"{repo_name}.repo"
 
         if self.gpg_key_url:
             # Use GPG key verification
@@ -462,7 +458,7 @@ gpgcheck=0
             print(f"[PASS] Repository file created: {repo_file}")
             print(f"\nRepository configuration:")
             print(repo_content)
-        except Exception as e:
+        except OSError as e:
             print(f"[FAIL] Failed to create repository file: {e}")
             return False
 
@@ -475,7 +471,7 @@ gpgcheck=0
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
-                timeout=60,
+                timeout=DNF_CLEAN_TIMEOUT_SEC,
             )
             print("[PASS] dnf cache cleaned")
         except subprocess.CalledProcessError as e:
@@ -532,43 +528,19 @@ gpgcheck=0
         print("Installation progress (streaming output):\n")
 
         try:
-            # Use Popen to stream output in real-time
-            process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,  # Line buffered
-            )
-
-            # Stream output line by line
-            output_lines = []
-            for line in process.stdout:
-                line = line.rstrip()
-                print(line)  # Print immediately
-                output_lines.append(line)
-                sys.stdout.flush()  # Ensure immediate display
-
-            # Wait for process to complete
-            return_code = process.wait(timeout=1800)  # 30 minute timeout
-
+            return_code = _run_streaming(cmd, INSTALL_TIMEOUT_SEC)
             if return_code == 0:
                 print("\n" + "=" * 80)
                 print("[PASS] DEB packages installed successfully from repository")
                 return True
-            else:
-                print("\n" + "=" * 80)
-                print(
-                    f"[FAIL] Failed to install DEB packages (exit code: {return_code})"
-                )
-                return False
-
-        except subprocess.TimeoutExpired:
-            process.kill()
             print("\n" + "=" * 80)
-            print("[FAIL] Installation timed out after 30 minutes")
+            print(f"[FAIL] Failed to install DEB packages (exit code: {return_code})")
             return False
-        except Exception as e:
+        except subprocess.TimeoutExpired:
+            print("\n" + "=" * 80)
+            print(f"[FAIL] Installation timed out after {INSTALL_TIMEOUT_SEC} minutes")
+            return False
+        except OSError as e:
             print(f"\n[FAIL] Error during installation: {e}")
             return False
 
@@ -612,43 +584,19 @@ gpgcheck=0
         print("Installation progress (streaming output):\n")
 
         try:
-            # Use Popen to stream output in real-time
-            process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,  # Line buffered
-            )
-
-            # Stream output line by line
-            output_lines = []
-            for line in process.stdout:
-                line = line.rstrip()
-                print(line)  # Print immediately
-                output_lines.append(line)
-                sys.stdout.flush()  # Ensure immediate display
-
-            # Wait for process to complete
-            return_code = process.wait(timeout=1800)  # 30 minute timeout
-
+            return_code = _run_streaming(cmd, INSTALL_TIMEOUT_SEC)
             if return_code == 0:
                 print("\n" + "=" * 80)
                 print("[PASS] RPM packages installed successfully from repository")
                 return True
-            else:
-                print("\n" + "=" * 80)
-                print(
-                    f"[FAIL] Failed to install RPM packages (exit code: {return_code})"
-                )
-                return False
-
-        except subprocess.TimeoutExpired:
-            process.kill()
             print("\n" + "=" * 80)
-            print("[FAIL] Installation timed out after 30 minutes")
+            print(f"[FAIL] Failed to install RPM packages (exit code: {return_code})")
             return False
-        except Exception as e:
+        except subprocess.TimeoutExpired:
+            print("\n" + "=" * 80)
+            print(f"[FAIL] Installation timed out after {INSTALL_TIMEOUT_SEC} minutes")
+            return False
+        except OSError as e:
             print(f"\n[FAIL] Error during installation: {e}")
             return False
 
@@ -739,7 +687,7 @@ gpgcheck=0
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
                     text=True,
-                    timeout=30,
+                    timeout=ROCMINFO_TIMEOUT_SEC,
                 )
                 print("   [PASS] rocminfo executed successfully")
                 # Print first few lines of output
@@ -751,15 +699,15 @@ gpgcheck=0
             except subprocess.TimeoutExpired:
                 print("   [WARN] rocminfo timed out (may require GPU hardware)")
             except subprocess.CalledProcessError as e:
-                print(f"   [WARN] rocminfo failed (may require GPU hardware)")
-            except Exception as e:
+                print("   [WARN] rocminfo failed (may require GPU hardware)")
+            except OSError as e:
                 print(f"   [WARN] Could not run rocminfo: {e}")
 
         # Test rdhc.py if available
         self.test_rdhc()
 
         # Return success if at least some components were found
-        if found_count >= 2:  # Require at least 2 key components
+        if found_count >= VERIFY_MIN_COMPONENTS:
             print("\n[PASS] ROCm installation verification PASSED")
             return True
         else:
@@ -806,7 +754,7 @@ gpgcheck=0
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
-                timeout=30,
+                timeout=RDHC_TIMEOUT_SEC,
             )
             print("   [PASS] rdhc.py executed successfully with --all")
             if result.stdout:
@@ -823,7 +771,7 @@ gpgcheck=0
         except subprocess.CalledProcessError:
             print("   [WARN] rdhc.py --all failed")
             return False
-        except Exception as e:
+        except OSError as e:
             print(f"   [WARN] Could not run rdhc.py: {e}")
             return False
 
@@ -883,52 +831,41 @@ gpgcheck=0
 
         except Exception as e:
             print(f"\n[FAIL] Error during full installation test: {e}")
-            import traceback
-
             traceback.print_exc()
             return False
 
 
 def main():
-    """Main entry point for the script.
-  Examples Usages:
-  # Install from nightly DEB repository (Ubuntu 24.04)
-  python native_linux_packages_test.py \\
-      --os-profile ubuntu2404 \\
+    """Main entry point for the Native Linux Package Installation Test script."""
+    epilog = """
+Examples:
+  # Nightly DEB (Ubuntu 24.04) - run inside matching container/VM
+  python native_linux_packages_test.py --os-profile ubuntu2404 \\
       --repo-url https://rocm.nightlies.amd.com/deb/20260204-21658678136/ \\
-      --gfx-arch gfx94x \\
-      --release-type nightly \\
-      --install-prefix /opt/rocm/core
+      --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
-  # Install from prerelease DEB repository (Ubuntu 24.04)
-  python native_linux_packages_test.py \\
-      --os-profile ubuntu2404 \\
+  # Prerelease DEB with GPG verification
+  python native_linux_packages_test.py --os-profile ubuntu2404 \\
       --repo-url https://rocm.prereleases.amd.com/packages/ubuntu2404 \\
-      --gfx-arch gfx94x \\
-      --release-type prerelease \\
-      --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg \\
-      --install-prefix /opt/rocm/core
+      --gfx-arch gfx94x --release-type prerelease --install-prefix /opt/rocm/core \\
+      --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
 
-  # Install from nightly RPM repository (RHEL 8)
-  python native_linux_packages_test.py \\
-      --os-profile rhel8 \\
+  # Nightly RPM (RHEL 8)
+  python native_linux_packages_test.py --os-profile rhel8 \\
       --repo-url https://rocm.nightlies.amd.com/rpm/20260204-21658678136/rhel8/x86_64/ \\
-      --gfx-arch gfx94x \\
-      --release-type nightly \\
-      --install-prefix /opt/rocm/core
+      --gfx-arch gfx94x --release-type nightly --install-prefix /opt/rocm/core
 
-  # Install from prerelease RPM repository (RHEL 8)
-  python native_linux_packages_test.py \\
-      --os-profile rhel8 \\
+  # Prerelease RPM (RHEL 8)
+  python native_linux_packages_test.py --os-profile rhel8 \\
       --repo-url https://rocm.prereleases.amd.com/packages/rhel8/x86_64/ \\
-      --gfx-arch gfx94x \\
-      --release-type prerelease \\
-      --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg \\
-      --install-prefix /opt/rocm/core
-    """
+      --gfx-arch gfx94x --release-type prerelease --install-prefix /opt/rocm/core \\
+      --gpg-key-url https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg
+"""
+
     parser = argparse.ArgumentParser(
         description="Full installation test for ROCm native packages",
         formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=epilog,
     )
 
     parser.add_argument(
