@@ -9,14 +9,14 @@
 
 add_custom_target(therock-third-party)
 
-# Third-party libraries built with the system toolchain.
-add_subdirectory(eigen)
-if(THEROCK_ENABLE_HOST_BLAS)
-  add_subdirectory(host-blas)
-endif()
-
-# Third-party libraries built with the amd-llvm compiler toolchain.
 if(THEROCK_ENABLE_THIRD_PARTY_LIBS)
+  # Third-party libraries built with the system toolchain.
+  add_subdirectory(eigen)
+  if(THEROCK_ENABLE_HOST_BLAS)
+    add_subdirectory(host-blas)
+  endif()
+
+  # Third-party libraries built with the amd-llvm compiler toolchain.
   # No-dep libraries (alphabetical)
   add_subdirectory(boost)
   add_subdirectory(Catch2)
