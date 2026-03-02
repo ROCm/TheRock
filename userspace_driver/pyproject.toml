@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "amd-gpu-driver"
+version = "0.1.0"
+description = "Pure-Python AMD GPU userspace driver via KFD ioctls"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = []
+
+[tool.setuptools]
+packages = ["amd_gpu_driver", "amd_gpu_driver.ioctl", "amd_gpu_driver.backends", "amd_gpu_driver.backends.kfd", "amd_gpu_driver.gpu", "amd_gpu_driver.commands", "amd_gpu_driver.kernel", "amd_gpu_driver.memory", "amd_gpu_driver.sync"]
+
+[tool.setuptools.package-dir]
+"" = "python"
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-ra"
+
+[tool.coverage.run]
+source = ["python/amd_gpu_driver"]
+
+[tool.coverage.report]
+show_missing = true
