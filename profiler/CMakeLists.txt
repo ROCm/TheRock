@@ -296,7 +296,6 @@ endif(THEROCK_BUILD_TESTING)
         EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-systems/examples"
         BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-systems-examples"
         BACKGROUND_BUILD
-        INSTALL_DESTINATION "share/rocprofiler-systems"
         CMAKE_ARGS
           -DHIP_PLATFORM=amd
           -DROCPROFSYS_GFX_TARGETS="${_ROCPROFSYS_GFX_TARGETS_ESCAPED}"
