@@ -199,7 +199,14 @@ artifact_groups = ["media-libs"]
 # ==============================================================================
 # ARTIFACT GROUPS - Logical groupings of related artifacts
 # ==============================================================================
-# These define build dependencies and source requirements
+# These define build dependencies and source requirements.
+#
+# Not every artifact group has a corresponding entry in the ARTIFACTS section.
+# Some groups (like third-party-libs) contain only internal build dependencies
+# that are built from source within a stage but never transmitted as artifacts
+# between CI stages. These groups use feature_name to generate a
+# THEROCK_ENABLE_* variable that gates their CMake subdirectories, and outside
+# artifacts reference them via group_deps rather than artifact_deps.
 
 [artifact_groups.third-party-sysdeps]
 description = "Third-party system libraries bundled for portable distribution"
