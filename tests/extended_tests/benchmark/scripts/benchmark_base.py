@@ -1,0 +1,640 @@
+"""Base class for benchmark tests with common functionality."""
+
+import os
+import shlex
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+from typing import Dict, List, Tuple, Any, IO
+from prettytable import PrettyTable
+
+# Add parent directory to path for utils import
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+# Add build_tools/github_actions to path for github_actions_utils
+sys.path.insert(
+    0, str(Path(__file__).resolve().parents[4] / "build_tools" / "github_actions")
+)
+from utils import ExtendedTestClient, HardwareDetector
+from utils.logger import log
+from utils.exceptions import TestExecutionError, TestResultError
+from github_actions_utils import gha_append_step_summary
+
+
+class BenchmarkBase:
+    """Base class providing common benchmark logic.
+
+    Child classes must implement run_benchmarks() and parse_results().
+    """
+
+    def __init__(self, benchmark_name: str, display_name: str = None):
+        """Initialize benchmark test.
+
+        Args:
+            benchmark_name: Internal benchmark name (e.g., 'rocfft')
+            display_name: Display name for reports (e.g., 'ROCfft'), defaults to benchmark_name
+        """
+        self.benchmark_name = benchmark_name
+        self.display_name = display_name or benchmark_name.upper()
+
+        # Environment variables
+        self.therock_bin_dir = os.getenv("THEROCK_BIN_DIR")
+        self.artifact_run_id = os.getenv("ARTIFACT_RUN_ID")
+        self.amdgpu_families = os.getenv("AMDGPU_FAMILIES")
+        self.script_dir = Path(__file__).resolve().parent
+        self.therock_dir = Path(__file__).resolve().parents[4]
+
+        # Initialize test client (will be set in run())
+        self.client = None
+
+    def execute_command(
+        self,
+        cmd: List[str],
+        log_file_handle: IO,
+        env: Dict[str, str] = None,
+        cwd: Path = None,
+    ) -> None:
+        """Execute a command and stream output to log file.
+
+        Args:
+            cmd: Command list to execute
+            log_file_handle: File handle to write output
+            env: Optional environment variables to set
+            cwd: Optional working directory (defaults to self.therock_dir)
+
+        Raises:
+            TestExecutionError: If command fails with non-zero exit code
+        """
+        working_dir = cwd if cwd is not None else self.therock_dir
+        log.info(f"++ Exec [{working_dir}]$ {shlex.join(cmd)}")
+        log_file_handle.write(f"{shlex.join(cmd)}\n")
+
+        # Merge custom env with current environment
+        process_env = os.environ.copy()
+        if env:
+            process_env.update(env)
+
+        process = subprocess.Popen(
+            cmd,
+            cwd=working_dir,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            env=process_env,
+        )
+
+        for line in process.stdout:
+            log.info(line.strip())
+            log_file_handle.write(f"{line}")
+
+        process.wait()
+
+        if process.returncode != 0:
+            raise TestExecutionError(
+                f"Command failed with exit code {process.returncode}\n"
+                f"Command: {shlex.join(cmd)}\n"
+                f"Working directory: {working_dir}\n"
+                f"Check log file for details"
+            )
+
+    def _detect_gpu_count(self) -> int:
+        """Detect the number of available GPUs using HardwareDetector.
+
+        Returns:
+            Number of GPUs detected
+
+        Raises:
+            RuntimeError: If no GPUs detected or detection fails
+        """
+        try:
+            detector = HardwareDetector()
+            gpu_list = detector.detect_gpu()
+            gpu_count = len(gpu_list)
+
+            if gpu_count == 0:
+                raise RuntimeError(
+                    "No GPUs detected. Benchmarks require at least one GPU. "
+                    "Ensure ROCm drivers are installed and GPU devices are accessible."
+                )
+
+            log.info(f"Detected {gpu_count} GPU(s)")
+            return gpu_count
+
+        except RuntimeError:
+            # Re-raise RuntimeError as-is
+            raise
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to detect GPUs: {e}. "
+                "Ensure ROCm drivers are installed and GPU devices are accessible."
+            ) from e
+
+    def _validate_openmpi(self) -> None:
+        """Check if OpenMPI is installed and available in the system.
+
+        Raises:
+            TestExecutionError: If OpenMPI (mpirun) is not found
+        """
+        if not shutil.which("mpirun"):
+            raise TestExecutionError(
+                "OpenMPI not found in system\n"
+                "Ensure OpenMPI is installed and 'mpirun' is available in PATH"
+            )
+        log.info("OpenMPI validated: mpirun found in system")
+
+    def create_test_result(
+        self,
+        test_name: str,
+        subtest_name: str,
+        status: str,
+        score: float,
+        unit: str,
+        flag: str,
+        **kwargs,
+    ) -> Dict[str, Any]:
+        """Create a standardized test result dictionary.
+
+        Args:
+            test_name: Benchmark name
+            subtest_name: Specific test identifier
+            status: Test status ('PASS' or 'FAIL')
+            score: Performance metric value
+            unit: Unit of measurement (e.g., 'ms', 'GFLOPS', 'GB/s')
+            flag: 'H' (higher is better) or 'L' (lower is better)
+            **kwargs: Additional test-specific parameters (batch_size, ngpu, mode, etc.)
+
+        Returns:
+            Dict[str, Any]: Test result dictionary with test data and configuration
+        """
+        # Extract common parameters with defaults
+        batch_size = kwargs.get("batch_size", 0)
+        ngpu = kwargs.get("ngpu", 1)
+
+        # Build test config with all parameters
+        test_config = {
+            "test_name": test_name,
+            "sub_test_name": subtest_name,
+            "python_version": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+            "environment_dependencies": [],
+            "batch_size": batch_size,
+            "ngpu": ngpu,
+        }
+
+        # Add any additional kwargs to test_config
+        for key, value in kwargs.items():
+            if key not in ["batch_size", "ngpu"]:
+                test_config[key] = value
+
+        return {
+            "test_name": test_name,
+            "subtest": subtest_name,
+            "batch_size": batch_size,
+            "ngpu": ngpu,
+            "status": status,
+            "score": float(score),
+            "unit": unit,
+            "flag": flag,
+            "test_config": test_config,
+        }
+
+    def calculate_statistics(
+        self, test_results: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """Calculate test statistics from results.
+
+        Args:
+            test_results: List of test result dictionaries with 'status' key
+
+        Returns:
+            Dictionary with:
+                - passed: Number of passed tests
+                - failed: Number of failed tests
+                - total: Total number of tests
+                - overall_status: 'PASS' if no failures, else 'FAIL'
+        """
+        passed = sum(1 for r in test_results if r.get("status") == "PASS")
+        failed = sum(1 for r in test_results if r.get("status") == "FAIL")
+        overall_status = "PASS" if failed == 0 else "FAIL"
+
+        return {
+            "passed": passed,
+            "failed": failed,
+            "total": len(test_results),
+            "overall_status": overall_status,
+        }
+
+    def upload_results(
+        self, test_results: List[Dict[str, Any]], stats: Dict[str, Any]
+    ) -> bool:
+        """Upload results to API and save locally."""
+        log.info("Uploading Results to API")
+        success = self.client.upload_results(
+            test_name=f"{self.benchmark_name}_benchmark",
+            test_results=test_results,
+            test_status=stats["overall_status"],
+            test_metadata={
+                "artifact_run_id": self.artifact_run_id,
+                "amdgpu_families": self.amdgpu_families,
+                "benchmark_name": self.benchmark_name,
+                "total_subtests": stats["total"],
+                "passed_subtests": stats["passed"],
+                "failed_subtests": stats["failed"],
+            },
+            save_local=True,
+            output_dir=str(self.script_dir / "results"),
+        )
+
+        if success:
+            log.info("Results uploaded successfully")
+        else:
+            log.info("Results saved locally only (API upload disabled or failed)")
+
+        return success
+
+    def compare_with_lkg(
+        self, test_results: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Compare results with Last Known Good baseline.
+
+        Args:
+            test_results: List of test result dictionaries
+
+        Returns:
+            List[Dict[str, Any]]: Test results with LKG comparison data
+        """
+        log.info("Comparing results with LKG")
+
+        # Use client to compare results with LKG
+        compared_results = self.client.compare_results(
+            self.benchmark_name, test_results
+        )
+
+        return compared_results
+
+    def _detect_optional_columns(
+        self, test_results: List[Dict[str, Any]]
+    ) -> Dict[str, bool]:
+        """Detect which optional columns are actually used in test results.
+
+        Args:
+            test_results: List of test result dictionaries
+
+        Returns:
+            Dict mapping column names to whether they should be included
+        """
+        has_batch_size = any(
+            result.get("batch_size") is not None and result.get("batch_size", 0) != 0
+            for result in test_results
+        )
+        has_mode = any(
+            result.get("test_config", {}).get("mode") is not None
+            for result in test_results
+        )
+
+        return {
+            "batch_size": has_batch_size,
+            "mode": has_mode,
+        }
+
+    def _build_table_from_results(
+        self,
+        results: List[Dict[str, Any]],
+        title: str = None,
+        optional_cols: Dict[str, bool] = None,
+    ) -> PrettyTable:
+        """Build a single PrettyTable from results with dynamic columns.
+
+        Args:
+            results: List of test result dictionaries
+            title: Optional table title
+            optional_cols: Dict of optional columns to include
+
+        Returns:
+            PrettyTable: Formatted table
+        """
+        optional_cols = optional_cols or {}
+
+        # Build field names dynamically
+        field_names = ["TestName", "SubTests"]
+
+        if optional_cols.get("batch_size"):
+            field_names.append("BatchSize")
+        if optional_cols.get("mode"):
+            field_names.append("Mode")
+
+        field_names.extend(
+            [
+                "nGPU",
+                "Result",
+                "Scores",
+                "Units",
+                "Flag",
+                "LKGScores",
+                "%Diff",
+                "FinalResult",
+            ]
+        )
+
+        table = PrettyTable(field_names)
+        if title:
+            table.title = title
+
+        for result in results:
+            row = [
+                result.get("test_name", ""),
+                result.get("subtest", ""),
+            ]
+
+            if optional_cols.get("batch_size"):
+                row.append(result.get("batch_size", 0))
+            if optional_cols.get("mode"):
+                row.append(result.get("test_config", {}).get("mode", ""))
+
+            row.extend(
+                [
+                    result.get("ngpu", 1),
+                    result.get("status", "UNKNOWN"),
+                    result.get("score", 0.0),
+                    result.get("unit", ""),
+                    result.get("flag", "H"),
+                    result.get("lkg_score", None),
+                    result.get("diff_pct", None),
+                    result.get("final_result", "UNKNOWN"),
+                ]
+            )
+
+            table.add_row(row)
+
+        return table
+
+    def build_display_table(
+        self,
+        test_results: List[Dict[str, Any]],
+        title: str = None,
+        group_by: str = None,
+    ) -> Any:
+        """Build a PrettyTable for display from test results.
+
+        Args:
+            test_results: List of test result dictionaries with LKG comparison data
+            title: Optional table title
+            group_by: Optional field name to group results by (returns list of tables)
+
+        Returns:
+            PrettyTable or List[PrettyTable]: Single table or list of tables if grouping
+        """
+        # Detect which optional columns are actually used
+        optional_cols = self._detect_optional_columns(test_results)
+
+        # If grouping requested, create multiple tables
+        if group_by:
+            # Group results by the specified field
+            groups = {}
+            for result in test_results:
+                group_key = result.get("test_config", {}).get(group_by, "Unknown")
+                if group_key not in groups:
+                    groups[group_key] = []
+                groups[group_key].append(result)
+
+            # Create a table for each group
+            tables = []
+            for group_name, group_results in groups.items():
+                table_title = f"{title} - {group_name}" if title else group_name
+                table = self._build_table_from_results(
+                    group_results, table_title, optional_cols
+                )
+                tables.append(table)
+
+            return tables
+
+        # Single table (no grouping)
+        return self._build_table_from_results(test_results, title, optional_cols)
+
+    def write_step_summary(
+        self, display_tables: Any, status_info: Dict[str, Any]
+    ) -> None:
+        """Write results to GitHub Actions step summary.
+
+        Args:
+            display_tables: Results table(s) with LKG comparison (PrettyTable or List[PrettyTable])
+            status_info: Dictionary from determine_final_status()
+        """
+        summary = (
+            f"### {self.display_name} Benchmark Results\n\n"
+            f"**Status:** {status_info['final_status']} | "
+            f"**Passed:** {status_info['pass_count']}/{status_info['total_count']} | "
+            f"**Failed:** {status_info['fail_count']}/{status_info['total_count']}"
+        )
+
+        if status_info["unknown_count"] > 0:
+            summary += f" | **Unknown:** {status_info['unknown_count']}/{status_info['total_count']}"
+
+        summary += "\n\n"
+
+        # Handle multiple tables (e.g., rocblas with suites)
+        if isinstance(display_tables, list):
+            for table in display_tables:
+                summary += (
+                    f"<details>\n"
+                    f"<summary>{table.title}</summary>\n\n"
+                    f"```\n{table}\n```\n\n"
+                    f"</details>\n\n"
+                )
+        else:
+            # Single table
+            summary += (
+                f"<details>\n"
+                f"<summary>View detailed results ({status_info['total_count']} tests)</summary>\n\n"
+                f"```\n{display_tables}\n```\n\n"
+                f"</details>"
+            )
+
+        # Write to GitHub Actions step summary
+        gha_append_step_summary(summary)
+
+    def determine_final_status(
+        self, test_results: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """Determine final test status from test results with LKG comparison data.
+
+        Args:
+            test_results: List of test results with LKG comparison data
+
+        Returns:
+            dict: {
+                'final_status': str - Overall status ('PASS', 'FAIL', or 'UNKNOWN')
+                'fail_count': int - Number of tests that failed LKG comparison
+                'unknown_count': int - Number of tests with no baseline
+                'pass_count': int - Number of tests that passed LKG comparison
+                'total_count': int - Total number of tests
+                'failed_tests': list - Names of tests that failed
+                'unknown_tests': list - Names of tests with no baseline
+            }
+        """
+        fail_count = 0
+        unknown_count = 0
+        pass_count = 0
+        failed_tests = []
+        unknown_tests = []
+
+        for result in test_results:
+            final_result = result.get("final_result", "UNKNOWN")
+            subtest = result.get("subtest", "")
+
+            if final_result == "FAIL":
+                fail_count += 1
+                failed_tests.append(subtest)
+            elif final_result == "UNKNOWN":
+                unknown_count += 1
+                unknown_tests.append(subtest)
+            elif final_result == "PASS":
+                pass_count += 1
+
+        if unknown_count > 0 and fail_count == 0:
+            log.warning("Some results have UNKNOWN status (no LKG data available)")
+
+        final_status = (
+            "FAIL" if fail_count > 0 else ("UNKNOWN" if unknown_count > 0 else "PASS")
+        )
+
+        return {
+            "final_status": final_status,
+            "fail_count": fail_count,
+            "unknown_count": unknown_count,
+            "pass_count": pass_count,
+            "total_count": fail_count + unknown_count + pass_count,
+            "failed_tests": failed_tests,
+            "unknown_tests": unknown_tests,
+        }
+
+    def run(self) -> None:
+        """Execute benchmark workflow.
+
+        Raises:
+            TestExecutionError: If benchmark execution encounters errors (missing files, etc.)
+            TestResultError: If benchmarks run successfully but results show failures
+
+        Note:
+            On success, returns normally (exit code 0)
+            On failure, raises exception (exit code 1)
+        """
+        log.info(f"Initializing {self.display_name} Benchmark Test")
+
+        # Initialize extended test client and print system info
+        self.client = ExtendedTestClient(auto_detect=True)
+        self.client.print_system_summary()
+
+        # Run benchmarks (implemented by child class)
+        self.run_benchmarks()
+
+        # Parse results (implemented by child class)
+        test_results = self.parse_results()
+
+        # Validate test results structure
+        if not test_results:
+            raise TestResultError(
+                "No test results found\n"
+                "Ensure benchmarks were executed successfully and results were parsed"
+            )
+
+        # Calculate statistics
+        stats = self.calculate_statistics(test_results)
+        log.info(f"Test Summary: {stats['passed']} passed, {stats['failed']} failed")
+
+        # Upload results
+        self.upload_results(test_results, stats)
+
+        # Compare with LKG baseline
+        compared_results = self.compare_with_lkg(test_results)
+
+        # Determine final status (do this BEFORE writing summary so we have correct counts)
+        status_info = self.determine_final_status(compared_results)
+        log.info(
+            f"Final Status: {status_info['final_status']} "
+            f"(PASS: {status_info['pass_count']}, "
+            f"FAIL: {status_info['fail_count']}, "
+            f"UNKNOWN: {status_info['unknown_count']})"
+        )
+        sys.stdout.flush()  # Ensure final status is displayed
+
+        # Build display table from compared results
+        # Check if results have suite grouping (e.g., rocblas)
+        has_suite = any(
+            "suite" in result.get("test_config", {}) for result in compared_results
+        )
+
+        if has_suite:
+            display_tables = self.build_display_table(
+                compared_results,
+                title=f"{self.display_name} Benchmark Results",
+                group_by="suite",
+            )
+            # Log each table
+            for table in display_tables:
+                log.info(f"\n{table}")
+        else:
+            display_tables = self.build_display_table(
+                compared_results, title=f"{self.display_name} Benchmark Results"
+            )
+            log.info(f"\n{display_tables}")
+
+        # Write results to GitHub Actions step summary
+        self.write_step_summary(display_tables, status_info)
+
+        # Flush output streams to ensure proper display ordering
+        sys.stdout.flush()
+        sys.stderr.flush()
+
+        # Raise exception if benchmarks failed
+        if status_info["final_status"] != "PASS":
+            fail_count = status_info["fail_count"]
+            unknown_count = status_info["unknown_count"]
+            total_count = status_info["total_count"]
+
+            # Build test lists
+            failed_tests = (
+                f"Failed tests: {', '.join(status_info['failed_tests'])}\n"
+                if fail_count > 0
+                else ""
+            )
+            unknown_tests = (
+                f"Unknown tests: {', '.join(status_info['unknown_tests'])}\n"
+                if unknown_count > 0
+                else ""
+            )
+
+            # Construct error message based on failure type
+            if fail_count > 0 and unknown_count > 0:
+                error_msg = (
+                    f"Benchmark test failed: {fail_count} FAIL, {unknown_count} UNKNOWN out of {total_count} tests\n"
+                    f"{failed_tests}{unknown_tests}"
+                    f"Performance regressions detected (FAIL) and missing baselines (UNKNOWN)"
+                )
+            elif fail_count > 0:
+                error_msg = (
+                    f"Benchmark test failed: {fail_count} out of {total_count} tests failed\n"
+                    f"{failed_tests}"
+                    f"Performance regressions detected"
+                )
+            else:  # unknown_count > 0
+                error_msg = (
+                    f"Benchmark test status unknown: {unknown_count} out of {total_count} tests have no baseline\n"
+                    f"{unknown_tests}"
+                    f"No baseline data available for comparison (expected for new benchmarks)"
+                )
+
+            raise TestResultError(error_msg)
+
+
+def run_benchmark_main(benchmark_instance):
+    """Run benchmark with standard error handling.
+
+    Args:
+        benchmark_instance: Instance of a benchmark test class
+
+    Raises:
+        TestExecutionError: If benchmark execution fails
+        TestResultError: If benchmark results show failures
+    """
+    benchmark_instance.run()

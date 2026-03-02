@@ -23,12 +23,18 @@ python build_tools/install_rocm_from_artifacts.py
     [--hipdnn | --no-hipdnn]
     [--hipdnn-samples | --no-hipdnn-samples]
     [--miopen | --no-miopen]
-    [--miopen-plugin | --no-miopen-plugin]
+    [--miopenprovider | --no-miopenprovider]
+    [--fusilliprovider | --no-fusilliprovider]
+    [--hipblasltprovider | --no-hipblasltprovider]
     [--prim | --no-prim]
     [--rand | --no-rand]
     [--rccl | --no-rccl]
+    [--rocdecode | --no-rocdecode]
+    [--rocjpeg | --no-rocjpeg]
     [--rocprofiler-compute | --no-rocprofiler-compute]
+    [--rocprofiler-sdk | --no-rocprofiler-sdk ]
     [--rocprofiler-systems | --no-rocprofiler-systems]
+    [--rocrtst | --no-rocrtst]
     [--rocwmma | --no-rocwmma]
     [--libhipcxx | --no-libhipcxx]
     [--tests | --no-tests]
@@ -299,6 +305,8 @@ def retrieve_artifacts_by_run_id(args):
         str(args.output_dir),
         "--flatten",
     ]
+    if args.amdgpu_targets:
+        argv.extend(["--amdgpu-targets", args.amdgpu_targets])
     if args.dry_run:
         argv.append("--dry-run")
     if args.run_github_repo:
@@ -314,6 +322,8 @@ def retrieve_artifacts_by_run_id(args):
         "base_lib",
         "amd-llvm_run",
         "amd-llvm_lib",
+        "core-amdsmi_run",
+        "core-amdsmi_lib",
         "core-hip_lib",
         "core-hip_dev",
         "core-ocl_lib",
@@ -333,13 +343,19 @@ def retrieve_artifacts_by_run_id(args):
             args.hipdnn,
             args.hipdnn_samples,
             args.miopen,
-            args.miopen_plugin,
-            args.fusilli_plugin,
+            args.miopenprovider,
+            args.fusilliprovider,
+            args.iree_compiler,
+            args.hipblasltprovider,
             args.prim,
             args.rand,
             args.rccl,
+            args.rocdecode,
+            args.rocjpeg,
             args.rocprofiler_compute,
+            args.rocprofiler_sdk,
             args.rocprofiler_systems,
+            args.rocrtst,
             args.rocwmma,
             args.libhipcxx,
         ]
@@ -381,22 +397,52 @@ def retrieve_artifacts_by_run_id(args):
             argv.append("miopen_run")
             # Also need these for runtime kernel compilation (rocrand includes).
             argv.append("rand_dev")
-        if args.miopen_plugin:
-            extra_artifacts.append("miopen-plugin")
-        if args.fusilli_plugin:
-            extra_artifacts.append("fusilli-plugin")
+        if args.miopenprovider:
+            extra_artifacts.append("miopenprovider")
+        if args.fusilliprovider:
+            extra_artifacts.append("fusilliprovider")
+        if args.iree_compiler:
+            extra_artifacts.append("iree-compiler")
+        if args.rocdecode:
+            extra_artifacts.append("sysdeps-amd-mesa")
+            extra_artifacts.append("rocdecode")
+            argv.append("rocdecode_dev")
+            argv.append("rocdecode_test")
+            argv.append("base_dev")
+            argv.append("amd-llvm_dev")
+        if args.rocjpeg:
+            extra_artifacts.append("sysdeps-amd-mesa")
+            extra_artifacts.append("rocjpeg")
+            argv.append("rocjpeg_dev")
+            argv.append("rocjpeg_test")
+            argv.append("base_dev")
+            argv.append("amd-llvm_dev")
+        if args.hipblasltprovider:
+            extra_artifacts.append("hipblasltprovider")
         if args.prim:
             extra_artifacts.append("prim")
         if args.rand:
             extra_artifacts.append("rand")
         if args.rccl:
             extra_artifacts.append("rccl")
+        if args.rocprofiler_sdk:
+            extra_artifacts.append("rocprofiler-sdk")
+            # Contains rocprofiler-sdk-rocpd
+            argv.append("rocprofiler-sdk_run")
         if args.rocprofiler_compute:
             extra_artifacts.append("rocprofiler-compute")
         if args.rocprofiler_systems:
             extra_artifacts.append("rocprofiler-systems")
+            # Contains executables (rocprof-sys-run, rocprof-sys-instrument, etc.)
+            argv.append("rocprofiler-systems_run")
+        if args.rocrtst:
+            extra_artifacts.append("rocrtst")
+            # rocrtst depends on sysdeps-hwloc (which depends on sysdeps-libpciaccess)
+            extra_artifacts.append("sysdeps-hwloc")
+            extra_artifacts.append("sysdeps-libpciaccess")
         if args.rocwmma:
             extra_artifacts.append("rocwmma")
+            argv.append("rocwmma_dev")
         if args.libhipcxx:
             extra_artifacts.append("libhipcxx")
             argv.append("amd-llvm_dev")
@@ -638,16 +684,44 @@ def main(argv):
     )
 
     artifacts_group.add_argument(
-        "--miopen-plugin",
+        "--miopenprovider",
         default=False,
-        help="Include 'miopen-plugin' artifacts",
+        help="Include 'miopenprovider' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
     artifacts_group.add_argument(
-        "--fusilli-plugin",
+        "--fusilliprovider",
         default=False,
-        help="Include 'fusilli-plugin' artifacts",
+        help="Include 'fusilliprovider' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--iree-compiler",
+        default=False,
+        help="Include 'iree-compiler' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--rocdecode",
+        default=False,
+        help="Include 'rocdecode' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--rocjpeg",
+        default=False,
+        help="Include 'rocjpeg' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--hipblasltprovider",
+        default=False,
+        help="Include 'hipblasltprovider' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
@@ -680,9 +754,23 @@ def main(argv):
     )
 
     artifacts_group.add_argument(
+        "--rocprofiler-sdk",
+        default=False,
+        help="Include 'rocprofiler-sdk' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
         "--rocprofiler-systems",
         default=False,
         help="Include 'rocprofiler-systems' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--rocrtst",
+        default=False,
+        help="Include 'rocrtst' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
@@ -715,6 +803,13 @@ def main(argv):
         "--input-dir",
         type=str,
         help="Pass in an existing directory of TheRock to provision and test",
+    )
+
+    parser.add_argument(
+        "--amdgpu-targets",
+        type=str,
+        default="",
+        help="Comma-separated individual GPU targets for fetching split artifacts (e.g. 'gfx942')",
     )
 
     parser.add_argument(

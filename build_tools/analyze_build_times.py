@@ -52,7 +52,9 @@ NAME_MAPPING = {
     "support": "mxDataGenerator",
     "host-suite-sparse": "SuiteSparse",
     "rocwmma": "rocWMMA",
-    "miopen-plugin": "miopen_plugin",
+    "miopenprovider": "miopenprovider",
+    "hipblasltprovider": "hipblasltprovider",
+    "fusilliprovider": "fusilliprovider",
 }
 
 # Top-level directories for ROCm components
@@ -64,6 +66,7 @@ ROCM_COMPONENT_DIRS = {
     "dctools",
     "profiler",
     "ml-libs",
+    "media-libs",
 }
 
 # Regex to parse artifact filenames: <project>_<variant>[_suffix].tar.xz

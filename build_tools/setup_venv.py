@@ -40,18 +40,13 @@ import subprocess
 import sys
 import re
 
-try:
-    import requests
-except ImportError:
-    requests = None
-
 from github_actions.github_actions_utils import *
-
-GFX_TARGET_REGEX = r'(gfx(?:\d{2,3}X|\d{3,4})(?:-[^<"/]*)?)</a>'
 
 is_windows = platform.system() == "Windows"
 
-INDEX_URLS_MAP = {
+ROCM_INDEX_URLS_MAP = {
+    "stable": "https://repo.amd.com/rocm/whl/",
+    "prerelease": "https://rocm.prereleases.amd.com/whl",
     "nightly": "https://rocm.nightlies.amd.com/v2",
     "dev": "https://rocm.devreleases.amd.com/v2",
 }
@@ -68,11 +63,8 @@ def run_command(args: list[str | Path], cwd: Path = Path.cwd()):
     subprocess.check_call(args, cwd=str(cwd), stdin=subprocess.DEVNULL)
 
 
-def get_system_py_command(use_uv: bool) -> list[str]:
-    return ["uv"] if use_uv else [sys.executable, "-m"]
-
-
-def find_venv_python(venv_path: Path) -> Path | None:
+def find_venv_python_exe(venv_path: Path) -> Path | None:
+    """Finds the python executable under |venv_path|, if one exists."""
     paths = [venv_path / "bin" / "python", venv_path / "Scripts" / "python.exe"]
     for p in paths:
         if p.exists():
@@ -80,10 +72,11 @@ def find_venv_python(venv_path: Path) -> Path | None:
     return None
 
 
-def create_venv(venv_dir: Path, py_cmd: list[str] | None = None):
-    if not py_cmd:
-        py_cmd = get_system_py_command(use_uv=False)
+def create_venv(venv_dir: Path, use_uv: bool = False):
+    """Creates a Python venv at |venv_dir|.
 
+    No-op if venv_dir is already an initialized venv (has a python executable).
+    """
     log(f"Creating venv at '{venv_dir}'")
 
     # Log some other variations of the path too.
@@ -92,43 +85,41 @@ def create_venv(venv_dir: Path, py_cmd: list[str] | None = None):
     except ValueError:
         venv_dir_relative = venv_dir
     venv_dir_resolved = venv_dir.resolve()
-    log(f"  Relative dir: '{venv_dir_relative}'")
-    log(f"  Resolved dir: '{venv_dir_resolved}'")
+    log(f"  Dir relative to CWD: '{venv_dir_relative}'")
+    log(f"  Dir fully resolved : '{venv_dir_resolved}'")
     log("")
 
     # Create with 'python -m venv' as needed.
-    python_exe = find_venv_python(venv_dir_resolved)
+    python_exe = find_venv_python_exe(venv_dir_resolved)
     if python_exe:
         log(f"  Found existing python executable at '{python_exe}', skipping creation")
         log("  Run again with --clean to clear the existing directory instead")
+        return
+
+    if use_uv:
+        run_command(["uv", "venv", str(venv_dir_resolved)])
     else:
-        run_command(py_cmd + ["venv", str(venv_dir_resolved)])
+        run_command([sys.executable, "-m", "venv", str(venv_dir_resolved)])
 
 
-def upgrade_pip(python_exe: Path):
+def update_venv(venv_dir: Path, use_uv: bool = False):
+    if use_uv:
+        # No updates needed.
+        return
+
+    # pip logs warnings about wanting to update, so we'll do that for it.
     log("")
+    python_exe = find_venv_python_exe(venv_dir)
     run_command([str(python_exe), "-m", "pip", "install", "--upgrade", "pip"])
 
 
-def install_packages(args: argparse.Namespace, py_cmd: list[str] | None):
-    if not py_cmd:
-        py_cmd = get_system_py_command(use_uv=False)
-
-    log("")
-
-    if args.index_name:
-        index_url = INDEX_URLS_MAP[args.index_name]
-    else:
-        index_url = args.index_url
-    index_url = index_url.rstrip("/") + "/" + args.index_subdir.strip("/")
-
-    command = py_cmd + [f"--index-url={index_url}", args.packages]
-    if args.disable_cache:
-        command.append("--no-cache-dir")
-    run_command(command)
-
-
 def activate_venv_in_gha(venv_dir: Path):
+    """Activates the venv in venv_dir for future GitHub Actions workflow steps.
+
+    This is a (useful) hack that modifies the PATH and VIRTUAL_ENV env vars
+    rather than call the platform-specific 'activate' scripts.
+    """
+
     log("")
     log(f"Activating venv for future GitHub Actions workflow steps")
     gha_warn_if_not_running_on_ci()
@@ -154,41 +145,70 @@ def activate_venv_in_gha(venv_dir: Path):
     gha_set_env({"VIRTUAL_ENV": venv_dir})
 
 
-def scrape_subdirs() -> dict[str, set[str]] | set[str] | None:
-    if not requests:
-        return None
+def install_packages_into_venv(
+    venv_dir: Path,
+    packages: list[str],
+    use_uv: bool = False,
+    index_url: str | None = None,
+    index_name: str | None = None,
+    index_subdir: str | None = None,
+    find_links: str | None = None,
+    pre: bool = False,
+    disable_cache: bool = False,
+):
+    """Installs packages into venv_dir using the provided options.
 
-    index_subdirs: dict[str, set[str]] | set[str] = dict()
+    Args:
+        venv_dir: The venv to install into
+        packages: The list of packages to install
+        use_uv: True to use 'uv', uses 'pip' otherwise
+        index_url: URL for '--index-url' command argument
+        index_name: Shorthand for a base index_url (e.g. 'nightly')
+        index_subdir: Subdirectory for 'index_url' or 'index_name'
+        find_links: URL for '--find-links' command argument
+        pre: Allow pre-release packages (pip: --pre, uv: --prerelease=allow)
+        disable_cache: Disable package cache (pip: --no-cache-dir, uv: --no-cache)
+    """
+    log("")
 
-    def scrape_subdirs_from_index(index_url: str) -> set[str]:
-        index_url = index_url.rstrip("/") + "/"
-        try:
-            response = requests.get(index_url)
-            response.raise_for_status()
-        except Exception as e:
-            print(
-                f"[ERROR]: fetching subdirs from index url: {index_url} failed with: {e}"
-            )
-            return set()
+    venv_python_exe = find_venv_python_exe(venv_dir)
+    assert venv_python_exe is not None, f"No python executable found in {venv_dir}"
+    pip_install_cmd = (
+        [str(venv_python_exe), "-m", "pip", "install"]
+        if not use_uv
+        else ["uv", "pip", "install", "--python", str(venv_python_exe)]
+    )
 
-        # matches the text inside the <a></a> elements to find all gfx targets, then puts returns them in a set
-        html = response.text
-        matches = re.findall(GFX_TARGET_REGEX, html)
-        return set(matches)
+    if index_url and index_name:
+        raise ValueError("Can't set both index_url and index_name")
 
-    # for every index url in the map fetches the subdirs and puts them in a dict with the index_name being the key
-    for index_name, index_url in INDEX_URLS_MAP.items():
-        index_subdirs[index_name] = scrape_subdirs_from_index(index_url)
+    if index_name:
+        # Look up known index name.
+        index_url = ROCM_INDEX_URLS_MAP[index_name]
 
-    # compares the first set of dirs to the rest of them, then, if they are all equal, returns a singular set instead of a dictionary
-    subdirs_sets = list(index_subdirs.values())
-    if all(s == subdirs_sets[0] for s in subdirs_sets[1:]):
-        index_subdirs = subdirs_sets[0]
+    if index_url:
+        # Join index with subdir.
+        if index_subdir:
+            index_url = f"{index_url.rstrip('/')}/{index_subdir.strip('/')}"
 
-    return index_subdirs
+        pip_install_cmd.append(f"--index-url={index_url}")
+
+    if find_links:
+        pip_install_cmd.append(f"--find-links={find_links}")
+
+    if pre:
+        pip_install_cmd.append("--prerelease=allow" if use_uv else "--pre")
+
+    if disable_cache:
+        pip_install_cmd.append("--no-cache" if use_uv else "--no-cache-dir")
+
+    pip_install_cmd.extend(packages)
+
+    run_command(pip_install_cmd)
 
 
-def log_activate_instructions(venv_dir: Path):
+def log_venv_activate_instructions(venv_dir: Path):
+    """Logs platform-specific instructions for activating a venv."""
     log("")
     log(f"Setup complete at '{venv_dir}'! Activate the venv with:")
     if is_windows:
@@ -199,29 +219,60 @@ def log_activate_instructions(venv_dir: Path):
 
 def run(args: argparse.Namespace):
     venv_dir = args.venv_dir
-    py_cmd = get_system_py_command(use_uv=args.use_uv)
+    use_uv = args.use_uv
 
     if args.clean and venv_dir.exists():
         log(f"Clearing existing venv_dir '{venv_dir}'")
         shutil.rmtree(venv_dir)
 
-    create_venv(venv_dir, py_cmd)
-
-    # if not using uv, replace the python exe in py_cmd with the venv python
-    python_exe = find_venv_python(venv_dir)
-    if not args.use_uv:
-        py_cmd = [str(python_exe), "-m", "pip", "install"]
-        upgrade_pip(python_exe)
-    else:
-        py_cmd = ["uv", "pip", "install", "--python", str(python_exe)]
+    create_venv(venv_dir, use_uv)
+    update_venv(venv_dir, use_uv)
 
     if args.packages:
-        install_packages(args, py_cmd)
+        install_packages_into_venv(
+            venv_dir=venv_dir,
+            packages=args.packages.split(),
+            use_uv=use_uv,
+            index_url=args.index_url,
+            index_subdir=args.index_subdir,
+            index_name=args.index_name,
+            find_links=args.find_links,
+            pre=args.pre,
+            disable_cache=args.disable_cache,
+        )
 
     if args.activate_in_future_github_actions_steps:
         activate_venv_in_gha(venv_dir)
     else:
-        log_activate_instructions(venv_dir)
+        log_venv_activate_instructions(venv_dir)
+
+
+GFX_TARGET_REGEX = r'(gfx(?:\d{2,3}X|\d{3,4})(?:-[^<"/]*)?)</a>'
+
+
+def _scrape_rocm_index_subdirs() -> set[str] | None:
+    """Scrapes available subdirs from all known indexes, returns union of all."""
+    try:
+        import requests
+    except ImportError:
+        return
+
+    all_subdirs: set[str] = set()
+
+    for index_url in ROCM_INDEX_URLS_MAP.values():
+        index_url = index_url.rstrip("/") + "/"
+        try:
+            response = requests.get(index_url)
+            response.raise_for_status()
+        except Exception as e:
+            print(f"[ERROR]: fetching subdirs from {index_url} failed: {e}")
+            continue
+
+        # Extract gfx targets from <a> elements.
+        matches = re.findall(GFX_TARGET_REGEX, response.text)
+        all_subdirs.update(matches)
+
+    return all_subdirs if all_subdirs else None
 
 
 def main(argv: list[str]):
@@ -239,9 +290,14 @@ def main(argv: list[str]):
         help="If the venv directory already exists, clear it and start fresh",
     )
     general_options.add_argument(
+        "--pre",
+        action=argparse.BooleanOptionalAction,
+        help="Allow installing pre-release packages",
+    )
+    general_options.add_argument(
         "--disable-cache",
         action=argparse.BooleanOptionalAction,
-        help="Disables the pip cache through the --no-cache-dir option",
+        help="Disable the pip/uv package cache",
     )
     general_options.add_argument(
         "--activate-in-future-github-actions-steps",
@@ -259,65 +315,46 @@ def main(argv: list[str]):
     # TODO(#1036): Other flags or helper scripts to help map between versions,
     #              git commits/refs, workflow runs, etc.
     #              I'd like a shorthand for "install packages from commit abcde"
+    #              Maybe use find_artifacts_for_commit.py
     install_options.add_argument(
         "--packages",
         type=str,
-        help="List of packages to install, including any extras or explicit versions",
+        help="Packages to install, including any extras or explicit versions (e.g. 'rocm[libraries,devel]==1.0')",
     )
-
-    index_group = install_options.add_mutually_exclusive_group()
     # TODO(#1036): add "auto" mode here that infers the index from the version?
-    # TODO(#1036): Default to nightly?
-    index_group.add_argument(
-        "--index-name",
-        type=str,
-        choices=["nightly", "dev"],
-        help="Shorthand name for an index to use with 'pip install --index-url='",
-    )
-    index_group.add_argument(
+    install_options.add_argument(
         "--index-url",
         type=str,
-        help="Full URL for a release index to use with 'pip install --index-url='",
+        help="Package index URL for pip --index-url (complete URL, or base URL with --index-subdir)",
+    )
+    install_options.add_argument(
+        "--index-name",
+        type=str,
+        choices=["stable", "prerelease", "nightly", "dev"],
+        help="Shorthand for a named index (requires --index-subdir)",
+    )
+    install_options.add_argument(
+        "--find-links",
+        type=str,
+        help="Package location URL for pip --find-links (compatible with --index-url)",
     )
 
-    subdirs: dict[str, set[str]] | set[str] | None = scrape_subdirs()
-    all_subdir_sets_congruent = isinstance(subdirs, set)
-
-    index_subdir_help = "Index subdirectory"
-    if not all_subdir_sets_congruent and subdirs:
-        index_subdir_help += ". Available options per index: " + str(subdirs)
-    elif not subdirs:
-        index_subdir_help += ", such as 'gfx110X-all'"
-    else:
-        index_subdir_help += "."
-
+    # Scrape available subdirs for --index-subdir choices.
+    available_subdirs = _scrape_rocm_index_subdirs()
     install_options.add_argument(
         "--index-subdir",
         "--index-subdirectory",
         type=str,
-        help=index_subdir_help,
-        choices=subdirs if all_subdir_sets_congruent else None,
+        help="Index subdirectory, such as 'gfx110X-all'",
+        choices=available_subdirs,
     )
 
     args = p.parse_args(argv)
 
-    # Validate arguments.
     if args.venv_dir.exists() and not args.venv_dir.is_dir():
         p.error(f"venv_dir '{args.venv_dir}' exists and is not a directory")
-    if args.packages and not (args.index_name or args.index_url):
-        p.error("If --packages is set, one of --index-name or --index-url must be set")
-    if args.packages and not args.index_subdir:
-        if subdirs and not all_subdir_sets_congruent:
-            if not args.index_name:
-                p.error(
-                    f"If --packages is set, --index-subdir must be set from the following list: {subdirs}"
-                )
-            else:
-                p.error(
-                    f"If --packages is set, --index-subdir must be set from the following list: {subdirs[args.index_name]}"
-                )
-        else:
-            p.error("If --packages is set, --index-subdir must be set")
+    if args.index_name and not args.index_subdir:
+        p.error("--index-subdir must be set when using --index-name")
 
     run(args)
 
