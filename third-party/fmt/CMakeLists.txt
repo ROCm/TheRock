@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 therock_subproject_fetch(therock-fmt-sources
   CMAKE_PROJECT
   # Originally mirrored from: https://github.com/fmtlib/fmt/releases/download/11.1.3/fmt-11.1.3.zip

@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Right now we only support OpenBLAS as the host BLAS library.
 # This will be extended later, including allowing to use the system BLAS of
 # your choice.

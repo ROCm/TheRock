@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 therock_subproject_fetch(therock-nlohmann-json-sources
   CMAKE_PROJECT
   # Originally mirrored from: https://github.com/nlohmann/json/releases/download/v3.12.0/json.tar.xz

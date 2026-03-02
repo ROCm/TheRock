@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Dual-mode CMakeLists.txt for simde (header-only library)
 #
 # NOTE: simde upstream uses meson, but we bypass it entirely because:

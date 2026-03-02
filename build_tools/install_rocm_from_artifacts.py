@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """install_rocm_from_artifacts.py
 
 This script helps CI workflows, developers and testing suites easily install
@@ -23,15 +26,16 @@ python build_tools/install_rocm_from_artifacts.py
     [--hipdnn | --no-hipdnn]
     [--hipdnn-samples | --no-hipdnn-samples]
     [--miopen | --no-miopen]
-    [--miopen-plugin | --no-miopen-plugin]
-    [--fusilli-plugin | --no-fusilli-plugin]
-    [--hipblaslt-plugin | --no-hipblaslt-plugin]
+    [--miopenprovider | --no-miopenprovider]
+    [--fusilliprovider | --no-fusilliprovider]
+    [--hipblasltprovider | --no-hipblasltprovider]
     [--prim | --no-prim]
     [--rand | --no-rand]
     [--rccl | --no-rccl]
     [--rocdecode | --no-rocdecode]
     [--rocjpeg | --no-rocjpeg]
     [--rocprofiler-compute | --no-rocprofiler-compute]
+    [--rocprofiler-sdk | --no-rocprofiler-sdk ]
     [--rocprofiler-systems | --no-rocprofiler-systems]
     [--rocrtst | --no-rocrtst]
     [--rocwmma | --no-rocwmma]
@@ -342,16 +346,17 @@ def retrieve_artifacts_by_run_id(args):
             args.hipdnn,
             args.hipdnn_samples,
             args.miopen,
-            args.miopen_plugin,
-            args.fusilli_plugin,
+            args.miopenprovider,
+            args.fusilliprovider,
             args.iree_compiler,
-            args.hipblaslt_plugin,
+            args.hipblasltprovider,
             args.prim,
             args.rand,
             args.rccl,
             args.rocdecode,
             args.rocjpeg,
             args.rocprofiler_compute,
+            args.rocprofiler_sdk,
             args.rocprofiler_systems,
             args.rocrtst,
             args.rocwmma,
@@ -395,10 +400,10 @@ def retrieve_artifacts_by_run_id(args):
             argv.append("miopen_run")
             # Also need these for runtime kernel compilation (rocrand includes).
             argv.append("rand_dev")
-        if args.miopen_plugin:
-            extra_artifacts.append("miopen-plugin")
-        if args.fusilli_plugin:
-            extra_artifacts.append("fusilli-plugin")
+        if args.miopenprovider:
+            extra_artifacts.append("miopenprovider")
+        if args.fusilliprovider:
+            extra_artifacts.append("fusilliprovider")
         if args.iree_compiler:
             extra_artifacts.append("iree-compiler")
         if args.rocdecode:
@@ -415,8 +420,8 @@ def retrieve_artifacts_by_run_id(args):
             argv.append("rocjpeg_test")
             argv.append("base_dev")
             argv.append("amd-llvm_dev")
-        if args.hipblaslt_plugin:
-            extra_artifacts.append("hipblaslt-plugin")
+        if args.hipblasltprovider:
+            extra_artifacts.append("hipblasltprovider")
         if args.prim:
             extra_artifacts.append("prim")
         if args.rand:
@@ -440,6 +445,7 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("sysdeps-libpciaccess")
         if args.rocwmma:
             extra_artifacts.append("rocwmma")
+            argv.append("rocwmma_dev")
         if args.libhipcxx:
             extra_artifacts.append("libhipcxx")
             argv.append("amd-llvm_dev")
@@ -681,16 +687,16 @@ def main(argv):
     )
 
     artifacts_group.add_argument(
-        "--miopen-plugin",
+        "--miopenprovider",
         default=False,
-        help="Include 'miopen-plugin' artifacts",
+        help="Include 'miopenprovider' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
     artifacts_group.add_argument(
-        "--fusilli-plugin",
+        "--fusilliprovider",
         default=False,
-        help="Include 'fusilli-plugin' artifacts",
+        help="Include 'fusilliprovider' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
@@ -716,9 +722,9 @@ def main(argv):
     )
 
     artifacts_group.add_argument(
-        "--hipblaslt-plugin",
+        "--hipblasltprovider",
         default=False,
-        help="Include 'hipblaslt-plugin' artifacts",
+        help="Include 'hipblasltprovider' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
@@ -751,16 +757,16 @@ def main(argv):
     )
 
     artifacts_group.add_argument(
-        "--rocprofiler-systems",
+        "--rocprofiler-sdk",
         default=False,
-        help="Include 'rocprofiler-systems' artifacts",
+        help="Include 'rocprofiler-sdk' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
     artifacts_group.add_argument(
-        "--rocprofiler-sdk",
+        "--rocprofiler-systems",
         default=False,
-        help="Include 'rocprofiler-sdk' artifacts",
+        help="Include 'rocprofiler-systems' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 

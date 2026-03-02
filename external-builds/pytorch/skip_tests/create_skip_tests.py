@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """PyTorch Test Skip List Generator.
 
 Creates a list of tests to be skipped or the only ones to be run on for PyTorch's pytest.
