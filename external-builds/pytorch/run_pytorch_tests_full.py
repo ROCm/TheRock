@@ -128,13 +128,14 @@ def cmd_arguments(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
         "test_binary_ufuncs",
         "test_autograd",
     ]
+    tests_to_include_env = os.getenv("TESTS_TO_INCLUDE", "")
     parser.add_argument(
         "--include",
         nargs="+",
-        default=default_includes,
+        default=None if tests_to_include_env else default_includes,
         metavar="TEST",
         help="Only run these test files (passed to run_test.py --include). "
-        "Also reads TESTS_TO_INCLUDE env var. "
+        "Ignored when TESTS_TO_INCLUDE env var is set (run_test.py reads it directly). "
         f"Default: {default_includes}",
     )
     parser.add_argument(
