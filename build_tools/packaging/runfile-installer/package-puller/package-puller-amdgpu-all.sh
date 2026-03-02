@@ -167,7 +167,7 @@ download_deb_packages() {
                 filename=$2;
             }
             /^$/ {
-                if (pkgname == pkg || index(pkgname, pkg) == 1) {
+                if (pkgname == pkg) {
                     print filename;
                     exit;
                 }
@@ -183,6 +183,12 @@ download_deb_packages() {
 
         PKG_URL="${REPO_URL}/${PKG_FILE}"
         PKG_NAME=$(basename "$PKG_FILE")
+
+        # Validate that the filename matches the package we're searching for
+        if [[ ! "$PKG_NAME" =~ ^${pkg}[_-] ]]; then
+            print_error "Package name mismatch! Searched for '$pkg' but found '$PKG_NAME'"
+            continue
+        fi
 
         print_status "Downloading $PKG_NAME from $PKG_URL"
         wget -q -O "$output_dir/$PKG_NAME" "$PKG_URL"
@@ -288,7 +294,7 @@ download_rpm_packages() {
         print_status "Searching for package: $pkg"
 
         # Extract package location from primary.xml
-        # Look for package name and extract the location href (search for partial name match)
+        # Look for package name and extract the location href (exact match)
         PKG_LOCATION=$(awk -v pkg="$pkg" '
             /<package type="rpm">/ {inpkg=1; loc=""; name=""}
             inpkg && /<name>/ {
@@ -304,7 +310,7 @@ download_rpm_packages() {
                 loc=$0;
             }
             inpkg && /<\/package>/ {
-                if (index(name, pkg) == 1) {
+                if (name == pkg) {
                     print loc;
                     exit;
                 }
@@ -319,6 +325,12 @@ download_rpm_packages() {
 
         PKG_URL="${REPO_BASEURL}/${PKG_LOCATION}"
         PKG_NAME=$(basename "$PKG_LOCATION")
+
+        # Validate that the filename matches the package we're searching for
+        if [[ ! "$PKG_NAME" =~ ^${pkg}- ]]; then
+            print_error "Package name mismatch! Searched for '$pkg' but found '$PKG_NAME'"
+            continue
+        fi
 
         print_status "Downloading $PKG_NAME from $PKG_URL"
         wget -q -O "$output_dir/$PKG_NAME" "$PKG_URL"

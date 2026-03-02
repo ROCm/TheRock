@@ -412,7 +412,7 @@ int get_rocm_core_pkg(DISTRO_TYPE distroType, char *rocm_core_out, size_t out_si
     // Check if the command was successful
     if (WIFEXITED(status) && WEXITSTATUS(status) == 0) 
     {
-        // the command maybe success, check that dkms provide output
+        // the command may have succeeded, check that dkms provide output
         if (strlen(rocm_core_out) > 0)
         {
             return 0;
@@ -433,7 +433,6 @@ int is_loc_opt_rocm(char *rocm_loc)
     if (strncmp(rocm_loc, rocm_base, strlen(rocm_base)) == 0)
     {
         char next_chr = rocm_loc[strlen(rocm_base)];
-        //if (next_chr == '\0' || next_chr == '-' || next_chr == '/')
         if (next_chr == '-')
         {
             return 1;
@@ -495,9 +494,33 @@ int check_dkms_status(char *dkms_out, size_t dkms_out_size)
     char path[LARGE_CHAR_SIZE];
     int status;
 
-    // Open the command for reading
+    // First check for amdgpu source in /usr/src which is world-readable
+    fp = popen("ls -d /usr/src/amdgpu-* 2>/dev/null | head -1", "r");
+    if (fp != NULL)
+    {
+        dkms_out[0] = '\0';
+        if (fgets(path, sizeof(path), fp) != NULL)
+        {
+            // Remove newline and extract version from path
+            path[strcspn(path, "\n")] = '\0';
+
+            // Extract just the directory name (e.g., "amdgpu-6.16.13-2278356.22.04")
+            char *dirname = strrchr(path, '/');
+            if (dirname != NULL)
+            {
+                dirname++; // Skip the '/'
+                strncpy(dkms_out, dirname, dkms_out_size - 1);
+                dkms_out[dkms_out_size - 1] = '\0';
+                pclose(fp);
+                return 0;
+            }
+        }
+        pclose(fp);
+    }
+
+    // Fallback to dkms status command (requires permissions on some distros)
     fp = popen("dkms status 2>&1", "r");
-    if (fp == NULL) 
+    if (fp == NULL)
     {
         perror("popen failed");
         return -1;
@@ -505,21 +528,21 @@ int check_dkms_status(char *dkms_out, size_t dkms_out_size)
 
     // Read the output a line at a time and store it in dkms_out
     dkms_out[0] = '\0'; // Initialize dkms_out to an empty string
-    while (fgets(path, sizeof(path), fp) != NULL) 
+    while (fgets(path, sizeof(path), fp) != NULL)
     {
         strncat(dkms_out, path, dkms_out_size - strlen(dkms_out) - 1);
     }
 
     // Close the command and get the exit status
     status = pclose(fp);
-    if (status == -1) 
+    if (status == -1)
     {
         perror("pclose");
         return -1;
     }
 
     // Check if the command was successful
-    if (WIFEXITED(status) && WEXITSTATUS(status) == 0) 
+    if (WIFEXITED(status) && WEXITSTATUS(status) == 0)
     {
         // the command maybe success, check that dkms provide output
         if (strlen(dkms_out) > 0)
@@ -533,8 +556,8 @@ int check_dkms_status(char *dkms_out, size_t dkms_out_size)
             return 0;
         }
         return -1;
-    } 
-    else 
+    }
+    else
     {
         return -1;
     }

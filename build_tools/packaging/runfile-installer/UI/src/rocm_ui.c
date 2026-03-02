@@ -155,7 +155,7 @@ int get_os_info()
     get_os_release_value("VERSION_ID", g_pConfig->distroVersion);
 
     char *debList[] = {"ubuntu", "debian"};
-    char *elList[]  = {"rhel", "ol"};
+    char *elList[]  = {"rhel", "ol", "rocky", "centos", "almalinux", "amzn"};
     char *sleList[] = {"sles"};
 
     for (i = 0; i < ARRAY_SIZE(debList); i++)
