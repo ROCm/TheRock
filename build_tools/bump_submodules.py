@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Helper script to bump TheRock's submodules, doing the following:
  * (Optional) Creates a new branch
  * Updates submodules from remote using `fetch_sources.py`

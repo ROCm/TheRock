@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """
 This AMD GPU Family Matrix is the "source of truth" for GitHub workflows.
 
@@ -82,7 +85,7 @@ amdgpu_family_info_matrix_presubmit = {
             "fetch-gfx-targets": ["gfx1100"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
-            "sanity_check_only_for_family": True,
+            "nightly_check_only_for_family": True,
         },
     },
     "gfx1151": {

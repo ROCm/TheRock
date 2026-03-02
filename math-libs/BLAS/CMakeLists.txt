@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Many things need to be configured with paths to additional LLVM tools.
 # If a project is using an amd-hip or amd-llvm toolchain, then it will already
 # have an implicit dep on the toolchain, so it is safe to reference binaries

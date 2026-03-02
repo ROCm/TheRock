@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Given ROCm artifacts directories, performs surgery to re-layout them for
 distribution as Python packages and builds sdists and wheels as appropriate.
 
@@ -97,8 +100,11 @@ def core_artifact_filter(an: ArtifactName) -> bool:
         "hipify",
         "host-blas",
         "host-suite-sparse",
+        "rocdecode",
+        "rocjpeg",
         "rocprofiler-sdk",
         "sysdeps",
+        "sysdeps-amd-mesa",
     ] and an.component in [
         "lib",
         "run",
@@ -119,8 +125,8 @@ def libraries_artifact_filter(target_family: str, an: ArtifactName) -> bool:
             "fft",
             "hipdnn",
             "miopen",
-            "miopen-plugin",
-            "hipblaslt-plugin",
+            "miopenprovider",
+            "hipblasltprovider",
             "rand",
             "rccl",
         ]
