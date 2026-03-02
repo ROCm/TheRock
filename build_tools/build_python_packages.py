@@ -73,21 +73,20 @@ def run(args: argparse.Namespace):
     if args.build_packages:
         build_packages(args.dest_dir, wheel_compression=args.wheel_compression)
 
-    # One meta (rocm) sdist per target family. Each sdist is NOT generic:
-    # restrict_families=True bakes DEFAULT_TARGET_FAMILY and
-    # AVAILABLE_TARGET_FAMILIES for a single gfx family into _dist_info.py,
-    # so when pip installs the sdist (executing setup.py on the target
-    # machine to build a wheel), determine_target_family() can only resolve
-    # to that one family, and install_requires is hardcoded to that family's
-    # packages. In a multi-arch build each sdist goes to dist/{target_family}/
-    # so callers can distinguish them; in a single-arch build the sdist goes
-    # directly to dist/ (no subdirectory).
+    # One meta (rocm) sdist per target family. In a multi-arch build,
+    # target_family and restrict_families=True bake THIS_TARGET_FAMILY,
+    # DEFAULT_TARGET_FAMILY, and AVAILABLE_TARGET_FAMILIES for that family
+    # into _dist_info.py so that determine_target_family() at install time
+    # resolves only to that family's packages. In a single-arch build the
+    # sdist is generic (target_family=None, no restriction) and goes
+    # directly to dist/; in a multi-arch build each sdist goes to
+    # dist/{target_family}/ so callers can distinguish them.
     for target_family in all_target_families:
         meta = PopulatedDistPackage(
             params,
             logical_name="meta",
-            target_family=target_family,
-            restrict_families=True,
+            target_family=target_family if multi_arch else None,
+            restrict_families=multi_arch,
         )
         if args.build_packages:
             build_packages(
