@@ -292,6 +292,7 @@ endif(THEROCK_BUILD_TESTING)
       endif()
 
       therock_cmake_subproject_declare(rocprofiler-systems-examples
+        USE_DIST_AMDGPU_TARGETS
         EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-systems/examples"
         BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-systems-examples"
         BACKGROUND_BUILD
