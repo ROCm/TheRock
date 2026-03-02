@@ -768,18 +768,47 @@ def parse_input_package_list(pkg_name, artifact_dir):
     return pkg_list, skipped_list
 
 
+def normalize_target_list(targets: list[str]) -> list[str]:
+    """Normalize target list by splitting on semicolons, commas, or spaces.
+
+    Accepts targets in multiple formats:
+    - Space-separated CLI args: ['gfx94X-dcgpu', 'gfx120X-all']
+    - Single comma-separated string: ['gfx94X-dcgpu,gfx120X-all,gfx1151']
+    - Single semicolon-separated string: ['gfx94X-dcgpu;gfx120X-all;gfx1151']
+    - Mixed: ['gfx94X-dcgpu;gfx120X-all', 'gfx1151']
+
+    Returns a flat list of individual target names.
+    """
+    normalized = []
+    for target in targets:
+        # Split by semicolon first, then comma, then whitespace
+        if ';' in target:
+            normalized.extend(target.split(';'))
+        elif ',' in target:
+            normalized.extend(target.split(','))
+        else:
+            # Could be space-separated or single value
+            normalized.extend(target.split())
+
+    # Remove empty strings and strip whitespace
+    return [t.strip() for t in normalized if t.strip()]
+
+
 def run(args: argparse.Namespace):
     # Set the global variables
     dest_dir = Path(args.dest_dir).expanduser().resolve()
+
+    # Normalize target list to handle various input formats
+    normalized_targets = normalize_target_list(args.target)
 
     # Configure architecture based on multi-arch mode
     if args.enable_multi_arch:
         # Multi-arch mode: use generic default, targets for gfxarch packages
         default_gfx_arch = GFX_GENERIC
-        gfxarch_list = args.target
+        gfxarch_list = normalized_targets
     else:
         # Single-arch mode: use first target as default, no additional arch list
-        default_gfx_arch = args.target[0]
+        default_gfx_arch = normalized_targets[0]
         gfxarch_list = []
 
     # Split version passed to use only major and minor version for prefix folder
