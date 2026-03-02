@@ -78,9 +78,8 @@ def execute_tests():
     # Otherwise, we run the normal test suite
     test_type = os.getenv("TEST_TYPE", "full")
     if test_type == "smoke":
-        environ_vars["GTEST_FILTER"] = ":".join(SMOKE_TESTS)
-        # cmd.append("--tests-regex")
-        # cmd.append("|".join(SMOKE_TESTS))
+        cmd.append("--tests-regex")
+        cmd.append("|".join(SMOKE_TESTS))
 
     logging.info(f"++ Exec [{THEROCK_PATH}]$ {shlex.join(cmd)}")
     subprocess.run(
