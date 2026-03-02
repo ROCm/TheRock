@@ -63,15 +63,22 @@ def get_rocm_version_from_file() -> str:
     return version
 
 
-def fetch_index(url: str) -> str:
-    """Fetch HTML content from URL."""
+def fetch_index(url: str, retries: int = 3) -> str:
+    """Fetch HTML content from URL.
+    
+    Args:
+        url: The URL to fetch
+        retries: Number of retry attempts on failure
+    """
     print(f"Fetching {url}")
-    try:
-        with urlopen(url, timeout=30) as response:
-            return response.read().decode("utf-8")
-    except (HTTPError, URLError) as e:
-        print(f"Error fetching {url}: {e}")
-        raise
+    for attempt in range(retries):
+        try:
+            with urlopen(url, timeout=30) as response:
+                return response.read().decode("utf-8")
+        except (HTTPError, URLError) as e:
+            print(f"Error fetching {url} (attempt {attempt + 1}/{retries}): {e}")
+            if attempt + 1 >= retries:
+                raise
 
 
 def extract_folders(html: str, date_prefix: str) -> set[str]:
