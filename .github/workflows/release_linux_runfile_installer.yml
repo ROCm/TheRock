@@ -58,7 +58,7 @@ jobs:
         run: |
           # Set defaults from inputs or compute them
           GFX_ARCHS="${{ inputs.gfx_archs }}"
-          PULL_AMDGPU="${{ inputs.pull_amdgpu"
+          PULL_AMDGPU="${{ inputs.pull_amdgpu }}"
           PULL_PKG="${{ inputs.pull_pkg }}"
           
           echo "gfx_archs=$GFX_ARCHS" >> $GITHUB_OUTPUT
