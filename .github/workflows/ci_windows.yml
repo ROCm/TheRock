@@ -93,6 +93,7 @@ jobs:
       test_type: ${{ inputs.test_type }}
       test_labels: ${{ inputs.test_labels }}
       sanity_check_only_for_family: ${{ inputs.sanity_check_only_for_family == true }}
+      run_functional_tests: ${{ inputs.run_functional_tests }}
 
   test_windows_benchmarks:
     needs: [build_windows_artifacts]
@@ -118,34 +119,6 @@ jobs:
       artifact_group: ${{ inputs.artifact_group }}
       amdgpu_families: ${{ inputs.amdgpu_families }}
       test_runs_on: ${{ inputs.benchmark_runs_on }}
-      artifact_run_id: ${{ inputs.artifact_run_id }}
-
-  test_windows_functional_tests:
-    needs: [build_windows_artifacts]
-    name: Test Windows Functional tests
-    # Run functional tests if:
-    # - Build succeeded (or using prebuilt artifacts)
-    # - Not expecting failure
-    # - Functional tests are enabled (run_functional_tests is true)
-    # - Test runner is available (test_runs_on is set)
-    if: >-
-      ${{
-        !failure() &&
-        !cancelled() &&
-        (
-          inputs.use_prebuilt_artifacts == 'false' ||
-          inputs.use_prebuilt_artifacts == 'true'
-        ) &&
-        inputs.expect_failure == false &&
-        inputs.run_functional_tests == true &&
-        inputs.test_runs_on != ''
-      }}
-    uses: ./.github/workflows/test_functional.yml
-    secrets: inherit
-    with:
-      artifact_group: ${{ inputs.artifact_group }}
-      amdgpu_families: ${{ inputs.amdgpu_families }}
-      test_runs_on: ${{ inputs.test_runs_on }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
 
   build_windows_python_packages:

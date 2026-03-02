@@ -456,9 +456,7 @@ def run():
     test_type = os.getenv("TEST_TYPE", "full")
     test_labels = json.loads(os.getenv("TEST_LABELS") or "[]")
     is_benchmark_workflow = str2bool(os.getenv("IS_BENCHMARK_WORKFLOW", "false"))
-    is_functional_test_workflow = str2bool(
-        os.getenv("IS_FUNCTIONAL_TEST_WORKFLOW", "false")
-    )
+    run_functional_tests = str2bool(os.getenv("RUN_FUNCTIONAL_TESTS", "false"))
 
     logging.info(f"Selecting projects: {projects_to_test}")
 
@@ -468,14 +466,16 @@ def run():
         # Benchmarks don't use test_type/test_labels (all have total_shards=1, no filtering)
         logging.info("Using benchmark_matrix only (benchmark tests)")
         selected_matrix = benchmark_matrix.copy()
-    elif is_functional_test_workflow:
-        # For functional workflow, use ONLY functional_matrix
-        logging.info("Using functional_matrix only (functional tests)")
-        selected_matrix = functional_matrix.copy()
     else:
-        # For regular workflow, use ONLY test_matrix
+        # For regular workflow, use test_matrix
         logging.info("Using test_matrix only (regular tests)")
         selected_matrix = test_matrix.copy()
+        # For nightly/scheduled builds, merge functional tests into the test matrix
+        if run_functional_tests and functional_matrix:
+            logging.info(
+                f"Merging {len(functional_matrix)} functional test(s) into test matrix"
+            )
+            selected_matrix.update(functional_matrix)
 
     # This string -> array conversion ensures no partial strings are detected during test selection (ex: "hipblas" in ["hipblaslt", "rocblas"] = false)
     project_array = [item.strip() for item in projects_to_test.split(",")]

@@ -36,6 +36,7 @@
   * windows_test_labels : List of test names to run on Windows, optionally filtered by PR labels.
   * enable_build_jobs: If true, builds will be enabled
   * test_type: The type of test that component tests will run (i.e. smoke, full)
+  * run_functional_tests: If true, functional tests will be enabled (nightly/scheduled builds)
 
   Written to GITHUB_STEP_SUMMARY:
   * Human-readable summary for most contributors
@@ -633,12 +634,15 @@ def main(base_args, linux_families, windows_families):
 
     test_type = "smoke"
     test_type_reason = "default (smoke tests)"
+    run_functional_tests = False
 
     # In the case of a scheduled run, we always want to build and we want to run full tests
     if is_schedule:
         enable_build_jobs = True
         test_type = "full"
         test_type_reason = "scheduled run triggers full tests"
+        # Functional tests run on nightly/scheduled builds (can be extended via PR labels later)
+        run_functional_tests = True
     else:
         modified_paths = get_git_modified_paths(base_ref)
         print("modified_paths (max 200):", modified_paths[:200])
@@ -667,6 +671,7 @@ def main(base_args, linux_families, windows_families):
             matrix_row["test-runs-on"] = ""
 
     print(f"test_type decision: '{test_type}' (reason: {test_type_reason})")
+    print(f"run_functional_tests: {run_functional_tests}")
 
     # Format variants for summary - handle both regular and multi-arch modes
     def format_variants(variants):
@@ -700,6 +705,7 @@ def main(base_args, linux_families, windows_families):
 * `windows_use_prebuilt_artifacts`: {json.dumps(windows_use_prebuilt_artifacts)}
 * `enable_build_jobs`: {json.dumps(enable_build_jobs)}
 * `test_type`: {test_type}
+* `run_functional_tests`: {json.dumps(run_functional_tests)}
     """
     )
 
@@ -710,6 +716,7 @@ def main(base_args, linux_families, windows_families):
         "windows_test_labels": json.dumps(windows_test_output),
         "enable_build_jobs": json.dumps(enable_build_jobs),
         "test_type": test_type,
+        "run_functional_tests": json.dumps(run_functional_tests),
     }
     gha_set_output(output)
 
