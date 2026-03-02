@@ -94,3 +94,31 @@ jobs:
       test_type: ${{ inputs.test_type }}
       test_labels: ${{ inputs.test_labels }}
       sanity_check_only_for_family: ${{ matrix.family_info.sanity_check_only_for_family }}
+
+  build_native_packages:
+    needs: [build_multi_arch_stages]
+    name: Build ${{ matrix.package_type }} packages
+    # Build native packages in parallel with tests after multi-arch build completes
+    # Skip if we're using prebuilt artifacts or expecting build failure
+    if: >-
+      ${{
+        !failure() &&
+        !cancelled() &&
+        inputs.use_prebuilt_artifacts == 'false' &&
+        inputs.expect_failure == false
+      }}
+    strategy:
+      fail-fast: false
+      matrix:
+        package_type: [deb, rpm]
+    uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
+    secrets: inherit
+    with:
+      dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
+      artifact_run_id: ${{ inputs.artifact_run_id }}
+      rocm_version: ${{ inputs.rocm_package_version }}
+      native_package_type: ${{ matrix.package_type }}
+      release_type: ""
+    permissions:
+      contents: read
+      id-token: write

@@ -782,10 +782,10 @@ def normalize_target_list(targets: list[str]) -> list[str]:
     normalized = []
     for target in targets:
         # Split by semicolon first, then comma, then whitespace
-        if ';' in target:
-            normalized.extend(target.split(';'))
-        elif ',' in target:
-            normalized.extend(target.split(','))
+        if ";" in target:
+            normalized.extend(target.split(";"))
+        elif "," in target:
+            normalized.extend(target.split(","))
         else:
             # Could be space-separated or single value
             normalized.extend(target.split())
