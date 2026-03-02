@@ -128,9 +128,9 @@ jobs:
 
           curl -s https://rocm.nightlies.amd.com/rpm/${{ steps.params.outputs.pull_tag }}-${{ steps.params.outputs.pull_run_id }}/x86_64/index.html -o /tmp/rpm_gfx_index.html
 
-          deb_gfx=$(cat /tmp/deb_gfx_index.html | grep "amdrocm-core-sdk-" | awk -F '"' '{print $2}' | awk -F '-' '{print $4}' | awk -F '_' '{print $1}' | sort | uniq)
+          deb_gfx=$(cat /tmp/deb_gfx_index.html | grep "amdrocm-core-sdk-" | awk -F '"' '{print $2}' | awk -F '-' '{print $4}' | awk -F '_' '{print $1}' | sort --reverse | uniq)
 
-          rpm_gfx=$(cat /tmp/rpm_gfx_index.html | grep "amdrocm-core-sdk-" | awk -F '"' '{print $2}' | awk -F '-' '{print $4}' | awk -F '_' '{print $1}' | sort | uniq)
+          rpm_gfx=$(cat /tmp/rpm_gfx_index.html | grep "amdrocm-core-sdk-" | awk -F '"' '{print $2}' | awk -F '-' '{print $4}' | awk -F '_' '{print $1}' | sort --reverse | uniq)
 
           echo "Deb gfx archs: $deb_gfx"
           echo "rpm gfx archs: $rpm_gfx"
