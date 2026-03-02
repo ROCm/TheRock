@@ -16,7 +16,7 @@ if(THEROCK_ENABLE_HOST_BLAS)
 endif()
 
 # Third-party libraries built with the amd-llvm compiler toolchain.
-if(THEROCK_ENABLE_COMPILER)
+if(THEROCK_ENABLE_THIRD_PARTY_LIBS)
   # No-dep libraries (alphabetical)
   add_subdirectory(boost)
   add_subdirectory(Catch2)

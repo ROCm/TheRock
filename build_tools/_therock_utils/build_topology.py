@@ -64,6 +64,11 @@ class ArtifactGroup:
     type: str  # "generic" or "per-arch"
     artifact_group_deps: List[str] = field(default_factory=list)
     source_sets: List[str] = field(default_factory=list)
+    feature_name: Optional[str] = None  # Standalone feature for the group
+    feature_group: Optional[str] = None  # Group option for the feature
+    artifact_deps: List[str] = field(
+        default_factory=list
+    )  # Artifacts the group feature REQUIRES
 
 
 @dataclass
@@ -86,6 +91,9 @@ class Artifact:
     split_databases: List[str] = field(
         default_factory=list
     )  # Database handlers to use when splitting artifacts (e.g., ["rocblas", "hipblaslt"])
+    group_deps: List[str] = field(
+        default_factory=list
+    )  # Group names whose features this artifact REQUIRES
 
 
 class BuildTopology:
@@ -152,6 +160,9 @@ class BuildTopology:
                 type=group_data.get("type", "generic"),
                 artifact_group_deps=group_data.get("artifact_group_deps", []),
                 source_sets=group_data.get("source_sets", []),
+                feature_name=group_data.get("feature_name"),
+                feature_group=group_data.get("feature_group"),
+                artifact_deps=group_data.get("artifact_deps", []),
             )
 
         # Parse artifacts
@@ -173,6 +184,7 @@ class BuildTopology:
                 disable_platforms=artifact_data.get("disable_platforms", []),
                 python_requires=python_requires,
                 split_databases=artifact_data.get("split_databases", []),
+                group_deps=artifact_data.get("group_deps", []),
             )
 
     def get_build_stages(self) -> List[BuildStage]:
@@ -200,6 +212,10 @@ class BuildTopology:
             return artifact.feature_group
         # Default rule: uppercase artifact_group and replace - with _
         return artifact.artifact_group.upper().replace("-", "_")
+
+    def get_group_feature_name(self, group: ArtifactGroup) -> Optional[str]:
+        """Get the feature name for an artifact group, if it has one."""
+        return group.feature_name
 
     def get_artifacts_in_group(self, group_name: str) -> List[Artifact]:
         """Get all artifacts belonging to a specific artifact group."""
@@ -351,6 +367,19 @@ class BuildTopology:
                     f"(expected: {valid_stage_types})"
                 )
 
+        # Validate artifact group feature fields
+        for group_name, group in self.artifact_groups.items():
+            if group.feature_name and not feature_pattern.match(group.feature_name):
+                errors.append(
+                    f"Artifact group '{group_name}' feature_name '{group.feature_name}' "
+                    f"should be UPPERCASE_WITH_UNDERSCORES"
+                )
+            if group.feature_group and not feature_pattern.match(group.feature_group):
+                errors.append(
+                    f"Artifact group '{group_name}' feature_group '{group.feature_group}' "
+                    f"should be UPPERCASE_WITH_UNDERSCORES"
+                )
+
         # Validate artifact names, types, and feature overrides
         for artifact_name, artifact in self.artifacts.items():
             if not entity_pattern.match(artifact_name):
@@ -443,6 +472,29 @@ class BuildTopology:
                 if dep_name not in self.artifacts:
                     errors.append(
                         f"Artifact '{artifact.name}' depends on unknown artifact '{dep_name}'"
+                    )
+
+        # Check group artifact_deps reference existing artifacts
+        for group in self.artifact_groups.values():
+            for dep_name in group.artifact_deps:
+                if dep_name not in self.artifacts:
+                    errors.append(
+                        f"Artifact group '{group.name}' artifact_deps references "
+                        f"unknown artifact '{dep_name}'"
+                    )
+
+        # Check artifact group_deps reference existing groups with feature_name
+        for artifact in self.artifacts.values():
+            for group_name in artifact.group_deps:
+                if group_name not in self.artifact_groups:
+                    errors.append(
+                        f"Artifact '{artifact.name}' group_deps references "
+                        f"unknown group '{group_name}'"
+                    )
+                elif not self.artifact_groups[group_name].feature_name:
+                    errors.append(
+                        f"Artifact '{artifact.name}' group_deps references "
+                        f"group '{group_name}' which has no feature_name"
                     )
 
         # Check for circular dependencies in artifact groups

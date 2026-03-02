@@ -481,6 +481,141 @@ class BuildTopologyTest(unittest.TestCase):
         self.assertIn("C", stage2_inbound)
         self.assertIn("D", stage2_inbound)
 
+    def test_parse_group_feature_fields(self):
+        """Test parsing artifact groups with feature_name, feature_group, artifact_deps."""
+        self.write_topology(
+            """
+            [artifact_groups.third-party]
+            description = "Third-party libs"
+            type = "generic"
+            feature_name = "THIRD_PARTY"
+            feature_group = "CORE"
+            artifact_deps = ["compiler"]
+
+            [artifacts.compiler]
+            artifact_group = "compiler-group"
+            type = "target-neutral"
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+        group = topology.artifact_groups["third-party"]
+        self.assertEqual(group.feature_name, "THIRD_PARTY")
+        self.assertEqual(group.feature_group, "CORE")
+        self.assertEqual(group.artifact_deps, ["compiler"])
+
+    def test_parse_artifact_group_deps(self):
+        """Test parsing artifacts with group_deps."""
+        self.write_topology(
+            """
+            [artifact_groups.third-party]
+            description = "Third-party libs"
+            type = "generic"
+            feature_name = "THIRD_PARTY"
+            feature_group = "CORE"
+
+            [artifacts.runtime]
+            artifact_group = "runtime-group"
+            type = "target-neutral"
+            group_deps = ["third-party"]
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+        artifact = topology.artifacts["runtime"]
+        self.assertEqual(artifact.group_deps, ["third-party"])
+
+    def test_validate_group_deps_unknown_group(self):
+        """Test validation catches group_deps referencing unknown group."""
+        self.write_topology(
+            """
+            [artifacts.artifact1]
+            artifact_group = "group1"
+            type = "target-neutral"
+            group_deps = ["nonexistent-group"]
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+        errors = topology.validate_topology()
+        self.assertTrue(
+            any("nonexistent-group" in e and "group_deps" in e for e in errors)
+        )
+
+    def test_validate_group_deps_no_feature_name(self):
+        """Test validation catches group_deps referencing group without feature_name."""
+        self.write_topology(
+            """
+            [artifact_groups.plain-group]
+            description = "Group without feature_name"
+            type = "generic"
+
+            [artifacts.artifact1]
+            artifact_group = "plain-group"
+            type = "target-neutral"
+            group_deps = ["plain-group"]
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+        errors = topology.validate_topology()
+        self.assertTrue(
+            any("no feature_name" in e and "plain-group" in e for e in errors)
+        )
+
+    def test_validate_group_artifact_deps_unknown(self):
+        """Test validation catches group artifact_deps referencing unknown artifact."""
+        self.write_topology(
+            """
+            [artifact_groups.third-party]
+            description = "Third-party libs"
+            type = "generic"
+            feature_name = "THIRD_PARTY"
+            artifact_deps = ["nonexistent-artifact"]
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+        errors = topology.validate_topology()
+        self.assertTrue(
+            any("nonexistent-artifact" in e and "artifact_deps" in e for e in errors)
+        )
+
+    def test_validate_group_feature_name_naming(self):
+        """Test validation catches bad group feature_name naming."""
+        self.write_topology(
+            """
+            [artifact_groups.bad-group]
+            description = "Bad naming"
+            type = "generic"
+            feature_name = "bad-name"
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+        errors = topology.validate_topology()
+        self.assertTrue(
+            any("bad-name" in e and "UPPERCASE_WITH_UNDERSCORES" in e for e in errors)
+        )
+
+    def test_validate_group_feature_group_naming(self):
+        """Test validation catches bad group feature_group naming."""
+        self.write_topology(
+            """
+            [artifact_groups.bad-group]
+            description = "Bad naming"
+            type = "generic"
+            feature_name = "BAD_GROUP"
+            feature_group = "not-valid"
+        """
+        )
+
+        topology = BuildTopology(self.topology_path)
+        errors = topology.validate_topology()
+        self.assertTrue(
+            any("not-valid" in e and "UPPERCASE_WITH_UNDERSCORES" in e for e in errors)
+        )
+
     def test_complex_dependency_chain(self):
         """Test complex dependency chain resolution."""
         self.write_topology(

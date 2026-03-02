@@ -47,6 +47,9 @@
 #   type = "generic" | "per-arch"           # "per-arch" = built per GPU architecture
 #   artifact_group_deps = ["dep1", "dep2"]  # Optional, other groups this depends on
 #   source_sets = ["set1", "set2"]          # Optional, source sets needed for this group
+#   feature_name = "FEATURE_NAME"           # Optional: standalone feature for the group
+#   feature_group = "GROUP_NAME"            # Optional: group option for the feature
+#   artifact_deps = ["dep1"]                # Optional: artifacts the group feature REQUIRES
 #
 #   [artifacts.<name>]
 #   artifact_group = "group-name"           # Required: which group this belongs to
@@ -64,6 +67,7 @@
 #   disable_platforms = ["windows"]         # Optional: platforms where disabled
 #   python_requires = ["-r path/to/req.txt", "pkg"]  # Optional: pip install args
 #   split_databases = ["rocblas", "hipblaslt"]  # Optional: database handlers for kpack split
+#   group_deps = ["group-name"]                 # Optional: group features this artifact REQUIRES
 #
 # ==============================================================================
 
@@ -142,9 +146,9 @@ artifact_groups = ["third-party-sysdeps", "base"]
 description = "Compiler, runtimes, and core profiling"
 artifact_groups = [
     "compiler",
+    "third-party-libs",
     "core-amdsmi",
     "core-runtime",
-    "third-party-libs",
     "hip-runtime",
     "opencl-runtime",
     "profiler-core",
@@ -201,6 +205,9 @@ description = "Third-party libraries (typically internal dependencies, not distr
 type = "generic"
 artifact_group_deps = ["compiler"]
 source_sets = []  # No submodules - uses vendored/in-tree deps
+feature_name = "THIRD_PARTY_LIBS"
+feature_group = "CORE"
+artifact_deps = ["amd-llvm"]
 
 [artifact_groups.base]
 description = "Base ROCm infrastructure and CMake tools"
@@ -452,6 +459,7 @@ feature_group = "ALL"
 artifact_group = "core-runtime"
 type = "target-neutral"
 artifact_deps = ["base", "sysdeps", "amd-llvm"]
+group_deps = ["third-party-libs"]
 feature_name = "CORE_RUNTIME"
 feature_group = "CORE"
 disable_platforms = ["windows"]
@@ -460,6 +468,7 @@ disable_platforms = ["windows"]
 artifact_group = "core-amdsmi"
 type = "target-neutral"
 artifact_deps = ["base", "sysdeps"]
+group_deps = ["third-party-libs"]
 feature_name = "CORE_AMDSMI"
 feature_group = "CORE"
 disable_platforms = ["windows"]
@@ -549,6 +558,7 @@ disable_platforms = ["windows"]
 artifact_group = "math-libs"
 type = "target-neutral"
 artifact_deps = []
+group_deps = ["third-party-libs"]
 
 # --- ML Libraries (per-arch) ---
 
