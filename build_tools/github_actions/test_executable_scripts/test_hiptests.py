@@ -39,20 +39,7 @@ if not os.path.isdir(CATCH_TESTS_PATH):
     logging.info(f"++ Error: catch tests not found in {CATCH_TESTS_PATH}")
     sys.exit(1)
 
-# TODO(#3204): Re-enable tests once issues are resolved
-TEST_TO_IGNORE = {
-    "gfx94X-dcgpu": {
-        "linux": [
-            "Unit_hipGetProcAddress_spt_Stream",
-        ]
-    },
-    "gfx950-dcgpu": {
-        "linux": [
-            "Unit_hipManagedKeyword_SingleGpu",
-            "Unit_hipGetProcAddress_spt_Stream",
-        ]
-    },
-}
+TEST_TO_IGNORE = {}
 
 
 def get_asan_lib_path():
