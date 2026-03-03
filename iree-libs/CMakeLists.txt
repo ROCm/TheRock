@@ -6,7 +6,6 @@
 ##############################################################################
 if(THEROCK_ENABLE_IREE_COMPILER)
   therock_cmake_subproject_declare(iree-compiler
-    DISABLE_AMDGPU_TARGETS
     NO_MERGE_COMPILE_COMMANDS
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/iree-compiler"
     EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/iree"
@@ -51,7 +50,7 @@ if(THEROCK_ENABLE_FUSILLIPROVIDER)
   # fusilli library
   ##############################################################################
   therock_cmake_subproject_declare(fusilli
-    DISABLE_AMDGPU_TARGETS
+    USE_DIST_AMDGPU_TARGETS
     BACKGROUND_BUILD
     EXCLUDE_FROM_ALL
     NO_MERGE_COMPILE_COMMANDS
@@ -83,7 +82,7 @@ if(THEROCK_ENABLE_FUSILLIPROVIDER)
   # fusilli hipDNN provider
   ##############################################################################
   therock_cmake_subproject_declare(fusilliprovider
-    DISABLE_AMDGPU_TARGETS
+    USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/fusilli/plugins/hipdnn-plugin"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/fusilliprovider"
     BACKGROUND_BUILD
