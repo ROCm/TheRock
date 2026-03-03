@@ -501,7 +501,7 @@ feature_group = "CORE"  # Part of core, enabled by default
 
 [artifacts.rocrtst]
 artifact_group = "rocrtst"
-type = "target-neutral"
+type = "target-specific"
 artifact_deps = ["core-runtime", "core-ocl", "sysdeps-hwloc"]
 feature_name = "CORE_RUNTIME_TESTS"
 feature_group = "CORE"
@@ -597,19 +597,19 @@ group_deps = ["third-party-libs"]
 [artifacts.miopenprovider]
 artifact_group = "ml-libs"
 type = "target-neutral"
-artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "spdlog"]
+artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn"]
 group_deps = ["third-party-libs"]
 
 [artifacts.hipblasltprovider]
 artifact_group = "ml-libs"
 type = "target-neutral"
-artifact_deps = ["core-runtime", "core-hip", "blas", "hipdnn", "spdlog"]
+artifact_deps = ["core-runtime", "core-hip", "blas", "hipdnn"]
 group_deps = ["third-party-libs"]
 
 [artifacts.hipdnn-samples]
 artifact_group = "ml-libs"
 type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "miopenprovider", "spdlog"]
+artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "miopenprovider"]
 group_deps = ["third-party-libs"]
 
 # --- IREE Integration ---
@@ -623,7 +623,7 @@ disable_platforms = ["windows"]
 [artifacts.fusilliprovider]
 artifact_group = "iree-libs"
 type = "target-neutral"
-artifact_deps = ["core-runtime", "core-hip", "hipdnn", "spdlog", "iree-compiler"]
+artifact_deps = ["core-runtime", "core-hip", "hipdnn", "iree-compiler"]
 group_deps = ["third-party-libs"]
 disable_platforms = ["windows"]
 
