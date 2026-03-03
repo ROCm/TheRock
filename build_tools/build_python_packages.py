@@ -91,6 +91,7 @@ def run(args: argparse.Namespace):
 def core_artifact_filter(an: ArtifactName) -> bool:
     core = an.name in [
         "amd-llvm",
+        "aqlprofiler",
         "base",
         "core-amdsmi",
         "core-hip",
