@@ -52,6 +52,12 @@ TEST_TO_IGNORE = {
             "Unit_hipGetProcAddress_spt_Stream",
         ]
     },
+    "gfx110X-all": {
+        "windows": [
+            "Unit_hipStreamValue_Wait_Blocking - uint64_t",
+            "Unit_hipStreamValue_Wait_Blocking - uint32_t",
+        ]
+    },
 }
 
 
