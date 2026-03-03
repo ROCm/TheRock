@@ -784,7 +784,7 @@ def do_build_pytorch(
 
     # aotriton is not supported on certain architectures yet.
     # gfx101X/gfx103X: https://github.com/ROCm/TheRock/issues/1925
-    AOTRITON_UNSUPPORTED_ARCHS = ["gfx101", "gfx103"]
+    AOTRITON_UNSUPPORTED_ARCHS = ["gfx101", "gfx103", "gfx906", "gfx908"]
     # gfx1152/53: supported in aotriton 0.11.2b+ (https://github.com/ROCm/aotriton/pull/142),
     #   which is pinned by pytorch >= 2.11. Older versions don't include it.
     if not is_pytorch_2_11_or_later:
