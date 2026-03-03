@@ -12,7 +12,7 @@ if version == "DEFAULT":
 
 setup(
     name="rocm-sdk-profilers",
-    version=version,  # <-- use the computed version
+    version=version,  # the computed version
     description="ROCm profiler applications (rocprofiler-systems and rocprofiler-compute)",
     author="AMD",
     license="MIT",
