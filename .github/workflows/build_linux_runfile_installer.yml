@@ -118,78 +118,78 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       
-      - name: Set ROCM_VERSION
-        run: |
-          ROCM_VERSION=$(echo "${{ inputs.rocm_version }}" | cut -d'~' -f1)
-          echo "Set value of ROCM_VERSION = '$ROCM_VERSION'"
-          echo "ROCM_VERSION=$ROCM_VERSION" >> $GITHUB_ENV
+      # - name: Set ROCM_VERSION
+      #   run: |
+      #     ROCM_VERSION=$(echo "${{ inputs.rocm_version }}" | cut -d'~' -f1)
+      #     echo "Set value of ROCM_VERSION = '$ROCM_VERSION'"
+      #     echo "ROCM_VERSION=$ROCM_VERSION" >> $GITHUB_ENV
       
-      # Value of inputs.rocm_version for daily nightly job would be in the format 7.12.0~20260218.
-      # We need the 20260218 and set it to pull_tag
-      # Value of inputs.rocm_version for prerelease job would be in the format 7.12.0~rc2.
-      # We need the rc2 and set it to pull_tag.
-      - name: Set PULL_TAG
-        run: |
-          if [[ -z $PULL_TAG ]]; then
-            PULL_TAG=$(echo "${{ inputs.rocm_version }}" | cut -d'~' -f2)
-            echo "Set value of PULL_TAG = '$PULL_TAG'"
-            echo "PULL_TAG=$PULL_TAG" >> $GITHUB_ENV
-          fi
+      # # Value of inputs.rocm_version for daily nightly job would be in the format 7.12.0~20260218.
+      # # We need the 20260218 and set it to pull_tag
+      # # Value of inputs.rocm_version for prerelease job would be in the format 7.12.0~rc2.
+      # # We need the rc2 and set it to pull_tag.
+      # - name: Set PULL_TAG
+      #   run: |
+      #     if [[ -z $PULL_TAG ]]; then
+      #       PULL_TAG=$(echo "${{ inputs.rocm_version }}" | cut -d'~' -f2)
+      #       echo "Set value of PULL_TAG = '$PULL_TAG'"
+      #       echo "PULL_TAG=$PULL_TAG" >> $GITHUB_ENV
+      #     fi
         
-      - name: Set MSCOMP
-        run: |
-          if [[ $RELEASE_TYPE == "dev" ]]; then
-            MSCOMP=dev
-          else
-            MSCOMP=prodmedium
-          fi
-          echo "Set value of MSCOMP = '$MSCOMP'"
-          echo "MSCOMP=$MSCOMP" >> $GITHUB_ENV
+      # - name: Set MSCOMP
+      #   run: |
+      #     if [[ $RELEASE_TYPE == "dev" ]]; then
+      #       MSCOMP=dev
+      #     else
+      #       MSCOMP=prodmedium
+      #     fi
+      #     echo "Set value of MSCOMP = '$MSCOMP'"
+      #     echo "MSCOMP=$MSCOMP" >> $GITHUB_ENV
       
-      - name: Set BUILD_TAG for dev branch
-        if: ${{ env.RELEASE_TYPE == 'dev' }}
-        run: |
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          BUILD_TAG="dev-$(git rev-parse --short HEAD)"
-          echo "Set value of BUILD_TAG = '$BUILD_TAG'"
-          echo "BUILD_TAG=$BUILD_TAG" >> $GITHUB_ENV
+      # - name: Set BUILD_TAG for dev branch
+      #   if: ${{ env.RELEASE_TYPE == 'dev' }}
+      #   run: |
+      #     git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      #     BUILD_TAG="dev-$(git rev-parse --short HEAD)"
+      #     echo "Set value of BUILD_TAG = '$BUILD_TAG'"
+      #     echo "BUILD_TAG=$BUILD_TAG" >> $GITHUB_ENV
 
-      - name: Run build-runfile-installer.sh
-        run: |
-          echo "### Runfile Build Options" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+      # - name: Run build-runfile-installer.sh
+      #   run: |
+      #     echo "### Runfile Build Options" >> $GITHUB_STEP_SUMMARY
+      #     echo "" >> $GITHUB_STEP_SUMMARY
 
-          echo "\`bash build-runfile-installer.sh rocm amdgpu rocm-archs=$GFX_ARCHS pullamdgpu=$PULL_AMDGPU pull=$PULL_TYPE pulltag=$PULL_TAG pullrunid=$PULL_RUN_ID pullrocmver=$ROCM_VERSION pullpkg=$PULL_PKG buildtag=$BUILD_TAG buildrunid=$BUILD_RUNID mscomp=$MSCOMP\`" >> $GITHUB_STEP_SUMMARY
+      #     echo "\`bash build-runfile-installer.sh rocm amdgpu rocm-archs=$GFX_ARCHS pullamdgpu=$PULL_AMDGPU pull=$PULL_TYPE pulltag=$PULL_TAG pullrunid=$PULL_RUN_ID pullrocmver=$ROCM_VERSION pullpkg=$PULL_PKG buildtag=$BUILD_TAG buildrunid=$BUILD_RUNID mscomp=$MSCOMP\`" >> $GITHUB_STEP_SUMMARY
           
-          # Add python3.12 in rpm database as a temporary workaround for ROCM-3946
-          dnf install -y rpm-build
-          cat > /tmp/python312-provides.spec << 'EOF'
-          Name:           python312-provides
-          Version:        1.0
-          Release:        1%{?dist}
-          Summary:        Provides python3.12 path for ROCm packages
-          License:        MIT
-          BuildArch:      noarch
+      #     # Add python3.12 in rpm database as a temporary workaround for ROCM-3946
+      #     dnf install -y rpm-build
+      #     cat > /tmp/python312-provides.spec << 'EOF'
+      #     Name:           python312-provides
+      #     Version:        1.0
+      #     Release:        1%{?dist}
+      #     Summary:        Provides python3.12 path for ROCm packages
+      #     License:        MIT
+      #     BuildArch:      noarch
 
-          Provides:       /opt/python/cp312-cp312/bin/python3.12
+      #     Provides:       /opt/python/cp312-cp312/bin/python3.12
 
-          %description
-          Dummy package that provides the python3.12 path requirement.
+      #     %description
+      #     Dummy package that provides the python3.12 path requirement.
 
-          %files
-          # No files, just provides
+      #     %files
+      #     # No files, just provides
 
-          %changelog
-          EOF
+      #     %changelog
+      #     EOF
 
-          # Build and install it
-          rpmbuild -bb /tmp/python312-provides.spec
-          rpm -ivh ~/rpmbuild/RPMS/noarch/python312-provides-1.0-1.el8.noarch.rpm
+      #     # Build and install it
+      #     rpmbuild -bb /tmp/python312-provides.spec
+      #     rpm -ivh ~/rpmbuild/RPMS/noarch/python312-provides-1.0-1.el8.noarch.rpm
           
-          bash build-runfile-installer.sh rocm amdgpu rocm-archs=$GFX_ARCHS pullamdgpu=$PULL_AMDGPU pull=$PULL_TYPE pulltag=$PULL_TAG pullrunid=$PULL_RUN_ID pullrocmver=$ROCM_VERSION pullpkg=$PULL_PKG buildtag=$BUILD_TAG buildrunid=$BUILD_RUNID mscomp=$MSCOMP
+      #     bash build-runfile-installer.sh rocm amdgpu rocm-archs=$GFX_ARCHS pullamdgpu=$PULL_AMDGPU pull=$PULL_TYPE pulltag=$PULL_TAG pullrunid=$PULL_RUN_ID pullrocmver=$ROCM_VERSION pullpkg=$PULL_PKG buildtag=$BUILD_TAG buildrunid=$BUILD_RUNID mscomp=$MSCOMP
 
-      - name: Show .run file
-        run: find . -name "*.run" -type f -exec ls -lctrh {} \;
+      # - name: Show .run file
+      #   run: find . -name "*.run" -type f -exec ls -lctrh {} \;
 
       - name: Install AWS CLI
         working-directory: ${{ github.workspace }}
@@ -202,30 +202,30 @@ jobs:
           aws-region: us-east-1
           role-to-assume: arn:aws:iam::317668459450:role/therock-${{ env.RELEASE_TYPE }}-runfile-s3-oidc
 
-      - name: Upload runfile to S3
-        if: ${{ github.repository_owner == 'ROCm' }}    
-        run: |
-          RUNFILE=$(find . -name "*.run" -type f | head -1)
-          if [ -z "$RUNFILE" ]; then
-            echo "ERROR: No .run file found"
-            exit 1
-          fi
-          RUNFILE_NAME=$(basename "$RUNFILE")
-          echo "Uploading $RUNFILE to s3://${{ env.S3_BUCKET_RUNFILE }}/"
-          aws s3 cp "$RUNFILE" "s3://${{ env.S3_BUCKET_RUNFILE }}/"
+      # - name: Upload runfile to S3
+      #   if: ${{ github.repository_owner == 'ROCm' }}    
+      #   run: |
+      #     RUNFILE=$(find . -name "*.run" -type f | head -1)
+      #     if [ -z "$RUNFILE" ]; then
+      #       echo "ERROR: No .run file found"
+      #       exit 1
+      #     fi
+      #     RUNFILE_NAME=$(basename "$RUNFILE")
+      #     echo "Uploading $RUNFILE to s3://${{ env.S3_BUCKET_RUNFILE }}/"
+      #     aws s3 cp "$RUNFILE" "s3://${{ env.S3_BUCKET_RUNFILE }}/"
           
-          # Append to GitHub Actions summary
-          echo "### Runfile Uploaded to S3" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**File:** \`${RUNFILE_NAME}\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**S3 Bucket:** \`${{ env.S3_BUCKET_RUNFILE }}\`" >> $GITHUB_STEP_SUMMARY
+      #     # Append to GitHub Actions summary
+      #     echo "### Runfile Uploaded to S3" >> $GITHUB_STEP_SUMMARY
+      #     echo "" >> $GITHUB_STEP_SUMMARY
+      #     echo "**File:** \`${RUNFILE_NAME}\`" >> $GITHUB_STEP_SUMMARY
+      #     echo "" >> $GITHUB_STEP_SUMMARY
+      #     echo "**S3 Bucket:** \`${{ env.S3_BUCKET_RUNFILE }}\`" >> $GITHUB_STEP_SUMMARY
       
-      - name: Generate index.html needed to display runfile installers.
-        if: ${{ github.repository_owner == 'ROCm' }}
-        working-directory: ${{ github.workspace }}/build_tools
-        run: |
-          python -m venv .venv
-          source .venv/bin/activate
-          pip install boto3
-          python index_generation_s3_runfile.py --bucket ${{ env.S3_BUCKET_RUNFILE }} --upload
+      # - name: Generate index.html needed to display runfile installers.
+      #   if: ${{ github.repository_owner == 'ROCm' }}
+      #   working-directory: ${{ github.workspace }}/build_tools
+      #   run: |
+      #     python -m venv .venv
+      #     source .venv/bin/activate
+      #     pip install boto3
+      #     python index_generation_s3_runfile.py --bucket ${{ env.S3_BUCKET_RUNFILE }} --upload
