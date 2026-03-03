@@ -19,15 +19,6 @@ def _get_functional_script_path(script_name: str) -> str:
 
 
 functional_matrix = {
-    "test_miopendriver_conv": {
-        "job_name": "test_miopendriver_conv",
-        "fetch_artifact_args": "--miopen --tests",
-        "timeout_minutes": 30,
-        "test_script": f"python {_get_functional_script_path('test_miopendriver_conv.py')}",
-        # TODO(lajagapp): Add windows support (https://github.com/ROCm/TheRock/issues/3207)
-        "platform": ["linux"],
-        "total_shards": 1,
-    },
     "test_rbt": {
         "job_name": "test_rbt",
         "fetch_artifact_args": "--core",

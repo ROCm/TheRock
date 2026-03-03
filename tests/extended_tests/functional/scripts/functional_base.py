@@ -12,7 +12,7 @@ import shlex
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Dict, IO, List, Tuple
+from typing import Any, Dict, List
 from prettytable import PrettyTable
 
 # Add parent directory to path for utils import
@@ -21,10 +21,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 sys.path.insert(
     0, str(Path(__file__).resolve().parents[4] / "build_tools" / "github_actions")
 )
-from utils import TestClient, HardwareDetector
+from utils import ExtendedTestClient
 from utils.logger import log
 from utils.exceptions import TestExecutionError, TestResultError
-from github_actions_utils import gha_append_step_summary
+from github_actions_utils import gha_append_step_summary, get_first_gpu_architecture
 
 
 class FunctionalBase:
@@ -52,27 +52,17 @@ class FunctionalBase:
         self.amdgpu_families = os.getenv("AMDGPU_FAMILIES")
         self.script_dir = Path(__file__).resolve().parent
         self.therock_dir = Path(__file__).resolve().parents[4]
+        self.rocm_path = (
+            Path(self.therock_bin_dir).resolve().parent
+            if self.therock_bin_dir
+            else None
+        )
 
         # Initialize test client (will be set in run())
         self.client = None
 
-    @property
-    def rocm_path(self) -> Path:
-        """ROCm installation path (parent of therock_bin_dir)."""
-        return Path(self.therock_bin_dir).resolve().parent
-
     def load_config(self, config_filename: str) -> Dict[str, Any]:
-        """Load test configuration from JSON file.
-
-        Args:
-            config_filename: Name of JSON config file (e.g., 'miopen_driver_conv.json')
-
-        Returns:
-            Parsed JSON configuration dictionary
-
-        Raises:
-            TestExecutionError: If config file not found or invalid JSON
-        """
+        """Load test configuration from JSON file in configs/ directory."""
         config_file = self.script_dir.parent / "configs" / config_filename
 
         try:
@@ -89,35 +79,42 @@ class FunctionalBase:
                 f"Check JSON syntax in {config_filename}"
             )
 
-    def get_gpu_architecture(self) -> Tuple[int, str]:
-        """Detect GPU count and architecture using HardwareDetector.
-
-        Returns:
-            Tuple of (gpu_count, gfx_version) e.g., (8, 'gfx942')
-
-        Raises:
-            TestExecutionError: If GPU detection fails or returns unknown
-        """
+    def get_gpu_architecture(self) -> str:
+        """Detect GPU architecture (e.g., 'gfx942') using rocminfo."""
         try:
-            detector = HardwareDetector()
-            gpu_count, gfx_version = detector.get_gpu_architecture()
-
-            if not gfx_version or gfx_version == "unknown":
-                raise TestExecutionError(
-                    "Could not detect GPU architecture.\n"
-                    "Ensure ROCm drivers are installed and GPU is accessible."
-                )
-
-            log.info(f"Detected {gpu_count} GPU(s), architecture: {gfx_version}")
-            return gpu_count, gfx_version
-
-        except TestExecutionError:
-            raise
+            gfx_id = get_first_gpu_architecture(therock_bin_dir=self.therock_bin_dir)
+            log.info(f"Detected GPU architecture: {gfx_id}")
+            return gfx_id
         except Exception as e:
             raise TestExecutionError(
                 f"Failed to detect GPU architecture: {e}\n"
                 "Ensure ROCm drivers are installed and GPU is accessible."
             ) from e
+
+    def get_rocm_env(self, additional_paths: List[Path] = None) -> Dict[str, str]:
+        """Get environment with LD_LIBRARY_PATH set for ROCm libraries.
+
+        Args:
+            additional_paths: Additional library paths to include
+
+        Returns:
+            Environment dictionary with LD_LIBRARY_PATH configured
+        """
+        env = os.environ.copy()
+        rocm_lib = self.rocm_path / "lib"
+
+        # Build list of library paths
+        lib_paths = [str(rocm_lib)]
+        if additional_paths:
+            lib_paths.extend(str(p) for p in additional_paths)
+
+        # Append existing LD_LIBRARY_PATH if present
+        existing = env.get("LD_LIBRARY_PATH", "")
+        if existing:
+            lib_paths.append(existing)
+
+        env["LD_LIBRARY_PATH"] = ":".join(lib_paths)
+        return env
 
     def execute_command(
         self,
@@ -128,20 +125,7 @@ class FunctionalBase:
         timeout: int = None,
         stream: bool = True,
     ) -> Tuple[int, str]:
-        """Execute a command with optional streaming output.
-
-        Args:
-            cmd: Command list to execute
-            cwd: Working directory (default: self.therock_dir)
-            env: Optional environment variables to set
-            log_file_handle: Optional file handle to write output
-            timeout: Timeout in seconds (only used when stream=False)
-            stream: If True (default), streams output to log while capturing.
-                    If False, captures silently with timeout support.
-
-        Returns:
-            Tuple of (exit_code, output)
-        """
+        """Execute a command with optional streaming output."""
         work_dir = cwd or self.therock_dir
         log.info(f"++ Exec [{work_dir}]$ {shlex.join(cmd)}")
         if log_file_handle:
@@ -201,23 +185,11 @@ class FunctionalBase:
         skip_if_exists: bool = True,
         update_submodules: bool = False,
     ) -> None:
-        """Clone a git repository.
-
-        Args:
-            git_url: Git repository URL
-            target_dir: Directory to clone into
-            branch: Branch to clone (optional, uses default branch if not specified)
-            skip_if_exists: Skip cloning if target_dir already exists (default: True)
-            update_submodules: Run git submodule update --init --recursive after clone
-
-        Raises:
-            TestExecutionError: If git clone or submodule update fails
-        """
+        """Clone a git repository, optionally skipping if it already exists."""
         if skip_if_exists and target_dir.exists():
             log.info(f"Directory already exists at {target_dir}, skipping clone")
             return
 
-        # Build git clone command
         branch_info = f" (branch: {branch})" if branch else " (default branch)"
         log.info(f"Cloning {git_url}{branch_info} to {target_dir}")
 
@@ -226,75 +198,23 @@ class FunctionalBase:
             cmd.extend(["--branch", branch])
         cmd.extend([git_url, str(target_dir)])
 
-        log.info(f"++ Exec: {shlex.join(cmd)}")
-
-        try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
+        return_code = self.execute_command(cmd)
+        if return_code != 0:
+            raise TestExecutionError(
+                f"Failed to clone repository: {git_url}{branch_info}"
             )
 
-            if result.returncode != 0:
+        log.info(f"Clone completed: {target_dir}")
+
+        if update_submodules:
+            log.info("Updating git submodules")
+            submodule_cmd = ["git", "submodule", "update", "--init", "--recursive"]
+            return_code = self.execute_command(submodule_cmd, cwd=target_dir)
+            if return_code != 0:
                 raise TestExecutionError(
-                    f"Failed to clone repository: {result.stderr}\n"
-                    f"URL: {git_url}{branch_info}"
+                    f"Failed to update submodules: {target_dir}"
                 )
-
-            log.info(f"Clone completed: {target_dir}")
-
-            # Update submodules if requested
-            if update_submodules:
-                log.info("Updating git submodules")
-                submodule_cmd = ["git", "submodule", "update", "--init", "--recursive"]
-                log.info(f"++ Exec [{target_dir}]$ {shlex.join(submodule_cmd)}")
-
-                result = subprocess.run(
-                    submodule_cmd,
-                    cwd=target_dir,
-                    capture_output=True,
-                    text=True,
-                )
-
-                if result.returncode != 0:
-                    raise TestExecutionError(
-                        f"Failed to update submodules: {result.stderr}\n"
-                        f"Repository: {target_dir}"
-                    )
-
-                log.info("Submodules updated")
-
-        except TestExecutionError:
-            raise
-        except Exception as e:
-            raise TestExecutionError(
-                f"Git clone failed: {e}\n" f"URL: {git_url}{branch_info}"
-            ) from e
-
-    def get_rocm_env(self, additional_paths: List[Path] = None) -> Dict[str, str]:
-        """Get environment with LD_LIBRARY_PATH set for ROCm libraries.
-
-        Args:
-            additional_paths: Additional library paths to include
-
-        Returns:
-            Environment dictionary with LD_LIBRARY_PATH configured
-        """
-        env = os.environ.copy()
-        rocm_lib = self.rocm_path / "lib"
-
-        # Build list of library paths
-        lib_paths = [str(rocm_lib)]
-        if additional_paths:
-            lib_paths.extend(str(p) for p in additional_paths)
-
-        # Append existing LD_LIBRARY_PATH if present
-        existing = env.get("LD_LIBRARY_PATH", "")
-        if existing:
-            lib_paths.append(existing)
-
-        env["LD_LIBRARY_PATH"] = ":".join(lib_paths)
-        return env
+            log.info("Submodules updated")
 
     def create_test_result(
         self,
@@ -333,14 +253,7 @@ class FunctionalBase:
     def calculate_statistics(
         self, test_results: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
-        """Calculate test statistics from results.
-
-        Args:
-            test_results: List of test result dictionaries with 'status' key
-
-        Returns:
-            Dictionary with detailed statistics including all status types
-        """
+        """Calculate pass/fail/error/skip statistics from test results."""
         passed = sum(1 for r in test_results if r.get("status") == "PASS")
         failed = sum(1 for r in test_results if r.get("status") == "FAIL")
         error = sum(1 for r in test_results if r.get("status") == "ERROR")
@@ -417,15 +330,7 @@ class FunctionalBase:
     def upload_results(
         self, test_results: List[Dict[str, Any]], stats: Dict[str, Any]
     ) -> bool:
-        """Upload results to API and save locally.
-
-        Args:
-            test_results: List of test result dictionaries
-            stats: Test statistics dictionary
-
-        Returns:
-            True if upload successful, False otherwise
-        """
+        """Upload results to API and save locally."""
         log.info("Uploading Functional Tests Results to API")
         success = self.client.upload_results(
             test_name=f"{self.test_name}_functional",
@@ -466,7 +371,7 @@ class FunctionalBase:
         log.info(f"{self.display_name} - Starting Functional Test")
 
         # Initialize test client and print system info
-        self.client = TestClient(auto_detect=True)
+        self.client = ExtendedTestClient(auto_detect=True)
         self.client.print_system_summary()
 
         # Run tests (implemented by child class)
