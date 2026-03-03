@@ -271,14 +271,15 @@ endif(THEROCK_BUILD_TESTING)
         "llvm/lib"
       CMAKE_INCLUDES
         therock_explicit_finders.cmake
+      BUILD_DEPS
+        therock-spdlog
+        therock-fmt
       RUNTIME_DEPS
         amdsmi
         aqlprofile
         hip-clr
         rocprofiler-register
         rocprofiler-sdk
-        therock-spdlog
-        therock-fmt
         ${THEROCK_BUNDLED_LIBDRM}
         ${THEROCK_BUNDLED_SQLITE3}
     )

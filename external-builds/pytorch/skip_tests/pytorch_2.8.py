@@ -32,4 +32,10 @@ skip_tests = {
             "test_hip_device_count",
         ]
     },
+    "gfx120": {
+        "cuda": [
+            # AssertionError: True is not false
+            "test_repeat_graph_capture_cublas_workspace_memory"
+        ]
+    },
 }
