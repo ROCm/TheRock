@@ -2,6 +2,10 @@
 
 This directory provides tooling for building JAX with ROCm Python wheels.
 
+> [!TIP]
+> If you want to install our prebuilt JAX packages instead of building them
+> from source, see [RELEASES.md](/RELEASES.md) instead.
+
 Table of contents:
 
 - [Support status](#support-status)
@@ -29,8 +33,9 @@ For upstream JAX development references, see:
 Support for JAX is provided via stable release branches of
 [ROCm/rocm-jax](https://github.com/ROCm/rocm-jax).
 
-| JAX version | Linux                                                                                                           | Windows          |
-| ----------- | --------------------------------------------------------------------------------------------------------------- | ---------------- |
+| JAX version | Linux                                                                                                            | Windows          |
+| ----------- | ---------------------------------------------------------------------------------------------------------------- | ---------------- |
+| 0.8.2       | ✅ Supported via [ROCm/rocm-jax `rocm-jaxlib-v0.8.2`](https://github.com/ROCm/rocm-jax/tree/rocm-jaxlib-v0.8.2) | ❌ Not supported |
 | 0.8.0       | ✅ Supported via [ROCm/rocm-jax `rocm-jaxlib-v0.8.0`](https://github.com/ROCm/rocm-jax/tree/rocm-jaxlib-v0.8.0) | ❌ Not supported |
 
 See also:
