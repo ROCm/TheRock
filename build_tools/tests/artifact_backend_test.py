@@ -186,6 +186,57 @@ class TestLocalDirectoryBackend(unittest.TestCase):
         (self.backend.base_path / "exists.tar.zst").touch()
         self.assertTrue(self.backend.artifact_exists("exists.tar.zst"))
 
+    def test_copy_artifact_between_local_backends(self):
+        """Test copy_artifact copies files between two local backends."""
+        source = LocalDirectoryBackend(
+            staging_dir=Path(self.temp_dir),
+            run_id="source-run",
+            platform="linux",
+        )
+        dest = LocalDirectoryBackend(
+            staging_dir=Path(self.temp_dir),
+            run_id="dest-run",
+            platform="linux",
+        )
+
+        # Create artifact in source
+        artifact_key = "test_lib_generic.tar.zst"
+        (source.base_path / artifact_key).write_bytes(b"test content")
+
+        # Copy to dest
+        dest.copy_artifact(artifact_key, source)
+
+        # Verify
+        self.assertTrue(dest.artifact_exists(artifact_key))
+        self.assertEqual((dest.base_path / artifact_key).read_bytes(), b"test content")
+
+    def test_copy_artifact_nonexistent_raises(self):
+        """Test copy_artifact raises FileNotFoundError for missing source artifact."""
+        source = LocalDirectoryBackend(
+            staging_dir=Path(self.temp_dir),
+            run_id="source-run",
+            platform="linux",
+        )
+        dest = LocalDirectoryBackend(
+            staging_dir=Path(self.temp_dir),
+            run_id="dest-run",
+            platform="linux",
+        )
+
+        with self.assertRaises(FileNotFoundError):
+            dest.copy_artifact("nonexistent.tar.zst", source)
+
+    def test_copy_artifact_wrong_backend_type_raises(self):
+        """Test copy_artifact raises TypeError when source is a different backend type."""
+        s3_source = S3Backend(
+            bucket="test-bucket",
+            run_id="source-run",
+            platform="linux",
+        )
+
+        with self.assertRaises(TypeError):
+            self.backend.copy_artifact("test.tar.zst", s3_source)
+
 
 class TestS3Backend(unittest.TestCase):
     """Tests for S3Backend with mocked boto3 client."""
@@ -389,6 +440,79 @@ class TestS3Backend(unittest.TestCase):
         mock_client.head_object.side_effect = Exception("Not found")
 
         self.assertFalse(self.backend.artifact_exists("nonexistent.tar.xz"))
+
+    @mock.patch.object(S3Backend, "s3_client", new_callable=mock.PropertyMock)
+    def test_copy_artifact_same_bucket(self, mock_client_prop):
+        """Test S3 server-side copy within the same bucket."""
+        mock_client = mock.MagicMock()
+        mock_client_prop.return_value = mock_client
+
+        source = S3Backend(
+            bucket="test-bucket",
+            run_id="source-run",
+            platform="linux",
+        )
+        dest = S3Backend(
+            bucket="test-bucket",
+            run_id="dest-run",
+            platform="linux",
+        )
+        # Share the mock client
+        source._s3_client = mock_client
+
+        dest.copy_artifact("artifact_lib_generic.tar.zst", source)
+
+        mock_client.copy.assert_called_once_with(
+            {
+                "Bucket": "test-bucket",
+                "Key": "source-run-linux/artifact_lib_generic.tar.zst",
+            },
+            "test-bucket",
+            "dest-run-linux/artifact_lib_generic.tar.zst",
+        )
+
+    @mock.patch.object(S3Backend, "s3_client", new_callable=mock.PropertyMock)
+    def test_copy_artifact_cross_bucket(self, mock_client_prop):
+        """Test S3 server-side copy across different buckets."""
+        mock_client = mock.MagicMock()
+        mock_client_prop.return_value = mock_client
+
+        source = S3Backend(
+            bucket="therock-ci-artifacts",
+            run_id="source-run",
+            platform="linux",
+        )
+        dest = S3Backend(
+            bucket="therock-ci-artifacts-external",
+            run_id="dest-run",
+            platform="linux",
+            external_repo="ROCm-rocm-libraries/",
+        )
+        source._s3_client = mock_client
+
+        dest.copy_artifact("artifact_lib_generic.tar.zst", source)
+
+        mock_client.copy.assert_called_once_with(
+            {
+                "Bucket": "therock-ci-artifacts",
+                "Key": "source-run-linux/artifact_lib_generic.tar.zst",
+            },
+            "therock-ci-artifacts-external",
+            "ROCm-rocm-libraries/dest-run-linux/artifact_lib_generic.tar.zst",
+        )
+
+    def test_copy_artifact_wrong_backend_type_raises(self):
+        """Test copy_artifact raises TypeError when source is a different backend type."""
+        import tempfile
+
+        local_source = LocalDirectoryBackend(
+            staging_dir=Path(tempfile.mkdtemp()),
+            run_id="source-run",
+            platform="linux",
+        )
+
+        with self.assertRaises(TypeError):
+            self.backend.copy_artifact("test.tar.zst", local_source)
 
 
 class TestCreateBackendFromEnv(unittest.TestCase):
