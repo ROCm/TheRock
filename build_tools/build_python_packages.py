@@ -92,7 +92,9 @@ def run(args: argparse.Namespace):
             build_packages(
                 args.dest_dir,
                 package_dirs=[meta.path],
-                dist_dir=(args.dest_dir / "dist" / target_family) if multi_arch else None,
+                dist_dir=(
+                    (args.dest_dir / "dist" / target_family) if multi_arch else None
+                ),
                 wheel_compression=args.wheel_compression,
             )
 
@@ -123,7 +125,9 @@ def run(args: argparse.Namespace):
             build_packages(
                 args.dest_dir,
                 package_dirs=[devel.path],
-                dist_dir=(args.dest_dir / "dist" / target_family) if multi_arch else None,
+                dist_dir=(
+                    (args.dest_dir / "dist" / target_family) if multi_arch else None
+                ),
                 wheel_compression=args.wheel_compression,
             )
 
