@@ -14,9 +14,6 @@
 	path = base/rocm-cmake
 	url = https://github.com/ROCm/rocm-cmake.git
 	branch = mainline
-[submodule "rocprof-trace-decoder"]
-	path = profiler/rocprof-trace-decoder/binaries
-	url = https://github.com/ROCm/rocprof-trace-decoder.git
 [submodule "rocm-libraries"]
 	path = rocm-libraries
 	url = https://github.com/ROCm/rocm-libraries

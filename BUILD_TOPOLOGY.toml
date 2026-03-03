@@ -110,10 +110,6 @@ submodules = []
 description = "Communication library submodules"
 submodules = []
 
-[source_sets.profiler-extras]
-description = "Additional profiler submodules"
-submodules = ["rocprof-trace-decoder"]
-
 [source_sets.amd-mesa]
 description = "ROCm media submodules (Mesa for VA-API)"
 submodules = ["amd-mesa"]
@@ -300,7 +296,7 @@ source_sets = ["base", "rocm-systems"]  # RDC uses amdsmi from core-amdsmi
 description = "Profiler applications and analysis tools"
 type = "generic"
 artifact_group_deps = ["profiler-core", "compiler", "core-amdsmi"]
-source_sets = ["rocm-systems", "profiler-extras"]  # rocprofiler-systems + trace decoder
+source_sets = ["rocm-systems"]
 
 [artifact_groups.iree-compiler]
 description = "IREE compiler"
