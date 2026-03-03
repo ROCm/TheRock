@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """PyTorch depends on a pinned build of Triton.
 
 This script runs after `pytorch_torch_repo.py` and checks out the proper triton

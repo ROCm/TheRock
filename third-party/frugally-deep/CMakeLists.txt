@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 therock_subproject_fetch(therock-frugally-deep-sources
   CMAKE_PROJECT
   # Use frugally-deep 0.15.x for MIOpen until the following issue is fixed

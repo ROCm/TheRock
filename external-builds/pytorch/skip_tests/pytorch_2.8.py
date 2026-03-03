@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 skip_tests = {
     "common": {
         "cuda": [
@@ -27,6 +30,12 @@ skip_tests = {
             # This test was fixed in torch 2.9, see
             # https://github.com/ROCm/TheRock/issues/2206
             "test_hip_device_count",
+        ]
+    },
+    "gfx120": {
+        "cuda": [
+            # AssertionError: True is not false
+            "test_repeat_graph_capture_cublas_workspace_memory"
         ]
     },
 }

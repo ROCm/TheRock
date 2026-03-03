@@ -151,7 +151,7 @@ The following benchmark tests are defined in `tests/extended_tests/benchmark/ben
 ### Benchmark Script Execution Flow
 
 ```
-1. Initialize BenchmarkClient
+1. Initialize ExtendedTestClient
    ↓ Auto-detect system (GPU, OS, ROCm version)
    ↓ Load configuration from config.yml
 

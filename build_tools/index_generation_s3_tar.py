@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """
 Script to generate an index.html listing .tar.gz files in an S3 bucket, performing the following:
  * Lists .tar.gz files in the specified S3 bucket.
