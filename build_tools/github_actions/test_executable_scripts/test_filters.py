@@ -103,7 +103,7 @@ def get_available_gpu_suite_tests():
         # Example: Test #123: miopen_gtest-quick-gfx1150-suite
         for line in result.stdout.split("\n"):
             # Look for lines containing test names with "-suite" suffix
-            if "-suite" in line and "Test #" in line:
+            if "-suite" in line and "Test " in line:
                 # Extract the test name
                 match = re.search(r"Test\s+#\d+:\s+(.+)", line)
                 if match:
