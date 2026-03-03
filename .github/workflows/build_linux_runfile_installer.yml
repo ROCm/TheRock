@@ -201,7 +201,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
         with:
           aws-region: us-east-1
-          role-to-assume: arn:aws:iam::317668459450:role/therock-${{ env.RELEASE_TYPE }}-runfile-s3-oidc
+          role-to-assume: arn:aws:iam::317668459450:role/therock-therock-${{ env.RELEASE_TYPE }}-runfile-s3-oidc
 
       # - name: Configure AWS Credentials
       #   if: always()
