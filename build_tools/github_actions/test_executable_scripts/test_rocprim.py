@@ -18,14 +18,6 @@ os_type = platform.system().lower()
 logging.basicConfig(level=logging.INFO)
 
 TEST_TO_IGNORE = {
-    # TODO(#2836): Re-enable gfx110X tests once issues are resolved
-    "gfx110X-all": {
-        "windows": [
-            "rocprim.block_discontinuity",
-            "rocprim.device_merge_sort",
-            "rocprim.device_reduce",
-        ]
-    },
     "gfx1151": {
         "windows": [
             # TODO(#2836): Re-enable test once issues are resolved
@@ -33,7 +25,7 @@ TEST_TO_IGNORE = {
             # TODO(#2836): Re-enable test once issues are resolved
             "rocprim.device_radix_sort",
         ]
-    },
+    }
 }
 
 SMOKE_TESTS = [

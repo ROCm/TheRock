@@ -48,16 +48,12 @@ skip_tests = {
             # torch._dynamo.exc.BackendCompilerFailed: backend='aot_eager' raised:
             # TypeError: 'CustomDecompTable' object is not a mapping
             "test_record_stream_on_shifted_view",
-            # AssertionError: Scalars are not close!
-            "test_allocator_settings",
         ],
         "torch": [
             "test_index_add_correctness",
-            # AssertionError: False is not true
-            "test_cpp_warnings_have_python_context_cuda",
         ],
     },
-    "gfx94": {
+    "gfx942": {
         "autograd": [
             # fixed or just good with no caching?
             # "test_reentrant_parent_error_on_cpu_cuda",
@@ -100,10 +96,13 @@ skip_tests = {
             "test_cublas_allow_bf16_reduced_precision_reduction_get_set",
             # AttributeError: Unknown attribute allow_fp16_reduced_precision_reduction_split_k
             "test_cublas_allow_fp16_reduced_precision_reduction_get_set",
+            # AssertionError: Scalars are not close!
+            "test_allocator_settings",
             # AttributeError: Unknown attribute allow_bf16_reduced_precision_reduction_split_k
             "test_cublas_allow_bf16_reduced_precision_reduction_get_set",
             # AttributeError: Unknown attribute allow_fp16_reduced_precision_reduction_split_k
             "test_cublas_allow_fp16_reduced_precision_reduction_get_set",
+            "test_allocator_settings",
         ],
         "nn": [
             # Is now skipped.. on pytorch side
@@ -116,6 +115,15 @@ skip_tests = {
         ],
         "torch": [
             "test_terminate_handler_on_crash",  # flaky !! hangs forever or works... can need up to 30 sec to pass
+            "test_cpp_warnings_have_python_context_cuda",
+            # torch._dynamo.exc.BackendCompilerFailed: backend='aot_eager' raised:
+            # TypeError: 'CustomDecompTable' object is not a mapping
+            "test_fx_memory_profiler_augmentation",
+        ],
+    },
+    "gfx950": {
+        "cuda": [
+            "test_cpp_warnings_have_python_context_cuda",
         ],
     },
     "windows": {
