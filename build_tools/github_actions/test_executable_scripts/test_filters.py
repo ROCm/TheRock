@@ -65,6 +65,13 @@ TEST_COMPONENT = COMPONENT_DIR_MAPPING.get(
 # GTest sharding
 SHARD_INDEX = os.getenv("SHARD_INDEX", 1)
 TOTAL_SHARDS = os.getenv("TOTAL_SHARDS", 1)
+
+# CTest parallel jobs (use fewer in less capable platforms)
+ctest_parallel_count = 8
+if AMDGPU_FAMILIES and "gfx1152" in AMDGPU_FAMILIES:
+    ctest_parallel_count = 4
+elif AMDGPU_FAMILIES and "gfx1153" in AMDGPU_FAMILIES:
+    ctest_parallel_count = 4
 environ_vars = os.environ.copy()
 # For display purposes in the GitHub Action UI, the shard array is 1th indexed. However for shard indexes, we convert it to 0th index.
 environ_vars["GTEST_SHARD_INDEX"] = str(int(SHARD_INDEX) - 1)
@@ -145,7 +152,7 @@ def build_ctest_command(category, gpu_arch, available_gpu_archs):
         [
             "--output-on-failure",
             "--parallel",
-            "8",
+            f"{ctest_parallel_count}",
             "--test-dir",
             f"{THEROCK_BIN_DIR}/{TEST_COMPONENT}",
             "-V",  # Always run in verbose mode
