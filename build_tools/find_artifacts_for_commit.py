@@ -165,10 +165,14 @@ def find_artifacts_for_commit(
     found: dict[str, ArtifactRunInfo] = {}
     for workflow_run in workflow_runs:
         # Bucket info depends only on the workflow run, not the artifact group.
-        external_repo, bucket = retrieve_bucket_info(
+        output_root = WorkflowOutputRoot.from_workflow_run(
+            run_id=str(workflow_run["id"]),
+            platform=platform,
             github_repository=github_repository_name,
             workflow_run=workflow_run,
         )
+        external_repo = output_root.external_repo
+        bucket = output_root.bucket
         for group in artifact_groups:
             if group in found:
                 continue
