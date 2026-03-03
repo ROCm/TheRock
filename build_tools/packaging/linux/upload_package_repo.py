@@ -481,9 +481,18 @@ def regenerate_repo_metadata_from_s3(
         raise ValueError(f"Unsupported package type: {pkg_type}")
 
 
-def run_command(cmd, cwd=None):
-    print(f"Running: {cmd}")
-    subprocess.run(cmd, shell=True, check=True, cwd=cwd)
+def run_command(cmd: list[str], cwd=None):
+    """Execute a shell command and print it before running.
+
+    Args:
+        cmd: Command and arguments as a list of strings
+        cwd: Optional working directory for the command
+
+    Raises:
+        subprocess.CalledProcessError: If the command exits with non-zero status
+    """
+    print(f"Running: {' '.join(cmd)}")
+    subprocess.run(cmd, check=True, cwd=cwd)
 
 
 def find_package_dir():
