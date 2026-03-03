@@ -38,13 +38,9 @@ def _find_platform_root() -> Path:
     )
 
 
-def _exe_suffix() -> str:
-    return ".exe" if os.name == "nt" else ""
-
-
 def _exec(relpath: str) -> None:
     root = _find_platform_root()
-    full_path = root / (relpath + _exe_suffix())
+    full_path = root / relpath
     if not full_path.exists():
         raise FileNotFoundError(f"Profiler tool not found: {full_path}")
     os.execv(str(full_path), [str(full_path)] + sys.argv[1:])
