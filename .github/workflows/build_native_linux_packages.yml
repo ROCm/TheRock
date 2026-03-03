@@ -102,16 +102,22 @@ jobs:
         run: |
           pip install pyelftools boto3 jinja2 pyzstd
 
-      - name: Build multi arch native packages
-        strategy:
-          fail-fast: false
-          matrix:
-            package_type: [deb, rpm]
-        uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
-        secrets: inherit
-        with:
-          dist_amdgpu_families: ${{ inputs.artifact_group }}
-          artifact_run_id: ${{ inputs.artifact_run_id }}
-          rocm_version: ${{ inputs.rocm_version }}
-          native_package_type: ${{ matrix.package_type }}
-          release_type: ""
+
+  # Test multi-arch native package workflow
+  test_multi_arch_native_packages:
+    name: Test Multi-Arch ${{ matrix.package_type }} packages
+    strategy:
+      fail-fast: false
+      matrix:
+        package_type: [deb, rpm]
+    uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
+    secrets: inherit
+    with:
+      dist_amdgpu_families: ${{ inputs.artifact_group }}
+      artifact_run_id: ${{ inputs.artifact_run_id }}
+      rocm_version: ${{ inputs.rocm_version }}
+      native_package_type: ${{ matrix.package_type }}
+      release_type: ""
+    permissions:
+      contents: read
+      id-token: write
