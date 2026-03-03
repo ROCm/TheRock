@@ -6,7 +6,7 @@
 """Script to install additional requirements.txt files for projects that require additional files for testing.
 
 Requires a requirements-file input parameter that is a list of comma separated paths to requirements.txt files.
-This path will always be relative to the absolute path of the OUTPUT_ARTIFACTS_DIR. 
+This path will always be relative to the absolute path of the OUTPUT_ARTIFACTS_DIR.
 
 Usage:
 python install_additional_requirements.py
