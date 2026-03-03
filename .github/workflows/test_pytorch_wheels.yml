@@ -145,6 +145,12 @@ jobs:
             --index-subdir=${{ inputs.amdgpu_family }} \
             --activate-in-future-github-actions-steps
 
+      - name: Export test times for sharding
+        run: |
+          pushd external-builds/pytorch/pytorch
+          PYTHONPATH=. python tools/stats/export_test_times.py
+          popd
+
       - name: Install test requirements
         run: |
           python -m pip install -r external-builds/pytorch/requirements-test.txt
@@ -154,6 +160,20 @@ jobs:
       - name: Run rocm-sdk sanity tests
         run: |
           rocm-sdk test
+
+      - name: Print environment variables
+        run: |
+          echo "=== Environment Variables ==="
+          env | sort
+          echo ""
+          echo "=== Python packages ==="
+          pip list
+          echo ""
+          echo "=== GPU Information ==="
+          rocm-smi || true
+          echo ""
+          echo "=== ROCm Version ==="
+          cat /opt/rocm/.info/version 2>/dev/null || echo "ROCm version file not found"
 
       - name: Run PyTorch smoketests
         run: |
