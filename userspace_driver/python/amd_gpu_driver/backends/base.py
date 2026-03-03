@@ -17,6 +17,7 @@ class MemoryLocation(Enum):
 class QueueType(Enum):
     COMPUTE = "compute"
     SDMA = "sdma"
+    SDMA_XGMI = "sdma_xgmi"
 
 
 @dataclass
@@ -29,6 +30,8 @@ class MemoryHandle:
     size: int = 0
     location: MemoryLocation = MemoryLocation.VRAM
     flags: int = 0
+    owner_gpu_id: int = 0  # Which GPU allocated this
+    mapped_gpu_ids: list[int] = field(default_factory=list)  # GPUs with page table entries
 
 
 @dataclass

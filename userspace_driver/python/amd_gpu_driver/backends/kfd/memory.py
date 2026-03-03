@@ -141,6 +141,7 @@ class KFDMemoryManager:
 
         # Step 4: Map to GPU
         self.map_to_gpu(handle)
+        handle.owner_gpu_id = self._gpu_id
 
         self._allocations.append(handle)
         return handle
@@ -196,14 +197,25 @@ class KFDMemoryManager:
         self._allocations.append(handle)
         return handle
 
-    def map_to_gpu(self, handle: MemoryHandle) -> None:
-        """Install GPU page table entries for this allocation."""
-        gpu_id_array = (ctypes.c_uint32 * 1)(self._gpu_id)
+    def map_to_gpu(
+        self, handle: MemoryHandle, gpu_ids: list[int] | None = None
+    ) -> None:
+        """Install GPU page table entries for this allocation.
+
+        Args:
+            handle: Memory allocation to map.
+            gpu_ids: List of GPU IDs to map to. If None, maps to the
+                     owning GPU only (preserves single-GPU behavior).
+        """
+        if gpu_ids is None:
+            gpu_ids = [self._gpu_id]
+        n = len(gpu_ids)
+        gpu_id_array = (ctypes.c_uint32 * n)(*gpu_ids)
 
         map_args = kfd_ioctl_map_memory_to_gpu_args()
         map_args.handle = handle.kfd_handle
         map_args.device_ids_array_ptr = ctypes.addressof(gpu_id_array)
-        map_args.n_devices = 1
+        map_args.n_devices = n
         map_args.n_success = 0
 
         helpers.ioctl(
@@ -212,15 +224,27 @@ class KFDMemoryManager:
             map_args,
             "MAP_MEMORY_TO_GPU",
         )
+        handle.mapped_gpu_ids = list(gpu_ids)
 
-    def unmap_from_gpu(self, handle: MemoryHandle) -> None:
-        """Remove GPU page table entries."""
-        gpu_id_array = (ctypes.c_uint32 * 1)(self._gpu_id)
+    def unmap_from_gpu(
+        self, handle: MemoryHandle, gpu_ids: list[int] | None = None
+    ) -> None:
+        """Remove GPU page table entries.
+
+        Args:
+            handle: Memory allocation to unmap.
+            gpu_ids: List of GPU IDs to unmap from. If None, unmaps from
+                     all GPUs in handle.mapped_gpu_ids, or the owning GPU.
+        """
+        if gpu_ids is None:
+            gpu_ids = handle.mapped_gpu_ids if handle.mapped_gpu_ids else [self._gpu_id]
+        n = len(gpu_ids)
+        gpu_id_array = (ctypes.c_uint32 * n)(*gpu_ids)
 
         unmap_args = kfd_ioctl_unmap_memory_from_gpu_args()
         unmap_args.handle = handle.kfd_handle
         unmap_args.device_ids_array_ptr = ctypes.addressof(gpu_id_array)
-        unmap_args.n_devices = 1
+        unmap_args.n_devices = n
         unmap_args.n_success = 0
 
         helpers.ioctl(
@@ -229,6 +253,9 @@ class KFDMemoryManager:
             unmap_args,
             "UNMAP_MEMORY_FROM_GPU",
         )
+        for gid in gpu_ids:
+            if gid in handle.mapped_gpu_ids:
+                handle.mapped_gpu_ids.remove(gid)
 
     def free(self, handle: MemoryHandle) -> None:
         """Free a GPU memory allocation."""

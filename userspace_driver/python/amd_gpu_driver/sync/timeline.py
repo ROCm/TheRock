@@ -137,6 +137,21 @@ class TimelineSemaphore:
         if self._signal_mem.cpu_addr:
             ctypes.c_uint64.from_address(self._signal_mem.cpu_addr).value = 0
 
+    def map_to_peers(self, peer_gpu_ids: list[int]) -> None:
+        """Map signal memory to peer GPUs for cross-GPU waiting.
+
+        This enables a peer GPU to poll this timeline's signal memory
+        via WAIT_REG_MEM or SDMA poll_regmem.
+
+        Args:
+            peer_gpu_ids: KFD GPU IDs of peer devices to map to.
+        """
+        from amd_gpu_driver.backends.kfd.device import KFDDevice
+
+        if not isinstance(self._backend, KFDDevice):
+            raise RuntimeError("map_to_peers requires KFD backend")
+        self._backend.map_memory_to_peers(self._signal_mem, peer_gpu_ids)
+
     def destroy(self) -> None:
         """Free resources."""
         if self._kfd_event is not None:

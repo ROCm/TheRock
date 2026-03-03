@@ -12,11 +12,13 @@ from amd_gpu_driver.errors import (
     UnsupportedGPUError,
 )
 from amd_gpu_driver.memory.buffer import Buffer
+from amd_gpu_driver.multi_gpu import MultiGPUContext
 from amd_gpu_driver.program import Program
 
 __all__ = [
     "AMDDevice",
     "Buffer",
+    "MultiGPUContext",
     "Program",
     "AMDGPUDriverError",
     "DeviceNotFoundError",

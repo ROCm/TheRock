@@ -15,6 +15,7 @@ from amd_gpu_driver.ioctl.kfd import (
     AMDKFD_IOC_DESTROY_QUEUE,
     KFD_IOC_QUEUE_TYPE_COMPUTE,
     KFD_IOC_QUEUE_TYPE_SDMA,
+    KFD_IOC_QUEUE_TYPE_SDMA_XGMI,
     KFD_MAX_QUEUE_PERCENTAGE,
     KFD_MAX_QUEUE_PRIORITY,
     kfd_ioctl_create_queue_args,
@@ -76,6 +77,13 @@ class KFDQueueManager:
         """Create an SDMA queue."""
         return self._create_queue(QueueType.SDMA, ring_size)
 
+    def create_xgmi_sdma_queue(
+        self,
+        ring_size: int = DEFAULT_RING_SIZE,
+    ) -> QueueHandle:
+        """Create an XGMI SDMA queue for cross-GPU copies."""
+        return self._create_queue(QueueType.SDMA_XGMI, ring_size)
+
     def _create_queue(self, queue_type: QueueType, ring_size: int) -> QueueHandle:
         """Create a hardware queue via AMDKFD_IOC_CREATE_QUEUE."""
         # Get kernel-matching queue sizes
@@ -133,11 +141,12 @@ class KFDQueueManager:
         args.read_pointer_address = read_ptr_addr
         args.ring_size = ring_size
         args.gpu_id = self._gpu_id
-        args.queue_type = (
-            KFD_IOC_QUEUE_TYPE_COMPUTE
-            if queue_type == QueueType.COMPUTE
-            else KFD_IOC_QUEUE_TYPE_SDMA
-        )
+        if queue_type == QueueType.COMPUTE:
+            args.queue_type = KFD_IOC_QUEUE_TYPE_COMPUTE
+        elif queue_type == QueueType.SDMA_XGMI:
+            args.queue_type = KFD_IOC_QUEUE_TYPE_SDMA_XGMI
+        else:
+            args.queue_type = KFD_IOC_QUEUE_TYPE_SDMA
         args.queue_percentage = KFD_MAX_QUEUE_PERCENTAGE
         args.queue_priority = KFD_MAX_QUEUE_PRIORITY
         args.eop_buffer_address = eop_buffer.gpu_addr
@@ -224,7 +233,7 @@ class KFDQueueManager:
         if ring is None or ring.cpu_addr == 0:
             raise QueueError("Queue ring buffer not mapped")
 
-        is_sdma = queue.queue_type == QueueType.SDMA
+        is_sdma = queue.queue_type in (QueueType.SDMA, QueueType.SDMA_XGMI)
         packet_bytes = len(packets)
 
         # Read current write pointer
