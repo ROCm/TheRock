@@ -190,7 +190,7 @@ jobs:
     with:
       stage_name: iree-compiler
       stage_display_name: "Stage - IREE Compiler"
-      timeout_minutes: 180  # 3 hours - includes captive LLVM build
+      timeout_minutes: 90  # 1.5 hours - iree is not _yet_ building with a common llvm, it includes its own.
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
     permissions:
