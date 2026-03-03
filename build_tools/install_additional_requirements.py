@@ -2,6 +2,32 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+
+"""Script to install additional requirements.txt files for projects that require additional files for testing.
+
+Requires a requirements-file input parameter that is a list of comma separated paths to requirements.txt files.
+This path will always be relative to the absolute path of the OUTPUT_ARTIFACTS_DIR. 
+
+Usage:
+python install_additional_requirements.py
+    (--requirements-files REQUIREMENTS_FILES)
+
+Examples:
+
+- Install a single requirements.txt file
+    ```
+    python install_additional_requirements.py \
+        --requirements-files path/to/requirements.txt
+    ```
+
+- Install multiple requirements.txt files
+    ```
+    python install_additional_requirements.py \
+        --requirements-files path/to/requirements.txt,path/to/requirements-test.txt
+    ```
+
+"""
+
 import argparse
 import logging
 import os
@@ -41,14 +67,9 @@ def main(argv):
         type=str,
         default="",
         help="A comma separated list of requirements.txt files to install",
+        required=True,
     )
     args = parser.parse_args(argv)
-    if not args.requirements_files:
-        logging.info(
-            "No requirements file(s) provided. Exiting install_additional_requirements.py..."
-        )
-        sys.exit(0)
-
     install_requirements(str(args.requirements_files))
 
 
