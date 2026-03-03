@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Unit tests for run_outputs.py."""
+"""Unit tests for workflow_outputs.py."""
 
 import os
 import sys
@@ -9,7 +9,7 @@ from unittest import mock
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
-from _therock_utils.run_outputs import RunOutputRoot
+from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from _therock_utils.storage_location import StorageLocation
 
 
@@ -43,11 +43,11 @@ class TestStorageLocation(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# RunOutputRoot — prefix
+# WorkflowOutputRoot — prefix
 # ---------------------------------------------------------------------------
 
 
-class TestRunOutputRootPrefix(unittest.TestCase):
+class TestWorkflowOutputRootPrefix(unittest.TestCase):
     def _make_root(self, **kwargs):
         defaults = dict(
             bucket="therock-ci-artifacts",
@@ -56,7 +56,7 @@ class TestRunOutputRootPrefix(unittest.TestCase):
             platform="linux",
         )
         defaults.update(kwargs)
-        return RunOutputRoot(**defaults)
+        return WorkflowOutputRoot(**defaults)
 
     def test_prefix_no_external_repo(self):
         root = self._make_root()
@@ -77,15 +77,15 @@ class TestRunOutputRootPrefix(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# RunOutputRoot — location methods
+# WorkflowOutputRoot — location methods
 # ---------------------------------------------------------------------------
 
 
-class TestRunOutputRootLocations(unittest.TestCase):
+class TestWorkflowOutputRootLocations(unittest.TestCase):
     """Test that each location method returns correct relative paths."""
 
     def setUp(self):
-        self.root = RunOutputRoot(
+        self.root = WorkflowOutputRoot(
             bucket="therock-ci-artifacts",
             external_repo="",
             run_id="99999",
@@ -157,11 +157,11 @@ class TestRunOutputRootLocations(unittest.TestCase):
         self._assert_relative_path(loc, "99999-linux/python/gfx110X-all")
 
 
-class TestRunOutputRootLocationsExternalRepo(unittest.TestCase):
+class TestWorkflowOutputRootLocationsExternalRepo(unittest.TestCase):
     """Verify external_repo prefix propagates through location methods."""
 
     def test_artifact_with_external_repo(self):
-        root = RunOutputRoot(
+        root = WorkflowOutputRoot(
             bucket="therock-ci-artifacts-external",
             external_repo="Fork-TheRock/",
             run_id="12345",
@@ -178,7 +178,7 @@ class TestRunOutputRootLocationsExternalRepo(unittest.TestCase):
         )
 
     def test_log_dir_with_external_repo(self):
-        root = RunOutputRoot(
+        root = WorkflowOutputRoot(
             bucket="therock-ci-artifacts-external",
             external_repo="Fork-TheRock/",
             run_id="12345",
@@ -192,15 +192,15 @@ class TestRunOutputRootLocationsExternalRepo(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# RunOutputRoot — end-to-end (s3_uri, https_url, local_path via StorageLocation)
+# WorkflowOutputRoot — end-to-end (s3_uri, https_url, local_path via StorageLocation)
 # ---------------------------------------------------------------------------
 
 
 class TestStorageLocationEndToEnd(unittest.TestCase):
-    """Verify the full chain: RunOutputRoot → StorageLocation → final strings."""
+    """Verify the full chain: WorkflowOutputRoot → StorageLocation → final strings."""
 
     def setUp(self):
-        self.root = RunOutputRoot(
+        self.root = WorkflowOutputRoot(
             bucket="therock-ci-artifacts",
             external_repo="",
             run_id="42",
@@ -239,13 +239,13 @@ class TestStorageLocationEndToEnd(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# RunOutputRoot — factory methods
+# WorkflowOutputRoot — factory methods
 # ---------------------------------------------------------------------------
 
 
-class TestRunOutputRootForLocal(unittest.TestCase):
+class TestWorkflowOutputRootForLocal(unittest.TestCase):
     def test_defaults(self):
-        root = RunOutputRoot.for_local()
+        root = WorkflowOutputRoot.for_local()
         self.assertEqual(root.bucket, "local")
         self.assertEqual(root.external_repo, "")
         self.assertEqual(root.run_id, "local")
@@ -253,7 +253,7 @@ class TestRunOutputRootForLocal(unittest.TestCase):
         self.assertIn(root.platform, ("linux", "windows", "darwin"))
 
     def test_custom_values(self):
-        root = RunOutputRoot.for_local(
+        root = WorkflowOutputRoot.for_local(
             run_id="test-42", platform="linux", bucket="test-bucket"
         )
         self.assertEqual(root.run_id, "test-42")
@@ -262,14 +262,14 @@ class TestRunOutputRootForLocal(unittest.TestCase):
         self.assertEqual(root.prefix, "test-42-linux")
 
 
-class TestRunOutputRootFromWorkflowRun(unittest.TestCase):
+class TestWorkflowOutputRootFromWorkflowRun(unittest.TestCase):
     """Test from_workflow_run() with mocked _retrieve_bucket_info."""
 
-    @mock.patch("_therock_utils.run_outputs._retrieve_bucket_info")
+    @mock.patch("_therock_utils.workflow_outputs._retrieve_bucket_info")
     def test_basic_does_not_trigger_api(self, mock_retrieve):
         """By default, run_id is NOT passed as workflow_run_id."""
         mock_retrieve.return_value = ("", "therock-ci-artifacts")
-        root = RunOutputRoot.from_workflow_run(run_id="12345", platform="linux")
+        root = WorkflowOutputRoot.from_workflow_run(run_id="12345", platform="linux")
         self.assertEqual(root.bucket, "therock-ci-artifacts")
         self.assertEqual(root.external_repo, "")
         self.assertEqual(root.run_id, "12345")
@@ -280,11 +280,11 @@ class TestRunOutputRootFromWorkflowRun(unittest.TestCase):
             workflow_run=None,
         )
 
-    @mock.patch("_therock_utils.run_outputs._retrieve_bucket_info")
+    @mock.patch("_therock_utils.workflow_outputs._retrieve_bucket_info")
     def test_lookup_workflow_run_triggers_api(self, mock_retrieve):
         """With lookup_workflow_run=True, run_id IS passed as workflow_run_id."""
         mock_retrieve.return_value = ("Fork-Repo/", "therock-ci-artifacts-external")
-        root = RunOutputRoot.from_workflow_run(
+        root = WorkflowOutputRoot.from_workflow_run(
             run_id="99999",
             platform="windows",
             github_repository="SomeUser/TheRock",
@@ -298,12 +298,12 @@ class TestRunOutputRootFromWorkflowRun(unittest.TestCase):
             workflow_run=None,
         )
 
-    @mock.patch("_therock_utils.run_outputs._retrieve_bucket_info")
+    @mock.patch("_therock_utils.workflow_outputs._retrieve_bucket_info")
     def test_with_workflow_run_dict(self, mock_retrieve):
         """When workflow_run is provided, it's passed through (no API call)."""
         mock_retrieve.return_value = ("", "therock-ci-artifacts")
         fake_run = {"id": 12345, "updated_at": "2026-01-01T00:00:00Z"}
-        root = RunOutputRoot.from_workflow_run(
+        root = WorkflowOutputRoot.from_workflow_run(
             run_id="12345",
             platform="linux",
             workflow_run=fake_run,
@@ -314,12 +314,12 @@ class TestRunOutputRootFromWorkflowRun(unittest.TestCase):
             workflow_run=fake_run,
         )
 
-    @mock.patch("_therock_utils.run_outputs._retrieve_bucket_info")
+    @mock.patch("_therock_utils.workflow_outputs._retrieve_bucket_info")
     def test_lookup_ignored_when_workflow_run_provided(self, mock_retrieve):
         """lookup_workflow_run is irrelevant when workflow_run is provided."""
         mock_retrieve.return_value = ("", "therock-ci-artifacts")
         fake_run = {"id": 12345, "updated_at": "2026-01-01T00:00:00Z"}
-        root = RunOutputRoot.from_workflow_run(
+        root = WorkflowOutputRoot.from_workflow_run(
             run_id="12345",
             platform="linux",
             workflow_run=fake_run,
@@ -345,7 +345,7 @@ class TestRetrieveBucketInfo(unittest.TestCase):
     def setUp(self):
         # Patch gha_query_workflow_run_by_id so we never make real API calls.
         self.api_patcher = mock.patch(
-            "_therock_utils.run_outputs.gha_query_workflow_run_by_id"
+            "_therock_utils.workflow_outputs.gha_query_workflow_run_by_id"
         )
         self.mock_api = self.api_patcher.start()
 
@@ -363,7 +363,7 @@ class TestRetrieveBucketInfo(unittest.TestCase):
         self.api_patcher.stop()
 
     def _call(self, **kwargs):
-        from _therock_utils.run_outputs import _retrieve_bucket_info
+        from _therock_utils.workflow_outputs import _retrieve_bucket_info
 
         return _retrieve_bucket_info(**kwargs)
 

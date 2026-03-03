@@ -10,7 +10,7 @@ from unittest import mock
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
-from _therock_utils.run_outputs import RunOutputRoot
+from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from _therock_utils.storage_location import StorageLocation
 from _therock_utils.storage_backend import (
     LocalStorageBackend,
@@ -68,13 +68,13 @@ class TestInferContentType(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# RunOutputRoot.root()
+# WorkflowOutputRoot.root()
 # ---------------------------------------------------------------------------
 
 
-class TestRunOutputRootRoot(unittest.TestCase):
+class TestWorkflowOutputRootRoot(unittest.TestCase):
     def test_root_returns_output_location(self):
-        rr = RunOutputRoot(
+        rr = WorkflowOutputRoot(
             bucket="my-bucket", external_repo="", run_id="123", platform="linux"
         )
         loc = rr.root()
@@ -83,7 +83,7 @@ class TestRunOutputRootRoot(unittest.TestCase):
         self.assertEqual(loc.relative_path, "123-linux")
 
     def test_root_with_external_repo(self):
-        rr = RunOutputRoot(
+        rr = WorkflowOutputRoot(
             bucket="b", external_repo="owner-repo/", run_id="99", platform="windows"
         )
         loc = rr.root()

@@ -19,7 +19,7 @@ from typing import List, Optional, Set
 import os
 import shutil
 
-from .run_outputs import RunOutputRoot
+from .workflow_outputs import WorkflowOutputRoot
 
 
 @dataclass
@@ -89,21 +89,21 @@ class ArtifactBackend(ABC):
 class LocalDirectoryBackend(ArtifactBackend):
     """Backend using a local directory (for testing/prototyping).
 
-    Directory structure mirrors S3 layout via RunOutputRoot::
+    Directory structure mirrors S3 layout via WorkflowOutputRoot::
 
-        {staging_dir}/{run_root.prefix}/
+        {staging_dir}/{output_root.prefix}/
             {artifact_name}_{component}_{target_family}.tar.zst
     """
 
-    def __init__(self, staging_dir: Path, run_root: RunOutputRoot):
+    def __init__(self, staging_dir: Path, output_root: WorkflowOutputRoot):
         self.staging_dir = Path(staging_dir)
-        self.run_root = run_root
+        self.output_root = output_root
         self.base_path.mkdir(parents=True, exist_ok=True)
 
     @property
     def base_path(self) -> Path:
         """Local artifacts directory path."""
-        return self.staging_dir / self.run_root.prefix
+        return self.staging_dir / self.output_root.prefix
 
     @property
     def base_uri(self) -> str:
@@ -111,7 +111,7 @@ class LocalDirectoryBackend(ArtifactBackend):
 
     def _artifact_path(self, artifact_key: str) -> Path:
         """Get local path for an artifact file."""
-        return self.run_root.artifact(artifact_key).local_path(self.staging_dir)
+        return self.output_root.artifact(artifact_key).local_path(self.staging_dir)
 
     def list_artifacts(self, name_filter: Optional[str] = None) -> List[str]:
         """List artifacts in local staging directory."""
@@ -161,23 +161,23 @@ class LocalDirectoryBackend(ArtifactBackend):
 class S3Backend(ArtifactBackend):
     """Backend using AWS S3.
 
-    S3 path structure is defined by RunOutputRoot::
+    S3 path structure is defined by WorkflowOutputRoot::
 
         s3://{bucket}/{prefix}/
             {artifact_name}_{component}_{target_family}.tar.zst
     """
 
-    def __init__(self, run_root: RunOutputRoot):
-        self.run_root = run_root
+    def __init__(self, output_root: WorkflowOutputRoot):
+        self.output_root = output_root
         self._s3_client = None
 
     @property
     def bucket(self) -> str:
-        return self.run_root.bucket
+        return self.output_root.bucket
 
     @property
     def s3_prefix(self) -> str:
-        return self.run_root.prefix
+        return self.output_root.prefix
 
     @property
     def s3_client(self):
@@ -209,7 +209,7 @@ class S3Backend(ArtifactBackend):
 
     @property
     def base_uri(self) -> str:
-        return self.run_root.root().s3_uri
+        return self.output_root.root().s3_uri
 
     def list_artifacts(self, name_filter: Optional[str] = None) -> List[str]:
         """List S3 artifacts."""
@@ -240,19 +240,19 @@ class S3Backend(ArtifactBackend):
 
     def download_artifact(self, artifact_key: str, dest_path: Path) -> None:
         """Download from S3."""
-        loc = self.run_root.artifact(artifact_key)
+        loc = self.output_root.artifact(artifact_key)
         dest_path.parent.mkdir(parents=True, exist_ok=True)
         self.s3_client.download_file(self.bucket, loc.relative_path, str(dest_path))
 
     def upload_artifact(self, source_path: Path, artifact_key: str) -> None:
         """Upload to S3."""
-        loc = self.run_root.artifact(artifact_key)
+        loc = self.output_root.artifact(artifact_key)
         self.s3_client.upload_file(str(source_path), self.bucket, loc.relative_path)
 
     def artifact_exists(self, artifact_key: str) -> bool:
         """Check if artifact exists in S3."""
         try:
-            loc = self.run_root.artifact(artifact_key)
+            loc = self.output_root.artifact(artifact_key)
             self.s3_client.head_object(Bucket=self.bucket, Key=loc.relative_path)
             return True
         except Exception:
@@ -271,7 +271,7 @@ def create_backend_from_env(
     - THEROCK_PLATFORM: Override platform (default: current platform)
 
     For S3 backend (when THEROCK_LOCAL_STAGING_DIR is not set):
-    - Uses RunOutputRoot.from_workflow_run() for bucket selection
+    - Uses WorkflowOutputRoot.from_workflow_run() for bucket selection
     """
     import platform as platform_module
 
@@ -282,11 +282,15 @@ def create_backend_from_env(
     run_id = run_id or os.getenv("THEROCK_RUN_ID", os.getenv("GITHUB_RUN_ID", "local"))
 
     if local_staging:
-        run_root = RunOutputRoot.for_local(run_id=run_id, platform=platform_name)
+        output_root = WorkflowOutputRoot.for_local(
+            run_id=run_id, platform=platform_name
+        )
         return LocalDirectoryBackend(
             staging_dir=Path(local_staging),
-            run_root=run_root,
+            output_root=output_root,
         )
 
-    run_root = RunOutputRoot.from_workflow_run(run_id=run_id, platform=platform_name)
-    return S3Backend(run_root=run_root)
+    output_root = WorkflowOutputRoot.from_workflow_run(
+        run_id=run_id, platform=platform_name
+    )
+    return S3Backend(output_root=output_root)

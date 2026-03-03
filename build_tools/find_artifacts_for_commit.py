@@ -30,7 +30,7 @@ import sys
 import urllib.request
 import urllib.error
 
-from _therock_utils.run_outputs import RunOutputRoot
+from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from github_actions.github_actions_utils import (
     GitHubAPIError,
     gha_query_workflow_runs_for_commit,
@@ -104,7 +104,7 @@ def _build_artifact_run_info(
     workflow_run: dict,
 ) -> ArtifactRunInfo:
     """Builds ArtifactRunInfo from a workflow run dict."""
-    run_root = RunOutputRoot.from_workflow_run(
+    output_root = WorkflowOutputRoot.from_workflow_run(
         run_id=str(workflow_run["id"]),
         platform=platform,
         github_repository=github_repository_name,
@@ -114,7 +114,7 @@ def _build_artifact_run_info(
     return ArtifactRunInfo(
         git_commit_sha=commit,
         github_repository_name=github_repository_name,
-        external_repo=run_root.external_repo,
+        external_repo=output_root.external_repo,
         workflow_file_name=workflow_file_name,
         workflow_run_id=str(workflow_run["id"]),
         workflow_run_status=workflow_run.get("status", "unknown"),
@@ -122,7 +122,7 @@ def _build_artifact_run_info(
         workflow_run_html_url=workflow_run.get("html_url", ""),
         platform=platform,
         artifact_group=artifact_group,
-        s3_bucket=run_root.bucket,
+        s3_bucket=output_root.bucket,
     )
 
 

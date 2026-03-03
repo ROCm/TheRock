@@ -3,7 +3,7 @@
 A ``StorageLocation`` represents a file or directory in S3 (or a local staging
 directory) without coupling to any particular layout or upload/download
 direction.  It is the bridge between path computation modules (like
-``run_outputs.RunOutputRoot``) and I/O modules (``storage_backend``,
+``workflow_outputs.WorkflowOutputRoot``) and I/O modules (``storage_backend``,
 ``artifact_backend``).
 
 Usage::

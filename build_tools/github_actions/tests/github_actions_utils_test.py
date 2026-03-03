@@ -455,7 +455,7 @@ class GitHubActionsUtilsTest(unittest.TestCase):
         workflow_run = gha_query_workflow_run_by_id("ROCm/TheRock", "18022609292")
         self.assertEqual(workflow_run["repository"]["full_name"], "ROCm/TheRock")
 
-        # Verify fields depended on by RunOutputRoot and find_artifacts_for_commit
+        # Verify fields depended on by WorkflowOutputRoot and find_artifacts_for_commit
         self.assertIn("id", workflow_run)
         self.assertIn("head_repository", workflow_run)
         self.assertIn("full_name", workflow_run["head_repository"])
@@ -479,7 +479,7 @@ class GitHubActionsUtilsTest(unittest.TestCase):
         self.assertIsInstance(runs, list)
         self.assertGreater(len(runs), 0)
 
-        # Verify fields depended on by RunOutputRoot and find_artifacts_for_commit
+        # Verify fields depended on by WorkflowOutputRoot and find_artifacts_for_commit
         run = runs[0]
         self.assertIn("id", run)
         self.assertIn("head_repository", run)

@@ -13,7 +13,7 @@ import sys
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from _therock_utils.run_outputs import RunOutputRoot
+from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from _therock_utils.storage_location import StorageLocation
 from _therock_utils.storage_backend import create_storage_backend
 
@@ -50,12 +50,14 @@ def sanitize_ref_for_filename(pytorch_git_ref: str) -> str:
     return pytorch_git_ref.replace("/", "-")
 
 
-def _make_run_root(run_id: str, bucket_override: str | None = None) -> RunOutputRoot:
+def _make_output_root(
+    run_id: str, bucket_override: str | None = None
+) -> WorkflowOutputRoot:
     if bucket_override:
-        return RunOutputRoot(
+        return WorkflowOutputRoot(
             bucket=bucket_override, external_repo="", run_id=run_id, platform=PLATFORM
         )
-    return RunOutputRoot.from_workflow_run(run_id=run_id, platform=PLATFORM)
+    return WorkflowOutputRoot.from_workflow_run(run_id=run_id, platform=PLATFORM)
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -125,8 +127,8 @@ def main(argv: list[str]) -> None:
     if not manifest_path.is_file():
         raise FileNotFoundError(f"Manifest not found: {manifest_path}")
 
-    run_root = _make_run_root(args.run_id, bucket_override=args.bucket)
-    manifest_dir_loc = run_root.manifest_dir(args.amdgpu_family)
+    output_root = _make_output_root(args.run_id, bucket_override=args.bucket)
+    manifest_dir_loc = output_root.manifest_dir(args.amdgpu_family)
     dest = StorageLocation(
         manifest_dir_loc.bucket,
         f"{manifest_dir_loc.relative_path}/{manifest_name}",

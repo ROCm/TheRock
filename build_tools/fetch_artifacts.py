@@ -41,7 +41,7 @@ from _therock_utils.artifacts import (
     ArtifactPopulator,
     _open_archive_for_read,
 )
-from _therock_utils.run_outputs import RunOutputRoot
+from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from artifact_manager import DownloadRequest, download_artifact
 
 
@@ -185,13 +185,13 @@ def run(args):
     artifact_group = args.artifact_group
     output_dir = args.output_dir
 
-    run_root = RunOutputRoot.from_workflow_run(
+    output_root = WorkflowOutputRoot.from_workflow_run(
         run_id=run_id,
         platform=args.platform,
         github_repository=run_github_repo,
         lookup_workflow_run=True,
     )
-    backend = S3Backend(run_root=run_root)
+    backend = S3Backend(output_root=output_root)
 
     # Parse individual GPU targets (comma-separated string to list).
     amdgpu_targets = (

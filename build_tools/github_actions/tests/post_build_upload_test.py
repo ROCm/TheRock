@@ -18,18 +18,18 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent))
 # Add github_actions to path so post_build_upload is importable.
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
-from _therock_utils.run_outputs import RunOutputRoot
+from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from _therock_utils.storage_backend import LocalStorageBackend
 import post_build_upload
 
 
-def _make_run_root(
+def _make_output_root(
     run_id="12345",
     platform="linux",
     bucket="therock-ci-artifacts",
     external_repo="",
 ):
-    return RunOutputRoot(
+    return WorkflowOutputRoot(
         bucket=bucket,
         external_repo=external_repo,
         run_id=run_id,
@@ -42,7 +42,7 @@ class TestUploadArtifacts(unittest.TestCase):
 
     def test_uploads_tar_xz_files(self):
         """Verify only .tar.xz and .tar.xz.sha256sum files are uploaded."""
-        run_root = _make_run_root()
+        output_root = _make_output_root()
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as staging:
             build_dir = Path(tmp)
             staging_dir = Path(staging)
@@ -56,7 +56,7 @@ class TestUploadArtifacts(unittest.TestCase):
 
             backend = LocalStorageBackend(staging_dir)
             post_build_upload.upload_artifacts(
-                "gfx94X-dcgpu", build_dir, run_root, backend
+                "gfx94X-dcgpu", build_dir, output_root, backend
             )
 
             # .tar.xz and .sha256sum should be at the run root
@@ -79,7 +79,7 @@ class TestUploadArtifacts(unittest.TestCase):
 
     def test_external_repo_prefix(self):
         """Verify external_repo propagates into paths."""
-        run_root = _make_run_root(
+        output_root = _make_output_root(
             external_repo="Fork-TheRock/",
             bucket="therock-ci-artifacts-external",
         )
@@ -93,7 +93,7 @@ class TestUploadArtifacts(unittest.TestCase):
 
             backend = LocalStorageBackend(staging_dir)
             post_build_upload.upload_artifacts(
-                "gfx94X-dcgpu", build_dir, run_root, backend
+                "gfx94X-dcgpu", build_dir, output_root, backend
             )
 
             self.assertTrue(
@@ -102,14 +102,14 @@ class TestUploadArtifacts(unittest.TestCase):
 
     def test_no_artifacts_dir_skips(self):
         """Verify no error when artifacts/ doesn't exist."""
-        run_root = _make_run_root()
+        output_root = _make_output_root()
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as staging:
             build_dir = Path(tmp)
             staging_dir = Path(staging)
             backend = LocalStorageBackend(staging_dir)
             # Should not raise
             post_build_upload.upload_artifacts(
-                "gfx94X-dcgpu", build_dir, run_root, backend
+                "gfx94X-dcgpu", build_dir, output_root, backend
             )
 
 
@@ -118,7 +118,7 @@ class TestUploadLogs(unittest.TestCase):
 
     def test_uploads_log_files(self):
         """Verify log files end up at the correct paths."""
-        run_root = _make_run_root()
+        output_root = _make_output_root()
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as staging:
             build_dir = Path(tmp)
             staging_dir = Path(staging)
@@ -128,7 +128,9 @@ class TestUploadLogs(unittest.TestCase):
             (log_dir / "ninja_logs.tar.gz").write_bytes(b"gzip")
 
             backend = LocalStorageBackend(staging_dir)
-            post_build_upload.upload_logs("gfx94X-dcgpu", build_dir, run_root, backend)
+            post_build_upload.upload_logs(
+                "gfx94X-dcgpu", build_dir, output_root, backend
+            )
 
             base = staging_dir / "12345-linux" / "logs" / "gfx94X-dcgpu"
             self.assertTrue((base / "build.log").is_file())
@@ -136,7 +138,7 @@ class TestUploadLogs(unittest.TestCase):
 
     def test_build_observability_uploaded(self):
         """Verify build_observability.html ends up in the log directory."""
-        run_root = _make_run_root()
+        output_root = _make_output_root()
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as staging:
             build_dir = Path(tmp)
             staging_dir = Path(staging)
@@ -145,7 +147,9 @@ class TestUploadLogs(unittest.TestCase):
             (log_dir / "build_observability.html").write_text("<html></html>")
 
             backend = LocalStorageBackend(staging_dir)
-            post_build_upload.upload_logs("gfx94X-dcgpu", build_dir, run_root, backend)
+            post_build_upload.upload_logs(
+                "gfx94X-dcgpu", build_dir, output_root, backend
+            )
 
             self.assertTrue(
                 (
@@ -159,7 +163,7 @@ class TestUploadLogs(unittest.TestCase):
 
     def test_log_index_uploaded(self):
         """Verify log index.html ends up in the log directory."""
-        run_root = _make_run_root()
+        output_root = _make_output_root()
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as staging:
             build_dir = Path(tmp)
             staging_dir = Path(staging)
@@ -168,7 +172,9 @@ class TestUploadLogs(unittest.TestCase):
             (log_dir / "index.html").write_text("<html></html>")
 
             backend = LocalStorageBackend(staging_dir)
-            post_build_upload.upload_logs("gfx94X-dcgpu", build_dir, run_root, backend)
+            post_build_upload.upload_logs(
+                "gfx94X-dcgpu", build_dir, output_root, backend
+            )
 
             self.assertTrue(
                 (
@@ -178,7 +184,7 @@ class TestUploadLogs(unittest.TestCase):
 
     def test_resource_profiler_flattened(self):
         """Verify resource profiler files are uploaded both in subdirectory and flattened."""
-        run_root = _make_run_root()
+        output_root = _make_output_root()
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as staging:
             build_dir = Path(tmp)
             staging_dir = Path(staging)
@@ -189,7 +195,9 @@ class TestUploadLogs(unittest.TestCase):
             (prof_dir / "comp-summary.md").write_text("# Summary")
 
             backend = LocalStorageBackend(staging_dir)
-            post_build_upload.upload_logs("gfx94X-dcgpu", build_dir, run_root, backend)
+            post_build_upload.upload_logs(
+                "gfx94X-dcgpu", build_dir, output_root, backend
+            )
 
             base = staging_dir / "12345-linux" / "logs" / "gfx94X-dcgpu"
 
@@ -205,13 +213,15 @@ class TestUploadLogs(unittest.TestCase):
 
     def test_no_log_dir_skips(self):
         """Verify no uploads happen when log dir doesn't exist."""
-        run_root = _make_run_root()
+        output_root = _make_output_root()
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as staging:
             build_dir = Path(tmp)
             staging_dir = Path(staging)
             backend = LocalStorageBackend(staging_dir)
             # Should not raise
-            post_build_upload.upload_logs("gfx94X-dcgpu", build_dir, run_root, backend)
+            post_build_upload.upload_logs(
+                "gfx94X-dcgpu", build_dir, output_root, backend
+            )
 
 
 class TestUploadManifest(unittest.TestCase):
@@ -219,7 +229,7 @@ class TestUploadManifest(unittest.TestCase):
 
     def test_manifest_uploaded(self):
         """Verify manifest ends up at the correct path."""
-        run_root = _make_run_root()
+        output_root = _make_output_root()
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as staging:
             build_dir = Path(tmp)
             staging_dir = Path(staging)
@@ -229,7 +239,7 @@ class TestUploadManifest(unittest.TestCase):
 
             backend = LocalStorageBackend(staging_dir)
             post_build_upload.upload_manifest(
-                "gfx94X-dcgpu", build_dir, run_root, backend
+                "gfx94X-dcgpu", build_dir, output_root, backend
             )
 
             self.assertTrue(
@@ -244,14 +254,14 @@ class TestUploadManifest(unittest.TestCase):
 
     def test_missing_manifest_raises(self):
         """Verify FileNotFoundError when manifest doesn't exist."""
-        run_root = _make_run_root()
+        output_root = _make_output_root()
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as staging:
             build_dir = Path(tmp)
             staging_dir = Path(staging)
             backend = LocalStorageBackend(staging_dir)
             with self.assertRaises(FileNotFoundError):
                 post_build_upload.upload_manifest(
-                    "gfx94X-dcgpu", build_dir, run_root, backend
+                    "gfx94X-dcgpu", build_dir, output_root, backend
                 )
 
 
@@ -261,7 +271,7 @@ class TestWriteGhaBuildSummary(unittest.TestCase):
     @mock.patch("post_build_upload.gha_append_step_summary")
     def test_summary_with_observability(self, mock_summary):
         """Verify observability link included when the report exists."""
-        run_root = _make_run_root()
+        output_root = _make_output_root()
         with tempfile.TemporaryDirectory() as tmp:
             build_dir = Path(tmp)
             log_dir = build_dir / "logs"
@@ -269,7 +279,7 @@ class TestWriteGhaBuildSummary(unittest.TestCase):
             (log_dir / "build_observability.html").write_text("<html></html>")
 
             post_build_upload.write_gha_build_summary(
-                "gfx94X-dcgpu", build_dir, run_root, "success"
+                "gfx94X-dcgpu", build_dir, output_root, "success"
             )
 
         calls = [c[0][0] for c in mock_summary.call_args_list]
@@ -295,12 +305,12 @@ class TestWriteGhaBuildSummary(unittest.TestCase):
     @mock.patch("post_build_upload.gha_append_step_summary")
     def test_summary_without_observability(self, mock_summary):
         """Verify observability link omitted when the report was not generated."""
-        run_root = _make_run_root()
+        output_root = _make_output_root()
         with tempfile.TemporaryDirectory() as tmp:
             build_dir = Path(tmp)
 
             post_build_upload.write_gha_build_summary(
-                "gfx94X-dcgpu", build_dir, run_root, "success"
+                "gfx94X-dcgpu", build_dir, output_root, "success"
             )
 
         calls = [c[0][0] for c in mock_summary.call_args_list]
@@ -312,7 +322,7 @@ class TestWriteGhaBuildSummary(unittest.TestCase):
     @mock.patch("post_build_upload.gha_append_step_summary")
     def test_summary_failure_skips_artifacts(self, mock_summary):
         """Verify artifact link is skipped when job failed."""
-        run_root = _make_run_root()
+        output_root = _make_output_root()
         with tempfile.TemporaryDirectory() as tmp:
             build_dir = Path(tmp)
             log_dir = build_dir / "logs"
@@ -320,7 +330,7 @@ class TestWriteGhaBuildSummary(unittest.TestCase):
             (log_dir / "build_observability.html").write_text("<html></html>")
 
             post_build_upload.write_gha_build_summary(
-                "gfx94X-dcgpu", build_dir, run_root, "failure"
+                "gfx94X-dcgpu", build_dir, output_root, "failure"
             )
 
         calls = [c[0][0] for c in mock_summary.call_args_list]
@@ -332,7 +342,7 @@ class TestWriteGhaBuildSummary(unittest.TestCase):
     @mock.patch("post_build_upload.gha_append_step_summary")
     def test_summary_with_external_repo(self, mock_summary):
         """Verify external_repo prefix appears in summary URLs."""
-        run_root = _make_run_root(
+        output_root = _make_output_root(
             external_repo="Fork-TheRock/",
             bucket="therock-ci-artifacts-external",
         )
@@ -340,7 +350,7 @@ class TestWriteGhaBuildSummary(unittest.TestCase):
             build_dir = Path(tmp)
 
             post_build_upload.write_gha_build_summary(
-                "gfx94X-dcgpu", build_dir, run_root, "success"
+                "gfx94X-dcgpu", build_dir, output_root, "success"
             )
 
         calls = [c[0][0] for c in mock_summary.call_args_list]

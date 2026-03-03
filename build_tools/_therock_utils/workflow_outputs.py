@@ -1,12 +1,12 @@
-"""CI run outputs layout specification.
+"""CI workflow outputs layout specification.
 
 This module defines the canonical directory structure for all outputs from a
-GitHub Actions workflow run. All tools that read or write run outputs should
-use this module to compute paths.
+GitHub Actions workflow run. All tools that read or write workflow outputs
+should use this module to compute paths.
 
-See docs/development/run_outputs_layout.md for the full layout reference.
+See docs/development/workflow_outputs.md for the full layout reference.
 
-A "run output" is anything produced by a CI workflow run:
+A "workflow output" is anything produced by a CI workflow run:
 - Build artifacts (.tar.xz, .tar.zst archives)
 - Logs (.log files, ninja_logs.tar.gz)
 - Manifests (therock_manifest.json)
@@ -15,18 +15,18 @@ A "run output" is anything produced by a CI workflow run:
 
 Usage::
 
-    from _therock_utils.run_outputs import RunOutputRoot
+    from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
     # Inside a CI workflow (env vars provide bucket info, no API call)
-    root = RunOutputRoot.from_workflow_run(run_id="12345", platform="linux")
+    root = WorkflowOutputRoot.from_workflow_run(run_id="12345", platform="linux")
 
     # Fetching artifacts from another run (API call for fork/cutover detection)
-    root = RunOutputRoot.from_workflow_run(
+    root = WorkflowOutputRoot.from_workflow_run(
         run_id="12345", platform="linux", lookup_workflow_run=True
     )
 
     # For local development/testing
-    root = RunOutputRoot.for_local(run_id="local", platform="linux")
+    root = WorkflowOutputRoot.for_local(run_id="local", platform="linux")
 
     # Get locations for various outputs
     loc = root.artifact("blas_lib_gfx94X.tar.xz")
@@ -56,15 +56,15 @@ def _log(*args, **kwargs):
 
 
 # ---------------------------------------------------------------------------
-# RunOutputRoot
+# WorkflowOutputRoot
 # ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True)
-class RunOutputRoot:
+class WorkflowOutputRoot:
     """Root location for all outputs from a single CI workflow run.
 
-    This is the single source of truth for computing paths to CI run outputs.
+    This is the single source of truth for computing paths to workflow outputs.
     Each method returns a `StorageLocation` that can be resolved to
     S3 URIs, HTTPS URLs, or local paths as needed.
 
@@ -200,7 +200,7 @@ class RunOutputRoot:
         github_repository: str | None = None,
         workflow_run: dict | None = None,
         lookup_workflow_run: bool = False,
-    ) -> "RunOutputRoot":
+    ) -> "WorkflowOutputRoot":
         """Create from CI workflow context.
 
         Determines the S3 bucket and external_repo prefix from repository
@@ -241,7 +241,7 @@ class RunOutputRoot:
         run_id: str = "local",
         platform: str | None = None,
         bucket: str = "local",
-    ) -> "RunOutputRoot":
+    ) -> "WorkflowOutputRoot":
         """Create for local development/testing.
 
         Args:
@@ -276,7 +276,7 @@ def _retrieve_bucket_info(
     """Determine S3 bucket and external_repo prefix for a workflow run.
 
     This is an internal implementation detail — use
-    `RunOutputRoot.from_workflow_run` instead.
+    `WorkflowOutputRoot.from_workflow_run` instead.
 
     Returns:
         Tuple of ``(external_repo, bucket)`` where:

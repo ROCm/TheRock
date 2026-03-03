@@ -14,7 +14,7 @@ import platform
 import shlex
 import subprocess
 import sys
-from _therock_utils.run_outputs import RunOutputRoot
+from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
 
 logging.basicConfig(level=logging.INFO)
@@ -86,8 +86,10 @@ def upload_test_report(report_dir: Path, bucket_uri: str, log_destination: str):
 
 
 def run(args: argparse.Namespace):
-    run_root = RunOutputRoot.from_workflow_run(run_id=args.run_id, platform=PLATFORM)
-    base_uri = f"s3://{run_root.bucket}/{run_root.prefix}"
+    output_root = WorkflowOutputRoot.from_workflow_run(
+        run_id=args.run_id, platform=PLATFORM
+    )
+    base_uri = f"s3://{output_root.bucket}/{output_root.prefix}"
 
     if not args.report_path.exists():
         logging.error(

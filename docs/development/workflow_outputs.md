@@ -1,4 +1,4 @@
-# CI Run Outputs Layout
+# CI Workflow Outputs Layout
 
 This document describes the directory layout for outputs produced by TheRock's
 CI workflow runs, and the Python modules for computing paths, uploading, and
@@ -13,15 +13,15 @@ manifests, python packages) that are uploaded to S3. Three modules in
 | Module             | Role                         | Key types                                                   |
 | ------------------ | ---------------------------- | ----------------------------------------------------------- |
 | `storage_location` | Backend-agnostic location    | `StorageLocation`                                           |
-| `run_outputs`      | CI path computation (no I/O) | `RunOutputRoot`                                             |
+| `workflow_outputs` | CI path computation (no I/O) | `WorkflowOutputRoot`                                        |
 | `storage_backend`  | Upload I/O (write)           | `StorageBackend`, `S3StorageBackend`, `LocalStorageBackend` |
 | `artifact_backend` | Download I/O (read)          | `ArtifactBackend`, `S3Backend`, `LocalDirectoryBackend`     |
 
 `StorageLocation` is the bridge between path computation and I/O.
-`RunOutputRoot` produces `StorageLocation` instances; backends consume them.
+`WorkflowOutputRoot` produces `StorageLocation` instances; backends consume them.
 
 ```
-RunOutputRoot ──produces──> StorageLocation ──consumed by──> StorageBackend
+WorkflowOutputRoot ──produces──> StorageLocation ──consumed by──> StorageBackend
                                                             ArtifactBackend
 ```
 
@@ -122,23 +122,23 @@ loc.https_url  # "https://therock-ci-artifacts.s3.amazonaws.com/12345-linux/file
 loc.local_path(Path("/tmp/staging"))  # Path("/tmp/staging/12345-linux/file.tar.xz")
 ```
 
-### RunOutputRoot
+### WorkflowOutputRoot
 
 A frozen dataclass that computes `StorageLocation` for every output type.
 
 ```python
-from _therock_utils.run_outputs import RunOutputRoot
+from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
 # Inside a CI workflow (env vars provide bucket info, no API call)
-root = RunOutputRoot.from_workflow_run(run_id="12345", platform="linux")
+root = WorkflowOutputRoot.from_workflow_run(run_id="12345", platform="linux")
 
 # Fetching artifacts from another run (API call for fork/cutover detection)
-root = RunOutputRoot.from_workflow_run(
+root = WorkflowOutputRoot.from_workflow_run(
     run_id="12345", platform="linux", lookup_workflow_run=True
 )
 
 # For local development (no API calls, no env vars needed)
-root = RunOutputRoot.for_local(run_id="local", platform="linux")
+root = WorkflowOutputRoot.for_local(run_id="local", platform="linux")
 
 # Location methods — each returns an StorageLocation
 root.root()
@@ -182,26 +182,26 @@ Content-type is inferred from file extension — callers don't need to specify i
 
 To add a new output type:
 
-1. Add a method to `RunOutputRoot` that returns `StorageLocation`
-1. Add tests to [`build_tools/tests/run_outputs_test.py`](/build_tools/tests/run_outputs_test.py)
+1. Add a method to `WorkflowOutputRoot` that returns `StorageLocation`
+1. Add tests to [`build_tools/tests/workflow_outputs_test.py`](/build_tools/tests/workflow_outputs_test.py)
 1. Update this document
 
 ## Consumers
 
 ### Upload scripts
 
-| File                                                                                       | Uses                                                                 |
-| ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
-| [`post_build_upload.py`](/build_tools/github_actions/post_build_upload.py)                 | `RunOutputRoot` + `StorageBackend` for artifacts, logs, manifests    |
-| [`upload_python_packages.py`](/build_tools/github_actions/upload_python_packages.py)       | `RunOutputRoot` + `StorageBackend` for Python wheels and index       |
-| [`upload_pytorch_manifest.py`](/build_tools/github_actions/upload_pytorch_manifest.py)     | `RunOutputRoot` + `StorageBackend` for PyTorch manifests             |
-| [`upload_test_report_script.py`](/build_tools/github_actions/upload_test_report_script.py) | `RunOutputRoot` for S3 base URI (upload not yet migrated to backend) |
+| File                                                                                       | Uses                                                                      |
+| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
+| [`post_build_upload.py`](/build_tools/github_actions/post_build_upload.py)                 | `WorkflowOutputRoot` + `StorageBackend` for artifacts, logs, manifests    |
+| [`upload_python_packages.py`](/build_tools/github_actions/upload_python_packages.py)       | `WorkflowOutputRoot` + `StorageBackend` for Python wheels and index       |
+| [`upload_pytorch_manifest.py`](/build_tools/github_actions/upload_pytorch_manifest.py)     | `WorkflowOutputRoot` + `StorageBackend` for PyTorch manifests             |
+| [`upload_test_report_script.py`](/build_tools/github_actions/upload_test_report_script.py) | `WorkflowOutputRoot` for S3 base URI (upload not yet migrated to backend) |
 
 ### Download scripts
 
-| File                                                                        | Uses                                                                      |
-| --------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| [`fetch_artifacts.py`](/build_tools/fetch_artifacts.py)                     | `RunOutputRoot.from_workflow_run(lookup_workflow_run=True)` + `S3Backend` |
-| [`find_artifacts_for_commit.py`](/build_tools/find_artifacts_for_commit.py) | `RunOutputRoot.from_workflow_run(workflow_run=...)` for bucket/prefix     |
-| [`artifact_backend.py`](/build_tools/_therock_utils/artifact_backend.py)    | `RunOutputRoot` for `S3Backend` construction                              |
-| [`artifact_manager.py`](/build_tools/artifact_manager.py)                   | Via `create_backend_from_env()`                                           |
+| File                                                                        | Uses                                                                           |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| [`fetch_artifacts.py`](/build_tools/fetch_artifacts.py)                     | `WorkflowOutputRoot.from_workflow_run(lookup_workflow_run=True)` + `S3Backend` |
+| [`find_artifacts_for_commit.py`](/build_tools/find_artifacts_for_commit.py) | `WorkflowOutputRoot.from_workflow_run(workflow_run=...)` for bucket/prefix     |
+| [`artifact_backend.py`](/build_tools/_therock_utils/artifact_backend.py)    | `WorkflowOutputRoot` for `S3Backend` construction                              |
+| [`artifact_manager.py`](/build_tools/artifact_manager.py)                   | Via `create_backend_from_env()`                                                |

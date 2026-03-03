@@ -17,18 +17,18 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent))
 # Add github_actions to path so upload_python_packages is importable.
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
-from _therock_utils.run_outputs import RunOutputRoot
+from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from _therock_utils.storage_backend import LocalStorageBackend
 import upload_python_packages
 
 
-def _make_run_root(
+def _make_output_root(
     run_id="12345",
     platform="linux",
     bucket="therock-ci-artifacts",
     external_repo="",
 ):
-    return RunOutputRoot(
+    return WorkflowOutputRoot(
         bucket=bucket,
         external_repo=external_repo,
         run_id=run_id,
@@ -61,8 +61,8 @@ class TestUploadPackages(unittest.TestCase):
     """Tests for upload_packages()."""
 
     def test_uploads_package_files(self):
-        run_root = _make_run_root()
-        packages_loc = run_root.python_packages("gfx94X-dcgpu")
+        output_root = _make_output_root()
+        packages_loc = output_root.python_packages("gfx94X-dcgpu")
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as staging:
             dist_dir = Path(tmp)
             staging_dir = Path(staging)
@@ -79,8 +79,8 @@ class TestUploadPackages(unittest.TestCase):
             self.assertTrue((base / "index.html").is_file())
 
     def test_no_files_raises(self):
-        run_root = _make_run_root()
-        packages_loc = run_root.python_packages("gfx94X-dcgpu")
+        output_root = _make_output_root()
+        packages_loc = output_root.python_packages("gfx94X-dcgpu")
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as staging:
             dist_dir = Path(tmp)
             staging_dir = Path(staging)
@@ -89,11 +89,11 @@ class TestUploadPackages(unittest.TestCase):
                 upload_python_packages.upload_packages(dist_dir, packages_loc, backend)
 
     def test_external_repo_prefix(self):
-        run_root = _make_run_root(
+        output_root = _make_output_root(
             external_repo="Fork-TheRock/",
             bucket="therock-ci-artifacts-external",
         )
-        packages_loc = run_root.python_packages("gfx94X-dcgpu")
+        packages_loc = output_root.python_packages("gfx94X-dcgpu")
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as staging:
             dist_dir = Path(tmp)
             staging_dir = Path(staging)

@@ -38,7 +38,7 @@ import subprocess
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from _therock_utils.run_outputs import RunOutputRoot
+from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from _therock_utils.storage_location import StorageLocation
 from _therock_utils.storage_backend import StorageBackend, create_storage_backend
 from github_actions_utils import (
@@ -61,12 +61,14 @@ def run_command(cmd: list[str], cwd: Path = Path.cwd()):
     subprocess.run(cmd, check=True)
 
 
-def _make_run_root(run_id: str, bucket_override: str | None = None) -> RunOutputRoot:
+def _make_output_root(
+    run_id: str, bucket_override: str | None = None
+) -> WorkflowOutputRoot:
     if bucket_override:
-        return RunOutputRoot(
+        return WorkflowOutputRoot(
             bucket=bucket_override, external_repo="", run_id=run_id, platform=PLATFORM
         )
-    return RunOutputRoot.from_workflow_run(run_id=run_id, platform=PLATFORM)
+    return WorkflowOutputRoot.from_workflow_run(run_id=run_id, platform=PLATFORM)
 
 
 def generate_index(dist_dir: Path, dry_run: bool = False):
@@ -153,8 +155,8 @@ def run(args: argparse.Namespace):
     log("---------------------")
     generate_index(dist_dir, dry_run=args.dry_run)
 
-    run_root = _make_run_root(args.run_id, bucket_override=args.bucket)
-    packages_loc = run_root.python_packages(args.artifact_group)
+    output_root = _make_output_root(args.run_id, bucket_override=args.bucket)
+    packages_loc = output_root.python_packages(args.artifact_group)
     backend = create_storage_backend(staging_dir=args.output_dir, dry_run=args.dry_run)
 
     log("")

@@ -16,11 +16,11 @@ from _therock_utils.artifact_backend import (
     S3Backend,
     create_backend_from_env,
 )
-from _therock_utils.run_outputs import RunOutputRoot
+from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
 
 def _make_local_root(run_id="test-run-123", platform="linux"):
-    return RunOutputRoot.for_local(run_id=run_id, platform=platform)
+    return WorkflowOutputRoot.for_local(run_id=run_id, platform=platform)
 
 
 def _make_s3_root(
@@ -29,7 +29,7 @@ def _make_s3_root(
     platform="linux",
     external_repo="external/",
 ):
-    return RunOutputRoot(
+    return WorkflowOutputRoot(
         bucket=bucket,
         external_repo=external_repo,
         run_id=run_id,
@@ -43,10 +43,10 @@ class TestLocalDirectoryBackend(unittest.TestCase):
     def setUp(self):
         """Create a temporary directory for testing."""
         self.temp_dir = tempfile.mkdtemp()
-        self.run_root = _make_local_root()
+        self.output_root = _make_local_root()
         self.backend = LocalDirectoryBackend(
             staging_dir=Path(self.temp_dir),
-            run_root=self.run_root,
+            output_root=self.output_root,
         )
 
     def tearDown(self):
@@ -208,8 +208,8 @@ class TestS3Backend(unittest.TestCase):
 
     def setUp(self):
         """Set up S3Backend with mocked client."""
-        self.run_root = _make_s3_root()
-        self.backend = S3Backend(run_root=self.run_root)
+        self.output_root = _make_s3_root()
+        self.backend = S3Backend(output_root=self.output_root)
 
     def test_base_uri(self):
         """Test that base_uri returns the correct S3 URI."""
@@ -234,7 +234,7 @@ class TestS3Backend(unittest.TestCase):
                 "AWS_SESSION_TOKEN": "test-token",
             },
         ):
-            backend = S3Backend(run_root=_make_s3_root())
+            backend = S3Backend(output_root=_make_s3_root())
             # Access client to trigger initialization
             _ = backend.s3_client
 
@@ -252,7 +252,7 @@ class TestS3Backend(unittest.TestCase):
 
         # Clear any existing credentials
         with mock.patch.dict(os.environ, {}, clear=True):
-            backend = S3Backend(run_root=_make_s3_root())
+            backend = S3Backend(output_root=_make_s3_root())
             # Access client to trigger initialization
             _ = backend.s3_client
 
@@ -432,7 +432,7 @@ class TestCreateBackendFromEnv(unittest.TestCase):
                 self.assertIn("override-run", backend.base_uri)
                 self.assertIn("override-platform", backend.base_uri)
 
-    @mock.patch("_therock_utils.run_outputs._retrieve_bucket_info")
+    @mock.patch("_therock_utils.workflow_outputs._retrieve_bucket_info")
     def test_s3_backend_when_no_local_dir(self, mock_retrieve):
         """Test that S3Backend is created when THEROCK_LOCAL_STAGING_DIR is not set."""
         mock_retrieve.return_value = ("", "test-bucket")
