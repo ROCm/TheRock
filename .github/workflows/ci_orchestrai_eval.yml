@@ -1,0 +1,67 @@
+# OrchestrAI (RDNA Reservation Service) evaluation workflow.
+# Follows the handbook pattern: request runners -> run on allocated runners -> release.
+# Trigger: workflow_dispatch only (manual). To run for your PR: Actions -> "CI - OrchestrAI Eval" -> Run workflow -> select your branch.
+# Requires RUNNER_SERVICE_PAT secret and repo registration with UCICD.(see https://amd.atlassian.net/wiki/x/yK1tUg)
+
+name: CI - OrchestrAI Eval
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  request_orchestrai_runners:
+    name: Request OrchestrAI runners
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Request GPU Runners
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          token: ${{ secrets.RUNNER_SERVICE_PAT }}
+          repository: AMD-SW-Infrastructure/ucicd-test-orchestra
+          event-type: rdna-service-request
+          client-payload: |
+            {
+              "action": "allocate",
+              "repository": "${{ github.repository }}",
+              "platform": "linux",
+              "gpu": "gpu_navi3x",
+              "count": 1
+            }
+
+      - name: Wait for runners to be ready
+        run: sleep 120
+
+  build_or_test:
+    name: Run on OrchestrAI runner
+    needs: request_orchestrai_runners
+    runs-on: [gpu_navi3x]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Minimal validation
+        run: |
+          uname -a
+          echo "OrchestrAI eval runner OK"
+
+  release_orchestrai_runners:
+    name: Release OrchestrAI runners
+    needs: build_or_test
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Release Runners
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          token: ${{ secrets.RUNNER_SERVICE_PAT }}
+          repository: AMD-SW-Infrastructure/ucicd-test-orchestra
+          event-type: rdna-service-request
+          client-payload: |
+            {
+              "action": "release",
+              "repository": "${{ github.repository }}",
+              "prefix": "CS-UCICD"
+            }
