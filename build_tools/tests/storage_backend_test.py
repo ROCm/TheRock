@@ -476,6 +476,145 @@ class TestS3StorageBackendCopyFile(unittest.TestCase):
         mock_client.copy_object.assert_not_called()
 
 
+class TestLocalStorageBackendUploadFiles(unittest.TestCase):
+    def test_uploads_all_files(self):
+        with tempfile.TemporaryDirectory() as staging, tempfile.TemporaryDirectory() as src:
+            staging_dir = Path(staging)
+            src_dir = Path(src)
+
+            (src_dir / "a.txt").write_text("aaa")
+            (src_dir / "b.txt").write_text("bbb")
+
+            files = [
+                (src_dir / "a.txt", StorageLocation("bucket", "run-1/a.txt")),
+                (src_dir / "b.txt", StorageLocation("bucket", "run-1/b.txt")),
+            ]
+            backend = LocalStorageBackend(staging_dir)
+            count = backend.upload_files(files)
+
+            self.assertEqual(count, 2)
+            self.assertEqual((staging_dir / "run-1" / "a.txt").read_text(), "aaa")
+            self.assertEqual((staging_dir / "run-1" / "b.txt").read_text(), "bbb")
+
+    def test_empty_list_returns_zero(self):
+        with tempfile.TemporaryDirectory() as staging:
+            backend = LocalStorageBackend(Path(staging))
+            self.assertEqual(backend.upload_files([]), 0)
+
+
+class TestS3StorageBackendUploadFiles(unittest.TestCase):
+    def test_uploads_all_files_in_parallel(self):
+        backend = S3StorageBackend()
+        mock_client = mock.MagicMock()
+        backend._s3_client = mock_client
+
+        files = [
+            (Path("/tmp/a.log"), StorageLocation("bucket", "run-1/a.log")),
+            (Path("/tmp/b.log"), StorageLocation("bucket", "run-1/b.log")),
+            (Path("/tmp/c.log"), StorageLocation("bucket", "run-1/c.log")),
+        ]
+        count = backend.upload_files(files)
+
+        self.assertEqual(count, 3)
+        self.assertEqual(mock_client.upload_file.call_count, 3)
+
+    def test_empty_list_returns_zero(self):
+        backend = S3StorageBackend()
+        mock_client = mock.MagicMock()
+        backend._s3_client = mock_client
+
+        count = backend.upload_files([])
+        self.assertEqual(count, 0)
+        mock_client.upload_file.assert_not_called()
+
+    def test_single_file_skips_thread_pool(self):
+        """A single file should not use a thread pool (no overhead)."""
+        backend = S3StorageBackend()
+        mock_client = mock.MagicMock()
+        backend._s3_client = mock_client
+
+        files = [
+            (Path("/tmp/only.log"), StorageLocation("bucket", "run-1/only.log")),
+        ]
+
+        with mock.patch(
+            "_therock_utils.storage_backend.concurrent.futures.ThreadPoolExecutor"
+        ) as mock_pool:
+            count = backend.upload_files(files)
+
+        self.assertEqual(count, 1)
+        mock_pool.assert_not_called()
+        mock_client.upload_file.assert_called_once()
+
+    def test_dry_run_skips_thread_pool(self):
+        backend = S3StorageBackend(dry_run=True)
+        mock_client = mock.MagicMock()
+        backend._s3_client = mock_client
+
+        files = [
+            (Path("/tmp/a.log"), StorageLocation("bucket", "run-1/a.log")),
+            (Path("/tmp/b.log"), StorageLocation("bucket", "run-1/b.log")),
+        ]
+
+        with mock.patch(
+            "_therock_utils.storage_backend.concurrent.futures.ThreadPoolExecutor"
+        ) as mock_pool:
+            count = backend.upload_files(files)
+
+        self.assertEqual(count, 2)
+        mock_pool.assert_not_called()
+        # Dry run: no actual boto3 calls
+        mock_client.upload_file.assert_not_called()
+
+    def test_error_propagation(self):
+        """If a file fails after retries, upload_files raises RuntimeError."""
+        backend = S3StorageBackend()
+        mock_client = mock.MagicMock()
+
+        # Second file always fails (after _s3_retry exhausts retries)
+        def upload_side_effect(filename, bucket, key, **kwargs):
+            if "bad" in key:
+                raise Exception("persistent failure")
+
+        mock_client.upload_file.side_effect = upload_side_effect
+        backend._s3_client = mock_client
+
+        files = [
+            (Path("/tmp/good.log"), StorageLocation("bucket", "run-1/good.log")),
+            (Path("/tmp/bad.log"), StorageLocation("bucket", "run-1/bad.log")),
+        ]
+
+        with mock.patch("_therock_utils.storage_backend.time.sleep"):
+            with self.assertRaises(RuntimeError) as ctx:
+                backend.upload_files(files)
+
+        self.assertIn("bad.log", str(ctx.exception))
+
+    def test_concurrency_param_wired_through(self):
+        backend = S3StorageBackend(upload_concurrency=5)
+        self.assertEqual(backend._upload_concurrency, 5)
+
+
+class TestS3StorageBackendMaxPoolConnections(unittest.TestCase):
+    def test_default_pool_connections_match_concurrency(self):
+        with mock.patch("boto3.client") as mock_boto3:
+            backend = S3StorageBackend()
+            _ = backend.s3_client
+
+            mock_boto3.assert_called_once()
+            config = mock_boto3.call_args.kwargs.get("config")
+            self.assertIsNotNone(config)
+            self.assertEqual(config.max_pool_connections, 10)
+
+    def test_custom_concurrency_sets_pool_connections(self):
+        with mock.patch("boto3.client") as mock_boto3:
+            backend = S3StorageBackend(upload_concurrency=20)
+            _ = backend.s3_client
+
+            config = mock_boto3.call_args.kwargs.get("config")
+            self.assertEqual(config.max_pool_connections, 20)
+
+
 class TestS3StorageBackendCredentialResolution(unittest.TestCase):
     """Verify the S3 client uses boto3's default credential chain.
 
@@ -576,6 +715,17 @@ class TestCreateStorageBackend(unittest.TestCase):
         backend = create_storage_backend(staging_dir=Path("/tmp/staging"), dry_run=True)
         self.assertIsInstance(backend, LocalStorageBackend)
         self.assertTrue(backend._dry_run)
+
+    def test_upload_concurrency_passed_to_s3_backend(self):
+        backend = create_storage_backend(upload_concurrency=25)
+        self.assertIsInstance(backend, S3StorageBackend)
+        self.assertEqual(backend._upload_concurrency, 25)
+
+    def test_upload_concurrency_ignored_for_local(self):
+        backend = create_storage_backend(
+            staging_dir=Path("/tmp/staging"), upload_concurrency=25
+        )
+        self.assertIsInstance(backend, LocalStorageBackend)
 
 
 if __name__ == "__main__":

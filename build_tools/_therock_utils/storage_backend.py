@@ -20,6 +20,7 @@ Usage::
     backend.copy_file(source_location, dest_location)
 """
 
+import concurrent.futures
 import logging
 import mimetypes
 import os
@@ -89,6 +90,22 @@ class StorageBackend(ABC):
     # promotion). Needs a list_files method or similar — see ArtifactBackend
     # consolidation TODO.
 
+    def upload_files(self, files: list[tuple[Path, StorageLocation]]) -> int:
+        """Upload multiple files.
+
+        The base implementation uploads sequentially.  Subclasses may
+        override to upload in parallel (see ``S3StorageBackend``).
+
+        Args:
+            files: List of ``(local_source, destination)`` pairs.
+
+        Returns:
+            Number of files uploaded.
+        """
+        for source, dest in files:
+            self.upload_file(source, dest)
+        return len(files)
+
     def upload_directory(
         self,
         source_dir: Path,
@@ -107,8 +124,6 @@ class StorageBackend(ABC):
             Number of files uploaded.
 
         Symlinks are skipped. Subdirectory structure is preserved.
-
-        TODO(scotttodd): Upload files in parallel (perhaps in the derived classes)
         """
         if not source_dir.is_dir():
             raise FileNotFoundError(f"Source directory not found: {source_dir}")
@@ -119,13 +134,17 @@ class StorageBackend(ABC):
             files.update(source_dir.rglob(pattern))
         sorted_files = sorted(f for f in files if f.is_file() and not f.is_symlink())
 
-        count = 0
-        for f in sorted_files:
-            rel = f.relative_to(source_dir).as_posix()
-            file_dest = StorageLocation(dest.bucket, f"{dest.relative_path}/{rel}")
-            self.upload_file(f, file_dest)
-            count += 1
-        return count
+        file_list = [
+            (
+                f,
+                StorageLocation(
+                    dest.bucket,
+                    f"{dest.relative_path}/{f.relative_to(source_dir).as_posix()}",
+                ),
+            )
+            for f in sorted_files
+        ]
+        return self.upload_files(file_list)
 
 
 # ---------------------------------------------------------------------------
@@ -135,6 +154,9 @@ class StorageBackend(ABC):
 # Retry parameters for transient S3 errors.
 _S3_MAX_RETRIES = 3
 _S3_INITIAL_BACKOFF_SECONDS = 1.0
+
+# Default number of concurrent uploads — matches the AWS CLI default.
+_S3_DEFAULT_UPLOAD_CONCURRENCY = 10
 
 
 def _s3_retry(operation: str, location: str, func, *args, **kwargs):
@@ -170,10 +192,20 @@ class S3StorageBackend(StorageBackend):
     order): environment variables, shared credentials file
     (``AWS_SHARED_CREDENTIALS_FILE``), instance metadata, etc.  This
     matches how the ``aws`` CLI resolves credentials.
+
+    ``upload_files()`` uploads in parallel using a thread pool whose size
+    is controlled by *upload_concurrency* (default: 10, matching the AWS
+    CLI).  The boto3 connection pool is sized to match.
     """
 
-    def __init__(self, *, dry_run: bool = False):
+    def __init__(
+        self,
+        *,
+        dry_run: bool = False,
+        upload_concurrency: int = _S3_DEFAULT_UPLOAD_CONCURRENCY,
+    ):
         self._dry_run = dry_run
+        self._upload_concurrency = upload_concurrency
         self._s3_client = None
 
     @property
@@ -181,9 +213,48 @@ class S3StorageBackend(StorageBackend):
         """Lazy-initialized boto3 S3 client."""
         if self._s3_client is None:
             import boto3
+            from botocore.config import Config
 
-            self._s3_client = boto3.client("s3")
+            self._s3_client = boto3.client(
+                "s3",
+                config=Config(max_pool_connections=self._upload_concurrency),
+            )
         return self._s3_client
+
+    def upload_files(self, files: list[tuple[Path, StorageLocation]]) -> int:
+        """Upload multiple files in parallel.
+
+        Uses a ``ThreadPoolExecutor`` with *upload_concurrency* workers.
+        Each individual file upload retries internally via ``_s3_retry``.
+        If any files still fail after retries, a ``RuntimeError`` is
+        raised listing the failures.
+        """
+        if not files:
+            return 0
+        if self._dry_run or len(files) == 1:
+            return super().upload_files(files)
+
+        failed: list[tuple[StorageLocation, BaseException]] = []
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=self._upload_concurrency,
+        ) as pool:
+            future_to_dest = {
+                pool.submit(self.upload_file, src, dst): dst for src, dst in files
+            }
+            for future in concurrent.futures.as_completed(future_to_dest):
+                dest = future_to_dest[future]
+                try:
+                    future.result()
+                except Exception as exc:
+                    failed.append((dest, exc))
+
+        if failed:
+            first_loc, first_exc = failed[0]
+            raise RuntimeError(
+                f"Failed to upload {len(failed)}/{len(files)} files. "
+                f"First failure: {first_loc.s3_uri}: {first_exc}"
+            )
+        return len(files)
 
     def upload_file(self, source: Path, dest: StorageLocation) -> None:
         content_type = infer_content_type(source)
@@ -262,6 +333,7 @@ def create_storage_backend(
     *,
     staging_dir: Path | None = None,
     dry_run: bool = False,
+    upload_concurrency: int | None = None,
 ) -> StorageBackend:
     """Create a storage backend.
 
@@ -270,7 +342,12 @@ def create_storage_backend(
             that copies files under this directory.  Otherwise returns an
             ``S3StorageBackend``.
         dry_run: If ``True``, the backend logs actions without writing.
+        upload_concurrency: Max concurrent uploads for S3 (default: 10).
+            Ignored for local backends.
     """
     if staging_dir is not None:
         return LocalStorageBackend(staging_dir, dry_run=dry_run)
-    return S3StorageBackend(dry_run=dry_run)
+    kwargs: dict = {"dry_run": dry_run}
+    if upload_concurrency is not None:
+        kwargs["upload_concurrency"] = upload_concurrency
+    return S3StorageBackend(**kwargs)
