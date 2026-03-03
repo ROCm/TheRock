@@ -107,12 +107,6 @@ if(THEROCK_ENABLE_RCCL AND THEROCK_SANITIZER STREQUAL "")
 endif(THEROCK_ENABLE_RCCL AND THEROCK_SANITIZER STREQUAL "")
 
 if(THEROCK_ENABLE_ROCSHMEM)
-  # Most libraries need to depend on the profiler, but is conditionally only used
-  # on Posix.
-  set(optional_profiler_deps)
-  if(THEROCK_FLAG_INCLUDE_PROFILER)
-    list(APPEND optional_profiler_deps roctracer rocprofiler-sdk)
-  endif()
   ##############################################################################
   # rocSHMEM
   ##############################################################################
@@ -151,7 +145,6 @@ if(THEROCK_ENABLE_ROCSHMEM)
       ${THEROCK_BUNDLED_NUMACTL}
     RUNTIME_DEPS
       hip-clr
-      ${optional_profiler_deps}
   )
   therock_cmake_subproject_glob_c_sources(rocshmem
     SUBDIRS
