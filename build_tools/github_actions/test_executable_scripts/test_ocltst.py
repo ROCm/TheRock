@@ -29,6 +29,7 @@ def setup_env(env):
     env["ROCM_PATH"] = str(ROCM_PATH)
     if platform.system() == "Linux":
         OCL_LIB_PATH = Path(THEROCK_BIN_DIR).parent / "lib"
+        logging.info(f"++ contents of OCL_LIB_PATH={os.listdir(OCL_LIB_PATH)}")
         if "LD_LIBRARY_PATH" in env:
             env["LD_LIBRARY_PATH"] = f"{OCL_LIB_PATH}:{env['LD_LIBRARY_PATH']}"
         else:
@@ -40,6 +41,7 @@ def execute_tests(env):
         cmd = [
             "./ocltst", "-J", "-m", "liboclruntime.so", "-A", "oclruntime.exclude",
         ]
+        logging.info(f"++ contents of OCLTST_PATH={os.listdir(OCLTST_PATH)}")
         env["LD_LIBRARY_PATH"] = f"{env['LD_LIBRARY_PATH']}:{OCLTST_PATH}"
         logging.info(f"++ Setting LD_LIBRARY_PATH={env['LD_LIBRARY_PATH']}")
         shell_var = False
