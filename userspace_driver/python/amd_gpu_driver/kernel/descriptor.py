@@ -23,9 +23,8 @@ class KernelDescriptor:
     private_segment_fixed_size: int = 0  # Scratch size per work-item
     kernarg_size: int = 0  # Size of kernel arguments in bytes
     reserved0: int = 0
-    kernel_code_entry_byte_offset: int = 0  # Offset from descriptor to code entry
-    reserved1: int = 0
-    reserved2: int = 0
+    kernel_code_entry_byte_offset: int = 0  # Offset from descriptor to code entry (int64)
+    reserved1: tuple[int, ...] = (0, 0, 0, 0, 0)  # 5 x uint32 reserved
     compute_pgm_rsrc3: int = 0
     compute_pgm_rsrc1: int = 0
     compute_pgm_rsrc2: int = 0
@@ -33,12 +32,26 @@ class KernelDescriptor:
     kernarg_preload: int = 0
     reserved3: int = 0
 
-    STRUCT_FMT = "<IIIIQIIIIIHHI"
+    # Layout (64 bytes total):
+    #   0: u32 group_segment_fixed_size
+    #   4: u32 private_segment_fixed_size
+    #   8: u32 kernarg_size
+    #  12: u32 reserved0
+    #  16: i64 kernel_code_entry_byte_offset
+    #  24: u32 reserved1[5]  (20 bytes)
+    #  44: u32 compute_pgm_rsrc3
+    #  48: u32 compute_pgm_rsrc1
+    #  52: u32 compute_pgm_rsrc2
+    #  56: u16 kernel_code_properties
+    #  58: u16 kernarg_preload
+    #  60: u32 reserved3
+    STRUCT_FMT = "<IIIIq5IIIIHHI"
 
     @classmethod
     def from_bytes(cls, data: bytes, offset: int = 0) -> KernelDescriptor:
         """Parse a kernel descriptor from raw bytes."""
         size = struct.calcsize(cls.STRUCT_FMT)
+        assert size == KERNEL_DESCRIPTOR_SIZE, f"struct size {size} != {KERNEL_DESCRIPTOR_SIZE}"
         if len(data) - offset < size:
             from amd_gpu_driver.errors import KernelLoadError
             raise KernelLoadError(
@@ -52,14 +65,13 @@ class KernelDescriptor:
             kernarg_size=fields[2],
             reserved0=fields[3],
             kernel_code_entry_byte_offset=fields[4],
-            reserved1=fields[5],
-            reserved2=fields[6],
-            compute_pgm_rsrc3=fields[7],
-            compute_pgm_rsrc1=fields[8],
-            compute_pgm_rsrc2=fields[9],
-            kernel_code_properties=fields[10],
-            kernarg_preload=fields[11],
-            reserved3=fields[12],
+            reserved1=fields[5:10],
+            compute_pgm_rsrc3=fields[10],
+            compute_pgm_rsrc1=fields[11],
+            compute_pgm_rsrc2=fields[12],
+            kernel_code_properties=fields[13],
+            kernarg_preload=fields[14],
+            reserved3=fields[15],
         )
 
     def to_bytes(self) -> bytes:
@@ -71,8 +83,7 @@ class KernelDescriptor:
             self.kernarg_size,
             self.reserved0,
             self.kernel_code_entry_byte_offset,
-            self.reserved1,
-            self.reserved2,
+            *self.reserved1,
             self.compute_pgm_rsrc3,
             self.compute_pgm_rsrc1,
             self.compute_pgm_rsrc2,

@@ -9,6 +9,8 @@ from typing import Any, Sequence
 
 from amd_gpu_driver.backends.base import DeviceBackend, MemoryHandle, MemoryLocation, QueueHandle
 from amd_gpu_driver.commands.pm4 import (
+    CS_PARTIAL_FLUSH,
+    EVENT_INDEX_CS_PARTIAL_FLUSH,
     PM4PacketBuilder,
     SH_REG_BASE,
 )
@@ -23,6 +25,8 @@ from amd_gpu_driver.gpu.registers import (
     COMPUTE_PGM_RSRC1,
     COMPUTE_PGM_RSRC2,
     COMPUTE_PGM_RSRC3,
+    COMPUTE_RESOURCE_LIMITS,
+    COMPUTE_RESTART_X,
     COMPUTE_START_X,
     COMPUTE_START_Y,
     COMPUTE_START_Z,
@@ -47,6 +51,7 @@ class Program:
         code_mem: MemoryHandle,
         family: GPUFamilyConfig,
         kernel_name: str = "",
+        descriptor_va: int = 0,
     ) -> None:
         self._backend = backend
         self._code_object = code_object
@@ -54,6 +59,7 @@ class Program:
         self._code_mem = code_mem
         self._family = family
         self._kernel_name = kernel_name
+        self._descriptor_va = descriptor_va
 
     @property
     def name(self) -> str:
@@ -93,8 +99,8 @@ class Program:
             args: Kernel arguments - Buffer GPU addresses or scalar uint64 values.
             timeline: Optional timeline semaphore for completion signaling.
         """
-        # Build kernarg buffer
-        kernarg_data = self._build_kernargs(args)
+        # Build kernarg buffer (explicit args + implicit dispatch packet)
+        kernarg_data = self._build_kernargs(args, grid, block)
         kernarg_mem = self._backend.alloc_memory(
             max(len(kernarg_data), 4096),
             MemoryLocation.GTT,
@@ -103,16 +109,27 @@ class Program:
         # Write kernarg data
         ctypes.memmove(kernarg_mem.cpu_addr, kernarg_data, len(kernarg_data))
 
-        # Compute code entry address
-        code_entry_addr = self._code_mem.gpu_addr + self._descriptor.kernel_code_entry_byte_offset
+        # Compute code entry address.
+        # kernel_code_entry_byte_offset is relative to the descriptor's
+        # virtual address in the ELF.  We uploaded .text starting at
+        # code_mem.gpu_addr, so we map the ELF VA to the GPU address.
+        text_va = self._code_object.text_section.sh_addr if self._code_object.text_section else 0
+        code_entry_va = self._descriptor_va + self._descriptor.kernel_code_entry_byte_offset
+        code_entry_addr = self._code_mem.gpu_addr + (code_entry_va - text_va)
 
         # Build PM4 command stream
         pm4 = PM4PacketBuilder()
 
-        # 1. Cache invalidation
-        pm4.acquire_mem()
+        # 1. Pre-dispatch cache invalidation (K-cache + L1 only, per tinygrad)
+        from amd_gpu_driver.commands.pm4 import (
+            CP_COHER_CNTL_SH_KCACHE_ACTION,
+            CP_COHER_CNTL_TCL1_ACTION,
+        )
+        pm4.acquire_mem(
+            coher_cntl=CP_COHER_CNTL_SH_KCACHE_ACTION | CP_COHER_CNTL_TCL1_ACTION,
+        )
 
-        # 2. Program address (shifted right by 8 bits)
+        # 2. Program address (shifted right by 8 bits, LO and HI consecutive)
         pgm_addr = code_entry_addr >> 8
         pm4.set_sh_reg(
             sh_reg_offset(COMPUTE_PGM_LO),
@@ -120,17 +137,26 @@ class Program:
             (pgm_addr >> 32) & 0xFFFFFFFF,
         )
 
-        # 3. Program resource registers
+        # 3. Program resource registers (RSRC1 and RSRC2 are consecutive)
         pm4.set_sh_reg(
             sh_reg_offset(COMPUTE_PGM_RSRC1),
             self._descriptor.compute_pgm_rsrc1,
-        )
-        pm4.set_sh_reg(
-            sh_reg_offset(COMPUTE_PGM_RSRC2),
             self._descriptor.compute_pgm_rsrc2,
         )
 
-        # 4. Kernarg pointer (USER_DATA_0 and USER_DATA_1)
+        # 4. RSRC3 (required for gfx942/CDNA3)
+        pm4.set_sh_reg(
+            sh_reg_offset(COMPUTE_PGM_RSRC3),
+            self._descriptor.compute_pgm_rsrc3,
+        )
+
+        # 5. Tmpring size (scratch)
+        pm4.set_sh_reg(sh_reg_offset(COMPUTE_TMPRING_SIZE), 0)
+
+        # 6. Restart coordinates (zero)
+        pm4.set_sh_reg(sh_reg_offset(COMPUTE_RESTART_X), 0, 0, 0)
+
+        # 7. Kernarg pointer (USER_DATA_0 and USER_DATA_1)
         kernarg_addr = kernarg_mem.gpu_addr
         pm4.set_sh_reg(
             sh_reg_offset(COMPUTE_USER_DATA_0),
@@ -138,31 +164,27 @@ class Program:
             (kernarg_addr >> 32) & 0xFFFFFFFF,
         )
 
-        # 5. Thread dimensions
-        pm4.set_sh_reg(sh_reg_offset(COMPUTE_START_X), 0)
-        pm4.set_sh_reg(sh_reg_offset(COMPUTE_START_Y), 0)
-        pm4.set_sh_reg(sh_reg_offset(COMPUTE_START_Z), 0)
+        # 8. Resource limits (0 = no restrictions)
+        pm4.set_sh_reg(sh_reg_offset(COMPUTE_RESOURCE_LIMITS), 0)
 
-        pm4.set_sh_reg(sh_reg_offset(COMPUTE_NUM_THREAD_X), block[0])
-        pm4.set_sh_reg(sh_reg_offset(COMPUTE_NUM_THREAD_Y), block[1])
-        pm4.set_sh_reg(sh_reg_offset(COMPUTE_NUM_THREAD_Z), block[2])
+        # 9. Start coordinates + workgroup dimensions (consecutive registers)
+        pm4.set_sh_reg(
+            sh_reg_offset(COMPUTE_START_X),
+            0, 0, 0,                           # start x, y, z
+            block[0], block[1], block[2],       # num_thread x, y, z
+            0, 0,                               # trailing zeros (thread holes)
+        )
 
-        # 6. Scratch (tmpring) size
-        if self._descriptor.private_segment_fixed_size > 0:
-            # Compute scratch size per wave
-            scratch_per_item = self._descriptor.private_segment_fixed_size
-            waves_per_sh = 1  # Simplified
-            scratch_size = scratch_per_item * self._family.wave_size * waves_per_sh
-            pm4.set_sh_reg(sh_reg_offset(COMPUTE_TMPRING_SIZE), scratch_size)
+        # 10. Dispatch
+        pm4.dispatch_direct(grid[0], grid[1], grid[2])
 
-        # 7. Dispatch
-        pm4.dispatch_direct(grid[0], grid[1], grid[2], initiator=1)
+        # 11. CS_PARTIAL_FLUSH after dispatch (ensures shader completion)
+        pm4.event_write(CS_PARTIAL_FLUSH, EVENT_INDEX_CS_PARTIAL_FLUSH)
 
-        # 8. Signal completion
+        # 12. Signal completion
         if timeline is not None:
             signal_value = timeline.next_value()
             signal_bytes = timeline.signal_packets(signal_value)
-            # Combine PM4 packets
             packets = pm4.build() + signal_bytes
         else:
             packets = pm4.build()
@@ -170,23 +192,51 @@ class Program:
         # Submit to queue
         self._backend.submit_packets(queue, packets)
 
-    def _build_kernargs(self, args: Sequence[int | Buffer]) -> bytes:
-        """Build the kernarg buffer from a list of arguments."""
+    def _build_kernargs(
+        self,
+        args: Sequence[int | Buffer],
+        grid: tuple[int, int, int],
+        block: tuple[int, int, int],
+    ) -> bytes:
+        """Build the kernarg buffer from arguments + implicit dispatch packet.
+
+        HIP kernels expect implicit arguments after the explicit ones.
+        The implicit dispatch packet layout (at 16-byte aligned offset):
+            +0x00: block_count_x (u32)   = grid[0]
+            +0x04: block_count_y (u32)   = grid[1]
+            +0x08: block_count_z (u32)   = grid[2]
+            +0x0C: group_size_x (u16)    = block[0]
+            +0x0E: group_size_y (u16)    = block[1]
+            +0x10: group_size_z (u16)    = block[2]
+            +0x12: remainder is reserved/zero
+        """
         parts: list[bytes] = []
         for arg in args:
             if isinstance(arg, Buffer):
-                # Pass GPU address as uint64
                 parts.append(struct.pack("<Q", arg.gpu_addr))
             elif isinstance(arg, int):
                 parts.append(struct.pack("<Q", arg))
             else:
                 raise KernelLoadError(f"Unsupported kernel argument type: {type(arg)}")
 
-        result = b"".join(parts)
-        # Pad to kernarg_size if needed
-        if len(result) < self._descriptor.kernarg_size:
-            result += b"\x00" * (self._descriptor.kernarg_size - len(result))
-        return result
+        explicit = b"".join(parts)
+
+        # Align explicit args to 16 bytes for implicit packet
+        implicit_offset = (len(explicit) + 15) & ~15
+
+        # Build implicit dispatch packet
+        implicit_packet = struct.pack(
+            "<III HHH",
+            grid[0], grid[1], grid[2],
+            block[0], block[1], block[2],
+        )
+
+        # Create full kernarg buffer
+        result = bytearray(max(self._descriptor.kernarg_size, implicit_offset + len(implicit_packet)))
+        result[:len(explicit)] = explicit
+        result[implicit_offset:implicit_offset + len(implicit_packet)] = implicit_packet
+
+        return bytes(result)
 
     def free(self) -> None:
         """Free the code memory."""
@@ -228,16 +278,30 @@ def load_program(
     else:
         kernel_sym = kernels[0]
 
-    # Parse kernel descriptor from the symbol's section
-    # The descriptor is at the symbol's value offset
-    descriptor_offset = kernel_sym.st_value
-    if co.text_section is not None:
-        # Descriptor is embedded in .text at the symbol offset
+    # Find the kernel descriptor.
+    # Modern AMDGPU ELFs put the descriptor as an OBJECT symbol named
+    # "<kernel>.kd" in .rodata.  The FUNC symbol points at the code entry.
+    kd_name = kernel_sym.name + ".kd"
+    kd_syms = [s for s in co.symbols if s.name == kd_name]
+
+    descriptor_va = 0
+    if kd_syms and co.rodata_section is not None:
+        kd_sym = kd_syms[0]
+        rodata_data = co.get_section_data(co.rodata_section)
+        # st_value is the virtual address; convert to offset within section
+        kd_offset = kd_sym.st_value - co.rodata_section.sh_addr
+        kd = KernelDescriptor.from_bytes(rodata_data, kd_offset)
+        descriptor_va = kd_sym.st_value
+    elif co.text_section is not None:
+        # Older format: descriptor embedded in .text at the symbol offset
         text_data = co.code
+        descriptor_offset = kernel_sym.st_value - co.text_section.sh_addr
         kd = KernelDescriptor.from_bytes(text_data, descriptor_offset)
+        descriptor_va = kernel_sym.st_value
     elif co.rodata_section is not None:
         rodata_data = co.get_section_data(co.rodata_section)
-        kd = KernelDescriptor.from_bytes(rodata_data, descriptor_offset)
+        kd = KernelDescriptor.from_bytes(rodata_data, 0)
+        descriptor_va = co.rodata_section.sh_addr
     else:
         raise KernelLoadError("Cannot find kernel descriptor section")
 
@@ -264,4 +328,5 @@ def load_program(
         code_mem=code_mem,
         family=family,
         kernel_name=kernel_sym.name,
+        descriptor_va=descriptor_va,
     )

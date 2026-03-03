@@ -84,6 +84,7 @@ class TimelineSemaphore:
             value=value,
             data_sel=DATA_SEL_SEND_64BIT,
             int_sel=INT_SEL_SEND_INT_ON_CONFIRM,
+            cache_flush=True,
         )
         return builder.build()
 

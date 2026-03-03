@@ -10,12 +10,12 @@ Register definitions from:
 
 # Compute program address (low/high 32 bits of code pointer >> 8)
 COMPUTE_PGM_LO = 0x2E0C
-COMPUTE_PGM_HI = 0x2E10
+COMPUTE_PGM_HI = 0x2E0D
 
 # Compute program resource registers
 COMPUTE_PGM_RSRC1 = 0x2E12
 COMPUTE_PGM_RSRC2 = 0x2E13
-COMPUTE_PGM_RSRC3 = 0x2E42
+COMPUTE_PGM_RSRC3 = 0x2E2D  # GFX942 (gc_9_4_3) only
 
 # User data SGPRs (for passing kernarg pointer, etc.)
 COMPUTE_USER_DATA_0 = 0x2E40
@@ -40,9 +40,14 @@ COMPUTE_RESOURCE_LIMITS = 0x2E15
 # Dispatch initiator
 COMPUTE_DISPATCH_INITIATOR = 0x2E00
 
+# Restart coordinates
+COMPUTE_RESTART_X = 0x2E1B
+COMPUTE_RESTART_Y = 0x2E1C
+COMPUTE_RESTART_Z = 0x2E1D
+
 # Shader control
-COMPUTE_SHADER_CHKSUM = 0x2E1C
-COMPUTE_MISC_RESERVED = 0x2E1E
+COMPUTE_SHADER_CHKSUM = 0x2E2C  # GFX942 (gc_9_4_3) only
+COMPUTE_MISC_RESERVED = 0x2E1F
 
 
 def sh_reg_offset(reg: int) -> int:
