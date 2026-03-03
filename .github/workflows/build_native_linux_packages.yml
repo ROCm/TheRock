@@ -115,6 +115,3 @@ jobs:
           rocm_version: ${{ inputs.rocm_version }}
           native_package_type: ${{ matrix.package_type }}
           release_type: ""
-        permissions:
-          contents: read
-          id-token: write
