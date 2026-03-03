@@ -16,7 +16,7 @@ import time
 from os import path, makedirs, getenv
 from collections import defaultdict
 from typing import Iterable, List, Type, Dict, Set, TypeVar, Optional
-from re import sub, match
+from re import sub, match, search
 from packaging.version import parse as _parse_version, Version, InvalidVersion
 
 import boto3
@@ -28,7 +28,9 @@ CLIENT = boto3.client('s3')
 
 # bucket for TheRock
 # We also manage `therock-nightly-python` (not the default to make the script safer to test)
-BUCKET_NAME = getenv("S3_BUCKET_PY", "therock-dev-python")
+BUCKET_NAME = getenv("S3_BUCKET_PY")
+if not BUCKET_NAME:
+    raise RuntimeError("S3_BUCKET_PY environment variable must be set")
 BUCKET = S3.Bucket(BUCKET_NAME)
 # TODO: bucket mirror just to hold index used with CDN
 # BUCKET_CDN = S3.Bucket('therock-nightly-python-testing')
@@ -38,18 +40,15 @@ ACCEPTED_FILE_EXTENSIONS = ("whl", "zip", "tar.gz")
 PREFIXES = [
     # Note: v2-staging first, in case issues are observed while the script runs
     # and the developer wants to more safely cancel the script.
-    "v2-staging/gfx110X-all",
-    "v2-staging/gfx1151",
-    "v2-staging/gfx120X-all",
-    "v2-staging/gfx94X-dcgpu",
-    "v2-staging/gfx950-dcgpu",
-    "v2/gfx110X-all",
-    "v2/gfx1151",
-    "v2/gfx120X-all",
-    "v2/gfx94X-dcgpu",
-    "v2/gfx950-dcgpu",
+    "v3/rocm/whl/gfx110X-dgpu",
+    "v3/rocm/whl/gfx1150",
+    "v3/rocm/whl/gfx1151",
+    "v3/rocm/whl/gfx1152",
+    "v3/rocm/whl/gfx120X-all",
+    "v3/rocm/whl/gfx90X-dcgpu",
+    "v3/rocm/whl/gfx94X-dcgpu",
+    "v3/rocm/whl/gfx950-dcgpu",
 ]
-
 CUSTOM_PREFIX = getenv('CUSTOM_PREFIX')
 if CUSTOM_PREFIX:
     PREFIXES.append(CUSTOM_PREFIX)
@@ -284,7 +283,8 @@ class S3Index:
                 attributes = (
                     f' data-dist-info-metadata="{pep658_sha}" data-core-metadata="{pep658_sha}"'
                 )
-            # Mark networkx versions with Python requirements (pytorch/pytorch#152191)
+            # Ugly hack: mark networkx-3.3, 3.4.2 as Python-3.10+ only to unblock https://github.com/pytorch/pytorch/issues/152191
+            # Mark networkx versions with Python requirements
             # networkx 3.4.2 for Python 3.10, 3.5+ for Python 3.11+
             if obj.key.endswith("networkx-3.4.2-py3-none-any.whl"):
                 attributes += ' data-requires-python="&gt;=3.10"'
@@ -458,6 +458,23 @@ class S3Index:
             rc.fetch_pep658()
         return rc
 
+def process_prefix(prefix: str, compute_sha256: bool = False, upload: bool = True):
+    print(f"Processing prefix: {prefix}")
+    stime = time.time()
+
+    idx = S3Index.from_S3(prefix=prefix, with_metadata=compute_sha256)
+
+    etime = time.time()
+    print(f"Fetched {len(idx.objects)} objects for '{prefix}' in {etime-stime:.2f}s")
+
+    if compute_sha256:
+        idx.compute_sha256()
+    elif not upload:
+        idx.save_pep503_htmls()
+    else:
+        idx.upload_pep503_htmls()
+
+    return len(idx.objects)
 
 def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser("Manage S3 HTML indices for PyTorch")
@@ -477,20 +494,13 @@ def main() -> None:
     action = "Saving indices" if args.do_not_upload else "Uploading indices"
     if args.compute_sha256:
         action = "Computing checksums"
-
     prefixes = PREFIXES if args.prefix == 'all' else [args.prefix]
     for prefix in prefixes:
-        print(f"INFO: {action} for '{prefix}'")
-        stime = time.time()
-        idx = S3Index.from_S3(prefix=prefix, with_metadata=True or args.compute_sha256)
-        etime = time.time()
-        print(f"DEBUG: Fetched {len(idx.objects)} objects for '{prefix}' in {etime-stime:.2f} seconds")
-        if args.compute_sha256:
-            idx.compute_sha256()
-        elif args.do_not_upload:
-            idx.save_pep503_htmls()
-        else:
-            idx.upload_pep503_htmls()
+        process_prefix(
+            prefix=prefix,
+            compute_sha256=args.compute_sha256,
+            upload=not args.do_not_upload
+        )
 
 if __name__ == "__main__":
     main()
