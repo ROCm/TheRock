@@ -4,7 +4,7 @@ This directory provides tooling for building JAX with ROCm Python wheels.
 
 > [!TIP]
 > If you want to install our prebuilt JAX packages instead of building them
-> from source, see [RELEASES.md](/RELEASES.md) instead.
+> from source, see [RELEASES.md](/RELEASES.md#installing-jax-python-packages) instead.
 
 Table of contents:
 
@@ -33,8 +33,8 @@ For upstream JAX development references, see:
 Support for JAX is provided via stable release branches of
 [ROCm/rocm-jax](https://github.com/ROCm/rocm-jax).
 
-| JAX version | Linux                                                                                                            | Windows          |
-| ----------- | ---------------------------------------------------------------------------------------------------------------- | ---------------- |
+| JAX version | Linux                                                                                                           | Windows          |
+| ----------- | --------------------------------------------------------------------------------------------------------------- | ---------------- |
 | 0.8.2       | ✅ Supported via [ROCm/rocm-jax `rocm-jaxlib-v0.8.2`](https://github.com/ROCm/rocm-jax/tree/rocm-jaxlib-v0.8.2) | ❌ Not supported |
 | 0.8.0       | ✅ Supported via [ROCm/rocm-jax `rocm-jaxlib-v0.8.0`](https://github.com/ROCm/rocm-jax/tree/rocm-jaxlib-v0.8.0) | ❌ Not supported |
 
@@ -76,15 +76,22 @@ provide it via **tarballs** with arbitrary install locations.
 
 ### Steps
 
-1. Checkout rocm-jax:
+1. Checkout rocm-jax and jax:
 
    ```bash
    git clone https://github.com/ROCm/rocm-jax.git
+   git clone https://github.com/ROCm/jax.git
    pushd rocm-jax
+   git checkout rocm-jaxlib-v<JAX_VERSION>
+   popd
+   pushd jax
+   git checkout rocm-jaxlib-v<JAX_VERSION>
+   popd
    ```
 
 1. Choose your configuration:
 
+   - **JAX version**: e.g. `0.8.2` or `0.8.0`
    - **Python version**: e.g. `3.12`
    - **TheRock tarball**: A tarball URL, a local tarball file path, or a
      directory containing a ROCm installation. Nightly tarballs are available
@@ -93,20 +100,27 @@ provide it via **tarballs** with arbitrary install locations.
 1. Build all wheels:
 
    ```bash
+   pushd rocm-jax
    python3 build/ci_build \
      --compiler=clang \
      --python-versions="3.12" \
      --rocm-version="<rocm_version>" \
      --therock-path="<path_to_tarball_or_rocm_dir>" \
+     --jax-source-dir="<path_to_jax_directory>" \
      dist_wheels
+   popd
    ```
+
+   > [!NOTE]
+   > The `--jax-source-dir` flag is required for JAX 0.8.2 and points to the
+   > cloned `jax` repository directory. For JAX 0.8.0, this flag can be omitted.
 
 1. Locate built wheels:
 
    After a successful build, wheels will be available in:
 
    ```text
-   jax_rocm_plugin/wheelhouse/
+   rocm-jax/jax_rocm_plugin/wheelhouse/
    ```
 
 For more detailed build options (including building `jax_rocm7_plugin` and
@@ -126,7 +140,7 @@ For more detailed build options (including building `jax_rocm7_plugin` and
 1. Checkout the JAX test repo:
 
    ```bash
-   git clone https://github.com/rocm/jax.git jax_tests
+   git clone https://github.com/ROCm/jax.git jax_tests
    pushd jax_tests
    git checkout rocm-jaxlib-v<JAX_VERSION>
    popd
@@ -155,7 +169,7 @@ For more detailed build options (including building `jax_rocm7_plugin` and
    ```
 
    For detailed instructions and example usage, see the
-   [TheRock RELEASES.md](https://github.com/ROCm/TheRock/blob/main/RELEASES.md#installing-tarballs-using-install_rocm_from_artifactspy).
+   [TheRock RELEASES.md](https://github.com/ROCm/TheRock/blob/main/RELEASES.md#automated-tarball-extraction).
 
 1. Install JAX wheels from the package index:
 
@@ -165,7 +179,7 @@ For more detailed build options (including building `jax_rocm7_plugin` and
      jaxlib jax_rocm7_plugin jax_rocm7_pjrt
 
    # Install jax from PyPI to match the version
-   pip install jax==<jax_version>
+   pip install jax==<JAX_VERSION>
    ```
 
 1. Run JAX tests:
