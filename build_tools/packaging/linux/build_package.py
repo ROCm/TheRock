@@ -23,6 +23,7 @@ import os
 import shutil
 import subprocess
 import sys
+import traceback
 
 from datetime import datetime, timezone
 from email.utils import format_datetime
@@ -140,9 +141,15 @@ def create_versioned_deb_package(pkg_name, config: PackageConfig):
 
     print(f"sourcedir_list:\n  {sourcedir_list}")
     if not sourcedir_list and not is_meta:
-        #sys.exit(f"{pkg_name}: Empty sourcedir_list and not a meta package, exiting")
-        print(f"ERROR: {pkg_name}: Empty sourcedir_list and not a meta package, skipping")
-        return []
+        if config.enable_multi_arch:
+            print(
+                f"ERROR: {pkg_name}: Empty sourcedir_list and not a meta package, skipping"
+            )
+            return []
+        else:
+            sys.exit(
+                f"{pkg_name}: Empty sourcedir_list and not a meta package, exiting"
+            )
 
     if not sourcedir_list:
         print(f"{pkg_name} is a Meta package")
@@ -267,12 +274,17 @@ def generate_rules_file(pkg_info, deb_dir, config: PackageConfig):
     # Get package name for changelog installation
     pkg_name = update_package_name(pkg_info.get("Package"), config)
 
+    # Disable debian dh_strip for multi-arch buillds
+    # TODO: Fix required for dh_strip error in multi-arch builds
+    if config.enable_multi_arch:
+        disable_dh_strip = "True"
+
     env = Environment(loader=FileSystemLoader(str(SCRIPT_DIR)))
     template = env.get_template("template/debian_rules.j2")
     # Prepare  context dictionary
     context = {
         "disable_dwz": disable_dwz,
-        "disable_dh_strip": "True",
+        "disable_dh_strip": disable_dh_strip,
         "install_prefix": config.install_prefix,
         "pkg_name": pkg_name,
     }
@@ -375,7 +387,7 @@ def generate_debian_postscripts(pkg_info, deb_dir, config: PackageConfig):
     parts = config.rocm_version.split(".")
     if len(parts) < 3:
         raise ValueError(
-            f"Version string '{args.rocm_version}' does not have major.minor.patch versions"
+            f"Version string '{config.rocm_version}' does not have major.minor.patch versions"
         )
 
     env = Environment(loader=FileSystemLoader(str(SCRIPT_DIR)))
@@ -452,20 +464,16 @@ def package_with_dpkg_build(pkg_dir):
     Returns: None
     """
     print_function_name()
-    current_dir = Path.cwd()
-    os.chdir(Path(pkg_dir))
     # Build the command
     cmd = ["dpkg-buildpackage", "-uc", "-us", "-b"]
 
     # Execute the command
     try:
-        subprocess.run(cmd, check=True)
+        subprocess.run(cmd, check=True, cwd=pkg_dir)
         print(f"Deb Package built successfully: {os.path.basename(pkg_dir)}")
     except subprocess.CalledProcessError as e:
-        print(f"Error building deb package{os.path.basename(pkg_dir)}: {e}")
+        print(f"Error building deb package: {os.path.basename(pkg_dir)}: {e}")
         sys.exit(e.returncode)
-
-    os.chdir(current_dir)
 
 
 ######################## RPM package creation ####################
@@ -568,6 +576,11 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
     rpmsuggests = ""
     sourcedir_list = []
     rpm_scripts = []
+    # amdrocm-debugger: Exclude libpython requirements
+    # Multiple Python-version-specific binaries are included; the wrapper script
+    # automatically selects the binary matching the system's Python version
+    exclude_libpython_requires = pkg_name == "amdrocm-debugger"
+
     is_meta = is_meta_package(pkg_info)
     if config.versioned_pkg:
         recommends_list = pkg_info.get("RPMRecommends", [])
@@ -586,6 +599,17 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
 
         # Filter out non-existing directories
         sourcedir_list = [path for path in sourcedir_list if os.path.isdir(path)]
+
+        # Warn if we have no artifacts for non-meta packages
+        if not sourcedir_list and not is_meta:
+            if config.enable_multi_arch:
+                print(
+                    f"WARNING: {pkg_name}: Empty sourcedir_list and not a meta package, creating empty RPM"
+                )
+            else:
+                sys.exit(
+                    f"{pkg_name}: Empty sourcedir_list and not a meta package, exiting"
+                )
 
         if is_postinstallscripts_available(pkg_info):
             rpm_scripts = generate_rpm_postscripts(pkg_info, config)
@@ -631,6 +655,7 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
         "disable_debug_package": is_debug_package_disabled(pkg_info),
         "sourcedir_list": sourcedir_list,
         "rpm_scripts": rpm_scripts,
+        "exclude_libpython_requires": exclude_libpython_requires,
     }
 
     with open(specfile, "w", encoding="utf-8") as f:
@@ -743,18 +768,47 @@ def parse_input_package_list(pkg_name, artifact_dir):
     return pkg_list, skipped_list
 
 
+def normalize_target_list(targets: list[str]) -> list[str]:
+    """Normalize target list by splitting on semicolons, commas, or spaces.
+
+    Accepts targets in multiple formats:
+    - Space-separated CLI args: ['gfx94X-dcgpu', 'gfx120X-all']
+    - Single comma-separated string: ['gfx94X-dcgpu,gfx120X-all,gfx1151']
+    - Single semicolon-separated string: ['gfx94X-dcgpu;gfx120X-all;gfx1151']
+    - Mixed: ['gfx94X-dcgpu;gfx120X-all', 'gfx1151']
+
+    Returns a flat list of individual target names.
+    """
+    normalized = []
+    for target in targets:
+        # Split by semicolon first, then comma, then whitespace
+        if ";" in target:
+            normalized.extend(target.split(";"))
+        elif "," in target:
+            normalized.extend(target.split(","))
+        else:
+            # Could be space-separated or single value
+            normalized.extend(target.split())
+
+    # Remove empty strings and strip whitespace
+    return [t.strip() for t in normalized if t.strip()]
+
+
 def run(args: argparse.Namespace):
     # Set the global variables
     dest_dir = Path(args.dest_dir).expanduser().resolve()
+
+    # Normalize target list to handle various input formats
+    normalized_targets = normalize_target_list(args.target)
 
     # Configure architecture based on multi-arch mode
     if args.enable_multi_arch:
         # Multi-arch mode: use generic default, targets for gfxarch packages
         default_gfx_arch = GFX_GENERIC
-        gfxarch_list = args.target
+        gfxarch_list = normalized_targets
     else:
         # Single-arch mode: use first target as default, no additional arch list
-        default_gfx_arch = args.target[0]
+        default_gfx_arch = normalized_targets[0]
         gfxarch_list = []
 
     # Split version passed to use only major and minor version for prefix folder
@@ -803,11 +857,12 @@ def run(args: argparse.Namespace):
             f"Invalid package type: {config.pkg_type}. Must be 'deb' or 'rpm'."
         )
 
+    current_pkg_idx = 0
     try:
         built_pkglist = []
         failed_pkglist = []
 
-        for pkg_name in pkg_list:
+        for current_pkg_idx, pkg_name in enumerate(pkg_list):
             print(f"Create {pkg_type} package.")
 
             pkg_info = get_package_info(pkg_name)
@@ -833,6 +888,14 @@ def run(args: argparse.Namespace):
                     built_pkglist.extend(output_list)
                     pkg_built = True
                     print(f"Built package List: {built_pkglist}")
+                else:
+                    # Add failed architecture variant to failed list
+                    variant_name = (
+                        f"{pkg_name}-{gfxarch}"
+                        if gfxarch != default_gfx_arch
+                        else pkg_name
+                    )
+                    failed_pkglist.append(variant_name)
 
             if not pkg_built:
                 failed_pkglist.append(pkg_name)
@@ -849,9 +912,18 @@ def run(args: argparse.Namespace):
 
         # Print build summary
         print_build_summary(config, pkglist_status)
-    except SystemExit:
+    except SystemExit as e:
         # Build aborted somewhere inside create_* functions
-        print("\n❌ Build aborted due to an error.\n")
+        tb = traceback.extract_tb(sys.exc_info()[2])
+        if tb:
+            filename, line_no, func, text = tb[-1]
+            print(f"\n❌ Build aborted due to an error at {filename}:{line_no}: {e}\n")
+        else:
+            print(f"\n❌ Build aborted due to an error: {e}\n")
+        # Record failed package and all pending packages
+        failed_pkglist.append(pkg_list[current_pkg_idx])
+        pending_pkgs = pkg_list[current_pkg_idx + 1 :]
+        failed_pkglist.extend(pending_pkgs)
         pkglist_status = PackageList(
             total=pkg_list,
             built=built_pkglist,
