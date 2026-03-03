@@ -20,7 +20,7 @@
 [submodule "rocm-libraries"]
 	path = rocm-libraries
 	url = https://github.com/ROCm/rocm-libraries
-	branch = develop
+	branch = users/rsrimant/nightly-0302-with-submodule-updates
 [submodule "rocm-systems"]
 	path = rocm-systems
 	url = https://github.com/ROCm/rocm-systems.git
