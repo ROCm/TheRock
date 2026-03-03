@@ -29,6 +29,7 @@ class AMDDevice:
     """
 
     def __init__(self, device_index: int = 0, *, backend: str = "kfd") -> None:
+        self._device_index = device_index
         self._backend: DeviceBackend
         if backend == "kfd":
             self._backend = KFDDevice()
@@ -127,6 +128,16 @@ class AMDDevice:
         if isinstance(kfd, KFDDevice) and kfd.node:
             return kfd.node.gfx_name
         return "unknown"
+
+    @property
+    def device_index(self) -> int:
+        """Index of this GPU (as passed to constructor)."""
+        return self._device_index
+
+    @property
+    def gpu_id(self) -> int:
+        """KFD GPU ID for this device."""
+        return self._backend.gpu_id
 
     @property
     def vram_size(self) -> int:

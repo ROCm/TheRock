@@ -124,6 +124,7 @@ class KFDDevice(DeviceBackend):
         self._events = KFDEventManager(
             kfd_fd=self._kfd_fd,
             gpu_id=self._gpu_id_value,
+            node_id=self._node.node_id,
         )
         self._queues = KFDQueueManager(
             kfd_fd=self._kfd_fd,
@@ -273,6 +274,19 @@ class KFDDevice(DeviceBackend):
         assert self._memory is not None
         self._memory.map_to_gpu(handle)
 
+    def map_memory_to_peers(
+        self, handle: MemoryHandle, peer_gpu_ids: list[int]
+    ) -> None:
+        """Map memory into page tables of peer GPUs for P2P access."""
+        assert self._memory is not None
+        # Include already-mapped GPUs to avoid EINVAL from the kernel
+        # when remapping a buffer that already has page table entries.
+        already_mapped = set(handle.mapped_gpu_ids)
+        all_gpu_ids = list(
+            {self._gpu_id_value} | already_mapped | set(peer_gpu_ids)
+        )
+        self._memory.map_to_gpu(handle, gpu_ids=all_gpu_ids)
+
     # --- Queues ---
 
     def create_compute_queue(self) -> QueueHandle:
@@ -282,6 +296,11 @@ class KFDDevice(DeviceBackend):
     def create_sdma_queue(self) -> QueueHandle:
         assert self._queues is not None
         return self._queues.create_sdma_queue()
+
+    def create_xgmi_sdma_queue(self) -> QueueHandle:
+        """Create an XGMI SDMA queue for cross-GPU copies."""
+        assert self._queues is not None
+        return self._queues.create_xgmi_sdma_queue()
 
     def destroy_queue(self, handle: QueueHandle) -> None:
         assert self._queues is not None

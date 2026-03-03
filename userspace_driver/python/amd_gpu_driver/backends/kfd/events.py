@@ -25,9 +25,10 @@ from amd_gpu_driver.ioctl.kfd import (
 class KFDEventManager:
     """Manages KFD signal events."""
 
-    def __init__(self, kfd_fd: int, gpu_id: int) -> None:
+    def __init__(self, kfd_fd: int, gpu_id: int, node_id: int = 0) -> None:
         self._kfd_fd = kfd_fd
         self._gpu_id = gpu_id
+        self._node_id = node_id
         self._events: list[SignalHandle] = []
         self._event_page_addr: int = 0
 
@@ -36,7 +37,7 @@ class KFDEventManager:
         args = kfd_ioctl_create_event_args()
         args.event_type = KFD_IOC_EVENT_SIGNAL
         args.auto_reset = 1 if auto_reset else 0
-        args.node_id = 0
+        args.node_id = self._node_id
 
         helpers.ioctl(
             self._kfd_fd, AMDKFD_IOC_CREATE_EVENT, args, "CREATE_EVENT"
