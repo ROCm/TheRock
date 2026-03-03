@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """
 Uploads test reports to AWS S3 bucket for a GitHub run ID and AMD GPU family
 """

@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 r"""Builds production PyTorch wheels based on the rocm wheels.
 
 This script is designed to be used from CI but should be serviceable for real
@@ -162,6 +165,7 @@ LINUX_LIBRARY_PRELOADS = [
     "rccl",  # Linux only for the moment.
     "hipblaslt",
     "miopen",
+    "hipdnn",
     "rocm_sysdeps_liblzma",
     "rocm-openblas",
 ]
@@ -179,6 +183,7 @@ WINDOWS_LIBRARY_PRELOADS = [
     "hipsolver",
     "hipblaslt",
     "miopen",
+    "hipdnn",
     "rocm-openblas",
 ]
 
