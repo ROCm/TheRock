@@ -142,7 +142,6 @@ endif(THEROCK_BUILD_TESTING)
       hip-clr
       rocprofiler-register
       ${_rocprofiler_sdk_optional_deps}
-      ${THEROCK_BUNDLED_ELFUTILS}
       ${THEROCK_BUNDLED_LIBDRM}
       ${THEROCK_BUNDLED_SQLITE3}
     )
@@ -244,11 +243,6 @@ endif(THEROCK_BUILD_TESTING)
       BACKGROUND_BUILD
       CMAKE_ARGS
         -DHIP_PLATFORM=amd
-        -DROCPROFSYS_BUILD_ELFUTILS=ON
-        -DROCPROFSYS_BUILD_TBB=ON
-        -DROCPROFSYS_BUILD_LIBIBERTY=ON
-        -DROCPROFSYS_BUILD_BOOST=ON
-        -DROCPROFSYS_BUILD_DYNINST=ON
         -DROCPROFSYS_BUILD_FOR_THEROCK=ON
         -DROCPROFSYS_GFX_TARGETS="${_ROCPROFSYS_GFX_TARGETS_ESCAPED}"
         -DROCPROFSYS_BUILD_SPDLOG=OFF
@@ -266,8 +260,12 @@ endif(THEROCK_BUILD_TESTING)
         rocprofiler-sdk
         therock-spdlog
         therock-fmt
+        ${THEROCK_BUNDLED_BINUTILS}
         ${THEROCK_BUNDLED_LIBDRM}
         ${THEROCK_BUNDLED_SQLITE3}
+        therock-tbb
+        therock-dyninst
+        therock-nlohmann-json
     )
     therock_cmake_subproject_glob_c_sources(rocprofiler-systems
       SUBDIRS .
