@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Given ROCm artifacts directories, performs surgery to re-layout them for
 distribution as Python packages and builds sdists and wheels as appropriate.
 
@@ -34,9 +37,6 @@ def run(args: argparse.Namespace):
         artifacts=ArtifactCatalog(args.artifact_dir),
     )
 
-    # Simple populate the top-level "rocm" package. This gets no platform files.
-    PopulatedDistPackage(params, logical_name="meta")
-
     # Populate each target neutral library package.
     core = PopulatedDistPackage(params, logical_name="core")
     core.rpath_dep(core, "lib/llvm/lib")
@@ -49,7 +49,7 @@ def run(args: argparse.Namespace):
     )
 
     # Populate each target-specific library package.
-    for target_family in params.all_target_families:
+    for target_family in sorted(params.all_target_families):
         lib = PopulatedDistPackage(
             params, logical_name="libraries", target_family=target_family
         )
@@ -62,23 +62,74 @@ def run(args: argparse.Namespace):
             )
         )
 
-    # And populate the devel package, which catches everything else.
-    devel = PopulatedDistPackage(params, logical_name="devel")
-    devel.populate_devel_files(
-        addl_artifact_names=[
-            # Since prim and rocwmma are header only libraries, they are not
-            # included in runtime packages, but we still want them in the devel package.
-            "prim",
-            "rocwmma",
-            # Third party dependencies needed by hipDNN consumers.
-            "flatbuffers",
-            "nlohmann-json",
-        ],
-        tarball_compression=args.devel_tarball_compression,
-    )
+    # Compute these before the first build call so they can be shared with the
+    # meta and devel loops below.
+    all_target_families = sorted(params.all_target_families)
+    multi_arch = len(all_target_families) > 1
 
+    # Build non-devel, non-meta wheels first — the rocm and rocm-sdk-devel
+    # staging dirs do not exist yet, so the default scan in build_packages
+    # will not accidentally include them.
     if args.build_packages:
         build_packages(args.dest_dir, wheel_compression=args.wheel_compression)
+
+    # One meta (rocm) sdist per target family. In a multi-arch build,
+    # target_family and restrict_families=True bake THIS_TARGET_FAMILY,
+    # DEFAULT_TARGET_FAMILY, and AVAILABLE_TARGET_FAMILIES for that family
+    # into _dist_info.py so that determine_target_family() at install time
+    # resolves only to that family's packages. In a single-arch build the
+    # sdist is generic (target_family=None, no restriction) and goes
+    # directly to dist/; in a multi-arch build each sdist goes to
+    # dist/{target_family}/ so callers can distinguish them.
+    for target_family in all_target_families:
+        meta = PopulatedDistPackage(
+            params,
+            logical_name="meta",
+            target_family=target_family if multi_arch else None,
+            restrict_families=multi_arch,
+        )
+        if args.build_packages:
+            build_packages(
+                args.dest_dir,
+                package_dirs=[meta.path],
+                dist_dir=(
+                    (args.dest_dir / "dist" / target_family) if multi_arch else None
+                ),
+                wheel_compression=args.wheel_compression,
+            )
+
+    # One rocm-sdk-devel wheel per target family. Each wheel is NOT generic:
+    # shared libraries already materialized by the libraries runtime package
+    # are embedded in the devel tarball as symlinks into that package's
+    # arch-specific platform directory (e.g. _rocm_sdk_libraries_gfx120x_all),
+    # so the tarball is only valid when the matching family's library wheel
+    # is co-installed. In a multi-arch build each wheel goes to
+    # dist/{target_family}/; in a single-arch build directly to dist/.
+    for target_family in all_target_families:
+        devel = PopulatedDistPackage(
+            params, logical_name="devel", target_family=target_family
+        )
+        devel.populate_devel_files(
+            addl_artifact_names=[
+                # Since prim and rocwmma are header only libraries, they are not
+                # included in runtime packages, but we still want them in the devel package.
+                "prim",
+                "rocwmma",
+                # Third party dependencies needed by hipDNN consumers.
+                "flatbuffers",
+                "nlohmann-json",
+            ],
+            tarball_compression=args.devel_tarball_compression,
+        )
+        if args.build_packages:
+            build_packages(
+                args.dest_dir,
+                package_dirs=[devel.path],
+                dist_dir=(
+                    (args.dest_dir / "dist" / target_family) if multi_arch else None
+                ),
+                wheel_compression=args.wheel_compression,
+            )
 
     print(
         f"::: Finished building packages at '{args.dest_dir}' with version '{args.version}'"
@@ -97,8 +148,11 @@ def core_artifact_filter(an: ArtifactName) -> bool:
         "hipify",
         "host-blas",
         "host-suite-sparse",
+        "rocdecode",
+        "rocjpeg",
         "rocprofiler-sdk",
         "sysdeps",
+        "sysdeps-amd-mesa",
     ] and an.component in [
         "lib",
         "run",
@@ -119,8 +173,8 @@ def libraries_artifact_filter(target_family: str, an: ArtifactName) -> bool:
             "fft",
             "hipdnn",
             "miopen",
-            "miopen-plugin",
-            "hipblaslt-plugin",
+            "miopenprovider",
+            "hipblasltprovider",
             "rand",
             "rccl",
         ]

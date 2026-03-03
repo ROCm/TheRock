@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Fetches sources from a specified branch/set of projects.
 # This script is available for users, but it is primarily the mechanism
 # the CI uses to get to a clean state.

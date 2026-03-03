@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 r"""Builds production PyTorch wheels based on the rocm wheels.
 
 This script is designed to be used from CI but should be serviceable for real

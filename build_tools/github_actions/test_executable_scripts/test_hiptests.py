@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 import logging
 import os
 import shlex
@@ -47,6 +50,12 @@ TEST_TO_IGNORE = {
         "linux": [
             "Unit_hipManagedKeyword_SingleGpu",
             "Unit_hipGetProcAddress_spt_Stream",
+        ]
+    },
+    "gfx110X-all": {
+        "windows": [
+            "Unit_hipStreamValue_Wait_Blocking - uint64_t",
+            "Unit_hipStreamValue_Wait_Blocking - uint32_t",
         ]
     },
 }

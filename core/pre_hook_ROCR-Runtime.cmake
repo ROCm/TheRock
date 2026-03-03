@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Prefetch LibElf to nullify the shady embedded find modules.
 # Maddeningly, the find module calls itself "LibElf" (camel case) but sets
 # "LIBELF_FOUND" (uppercase).

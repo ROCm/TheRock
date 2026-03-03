@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Check if a Python executable supports linking against a shared libpython.
 # Returns the path to the shared library if available, empty string otherwise.
 function(_therock_check_python_shared_library python_exe out_var)

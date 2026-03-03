@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 if(WIN32)
   set(LLVM_LINK_LLVM_DYLIB OFF)
 else()
