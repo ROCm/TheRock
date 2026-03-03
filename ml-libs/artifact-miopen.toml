@@ -1,6 +1,9 @@
 # MIOpen
 [components.dbg."ml-libs/MIOpen/stage"]
 [components.dev."ml-libs/MIOpen/stage"]
+exclude = [
+  "*/bin/*test*",
+]
 [components.doc."ml-libs/MIOpen/stage"]
 [components.lib."ml-libs/MIOpen/stage"]
 include = [
@@ -11,3 +14,6 @@ include = [
   "bin/miopen_gtest*",
 ]
 [components.run."ml-libs/MIOpen/stage"]
+exclude = [
+  "*/bin/*test*",
+]
