@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 name: Test component
 
 on:
@@ -128,12 +131,19 @@ jobs:
         run: |
           python ./build_tools/print_driver_gpu_info.py
 
+      - name: Setup Additional Requirements
+        if: ${{ fromJSON(inputs.component).additional_requirements_files != '' }}
+        run: |
+          python ./build_tools/install_additional_requirements.py \
+            --requirements-files=${{ join(fromJSON(inputs.component).additional_requirements_files, ',') }}
+
       - name: Test
         timeout-minutes: ${{ fromJSON(inputs.component).timeout_minutes }}
         env:
           SHARD_INDEX: ${{ matrix.shard }}
           TOTAL_SHARDS: ${{ fromJSON(inputs.component).total_shards }}
           TEST_TYPE: ${{ fromJSON(inputs.component).test_type }}
+          ROCM_KPACK_DEBUG: "1"
         run: |
           ${{ fromJSON(inputs.component).test_script }}
 
