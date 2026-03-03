@@ -40,14 +40,16 @@ ACCEPTED_FILE_EXTENSIONS = ("whl", "zip", "tar.gz")
 PREFIXES = [
     # Note: v2-staging first, in case issues are observed while the script runs
     # and the developer wants to more safely cancel the script.
-    "v3/rocm/whl/gfx110X-dgpu",
-    "v3/rocm/whl/gfx1150",
-    "v3/rocm/whl/gfx1151",
-    "v3/rocm/whl/gfx1152",
-    "v3/rocm/whl/gfx120X-all",
-    "v3/rocm/whl/gfx90X-dcgpu",
-    "v3/rocm/whl/gfx94X-dcgpu",
-    "v3/rocm/whl/gfx950-dcgpu",
+    "v2-staging/gfx110X-all",
+    "v2-staging/gfx1151",
+    "v2-staging/gfx120X-all",
+    "v2-staging/gfx94X-dcgpu",
+    "v2-staging/gfx950-dcgpu",
+    "v2/gfx110X-all",
+    "v2/gfx1151",
+    "v2/gfx120X-all",
+    "v2/gfx94X-dcgpu",
+    "v2/gfx950-dcgpu",
 ]
 CUSTOM_PREFIX = getenv('CUSTOM_PREFIX')
 if CUSTOM_PREFIX:
