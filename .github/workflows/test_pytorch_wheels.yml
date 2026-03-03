@@ -65,8 +65,12 @@ run-name: Test PyTorch (${{ inputs.amdgpu_family }}, ${{ inputs.torch_version}},
 
 jobs:
   test_wheels:
-    name: Test PyTorch | ${{ inputs.amdgpu_family }}
+    name: Test PyTorch | ${{ inputs.amdgpu_family }} (shard ${{ matrix.shard }}/4)
     runs-on: ${{ inputs.test_runs_on }}
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     container:
       image: ${{ contains(inputs.test_runs_on, 'linux') && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26' || null }}
       options: --ipc host
@@ -83,6 +87,8 @@ jobs:
     env:
       VENV_DIR: ${{ github.workspace }}/.venv
       AMDGPU_FAMILY: ${{ inputs.amdgpu_family }}
+      SHARD_NUMBER: ${{ matrix.shard }}
+      NUM_TEST_SHARDS: 4
 
     steps:
       - name: Checkout
