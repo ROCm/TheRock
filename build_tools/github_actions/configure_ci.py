@@ -661,10 +661,16 @@ def main(base_args, linux_families, windows_families):
             test_type = "full"
             test_type_reason = f"test label(s) specified: {combined_test_labels}"
 
-    # If the "run-full-tests-only" flag is set for this family, we do not run tests if it is a smoke test type
-    for matrix_row in linux_variants_output + windows_variants_output:
-        if matrix_row.get("run-full-tests-only", False) and test_type == "smoke":
-            matrix_row["test-runs-on"] = ""
+        for matrix_row in linux_variants_output + windows_variants_output:
+            # If the "run-full-tests-only" flag is set for this family, we do not run tests if it is a smoke test type
+            if matrix_row.get("run-full-tests-only", False) and test_type == "smoke":
+                matrix_row["test-runs-on"] = ""
+            # For nightly_check_only_for_family architectures, we want to run only full tests during nightly (scheduled) run
+            # Otherwise, we run sanity checks in all other scenarios (presubmit/postsubmit)
+            if matrix_row.get("nightly_check_only_for_family", False) and (
+                is_pull_request or is_push
+            ):
+                matrix_row["sanity_check_only_for_family"] = True
 
     print(f"test_type decision: '{test_type}' (reason: {test_type_reason})")
 
