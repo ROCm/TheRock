@@ -72,7 +72,7 @@ jobs:
 
       - name: Install Python requirements
         run: |
-          pip install pyelftools boto3 jinja2
+          pip install pyelftools boto3 jinja2 pyzstd
 
       - name: Install System requirements
         run: |
