@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 name: Test component
 
 on:
@@ -127,6 +130,12 @@ jobs:
         timeout-minutes: 3
         run: |
           python ./build_tools/print_driver_gpu_info.py
+
+      - name: Setup Additional Requirements
+        if: ${{ fromJSON(inputs.component).additional_requirements_files != '' }}
+        run: |
+          python ./build_tools/install_additional_requirements.py \
+            --requirements-files=${{ join(fromJSON(inputs.component).additional_requirements_files, ',') }}
 
       - name: Test
         timeout-minutes: ${{ fromJSON(inputs.component).timeout_minutes }}

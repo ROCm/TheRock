@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # AMDGPU_LLVM_TARGET
 # Information from: [
 #     https://rocm.docs.amd.com/en/latest/reference/gpu-arch-specs.html

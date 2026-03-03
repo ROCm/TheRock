@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Abstraction layer for artifact storage backends (S3 or local directory).
 
 This module provides a unified interface for artifact storage that works with

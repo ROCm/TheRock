@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Integration tests for artifact_manager.py CLI tool.
 
 These tests verify end-to-end behavior of the artifact_manager push/fetch commands,

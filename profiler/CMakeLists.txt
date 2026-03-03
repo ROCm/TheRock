@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 if(THEROCK_ENABLE_ROCPROFV3)
   set(_rocprofiler_sdk_optional_deps)
 
@@ -49,7 +52,6 @@ if(THEROCK_ENABLE_ROCPROFV3)
 
 if(THEROCK_BUILD_TESTING)
   therock_provide_artifact(aqlprofile-tests
-    TARGET_NEUTRAL
     DESCRIPTOR artifact-aqlprofile.toml
     COMPONENTS
       test
@@ -122,8 +124,13 @@ endif(THEROCK_BUILD_TESTING)
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-compute"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-compute"
     BACKGROUND_BUILD
+    DEFAULT_GPU_TARGETS
+      gfx942
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
+      -DENABLE_TESTS=${THEROCK_BUILD_TESTING}
+      -DINSTALL_TESTS=${THEROCK_BUILD_TESTING}
+      -DTEST_FROM_INSTALL=${THEROCK_BUILD_TESTING}
       -DCHECK_PYTHON_DEPS=OFF
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
@@ -193,6 +200,7 @@ endif(THEROCK_BUILD_TESTING)
       doc
       lib
       run
+      test
     SUBPROJECT_DEPS
       aqlprofile
       rocprofiler-sdk
@@ -214,8 +222,6 @@ endif(THEROCK_BUILD_TESTING)
       aqlprofile
       rocprofiler-sdk
       rocprofiler-compute
-      roctracer
-      ${_rocprofiler_sdk_optional_deps}
   )
 
   ##############################################################################
@@ -252,14 +258,15 @@ endif(THEROCK_BUILD_TESTING)
         "llvm/lib"
       CMAKE_INCLUDES
         therock_explicit_finders.cmake
+      BUILD_DEPS
+        therock-spdlog
+        therock-fmt
       RUNTIME_DEPS
         amdsmi
         aqlprofile
         hip-clr
         rocprofiler-register
         rocprofiler-sdk
-        therock-spdlog
-        therock-fmt
         ${THEROCK_BUNDLED_LIBDRM}
         ${THEROCK_BUNDLED_SQLITE3}
     )

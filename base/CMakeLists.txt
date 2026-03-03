@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Optional subprojects add themselves to this list for artifact dependencies.
 set(_optional_artifact_deps)
 

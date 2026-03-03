@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """install_rocm_from_artifacts.py
 
 This script helps CI workflows, developers and testing suites easily install
@@ -32,6 +35,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--rocdecode | --no-rocdecode]
     [--rocjpeg | --no-rocjpeg]
     [--rocprofiler-compute | --no-rocprofiler-compute]
+    [--rocprofiler-sdk | --no-rocprofiler-sdk ]
     [--rocprofiler-systems | --no-rocprofiler-systems]
     [--rocrtst | --no-rocrtst]
     [--rocwmma | --no-rocwmma]
@@ -352,6 +356,7 @@ def retrieve_artifacts_by_run_id(args):
             args.rocdecode,
             args.rocjpeg,
             args.rocprofiler_compute,
+            args.rocprofiler_sdk,
             args.rocprofiler_systems,
             args.rocrtst,
             args.rocwmma,
@@ -752,16 +757,16 @@ def main(argv):
     )
 
     artifacts_group.add_argument(
-        "--rocprofiler-systems",
+        "--rocprofiler-sdk",
         default=False,
-        help="Include 'rocprofiler-systems' artifacts",
+        help="Include 'rocprofiler-sdk' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
     artifacts_group.add_argument(
-        "--rocprofiler-sdk",
+        "--rocprofiler-systems",
         default=False,
-        help="Include 'rocprofiler-sdk' artifacts",
+        help="Include 'rocprofiler-systems' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
