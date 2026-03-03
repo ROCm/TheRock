@@ -8,6 +8,7 @@ import struct
 PACKET3_NOP = 0x10
 PACKET3_WAIT_REG_MEM = 0x0C
 PACKET3_DISPATCH_DIRECT = 0x15
+PACKET3_EVENT_WRITE = 0x46
 PACKET3_RELEASE_MEM = 0x49
 PACKET3_ACQUIRE_MEM = 0x58
 PACKET3_SET_SH_REG = 0x76
@@ -46,9 +47,19 @@ ACQUIRE_MEM_ENGINE_ME = 0
 
 # Cache operations for ACQUIRE_MEM
 CP_COHER_CNTL_TC_ACTION = 1 << 23
+CP_COHER_CNTL_TCL1_ACTION = 1 << 22
 CP_COHER_CNTL_TC_WB_ACTION = 1 << 18
 CP_COHER_CNTL_SH_KCACHE_ACTION = 1 << 27
 CP_COHER_CNTL_SH_ICACHE_ACTION = 1 << 29
+
+# RELEASE_MEM cache flush flags (GFX9)
+EOP_TC_WB_ACTION_EN = 1 << 15
+EOP_TC_NC_ACTION_EN = 1 << 19
+
+# EVENT_WRITE event types
+CS_PARTIAL_FLUSH = 7
+EVENT_INDEX_EOP = 5
+EVENT_INDEX_CS_PARTIAL_FLUSH = 4
 
 # Register bases for SET_SH_REG/SET_UCONFIG_REG
 SH_REG_BASE = 0x2C00
@@ -130,13 +141,17 @@ class PM4PacketBuilder:
         data_sel: int = DATA_SEL_SEND_64BIT,
         int_sel: int = INT_SEL_SEND_INT_ON_CONFIRM,
         event_index: int = 5,  # EOP event
+        cache_flush: bool = False,
     ) -> PM4PacketBuilder:
         """RELEASE_MEM: write a value to memory and optionally raise interrupt.
 
         Used for signaling completion of dispatch.
+        GFX9 format: 7 payload dwords (header + 7).
         """
-        # dword 0: event_type | event_index
+        # dword 0: event_type | event_index | optional cache flags
         dw0 = (event_type & 0x3F) | ((event_index & 0xF) << 8)
+        if cache_flush:
+            dw0 |= EOP_TC_WB_ACTION_EN | EOP_TC_NC_ACTION_EN
         # dword 1: data_sel | int_sel
         dw1 = ((data_sel & 0x7) << 29) | ((int_sel & 0x3) << 24)
         # dword 2-3: address (low, high)
@@ -145,8 +160,10 @@ class PM4PacketBuilder:
         # dword 4-5: data (low, high)
         data_lo = value & 0xFFFFFFFF
         data_hi = (value >> 32) & 0xFFFFFFFF
+        # dword 6: ctxid (always 0 for GFX9)
+        ctxid = 0
 
-        self._pkt3(PACKET3_RELEASE_MEM, dw0, dw1, addr_lo, addr_hi, data_lo, data_hi)
+        self._pkt3(PACKET3_RELEASE_MEM, dw0, dw1, addr_lo, addr_hi, data_lo, data_hi, ctxid)
         return self
 
     def wait_reg_mem(
@@ -180,17 +197,28 @@ class PM4PacketBuilder:
         dim_x: int,
         dim_y: int,
         dim_z: int,
-        initiator: int = 1,
+        initiator: int = 0x5,
     ) -> PM4PacketBuilder:
         """DISPATCH_DIRECT: launch compute shader.
 
         dim_x/y/z are the global dispatch dimensions in workgroups.
-        initiator should have bit 0 set to enable dispatch.
+        initiator: bit 0 = compute_shader_en, bit 2 = force_start_at_000.
+        Default 0x5 = both enabled.
         """
         self._pkt3(
             PACKET3_DISPATCH_DIRECT,
             dim_x, dim_y, dim_z, initiator,
         )
+        return self
+
+    def event_write(
+        self,
+        event_type: int,
+        event_index: int,
+    ) -> PM4PacketBuilder:
+        """EVENT_WRITE: emit a GPU event (e.g. CS_PARTIAL_FLUSH)."""
+        dw0 = (event_type & 0x3F) | ((event_index & 0xF) << 8)
+        self._pkt3(PACKET3_EVENT_WRITE, dw0)
         return self
 
     def build(self) -> bytes:
