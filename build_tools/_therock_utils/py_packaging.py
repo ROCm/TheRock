@@ -429,7 +429,7 @@ class PopulatedDistPackage:
                 # artifact.
                 return False
             if an.target_family != "generic" and an.target_family != self.target_family:
-                # We only materialize the default target family for devel packages.
+                # Only include artifacts for this devel package's target family.
                 return False
             return True
 
