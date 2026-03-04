@@ -1,0 +1,65 @@
+;
+; amdgpu_mcdm.inf - MCDM miniport driver for AMD GPU compute
+;
+; This driver claims an AMD GPU as a ComputeAccelerator device and
+; provides hardware access to the Python userspace driver through
+; the DxgkDdiEscape interface.
+;
+; Target: AMD RX 9070 XT (DEV_7551, RDNA 4 / GFX1201 / Navi 48)
+;
+
+[Version]
+Signature   = "$WINDOWS NT$"
+Class       = ComputeAccelerator
+ClassGuid   = {F01A9D53-3FF6-48D2-9F97-C8A7004BE10C}
+Provider    = %ProviderString%
+CatalogFile = amdgpu_mcdm.cat
+DriverVer   = 03/04/2026,0.1.0.0
+PnpLockdown = 1
+
+[DestinationDirs]
+DefaultDestDir = 13  ; Driver Store
+
+[SourceDisksNames]
+1 = %DiskName%
+
+[SourceDisksFiles]
+amdgpu_mcdm.sys = 1
+
+[Manufacturer]
+%ManufacturerString% = AmdGpu, NTamd64.10.0...19041
+
+[AmdGpu.NTamd64.10.0...19041]
+; AMD RX 9070 XT (Navi 48 / gfx1201)
+%DeviceDesc_7551% = AmdGpu_Install, PCI\VEN_1002&DEV_7551
+
+; Add more device IDs here as needed:
+; %DeviceDesc_XXXX% = AmdGpu_Install, PCI\VEN_1002&DEV_XXXX
+
+[AmdGpu_Install]
+FeatureScore = E1
+
+[AmdGpu_Install.HW]
+AddReg = AmdGpu_HW_AddReg
+
+[AmdGpu_HW_AddReg]
+; No display functionality
+HKR,, UpperFilters, %REG_MULTI_SZ%,
+
+[AmdGpu_Install.Services]
+AddService = amdgpu_mcdm, 0x00000002, AmdGpu_Service_Install
+
+[AmdGpu_Service_Install]
+DisplayName    = %ServiceDesc%
+ServiceType    = 1          ; SERVICE_KERNEL_DRIVER
+StartType      = 3          ; SERVICE_DEMAND_START
+ErrorControl   = 1          ; SERVICE_ERROR_NORMAL
+ServiceBinary  = %13%\amdgpu_mcdm.sys
+
+[Strings]
+ProviderString      = "ROCm Open Source"
+ManufacturerString  = "Advanced Micro Devices, Inc."
+DiskName            = "AMD GPU MCDM Compute Driver Disk"
+ServiceDesc         = "AMD GPU MCDM Compute Driver"
+DeviceDesc_7551     = "AMD Radeon RX 9070 XT (Compute)"
+REG_MULTI_SZ        = 0x00010000

@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <!-- ============================================================
+       Project Configurations: Debug|x64 and Release|x64
+       ============================================================ -->
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+
+  <!-- ============================================================
+       Global properties
+       ============================================================ -->
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{8A7B3F2E-1C4D-4E5F-9A6B-7D8E0F1A2B3C}</ProjectGuid>
+    <RootNamespace>amdgpu_mcdm</RootNamespace>
+    <ProjectName>amdgpu_mcdm</ProjectName>
+    <!-- WDK kernel-mode driver toolset — triggers entire WDK build chain -->
+    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
+    <Platform>x64</Platform>
+    <!--
+      WDM (not KMDF): We call DxgkInitialize directly from DriverEntry.
+      Entry point: GsDriverEntry -> DriverEntry (standard WDM pattern).
+      No KMDF framework overhead needed.
+    -->
+    <DriverType>WDM</DriverType>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+
+  <!-- ============================================================
+       Configuration properties — shared
+       ============================================================ -->
+  <PropertyGroup Condition="'$(Configuration)'=='Debug'" Label="Configuration">
+    <ConfigurationType>Driver</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>Unicode</CharacterSet>
+    <TargetVersion>Windows10</TargetVersion>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)'=='Release'" Label="Configuration">
+    <ConfigurationType>Driver</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <CharacterSet>Unicode</CharacterSet>
+    <TargetVersion>Windows10</TargetVersion>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+
+  <!-- Disable InfVerif (DLL missing) and test signing for development -->
+  <PropertyGroup>
+    <EnableInf2Cat>false</EnableInf2Cat>
+    <DriverTargetPlatform>Universal</DriverTargetPlatform>
+    <SignMode>Off</SignMode>
+  </PropertyGroup>
+
+  <!-- ============================================================
+       Compiler and linker settings
+       ============================================================ -->
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <!-- _KERNEL_MODE is auto-defined by WDK kernel driver toolset -->
+      <PreprocessorDefinitions>%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>Level4</WarningLevel>
+      <TreatWarningAsError>false</TreatWarningAsError>
+    </ClCompile>
+    <!-- Disable InfVerif — the DLL is missing from this WDK install -->
+    <InfVerif>
+      <TreatWarningAsError>false</TreatWarningAsError>
+    </InfVerif>
+    <Link>
+      <!--
+        displib.lib: Provides DxgkInitialize() for WDDM miniport registration.
+        ntoskrnl.lib, hal.lib, wmilib.lib: Auto-linked by WDK WDM props.
+      -->
+      <AdditionalDependencies>$(DDK_LIB_PATH)displib.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <!--
+      StampInf: set driver version date and version string.
+      Uses current date at build time.
+    -->
+    <StampInf>
+      <DriverVersionNumber>0.2.0.0</DriverVersionNumber>
+    </StampInf>
+  </ItemDefinitionGroup>
+
+  <!-- Debug-specific: enable assertions and debug output -->
+  <ItemDefinitionGroup Condition="'$(Configuration)'=='Debug'">
+    <ClCompile>
+      <PreprocessorDefinitions>DBG=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <Optimization>Disabled</Optimization>
+    </ClCompile>
+  </ItemDefinitionGroup>
+
+  <!-- Release-specific: full optimization -->
+  <ItemDefinitionGroup Condition="'$(Configuration)'=='Release'">
+    <ClCompile>
+      <Optimization>Full</Optimization>
+    </ClCompile>
+  </ItemDefinitionGroup>
+
+  <!-- ============================================================
+       Source files
+       ============================================================ -->
+  <ItemGroup>
+    <ClCompile Include="driver_entry.c" />
+    <ClCompile Include="ddi_device.c" />
+    <ClCompile Include="ddi_escape.c" />
+    <ClCompile Include="ddi_memory.c" />
+    <ClCompile Include="ddi_scheduling.c" />
+    <ClCompile Include="ddi_interrupt.c" />
+    <ClCompile Include="ddi_query.c" />
+    <ClCompile Include="ddi_tdr.c" />
+    <ClCompile Include="ddi_stubs.c" />
+  </ItemGroup>
+
+  <!-- Header files -->
+  <ItemGroup>
+    <ClInclude Include="amdgpu_mcdm.h" />
+  </ItemGroup>
+
+  <!-- INF file for driver installation -->
+  <ItemGroup>
+    <Inf Include="amdgpu_mcdm.inf" />
+  </ItemGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

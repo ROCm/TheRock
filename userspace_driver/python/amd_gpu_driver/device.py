@@ -28,17 +28,29 @@ class AMDDevice:
         backend: Backend type to use ("kfd" for now).
     """
 
-    def __init__(self, device_index: int = 0, *, backend: str = "kfd") -> None:
+    def __init__(self, device_index: int = 0, *, backend: str | None = None) -> None:
         self._device_index = device_index
         self._backend: DeviceBackend
+
+        # Auto-detect backend based on platform
+        if backend is None:
+            backend = "windows" if sys.platform == "win32" else "kfd"
+
         if backend == "kfd":
             if sys.platform == "win32":
                 raise RuntimeError(
                     "KFD backend is not available on Windows. "
-                    "Use the 'windows' backend instead (not yet implemented)."
+                    "Use the 'windows' backend instead."
                 )
             from amd_gpu_driver.backends.kfd import KFDDevice
             self._backend = KFDDevice()
+        elif backend == "windows":
+            if sys.platform != "win32":
+                raise RuntimeError(
+                    "Windows backend is only available on Windows."
+                )
+            from amd_gpu_driver.backends.windows import WindowsDevice
+            self._backend = WindowsDevice()
         else:
             raise ValueError(f"Unknown backend: {backend!r}")
 

@@ -1,0 +1,20 @@
+# Build output
+x64/
+Debug/
+Release/
+*.obj
+*.pdb
+*.sys
+*.cat
+*.tlog/
+
+# Test certificate (generated per-machine)
+*.cer
+*.pfx
+
+# Visual Studio
+*.user
+*.suo
+*.ncb
+*.sdf
+.vs/
