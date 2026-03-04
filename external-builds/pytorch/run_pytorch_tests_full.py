@@ -26,9 +26,27 @@ from pytorch_utils import (
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 
 
+ROCM_BUILD_ENVIRONMENT = "linux-noble-rocm-py3.12-mi300"
+
+THEROCK_ENV_VARS = [
+    "CI",
+    "BUILD_ENVIRONMENT",
+    "PYTORCH_TEST_WITH_ROCM",
+    "PYTORCH_TESTING_DEVICE_ONLY_FOR",
+    "PYTORCH_PRINT_REPRO_ON_FAILURE",
+    "MIOPEN_CUSTOM_CACHE_DIR",
+    "TEST_CONFIG",
+    "PYTHONPATH",
+    "HIP_VISIBLE_DEVICES",
+    "SHARD_NUMBER",
+    "NUM_TEST_SHARDS",
+    "TESTS_TO_INCLUDE",
+]
+
+
 def setup_env(pytorch_dir: Path, test_config: str) -> None:
     os.environ["CI"] = "1"
-    os.environ["BUILD_ENVIRONMENT"] = "rocm"
+    os.environ["BUILD_ENVIRONMENT"] = ROCM_BUILD_ENVIRONMENT
     os.environ["PYTORCH_TEST_WITH_ROCM"] = "1"
     os.environ["PYTORCH_TESTING_DEVICE_ONLY_FOR"] = "cuda"
     os.environ["PYTORCH_PRINT_REPRO_ON_FAILURE"] = "0"
@@ -43,6 +61,15 @@ def setup_env(pytorch_dir: Path, test_config: str) -> None:
         os.environ["PYTHONPATH"] = f"{test_dir}:{old_pythonpath}"
     else:
         os.environ["PYTHONPATH"] = test_dir
+
+
+def print_env() -> None:
+    print("=== TheRock PyTorch Test Environment ===")
+    for var in THEROCK_ENV_VARS:
+        val = os.environ.get(var, "<not set>")
+        print(f"  {var}={val}")
+    print("=========================================")
+    sys.stdout.flush()
 
 
 def cmd_arguments(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
@@ -230,6 +257,7 @@ def main() -> int:
             )
 
         setup_env(args.pytorch_dir, args.test_config)
+        print_env()
 
         cmd = build_run_test_cmd(args, tests_to_skip, passthrough_args)
         print(f"Executing: {' '.join(cmd)}")

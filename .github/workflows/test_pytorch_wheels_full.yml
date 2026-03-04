@@ -89,6 +89,11 @@ jobs:
       AMDGPU_FAMILY: ${{ inputs.amdgpu_family }}
       SHARD_NUMBER: ${{ matrix.shard }}
       NUM_TEST_SHARDS: 4
+      CI: "1"
+      BUILD_ENVIRONMENT: "linux-noble-rocm-py3.12-mi300"
+      PYTORCH_TEST_WITH_ROCM: "1"
+      PYTORCH_TESTING_DEVICE_ONLY_FOR: "cuda"
+      TEST_CONFIG: "default"
 
     steps:
       - name: Checkout
