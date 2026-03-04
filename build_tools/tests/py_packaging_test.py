@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Tests for _therock_utils/py_packaging.py.
 
 These tests cover:
