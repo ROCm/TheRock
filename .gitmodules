@@ -57,10 +57,10 @@
 	url = https://github.com/ROCm/OpenCL-CTS
 [submodule "opencl/opencl-headers"]
 	path = opencl/opencl-headers
-	url = https://github.com/KhronosGroup/OpenCL-Headers
+	url = https://github.com/ROCm/OpenCL-Headers
 [submodule "opencl/spirv-headers"]
 	path = opencl/spirv-headers
-	url = https://github.com/KhronosGroup/SPIRV-Headers
+	url = https://github.com/ROCm/SPIRV-Headers
 [submodule "opencl/spirv-tools"]
 	path = opencl/spirv-tools
 	url = https://github.com/KhronosGroup/SPIRV-Tools
