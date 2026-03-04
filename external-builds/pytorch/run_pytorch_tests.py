@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """PyTorch ROCm Pytest Runner with additional test exclusion capabilities.
 
 This script runs PyTorch unit tests using pytest with additional test exclusion

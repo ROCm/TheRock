@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Recursively gets all build system targets defined in a directory and all of
 # its subdirectories.
 function(therock_get_all_targets var dir)

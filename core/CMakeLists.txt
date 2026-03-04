@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # On Linux, we compile core libraries with our own LLVM. This gets us the
 # best optimizations and, most importantly, gives us uniform access to
 # sanitizers. Currently, some of these projects, though, are hard-coded
@@ -462,7 +465,6 @@ if(THEROCK_BUILD_TESTING)
     therock_cmake_subproject_activate(rocrtst)
 
     therock_provide_artifact(rocrtst
-      TARGET_NEUTRAL
       DESCRIPTOR artifact-core-rocrtst.toml
       COMPONENTS
         dbg

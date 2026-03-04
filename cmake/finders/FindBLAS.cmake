@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # This finder resolves the virtual BLAS package for sub-projects.
 # It defers to the built host-blas, if available, otherwise, failing.
 cmake_policy(PUSH)

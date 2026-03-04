@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 import os
 from pathlib import Path
 import subprocess
@@ -485,6 +488,7 @@ class GitHubActionsUtilsTest(unittest.TestCase):
         self.assertIn("id", run)
         self.assertIn("head_repository", run)
         self.assertIn("full_name", run["head_repository"])
+        self.assertIn("created_at", run)
         self.assertIn("updated_at", run)
         self.assertIn("status", run)
         self.assertIn("html_url", run)
@@ -497,6 +501,26 @@ class GitHubActionsUtilsTest(unittest.TestCase):
         )
         self.assertIsInstance(runs, list)
         self.assertEqual(len(runs), 0)
+
+    def test_gha_query_workflow_runs_for_commit_sorts_by_created_at(self):
+        """Runs are sorted most-recent-first by created_at (ISO 8601)."""
+        # API returns ISO 8601 timestamps like "2026-01-15T10:00:00Z" which
+        # are lexicographically sortable. Simulate an API response where the
+        # runs arrive in the wrong order.
+        older_run = {"id": 1, "created_at": "2026-01-10T08:00:00Z"}
+        newer_run = {"id": 2, "created_at": "2026-01-15T10:00:00Z"}
+
+        with mock.patch(
+            "github_actions_utils.gha_send_request",
+            return_value={"workflow_runs": [older_run, newer_run]},
+        ):
+            runs = gha_query_workflow_runs_for_commit(
+                "ROCm/TheRock", "ci.yml", "abc123"
+            )
+
+        self.assertEqual(len(runs), 2)
+        self.assertEqual(runs[0]["id"], 2, "Newer run should be first")
+        self.assertEqual(runs[1]["id"], 1, "Older run should be second")
 
     @_skip_unless_authenticated_github_api_is_available
     def test_gha_query_last_successful_workflow_run(self):

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """
 Tooling for TheRock build system. The goal is to have single unified view across build resource utilization for TheRock components and systems locally as well as in CI.
 
