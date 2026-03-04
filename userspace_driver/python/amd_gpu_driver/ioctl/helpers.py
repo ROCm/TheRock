@@ -1,49 +1,59 @@
-"""Low-level libc wrappers for ioctl() and mmap() via ctypes."""
+"""Low-level libc wrappers for ioctl() and mmap() via ctypes.
+
+On Linux, this module loads libc and exposes ioctl/mmap/munmap/memcpy/memset
+wrappers. On Windows, the libc-dependent parts are unavailable (libc is None),
+but the pure-Python ioctl number encoding functions (_IOC, _IOR, _IOW, _IOWR)
+and mmap constants are always importable.
+"""
 
 from __future__ import annotations
 
 import ctypes
 import ctypes.util
 import os
+import sys
 from typing import Any
 
 from amd_gpu_driver.errors import IoctlError
 
-# --- libc loading ---
+# --- libc loading (Linux only) ---
 
-_libc_name = ctypes.util.find_library("c")
-if _libc_name is None:
-    raise RuntimeError("Cannot find libc")
-libc = ctypes.CDLL(_libc_name, use_errno=True)
+libc: ctypes.CDLL | None = None
 
-# ioctl(int fd, unsigned long request, ...) -> int
-libc.ioctl.restype = ctypes.c_int
-libc.ioctl.argtypes = [ctypes.c_int, ctypes.c_ulong, ctypes.c_void_p]
+if sys.platform != "win32":
+    _libc_name = ctypes.util.find_library("c")
+    if _libc_name is None:
+        raise RuntimeError("Cannot find libc")
+    libc = ctypes.CDLL(_libc_name, use_errno=True)
 
-# mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset) -> void*
-libc.mmap.restype = ctypes.c_void_p
-libc.mmap.argtypes = [
-    ctypes.c_void_p,
-    ctypes.c_size_t,
-    ctypes.c_int,
-    ctypes.c_int,
-    ctypes.c_int,
-    ctypes.c_long,
-]
+    # ioctl(int fd, unsigned long request, ...) -> int
+    libc.ioctl.restype = ctypes.c_int
+    libc.ioctl.argtypes = [ctypes.c_int, ctypes.c_ulong, ctypes.c_void_p]
 
-# munmap(void *addr, size_t length) -> int
-libc.munmap.restype = ctypes.c_int
-libc.munmap.argtypes = [ctypes.c_void_p, ctypes.c_size_t]
+    # mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset) -> void*
+    libc.mmap.restype = ctypes.c_void_p
+    libc.mmap.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_long,
+    ]
 
-# memcpy(void *dest, const void *src, size_t n) -> void*
-libc.memcpy.restype = ctypes.c_void_p
-libc.memcpy.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t]
+    # munmap(void *addr, size_t length) -> int
+    libc.munmap.restype = ctypes.c_int
+    libc.munmap.argtypes = [ctypes.c_void_p, ctypes.c_size_t]
 
-# memset(void *s, int c, size_t n) -> void*
-libc.memset.restype = ctypes.c_void_p
-libc.memset.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_size_t]
+    # memcpy(void *dest, const void *src, size_t n) -> void*
+    libc.memcpy.restype = ctypes.c_void_p
+    libc.memcpy.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t]
 
-# --- mmap constants ---
+    # memset(void *s, int c, size_t n) -> void*
+    libc.memset.restype = ctypes.c_void_p
+    libc.memset.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_size_t]
+
+# --- mmap constants (Linux values, used by ioctl encoding and KFD backend) ---
 
 PROT_NONE = 0x0
 PROT_READ = 0x1
@@ -93,12 +103,20 @@ def _IOWR(type_char: int, nr: int, size: int) -> int:
     return _IOC(_IOC_READ | _IOC_WRITE, type_char, nr, size)
 
 
-# --- Wrappers ---
+# --- Wrappers (Linux only) ---
+
+
+def _require_libc() -> ctypes.CDLL:
+    """Return libc, raising RuntimeError on Windows."""
+    if libc is None:
+        raise RuntimeError("libc wrappers are not available on Windows")
+    return libc
 
 
 def ioctl(fd: int, request: int, arg: Any, ioctl_name: str = "unknown") -> int:
     """Call ioctl, raising IoctlError on failure."""
-    ret = libc.ioctl(fd, request, ctypes.byref(arg) if hasattr(arg, '_fields_') else arg)
+    _libc = _require_libc()
+    ret = _libc.ioctl(fd, request, ctypes.byref(arg) if hasattr(arg, '_fields_') else arg)
     if ret < 0:
         errno = ctypes.get_errno()
         raise IoctlError(ioctl_name, errno)
@@ -117,8 +135,9 @@ def libc_mmap(
 
     Supports MAP_FIXED which Python's mmap module does not.
     """
+    _libc = _require_libc()
     c_addr = ctypes.c_void_p(addr)
-    result = libc.mmap(c_addr, length, prot, flags, fd, offset)
+    result = _libc.mmap(c_addr, length, prot, flags, fd, offset)
     if result == MAP_FAILED:
         errno = ctypes.get_errno()
         raise OSError(errno, f"mmap failed: {os.strerror(errno)}")
@@ -127,7 +146,8 @@ def libc_mmap(
 
 def libc_munmap(addr: int, length: int) -> None:
     """Unmap memory."""
-    ret = libc.munmap(ctypes.c_void_p(addr), length)
+    _libc = _require_libc()
+    ret = _libc.munmap(ctypes.c_void_p(addr), length)
     if ret < 0:
         errno = ctypes.get_errno()
         raise OSError(errno, f"munmap failed: {os.strerror(errno)}")
