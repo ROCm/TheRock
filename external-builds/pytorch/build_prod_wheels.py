@@ -265,6 +265,7 @@ def get_rocm_path(path_name: str) -> Path:
         ).strip()
     )
 
+
 def get_rocm_init_contents(args: argparse.Namespace):
     """Gets the contents of the _rocm_init.py file to add to the build."""
     sdk_version = get_rocm_sdk_version()
@@ -275,6 +276,7 @@ def get_rocm_init_contents(args: argparse.Namespace):
     # Dynamically filter based on what this target actually provides
     try:
         import rocm_sdk._dist_info as _di
+
         available = [s for s in library_preloads if s in _di.ALL_LIBRARIES]
     except Exception:
         available = library_preloads  # fallback
