@@ -626,7 +626,7 @@ disable_platforms = ["windows"]
 [artifacts.rocprofiler-sdk]
 artifact_group = "profiler-core"
 type = "target-neutral"
-artifact_deps = ["core-runtime", "base"]  # rocprofiler-register is in base
+artifact_deps = ["core-runtime", "base", "aqlprofile"]  # rocprofiler-register is in base
 feature_name = "ROCPROFV3"
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
