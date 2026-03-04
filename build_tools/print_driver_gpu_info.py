@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """
 Sanity check script for CI runners.
 
@@ -20,6 +23,10 @@ import shutil
 import subprocess
 import sys
 from typing import List, Optional
+
+AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
+# TODO(#2964): Remove gfx950-dcgpu once amdsmi static does not timeout
+unsupported_amdsmi_families = ["gfx1151", "gfx950-dcgpu"]
 
 
 def log(*args, **kwargs):
@@ -103,16 +110,24 @@ def run_sanity(os_name: str) -> None:
         )
     else:
         # Linux: amd-smi static + rocminfo
-        run_command_with_search(
-            label="amd-smi static",
-            command="amd-smi",
-            args=["static"],
-            extra_command_search_paths=[bin_dir],
-        )
+        # TODO(#2789): Remove conditional once amdsmi supports gfx1151
+        if AMDGPU_FAMILIES not in unsupported_amdsmi_families:
+            run_command_with_search(
+                label="amd-smi static",
+                command="amd-smi",
+                args=["static"],
+                extra_command_search_paths=[bin_dir],
+            )
         run_command_with_search(
             label="rocminfo",
             command="rocminfo",
             args=[],
+            extra_command_search_paths=[bin_dir],
+        )
+        run_command_with_search(
+            label="Kernel version",
+            command="uname",
+            args=["-r"],
             extra_command_search_paths=[bin_dir],
         )
 

@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Builds artifacts from a descriptor.
 
 See `artifacts` for a general description of artifacts and utilities for processing
@@ -113,8 +116,11 @@ class ArtifactDescriptor:
         ]
     )
 
-    def __init__(self, record: dict):
+    def __init__(self, record: dict, *, artifact_name: str):
+        if not artifact_name:
+            raise ValueError("artifact_name is required")
         _check_allowed_keys(record, ArtifactDescriptor.ALLOWED_KEYS)
+        self.artifact_name = artifact_name
         self.components: dict[str, "ComponentDescriptor"] = {}
 
         # Handle options.
@@ -136,17 +142,21 @@ class ArtifactDescriptor:
             if not isinstance(components_record, dict):
                 raise ValueError(f"Expected 'components' to be a table")
             for name, component_record in components_record.items():
-                component = ComponentDescriptor(name, component_record)
+                component = ComponentDescriptor(
+                    name, component_record, artifact_name=artifact_name
+                )
                 self.components[name] = component
 
         # Add an empty component for each default component, since they form a
         # chain of extensions that must exist.
         for default_name in ComponentDefaults.ALL.keys():
             if default_name not in self.components:
-                self.components[default_name] = ComponentDescriptor(default_name, {})
+                self.components[default_name] = ComponentDescriptor(
+                    default_name, {}, artifact_name=artifact_name
+                )
 
     @staticmethod
-    def load_toml_file(p: Path) -> "ArtifactDescriptor":
+    def load_toml_file(p: Path, *, artifact_name: str) -> "ArtifactDescriptor":
         try:
             import tomllib
         except ModuleNotFoundError:
@@ -155,7 +165,7 @@ class ArtifactDescriptor:
         with open(p, "rb") as f:
             kwdict = tomllib.load(f)
         try:
-            return ArtifactDescriptor(kwdict or {})
+            return ArtifactDescriptor(kwdict or {}, artifact_name=artifact_name)
         except ValueError as e:
             raise ValueError(f"{str(e)} (while loading descriptor from {p})")
         except Exception as e:
@@ -175,8 +185,9 @@ class OptionsDescriptor:
 class ComponentDescriptor:
     ALLOWED_KEYS = set(["extends"])
 
-    def __init__(self, name, record: dict):
+    def __init__(self, name, record: dict, *, artifact_name: str):
         self.name = name
+        self.artifact_name = artifact_name
         self.basedirs: dict[str, ComponentBasedirDescriptor] = {}
         # All dict-valued fields are basedir_records. Others are fields.
         basedir_records: dict[str, dict] = {}
@@ -198,7 +209,7 @@ class ComponentDescriptor:
         # Instantiate all children.
         for basedir_relpath, basedir_record in basedir_records.items():
             self.basedirs[basedir_relpath] = ComponentBasedirDescriptor(
-                self, basedir_relpath, basedir_record
+                self, basedir_relpath, basedir_record, artifact_name=artifact_name
             )
 
     @staticmethod
@@ -225,7 +236,12 @@ class ComponentBasedirDescriptor:
     )
 
     def __init__(
-        self, component: ComponentDescriptor, basedir_relpath: str, record: dict
+        self,
+        component: ComponentDescriptor,
+        basedir_relpath: str,
+        record: dict,
+        *,
+        artifact_name: str,
     ):
         _check_allowed_keys(record, ComponentBasedirDescriptor.ALLOWED_KEYS)
         self.basedir_relpath = basedir_relpath
@@ -236,10 +252,17 @@ class ComponentBasedirDescriptor:
         includes = _dup_list_or_str(record.get("include"))
         if use_default_patterns:
             includes.extend(defaults.includes)
+
         excludes = _dup_list_or_str(record.get("exclude"))
         if use_default_patterns:
             excludes.extend(defaults.excludes)
         force_includes = _dup_list_or_str(record.get("force_include"))
+
+        # Add kpack patterns to force_includes so they don't interfere with
+        # the normal include pattern matching. If added to includes, they would
+        # cause files to be excluded when includes is otherwise empty.
+        force_includes.append(f".kpack/{artifact_name}_{component.name}.kpm")
+        force_includes.append(f".kpack/{artifact_name}_{component.name}_*.kpack")
 
         self.predicate = MatchPredicate(
             includes=includes,
@@ -262,7 +285,10 @@ class ComponentContents:
     def write_artifact(self, destdir: Path):
         for basedir_relpath, pm in self.basedir_contents.items():
             pm.copy_to(
-                destdir=destdir, destprefix=basedir_relpath + "/", remove_dest=False
+                destdir=destdir,
+                destprefix=basedir_relpath + "/",
+                remove_dest=False,
+                always_copy=True,
             )
         # Write a manifest containing relative paths of all base directories.
         manifest_path = destdir / "artifact_manifest.txt"

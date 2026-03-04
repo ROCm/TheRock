@@ -1,11 +1,12 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """This file helps generate a package target matrix for workflows.
 
 Environment variable inputs:
     * 'AMDGPU_FAMILIES': A comma separated list of AMD GPU families, e.g.
                     `gfx94X,gfx103x`, or empty for the default list
     * 'THEROCK_PACKAGE_PLATFORM': "linux" or "windows"
-    * ROCM_THEROCK_TEST_RUNNERS (optional): Test runner JSON object, coming from ROCm organization
-    * LOAD_TEST_RUNNERS_FROM_VAR (optional): boolean env variable that loads in ROCm org data if enabled
 
 Outputs written to GITHUB_OUTPUT:
     * 'package_targets': JSON list of the form

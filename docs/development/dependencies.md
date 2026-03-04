@@ -1,5 +1,25 @@
 # Dependencies
 
+TheRock manages two categories of third-party dependencies, distinguished by
+their packaging behavior (see [`BUILD_TOPOLOGY.toml`](/BUILD_TOPOLOGY.toml) for
+the build topology):
+
+1. **Sysdeps** ([`third-party/sysdeps/`](/third-party/sysdeps/)) — libraries (zlib,
+   elfutils, libdrm, numactl, etc.) built from source with SONAME rewriting and
+   symbol versioning so that ROCm can ship private copies without conflicting with
+   system-installed versions. This is the mechanism that enables portable
+   distribution.
+1. **Other third-party libraries** ([`third-party/`](/third-party/)) — libraries
+   used as build dependencies that are not exposed externally and/or are not
+   typically available as system packages (fmt, spdlog, flatbuffers,
+   googletest, etc.). These are not given special packaging treatment. Most are
+   `CORE` dependencies required by some subproject unconditionally while the
+   `HOST_MATH` libraries (host-blas, SuiteSparse, fftw3) are optional.
+
+The rest of this document covers the sysdeps in detail.
+
+## Sysdeps
+
 The ROCm projects have a number of dependencies. Typically those that escape
 any specific library and are generally available as part of an OS distribution
 are the concern of TheRock. In these cases, TheRock prefers to build them
@@ -26,6 +46,7 @@ project wide:
   bundling is not enabled or supported for the target OS):
   - `THEROCK_BUNDLED_BZIP2`
   - `THEROCK_BUNDLED_ELFUTILS`
+  - `THEROCK_BUNDLED_HWLOC`
   - `THEROCK_BUNDLED_LIBCAP`
   - `THEROCK_BUNDLED_LIBDRM`
   - `THEROCK_BUNDLED_LIBLZMA`
@@ -53,10 +74,20 @@ Implementation notes for each library is below:
 - Alternatives: None (some OS vendors will provide alternatives but the source
   distribution of bzip2 has no opinion)
 
+## Expat
+
+- Canonical method: `find_package(expat)`
+- Import library: `expat::expat`
+
 ## GMP
 
 - Canonical method: `find_package(gmp)`
 - Import library: `gmp::gmp`
+
+## hwloc
+
+- Canonical method: `find_package(hwloc CONFIG)`
+- Import library: `hwloc::hwloc`
 
 ## ELFUTILS
 
@@ -104,6 +135,16 @@ Supported sub-libraries: `libdrm`, `libdrm_amdgpu`
 - Import library: `LibLZMA::LibLZMA`
 - Alternatives: `pkg_check_modules(LZMA liblzma)`
 
+## MPFR
+
+- Canonical method: `find_package(mpfr)`
+- Import library: `mpfr::mpfr`
+
+## NCurses
+
+- Canonical method: `find_package(ncurses)`
+- Import library: `ncurses::ncurses`
+
 ### numactl
 
 Provides the `libnuma` library. Tools are not included in bundled sysdeps.
@@ -139,5 +180,11 @@ SIMDe (SIMD Everywhere) is a header-only portability library for SIMD intrinsics
 ## zstd
 
 - Canonical method: `find_package(zstd)`
-- Import library: `zstd::libzstd_shared`
-- Alternatives: `pkg_check_modules(ZSTD libzstd)`
+- Import library: `zstd::libzstd` (preferred - INTERFACE target that wraps the concrete library)
+- Alternatives:
+  - `zstd::libzstd_shared` - explicit shared library target
+  - `pkg_check_modules(ZSTD libzstd)`
+- Note: Upstream zstd's CMake install generates both `zstd::libzstd` (INTERFACE) and
+  `zstd::libzstd_shared` (SHARED IMPORTED). The INTERFACE target forwards to the
+  appropriate concrete target, abstracting static vs shared selection. Prefer
+  `zstd::libzstd` for new code.

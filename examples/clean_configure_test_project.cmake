@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 if(EXISTS "${BINARY_DIR}")
   message(STATUS "Removing build dir ${BINARY_DIR}")
   file(REMOVE_RECURSE "${BINARY_DIR}")
@@ -10,6 +13,7 @@ set(propagate_vars
   THEROCK_ENABLE_HIP
   THEROCK_ENABLE_HIPDNN
   THEROCK_ENABLE_HIPTENSOR
+  THEROCK_ENABLE_LIBHIPCXX
   THEROCK_ENABLE_MIOPEN
   THEROCK_ENABLE_PRIM
   THEROCK_ENABLE_RAND

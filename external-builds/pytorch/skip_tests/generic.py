@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 skip_tests = {
     "gfx950": {
         "cuda": {
@@ -6,11 +9,6 @@ skip_tests = {
         }
     },
     "common": {
-        # ----------------
-        # might be failing
-        # ----------------
-        # "binary_ufuncs": [ "test_cuda_tensor_pow_scalar_tensor_cuda" ]
-        # ----------------
         "cuda": [
             # HIP_VISIBLE_DEVICES and CUDA_VISIBLE_DEVICES not working
             # to restrict visibility of devices
@@ -67,6 +65,9 @@ skip_tests = {
             # FLAKY!! AssertionError: 'tensor([2.3000+4.j, 7.0000+6.j])' != 'tensor([2.30000+4.j, 7.00000+6.j])'
             # (Note: this will also skip "test_print" in all other test modules)
             "test_print",
+            # torch._dynamo.exc.BackendCompilerFailed: backend='aot_eager' raised:
+            # TypeError: 'CustomDecompTable' object is not a mapping
+            "test_fx_memory_profiler_augmentation",
         ],
         "unary_ufuncs": [
             # ----------------

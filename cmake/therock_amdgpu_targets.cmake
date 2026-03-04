@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Target metadata is maintained as global properties:
 #   THEROCK_AMDGPU_TARGETS: List of gfx target names
 #   THEROCK_AMDGPU_TARGET_FAMILIES: List of target families (may contain duplicates)
@@ -41,20 +44,25 @@ function(therock_add_amdgpu_target gfx_target product_name)
   endforeach()
 endfunction()
 
-# gfx90X family
-therock_add_amdgpu_target(gfx906 "Radeon VII / MI50 CDNA" FAMILY dgpu-all gfx90X-all gfx90X-dgpu gfx90X-dcgpu
+# gfx906 (separate family - different instruction support from gfx908/gfx90a)
+therock_add_amdgpu_target(gfx906 "Radeon VII / MI50 CDNA" FAMILY dgpu-all gfx906-dgpu
   EXCLUDE_TARGET_PROJECTS
     hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
     composable_kernel # https://github.com/ROCm/TheRock/issues/1245
     rocWMMA # https://github.com/ROCm/TheRock/issues/1944
     hipTensor # https://github.com/ROCm/TheRock/issues/2074
+    rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
 )
-therock_add_amdgpu_target(gfx908 "MI100 CDNA" FAMILY gfx90X-all dcgpu-all gfx90X-dcgpu
+
+# gfx908 (separate family - different instruction support from gfx906/gfx90a)
+therock_add_amdgpu_target(gfx908 "MI100 CDNA" FAMILY dcgpu-all gfx908-dcgpu
   EXCLUDE_TARGET_PROJECTS
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
 )
-therock_add_amdgpu_target(gfx90a "MI210/250 CDNA" FAMILY gfx90X-all dcgpu-all gfx90X-dcgpu
+
+# gfx90a (separate family - different instruction support from gfx906/gfx908)
+therock_add_amdgpu_target(gfx90a "MI210/250 CDNA" FAMILY dcgpu-all gfx90a-dcgpu
   EXCLUDE_TARGET_PROJECTS
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
 )
@@ -73,6 +81,7 @@ therock_add_amdgpu_target(gfx1010 "AMD RX 5700" FAMILY dgpu-all gfx101X-all gfx1
     composable_kernel # https://github.com/ROCm/TheRock/issues/1245
     rocWMMA # https://github.com/ROCm/TheRock/issues/1944
     hipTensor # https://github.com/ROCm/TheRock/issues/2074
+    rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
 )
 therock_add_amdgpu_target(gfx1011 "AMD Radeon Pro V520" FAMILY dgpu-all gfx101X-all gfx101X-dgpu
   EXCLUDE_TARGET_PROJECTS
@@ -81,7 +90,9 @@ therock_add_amdgpu_target(gfx1011 "AMD Radeon Pro V520" FAMILY dgpu-all gfx101X-
     composable_kernel # https://github.com/ROCm/TheRock/issues/1245
     rocWMMA # https://github.com/ROCm/TheRock/issues/1944
     hipTensor # https://github.com/ROCm/TheRock/issues/2074
+    rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
 )
+
 therock_add_amdgpu_target(gfx1012 "AMD RX 5500" FAMILY dgpu-all gfx101X-all gfx101X-dgpu
   EXCLUDE_TARGET_PROJECTS
     hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
@@ -89,6 +100,7 @@ therock_add_amdgpu_target(gfx1012 "AMD RX 5500" FAMILY dgpu-all gfx101X-all gfx1
     composable_kernel # https://github.com/ROCm/TheRock/issues/1245
     rocWMMA # https://github.com/ROCm/TheRock/issues/1944
     hipTensor # https://github.com/ROCm/TheRock/issues/2074
+    rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
 )
 
 # gfx103X family
@@ -98,6 +110,15 @@ therock_add_amdgpu_target(gfx1030 "AMD RX 6800 / XT" FAMILY dgpu-all gfx103X-all
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
     rocWMMA # https://github.com/ROCm/TheRock/issues/1944
     hipTensor # https://github.com/ROCm/TheRock/issues/2074
+    rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
+)
+therock_add_amdgpu_target(gfx1031 "AMD RX 6700 / XT" FAMILY dgpu-all gfx103X-all gfx103X-dgpu
+  EXCLUDE_TARGET_PROJECTS
+  hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
+  hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
+  rocWMMA # https://github.com/ROCm/TheRock/issues/1944
+  hipTensor # https://github.com/ROCm/TheRock/issues/2074
+  rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
 )
 therock_add_amdgpu_target(gfx1032 "AMD RX 6600" FAMILY dgpu-all gfx103X-all gfx103X-dgpu
   EXCLUDE_TARGET_PROJECTS
@@ -105,13 +126,32 @@ therock_add_amdgpu_target(gfx1032 "AMD RX 6600" FAMILY dgpu-all gfx103X-all gfx1
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
     rocWMMA # https://github.com/ROCm/TheRock/issues/1944
     hipTensor # https://github.com/ROCm/TheRock/issues/2074
+    rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
 )
-therock_add_amdgpu_target(gfx1035 "AMD Radeon 680M Laptop iGPU" igpu-all FAMILY gfx103X-all gfx103X-igpu
+therock_add_amdgpu_target(gfx1033 "AMD Van Gogh iGPU" FAMILY igpu-all gfx103X-all gfx103X-igpu
   EXCLUDE_TARGET_PROJECTS
     hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
     rocWMMA # https://github.com/ROCm/TheRock/issues/1944
     hipTensor # https://github.com/ROCm/TheRock/issues/2074
+    rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
+    composable_kernel
+)
+therock_add_amdgpu_target(gfx1034 "AMD RX 6500 XT" FAMILY dgpu-all gfx103X-all gfx103X-dgpu
+  EXCLUDE_TARGET_PROJECTS
+    hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
+    hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
+    rocWMMA # https://github.com/ROCm/TheRock/issues/1944
+    hipTensor # https://github.com/ROCm/TheRock/issues/2074
+    rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
+)
+therock_add_amdgpu_target(gfx1035 "AMD Radeon 680M Laptop iGPU" FAMILY igpu-all gfx103X-all gfx103X-igpu
+  EXCLUDE_TARGET_PROJECTS
+    hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
+    hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
+    rocWMMA # https://github.com/ROCm/TheRock/issues/1944
+    hipTensor # https://github.com/ROCm/TheRock/issues/2074
+    rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
 )
 therock_add_amdgpu_target(gfx1036 "AMD Raphael iGPU" FAMILY igpu-all gfx103X-all gfx103X-igpu
   EXCLUDE_TARGET_PROJECTS
@@ -119,6 +159,7 @@ therock_add_amdgpu_target(gfx1036 "AMD Raphael iGPU" FAMILY igpu-all gfx103X-all
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
     rocWMMA # https://github.com/ROCm/TheRock/issues/1944
     hipTensor # https://github.com/ROCm/TheRock/issues/2074
+    rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
 )
 
 # gfx110X family
@@ -126,17 +167,20 @@ therock_add_amdgpu_target(gfx1100 "AMD RX 7900 XTX" FAMILY dgpu-all gfx110X-all 
   EXCLUDE_TARGET_PROJECTS
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
     hipTensor # https://github.com/ROCm/TheRock/issues/2074
+    rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
 )
 therock_add_amdgpu_target(gfx1101 "AMD RX 7800 XT" FAMILY dgpu-all gfx110X-all gfx110X-dgpu
   EXCLUDE_TARGET_PROJECTS
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
     hipTensor # https://github.com/ROCm/TheRock/issues/2074
+    rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
 )
 therock_add_amdgpu_target(gfx1102 "AMD RX 7700S/Framework Laptop 16" FAMILY dgpu-all gfx110X-all gfx110X-dgpu
   EXCLUDE_TARGET_PROJECTS
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
     hipBLASLt # https://github.com/ROCm/TheRock/issues/1062
     hipTensor # https://github.com/ROCm/TheRock/issues/2074
+    rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
 )
 therock_add_amdgpu_target(gfx1103 "AMD Radeon 780M Laptop iGPU" FAMILY igpu-all gfx110X-all gfx110X-igpu
   EXCLUDE_TARGET_PROJECTS
@@ -144,6 +188,7 @@ therock_add_amdgpu_target(gfx1103 "AMD Radeon 780M Laptop iGPU" FAMILY igpu-all 
     rccl  # https://github.com/ROCm/TheRock/issues/150
     rocWMMA # https://github.com/ROCm/TheRock/issues/1944
     hipTensor # https://github.com/ROCm/TheRock/issues/2074
+    rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
 )
 
 # gfx115X family
@@ -152,24 +197,28 @@ therock_add_amdgpu_target(gfx1150 "AMD Strix Point iGPU" FAMILY igpu-all gfx115X
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
     rccl  # https://github.com/ROCm/TheRock/issues/150
     hipTensor # https://github.com/ROCm/TheRock/issues/2074
+    rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
 )
 therock_add_amdgpu_target(gfx1151 "AMD Strix Halo iGPU" FAMILY igpu-all gfx115X-all gfx115X-igpu
   EXCLUDE_TARGET_PROJECTS
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
     rccl  # https://github.com/ROCm/TheRock/issues/150
     hipTensor # https://github.com/ROCm/TheRock/issues/2074
+    rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
 )
 therock_add_amdgpu_target(gfx1152 "AMD Krackan 1 iGPU" FAMILY igpu-all gfx115X-all gfx115X-igpu
   EXCLUDE_TARGET_PROJECTS
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
     rccl  # https://github.com/ROCm/TheRock/issues/150
-    rocWMMA # https://github.com/ROCm/TheRock/issues/1944
+    hipTensor # https://github.com/ROCm/TheRock/issues/2074
+    rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
 )
 therock_add_amdgpu_target(gfx1153 "AMD Radeon 820M iGPU" FAMILY igpu-all gfx115X-all gfx115X-igpu
   EXCLUDE_TARGET_PROJECTS
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
     rccl  # https://github.com/ROCm/TheRock/issues/150
-    rocWMMA # https://github.com/ROCm/TheRock/issues/1944
+    hipTensor # https://github.com/ROCm/TheRock/issues/2074
+    rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
 )
 
 # gfx120X family
@@ -177,11 +226,13 @@ therock_add_amdgpu_target(gfx1200 "AMD RX 9060 / XT" FAMILY dgpu-all gfx120X-all
   EXCLUDE_TARGET_PROJECTS
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
     hipTensor # https://github.com/ROCm/TheRock/issues/2074
+    rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
 )
 therock_add_amdgpu_target(gfx1201 "AMD RX 9070 / XT" FAMILY dgpu-all gfx120X-all
   EXCLUDE_TARGET_PROJECTS
     hipSPARSELt # https://github.com/ROCm/TheRock/issues/2042
     hipTensor # https://github.com/ROCm/TheRock/issues/2074
+    rocprofiler-compute # https://github.com/ROCm/TheRock/issues/2892
 )
 
 # Optional extension targets (used for out of tree target development).

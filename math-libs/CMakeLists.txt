@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 if(THEROCK_ENABLE_RAND)
   ##############################################################################
   # rocRAND
@@ -327,13 +330,77 @@ if(THEROCK_ENABLE_ROCWMMA)
   )
 endif(THEROCK_ENABLE_ROCWMMA)
 
-if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
+if(THEROCK_ENABLE_LIBHIPCXX)
   ##############################################################################
-  # composable_kernel
+  # libhipcxx
   ##############################################################################
 
+  therock_cmake_subproject_declare(libhipcxx
+    # TODO: use this in case libhipcx is moved to e.g. rocm-libraries
+    #EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/libhipcxx"
+    EXTERNAL_SOURCE_DIR "${THEROCK_SOURCE_DIR}/math-libs/libhipcxx"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/libhipcxx"
+    BACKGROUND_BUILD
+    DEFAULT_GPU_TARGETS
+      gfx942  # Fixes issue with empty target list for unsupported architectures.
+    CMAKE_ARGS
+      -DHIP_PLATFORM=amd
+      -DROCM_PATH=
+      -DROCM_DIR=
+      -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON # Needed for Ninja build?
+    CMAKE_INCLUDES
+      therock_explicit_finders.cmake
+    COMPILER_TOOLCHAIN
+      amd-hip
+      hipcc
+    BUILD_DEPS
+      rocm-cmake
+    RUNTIME_DEPS
+      amd-llvm
+      hip-clr
+      hipcc
+  )
+  therock_cmake_subproject_glob_c_sources(libhipcxx
+    SUBDIRS
+      .
+  )
+  therock_cmake_subproject_require_host_program(libhipcxx lit)
+  therock_cmake_subproject_activate(libhipcxx)
+
+  therock_provide_artifact(libhipcxx
+    DESCRIPTOR artifact-libhipcxx.toml
+    COMPONENTS
+      dbg
+      dev
+      lib
+      test
+    SUBPROJECT_DEPS
+      libhipcxx
+  )
+endif(THEROCK_ENABLE_LIBHIPCXX)
+
+# limit use of composable kernel to the GPU families it is valid for
+if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
+  set(_ck_supported_gfx_targets gfx908 gfx90a gfx942 gfx950 gfx1150 gfx1151 gfx1152 gfx1153 gfx1200 gfx1201)
+  foreach(_gfx_target ${THEROCK_AMDGPU_TARGETS})
+    if(NOT ${_gfx_target} IN_LIST _ck_supported_gfx_targets)
+      message(WARNING
+        "${_gfx_target} (included in THEROCK_AMDGPU_TARGETS) is not supported by composable kernel. "
+        "Disabling composable kernel and it's use in MIOpen.")
+      set(THEROCK_ENABLE_COMPOSABLE_KERNEL OFF)
+      set(THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL OFF)
+    endif()
+  endforeach()
+endif()
+
+if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
+  ##############################################################################
+  # Composable_kernel
+  ##############################################################################
+  # TODO: Move this to math-libs
+
   therock_cmake_subproject_declare(composable_kernel
-    EXTERNAL_SOURCE_DIR "${THEROCK_COMPOSABLE_KERNEL_SOURCE_DIR}"
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/composablekernel"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/composable_kernel"
     BACKGROUND_BUILD
     CMAKE_ARGS
@@ -341,7 +408,8 @@ if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
       -DROCM_PATH=
       -DROCM_DIR=
       "-DBUILD_TESTING=${THEROCK_BUILD_TESTING}"
-      -DMIOPEN_REQ_LIBS_ONLY=OFF
+      -DMIOPEN_REQ_LIBS_ONLY=ON
+      -DHIPTENSOR_REQ_LIBS_ONLY=ON
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
@@ -366,7 +434,6 @@ if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
       dev
       doc
       lib
-      run
     SUBPROJECT_DEPS
       composable_kernel
   )

@@ -31,9 +31,9 @@ Note that some fully supported GPU architectures may show a more limited state o
 | **RDNA4**    | **gfx1201** | ✅            | ✅            | ✅            |
 | **RDNA4**    | **gfx1200** | ✅            | ✅            | ✅            |
 | **RDNA3.5**  | **gfx1153** |               |               |               |
+| **RDNA3.5**  | **gfx1152** |               |               |               |
 | **RDNA3.5**  | **gfx1151** | ✅            | ✅            |               |
 | **RDNA3.5**  | **gfx1150** | ✅            | ✅            |               |
-| **RDNA3.5**  | **gfx1152** |               |               |               |
 | **RDNA3**    | **gfx1103** |               | ✅            |               |
 | **RDNA3**    | **gfx1102** | ✅            | ✅            |               |
 | **RDNA3**    | **gfx1101** | ✅            | ✅            |               |
@@ -46,7 +46,7 @@ Note that some fully supported GPU architectures may show a more limited state o
 
 ## ROCm on Windows
 
-Check [windows_support.md](<%5Bdocs/development/windows_support.md%5D(https://github.com/ROCm/TheRock/blob/main/docs/development/windows_support.md)>) on current status of development.
+Check [windows_support.md](https://github.com/ROCm/TheRock/blob/main/docs/development/windows_support.md) on current status of development.
 
 ### AMD Radeon - Windows
 

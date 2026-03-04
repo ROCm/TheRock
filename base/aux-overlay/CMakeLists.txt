@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Auxiliary Overlay
 #
 # This project contains some odds and ends needed in order to complete
@@ -14,11 +17,32 @@ project(therock-aux-overlay)
 
 if(NOT WIN32)
   add_custom_target(symlinks ALL
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/bin"
     COMMAND "${CMAKE_COMMAND}" -E create_symlink "lib/llvm" "${CMAKE_CURRENT_BINARY_DIR}/llvm"
+    COMMAND "${CMAKE_COMMAND}" -E create_symlink "lib/llvm/amdgcn" "${CMAKE_CURRENT_BINARY_DIR}/amdgcn"
+    COMMAND "${CMAKE_COMMAND}" -E create_symlink "../lib/llvm/bin/amdclang" "${CMAKE_CURRENT_BINARY_DIR}/bin/amdclang"
+    COMMAND "${CMAKE_COMMAND}" -E create_symlink "../lib/llvm/bin/amdflang" "${CMAKE_CURRENT_BINARY_DIR}/bin/amdflang"
+    COMMAND "${CMAKE_COMMAND}" -E create_symlink "../lib/llvm/bin/amdclang++" "${CMAKE_CURRENT_BINARY_DIR}/bin/amdclang++"
+    COMMAND "${CMAKE_COMMAND}" -E create_symlink "../lib/llvm/bin/amdclang-cl" "${CMAKE_CURRENT_BINARY_DIR}/bin/amdclang-cl"
+    COMMAND "${CMAKE_COMMAND}" -E create_symlink "../lib/llvm/bin/amdclang-cpp" "${CMAKE_CURRENT_BINARY_DIR}/bin/amdclang-cpp"
+    COMMAND "${CMAKE_COMMAND}" -E create_symlink "../lib/llvm/bin/amdlld" "${CMAKE_CURRENT_BINARY_DIR}/bin/amdlld"
+    COMMAND "${CMAKE_COMMAND}" -E create_symlink "../lib/llvm/bin/offload-arch" "${CMAKE_CURRENT_BINARY_DIR}/bin/offload-arch"
   )
   install(FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/bin"
     "${CMAKE_CURRENT_BINARY_DIR}/llvm"
+    "${CMAKE_CURRENT_BINARY_DIR}/amdgcn"
     DESTINATION .
+  )
+  install(FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/bin/amdclang"
+    "${CMAKE_CURRENT_BINARY_DIR}/bin/amdflang"
+    "${CMAKE_CURRENT_BINARY_DIR}/bin/amdclang++"
+    "${CMAKE_CURRENT_BINARY_DIR}/bin/amdclang-cl"
+    "${CMAKE_CURRENT_BINARY_DIR}/bin/amdclang-cpp"
+    "${CMAKE_CURRENT_BINARY_DIR}/bin/amdlld"
+    "${CMAKE_CURRENT_BINARY_DIR}/bin/offload-arch"
+    DESTINATION bin
   )
 endif()
 

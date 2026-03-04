@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Adds a test for shared libraries under a common path.
 # PATH: Common path (relative to CMAKE_CURRENT_BINARY_DIR if not absolute)
 # LIB_NAMES: Library names to validate
@@ -8,6 +11,12 @@ function(therock_test_validate_shared_lib)
     "PATH"
     "LIB_NAMES"
   )
+
+  # Skip shared-library dlopen validation for sanitizer builds.
+  if(NOT "${THEROCK_SANITIZER}" STREQUAL "")
+    return()
+  endif()
+
   if(WIN32)
     # This helper is Linux only. In the future, we can have separate DLL_NAMES
     # and verify.

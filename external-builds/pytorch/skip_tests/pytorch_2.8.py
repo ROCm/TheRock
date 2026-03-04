@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 skip_tests = {
     "common": {
         "cuda": [
@@ -29,20 +32,10 @@ skip_tests = {
             "test_hip_device_count",
         ]
     },
-    "gfx950": {
-        "binary_ufuncs": [
-            # AssertionError: Tensor-likes are not close!
-            "test_contig_vs_every_other___rpow___cuda_complex64",
-            # AssertionError: Tensor-likes are not close!
-            "test_contig_vs_every_other__refs_pow_cuda_complex64",
-            # AssertionError: Tensor-likes are not close!
-            "test_contig_vs_every_other_pow_cuda_complex64",
-            # AssertionError: Tensor-likes are not close!
-            "test_non_contig___rpow___cuda_complex64",
-            # AssertionError: Tensor-likes are not close!
-            "test_non_contig__refs_pow_cuda_complex64",
-            # AssertionError: Tensor-likes are not close!
-            "test_non_contig_pow_cuda_complex64",
+    "gfx120": {
+        "cuda": [
+            # AssertionError: True is not false
+            "test_repeat_graph_capture_cublas_workspace_memory"
         ]
     },
 }

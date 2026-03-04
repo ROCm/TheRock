@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Fetches the specific pull request, commit or branch from a repo.
 This script is available for users, but it is primarily the mechanism
 to fetch a monorepo in the CI.
@@ -18,7 +21,7 @@ def log(*args, **kwargs):
     sys.stdout.flush()
 
 
-def exec(args: list[str | Path], cwd: Path):
+def run_command(args: list[str | Path], cwd: Path):
     args = [str(arg) for arg in args]
     log(f"++ Exec [{cwd}]$ {shlex.join(args)}")
     sys.stdout.flush()
@@ -26,7 +29,7 @@ def exec(args: list[str | Path], cwd: Path):
 
 
 def fetch_branch(args):
-    exec(
+    run_command(
         ["git", "checkout", args.remote_branch],
         cwd=args.directory,
     )
@@ -36,7 +39,7 @@ def fetch_commit(args):
     additional_args = []
     if args.local_branch:
         additional_args += ["-b", args.local_branch]
-    exec(
+    run_command(
         ["git", "checkout"] + additional_args + [args.commit],
         cwd=args.directory,
     )
@@ -48,11 +51,11 @@ def fetch_pr(args):
     else:
         local_branch = args.pr_number
 
-    exec(
+    run_command(
         ["git", "fetch", "origin", f"pull/{args.pr_number}/head:{local_branch}"],
         cwd=args.directory,
     )
-    exec(
+    run_command(
         ["git", "switch", local_branch],
         cwd=args.directory,
     )
@@ -65,7 +68,7 @@ def run(args):
     if args.jobs:
         additional_args += ["--jobs", str(args.jobs)]
 
-    exec(
+    run_command(
         ["git", "clone"] + additional_args + [args.repo, args.directory],
         cwd=THIS_SCRIPT_DIR,
     )

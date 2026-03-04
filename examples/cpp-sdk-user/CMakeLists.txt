@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Build with:
 #   cmake -GNinja -S. -Bbuild -DCMAKE_PREFIX_PATH=path/to/rocm
 if ("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
@@ -26,6 +29,7 @@ option(THEROCK_ENABLE_PRIM "Whether rocprim is available" ON)
 option(THEROCK_ENABLE_RAND "Whether rocrand/hiprand are available" ON)
 option(THEROCK_ENABLE_RCCL "Whether rccl is available" ON)
 option(THEROCK_ENABLE_ROCWMMA "Whether rocwmma is available" ON)
+option(THEROCK_ENABLE_LIBHIPCXX "Whether libhipcxx is available" ON)
 option(THEROCK_ENABLE_SOLVER "Whether rocsolver/hipsolver are available" ON)
 option(THEROCK_ENABLE_SPARSE "Whether rocsparse/hipsparse/hipsparselt are available" ON)
 option(ENABLE_DEVICE_TEST "Whether to enable testing that requires a device" OFF)
@@ -155,4 +159,9 @@ endif()
 if(THEROCK_ENABLE_HIPTENSOR)
     find_package(hiptensor CONFIG REQUIRED)
     message(STATUS "hipTensor version: ${hiptensor_VERSION}")
+endif()
+
+if(THEROCK_ENABLE_LIBHIPCXX)
+    find_package(libhipcxx CONFIG REQUIRED)
+    message(STATUS "libhipcxx version: ${libhipcxx_VERSION}")
 endif()

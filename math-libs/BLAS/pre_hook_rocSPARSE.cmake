@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 if(NOT WIN32)
   # Configure roctracer if on a supported operating system (Linux).
   # rocSPARSE has deprecated dependencies on roctracer. We apply a patch to redirect
@@ -11,7 +14,10 @@ endif()
 
 # See the artifact descriptor where we require these matrices for the test
 # artifact. Consider installing as part of the main project.
-install(
-  DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/clients/matrices"
-  DESTINATION "clients"
-)
+# The client will only be built if testing is enabled. See rocSPARSE CMakeLists.txt.
+if(THEROCK_BUILD_TESTING)
+  install(
+    DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/clients/matrices"
+    DESTINATION "clients"
+  )
+endif()

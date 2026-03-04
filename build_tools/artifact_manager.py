@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Stage-aware artifact manager for multi-stage CI/CD pipeline.
 
 This CLI tool manages artifacts between build stages, supporting both local
@@ -12,6 +15,14 @@ Usage:
         --amdgpu-families gfx94X-dcgpu \
         --run-id 12345 \
         --output-dir build/
+
+    # Fetch and flatten artifacts into single directory structure
+    python stage_artifact_manager.py fetch \
+        --stage math-libs \
+        --amdgpu-families gfx94X-dcgpu \
+        --run-id 12345 \
+        --output-dir build/ \
+        --flatten
 
     # Push produced artifacts after building (compresses and uploads in parallel)
     python stage_artifact_manager.py push \
@@ -224,7 +235,7 @@ def extract_artifact(request: ExtractRequest) -> Optional[Path]:
             populator(archive_path)
         elif request.flatten:
             output_dir = request.output_dir
-            log(f"  ++ Flattening {archive_path.name}")
+            log(f"  ++ Flattening {archive_path.name} to {output_dir}")
             flattener = ArtifactPopulator(
                 output_path=output_dir, verbose=False, flatten=True
             )
@@ -250,26 +261,40 @@ def do_fetch(args: argparse.Namespace):
     """Fetch inbound artifacts for a stage with parallel download and extract."""
     topology = get_topology(args.topology)
 
-    # Validate stage
-    if args.stage not in topology.build_stages:
-        log(f"ERROR: Stage '{args.stage}' not found")
-        log(f"Available stages: {', '.join(topology.build_stages.keys())}")
-        sys.exit(1)
+    # Determine which artifacts to fetch
+    if args.stage == "all":
+        # Fetch all artifacts in the topology
+        inbound = set(topology.artifacts.keys())
+        log(f"Fetching all {len(inbound)} artifacts")
+    else:
+        # Validate stage
+        if args.stage not in topology.build_stages:
+            log(f"ERROR: Stage '{args.stage}' not found")
+            log(f"Available stages: {', '.join(topology.build_stages.keys())}")
+            sys.exit(1)
 
-    # Get inbound artifacts for this stage
-    inbound = topology.get_inbound_artifacts(args.stage)
-    if not inbound:
-        log(f"Stage '{args.stage}' has no inbound artifacts")
-        return
+        # Get inbound artifacts for this stage
+        inbound = topology.get_inbound_artifacts(args.stage)
+        if not inbound:
+            log(f"Stage '{args.stage}' has no inbound artifacts")
+            return
 
-    log(
-        f"Stage '{args.stage}' needs {len(inbound)} artifacts: {', '.join(sorted(inbound))}"
-    )
+        log(
+            f"Stage '{args.stage}' needs {len(inbound)} artifacts: {', '.join(sorted(inbound))}"
+        )
 
-    # Determine target families
+    # Determine target families to fetch (inclusive: both family names and
+    # individual targets are tried, whichever is in the bucket gets fetched).
     target_families = ["generic"]
-    if args.amdgpu_families:
-        target_families.extend(args.amdgpu_families.split(","))
+    if args.generic_only:
+        log("Fetching generic (host) artifacts only")
+    else:
+        if args.amdgpu_families:
+            target_families.extend(args.amdgpu_families.split(","))
+        if args.amdgpu_targets:
+            target_families.extend(
+                t.strip() for t in args.amdgpu_targets.split(",") if t.strip()
+            )
 
     # Create backend
     backend = create_backend_from_env(
@@ -356,13 +381,13 @@ def do_fetch(args: argparse.Namespace):
                                 archive_path=downloaded_path,
                                 output_dir=(
                                     output_dir / "artifacts"
-                                    if not args.bootstrap
+                                    if not args.bootstrap and not args.flatten
                                     else output_dir
                                 ),
                                 # Don't delete during parallel extraction - cleanup
                                 # happens after all extractions complete
                                 delete_archive=False,
-                                flatten=False,
+                                flatten=args.flatten,
                                 bootstrap=args.bootstrap,
                                 cleaned_paths=(
                                     bootstrap_cleaned_paths if args.bootstrap else None
@@ -539,13 +564,11 @@ def do_push(args: argparse.Namespace):
         log(f"ERROR: Artifacts directory not found: {artifacts_dir}")
         sys.exit(1)
 
-    # Determine target families
-    target_families = ["generic"]
-    if args.amdgpu_families:
-        target_families.extend(args.amdgpu_families.split(","))
-
     # Find artifact directories to compress and upload
     # Check for both pre-compressed archives and exploded directories
+    # Note: We push all artifacts produced by this stage regardless of target family.
+    # The build system already determined what to build; filtering here is redundant
+    # and breaks with kpack splitting (which produces individual arch artifacts).
     upload_dir = build_dir / ".upload_cache"
     upload_dir.mkdir(parents=True, exist_ok=True)
 
@@ -559,8 +582,6 @@ def do_push(args: argparse.Namespace):
             if not an:
                 continue
             if an.name not in produced:
-                continue
-            if an.target_family not in target_families:
                 continue
 
             ext = ".tar.zst" if args.compression_type == "zstd" else ".tar.xz"
@@ -581,8 +602,6 @@ def do_push(args: argparse.Namespace):
             if not an:
                 continue
             if an.name not in produced:
-                continue
-            if an.target_family not in target_families:
                 continue
 
             direct_upload_requests.append(
@@ -774,12 +793,27 @@ def main(argv: Optional[List[str]] = None):
     )
     _add_backend_args(fetch_parser)
     fetch_parser.add_argument(
-        "--stage", type=str, required=True, help="Build stage name"
+        "--stage",
+        type=str,
+        default="all",
+        help="Build stage name (default: 'all' fetches all artifacts)",
     )
-    fetch_parser.add_argument(
+    fetch_target_group = fetch_parser.add_mutually_exclusive_group()
+    fetch_target_group.add_argument(
         "--amdgpu-families",
         type=str,
-        help="Comma-separated GPU families (e.g., gfx94X-dcgpu,gfx110X-all)",
+        help="Comma-separated GPU families to fetch (e.g., gfx94X-dcgpu,gfx1100)",
+    )
+    fetch_target_group.add_argument(
+        "--generic-only",
+        action="store_true",
+        help="Only fetch generic (host) artifacts, skip device-specific artifacts",
+    )
+    fetch_parser.add_argument(
+        "--amdgpu-targets",
+        type=str,
+        default="",
+        help="Comma-separated individual GPU targets for fetching split artifacts (e.g. 'gfx942')",
     )
     fetch_parser.add_argument(
         "--output-dir",
@@ -787,10 +821,16 @@ def main(argv: Optional[List[str]] = None):
         required=True,
         help="Output directory for fetched artifacts",
     )
-    fetch_parser.add_argument(
+    fetch_extract_group = fetch_parser.add_mutually_exclusive_group()
+    fetch_extract_group.add_argument(
         "--bootstrap",
         action="store_true",
         help="Bootstrap build directory (flatten artifacts and create prebuilt markers)",
+    )
+    fetch_extract_group.add_argument(
+        "--flatten",
+        action="store_true",
+        help="Flatten artifacts into a single directory structure (merge all artifacts)",
     )
     fetch_parser.add_argument(
         "--no-extract",
@@ -818,11 +858,6 @@ def main(argv: Optional[List[str]] = None):
     _add_backend_args(push_parser)
     push_parser.add_argument(
         "--stage", type=str, required=True, help="Build stage name"
-    )
-    push_parser.add_argument(
-        "--amdgpu-families",
-        type=str,
-        help="Comma-separated GPU families (e.g., gfx94X-dcgpu,gfx110X-all)",
     )
     push_parser.add_argument(
         "--build-dir",

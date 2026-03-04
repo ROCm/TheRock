@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """
 Uploads test reports to AWS S3 bucket for a GitHub run ID and AMD GPU family
 """
@@ -24,7 +27,7 @@ sys.path.append(str(THEROCK_DIR / "third-party" / "indexer"))
 from indexer import process_dir
 
 
-def exec(cmd: list[str], cwd: Path):
+def run_command(cmd: list[str], cwd: Path):
     logging.info(f"++ Exec [{cwd}]$ {shlex.join(cmd)}")
     subprocess.run(cmd, check=True)
 
@@ -78,7 +81,7 @@ def upload_test_report(report_dir: Path, bucket_uri: str, log_destination: str):
         "--content-type",
         "text/html",
     ]
-    exec(cmd, cwd=Path.cwd())
+    run_command(cmd, cwd=Path.cwd())
     logging.info("Uploaded all .html files from %s to %s", report_dir, bucket_uri)
 
 

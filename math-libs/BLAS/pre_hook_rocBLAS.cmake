@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Tensile just uses the system path to find most of its tools and it does this
 # in the build phase. Rather than tunneling everything through manually, we
 # just explicitly set up the path to include our toolchain ROCM and LLVM

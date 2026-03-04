@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # TODO: hipblas does not appear to be setting its include directory when used
 # in an isolated directory via find_package (this has probably been masked when
 # in a directory with everything else). So we just include it here.

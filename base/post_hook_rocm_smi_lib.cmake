@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # smi_lib public headers include libdrm, so in the bundled case, we must ensure
 # that the installed libraries add the include directory. This is because
 # libdrm does not cross the install boundary as a dep (since it is pkgconfig
