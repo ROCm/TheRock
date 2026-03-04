@@ -19,10 +19,11 @@ ROCPROFILER_SDK_TESTS_DIRECTORY = f"{ROCPROFILER_SDK_DIRECTORY}/tests"
 
 logging.basicConfig(level=logging.INFO)
 
-# Set up HIP_PATH / ROCM_PATH
+# Set up HIP_PATH / ROCM_PATH / ROCPROFILER_METRICS_PATH
 environ_vars = os.environ.copy()
 environ_vars["ROCM_PATH"] = str(THEROCK_PATH)
 environ_vars["HIP_PATH"] = str(THEROCK_PATH)
+environ_vars["ROCPROFILER_METRICS_PATH"] = ROCPROFILER_SDK_DIRECTORY
 
 # Env setup
 environ_vars["HIP_PLATFORM"] = "amd"
