@@ -205,7 +205,7 @@ def build_run_test_cmd(
 
     if not args.no_exclude_jit_executor:
         cmd.append("--exclude-jit-executor")
-    if not args.no_exclude_distributed:
+    if not args.no_exclude_distributed and args.test_config != "distributed":
         cmd.append("--exclude-distributed-tests")
     if not args.no_exclude_quantization:
         cmd.append("--exclude-quantization-tests")
