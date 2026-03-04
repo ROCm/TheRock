@@ -145,7 +145,8 @@ jobs:
           TEST_TYPE: ${{ fromJSON(inputs.component).test_type }}
           ROCM_KPACK_DEBUG: "1"
           ASAN_OPTIONS: "detect_odr_violation=0:quarantine_size_mb=600"
-          HSA_XNACK: 1          
+          HSA_XNACK: 1
+          ASAN_SYMBOLIZER_PATH: ${{ env.VENV_DIR }}/llvm/bin/llvm-symbolizer
         run: |
           ${{ fromJSON(inputs.component).test_script }}
 
