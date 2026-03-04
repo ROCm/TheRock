@@ -314,7 +314,7 @@ description = "Fusilli hipdnn provider"
 type = "generic"
 artifact_group_deps = ["hip-runtime", "iree-compiler"]
 # TODO: rocm-systems included for projects/hip/VERSION (see CMakeLists.txt)
-source_sets = ["iree-libs", "rocm-systems"]
+source_sets = ["iree-libs", "rocm-libraries", "rocm-systems"]
 
 [artifact_groups.media-libs]
 description = "Media Libraries"
