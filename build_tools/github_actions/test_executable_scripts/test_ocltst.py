@@ -29,7 +29,7 @@ def setup_env(env):
     env["ROCM_PATH"] = str(ROCM_PATH)
     if platform.system() == "Linux":
         ROCK_LIB_PATH = Path(THEROCK_BIN_DIR).parent / "lib"
-        OCL_LIB = Path(ROCK_LIB_PATH) / "opencl" / "lib"
+        OCL_LIB = Path(ROCK_LIB_PATH) / "opencl"
         LLVM_LIB = Path(ROCK_LIB_PATH) / "llvm" / "lib"
         ROCM_SYSDEPS_LIB = Path(ROCK_LIB_PATH) / "rocm_sysdeps" / "lib"
         logging.info(f"++ contents of ROCK_LIB_PATH={os.listdir(ROCK_LIB_PATH)}")
