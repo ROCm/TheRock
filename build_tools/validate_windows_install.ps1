@@ -278,6 +278,56 @@ if ($env:VCINSTALLDIR) {
     Write-Info "Skipping ATL check (MSVC environment not activated)"
 }
 
+# rc.exe (Windows Resource Compiler - lives in SDK bin, not MSVC bin)
+$rcCmd = Get-Command rc.exe -ErrorAction SilentlyContinue
+if ($rcCmd) {
+    Write-Pass "rc.exe in PATH: $($rcCmd.Source)"
+} else {
+    Write-Fail "rc.exe not found in PATH (Windows SDK bin directory missing)" `
+        -Detail "The VS dev shell may not have set up the SDK paths. Check that the Windows SDK is installed and its bin\x64 dir is on PATH."
+}
+
+# Test compile: exercises headers from each SDK include directory and links
+# kernel32.lib.  This is the most reliable way to detect a broken VS dev
+# shell where cl.exe is on PATH but SDK include/lib dirs are not configured.
+#   windows.h  → Include\<ver>\um
+#   stdio.h    → Include\<ver>\ucrt
+#   rpcndr.h   → Include\<ver>\shared
+#   winstring.h→ Include\<ver>\winrt
+#   Link kernel32.lib → Lib\<ver>\um\x64 + Lib\<ver>\ucrt\x64
+if ($clCmd) {
+    $testDir = Join-Path $env:TEMP "therock_compile_test_$([System.Guid]::NewGuid().ToString('N'))"
+    $testSrc = Join-Path $testDir "test.c"
+    $testExe = Join-Path $testDir "test.exe"
+    try {
+        New-Item -ItemType Directory -Path $testDir -Force -ErrorAction Stop | Out-Null
+        Set-Content -Path $testSrc -Value @"
+#include <windows.h>   /* um */
+#include <stdio.h>     /* ucrt */
+#include <rpcndr.h>    /* shared */
+#include <winstring.h> /* winrt */
+int main(void) {
+    HANDLE h = GetProcessHeap();
+    printf("ok %p\n", (void*)h);
+    return 0;
+}
+"@ -ErrorAction Stop
+        $compileOut = (& cl.exe /nologo /Fo:"$testDir\" /Fe:"$testExe" "$testSrc" /link kernel32.lib 2>&1) -join "`n"
+        if ((Test-Path $testExe)) {
+            Write-Pass "Test compile + link succeeded (um, ucrt, shared, winrt headers; kernel32.lib)"
+        } else {
+            Write-Fail "Test compile failed - SDK environment is incomplete" `
+                -Detail $compileOut.Substring(0, [Math]::Min(300, $compileOut.Length))
+        }
+    } catch {
+        Write-Fail "Test compile could not run: $($_.Exception.Message)"
+    } finally {
+        Remove-Item $testDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+} else {
+    Write-Info "Skipping test-compile check (cl.exe not available)"
+}
+
 # ============================================================================
 Write-Section "4. Core Build Tools"
 
