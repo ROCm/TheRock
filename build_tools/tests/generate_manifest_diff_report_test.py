@@ -10,13 +10,17 @@ from urllib.error import HTTPError
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from generate_manifest_diff_report import (
+    create_table,
     determine_status,
     fetch_commits_in_range,
     format_commit_date,
+    generate_non_superrepo_html,
     get_api_base_from_url,
     is_revert,
+    ManifestDiff,
     parse_args,
     resolve_commits,
+    Submodule,
 )
 
 
@@ -251,14 +255,47 @@ class ResolveCommitsTest(unittest.TestCase):
         self.assertEqual(end_sha, "def456")
 
     def test_output_dir_argument_parsed(self):
-        """--output-dir argument is parsed correctly."""
+        """--output-dir argument is parsed as Path."""
         args = parse_args(["--start", "abc", "--end", "def", "--output-dir", "reports"])
-        self.assertEqual(args.output_dir, "reports")
+        self.assertEqual(args.output_dir, Path("reports"))
 
     def test_output_dir_defaults_to_none(self):
         """--output-dir defaults to None when not specified."""
         args = parse_args(["--start", "abc", "--end", "def"])
         self.assertIsNone(args.output_dir)
+
+
+# =============================================================================
+# HTML Report Structure Tests
+# =============================================================================
+
+
+class HtmlReportStructureTest(unittest.TestCase):
+    """Tests that generated HTML includes semantic row classes and data attributes."""
+
+    def test_create_table_includes_header_row_class(self):
+        """Report tables have header row with class report-table-header-row."""
+        html = create_table(["Component", "Commits"], [])
+        self.assertIn("report-table-header-row", html)
+
+    def test_non_superrepo_html_includes_component_row_and_data_component(self):
+        """Non-superrepo table rows have component-row class and data-component attribute."""
+        sub = Submodule(
+            name="test-submodule",
+            sha="abc123",
+            api_base="https://api.github.com/repos/ROCm/test",
+            branch="main",
+            status="unchanged",
+        )
+        diff = ManifestDiff(
+            start_commit="start",
+            end_commit="end",
+            submodules={"test-submodule": sub},
+        )
+        html = generate_non_superrepo_html(diff)
+        self.assertIn("component-row", html)
+        self.assertIn("data-component=", html)
+        self.assertIn("test-submodule", html)
 
 
 if __name__ == "__main__":
