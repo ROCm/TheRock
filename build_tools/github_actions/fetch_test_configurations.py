@@ -145,17 +145,6 @@ test_matrix = {
             "windows": 2,
         },
     },
-    "rocprofiler_systems": {
-        "job_name": "rocprofiler_systems",
-        "fetch_artifact_args": "--rocprofiler-systems --rocprofiler-sdk --tests",
-        "timeout_minutes": 15,
-        "test_script": f"python {_get_script_path('test_rocprofiler_systems.py')}",
-        "platform": ["linux"],
-        "total_shards_dict": {
-            "linux": 1,
-            "windows": 1,
-        },
-    },
     "hipcub": {
         "job_name": "hipcub",
         "fetch_artifact_args": "--prim --tests",
@@ -387,9 +376,9 @@ test_matrix = {
             "windows": 2,
         },
     },
-    # rocprofiler-compute tests
+    # profiler tests
     "rocprofiler-compute": {
-        "job_name": "rocprofiler_compute",
+        "job_name": "rocprofiler-compute",
         "fetch_artifact_args": "--rocprofiler-compute --rocprofiler-sdk --tests",
         "timeout_minutes": 60,
         "additional_requirements_files": [
@@ -399,6 +388,17 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_rocprofiler_compute.py')} -v",
         "platform": ["linux"],
         "total_shards": 2,
+    },
+    "rocprofiler-systems": {
+        "job_name": "rocprofiler-systems",
+        "fetch_artifact_args": "--rocprofiler-systems --rocprofiler-sdk --tests",
+        "timeout_minutes": 15,
+        "test_script": f"python {_get_script_path('test_rocprofiler_systems.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
     },
     # libhipcxx hipcc tests
     "libhipcxx_hipcc": {
