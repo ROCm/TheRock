@@ -86,7 +86,7 @@ class Program:
         queue: QueueHandle,
         grid: tuple[int, int, int],
         block: tuple[int, int, int],
-        args: Sequence[int | Buffer],
+        args: Sequence[int | Buffer | tuple[int, int]],
         *,
         timeline: TimelineSemaphore | None = None,
     ) -> None:
@@ -96,7 +96,9 @@ class Program:
             queue: Compute queue to submit to.
             grid: Global dispatch dimensions (workgroups in x, y, z).
             block: Workgroup dimensions (threads in x, y, z).
-            args: Kernel arguments - Buffer GPU addresses or scalar uint64 values.
+            args: Kernel arguments — Buffer for GPU addresses, int for 64-bit
+                scalars, or (value, byte_size) tuples for sized scalars
+                (e.g. (42, 4) for uint32_t).
             timeline: Optional timeline semaphore for completion signaling.
         """
         # Build kernarg buffer (explicit args + implicit dispatch packet)
@@ -194,7 +196,7 @@ class Program:
 
     def _build_kernargs(
         self,
-        args: Sequence[int | Buffer],
+        args: Sequence[int | Buffer | tuple[int, int]],
         grid: tuple[int, int, int],
         block: tuple[int, int, int],
     ) -> bytes:
@@ -209,11 +211,23 @@ class Program:
             +0x0E: group_size_y (u16)    = block[1]
             +0x10: group_size_z (u16)    = block[2]
             +0x12: remainder is reserved/zero
+
+        Args can be:
+            - Buffer: packed as 8-byte GPU address
+            - int: packed as 8-byte uint64 (for pointers / large values)
+            - (value, byte_size): packed at the specified size (2, 4, or 8 bytes)
         """
+        _SIZE_FMTS = {2: "<H", 4: "<I", 8: "<Q"}
         parts: list[bytes] = []
         for arg in args:
             if isinstance(arg, Buffer):
                 parts.append(struct.pack("<Q", arg.gpu_addr))
+            elif isinstance(arg, tuple):
+                val, size = arg
+                fmt = _SIZE_FMTS.get(size)
+                if fmt is None:
+                    raise KernelLoadError(f"Unsupported kernarg size: {size} (must be 2, 4, or 8)")
+                parts.append(struct.pack(fmt, val))
             elif isinstance(arg, int):
                 parts.append(struct.pack("<Q", arg))
             else:
