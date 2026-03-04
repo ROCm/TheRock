@@ -5,11 +5,12 @@
 
 When two artifact descriptors claim the same stage directory for any component
 type, extracting both artifacts into the same output directory causes file
-collisions. This was the root cause of
-https://github.com/ROCm/TheRock/issues/3758, where both
-artifact-rocprofiler-sdk.toml and the former artifact-aqlprofile-tests.toml
-included profiler/aqlprofile/stage, causing concurrent extraction to race on
-shared files.
+collisions.
+
+This was the root cause of https://github.com/ROCm/TheRock/issues/3758, where
+both `artifact-rocprofiler-sdk.toml` and `artifact-aqlprofile-tests.toml`
+included `profiler/aqlprofile/stage`, causing concurrent extraction to race
+(and fail with "file exists" errors) on overlapping files.
 
 This test loads the real artifact-*.toml descriptors from the source tree and
 checks that each stage directory (basedir) belongs to exactly one descriptor.
@@ -59,7 +60,9 @@ class ArtifactDescriptorOverlapTest(unittest.TestCase):
 
         descriptors = sorted(THEROCK_DIR.rglob("artifact-*.toml"))
         self.assertGreater(
-            len(descriptors), 0, "No artifact descriptors found — check THEROCK_DIR"
+            len(descriptors),
+            0,
+            f"No artifact descriptors found, check THEROCK_DIR ('{THEROCK_DIR}')",
         )
 
         for descriptor_path in descriptors:
