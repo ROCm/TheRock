@@ -89,6 +89,11 @@ def rocm_info():
 def rocm_smi():
     _exec("bin/rocm-smi")
 
+def roccoremerge():
+    _exec("bin/roccoremerge")
+
+def rocgdb():
+    _exec("bin/rocgdb")
 
 def rocprofv3():
     _exec("bin/rocprofv3")
