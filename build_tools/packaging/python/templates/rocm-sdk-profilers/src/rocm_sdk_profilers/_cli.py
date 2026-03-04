@@ -1,3 +1,9 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+"""Trampoline for console scripts."""
+
+
 from __future__ import annotations
 
 import os
