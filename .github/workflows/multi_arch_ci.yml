@@ -43,6 +43,14 @@ on:
         type: string
         description: "If provided, the tests will run on this artifact ID"
         default: ""
+      linux_prebuilt_stages:
+        type: string
+        description: "Comma-separated stages to use prebuilt (e.g. foundation,compiler-runtime). Leave empty to build all."
+        default: ""
+      linux_baseline_run_id:
+        type: string
+        description: "Run ID to copy prebuilt artifacts from. Required when linux_prebuilt_stages is set."
+        default: ""
   # pull_request:
   #   types:
   #     - labeled
@@ -66,6 +74,11 @@ jobs:
     with:
       build_variant: "release"
       multi_arch: true
+      prebuilt_stages: ${{ inputs.linux_prebuilt_stages }}
+      baseline_run_id: ${{ inputs.linux_baseline_run_id }}
+    permissions:
+      contents: read
+      id-token: write
 
   linux_build_and_test:
     name: Linux::${{ matrix.variant.build_variant_label }}
@@ -92,6 +105,7 @@ jobs:
       artifact_run_id: ${{ inputs.artifact_run_id }}
       expect_failure: ${{ matrix.variant.expect_failure == true }}
       use_prebuilt_artifacts: ${{ inputs.linux_use_prebuilt_artifacts == true && 'true' || 'false' }}
+      prebuilt_stages: ${{ inputs.linux_prebuilt_stages }}
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
     permissions:

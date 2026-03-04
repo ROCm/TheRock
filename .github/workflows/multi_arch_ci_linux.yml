@@ -28,6 +28,9 @@ on:
         type: boolean
       use_prebuilt_artifacts:
         type: string
+      prebuilt_stages:
+        type: string
+        default: ""
       rocm_package_version:
         type: string
       test_type:
@@ -51,6 +54,7 @@ jobs:
       build_variant_suffix: ${{ inputs.build_variant_suffix }}
       expect_failure: ${{ inputs.expect_failure }}
       use_prebuilt_artifacts: ${{ inputs.use_prebuilt_artifacts }}
+      prebuilt_stages: ${{ inputs.prebuilt_stages }}
       rocm_package_version: ${{ inputs.rocm_package_version }}
       test_type: ${{ inputs.test_type }}
     permissions:
