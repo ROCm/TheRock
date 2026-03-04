@@ -1,8 +1,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-# TODO(#2632): Re-enable RCCL for sanitizer builds once RCCL build time is acceptable
-if(THEROCK_ENABLE_RCCL AND THEROCK_SANITIZER STREQUAL "")
+if(THEROCK_ENABLE_RCCL)
   # Most libraries need to depend on the profiler, but is conditionally only used
   # on Posix.
   set(optional_profiler_deps)
@@ -104,7 +103,7 @@ if(THEROCK_ENABLE_RCCL AND THEROCK_SANITIZER STREQUAL "")
     SUBPROJECT_DEPS
       ${_rccl_subproject_names}
   )
-endif(THEROCK_ENABLE_RCCL AND THEROCK_SANITIZER STREQUAL "")
+endif()
 
 if(THEROCK_ENABLE_ROCSHMEM)
   ##############################################################################

@@ -97,10 +97,8 @@ if(THEROCK_ENABLE_FUSILLIPROVIDER)
       fusilli
       hipDNN
       therock-flatbuffers
-      therock-fmt
       therock-googletest
       therock-nlohmann-json
-      therock-spdlog
     RUNTIME_DEPS
       hip-clr
       hipDNN
