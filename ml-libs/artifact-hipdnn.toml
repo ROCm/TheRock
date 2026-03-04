@@ -18,7 +18,7 @@ include = [
   "bin/*test*",                      # Test binaries
   "bin/*gtest*",                     # GTest binaries
 ]
-components.run."ml-libs/hipDNN/stage"
+[components.run."ml-libs/hipDNN/stage"]
 include = [
   "bin/**",                          # All binaries
   "lib/*.so*",                       # Shared libraries
