@@ -281,25 +281,13 @@ if ($env:VCINSTALLDIR) {
 # ============================================================================
 Write-Section "4. Core Build Tools"
 
-# CMake - must be < 4.0.0 per issue #318
+# CMake
 $cmakeCmd = Get-Command cmake -ErrorAction SilentlyContinue
 if ($cmakeCmd) {
     $cmakeVerStr = ((& cmake --version 2>&1 | Select-Object -First 1) -replace "cmake version ", "").Trim()
-    try {
-        $cmakeVer = [Version]$cmakeVerStr
-        if ($cmakeVer -ge [Version]"4.0") {
-            Write-Fail "CMake $cmakeVerStr is too new (< 4.0.0 required, see issue #318)" `
-                -Detail "Downgrade: winget install cmake -v 3.31.0"
-        } elseif ($cmakeVer -lt [Version]"3.21") {
-            Write-Fail "CMake $cmakeVerStr is too old (3.21+ required)"
-        } else {
-            Write-Pass "CMake $cmakeVerStr (>= 3.21 and < 4.0.0)"
-        }
-    } catch {
-        Write-Pass "CMake found: $cmakeVerStr (could not parse version)"
-    }
+    Write-Pass "CMake $cmakeVerStr"
 } else {
-    Write-Fail "CMake not found in PATH" -Detail "Install: winget install cmake -v 3.31.0"
+    Write-Fail "CMake not found in PATH" -Detail "Install: winget install cmake"
 }
 
 # Ninja
