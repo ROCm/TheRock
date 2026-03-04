@@ -124,7 +124,12 @@ if(THEROCK_ENABLE_ROCSHMEM)
       -DGDA_MLX5=ON
       -DGDA_BNXT=ON
       -DGDA_IONIC=ON
-      -DUSE_EXTERNAL_MPI=OFF # ONLY WORKS WITH Open MPI, other MPI implementations are not supported
+      # When using MPI (e.g. for bootsrapping or using RO) it only works with Open MPI and is
+      # incompatible with MPICH, Intel MPI, or MVAPICH.
+      # The loading mechanisms for using MPI is using dlopen() at run-time. It only support
+      # Open MPI 5.x.x and 4.1.x symbols.
+      # There is no compile time dependency to MPI.
+      -DUSE_EXTERNAL_MPI=OFF
       -DCMAKE_POSITION_INDEPENDENT_CODE=ON
       -DHIP_PLATFORM=amd
       -DROCM_PATH=
