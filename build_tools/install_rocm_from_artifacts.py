@@ -430,6 +430,7 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("rccl")
         if args.rocprofiler_sdk:
             extra_artifacts.append("rocprofiler-sdk")
+            extra_artifacts.append("aqlprofile")
             # Contains rocprofiler-sdk-rocpd
             argv.append("rocprofiler-sdk_run")
         if args.rocprofiler_compute:
