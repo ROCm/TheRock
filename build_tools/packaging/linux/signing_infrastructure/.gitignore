@@ -1,0 +1,40 @@
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+venv/
+.venv/
+
+# Claude Code local settings (machine-specific)
+.claude/settings.local.json
+*.rpm
+!test-package.rpm  # Keep small test RPM, ignore bigtest.rpm and signed copies
+*.sig
+*.asc
+.env
+.gnupg/
+server.log
+server.pid
+test.sig
+test-large.sig
+test-binary.sig
+test-package-signed.rpm
+
+# Authentication and TLS secrets
+config/secrets.json
+*.key
+*.crt
+*.pem
+*.p12
+*.pfx
+
+# Audit logs
+/var/log/gpg-signing/
+audit.log
+*.log

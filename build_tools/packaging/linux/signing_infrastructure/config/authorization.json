@@ -1,0 +1,22 @@
+{
+  "roles": {
+    "test-valid": {
+      "allowed_keys": ["44D107C408145F7F"],
+      "allowed_digest_algos": ["SHA256"],
+      "max_requests_per_hour": 10,
+      "description": "Valid test role"
+    },
+    "test-restricted": {
+      "allowed_keys": ["FAKE-KEY-NOT-AVAILABLE"],
+      "allowed_digest_algos": ["SHA256"],
+      "max_requests_per_hour": 10,
+      "description": "Restricted role for testing denial"
+    },
+    "test-no-rate-limit": {
+      "allowed_keys": ["44D107C408145F7F"],
+      "allowed_digest_algos": ["SHA256"],
+      "max_requests_per_hour": 0,
+      "description": "No rate limit"
+    }
+  }
+}

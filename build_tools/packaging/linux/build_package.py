@@ -505,7 +505,7 @@ def create_nonversioned_rpm_package(pkg_name, config: PackageConfig):
     package_dir = Path(config.dest_dir) / config.pkg_type / pkg_name
     specfile = package_dir / "specfile"
     generate_spec_file(pkg_name, specfile, config)
-    package_with_rpmbuild(specfile)
+    package_with_rpmbuild(specfile, config)
     config.versioned_pkg = True
 
 
@@ -530,7 +530,7 @@ def create_versioned_rpm_package(pkg_name, config: PackageConfig):
     )
     specfile = package_dir / "specfile"
     generate_spec_file(pkg_name, specfile, config)
-    package_with_rpmbuild(specfile)
+    package_with_rpmbuild(specfile, config)
 
 
 def generate_spec_file(pkg_name, specfile, config: PackageConfig):
@@ -678,20 +678,25 @@ def generate_rpm_postscripts(pkg_info, config: PackageConfig):
     return rpm_script_sections
 
 
-def package_with_rpmbuild(spec_file):
+def package_with_rpmbuild(spec_file, config:PackageConfig):
     """Generate a RPM package using `rpmbuild`
 
     Parameters:
     spec_file: Specfile for RPM package
+    config: Configuration object containing package metadata
 
     Returns: None
     """
     print_function_name()
     package_rpm = os.path.dirname(spec_file)
+    cmd = ["rpmbuild", "--define", f"_topdir {package_rpm}", "-ba", spec_file],
+    if config.sign:
+        # Explicitly add the signing signature, rather than default to first
+        cmd += ["--define", f"_gpg_name {config.sign}", --sign"]
 
     try:
         subprocess.run(
-            ["rpmbuild", "--define", f"_topdir {package_rpm}", "-ba", spec_file],
+            command,
             check=True,
         )
         print(f"RPM build completed successfully: {os.path.basename(package_rpm)}")
@@ -793,6 +798,7 @@ def run(args: argparse.Namespace):
         install_prefix=prefix,
         gfx_arch=args.target,
         enable_rpath=args.rpath_pkg,
+        sign=args.sign,
     )
 
     # Clean the packaging build directories
@@ -911,6 +917,12 @@ def main(argv: list[str]):
         help="Specify the packages to be created",
     )
 
+    p.addd_argument(
+        "--sign",
+        type=str,
+        nargs="?",
+        help="Specify the Signing key, e.g. signer2@example.com or AB9900",
+    )
     args = p.parse_args(argv)
     run(args)
 

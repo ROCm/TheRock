@@ -4,9 +4,12 @@ The current scope of this is for producing AMD vendor packaging for hosting in A
 #Prerequisites:
 Python version required : python 3.12 or above
  Almalinux:
-dnf install rpm-build
+dnf install rpm-build rpm-sign
 dnf install llvm
 pip install -r requirements.txt
+export GPG_SIGNING_SERVER='http://your-signing-server.company.com'
+echo '%_gpg_path /TheRock/build_tools/packaging/linux/gpgshim' >> ~/.rpmmacros
+
 
  Ubuntu:
 apt update
@@ -18,7 +21,7 @@ pip install -r requirements.txt
 
 #Usage:
 Almalinux:
-./build_package.py --artifacts-dir ./ARTIFACTS_DIR --target gfx94X-dcgpu --dest-dir ./OUTPUT_PKG --rocm-version 7.1.0 --pkg-type rpm --version-suffix build_type
+./build_package.py --artifacts-dir ./ARTIFACTS_DIR --target gfx94X-dcgpu --dest-dir ./OUTPUT_PKG --rocm-version 7.1.0 --pkg-type rpm --version-suffix build_type [--sign signer2@example.com]
 
 Ubuntu:
 ./build_package.py --artifacts-dir ./ARTIFACTS_DIR --target gfx94X-dcgpu --dest-dir ./OUTPUT_PKG --rocm-version 7.1.0 --pkg-type deb --version-suffix build_type

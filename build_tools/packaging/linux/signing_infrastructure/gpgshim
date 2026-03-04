@@ -1,0 +1,404 @@
+#!/usr/bin/env python3
+"""
+GPG shim for remote RPM signing.
+
+This script acts as a drop-in replacement for gpg, intercepting signing requests
+from rpmsign and forwarding them to a remote signing server via REST API.
+
+The shim minimizes data transfer by:
+- Only sending the digest/hash to be signed (not the full RPM)
+- Deduplicating any repeated data in the signing process
+- Using standard library modules for zero additional dependencies
+"""
+
+import sys
+import os
+import hashlib
+import json
+import time
+import random
+import argparse
+import logging
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
+from base64 import b64encode, b64decode
+
+
+class GPGShim:
+    def __init__(self):
+        # Configuration from environment variables
+        self.signing_server = os.environ.get('GPG_SIGNING_SERVER', 'http://localhost:8080/sign')
+        self.key_id = os.environ.get('GPG_KEY_ID', '')
+        self.timeout = int(os.environ.get('GPG_TIMEOUT', '30'))
+
+        # Retry configuration
+        self.max_retries = int(os.environ.get('GPG_MAX_RETRIES', '5'))
+        self.initial_backoff = float(os.environ.get('GPG_INITIAL_BACKOFF', '0.1'))
+        self.max_backoff = float(os.environ.get('GPG_MAX_BACKOFF', '10.0'))
+
+        # Authentication configuration
+        self.auth_token = os.environ.get('GPG_SERVER_TOKEN', '')
+
+        # TLS/HTTPS configuration
+        self.ca_cert = os.environ.get('GPG_SERVER_CA_CERT', '')
+        self.verify_ssl = os.environ.get('GPG_VERIFY_SSL', 'true').lower() != 'false'
+
+        # Cache for deduplication (session-based)
+        self.data_cache = {}
+
+        # Setup logging - GPG_SHIM_DEBUG should be a filename
+        self.logger = logging.getLogger('gpgshim')
+        debug_file = os.environ.get('GPG_SHIM_DEBUG')
+        if debug_file:
+            self.logger.setLevel(logging.DEBUG)
+            handler = logging.FileHandler(debug_file, mode='a')
+            handler.setFormatter(logging.Formatter('+ %(message)s'))
+            self.logger.addHandler(handler)
+        else:
+            self.logger.setLevel(logging.CRITICAL)  # Effectively disabled
+
+    def parse_args(self, args):
+        """Parse gpg command line arguments using argparse."""
+        parser = argparse.ArgumentParser(add_help=False)
+
+        # Flags we care about
+        parser.add_argument('-b', '--detach-sign', '-s', action='store_true', dest='detach_sign')
+        parser.add_argument('-a', '--armor', action='store_true')
+        parser.add_argument('--batch', '--no-tty', action='store_true', dest='batch')
+        parser.add_argument('-u', '--local-user', dest='local_user')
+        parser.add_argument('-o', '--output', dest='output')
+        parser.add_argument('--digest-algo', default='SHA256', dest='digest_algo')
+        parser.add_argument('--passphrase-fd', dest='passphrase_fd')
+        parser.add_argument('--status-fd', dest='status_fd')
+
+        # Parse known args, ignore unknown (GPG has many flags we don't care about)
+        parsed_args, unknown = parser.parse_known_args(args)
+
+        # Convert to dict for backward compatibility
+        result = {
+            'detach_sign': parsed_args.detach_sign,
+            'armor': parsed_args.armor,
+            'batch': parsed_args.batch,
+            'local_user': parsed_args.local_user,
+            'output': parsed_args.output,
+            'digest_algo': parsed_args.digest_algo.upper() if parsed_args.digest_algo else 'SHA256',
+            'passphrase_fd': parsed_args.passphrase_fd,
+            'status_fd': parsed_args.status_fd,
+            'unknown_args': unknown
+        }
+
+        return result
+
+    def read_stdin_data(self):
+        """Read data from stdin (binary mode)."""
+        # stdin might be text mode, get the underlying binary buffer
+        if hasattr(sys.stdin, 'buffer'):
+            return sys.stdin.buffer.read()
+        else:
+            return sys.stdin.read().encode('latin1')
+
+    def compute_hash(self, data):
+        """Compute hash of data for deduplication."""
+        return hashlib.sha256(data).hexdigest()
+
+    def compute_digest(self, data, algo):
+        """Compute digest of data using specified algorithm."""
+        algo = algo.upper()
+
+        # Map GPG digest names to hashlib names
+        algo_map = {
+            'SHA256': 'sha256',
+            'SHA384': 'sha384',
+            'SHA512': 'sha512',
+            'SHA1': 'sha1',
+            'MD5': 'md5',
+            'SHA224': 'sha224',
+        }
+
+        hashlib_algo = algo_map.get(algo, 'sha256')
+
+        try:
+            h = hashlib.new(hashlib_algo)
+            h.update(data)
+            return h.digest()
+        except ValueError:
+            # Fallback to SHA256 if algorithm not supported
+            h = hashlib.sha256()
+            h.update(data)
+            return h.digest()
+
+    def sign_remote(self, data, options):
+        """Send signing request to remote server with exponential backoff retry."""
+        digest_algo = options.get('digest_algo', 'SHA256')
+
+        # Compute hash for deduplication cache
+        data_hash = self.compute_hash(data)
+
+        # Check if we've already signed this exact data
+        if data_hash in self.data_cache:
+            return self.data_cache[data_hash]
+
+        # Prepare request payload - send the actual data
+        # The server will compute the digest and sign it
+        # Note: For RPM signing with ppid caching, only the first call (header ~4KB)
+        # actually sends data. The second call (full RPM) reuses the cached signature.
+        payload = {
+            'data': b64encode(data).decode('ascii'),
+            'key_id': options.get('local_user') or self.key_id,
+            'digest_algo': digest_algo,
+            'armor': options.get('armor', False),
+        }
+
+        # Retry with exponential backoff
+        backoff = self.initial_backoff
+        last_error = None
+
+        for attempt in range(self.max_retries):
+            try:
+                return self._make_signing_request(payload, options, data_hash)
+
+            except HTTPError as e:
+                if e.code == 503:
+                    # Server busy - retry with exponential backoff
+                    if attempt < self.max_retries - 1:
+                        # Add jitter to prevent thundering herd
+                        jitter = random.uniform(0, backoff * 0.1)
+                        sleep_time = backoff + jitter
+
+                        self.logger.debug("Server busy (503), retrying in {:.2f}s (attempt {}/{})".format(
+                            sleep_time, attempt + 1, self.max_retries))
+
+                        time.sleep(sleep_time)
+                        backoff = min(backoff * 2, self.max_backoff)
+                        continue
+                    else:
+                        last_error = "Server busy after {} retries".format(self.max_retries)
+                        break
+                elif e.code == 401:
+                    # Authentication failed - don't retry
+                    last_error = "Authentication failed: Invalid or missing token"
+                    try:
+                        error_detail = json.loads(e.read().decode('utf-8'))
+                        if 'error' in error_detail:
+                            last_error = "Authentication failed: {}".format(error_detail['error'])
+                    except:
+                        pass
+                    break
+                elif e.code == 403:
+                    # Authorization failed - don't retry
+                    last_error = "Authorization failed: Access denied"
+                    try:
+                        error_detail = json.loads(e.read().decode('utf-8'))
+                        if 'error' in error_detail:
+                            last_error = "Authorization failed: {}".format(error_detail['error'])
+                    except:
+                        pass
+                    break
+                elif e.code == 429:
+                    # Rate limited - could retry with backoff, but treat as error for now
+                    last_error = "Rate limit exceeded"
+                    try:
+                        error_detail = json.loads(e.read().decode('utf-8'))
+                        if 'error' in error_detail:
+                            last_error = "Rate limit exceeded: {}".format(error_detail['error'])
+                    except:
+                        pass
+                    break
+                else:
+                    # Other HTTP error - don't retry
+                    last_error = "HTTP error: {} {}".format(e.code, e.reason)
+                    try:
+                        error_detail = e.read().decode('utf-8')
+                        last_error += "\n{}".format(error_detail)
+                    except:
+                        pass
+                    break
+
+            except (URLError, Exception) as e:
+                # Network error or other exception
+                if attempt < self.max_retries - 1:
+                    # Retry network errors with backoff
+                    jitter = random.uniform(0, backoff * 0.1)
+                    sleep_time = backoff + jitter
+
+                    self.logger.debug("Network error: {}, retrying in {:.2f}s (attempt {}/{})".format(
+                        str(e), sleep_time, attempt + 1, self.max_retries))
+
+                    time.sleep(sleep_time)
+                    backoff = min(backoff * 2, self.max_backoff)
+                    continue
+                else:
+                    last_error = "Network error after {} retries: {}".format(self.max_retries, str(e))
+                    break
+
+        # All retries exhausted
+        if last_error:
+            self.error(last_error)
+        return None
+
+    def _make_signing_request(self, payload, options, digest_hash):
+        """Make a single signing request to the server."""
+        # Build headers
+        headers = {
+            'Content-Type': 'application/json',
+            'User-Agent': 'gpgshim/2.0'
+        }
+
+        # Add authentication token if configured
+        if self.auth_token:
+            headers['Authorization'] = 'Bearer {}'.format(self.auth_token)
+
+        request = Request(
+            self.signing_server,
+            data=json.dumps(payload).encode('utf-8'),
+            headers=headers,
+            method='POST'
+        )
+
+        # Configure SSL/TLS context if using HTTPS
+        ssl_context = None
+        if self.signing_server.startswith('https://'):
+            import ssl
+            ssl_context = ssl.create_default_context()
+
+            # Load custom CA certificate if specified
+            if self.ca_cert:
+                ssl_context.load_verify_locations(self.ca_cert)
+
+            # Disable SSL verification if requested (for testing only)
+            if not self.verify_ssl:
+                ssl_context.check_hostname = False
+                ssl_context.verify_mode = ssl.CERT_NONE
+
+        with urlopen(request, timeout=self.timeout, context=ssl_context) as response:
+            result = json.loads(response.read().decode('utf-8'))
+
+            if 'signature' not in result:
+                raise ValueError("Invalid response from signing server: missing 'signature' field")
+
+            signature = b64decode(result['signature'])
+
+            # Cache the result
+            self.data_cache[digest_hash] = signature
+
+            # Write status information if requested
+            if options.get('status_fd'):
+                self.write_status(options['status_fd'], result.get('key_id', ''))
+
+            return signature
+
+    def write_status(self, fd, key_id):
+        """Write GPG status messages to the specified file descriptor."""
+        try:
+            import time
+            fd_num = int(fd)
+            status_file = os.fdopen(fd_num, 'w')
+            # Mimic GPG status output
+            status_file.write("[GNUPG:] SIG_CREATED D 1 8 00 {0} {1}\n".format(int(time.time()), key_id))
+            status_file.flush()
+        except:
+            pass  # Ignore status write errors
+
+    def error(self, message):
+        """Write error message to stderr."""
+        sys.stderr.write("gpgshim: {}\n".format(message))
+        sys.stderr.flush()
+
+    def run(self, args):
+        """Main entry point."""
+        self.logger.debug("gpgshim invoked (pid={}, ppid={})".format(os.getpid(), os.getppid()))
+        self.logger.debug("args: {}".format(args))
+
+        options = self.parse_args(args)
+
+        self.logger.debug("parsed options:")
+        for key, value in options.items():
+            self.logger.debug("  {}: {}".format(key, value))
+
+        # V4 RPM signing optimization: rpmsign calls gpg twice
+        # 1st call: sign header (~4KB) - read data, send to server, cache signature
+        # 2nd call: sign full RPM (1GB) - read data (but don't send), use cached signature
+        # Use ppid as cache key since both calls come from same rpmsign process
+        # IMPORTANT: We must always read from stdin (rpmsign is piping data)
+        output_file = options.get('output')
+        cache_file = '/tmp/gpgshim-cache-{}.sig'.format(os.getppid()) if output_file else None
+
+        # Check if we have a cached signature from previous call
+        use_cache = False
+        if cache_file and os.path.exists(cache_file):
+            self.logger.debug("found cached signature: {}".format(cache_file))
+            use_cache = True
+
+        # Always read data from stdin (rpmsign is piping it, we must consume it)
+        self.logger.debug("reading data from stdin...")
+
+        data = self.read_stdin_data()
+
+        if not data:
+            self.error("No data received on stdin")
+            return 1
+
+        self.logger.debug("read {} bytes from stdin".format(len(data)))
+
+        # If we have a cached signature, use it (don't send data to server)
+        if use_cache:
+            self.logger.debug("using cached signature (not sending {} bytes to server)".format(len(data)))
+            try:
+                with open(cache_file, 'rb') as f:
+                    signature = f.read()
+                os.unlink(cache_file)
+                self.logger.debug("loaded cached signature ({} bytes), deleted cache".format(len(signature)))
+            except Exception as e:
+                self.error("Failed to load cached signature: {}".format(e))
+                return 1
+        else:
+            # No cache - perform remote signing
+            self.logger.debug("calling sign_remote() with {} bytes...".format(len(data)))
+
+            signature = self.sign_remote(data, options)
+
+            if signature is None:
+                self.logger.debug("sign_remote() returned None (failed)")
+                return 1
+
+            self.logger.debug("received signature ({} bytes)".format(len(signature)))
+
+            # Cache signature for potential second call from rpmsign
+            if cache_file:
+                try:
+                    with open(cache_file, 'wb') as f:
+                        f.write(signature)
+                    self.logger.debug("cached signature to: {}".format(cache_file))
+                except Exception as e:
+                    self.logger.debug("failed to cache signature: {}".format(e))
+
+        # Write signature to output file or stdout (both as binary)
+        if output_file:
+            self.logger.debug("writing signature to file: {}".format(output_file))
+            # Write to specified file
+            try:
+                with open(output_file, 'wb') as f:
+                    f.write(signature)
+                self.logger.debug("successfully wrote {} bytes to {}".format(len(signature), output_file))
+            except IOError as e:
+                self.error("Failed to write to {}: {}".format(output_file, str(e)))
+                return 1
+        else:
+            self.logger.debug("writing signature to stdout")
+            # Write to stdout (binary)
+            sys.stdout.buffer.write(signature)
+            sys.stdout.buffer.flush()
+
+        self.logger.debug("gpgshim completed successfully (exit 0)")
+
+        return 0
+
+
+def main():
+    shim = GPGShim()
+    exit_code = shim.run(sys.argv[1:])
+    sys.exit(exit_code)
+
+
+if __name__ == '__main__':
+    main()
