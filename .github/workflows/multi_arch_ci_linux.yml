@@ -37,6 +37,23 @@ permissions:
   contents: read
 
 jobs:
+  compute_native_package_version:
+    name: Compute Native Package Version
+    runs-on: ubuntu-latest
+    outputs:
+      native_package_version: ${{ steps.compute_version.outputs.native_package_version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Compute native package version
+        id: compute_version
+        run: |
+          version=$(python ./build_tools/compute_rocm_package_version.py --package-type deb --release-type dev)
+          echo "native_package_version=${version}" >> $GITHUB_OUTPUT
+          echo "Native package version: ${version}"
+
+
   build_multi_arch_stages:
     name: Build Multi-Arch Stages
     if: ${{ inputs.use_prebuilt_artifacts == 'false' }}
@@ -96,8 +113,7 @@ jobs:
       sanity_check_only_for_family: ${{ matrix.family_info.sanity_check_only_for_family }}
 
   build_native_packages:
-    needs: [build_multi_arch_stages]
-    name: Build ${{ matrix.package_type }} packages
+    needs: [build_multi_arch_stages, compute_native_package_version]
     # Build native packages in parallel with tests after multi-arch build completes
     # Skip if we're using prebuilt artifacts or expecting build failure
     if: >-
@@ -116,7 +132,7 @@ jobs:
     with:
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
-      rocm_version: ${{ inputs.rocm_package_version }}
+      rocm_version: ${{ needs.compute_native_package_version.outputs.native_package_version }}
       native_package_type: ${{ matrix.package_type }}
       release_type: ""
     permissions:
