@@ -265,7 +265,6 @@ def get_rocm_path(path_name: str) -> Path:
         ).strip()
     )
 
-
 def get_rocm_init_contents(args: argparse.Namespace):
     """Gets the contents of the _rocm_init.py file to add to the build."""
     sdk_version = get_rocm_sdk_version()
@@ -276,7 +275,6 @@ def get_rocm_init_contents(args: argparse.Namespace):
     # Dynamically filter based on what this target actually provides
     try:
         import rocm_sdk._dist_info as _di
-
         available = [s for s in library_preloads if s in _di.ALL_LIBRARIES]
     except Exception:
         available = library_preloads  # fallback
@@ -793,7 +791,7 @@ def do_build_pytorch(
     is_pytorch_2_11_or_later = pytorch_build_version_parsed.release[:2] >= (2, 11)
 
     # aotriton is not supported on certain architectures yet.
-    # gfx101X/gfx103X: https://github.com/ROCm/TheRock/issues/1925
+    # gfx101X/gfx103X/gfx906/gfx908: https://github.com/ROCm/TheRock/issues/1925
     AOTRITON_UNSUPPORTED_ARCHS = ["gfx101", "gfx103", "gfx906", "gfx908"]
     # gfx1152/53: supported in aotriton 0.11.2b+ (https://github.com/ROCm/aotriton/pull/142),
     #   which is pinned by pytorch >= 2.11. Older versions don't include it.
