@@ -412,8 +412,8 @@ also install `jaxlib`, `jax_rocm7_plugin`, and `jax_rocm7_pjrt`.
 
 > [!WARNING]
 > Unlike PyTorch, the JAX wheels do **not** automatically install `rocm[libraries]`
-> as a dependency. You must have ROCm installed separately, either via a
-> [tarball installation](#installing-from-tarballs) or a system-level ROCm install.
+> as a dependency. You must have ROCm installed separately via a
+> [tarball installation](#installing-from-tarballs).
 
 > [!IMPORTANT]
 > The `jax` package itself is **not** published to the TheRock index.
