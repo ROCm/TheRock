@@ -101,11 +101,6 @@ class UcxTest(FunctionalBase):
 
         # Run gtest
         gtest_path = self.ucx_build_dir / "test" / "gtest" / "gtest"
-        if not gtest_path.exists():
-            raise TestExecutionError(
-                f"UCX gtest not found at {gtest_path}\n"
-                f"Ensure UCX build completed successfully"
-            )
 
         cmd = [
             str(gtest_path),
