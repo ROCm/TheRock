@@ -65,11 +65,14 @@ class AMDDevice:
         )
         return Buffer(handle, self._backend)
 
-    def load_program(self, path: str | Path) -> Program:
+    def load_program(
+        self, path: str | Path, kernel_name: str | None = None
+    ) -> Program:
         """Load a GPU program from an ELF code object file.
 
         Args:
             path: Path to .co or .hsaco file.
+            kernel_name: Specific kernel to load (None = first kernel found).
 
         Returns:
             A Program object ready for dispatch.
@@ -80,7 +83,7 @@ class AMDDevice:
         family = kfd.family
         if family is None:
             raise RuntimeError("GPU family not identified")
-        return load_program(self._backend, path, family)
+        return load_program(self._backend, path, family, kernel_name=kernel_name)
 
     def copy(self, dst: Buffer, src: Buffer, size: int | None = None) -> None:
         """Copy data between GPU buffers using SDMA.
