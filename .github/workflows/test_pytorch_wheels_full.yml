@@ -9,15 +9,10 @@ on:
         type: string
         default: "gfx94X-dcgpu"
       test_runs_on:
-        description: Runner for default/inductor tests (1 GPU)
+        description: Runner label to use. The selected runner should have a GPU supported by amdgpu_family
         required: true
         type: string
         default: "linux-mi325-1gpu-ossci-rocm"
-      distributed_test_runs_on:
-        description: Runner for distributed tests (multi-GPU)
-        required: true
-        type: string
-        default: "linux-mi325-4gpu-ossci-rocm"
       package_index_url:
         description: Base Python package index URL to test, typically nightly/dev URL with a "v2" or "v2-staging" subdir (without a GPU family subdir)
         required: true
@@ -35,10 +30,6 @@ on:
         description: PyTorch ref to checkout test sources from. (e.g. "nightly", or "release/2.7")
         type: string
         default: "release/2.7"
-      test_configs:
-        description: 'Comma-separated test configs to run (e.g. "default" or "default,distributed,inductor")'
-        type: string
-        default: "default,distributed,inductor"
 
   workflow_call:
     inputs:
@@ -48,10 +39,6 @@ on:
       test_runs_on:
         required: true
         type: string
-      distributed_test_runs_on:
-        description: Runner for distributed tests (multi-GPU)
-        type: string
-        default: "linux-mi325-4gpu-ossci-rocm"
       package_index_url:
         required: true
         type: string
@@ -64,10 +51,6 @@ on:
       pytorch_git_ref:
         type: string
         default: "release/2.7"
-      test_configs:
-        description: 'Comma-separated test configs to run'
-        type: string
-        default: "default,distributed,inductor"
       repository:
         description: "Repository to checkout. Otherwise, defaults to `github.repository`."
         type: string
@@ -82,13 +65,12 @@ run-name: Test PyTorch Full (${{ inputs.amdgpu_family }}, ${{ inputs.torch_versi
 
 jobs:
   test_wheels:
-    name: Test PyTorch Full | ${{ inputs.amdgpu_family }} | ${{ matrix.test_config }} (shard ${{ matrix.shard }}/4)
-    runs-on: ${{ matrix.test_config == 'distributed' && inputs.distributed_test_runs_on || inputs.test_runs_on }}
+    name: Test PyTorch Full | ${{ inputs.amdgpu_family }} (shard ${{ matrix.shard }}/4)
+    runs-on: ${{ inputs.test_runs_on }}
     strategy:
       fail-fast: false
       matrix:
         shard: [1, 2, 3, 4]
-        test_config: ${{ fromJSON(format('["{0}"]', replace(inputs.test_configs, ',', '","'))) }}
     container:
       image: ${{ contains(inputs.test_runs_on, 'linux') && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26' || null }}
       options: --ipc host
@@ -111,7 +93,7 @@ jobs:
       BUILD_ENVIRONMENT: "linux-noble-rocm-py3.12-mi300"
       PYTORCH_TEST_WITH_ROCM: "1"
       PYTORCH_TESTING_DEVICE_ONLY_FOR: "cuda"
-      TEST_CONFIG: ${{ matrix.test_config }}
+      TEST_CONFIG: "default"
 
     steps:
       - name: Checkout
