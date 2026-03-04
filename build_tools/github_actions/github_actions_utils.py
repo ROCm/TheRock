@@ -444,10 +444,15 @@ def gha_query_workflow_runs_for_commit(
     """
     url = (
         f"https://api.github.com/repos/{github_repository}"
-        f"/actions/workflows/{workflow_file_name}/runs?head_sha={git_commit_sha}"
+        f"/actions/workflows/{workflow_file_name}/runs"
+        f"?head_sha={git_commit_sha}&sort=created&direction=desc"
     )
     response = gha_send_request(url)
-    return response.get("workflow_runs", [])
+    runs = response.get("workflow_runs", [])
+    # Sort client-side as defense in depth — the API default order is not
+    # documented and community reports suggest it may not be chronological.
+    runs.sort(key=lambda r: r["created_at"], reverse=True)
+    return runs
 
 
 def gha_query_last_successful_workflow_run(
@@ -467,7 +472,7 @@ def gha_query_last_successful_workflow_run(
         or None if no successful runs are found.
     """
     # Use GitHub API query parameters to pre-filter for successful runs on the specified branch
-    url = f"https://api.github.com/repos/{github_repository}/actions/workflows/{workflow_name}/runs?status=success&branch={branch}&per_page=100"
+    url = f"https://api.github.com/repos/{github_repository}/actions/workflows/{workflow_name}/runs?status=success&branch={branch}&per_page=100&sort=created&direction=desc"
     response = gha_send_request(url)
 
     # Return the first (most recent) successful run
