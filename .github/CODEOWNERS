@@ -7,3 +7,7 @@
 
 # New patches are strongly discouraged. See patches/README.md.
 /patches/               @ScottTodd @marbre
+
+# Debug tools configs and ROCgdb cmake wrapper.
+/debug-tools            @ROCm/TheRock-infra-write @ROCm-DevTools-Debugger
+/debig-tools/rocgdb     @ROCm/TheRock-infra-write @ROCm-DevTools-Debugger
