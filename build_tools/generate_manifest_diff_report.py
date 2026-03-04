@@ -17,6 +17,7 @@ Example usage:
 
 # Standard library imports
 import argparse
+import html
 import os
 import sys
 import urllib.parse
@@ -195,6 +196,7 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--output-dir",
+        type=Path,
         help="Output directory for the report (default: TheRock root directory)",
     )
     return parser.parse_args(argv)
@@ -878,7 +880,11 @@ def create_commit_list_html(
 def create_table(headers: list[str], rows: list[str]) -> str:
     """Create HTML table."""
     header_html = "".join(f"<th>{h}</th>" for h in headers)
-    return f"<table class='report-table'><tr>{header_html}</tr>{''.join(rows)}</table>"
+    return (
+        "<table class='report-table'>"
+        f"<tr class='report-table-header-row'>{header_html}</tr>"
+        f"{''.join(rows)}</table>"
+    )
 
 
 # =============================================================================
@@ -1013,12 +1019,14 @@ class SuperrepoHtmlBuilder:
             elif self.superrepo.status == "reverted" and comp.commits:
                 status_class = "reverted"
 
+            row_classes.append("component-row")
             commit_html = create_commit_list_html(
                 comp.commits, self.superrepo.name, status_class
             )
             row_class_attr = f" class='{' '.join(row_classes)}'" if row_classes else ""
+            data_component = html.escape(comp.name, quote=True)
             rows.append(
-                f"<tr{row_class_attr}><td>{comp.name}</td><td>{commit_html}</td></tr>"
+                f"<tr{row_class_attr} data-component='{data_component}'><td>{comp.name}</td><td>{commit_html}</td></tr>"
             )
 
         return create_table(["Component", "Commits"], rows)
@@ -1131,9 +1139,11 @@ def generate_non_superrepo_html(diff: ManifestDiff) -> str:
             end_sha=sub.end_sha if sub.status == "reverted" else None,
         )
         full_content = range_html + commit_html
+        row_classes.append("component-row")
         row_class_attr = f" class='{' '.join(row_classes)}'" if row_classes else ""
+        data_component = html.escape(sub.name, quote=True)
         rows.append(
-            f"<tr{row_class_attr}><td>{sub.name}</td><td>{full_content}</td></tr>"
+            f"<tr{row_class_attr} data-component='{data_component}'><td>{sub.name}</td><td>{full_content}</td></tr>"
         )
 
     return removed_banner + create_table(["Submodule", "Commits"], rows)
@@ -1408,8 +1418,7 @@ def main(argv: list[str] | None = None) -> int:
 
     diff = compare_manifests(start_commit, end_commit)
 
-    # Determine output directory
-    output_dir = Path(args.output_dir) if args.output_dir else None
+    output_dir = args.output_dir
     generate_html_report(diff, output_dir)
 
     print("\n=== Generating Step Summary ===")
