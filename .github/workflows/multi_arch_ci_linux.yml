@@ -31,6 +31,13 @@ on:
       prebuilt_stages:
         type: string
         default: ""
+      baseline_run_id:
+        type: string
+        default: ""
+      dist_amdgpu_families_flat:
+        type: string
+        default: ""
+        description: "Comma-separated list of all GPU families (for artifact copy)"
       rocm_package_version:
         type: string
       test_type:
@@ -40,9 +47,41 @@ permissions:
   contents: read
 
 jobs:
+  copy_prebuilt_stages:
+    name: Copy Prebuilt Stages
+    if: ${{ inputs.prebuilt_stages != '' && inputs.baseline_run_id != '' }}
+    runs-on: azure-linux-scale-rocm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checking out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install artifact manager dependencies
+        run: pip install boto3
+
+      - name: Configure AWS Credentials
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-ci
+
+      - name: Copy prebuilt stage artifacts
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python build_tools/artifact_manager.py copy \
+            --source-run-id=${{ inputs.baseline_run_id }} \
+            --stage="${{ inputs.prebuilt_stages }}" \
+            --amdgpu-families="${{ inputs.dist_amdgpu_families_flat }}"
+
   build_multi_arch_stages:
     name: Build Multi-Arch Stages
-    if: ${{ inputs.use_prebuilt_artifacts == 'false' }}
+    needs: copy_prebuilt_stages
+    if: ${{ !cancelled() && !failure() && inputs.use_prebuilt_artifacts == 'false' }}
     uses: ./.github/workflows/multi_arch_build_portable_linux.yml
     secrets: inherit
     with:
@@ -62,7 +101,7 @@ jobs:
       id-token: write
 
   test_artifacts_per_family:
-    needs: [build_multi_arch_stages]
+    needs: [copy_prebuilt_stages, build_multi_arch_stages]
     name: Test ${{ matrix.family_info.amdgpu_family }}
     # If the dependent job failed/cancelled, this job will not be run
     # The use_prebuilt_artifacts "or" statement ensures that tests will run if
