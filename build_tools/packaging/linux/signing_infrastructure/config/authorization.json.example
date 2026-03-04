@@ -1,0 +1,43 @@
+{
+  "roles": {
+    "production": {
+      "allowed_keys": [
+        "prod-signing-key@company.com",
+        "ABCD1234ABCD1234"
+      ],
+      "allowed_digest_algos": ["SHA256", "SHA384", "SHA512"],
+      "max_requests_per_hour": 1000,
+      "description": "Production release signing - GitHub Actions only"
+    },
+    "development": {
+      "allowed_keys": [
+        "dev-signing-key@company.com",
+        "EFEF5678EFEF5678"
+      ],
+      "allowed_digest_algos": ["SHA256"],
+      "max_requests_per_hour": 5000,
+      "description": "Development and test builds - higher rate limit"
+    },
+    "admin": {
+      "allowed_keys": [
+        "prod-signing-key@company.com",
+        "dev-signing-key@company.com"
+      ],
+      "allowed_digest_algos": ["SHA256", "SHA384", "SHA512"],
+      "max_requests_per_hour": 100,
+      "description": "Administrative access for manual signing - time-limited tokens"
+    },
+    "emergency": {
+      "allowed_keys": [],
+      "allowed_digest_algos": ["SHA256", "SHA384", "SHA512"],
+      "max_requests_per_hour": 50,
+      "description": "Emergency access - allows any key (empty list), restricted rate"
+    }
+  },
+  "audit": {
+    "enabled": true,
+    "log_file": "/var/log/gpg-signing/audit.log",
+    "log_level": "INFO",
+    "retention_days": 365
+  }
+}

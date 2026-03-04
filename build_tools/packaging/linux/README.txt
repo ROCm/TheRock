@@ -3,22 +3,27 @@ The current scope of this is for producing AMD vendor packaging for hosting in A
 
 #Prerequisites:
 Python version required : python 3.12 or above
- Ubuntu(24.04):
+ Almalinux:
+dnf install rpm-build rpm-sign
+dnf install llvm
+pip install -r requirements.txt
+export GPG_SIGNING_SERVER='http://your-signing-server.company.com'
+echo '%_gpg_path /TheRock/build_tools/packaging/linux/gpgshim' >> ~/.rpmmacros
+
+
+ Ubuntu:
 apt update
-apt install -y python3 python3-venv python3-pip
+apt install -y python3
+apt install -y python3-pip
 apt install -y debhelper
-apt install -y llvm-20
-apt install -y rpm
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt (build_tools/packaging/linux/requirements.txt)
+apt install -y llvm
+pip install -r requirements.txt
 
 #Usage:
-Ubuntu (with auto-detected architectures - recommended):
-./build_package.py --artifacts-dir ./ARTIFACTS_DIR --dest-dir ./OUTPUT_PKG --rocm-version 7.1.0 --pkg-type deb --version-suffix build_type
+Almalinux:
+./build_package.py --artifacts-dir ./ARTIFACTS_DIR --target gfx94X-dcgpu --dest-dir ./OUTPUT_PKG --rocm-version 7.1.0 --pkg-type rpm --version-suffix build_type [--sign signer2@example.com]
 
-Ubuntu (with explicit target):
+Ubuntu:
 ./build_package.py --artifacts-dir ./ARTIFACTS_DIR --target gfx94X-dcgpu --dest-dir ./OUTPUT_PKG --rocm-version 7.1.0 --pkg-type deb --version-suffix build_type
-
-Note: The --target argument is optional. If not provided, the script will automatically detect GFX architectures from the artifact directory.
 
 For more options ./build_package.py -h

@@ -1,0 +1,25 @@
+# Test RPM Package
+
+File: test-package.rpm
+Size: ~11KB
+Original: rootfiles-8.1-31.el9.noarch.rpm from CentOS Stream 9
+
+This is a small, real RPM package used for testing the gpg shim with actual
+rpmsign commands. It was downloaded from:
+https://mirror.stream.centos.org/9-stream/BaseOS/x86_64/os/Packages/
+
+The rootfiles package is a minimal base package that contains basic /root
+directory files. It's perfect for testing because:
+- Very small size (11KB)
+- Real, valid RPM format
+- No dependencies
+- Publicly available from CentOS mirrors
+
+To test signing:
+  make test-rpm
+
+Or manually:
+  export GNUPGHOME=$(pwd)/.gnupg
+  export GPG_SIGNING_SERVER=http://localhost:8080/sign
+  cp test-package.rpm test-signed.rpm
+  rpmsign --define "_gpg_path $(pwd)/gpgshim" --addsign test-signed.rpm
