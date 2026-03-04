@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """
-This is a generic test runner that can test multiple components using GPU-based filtering.
-This works on top of the PR - Test Filter Standardization Proof of Concept - MIOpen #3513
-in rocm-libraries (https://github.com/ROCm/rocm-libraries/pull/3513)
+This is a generic test runner that can test multiple components.
+This works on components in rocm-libraries/rocm-systems which use test_categories.yml for test categorization.
 
 Environment variables used:
 - TEST_COMPONENT: Job name of the component to test (e.g., "miopen", "rocrand", "hiprand")
@@ -12,7 +11,7 @@ Environment variables used:
 - TEST_TYPE: "smoke" runs tests with "quick" category, otherwise runs "standard" category
 - AMDGPU_FAMILIES: Parsed to extract GPU architecture (e.g., "gfx1151")
 
-The script checks the available tests from ctest -N and filters the appropriate tests based on the GPU architecture.
+The script discovers GPU-specific labels via ctest --print-labels and runs the appropriate tests for the current GPU architecture.
 """
 
 import sys
@@ -74,12 +73,10 @@ if AMDGPU_FAMILIES and "gfx1152" in AMDGPU_FAMILIES:
 elif AMDGPU_FAMILIES and "gfx1153" in AMDGPU_FAMILIES:
     ctest_parallel_count = 4
 environ_vars = os.environ.copy()
-# For display purposes in the GitHub Action UI, the shard array is 1th indexed. However for shard indexes, we convert it to 0th index.
+# Set the GTEST env vars for Gtest based tests
+# Set ROCM_PATH for tests that rely on it
 environ_vars["GTEST_SHARD_INDEX"] = str(int(SHARD_INDEX) - 1)
 environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
-
-# Some of our runtime kernel compilations have been relying on either ROCM_PATH being set, or ROCm being installed at
-# /opt/rocm. Neither of these is true in TheRock so we need to supply ROCM_PATH to our tests.
 ROCM_PATH = Path(THEROCK_BIN_DIR).resolve().parent
 environ_vars["ROCM_PATH"] = str(ROCM_PATH)
 
@@ -89,10 +86,10 @@ logging.basicConfig(level=logging.INFO)
 
 def get_available_gpu_suite_tests():
     """
-    Get all available specific GPU tests from ctest -N.
+    Get all available GPU architecture labels from ctest --print-labels.
 
-    Parses test names in the format: {target_name}-{category}-{gpu_arch}-suite
-    Returns a set of gpu_arch strings (e.g., 'gfx1150', 'gfx11X', 'gfx950').
+    Parses labels of the form ex_gpu_{gpu_arch} (e.g. ex_gpu_gfx110X, ex_gpu_gfx950).
+    Returns a set of gpu_arch strings (e.g., 'gfx110X', 'gfx115X', 'gfx950').
     """
     test_dir = Path(THEROCK_BIN_DIR) / TEST_COMPONENT
     if not test_dir.exists() or not test_dir.is_dir():
@@ -100,37 +97,44 @@ def get_available_gpu_suite_tests():
         sys.exit(1)
 
     try:
+        # Ensure the component has at least one test
+        list_result = subprocess.run(
+            ["ctest", "-N", "--test-dir", str(test_dir)],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        total_tests = sum(
+            1
+            for line in list_result.stdout.splitlines()
+            if re.search(r"Test\s+#\d+:", line)
+        )
+        if total_tests == 0:
+            print(
+                f"Error: No tests found in {test_dir}. Cannot run test suite.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
         result = subprocess.run(
-            ["ctest", "-N", "--test-dir", f"{THEROCK_BIN_DIR}/{TEST_COMPONENT}"],
+            ["ctest", "--print-labels", "--test-dir", str(test_dir)],
             capture_output=True,
             text=True,
             check=True,
         )
 
         gpu_archs = set()
-        # Parse output for test names
-        # Looking for pattern: Test #N: name-category-gpuarch-suite
-        # Example: Test #123: miopen_gtest-quick-gfx1150-suite
-        for line in result.stdout.split("\n"):
-            # Look for lines containing test names with "-suite" suffix
-            if "-suite" in line and "Test " in line:
-                # Extract the test name
-                match = re.search(r"Test\s+#\d+:\s+(.+)", line)
-                if match:
-                    test_name = match.group(1).strip()
-                    # Extract gpu_arch from pattern: *-{category}-{gpu_arch}-suite
-                    # Split from the right to get the parts
-                    parts = test_name.split("-")
-                    if len(parts) >= 3 and parts[-1] == "suite":
-                        # The gpu_arch is the second-to-last part
-                        gpu_arch = parts[-2]
-                        # Verify it looks like a GPU arch (starts with gfx)
-                        if gpu_arch.startswith("gfx"):
-                            gpu_archs.add(gpu_arch)
+        prefix = "ex_gpu_"
+        for line in result.stdout.splitlines():
+            label = line.strip()
+            if label.startswith(prefix):
+                gpu_arch = label[len(prefix) :]
+                if gpu_arch.startswith("gfx"):
+                    gpu_archs.add(gpu_arch)
 
         return gpu_archs
     except subprocess.CalledProcessError as e:
-        print(f"Error running ctest -N: {e}", file=sys.stderr)
+        print(f"Error running ctest --print-labels: {e}", file=sys.stderr)
         sys.exit(1)
     except FileNotFoundError:
         print(
