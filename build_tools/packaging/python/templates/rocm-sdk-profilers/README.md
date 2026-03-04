@@ -35,5 +35,5 @@ invoking a console script will result in a `FileNotFoundError`.
 - Dependencies are managed by the `rocm` meta package.
 - Versioning is centrally managed via `rocm_sdk._dist_info`.
 
-This package is built via `build_python_packages.py` in the ROCm packaging
-pipeline.
+When integrated into the full ROCm packaging pipeline, this package will be
+built via `build_python_packages.py`.
