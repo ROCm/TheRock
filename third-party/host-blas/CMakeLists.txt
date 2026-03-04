@@ -22,7 +22,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     therock_subproject_fetch(therock-OpenBLAS-sources
       CMAKE_PROJECT
       SOURCE_DIR "${_source_dir}"
-      # Originally mirrored from: https://github.com/OpenMathLib/OpenBLAS/releases/download/v0.3.29/OpenBLAS-0.3.29.tar.gz
+      # Originally mirrored from: https://github.com/OpenMathLib/OpenBLAS/archive/18638c70eff1f0d08e2833b2724deaa128d6a334.tar.gz
       URL https://rocm-third-party-deps.s3.us-east-2.amazonaws.com/OpenBLAS-18638c7.tar.gz
       URL_HASH SHA256=5d81882fdf45a92a190bda2be2922d3372fef19af8f4442f720c0ebc4d10eba8
       # Originally posted MD5 was recomputed as SHA256 manually:
