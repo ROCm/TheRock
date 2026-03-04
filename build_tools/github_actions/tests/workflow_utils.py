@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Shared helpers for workflow YAML tests."""
 
 from pathlib import Path
