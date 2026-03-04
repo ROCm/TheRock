@@ -34,6 +34,7 @@ THEROCK_ENV_VARS = [
     "PYTORCH_TEST_WITH_ROCM",
     "PYTORCH_TESTING_DEVICE_ONLY_FOR",
     "PYTORCH_PRINT_REPRO_ON_FAILURE",
+    "PYTORCH_TEST_RUN_EVERYTHING_IN_SERIAL",
     "MIOPEN_CUSTOM_CACHE_DIR",
     "TEST_CONFIG",
     "PYTHONPATH",
@@ -54,6 +55,14 @@ def setup_env(pytorch_dir: Path, test_config: str) -> None:
 
     if test_config:
         os.environ["TEST_CONFIG"] = test_config
+
+    # On 1-GPU runners, rocminfo reports all physical GPUs (e.g. 3) but only one
+    # is visible via HIP_VISIBLE_DEVICES.  This causes NUM_PROCS=3 inside
+    # run_test.py, spawning 3 parallel workers that all contend for the same GPU.
+    # Force serial execution for non-distributed configs to avoid contention and
+    # ensure even shard distribution by wall-clock time.
+    if test_config != "distributed":
+        os.environ["PYTORCH_TEST_RUN_EVERYTHING_IN_SERIAL"] = "1"
 
     test_dir = str(pytorch_dir / "test")
     old_pythonpath = os.getenv("PYTHONPATH", "")
