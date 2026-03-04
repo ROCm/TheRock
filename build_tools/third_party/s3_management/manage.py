@@ -16,7 +16,7 @@ import time
 from os import path, makedirs, getenv
 from collections import defaultdict
 from typing import Iterable, List, Type, Dict, Set, TypeVar, Optional
-from re import sub, match, search
+from re import sub, match
 from packaging.version import parse as _parse_version, Version, InvalidVersion
 
 import boto3
@@ -28,13 +28,20 @@ CLIENT = boto3.client('s3')
 
 # bucket for TheRock
 # We also manage `therock-nightly-python` (not the default to make the script safer to test)
-BUCKET_NAME = getenv("S3_BUCKET_PY")
-if not BUCKET_NAME:
-    raise RuntimeError("S3_BUCKET_PY environment variable must be set")
-BUCKET = S3.Bucket(BUCKET_NAME)
-# TODO: bucket mirror just to hold index used with CDN
-# BUCKET_CDN = S3.Bucket('therock-nightly-python-testing')
-INDEX_BUCKETS = {BUCKET} #, BUCKET_CDN}
+
+def initialize_bucket(bucket_name: Optional[str]) -> None:
+    # Resolve and configure the S3 bucket used for index updates.
+    # CLI --bucket takes precedence over S3_BUCKET_PY; fails if neither is set.
+    global BUCKET_NAME, BUCKET, INDEX_BUCKETS
+
+    BUCKET_NAME = bucket_name or getenv("S3_BUCKET_PY")
+    if not BUCKET_NAME:
+        raise RuntimeError("Bucket must be provided via --bucket or S3_BUCKET_PY")
+
+    BUCKET = S3.Bucket(BUCKET_NAME)
+    # TODO: bucket mirror just to hold index used with CDN
+    # BUCKET_CDN = S3.Bucket('therock-nightly-python-testing')
+    INDEX_BUCKETS = {BUCKET}
 
 ACCEPTED_FILE_EXTENSIONS = ("whl", "zip", "tar.gz")
 PREFIXES = [
@@ -286,6 +293,7 @@ class S3Index:
                     f' data-dist-info-metadata="{pep658_sha}" data-core-metadata="{pep658_sha}"'
                 )
             # Mark networkx versions with Python requirements (pytorch/pytorch#152191)
+            # networkx 3.4.2 for Python 3.10, 3.5+ for Python 3.11+
             if obj.key.endswith("networkx-3.4.2-py3-none-any.whl"):
                 attributes += ' data-requires-python="&gt;=3.10"'
             elif "networkx-" in obj.key and obj.key.endswith("-py3-none-any.whl"):
@@ -458,7 +466,10 @@ class S3Index:
             rc.fetch_pep658()
         return rc
 
-def process_prefix(prefix: str, compute_sha256: bool = False, upload: bool = True):
+def update_pep503_index(prefix: str, compute_sha256: bool = False, upload: bool = True):
+    # Regenerates the PEP 503 simple index for a given S3 prefix.
+    # Fetches valid artifacts, applies allow-list filtering, optionally updates
+    # checksums, and uploads (or saves) the generated index.html files.
     print(f"Processing prefix: {prefix}")
     stime = time.time()
 
@@ -483,6 +494,7 @@ def create_parser() -> argparse.ArgumentParser:
         type=str,
         choices=PREFIXES + ["all"]
     )
+    parser.add_argument("--bucket", type=str, help="S3 bucket name")
     parser.add_argument("--do-not-upload", action="store_true")
     parser.add_argument("--compute-sha256", action="store_true")
     return parser
@@ -491,12 +503,14 @@ def create_parser() -> argparse.ArgumentParser:
 def main() -> None:
     parser = create_parser()
     args = parser.parse_args()
+    initialize_bucket(args.bucket)
     action = "Saving indices" if args.do_not_upload else "Uploading indices"
     if args.compute_sha256:
         action = "Computing checksums"
+    print(f"INFO: {action} for '{prefix}'")
     prefixes = PREFIXES if args.prefix == 'all' else [args.prefix]
     for prefix in prefixes:
-        process_prefix(
+        update_pep503_index(
             prefix=prefix,
             compute_sha256=args.compute_sha256,
             upload=not args.do_not_upload
