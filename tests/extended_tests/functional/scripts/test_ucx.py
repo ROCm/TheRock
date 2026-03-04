@@ -20,6 +20,10 @@ from utils.exceptions import TestExecutionError
 class UcxTest(FunctionalBase):
     """UCX ROCm integration tests."""
 
+    GIT_URL = "https://github.com/openucx/ucx"
+    GIT_BRANCH = "master"
+    GTEST_FILTER = "*rocm*"
+
     def __init__(self):
         super().__init__(test_name="ucx", display_name="UCX Test")
 
@@ -27,12 +31,6 @@ class UcxTest(FunctionalBase):
         # Resolve to absolute path (required by configure --prefix)
         self.ucx_dir = self.rocm_path / "bin" / "ucx"
         self.ucx_build_dir = self.ucx_dir / "build"
-
-        # Load test configuration from JSON
-        config = self.load_config("ucx.json")
-        self.git_url = config["git_url"]
-        self.git_branch = config["git_branch"]
-        self.gtest_filter = config["gtest_filter"]
 
     def _build_ucx(self) -> None:
         """Build UCX with ROCm support."""
@@ -95,8 +93,8 @@ class UcxTest(FunctionalBase):
 
         # Clone and build UCX
         self.clone_repository(
-            git_url=self.git_url,
-            branch=self.git_branch,
+            git_url=self.GIT_URL,
+            branch=self.GIT_BRANCH,
             target_dir=self.ucx_dir,
         )
         self._build_ucx()
@@ -111,7 +109,7 @@ class UcxTest(FunctionalBase):
 
         cmd = [
             str(gtest_path),
-            f"--gtest_filter={self.gtest_filter}",
+            f"--gtest_filter={self.GTEST_FILTER}",
             f"--gtest_output=json:{self.results_json}",
         ]
 
