@@ -37,22 +37,28 @@ permissions:
   contents: read
 
 jobs:
-  compute_native_package_version:
-    name: Compute Native Package Version
+  compute_native_package_versions:
+    name: Compute Native Package Versions
     runs-on: ubuntu-latest
     outputs:
-      native_package_version: ${{ steps.compute_version.outputs.native_package_version }}
+      deb_version: ${{ steps.compute_versions.outputs.deb_version }}
+      rpm_version: ${{ steps.compute_versions.outputs.rpm_version }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Compute native package version
-        id: compute_version
+      - name: Compute package versions for both deb and rpm
+        id: compute_versions
         run: |
-          version=$(python ./build_tools/compute_rocm_package_version.py --package-type deb --release-type dev)
-          echo "native_package_version=${version}" >> $GITHUB_OUTPUT
-          echo "Native package version: ${version}"
+          # Compute both versions in same step to ensure consistent timestamp
+          deb_version=$(python ./build_tools/compute_rocm_package_version.py --package-type deb --release-type dev)
+          rpm_version=$(python ./build_tools/compute_rocm_package_version.py --package-type rpm --release-type dev)
 
+          echo "deb_version=${deb_version}" >> $GITHUB_OUTPUT
+          echo "rpm_version=${rpm_version}" >> $GITHUB_OUTPUT
+
+          echo "DEB package version: ${deb_version}"
+          echo "RPM package version: ${rpm_version}"
 
   build_multi_arch_stages:
     name: Build Multi-Arch Stages
@@ -113,7 +119,7 @@ jobs:
       sanity_check_only_for_family: ${{ matrix.family_info.sanity_check_only_for_family }}
 
   build_native_packages:
-    needs: [build_multi_arch_stages, compute_native_package_version]
+    needs: [build_multi_arch_stages, compute_native_package_versions]
     # Build native packages in parallel with tests after multi-arch build completes
     # Skip if we're using prebuilt artifacts or expecting build failure
     if: >-
@@ -132,7 +138,12 @@ jobs:
     with:
       dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       artifact_run_id: ${{ inputs.artifact_run_id }}
-      rocm_version: ${{ needs.compute_native_package_version.outputs.native_package_version }}
+      rocm_version: >-
+        ${{
+          matrix.package_type == 'deb'
+          && needs.compute_native_package_versions.outputs.deb_version
+          || needs.compute_native_package_versions.outputs.rpm_version
+        }}
       native_package_type: ${{ matrix.package_type }}
       release_type: ""
     permissions:
