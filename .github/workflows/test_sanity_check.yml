@@ -119,6 +119,7 @@ jobs:
           VENV_DIR: ${{ env.VENV_DIR }}
           FETCH_ARTIFACT_ARGS: "--base-only"
           IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
+          REQUIREMENTS: "-r requirements-test-base.txt -r requirements-test-pytest.txt"
 
       # The sanity checks run tools like 'offload-arch' which may search for
       # DLLs on multiple search paths (PATH, CWD, system32, etc.).

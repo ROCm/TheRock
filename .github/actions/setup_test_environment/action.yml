@@ -26,6 +26,9 @@ inputs:
   IS_PR_FROM_FORK:
     description: (boolean) True if this workflow run is from a PR on a fork (often `github.event.pull_request.head.repo.fork`)
     default: false
+  REQUIREMENTS:
+    description: (string) Requirements files to install
+    default: "-r requirements-test-base.txt"
 
 runs:
   using: "composite"
@@ -56,7 +59,7 @@ runs:
     - name: Install test requirements
       shell: bash
       run: |
-        uv pip install -r requirements-test.txt
+        uv pip install ${{inputs.REQUIREMENTS}}
         uv pip freeze
 
     - name: Install Choco tools

@@ -1,0 +1,8 @@
+pytest==9.0.0 # This versions has subtests built-in.
+pytest-check==2.5.3
+pytest-cov==6.0.0
+pytest-timeout==2.4.0
+perfetto==0.7.0 # Newer versions of perfetto remove support for required GLIBC version.
+
+# libhipcxx test requirement
+lit==18.1.8
