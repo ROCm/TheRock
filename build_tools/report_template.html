@@ -4,7 +4,21 @@
   <title>Commit Diff Report</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
-    /* Common table styles */
+    /* Status colors (consolidated) */
+    :root {
+      --status-added-bg: #d4edda;
+      --status-added-border: #28a745;
+      --status-added-text: #155724;
+      --status-removed-bg: #f8d7da;
+      --status-removed-border: #dc3545;
+      --status-removed-text: #721c24;
+      --status-reverted-bg: #fff3cd;
+      --status-reverted-border: #ffc107;
+      --status-reverted-text: #856404;
+      --status-unchanged-text: #6c757d;
+    }
+
+    /* === Tables (base) === */
     .report-table, .commit-history-table {
       width: 100%;
       border-collapse: collapse;
@@ -18,24 +32,24 @@
       margin-top: 8px;
     }
 
-    .report-table th, .commit-history-table th {
+    .report-table th {
       padding: 8px;
       border: 1px solid #ccc;
       text-align: left;
+      background-color: #f1f1f1;
     }
 
-    .report-table th {
-      background-color: #f1f1f1;
+    .commit-history-table th {
+      padding: 8px;
+      border: 1px solid #ccc;
+      text-align: left;
+      background-color: #f8f9fa;
     }
 
     /* Column widths for report table */
     .report-table th:first-child,
     .report-table td:first-child {
       width: 180px;
-    }
-
-    .commit-history-table th {
-      background-color: #f8f9fa;
     }
 
     .report-table td, .commit-history-table td {
@@ -66,7 +80,8 @@
     .commit-history-table .message-col {
       font-size: 13px;
     }
-    /* Commit styling */
+
+    /* === Commit styling === */
     .commit-badge {
       display: inline-block;
       background-color: #1976D2;
@@ -111,33 +126,32 @@
         font-style: italic;
     }
 
-    /* Summary category removed - no background, left-aligned */
     .summary-category.removed {
         background-color: transparent;
         text-align: left;
     }
 
-    /* Background colors for commit-list containers */
+    /* === Commit list variants (by status) === */
     .commit-list.reverted-bg {
-        background-color: #fff3cd;
+        background-color: var(--status-reverted-bg);
     }
 
     .commit-list.newly-added-bg {
-        background-color: #d4edda;
+        background-color: var(--status-added-bg);
     }
 
     .commit-list.removed-bg {
-        background-color: #f8d7da;
+        background-color: var(--status-removed-bg);
     }
 
     .removed-message {
-        color: #721c24;
+        color: var(--status-removed-text);
         font-weight: bold;
         text-align: center;
         padding: 8px;
     }
 
-    /* Superrepo status banners */
+    /* === Superrepo / banners === */
     .superrepo-status-banner {
         padding: 12px 16px;
         margin-bottom: 12px;
@@ -146,21 +160,21 @@
     }
 
     .superrepo-status-banner.added {
-        background-color: #d4edda;
-        border-left: 4px solid #28a745;
-        color: #155724;
+        background-color: var(--status-added-bg);
+        border-left: 4px solid var(--status-added-border);
+        color: var(--status-added-text);
     }
 
     .superrepo-status-banner.removed {
-        background-color: #f8d7da;
-        border-left: 4px solid #dc3545;
-        color: #721c24;
+        background-color: var(--status-removed-bg);
+        border-left: 4px solid var(--status-removed-border);
+        color: var(--status-removed-text);
     }
 
     .superrepo-status-banner.reverted {
-        background-color: #fff3cd;
-        border-left: 4px solid #ffc107;
-        color: #856404;
+        background-color: var(--status-reverted-bg);
+        border-left: 4px solid var(--status-reverted-border);
+        color: var(--status-reverted-text);
     }
 
     .replaced-submodules {
@@ -179,9 +193,9 @@
 
     /* Removed submodules banner in Other Components section */
     .removed-submodules-banner {
-        background-color: #f8d7da;
-        border-left: 4px solid #dc3545;
-        color: #721c24;
+        background-color: var(--status-removed-bg);
+        border-left: 4px solid var(--status-removed-border);
+        color: var(--status-removed-text);
         padding: 12px 16px;
         margin-bottom: 12px;
         border-radius: 4px;
@@ -197,22 +211,28 @@
     }
 
     .reverted-header {
-        background-color: #fff3cd;
+        background-color: var(--status-reverted-bg);
         padding: 8px;
         border-radius: 4px;
         margin-bottom: 8px;
-        border-left: 3px solid #ffc107;
+        border-left: 3px solid var(--status-reverted-border);
     }
 
     .newly-added-header {
-        color: #155724;
+        color: var(--status-added-text);
         font-weight: bold;
         padding: 8px;
         margin-bottom: 8px;
         border-bottom: 1px solid rgba(0,0,0,0.1);
     }
 
-    /* Consolidated Summary Styles */
+    /* Generator: superrepo REMOVED / No components messages */
+    .removed, .unchanged {
+        color: var(--status-unchanged-text);
+        padding: 8px 0;
+    }
+
+    /* === Summary === */
     .summary-container {
         background-color: #ffffff;
         padding: 16px;
@@ -268,19 +288,19 @@
     }
 
     .summary-category.added h3 {
-        color: #28a745;
+        color: var(--status-added-border);
     }
 
     .summary-category.removed h3 {
-        color: #dc3545;
+        color: var(--status-removed-border);
     }
 
     .summary-category.changed h3 {
-        color: #ffc107;
+        color: var(--status-reverted-border);
     }
 
     .summary-category.unchanged h3 {
-        color: #6c757d;
+        color: var(--status-unchanged-text);
     }
 
     .summary-list {
@@ -289,17 +309,17 @@
     }
 
     .summary-list li {
-        color: #6c757d;
+        color: var(--status-unchanged-text);
         margin-bottom: 4px;
     }
 
-    /* Column width classes for associations table */
+    /* === Column utilities === */
     .col-date { width: 80px; }
     .col-sha { width: 60px; }
     .col-author { width: 120px; }
     .col-projects { width: 150px; }
 
-    /* Filter controls styling */
+    /* === Filter controls === */
     .filter-container {
       background-color: #fff3cd;
       border: 1px solid #ffeaa7;
@@ -352,12 +372,12 @@
       margin: 0 8px;
     }
 
-    /* Hide/show classes for filtered content */
+    /* === Hide/show utilities === */
     .hidden {
       display: none !important;
     }
 
-    /* Selective filtering styles */
+    /* === Filter selective / dropdown === */
     .selective-filter {
       margin-top: 16px;
       padding-top: 16px;
@@ -569,14 +589,46 @@
   </div>
 
   <script>
-    // Filter functionality
-    document.addEventListener('DOMContentLoaded', function() {
-      // Summary sections toggle
+    const SELECTOR_COMMIT_HISTORY_TABLES = '.commit-history-table';
+    const SELECTOR_COMMIT_HISTORY_SECTIONS = '.section-title';
+    const SELECTOR_REPORT_TABLE = '.report-table';
+    const SELECTOR_COMPONENT_ROW = '.report-table tr.component-row';
+    const SELECTOR_SUMMARY_CONTAINERS = '#submodule-summary, #superrepo-summary';
+    const SELECTOR_UNCHANGED_ROW = '.unchanged-row';
+
+    function validateTemplate() {
+      const requiredIds = [
+        'toggle-summaries', 'toggle-commit-history', 'toggle-component-tables', 'toggle-unchanged',
+        'enable-selective-filter', 'component-dropdown', 'add-component', 'clear-all', 'selected-items'
+      ];
+      for (const id of requiredIds) {
+        const el = document.getElementById(id);
+        if (!el) {
+          throw new Error('Expected element #' + id + ' not found in report template');
+        }
+      }
+    }
+
+    function setupSectionToggles() {
       const summariesToggle = document.getElementById('toggle-summaries');
-      const summaryContainers = document.querySelectorAll('#submodule-summary, #superrepo-summary');
+      const commitHistoryToggle = document.getElementById('toggle-commit-history');
+      const componentTablesToggle = document.getElementById('toggle-component-tables');
+      const unchangedToggle = document.getElementById('toggle-unchanged');
+      if (!summariesToggle) {
+        throw new Error('Expected element #toggle-summaries not found in report template');
+      }
+      if (!commitHistoryToggle) {
+        throw new Error('Expected element #toggle-commit-history not found in report template');
+      }
+      if (!componentTablesToggle) {
+        throw new Error('Expected element #toggle-component-tables not found in report template');
+      }
+      if (!unchangedToggle) {
+        throw new Error('Expected element #toggle-unchanged not found in report template');
+      }
 
       summariesToggle.addEventListener('change', function() {
-        summaryContainers.forEach(container => {
+        document.querySelectorAll(SELECTOR_SUMMARY_CONTAINERS).forEach(container => {
           if (this.checked) {
             container.classList.remove('hidden');
           } else {
@@ -585,23 +637,15 @@
         });
       });
 
-      // Commit history tables toggle
-      const commitHistoryToggle = document.getElementById('toggle-commit-history');
-
       commitHistoryToggle.addEventListener('change', function() {
-        // Hide/show all commit history tables
-        const commitHistoryTables = document.querySelectorAll('.commit-history-table');
-        const commitHistorySections = document.querySelectorAll('.section-title');
-
-        commitHistoryTables.forEach(table => {
+        document.querySelectorAll(SELECTOR_COMMIT_HISTORY_TABLES).forEach(table => {
           if (this.checked) {
             table.classList.remove('hidden');
           } else {
             table.classList.add('hidden');
           }
         });
-
-        commitHistorySections.forEach(section => {
+        document.querySelectorAll(SELECTOR_COMMIT_HISTORY_SECTIONS).forEach(section => {
           if (this.checked) {
             section.classList.remove('hidden');
           } else {
@@ -610,14 +654,8 @@
         });
       });
 
-      // Component tables toggle
-      const componentTablesToggle = document.getElementById('toggle-component-tables');
-
       componentTablesToggle.addEventListener('change', function() {
-        // Hide/show all component tables (report-table class)
-        const componentTables = document.querySelectorAll('.report-table');
-
-        componentTables.forEach(table => {
+        document.querySelectorAll(SELECTOR_REPORT_TABLE).forEach(table => {
           if (this.checked) {
             table.classList.remove('hidden');
           } else {
@@ -626,14 +664,8 @@
         });
       });
 
-      // Hide unchanged components toggle
-      const unchangedToggle = document.getElementById('toggle-unchanged');
-
       unchangedToggle.addEventListener('change', function() {
-        // Hide/show all rows with unchanged-row class
-        const unchangedRows = document.querySelectorAll('.unchanged-row');
-
-        unchangedRows.forEach(row => {
+        document.querySelectorAll(SELECTOR_UNCHANGED_ROW).forEach(row => {
           if (this.checked) {
             row.classList.add('hidden');
           } else {
@@ -641,28 +673,50 @@
           }
         });
       });
+    }
 
-      // Selective filtering functionality
-      let selectedComponents = new Set();
+    function setupSelectiveFiltering() {
       const selectiveFilterCheckbox = document.getElementById('enable-selective-filter');
       const componentDropdown = document.getElementById('component-dropdown');
       const addButton = document.getElementById('add-component');
       const clearAllButton = document.getElementById('clear-all');
       const selectedItemsContainer = document.getElementById('selected-items');
+      if (!selectiveFilterCheckbox) {
+        throw new Error('Expected element #enable-selective-filter not found in report template');
+      }
+      if (!componentDropdown) {
+        throw new Error('Expected element #component-dropdown not found in report template');
+      }
+      if (!addButton) {
+        throw new Error('Expected element #add-component not found in report template');
+      }
+      if (!clearAllButton) {
+        throw new Error('Expected element #clear-all not found in report template');
+      }
+      if (!selectedItemsContainer) {
+        throw new Error('Expected element #selected-items not found in report template');
+      }
 
-      // Populate dropdown with all components and submodules found in the report
+      const selectedComponents = new Set();
+
+      function getAllComponentRows() {
+        return document.querySelectorAll(SELECTOR_COMPONENT_ROW);
+      }
+
+      function showAllComponentRows() {
+        getAllComponentRows().forEach(row => {
+          row.classList.remove('hidden');
+        });
+      }
+
       function populateDropdown() {
         const components = new Set();
-
-        // Find all component names from report tables
-        document.querySelectorAll('.report-table tr td:first-child').forEach(cell => {
-          const componentName = cell.textContent.trim();
-          if (componentName && componentName !== 'Component' && componentName !== 'Submodule') {
-            components.add(componentName);
+        getAllComponentRows().forEach(row => {
+          const name = row.dataset.component;
+          if (name) {
+            components.add(name);
           }
         });
-
-        // Clear dropdown and add options
         componentDropdown.innerHTML = '<option value="">Select a component or submodule...</option>';
         Array.from(components).sort().forEach(component => {
           const option = document.createElement('option');
@@ -672,68 +726,31 @@
         });
       }
 
-      // Enable/disable selective filtering
-      selectiveFilterCheckbox.addEventListener('change', function() {
-        const isEnabled = this.checked;
-        componentDropdown.disabled = !isEnabled;
-        addButton.disabled = !isEnabled;
-
-        if (isEnabled) {
-          populateDropdown();
-          applySelectiveFilter();
-        } else {
-          // Show all components when disabled
-          document.querySelectorAll('.report-table tr').forEach(row => {
-            if (!row.querySelector('th')) { // Skip header rows
-              row.classList.remove('hidden');
-            }
-          });
+      function applySelectiveFilter() {
+        if (!selectiveFilterCheckbox.checked || selectedComponents.size === 0) {
+          showAllComponentRows();
+          return;
         }
-      });
+        getAllComponentRows().forEach(row => {
+          const name = row.dataset.component;
+          if (selectedComponents.has(name)) {
+            row.classList.remove('hidden');
+          } else {
+            row.classList.add('hidden');
+          }
+        });
+      }
 
-      // Add selected component
-      addButton.addEventListener('click', function() {
-        const selectedValue = componentDropdown.value;
-        if (selectedValue && !selectedComponents.has(selectedValue)) {
-          selectedComponents.add(selectedValue);
-          renderSelectedItems();
-          applySelectiveFilter();
-          componentDropdown.value = ''; // Reset dropdown
-        }
-      });
-
-      // Clear all selected components
-      clearAllButton.addEventListener('click', function() {
-        selectedComponents.clear();
-        renderSelectedItems();
-        applySelectiveFilter();
-      });
-
-      // Support Enter key in dropdown
-      componentDropdown.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter' && this.value) {
-          addButton.click();
-        }
-      });
-
-      // Render selected items UI
       function renderSelectedItems() {
         selectedItemsContainer.innerHTML = '';
-
         selectedComponents.forEach(component => {
           const item = document.createElement('div');
           item.className = 'selected-item';
-          item.innerHTML = `
-            <span>${component}</span>
-            <button class="remove-btn" data-component="${component}">×</button>
-          `;
+          item.innerHTML = '<span>' + component + '</span>' +
+            '<button class="remove-btn" data-component="' + component.replace(/"/g, '&quot;') + '">×</button>';
           selectedItemsContainer.appendChild(item);
         });
-
-        // Show/hide clear all button
         clearAllButton.style.display = selectedComponents.size > 0 ? 'inline-block' : 'none';
-
-        // Add remove button listeners
         selectedItemsContainer.querySelectorAll('.remove-btn').forEach(btn => {
           btn.addEventListener('click', function() {
             const component = this.dataset.component;
@@ -744,33 +761,45 @@
         });
       }
 
-      // Apply selective filter to hide/show table rows
-      function applySelectiveFilter() {
-        if (!selectiveFilterCheckbox.checked || selectedComponents.size === 0) {
-          // Show all if filter disabled or no selections
-          document.querySelectorAll('.report-table tr').forEach(row => {
-            if (!row.querySelector('th')) { // Skip header rows
-              row.classList.remove('hidden');
-            }
-          });
-          return;
+      selectiveFilterCheckbox.addEventListener('change', function() {
+        const isEnabled = this.checked;
+        componentDropdown.disabled = !isEnabled;
+        addButton.disabled = !isEnabled;
+        if (isEnabled) {
+          populateDropdown();
+          applySelectiveFilter();
+        } else {
+          showAllComponentRows();
         }
+      });
 
-        // Hide all rows, then show only selected components
-        document.querySelectorAll('.report-table tr').forEach(row => {
-          if (!row.querySelector('th')) { // Skip header rows
-            const firstCell = row.querySelector('td:first-child');
-            if (firstCell) {
-              const componentName = firstCell.textContent.trim();
-              if (selectedComponents.has(componentName)) {
-                row.classList.remove('hidden');
-              } else {
-                row.classList.add('hidden');
-              }
-            }
-          }
-        });
-      }
+      addButton.addEventListener('click', function() {
+        const selectedValue = componentDropdown.value;
+        if (selectedValue && !selectedComponents.has(selectedValue)) {
+          selectedComponents.add(selectedValue);
+          renderSelectedItems();
+          applySelectiveFilter();
+          componentDropdown.value = '';
+        }
+      });
+
+      clearAllButton.addEventListener('click', function() {
+        selectedComponents.clear();
+        renderSelectedItems();
+        applySelectiveFilter();
+      });
+
+      componentDropdown.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter' && this.value) {
+          addButton.click();
+        }
+      });
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+      validateTemplate();
+      setupSectionToggles();
+      setupSelectiveFiltering();
     });
   </script>
 
