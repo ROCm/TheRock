@@ -173,9 +173,9 @@ class InstallPackagesTest(unittest.TestCase):
 
 class GfxRegexPatternTest(unittest.TestCase):
     def test_valid_match(self):
-        html_snippet = '<a href="relpath/to/wherever/gfx103X-dgpu">gfx103X-dgpu</a><br><a href="/relpath/gfx120X-all">gfx120X-all</a>'
+        html_snippet = '<a href="relpath/to/wherever/gfx103X-all">gfx103X-all</a><br><a href="/relpath/gfx120X-all">gfx120X-all</a>'
         matches = re.findall(GFX_TARGET_REGEX, html_snippet)
-        self.assertEqual(["gfx103X-dgpu", "gfx120X-all"], matches)
+        self.assertEqual(["gfx103X-all", "gfx120X-all"], matches)
 
     def test_match_without_suffix(self):
         html_snippet = "<a>gfx940</a><br><a>gfx1030</a>"

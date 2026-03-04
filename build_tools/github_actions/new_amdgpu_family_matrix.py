@@ -68,7 +68,7 @@ amdgpu_family_predefined_groups = {
     "amdgpu_nightly": [
         "gfx90X-dcgpu",
         "gfx101X-dgpu",
-        "gfx103X-dgpu",
+        "gfx103X-all",
         "gfx1150",
         "gfx1152",
         "gfx1153",
