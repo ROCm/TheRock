@@ -6,7 +6,6 @@ from pathlib import Path
 import sys
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
-OUTPUT_ARTIFACTS_DIR = os.getenv("OUTPUT_ARTIFACTS_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
@@ -18,82 +17,97 @@ ROCPROFILER_SDK_DIRECTORY = f"{THEROCK_PATH}/share/rocprofiler-sdk"
 ROCPROFILER_SDK_TESTS_DIRECTORY = f"{ROCPROFILER_SDK_DIRECTORY}/tests"
 
 logging.basicConfig(level=logging.INFO)
-
-# Set up HIP_PATH / ROCM_PATH / ROCPROFILER_METRICS_PATH
 environ_vars = os.environ.copy()
-environ_vars["ROCM_PATH"] = str(THEROCK_PATH)
-environ_vars["HIP_PATH"] = str(THEROCK_PATH)
-environ_vars["ROCPROFILER_METRICS_PATH"] = ROCPROFILER_SDK_DIRECTORY
 
-# Env setup
-environ_vars["HIP_PLATFORM"] = "amd"
 
-# Set up LD_LIBRARY_PATH
-old_ld_lib_path = os.getenv("LD_LIBRARY_PATH", "")
-sysdeps_path = f"{THEROCK_LIB_PATH}/rocm_sysdeps/lib"
-if old_ld_lib_path:
-    environ_vars["LD_LIBRARY_PATH"] = (
-        f"{THEROCK_LIB_PATH}:{sysdeps_path}:{old_ld_lib_path}"
+def setup_env():
+    # Set up HIP_PATH / ROCM_PATH / ROCPROFILER_METRICS_PATH
+    environ_vars["ROCM_PATH"] = str(THEROCK_PATH)
+    environ_vars["HIP_PATH"] = str(THEROCK_PATH)
+    environ_vars["ROCPROFILER_METRICS_PATH"] = ROCPROFILER_SDK_DIRECTORY
+
+    # Set up HIP_PLATFORM
+    environ_vars["HIP_PLATFORM"] = "amd"
+
+    # Set up LD_LIBRARY_PATH
+    old_ld_lib_path = os.getenv("LD_LIBRARY_PATH", "")
+    sysdeps_path = f"{THEROCK_LIB_PATH}/rocm_sysdeps/lib"
+    if old_ld_lib_path:
+        environ_vars["LD_LIBRARY_PATH"] = (
+            f"{THEROCK_LIB_PATH}:{sysdeps_path}:{old_ld_lib_path}"
+        )
+    else:
+        environ_vars["LD_LIBRARY_PATH"] = f"{THEROCK_LIB_PATH}:{sysdeps_path}"
+
+
+def cmake_config():
+    # CMake Configuration
+    cmake_config_cmd = [
+        "cmake",
+        "-B",
+        "build",
+        "-G",
+        "Ninja",
+        f"-DCMAKE_PREFIX_PATH={THEROCK_PATH};{THEROCK_LIB_PATH}/rocm_sysdeps",
+        f"-DCMAKE_HIP_COMPILER={THEROCK_PATH}/llvm/bin/amdclang++",
+        f"-DCMAKE_C_COMPILER={THEROCK_PATH}/llvm/bin/amdclang",
+        f"-DCMAKE_CXX_COMPILER={THEROCK_PATH}/llvm/bin/amdclang++",
+        f"-DPython3_EXECUTABLE={sys.executable}",
+    ]
+
+    logging.info(
+        f"++ Exec [{ROCPROFILER_SDK_TESTS_DIRECTORY}]$ {shlex.join(cmake_config_cmd)}"
     )
-else:
-    environ_vars["LD_LIBRARY_PATH"] = f"{THEROCK_LIB_PATH}:{sysdeps_path}"
+    subprocess.run(
+        cmake_config_cmd,
+        cwd=ROCPROFILER_SDK_TESTS_DIRECTORY,
+        check=True,
+        env=environ_vars,
+    )
 
-python3_path = sys.executable
 
-# CMake Configuration
-cmake_config_cmd = [
-    "cmake",
-    "-B",
-    "build",
-    "-G",
-    "Ninja",
-    f"-DCMAKE_PREFIX_PATH={THEROCK_PATH};{THEROCK_LIB_PATH}/rocm_sysdeps",
-    f"-DCMAKE_HIP_COMPILER={THEROCK_PATH}/llvm/bin/amdclang++",
-    f"-DCMAKE_C_COMPILER={THEROCK_PATH}/llvm/bin/amdclang",
-    f"-DCMAKE_CXX_COMPILER={THEROCK_PATH}/llvm/bin/amdclang++",
-    f"-DPython3_EXECUTABLE={python3_path}",
-]
+def cmake_build():
+    # CMake Build
+    cmake_build_cmd = [
+        "cmake",
+        "--build",
+        "build",
+        "-j",
+    ]
 
-logging.info(
-    f"++ Exec [{ROCPROFILER_SDK_TESTS_DIRECTORY}]$ {shlex.join(cmake_config_cmd)}"
-)
-subprocess.run(
-    cmake_config_cmd,
-    cwd=ROCPROFILER_SDK_TESTS_DIRECTORY,
-    check=True,
-    env=environ_vars,
-)
+    logging.info(
+        f"++ Exec [{ROCPROFILER_SDK_TESTS_DIRECTORY}]$ {shlex.join(cmake_build_cmd)}"
+    )
+    subprocess.run(
+        cmake_build_cmd,
+        cwd=ROCPROFILER_SDK_TESTS_DIRECTORY,
+        check=True,
+        env=environ_vars,
+    )
 
-# CMake Build
-cmake_build_cmd = [
-    "cmake",
-    "--build",
-    "build",
-    "-j",
-]
 
-logging.info(
-    f"++ Exec [{ROCPROFILER_SDK_TESTS_DIRECTORY}]$ {shlex.join(cmake_build_cmd)}"
-)
-subprocess.run(
-    cmake_build_cmd,
-    cwd=ROCPROFILER_SDK_TESTS_DIRECTORY,
-    check=True,
-    env=environ_vars,
-)
+def execute_tests():
+    # CTest
+    ctest_cmd = [
+        "ctest",
+        "--test-dir",
+        "build",
+        "--output-on-failure",
+    ]
 
-# CTest
-ctest_cmd = [
-    "ctest",
-    "--test-dir",
-    "build",
-    "--output-on-failure",
-]
+    logging.info(
+        f"++ Exec [{ROCPROFILER_SDK_TESTS_DIRECTORY}]$ {shlex.join(ctest_cmd)}"
+    )
+    subprocess.run(
+        ctest_cmd,
+        cwd=ROCPROFILER_SDK_TESTS_DIRECTORY,
+        check=True,
+        env=environ_vars,
+    )
 
-logging.info(f"++ Exec [{ROCPROFILER_SDK_TESTS_DIRECTORY}]$ {shlex.join(ctest_cmd)}")
-subprocess.run(
-    ctest_cmd,
-    cwd=ROCPROFILER_SDK_TESTS_DIRECTORY,
-    check=True,
-    env=environ_vars,
-)
+
+if __name__ == "__main__":
+    setup_env()
+    cmake_config()
+    cmake_build()
+    execute_tests()
