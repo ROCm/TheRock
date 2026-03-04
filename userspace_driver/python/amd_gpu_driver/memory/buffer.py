@@ -5,7 +5,6 @@ from __future__ import annotations
 import ctypes
 
 from amd_gpu_driver.backends.base import MemoryHandle, MemoryLocation
-from amd_gpu_driver.ioctl.helpers import libc
 
 
 class Buffer:
@@ -94,7 +93,7 @@ class Buffer:
                 f"buffer size {self._handle.size}"
             )
         addr = self._handle.cpu_addr + offset
-        libc.memset(ctypes.c_void_p(addr), value, size)
+        ctypes.memset(addr, value, size)
 
     def free(self) -> None:
         """Free this buffer's GPU memory."""

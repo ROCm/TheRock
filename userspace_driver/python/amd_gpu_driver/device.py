@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from typing import Any
 
 from amd_gpu_driver.backends.base import DeviceBackend, MemoryLocation
-from amd_gpu_driver.backends.kfd import KFDDevice
 from amd_gpu_driver.commands.sdma import SDMAPacketBuilder
 from amd_gpu_driver.gpu.family import GPUFamilyConfig
 from amd_gpu_driver.memory.buffer import Buffer
@@ -32,6 +32,12 @@ class AMDDevice:
         self._device_index = device_index
         self._backend: DeviceBackend
         if backend == "kfd":
+            if sys.platform == "win32":
+                raise RuntimeError(
+                    "KFD backend is not available on Windows. "
+                    "Use the 'windows' backend instead (not yet implemented)."
+                )
+            from amd_gpu_driver.backends.kfd import KFDDevice
             self._backend = KFDDevice()
         else:
             raise ValueError(f"Unknown backend: {backend!r}")
@@ -77,10 +83,10 @@ class AMDDevice:
         Returns:
             A Program object ready for dispatch.
         """
-        kfd = self._backend
-        if not isinstance(kfd, KFDDevice):
+        from amd_gpu_driver.backends.kfd import KFDDevice
+        if not isinstance(self._backend, KFDDevice):
             raise RuntimeError("load_program requires KFD backend")
-        family = kfd.family
+        family = self._backend.family
         if family is None:
             raise RuntimeError("GPU family not identified")
         return load_program(self._backend, path, family, kernel_name=kernel_name)
@@ -127,9 +133,9 @@ class AMDDevice:
     @property
     def gfx_target(self) -> str:
         """GFX target string (e.g. 'gfx942')."""
-        kfd = self._backend
-        if isinstance(kfd, KFDDevice) and kfd.node:
-            return kfd.node.gfx_name
+        from amd_gpu_driver.backends.kfd import KFDDevice
+        if isinstance(self._backend, KFDDevice) and self._backend.node:
+            return self._backend.node.gfx_name
         return "unknown"
 
     @property
