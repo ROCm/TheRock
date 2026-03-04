@@ -1,3 +1,9 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+"""Main rocm-sdk-profilers (OS specific)."""
+
+
 import os
 
 from setuptools import find_packages, setup
