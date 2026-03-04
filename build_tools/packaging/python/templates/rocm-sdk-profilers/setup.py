@@ -2,8 +2,22 @@ import os
 
 from setuptools import find_packages, setup
 
-# Version is defined centrally for all ROCm wheels
-from rocm_sdk import _dist_info as dist_info  # type: ignore
+import importlib.util
+
+
+# Version is defined centrally for all ROCm wheels via a local _dist_info.py
+def _load_local_dist_info():
+    this_dir = os.path.dirname(os.path.abspath(__file__))
+    dist_info_path = os.path.join(this_dir, "_dist_info.py")
+    spec = importlib.util.spec_from_file_location("_dist_info", dist_info_path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Cannot load local _dist_info module from {dist_info_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+dist_info = _load_local_dist_info()
 
 version = os.environ.get("ROCM_SDK_VERSION", dist_info.__version__)
 if version == "DEFAULT":
