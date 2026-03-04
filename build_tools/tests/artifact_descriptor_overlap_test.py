@@ -14,6 +14,15 @@ included `profiler/aqlprofile/stage`, causing concurrent extraction to race
 
 This test loads the real artifact-*.toml descriptors from the source tree and
 checks that each stage directory (basedir) belongs to exactly one descriptor.
+
+Limitations (cases this test does NOT catch):
+  - Two artifacts with *different* basedirs whose installed files collide
+    after flattening (basedir prefix stripped). If two subprojects both
+    install a file to the same relative path (e.g., "lib/libfoo.so" or
+    "bin/sequence.yaml") in their respective stage dirs, flattening produces
+    duplicate paths even though the basedirs are distinct. Current projects
+    avoid this by using unique file names, but it's convention rather than
+    enforcement. Catching this requires inspecting actual build output.
 """
 
 import tomllib
