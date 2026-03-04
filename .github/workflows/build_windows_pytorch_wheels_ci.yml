@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # CI variant of build_windows_pytorch_wheels.yml.
 #
 # Key differences from the release workflow:

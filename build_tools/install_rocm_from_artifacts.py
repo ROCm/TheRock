@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """install_rocm_from_artifacts.py
 
 This script helps CI workflows, developers and testing suites easily install

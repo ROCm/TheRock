@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 if(THEROCK_ENABLE_ROCPROFV3)
   set(_rocprofiler_sdk_optional_deps)
 
@@ -255,14 +258,15 @@ endif(THEROCK_BUILD_TESTING)
         "llvm/lib"
       CMAKE_INCLUDES
         therock_explicit_finders.cmake
+      BUILD_DEPS
+        therock-spdlog
+        therock-fmt
       RUNTIME_DEPS
         amdsmi
         aqlprofile
         hip-clr
         rocprofiler-register
         rocprofiler-sdk
-        therock-spdlog
-        therock-fmt
         ${THEROCK_BUNDLED_LIBDRM}
         ${THEROCK_BUNDLED_SQLITE3}
     )

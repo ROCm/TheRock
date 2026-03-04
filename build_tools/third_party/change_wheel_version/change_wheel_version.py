@@ -1,3 +1,7 @@
+# Copyright (c) 2023 hauntsaninja
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 #################################################################################
 # original version from https://github.com/hauntsaninja/change_wheel_version
 # (commit e28436ebdb6fe5a81cd29922f7276d00675d1bd3, Sep 13, 2024)

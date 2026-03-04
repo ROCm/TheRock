@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Utils package for test execution with system detection and result reporting.
 
 Provides ExtendedTestClient API for collecting system info (OS, hardware, ROCm) and
