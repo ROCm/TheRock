@@ -103,10 +103,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          python build_tools/github_actions/copy_prebuilt_stages.py \
-            --prebuilt-stages="${{ inputs.linux_prebuilt_stages }}" \
-            --baseline-run-id=${{ inputs.linux_baseline_run_id }} \
-            --linux-variants='${{ needs.setup.outputs.linux_variants }}'
+          python build_tools/artifact_manager.py copy \
+            --source-run-id=${{ inputs.linux_baseline_run_id }} \
+            --stage="${{ inputs.linux_prebuilt_stages }}" \
+            --amdgpu-families="${{ needs.setup.outputs.linux_dist_amdgpu_families }}"
 
   linux_build_and_test:
     name: Linux::${{ matrix.variant.build_variant_label }}
