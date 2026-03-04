@@ -19,6 +19,9 @@
  * CTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
  * ************************************************************************ */
+#ifndef HELP_MENU_H
+#define HELP_MENU_H
+
 #include "menu_data.h"
 
 #define HELP_MENU_ITEM_START_Y              5   // minimum starting y/row
@@ -27,3 +30,5 @@
 int create_help_menu_window(MENU_DATA *pMenuData, char *helpTile, char *helpFile);
 void destroy_help_menu(MENU_DATA *pMenuData);
 void do_help_menu(MENU_DATA *pMenuData);
+
+#endif // HELP_MENU_H

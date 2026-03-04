@@ -116,6 +116,7 @@ END_USAGE
 
 os_release() {
     if [[ -r  /etc/os-release ]]; then
+        # shellcheck source=/dev/null
         . /etc/os-release
 
         DISTRO_NAME=$ID
@@ -189,6 +190,7 @@ read_config() {
         fi
 
         # Source the config file
+        # shellcheck source=/dev/null
         source "$CONFIG_FILE"
         echo "Configuration loaded successfully."
         echo "Note: Command-line arguments will override config values."
@@ -231,12 +233,14 @@ write_version() {
     echo "AMDGPU_DKMS_BUILD_NUM    = $AMDGPU_DKMS_BUILD_NUM"
 
     # Update the version file
-    echo "$INSTALLER_VERSION" > "$VERSION_FILE"
-    echo "$ROCM_VER" >> "$VERSION_FILE"
-    echo "$BUILD_TAG" >> "$VERSION_FILE"
-    echo "$BUILD_RUNID" >> "$VERSION_FILE"
-    echo "$BUILD_TAG_INFO" >> "$VERSION_FILE"
-    echo "$AMDGPU_DKMS_BUILD_NUM" >> "$VERSION_FILE"
+    {
+        echo "$INSTALLER_VERSION"
+        echo "$ROCM_VER"
+        echo "$BUILD_TAG"
+        echo "$BUILD_RUNID"
+        echo "$BUILD_TAG_INFO"
+        echo "$AMDGPU_DKMS_BUILD_NUM"
+    } > "$VERSION_FILE"
 
     echo "Installer name: $BUILD_INSTALLER_NAME"
 }
@@ -246,7 +250,8 @@ print_directory_size() {
     local dir_name="${2:-$(basename "$dir_path")}"
 
     if [ -d "$dir_path" ]; then
-        local size=$(du -sh "$dir_path" 2>/dev/null | awk '{print $1}')
+        local size
+        size=$(du -sh "$dir_path" 2>/dev/null | awk '{print $1}')
         if [ -n "$size" ]; then
             echo "  Directory size: $size ($dir_name)"
         fi
@@ -268,10 +273,19 @@ generate_component_lists() {
     else
         # Extract GFX architectures (e.g., gfx94x, gfx942, gfx1030)
         # Look for patterns like gfx followed by numbers and optional letters
-        GFX_LIST=$(ls "$component_dir" 2>/dev/null | grep -oP 'gfx[0-9]+[a-z]*' | sort -u | tr '\n' ' ')
+        local gfx_found=()
+        for file in "$component_dir"/*; do
+            if [[ -e "$file" ]]; then
+                local filename
+                filename=$(basename "$file")
+                if [[ "$filename" =~ gfx[0-9]+[a-z]* ]]; then
+                    gfx_found+=("${BASH_REMATCH[0]}")
+                fi
+            fi
+        done
 
-        # Trim trailing spaces
-        GFX_LIST=$(echo "$GFX_LIST" | sed 's/ *$//')
+        # Remove duplicates and convert to space-separated list
+        GFX_LIST=$(printf '%s\n' "${gfx_found[@]}" | sort -u | tr '\n' ' ' | sed 's/ *$//')
     fi
 
     # Component categories are fixed (defined in rocm-installer.sh)
@@ -315,7 +329,8 @@ install_makeself() {
 
     # Check if makeself command is already available
     if command -v makeself &> /dev/null; then
-        local makeself_version=$(makeself --version)
+        local makeself_version
+        makeself_version=$(makeself --version)
         echo -e "\e[32mmakeself already installed\e[0m"
         echo -e "\e[32mVersion: $makeself_version\e[0m"
         return 0
@@ -331,7 +346,8 @@ install_makeself() {
 
     # Check if package manager install succeeded
     if command -v makeself &> /dev/null; then
-        local makeself_version=$(makeself --version)
+        local makeself_version
+        makeself_version=$(makeself --version)
         echo -e "\e[32mmakeself installed successfully from package manager\e[0m"
         echo -e "\e[32mVersion: $makeself_version\e[0m"
         return 0
@@ -345,9 +361,7 @@ install_makeself() {
 
     # Download the makeself package
     echo "Downloading makeself package from github..."
-    wget -q "$makeself_url"
-
-    if [[ $? -ne 0 ]]; then
+    if ! wget -q "$makeself_url"; then
         echo -e "\e[31mmakeself package not found: $makeself_url.\e[0m"
         exit 1
     fi
@@ -714,8 +728,7 @@ configure_compression() {
         dev)
             # Install and use pigz with compression level 6 (balanced)
             # SAFE: gzip-compatible, works on all target systems
-            install_pigz
-            if [ $? -eq 0 ]; then
+            if install_pigz; then
                 MAKESELF_OPT_COMPRESS="--pigz --complevel 6"
                 echo "Compression: Pigz level 6 (fast, universal gzip-compatible)"
             else
@@ -726,8 +739,7 @@ configure_compression() {
         prodfast)
             # Install and use pigz (production-fast, gzip-compatible)
             # SAFE: gzip-compatible, works on all target systems
-            install_pigz
-            if [ $? -eq 0 ]; then
+            if install_pigz; then
                 MAKESELF_OPT_COMPRESS="--pigz"
                 echo "Compression: Pigz (production-fast, universal gzip-compatible)"
             else
@@ -738,8 +750,7 @@ configure_compression() {
         prodmedium)
             # Install and use pbzip2 (parallel bzip2, better compression than gzip)
             # SAFE: bzip2-compatible, works on all target systems
-            install_pbzip2
-            if [ $? -eq 0 ]; then
+            if install_pbzip2; then
                 MAKESELF_OPT_COMPRESS="--pbzip2"
                 echo "Compression: Pbzip2 (parallel bzip2, near-xz compression, universal)"
             else
@@ -750,8 +761,7 @@ configure_compression() {
         prodsmall)
             # Install and use xz (best compression, slowest build)
             # SAFE: xz-compatible, works on most target systems
-            install_xz
-            if [ $? -eq 0 ]; then
+            if install_xz; then
                 MAKESELF_OPT_COMPRESS="--xz"
                 echo "Compression: XZ (best compression, standard xz-compatible)"
             else
@@ -783,12 +793,14 @@ extract_rocm_packages_deb() {
         # On RPM-based systems, use nodpkg extractor and extract to separate directory
         echo "Using nodpkg extractor for RPM-based system (nocontent mode)"
         PACKAGE_ROCM_DIR="$PWD/packages-rocm-deb" EXTRACT_FORMAT=deb ./package-extractor-debs-nodpkg.sh rocm ext-rocm="../rocm-installer/component-rocm-deb" nocontent
+        extract_status=$?
     else
         # On DEB-based systems, use standard extractor
         PACKAGE_ROCM_DIR="$PWD/packages-rocm-deb" EXTRACT_FORMAT=deb ./package-extractor-debs.sh rocm ext-rocm="../rocm-installer/component-rocm" $EXTRACT_TYPE
+        extract_status=$?
     fi
 
-    if [[ $? -ne 0 ]]; then
+    if [[ $extract_status -ne 0 ]]; then
         echo -e "\e[31mFailed extraction of ROCm DEB packages.\e[0m"
         exit 1
     fi
@@ -804,7 +816,7 @@ extract_rocm_packages_deb() {
 extract_amdgpu_packages_deb() {
     echo "Extracting AMDGPU DEB packages for $BUILD_OS (tag: $DISTRO_TAG)..."
 
-    # AMDGPU packages are stored in subdirectories: packages-amdgpu/<distro_tag>
+    # AMDGPU packages are stored in subdirectories: packages-amdgpu/<DISTRO_TAG>
     AMDGPU_PKG_DIR="packages-amdgpu/${DISTRO_TAG}"
 
     # Verify AMDGPU package directory exists
@@ -814,9 +826,8 @@ extract_amdgpu_packages_deb() {
         exit 1
     fi
 
-    # Extract the AMDGPU packages to component-amdgpu/<distro_tag>
-    PACKAGE_AMDGPU_DIR="$PWD/$AMDGPU_PKG_DIR" EXTRACT_FORMAT=deb ./package-extractor-debs.sh amdgpu ext-amdgpu="${EXTRACT_DIR}/component-amdgpu/${DISTRO_TAG}"
-    if [[ $? -ne 0 ]]; then
+    # Extract the AMDGPU packages to component-amdgpu/<DISTRO_TAG>
+    if ! PACKAGE_AMDGPU_DIR="$PWD/$AMDGPU_PKG_DIR" EXTRACT_FORMAT=deb ./package-extractor-debs.sh amdgpu ext-amdgpu="${EXTRACT_DIR}/component-amdgpu/${DISTRO_TAG}"; then
         echo -e "\e[31mFailed extraction of AMDGPU DEB packages.\e[0m"
         exit 1
     fi
@@ -831,8 +842,7 @@ extract_rocm_packages_rpm() {
     # Extract all ROCm RPM packages (common and gfx-specific)
     # The extractor script will auto-detect all packages-rocm*-rpm directories
     echo "Extracting ROCm RPM packages (common and gfx-specific)..."
-    PACKAGE_ROCM_DIR="$PWD/packages-rocm-rpm" EXTRACT_FORMAT=rpm ./package-extractor-rpms.sh rocm ext-rocm="../rocm-installer" $EXTRACT_TYPE
-    if [[ $? -ne 0 ]]; then
+    if ! PACKAGE_ROCM_DIR="$PWD/packages-rocm-rpm" EXTRACT_FORMAT=rpm ./package-extractor-rpms.sh rocm ext-rocm="../rocm-installer" $EXTRACT_TYPE; then
         echo -e "\e[31mFailed extraction of ROCm RPM packages.\e[0m"
         exit 1
     fi
@@ -844,7 +854,7 @@ extract_rocm_packages_rpm() {
 extract_amdgpu_packages_rpm() {
     echo "Extracting AMDGPU RPM packages for $BUILD_OS (tag: $DISTRO_TAG)..."
 
-    # AMDGPU packages are stored in subdirectories: packages-amdgpu/<distro_tag>
+    # AMDGPU packages are stored in subdirectories: packages-amdgpu/<DISTRO_TAG>
     AMDGPU_PKG_DIR="packages-amdgpu/${DISTRO_TAG}"
 
     # Verify AMDGPU package directory exists
@@ -854,9 +864,8 @@ extract_amdgpu_packages_rpm() {
         exit 1
     fi
 
-    # Extract the AMDGPU packages to component-amdgpu/<distro_tag>
-    PACKAGE_AMDGPU_DIR="$PWD/$AMDGPU_PKG_DIR" EXTRACT_FORMAT=rpm ./package-extractor-rpms.sh amdgpu ext-amdgpu="${EXTRACT_DIR}/component-amdgpu/${DISTRO_TAG}"
-    if [[ $? -ne 0 ]]; then
+    # Extract the AMDGPU packages to component-amdgpu/<DISTRO_TAG>
+    if ! PACKAGE_AMDGPU_DIR="$PWD/$AMDGPU_PKG_DIR" EXTRACT_FORMAT=rpm ./package-extractor-rpms.sh amdgpu ext-amdgpu="${EXTRACT_DIR}/component-amdgpu/${DISTRO_TAG}"; then
         echo -e "\e[31mFailed extraction of AMDGPU RPM packages.\e[0m"
         exit 1
     fi
@@ -894,18 +903,18 @@ extract_amdgpu_packages_all() {
 
         if [ -d "$amdgpu_dir" ]; then
             # Extract distro tag from directory name (e.g., packages-amdgpu/el8 -> el8)
-            local DISTRO_TAG="$(basename "$amdgpu_dir")"
+            local distro_tag
+            distro_tag="$(basename "$amdgpu_dir")"
 
-            echo "Extracting AMDGPU packages from $amdgpu_dir (tag: $DISTRO_TAG)..."
+            echo "Extracting AMDGPU packages from $amdgpu_dir (tag: $distro_tag)..."
 
             # Extract the AMDGPU packages to component-amdgpu/<distro_tag>
-            PACKAGE_AMDGPU_DIR="$PWD/$amdgpu_dir" ./package-extractor-all.sh amdgpu pkgs-amdgpu="$PWD/$amdgpu_dir" ext-amdgpu="${EXTRACT_DIR}/component-amdgpu/${DISTRO_TAG}"
-            if [[ $? -ne 0 ]]; then
+            if ! PACKAGE_AMDGPU_DIR="$PWD/$amdgpu_dir" ./package-extractor-all.sh amdgpu pkgs-amdgpu="$PWD/$amdgpu_dir" ext-amdgpu="${EXTRACT_DIR}/component-amdgpu/${distro_tag}"; then
                 echo -e "\e[31mFailed extraction of AMDGPU packages from $amdgpu_dir.\e[0m"
                 exit 1
             fi
 
-            print_directory_size "${EXTRACT_DIR}/component-amdgpu/${DISTRO_TAG}" "component-amdgpu/${DISTRO_TAG}"
+            print_directory_size "${EXTRACT_DIR}/component-amdgpu/${distro_tag}" "component-amdgpu/${distro_tag}"
         fi
     done
 
@@ -963,7 +972,7 @@ extract_packages() {
     echo Running Package Extractor...
 
     if [ $BUILD_EXTRACT == "yes" ]; then
-        pushd ../package-extractor
+        pushd ../package-extractor || exit
 
         # Extract ROCm packages
         extract_packages_rocm
@@ -971,7 +980,7 @@ extract_packages() {
         # Extract AMDGPU packages
         extract_packages_amdgpu
 
-        popd
+        popd || exit
     else
         echo Extract Packages disabled.
     fi
@@ -992,11 +1001,10 @@ build_UI() {
         echo Creating $BUILD_DIR_UI directory.
         mkdir $BUILD_DIR_UI
 
-        pushd $BUILD_DIR_UI
+        pushd $BUILD_DIR_UI || exit
             # UI now reads VERSION file at runtime - no version parameters needed
             cmake ../build-installer
-            make
-            if [[ $? -ne 0 ]]; then
+            if ! make; then
                 echo -e "\e[31mFailed GUI build.\e[0m"
                 exit 1
             fi
@@ -1008,7 +1016,7 @@ build_UI() {
             else
                 echo "SUCCESS: No ncurses dynamic dependencies found (fully static)"
             fi
-        popd
+        popd || exit
     else
         echo UI build disabled.
     fi
@@ -1034,8 +1042,7 @@ build_installer() {
         echo "MAKESELF_OPT_CLEANUP  = $MAKESELF_OPT_CLEANUP"
         echo "MAKESELF_OPT_TAR      = $MAKESELF_OPT_TAR"
 
-        makeself $MAKESELF_OPT_HEADER $MAKESELF_OPT $MAKESELF_OPT_COMPRESS $MAKESELF_OPT_CLEANUP $MAKESELF_OPT_TAR ../rocm-installer "./$BUILD_DIR/$BUILD_INSTALLER_NAME.run" "ROCm Runfile Installer" ./install-init.sh
-        if [[ $? -ne 0 ]]; then
+        if ! makeself $MAKESELF_OPT_HEADER $MAKESELF_OPT $MAKESELF_OPT_COMPRESS $MAKESELF_OPT_CLEANUP $MAKESELF_OPT_TAR ../rocm-installer "./$BUILD_DIR/$BUILD_INSTALLER_NAME.run" "ROCm Runfile Installer" ./install-init.sh; then
             echo -e "\e[31mFailed makeself build.\e[0m"
             exit 1
         fi
@@ -1071,7 +1078,7 @@ echo BUILD INSTALLER
 echo ==============================
 
 SUDO=$([[ $(id -u) -ne 0 ]] && echo "sudo" ||:)
-echo SUDO: $SUDO
+echo SUDO: "$SUDO"
 
 os_release
 

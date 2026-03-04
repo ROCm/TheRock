@@ -128,7 +128,6 @@ check_tools
 
 # Detect package type from arguments or auto-detect
 PACKAGE_DIR=""
-EXTRACT_TYPE=""
 
 # Parse arguments to find package directory
 for arg in "$@"; do
@@ -141,8 +140,7 @@ done
 
 # Detect package type if we have a package directory
 if [ -n "$PACKAGE_DIR" ]; then
-    PKG_TYPE=$(detect_package_type "$PACKAGE_DIR")
-    if [ $? -eq 0 ]; then
+    if PKG_TYPE=$(detect_package_type "$PACKAGE_DIR"); then
         echo "Detected package type: $PKG_TYPE"
 
         # Route to appropriate extractor

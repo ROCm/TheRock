@@ -37,7 +37,6 @@ GRAPHICS_REPO=
 
 # Packaging repos
 PACKAGE_REPO=$PWD/packages
-SETUP_PATH=$PWD/setup
 
 # Logs
 PULL_LOGS_DIR="$PWD/logs"
@@ -45,14 +44,9 @@ PULL_CURRENT_LOG="$PULL_LOGS_DIR/pull_chroot_$(date +%s).log"
 
 # Config
 PACKAGES="rocm"
-VERBOSE=0
-
-REPO_LIST=(rocm-build.list amdgpu-build.list graphics-build.list rocm.list amdgpu.list amdgpu-proprietary.list)
-GPG_LIST=(rocm.gpg amdrocm.gpg)
 
 PROMPT_USER=0
 DUMP_AMD_PKGS=0
-DUMP_NON_AMD_PKGS=0
 
 ###### Functions ###############################################################
 
@@ -65,8 +59,6 @@ Usage: $PROG [Options] [Pull_Config] [Packages] [Output]
 
     prompt  = Run the package puller with user prompts.
     amd     = Copy amd-specific packages out.
-    other   = Copy non-amd packages out.
-    verbose = Run the package puller with verbose logging.
 
 [Pull_Config]:
     config=<file_path> = <file_path> Path to a .config file with create settings in the format of create-default.config.
@@ -87,6 +79,7 @@ END_USAGE
 
 check_host_os() {
     if [[ -r  /etc/os-release ]]; then
+        # shellcheck source=/dev/null
         . /etc/os-release
 
         DISTRO_NAME=$ID
@@ -101,7 +94,7 @@ check_host_os() {
 
 prompt_user() {
     if [[ $PROMPT_USER == 1 ]]; then
-        read -p "$1" option
+        read -rp "$1" option
     else
         option=y
     fi
@@ -135,8 +128,7 @@ install_chroot_tools() {
     # Install missing tools
     if [[ -n "$tools_to_install" ]]; then
         echo "Installing:$tools_to_install"
-        $SUDO dnf install -y $tools_to_install
-        if [[ $? -ne 0 ]]; then
+        if ! $SUDO dnf install -y $tools_to_install; then
             echo -e "\e[31mERROR: Failed to install required tools\e[0m"
             echo "Make sure EPEL repository is enabled."
             exit 1
@@ -171,9 +163,7 @@ create_ubuntu_chroot() {
 
     # Use --variant=minbase for a smaller, more reliable base system
     # This is especially important when running in containers
-    $SUDO debootstrap --variant=minbase --arch=amd64 $UBUNTU_VERSION "$CHROOT_DIR" $UBUNTU_MIRROR
-
-    if [[ $? -ne 0 ]]; then
+    if ! $SUDO debootstrap --variant=minbase --arch=amd64 "$UBUNTU_VERSION" "$CHROOT_DIR" "$UBUNTU_MIRROR"; then
         echo -e "\e[31mERROR: Failed to create Ubuntu chroot\e[0m"
         echo "Check log for details: $PULL_CURRENT_LOG"
         echo ""
@@ -230,9 +220,7 @@ install_ca_certificates_in_chroot() {
 
     # Run apt-get commands inside chroot to install ca-certificates, wget, and gnupg
     # At this point, only Ubuntu's default repos (HTTP) are configured
-    $SUDO chroot "$CHROOT_DIR" /bin/bash -c "apt-get update && apt-get install -y ca-certificates wget gnupg"
-
-    if [[ $? -ne 0 ]]; then
+    if ! $SUDO chroot "$CHROOT_DIR" /bin/bash -c "apt-get update && apt-get install -y ca-certificates wget gnupg"; then
         echo -e "\e[31mERROR: Failed to install ca-certificates, wget, and gnupg\e[0m"
         cleanup_chroot
         exit 1
@@ -246,9 +234,9 @@ setup_gpg_in_chroot() {
     echo "Setting up GPG in chroot..."
     echo "========================================="
 
-    if [[ $ROCM_REPO =~ "amdrocm.gpg" ]] || [[ $ROCM_REPO =~ "rocm.gpg" ]]; then
+    if [[ $ROCM_REPO =~ amdrocm\.gpg ]] || [[ $ROCM_REPO =~ rocm\.gpg ]]; then
         # Determine GPG key URL based on repo type (release vs prerelease)
-        if [[ $ROCM_REPO =~ "rocm.prereleases.amd.com" ]]; then
+        if [[ $ROCM_REPO =~ rocm\.prereleases\.amd\.com ]]; then
             GPG_KEY_URL="https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg"
             echo "Using prerelease GPG key: $GPG_KEY_URL"
         else
@@ -257,9 +245,7 @@ setup_gpg_in_chroot() {
         fi
 
         echo "Downloading ROCm GPG key inside chroot to /etc/apt/keyrings/amdrocm.gpg..."
-        $SUDO chroot "$CHROOT_DIR" /bin/bash -c "set -e && set -o pipefail && mkdir --parents --mode=0755 /etc/apt/keyrings && wget $GPG_KEY_URL -O - | gpg --dearmor | tee /etc/apt/keyrings/amdrocm.gpg > /dev/null"
-
-        if [[ $? -ne 0 ]]; then
+        if ! $SUDO chroot "$CHROOT_DIR" /bin/bash -c "set -e && set -o pipefail && mkdir --parents --mode=0755 /etc/apt/keyrings && wget $GPG_KEY_URL -O - | gpg --dearmor | tee /etc/apt/keyrings/amdrocm.gpg > /dev/null"; then
             echo -e "\e[31mERROR: Failed to download GPG key\e[0m"
             cleanup_chroot
             exit 1
@@ -390,9 +376,7 @@ CHROOT_SCRIPT
     # Execute the download script inside chroot
     echo "Executing download in chroot..."
     echo "Command: chroot $CHROOT_DIR /tmp/chroot-download.sh $PACKAGES"
-    $SUDO chroot "$CHROOT_DIR" /tmp/chroot-download.sh $PACKAGES
-
-    if [[ $? -ne 0 ]]; then
+    if ! $SUDO chroot "$CHROOT_DIR" /tmp/chroot-download.sh $PACKAGES; then
         echo -e "\e[31mERROR: Package download failed in chroot\e[0m"
         cleanup_chroot
         exit 1
@@ -429,36 +413,12 @@ copy_packages_out() {
     fi
 
     # Count packages
-    pkg_count=$(ls -1 "$PACKAGE_REPO"/*.deb 2>/dev/null | wc -l)
+    pkg_count=$(find "$PACKAGE_REPO" -maxdepth 1 -name "*.deb" 2>/dev/null | wc -l)
     if [[ $DUMP_AMD_PKGS == 1 ]]; then
-        pkg_count=$(ls -1 "$PACKAGE_REPO/packages-amd"/*.deb 2>/dev/null | wc -l)
+        pkg_count=$(find "$PACKAGE_REPO/packages-amd" -maxdepth 1 -name "*.deb" 2>/dev/null | wc -l)
     fi
 
     echo "Copied $pkg_count packages to: $PACKAGE_REPO"
-}
-
-cleanup() {
-    echo "========================================="
-    echo "Cleaning up repo files and GPG keys from chroot..."
-    echo "========================================="
-
-    # Remove any list files from chroot
-    for index in ${REPO_LIST[@]}; do
-        if [ -f "$CHROOT_DIR/etc/apt/sources.list.d/$index" ]; then
-            echo -e "\e[93m=-=-=-= Removing $index =-=-=-=\e[0m"
-            $SUDO rm "$CHROOT_DIR/etc/apt/sources.list.d/$index"
-        fi
-    done
-
-    # Remove any gpg files from chroot
-    for index in ${GPG_LIST[@]}; do
-        if [ -f "$CHROOT_DIR/etc/apt/keyrings/$index" ]; then
-            echo -e "\e[93m=-=-=-= Removing $index =-=-=-=\e[0m"
-            $SUDO rm "$CHROOT_DIR/etc/apt/keyrings/$index"
-        fi
-    done
-
-    echo "Cleanup complete."
 }
 
 cleanup_chroot() {
@@ -493,6 +453,7 @@ read_config() {
     fi
 
     # Source the config file
+    # shellcheck source=/dev/null
     . "$1"
 
     # Set variables from config
@@ -514,8 +475,8 @@ read_config() {
 ####### Main script ###############################################################
 
 # Create logs directory
-if [ ! -d $PULL_LOGS_DIR ]; then
-    mkdir -p $PULL_LOGS_DIR
+if [ ! -d "$PULL_LOGS_DIR" ]; then
+    mkdir -p "$PULL_LOGS_DIR"
 fi
 
 exec > >(tee -a "$PULL_CURRENT_LOG") 2>&1
@@ -551,16 +512,6 @@ do
     amd)
         echo "Enabling AMD package filter."
         DUMP_AMD_PKGS=1
-        shift
-        ;;
-    other)
-        echo "Enabling non-AMD package dump."
-        DUMP_NON_AMD_PKGS=1
-        shift
-        ;;
-    verbose)
-        echo "Enabling verbose logging."
-        VERBOSE=1
         shift
         ;;
     config=*)

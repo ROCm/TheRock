@@ -22,12 +22,9 @@
 # THE SOFTWARE.
 # #############################################################################
 
-COMPO_DIR=
 DEPS_COUNT=0
 
 DEPS=
-DEPS_ROCM=
-DEPS_AMDGPU=
 
 USE_ROCM=0
 USE_AMDGPU=0
@@ -77,6 +74,7 @@ END_USAGE
 
 os_release() {
     if [[ -r  /etc/os-release ]]; then
+        # shellcheck source=/dev/null
         . /etc/os-release
 
         DISTRO_NAME=$ID
@@ -236,7 +234,7 @@ remove_rocky_kernel_repo() {
     if [ -f /etc/yum.repos.d/appstream-amdgpu.repo ]; then
         echo Removing Rocky AppStream repos...
         
-        echo =-=-=-= Removing appstream-amdgpu.repo =-=-=-=
+        echo "-=-=-= Removing appstream-amdgpu.repo -=-=-="
         $SUDO rm /etc/yum.repos.d/appstream-amdgpu.repo
         
          # Cleanup the dnf caches
@@ -300,17 +298,17 @@ is_pkg_installable_deb() {
     # if the dep is a virtual package - check for the virtual package
     if [[ $install_result -eq 0 ]]; then
         print_str "Checking for virtual package."
-        
-        if ! $DISTRO_CACHE_CHK $dep 2>&1 | grep -q "Package"; then
+
+        if ! $DISTRO_CACHE_CHK "$dep" 2>&1 | grep -q "Package"; then
             echo Virtual package.
             check_virtual_package_deb "$dep"
             install_result=$?
         fi
     fi
-    
+
     # get the version of the installable package
     if [[ $install_result -eq 0 ]]; then
-        INSTALL_VER=$(apt-cache show $dep 2>/dev/null | grep -m1 "^Version:" | awk '{print $2}' | cut -d'-' -f1)
+        INSTALL_VER=$(apt-cache show "$dep" 2>/dev/null | grep -m1 "^Version:" | awk '{print $2}' | cut -d'-' -f1)
     fi
     
     return $install_result
@@ -322,9 +320,10 @@ get_dep_from_cache() {
     if [[ -z "$dep" ]]; then
         return 1
     fi
-    
-    local entry=$(echo "$INSTALLABLE_PKG_CACHE" | grep "^$dep,")
-    
+
+    local entry
+    entry=$(echo "$INSTALLABLE_PKG_CACHE" | grep "^$dep,")
+
     if [[ -n "$entry" ]]; then
         DEPS_INTS_NAME=$(echo "$entry" | cut -d',' -f1)
         DEPS_INST_VER=$(echo "$entry" | cut -d',' -f2)
@@ -347,8 +346,7 @@ check_pkg_cache() {
         return 1
     fi
     
-    get_dep_from_cache "$pkg"
-    if [[ $? -eq 0 ]]; then
+    if get_dep_from_cache "$pkg"; then
         print_str "Package : $DEPS_INTS_NAME | $DEPS_INST_VER (cache)" 2
         pkg_cached=0
     else
@@ -376,18 +374,18 @@ build_installable_pkg_cache_dnf() {
             
                 # build the list of packages removing all spaces and replacing "|" with spaces
                 deplist=$(echo "$testdep" | tr -d ' ' | tr '|' ' ')
-                
-                for pkg in $deplist; do
+
+                for dep_pkg in $deplist; do
                     print_str "+++++++++++++++++++++"
-                    print_str "Checking: $pkg"
-                    
+                    print_str "Checking: $dep_pkg"
+
                     # remove versioning
                     if [ $PACKAGE_TYPE == "deb" ]; then
-                        dep=$(echo $pkg | sed -E 's/\([><!=]*[0-9.]*\)//g')
-                        dep_version=$(echo "$pkg" | grep -oE '[0-9.]+')
+                        dep=$(echo "$dep_pkg" | sed -E 's/\([><!=]*[0-9.]*\)//g')
+                        dep_version=$(echo "$dep_pkg" | grep -oE '[0-9.]+')
                     else
-                        dep=$(echo $pkg | sed -E 's/[><=!]=?[0-9.]+//g')
-                        dep_version=$(echo "$pkg" | grep -oE '[0-9.]+')
+                        dep=$(echo "$dep_pkg" | sed -E 's/[><=!]=?[0-9.]+//g')
+                        dep_version=$(echo "$dep_pkg" | grep -oE '[0-9.]+')
                     fi
                     print_str "Name/Ver: $dep | $dep_version"
                     PACKAGE_DEP_LIST+="$dep "
@@ -404,9 +402,9 @@ build_installable_pkg_cache_dnf() {
         
         # query the dnf cache for the list of packages available for install using the full missing deps list
         INSTALLABLE_PKG_CACHE=$($DISTRO_CACHE_CHK $PACKAGE_DEP_LIST | grep -E "^(Name|Version)" | sed 'N;s/Name *: *\(.*\)\nVersion *: *\(.*\)/\1,\2/' | sort -u)
-         
+
         echo ----------------------
-        echo $INSTALLABLE_PKG_CACHE
+        echo "$INSTALLABLE_PKG_CACHE"
         echo ----------------------
     fi
     
@@ -451,7 +449,8 @@ get_package_from_provides_zypper() {
 
     # Use zypper search --provides to find packages that provide this capability
     # Not using --match-exact to allow partial matching (e.g., libatomic -> libatomic1)
-    local search_output=$(zypper search --provides "$capability" 2>&1)
+    local search_output
+    search_output=$(zypper search --provides "$capability" 2>&1)
 
     # Parse the table output: S  | Name | Summary | Type
     # Extract the Name column (field 2) from data rows
@@ -485,7 +484,7 @@ is_pkg_installable_rpm() {
     local install_result=0
 
     # first check for the dep in the installable package cache
-    check_pkg_cache $dep
+    check_pkg_cache "$dep"
     install_result=$?
 
     # if not in the installable package cache, check the for dep directly again
@@ -523,7 +522,7 @@ is_pkg_installable_rpm() {
             if [[ -n $VIRTUAL_PACKAGE ]]; then
                 INSTALL_VER=$(zypper info "$VIRTUAL_PACKAGE" 2>/dev/null | grep -m1 "^Version" | awk '{print $3}')
             else
-                INSTALL_VER=$(zypper info $dep 2>/dev/null | grep -m1 "^Version" | awk '{print $3}')
+                INSTALL_VER=$(zypper info "$dep" 2>/dev/null | grep -m1 "^Version" | awk '{print $3}')
             fi
         fi
     fi
@@ -549,14 +548,15 @@ is_pkg_installable() {
 is_pkg_deb_installed() {
     local dep="$1"
     local install_result=0
-    
+
     print_str "is_pkg_deb_installed: dep = $dep" 4
-    
-    local status=$(dpkg-query -W -f'${Package}:${Architecture} ${Status}\n' "$dep" 2>/dev/null | grep -E ':amd64|:all' | awk '{print $4}')
+
+    local status
+    status=$(dpkg-query -W -f'${Package}:${Architecture} ${Status}\n' "$dep" 2>/dev/null | grep -E ':amd64|:all' | awk '{print $4}')
     if [[ $status != "installed" ]]; then
     
         # if the package is not installed, check if it's installed via a virtual package
-        dpkg-query -W -f='${Package} ${Provides}\n' '*' | grep $dep | grep -v "^$dep " > /dev/null 2>&1
+        dpkg-query -W -f='${Package} ${Provides}\n' '*' | grep "$dep" | grep -v "^$dep " > /dev/null 2>&1
         install_result=$?
         
         if [[ $install_result -eq 0 ]]; then
@@ -579,7 +579,9 @@ is_pkg_rpm_installed() {
 
     # All RPM-based systems: use rpm --whatprovides for checking
     # This works reliably across RHEL, Rocky, AlmaLinux, and SLES
-    local rpm_output=$(rpm -q --whatprovides "$dep" 2>&1)
+    local rpm_output
+    rpm_output=$(rpm -q --whatprovides "$dep" 2>&1)
+    
     local rpm_result=$?
 
     # Check if the output indicates "no package provides"
@@ -598,7 +600,7 @@ is_pkg_rpm_installed() {
     # If not found via whatprovides, try direct package name
     if [[ $install_result -ne 0 ]]; then
         print_str "Trying direct package name: rpm -q $dep" 4
-        rpm -q "$dep" > /dev/null 2>&1
+        rpm -q $dep > /dev/null 2>&1
         install_result=$?
 
         if [[ $install_result -eq 0 ]]; then
@@ -655,10 +657,10 @@ check_dep_installable() {
 
                 # remove versioning
                 if [ $PACKAGE_TYPE == "deb" ]; then
-                    dep=$(echo $pkg | sed -E 's/\([><!=]*[0-9.]*\)//g')
+                    dep=$(echo "$pkg" | sed -E 's/\([><!=]*[0-9.]*\)//g')
                     dep_version=$(echo "$pkg" | grep -oE '[0-9.]+')
                 else
-                    dep=$(echo $pkg | sed -E 's/[><=!]=?[0-9.]+//g')
+                    dep=$(echo "$pkg" | sed -E 's/[><=!]=?[0-9.]+//g')
                     dep_version=$(echo "$pkg" | grep -oE '[0-9.]+')
                 fi
                 print_str "Name/Ver: $dep | $dep_version"
@@ -671,7 +673,7 @@ check_dep_installable() {
                     installable="$dep"
                     break;    # may want to select an amd package if available over any other
                 else
-                    echo $pkg cannot be installed.
+                    echo "$pkg" cannot be installed.
                 fi
             done
 
@@ -688,7 +690,7 @@ check_dep_installable() {
                 echo -e "\e[32m$dep installable : $INSTALL_VER\e[0m"
                 installable="$dep"
             else
-                echo $pkg cannot be installed.
+                echo "$pkg" cannot be installed.
             fi
         fi
 
@@ -703,7 +705,7 @@ check_dep_installable() {
         if [[ -z $VIRTUAL_PACKAGE ]]; then
             INSTALL_LIST+="$installable "
         else
-            echo Capability is provided by package: $VIRTUAL_PACKAGE. Adding.
+            echo Capability is provided by package: "$VIRTUAL_PACKAGE". Adding.
             INSTALL_LIST+="$VIRTUAL_PACKAGE "
         fi
     else
@@ -714,10 +716,10 @@ check_dep_installable() {
 compare_versions_deb() {
     local version1=$1
     local version2=$2
-    
-    if dpkg --compare-versions "$current_version" eq "$version"; then
+
+    if dpkg --compare-versions "$version1" eq "$version2"; then
         return 0  # Equal
-    elif dpkg --compare-versions "$current_version" gt "$version"; then
+    elif dpkg --compare-versions "$version1" gt "$version2"; then
         return 1  # Greater
     else
         return 2  # Less
@@ -789,7 +791,7 @@ check_dep_version_installed() {
             
             # check for an error on rpm -q : an error may be due a virtual package
             if [[ $dep_status -ne 0 ]] && [[ $PACKAGE_TYPE == "rpm" ]]; then
-                dep_name_v=$(rpm -q --whatprovides $dep_name)
+                dep_name_v=$(rpm -q --whatprovides "$dep_name")
                 echo "$dep_name -> $dep_name_v <v>"
                 
                 # update the name to the virtual name and get the version
@@ -884,8 +886,7 @@ check_installed_dep_packages() {
             IFS='|' read -ra deps <<< "$pkg"
             for dep in "${deps[@]}"; do
                 dep_trimmed=$(echo "$dep" | sed 's/^ *//;s/ *$//')
-                check_dep_version_installed "$dep_trimmed"
-                if [[ $? -eq 0 ]]; then
+                if check_dep_version_installed "$dep_trimmed"; then
                     status=0
                     break
                 fi
@@ -973,8 +974,7 @@ install_rocky_kernel_packages() {
     for package in "${packages[@]}"; do
         package_name=$(basename "${package}")
         echo "Downloading: $package_name"
-        wget -q "$package" -O "$package_name"
-        if [[ $? -ne 0 ]]; then
+        if ! wget -q "$package" -O "$package_name"; then
             echo -e "\e[31mFailed to download kernel package: $package\e[0m"
             failed=1
             break
@@ -995,9 +995,8 @@ install_rocky_kernel_packages() {
     done
     
     echo "Installing: $package_list"
-    
-    $SUDO dnf install -y $package_list
-    if [[ $? -ne 0 ]]; then
+
+    if ! $SUDO dnf install -y $package_list; then
         echo -e "\e[31mFailed to install kernel packages: $package_list\e[0m"
         $SUDO rm $package_list
         return 1
@@ -1018,9 +1017,7 @@ add_rocky_repo() {
     echo "Adding URL: $rocky_repo_url"
     
      # Check if the repo is accessible
-    wget --spider "$rocky_repo_url/repodata" > /dev/null 2>&1
-    
-    if [[ $? -eq 0 ]]; then
+    if wget --spider "$rocky_repo_url/repodata" > /dev/null 2>&1; then
         echo -e "\e[32mRepo $rocky_repo_desc accessible\e[0m"
 cat <<EOF | $SUDO tee -a /etc/yum.repos.d/appstream-amdgpu.repo
 [$rocky_repo_name]
@@ -1059,9 +1056,7 @@ get_kernel_pacakges_repo_rocky() {
     
     # Check each repo for the required kernel packages
     for url in "${base_urls[@]}"; do
-        wget --spider "$url/Packages/k/$package" > /dev/null 2>&1
-    
-        if [[ $? -eq 0 ]]; then
+        if wget --spider "$url/Packages/k/$package" > /dev/null 2>&1; then
             echo -e "Packages in $url : \e[32mAvailable.\e[0m"
             pkg_avail=1
             break
@@ -1092,15 +1087,13 @@ get_kernel_pacakges_repo_rocky() {
     fi
     
     # Attempt to add the repo for the kernel packages
-    add_rocky_repo "$url" "$dir_subtype-$dir_type-$dir_package" "$dir_subtype $dir_type $dir_package"
-    if [[ $? -eq 0 ]]; then
+    if add_rocky_repo "$url" "$dir_subtype-$dir_type-$dir_package" "$dir_subtype $dir_type $dir_package"; then
         KERNEL_PACKAGES_VER="-$KERNEL_VER"
     else
         echo "Repo not available. Downloading package."
-        
+
         # The repo may not be accessible, so manually download and install from the repo
-        install_rocky_kernel_packages "$url"
-        if [[ $? -ne 0 ]]; then
+        if ! install_rocky_kernel_packages "$url"; then
             print_err "Unable to download and install kernel packages."
             return 1
         fi
@@ -1114,16 +1107,14 @@ get_kernel_packages_rocky() {
     
     remove_rocky_kernel_repo
     
-    dnf repoquery --available --queryformat "%{name}-%{version}-%{release}.%{arch}" | grep kernel-headers-$(uname -r)
-    if [ $? -eq 0 ]; then
+    if dnf repoquery --available --queryformat "%{name}-%{version}-%{release}.%{arch}" | grep "kernel-headers-$(uname -r)"; then
         echo "Kernel Packages for $KERNEL_VER are available in the AppStream repositories."
         KERNEL_PACKAGES_VER="-$KERNEL_VER"
     else
         echo -e "\e[93mKernel Packages not available in the AppStream repositories.\e[0m"
         
         # check for legacy kernel headers
-    	get_kernel_pacakges_repo_rocky
-    	if [ $? -eq 1 ]; then
+    	if ! get_kernel_pacakges_repo_rocky; then
     	    echo -e "\e[93mKernel Packages not available in the repositories.  Using defaults.\e[0m"
     	fi
     fi
@@ -1135,8 +1126,7 @@ get_kernel_packages_el() {
     echo EL kernel packages...
 
     if [[ $DEPS_LIST_ONLY == 0 ]]; then
-        dnf list "kernel-headers-$KERNEL_VER" &> /dev/null
-        if [ $? -eq 0 ]; then
+        if dnf list "kernel-headers-$KERNEL_VER" &> /dev/null; then
             echo "Kernel Packages for $KERNEL_VER are available in the repositories."
             KERNEL_PACKAGES_VER="-$KERNEL_VER"
         else
@@ -1166,7 +1156,8 @@ get_kernel_packages_el() {
 }
 
 get_kernel_type_ol() {
-    local kernel_version=$(uname -r)
+    local kernel_version
+    kernel_version=$(uname -r)
 
     if [[ $kernel_version == *"uek"* ]]; then
         echo "UEK"
@@ -1186,8 +1177,7 @@ get_kernel_packages_ol() {
     if [[ $kernel_type == "UEK" ]]; then
 
         # check for the uek kernel packages
-        dnf list "kernel-uek-devel-$KERNEL_VER" &> /dev/null
-        if [ $? -eq 0 ]; then
+        if dnf list "kernel-uek-devel-$KERNEL_VER" &> /dev/null; then
             echo "Kernel Packages for UEK $KERNEL_VER are available in the repositories."
             KERNEL_PACKAGES+="kernel-uek-devel-$KERNEL_VER "
         else
@@ -1195,8 +1185,7 @@ get_kernel_packages_ol() {
         fi
     elif [[ $kernel_type == "RHCK" ]]; then
         # check for the rhck kernel packages
-        dnf list "kernel-headers-$KERNEL_VER" &> /dev/null
-        if [[ $? -eq 0 ]]; then
+        if dnf list "kernel-headers-$KERNEL_VER" &> /dev/null; then
             echo "Kernel Packages for RHCK $KERNEL_VER are available in the repositories."
             KERNEL_PACKAGES+="kernel-headers-$KERNEL_VER kernel-devel-$KERNEL_VER "
             if [[ $DISTRO_VER == 9* ]]; then
@@ -1219,8 +1208,8 @@ get_kernel_packages_ol() {
     
     if [ -f "/boot/config-$(uname -r)" ]; then
         echo "Find the value of TARGET_GCC_VERSION using CONFIG_CC_VERSION_TEXT from /boot/config-$(uname -r)"
-        TARGET_GCC_VERSION=$($SUDO cat /boot/config-$(uname -r) | grep CONFIG_CC_VERSION_TEXT | cut -d '=' -f2 | awk -F " " '{print $NF}' | tr -d ')' | tr -d '"')
-        for gcc_package in ${GCC_TOOLSET_PACKAGES_OL[@]}; do
+        TARGET_GCC_VERSION=$($SUDO cat "/boot/config-$(uname -r)" | grep CONFIG_CC_VERSION_TEXT | cut -d '=' -f2 | awk -F " " '{print $NF}' | tr -d ')' | tr -d '"')
+        for gcc_package in "${GCC_TOOLSET_PACKAGES_OL[@]}"; do
             # Expect full package name we want to install
             # Example: gcc-toolset-11-gcc-11.4.1-3.0.1.el8_6
             if [[ $DISTRO_VER == 8* ]]; then
@@ -1248,14 +1237,13 @@ get_kernel_packages_amzn() {
     KERNEL_MAJ_MIN=$(echo "$KERNEL_VER" | cut -d'.' -f1,2)
     
     # Extract version up to .x86_64
-    KERNEL_VER_AMZN=$(echo "$KERNEL_VER" | sed 's/\.x86_64$//')
+    KERNEL_VER_AMZN="${KERNEL_VER%.x86_64}"
     
     echo "KERNEL_MAJ_MIN : $KERNEL_MAJ_MIN"
     echo "KERNEL_VER_AMZN: $KERNEL_VER_AMZN"
 
     if [[ $DEPS_LIST_ONLY == 0 ]]; then
-        dnf list "kernel$KERNEL_MAJ_MIN-headers-$KERNEL_VER_AMZN"
-        if [ $? -eq 0 ]; then
+        if dnf list "kernel$KERNEL_MAJ_MIN-headers-$KERNEL_VER_AMZN"; then
             echo "Kernel Packages for $KERNEL_VER_AMZN are available in the repositories."
         else
             print_err "Kernel Packages not available in the repositories."
@@ -1272,13 +1260,14 @@ get_kernel_packages_amzn() {
 get_kernel_package_for_kernel_version() {
     print_str "--------------------------------"
     print_str "Find kernel package $1 for kernel version $KERNEL_PACKAGE_VER..."
-    
+
     kernel_package="$1"
+
+    local output
+    output=$($SUDO zypper search -s "$kernel_package" | grep "$KERNEL_PACKAGE_VER")
     
-    local output=$($SUDO zypper search -s "$kernel_package" | grep $KERNEL_PACKAGE_VER)
     for col_value in ${output}; do
-        grep -q $KERNEL_PACKAGE_VER <<< "$col_value"
-        if [ $? -eq 0 ]; then
+        if grep -q "$KERNEL_PACKAGE_VER" <<< "$col_value"; then
             NEW_KERNEL_PACKAGE_VER="$col_value"
             echo "Using $NEW_KERNEL_PACKAGE_VER for $kernel_package"
             KERNEL_PACKAGES+="$kernel_package-$NEW_KERNEL_PACKAGE_VER "
@@ -1316,8 +1305,7 @@ get_kernel_packages() {
     elif [ $DISTRO_PACKAGE_MGR == "zypper" ]; then
         if [[ $DEPS_LIST_ONLY == 0 ]]; then
             KERNEL_PACKAGE_VER="$(uname -r | sed "s/-default//") "
-            $SUDO zypper search -s kernel-default-devel | grep $KERNEL_PACKAGE_VER &> /dev/null
-            if [ $? -eq 0 ]; then
+            if $SUDO zypper search -s kernel-default-devel | grep "$KERNEL_PACKAGE_VER" &> /dev/null; then
                 echo "Kernel Packages for $KERNEL_PACKAGE_VER are available in the repositories."
 
                 get_kernel_package_for_kernel_version "kernel-default-devel"
@@ -1350,16 +1338,16 @@ print_deps() {
     if [[ -n $MISSING_DEPS ]]; then
         echo ==============================================================
         echo "Dependencies: $MISSING_DEPS_COUNT of $DEPS_COUNT packages require install:"
-        echo $MISSING_DEPS | tr ',' '\n' | awk 'NF' | sed 's/^[ \t]*//;s/[ \t]*$//' | sort -u
-        echo $MISSING_DEPS | tr ',' '\n' | awk 'NF' | sed 's/^[ \t]*//;s/[ \t]*$//' | sort -u > deps_list.txt
+        echo "$MISSING_DEPS" | tr ',' '\n' | awk 'NF' | sed 's/^[ \t]*//;s/[ \t]*$//' | sort -u
+        echo "$MISSING_DEPS" | tr ',' '\n' | awk 'NF' | sed 's/^[ \t]*//;s/[ \t]*$//' | sort -u > deps_list.txt
     fi
 }
 
 read_deps() {
     print_str "--------------------------------"
     print_str "Read Dependency Configuration: $DEPS_FILE ..."
-    
-    if [ ! -f $DEPS_FILE ]; then
+
+    if [ ! -f "$DEPS_FILE" ]; then
         print_err "$DEPS_FILE does not exist."
         exit 1
     fi
@@ -1420,8 +1408,7 @@ build_dependencies_list_for_compo() {
         fi
 
         # Get the distro tag for the current running distro
-        AMDGPU_DISTRO_TAG=$(get_amdgpu_distro_tag)
-        if [ $? -ne 0 ]; then
+        if ! AMDGPU_DISTRO_TAG=$(get_amdgpu_distro_tag); then
             print_err "Failed to determine AMDGPU distro tag"
             exit 1
         fi
@@ -1486,14 +1473,13 @@ setup_epel_crb() {
         
     else
         echo "EPEL repo setup for EL $DISTRO_MAJOR_VER."
-        
-        wget --tries 5 https://dl.fedoraproject.org/pub/epel/$epel_pkg
-        if [ $? -ne 0 ]; then
+
+        if ! wget --tries 5 https://dl.fedoraproject.org/pub/epel/"$epel_pkg"; then
             print_err "Unsupported version for EPEL."
             exit 1
         fi
-        $SUDO rpm -ivh $epel_pkg
-        
+        $SUDO rpm -ivh "$epel_pkg"
+
         echo "EPEL repo setup...Complete."
     fi
     
@@ -1503,8 +1489,9 @@ setup_epel_crb() {
             print_err "$codeready_repo repo not configured."
             exit 1
         fi
-        
-        local repo_status=$(dnf repolist all | grep "^$codeready_repo" | awk '{print $NF}')
+
+        local repo_status
+        repo_status=$(dnf repolist all | grep "^$codeready_repo" | awk '{print $NF}')
         if [[ "$repo_status" == "disabled" ]]; then
             echo "Enabling $codeready_repo."
             $SUDO dnf config-manager --enable "$codeready_repo"
@@ -1591,7 +1578,7 @@ install_dependencies() {
     if [[ $VERBOSE == 1 ]]; then
         echo -----------------------------------------------
         echo Installing the following based on availability:
-        echo $INSTALL_LIST
+        echo "$INSTALL_LIST"
         echo -----------------------------------------------
     fi
     
@@ -1600,7 +1587,7 @@ install_dependencies() {
         if [ $DISTRO_PACKAGE_MGR == "apt" ]; then
             $SUDO apt-get install "$installopt" $INSTALL_LIST
         elif [ $DISTRO_PACKAGE_MGR == "dnf" ]; then
-            $SUDO dnf install $installopt $INSTALL_LIST
+            $SUDO dnf install "$installopt" $INSTALL_LIST
         else
             $SUDO zypper install --oldpackage "$installopt" $INSTALL_LIST
         fi

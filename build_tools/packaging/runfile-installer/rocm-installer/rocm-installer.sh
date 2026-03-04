@@ -36,7 +36,6 @@ TARGET_ROCM_DIR="$TARGET_ROCM_DEFAULT_DIR"
 TARGET_AMDGPU_DIR="/"
 
 # Component Configuration
-COMPO_ROCM_FILE="$EXTRACT_ROCM_DIR/base/rocm-packages.config"
 COMPO_ROCM_LIST="$EXTRACT_ROCM_DIR/base/components.txt"
 COMPO_AMDGPU_FILE=""  # Set dynamically after os_release() determines distro
 COMPO_INSTALL="core"  # Default component: core, core-dev, dev-tools, core-sdk, opencl (comma-separated)
@@ -274,6 +273,7 @@ END_USAGE
 
 os_release() {
     if [[ -r  /etc/os-release ]]; then
+        # shellcheck source=/dev/null
         . /etc/os-release
 
         DISTRO_NAME=$ID
@@ -407,7 +407,7 @@ setup_rocm_version_info() {
         # This represents the actual installation structure
         ROCM_CONTENT_BASE=$(dirname "$ROCM_CORE_VER_DIR")
         ROCM_CONTENT_BASE=${ROCM_CONTENT_BASE%/content*}/content
-        INSTALLER_ROCM_VERSION_NAME=${ROCM_CORE_VER_DIR#$ROCM_CONTENT_BASE/}
+        INSTALLER_ROCM_VERSION_NAME=${ROCM_CORE_VER_DIR#"$ROCM_CONTENT_BASE"/}
 
         # Extract base version for version string (e.g., core-7.11 -> 7.11)
         ROCM_VER_BASE=$(basename "$ROCM_CORE_VER_DIR")
@@ -534,7 +534,7 @@ print_str() {
 
 prompt_user() {
     if [[ $PROMPT_USER == 1 ]]; then
-        read -p "$1" option
+        read -rp "$1" option
     else
         option=y
     fi
@@ -559,14 +559,14 @@ dump_rocm_state() {
 
     if [[ $VERBOSE == 1 ]]; then
         ls_opt="-la"
-        
+
         echo ----------------------------
         echo -e "\e[95m$rocm_install_loc\e[0m"
-        ls $ls_opt $rocm_install_loc
+        ls $ls_opt "$rocm_install_loc"
         
         echo ----------------------------
         echo -e "\e[95m$rocm_directory\e[0m"
-        ls $ls_opt $rocm_directory
+        ls $ls_opt "$rocm_directory"
         
         echo ----------------------------
         echo -e "\e[95m/etc/ld.so.conf.d\e[0m"
@@ -578,15 +578,15 @@ dump_rocm_state() {
         
         echo ----------------------------
         echo -e "\e[95m$rocm_directory/include\e[0m"
-        ls $ls_opt $rocm_directory/include
+        ls $ls_opt "$rocm_directory/include"
         
         echo ----------------------------
         echo -e "\e[95m$rocm_directory/bin\e[0m"
-        ls $ls_opt $rocm_directory/bin
+        ls $ls_opt "$rocm_directory/bin"
         
         echo ----------------------------
         echo -e "\e[95m$rocm_directory/lib\e[0m"
-        ls $ls_opt $rocm_directory/lib
+        ls $ls_opt "$rocm_directory/lib"
     fi
     
     echo ----------------------------
@@ -647,7 +647,8 @@ validate_gfx_arg() {
             # (i.e., if NOT all components are base-only)
             if [[ $base_only_install == 0 ]]; then
                 # Get available architectures from installer
-                local available_archs=($(get_available_gfx_archs))
+                local available_archs
+                read -r -a available_archs <<< "$(get_available_gfx_archs)"
                 print_err "The gfx= argument is required when installing ROCm components with architecture variants."
                 echo "Requested components: $COMPO_INSTALL"
                 echo "Example: $PROG compo=$COMPO_INSTALL gfx=gfx94x rocm"
@@ -676,7 +677,8 @@ validate_gfx_arg() {
 
         # Validate format: must start with "gfx" followed by alphanumeric
         if [[ ! "$INSTALL_GFX" =~ ^gfx[0-9a-z]+$ ]]; then
-            local available_archs=($(get_available_gfx_archs))
+            local available_archs
+            read -r -a available_archs <<< "$(get_available_gfx_archs)"
             print_err "Invalid gfx= format: $INSTALL_GFX"
             echo "The architecture must be in format: gfx<arch>"
             if [ ${#available_archs[@]} -gt 0 ]; then
@@ -688,7 +690,8 @@ validate_gfx_arg() {
         fi
 
         # Validate against available architectures in installer
-        local available_archs=($(get_available_gfx_archs))
+        local available_archs
+        read -r -a available_archs <<< "$(get_available_gfx_archs)"
         if [ ${#available_archs[@]} -gt 0 ]; then
             local valid_arch=0
             for arch in "${available_archs[@]}"; do
@@ -713,7 +716,8 @@ validate_compo_arg() {
     if [[ $ROCM_INSTALL == 1 && "$DEPS_ARG" != "install-only" ]]; then
         if [[ -n "$COMPO_INSTALL" ]]; then
             # Get available component categories
-            local available_compos=($(get_available_components))
+            local available_compos
+            read -r -a available_compos <<< "$(get_available_components)"
 
             # Split comma-separated component list
             IFS=',' read -ra compo_list <<< "$COMPO_INSTALL"
@@ -757,27 +761,27 @@ dump_stats() {
         stat_dir="/${stat_dir#//}"
     fi
 
-    echo $stat_dir:
+    echo "$stat_dir":
     echo ----------------------------
-    echo "size:" 
+    echo "size:"
     echo "-----"
-    echo "$(du -sh $stat_dir | awk '{print $1}')"
-    echo "$(du -sb $stat_dir | awk '{print $1}')" bytes
+    du -sh "$stat_dir" | awk '{print $1}'
+    echo "$(du -sb "$stat_dir" | awk '{print $1}')" bytes
     echo "------"
     echo "types:"
     echo "------"
-    echo "files = $(find $stat_dir -type f | wc -l)"
-    echo "dirs  = $(find $stat_dir -type d | wc -l)"
-    echo "links = $(find $stat_dir -type l | wc -l)"
+    echo "files = $(find "$stat_dir" -type f | wc -l)"
+    echo "dirs  = $(find "$stat_dir" -type d | wc -l)"
+    echo "links = $(find "$stat_dir" -type l | wc -l)"
     echo "        ------"
-    echo "        $(find $stat_dir | wc -l)"
+    echo "        $(find "$stat_dir" | wc -l)"
     echo ----------------------------
 }
 
 install_deps() {
-    echo =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+    echo "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-="
     echo -e "\e[96mINSTALL Dependencies : $DISTRO_NAME $DISTRO_VER\e[0m"
-    echo =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+    echo "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-="
     
     echo Installing Dependencies...
     
@@ -805,10 +809,10 @@ install_deps() {
     
     # parse the dependency args
     if [[ $DEPS_ARG == "list" ]]; then
-        
+
         echo Listing required dependencies
-        
-        ./deps-installer.sh $deps_rocm $deps_amdgpu $depOp list
+
+        ./deps-installer.sh "$deps_rocm" "$deps_amdgpu" $depOp list
         status=$?
         
          if [[ status -ne 0 ]]; then
@@ -822,7 +826,7 @@ install_deps() {
 
         echo Validating required dependencies
 
-        ./deps-installer.sh $deps_rocm $deps_amdgpu $depOp
+        ./deps-installer.sh "$deps_rocm" "$deps_amdgpu" $depOp
         status=$?
         
         if [[ status -ne 0 ]]; then
@@ -833,8 +837,8 @@ install_deps() {
         exit 0
         
     elif [[ $DEPS_ARG == "install" ]] || [[ $DEPS_ARG == "install-only" ]]; then
-    
-       ./deps-installer.sh $deps_rocm $deps_amdgpu $depOp install
+
+       ./deps-installer.sh "$deps_rocm" "$deps_amdgpu" $depOp install
         status=$?
         
         if [[ status -ne 0 ]]; then
@@ -876,7 +880,7 @@ read_components() {
     echo --------------------------------
     echo "Read Component Configuration: $COMPO_FILE ..."
 
-    if [ ! -f $COMPO_FILE ]; then
+    if [ ! -f "$COMPO_FILE" ]; then
         print_err "Component config file $COMPO_FILE does not exist."
         exit 1
     fi
@@ -900,8 +904,8 @@ read_components() {
 
 list_components() {
     echo --------------------------------
-    
-    if [ -f $COMPO_ROCM_LIST ]; then    
+
+    if [ -f "$COMPO_ROCM_LIST" ]; then
         while IFS= read -r compo; do
             echo "$compo"
         done < "$COMPO_ROCM_LIST"
@@ -925,15 +929,16 @@ set_prefix_scriptlet() {
         if [[ -n $SUDO_OPTS ]]; then
             SUDO_OPTS="$SUDO -E"
         fi
-        echo SUDO_OPTS = $SUDO_OPTS
+        echo SUDO_OPTS = "$SUDO_OPTS"
     fi
 }
 
 configure_scriptlet() {
     print_str "Configuring scriptlet."
-    
-    local scriptlet=$(cat $1)
-    
+
+    local scriptlet
+    scriptlet=$(cat "$1")
+
     local rocm_default="/opt"
     local rocm_reloc="$TARGET_DIR"
     local postinst_reloc="$1-reloc"
@@ -945,8 +950,8 @@ configure_scriptlet() {
     fi
     
     print_str "Using scriptlet: $1"
-    
-    sed "s|$rocm_default|$rocm_reloc|g" $1 > "$postinst_reloc"
+
+    sed "s|$rocm_default|$rocm_reloc|g" "$1" > "$postinst_reloc"
     $SUDO chmod +x "$postinst_reloc"
 }
 
@@ -991,11 +996,8 @@ patch_scriptlet_version() {
     # Create a backup of the original file
     cp "$scriptlet_file" "$scriptlet_file.bak"
 
-    # Perform the replacement
-    sed -i "s/$search_string/$replace_string/g" "$scriptlet_file"
-
-    # Check if replacement was successful
-    if [ $? -eq 0 ]; then
+    # Perform the replacement and check if successful
+    if sed -i "s/$search_string/$replace_string/g" "$scriptlet_file"; then
         echo "Successfully updated $scriptlet_file"
     else
         echo "Error processing $file"
@@ -1044,7 +1046,7 @@ uninstall_prerm_scriptlet_amdgpu() {
 
         if [[ $FORCE_UNINSTALL_AMDGPU == 1 ]]; then
             echo "Patching prerm scriptlet $prerm_scriptlet"
-            patch_scriptlet_version $prerm_scriptlet $AMDGPU_DKMS_BUILD_NUM $INSTALLED_AMDGPU_DKMS_BUILD_NUM
+            patch_scriptlet_version "$prerm_scriptlet" "$AMDGPU_DKMS_BUILD_NUM" "$INSTALLED_AMDGPU_DKMS_BUILD_NUM"
         fi
 
         if [[ $VERBOSE == 1 ]]; then
@@ -1118,7 +1120,8 @@ detect_installed_base_components() {
     # Check each base package to see if its files are actually installed
     for pkg_dir in "$EXTRACT_ROCM_DIR/base"/*; do
         if [ -d "$pkg_dir" ]; then
-            local pkg_name=$(basename "$pkg_dir")
+            local pkg_name
+            pkg_name=$(basename "$pkg_dir")
             local content_dir="$pkg_dir/content"
 
             # Check if this package's files are actually installed
@@ -1133,9 +1136,9 @@ detect_installed_base_components() {
                 while IFS= read -r -d '' file && [ $file_count -lt 20 ]; do
                     # Get the relative path from content directory
                     # Files are at: content/rocm/core-7.11/bin/..., need to strip to: bin/...
-                    local rel_path="${file#$content_dir/}"
+                    local rel_path="${file#"$content_dir"/}"
                     # Strip the rocm/core-X.XX/ prefix to get actual install path
-                    rel_path="${rel_path#${INSTALLER_ROCM_VERSION_NAME}/}"
+                    rel_path="${rel_path#"${INSTALLER_ROCM_VERSION_NAME}"/}"
                     # Check if this file exists in the installation
                     if [ -f "$rocm_install_dir/$rel_path" ] || [ -L "$rocm_install_dir/$rel_path" ]; then
                         pkg_installed=1
@@ -1153,7 +1156,7 @@ detect_installed_base_components() {
     done
 
     if [ -n "$COMPONENTS" ]; then
-        echo -e "\e[32mFound $(echo $COMPONENTS | wc -w) installed base component(s)\e[0m"
+        echo -e "\e[32mFound $(echo "$COMPONENTS" | wc -w) installed base component(s)\e[0m"
     else
         echo "No installed base components detected"
     fi
@@ -1182,7 +1185,8 @@ add_meta_packages_from_detected_components() {
             continue
         fi
 
-        local pkg_name=$(basename "$pkg_dir")
+        local pkg_name
+        pkg_name=$(basename "$pkg_dir")
 
         # Skip if already in the component list
         if echo " $current_components " | grep -q " $pkg_name "; then
@@ -1219,7 +1223,8 @@ detect_installed_gfx_architectures() {
 
     for gfx_dir in "$EXTRACT_ROCM_DIR"/gfx*/; do
         if [ -d "$gfx_dir" ]; then
-            local gfx_arch=$(basename "$gfx_dir")
+            local gfx_arch
+            gfx_arch=$(basename "$gfx_dir")
             gfx_arch=${gfx_arch#gfx}
 
             # Check if this GFX architecture is actually installed at the target
@@ -1268,14 +1273,16 @@ detect_installed_gfx_components() {
     echo "Auto-detecting installed GFX components..."
 
     for gfx_dir in "${gfx_dirs[@]}"; do
-        local gfx_arch=$(basename "$gfx_dir")
+        local gfx_arch
+        gfx_arch=$(basename "$gfx_dir")
         echo "Checking components for $gfx_arch..."
 
         # Detect which GFX packages are actually installed
         local gfx_comps=""
         for pkg_dir in "$gfx_dir"/*; do
             if [ -d "$pkg_dir" ]; then
-                local pkg_name=$(basename "$pkg_dir")
+                local pkg_name
+                pkg_name=$(basename "$pkg_dir")
                 local content_dir="$pkg_dir/content"
 
                 # Check if this package's files are actually installed
@@ -1286,9 +1293,9 @@ detect_installed_gfx_components() {
                     # Check sample files to determine if package is installed
                     # Check up to 20 files for more robust detection
                     while IFS= read -r -d '' file && [ $file_count -lt 20 ]; do
-                        local rel_path="${file#$content_dir/}"
+                        local rel_path="${file#"$content_dir"/}"
                         # Strip the rocm/core-X.XX/ prefix to get actual install path
-                        rel_path="${rel_path#${INSTALLER_ROCM_VERSION_NAME}/}"
+                        rel_path="${rel_path#"${INSTALLER_ROCM_VERSION_NAME}"/}"
                         if [ -f "$rocm_install_dir/$rel_path" ] || [ -L "$rocm_install_dir/$rel_path" ]; then
                             pkg_installed=1
                             break
@@ -1333,7 +1340,8 @@ detect_meta_packages() {
             continue
         fi
 
-        local pkg_name=$(basename "$pkg_dir")
+        local pkg_name
+        pkg_name=$(basename "$pkg_dir")
 
         # Skip if already in the component list
         if echo " $COMPONENTS " | grep -q " $pkg_name "; then
@@ -1355,7 +1363,8 @@ detect_meta_packages() {
     for entry in "${gfx_components[@]}"; do
         local comps="${entry%|*}"
         local gfx_extract_dir="${entry#*|}"
-        local gfx_arch=$(basename "$gfx_extract_dir")
+        local gfx_arch
+        gfx_arch=$(basename "$gfx_extract_dir")
 
         # Add meta packages with scriptlets to this GFX directory's component list
         for pkg_dir in "$gfx_extract_dir"/*; do
@@ -1363,7 +1372,8 @@ detect_meta_packages() {
                 continue
             fi
 
-            local pkg_name=$(basename "$pkg_dir")
+            local pkg_name
+            pkg_name=$(basename "$pkg_dir")
 
             # Skip if already in the component list
             if echo " $comps " | grep -q " $pkg_name "; then
@@ -1397,19 +1407,19 @@ install_rocm_component() {
     local content_dir="$extract_dir/$component/content"
     local script_dir="$extract_dir/$component/scriptlets"
 
-    echo Copying content component: $component...
-    
+    echo Copying content component: "$component"...
+
     if [[ -n $INSTALLED_PKGS ]]; then
-        local matches=$(echo "$INSTALLED_PKGS" | grep -E "^($component)/")
+        local matches
+        matches=$(echo "$INSTALLED_PKGS" | grep -E "^($component)/")
         if [[ -n $matches ]]; then
             print_warning "Package installation of ROCm package: $component"
-            echo $matches
-            read -p "Overwrite package install of $compo (y/n): " option
+            echo "$matches"
+            read -rp "Overwrite package install of $compo (y/n): " option
             if [[ $option == "Y" || $option == "y" ]]; then
                 echo "Proceeding with install..."
                 # Copy the component content/data to the target location
-                $SUDO rsync $RSYNC_OPTS_ROCM "$content_dir"/* "$TARGET_DIR"
-                if [ $? -ne 0 ]; then
+                if ! $SUDO rsync $RSYNC_OPTS_ROCM "$content_dir"/* "$TARGET_DIR"; then
                     print_err "rsync error."
                     exit 1
                 fi
@@ -1420,15 +1430,14 @@ install_rocm_component() {
         fi
     else
         # Copy the component content/data to the target location
-        $SUDO rsync $RSYNC_OPTS_ROCM "$content_dir"/* "$TARGET_DIR"
-        if [ $? -ne 0 ]; then
+        if ! $SUDO rsync $RSYNC_OPTS_ROCM "$content_dir"/* "$TARGET_DIR"; then
             print_err "rsync error."
             exit 1
         fi
         COMPONENT_COUNT=$((COMPONENT_COUNT+1))
     fi
-        
-    echo Copying content component: $component...Complete.
+
+    echo Copying content component: "$component"...Complete.
 }
 
 draw_progress_bar() {
@@ -1458,18 +1467,21 @@ check_rocm_package_install() {
     # Package install only for /opt installs
     if [[ "$TARGET_DIR" == "/opt" || "$rocm_loc" == "/opt/rocm"* ]]; then
         # check for a rocm-core package and if it matches the version of rocm being installed
-        local rocm_core_pkg=$($PKG_INSTALLED_CMD 2>&1 | grep "rocm-core")
+        local rocm_core_pkg
+        rocm_core_pkg=$($PKG_INSTALLED_CMD 2>&1 | grep "rocm-core")
 
-        local rocm_ver_name=$(basename "$rocm_loc")
+        local rocm_ver_name
+        rocm_ver_name=$(basename "$rocm_loc")
         # Strip both "rocm-" and "core-" prefixes to get version number
         local rocm_ver=${rocm_ver_name#rocm-}
         rocm_ver=${rocm_ver#core-}
 
         IFS='.' read -r x y z <<< "$rocm_ver"
-        local rocm_core_ver=$(printf "%d%02d%02d" "$x" "$y" "$z")
-        
+        local rocm_core_ver
+        rocm_core_ver=$(printf "%d%02d%02d" "$x" "$y" "$z")
+
         if [[ -n $rocm_core_pkg ]] && [[ "$rocm_core_pkg" == *"$rocm_core_ver"* ]]; then
-            echo rocm-core package detected : $rocm_core_ver
+            echo rocm-core package detected : "$rocm_core_ver"
         
             # cached the installed packages
             INSTALLED_PKGS=$($PKG_INSTALLED_CMD 2>&1)
@@ -1487,8 +1499,7 @@ check_rocm_package_install() {
 
 find_rocm_with_progress() {
     ROCM_DIR=
-    ROCM_TARGET_ROOT=0
-    
+
     local rocm_find_base=
     local rocm_version_dir=""
     local rocm_depth=
@@ -1496,8 +1507,9 @@ find_rocm_with_progress() {
     local find_opt=$1
     local found=1
     local progress=0
-    local temp_file=$(mktemp)
-    
+    local temp_file
+    temp_file=$(mktemp)
+
     # optimize the search based on if the target arg is set or "all" option
     if [[ "$find_opt" == "all" ]]; then
         echo Using no target.
@@ -1546,7 +1558,6 @@ find_rocm_with_progress() {
         # check if the path is root at the default /opt/rocm*
         if [[ "$ROCM_DIR" == /opt/rocm* ]]; then
             echo ROCm Default Root path.
-            ROCM_TARGET_ROOT=1
         fi
 
         # list any rocm install paths
@@ -1569,15 +1580,15 @@ find_rocm_with_progress() {
 
 prereq_installer_check() {
     local not_install=""
-    
+
     # Check if the require packages are installed on the system for installer to function
-    for pkg in ${INSTALLER_DEPS[@]}; do
+    for pkg in "${INSTALLER_DEPS[@]}"; do
         # Check if this a package install of rocm
         if ! $PKG_INSTALLED_CMD 2>&1 | grep "$pkg" > /dev/null 2>&1; then
             echo "Package $pkg not installed."
             not_install+="$pkg "
         else
-            echo $pkg is installed
+            echo "$pkg" is installed
         fi
     done  
     
@@ -1602,7 +1613,7 @@ query_prev_rocm() {
     fi
 
     echo -e "Overwriting an existing installation may result in a loss of functionality.\n"
-    read -p "Do you wish to continue with a new Runfile ROCm installation (y/n): " option
+    read -rp "Do you wish to continue with a new Runfile ROCm installation (y/n): " option
     if [[ $option == "Y" || $option == "y" ]]; then
         echo "Proceeding with install..."
     else
@@ -1633,7 +1644,7 @@ process_prev_rocm() {
         for inst in "${rocm_install[@]}"; do
             # Check if the same version is being installed
             if [[ "$inst" == *"$INSTALLER_ROCM_VERSION"* ]]; then
-                echo Version match: $INSTALLER_ROCM_VERSION
+                echo Version match: "$INSTALLER_ROCM_VERSION"
                 prev_install=1
                 break
             fi
@@ -1654,9 +1665,7 @@ preinstall_rocm() {
     prereq_installer_check
     
     # Check for any previous installs of ROCm for the current target
-    find_rocm_with_progress "$TARGET_DIR"
-
-    if [[ $? -eq 0 ]]; then
+    if find_rocm_with_progress "$TARGET_DIR"; then
         process_prev_rocm
     else
         print_no_err "ROCm Install not found."
@@ -1755,12 +1764,12 @@ configure_rocm_install() {
                         # Split packages between base and gfx directories
                         if [ -d "$EXTRACT_ROCM_DIR/base/$pkg" ]; then
                             # Package is in base directory
-                            if [[ ! " $COMPONENTS " =~ " $pkg " ]]; then
+                            if [[ ! " $COMPONENTS " =~ \ $pkg\  ]]; then
                                 COMPONENTS="$COMPONENTS $pkg"
                             fi
                         elif [ -d "$EXTRACT_ROCM_DIR/${INSTALL_GFX}/$pkg" ]; then
                             # Package is in gfx directory
-                            if [[ ! " $COMPONENTS_GFX " =~ " $pkg " ]]; then
+                            if [[ ! " $COMPONENTS_GFX " =~ \ $pkg\  ]]; then
                                 COMPONENTS_GFX="$COMPONENTS_GFX $pkg"
                             fi
                         fi
@@ -1787,20 +1796,21 @@ configure_rocm_install() {
                     while IFS= read -r pkg; do
                         # Only add packages that are in base directory
                         if [ -d "$EXTRACT_ROCM_DIR/base/$pkg" ]; then
-                            if [[ ! " $COMPONENTS " =~ " $pkg " ]]; then
+                            if [[ ! " $COMPONENTS " =~ \ $pkg\  ]]; then
                                 COMPONENTS="$COMPONENTS $pkg"
                             fi
                         fi
                     done < "$base_meta_file"
                 else
                     # If no base-specific meta file, try to find any gfx variant and extract base packages
-                    local any_gfx_meta_file=$(find "$COMPO_META_DIR" -name "${meta_base}-gfx*-meta.config" -print -quit)
+                    local any_gfx_meta_file
+                    any_gfx_meta_file=$(find "$COMPO_META_DIR" -name "${meta_base}-gfx*-meta.config" -print -quit)
                     if [ -f "$any_gfx_meta_file" ]; then
                         echo "  Reading base packages from: $any_gfx_meta_file"
                         while IFS= read -r pkg; do
                             # Only add packages that are in base directory
                             if [ -d "$EXTRACT_ROCM_DIR/base/$pkg" ]; then
-                                if [[ ! " $COMPONENTS " =~ " $pkg " ]]; then
+                                if [[ ! " $COMPONENTS " =~ \ $pkg\  ]]; then
                                     COMPONENTS="$COMPONENTS $pkg"
                                 fi
                             fi
@@ -1830,9 +1840,9 @@ configure_rocm_install() {
 }
 
 install_rocm() {
-    echo =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+    echo "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-="
     echo -e "\e[96mINSTALL ROCm\e[0m"
-    echo =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+    echo "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-="
     
     set_rocm_target
     
@@ -1861,20 +1871,20 @@ install_rocm() {
     configure_rocm_install
 
     # Install base ROCm components from component-rocm/base
-    for compo in ${COMPONENTS[@]}; do
+    for compo in $COMPONENTS; do
         echo ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
         echo -e "\e[32mInstalling base component: $compo\e[0m"
-        install_rocm_component $compo "$EXTRACT_ROCM_DIR/base"
+        install_rocm_component "$compo" "$EXTRACT_ROCM_DIR/base"
         echo ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     done
 
     # Install GFX-specific components from component-rocm/gfxXYZ if specified
     if [[ -n $INSTALL_GFX ]]; then
         local gfx_extract_dir="$EXTRACT_ROCM_DIR/${INSTALL_GFX}"
-        for compo in ${COMPONENTS_GFX[@]}; do
+        for compo in $COMPONENTS_GFX; do
             echo ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
             echo -e "\e[32mInstalling GFX component (${INSTALL_GFX}): $compo\e[0m"
-            install_rocm_component $compo "$gfx_extract_dir"
+            install_rocm_component "$compo" "$gfx_extract_dir"
             echo ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
         done
     fi
@@ -1903,7 +1913,7 @@ uninstall_rocm_target() {
     echo -e "\e[95mUninstalling ROCm target: $rocm_ver_dir\e[0m"
 
     # if the directory for removal exists, then remove the components and delete it
-    if [[ -d "$rocm_rm_dir" && "rocm_rm_dir" != "/" ]]; then
+    if [[ -d "$rocm_rm_dir" && "$rocm_rm_dir" != "/" ]]; then
         echo Uninstalling components from config.
 
         # Reset COMPONENTS to avoid accumulation across multiple uninstall calls
@@ -1965,8 +1975,8 @@ uninstall_rocm_target() {
         echo ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
         if [[ -n "$COMPONENTS" ]]; then
             echo "prerm executing for base components...."
-            for compo in ${COMPONENTS[@]}; do
-                uninstall_prerm_scriptlet $compo "$EXTRACT_ROCM_DIR/base"
+            for compo in $COMPONENTS; do
+                uninstall_prerm_scriptlet "$compo" "$EXTRACT_ROCM_DIR/base"
             done
         fi
 
@@ -1989,8 +1999,8 @@ uninstall_rocm_target() {
         echo ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
         if [[ -n "$COMPONENTS" ]]; then
             echo "postrm executing for base components...."
-            for compo in ${COMPONENTS[@]}; do
-                uninstall_postrm_scriptlet $compo "$EXTRACT_ROCM_DIR/base"
+            for compo in $COMPONENTS; do
+                uninstall_postrm_scriptlet "$compo" "$EXTRACT_ROCM_DIR/base"
             done
         fi
 
@@ -2018,7 +2028,8 @@ uninstall_rocm_target() {
         if [[ -L "$rocm_rm_dir/rocm" ]]; then
             echo "Found symlink 'rocm': $rocm_rm_dir/rocm"
 
-            local item_count=$(find "$rocm_rm_dir" -mindepth 1 -maxdepth 1 | wc -l)
+            local item_count
+            item_count=$(find "$rocm_rm_dir" -mindepth 1 -maxdepth 1 | wc -l)
 
             # If the directory contains only the "rocm" symlink, delete it
             if [[ $item_count -eq 1 ]]; then
@@ -2030,7 +2041,8 @@ uninstall_rocm_target() {
         # Check if /opt/rocm (or equivalent parent) directory is empty and remove it
         local rocm_parent_dir="$rocm_rm_dir/rocm"
         if [ -d "$rocm_parent_dir" ]; then
-            local parent_item_count=$(find "$rocm_parent_dir" -mindepth 1 -maxdepth 1 2>/dev/null | wc -l)
+            local parent_item_count
+            parent_item_count=$(find "$rocm_parent_dir" -mindepth 1 -maxdepth 1 2>/dev/null | wc -l)
 
             if [[ $parent_item_count -eq 0 ]]; then
                 echo -e "\e[93mRemoving empty ROCm parent directory: $rocm_parent_dir\e[0m"
@@ -2050,17 +2062,15 @@ uninstall_rocm_target() {
 }
 
 uninstall_rocm() {
-    echo =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+    echo "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-="
     echo -e "\e[95mUNINSTALL ROCm\e[0m"
-    echo =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+    echo "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-="
     
     set_rocm_target
-    
+
     # Check for any previous installs of ROCm
-    find_rocm_with_progress "$TARGET_DIR"
-    
-    if [[ $? -eq 0 ]]; then
-    
+    if find_rocm_with_progress "$TARGET_DIR"; then
+
         # Update the target for scriptlet hanndling
         if [[ "$TARGET_DIR" == *"rocm"* ]]; then
             TARGET_DIR="${TARGET_ROCM_DIR%/\rocm*}"
@@ -2073,9 +2083,9 @@ uninstall_rocm() {
         print_no_err "ROCm Installs found: ${#rocm_install[@]}"
         
         # Check if multiple rocm installs at current target
-        if [[ ${#rocm_install[@]} > 1 ]]; then
+        if [[ ${#rocm_install[@]} -gt 1 ]]; then
             echo "Multiple ROCm installs for target=$INSTALL_TARGET"
-            read -p "Do you wish to uninstall all ROCm installations at target (y/n): " option
+            read -rp "Do you wish to uninstall all ROCm installations at target (y/n): " option
             if [[ $option == "Y" || $option == "y" ]]; then
                 echo "Proceeding with uninstall..."
             else
@@ -2111,26 +2121,23 @@ install_amdgpu_component() {
     local content_dir="$EXTRACT_DIR/$component/content"
     local script_dir="$EXTRACT_DIR/$component/scriptlets"
 
-    echo Copying content component: $component...
+    echo Copying content component: "$component"...
 
     # Copy the component content/data to the target location 
 
     if [[ $component == "amdgpu-dkms" ]]; then
 
-        $SUDO rsync $RSYNC_OPTS_AMDGPU "$content_dir/"* "$TARGET_DIR"
-        if [ $? -ne 0 ]; then
+        if ! $SUDO rsync $RSYNC_OPTS_AMDGPU "$content_dir/"* "$TARGET_DIR"; then
             print_err "rsync error."
             exit 1
         fi
 
         if [ -f "$script_dir/amdgpu_firmware" ]; then
             # workaround amdgpu_firmware being called via amdgpu-dkms.amdgpu_firmware
-            $SUDO cp -p $script_dir/amdgpu_firmware $script_dir/amdgpu-dkms.amdgpu_firmware
+            $SUDO cp -p "$script_dir/amdgpu_firmware" "$script_dir/amdgpu-dkms.amdgpu_firmware"
         fi
     else
-        $SUDO rsync $RSYNC_OPTS_AMDGPU "$content_dir/"* "$TARGET_DIR"
-
-        if [ $? -ne 0 ]; then
+        if ! $SUDO rsync $RSYNC_OPTS_AMDGPU "$content_dir/"* "$TARGET_DIR"; then
             print_err "rsync error."
             exit 1
         fi
@@ -2138,17 +2145,17 @@ install_amdgpu_component() {
 
     COMPONENT_COUNT=$((COMPONENT_COUNT+1))
 
-    echo Copying content component: $component...Complete.
+    echo Copying content component: "$component"...Complete.
 
     # Process any scriptlets
-    for scriptlet in $script_dir/*; do
+    for scriptlet in "$script_dir"/*; do
         if [[ -f $scriptlet ]]; then
             print_str "Detected: $scriptlet."
         fi
     done
 
     # Execute any postinst scriptlets
-    install_postinst_scriptlet $component
+    install_postinst_scriptlet "$component"
 }
 
 query_prev_driver_version() {
@@ -2160,7 +2167,7 @@ query_prev_driver_version() {
         # Extract driver name and version (format is "module, version, kernel/arch/...")
         if [[ $line =~ ^([^\/]+)\/([^,]+),\ ([^,]+),\ (.+)$ ]]; then
             driver=${BASH_REMATCH[1]}
-            if [ $driver = "amdgpu" ]; then
+            if [ "$driver" = "amdgpu" ]; then
                 INSTALLED_AMDGPU_DKMS_BUILD_NUM="${BASH_REMATCH[2]}"
                 kernel_version=${BASH_REMATCH[3]}
                 if [[ $VERBOSE == 1 ]]; then
@@ -2170,7 +2177,7 @@ query_prev_driver_version() {
                 fi
             fi
         fi
-    done < <(echo $dkms_output)
+    done < <(echo "$dkms_output")
 }
 
 get_amdgpu_version_from_scriptlet() {
@@ -2183,9 +2190,10 @@ get_amdgpu_version_from_scriptlet() {
 
     local scriptlet_file="$EXTRACT_AMDGPU_DIR/amdgpu-dkms/scriptlets/postinst"
 
-    if [[ -f "$scriptlet_file" ]]; then
+    if [[ -f $scriptlet_file ]]; then
         # Try Ubuntu/Debian pattern: CVERSION=...
-        local version=$(grep "^CVERSION=" "$scriptlet_file" | cut -d'=' -f2)
+        local version
+        version=$(grep "^CVERSION=" "$scriptlet_file" | cut -d'=' -f2)
 
         if [[ -z "$version" ]]; then
             # Try RPM pattern: $postinst amdgpu <version>
@@ -2224,7 +2232,7 @@ preinstall_amdgpu() {
         # Check if driver already present in dkms
         query_prev_driver_version
 
-        if [ ! $INSTALLED_AMDGPU_DKMS_BUILD_NUM = 0 ] ; then
+        if [ ! "$INSTALLED_AMDGPU_DKMS_BUILD_NUM" = 0 ] ; then
             print_warning "The amdgpu driver installed, version $INSTALLED_AMDGPU_DKMS_BUILD_NUM"
             echo "Consider uninstalling previous versions of amdgpu using the Runfile installer."
             echo "Usage: bash $PROG uninstall-amdgpu"
@@ -2239,9 +2247,9 @@ preinstall_amdgpu() {
 }
 
 install_amdgpu() {
-    echo =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+    echo "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-="
     echo -e "\e[96mINSTALL AMDGPU\e[0m"
-    echo =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+    echo "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-="
 
     # Check if amdgpu is installable
     preinstall_amdgpu
@@ -2260,10 +2268,10 @@ install_amdgpu() {
     read_components
     
     # Install each component in the component list for amdgpu
-    for compo in ${COMPONENTS[@]}; do
+    for compo in $COMPONENTS; do
         echo ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
         echo -e "\e[32mInstalling $compo\e[0m"
-        install_amdgpu_component $compo
+        install_amdgpu_component "$compo"
         echo ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     done
     
@@ -2280,8 +2288,8 @@ find_and_delete() {
     local type=$2
     local force_remove_dir=0
 
-    find $file_path -type $type -print0 | while IFS= read -r -d '' filename; do
-        remove_filename=$(echo $filename|sed -e "s%$path_to_files%%g")
+    find "$file_path" -type "$type" -print0 | while IFS= read -r -d '' filename; do
+        remove_filename="${filename#"$path_to_files"}"
 
         if [[ $FORCE_UNINSTALL_AMDGPU == 1 ]]; then
             if [[ "$remove_filename" == *"$AMDGPU_DKMS_BUILD_NUM"* ]]; then
@@ -2301,7 +2309,7 @@ find_and_delete() {
                     echo "remove: $remove_filename"
                 fi
                 # Here delete only files, folder deleted as in normal uninstall
-                $SUDO rm -f $remove_filename 2>/dev/null
+                $SUDO rm -f "$remove_filename" 2>/dev/null
             fi
         fi
 
@@ -2317,13 +2325,12 @@ find_and_delete() {
 
 delete_empty_dirs() {
     local files_dir=$1
-    local installed_dir=$2
 
     # Recursively check all subdirs under files starting from the deepest level
 
     find "$files_dir" -depth -type d | while read -r subdir_files_dir; do
         # Remove the base path of installation to get the relative path
-        relativePath="${subdir_files_dir#$files_dir}"
+        relativePath="${subdir_files_dir#"$files_dir"}"
 
         # Construct the corresponding path in installed dir
         subdir_installed="$relativePath"
@@ -2339,9 +2346,9 @@ delete_empty_dirs() {
 }
 
 uninstall_amdgpu() {
-    echo =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+    echo "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-="
     echo -e "\e[95mUNINSTALL amdgpu\e[0m"
-    echo =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+    echo "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-="
 
     echo "EXTRACT_AMDGPU_DIR = $EXTRACT_AMDGPU_DIR"
     echo "TARGET_AMDGPU_DIR  = $TARGET_AMDGPU_DIR"
@@ -2351,7 +2358,7 @@ uninstall_amdgpu() {
 
     query_prev_driver_version
 
-    if [ $INSTALLED_AMDGPU_DKMS_BUILD_NUM == 0 ] ; then
+    if [ "$INSTALLED_AMDGPU_DKMS_BUILD_NUM" == 0 ] ; then
         print_err "amdgpu driver not installed."
         echo "Please install amdgpu using the Runfile installer."
         echo "Usage: bash $PROG amdgpu"
@@ -2360,7 +2367,8 @@ uninstall_amdgpu() {
 
     # Get the full AMDGPU version (with distro suffix) from the scriptlet
     # This overrides the version from VERSION file which has suffix stripped
-    local scriptlet_version=$(get_amdgpu_version_from_scriptlet)
+    local scriptlet_version
+    scriptlet_version=$(get_amdgpu_version_from_scriptlet)
     if [[ -n "$scriptlet_version" ]]; then
         AMDGPU_DKMS_BUILD_NUM="$scriptlet_version"
         echo "Using AMDGPU version from scriptlet: $AMDGPU_DKMS_BUILD_NUM"
@@ -2369,7 +2377,7 @@ uninstall_amdgpu() {
     echo "Installed amdgpu version $INSTALLED_AMDGPU_DKMS_BUILD_NUM"
     echo "Runfile amdgpu version $AMDGPU_DKMS_BUILD_NUM"
 
-    if [ ! $INSTALLED_AMDGPU_DKMS_BUILD_NUM == $AMDGPU_DKMS_BUILD_NUM ] ; then
+    if [ ! "$INSTALLED_AMDGPU_DKMS_BUILD_NUM" == "$AMDGPU_DKMS_BUILD_NUM" ] ; then
         print_err "amdgpu driver installed version does not match runfile version."
         prompt_user "Force uninstall (y/n): "
         if [[ $option == "Y" || $option == "y" ]]; then
@@ -2391,23 +2399,24 @@ uninstall_amdgpu() {
 
     # Run the pre-remove scripts for each component
     # Workaround for amdgpu packages order
-    #for compo in ${COMPONENTS[@]}; do
-    remove_arr=($COMPONENTS)
+    #for compo in "${COMPONENTS[@]}"; do
+    local remove_arr
+    read -r -a remove_arr <<< "$COMPONENTS"
     for(( i=0; i<${#remove_arr[@]}; i++ )) do
         compo=${remove_arr[i]}
 
-        uninstall_prerm_scriptlet_amdgpu $compo
+        uninstall_prerm_scriptlet_amdgpu "$compo"
 
         # remove files
         path_to_files="$EXTRACT_AMDGPU_DIR/$compo/content"
 
         echo "Removing amdgpu files..."
-        find_and_delete $path_to_files "l"
-        find_and_delete $path_to_files "f"
+        find_and_delete "$path_to_files" "l"
+        find_and_delete "$path_to_files" "f"
 
-        delete_empty_dirs $path_to_files "/"
+        delete_empty_dirs "$path_to_files"
 
-        uninstall_postrm_scriptlet $compo
+        uninstall_postrm_scriptlet "$compo"
     done
 
     # Update initramfs for all kernels
@@ -2425,8 +2434,8 @@ install_postint_scriptlets() {
     # Run post-install scripts for base components
     if [[ -n "$COMPONENTS" ]]; then
         echo "postinst executing for base components...."
-        for compo in ${COMPONENTS[@]}; do
-            install_postinst_scriptlet $compo "$EXTRACT_ROCM_DIR/base"
+        for compo in $COMPONENTS; do
+            install_postinst_scriptlet "$compo" "$EXTRACT_ROCM_DIR/base"
         done
     fi
 
@@ -2436,8 +2445,8 @@ install_postint_scriptlets() {
         # Explicit gfx= was specified
         local gfx_extract_dir="$EXTRACT_ROCM_DIR/${INSTALL_GFX}"
         echo "postinst executing for GFX components ($INSTALL_GFX)...."
-        for compo in ${COMPONENTS_GFX[@]}; do
-            install_postinst_scriptlet $compo "$gfx_extract_dir"
+        for compo in $COMPONENTS_GFX; do
+            install_postinst_scriptlet "$compo" "$gfx_extract_dir"
         done
     elif [ ${#gfx_components[@]} -gt 0 ]; then
         # Auto-detected GFX components (from uninstall-like detection)
@@ -2466,8 +2475,7 @@ install_post_rocm_etc() {
             echo /etc/OpenCL/vendors/
             $SUDO mkdir -p /etc/OpenCL/vendors
             $SUDO chmod 755 /etc/OpenCL /etc/OpenCL/vendors
-            $SUDO rsync $RSYNC_OPTS_ROCM "$content_etc_dir/OpenCL/vendors/"* "/etc/OpenCL/vendors/"
-            if [ $? -ne 0 ]; then
+            if ! $SUDO rsync $RSYNC_OPTS_ROCM "$content_etc_dir/OpenCL/vendors/"* "/etc/OpenCL/vendors/"; then
                 print_err "rsync error."
                 exit 1
             fi
@@ -2484,7 +2492,7 @@ install_post_rocm_extras() {
 
     # Process base components
     if [[ -n "$COMPONENTS" ]]; then
-        for compo in ${COMPONENTS[@]}; do
+        for compo in $COMPONENTS; do
             content_etc_dir="$EXTRACT_ROCM_DIR/base/$compo/content-etc"
             if [ -d "$content_etc_dir" ]; then
                 echo "/etc content for component: $compo"
@@ -2498,7 +2506,7 @@ install_post_rocm_extras() {
     if [[ -n $INSTALL_GFX ]]; then
         # Explicit gfx= was specified
         local gfx_extract_dir="$EXTRACT_ROCM_DIR/${INSTALL_GFX}"
-        for compo in ${COMPONENTS_GFX[@]}; do
+        for compo in $COMPONENTS_GFX; do
             content_etc_dir="$gfx_extract_dir/$compo/content-etc"
             if [ -d "$content_etc_dir" ]; then
                 echo "/etc content for GFX component: $compo"
@@ -2526,9 +2534,9 @@ install_post_rocm_extras() {
 }
 
 install_post_rocm() {
-    echo =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+    echo "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-="
     echo -e "\e[96mINSTALL ROCm post-install config\e[0m"
-    echo =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+    echo "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-="
 
     local rocm_ver_dir=
 
@@ -2570,8 +2578,7 @@ install_post_rocm() {
         set_rocm_target
 
         # check if target has a rocm install
-        find_rocm_with_progress "$TARGET_DIR"
-        if [[ $? -ne 0 ]]; then
+        if ! find_rocm_with_progress "$TARGET_DIR"; then
             print_err "ROCm runfile install at target $TARGET_DIR not found."
             exit 1
         fi
@@ -2580,7 +2587,7 @@ install_post_rocm() {
         print_no_err "ROCm Installs found: ${#rocm_install[@]}"
 
         # Only allow for single post-rocm install
-        if [[ ${#rocm_install[@]} > 1 ]]; then
+        if [[ ${#rocm_install[@]} -gt 1 ]]; then
             print_err "Multiple ROCm installation found.  Please select a single target for post install."
             exit 1
         fi
@@ -2633,11 +2640,15 @@ install_post_rocm() {
         fi
 
         # Now check if the target rocm version matches the installer rocm version
-        local rocm_ver_name=$(basename "${rocm_install[0]}")
+        local rocm_ver_name
+        rocm_ver_name=$(basename "${rocm_install[0]}")
+        
         # Remove both "rocm-" and "core-" prefixes and extract version
         local rocm_ver_extracted="${rocm_ver_name#rocm-}"  # Remove rocm- prefix if present
         rocm_ver_extracted="${rocm_ver_extracted#core-}"   # Remove core- prefix if present
-        local rocm_ver_short=$(echo "$rocm_ver_extracted" | cut -d '.' -f 1-2)
+        
+        local rocm_ver_short
+        rocm_ver_short=$(echo "$rocm_ver_extracted" | cut -d '.' -f 1-2)
 
         echo "Installer ROCm version: $ROCM_VER"
         echo "Target ROCm version   : $rocm_ver_short"
@@ -2678,9 +2689,9 @@ set_gpu_access() {
     echo Setting GPU Access...
 
     if [[ $GPU_ACCESS == "user" ]]; then
-        echo Adding current user: $USER to render,video group.
+        echo Adding current user: "$USER" to render,video group.
 
-        $SUDO usermod -aG render,video $USER
+        $SUDO usermod -aG render,video "$USER"
 
         echo -e "\e[31m< System reboot may be required >\e[0m"
 
@@ -2714,8 +2725,8 @@ EOF
 ####### Main script ###############################################################
 
 # Create the installer log directory
-if [ ! -d $RUN_INSTALLER_LOG_DIR ]; then
-    mkdir -p $RUN_INSTALLER_LOG_DIR
+if [ ! -d "$RUN_INSTALLER_LOG_DIR" ]; then
+    mkdir -p "$RUN_INSTALLER_LOG_DIR"
 fi
 
 exec > >(tee -a "$RUN_INSTALLER_CURRENT_LOG") 2>&1
@@ -2731,8 +2742,7 @@ PROG=${0##*/}
 os_release
 
 # Set up distro-specific AMDGPU paths after distro is determined
-AMDGPU_DISTRO_TAG=$(get_amdgpu_distro_tag)
-if [ $? -ne 0 ]; then
+if ! AMDGPU_DISTRO_TAG=$(get_amdgpu_distro_tag); then
     print_err "Failed to determine AMDGPU distro tag"
     exit 1
 fi
@@ -2741,7 +2751,7 @@ fi
 EXTRACT_AMDGPU_DIR="$EXTRACT_AMDGPU_DIR/$AMDGPU_DISTRO_TAG"
 COMPO_AMDGPU_FILE="$EXTRACT_AMDGPU_DIR/amdgpu-packages.config"
 
-echo "args: $@"
+echo "args: $*"
 echo --------------------------------
 
 # parse args
@@ -2801,7 +2811,7 @@ do
         ;;
     target=*)
         INSTALL_TARGET="${1#*=}"
-        echo Using install target location: $INSTALL_TARGET
+        echo Using install target location: "$INSTALL_TARGET"
         TARGET_ROCM_DIR="$INSTALL_TARGET"
         shift
         ;;
@@ -2815,7 +2825,7 @@ do
             echo "========================================="
 
             # Get available architectures from installer
-            available_archs=($(get_available_gfx_archs))
+            read -r -a available_archs <<< "$(get_available_gfx_archs)"
 
             if [ ${#available_archs[@]} -gt 0 ]; then
                 echo ""
@@ -2835,7 +2845,7 @@ do
         fi
 
         USER_SPECIFIED_GFX=1
-        echo Using GFX architecture: $INSTALL_GFX
+        echo Using GFX architecture: "$INSTALL_GFX"
         shift
         ;;
     compo=*)
@@ -2865,7 +2875,7 @@ do
         fi
 
         USER_SPECIFIED_COMPO=1
-        echo Using component installation: $COMPO_INSTALL
+        echo Using component installation: "$COMPO_INSTALL"
         shift
         ;;
     force)
@@ -2885,7 +2895,7 @@ do
         ;;
     gpu-access=*)
         GPU_ACCESS="${1#*=}"
-        echo Setting GPU access: $GPU_ACCESS
+        echo Setting GPU access: "$GPU_ACCESS"
         shift
         ;;
     findrocm)
@@ -2904,13 +2914,12 @@ do
         
         echo -e "\nChecking rocm installation type...\n"
         for inst in "${rocm_install[@]}"; do
-            check_rocm_package_install "$inst"
-            if [[ $? -eq 0 ]]; then
+            if check_rocm_package_install "$inst"; then
                 echo "Runfile        : $inst"
             else
                 echo "Package manager: $inst"
             fi
-            
+
         done
         
         exit 0
@@ -2918,7 +2927,6 @@ do
     complist)
         echo Component List
         list_components
-        shift
         ;;
     prompt)
         echo "Enabling user prompts."

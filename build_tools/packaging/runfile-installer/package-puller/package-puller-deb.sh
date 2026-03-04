@@ -29,7 +29,6 @@ GRAPHICS_REPO=
 
 # Packaging repos
 PACKAGE_REPO=$PWD/packages
-SETUP_PATH=$PWD/setup
 
 # Logs
 PULL_LOGS_DIR="$PWD/logs"
@@ -79,6 +78,7 @@ END_USAGE
 
 os_release() {
     if [[ -r  /etc/os-release ]]; then
+        # shellcheck source=/dev/null
         . /etc/os-release
 
         DISTRO_NAME=$ID
@@ -137,7 +137,7 @@ print_str() {
 
 prompt_user() {
     if [[ $PROMPT_USER == 1 ]]; then
-        read -p "$1" option
+        read -rp "$1" option
     else
         option=y
     fi
@@ -146,20 +146,20 @@ prompt_user() {
 cleanup() {
     echo ++++++++++++++++++++++++++++++++
     echo Cleaning up...
-    
+
     # Remove any list files
-    for index in ${REPO_LIST[@]}; do
-        if [ -f /etc/apt/sources.list.d/$index ]; then
+    for index in "${REPO_LIST[@]}"; do
+        if [ -f "/etc/apt/sources.list.d/$index" ]; then
             echo -e "\e[93m=-=-=-= Removing $index =-=-=-=\e[0m"
-            $SUDO rm /etc/apt/sources.list.d/$index
+            $SUDO rm "/etc/apt/sources.list.d/$index"
         fi
     done
-    
+
     # Remove any gpg files
-    for index in ${GPG_LIST[@]}; do
-        if [ -f /etc/apt/keyrings/$index ]; then
+    for index in "${GPG_LIST[@]}"; do
+        if [ -f "/etc/apt/keyrings/$index" ]; then
             echo -e "\e[93m=-=-=-= Removing $index =-=-=-=\e[0m"
-            $SUDO rm /etc/apt/keyrings/$index
+            $SUDO rm "/etc/apt/keyrings/$index"
         fi
     done
     
@@ -201,14 +201,15 @@ config_create() {
     # Check for user-modified config file (input .config to create script)
     if [[ ${CREATE_CONFIG_FILE_INPUT##*.} == "config" ]]; then
          CREATE_CONFIG_FILE=$CREATE_CONFIG_FILE_INPUT
-         echo Using Create Configuration file: $CREATE_CONFIG_FILE
-         
-         if [[ ! -f $CREATE_CONFIG_FILE ]]; then
-             echo $CREATE_CONFIG_FILE not found.
+         echo Using Create Configuration file: "$CREATE_CONFIG_FILE"
+
+         if [[ ! -f "$CREATE_CONFIG_FILE" ]]; then
+             echo "$CREATE_CONFIG_FILE" not found.
              exit 1
          fi
-         
-         source $CREATE_CONFIG_FILE
+
+         # shellcheck source=/dev/null
+         source "$CREATE_CONFIG_FILE"
     else
         print_err "Fail.  No config file."
         exit 1
@@ -236,11 +237,11 @@ setup_apt() {
     echo ++++++++++++++++++++++++++++++++
     echo Setting up gpg...
 
-    if [[ $ROCM_REPO =~ "amdrocm.gpg" ]] || [[ $ROCM_REPO =~ "rocm.gpg" ]]; then
+    if [[ $ROCM_REPO =~ amdrocm\.gpg ]] || [[ $ROCM_REPO =~ rocm\.gpg ]]; then
         sudo mkdir --parents --mode=0755 /etc/apt/keyrings
 
         # Determine GPG key URL based on repo type (release vs prerelease)
-        if [[ $ROCM_REPO =~ "rocm.prereleases.amd.com" ]]; then
+        if [[ $ROCM_REPO =~ rocm\.prereleases\.amd\.com ]]; then
             GPG_KEY_URL="https://rocm.prereleases.amd.com/packages/gpg/rocm.gpg"
             echo "Using prerelease GPG key: $GPG_KEY_URL"
         else
@@ -309,24 +310,24 @@ download_packages() {
     echo Downloading and setting up Packaging...
 
     # create the package directory repo
-    echo Creating packages directory: $PACKAGE_REPO
-    mkdir $PACKAGE_REPO
+    echo Creating packages directory: "$PACKAGE_REPO"
+    mkdir "$PACKAGE_REPO"
        
     $SUDO apt-get update  > /dev/null 2>&1
     $SUDO apt-get clean
     
-    echo =-=-=-= download packages =-=-=-=
+    echo "-=-=-= download packages -=-=-="
     prompt_user "Start Download : (y/n): "
     if [[ $option == "Y" || $option == "y" ]]; then
     
         # Download the package dependencies to the dep directory
-        pushd $PACKAGE_REPO
-            
+        pushd "$PACKAGE_REPO" || exit
+
             $SUDO apt-get -y --download-only -o Dir::Cache="./" -o Dir::Cache::archives="./" install $PACKAGES
             ret=$?
-            
+
             cleanup_pkg_cache
-        popd
+        popd || exit
         
         # check for any download errors
         if [[ $ret -ne 0 ]]; then
@@ -345,12 +346,11 @@ download_packages() {
     fi
     
     # simulate/dryrun the install
-    $SUDO apt-get install --dry-run $PACKAGES
-    if [ $? -ne 0 ]; then
+    if ! $SUDO apt-get install --dry-run $PACKAGES; then
         echo -e "\e[31m++++++++++++++++++++++++++++++++++++++++\e[0m"
         echo -e "\e[31mError occurred.  Repo validation failed.\e[0m"
         echo -e "\e[31m++++++++++++++++++++++++++++++++++++++++\e[0m"
-        
+
         cleanup
         
         exit 1
@@ -365,37 +365,40 @@ download_packages() {
 
 check_package_owner() {
     AMDPKG=0
-    AMDGPUPKG=0
-    
+
     local pkgName=$1
-    local package=$(dpkg -I $pkgName | grep "Package:")
-    local maintainer=$(dpkg -I $pkgName | grep -m 1 "Maintainer:")
-    local description=$(dpkg -I $pkgName | grep "Description:")
+    local package
+    local maintainer
+    local description
     
+    package=$(dpkg -I "$pkgName" | grep "Package:")
+    maintainer=$(dpkg -I "$pkgName" | grep -m 1 "Maintainer:")
+    description=$(dpkg -I "$pkgName" | grep "Description:")
+
     if [[ $VERBOSE == 1 ]]; then
-        dpkg -I $pkgName
+        dpkg -I "$pkgName"
     fi
     
     if [[ $package =~ "amdgpu" || $package =~ "rocm" || $package =~ "hip" ]]; then
         AMDPKG=1
         
         # filter out any distro-versions of amdgpu packages
-        if [[ $package =~ "amdgpu" && -n $maintainer ]]; then
-            if [[ ! $maintainer =~ "<gpudriverdevsupport@amd.com>" && ! $maintainer =~ "<slava.grigorev@amd.com>"  ]]; then
+        if [[ $package =~ amdgpu && -n $maintainer ]]; then
+            if [[ ! $maintainer =~ \<gpudriverdevsupport@amd\.com\> && ! $maintainer =~ \<slava\.grigorev@amd\.com\>  ]]; then
                 AMDPKG=0
             fi
         fi
-        
+
         # filter out any distro-versions of hip packages
-        if [[ $package =~ "hip" && -n $maintainer ]]; then
-            if [[ $maintainer =~ "Ubuntu Developers" ]]; then
+        if [[ $package =~ hip && -n $maintainer ]]; then
+            if [[ $maintainer =~ Ubuntu\ Developers ]]; then
                 AMDPKG=0
             fi
         fi
-        
+
     else
        if [[ -n $maintainer ]]; then
-           if [[ $maintainer =~ "Advanced Micro Devices" || $maintainer =~ "ROCm" || $maintainer =~ "AMD" || $maintainer =~ "amd.com"  ]]; then
+           if [[ $maintainer =~ Advanced\ Micro\ Devices || $maintainer =~ ROCm || $maintainer =~ AMD || $maintainer =~ amd\.com  ]]; then
                AMDPKG=1
            fi
        fi
@@ -410,45 +413,44 @@ check_package_owner() {
     # for amd or amdgpu-specific packages copy to separate directories  
     if [[ $AMDPKG == 1 ]] ; then
         AMD_COUNT=$((AMD_COUNT+1))
-        ROCM_PACKAGES+="$(basename $pkgName) "
-        
+        ROCM_PACKAGES+="$(basename "$pkgName") "
+
         if [[ $DUMP_AMD_PKGS == 1 ]]; then
-            if [[ ! -d $PWD/packages-amd ]]; then
+            if [[ ! -d "$PWD/packages-amd" ]]; then
                 echo Creating Extraction amd directory.
-                mkdir -p $PWD/packages-amd
+                mkdir -p "$PWD/packages-amd"
             fi
-        
-            cp $pkgName $PWD/packages-amd
+
+            cp "$pkgName" "$PWD/packages-amd"
         fi
-        
+
         if [[ -n $maintainer ]]; then
-            if [[ $maintainer =~ "<gpudriverdevsupport@amd.com>" || $maintainer =~ "<slava.grigorev@amd.com>" ]]; then
-                AMDGPUPKG=1
+            if [[ $maintainer =~ \<gpudriverdevsupport@amd\.com\> || $maintainer =~ \<slava\.grigorev@amd\.com\> ]]; then
                 AMDGPU_COUNT=$((AMDGPU_COUNT+1))
-                if [[ ! -d $PWD/packages-amdgpu ]]; then
+                if [[ ! -d "$PWD/packages-amdgpu" ]]; then
                     echo Creating Extraction amdgpu directory.
-                    mkdir -p $PWD/packages-amdgpu
+                    mkdir -p "$PWD/packages-amdgpu"
                 fi
-        
-               cp $pkgName $PWD/packages-amdgpu
+
+               cp "$pkgName" "$PWD/packages-amdgpu"
                echo -e "\e[94m++++++++++++++++++++++++++++++++++++\e[0m"
                echo -e "\e[94m$AMDGPU_COUNT: AMDGPU PACKAGE\e[0m"
                echo -e "\e[94m++++++++++++++++++++++++++++++++++++\e[0m"
            fi
        fi
-        
+
         print_no_err "$AMD_COUNT: AMD PACKAGE"
     else
         NON_AMD_COUNT=$((NON_AMD_COUNT+1))
-        OTHER_PACKAGES+="$(basename $pkgName) "
-        
+        OTHER_PACKAGES+="$(basename "$pkgName") "
+
         if [[ $DUMP_NON_AMD_PKGS == 1 ]]; then
-            if [[ ! -d $PWD/packages-other ]]; then
+            if [[ ! -d "$PWD/packages-other" ]]; then
                 echo Creating Extraction non-amd directory.
-                mkdir -p $PWD/packages-other
+                mkdir -p "$PWD/packages-other"
             fi
-        
-            cp $pkgName $PWD/packages-other
+
+            cp "$pkgName" "$PWD/packages-other"
         fi
         
         print_str "$NON_AMD_COUNT: 3rd Party PACKAGE" 4
@@ -464,23 +466,23 @@ dump_packages_info() {
     PACKAGES=
     ROCM_PACKAGES=
     OTHER_PACKAGES=
-    
-    for pkg in $PACKAGE_REPO/*; do
+
+    for pkg in "$PACKAGE_REPO"/*; do
         if [[ $pkg == *.deb ]]; then
-            echo pkg = $pkg
+            echo pkg = "$pkg"
             PACKAGES+="$pkg "
         fi
     done
-    
-    pushd $PACKAGE_REPO
+
+    pushd "$PACKAGE_REPO" || exit
         for pkg in $PACKAGES; do
             PKG_COUNT=$((PKG_COUNT+1))
-        
+
             echo ----------------------------------------------------------------------
-            echo -e "\e[93mpkg $PKG_COUNT = $(basename $pkg)\e[0m"
-            check_package_owner $pkg
+            echo -e "\e[93mpkg $PKG_COUNT = $(basename "$pkg")\e[0m"
+            check_package_owner "$pkg"
        done
-   popd
+   popd || exit
    
    echo -----------------------------
    echo "Package Total         = $PKG_COUNT"
@@ -493,8 +495,8 @@ dump_packages_info() {
 ####### Main script ###############################################################
 
 # Create the pull log directory
-if [ ! -d $PULL_LOGS_DIR ]; then
-    mkdir -p $PULL_LOGS_DIR
+if [ ! -d "$PULL_LOGS_DIR" ]; then
+    mkdir -p "$PULL_LOGS_DIR"
 fi
 
 exec > >(tee -a "$PULL_CURRENT_LOG") 2>&1
@@ -506,7 +508,7 @@ echo ====================
 PROG=${0##*/}
 
 SUDO=$([[ $(id -u) -ne 0 ]] && echo "sudo" ||:)
-echo SUDO: $SUDO
+echo SUDO: "$SUDO"
 
 os_release
 
@@ -560,7 +562,7 @@ do
 done
 
 # Configure the creator
-config_create $CONFIG_FILE
+config_create "$CONFIG_FILE"
 
 echo --------------------------------------------------
 echo "PACKAGE_REPO  = $PACKAGE_REPO"
@@ -572,7 +574,7 @@ echo "AMDGPU_REPO   = $AMDGPU_REPO"
 echo -----------------------------------------
 echo "GRAPHICS_REPO = $GRAPHICS_REPO"
 echo -----------------------------------------
-echo PACKAGES       = $PACKAGES
+echo "PACKAGES       = $PACKAGES"
 echo --------------------------------------------------
 
 prompt_user "Pull Packages from repos (y/n): "
@@ -585,9 +587,9 @@ cleanup
 
 install_tools
 
-if [ -d $PACKAGE_REPO ]; then
+if [ -d "$PACKAGE_REPO" ]; then
     echo -e "\e[93mPackage directory exists.  Removing: $PACKAGE_REPO\e[0m"
-    $SUDO rm -r $PACKAGE_REPO
+    $SUDO rm -r "$PACKAGE_REPO"
 fi
 
 setup_apt

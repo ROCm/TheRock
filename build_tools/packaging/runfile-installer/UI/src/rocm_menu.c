@@ -311,11 +311,8 @@ int find_rocm_with_progress(char *target)
         exit(1);
     }
 
-    // close any open file descriptors
-    if (fd >= 0)
-    {
-        close(fd);
-    }
+    // Note: fd is only set in child process, which doesn't return here
+    // Parent process keeps fd = -1, so no file descriptor to close
 
     delwin(progress_win);
 
@@ -538,7 +535,7 @@ void do_rocm_menu()
     wclear(menuROCm.pMenuWindow);
 
     // draw the ROCm menu contents
-    rocm_menu_draw(&menuROCm);
+    rocm_menu_draw();
 
     // ROCm menu loop
     menu_loop(&menuROCm);
@@ -667,7 +664,7 @@ void process_rocm_menu_form(MENU_DATA *pMenuData)
     post_form(pForm);
     post_menu(pMenu);
 
-    rocm_menu_draw(pMenuData);
+    rocm_menu_draw();
 
     print_form_control_msg(pMenuData);
 
@@ -960,7 +957,7 @@ void uninstall_rocm_paths()
         // Strip /rocm/core-* to get base install directory
         // e.g., /opt/rocm/core-7.11 -> /opt
         char base_path[LARGE_CHAR_SIZE];
-        strcpy(base_path, g_pRocmConfig->rocm_paths[uninstall_index]);
+        snprintf(base_path, sizeof(base_path), "%s", g_pRocmConfig->rocm_paths[uninstall_index]);
         char *rocm_core = strstr(base_path, "/rocm/core-");
         if (rocm_core != NULL)
         {
@@ -1231,11 +1228,7 @@ void process_rocm_device_menu()
 
     DEBUG_UI_MSG(&menuROCmDevice, "ROCM Device Menu: %d, itemlist %d", index, menuROCmDevice.curItemListIndex);
 
-    if (index == 0)
-    {
-
-    }
-    else
+    if (index != 0)
     {
         DEBUG_UI_MSG(&menuROCm, "Unknown item index");
     }

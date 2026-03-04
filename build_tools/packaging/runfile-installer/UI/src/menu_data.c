@@ -440,12 +440,140 @@ void menu_item_select(MENU_DATA *pMenuData, ITEM *pCurrentItem)
     }
 }
 
+static void handle_key_down(MENU_DATA *pMenuData)
+{
+    MENU *pMenu = pMenuData->pMenu;
+    ITEM *pCurrentItem;
+    void (*p)(MENU_DATA*);
+
+    menu_driver(pMenu, REQ_DOWN_ITEM);
+
+    skip_menu_item_down_if_skippable(pMenu);
+
+    pCurrentItem = current_item(pMenu);
+
+    if (pMenuData->clearErrMsgAfterUpOrDownKeyPress)
+    {
+        clear_menu_msg(pMenuData);
+    }
+
+    print_menu_item_selection(pMenuData, MENU_SEL_START_Y, MENU_SEL_START_X);
+
+    // update menu scrolling position
+    menu_scroll_update_selections(pMenuData, item_index(pCurrentItem));
+
+    p = item_userptr(pCurrentItem);
+    if (NULL != p)
+    {
+        p((MENU_DATA*)pMenuData);
+    }
+}
+
+static void handle_key_up(MENU_DATA *pMenuData)
+{
+    MENU *pMenu = pMenuData->pMenu;
+    ITEM *pCurrentItem;
+    bool is_skipped;
+    void (*p)(MENU_DATA*);
+
+    menu_driver(pMenu, REQ_UP_ITEM);
+
+    is_skipped = skip_menu_item_up_if_skippable(pMenu);
+
+    pCurrentItem = current_item(pMenu);
+
+    // Special case: if we skipped at top boundary, ncurses scrolled to show index 0
+    // but cursor moved back to index 1. Update startListIndex to reflect display.
+    if (is_skipped && item_index(pCurrentItem) == 1 && pMenuData->startListIndex == 1)
+    {
+        // Index 0 is now visible at top of display
+        pMenuData->startListIndex = 0;
+        pMenuData->endListIndex = pMenuData->startListIndex + (MAX_MENU_ITEMS_DISPLAY - pMenuData->pMenuProps->starty);
+
+        // Redraw all X marks with updated indices
+        ITEM **items = menu_items(pMenu);
+        for (int i = 0; i < item_count(pMenu); i++)
+        {
+            delete_menu_item_selection_mark(pMenuData, items[i]);
+        }
+        for (int i = 0; i < item_count(pMenu); i++)
+        {
+            if (item_value(items[i])) add_menu_item_selection_mark(pMenuData, items[i]);
+        }
+    }
+
+    if (pMenuData->clearErrMsgAfterUpOrDownKeyPress)
+    {
+        clear_menu_msg(pMenuData);
+    }
+
+    print_menu_item_selection(pMenuData, MENU_SEL_START_Y, MENU_SEL_START_X);
+
+    // update menu scrolling position
+    menu_scroll_update_selections(pMenuData, item_index(pCurrentItem));
+
+    p = item_userptr(pCurrentItem);
+    if (NULL != p)
+    {
+        p((MENU_DATA*)pMenuData);
+    }
+}
+
+static void handle_key_enter(MENU_DATA *pMenuData, ITEM *pCurrentItem, int *done)
+{
+    int listIndex = pMenuData->curItemListIndex;
+    MENU *pMenu = pMenuData->pMenu;
+    void (*p)(MENU_DATA*);
+
+    if ( item_index(pCurrentItem) == pMenuData->itemList[listIndex].doneItemIndex )
+    {
+        *done = 1;
+    }
+    else
+    {
+        if (is_menu_item_help_item_index(pMenuData, 0, pCurrentItem))
+        {
+            if (pMenuData->pHelpMenu)
+            {
+                // switch to the current menu's help menu
+                do_help_menu(pMenuData);
+
+                // switch back to current menu : redraw and post
+                menu_draw(pMenuData);
+                post_menu(pMenu);
+            }
+        }
+        else if (pMenuData->isMenuItemsSelectable && // rocm usecases or rocm versions menu
+                !is_menu_item_done_item_index(pMenuData, listIndex, pCurrentItem) &&
+                item_opts(pCurrentItem) == O_SELECTABLE )
+        {
+            menu_item_select(pMenuData, pCurrentItem);
+        }
+
+        // call the menu data processor
+        p = menu_userptr(pMenu);
+        if (NULL != p)
+        {
+            p((MENU_DATA*)pMenuData);
+        }
+        else
+        {
+            DEBUG_UI_MSG(pMenuData, "No user ptr for form");
+        }
+
+        p = item_userptr(pCurrentItem);
+        if (NULL != p)
+        {
+            p((MENU_DATA*)pMenuData);
+        }
+    }
+}
+
 void menu_loop(MENU_DATA *pMenuData)
 {
     int c;
     int done = 0;
     int listIndex = pMenuData->curItemListIndex;
-    bool is_skipped = false;
 
     WINDOW *pMenuWindow = pMenuData->pMenuWindow;
     MENU *pMenu = pMenuData->pMenu;
@@ -480,78 +608,12 @@ void menu_loop(MENU_DATA *pMenuData)
                 break;
 
             case KEY_DOWN:
-            {
-                menu_driver(pMenu, REQ_DOWN_ITEM);
-
-                is_skipped = skip_menu_item_down_if_skippable(pMenu);
-
-                pCurrentItem = current_item(pMenu);
-
-                if (pMenuData->clearErrMsgAfterUpOrDownKeyPress)
-                {
-                    clear_menu_msg(pMenuData);
-                }
-
-                print_menu_item_selection(pMenuData, MENU_SEL_START_Y, MENU_SEL_START_X);
-
-                // update menu scrolling position
-                menu_scroll_update_selections(pMenuData, item_index(pCurrentItem));
-
-                p = item_userptr(pCurrentItem);
-                if (NULL != p)
-                {
-                    p((MENU_DATA*)pMenuData);
-                }
-
+                handle_key_down(pMenuData);
                 break;
-            }
 
             case KEY_UP:
-            {
-                menu_driver(pMenu, REQ_UP_ITEM);
-
-                is_skipped = skip_menu_item_up_if_skippable(pMenu);
-
-                pCurrentItem = current_item(pMenu);
-
-                // Special case: if we skipped at top boundary, ncurses scrolled to show index 0
-                // but cursor moved back to index 1. Update startListIndex to reflect display.
-                if (is_skipped && item_index(pCurrentItem) == 1 && pMenuData->startListIndex == 1)
-                {
-                    // Index 0 is now visible at top of display
-                    pMenuData->startListIndex = 0;
-                    pMenuData->endListIndex = pMenuData->startListIndex + (MAX_MENU_ITEMS_DISPLAY - pMenuData->pMenuProps->starty);
-
-                    // Redraw all X marks with updated indices
-                    ITEM **items = menu_items(pMenu);
-                    for (int i = 0; i < item_count(pMenu); i++)
-                    {
-                        delete_menu_item_selection_mark(pMenuData, items[i]);
-                    }
-                    for (int i = 0; i < item_count(pMenu); i++)
-                    {
-                        if (item_value(items[i])) add_menu_item_selection_mark(pMenuData, items[i]);
-                    }
-                }
-
-                if (pMenuData->clearErrMsgAfterUpOrDownKeyPress)
-                {
-                    clear_menu_msg(pMenuData);
-                }
-
-                print_menu_item_selection(pMenuData, MENU_SEL_START_Y, MENU_SEL_START_X);
-
-                // update menu scrolling position
-                menu_scroll_update_selections(pMenuData, item_index(pCurrentItem));
-
-                p = item_userptr(pCurrentItem);
-                if (NULL != p)
-                {
-                    p((MENU_DATA*)pMenuData);
-                }
-
+                handle_key_up(pMenuData);
                 break;
-            }
 
             case ' ':
                 // Don't do anything if item isn't selectable.
@@ -578,48 +640,7 @@ void menu_loop(MENU_DATA *pMenuData)
                 break;
 
             case 10:    // Enter
-                if ( item_index(pCurrentItem) == pMenuData->itemList[listIndex].doneItemIndex )
-                {
-                    done = 1;
-                }
-                else
-                {   
-                    if (is_menu_item_help_item_index(pMenuData, 0, pCurrentItem))
-                    {
-                        if (pMenuData->pHelpMenu)
-                        {
-                            // switch to the current menu's help menu
-                            do_help_menu(pMenuData);
-
-                            // switch back to current menu : redraw and post
-                            menu_draw(pMenuData);
-                            post_menu(pMenu);
-                        }
-                    }
-                    else if (pMenuData->isMenuItemsSelectable && // rocm usecases or rocm versions menu
-                            !is_menu_item_done_item_index(pMenuData, listIndex, pCurrentItem) &&
-                            item_opts(pCurrentItem) == O_SELECTABLE ) { 
-
-                            menu_item_select(pMenuData, pCurrentItem);
-                    }
-
-                    // call the menu data processor
-                    p = menu_userptr(pMenu);
-                    if (NULL != p)
-                    {
-                        p((MENU_DATA*)pMenuData);
-                    }
-                    else
-                    {
-                        DEBUG_UI_MSG(pMenuData, "No user ptr for form");
-                    }
-
-                    p = item_userptr(pCurrentItem);
-                    if (NULL != p)
-                    {
-                        p((MENU_DATA*)pMenuData);
-                    }
-                }
+                handle_key_enter(pMenuData, pCurrentItem, &done);
                 break;
         }
 
@@ -1227,27 +1248,27 @@ int display_help_scroll_window(MENU_DATA *pMenuData, char *filename)
     curs_set(0);
 
     // Read in all the lines making up the file
-    while ((read = getline(&line, &line_length, file)) != -1) 
+    while ((read = getline(&line, &line_length, file)) != -1)
     {
-        char **temp = realloc(lines, (num_lines + 1) * sizeof(char*));
-        if (temp == NULL)
+        char **new_lines = realloc(lines, (num_lines + 1) * sizeof(char*));
+        if (new_lines == NULL)
         {
-            if (line != NULL) free(line);
+            free(line);
 
             if (lines != NULL)
             {
                 for (int i = 0; i < num_lines; i++)
                 {
-                    if (lines[i] != NULL) free(lines[i]);
+                    free(lines[i]);
                 }
                 free(lines);
             }
-            
+
             fclose(file);
             return 1;
         }
 
-        lines = temp;
+        lines = new_lines;
         lines[num_lines] = line;
 
         line = NULL;
@@ -1300,24 +1321,24 @@ int display_help_scroll_window(MENU_DATA *pMenuData, char *filename)
                     if (heading_type == 1)
                     {
                         wattron(win, CYAN | A_BOLD);  // Heading 1: Cyan + Bold
-                        mvwprintw(win, i+1, 1, display_text, "%s");
+                        mvwprintw(win, i+1, 1, "%s", display_text);
                         wattroff(win, CYAN | A_BOLD);
                     }
                     else if (heading_type == 2)
                     {
                         wattron(win, MAGENTA | A_BOLD);  // Heading 2: Magenta + Bold
-                        mvwprintw(win, i+1, 1, display_text, "%s");
+                        mvwprintw(win, i+1, 1, "%s", display_text);
                         wattroff(win, MAGENTA | A_BOLD);
                     }
                     else if (heading_type == 3)
                     {
                         wattron(win, YELLOW | A_BOLD);  // Heading 3: Yellow + Bold
-                        mvwprintw(win, i+1, 1, display_text, "%s");
+                        mvwprintw(win, i+1, 1, "%s", display_text);
                         wattroff(win, YELLOW | A_BOLD);
                     }
                     else
                     {
-                        mvwprintw(win, i+1, 1, line_text, "%s");
+                        mvwprintw(win, i+1, 1, "%s", line_text);
                     }
                 }
             }
@@ -1458,18 +1479,18 @@ int display_scroll_window(char *windowTitle, char *listTitle, char *filename, in
     refresh();
 
     // Read in all the lines making up the file
-    while ((read = getline(&line, &line_length, file)) != -1) 
+    while ((read = getline(&line, &line_length, file)) != -1)
     {
-        char **temp = realloc(lines, (num_lines + 1) * sizeof(char*));
-        if (temp == NULL)
+        char **new_lines = realloc(lines, (num_lines + 1) * sizeof(char*));
+        if (new_lines == NULL)
         {
-            if (line != NULL) free(line);
+            free(line);
 
             if (lines != NULL)
             {
                 for (int i = 0; i < num_lines; i++)
                 {
-                    if (lines[i] != NULL) free(lines[i]);
+                    free(lines[i]);
                 }
                 free(lines);
             }
@@ -1478,7 +1499,7 @@ int display_scroll_window(char *windowTitle, char *listTitle, char *filename, in
             return 1;
         }
 
-        lines = temp;
+        lines = new_lines;
         lines[num_lines] = line;
 
         line = NULL;
@@ -1511,7 +1532,7 @@ int display_scroll_window(char *windowTitle, char *listTitle, char *filename, in
             {
                 if (lines[start_line + i] != NULL)
                 {
-                    mvwprintw(win, i+list_start_row, 1, lines[start_line + i], "%s");
+                    mvwprintw(win, i+list_start_row, 1, "%s", lines[start_line + i]);
                 }
             }       
         }

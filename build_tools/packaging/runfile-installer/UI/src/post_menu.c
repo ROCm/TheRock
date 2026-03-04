@@ -128,7 +128,7 @@ void do_post_menu()
     wclear(menuPost.pMenuWindow);
 
     // draw the post install menu contents
-    post_menu_draw(&menuPost);
+    post_menu_draw();
 
     // post install menu loop
     menu_loop(&menuPost);
@@ -194,5 +194,5 @@ void process_post_menu()
         }
     }
 
-    post_menu_draw(&menuPost);
+    post_menu_draw();
 }

@@ -158,6 +158,7 @@ END_USAGE
 
 os_release() {
     if [[ -r  /etc/os-release ]]; then
+        # shellcheck source=/dev/null
         . /etc/os-release
 
         DISTRO_NAME=$ID
@@ -225,6 +226,7 @@ read_config() {
         fi
 
         # Source the config file
+        # shellcheck source=/dev/null
         source "$CONFIG_FILE"
         echo "Configuration loaded successfully."
         echo "Note: Command-line arguments will override config values."
@@ -243,7 +245,7 @@ validate_args() {
         echo -e "\e[31mERROR: PULL_CONFIG_RELEASE_TYPE not set. Use pull= argument.\e[0m"
         echo "Valid values: ${ROCM_RELEASE_TYPES[*]}"
         validation_failed=1
-    elif [[ ! " ${ROCM_RELEASE_TYPES[@]} " =~ " ${PULL_CONFIG_RELEASE_TYPE} " ]]; then
+    elif [[ ! " ${ROCM_RELEASE_TYPES[*]} " =~ \ ${PULL_CONFIG_RELEASE_TYPE}\  ]]; then
         echo -e "\e[31mERROR: Invalid pull= value: $PULL_CONFIG_RELEASE_TYPE\e[0m"
         echo "Valid values: ${ROCM_RELEASE_TYPES[*]}"
         validation_failed=1
@@ -336,8 +338,7 @@ install_tools() {
         else
             # One or more tools missing, install all
             echo "Installing required tools: sudo wget"
-            dnf install -y sudo wget
-            if [[ $? -ne 0 ]]; then
+            if ! dnf install -y sudo wget; then
                 echo -e "\e[31mERROR: Failed to install tools.\e[0m"
                 exit 1
             fi
@@ -459,7 +460,8 @@ generate_package_lists() {
     local deb_packages=""
 
     # Handle RPM vs DEB package naming conventions (RPM uses "devel", DEB uses "dev")
-    local normalized=$(normalize_package_name "$PULL_CONFIG_PKG")
+    local normalized
+    normalized=$(normalize_package_name "$PULL_CONFIG_PKG")
     local pull_pkg_rpm="${normalized%|*}"
     local pull_pkg_deb="${normalized#*|}"
 
@@ -561,7 +563,8 @@ generate_package_lists_extra() {
         echo "  Package: $pkg_name (type: $pkg_type)"
 
         # Normalize package name for RPM/DEB
-        local normalized=$(normalize_package_name "$pkg_name")
+        local normalized
+        normalized=$(normalize_package_name "$pkg_name")
         local pull_pkg_rpm="${normalized%|*}"
         local pull_pkg_deb="${normalized#*|}"
 
@@ -782,17 +785,15 @@ setup_rocm_packages() {
 
 setup_rocm_deb() {
     # Pull ROCm DEB packages
-    pushd ../package-puller
+    pushd ../package-puller || exit
         echo -------------------------------------------------------------
         echo "Setting up for ROCm components..."
         echo "========================================="
         echo "Pulling DEB packages..."
         echo "========================================="
 
-        ./package-puller-deb.sh amd config="$PULLER_CONFIG_DEB" pkg="$PULLER_PACKAGES_DEB"
-
         # check if package pull was successful
-        if [[ $? -ne 0 ]]; then
+        if ! ./package-puller-deb.sh amd config="$PULLER_CONFIG_DEB" pkg="$PULLER_PACKAGES_DEB"; then
             echo -e "\e[31mFailed pull of ROCm DEB packages.\e[0m"
             exit 1
         fi
@@ -802,22 +803,20 @@ setup_rocm_deb() {
 
         echo ""
         echo "Setting up for ROCm components...Complete."
-    popd
+    popd || exit
 }
 
 setup_rocm_deb_chroot() {
     # Pull ROCm DEB packages using chroot method (for RPM-based host OS)
-    pushd ../package-puller
+    pushd ../package-puller || exit
         echo -------------------------------------------------------------
         echo "Setting up for ROCm components (chroot mode)..."
         echo "========================================="
         echo "Pulling DEB packages using Ubuntu chroot..."
         echo "========================================="
 
-        ./package-puller-deb-chroot.sh amd config="$PULLER_CONFIG_DEB" pkg="$PULLER_PACKAGES_DEB"
-
         # check if package pull was successful
-        if [[ $? -ne 0 ]]; then
+        if ! ./package-puller-deb-chroot.sh amd config="$PULLER_CONFIG_DEB" pkg="$PULLER_PACKAGES_DEB"; then
             echo -e "\e[31mFailed pull of ROCm DEB packages (chroot).\e[0m"
             exit 1
         fi
@@ -827,22 +826,20 @@ setup_rocm_deb_chroot() {
 
         echo ""
         echo "Setting up for ROCm components (chroot)...Complete."
-    popd
+    popd || exit
 }
 
 setup_rocm_rpm() {
     # Pull ROCm RPM packages
-    pushd ../package-puller
+    pushd ../package-puller || exit
         echo -------------------------------------------------------------
         echo "Setting up for ROCm components..."
         echo "========================================="
         echo "Pulling RPM packages..."
         echo "========================================="
 
-        ./package-puller-el.sh amd config="$PULLER_CONFIG_RPM" pkg="$PULLER_PACKAGES_RPM"
-
         # check if package pull was successful
-        if [[ $? -ne 0 ]]; then
+        if ! ./package-puller-el.sh amd config="$PULLER_CONFIG_RPM" pkg="$PULLER_PACKAGES_RPM"; then
             echo -e "\e[31mFailed pull of ROCm RPM packages.\e[0m"
             exit 1
         fi
@@ -852,7 +849,7 @@ setup_rocm_rpm() {
 
         echo ""
         echo "Setting up for ROCm components...Complete."
-    popd
+    popd || exit
 }
 
 setup_rocm() {
@@ -894,7 +891,7 @@ setup_amdgpu() {
     configure_setup_amdgpu
 
     # Pull AMDGPU packages
-    pushd ../package-puller
+    pushd ../package-puller || exit
         echo -------------------------------------------------------------
         echo "Setting up for AMDGPU components..."
         echo "========================================="
@@ -904,17 +901,20 @@ setup_amdgpu() {
         # Call the appropriate package puller based on distro type
         if [ $PULL_DISTRO_TYPE == "deb" ]; then
             ./package-puller-deb.sh amd config="$PULLER_CONFIG" pkg="$PULLER_PACKAGES_AMDGPU"
+            pull_status=$?
         elif [ $PULL_DISTRO_TYPE == "el" ]; then
             ./package-puller-el.sh amd config="$PULLER_CONFIG" pkg="$PULLER_PACKAGES_AMDGPU"
+            pull_status=$?
         elif [ $PULL_DISTRO_TYPE == "sle" ]; then
             ./package-puller-sle.sh amd config="$PULLER_CONFIG" pkg="$PULLER_PACKAGES_AMDGPU"
+            pull_status=$?
         else
             echo -e "\e[31mUnsupported distro type: $PULL_DISTRO_TYPE\e[0m"
             exit 1
         fi
 
         # check if package pull was successful
-        if [[ $? -ne 0 ]]; then
+        if [[ $pull_status -ne 0 ]]; then
             echo -e "\e[31mFailed pull of AMDGPU packages.\e[0m"
             exit 1
         fi
@@ -936,12 +936,12 @@ setup_amdgpu() {
 
         echo ""
         echo "Setting up for AMDGPU components...Complete."
-    popd
+    popd || exit
 }
 
 setup_amdgpu_all() {
     # Pull AMDGPU packages for all distributions
-    pushd ../package-puller
+    pushd ../package-puller || exit
         echo -------------------------------------------------------------
         echo "Setting up for AMDGPU components (all distributions)..."
         echo "========================================="
@@ -966,7 +966,7 @@ setup_amdgpu_all() {
 
         echo ""
         echo "Setting up for AMDGPU components (all distributions)...Complete."
-    popd
+    popd || exit
 }
 
 ####### Main script ###############################################################
@@ -979,7 +979,7 @@ echo SETUP INSTALLER
 echo ============================
 
 SUDO=$([[ $(id -u) -ne 0 ]] && echo "sudo" ||:)
-echo SUDO: $SUDO
+echo SUDO: "$SUDO"
 
 os_release
 

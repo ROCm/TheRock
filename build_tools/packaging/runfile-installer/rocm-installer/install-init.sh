@@ -25,32 +25,9 @@
 
 ###### Functions ###############################################################
 
-get_version() {
-    i=0
-    
-    while IFS= read -r line; do
-        case $i in
-            0) INSTALLER_VERSION="$line" ;;
-            1) ROCM_VERSION="$line" ;;
-            2) DISTRO_BUILD_VERSION="$line" ;;
-            3) ROCM_BUILD_NUM="$line" ;;
-            4) AMDGPU_DKMS_BUILD_NUM="$line" ;;
-            5) BUILD_INSTALLER_NAME="$line" ;;
-        esac
-        
-        i=$((i+1))
-    done < "./VERSION"
-}
-
-print_version() {
-    echo ROCm Runfile Installer Version : $INSTALLER_VERSION-$ROCM_VERSION
-    echo ROCm Runfile Installer Package : $BUILD_INSTALLER_NAME
-}
-
 os_release() {
-    get_version
-    
     if [[ -r  /etc/os-release ]]; then
+        # shellcheck source=/dev/null
         . /etc/os-release
 
         DISTRO_NAME=$ID
@@ -133,18 +110,12 @@ os_release() {
 
 ####### Main script ###############################################################
 
-SUDO=$([[ $(id -u) -ne 0 ]] && echo "sudo" ||:)
-
 os_release
 
 # parse args
 while (($#))
 do
     case "$1" in
-    version)
-        print_version
-        exit 0
-        ;;
     *)
         ARGS+="$1 "
         shift

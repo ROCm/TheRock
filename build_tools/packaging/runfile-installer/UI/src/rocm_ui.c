@@ -132,10 +132,7 @@ void get_os_release_value(char *key, char *value)
     }
     fclose(fp);
 
-    if (line) 
-    {
-        free(line);
-    }
+    free(line);
 }
 
 int get_os_info()
@@ -256,12 +253,93 @@ int read_version_file()
     }
 
     fclose(fp);
-    if (line)
-    {
-        free(line);
-    }
+    free(line);
 
     return 0;
+}
+
+void main_menu_install_draw(MENU_DATA *pMenuData)
+{
+    WINDOW *pMenuWindow = pMenuData->pMenuWindow;
+    char drawName[DEFAULT_CHAR_SIZE];
+    int start_row = 14;
+
+    // Draw the current install configuration
+    if (g_pRocmConfig->install_rocm || (g_pDriverConfig->install_driver))
+    {
+        wattron(pMenuWindow, WHITE | A_ITALIC | A_UNDERLINE | A_BOLD);
+        mvwprintw(pMenuWindow, start_row, 50, "Install Configuration");
+        wattroff(pMenuWindow, WHITE | A_ITALIC | A_UNDERLINE | A_BOLD);
+        start_row +=2;
+    }
+
+    // ROCm
+    if (g_pRocmConfig->install_rocm)
+    {
+        wattron(pMenuWindow, WHITE | A_ITALIC );
+        mvwprintw(pMenuWindow, start_row, 52, "ROCm Install:");
+        wattroff(pMenuWindow, WHITE | A_ITALIC );
+        menu_info_draw_bool(pMenuData, start_row, 66, g_pRocmConfig->install_rocm);
+
+        // ROCm device
+        if (strlen(g_pRocmConfig->rocm_device) > 0)
+        {
+            wattron(pMenuWindow, GREEN | A_BOLD);
+            mvwprintw(pMenuWindow, start_row+1, 58, "Device: %s", g_pRocmConfig->rocm_device);
+            wattroff(pMenuWindow, GREEN | A_BOLD);
+        }
+        else
+        {
+            wattron(pMenuWindow, RED | A_BOLD);
+            mvwprintw(pMenuWindow, start_row+1, 58, "Device: not selected.");
+            wattroff(pMenuWindow, RED | A_BOLD);
+        }
+
+        // ROCm components
+        if (strlen(g_pRocmConfig->rocm_components) > 0)
+        {
+            clear_str(drawName);
+            field_trim(g_pRocmConfig->rocm_components, drawName, 17);
+
+            wattron(pMenuWindow, GREEN | A_BOLD);
+            mvwprintw(pMenuWindow, start_row+2, 54, "Components: %s", drawName);
+            wattroff(pMenuWindow, GREEN | A_BOLD);
+        }
+        else
+        {
+            wattron(pMenuWindow, RED | A_BOLD);
+            mvwprintw(pMenuWindow, start_row+2, 54, "Components: not selected.");
+            wattroff(pMenuWindow, RED | A_BOLD);
+        }
+
+        // ROCm install path
+        if (g_pRocmConfig->is_rocm_path_valid)
+        {
+            clear_str(drawName);
+            field_trim(g_pRocmConfig->rocm_install_path, drawName, 17);
+
+            wattron(pMenuWindow, GREEN | A_BOLD);
+            mvwprintw(pMenuWindow, start_row+3, 52, "Install Path: %s", drawName);
+            wattroff(pMenuWindow, GREEN | A_BOLD);
+        }
+        else
+        {
+            wattron(pMenuWindow, RED | A_BOLD);
+            mvwprintw(pMenuWindow, start_row+3, 52, "Install Path: Invalid.");
+            wattroff(pMenuWindow, RED | A_BOLD);
+        }
+
+        start_row +=5;
+    }
+
+    // Driver
+    if (g_pDriverConfig->install_driver)
+    {
+        wattron(pMenuWindow, WHITE | A_ITALIC );
+        mvwprintw(pMenuWindow, start_row, 50, "Driver Install: %d", g_pDriverConfig->install_driver);
+        wattroff(pMenuWindow, WHITE | A_ITALIC );
+        menu_info_draw_bool(pMenuData, start_row, 66, g_pDriverConfig->install_driver);
+    }
 }
 
 void main_menu_draw(MENU_DATA *pMenuData)
@@ -299,6 +377,8 @@ void main_menu_draw(MENU_DATA *pMenuData)
     {
         clear_menu_msg(pMenuData);
     }
+
+    main_menu_install_draw(pMenuData);
 
     box(pMenuData->pMenuWindow, 0, 0);
 }
@@ -400,13 +480,55 @@ void set_install_state(MENU_DATA *pMenuData)
     g_pConfig->install = installable;
 }
 
+static void handle_key_enter(ITEM *pCurrentItem, MENU_DATA *pMenuMain, int *done, int *status)
+{
+    MENU *pMenu = pMenuMain->pMenu;
+
+    unpost_menu(pMenu);
+
+    if ( item_index(pCurrentItem) == MAIN_MENU_ITEM_PRE_INDEX )
+    {
+        do_pre_menu();
+    }
+    else if ( item_index(pCurrentItem) == MAIN_MENU_ITEM_ROCM_INDEX )
+    {
+        do_rocm_menu();
+        set_install_state(pMenuMain);
+    }
+    else if ( item_index(pCurrentItem) == MAIN_MENU_ITEM_DRIVER_INDEX )
+    {
+        do_driver_menu();
+        set_install_state(pMenuMain);
+    }
+    else if ( item_index(pCurrentItem) == MAIN_MENU_ITEM_POST_INDEX )
+    {
+        do_post_menu();
+    }
+    else if ( item_index(pCurrentItem) == MAIN_MENU_ITEM_INSTALL_INDEX )
+    {
+        if (g_pConfig->install)
+        {
+            *done = 1;
+            *status = 0;
+        }
+    }
+    else
+    {
+        print_menu_err_msg(pMenuMain, "Invalid item");
+    }
+
+    // return to the main menu
+    main_menu_draw(pMenuMain);
+    post_menu(pMenu);
+}
+
 int main()
 {
     WINDOW *menuWindow;
     MENU *pMenu;
     ITEM *pCurrentItem;
 
-    OFFLINE_INSTALL_CONFIG offlineConfig = {0};
+    static OFFLINE_INSTALL_CONFIG offlineConfig = {0};
     MENU_DATA menuMain = {0};
 
     int c;
@@ -542,43 +664,7 @@ int main()
 
             case 10:    // Enter
                 pCurrentItem = current_item(pMenu);
-                unpost_menu(pMenu);
-
-                if ( item_index(pCurrentItem) == MAIN_MENU_ITEM_PRE_INDEX )
-                {
-                    do_pre_menu();
-                }
-                else if ( item_index(pCurrentItem) == MAIN_MENU_ITEM_ROCM_INDEX )
-                {
-                    do_rocm_menu();
-                    set_install_state(&menuMain);
-                }
-                else if ( item_index(pCurrentItem) == MAIN_MENU_ITEM_DRIVER_INDEX )
-                {
-                    do_driver_menu();
-                    set_install_state(&menuMain);
-                }
-                else if ( item_index(pCurrentItem) == MAIN_MENU_ITEM_POST_INDEX )
-                {
-                    do_post_menu();
-                }
-                else if ( item_index(pCurrentItem) == MAIN_MENU_ITEM_INSTALL_INDEX )
-                {
-                    if (g_pConfig->install)
-                    {
-                        done = 1;
-                        status = 0;
-                    }
-                }
-                else
-                {
-                    print_menu_err_msg(&menuMain, "Invalid item");
-                }
-
-                // return to the main menu
-                main_menu_draw(&menuMain);
-                post_menu(pMenu);
-
+                handle_key_enter(pCurrentItem, &menuMain, &done, &status);
                 break;
         }
 

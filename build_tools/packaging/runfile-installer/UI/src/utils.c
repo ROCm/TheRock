@@ -29,6 +29,9 @@
 #include <dirent.h>
 #include <libgen.h>
 #include <ctype.h>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <fcntl.h>
 
 
 void exit_error(char *pError)
@@ -89,7 +92,7 @@ int get_field_length(char *text, int field_width)
     char temp[DEFAULT_CHAR_SIZE];
     int i;
 
-    strcpy(temp, text);
+    snprintf(temp, sizeof(temp), "%s", text);
 
     for (i = 0; i < field_width; i++)
     {
@@ -566,28 +569,70 @@ int check_dkms_status(char *dkms_out, size_t dkms_out_size)
 int execute_cmd(const char *script, const char *args, WINDOW *pWin)
 {
     int ret = 1;
-
-    char cmd[LARGE_CHAR_SIZE];
-    clear_str(cmd);
+    pid_t pid;
+    int status;
 
     if (pWin)
     {
         // exit ncurses for the command
         def_prog_mode();
-	    endwin();
+        endwin();
+    }
 
-        sprintf(cmd, "%s %s", script, args);
+    pid = fork();
+    if (pid == 0)
+    {
+        // Child process
+        if (!pWin)
+        {
+            // Redirect output to /dev/null if no window
+            int fd = open("/dev/null", O_WRONLY);
+            if (fd >= 0)
+            {
+                dup2(fd, STDOUT_FILENO);
+                dup2(fd, STDERR_FILENO);
+                close(fd);
+            }
+        }
+
+        // Use execl to avoid shell interpretation - safer against command injection
+        // Parse args into separate arguments (simple space-separated parsing)
+        char args_copy[LARGE_CHAR_SIZE];
+        snprintf(args_copy, sizeof(args_copy), "%s", args);
+
+        // Count arguments
+        char *argv[64];  // Support up to 64 arguments
+        int argc = 0;
+        argv[argc++] = (char *)script;
+
+        // Split args by space
+        char *token = strtok(args_copy, " ");
+        while (token != NULL && argc < 63)
+        {
+            argv[argc++] = token;
+            token = strtok(NULL, " ");
+        }
+        argv[argc] = NULL;
+
+        // Execute without shell - prevents command injection
+        execv(script, argv);
+
+        // If execv fails
+        exit(1);
+    }
+    else if (pid > 0)
+    {
+        // Parent process - wait for child
+        waitpid(pid, &status, 0);
+        if (WIFEXITED(status) && WEXITSTATUS(status) == 0)
+        {
+            ret = 0;
+        }
     }
     else
     {
-        sprintf(cmd, "%s %s > /dev/null 2>&1", script, args);
-    }
-
-    // execute the command
-    ret = system(cmd);
-    if ((WEXITSTATUS(ret)) == 0)
-    {
-        ret = 0;
+        // Fork failed
+        ret = -1;
     }
 
     if (pWin)

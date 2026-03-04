@@ -32,14 +32,10 @@ BUILD_INSTALLER_DIR="$SCRIPT_DIR/build-installer"
 # Arguments to pass to each script
 SETUP_ARGS=()
 BUILD_ARGS=()
-SHOW_HELP=0
 
 # Phase control flags
 SKIP_SETUP=0
 SKIP_BUILD=0
-
-# Config file control
-USE_CONFIG_FILE=0
 
 # Build tag and run ID (captured from pulltag and pullrunid)
 # Note: These may be pre-set by config files, so only initialize if not already set
@@ -205,6 +201,7 @@ for arg in "$@"; do
             fi
 
             echo "Loading configuration from: $CONFIG_FILE"
+            # shellcheck source=/dev/null
             source "$CONFIG_FILE"
 
             # Map config variables to script variables for use in this script
@@ -215,7 +212,6 @@ for arg in "$@"; do
 
             echo "Configuration loaded. Command-line arguments will override config values."
             echo ""
-            USE_CONFIG_FILE=1
             break
             ;;
     esac
@@ -292,18 +288,18 @@ done
 
 # Auto-configure build arguments based on setup arguments
 # If rocm specified without amdgpu, disable AMDGPU extraction in build
-if [[ " ${SETUP_ARGS[@]} " =~ " rocm " ]] && [[ ! " ${SETUP_ARGS[@]} " =~ " amdgpu " ]]; then
+if [[ " ${SETUP_ARGS[*]} " =~ " rocm " ]] && [[ ! " ${SETUP_ARGS[*]} " =~ " amdgpu " ]]; then
     # User specified only rocm, so disable AMDGPU extraction in build unless explicitly enabled
-    if [[ ! " ${BUILD_ARGS[@]} " =~ " noamdgpu " ]]; then
+    if [[ ! " ${BUILD_ARGS[*]} " =~ " noamdgpu " ]]; then
         BUILD_ARGS+=("noamdgpu")
         echo "Auto-added 'noamdgpu' to build args (rocm-only build)"
     fi
 fi
 
 # If amdgpu specified without rocm, disable ROCm extraction in build
-if [[ " ${SETUP_ARGS[@]} " =~ " amdgpu " ]] && [[ ! " ${SETUP_ARGS[@]} " =~ " rocm " ]]; then
+if [[ " ${SETUP_ARGS[*]} " =~ " amdgpu " ]] && [[ ! " ${SETUP_ARGS[*]} " =~ " rocm " ]]; then
     # User specified only amdgpu, so disable ROCm extraction in build unless explicitly enabled
-    if [[ ! " ${BUILD_ARGS[@]} " =~ " norocm " ]]; then
+    if [[ ! " ${BUILD_ARGS[*]} " =~ " norocm " ]]; then
         BUILD_ARGS+=("norocm")
         echo "Auto-added 'norocm' to build args (amdgpu-only build)"
     fi
@@ -340,10 +336,10 @@ if [ $SKIP_SETUP -eq 0 ]; then
     echo ""
 
     echo "Setup Configuration:"
-    echo "  Setup Arguments: ${SETUP_ARGS[@]:-<none>}"
+    echo "  Setup Arguments: ${SETUP_ARGS[*]:-<none>}"
     echo ""
 
-    echo "Running: ./setup-installer.sh ${SETUP_ARGS[@]}"
+    echo "Running: ./setup-installer.sh ${SETUP_ARGS[*]}"
     echo ""
 
     ./setup-installer.sh "${SETUP_ARGS[@]}"
@@ -390,10 +386,10 @@ if [ $SKIP_BUILD -eq 0 ]; then
     fi
 
     echo "Build Configuration:"
-    echo "  Build Arguments: ${BUILD_ARGS[@]:-<none>}"
+    echo "  Build Arguments: ${BUILD_ARGS[*]:-<none>}"
     echo ""
 
-    echo "Running: ./build-installer.sh ${BUILD_ARGS[@]}"
+    echo "Running: ./build-installer.sh ${BUILD_ARGS[*]}"
     echo ""
 
     ./build-installer.sh "${BUILD_ARGS[@]}"

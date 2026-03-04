@@ -113,6 +113,7 @@ download_deb_packages() {
         return 1
     fi
 
+    # shellcheck source=/dev/null
     source "$config_file"
 
     if [ -z "$AMDGPU_REPO" ]; then
@@ -142,9 +143,8 @@ download_deb_packages() {
     PACKAGES_URL="${REPO_URL}/dists/${DISTRO_NAME}/${COMPONENT}/binary-amd64/Packages.gz"
 
     print_status "Downloading package index from: $PACKAGES_URL"
-    wget -q -O "$output_dir/Packages.gz" "$PACKAGES_URL"
 
-    if [ $? -ne 0 ]; then
+    if ! wget -q -O "$output_dir/Packages.gz" "$PACKAGES_URL"; then
         print_warning "Repository not available for $distro_tag at $PACKAGES_URL"
         print_warning "Skipping $distro_tag (repository may not exist for this AMDGPU version)"
         rm -rf "$output_dir"
@@ -191,9 +191,8 @@ download_deb_packages() {
         fi
 
         print_status "Downloading $PKG_NAME from $PKG_URL"
-        wget -q -O "$output_dir/$PKG_NAME" "$PKG_URL"
 
-        if [ $? -eq 0 ]; then
+        if wget -q -O "$output_dir/$PKG_NAME" "$PKG_URL"; then
             echo -e "\e[32mSuccessfully downloaded: $PKG_NAME\e[0m"
         else
             print_error "Failed to download $PKG_NAME"
@@ -219,6 +218,7 @@ download_rpm_packages() {
         return 1
     fi
 
+    # shellcheck source=/dev/null
     source "$config_file"
 
     if [ -z "$AMDGPU_REPO" ]; then
@@ -247,9 +247,8 @@ download_rpm_packages() {
     REPOMD_URL="${REPO_BASEURL}/repodata/repomd.xml"
 
     print_status "Downloading repomd.xml from: $REPOMD_URL"
-    wget -q -O "$output_dir/repomd.xml" "$REPOMD_URL"
 
-    if [ $? -ne 0 ]; then
+    if ! wget -q -O "$output_dir/repomd.xml" "$REPOMD_URL"; then
         print_warning "Repository not available for $distro_tag at $REPOMD_URL"
         print_warning "Skipping $distro_tag (repository may not exist for this AMDGPU version)"
         rm -rf "$output_dir"
@@ -273,9 +272,7 @@ download_rpm_packages() {
     PRIMARY_URL="${REPO_BASEURL}/${PRIMARY_HREF}"
 
     print_status "Downloading primary metadata from: $PRIMARY_URL"
-    wget -q -O "$output_dir/primary.xml.gz" "$PRIMARY_URL"
-
-    if [ $? -ne 0 ]; then
+    if ! wget -q -O "$output_dir/primary.xml.gz" "$PRIMARY_URL"; then
         print_error "Failed to download primary.xml.gz from $PRIMARY_URL"
         rm -f "$output_dir/repomd.xml"
         return 1
@@ -333,9 +330,8 @@ download_rpm_packages() {
         fi
 
         print_status "Downloading $PKG_NAME from $PKG_URL"
-        wget -q -O "$output_dir/$PKG_NAME" "$PKG_URL"
 
-        if [ $? -eq 0 ]; then
+        if wget -q -O "$output_dir/$PKG_NAME" "$PKG_URL"; then
             echo -e "\e[32mSuccessfully downloaded: $PKG_NAME\e[0m"
         else
             print_error "Failed to download $PKG_NAME"
@@ -411,7 +407,7 @@ while (($#)); do
 done
 
 # Change to script directory
-pushd "$SCRIPT_DIR" > /dev/null
+pushd "$SCRIPT_DIR" > /dev/null || exit
 
 # Download packages
 if [ -n "$SPECIFIC_DISTRO" ]; then
@@ -473,6 +469,6 @@ else
     fi
 fi
 
-popd > /dev/null
+popd > /dev/null || exit
 
 exit $EXIT_CODE

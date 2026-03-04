@@ -280,11 +280,8 @@ int execute_cmd_with_progress(const char *script, const char *arg1, const char *
         exit(1);
     }
 
-    // close any open file descriptors
-    if (fd >= 0)
-    {
-        close(fd);
-    }
+    // Note: fd is only set in child process, which doesn't return here
+    // Parent process keeps fd = -1, so no file descriptor to close
 
     delwin(progress_win);
 
@@ -306,24 +303,17 @@ void wait_for_user_input(WINDOW *pWin, int y, int x, char *output)
     wrefresh(pWin);
 
     int done = 0;
-    int c;
 
     // wait for keyboard input
     while( done == 0 )
     {
-        c = wgetch(pWin);
-        switch (c) 
-        {
-            default:
-                done = 1;
-                break;
-        }
+        wgetch(pWin);
+        done = 1;
     };
 }
 
 void process_item()
 {
-    //DEBUG_UI_MSG(&menuPre, "item userptr: item index %d, i = %p", item_index(current_item(pMenuData->pMenu)), pMenuData);
     draw_deps_selections();
 }
 

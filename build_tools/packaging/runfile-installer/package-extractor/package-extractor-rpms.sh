@@ -121,6 +121,7 @@ END_USAGE
 
 os_release() {
     if [[ -r  /etc/os-release ]]; then
+        # shellcheck source=/dev/null
         . /etc/os-release
 
         DISTRO_NAME=$ID
@@ -166,7 +167,7 @@ print_err() {
 
 prompt_user() {
     if [[ $PROMPT_USER == 1 ]]; then
-        read -p "$1" option
+        read -rp "$1" option
     else
         option=y
     fi
@@ -233,20 +234,20 @@ dump_extract_stats() {
     
     local stat_dir=$1
 
-    echo $stat_dir:
+    echo "$stat_dir":
     echo ----------------------------
-    echo "size:" 
+    echo "size:"
     echo "-----"
-    echo "$(du -sh $stat_dir | awk '{print $1}')"
-    echo "$(du -sb $stat_dir | awk '{print $1}')" bytes
+    du -sh "$stat_dir" | awk '{print $1}'
+    echo "$(du -sb "$stat_dir" | awk '{print $1}')" bytes
     echo "------"
     echo "types:"
     echo "------"
-    echo "files = $(find $stat_dir -type f | wc -l)"
-    echo "dirs  = $(find $stat_dir -type d | wc -l)"
-    echo "links = $(find $stat_dir -type l | wc -l)"
+    echo "files = $(find "$stat_dir" -type f | wc -l)"
+    echo "dirs  = $(find "$stat_dir" -type d | wc -l)"
+    echo "links = $(find "$stat_dir" -type l | wc -l)"
     echo "        ------"
-    echo "        $(find $stat_dir | wc -l)"
+    echo "        $(find "$stat_dir" | wc -l)"
     echo ----------------------------
 }
 
@@ -278,9 +279,9 @@ scriptlet_stats() {
     echo "SCRIPLET_POSTRM_COUNT   = $SCRIPLET_POSTRM_COUNT"
     echo "SCRIPTLET_OPT_COUNT     = $SCRIPTLET_OPT_COUNT"
     echo ----------------------
-    echo "Scriptlets (/opt/rocm):"  
+    echo "Scriptlets (/opt/rocm):"
     echo ----------------------
-    echo $SCRIPTLET_OPT | tr ' ' '\n' | sed 's/^[ \t]*//;s/[ \t]*$//' | sort -u
+    echo "$SCRIPTLET_OPT" | tr ' ' '\n' | sed 's/^[ \t]*//;s/[ \t]*$//' | sort -u
 }
 
 write_out_list() {
@@ -337,8 +338,9 @@ move_data() {
 
     # Loop through the content directory
     for dir in "$content_dir"/*; do
-        local dirname=$(basename "$dir")
-        
+        local dirname
+        dirname=$(basename "$dir")
+
         # Check if the current directory is the opt / etc / or usr directories
         if [[ -d "$dir" && "$dirname" == "opt" ]]; then
             echo -e "\e[93m'opt' directory detected: $dir\e[0m"
@@ -370,22 +372,21 @@ extract_data() {
     echo --------------------------------
     
     local package_dir_content="$PACKAGE_DIR/content"
-    
-    echo Creating content directory: $package_dir_content
-    mkdir $package_dir_content
+
+    echo Creating content directory: "$package_dir_content"
+    mkdir "$package_dir_content"
     
     echo "Extracting Data..."
     
     # Extract the rpm package file content
-    pushd $package_dir_content
-    
-        rpm2cpio "$PACKAGE" | cpio -idmv > /dev/null 2>&1
-        if [[ $? -ne 0 ]]; then
+    pushd "$package_dir_content" || exit
+
+        if ! rpm2cpio "$PACKAGE" | cpio -idmv > /dev/null 2>&1; then
             print_err "Failed rpm2cpio"
             exit 1
         fi
-        
-    popd
+
+    popd || exit
 
     # List extracted content files if requested
     if [ $CONTENT_LIST -eq 1 ]; then
@@ -410,14 +411,16 @@ extract_version() {
         echo "Extract rocm versioning..."
 
         # Extract version from package filename
-        local pkg_basename=$(basename "$pkg")
+        local pkg_basename
+        pkg_basename=$(basename "$pkg")
+        
         local pattern='amdrocm-base([0-9]+\.[0-9]+)-'
 
         if [[ $pkg_basename =~ $pattern ]]; then
             ROCM_VER="${BASH_REMATCH[1]}"
         else
-            VERSION_INFO=$(rpm -qi --nosignature $pkg | grep -E 'Version' | awk '{print $3}')
-            echo VERSION_INFO = $VERSION_INFO
+            VERSION_INFO=$(rpm -qi --nosignature "$pkg" | grep -E 'Version' | awk '{print $3}')
+            echo VERSION_INFO = "$VERSION_INFO"
             ROCM_VER=$(echo "$VERSION_INFO" | cut -d '.' -f 1-2)
         fi
 
@@ -429,10 +432,10 @@ extract_info() {
     echo --------------------------------
     echo Extracting package info
     echo --------------------------------
-    
-    rpm -qi --nosignature $PACKAGE
-    
-    VERSION_INFO=$(rpm -qi --nosignature $PACKAGE | grep -E 'Version' | awk '{print $3}')
+
+    rpm -qi --nosignature "$PACKAGE"
+
+    VERSION_INFO=$(rpm -qi --nosignature "$PACKAGE" | grep -E 'Version' | awk '{print $3}')
     
     # Check for amdgpu-based packages pulled with rocm packages
     if echo "$PACKAGE_DIR_NAME" | grep -q 'amdgpu'; then
@@ -461,21 +464,21 @@ extract_deps() {
     
     echo "Extracting Dependencies...: $PACKAGE to $package_dir_deps"
 
-    if [ ! -d $package_dir_deps ]; then
-        echo Creating deps directory: $package_dir_deps
-        mkdir -p $package_dir_deps
+    if [ ! -d "$package_dir_deps" ]; then
+        echo Creating deps directory: "$package_dir_deps"
+        mkdir -p "$package_dir_deps"
     fi
 
     echo --------------------------------
-    rpm -qpRv --nosignature $PACKAGE
+    rpm -qpRv --nosignature "$PACKAGE"
     echo --------------------------------
 
     # Extract manual dependencies
-    DEPS=$(rpm -qpRv --nosignature $PACKAGE | grep -E 'manual' | sed 's/manual: /,/')
+    DEPS=$(rpm -qpRv --nosignature "$PACKAGE" | grep -E 'manual' | sed 's/manual: /,/')
 
     # Also extract important automatic shared library dependencies
     # These are typically shown as "libname.so.X()(64bit)" and we need to map them to package names
-    AUTO_DEPS=$(rpm -qpR --nosignature $PACKAGE | grep -E '^lib.*\.so\.' | sed 's/(.*)//' | sed 's/\.so\..*//')
+    AUTO_DEPS=$(rpm -qpR --nosignature "$PACKAGE" | grep -E '^lib.*\.so\.' | sed 's/(.*)//' | sed 's/\.so\..*//')
 
     # Add atomic library dependency if found
     if echo "$AUTO_DEPS" | grep -q "libatomic"; then
@@ -487,10 +490,10 @@ extract_deps() {
         echo "-------------"
         echo "Dependencies:"
         echo "-------------"
-        echo $DEPS | tr ',' '\n' | awk 'NF' | sed 's/^[ \t]*//;s/[ \t]*$//' | sort -u
+        echo "$DEPS" | tr ',' '\n' | awk 'NF' | sed 's/^[ \t]*//;s/[ \t]*$//' | sort -u
 
         # write out the dependencies
-        echo $DEPS | tr ',' '\n' | awk 'NF' | sed 's/^[ \t]*//;s/[ \t]*$//' | sort -u > "$package_dir_deps/deps.txt"
+        echo "$DEPS" | tr ',' '\n' | awk 'NF' | sed 's/^[ \t]*//;s/[ \t]*$//' | sort -u > "$package_dir_deps/deps.txt"
 
         GLOBAL_DEPS+="$DEPS "
         echo "-------------"
@@ -508,15 +511,16 @@ extract_scriptlets() {
     local package_dir_scriptlet="$PACKAGE_DIR/scriptlets"
     
     echo "Extracting Scriptlets...: $PACKAGE to $package_dir_scriptlet"
-    
-    if [ ! -d $package_dir_scriptlet ]; then
-        echo Creating scriptlet directory: $package_dir_scriptlet
-        mkdir -p $package_dir_scriptlet
+
+    if [ ! -d "$package_dir_scriptlet" ]; then
+        echo Creating scriptlet directory: "$package_dir_scriptlet"
+        mkdir -p "$package_dir_scriptlet"
     fi
-    
-    local scriptlets=$(rpm -qp --scripts --nosignature "$PACKAGE")
+
+    local scriptlets
+    scriptlets=$(rpm -qp --scripts --nosignature "$PACKAGE")
     echo +++++++++++
-    echo $scriptlets
+    echo "$scriptlets"
     echo +++++++++++
    
     echo "$scriptlets" | awk -v output_dir="$package_dir_scriptlet" '
@@ -543,53 +547,53 @@ extract_scriptlets() {
     '
     
     # Make the output scripts executable
-    for scriptlet in $package_dir_scriptlet/*; do
-       if [[ -s $scriptlet ]]; then
+    for scriptlet in "$package_dir_scriptlet"/*; do
+       if [[ -s "$scriptlet" ]]; then
            echo ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
            echo Making scriptlet $scriptlet executable.
            chmod +x "$scriptlet"
            
            # Check the script content for /opt
-           if echo "$(cat $scriptlet)" | grep -q '/opt'; then
+           if grep -q '/opt' "$scriptlet"; then
                echo "Scriptlet contains /opt"
                SCRIPTLET_OPT_COUNT=$((SCRIPTLET_OPT_COUNT+1))
-               SCRIPTLET_OPT+="$(echo "$base_name") "
+               SCRIPTLET_OPT+="$base_name "
            fi
-           
+
            echo ++++++++++++++++++++++++++++
-           echo $(basename $scriptlet)
+           basename "$scriptlet"
            echo ++++++++++++++++++++++++++++
            cat "$scriptlet"
            echo ++++++++++++++++++++++++++++
-           
-           if [[ $(basename $scriptlet) == "preinstall.sh" ]]; then
+
+           if [[ $(basename "$scriptlet") == "preinstall.sh" ]]; then
                SCRIPLET_PREINST_COUNT=$((SCRIPLET_PREINST_COUNT+1))
-               
+
                # Rename for rocm-installer
                mv "$scriptlet" "$(dirname "$scriptlet")/preinst"
-               
-           elif [[ $(basename $scriptlet) == "postinstall.sh" ]]; then
+
+           elif [[ $(basename "$scriptlet") == "postinstall.sh" ]]; then
                SCRIPLET_POSTINST_COUNT=$((SCRIPLET_POSTINST_COUNT+1))
-               
+
                # Rename for rocm-installer
                mv "$scriptlet" "$(dirname "$scriptlet")/postinst"
-               
-           elif [[ $(basename $scriptlet) == "preuninstall.sh" ]]; then
+
+           elif [[ $(basename "$scriptlet") == "preuninstall.sh" ]]; then
                SCRIPLET_PRERM_COUNT=$((SCRIPLET_PRERM_COUNT+1))
-               
+
                # Rename for rocm-installer
                mv "$scriptlet" "$(dirname "$scriptlet")/prerm"
-               
-           elif [[ $(basename $scriptlet) == "postuninstall.sh" ]]; then
+
+           elif [[ $(basename "$scriptlet") == "postuninstall.sh" ]]; then
                SCRIPLET_POSTRM_COUNT=$((SCRIPLET_POSTRM_COUNT+1))
-               
+
                # Rename for rocm-installer
                mv "$scriptlet" "$(dirname "$scriptlet")/postrm"
                
            fi
            
        else
-           if [[ -f $scriptlet ]]; then
+           if [[ -f "$scriptlet" ]]; then
                #echo Removing empty scriptlet $(basename $scriptlet).
                rm "$scriptlet"
            fi
@@ -603,18 +607,19 @@ extract_scriptlets() {
 extract_package() {
     echo ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     echo "Extracting Package...: $PACKAGE"
-    
-    local base_name=$(basename $PACKAGE)
-    
+
+    local base_name
+    base_name=$(basename "$PACKAGE")
+
     PACKAGE_DIR_NAME=$(echo "$base_name" | sed 's/-[0-9].*$//')
     PACKAGE_DIR=$EXTRACT_DIR/$PACKAGE_DIR_NAME
     
     echo "Package Directory Name    = $PACKAGE_DIR_NAME"
     echo "Package Extract Directory = $PACKAGE_DIR"
-    
-    if [ ! -d $PACKAGE_DIR ]; then
-        echo Create directory $PACKAGE_DIR
-        mkdir -p $PACKAGE_DIR
+
+    if [ ! -d "$PACKAGE_DIR" ]; then
+        echo Create directory "$PACKAGE_DIR"
+        mkdir -p "$PACKAGE_DIR"
     fi
     
     # Extract the content from data
@@ -663,10 +668,12 @@ add_extra_deps() {
 
 check_package_owner() {
     AMDPKG=0
-    
-    local package=$(rpm -q --queryformat "%{NAME}" --nosignature $PACKAGE)
-    local vendor=$(rpm -qi --nosignature $PACKAGE | grep Vendor)
-    
+
+    local package
+    local vendor
+    package=$(rpm -q --queryformat "%{NAME}" --nosignature "$PACKAGE")
+    vendor=$(rpm -qi --nosignature "$PACKAGE" | grep Vendor)
+
     if [[ $package =~ "amdgpu" || $package =~ "rocm" ]]; then
         AMDPKG=1
     else
@@ -680,11 +687,11 @@ check_package_owner() {
     if [[ $AMDPKG == 1 ]] ; then
         print_no_err "AMD PACKAGE"
         AMD_COUNT=$((AMD_COUNT+1))
-        AMD_PACKAGES+="$(basename $PACKAGE) "
+        AMD_PACKAGES+="$(basename "$PACKAGE") "
     else
         print_err "3rd Party PACKAGE"
         NON_AMD_COUNT=$((NON_AMD_COUNT+1))
-        OTHER_PACKAGES+="$(basename $PACKAGE) "
+        OTHER_PACKAGES+="$(basename "$PACKAGE") "
     fi
 }
 
@@ -767,12 +774,12 @@ filter_deps_version() {
                 # before writing out, check for "tags" or if the dep is in the extracted package list
                 if echo "$CONFIG_PKGS" | grep -qw "$prev_package"; then
                     echo -e "\e[32mConfig package: write prev_package: $prev_package\e[0m"
-                    echo $prev_package >> "$deps_file_filtered"
+                    echo "$prev_package" >> "$deps_file_filtered"
                 else
                     echo -e "\e[32mNon-Tag package: write prev_line: $prev_line\e[0m"
-                    echo $prev_line >> "$deps_file_filtered"
+                    echo "$prev_line" >> "$deps_file_filtered"
                 fi
-                
+
                 prev_package="$current_package"
                 prev_line=$line
                 prev_version="$current_version"
@@ -783,9 +790,9 @@ filter_deps_version() {
             prev_version="$current_version"
         fi
     done < "$deps_file"
-    
+
     # write out the last line
-    echo $prev_line >> "$deps_file_filtered"
+    echo "$prev_line" >> "$deps_file_filtered"
     
     sort -u "$deps_file_filtered" -o "$deps_file_filtered"
     
@@ -821,23 +828,23 @@ extract_rpms() {
     echo Extracting RPMs...
     
     PKG_COUNT=0
-    
-    if [ -d $EXTRACT_DIR ]; then
+
+    if [ -d "$EXTRACT_DIR" ]; then
         echo -e "\e[93mExtraction directory exists. Removing: $EXTRACT_DIR\e[0m"
-        $SUDO rm -rf $EXTRACT_DIR
+        $SUDO rm -rf "$EXTRACT_DIR"
     fi
-    
+
     echo Creating Extraction directory.
-    mkdir -p $EXTRACT_DIR
-    
+    mkdir -p "$EXTRACT_DIR"
+
     echo Extracting RPM...
-    
+
     for pkg in $PACKAGES; do
-        
+
         PKG_COUNT=$((PKG_COUNT+1))
-        
+
         echo -------------------------------------------------------------------------------
-        echo -e "\e[93mpkg $PKG_COUNT = $(basename $pkg)\e[0m"
+        echo -e "\e[93mpkg $PKG_COUNT = $(basename "$pkg")\e[0m"
         
         PACKAGE=$pkg
         
@@ -916,9 +923,13 @@ combine_rocm_deps() {
                 fi
             done < "$gfx_deps_sorted" > "$gfx_deps_filtered"
 
-            local filtered_count=$(wc -l < "$gfx_deps_sorted")
-            local remaining_count=$(wc -l < "$gfx_deps_filtered")
+            local filtered_count
+            local remaining_count
+            filtered_count=$(wc -l < "$gfx_deps_sorted")
+            remaining_count=$(wc -l < "$gfx_deps_filtered")
+            
             local removed_count=$((filtered_count - remaining_count))
+            
             echo "Filtered out $removed_count AMD ROCm package dependencies"
             echo "Remaining external dependencies: $remaining_count"
 
@@ -967,8 +978,8 @@ combine_rocm_deps() {
 
     rm -f "$temp_deps_file" "$all_packages_file"
 
-    local total_deps=$(wc -l < "$combined_deps_file")
-    local total_components=$((gfx_component_count + 1))
+    local total_deps
+    total_deps=$(wc -l < "$combined_deps_file")
     echo "Combined dependencies from $gfx_component_count gfx component subdirectories + base component"
     echo "Total unique required dependencies: $total_deps"
     echo "Output file: $combined_deps_file"
@@ -1020,7 +1031,8 @@ extract_meta_package_deps() {
         [[ -z "$dep_line" || "$dep_line" =~ ^# ]] && continue
 
         # Extract package name (remove version info after "=")
-        local pkg_name=$(echo "$dep_line" | sed 's/[[:space:]]*=.*//' | xargs)
+        local pkg_name
+        pkg_name=$(echo "$dep_line" | sed 's/[[:space:]]*=.*//' | xargs)
 
         # Only process amdrocm packages
         if [[ "$pkg_name" =~ ^amdrocm- ]]; then
@@ -1080,7 +1092,8 @@ extract_meta_package_deps() {
             [[ -z "$dep_line" || "$dep_line" =~ ^# ]] && continue
 
             # Extract package name (remove version info after "=")
-            local dep_pkg_name=$(echo "$dep_line" | sed 's/[[:space:]]*=.*//' | xargs)
+            local dep_pkg_name
+            dep_pkg_name=$(echo "$dep_line" | sed 's/[[:space:]]*=.*//' | xargs)
 
             # Only process amdrocm packages
             if [[ "$dep_pkg_name" =~ ^amdrocm- ]]; then
@@ -1127,7 +1140,8 @@ extract_meta_packages() {
             continue
         fi
 
-        local gfx_tag=$(basename "$gfx_dir")
+        local gfx_tag
+        gfx_tag=$(basename "$gfx_dir")
         echo ""
         echo "Processing $gfx_tag directory..."
 
@@ -1264,7 +1278,7 @@ extract_rocm_rpms() {
         init_stats
 
         # Set PKG_LIST and PACKAGES for this gfx group
-        PKG_LIST=($pkg_list)
+        read -r -a PKG_LIST <<< "$pkg_list"
         PACKAGES="$pkg_list"
         PKG_COUNT=${#PKG_LIST[@]}
 
@@ -1310,15 +1324,15 @@ extract_amdgpu_rpms() {
     
     echo Getting package list...
     PACKAGE_LIST=
-    
-    if [ ! -d $PACKAGE_DIR ]; then
+
+    if [ ! -d "$PACKAGE_DIR" ]; then
         print_err "$PACKAGE_DIR does not exist."
         exit 1
     fi
-    
-    for pkg in $PACKAGE_DIR/*; do
+
+    for pkg in "$PACKAGE_DIR"/*; do
         if [[ $pkg == *.rpm ]]; then
-            echo $pkg
+            echo "$pkg"
             PACKAGES+="$pkg "
         fi
     done
@@ -1335,11 +1349,11 @@ extract_amdgpu_rpms() {
     # extract the amdgpu-dkms build version
     local amdgpu_dkms_path="$EXTRACT_AMDGPU_DIR/amdgpu-dkms/content/usr/src"
 
-    if [ -d $amdgpu_dkms_path ]; then
-        AMDGPU_DKMS_BUILD_VER=$(ls $amdgpu_dkms_path)
+    if [ -d "$amdgpu_dkms_path" ]; then
+        AMDGPU_DKMS_BUILD_VER=$(ls "$amdgpu_dkms_path")
         AMDGPU_DKMS_BUILD_VER=${AMDGPU_DKMS_BUILD_VER#amdgpu-}
 
-        echo AMDGPU_DKMS_BUILD_VER = $AMDGPU_DKMS_BUILD_VER
+        echo AMDGPU_DKMS_BUILD_VER = "$AMDGPU_DKMS_BUILD_VER"
 
         # Create root-level amdgpu-dkms-ver.txt with distro suffix removed
         local root_amdgpu_dkms_file="../rocm-installer/component-amdgpu/$EXTRACT_AMDGPU_DKMS_VER_FILE"
@@ -1347,7 +1361,8 @@ extract_amdgpu_rpms() {
         # e.g., 6.16.13-2278356.24.04 -> 6.16.13-2278356
         # e.g., 6.16.13-2278356.el8 -> 6.16.13-2278356
         # e.g., 6.16.13-2278356.amzn2023 -> 6.16.13-2278356
-        local clean_ver=$(echo "$AMDGPU_DKMS_BUILD_VER" | sed -E 's/\.(el[0-9]+|amzn[0-9]+|[0-9]+\.[0-9]+)$//')
+        local clean_ver
+        clean_ver=$(echo "$AMDGPU_DKMS_BUILD_VER" | sed -E 's/\.(el[0-9]+|amzn[0-9]+|[0-9]+\.[0-9]+)$//')
 
         echo "Writing root AMDGPU_DKMS_VER (distro suffix removed) = $clean_ver"
         mkdir -p "$(dirname "$root_amdgpu_dkms_file")"
@@ -1356,8 +1371,10 @@ extract_amdgpu_rpms() {
     
     # reorder the amdgpu package config to ensure the order
     local config_file="$EXTRACT_DIR/$EXTRACT_AMDGPU_PKG_CONFIG_FILE"
+
+    local packages
+    packages=$(cat "$config_file")
     
-    local packages=$(cat "$config_file")
     local reordered_packages=""
 
     # Ensure "amdgpu-dkms-firmware" is the first package
@@ -1393,8 +1410,8 @@ write_extract_info() {
 ####### Main script ###############################################################
 
 # Create the extraction log directory
-if [ ! -d $EXTRACT_LOGS_DIR ]; then
-    mkdir -p $EXTRACT_LOGS_DIR
+if [ ! -d "$EXTRACT_LOGS_DIR" ]; then
+    mkdir -p "$EXTRACT_LOGS_DIR"
 fi
 
 exec > >(tee -a "$EXTRACT_CURRENT_LOG") 2>&1

@@ -59,12 +59,12 @@ cleanup_install() {
         
         print_msg "Cleaning up amdgpu components...Complete"
     fi
-    
+
     # Remove any installer scripts
-    for index in ${CLEAN_SCRIPT_LIST[@]}; do
-        if [ -f $index ]; then
+    for index in "${CLEAN_SCRIPT_LIST[@]}"; do
+        if [ -f "$index" ]; then
             print_msg "==== Removing $index ===="
-            $SUDO rm $index
+            $SUDO rm "$index"
         fi
     done
     

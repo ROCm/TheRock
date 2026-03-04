@@ -29,7 +29,6 @@ GRAPHICS_REPO=
 
 # Packaging repos
 PACKAGE_REPO=$PWD/packages
-SETUP_PATH=$PWD/setup
 
 # Logs
 PULL_LOGS_DIR="$PWD/logs"
@@ -80,6 +79,7 @@ END_USAGE
 
 os_release() {
     if [[ -r  /etc/os-release ]]; then
+        # shellcheck source=/dev/null
         . /etc/os-release
 
         DISTRO_NAME=$ID
@@ -144,7 +144,7 @@ print_str() {
 
 prompt_user() {
     if [[ $PROMPT_USER == 1 ]]; then
-        read -p "$1" option
+        read -rp "$1" option
     else
         option=y
     fi
@@ -154,8 +154,7 @@ update_dnf_conf() {
     $SUDO cp /etc/dnf/dnf.conf /etc/dnf/dnf.conf.bak
 
     # check if the dnf.conf file has fastestmirror=true
-    grep -q "fastestmirror=true" /etc/dnf/dnf.conf
-    if [ $? -ne 0 ]; then
+    if ! grep -q "fastestmirror=true" /etc/dnf/dnf.conf; then
         echo Enabling fastest mirror.
         echo "fastestmirror=true" | $SUDO tee -a /etc/dnf/dnf.conf
     fi
@@ -189,9 +188,8 @@ setup_epel_crb() {
         fi
     
         echo "EPEL repo setup for EL $DISTRO_MAJOR_VER."
-        
-        wget --tries 5 https://dl.fedoraproject.org/pub/epel/$epel_pkg
-        if [ $? -ne 0 ]; then
+
+        if ! wget --tries 5 https://dl.fedoraproject.org/pub/epel/"$epel_pkg"; then
             print_err "Unsupported version for EPEL."
             exit 1
         fi
@@ -205,8 +203,9 @@ setup_epel_crb() {
             print_err "$codeready_repo repo not configured."
             exit 1
         fi
-        
-        local repo_status=$(dnf repolist all | grep "^$codeready_repo" | awk '{print $NF}')
+
+        local repo_status
+        repo_status=$(dnf repolist all | grep "^$codeready_repo" | awk '{print $NF}')
         if [[ "$repo_status" == "disabled" ]]; then
             echo "Enabling $codeready_repo."
             $SUDO dnf config-manager --enable "$codeready_repo"
@@ -241,12 +240,12 @@ install_prereqs() {
 cleanup() {
     echo ++++++++++++++++++++++++++++++++
     echo Cleaning up...
-    
+
     # Remove any .repo files
-    for index in ${REPO_LIST[@]}; do
-        if [ -f /etc/yum.repos.d/$index ]; then
+    for index in "${REPO_LIST[@]}"; do
+        if [ -f "/etc/yum.repos.d/$index" ]; then
             echo -e "\e[93m=-=-=-= Removing $index =-=-=-=\e[0m"
-            $SUDO rm /etc/yum.repos.d/$index
+            $SUDO rm "/etc/yum.repos.d/$index"
         fi
     done
     
@@ -269,14 +268,15 @@ config_create() {
     # Check for user-modified config file (input .config to create script)
     if [[ ${CREATE_CONFIG_FILE_INPUT##*.} == "config" ]]; then
          CREATE_CONFIG_FILE=$CREATE_CONFIG_FILE_INPUT
-         echo Using Create Configuration file: $CREATE_CONFIG_FILE
-         
-         if [[ ! -f $CREATE_CONFIG_FILE ]]; then
-             echo $CREATE_CONFIG_FILE not found.
+         echo Using Create Configuration file: "$CREATE_CONFIG_FILE"
+
+         if [[ ! -f "$CREATE_CONFIG_FILE" ]]; then
+             echo "$CREATE_CONFIG_FILE" not found.
              exit 1
          fi
-         
-         source $CREATE_CONFIG_FILE
+
+         # shellcheck source=/dev/null
+         source "$CREATE_CONFIG_FILE"
     else
         print_err "Fail.  No config file."
         exit 1
@@ -383,23 +383,23 @@ download_packages() {
     echo Downloading and setting up Packaging...
 
     # create the package directory repo
-    echo Creating packages directory: $PACKAGE_REPO
-    mkdir $PACKAGE_REPO
+    echo Creating packages directory: "$PACKAGE_REPO"
+    mkdir "$PACKAGE_REPO"
        
     $SUDO dnf clean all
     $SUDO rm -rf /var/cache/dnf/*
     
-    echo =-=-=-= download packages =-=-=-=
+    echo "-=-=-= download packages -=-=-="
     prompt_user "Start Download : (y/n): "
     if [[ $option == "Y" || $option == "y" ]]; then
     
         # Download the package dependencies to the dep directory
-        pushd $PACKAGE_REPO
-            
+        pushd "$PACKAGE_REPO" || exit
+
             $SUDO dnf download --resolve --downloaddir="./" $PACKAGES
             ret=$?
-            
-        popd
+
+        popd || exit
         
         # check for any download errors
         if [[ $ret -ne 0 ]]; then
@@ -438,15 +438,18 @@ download_packages() {
 
 check_package_owner() {
     AMDPKG=0
-    AMDGPUPKG=0
-    
+
     local pkgName=$1
-    local package=$(rpm -q --queryformat "%{NAME}" --nosignature $pkg)
-    local vendor=$(rpm -qi --nosignature $pkg | grep Vendor)
-    local epoch=$(rpm -q --queryformat "%{EPOCH}" --nosignature $pkg)
+    local package
+    local vendor
+    local epoch
     
+    package=$(rpm -q --queryformat "%{NAME}" --nosignature "$pkg")
+    vendor=$(rpm -qi --nosignature "$pkg" | grep Vendor)
+    epoch=$(rpm -q --queryformat "%{EPOCH}" --nosignature "$pkg")
+
     if [[ $VERBOSE == 1 ]]; then
-        rpm -qi --nosignature $pkgName
+        rpm -qi --nosignature "$pkgName"
     fi
     
     if [[ $package =~ "amdgpu" || $package =~ "rocm" ]]; then
@@ -462,43 +465,42 @@ check_package_owner() {
     # for amd or amdgpu-specific packages copy to separate directories  
     if [[ $AMDPKG == 1 ]] ; then
         AMD_COUNT=$((AMD_COUNT+1))
-        ROCM_PACKAGES+="$(basename $pkgName) "
-        
+        ROCM_PACKAGES+="$(basename "$pkgName") "
+
         if [[ $DUMP_AMD_PKGS == 1 ]]; then
-            if [[ ! -d $PWD/packages-amd ]]; then
+            if [[ ! -d "$PWD/packages-amd" ]]; then
                 echo Creating Extraction amd directory.
-                mkdir -p $PWD/packages-amd
+                mkdir -p "$PWD/packages-amd"
             fi
-        
-            cp $pkgName $PWD/packages-amd
+
+            cp "$pkgName" "$PWD/packages-amd"
         fi
-        
+
         if [[ $epoch != "(none)" ]]; then
-            AMDGPUPKG=1
             AMDGPU_COUNT=$((AMDGPU_COUNT+1))
-            if [[ ! -d $PWD/packages-amdgpu ]]; then
+            if [[ ! -d "$PWD/packages-amdgpu" ]]; then
                 echo Creating Extraction amdgpu directory.
-                mkdir -p $PWD/packages-amdgpu
+                mkdir -p "$PWD/packages-amdgpu"
             fi
-            
-            cp $pkgName $PWD/packages-amdgpu
+
+            cp "$pkgName" "$PWD/packages-amdgpu"
             echo -e "\e[94m++++++++++++++++++++++++++++++++++++\e[0m"
             echo -e "\e[94m$AMDGPU_COUNT: AMDGPU PACKAGE\e[0m"
             echo -e "\e[94m++++++++++++++++++++++++++++++++++++\e[0m"
         fi
-        
+
         print_no_err "$AMD_COUNT: AMD PACKAGE"
     else
         NON_AMD_COUNT=$((NON_AMD_COUNT+1))
-        OTHER_PACKAGES+="$(basename $pkgName) "
-        
+        OTHER_PACKAGES+="$(basename "$pkgName") "
+
         if [[ $DUMP_NON_AMD_PKGS == 1 ]]; then
-            if [[ ! -d $PWD/packages-other ]]; then
+            if [[ ! -d "$PWD/packages-other" ]]; then
                 echo Creating Extraction non-amd directory.
-                mkdir -p $PWD/packages-other
+                mkdir -p "$PWD/packages-other"
             fi
-        
-            cp $pkgName $PWD/packages-other
+
+            cp "$pkgName" "$PWD/packages-other"
         fi
         
         print_str "$NON_AMD_COUNT: 3rd Party PACKAGE" 4
@@ -514,23 +516,23 @@ dump_packages_info() {
     PACKAGES=
     ROCM_PACKAGES=
     OTHER_PACKAGES=
-    
-    for pkg in $PACKAGE_REPO/*; do
+
+    for pkg in "$PACKAGE_REPO"/*; do
         if [[ $pkg == *.rpm ]]; then
-            echo pkg = $pkg
+            echo pkg = "$pkg"
             PACKAGES+="$pkg "
         fi
     done
-    
-    pushd $PACKAGE_REPO
+
+    pushd "$PACKAGE_REPO" || exit
         for pkg in $PACKAGES; do
             PKG_COUNT=$((PKG_COUNT+1))
-        
+
             echo ----------------------------------------------------------------------
-            echo -e "\e[93mpkg $PKG_COUNT = $(basename $pkg)\e[0m"
-            check_package_owner $pkg
+            echo -e "\e[93mpkg $PKG_COUNT = $(basename "$pkg")\e[0m"
+            check_package_owner "$pkg"
        done
-   popd
+   popd || exit
    
    echo -----------------------------
    echo "Package Total         = $PKG_COUNT"
@@ -543,8 +545,8 @@ dump_packages_info() {
 ####### Main script ###############################################################
 
 # Create the pull log directory
-if [ ! -d $PULL_LOGS_DIR ]; then
-    mkdir -p $PULL_LOGS_DIR
+if [ ! -d "$PULL_LOGS_DIR" ]; then
+    mkdir -p "$PULL_LOGS_DIR"
 fi
 
 exec > >(tee -a "$PULL_CURRENT_LOG") 2>&1
@@ -556,7 +558,7 @@ echo ===================
 PROG=${0##*/}
 
 SUDO=$([[ $(id -u) -ne 0 ]] && echo "sudo" ||:)
-echo SUDO: $SUDO
+echo SUDO: "$SUDO"
 
 os_release
 
@@ -610,7 +612,7 @@ do
 done
 
 # Configure the creator
-config_create $CONFIG_FILE
+config_create "$CONFIG_FILE"
 
 echo --------------------------------------------------
 echo "PACKAGE_REPO  = $PACKAGE_REPO"
@@ -622,7 +624,7 @@ echo "AMDGPU_REPO   = $AMDGPU_REPO"
 echo -----------------------------------------
 echo "GRAPHICS_REPO = $GRAPHICS_REPO"
 echo -----------------------------------------
-echo PACKAGES       = $PACKAGES
+echo "PACKAGES       = $PACKAGES"
 echo --------------------------------------------------
 
 prompt_user "Pull Packages from repos (y/n): "
@@ -635,9 +637,9 @@ cleanup
 
 install_prereqs
 
-if [ -d $PACKAGE_REPO ]; then
+if [ -d "$PACKAGE_REPO" ]; then
     echo -e "\e[93mPackage directory exists.  Removing: $PACKAGE_REPO\e[0m"
-    $SUDO rm -r $PACKAGE_REPO
+    $SUDO rm -r "$PACKAGE_REPO"
 fi
 
 setup_rocm_repo

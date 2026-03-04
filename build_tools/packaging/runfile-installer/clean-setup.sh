@@ -21,7 +21,7 @@ OFFLINE_SELF_BASE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Detect if sudo is needed
 SUDO=$([[ $(id -u) -ne 0 ]] && echo "sudo" ||:)
-echo SUDO: $SUDO
+echo SUDO: "$SUDO"
 
 # Parse arguments
 CLEAN_SETUP=0
@@ -81,7 +81,7 @@ elif [ $CLEAN_BUILD -eq 1 ]; then
 fi
 echo =======================
 
-pushd "$OFFLINE_SELF_BASE"
+pushd "$OFFLINE_SELF_BASE" || exit
 
 ###### Setup-related cleanup (pulled packages) ######
 if [ $CLEAN_SETUP -eq 1 ]; then
@@ -351,7 +351,7 @@ if [ $CLEAN_BUILD -eq 1 ]; then
     fi
 fi
 
-popd
+popd || exit
 
 echo ""
 echo =======================

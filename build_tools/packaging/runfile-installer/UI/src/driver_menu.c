@@ -255,7 +255,7 @@ void do_driver_menu()
     wclear(menuDriver.pMenuWindow);
 
     // draw the driver menu contents
-    driver_menu_draw(&menuDriver);
+    driver_menu_draw();
 
     // driver menu loop
     menu_loop(&menuDriver);
@@ -333,5 +333,5 @@ void process_driver_menu()
         DEBUG_UI_MSG(&menuDriver, "Unknown item index");
     }
 
-    driver_menu_draw(&menuDriver);
+    driver_menu_draw();
 }
