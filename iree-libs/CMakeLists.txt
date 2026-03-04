@@ -88,7 +88,7 @@ if(THEROCK_ENABLE_FUSILLIPROVIDER)
   ##############################################################################
   therock_cmake_subproject_declare(fusilliprovider
     USE_DIST_AMDGPU_TARGETS
-    EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/fusilli/plugins/hipdnn-plugin"
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/dnn-providers/fusilli-provider"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/fusilliprovider"
     BACKGROUND_BUILD
     CMAKE_ARGS
