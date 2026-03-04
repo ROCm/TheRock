@@ -12,10 +12,15 @@ on:
         type: string
         default: "gfx94X-dcgpu"
       test_runs_on:
-        description: Runner label to use. The selected runner should have a GPU supported by amdgpu_family
+        description: Runner for default/inductor tests (1 GPU)
         required: true
         type: string
         default: "linux-mi325-1gpu-ossci-rocm"
+      distributed_test_runs_on:
+        description: Runner for distributed tests (multi-GPU)
+        required: true
+        type: string
+        default: "linux-mi325-4gpu-ossci-rocm"
       package_index_url:
         description: Base Python package index URL to test, typically nightly/dev URL with a "v2" or "v2-staging" subdir (without a GPU family subdir)
         required: true
@@ -46,6 +51,10 @@ on:
       test_runs_on:
         required: true
         type: string
+      distributed_test_runs_on:
+        description: Runner for distributed tests (multi-GPU)
+        type: string
+        default: "linux-mi325-4gpu-ossci-rocm"
       package_index_url:
         required: true
         type: string
@@ -77,7 +86,7 @@ run-name: Test PyTorch (${{ inputs.amdgpu_family }}, ${{ inputs.torch_version}},
 jobs:
   test_wheels:
     name: Test PyTorch | ${{ inputs.amdgpu_family }} | ${{ matrix.test_config }} (shard ${{ matrix.shard }}/4)
-    runs-on: ${{ inputs.test_runs_on }}
+    runs-on: ${{ matrix.test_config == 'distributed' && inputs.distributed_test_runs_on || inputs.test_runs_on }}
     strategy:
       fail-fast: false
       matrix:
