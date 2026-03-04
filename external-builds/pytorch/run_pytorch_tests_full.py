@@ -25,7 +25,7 @@ from pytorch_utils import (
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 
-
+#Use mi300 test times because https://github.com/ROCm/TheRock/actions/workflows/test_pytorch_wheels.yml chooses mi300 as default
 ROCM_BUILD_ENVIRONMENT = "linux-noble-rocm-py3.12-mi300"
 
 THEROCK_ENV_VARS = [
