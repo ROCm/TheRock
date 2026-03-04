@@ -103,7 +103,6 @@ jobs:
       use_prebuilt_artifacts: ${{ inputs.linux_use_prebuilt_artifacts == true && 'true' || 'false' }}
       prebuilt_stages: ${{ inputs.linux_prebuilt_stages }}
       baseline_run_id: ${{ inputs.linux_baseline_run_id }}
-      dist_amdgpu_families_flat: ${{ needs.setup.outputs.linux_dist_amdgpu_families }}
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
     permissions:

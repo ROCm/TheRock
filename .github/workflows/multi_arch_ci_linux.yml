@@ -34,10 +34,6 @@ on:
       baseline_run_id:
         type: string
         default: ""
-      dist_amdgpu_families_flat:
-        type: string
-        default: ""
-        description: "Comma-separated list of all GPU families (for artifact copy)"
       rocm_package_version:
         type: string
       test_type:
@@ -76,7 +72,7 @@ jobs:
           python build_tools/artifact_manager.py copy \
             --source-run-id=${{ inputs.baseline_run_id }} \
             --stage="${{ inputs.prebuilt_stages }}" \
-            --amdgpu-families="${{ inputs.dist_amdgpu_families_flat }}"
+            --amdgpu-families="${{ inputs.dist_amdgpu_families }}"
 
   build_multi_arch_stages:
     name: Build Multi-Arch Stages

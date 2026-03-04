@@ -712,22 +712,10 @@ def main(base_args, linux_families, windows_families):
     """
     )
 
-    # Collect all dist_amdgpu_families across variants (comma-separated).
-    # Used by copy_prebuilt_stages to know which families to copy artifacts for.
-    def _collect_families(variants: list[dict]) -> str:
-        families: set[str] = set()
-        for variant in variants:
-            for family in variant.get("dist_amdgpu_families", "").split(";"):
-                if family:
-                    families.add(family)
-        return ",".join(sorted(families))
-
     output = {
         "linux_variants": json.dumps(linux_variants_output),
-        "linux_dist_amdgpu_families": _collect_families(linux_variants_output),
         "linux_test_labels": json.dumps(linux_test_output),
         "windows_variants": json.dumps(windows_variants_output),
-        "windows_dist_amdgpu_families": _collect_families(windows_variants_output),
         "windows_test_labels": json.dumps(windows_test_output),
         "enable_build_jobs": json.dumps(enable_build_jobs),
         "test_type": test_type,
