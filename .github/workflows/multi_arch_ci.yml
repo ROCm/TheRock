@@ -75,14 +75,42 @@ jobs:
       build_variant: "release"
       multi_arch: true
       prebuilt_stages: ${{ inputs.linux_prebuilt_stages }}
-      baseline_run_id: ${{ inputs.linux_baseline_run_id }}
+
+  copy_prebuilt_stages:
+    name: Copy Prebuilt Stages
+    needs: setup
+    if: ${{ inputs.linux_prebuilt_stages != '' && inputs.linux_baseline_run_id != '' }}
+    runs-on: azure-linux-scale-rocm
     permissions:
       contents: read
       id-token: write
+    steps:
+      - name: Checking out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install artifact manager dependencies
+        run: pip install boto3
+
+      - name: Configure AWS Credentials
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-ci
+
+      - name: Copy prebuilt stage artifacts
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python build_tools/github_actions/copy_prebuilt_stages.py \
+            --prebuilt-stages="${{ inputs.linux_prebuilt_stages }}" \
+            --baseline-run-id=${{ inputs.linux_baseline_run_id }} \
+            --linux-variants='${{ needs.setup.outputs.linux_variants }}'
 
   linux_build_and_test:
     name: Linux::${{ matrix.variant.build_variant_label }}
-    needs: setup
+    needs: [setup, copy_prebuilt_stages]
     if: >-
       ${{
         needs.setup.outputs.linux_variants != '[]' &&
@@ -148,6 +176,7 @@ jobs:
     if: always()
     needs:
       - setup
+      - copy_prebuilt_stages
       - linux_build_and_test
       - windows_build_and_test
     runs-on: ubuntu-24.04

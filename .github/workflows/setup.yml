@@ -16,11 +16,7 @@ on:
       prebuilt_stages:
         type: string
         default: ""
-        description: "Comma-separated stages to copy from baseline run (e.g. foundation,compiler-runtime)"
-      baseline_run_id:
-        type: string
-        default: ""
-        description: "Run ID to copy prebuilt artifacts from"
+        description: "Override for which stages to use prebuilt. Empty means determine automatically (not yet implemented)."
     outputs:
       enable_build_jobs:
         description: Whether to enable build jobs.
@@ -46,13 +42,10 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   setup:
-    # NOTE: Using azure-linux-scale-rocm for S3 write access (prebuilt copy).
-    # Revisit runner choice once prototype is validated.
-    runs-on: azure-linux-scale-rocm
+    runs-on: ubuntu-24.04
     env:
       # The commit being checked out is the merge commit for a PR. Its first
       # parent will be the tip of the base branch.
@@ -97,24 +90,3 @@ jobs:
       - name: Compute package version
         id: rocm_package_version
         run: python ./build_tools/compute_rocm_package_version.py --release-type=dev
-
-      - name: Install artifact manager dependencies
-        if: ${{ inputs.prebuilt_stages != '' && inputs.baseline_run_id != '' }}
-        run: pip install boto3
-
-      - name: Configure AWS Credentials
-        if: ${{ inputs.prebuilt_stages != '' && inputs.baseline_run_id != '' && !github.event.pull_request.head.repo.fork }}
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
-        with:
-          aws-region: us-east-2
-          role-to-assume: arn:aws:iam::692859939525:role/therock-ci
-
-      - name: Copy prebuilt stage artifacts
-        if: ${{ inputs.prebuilt_stages != '' && inputs.baseline_run_id != '' && !github.event.pull_request.head.repo.fork }}
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          python build_tools/github_actions/copy_prebuilt_stages.py \
-            --prebuilt-stages="${{ inputs.prebuilt_stages }}" \
-            --baseline-run-id=${{ inputs.baseline_run_id }} \
-            --linux-variants='${{ steps.configure.outputs.linux_variants }}'
