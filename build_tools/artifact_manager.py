@@ -141,7 +141,7 @@ def parse_target_families(args: argparse.Namespace) -> List[str]:
         log("Using generic (host) artifacts only")
     else:
         if args.amdgpu_families:
-            target_families.extend(args.amdgpu_families.split(","))
+            target_families.extend(args.amdgpu_families.split(";"))
         if args.amdgpu_targets:
             target_families.extend(
                 t.strip() for t in args.amdgpu_targets.split(",") if t.strip()
@@ -953,7 +953,7 @@ def _add_target_args(parser: argparse.ArgumentParser):
     target_group.add_argument(
         "--amdgpu-families",
         type=str,
-        help="Comma-separated GPU families (e.g., gfx94X-dcgpu,gfx1100)",
+        help="Semicolon-separated GPU families (e.g., gfx94X-dcgpu;gfx1100)",
     )
     target_group.add_argument(
         "--generic-only",
@@ -1131,7 +1131,7 @@ def main(argv: Optional[List[str]] = None):
     info_parser.add_argument(
         "--amdgpu-families",
         type=str,
-        help="Comma-separated GPU families to show file lists for",
+        help="Semicolon-separated GPU families to show file lists for",
     )
     info_parser.set_defaults(func=do_info)
 
