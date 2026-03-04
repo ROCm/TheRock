@@ -81,6 +81,7 @@ if(THEROCK_ENABLE_RCCL)
       RUNTIME_DEPS
         hip-clr
         hipify
+        rocprofiler-register
         rccl
     )
     therock_cmake_subproject_glob_c_sources(rccl-tests
