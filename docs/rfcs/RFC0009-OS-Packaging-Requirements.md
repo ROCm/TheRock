@@ -156,8 +156,8 @@ Using `yum` ROCm Core SDK runtime components and ROCm Core SDK runtime + develop
 yum install rocm # ROCm 8.0
 yum install rocm-core # ROCm 8.0
 yum install rocm-core<ver>
-yum install rocm-core-devel
-yum install rocm-core-devel<ver>
+yum install rocm-core-dev
+yum install rocm-core-dev<ver>
 ```
 
 The following table shows the meta packages that will be available:
@@ -165,7 +165,7 @@ The following table shows the meta packages that will be available:
 | Name                    | Content                                                              | Description                                                                   |
 | :---------------------- | :------------------------------------------------------------------- | :---------------------------------------------------------------------------- |
 | amdrocm & amdrocm-core  | runtime & libraries, components, runtime compiler, amd-smi, rocminfo | Needed to run software built with ROCm Core                                   |
-| amdrocm-core-devel      | rocm-core + compiler cmake, static library files, and headers        | Needed to build software with ROCm Core                                       |
+| amdrocm-core-dev        | rocm-core + compiler cmake, static library files, and headers        | Needed to build software with ROCm Core                                       |
 | amdrocm-developer-tools | Profiler, debugger, and related tools                                | Independent set of tools to debug and profile any application built with ROCm |
 | amdrocm-fortran         |                                                                      | Fortran compiler and related components                                       |
 | amdrocm-opencl          |                                                                      | Components needed to run OpenCL                                               |
