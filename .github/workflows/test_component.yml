@@ -152,6 +152,9 @@ jobs:
           TOTAL_SHARDS: ${{ fromJSON(inputs.component).total_shards }}
           TEST_TYPE: ${{ fromJSON(inputs.component).test_type }}
           ROCM_KPACK_DEBUG: "1"
+          # Windows hip-tests (PAL=1, ROCR=0) set this via matrix; other components
+          # leave it empty. #3587
+          GPU_ENABLE_PAL: ${{ fromJSON(inputs.component).gpu_enable_pal }}
         run: |
           ${{ fromJSON(inputs.component).test_script }}
 
