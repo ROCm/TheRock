@@ -141,10 +141,17 @@ jobs:
       - name: Set up virtual environment
         run: |
           python build_tools/setup_venv.py ${VENV_DIR} \
-            --packages "torch==${{ inputs.torch_version }} rocm[devel]==${{ inputs.rocm_devel_version }}" \
+            --packages "torch==${{ inputs.torch_version }}" \
             --index-url=${{ inputs.package_index_url }} \
             --index-subdir=${{ inputs.amdgpu_family }} \
             --activate-in-future-github-actions-steps
+
+      # Temporary workaround for CI since 0305 packages are missing
+      - name: Install rocm[devel]
+        run: |
+          python -m pip install --force-reinstall --no-deps \
+            --index-url="${{ inputs.package_index_url }}/${{ inputs.amdgpu_family }}" \
+            "rocm[devel]==${{ inputs.rocm_devel_version }}"
 
       # rocm[devel] provides development headers needed by tests that compile
       # C++ extensions (e.g. dummy_allocator). hipconfig --rocmpath points to
