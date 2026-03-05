@@ -180,6 +180,10 @@ jobs:
           fi
           echo "${python_dir}/bin" >> "$GITHUB_PATH"
 
+      - name: Install python deps for CI
+        run: |
+          pip install -r external-builds/pytorch/requirements-ci.txt
+
       # Checkout nightly sources from https://github.com/pytorch/pytorch
       - name: Checkout PyTorch Source Repos from nightly branch
         if: ${{ inputs.pytorch_git_ref == 'nightly' }}
@@ -205,7 +209,6 @@ jobs:
       - name: Determine optional arguments passed to `build_prod_wheels.py`
         if: ${{ inputs.rocm_version }}
         run: |
-          pip install packaging
           python build_tools/github_actions/determine_version.py \
             --rocm-version ${{ inputs.rocm_version }}
 
@@ -302,7 +305,6 @@ jobs:
           # Environment variables to be set for `manage.py`
           CUSTOM_PREFIX: "${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}"
         run: |
-          pip install boto3 packaging
           python ./build_tools/third_party/s3_management/manage.py ${{ env.CUSTOM_PREFIX }}
 
   generate_target_to_run:
@@ -398,11 +400,15 @@ jobs:
             --include "triton-${TRITON_VERSION}-${CP_VERSION}-linux_x86_64.whl" \
             --include "apex-${APEX_VERSION}-${CP_VERSION}-linux_x86_64.whl"
 
+
+      - name: Install python deps for CI
+        run: |
+          pip install -r external-builds/pytorch/requirements-ci.txt
+
       - name: (Re-)Generate Python package release index
         if: ${{ env.upload == 'true' }}
         env:
           # Environment variables to be set for `manage.py`
           CUSTOM_PREFIX: "${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}"
         run: |
-          pip install boto3 packaging
           python ./build_tools/third_party/s3_management/manage.py ${{ env.CUSTOM_PREFIX }}
