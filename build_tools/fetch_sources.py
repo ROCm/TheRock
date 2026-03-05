@@ -515,7 +515,7 @@ def main(argv):
     )
     parser.add_argument(
         "--include-iree-libs",
-        default=True,
+        default=False,
         action=argparse.BooleanOptionalAction,
         help="Include IREE and related libraries",
     )
