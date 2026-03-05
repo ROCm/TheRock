@@ -69,7 +69,9 @@ add_custom_target(
     "${CMAKE_COMMAND}" -E rm -rf -- "${CMAKE_INSTALL_PREFIX}" "${PATCH_SOURCE_DIR}"
   COMMAND
     # We have to patch the sources so make a fresh copy.
-    "${CMAKE_COMMAND}" -E copy_directory "${SOURCE_DIR}" "${PATCH_SOURCE_DIR}"
+    # Use copy_dir_with_timestamps.py instead of `cmake -E copy_directory` to
+    # preserve file modification timestamps.
+    "${Python3_EXECUTABLE}" "${THEROCK_SOURCE_DIR}/build_tools/copy_dir_with_timestamps.py" "${SOURCE_DIR}" "${PATCH_SOURCE_DIR}"
   COMMAND
     bash "${CMAKE_CURRENT_SOURCE_DIR}/patch_source.sh" "${PATCH_SOURCE_DIR}"
   COMMAND
