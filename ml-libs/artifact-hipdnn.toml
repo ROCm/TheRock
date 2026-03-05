@@ -17,12 +17,14 @@ exclude = [
 include = [
   "bin/*test*",                      # Test binaries
   "bin/*gtest*",                     # GTest binaries
+  "lib/test_plugins/**",
+]
+exclude = [
+  "bin/**/*.cmake",                  # Exclude CMake files
 ]
 [components.run."ml-libs/hipDNN/stage"]
 include = [
   "bin/**",                          # All binaries
-  "lib/*.so*",                       # Shared libraries
-  "lib/test_plugins/**",             # Test plugins
 ]
 exclude = [
   "bin/**/*.cmake",                  # Exclude CMake files
