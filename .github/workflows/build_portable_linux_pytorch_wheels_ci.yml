@@ -118,6 +118,10 @@ jobs:
           fi
           echo "${python_dir}/bin" >> "$GITHUB_PATH"
 
+      - name: Install python deps for CI
+        run: |
+          pip install -r external-builds/pytorch/requirements-ci.txt
+
       - name: Checkout PyTorch source (nightly)
         if: ${{ inputs.pytorch_git_ref == 'nightly' }}
         run: |
@@ -136,7 +140,6 @@ jobs:
       - name: Determine optional arguments passed to `build_prod_wheels.py`
         if: ${{ inputs.rocm_version }}
         run: |
-          pip install packaging
           python build_tools/github_actions/determine_version.py \
             --rocm-version ${{ inputs.rocm_version }}
 
