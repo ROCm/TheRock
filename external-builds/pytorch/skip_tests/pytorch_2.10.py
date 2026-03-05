@@ -29,10 +29,6 @@ skip_tests = {
             "test_memory_snapshot_with_cpp",
             # AssertionError: Scalars are not equal!
             "test_mempool_ctx_multithread",
-            # RuntimeError: Error building extension 'dummy_allocator'
-            "test_mempool_empty_cache_inactive",
-            # RuntimeError: Error building extension 'dummy_allocator_v1'
-            "test_mempool_limited_memory_with_allocator",
             # OSError: libhiprtc.so: cannot open shared object file: No such file or directory
             # File "/home/tester/TheRock/.venv/lib/python3.12/site-packages/torch/cuda/_utils.py", line 57, in _get_hiprtc_library
             # lib = ctypes.CDLL("libhiprtc.so")

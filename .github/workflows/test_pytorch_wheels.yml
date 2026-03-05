@@ -134,10 +134,18 @@ jobs:
       - name: Set up virtual environment
         run: |
           python build_tools/setup_venv.py ${VENV_DIR} \
-            --packages torch==${{ inputs.torch_version }} \
+            --packages "torch==${{ inputs.torch_version }} rocm[devel]" \
             --index-url=${{ inputs.package_index_url }} \
             --index-subdir=${{ inputs.amdgpu_family }} \
             --activate-in-future-github-actions-steps
+
+      # rocm[devel] provides development headers needed by tests that compile
+      # C++ extensions (e.g. dummy_allocator). hipconfig --rocmpath points to
+      # the devel package root so PyTorch's _find_rocm_home() resolves
+      # correctly.
+      - name: Set ROCM_PATH
+        run: |
+          echo "ROCM_PATH=$(hipconfig --rocmpath)" >> $GITHUB_ENV
 
       - name: Install test requirements
         run: |

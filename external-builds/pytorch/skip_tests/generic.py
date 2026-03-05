@@ -24,15 +24,6 @@ skip_tests = {
             # 'num_host_free': 0, 'reserved_bytes.allocated': 0, 'reserved_bytes.current': 0, 'reserved_bytes.freed': 0,
             # 'reserved_bytes.peak': 0, 'segment.allocated': 0, 'segment.current': 0, 'segment.freed': 0, 'segment.peak': 0})
             "test_host_memory_stats",
-            # THIS IS AN OLD ERROR
-            # In file included from /home/tester/.cache/torch_extensions/py312_cpu/dummy_allocator/main_hip.cpp:5:
-            # /home/tester/TheRock/.venv/lib/python3.12/site-packages/torch/include/ATen/hip/Exceptions.h:4:10: fatal error: hipblas/hipblas.h: No such file or directory
-            #     4 | #include <hipblas/hipblas.h>
-            #     |          ^~~~~~~~~~~~~~~~~~~
-            # compilation terminated.
-            # NEW ERROR
-            # RuntimeError: Error building extension 'dummy_allocator'
-            "test_mempool_with_allocator",
             # Change detector test (Cublaslt vs Cublas depending on gcn_arch and torch version)
             # Always skip as this test is very basic and needs manual intervention for new architectures
             # See

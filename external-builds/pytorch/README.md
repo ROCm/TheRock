@@ -232,6 +232,16 @@ python run_pytorch_smoke_tests.py -- \
 
 ### Running full PyTorch tests
 
+> [!WARNING]
+> Our CI currently tests with `rocm[devel]` installed alongside `torch` because
+> some tests require development headers at runtime. If you are running tests
+> locally, install the devel packages and set `ROCM_PATH` accordingly:
+>
+> ```bash
+> pip install "rocm[devel]" --index-url <your-index-url>
+> export ROCM_PATH=$(hipconfig --rocmpath)
+> ```
+
 We have a [`run_pytorch_tests.py`](run_pytorch_tests.py) script
 which runs PyTorch unit tests using pytest with additional test exclusion
 capabilities tailored for AMD ROCm GPUs. See the script for detailed

@@ -23,15 +23,6 @@ skip_tests = {
             "test_memory_snapshot_with_cpp",
             # AssertionError: Scalars are not equal!
             "test_mempool_ctx_multithread",
-            # RuntimeError: Error building extension 'dummy_allocator'
-            "test_mempool_empty_cache_inactive",
-            # RuntimeError: Error building extension 'dummy_allocator_v1'
-            "test_mempool_limited_memory_with_allocator",
-            # new for pytorch 2.11
-            # RuntimeError: Error building extension 'dummy_allocator_v3'
-            "test_tensor_delete_after_allocator_delete",
-            # RuntimeError: Error building extension 'dummy_allocator'
-            "test_deleted_mempool_not_used_on_oom",
             # ModuleNotFoundError: No module named 'torchvision'
             "test_resnet",
             # RuntimeError: miopenStatusUnknownError
