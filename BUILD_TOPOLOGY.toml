@@ -249,7 +249,7 @@ source_sets = ["rocm-systems"]  # clr is in rocm-systems
 
 [artifact_groups.rocrtst]
 description = "Core runtime tests (ROCR-Runtime, rocminfo)"
-type = "per-arch"
+type = "generic"
 artifact_group_deps = ["opencl-runtime", "core-runtime"]
 source_sets = ["rocm-systems"]
 
@@ -480,7 +480,7 @@ feature_group = "CORE"  # Part of core, enabled by default
 
 [artifacts.rocrtst]
 artifact_group = "rocrtst"
-type = "target-specific"
+type = "target-neutral"
 artifact_deps = ["core-runtime", "core-ocl", "sysdeps-hwloc"]
 feature_name = "CORE_RUNTIME_TESTS"
 feature_group = "CORE"
@@ -493,11 +493,11 @@ platform = "windows"
 artifact_deps = ["core-hip"]
 feature_group = "CORE"  # Part of core, enabled by default
 
-# --- hip-tests (per-arch) ---
+# --- hip-tests ---
 
 [artifacts.core-hiptests]
 artifact_group = "hip-runtime"
-type = "target-specific"
+type = "target-neutral"
 artifact_deps = ["core-hip"]
 feature_group = "CORE"  # Part of core, enabled by default
 
@@ -621,20 +621,26 @@ type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "hipify", "rocprofiler-sdk", "core-amdsmi"]
 disable_platforms = ["windows"]
 
+[artifacts.rocshmem]
+artifact_group = "comm-libs"
+type = "target-specific"
+artifact_deps = ["core-runtime", "core-hip", "sysdeps"]
+disable_platforms = ["windows"]
+
 # --- Profiler Tools ---
+
+[artifacts.aqlprofile]
+artifact_group = "profiler-core"
+type = "target-neutral"
+artifact_deps = ["core-runtime"]
+feature_group = "PROFILER"
+disable_platforms = ["windows"]
 
 [artifacts.rocprofiler-sdk]
 artifact_group = "profiler-core"
 type = "target-neutral"
-artifact_deps = ["core-runtime", "base"]  # rocprofiler-register is in base
+artifact_deps = ["core-runtime", "base", "aqlprofile"]  # rocprofiler-register is in base
 feature_name = "ROCPROFV3"
-feature_group = "PROFILER"
-disable_platforms = ["windows"]
-
-[artifacts.aqlprofile-tests]
-artifact_group = "profiler-core"
-type = "target-specific"
-artifact_deps = ["core-runtime"]
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
 
