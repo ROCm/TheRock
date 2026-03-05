@@ -1,4 +1,7 @@
 #!/usr/bin/env pwsh
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 <#
 .SYNOPSIS
     Validates the Windows development environment for building TheRock/ROCm from source.

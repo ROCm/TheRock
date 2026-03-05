@@ -172,7 +172,7 @@ compiler/       # LLVM/Clang/LLD, device libraries
 core/           # HIP, CLR, ROCr
 math-libs/      # rocBLAS, rocFFT, etc.
 ml-libs/        # MIOpen, composable_kernel
-comm-libs/      # RCCL
+comm-libs/      # RCCL, rocSHMEM
 profiler/       # rocprofiler, roctracer
 build_tools/    # Python build scripts
 cmake/          # CMake infrastructure
