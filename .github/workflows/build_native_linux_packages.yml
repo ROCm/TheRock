@@ -188,6 +188,7 @@ jobs:
   get_install_test_profiles:
     name: Get Install test OS profiles for ${{ inputs.native_package_type }}
     runs-on: ubuntu-24.04
+    needs: [build_native_packages]
     outputs:
       os_profiles: ${{ steps.set.outputs.os_profiles }}
       gfx_arch: ${{ steps.set.outputs.gfx_arch }}
