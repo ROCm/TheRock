@@ -33,6 +33,10 @@ on:
         description: PyTorch ref to checkout test sources from. (e.g. "nightly", or "release/2.7")
         type: string
         default: "release/2.7"
+      rocm_devel_version:
+        description: 'rocm[devel] package version to install (e.g. "7.12.0a20260304")'
+        required: true
+        type: string
 
   workflow_call:
     inputs:
@@ -54,6 +58,9 @@ on:
       pytorch_git_ref:
         type: string
         default: "release/2.7"
+      rocm_devel_version:
+        required: true
+        type: string
       repository:
         description: "Repository to checkout. Otherwise, defaults to `github.repository`."
         type: string
@@ -134,7 +141,7 @@ jobs:
       - name: Set up virtual environment
         run: |
           python build_tools/setup_venv.py ${VENV_DIR} \
-            --packages "torch==${{ inputs.torch_version }} rocm[devel]" \
+            --packages "torch==${{ inputs.torch_version }} rocm[devel]==${{ inputs.rocm_devel_version }}" \
             --index-url=${{ inputs.package_index_url }} \
             --index-subdir=${{ inputs.amdgpu_family }} \
             --activate-in-future-github-actions-steps
