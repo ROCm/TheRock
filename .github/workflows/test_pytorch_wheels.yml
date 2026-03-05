@@ -149,7 +149,7 @@ jobs:
       # Temporary workaround for CI since 0305 packages are missing
       - name: Install rocm[devel]
         run: |
-          python -m pip install --force-reinstall --no-deps \
+          python -m pip install --upgrade \
             --index-url="${{ inputs.package_index_url }}/${{ inputs.amdgpu_family }}" \
             "rocm[devel]==${{ inputs.rocm_devel_version }}"
 
