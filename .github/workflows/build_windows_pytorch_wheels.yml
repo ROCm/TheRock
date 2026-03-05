@@ -39,6 +39,11 @@ on:
         description: PyTorch ref to checkout. (typically "nightly", or "release/X.Y")
         required: true
         type: string
+      cache_type:
+        description: "Compiler cache type (sccache, ccache, or none)"
+        required: false
+        type: string
+        default: "none"
       repository:
         description: "Repository to checkout. Otherwise, defaults to `github.repository`."
         type: string
@@ -96,15 +101,22 @@ on:
         required: true
         type: string
         default: "release/2.9"
-
-permissions:
-  id-token: write
-  contents: read
+      cache_type:
+        description: "Compiler cache type"
+        type: choice
+        options:
+          - none
+          - sccache
+          - ccache
+        default: none
 
 jobs:
   build_pytorch_wheels:
     name: Build | ${{ inputs.amdgpu_family }} | py ${{ inputs.python_version }} | torch ${{ inputs.pytorch_git_ref }}
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-windows-scale-rocm' || 'windows-2022' }}
+    permissions:
+      id-token: write
+      contents: read
     env:
       CHECKOUT_ROOT: B:/src
       OUTPUT_DIR: ${{ github.workspace }}/output
@@ -113,6 +125,13 @@ jobs:
       RELEASE_TYPE: ${{ inputs.release_type }}
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
       optional_build_prod_arguments: ""
+      SCCACHE_BUCKET: "therock-${{ inputs.release_type }}-pytorch-sccache"
+      SCCACHE_REGION: us-east-2
+      SCCACHE_S3_KEY_PREFIX: "windows/${{ inputs.amdgpu_family }}/"
+      SCCACHE_S3_USE_SSL: "true"
+      SCCACHE_S3_SERVER_SIDE_ENCRYPTION: "true"
+      SCCACHE_IDLE_TIMEOUT: "600"
+      SCCACHE_LOG: warn
     outputs:
       cp_version: ${{ env.cp_version }}
       # The following are python package versions produced by the build. The
@@ -163,6 +182,12 @@ jobs:
           choco install --no-progress -y awscli
           echo "$PATH;C:\Program Files\Amazon\AWSCLIV2" >> $GITHUB_PATH
 
+      - name: Install sccache
+        if: ${{ inputs.cache_type == 'sccache' }}
+        run: |
+          choco install --no-progress -y sccache
+          echo "sccache version: $(sccache --version)"
+
       # After other installs, so MSVC get priority in the PATH.
       - name: Configure MSVC
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
@@ -210,13 +235,32 @@ jobs:
           python build_tools/github_actions/determine_version.py \
             --rocm-version ${{ inputs.rocm_version }}
 
+      - name: Configure AWS Credentials for sccache
+        if: ${{ inputs.cache_type == 'sccache' && github.repository_owner == 'ROCm' }}
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-${{ inputs.release_type }}
+          special-characters-workaround: true
+
+      - name: Verify sccache
+        if: ${{ inputs.cache_type == 'sccache' }}
+        run: |
+          echo "sccache version: $(sccache --version)"
+          echo "SCCACHE_BUCKET=${SCCACHE_BUCKET}"
+          echo "SCCACHE_S3_KEY_PREFIX=${SCCACHE_S3_KEY_PREFIX}"
+
       - name: Build PyTorch Wheels
         id: build-pytorch-wheels
         # Using 'cmd' here is load bearing! There are configuration issues when
         # run under 'bash': https://github.com/ROCm/TheRock/issues/827#issuecomment-3025858800
         shell: cmd
         run: |
-          echo "Building PyTorch wheels for ${{ inputs.amdgpu_family }}"
+          set "CACHE_FLAG="
+          if "${{ inputs.cache_type }}"=="sccache" set "CACHE_FLAG=--use-sccache"
+          if "${{ inputs.cache_type }}"=="ccache" set "CACHE_FLAG=--use-ccache"
+
+          echo "Building PyTorch wheels for ${{ inputs.amdgpu_family }} (cache: ${{ inputs.cache_type }})"
           python ./external-builds/pytorch/build_prod_wheels.py ^
             build ^
             --install-rocm ^
@@ -227,8 +271,22 @@ jobs:
             --enable-pytorch-flash-attention-windows ^
             --clean ^
             --output-dir ${{ env.PACKAGE_DIST_DIR }} ^
+            %CACHE_FLAG% ^
             ${{ env.optional_build_prod_arguments }}
           python ./build_tools/github_actions/write_torch_versions.py --dist-dir ${{ env.PACKAGE_DIST_DIR }}
+
+      - name: Report cache stats
+        if: ${{ !cancelled() && inputs.cache_type != 'none' }}
+        run: |
+          if [ "${{ inputs.cache_type }}" = "sccache" ]; then
+            echo "sccache stats:"
+            echo "--------------"
+            sccache --show-stats || true
+          elif [ "${{ inputs.cache_type }}" = "ccache" ]; then
+            echo "ccache stats:"
+            echo "-------------"
+            ccache -s -v || true
+          fi
 
       - name: Sanity Check Wheel
         shell: cmd
@@ -287,6 +345,8 @@ jobs:
   generate_target_to_run:
     name: Generate target_to_run
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     outputs:
       test_runs_on: ${{ steps.configure.outputs.test-runs-on }}
       bypass_tests_for_releases: ${{ steps.configure.outputs.bypass_tests_for_releases }}
@@ -308,6 +368,8 @@ jobs:
     name: Test | ${{ inputs.amdgpu_family }} | ${{ needs.generate_target_to_run.outputs.test_runs_on }}
     if: ${{ needs.generate_target_to_run.outputs.test_runs_on != '' }}
     needs: [build_pytorch_wheels, generate_target_to_run]
+    permissions:
+      contents: read
     uses: ./.github/workflows/test_pytorch_wheels.yml
     with:
       amdgpu_family: ${{ inputs.amdgpu_family }}
@@ -324,6 +386,9 @@ jobs:
     needs: [build_pytorch_wheels, generate_target_to_run, test_pytorch_wheels]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
+    permissions:
+      id-token: write
+      contents: read
     env:
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
       CP_VERSION: "${{ needs.build_pytorch_wheels.outputs.cp_version }}"
