@@ -156,8 +156,9 @@ jobs:
       
       - name: Set BUILD_TAG for dev branch
         if: ${{ env.RELEASE_TYPE == 'dev' }}
+        working-directory: ${{ github.workspace }}
         run: |
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          # git config --global --add safe.directory "$GITHUB_WORKSPACE"
           BUILD_TAG="dev-$(git rev-parse --short HEAD)"
           echo "Set value of BUILD_TAG = '$BUILD_TAG'"
           echo "BUILD_TAG=$BUILD_TAG" >> $GITHUB_ENV
