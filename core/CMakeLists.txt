@@ -480,3 +480,45 @@ if(THEROCK_BUILD_TESTING)
 
   endif(THEROCK_ENABLE_CORE_RUNTIME_TESTS)
 endif(THEROCK_BUILD_TESTING)
+
+##############################################################################
+# rocm_bandwidth_test (RBT)
+# Standalone ROCm diagnostic tool for GPU memory bandwidth and P2P testing.
+# Source: https://github.com/ROCm/rocm_bandwidth_test (standalone submodule)
+##############################################################################
+
+if(NOT WIN32)
+  if(THEROCK_ENABLE_ROCM_BANDWIDTH_TEST)
+
+    therock_cmake_subproject_declare(rocm-bandwidth-test
+      USE_DIST_AMDGPU_TARGETS
+      EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/rocm-bandwidth-test"
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocm-bandwidth-test"
+      BACKGROUND_BUILD
+      COMPILER_TOOLCHAIN
+        "${_system_toolchain}"
+      CMAKE_ARGS
+        "-DCMAKE_VERBOSE_MAKEFILE=OFF"
+      RUNTIME_DEPS
+        ROCR-Runtime
+      INTERFACE_LINK_DIRS
+        "lib"
+      INTERFACE_INSTALL_RPATH_DIRS
+        "lib"
+    )
+    therock_cmake_subproject_activate(rocm-bandwidth-test)
+
+    therock_provide_artifact(rocm-bandwidth-test
+      TARGET_NEUTRAL
+      DESCRIPTOR artifact-core-rbt.toml
+      COMPONENTS
+        dbg
+        doc
+        lib
+        run
+      SUBPROJECT_DEPS
+        rocm-bandwidth-test
+    )
+
+  endif(THEROCK_ENABLE_ROCM_BANDWIDTH_TEST)
+endif() # NOT WIN32

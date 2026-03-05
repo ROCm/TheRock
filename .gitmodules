@@ -52,3 +52,7 @@
 	path = debug-tools/rocgdb/source
 	url = https://github.com/ROCm/rocgdb.git
 	branch = amd-staging-rocgdb-16
+[submodule "core/rocm-bandwidth-test"]
+	path = core/rocm-bandwidth-test
+	url = https://github.com/ROCm/rocm_bandwidth_test.git
+	branch = master
