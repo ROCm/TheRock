@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """YAML configuration parser with schema validation and environment variable expansion."""
 
 import yaml

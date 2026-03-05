@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Data Center Tools
 
 if(THEROCK_ENABLE_RDC)
