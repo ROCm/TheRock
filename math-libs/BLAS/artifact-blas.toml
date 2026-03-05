@@ -9,10 +9,19 @@
 optional = true
 [components.dev."math-libs/BLAS/rocRoller/stage"]
 optional = true
+include = [
+  "include/rocRoller/**",
+  "lib/cmake/rocroller/**",
+]
 [components.doc."math-libs/BLAS/rocRoller/stage"]
 optional = true
 [components.lib."math-libs/BLAS/rocRoller/stage"]
 optional = true
+include = [
+  "lib/librocroller*",
+  "lib/rocroller*",
+  "bin/rocroller*",
+]
 [components.test."math-libs/BLAS/rocRoller/stage"]
 include = [
   "bin/rocroller-test*",
