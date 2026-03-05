@@ -16,7 +16,7 @@ include = [
 [components.doc."ml-libs/MIOpen/stage"]
 [components.lib."ml-libs/MIOpen/stage"]
 include = [
-  "lib/*.so*",
+  "lib/**",
   "share/miopen/**",
 ]
 exclude = [
