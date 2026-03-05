@@ -34,15 +34,8 @@ def setup_env():
     environ_vars["ROCPROFILER_METRICS_PATH"] = str(ROCPROFILER_SDK_PATH)
     environ_vars["HIP_PLATFORM"] = "amd"
 
-    old_ld_lib_path = os.getenv("LD_LIBRARY_PATH", "")
-    if old_ld_lib_path:
-        environ_vars["LD_LIBRARY_PATH"] = (
-            f"{THEROCK_LIB_PATH}:{THEROCK_SYSDEPS_LIB_PATH}:{old_ld_lib_path}"
-        )
-    else:
-        environ_vars["LD_LIBRARY_PATH"] = (
-            f"{THEROCK_LIB_PATH}:{THEROCK_SYSDEPS_LIB_PATH}"
-        )
+    old_ld_lib_path = os.getenv("LD_LIBRARY_PATH", "").split(":")
+    environ_vars["LD_LIBRARY_PATH"] = ":".join([f"{THEROCK_LIB_PATH}", f"{THEROCK_SYSDEPS_LIB_PATH}"] + old_ld_lib_path)
 
 
 def cmake_config():
@@ -71,14 +64,15 @@ def cmake_config():
 
 
 # SDK requires test binaries to be built on the gfx architecture being tested on
-# This requires building on the test stage as we cannot build these on a gpu-less environment
-# Ensuring that these tests build properly is also part of the overall test coverage for SDK
+# Certain tests are enabled/disabled based on the GPU architecture.
+# Ensuring that these tests build properly against an install is also part of the overall test coverage for SDK (emulates tool developers building tools with rocprofiler-sdk)
 def cmake_build():
     cmake_build_cmd = [
         "cmake",
         "--build",
         "build",
-        "-j",
+        "--parallel",
+        "8",
     ]
 
     logging.info(
