@@ -884,11 +884,39 @@ function(therock_cmake_subproject_activate target_name)
     set(_fileset_verbose_arg --verbose)
   endif()
 
+  # Compute fingerprint early so we can validate prebuilt artifacts
+  # (fingerprint calculation moved from end of function)
+  _therock_subproject_fprint_files(_fprint_content "${_fprint_files}")
+  set(_fprint)
+  if(_fprint_is_valid)
+    string(SHA256 _fprint "${_fprint_content}")
+  endif()
+  if(THEROCK_VERBOSE)
+    message(STATUS "  FPRINT = ${_fprint}")
+    message(STATUS "  FPRINT CONTENT = ${_fprint_content}")
+  endif()
+
+  # Validate prebuilt fingerprint if prebuilt file exists
+  set(_use_prebuilt FALSE)
   if(EXISTS "${_prebuilt_file}")
+    # Validate the prebuilt fingerprint
+    _therock_validate_prebuilt_fingerprint(_prebuilt_valid "${target_name}" "${_prebuilt_file}" "${_fprint}")
+
+    if(_prebuilt_valid)
+      # Fingerprint valid - use prebuilt
+      set(_use_prebuilt TRUE)
+      message(STATUS "  USING PREBUILT: Fingerprint validated")
+    else()
+      # Fingerprint invalid - delete marker and rebuild
+      message(STATUS "  REBUILDING: Prebuilt fingerprint mismatch, removing .prebuilt marker")
+      file(REMOVE "${_prebuilt_file}")
+    endif()
+  endif()
+
+  if(_use_prebuilt)
     # If pre-built, just touch the stamp files, conditioned on the prebuilt
     # marker file (which may just be a stamp file or may contain a unique hash
     # for this part of the build).
-    message(STATUS "  DISABLING BUILD: Marked as pre-built")
     add_custom_command(
       OUTPUT "${_configure_stamp_file}"
       COMMAND "${CMAKE_COMMAND}" -E touch "${_configure_stamp_file}"
@@ -1082,19 +1110,10 @@ function(therock_cmake_subproject_activate target_name)
   )
   add_dependencies(therock-expunge "${target_name}+expunge")
 
-  # Process fingerprints.
-  _therock_subproject_fprint_files(_fprint_content "${_fprint_files}")
-  set(_fprint)
-  if(_fprint_is_valid)
-    string(SHA256 _fprint "${_fprint_content}")
-  endif()
+  # Store fingerprint in target property (fingerprint was computed earlier)
   set_target_properties("${target_name}" PROPERTIES
     THEROCK_FPRINT "${_fprint}"
   )
-  if(THEROCK_VERBOSE)
-    message(STATUS "  FPRINT = ${_fprint}")
-    message(STATUS "  FPRINT CONTENT = ${_fprint_content}")
-  endif()
 endfunction()
 
 # therock_cmake_subproject_glob_c_sources
@@ -1570,6 +1589,65 @@ function(_therock_cmake_subproject_setup_toolchain
   file(CONFIGURE OUTPUT "${toolchain_file}" CONTENT "${_toolchain_contents}" @ONLY ESCAPE_QUOTES)
 endfunction()
 
+
+# Validates a prebuilt fingerprint against the expected fingerprint.
+# Returns TRUE if the prebuilt is valid and can be used, FALSE if it should be rebuilt.
+# Handles edge cases:
+#   - Empty .prebuilt file (old format): Trust it, return TRUE
+#   - "UNKNOWN" content: Trust it, return TRUE
+#   - Valid fingerprint match: Return TRUE
+#   - Fingerprint mismatch: Return FALSE
+#   - Missing expected fingerprint: Return TRUE (can't validate, trust prebuilt)
+function(_therock_validate_prebuilt_fingerprint out_valid target_name prebuilt_file expected_fprint)
+  set(_is_valid TRUE)
+
+  if(NOT EXISTS "${prebuilt_file}")
+    # File doesn't exist, not a prebuilt
+    set(_is_valid FALSE)
+  else()
+    # Read the prebuilt fingerprint
+    file(READ "${prebuilt_file}" _prebuilt_fprint)
+    string(STRIP "${_prebuilt_fprint}" _prebuilt_fprint)
+
+    # Handle edge cases
+    if(NOT _prebuilt_fprint)
+      # Empty file - backwards compatibility, trust it
+      if(THEROCK_VERBOSE)
+        message(STATUS "  ${target_name}: Prebuilt fingerprint empty (old format), trusting prebuilt")
+      endif()
+      set(_is_valid TRUE)
+    elseif(_prebuilt_fprint STREQUAL "UNKNOWN")
+      # Unknown fingerprint - trust it
+      if(THEROCK_VERBOSE)
+        message(STATUS "  ${target_name}: Prebuilt fingerprint UNKNOWN, trusting prebuilt")
+      endif()
+      set(_is_valid TRUE)
+    elseif(NOT expected_fprint)
+      # No expected fingerprint to compare - trust prebuilt
+      if(THEROCK_VERBOSE)
+        message(STATUS "  ${target_name}: No expected fingerprint, trusting prebuilt")
+      endif()
+      set(_is_valid TRUE)
+    else()
+      # Compare fingerprints
+      if(_prebuilt_fprint STREQUAL expected_fprint)
+        if(THEROCK_VERBOSE)
+          message(STATUS "  ${target_name}: Prebuilt fingerprint matches (${_prebuilt_fprint})")
+        endif()
+        set(_is_valid TRUE)
+      else()
+        message(WARNING "${target_name}: Prebuilt fingerprint mismatch, will rebuild")
+        if(THEROCK_VERBOSE)
+          message(STATUS "  Expected: ${expected_fprint}")
+          message(STATUS "  Actual:   ${_prebuilt_fprint}")
+        endif()
+        set(_is_valid FALSE)
+      endif()
+    endif()
+  endif()
+
+  set("${out_valid}" "${_is_valid}" PARENT_SCOPE)
+endfunction()
 
 # Fingerprints a source directory. If the source directory is considered dirty
 # then the output fingerprint will be the empty string (invalid).
