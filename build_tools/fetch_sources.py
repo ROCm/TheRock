@@ -103,6 +103,8 @@ def get_enabled_projects(args) -> List[str]:
         projects.extend(args.compiler_projects)
     if args.include_debug_tools:
         projects.extend(args.debug_tools)
+    if args.include_diagnostic_tools:
+        projects.extend(args.diagnostic_tools)
     if args.include_rocm_libraries:
         projects.extend(["rocm-libraries"])
     if args.include_rocm_systems:
@@ -458,6 +460,12 @@ def main(argv):
         help="Include ROCm debugging tools",
     )
     parser.add_argument(
+        "--include-diagnostic-tools",
+        default=True,
+        action=argparse.BooleanOptionalAction,
+        help="Include ROCm diagnostic and benchmark tools",
+    )
+    parser.add_argument(
         "--include-rocm-libraries",
         default=True,
         action=argparse.BooleanOptionalAction,
@@ -567,6 +575,19 @@ def main(argv):
             else [
                 # Linux only projects.
                 "rocgdb",
+            ]
+        ),
+    )
+    parser.add_argument(
+        "--diagnostic-tools",
+        nargs="+",
+        type=str,
+        default=(
+            []
+            if is_windows()
+            else [
+                # Linux only projects.
+                "core/rocm-bandwidth-test",
             ]
         ),
     )
