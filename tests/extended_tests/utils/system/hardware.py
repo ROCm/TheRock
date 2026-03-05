@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Hardware detection for CPU and GPU using system commands and ROCm tools."""
 
 import subprocess

@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Stage-aware artifact manager for multi-stage CI/CD pipeline.
 
 This CLI tool manages artifacts between build stages, supporting both local

@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Subdirectory load order here is carefully balanced - see usage from the root
 # CMakeLists.txt. Notably this file does *not* include the sysdeps subdirectory,
 # which is expected to be included *first*. This allows for bootstrapping

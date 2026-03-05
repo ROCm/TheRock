@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Base class for benchmark tests with common functionality."""
 
 import os
@@ -15,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 sys.path.insert(
     0, str(Path(__file__).resolve().parents[4] / "build_tools" / "github_actions")
 )
-from utils import BenchmarkClient, HardwareDetector
+from utils import ExtendedTestClient, HardwareDetector
 from utils.logger import log
 from utils.exceptions import TestExecutionError
 from github_actions_utils import gha_append_step_summary
@@ -316,8 +319,8 @@ class BenchmarkBase:
         """Execute benchmark workflow and return exit code (0=PASS, 1=FAIL)."""
         log.info(f"Initializing {self.display_name} Benchmark Test")
 
-        # Initialize benchmark client and print system info
-        self.client = BenchmarkClient(auto_detect=True)
+        # Initialize extended test client and print system info
+        self.client = ExtendedTestClient(auto_detect=True)
         self.client.print_system_summary()
 
         # Run benchmarks (implemented by child class)

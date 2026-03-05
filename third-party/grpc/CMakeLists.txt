@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # gRPC static library for RDC
 therock_subproject_fetch(therock-grpc-sources
   CMAKE_PROJECT
@@ -50,7 +53,7 @@ therock_cmake_subproject_declare(therock-grpc
     -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 
   RUNTIME_DEPS
-    therock-zlib
+    ${THEROCK_BUNDLED_ZLIB}
 )
 therock_cmake_subproject_provide_package(therock-grpc gRPC lib/cmake/grpc)
 therock_cmake_subproject_provide_package(therock-grpc protobuf lib/cmake/protobuf)
