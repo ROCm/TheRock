@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # therock_artifacts.cmake
 # Facilities for bundling artifacts for bootstrapping and subsequent CI/CD
 # phases.

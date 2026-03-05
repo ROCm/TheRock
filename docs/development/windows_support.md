@@ -50,8 +50,8 @@ mainline, in open source, using MSVC, etc.).
 | core                | [hipInfo (hip-tests)](https://github.com/ROCm/rocm-systems/tree/develop/projects/hip-tests)                              | rocm-systems   | ✅        |                                               |
 | core                | [clr](https://github.com/ROCm/rocm-systems/tree/develop/projects/clr)                                                    | rocm-systems   | 🟡        | Needs a folder with prebuilt static libraries |
 |                     |                                                                                                                          |                |           |                                               |
-| debug-tools         | [amd-dbgapi](https://github.com/ROCm/ROCdbgapi)                                                                          | standalone     | ❌        | Unsupported                                   |
-| debug-tools         | [rocr-debug-agent](https://github.com/ROCm/rocr_debug_agent)                                                             | standalone     | ❌        | Unsupported                                   |
+| debug-tools         | [amd-dbgapi](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocdbgapi)                                       | rocm-systems   | ❌        | Unsupported                                   |
+| debug-tools         | [rocr-debug-agent](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocr-debug-agent)                          | rocm-systems   | ❌        | Unsupported                                   |
 | debug-tools         | [rocgdb](https://github.com/ROCm/rocgdb)                                                                                 | standalone     | ❌        | Unsupported                                   |
 |                     |                                                                                                                          |                |           |                                               |
 | profiler            | [aqlprofile](https://github.com/ROCm/rocm-systems/tree/develop/projects/aqlprofile)                                      | rocm-systems   | ❌        | Unsupported                                   |
@@ -60,6 +60,9 @@ mainline, in open source, using MSVC, etc.).
 | profiler            | [rocprofiler-systems](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocprofiler-systems)                    | rocm-systems   | ❌        | Unsupported                                   |
 |                     |                                                                                                                          |                |           |                                               |
 | comm-libs           | [rccl](https://github.com/ROCm/rocm-systems/tree/develop/projects/rccl)                                                  | rocm-systems   | ❌        | Unsupported                                   |
+|                     |                                                                                                                          |                |           |                                               |
+| media-libs          | [rocDecode](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocdecode)                                        | rocm-systems   | ❌        | Linux only (requires VA-API / Mesa)           |
+| media-libs          | [rocJPEG](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocjpeg)                                            | rocm-systems   | ❌        | Linux only (requires VA-API / Mesa)           |
 |                     |                                                                                                                          |                |           |                                               |
 | math-libs           | [rocRAND](https://github.com/ROCm/rocm-libraries/tree/develop/projects/rocrand)                                          | rocm-libraries | ✅        |                                               |
 | math-libs           | [hipRAND](https://github.com/ROCm/rocm-libraries/tree/develop/projects/hiprand)                                          | rocm-libraries | ✅        |                                               |
@@ -85,13 +88,27 @@ mainline, in open source, using MSVC, etc.).
 | ml-libs             | [Composable Kernel](https://github.com/ROCm/rocm-libraries/tree/develop/projects/composablekernel)                       | rocm-libraries | ✅        |                                               |
 | ml-libs             | [MIOpen](https://github.com/ROCm/rocm-libraries/tree/develop/projects/miopen)                                            | rocm-libraries | ✅        |                                               |
 | ml-libs             | [hipDNN](https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipdnn)                                            | rocm-libraries | ✅        |                                               |
+| ml-libs             | [MIOpen Provider](https://github.com/ROCm/rocm-libraries/tree/develop/dnn-providers/miopen-provider)                     | rocm-libraries | ✅        |                                               |
 | ml-libs             | [MIOpen Legacy Plugin](https://github.com/ROCm/rocm-libraries/tree/develop/projects/hipdnn/plugins/miopen_legacy_plugin) | rocm-libraries | ✅        |                                               |
-| ml-libs             | [hipBLASLt Plugin](https://github.com/ROCm/rocm-libraries/tree/develop/dnn-providers/hipblaslt-provider)                 | rocm-libraries | ✅        |                                               |
+| ml-libs             | [hipBLASLt Provider](https://github.com/ROCm/rocm-libraries/tree/develop/dnn-providers/hipblaslt-provider)               | rocm-libraries | ✅        |                                               |
 
 ## Building TheRock from source
 
 These instructions mostly mirror the instructions in the root
 [README.md](../../README.md), with some extra Windows-specific callouts.
+
+### Validating your environment
+
+Before diving into the full setup, you can run the environment validation script
+to check that all prerequisites are met:
+
+```powershell
+.\build_tools\validate_windows_install.ps1
+```
+
+The script checks RAM, disk space, long path support, symlink capability, MSVC,
+CMake, Ninja, Git, Python, DVC, Strawberry Perl/gfortran, ccache, and git
+configuration. It is safe to re-run at any time.
 
 ### Prerequisites
 
@@ -110,9 +127,24 @@ These instructions mostly mirror the instructions in the root
     to save space, but storage sizes do not often account for this savings.
     Reported size used and actual size used may differ substantially.
 
-- Long path support is required. As needed, enable long paths for your system:
+- Long path support is required. There are a few ways to enable it:
 
-  - https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation?tabs=registry#registry-setting-to-enable-long-paths
+  - **Registry (most reliable):** set
+    `HKLM\SYSTEM\CurrentControlSet\Control\FileSystem\LongPathsEnabled` to `1`
+    (requires admin):
+
+    ```
+    reg add HKLM\SYSTEM\CurrentControlSet\Control\FileSystem /v LongPathsEnabled /t REG_DWORD /d 1 /f
+    ```
+
+  - **GUI toggle (Windows 11, after enabling Developer Mode):** go to
+    Settings > System > For developers and enable the **"Enable Long Paths"**
+    toggle, then reboot. Note: this toggle may not appear until Developer Mode
+    is on, and has been reported as unreliable on some systems — verify with the
+    validation script after rebooting.
+
+  - See also:
+    https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation?tabs=registry#registry-setting-to-enable-long-paths
 
 - There are some [known issues](https://github.com/ROCm/TheRock/issues/651)
   with preexisting HIP SDK / ROCm installs causing errors during the build

@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Fetches sources from a specified branch/set of projects.
 # This script is available for users, but it is primarily the mechanism
 # the CI uses to get to a clean state.
@@ -423,7 +426,17 @@ def main(argv):
         "--nested-submodules",
         nargs="+",
         type=parse_nested_submodules,
-        default=[("iree", ["third_party/flatcc", "third_party/benchmark"])],
+        default=[
+            (
+                "iree",
+                [
+                    "third_party/flatcc",
+                    "third_party/benchmark",
+                    "third_party/llvm-project",
+                    "third_party/torch-mlir",
+                ],
+            )
+        ],
         help="Specify which nested submodules to fetch (e.g., project1:nested_in_project1_1,nested_in_project1_2 project2:nested_in_project2)",
     )
     parser.add_argument(
@@ -470,7 +483,7 @@ def main(argv):
     )
     parser.add_argument(
         "--include-iree-libs",
-        default=True,
+        default=False,
         action=argparse.BooleanOptionalAction,
         help="Include IREE and related libraries",
     )
@@ -553,8 +566,6 @@ def main(argv):
             if is_windows()
             else [
                 # Linux only projects.
-                "amd-dbgapi",
-                "rocr-debug-agent",
                 "rocgdb",
             ]
         ),
