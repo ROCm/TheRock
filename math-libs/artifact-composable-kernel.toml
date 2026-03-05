@@ -7,3 +7,7 @@ include = [
 ]
 [components.doc."math-libs/composable_kernel/stage"]
 [components.lib."math-libs/composable_kernel/stage"]
+include = [
+  "share/composable_kernel/**",
+]
+[components.run."math-libs/composable_kernel/stage"]
