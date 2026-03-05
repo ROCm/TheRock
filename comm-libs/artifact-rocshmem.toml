@@ -5,7 +5,7 @@
 [components.lib."comm-libs/rocshmem/stage"]
 include = [
   "share/rocshmem/**",
-  "lib/rocshmem.a",
+  "lib/librocshmem.a",
 ]
 [components.run."comm-libs/rocshmem/stage"]
 include = [
