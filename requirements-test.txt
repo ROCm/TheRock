@@ -1,3 +1,0 @@
-# Legacy umbrella file (prefer requirements-test-base.txt or requirements-test-pztest.txt directly)
--r requirements-test-base.txt
--r requirements-test-pytest.txt
