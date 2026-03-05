@@ -500,7 +500,6 @@ def main(argv):
         default=[
             "half",
             "rocm-cmake",
-            "rocprof-trace-decoder",
         ],
     )
     parser.add_argument(
