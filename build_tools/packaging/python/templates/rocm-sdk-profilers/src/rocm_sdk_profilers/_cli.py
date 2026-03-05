@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 import sys
 from pathlib import Path
+import platform
 
 
 def _find_platform_root() -> Path:
@@ -45,6 +46,10 @@ def _find_platform_root() -> Path:
 
 
 def _exec(relpath: str) -> None:
+
+    if platform.system() == "Windows":
+        raise RuntimeError("rocm-sdk-profilers is not supported on Windows.")
+
     root = _find_platform_root()
     full_path = root / relpath
     if not full_path.exists():
