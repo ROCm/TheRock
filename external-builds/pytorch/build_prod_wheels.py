@@ -163,6 +163,7 @@ LINUX_LIBRARY_PRELOADS = [
     "hipsparselt",
     "hipsolver",
     "rccl",  # Linux only for the moment.
+    "rocshmem",  # Linux only for the moment.
     "hipblaslt",
     "miopen",
     "hipdnn",
