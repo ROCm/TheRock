@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 
 """Fetches artifacts from S3.
 
@@ -37,11 +40,12 @@ import sys
 
 from _therock_utils.artifact_backend import ArtifactBackend, S3Backend
 from _therock_utils.artifacts import (
+    ArtifactName,
     ArtifactPopulator,
     _open_archive_for_read,
 )
+from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from artifact_manager import DownloadRequest, download_artifact
-from github_actions.github_actions_utils import retrieve_bucket_info
 
 
 # TODO(geomin12): switch out logging library
@@ -50,30 +54,51 @@ def log(*args, **kwargs):
     sys.stdout.flush()
 
 
-def list_artifacts_for_group(backend: ArtifactBackend, artifact_group: str) -> set[str]:
-    """Lists artifacts from backend, filtered by artifact_group.
+def list_artifacts_for_group(
+    backend: ArtifactBackend,
+    artifact_group: str,
+    amdgpu_targets: list[str] | None = None,
+) -> set[str]:
+    """Lists artifacts from backend, filtered by artifact_group and/or individual targets.
+
+    Inclusive matching: accepts both family-named archives (mono-arch pipeline)
+    and individual-target archives (split/kpack pipeline). Whichever naming
+    convention is present in the bucket will be matched.
 
     Args:
         backend: ArtifactBackend instance configured for the target run
-        artifact_group: GPU family to filter by (e.g., "gfx94X-all"). Also includes
-            artifacts with "generic" in the name.
+        artifact_group: GPU family to filter by (e.g., "gfx94X-dcgpu").
+        amdgpu_targets: Individual GPU targets to also match (e.g., ["gfx942"]).
 
     Returns:
-        Set of artifact filenames matching the artifact_group or "generic".
+        Set of artifact filenames matching any of the target families or "generic".
     """
     log(f"Retrieving artifacts from '{backend.base_uri}'")
+
+    # Build inclusive set of target families to match
+    targets_to_match: set[str] = {"generic"}
+    if artifact_group:
+        targets_to_match.add(artifact_group)
+    if amdgpu_targets:
+        targets_to_match.update(amdgpu_targets)
+
+    log(f"Matching artifact target families: {sorted(targets_to_match)}")
 
     # Get all artifacts from backend
     all_artifacts = backend.list_artifacts()
 
-    # Filter by artifact_group (matches if artifact_group or "generic" in filename)
+    # Use structured ArtifactName parsing for reliable matching
     data = set()
     for filename in all_artifacts:
-        if artifact_group in filename or "generic" in filename:
+        an = ArtifactName.from_filename(filename)
+        if an and an.target_family in targets_to_match:
             data.add(filename)
 
     if not data:
-        log(f"Found no artifacts matching '{artifact_group}' at '{backend.base_uri}'")
+        log(
+            f"Found no artifacts matching {sorted(targets_to_match)} "
+            f"at '{backend.base_uri}'"
+        )
     return data
 
 
@@ -163,15 +188,19 @@ def run(args):
     artifact_group = args.artifact_group
     output_dir = args.output_dir
 
-    external_repo, bucket = retrieve_bucket_info(
-        github_repository=run_github_repo,
-        workflow_run_id=run_id,
-    )
-    backend = S3Backend(
-        bucket=bucket,
+    output_root = WorkflowOutputRoot.from_workflow_run(
         run_id=run_id,
         platform=args.platform,
-        external_repo=external_repo,
+        github_repository=run_github_repo,
+        lookup_workflow_run=True,
+    )
+    backend = S3Backend(output_root=output_root)
+
+    # Parse individual GPU targets (comma-separated string to list).
+    amdgpu_targets = (
+        [t.strip() for t in args.amdgpu_targets.split(",") if t.strip()]
+        if args.amdgpu_targets
+        else []
     )
 
     # Lookup which artifacts exist in the bucket.
@@ -179,7 +208,9 @@ def run(args):
     # (via include patterns) do exist, so this may silently fail to fetch
     # expected files.
     available_artifacts = list_artifacts_for_group(
-        backend=backend, artifact_group=artifact_group
+        backend=backend,
+        artifact_group=artifact_group,
+        amdgpu_targets=amdgpu_targets,
     )
     if not available_artifacts:
         log(f"No matching artifacts for {run_id} exist. Exiting...")
@@ -276,6 +307,12 @@ def main(argv):
         type=str,
         required=True,
         help="Artifact group to fetch",
+    )
+    filter_group.add_argument(
+        "--amdgpu-targets",
+        type=str,
+        default="",
+        help="Comma-separated individual GPU targets for fetching split artifacts (e.g. 'gfx942')",
     )
 
     parser.add_argument(

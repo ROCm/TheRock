@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Most libraries need to depend on the profiler, but is conditionally only used
 # on Posix.
 set(optional_profiler_deps)
@@ -7,7 +10,7 @@ endif()
 
 # limit use of composable kernel to the GPU families it is valid for
 if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
-  set(_ck_supported_gfx_targets gfx908 gfx90a gfx942 gfx950 gfx1150 gfx1151 gfx1200 gfx1201)
+  set(_ck_supported_gfx_targets gfx908 gfx90a gfx942 gfx950 gfx1150 gfx1151 gfx1152 gfx1153 gfx1200 gfx1201)
   foreach(_gfx_target ${THEROCK_AMDGPU_TARGETS})
     if(NOT ${_gfx_target} IN_LIST _ck_supported_gfx_targets)
       message(WARNING
@@ -35,6 +38,7 @@ if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
       -DROCM_DIR=
       "-DBUILD_TESTING=${THEROCK_BUILD_TESTING}"
       -DMIOPEN_REQ_LIBS_ONLY=ON
+      -DHIPTENSOR_REQ_LIBS_ONLY=ON
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
@@ -59,7 +63,6 @@ if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
       dev
       doc
       lib
-      run
     SUBPROJECT_DEPS
       composable_kernel
   )
@@ -174,12 +177,12 @@ if(THEROCK_ENABLE_HIPDNN)
       amd-hip
     BUILD_DEPS
       therock-googletest
+      therock-fmt
+      therock-spdlog
     RUNTIME_DEPS
       hip-clr
       therock-flatbuffers
-      therock-fmt
       therock-nlohmann-json
-      therock-spdlog
   )
   therock_cmake_subproject_glob_c_sources(hipDNN
   SUBDIRS
@@ -208,20 +211,22 @@ if(THEROCK_ENABLE_HIPDNN)
   )
 endif(THEROCK_ENABLE_HIPDNN)
 
-if(THEROCK_ENABLE_MIOPEN_PLUGIN)
+if(THEROCK_ENABLE_MIOPENPROVIDER)
   ##############################################################################
-  # hipDNN MIOpen plugin
+  # hipDNN MIOpen provider
   ##############################################################################
 
-  therock_cmake_subproject_declare(MIOpen_plugin
-    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipdnn/plugins/miopen_legacy_plugin"
-    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/miopen_plugin"
+  therock_cmake_subproject_declare(miopenprovider
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/dnn-providers/miopen-provider"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/miopenprovider"
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
       -DROCM_PATH=
       -DROCM_DIR=
       "-DHIP_DNN_SKIP_TESTS=$<NOT:$<BOOL:${THEROCK_BUILD_TESTING}>>"
+      -DENABLE_CLANG_TIDY=OFF
+      -DENABLE_CLANG_FORMAT=OFF
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
@@ -231,37 +236,35 @@ if(THEROCK_ENABLE_MIOPEN_PLUGIN)
       therock-googletest
       therock-flatbuffers
       therock-nlohmann-json
-      therock-fmt
-      therock-spdlog
     RUNTIME_DEPS
       MIOpen
   )
-  therock_cmake_subproject_glob_c_sources(MIOpen_plugin
+  therock_cmake_subproject_glob_c_sources(miopenprovider
   SUBDIRS
     .
   )
-  therock_cmake_subproject_activate(MIOpen_plugin)
+  therock_cmake_subproject_activate(miopenprovider)
 
-  therock_provide_artifact(miopen-plugin
+  therock_provide_artifact(miopenprovider
     TARGET_NEUTRAL
-    DESCRIPTOR artifact-miopen-plugin.toml
+    DESCRIPTOR artifact-miopenprovider.toml
     COMPONENTS
       dbg
       lib
       test
     SUBPROJECT_DEPS
-      MIOpen_plugin
+      miopenprovider
   )
-endif(THEROCK_ENABLE_MIOPEN_PLUGIN)
+endif(THEROCK_ENABLE_MIOPENPROVIDER)
 
-if(THEROCK_ENABLE_HIPBLASLT_PLUGIN)
+if(THEROCK_ENABLE_HIPBLASLTPROVIDER)
   ##############################################################################
-  # hipDNN hipBLASlt plugin
+  # hipDNN hipBLASLt provider
   ##############################################################################
 
-  therock_cmake_subproject_declare(hipBLASLt_plugin
+  therock_cmake_subproject_declare(hipblasltprovider
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/dnn-providers/hipblaslt-provider"
-    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipblaslt_plugin"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipblasltprovider"
     BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
@@ -277,29 +280,27 @@ if(THEROCK_ENABLE_HIPBLASLT_PLUGIN)
       therock-googletest
       therock-flatbuffers
       therock-nlohmann-json
-      therock-fmt
-      therock-spdlog
     RUNTIME_DEPS
       hipBLAS-common
       hipBLASLt
   )
-  therock_cmake_subproject_glob_c_sources(hipBLASLt_plugin
+  therock_cmake_subproject_glob_c_sources(hipblasltprovider
   SUBDIRS
     .
   )
-  therock_cmake_subproject_activate(hipBLASLt_plugin)
+  therock_cmake_subproject_activate(hipblasltprovider)
 
-  therock_provide_artifact(hipblaslt-plugin
+  therock_provide_artifact(hipblasltprovider
     TARGET_NEUTRAL
-    DESCRIPTOR artifact-hipblaslt-plugin.toml
+    DESCRIPTOR artifact-hipblasltprovider.toml
     COMPONENTS
       dbg
       lib
       test
     SUBPROJECT_DEPS
-      hipBLASLt_plugin
+      hipblasltprovider
   )
-endif(THEROCK_ENABLE_HIPBLASLT_PLUGIN)
+endif(THEROCK_ENABLE_HIPBLASLTPROVIDER)
 
 if(THEROCK_ENABLE_HIPDNN_SAMPLES)
   ##############################################################################
@@ -323,10 +324,8 @@ if(THEROCK_ENABLE_HIPDNN_SAMPLES)
       hipDNN
       therock-flatbuffers
       therock-nlohmann-json
-      therock-fmt
-      therock-spdlog
     RUNTIME_DEPS
-      MIOpen_plugin
+      miopenprovider
   )
   therock_cmake_subproject_glob_c_sources(hipDNN_samples
   SUBDIRS

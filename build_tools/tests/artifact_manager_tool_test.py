@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Integration tests for artifact_manager.py CLI tool.
 
 These tests verify end-to-end behavior of the artifact_manager push/fetch commands,
@@ -17,6 +20,7 @@ from unittest import mock
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from _therock_utils.artifact_backend import ArtifactBackend, LocalDirectoryBackend
+from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
 # Minimal topology TOML for testing push/fetch behavior.
 # Defines two stages: upstream-stage produces artifacts, downstream-stage consumes them.
@@ -90,10 +94,10 @@ class FailingBackend(ArtifactBackend):
 
         # Use a real backend for successful operations
         if staging_dir:
+            output_root = WorkflowOutputRoot.for_local(run_id=run_id, platform=platform)
             self._real_backend = LocalDirectoryBackend(
                 staging_dir=staging_dir,
-                run_id=run_id,
-                platform=platform,
+                output_root=output_root,
             )
         else:
             self._real_backend = None
@@ -208,10 +212,12 @@ class ArtifactManagerTestBase(unittest.TestCase):
         self, name: str, component: str, target_family: str, run_id: str = "local"
     ) -> str:
         """Create a fake artifact in the staging directory."""
+        output_root = WorkflowOutputRoot.for_local(
+            run_id=run_id, platform=TEST_PLATFORM
+        )
         backend = LocalDirectoryBackend(
             staging_dir=self.staging_dir,
-            run_id=run_id,
-            platform=TEST_PLATFORM,
+            output_root=output_root,
         )
 
         archive_name = f"{name}_{component}_{target_family}.tar.zst"
@@ -318,10 +324,12 @@ class TestPushFailureExitCode(ArtifactManagerTestBase):
         artifact_manager.main(argv)
 
         # Verify artifacts were uploaded
+        output_root = WorkflowOutputRoot.for_local(
+            run_id="local", platform=TEST_PLATFORM
+        )
         backend = LocalDirectoryBackend(
             staging_dir=self.staging_dir,
-            run_id="local",
-            platform=TEST_PLATFORM,
+            output_root=output_root,
         )
         self.assertTrue(backend.artifact_exists("test-artifact_lib_generic.tar.zst"))
 
@@ -430,6 +438,150 @@ class TestFetchFailureExitCode(ArtifactManagerTestBase):
 
         self.assertEqual(ctx.exception.code, 1)
         mock_extract.assert_called_once()
+
+
+class TestFetchAmdgpuTargets(ArtifactManagerTestBase):
+    """Tests that fetch command correctly handles --amdgpu-targets for split artifacts."""
+
+    def test_fetch_with_amdgpu_targets_finds_individual_target_archives(self):
+        """Test that --amdgpu-targets matches individual-target split archives."""
+        import artifact_manager
+
+        # Stage a generic artifact and a per-target artifact
+        self._create_staged_artifact("test-artifact", "lib", "generic")
+        self._create_staged_artifact("test-artifact", "lib", "gfx942")
+
+        extract_calls = []
+
+        def mock_extract(request):
+            extract_calls.append(request)
+            return request.output_dir
+
+        with mock.patch("artifact_manager.extract_artifact", mock_extract):
+            argv = [
+                "fetch",
+                "--stage",
+                "downstream-stage",
+                "--output-dir",
+                str(self.output_dir),
+                "--topology",
+                str(self.topology_path),
+                "--local-staging-dir",
+                str(self.staging_dir),
+                "--platform",
+                TEST_PLATFORM,
+                "--run-id",
+                "local",
+                "--amdgpu-targets",
+                "gfx942",
+            ]
+
+            artifact_manager.main(argv)
+
+        # Should have fetched both generic and gfx942
+        fetched_keys = [c.archive_path.name for c in extract_calls]
+        self.assertTrue(
+            any("generic" in k for k in fetched_keys),
+            f"Should fetch generic artifact, got: {fetched_keys}",
+        )
+        self.assertTrue(
+            any("gfx942" in k for k in fetched_keys),
+            f"Should fetch gfx942 artifact, got: {fetched_keys}",
+        )
+
+    def test_fetch_with_amdgpu_targets_skips_other_targets(self):
+        """Test that --amdgpu-targets doesn't fetch archives for other targets."""
+        import artifact_manager
+
+        # Stage artifacts for two different targets
+        self._create_staged_artifact("test-artifact", "lib", "generic")
+        self._create_staged_artifact("test-artifact", "lib", "gfx942")
+        self._create_staged_artifact("test-artifact", "lib", "gfx1100")
+
+        extract_calls = []
+
+        def mock_extract(request):
+            extract_calls.append(request)
+            return request.output_dir
+
+        with mock.patch("artifact_manager.extract_artifact", mock_extract):
+            argv = [
+                "fetch",
+                "--stage",
+                "downstream-stage",
+                "--output-dir",
+                str(self.output_dir),
+                "--topology",
+                str(self.topology_path),
+                "--local-staging-dir",
+                str(self.staging_dir),
+                "--platform",
+                TEST_PLATFORM,
+                "--run-id",
+                "local",
+                "--amdgpu-targets",
+                "gfx942",
+            ]
+
+            artifact_manager.main(argv)
+
+        fetched_keys = [c.archive_path.name for c in extract_calls]
+        self.assertFalse(
+            any("gfx1100" in k for k in fetched_keys),
+            f"Should NOT fetch gfx1100 artifact, got: {fetched_keys}",
+        )
+
+    def test_fetch_with_families_and_targets_is_inclusive(self):
+        """Test that --amdgpu-families and --amdgpu-targets together fetch both."""
+        import artifact_manager
+
+        # Stage family-named and target-named artifacts
+        self._create_staged_artifact("test-artifact", "lib", "generic")
+        self._create_staged_artifact("test-artifact", "lib", "gfx94X-dcgpu")
+        self._create_staged_artifact("test-artifact", "lib", "gfx942")
+
+        extract_calls = []
+
+        def mock_extract(request):
+            extract_calls.append(request)
+            return request.output_dir
+
+        with mock.patch("artifact_manager.extract_artifact", mock_extract):
+            argv = [
+                "fetch",
+                "--stage",
+                "downstream-stage",
+                "--output-dir",
+                str(self.output_dir),
+                "--topology",
+                str(self.topology_path),
+                "--local-staging-dir",
+                str(self.staging_dir),
+                "--platform",
+                TEST_PLATFORM,
+                "--run-id",
+                "local",
+                "--amdgpu-families",
+                "gfx94X-dcgpu",
+                "--amdgpu-targets",
+                "gfx942",
+            ]
+
+            artifact_manager.main(argv)
+
+        fetched_keys = [c.archive_path.name for c in extract_calls]
+        self.assertTrue(
+            any("generic" in k for k in fetched_keys),
+            f"Should fetch generic, got: {fetched_keys}",
+        )
+        self.assertTrue(
+            any("gfx94X-dcgpu" in k for k in fetched_keys),
+            f"Should fetch family archive, got: {fetched_keys}",
+        )
+        self.assertTrue(
+            any("gfx942" in k for k in fetched_keys),
+            f"Should fetch target archive, got: {fetched_keys}",
+        )
 
 
 class TestFetchFlatten(ArtifactManagerTestBase):
