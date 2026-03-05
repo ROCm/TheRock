@@ -271,25 +271,42 @@ def get_rocm_init_contents(args: argparse.Namespace):
     library_preloads = (
         WINDOWS_LIBRARY_PRELOADS if is_windows else LINUX_LIBRARY_PRELOADS
     )
+    library_preloads_formatted = ", ".join(f"'{s}'" for s in library_preloads)
+    return textwrap.dedent(
+        f"""
+        def initialize():
+            import rocm_sdk
+            rocm_sdk.initialize_process(
+                preload_shortnames=[{library_preloads_formatted}],
+                check_version='{sdk_version}')
+        """
+    )
 
-    # # Dynamically filter based on what this target actually provides
-    # try:
-    #     import rocm_sdk._dist_info as _di
-    #     available = [s for s in library_preloads if s in _di.ALL_LIBRARIES]
-    # except Exception:
-    #     available = library_preloads  # fallback
+# def get_rocm_init_contents(args: argparse.Namespace):
+#     """Gets the contents of the _rocm_init.py file to add to the build."""
+#     sdk_version = get_rocm_sdk_version()
+#     library_preloads = (
+#         WINDOWS_LIBRARY_PRELOADS if is_windows else LINUX_LIBRARY_PRELOADS
+#     )
 
-    # library_preloads_formatted = ", ".join(f"'{s}'" for s in available)
+#     # Dynamically filter based on what this target actually provides
+#     try:
+#         import rocm_sdk._dist_info as _di
+#         available = [s for s in library_preloads if s in _di.ALL_LIBRARIES]
+#     except Exception:
+#         available = library_preloads  # fallback
 
-    # return textwrap.dedent(
-    #     f"""
-    #     def initialize():
-    #         import rocm_sdk
-    #         rocm_sdk.initialize_process(
-    #             preload_shortnames=[{library_preloads_formatted}],
-    #             check_version='{sdk_version}')
-    #     """
-    # )
+#     library_preloads_formatted = ", ".join(f"'{s}'" for s in available)
+
+#     return textwrap.dedent(
+#         f"""
+#         def initialize():
+#             import rocm_sdk
+#             rocm_sdk.initialize_process(
+#                 preload_shortnames=[{library_preloads_formatted}],
+#                 check_version='{sdk_version}')
+#         """
+#     )
 
 
 def remove_dir_if_exists(dir: Path):
