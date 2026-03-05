@@ -34,15 +34,16 @@ dist_info = _load_local_dist_info()
 
 version = os.environ.get("ROCM_SDK_VERSION", dist_info.__version__)
 if version == "DEFAULT":
-    # Allows standalone template builds (Phase 2)
+    # Fallback used for standalone template builds during Phase 2 testing.
+    # The packaging pipeline will always provide ROCM_SDK_VERSION.
     version = "0.0.0.dev0"
 
 setup(
     name="rocm-sdk-profilers",
     version=version,
     description="ROCm profiler applications (rocprofiler-systems and rocprofiler-compute)",
-    package_dir={"": "src"},
     packages=find_packages(where="src"),
+    package_dir={"": "src"},
     include_package_data=True,
     zip_safe=False,
     entry_points={
