@@ -42,15 +42,6 @@ if(THEROCK_ENABLE_MPI)
   add_subdirectory(openmpi)
 endif()
 
-# TODO: Relocate non header-only libraries here (i.e. boost, host-blas).
-if(THEROCK_BUNDLE_SYSDEPS)
-  if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    add_subdirectory(sysdeps/linux)
-  elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
-    add_subdirectory(sysdeps/windows)
-  endif()
-endif()
-
 # gRPC: Static library for RDC (built on-demand when depended upon)
 # See: docs/rfcs/RFC0007-rdc-therock-integration.md
 add_subdirectory(grpc)
