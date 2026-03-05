@@ -102,7 +102,7 @@ jobs:
     defaults:
       run:
         # working-directory: ${{ github.workspace}}/build_tools/packaging/runfile-installer
-        working-directory: ${{github.workspace}}/rocm-systems/projects/runfile-installer
+        working-directory: ${{ github.workspace }}/rocm-systems/projects/runfile-installer
     env:
       BUILD_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:d6ae5712a9c7e8b88281d021e907b312cd8a26295b95690baef3e8dde4805858
       BUILD_RUNID: ${{ github.run_id }}
@@ -121,8 +121,9 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Checkout rocm-systems submodule
+        working-directory: ${{ github.workspace }}
         run: |
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config --global --add safe.directory .
           git submodule update --init rocm-systems
       
       - name: Set ROCM_VERSION
