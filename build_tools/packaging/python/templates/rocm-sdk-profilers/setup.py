@@ -3,21 +3,28 @@
 
 """Main rocm-sdk-profilers (OS specific)."""
 
+from __future__ import annotations
 
+import importlib.util
 import os
+from pathlib import Path
 
 from setuptools import find_packages, setup
 
-import importlib.util
+
+THIS_DIR = Path(__file__).resolve().parent
 
 
-# Version is defined centrally for all ROCm wheels via a local _dist_info.py
 def _load_local_dist_info():
-    this_dir = os.path.dirname(os.path.abspath(__file__))
-    dist_info_path = os.path.join(this_dir, "_dist_info.py")
+    """Load the per-wheel _dist_info.py generated into this template at build time."""
+    dist_info_path = THIS_DIR / "_dist_info.py"
+    if not dist_info_path.exists():
+        raise ImportError(f"Cannot find local _dist_info.py at: {dist_info_path}")
+
     spec = importlib.util.spec_from_file_location("_dist_info", dist_info_path)
     if spec is None or spec.loader is None:
         raise ImportError(f"Cannot load local _dist_info module from {dist_info_path}")
+
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -32,7 +39,7 @@ if version == "DEFAULT":
 
 setup(
     name="rocm-sdk-profilers",
-    version=version,  # the computed version
+    version=version,
     description="ROCm profiler applications (rocprofiler-systems and rocprofiler-compute)",
     author="AMD",
     license="MIT",
