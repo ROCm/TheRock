@@ -8,6 +8,7 @@ from __future__ import annotations
 import importlib.util
 import os
 from pathlib import Path
+import platform
 
 from setuptools import find_packages, setup
 
@@ -38,6 +39,7 @@ if version == "DEFAULT":
     # The packaging pipeline will always provide ROCM_SDK_VERSION.
     version = "0.0.0.dev0"
 
+
 setup(
     name="rocm-sdk-profilers",
     version=version,
@@ -47,14 +49,18 @@ setup(
     include_package_data=True,
     zip_safe=False,
     entry_points={
-        "console_scripts": [
-            "rocprof-compute=rocm_sdk_profilers._cli:rocprof_compute",
-            "rocprof-sys-avail=rocm_sdk_profilers._cli:rocprof_sys_avail",
-            "rocprof-sys-causal=rocm_sdk_profilers._cli:rocprof_sys_causal",
-            "rocprof-sys-instrument=rocm_sdk_profilers._cli:rocprof_sys_instrument",
-            "rocprof-sys-run=rocm_sdk_profilers._cli:rocprof_sys_run",
-            "rocprof-sys-sample=rocm_sdk_profilers._cli:rocprof_sys_sample",
-        ],
+        "console_scripts": (
+            [
+                "rocprof-compute=rocm_sdk_profilers._cli:rocprof_compute",
+                "rocprof-sys-avail=rocm_sdk_profilers._cli:rocprof_sys_avail",
+                "rocprof-sys-causal=rocm_sdk_profilers._cli:rocprof_sys_causal",
+                "rocprof-sys-instrument=rocm_sdk_profilers._cli:rocprof_sys_instrument",
+                "rocprof-sys-run=rocm_sdk_profilers._cli:rocprof_sys_run",
+                "rocprof-sys-sample=rocm_sdk_profilers._cli:rocprof_sys_sample",
+            ]
+            if platform.system() != "Windows"
+            else []
+        ),
     },
     python_requires=">=3.8",
 )
