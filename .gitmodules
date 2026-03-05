@@ -55,4 +55,4 @@
 [submodule "core/rocm-bandwidth-test"]
 	path = core/rocm-bandwidth-test
 	url = https://github.com/ROCm/rocm_bandwidth_test.git
-	branch = master
+	branch = amd-mainline
