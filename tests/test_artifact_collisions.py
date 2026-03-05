@@ -119,8 +119,8 @@ class TestArtifactCollisions:
         if not archives:
             pytest.skip(f"No artifact archives found in {artifacts_dir}")
 
-        # flattened_path -> set of artifact names that contain it
-        seen: dict[str, set[str]] = defaultdict(set)
+        # flattened_path -> { artifact_name: set of archive filenames }
+        seen: dict[str, dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
         skipped: list[str] = []
 
         for archive_path in archives:
@@ -140,13 +140,11 @@ class TestArtifactCollisions:
                 continue
 
             for fpath in flattened_paths:
-                seen[fpath].add(an.name)
+                seen[fpath][an.name].add(archive_name)
 
         # Only flag paths that appear in two or more different artifact names.
-        collisions: dict[str, set[str]] = {
-            fpath: artifact_names
-            for fpath, artifact_names in seen.items()
-            if len(artifact_names) > 1
+        collisions: dict[str, dict[str, set[str]]] = {
+            fpath: by_name for fpath, by_name in seen.items() if len(by_name) > 1
         }
 
         if skipped:
@@ -155,10 +153,11 @@ class TestArtifactCollisions:
         if collisions:
             # Show at most 20 collisions to keep output readable.
             lines = []
-            for fpath, artifact_names in sorted(collisions.items())[:20]:
+            for fpath, by_name in sorted(collisions.items())[:20]:
                 lines.append(f"  {fpath}")
-                for name in sorted(artifact_names):
-                    lines.append(f"    - {name}")
+                for name in sorted(by_name):
+                    archives_list = sorted(by_name[name])
+                    lines.append(f"    - {name} ({', '.join(archives_list)})")
             summary = "\n".join(lines)
             remaining = len(collisions) - 20
             if remaining > 0:
