@@ -1,0 +1,30 @@
+From aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa Mon Sep 17 00:00:00 2001
+From: Ruijing Yang <ruijing.yang@amd.com>
+Date: Mon, 2 Mar 2026 00:00:00 +0000
+Subject: [PATCH] Revert "SWDEV-573589 - Fixed performance regression due to
+ the increase of the signal pool (#2470)"
+
+This reverts commit aecc84545643e3bcb1594a4610368c4785a5f55d
+for bisection testing to confirm whether this commit is responsible
+for the performance improvement between 12/31 and 01/03 nightly builds.
+---
+ projects/clr/rocclr/device/rocm/rocvirtual.cpp | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/projects/clr/rocclr/device/rocm/rocvirtual.cpp b/projects/clr/rocclr/device/rocm/rocvirtual.cpp
+index 0814e460fe..ff8354e350 100644
+--- a/projects/clr/rocclr/device/rocm/rocvirtual.cpp
++++ b/projects/clr/rocclr/device/rocm/rocvirtual.cpp
+@@ -516,7 +516,8 @@ hsa_signal_t VirtualGPU::HwQueueTracker::ActiveSignal(hsa_signal_value_t init_va
+   auto temp_id = (current_id_ + 2) % signal_list_.size();
+ 
+   // If GPU is still busy with processing, then add more signals to avoid more frequent stalls
+-  if (Hsa::signal_load_relaxed(signal_list_[temp_id]->signal_) > 0) {
++  if ((Hsa::signal_load_relaxed(signal_list_[temp_id]->signal_) > 0) ||
++      (signal_list_[temp_id]->ts_ == ts)) {
+     std::unique_ptr<ProfilingSignal> signal(new ProfilingSignal());
+     if ((signal != nullptr) && CreateSignal(signal.get())) {
+       // Find valid new index
+-- 
+2.34.1
+
