@@ -6,7 +6,7 @@ if(THEROCK_ENABLE_RCCL)
   # on Posix.
   set(optional_profiler_deps)
   if(THEROCK_FLAG_INCLUDE_PROFILER)
-    list(APPEND optional_profiler_deps roctracer rocprofiler-sdk)
+    list(APPEND optional_profiler_deps rocprofiler-register roctracer rocprofiler-sdk)
   endif()
 
   # RCCL can optionally use amdsmi/rocm_smi_lib on Linux, but those may not be
@@ -51,7 +51,6 @@ if(THEROCK_ENABLE_RCCL)
     RUNTIME_DEPS
       hip-clr
       hipify
-      rocprofiler-register
       ${_rccl_optional_runtime_deps}
       ${optional_profiler_deps}
   )
