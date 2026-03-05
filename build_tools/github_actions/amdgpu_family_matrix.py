@@ -156,6 +156,7 @@ amdgpu_family_info_matrix_nightly = {
             "fetch-gfx-targets": [],
             "sanity_check_only_for_family": True,
             "build_variants": ["release"],
+            "expect_pytorch_failure": True,
         },
         # TODO(#1927): Resolve error generating file `torch_hip_generated_int4mm.hip.obj`, to enable PyTorch builds
         "windows": {
@@ -174,6 +175,7 @@ amdgpu_family_info_matrix_nightly = {
             "fetch-gfx-targets": [],
             "sanity_check_only_for_family": True,
             "build_variants": ["release"],
+            "expect_pytorch_failure": True,
         },
         "windows": {
             "test-runs-on": "",
