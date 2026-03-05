@@ -319,6 +319,7 @@ therock_cmake_subproject_declare(ocl-icd
   CMAKE_ARGS
     "-DOPENCL_ICD_LOADER_REQUIRE_WDK=OFF"
     "-DOPENCL_ICD_LOADER_HEADERS_DIR=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/clr/opencl/khronos/headers/opencl2.2"
+    "-DBUILD_TESTING=${THEROCK_BUILD_TESTING}"
 
   INTERFACE_LINK_DIRS
     "lib"
