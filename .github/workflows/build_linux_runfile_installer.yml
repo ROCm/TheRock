@@ -116,6 +116,7 @@ jobs:
       BUILD_TAG: ${{ inputs.pull_tag }}
       GFX_ARCHS: ${{ inputs.gfx_archs }}
       PULL_AMDGPU: ${{ inputs.pull_amdgpu }}
+      ROCM_VERSION: ${{ inputs.rocm_version }}
       S3_BUCKET_RUNFILE: therock-${{ inputs.release_type }}-runfile
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -125,24 +126,6 @@ jobs:
         run: |
           git config --global --add safe.directory .
           git submodule update --init rocm-systems
-      
-      - name: Set ROCM_VERSION
-        run: |
-          ROCM_VERSION=$(echo "${{ inputs.rocm_version }}" | cut -d'~' -f1)
-          echo "Set value of ROCM_VERSION = '$ROCM_VERSION'"
-          echo "ROCM_VERSION=$ROCM_VERSION" >> $GITHUB_ENV
-      
-      # Value of inputs.rocm_version for daily nightly job would be in the format 7.12.0~20260218.
-      # We need the 20260218 and set it to pull_tag
-      # Value of inputs.rocm_version for prerelease job would be in the format 7.12.0~rc2.
-      # We need the rc2 and set it to pull_tag.
-      - name: Set PULL_TAG
-        run: |
-          if [[ -z $PULL_TAG ]]; then
-            PULL_TAG=$(echo "${{ inputs.rocm_version }}" | cut -d'~' -f2)
-            echo "Set value of PULL_TAG = '$PULL_TAG'"
-            echo "PULL_TAG=$PULL_TAG" >> $GITHUB_ENV
-          fi
         
       - name: Set MSCOMP
         run: |
