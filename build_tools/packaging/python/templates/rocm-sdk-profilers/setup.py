@@ -41,8 +41,6 @@ setup(
     name="rocm-sdk-profilers",
     version=version,
     description="ROCm profiler applications (rocprofiler-systems and rocprofiler-compute)",
-    author="AMD",
-    license="MIT",
     package_dir={"": "src"},
     packages=find_packages(where="src"),
     include_package_data=True,
