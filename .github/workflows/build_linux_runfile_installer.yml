@@ -122,7 +122,9 @@ jobs:
 
       - name: Checkout rocm-systems submodule
         working-directory: ${{ github.workspace }}
-        run: git submodule update --init rocm-systems
+        run: |
+          git config --global --add safe.directory .
+          git submodule update --init rocm-systems
       
       # - name: Set ROCM_VERSION
       #   run: |
