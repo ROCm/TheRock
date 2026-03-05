@@ -58,3 +58,7 @@ else:
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 result = subprocess.run(cmd, cwd=THEROCK_DIR, env=environ_vars)
+
+if result.returncode != 0:
+    logging.error(f"Tests failed with return code {result.returncode}")
+    sys.exit(result.returncode)
