@@ -1,4 +1,7 @@
-name: Native Linux Packages Install Test
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Test Native Linux Packages Install
 
 on:
   workflow_call:
@@ -67,14 +70,13 @@ permissions:
   id-token: write
   contents: read
 
-run-name: Full Test - Native Linux packages (${{ inputs.os_profile }})
+run-name: Test - Native Linux packages Install (${{ inputs.os_profile }})
 
 jobs:
-  full_test_native_linux_packages:
-    name: Full Installation Test - ${{ inputs.os_profile }}
+  test_native_linux_packages_install:
+    name: Test Native Linux Packages Installation - ${{ inputs.os_profile }}
     strategy:
       fail-fast: false
-    # Derive package type from os_profile: ubuntu/debian -> deb, else rpm
     runs-on: ${{ github.repository_owner == 'ROCm' && 'linux-mi325-1gpu-ossci-rocm' || 'ubuntu-24.04' }}
     container:
       # Use container matching the OS profile (SLES / Ubuntu|Debian / AlmaLinux)
@@ -102,8 +104,6 @@ jobs:
           if [ "${PKG_TYPE}" = "deb" ]; then
             apt update
             apt install -y \
-              python3 \
-              python3-pip \
               wget \
               curl \
               ca-certificates \
@@ -113,8 +113,6 @@ jobs:
             # SLES prerequisites (uses zypper)
             zypper refresh
             zypper install -y \
-              python3 \
-              python3-pip \
               wget \
               curl \
               ca-certificates \
@@ -124,8 +122,6 @@ jobs:
             # RHEL/CentOS/AlmaLinux/AZL prerequisites
             # Use --allowerasing to handle curl-minimal conflict on AlmaLinux 9
             dnf install -y --allowerasing \
-              python3 \
-              python3-pip \
               wget \
               curl \
               ca-certificates \
@@ -136,14 +132,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
+      - name: Set up Python
+        uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
+        with:
+          python-version: '3.12'
+
       - name: Install Python Dependencies
         run: |
-          case "${{ inputs.os_profile }}" in ubuntu*|debian*) USE_BREAK_SYSTEM=1 ;; *) USE_BREAK_SYSTEM=0 ;; esac
-          if [ "$USE_BREAK_SYSTEM" = "1" ]; then
-            pip3 install --break-system-packages pyelftools requests prettytable PyYAML
-          else
-            pip3 install pyelftools requests prettytable PyYAML
-          fi
+          pip install pyelftools requests prettytable PyYAML
 
       - name: Validate OS Profile
         run: |
@@ -164,8 +160,8 @@ jobs:
           esac
           echo "=========================================================================="
 
-      - name: Full Package Installation Test
-        id: full-test
+      - name: Package Installation Test
+        id: install-test
         run: |
           echo "=========================================================================="
           echo "FULL INSTALLATION TEST - NATIVE LINUX PACKAGES"
@@ -178,7 +174,7 @@ jobs:
           echo "=========================================================================="
           echo ""
 
-          CMD="python3 build_tools/packaging/linux/native_linux_packages_test.py"
+          CMD="python build_tools/packaging/linux/native_linux_packages_test.py"
           CMD="$CMD --os-profile ${{ inputs.os_profile }}"
           CMD="$CMD --repo-url \"${{ env.REPO_URL }}\""
           CMD="$CMD --gfx-arch ${{ env.GFX_ARCH }}"
@@ -193,7 +189,7 @@ jobs:
           eval $CMD
 
       - name: Verify ROCm Installation
-        if: always() && steps.full-test.outcome == 'success'
+        if: always() && steps.install-test.outcome == 'success'
         shell: bash
         run: |
           echo "=========================================================================="
@@ -248,10 +244,10 @@ jobs:
         run: |
           echo ""
           echo "=========================================================================="
-          echo "FULL TEST REPORT"
+          echo "INSTALL TEST REPORT"
           echo "=========================================================================="
 
-          if [ "${{ steps.full-test.outcome }}" = "success" ]; then
+          if [ "${{ steps.install-test.outcome }}" = "success" ]; then
             echo "FULL INSTALLATION TEST PASSED"
             echo ""
             echo "Summary:"
