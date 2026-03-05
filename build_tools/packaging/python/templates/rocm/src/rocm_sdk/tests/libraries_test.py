@@ -19,6 +19,11 @@ from . import utils
 
 import rocm_sdk
 
+# hipDNN is not packaged for gfx906/gfx908 in current ROCm releases.
+# Skip loading hipdnn shared libraries for those architectures.
+TARGET_FAMILY = di.determine_target_family()
+SKIP_HIPDNN = TARGET_FAMILY in ("gfx906", "gfx908")
+
 utils.assert_is_physical_package(rocm_sdk)
 
 libraries_mod_name = di.ALL_PACKAGES["libraries"].get_py_package_name(
@@ -64,6 +69,10 @@ class ROCmLibrariesTest(unittest.TestCase):
                 if "amd_smi" in str(so_path) or "goamdsmi" in str(so_path):
                     # TODO: Library preloads for amdsmi need to be implement.
                     # Though this is not needed for the amd-smi client.
+                    continue
+
+                # hipDNN is not shipped for some architectures (gfx906/gfx908)
+                if SKIP_HIPDNN and "hipdnn" in str(so_path):
                     continue
 
                 extra_setup = ""
