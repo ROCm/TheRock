@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Disable INT128 support on Windows to avoid cross linkage issues when building
 # with clang but depending on MSVC built support libraries:
 # https://github.com/ROCm/TheRock/issues/405

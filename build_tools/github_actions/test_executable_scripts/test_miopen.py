@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 import logging
 import os
 import shlex
@@ -108,6 +111,7 @@ positive_filter.append("*/GPU_Dropout*")
 positive_filter.append("*/GPU_MhaBackward_*")
 positive_filter.append("*/GPU_MhaForward_*")
 positive_filter.append("*GPU_TestMhaFind20*")
+positive_filter.append("*/GPU_MIOpenDriver*")
 
 #############################################
 
@@ -116,6 +120,7 @@ negative_filter.append("*MIOpenTestConv*")
 
 # For sake of time saving on pre-commit step
 ####################################################
+negative_filter.append("Full/GPU_MIOpenDriverConv2dTransTest*")  # 4 min 45 sec
 negative_filter.append("Full/GPU_Reduce_FP64*")  # 4 min 19 sec
 negative_filter.append("Full/GPU_BNOCLFWDTrainSerialRun3D_BFP16*")  # 3 min 37 sec
 negative_filter.append("Full/GPU_Lrn_FP32*")  # 2 min 50 sec
@@ -128,6 +133,10 @@ negative_filter.append("Smoke/GPU_BNOCLBWDLarge2D_BFP16*")  # 1 min 19 sec
 
 negative_filter.append("Full/GPU_UnitTestActivationDescriptor_FP32*")  # 1 min 23 sec
 negative_filter.append("Full/GPU_UnitTestActivationDescriptor_FP16*")  # 1 min 0 sec
+
+negative_filter.append(
+    "Full/GPU_MIOpenDriverRegressionBigTensorTest_FP32*"
+)  # 0 min 59 sec
 
 negative_filter.append(
     "Smoke/GPU_BNOCLBWDLargeFusedActivation2D_BFP16*"
@@ -162,11 +171,6 @@ if AMDGPU_FAMILIES in TEST_TO_IGNORE and os_type in TEST_TO_IGNORE[AMDGPU_FAMILI
     ignored_tests = TEST_TO_IGNORE[AMDGPU_FAMILIES][os_type]
     for ignored_test in ignored_tests:
         negative_filter.append(ignored_test)
-
-
-# Don't run while investigating to allow CI to pass
-# Jira Ticket ALMIOPEN-990
-negative_filter.append("*/GPU_MIOpenDriver*")
 
 # TODO(rocm-libraries#2266): re-enable test for gfx950-dcgpu
 if AMDGPU_FAMILIES == "gfx950-dcgpu":
