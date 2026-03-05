@@ -31,14 +31,19 @@ on:
         required: false
         type: string
       os_profile:
-        description: OS profile for install test (e.g., ubuntu2404, rhel8, sles16, almalinux9). Used by test_native_linux_packages.
+        description: OS profile for install test (e.g., ubuntu2404, rhel8, sles16, almalinux9). Used by test_native_linux_packages_install.
         required: false
         type: string
       install_prefix:
-        description: Installation prefix for install test (default /opt/rocm/core). Used by test_native_linux_packages.
+        description: Installation prefix for install test (default /opt/rocm/core). Used by test_native_linux_packages_install.
         required: false
         type: string
         default: "/opt/rocm/core"
+      repo_base_url:
+        description: "Base URL for the repo (no trailing slash). For nightly use e.g. https://rocm.nightlies.amd.com; for prerelease use e.g. https://rocm.prereleases.amd.com/packages. Used to build repo_url for install test; for prerelease, GPG key URL is derived as repo_base_url/gpg/rocm.gpg."
+        required: false
+        type: string
+        default: "https://rocm.nightlies.amd.com"
       repository:
         description: "Repository to checkout. Otherwise, defaults to `github.repository`."
         type: string
@@ -92,6 +97,10 @@ on:
         description: Installation prefix for install test.
         type: string
         default: "/opt/rocm/core"
+      repo_base_url:
+        description: "Base URL for the repo (nightly e.g. https://rocm.nightlies.amd.com; prerelease e.g. https://rocm.prereleases.amd.com/packages)."
+        type: string
+        default: "https://rocm.nightlies.amd.com"
       ref:
         description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
         type: string
@@ -108,6 +117,9 @@ jobs:
     strategy:
       fail-fast: false
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
+    outputs:
+      repo_sub_folder: ${{ steps.repo-metadata.outputs.repo_sub_folder }}
+      build_date: ${{ steps.repo-metadata.outputs.build_date }}
     env:
       BUILD_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:d6ae5712a9c7e8b88281d021e907b312cd8a26295b95690baef3e8dde4805858
       ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id || github.run_id }}
@@ -123,6 +135,15 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
+
+      - name: Set repo_sub_folder
+        id: repo-metadata
+        run: |
+          BUILD_DATE=$(date +%Y%m%d)
+          REPO_SUB_FOLDER="${BUILD_DATE}-${{ env.ARTIFACT_RUN_ID }}"
+          echo "repo_sub_folder=${REPO_SUB_FOLDER}" >> $GITHUB_OUTPUT
+          echo "build_date=${BUILD_DATE}" >> $GITHUB_OUTPUT
+          echo "REPO_SUB_FOLDER=${REPO_SUB_FOLDER}"
 
       - name: Set up Python
         uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
@@ -183,8 +204,8 @@ jobs:
             --artifact-id ${{ env.ARTIFACT_RUN_ID }} \
             --job ${{ inputs.release_type }}
 
-  generate_target_to_run:
-    name: Generate target_to_run
+  generate_target_to_install_test:
+    name: Generate target_to_install_test
     runs-on: ubuntu-24.04
     needs: [build_native_packages]
     outputs:
@@ -195,15 +216,13 @@ jobs:
       - name: Set repo_url, gpg_key_url, gfx_arch
         id: vars
         run: |
-          BUILD_DATE=$(date +%Y%m%d)
-          ARTIFACT_ID="${{ inputs.artifact_run_id || github.run_id }}"
-          REPO_SUB_FOLDER="${BUILD_DATE}-${ARTIFACT_ID}"
+          REPO_SUB_FOLDER="${{ needs.build_native_packages.outputs.repo_sub_folder }}"
           GFX_ARCH=$(echo "${{ inputs.artifact_group }}" | cut -d'-' -f1 | tr '[:upper:]' '[:lower:]')
           RELEASE_TYPE="${{ inputs.release_type == 'dev' && 'nightly' || (inputs.release_type || 'nightly') }}"
           PKG_TYPE="${{ inputs.native_package_type }}"
           OS_PROFILE="${{ inputs.os_profile }}"
+          BASE="${{ inputs.repo_base_url }}"
           if [ "$RELEASE_TYPE" = "prerelease" ]; then
-            BASE="https://rocm.prereleases.amd.com/packages"
             if [ "$PKG_TYPE" = "deb" ]; then
               REPO_URL="${BASE}/${OS_PROFILE}"
             else
@@ -211,7 +230,6 @@ jobs:
             fi
             GPG_KEY_URL="${BASE}/gpg/rocm.gpg"
           else
-            BASE="https://rocm.nightlies.amd.com"
             if [ "$PKG_TYPE" = "deb" ]; then
               REPO_URL="${BASE}/deb/${REPO_SUB_FOLDER}/"
             else
@@ -225,14 +243,14 @@ jobs:
           echo "REPO_URL=${REPO_URL}"
           echo "GFX_ARCH=${GFX_ARCH}"
 
-  test_native_linux_packages:
-    name: Test Native Linux Packages - ${{ inputs.os_profile }}
-    needs: [build_native_packages, generate_target_to_run]
+  test_native_linux_packages_install:
+    name: Test Native Linux Packages Install - ${{ inputs.os_profile }}
+    needs: [build_native_packages, generate_target_to_install_test]
     if: ${{ inputs.os_profile != '' }}
-    uses: ./.github/workflows/native_linux_packages_install_test.yml
+    uses: ./.github/workflows/test_native_linux_packages_install.yml
     with:
-      repo_url: ${{ needs.generate_target_to_run.outputs.repo_url }}
-      gpg_key_url: ${{ needs.generate_target_to_run.outputs.gpg_key_url }}
+      repo_url: ${{ needs.generate_target_to_install_test.outputs.repo_url }}
+      gpg_key_url: ${{ needs.generate_target_to_install_test.outputs.gpg_key_url }}
       os_profile: ${{ inputs.os_profile }}
-      gfx_arch: ${{ needs.generate_target_to_run.outputs.gfx_arch }}
+      gfx_arch: ${{ needs.generate_target_to_install_test.outputs.gfx_arch }}
       install_prefix: ${{ inputs.install_prefix || '/opt/rocm/core' }}
