@@ -156,17 +156,6 @@ def run(args: argparse.Namespace):
     print(f"export CCACHE_CONFIGPATH={config_file}")
 
 
-def check_bazel_remote_connectivity():
-    remote_storage = f"{CACHE_SRV_REL.split('|')[0]}/status"
-    import requests, sys
-    try:
-        response = requests.get(remote_storage, timeout=5)
-        response.raise_for_status()
-        print(f"Successfully connected to remote storage: {response.text}")
-    except requests.RequestException as e:
-        print(f"Failed to connect to remote storage: {response.text}. Error: {e}", file=sys.stderr)
-        sys.exit(1)
-
 def main(argv: list[str]):
     p = argparse.ArgumentParser()
     p.add_argument(
@@ -212,7 +201,6 @@ def main(argv: list[str]):
     )
 
     args = p.parse_args(argv)
-    check_bazel_remote_connectivity()
     run(args)
 
 
