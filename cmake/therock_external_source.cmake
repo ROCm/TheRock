@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Enables to build a subcomponent from a user provided source location.
 function(therock_enable_external_source package_name default_source_dir option_default)
   string(TOUPPER ${package_name} _PACKAGE_UPPER)

@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # On Linux, we compile core libraries with our own LLVM. This gets us the
 # best optimizations and, most importantly, gives us uniform access to
 # sanitizers. Currently, some of these projects, though, are hard-coded
@@ -264,7 +267,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
     set(HIP_TESTS_CMAKE_ARGS)
     set(_hip_tests_subproject_names)
     therock_cmake_subproject_declare(hip-tests
-      USE_DIST_AMDGPU_TARGETS
+      USE_TEST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hip-tests/catch"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hip-tests"
       BACKGROUND_BUILD
@@ -291,6 +294,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
     therock_cmake_subproject_activate(hip-tests)
     # Provide it as an artifact:
     therock_provide_artifact(core-hiptests
+      TARGET_NEUTRAL
       DESCRIPTOR artifact-core-hiptests.toml
       COMPONENTS
         test
@@ -434,7 +438,7 @@ if(THEROCK_BUILD_TESTING)
     endif()
 
     therock_cmake_subproject_declare(rocrtst
-      USE_DIST_AMDGPU_TARGETS
+      USE_TEST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/rocrtst/suites/test_common"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocrtst"
       BACKGROUND_BUILD

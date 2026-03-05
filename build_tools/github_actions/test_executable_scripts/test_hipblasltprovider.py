@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 import logging
 import os
 import shlex
@@ -13,7 +16,7 @@ logging.basicConfig(level=logging.INFO)
 cmd = [
     "ctest",
     "--test-dir",
-    f"{THEROCK_BIN_DIR}/miopen_legacy_plugin",
+    f"{THEROCK_BIN_DIR}/hipblaslt_plugin",
     "--output-on-failure",
     "--parallel",
     "8",

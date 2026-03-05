@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Determines the SDK version and version suffix to pass as additional
 arguments to scripts like `external-builds/pytorch/build_prod_wheels.py`.
 

@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 if ("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
     message(FATAL_ERROR "In-source builds are not allowed. Please create a separate build directory.")
 endif()
@@ -238,6 +241,7 @@ option(THEROCK_ENABLE_MATH_LIBS "Enable building of math libraries" "${THEROCK_E
 option(THEROCK_ENABLE_ML_LIBS "Enable building of ML libraries" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_PROFILER "Enable building the profiler libraries" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_DC_TOOLS "Enable building of data center tools" "${THEROCK_ENABLE_ALL}")
+option(THEROCK_ENABLE_MEDIA_LIBS "Enable building of Media libraries" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_HOST_MATH "Build all bundled host math libraries by default" OFF)
 option(THEROCK_RESET_FEATURES "One-shot flag which forces all feature flags to their default state for this configuration run" OFF)
 # TODO(iree-org/fusilli/issues/57): Enable fusilli build once multi-arch support lands.
@@ -310,6 +314,20 @@ set(THEROCK_AMDGPU_FAMILIES "" CACHE STRING "AMDGPU target families to build for
 set(THEROCK_AMDGPU_TARGETS "" CACHE STRING "AMDGPU targets to build for")
 set(THEROCK_AMDGPU_DIST_BUNDLE_NAME "" CACHE STRING "Distribution bundle name for AMDGPU packages")
 
+# Note that if THEROCK_DIST_AMDGPU_FAMILIES and THEROCK_DIST_AMDGPU_TARGETS are empty, then
+# this defaults to the build targets (THEROCK_AMDGPU_FAMILIES). These "dist" targets are used
+# for runtime libraries that embed device code and are marked as target-neutral (which typically
+# means generate for all supported architectures). They are also reported in dist_info.json
+# and consumed by downstream tools such as PyTorch via `rocm-sdk targets`.
+set(THEROCK_DIST_AMDGPU_FAMILIES "" CACHE STRING "AMDGPU target families to use for target-neutral dist projects")
+set(THEROCK_DIST_AMDGPU_TARGETS "" CACHE STRING "AMDGPU targets for target-neutral dist projects (individual gfx targets in addition to those expanded from THEROCK_DIST_AMDGPU_FAMILIES)")
+
+# Test targets control what architectures TARGET_NEUTRAL test artifacts compile device code for.
+# Defaults to all available targets so that a single _generic artifact works on any architecture,
+# making classic CI upload races harmless. Does NOT affect dist_info.json.
+set(THEROCK_TEST_AMDGPU_FAMILIES "" CACHE STRING "AMDGPU target families to build for TARGET_NEUTRAL test artifacts (default: all available)")
+set(THEROCK_TEST_AMDGPU_TARGETS "" CACHE STRING "AMDGPU targets to build for TARGET_NEUTRAL test artifacts (default: all available)")
+
 therock_validate_amdgpu_targets()
 
 ################################################################################
@@ -327,6 +345,27 @@ if(CMAKE_C_VISIBILITY_PRESET)
 endif()
 if(CMAKE_CXX_VISIBILITY_PRESET)
   list(APPEND DEFAULT_CMAKE_ARGS ${CMAKE_CXX_VISIBILITY_PRESET})
+endif()
+
+################################################################################
+# patchelf / install_name_tool
+# Building with bundled sysdep or rocGDB requires patchelf on Linux and
+# install_name_tool on macOS to set RPATH.
+################################################################################
+
+if(THEROCK_BUNDLE_SYSDEPS OR THEROCK_ENABLE_ROCGDB)
+  if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    find_program(PATCHELF patchelf)
+    if(NOT PATCHELF)
+      message(FATAL_ERROR "Building with THEROCK_BUNDLE_SYSDEPS=ON or THEROCK_ENABLE_ROCGDB=ON on Linux requires `patchelf`")
+    endif()
+  elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    # macOS uses install_name_tool (from Xcode) instead of patchelf
+    find_program(INSTALL_NAME_TOOL install_name_tool)
+    if(NOT INSTALL_NAME_TOOL)
+      message(FATAL_ERROR "Building with THEROCK_BUNDLE_SYSDEPS=ON or THEROCK_ENABLE_ROCGDB=ON on macOS requires `install_name_tool` (install Xcode Command Line Tools)")
+    endif()
+  endif()
 endif()
 
 ################################################################################
@@ -355,14 +394,12 @@ set(THEROCK_BUNDLED_NUMACTL)
 set(THEROCK_BUNDLED_SQLITE3)
 set(THEROCK_BUNDLED_ZLIB)
 set(THEROCK_BUNDLED_ZSTD)
+set(THEROCK_BUNDLED_AMDMESA)
+
 
 if(THEROCK_BUNDLE_SYSDEPS)
   message(STATUS "Building with bundled system dependencies enabled")
   if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    find_program(PATCHELF patchelf)
-    if(NOT PATCHELF)
-      message(FATAL_ERROR "Building with THEROCK_BUNDLE_SYSDEPS=ON on Linux requires `patchelf`")
-    endif()
     find_program(MESON_BUILD meson)
     if(NOT MESON_BUILD)
       message(FATAL_ERROR "Building with THEROCK_BUNDLE_SYSDEPS=ON on Linux requires (easiest: `pip install meson`)")
@@ -382,12 +419,10 @@ if(THEROCK_BUNDLE_SYSDEPS)
     set(THEROCK_BUNDLED_SQLITE3 therock-sqlite3)
     set(THEROCK_BUNDLED_ZLIB therock-zlib)
     set(THEROCK_BUNDLED_ZSTD therock-zstd)
-  elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-    # macOS uses install_name_tool (from Xcode) instead of patchelf
-    find_program(INSTALL_NAME_TOOL install_name_tool)
-    if(NOT INSTALL_NAME_TOOL)
-      message(FATAL_ERROR "Building with THEROCK_BUNDLE_SYSDEPS=ON on macOS requires `install_name_tool` (install Xcode Command Line Tools)")
+    if(THEROCK_ENABLE_SYSDEPS_AMD_MESA)
+      set(THEROCK_BUNDLED_AMDMESA therock-amd-mesa)
     endif()
+  elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     find_program(MESON_BUILD meson)
     if(NOT MESON_BUILD)
       message(FATAL_ERROR "Building with THEROCK_BUNDLE_SYSDEPS=ON on macOS requires `meson` (easiest: `pip install meson`)")
@@ -432,9 +467,10 @@ endif()
 
 # Add subdirectories in dependency DAG order (which happens to be semi-alpha:
 # don't be fooled).
-add_subdirectory(third-party)
+add_subdirectory(third-party/sysdeps)
 add_subdirectory(base)
 add_subdirectory(compiler)
+add_subdirectory(third-party)
 add_subdirectory(core)
 add_subdirectory(debug-tools)
 # Note that rocprofiler-register is in base and is what higher level clients
@@ -446,6 +482,7 @@ add_subdirectory(comm-libs)
 add_subdirectory(math-libs)
 add_subdirectory(ml-libs)
 add_subdirectory(iree-libs)
+add_subdirectory(media-libs)
 
 if(THEROCK_BUILD_TESTING)
   add_subdirectory(examples)

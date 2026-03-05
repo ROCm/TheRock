@@ -372,7 +372,7 @@ def generate_debian_postscripts(pkg_info, deb_dir, config: PackageConfig):
     parts = config.rocm_version.split(".")
     if len(parts) < 3:
         raise ValueError(
-            f"Version string '{args.rocm_version}' does not have major.minor.patch versions"
+            f"Version string '{config.rocm_version}' does not have major.minor.patch versions"
         )
 
     env = Environment(loader=FileSystemLoader(str(SCRIPT_DIR)))
@@ -449,20 +449,16 @@ def package_with_dpkg_build(pkg_dir):
     Returns: None
     """
     print_function_name()
-    current_dir = Path.cwd()
-    os.chdir(Path(pkg_dir))
     # Build the command
     cmd = ["dpkg-buildpackage", "-uc", "-us", "-b"]
 
     # Execute the command
     try:
-        subprocess.run(cmd, check=True)
+        subprocess.run(cmd, check=True, cwd=pkg_dir)
         print(f"Deb Package built successfully: {os.path.basename(pkg_dir)}")
     except subprocess.CalledProcessError as e:
-        print(f"Error building deb package{os.path.basename(pkg_dir)}: {e}")
+        print(f"Error building deb package: {os.path.basename(pkg_dir)}: {e}")
         sys.exit(e.returncode)
-
-    os.chdir(current_dir)
 
 
 ######################## RPM package creation ####################
@@ -562,6 +558,11 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
     rpmsuggests = ""
     sourcedir_list = []
     rpm_scripts = []
+    # amdrocm-debugger: Exclude libpython requirements
+    # Multiple Python-version-specific binaries are included; the wrapper script
+    # automatically selects the binary matching the system's Python version
+    exclude_libpython_requires = pkg_name == "amdrocm-debugger"
+
     if config.versioned_pkg:
         recommends_list = pkg_info.get("RPMRecommends", [])
         rpmrecommends = convert_to_versiondependency(recommends_list, config)
@@ -624,6 +625,7 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
         "disable_debug_package": is_debug_package_disabled(pkg_info),
         "sourcedir_list": sourcedir_list,
         "rpm_scripts": rpm_scripts,
+        "exclude_libpython_requires": exclude_libpython_requires,
     }
 
     with open(specfile, "w", encoding="utf-8") as f:
