@@ -755,35 +755,29 @@ def _create_source_backend(
 ) -> ArtifactBackend:
     """Create a backend for the source run ID.
 
-    For S3, uses retrieve_bucket_info(workflow_run_id=source_run_id) to resolve
-    the correct bucket (which may differ from the current run's bucket).
+    For S3, uses WorkflowOutputRoot.from_workflow_run(lookup_workflow_run=True)
+    to resolve the correct bucket (which may differ from the current run's bucket).
 
     For local backends, creates a LocalDirectoryBackend in the same staging dir.
     """
+    from _therock_utils.workflow_outputs import WorkflowOutputRoot
+
     if local_staging_dir or os.getenv("THEROCK_LOCAL_STAGING_DIR"):
         from _therock_utils.artifact_backend import LocalDirectoryBackend
 
         staging = local_staging_dir or Path(os.environ["THEROCK_LOCAL_STAGING_DIR"])
+        output_root = WorkflowOutputRoot.for_local(
+            run_id=source_run_id, platform=platform
+        )
         return LocalDirectoryBackend(
             staging_dir=staging,
-            run_id=source_run_id,
-            platform=platform,
+            output_root=output_root,
         )
 
-    try:
-        from _therock_utils.github_actions_utils import retrieve_bucket_info
-
-        external_repo, bucket = retrieve_bucket_info(workflow_run_id=source_run_id)
-    except (ImportError, ModuleNotFoundError):
-        bucket = os.getenv("THEROCK_S3_BUCKET", "therock-ci-artifacts")
-        external_repo = ""
-
-    return S3Backend(
-        bucket=bucket,
-        run_id=source_run_id,
-        platform=platform,
-        external_repo=external_repo,
+    output_root = WorkflowOutputRoot.from_workflow_run(
+        run_id=source_run_id, platform=platform, lookup_workflow_run=True
     )
+    return S3Backend(output_root=output_root)
 
 
 def do_copy(args: argparse.Namespace):

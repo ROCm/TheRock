@@ -209,13 +209,11 @@ class TestLocalDirectoryBackend(unittest.TestCase):
         """Test copy_artifact copies files between two local backends."""
         source = LocalDirectoryBackend(
             staging_dir=Path(self.temp_dir),
-            run_id="source-run",
-            platform="linux",
+            output_root=_make_local_root(run_id="source-run"),
         )
         dest = LocalDirectoryBackend(
             staging_dir=Path(self.temp_dir),
-            run_id="dest-run",
-            platform="linux",
+            output_root=_make_local_root(run_id="dest-run"),
         )
 
         # Create artifact in source
@@ -233,13 +231,11 @@ class TestLocalDirectoryBackend(unittest.TestCase):
         """Test copy_artifact raises FileNotFoundError for missing source artifact."""
         source = LocalDirectoryBackend(
             staging_dir=Path(self.temp_dir),
-            run_id="source-run",
-            platform="linux",
+            output_root=_make_local_root(run_id="source-run"),
         )
         dest = LocalDirectoryBackend(
             staging_dir=Path(self.temp_dir),
-            run_id="dest-run",
-            platform="linux",
+            output_root=_make_local_root(run_id="dest-run"),
         )
 
         with self.assertRaises(FileNotFoundError):
@@ -248,9 +244,7 @@ class TestLocalDirectoryBackend(unittest.TestCase):
     def test_copy_artifact_wrong_backend_type_raises(self):
         """Test copy_artifact raises TypeError when source is a different backend type."""
         s3_source = S3Backend(
-            bucket="test-bucket",
-            run_id="source-run",
-            platform="linux",
+            output_root=_make_s3_root(run_id="source-run"),
         )
 
         with self.assertRaises(TypeError):
@@ -455,14 +449,14 @@ class TestS3Backend(unittest.TestCase):
         mock_client_prop.return_value = mock_client
 
         source = S3Backend(
-            bucket="test-bucket",
-            run_id="source-run",
-            platform="linux",
+            output_root=_make_s3_root(
+                bucket="test-bucket", run_id="source-run", external_repo=""
+            )
         )
         dest = S3Backend(
-            bucket="test-bucket",
-            run_id="dest-run",
-            platform="linux",
+            output_root=_make_s3_root(
+                bucket="test-bucket", run_id="dest-run", external_repo=""
+            )
         )
         # Share the mock client
         source._s3_client = mock_client
@@ -485,15 +479,18 @@ class TestS3Backend(unittest.TestCase):
         mock_client_prop.return_value = mock_client
 
         source = S3Backend(
-            bucket="therock-ci-artifacts",
-            run_id="source-run",
-            platform="linux",
+            output_root=_make_s3_root(
+                bucket="therock-ci-artifacts",
+                run_id="source-run",
+                external_repo="",
+            )
         )
         dest = S3Backend(
-            bucket="therock-ci-artifacts-external",
-            run_id="dest-run",
-            platform="linux",
-            external_repo="ROCm-rocm-libraries/",
+            output_root=_make_s3_root(
+                bucket="therock-ci-artifacts-external",
+                run_id="dest-run",
+                external_repo="ROCm-rocm-libraries/",
+            )
         )
         source._s3_client = mock_client
 
@@ -514,8 +511,7 @@ class TestS3Backend(unittest.TestCase):
 
         local_source = LocalDirectoryBackend(
             staging_dir=Path(tempfile.mkdtemp()),
-            run_id="source-run",
-            platform="linux",
+            output_root=_make_local_root(run_id="source-run"),
         )
 
         with self.assertRaises(TypeError):

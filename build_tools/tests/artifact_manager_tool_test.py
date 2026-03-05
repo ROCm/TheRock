@@ -777,8 +777,9 @@ class TestCopy(ArtifactManagerTestBase):
         # Verify artifact exists in dest
         dest_backend = LocalDirectoryBackend(
             staging_dir=self.staging_dir,
-            run_id="dest-run",
-            platform=TEST_PLATFORM,
+            output_root=WorkflowOutputRoot.for_local(
+                run_id="dest-run", platform=TEST_PLATFORM
+            ),
         )
         self.assertTrue(
             dest_backend.artifact_exists("test-artifact_lib_generic.tar.zst")
@@ -792,8 +793,9 @@ class TestCopy(ArtifactManagerTestBase):
         # Also create a sha256sum file in the source
         source_backend = LocalDirectoryBackend(
             staging_dir=self.staging_dir,
-            run_id="source-run",
-            platform=TEST_PLATFORM,
+            output_root=WorkflowOutputRoot.for_local(
+                run_id="source-run", platform=TEST_PLATFORM
+            ),
         )
         sha_path = (
             source_backend.base_path / "test-artifact_lib_generic.tar.zst.sha256sum"
@@ -804,8 +806,9 @@ class TestCopy(ArtifactManagerTestBase):
 
         dest_backend = LocalDirectoryBackend(
             staging_dir=self.staging_dir,
-            run_id="dest-run",
-            platform=TEST_PLATFORM,
+            output_root=WorkflowOutputRoot.for_local(
+                run_id="dest-run", platform=TEST_PLATFORM
+            ),
         )
         self.assertTrue(
             (
@@ -824,8 +827,9 @@ class TestCopy(ArtifactManagerTestBase):
 
         dest_backend = LocalDirectoryBackend(
             staging_dir=self.staging_dir,
-            run_id="dest-run",
-            platform=TEST_PLATFORM,
+            output_root=WorkflowOutputRoot.for_local(
+                run_id="dest-run", platform=TEST_PLATFORM
+            ),
         )
         for comp in ["lib", "dev", "run"]:
             self.assertTrue(
@@ -844,8 +848,9 @@ class TestCopy(ArtifactManagerTestBase):
 
         dest_backend = LocalDirectoryBackend(
             staging_dir=self.staging_dir,
-            run_id="dest-run",
-            platform=TEST_PLATFORM,
+            output_root=WorkflowOutputRoot.for_local(
+                run_id="dest-run", platform=TEST_PLATFORM
+            ),
         )
         # upstream-stage produces test-artifact
         self.assertTrue(
@@ -865,8 +870,9 @@ class TestCopy(ArtifactManagerTestBase):
 
         dest_backend = LocalDirectoryBackend(
             staging_dir=self.staging_dir,
-            run_id="dest-run",
-            platform=TEST_PLATFORM,
+            output_root=WorkflowOutputRoot.for_local(
+                run_id="dest-run", platform=TEST_PLATFORM
+            ),
         )
         self.assertFalse(
             dest_backend.artifact_exists("test-artifact_lib_generic.tar.zst")
@@ -884,8 +890,9 @@ class TestCopy(ArtifactManagerTestBase):
         # Source backend has the artifact
         source_backend = LocalDirectoryBackend(
             staging_dir=self.staging_dir,
-            run_id="source-run",
-            platform=TEST_PLATFORM,
+            output_root=WorkflowOutputRoot.for_local(
+                run_id="source-run", platform=TEST_PLATFORM
+            ),
         )
         self._create_source_artifact("test-artifact", "lib", "generic")
         mock_source_factory.return_value = source_backend
@@ -994,8 +1001,9 @@ class TestCopy(ArtifactManagerTestBase):
 
         dest_backend = LocalDirectoryBackend(
             staging_dir=self.staging_dir,
-            run_id="dest-run",
-            platform=TEST_PLATFORM,
+            output_root=WorkflowOutputRoot.for_local(
+                run_id="dest-run", platform=TEST_PLATFORM
+            ),
         )
         self.assertTrue(
             dest_backend.artifact_exists("test-artifact_lib_generic.tar.zst")
