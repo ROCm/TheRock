@@ -317,7 +317,9 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_rocprofiler_sdk.py')}",
         "platform": ["linux"],
         "container_options": "--cap-add=SYS_PTRACE",
-        "total_shards": 1,
+        "total_shards_dict": {
+            "linux": 1,
+        },
     },
     # hipDNN tests
     "hipdnn": {
