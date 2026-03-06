@@ -685,8 +685,3 @@ def output_failed_tests(failed_tests: list[str]) -> None:
             "failed_tests_count": str(len(failed_tests)),
         }
     )
-
-    if failed_tests:
-        _log(f"Failed tests ({len(failed_tests)}):")
-        for test in failed_tests:
-            _log(f"  - {test}")
