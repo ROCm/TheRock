@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
@@ -13,34 +12,13 @@ We only test the changed package plus its direct downstream dependents.
 Example dependency chain: rocblas ← hipblas ← hipblaslt ← miopen
 If rocblas was updated, we test: rocblas, hipblas
 
-PROGRAMMATIC USAGE:
-    from determine_rocm_test_dependencies import create_analyzer
-
-    # Create analyzer (uses current directory as TheRock root)
-    analyzer = create_analyzer()
-
-    # Or specify a different directory
-    analyzer = create_analyzer("/path/to/TheRock")
-
-    # Get packages to test for changed packages
-    packages_to_test = analyzer.get_packages_to_test(["rocblas"])
-    print(packages_to_test)  # {'rocblas', 'hipblas'}
-
-    # Access all packages
-    for pkg_name, pkg_info in analyzer.packages.items():
-        print(f"{pkg_name}: {pkg_info.runtime_deps}")
-
-COMMAND-LINE USAGE:
-    # Returns JSON array of packages to test
-    determine_rocm_test_dependencies.py --changed rocblas
-    # Output: ["hipblas", "rocblas"]
-
-    # Multiple changed packages
-    determine_rocm_test_dependencies.py --changed rocblas hipblas
-    # Output: ["hipblas", "hipblaslt", "rocblas"]
-
-    # Specify TheRock directory
-    determine_rocm_test_dependencies.py --therock-dir /path/to/TheRock --changed rocblas
+usage: determine_rocm_test_dependencies.py [-h] [--therock-dir THEROCK_DIR] --changed PACKAGE [PACKAGE ...]
+options:
+  -h, --help            show this help message and exit
+  --therock-dir THEROCK_DIR
+                        Path to TheRock directory (default: current directory)
+  --changed PACKAGE [PACKAGE ...]
+                        Package(s) that have changed (e.g., rocBLAS, hipBLAS)
 """
 
 import argparse
