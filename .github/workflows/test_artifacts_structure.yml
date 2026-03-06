@@ -55,7 +55,6 @@ jobs:
         run: |
           pip install -r requirements-test.txt
 
-      # Note: hardcoding --run-github-repo for testing! Remove before merge!
       - name: Fetch artifact archives (no extract)
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -65,7 +64,6 @@ jobs:
             --artifact-group=${ARTIFACT_GROUP} \
             --amdgpu-targets=${AMDGPU_TARGETS} \
             --output-dir=${ARTIFACTS_DIR} \
-            --run-github-repo=ROCm/TheRock \
             --no-extract
 
       - name: Validate artifact structure
