@@ -124,6 +124,7 @@ if(THEROCK_ENABLE_COMPILER)
       ${THEROCK_BUNDLED_NUMACTL}
       ${THEROCK_BUNDLED_ELFUTILS}
       ${THEROCK_BUNDLED_LIBDRM}
+      ${THEROCK_BUNDLED_LIBFFI}
     # The entire LLVM install tree is placed inside of the overall ROCM lib/llvm
     # directory.
     INSTALL_DESTINATION "lib/llvm"
