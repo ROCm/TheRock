@@ -53,6 +53,7 @@ on:
           - dev
           - nightly
           - prerelease
+          - release
         default: "dev"
       gfx_archs:
         description: gfx architectures to build (eg "gfx90x", "gfx94x", "gfx950", "gfx110x", "gfx1150", "gfx1151", "gfx1152", "gfx120x")
