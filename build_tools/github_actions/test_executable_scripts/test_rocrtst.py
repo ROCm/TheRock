@@ -6,10 +6,15 @@ import os
 import shlex
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 sys.path.insert(0, os.fspath(Path(__file__).resolve().parent.parent))
-from github_actions_utils import get_first_gpu_architecture
+from github_actions_utils import (
+    get_first_gpu_architecture,
+    output_failed_tests,
+    parse_gtest_json,
+)
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 
@@ -25,7 +30,11 @@ environ_vars["GTEST_SHARD_INDEX"] = str(int(SHARD_INDEX) - 1)
 environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 
 cwd_dir = Path(THEROCK_BIN_DIR)
-cmd = ["./rocrtst64"]
+
+# Create temp file for JSON output
+gtest_json_path = Path(tempfile.gettempdir()) / "rocrtst_test_results.json"
+
+cmd = ["./rocrtst64", f"--gtest_output=json:{gtest_json_path}"]
 
 # Excluded tests (flaky or disabled in CI).
 EXCLUDED_TESTS = [
@@ -59,4 +68,11 @@ else:
     environ_vars["GTEST_FILTER"] = exclude_filter
 
 logging.info(f"++ Exec [{cwd_dir}]$ {shlex.join(cmd)}")
-subprocess.run(cmd, cwd=cwd_dir, check=True, env=environ_vars)
+result = subprocess.run(cmd, cwd=cwd_dir, check=False, env=environ_vars)
+
+# Parse and output failed tests
+failed_tests = parse_gtest_json(gtest_json_path)
+output_failed_tests(failed_tests)
+
+# Exit with the original return code
+sys.exit(result.returncode)

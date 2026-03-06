@@ -600,3 +600,88 @@ def is_asan():
     """Using artifact_group, determines if this is an asan build"""
     ARTIFACT_GROUP = os.getenv("ARTIFACT_GROUP", "")
     return "asan" in ARTIFACT_GROUP
+
+
+# =============================================================================
+# Test Result Collection Utilities
+# =============================================================================
+
+
+def parse_ctest_junit_xml(xml_path: str | Path) -> list[str]:
+    """Parse ctest JUnit XML output to extract failed test names."""
+    import xml.etree.ElementTree as ET
+
+    xml_path = Path(xml_path)
+    failed_tests = []
+
+    if not xml_path.exists():
+        _log(f"Warning: JUnit XML file not found: {xml_path}")
+        return failed_tests
+
+    try:
+        tree = ET.parse(xml_path)
+        root = tree.getroot()
+
+        # Handle both <testsuites> and <testsuite> as root
+        if root.tag == "testsuites":
+            testsuites = root.findall("testsuite")
+        elif root.tag == "testsuite":
+            testsuites = [root]
+        else:
+            _log(f"Warning: Unexpected XML root element: {root.tag}")
+            return failed_tests
+
+        for testsuite in testsuites:
+            for testcase in testsuite.findall("testcase"):
+                test_name = testcase.get("name", "")
+                # Check for failure or error elements
+                if (
+                    testcase.find("failure") is not None
+                    or testcase.find("error") is not None
+                ):
+                    failed_tests.append(test_name)
+
+    except ET.ParseError as e:
+        _log(f"Error: Failed to parse JUnit XML: {e}")
+
+    return failed_tests
+
+
+def parse_gtest_json(json_path: str | Path) -> list[str]:
+    """Parse gtest JSON output to extract failed test names."""
+    json_path = Path(json_path)
+    failed_tests = []
+
+    if not json_path.exists():
+        _log(f"Warning: GTest JSON file not found: {json_path}")
+        return failed_tests
+
+    try:
+        with open(json_path) as f:
+            data = json.load(f)
+
+        # gtest JSON format has "testsuites" array
+        for testsuite in data.get("testsuites", []):
+            suite_name = testsuite.get("name", "")
+            for testcase in testsuite.get("testsuite", []):
+                test_name = testcase.get("name", "")
+                full_name = f"{suite_name}.{test_name}" if suite_name else test_name
+
+                # Check for failures array
+                if testcase.get("failures"):
+                    failed_tests.append(full_name)
+
+    except json.JSONDecodeError as e:
+        _log(f"Error: Failed to parse gtest JSON: {e}")
+
+    return failed_tests
+
+
+def output_failed_tests(failed_tests: list[str]) -> None:
+    """Output failed tests to GITHUB_OUTPUT for workflow consumption."""
+    gha_set_output(
+        {
+            "failed_tests": json.dumps(failed_tests),
+            "failed_tests_count": str(len(failed_tests)),
+        }
+    )

@@ -5,6 +5,8 @@ import logging
 import os
 import shlex
 import subprocess
+import sys
+import tempfile
 from pathlib import Path
 
 # Resolve paths
@@ -12,6 +14,10 @@ THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 OUTPUT_ARTIFACTS_DIR = os.getenv("OUTPUT_ARTIFACTS_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
+
+# Import test result collection utilities
+sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
+from github_actions_utils import output_failed_tests, parse_ctest_junit_xml
 
 THEROCK_BIN_PATH = Path(THEROCK_BIN_DIR).resolve()
 THEROCK_PATH = THEROCK_BIN_PATH.parent
@@ -63,12 +69,17 @@ SMOKE_TESTS = [
     "test_profile_iteration_multiplexing_1",
 ]
 
+# Create temp file for JUnit XML output
+junit_xml_path = Path(tempfile.gettempdir()) / "rocprofiler_compute_test_results.xml"
+
 # Run tests
 cmd = [
     "ctest",
     "--test-dir",
     f"{ROCPROFILER_COMPUTE_DIRECTORY}",
     "--output-on-failure",
+    "--output-junit",
+    str(junit_xml_path),
     "--verbose",
     "--exclude-regex",
     f"{"|".join(EXCLUDED_TESTS)}",
@@ -84,9 +95,16 @@ if test_type == "smoke":
     cmd.append("|".join(SMOKE_TESTS))
 
 logging.info(f"++ Exec [{THEROCK_PATH}]$ {shlex.join(cmd)}")
-subprocess.run(
+result = subprocess.run(
     cmd,
     cwd=THEROCK_PATH,
-    check=True,
+    check=False,
     env=environ_vars,
 )
+
+# Parse and output failed tests
+failed_tests = parse_ctest_junit_xml(junit_xml_path)
+output_failed_tests(failed_tests)
+
+# Exit with the original return code
+sys.exit(result.returncode)
