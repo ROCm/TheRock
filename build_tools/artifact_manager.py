@@ -784,7 +784,9 @@ def do_copy(args: argparse.Namespace):
     """Copy produced artifacts for one or more stages from one run to another."""
     topology = get_topology(args.topology)
 
-    # Parse and validate stages (comma-separated)
+    # Parse and validate stages (comma-separated). Unlike fetch/push which
+    # operate on a single stage, copy accepts multiple stages at once so that
+    # a single setup job can copy all prebuilt stages in one invocation.
     stage_names = [s.strip() for s in args.stage.split(",") if s.strip()]
     available_stages = topology.build_stages.keys()
     for stage_name in stage_names:
