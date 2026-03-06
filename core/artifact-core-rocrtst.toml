@@ -3,6 +3,9 @@
 [components.dev."core/rocrtst/stage"]
 [components.doc."core/rocrtst/stage"]
 [components.run."core/rocrtst/stage"]
+exclude = [
+  "bin/**",
+]
 [components.test."core/rocrtst/stage"]
 exclude = [
     "lib/rocrtst/lib/libhwloc.so*",

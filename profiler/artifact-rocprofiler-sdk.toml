@@ -17,6 +17,9 @@ include = [
   "share/rocprofiler-sdk-roctx/**",
   "lib/python*/**",
 ]
+exclude = [
+  "share/rocprofiler-sdk/tests/**",
+]
 [components.test."profiler/rocprofiler-sdk/stage"]
 include = [
   "share/rocprofiler-sdk/tests/**",

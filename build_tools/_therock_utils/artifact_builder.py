@@ -82,6 +82,7 @@ ComponentDefaults(
     extends=["dbg"],
 )
 ComponentDefaults("doc", includes=["**/share/doc/**"], extends=["dev"])
+ComponentDefaults("test", extends=["doc"])
 
 
 class ArtifactDescriptor:
