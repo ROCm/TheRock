@@ -192,6 +192,10 @@ jobs:
       - name: Configure MSVC
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
 
+      - name: Install python deps for CI
+        run: |
+          pip install -r external-builds/pytorch/requirements-ci.txt
+
       # Checkout nightly sources from https://github.com/pytorch/pytorch
       # TODO: switch to 'nightly' to match our Linux workflows?
       - name: Checkout PyTorch source repos (nightly branch)
@@ -231,7 +235,6 @@ jobs:
       - name: Determine optional arguments passed to `build_prod_wheels.py`
         if: ${{ inputs.rocm_version }}
         run: |
-          pip install packaging
           python build_tools/github_actions/determine_version.py \
             --rocm-version ${{ inputs.rocm_version }}
 
@@ -339,7 +342,6 @@ jobs:
           CUSTOM_PREFIX: "${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}"
         shell: cmd
         run: |
-          pip install boto3 packaging
           python ./build_tools/third_party/s3_management/manage.py ${{ env.CUSTOM_PREFIX }}
 
   generate_target_to_run:
@@ -431,11 +433,14 @@ jobs:
             --include "torchaudio-${TORCHAUDIO_VERSION}-${CP_VERSION}-win_amd64.whl" \
             --include "torchvision-${TORCHVISION_VERSION}-${CP_VERSION}-win_amd64.whl"
 
+      - name: Install python deps for CI
+        run: |
+          pip install -r external-builds/pytorch/requirements-ci.txt
+
       - name: (Re-)Generate Python package release index
         if: ${{ env.upload == 'true' }}
         env:
           # Environment variables to be set for `manage.py`
           CUSTOM_PREFIX: "${{ inputs.s3_subdir }}/${{ inputs.amdgpu_family }}"
         run: |
-          pip install boto3 packaging
           python ./build_tools/third_party/s3_management/manage.py ${{ env.CUSTOM_PREFIX }}
