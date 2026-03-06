@@ -137,6 +137,50 @@ class PackageDependencyAnalyzerTest(unittest.TestCase):
         self.assertIn("name", info)
         self.assertEqual(info["name"], "rocblas")
 
+    def test_only_downstream_tested(self):
+        """
+        CRITICAL TEST: Verify we only test downstream, NOT upstream dependencies.
+
+        Dependency chain: rocblas ← hipblas ← hipblaslt
+        (hipblas depends on rocblas, hipblaslt depends on hipblas)
+        """
+        cmake_content = """
+            therock_cmake_subproject_declare(rocBLAS
+                RUNTIME_DEPS
+                    hip-clr
+            )
+
+            therock_cmake_subproject_declare(hipBLAS
+                RUNTIME_DEPS
+                    rocBLAS
+            )
+
+            therock_cmake_subproject_declare(hipBLASLt
+                RUNTIME_DEPS
+                    hipBLAS
+            )
+        """
+        self.write_cmake_file(self.math_libs_dir / "CMakeLists.txt", cmake_content)
+        analyzer = PackageDependencyAnalyzer(self.therock_root)
+
+        # When rocblas changes: test rocblas, hipblas, hipblaslt (all downstream)
+        packages = analyzer.get_packages_to_test(["rocblas"])
+        self.assertIn("rocblas", packages)
+        self.assertIn("hipblas", packages)
+        self.assertIn("hipblaslt", packages)
+
+        # When hipblas changes: test hipblas, hipblaslt, but NOT rocblas (upstream)
+        packages = analyzer.get_packages_to_test(["hipblas"])
+        self.assertIn("hipblas", packages)
+        self.assertIn("hipblaslt", packages)
+        self.assertNotIn("rocblas", packages, "FAIL: rocblas is UPSTREAM and should NOT be tested")
+
+        # When hipblaslt changes: test only hipblaslt, NOT hipblas or rocblas (both upstream)
+        packages = analyzer.get_packages_to_test(["hipblaslt"])
+        self.assertIn("hipblaslt", packages)
+        self.assertNotIn("hipblas", packages, "FAIL: hipblas is UPSTREAM and should NOT be tested")
+        self.assertNotIn("rocblas", packages, "FAIL: rocblas is UPSTREAM and should NOT be tested")
+
 
 if __name__ == "__main__":
     unittest.main()

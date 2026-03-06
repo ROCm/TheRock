@@ -9,15 +9,37 @@ This script analyzes CMakeLists.txt files to extract package-level dependencies
 (e.g., rocBLAS, hipBLAS, rocSOLVER) and determines which packages need testing
 when a specific package is updated.
 
+TESTING PRINCIPLE:
+    Only test DOWNSTREAM components that CAN be affected by changes.
+    DO NOT test UPSTREAM components that CANNOT be affected by changes.
+
+    Example dependency chain: rocblas ← hipblas ← hipblaslt
+    (arrows show dependency direction: hipblas depends on rocblas)
+
+    If rocblas changes:
+        ✓ Test rocblas (changed)
+        ✓ Test hipblas (downstream - depends on rocblas, could break)
+        ✓ Test hipblaslt (downstream - transitively depends on rocblas, could break)
+
+    If hipblas changes:
+        ✗ DON'T test rocblas (upstream - cannot be affected by hipblas)
+        ✓ Test hipblas (changed)
+        ✓ Test hipblaslt (downstream - depends on hipblas, could break)
+
+    If hipblaslt changes:
+        ✗ DON'T test rocblas (upstream - cannot be affected)
+        ✗ DON'T test hipblas (upstream - cannot be affected)
+        ✓ Test hipblaslt (changed, leaf node with no dependents)
+
 Usage:
     # Find what needs testing if rocBLAS changes
-    python3 compute_package_test_dependencies.py --changed rocBLAS
+    python3 compute_package_test_dependencies.py --changed rocblas
 
     # Find what needs testing for multiple changes
-    python3 compute_package_test_dependencies.py --changed rocBLAS hipBLAS
+    python3 compute_package_test_dependencies.py --changed rocblas hipblas
 
     # Output as JSON for automation
-    python3 compute_package_test_dependencies.py --changed rocBLAS --format json
+    python3 compute_package_test_dependencies.py --changed rocblas --format json
 
     # Show full dependency graph
     python3 compute_package_test_dependencies.py --graph
@@ -128,8 +150,9 @@ class PackageDependencyAnalyzer:
             pkg_info = PackageInfo(package_name, cmake_file)
 
             # Extract BUILD_DEPS
+            # Match until we hit another keyword (RUNTIME_DEPS, CMAKE_ARGS, etc.) or closing paren
             build_deps_match = re.search(
-                r'BUILD_DEPS\s+((?:[^\n)]+(?:\n\s+)?)+)',
+                r'BUILD_DEPS\s+((?:(?!\b(?:RUNTIME_DEPS|CMAKE_ARGS|CMAKE_INCLUDES|COMPILER_TOOLCHAIN|EXTERNAL_SOURCE_DIR|BINARY_DIR|BACKGROUND_BUILD|DEFAULT_GPU_TARGETS)\b)[^\n)]+(?:\n\s+)?)+)',
                 decl_block,
                 re.MULTILINE
             )
@@ -149,8 +172,9 @@ class PackageDependencyAnalyzer:
                         pkg_info.all_deps.add(dep.lower())
 
             # Extract RUNTIME_DEPS
+            # Match until we hit another keyword or closing paren
             runtime_deps_match = re.search(
-                r'RUNTIME_DEPS\s+((?:[^\n)]+(?:\n\s+)?)+)',
+                r'RUNTIME_DEPS\s+((?:(?!\b(?:BUILD_DEPS|CMAKE_ARGS|CMAKE_INCLUDES|COMPILER_TOOLCHAIN|EXTERNAL_SOURCE_DIR|BINARY_DIR|BACKGROUND_BUILD|DEFAULT_GPU_TARGETS)\b)[^\n)]+(?:\n\s+)?)+)',
                 decl_block,
                 re.MULTILINE
             )
@@ -173,7 +197,15 @@ class PackageDependencyAnalyzer:
             self.packages[package_name] = pkg_info
 
     def _build_reverse_dependency_graph(self):
-        """Build a reverse dependency graph for fast lookups."""
+        """
+        Build a reverse dependency graph for fast lookups.
+
+        This maps each package to its DOWNSTREAM dependents (packages that depend on it).
+
+        Example: if hipblas depends on rocblas:
+            packages["hipblas"].all_deps contains "rocblas" (forward dep)
+            reverse_deps["rocblas"] contains "hipblas" (reverse dep / downstream)
+        """
         # Initialize empty sets for all packages
         for package_name in self.packages:
             self.reverse_deps[package_name] = set()
@@ -187,13 +219,23 @@ class PackageDependencyAnalyzer:
 
     def get_transitive_dependents(self, package_name: str) -> Set[str]:
         """
-        Get all packages that transitively depend on the given package.
+        Get all DOWNSTREAM packages that transitively depend on the given package.
+
+        This computes the "reverse transitive closure" - all packages that would be
+        affected if this package changes. Returns ONLY downstream packages, NOT
+        upstream dependencies.
+
+        Example: rocblas ← hipblas ← hipblaslt
+            get_transitive_dependents("rocblas") → {hipblas, hipblaslt}
+            get_transitive_dependents("hipblas") → {hipblaslt}
+            get_transitive_dependents("hipblaslt") → {} (no downstream dependents)
 
         Args:
             package_name: Name of the changed package
 
         Returns:
-            Set of package names that depend on this package (directly or transitively)
+            Set of DOWNSTREAM package names that depend on this package (directly or transitively).
+            Does NOT include upstream dependencies (which cannot be affected by changes).
         """
         if package_name not in self.reverse_deps:
             return set()
@@ -220,11 +262,19 @@ class PackageDependencyAnalyzer:
         """
         Get all packages that need testing given a list of changed packages.
 
+        Returns the changed packages PLUS all downstream packages that depend on them.
+        Does NOT include upstream dependencies (which cannot be affected).
+
+        Example: rocblas ← hipblas ← hipblaslt
+            get_packages_to_test(["rocblas"]) → {rocblas, hipblas, hipblaslt}
+            get_packages_to_test(["hipblas"]) → {hipblas, hipblaslt} (NOT rocblas)
+            get_packages_to_test(["hipblaslt"]) → {hipblaslt} (NOT hipblas or rocblas)
+
         Args:
             changed_packages: List of package names that have changed
 
         Returns:
-            Set of package names that need testing (includes changed packages)
+            Set of package names that need testing (changed packages + downstream dependents).
         """
         packages_to_test = set(changed_packages)
 
