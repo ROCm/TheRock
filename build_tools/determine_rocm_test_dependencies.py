@@ -83,8 +83,7 @@ class PackageDependencyAnalyzer:
         """Parse a CMakeLists.txt file to extract package declarations."""
         # Pattern to match therock_cmake_subproject_declare
         declare_pattern = re.compile(
-            r'therock_cmake_subproject_declare\((\w+(?:-\w+)*)',
-            re.MULTILINE
+            r"therock_cmake_subproject_declare\((\w+(?:-\w+)*)", re.MULTILINE
         )
 
         for match in declare_pattern.finditer(content):
@@ -94,29 +93,29 @@ class PackageDependencyAnalyzer:
             start_pos = match.start()
             # Extract the full declaration block (simplified - find next standalone ')')
             # This is a heuristic; proper parsing would require a CMake parser
-            decl_end = content.find('\n)', start_pos)
+            decl_end = content.find("\n)", start_pos)
             if decl_end == -1:
                 decl_end = len(content)
 
-            decl_block = content[start_pos:decl_end + 2]
+            decl_block = content[start_pos : decl_end + 2]
 
             pkg_info = PackageInfo(package_name, cmake_file)
 
             # Extract RUNTIME_DEPS
             # Match until we hit another keyword or closing paren
             runtime_deps_match = re.search(
-                r'RUNTIME_DEPS\s+((?:(?!\b(?:BUILD_DEPS|CMAKE_ARGS|CMAKE_INCLUDES|COMPILER_TOOLCHAIN|EXTERNAL_SOURCE_DIR|BINARY_DIR|BACKGROUND_BUILD|DEFAULT_GPU_TARGETS)\b)[^\n)]+(?:\n\s+)?)+)',
+                r"RUNTIME_DEPS\s+((?:(?!\b(?:BUILD_DEPS|CMAKE_ARGS|CMAKE_INCLUDES|COMPILER_TOOLCHAIN|EXTERNAL_SOURCE_DIR|BINARY_DIR|BACKGROUND_BUILD|DEFAULT_GPU_TARGETS)\b)[^\n)]+(?:\n\s+)?)+)",
                 decl_block,
-                re.MULTILINE
+                re.MULTILINE,
             )
             if runtime_deps_match:
                 deps_text = runtime_deps_match.group(1)
-                for line in deps_text.split('\n'):
+                for line in deps_text.split("\n"):
                     line = line.strip()
-                    if line.startswith('#') or not line:
+                    if line.startswith("#") or not line:
                         continue
-                    dep = line.split('#')[0].strip()
-                    if dep and not dep.startswith('${'):
+                    dep = line.split("#")[0].strip()
+                    if dep and not dep.startswith("${"):
                         pkg_info.runtime_deps.add(dep.lower())  # Normalize to lowercase
 
             # Determine artifact from file path
@@ -147,7 +146,6 @@ class PackageDependencyAnalyzer:
                 if dep_name in self.packages:
                     self.reverse_deps[dep_name].add(package_name)
 
-
     def get_packages_to_test(self, changed_packages: List[str]) -> Set[str]:
         """
         Get all packages that need testing given a list of changed packages.
@@ -166,7 +164,6 @@ class PackageDependencyAnalyzer:
             packages_to_test.update(self.reverse_deps.get(changed, set()))
 
         return packages_to_test
-
 
 
 def create_analyzer(therock_dir: Optional[Path] = None) -> PackageDependencyAnalyzer:
@@ -221,7 +218,9 @@ def main():
     # Find TheRock root
     therock_dir = Path(args.therock_dir).resolve()
     if not therock_dir.exists():
-        print(f"Error: TheRock root directory not found: {therock_dir}", file=sys.stderr)
+        print(
+            f"Error: TheRock root directory not found: {therock_dir}", file=sys.stderr
+        )
         sys.exit(1)
 
     # Create the analyzer

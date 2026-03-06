@@ -32,6 +32,7 @@ class PackageDependencyAnalyzerTest(unittest.TestCase):
         if self.temp_dir and Path(self.temp_dir).exists():
             shutil.rmtree(self.temp_dir)
 
+
     def write_cmake_file(self, path: Path, content: str):
         """Write a CMakeLists.txt file."""
         with open(path, "w") as f:
