@@ -7,3 +7,7 @@ include = [
 ]
 [components.doc."ml-libs/composable_kernel/stage"]
 [components.lib."ml-libs/composable_kernel/stage"]
+[components.test."ml-libs/composable_kernel/stage"]
+include = [
+  "bin/test_*",
+]

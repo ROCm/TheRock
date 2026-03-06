@@ -37,8 +37,6 @@ if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
       -DROCM_PATH=
       -DROCM_DIR=
       "-DBUILD_TESTING=${THEROCK_BUILD_TESTING}"
-      -DMIOPEN_REQ_LIBS_ONLY=ON
-      -DHIPTENSOR_REQ_LIBS_ONLY=ON
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
@@ -63,6 +61,7 @@ if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
       dev
       doc
       lib
+      test
     SUBPROJECT_DEPS
       composable_kernel
   )

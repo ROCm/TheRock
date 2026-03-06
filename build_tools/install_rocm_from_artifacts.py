@@ -23,6 +23,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--blas | --no-blas]
     [--debug-tools | --no-debug-tools]
     [--fft | --no-fft]
+    [--composablekernel | --no-composablekernel]
     [--hipdnn | --no-hipdnn]
     [--hipdnn-samples | --no-hipdnn-samples]
     [--miopen | --no-miopen]
@@ -343,6 +344,7 @@ def retrieve_artifacts_by_run_id(args):
             args.blas,
             args.debug_tools,
             args.fft,
+            args.composablekernel,
             args.hipdnn,
             args.hipdnn_samples,
             args.miopen,
@@ -390,6 +392,8 @@ def retrieve_artifacts_by_run_id(args):
         if args.fft:
             extra_artifacts.append("fft")
             extra_artifacts.append("fftw3")
+        if args.composablekernel:
+            extra_artifacts.append("composable-kernel")
         if args.hipdnn:
             extra_artifacts.append("hipdnn")
         if args.hipdnn_samples:
@@ -663,6 +667,13 @@ def main(argv):
         "--fft",
         default=False,
         help="Include 'fft' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--composablekernel",
+        default=False,
+        help="Include 'composablekernel' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
