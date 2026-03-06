@@ -62,11 +62,11 @@ def _run_amd_smi(amd_smi_path: Path, modifiers: list[str]) -> tuple[int, str, st
         tuple[int, str, str]: Return code, stdout text, stderr text.
     """
     cmd = [str(amd_smi_path), "list"] + modifiers
-    logger.debug("Running amd-smi: %s", cmd)
+    logger.info("Running amd-smi: %s", cmd)
     proc = subprocess.run(cmd, capture_output=True, text=True)
-    logger.debug("amd-smi returncode=%s", proc.returncode)
-    logger.debug("amd-smi stdout:\n%s", proc.stdout)
-    logger.debug("amd-smi stderr:\n%s", proc.stderr)
+    logger.info("amd-smi returncode=%s", proc.returncode)
+    logger.info("amd-smi stdout:\n%s", proc.stdout)
+    logger.info("amd-smi stderr:\n%s", proc.stderr)
     return proc.returncode, proc.stdout, proc.stderr
 
 

@@ -156,7 +156,6 @@ test_matrix = {
             "windows": 1,
         },
     },
-    
     "amdsmi_cli": {
         "job_name": "amdsmi_cli",
         "fetch_artifact_args": "--tests",
