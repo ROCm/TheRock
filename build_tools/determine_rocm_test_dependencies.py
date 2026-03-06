@@ -9,16 +9,14 @@ which packages need testing when a specific package is updated.
 
 We only test the changed package plus its direct downstream dependents.
 
-Example dependency chain: rocblas ← hipblas ← hipblaslt ← miopen
-If rocblas was updated, we test: rocblas, hipblas
-
-usage: determine_rocm_test_dependencies.py [-h] [--therock-dir THEROCK_DIR] --changed PACKAGE [PACKAGE ...]
+usage: determine_rocm_test_dependencies.py [-h] [--therock-dir THEROCK_DIR] [--changed PACKAGE [PACKAGE ...]] [--list-packages]
 options:
   -h, --help            show this help message and exit
   --therock-dir THEROCK_DIR
                         Path to TheRock directory (default: current directory)
   --changed PACKAGE [PACKAGE ...]
                         Package(s) that have changed (e.g., rocBLAS, hipBLAS)
+  --list-packages       List all available packages with their directories
 """
 
 import argparse
