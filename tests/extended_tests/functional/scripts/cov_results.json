@@ -1,0 +1,26 @@
+[
+  {
+    "test_suite": "targetid_bit_extract",
+    "test_case": "default_build_detect_n",
+    "command": "hipcc bit_extract.cpp -I /home/master/dockerx/dkrottap/TheRock/rocm-systems/projects/hip-tests/samples/common",
+    "return_code": 0,
+    "status": "PASS",
+    "detected_code_object_version": 6
+  },
+  {
+    "test_suite": "targetid_bit_extract",
+    "test_case": "backward_compat_n_minus_1",
+    "command": "hipcc bit_extract.cpp -I /home/master/dockerx/dkrottap/TheRock/rocm-systems/projects/hip-tests/samples/common -mcode-object-version=5",
+    "return_code": 0,
+    "status": "PASS",
+    "detected_code_object_version": 5
+  },
+  {
+    "test_suite": "targetid_bit_extract",
+    "test_case": "backward_compat_n_minus_2",
+    "command": "hipcc bit_extract.cpp -I /home/master/dockerx/dkrottap/TheRock/rocm-systems/projects/hip-tests/samples/common -mcode-object-version=4",
+    "return_code": 0,
+    "status": "PASS",
+    "detected_code_object_version": 4
+  }
+]
