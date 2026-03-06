@@ -169,7 +169,7 @@ class LocalDirectoryBackend(ArtifactBackend):
             shutil.copy2(sha_src, self._artifact_path(f"{artifact_key}.sha256sum"))
 
     def copy_artifact(
-        self, artifact_key: str, source_backend: "LocalDirectoryBackend"
+        self, artifact_key: str, source_backend: "ArtifactBackend"
     ) -> None:
         """Copy artifact from another local backend."""
         if not isinstance(source_backend, LocalDirectoryBackend):
@@ -279,7 +279,9 @@ class S3Backend(ArtifactBackend):
         loc = self.output_root.artifact(artifact_key)
         self.s3_client.upload_file(str(source_path), self.bucket, loc.relative_path)
 
-    def copy_artifact(self, artifact_key: str, source_backend: "S3Backend") -> None:
+    def copy_artifact(
+        self, artifact_key: str, source_backend: "ArtifactBackend"
+    ) -> None:
         """Server-side copy from another S3 backend (cross-bucket supported)."""
         if not isinstance(source_backend, S3Backend):
             raise TypeError(

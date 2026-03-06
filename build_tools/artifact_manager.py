@@ -812,7 +812,7 @@ def do_copy(args: argparse.Namespace):
     source_backend = _create_source_backend(
         source_run_id=args.source_run_id,
         platform=args.platform,
-        local_staging_dir=getattr(args, "local_staging_dir", None),
+        local_staging_dir=args.local_staging_dir,
     )
     dest_backend = create_backend_from_env(
         run_id=args.run_id,
@@ -859,19 +859,24 @@ def do_copy(args: argparse.Namespace):
 
     log(f"\nCopying {len(copy_requests)} artifacts...")
 
-    copied_count = 0
+    failed_artifacts = []
     with concurrent.futures.ThreadPoolExecutor(
         max_workers=args.concurrency
     ) as executor:
-        futures = [executor.submit(copy_single_artifact, req) for req in copy_requests]
+        futures = {
+            executor.submit(copy_single_artifact, req): req for req in copy_requests
+        }
         for future in concurrent.futures.as_completed(futures):
-            if future.result():
-                copied_count += 1
+            if not future.result():
+                failed_artifacts.append(futures[future].artifact_key)
 
+    copied_count = len(copy_requests) - len(failed_artifacts)
     log(f"\nCopied {copied_count}/{len(copy_requests)} artifacts")
 
-    if copied_count < len(copy_requests):
-        log(f"ERROR: {len(copy_requests) - copied_count} artifacts failed to copy")
+    if failed_artifacts:
+        log(f"ERROR: {len(failed_artifacts)} artifacts failed to copy:")
+        for name in sorted(failed_artifacts):
+            log(f"  - {name}")
         sys.exit(1)
 
     # Best-effort copy of sha256sum files (don't fail if missing).
@@ -884,18 +889,23 @@ def do_copy(args: argparse.Namespace):
             if source_backend.artifact_exists(req.artifact_key)
         ]
         if existing_sha_requests:
-            sha_copied = 0
+            sha_failed = []
             with concurrent.futures.ThreadPoolExecutor(
                 max_workers=args.concurrency
             ) as executor:
-                futures = [
-                    executor.submit(copy_single_artifact, req)
+                futures = {
+                    executor.submit(copy_single_artifact, req): req
                     for req in existing_sha_requests
-                ]
+                }
                 for future in concurrent.futures.as_completed(futures):
-                    if future.result():
-                        sha_copied += 1
+                    if not future.result():
+                        sha_failed.append(futures[future].artifact_key)
+            sha_copied = len(existing_sha_requests) - len(sha_failed)
             log(f"Copied {sha_copied}/{len(existing_sha_requests)} sha256sum files")
+            if sha_failed:
+                log(f"WARNING: {len(sha_failed)} sha256sum files failed to copy:")
+                for name in sorted(sha_failed):
+                    log(f"  - {name}")
         else:
             log("No sha256sum files found in source, skipping")
 
