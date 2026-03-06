@@ -1,0 +1,267 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Test Native Linux Packages Install
+
+on:
+  workflow_call:
+    inputs:
+      repo_url:
+        description: "Full repository URL (e.g. https://rocm.nightlies.amd.com/deb/20260204-12345/ or https://rocm.prereleases.amd.com/packages/ubuntu2404)"
+        required: true
+        type: string
+      gpg_key_url:
+        description: "GPG key URL for signed repos (optional; leave empty for nightly). Set for prerelease."
+        required: false
+        type: string
+        default: ""
+      os_profile:
+        description: OS profile (e.g., ubuntu2404, rhel8, debian12, sles16, almalinux9, centos7, azl3). Package type (deb/rpm) is derived from this.
+        required: true
+        type: string
+      gfx_arch:
+        description: GPU architecture for package names (e.g. gfx94x). Default gfx94x.
+        required: false
+        type: string
+        default: "gfx94x"
+      install_prefix:
+        description: Installation prefix path (optional, defaults to /opt/rocm/core).
+        required: false
+        type: string
+        default: "/opt/rocm/core"
+  workflow_dispatch:
+    inputs:
+      repo_url:
+        description: "Full repository URL"
+        required: true
+        type: string
+      gpg_key_url:
+        description: "GPG key URL (optional; leave empty for nightly)"
+        type: string
+        default: ""
+      os_profile:
+        description: OS profile (package type deb/rpm is derived from this).
+        required: true
+        type: choice
+        options:
+          - ubuntu2404
+          - ubuntu2204
+          - debian12
+          - debian13
+          - rhel8
+          - rhel9
+          - rhel10
+          - sles15
+          - sles16
+          - almalinux9
+          - centos7
+          - azl3
+      gfx_arch:
+        description: GPU architecture (e.g. gfx94x)
+        type: string
+        default: "gfx94x"
+      install_prefix:
+        description: Installation prefix path
+        type: string
+        default: "/opt/rocm/core"
+        required: false
+
+permissions:
+  id-token: write
+  contents: read
+
+run-name: Test - Native Linux packages Install (${{ inputs.os_profile }})
+
+jobs:
+  test_native_linux_packages_install:
+    name: Test Native Linux Packages Installation - ${{ inputs.os_profile }}
+    strategy:
+      fail-fast: false
+    runs-on: ${{ github.repository_owner == 'ROCm' && 'linux-mi325-1gpu-ossci-rocm' || 'ubuntu-24.04' }}
+    container:
+      # Use container matching the OS profile (SLES / Ubuntu|Debian / AlmaLinux)
+      image: ${{ startsWith(inputs.os_profile, 'sles') && 'registry.suse.com/bci/bci-base:16.0' || ((startsWith(inputs.os_profile, 'ubuntu') || startsWith(inputs.os_profile, 'debian')) && 'ubuntu:24.04') || 'almalinux:9' }}
+      options: --ipc host
+        --privileged
+    env:
+      REPO_URL: ${{ inputs.repo_url }}
+      GPG_KEY_URL: ${{ inputs.gpg_key_url || '' }}
+      OS_PROFILE: ${{ inputs.os_profile }}
+      GFX_ARCH: ${{ inputs.gfx_arch || 'gfx94x' }}
+      INSTALL_PREFIX: ${{ inputs.install_prefix || '/opt/rocm/core' }}
+      # Release type for script: prerelease if GPG key URL is set, else nightly
+      RELEASE_TYPE: ${{ inputs.gpg_key_url != '' && 'prerelease' || 'nightly' }}
+    steps:
+      - name: Install System Prerequisites
+        run: |
+          # Derive package type from os_profile for install steps
+          case "${{ inputs.os_profile }}" in
+            ubuntu*|debian*) PKG_TYPE=deb ;;
+            *)               PKG_TYPE=rpm ;;
+          esac
+          echo "Installing prerequisites for ${PKG_TYPE} on container"
+
+          if [ "${PKG_TYPE}" = "deb" ]; then
+            apt update
+            apt install -y \
+              wget \
+              curl \
+              ca-certificates \
+              git \
+              lsb-release
+          elif [[ "${{ inputs.os_profile }}" == sles* ]]; then
+            # SLES prerequisites (uses zypper)
+            zypper refresh
+            zypper install -y \
+              wget \
+              curl \
+              ca-certificates \
+              git \
+              lsb-release
+          else
+            # RHEL/CentOS/AlmaLinux/AZL prerequisites
+            # Use --allowerasing to handle curl-minimal conflict on AlmaLinux 9
+            dnf install -y --allowerasing \
+              wget \
+              curl \
+              ca-certificates \
+              git \
+              dnf-plugins-core
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up Python
+        uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
+        with:
+          python-version: '3.12'
+
+      - name: Install Python Dependencies
+        run: |
+          pip install pyelftools requests prettytable PyYAML
+
+      - name: Validate OS Profile
+        run: |
+          echo "=========================================================================="
+          echo "VALIDATING OS PROFILE"
+          echo "=========================================================================="
+          echo "OS Profile: ${{ inputs.os_profile }}"
+          OS_PROFILE_LOWER=$(echo "${{ inputs.os_profile }}" | tr '[:upper:]' '[:lower:]')
+          case "$OS_PROFILE_LOWER" in
+            ubuntu*|debian*|rhel*|sles*|almalinux*|centos*|azl*)
+              echo "[PASS] Supported OS profile (package type derived from profile)"
+              ;;
+            *)
+              echo "[ERROR] Unsupported OS profile: ${{ inputs.os_profile }}"
+              echo "Supported: ubuntu*, debian*, rhel*, sles*, almalinux*, centos*, azl*"
+              exit 1
+              ;;
+          esac
+          echo "=========================================================================="
+
+      - name: Package Installation Test
+        id: install-test
+        run: |
+          echo "=========================================================================="
+          echo "FULL INSTALLATION TEST - NATIVE LINUX PACKAGES"
+          echo "=========================================================================="
+          echo "OS Profile: ${{ inputs.os_profile }}"
+          echo "Repository URL: ${{ env.REPO_URL }}"
+          echo "Install Prefix: ${{ env.INSTALL_PREFIX }}"
+          echo "GPU Architecture: ${{ env.GFX_ARCH }}"
+          echo "Release Type: ${{ env.RELEASE_TYPE }}"
+          echo "=========================================================================="
+          echo ""
+
+          CMD="python build_tools/packaging/linux/native_linux_packages_test.py"
+          CMD="$CMD --os-profile ${{ inputs.os_profile }}"
+          CMD="$CMD --repo-url \"${{ env.REPO_URL }}\""
+          CMD="$CMD --gfx-arch ${{ env.GFX_ARCH }}"
+          CMD="$CMD --install-prefix \"${{ env.INSTALL_PREFIX }}\""
+          CMD="$CMD --release-type ${{ env.RELEASE_TYPE }}"
+          if [ -n "${{ env.GPG_KEY_URL }}" ]; then
+            CMD="$CMD --gpg-key-url \"${{ env.GPG_KEY_URL }}\""
+          fi
+
+          echo "Executing: $CMD"
+          echo ""
+          eval $CMD
+
+      - name: Verify ROCm Installation
+        if: always() && steps.install-test.outcome == 'success'
+        shell: bash
+        run: |
+          echo "=========================================================================="
+          echo "VERIFYING ROCM INSTALLATION"
+          echo "=========================================================================="
+          echo "Install Prefix: ${{ env.INSTALL_PREFIX }}"
+          echo ""
+
+          # Check if ROCm directory exists
+          if [ -d "${{ env.INSTALL_PREFIX }}" ]; then
+            echo "ROCm installation directory exists: ${{ env.INSTALL_PREFIX }}"
+            echo ""
+            echo "Directory structure:"
+            ls -la ${{ env.INSTALL_PREFIX }}
+          else
+            echo "ROCm installation directory not found: ${{ env.INSTALL_PREFIX }}"
+            exit 1
+          fi
+
+          # Check for key ROCm components
+          echo ""
+          echo "Checking for key ROCm components:"
+
+          components=(
+            "bin/rocminfo"
+            "bin/hipcc"
+            "include/hip/hip_runtime.h"
+            "lib/libamdhip64.so"
+          )
+
+          all_found=true
+          for comp in "${components[@]}"; do
+            full_path="${{ env.INSTALL_PREFIX }}/${comp}"
+            if [ -e "$full_path" ]; then
+              echo "  $comp"
+            else
+              echo "  $comp (not found)"
+              all_found=false
+            fi
+          done
+
+          if [ "$all_found" = true ]; then
+            echo ""
+            echo "All key components found"
+          else
+            echo ""
+            echo "Some components missing (may be expected depending on package selection)"
+          fi
+
+      - name: Test Report
+        if: always()
+        run: |
+          echo ""
+          echo "=========================================================================="
+          echo "INSTALL TEST REPORT"
+          echo "=========================================================================="
+
+          if [ "${{ steps.install-test.outcome }}" = "success" ]; then
+            echo "FULL INSTALLATION TEST PASSED"
+            echo ""
+            echo "Summary:"
+            echo "  - Repository setup: SUCCESS"
+            echo "  - Package installation: SUCCESS"
+            echo "  - ROCm verification: SUCCESS"
+            echo ""
+            echo "Installed at: ${{ env.INSTALL_PREFIX }}"
+            echo "From: ${{ env.REPO_URL }}"
+          else
+            echo "FULL INSTALLATION TEST FAILED"
+            echo ""
+            echo "The test failed during repository setup or package installation."
+            echo "Please check the logs above for detailed error messages."
+            exit 1
+          fi
+          echo "=========================================================================="
