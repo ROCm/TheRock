@@ -9,10 +9,10 @@ are designed to catch issues before artifacts are installed or tested on GPU
 runners.
 
 Tests:
-  - Cross-artifact collisions: no two artifacts should produce files that
+  - Cross-artifact overlaps: no two artifacts should produce files that
     flatten to the same path (causes silent overwrites or race conditions,
     see https://github.com/ROCm/TheRock/issues/3758).
-  - Within-artifact component collisions: different components (lib, run,
+  - Within-artifact component overlaps: different components (lib, run,
     test, etc.) of the same artifact should contain disjoint files (the
     component scanner should enforce this via the extends chain).
   - Manifest validation: every archive should have artifact_manifest.txt
@@ -69,6 +69,7 @@ def list_archive_files(archive_path: Path) -> tuple[list[str], list[str]]:
     flattened: list[str] = []
 
     with _open_archive_for_read(archive_path) as tf:
+        # Extract prefixes from the artifact manifest.
         manifest_member = tf.next()
         if manifest_member is None or manifest_member.name != "artifact_manifest.txt":
             raise ValueError(
@@ -76,10 +77,19 @@ def list_archive_files(archive_path: Path) -> tuple[list[str], list[str]]:
                 f"got {manifest_member.name if manifest_member else 'empty archive'}"
             )
         with tf.extractfile(manifest_member) as mf:
+            # The artifact_manifest.txt will contain prefix lines like:
+            #   math-libs/BLAS/hipBLAS-common/stage
+            #   math-libs/BLAS/rocRoller/stage
+            #   math-libs/BLAS/hipBLAS/stage
             prefixes = [
                 line for line in mf.read().decode().splitlines() if line.strip()
             ]
 
+        # Strip prefixes from each file member to produce flattened paths.
+        # For example:
+        #   prefix:     math-libs/BLAS/hipBLAS/stage
+        #   member:     math-libs/BLAS/hipBLAS/stage/include/hipblas/hipblas.h
+        #   flattened:  include/hipblas/hipblas.h
         while member := tf.next():
             if member.isdir():
                 continue
@@ -114,7 +124,7 @@ class ArchiveInfo:
 
 
 @dataclasses.dataclass
-class FileCollision:
+class CrossArtifactOverlap:
     """A flattened file path found in multiple artifacts."""
 
     path: str
@@ -122,7 +132,7 @@ class FileCollision:
 
 
 @dataclasses.dataclass
-class ArtifactComponentOverlap:
+class ComponentOverlap:
     """Files duplicated across components within one artifact."""
 
     artifact_name: str
@@ -174,20 +184,22 @@ def archive_index(artifacts_dir: Path) -> list[ArchiveInfo]:
     return index
 
 
-def _format_collision_summary(collisions: list[FileCollision], limit: int = 20) -> str:
-    """Format cross-artifact collisions into readable summary."""
+def _format_cross_artifact_overlaps(
+    overlaps: list[CrossArtifactOverlap], limit: int = 20
+) -> str:
+    """Format cross-artifact overlaps into readable summary."""
     lines = []
-    for collision in sorted(collisions, key=lambda c: c.path)[:limit]:
-        lines.append(f"  {collision.path}")
-        for label, archive in sorted(collision.sources):
+    for overlap in sorted(overlaps, key=lambda o: o.path)[:limit]:
+        lines.append(f"  {overlap.path}")
+        for label, archive in sorted(overlap.sources):
             lines.append(f"    - {label} ({archive})")
-    remaining = len(collisions) - limit
+    remaining = len(overlaps) - limit
     if remaining > 0:
         lines.append(f"  ... and {remaining} more")
     return "\n".join(lines)
 
 
-def _format_overlap_summary(overlaps: list[ArtifactComponentOverlap]) -> str:
+def _format_component_overlaps(overlaps: list[ComponentOverlap]) -> str:
     """Format within-artifact component overlaps into readable summary."""
     lines = []
     total = 0
@@ -205,7 +217,7 @@ def _format_overlap_summary(overlaps: list[ArtifactComponentOverlap]) -> str:
 class TestArtifactStructure:
     """Structural validation of artifact archives."""
 
-    def test_no_cross_artifact_collisions(self, archive_index: list[ArchiveInfo]):
+    def test_no_cross_artifact_overlaps(self, archive_index: list[ArchiveInfo]):
         """No two artifacts should contain files that flatten to the same path.
 
         This catches both same-basedir overlaps (like #3758) and the subtler
@@ -214,38 +226,42 @@ class TestArtifactStructure:
 
         See https://github.com/ROCm/TheRock/issues/3796
         """
+        # For each flattened path, track which artifacts contain it.
         # flattened_path -> { artifact_name: set of archive filenames }
-        seen: dict[str, dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
+        path_artifacts: dict[str, dict[str, set[str]]] = defaultdict(
+            lambda: defaultdict(set)
+        )
 
         for info in archive_index:
             for fpath in info.flattened_paths:
-                seen[fpath][info.artifact_name].add(info.filename)
+                path_artifacts[fpath][info.artifact_name].add(info.filename)
 
-        # Flag paths that appear in two or more different artifact names.
-        collisions: list[FileCollision] = []
-        for fpath, by_name in seen.items():
-            if len(by_name) > 1:
+        # A cross-artifact overlap is a path claimed by more than one artifact
+        # (e.g. "blas", "support").
+        overlaps: list[CrossArtifactOverlap] = []
+        for fpath, artifact_archives in path_artifacts.items():
+            if len(artifact_archives) > 1:
                 sources = []
-                for name, archive_names in by_name.items():
-                    for a in archive_names:
-                        sources.append((name, a))
-                collisions.append(FileCollision(path=fpath, sources=sources))
+                for artifact_name, archives in artifact_archives.items():
+                    for archive in archives:
+                        sources.append((artifact_name, archive))
+                overlaps.append(CrossArtifactOverlap(path=fpath, sources=sources))
 
-        if collisions:
-            summary = _format_collision_summary(collisions)
+        if overlaps:
+            summary = _format_cross_artifact_overlaps(overlaps)
             pytest.fail(
-                f"Found {len(collisions)} cross-artifact collision(s) across "
+                f"Found {len(overlaps)} cross-artifact overlap(s) across "
                 f"{len(archive_index)} archives "
                 f"(see https://github.com/ROCm/TheRock/issues/3796):\n{summary}"
             )
 
         logger.info(
-            "Checked %d unique paths across %d archives, no cross-artifact collisions",
-            len(seen),
+            "Checked %d unique paths across %d archives, no cross-artifact overlaps",
+            len(path_artifacts),
             len(archive_index),
         )
 
-    def test_no_within_artifact_component_collisions(
+    def test_no_within_artifact_component_overlaps(
         self, archive_index: list[ArchiveInfo]
     ):
         """Components of the same artifact should contain disjoint files.
@@ -265,36 +281,37 @@ class TestArtifactStructure:
         for info in archive_index:
             by_artifact[info.artifact_name][info.component].update(info.flattened_paths)
 
-        all_overlaps: list[ArtifactComponentOverlap] = []
-
-        for artifact_name, comp_files in by_artifact.items():
-            comp_names = sorted(comp_files.keys())
+        # A component overlap is a path claimed by more than one component
+        # within a single artifact name (e.g. "blas_run", "blas_test").
+        overlaps: list[ComponentOverlap] = []
+        for artifact_name, component_files in by_artifact.items():
+            component_names = sorted(component_files.keys())
             # fpath -> list of component names that contain it
             artifact_overlaps: dict[str, list[str]] = {}
-            for i in range(len(comp_names)):
-                for j in range(i + 1, len(comp_names)):
-                    c1, c2 = comp_names[i], comp_names[j]
-                    for fpath in comp_files[c1] & comp_files[c2]:
+            for i in range(len(component_names)):
+                for j in range(i + 1, len(component_names)):
+                    c1, c2 = component_names[i], component_names[j]
+                    for fpath in component_files[c1] & component_files[c2]:
                         artifact_overlaps.setdefault(fpath, []).extend([c1, c2])
 
             if artifact_overlaps:
-                all_overlaps.append(
-                    ArtifactComponentOverlap(
+                overlaps.append(
+                    ComponentOverlap(
                         artifact_name=artifact_name, overlaps=artifact_overlaps
                     )
                 )
 
-        if all_overlaps:
-            total, summary = _format_overlap_summary(all_overlaps)
+        if overlaps:
+            total, summary = _format_component_overlaps(overlaps)
             pytest.fail(
-                f"Found within-artifact component collisions in "
-                f"{len(all_overlaps)} artifact(s) ({total} total files). "
-                f"Components should be disjoint "
+                f"Found within-artifact component overlaps in "
+                f"{len(overlaps)} artifact(s) ({total} total files). "
+                f"Components (_run, _test, etc.) should be disjoint "
                 f"(see https://github.com/ROCm/TheRock/issues/3796):\n{summary}"
             )
 
         artifact_names = {a.artifact_name for a in archive_index}
         logger.info(
-            "Checked %d artifacts, no within-artifact component collisions",
+            "Checked %d artifacts, no within-artifact component overlaps",
             len(artifact_names),
         )
