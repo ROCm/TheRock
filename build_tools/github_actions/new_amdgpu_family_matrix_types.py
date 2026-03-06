@@ -12,7 +12,7 @@ Terminology
 family        GPU family group name, e.g. "gfx94X", "gfx115X". Groups related
               architectures under one umbrella.
 
-scope         Subgroup within a family. Generic scopes are "dcgpu", "dgpu", "all".
+scope         Subgroup within a family. Generic scopes are "dcgpu", "dgpu", "all", ...
               Specific GPU names (e.g. "gfx1151") are also valid scopes.
 
 canonical key The string used to identify a MatrixEntry in predefined groups and
@@ -230,7 +230,7 @@ class PlatformConfig:
 
 # Generic scope names that pair with the family name to form a lookup key.
 # Specific GPU names (e.g. "gfx1151") are their own key.
-_GENERIC_SCOPES: frozenset[str] = frozenset({"all", "dcgpu", "dgpu"})
+_GENERIC_SCOPES: frozenset[str] = frozenset({"all", "dcgpu", "dgpu", "igpu"})
 
 
 @dataclass
