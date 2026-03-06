@@ -389,6 +389,7 @@ if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
         "Disabling composable kernel and it's use in MIOpen.")
       set(THEROCK_ENABLE_COMPOSABLE_KERNEL OFF)
       set(THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL OFF)
+      set(THEROCK_ENABLE_HIPTENSOR OFF)
     endif()
   endforeach()
 endif()
@@ -397,7 +398,6 @@ if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
   ##############################################################################
   # Composable_kernel
   ##############################################################################
-  # TODO: Move this to math-libs
 
   therock_cmake_subproject_declare(composable_kernel
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/composablekernel"
@@ -440,6 +440,7 @@ if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
   )
 endif()
 
+set(THEROCK_ENABLE_HIPTENSOR OFF)
 if(THEROCK_ENABLE_HIPTENSOR)
   ##############################################################################
   # hipTensor
