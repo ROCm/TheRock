@@ -10,33 +10,56 @@ This script analyzes CMakeLists.txt files to extract package-level dependencies
 when a specific package is updated.
 
 TESTING PRINCIPLE:
-    Only test DOWNSTREAM components that CAN be affected by changes.
-    DO NOT test UPSTREAM components that CANNOT be affected by changes.
+    Only test DIRECT DOWNSTREAM components that explicitly depend on the changed package.
+    DO NOT test transitive/recursive dependencies or upstream components.
 
-    Example dependency chain: rocblas ← hipblas ← hipblaslt
+    Example dependency chain: rocblas ← hipblas ← hipblaslt ← miopen
     (arrows show dependency direction: hipblas depends on rocblas)
 
     If rocblas changes:
         ✓ Test rocblas (changed)
-        ✓ Test hipblas (downstream - depends on rocblas, could break)
-        ✓ Test hipblaslt (downstream - transitively depends on rocblas, could break)
+        ✓ Test hipblas (direct RUNTIME_DEPS on rocblas)
+        ✗ DON'T test hipblaslt (transitive - depends on hipblas, not rocblas directly)
+        ✗ DON'T test miopen (transitive - no direct dependency on rocblas)
 
     If hipblas changes:
         ✗ DON'T test rocblas (upstream - cannot be affected by hipblas)
         ✓ Test hipblas (changed)
-        ✓ Test hipblaslt (downstream - depends on hipblas, could break)
+        ✓ Test hipblaslt (direct RUNTIME_DEPS on hipblas)
+        ✗ DON'T test miopen (transitive - depends on hipblaslt, not hipblas directly)
 
     If hipblaslt changes:
-        ✗ DON'T test rocblas (upstream - cannot be affected)
-        ✗ DON'T test hipblas (upstream - cannot be affected)
-        ✓ Test hipblaslt (changed, leaf node with no dependents)
+        ✗ DON'T test rocblas or hipblas (upstream - cannot be affected)
+        ✓ Test hipblaslt (changed)
+        ✓ Test miopen (direct RUNTIME_DEPS on hipblaslt)
+
+MAJOR vs MINOR DEPENDENCIES (Heuristic):
+    By default, only RUNTIME_DEPS are considered "major" dependencies that trigger
+    testing of downstream packages. BUILD_DEPS are treated as "minor" dependencies
+    and do not trigger testing.
+
+    Rationale:
+    - RUNTIME_DEPS: Runtime dependencies actually USE the changed package when running.
+      Tests exercise the functionality, so changes can break tests.
+    - BUILD_DEPS: Build-time dependencies (headers, libraries needed for compilation).
+      Often just needed for compilation but may not exercise functionality at test time.
+
+    Example: If rocblas changes:
+        rocblas changes → test hipblas (has RUNTIME_DEPS on rocblas - actually uses it)
+        rocblas changes → test rocsolver (has RUNTIME_DEPS on rocblas - actually uses it)
+        rocblas changes → skip rocsparse (only BUILD_DEPS - compiles against it but may not use it)
+
+    Use --include-build-deps to also test BUILD_DEPS (comprehensive compilation testing).
 
 Usage:
-    # Find what needs testing if rocBLAS changes
+    # Find what needs testing if rocBLAS changes (only RUNTIME_DEPS by default)
     python3 compute_package_test_dependencies.py --changed rocblas
 
     # Find what needs testing for multiple changes
     python3 compute_package_test_dependencies.py --changed rocblas hipblas
+
+    # Include BUILD_DEPS for comprehensive compile-time testing
+    python3 compute_package_test_dependencies.py --changed rocblas --include-build-deps
 
     # Output as JSON for automation
     python3 compute_package_test_dependencies.py --changed rocblas --format json
@@ -74,8 +97,10 @@ class PackageInfo:
 class PackageDependencyAnalyzer:
     """Analyzes package-level test dependencies from CMakeLists.txt files."""
 
-    def __init__(self, therock_root: Path):
+    def __init__(self, therock_root: Path, include_build_deps: bool = False, include_runtime_deps: bool = True):
         self.therock_root = therock_root
+        self.include_build_deps = include_build_deps
+        self.include_runtime_deps = include_runtime_deps
         self.packages: Dict[str, PackageInfo] = {}
         self.reverse_deps: Dict[str, Set[str]] = {}
         self._discover_packages()
@@ -205,6 +230,11 @@ class PackageDependencyAnalyzer:
         Example: if hipblas depends on rocblas:
             packages["hipblas"].all_deps contains "rocblas" (forward dep)
             reverse_deps["rocblas"] contains "hipblas" (reverse dep / downstream)
+
+        Tracks dependencies based on include_build_deps and include_runtime_deps flags:
+        - include_build_deps=True: BUILD_DEPS trigger testing
+        - include_runtime_deps=True: RUNTIME_DEPS trigger testing
+        - Both can be enabled or disabled independently
         """
         # Initialize empty sets for all packages
         for package_name in self.packages:
@@ -212,7 +242,16 @@ class PackageDependencyAnalyzer:
 
         # Populate reverse dependencies
         for package_name, pkg_info in self.packages.items():
-            for dep_name in pkg_info.all_deps:
+            # Collect dependencies to track based on flags
+            deps_to_track = set()
+
+            if self.include_build_deps:
+                deps_to_track.update(pkg_info.build_deps)
+
+            if self.include_runtime_deps:
+                deps_to_track.update(pkg_info.runtime_deps)
+
+            for dep_name in deps_to_track:
                 # Only track dependencies on packages we know about
                 if dep_name in self.packages:
                     self.reverse_deps[dep_name].add(package_name)
@@ -262,27 +301,27 @@ class PackageDependencyAnalyzer:
         """
         Get all packages that need testing given a list of changed packages.
 
-        Returns the changed packages PLUS all downstream packages that depend on them.
-        Does NOT include upstream dependencies (which cannot be affected).
+        Returns the changed packages PLUS DIRECT downstream packages that depend on them.
+        Does NOT include transitive/recursive dependencies or upstream dependencies.
 
         Example: rocblas ← hipblas ← hipblaslt
-            get_packages_to_test(["rocblas"]) → {rocblas, hipblas, hipblaslt}
+            get_packages_to_test(["rocblas"]) → {rocblas, hipblas} (NOT hipblaslt)
             get_packages_to_test(["hipblas"]) → {hipblas, hipblaslt} (NOT rocblas)
-            get_packages_to_test(["hipblaslt"]) → {hipblaslt} (NOT hipblas or rocblas)
+            get_packages_to_test(["hipblaslt"]) → {hipblaslt} (no direct dependents)
 
         Args:
             changed_packages: List of package names that have changed
 
         Returns:
-            Set of package names that need testing (changed packages + downstream dependents).
+            Set of package names that need testing (changed packages + direct downstream dependents).
         """
         packages_to_test = set(changed_packages)
 
         for changed in changed_packages:
             # Add the changed package itself
             packages_to_test.add(changed)
-            # Add all transitive dependents
-            packages_to_test.update(self.get_transitive_dependents(changed))
+            # Add only DIRECT dependents (not transitive)
+            packages_to_test.update(self.reverse_deps.get(changed, set()))
 
         return packages_to_test
 
@@ -416,8 +455,19 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Find what needs testing if rocBLAS changes
+  # Find what needs testing if rocBLAS changes (only RUNTIME_DEPS - default)
   %(prog)s --changed rocBLAS
+  # Tests hipBLAS, rocSOLVER (actually use rocBLAS at runtime)
+
+  # Include BUILD_DEPS for comprehensive testing
+  %(prog)s --changed rocBLAS --include-build-deps
+  # Also tests rocSPARSE, hipSPARSE (compile against rocBLAS)
+
+  # Only BUILD_DEPS (exclude RUNTIME_DEPS)
+  %(prog)s --changed rocBLAS --exclude-runtime-deps --include-build-deps
+
+  # Both BUILD_DEPS and RUNTIME_DEPS (most comprehensive)
+  %(prog)s --changed rocBLAS --include-build-deps --include-runtime-deps
 
   # Find what needs testing for multiple changes
   %(prog)s --changed rocBLAS hipBLAS
@@ -468,6 +518,26 @@ Examples:
         metavar="PACKAGE",
         help="Show detailed dependency info for a specific package",
     )
+    parser.add_argument(
+        "--include-runtime-deps",
+        action="store_true",
+        help="Include RUNTIME_DEPS when determining test dependencies (default)",
+    )
+    parser.add_argument(
+        "--exclude-runtime-deps",
+        action="store_true",
+        help="Exclude RUNTIME_DEPS when determining test dependencies",
+    )
+    parser.add_argument(
+        "--include-build-deps",
+        action="store_true",
+        help="Include BUILD_DEPS when determining test dependencies",
+    )
+    parser.add_argument(
+        "--exclude-build-deps",
+        action="store_true",
+        help="Exclude BUILD_DEPS when determining test dependencies (default)",
+    )
 
     args = parser.parse_args()
 
@@ -477,8 +547,34 @@ Examples:
         print(f"Error: TheRock root directory not found: {therock_root}", file=sys.stderr)
         sys.exit(1)
 
-    # Create the analyzer
-    analyzer = PackageDependencyAnalyzer(therock_root)
+    # Determine which dependency types to include
+    # Defaults: BUILD_DEPS=False, RUNTIME_DEPS=True
+    # Rationale: RUNTIME_DEPS actually exercise the changed package during tests
+    include_build_deps = False
+    include_runtime_deps = True
+
+    # Handle explicit include/exclude flags
+    if args.exclude_build_deps:
+        include_build_deps = False
+    if args.include_build_deps:
+        include_build_deps = True
+
+    if args.include_runtime_deps:
+        include_runtime_deps = True
+    if args.exclude_runtime_deps:
+        include_runtime_deps = False
+
+    # Validate: at least one dependency type must be enabled
+    if not include_build_deps and not include_runtime_deps:
+        print("Error: Cannot exclude both BUILD_DEPS and RUNTIME_DEPS. At least one must be included.", file=sys.stderr)
+        sys.exit(1)
+
+    # Create the analyzer with appropriate heuristic
+    analyzer = PackageDependencyAnalyzer(
+        therock_root,
+        include_build_deps=include_build_deps,
+        include_runtime_deps=include_runtime_deps
+    )
 
     if not analyzer.packages:
         print("Warning: No packages found. Check the TheRock root path.", file=sys.stderr)
