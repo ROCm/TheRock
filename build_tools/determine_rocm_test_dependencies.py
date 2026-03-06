@@ -210,8 +210,12 @@ def main():
         type=str,
         nargs="+",
         metavar="PACKAGE",
-        required=True,
         help="Package(s) that have changed (e.g., rocBLAS, hipBLAS)",
+    )
+    parser.add_argument(
+        "--list-packages",
+        action="store_true",
+        help="List all available packages with their directories",
     )
 
     args = parser.parse_args()
@@ -228,6 +232,27 @@ def main():
     if not analyzer.packages:
         print("Error: No packages found. Check the TheRock root path.", file=sys.stderr)
         sys.exit(1)
+
+    # Handle --list-packages
+    if args.list_packages:
+        # Group packages by artifact/directory
+        packages_by_dir: Dict[str, List[str]] = {}
+        for pkg_name, pkg_info in analyzer.packages.items():
+            artifact = pkg_info.artifact or "unknown"
+            if artifact not in packages_by_dir:
+                packages_by_dir[artifact] = []
+            packages_by_dir[artifact].append(pkg_name)
+
+        # Sort package lists within each directory
+        for artifact in packages_by_dir:
+            packages_by_dir[artifact].sort()
+
+        print(json.dumps(packages_by_dir, indent=2, sort_keys=True))
+        return
+
+    # Require --changed if not listing packages
+    if not args.changed:
+        parser.error("the following arguments are required: --changed")
 
     # Normalize input package names to lowercase
     changed_packages = [p.lower() for p in args.changed]
