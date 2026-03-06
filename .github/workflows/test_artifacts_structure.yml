@@ -18,6 +18,13 @@ on:
         type: string
         description: "Run ID to fetch artifacts from (defaults to current run)"
         default: ""
+      platform:
+        type: choice
+        description: "Platform to fetch artifacts for"
+        options:
+          - linux
+          - windows
+        default: "linux"
   workflow_call:
     inputs:
       artifact_group:
@@ -29,6 +36,9 @@ on:
       artifact_run_id:
         type: string
         default: ""
+      platform:
+        type: string
+        default: "linux"
 
 permissions:
   contents: read
@@ -41,6 +51,7 @@ jobs:
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       ARTIFACT_GROUP: ${{ inputs.artifact_group }}
       AMDGPU_TARGETS: ${{ inputs.amdgpu_targets }}
+      PLATFORM: ${{ inputs.platform }}
       ARTIFACTS_DIR: ${{ github.workspace }}/artifacts
     steps:
       - name: Checkout repository
@@ -63,6 +74,7 @@ jobs:
             --run-id=${ARTIFACT_RUN_ID} \
             --artifact-group=${ARTIFACT_GROUP} \
             --amdgpu-targets=${AMDGPU_TARGETS} \
+            --platform=${PLATFORM} \
             --output-dir=${ARTIFACTS_DIR} \
             --no-extract
 
