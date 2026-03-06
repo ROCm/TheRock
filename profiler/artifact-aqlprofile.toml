@@ -4,6 +4,9 @@
 [components.doc."profiler/aqlprofile/stage"]
 [components.lib."profiler/aqlprofile/stage"]
 [components.run."profiler/aqlprofile/stage"]
+exclude = [
+  "share/hsa-amd-aqlprofile/**",
+]
 [components.test."profiler/aqlprofile/stage"]
 include = [
   "share/hsa-amd-aqlprofile/**",
