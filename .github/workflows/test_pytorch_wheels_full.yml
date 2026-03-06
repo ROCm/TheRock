@@ -1,7 +1,4 @@
-# Copyright Advanced Micro Devices, Inc.
-# SPDX-License-Identifier: MIT
-
-name: Test PyTorch Wheels
+name: Test PyTorch Wheels (Full Suite)
 
 on:
   workflow_dispatch:
@@ -64,11 +61,11 @@ on:
 permissions:
   contents: read
 
-run-name: Test PyTorch (${{ inputs.amdgpu_family }}, ${{ inputs.torch_version}}, ${{ inputs.test_runs_on }})
+run-name: Test PyTorch Full (${{ inputs.amdgpu_family }}, ${{ inputs.torch_version}}, ${{ inputs.test_runs_on }})
 
 jobs:
   test_wheels:
-    name: Test PyTorch | ${{ inputs.amdgpu_family }} (shard ${{ matrix.shard }}/4)
+    name: Test PyTorch Full | ${{ inputs.amdgpu_family }} (shard ${{ matrix.shard }}/4)
     runs-on: ${{ inputs.test_runs_on }}
     strategy:
       fail-fast: false
@@ -123,9 +120,6 @@ jobs:
         run: |
           git config --global core.longpaths true
 
-      # Here we checkout the same version of PyTorch that wheels were built from
-      # so we have the right set of test source files. We _probably_ don't need
-      # to run HIPIFY or apply any patches, so we skip those steps to save time.
       - name: Checkout PyTorch Source Repos from nightly branch
         if: ${{ (inputs.pytorch_git_ref == 'nightly') }}
         run: |
@@ -186,7 +180,7 @@ jobs:
             --log-cli-level=INFO \
             -v
 
-      - name: (Linux) Run PyTorch tests
+      - name: (Linux) Run PyTorch full test suite
         if: ${{ runner.os == 'Linux' }}
         run: |
           python ./external-builds/pytorch/run_pytorch_tests_full.py -- \
