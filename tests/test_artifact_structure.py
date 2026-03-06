@@ -260,9 +260,10 @@ class TestArtifactStructure:
         """Components of the same artifact should contain disjoint files.
 
         The component scanner (artifact_builder.py) enforces disjointness via
-        the extends chain (lib -> run -> dbg -> dev -> doc). However, the
-        "test" component has no extends, so it can re-claim files already taken
-        by other components.
+        the extends chain (lib -> run -> dbg -> dev -> doc -> test). Overlaps
+        can still occur if descriptors misconfigure include/exclude patterns
+        (e.g., a bare 'run' entry acting as a catch-all that steals files
+        from later components like 'test').
 
         See https://github.com/ROCm/TheRock/issues/3796
         """
