@@ -216,16 +216,41 @@ class TestLocalDirectoryBackend(unittest.TestCase):
             output_root=_make_local_root(run_id="dest-run"),
         )
 
-        # Create artifact in source
+        # Create artifact and sha256sum in source
         artifact_key = "test_lib_generic.tar.zst"
         (source.base_path / artifact_key).write_bytes(b"test content")
+        (source.base_path / f"{artifact_key}.sha256sum").write_text(
+            "abc123  test_lib_generic.tar.zst\n"
+        )
 
         # Copy to dest
         dest.copy_artifact(artifact_key, source)
 
-        # Verify
+        # Verify artifact and sha256sum were both copied
         self.assertTrue(dest.artifact_exists(artifact_key))
         self.assertEqual((dest.base_path / artifact_key).read_bytes(), b"test content")
+        self.assertTrue((dest.base_path / f"{artifact_key}.sha256sum").exists())
+
+    def test_copy_artifact_without_sha256sum(self):
+        """Test copy_artifact works when no sha256sum file exists."""
+        source = LocalDirectoryBackend(
+            staging_dir=Path(self.temp_dir),
+            output_root=_make_local_root(run_id="source-run"),
+        )
+        dest = LocalDirectoryBackend(
+            staging_dir=Path(self.temp_dir),
+            output_root=_make_local_root(run_id="dest-run"),
+        )
+
+        # Create artifact without sha256sum
+        artifact_key = "test_lib_generic.tar.zst"
+        (source.base_path / artifact_key).write_bytes(b"test content")
+
+        # Copy should succeed without error
+        dest.copy_artifact(artifact_key, source)
+
+        self.assertTrue(dest.artifact_exists(artifact_key))
+        self.assertFalse((dest.base_path / f"{artifact_key}.sha256sum").exists())
 
     def test_copy_artifact_nonexistent_raises(self):
         """Test copy_artifact raises FileNotFoundError for missing source artifact."""
@@ -447,6 +472,8 @@ class TestS3Backend(unittest.TestCase):
         """Test S3 server-side copy within the same bucket."""
         mock_client = mock.MagicMock()
         mock_client_prop.return_value = mock_client
+        # sha256sum exists in source
+        mock_client.head_object.return_value = {}
 
         source = S3Backend(
             output_root=_make_s3_root(
@@ -463,7 +490,9 @@ class TestS3Backend(unittest.TestCase):
 
         dest.copy_artifact("artifact_lib_generic.tar.zst", source)
 
-        mock_client.copy.assert_called_once_with(
+        # Verify both artifact and sha256sum were copied
+        self.assertEqual(mock_client.copy.call_count, 2)
+        mock_client.copy.assert_any_call(
             {
                 "Bucket": "test-bucket",
                 "Key": "source-run-linux/artifact_lib_generic.tar.zst",
@@ -471,12 +500,22 @@ class TestS3Backend(unittest.TestCase):
             "test-bucket",
             "dest-run-linux/artifact_lib_generic.tar.zst",
         )
+        mock_client.copy.assert_any_call(
+            {
+                "Bucket": "test-bucket",
+                "Key": "source-run-linux/artifact_lib_generic.tar.zst.sha256sum",
+            },
+            "test-bucket",
+            "dest-run-linux/artifact_lib_generic.tar.zst.sha256sum",
+        )
 
     @mock.patch.object(S3Backend, "s3_client", new_callable=mock.PropertyMock)
     def test_copy_artifact_cross_bucket(self, mock_client_prop):
         """Test S3 server-side copy across different buckets."""
         mock_client = mock.MagicMock()
         mock_client_prop.return_value = mock_client
+        # sha256sum does not exist in source
+        mock_client.head_object.side_effect = Exception("Not found")
 
         source = S3Backend(
             output_root=_make_s3_root(
@@ -496,6 +535,7 @@ class TestS3Backend(unittest.TestCase):
 
         dest.copy_artifact("artifact_lib_generic.tar.zst", source)
 
+        # Only artifact copied (no sha256sum in source)
         mock_client.copy.assert_called_once_with(
             {
                 "Bucket": "therock-ci-artifacts",
