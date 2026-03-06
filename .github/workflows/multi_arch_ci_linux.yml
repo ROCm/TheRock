@@ -37,6 +37,29 @@ permissions:
   contents: read
 
 jobs:
+  compute_native_package_versions:
+    name: Compute Native Package Versions
+    runs-on: ubuntu-latest
+    outputs:
+      deb_version: ${{ steps.compute_versions.outputs.deb_version }}
+      rpm_version: ${{ steps.compute_versions.outputs.rpm_version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Compute package versions for both deb and rpm
+        id: compute_versions
+        run: |
+          # Compute both versions in same step to ensure consistent timestamp
+          deb_version=$(python ./build_tools/compute_rocm_package_version.py --package-type deb --release-type dev)
+          rpm_version=$(python ./build_tools/compute_rocm_package_version.py --package-type rpm --release-type dev)
+
+          echo "deb_version=${deb_version}" >> $GITHUB_OUTPUT
+          echo "rpm_version=${rpm_version}" >> $GITHUB_OUTPUT
+
+          echo "DEB package version: ${deb_version}"
+          echo "RPM package version: ${rpm_version}"
+
   build_multi_arch_stages:
     name: Build Multi-Arch Stages
     if: ${{ inputs.use_prebuilt_artifacts == 'false' }}
@@ -94,3 +117,35 @@ jobs:
       test_type: ${{ inputs.test_type }}
       test_labels: ${{ inputs.test_labels }}
       sanity_check_only_for_family: ${{ matrix.family_info.sanity_check_only_for_family }}
+
+  build_native_packages:
+    needs: [build_multi_arch_stages, compute_native_package_versions]
+    # Build native packages in parallel with tests after multi-arch build completes
+    # Skip if we're using prebuilt artifacts or expecting build failure
+    if: >-
+      ${{
+        !failure() &&
+        !cancelled() &&
+        inputs.use_prebuilt_artifacts == 'false' &&
+        inputs.expect_failure == false
+      }}
+    strategy:
+      fail-fast: false
+      matrix:
+        package_type: [deb, rpm]
+    uses: ./.github/workflows/multi_arch_build_native_linux_packages.yml
+    secrets: inherit
+    with:
+      dist_amdgpu_families: ${{ inputs.dist_amdgpu_families }}
+      artifact_run_id: ${{ inputs.artifact_run_id }}
+      rocm_version: >-
+        ${{
+          matrix.package_type == 'deb'
+          && needs.compute_native_package_versions.outputs.deb_version
+          || needs.compute_native_package_versions.outputs.rpm_version
+        }}
+      native_package_type: ${{ matrix.package_type }}
+      release_type: ""
+    permissions:
+      contents: read
+      id-token: write
