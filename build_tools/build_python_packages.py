@@ -185,6 +185,7 @@ def libraries_artifact_filter(target_family: str, an: ArtifactName) -> bool:
             "hipblasltprovider",
             "rand",
             "rccl",
+            "rocshmem",
         ]
         and an.component
         in [
