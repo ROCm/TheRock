@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: MIT
 
 """
-Basic sanity tests for compute_package_test_dependencies module.
+Basic sanity tests for determine_rocm_test_dependencies module.
 """
 
 import os
@@ -15,9 +15,10 @@ from pathlib import Path
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
-from compute_package_test_dependencies import (
+from determine_rocm_test_dependencies import (
     PackageInfo,
     PackageDependencyAnalyzer,
+    create_analyzer,
 )
 
 
@@ -78,7 +79,7 @@ class PackageDependencyAnalyzerTest(unittest.TestCase):
         # Check that some dependencies were found
         rocblas_pkg = analyzer.packages.get("rocblas")
         self.assertIsNotNone(rocblas_pkg)
-        self.assertGreater(len(rocblas_pkg.all_deps), 0)
+        self.assertGreater(len(rocblas_pkg.runtime_deps), 0)
 
     def test_reverse_dependencies(self):
         """Sanity check: reverse dependencies are computed."""
@@ -94,7 +95,6 @@ class PackageDependencyAnalyzerTest(unittest.TestCase):
             )
         """
         self.write_cmake_file(self.math_libs_dir / "CMakeLists.txt", cmake_content)
-        # Use default (include_runtime_deps=True) which should pick up hipBLAS
         analyzer = PackageDependencyAnalyzer(self.therock_root)
 
         # Check that rocblas has reverse dependencies (hipblas has RUNTIME_DEPS on it)
@@ -121,8 +121,8 @@ class PackageDependencyAnalyzerTest(unittest.TestCase):
         self.assertGreater(len(packages), 0)
         self.assertIn("rocblas", packages)
 
-    def test_dependency_info(self):
-        """Sanity check: get_dependency_info returns data."""
+    def test_create_analyzer(self):
+        """Sanity check: create_analyzer helper works."""
         cmake_content = """
             therock_cmake_subproject_declare(rocBLAS
                 BUILD_DEPS
@@ -132,18 +132,18 @@ class PackageDependencyAnalyzerTest(unittest.TestCase):
             )
         """
         self.write_cmake_file(self.math_libs_dir / "CMakeLists.txt", cmake_content)
-        analyzer = PackageDependencyAnalyzer(self.therock_root)
+        analyzer = create_analyzer(self.therock_root)
 
-        info = analyzer.get_dependency_info("rocblas")
-        self.assertIn("name", info)
-        self.assertEqual(info["name"], "rocblas")
+        # Check that packages were discovered
+        self.assertIn("rocblas", analyzer.packages)
+        rocblas_pkg = analyzer.packages.get("rocblas")
+        self.assertIsNotNone(rocblas_pkg)
+        self.assertEqual(rocblas_pkg.name, "rocblas")
 
-    def test_runtime_deps_vs_build_deps(self):
+    def test_runtime_deps_only(self):
         """
-        Test that RUNTIME_DEPS vs BUILD_DEPS filtering works correctly.
-
-        By default: only RUNTIME_DEPS trigger testing (packages that actually use the dependency)
-        With include_build_deps: BUILD_DEPS also trigger testing
+        Test that only RUNTIME_DEPS trigger testing.
+        BUILD_DEPS are ignored (only used for build ordering, not runtime testing).
         """
         cmake_content = """
             therock_cmake_subproject_declare(rocBLAS
@@ -163,32 +163,11 @@ class PackageDependencyAnalyzerTest(unittest.TestCase):
         """
         self.write_cmake_file(self.math_libs_dir / "CMakeLists.txt", cmake_content)
 
-        # Default: only RUNTIME_DEPS (include_runtime_deps=True, include_build_deps=False)
-        analyzer_runtime_only = PackageDependencyAnalyzer(
-            self.therock_root, include_build_deps=False, include_runtime_deps=True
-        )
-        packages = analyzer_runtime_only.get_packages_to_test(["rocblas"])
+        analyzer = PackageDependencyAnalyzer(self.therock_root)
+        packages = analyzer.get_packages_to_test(["rocblas"])
         self.assertIn("rocblas", packages)
         self.assertIn("hipblas", packages, "hipblas has RUNTIME_DEPS on rocblas")
         self.assertNotIn("rocsparse", packages, "rocsparse only has BUILD_DEPS, should be excluded")
-
-        # With BUILD_DEPS included
-        analyzer_both = PackageDependencyAnalyzer(
-            self.therock_root, include_build_deps=True, include_runtime_deps=True
-        )
-        packages = analyzer_both.get_packages_to_test(["rocblas"])
-        self.assertIn("rocblas", packages)
-        self.assertIn("hipblas", packages, "hipblas has RUNTIME_DEPS on rocblas")
-        self.assertIn("rocsparse", packages, "rocsparse has BUILD_DEPS on rocblas and should be included")
-
-        # Only BUILD_DEPS
-        analyzer_build_only = PackageDependencyAnalyzer(
-            self.therock_root, include_build_deps=True, include_runtime_deps=False
-        )
-        packages = analyzer_build_only.get_packages_to_test(["rocblas"])
-        self.assertIn("rocblas", packages)
-        self.assertNotIn("hipblas", packages, "hipblas has RUNTIME_DEPS, should be excluded")
-        self.assertIn("rocsparse", packages, "rocsparse has BUILD_DEPS on rocblas")
 
     def test_only_downstream_tested(self):
         """
@@ -214,7 +193,6 @@ class PackageDependencyAnalyzerTest(unittest.TestCase):
             )
         """
         self.write_cmake_file(self.math_libs_dir / "CMakeLists.txt", cmake_content)
-        # Use default (include_runtime_deps=True, include_build_deps=False)
         analyzer = PackageDependencyAnalyzer(self.therock_root)
 
         # When rocblas changes: test rocblas and hipblas (DIRECT dependent only)
@@ -272,7 +250,6 @@ class PackageDependencyAnalyzerTest(unittest.TestCase):
             )
         """
         self.write_cmake_file(self.math_libs_dir / "CMakeLists.txt", cmake_content)
-        # Use default (include_runtime_deps=True, include_build_deps=False)
         analyzer = PackageDependencyAnalyzer(self.therock_root)
 
         # When rocblas changes: only test hipblas (direct dependent)
