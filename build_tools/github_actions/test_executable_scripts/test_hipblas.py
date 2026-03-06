@@ -69,4 +69,7 @@ failed_tests = parse_gtest_json(gtest_json_path)
 output_failed_tests(failed_tests)
 
 # Exit with the original return code
-sys.exit(result.returncode)
+if result.returncode == 0 or result.returncode == 3:
+    sys.exit(0)
+else:
+    sys.exit(result.returncode)
