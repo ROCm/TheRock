@@ -208,6 +208,14 @@ def _validate_csv_row(csv_row: dict) -> list[str]:
         (["--json", "--file"], "json"),
         (["--csv", "--file"], "csv"),
     ],
+    ids=[
+        "human-stdout",
+        "json-stdout",
+        "csv-stdout",
+        "human-file",
+        "json-file",
+        "csv-file",
+    ],
 )
 def test_amd_smi_list(mod_args, tmp_path):
     """End-to-end test of `amd-smi list` covering output modes.
