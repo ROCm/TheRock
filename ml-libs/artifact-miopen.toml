@@ -1,13 +1,45 @@
 # MIOpen
 [components.dbg."ml-libs/MIOpen/stage"]
 [components.dev."ml-libs/MIOpen/stage"]
+include = [
+  # Headers from standard locations
+  "include/**/*.h",
+  "include/**/*.hpp",
+
+  # CMake files from standard locations
+  "lib/cmake/**/*.cmake",
+  "share/*/cmake/**/*.cmake",
+
+  # CMake from bin
+  "bin/**/*.cmake",
+]
 [components.doc."ml-libs/MIOpen/stage"]
 [components.lib."ml-libs/MIOpen/stage"]
 include = [
+  "lib/**",
   "share/miopen/**",
+]
+exclude = [
+  "share/miopen/**/*.h",      # Headers go to dev
+  "share/miopen/**/*.cmake",  # CMake goes to dev
 ]
 [components.test."ml-libs/MIOpen/stage"]
 include = [
-  "bin/miopen_gtest*",
+  "bin/*test*",               # Test executables
+  "bin/*gtest*",              # GTest executables
 ]
 [components.run."ml-libs/MIOpen/stage"]
+include = [
+  "bin/*",                    # Binaries
+]
+exclude = [
+  # Exclude non-binary files from bin/
+  "bin/*.cmake",
+  "bin/*.txt",
+  "bin/*.md",
+
+  # Exclude test binaries
+  "bin/*test*",
+  "bin/*gtest*",
+  "bin/*bench*",
+]

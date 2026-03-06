@@ -1,6 +1,12 @@
 # hipDNN
 [components.dbg."ml-libs/hipDNN/stage"]
 [components.dev."ml-libs/hipDNN/stage"]
+include = [
+  "include/**",                      # Header files
+  "lib/cmake/**",                    # CMake configs in lib
+  "share/*/cmake/**",                # CMake configs in share
+  "bin/**/*.cmake",                  # All CMake files in bin (including subdirs)
+]
 [components.doc."ml-libs/hipDNN/stage"]
 [components.lib."ml-libs/hipDNN/stage"]
 exclude = [
@@ -9,7 +15,19 @@ exclude = [
 ]
 [components.test."ml-libs/hipDNN/stage"]
 include = [
-  "bin/*hipdnn_*_test*",
-  "bin/hipdnn/CTestTestfile.cmake",
+  "bin/*test*",                      # Test binaries
+  "bin/*gtest*",                     # GTest binaries
   "lib/test_plugins/**",
+]
+exclude = [
+  "bin/**/*.cmake",                  # Exclude CMake files
+]
+[components.run."ml-libs/hipDNN/stage"]
+include = [
+  "bin/**",                          # All binaries
+]
+exclude = [
+  "bin/**/*.cmake",                  # Exclude CMake files
+  "bin/*test*",                      # Exclude test binaries
+  "bin/*gtest*",                     # Exclude gtest binaries
 ]
