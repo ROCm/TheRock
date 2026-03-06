@@ -293,7 +293,9 @@ class BootstrappingPopulator(ArtifactPopulator):
             if fprint_path.exists():
                 self.current_fingerprint = fprint_path.read_text().strip()
                 if self.verbose:
-                    print(f"  Loaded fingerprint from extracted file: {self.current_fingerprint[:16]}...")
+                    print(
+                        f"  Loaded fingerprint from extracted file: {self.current_fingerprint[:16]}..."
+                    )
 
     def on_artifact_dir(self, artifact_dir: Path):
         print(f"FLATTENING {artifact_dir.name}")
