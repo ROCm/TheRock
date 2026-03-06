@@ -5,6 +5,8 @@ import logging
 import os
 import shlex
 import subprocess
+import sys
+import tempfile
 from pathlib import Path
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
@@ -12,6 +14,10 @@ AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 platform = os.getenv("RUNNER_OS").lower()
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
+
+# Import test result collection utilities
+sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
+from github_actions_utils import output_failed_tests, parse_ctest_junit_xml
 
 # GTest sharding
 SHARD_INDEX = os.getenv("SHARD_INDEX", 1)
@@ -54,11 +60,16 @@ ctest_parallelism = "2"
 if AMDGPU_FAMILIES == "gfx1153":
     ctest_parallelism = "1"
 
+# Create temp file for JUnit XML output
+junit_xml_path = Path(tempfile.gettempdir()) / "rocwmma_test_results.xml"
+
 cmd = [
     "ctest",
     "--test-dir",
     f"{THEROCK_BIN_DIR}/rocwmma{test_subdir}",
     "--output-on-failure",
+    "--output-junit",
+    str(junit_xml_path),
     "--parallel",
     ctest_parallelism,
     "--timeout",
@@ -68,9 +79,16 @@ cmd = [
 ]
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 
-subprocess.run(
+result = subprocess.run(
     cmd,
     cwd=THEROCK_DIR,
-    check=True,
+    check=False,
     env=environ_vars,
 )
+
+# Parse and output failed tests
+failed_tests = parse_ctest_junit_xml(junit_xml_path)
+output_failed_tests(failed_tests)
+
+# Exit with the original return code
+sys.exit(result.returncode)

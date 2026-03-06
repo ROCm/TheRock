@@ -23,9 +23,11 @@ AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 os_type = platform.system().lower()
 CATCH_TESTS_PATH = str(Path(THEROCK_BIN_DIR).parent / "share" / "hip" / "catch_tests")
 
-# Importing is_asan from github_actions_utils.py
+# Importing utilities from github_actions_utils.py
 sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
-from github_actions_utils import is_asan
+from github_actions_utils import is_asan, output_failed_tests, parse_ctest_junit_xml
+
+import tempfile
 
 env = os.environ.copy()
 
@@ -118,6 +120,9 @@ def setup_env(env):
 
 
 def execute_tests(env):
+    # Create temp file for JUnit XML output
+    junit_xml_path = Path(tempfile.gettempdir()) / "hiptests_test_results.xml"
+
     # Allow for more time in ASAN mode to run the tests.
     timeout = 1500 if is_asan() else 600
     cmd = [
@@ -127,6 +132,8 @@ def execute_tests(env):
         "--test-dir",
         CATCH_TESTS_PATH,
         "--output-on-failure",
+        "--output-junit",
+        str(junit_xml_path),
         "--timeout",
         f"{timeout}",
     ]
@@ -136,7 +143,14 @@ def execute_tests(env):
         cmd.extend(["--exclude-regex", "|".join(ignored_tests)])
 
     logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-    subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=env)
+    result = subprocess.run(cmd, cwd=THEROCK_DIR, check=False, env=env)
+
+    # Parse and output failed tests
+    failed_tests = parse_ctest_junit_xml(junit_xml_path)
+    output_failed_tests(failed_tests)
+
+    # Exit with the original return code
+    sys.exit(result.returncode)
 
 
 if __name__ == "__main__":
