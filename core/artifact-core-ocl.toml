@@ -3,6 +3,9 @@
 [components.dev."core/ocl-clr/stage"]
 [components.doc."core/ocl-clr/stage"]
 [components.lib."core/ocl-clr/stage"]
+include = [
+  "etc/**",
+]
 [components.run."core/ocl-clr/stage"]
 include = [
   "bin/**",
