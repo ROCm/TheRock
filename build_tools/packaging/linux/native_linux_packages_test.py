@@ -577,6 +577,26 @@ gpgcheck=0
                     "-y",
                 ] + self.package_names
             print("[INFO] Using zypper for SLES package installation")
+            # Install update-alternatives (required for SLES) before ROCm packages
+            print("\nInstalling update-alternatives (SLES prerequisite)...")
+            try:
+                result = subprocess.run(
+                    ["zypper", "install", "-y", "update-alternatives"],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    timeout=120,
+                )
+                if result.returncode == 0:
+                    print("[PASS] update-alternatives installed")
+                else:
+                    print(
+                        f"[WARN] zypper install update-alternatives returned {result.returncode} (continuing anyway)"
+                    )
+            except (subprocess.TimeoutExpired, OSError) as e:
+                print(
+                    f"[WARN] Could not install update-alternatives: {e} (continuing anyway)"
+                )
         else:
             cmd = ["dnf", "install", "-y"] + self.package_names
         print(f"\nRunning: {' '.join(cmd)}")
