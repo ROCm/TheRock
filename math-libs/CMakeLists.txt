@@ -378,3 +378,110 @@ if(THEROCK_ENABLE_LIBHIPCXX)
       libhipcxx
   )
 endif(THEROCK_ENABLE_LIBHIPCXX)
+
+# limit use of composable kernel to the GPU families it is valid for
+if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
+  set(_ck_supported_gfx_targets gfx908 gfx90a gfx942 gfx950 gfx1100 gfx1101 gfx1102 gfx1103 gfx1150 gfx1151 gfx1152 gfx1153 gfx1200 gfx1201)
+  foreach(_gfx_target ${THEROCK_AMDGPU_TARGETS})
+    if(NOT ${_gfx_target} IN_LIST _ck_supported_gfx_targets)
+      message(WARNING
+        "${_gfx_target} (included in THEROCK_AMDGPU_TARGETS) is not supported by composable kernel. "
+        "Disabling composable kernel and it's use in MIOpen.")
+      set(THEROCK_ENABLE_COMPOSABLE_KERNEL OFF)
+      set(THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL OFF)
+      set(THEROCK_ENABLE_HIPTENSOR OFF)
+    endif()
+  endforeach()
+endif()
+
+if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
+  ##############################################################################
+  # Composable_kernel
+  ##############################################################################
+
+  therock_cmake_subproject_declare(composable_kernel
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/composablekernel"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/composable_kernel"
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      -DHIP_PLATFORM=amd
+      -DROCM_PATH=
+      -DROCM_DIR=
+      "-DBUILD_TESTING=${THEROCK_BUILD_TESTING}"
+      -DMIOPEN_REQ_LIBS_ONLY=ON
+      -DHIPTENSOR_REQ_LIBS_ONLY=ON
+    CMAKE_INCLUDES
+      therock_explicit_finders.cmake
+    COMPILER_TOOLCHAIN
+      amd-hip
+    BUILD_DEPS
+      rocm-cmake
+    RUNTIME_DEPS
+      hip-clr
+      rocm-half
+      rocRAND
+      ${THEROCK_BUNDLED_BZIP2}
+      ${optional_profiler_deps}
+  )
+  therock_cmake_subproject_provide_package(composable_kernel composable_kernel lib/cmake/composable_kernel)
+
+  therock_cmake_subproject_activate(composable_kernel)
+
+  therock_provide_artifact(composable-kernel
+    DESCRIPTOR artifact-composable-kernel.toml
+    COMPONENTS
+      dbg
+      dev
+      doc
+      lib
+      run
+    SUBPROJECT_DEPS
+      composable_kernel
+  )
+endif()
+
+set(THEROCK_ENABLE_HIPTENSOR OFF)
+if(THEROCK_ENABLE_HIPTENSOR)
+  ##############################################################################
+  # hipTensor
+  ##############################################################################
+
+  therock_cmake_subproject_declare(hipTensor
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hiptensor"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipTensor"
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      -DHIP_PLATFORM=amd
+      -DROCM_PATH=
+      -DROCM_DIR=
+      "-DHIPTENSOR_BUILD_TESTS=$<BOOL:${THEROCK_BUILD_TESTING}>"
+      -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON # Needed for Ninja build
+    CMAKE_INCLUDES
+      therock_explicit_finders.cmake
+    COMPILER_TOOLCHAIN
+      amd-hip
+    BUILD_DEPS
+      rocm-cmake
+      therock-googletest
+      composable_kernel
+    RUNTIME_DEPS
+      hip-clr
+  )
+  therock_cmake_subproject_glob_c_sources(hipTensor
+    SUBDIRS
+      .
+  )
+  therock_cmake_subproject_provide_package(hipTensor hiptensor lib/cmake/hiptensor)
+  therock_cmake_subproject_activate(hipTensor)
+
+  therock_provide_artifact(hiptensor
+    DESCRIPTOR artifact-hiptensor.toml
+    COMPONENTS
+      dbg
+      dev
+      lib
+      test
+    SUBPROJECT_DEPS
+      hipTensor
+  )
+endif(THEROCK_ENABLE_HIPTENSOR)
