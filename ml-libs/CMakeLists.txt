@@ -348,7 +348,7 @@ if(THEROCK_ENABLE_HIPDNN_INTEGRATION_TESTS)
   ##############################################################################
 
   therock_cmake_subproject_declare(hipdnn-integration-tests
-    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/hipdnn-integration-tests"
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/dnn-providers/integration-tests"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hipdnn-integration-tests"
     BACKGROUND_BUILD
     CMAKE_ARGS
@@ -384,8 +384,8 @@ if(THEROCK_ENABLE_HIPDNN_INTEGRATION_TESTS)
   # the super-build. The integration test suite will check that the expected
   # plugins are loaded at runtime.
   #
-  # NOTE: THEROCK_ENABLE_*_PLUGIN variables are set by the build topology, so
-  # should include sub components; for example THEROCK_ENABLE_FUSILLI_PLUGIN
+  # NOTE: THEROCK_ENABLE_*PROVIDER variables are set by the build topology, so
+  # should include sub components; for example THEROCK_ENABLE_FUSILLIPROVIDER
   # should be enabled even if the user did not explicitly provide the variable,
   # instead providing THEROCK_ENABLE_ALL or THEROCK_ENABLE_IREE_LIBS.
   #
@@ -395,11 +395,14 @@ if(THEROCK_ENABLE_HIPDNN_INTEGRATION_TESTS)
   # rather than install as part of the super-project - so the install happens in
   # post_hook_hipdnn-integration-tests.cmake.
   set(_plugins_json_array "")
-  if(THEROCK_ENABLE_MIOPEN_PLUGIN)
+  if(THEROCK_ENABLE_MIOPENPROVIDER)
     list(APPEND _plugins_json_array "\"miopen\"")
   endif()
-  if(THEROCK_ENABLE_FUSILLI_PLUGIN)
+  if(THEROCK_ENABLE_FUSILLIPROVIDER)
     list(APPEND _plugins_json_array "\"fusilli\"")
+  endif()
+  if(THEROCK_ENABLE_HIPBLASLTPROVIDER)
+    list(APPEND _plugins_json_array "\"hipblaslt\"")
   endif()
   string(REPLACE ";" ", " _plugins_json_str "${_plugins_json_array}")
 
