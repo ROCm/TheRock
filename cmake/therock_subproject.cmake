@@ -10,6 +10,8 @@
 
 include(ExternalProject)
 
+set(ROCM_PATH ${THEROCK_BINARY_DIR}/dist/rocm)
+
 # Global properties.
 # THEROCK_DEFAULT_CMAKE_VARS:
 # List of CMake variables that will be injected by default into the
@@ -26,6 +28,10 @@ set_property(GLOBAL PROPERTY THEROCK_DEFAULT_CMAKE_VARS
   THEROCK_ENABLE_LLVM_TESTS
   LLVM_LIT_ARGS
   THEROCK_USE_SAFE_DEPENDENCY_PROVIDER
+  HIP_DIR
+  HIP_PATH
+  ROCM_DIR
+  ROCM_PATH
   ROCM_SYMLINK_LIBS
 
   # RPATH handling.
@@ -715,10 +721,10 @@ function(therock_cmake_subproject_activate target_name)
   #   * Use `${HIP_PATH}` as a hint for `find_package()` calls
   # We unset both the CMake and environment variables with these names.
   # See also https://github.com/ROCm/TheRock/issues/670.
-  list(APPEND _build_env_pairs "--unset=ROCM_PATH")
-  list(APPEND _build_env_pairs "--unset=ROCM_DIR")
-  list(APPEND _build_env_pairs "--unset=HIP_PATH")
-  list(APPEND _build_env_pairs "--unset=HIP_DIR")
+  list(APPEND _build_env_pairs "ROCM_DIR=${THEROCK_BINARY_DIR}/dist/rocm")
+  list(APPEND _build_env_pairs "ROCM_PATH=${THEROCK_BINARY_DIR}/dist/rocm")
+  list(APPEND _build_env_pairs "HIP_PATH=${THEROCK_BINARY_DIR}/dist/rocm")
+  list(APPEND _build_env_pairs "HIP_DIR=${THEROCK_BINARY_DIR}/dist/rocm")
 
   # Handle compiler toolchain.
   set(_compiler_toolchain_addl_depends)
