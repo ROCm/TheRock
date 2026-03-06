@@ -184,18 +184,13 @@ def archive_index(artifacts_dir: Path) -> list[ArchiveInfo]:
     return index
 
 
-def _format_cross_artifact_overlaps(
-    overlaps: list[CrossArtifactOverlap], limit: int = 20
-) -> str:
+def _format_cross_artifact_overlaps(overlaps: list[CrossArtifactOverlap]) -> str:
     """Format cross-artifact overlaps into readable summary."""
     lines = []
-    for overlap in sorted(overlaps, key=lambda o: o.path)[:limit]:
+    for overlap in sorted(overlaps, key=lambda o: o.path):
         lines.append(f"  {overlap.path}")
         for label, archive in sorted(overlap.sources):
             lines.append(f"    - {label} ({archive})")
-    remaining = len(overlaps) - limit
-    if remaining > 0:
-        lines.append(f"  ... and {remaining} more")
     return "\n".join(lines)
 
 
@@ -206,11 +201,9 @@ def _format_component_overlaps(overlaps: list[ComponentOverlap]) -> str:
     for overlap in sorted(overlaps, key=lambda o: o.artifact_name):
         total += len(overlap.overlaps)
         lines.append(f"  {overlap.artifact_name} ({len(overlap.overlaps)} files):")
-        for fpath in sorted(overlap.overlaps)[:5]:
+        for fpath in sorted(overlap.overlaps):
             comps = sorted(set(overlap.overlaps[fpath]))
             lines.append(f"    {fpath}  [{', '.join(comps)}]")
-        if len(overlap.overlaps) > 5:
-            lines.append(f"    ... and {len(overlap.overlaps) - 5} more")
     return total, "\n".join(lines)
 
 
