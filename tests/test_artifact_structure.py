@@ -113,6 +113,22 @@ class ArchiveInfo:
     flattened_paths: set[str]
 
 
+@dataclasses.dataclass
+class FileCollision:
+    """A flattened file path found in multiple artifacts."""
+
+    path: str
+    sources: list[tuple[str, str]]  # (artifact_name, archive_filename)
+
+
+@dataclasses.dataclass
+class ArtifactComponentOverlap:
+    """Files duplicated across components within one artifact."""
+
+    artifact_name: str
+    overlaps: dict[str, list[str]]  # path -> [component_name, ...]
+
+
 @pytest.fixture(scope="session")
 def archive_index(artifacts_dir: Path) -> list[ArchiveInfo]:
     """Scan all archives once and return a flat list of ArchiveInfo."""
@@ -158,22 +174,32 @@ def archive_index(artifacts_dir: Path) -> list[ArchiveInfo]:
     return index
 
 
-def _format_collision_summary(
-    collisions: dict[str, list[tuple[str, str]]], limit: int = 20
-) -> str:
-    """Format collision dict into readable summary.
-
-    collisions: flattened_path -> [(label, archive_name), ...]
-    """
+def _format_collision_summary(collisions: list[FileCollision], limit: int = 20) -> str:
+    """Format cross-artifact collisions into readable summary."""
     lines = []
-    for fpath, sources in sorted(collisions.items())[:limit]:
-        lines.append(f"  {fpath}")
-        for label, archive in sorted(sources):
+    for collision in sorted(collisions, key=lambda c: c.path)[:limit]:
+        lines.append(f"  {collision.path}")
+        for label, archive in sorted(collision.sources):
             lines.append(f"    - {label} ({archive})")
     remaining = len(collisions) - limit
     if remaining > 0:
         lines.append(f"  ... and {remaining} more")
     return "\n".join(lines)
+
+
+def _format_overlap_summary(overlaps: list[ArtifactComponentOverlap]) -> str:
+    """Format within-artifact component overlaps into readable summary."""
+    lines = []
+    total = 0
+    for overlap in sorted(overlaps, key=lambda o: o.artifact_name):
+        total += len(overlap.overlaps)
+        lines.append(f"  {overlap.artifact_name} ({len(overlap.overlaps)} files):")
+        for fpath in sorted(overlap.overlaps)[:5]:
+            comps = sorted(set(overlap.overlaps[fpath]))
+            lines.append(f"    {fpath}  [{', '.join(comps)}]")
+        if len(overlap.overlaps) > 5:
+            lines.append(f"    ... and {len(overlap.overlaps) - 5} more")
+    return total, "\n".join(lines)
 
 
 class TestArtifactStructure:
@@ -196,14 +222,14 @@ class TestArtifactStructure:
                 seen[fpath][info.artifact_name].add(info.filename)
 
         # Flag paths that appear in two or more different artifact names.
-        collisions: dict[str, list[tuple[str, str]]] = {}
+        collisions: list[FileCollision] = []
         for fpath, by_name in seen.items():
             if len(by_name) > 1:
                 sources = []
                 for name, archive_names in by_name.items():
                     for a in archive_names:
                         sources.append((name, a))
-                collisions[fpath] = sources
+                collisions.append(FileCollision(path=fpath, sources=sources))
 
         if collisions:
             summary = _format_collision_summary(collisions)
@@ -239,36 +265,30 @@ class TestArtifactStructure:
         for info in archive_index:
             by_artifact[info.artifact_name][info.component].update(info.flattened_paths)
 
-        all_collisions: dict[str, dict[str, list[str]]] = {}
+        all_overlaps: list[ArtifactComponentOverlap] = []
 
-        for art_name, comp_files in by_artifact.items():
+        for artifact_name, comp_files in by_artifact.items():
             comp_names = sorted(comp_files.keys())
             # fpath -> list of component names that contain it
-            art_collisions: dict[str, list[str]] = {}
+            artifact_overlaps: dict[str, list[str]] = {}
             for i in range(len(comp_names)):
                 for j in range(i + 1, len(comp_names)):
                     c1, c2 = comp_names[i], comp_names[j]
                     for fpath in comp_files[c1] & comp_files[c2]:
-                        art_collisions.setdefault(fpath, []).extend([c1, c2])
+                        artifact_overlaps.setdefault(fpath, []).extend([c1, c2])
 
-            if art_collisions:
-                all_collisions[art_name] = art_collisions
+            if artifact_overlaps:
+                all_overlaps.append(
+                    ArtifactComponentOverlap(
+                        artifact_name=artifact_name, overlaps=artifact_overlaps
+                    )
+                )
 
-        if all_collisions:
-            lines = []
-            total = 0
-            for art_name, art_cols in sorted(all_collisions.items()):
-                total += len(art_cols)
-                lines.append(f"  {art_name} ({len(art_cols)} files):")
-                for fpath in sorted(art_cols)[:5]:
-                    comps = sorted(set(art_cols[fpath]))
-                    lines.append(f"    {fpath}  [{', '.join(comps)}]")
-                if len(art_cols) > 5:
-                    lines.append(f"    ... and {len(art_cols) - 5} more")
-            summary = "\n".join(lines)
+        if all_overlaps:
+            total, summary = _format_overlap_summary(all_overlaps)
             pytest.fail(
                 f"Found within-artifact component collisions in "
-                f"{len(all_collisions)} artifact(s) ({total} total files). "
+                f"{len(all_overlaps)} artifact(s) ({total} total files). "
                 f"Components should be disjoint "
                 f"(see https://github.com/ROCm/TheRock/issues/3796):\n{summary}"
             )
