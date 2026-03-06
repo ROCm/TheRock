@@ -10,10 +10,6 @@ on:
         type: string
         description: "Artifact group (e.g. gfx94X-dcgpu, gfx110X-all)"
         required: true
-      amdgpu_targets:
-        type: string
-        description: "Individual GPU targets for split artifacts (e.g. gfx942, gfx1100)"
-        default: ""
       artifact_run_id:
         type: string
         description: "Run ID to fetch artifacts from (defaults to current run)"
@@ -30,9 +26,6 @@ on:
       artifact_group:
         type: string
         required: true
-      amdgpu_targets:
-        type: string
-        default: ""
       artifact_run_id:
         type: string
         default: ""
@@ -50,7 +43,6 @@ jobs:
     env:
       ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       ARTIFACT_GROUP: ${{ inputs.artifact_group }}
-      AMDGPU_TARGETS: ${{ inputs.amdgpu_targets }}
       PLATFORM: ${{ inputs.platform }}
       ARTIFACTS_DIR: ${{ github.workspace }}/artifacts
     steps:
@@ -73,7 +65,6 @@ jobs:
           python ./build_tools/fetch_artifacts.py \
             --run-id=${ARTIFACT_RUN_ID} \
             --artifact-group=${ARTIFACT_GROUP} \
-            --amdgpu-targets=${AMDGPU_TARGETS} \
             --platform=${PLATFORM} \
             --output-dir=${ARTIFACTS_DIR} \
             --no-extract
