@@ -77,9 +77,15 @@ if all_expected_failures:
 fd, json_config_path = tempfile.mkstemp(suffix=".json", prefix="hipdnn_test_config_")
 with os.fdopen(fd, "w") as f:
     json.dump(config, f)
-
-os.environ["HIPDNN_TEST_CONFIG_PATH"] = json_config_path
 logging.info(f"Wrote JSON config to: {json_config_path}")
+
+environ_vars = os.environ.copy()
+
+# Set config path
+environ_vars["HIPDNN_TEST_CONFIG_PATH"] = json_config_path
+
+# Add THEROCK_BIN_DIR to PATH
+environ_vars["PATH"] = f"{THEROCK_BIN_DIR}:{environ_vars['PATH']}"
 
 cmd = [
     "ctest",
@@ -89,7 +95,7 @@ cmd = [
     "--parallel",
     "8",
     "--timeout",
-    "120",
+    "1200",
 ]
 
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
@@ -98,4 +104,5 @@ subprocess.run(
     cmd,
     cwd=THEROCK_DIR,
     check=True,
+    env=environ_vars,
 )

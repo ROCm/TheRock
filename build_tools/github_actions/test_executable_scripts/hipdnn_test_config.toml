@@ -32,3 +32,7 @@
 [plugins.miopen]
 path = "libmiopen_legacy_plugin.so"
 engines = ["MIOPEN_PLUGIN"]
+
+[plugins.fusilli]
+path = "libfusilli_plugin.so"
+engines = ["FUSILLI"]
