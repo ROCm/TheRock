@@ -262,6 +262,7 @@ LibraryEntry("hipsparse", "libraries", "libhipsparse.so*", "hipsparse*.dll")
 LibraryEntry("hipsparselt", "libraries", "libhipsparselt.so*", "")
 LibraryEntry("hipsolver", "libraries", "libhipsolver.so*", "hipsolver*.dll")
 LibraryEntry("rccl", "libraries", "librccl.so*", "")
+LibraryEntry("rocshmem", "libraries", "librocshmem*", "")
 LibraryEntry("miopen", "libraries", "libMIOpen.so*", "MIOpen*.dll")
 LibraryEntry("hipdnn", "libraries", "libhipdnn_backend.so*", "hipdnn_backend*.dll")
 
