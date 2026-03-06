@@ -907,9 +907,16 @@ function(therock_cmake_subproject_activate target_name)
       set(_use_prebuilt TRUE)
       message(STATUS "  USING PREBUILT: Fingerprint validated")
     else()
-      # Fingerprint invalid - delete marker and rebuild
-      message(STATUS "  REBUILDING: Prebuilt fingerprint mismatch, removing .prebuilt marker")
-      file(REMOVE "${_prebuilt_file}")
+      # Fingerprint invalid - behavior depends on THEROCK_REBUILD_ON_FPRINT_MISMATCH
+      if(THEROCK_REBUILD_ON_FPRINT_MISMATCH)
+        # Delete marker and rebuild
+        message(STATUS "  REBUILDING: Prebuilt fingerprint mismatch, removing .prebuilt marker")
+        file(REMOVE "${_prebuilt_file}")
+      else()
+        # Skip the build - use prebuilt despite mismatch
+        message(WARNING "  SKIPPING BUILD: Prebuilt fingerprint mismatch but THEROCK_REBUILD_ON_FPRINT_MISMATCH=OFF")
+        set(_use_prebuilt TRUE)
+      endif()
     endif()
   endif()
 
