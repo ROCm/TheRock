@@ -4,12 +4,12 @@ This is a generic test runner that can test multiple components.
 This works on components in rocm-libraries/rocm-systems which use test_categories.yml for test categorization.
 
 Environment variables used:
-- TEST_COMPONENT: Job name of the component to test (e.g., "miopen", "rocrand", "hiprand")
-  This is automatically set by the GitHub Actions workflow from the job_name field.
-  The script maps these job names to actual test directory names (e.g., "miopen" -> "MIOpen")
-  Defaults to "miopen" if not set.
-- TEST_TYPE: "smoke" runs tests with "quick" category, otherwise runs "standard" category
-- AMDGPU_FAMILIES: Parsed to extract GPU architecture (e.g., "gfx1151")
+TEST_COMPONENT: Job name of the component to test (e.g., "miopen", "rocrand", "hiprand")
+    This is automatically set by the GitHub Actions workflow from the job_name field.
+    The script maps these job names to actual test directory names (e.g., "miopen" -> "MIOpen")
+    Defaults to "miopen" if not set.
+TEST_TYPE: "smoke" runs tests with "quick" category, otherwise runs "standard" category
+AMDGPU_FAMILIES: Parsed to extract GPU architecture (e.g., "gfx1151")
 
 The script discovers GPU-specific labels via ctest --print-labels and runs the appropriate tests for the current GPU architecture.
 """
@@ -73,6 +73,10 @@ if AMDGPU_FAMILIES and "gfx1152" in AMDGPU_FAMILIES:
     ctest_parallel_count = 4
 elif AMDGPU_FAMILIES and "gfx1153" in AMDGPU_FAMILIES:
     ctest_parallel_count = 4
+
+# CTest per-test timeout (default 2 hours, in seconds)
+ctest_timeout_seconds = 7200
+
 environ_vars = os.environ.copy()
 # Set the GTEST env vars for Gtest based tests
 # Set ROCM_PATH for tests that rely on it
@@ -159,6 +163,8 @@ def build_ctest_command(category, gpu_arch, available_gpu_archs):
             "--output-on-failure",
             "--parallel",
             f"{ctest_parallel_count}",
+            "--timeout",
+            str(ctest_timeout_seconds),
             "--test-dir",
             f"{THEROCK_BIN_DIR}/{TEST_COMPONENT}",
             "-V",  # Always run in verbose mode
