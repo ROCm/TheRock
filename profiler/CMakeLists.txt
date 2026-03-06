@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 if(THEROCK_ENABLE_ROCPROFV3)
   set(_rocprofiler_sdk_optional_deps)
 
@@ -24,7 +27,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
   # aqlprofile
   ##############################################################################
   therock_cmake_subproject_declare(aqlprofile
-    USE_DIST_AMDGPU_TARGETS
+    USE_TEST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/aqlprofile"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/aqlprofile"
     BACKGROUND_BUILD
@@ -47,15 +50,19 @@ if(THEROCK_ENABLE_ROCPROFV3)
   )
   therock_cmake_subproject_activate(aqlprofile)
 
-if(THEROCK_BUILD_TESTING)
-  therock_provide_artifact(aqlprofile-tests
+  therock_provide_artifact(aqlprofile
+    TARGET_NEUTRAL
     DESCRIPTOR artifact-aqlprofile.toml
     COMPONENTS
+      dbg
+      dev
+      doc
+      lib
+      run
       test
     SUBPROJECT_DEPS
       aqlprofile
   )
-endif(THEROCK_BUILD_TESTING)
 
   ##############################################################################
   # rocprofiler-sdk
@@ -121,8 +128,13 @@ endif(THEROCK_BUILD_TESTING)
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-compute"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-compute"
     BACKGROUND_BUILD
+    DEFAULT_GPU_TARGETS
+      gfx942
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
+      -DENABLE_TESTS=${THEROCK_BUILD_TESTING}
+      -DINSTALL_TESTS=${THEROCK_BUILD_TESTING}
+      -DTEST_FROM_INSTALL=${THEROCK_BUILD_TESTING}
       -DCHECK_PYTHON_DEPS=OFF
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
@@ -192,8 +204,8 @@ endif(THEROCK_BUILD_TESTING)
       doc
       lib
       run
+      test
     SUBPROJECT_DEPS
-      aqlprofile
       rocprofiler-sdk
       roctracer
       ${_rocprofiler_sdk_optional_deps}
@@ -213,8 +225,6 @@ endif(THEROCK_BUILD_TESTING)
       aqlprofile
       rocprofiler-sdk
       rocprofiler-compute
-      roctracer
-      ${_rocprofiler_sdk_optional_deps}
   )
 
   ##############################################################################
@@ -228,6 +238,11 @@ endif(THEROCK_BUILD_TESTING)
       set(_ROCPROFSYS_GFX_TARGETS_ESCAPED "")
     else()
       string(REPLACE ";" "\\;" _ROCPROFSYS_GFX_TARGETS_ESCAPED "${THEROCK_DIST_AMDGPU_TARGETS}")
+    endif()
+
+    set(_rocprofiler_systems_optional_deps)
+    if(THEROCK_ENABLE_MPI)
+      set(_rocprofiler_systems_optional_deps therock-openmpi)
     endif()
 
     therock_cmake_subproject_declare(rocprofiler-systems
@@ -245,22 +260,25 @@ endif(THEROCK_BUILD_TESTING)
         -DROCPROFSYS_BUILD_FOR_THEROCK=ON
         -DROCPROFSYS_GFX_TARGETS="${_ROCPROFSYS_GFX_TARGETS_ESCAPED}"
         -DROCPROFSYS_BUILD_SPDLOG=OFF
+        "-DROCPROFSYS_USE_MPI=${THEROCK_ENABLE_MPI}"
       INSTALL_RPATH_DIRS
         "lib"
         "lib/rocprofiler-systems"
         "llvm/lib"
       CMAKE_INCLUDES
         therock_explicit_finders.cmake
+      BUILD_DEPS
+        therock-spdlog
+        therock-fmt
       RUNTIME_DEPS
         amdsmi
         aqlprofile
         hip-clr
         rocprofiler-register
         rocprofiler-sdk
-        therock-spdlog
-        therock-fmt
         ${THEROCK_BUNDLED_LIBDRM}
         ${THEROCK_BUNDLED_SQLITE3}
+        ${_rocprofiler_systems_optional_deps}
     )
     therock_cmake_subproject_glob_c_sources(rocprofiler-systems
       SUBDIRS .

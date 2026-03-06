@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Unit tests for artifact_backend.py."""
 
 import os
@@ -16,6 +19,25 @@ from _therock_utils.artifact_backend import (
     S3Backend,
     create_backend_from_env,
 )
+from _therock_utils.workflow_outputs import WorkflowOutputRoot
+
+
+def _make_local_root(run_id="test-run-123", platform="linux"):
+    return WorkflowOutputRoot.for_local(run_id=run_id, platform=platform)
+
+
+def _make_s3_root(
+    bucket="test-bucket",
+    run_id="test-run-456",
+    platform="linux",
+    external_repo="external/",
+):
+    return WorkflowOutputRoot(
+        bucket=bucket,
+        external_repo=external_repo,
+        run_id=run_id,
+        platform=platform,
+    )
 
 
 class TestLocalDirectoryBackend(unittest.TestCase):
@@ -24,10 +46,10 @@ class TestLocalDirectoryBackend(unittest.TestCase):
     def setUp(self):
         """Create a temporary directory for testing."""
         self.temp_dir = tempfile.mkdtemp()
+        self.output_root = _make_local_root()
         self.backend = LocalDirectoryBackend(
             staging_dir=Path(self.temp_dir),
-            run_id="test-run-123",
-            platform="linux",
+            output_root=self.output_root,
         )
 
     def tearDown(self):
@@ -38,7 +60,7 @@ class TestLocalDirectoryBackend(unittest.TestCase):
 
     def test_base_uri(self):
         """Test that base_uri returns the correct path."""
-        expected = str(Path(self.temp_dir) / "run-test-run-123-linux")
+        expected = str(Path(self.temp_dir) / "test-run-123-linux")
         self.assertEqual(self.backend.base_uri, expected)
 
     def test_base_path_created(self):
@@ -189,12 +211,8 @@ class TestS3Backend(unittest.TestCase):
 
     def setUp(self):
         """Set up S3Backend with mocked client."""
-        self.backend = S3Backend(
-            bucket="test-bucket",
-            run_id="test-run-456",
-            platform="linux",
-            external_repo="external/",
-        )
+        self.output_root = _make_s3_root()
+        self.backend = S3Backend(output_root=self.output_root)
 
     def test_base_uri(self):
         """Test that base_uri returns the correct S3 URI."""
@@ -219,11 +237,7 @@ class TestS3Backend(unittest.TestCase):
                 "AWS_SESSION_TOKEN": "test-token",
             },
         ):
-            backend = S3Backend(
-                bucket="test-bucket",
-                run_id="test-run",
-                platform="linux",
-            )
+            backend = S3Backend(output_root=_make_s3_root())
             # Access client to trigger initialization
             _ = backend.s3_client
 
@@ -241,11 +255,7 @@ class TestS3Backend(unittest.TestCase):
 
         # Clear any existing credentials
         with mock.patch.dict(os.environ, {}, clear=True):
-            backend = S3Backend(
-                bucket="test-bucket",
-                run_id="test-run",
-                platform="linux",
-            )
+            backend = S3Backend(output_root=_make_s3_root())
             # Access client to trigger initialization
             _ = backend.s3_client
 
@@ -425,27 +435,20 @@ class TestCreateBackendFromEnv(unittest.TestCase):
                 self.assertIn("override-run", backend.base_uri)
                 self.assertIn("override-platform", backend.base_uri)
 
-    @mock.patch("_therock_utils.artifact_backend.S3Backend")
-    def test_s3_backend_when_no_local_dir(self, mock_s3_backend):
+    @mock.patch("_therock_utils.workflow_outputs._retrieve_bucket_info")
+    def test_s3_backend_when_no_local_dir(self, mock_retrieve):
         """Test that S3Backend is created when THEROCK_LOCAL_STAGING_DIR is not set."""
+        mock_retrieve.return_value = ("", "test-bucket")
         with mock.patch.dict(
             os.environ,
-            {
-                "THEROCK_S3_BUCKET": "test-bucket",
-                "THEROCK_RUN_ID": "s3-run-id",
-            },
+            {"THEROCK_RUN_ID": "s3-run-id"},
             clear=True,
         ):
-            # Mock the github_actions_utils import to fail
-            with mock.patch.dict(
-                sys.modules, {"_therock_utils.github_actions_utils": None}
-            ):
-                backend = create_backend_from_env()
+            backend = create_backend_from_env()
 
-                mock_s3_backend.assert_called_once()
-                call_kwargs = mock_s3_backend.call_args[1]
-                self.assertEqual(call_kwargs["bucket"], "test-bucket")
-                self.assertEqual(call_kwargs["run_id"], "s3-run-id")
+            self.assertIsInstance(backend, S3Backend)
+            self.assertEqual(backend.bucket, "test-bucket")
+            self.assertIn("s3-run-id", backend.s3_prefix)
 
 
 if __name__ == "__main__":

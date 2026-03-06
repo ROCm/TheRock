@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """PyTorch ROCm Pytest Runner with additional test exclusion capabilities.
 
 This script runs PyTorch unit tests using pytest with additional test exclusion
@@ -197,11 +200,11 @@ By default the pytorch directory is determined based on this script's location
     )
 
     parser.add_argument(
-        "--no-cache",
-        default=False,
+        "--cache",
+        default=True,
         required=False,
         action=argparse.BooleanOptionalAction,
-        help="""Disable pytest caching. Useful when only having read-only access to pytorch directory""",
+        help="""Enable pytest caching (default). Use --no-cache when only having read-only access to pytorch directory""",
     )
 
     # GPU selection happens in two stages:
@@ -302,7 +305,7 @@ def main() -> int:
             #         Forced to 0 (disabled) when used with --pdb.
         ]
 
-        if args.no_cache:
+        if not args.cache:
             pytest_args += [
                 "-p",
                 "no:cacheprovider",  # Disable caching: useful when running in a container

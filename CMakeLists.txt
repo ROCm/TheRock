@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 if ("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
     message(FATAL_ERROR "In-source builds are not allowed. Please create a separate build directory.")
 endif()
@@ -116,7 +119,10 @@ if(THEROCK_KPACK_SPLIT_ARTIFACTS AND NOT THEROCK_KPACK_DIR)
 endif()
 
 option(THEROCK_BUNDLE_SYSDEPS "Builds bundled system deps for portable builds into lib/rocm_sysdeps" ON)
-option(THEROCK_ENABLE_MPI "Enables building components with Message Passing Interface (MPI) support" OFF)
+# TODO: Set default to true for Linux branch after necessary changes land
+cmake_dependent_option(THEROCK_ENABLE_MPI
+  "Enables building components with Message Passing Interface (MPI) support"
+  OFF "NOT WIN32" OFF)
 option(THEROCK_ENABLE_LLVM_TESTS "Enables building LLVM LIT tests" OFF)
 
 set(THEROCK_SANITIZER "" CACHE STRING "Enable project wide sanitizer build ('ASAN' for host+device, 'HOST_ASAN' for host-only)")
@@ -310,6 +316,20 @@ therock_report_features()
 set(THEROCK_AMDGPU_FAMILIES "" CACHE STRING "AMDGPU target families to build for")
 set(THEROCK_AMDGPU_TARGETS "" CACHE STRING "AMDGPU targets to build for")
 set(THEROCK_AMDGPU_DIST_BUNDLE_NAME "" CACHE STRING "Distribution bundle name for AMDGPU packages")
+
+# Note that if THEROCK_DIST_AMDGPU_FAMILIES and THEROCK_DIST_AMDGPU_TARGETS are empty, then
+# this defaults to the build targets (THEROCK_AMDGPU_FAMILIES). These "dist" targets are used
+# for runtime libraries that embed device code and are marked as target-neutral (which typically
+# means generate for all supported architectures). They are also reported in dist_info.json
+# and consumed by downstream tools such as PyTorch via `rocm-sdk targets`.
+set(THEROCK_DIST_AMDGPU_FAMILIES "" CACHE STRING "AMDGPU target families to use for target-neutral dist projects")
+set(THEROCK_DIST_AMDGPU_TARGETS "" CACHE STRING "AMDGPU targets for target-neutral dist projects (individual gfx targets in addition to those expanded from THEROCK_DIST_AMDGPU_FAMILIES)")
+
+# Test targets control what architectures TARGET_NEUTRAL test artifacts compile device code for.
+# Defaults to all available targets so that a single _generic artifact works on any architecture,
+# making classic CI upload races harmless. Does NOT affect dist_info.json.
+set(THEROCK_TEST_AMDGPU_FAMILIES "" CACHE STRING "AMDGPU target families to build for TARGET_NEUTRAL test artifacts (default: all available)")
+set(THEROCK_TEST_AMDGPU_TARGETS "" CACHE STRING "AMDGPU targets to build for TARGET_NEUTRAL test artifacts (default: all available)")
 
 therock_validate_amdgpu_targets()
 
