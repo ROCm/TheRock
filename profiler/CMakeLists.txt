@@ -27,7 +27,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
   # aqlprofile
   ##############################################################################
   therock_cmake_subproject_declare(aqlprofile
-    USE_DIST_AMDGPU_TARGETS
+    USE_TEST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/aqlprofile"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/aqlprofile"
     BACKGROUND_BUILD
@@ -50,15 +50,19 @@ if(THEROCK_ENABLE_ROCPROFV3)
   )
   therock_cmake_subproject_activate(aqlprofile)
 
-if(THEROCK_BUILD_TESTING)
-  therock_provide_artifact(aqlprofile-tests
+  therock_provide_artifact(aqlprofile
+    TARGET_NEUTRAL
     DESCRIPTOR artifact-aqlprofile.toml
     COMPONENTS
+      dbg
+      dev
+      doc
+      lib
+      run
       test
     SUBPROJECT_DEPS
       aqlprofile
   )
-endif(THEROCK_BUILD_TESTING)
 
   ##############################################################################
   # rocprofiler-sdk
@@ -202,7 +206,6 @@ endif(THEROCK_BUILD_TESTING)
       run
       test
     SUBPROJECT_DEPS
-      aqlprofile
       rocprofiler-sdk
       roctracer
       ${_rocprofiler_sdk_optional_deps}
@@ -264,6 +267,10 @@ endif(THEROCK_BUILD_TESTING)
       "unset(Python3_EXECUTABLE CACHE)\n"
       "unset(_Python3_ROOT_DIR_LAST CACHE)\n"
     )
+    set(_rocprofiler_systems_optional_deps)
+    if(THEROCK_ENABLE_MPI)
+      set(_rocprofiler_systems_optional_deps therock-openmpi)
+    endif()
 
     therock_cmake_subproject_declare(rocprofiler-systems
       USE_DIST_AMDGPU_TARGETS
@@ -282,6 +289,7 @@ endif(THEROCK_BUILD_TESTING)
         -DROCPROFSYS_BUILD_SPDLOG=OFF
         -DROCPROFSYS_USE_PYTHON=ON
         -DROCPROFSYS_PYTHON_ROOT_DIRS:STRING="${_rocprofsys_python_root_dirs_str}"
+        "-DROCPROFSYS_USE_MPI=${THEROCK_ENABLE_MPI}"
       INSTALL_RPATH_DIRS
         "lib"
         "lib/rocprofiler-systems"
@@ -300,6 +308,7 @@ endif(THEROCK_BUILD_TESTING)
         rocprofiler-sdk
         ${THEROCK_BUNDLED_LIBDRM}
         ${THEROCK_BUNDLED_SQLITE3}
+        ${_rocprofiler_systems_optional_deps}
     )
     therock_cmake_subproject_glob_c_sources(rocprofiler-systems
       SUBDIRS .

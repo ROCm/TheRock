@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """
 Unit tests for build_tools/packaging/linux/generate_package_indexes.py
 
