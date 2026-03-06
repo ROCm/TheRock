@@ -265,6 +265,7 @@ def get_rocm_path(path_name: str) -> Path:
         ).strip()
     )
 
+
 def get_rocm_init_contents(args: argparse.Namespace):
     """Gets the contents of the _rocm_init.py file to add to the build."""
     sdk_version = get_rocm_sdk_version()
@@ -281,6 +282,7 @@ def get_rocm_init_contents(args: argparse.Namespace):
                 check_version='{sdk_version}')
         """
     )
+
 
 def remove_dir_if_exists(dir: Path):
     if dir.exists():
