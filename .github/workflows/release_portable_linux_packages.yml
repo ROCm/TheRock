@@ -190,6 +190,7 @@ jobs:
       THEROCK_BUILD_PROF_LOG_DIR: ${{ github.workspace }}/output/build/logs/therock-build-prof
       CCACHE_DIR: ${{ github.workspace }}/output/caches/ccache
       PIP_CACHE_DIR: ${{ github.workspace }}/output/caches/pip
+      CCACHE_CONFIGPATH: ${{ github.workspace }}/.ccache/ccache.conf
 
     steps:
       - name: "Checking out repository"
@@ -205,6 +206,15 @@ jobs:
         run: |
           git config --global --add safe.directory $PWD
           git config fetch.parallel 10
+
+      # Set up ccache for non-dev releases.
+      - name: Setup ccache
+        if: ${{ env.RELEASE_TYPE != 'dev' }}
+        run: |
+          ./build_tools/setup_ccache.py \
+            --config-preset "github-oss-postsubmit" \
+            --dir "$(dirname $CCACHE_CONFIGPATH)" \
+            --local-path "$CACHE_DIR/ccache"
 
       - name: Runner health status
         run: |
@@ -245,6 +255,7 @@ jobs:
           cd ${{ env.OUTPUT_DIR }}/build/dist/rocm
           echo "Building ${{ env.DIST_ARCHIVE }}"
           tar cfz "${{ env.DIST_ARCHIVE }}" .
+          ccache -s
 
       - name: Build Python Packages
         run: |
