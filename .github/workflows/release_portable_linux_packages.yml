@@ -207,7 +207,9 @@ jobs:
           git config --global --add safe.directory $PWD
           git config fetch.parallel 10
 
+      # Set up ccache for non-dev releases.
       - name: Setup ccache
+        if: ${{ env.RELEASE_TYPE != 'dev' }}
         run: |
           ./build_tools/setup_ccache.py \
             --config-preset "github-oss-postsubmit" \
