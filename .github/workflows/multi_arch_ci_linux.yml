@@ -94,3 +94,59 @@ jobs:
       test_type: ${{ inputs.test_type }}
       test_labels: ${{ inputs.test_labels }}
       sanity_check_only_for_family: ${{ matrix.family_info.sanity_check_only_for_family }}
+
+  build_python_packages:
+    needs: [build_multi_arch_stages]
+    name: Build Python Packages
+    # Same conditional pattern as test_artifacts_per_family
+    if: >-
+      ${{
+        !failure() &&
+        !cancelled() &&
+        (
+          inputs.use_prebuilt_artifacts == 'false' ||
+          inputs.use_prebuilt_artifacts == 'true'
+        ) &&
+        inputs.expect_failure == false
+      }}
+    uses: ./.github/workflows/build_portable_linux_python_packages.yml
+    with:
+      artifact_run_id: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
+      artifact_group: ${{ inputs.artifact_group }}
+      amdgpu_families: "${{ replace(inputs.dist_amdgpu_families, ';', ',') }}"
+      multiarch_index: true
+      package_version: ${{ inputs.rocm_package_version }}
+    permissions:
+      contents: read
+      id-token: write
+
+  test_python_packages_per_family:
+    needs: [build_python_packages]
+    name: Test Python ${{ matrix.family_info.amdgpu_family }}
+    # Run if build succeeded and test runner is available
+    if: >-
+      ${{
+        !failure() &&
+        !cancelled() &&
+        (
+          inputs.use_prebuilt_artifacts == 'false' ||
+          inputs.use_prebuilt_artifacts == 'true'
+        ) &&
+        inputs.expect_failure == false &&
+        matrix.family_info.test-runs-on != ''
+      }}
+    strategy:
+      fail-fast: false
+      matrix:
+        family_info: ${{ fromJSON(inputs.matrix_per_family_json) }}
+        # Match exclusions from test_artifacts_per_family
+        exclude:
+          - family_info:
+              amdgpu_family: gfx950-dcgpu
+    uses: ./.github/workflows/test_rocm_wheels.yml
+    with:
+      amdgpu_family: ${{ matrix.family_info.amdgpu_family }}
+      test_runs_on: ${{ matrix.family_info.test-runs-on }}
+      package_find_links_url: "${{ needs.build_python_packages.outputs.package_find_links_url }}/${{ matrix.family_info.amdgpu_family }}/index.html"
+      python_version: "3.12"
+      rocm_version: ${{ inputs.rocm_package_version }}

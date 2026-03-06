@@ -43,6 +43,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from _therock_utils.storage_location import StorageLocation
 from _therock_utils.storage_backend import StorageBackend, create_storage_backend
+from generate_package_index import generate_multiarch_indexes
 from github_actions_utils import (
     gha_append_step_summary,
     gha_set_output,
@@ -73,26 +74,39 @@ def _make_output_root(
     return WorkflowOutputRoot.from_workflow_run(run_id=run_id, platform=PLATFORM)
 
 
-def generate_index(dist_dir: Path, dry_run: bool = False):
-    """Generates an index.html file listing packages for pip --find-links."""
-    indexer_script = THEROCK_DIR / "third-party" / "indexer" / "indexer.py"
-    if not indexer_script.is_file():
-        raise FileNotFoundError(f"Indexer script not found: {indexer_script}")
+def generate_index(dist_dir: Path, multiarch: bool = False, dry_run: bool = False):
+    """Generates an index.html file listing packages for pip --find-links.
 
-    cmd = [
-        sys.executable,
-        str(indexer_script),
-        str(dist_dir),
-        "--filter",
-        "*.whl",
-        "*.tar.gz",
-    ]
-
+    Args:
+        dist_dir: Directory containing packages to index
+        multiarch: If True, generate per-family indexes for multi-arch builds
+        dry_run: If True, print command without executing
+    """
     if dry_run:
-        log(f"[DRY RUN] Would run: {shlex.join(cmd)}")
+        log(f"[DRY RUN] Would generate index in {dist_dir} (multiarch={multiarch})")
         return
 
-    run_command(cmd)
+    if multiarch:
+        # Multi-arch mode: generate per-family indexes with relative paths
+        log("[INFO] Multi-arch mode: generating per-family indexes")
+        generate_multiarch_indexes(dist_dir)
+    else:
+        # Single-arch mode: use existing indexer.py for top-level
+        log("[INFO] Single-arch mode: using indexer.py")
+        indexer_script = THEROCK_DIR / "third-party" / "indexer" / "indexer.py"
+        if not indexer_script.is_file():
+            raise FileNotFoundError(f"Indexer script not found: {indexer_script}")
+
+        cmd = [
+            sys.executable,
+            str(indexer_script),
+            str(dist_dir),
+            "--filter",
+            "*.whl",
+            "*.tar.gz",
+        ]
+
+        run_command(cmd)
 
 
 def find_package_files(dist_dir: Path) -> list[Path]:
@@ -120,9 +134,36 @@ def upload_packages(
     log(f"[INFO] Uploaded {count} files")
 
 
-def write_gha_upload_summary(packages_loc: StorageLocation):
-    index_url = f"{packages_loc.https_url}/index.html"
-    install_instructions_markdown = f"""[ROCm Python packages]({index_url})
+def write_gha_upload_summary(packages_loc: StorageLocation, multiarch: bool = False):
+    """Write GitHub Actions summary with pip install instructions.
+
+    Args:
+        packages_loc: Storage location for packages
+        multiarch: If True, this is a multi-arch build with per-family indexes
+    """
+    if multiarch:
+        # Multi-arch: show base URL with explanation
+        base_url = packages_loc.https_url
+        install_instructions_markdown = f"""[ROCm Python packages]({base_url})
+
+**Multi-arch build:** Per-family indexes available at `{base_url}/{{family}}/index.html`
+
+Example for gfx94X-dcgpu:
+```bash
+pip install rocm[libraries,devel] --pre {LINE_CONTINUATION_CHAR}
+    --find-links={base_url}/gfx94X-dcgpu/index.html
+```
+
+Example for gfx120X-all:
+```bash
+pip install rocm[libraries,devel] --pre {LINE_CONTINUATION_CHAR}
+    --find-links={base_url}/gfx120X-all/index.html
+```
+"""
+    else:
+        # Single-arch: traditional index URL
+        index_url = f"{packages_loc.https_url}/index.html"
+        install_instructions_markdown = f"""[ROCm Python packages]({index_url})
 ```bash
 pip install rocm[libraries,devel] --pre {LINE_CONTINUATION_CHAR}
     --find-links={index_url}
@@ -155,7 +196,8 @@ def run(args: argparse.Namespace):
     log("")
     log("Generating index.html")
     log("---------------------")
-    generate_index(dist_dir, dry_run=args.dry_run)
+    log(f"[INFO] Multi-arch indexing: {args.multiarch}")
+    generate_index(dist_dir, multiarch=args.multiarch, dry_run=args.dry_run)
 
     output_root = _make_output_root(args.run_id, bucket_override=args.bucket)
     packages_loc = output_root.python_packages(args.artifact_group)
@@ -167,7 +209,15 @@ def run(args: argparse.Namespace):
     upload_packages(dist_dir=dist_dir, packages_loc=packages_loc, backend=backend)
 
     if not args.output_dir:
-        index_url = f"{packages_loc.https_url}/index.html"
+        # For multi-arch, return base URL without /index.html
+        # so tests can append /{family}/index.html
+        # For single-arch, return traditional URL with /index.html
+        if args.multiarch:
+            index_url = packages_loc.https_url
+            log(f"[INFO] Multi-arch base URL (tests append /{{family}}/index.html): {index_url}")
+        else:
+            index_url = f"{packages_loc.https_url}/index.html"
+            log(f"[INFO] Single-arch index URL: {index_url}")
 
         log("Set github actions output")
         log("-------------------------")
@@ -175,7 +225,7 @@ def run(args: argparse.Namespace):
 
         log("Write github actions build summary")
         log("----------------------------------")
-        write_gha_upload_summary(packages_loc)
+        write_gha_upload_summary(packages_loc, multiarch=args.multiarch)
 
     log("")
     log("[INFO] Done!")
@@ -214,6 +264,11 @@ def main():
         type=str,
         default=None,
         help="Override S3 bucket (default: auto-select from workflow run)",
+    )
+    parser.add_argument(
+        "--multiarch",
+        action="store_true",
+        help="Multi-arch mode: generate per-family indexes (required for multi-arch builds with family-specific wheels)",
     )
     parser.add_argument(
         "--dry-run",
