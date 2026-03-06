@@ -347,11 +347,14 @@ function(therock_provide_artifact slice_name)
       continue()
     endif()
     set(_component_dir "${_artifacts_dir}/${slice_name}_${_component}${_bundle_suffix}")
-    set(_fprint_file "${_component_dir}.fprint")
+    # Write fingerprint file INSIDE the component directory so it gets archived
+    set(_fprint_file "${_component_dir}/.fprint")
+    # Always write fprint file for validation, even if invalid
     if(_fprint_is_valid)
       file(WRITE "${_fprint_file}" "${_fprint}")
-    elseif(EXISTS "${_fprint_file}")
-      file(REMOVE "${_fprint_file}")
+    else()
+      # Write INVALID marker so prebuilt validation knows fingerprint couldn't be computed
+      file(WRITE "${_fprint_file}" "INVALID")
     endif()
     set(_manifest_file "${_component_dir}/artifact_manifest.txt")
     set(_archive_file "${_component_dir}${THEROCK_ARTIFACT_ARCHIVE_SUFFIX}.tar.xz")

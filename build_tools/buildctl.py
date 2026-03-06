@@ -118,7 +118,8 @@ def do_enable_disable(args: argparse.Namespace, enable_mode: bool):
                 changed = True
         else:
             if not prebuilt_file.exists():
-                prebuilt_file.touch()
+                # Write UNKNOWN instead of creating empty file
+                prebuilt_file.write_text("UNKNOWN")
                 changed = True
         print(f"[{'X' if action_enable else ' '}] {rp} {message}")
 
@@ -253,6 +254,8 @@ class BootstrappingPopulator(ArtifactPopulator):
     def __init__(self, output_path: Path, verbose: bool = False):
         super().__init__(output_path=output_path, verbose=verbose, flatten=False)
         self.created_markers: list[Path] = []
+        self.current_artifact_path: Optional[Path] = None
+        self.current_fingerprint: Optional[str] = None
 
     def on_first_relpath(self, relpath: str):
         if not relpath:
@@ -262,17 +265,65 @@ class BootstrappingPopulator(ArtifactPopulator):
         if full_path.exists():
             print(f"CLEANING: {full_path}")
             shutil.rmtree(full_path)
-        # Write the ".prebuilt" marker file
+        # Write the ".prebuilt" marker file with fingerprint content
         prebuilt_path = full_path.with_name(full_path.name + ".prebuilt")
         prebuilt_path.parent.mkdir(parents=True, exist_ok=True)
-        prebuilt_path.touch()
+
+        # Write fingerprint content if available
+        if self.current_fingerprint:
+            prebuilt_path.write_text(self.current_fingerprint)
+            if self.verbose:
+                print(f"  Writing fingerprint to {prebuilt_path}")
+        else:
+            # No fingerprint available, write UNKNOWN
+            prebuilt_path.write_text("UNKNOWN")
+            if self.verbose:
+                print(f"  Writing UNKNOWN fingerprint to {prebuilt_path}")
+
         self.created_markers.append(prebuilt_path)
+
+    def on_relpath(self, relpath: str):
+        """Override to capture fingerprint from first extracted file."""
+        super().on_relpath(relpath)
+        # After files are extracted, try to load fingerprint if we haven't yet
+        if self.current_fingerprint is None and relpath:
+            # Check if .fprint was extracted in the output directory
+            full_path = self.output_path / relpath
+            fprint_path = full_path / ".fprint"
+            if fprint_path.exists():
+                self.current_fingerprint = fprint_path.read_text().strip()
+                if self.verbose:
+                    print(
+                        f"  Loaded fingerprint from extracted file: {self.current_fingerprint[:16]}..."
+                    )
 
     def on_artifact_dir(self, artifact_dir: Path):
         print(f"FLATTENING {artifact_dir.name}")
+        self.current_artifact_path = artifact_dir
+        self.current_fingerprint = None
+        self._load_fingerprint()
 
     def on_artifact_archive(self, artifact_archive: Path):
         print(f"EXPANDING {artifact_archive.name}")
+        self.current_artifact_path = artifact_archive
+        self.current_fingerprint = None
+        # For archives, fingerprint will be loaded in on_relpath after extraction
+
+    def _load_fingerprint(self):
+        """Load fingerprint from .fprint file inside artifact directory."""
+        if self.current_artifact_path is None:
+            return
+
+        # For exploded directories, look for .fprint file inside
+        if self.current_artifact_path.is_dir():
+            fprint_path = self.current_artifact_path / ".fprint"
+            if fprint_path.exists():
+                self.current_fingerprint = fprint_path.read_text().strip()
+                if self.verbose:
+                    print(f"  Loaded fingerprint: {self.current_fingerprint[:16]}...")
+            else:
+                if self.verbose:
+                    print(f"  No .fprint file found in {self.current_artifact_path}")
 
 
 def do_bootstrap(args: argparse.Namespace):
