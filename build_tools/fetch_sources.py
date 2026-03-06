@@ -140,17 +140,49 @@ def fetch_nested_submodules(args, projects):
 
         # Fetch the nested submodules
         parent_dir = THEROCK_DIR / get_submodule_path(parent)
-        nested_submodule_paths = [
-            get_submodule_path(nested_submodule, cwd=parent_dir)
-            for nested_submodule in nested_submodules
-        ]
-        run_command(
-            ["git", "submodule", "update", "--init"]
-            + update_args
-            + ["--"]
-            + nested_submodule_paths,
-            cwd=parent_dir,
-        )
+
+        # Use amd-llvm as a reference repo for llvm-project nested submodules.
+        # The ROCm fork (compiler/amd-llvm) and any other llvm fork likely share
+        # the vast majority of git history, so --reference saves significant
+        # clone time.
+        amd_llvm_path = THEROCK_DIR / "compiler" / "amd-llvm"
+        llvm_ref_paths = []
+        other_paths = []
+        for nested_submodule in nested_submodules:
+            sub_path = get_submodule_path(nested_submodule, cwd=parent_dir)
+            # In stage aware CI amd-llvm may not be fetched, so we only use
+            # --reference when it exists on disk.
+            if sub_path.endswith("llvm-project") and amd_llvm_path.exists():
+                llvm_ref_paths.append(sub_path)
+            else:
+                other_paths.append(sub_path)
+
+        # Fetch nested llvm-project forks using --reference.
+        if llvm_ref_paths:
+            run_command(
+                [
+                    "git",
+                    "submodule",
+                    "update",
+                    "--init",
+                    "--reference",
+                    str(amd_llvm_path),
+                ]
+                + update_args
+                + ["--"]
+                + llvm_ref_paths,
+                cwd=parent_dir,
+            )
+
+        # Fetch a regular nested submodule
+        if other_paths:
+            run_command(
+                ["git", "submodule", "update", "--init"]
+                + update_args
+                + ["--"]
+                + other_paths,
+                cwd=parent_dir,
+            )
 
 
 def run(args):
