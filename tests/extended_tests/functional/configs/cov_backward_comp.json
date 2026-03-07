@@ -1,0 +1,7 @@
+{
+  "description": "TargetID bit_extract backward compatibility test config",
+  "sample_relative_path": "projects/hip-tests/samples/0_Intro/bit_extract",
+  "include_relative_path": "projects/hip-tests/samples/common",
+  "source_file": "bit_extract.cpp",
+  "binary_prefix": "bit_extract"
+}
