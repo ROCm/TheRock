@@ -59,10 +59,12 @@ from _therock_utils.build_topology import BuildTopology
 from _therock_utils.artifact_backend import (
     ArtifactBackend,
     ARTIFACT_EXTENSIONS,
+    LocalDirectoryBackend,
     S3Backend,
     create_backend_from_env,
 )
 from _therock_utils.artifacts import ArtifactName, ArtifactPopulator
+from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
 # Component types that artifacts are split into
 ARTIFACT_COMPONENTS = ["lib", "run", "dev", "dbg", "doc", "test"]
@@ -760,11 +762,7 @@ def _create_source_backend(
 
     For local backends, creates a LocalDirectoryBackend in the same staging dir.
     """
-    from _therock_utils.workflow_outputs import WorkflowOutputRoot
-
     if local_staging_dir or os.getenv("THEROCK_LOCAL_STAGING_DIR"):
-        from _therock_utils.artifact_backend import LocalDirectoryBackend
-
         staging = local_staging_dir or Path(os.environ["THEROCK_LOCAL_STAGING_DIR"])
         output_root = WorkflowOutputRoot.for_local(
             run_id=source_run_id, platform=platform
