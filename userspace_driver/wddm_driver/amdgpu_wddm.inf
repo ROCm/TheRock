@@ -1,7 +1,7 @@
 ;
-; amdgpu_wddm.inf - WDDM display miniport driver for AMD GPU
+; amdgpu_wddm.inf - ROCm Display Driver for AMD GPU
 ;
-; Full WDDM display driver with POST framebuffer passthrough.
+; WDDM display miniport with POST framebuffer passthrough.
 ; Registers as Display class to replace AMD Adrenalin, provides
 ; escape channel for Python compute driver.
 ;
@@ -59,6 +59,6 @@ ServiceBinary  = %13%\amdgpu_wddm.sys
 [Strings]
 ProviderString      = "ROCm Open Source"
 ManufacturerString  = "Advanced Micro Devices, Inc."
-DiskName            = "AMD GPU WDDM Display Driver Disk"
-ServiceDesc         = "AMD GPU WDDM Display Driver"
-DeviceDesc_7551     = "AMD Radeon RX 9070 XT (WDDM Display)"
+DiskName            = "ROCm Display Driver Disk"
+ServiceDesc         = "ROCm Display Driver"
+DeviceDesc_7551     = "AMD Radeon RX 9070 XT (ROCm Display)"

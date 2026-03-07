@@ -1,5 +1,5 @@
 /*
- * ddi_tdr.c - TDR handlers for WDDM display miniport
+ * ddi_tdr.c - TDR handlers for ROCm Display Driver
  * Identical to MCDM.
  */
 

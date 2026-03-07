@@ -1,5 +1,5 @@
 /*
- * driver_entry.c - DriverEntry for AMD GPU WDDM display miniport driver
+ * driver_entry.c - DriverEntry for ROCm Display Driver
  *
  * Entry point: DriverEntry -> DxgkInitialize
  * Populates DRIVER_INITIALIZATION_DATA with all required DDI callbacks.

@@ -1,5 +1,5 @@
 /*
- * ddi_interrupt.c - Interrupt DDIs for WDDM display miniport
+ * ddi_interrupt.c - Interrupt DDIs for ROCm Display Driver
  *
  * Identical to MCDM: ISR reads IH ring, DPC signals registered events.
  */

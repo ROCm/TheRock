@@ -1,5 +1,5 @@
 /*
- * ddi_memory.c - Memory management DDIs for WDDM display miniport
+ * ddi_memory.c - Memory management DDIs for ROCm Display Driver
  *
  * Extended from MCDM: GetStandardAllocationDriverData handles standard
  * surface types (SharedPrimary, Shadow, Staging) needed by DWM/WARP.

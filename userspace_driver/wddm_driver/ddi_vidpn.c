@@ -1,5 +1,5 @@
 /*
- * ddi_vidpn.c - VidPn DDIs for WDDM display miniport
+ * ddi_vidpn.c - VidPn DDIs for ROCm Display Driver
  *
  * All VidPn operations support exactly one mode: the POST framebuffer
  * dimensions and format. Single path: source 0 -> target 0.

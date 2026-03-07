@@ -1,5 +1,5 @@
 /*
- * ddi_scheduling.c - Scheduling DDIs for WDDM display miniport
+ * ddi_scheduling.c - Scheduling DDIs for ROCm Display Driver
  *
  * Extended from MCDM: SubmitCommand now executes CPU blits for
  * software Present, and Patch resolves physical addresses.

@@ -1,5 +1,5 @@
 /*
- * ddi_device.c - Device lifecycle DDIs for WDDM display miniport
+ * ddi_device.c - Device lifecycle DDIs for ROCm Display Driver
  *
  * Key difference from MCDM: StartDevice acquires POST display ownership
  * and reports 1 video present source + 1 child device.

@@ -1,5 +1,5 @@
 /*
- * ddi_present.c - Software Present DDI for WDDM display miniport
+ * ddi_present.c - Software Present DDI for ROCm Display Driver
  *
  * DWM uses WARP (software D3D) as UMD, renders to shadow surfaces,
  * then calls Present. We encode a DMA command describing the blit,

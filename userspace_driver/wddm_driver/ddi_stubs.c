@@ -1,5 +1,5 @@
 /*
- * ddi_stubs.c - Remaining DDI stubs for WDDM display miniport
+ * ddi_stubs.c - Remaining DDI stubs for ROCm Display Driver
  *
  * Reduced from MCDM: child DDIs moved to ddi_display.c,
  * VidPn DDIs moved to ddi_vidpn.c, Present moved to ddi_present.c.

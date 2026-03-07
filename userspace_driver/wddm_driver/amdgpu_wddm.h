@@ -1,7 +1,7 @@
 /*
- * amdgpu_wddm.h - Shared header for AMD GPU WDDM display miniport driver
+ * amdgpu_wddm.h - Shared header for ROCm Display Driver
  *
- * Full WDDM display driver with POST framebuffer passthrough.
+ * WDDM display miniport with POST framebuffer passthrough.
  * Registers as Display class, acquires POST framebuffer from UEFI/GOP,
  * implements software Present for DWM desktop rendering, and provides
  * DxgkDdiEscape channel for Python compute driver.

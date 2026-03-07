@@ -1,5 +1,5 @@
 /*
- * ddi_query.c - QueryAdapterInfo and engine query DDIs for WDDM display
+ * ddi_query.c - QueryAdapterInfo and engine query DDIs for ROCm Display Driver
  *
  * Key difference from MCDM: no ComputeOnly bit, display capabilities.
  */

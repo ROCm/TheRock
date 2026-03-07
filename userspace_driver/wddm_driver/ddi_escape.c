@@ -1,5 +1,5 @@
 /*
- * ddi_escape.c - DxgkDdiEscape handler for WDDM display miniport
+ * ddi_escape.c - DxgkDdiEscape handler for ROCm Display Driver
  *
  * Identical to MCDM escape handler -- routes commands between Python
  * userspace driver and GPU hardware.

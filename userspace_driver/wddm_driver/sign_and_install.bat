@@ -35,7 +35,7 @@ if not exist "%DRIVER_SYS%" (
 )
 
 echo ============================================================
-echo AMD GPU WDDM Display Driver - Sign and Install
+echo AMD GPU ROCm Display Driver - Sign and Install
 echo ============================================================
 echo.
 
@@ -72,7 +72,7 @@ echo [3/5] Signing driver...
 
 REM --- Step 4: Install ---
 echo.
-echo [4/5] Installing WDDM display driver...
+echo [4/5] Installing ROCm Display Driver...
 echo This will replace the current display driver for AMD RX 9070 XT.
 echo.
 
@@ -87,7 +87,7 @@ if %errorlevel% neq 0 (
 REM --- Step 5: Verify ---
 echo.
 echo [5/5] Verifying...
-echo Check Device Manager for "AMD Radeon RX 9070 XT (WDDM Display)"
+echo Check Device Manager for "AMD Radeon RX 9070 XT (ROCm Display)"
 echo under "Display adapters".
 echo.
 echo Registry check:
