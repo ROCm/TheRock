@@ -54,11 +54,27 @@ def execute_tests(env):
             "-A",
             "oclruntime.exclude",
         ]
+        cmd_ldd = [
+            "ldd",
+            "./ocltst",
+        ]
+        cmd_strace = [
+            "strace",
+            "./ocltst",
+            "-m",
+            "liboclruntime.so",
+        ]
+
         # logging.info(f"++ contents of OCLTST_PATH={os.listdir(OCLTST_PATH)}")
         env["LD_LIBRARY_PATH"] = f"{OCLTST_PATH}:{env['LD_LIBRARY_PATH']}"
         logging.info(f"++ Setting LD_LIBRARY_PATH={env['LD_LIBRARY_PATH']}")
         logging.info(f"++ Setting OCL_ICD_VENDORS={env['OCL_ICD_VENDORS']}")
         shell_var = False
+        # debug to see what librarys are loaded and missed during execution
+        logging.info(f"++++++++++++ DEBUGGING LIBS LOADING : ocltst_debug start+++++++++++++++++")
+        subprocess.run(cmd_ldd, cwd=OCLTST_PATH, check=True, env=env, shell=shell_var)
+        subprocess.run(cmd_strace, cwd=OCLTST_PATH, check=True, env=env, shell=shell_var)
+        logging.info(f"++++++++++++ DEBUGGING LIBS LOADING : ocltst_debug end+++++++++++++++++")
     elif platform.system() == "Windows":
         OCLTST_PATH = str(Path(THEROCK_BIN_DIR).parent / "tests" / "ocltst")
         cmd = [
