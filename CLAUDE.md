@@ -179,6 +179,14 @@ cmake/          # CMake infrastructure
 docs/           # Documentation
 ```
 
+## HIP Remote Development
+
+HIP Remote lets a Windows/macOS client run GPU workloads on a remote Linux
+machine over TCP. Source lives in `rocm-systems/projects/hip-remote-*`.
+
+See [docs/hip-remote/README.md](docs/hip-remote/README.md) for build steps,
+usage, environment variables, and troubleshooting.
+
 ## Key Documentation
 
 Reference the below for specialty tasks and deeper analysis, asking questions with subagents in order to avoid polluting context:

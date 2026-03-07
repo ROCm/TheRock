@@ -1,20 +1,20 @@
 # HIP Remote Execution
 
 HIP Remote enables running GPU workloads on a remote Linux machine with AMD
-GPUs from a Windows (or other) client. A lightweight proxy DLL intercepts HIP
+GPUs from a Windows (or macOS) client. A lightweight proxy DLL intercepts HIP
 API calls on the client and forwards them over TCP to a worker process on the
 GPU server.
 
 ## Architecture
 
 ```
-Windows Client                         Linux GPU Server
-+------------------+                   +-------------------+
-|  PyTorch / App   |                   |   hip-worker      |
-|        |         |     TCP/IP        |        |          |
-| amdhip64_7.dll   | ===============> |  libamdhip64.so   |
-| (proxy DLL)      |   port 18515     |  (real HIP)       |
-+------------------+                   +-------------------+
+Windows/macOS Client                  Linux GPU Server
++------------------+                  +-------------------+
+|  PyTorch / App   |                  |   hip-worker      |
+|        |         |     TCP/IP       |        |          |
+| amdhip64_7.dll   | ===============>|  libamdhip64.so   |
+| (proxy DLL)      |   port 18515    |  (real HIP)       |
++------------------+                  +-------------------+
 ```
 
 The proxy DLL (`amdhip64_7.dll`) exports the same symbols as the real HIP
@@ -24,11 +24,11 @@ optimisations keep the overhead low for asynchronous operations.
 
 ## Prerequisites
 
-| Component | Requirement |
-|-----------|------------|
-| **Client** | Windows with Python 3.10-3.13, VS 2022 Build Tools |
-| **Server** | Linux with ROCm 7.2+, AMD GPU (MI300X, MI250, etc.) |
-| **Network** | TCP connectivity on port 18515 between client and server |
+| Component  | Requirement                                            |
+| ---------- | ------------------------------------------------------ |
+| **Client** | Windows with Python 3.10-3.13, VS 2022 Build Tools    |
+| **Server** | Linux with ROCm 7.2+, AMD GPU (MI300X, MI250, etc.)   |
+| **Network**| TCP connectivity on port 18515 between client & server |
 
 ## Building
 
@@ -36,23 +36,52 @@ optimisations keep the overhead low for asynchronous operations.
 
 ```bash
 cd rocm-systems/projects/hip-remote-worker
-cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build
+mkdir -p build && cd build
+cmake -GNinja ..
+ninja
 ```
 
 The worker binary is `build/hip-worker`.
 
 ### Client proxy DLL (Windows)
 
-Open a **VS x64 Developer Command Prompt** (or run `vcvars64.bat`), then:
+**Important:** All commands must run from a **VS x64 Developer Command Prompt**
+(or after sourcing `vcvars64.bat`) so MSVC is on the PATH.
 
 ```cmd
 cd rocm-systems\projects\hip-remote-client
-cmake -B build
-cmake --build build --target amdhip64
+
+:: Configure with Ninja, proxy mode, and ROCm SDK headers
+:: ROCM_PATH enables the real hipDeviceProp_t struct from the SDK.
+:: Get it via: rocm-sdk path --root
+cmake -B build -G Ninja -DHIP_REMOTE_PROXY_MODE=ON ^
+    -DROCM_PATH=path\to\venv\Lib\site-packages\_rocm_sdk_devel .
+
+:: Build the proxy DLL
+ninja -C build amdhip64
+
+:: Build the hipRTC proxy DLL (separate step)
+cd build
+cl /LD /Fe:hiprtc0702.dll /I..\include ..\src\hiprtc_proxy.c
 ```
 
-The proxy DLL is `build\amdhip64_7.dll`.
+If `ROCM_PATH` is omitted, the build uses a fallback struct that covers the
+most common fields. Setting it is recommended for full Triton compatibility.
+
+After this you will have two DLLs in the `build/` directory:
+
+- `amdhip64_7.dll` -- the HIP proxy
+- `hiprtc0702.dll` -- the hipRTC proxy
+
+### Client library (macOS)
+
+```bash
+cd rocm-systems/projects/hip-remote-client
+cmake -B build
+cmake --build build
+```
+
+The shared library is `build/libamdhip64.1.0.0.dylib`.
 
 ### TheRock SDK + PyTorch (Windows)
 
@@ -107,24 +136,23 @@ The built wheels are installed into the active venv automatically.
 ### 1. Start the worker on the GPU server
 
 ```bash
-# Use a specific GPU (optional)
+cd rocm-systems/projects/hip-remote-worker/build
+
+# Optional: restrict to a specific GPU
 export HIP_VISIBLE_DEVICES=1
 
-# Enable debug logging
-export TF_DEBUG=1
+# Start with debug logging
+TF_DEBUG=1 nohup ./hip-worker > /tmp/hip-worker.log 2>&1 &
 
-# Start the worker
-./build/hip-worker > /tmp/hip-worker.log 2>&1 &
-
-# Verify it's listening
-ss -tlnp | grep 18515
+# Verify
+tail -3 /tmp/hip-worker.log
+# Should show: [HIP-Worker] Listening on port 18515
 ```
 
-The worker listens on port 18515 by default.
+The worker supports multiple concurrent clients via fork-per-client. Each
+connection gets its own process with an independent HIP context.
 
 ### 2. Run PyTorch with hip-remote
-
-### 3. Run PyTorch with hip-remote
 
 Set the environment variables and run your script:
 
@@ -137,15 +165,16 @@ $env:MIOPEN_SYSTEM_DB_PATH = (rocm-sdk path --bin)
 python your_script.py
 ```
 
-| Variable | Description |
-|----------|------------|
-| `TF_WORKER_HOST` | IP address or hostname of the GPU server |
-| `TF_WORKER_PORT` | Worker port (default: 18515) |
-| `TF_DEBUG` | Set to `1` for debug logging |
-| `HIP_REMOTE_LIB_DIR` | Directory containing `amdhip64_7.dll` proxy |
-| `MIOPEN_SYSTEM_DB_PATH` | Path to MIOpen TunaNet models (`.tn.model` files). Set to `_rocm_sdk_devel/bin` from the venv. |
+| Variable               | Description                                     |
+| ---------------------- | ----------------------------------------------- |
+| `TF_WORKER_HOST`       | IP address or hostname of the GPU server        |
+| `TF_WORKER_PORT`       | Worker port (default: 18515)                    |
+| `TF_DEBUG`             | Set to `1` for debug logging                    |
+| `TRITON_LIBHIP_PATH`   | For Triton: set to the same `amdhip64_7.dll` path as `HIP_REMOTE_LIB_DIR` |
+| `HIP_REMOTE_LIB_DIR`  | Directory containing `amdhip64_7.dll` proxy     |
+| `MIOPEN_SYSTEM_DB_PATH`| Path to MIOpen TunaNet models. Use `rocm-sdk path --bin`. |
 
-### 4. Verify
+### 3. Verify
 
 ```python
 import torch
@@ -167,14 +196,6 @@ The proxy uses several optimisations to minimise network overhead:
 - **Client-side caching**: Device properties, driver version, occupancy
   queries, and event handles are cached locally.
 
-Benchmark results (Windows client to remote MI300X):
-
-| Metric | Per-operation time |
-|--------|-------------------|
-| SDPA (Flash Attention) | 0.53 ms |
-| Conv2d | 1.86 ms |
-| GEMM | 0.75 ms |
-
 ## Troubleshooting
 
 **Connection refused**: Ensure the worker is running and the firewall allows
@@ -193,6 +214,11 @@ stderr is captured (`> /tmp/hip-worker.log 2>&1`).
 **`hipErrorNotInitialized`**: The client failed to connect to the worker.
 Check `TF_WORKER_HOST` and network connectivity.
 
+**`WinError 127 - procedure not found`**: The proxy DLL is missing a symbol
+that an SDK library needs. Ensure `hip_api_stubs_gen.c` is compiled into the
+DLL. This file provides stub implementations for ~490 HIP APIs that the proxy
+does not implement but that SDK libraries (rocblas, hipblas, etc.) import.
+
 ## Protocol
 
 The client and worker communicate using a binary protocol over TCP. Each
@@ -209,3 +235,5 @@ message has a fixed-size header followed by a variable-length payload:
 
 Fire-and-forget requests set `HIP_REMOTE_FLAG_NO_REPLY` in the flags field.
 The worker processes the request but does not send a response.
+
+See [PROTOCOL.md](PROTOCOL.md) for the full protocol specification.
