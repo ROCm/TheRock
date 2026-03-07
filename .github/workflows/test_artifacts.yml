@@ -25,6 +25,9 @@ on:
         type: string
       test_labels:
         type: string
+      run_functional_tests:
+        type: boolean
+        default: false
   workflow_call:
     inputs:
       artifact_group:
@@ -46,6 +49,9 @@ on:
         type: string
       test_labels:
         type: string
+      run_functional_tests:
+        type: boolean
+        default: false
   push:
     branches:
       - ADHOCBUILD
@@ -93,6 +99,7 @@ jobs:
           AMDGPU_FAMILIES: ${{ inputs.amdgpu_families }}
           TEST_TYPE: ${{ inputs.test_type }}
           TEST_LABELS: ${{ inputs.test_labels }}
+          RUN_FUNCTIONAL_TESTS: ${{ inputs.run_functional_tests }}
         run: python ./build_tools/github_actions/fetch_test_configurations.py
 
   test_sanity_check:
