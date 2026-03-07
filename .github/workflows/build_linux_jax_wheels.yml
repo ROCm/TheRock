@@ -62,9 +62,7 @@ on:
           - gfx1152
           - gfx1153
           - gfx120X-all
-          - gfx906
-          - gfx908
-          - gfx90a
+          - gfx90X-dcgpu
           - gfx94X-dcgpu
           - gfx950-dcgpu
         default: gfx94X-dcgpu
