@@ -252,6 +252,23 @@ python run_pytorch_tests.py -k "test_nn and not test_dropout"
 
 # Explicit pytorch repo path (for test sources) and GPU family (for filtering)
 python run_pytorch_tests.py --pytorch-dir=/tmp/pytorch --amdgpu-family=gfx950
+
+# GPU selection happens in two stages:
+#   1. --device-query  decides which GPUs enter the candidate set.
+#   2. --gpu-policy    decides how many candidates are made visible to tests.
+#
+# All GPUs visible at once (for multi-GPU tests):
+python run_pytorch_tests.py --device-query all --gpu-policy all
+
+# All GPUs discovered, but only one visible at a time:
+python run_pytorch_tests.py --device-query all --gpu-policy single
+
+# One GPU per architecture discovered, all of them visible:
+python run_pytorch_tests.py --device-query unique --gpu-policy all
+
+# Multi-GPU run on a single architecture (e.g., use both gfx1201 GPUs on a
+# machine where visible devices are {'gfx1100': [0], 'gfx1201': [1, 2]}):
+python run_pytorch_tests.py --amdgpu-family=gfx1201 --device-query all --gpu-policy all
 ```
 
 Tests can also be run by following the ROCm documentation at
