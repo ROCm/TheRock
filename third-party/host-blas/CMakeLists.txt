@@ -61,6 +61,10 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       INSTALL_RPATH_EXECUTABLE_DIR "lib/host-math/bin"
       INSTALL_RPATH_LIBRARY_DIR "lib/host-math/lib"
       INTERFACE_INSTALL_RPATH_DIRS "lib/host-math/lib"
+      # libomp.so (from amdclang) lives in lib/llvm/lib. TheRock's RPATH
+      # infrastructure will compute the correct $ORIGIN-relative path from
+      # lib/host-math/lib (i.e. $ORIGIN/../../llvm/lib).
+      INSTALL_RPATH_DIRS "lib/llvm/lib"
       CMAKE_ARGS
         "-DSOURCE_DIR=${_source_dir}"
         -DBUILD_SHARED_LIBS=ON
@@ -70,6 +74,17 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         -DTARGET=HASWELL
         -DDYNAMIC_ARCH=${_enable_dynamicArch}
         -DBUILD_TESTING=OFF
+        -DUSE_OPENMP=ON
+        -DNOFORTRAN=1
+      COMPILER_TOOLCHAIN
+        amd-llvm
+      # librocm-openblas.so is built with amdclang and USE_OPENMP=ON, so it
+      # has a runtime dependency on libomp.so from therock-amd-llvm. Declaring
+      # that here propagates therock-amd-llvm's INTERFACE_LINK_DIRS (lib/llvm/lib)
+      # transitively to all consumers, providing the correct -rpath-link at
+      # their link time so the linker can resolve libomp.so transitively.
+      RUNTIME_DEPS
+        amd-llvm
       EXTRA_DEPENDS
         "${_download_stamp}"
     )
