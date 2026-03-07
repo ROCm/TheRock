@@ -50,6 +50,12 @@ ComponentDefaults(
 # Run components layer on top of 'lib' components and also include executables
 # and tools that are not needed by library consumers. Descriptors should
 # explicitly include "bin" directory contents as needed.
+# WARNING: 'run' has no default includes, so a bare entry like
+#   [components.run."some/stage"]
+# acts as a catch-all that claims ALL files not matched by 'lib'. This prevents
+# later components (dbg, dev, doc, test) from claiming files in that stage dir.
+# Always use explicit includes on run, or omit it for stage dirs where dev/test
+# content is expected.
 ComponentDefaults("run", extends=["lib"])
 
 
@@ -82,6 +88,12 @@ ComponentDefaults(
     extends=["dbg"],
 )
 ComponentDefaults("doc", includes=["**/share/doc/**"], extends=["dev"])
+
+# Test components extend the full chain (lib → run → dbg → dev → doc → test)
+# so they automatically skip files claimed by earlier components. Descriptors
+# that want specific files in test (instead of run) must exclude those files
+# from run — see docs/development/artifacts.md for details.
+ComponentDefaults("test", extends=["doc"])
 
 
 class ArtifactDescriptor:
