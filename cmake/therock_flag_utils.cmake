@@ -70,13 +70,12 @@ function(therock_declare_flag)
     )
   endif()
 
-  # Create cache variable.
-  set(THEROCK_FLAG_${ARG_NAME} "${ARG_DEFAULT_VALUE}" CACHE BOOL "${ARG_DESCRIPTION}")
-
-  # Register the flag.
+  # Register the flag (metadata only — no cache/global manipulation here).
+  # All cache variables and global state are created in therock_finalize_flags().
   set_property(GLOBAL APPEND PROPERTY THEROCK_ALL_FLAGS "${ARG_NAME}")
 
   # Store flag metadata in global properties for later retrieval.
+  set_property(GLOBAL PROPERTY _THEROCK_FLAG_${ARG_NAME}_DEFAULT_VALUE "${ARG_DEFAULT_VALUE}")
   set_property(GLOBAL PROPERTY _THEROCK_FLAG_${ARG_NAME}_DESCRIPTION "${ARG_DESCRIPTION}")
   set_property(GLOBAL PROPERTY _THEROCK_FLAG_${ARG_NAME}_GLOBAL_CMAKE_VARS "${ARG_GLOBAL_CMAKE_VARS}")
   set_property(GLOBAL PROPERTY _THEROCK_FLAG_${ARG_NAME}_GLOBAL_CPP_DEFINES "${ARG_GLOBAL_CPP_DEFINES}")
@@ -86,15 +85,13 @@ function(therock_declare_flag)
   if(ARG_ISSUE)
     set_property(GLOBAL PROPERTY _THEROCK_FLAG_${ARG_NAME}_ISSUE "${ARG_ISSUE}")
   endif()
-
-  # Propagate to parent scope so it's available at the calling CMakeLists.txt level.
-  set(THEROCK_FLAG_${ARG_NAME} "${THEROCK_FLAG_${ARG_NAME}}" PARENT_SCOPE)
 endfunction()
 
 # therock_override_flag_default
-# Changes the default value of a previously declared flag. Intended for use in
-# BRANCH_FLAGS.cmake on integration branches. If the user has explicitly set the
-# cache variable via -D, their value takes precedence.
+# Changes the default value of a previously declared flag. Only updates the
+# stored default property — actual cache variable creation happens in
+# therock_finalize_flags(). Intended for use in BRANCH_FLAGS.cmake on
+# integration branches.
 function(therock_override_flag_default flag_name new_default)
   get_property(_all_flags GLOBAL PROPERTY THEROCK_ALL_FLAGS)
   if(NOT "${flag_name}" IN_LIST _all_flags)
@@ -103,15 +100,8 @@ function(therock_override_flag_default flag_name new_default)
     )
   endif()
 
-  # Only override if the variable was not explicitly set by the user on the
-  # command line. CMake sets the CACHE property type for -D variables, but
-  # there's no direct way to check "was this set by the user". We use the
-  # CMAKE_CACHE_ARGS approach: if current value equals the original default,
-  # it was likely not overridden by the user. However, the most reliable
-  # approach is to just force-set it and let -D on reconfigure win.
   message(STATUS "Flag ${flag_name} default overridden to ${new_default}")
-  set(THEROCK_FLAG_${flag_name} "${new_default}" CACHE BOOL "" FORCE)
-  set(THEROCK_FLAG_${flag_name} "${new_default}" PARENT_SCOPE)
+  set_property(GLOBAL PROPERTY _THEROCK_FLAG_${flag_name}_DEFAULT_VALUE "${new_default}")
 endfunction()
 
 # therock_finalize_flags
@@ -122,7 +112,18 @@ endfunction()
 function(therock_finalize_flags)
   get_property(_all_flags GLOBAL PROPERTY THEROCK_ALL_FLAGS)
 
-  # Build JSON content for flag_settings.json.
+  # Phase 1: Create cache variables from stored defaults.
+  # This is the single place where THEROCK_FLAG_* cache vars are created,
+  # ensuring no set-ordering issues between declare and override.
+  foreach(_flag_name ${_all_flags})
+    get_property(_default GLOBAL PROPERTY _THEROCK_FLAG_${_flag_name}_DEFAULT_VALUE)
+    get_property(_description GLOBAL PROPERTY _THEROCK_FLAG_${_flag_name}_DESCRIPTION)
+    set(THEROCK_FLAG_${_flag_name} "${_default}" CACHE BOOL "${_description}")
+    # Propagate the (possibly user-overridden) cache value to the caller's scope.
+    set(THEROCK_FLAG_${_flag_name} "${THEROCK_FLAG_${_flag_name}}" PARENT_SCOPE)
+  endforeach()
+
+  # Phase 2: Process enabled flags and build JSON.
   set(_json_entries)
 
   foreach(_flag_name ${_all_flags})
