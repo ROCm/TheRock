@@ -48,6 +48,17 @@ test_matrix = {
             "windows": 4,
         },
     },
+    # ocltest
+    "ocltst": {
+        "job_name": "ocltst",
+        "fetch_artifact_args": "--tests",
+        "timeout_minutes": 120,
+        "test_script": f"python {_get_script_path('test_ocltst.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards": 4,
+        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_ocl_rt@sha256:04caf91ed80223b143b71eac67876845310ba38d832d5ecd7d284189f9bf73fd",
+        "container_options": "--cap-add=SYS_PTRACE",
+    },
     # BLAS tests
     "rocblas": {
         "job_name": "rocblas",

@@ -330,6 +330,7 @@ therock_cmake_subproject_activate(ocl-icd)
 if(THEROCK_ENABLE_OCL_RUNTIME)
   set(OCL_CLR_CMAKE_ARGS)
   set(OCL_CLR_RUNTIME_DEPS)
+
   if(WIN32)
     # Windows CLR options
     set(_compute_pal_dir "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/amdgpu-windows-interop")
@@ -350,10 +351,11 @@ if(THEROCK_ENABLE_OCL_RUNTIME)
       rocprofiler-register
       ROCR-Runtime
     )
-    list(APPEND OCL_CLR_CMAKE_ARGS
-      "-DBUILD_TESTS=${THEROCK_BUILD_TESTING}"
-    )
   endif()
+  # ocltst build flag
+  list(APPEND OCL_CLR_CMAKE_ARGS
+  "-DBUILD_TESTS=${THEROCK_BUILD_TESTING}"
+  )
 
   therock_cmake_subproject_declare(ocl-clr
     USE_DIST_AMDGPU_TARGETS
