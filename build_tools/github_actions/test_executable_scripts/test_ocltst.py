@@ -42,6 +42,7 @@ def setup_env(env):
         )
         env["OCL_ICD_VENDORS"] = f"{OCL_ICD_VENDORS}/"
 
+
 def execute_tests(env):
     if platform.system() == "Linux":
         OCLTST_PATH = str(Path(THEROCK_BIN_DIR).parent / "share" / "opencl" / "ocltst")
@@ -52,7 +53,7 @@ def execute_tests(env):
             "liboclruntime.so",
             "-A",
             "oclruntime.exclude",
-         ]
+        ]
         # logging.info(f"++ contents of OCLTST_PATH={os.listdir(OCLTST_PATH)}")
         env["LD_LIBRARY_PATH"] = f"{OCLTST_PATH}:{env['LD_LIBRARY_PATH']}"
         logging.info(f"++ Setting LD_LIBRARY_PATH={env['LD_LIBRARY_PATH']}")
@@ -67,7 +68,7 @@ def execute_tests(env):
             "oclruntime.dll",
             "-A",
             "oclruntime.exclude",
-         ]
+        ]
         shell_var = True
     else:
         logging.info(f"++ Error: unsupported system: {platform.system()}")
@@ -75,6 +76,7 @@ def execute_tests(env):
 
     logging.info(f"++ Exec [{OCLTST_PATH}]$ {shlex.join(cmd)}")
     subprocess.run(cmd, cwd=OCLTST_PATH, check=True, env=env, shell=shell_var)
+
 
 if __name__ == "__main__":
     setup_env(env)
