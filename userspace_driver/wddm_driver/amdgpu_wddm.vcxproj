@@ -16,62 +16,78 @@
     <ProjectGuid>{2B3C4D5E-6F7A-8B9C-0D1E-2F3A4B5C6D7E}</ProjectGuid>
     <RootNamespace>amdgpu_wddm</RootNamespace>
     <ProjectName>amdgpu_wddm</ProjectName>
-    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
+    <!-- Use standard v143 toolset — we import WDK props manually below -->
+    <PlatformToolset>v143</PlatformToolset>
     <Platform>x64</Platform>
-    <DriverType>WDM</DriverType>
-  </PropertyGroup>
-
-  <PropertyGroup>
-    <InfVerif_NoError>true</InfVerif_NoError>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
 
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
 
   <PropertyGroup Condition="'$(Configuration)'=='Debug'" Label="Configuration">
-    <ConfigurationType>Driver</ConfigurationType>
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <CharacterSet>Unicode</CharacterSet>
-    <TargetVersion>Windows10</TargetVersion>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)'=='Release'" Label="Configuration">
-    <ConfigurationType>Driver</ConfigurationType>
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <CharacterSet>Unicode</CharacterSet>
-    <TargetVersion>Windows10</TargetVersion>
   </PropertyGroup>
 
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
 
+  <!-- WDK paths -->
   <PropertyGroup>
+    <WDKRoot>$([MSBuild]::GetRegistryValueFromView('HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows Kits\Installed Roots', 'KitsRoot10', '', RegistryView.Registry32))</WDKRoot>
+    <WDKRoot Condition="'$(WDKRoot)' == ''">C:\Program Files (x86)\Windows Kits\10\</WDKRoot>
+    <WDKVersion>10.0.26100.0</WDKVersion>
+    <KM_IncPath>$(WDKRoot)Include\$(WDKVersion)\km</KM_IncPath>
+    <KM_LibPath>$(WDKRoot)Lib\$(WDKVersion)\km\x64</KM_LibPath>
+    <DDK_IncPath>$(WDKRoot)Include\$(WDKVersion)\shared</DDK_IncPath>
+    <TargetExt>.sys</TargetExt>
+    <TargetName>amdgpu_wddm</TargetName>
     <EnableInf2Cat>false</EnableInf2Cat>
-    <DriverTargetPlatform>Universal</DriverTargetPlatform>
     <SignMode>Off</SignMode>
-    <RunInfVerif>false</RunInfVerif>
-    <InfVerifEnabled>false</InfVerifEnabled>
+    <GenerateManifest>false</GenerateManifest>
+    <EmbedManifest>false</EmbedManifest>
   </PropertyGroup>
 
   <ItemDefinitionGroup>
     <ClCompile>
-      <PreprocessorDefinitions>%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(KM_IncPath);$(DDK_IncPath);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_AMD64_;AMD64;_WIN64;_KERNEL_MODE;NTSTRSAFE_LIB;NTDDI_VERSION=0x0A00000C;_WIN32_WINNT=0x0A00;WINVER=0x0A00;WINNT=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <WarningLevel>Level4</WarningLevel>
       <TreatWarningAsError>false</TreatWarningAsError>
+      <CallingConvention>StdCall</CallingConvention>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <BufferSecurityCheck>true</BufferSecurityCheck>
+      <ControlFlowGuard>Guard</ControlFlowGuard>
+      <ExceptionHandling>false</ExceptionHandling>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <CompileAs>CompileAsC</CompileAs>
     </ClCompile>
-    <InfVerif>
-      <TreatWarningAsError>false</TreatWarningAsError>
-    </InfVerif>
     <Link>
-      <AdditionalDependencies>$(DDK_LIB_PATH)displib.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <SubSystem>Native</SubSystem>
+      <Driver>Driver</Driver>
+      <EntryPointSymbol>GsDriverEntry</EntryPointSymbol>
+      <AdditionalLibraryDirectories>$(KM_LibPath);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>ntoskrnl.lib;hal.lib;wmilib.lib;BufferOverflowFastFailK.lib;displib.lib;ntstrsafe.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <!-- Kernel drivers must not link CRT -->
+      <IgnoreAllDefaultLibraries>true</IgnoreAllDefaultLibraries>
+      <!-- /MANIFEST is incompatible with /DRIVER -->
+      <EnableUAC>false</EnableUAC>
+      <AdditionalOptions>/MANIFEST:NO %(AdditionalOptions)</AdditionalOptions>
     </Link>
-    <StampInf>
-      <DriverVersionNumber>0.8.0.0</DriverVersionNumber>
-    </StampInf>
   </ItemDefinitionGroup>
 
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Debug'">
     <ClCompile>
       <PreprocessorDefinitions>DBG=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <Optimization>Disabled</Optimization>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
     </ClCompile>
   </ItemDefinitionGroup>
 
@@ -100,13 +116,6 @@
     <ClInclude Include="amdgpu_wddm.h" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Inf Include="amdgpu_wddm.inf" />
-  </ItemGroup>
-
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
-
-  <!-- Override InfVerif target to skip broken DLL -->
-  <Target Name="InfVerif" />
 
 </Project>

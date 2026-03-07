@@ -46,10 +46,13 @@ FillSourceMode(
     _Inout_ D3DKMDT_VIDPN_SOURCE_MODE *pMode
     )
 {
-    /* Preserve Id assigned by pfnCreateNewModeInfo -- dxgkrnl owns it */
-    D3DKMDT_VIDEO_PRESENT_SOURCE_MODE_ID SavedId = pMode->Id;
-    RtlZeroMemory(pMode, sizeof(*pMode));
-    pMode->Id = SavedId;
+    /*
+     * pfnCreateNewModeInfo returns a pre-zeroed allocation sized for the
+     * WDDM version the driver registered.  Do NOT RtlZeroMemory the whole
+     * struct -- our compiled sizeof may exceed the allocation when we build
+     * with newer WDK headers than the WDDM version we advertise.
+     * Just set the fields we need; Id is already assigned by dxgkrnl.
+     */
     pMode->Type = D3DKMDT_RMT_GRAPHICS;
     pMode->Format.Graphics.PrimSurfSize.cx = pAdapter->PostDisplay.Width;
     pMode->Format.Graphics.PrimSurfSize.cy = pAdapter->PostDisplay.Height;
@@ -67,10 +70,11 @@ FillTargetMode(
     _Inout_ D3DKMDT_VIDPN_TARGET_MODE *pMode
     )
 {
-    /* Preserve Id assigned by pfnCreateNewModeInfo -- dxgkrnl owns it */
-    D3DKMDT_VIDEO_PRESENT_TARGET_MODE_ID SavedId = pMode->Id;
-    RtlZeroMemory(pMode, sizeof(*pMode));
-    pMode->Id = SavedId;
+    /*
+     * Do NOT RtlZeroMemory -- see FillSourceMode comment.
+     * Id is pre-assigned by dxgkrnl.  Structure is pre-zeroed.
+     */
+    pMode->Preference = D3DKMDT_MP_PREFERRED;
     pMode->VideoSignalInfo.VideoStandard = D3DKMDT_VSS_OTHER;
     pMode->VideoSignalInfo.TotalSize.cx = pAdapter->PostDisplay.Width;
     pMode->VideoSignalInfo.TotalSize.cy = pAdapter->PostDisplay.Height;
@@ -517,12 +521,7 @@ AmdGpuRecommendMonitorModes(
         return Status;
 
     /* Fill in the preferred mode (POST dimensions) */
-    /* Preserve Id assigned by pfnCreateNewModeInfo -- dxgkrnl owns it */
-    {
-        D3DKMDT_MONITOR_SOURCE_MODE_ID SavedId = pMonMode->Id;
-        RtlZeroMemory(pMonMode, sizeof(*pMonMode));
-        pMonMode->Id = SavedId;
-    }
+    /* Do NOT RtlZeroMemory -- see FillSourceMode comment re: sizeof mismatch */
     pMonMode->VideoSignalInfo.VideoStandard = D3DKMDT_VSS_OTHER;
     pMonMode->VideoSignalInfo.TotalSize.cx = pAdapter->PostDisplay.Width;
     pMonMode->VideoSignalInfo.TotalSize.cy = pAdapter->PostDisplay.Height;
