@@ -1,0 +1,64 @@
+;
+; amdgpu_wddm.inf - WDDM display miniport driver for AMD GPU
+;
+; Full WDDM display driver with POST framebuffer passthrough.
+; Registers as Display class to replace AMD Adrenalin, provides
+; escape channel for Python compute driver.
+;
+; Target: AMD RX 9070 XT (DEV_7551, RDNA 4 / GFX1201 / Navi 48)
+;
+
+[Version]
+Signature   = "$WINDOWS NT$"
+Class       = Display
+ClassGuid   = {4D36E968-E325-11CE-BFC1-08002BE10318}
+Provider    = %ProviderString%
+CatalogFile = amdgpu_wddm.cat
+DriverVer   = 03/05/2026,10.8.0.100
+PnpLockdown = 1
+
+[DestinationDirs]
+DefaultDestDir = 13  ; Driver Store
+
+[SourceDisksNames]
+1 = %DiskName%
+
+[SourceDisksFiles]
+amdgpu_wddm.sys = 1
+
+[Manufacturer]
+%ManufacturerString% = AmdGpu, NTamd64.10.0...19041
+
+[AmdGpu.NTamd64.10.0...19041]
+; AMD RX 9070 XT (Navi 48 / gfx1201)
+%DeviceDesc_7551% = AmdGpu_Install, PCI\VEN_1002&DEV_7551
+
+[AmdGpu_Install]
+CopyFiles = AmdGpu_CopyFiles
+FeatureScore = E1
+
+[AmdGpu_CopyFiles]
+amdgpu_wddm.sys
+
+[AmdGpu_Install.HW]
+AddReg = AmdGpu_HW_AddReg
+
+[AmdGpu_HW_AddReg]
+; No special hardware settings
+
+[AmdGpu_Install.Services]
+AddService = amdgpu_wddm, 0x00000002, AmdGpu_Service_Install
+
+[AmdGpu_Service_Install]
+DisplayName    = %ServiceDesc%
+ServiceType    = 1          ; SERVICE_KERNEL_DRIVER
+StartType      = 3          ; SERVICE_DEMAND_START
+ErrorControl   = 1          ; SERVICE_ERROR_NORMAL
+ServiceBinary  = %13%\amdgpu_wddm.sys
+
+[Strings]
+ProviderString      = "ROCm Open Source"
+ManufacturerString  = "Advanced Micro Devices, Inc."
+DiskName            = "AMD GPU WDDM Display Driver Disk"
+ServiceDesc         = "AMD GPU WDDM Display Driver"
+DeviceDesc_7551     = "AMD Radeon RX 9070 XT (WDDM Display)"
