@@ -33,20 +33,27 @@ def setup_env(env):
         LLVM_LIB = Path(ROCK_LIB_PATH) / "llvm" / "lib"
         ROCM_SYSDEPS_LIB = Path(ROCK_LIB_PATH) / "rocm_sysdeps" / "lib"
         OCL_ICD_VENDORS = Path(THEROCK_BIN_DIR).parent / "etc" / "OpenCL" / "vendors"
-        #logging.info(f"++ contents of ROCK_LIB_PATH={os.listdir(ROCK_LIB_PATH)}")
+        # logging.info(f"++ contents of ROCK_LIB_PATH={os.listdir(ROCK_LIB_PATH)}")
         LD_LIBRARY_PATH = os.getenv("LD_LIBRARY_PATH")
         if LD_LIBRARY_PATH is not None:
             LD_LIBRARY_PATH = Path(LD_LIBRARY_PATH)
-        env["LD_LIBRARY_PATH"] = f"{ROCK_LIB_PATH}:{OCL_LIB}:{LLVM_LIB}:{ROCM_SYSDEPS_LIB}:{LD_LIBRARY_PATH}"
+        env["LD_LIBRARY_PATH"] = (
+            f"{ROCK_LIB_PATH}:{OCL_LIB}:{LLVM_LIB}:{ROCM_SYSDEPS_LIB}:{LD_LIBRARY_PATH}"
+        )
         env["OCL_ICD_VENDORS"] = f"{OCL_ICD_VENDORS}/"
 
 def execute_tests(env):
     if platform.system() == "Linux":
         OCLTST_PATH = str(Path(THEROCK_BIN_DIR).parent / "share" / "opencl" / "ocltst")
         cmd = [
-            "./ocltst", "-J", "-m", "liboclruntime.so", "-A", "oclruntime.exclude",
-        ]
-        #logging.info(f"++ contents of OCLTST_PATH={os.listdir(OCLTST_PATH)}")
+            "./ocltst",
+            "-J",
+            "-m",
+            "liboclruntime.so",
+            "-A",
+            "oclruntime.exclude",
+         ]
+        # logging.info(f"++ contents of OCLTST_PATH={os.listdir(OCLTST_PATH)}")
         env["LD_LIBRARY_PATH"] = f"{OCLTST_PATH}:{env['LD_LIBRARY_PATH']}"
         logging.info(f"++ Setting LD_LIBRARY_PATH={env['LD_LIBRARY_PATH']}")
         logging.info(f"++ Setting OCL_ICD_VENDORS={env['OCL_ICD_VENDORS']}")
@@ -54,8 +61,13 @@ def execute_tests(env):
     elif platform.system() == "Windows":
         OCLTST_PATH = str(Path(THEROCK_BIN_DIR).parent / "tests" / "ocltst")
         cmd = [
-            "ocltst.exe", "-J", "-m", "oclruntime.dll", "-A", "oclruntime.exclude",
-        ]
+            "ocltst.exe",
+            "-J",
+            "-m",
+            "oclruntime.dll",
+            "-A",
+            "oclruntime.exclude",
+         ]
         shell_var = True
     else:
         logging.info(f"++ Error: unsupported system: {platform.system()}")
