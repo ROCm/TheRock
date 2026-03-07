@@ -305,6 +305,7 @@ test_matrix = {
         },
         # Architectures that we have multi GPU setup for testing
         "multi_gpu": {"linux": ["gfx94X-dcgpu"]},
+        "additional_requirements_files": ["requirements-test-pytest.txt"],
     },
     # hipDNN tests
     "hipdnn": {
