@@ -589,6 +589,11 @@ artifact_group = "ml-libs"
 type = "target-specific"
 artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "miopenprovider"]
 
+[artifacts.hipdnn-integration-tests]
+artifact_group = "ml-libs"
+type = "target-neutral"
+artifact_deps = ["hipdnn"]
+
 # --- IREE Integration ---
 
 [artifacts.iree-compiler]
