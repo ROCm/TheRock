@@ -122,6 +122,14 @@ Operation-specific response fields follow after the error code.
 | `0x0201` | `FREE` | `{device_ptr}` | (fire-and-forget) |
 | `0x0205` | `MALLOC_ASYNC` | `{size, stream}` | `{error_code, device_ptr}` |
 | `0x0206` | `FREE_ASYNC` | `{device_ptr, stream}` | (fire-and-forget) |
+| `0x0280` | `MALLOC_VADDR` | `{vaddr, size, flags}` | (fire-and-forget) |
+| `0x0281` | `MALLOC_ASYNC_VADDR` | `{vaddr, size, stream}` | (fire-and-forget) |
+
+**Virtual address allocation** (`MALLOC_VADDR`): The client assigns a virtual
+address locally from a monotonic counter (base `0x7F0000000000`) and sends the
+allocation as fire-and-forget. The worker performs the real `hipMalloc` and
+stores a mapping from virtual address to real GPU pointer. All subsequent API
+calls use the virtual address; the worker translates before calling real HIP.
 
 ### Memory Transfer (0x021x)
 
@@ -177,9 +185,16 @@ For D2H copies, the response payload is `HipRemoteMemcpyResponse` followed by
 | `0x0503` | `MODULE_GET_FUNCTION` | `{module, function_name[256]}` | `{error_code, function, num_args, num_params, params[]}` |
 
 The `MODULE_GET_FUNCTION` response includes kernel argument metadata extracted
-via COMGR from the code object. Each `params[i]` contains `{offset, size}` for
-the kernel argument at index `i`. The client uses this metadata to build the
-flat kernarg buffer with correct argument placement.
+via COMGR from the code object. Each `params[i]` is a `HipRemoteParamDesc`
+containing `{offset, size, is_pointer, _pad[3]}`:
+
+- `offset`: byte offset within the kernarg buffer
+- `size`: parameter size in bytes
+- `is_pointer`: 1 if COMGR `value_kind` is `global_buffer`, 0 otherwise
+
+The `is_pointer` flag is used during kernel launch to determine which
+arguments require virtual-to-real address translation. See the Kernel
+Argument Translation section below.
 
 ### Kernel Launch (0x0510)
 
@@ -267,11 +282,15 @@ Fire-and-forget operations:
 
 Operations that always require a response:
 
-- `hipMalloc` (returns device pointer)
+- `hipMalloc` via legacy `MALLOC` opcode (returns device pointer)
 - `hipMemcpy` D2H (returns data)
 - `hipDeviceSynchronize` (implicit error check)
 - `hipEventSynchronize` / `hipEventElapsedTime` (timing)
 - `hipModuleLoadData` / `hipModuleGetFunction` (returns handles)
+
+Note: `hipMalloc` is fire-and-forget when using `MALLOC_VADDR` (the default
+path). The client assigns a virtual address locally and does not wait for the
+worker's response.
 
 ## Write Coalescing
 
@@ -300,11 +319,34 @@ GPU errors work natively in HIP.
 
 ## Handle Semantics
 
-Remote handles (device pointers, stream handles, event handles, module
-handles, function handles) are opaque 64-bit values. The client stores them
-as-is and passes them back to the worker in subsequent requests. The worker
-interprets them as native HIP pointers/handles.
+Remote handles (module handles, function handles, event handles) are opaque
+64-bit values. The client stores them as-is and passes them back to the worker.
 
-Device pointers returned by `hipMalloc` on the worker are valid GPU addresses
-on the remote device. The client never dereferences them -- they are passed
-through to subsequent `hipMemcpy`, `hipLaunchKernel`, etc. calls.
+**Device pointers** use virtual addresses (vaddrs) starting at
+`0x7F0000000000`. The client assigns vaddrs locally via `MALLOC_VADDR`; the
+worker maps each vaddr to a real GPU pointer. The client never dereferences
+vaddrs -- they are translated by the worker before every HIP API call.
+
+**Stream handles** use virtual handles starting at `0x5F0000000000`, assigned
+locally via fire-and-forget stream creation.
+
+## Kernel Argument Translation
+
+When the worker receives a kernel launch, it translates virtual addresses in
+the kernel argument buffer to real GPU pointers. The translation strategy
+depends on available metadata:
+
+1. **COMGR-guided** (HIP C++ kernels): Each parameter's `is_pointer` flag
+   (from COMGR `value_kind`) determines translation:
+   - `is_pointer=1` (`global_buffer`): range lookup for the 8-byte value
+   - `is_pointer=0`, size == 8: translate if value ≥ VADDR_BASE (Tensile
+     marks pointer params as `by_value`; real scalars never reach this range)
+   - `is_pointer=0`, size > 8 (`by_value` struct): scan all 8-byte sub-fields
+   - size < 8: skip (definitely a scalar)
+
+2. **Blind scan** (assembly kernels without COMGR metadata, e.g. Tensile):
+   scan all 8-byte-aligned positions for values ≥ `0x7F0000000000`.
+
+The worker maintains a hash map (1M slots) for O(1) exact vaddr lookup, a
+sorted allocation list for O(log N) range lookups (sub-array pointers), and a
+last-hit cache for consecutive accesses to the same allocation.

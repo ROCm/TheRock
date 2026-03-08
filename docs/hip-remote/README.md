@@ -187,11 +187,15 @@ print(torch.cuda.get_device_name(0))   # AMD Instinct MI300X
 The proxy uses several optimisations to minimise network overhead:
 
 - **Fire-and-forget**: Async GPU operations (kernel launches, memset, D2D
-  copies, event record, free) are sent without waiting for a response.
+  copies, malloc, event record, free) are sent without waiting for a response.
+- **Virtual address allocation**: `hipMalloc` assigns opaque handles locally
+  instead of round-tripping to the worker. The worker maps virtual addresses
+  to real GPU pointers.
 - **Write coalescing**: A 64 KB buffer accumulates fire-and-forget requests
   and flushes them in bulk at sync points.
-- **Scatter-gather I/O**: `writev`/`WSASend` combines header, payload, and
-  data into a single syscall.
+- **COMGR-guided arg translation**: Kernel argument pointers are identified
+  via COMGR `value_kind` metadata, with a blind-scan fallback for assembly
+  kernels (Tensile/rocBLAS).
 - **Combined opcodes**: Module load + get function in one round-trip.
 - **Client-side caching**: Device properties, driver version, occupancy
   queries, and event handles are cached locally.
@@ -218,6 +222,14 @@ Check `TF_WORKER_HOST` and network connectivity.
 that an SDK library needs. Ensure `hip_api_stubs_gen.c` is compiled into the
 DLL. This file provides stub implementations for ~490 HIP APIs that the proxy
 does not implement but that SDK libraries (rocblas, hipblas, etc.) import.
+
+**`hipErrorLaunchFailure` with `debug=True`**: Triton's debug mode uses
+device-side assertions that require host-device shared memory, which cannot
+work over TCP. Run without `debug=True`.
+
+**Stale GPU errors after many tests**: If running a large test suite where some
+tests fail with GPU errors, restart the worker between runs. Async GPU errors
+from one test can poison the GPU context for subsequent tests.
 
 ## Protocol
 

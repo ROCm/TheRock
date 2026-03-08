@@ -168,10 +168,22 @@ The worker maintains two data structures:
    lookups, making translation effectively O(1).
 
 Every handler that receives a pointer or stream handle calls
-`vaddr_translate()` before passing it to the real HIP API. For kernel
-launches, all 8-byte-aligned positions within each kernel argument
-(including struct sub-fields) are scanned for values in the vaddr range
-and translated.
+`vaddr_translate()` before passing it to the real HIP API. Kernel
+argument translation uses a tiered approach based on available metadata:
+
+1. **COMGR-guided** (most kernels): The worker extracts `value_kind`
+   from COMGR metadata for each parameter. `global_buffer` params are
+   translated via range lookup. `by_value` params with size == 8 are
+   also translated if their value >= VADDR_BASE (Tensile marks pointer
+   params as `by_value`; real scalars never reach this range).
+   `by_value` struct params (size > 8) have all 8-byte sub-fields
+   scanned. Params smaller than 8 bytes are skipped.
+
+2. **Blind scan** (Tensile/rocBLAS assembly kernels): When no COMGR
+   metadata is available (assembly kernels lack standard metadata), all
+   8-byte-aligned positions in the flat kernarg buffer are scanned.
+   Tensile kernel scalars (matrix dimensions, strides, alpha/beta) are
+   small values that never collide with the vaddr range.
 
 ### Virtual Stream Handles
 
@@ -240,10 +252,10 @@ copied data.
 
 | Test | Without Optimizations | With FnF Only | With FnF + Vaddr | Speedup |
 |------|-----------------------|---------------|-------------------|---------|
-| **GPT-2 total** | ~300s+ | 167s | **40s** | **7.5x** |
-| **GPT-2 per token** | N/A | 6.64s | **3.40s** | **1.95x** |
-| **SDXL total** | N/A | 594s | **340s** | **1.75x** |
-| **SDXL generation (30 steps)** | N/A | 60s | **47.5s** | **1.26x** |
+| **GPT-2 total** | ~300s+ | 167s | **19s** | **16x** |
+| **GPT-2 per token** | N/A | 6.64s | **3.72s** | **1.8x** |
+| **SDXL total** | N/A | 594s | **281s** | **2.1x** |
+| **SDXL generation (30 steps)** | N/A | 60s | **42.5s** | **1.4x** |
 | **Vroom per-op (SDPA/Conv/GEMM)** | ~400ms | 135ms | **131ms** | **3.0x** |
 
 The virtual address optimization primarily accelerates model loading
@@ -262,35 +274,72 @@ bandwidth.
 | `hip_api_memory.c` | Virtual address allocator (`vaddr_alloc`), hipMalloc/MallocManaged/MallocAsync converted to FnF with vaddr, hipFreeHost made local-only |
 | `hip_api_stream.c` | Virtual stream handle allocator, hipStreamCreate variants converted to FnF |
 | `hip_api_module.c` | hipLaunchKernel/hipModuleLaunchKernel fire-and-forget |
+| `hip_api_device.c` | CPU pointer validation in `hipPointerGetAttribute` (rejects non-vaddr pointers) |
 | `hip_client.c` | Write coalescing buffer, `hip_remote_request_fire_and_forget()` and `_with_data` variant |
-| `hip_worker_main.c` | vaddr hash map (1M slots) + sorted alloc list + last-hit cache, `vaddr_translate()` in all handlers, `handle_malloc_vaddr`, deferred error reporting in `handle_device_synchronize`, `g_suppress_response` mechanism, dynamically growable caches (g_loaded_modules, g_func_cache, g_kernarg_sizes, g_kernel_arg_cache), TCP keepalive, malloc retry |
+| `hip_worker_main.c` | vaddr hash map + sorted alloc list + last-hit cache, `vaddr_translate()`, COMGR `is_pointer` extraction, cache invalidation on module unload, blind scan for assembly kernels, `hipDeviceSynchronize` guard before module loads, deferred error reporting, dynamically growable caches, TCP keepalive |
 
 ---
 
-## 7. Known Issues
+## 7. Kernel Argument Translation Details
 
-### Vaddr Translation False Positives (Triton FP8 Tests)
+### COMGR-Guided Translation
 
-The vaddr translation scans kernel argument 8-byte values for matches
-in the virtual address range. When COMGR metadata is unavailable or a
-struct parameter contains non-pointer 8-byte sub-fields whose values
-coincidentally fall in the vaddr range (VADDR_BASE to VADDR_BASE + total
-allocated), the translation corrupts kernel arguments. This causes
-asynchronous GPU illegal memory access that poisons the GPU context for
-all subsequent operations.
+For most HIP C++ kernels (PyTorch, Triton JIT), the worker extracts
+COMGR metadata from the code object ELF. Each kernel parameter has a
+`value_kind` field:
 
-**Affected tests**: `test_scaled_dot` with FP8/e2m1 types in Triton's
-`test_core.py`. The first ~83 tests (fp16/bf16) pass, then all FP8
-variants fail.
+- **`global_buffer`** (`is_pointer=1`): An 8-byte GPU pointer. Translated
+  via range lookup to handle sub-array pointers (e.g., `tensor[100:]`).
+- **`by_value`** with size == 8: Translated if value >= VADDR_BASE.
+  Tensile/rocBLAS marks pointer params as `by_value` in COMGR metadata;
+  real scalars (strides, counts, alpha/beta) never reach the vaddr range.
+- **`by_value`** with size > 8: A struct passed by value. All 8-byte
+  sub-fields are scanned for vaddrs, since PyTorch packs multiple tensor
+  pointers into structs (e.g., `TrivialOffsetCalculator`).
+- **size < 8**: Skipped (definitely a scalar -- too small for a pointer).
 
-**Root cause**: The PhiloxState struct (32 bytes) in PyTorch's random
-number generation kernels contains a pointer at offset 0 and counter/seed
-data at subsequent offsets. The scan translates the pointer correctly but
-may also translate counter values that fall in the vaddr range.
+The `is_pointer` flag is stored in `HipRemoteParamDesc` and flows from
+the worker's COMGR extraction through the protocol to the client's
+function info cache and back to the worker during kernel launch.
 
-**Proper fix**: Add `value_kind` (pointer vs scalar) from COMGR metadata
-to `HipRemoteParamDesc`. Only translate `global_buffer` parameters. This
-requires a protocol struct change and matched rebuild of client + worker.
+### Blind Scan Fallback
 
-**Workaround**: Moving VADDR_BASE to a higher value (e.g., 0xABCD00000000)
-reduces the probability of false positives. Testing this approach.
+Tensile/rocBLAS assembly kernels lack standard COMGR metadata (their code
+objects don't have `.amdhsa_kernel` entries with `.args` sections). For
+these kernels, the worker falls back to scanning all 8-byte-aligned
+positions in the flat kernarg buffer. This is safe because Tensile kernel
+scalars (matrix dimensions, strides, alpha/beta) are small values that
+never reach the vaddr range (≥ 0x7F0000000000).
+
+### Cache Invalidation
+
+The HIP runtime can reuse module handle addresses after `hipModuleUnload`.
+Without cache invalidation, a new module loaded at the same address would
+get stale COMGR metadata from the previous module -- potentially with
+wrong `is_pointer` flags and parameter sizes. The worker now invalidates
+`CachedKernelArgs` and `LoadedModuleEntry` on every module unload.
+
+### GPU Error Guard
+
+A `hipDeviceSynchronize` call before every `hipModuleLoadData` drains
+any pending async GPU errors from prior fire-and-forget kernel launches.
+Without this, a kernel argument translation error would cause
+`hipModuleLoadData` to hang indefinitely on a poisoned GPU context.
+
+## 8. Known Limitations
+
+### Device-Side Assertions
+
+Triton's `debug=True` mode enables device-side assertions that require
+the GPU to write assertion failure info to a host-pinned buffer. This
+mechanism requires shared host-device memory that cannot work over a TCP
+connection. Tests using `@triton.jit(debug=True)` will fail with
+`hipErrorLaunchFailure`.
+
+### CPU Pointer Detection
+
+The client validates pointer arguments by checking if the address falls
+in the vaddr range (≥ `VADDR_BASE`). CPU tensor pointers are outside this
+range and correctly return `hipErrorInvalidValue` from
+`hipPointerGetAttribute`, allowing callers like Triton to detect and
+reject them.
