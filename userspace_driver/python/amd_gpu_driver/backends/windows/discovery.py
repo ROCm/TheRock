@@ -1,6 +1,6 @@
 """Adapter discovery — find our MCDM device among WDDM adapters.
 
-Uses D3DKMTEnumAdapters3 to enumerate adapters, then ESCAPE_GET_INFO
+Uses D3DKMTEnumAdapters2 to enumerate adapters, then ESCAPE_GET_INFO
 to identify which one is our AMD GPU MCDM compute device.
 """
 

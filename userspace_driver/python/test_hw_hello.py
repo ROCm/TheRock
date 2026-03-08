@@ -76,11 +76,11 @@ def test_get_info(dev: object) -> bool:
 
         # Print BAR info
         for i, bar in enumerate(info.bars):
-            if bar.get("size", 0) > 0:
-                addr = bar.get("phys_addr", 0)
-                size = bar.get("size", 0)
+            if bar.get("length", 0) > 0:
+                addr = bar.get("physical_address", 0)
+                length = bar.get("length", 0)
                 print(f"  BAR{i}:       addr=0x{addr:012X} "
-                      f"size={size // (1024*1024)}MB")
+                      f"size={length // (1024*1024)}MB")
 
         if info.vendor_id != 0x1002:
             print("  WARNING: Unexpected vendor ID")

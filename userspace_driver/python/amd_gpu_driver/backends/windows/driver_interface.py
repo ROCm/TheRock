@@ -1,10 +1,10 @@
-"""Low-level ctypes bindings for D3DKMT APIs and MCDM escape commands.
+"""Low-level ctypes bindings for D3DKMT APIs and escape commands.
 
 Provides the Python ↔ kernel communication channel:
-  Python → gdi32.D3DKMTEscape → dxgkrnl.sys → DxgkDdiEscape → amdgpu_mcdm.sys
+  Python → gdi32.D3DKMTEscape → dxgkrnl.sys → DxgkDdiEscape → amdgpu_wddm.sys
 
 The escape buffer carries an AMDGPU_ESCAPE_HEADER followed by command-specific
-data, matching the structures defined in kernel_driver/amdgpu_mcdm.h.
+data, matching the structures defined in wddm_driver/amdgpu_wddm.h.
 """
 
 from __future__ import annotations
@@ -20,9 +20,15 @@ if sys.platform != "win32":
 
 # ============================================================================
 # D3DKMT API bindings (gdi32.dll)
+#
+# CRITICAL: D3DKMT_HANDLE is UINT (4 bytes), NOT HANDLE (8 bytes on x64).
+# Using wintypes.HANDLE causes struct misalignment and silent failures.
 # ============================================================================
 
 gdi32 = ctypes.WinDLL("gdi32", use_last_error=True)
+
+# D3DKMT_HANDLE is typedef UINT, always 4 bytes
+D3DKMT_HANDLE = ctypes.c_uint32
 
 
 class LUID(ctypes.Structure):
@@ -33,22 +39,21 @@ class LUID(ctypes.Structure):
     ]
 
 
-# --- D3DKMTEnumAdapters3 ---
-
-class D3DKMT_ENUMADAPTERS3(ctypes.Structure):
-    _fields_ = [
-        ("Filter", ctypes.c_uint64),  # D3DKMT_ENUMADAPTERS_FILTER
-        ("NumAdapters", ctypes.c_uint),
-        ("pAdapters", ctypes.c_void_p),  # D3DKMT_ADAPTERINFO*
-    ]
-
+# --- D3DKMTEnumAdapters2 ---
 
 class D3DKMT_ADAPTERINFO(ctypes.Structure):
     _fields_ = [
-        ("hAdapter", wintypes.HANDLE),
+        ("hAdapter", D3DKMT_HANDLE),
         ("AdapterLuid", LUID),
-        ("NumOfSources", ctypes.c_uint),
+        ("NumOfSources", ctypes.c_uint32),
         ("bPrecisePresentRegionsPreferred", wintypes.BOOL),
+    ]
+
+
+class D3DKMT_ENUMADAPTERS2(ctypes.Structure):
+    _fields_ = [
+        ("NumAdapters", ctypes.c_uint32),
+        ("pAdapters", ctypes.POINTER(D3DKMT_ADAPTERINFO)),
     ]
 
 
@@ -57,7 +62,7 @@ class D3DKMT_ADAPTERINFO(ctypes.Structure):
 class D3DKMT_OPENADAPTERFROMLUID(ctypes.Structure):
     _fields_ = [
         ("AdapterLuid", LUID),
-        ("hAdapter", wintypes.HANDLE),
+        ("hAdapter", D3DKMT_HANDLE),
     ]
 
 
@@ -65,7 +70,7 @@ class D3DKMT_OPENADAPTERFROMLUID(ctypes.Structure):
 
 class D3DKMT_CLOSEADAPTER(ctypes.Structure):
     _fields_ = [
-        ("hAdapter", wintypes.HANDLE),
+        ("hAdapter", D3DKMT_HANDLE),
     ]
 
 
@@ -75,13 +80,13 @@ D3DKMT_ESCAPE_DRIVERPRIVATE = 0
 
 class D3DKMT_ESCAPE(ctypes.Structure):
     _fields_ = [
-        ("hAdapter", wintypes.HANDLE),
-        ("hDevice", wintypes.HANDLE),
-        ("Type", ctypes.c_uint),
-        ("Flags", ctypes.c_uint),
+        ("hAdapter", D3DKMT_HANDLE),
+        ("hDevice", D3DKMT_HANDLE),
+        ("Type", ctypes.c_uint32),
+        ("Flags", ctypes.c_uint32),
         ("pPrivateDriverData", ctypes.c_void_p),
-        ("PrivateDriverDataSize", ctypes.c_uint),
-        ("hContext", wintypes.HANDLE),
+        ("PrivateDriverDataSize", ctypes.c_uint32),
+        ("hContext", D3DKMT_HANDLE),
     ]
 
 
@@ -89,20 +94,20 @@ class D3DKMT_ESCAPE(ctypes.Structure):
 
 class D3DKMT_CREATEDEVICE(ctypes.Structure):
     _fields_ = [
-        ("hAdapter", wintypes.HANDLE),
+        ("hAdapter", D3DKMT_HANDLE),
         ("pCommandBuffer", ctypes.c_void_p),
-        ("CommandBufferSize", ctypes.c_uint),
+        ("CommandBufferSize", ctypes.c_uint32),
         ("pAllocationList", ctypes.c_void_p),
-        ("AllocationListSize", ctypes.c_uint),
+        ("AllocationListSize", ctypes.c_uint32),
         ("pPatchLocationList", ctypes.c_void_p),
-        ("PatchLocationListSize", ctypes.c_uint),
-        ("hDevice", wintypes.HANDLE),
+        ("PatchLocationListSize", ctypes.c_uint32),
+        ("hDevice", D3DKMT_HANDLE),
     ]
 
 
 class D3DKMT_DESTROYDEVICE(ctypes.Structure):
     _fields_ = [
-        ("hDevice", wintypes.HANDLE),
+        ("hDevice", D3DKMT_HANDLE),
     ]
 
 
@@ -112,10 +117,10 @@ KMTQAITYPE_DRIVER_DESCRIPTION = 76  # Gets driver description string
 
 class D3DKMT_QUERYADAPTERINFO(ctypes.Structure):
     _fields_ = [
-        ("hAdapter", wintypes.HANDLE),
-        ("Type", ctypes.c_uint),
+        ("hAdapter", D3DKMT_HANDLE),
+        ("Type", ctypes.c_uint32),
         ("pPrivateDriverData", ctypes.c_void_p),
-        ("PrivateDriverDataSize", ctypes.c_uint),
+        ("PrivateDriverDataSize", ctypes.c_uint32),
     ]
 
 
@@ -123,8 +128,7 @@ class D3DKMT_QUERYADAPTERINFO(ctypes.Structure):
 # Set up D3DKMT function prototypes
 # ============================================================================
 
-# D3DKMTEnumAdapters3 may not exist on older Windows — check at call time
-_D3DKMTEnumAdapters3 = getattr(gdi32, "D3DKMTEnumAdapters3", None)
+_D3DKMTEnumAdapters2 = gdi32.D3DKMTEnumAdapters2
 _D3DKMTOpenAdapterFromLuid = gdi32.D3DKMTOpenAdapterFromLuid
 _D3DKMTCloseAdapter = gdi32.D3DKMTCloseAdapter
 _D3DKMTEscape = gdi32.D3DKMTEscape
@@ -301,8 +305,8 @@ class DriverInterface:
     """
 
     def __init__(self) -> None:
-        self._adapter_handle: wintypes.HANDLE | None = None
-        self._device_handle: wintypes.HANDLE | None = None
+        self._adapter_handle: int | None = None
+        self._device_handle: int | None = None
         self._adapter_luid: LUID | None = None
 
     def enumerate_adapters(self) -> list[D3DKMT_ADAPTERINFO]:
@@ -311,29 +315,23 @@ class DriverInterface:
         Returns list of adapter info structs. Our MCDM device will
         appear as a ComputeAccelerator with NumOfSources=0.
         """
-        if _D3DKMTEnumAdapters3 is None:
-            raise RuntimeError(
-                "D3DKMTEnumAdapters3 not available — requires Windows 10 1903+"
-            )
-
         # First call: get count
-        args = D3DKMT_ENUMADAPTERS3()
-        args.Filter = 0  # No filter — get all adapters
+        args = D3DKMT_ENUMADAPTERS2()
         args.NumAdapters = 0
         args.pAdapters = None
 
-        status = _D3DKMTEnumAdapters3(ctypes.byref(args))
-        _check_ntstatus(status, "D3DKMTEnumAdapters3 (count)")
+        status = _D3DKMTEnumAdapters2(ctypes.byref(args))
+        _check_ntstatus(status, "D3DKMTEnumAdapters2 (count)")
 
         if args.NumAdapters == 0:
             return []
 
         # Second call: get adapter info
         adapter_array = (D3DKMT_ADAPTERINFO * args.NumAdapters)()
-        args.pAdapters = ctypes.cast(adapter_array, ctypes.c_void_p)
+        args.pAdapters = adapter_array
 
-        status = _D3DKMTEnumAdapters3(ctypes.byref(args))
-        _check_ntstatus(status, "D3DKMTEnumAdapters3 (list)")
+        status = _D3DKMTEnumAdapters2(ctypes.byref(args))
+        _check_ntstatus(status, "D3DKMTEnumAdapters2 (list)")
 
         return list(adapter_array[:args.NumAdapters])
 
@@ -394,12 +392,12 @@ class DriverInterface:
 
         args = D3DKMT_ESCAPE()
         args.hAdapter = self._adapter_handle
-        args.hDevice = self._device_handle
+        args.hDevice = self._device_handle if self._device_handle is not None else 0
         args.Type = D3DKMT_ESCAPE_DRIVERPRIVATE
         args.Flags = 0
         args.pPrivateDriverData = ctypes.addressof(command_buffer)
         args.PrivateDriverDataSize = ctypes.sizeof(command_buffer)
-        args.hContext = None
+        args.hContext = 0
 
         status = _D3DKMTEscape(ctypes.byref(args))
         _check_ntstatus(status, "D3DKMTEscape")
