@@ -57,7 +57,10 @@ struct amdgpu_lite_get_info {
 	__u32 mmio_bar_index;       /* Index into bars[] for MMIO registers */
 	__u32 vram_bar_index;       /* Index into bars[] for VRAM aperture */
 	__u32 doorbell_bar_index;   /* Index into bars[] for doorbell */
-	__u32 reserved2[5];
+	__u32 reserved2;
+	__u64 gart_table_bus_addr;  /* Physical address of GART page table */
+	__u64 gart_table_size;      /* Size in bytes */
+	__u64 gart_gpu_va_start;    /* GPU VA where GART aperture begins */
 };
 
 /* ======================================================================
@@ -150,11 +153,13 @@ struct amdgpu_lite_unmap_gpu {
 
 struct amdgpu_lite_setup_irq {
 	/* Input */
-	__s32 eventfd;          /* eventfd file descriptor */
+	__s32 eventfd;          /* eventfd fd (-1 to teardown existing) */
 	__u32 irq_source;       /* Interrupt source ID */
-	__u32 reserved[4];
-	/* Output */
-	__u32 registration_id;  /* ID for later teardown */
+	__u32 registration_id;  /* 0 = new registration, nonzero = teardown */
+	__u32 reserved[3];
+	/* Output (on new registration) */
+	__u32 out_registration_id;
+	__u32 reserved2;
 };
 
 /* ======================================================================
@@ -209,9 +214,34 @@ struct amdgpu_lite_setup_irq {
 #include <linux/idr.h>
 #include <linux/mutex.h>
 #include <linux/list.h>
+#include <linux/spinlock.h>
+#include <linux/eventfd.h>
 
 #define AMDGPU_LITE_MAX_GTT_ALLOCS  256
+#define AMDGPU_LITE_MAX_EVENTS      64
 #define AMDGPU_LITE_NAME            "amdgpu_lite"
+
+/* GART table configuration */
+#define AMDGPU_LITE_GART_TABLE_SIZE   (1024 * 1024)       /* 1MB */
+#define AMDGPU_LITE_GART_NUM_ENTRIES  (AMDGPU_LITE_GART_TABLE_SIZE / 8)  /* 128K entries */
+#define AMDGPU_LITE_GART_VA_START     0x100000000ULL       /* 4GB, after VRAM */
+
+/* VRAM allocation tracking */
+struct vram_allocation {
+	struct list_head list;
+	uint64_t handle;
+	uint64_t gpu_offset;    /* Offset within VRAM */
+	uint64_t size;
+	uint32_t num_pages;
+};
+
+/* VRAM bitmap allocator */
+struct vram_allocator {
+	unsigned long *bitmap;  /* 1 bit per VRAM page */
+	uint64_t total_pages;
+	uint64_t free_pages;
+	struct mutex lock;
+};
 
 /* Per-BAR kernel state */
 struct amdgpu_lite_bar {
@@ -222,6 +252,14 @@ struct amdgpu_lite_bar {
 	bool is_memory;
 	bool is_64bit;
 	bool is_prefetchable;
+};
+
+/* Eventfd registration for interrupt forwarding */
+struct amdgpu_lite_event_reg {
+	struct eventfd_ctx *ctx;
+	uint32_t irq_source;
+	struct amdgpu_lite_fpriv *owner;  /* For cleanup on file close */
+	bool in_use;
 };
 
 /* GTT (DMA-coherent) allocation tracking */
@@ -238,8 +276,10 @@ struct amdgpu_lite_gtt_alloc {
 struct amdgpu_lite_fpriv {
 	struct amdgpu_lite_device *ldev;
 	struct list_head gtt_allocs;
+	struct list_head vram_allocs;
 	struct mutex alloc_lock;
 	u64 next_gtt_handle;
+	u64 next_vram_handle;
 };
 
 /* Per-device state */
@@ -260,6 +300,21 @@ struct amdgpu_lite_device {
 	/* VRAM info */
 	u64 vram_size;
 	u64 visible_vram_size;
+
+	/* VRAM allocator */
+	struct vram_allocator vram;
+
+	/* GART page table */
+	uint64_t *gart_table;          /* GART PTE array (DMA coherent) */
+	dma_addr_t gart_table_bus_addr;
+	uint64_t gart_size;            /* Size of GART table in bytes */
+	uint64_t gart_next_gpu_va;     /* Bump allocator for auto-assign */
+	struct mutex gart_lock;
+
+	/* Interrupt / eventfd */
+	struct amdgpu_lite_event_reg events[AMDGPU_LITE_MAX_EVENTS];
+	spinlock_t events_lock;
+	int irq_vector;                /* MSI-X/MSI vector number */
 
 	/* Device tracking */
 	int index;
@@ -291,11 +346,23 @@ long amdgpu_lite_ioctl_unmap_gpu(struct amdgpu_lite_fpriv *fpriv,
 				 unsigned long arg);
 int amdgpu_lite_mmap_gtt(struct amdgpu_lite_fpriv *fpriv,
 			 struct vm_area_struct *vma);
+int amdgpu_lite_mmap_vram(struct amdgpu_lite_fpriv *fpriv,
+			  struct vm_area_struct *vma);
 void amdgpu_lite_free_all_gtt(struct amdgpu_lite_fpriv *fpriv);
+void amdgpu_lite_free_all_vram(struct amdgpu_lite_fpriv *fpriv);
+int vram_allocator_init(struct amdgpu_lite_device *ldev);
+void vram_allocator_destroy(struct amdgpu_lite_device *ldev);
+
+/* Implemented in memory.c - GART */
+int amdgpu_lite_gart_init(struct amdgpu_lite_device *ldev);
+void amdgpu_lite_gart_cleanup(struct amdgpu_lite_device *ldev);
 
 /* Implemented in irq.c */
+int amdgpu_lite_irq_init(struct amdgpu_lite_device *ldev);
+void amdgpu_lite_irq_cleanup(struct amdgpu_lite_device *ldev);
 long amdgpu_lite_ioctl_setup_irq(struct amdgpu_lite_fpriv *fpriv,
 				 unsigned long arg);
+void amdgpu_lite_irq_release_fpriv(struct amdgpu_lite_fpriv *fpriv);
 
 #endif /* __KERNEL__ */
 #endif /* _AMDGPU_LITE_H_ */

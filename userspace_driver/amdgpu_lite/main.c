@@ -41,8 +41,10 @@ static int amdgpu_lite_open(struct inode *inode, struct file *filp)
 
 	fpriv->ldev = ldev;
 	INIT_LIST_HEAD(&fpriv->gtt_allocs);
+	INIT_LIST_HEAD(&fpriv->vram_allocs);
 	mutex_init(&fpriv->alloc_lock);
 	fpriv->next_gtt_handle = 1;
+	fpriv->next_vram_handle = 1;
 
 	filp->private_data = fpriv;
 	return 0;
@@ -53,8 +55,11 @@ static int amdgpu_lite_release(struct inode *inode, struct file *filp)
 	struct amdgpu_lite_fpriv *fpriv = filp->private_data;
 
 	if (fpriv) {
-		/* Free all GTT allocations owned by this fd */
+		/* Release all eventfd registrations owned by this fd */
+		amdgpu_lite_irq_release_fpriv(fpriv);
+		/* Free all allocations owned by this fd */
 		amdgpu_lite_free_all_gtt(fpriv);
+		amdgpu_lite_free_all_vram(fpriv);
 		mutex_destroy(&fpriv->alloc_lock);
 		kfree(fpriv);
 	}
@@ -105,6 +110,8 @@ static int amdgpu_lite_mmap(struct file *filp, struct vm_area_struct *vma)
 		return amdgpu_lite_mmap_bar(ldev, vma);
 	case AMDGPU_LITE_MMAP_TYPE_GTT:
 		return amdgpu_lite_mmap_gtt(fpriv, vma);
+	case AMDGPU_LITE_MMAP_TYPE_VRAM:
+		return amdgpu_lite_mmap_vram(fpriv, vma);
 	default:
 		return -EINVAL;
 	}
@@ -155,6 +162,21 @@ static int amdgpu_lite_probe(struct pci_dev *pdev,
 	if (ret)
 		goto err_free;
 
+	/* Initialize VRAM allocator */
+	ret = vram_allocator_init(ldev);
+	if (ret)
+		goto err_pci;
+
+	/* Initialize GART page table */
+	ret = amdgpu_lite_gart_init(ldev);
+	if (ret)
+		goto err_vram;
+
+	/* Initialize MSI-X/MSI interrupts */
+	ret = amdgpu_lite_irq_init(ldev);
+	if (ret)
+		goto err_gart;
+
 	/* Register misc device: /dev/amdgpu_lite0, /dev/amdgpu_lite1, ... */
 	snprintf(ldev->misc_name, sizeof(ldev->misc_name),
 		 "amdgpu_lite%d", ldev->index);
@@ -166,7 +188,7 @@ static int amdgpu_lite_probe(struct pci_dev *pdev,
 	ret = misc_register(&ldev->misc);
 	if (ret) {
 		dev_err(&pdev->dev, "amdgpu_lite: failed to register misc device\n");
-		goto err_pci;
+		goto err_irq;
 	}
 
 	/* Add to global list */
@@ -178,6 +200,12 @@ static int amdgpu_lite_probe(struct pci_dev *pdev,
 		 ldev->misc_name);
 	return 0;
 
+err_irq:
+	amdgpu_lite_irq_cleanup(ldev);
+err_gart:
+	amdgpu_lite_gart_cleanup(ldev);
+err_vram:
+	vram_allocator_destroy(ldev);
 err_pci:
 	amdgpu_lite_pci_cleanup(ldev);
 err_free:
@@ -199,6 +227,9 @@ static void amdgpu_lite_remove(struct pci_dev *pdev)
 	mutex_unlock(&amdgpu_lite_devices_lock);
 
 	misc_deregister(&ldev->misc);
+	amdgpu_lite_irq_cleanup(ldev);
+	amdgpu_lite_gart_cleanup(ldev);
+	vram_allocator_destroy(ldev);
 	amdgpu_lite_pci_cleanup(ldev);
 	kfree(ldev);
 }

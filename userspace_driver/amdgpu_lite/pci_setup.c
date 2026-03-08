@@ -274,6 +274,11 @@ long amdgpu_lite_ioctl_get_info(struct amdgpu_lite_device *ldev,
 	info.vram_bar_index = ldev->vram_bar_idx;
 	info.doorbell_bar_index = ldev->doorbell_bar_idx;
 
+	/* GART page table info */
+	info.gart_table_bus_addr = ldev->gart_table_bus_addr;
+	info.gart_table_size = ldev->gart_size;
+	info.gart_gpu_va_start = AMDGPU_LITE_GART_VA_START;
+
 	if (copy_to_user((void __user *)arg, &info, sizeof(info)))
 		return -EFAULT;
 
