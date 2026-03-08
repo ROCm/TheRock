@@ -263,4 +263,34 @@ bandwidth.
 | `hip_api_stream.c` | Virtual stream handle allocator, hipStreamCreate variants converted to FnF |
 | `hip_api_module.c` | hipLaunchKernel/hipModuleLaunchKernel fire-and-forget |
 | `hip_client.c` | Write coalescing buffer, `hip_remote_request_fire_and_forget()` and `_with_data` variant |
-| `hip_worker_main.c` | vaddr hash map (1M slots) + sorted alloc list + last-hit cache, `vaddr_translate()` in all handlers, `handle_malloc_vaddr`, deferred error reporting in `handle_device_synchronize`, `g_suppress_response` mechanism |
+| `hip_worker_main.c` | vaddr hash map (1M slots) + sorted alloc list + last-hit cache, `vaddr_translate()` in all handlers, `handle_malloc_vaddr`, deferred error reporting in `handle_device_synchronize`, `g_suppress_response` mechanism, dynamically growable caches (g_loaded_modules, g_func_cache, g_kernarg_sizes, g_kernel_arg_cache), TCP keepalive, malloc retry |
+
+---
+
+## 7. Known Issues
+
+### Vaddr Translation False Positives (Triton FP8 Tests)
+
+The vaddr translation scans kernel argument 8-byte values for matches
+in the virtual address range. When COMGR metadata is unavailable or a
+struct parameter contains non-pointer 8-byte sub-fields whose values
+coincidentally fall in the vaddr range (VADDR_BASE to VADDR_BASE + total
+allocated), the translation corrupts kernel arguments. This causes
+asynchronous GPU illegal memory access that poisons the GPU context for
+all subsequent operations.
+
+**Affected tests**: `test_scaled_dot` with FP8/e2m1 types in Triton's
+`test_core.py`. The first ~83 tests (fp16/bf16) pass, then all FP8
+variants fail.
+
+**Root cause**: The PhiloxState struct (32 bytes) in PyTorch's random
+number generation kernels contains a pointer at offset 0 and counter/seed
+data at subsequent offsets. The scan translates the pointer correctly but
+may also translate counter values that fall in the vaddr range.
+
+**Proper fix**: Add `value_kind` (pointer vs scalar) from COMGR metadata
+to `HipRemoteParamDesc`. Only translate `global_buffer` parameters. This
+requires a protocol struct change and matched rebuild of client + worker.
+
+**Workaround**: Moving VADDR_BASE to a higher value (e.g., 0xABCD00000000)
+reduces the probability of false positives. Testing this approach.
