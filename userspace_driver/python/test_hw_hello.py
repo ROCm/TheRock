@@ -75,6 +75,7 @@ def test_get_info(dev: object) -> bool:
         print(f"  Visible:    {info.visible_vram_size // (1024*1024)} MB")
         print(f"  MMIO BAR:   {info.mmio_bar_index}")
         print(f"  VRAM BAR:   {info.vram_bar_index}")
+        print(f"  Headless:   {info.headless}")
 
         # Print BAR info
         for i, bar in enumerate(info.bars):

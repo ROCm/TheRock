@@ -461,17 +461,26 @@ AmdGpuStartDevice(
     }
 
     /*
+     * Detect headless (compute-only) GPU: no POST display acquired means
+     * no physical display output. This is normal for MI100, MI200, MI300,
+     * and any GPU that isn't driving a monitor.
+     */
+    pAdapter->Headless = !pAdapter->PostDisplay.Acquired;
+
+    /*
      * Always report 1 video present source and 1 child device.
-     * If we're not the POST device, the child will report as disconnected
-     * so no display path is established, but the driver still loads.
+     * WDDM Display class requires at least 1 child. For headless GPUs,
+     * QueryChildStatus will report the child as disconnected so no
+     * display path is established, but the driver still loads and the
+     * escape channel works.
      */
     *NumberOfVideoPresentSources = 1;
     *NumberOfChildren = 1;
 
     pAdapter->Started = TRUE;
 
-    KdPrint(("AmdGpuWddm: StartDevice succeeded, VendorId=0x%04X DeviceId=0x%04X NumBars=%u\n",
-        pAdapter->VendorId, pAdapter->DeviceId, pAdapter->NumBars));
+    KdPrint(("AmdGpuWddm: StartDevice succeeded, VendorId=0x%04X DeviceId=0x%04X NumBars=%u Headless=%u\n",
+        pAdapter->VendorId, pAdapter->DeviceId, pAdapter->NumBars, pAdapter->Headless));
 
     /* Write StartDevice status to registry */
     {
@@ -502,6 +511,10 @@ AmdGpuStartDevice(
 
             RtlInitUnicodeString(&ValName, L"PostAcquired");
             Val = pAdapter->PostDisplay.Acquired ? 1 : 0;
+            ZwSetValueKey(hKey, &ValName, 0, REG_DWORD, &Val, sizeof(Val));
+
+            RtlInitUnicodeString(&ValName, L"Headless");
+            Val = pAdapter->Headless ? 1 : 0;
             ZwSetValueKey(hKey, &ValName, 0, REG_DWORD, &Val, sizeof(Val));
 
             ZwClose(hKey);

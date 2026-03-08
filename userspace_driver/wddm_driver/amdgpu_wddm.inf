@@ -2,10 +2,12 @@
 ; amdgpu_wddm.inf - ROCm Display Driver for AMD GPU
 ;
 ; WDDM display miniport with POST framebuffer passthrough.
-; Registers as Display class to replace AMD Adrenalin, provides
-; escape channel for Python compute driver.
+; Registers as Display class, provides escape channel for
+; Python compute driver. Supports both display and headless
+; (compute-only) AMD GPUs.
 ;
-; Target: AMD RX 9070 XT (DEV_7551, RDNA 4 / GFX1201 / Navi 48)
+; Device IDs sourced from Linux kernel amdgpu driver (v6.17).
+; Covers Vega (GCN5) through RDNA4 and CDNA1-3 (MI100-MI300).
 ;
 
 [Version]
@@ -14,7 +16,7 @@ Class       = Display
 ClassGuid   = {4D36E968-E325-11CE-BFC1-08002BE10318}
 Provider    = %ProviderString%
 CatalogFile = amdgpu_wddm.cat
-DriverVer   = 03/07/2026,10.8.0.400
+DriverVer   = 03/07/2026,10.8.0.500
 PnpLockdown = 1
 
 [DestinationDirs]
@@ -30,8 +32,141 @@ amdgpu_wddm.sys = 1
 %ManufacturerString% = AmdGpu, NTamd64.10.0...19041
 
 [AmdGpu.NTamd64.10.0...19041]
-; AMD RX 9070 XT (Navi 48 / gfx1201)
-%DeviceDesc_7551% = AmdGpu_Install, PCI\VEN_1002&DEV_7551
+
+; ---- Vega 10 (gfx900) - Radeon RX Vega 56/64, Instinct MI25, Pro WX 8100/9100 ----
+%DeviceDesc_Vega10% = AmdGpu_Install, PCI\VEN_1002&DEV_6860
+%DeviceDesc_Vega10% = AmdGpu_Install, PCI\VEN_1002&DEV_6861
+%DeviceDesc_Vega10% = AmdGpu_Install, PCI\VEN_1002&DEV_6862
+%DeviceDesc_Vega10% = AmdGpu_Install, PCI\VEN_1002&DEV_6863
+%DeviceDesc_Vega10% = AmdGpu_Install, PCI\VEN_1002&DEV_6864
+%DeviceDesc_Vega10% = AmdGpu_Install, PCI\VEN_1002&DEV_6867
+%DeviceDesc_Vega10% = AmdGpu_Install, PCI\VEN_1002&DEV_6868
+%DeviceDesc_Vega10% = AmdGpu_Install, PCI\VEN_1002&DEV_6869
+%DeviceDesc_Vega10% = AmdGpu_Install, PCI\VEN_1002&DEV_686A
+%DeviceDesc_Vega10% = AmdGpu_Install, PCI\VEN_1002&DEV_686B
+%DeviceDesc_Vega10% = AmdGpu_Install, PCI\VEN_1002&DEV_686C
+%DeviceDesc_Vega10% = AmdGpu_Install, PCI\VEN_1002&DEV_686D
+%DeviceDesc_Vega10% = AmdGpu_Install, PCI\VEN_1002&DEV_686E
+%DeviceDesc_Vega10% = AmdGpu_Install, PCI\VEN_1002&DEV_686F
+%DeviceDesc_Vega10% = AmdGpu_Install, PCI\VEN_1002&DEV_687F
+
+; ---- Vega 12 (gfx904) ----
+%DeviceDesc_Vega12% = AmdGpu_Install, PCI\VEN_1002&DEV_69A0
+%DeviceDesc_Vega12% = AmdGpu_Install, PCI\VEN_1002&DEV_69A1
+%DeviceDesc_Vega12% = AmdGpu_Install, PCI\VEN_1002&DEV_69A2
+%DeviceDesc_Vega12% = AmdGpu_Install, PCI\VEN_1002&DEV_69A3
+%DeviceDesc_Vega12% = AmdGpu_Install, PCI\VEN_1002&DEV_69AF
+
+; ---- Vega 20 (gfx906) - Radeon VII, Instinct MI50/MI60 ----
+%DeviceDesc_Vega20% = AmdGpu_Install, PCI\VEN_1002&DEV_66A0
+%DeviceDesc_Vega20% = AmdGpu_Install, PCI\VEN_1002&DEV_66A1
+%DeviceDesc_Vega20% = AmdGpu_Install, PCI\VEN_1002&DEV_66A2
+%DeviceDesc_Vega20% = AmdGpu_Install, PCI\VEN_1002&DEV_66A3
+%DeviceDesc_Vega20% = AmdGpu_Install, PCI\VEN_1002&DEV_66A4
+%DeviceDesc_Vega20% = AmdGpu_Install, PCI\VEN_1002&DEV_66A7
+%DeviceDesc_Vega20% = AmdGpu_Install, PCI\VEN_1002&DEV_66AF
+
+; ---- Arcturus / CDNA1 (gfx908) - Instinct MI100 [HEADLESS] ----
+%DeviceDesc_Arcturus% = AmdGpu_Install, PCI\VEN_1002&DEV_7388
+%DeviceDesc_Arcturus% = AmdGpu_Install, PCI\VEN_1002&DEV_738C
+%DeviceDesc_Arcturus% = AmdGpu_Install, PCI\VEN_1002&DEV_738E
+%DeviceDesc_Arcturus% = AmdGpu_Install, PCI\VEN_1002&DEV_7390
+
+; ---- Aldebaran / CDNA2 (gfx90a) - Instinct MI200 series [HEADLESS] ----
+%DeviceDesc_Aldebaran% = AmdGpu_Install, PCI\VEN_1002&DEV_7408
+%DeviceDesc_Aldebaran% = AmdGpu_Install, PCI\VEN_1002&DEV_740C
+%DeviceDesc_Aldebaran% = AmdGpu_Install, PCI\VEN_1002&DEV_740F
+%DeviceDesc_Aldebaran% = AmdGpu_Install, PCI\VEN_1002&DEV_7410
+
+; ---- Aqua Vanjaram / CDNA3 (gfx942) - Instinct MI300 series [HEADLESS] ----
+%DeviceDesc_MI300% = AmdGpu_Install, PCI\VEN_1002&DEV_74A0
+%DeviceDesc_MI300% = AmdGpu_Install, PCI\VEN_1002&DEV_74A1
+%DeviceDesc_MI300% = AmdGpu_Install, PCI\VEN_1002&DEV_74A2
+
+; ---- Navi 10 / RDNA1 (gfx1010) - Radeon RX 5600/5700 series ----
+%DeviceDesc_Navi10% = AmdGpu_Install, PCI\VEN_1002&DEV_7310
+%DeviceDesc_Navi10% = AmdGpu_Install, PCI\VEN_1002&DEV_7312
+%DeviceDesc_Navi10% = AmdGpu_Install, PCI\VEN_1002&DEV_7318
+%DeviceDesc_Navi10% = AmdGpu_Install, PCI\VEN_1002&DEV_7319
+%DeviceDesc_Navi10% = AmdGpu_Install, PCI\VEN_1002&DEV_731A
+%DeviceDesc_Navi10% = AmdGpu_Install, PCI\VEN_1002&DEV_731B
+%DeviceDesc_Navi10% = AmdGpu_Install, PCI\VEN_1002&DEV_731E
+%DeviceDesc_Navi10% = AmdGpu_Install, PCI\VEN_1002&DEV_731F
+
+; ---- Navi 12 / RDNA1 (gfx1011) - Radeon Pro 5600M ----
+%DeviceDesc_Navi12% = AmdGpu_Install, PCI\VEN_1002&DEV_7360
+%DeviceDesc_Navi12% = AmdGpu_Install, PCI\VEN_1002&DEV_7362
+
+; ---- Navi 14 / RDNA1 (gfx1012) - Radeon RX 5500 series ----
+%DeviceDesc_Navi14% = AmdGpu_Install, PCI\VEN_1002&DEV_7340
+%DeviceDesc_Navi14% = AmdGpu_Install, PCI\VEN_1002&DEV_7341
+%DeviceDesc_Navi14% = AmdGpu_Install, PCI\VEN_1002&DEV_7347
+%DeviceDesc_Navi14% = AmdGpu_Install, PCI\VEN_1002&DEV_734F
+
+; ---- Sienna Cichlid / RDNA2 (gfx1030) - Radeon RX 6800/6900 series ----
+%DeviceDesc_SiennaCichlid% = AmdGpu_Install, PCI\VEN_1002&DEV_73A0
+%DeviceDesc_SiennaCichlid% = AmdGpu_Install, PCI\VEN_1002&DEV_73A1
+%DeviceDesc_SiennaCichlid% = AmdGpu_Install, PCI\VEN_1002&DEV_73A2
+%DeviceDesc_SiennaCichlid% = AmdGpu_Install, PCI\VEN_1002&DEV_73A3
+%DeviceDesc_SiennaCichlid% = AmdGpu_Install, PCI\VEN_1002&DEV_73A5
+%DeviceDesc_SiennaCichlid% = AmdGpu_Install, PCI\VEN_1002&DEV_73A8
+%DeviceDesc_SiennaCichlid% = AmdGpu_Install, PCI\VEN_1002&DEV_73A9
+%DeviceDesc_SiennaCichlid% = AmdGpu_Install, PCI\VEN_1002&DEV_73AB
+%DeviceDesc_SiennaCichlid% = AmdGpu_Install, PCI\VEN_1002&DEV_73AC
+%DeviceDesc_SiennaCichlid% = AmdGpu_Install, PCI\VEN_1002&DEV_73AD
+%DeviceDesc_SiennaCichlid% = AmdGpu_Install, PCI\VEN_1002&DEV_73AE
+%DeviceDesc_SiennaCichlid% = AmdGpu_Install, PCI\VEN_1002&DEV_73AF
+%DeviceDesc_SiennaCichlid% = AmdGpu_Install, PCI\VEN_1002&DEV_73BF
+
+; ---- Navy Flounder / RDNA2 (gfx1031) - Radeon RX 6700 series ----
+%DeviceDesc_NavyFlounder% = AmdGpu_Install, PCI\VEN_1002&DEV_73C0
+%DeviceDesc_NavyFlounder% = AmdGpu_Install, PCI\VEN_1002&DEV_73C1
+%DeviceDesc_NavyFlounder% = AmdGpu_Install, PCI\VEN_1002&DEV_73C3
+%DeviceDesc_NavyFlounder% = AmdGpu_Install, PCI\VEN_1002&DEV_73DA
+%DeviceDesc_NavyFlounder% = AmdGpu_Install, PCI\VEN_1002&DEV_73DB
+%DeviceDesc_NavyFlounder% = AmdGpu_Install, PCI\VEN_1002&DEV_73DC
+%DeviceDesc_NavyFlounder% = AmdGpu_Install, PCI\VEN_1002&DEV_73DD
+%DeviceDesc_NavyFlounder% = AmdGpu_Install, PCI\VEN_1002&DEV_73DE
+%DeviceDesc_NavyFlounder% = AmdGpu_Install, PCI\VEN_1002&DEV_73DF
+
+; ---- Dimgrey Cavefish / RDNA2 (gfx1032) - Radeon RX 6600 series ----
+%DeviceDesc_DimgreyCavefish% = AmdGpu_Install, PCI\VEN_1002&DEV_73E0
+%DeviceDesc_DimgreyCavefish% = AmdGpu_Install, PCI\VEN_1002&DEV_73E1
+%DeviceDesc_DimgreyCavefish% = AmdGpu_Install, PCI\VEN_1002&DEV_73E2
+%DeviceDesc_DimgreyCavefish% = AmdGpu_Install, PCI\VEN_1002&DEV_73E3
+%DeviceDesc_DimgreyCavefish% = AmdGpu_Install, PCI\VEN_1002&DEV_73E8
+%DeviceDesc_DimgreyCavefish% = AmdGpu_Install, PCI\VEN_1002&DEV_73E9
+%DeviceDesc_DimgreyCavefish% = AmdGpu_Install, PCI\VEN_1002&DEV_73EA
+%DeviceDesc_DimgreyCavefish% = AmdGpu_Install, PCI\VEN_1002&DEV_73EB
+%DeviceDesc_DimgreyCavefish% = AmdGpu_Install, PCI\VEN_1002&DEV_73EC
+%DeviceDesc_DimgreyCavefish% = AmdGpu_Install, PCI\VEN_1002&DEV_73ED
+%DeviceDesc_DimgreyCavefish% = AmdGpu_Install, PCI\VEN_1002&DEV_73EF
+%DeviceDesc_DimgreyCavefish% = AmdGpu_Install, PCI\VEN_1002&DEV_73FF
+
+; ---- Beige Goby / RDNA2 (gfx1034) - Radeon RX 6400/6500 series ----
+%DeviceDesc_BeigeGoby% = AmdGpu_Install, PCI\VEN_1002&DEV_7420
+%DeviceDesc_BeigeGoby% = AmdGpu_Install, PCI\VEN_1002&DEV_7421
+%DeviceDesc_BeigeGoby% = AmdGpu_Install, PCI\VEN_1002&DEV_7422
+%DeviceDesc_BeigeGoby% = AmdGpu_Install, PCI\VEN_1002&DEV_7423
+%DeviceDesc_BeigeGoby% = AmdGpu_Install, PCI\VEN_1002&DEV_7424
+%DeviceDesc_BeigeGoby% = AmdGpu_Install, PCI\VEN_1002&DEV_743F
+
+; ---- Navi 31 / RDNA3 (gfx1100) - Radeon RX 7900 XTX/XT/GRE ----
+%DeviceDesc_Navi31% = AmdGpu_Install, PCI\VEN_1002&DEV_744C
+%DeviceDesc_Navi31% = AmdGpu_Install, PCI\VEN_1002&DEV_7448
+
+; ---- Navi 32 / RDNA3 (gfx1101) - Radeon RX 7800 XT/7700 XT ----
+%DeviceDesc_Navi32% = AmdGpu_Install, PCI\VEN_1002&DEV_747E
+
+; ---- Navi 33 / RDNA3 (gfx1102) - Radeon RX 7600 series ----
+%DeviceDesc_Navi33% = AmdGpu_Install, PCI\VEN_1002&DEV_7480
+%DeviceDesc_Navi33% = AmdGpu_Install, PCI\VEN_1002&DEV_7483
+
+; ---- Navi 48 / RDNA4 (gfx1201) - Radeon RX 9070 series ----
+%DeviceDesc_Navi48% = AmdGpu_Install, PCI\VEN_1002&DEV_7551
+
+; ---- Navi 44 / RDNA4 (gfx1200) - Radeon RX 9060 series ----
+%DeviceDesc_Navi44% = AmdGpu_Install, PCI\VEN_1002&DEV_7561
 
 [AmdGpu_Install]
 CopyFiles = AmdGpu_CopyFiles
@@ -57,8 +192,37 @@ ErrorControl   = 1          ; SERVICE_ERROR_NORMAL
 ServiceBinary  = %13%\amdgpu_wddm.sys
 
 [Strings]
-ProviderString      = "ROCm Open Source"
-ManufacturerString  = "Advanced Micro Devices, Inc."
-DiskName            = "ROCm Display Driver Disk"
-ServiceDesc         = "ROCm Display Driver"
-DeviceDesc_7551     = "AMD Radeon RX 9070 XT (ROCm Display)"
+ProviderString          = "ROCm Open Source"
+ManufacturerString      = "Advanced Micro Devices, Inc."
+DiskName                = "ROCm Display Driver Disk"
+ServiceDesc             = "ROCm Display Driver"
+
+; Vega (GCN5)
+DeviceDesc_Vega10       = "AMD Vega 10 (ROCm)"
+DeviceDesc_Vega12       = "AMD Vega 12 (ROCm)"
+DeviceDesc_Vega20       = "AMD Vega 20 (ROCm)"
+
+; CDNA - Compute-only (headless)
+DeviceDesc_Arcturus     = "AMD Instinct MI100 (ROCm)"
+DeviceDesc_Aldebaran    = "AMD Instinct MI200 (ROCm)"
+DeviceDesc_MI300        = "AMD Instinct MI300 (ROCm)"
+
+; RDNA1
+DeviceDesc_Navi10       = "AMD Navi 10 (ROCm)"
+DeviceDesc_Navi12       = "AMD Navi 12 (ROCm)"
+DeviceDesc_Navi14       = "AMD Navi 14 (ROCm)"
+
+; RDNA2
+DeviceDesc_SiennaCichlid    = "AMD Radeon RX 6800/6900 (ROCm)"
+DeviceDesc_NavyFlounder     = "AMD Radeon RX 6700 (ROCm)"
+DeviceDesc_DimgreyCavefish  = "AMD Radeon RX 6600 (ROCm)"
+DeviceDesc_BeigeGoby        = "AMD Radeon RX 6400/6500 (ROCm)"
+
+; RDNA3
+DeviceDesc_Navi31       = "AMD Radeon RX 7900 (ROCm)"
+DeviceDesc_Navi32       = "AMD Radeon RX 7800/7700 (ROCm)"
+DeviceDesc_Navi33       = "AMD Radeon RX 7600 (ROCm)"
+
+; RDNA4
+DeviceDesc_Navi48       = "AMD Radeon RX 9070 (ROCm)"
+DeviceDesc_Navi44       = "AMD Radeon RX 9060 (ROCm)"

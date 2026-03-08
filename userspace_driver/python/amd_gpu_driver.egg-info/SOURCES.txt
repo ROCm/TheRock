@@ -2,6 +2,7 @@ pyproject.toml
 python/amd_gpu_driver/__init__.py
 python/amd_gpu_driver/device.py
 python/amd_gpu_driver/errors.py
+python/amd_gpu_driver/multi_gpu.py
 python/amd_gpu_driver/program.py
 python/amd_gpu_driver/topology.py
 python/amd_gpu_driver.egg-info/PKG-INFO
@@ -16,6 +17,17 @@ python/amd_gpu_driver/backends/kfd/device.py
 python/amd_gpu_driver/backends/kfd/events.py
 python/amd_gpu_driver/backends/kfd/memory.py
 python/amd_gpu_driver/backends/kfd/queue.py
+python/amd_gpu_driver/backends/windows/__init__.py
+python/amd_gpu_driver/backends/windows/compute_dispatch.py
+python/amd_gpu_driver/backends/windows/device.py
+python/amd_gpu_driver/backends/windows/discovery.py
+python/amd_gpu_driver/backends/windows/driver_interface.py
+python/amd_gpu_driver/backends/windows/gmc_init.py
+python/amd_gpu_driver/backends/windows/ih_init.py
+python/amd_gpu_driver/backends/windows/ip_discovery.py
+python/amd_gpu_driver/backends/windows/nbio_init.py
+python/amd_gpu_driver/backends/windows/psp_init.py
+python/amd_gpu_driver/backends/windows/ring_init.py
 python/amd_gpu_driver/commands/__init__.py
 python/amd_gpu_driver/commands/pm4.py
 python/amd_gpu_driver/commands/ring.py

@@ -105,12 +105,21 @@ AmdGpuQueryChildStatus(
     }
 
     if (ChildStatus->Type == StatusConnection) {
+        AMDGPU_ADAPTER *pAdapter = (AMDGPU_ADAPTER *)MiniportDeviceContext;
+
         /*
-         * Always report connected. Non-POST display drivers must still
-         * report viable outputs -- dxgkrnl rejects display drivers with
-         * zero connected children on non-POST devices.
+         * Report connected only if we have a display.
+         *
+         * For headless compute GPUs (MI100, MI200, MI300, etc.), report
+         * disconnected so dxgkrnl doesn't try to establish a display path.
+         * The escape channel for compute works regardless of display status.
+         *
+         * For GPUs with display output (consumer/pro cards), report
+         * connected so the POST framebuffer display path works.
          */
-        ChildStatus->HotPlug.Connected = TRUE;
+        ChildStatus->HotPlug.Connected = !pAdapter->Headless;
+        KdPrint(("AmdGpuWddm: QueryChildStatus Connected=%u (Headless=%u)\n",
+            ChildStatus->HotPlug.Connected, pAdapter->Headless));
         return STATUS_SUCCESS;
     }
 

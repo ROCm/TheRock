@@ -38,6 +38,7 @@ EscapeGetInfo(
     pData->VisibleVramSizeBytes = pAdapter->VisibleVramSize;
     pData->MmioBarIndex = pAdapter->MmioBarIndex;
     pData->VramBarIndex = pAdapter->VramBarIndex;
+    pData->Headless = pAdapter->Headless;
 
     return STATUS_SUCCESS;
 }
