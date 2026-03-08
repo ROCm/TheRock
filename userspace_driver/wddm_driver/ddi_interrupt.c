@@ -23,15 +23,15 @@ AmdGpuInterruptRoutine(
     if (!pAdapter->IhRing.Configured)
         return FALSE;
 
-    if (!pAdapter->Bars[0].Mapped || pAdapter->Bars[0].KernelAddress == NULL)
+    if (!pAdapter->Bars[pAdapter->MmioBarIndex].Mapped || pAdapter->Bars[pAdapter->MmioBarIndex].KernelAddress == NULL)
         return FALSE;
 
     if (pAdapter->IhRing.WptrRegOffset + sizeof(ULONG) >
-        pAdapter->Bars[0].Length)
+        pAdapter->Bars[pAdapter->MmioBarIndex].Length)
         return FALSE;
 
     Wptr = READ_REGISTER_ULONG(
-        (PULONG)((PUCHAR)pAdapter->Bars[0].KernelAddress +
+        (PULONG)((PUCHAR)pAdapter->Bars[pAdapter->MmioBarIndex].KernelAddress +
                  pAdapter->IhRing.WptrRegOffset));
 
     Wptr &= pAdapter->IhRing.RingMask;
@@ -59,7 +59,7 @@ AmdGpuDpcRoutine(
 
     if (InterlockedExchange(&pAdapter->IhPending, 0)) {
         Wptr = READ_REGISTER_ULONG(
-            (PULONG)((PUCHAR)pAdapter->Bars[0].KernelAddress +
+            (PULONG)((PUCHAR)pAdapter->Bars[pAdapter->MmioBarIndex].KernelAddress +
                      pAdapter->IhRing.WptrRegOffset));
         Wptr &= pAdapter->IhRing.RingMask;
 
@@ -88,9 +88,9 @@ AmdGpuDpcRoutine(
         }
 
         if (pAdapter->IhRing.RptrRegOffset + sizeof(ULONG) <=
-            pAdapter->Bars[0].Length) {
+            pAdapter->Bars[pAdapter->MmioBarIndex].Length) {
             WRITE_REGISTER_ULONG(
-                (PULONG)((PUCHAR)pAdapter->Bars[0].KernelAddress +
+                (PULONG)((PUCHAR)pAdapter->Bars[pAdapter->MmioBarIndex].KernelAddress +
                          pAdapter->IhRing.RptrRegOffset),
                 pAdapter->IhRing.Rptr);
         }

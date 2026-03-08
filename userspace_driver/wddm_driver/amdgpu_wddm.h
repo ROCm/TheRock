@@ -62,6 +62,8 @@ typedef struct _AMDGPU_ESCAPE_GET_INFO_DATA {
     } Bars[6];
     ULONGLONG   VramSizeBytes;
     ULONGLONG   VisibleVramSizeBytes;
+    ULONG       MmioBarIndex;       /* Which Bars[] entry is MMIO registers */
+    ULONG       VramBarIndex;       /* Which Bars[] entry is VRAM aperture */
 } AMDGPU_ESCAPE_GET_INFO_DATA;
 
 typedef struct _AMDGPU_ESCAPE_REG32_DATA {
@@ -287,6 +289,11 @@ typedef struct _AMDGPU_ADAPTER {
     ULONGLONG               VramSize;
     ULONGLONG               VisibleVramSize;
 
+    /* BAR classification (set by ClassifyBars after EnumerateBars) */
+    ULONG                   MmioBarIndex;     /* MMIO register BAR (~256MB) */
+    ULONG                   VramBarIndex;     /* VRAM aperture BAR (largest) */
+    ULONG                   DoorbellBarIndex; /* Doorbell BAR (smallest) */
+
     /* POST display state */
     AMDGPU_POST_DISPLAY     PostDisplay;
 
@@ -297,7 +304,7 @@ typedef struct _AMDGPU_ADAPTER {
     BOOLEAN                 Started;
 } AMDGPU_ADAPTER;
 
-/* Lazy BAR0 mapping */
-NTSTATUS AmdGpuMapBar0IfNeeded(_Inout_ AMDGPU_ADAPTER *pAdapter);
+/* Lazy MMIO BAR mapping */
+NTSTATUS AmdGpuMapMmioIfNeeded(_Inout_ AMDGPU_ADAPTER *pAdapter);
 
 #endif /* _KERNEL_MODE */

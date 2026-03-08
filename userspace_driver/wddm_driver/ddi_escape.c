@@ -17,7 +17,7 @@ EscapeGetInfo(
 {
     ULONG i;
 
-    AmdGpuMapBar0IfNeeded(pAdapter);
+    AmdGpuMapMmioIfNeeded(pAdapter);
 
     pData->VendorId = pAdapter->VendorId;
     pData->DeviceId = pAdapter->DeviceId;
@@ -36,6 +36,8 @@ EscapeGetInfo(
 
     pData->VramSizeBytes = pAdapter->VramSize;
     pData->VisibleVramSizeBytes = pAdapter->VisibleVramSize;
+    pData->MmioBarIndex = pAdapter->MmioBarIndex;
+    pData->VramBarIndex = pAdapter->VramBarIndex;
 
     return STATUS_SUCCESS;
 }
@@ -49,8 +51,12 @@ EscapeReadReg32(
     ULONG BarIndex = pData->BarIndex;
     ULONG Offset = pData->Offset;
 
-    if (BarIndex == 0 && !pAdapter->Bars[0].Mapped)
-        AmdGpuMapBar0IfNeeded(pAdapter);
+    /* BarIndex 0 from userspace means "MMIO register BAR" */
+    if (BarIndex == 0)
+        BarIndex = pAdapter->MmioBarIndex;
+
+    if (!pAdapter->Bars[BarIndex].Mapped)
+        AmdGpuMapMmioIfNeeded(pAdapter);
 
     if (BarIndex >= AMDGPU_MAX_BARS || !pAdapter->Bars[BarIndex].Mapped)
         return STATUS_INVALID_PARAMETER;
@@ -73,8 +79,12 @@ EscapeWriteReg32(
     ULONG BarIndex = pData->BarIndex;
     ULONG Offset = pData->Offset;
 
-    if (BarIndex == 0 && !pAdapter->Bars[0].Mapped)
-        AmdGpuMapBar0IfNeeded(pAdapter);
+    /* BarIndex 0 from userspace means "MMIO register BAR" */
+    if (BarIndex == 0)
+        BarIndex = pAdapter->MmioBarIndex;
+
+    if (!pAdapter->Bars[BarIndex].Mapped)
+        AmdGpuMapMmioIfNeeded(pAdapter);
 
     if (BarIndex >= AMDGPU_MAX_BARS || !pAdapter->Bars[BarIndex].Mapped)
         return STATUS_INVALID_PARAMETER;
@@ -400,11 +410,14 @@ EscapeEnableMsi(
     if (pData->IhRingSize > pAdapter->DmaAllocs[Index].Size)
         return STATUS_INVALID_PARAMETER;
 
-    if (pAdapter->Bars[0].Length == 0 || !pAdapter->Bars[0].Mapped)
+    if (pAdapter->Bars[pAdapter->MmioBarIndex].Length == 0 ||
+        !pAdapter->Bars[pAdapter->MmioBarIndex].Mapped)
         return STATUS_DEVICE_CONFIGURATION_ERROR;
 
-    if (pData->IhRptrRegOffset + sizeof(ULONG) > pAdapter->Bars[0].Length ||
-        pData->IhWptrRegOffset + sizeof(ULONG) > pAdapter->Bars[0].Length)
+    if (pData->IhRptrRegOffset + sizeof(ULONG) >
+        pAdapter->Bars[pAdapter->MmioBarIndex].Length ||
+        pData->IhWptrRegOffset + sizeof(ULONG) >
+        pAdapter->Bars[pAdapter->MmioBarIndex].Length)
         return STATUS_INVALID_PARAMETER;
 
     pAdapter->IhRing.RingBuffer = pAdapter->DmaAllocs[Index].KernelVa;

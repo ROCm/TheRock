@@ -198,6 +198,8 @@ class EscapeGetInfoData(ctypes.Structure):
         ("Bars", BarInfo * 6),
         ("VramSizeBytes", ctypes.c_uint64),
         ("VisibleVramSizeBytes", ctypes.c_uint64),
+        ("MmioBarIndex", ctypes.c_uint32),
+        ("VramBarIndex", ctypes.c_uint32),
     ]
 
 
@@ -291,6 +293,8 @@ class DeviceInfo:
     bars: list[dict[str, int | bool]]
     vram_size: int
     visible_vram_size: int
+    mmio_bar_index: int
+    vram_bar_index: int
 
 
 # ============================================================================
@@ -433,6 +437,8 @@ class DriverInterface:
             bars=bars,
             vram_size=cmd.VramSizeBytes,
             visible_vram_size=cmd.VisibleVramSizeBytes,
+            mmio_bar_index=cmd.MmioBarIndex,
+            vram_bar_index=cmd.VramBarIndex,
         )
 
     def read_reg32(self, offset: int, bar_index: int = 0) -> int:

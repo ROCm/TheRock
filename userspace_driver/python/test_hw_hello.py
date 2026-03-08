@@ -73,14 +73,25 @@ def test_get_info(dev: object) -> bool:
               f"0x{info.subsystem_id:04X}")
         print(f"  VRAM:       {info.vram_size // (1024*1024)} MB")
         print(f"  Visible:    {info.visible_vram_size // (1024*1024)} MB")
+        print(f"  MMIO BAR:   {info.mmio_bar_index}")
+        print(f"  VRAM BAR:   {info.vram_bar_index}")
 
         # Print BAR info
         for i, bar in enumerate(info.bars):
             if bar.get("length", 0) > 0:
                 addr = bar.get("physical_address", 0)
                 length = bar.get("length", 0)
+                label = ""
+                if i == info.mmio_bar_index:
+                    label = " [MMIO]"
+                elif i == info.vram_bar_index:
+                    label = " [VRAM]"
+                if length >= 1024 * 1024:
+                    size_str = f"{length // (1024*1024)}MB"
+                else:
+                    size_str = f"{length // 1024}KB"
                 print(f"  BAR{i}:       addr=0x{addr:012X} "
-                      f"size={length // (1024*1024)}MB")
+                      f"size={size_str}{label}")
 
         if info.vendor_id != 0x1002:
             print("  WARNING: Unexpected vendor ID")

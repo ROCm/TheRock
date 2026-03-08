@@ -100,6 +100,8 @@ class EscapeGetInfoData(ctypes.Structure):
         ("Bars", BarInfo * 6),
         ("VramSizeBytes", ctypes.c_uint64),
         ("VisibleVramSizeBytes", ctypes.c_uint64),
+        ("MmioBarIndex", ctypes.c_uint32),
+        ("VramBarIndex", ctypes.c_uint32),
     ]
 
 
@@ -189,7 +191,8 @@ def main() -> int:
         info = ""
         if ok:
             info = (f" vendor=0x{cmd.VendorId:04X} device=0x{cmd.DeviceId:04X}"
-                    f" vram={cmd.VramSizeBytes//(1024*1024)}MB bars={cmd.NumBars}")
+                    f" vram={cmd.VramSizeBytes//(1024*1024)}MB bars={cmd.NumBars}"
+                    f" mmio_bar={cmd.MmioBarIndex} vram_bar={cmd.VramBarIndex}")
         print(f"[{i}] LUID={luid.HighPart}:{luid.LowPart} src={ai.NumOfSources} "
               f"hDev=0x{h_device:X} escape={'OK' if ok else f'0x{s & 0xFFFFFFFF:08X}'}{info}")
 

@@ -161,26 +161,108 @@ EnumerateBars(
     return STATUS_SUCCESS;
 }
 
+/*
+ * ClassifyBars -- determine which BAR is MMIO, VRAM, and doorbell.
+ *
+ * AMD GPUs present BARs as (by PCI BAR index):
+ *   BAR0/1: VRAM aperture (largest, prefetchable, 64-bit)
+ *   BAR2/3: Doorbell aperture (medium, prefetchable, 64-bit, ~256MB)
+ *   BAR5:   MMIO registers (smallest, non-prefetchable, 32-bit, ~512KB)
+ *
+ * CM resource list doesn't preserve PCI BAR indices, so we classify
+ * by size: VRAM=largest, MMIO=smallest, Doorbell=middle.
+ */
+static void
+ClassifyBars(
+    _Inout_ AMDGPU_ADAPTER *pAdapter
+    )
+{
+    ULONG i;
+    ULONGLONG LargestSize = 0;
+    ULONGLONG SmallestSize = (ULONGLONG)-1;
+    ULONG LargestIdx = 0, SmallestIdx = 0;
+
+    /* Default: all point to 0 */
+    pAdapter->MmioBarIndex = 0;
+    pAdapter->VramBarIndex = 0;
+    pAdapter->DoorbellBarIndex = 0;
+
+    if (pAdapter->NumBars < 2)
+        return;
+
+    /* Find largest and smallest memory BARs */
+    for (i = 0; i < pAdapter->NumBars; i++) {
+        if (!pAdapter->Bars[i].IsMemory || pAdapter->Bars[i].Length == 0)
+            continue;
+        if (pAdapter->Bars[i].Length > LargestSize) {
+            LargestSize = pAdapter->Bars[i].Length;
+            LargestIdx = i;
+        }
+        if (pAdapter->Bars[i].Length < SmallestSize) {
+            SmallestSize = pAdapter->Bars[i].Length;
+            SmallestIdx = i;
+        }
+    }
+
+    /*
+     * MMIO register BAR is the SMALLEST (BAR5, ~512KB).
+     * VRAM is the LARGEST (BAR0, up to full VRAM with ReBAR).
+     * Doorbell is the MIDDLE one (BAR2, ~256MB).
+     */
+    pAdapter->VramBarIndex = LargestIdx;
+    pAdapter->MmioBarIndex = SmallestIdx;
+
+    /* Doorbell is the one that's neither largest nor smallest */
+    for (i = 0; i < pAdapter->NumBars; i++) {
+        if (!pAdapter->Bars[i].IsMemory || pAdapter->Bars[i].Length == 0)
+            continue;
+        if (i != LargestIdx && i != SmallestIdx) {
+            pAdapter->DoorbellBarIndex = i;
+            break;
+        }
+    }
+
+    /* If only 2 BARs, MMIO is the smaller one */
+    if (pAdapter->NumBars == 2) {
+        pAdapter->MmioBarIndex = SmallestIdx;
+        pAdapter->DoorbellBarIndex = LargestIdx;
+    }
+
+    KdPrint(("AmdGpuWddm: BAR classification: MMIO=%u (%lluKB) VRAM=%u (%lluMB) Doorbell=%u (%lluMB)\n",
+        pAdapter->MmioBarIndex,
+        pAdapter->Bars[pAdapter->MmioBarIndex].Length / 1024,
+        pAdapter->VramBarIndex,
+        pAdapter->Bars[pAdapter->VramBarIndex].Length / (1024 * 1024),
+        pAdapter->DoorbellBarIndex,
+        pAdapter->Bars[pAdapter->DoorbellBarIndex].Length / (1024 * 1024)));
+}
+
 static NTSTATUS
-MapBar0(
+MapMmioBar(
     _Inout_ AMDGPU_ADAPTER *pAdapter
     )
 {
     PVOID MappedAddr;
+    ULONG Idx = pAdapter->MmioBarIndex;
 
-    if (pAdapter->NumBars == 0 || pAdapter->Bars[0].Length == 0)
+    if (pAdapter->NumBars == 0 || pAdapter->Bars[Idx].Length == 0)
         return STATUS_DEVICE_CONFIGURATION_ERROR;
 
     MappedAddr = MmMapIoSpaceEx(
-        pAdapter->Bars[0].PhysicalAddress,
-        (SIZE_T)pAdapter->Bars[0].Length,
+        pAdapter->Bars[Idx].PhysicalAddress,
+        (SIZE_T)pAdapter->Bars[Idx].Length,
         PAGE_READWRITE | PAGE_NOCACHE);
 
     if (MappedAddr == NULL)
         return STATUS_INSUFFICIENT_RESOURCES;
 
-    pAdapter->Bars[0].KernelAddress = MappedAddr;
-    pAdapter->Bars[0].Mapped = TRUE;
+    pAdapter->Bars[Idx].KernelAddress = MappedAddr;
+    pAdapter->Bars[Idx].Mapped = TRUE;
+
+    KdPrint(("AmdGpuWddm: Mapped MMIO BAR[%u] phys=0x%llX len=%lluMB kva=%p\n",
+        Idx, pAdapter->Bars[Idx].PhysicalAddress.QuadPart,
+        pAdapter->Bars[Idx].Length / (1024 * 1024), MappedAddr));
+
     return STATUS_SUCCESS;
 }
 
@@ -206,36 +288,45 @@ DetectVramSize(
     _Inout_ AMDGPU_ADAPTER *pAdapter
     )
 {
+    ULONG MmioIdx = pAdapter->MmioBarIndex;
+    ULONG VramIdx = pAdapter->VramBarIndex;
     ULONG MemSizeMB;
 
-    if (!pAdapter->Bars[0].Mapped || pAdapter->Bars[0].KernelAddress == NULL) {
-        pAdapter->VramSize = 0;
-        pAdapter->VisibleVramSize = 0;
+    if (!pAdapter->Bars[MmioIdx].Mapped ||
+        pAdapter->Bars[MmioIdx].KernelAddress == NULL) {
+        /* Fall back to VRAM BAR size as estimate */
+        pAdapter->VramSize = pAdapter->Bars[VramIdx].Length;
+        pAdapter->VisibleVramSize = pAdapter->VramSize;
         return;
     }
 
-    if (mmRCC_CONFIG_MEMSIZE_BYTE + sizeof(ULONG) > pAdapter->Bars[0].Length) {
-        pAdapter->VramSize = 0;
-        pAdapter->VisibleVramSize = 0;
+    if (mmRCC_CONFIG_MEMSIZE_BYTE + sizeof(ULONG) >
+        pAdapter->Bars[MmioIdx].Length) {
+        pAdapter->VramSize = pAdapter->Bars[VramIdx].Length;
+        pAdapter->VisibleVramSize = pAdapter->VramSize;
         return;
     }
 
     MemSizeMB = READ_REGISTER_ULONG(
-        (PULONG)((PUCHAR)pAdapter->Bars[0].KernelAddress + mmRCC_CONFIG_MEMSIZE_BYTE));
+        (PULONG)((PUCHAR)pAdapter->Bars[MmioIdx].KernelAddress +
+                 mmRCC_CONFIG_MEMSIZE_BYTE));
 
-    pAdapter->VramSize = (ULONGLONG)MemSizeMB * 1024ULL * 1024ULL;
+    KdPrint(("AmdGpuWddm: RCC_CONFIG_MEMSIZE register = 0x%08X (%u MB)\n",
+        MemSizeMB, MemSizeMB));
 
-    if (pAdapter->NumBars >= 3 && pAdapter->Bars[2].Length > 0) {
-        pAdapter->VisibleVramSize =
-            (pAdapter->VramSize < pAdapter->Bars[2].Length)
-            ? pAdapter->VramSize
-            : pAdapter->Bars[2].Length;
+    if (MemSizeMB > 0 && MemSizeMB < 0x100000) {
+        /* Register returned valid MB count */
+        pAdapter->VramSize = (ULONGLONG)MemSizeMB * 1024ULL * 1024ULL;
     } else {
-        pAdapter->VisibleVramSize =
-            (pAdapter->VramSize < 256ULL * 1024 * 1024)
-            ? pAdapter->VramSize
-            : 256ULL * 1024 * 1024;
+        /* Register read failed or returned garbage, use VRAM BAR size */
+        pAdapter->VramSize = pAdapter->Bars[VramIdx].Length;
     }
+
+    /* Visible VRAM = min(total VRAM, VRAM BAR size) */
+    pAdapter->VisibleVramSize =
+        (pAdapter->VramSize < pAdapter->Bars[VramIdx].Length)
+        ? pAdapter->VramSize
+        : pAdapter->Bars[VramIdx].Length;
 }
 
 /* PCI config offsets */
@@ -322,10 +413,12 @@ AmdGpuStartDevice(
         pAdapter->SubsystemId = SubsysId;
     }
 
-    /* ---- Enumerate PCI BARs ---- */
+    /* ---- Enumerate PCI BARs and classify ---- */
     Status = EnumerateBars(pAdapter);
     if (!NT_SUCCESS(Status))
         pAdapter->NumBars = 0;
+
+    ClassifyBars(pAdapter);
 
     /* ---- Acquire POST display ownership ---- */
     {
@@ -419,23 +512,24 @@ AmdGpuStartDevice(
 }
 
 /* ======================================================================
- * MapBar0IfNeeded -- lazy init
+ * MapMmioIfNeeded -- lazy MMIO BAR mapping
  * ====================================================================== */
 
 NTSTATUS
-AmdGpuMapBar0IfNeeded(
+AmdGpuMapMmioIfNeeded(
     _Inout_ AMDGPU_ADAPTER *pAdapter
     )
 {
     NTSTATUS Status;
+    ULONG Idx = pAdapter->MmioBarIndex;
 
-    if (pAdapter->Bars[0].Mapped)
+    if (pAdapter->Bars[Idx].Mapped)
         return STATUS_SUCCESS;
 
     if (pAdapter->NumBars == 0)
         return STATUS_DEVICE_CONFIGURATION_ERROR;
 
-    Status = MapBar0(pAdapter);
+    Status = MapMmioBar(pAdapter);
     if (!NT_SUCCESS(Status))
         return Status;
 
