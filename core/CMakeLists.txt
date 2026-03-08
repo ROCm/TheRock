@@ -63,6 +63,21 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
   # ROCR-Runtime
   ##############################################################################
 
+  # On Windows with wddm_lite, we don't need libdrm or numactl
+  set(_ROCR_CMAKE_ARGS "-DBUILD_SHARED_LIBS=ON")
+  set(_ROCR_RUNTIME_DEPS
+    rocprofiler-register
+    ${THEROCK_BUNDLED_ELFUTILS}
+  )
+  if(WIN32)
+    list(APPEND _ROCR_CMAKE_ARGS "-DHSAKMT_WDDM_LITE=ON")
+  else()
+    list(APPEND _ROCR_RUNTIME_DEPS
+      ${THEROCK_BUNDLED_LIBDRM}
+      ${THEROCK_BUNDLED_NUMACTL}
+    )
+  endif()
+
   therock_cmake_subproject_declare(ROCR-Runtime
     USE_DIST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime"
@@ -71,15 +86,12 @@ if(THEROCK_ENABLE_CORE_RUNTIME)
     COMPILER_TOOLCHAIN
       "${_system_toolchain}"
     CMAKE_ARGS
-      "-DBUILD_SHARED_LIBS=ON"
+      ${_ROCR_CMAKE_ARGS}
     BUILD_DEPS
       amd-llvm
       therock-simde
     RUNTIME_DEPS
-      rocprofiler-register
-      ${THEROCK_BUNDLED_ELFUTILS}
-      ${THEROCK_BUNDLED_LIBDRM}
-      ${THEROCK_BUNDLED_NUMACTL}
+      ${_ROCR_RUNTIME_DEPS}
     INTERFACE_LINK_DIRS
       "lib"
     INTERFACE_INSTALL_RPATH_DIRS
@@ -143,15 +155,17 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
   set(HIP_CLR_CMAKE_ARGS)
   set(HIP_CLR_RUNTIME_DEPS)
   if(WIN32)
-    # Windows CLR options
-    set(_compute_pal_dir "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/shared/amdgpu-windows-interop")
-    cmake_path(NORMAL_PATH _compute_pal_dir)
+    # Windows CLR options: use HSA path with wddm_lite instead of PAL
     list(APPEND HIP_CLR_CMAKE_ARGS
       "-DUSE_PROF_API=OFF"
       "-D__HIP_ENABLE_PCH=OFF"
-      "-DROCCLR_ENABLE_PAL=1"
-      "-DROCCLR_ENABLE_HSA=0"
-      "-DAMD_COMPUTE_WIN=${_compute_pal_dir}"
+      "-DROCCLR_ENABLE_PAL=0"
+      "-DROCCLR_ENABLE_HSA=1"
+    )
+    # Same runtime deps as Linux HSA path
+    list(APPEND HIP_CLR_RUNTIME_DEPS
+      rocminfo
+      ROCR-Runtime
     )
   else()
     # Non-Windows CLR options.

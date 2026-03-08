@@ -185,6 +185,7 @@ therock_cmake_subproject_declare(rocBLAS
     -DHIP_PLATFORM=amd
     -DROCM_PATH=
     -DROCM_DIR=
+    -DOpenMP_DIR=${THEROCK_BINARY_DIR}/compiler/amd-llvm/dist/lib/llvm/lib/cmake/openmp
     -Dhipblaslt_path=
     -DBUILD_WITH_TENSILE=ON
     -DBUILD_WITH_HIPBLASLT=ON
@@ -234,6 +235,7 @@ if(THEROCK_ENABLE_SPARSE)
       -DHIP_PLATFORM=amd
       -DROCM_PATH=
       -DROCM_DIR=
+      -DOpenMP_DIR=${THEROCK_BINARY_DIR}/compiler/amd-llvm/dist/lib/llvm/lib/cmake/openmp
       -DBUILD_WITH_ROCBLAS=ON
       -DBUILD_CLIENTS_TESTS=${THEROCK_BUILD_TESTING}
       -DBUILD_CLIENTS_BENCHMARKS=${THEROCK_BUILD_TESTING}
@@ -459,6 +461,7 @@ therock_cmake_subproject_declare(hipBLAS
     -DHIP_PLATFORM=amd
     -DROCM_PATH=
     -DROCM_DIR=
+    -DOpenMP_DIR=${THEROCK_BINARY_DIR}/compiler/amd-llvm/dist/lib/llvm/lib/cmake/openmp
     "-DBUILD_WITH_SOLVER=${THEROCK_ENABLE_SOLVER}"
     -DBUILD_CLIENTS_TESTS=${THEROCK_BUILD_TESTING}
     -DBUILD_CLIENTS_BENCHMARKS=${THEROCK_BUILD_TESTING}

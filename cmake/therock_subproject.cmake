@@ -36,6 +36,9 @@ set_property(GLOBAL PROPERTY THEROCK_DEFAULT_CMAKE_VARS
 
   # Debug info handling.
   THEROCK_SPLIT_DEBUG_INFO
+
+  # Prevent system ROCm installations from interfering with the build.
+  CMAKE_IGNORE_PREFIX_PATH
 )
 
 # Whenever a new package is advertised by the super-project, it is added here.
