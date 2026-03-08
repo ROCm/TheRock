@@ -1,61 +1,57 @@
-# Fire-and-Forget Kernel Launches in hip-remote
+# hip-remote Performance Optimizations
 
 ## Overview
 
-hip-remote enables a Windows client to execute GPU workloads on a remote Linux
-machine equipped with AMD MI300X GPUs. HIP API calls are intercepted on the
-client, serialized over TCP, and dispatched to a worker process on the GPU
-server.
+hip-remote enables a Windows or macOS client to execute GPU workloads on a
+remote Linux machine equipped with AMD MI300X GPUs. HIP API calls are
+intercepted on the client, serialized over TCP, and dispatched to a worker
+process on the GPU server.
 
-This document describes the **fire-and-forget** optimization that eliminates
-synchronous network round-trips for asynchronous GPU operations, dramatically
-reducing the impact of network latency on throughput.
+This document describes the two key optimization strategies that minimize the
+impact of network latency:
+
+1. **Fire-and-forget pipelining** -- eliminates synchronous round-trips for
+   asynchronous GPU operations.
+2. **Virtual address allocation** -- eliminates round-trips for memory
+   allocation by assigning opaque handles on the client side.
 
 ---
 
 ## 1. The Problem: Synchronous Round-Trips
 
-In the original protocol every HIP API call — even those that are inherently
-asynchronous on the GPU — required a full TCP round-trip before the client
-could issue the next call:
+In the original protocol every HIP API call required a full TCP round-trip:
 
 ```
  Client (Windows)                         Worker (Linux + MI300X)
  ────────────────                         ──────────────────────
 
-  hipLaunchKernel ──── request ──────────►  dispatch to GPU
-                  ◄─── response (400ms) ──  hipSuccess
-
-  hipMemcpyAsync  ──── request ──────────►  enqueue copy
-                  ◄─── response (400ms) ──  hipSuccess
-
-  hipLaunchKernel ──── request ──────────►  dispatch to GPU
-                  ◄─── response (400ms) ──  hipSuccess
-                       ...
+  hipMalloc      ──── request ──────────►  allocate GPU memory
+                 ◄─── response (RTT) ────  device_ptr
+  hipMemcpy H2D  ──── request ──────────►  copy data to GPU
+                 ◄─── response (RTT) ────  hipSuccess
+  hipLaunchKernel ─── request ──────────►  dispatch to GPU
+                 ◄─── response (RTT) ────  hipSuccess
 ```
 
-With ~200 ms one-way latency (~400 ms round-trip), a GPT-2 forward pass
-requiring hundreds of operations serializes into:
+With ~130 ms round-trip time, a model with 700 parameters requires:
 
 ```
-  total_time ≈ 400ms × N_operations + GPU_compute_time
-
-  Example: 300 operations × 400ms = 120 seconds of pure network wait
-           before any GPU time is even counted.
+  hipMalloc round-trips:  700 × 130ms = 91 seconds
+  Kernel launch trips:    300 × 130ms = 39 seconds
+  Total network wait:     130+ seconds (before any GPU time)
 ```
-
-The GPU sits idle between operations while bytes travel across the internet.
 
 ---
 
-## 2. The Solution: Fire-and-Forget Pipelining
+## 2. Fire-and-Forget Pipelining
 
-The key insight: most GPU operations are **asynchronous** — the HIP runtime
-returns immediately and the GPU executes later. The only reason we waited for
-a response was to check the error code, which is almost always `hipSuccess`.
+### Concept
 
-Fire-and-forget sends the request and **immediately moves on** to the next
-operation without waiting for a response:
+Most GPU operations are asynchronous -- the HIP runtime returns immediately
+and the GPU executes later. The only reason we waited for a response was to
+check the error code, which is almost always `hipSuccess`.
+
+Fire-and-forget sends the request and immediately moves on:
 
 ```
  Client (Windows)                         Worker (Linux + MI300X)
@@ -72,218 +68,199 @@ operation without waiting for a response:
                        ◄─── response ──────  hipSuccess (or error)
 ```
 
-All fire-and-forget requests are **pipelined** into the TCP stream. The
-worker drains them in order. The client only blocks when it genuinely needs
-a result — a synchronization point, a D2H memory copy, or an allocation
-that returns a pointer.
+### Protocol
 
-```
-  total_time ≈ network_transfer_time(all_payloads) + GPU_compute_time
-
-  The 400ms-per-operation penalty is gone.
-```
-
----
-
-## 3. Protocol Design
-
-### 3.1 The NO_REPLY Flag
-
-A single bit in the request header flags field:
+A single bit in the request header:
 
 ```c
 #define HIP_REMOTE_FLAG_NO_REPLY  (1u << 3)
 ```
 
-When set, the worker processes the request normally but **skips sending a
-response**. The client returns `hipSuccess` immediately after the `send()`.
+When set, the worker processes the request but skips sending a response.
+The `send_response()` function checks `g_suppress_response` and becomes a
+no-op, requiring zero changes to existing handler functions.
 
-### 3.2 Client-Side Functions
+### Write Coalescing
 
-Two new request functions mirror the existing synchronous ones:
+Fire-and-forget requests are accumulated in a client-side write buffer
+(64 KB) and flushed in bulk at the next synchronous call. This batches
+many small TCP writes into a single large `send()`, improving throughput.
 
-```
-┌─────────────────────────────────────┬─────────────────────────────────────┐
-│ Synchronous (waits for response)    │ Fire-and-Forget (no response)       │
-├─────────────────────────────────────┼─────────────────────────────────────┤
-│ hip_remote_request()                │ hip_remote_request_fire_and_forget()│
-│ hip_remote_request_with_data()      │ hip_remote_request_with_data_       │
-│                                     │   fire_and_forget()                 │
-└─────────────────────────────────────┴─────────────────────────────────────┘
-```
+### Which Operations Are Fire-and-Forget?
 
-The `_with_data` variant is used for H2D memcpy where the host buffer is
-sent inline with the request (flag `HIP_REMOTE_FLAG_HAS_INLINE_DATA` is
-combined with `HIP_REMOTE_FLAG_NO_REPLY`).
+| Operation                | FnF | Reason                           |
+|--------------------------|-----|----------------------------------|
+| hipLaunchKernel          | Yes | Async GPU dispatch, no return    |
+| hipModuleLaunchKernel    | Yes | Same -- flat kernarg path        |
+| hipMemcpy H2D            | Yes | Data flows client to worker only |
+| hipMemcpy D2D            | Yes | No data crosses the network      |
+| hipMemset / Async        | Yes | No return value needed           |
+| hipFree / FreeAsync      | Yes | No return value needed           |
+| hipEventRecord           | Yes | No return value needed           |
+| hipStreamDestroy         | Yes | No return value needed           |
+| hipStreamWaitEvent       | Yes | No return value needed           |
+| hipMemcpy D2H            | No  | Data must come back to client    |
+| hipDeviceSynchronize     | No  | Synchronization barrier          |
+| hipStreamSynchronize     | No  | Synchronization barrier          |
+| hipMalloc                | No* | Returns device pointer           |
+| hipModuleLoadData        | No  | Returns module handle            |
 
-### 3.3 Worker-Side Suppression
-
-The worker uses a global flag checked inside `send_response()`:
-
-```c
-static int g_suppress_response = 0;
-
-static int send_response(...) {
-    if (g_suppress_response) return 0;  // no-op
-    // ... normal send logic ...
-}
-```
-
-Before dispatching each request, the dispatch loop sets the flag based on
-the incoming header:
-
-```c
-g_suppress_response = (header.flags & HIP_REMOTE_FLAG_NO_REPLY) != 0;
-```
-
-This approach requires **zero changes** to existing handler functions — they
-call `send_response()` / `send_simple_response()` as before, and the calls
-silently become no-ops for fire-and-forget requests.
+\* hipMalloc is no longer synchronous -- see section 3.
 
 ---
 
-## 4. Which Operations Are Fire-and-Forget?
+## 3. Virtual Address Allocation
+
+### Concept
+
+`hipMalloc` was the last major source of synchronous round-trips. It must
+return a device pointer to the caller, which previously required waiting
+for the worker's response.
+
+The key insight: **the client never dereferences GPU pointers**. They are
+opaque 64-bit handles passed between HIP API calls. The client can assign
+a virtual handle locally and send the allocation as fire-and-forget. The
+worker performs the real allocation and stores a mapping from virtual
+handle to real GPU pointer.
+
+This is the same technique X11 uses for resource creation: the server
+assigns an ID range, the client picks IDs locally, no round-trip needed.
 
 ```
-┌──────────────────────────┬─────────────┬──────────────────────────────────┐
-│ Operation                │ Fire & Forget│ Reason                          │
-├──────────────────────────┼─────────────┼──────────────────────────────────┤
-│ hipLaunchKernel          │     ✓       │ Async GPU dispatch, no return    │
-│ hipModuleLaunchKernel    │     ✓       │ Same — flat kernarg path         │
-│ hipMemcpy H2D            │     ✓       │ Data flows client → worker only  │
-│ hipMemcpy D2D            │     ✓       │ No data crosses the network      │
-│ hipMemcpyAsync (H2D/D2D) │     ✓       │ Same as above                    │
-│ hipMemset / Async        │     ✓       │ No return value needed           │
-│ hipFree / FreeAsync      │     ✓       │ No return value needed           │
-│ hipEventRecord           │     ✓       │ No return value needed           │
-├──────────────────────────┼─────────────┼──────────────────────────────────┤
-│ hipMemcpy D2H            │     ✗       │ Data must come back to client    │
-│ hipMalloc / MallocAsync  │     ✗       │ Returns device pointer           │
-│ hipDeviceSynchronize     │     ✗       │ Synchronization barrier          │
-│ hipStreamSynchronize     │     ✗       │ Synchronization barrier          │
-│ hipEventSynchronize      │     ✗       │ Synchronization barrier          │
-│ hipModuleLoadData        │     ✗       │ Returns module handle            │
-│ hipModuleGetFunction     │     ✗       │ Returns function handle          │
-│ hipGetDeviceProperties   │     ✗       │ Returns data to client           │
-└──────────────────────────┴─────────────┴──────────────────────────────────┘
+ BEFORE: Each hipMalloc is a sync round-trip
+
+  Client                              Worker
+  ──────                              ──────
+  hipMalloc(1024) ─── request ──────► real hipMalloc → ptr=0x7e01000
+                  ◄── response ────── ptr=0x7e01000
+  hipMemcpy H2D   ─── FnF ──────────► copy data
+
+ AFTER: hipMalloc becomes fire-and-forget
+
+  Client                              Worker
+  ──────                              ──────
+  hipMalloc(1024) → vaddr=V1 (local)
+    ─── FnF: alloc V1, 1024 ────────► real hipMalloc → map V1→0x7e01000
+  hipMemcpy H2D(V1) ─── FnF ───────► translate V1→0x7e01000, copy
+  hipMalloc(2048) → vaddr=V2 (local)
+    ─── FnF: alloc V2, 2048 ────────► real hipMalloc → map V2→0x7e02000
+  hipMemcpy H2D(V2) ─── FnF ───────► translate V2→0x7e02000, copy
 ```
 
-**Rule of thumb:** if the client needs a return value or data from the
-worker, it must wait. Everything else can be fire-and-forget.
+All hipMalloc calls become fire-and-forget. The client assigns virtual
+addresses from a monotonically increasing counter starting at
+`0x7F0000000000` (chosen to avoid collisions with real host pointers).
+
+### Worker-Side Translation
+
+The worker maintains two data structures:
+
+1. **Hash map** (1M slots, open addressing) -- O(1) exact vaddr lookup.
+   Used for base allocations and stream handles.
+
+2. **Sorted alloc list** (up to 64K entries) -- O(log N) binary search
+   for range lookups. Used when PyTorch's caching allocator sub-allocates
+   from a large block (e.g., a tensor at `vaddr_base + offset`).
+
+3. **Last-hit cache** -- a single-entry cache that remembers the most
+   recent allocation block. Since consecutive kernel launches typically
+   operate on the same tensors, the cache hits on the vast majority of
+   lookups, making translation effectively O(1).
+
+Every handler that receives a pointer or stream handle calls
+`vaddr_translate()` before passing it to the real HIP API. For kernel
+launches, all 8-byte-aligned positions within each kernel argument
+(including struct sub-fields) are scanned for values in the vaddr range
+and translated.
+
+### Virtual Stream Handles
+
+The same approach applies to `hipStreamCreate`. The client assigns a
+virtual stream handle from a separate counter (`0x5F0000000000`), sends
+the creation request as fire-and-forget, and uses the virtual handle in
+all subsequent stream operations. The worker creates the real stream and
+stores the mapping.
+
+### D2H Correctness
+
+When the client needs GPU data (D2H memcpy, `.item()`, `.cpu()`), the
+operation remains synchronous. This works correctly because:
+
+1. Every sync call **flushes the write buffer** first, sending all
+   accumulated FnF requests.
+2. TCP preserves ordering, so the worker processes the FnF
+   malloc/memcpy/launch operations **before** it receives the D2H request.
+3. By the time the worker handles the D2H, the vaddr is mapped and the
+   kernel results are ready.
+
+### Deferred Error Handling
+
+If `hipMalloc` fails on the worker (e.g., out of memory), the error is
+stored in the vaddr map. The next synchronization point
+(`hipDeviceSynchronize`, D2H memcpy) returns the deferred error to the
+client. This matches native CUDA/HIP async error semantics.
 
 ---
 
-## 5. Why It's Safe
+## 4. Safety Guarantees
 
-Three properties guarantee correctness:
+Three properties guarantee correctness for both optimizations:
 
-### 5.1 TCP Preserves Ordering
+### TCP Preserves Ordering
 
-TCP is a byte stream — requests arrive at the worker in the exact order the
-client sent them. There is no reordering.
+TCP is a byte stream -- requests arrive at the worker in the exact order
+the client sent them. There is no reordering.
 
-### 5.2 Worker Is Single-Threaded
+### Worker Is Single-Threaded
 
-The worker reads one request at a time from the socket, fully processes it
-(including the HIP API call), then reads the next. So a fire-and-forget
-`hipMemcpy H2D` completes on the worker before the subsequent
-`hipLaunchKernel` is even read from the socket.
+The worker reads one request at a time, fully processes it (including the
+HIP API call), then reads the next. A fire-and-forget `hipMemcpy H2D`
+completes on the worker before the subsequent `hipLaunchKernel` is read.
 
-```
-  Worker event loop:
-  ┌─────────────────────────────────────────────────┐
-  │ while (connected) {                             │
-  │   read header + payload from TCP                │
-  │   set g_suppress_response from NO_REPLY flag    │
-  │   dispatch to handler (blocks until HIP returns)│
-  │   g_suppress_response = 0                       │
-  │   free(payload)                                 │
-  │ }                                               │
-  └─────────────────────────────────────────────────┘
-```
-
-### 5.3 GPU Stream Ordering
+### GPU Stream Ordering
 
 All operations submitted to the same HIP stream execute in submission
 order on the GPU. A kernel launched after a memcpy will always see the
-copied data. This is a fundamental GPU programming guarantee.
-
-### 5.4 Error Deferral
-
-If a fire-and-forget operation fails on the GPU, the error surfaces at the
-next synchronization point (`hipDeviceSynchronize`, `hipMemcpy D2H`, etc.)
-where the client is waiting for a response. This matches the native HIP
-behavior where asynchronous errors are reported at subsequent sync calls.
+copied data.
 
 ---
 
-## 6. Performance Impact
+## 5. Performance Results
 
-### Before (synchronous)
+### Benchmark Configuration
 
-```
-  ┌─────┐  400ms  ┌─────┐  400ms  ┌─────┐  400ms  ┌─────┐
-  │ op1 │────────►│ op2 │────────►│ op3 │────────►│ op4 │ ...
-  └─────┘         └─────┘         └─────┘         └─────┘
+| Parameter | Value |
+|-----------|-------|
+| Client    | Windows 11, AMD Ryzen |
+| Worker    | Linux, 8x AMD Instinct MI300X |
+| Network   | ~130ms round-trip time |
+| PyTorch   | 2.12.0a0+devrocm7.12.0.dev0 |
 
-  Time for 300 ops: ~120 seconds of network wait alone
-```
+### Results
 
-### After (fire-and-forget)
+| Test | Without Optimizations | With FnF Only | With FnF + Vaddr | Speedup |
+|------|-----------------------|---------------|-------------------|---------|
+| **GPT-2 total** | ~300s+ | 167s | **40s** | **7.5x** |
+| **GPT-2 per token** | N/A | 6.64s | **3.40s** | **1.95x** |
+| **SDXL total** | N/A | 594s | **340s** | **1.75x** |
+| **SDXL generation (30 steps)** | N/A | 60s | **47.5s** | **1.26x** |
+| **Vroom per-op (SDPA/Conv/GEMM)** | ~400ms | 135ms | **131ms** | **3.0x** |
 
-```
-  ┌─────┬─────┬─────┬─────┬─────┬─────┬─── ───┬──────┐
-  │ op1 │ op2 │ op3 │ op4 │ op5 │ ... │ op300 │ sync │
-  └─────┴─────┴─────┴─────┴─────┴─────┴─── ───┴──────┘
-  |◄──────── pipelined into TCP stream ────────►|      |
-                                                 400ms
-                                                 (one wait)
-
-  Time for 300 ops: ~1 network round-trip + GPU compute time
-```
-
-### GPT-2 Result
-
-| Metric | Value |
-|--------|-------|
-| Model | GPT-2 (124M params, FP16) |
-| Client | Windows PC |
-| Worker | Linux with 8× MI300X |
-| Network | ~200ms one-way latency |
-| Tokens generated | 5 |
-| Total generation time | 19.6 seconds |
-| Time per token | ~3.9 seconds |
-
-The generation completed successfully, producing coherent text:
-
-> *"The future of AI is in the hands of the"*
+The virtual address optimization primarily accelerates model loading
+(`model.to("cuda")`), where hundreds of `hipMalloc` calls were previously
+serialized round-trips. With vaddr allocation, the entire model transfer
+becomes a stream of fire-and-forget operations bounded only by network
+bandwidth.
 
 ---
 
-## 7. Implementation Files
+## 6. Implementation Files
 
 | File | Changes |
 |------|---------|
-| `hip_remote_protocol.h` | Added `HIP_REMOTE_FLAG_NO_REPLY` flag definition |
-| `hip_remote_client.h` | Declared `hip_remote_request_fire_and_forget()` and `_with_data` variant |
-| `hip_client.c` | Implemented the two fire-and-forget request functions |
-| `hip_api_module.c` | `hipLaunchKernel` / `hipModuleLaunchKernel` use fire-and-forget |
-| `hip_api_memory.c` | `hipMemcpy H2D/D2D`, `hipMemset`, `hipFree` use fire-and-forget |
-| `hip_api_stream.c` | `hipEventRecord` uses fire-and-forget |
-| `hip_worker_main.c` | `g_suppress_response` mechanism; per-function COMGR cache; `kernelParams` reconstruction |
-
----
-
-## 8. Related Fix: Worker Kernel Launch Path
-
-During testing, a pre-existing bug was discovered where
-`hipExtModuleLaunchKernel` with a flat `extra` buffer did not correctly
-handle kernel arguments for regular (non-Tensile) kernels — only the first
-element of vectorized kernels was being processed.
-
-The fix caches COMGR metadata (parameter offset and size) per function
-handle on the worker. During launch, if metadata is available, the worker
-reconstructs a `kernelParams` pointer array from the flat buffer and calls
-`hipModuleLaunchKernel` instead. `hipExtModuleLaunchKernel` with `extra` is
-now only used as a fallback for kernels without COMGR metadata (e.g. Tensile
-library kernels).
+| `hip_remote_protocol.h` | `HIP_REMOTE_FLAG_NO_REPLY`, `HIP_OP_MALLOC_VADDR` / `HIP_OP_MALLOC_ASYNC_VADDR` opcodes, `HipRemoteMallocVaddrRequest` struct, `vhandle` field in `HipRemoteStreamCreateRequest` |
+| `hip_api_memory.c` | Virtual address allocator (`vaddr_alloc`), hipMalloc/MallocManaged/MallocAsync converted to FnF with vaddr, hipFreeHost made local-only |
+| `hip_api_stream.c` | Virtual stream handle allocator, hipStreamCreate variants converted to FnF |
+| `hip_api_module.c` | hipLaunchKernel/hipModuleLaunchKernel fire-and-forget |
+| `hip_client.c` | Write coalescing buffer, `hip_remote_request_fire_and_forget()` and `_with_data` variant |
+| `hip_worker_main.c` | vaddr hash map (1M slots) + sorted alloc list + last-hit cache, `vaddr_translate()` in all handlers, `handle_malloc_vaddr`, deferred error reporting in `handle_device_synchronize`, `g_suppress_response` mechanism |
