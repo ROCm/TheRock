@@ -1,0 +1,2 @@
+obj-m := amdgpu_lite.o
+amdgpu_lite-y := main.o pci_setup.o memory.o irq.o
