@@ -9,6 +9,7 @@ GMC init, MQD construction, queue management) happens in userspace.
 
 from __future__ import annotations
 
+import ctypes
 import glob
 import os
 from dataclasses import dataclass
@@ -206,6 +207,139 @@ class AmdgpuLiteDevice(DeviceBackend):
             return 0
         mapping = self._bar_mappings.get(self._info.vram_bar_index)
         return mapping.addr if mapping else 0
+
+    # --- Register access (compatible with WindowsDevice interface) ---
+
+    def read_reg32(self, byte_offset: int, bar_index: int = 0) -> int:
+        """Read a 32-bit MMIO register at the given byte offset.
+
+        This matches the WindowsDevice.read_reg32() interface so that
+        the shared init modules (nbio_init, gmc_init, etc.) work with
+        either backend via duck typing.
+        """
+        mmio = self.mmio_addr
+        if mmio == 0:
+            raise RuntimeError("MMIO BAR not mapped")
+        return ctypes.c_uint32.from_address(mmio + byte_offset).value
+
+    def write_reg32(self, byte_offset: int, value: int, bar_index: int = 0) -> None:
+        """Write a 32-bit MMIO register at the given byte offset."""
+        mmio = self.mmio_addr
+        if mmio == 0:
+            raise RuntimeError("MMIO BAR not mapped")
+        ctypes.c_uint32.from_address(mmio + byte_offset).value = value & 0xFFFFFFFF
+
+    def read_reg_indirect(self, address: int) -> int:
+        """Read a register via SMN indirect access (NBIO index/data).
+
+        Writes the target SMN address to the NBIO index register (byte
+        offset 0x60), then reads the result from the data register (0x64).
+
+        Note: On RDNA4 with amdgpu_lite, SMN indirect reads return zeros
+        because the NBIO index/data path requires kernel-level SMN
+        configuration. Use read_vram() for VRAM reads instead.
+        """
+        NBIO_INDEX = 0x60
+        NBIO_DATA = 0x64
+        self.write_reg32(NBIO_INDEX, address)
+        return self.read_reg32(NBIO_DATA)
+
+    def map_vram_bar(self) -> int:
+        """Map the VRAM BAR if not already mapped. Returns CPU address."""
+        if self._info is None:
+            raise RuntimeError("Device not opened")
+        vram_idx = self._info.vram_bar_index
+        if vram_idx not in self._bar_mappings:
+            self._map_bar(vram_idx)
+        return self._bar_mappings[vram_idx].addr
+
+    def read_vram(self, offset: int, size: int) -> bytes:
+        """Read bytes from VRAM via the BAR aperture.
+
+        This is used for reading the IP discovery table at the top of VRAM.
+        Requires the VRAM BAR to be mapped (resizable BAR must cover the
+        full VRAM range).
+        """
+        vram_addr = self.map_vram_bar()
+        mapping = self._bar_mappings[self._info.vram_bar_index]
+        if offset + size > mapping.size:
+            raise RuntimeError(
+                f"VRAM read at offset {offset:#x}+{size:#x} exceeds "
+                f"BAR size {mapping.size:#x}"
+            )
+        return (ctypes.c_char * size).from_address(vram_addr + offset).raw
+
+    def write_reg_indirect(self, address: int, value: int) -> None:
+        """Write a register via SMN indirect access."""
+        NBIO_INDEX = 0x60
+        NBIO_DATA = 0x64
+        self.write_reg32(NBIO_INDEX, address)
+        self.write_reg32(NBIO_DATA, value)
+
+    # --- Windows driver compatibility stubs ---
+
+    def enable_msi(self, **kwargs) -> tuple[bool, int]:
+        """No-op on Linux: the kernel module handles MSI-X setup.
+
+        Returns (enabled=True, num_vectors=1) to satisfy ih_init.
+        """
+        return (True, 1)
+
+    def map_bar(self, bar_index: int, offset: int, size: int) -> tuple[int, int]:
+        """Return CPU address into an already-mapped BAR.
+
+        On Windows, this does a separate ioctl per sub-region. On Linux with
+        amdgpu_lite, the entire BAR is already mapped in open(), so we just
+        return the base + offset.
+
+        Note: ring_init hardcodes BAR2 for doorbells (Windows convention).
+        On amdgpu_lite, doorbell may be a different BAR index. We remap
+        BAR2 requests to the actual doorbell BAR if BAR2 isn't mapped.
+
+        Returns (cpu_addr, handle). Handle is 0 (no separate mapping).
+        """
+        actual_index = bar_index
+        if bar_index not in self._bar_mappings and self._info is not None:
+            # Remap: if BAR2 is requested but doorbell is on a different BAR
+            if bar_index == 2 and self._info.doorbell_bar_index != 2:
+                actual_index = self._info.doorbell_bar_index
+
+        if actual_index not in self._bar_mappings:
+            self._map_bar(actual_index)
+        mapping = self._bar_mappings[actual_index]
+        if offset + size > mapping.size:
+            raise RuntimeError(
+                f"BAR{actual_index} map at offset {offset:#x}+{size:#x} "
+                f"exceeds BAR size {mapping.size:#x}"
+            )
+        return (mapping.addr + offset, 0)
+
+    # --- DMA allocation (compatible with WindowsDevice.driver interface) ---
+
+    @property
+    def driver(self) -> AmdgpuLiteDevice:
+        """Self-reference for WindowsDevice.driver compatibility.
+
+        The init code calls dev.driver.alloc_dma() — on Windows this
+        goes through DriverInterface, here we implement it directly.
+        """
+        return self
+
+    def alloc_dma(self, size: int) -> tuple[int, int, int]:
+        """Allocate DMA-coherent memory.
+
+        Returns (cpu_address, bus_address, allocation_handle).
+        Compatible with WindowsDevice.driver.alloc_dma() interface.
+        """
+        assert self._memory is not None
+        from amd_gpu_driver.backends.amdgpu_lite.memory import DMAAllocation
+        alloc = self._memory.alloc_dma(size)
+        return (alloc.cpu_addr, alloc.bus_addr, alloc.handle)
+
+    def free_dma(self, allocation_handle: int) -> None:
+        """Free a DMA allocation."""
+        assert self._memory is not None
+        self._memory.free_dma(allocation_handle)
 
     # --- Memory ---
 

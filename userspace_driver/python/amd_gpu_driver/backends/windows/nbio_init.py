@@ -82,7 +82,7 @@ def resolve_nbio_bases(ip_result: IPDiscoveryResult) -> NBIOConfig:
         # NBIO is OSSSYS (HW_ID 40) in the IP discovery table
         # But some versions report as separate NBIO entries
         # For SOC21, NBIO base addresses come from the discovery table
-        if block.hw_id == HardwareID.OSSSYS and block.instance == 0:
+        if block.hw_id == HardwareID.OSSSYS and block.instance_number == 0:
             for i, addr in enumerate(block.base_addresses):
                 if i < len(bases) and addr != 0:
                     bases[i] = addr

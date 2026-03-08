@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import ctypes
 
+from dataclasses import dataclass
+
 from amd_gpu_driver.backends.base import MemoryHandle, MemoryLocation
 from amd_gpu_driver.errors import MemoryAllocationError
 from amd_gpu_driver.ioctl import helpers
@@ -35,12 +37,27 @@ def _align_up(value: int, alignment: int) -> int:
     return (value + alignment - 1) & ~(alignment - 1)
 
 
+@dataclass
+class DMAAllocation:
+    """A DMA-coherent allocation with both CPU and bus addresses.
+
+    Used for hardware register programming where the physical bus address
+    is needed (ring buffers, MQD, EOP, GART table base, etc.).
+    """
+
+    cpu_addr: int
+    bus_addr: int
+    handle: int
+    size: int
+
+
 class LiteMemoryManager:
     """Manages memory allocation via amdgpu_lite kernel module ioctls."""
 
     def __init__(self, fd: int) -> None:
         self._fd = fd
         self._allocations: list[MemoryHandle] = []
+        self._dma_allocations: dict[int, DMAAllocation] = {}  # handle -> DMAAllocation
 
     def alloc(
         self,
@@ -200,7 +217,66 @@ class LiteMemoryManager:
         if handle in self._allocations:
             self._allocations.remove(handle)
 
+    def alloc_dma(self, size: int) -> DMAAllocation:
+        """Allocate DMA-coherent memory WITHOUT GART mapping.
+
+        Returns both cpu_addr and bus_addr. The bus_addr is the physical
+        DMA address needed for programming hardware registers (ring bases,
+        MQD address, EOP buffer, GART table base, etc.).
+
+        Unlike alloc(GTT, map_gpu=True), this does NOT install GART PTEs.
+        The hardware accesses these buffers via their physical bus address,
+        not through GPU virtual address translation.
+        """
+        size = _align_up(size, PAGE_SIZE)
+        args = amdgpu_lite_alloc_gtt()
+        args.size = size
+
+        try:
+            helpers.ioctl(self._fd, AMDGPU_LITE_IOC_ALLOC_GTT, args, "ALLOC_GTT")
+        except Exception:
+            raise MemoryAllocationError(size, "DMA")
+
+        cpu_addr = helpers.libc_mmap(
+            None,
+            size,
+            helpers.PROT_READ | helpers.PROT_WRITE,
+            helpers.MAP_SHARED,
+            self._fd,
+            args.mmap_offset,
+        )
+
+        alloc = DMAAllocation(
+            cpu_addr=cpu_addr,
+            bus_addr=args.bus_addr,
+            handle=args.handle,
+            size=size,
+        )
+        self._dma_allocations[args.handle] = alloc
+        return alloc
+
+    def free_dma(self, handle: int) -> None:
+        """Free a DMA allocation by handle."""
+        alloc = self._dma_allocations.pop(handle, None)
+        if alloc is None:
+            return
+
+        free_args = amdgpu_lite_free_gtt()
+        free_args.handle = handle
+        try:
+            helpers.ioctl(self._fd, AMDGPU_LITE_IOC_FREE_GTT, free_args, "FREE_GTT")
+        except Exception:
+            pass
+
+        if alloc.cpu_addr and alloc.size:
+            try:
+                helpers.libc_munmap(alloc.cpu_addr, alloc.size)
+            except Exception:
+                pass
+
     def free_all(self) -> None:
         """Free all tracked allocations."""
         for handle in list(self._allocations):
             self.free(handle)
+        for handle in list(self._dma_allocations.keys()):
+            self.free_dma(handle)

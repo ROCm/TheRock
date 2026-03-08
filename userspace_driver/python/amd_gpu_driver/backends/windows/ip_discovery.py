@@ -481,8 +481,9 @@ def parse_ip_discovery(data: bytes) -> IPDiscoveryResult:
             die_id, die_offset = struct.unpack_from(
                 "<HH", data, abs_offset + 14 + die_idx * 4)
 
-            # die_offset is relative to the start of the IP discovery table
-            die_abs = abs_offset + die_offset
+            # die_offset is relative to the binary header start, not the
+            # IP discovery table (matches kernel amdgpu_discovery.c behavior)
+            die_abs = offset + die_offset
             if die_abs + 4 > len(data):
                 break
 

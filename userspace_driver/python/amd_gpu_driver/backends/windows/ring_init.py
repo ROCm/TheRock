@@ -528,7 +528,7 @@ def submit_compute_packets(
     config.wptr += len(packet_data) // 4
 
     # Update wptr writeback location (64-bit write)
-    ctypes.c_uint64.from_address(config.wptr_bus_addr).value = config.wptr
+    ctypes.c_uint64.from_address(config.wptr_cpu_addr).value = config.wptr
 
     # Ring the doorbell (64-bit write to doorbell BAR)
     if config.doorbell_cpu_addr != 0:
