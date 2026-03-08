@@ -565,6 +565,9 @@ AmdGpuStopDevice(
     pAdapter->Started = FALSE;
     pAdapter->IhRing.Configured = FALSE;
 
+    /* Cleanup compute state (Phase 2) */
+    AmdGpuComputeCleanup(pAdapter);
+
     /* Release registered events */
     {
         ULONG i;

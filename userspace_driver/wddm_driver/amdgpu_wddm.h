@@ -35,6 +35,26 @@ typedef enum _AMDGPU_ESCAPE_CODE {
     AMDGPU_ESCAPE_REGISTER_EVENT    = 0x0050,
     AMDGPU_ESCAPE_ENABLE_MSI        = 0x0051,
     AMDGPU_ESCAPE_GET_IOMMU_INFO    = 0x0060,
+
+    /* KFD-equivalent compute operations (Phase 2) */
+    AMDGPU_ESCAPE_ALLOC_MEMORY      = 0x0100,
+    AMDGPU_ESCAPE_FREE_MEMORY       = 0x0101,
+    AMDGPU_ESCAPE_MAP_MEMORY        = 0x0102,
+    AMDGPU_ESCAPE_UNMAP_MEMORY      = 0x0103,
+    AMDGPU_ESCAPE_CREATE_QUEUE      = 0x0110,
+    AMDGPU_ESCAPE_DESTROY_QUEUE     = 0x0111,
+    AMDGPU_ESCAPE_UPDATE_QUEUE      = 0x0112,
+    AMDGPU_ESCAPE_CREATE_EVENT      = 0x0120,
+    AMDGPU_ESCAPE_DESTROY_EVENT     = 0x0121,
+    AMDGPU_ESCAPE_SET_EVENT         = 0x0122,
+    AMDGPU_ESCAPE_RESET_EVENT       = 0x0123,
+    AMDGPU_ESCAPE_WAIT_EVENTS       = 0x0124,
+    AMDGPU_ESCAPE_GET_PROCESS_APERTURES = 0x0130,
+    AMDGPU_ESCAPE_SET_MEMORY_POLICY = 0x0131,
+    AMDGPU_ESCAPE_SET_SCRATCH_BACKING = 0x0132,
+    AMDGPU_ESCAPE_SET_TRAP_HANDLER  = 0x0133,
+    AMDGPU_ESCAPE_GET_CLOCK_COUNTERS = 0x0140,
+    AMDGPU_ESCAPE_GET_VERSION       = 0x0150,
 } AMDGPU_ESCAPE_CODE;
 
 typedef struct _AMDGPU_ESCAPE_HEADER {
@@ -125,6 +145,198 @@ typedef struct _AMDGPU_ESCAPE_GET_IOMMU_INFO_DATA {
     BOOLEAN     DmaRemappingActive;
     UCHAR       Reserved;
 } AMDGPU_ESCAPE_GET_IOMMU_INFO_DATA;
+
+/* ======================================================================
+ * KFD-equivalent compute escape structures (Phase 2)
+ * ====================================================================== */
+
+/* Memory type flags for ALLOC_MEMORY */
+#define AMDGPU_MEM_TYPE_VRAM        0x0001
+#define AMDGPU_MEM_TYPE_GTT         0x0002
+#define AMDGPU_MEM_TYPE_SYSTEM      0x0004
+#define AMDGPU_MEM_FLAG_USERPTR     0x0010
+#define AMDGPU_MEM_FLAG_HOST_ACCESS 0x0020
+#define AMDGPU_MEM_FLAG_NONPAGED    0x0040
+#define AMDGPU_MEM_FLAG_READONLY    0x0080
+#define AMDGPU_MEM_FLAG_EXECUTABLE  0x0100
+#define AMDGPU_MEM_FLAG_AQL_QUEUE   0x0200
+#define AMDGPU_MEM_FLAG_UNCACHED    0x0400
+#define AMDGPU_MEM_FLAG_CONTIGUOUS  0x0800
+#define AMDGPU_MEM_FLAG_NO_SUBSTITUTE 0x1000
+#define AMDGPU_MEM_FLAG_SCRATCH     0x2000
+#define AMDGPU_MEM_FLAG_GDS         0x4000
+#define AMDGPU_MEM_FLAG_COHERENT    0x8000
+
+typedef struct _AMDGPU_ESCAPE_ALLOC_MEMORY_DATA {
+    AMDGPU_ESCAPE_HEADER Header;
+    ULONG       GpuId;
+    ULONGLONG   SizeInBytes;
+    ULONGLONG   Alignment;
+    ULONG       Flags;
+    ULONGLONG   VaAddress;
+    /* Output */
+    PVOID       CpuAddress;
+    ULONGLONG   GpuAddress;
+    ULONGLONG   Handle;
+} AMDGPU_ESCAPE_ALLOC_MEMORY_DATA;
+
+typedef struct _AMDGPU_ESCAPE_FREE_MEMORY_DATA {
+    AMDGPU_ESCAPE_HEADER Header;
+    ULONGLONG   Handle;
+} AMDGPU_ESCAPE_FREE_MEMORY_DATA;
+
+typedef struct _AMDGPU_ESCAPE_MAP_MEMORY_DATA {
+    AMDGPU_ESCAPE_HEADER Header;
+    ULONGLONG   Handle;
+    ULONG       GpuId;
+    /* Output */
+    ULONGLONG   GpuAddress;
+} AMDGPU_ESCAPE_MAP_MEMORY_DATA;
+
+typedef struct _AMDGPU_ESCAPE_UNMAP_MEMORY_DATA {
+    AMDGPU_ESCAPE_HEADER Header;
+    ULONGLONG   Handle;
+    ULONG       GpuId;
+} AMDGPU_ESCAPE_UNMAP_MEMORY_DATA;
+
+/* Queue types matching KFD */
+#define AMDGPU_QUEUE_TYPE_COMPUTE     1
+#define AMDGPU_QUEUE_TYPE_SDMA        2
+#define AMDGPU_QUEUE_TYPE_COMPUTE_AQL 21
+
+typedef struct _AMDGPU_ESCAPE_CREATE_QUEUE_DATA {
+    AMDGPU_ESCAPE_HEADER Header;
+    ULONG       GpuId;
+    ULONG       QueueType;
+    ULONG       QueuePercentage;
+    LONG        Priority;
+    ULONGLONG   QueueAddress;
+    ULONGLONG   QueueSizeInBytes;
+    ULONGLONG   WritePointerAddress;
+    ULONGLONG   ReadPointerAddress;
+    ULONGLONG   EopBufferAddress;
+    ULONG       EopBufferSize;
+    ULONGLONG   ContextSaveAddress;
+    ULONG       ContextSaveSize;
+    ULONG       SdmaEngineId;
+    /* Output */
+    ULONGLONG   QueueId;
+    ULONGLONG   DoorbellOffset;
+} AMDGPU_ESCAPE_CREATE_QUEUE_DATA;
+
+typedef struct _AMDGPU_ESCAPE_DESTROY_QUEUE_DATA {
+    AMDGPU_ESCAPE_HEADER Header;
+    ULONGLONG   QueueId;
+} AMDGPU_ESCAPE_DESTROY_QUEUE_DATA;
+
+typedef struct _AMDGPU_ESCAPE_UPDATE_QUEUE_DATA {
+    AMDGPU_ESCAPE_HEADER Header;
+    ULONGLONG   QueueId;
+    ULONG       QueuePercentage;
+    LONG        Priority;
+    ULONGLONG   QueueAddress;
+    ULONGLONG   QueueSizeInBytes;
+} AMDGPU_ESCAPE_UPDATE_QUEUE_DATA;
+
+/* Event types matching KFD HSA_EVENTTYPE */
+#define AMDGPU_EVENT_TYPE_SIGNAL        0
+#define AMDGPU_EVENT_TYPE_QUEUE         7
+#define AMDGPU_EVENT_TYPE_MEMORY        8
+
+typedef struct _AMDGPU_ESCAPE_CREATE_EVENT_DATA {
+    AMDGPU_ESCAPE_HEADER Header;
+    ULONG       EventType;
+    ULONG       GpuId;
+    BOOLEAN     AutoReset;
+    UCHAR       Reserved[3];
+    /* Output */
+    ULONG       EventId;
+    ULONGLONG   EventPageAddress;
+    ULONG       EventSlotIndex;
+} AMDGPU_ESCAPE_CREATE_EVENT_DATA;
+
+typedef struct _AMDGPU_ESCAPE_DESTROY_EVENT_DATA {
+    AMDGPU_ESCAPE_HEADER Header;
+    ULONG       EventId;
+} AMDGPU_ESCAPE_DESTROY_EVENT_DATA;
+
+typedef struct _AMDGPU_ESCAPE_SET_EVENT_DATA {
+    AMDGPU_ESCAPE_HEADER Header;
+    ULONG       EventId;
+} AMDGPU_ESCAPE_SET_EVENT_DATA;
+
+typedef struct _AMDGPU_ESCAPE_RESET_EVENT_DATA {
+    AMDGPU_ESCAPE_HEADER Header;
+    ULONG       EventId;
+} AMDGPU_ESCAPE_RESET_EVENT_DATA;
+
+#define AMDGPU_MAX_WAIT_EVENTS 16
+
+typedef struct _AMDGPU_ESCAPE_WAIT_EVENTS_DATA {
+    AMDGPU_ESCAPE_HEADER Header;
+    ULONG       NumEvents;
+    ULONG       EventIds[AMDGPU_MAX_WAIT_EVENTS];
+    BOOLEAN     WaitAll;
+    UCHAR       Reserved[3];
+    ULONG       TimeoutMs;
+    /* Output */
+    ULONG       SignaledIndex;
+} AMDGPU_ESCAPE_WAIT_EVENTS_DATA;
+
+typedef struct _AMDGPU_ESCAPE_GET_PROCESS_APERTURES_DATA {
+    AMDGPU_ESCAPE_HEADER Header;
+    ULONG       GpuId;
+    /* Output */
+    ULONGLONG   LdsBase;
+    ULONGLONG   LdsLimit;
+    ULONGLONG   ScratchBase;
+    ULONGLONG   ScratchLimit;
+    ULONGLONG   GpuVmBase;
+    ULONGLONG   GpuVmLimit;
+} AMDGPU_ESCAPE_GET_PROCESS_APERTURES_DATA;
+
+typedef struct _AMDGPU_ESCAPE_SET_MEMORY_POLICY_DATA {
+    AMDGPU_ESCAPE_HEADER Header;
+    ULONG       GpuId;
+    ULONG       DefaultPolicy;
+    ULONG       AlternatePolicy;
+    ULONGLONG   AlternateApertureBase;
+    ULONGLONG   AlternateApertureSize;
+} AMDGPU_ESCAPE_SET_MEMORY_POLICY_DATA;
+
+typedef struct _AMDGPU_ESCAPE_SET_SCRATCH_BACKING_DATA {
+    AMDGPU_ESCAPE_HEADER Header;
+    ULONG       GpuId;
+    ULONGLONG   ScratchBackingVa;
+    ULONGLONG   ScratchBackingSize;
+} AMDGPU_ESCAPE_SET_SCRATCH_BACKING_DATA;
+
+typedef struct _AMDGPU_ESCAPE_SET_TRAP_HANDLER_DATA {
+    AMDGPU_ESCAPE_HEADER Header;
+    ULONG       GpuId;
+    ULONGLONG   TbaAddress;
+    ULONGLONG   TbaSize;
+    ULONGLONG   TmaAddress;
+    ULONGLONG   TmaSize;
+} AMDGPU_ESCAPE_SET_TRAP_HANDLER_DATA;
+
+typedef struct _AMDGPU_ESCAPE_GET_CLOCK_COUNTERS_DATA {
+    AMDGPU_ESCAPE_HEADER Header;
+    ULONG       GpuId;
+    /* Output */
+    ULONGLONG   GpuClockCounter;
+    ULONGLONG   CpuClockCounter;
+    ULONGLONG   SystemClockCounter;
+    ULONGLONG   SystemClockFrequencyHz;
+    ULONGLONG   GpuClockFrequencyHz;
+} AMDGPU_ESCAPE_GET_CLOCK_COUNTERS_DATA;
+
+typedef struct _AMDGPU_ESCAPE_GET_VERSION_DATA {
+    AMDGPU_ESCAPE_HEADER Header;
+    /* Output */
+    ULONG       KfdMajorVersion;
+    ULONG       KfdMinorVersion;
+} AMDGPU_ESCAPE_GET_VERSION_DATA;
 
 /* ======================================================================
  * Internal driver structures (kernel-mode only)
@@ -302,12 +514,154 @@ typedef struct _AMDGPU_ADAPTER {
     /* VidPn state */
     AMDGPU_VIDPN_STATE      VidPnState;
 
+    /* Compute state (Phase 2) */
+    AMDGPU_COMPUTE_STATE    Compute;
+
     /* Flags */
     BOOLEAN                 Started;
     BOOLEAN                 Headless;       /* TRUE if no display output (compute-only GPU) */
 } AMDGPU_ADAPTER;
 
+/* ======================================================================
+ * GPU memory allocation tracking (Phase 2)
+ * ====================================================================== */
+
+#define AMDGPU_MAX_GPU_ALLOCS   4096
+#define AMDGPU_MAX_GPU_QUEUES   64
+#define AMDGPU_MAX_GPU_EVENTS   256
+
+/* GPU memory allocation */
+typedef struct _AMDGPU_GPU_ALLOC {
+    BOOLEAN         InUse;
+    ULONG           Flags;              /* AMDGPU_MEM_TYPE_* | AMDGPU_MEM_FLAG_* */
+    ULONGLONG       SizeInBytes;
+    ULONGLONG       GpuVa;             /* GPU virtual address */
+    PVOID           CpuVa;             /* CPU mapping (if host-accessible) */
+    PHYSICAL_ADDRESS PhysAddr;          /* Physical/bus address */
+    PMDL            Mdl;                /* MDL for user mapping */
+    PVOID           KernelVa;           /* Kernel mapping */
+} AMDGPU_GPU_ALLOC;
+
+/* Compute queue */
+typedef struct _AMDGPU_GPU_QUEUE {
+    BOOLEAN         InUse;
+    ULONG           QueueType;
+    ULONG           QueueId;
+    ULONGLONG       RingBufferGpuVa;
+    ULONGLONG       RingSizeBytes;
+    ULONGLONG       DoorbellOffset;
+    LONG            Priority;
+    /* MQD (Memory Queue Descriptor) for MES */
+    PVOID           MqdKernelVa;
+    PHYSICAL_ADDRESS MqdPhysAddr;
+} AMDGPU_GPU_QUEUE;
+
+/* Kernel event for signaling */
+typedef struct _AMDGPU_GPU_EVENT {
+    BOOLEAN         InUse;
+    ULONG           EventType;
+    ULONG           EventId;
+    PKEVENT         KernelEvent;        /* KeSetEvent target */
+    BOOLEAN         AutoReset;
+    BOOLEAN         Signaled;
+    ULONGLONG       EventPageSlot;      /* Offset in event page */
+} AMDGPU_GPU_EVENT;
+
+/* Event page - shared memory page for signal values */
+typedef struct _AMDGPU_EVENT_PAGE {
+    PVOID           KernelVa;
+    PHYSICAL_ADDRESS PhysAddr;
+    PMDL            Mdl;
+    PVOID           UserVa;
+    BOOLEAN         Allocated;
+} AMDGPU_EVENT_PAGE;
+
+/* Extended adapter context with compute support */
+typedef struct _AMDGPU_COMPUTE_STATE {
+    /* GPU memory allocations */
+    AMDGPU_GPU_ALLOC    Allocs[AMDGPU_MAX_GPU_ALLOCS];
+    KSPIN_LOCK          AllocsLock;
+    ULONG               NextAllocHandle;
+
+    /* Compute queues */
+    AMDGPU_GPU_QUEUE    Queues[AMDGPU_MAX_GPU_QUEUES];
+    KSPIN_LOCK          QueuesLock;
+    ULONG               NextQueueId;
+
+    /* Events */
+    AMDGPU_GPU_EVENT    Events[AMDGPU_MAX_GPU_EVENTS];
+    KSPIN_LOCK          EventsLock;
+    ULONG               NextEventId;
+    AMDGPU_EVENT_PAGE   EventPage;
+
+    /* GPU VM apertures */
+    ULONGLONG           GpuVmBase;      /* Start of GPUVM range */
+    ULONGLONG           GpuVmLimit;     /* End of GPUVM range */
+    ULONGLONG           LdsBase;
+    ULONGLONG           LdsLimit;
+    ULONGLONG           ScratchBase;
+    ULONGLONG           ScratchLimit;
+
+    /* Scratch backing memory */
+    ULONGLONG           ScratchBackingVa;
+    ULONGLONG           ScratchBackingSize;
+
+    /* Trap handler */
+    ULONGLONG           TbaAddress;
+    ULONGLONG           TbaSize;
+    ULONGLONG           TmaAddress;
+    ULONGLONG           TmaSize;
+
+    /* Memory policy */
+    ULONG               DefaultCachePolicy;
+    ULONG               AlternateCachePolicy;
+
+    BOOLEAN             Initialized;
+} AMDGPU_COMPUTE_STATE;
+
 /* Lazy MMIO BAR mapping */
 NTSTATUS AmdGpuMapMmioIfNeeded(_Inout_ AMDGPU_ADAPTER *pAdapter);
+
+/* Compute state init/cleanup */
+NTSTATUS AmdGpuComputeInit(_Inout_ AMDGPU_ADAPTER *pAdapter);
+void AmdGpuComputeCleanup(_Inout_ AMDGPU_ADAPTER *pAdapter);
+
+/* Compute escape handlers */
+NTSTATUS EscapeAllocMemory(_In_ AMDGPU_ADAPTER *pAdapter,
+                           _Inout_ AMDGPU_ESCAPE_ALLOC_MEMORY_DATA *pData);
+NTSTATUS EscapeFreeMemory(_In_ AMDGPU_ADAPTER *pAdapter,
+                          _Inout_ AMDGPU_ESCAPE_FREE_MEMORY_DATA *pData);
+NTSTATUS EscapeMapMemory(_In_ AMDGPU_ADAPTER *pAdapter,
+                         _Inout_ AMDGPU_ESCAPE_MAP_MEMORY_DATA *pData);
+NTSTATUS EscapeUnmapMemory(_In_ AMDGPU_ADAPTER *pAdapter,
+                           _Inout_ AMDGPU_ESCAPE_UNMAP_MEMORY_DATA *pData);
+NTSTATUS EscapeCreateQueue(_In_ AMDGPU_ADAPTER *pAdapter,
+                           _Inout_ AMDGPU_ESCAPE_CREATE_QUEUE_DATA *pData);
+NTSTATUS EscapeDestroyQueue(_In_ AMDGPU_ADAPTER *pAdapter,
+                            _Inout_ AMDGPU_ESCAPE_DESTROY_QUEUE_DATA *pData);
+NTSTATUS EscapeUpdateQueue(_In_ AMDGPU_ADAPTER *pAdapter,
+                           _Inout_ AMDGPU_ESCAPE_UPDATE_QUEUE_DATA *pData);
+NTSTATUS EscapeCreateEvent(_In_ AMDGPU_ADAPTER *pAdapter,
+                           _Inout_ AMDGPU_ESCAPE_CREATE_EVENT_DATA *pData);
+NTSTATUS EscapeDestroyEvent(_In_ AMDGPU_ADAPTER *pAdapter,
+                            _Inout_ AMDGPU_ESCAPE_DESTROY_EVENT_DATA *pData);
+NTSTATUS EscapeSetEvent(_In_ AMDGPU_ADAPTER *pAdapter,
+                        _Inout_ AMDGPU_ESCAPE_SET_EVENT_DATA *pData);
+NTSTATUS EscapeResetEvent(_In_ AMDGPU_ADAPTER *pAdapter,
+                          _Inout_ AMDGPU_ESCAPE_RESET_EVENT_DATA *pData);
+NTSTATUS EscapeWaitEvents(_In_ AMDGPU_ADAPTER *pAdapter,
+                          _Inout_ AMDGPU_ESCAPE_WAIT_EVENTS_DATA *pData);
+NTSTATUS EscapeGetProcessApertures(_In_ AMDGPU_ADAPTER *pAdapter,
+                                   _Inout_ AMDGPU_ESCAPE_GET_PROCESS_APERTURES_DATA *pData);
+NTSTATUS EscapeSetMemoryPolicy(_In_ AMDGPU_ADAPTER *pAdapter,
+                               _Inout_ AMDGPU_ESCAPE_SET_MEMORY_POLICY_DATA *pData);
+NTSTATUS EscapeSetScratchBacking(_In_ AMDGPU_ADAPTER *pAdapter,
+                                 _Inout_ AMDGPU_ESCAPE_SET_SCRATCH_BACKING_DATA *pData);
+NTSTATUS EscapeSetTrapHandler(_In_ AMDGPU_ADAPTER *pAdapter,
+                              _Inout_ AMDGPU_ESCAPE_SET_TRAP_HANDLER_DATA *pData);
+NTSTATUS EscapeGetClockCounters(_In_ AMDGPU_ADAPTER *pAdapter,
+                                _Inout_ AMDGPU_ESCAPE_GET_CLOCK_COUNTERS_DATA *pData);
+NTSTATUS EscapeGetVersion(_In_ AMDGPU_ADAPTER *pAdapter,
+                          _Inout_ AMDGPU_ESCAPE_GET_VERSION_DATA *pData);
 
 #endif /* _KERNEL_MODE */

@@ -568,6 +568,151 @@ AmdGpuEscape(
                 (AMDGPU_ESCAPE_GET_IOMMU_INFO_DATA *)pEscape->pPrivateDriverData);
         break;
 
+    /* KFD-equivalent compute operations (Phase 2) */
+    case AMDGPU_ESCAPE_ALLOC_MEMORY:
+        if (pEscape->PrivateDriverDataSize < sizeof(AMDGPU_ESCAPE_ALLOC_MEMORY_DATA))
+            Status = STATUS_BUFFER_TOO_SMALL;
+        else
+            Status = EscapeAllocMemory(pAdapter,
+                (AMDGPU_ESCAPE_ALLOC_MEMORY_DATA *)pEscape->pPrivateDriverData);
+        break;
+
+    case AMDGPU_ESCAPE_FREE_MEMORY:
+        if (pEscape->PrivateDriverDataSize < sizeof(AMDGPU_ESCAPE_FREE_MEMORY_DATA))
+            Status = STATUS_BUFFER_TOO_SMALL;
+        else
+            Status = EscapeFreeMemory(pAdapter,
+                (AMDGPU_ESCAPE_FREE_MEMORY_DATA *)pEscape->pPrivateDriverData);
+        break;
+
+    case AMDGPU_ESCAPE_MAP_MEMORY:
+        if (pEscape->PrivateDriverDataSize < sizeof(AMDGPU_ESCAPE_MAP_MEMORY_DATA))
+            Status = STATUS_BUFFER_TOO_SMALL;
+        else
+            Status = EscapeMapMemory(pAdapter,
+                (AMDGPU_ESCAPE_MAP_MEMORY_DATA *)pEscape->pPrivateDriverData);
+        break;
+
+    case AMDGPU_ESCAPE_UNMAP_MEMORY:
+        if (pEscape->PrivateDriverDataSize < sizeof(AMDGPU_ESCAPE_UNMAP_MEMORY_DATA))
+            Status = STATUS_BUFFER_TOO_SMALL;
+        else
+            Status = EscapeUnmapMemory(pAdapter,
+                (AMDGPU_ESCAPE_UNMAP_MEMORY_DATA *)pEscape->pPrivateDriverData);
+        break;
+
+    case AMDGPU_ESCAPE_CREATE_QUEUE:
+        if (pEscape->PrivateDriverDataSize < sizeof(AMDGPU_ESCAPE_CREATE_QUEUE_DATA))
+            Status = STATUS_BUFFER_TOO_SMALL;
+        else
+            Status = EscapeCreateQueue(pAdapter,
+                (AMDGPU_ESCAPE_CREATE_QUEUE_DATA *)pEscape->pPrivateDriverData);
+        break;
+
+    case AMDGPU_ESCAPE_DESTROY_QUEUE:
+        if (pEscape->PrivateDriverDataSize < sizeof(AMDGPU_ESCAPE_DESTROY_QUEUE_DATA))
+            Status = STATUS_BUFFER_TOO_SMALL;
+        else
+            Status = EscapeDestroyQueue(pAdapter,
+                (AMDGPU_ESCAPE_DESTROY_QUEUE_DATA *)pEscape->pPrivateDriverData);
+        break;
+
+    case AMDGPU_ESCAPE_UPDATE_QUEUE:
+        if (pEscape->PrivateDriverDataSize < sizeof(AMDGPU_ESCAPE_UPDATE_QUEUE_DATA))
+            Status = STATUS_BUFFER_TOO_SMALL;
+        else
+            Status = EscapeUpdateQueue(pAdapter,
+                (AMDGPU_ESCAPE_UPDATE_QUEUE_DATA *)pEscape->pPrivateDriverData);
+        break;
+
+    case AMDGPU_ESCAPE_CREATE_EVENT:
+        if (pEscape->PrivateDriverDataSize < sizeof(AMDGPU_ESCAPE_CREATE_EVENT_DATA))
+            Status = STATUS_BUFFER_TOO_SMALL;
+        else
+            Status = EscapeCreateEvent(pAdapter,
+                (AMDGPU_ESCAPE_CREATE_EVENT_DATA *)pEscape->pPrivateDriverData);
+        break;
+
+    case AMDGPU_ESCAPE_DESTROY_EVENT:
+        if (pEscape->PrivateDriverDataSize < sizeof(AMDGPU_ESCAPE_DESTROY_EVENT_DATA))
+            Status = STATUS_BUFFER_TOO_SMALL;
+        else
+            Status = EscapeDestroyEvent(pAdapter,
+                (AMDGPU_ESCAPE_DESTROY_EVENT_DATA *)pEscape->pPrivateDriverData);
+        break;
+
+    case AMDGPU_ESCAPE_SET_EVENT:
+        if (pEscape->PrivateDriverDataSize < sizeof(AMDGPU_ESCAPE_SET_EVENT_DATA))
+            Status = STATUS_BUFFER_TOO_SMALL;
+        else
+            Status = EscapeSetEvent(pAdapter,
+                (AMDGPU_ESCAPE_SET_EVENT_DATA *)pEscape->pPrivateDriverData);
+        break;
+
+    case AMDGPU_ESCAPE_RESET_EVENT:
+        if (pEscape->PrivateDriverDataSize < sizeof(AMDGPU_ESCAPE_RESET_EVENT_DATA))
+            Status = STATUS_BUFFER_TOO_SMALL;
+        else
+            Status = EscapeResetEvent(pAdapter,
+                (AMDGPU_ESCAPE_RESET_EVENT_DATA *)pEscape->pPrivateDriverData);
+        break;
+
+    case AMDGPU_ESCAPE_WAIT_EVENTS:
+        if (pEscape->PrivateDriverDataSize < sizeof(AMDGPU_ESCAPE_WAIT_EVENTS_DATA))
+            Status = STATUS_BUFFER_TOO_SMALL;
+        else
+            Status = EscapeWaitEvents(pAdapter,
+                (AMDGPU_ESCAPE_WAIT_EVENTS_DATA *)pEscape->pPrivateDriverData);
+        break;
+
+    case AMDGPU_ESCAPE_GET_PROCESS_APERTURES:
+        if (pEscape->PrivateDriverDataSize < sizeof(AMDGPU_ESCAPE_GET_PROCESS_APERTURES_DATA))
+            Status = STATUS_BUFFER_TOO_SMALL;
+        else
+            Status = EscapeGetProcessApertures(pAdapter,
+                (AMDGPU_ESCAPE_GET_PROCESS_APERTURES_DATA *)pEscape->pPrivateDriverData);
+        break;
+
+    case AMDGPU_ESCAPE_SET_MEMORY_POLICY:
+        if (pEscape->PrivateDriverDataSize < sizeof(AMDGPU_ESCAPE_SET_MEMORY_POLICY_DATA))
+            Status = STATUS_BUFFER_TOO_SMALL;
+        else
+            Status = EscapeSetMemoryPolicy(pAdapter,
+                (AMDGPU_ESCAPE_SET_MEMORY_POLICY_DATA *)pEscape->pPrivateDriverData);
+        break;
+
+    case AMDGPU_ESCAPE_SET_SCRATCH_BACKING:
+        if (pEscape->PrivateDriverDataSize < sizeof(AMDGPU_ESCAPE_SET_SCRATCH_BACKING_DATA))
+            Status = STATUS_BUFFER_TOO_SMALL;
+        else
+            Status = EscapeSetScratchBacking(pAdapter,
+                (AMDGPU_ESCAPE_SET_SCRATCH_BACKING_DATA *)pEscape->pPrivateDriverData);
+        break;
+
+    case AMDGPU_ESCAPE_SET_TRAP_HANDLER:
+        if (pEscape->PrivateDriverDataSize < sizeof(AMDGPU_ESCAPE_SET_TRAP_HANDLER_DATA))
+            Status = STATUS_BUFFER_TOO_SMALL;
+        else
+            Status = EscapeSetTrapHandler(pAdapter,
+                (AMDGPU_ESCAPE_SET_TRAP_HANDLER_DATA *)pEscape->pPrivateDriverData);
+        break;
+
+    case AMDGPU_ESCAPE_GET_CLOCK_COUNTERS:
+        if (pEscape->PrivateDriverDataSize < sizeof(AMDGPU_ESCAPE_GET_CLOCK_COUNTERS_DATA))
+            Status = STATUS_BUFFER_TOO_SMALL;
+        else
+            Status = EscapeGetClockCounters(pAdapter,
+                (AMDGPU_ESCAPE_GET_CLOCK_COUNTERS_DATA *)pEscape->pPrivateDriverData);
+        break;
+
+    case AMDGPU_ESCAPE_GET_VERSION:
+        if (pEscape->PrivateDriverDataSize < sizeof(AMDGPU_ESCAPE_GET_VERSION_DATA))
+            Status = STATUS_BUFFER_TOO_SMALL;
+        else
+            Status = EscapeGetVersion(pAdapter,
+                (AMDGPU_ESCAPE_GET_VERSION_DATA *)pEscape->pPrivateDriverData);
+        break;
+
     default:
         Status = STATUS_INVALID_PARAMETER;
         break;

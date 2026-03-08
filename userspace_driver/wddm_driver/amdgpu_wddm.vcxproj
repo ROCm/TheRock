@@ -110,6 +110,7 @@
     <ClCompile Include="ddi_vidpn.c" />
     <ClCompile Include="ddi_display.c" />
     <ClCompile Include="ddi_present.c" />
+    <ClCompile Include="ddi_compute.c" />
   </ItemGroup>
 
   <ItemGroup>
