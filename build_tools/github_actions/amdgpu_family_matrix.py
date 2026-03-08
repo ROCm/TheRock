@@ -231,7 +231,7 @@ amdgpu_family_info_matrix_nightly = {
     "gfx103x": {
         "linux": {
             "test-runs-on": "linux-gfx1030-gpu-rocm",
-            "family": "gfx103X-dgpu",
+            "family": "gfx103X-all",
             "fetch-gfx-targets": ["gfx1030"],
             "build_variants": ["release"],
             "sanity_check_only_for_family": True,
@@ -240,7 +240,7 @@ amdgpu_family_info_matrix_nightly = {
             # TODO(#3200): Re-enable machine once it is stable
             # Label is "windows-gfx1030-gpu-rocm"
             "test-runs-on": "",
-            "family": "gfx103X-dgpu",
+            "family": "gfx103X-all",
             "fetch-gfx-targets": [],
             "build_variants": ["release"],
             "sanity_check_only_for_family": True,
