@@ -75,8 +75,14 @@ Two workflow inputs control this:
 
 Stage names come from [`BUILD_TOPOLOGY.toml`](/BUILD_TOPOLOGY.toml).
 
-Currently, stages names must be explicitly specified. In the future these may
+Currently, stage names must be explicitly specified. In the future these may
 be computed based on dependencies and a special "all" option may be available.
+
+<!-- TODO: The workflows currently use `contains(prebuilt_stages, 'name')` for
+     substring matching, which would break if a stage name is a prefix of
+     another. When configure_ci.py generates the stage list automatically,
+     switch to a JSON array and use `fromJSON()` + `contains()` for exact
+     matching. -->
 
 For now, these are the common configurations used for testing:
 

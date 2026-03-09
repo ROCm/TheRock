@@ -68,7 +68,6 @@ jobs:
           role-to-assume: arn:aws:iam::692859939525:role/therock-ci
 
       - name: Copy prebuilt stage artifacts
-        if: ${{ !github.event.pull_request.head.repo.fork }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
