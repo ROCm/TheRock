@@ -448,6 +448,18 @@ test_matrix = {
             "windows": 1,
         },
     },
+    # hecbench SPIR-V tests
+    "hecbench_spirv": {
+        "job_name": "hecbench_spirv",
+        "fetch_artifact_args": "--tests",
+        "timeout_minutes": 45,
+        "test_script": f"python {_get_script_path('test_hecbench_spirv.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
+    },
 }
 
 
