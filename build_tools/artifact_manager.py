@@ -368,7 +368,9 @@ def do_fetch(args: argparse.Namespace):
             if any(filename.startswith(f"{name}_") for name in inbound)
         ]
     else:
-        matched_filenames = find_available_artifacts(inbound, target_families, available)
+        matched_filenames = find_available_artifacts(
+            inbound, target_families, available
+        )
 
     download_requests = [
         DownloadRequest(
