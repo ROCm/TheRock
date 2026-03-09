@@ -683,6 +683,7 @@ def output_failed_tests(failed_tests: list[str]) -> None:
     gha_set_output(
         {
             "failed_tests": json.dumps(failed_tests),
+            "failed_tests_count": str(len(failed_tests)),
         }
     )
 
