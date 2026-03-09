@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """ROCm detection for version, build info, and compatibility checking."""
 
 import subprocess

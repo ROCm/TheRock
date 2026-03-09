@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Platform detection for OS, kernel, hostname, IP, and BIOS information."""
 
 import platform

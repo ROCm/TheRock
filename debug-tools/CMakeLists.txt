@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 set(DEBUG_TOOLS_DIR "${THEROCK_SOURCE_DIR}/debug-tools")
 
 if(THEROCK_ENABLE_AMD_DBGAPI)
@@ -133,7 +136,7 @@ if(THEROCK_ENABLE_ROCR_DEBUG_AGENT_TESTS)
 
   if(THEROCK_BUILD_TESTING)
     therock_cmake_subproject_declare(rocr-debug-agent-tests
-      USE_DIST_AMDGPU_TARGETS
+      USE_TEST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-debug-agent/test"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocr-debug-agent-tests"
       CMAKE_ARGS

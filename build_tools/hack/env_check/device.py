@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 from __future__ import annotations
 from .find_tools import FindPython, FindMSVC
 from .utils import *

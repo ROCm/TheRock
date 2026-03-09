@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 import logging
 import os
 import shlex
@@ -21,8 +24,7 @@ environ_vars = os.environ.copy()
 environ_vars["GTEST_SHARD_INDEX"] = str(int(SHARD_INDEX) - 1)
 environ_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 
-gpu_arch = get_first_gpu_architecture(env=environ_vars, therock_bin_dir=THEROCK_BIN_DIR)
-cwd_dir = Path(THEROCK_BIN_DIR) / gpu_arch
+cwd_dir = Path(THEROCK_BIN_DIR)
 cmd = ["./rocrtst64"]
 
 # Excluded tests (flaky or disabled in CI).

@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 name: Publish no_rocm_image_ubuntu24_04_rocgdb images
 on:
   workflow_dispatch:

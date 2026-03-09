@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 function(therock_sanitizer_configure
     out_sanitizer_stanza
     out_sanitizer_selected

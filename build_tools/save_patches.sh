@@ -1,4 +1,7 @@
 #!/bin/bash
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Saves patches that are maintained locally to make TheRock work with a given
 # branch.
 # Usage: save_patches.sh base_tag project_name patch_subdir
