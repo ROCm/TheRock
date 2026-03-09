@@ -90,10 +90,6 @@ if(THEROCK_ENABLE_MIOPEN)
     else()
       message(WARNING "Unhandled MSVC_VERSION '${MSVC_VERSION}', Boost may not configure correctly")
     endif()
-
-    set(_THEROCK_MIOPEN_ENABLE_TESTING ON)
-  else()
-    set(_THEROCK_MIOPEN_ENABLE_TESTING ${THEROCK_BUILD_TESTING})
   endif()
 
   therock_cmake_subproject_declare(MIOpen
@@ -104,7 +100,7 @@ if(THEROCK_ENABLE_MIOPEN)
       -DHIP_PLATFORM=amd
       -DROCM_PATH=
       -DROCM_DIR=
-      "-DBUILD_TESTING=${_THEROCK_MIOPEN_ENABLE_TESTING}"
+      "-DBUILD_TESTING=${THEROCK_BUILD_TESTING}"
       "-DMIOPEN_USE_COMPOSABLEKERNEL=${THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL}"
       -DMIOPEN_USE_MLIR=OFF # TODO: enable
       -DMIOPEN_TEST_DISCRETE=OFF
