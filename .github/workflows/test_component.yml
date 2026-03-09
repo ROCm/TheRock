@@ -157,47 +157,18 @@ jobs:
           ${{ fromJSON(inputs.component).test_script }}
 
       - name: Print test reproduction steps
-        if: ${{ failure() && steps.test.outcome == 'failure' }}
-        env:
-          COMPONENT_NAME: ${{ fromJSON(inputs.component).job_name }}
-          TEST_SCRIPT: ${{ fromJSON(inputs.component).test_script }}
+        # TODO: Add windows for reproduction steps  
+        if: ${{ failure() && steps.test.outcome == 'failure' && inputs.platform == 'linux' }}
         run: |
-          echo "============================================================"
-          echo "TEST FAILURE - REPRODUCTION STEPS"
-          echo "============================================================"
-          echo ""
-          echo "To reproduce this test failure locally, follow these steps:"
-          echo ""
-          echo "1. Start the Docker container:"
-          echo "   docker run -it \\"
-          echo "       --ipc host \\"
-          echo "       --group-add video \\"
-          echo "       --device /dev/kfd \\"
-          echo "       --device /dev/dri \\"
-          echo "       ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest /bin/bash"
-          echo ""
-          echo "2. Inside the container, set up the environment:"
-          echo "   curl -LsSf https://astral.sh/uv/install.sh | bash && source \$HOME/.local/bin/env"
-          echo "   git clone https://github.com/ROCm/TheRock.git && cd TheRock"
-          echo "   uv venv .venv && source .venv/bin/activate"
-          echo "   uv pip install -r requirements-test.txt"
-          echo ""
-          echo "3. Install artifacts from this CI run:"
-          echo "   GITHUB_REPOSITORY=${{ github.repository }} python build_tools/install_rocm_from_artifacts.py \\"
-          echo "       --run-id ${{ env.ARTIFACT_RUN_ID }} \\"
-          echo "       --amdgpu-family ${{ inputs.amdgpu_families }}" \\
-          echo "       ${{ fromJSON(inputs.component).fetch_artifact_args }}"
-          echo ""
-          echo "4. Set environment variables and run the test:"
-          echo "   export THEROCK_BIN_DIR=./therock-build/bin"
-          echo "   export OUTPUT_ARTIFACTS_DIR=./therock-build"
-          echo "   export SHARD_INDEX=${{ matrix.shard }}"
-          echo "   export TOTAL_SHARDS=${{ fromJSON(inputs.component).total_shards }}"
-          echo "   export TEST_TYPE=${{ fromJSON(inputs.component).test_type }}"
-          echo "   ${TEST_SCRIPT}"
-          echo ""
-          echo "For more details, see: https://github.com/ROCm/TheRock/blob/main/docs/development/test_environment_reproduction.md"
-          echo "============================================================"
+          python ./build_tools/github_actions/print_test_reproduction_steps.py \
+            --run-id "${{ env.ARTIFACT_RUN_ID }}" \
+            --repository "${{ github.repository }}" \
+            --amdgpu-family "${{ inputs.amdgpu_families }}" \
+            --test-script "${{ fromJSON(inputs.component).test_script }}" \
+            --shard-index "${{ matrix.shard }}" \
+            --total-shards "${{ fromJSON(inputs.component).total_shards }}" \
+            --test-type "${{ fromJSON(inputs.component).test_type }}" \
+            --fetch-artifact-args "${{ fromJSON(inputs.component).fetch_artifact_args }}"
 
       # GitHub's 'Complete job' step is unaware of launched executables
       # and will fail to clean up orphan processes.
