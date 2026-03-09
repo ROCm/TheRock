@@ -299,6 +299,7 @@ def libraries_artifact_filter(target_family: str, an: ArtifactName) -> bool:
             "hipkernelprovider",
             "rand",
             "rccl",
+            "rocshmem",
         ]
         and an.component
         in [
