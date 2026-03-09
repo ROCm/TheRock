@@ -387,7 +387,7 @@ test_matrix = {
         ],
         "test_script": f"python {_get_script_path('test_rocprofiler_compute.py')} -v",
         "platform": ["linux"],
-        "total_shards": 2,
+        "total_shards_dict": {"linux": 2},
     },
     "rocprofiler-systems": {
         "job_name": "rocprofiler-systems",
