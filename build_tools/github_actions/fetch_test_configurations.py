@@ -56,7 +56,7 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_ocltst.py')}",
         "platform": ["linux", "windows"],
         "total_shards": 4,
-        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_ocl_rt@sha256:04caf91ed80223b143b71eac67876845310ba38d832d5ecd7d284189f9bf73fd",
+        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_ocl_rt@sha256:f059191fdd5cf3bf8c5a47cb017a7be6e9bded0d52be594feb96f724f6a838eb",
         "container_options": "--cap-add=SYS_PTRACE",
     },
     # BLAS tests
