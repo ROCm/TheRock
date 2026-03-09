@@ -16,7 +16,7 @@ THEROCK_DIR = SCRIPT_DIR.parent.parent.parent.resolve()
 
 # Import test result collection utilities
 sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
-from github_actions_utils import output_failed_tests, parse_gtest_json
+from github_actions_utils import run_test
 
 logging.basicConfig(level=logging.INFO)
 
@@ -52,12 +52,6 @@ cmd = [
     "--matrices-dir",
     f"{OUTPUT_ARTIFACTS_DIR}/clients/matrices/",
 ] + test_filter
-logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-result = subprocess.run(cmd, cwd=THEROCK_DIR, check=False, env=environ_vars)
-
-# Parse and output failed tests
-failed_tests = parse_gtest_json(gtest_json_path)
-output_failed_tests(failed_tests)
-
-# Exit with the original return code
-sys.exit(result.returncode)
+run_test(
+    cmd, output_format="gtest", output_path=gtest_json_path, cwd=THEROCK_DIR, env=environ_vars
+)

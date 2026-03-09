@@ -25,7 +25,7 @@ CATCH_TESTS_PATH = str(Path(THEROCK_BIN_DIR).parent / "share" / "hip" / "catch_t
 
 # Importing utilities from github_actions_utils.py
 sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
-from github_actions_utils import is_asan, output_failed_tests, parse_ctest_junit_xml
+from github_actions_utils import is_asan, run_test
 
 import tempfile
 
@@ -142,15 +142,9 @@ def execute_tests(env):
         ignored_tests = TEST_TO_IGNORE[AMDGPU_FAMILIES][os_type]
         cmd.extend(["--exclude-regex", "|".join(ignored_tests)])
 
-    logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-    result = subprocess.run(cmd, cwd=THEROCK_DIR, check=False, env=env)
-
-    # Parse and output failed tests
-    failed_tests = parse_ctest_junit_xml(junit_xml_path)
-    output_failed_tests(failed_tests)
-
-    # Exit with the original return code
-    sys.exit(result.returncode)
+    run_test(
+        cmd, output_format="ctest", output_path=junit_xml_path, cwd=THEROCK_DIR, env=env
+    )
 
 
 if __name__ == "__main__":

@@ -15,7 +15,7 @@ THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
 # Import test result collection utilities
 sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
-from github_actions_utils import output_failed_tests, parse_ctest_junit_xml
+from github_actions_utils import run_test
 
 logging.basicConfig(level=logging.INFO)
 
@@ -34,17 +34,4 @@ cmd = [
     "--timeout",
     "60",
 ]
-logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-
-result = subprocess.run(
-    cmd,
-    cwd=THEROCK_DIR,
-    check=False,
-)
-
-# Parse and output failed tests
-failed_tests = parse_ctest_junit_xml(junit_xml_path)
-output_failed_tests(failed_tests)
-
-# Exit with the original return code
-sys.exit(result.returncode)
+run_test(cmd, output_format="ctest", output_path=junit_xml_path, cwd=THEROCK_DIR)

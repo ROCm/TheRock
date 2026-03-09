@@ -15,7 +15,7 @@ THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
 # Importing utilities from github_actions_utils.py
 sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
-from github_actions_utils import is_asan, output_failed_tests, parse_gtest_json
+from github_actions_utils import is_asan, run_test
 
 # GTest sharding
 SHARD_INDEX = os.getenv("SHARD_INDEX", 1)
@@ -46,17 +46,5 @@ cmd = [
     f"{THEROCK_BIN_DIR}/rocblas-test",
     f"--gtest_output=json:{gtest_json_path}",
 ] + test_filter
-logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
 
-result = subprocess.run(
-    cmd,
-    cwd=THEROCK_DIR,
-    check=False,
-)
-
-# Parse and output failed tests
-failed_tests = parse_gtest_json(gtest_json_path)
-output_failed_tests(failed_tests)
-
-# Exit with the original return code
-sys.exit(result.returncode)
+run_test(cmd, output_format="gtest", output_path=gtest_json_path, cwd=THEROCK_DIR)

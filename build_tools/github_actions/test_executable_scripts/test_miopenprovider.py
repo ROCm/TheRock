@@ -16,7 +16,7 @@ THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
 # Import test result collection utilities
 sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
-from github_actions_utils import output_failed_tests, parse_ctest_junit_xml
+from github_actions_utils import run_test
 
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 os_type = platform.system().lower()
@@ -62,18 +62,6 @@ if test_type == "smoke":
     # Exclude tests that start with "Full" during smoke tests
     environ_vars["GTEST_FILTER"] = "-Full*"
 
-logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-
-result = subprocess.run(
-    cmd,
-    cwd=THEROCK_DIR,
-    check=False,
-    env=environ_vars,
+run_test(
+    cmd, output_format="ctest", output_path=junit_xml_path, cwd=THEROCK_DIR, env=environ_vars
 )
-
-# Parse and output failed tests
-failed_tests = parse_ctest_junit_xml(junit_xml_path)
-output_failed_tests(failed_tests)
-
-# Exit with the original return code
-sys.exit(result.returncode)

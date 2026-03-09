@@ -17,7 +17,7 @@ THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
 # Import test result collection utilities
 sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
-from github_actions_utils import output_failed_tests, parse_ctest_junit_xml
+from github_actions_utils import run_test
 
 THEROCK_BIN_PATH = Path(THEROCK_BIN_DIR).resolve()
 THEROCK_PATH = THEROCK_BIN_PATH.parent
@@ -94,17 +94,6 @@ if test_type == "smoke":
     cmd.append("--tests-regex")
     cmd.append("|".join(SMOKE_TESTS))
 
-logging.info(f"++ Exec [{THEROCK_PATH}]$ {shlex.join(cmd)}")
-result = subprocess.run(
-    cmd,
-    cwd=THEROCK_PATH,
-    check=False,
-    env=environ_vars,
+run_test(
+    cmd, output_format="ctest", output_path=junit_xml_path, cwd=THEROCK_PATH, env=environ_vars
 )
-
-# Parse and output failed tests
-failed_tests = parse_ctest_junit_xml(junit_xml_path)
-output_failed_tests(failed_tests)
-
-# Exit with the original return code
-sys.exit(result.returncode)

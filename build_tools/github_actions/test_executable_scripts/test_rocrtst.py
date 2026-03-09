@@ -10,11 +10,7 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, os.fspath(Path(__file__).resolve().parent.parent))
-from github_actions_utils import (
-    get_first_gpu_architecture,
-    output_failed_tests,
-    parse_gtest_json,
-)
+from github_actions_utils import run_test
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 
@@ -67,12 +63,6 @@ if test_type == "smoke":
 else:
     environ_vars["GTEST_FILTER"] = exclude_filter
 
-logging.info(f"++ Exec [{cwd_dir}]$ {shlex.join(cmd)}")
-result = subprocess.run(cmd, cwd=cwd_dir, check=False, env=environ_vars)
-
-# Parse and output failed tests
-failed_tests = parse_gtest_json(gtest_json_path)
-output_failed_tests(failed_tests)
-
-# Exit with the original return code
-sys.exit(result.returncode)
+run_test(
+    cmd, output_format="gtest", output_path=gtest_json_path, cwd=cwd_dir, env=environ_vars
+)

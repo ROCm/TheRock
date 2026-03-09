@@ -12,6 +12,7 @@ import logging
 import os
 from pathlib import Path
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -685,3 +686,76 @@ def output_failed_tests(failed_tests: list[str]) -> None:
             "failed_tests_count": str(len(failed_tests)),
         }
     )
+
+
+def run_test(
+    cmd: list[str],
+    *,
+    output_format: str,
+    output_path: str | Path,
+    cwd: str | Path | None = None,
+    env: dict[str, str] | None = None,
+    success_returncodes: list[int] | None = None,
+) -> None:
+    """Run a test command, parse results, output failed tests, and exit.
+
+    This is a convenience wrapper that handles the common pattern of:
+    1. Running a test command (gtest or ctest)
+    2. Parsing the output file for failed tests
+    3. Outputting failed tests to GITHUB_OUTPUT
+    4. Exiting with the test command's return code
+
+    Args:
+        cmd: The command to run (list of strings).
+        output_format: Either "gtest" (JSON) or "ctest" (JUnit XML).
+        output_path: Path to the test output file.
+        cwd: Working directory for the command. Defaults to current directory.
+        env: Environment variables for the command. Defaults to current env.
+        success_returncodes: List of return codes to treat as success (exit 0).
+            Defaults to [0]. Some tests may use other codes (e.g., [0, 3]).
+
+    Raises:
+        ValueError: If output_format is not "gtest" or "ctest".
+
+    Example:
+        # For gtest:
+        run_test(
+            [f"{THEROCK_BIN_DIR}/rocblas-test", f"--gtest_output=json:{json_path}"],
+            output_format="gtest",
+            output_path=json_path,
+            cwd=THEROCK_DIR,
+        )
+
+        # For ctest:
+        run_test(
+            ["ctest", "--test-dir", test_dir, "--output-junit", str(xml_path)],
+            output_format="ctest",
+            output_path=xml_path,
+            cwd=THEROCK_DIR,
+        )
+    """
+    if output_format not in ("gtest", "ctest"):
+        raise ValueError(f"output_format must be 'gtest' or 'ctest', got: {output_format}")
+
+    if success_returncodes is None:
+        success_returncodes = [0]
+
+    _log(f"++ Exec: {shlex.join(cmd)}")
+
+    result = subprocess.run(
+        cmd,
+        cwd=cwd,
+        env=env,
+        check=False,
+    )
+
+    if output_format == "gtest":
+        failed_tests = parse_gtest_json(output_path)
+    else:
+        failed_tests = parse_ctest_junit_xml(output_path)
+
+    output_failed_tests(failed_tests)
+
+    if result.returncode in success_returncodes:
+        sys.exit(0)
+    sys.exit(result.returncode)
