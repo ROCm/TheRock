@@ -37,7 +37,7 @@ extended_tests/utils/
 
 ## Usage
 
-### From Test Base Classes
+### From Extended Test Base Classes
 
 Both `BenchmarkBase` and `FunctionalBase` inherit from `ExtendedTestBase`, which provides
 shared infrastructure (command execution, GPU detection, result creation, statistics, uploads):

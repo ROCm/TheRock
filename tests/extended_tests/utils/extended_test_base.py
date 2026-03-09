@@ -21,17 +21,15 @@ from .exceptions import TestExecutionError
 from .extended_test_client import ExtendedTestClient
 
 from github_actions_utils import (
-    get_first_gpu_architecture,
-    get_visible_gpu_count,
     gha_append_step_summary,
 )
 
 
 class ExtendedTestBase:
-    """Base class providing shared infrastructure for benchmark and functional tests."""
+    """Base class providing shared infrastructure for extended tests."""
 
     def __init__(self, test_name: str, display_name: str = None):
-        """Initialize common test infrastructure.
+        """Initialize common extended test infrastructure.
 
         Args:
             test_name: Internal test name (e.g., 'rocfft', 'miopen_driver_conv')
@@ -96,30 +94,6 @@ class ExtendedTestBase:
         process.wait()
         return process.returncode
 
-    def get_gpu_architecture(self) -> str:
-        """Detect GPU architecture (e.g., 'gfx942') using rocminfo."""
-        try:
-            gfx_id = get_first_gpu_architecture(therock_bin_dir=self.therock_bin_dir)
-            log.info(f"Detected GPU architecture: {gfx_id}")
-            return gfx_id
-        except Exception as e:
-            raise TestExecutionError(
-                f"Failed to detect GPU architecture: {e}\n"
-                "Ensure ROCm drivers are installed and GPU is accessible."
-            ) from e
-
-    def detect_gpu_count(self) -> int:
-        """Detect the number of available GPUs using rocminfo."""
-        gpu_count = get_visible_gpu_count(therock_bin_dir=self.therock_bin_dir)
-        if gpu_count == 0:
-            raise RuntimeError(
-                "No GPUs detected. Tests require at least one GPU. "
-                "Ensure ROCm drivers are installed and GPU devices "
-                "are accessible."
-            )
-        log.info(f"Detected {gpu_count} GPU(s)")
-        return gpu_count
-
     def create_test_result(
         self,
         test_name: str,
@@ -129,7 +103,7 @@ class ExtendedTestBase:
     ) -> Dict[str, Any]:
         """Create a standardized test result dictionary.
 
-        Builds the base result structure used by both benchmark and functional tests.
+        Builds the base result structure used by extended tests.
 
         Args:
             test_name: Test name (e.g., 'rocfft')
