@@ -91,7 +91,10 @@ jobs:
               --run-id="${{ env.ARTIFACT_RUN_ID }}" \
               --stage=all \
               --amdgpu-families="${{ inputs.amdgpu_families }}" \
-              --output-dir="${{ env.ARTIFACTS_DIR }}"
+              --output-dir="${{ github.workspace }}"
+              # NOTE: artifact_manager.py appends /artifacts to --output-dir
+              # in non-flatten mode, so pass workspace root here so that
+              # artifacts land in ARTIFACTS_DIR ($workspace/artifacts).
           else
             # Single-family mode: use fetch_artifacts.py (backward compatible)
             echo "Fetching artifacts for single family: ${{ inputs.artifact_group }}"
