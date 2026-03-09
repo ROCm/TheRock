@@ -70,7 +70,7 @@ jobs:
   # ==========================================================================
   compiler-runtime:
     needs: foundation
-    if: ${{ !contains(inputs.prebuilt_stages, 'compiler-runtime') }}
+    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'compiler-runtime') }}
     uses: ./.github/workflows/multi_arch_build_windows_artifacts.yml
     secrets: inherit
     with:
@@ -89,7 +89,7 @@ jobs:
   # ==========================================================================
   math-libs:
     needs: compiler-runtime
-    if: ${{ !contains(inputs.prebuilt_stages, 'math-libs') }}
+    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'math-libs') }}
     strategy:
       fail-fast: false
       matrix:
