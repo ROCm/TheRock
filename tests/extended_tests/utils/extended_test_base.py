@@ -137,30 +137,22 @@ class ExtendedTestBase:
     def calculate_statistics(
         self,
         test_results: List[Dict[str, Any]],
-        status_types: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """Calculate pass/fail statistics from test results and return a dictionary with the counts.
 
         Args:
             test_results: List of test result dicts with 'status' key.
-            status_types: Status types to count. Defaults to ["PASS", "FAIL"].
         """
-        if status_types is None:
-            status_types = ["PASS", "FAIL"]
+        counts = {
+            "passed": sum(1 for r in test_results if r.get("status") == "PASS"),
+            "failed": sum(1 for r in test_results if r.get("status") == "FAIL"),
+            "error": sum(1 for r in test_results if r.get("status") == "ERROR"),
+        }
 
-        counts = {}
-        for status in status_types:
-            key = status.lower()
-            if key == "pass":
-                key = "passed"
-            elif key == "fail":
-                key = "failed"
-            counts[key] = sum(1 for r in test_results if r.get("status") == status)
-
-        # Overall status: FAIL if any failures or errors
-        failure_count = counts.get("failed", 0) + counts.get("error", 0)
         counts["total"] = len(test_results)
-        counts["overall_status"] = "PASS" if failure_count == 0 else "FAIL"
+        counts["overall_status"] = (
+            "PASS" if (counts["failed"] + counts["error"]) == 0 else "FAIL"
+        )
 
         return counts
 
@@ -202,6 +194,9 @@ class ExtendedTestBase:
         if success:
             log.info("Results uploaded successfully")
         else:
-            log.info("Results saved locally only (API upload disabled or failed)")
+            log.error(
+                f"API upload failed for '{self.test_name}' {test_type} results. "
+                f"Results were saved locally to '{output_dir}'. "
+            )
 
         return success
