@@ -51,7 +51,7 @@ jobs:
   # STAGE: foundation (generic)
   # ==========================================================================
   foundation:
-    if: ${{ !contains(inputs.prebuilt_stages, 'foundation') }}
+    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'foundation') }}
     uses: ./.github/workflows/multi_arch_build_windows_artifacts.yml
     secrets: inherit
     with:
