@@ -1,0 +1,16 @@
+# rocshmem
+[components.dbg."comm-libs/rocshmem/stage"]
+[components.dev."comm-libs/rocshmem/stage"]
+[components.doc."comm-libs/rocshmem/stage"]
+[components.lib."comm-libs/rocshmem/stage"]
+include = [
+  "share/rocshmem/**",
+]
+[components.run."comm-libs/rocshmem/stage"]
+include = [
+  "bin/rocshmem_info",
+]
+
+# Tests
+[components.test."comm-libs/rocshmem/stage"]
+optional = true
