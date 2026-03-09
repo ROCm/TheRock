@@ -224,7 +224,9 @@ class BenchmarkBase:
     ) -> bool:
         """Upload results to API and save locally."""
         if not ENABLE_RESULTS_API:
-            log.warning("Results API is disabled (ENABLE_RESULTS_API=False). Skipping upload.")
+            log.warning(
+                "Results API is disabled (ENABLE_RESULTS_API=False). Skipping upload."
+            )
             return False
 
         log.info("Uploading Results to API")
@@ -254,7 +256,9 @@ class BenchmarkBase:
     def compare_with_lkg(self, tables: Any) -> Any:
         """Compare results with Last Known Good baseline."""
         if not ENABLE_RESULTS_API:
-            log.warning("Results API is disabled (ENABLE_RESULTS_API=False). Skipping LKG comparison.")
+            log.warning(
+                "Results API is disabled (ENABLE_RESULTS_API=False). Skipping LKG comparison."
+            )
             # Print raw tables so scores are still visible in the log.
             table_list = tables if isinstance(tables, list) else [tables]
             for table in table_list:
