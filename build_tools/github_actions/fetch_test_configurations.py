@@ -283,7 +283,7 @@ test_matrix = {
     # MIOpen tests
     "miopen": {
         "job_name": "miopen",
-        "fetch_artifact_args": "--blas --miopen --tests",
+        "fetch_artifact_args": "--blas --miopen --rand --tests",
         "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_miopen.py')}",
         "platform": ["linux", "windows"],
@@ -398,7 +398,7 @@ test_matrix = {
         ],
         "test_script": f"python {_get_script_path('test_rocprofiler_compute.py')} -v",
         "platform": ["linux"],
-        "total_shards": 2,
+        "total_shards_dict": {"linux": 2},
     },
     # libhipcxx hipcc tests
     "libhipcxx_hipcc": {

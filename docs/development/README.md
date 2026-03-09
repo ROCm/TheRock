@@ -26,6 +26,7 @@
 
 ### Infrastructure
 
+- [CI Workflow Outputs Layout](workflow_outputs.md)
 - [GitHub Actions Debugging](github_actions_debugging.md)
 - [CI Behavior Manipulation](ci_behavior_manipulation.md)
 
