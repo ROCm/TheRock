@@ -162,10 +162,8 @@ jobs:
           echo "=== Failed Tests Summary ==="
           echo "Component: ${{ fromJSON(inputs.component).job_name }}"
           echo "Shard: ${{ matrix.shard }}/${{ fromJSON(inputs.component).total_shards }}"
-          echo "Failed test count: ${{ steps.run_tests.outputs.failed_tests_count }}"
           echo ""
-          echo "Failed tests:"
-          echo '${{ steps.run_tests.outputs.failed_tests }}' | python -c "import sys, json; tests = json.load(sys.stdin); print('\n'.join(f'  - {t}' for t in tests))"
+          echo "Failed tests: ${{ steps.run_tests.outputs.failed_tests }}"
 
       # GitHub's 'Complete job' step is unaware of launched executables
       # and will fail to clean up orphan processes.

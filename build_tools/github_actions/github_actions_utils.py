@@ -683,7 +683,6 @@ def output_failed_tests(failed_tests: list[str]) -> None:
     gha_set_output(
         {
             "failed_tests": json.dumps(failed_tests),
-            "failed_tests_count": str(len(failed_tests)),
         }
     )
 
@@ -704,18 +703,6 @@ def run_test(
     2. Parsing the output file for failed tests
     3. Outputting failed tests to GITHUB_OUTPUT
     4. Exiting with the test command's return code
-
-    Args:
-        cmd: The command to run (list of strings).
-        output_format: Either "gtest" (JSON) or "ctest" (JUnit XML).
-        output_path: Path to the test output file.
-        cwd: Working directory for the command. Defaults to current directory.
-        env: Environment variables for the command. Defaults to current env.
-        success_returncodes: List of return codes to treat as success (exit 0).
-            Defaults to [0]. Some tests may use other codes (e.g., [0, 3]).
-
-    Raises:
-        ValueError: If output_format is not "gtest" or "ctest".
 
     Example:
         # For gtest:
