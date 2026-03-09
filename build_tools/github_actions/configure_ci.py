@@ -637,11 +637,13 @@ def main(base_args, linux_families, windows_families):
     test_type = "smoke"
     test_type_reason = "default (smoke tests)"
 
-    # In the case of a scheduled run, we always want to build and we want to run full tests
+    # Scheduled and manually dispatched runs always build.
     if is_schedule:
         enable_build_jobs = True
         test_type = "full"
         test_type_reason = "scheduled run triggers full tests"
+    elif is_workflow_dispatch:
+        enable_build_jobs = True
     else:
         modified_paths = get_git_modified_paths(base_ref)
         print("modified_paths (max 200):", modified_paths[:200])
