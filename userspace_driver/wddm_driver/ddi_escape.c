@@ -110,6 +110,7 @@ EscapeMapBar(
     ULONGLONG Offset = pData->Offset;
     ULONGLONG Length = pData->Length;
     PHYSICAL_ADDRESS PhysAddr;
+    PVOID KernelVa;
     PMDL Mdl;
     PVOID UserVa;
 
@@ -125,32 +126,29 @@ EscapeMapBar(
     if (Offset + Length > pAdapter->Bars[BarIndex].Length)
         return STATUS_INVALID_PARAMETER;
 
+    /* Limit single mapping to 16MB to avoid excessive resource usage */
+    if (Length > 16 * 1024 * 1024)
+        return STATUS_INVALID_PARAMETER;
+
     PhysAddr.QuadPart =
         pAdapter->Bars[BarIndex].PhysicalAddress.QuadPart + Offset;
 
-    Mdl = IoAllocateMdl(NULL, (ULONG)Length, FALSE, FALSE, NULL);
-    if (Mdl == NULL)
+    /*
+     * Map the BAR region into kernel space first using MmMapIoSpace.
+     * This is the correct way to map device memory (BAR space).
+     * Then create an MDL from the kernel mapping and map to userspace.
+     */
+    KernelVa = MmMapIoSpace(PhysAddr, (SIZE_T)Length, MmNonCached);
+    if (KernelVa == NULL)
         return STATUS_INSUFFICIENT_RESOURCES;
 
-    MmBuildMdlForNonPagedPool(Mdl);
-
-    {
-        PPFN_NUMBER Pages = MmGetMdlPfnArray(Mdl);
-        ULONG PageCount = (ULONG)((Length + PAGE_SIZE - 1) >> PAGE_SHIFT);
-        ULONGLONG BasePfn = PhysAddr.QuadPart >> PAGE_SHIFT;
-        ULONG i;
-
-        IoFreeMdl(Mdl);
-        Mdl = IoAllocateMdl(NULL, (ULONG)Length, FALSE, FALSE, NULL);
-        if (Mdl == NULL)
-            return STATUS_INSUFFICIENT_RESOURCES;
-
-        Mdl->MdlFlags |= MDL_PAGES_LOCKED;
-        Pages = MmGetMdlPfnArray(Mdl);
-        for (i = 0; i < PageCount; i++) {
-            Pages[i] = (PFN_NUMBER)(BasePfn + i);
-        }
+    Mdl = IoAllocateMdl(KernelVa, (ULONG)Length, FALSE, FALSE, NULL);
+    if (Mdl == NULL) {
+        MmUnmapIoSpace(KernelVa, (SIZE_T)Length);
+        return STATUS_INSUFFICIENT_RESOURCES;
     }
+
+    MmBuildMdlForNonPagedPool(Mdl);
 
     __try {
         UserVa = MmMapLockedPagesSpecifyCache(
@@ -158,16 +156,24 @@ EscapeMapBar(
             NULL, FALSE, NormalPagePriority);
     } __except (EXCEPTION_EXECUTE_HANDLER) {
         IoFreeMdl(Mdl);
+        MmUnmapIoSpace(KernelVa, (SIZE_T)Length);
         return STATUS_INSUFFICIENT_RESOURCES;
     }
 
     if (UserVa == NULL) {
         IoFreeMdl(Mdl);
+        MmUnmapIoSpace(KernelVa, (SIZE_T)Length);
         return STATUS_INSUFFICIENT_RESOURCES;
     }
 
     pData->MappedAddress = UserVa;
+    /* Pack both handles: MDL in MappingHandle, KernelVa stored after unmap */
     pData->MappingHandle = (PVOID)Mdl;
+    /* Store KernelVa and Length in adapter tracking for cleanup.
+     * For now, use a simple approach: store KernelVa in the MDL's
+     * MappedSystemVa field (it's not used for IoSpace MDLs). */
+    Mdl->MappedSystemVa = KernelVa;
+    Mdl->ByteCount = (ULONG)Length;
     return STATUS_SUCCESS;
 }
 
@@ -178,6 +184,8 @@ EscapeUnmapBar(
     )
 {
     PMDL Mdl;
+    PVOID KernelVa;
+    ULONG Length;
 
     UNREFERENCED_PARAMETER(pAdapter);
 
@@ -185,8 +193,15 @@ EscapeUnmapBar(
         return STATUS_INVALID_PARAMETER;
 
     Mdl = (PMDL)pData->MappingHandle;
+    KernelVa = Mdl->MappedSystemVa;
+    Length = Mdl->ByteCount;
+
     MmUnmapLockedPages(pData->MappedAddress, Mdl);
     IoFreeMdl(Mdl);
+
+    /* Unmap the kernel IoSpace mapping */
+    if (KernelVa != NULL)
+        MmUnmapIoSpace(KernelVa, (SIZE_T)Length);
 
     pData->MappedAddress = NULL;
     pData->MappingHandle = NULL;
