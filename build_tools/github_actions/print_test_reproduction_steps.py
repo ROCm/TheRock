@@ -40,13 +40,17 @@ def print_reproduction_steps(args: argparse.Namespace) -> None:
     print(f"       {args.container_image} /bin/bash")
     print()
     print("2. Inside the container, set up the environment:")
-    print("   curl -LsSf https://astral.sh/uv/install.sh | bash && source $HOME/.local/bin/env")
+    print(
+        "   curl -LsSf https://astral.sh/uv/install.sh | bash && source $HOME/.local/bin/env"
+    )
     print("   git clone https://github.com/ROCm/TheRock.git && cd TheRock")
     print("   uv venv .venv && source .venv/bin/activate")
     print("   uv pip install -r requirements-test.txt")
     print()
     print("3. Install artifacts from this CI run:")
-    print(f"   GITHUB_REPOSITORY={args.repository} python build_tools/install_rocm_from_artifacts.py \\")
+    print(
+        f"   GITHUB_REPOSITORY={args.repository} python build_tools/install_rocm_from_artifacts.py \\"
+    )
     print(f"       --run-id {args.run_id} \\")
     if args.fetch_artifact_args:
         print(f"       --amdgpu-family {args.amdgpu_family} \\")
@@ -63,7 +67,9 @@ def print_reproduction_steps(args: argparse.Namespace) -> None:
     print(f"   {args.test_script}")
     print()
     print("For more details, see:")
-    print("https://github.com/ROCm/TheRock/blob/main/docs/development/test_environment_reproduction.md")
+    print(
+        "https://github.com/ROCm/TheRock/blob/main/docs/development/test_environment_reproduction.md"
+    )
     print("=" * 60)
 
 
