@@ -44,7 +44,9 @@ def _run(
             timeout=timeout,
         )
     except subprocess.TimeoutExpired:
-        logging.error("Command timed out after %d seconds: %s", timeout, shlex.join(cmd))
+        logging.error(
+            "Command timed out after %d seconds: %s", timeout, shlex.join(cmd)
+        )
         raise
 
 
@@ -89,7 +91,9 @@ def _enable_spirv_in_makefile(makefile_path: Path, rocm_path: Path):
 
 def _select_benchmarks(src_dir: Path) -> List[Path]:
     if HECBENCH_BENCHMARKS:
-        names = [bench.strip() for bench in HECBENCH_BENCHMARKS.split(",") if bench.strip()]
+        names = [
+            bench.strip() for bench in HECBENCH_BENCHMARKS.split(",") if bench.strip()
+        ]
         selected = []
         for name in names:
             bench_dir = src_dir / name
@@ -102,7 +106,9 @@ def _select_benchmarks(src_dir: Path) -> List[Path]:
         return selected
 
     benches = sorted(
-        bench for bench in src_dir.iterdir() if bench.is_dir() and bench.name.endswith("-hip")
+        bench
+        for bench in src_dir.iterdir()
+        if bench.is_dir() and bench.name.endswith("-hip")
     )
 
     if not benches:
@@ -199,17 +205,26 @@ def main() -> None:
                     bench_name,
                     exception.output,
                 )
-                results.append({"benchmark": bench_name, "status": "timeout (partial results)"})
+                results.append(
+                    {"benchmark": bench_name, "status": "timeout (partial results)"}
+                )
                 failures.append((bench_name, "run timed out"))
                 continue
 
             if "Device-side assertion" in run_proc.stderr:
-                logging.error("Benchmark %s failed due to device-side assertion", bench_name)
+                logging.error(
+                    "Benchmark %s failed due to device-side assertion", bench_name
+                )
                 logging.error("stdout:\n%s", run_proc.stdout)
                 logging.error("stderr:\n%s", run_proc.stderr)
                 failures.append((bench_name, "device-side assertion"))
                 assertion_failures.append(bench_name)
-                results.append({"benchmark": bench_name, "status": "failed (device-side assertion)"})
+                results.append(
+                    {
+                        "benchmark": bench_name,
+                        "status": "failed (device-side assertion)",
+                    }
+                )
                 continue
 
             if run_proc.returncode != 0:
@@ -226,14 +241,22 @@ def main() -> None:
         summary = {
             "total": len(selected_benchmarks),
             "passed": sum(1 for result in results if result["status"] == "passed"),
-            "failed": sum(1 for result in results if "failed" in result["status"] or "timed out" in result["status"] or "compile" in result["status"]),
+            "failed": sum(
+                1
+                for result in results
+                if "failed" in result["status"]
+                or "timed out" in result["status"]
+                or "compile" in result["status"]
+            ),
             "assertion_failures": len(assertion_failures),
             "results": results,
         }
         logging.info("Results summary: %s", json.dumps(summary, indent=2))
 
         if failures:
-            logging.error("hecbench_spirv had %d failure(s): %s", len(failures), failures)
+            logging.error(
+                "hecbench_spirv had %d failure(s): %s", len(failures), failures
+            )
             sys.exit(1)
 
         logging.info("hecbench_spirv completed successfully")
