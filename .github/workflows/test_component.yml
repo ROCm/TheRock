@@ -154,7 +154,6 @@ jobs:
           TEST_TYPE: ${{ fromJSON(inputs.component).test_type }}
           ROCM_KPACK_DEBUG: "1"
         run: |
-          exit 1
           ${{ fromJSON(inputs.component).test_script }}
 
       - name: Print test reproduction steps
