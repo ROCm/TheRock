@@ -5,12 +5,8 @@ import logging
 import os
 import shlex
 import subprocess
-import sys
 from pathlib import Path
 import platform
-
-sys.path.insert(0, os.fspath(Path(__file__).resolve().parent.parent))
-from github_actions_utils import get_first_gpu_architecture
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
