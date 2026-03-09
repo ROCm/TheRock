@@ -117,7 +117,8 @@ jobs:
               curl \
               ca-certificates \
               git \
-              lsb-release
+              lsb-release \
+              update-alternatives
           else
             # RHEL/CentOS/AlmaLinux/AZL prerequisites
             # Use --allowerasing to handle curl-minimal conflict on AlmaLinux 9
