@@ -13,5 +13,6 @@ include = [
 [components.run."profiler/rocprofiler-systems/stage"]
 include = [
   "bin/**",
-  "share/rocprofiler-systems/**"
+  "share/rocprofiler-systems/**",
+  "lib/python*/**",
 ]
