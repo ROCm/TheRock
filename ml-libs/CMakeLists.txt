@@ -8,16 +8,17 @@ if(THEROCK_FLAG_INCLUDE_PROFILER)
   list(APPEND optional_profiler_deps roctracer rocprofiler-sdk)
 endif()
 
-# limit use of composable kernel to the GPU families it is valid for
+# Disable composable kernel on GPU families that are explicitly unsupported
 if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
-  set(_ck_supported_gfx_targets gfx908 gfx90a gfx942 gfx950 gfx1150 gfx1151 gfx1152 gfx1153 gfx1200 gfx1201)
+  set(_ck_unsupported_gfx_targets gfx906 gfx1010 gfx1011 gfx1012 gfx1033)
   foreach(_gfx_target ${THEROCK_AMDGPU_TARGETS})
-    if(NOT ${_gfx_target} IN_LIST _ck_supported_gfx_targets)
+    if(_gfx_target IN_LIST _ck_unsupported_gfx_targets)
       message(WARNING
         "${_gfx_target} (included in THEROCK_AMDGPU_TARGETS) is not supported by composable kernel. "
-        "Disabling composable kernel and it's use in MIOpen.")
+        "Disabling composable kernel and its use in MIOpen.")
       set(THEROCK_ENABLE_COMPOSABLE_KERNEL OFF)
       set(THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL OFF)
+      break() 
     endif()
   endforeach()
 endif()
