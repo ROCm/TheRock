@@ -214,6 +214,11 @@ jobs:
           aws s3 cp ${{ env.PACKAGE_DIST_DIR }}/ s3://${{ env.S3_BUCKET_PY }}/${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}/ \
             --recursive --exclude "*" --include "*.whl"
 
+      - name: Install boto3 for manifest upload
+        if: ${{ github.repository_owner == 'ROCm' }}
+        run: |
+          python3 -m pip install boto3
+
       - name: Upload JAX manifest to artifacts S3
         if: ${{ github.repository_owner == 'ROCm' }}
         run: |
