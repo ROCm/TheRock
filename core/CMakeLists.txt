@@ -302,6 +302,44 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
         hip-tests
     )
     list(APPEND _hip_tests_subproject_names hip-tests)
+
+    ##############################################################################
+    # HIP samples
+    ##############################################################################
+
+    therock_cmake_subproject_declare(hip_samples
+      USE_TEST_AMDGPU_TARGETS
+      EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hip-tests/samples"
+      BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hip_samples"
+      BACKGROUND_BUILD
+      COMPILER_TOOLCHAIN
+        amd-hip
+      CMAKE_ARGS
+        -DHIP_PLATFORM="amd"
+        -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON
+      BUILD_DEPS
+        rocm-cmake
+      RUNTIME_DEPS
+        hip-clr
+        ${THEROCK_BUNDLED_NUMACTL}
+      INTERFACE_LINK_DIRS
+        lib
+        lib/rocm_sysdeps/lib
+      INTERFACE_INSTALL_RPATH_DIRS
+        lib
+        lib/rocm_sysdeps/lib
+    )
+    therock_cmake_subproject_glob_c_sources(hip_samples SUBDIRS .)
+    therock_cmake_subproject_activate(hip_samples)
+
+    therock_provide_artifact(hip-samples
+      TARGET_NEUTRAL
+      DESCRIPTOR artifact-hip-samples.toml
+      COMPONENTS
+        test
+      SUBPROJECT_DEPS
+        hip_samples
+    )
   endif(THEROCK_BUILD_TESTING)
 endif(THEROCK_ENABLE_HIP_RUNTIME)
 
