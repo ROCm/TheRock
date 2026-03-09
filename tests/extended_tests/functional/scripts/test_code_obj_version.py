@@ -30,7 +30,6 @@ class TargetIdBitExtractTest(FunctionalBase):
             test_name="cov_backward_comptability",
             display_name="Cov Backward Comptability",
         )
-        self.results_json = self.script_dir / "cov_results.json"
         self.test_results: List[Dict[str, Any]] = []
 
         config = self.load_config("cov_backward_comp.json")
@@ -142,7 +141,7 @@ class TargetIdBitExtractTest(FunctionalBase):
                 return " | ".join(lines)
             return " | ".join(lines[:max_lines]) + " | ..."
 
-        def abi_to_code_object_version(abi_version: int, source_desc: str) -> int:
+        def _abi_to_code_object_version(abi_version: int, source_desc: str) -> int:
             # AMDGPU HSA ABI uses a fixed offset:
             #   ELFABIVERSION_AMDGPU_HSA_V2 -> ABI Version 0
             #   ELFABIVERSION_AMDGPU_HSA_V3 -> ABI Version 1
@@ -213,7 +212,7 @@ class TargetIdBitExtractTest(FunctionalBase):
                         match = re.search(r"ABI Version:\s*(\d+)", elf_header)
                         if match:
                             abi_version = int(match.group(1))
-                            return abi_to_code_object_version(abi_version, str(bundle_path))
+                            return _abi_to_code_object_version(abi_version, str(bundle_path))
                         bundle_errors.append(
                             f"`llvm-readelf -h {bundle_name}` did not contain ABI Version"
                         )
@@ -286,29 +285,8 @@ class TargetIdBitExtractTest(FunctionalBase):
                 rc,
                 error="Compile failed for default build (no -mcode-object-version)",
             )
-            with open(self.results_json, "w") as f:
-                json.dump(self.test_results, f, indent=2)
-            log.info(f"{self.display_name} results saved to {self.results_json}")
             return
-
-        try:
-            base_version = self._extract_code_object_version(default_binary)
-        except TestExecutionError as e:
-            self._record_result(
-                default_variant,
-                default_compile_cmd,
-                "SKIP",
-                0,
-                error=(
-                    "Code object version detection is not supported on this "
-                    f"platform/toolchain: {e}"
-                ),
-            )
-            with open(self.results_json, "w") as f:
-                json.dump(self.test_results, f, indent=2)
-            log.info(f"{self.display_name} results saved to {self.results_json}")
-            return
-
+        base_version = self._extract_code_object_version(default_binary)
         run_rc, _, run_err = self._run_and_validate_binary(default_binary)
         if run_err:
             self._record_result(
@@ -405,22 +383,13 @@ class TargetIdBitExtractTest(FunctionalBase):
                     detected_version=detected,
                 )
 
-        with open(self.results_json, "w") as f:
-            json.dump(self.test_results, f, indent=2)
-        log.info(f"{self.display_name} results saved to {self.results_json}")
-
     def parse_results(self) -> List[Dict[str, Any]]:
         log.info(f"Parsing {self.display_name} Results")
-        try:
-            with open(self.results_json, "r") as f:
-                json_results = json.load(f)
-        except FileNotFoundError:
-            raise TestExecutionError(f"Results JSON file not found: {self.results_json}")
-        except json.JSONDecodeError as e:
-            raise TestExecutionError(f"Invalid JSON in results file: {e}")
+        if not self.test_results:
+            raise TestExecutionError("No test results collected during run_tests()")
 
         parsed_results = []
-        for result in json_results:
+        for result in self.test_results:
             status = result.get("status", "ERROR").upper()
             if status not in ["PASS", "FAIL", "ERROR", "SKIP"]:
                 status = "ERROR"
