@@ -184,7 +184,7 @@ jobs:
           echo ""
           echo "3. Install artifacts from this CI run:"
           echo "   GITHUB_REPOSITORY=${{ github.repository }} python build_tools/install_rocm_from_artifacts.py \\"
-          echo "       --run-id ${{ github.run_id }} \\"
+          echo "       --run-id ${{ env.ARTIFACT_RUN_ID }} \\"
           echo "       --amdgpu-family ${{ inputs.amdgpu_families }}" \\
           echo "       ${{ fromJSON(inputs.component).fetch_artifact_args }}"
           echo ""
