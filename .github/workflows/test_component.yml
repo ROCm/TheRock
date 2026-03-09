@@ -157,7 +157,7 @@ jobs:
           ${{ fromJSON(inputs.component).test_script }}
 
       - name: Print test reproduction steps
-        # TODO: Add windows for reproduction steps  
+        # TODO: Add windows reproduction steps
         if: ${{ failure() && steps.test.outcome == 'failure' && inputs.platform == 'linux' }}
         run: |
           python ./build_tools/github_actions/print_test_reproduction_steps.py \
