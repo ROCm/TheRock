@@ -155,6 +155,7 @@ jobs:
           ROCM_KPACK_DEBUG: "1"
         run: |
           ${{ fromJSON(inputs.component).test_script }}
+          exit 1
 
       - name: Print test reproduction steps
         if: ${{ failure() && steps.test.outcome == 'failure' }}
