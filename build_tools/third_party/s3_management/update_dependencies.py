@@ -5,17 +5,13 @@
 # Forked from https://github.com/pytorch/test-infra/blob/1ffc7f7b3b421b57c380de469e11744f54399f09/s3_management/update_dependencies.py.
 # Changes incorporated from https://github.com/pytorch/test-infra/blob/a87d94b148bbd2c68e69e542350099a971f4c8d3/s3_management/update_dependencies.py.
 
-from typing import Dict, List
+from typing import Any, Dict, List
 from os import getenv
 
 import boto3  # type: ignore[import-untyped]
 import re
 
 
-S3 = boto3.resource("s3")
-CLIENT = boto3.client("s3")
-# We also manage `therock-nightly-python` (not the default to make the script safer to test)
-BUCKET = S3.Bucket(getenv("S3_BUCKET_PY", "therock-dev-python"))
 # Note: v2-staging first, in case issues are observed while the script runs
 # and the developer wants to more safely cancel the script.
 VERSIONS = ["v2-staging", "v2"]
@@ -39,6 +35,24 @@ PACKAGES_PER_PROJECT = {
     "typing-extensions": {"versions": ["latest"], "project": "torch"},
     "setuptools": {"versions": ["latest"], "project": "rocm"},
 }
+
+SUBFOLDERS = [
+    "gfx101X-dgpu",
+    "gfx103X-dgpu",
+    "gfx110X-all",
+    "gfx1150",
+    "gfx1151",
+    "gfx120X-all",
+    "gfx90X-dcgpu",
+    "gfx94X-dcgpu",
+    "gfx950-dcgpu",
+]
+
+
+def get_s3_bucket(bucket_name: str | None = None):
+    s3 = boto3.resource("s3")
+    resolved_bucket_name = bucket_name or getenv("S3_BUCKET_PY", "therock-dev-python")
+    return s3.Bucket(resolved_bucket_name)
 
 
 def download(url: str) -> bytes:
@@ -77,6 +91,7 @@ def get_wheels_of_version(idx: Dict[str, str], version: str) -> Dict[str, str]:
 
 
 def upload_missing_whls(
+    bucket: Any,
     pkg_name: str = "numpy",
     prefix: str = "whl/test",
     *,
@@ -156,11 +171,11 @@ def upload_missing_whls(
         print(f"Downloading {pkg}")
         if dry_run:
             has_updates = True
-            print(f"Dry Run - not Uploading {pkg} to s3://{BUCKET.name}/{prefix}/")
+            print(f"Dry Run - not Uploading {pkg} to s3://{bucket.name}/{prefix}/")
             continue
         data = download(pypi_idx[pkg])
-        print(f"Uploading {pkg} to s3://{BUCKET.name}/{prefix}/")
-        BUCKET.Object(key=f"{prefix}/{pkg}").put(
+        print(f"Uploading {pkg} to s3://{bucket.name}/{prefix}/")
+        bucket.Object(key=f"{prefix}/{pkg}").put(
             ContentType="binary/octet-stream", Body=data
         )
         has_updates = True
@@ -170,37 +185,21 @@ def upload_missing_whls(
         )
 
 
-def main() -> None:
-    from argparse import ArgumentParser
-
-    parser = ArgumentParser(f"Upload dependent packages to s3://{BUCKET}")
-    # Get unique paths from the packages list
-    project_paths = list(
-        set(pkg_info["project"] for pkg_info in PACKAGES_PER_PROJECT.values())
-    )
-    parser.add_argument("--package", choices=project_paths, default="torch")
-    parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument("--only-pypi", action="store_true")
-    args = parser.parse_args()
-
-    SUBFOLDERS =  [
-        "gfx101X-dgpu",
-        "gfx103X-dgpu",
-        "gfx110X-all",
-        "gfx1150",
-        "gfx1151",
-        "gfx120X-all",
-        "gfx90X-dcgpu",
-        "gfx94X-dcgpu",
-        "gfx950-dcgpu",
-    ]
+def run_update_dependencies(
+    *,
+    package: str = "torch",
+    dry_run: bool = False,
+    only_pypi: bool = False,
+    bucket_name: str | None = None,
+) -> None:
+    bucket = get_s3_bucket(bucket_name)
 
     for prefix in SUBFOLDERS:
         # Filter packages by the selected project path
         selected_packages = {
             pkg_name: pkg_info
             for pkg_name, pkg_info in PACKAGES_PER_PROJECT.items()
-            if pkg_info["project"] == args.package
+            if pkg_info["project"] == package
         }
         for VERSION in VERSIONS:
             for pkg_name, pkg_info in selected_packages.items():
@@ -211,12 +210,62 @@ def main() -> None:
 
                 for target_version in pkg_info["versions"]:
                     upload_missing_whls(
+                        bucket,
                         pkg_name,
                         full_path,
-                        dry_run=args.dry_run,
-                        only_pypi=args.only_pypi,
+                        dry_run=dry_run,
+                        only_pypi=only_pypi,
                         target_version=target_version,
                     )
+
+
+def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    del context
+
+    event = event or {}
+    package = event.get("package", "torch")
+    dry_run = event.get("dry_run", False)
+    only_pypi = event.get("only_pypi", False)
+    bucket_name = event.get("bucket_name")
+
+    run_update_dependencies(
+        package=package,
+        dry_run=dry_run,
+        only_pypi=only_pypi,
+        bucket_name=bucket_name,
+    )
+
+    return {
+        "statusCode": 200,
+        "body": {
+            "package": package,
+            "dry_run": dry_run,
+            "only_pypi": only_pypi,
+            "bucket_name": bucket_name or getenv("S3_BUCKET_PY", "therock-dev-python"),
+        },
+    }
+
+
+def main() -> None:
+    from argparse import ArgumentParser
+
+    parser = ArgumentParser(
+        f"Upload dependent packages to s3://{getenv('S3_BUCKET_PY', 'therock-dev-python')}"
+    )
+    # Get unique paths from the packages list
+    project_paths = list(
+        set(pkg_info["project"] for pkg_info in PACKAGES_PER_PROJECT.values())
+    )
+    parser.add_argument("--package", choices=project_paths, default="torch")
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--only-pypi", action="store_true")
+    args = parser.parse_args()
+
+    run_update_dependencies(
+        package=args.package,
+        dry_run=args.dry_run,
+        only_pypi=args.only_pypi,
+    )
 
 
 if __name__ == "__main__":
