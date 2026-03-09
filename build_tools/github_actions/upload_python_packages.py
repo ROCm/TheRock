@@ -11,8 +11,9 @@ developers, users, and test workflows.
 Usage:
   upload_python_packages.py
     --input-packages-dir PACKAGES_DIR
-    --artifact-group ARTIFACT_GROUP
     --run-id RUN_ID
+    [--artifact-group ARTIFACT_GROUP]  # Required for single-arch; omit with --multiarch
+    [--multiarch]              # Multi-arch mode: omits artifact_group from upload path
     [--output-dir OUTPUT_DIR]  # Local output instead of S3
     [--bucket BUCKET]          # Override bucket selection (defaults to auto-select)
     [--dry-run]                # Print what would happen without taking action
@@ -26,6 +27,12 @@ Output Layout:
   {bucket}/{external_repo}{run_id}-{platform}/python/{artifact_group}/
     *.whl, *.tar.gz   # Wheel and sdist files
     index.html        # File listing for pip --find-links
+
+  For multi-arch builds (--multiarch), artifact_group is omitted:
+  {bucket}/{external_repo}{run_id}-{platform}/python/
+    {family}/         # Per-family subdirectory (gfx94X-dcgpu, etc.)
+      index.html
+    *.whl, *.tar.gz
 
 Installation:
   pip install rocm[libraries,devel] --pre \\
@@ -200,7 +207,12 @@ def run(args: argparse.Namespace):
     generate_index(dist_dir, multiarch=args.multiarch, dry_run=args.dry_run)
 
     output_root = _make_output_root(args.run_id, bucket_override=args.bucket)
-    packages_loc = output_root.python_packages(args.artifact_group)
+    # Multi-arch builds don't need an artifact_group subdirectory: the run_id
+    # already uniquely identifies the build, and there is only one Python build
+    # job per multi-arch run.
+    packages_loc = output_root.python_packages(
+        "" if args.multiarch else args.artifact_group
+    )
     backend = create_storage_backend(staging_dir=args.output_dir, dry_run=args.dry_run)
 
     log("")
@@ -244,8 +256,8 @@ def main():
     parser.add_argument(
         "--artifact-group",
         type=str,
-        required=True,
-        help="Artifact group (e.g., gfx94X-dcgpu)",
+        default="",
+        help="Artifact group (e.g., gfx94X-dcgpu). Omit for multi-arch builds.",
     )
     parser.add_argument(
         "--run-id",
@@ -280,6 +292,8 @@ def main():
 
     if args.output_dir and args.bucket:
         parser.error("--output-dir and --bucket are mutually exclusive")
+    if not args.multiarch and not args.artifact_group:
+        parser.error("--artifact-group is required for single-arch builds")
 
     run(args)
 

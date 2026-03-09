@@ -114,5 +114,27 @@ class TestUploadPackages(unittest.TestCase):
             )
 
 
+class TestMultiArchUploadPath(unittest.TestCase):
+    """Tests that multi-arch uploads go to python/ without an artifact_group subdir."""
+
+    def test_multiarch_upload_path(self):
+        output_root = _make_output_root()
+        packages_loc = output_root.python_packages("")
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as staging:
+            dist_dir = Path(tmp)
+            staging_dir = Path(staging)
+            (dist_dir / "rocm-1.0.whl").write_bytes(b"whl")
+            (dist_dir / "index.html").write_text("<html></html>")
+
+            backend = LocalStorageBackend(staging_dir)
+            upload_python_packages.upload_packages(dist_dir, packages_loc, backend)
+
+            base = staging_dir / "12345-linux" / "python"
+            self.assertTrue((base / "rocm-1.0.whl").is_file())
+            self.assertTrue((base / "index.html").is_file())
+            # Confirm no artifact_group subdirectory was created
+            self.assertFalse((base / "multi-arch-release").exists())
+
+
 if __name__ == "__main__":
     unittest.main()

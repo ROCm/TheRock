@@ -182,13 +182,17 @@ class WorkflowOutputRoot:
 
     # -- Python packages --------------------------------------------------------
 
-    def python_packages(self, artifact_group: str) -> StorageLocation:
+    def python_packages(self, artifact_group: str = "") -> StorageLocation:
         """Location for the Python packages directory.
 
         Args:
-            artifact_group: Build variant (e.g., 'gfx110X-all')
+            artifact_group: Build variant (e.g., 'gfx110X-all'). If empty,
+                packages are stored directly under python/ (used for
+                multi-arch builds where run_id already uniquely identifies
+                the build).
         """
-        return StorageLocation(self.bucket, f"{self.prefix}/python/{artifact_group}")
+        suffix = f"/{artifact_group}" if artifact_group else ""
+        return StorageLocation(self.bucket, f"{self.prefix}/python{suffix}")
 
     # -- Factories --------------------------------------------------------------
 
