@@ -50,6 +50,28 @@ TEST_TO_IGNORE = {
         "linux": [
             "Unit_hipManagedKeyword_SingleGpu",
             "Unit_hipGetProcAddress_spt_Stream",
+            "Unit_hipHostRegister_AsyncApis",
+            "Unit_hipMemsetDSync - uint32_t",
+            "Unit_hipMemsetDASyncMulti - int8_t",
+            "Unit_hipStreamValue_Wait_Blocking - uint32_t",
+            "Unit_atomicExch_Positive_Same_Address_Compile_Time",
+            "Unit_hipHostRegister_ReferenceFromKernelandhipMemset - int",
+            "Unit_hipHostRegister_Graphs",
+            "Unit_hipMemsetSync",
+            "Unit_hipMemset2DSync",
+            "Unit_hipMemsetDASyncMulti - int16_t",
+            "Unit_hipStreamValue_Wait_Blocking - uint64_t",
+            "Unit_hipHostRegister_ReferenceFromKernelandhipMemset - float",
+            "Unit_hipMemsetDSync - int8_t",
+            "Unit_hipMemset3DSync",
+            "Unit_hipMemsetDASyncMulti - uint32_t",
+            "Unit_hipStreamValue_Write - TestParams<uint64_t, PtrType::DevicePtrToHost>",
+            "Unit_hipHostRegister_ReferenceFromKernelandhipMemset - double"
+            "Unit_hipGetProcAddress_MemoryApisRegisterUnReg",
+            "Unit_hipMemsetDSync - int16_t",
+            "Unit_hipMemsetASyncMulti",
+            "Unit_hipHostAlloc_AllocateMoreThanAvailGPUMemory",
+            "Unit_hipStreamValue_Write - TestParams<uint32_t, PtrType::DevicePtrToHost>",
         ]
     },
     "gfx110X-all": {

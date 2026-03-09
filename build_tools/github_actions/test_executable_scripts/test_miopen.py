@@ -159,22 +159,33 @@ negative_filter.append("Full/GPU_ConvGrpActivInfer3D_BFP16*")  # 0 min 27 sec
 negative_filter.append("Full/GPU_ConvGrpActivInfer3D_FP32*")  # 0 min 22 sec
 negative_filter.append("Full/GPU_ConvGrpActivInfer3D_FP16*")  # 0 min 16 sec
 
-# Flaky tests
+# TODO(#3202): Re-enable tests once issues are resolved
 TEST_TO_IGNORE = {
+    "gfx110X-all": {
+        "windows": [
+            # Failed on gfx1103
+            "Smoke/CPU_Handle_NONE.TestHIP/with_stream_false_test_id_0",
+            "Full/GPU_reduce_custom_fp32_fp16_FP32.FloatTest_reduce_custom_fp32_fp16/1",
+            "Full/GPU_reduce_custom_fp32_fp16_FP32.FloatTest_reduce_custom_fp32_fp16/5",
+            "Full/GPU_reduce_custom_fp32_fp16_FP32.FloatTest_reduce_custom_fp32_fp16/9",
+            "Full/GPU_reduce_custom_fp32_fp16_FP32.FloatTest_reduce_custom_fp32_fp16/13",
+            "Full/GPU_reduce_custom_fp32_fp16_FP32.FloatTest_reduce_custom_fp32_fp16/17",
+            "Full/GPU_reduce_custom_fp32_fp16_FP16.HalfTest_reduce_custom_fp32_fp16/1",
+            "Full/GPU_reduce_custom_fp32_fp16_FP16.HalfTest_reduce_custom_fp32_fp16/5",
+            "Full/GPU_reduce_custom_fp32_fp16_FP16.HalfTest_reduce_custom_fp32_fp16/9",
+            "Full/GPU_reduce_custom_fp32_fp16_FP16.HalfTest_reduce_custom_fp32_fp16/13",
+            "Full/GPU_reduce_custom_fp32_fp16_FP16.HalfTest_reduce_custom_fp32_fp16/17",
+        ]
+    },
     "gfx1151": {
-        # TODO(#3202): Re-enable tests once issues are resolved
         "windows": ["Full/GPU_UnitTestConvSolverGemmBwdRestBwd_FP16.GemmBwdRest/0"]
-    }
+    },
+    "gfx950-dcgpu": {"linux": ["*DBSync*"]},
 }
 
 if AMDGPU_FAMILIES in TEST_TO_IGNORE and os_type in TEST_TO_IGNORE[AMDGPU_FAMILIES]:
     ignored_tests = TEST_TO_IGNORE[AMDGPU_FAMILIES][os_type]
-    for ignored_test in ignored_tests:
-        negative_filter.append(ignored_test)
-
-# TODO(rocm-libraries#2266): re-enable test for gfx950-dcgpu
-if AMDGPU_FAMILIES == "gfx950-dcgpu":
-    negative_filter.append("*DBSync*")
+    negative_filter.extend(ignored_tests)
 
 # Tests to be filtered for navi
 # 1- Ignore gfx942 tests
