@@ -5,9 +5,15 @@
 """
 Full installation test script for ROCm native packages.
 
-This script sets up the package-manager repository, installs ROCm native packages
-(amdrocm-{gfx_arch}, amdrocm-core-sdk-{gfx_arch}), and verifies the installation. URL generation and package
-name construction are delegated to the YAML workflow when run from CI.
+The test runs in three steps (invoked one by one from main):
+  1. Repo setup and install: set up package-manager repository and install
+     ROCm packages (amdrocm-{gfx_arch}, amdrocm-core-sdk-{gfx_arch}).
+  2. Basic verification: sanity check that install prefix exists and minimum
+     key components are present.
+  3. Full verification: detailed checks (components, installed packages,
+     rocminfo, rdhc.py).
+
+
 
 Path and repo name are overridable via environment variables: ROCM_REPO_NAME (repo id used for
 APT list, Zypper/Yum repo file and section), ROCM_APT_KEYRING_DIR, ROCM_APT_SOURCES_LIST,
@@ -169,7 +175,7 @@ class NativeLinuxPackagesTester:
         gfx_arch: Optional[Union[str, list[str]]] = None,
         gpg_key_url: Optional[str] = None,
     ):
-        """Initialize the package full tester.
+        """Initialize the package Install tester.
 
         Args:
             repo_url: Full repository URL (constructed in YAML)
@@ -600,8 +606,77 @@ gpgcheck=0
             print(f"\n[FAIL] Error during installation: {e}")
             return False
 
+    def run_repo_setup_and_install(self) -> bool:
+        """Step 1: Set up package-manager repository and install ROCm packages.
+
+        Returns:
+            True if repository setup and package installation both succeeded.
+        """
+        print("\n" + "=" * 80)
+        print("STEP 1: REPOSITORY SETUP AND PACKAGE INSTALLATION")
+        print("=" * 80)
+        print(f"\nOS Profile: {self.os_profile}")
+        print(f"Package Type (derived): {self.package_type.upper()}")
+        print(f"Repository URL: {self.repo_url}")
+        print(f"Packages (in order): {self.package_names}")
+
+        if self.package_type == "deb":
+            if not self.setup_deb_repository():
+                return False
+            return self.install_deb_packages()
+        else:
+            if not self.setup_rpm_repository():
+                return False
+            return self.install_rpm_packages()
+
+    def run_basic_verification(self) -> bool:
+        """Step 2: Basic sanity check / basic install verification.
+
+        Checks that the install prefix exists and at least VERIFY_MIN_COMPONENTS
+        key components are present. Does not run rocminfo, package listing, or rdhc.
+
+        Returns:
+            True if basic verification passed.
+        """
+        print("\n" + "=" * 80)
+        print("STEP 2: BASIC INSTALL VERIFICATION (SANITY CHECK)")
+        print("=" * 80)
+
+        install_path = Path(self.install_prefix)
+        if not install_path.exists():
+            print(f"\n[FAIL] Installation directory not found: {self.install_prefix}")
+            return False
+
+        print(f"\n[PASS] Installation directory exists: {self.install_prefix}")
+
+        found_count = 0
+        for component in VERIFY_KEY_COMPONENTS:
+            if (install_path / component).exists():
+                found_count += 1
+
+        print(
+            f"Key components found: {found_count}/{len(VERIFY_KEY_COMPONENTS)} (minimum required: {VERIFY_MIN_COMPONENTS})"
+        )
+
+        if found_count >= VERIFY_MIN_COMPONENTS:
+            print("\n[PASS] Basic verification PASSED")
+            return True
+        print("\n[FAIL] Basic verification FAILED (insufficient components)")
+        return False
+
+    def run_full_verification(self) -> bool:
+        """Step 3: Detailed/full verification of ROCm installation.
+
+        Checks components, lists installed packages, runs rocminfo if available,
+        and tests rdhc.py. See verify_rocm_installation() for implementation.
+        """
+        print("\n" + "=" * 80)
+        print("STEP 3: FULL / DETAILED VERIFICATION")
+        print("=" * 80)
+        return self.verify_rocm_installation()
+
     def verify_rocm_installation(self) -> bool:
-        """Verify that ROCm is properly installed.
+        """Verify that ROCm is properly installed (detailed: components, packages, rocminfo, rdhc).
 
         Returns:
             True if verification successful, False otherwise
@@ -775,65 +850,6 @@ gpgcheck=0
             print(f"   [WARN] Could not run rdhc.py: {e}")
             return False
 
-    def run(self) -> bool:
-        """Execute the full installation test process.
-
-        Returns:
-            True if all operations successful, False otherwise
-        """
-        print("\n" + "=" * 80)
-        print("FULL INSTALLATION TEST - NATIVE LINUX PACKAGES")
-        print("=" * 80)
-        print(f"\nOS Profile: {self.os_profile}")
-        print(f"Package Type (derived): {self.package_type.upper()}")
-        print(f"Release Type: {self.release_type.upper()}")
-        print(f"Repository URL: {self.repo_url}")
-        print(
-            f"GPU Architecture(s): {self.gfx_arch_list} (using first: {self.gfx_arch})"
-        )
-        print(f"Packages (in order): {self.package_names}")
-        print(f"Install Prefix: {self.install_prefix}")
-
-        try:
-            # Step 1: Setup repository
-            if self.package_type == "deb":
-                setup_success = self.setup_deb_repository()
-            else:  # rpm
-                setup_success = self.setup_rpm_repository()
-
-            if not setup_success:
-                return False
-
-            # Step 2: Install packages
-            if self.package_type == "deb":
-                install_success = self.install_deb_packages()
-            else:  # rpm
-                install_success = self.install_rpm_packages()
-
-            if not install_success:
-                return False
-
-            # Step 3: Verify installation
-            verification_success = self.verify_rocm_installation()
-
-            # Print final status
-            print("\n" + "=" * 80)
-            if install_success and verification_success:
-                print("[PASS] FULL INSTALLATION TEST PASSED")
-                print(
-                    "\nROCm has been successfully installed from repository and verified!"
-                )
-            else:
-                print("[FAIL] FULL INSTALLATION TEST FAILED")
-            print("=" * 80 + "\n")
-
-            return install_success and verification_success
-
-        except Exception as e:
-            print(f"\n[FAIL] Error during full installation test: {e}")
-            traceback.print_exc()
-            return False
-
 
 def main():
     """Main entry point for the Native Linux Package Installation Test script."""
@@ -910,6 +926,14 @@ Examples:
         help="GPG key URL",
     )
 
+    parser.add_argument(
+        "--test-type",
+        type=str,
+        choices=["sanity", "full"],
+        default="sanity",
+        help="Test type: 'sanity' runs only basic verification; 'full' runs basic + full verification.",
+    )
+
     args = parser.parse_args()
 
     # Derive package type from OS profile
@@ -930,11 +954,12 @@ Examples:
     print(f"Repository URL: {args.repo_url}")
     print(f"GPU Architecture(s): {args.gfx_arch} (using first: {args.gfx_arch[0]})")
     print(f"Install Prefix: {args.install_prefix}")
+    print(f"Test Type: {args.test_type}")
     if args.gpg_key_url:
         print(f"GPG Key URL: {args.gpg_key_url}")
     print("=" * 80)
 
-    # Create installer and run
+    # Create tester and run the three operations in order
     tester = NativeLinuxPackagesTester(
         os_profile=args.os_profile,
         repo_url=args.repo_url,
@@ -944,8 +969,43 @@ Examples:
         gpg_key_url=args.gpg_key_url,
     )
 
-    success = tester.run()
-    sys.exit(0 if success else 1)
+    print("\n" + "=" * 80)
+    print("INSTALLATION TEST - NATIVE LINUX PACKAGES")
+    print("=" * 80)
+    print(f"Release Type: {tester.release_type.upper()}")
+    print(f"Install Prefix: {tester.install_prefix}")
+    print(f"Test Type: {args.test_type}")
+    print("=" * 80)
+
+    try:
+        # 1. Repo setup and install (always)
+        if not tester.run_repo_setup_and_install():
+            print("\n[FAIL] Step 1 (repo setup and install) failed.")
+            sys.exit(1)
+
+        # 2. Basic sanity / basic install verification (always)
+        if not tester.run_basic_verification():
+            print("\n[FAIL] Step 2 (basic verification) failed.")
+            sys.exit(1)
+
+        # 3. Full verification only when test_type is "full"
+        if args.test_type == "full":
+            if not tester.run_full_verification():
+                print("\n[FAIL] Step 3 (full verification) failed.")
+                sys.exit(1)
+
+        print("\n" + "=" * 80)
+        print("[PASS] INSTALLATION TEST PASSED")
+        if args.test_type == "sanity":
+            print("(sanity: basic verification completed)")
+        else:
+            print("ROCm has been successfully installed from repository and verified!")
+        print("=" * 80 + "\n")
+        sys.exit(0)
+    except Exception as e:
+        print(f"\n[FAIL] Error during installation test: {e}")
+        traceback.print_exc()
+        sys.exit(1)
 
 
 if __name__ == "__main__":
