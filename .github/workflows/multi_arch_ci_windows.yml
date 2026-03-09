@@ -44,7 +44,12 @@ jobs:
   copy_prebuilt_stages:
     name: Copy Prebuilt Stages
     if: ${{ inputs.prebuilt_stages != '' && inputs.baseline_run_id != '' }}
+    # TODO: Consider running on a Linux runner with --platform=windows to
+    #   avoid Windows runner setup overhead (setup-python ~51s).
     runs-on: azure-windows-scale-rocm
+    defaults:
+      run:
+        shell: bash
     permissions:
       contents: read
       id-token: write
