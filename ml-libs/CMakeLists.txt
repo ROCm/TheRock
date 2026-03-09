@@ -11,15 +11,19 @@ endif()
 # Disable composable kernel on GPU families that are explicitly unsupported
 if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
   set(_ck_unsupported_gfx_targets gfx906 gfx1010 gfx1011 gfx1012 gfx1033)
+  set(_ck_is_unsupported OFF)
   foreach(_gfx_target ${THEROCK_AMDGPU_TARGETS})
     if(_gfx_target IN_LIST _ck_unsupported_gfx_targets)
+      set(_ck_is_unsupported ON)
       message(WARNING
         "${_gfx_target} (included in THEROCK_AMDGPU_TARGETS) is not supported by composable kernel. "
         "Disabling composable kernel and its use in MIOpen.")
-      set(THEROCK_ENABLE_COMPOSABLE_KERNEL OFF)
-      set(THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL OFF)
     endif()
   endforeach()
+  if(_ck_is_unsupported)
+    set(THEROCK_ENABLE_COMPOSABLE_KERNEL OFF)
+    set(THEROCK_MIOPEN_USE_COMPOSABLE_KERNEL OFF)
+  endif()
 endif()
 
 if(THEROCK_ENABLE_COMPOSABLE_KERNEL)
