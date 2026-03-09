@@ -1,11 +1,8 @@
 # hipDNN
 [components.dbg."ml-libs/hipDNN/stage"]
 [components.dev."ml-libs/hipDNN/stage"]
-include = [
-  "include/**",                      # Header files
-  "lib/cmake/**",                    # CMake configs in lib
-  "share/*/cmake/**",                # CMake configs in share
-  "bin/**/*.cmake",                  # All CMake files in bin (including subdirs)
+exclude = [
+  "*/bin/*test*",
 ]
 [components.doc."ml-libs/hipDNN/stage"]
 [components.lib."ml-libs/hipDNN/stage"]
