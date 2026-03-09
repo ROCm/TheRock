@@ -15,9 +15,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-# Add build_tools to path so _therock_utils is importable.
-sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent))
-# Add github_actions to path so generate_package_index is importable.
+# Add build_tools to path so generate_package_index and _therock_utils are importable.
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from generate_package_index import generate_simple_index, generate_multiarch_indexes

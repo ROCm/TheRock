@@ -63,7 +63,7 @@ jobs:
     # If the dependent job failed/cancelled, this job will not be run
     # The use_prebuilt_artifacts "or" statement ensures that tests will run if
     # previous build step is run or skipped.
-    # If we are expecting a build failure, do not run tests to save machine capacity
+    # If we are expecting a build failure, do not run tests to save machine capacity.
     if: >-
       ${{
         !failure() &&
@@ -98,7 +98,9 @@ jobs:
   build_python_packages:
     needs: [build_multi_arch_stages]
     name: Build Python Packages
-    # Same conditional pattern as test_artifacts_per_family
+    # If the dependent job failed/cancelled, this job will not be run
+    # The use_prebuilt_artifacts "or" statement ensures that tests will run if
+    # previous build step is run or skipped.
     if: >-
       ${{
         !failure() &&
@@ -123,7 +125,9 @@ jobs:
   test_python_packages_per_family:
     needs: [build_python_packages]
     name: Test Python ${{ matrix.family_info.amdgpu_family }}
-    # Run if build succeeded and test runner is available
+    # If the dependent job failed/cancelled, this job will not be run
+    # The use_prebuilt_artifacts "or" statement ensures that tests will run if
+    # previous build step is run or skipped.
     if: >-
       ${{
         !failure() &&
@@ -138,7 +142,7 @@ jobs:
       fail-fast: false
       matrix:
         family_info: ${{ fromJSON(inputs.matrix_per_family_json) }}
-        # Match exclusions from test_artifacts_per_family
+        # TODO(TheRock#3288): Re-enable gfx950-dcgpu runners once we get more capacity
         exclude:
           - family_info:
               amdgpu_family: gfx950-dcgpu
