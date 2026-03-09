@@ -249,7 +249,7 @@ source_sets = ["rocm-systems"]  # clr is in rocm-systems
 
 [artifact_groups.rocrtst]
 description = "Core runtime tests (ROCR-Runtime, rocminfo)"
-type = "per-arch"
+type = "generic"
 artifact_group_deps = ["opencl-runtime", "core-runtime"]
 source_sets = ["rocm-systems"]
 
@@ -423,6 +423,12 @@ type = "target-neutral"
 artifact_deps = ["amd-llvm"]
 feature_group = "CORE"
 
+[artifacts.openmpi]
+artifact_group = "third-party-libs"
+type = "target-neutral"
+artifact_deps = []
+feature_group = "CORE"
+
 # --- Base Infrastructure ---
 
 [artifacts.base]
@@ -480,7 +486,7 @@ feature_group = "CORE"  # Part of core, enabled by default
 
 [artifacts.rocrtst]
 artifact_group = "rocrtst"
-type = "target-specific"
+type = "target-neutral"
 artifact_deps = ["core-runtime", "core-ocl", "sysdeps-hwloc"]
 feature_name = "CORE_RUNTIME_TESTS"
 feature_group = "CORE"
@@ -618,7 +624,7 @@ disable_platforms = ["windows"]
 [artifacts.rccl]
 artifact_group = "comm-libs"
 type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip", "hipify", "rocprofiler-sdk", "core-amdsmi"]
+artifact_deps = ["core-runtime", "core-hip", "hipify", "rocprofiler-sdk", "core-amdsmi", "openmpi"]
 disable_platforms = ["windows"]
 
 [artifacts.rocshmem]

@@ -9,6 +9,10 @@
 optional = true
 [components.dev."math-libs/BLAS/rocRoller/stage"]
 optional = true
+exclude = [
+  "include/mxDataGenerator/**",
+  "lib/cmake/mxDataGenerator/**",
+]
 [components.doc."math-libs/BLAS/rocRoller/stage"]
 optional = true
 [components.lib."math-libs/BLAS/rocRoller/stage"]

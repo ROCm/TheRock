@@ -438,7 +438,7 @@ if(THEROCK_BUILD_TESTING)
     endif()
 
     therock_cmake_subproject_declare(rocrtst
-      USE_DIST_AMDGPU_TARGETS
+      USE_TEST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/rocrtst/suites/test_common"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocrtst"
       BACKGROUND_BUILD
@@ -466,6 +466,7 @@ if(THEROCK_BUILD_TESTING)
     therock_cmake_subproject_activate(rocrtst)
 
     therock_provide_artifact(rocrtst
+      TARGET_NEUTRAL
       DESCRIPTOR artifact-core-rocrtst.toml
       COMPONENTS
         dbg

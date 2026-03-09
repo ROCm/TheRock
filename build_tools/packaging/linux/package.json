@@ -1168,6 +1168,20 @@
             ]
           }
         ]
+      },
+      {
+        "Artifact": "aqlprofile",
+        "Artifact_Subdir": [
+          {
+            "Name": "aqlprofile",
+            "Components": [
+              "lib",
+              "dev",
+              "run",
+              "doc"
+            ]
+          }
+        ]
       }
     ],
 
@@ -1649,6 +1663,7 @@
             "Name": "composable_kernel",
             "Components": [
               "run",
+              "dev",
               "doc"
             ]
           }
