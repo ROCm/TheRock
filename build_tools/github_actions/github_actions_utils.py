@@ -735,7 +735,9 @@ def run_test(
         )
     """
     if output_format not in ("gtest", "ctest"):
-        raise ValueError(f"output_format must be 'gtest' or 'ctest', got: {output_format}")
+        raise ValueError(
+            f"output_format must be 'gtest' or 'ctest', got: {output_format}"
+        )
 
     if success_returncodes is None:
         success_returncodes = [0]
