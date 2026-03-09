@@ -355,7 +355,21 @@ def do_fetch(args: argparse.Namespace):
     download_dir = output_dir / ".download_cache"
     download_dir.mkdir(parents=True, exist_ok=True)
 
-    matched_filenames = find_available_artifacts(inbound, target_families, available)
+    fetch_all_families = not args.generic_only and args.amdgpu_families == "all"
+
+    if fetch_all_families:
+        # Fetch all available artifacts matching the inbound set by prefix.
+        # Used when --amdgpu-families=all to grab every family without
+        # enumerating them explicitly.
+        log("Fetching all available families")
+        matched_filenames = [
+            filename
+            for filename in sorted(available)
+            if any(filename.startswith(f"{name}_") for name in inbound)
+        ]
+    else:
+        matched_filenames = find_available_artifacts(inbound, target_families, available)
+
     download_requests = [
         DownloadRequest(
             artifact_key=filename,

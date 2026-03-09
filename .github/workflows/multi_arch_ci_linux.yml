@@ -113,7 +113,7 @@ jobs:
     with:
       artifact_run_id: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       artifact_group: ${{ inputs.artifact_group }}
-      amdgpu_families: "${{ replace(inputs.dist_amdgpu_families, ';', ',') }}"
+      amdgpu_families: "all"
       multiarch_index: true
       package_version: ${{ inputs.rocm_package_version }}
     permissions:
@@ -132,8 +132,7 @@ jobs:
           inputs.use_prebuilt_artifacts == 'false' ||
           inputs.use_prebuilt_artifacts == 'true'
         ) &&
-        inputs.expect_failure == false &&
-        matrix.family_info.test-runs-on != ''
+        inputs.expect_failure == false
       }}
     strategy:
       fail-fast: false

@@ -1013,5 +1013,68 @@ class TestCopy(ArtifactManagerTestBase):
         )
 
 
+class TestFetchAllFamilies(ArtifactManagerTestBase):
+    """Tests that fetch with --amdgpu-families=all fetches all available families."""
+
+    def test_fetch_all_families_fetches_all_available_families(self):
+        """Test that --stage=all --amdgpu-families=all fetches all families from backend."""
+        import artifact_manager
+
+        # Stage artifacts for multiple families
+        self._create_staged_artifact("test-artifact", "lib", "generic")
+        self._create_staged_artifact("test-artifact", "lib", "gfx94X-dcgpu")
+        self._create_staged_artifact("test-artifact", "dev", "gfx120X-all")
+        self._create_staged_artifact("downstream-artifact", "lib", "generic")
+
+        extract_calls = []
+
+        def mock_extract(request):
+            extract_calls.append(request)
+            return request.output_dir
+
+        with mock.patch("artifact_manager.extract_artifact", mock_extract):
+            argv = [
+                "fetch",
+                "--stage",
+                "all",
+                "--output-dir",
+                str(self.output_dir),
+                "--topology",
+                str(self.topology_path),
+                "--local-staging-dir",
+                str(self.staging_dir),
+                "--platform",
+                TEST_PLATFORM,
+                "--run-id",
+                "local",
+                "--amdgpu-families",
+                "all",
+            ]
+
+            artifact_manager.main(argv)
+
+        # Should have fetched all 4 staged artifacts
+        fetched_keys = [c.archive_path.name for c in extract_calls]
+        self.assertEqual(
+            len(fetched_keys),
+            4,
+            f"Should fetch all 4 staged artifacts, got: {fetched_keys}",
+        )
+
+        # Verify all families were discovered and fetched
+        self.assertTrue(
+            any("generic" in k for k in fetched_keys),
+            f"Should fetch generic artifacts, got: {fetched_keys}",
+        )
+        self.assertTrue(
+            any("gfx94X-dcgpu" in k for k in fetched_keys),
+            f"Should fetch gfx94X-dcgpu artifacts, got: {fetched_keys}",
+        )
+        self.assertTrue(
+            any("gfx120X-all" in k for k in fetched_keys),
+            f"Should fetch gfx120X-all artifacts, got: {fetched_keys}",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
