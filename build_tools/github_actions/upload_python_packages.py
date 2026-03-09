@@ -226,7 +226,9 @@ def run(args: argparse.Namespace):
         # For single-arch, return traditional URL with /index.html
         if args.multiarch:
             index_url = packages_loc.https_url
-            log(f"[INFO] Multi-arch base URL (tests append /{{family}}/index.html): {index_url}")
+            log(
+                f"[INFO] Multi-arch base URL (tests append /{{family}}/index.html): {index_url}"
+            )
         else:
             index_url = f"{packages_loc.https_url}/index.html"
             log(f"[INFO] Single-arch index URL: {index_url}")

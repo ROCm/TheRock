@@ -98,7 +98,9 @@ def generate_simple_index(
     )
 
 
-def generate_multiarch_indexes(dist_dir: Path, patterns: list[str] | None = None) -> None:
+def generate_multiarch_indexes(
+    dist_dir: Path, patterns: list[str] | None = None
+) -> None:
     """Generate per-family index files for multi-arch builds.
 
     For multi-arch builds, the dist directory structure is:
