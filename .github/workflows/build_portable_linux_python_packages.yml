@@ -91,8 +91,7 @@ jobs:
               --run-id="${{ env.ARTIFACT_RUN_ID }}" \
               --stage=all \
               --amdgpu-families="${{ inputs.amdgpu_families }}" \
-              --output-dir="${{ env.ARTIFACTS_DIR }}" \
-              --flatten
+              --output-dir="${{ env.ARTIFACTS_DIR }}"
           else
             # Single-family mode: use fetch_artifacts.py (backward compatible)
             echo "Fetching artifacts for single family: ${{ inputs.artifact_group }}"
