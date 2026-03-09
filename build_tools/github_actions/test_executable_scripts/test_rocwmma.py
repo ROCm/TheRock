@@ -78,5 +78,9 @@ cmd = [
     "|".join(TESTS_TO_IGNORE),
 ]
 run_test(
-    cmd, output_format="ctest", output_path=junit_xml_path, cwd=THEROCK_DIR, env=environ_vars
+    cmd,
+    output_format="ctest",
+    output_path=junit_xml_path,
+    cwd=THEROCK_DIR,
+    env=environ_vars,
 )

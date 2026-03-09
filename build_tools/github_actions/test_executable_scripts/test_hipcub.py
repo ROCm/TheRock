@@ -126,5 +126,9 @@ if test_type == "smoke":
     environ_vars["GTEST_FILTER"] = ":".join(SMOKE_TESTS)
 
 run_test(
-    cmd, output_format="ctest", output_path=junit_xml_path, cwd=THEROCK_DIR, env=environ_vars
+    cmd,
+    output_format="ctest",
+    output_path=junit_xml_path,
+    cwd=THEROCK_DIR,
+    env=environ_vars,
 )

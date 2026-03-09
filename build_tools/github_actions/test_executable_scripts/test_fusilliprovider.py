@@ -63,5 +63,9 @@ if test_type == "smoke":
     logging.info("   TEST_TYPE=smoke: Excluding Full* tests via GTEST_FILTER")
 
 run_test(
-    cmd, output_format="ctest", output_path=junit_xml_path, cwd=THEROCK_DIR, env=environ_vars
+    cmd,
+    output_format="ctest",
+    output_path=junit_xml_path,
+    cwd=THEROCK_DIR,
+    env=environ_vars,
 )

@@ -117,4 +117,6 @@ extra = os.getenv("EXTRA_GTEST_ARGS", "")
 if extra:
     cmd += shlex.split(extra)
 
-run_test(cmd, output_format="gtest", output_path=gtest_json_path, cwd=THEROCK_DIR, env=env)
+run_test(
+    cmd, output_format="gtest", output_path=gtest_json_path, cwd=THEROCK_DIR, env=env
+)

@@ -44,5 +44,9 @@ if test_type == "smoke":
     environ_vars["GTEST_FILTER"] = "-Full*"
 
 run_test(
-    cmd, output_format="ctest", output_path=junit_xml_path, cwd=THEROCK_DIR, env=environ_vars
+    cmd,
+    output_format="ctest",
+    output_path=junit_xml_path,
+    cwd=THEROCK_DIR,
+    env=environ_vars,
 )

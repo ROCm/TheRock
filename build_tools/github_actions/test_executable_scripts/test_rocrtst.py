@@ -64,5 +64,9 @@ else:
     environ_vars["GTEST_FILTER"] = exclude_filter
 
 run_test(
-    cmd, output_format="gtest", output_path=gtest_json_path, cwd=cwd_dir, env=environ_vars
+    cmd,
+    output_format="gtest",
+    output_path=gtest_json_path,
+    cwd=cwd_dir,
+    env=environ_vars,
 )

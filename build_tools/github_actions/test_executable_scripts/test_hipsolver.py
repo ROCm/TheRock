@@ -60,5 +60,9 @@ cmd = [
 ]
 
 run_test(
-    cmd, output_format="gtest", output_path=gtest_json_path, cwd=THEROCK_DIR, env=envion_vars
+    cmd,
+    output_format="gtest",
+    output_path=gtest_json_path,
+    cwd=THEROCK_DIR,
+    env=envion_vars,
 )

@@ -95,5 +95,9 @@ if test_type == "smoke":
     cmd.append("|".join(SMOKE_TESTS))
 
 run_test(
-    cmd, output_format="ctest", output_path=junit_xml_path, cwd=THEROCK_PATH, env=environ_vars
+    cmd,
+    output_format="ctest",
+    output_path=junit_xml_path,
+    cwd=THEROCK_PATH,
+    env=environ_vars,
 )
