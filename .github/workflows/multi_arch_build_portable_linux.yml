@@ -34,8 +34,6 @@ on:
         type: string
       test_labels:
         type: string
-      artifact_run_id:
-        type: string
       expect_failure:
         type: boolean
       rocm_package_version:

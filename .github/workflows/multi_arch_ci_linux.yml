@@ -22,8 +22,6 @@ on:
         type: string
       test_labels:
         type: string
-      artifact_run_id:
-        type: string
       expect_failure:
         type: boolean
       prebuilt_stages:
@@ -121,7 +119,6 @@ jobs:
       amdgpu_families: ${{ matrix.family_info.amdgpu_family }}
       amdgpu_targets: ${{ matrix.family_info.amdgpu_targets }}
       test_runs_on: ${{ matrix.family_info.test-runs-on }}
-      artifact_run_id: ${{ inputs.artifact_run_id }}
       test_type: ${{ inputs.test_type }}
       test_labels: ${{ inputs.test_labels }}
       sanity_check_only_for_family: ${{ matrix.family_info.sanity_check_only_for_family }}
