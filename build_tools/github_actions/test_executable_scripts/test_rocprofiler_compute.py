@@ -24,39 +24,13 @@ THEROCK_PATH = THEROCK_BIN_PATH.parent
 THEROCK_LIB_PATH = str(THEROCK_PATH / "lib")
 ROCPROFILER_COMPUTE_DIRECTORY = THEROCK_PATH / "libexec" / "rocprofiler-compute"
 
-# Set up ROCM_PATH
-environ_vars = os.environ.copy()
-environ_vars["ROCM_PATH"] = str(THEROCK_PATH)
-
-# Set up PATH
-old_path = os.getenv("PATH", "")
-rocm_bin = str(THEROCK_BIN_PATH)
-if old_path:
-    environ_vars["PATH"] = f"{rocm_bin}:{old_path}"
-else:
-    environ_vars["PATH"] = rocm_bin
-
-# Set up LD_LIBRARY_PATH
-old_ld_lib_path = os.getenv("LD_LIBRARY_PATH", "")
-sysdeps_path = f"{THEROCK_LIB_PATH}/rocm_sysdeps/lib"
-if old_ld_lib_path:
-    environ_vars["LD_LIBRARY_PATH"] = (
-        f"{THEROCK_LIB_PATH}:{sysdeps_path}:{old_ld_lib_path}"
-    )
-else:
-    environ_vars["LD_LIBRARY_PATH"] = f"{THEROCK_LIB_PATH}:{sysdeps_path}"
-
 # Set up excluded tests (include Jiras)
 # AIPROFSDK-36: rocr issue causing test to fail
 EXCLUDED_TESTS = [
     "test_profile_pc_sampling",
 ]
 
-# Sharding
-shard_index = int(os.getenv("SHARD_INDEX", "1")) - 1
-total_shards = int(os.getenv("TOTAL_SHARDS", "1"))
-
-# Smoke Tests Setup
+# Smoke Tests
 SMOKE_TESTS = [
     "test_autogen_config",
     "test_utils",
@@ -71,33 +45,68 @@ SMOKE_TESTS = [
 
 # Create temp file for JUnit XML output
 junit_xml_path = Path(tempfile.gettempdir()) / "rocprofiler_compute_test_results.xml"
+environ_vars = os.environ.copy()
 
-# Run tests
-cmd = [
-    "ctest",
-    "--test-dir",
-    f"{ROCPROFILER_COMPUTE_DIRECTORY}",
-    "--output-on-failure",
-    "--output-junit",
-    str(junit_xml_path),
-    "--verbose",
-    "--exclude-regex",
-    f"{"|".join(EXCLUDED_TESTS)}",
-    "--tests-information",
-    f"{shard_index},,{total_shards}",
-]
 
-# If smoke tests are enabled, we run smoke tests only.
-# Otherwise, we run the normal test suite
-test_type = os.getenv("TEST_TYPE", "full")
-if test_type == "smoke":
-    cmd.append("--tests-regex")
-    cmd.append("|".join(SMOKE_TESTS))
+def setup_env():
+    # Set up ROCM_PATH
+    environ_vars["ROCM_PATH"] = str(THEROCK_PATH)
 
-run_test(
-    cmd,
-    output_format="ctest",
-    output_path=junit_xml_path,
-    cwd=THEROCK_PATH,
-    env=environ_vars,
-)
+    # Set up PATH
+    old_path = os.getenv("PATH", "")
+    rocm_bin = str(THEROCK_BIN_PATH)
+    if old_path:
+        environ_vars["PATH"] = f"{rocm_bin}:{old_path}"
+    else:
+        environ_vars["PATH"] = rocm_bin
+
+    # Set up LD_LIBRARY_PATH
+    old_ld_lib_path = os.getenv("LD_LIBRARY_PATH", "")
+    sysdeps_path = f"{THEROCK_LIB_PATH}/rocm_sysdeps/lib"
+    if old_ld_lib_path:
+        environ_vars["LD_LIBRARY_PATH"] = (
+            f"{THEROCK_LIB_PATH}:{sysdeps_path}:{old_ld_lib_path}"
+        )
+    else:
+        environ_vars["LD_LIBRARY_PATH"] = f"{THEROCK_LIB_PATH}:{sysdeps_path}"
+
+
+def execute_tests():
+    # Sharding
+    shard_index = int(os.getenv("SHARD_INDEX", "1")) - 1
+    total_shards = int(os.getenv("TOTAL_SHARDS", "1"))
+
+    # Run tests
+    cmd = [
+        "ctest",
+        "--test-dir",
+        f"{ROCPROFILER_COMPUTE_DIRECTORY}",
+        "--output-on-failure",
+        "--verbose",
+        "--exclude-regex",
+        f"{"|".join(EXCLUDED_TESTS)}",
+        "--tests-information",
+        f"{shard_index},,{total_shards}",
+        "--output-junit",
+        str(junit_xml_path),
+    ]
+
+    # If smoke tests are enabled, we run smoke tests only.
+    # Otherwise, we run the normal test suite
+    test_type = os.getenv("TEST_TYPE", "full")
+    if test_type == "smoke":
+        cmd.append("--tests-regex")
+        cmd.append("|".join(SMOKE_TESTS))
+
+    run_test(
+        cmd,
+        output_format="ctest",
+        output_path=junit_xml_path,
+        cwd=THEROCK_PATH,
+        env=environ_vars,
+    )
+
+
+if __name__ == "__main__":
+    setup_env()
+    execute_tests()
