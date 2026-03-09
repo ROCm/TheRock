@@ -64,6 +64,12 @@ if(THEROCK_ENABLE_RCCL)
   list(APPEND _rccl_subproject_names rccl)
 
   if(THEROCK_BUILD_TESTING)
+
+    set(_rccl_tests_optional_deps)
+    if(THEROCK_ENABLE_MPI)
+      set(_rccl_tests_optional_deps "therock-openmpi")
+    endif()
+
     therock_cmake_subproject_declare(rccl-tests
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rccl-tests"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rccl-tests"
@@ -82,6 +88,7 @@ if(THEROCK_ENABLE_RCCL)
         hip-clr
         hipify
         rccl
+        ${_rccl_tests_optional_deps}
     )
     therock_cmake_subproject_glob_c_sources(rccl-tests
       SUBDIRS
@@ -104,3 +111,70 @@ if(THEROCK_ENABLE_RCCL)
       ${_rccl_subproject_names}
   )
 endif()
+
+if(THEROCK_ENABLE_ROCSHMEM)
+  ##############################################################################
+  # rocSHMEM
+  ##############################################################################
+  set(_rocshmem_subproject_names)
+  therock_cmake_subproject_declare(rocshmem
+    EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocshmem"
+    BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocshmem"
+    # High latency LTO link of a single library.
+    BACKGROUND_BUILD
+    CMAKE_ARGS
+      -DCMAKE_VERBOSE_MAKEFILE=OFF
+      -DUSE_RO=ON
+      -DUSE_IPC=ON
+      -DUSE_GDA=ON
+      -DGDA_MLX5=ON
+      -DGDA_BNXT=ON
+      -DGDA_IONIC=ON
+      # When using MPI (e.g. for bootsrapping or using RO) it only works with Open MPI and is
+      # incompatible with MPICH, Intel MPI, or MVAPICH.
+      # The loading mechanisms for using MPI is using dlopen() at run-time. It only support
+      # Open MPI 5.x.x and 4.1.x symbols.
+      # There is no compile time dependency to MPI.
+      -DUSE_EXTERNAL_MPI=OFF
+      -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+      -DHIP_PLATFORM=amd
+      -DROCM_PATH=
+      -DROCM_DIR=
+      "-DEXPLICIT_ROCM_VERSION=${ROCM_MAJOR_VERSION}.${ROCM_MINOR_VERSION}.${ROCM_PATCH_VERSION}"
+      -DBUILD_TESTS=${THEROCK_BUILD_TESTING}
+      -DSOURCE_DIR=${_source_dir}
+      -DPATCHELF=${PATCHELF}
+      -DPython3_EXECUTABLE=${Python3_EXECUTABLE}
+    CMAKE_INCLUDES
+      therock_explicit_finders.cmake
+    COMPILER_TOOLCHAIN
+      amd-hip
+    BUILD_DEPS
+      rocm-cmake
+      therock-fmt
+      therock-googletest
+      ${THEROCK_BUNDLED_NUMACTL}
+    RUNTIME_DEPS
+      hip-clr
+  )
+  therock_cmake_subproject_glob_c_sources(rocshmem
+    SUBDIRS
+      src
+  )
+  therock_cmake_subproject_provide_package(rocshmem ROCSHMEM lib/cmake/rocshmem)
+  therock_cmake_subproject_activate(rocshmem)
+  list(APPEND _rocshmem_subproject_names rocshmem)
+
+  therock_provide_artifact(rocshmem
+    DESCRIPTOR artifact-rocshmem.toml
+    COMPONENTS
+      dbg
+      dev
+      doc
+      lib
+      run
+      test
+    SUBPROJECT_DEPS
+      ${_rocshmem_subproject_names}
+  )
+endif(THEROCK_ENABLE_ROCSHMEM)
