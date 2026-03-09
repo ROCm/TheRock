@@ -24,6 +24,11 @@ from utils.exceptions import TestExecutionError
 from github_actions_utils import gha_append_step_summary
 
 
+# TODO(lajagapp): Set to True once the results API network/firewall issue is
+# resolved. (https://github.com/ROCm/TheRock/issues/3850)
+ENABLE_RESULTS_API = False
+
+
 class BenchmarkBase:
     """Base class providing common benchmark logic.
 
@@ -218,6 +223,10 @@ class BenchmarkBase:
         self, test_results: List[Dict[str, Any]], stats: Dict[str, Any]
     ) -> bool:
         """Upload results to API and save locally."""
+        if not ENABLE_RESULTS_API:
+            log.warning("Results API is disabled (ENABLE_RESULTS_API=False). Skipping upload.")
+            return False
+
         log.info("Uploading Results to API")
         success = self.client.upload_results(
             test_name=f"{self.benchmark_name}_benchmark",
@@ -244,6 +253,15 @@ class BenchmarkBase:
 
     def compare_with_lkg(self, tables: Any) -> Any:
         """Compare results with Last Known Good baseline."""
+        if not ENABLE_RESULTS_API:
+            log.warning("Results API is disabled (ENABLE_RESULTS_API=False). Skipping LKG comparison.")
+            # Print raw tables so scores are still visible in the log.
+            table_list = tables if isinstance(tables, list) else [tables]
+            for table in table_list:
+                if table._rows:
+                    log.info(f"\n{table}")
+            return None
+
         log.info("Comparing results with LKG")
 
         if isinstance(tables, list):
@@ -340,14 +358,18 @@ class BenchmarkBase:
         # Upload results
         self.upload_results(test_results, stats)
 
-        # Compare with LKG (compares each table individually and prints results)
+        # Compare with LKG (returns None when ENABLE_RESULTS_API is False)
         final_tables = self.compare_with_lkg(tables)
 
-        # Write to GitHub Actions step summary
-        self.write_step_summary(stats, final_tables)
+        if final_tables is not None:
+            # Write to GitHub Actions step summary
+            self.write_step_summary(stats, final_tables)
+            # Determine final status from LKG comparison
+            final_status = self.determine_final_status(final_tables)
+        else:
+            # API disabled — use pass/fail stats directly
+            final_status = stats["overall_status"]
 
-        # Determine final status
-        final_status = self.determine_final_status(final_tables)
         log.info(f"Final Status: {final_status}")
 
         # Return 0 only if PASS, otherwise return 1
