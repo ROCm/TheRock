@@ -41,6 +41,7 @@ ______________________________________________________________________
    Map `TEST_COMPONENT` (e.g. `miopen`) to the test directory name (e.g. `MIOpen`) via `COMPONENT_DIR_MAPPING`. Fail if the test directory does not exist under `THEROCK_BIN_DIR`.
 1. **Discover GPU suites**
    Run `ctest --print-labels --test-dir {THEROCK_BIN_DIR}/{TEST_COMPONENT}`. Collect every label that starts with `ex_gpu_` and whose suffix starts with `gfx` (e.g. `ex_gpu_gfx110X` → `gfx110X`). This yields the set of **available GPU architectures** for which a label exists.
+   These are the set of GPU's for which some test exclusions apply - i.e there are some tests which should not be run on these GPU models. The exp_gpu\_ labels with these gpu models points to the ctest entries where the tests are excluded.
 1. **Choose category**
    From `TEST_TYPE`: `smoke` → `quick`, else → `standard`.
 1. **Resolve GPU arch**

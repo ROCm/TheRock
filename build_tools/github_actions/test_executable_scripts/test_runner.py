@@ -74,6 +74,7 @@ elif AMDGPU_FAMILIES and "gfx1153" in AMDGPU_FAMILIES:
     ctest_parallel_count = 4
 
 # CTest per-test timeout (default 2 hours, in seconds)
+# There should be a timeout set from component level, but this can be used as an override
 ctest_timeout_seconds = 7200
 
 environ_vars = os.environ.copy()
