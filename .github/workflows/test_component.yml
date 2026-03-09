@@ -154,6 +154,7 @@ jobs:
           TEST_TYPE: ${{ fromJSON(inputs.component).test_type }}
           ROCM_KPACK_DEBUG: "1"
         run: |
+          exit 1
           ${{ fromJSON(inputs.component).test_script }}
 
       - name: Print test reproduction steps
@@ -174,7 +175,7 @@ jobs:
           echo "       --group-add video \\"
           echo "       --device /dev/kfd \\"
           echo "       --device /dev/dri \\"
-          echo "       ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98 /bin/bash"
+          echo "       ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest /bin/bash"
           echo ""
           echo "2. Inside the container, set up the environment:"
           echo "   curl -LsSf https://astral.sh/uv/install.sh | bash && source \$HOME/.local/bin/env"
@@ -185,7 +186,8 @@ jobs:
           echo "3. Install artifacts from this CI run:"
           echo "   GITHUB_REPOSITORY=${{ github.repository }} python build_tools/install_rocm_from_artifacts.py \\"
           echo "       --run-id ${{ github.run_id }} \\"
-          echo "       --amdgpu-family ${{ inputs.amdgpu_families }}"
+          echo "       --amdgpu-family ${{ inputs.amdgpu_families }}" \\
+          echo "       ${{ fromJSON(inputs.component).fetch_artifact_args }}"
           echo ""
           echo "4. Set environment variables and run the test:"
           echo "   export THEROCK_BIN_DIR=./therock-build/bin"
