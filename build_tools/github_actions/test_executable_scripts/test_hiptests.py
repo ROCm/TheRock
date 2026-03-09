@@ -41,15 +41,8 @@ if not os.path.isdir(CATCH_TESTS_PATH):
 
 # TODO(#3204): Re-enable tests once issues are resolved
 TEST_TO_IGNORE = {
-    "gfx94X-dcgpu": {
-        "linux": [
-            "Unit_hipGetProcAddress_spt_Stream",
-        ]
-    },
     "gfx950-dcgpu": {
         "linux": [
-            "Unit_hipManagedKeyword_SingleGpu",
-            "Unit_hipGetProcAddress_spt_Stream",
             "Unit_hipHostRegister_AsyncApis",
             "Unit_hipMemsetDSync - uint32_t",
             "Unit_hipMemsetDASyncMulti - int8_t",
