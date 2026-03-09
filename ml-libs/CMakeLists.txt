@@ -29,12 +29,6 @@ if(THEROCK_ENABLE_MIOPEN AND _miopen_enabled)
     list(APPEND optional_miopen_build_deps composable_kernel)
   endif()
 
-  if(MSVC)
-    set(_THEROCK_MIOPEN_ENABLE_TESTING ON)
-  else()
-    set(_THEROCK_MIOPEN_ENABLE_TESTING ${THEROCK_BUILD_TESTING})
-  endif()
-
   # Translate the generic <comp_name>_SANITIZER preset convention (e.g.
   # amd-llvm_SANITIZER) into hipconv's own HIPCONV_DISABLE_ASAN option (see
   # projects/miopen/src/hipconv/CMakeLists.txt): hipconv is a subdirectory of
@@ -53,7 +47,7 @@ if(THEROCK_ENABLE_MIOPEN AND _miopen_enabled)
       -DHIP_PLATFORM=amd
       -DROCM_PATH=
       -DROCM_DIR=
-      "-DBUILD_TESTING=${_THEROCK_MIOPEN_ENABLE_TESTING}"
+      "-DBUILD_TESTING=${THEROCK_BUILD_TESTING}"
       "-DMIOPEN_USE_COMPOSABLEKERNEL=${_miopen_use_ck}"
       -DMIOPEN_USE_MLIR=OFF # TODO: enable
       -DMIOPEN_TEST_DISCRETE=OFF
