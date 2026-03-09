@@ -155,26 +155,8 @@ jobs:
       - windows_build_and_test
     runs-on: ubuntu-24.04
     steps:
-      - name: Output failed jobs
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Evaluate workflow results
         run: |
-          echo '${{ toJson(needs) }}'
-
-          # Build a list of failed jobs, but ignore those marked continue-on-error
-          FAILED_JOBS="$(echo '${{ toJson(needs) }}' \
-            | jq --raw-output '
-              to_entries
-              | map(select(
-                  (.value.result != "success" and .value.result != "skipped")
-                  and (.value.outputs.continue_on_error | not)
-                ))
-              | map(.key)
-              | join(",")
-            ' \
-          )"
-
-          if [[ -n "${FAILED_JOBS}" ]]; then
-            echo "The following jobs failed: ${FAILED_JOBS}"
-            exit 1
-          else
-            echo "All required jobs succeeded (continue-on-error jobs ignored)."
-          fi
+          python build_tools/github_actions/workflow_summary.py \
+            --needs-json '${{ toJSON(needs) }}'
