@@ -16,7 +16,7 @@ Class       = Display
 ClassGuid   = {4D36E968-E325-11CE-BFC1-08002BE10318}
 Provider    = %ProviderString%
 CatalogFile = amdgpu_wddm.cat
-DriverVer   = 03/07/2026,10.8.0.500
+DriverVer   = 03/08/2026,10.8.0.600
 PnpLockdown = 1
 
 [DestinationDirs]

@@ -221,15 +221,29 @@ EscapeFreeMemory(_In_ AMDGPU_ADAPTER *pAdapter,
                  _Inout_ AMDGPU_ESCAPE_FREE_MEMORY_DATA *pData)
 {
     AMDGPU_COMPUTE_STATE *cs = &pAdapter->Compute;
-    ULONG slotIdx = (ULONG)pData->Handle;
+    ULONG slotIdx = (ULONG)-1;
     KIRQL oldIrql;
-
-    if (slotIdx >= AMDGPU_MAX_GPU_ALLOCS)
-        return STATUS_INVALID_PARAMETER;
+    ULONG i;
 
     KeAcquireSpinLock(&cs->AllocsLock, &oldIrql);
 
-    if (!cs->Allocs[slotIdx].InUse) {
+    /* Handle can be either a slot index or a CPU virtual address.
+     * Try slot index first, then fall back to searching by CpuVa. */
+    if (pData->Handle < AMDGPU_MAX_GPU_ALLOCS &&
+        cs->Allocs[(ULONG)pData->Handle].InUse) {
+        slotIdx = (ULONG)pData->Handle;
+    } else {
+        /* Search by CPU virtual address */
+        for (i = 0; i < AMDGPU_MAX_GPU_ALLOCS; i++) {
+            if (cs->Allocs[i].InUse &&
+                cs->Allocs[i].CpuVa == (PVOID)(ULONG_PTR)pData->Handle) {
+                slotIdx = i;
+                break;
+            }
+        }
+    }
+
+    if (slotIdx == (ULONG)-1 || !cs->Allocs[slotIdx].InUse) {
         KeReleaseSpinLock(&cs->AllocsLock, oldIrql);
         return STATUS_INVALID_PARAMETER;
     }
@@ -257,9 +271,24 @@ EscapeMapMemory(_In_ AMDGPU_ADAPTER *pAdapter,
                 _Inout_ AMDGPU_ESCAPE_MAP_MEMORY_DATA *pData)
 {
     AMDGPU_COMPUTE_STATE *cs = &pAdapter->Compute;
-    ULONG slotIdx = (ULONG)pData->Handle;
+    ULONG slotIdx = (ULONG)-1;
+    ULONG i;
 
-    if (slotIdx >= AMDGPU_MAX_GPU_ALLOCS || !cs->Allocs[slotIdx].InUse)
+    /* Resolve handle: try slot index first, then search by CpuVa */
+    if (pData->Handle < AMDGPU_MAX_GPU_ALLOCS &&
+        cs->Allocs[(ULONG)pData->Handle].InUse) {
+        slotIdx = (ULONG)pData->Handle;
+    } else {
+        for (i = 0; i < AMDGPU_MAX_GPU_ALLOCS; i++) {
+            if (cs->Allocs[i].InUse &&
+                cs->Allocs[i].CpuVa == (PVOID)(ULONG_PTR)pData->Handle) {
+                slotIdx = i;
+                break;
+            }
+        }
+    }
+
+    if (slotIdx == (ULONG)-1)
         return STATUS_INVALID_PARAMETER;
 
     /* For now, GPU VA = physical address (identity mapping).
@@ -274,9 +303,24 @@ EscapeUnmapMemory(_In_ AMDGPU_ADAPTER *pAdapter,
                   _Inout_ AMDGPU_ESCAPE_UNMAP_MEMORY_DATA *pData)
 {
     AMDGPU_COMPUTE_STATE *cs = &pAdapter->Compute;
-    ULONG slotIdx = (ULONG)pData->Handle;
+    ULONG slotIdx = (ULONG)-1;
+    ULONG i;
 
-    if (slotIdx >= AMDGPU_MAX_GPU_ALLOCS || !cs->Allocs[slotIdx].InUse)
+    /* Resolve handle: try slot index first, then search by CpuVa */
+    if (pData->Handle < AMDGPU_MAX_GPU_ALLOCS &&
+        cs->Allocs[(ULONG)pData->Handle].InUse) {
+        slotIdx = (ULONG)pData->Handle;
+    } else {
+        for (i = 0; i < AMDGPU_MAX_GPU_ALLOCS; i++) {
+            if (cs->Allocs[i].InUse &&
+                cs->Allocs[i].CpuVa == (PVOID)(ULONG_PTR)pData->Handle) {
+                slotIdx = i;
+                break;
+            }
+        }
+    }
+
+    if (slotIdx == (ULONG)-1)
         return STATUS_INVALID_PARAMETER;
 
     /* Unmap from GPU page tables when GMC is implemented */

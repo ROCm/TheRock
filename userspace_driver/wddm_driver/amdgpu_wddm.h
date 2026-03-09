@@ -462,67 +462,6 @@ typedef struct _AMDGPU_ALLOCATION {
 } AMDGPU_ALLOCATION;
 
 /* ======================================================================
- * Per-adapter context (extended with POST display state)
- * ====================================================================== */
-
-typedef struct _AMDGPU_ADAPTER {
-    /* DXGK handles */
-    PVOID                   DxgkHandle;
-    DXGK_START_INFO         DxgkStartInfo;
-    DXGKRNL_INTERFACE       DxgkInterface;
-
-    /* PCI info */
-    USHORT                  VendorId;
-    USHORT                  DeviceId;
-    USHORT                  SubsystemVendorId;
-    USHORT                  SubsystemId;
-    UCHAR                   RevisionId;
-
-    /* BAR resources */
-    AMDGPU_BAR_INFO         Bars[AMDGPU_MAX_BARS];
-    ULONG                   NumBars;
-
-    /* Interrupt */
-    BOOLEAN                 InterruptEnabled;
-    ULONG                   NumMsiVectors;
-    PKINTERRUPT             InterruptObject;
-
-    /* IH ring */
-    AMDGPU_IH_RING          IhRing;
-    volatile LONG           IhPending;
-
-    /* Registered events */
-    AMDGPU_EVENT_REG        Events[AMDGPU_MAX_EVENTS];
-    KSPIN_LOCK              EventsLock;
-
-    /* DMA allocations */
-    AMDGPU_DMA_ALLOC        DmaAllocs[AMDGPU_MAX_DMA_ALLOCS];
-    KSPIN_LOCK              DmaAllocsLock;
-
-    /* VRAM info */
-    ULONGLONG               VramSize;
-    ULONGLONG               VisibleVramSize;
-
-    /* BAR classification (set by ClassifyBars after EnumerateBars) */
-    ULONG                   MmioBarIndex;     /* MMIO register BAR (~512KB) */
-    ULONG                   VramBarIndex;     /* VRAM aperture BAR (largest) */
-    ULONG                   DoorbellBarIndex; /* Doorbell BAR */
-
-    /* POST display state */
-    AMDGPU_POST_DISPLAY     PostDisplay;
-
-    /* VidPn state */
-    AMDGPU_VIDPN_STATE      VidPnState;
-
-    /* Compute state (Phase 2) */
-    AMDGPU_COMPUTE_STATE    Compute;
-
-    /* Flags */
-    BOOLEAN                 Started;
-    BOOLEAN                 Headless;       /* TRUE if no display output (compute-only GPU) */
-} AMDGPU_ADAPTER;
-
-/* ======================================================================
  * GPU memory allocation tracking (Phase 2)
  * ====================================================================== */
 
@@ -618,6 +557,67 @@ typedef struct _AMDGPU_COMPUTE_STATE {
 
     BOOLEAN             Initialized;
 } AMDGPU_COMPUTE_STATE;
+
+/* ======================================================================
+ * Per-adapter context (extended with POST display state)
+ * ====================================================================== */
+
+typedef struct _AMDGPU_ADAPTER {
+    /* DXGK handles */
+    PVOID                   DxgkHandle;
+    DXGK_START_INFO         DxgkStartInfo;
+    DXGKRNL_INTERFACE       DxgkInterface;
+
+    /* PCI info */
+    USHORT                  VendorId;
+    USHORT                  DeviceId;
+    USHORT                  SubsystemVendorId;
+    USHORT                  SubsystemId;
+    UCHAR                   RevisionId;
+
+    /* BAR resources */
+    AMDGPU_BAR_INFO         Bars[AMDGPU_MAX_BARS];
+    ULONG                   NumBars;
+
+    /* Interrupt */
+    BOOLEAN                 InterruptEnabled;
+    ULONG                   NumMsiVectors;
+    PKINTERRUPT             InterruptObject;
+
+    /* IH ring */
+    AMDGPU_IH_RING          IhRing;
+    volatile LONG           IhPending;
+
+    /* Registered events */
+    AMDGPU_EVENT_REG        Events[AMDGPU_MAX_EVENTS];
+    KSPIN_LOCK              EventsLock;
+
+    /* DMA allocations */
+    AMDGPU_DMA_ALLOC        DmaAllocs[AMDGPU_MAX_DMA_ALLOCS];
+    KSPIN_LOCK              DmaAllocsLock;
+
+    /* VRAM info */
+    ULONGLONG               VramSize;
+    ULONGLONG               VisibleVramSize;
+
+    /* BAR classification (set by ClassifyBars after EnumerateBars) */
+    ULONG                   MmioBarIndex;     /* MMIO register BAR (~512KB) */
+    ULONG                   VramBarIndex;     /* VRAM aperture BAR (largest) */
+    ULONG                   DoorbellBarIndex; /* Doorbell BAR */
+
+    /* POST display state */
+    AMDGPU_POST_DISPLAY     PostDisplay;
+
+    /* VidPn state */
+    AMDGPU_VIDPN_STATE      VidPnState;
+
+    /* Compute state (Phase 2) */
+    AMDGPU_COMPUTE_STATE    Compute;
+
+    /* Flags */
+    BOOLEAN                 Started;
+    BOOLEAN                 Headless;       /* TRUE if no display output (compute-only GPU) */
+} AMDGPU_ADAPTER;
 
 /* Lazy MMIO BAR mapping */
 NTSTATUS AmdGpuMapMmioIfNeeded(_Inout_ AMDGPU_ADAPTER *pAdapter);
