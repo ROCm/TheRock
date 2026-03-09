@@ -30,6 +30,10 @@ on:
         description: PyTorch ref to checkout test sources from. (e.g. "nightly", or "release/2.7")
         type: string
         default: "release/2.7"
+      tests_to_include:
+        description: List of test suites to run
+        type: string
+        default: test_nn test_torch test_cuda test_unary_ufuncs test_binary_ufuncs test_autograd
 
   workflow_call:
     inputs:
@@ -57,6 +61,11 @@ on:
       ref:
         description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
         type: string
+      tests_to_include:
+        description: List of test suites to run
+        type: string
+        default: test_nn test_torch test_cuda test_unary_ufuncs test_binary_ufuncs test_autograd
+        
 
 permissions:
   contents: read
