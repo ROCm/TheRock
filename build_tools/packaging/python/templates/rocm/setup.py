@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Main rocm meta package.
 
 This package is a bit unique because we only distribute it as an sdist: it is

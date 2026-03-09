@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Generate CMake configuration for building a specific stage.
 
 This script uses BUILD_TOPOLOGY.toml to determine which features/artifacts

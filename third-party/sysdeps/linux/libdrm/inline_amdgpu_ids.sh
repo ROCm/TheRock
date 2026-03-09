@@ -1,4 +1,7 @@
 #!/bin/bash
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Reads the data/amdgpu.ids file and replaces the amdgpu/amdgpu_asic_id.c file
 # with a fully inlined table that does not need to consult a fixed place on
 # the filesystem.

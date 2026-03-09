@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Test of the library trees."""
 
 """Installation package tests for the core package."""
@@ -62,6 +65,30 @@ class ROCmDevelTest(unittest.TestCase):
         self.assertTrue(path.exists(), msg=f"Expected root path {path} to exist")
         bin_path = path / "bin"
         self.assertTrue(bin_path.exists(), msg=f"Expected bin path {bin_path} to exist")
+
+    def testCLIUsesDevelRootPath(self):
+        root_path_output = (
+            utils.run_command(
+                [sys.executable, "-m", "rocm_sdk", "path", "--root"], capture=True
+            )
+            .decode()
+            .strip()
+        )
+        root_path = Path(root_path_output)
+
+        # CLI scripts by default run from _rocm_sdk_core.
+        # When the devel package is installed they should run from _rocm_sdk_devel.
+        rocmpath_output = (
+            utils.run_command(["hipconfig", "--rocmpath"], capture=True)
+            .decode()
+            .strip()
+        )
+        rocmpath = Path(rocmpath_output)
+        self.assertEqual(
+            root_path,
+            rocmpath,
+            msg=f"Expected `hipconfig --rocmpath` to return {root_path}, not {rocmpath}",
+        )
 
     @unittest.skipIf(
         platform.system() == "Windows", "root LLVM symlink only exists on Linux"
@@ -135,7 +162,7 @@ class ROCmDevelTest(unittest.TestCase):
             extra_setup = ""
             if (
                 "hipdnn_plugins" in str(so_path) or "test_plugins" in str(so_path)
-            ) and sys.platform == "win32":
+            ) and platform.system() == "Windows":
                 # hipdnn plugins have dependencies on other libraries (e.g. miopen).
                 # In a real-world scenario, hipdnn_backend loads these plugins, and
                 # the dependencies are found because they reside in the same directory
