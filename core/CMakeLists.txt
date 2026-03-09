@@ -307,6 +307,8 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
     # HIP samples
     ##############################################################################
 
+    # Get hip-clr dist dir to set HIP_PATH/ROCM_PATH for the samples.
+    get_target_property(_hip_dist_dir hip-clr THEROCK_DIST_DIR)
     therock_cmake_subproject_declare(hip_samples
       USE_TEST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hip-tests/samples"
@@ -317,6 +319,8 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       CMAKE_ARGS
         -DHIP_PLATFORM="amd"
         -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON
+        -DHIP_PATH="${_hip_dist_dir}"
+        -DROCM_PATH="${_hip_dist_dir}"
       BUILD_DEPS
         rocm-cmake
       RUNTIME_DEPS
