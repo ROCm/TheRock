@@ -1,0 +1,87 @@
+{
+  "$schema": "Authorization configuration for GPG signing server",
+  "comment": "Copy this to authorization.json and configure for your environment",
+
+  "oidc_role_mapping": {
+    "refs/heads/main": "release",
+    "refs/heads/release/*": "release",
+    "refs/heads/*": "development",
+    "refs/pull/*": "development"
+  },
+
+  "roles": {
+    "development": {
+      "description": "Development builds (non-main branches, PRs)",
+      "allowed_keys": [
+        "therock-dev@amd.com"
+      ],
+      "allowed_digest_algos": [
+        "SHA256",
+        "SHA512"
+      ],
+      "max_requests_per_hour": 10000,
+
+      "allowed_repositories": [
+        "ROCm/TheRock",
+        "ROCm/rockrel"
+      ],
+      "allowed_refs": [
+        "refs/heads/*",
+        "refs/pull/*"
+      ],
+      "allowed_workflows": [
+        ".github/workflows/multi_arch_build_native_linux_packages.yml",
+        ".github/workflows/build_native_linux_packages.yml"
+      ]
+    },
+
+    "nightly": {
+      "description": "Nightly builds",
+      "allowed_keys": [
+        "therock-nightly@amd.com"
+      ],
+      "allowed_digest_algos": [
+        "SHA256",
+        "SHA512"
+      ],
+      "max_requests_per_hour": 5000,
+
+      "allowed_repositories": [
+        "ROCm/TheRock",
+        "ROCm/rockrel"
+      ],
+      "allowed_refs": [
+        "refs/heads/main",
+        "refs/heads/develop"
+      ],
+      "allowed_workflows": [
+        ".github/workflows/multi_arch_build_native_linux_packages.yml"
+      ]
+    },
+
+    "release": {
+      "description": "Production releases (main branch, release branches)",
+      "allowed_keys": [
+        "therock-release@amd.com"
+      ],
+      "allowed_digest_algos": [
+        "SHA256",
+        "SHA512"
+      ],
+      "max_requests_per_hour": 1000,
+
+      "allowed_repositories": [
+        "ROCm/TheRock",
+        "ROCm/rockrel"
+      ],
+      "allowed_refs": [
+        "refs/heads/main",
+        "refs/heads/release/*",
+        "refs/tags/v*"
+      ],
+      "allowed_workflows": [
+        ".github/workflows/multi_arch_build_native_linux_packages.yml"
+      ]
+    }
+  }
+}

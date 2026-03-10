@@ -7,46 +7,49 @@
 Packaging + repository upload tool.
 
 Usage:
-  python ./build_tools/packaging/linux/upload_package_repo.py \
-    --pkg-type deb \
-    --run-id 16418185899 \
-    --package-dir /path/to/packages
+python ./build_tools/packaging/linux/upload_package_repo.py \
+             --pkg-type deb \
+             --s3-bucket therock-deb-rpm-test \
+             --amdgpu-family gfx94X-dcgpu \
+             --artifact-id 16418185899 \
+             --job nightly
 
-Bucket + prefix are resolved automatically via WorkflowOutputRoot using
-the GITHUB_REPOSITORY and RELEASE_TYPE environment variables:
-  - CI builds    → therock-ci-artifacts / <run_id>-linux/packages/deb
-  - dev builds   → therock-dev-artifacts / <run_id>-linux/packages/deb
-  - nightly      → therock-nightly-artifacts / <run_id>-linux/packages/deb
-  - prerelease   → therock-prerelease-artifacts / <run_id>-linux/packages/deb
+Dev upload location:
+  s3bucket/deb/<YYYYMMDD>-<artifact_id>
+  s3bucket/rpm/<YYYYMMDD>-<artifact_id>
+
+Nightly upload location:
+  s3bucket/deb/<YYYYMMDD>-<artifact_id>
+  s3bucket/rpm/<YYYYMMDD>-<artifact_id>
 """
 
 import argparse
+import base64
 import boto3
 import datetime
+import json
 import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
 
+
+# Import index generation helpers generate_package_indexes.py
 _THIS_DIR = Path(__file__).resolve().parent
-_BUILD_TOOLS_DIR = _THIS_DIR.parent.parent
-_GITHUB_ACTIONS_DIR = _BUILD_TOOLS_DIR / "github_actions"
-
 if str(_THIS_DIR) not in sys.path:
     sys.path.insert(0, str(_THIS_DIR))
-if str(_BUILD_TOOLS_DIR) not in sys.path:
-    sys.path.insert(0, str(_BUILD_TOOLS_DIR))
-if str(_GITHUB_ACTIONS_DIR) not in sys.path:
-    sys.path.insert(0, str(_GITHUB_ACTIONS_DIR))
 
-from _therock_utils.storage_backend import StorageBackend, create_storage_backend
-from _therock_utils.storage_location import StorageLocation
-from _therock_utils.workflow_outputs import WorkflowOutputRoot
-from github_actions_api import gha_append_step_summary
+from generate_package_indexes import (
+    generate_index_from_s3,
+    generate_top_index_from_s3,
+)
 
 
-def regenerate_rpm_metadata_from_s3(s3, bucket, prefix, uploaded_packages):
+def regenerate_rpm_metadata_from_s3(s3, bucket, prefix, uploaded_packages,
+                                     gpg_signing_server="", gpg_server_token=""):
     """Regenerate RPM repository metadata using merge approach.
 
     Downloads existing repodata from S3, generates metadata for new packages,
@@ -120,7 +123,7 @@ def regenerate_rpm_metadata_from_s3(s3, bucket, prefix, uploaded_packages):
 
             # Generate repodata for new packages with clean paths (no baseurl)
             run_command(
-                ["createrepo_c", "--no-database", "--simple-md-filenames", "."],
+                "createrepo_c --no-database --simple-md-filenames .",
                 cwd=str(new_arch_dir),
             )
             print("✅ Generated metadata for uploaded packages")
@@ -147,18 +150,9 @@ def regenerate_rpm_metadata_from_s3(s3, bucket, prefix, uploaded_packages):
             # mergerepo_c merges repodata without needing actual RPM files!
             # Use --no-database, --simple-md-filenames, and --omit-baseurl to ensure clean paths
             run_command(
-                [
-                    "mergerepo_c",
-                    "--no-database",
-                    "--simple-md-filenames",
-                    "--omit-baseurl",
-                    "--repo",
-                    str(old_repo_dir),
-                    "--repo",
-                    str(new_repo_dir / "x86_64"),
-                    "--outputdir",
-                    str(merged_arch_dir),
-                ],
+                f"mergerepo_c --no-database --simple-md-filenames --omit-baseurl "
+                f'--repo "{old_repo_dir}" --repo "{new_repo_dir / "x86_64"}" '
+                f'--outputdir "{merged_arch_dir}"',
                 cwd=str(temp_path),
             )
             print("✅ Merged repository metadata")
@@ -168,8 +162,12 @@ def regenerate_rpm_metadata_from_s3(s3, bucket, prefix, uploaded_packages):
                 new_repo_dir / "x86_64" / "repodata", merged_arch_dir / "repodata"
             )
 
-        # Step 4: Upload merged repodata to S3
+        # Step 3.5: Sign repomd.xml if signing server is configured
         merged_repodata = merged_arch_dir / "repodata"
+        if merged_repodata.exists() and gpg_signing_server and gpg_server_token:
+            sign_rpm_repomd_files(merged_arch_dir, gpg_signing_server, gpg_server_token)
+
+        # Step 4: Upload merged repodata to S3
         if merged_repodata.exists():
             print("Uploading merged repository metadata to S3...")
             uploaded_metadata = []
@@ -230,7 +228,7 @@ def generate_release_file_with_checksums(release_file, job_type, dists_dir):
         sha256_entries.append(f" {sha256_hash.hexdigest()} {file_size:16d} {rel_path}")
 
     # Write Release file
-    with open(release_file, "w", encoding="utf-8") as f:
+    with open(release_file, "w") as f:
         # Header fields
         f.write(
             f"""Origin: AMD ROCm
@@ -301,7 +299,8 @@ def upload_deb_metadata_to_s3(s3, bucket, prefix, dists_dir, release_file):
 
 
 def regenerate_deb_metadata_from_s3(
-    s3, bucket, prefix, uploaded_packages, job_type="nightly"
+    s3, bucket, prefix, uploaded_packages, job_type="nightly",
+    gpg_signing_server="", gpg_server_token=""
 ):
     """Regenerate Debian repository metadata efficiently with proper checksums.
 
@@ -337,7 +336,7 @@ def regenerate_deb_metadata_from_s3(
                 f"Downloading existing Packages file from S3: s3://{bucket}/{packages_s3_key}"
             )
             s3.download_file(bucket, packages_s3_key, str(existing_packages))
-            with open(existing_packages, "r", encoding="utf-8") as f:
+            with open(existing_packages, "r") as f:
                 content = f.read()
                 pkg_count = content.count("\nPackage: ")
             print(f"✅ Downloaded existing Packages file ({pkg_count} packages)")
@@ -358,9 +357,8 @@ def regenerate_deb_metadata_from_s3(
             # Generate Packages entries for uploaded packages
             new_packages = dists_dir / "Packages.new"
             run_command(
-                ["dpkg-scanpackages", "-m", "pool/main", "/dev/null"],
+                f'dpkg-scanpackages -m pool/main /dev/null > "{new_packages}"',
                 cwd=str(temp_path),
-                stdout=new_packages,
             )
             print("✅ Generated Packages entries for uploaded packages")
         else:
@@ -368,11 +366,7 @@ def regenerate_deb_metadata_from_s3(
             if existing_packages and existing_packages.exists():
                 print("Preserving existing metadata...")
                 shutil.copy2(existing_packages, dists_dir / "Packages")
-                run_command(
-                    ["gzip", "-9c", "Packages"],
-                    cwd=str(dists_dir),
-                    stdout=dists_dir / "Packages.gz",
-                )
+                run_command("gzip -9c Packages > Packages.gz", cwd=str(dists_dir))
 
                 # Generate Release file with checksums
                 release_dir = temp_path / "dists" / "stable"
@@ -394,7 +388,7 @@ def regenerate_deb_metadata_from_s3(
             def parse_packages_file(filepath):
                 """Parse Packages file into dict keyed by Filename"""
                 packages = {}
-                with open(filepath, "r", encoding="utf-8") as f:
+                with open(filepath, "r") as f:
                     current_entry = []
                     current_filename = None
 
@@ -425,7 +419,7 @@ def regenerate_deb_metadata_from_s3(
             merged = old_packages.copy()
             merged.update(new_packages_dict)
 
-            with open(merged_packages, "w", encoding="utf-8") as outfile:
+            with open(merged_packages, "w") as outfile:
                 for filename in sorted(merged.keys()):
                     outfile.write(merged[filename])
                     outfile.write("\n")
@@ -436,11 +430,7 @@ def regenerate_deb_metadata_from_s3(
             shutil.copy2(new_packages, merged_packages)
 
         # Compress Packages file
-        run_command(
-            ["gzip", "-9c", "Packages"],
-            cwd=str(dists_dir),
-            stdout=dists_dir / "Packages.gz",
-        )
+        run_command("gzip -9c Packages > Packages.gz", cwd=str(dists_dir))
 
         # Step 4: Generate Release file with checksums
         release_dir = temp_path / "dists" / "stable"
@@ -449,12 +439,17 @@ def regenerate_deb_metadata_from_s3(
 
         generate_release_file_with_checksums(release_file, job_type, dists_dir)
 
+        # Step 4.5: Sign Release file if signing server is configured
+        if gpg_signing_server and gpg_server_token:
+            sign_deb_release_file(release_file, gpg_signing_server, gpg_server_token)
+
         # Step 5: Upload merged files to S3
         upload_deb_metadata_to_s3(s3, bucket, prefix, dists_dir, release_file)
 
 
 def regenerate_repo_metadata_from_s3(
-    s3, bucket, prefix, pkg_type, uploaded_packages, job_type="nightly"
+    s3, bucket, prefix, pkg_type, uploaded_packages, job_type="nightly",
+    gpg_signing_server="", gpg_server_token=""
 ):
     """Regenerate repository metadata efficiently using merge approach.
 
@@ -468,39 +463,33 @@ def regenerate_repo_metadata_from_s3(
         pkg_type: Package type ('rpm' or 'deb')
         uploaded_packages: List of actually uploaded package file paths (avoids duplicates from deduplication)
         job_type: Job type for Release file metadata (default: 'nightly')
+        gpg_signing_server: GPG signing server URL (optional)
+        gpg_server_token: Authentication token for signing server (optional)
     """
     if pkg_type == "rpm":
-        regenerate_rpm_metadata_from_s3(s3, bucket, prefix, uploaded_packages)
+        regenerate_rpm_metadata_from_s3(s3, bucket, prefix, uploaded_packages,
+                                         gpg_signing_server, gpg_server_token)
     elif pkg_type == "deb":
-        regenerate_deb_metadata_from_s3(s3, bucket, prefix, uploaded_packages, job_type)
+        regenerate_deb_metadata_from_s3(s3, bucket, prefix, uploaded_packages, job_type,
+                                         gpg_signing_server, gpg_server_token)
     else:
         raise ValueError(f"Unsupported package type: {pkg_type}")
 
 
-def run_command(cmd: list[str], cwd=None, stdout=None):
-    """Run a command safely without shell interpolation.
-
-    Args:
-        cmd: Command and arguments as a list of strings
-        cwd: Working directory for the command
-        stdout: Optional path to redirect stdout to a file
-
-    Raises:
-        subprocess.CalledProcessError: If the command exits with non-zero status
-    """
-    print(f"Running: {' '.join(cmd)}")
-    if stdout is not None:
-        with open(stdout, "wb") as f:
-            subprocess.run(cmd, check=True, cwd=cwd, stdout=f)
-    else:
-        subprocess.run(cmd, check=True, cwd=cwd)
+def run_command(cmd, cwd=None):
+    print(f"Running: {cmd}")
+    subprocess.run(cmd, shell=True, check=True, cwd=cwd)
 
 
 def find_package_dir():
-    base = Path.cwd() / "output" / "packages"
-    if not base.exists():
+    base = os.path.join(os.getcwd(), "output", "packages")
+    if not os.path.exists(base):
         raise RuntimeError(f"Package directory not found: {base}")
     return base
+
+
+def yyyymmdd():
+    return datetime.datetime.utcnow().strftime("%Y%m%d")
 
 
 def s3_object_exists(s3, bucket, key):
@@ -516,30 +505,24 @@ def s3_object_exists(s3, bucket, key):
 def create_deb_repo(package_dir, job_type):
     print("Creating APT repository...")
 
-    package_path = Path(package_dir)
-    dists = package_path / "dists" / "stable" / "main" / "binary-amd64"
-    pool = package_path / "pool" / "main"
+    dists = os.path.join(package_dir, "dists", "stable", "main", "binary-amd64")
+    pool = os.path.join(package_dir, "pool", "main")
 
-    dists.mkdir(parents=True, exist_ok=True)
-    pool.mkdir(parents=True, exist_ok=True)
+    os.makedirs(dists, exist_ok=True)
+    os.makedirs(pool, exist_ok=True)
 
-    for f in package_path.iterdir():
-        if f.suffix == ".deb":
-            shutil.move(f, pool / f.name)
+    for f in os.listdir(package_dir):
+        if f.endswith(".deb"):
+            shutil.move(os.path.join(package_dir, f), os.path.join(pool, f))
 
     run_command(
-        ["dpkg-scanpackages", "-m", "pool/main", "/dev/null"],
-        cwd=str(package_path),
-        stdout=dists / "Packages",
+        "dpkg-scanpackages -m pool/main /dev/null > dists/stable/main/binary-amd64/Packages",
+        cwd=package_dir,
     )
-    run_command(
-        ["gzip", "-9c", "Packages"],
-        cwd=str(dists),
-        stdout=dists / "Packages.gz",
-    )
+    run_command("gzip -9c Packages > Packages.gz", cwd=dists)
 
-    release = package_path / "dists" / "stable" / "Release"
-    with open(release, "w", encoding="utf-8") as f:
+    release = os.path.join(package_dir, "dists", "stable", "Release")
+    with open(release, "w") as f:
         f.write(
             f"""Origin: AMD ROCm
 Label: ROCm {job_type} Packages
@@ -551,6 +534,8 @@ Date: {datetime.datetime.utcnow():%a, %d %b %Y %H:%M:%S UTC}
 """
         )
 
+    # Index generation now happens from S3 state after upload
+
 
 def create_rpm_repo(package_dir):
     """Create RPM repository structure.
@@ -560,20 +545,18 @@ def create_rpm_repo(package_dir):
     """
     print("Creating RPM repository...")
 
-    package_path = Path(package_dir)
-    arch_dir = package_path / "x86_64"
-    arch_dir.mkdir(parents=True, exist_ok=True)
+    arch_dir = os.path.join(package_dir, "x86_64")
+    os.makedirs(arch_dir, exist_ok=True)
 
-    for f in package_path.iterdir():
-        if f.suffix == ".rpm":
-            shutil.move(f, arch_dir / f.name)
+    for f in os.listdir(package_dir):
+        if f.endswith(".rpm"):
+            shutil.move(os.path.join(package_dir, f), os.path.join(arch_dir, f))
 
     # Generate initial repodata from local packages with clean paths (no baseurl)
     # This will be regenerated from S3 state after upload
-    run_command(
-        ["createrepo_c", "--no-database", "--simple-md-filenames", "."],
-        cwd=str(arch_dir),
-    )
+    run_command("createrepo_c --no-database --simple-md-filenames .", cwd=arch_dir)
+
+    # Index generation now happens from S3 state after upload
 
 
 def upload_to_s3(source_dir, bucket, prefix, dedupe=False):
@@ -587,7 +570,7 @@ def upload_to_s3(source_dir, bucket, prefix, dedupe=False):
 
     for root, _, files in os.walk(source_dir):
         for fname in files:
-            # Always skip local index.html files, those are generated server-side.
+            # Skip index.html files - we'll generate them from S3 state
             if fname == "index.html":
                 continue
 
@@ -596,9 +579,9 @@ def upload_to_s3(source_dir, bucket, prefix, dedupe=False):
                 print(f"Skipping build manifest file (local only): {fname}")
                 continue
 
-            local = Path(root) / fname
-            rel = local.relative_to(source_dir)
-            key = f"{prefix}/{rel.as_posix()}"
+            local = os.path.join(root, fname)
+            rel = os.path.relpath(local, source_dir)
+            key = os.path.join(prefix, rel).replace("\\", "/")
 
             # Skip metadata files - they'll be regenerated/merged properly later
             # For DEB: skip Packages, Packages.gz, Release in dists/
@@ -621,12 +604,12 @@ def upload_to_s3(source_dir, bucket, prefix, dedupe=False):
             extra = {"ContentType": "text/html"} if fname.endswith(".html") else None
 
             print(f"Uploading: {key}")
-            s3.upload_file(str(local), bucket, key, ExtraArgs=extra)
+            s3.upload_file(local, bucket, key, ExtraArgs=extra)
             uploaded += 1
 
             # Track uploaded packages for metadata generation
             if fname.endswith(".deb") or fname.endswith(".rpm"):
-                uploaded_packages.append(str(local))
+                uploaded_packages.append(local)
 
     print(f"Uploaded: {uploaded}, Skipped: {skipped}")
     if uploaded_packages:
@@ -635,178 +618,242 @@ def upload_to_s3(source_dir, bucket, prefix, dedupe=False):
     return s3, uploaded_packages  # Return S3 client and list of uploaded packages
 
 
-def upload_packaging_logs(
-    package_dir: Path,
-    pkg_type: str,
-    output_root: WorkflowOutputRoot,
-    backend: StorageBackend,
-) -> str | None:
-    """Upload native packaging logs to S3.
-
-    Uploads all log files from the packaging logs directory to the S3 location
-    specified by WorkflowOutputRoot.native_linux_packages_log_dir().
+def sign_metadata_file(
+    metadata_file: Path,
+    output_file: Path,
+    server_url: str,
+    token: str,
+    clearsign: bool = False,
+    timeout: int = 60
+):
+    """Sign repository metadata file using remote signing server.
 
     Args:
-        package_dir: Directory containing built packages (logs are in logs/ subdir)
-        pkg_type: Package type ('deb' or 'rpm')
-        output_root: WorkflowOutputRoot for computing S3 paths
-        backend: Storage backend for uploads
+        metadata_file: Path to metadata file (Release, repomd.xml, etc.)
+        output_file: Path to write signature
+        server_url: Signing server URL (e.g., https://signing.example.com/sign)
+        token: Authentication token (OIDC or JWT)
+        clearsign: Create clearsigned output (for InRelease files)
+        timeout: Request timeout in seconds
 
-    Returns:
-        URL to the log index page, or None if no logs were uploaded
+    Raises:
+        FileNotFoundError: If metadata_file doesn't exist
+        HTTPError: If server returns error response
+        URLError: If network error occurs
     """
-    log_dir = package_dir / "logs"
-    if not log_dir.is_dir():
-        print(f"[INFO] Log directory {log_dir} not found. Skipping log upload.")
-        return None
+    # Read metadata file
+    if not metadata_file.exists():
+        raise FileNotFoundError(f"Metadata file not found: {metadata_file}")
 
-    log_files = list(log_dir.glob("*.log"))
-    if not log_files:
-        print(f"[INFO] No log files found in {log_dir}. Skipping log upload.")
-        return None
+    with open(metadata_file, 'rb') as f:
+        metadata_data = f.read()
 
-    print(f"Uploading {len(log_files)} packaging log files...")
-    dest_location = output_root.native_linux_packages_log_dir(pkg_type)
-    backend.upload_directory(log_dir, dest_location)
+    print(f"📝 Signing metadata: {metadata_file.name} ({len(metadata_data)} bytes)")
 
-    log_index_url = output_root.native_linux_packages_log_index(pkg_type).https_url
-    print(f"Packaging logs uploaded to: {log_index_url}")
-    return log_index_url
+    # Prepare signing request
+    payload = {
+        'data': base64.b64encode(metadata_data).decode('ascii'),
+        'digest_algo': 'SHA256',
+        'armor': True,  # Metadata signatures are ASCII-armored
+    }
+
+    if clearsign:
+        payload['clearsign'] = True
+
+    # Prepare HTTP request
+    json_data = json.dumps(payload).encode('utf-8')
+
+    headers = {
+        'Content-Type': 'application/json',
+        'Authorization': f'Bearer {token}',
+        'User-Agent': 'upload_package_repo/1.0'
+    }
+
+    print(f"🔐 Sending signing request to: {server_url}")
+    print(f"   Clearsign: {clearsign}")
+
+    # Send request to signing server
+    try:
+        request = Request(server_url, data=json_data, headers=headers)
+        response = urlopen(request, timeout=timeout)
+
+        # Parse response
+        response_data = response.read()
+        result = json.loads(response_data)
+
+        # Extract signature
+        if 'signature' in result:
+            signature_b64 = result['signature']
+            signature = base64.b64decode(signature_b64)
+        else:
+            raise ValueError("Server response missing 'signature' field")
+
+        print(f"✅ Signature received ({len(signature)} bytes)")
+
+        # Write signature to output file
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(output_file, 'wb') as f:
+            f.write(signature)
+
+        print(f"✅ Signature written to: {output_file.name}")
+
+        return True
+
+    except HTTPError as e:
+        error_body = e.read().decode('utf-8')
+        print(f"❌ HTTP Error {e.code}: {e.reason}", file=sys.stderr)
+        print(f"   Server response: {error_body}", file=sys.stderr)
+
+        try:
+            error_json = json.loads(error_body)
+            if 'error' in error_json:
+                print(f"   Error detail: {error_json['error']}", file=sys.stderr)
+        except json.JSONDecodeError:
+            pass
+
+        raise
+
+    except URLError as e:
+        print(f"❌ Network error: {e.reason}", file=sys.stderr)
+        raise
+
+    except Exception as e:
+        print(f"❌ Unexpected error: {str(e)}", file=sys.stderr)
+        raise
 
 
-def _emit_github_output(key: str, value: str) -> None:
-    """Write a key=value pair to $GITHUB_OUTPUT if running in GitHub Actions."""
-    github_output = os.environ.get("GITHUB_OUTPUT")
-    if github_output:
-        with open(github_output, "a", encoding="utf-8") as f:
-            f.write(f"{key}={value}\n")
+def sign_deb_release_file(release_file: Path, server_url: str, token: str):
+    """Sign DEB Release file (creates InRelease and Release.gpg).
 
-
-def _package_install_url(bucket: str, prefix: str, pkg_type: str) -> str:
-    """Compute the package manager install URL for a given repo location.
-
-    For RPM repos, dnf/yum baseurl must point to the x86_64/ subdirectory
-    (the directory containing repodata/). For DEB repos, apt points to the
-    repo root (it resolves dists/ itself).
+    Args:
+        release_file: Path to Release file
+        server_url: Signing server URL
+        token: Authentication token (OIDC or JWT)
     """
-    base = StorageLocation(bucket, prefix).https_url
-    if pkg_type == "rpm":
-        return f"{base}/x86_64"
-    return base
+    print(f"\n{'='*60}")
+    print(f"Signing DEB Release file")
+    print(f"{'='*60}")
+
+    # Create InRelease (clearsigned)
+    inrelease_file = release_file.parent / "InRelease"
+    sign_metadata_file(
+        release_file,
+        inrelease_file,
+        server_url,
+        token,
+        clearsign=True
+    )
+
+    # Create Release.gpg (detached signature)
+    release_gpg = release_file.parent / "Release.gpg"
+    sign_metadata_file(
+        release_file,
+        release_gpg,
+        server_url,
+        token,
+        clearsign=False
+    )
+
+    print(f"✅ DEB Release file signed: InRelease, Release.gpg")
 
 
-def _resolve_upload_target(
-    args: argparse.Namespace,
-    pkg_type: str,
-) -> tuple[str, str, str, bool, str]:
-    """Resolve S3 bucket, prefix, install URL, dedupe flag, and job type.
+def sign_rpm_repomd_files(rpm_dir: Path, server_url: str, token: str):
+    """Sign RPM repomd.xml files (one per architecture).
 
-    Returns:
-        Tuple of (bucket, prefix, install_url, dedupe, job_type)
+    Args:
+        rpm_dir: RPM repository root directory
+        server_url: Signing server URL
+        token: Authentication token (OIDC or JWT)
     """
-    # Derive bucket + prefix from WorkflowOutputRoot.
-    # This is the single source of truth for CI path layout.
-    root = WorkflowOutputRoot.from_workflow_run(run_id=args.run_id, platform="linux")
-    loc = root.native_linux_packages(pkg_type)
-    job_type = os.environ.get("RELEASE_TYPE", "ci")
-    install_url = _package_install_url(loc.bucket, loc.relative_path, pkg_type)
-    return loc.bucket, loc.relative_path, install_url, True, job_type
+    print(f"\n{'='*60}")
+    print(f"Signing RPM repomd.xml files")
+    print(f"{'='*60}")
+
+    # Find all repomd.xml files (one per architecture)
+    repomd_files = list(rpm_dir.rglob("repodata/repomd.xml"))
+
+    if not repomd_files:
+        print(f"⚠️  Warning: No repomd.xml files found in {rpm_dir}")
+        return
+
+    print(f"Found {len(repomd_files)} repomd.xml file(s) to sign")
+
+    for repomd_file in repomd_files:
+        # Create detached signature (repomd.xml.asc)
+        repomd_asc = repomd_file.parent / "repomd.xml.asc"
+
+        sign_metadata_file(
+            repomd_file,
+            repomd_asc,
+            server_url,
+            token,
+            clearsign=False
+        )
+
+    print(f"✅ All RPM repomd.xml files signed")
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--pkg-type", required=True, choices=["deb", "rpm"])
-
-    # Use WorkflowOutputRoot for bucket/prefix resolution.
-    # Bucket and prefix are derived automatically from CI context
-    # (GITHUB_REPOSITORY, RELEASE_TYPE, fork detection).
+    parser.add_argument("--s3-bucket", required=True)
+    parser.add_argument("--amdgpu-family", required=True)
+    parser.add_argument("--artifact-id", required=True)
     parser.add_argument(
-        "--run-id",
-        required=True,
-        help="GitHub Actions workflow run ID (required for WorkflowOutputRoot path resolution)",
+        "--job",
+        default="dev",
+        choices=["dev", "nightly", "prerelease"],
+        help="Enable dev or nightly shared repo",
     )
-
     parser.add_argument(
-        "--package-dir",
-        required=True,
-        help="Path to the directory containing built packages.",
+        "--gpg-signing-server",
+        type=str,
+        default="",
+        help="GPG signing server URL (e.g., https://signing.example.com/sign)"
+    )
+    parser.add_argument(
+        "--gpg-server-token",
+        type=str,
+        default="",
+        help="Authentication token for signing server (OIDC or JWT)"
     )
 
     args = parser.parse_args()
-    package_dir = Path(args.package_dir).resolve()
+    package_dir = find_package_dir()
 
-    bucket, prefix, install_url, dedupe, job_type = _resolve_upload_target(
-        args, args.pkg_type
-    )
+    # Setup the prefix based on build type
+    if args.job in ["nightly", "dev"]:
+        prefix = f"{args.pkg_type}/{yyyymmdd()}-{args.artifact_id}"
+        dedupe = True
+    elif args.job == "prerelease":
+        prefix = f"v3/packages/{args.pkg_type}"
+        dedupe = True
 
     if args.pkg_type == "deb":
-        create_deb_repo(package_dir, job_type)
+        create_deb_repo(package_dir, args.job)
     else:
         create_rpm_repo(package_dir)
 
     # Upload packages and metadata to S3
     s3_client, uploaded_packages = upload_to_s3(
-        package_dir, bucket, prefix, dedupe=dedupe
+        package_dir, args.s3_bucket, prefix, dedupe=dedupe
     )
 
     # Efficiently update repository metadata by merging with existing metadata
+    # (avoids re-downloading all packages from S3)
+    # Only generates metadata for actually uploaded packages (avoids duplicates from deduplication)
     regenerate_repo_metadata_from_s3(
-        s3_client, bucket, prefix, args.pkg_type, uploaded_packages, job_type
+        s3_client, args.s3_bucket, prefix, args.pkg_type, uploaded_packages, args.job,
+        args.gpg_signing_server, args.gpg_server_token
     )
 
-    print(f"Package repository URL: {install_url}")
-    _emit_github_output("package_repository_url", install_url)
+    # Generate index.html files from S3 state (recursive for specific upload)
+    generate_index_from_s3(s3_client, args.s3_bucket, prefix)
 
-    # Upload packaging logs and write step summary
-    output_root = WorkflowOutputRoot.from_workflow_run(
-        run_id=args.run_id, platform="linux"
-    )
-    backend = create_storage_backend()
-    log_index_url = upload_packaging_logs(
-        package_dir, args.pkg_type, output_root, backend
-    )
-    if log_index_url:
-        _emit_github_output("packaging_logs_url", log_index_url)
-
-    # Write GitHub Actions step summary
-    pkg_type_upper = args.pkg_type.upper()
-    if args.pkg_type == "deb":
-        install_instructions = f"""### {pkg_type_upper} Package Build Results
-
-[Package Repository]({install_url})
-
-```bash
-# Add the repository
-echo "deb [trusted=yes] {install_url} stable main" | \\
-    sudo tee /etc/apt/sources.list.d/therock.list
-sudo apt update
-
-# Install packages
-sudo apt install <package-name>
-```
-"""
-    else:
-        install_instructions = f"""### {pkg_type_upper} Package Build Results
-
-[Package Repository]({install_url})
-
-```bash
-# Add the repository
-sudo tee /etc/yum.repos.d/therock.repo << 'EOF'
-[therock]
-name=TheRock
-baseurl={install_url}
-enabled=1
-gpgcheck=0
-EOF
-
-# Install packages
-sudo dnf install <package-name>
-```
-"""
-    if log_index_url:
-        install_instructions += f"\n[Packaging Logs]({log_index_url})\n"
-    gha_append_step_summary(install_instructions)
+    # Generate a top-level index for the pkg type (e.g., 'deb' or 'rpm')
+    # Uses S3 Delimiter for efficiency (only lists folders, not all nested files)
+    top_prefix = prefix.split("/")[0]
+    generate_top_index_from_s3(s3_client, args.s3_bucket, top_prefix)
 
 
 if __name__ == "__main__":

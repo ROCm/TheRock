@@ -1,0 +1,9 @@
+# GPG Signing Server Dependencies
+
+# Optional: OIDC support for GitHub Actions
+# If not installed, server falls back to JWT-only mode
+# Install with: pip install -r requirements.txt
+PyJWT[crypto]>=2.8.0
+
+# Note: Server core functionality works with Python stdlib only (no dependencies)
+# This file is ONLY needed if you want OIDC support
