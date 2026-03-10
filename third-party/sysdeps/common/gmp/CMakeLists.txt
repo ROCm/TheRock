@@ -72,15 +72,19 @@ endif()
 set(patch_source_commands)
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   list(APPEND patch_source_commands   COMMAND
-    bash "${CMAKE_CURRENT_SOURCE_DIR}/patch_source.sh" "${SOURCE_DIR}")
+    bash "${CMAKE_CURRENT_SOURCE_DIR}/patch_source.sh" "${CMAKE_CURRENT_BINARY_DIR}/s")
 endif()
 
 add_custom_target(
   build ALL
   WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-  #
-  # OPTIONAL: Patching of the sources should happen here.
-  #
+  COMMAND
+    "${CMAKE_COMMAND}" -E rm -rf -- "${CMAKE_INSTALL_PREFIX}" "${CMAKE_CURRENT_BINARY_DIR}/s"
+  COMMAND
+    # Use copy_dir_with_timestamps.py instead of `cmake -E copy_directory` to
+    # preserve file modification timestamps, preventing autotools from trying
+    # to regenerate files (which would require additional tools).
+    "${Python3_EXECUTABLE}" "${THEROCK_SOURCE_DIR}/build_tools/copy_dir_with_timestamps.py" "${SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/s"
   COMMAND
     ${patch_source_commands}
   COMMAND
@@ -94,7 +98,7 @@ add_custom_target(
       "LDFLAGS=${CMAKE_SHARED_LINKER_FLAGS} -Wl,-rpath=\\'\\$$\\$$ORIGIN\\' -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
       "CPPFLAGS=${EXTRA_CPPFLAGS}"
       --
-    "${SOURCE_DIR}/configure"
+    "${CMAKE_CURRENT_BINARY_DIR}/s/configure"
       --prefix "${CMAKE_INSTALL_PREFIX}"
   COMMAND
     make V=1

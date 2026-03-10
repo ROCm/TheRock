@@ -35,7 +35,7 @@ def main():
     if dst.exists():
         sys.stderr.write(
             f"ERROR: Destination already exists: {dst}\n"
-            f"       Remove it first with `cmake -E rm -rf {dst}`\n"
+            f" Remove it first with `cmake -E rm -rf {dst}`\n"
         )
         sys.exit(1)
 
