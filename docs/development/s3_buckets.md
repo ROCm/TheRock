@@ -13,6 +13,11 @@ The full ARN pattern is
 `arn:aws:iam::692859939525:role/therock-{ci,dev,nightly,prerelease}`.
 
 ```yaml
+# This covers the common case for "CI" workflows that run on PRs from
+# ROCm repositories and PRs from forks. Other workflows, such as release
+# workflows also used by https://github.com/ROCm/rockrel, may use different
+# roles and slightly different usage patterns.
+
 jobs:
   build:
     runs-on: azure-linux-scale-rocm
