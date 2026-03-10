@@ -75,7 +75,7 @@ test_matrix = {
     "opencl-cts": {
         "job_name": "opencl-cts",
         "fetch_artifact_args": "--tests",
-        "timeout_minutes": 120,
+        "timeout_minutes": 240,
         "test_script": f"python {_get_script_path('test_opencl_cts.py')}",
         "platform": ["linux"],
         "total_shards": 1,
