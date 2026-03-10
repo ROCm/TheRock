@@ -177,12 +177,12 @@ if(THEROCK_ENABLE_HIPDNN)
       amd-hip
     BUILD_DEPS
       therock-googletest
+      therock-fmt
+      therock-spdlog
     RUNTIME_DEPS
       hip-clr
       therock-flatbuffers
-      therock-fmt
       therock-nlohmann-json
-      therock-spdlog
   )
   therock_cmake_subproject_glob_c_sources(hipDNN
   SUBDIRS
@@ -236,8 +236,6 @@ if(THEROCK_ENABLE_MIOPENPROVIDER)
       therock-googletest
       therock-flatbuffers
       therock-nlohmann-json
-      therock-fmt
-      therock-spdlog
     RUNTIME_DEPS
       MIOpen
   )
@@ -282,8 +280,6 @@ if(THEROCK_ENABLE_HIPBLASLTPROVIDER)
       therock-googletest
       therock-flatbuffers
       therock-nlohmann-json
-      therock-fmt
-      therock-spdlog
     RUNTIME_DEPS
       hipBLAS-common
       hipBLASLt
@@ -328,8 +324,6 @@ if(THEROCK_ENABLE_HIPDNN_SAMPLES)
       hipDNN
       therock-flatbuffers
       therock-nlohmann-json
-      therock-fmt
-      therock-spdlog
     RUNTIME_DEPS
       miopenprovider
   )

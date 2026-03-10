@@ -46,7 +46,7 @@ skip_tests = {
             "test_invalid_status_for_legacy_api",
         ],
     },
-    "gfx942": {
+    "gfx94": {
         "autograd": [
             # fixed or just good with no caching?
             # "test_reentrant_parent_error_on_cpu_cuda",
@@ -107,7 +107,6 @@ skip_tests = {
             "test_cublas_allow_bf16_reduced_precision_reduction_get_set",
             # AttributeError: Unknown attribute allow_fp16_reduced_precision_reduction_split_k
             "test_cublas_allow_fp16_reduced_precision_reduction_get_set",
-            "test_allocator_settings",
         ],
         "nn": [
             # Is now skipped.. on pytorch side

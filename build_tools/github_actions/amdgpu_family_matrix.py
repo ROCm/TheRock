@@ -51,6 +51,20 @@ all_build_variants = {
     },
 }
 
+"""
+amdgpu_family_info_matrix dictionary fields:
+- test-runs-on: (required) GitHub runner label for this architecture
+- test-runs-on-multi-gpu: (optional) GitHub runner label for multi-GPU tests for this architecture
+- benchmark-runs-on: (optional) GitHub runner label for benchmarks for this architecture
+- test-runs-on-kernel: (optional) dict of kernel-specific runner labels, keyed by kernel type (e.g. "oem")
+- family: (required) AMD GPU family name, used for test selection and artifact fetching
+- fetch-gfx-targets: (required) list of gfx targets to fetch split test artifacts for (e.g. ["gfx942", "gfx942:xnack+"])
+- build_variants: (optional) list of build variants to test for this architecture (e.g. ["release", "asan"])
+- bypass_tests_for_releases: (optional) if enabled, bypass tests for release builds (e.g. by skipping test steps in the workflow, or by not running tests on release builds in test scripts)
+- sanity_check_only_for_family: (optional) if enabled, only run sanity check tests for this architecture
+- run-full-tests-only: (optional) if enabled, only run full tests for this architecture
+- nightly_check_only_for_family (optional): if enabled, only run CI nightly tests for this architecture
+"""
 # The 'presubmit' matrix runs on 'pull_request' triggers (on all PRs).
 amdgpu_family_info_matrix_presubmit = {
     "gfx94x": {
@@ -85,7 +99,6 @@ amdgpu_family_info_matrix_presubmit = {
             "fetch-gfx-targets": ["gfx1100"],
             "bypass_tests_for_releases": True,
             "build_variants": ["release"],
-            "nightly_check_only_for_family": True,
         },
     },
     "gfx1151": {

@@ -239,19 +239,6 @@
             ]
           }
         ]
-      },
-      {
-        "Artifact": "amd-llvm",
-        "Artifact_Subdir": [
-          {
-            "Name": "amd-comgr-stub",
-            "Components": [
-              "lib",
-              "run",
-              "doc"
-            ]
-          }
-        ]
       }
     ],
     "Gfxarch": "False"
@@ -1168,6 +1155,20 @@
             ]
           }
         ]
+      },
+      {
+        "Artifact": "aqlprofile",
+        "Artifact_Subdir": [
+          {
+            "Name": "aqlprofile",
+            "Components": [
+              "lib",
+              "dev",
+              "run",
+              "doc"
+            ]
+          }
+        ]
       }
     ],
 
@@ -1649,6 +1650,7 @@
             "Name": "composable_kernel",
             "Components": [
               "run",
+              "dev",
               "doc"
             ]
           }

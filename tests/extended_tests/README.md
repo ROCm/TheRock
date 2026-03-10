@@ -82,13 +82,14 @@ extended_tests/
 │   └── README.md                  # Functional-specific docs (placeholder - tests to be added in follow-up PRs)
 │
 └── utils/                          # SHARED utilities for all test types
+    ├── extended_test_base.py      # ExtendedTestBase - shared base class for all tests
+    ├── extended_test_client.py    # ExtendedTestClient - system detection & result reporting
     ├── exceptions.py              # Custom exception classes
     │   ├── BenchmarkExecutionError   # Execution/parsing failures
     │   ├── BenchmarkResultError      # Result validation failures
     │   └── FrameworkException        # Base exception
     │
     ├── logger.py                  # Logging utilities
-    ├── extended_test_client.py    # ExtendedTestClient API
     ├── constants.py               # Global constants
     │
     ├── config/                    # Configuration parsers

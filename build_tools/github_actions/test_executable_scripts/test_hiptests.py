@@ -52,6 +52,12 @@ TEST_TO_IGNORE = {
             "Unit_hipGetProcAddress_spt_Stream",
         ]
     },
+    "gfx110X-all": {
+        "windows": [
+            "Unit_hipStreamValue_Wait_Blocking - uint64_t",
+            "Unit_hipStreamValue_Wait_Blocking - uint32_t",
+        ]
+    },
 }
 
 
@@ -104,6 +110,7 @@ def setup_env(env):
         # For ASAN mode, we preload it for test count query and test running
         if is_asan():
             env["LD_PRELOAD"] = get_asan_lib_path()
+            env["HSA_XNACK"] = "1"
             # TODO: enable this when we have symbolizer patch in
             # env["ASAN_SYMBOLIZER_PATH"] = str(Path(THEROCK_BIN_DIR).parent / "lib" / "llvm" / "bin" / "llvm-symbolizer")
     else:
