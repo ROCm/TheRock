@@ -25,8 +25,16 @@ from pytorch_utils import (
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 
-#Use mi300 test times because https://github.com/ROCm/TheRock/actions/workflows/test_pytorch_wheels.yml chooses mi300 as default
-ROCM_BUILD_ENVIRONMENT = "linux-noble-rocm-py3.12-mi300"
+# Maps gfx arch to BUILD_ENVIRONMENT for test timing data lookup.
+# Must stay in sync with pytorch/pytorch PR #176445.
+# mi300 uses noble/py3.12; all others use jammy/py3.10.
+GFX_TO_BUILD_ENV = {
+    "gfx90a": "linux-jammy-rocm-py3.10-mi200",
+    "gfx942": "linux-noble-rocm-py3.12-mi300",
+    "gfx950": "linux-jammy-rocm-py3.10-mi355",
+    "gfx1100": "linux-jammy-rocm-py3.10-navi31",
+}
+ROCM_BUILD_ENVIRONMENT_DEFAULT = "linux-noble-rocm-py3.12-mi300"
 
 THEROCK_ENV_VARS = [
     "CI",
@@ -45,16 +53,17 @@ THEROCK_ENV_VARS = [
 ]
 
 
-def setup_env(pytorch_dir: Path, test_config: str) -> None:
-    os.environ["CI"] = "1"
-    os.environ["BUILD_ENVIRONMENT"] = ROCM_BUILD_ENVIRONMENT
-    os.environ["PYTORCH_TEST_WITH_ROCM"] = "1"
-    os.environ["PYTORCH_TESTING_DEVICE_ONLY_FOR"] = "cuda"
-    os.environ["PYTORCH_PRINT_REPRO_ON_FAILURE"] = "0"
+def setup_env(pytorch_dir: Path, test_config: str, gfx_arch: str = "") -> None:
+    os.environ.setdefault("CI", "1")
+    build_env = GFX_TO_BUILD_ENV.get(gfx_arch, ROCM_BUILD_ENVIRONMENT_DEFAULT)
+    os.environ.setdefault("BUILD_ENVIRONMENT", build_env)
+    os.environ.setdefault("PYTORCH_TEST_WITH_ROCM", "1")
+    os.environ.setdefault("PYTORCH_TESTING_DEVICE_ONLY_FOR", "cuda")
+    os.environ.setdefault("PYTORCH_PRINT_REPRO_ON_FAILURE", "0")
     os.environ["MIOPEN_CUSTOM_CACHE_DIR"] = tempfile.mkdtemp()
 
     if test_config:
-        os.environ["TEST_CONFIG"] = test_config
+        os.environ.setdefault("TEST_CONFIG", test_config)
 
     # On 1-GPU runners, rocminfo reports all physical GPUs (e.g. 3) but only one
     # is visible via HIP_VISIBLE_DEVICES.  This causes NUM_PROCS=3 inside
@@ -87,7 +96,7 @@ def cmd_arguments(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
     except ValueError:
         passthrough_args = []
     else:
-        passthrough_args = argv[rest_pos + 1:]
+        passthrough_args = argv[rest_pos + 1 :]
         argv = argv[:rest_pos]
 
     parser = argparse.ArgumentParser(description=__doc__)
@@ -135,7 +144,8 @@ def cmd_arguments(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
         metavar="TEST",
         help="Only run these test files (passed to run_test.py --include). "
         "Also settable via TESTS_TO_INCLUDE env var (run_test.py reads it directly). "
-        "Default: run all tests.",
+        "If neither is set, run_test.py runs all tests. The workflow may "
+        "provide a limited default set via TESTS_TO_INCLUDE.",
     )
     parser.add_argument(
         "--exclude",
@@ -179,13 +189,6 @@ def cmd_arguments(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
         default=False,
         help="Pass --dry-run to run_test.py to list tests without running them.",
     )
-    parser.add_argument(
-        "--verbose",
-        action="store_true",
-        default=True,
-        help="Pass --verbose to run_test.py (default: True).",
-    )
-
     args = parser.parse_args(argv)
 
     if not args.pytorch_dir.exists():
@@ -199,7 +202,9 @@ def cmd_arguments(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
         parser.error("--shard and --num-shards must both be set or both be unset.")
 
     if args.shard > 0 and args.shard > args.num_shards:
-        parser.error(f"--shard ({args.shard}) cannot exceed --num-shards ({args.num_shards}).")
+        parser.error(
+            f"--shard ({args.shard}) cannot exceed --num-shards ({args.num_shards})."
+        )
 
     return args, passthrough_args
 
@@ -220,9 +225,8 @@ def build_run_test_cmd(
         cmd.append("--exclude-quantization-tests")
 
     cmd.append("--keep-going")
+    cmd.append("--verbose")
 
-    if args.verbose:
-        cmd.append("--verbose")
     if args.dry_run:
         cmd.append("--dry-run")
 
@@ -265,7 +269,7 @@ def main() -> int:
                 create_skip_list=not args.debug,
             )
 
-        setup_env(args.pytorch_dir, args.test_config)
+        setup_env(args.pytorch_dir, args.test_config, gfx_arch=first_arch)
         print_env()
 
         cmd = build_run_test_cmd(args, tests_to_skip, passthrough_args)

@@ -65,7 +65,7 @@ on:
         description: List of test suites to run
         type: string
         default: test_nn test_torch test_cuda test_unary_ufuncs test_binary_ufuncs test_autograd
-        
+
 
 permissions:
   contents: read
@@ -74,12 +74,16 @@ run-name: Test PyTorch Full (${{ inputs.amdgpu_family }}, ${{ inputs.torch_versi
 
 jobs:
   test_wheels:
-    name: Test PyTorch Full | ${{ inputs.amdgpu_family }} (shard ${{ matrix.shard }}/4)
+    name: Test PyTorch Full | ${{ inputs.amdgpu_family }} (shard ${{ matrix.shard }}/${{ matrix.num_shards }})
     runs-on: ${{ inputs.test_runs_on }}
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        include:
+          - { shard: 1, num_shards: 4 }
+          - { shard: 2, num_shards: 4 }
+          - { shard: 3, num_shards: 4 }
+          - { shard: 4, num_shards: 4 }
     container:
       image: ${{ contains(inputs.test_runs_on, 'linux') && 'ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:405945a40deaff9db90b9839c0f41d4cba4a383c1a7459b28627047bf6302a26' || null }}
       options: --ipc host
@@ -97,7 +101,7 @@ jobs:
       VENV_DIR: ${{ github.workspace }}/.venv
       AMDGPU_FAMILY: ${{ inputs.amdgpu_family }}
       SHARD_NUMBER: ${{ matrix.shard }}
-      NUM_TEST_SHARDS: 4
+      NUM_TEST_SHARDS: ${{ matrix.num_shards }}
       CI: "1"
       BUILD_ENVIRONMENT: "linux-noble-rocm-py3.12-mi300"
       PYTORCH_TEST_WITH_ROCM: "1"
