@@ -250,9 +250,7 @@ def build_run_test_cmd(
 def main(argv: list[str]) -> int:
     args, passthrough_args = cmd_arguments(argv)
 
-    ((first_arch, _),) = set_gpu_execution_policy(
-        args.amdgpu_family, policy="single"
-    )
+    ((first_arch, _),) = set_gpu_execution_policy(args.amdgpu_family, policy="single")
     print(f"Using AMDGPU family: {first_arch}")
 
     pytorch_version = args.pytorch_version
