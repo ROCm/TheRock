@@ -22,7 +22,7 @@ from utils.extended_test_base import ExtendedTestBase, gha_append_step_summary
 ENABLE_RESULTS_API = False
 
 
-class BenchmarkBase:
+class BenchmarkBase(ExtendedTestBase):
     """Base class providing common benchmark logic.
 
     Inherits shared infrastructure from ExtendedTestBase (execute_command,
@@ -106,7 +106,7 @@ class BenchmarkBase:
         """
         if not ENABLE_RESULTS_API:
             log.warning(
-                "Results API is disabled (ENABLE_RESULTS_API=False). Skipping upload."
+                "Results API is disabled temporarily (ENABLE_RESULTS_API=False). Skipping upload."
             )
             return False
 
@@ -116,7 +116,7 @@ class BenchmarkBase:
         """Compare results with Last Known Good baseline."""
         if not ENABLE_RESULTS_API:
             log.warning(
-                "Results API is disabled (ENABLE_RESULTS_API=False). Skipping LKG comparison."
+                "Results API is disabled temporarily (ENABLE_RESULTS_API=False). Skipping LKG comparison."
             )
             # Print raw tables so scores are still visible in the log.
             table_list = tables if isinstance(tables, list) else [tables]
