@@ -1,0 +1,586 @@
+{
+  "blockers": [
+    "GPUOpen publishes gfx1201 through the architecture-level RDNA4 XML, so target mapping cannot assume one XML per target.",
+    "gfx1201 barrier/wait control differs from gfx950: the import contains `S_BARRIER_WAIT` and `S_WAIT_*`, while `S_BARRIER` is absent.",
+    "RDNA4-only graphics and memory encodings (`ENC_VBUFFER`, `ENC_VIMAGE`, `ENC_VSAMPLE`, `ENC_VFLAT`, `ENC_VSCRATCH`, `ENC_VEXPORT`, `ENC_VINTERP`, `ENC_VOP3P`) need architecture-local plumbing before gfx950 logic can be reused."
+  ],
+  "carry_over_family_focus": [
+    {
+      "bucket": "transferable_full",
+      "example_instruction": "V_MOV_B32",
+      "family_name": "v",
+      "instruction_count": 235,
+      "rationale": "Largest fully-supported carry-over bucket from gfx950."
+    },
+    {
+      "bucket": "transferable_full",
+      "example_instruction": "S_MOV_B32",
+      "family_name": "s",
+      "instruction_count": 98,
+      "rationale": "Scalar control and ALU subset with direct gfx950 precedent."
+    },
+    {
+      "bucket": "transferable_full",
+      "example_instruction": "DS_ADD_U32",
+      "family_name": "ds",
+      "instruction_count": 27,
+      "rationale": "Small LDS subset already proven end-to-end on gfx950."
+    },
+    {
+      "bucket": "transferable_full",
+      "example_instruction": "GLOBAL_ATOMIC_ADD_F32",
+      "family_name": "global",
+      "instruction_count": 3,
+      "rationale": "Only a narrow global atomic subset currently has full precedent."
+    },
+    {
+      "bucket": "transferable_decode_only",
+      "example_instruction": "V_CVT_F32_FP8",
+      "family_name": "v",
+      "instruction_count": 26,
+      "rationale": "Binary decode precedent exists, but execution semantics still need work."
+    },
+    {
+      "bucket": "transferable_semantic_only",
+      "example_instruction": "V_CMP_LT_F16",
+      "family_name": "v",
+      "instruction_count": 30,
+      "rationale": "Interpreter precedent exists, but raw binary decode work is missing."
+    },
+    {
+      "bucket": "transferable_decode_only",
+      "example_instruction": "S_GETPC_B64",
+      "family_name": "s",
+      "instruction_count": 10,
+      "rationale": "Scalar control opcodes appear in coverage but are not executable yet."
+    }
+  ],
+  "metadata": {
+    "architecture_name": "AMD RDNA 4",
+    "encoding_count": 5062,
+    "gfx_target": "gfx1201",
+    "instruction_count": 1264,
+    "release_date": "2025-02-19",
+    "schema_version": "1.1.0",
+    "source_xml": "amdgpu_isa_rdna4.xml"
+  },
+  "phase0_decoder_focus": [
+    {
+      "example_instruction": "S_ENDPGM",
+      "instruction_count": 41,
+      "name": "ENC_SOPP",
+      "rationale": "Program control, wait/event sequencing, and branch bring-up."
+    },
+    {
+      "example_instruction": "S_MOV_B32",
+      "instruction_count": 84,
+      "name": "ENC_SOP1",
+      "rationale": "Scalar move, bit-manipulation, and exec-mask setup precedent."
+    },
+    {
+      "example_instruction": "S_AND_B32",
+      "instruction_count": 72,
+      "name": "ENC_SOP2",
+      "rationale": "Scalar binary core needed before wider control-flow work."
+    },
+    {
+      "example_instruction": "S_CMP_EQ_U32",
+      "instruction_count": 46,
+      "name": "ENC_SOPC",
+      "rationale": "Scalar compare path for branch and predicate plumbing."
+    },
+    {
+      "example_instruction": "S_MOVK_I32",
+      "instruction_count": 8,
+      "name": "ENC_SOPK",
+      "rationale": "Small scalar-immediate surface used by early control kernels."
+    },
+    {
+      "example_instruction": "S_LOAD_B32",
+      "instruction_count": 28,
+      "name": "ENC_SMEM",
+      "rationale": "RDNA4 scalar memory is a first architecture-local blocker."
+    },
+    {
+      "example_instruction": "V_MOV_B32",
+      "instruction_count": 90,
+      "name": "ENC_VOP1",
+      "rationale": "Vector move and conversion baseline reused across many programs."
+    },
+    {
+      "example_instruction": "V_ADD_F32",
+      "instruction_count": 45,
+      "name": "ENC_VOP2",
+      "rationale": "Core vector arithmetic used by both compute and graphics paths."
+    },
+    {
+      "example_instruction": "V_CMP_EQ_F32",
+      "instruction_count": 162,
+      "name": "ENC_VOPC",
+      "rationale": "Vector compare path for control, masking, and shader predicates."
+    },
+    {
+      "example_instruction": "V_ADD3_U32",
+      "instruction_count": 434,
+      "name": "ENC_VOP3",
+      "rationale": "Largest instruction family and the main overlap with gfx950 precedent."
+    },
+    {
+      "example_instruction": "DS_ADD_U32",
+      "instruction_count": 123,
+      "name": "ENC_VDS",
+      "rationale": "LDS data path with a small fully-supported carry-over subset."
+    },
+    {
+      "example_instruction": "GLOBAL_LOAD_B32",
+      "instruction_count": 65,
+      "name": "ENC_VGLOBAL",
+      "rationale": "Global memory load/store family that replaces gfx950-specific naming."
+    }
+  ],
+  "phase1_decoder_focus": [
+    {
+      "example_instruction": "BUFFER_LOAD_FORMAT_X",
+      "instruction_count": 89,
+      "name": "ENC_VBUFFER",
+      "rationale": "RDNA4 buffer resource path and typed buffer forms."
+    },
+    {
+      "example_instruction": "FLAT_LOAD_B32",
+      "instruction_count": 55,
+      "name": "ENC_VFLAT",
+      "rationale": "Flat memory path layered after scalar/global addressing is stable."
+    },
+    {
+      "example_instruction": "SCRATCH_LOAD_B32",
+      "instruction_count": 24,
+      "name": "ENC_VSCRATCH",
+      "rationale": "Scratch memory path is target-local and can come after flat/global."
+    },
+    {
+      "example_instruction": "IMAGE_SAMPLE",
+      "instruction_count": 58,
+      "name": "ENC_VSAMPLE",
+      "rationale": "Graphics sampling path unique to the RDNA4 import."
+    },
+    {
+      "example_instruction": "IMAGE_LOAD",
+      "instruction_count": 33,
+      "name": "ENC_VIMAGE",
+      "rationale": "Image load/store/atomic path separate from sampled operations."
+    },
+    {
+      "example_instruction": "EXPORT",
+      "instruction_count": 1,
+      "name": "ENC_VEXPORT",
+      "rationale": "Graphics export path with no gfx950 precedent."
+    },
+    {
+      "example_instruction": "V_INTERP_P10_F32",
+      "instruction_count": 6,
+      "name": "ENC_VINTERP",
+      "rationale": "Shader interpolation path that anchors graphics-local vector work."
+    },
+    {
+      "example_instruction": "V_PK_ADD_F16",
+      "instruction_count": 56,
+      "name": "ENC_VOP3P",
+      "rationale": "Packed/vector math delta visible in the RDNA4 import."
+    }
+  ],
+  "rdna4_delta_family_focus": [
+    {
+      "bucket": "new_vs_gfx950",
+      "example_instruction": "S_LOAD_B32",
+      "family_name": "s",
+      "instruction_count": 153,
+      "rationale": "Scalar memory and wait/barrier control differ from gfx950."
+    },
+    {
+      "bucket": "new_vs_gfx950",
+      "example_instruction": "V_INTERP_P10_F32",
+      "family_name": "v",
+      "instruction_count": 155,
+      "rationale": "Graphics-local vector forms expand the RDNA4 surface."
+    },
+    {
+      "bucket": "new_vs_gfx950",
+      "example_instruction": "IMAGE_LOAD",
+      "family_name": "image",
+      "instruction_count": 91,
+      "rationale": "Image pipeline has no direct gfx950 baseline."
+    },
+    {
+      "bucket": "new_vs_gfx950",
+      "example_instruction": "BUFFER_LOAD_FORMAT_X",
+      "family_name": "buffer",
+      "instruction_count": 62,
+      "rationale": "Buffer load/store/atomic naming and resource handling are RDNA4-local."
+    },
+    {
+      "bucket": "new_vs_gfx950",
+      "example_instruction": "GLOBAL_LOAD_B32",
+      "family_name": "global",
+      "instruction_count": 62,
+      "rationale": "Global memory family uses the RDNA4 ISA surface instead of gfx950 forms."
+    },
+    {
+      "bucket": "new_vs_gfx950",
+      "example_instruction": "DS_LOAD_B32",
+      "family_name": "ds",
+      "instruction_count": 60,
+      "rationale": "LDS load/store and atomic expansion beyond the gfx950 subset."
+    },
+    {
+      "bucket": "new_vs_gfx950",
+      "example_instruction": "FLAT_LOAD_B32",
+      "family_name": "flat",
+      "instruction_count": 52,
+      "rationale": "Flat addressing path needs RDNA4-specific decode and operand wiring."
+    },
+    {
+      "bucket": "new_vs_gfx950",
+      "example_instruction": "SCRATCH_LOAD_B32",
+      "family_name": "scratch",
+      "instruction_count": 24,
+      "rationale": "Scratch memory is absent from the current gfx950-local layout."
+    },
+    {
+      "bucket": "new_vs_gfx950",
+      "example_instruction": "TBUFFER_LOAD_FORMAT_X",
+      "family_name": "tbuffer",
+      "instruction_count": 8,
+      "rationale": "Typed buffer graphics path should layer on top of buffer support."
+    },
+    {
+      "bucket": "new_vs_gfx950",
+      "example_instruction": "EXPORT",
+      "family_name": "export",
+      "instruction_count": 1,
+      "rationale": "Graphics export path is unique to the RDNA4 import."
+    }
+  ],
+  "support_buckets": [
+    {
+      "bucket": "transferable_full",
+      "description": "Present in gfx950 with both raw decode coverage and interpreter semantics already implemented.",
+      "instruction_count": 363,
+      "top_encodings": [
+        {
+          "encoding_name": "ENC_VOP3",
+          "instruction_count": 232
+        },
+        {
+          "encoding_name": "VOP3_INST_LITERAL",
+          "instruction_count": 229
+        },
+        {
+          "encoding_name": "VOP3_VOP_DPP16",
+          "instruction_count": 149
+        },
+        {
+          "encoding_name": "VOP3_VOP_DPP8",
+          "instruction_count": 149
+        },
+        {
+          "encoding_name": "ENC_VOPC",
+          "instruction_count": 108
+        },
+        {
+          "encoding_name": "VOPC_INST_LITERAL",
+          "instruction_count": 108
+        },
+        {
+          "encoding_name": "ENC_VOP1",
+          "instruction_count": 65
+        },
+        {
+          "encoding_name": "VOP1_INST_LITERAL",
+          "instruction_count": 63
+        },
+        {
+          "encoding_name": "VOPC_VOP_DPP16",
+          "instruction_count": 54
+        },
+        {
+          "encoding_name": "VOPC_VOP_DPP8",
+          "instruction_count": 54
+        }
+      ],
+      "top_families": [
+        {
+          "family_name": "v",
+          "instruction_count": 235
+        },
+        {
+          "family_name": "s",
+          "instruction_count": 98
+        },
+        {
+          "family_name": "ds",
+          "instruction_count": 27
+        },
+        {
+          "family_name": "global",
+          "instruction_count": 3
+        }
+      ]
+    },
+    {
+      "bucket": "transferable_decode_only",
+      "description": "Binary shape already appears in gfx950 coverage, but execution semantics are still missing there.",
+      "instruction_count": 36,
+      "top_encodings": [
+        {
+          "encoding_name": "ENC_VOP3",
+          "instruction_count": 24
+        },
+        {
+          "encoding_name": "VOP3_INST_LITERAL",
+          "instruction_count": 24
+        },
+        {
+          "encoding_name": "VOP3_VOP_DPP16",
+          "instruction_count": 22
+        },
+        {
+          "encoding_name": "VOP3_VOP_DPP8",
+          "instruction_count": 22
+        },
+        {
+          "encoding_name": "ENC_SOP1",
+          "instruction_count": 10
+        },
+        {
+          "encoding_name": "ENC_VOP2",
+          "instruction_count": 10
+        },
+        {
+          "encoding_name": "VOP2_INST_LITERAL",
+          "instruction_count": 10
+        },
+        {
+          "encoding_name": "VOP2_VOP_DPP16",
+          "instruction_count": 9
+        },
+        {
+          "encoding_name": "VOP2_VOP_DPP8",
+          "instruction_count": 9
+        },
+        {
+          "encoding_name": "ENC_VOP1",
+          "instruction_count": 8
+        }
+      ],
+      "top_families": [
+        {
+          "family_name": "v",
+          "instruction_count": 26
+        },
+        {
+          "family_name": "s",
+          "instruction_count": 10
+        }
+      ]
+    },
+    {
+      "bucket": "transferable_semantic_only",
+      "description": "Execution semantics exist in gfx950 coverage, but binary decode coverage has not been wired up yet.",
+      "instruction_count": 30,
+      "top_encodings": [
+        {
+          "encoding_name": "VOPC_VOP_DPP16",
+          "instruction_count": 30
+        },
+        {
+          "encoding_name": "VOPC_VOP_DPP8",
+          "instruction_count": 30
+        },
+        {
+          "encoding_name": "ENC_VOP3",
+          "instruction_count": 30
+        },
+        {
+          "encoding_name": "VOP3_INST_LITERAL",
+          "instruction_count": 30
+        },
+        {
+          "encoding_name": "VOP3_VOP_DPP16",
+          "instruction_count": 30
+        },
+        {
+          "encoding_name": "VOP3_VOP_DPP8",
+          "instruction_count": 30
+        },
+        {
+          "encoding_name": "ENC_VOPC",
+          "instruction_count": 30
+        },
+        {
+          "encoding_name": "VOPC_INST_LITERAL",
+          "instruction_count": 30
+        }
+      ],
+      "top_families": [
+        {
+          "family_name": "v",
+          "instruction_count": 30
+        }
+      ]
+    },
+    {
+      "bucket": "known_but_unsupported",
+      "description": "Opcode name already exists in the gfx950 catalog, but neither decoder nor interpreter support is complete.",
+      "instruction_count": 167,
+      "top_encodings": [
+        {
+          "encoding_name": "ENC_VOP3",
+          "instruction_count": 61
+        },
+        {
+          "encoding_name": "VOP3_INST_LITERAL",
+          "instruction_count": 61
+        },
+        {
+          "encoding_name": "VOP3_VOP_DPP16",
+          "instruction_count": 52
+        },
+        {
+          "encoding_name": "VOP3_VOP_DPP8",
+          "instruction_count": 52
+        },
+        {
+          "encoding_name": "ENC_VDS",
+          "instruction_count": 38
+        },
+        {
+          "encoding_name": "VOPC_VOP_DPP16",
+          "instruction_count": 24
+        },
+        {
+          "encoding_name": "VOPC_VOP_DPP8",
+          "instruction_count": 24
+        },
+        {
+          "encoding_name": "ENC_VOPC",
+          "instruction_count": 24
+        },
+        {
+          "encoding_name": "VOPC_INST_LITERAL",
+          "instruction_count": 24
+        },
+        {
+          "encoding_name": "ENC_VOP3P",
+          "instruction_count": 21
+        }
+      ],
+      "top_families": [
+        {
+          "family_name": "v",
+          "instruction_count": 86
+        },
+        {
+          "family_name": "ds",
+          "instruction_count": 38
+        },
+        {
+          "family_name": "s",
+          "instruction_count": 21
+        },
+        {
+          "family_name": "buffer",
+          "instruction_count": 11
+        },
+        {
+          "family_name": "tbuffer",
+          "instruction_count": 8
+        },
+        {
+          "family_name": "flat",
+          "instruction_count": 3
+        }
+      ]
+    },
+    {
+      "bucket": "new_vs_gfx950",
+      "description": "Opcode name is absent from gfx950 and needs RDNA4-local decode and semantic work.",
+      "instruction_count": 668,
+      "top_encodings": [
+        {
+          "encoding_name": "ENC_VOP3",
+          "instruction_count": 87
+        },
+        {
+          "encoding_name": "VOP3_INST_LITERAL",
+          "instruction_count": 83
+        },
+        {
+          "encoding_name": "ENC_VBUFFER",
+          "instruction_count": 70
+        },
+        {
+          "encoding_name": "VOP3_VOP_DPP16",
+          "instruction_count": 68
+        },
+        {
+          "encoding_name": "VOP3_VOP_DPP8",
+          "instruction_count": 68
+        },
+        {
+          "encoding_name": "ENC_VGLOBAL",
+          "instruction_count": 62
+        },
+        {
+          "encoding_name": "ENC_VDS",
+          "instruction_count": 58
+        },
+        {
+          "encoding_name": "ENC_VSAMPLE",
+          "instruction_count": 58
+        },
+        {
+          "encoding_name": "ENC_VFLAT",
+          "instruction_count": 52
+        },
+        {
+          "encoding_name": "ENC_SOP1",
+          "instruction_count": 46
+        }
+      ],
+      "top_families": [
+        {
+          "family_name": "v",
+          "instruction_count": 155
+        },
+        {
+          "family_name": "s",
+          "instruction_count": 153
+        },
+        {
+          "family_name": "image",
+          "instruction_count": 91
+        },
+        {
+          "family_name": "buffer",
+          "instruction_count": 62
+        },
+        {
+          "family_name": "global",
+          "instruction_count": 62
+        },
+        {
+          "family_name": "ds",
+          "instruction_count": 60
+        },
+        {
+          "family_name": "flat",
+          "instruction_count": 52
+        },
+        {
+          "family_name": "scratch",
+          "instruction_count": 24
+        }
+      ]
+    }
+  ]
+}
