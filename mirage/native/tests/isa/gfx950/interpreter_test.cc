@@ -1176,6 +1176,19 @@ int main() {
     }
   }
 
+  const std::array<std::string_view, 3> kDsDualDataOpcodes = {
+      "DS_MSKOR_B32",
+      "DS_CMPST_B32",
+      "DS_CMPST_F32",
+  };
+  for (std::string_view opcode : kDsDualDataOpcodes) {
+    if (!Expect(interpreter.Supports(opcode),
+                "expected ds dual-data opcode support")) {
+      std::cerr << opcode << '\n';
+      return 1;
+    }
+  }
+
   const std::array<std::string_view, 2> kDsPairWriteOpcodes = {
       "DS_WRITE2_B32",
       "DS_WRITE2ST64_B32",
@@ -1214,12 +1227,27 @@ int main() {
     }
   }
 
-  const std::array<std::string_view, 15> kReturningDsOpcodes = {
+  const std::array<std::string_view, 4> kDsDualDataReturnOpcodes = {
+      "DS_MSKOR_RTN_B32",
+      "DS_CMPST_RTN_B32",
+      "DS_CMPST_RTN_F32",
+      "DS_WRAP_RTN_B32",
+  };
+  for (std::string_view opcode : kDsDualDataReturnOpcodes) {
+    if (!Expect(interpreter.Supports(opcode),
+                "expected ds dual-data return opcode support")) {
+      std::cerr << opcode << '\n';
+      return 1;
+    }
+  }
+
+  const std::array<std::string_view, 16> kReturningDsOpcodes = {
       "DS_ADD_RTN_U32", "DS_SUB_RTN_U32", "DS_RSUB_RTN_U32",
       "DS_INC_RTN_U32", "DS_DEC_RTN_U32", "DS_MIN_RTN_I32",
       "DS_MAX_RTN_I32", "DS_MIN_RTN_U32", "DS_MAX_RTN_U32",
       "DS_AND_RTN_B32", "DS_OR_RTN_B32",  "DS_XOR_RTN_B32",
-      "DS_ADD_RTN_F32", "DS_MIN_RTN_F32", "DS_MAX_RTN_F32",
+      "DS_WRXCHG_RTN_B32", "DS_ADD_RTN_F32", "DS_MIN_RTN_F32",
+      "DS_MAX_RTN_F32",
   };
   for (std::string_view opcode : kReturningDsOpcodes) {
     if (!Expect(interpreter.Supports(opcode),
@@ -6841,7 +6869,7 @@ int main() {
         }
         return true;
       };
-  const std::array<DsReturnCase, 15> kDsReturnCases = {{
+  const std::array<DsReturnCase, 16> kDsReturnCases = {{
       {"DS_ADD_RTN_U32", {10u, 20u, 40u}, {1u, 2u, 4u}, {11u, 22u, 44u}},
       {"DS_SUB_RTN_U32", {10u, 20u, 40u}, {1u, 2u, 4u}, {9u, 18u, 36u}},
       {"DS_RSUB_RTN_U32", {10u, 20u, 40u}, {15u, 25u, 45u}, {5u, 5u, 5u}},
@@ -6869,6 +6897,10 @@ int main() {
        {0x12345678u, 0xffffffffu, 0x0f0f0f0fu},
        {0x00ff00ffu, 0x0f0f0f0fu, 0xffffffffu},
        {0x12cb5687u, 0xf0f0f0f0u, 0xf0f0f0f0u}},
+      {"DS_WRXCHG_RTN_B32",
+       {0x12345678u, 0xffffffffu, 0x0f0f0f0fu},
+       {0x00ff00ffu, 0x0f0f0f0fu, 0xffffffffu},
+       {0x00ff00ffu, 0x0f0f0f0fu, 0xffffffffu}},
       {"DS_ADD_RTN_F32",
        {FloatBits(1.5f), FloatBits(-2.0f), FloatBits(10.0f)},
        {FloatBits(2.25f), FloatBits(0.5f), FloatBits(-5.0f)},
@@ -6885,6 +6917,173 @@ int main() {
   for (const DsReturnCase& test_case : kDsReturnCases) {
     if (!run_ds_return_case(test_case, false) ||
         !run_ds_return_case(test_case, true)) {
+      return 1;
+    }
+  }
+
+  struct DsDualDataCase {
+    std::string_view opcode;
+    bool has_return;
+    std::array<std::uint32_t, 3> initial_values;
+    std::array<std::uint32_t, 3> data0_values;
+    std::array<std::uint32_t, 3> data1_values;
+    std::array<std::uint32_t, 3> expected_final_values;
+  };
+  const auto run_ds_dual_data_case =
+      [&](const DsDualDataCase& test_case, bool use_compiled_program) {
+        std::vector<DecodedInstruction> program = {
+            DecodedInstruction::ThreeOperand(
+                "DS_WRITE_B32", InstructionOperand::Vgpr(0),
+                InstructionOperand::Vgpr(1), InstructionOperand::Imm32(0)),
+        };
+        if (test_case.has_return) {
+          program.push_back(DecodedInstruction::FiveOperand(
+              test_case.opcode, InstructionOperand::Vgpr(2),
+              InstructionOperand::Vgpr(0), InstructionOperand::Vgpr(3),
+              InstructionOperand::Vgpr(4), InstructionOperand::Imm32(0)));
+        } else {
+          program.push_back(DecodedInstruction::FourOperand(
+              test_case.opcode, InstructionOperand::Vgpr(0),
+              InstructionOperand::Vgpr(3), InstructionOperand::Vgpr(4),
+              InstructionOperand::Imm32(0)));
+        }
+        program.push_back(DecodedInstruction::ThreeOperand(
+            "DS_READ_B32", InstructionOperand::Vgpr(5), InstructionOperand::Vgpr(0),
+            InstructionOperand::Imm32(0)));
+        program.push_back(DecodedInstruction::Nullary("S_ENDPGM"));
+
+        WaveExecutionState state;
+        state.exec_mask = 0b1011ULL;
+        state.vgprs[0][0] = 0u;
+        state.vgprs[0][1] = 4u;
+        state.vgprs[0][3] = 8u;
+        state.vgprs[1][0] = test_case.initial_values[0];
+        state.vgprs[1][1] = test_case.initial_values[1];
+        state.vgprs[1][3] = test_case.initial_values[2];
+        state.vgprs[3][0] = test_case.data0_values[0];
+        state.vgprs[3][1] = test_case.data0_values[1];
+        state.vgprs[3][3] = test_case.data0_values[2];
+        state.vgprs[4][0] = test_case.data1_values[0];
+        state.vgprs[4][1] = test_case.data1_values[1];
+        state.vgprs[4][3] = test_case.data1_values[2];
+        state.vgprs[2][2] = 0xdeadbeefu;
+        state.vgprs[5][2] = 0xcafebabeu;
+
+        std::string case_error;
+        if (use_compiled_program) {
+          std::vector<CompiledInstruction> compiled_program;
+          if (!interpreter.CompileProgram(program, &compiled_program, &case_error)) {
+            std::cerr << test_case.opcode << " compile: " << case_error << '\n';
+            return false;
+          }
+          if (!interpreter.ExecuteProgram(compiled_program, &state, &case_error)) {
+            std::cerr << test_case.opcode << " compiled execute: " << case_error
+                      << '\n';
+            return false;
+          }
+        } else if (!interpreter.ExecuteProgram(program, &state, &case_error)) {
+          std::cerr << test_case.opcode << " decoded execute: " << case_error
+                    << '\n';
+          return false;
+        }
+
+        const char* mode = use_compiled_program ? "compiled" : "decoded";
+        if (!Expect(state.halted, "expected ds dual-data test to halt")) {
+          std::cerr << test_case.opcode << ' ' << mode << '\n';
+          return false;
+        }
+
+        const std::array<std::size_t, 3> kObservedLanes = {0u, 1u, 3u};
+        const std::array<std::size_t, 3> kObservedAddresses = {0u, 4u, 8u};
+        for (std::size_t index = 0; index < kObservedLanes.size(); ++index) {
+          const std::size_t lane = kObservedLanes[index];
+          const std::uint32_t expected_final =
+              test_case.expected_final_values[index];
+          if (test_case.has_return &&
+              !Expect(state.vgprs[2][lane] == test_case.initial_values[index],
+                      "expected ds dual-data old value")) {
+            std::cerr << test_case.opcode << ' ' << mode << " lane=" << lane
+                      << '\n';
+            return false;
+          }
+          if (!Expect(state.vgprs[5][lane] == expected_final,
+                      "expected ds dual-data final value")) {
+            std::cerr << test_case.opcode << ' ' << mode << " lane=" << lane
+                      << '\n';
+            return false;
+          }
+
+          std::uint32_t lds_value = 0;
+          std::memcpy(&lds_value, state.lds_bytes.data() + kObservedAddresses[index],
+                      sizeof(lds_value));
+          if (!Expect(lds_value == expected_final,
+                      "expected ds dual-data lds final value")) {
+            std::cerr << test_case.opcode << ' ' << mode << " lane=" << lane
+                      << '\n';
+            return false;
+          }
+        }
+
+        if (test_case.has_return &&
+            !Expect(state.vgprs[2][2] == 0xdeadbeefu,
+                    "expected inactive ds dual-data return preservation")) {
+          std::cerr << test_case.opcode << ' ' << mode << '\n';
+          return false;
+        }
+        if (!Expect(state.vgprs[5][2] == 0xcafebabeu,
+                    "expected inactive ds dual-data read preservation")) {
+          std::cerr << test_case.opcode << ' ' << mode << '\n';
+          return false;
+        }
+        return true;
+      };
+  const std::array<DsDualDataCase, 7> kDsDualDataCases = {{
+      {"DS_MSKOR_B32",
+       false,
+       {0xaaaa5555u, 0xf0f0f0f0u, 0x12345678u},
+       {0x00ff00ffu, 0x0f0f0000u, 0xffffffffu},
+       {0x11002200u, 0x00001234u, 0x00000009u},
+       {0xbb007700u, 0xf0f0f2f4u, 0x00000009u}},
+      {"DS_CMPST_B32",
+       false,
+       {10u, 20u, 30u},
+       {10u, 5u, 30u},
+       {111u, 222u, 333u},
+       {111u, 20u, 333u}},
+      {"DS_CMPST_F32",
+       false,
+       {FloatBits(1.0f), FloatBits(2.5f), FloatBits(-0.0f)},
+       {FloatBits(1.0f), FloatBits(3.0f), FloatBits(0.0f)},
+       {FloatBits(4.0f), FloatBits(5.0f), FloatBits(6.0f)},
+       {FloatBits(4.0f), FloatBits(2.5f), FloatBits(6.0f)}},
+      {"DS_MSKOR_RTN_B32",
+       true,
+       {0xaaaa5555u, 0xf0f0f0f0u, 0x12345678u},
+       {0x00ff00ffu, 0x0f0f0000u, 0xffffffffu},
+       {0x11002200u, 0x00001234u, 0x00000009u},
+       {0xbb007700u, 0xf0f0f2f4u, 0x00000009u}},
+      {"DS_CMPST_RTN_B32",
+       true,
+       {10u, 20u, 30u},
+       {10u, 5u, 30u},
+       {111u, 222u, 333u},
+       {111u, 20u, 333u}},
+      {"DS_CMPST_RTN_F32",
+       true,
+       {FloatBits(1.0f), FloatBits(2.5f), FloatBits(-0.0f)},
+       {FloatBits(1.0f), FloatBits(3.0f), FloatBits(0.0f)},
+       {FloatBits(4.0f), FloatBits(5.0f), FloatBits(6.0f)},
+       {FloatBits(4.0f), FloatBits(2.5f), FloatBits(6.0f)}},
+      {"DS_WRAP_RTN_B32",
+       true,
+       {0u, 5u, 12u},
+       {111u, 222u, 333u},
+       {7u, 8u, 10u},
+       {111u, 4u, 333u}},
+  }};
+  for (const DsDualDataCase& test_case : kDsDualDataCases) {
+    if (!run_ds_dual_data_case(test_case, false) ||
+        !run_ds_dual_data_case(test_case, true)) {
       return 1;
     }
   }

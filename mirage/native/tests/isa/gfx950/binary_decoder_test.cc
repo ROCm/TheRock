@@ -6080,12 +6080,113 @@ int main() {
     }
   }
 
-  const std::array<std::string_view, 15> kReturningDsOpcodes = {
+  const std::array<std::string_view, 3> kDsDualDataOpcodes = {
+      "DS_MSKOR_B32",
+      "DS_CMPST_B32",
+      "DS_CMPST_F32",
+  };
+  for (std::string_view opcode_name : kDsDualDataOpcodes) {
+    const auto opcode = FindDefaultEncodingOpcode(opcode_name, "ENC_DS");
+    if (!Expect(opcode.has_value(), "expected ds dual-data opcode lookup")) {
+      std::cerr << opcode_name << '\n';
+      return 1;
+    }
+
+    const auto encoded = MakeDs(*opcode, 0, 1, 2, 3, 6);
+    const std::vector<std::uint32_t> encoded_program = {
+        encoded[0], encoded[1], MakeSopp(1),
+    };
+    decoded_program.clear();
+    if (!Expect(decoder.DecodeProgram(encoded_program, &decoded_program,
+                                      &error_message),
+                error_message.c_str()) ||
+        !Expect(decoded_program.size() == 2,
+                "expected ds dual-data decode program size") ||
+        !Expect(decoded_program[0].opcode == opcode_name,
+                "expected ds dual-data opcode decode") ||
+        !Expect(decoded_program[0].operand_count == 4,
+                "expected ds dual-data operand count") ||
+        !Expect(decoded_program[0].operands[0].kind == OperandKind::kVgpr,
+                "expected ds dual-data address kind") ||
+        !Expect(decoded_program[0].operands[0].index == 1,
+                "expected ds dual-data address index") ||
+        !Expect(decoded_program[0].operands[1].kind == OperandKind::kVgpr,
+                "expected ds dual-data data0 kind") ||
+        !Expect(decoded_program[0].operands[1].index == 2,
+                "expected ds dual-data data0 index") ||
+        !Expect(decoded_program[0].operands[2].kind == OperandKind::kVgpr,
+                "expected ds dual-data data1 kind") ||
+        !Expect(decoded_program[0].operands[2].index == 3,
+                "expected ds dual-data data1 index") ||
+        !Expect(decoded_program[0].operands[3].kind == OperandKind::kImm32,
+                "expected ds dual-data offset kind") ||
+        !Expect(decoded_program[0].operands[3].imm32 == 6u,
+                "expected ds dual-data offset value")) {
+      std::cerr << opcode_name << '\n';
+      return 1;
+    }
+  }
+
+  const std::array<std::string_view, 4> kDsDualDataReturnOpcodes = {
+      "DS_MSKOR_RTN_B32",
+      "DS_CMPST_RTN_B32",
+      "DS_CMPST_RTN_F32",
+      "DS_WRAP_RTN_B32",
+  };
+  for (std::string_view opcode_name : kDsDualDataReturnOpcodes) {
+    const auto opcode = FindDefaultEncodingOpcode(opcode_name, "ENC_DS");
+    if (!Expect(opcode.has_value(),
+                "expected ds dual-data return opcode lookup")) {
+      std::cerr << opcode_name << '\n';
+      return 1;
+    }
+
+    const auto encoded = MakeDs(*opcode, 9, 1, 2, 3, 7);
+    const std::vector<std::uint32_t> encoded_program = {
+        encoded[0], encoded[1], MakeSopp(1),
+    };
+    decoded_program.clear();
+    if (!Expect(decoder.DecodeProgram(encoded_program, &decoded_program,
+                                      &error_message),
+                error_message.c_str()) ||
+        !Expect(decoded_program.size() == 2,
+                "expected ds dual-data return decode program size") ||
+        !Expect(decoded_program[0].opcode == opcode_name,
+                "expected ds dual-data return opcode decode") ||
+        !Expect(decoded_program[0].operand_count == 5,
+                "expected ds dual-data return operand count") ||
+        !Expect(decoded_program[0].operands[0].kind == OperandKind::kVgpr,
+                "expected ds dual-data return destination kind") ||
+        !Expect(decoded_program[0].operands[0].index == 9,
+                "expected ds dual-data return destination index") ||
+        !Expect(decoded_program[0].operands[1].kind == OperandKind::kVgpr,
+                "expected ds dual-data return address kind") ||
+        !Expect(decoded_program[0].operands[1].index == 1,
+                "expected ds dual-data return address index") ||
+        !Expect(decoded_program[0].operands[2].kind == OperandKind::kVgpr,
+                "expected ds dual-data return data0 kind") ||
+        !Expect(decoded_program[0].operands[2].index == 2,
+                "expected ds dual-data return data0 index") ||
+        !Expect(decoded_program[0].operands[3].kind == OperandKind::kVgpr,
+                "expected ds dual-data return data1 kind") ||
+        !Expect(decoded_program[0].operands[3].index == 3,
+                "expected ds dual-data return data1 index") ||
+        !Expect(decoded_program[0].operands[4].kind == OperandKind::kImm32,
+                "expected ds dual-data return offset kind") ||
+        !Expect(decoded_program[0].operands[4].imm32 == 7u,
+                "expected ds dual-data return offset value")) {
+      std::cerr << opcode_name << '\n';
+      return 1;
+    }
+  }
+
+  const std::array<std::string_view, 16> kReturningDsOpcodes = {
       "DS_ADD_RTN_U32", "DS_SUB_RTN_U32", "DS_RSUB_RTN_U32",
       "DS_INC_RTN_U32", "DS_DEC_RTN_U32", "DS_MIN_RTN_I32",
       "DS_MAX_RTN_I32", "DS_MIN_RTN_U32", "DS_MAX_RTN_U32",
       "DS_AND_RTN_B32", "DS_OR_RTN_B32",  "DS_XOR_RTN_B32",
-      "DS_ADD_RTN_F32", "DS_MIN_RTN_F32", "DS_MAX_RTN_F32",
+      "DS_WRXCHG_RTN_B32", "DS_ADD_RTN_F32", "DS_MIN_RTN_F32",
+      "DS_MAX_RTN_F32",
   };
   for (std::string_view opcode_name : kReturningDsOpcodes) {
     const auto opcode = FindDefaultEncodingOpcode(opcode_name, "ENC_DS");

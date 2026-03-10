@@ -1,15 +1,15 @@
 # GFX950 Coverage Report
 
 - Catalog instructions: 1242
-- Semantic support: 554 (44.6%)
-- Raw decode support: 577 (46.5% of total, 56.9% of measured)
+- Semantic support: 562 (45.2%)
+- Raw decode support: 585 (47.1% of total, 57.7% of measured)
 - Raw decode measurable instructions: 1014
 
 ## Gaps
 
 - Semantic-only coverage without measured decode: 36
 - Decode-only without semantic support: 59
-- Missing both semantic and decode support: 629
+- Missing both semantic and decode support: 621
 
 ## Unmeasured Encoding Families
 
@@ -91,19 +91,11 @@
 
 ## Missing-Both Sample
 
-- `DS_MSKOR_B32`
-- `DS_CMPST_B32`
-- `DS_CMPST_F32`
 - `DS_PK_ADD_F16`
 - `DS_PK_ADD_BF16`
 - `DS_WRITE_ADDTID_B32`
-- `DS_MSKOR_RTN_B32`
-- `DS_WRXCHG_RTN_B32`
 - `DS_WRXCHG2_RTN_B32`
 - `DS_WRXCHG2ST64_RTN_B32`
-- `DS_CMPST_RTN_B32`
-- `DS_CMPST_RTN_F32`
-- `DS_WRAP_RTN_B32`
 - `DS_SWIZZLE_B32`
 - `DS_PERMUTE_B32`
 - `DS_BPERMUTE_B32`
@@ -116,3 +108,11 @@
 - `DS_MAX_I64`
 - `DS_MIN_U64`
 - `DS_MAX_U64`
+- `DS_AND_B64`
+- `DS_OR_B64`
+- `DS_XOR_B64`
+- `DS_MSKOR_B64`
+- `DS_WRITE_B64`
+- `DS_WRITE2_B64`
+- `DS_WRITE2ST64_B64`
+- `DS_CMPST_B64`
