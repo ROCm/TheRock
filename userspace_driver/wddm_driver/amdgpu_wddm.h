@@ -32,6 +32,7 @@ typedef enum _AMDGPU_ESCAPE_CODE {
     AMDGPU_ESCAPE_ALLOC_DMA         = 0x0030,
     AMDGPU_ESCAPE_FREE_DMA          = 0x0031,
     AMDGPU_ESCAPE_MAP_VRAM          = 0x0040,
+    AMDGPU_ESCAPE_READ_VRAM         = 0x0041,
     AMDGPU_ESCAPE_REGISTER_EVENT    = 0x0050,
     AMDGPU_ESCAPE_ENABLE_MSI        = 0x0051,
     AMDGPU_ESCAPE_GET_IOMMU_INFO    = 0x0060,
@@ -119,6 +120,21 @@ typedef struct _AMDGPU_ESCAPE_MAP_VRAM_DATA {
     PVOID       MappedAddress;
     PVOID       MappingHandle;
 } AMDGPU_ESCAPE_MAP_VRAM_DATA;
+
+/*
+ * READ_VRAM: Read VRAM data through driver (avoids user-mode mapping).
+ * The driver maps the VRAM BAR region into kernel space, copies the data
+ * into the escape buffer, and unmaps. Data[] is a flexible array at the
+ * end of the struct. Caller must pass PrivateDriverDataSize =
+ * sizeof(header fields) + requested Length.
+ */
+#define AMDGPU_READ_VRAM_HEADER_SIZE 32  /* Header(12) + pad(4) + Offset(8) + Length(8) */
+typedef struct _AMDGPU_ESCAPE_READ_VRAM_DATA {
+    AMDGPU_ESCAPE_HEADER Header;
+    ULONGLONG   Offset;     /* Byte offset into VRAM BAR */
+    ULONGLONG   Length;     /* Number of bytes to read */
+    UCHAR       Data[1];    /* Flexible: actual data follows */
+} AMDGPU_ESCAPE_READ_VRAM_DATA;
 
 typedef struct _AMDGPU_ESCAPE_REGISTER_EVENT_DATA {
     AMDGPU_ESCAPE_HEADER Header;

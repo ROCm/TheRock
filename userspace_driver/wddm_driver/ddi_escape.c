@@ -363,6 +363,62 @@ EscapeMapVram(
 }
 
 static NTSTATUS
+EscapeReadVram(
+    _In_ AMDGPU_ADAPTER *pAdapter,
+    _Inout_ AMDGPU_ESCAPE_READ_VRAM_DATA *pData,
+    _In_ ULONG BufferSize
+    )
+{
+    ULONG VramBarIndex = 0;
+    ULONGLONG Offset = pData->Offset;
+    ULONGLONG Length = pData->Length;
+    PHYSICAL_ADDRESS PhysAddr;
+    PVOID KernelVa;
+    ULONG DataOffset;
+
+    /* Find VRAM BAR (largest memory BAR) */
+    {
+        ULONG i;
+        ULONGLONG MaxLen = 0;
+        for (i = 0; i < pAdapter->NumBars; i++) {
+            if (pAdapter->Bars[i].IsMemory &&
+                pAdapter->Bars[i].Length > MaxLen) {
+                MaxLen = pAdapter->Bars[i].Length;
+                VramBarIndex = i;
+            }
+        }
+    }
+
+    if (VramBarIndex == 0 && pAdapter->NumBars < 2)
+        return STATUS_DEVICE_CONFIGURATION_ERROR;
+
+    if (Offset + Length > pAdapter->Bars[VramBarIndex].Length)
+        return STATUS_INVALID_PARAMETER;
+
+    /* Limit single read to 64KB */
+    if (Length > 64 * 1024)
+        return STATUS_INVALID_PARAMETER;
+
+    /* Check buffer has space for the data */
+    DataOffset = FIELD_OFFSET(AMDGPU_ESCAPE_READ_VRAM_DATA, Data);
+    if (BufferSize < DataOffset + (ULONG)Length)
+        return STATUS_BUFFER_TOO_SMALL;
+
+    PhysAddr.QuadPart =
+        pAdapter->Bars[VramBarIndex].PhysicalAddress.QuadPart + Offset;
+
+    KernelVa = MmMapIoSpace(PhysAddr, (SIZE_T)Length, MmNonCached);
+    if (KernelVa == NULL)
+        return STATUS_INSUFFICIENT_RESOURCES;
+
+    /* Copy VRAM data to the escape buffer */
+    RtlCopyMemory(pData->Data, KernelVa, (SIZE_T)Length);
+
+    MmUnmapIoSpace(KernelVa, (SIZE_T)Length);
+    return STATUS_SUCCESS;
+}
+
+static NTSTATUS
 EscapeRegisterEvent(
     _In_ AMDGPU_ADAPTER *pAdapter,
     _Inout_ AMDGPU_ESCAPE_REGISTER_EVENT_DATA *pData
@@ -557,6 +613,15 @@ AmdGpuEscape(
         else
             Status = EscapeMapVram(pAdapter,
                 (AMDGPU_ESCAPE_MAP_VRAM_DATA *)pEscape->pPrivateDriverData);
+        break;
+
+    case AMDGPU_ESCAPE_READ_VRAM:
+        if (pEscape->PrivateDriverDataSize < FIELD_OFFSET(AMDGPU_ESCAPE_READ_VRAM_DATA, Data))
+            Status = STATUS_BUFFER_TOO_SMALL;
+        else
+            Status = EscapeReadVram(pAdapter,
+                (AMDGPU_ESCAPE_READ_VRAM_DATA *)pEscape->pPrivateDriverData,
+                pEscape->PrivateDriverDataSize);
         break;
 
     case AMDGPU_ESCAPE_REGISTER_EVENT:
