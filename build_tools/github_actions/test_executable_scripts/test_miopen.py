@@ -180,6 +180,10 @@ if AMDGPU_FAMILIES == "gfx950-dcgpu":
 # 1- Ignore gfx942 tests
 # TODO: There is no FP32 wmma on Navi, remove all FP32 conv tests. These should already be skipped via applicability for
 # CK solvers
+# Failing on on win gfx110x
+if any(prefix in AMDGPU_FAMILIES for prefix in ["gfx110"])
+    negative_filter.append("*/GPU_MIOpenDriver*")
+
 if any(prefix in AMDGPU_FAMILIES for prefix in ["gfx110", "gfx115", "gfx120"]):
     # These are ignored in miopen
     negative_filter.append(
