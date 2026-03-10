@@ -1,12 +1,6 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-if(WIN32)
-  set(LLVM_LINK_LLVM_DYLIB OFF)
-else()
-  set(LLVM_LINK_LLVM_DYLIB ON)
-endif()
-
 set(COMGR_DISABLE_SPIRV OFF)
 
 # Enable ASAN for Comgr when THEROCK_SANITIZER is set to ASAN or HOST_ASAN
