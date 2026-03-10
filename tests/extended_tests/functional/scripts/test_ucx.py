@@ -1,11 +1,13 @@
-"""
-Unified Communication X (UCX) ROCm integration tests
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
 
-Clones, builds and runs UCX gtest, collects results, and uploads to results API.
+"""
+Unified Communication X (UCX) ROCm integration tests.
+
+Runs the pre-built UCX gtest binary to validate ROCm integration.
 """
 
 import json
-import os
 import sys
 from pathlib import Path
 from typing import Any, Dict, List
@@ -20,87 +22,30 @@ from utils.exceptions import TestExecutionError
 class UcxTest(FunctionalBase):
     """UCX ROCm integration tests."""
 
-    GIT_URL = "https://github.com/openucx/ucx"
-    GIT_BRANCH = "master"
     GTEST_FILTER = "*rocm*"
 
     def __init__(self):
         super().__init__(test_name="ucx", display_name="UCX Test")
 
         self.results_json = self.script_dir / "ucx_results.json"
-        # Resolve to absolute path (required by configure --prefix)
-        self.ucx_dir = self.rocm_path / "bin" / "ucx"
-        self.ucx_build_dir = self.ucx_dir / "build"
 
-    def _build_ucx(self) -> None:
-        """Build UCX with ROCm support."""
-        log.info("Building UCX with ROCm support")
-
-        build_steps = [
-            {
-                "name": "autogen",
-                "cmd": ["./autogen.sh"],
-                "cwd": self.ucx_dir,
-            },
-            {
-                "name": "mkdir build",
-                "cmd": ["mkdir", "-p", "build"],
-                "cwd": self.ucx_dir,
-            },
-            {
-                "name": "configure",
-                "cmd": [
-                    "../contrib/configure-release",
-                    "--disable-logging",
-                    "--disable-debug",
-                    "--disable-assertions",
-                    "--enable-params-check",
-                    f"--prefix={self.ucx_build_dir}",
-                    "--without-knem",
-                    "--without-cuda",
-                    f"--with-rocm={self.rocm_path}",
-                    "--enable-gtest",
-                    "--without-gdrcopy",
-                    "--without-java",
-                ],
-                "cwd": self.ucx_build_dir,
-            },
-            {
-                "name": "make",
-                "cmd": ["make", f"-j{os.cpu_count()}"],
-                "cwd": self.ucx_build_dir,
-            },
-            {
-                "name": "make install",
-                "cmd": ["make", f"-j{os.cpu_count()}", "install"],
-                "cwd": self.ucx_build_dir,
-            },
-        ]
-
-        for step in build_steps:
-            log.info(f"Running build step: {step['name']}")
-
-            return_code = self.execute_command(step["cmd"], cwd=step["cwd"])
-
-            if return_code != 0:
-                raise TestExecutionError(f"UCX build failed at step '{step['name']}'")
-
-        log.info("UCX build completed")
+        # UCX build directory (populated by TheRock build system)
+        self.ucx_build_dir = (
+            self.therock_dir / "external-builds" / "ucx" / "ucx" / "build"
+        )
 
     def run_tests(self) -> None:
-        """Clone, build and run UCX gtest, save results to JSON."""
+        """Run UCX gtest using the pre-built binary, save results to JSON."""
         log.info(f"Running {self.display_name}")
 
-        # Clone and build UCX
-        self.clone_repository(
-            git_url=self.GIT_URL,
-            branch=self.GIT_BRANCH,
-            target_dir=self.ucx_dir,
-        )
-        self._build_ucx()
-
-        # Run gtest
+        # Locate pre-built UCX gtest binary
         gtest_path = self.ucx_build_dir / "test" / "gtest" / "gtest"
+        if not gtest_path.exists():
+            raise TestExecutionError(
+                f"UCX gtest binary not found at {gtest_path}\n"
+                "Ensure TheRock was built with UCX gtest enabled"
+            )
+        log.info(f"Using UCX gtest binary: {gtest_path}")
 
         cmd = [
             str(gtest_path),
@@ -110,7 +55,8 @@ class UcxTest(FunctionalBase):
 
         # Set LD_LIBRARY_PATH to find ROCm libraries
         env = self.get_rocm_env()
-        return_code = self.execute_command(cmd, cwd=self.ucx_build_dir, env=env)
+
+        return_code, output = self.execute_command(cmd, cwd=self.ucx_build_dir, env=env)
 
         if return_code != 0:
             raise TestExecutionError(
