@@ -79,21 +79,28 @@ The `comp-summary.*` files appear both in the `therock-build-prof/` subdirectory
 (uploaded as part of the recursive directory upload) and at the log root
 (uploaded explicitly for direct linking).
 
-### Bucket selection
+### Bucket selection and authentication
 
 The bucket is determined by `_retrieve_bucket_info()` in `workflow_outputs.py`.
 
 #### Buckets
 
-| Bucket                                                                                     | Used for                                                                      | Upload auth                                         |
-| ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- | --------------------------------------------------- |
-| [`therock-ci-artifacts`](https://therock-ci-artifacts.s3.amazonaws.com/)                   | CI runs on `ROCm/TheRock`                                                     | `therock-ci` role (OIDC)                            |
-| [`therock-ci-artifacts-external`](https://therock-ci-artifacts-external.s3.amazonaws.com/) | CI runs from forks and other repos<br>(e.g. `rocm-libraries`, `rocm-systems`) | Runner baseline credentials (no extra setup needed) |
-| [`therock-dev-artifacts`](https://therock-dev-artifacts.s3.amazonaws.com/)                 | Release type `dev`                                                            | `therock-dev` role (OIDC)                           |
-| [`therock-nightly-artifacts`](https://therock-nightly-artifacts.s3.amazonaws.com/)         | Release type `nightly`                                                        | `therock-nightly` role (OIDC)                       |
-| [`therock-prerelease-artifacts`](https://therock-prerelease-artifacts.s3.amazonaws.com/)   | Release type `prerelease`                                                     | `therock-prerelease` role (OIDC)                    |
-| [`therock-artifacts`](https://therock-artifacts.s3.amazonaws.com/)                         | Pre-cutover `ROCm/TheRock` runs (legacy)                                      | —                                                   |
-| [`therock-artifacts-external`](https://therock-artifacts-external.s3.amazonaws.com/)       | Pre-cutover fork/external runs (legacy)                                       | —                                                   |
+Currently used buckets:
+
+| Bucket                                                                                     | Used for                                                                      | Upload authentication methods                                                                               |
+| ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| [`therock-ci-artifacts`](https://therock-ci-artifacts.s3.amazonaws.com/)                   | CI runs on `ROCm/TheRock`                                                     | <ul><li>`therock-ci` role (OIDC)</li></ul>                                                                  |
+| [`therock-ci-artifacts-external`](https://therock-ci-artifacts-external.s3.amazonaws.com/) | CI runs from forks and other repos<br>(e.g. `rocm-libraries`, `rocm-systems`) | <ul><li>`therock-ci-external` role (OIDC)</li><li>Runner base credentials (no extra setup needed)</li></ul> |
+| [`therock-dev-artifacts`](https://therock-dev-artifacts.s3.amazonaws.com/)                 | Release type `dev`                                                            | <ul><li>`therock-dev` role (OIDC)</li></ul>                                                                 |
+| [`therock-nightly-artifacts`](https://therock-nightly-artifacts.s3.amazonaws.com/)         | Release type `nightly`                                                        | <ul><li>`therock-nightly` role (OIDC)</li></ul>                                                             |
+| [`therock-prerelease-artifacts`](https://therock-prerelease-artifacts.s3.amazonaws.com/)   | Release type `prerelease`                                                     | <ul><li>`therock-prerelease` role (OIDC)</li></ul>                                                          |
+
+Legacy buckets (no longer used):
+
+| Legacy bucket                                                                        | Used for                             | Upload auth                                                |
+| ------------------------------------------------------------------------------------ | ------------------------------------ | ---------------------------------------------------------- |
+| [`therock-artifacts`](https://therock-artifacts.s3.amazonaws.com/)                   | Old CI runs in `ROCm/TheRock` runs   | <ul><li>`therock-artifacts` role (OIDC)</li></ul>          |
+| [`therock-artifacts-external`](https://therock-artifacts-external.s3.amazonaws.com/) | Old CI runs in forks and other repos | <ul><li>`therock-artifacts-external` role (OIDC)</li></ul> |
 
 **Authentication:** Our CI runners come with baseline credentials that allow
 uploading to `therock-ci-artifacts-external`. To upload to any other bucket,
