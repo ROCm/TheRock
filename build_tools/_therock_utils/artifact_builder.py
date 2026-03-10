@@ -113,11 +113,8 @@ class ArtifactDescriptor:
         ]
     )
 
-    def __init__(self, record: dict, *, artifact_name: str):
-        if not artifact_name:
-            raise ValueError("artifact_name is required")
+    def __init__(self, record: dict):
         _check_allowed_keys(record, ArtifactDescriptor.ALLOWED_KEYS)
-        self.artifact_name = artifact_name
         self.components: dict[str, "ComponentDescriptor"] = {}
 
         # Handle options.
@@ -139,21 +136,17 @@ class ArtifactDescriptor:
             if not isinstance(components_record, dict):
                 raise ValueError(f"Expected 'components' to be a table")
             for name, component_record in components_record.items():
-                component = ComponentDescriptor(
-                    name, component_record, artifact_name=artifact_name
-                )
+                component = ComponentDescriptor(name, component_record)
                 self.components[name] = component
 
         # Add an empty component for each default component, since they form a
         # chain of extensions that must exist.
         for default_name in ComponentDefaults.ALL.keys():
             if default_name not in self.components:
-                self.components[default_name] = ComponentDescriptor(
-                    default_name, {}, artifact_name=artifact_name
-                )
+                self.components[default_name] = ComponentDescriptor(default_name, {})
 
     @staticmethod
-    def load_toml_file(p: Path, *, artifact_name: str) -> "ArtifactDescriptor":
+    def load_toml_file(p: Path) -> "ArtifactDescriptor":
         try:
             import tomllib
         except ModuleNotFoundError:
@@ -162,7 +155,7 @@ class ArtifactDescriptor:
         with open(p, "rb") as f:
             kwdict = tomllib.load(f)
         try:
-            return ArtifactDescriptor(kwdict or {}, artifact_name=artifact_name)
+            return ArtifactDescriptor(kwdict or {})
         except ValueError as e:
             raise ValueError(f"{str(e)} (while loading descriptor from {p})")
         except Exception as e:
@@ -182,9 +175,8 @@ class OptionsDescriptor:
 class ComponentDescriptor:
     ALLOWED_KEYS = set(["extends"])
 
-    def __init__(self, name, record: dict, *, artifact_name: str):
+    def __init__(self, name, record: dict):
         self.name = name
-        self.artifact_name = artifact_name
         self.basedirs: dict[str, ComponentBasedirDescriptor] = {}
         # All dict-valued fields are basedir_records. Others are fields.
         basedir_records: dict[str, dict] = {}
@@ -206,7 +198,7 @@ class ComponentDescriptor:
         # Instantiate all children.
         for basedir_relpath, basedir_record in basedir_records.items():
             self.basedirs[basedir_relpath] = ComponentBasedirDescriptor(
-                self, basedir_relpath, basedir_record, artifact_name=artifact_name
+                self, basedir_relpath, basedir_record
             )
 
     @staticmethod
@@ -233,12 +225,7 @@ class ComponentBasedirDescriptor:
     )
 
     def __init__(
-        self,
-        component: ComponentDescriptor,
-        basedir_relpath: str,
-        record: dict,
-        *,
-        artifact_name: str,
+        self, component: ComponentDescriptor, basedir_relpath: str, record: dict
     ):
         _check_allowed_keys(record, ComponentBasedirDescriptor.ALLOWED_KEYS)
         self.basedir_relpath = basedir_relpath
@@ -249,17 +236,10 @@ class ComponentBasedirDescriptor:
         includes = _dup_list_or_str(record.get("include"))
         if use_default_patterns:
             includes.extend(defaults.includes)
-
         excludes = _dup_list_or_str(record.get("exclude"))
         if use_default_patterns:
             excludes.extend(defaults.excludes)
         force_includes = _dup_list_or_str(record.get("force_include"))
-
-        # Add kpack patterns to force_includes so they don't interfere with
-        # the normal include pattern matching. If added to includes, they would
-        # cause files to be excluded when includes is otherwise empty.
-        force_includes.append(f".kpack/{artifact_name}_{component.name}.kpm")
-        force_includes.append(f".kpack/{artifact_name}_{component.name}_*.kpack")
 
         self.predicate = MatchPredicate(
             includes=includes,

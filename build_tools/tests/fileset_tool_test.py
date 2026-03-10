@@ -114,8 +114,6 @@ class FilesetToolTest(unittest.TestCase):
                 "artifact",
                 "--descriptor",
                 descriptor_file,
-                "--artifact-name",
-                "test",
                 "--root-dir",
                 input_dir,
                 "doc",
