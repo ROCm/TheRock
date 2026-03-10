@@ -39,6 +39,7 @@ on:
       rocm_package_version:
         description: ROCm package version (primarily for Python packages).
         value: ${{ jobs.setup.outputs.rocm_package_version }}
+
 permissions:
   contents: read
 
