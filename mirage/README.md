@@ -132,7 +132,10 @@ internal-opcode entrypoints for a small subset of ops: `S_MOV_B32`,
 `DS_NOP`, `DS_WRITE_{B8,B16,B32}`, `DS_READ_B32`,
 `DS_{ADD,SUB,RSUB,INC,DEC,MIN,MAX}_{U32}`,
 `DS_{MIN,MAX}_I32`, `DS_{AND,OR,XOR}_B32`,
-`DS_{ADD,MIN,MAX}_F32`, `FLAT_LOAD_DWORD`,
+`DS_{ADD,MIN,MAX}_F32`,
+`DS_{ADD,SUB,RSUB,INC,DEC}_RTN_U32`,
+`DS_{MIN,MAX}_RTN_{I32,U32,F32}`,
+`DS_{AND,OR,XOR}_RTN_B32`, `DS_ADD_RTN_F32`, `FLAT_LOAD_DWORD`,
 `FLAT_LOAD/STORE_{U,S}{BYTE,SHORT}`, `FLAT_LOAD/STORE_DWORDX{2,3,4}`,
 `FLAT_STORE_DWORD`, `GLOBAL_LOAD/STORE_{U,S}{BYTE,SHORT}`,
 `GLOBAL_LOAD/STORE_DWORD`, `GLOBAL_LOAD/STORE_DWORDX{2,3,4}`, the full
@@ -162,7 +165,11 @@ narrow `ENC_VOP3` forms for `V_MUL_LO_U32`, `V_MUL_HI_{U32,I32}`,
 including inline integer constants, single-dword literals, signed relative
 branch offsets, normalized `SOPK` immediate forms, return and no-return global
 atomic decode via `SC0`, and the first 64-bit instruction decode paths for
-scalar and vector memory traffic, plus special scalar sources `SRC_VCCZ`,
+scalar and vector memory traffic, plus DS return-atomic decode for
+`DS_{ADD,SUB,RSUB,INC,DEC}_RTN_U32`,
+`DS_{MIN,MAX}_RTN_{I32,U32,F32}`,
+`DS_{AND,OR,XOR}_RTN_B32`, `DS_ADD_RTN_F32`, and special scalar sources
+`SRC_VCCZ`,
 `SRC_EXECZ`, and `SRC_SCC`.
 
 The scalar execution model also treats `EXEC` as the architectural pair

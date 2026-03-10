@@ -1,15 +1,15 @@
 # GFX950 Coverage Report
 
 - Catalog instructions: 1242
-- Semantic support: 531 (42.8%)
-- Raw decode support: 554 (44.6% of total, 54.6% of measured)
+- Semantic support: 546 (44.0%)
+- Raw decode support: 569 (45.8% of total, 56.1% of measured)
 - Raw decode measurable instructions: 1014
 
 ## Gaps
 
 - Semantic-only coverage without measured decode: 36
 - Decode-only without semantic support: 59
-- Missing both semantic and decode support: 652
+- Missing both semantic and decode support: 637
 
 ## Unmeasured Encoding Families
 
@@ -99,20 +99,20 @@
 - `DS_PK_ADD_F16`
 - `DS_PK_ADD_BF16`
 - `DS_WRITE_ADDTID_B32`
-- `DS_ADD_RTN_U32`
-- `DS_SUB_RTN_U32`
-- `DS_RSUB_RTN_U32`
-- `DS_INC_RTN_U32`
-- `DS_DEC_RTN_U32`
-- `DS_MIN_RTN_I32`
-- `DS_MAX_RTN_I32`
-- `DS_MIN_RTN_U32`
-- `DS_MAX_RTN_U32`
-- `DS_AND_RTN_B32`
-- `DS_OR_RTN_B32`
-- `DS_XOR_RTN_B32`
 - `DS_MSKOR_RTN_B32`
 - `DS_WRXCHG_RTN_B32`
 - `DS_WRXCHG2_RTN_B32`
 - `DS_WRXCHG2ST64_RTN_B32`
 - `DS_CMPST_RTN_B32`
+- `DS_CMPST_RTN_F32`
+- `DS_WRAP_RTN_B32`
+- `DS_READ2_B32`
+- `DS_READ2ST64_B32`
+- `DS_READ_I8`
+- `DS_READ_U8`
+- `DS_READ_I16`
+- `DS_READ_U16`
+- `DS_SWIZZLE_B32`
+- `DS_PERMUTE_B32`
+- `DS_BPERMUTE_B32`
+- `DS_ADD_U64`

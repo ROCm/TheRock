@@ -231,7 +231,40 @@ bool IsSupportedDsOpcode(std::string_view opcode_name) {
          opcode_name == "DS_OR_B32" || opcode_name == "DS_XOR_B32" ||
          opcode_name == "DS_ADD_F32" || opcode_name == "DS_MIN_F32" ||
          opcode_name == "DS_MAX_F32" || opcode_name == "DS_WRITE_B8" ||
-         opcode_name == "DS_WRITE_B16";
+         opcode_name == "DS_WRITE_B16" ||
+         opcode_name == "DS_ADD_RTN_U32" ||
+         opcode_name == "DS_SUB_RTN_U32" ||
+         opcode_name == "DS_RSUB_RTN_U32" ||
+         opcode_name == "DS_INC_RTN_U32" ||
+         opcode_name == "DS_DEC_RTN_U32" ||
+         opcode_name == "DS_MIN_RTN_I32" ||
+         opcode_name == "DS_MAX_RTN_I32" ||
+         opcode_name == "DS_MIN_RTN_U32" ||
+         opcode_name == "DS_MAX_RTN_U32" ||
+         opcode_name == "DS_AND_RTN_B32" ||
+         opcode_name == "DS_OR_RTN_B32" ||
+         opcode_name == "DS_XOR_RTN_B32" ||
+         opcode_name == "DS_ADD_RTN_F32" ||
+         opcode_name == "DS_MIN_RTN_F32" ||
+         opcode_name == "DS_MAX_RTN_F32";
+}
+
+bool IsDsReturnOpcode(std::string_view opcode_name) {
+  return opcode_name == "DS_ADD_RTN_U32" ||
+         opcode_name == "DS_SUB_RTN_U32" ||
+         opcode_name == "DS_RSUB_RTN_U32" ||
+         opcode_name == "DS_INC_RTN_U32" ||
+         opcode_name == "DS_DEC_RTN_U32" ||
+         opcode_name == "DS_MIN_RTN_I32" ||
+         opcode_name == "DS_MAX_RTN_I32" ||
+         opcode_name == "DS_MIN_RTN_U32" ||
+         opcode_name == "DS_MAX_RTN_U32" ||
+         opcode_name == "DS_AND_RTN_B32" ||
+         opcode_name == "DS_OR_RTN_B32" ||
+         opcode_name == "DS_XOR_RTN_B32" ||
+         opcode_name == "DS_ADD_RTN_F32" ||
+         opcode_name == "DS_MIN_RTN_F32" ||
+         opcode_name == "DS_MAX_RTN_F32";
 }
 
 }  // namespace
@@ -591,6 +624,21 @@ bool Gfx950BinaryDecoder::DecodeDs(std::span<const std::uint32_t> words,
     }
     *instruction = DecodedInstruction::ThreeOperand(instruction_name, dst, addr,
                                                     offset);
+  } else if (IsDsReturnOpcode(opcode_name)) {
+    InstructionOperand dst;
+    if (!DecodeVectorDestination(
+            static_cast<std::uint32_t>(ExtractBits(instruction_word, 56, 8)),
+            &dst, error_message)) {
+      return false;
+    }
+    InstructionOperand data;
+    if (!DecodeVectorRegisterSource(
+            static_cast<std::uint32_t>(ExtractBits(instruction_word, 40, 8)),
+            &data, error_message)) {
+      return false;
+    }
+    *instruction = DecodedInstruction::FourOperand(instruction_name, dst, addr,
+                                                   data, offset);
   } else {
     InstructionOperand data;
     if (!DecodeVectorRegisterSource(

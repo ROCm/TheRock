@@ -5940,6 +5940,55 @@ int main() {
     }
   }
 
+  const std::array<std::string_view, 15> kReturningDsOpcodes = {
+      "DS_ADD_RTN_U32", "DS_SUB_RTN_U32", "DS_RSUB_RTN_U32",
+      "DS_INC_RTN_U32", "DS_DEC_RTN_U32", "DS_MIN_RTN_I32",
+      "DS_MAX_RTN_I32", "DS_MIN_RTN_U32", "DS_MAX_RTN_U32",
+      "DS_AND_RTN_B32", "DS_OR_RTN_B32",  "DS_XOR_RTN_B32",
+      "DS_ADD_RTN_F32", "DS_MIN_RTN_F32", "DS_MAX_RTN_F32",
+  };
+  for (std::string_view opcode_name : kReturningDsOpcodes) {
+    const auto opcode = FindDefaultEncodingOpcode(opcode_name, "ENC_DS");
+    if (!Expect(opcode.has_value(), "expected returning ds opcode lookup")) {
+      std::cerr << opcode_name << '\n';
+      return 1;
+    }
+
+    const auto encoded = MakeDs(*opcode, 9, 1, 2, 0, 7);
+    const std::vector<std::uint32_t> encoded_program = {
+        encoded[0], encoded[1], MakeSopp(1),
+    };
+    decoded_program.clear();
+    if (!Expect(decoder.DecodeProgram(encoded_program, &decoded_program,
+                                      &error_message),
+                error_message.c_str()) ||
+        !Expect(decoded_program.size() == 2,
+                "expected returning ds decode program size") ||
+        !Expect(decoded_program[0].opcode == opcode_name,
+                "expected returning ds opcode decode") ||
+        !Expect(decoded_program[0].operand_count == 4,
+                "expected returning ds operand count") ||
+        !Expect(decoded_program[0].operands[0].kind == OperandKind::kVgpr,
+                "expected returning ds destination kind") ||
+        !Expect(decoded_program[0].operands[0].index == 9,
+                "expected returning ds destination index") ||
+        !Expect(decoded_program[0].operands[1].kind == OperandKind::kVgpr,
+                "expected returning ds address kind") ||
+        !Expect(decoded_program[0].operands[1].index == 1,
+                "expected returning ds address index") ||
+        !Expect(decoded_program[0].operands[2].kind == OperandKind::kVgpr,
+                "expected returning ds data kind") ||
+        !Expect(decoded_program[0].operands[2].index == 2,
+                "expected returning ds data index") ||
+        !Expect(decoded_program[0].operands[3].kind == OperandKind::kImm32,
+                "expected returning ds offset kind") ||
+        !Expect(decoded_program[0].operands[3].imm32 == 7u,
+                "expected returning ds offset value")) {
+      std::cerr << opcode_name << '\n';
+      return 1;
+    }
+  }
+
   const auto flat_load_word = MakeFlat(20, 10, 0, 0, 4);
   const auto flat_store_word = MakeFlat(28, 0, 0, 2, 0);
   const auto global_load_word = MakeGlobal(20, 11, 4, 0, 0, -4);
