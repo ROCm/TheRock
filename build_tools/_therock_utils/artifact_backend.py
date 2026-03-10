@@ -82,6 +82,20 @@ class ArtifactBackend(ABC):
         """Check if an artifact exists in the backend."""
         pass
 
+    @abstractmethod
+    def copy_artifact(
+        self, artifact_key: str, source_backend: "ArtifactBackend"
+    ) -> None:
+        """Copy an artifact from source_backend into this backend (server-side when possible).
+
+        Also copies the companion .sha256sum file if it exists in the source.
+
+        Args:
+            artifact_key: The artifact filename (e.g., "blas_lib_gfx94X.tar.zst")
+            source_backend: The backend to copy from
+        """
+        pass
+
     @property
     @abstractmethod
     def base_uri(self) -> str:
@@ -155,6 +169,25 @@ class LocalDirectoryBackend(ArtifactBackend):
         sha_src = source_path.parent / f"{source_path.name}.sha256sum"
         if sha_src.exists():
             shutil.copy2(sha_src, self._artifact_path(f"{artifact_key}.sha256sum"))
+
+    def copy_artifact(
+        self, artifact_key: str, source_backend: "ArtifactBackend"
+    ) -> None:
+        """Copy artifact from another local backend."""
+        if not isinstance(source_backend, LocalDirectoryBackend):
+            raise TypeError(
+                f"Cannot copy from {type(source_backend).__name__} to LocalDirectoryBackend"
+            )
+        src = source_backend.base_path / artifact_key
+        if not src.exists():
+            raise FileNotFoundError(f"Artifact not found in source backend: {src}")
+        dest = self.base_path / artifact_key
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dest)
+        # Also copy sha256sum if it exists
+        sha_src = source_backend.base_path / f"{artifact_key}.sha256sum"
+        if sha_src.exists():
+            shutil.copy2(sha_src, self.base_path / f"{artifact_key}.sha256sum")
 
     def artifact_exists(self, artifact_key: str) -> bool:
         """Check if artifact exists in local staging."""
@@ -251,6 +284,31 @@ class S3Backend(ArtifactBackend):
         """Upload to S3."""
         loc = self.output_root.artifact(artifact_key)
         self.s3_client.upload_file(str(source_path), self.bucket, loc.relative_path)
+
+    def copy_artifact(
+        self, artifact_key: str, source_backend: "ArtifactBackend"
+    ) -> None:
+        """Server-side copy from another S3 backend (cross-bucket supported)."""
+        if not isinstance(source_backend, S3Backend):
+            raise TypeError(
+                f"Cannot copy from {type(source_backend).__name__} to S3Backend"
+            )
+        copy_source = {
+            "Bucket": source_backend.bucket,
+            "Key": f"{source_backend.s3_prefix}/{artifact_key}",
+        }
+        dest_key = f"{self.s3_prefix}/{artifact_key}"
+        self.s3_client.copy(copy_source, self.bucket, dest_key)
+        # Also copy sha256sum if it exists
+        sha_key = f"{artifact_key}.sha256sum"
+        if source_backend.artifact_exists(sha_key):
+            sha_copy_source = {
+                "Bucket": source_backend.bucket,
+                "Key": f"{source_backend.s3_prefix}/{sha_key}",
+            }
+            self.s3_client.copy(
+                sha_copy_source, self.bucket, f"{self.s3_prefix}/{sha_key}"
+            )
 
     def artifact_exists(self, artifact_key: str) -> bool:
         """Check if artifact exists in S3."""
