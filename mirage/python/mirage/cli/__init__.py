@@ -1,0 +1,1 @@
+"""CLI entrypoints for Mirage."""
