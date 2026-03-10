@@ -356,6 +356,7 @@ def do_fetch(args: argparse.Namespace):
     download_dir.mkdir(parents=True, exist_ok=True)
 
     matched_filenames = find_available_artifacts(inbound, target_families, available)
+
     download_requests = [
         DownloadRequest(
             artifact_key=filename,
@@ -912,7 +913,7 @@ def do_info(args: argparse.Namespace):
 
     # Show target families if provided
     if args.amdgpu_families:
-        families = args.amdgpu_families.split(",")
+        families = args.amdgpu_families.split(";")
         target_families = ["generic"] + families
         log(f"\nTarget families: {', '.join(target_families)}")
 

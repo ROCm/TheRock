@@ -102,6 +102,16 @@ jobs:
       contents: read
       id-token: write
 
+  validate_artifact_structure:
+    needs: [build_multi_arch_stages]
+    name: Validate Artifact Structure
+    # If we are expecting a build failure, do not run tests to save machine capacity.
+    if: ${{ !failure() && !cancelled() && inputs.expect_failure == false }}
+    uses: ./.github/workflows/test_artifacts_structure.yml
+    with:
+      artifact_group: ${{ inputs.artifact_group }}
+      platform: windows
+
   test_artifacts_per_family:
     needs: [copy_prebuilt_stages, build_multi_arch_stages]
     name: Test ${{ matrix.family_info.amdgpu_family }}
