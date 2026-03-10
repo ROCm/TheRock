@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """
 MIOpen Driver Convolution Functional Test
 
@@ -16,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # For functional_base
 from functional_base import FunctionalBase, run_functional_main
 from utils.logger import log
 from utils.exceptions import TestExecutionError
+from github_actions_utils import get_first_gpu_architecture
 
 
 class MIOpenDriverConvTest(FunctionalBase):
@@ -47,8 +51,8 @@ class MIOpenDriverConvTest(FunctionalBase):
         """Run MIOpen driver convolution tests and save results to JSON."""
         log.info(f"Running {self.display_name} Tests")
 
-        # Detect GPU architecture (use ROCR_VISIBLE_DEVICES to control which GPU if needed)
-        gfx_id = self.get_gpu_architecture()
+        # Detect GPU architecture
+        gfx_id = get_first_gpu_architecture(therock_bin_dir=self.therock_bin_dir)
 
         miopen_driver = Path(self.therock_bin_dir) / "MIOpenDriver"
         if not miopen_driver.exists():
