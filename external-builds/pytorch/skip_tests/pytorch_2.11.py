@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 skip_tests = {
     "common": {
         "autograd": [
@@ -41,12 +44,9 @@ skip_tests = {
         ],
         "torch": [
             "test_cpp_warnings_have_python_context_cuda",
-            # torch._dynamo.exc.BackendCompilerFailed: backend='aot_eager' raised:
-            # TypeError: 'CustomDecompTable' object is not a mapping
-            "test_fx_memory_profiler_augmentation",
         ],
     },
-    "gfx120X-all": {
+    "gfx120": {
         "autograd": [
             # AssertionError: False is not true
             "test_side_stream_backward_overlap_cuda"

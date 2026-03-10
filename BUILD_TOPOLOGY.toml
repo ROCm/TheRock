@@ -249,7 +249,7 @@ source_sets = ["rocm-systems"]  # clr is in rocm-systems
 
 [artifact_groups.rocrtst]
 description = "Core runtime tests (ROCR-Runtime, rocminfo)"
-type = "per-arch"
+type = "generic"
 artifact_group_deps = ["opencl-runtime", "core-runtime"]
 source_sets = ["rocm-systems"]
 
@@ -423,6 +423,12 @@ type = "target-neutral"
 artifact_deps = ["amd-llvm"]
 feature_group = "CORE"
 
+[artifacts.openmpi]
+artifact_group = "third-party-libs"
+type = "target-neutral"
+artifact_deps = []
+feature_group = "CORE"
+
 # --- Base Infrastructure ---
 
 [artifacts.base]
@@ -493,11 +499,11 @@ platform = "windows"
 artifact_deps = ["core-hip"]
 feature_group = "CORE"  # Part of core, enabled by default
 
-# --- hip-tests (per-arch) ---
+# --- hip-tests ---
 
 [artifacts.core-hiptests]
 artifact_group = "hip-runtime"
-type = "target-specific"
+type = "target-neutral"
 artifact_deps = ["core-hip"]
 feature_group = "CORE"  # Part of core, enabled by default
 
@@ -571,17 +577,17 @@ artifact_deps = ["core-runtime", "core-hip", "spdlog"]
 [artifacts.miopenprovider]
 artifact_group = "ml-libs"
 type = "target-neutral"
-artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "spdlog"]
+artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn"]
 
 [artifacts.hipblasltprovider]
 artifact_group = "ml-libs"
 type = "target-neutral"
-artifact_deps = ["core-runtime", "core-hip", "blas", "hipdnn", "spdlog"]
+artifact_deps = ["core-runtime", "core-hip", "blas", "hipdnn"]
 
 [artifacts.hipdnn-samples]
 artifact_group = "ml-libs"
 type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "miopenprovider", "spdlog"]
+artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "miopenprovider"]
 
 # --- IREE Integration ---
 
@@ -594,7 +600,7 @@ disable_platforms = ["windows"]
 [artifacts.fusilliprovider]
 artifact_group = "iree-libs"
 type = "target-neutral"
-artifact_deps = ["core-runtime", "core-hip", "hipdnn", "spdlog", "iree-compiler"]
+artifact_deps = ["core-runtime", "core-hip", "hipdnn", "iree-compiler"]
 disable_platforms = ["windows"]
 
 # --- Media Integration ---
@@ -618,23 +624,29 @@ disable_platforms = ["windows"]
 [artifacts.rccl]
 artifact_group = "comm-libs"
 type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip", "hipify", "rocprofiler-sdk", "core-amdsmi"]
+artifact_deps = ["core-runtime", "core-hip", "hipify", "rocprofiler-sdk", "core-amdsmi", "openmpi"]
+disable_platforms = ["windows"]
+
+[artifacts.rocshmem]
+artifact_group = "comm-libs"
+type = "target-specific"
+artifact_deps = ["core-runtime", "core-hip", "sysdeps"]
 disable_platforms = ["windows"]
 
 # --- Profiler Tools ---
 
-[artifacts.rocprofiler-sdk]
+[artifacts.aqlprofile]
 artifact_group = "profiler-core"
 type = "target-neutral"
-artifact_deps = ["core-runtime", "base"]  # rocprofiler-register is in base
-feature_name = "ROCPROFV3"
+artifact_deps = ["core-runtime"]
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
 
-[artifacts.aqlprofile-tests]
+[artifacts.rocprofiler-sdk]
 artifact_group = "profiler-core"
-type = "target-specific"
-artifact_deps = ["core-runtime"]
+type = "target-neutral"
+artifact_deps = ["core-runtime", "base", "aqlprofile"]  # rocprofiler-register is in base
+feature_name = "ROCPROFV3"
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
 

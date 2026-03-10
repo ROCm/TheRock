@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """
 RCCL Benchmark Test
 
@@ -14,6 +17,7 @@ from prettytable import PrettyTable
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # For extended_tests/utils
 sys.path.insert(0, str(Path(__file__).parent))  # For benchmark_base
 from benchmark_base import BenchmarkBase, run_benchmark_main
+from github_actions_utils import get_visible_gpu_count
 from utils.logger import log
 
 
@@ -23,7 +27,7 @@ class RCCLBenchmark(BenchmarkBase):
     def __init__(self):
         super().__init__(benchmark_name="rccl", display_name="RCCL")
         self.log_file = self.script_dir / "rccl_bench.log"
-        self.ngpu = self._detect_gpu_count()
+        self.ngpu = get_visible_gpu_count(therock_bin_dir=self.therock_bin_dir)
 
         # Validate OpenMPI is available (from base class)
         self._validate_openmpi()

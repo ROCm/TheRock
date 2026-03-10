@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Analyze Ninja build times and generate HTML report.
 
 This script parses the .ninja_log file from a build directory and generates

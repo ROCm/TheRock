@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Utils package for test execution with system detection and result reporting.
 
 Provides ExtendedTestClient API for collecting system info (OS, hardware, ROCm) and
@@ -18,6 +21,8 @@ __all__ = [
     "exceptions",
     # Main API
     "ExtendedTestClient",
+    # Shared test base class
+    "ExtendedTestBase",
     # Commonly used exports
     "SystemContext",
     "SystemDetector",
