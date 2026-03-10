@@ -103,7 +103,6 @@ jobs:
       SHARD_NUMBER: ${{ matrix.shard }}
       NUM_TEST_SHARDS: ${{ matrix.num_shards }}
       CI: "1"
-      BUILD_ENVIRONMENT: "linux-noble-rocm-py3.12-mi300"
       PYTORCH_TEST_WITH_ROCM: "1"
       PYTORCH_TESTING_DEVICE_ONLY_FOR: "cuda"
       TEST_CONFIG: "default"
