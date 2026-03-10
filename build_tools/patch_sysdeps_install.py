@@ -47,8 +47,11 @@ def relativize_pc_file(pc_file: Path) -> None:
     # .pc files are in $PREFIX/lib/pkgconfig, so go up 2 levels.
     content = content.replace(f"prefix={original_prefix}", "prefix=${pcfiledir}/../..")
     # Replace all other occurrences of the absolute path with ${prefix}.
-    # Use trailing / to avoid partial matches.
+    # Use trailing / to avoid partial matches on path components.
     content = content.replace(f"{original_prefix}/", "${prefix}/")
+    # Also replace the exact prefix at end-of-line (e.g. exec_prefix=<path>
+    # with no trailing slash, as produced by some autoconf-generated .pc files).
+    content = content.replace(f"{original_prefix}\n", "${prefix}\n")
     pc_file.write_text(content)
 
 
