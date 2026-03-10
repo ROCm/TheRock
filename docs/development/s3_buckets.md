@@ -13,20 +13,44 @@ The full ARN pattern is
 `arn:aws:iam::692859939525:role/therock-{ci,dev,nightly,prerelease}`.
 
 ```yaml
-# Job-level permission required for OIDC token
-permissions:
-  id-token: write
+jobs:
+  build:
+    runs-on: azure-linux-scale-rocm
+    permissions:
+      id-token: write
+    # Linux containers only — mount runner baseline credentials
+    env:
+      AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini
 
-steps:
-  # Assume the therock-ci OIDC role in ROCm/TheRock. Other repos
-  # fall back to runner base credentials (therock-ci-artifacts-external).
-  - name: Configure AWS Credentials
-    if: ${{ github.repository == 'ROCm/TheRock' && !github.event.pull_request.head.repo.fork }}
-    uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
-    with:
-      aws-region: us-east-2
-      role-to-assume: arn:aws:iam::692859939525:role/therock-ci
+    steps:
+      # ... build steps ...
+
+      # Credentials are short-lived — assume the role close to when it's needed.
+
+      # Assume the therock-ci OIDC role in ROCm/TheRock. Other repos
+      # fall back to runner base credentials (therock-ci-artifacts-external).
+      - name: Configure AWS Credentials
+        if: ${{ github.repository == 'ROCm/TheRock' && !github.event.pull_request.head.repo.fork }}
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-ci
+          # Windows only — retry until secret key has no special characters:
+          special-characters-workaround: true
+
+      # ... upload steps that use the credentials ...
 ```
+
+**Platform-specific details:**
+
+- **Linux containers** mount runner credentials via
+  `AWS_SHARED_CREDENTIALS_FILE: /home/awsconfig/credentials.ini` in the job's
+  `env` block. These baseline credentials allow uploading to
+  `therock-ci-artifacts-external` without OIDC.
+- **Windows** jobs must pass `special-characters-workaround: true` to
+  `aws-actions/configure-aws-credentials`. This retries credential fetching
+  until the secret access key contains no special characters, which some
+  Windows environments cannot tolerate.
 
 ## Bucket inventory
 
