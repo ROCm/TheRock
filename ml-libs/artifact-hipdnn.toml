@@ -25,6 +25,4 @@ include = [
 ]
 exclude = [
   "bin/**/*.cmake",                  # Exclude CMake files
-  "bin/*test*",                      # Exclude test binaries
-  "bin/*gtest*",                     # Exclude gtest binaries
 ]
