@@ -103,8 +103,10 @@ jobs:
         run: |
           python build_tools/health_status.py
 
+      # Assume the therock-ci OIDC role in ROCm/TheRock. Other repos
+      # fall back to runner base credentials (therock-ci-artifacts-external).
       - name: Configure AWS Credentials
-        if: ${{ !github.event.pull_request.head.repo.fork }}
+        if: ${{ github.repository == 'ROCm/TheRock' }}
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
         with:
           aws-region: us-east-2
@@ -155,7 +157,7 @@ jobs:
           ls -lh "${BUILD_DIR}"/artifacts/*.tar.xz 2>/dev/null || echo "No artifacts found"
 
       - name: Configure AWS Credentials (refresh for push)
-        if: ${{ !github.event.pull_request.head.repo.fork }}
+        if: ${{ github.repository == 'ROCm/TheRock' }}
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
         with:
           aws-region: us-east-2
