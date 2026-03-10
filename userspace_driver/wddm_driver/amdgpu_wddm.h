@@ -56,6 +56,7 @@ typedef enum _AMDGPU_ESCAPE_CODE {
     AMDGPU_ESCAPE_SET_TRAP_HANDLER  = 0x0133,
     AMDGPU_ESCAPE_GET_CLOCK_COUNTERS = 0x0140,
     AMDGPU_ESCAPE_GET_VERSION       = 0x0150,
+    AMDGPU_ESCAPE_GET_PHYS_PAGES    = 0x0160,
 } AMDGPU_ESCAPE_CODE;
 
 typedef struct _AMDGPU_ESCAPE_HEADER {
@@ -353,6 +354,21 @@ typedef struct _AMDGPU_ESCAPE_GET_VERSION_DATA {
     ULONG       KfdMajorVersion;
     ULONG       KfdMinorVersion;
 } AMDGPU_ESCAPE_GET_VERSION_DATA;
+
+/*
+ * GET_PHYS_PAGES: Return per-page physical/bus addresses for an allocation.
+ * Used by userspace to populate GART page table entries.
+ */
+#define AMDGPU_MAX_PHYS_PAGES 256  /* Up to 1MB per call */
+typedef struct _AMDGPU_ESCAPE_GET_PHYS_PAGES_DATA {
+    AMDGPU_ESCAPE_HEADER Header;
+    ULONGLONG   Handle;                     /* Input: allocation handle */
+    ULONG       PageOffset;                 /* Input: start page index */
+    /* Output */
+    ULONG       NumPages;                   /* Actual pages returned */
+    ULONG       TotalPages;                 /* Total pages in allocation */
+    ULONGLONG   PhysAddrs[AMDGPU_MAX_PHYS_PAGES];
+} AMDGPU_ESCAPE_GET_PHYS_PAGES_DATA;
 
 /* ======================================================================
  * Internal driver structures (kernel-mode only)
@@ -679,5 +695,7 @@ NTSTATUS EscapeGetClockCounters(_In_ AMDGPU_ADAPTER *pAdapter,
                                 _Inout_ AMDGPU_ESCAPE_GET_CLOCK_COUNTERS_DATA *pData);
 NTSTATUS EscapeGetVersion(_In_ AMDGPU_ADAPTER *pAdapter,
                           _Inout_ AMDGPU_ESCAPE_GET_VERSION_DATA *pData);
+NTSTATUS EscapeGetPhysPages(_In_ AMDGPU_ADAPTER *pAdapter,
+                            _Inout_ AMDGPU_ESCAPE_GET_PHYS_PAGES_DATA *pData);
 
 #endif /* _KERNEL_MODE */

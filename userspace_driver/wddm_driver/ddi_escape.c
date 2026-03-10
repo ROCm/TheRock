@@ -793,6 +793,14 @@ AmdGpuEscape(
                 (AMDGPU_ESCAPE_GET_VERSION_DATA *)pEscape->pPrivateDriverData);
         break;
 
+    case AMDGPU_ESCAPE_GET_PHYS_PAGES:
+        if (pEscape->PrivateDriverDataSize < sizeof(AMDGPU_ESCAPE_GET_PHYS_PAGES_DATA))
+            Status = STATUS_BUFFER_TOO_SMALL;
+        else
+            Status = EscapeGetPhysPages(pAdapter,
+                (AMDGPU_ESCAPE_GET_PHYS_PAGES_DATA *)pEscape->pPrivateDriverData);
+        break;
+
     default:
         Status = STATUS_INVALID_PARAMETER;
         break;
