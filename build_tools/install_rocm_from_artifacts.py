@@ -371,15 +371,11 @@ def retrieve_artifacts_by_run_id(args):
         if args.blas:
             extra_artifacts.append("blas")
         if args.debug_tools:
-            # Add extra artifacts so we generate _lib and _test artifact
-            # entries later.
             extra_artifacts.append("amd-dbgapi")
             extra_artifacts.append("rocgdb")
             extra_artifacts.append("rocr-debug-agent")
             extra_artifacts.append("rocr-debug-agent-tests")
-
-            # Add the rest of the artifacts not handled automatically (non-lib
-            # and non-test).
+            # Contains the rocgdb executable.
             argv.append("rocgdb_run")
 
             # Libraries rocgdb depends on.
@@ -396,7 +392,7 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("hipdnn-samples")
         if args.miopen:
             extra_artifacts.append("miopen")
-            # We need bin/MIOpenDriver executable for tests.
+            # Contains bin/MIOpenDriver executable for tests.
             argv.append("miopen_run")
             # Also need these for runtime kernel compilation (rocrand includes).
             argv.append("rand_dev")
@@ -435,6 +431,8 @@ def retrieve_artifacts_by_run_id(args):
             argv.append("rocprofiler-sdk_run")
         if args.rocprofiler_compute:
             extra_artifacts.append("rocprofiler-compute")
+            # Contains the rocprof-compute CLI executable.
+            argv.append("rocprofiler-compute_run")
         if args.rocprofiler_systems:
             extra_artifacts.append("rocprofiler-systems")
             # Contains executables (rocprof-sys-run, rocprof-sys-instrument, etc.)
@@ -453,6 +451,10 @@ def retrieve_artifacts_by_run_id(args):
             argv.append("amd-llvm_lib")
             argv.append("base_dev_generic")
 
+        # Fetch _lib (always) and _test (when --tests) for each artifact.
+        # Some projects have self-contained _test archives (just test
+        # binaries), while others may also need executables or data from
+        # _run. Add those explicitly above via argv.append("<name>_run").
         extra_artifact_patterns = [f"{a}_lib" for a in extra_artifacts]
         if args.tests:
             extra_artifact_patterns.extend([f"{a}_test" for a in extra_artifacts])
