@@ -27,10 +27,9 @@ class TargetIdBitExtractTest(FunctionalBase):
 
     def __init__(self):
         super().__init__(
-            test_name="cov_backward_comptability",
-            display_name="Cov Backward Comptability",
+            test_name="cov_backward_compatibility",
+            display_name="Cov Backward Compatibility",
         )
-        self.results_json = self.script_dir / "cov_results.json"
         self.test_results: List[Dict[str, Any]] = []
 
         config = self.load_config("cov_backward_comp.json")
@@ -286,9 +285,6 @@ class TargetIdBitExtractTest(FunctionalBase):
                 rc,
                 error="Compile failed for default build (no -mcode-object-version)",
             )
-            with open(self.results_json, "w") as f:
-                json.dump(self.test_results, f, indent=2)
-            log.info(f"{self.display_name} results saved to {self.results_json}")
             return
 
         try:
@@ -304,9 +300,6 @@ class TargetIdBitExtractTest(FunctionalBase):
                     f"platform/toolchain: {e}"
                 ),
             )
-            with open(self.results_json, "w") as f:
-                json.dump(self.test_results, f, indent=2)
-            log.info(f"{self.display_name} results saved to {self.results_json}")
             return
 
         run_rc, _, run_err = self._run_and_validate_binary(default_binary)
@@ -405,22 +398,14 @@ class TargetIdBitExtractTest(FunctionalBase):
                     detected_version=detected,
                 )
 
-        with open(self.results_json, "w") as f:
-            json.dump(self.test_results, f, indent=2)
-        log.info(f"{self.display_name} results saved to {self.results_json}")
 
     def parse_results(self) -> List[Dict[str, Any]]:
         log.info(f"Parsing {self.display_name} Results")
-        try:
-            with open(self.results_json, "r") as f:
-                json_results = json.load(f)
-        except FileNotFoundError:
-            raise TestExecutionError(f"Results JSON file not found: {self.results_json}")
-        except json.JSONDecodeError as e:
-            raise TestExecutionError(f"Invalid JSON in results file: {e}")
+        if not self.test_results:
+            raise TestExecutionError("No test results collected during run_tests()")
 
         parsed_results = []
-        for result in json_results:
+        for result in self.test_results:
             status = result.get("status", "ERROR").upper()
             if status not in ["PASS", "FAIL", "ERROR", "SKIP"]:
                 status = "ERROR"
@@ -436,7 +421,6 @@ class TargetIdBitExtractTest(FunctionalBase):
             )
 
         return parsed_results
-
 
 if __name__ == "__main__":
     run_functional_main(TargetIdBitExtractTest())
