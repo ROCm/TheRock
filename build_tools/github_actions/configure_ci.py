@@ -644,6 +644,11 @@ def main(base_args, linux_families, windows_families):
         test_type_reason = "scheduled run triggers full tests"
     elif is_workflow_dispatch:
         enable_build_jobs = True
+        # If test labels were specified, run full tests for those.
+        if linux_test_output or windows_test_output:
+            combined_test_labels = list(set(linux_test_output + windows_test_output))
+            test_type = "full"
+            test_type_reason = f"test label(s) specified: {combined_test_labels}"
     else:
         modified_paths = get_git_modified_paths(base_ref)
         print("modified_paths (max 200):", modified_paths[:200])
