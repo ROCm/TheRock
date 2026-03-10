@@ -13,21 +13,35 @@ and explains the authentication needed to upload to them.
 
 ## Release buckets
 
-Each release type (`dev`, `nightly`, `prerelease`) has a matching set of
-buckets. All buckets for a given release type are accessed via the
-`therock-{release_type}` IAM role.
+Each release type (`dev`, `nightly`, `prerelease`, `release`) has a matching
+set of buckets.
 
-| Bucket                                                                                   | Contents        | IAM role             |
-| ---------------------------------------------------------------------------------------- | --------------- | -------------------- |
-| [`therock-dev-artifacts`](https://therock-dev-artifacts.s3.amazonaws.com/)               | Build outputs   | `therock-dev`        |
-| [`therock-dev-python`](https://therock-dev-python.s3.amazonaws.com/)                     | Python packages | `therock-dev`        |
-| [`therock-dev-tarball`](https://therock-dev-tarball.s3.amazonaws.com/)                   | ROCm tarballs   | `therock-dev`        |
-| [`therock-nightly-artifacts`](https://therock-nightly-artifacts.s3.amazonaws.com/)       | Build outputs   | `therock-nightly`    |
-| [`therock-nightly-python`](https://therock-nightly-python.s3.amazonaws.com/)             | Python packages | `therock-nightly`    |
-| [`therock-nightly-tarball`](https://therock-nightly-tarball.s3.amazonaws.com/)           | ROCm tarballs   | `therock-nightly`    |
-| [`therock-prerelease-artifacts`](https://therock-prerelease-artifacts.s3.amazonaws.com/) | Build outputs   | `therock-prerelease` |
-| [`therock-prerelease-python`](https://therock-prerelease-python.s3.amazonaws.com/)       | Python packages | `therock-prerelease` |
-| [`therock-prerelease-tarball`](https://therock-prerelease-tarball.s3.amazonaws.com/)     | ROCm tarballs   | `therock-prerelease` |
+The `dev`, `nightly`, and `prerelease` types are accessed via
+the `therock-{release_type}` IAM role while stable `release` buckets are
+manually promoted from prereleases via IAM user policies (see
+[`how_to_do_release.md`](/build_tools/packaging/how_to_do_release.md)).
+
+Python and tarball buckets are fronted by CloudFront CDNs — prefer the CDN
+URLs for reading (e.g. `pip install --index-url`).
+
+| Bucket                                                                                   | Contents        | IAM role             | CDN                                                                                |
+| ---------------------------------------------------------------------------------------- | --------------- | -------------------- | ---------------------------------------------------------------------------------- |
+| [`therock-dev-artifacts`](https://therock-dev-artifacts.s3.amazonaws.com/)               | Build outputs   | `therock-dev`        | —                                                                                  |
+| [`therock-dev-packages`](https://therock-dev-packages.s3.amazonaws.com/)                 | Native packages | `therock-dev`        | —                                                                                  |
+| [`therock-dev-python`](https://therock-dev-python.s3.amazonaws.com/)                     | Python packages | `therock-dev`        | [`rocm.devreleases.amd.com/v2/`](https://rocm.devreleases.amd.com/v2/)             |
+| [`therock-dev-tarball`](https://therock-dev-tarball.s3.amazonaws.com/)                   | ROCm tarballs   | `therock-dev`        | [`rocm.devreleases.amd.com/tarball/`](https://rocm.devreleases.amd.com/tarball/)   |
+| [`therock-nightly-artifacts`](https://therock-nightly-artifacts.s3.amazonaws.com/)       | Build outputs   | `therock-nightly`    | —                                                                                  |
+| [`therock-nightly-packages`](https://therock-nightly-packages.s3.amazonaws.com/)         | Native packages | `therock-nightly`    | —                                                                                  |
+| [`therock-nightly-python`](https://therock-nightly-python.s3.amazonaws.com/)             | Python packages | `therock-nightly`    | [`rocm.nightlies.amd.com/v2/`](https://rocm.nightlies.amd.com/v2/)                 |
+| [`therock-nightly-tarball`](https://therock-nightly-tarball.s3.amazonaws.com/)           | ROCm tarballs   | `therock-nightly`    | [`rocm.nightlies.amd.com/tarball/`](https://rocm.nightlies.amd.com/tarball/)       |
+| [`therock-prerelease-artifacts`](https://therock-prerelease-artifacts.s3.amazonaws.com/) | Build outputs   | `therock-prerelease` | —                                                                                  |
+| [`therock-prerelease-packages`](https://therock-prerelease-packages.s3.amazonaws.com/)   | Native packages | `therock-prerelease` | [`rocm.prereleases.amd.com/packages/`](https://rocm.prereleases.amd.com/packages/) |
+| [`therock-prerelease-python`](https://therock-prerelease-python.s3.amazonaws.com/)       | Python packages | `therock-prerelease` | [`rocm.prereleases.amd.com/whl/`](https://rocm.prereleases.amd.com/whl/)           |
+| [`therock-prerelease-tarball`](https://therock-prerelease-tarball.s3.amazonaws.com/)     | ROCm tarballs   | `therock-prerelease` | [`rocm.prereleases.amd.com/tarball/`](https://rocm.prereleases.amd.com/tarball/)   |
+| [`therock-release-artifacts`](https://therock-release-artifacts.s3.amazonaws.com/)       | Build outputs   | —                    | —                                                                                  |
+| [`therock-release-packages`](https://therock-release-packages.s3.amazonaws.com/)         | Native packages | —                    | [`repo.amd.com/rocm/packages/`](https://repo.amd.com/rocm/packages/)               |
+| [`therock-release-python`](https://therock-release-python.s3.amazonaws.com/)             | Python packages | —                    | [`repo.amd.com/rocm/whl/`](https://repo.amd.com/rocm/whl/)                         |
+| [`therock-release-tarball`](https://therock-release-tarball.s3.amazonaws.com/)           | ROCm tarballs   | —                    | [`repo.amd.com/rocm/tarball/`](https://repo.amd.com/rocm/tarball/)                 |
 
 ## Cache buckets
 
