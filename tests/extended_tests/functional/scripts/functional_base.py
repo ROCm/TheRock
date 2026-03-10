@@ -1,15 +1,9 @@
-"""
-Base class for functional tests with common functionality.
 
-Provides test execution, result parsing, logging, and GitHub Actions integration
-for functional correctness tests. Unlike benchmarks which measure performance,
-functional tests verify correctness with pass/fail results.
-"""
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
 
-import json
-import os
-import shlex
-import subprocess
+"""Base class for functional tests with common functionality."""
+
 import sys
 from pathlib import Path
 from typing import Any, Dict, List
@@ -17,23 +11,19 @@ from prettytable import PrettyTable
 
 # Add parent directory to path for utils import
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-# Add build_tools/github_actions to path for github_actions_utils
-sys.path.insert(
-    0, str(Path(__file__).resolve().parents[4] / "build_tools" / "github_actions")
-)
-from utils import ExtendedTestClient
+
 from utils.logger import log
 from utils.exceptions import TestExecutionError, TestResultError
-from github_actions_utils import gha_append_step_summary, get_first_gpu_architecture
+from utils.extended_test_base import ExtendedTestBase, gha_append_step_summary
 
 
-class FunctionalBase:
+class FunctionalBase(ExtendedTestBase):
     """Base class providing common functional test logic.
 
-    Child classes must implement run_tests() and parse_results().
+    Inherits shared infrastructure from ExtendedTestBase (execute_command,
+    calculate_statistics, upload_results, etc.).
 
-    Unlike benchmarks (which measure performance), functional tests verify
-    correctness and produce pass/fail results without performance metrics.
+    Child classes must implement run_tests() and parse_results().
     """
 
     def __init__(self, test_name: str, display_name: str = None):
@@ -43,207 +33,13 @@ class FunctionalBase:
             test_name: Internal test name (e.g., 'miopen_driver_conv')
             display_name: Display name for reports (e.g., 'MIOpen Driver Convolution')
         """
-        self.test_name = test_name
-        self.display_name = display_name or test_name
-
-        # Environment variables
-        self.therock_bin_dir = os.getenv("THEROCK_BIN_DIR")
-        self.artifact_run_id = os.getenv("ARTIFACT_RUN_ID")
-        self.amdgpu_families = os.getenv("AMDGPU_FAMILIES")
+        super().__init__(test_name, display_name or test_name)
         self.script_dir = Path(__file__).resolve().parent
-        self.therock_dir = Path(__file__).resolve().parents[4]
-        self.rocm_path = (
-            Path(self.therock_bin_dir).resolve().parent
-            if self.therock_bin_dir
-            else None
-        )
-
-        # Initialize test client (will be set in run())
-        self.client = None
-
-    def load_config(self, config_filename: str) -> Dict[str, Any]:
-        """Load test configuration from JSON file in configs/ directory."""
-        config_file = self.script_dir.parent / "configs" / config_filename
-
-        try:
-            with open(config_file, "r") as f:
-                return json.load(f)
-        except FileNotFoundError:
-            raise TestExecutionError(
-                f"Configuration file not found: {config_file}\n"
-                f"Ensure {config_filename} exists in configs/ directory"
-            )
-        except json.JSONDecodeError as e:
-            raise TestExecutionError(
-                f"Invalid JSON in configuration file: {e}\n"
-                f"Check JSON syntax in {config_filename}"
-            )
-
-    def get_gpu_architecture(self) -> str:
-        """Detect GPU architecture (e.g., 'gfx942') using rocminfo."""
-        try:
-            gfx_id = get_first_gpu_architecture(therock_bin_dir=self.therock_bin_dir)
-            log.info(f"Detected GPU architecture: {gfx_id}")
-            return gfx_id
-        except Exception as e:
-            raise TestExecutionError(
-                f"Failed to detect GPU architecture: {e}\n"
-                "Ensure ROCm drivers are installed and GPU is accessible."
-            ) from e
-
-    def get_rocm_env(self, additional_paths: List[Path] = None) -> Dict[str, str]:
-        """Get environment with LD_LIBRARY_PATH set for ROCm libraries.
-
-        Args:
-            additional_paths: Additional library paths to include
-
-        Returns:
-            Environment dictionary with LD_LIBRARY_PATH configured
-        """
-        env = os.environ.copy()
-        rocm_lib = self.rocm_path / "lib"
-
-        # Build list of library paths
-        lib_paths = [str(rocm_lib)]
-        if additional_paths:
-            lib_paths.extend(str(p) for p in additional_paths)
-
-        # Append existing LD_LIBRARY_PATH if present
-        existing = env.get("LD_LIBRARY_PATH", "")
-        if existing:
-            lib_paths.append(existing)
-
-        env["LD_LIBRARY_PATH"] = ":".join(lib_paths)
-        return env
-
-    def execute_command(
-        self,
-        cmd: List[str],
-        cwd: Path = None,
-        env: Dict[str, str] = None,
-        log_file_handle: IO = None,
-        timeout: int = None,
-        stream: bool = True,
-    ) -> Tuple[int, str]:
-        """Execute a command with optional streaming output."""
-        work_dir = cwd or self.therock_dir
-        log.info(f"++ Exec [{work_dir}]$ {shlex.join(cmd)}")
-        if log_file_handle:
-            log_file_handle.write(f"{shlex.join(cmd)}\n")
-
-        # Merge custom env with current environment
-        process_env = os.environ.copy()
-        if env:
-            process_env.update(env)
-
-        if stream:
-            # Stream output to log while capturing
-            process = subprocess.Popen(
-                cmd,
-                cwd=work_dir,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,
-                env=process_env,
-            )
-
-            output_lines = []
-            for line in process.stdout:
-                log.info(line.rstrip())
-                output_lines.append(line)
-                if log_file_handle:
-                    log_file_handle.write(line)
-
-            process.wait()
-            return process.returncode, "".join(output_lines)
-        else:
-            # Silent capture with timeout support
-            try:
-                result = subprocess.run(
-                    cmd,
-                    cwd=work_dir,
-                    env=process_env,
-                    capture_output=True,
-                    text=True,
-                    timeout=timeout,
-                )
-                return result.returncode, result.stdout + result.stderr
-
-            except subprocess.TimeoutExpired:
-                log.error(f"Command timed out after {timeout}s")
-                return -1, f"Command timed out after {timeout} seconds"
-            except Exception as e:
-                log.error(f"Command failed: {e}")
-                return -1, str(e)
-
-    def create_test_result(
-        self,
-        test_name: str,
-        subtest_name: str,
-        status: str,
-        **kwargs,
-    ) -> Dict[str, Any]:
-        """Create a standardized functional test result dictionary.
-
-        Args:
-            test_name: Test name
-            subtest_name: Specific test/suite identifier
-            status: Test status ('PASS', 'FAIL', 'ERROR', 'SKIP')
-            **kwargs: Additional test-specific parameters (suite, command, etc.)
-
-        Returns:
-            Dict[str, Any]: Test result dictionary
-        """
-        # test_config required by API schema
-        test_config = {
-            "test_name": test_name,
-            "sub_test_name": subtest_name,
-            "python_version": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
-            "environment_dependencies": [],
-        }
-
-        return {
-            "test_name": test_name,
-            "subtest": subtest_name,
-            "status": status,
-            "test_config": test_config,
-            **kwargs,
-        }
-
-    def calculate_statistics(
-        self, test_results: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
-        """Calculate pass/fail/error/skip statistics from test results."""
-        passed = sum(1 for r in test_results if r.get("status") == "PASS")
-        failed = sum(1 for r in test_results if r.get("status") == "FAIL")
-        error = sum(1 for r in test_results if r.get("status") == "ERROR")
-        skipped = sum(1 for r in test_results if r.get("status") == "SKIP")
-
-        # Overall status: PASS only if no failures/errors
-        overall_status = "PASS" if (failed == 0 and error == 0) else "FAIL"
-
-        return {
-            "passed": passed,
-            "failed": failed,
-            "error": error,
-            "skipped": skipped,
-            "total": len(test_results),
-            "overall_status": overall_status,
-        }
 
     def create_result_tables(
         self, test_results: List[Dict[str, Any]], stats: Dict[str, Any]
     ) -> tuple:
-        """Create detailed and summary result tables.
-
-        Args:
-            test_results: List of test result dictionaries
-            stats: Test statistics dictionary
-
-        Returns:
-            tuple: (detailed_table, summary_table)
-        """
+        """Create detailed and summary result tables."""
         # Build detailed table and count suites
         detailed_table = PrettyTable()
         detailed_table.field_names = ["TestSuite", "TestCase", "Status"]
@@ -288,52 +84,14 @@ class FunctionalBase:
 
         return detailed_table, summary_table
 
-    def upload_results(
-        self, test_results: List[Dict[str, Any]], stats: Dict[str, Any]
-    ) -> bool:
-        """Upload results to API and save locally."""
-        log.info("Uploading Functional Tests Results to API")
-        success = self.client.upload_results(
-            test_name=f"{self.test_name}_functional",
-            test_results=test_results,
-            test_status=stats["overall_status"],
-            test_metadata={
-                "artifact_run_id": self.artifact_run_id,
-                "amdgpu_families": self.amdgpu_families,
-                "test_name": self.test_name,
-                "total_tests": stats["total"],
-                "passed_tests": stats["passed"],
-                "failed_tests": stats["failed"],
-                "error_tests": stats["error"],
-                "skipped_tests": stats["skipped"],
-            },
-            save_local=True,
-            output_dir=str(self.script_dir.parent / "results"),
-        )
-
-        if success:
-            log.info("Results uploaded successfully")
-        else:
-            log.info("Results saved locally only (API upload disabled or failed)")
-
-        return success
-
     def run(self) -> None:
         """Execute functional test workflow.
 
         Raises:
-            TestExecutionError: If test execution encounters errors (missing files, etc.)
-            TestResultError: If tests run successfully but results show failures
-
-        Note:
-            On success, returns normally (exit code 0)
-            On failure, raises exception (exit code 1)
+            TestExecutionError: If test execution encounters errors
+            TestResultError: If tests run but results show failures
         """
         log.info(f"{self.display_name} - Starting Functional Test")
-
-        # Initialize test client and print system info
-        self.client = ExtendedTestClient(auto_detect=True)
-        self.client.print_system_summary()
 
         # Run tests (implemented by child class)
         self.run_tests()
@@ -360,9 +118,21 @@ class FunctionalBase:
         log.info(f"\n{summary_table}")
         log.info(f"\nFinal Status: {stats['overall_status']}")
 
-        # Upload results (optional, may not be available in all environments)
+        # Upload results
         try:
-            self.upload_results(test_results, stats)
+            self.upload_results(
+                test_results=test_results,
+                stats=stats,
+                test_type="functional",
+                output_dir=str(self.script_dir.parent / "results"),
+                extra_metadata={
+                    "total_tests": stats["total"],
+                    "passed_tests": stats["passed"],
+                    "failed_tests": stats["failed"],
+                    "error_tests": stats["error"],
+                    "skipped_tests": stats["skipped"],
+                },
+            )
         except Exception as e:
             log.warning(f"Could not upload results: {e}")
 
@@ -390,7 +160,6 @@ def run_functional_main(test_instance):
     """Run functional test.
 
     Raises exceptions on failure, returns normally on success.
-    This is the Pythonic way - let Python set exit codes automatically:
     - Success: Returns normally → exit code 0
     - Execution Error: Raises TestExecutionError → exit code 1
     - Result Failure: Raises TestResultError → exit code 1
