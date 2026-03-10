@@ -93,23 +93,23 @@ def run_test(test_exe, env):
     logging.info(f"++ Exec [{test_exe.parent}]$ {shlex.join(cmd)}")
 
     try:
-        result = subprocess.run(
+        with subprocess.Popen(
             cmd,
             cwd=str(test_exe.parent),
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
             text=True,
             env=env,
-        )
+        ) as proc:
+            for line in proc.stdout:
+                print(line, end="", flush=True)
+            returncode = proc.wait()
 
-        if result.returncode == 0:
+        if returncode == 0:
             logging.info(f"✓ PASSED: {test_name}")
             return True
         else:
-            logging.error(f"✗ FAILED: {test_name} (exit code: {result.returncode})")
-            if result.stdout:
-                logging.error(f"  stdout: {result.stdout[:500]}")
-            if result.stderr:
-                logging.error(f"  stderr: {result.stderr[:500]}")
+            logging.error(f"✗ FAILED: {test_name} (exit code: {returncode})")
             return False
 
     except subprocess.TimeoutExpired:
