@@ -119,6 +119,11 @@ def main(argv: list[str]) -> None:
         help="patchelf executable (default: $PATCHELF env var or 'patchelf')",
     )
     p.add_argument(
+        "--remove-binaries",
+        action="store_true",
+        help="Remove the bin/ directory from the install prefix",
+    )
+    p.add_argument(
         "--normalize",
         action="append",
         default=[],
@@ -148,6 +153,11 @@ def main(argv: list[str]) -> None:
         for file_path in lib_dir.iterdir():
             if file_path.suffix in (".a", ".la"):
                 file_path.unlink(missing_ok=True)
+
+        if args.remove_binaries:
+            bin_dir = install_prefix / "bin"
+            if bin_dir.exists():
+                shutil.rmtree(bin_dir)
 
         for prefixed_name, linker_name in normalize_pairs:
             update_library_links(lib_dir / prefixed_name, linker_name, patchelf)

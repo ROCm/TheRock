@@ -92,7 +92,10 @@ add_custom_target(
       "PATCHELF=${PATCHELF}"
       "THEROCK_SOURCE_DIR=${THEROCK_SOURCE_DIR}"
       "Python3_EXECUTABLE=${Python3_EXECUTABLE}" --
-    bash "${CMAKE_CURRENT_SOURCE_DIR}/patch_install.sh" ${CMAKE_INSTALL_PREFIX}
+    "${Python3_EXECUTABLE}" "${THEROCK_SOURCE_DIR}/build_tools/patch_sysdeps_install.py"
+      ${CMAKE_INSTALL_PREFIX}
+      --normalize "librocm_sysdeps_numa.so:libnuma.so"
+      --remove-binaries
 )
 
 configure_file(
