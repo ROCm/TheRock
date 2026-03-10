@@ -37,8 +37,8 @@ def main() -> int:
         f"-I{mirage_root}",
         str(probe_source),
         str(mirage_root / "native" / "generated" / "gfx950_instruction_catalog.cc"),
-        str(mirage_root / "native" / "src" / "gfx950_interpreter.cc"),
-        str(mirage_root / "native" / "src" / "gfx950_binary_decoder.cc"),
+        str(mirage_root / "native" / "src" / "isa" / "gfx950" / "interpreter.cc"),
+        str(mirage_root / "native" / "src" / "isa" / "gfx950" / "binary_decoder.cc"),
         "-o",
         str(probe_binary),
     ]

@@ -7,9 +7,9 @@
 #include <string_view>
 #include <vector>
 
-#include "lib/sim/isa/decoded_instruction.h"
-#include "lib/sim/isa/gfx950_binary_decoder.h"
-#include "lib/sim/isa/gfx950_interpreter.h"
+#include "lib/sim/isa/common/decoded_instruction.h"
+#include "lib/sim/isa/gfx950/binary_decoder.h"
+#include "lib/sim/isa/gfx950/interpreter.h"
 #include "lib/sim/isa/instruction_catalog.h"
 
 namespace {

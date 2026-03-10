@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "lib/sim/isa/instruction_catalog.h"
-#include "lib/sim/isa/wave_execution_state.h"
+#include "lib/sim/isa/common/wave_execution_state.h"
 #include "lib/sim/single_gpu_simulator.h"
 
 namespace {

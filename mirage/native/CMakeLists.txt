@@ -6,9 +6,9 @@ enable_testing()
 
 add_library(mirage_sim_core STATIC
   generated/gfx950_instruction_catalog.cc
-  src/gfx950_binary_decoder.cc
+  src/isa/gfx950/binary_decoder.cc
   src/mirage_sim_core.cc
-  src/gfx950_interpreter.cc
+  src/isa/gfx950/interpreter.cc
   src/single_gpu_simulator.cc
   src/virtual_gpu_device.cc
 )
@@ -24,12 +24,12 @@ add_executable(mirage_instruction_catalog_test
 target_link_libraries(mirage_instruction_catalog_test PRIVATE mirage_sim_core)
 
 add_executable(mirage_gfx950_interpreter_test
-  tests/gfx950_interpreter_test.cc
+  tests/isa/gfx950/interpreter_test.cc
 )
 target_link_libraries(mirage_gfx950_interpreter_test PRIVATE mirage_sim_core)
 
 add_executable(mirage_gfx950_binary_decoder_test
-  tests/gfx950_binary_decoder_test.cc
+  tests/isa/gfx950/binary_decoder_test.cc
 )
 target_link_libraries(mirage_gfx950_binary_decoder_test PRIVATE mirage_sim_core)
 
@@ -39,7 +39,7 @@ add_executable(mirage_sim_core_test
 target_link_libraries(mirage_sim_core_test PRIVATE mirage_sim_core)
 
 add_executable(mirage_gfx950_runtime_test
-  tests/gfx950_runtime_test.cc
+  tests/isa/gfx950/runtime_test.cc
 )
 target_link_libraries(mirage_gfx950_runtime_test PRIVATE mirage_sim_core)
 

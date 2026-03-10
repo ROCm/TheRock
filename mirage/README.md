@@ -11,6 +11,17 @@ This subtree is intentionally split into:
 - `compat/` for ROCm-facing compatibility layers such as `libhsakmt`
 - `third_party/amd_gpu_isa/` for vendored machine-readable AMD ISA specs used to generate simulator instruction catalogs
 
+The ISA layer is also split by ownership boundary:
+
+- `lib/sim/isa/common/` for shared instruction, memory, and wave-state types
+- `lib/sim/isa/gfx950/` for CDNA4-specific decoder and execution interfaces
+- `native/src/isa/gfx950/` and `native/tests/isa/gfx950/` for the current
+  architecture-specific implementation and tests
+
+The legacy top-level `lib/sim/isa/gfx950_*.h` and common ISA header paths remain
+as compatibility wrappers so new architecture work can land in dedicated
+directories without forcing a single large include-path rewrite.
+
 ## Local Development
 
 Python environment:

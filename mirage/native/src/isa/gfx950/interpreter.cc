@@ -1,4 +1,4 @@
-#include "lib/sim/isa/gfx950_interpreter.h"
+#include "lib/sim/isa/gfx950/interpreter.h"
 
 #include <algorithm>
 #include <array>

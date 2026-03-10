@@ -5,8 +5,8 @@
 #include <string>
 #include <utility>
 
-#include "lib/sim/isa/gfx950_binary_decoder.h"
-#include "lib/sim/isa/gfx950_interpreter.h"
+#include "lib/sim/isa/gfx950/binary_decoder.h"
+#include "lib/sim/isa/gfx950/interpreter.h"
 
 namespace mirage::sim {
 namespace {

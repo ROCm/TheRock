@@ -1,4 +1,4 @@
-#include "lib/sim/isa/gfx950_binary_decoder.h"
+#include "lib/sim/isa/gfx950/binary_decoder.h"
 
 #include <cstddef>
 #include <cstdint>

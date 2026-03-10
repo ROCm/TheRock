@@ -11,7 +11,7 @@
 #include <vector>
 
 #include "lib/sim/exec/dispatch/dispatch_context.h"
-#include "lib/sim/isa/gfx950_interpreter.h"
+#include "lib/sim/isa/gfx950/interpreter.h"
 #include "lib/sim/gpu/virtual_gpu_device.h"
 #include "lib/sim/memory/gpu_va_space.h"
 #include "lib/sim/memory/memory_region.h"

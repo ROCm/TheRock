@@ -11,11 +11,11 @@
 #include <string_view>
 #include <vector>
 
-#include "lib/sim/isa/decoded_instruction.h"
-#include "lib/sim/isa/execution_memory.h"
-#include "lib/sim/isa/gfx950_interpreter.h"
+#include "lib/sim/isa/common/decoded_instruction.h"
+#include "lib/sim/isa/common/execution_memory.h"
+#include "lib/sim/isa/common/wave_execution_state.h"
+#include "lib/sim/isa/gfx950/interpreter.h"
 #include "lib/sim/isa/instruction_catalog.h"
-#include "lib/sim/isa/wave_execution_state.h"
 #include "lib/sim/single_gpu_simulator.h"
 
 namespace {
