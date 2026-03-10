@@ -192,6 +192,13 @@ endblock()
 # Project wide flags for controlling the build system.
 ################################################################################
 
+# Note that delay-loading is incompatible with ASAN until a more robust mechanism
+# is implemented. See: https://github.com/ROCm/TheRock/issues/1783
+cmake_dependent_option(
+  THEROCK_FLAG_COMGR_DELAY_LOAD
+  "Enables delay loading and linker namespacing of the amd_comgr library (Linux only)"
+  ON "LINUX" OFF)
+
 # Flag: -DTHEROCK_FLAG_INCLUDE_PROFILER=OFF
 # Note that the profiler is an integral part of the system and disabling it is not
 # fully supported. However, in early bringup, it can be useful to disable building
