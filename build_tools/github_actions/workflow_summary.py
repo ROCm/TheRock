@@ -168,6 +168,24 @@ def fetch_failed_jobs(
     return failed
 
 
+def _print_failed_sub_job_urls(github_repository: str, github_run_id: str) -> None:
+    """Best-effort: fetch and print URLs for failed sub-jobs."""
+    try:
+        failed_jobs = fetch_failed_jobs(github_repository, github_run_id)
+    except GitHubAPIError as e:
+        print(f"\n  (Could not fetch job details: {e})")
+        return
+
+    if not failed_jobs:
+        return
+
+    print(f"\n{_RED}Failed sub-jobs:{_RESET}")
+    for job in failed_jobs:
+        print(f"  {_RED}{job.name}{_RESET}")
+        if job.html_url:
+            print(f"    {job.html_url}")
+
+
 # ---------------------------------------------------------------------------
 # ANSI colors (supported by GitHub Actions log output)
 # ---------------------------------------------------------------------------
@@ -220,36 +238,18 @@ def main(argv: list[str]) -> int:
         print(f"  {color}{job.name}: {job.result}{_RESET}")
 
     if failed:
-        print(f"\n{_RED}The following jobs failed:{_RESET}")
+        print(f"\n{_RED}The following job(s) failed:{_RESET}")
         for job in failed:
             print(f"  {_RED}{job.name}{_RESET}")
 
         # Try to fetch granular failure info from the API.
         if args.github_repository and args.github_run_id:
-            _print_failed_job_urls(args.github_repository, args.github_run_id)
+            _print_failed_sub_job_urls(args.github_repository, args.github_run_id)
 
         return 1
 
     print(f"\n{_GREEN}All required jobs succeeded.{_RESET}")
     return 0
-
-
-def _print_failed_job_urls(github_repository: str, github_run_id: str) -> None:
-    """Best-effort: fetch and print URLs for failed sub-jobs."""
-    try:
-        failed_jobs = fetch_failed_jobs(github_repository, github_run_id)
-    except GitHubAPIError as e:
-        print(f"\n  (Could not fetch job details: {e})")
-        return
-
-    if not failed_jobs:
-        return
-
-    print(f"\n{_RED}Failed jobs:{_RESET}")
-    for job in failed_jobs:
-        print(f"  {_RED}{job.name}{_RESET}")
-        if job.html_url:
-            print(f"    {job.html_url}")
 
 
 if __name__ == "__main__":
