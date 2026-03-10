@@ -489,7 +489,6 @@ endif(THEROCK_BUILD_TESTING)
 
 if(NOT WIN32)
   if(THEROCK_ENABLE_ROCM_BANDWIDTH_TEST)
-
     therock_cmake_subproject_declare(rocm-bandwidth-test
       USE_DIST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/rocm-bandwidth-test"
