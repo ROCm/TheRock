@@ -75,6 +75,7 @@ if(THEROCK_BUILD_TESTING AND THEROCK_ENABLE_OCL_RUNTIME)
         "-DSPIRV_TOOLS_DIR=${CMAKE_CURRENT_BINARY_DIR}/spirv-tools/dist/bin"
         "-DOPENCL_LIBRARIES=OpenCL"
         "-DCMAKE_BUILD_TYPE=Release"
+        "-DCMAKE_INSTALL_BINDIR=share/opencl/opencl-cts"
       BUILD_DEPS
         rocm-cmake
         spirv-tools
