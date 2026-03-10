@@ -630,7 +630,7 @@ disable_platforms = ["windows"]
 [artifacts.rocshmem]
 artifact_group = "comm-libs"
 type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip", "sysdeps"]
+artifact_deps = ["core-runtime", "core-hip", "sysdeps", "openmpi"]
 disable_platforms = ["windows"]
 
 # --- Profiler Tools ---
