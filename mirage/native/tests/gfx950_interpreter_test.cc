@@ -2,6 +2,7 @@
 #include <cstddef>
 #include <cstring>
 #include <iostream>
+#include <memory>
 #include <span>
 #include <string>
 #include <string_view>
@@ -215,6 +216,13 @@ struct ScalarPairBinaryCase {
   std::uint64_t rhs = 0;
   std::uint64_t expected = 0;
   bool initial_scc = false;
+  bool expected_scc = false;
+};
+
+struct ScalarPairCompareCase {
+  std::string_view opcode;
+  std::uint64_t lhs = 0;
+  std::uint64_t rhs = 0;
   bool expected_scc = false;
 };
 
@@ -510,6 +518,53 @@ bool RunScalarPairUnaryCase(
   return true;
 }
 
+bool RunScalarPairCompareCase(
+    const mirage::sim::isa::Gfx950Interpreter& interpreter,
+    const ScalarPairCompareCase& test_case,
+    bool use_compiled_program) {
+  using namespace mirage::sim::isa;
+
+  const std::vector<DecodedInstruction> program = {
+      DecodedInstruction::TwoOperand(test_case.opcode, InstructionOperand::Sgpr(20),
+                                     InstructionOperand::Sgpr(24)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+
+  WaveExecutionState state;
+  SplitU64(test_case.lhs, &state.sgprs[20], &state.sgprs[21]);
+  SplitU64(test_case.rhs, &state.sgprs[24], &state.sgprs[25]);
+
+  std::string error_message;
+  if (use_compiled_program) {
+    std::vector<CompiledInstruction> compiled_program;
+    if (!interpreter.CompileProgram(program, &compiled_program, &error_message)) {
+      std::cerr << test_case.opcode << " compile: " << error_message << '\n';
+      return false;
+    }
+    if (!interpreter.ExecuteProgram(compiled_program, &state, &error_message)) {
+      std::cerr << test_case.opcode << " compiled execute: " << error_message
+                << '\n';
+      return false;
+    }
+  } else if (!interpreter.ExecuteProgram(program, &state, &error_message)) {
+    std::cerr << test_case.opcode << " decoded execute: " << error_message
+              << '\n';
+    return false;
+  }
+
+  const char* mode = use_compiled_program ? "compiled" : "decoded";
+  if (!Expect(state.halted, "expected scalar pair compare test to halt")) {
+    std::cerr << test_case.opcode << ' ' << mode << '\n';
+    return false;
+  }
+  if (!Expect(state.scc == test_case.expected_scc,
+              "expected scalar pair compare SCC")) {
+    std::cerr << test_case.opcode << ' ' << mode << '\n';
+    return false;
+  }
+  return true;
+}
+
 bool RunScalarPairFromScalarUnaryCase(
     const mirage::sim::isa::Gfx950Interpreter& interpreter,
     const ScalarPairFromScalarUnaryCase& test_case,
@@ -730,8 +785,12 @@ int main() {
               "expected S_BITSET1_B64 support") ||
       !Expect(interpreter.Supports("S_ADDK_I32"),
               "expected S_ADDK_I32 support") ||
+      !Expect(interpreter.Supports("S_ADD_I32"),
+              "expected S_ADD_I32 support") ||
       !Expect(interpreter.Supports("S_ADDC_U32"),
               "expected S_ADDC_U32 support") ||
+      !Expect(interpreter.Supports("S_SUB_I32"),
+              "expected S_SUB_I32 support") ||
       !Expect(interpreter.Supports("S_MULK_I32"),
               "expected S_MULK_I32 support") ||
       !Expect(interpreter.Supports("S_MUL_I32"),
@@ -742,6 +801,14 @@ int main() {
               "expected S_MUL_HI_I32 support") ||
       !Expect(interpreter.Supports("S_SUBB_U32"),
               "expected S_SUBB_U32 support") ||
+      !Expect(interpreter.Supports("S_MIN_I32"),
+              "expected S_MIN_I32 support") ||
+      !Expect(interpreter.Supports("S_MIN_U32"),
+              "expected S_MIN_U32 support") ||
+      !Expect(interpreter.Supports("S_MAX_I32"),
+              "expected S_MAX_I32 support") ||
+      !Expect(interpreter.Supports("S_MAX_U32"),
+              "expected S_MAX_U32 support") ||
       !Expect(interpreter.Supports("S_LSHL1_ADD_U32"),
               "expected S_LSHL1_ADD_U32 support") ||
       !Expect(interpreter.Supports("S_LSHL2_ADD_U32"),
@@ -998,6 +1065,10 @@ int main() {
               "expected GLOBAL_ATOMIC_CMPSWAP support") ||
       !Expect(interpreter.Supports("S_CMP_EQ_U32"),
               "expected S_CMP_EQ_U32 support") ||
+      !Expect(interpreter.Supports("S_CMP_EQ_U64"),
+              "expected S_CMP_EQ_U64 support") ||
+      !Expect(interpreter.Supports("S_CMP_LG_U64"),
+              "expected S_CMP_LG_U64 support") ||
       !Expect(interpreter.Supports("S_CMP_GT_I32"),
               "expected S_CMP_GT_I32 support") ||
       !Expect(interpreter.Supports("S_CMP_GT_U32"),
@@ -1048,12 +1119,38 @@ int main() {
               "expected S_ANDN2_WREXEC_B64 support") ||
       !Expect(interpreter.Supports("S_BARRIER"),
               "expected S_BARRIER support") ||
+      !Expect(interpreter.Supports("V_NOP"),
+              "expected V_NOP support") ||
       !Expect(interpreter.Supports("V_READFIRSTLANE_B32"),
               "expected V_READFIRSTLANE_B32 support") ||
       !Expect(interpreter.Supports("V_READLANE_B32"),
               "expected V_READLANE_B32 support") ||
       !Expect(interpreter.Supports("V_WRITELANE_B32"),
               "expected V_WRITELANE_B32 support") ||
+      !Expect(interpreter.Supports("V_CVT_F16_U16"),
+              "expected V_CVT_F16_U16 support") ||
+      !Expect(interpreter.Supports("V_CVT_F16_I16"),
+              "expected V_CVT_F16_I16 support") ||
+      !Expect(interpreter.Supports("V_CVT_U16_F16"),
+              "expected V_CVT_U16_F16 support") ||
+      !Expect(interpreter.Supports("V_CVT_I16_F16"),
+              "expected V_CVT_I16_F16 support") ||
+      !Expect(interpreter.Supports("V_SAT_PK_U8_I16"),
+              "expected V_SAT_PK_U8_I16 support") ||
+      !Expect(interpreter.Supports("V_EXP_LEGACY_F32"),
+              "expected V_EXP_LEGACY_F32 support") ||
+      !Expect(interpreter.Supports("V_LOG_LEGACY_F32"),
+              "expected V_LOG_LEGACY_F32 support") ||
+      !Expect(interpreter.Supports("V_CVT_F32_UBYTE0"),
+              "expected V_CVT_F32_UBYTE0 support") ||
+      !Expect(interpreter.Supports("V_CVT_F32_UBYTE1"),
+              "expected V_CVT_F32_UBYTE1 support") ||
+      !Expect(interpreter.Supports("V_CVT_F32_UBYTE2"),
+              "expected V_CVT_F32_UBYTE2 support") ||
+      !Expect(interpreter.Supports("V_CVT_F32_UBYTE3"),
+              "expected V_CVT_F32_UBYTE3 support") ||
+      !Expect(interpreter.Supports("DS_NOP"),
+              "expected DS_NOP support") ||
       !Expect(interpreter.Supports("DS_ADD_U32"),
               "expected DS_ADD_U32 support") ||
       !Expect(interpreter.Supports("DS_READ_B32"),
@@ -1225,10 +1322,16 @@ int main() {
     }
   }
 
-  const std::array<ScalarBinaryCase, 24> kScalarBinaryCases = {{
+  const std::array<ScalarBinaryCase, 30> kScalarBinaryCases = {{
       {"S_CSELECT_B32", 0x11111111U, 0x22222222U, 0x11111111U, true, true},
       {"S_CSELECT_B32", 0x11111111U, 0x22222222U, 0x22222222U, false, false},
       {"S_ABSDIFF_I32", 5U, 17U, 12U, false, true},
+      {"S_ADD_I32", 0xffffffffU, 1U, 0x00000000U, false, true},
+      {"S_SUB_I32", 0U, 1U, 0xffffffffU, false, false},
+      {"S_MIN_I32", 0xfffffffbu, 3U, 0xfffffffbu, false, true},
+      {"S_MIN_U32", 5U, 3U, 3U, true, false},
+      {"S_MAX_I32", 0xfffffffbu, 3U, 3U, true, false},
+      {"S_MAX_U32", 5U, 3U, 5U, false, true},
       {"S_BFE_U32", 0x12345678U, 0x00080008U, 0x00000056U, false, true},
       {"S_BFE_I32", 0x0000f000U, 0x0004000cU, 0xffffffffU, false, true},
       {"S_ANDN2_B32", 0x55ff0f0fU, 0x3300aa55U, 0x44ff050aU, false, true},
@@ -1351,6 +1454,19 @@ int main() {
   for (const ScalarPairBinaryCase& test_case : kScalarPairBinaryCases) {
     if (!RunScalarPairBinaryCase(interpreter, test_case, false) ||
         !RunScalarPairBinaryCase(interpreter, test_case, true)) {
+      return 1;
+    }
+  }
+
+  const std::array<ScalarPairCompareCase, 4> kScalarPairCompareCases = {{
+      {"S_CMP_EQ_U64", 0x123456789abcdef0ULL, 0x123456789abcdef0ULL, true},
+      {"S_CMP_EQ_U64", 0x123456789abcdef0ULL, 0x123456789abcdef1ULL, false},
+      {"S_CMP_LG_U64", 0x0000000000000001ULL, 0x0000000000000002ULL, true},
+      {"S_CMP_LG_U64", 0xabcdef0123456789ULL, 0xabcdef0123456789ULL, false},
+  }};
+  for (const ScalarPairCompareCase& test_case : kScalarPairCompareCases) {
+    if (!RunScalarPairCompareCase(interpreter, test_case, false) ||
+        !RunScalarPairCompareCase(interpreter, test_case, true)) {
       return 1;
     }
   }
@@ -2046,6 +2162,459 @@ int main() {
       !Expect(compiled_vector_conversion_state.vgprs[88][2] == 0xdeadbeefu &&
                   compiled_vector_conversion_state.vgprs[89][2] == 0xcafebabeu,
               "expected inactive compiled v_cvt_f64_u32 result")) {
+    return 1;
+  }
+
+  const std::vector<DecodedInstruction> vector_byte_conversion_program = {
+      DecodedInstruction::Nullary("V_NOP"),
+      DecodedInstruction::Unary("V_CVT_F16_U16", InstructionOperand::Vgpr(96),
+                                InstructionOperand::Vgpr(90)),
+      DecodedInstruction::Unary("V_CVT_F32_UBYTE0",
+                                InstructionOperand::Vgpr(97),
+                                InstructionOperand::Vgpr(91)),
+      DecodedInstruction::Unary("V_CVT_F32_UBYTE1",
+                                InstructionOperand::Vgpr(98),
+                                InstructionOperand::Vgpr(91)),
+      DecodedInstruction::Unary("V_CVT_F32_UBYTE2",
+                                InstructionOperand::Vgpr(99),
+                                InstructionOperand::Vgpr(91)),
+      DecodedInstruction::Unary("V_CVT_F32_UBYTE3",
+                                InstructionOperand::Vgpr(100),
+                                InstructionOperand::Vgpr(91)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+
+  WaveExecutionState vector_byte_conversion_state;
+  vector_byte_conversion_state.exec_mask = 0b1011ULL;
+  vector_byte_conversion_state.vgprs[90][0] = 1u;
+  vector_byte_conversion_state.vgprs[90][1] = 2u;
+  vector_byte_conversion_state.vgprs[90][3] = 3u;
+  vector_byte_conversion_state.vgprs[91][0] = 0x44332211u;
+  vector_byte_conversion_state.vgprs[91][1] = 0xaabbccddu;
+  vector_byte_conversion_state.vgprs[91][3] = 0x01020304u;
+  vector_byte_conversion_state.vgprs[96][2] = 0xdeadbeefu;
+  vector_byte_conversion_state.vgprs[97][2] = 0xdeadbeefu;
+  vector_byte_conversion_state.vgprs[98][2] = 0xdeadbeefu;
+  vector_byte_conversion_state.vgprs[99][2] = 0xdeadbeefu;
+  vector_byte_conversion_state.vgprs[100][2] = 0xdeadbeefu;
+  if (!Expect(interpreter.ExecuteProgram(vector_byte_conversion_program,
+                                         &vector_byte_conversion_state,
+                                         &error_message),
+              error_message.c_str()) ||
+      !Expect(vector_byte_conversion_state.halted,
+              "expected decoded vector byte conversion program to halt") ||
+      !Expect(vector_byte_conversion_state.vgprs[96][0] == 0x00003c00u,
+              "expected decoded v_cvt_f16_u16 lane 0 result") ||
+      !Expect(vector_byte_conversion_state.vgprs[96][1] == 0x00004000u,
+              "expected decoded v_cvt_f16_u16 lane 1 result") ||
+      !Expect(vector_byte_conversion_state.vgprs[96][2] == 0xdeadbeefu,
+              "expected inactive decoded v_cvt_f16_u16 result") ||
+      !Expect(vector_byte_conversion_state.vgprs[96][3] == 0x00004200u,
+              "expected decoded v_cvt_f16_u16 lane 3 result") ||
+      !Expect(vector_byte_conversion_state.vgprs[97][0] == FloatBits(17.0f),
+              "expected decoded v_cvt_f32_ubyte0 lane 0 result") ||
+      !Expect(vector_byte_conversion_state.vgprs[97][1] == FloatBits(221.0f),
+              "expected decoded v_cvt_f32_ubyte0 lane 1 result") ||
+      !Expect(vector_byte_conversion_state.vgprs[97][2] == 0xdeadbeefu,
+              "expected inactive decoded v_cvt_f32_ubyte0 result") ||
+      !Expect(vector_byte_conversion_state.vgprs[97][3] == FloatBits(4.0f),
+              "expected decoded v_cvt_f32_ubyte0 lane 3 result") ||
+      !Expect(vector_byte_conversion_state.vgprs[98][0] == FloatBits(34.0f),
+              "expected decoded v_cvt_f32_ubyte1 lane 0 result") ||
+      !Expect(vector_byte_conversion_state.vgprs[98][1] == FloatBits(204.0f),
+              "expected decoded v_cvt_f32_ubyte1 lane 1 result") ||
+      !Expect(vector_byte_conversion_state.vgprs[98][2] == 0xdeadbeefu,
+              "expected inactive decoded v_cvt_f32_ubyte1 result") ||
+      !Expect(vector_byte_conversion_state.vgprs[98][3] == FloatBits(3.0f),
+              "expected decoded v_cvt_f32_ubyte1 lane 3 result") ||
+      !Expect(vector_byte_conversion_state.vgprs[99][0] == FloatBits(51.0f),
+              "expected decoded v_cvt_f32_ubyte2 lane 0 result") ||
+      !Expect(vector_byte_conversion_state.vgprs[99][1] == FloatBits(187.0f),
+              "expected decoded v_cvt_f32_ubyte2 lane 1 result") ||
+      !Expect(vector_byte_conversion_state.vgprs[99][2] == 0xdeadbeefu,
+              "expected inactive decoded v_cvt_f32_ubyte2 result") ||
+      !Expect(vector_byte_conversion_state.vgprs[99][3] == FloatBits(2.0f),
+              "expected decoded v_cvt_f32_ubyte2 lane 3 result") ||
+      !Expect(vector_byte_conversion_state.vgprs[100][0] == FloatBits(68.0f),
+              "expected decoded v_cvt_f32_ubyte3 lane 0 result") ||
+      !Expect(vector_byte_conversion_state.vgprs[100][1] == FloatBits(170.0f),
+              "expected decoded v_cvt_f32_ubyte3 lane 1 result") ||
+      !Expect(vector_byte_conversion_state.vgprs[100][2] == 0xdeadbeefu,
+              "expected inactive decoded v_cvt_f32_ubyte3 result") ||
+      !Expect(vector_byte_conversion_state.vgprs[100][3] == FloatBits(1.0f),
+              "expected decoded v_cvt_f32_ubyte3 lane 3 result")) {
+    return 1;
+  }
+
+  std::vector<CompiledInstruction> compiled_vector_byte_conversion_program;
+  if (!Expect(interpreter.CompileProgram(vector_byte_conversion_program,
+                                         &compiled_vector_byte_conversion_program,
+                                         &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+
+  WaveExecutionState compiled_vector_byte_conversion_state;
+  compiled_vector_byte_conversion_state.exec_mask = 0b1011ULL;
+  compiled_vector_byte_conversion_state.vgprs[90][0] = 1u;
+  compiled_vector_byte_conversion_state.vgprs[90][1] = 2u;
+  compiled_vector_byte_conversion_state.vgprs[90][3] = 3u;
+  compiled_vector_byte_conversion_state.vgprs[91][0] = 0x44332211u;
+  compiled_vector_byte_conversion_state.vgprs[91][1] = 0xaabbccddu;
+  compiled_vector_byte_conversion_state.vgprs[91][3] = 0x01020304u;
+  compiled_vector_byte_conversion_state.vgprs[96][2] = 0xdeadbeefu;
+  compiled_vector_byte_conversion_state.vgprs[97][2] = 0xdeadbeefu;
+  compiled_vector_byte_conversion_state.vgprs[98][2] = 0xdeadbeefu;
+  compiled_vector_byte_conversion_state.vgprs[99][2] = 0xdeadbeefu;
+  compiled_vector_byte_conversion_state.vgprs[100][2] = 0xdeadbeefu;
+  if (!Expect(interpreter.ExecuteProgram(
+                  compiled_vector_byte_conversion_program,
+                  &compiled_vector_byte_conversion_state, &error_message),
+              error_message.c_str()) ||
+      !Expect(compiled_vector_byte_conversion_state.halted,
+              "expected compiled vector byte conversion program to halt") ||
+      !Expect(compiled_vector_byte_conversion_state.vgprs[96][0] == 0x00003c00u,
+              "expected compiled v_cvt_f16_u16 lane 0 result") ||
+      !Expect(compiled_vector_byte_conversion_state.vgprs[96][1] == 0x00004000u,
+              "expected compiled v_cvt_f16_u16 lane 1 result") ||
+      !Expect(compiled_vector_byte_conversion_state.vgprs[96][2] ==
+                  0xdeadbeefu,
+              "expected inactive compiled v_cvt_f16_u16 result") ||
+      !Expect(compiled_vector_byte_conversion_state.vgprs[96][3] == 0x00004200u,
+              "expected compiled v_cvt_f16_u16 lane 3 result") ||
+      !Expect(compiled_vector_byte_conversion_state.vgprs[97][0] ==
+                  FloatBits(17.0f),
+              "expected compiled v_cvt_f32_ubyte0 lane 0 result") ||
+      !Expect(compiled_vector_byte_conversion_state.vgprs[97][1] ==
+                  FloatBits(221.0f),
+              "expected compiled v_cvt_f32_ubyte0 lane 1 result") ||
+      !Expect(compiled_vector_byte_conversion_state.vgprs[97][2] ==
+                  0xdeadbeefu,
+              "expected inactive compiled v_cvt_f32_ubyte0 result") ||
+      !Expect(compiled_vector_byte_conversion_state.vgprs[97][3] ==
+                  FloatBits(4.0f),
+              "expected compiled v_cvt_f32_ubyte0 lane 3 result") ||
+      !Expect(compiled_vector_byte_conversion_state.vgprs[98][0] ==
+                  FloatBits(34.0f),
+              "expected compiled v_cvt_f32_ubyte1 lane 0 result") ||
+      !Expect(compiled_vector_byte_conversion_state.vgprs[98][1] ==
+                  FloatBits(204.0f),
+              "expected compiled v_cvt_f32_ubyte1 lane 1 result") ||
+      !Expect(compiled_vector_byte_conversion_state.vgprs[98][2] ==
+                  0xdeadbeefu,
+              "expected inactive compiled v_cvt_f32_ubyte1 result") ||
+      !Expect(compiled_vector_byte_conversion_state.vgprs[98][3] ==
+                  FloatBits(3.0f),
+              "expected compiled v_cvt_f32_ubyte1 lane 3 result") ||
+      !Expect(compiled_vector_byte_conversion_state.vgprs[99][0] ==
+                  FloatBits(51.0f),
+              "expected compiled v_cvt_f32_ubyte2 lane 0 result") ||
+      !Expect(compiled_vector_byte_conversion_state.vgprs[99][1] ==
+                  FloatBits(187.0f),
+              "expected compiled v_cvt_f32_ubyte2 lane 1 result") ||
+      !Expect(compiled_vector_byte_conversion_state.vgprs[99][2] ==
+                  0xdeadbeefu,
+              "expected inactive compiled v_cvt_f32_ubyte2 result") ||
+      !Expect(compiled_vector_byte_conversion_state.vgprs[99][3] ==
+                  FloatBits(2.0f),
+              "expected compiled v_cvt_f32_ubyte2 lane 3 result") ||
+      !Expect(compiled_vector_byte_conversion_state.vgprs[100][0] ==
+                  FloatBits(68.0f),
+              "expected compiled v_cvt_f32_ubyte3 lane 0 result") ||
+      !Expect(compiled_vector_byte_conversion_state.vgprs[100][1] ==
+                  FloatBits(170.0f),
+              "expected compiled v_cvt_f32_ubyte3 lane 1 result") ||
+      !Expect(compiled_vector_byte_conversion_state.vgprs[100][2] ==
+                  0xdeadbeefu,
+              "expected inactive compiled v_cvt_f32_ubyte3 result") ||
+      !Expect(compiled_vector_byte_conversion_state.vgprs[100][3] ==
+                  FloatBits(1.0f),
+              "expected compiled v_cvt_f32_ubyte3 lane 3 result")) {
+    return 1;
+  }
+
+  const std::vector<DecodedInstruction> vector_half_int_conversion_program = {
+      DecodedInstruction::Unary("V_CVT_F16_I16", InstructionOperand::Vgpr(101),
+                                InstructionOperand::Vgpr(92)),
+      DecodedInstruction::Unary("V_CVT_U16_F16", InstructionOperand::Vgpr(102),
+                                InstructionOperand::Vgpr(93)),
+      DecodedInstruction::Unary("V_CVT_I16_F16", InstructionOperand::Vgpr(103),
+                                InstructionOperand::Vgpr(94)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+
+  auto vector_half_int_conversion_state = std::make_unique<WaveExecutionState>();
+  vector_half_int_conversion_state->exec_mask = 0b1011ULL;
+  vector_half_int_conversion_state->vgprs[92][0] = 0xffffu;
+  vector_half_int_conversion_state->vgprs[92][1] = 0x0002u;
+  vector_half_int_conversion_state->vgprs[92][3] = 0xfffdu;
+  vector_half_int_conversion_state->vgprs[93][0] = 0x00003e00u;
+  vector_half_int_conversion_state->vgprs[93][1] = 0x00004000u;
+  vector_half_int_conversion_state->vgprs[93][3] = 0x00004300u;
+  vector_half_int_conversion_state->vgprs[94][0] = 0x0000be00u;
+  vector_half_int_conversion_state->vgprs[94][1] = 0x00004000u;
+  vector_half_int_conversion_state->vgprs[94][3] = 0x0000c200u;
+  vector_half_int_conversion_state->vgprs[101][2] = 0xdeadbeefu;
+  vector_half_int_conversion_state->vgprs[102][2] = 0xdeadbeefu;
+  vector_half_int_conversion_state->vgprs[103][2] = 0xdeadbeefu;
+  if (!Expect(interpreter.ExecuteProgram(vector_half_int_conversion_program,
+                                         vector_half_int_conversion_state.get(),
+                                         &error_message),
+              error_message.c_str()) ||
+      !Expect(vector_half_int_conversion_state->halted,
+              "expected decoded vector half/int conversion program to halt") ||
+      !Expect(vector_half_int_conversion_state->vgprs[101][0] == 0x0000bc00u,
+              "expected decoded v_cvt_f16_i16 lane 0 result") ||
+      !Expect(vector_half_int_conversion_state->vgprs[101][1] == 0x00004000u,
+              "expected decoded v_cvt_f16_i16 lane 1 result") ||
+      !Expect(vector_half_int_conversion_state->vgprs[101][2] == 0xdeadbeefu,
+              "expected inactive decoded v_cvt_f16_i16 result") ||
+      !Expect(vector_half_int_conversion_state->vgprs[101][3] == 0x0000c200u,
+              "expected decoded v_cvt_f16_i16 lane 3 result") ||
+      !Expect(vector_half_int_conversion_state->vgprs[102][0] == 1u,
+              "expected decoded v_cvt_u16_f16 lane 0 result") ||
+      !Expect(vector_half_int_conversion_state->vgprs[102][1] == 2u,
+              "expected decoded v_cvt_u16_f16 lane 1 result") ||
+      !Expect(vector_half_int_conversion_state->vgprs[102][2] == 0xdeadbeefu,
+              "expected inactive decoded v_cvt_u16_f16 result") ||
+      !Expect(vector_half_int_conversion_state->vgprs[102][3] == 3u,
+              "expected decoded v_cvt_u16_f16 lane 3 result") ||
+      !Expect(vector_half_int_conversion_state->vgprs[103][0] == 0x0000ffffu,
+              "expected decoded v_cvt_i16_f16 lane 0 result") ||
+      !Expect(vector_half_int_conversion_state->vgprs[103][1] == 0x00000002u,
+              "expected decoded v_cvt_i16_f16 lane 1 result") ||
+      !Expect(vector_half_int_conversion_state->vgprs[103][2] == 0xdeadbeefu,
+              "expected inactive decoded v_cvt_i16_f16 result") ||
+      !Expect(vector_half_int_conversion_state->vgprs[103][3] == 0x0000fffdu,
+              "expected decoded v_cvt_i16_f16 lane 3 result")) {
+    return 1;
+  }
+
+  std::vector<CompiledInstruction> compiled_vector_half_int_conversion_program;
+  if (!Expect(interpreter.CompileProgram(vector_half_int_conversion_program,
+                                         &compiled_vector_half_int_conversion_program,
+                                         &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+
+  auto compiled_vector_half_int_conversion_state =
+      std::make_unique<WaveExecutionState>();
+  compiled_vector_half_int_conversion_state->exec_mask = 0b1011ULL;
+  compiled_vector_half_int_conversion_state->vgprs[92][0] = 0xffffu;
+  compiled_vector_half_int_conversion_state->vgprs[92][1] = 0x0002u;
+  compiled_vector_half_int_conversion_state->vgprs[92][3] = 0xfffdu;
+  compiled_vector_half_int_conversion_state->vgprs[93][0] = 0x00003e00u;
+  compiled_vector_half_int_conversion_state->vgprs[93][1] = 0x00004000u;
+  compiled_vector_half_int_conversion_state->vgprs[93][3] = 0x00004300u;
+  compiled_vector_half_int_conversion_state->vgprs[94][0] = 0x0000be00u;
+  compiled_vector_half_int_conversion_state->vgprs[94][1] = 0x00004000u;
+  compiled_vector_half_int_conversion_state->vgprs[94][3] = 0x0000c200u;
+  compiled_vector_half_int_conversion_state->vgprs[101][2] = 0xdeadbeefu;
+  compiled_vector_half_int_conversion_state->vgprs[102][2] = 0xdeadbeefu;
+  compiled_vector_half_int_conversion_state->vgprs[103][2] = 0xdeadbeefu;
+  if (!Expect(interpreter.ExecuteProgram(
+                  compiled_vector_half_int_conversion_program,
+                  compiled_vector_half_int_conversion_state.get(),
+                  &error_message),
+              error_message.c_str()) ||
+      !Expect(compiled_vector_half_int_conversion_state->halted,
+              "expected compiled vector half/int conversion program to halt") ||
+      !Expect(compiled_vector_half_int_conversion_state->vgprs[101][0] ==
+                  0x0000bc00u,
+              "expected compiled v_cvt_f16_i16 lane 0 result") ||
+      !Expect(compiled_vector_half_int_conversion_state->vgprs[101][1] ==
+                  0x00004000u,
+              "expected compiled v_cvt_f16_i16 lane 1 result") ||
+      !Expect(compiled_vector_half_int_conversion_state->vgprs[101][2] ==
+                  0xdeadbeefu,
+              "expected inactive compiled v_cvt_f16_i16 result") ||
+      !Expect(compiled_vector_half_int_conversion_state->vgprs[101][3] ==
+                  0x0000c200u,
+              "expected compiled v_cvt_f16_i16 lane 3 result") ||
+      !Expect(compiled_vector_half_int_conversion_state->vgprs[102][0] == 1u,
+              "expected compiled v_cvt_u16_f16 lane 0 result") ||
+      !Expect(compiled_vector_half_int_conversion_state->vgprs[102][1] == 2u,
+              "expected compiled v_cvt_u16_f16 lane 1 result") ||
+      !Expect(compiled_vector_half_int_conversion_state->vgprs[102][2] ==
+                  0xdeadbeefu,
+              "expected inactive compiled v_cvt_u16_f16 result") ||
+      !Expect(compiled_vector_half_int_conversion_state->vgprs[102][3] == 3u,
+              "expected compiled v_cvt_u16_f16 lane 3 result") ||
+      !Expect(compiled_vector_half_int_conversion_state->vgprs[103][0] ==
+                  0x0000ffffu,
+              "expected compiled v_cvt_i16_f16 lane 0 result") ||
+      !Expect(compiled_vector_half_int_conversion_state->vgprs[103][1] ==
+                  0x00000002u,
+              "expected compiled v_cvt_i16_f16 lane 1 result") ||
+      !Expect(compiled_vector_half_int_conversion_state->vgprs[103][2] ==
+                  0xdeadbeefu,
+              "expected inactive compiled v_cvt_i16_f16 result") ||
+      !Expect(compiled_vector_half_int_conversion_state->vgprs[103][3] ==
+                  0x0000fffdu,
+              "expected compiled v_cvt_i16_f16 lane 3 result")) {
+    return 1;
+  }
+
+  const std::vector<DecodedInstruction> vector_sat_pk_program = {
+      DecodedInstruction::Unary("V_SAT_PK_U8_I16", InstructionOperand::Vgpr(106),
+                                InstructionOperand::Vgpr(97)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+
+  auto vector_sat_pk_state = std::make_unique<WaveExecutionState>();
+  vector_sat_pk_state->exec_mask = 0b1011ULL;
+  vector_sat_pk_state->vgprs[97][0] = 0x007f0100u;
+  vector_sat_pk_state->vgprs[97][1] = 0xffff0001u;
+  vector_sat_pk_state->vgprs[97][3] = 0x12340080u;
+  vector_sat_pk_state->vgprs[106][2] = 0xdeadbeefu;
+  if (!Expect(interpreter.ExecuteProgram(vector_sat_pk_program,
+                                         vector_sat_pk_state.get(),
+                                         &error_message),
+              error_message.c_str()) ||
+      !Expect(vector_sat_pk_state->halted,
+              "expected decoded v_sat_pk_u8_i16 program to halt") ||
+      !Expect(vector_sat_pk_state->vgprs[106][0] == 0x00007fffu,
+              "expected decoded v_sat_pk_u8_i16 lane 0 result") ||
+      !Expect(vector_sat_pk_state->vgprs[106][1] == 0x00000001u,
+              "expected decoded v_sat_pk_u8_i16 lane 1 result") ||
+      !Expect(vector_sat_pk_state->vgprs[106][2] == 0xdeadbeefu,
+              "expected inactive decoded v_sat_pk_u8_i16 result") ||
+      !Expect(vector_sat_pk_state->vgprs[106][3] == 0x0000ff80u,
+              "expected decoded v_sat_pk_u8_i16 lane 3 result")) {
+    return 1;
+  }
+
+  std::vector<CompiledInstruction> compiled_vector_sat_pk_program;
+  if (!Expect(interpreter.CompileProgram(vector_sat_pk_program,
+                                         &compiled_vector_sat_pk_program,
+                                         &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+
+  auto compiled_vector_sat_pk_state = std::make_unique<WaveExecutionState>();
+  compiled_vector_sat_pk_state->exec_mask = 0b1011ULL;
+  compiled_vector_sat_pk_state->vgprs[97][0] = 0x007f0100u;
+  compiled_vector_sat_pk_state->vgprs[97][1] = 0xffff0001u;
+  compiled_vector_sat_pk_state->vgprs[97][3] = 0x12340080u;
+  compiled_vector_sat_pk_state->vgprs[106][2] = 0xdeadbeefu;
+  if (!Expect(interpreter.ExecuteProgram(compiled_vector_sat_pk_program,
+                                         compiled_vector_sat_pk_state.get(),
+                                         &error_message),
+              error_message.c_str()) ||
+      !Expect(compiled_vector_sat_pk_state->halted,
+              "expected compiled v_sat_pk_u8_i16 program to halt") ||
+      !Expect(compiled_vector_sat_pk_state->vgprs[106][0] == 0x00007fffu,
+              "expected compiled v_sat_pk_u8_i16 lane 0 result") ||
+      !Expect(compiled_vector_sat_pk_state->vgprs[106][1] == 0x00000001u,
+              "expected compiled v_sat_pk_u8_i16 lane 1 result") ||
+      !Expect(compiled_vector_sat_pk_state->vgprs[106][2] == 0xdeadbeefu,
+              "expected inactive compiled v_sat_pk_u8_i16 result") ||
+      !Expect(compiled_vector_sat_pk_state->vgprs[106][3] == 0x0000ff80u,
+              "expected compiled v_sat_pk_u8_i16 lane 3 result")) {
+    return 1;
+  }
+
+  const std::vector<DecodedInstruction> vector_legacy_float_math_program = {
+      DecodedInstruction::Unary("V_EXP_LEGACY_F32", InstructionOperand::Vgpr(104),
+                                InstructionOperand::Vgpr(95)),
+      DecodedInstruction::Unary("V_LOG_LEGACY_F32", InstructionOperand::Vgpr(105),
+                                InstructionOperand::Vgpr(96)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+
+  auto vector_legacy_float_math_state = std::make_unique<WaveExecutionState>();
+  vector_legacy_float_math_state->exec_mask = 0b1011ULL;
+  vector_legacy_float_math_state->vgprs[95][0] = FloatBits(1.0f);
+  vector_legacy_float_math_state->vgprs[95][1] = FloatBits(2.0f);
+  vector_legacy_float_math_state->vgprs[95][3] = FloatBits(-1.0f);
+  vector_legacy_float_math_state->vgprs[96][0] = FloatBits(1.0f);
+  vector_legacy_float_math_state->vgprs[96][1] = FloatBits(8.0f);
+  vector_legacy_float_math_state->vgprs[96][3] = FloatBits(0.5f);
+  vector_legacy_float_math_state->vgprs[104][2] = 0xdeadbeefu;
+  vector_legacy_float_math_state->vgprs[105][2] = 0xdeadbeefu;
+  if (!Expect(interpreter.ExecuteProgram(vector_legacy_float_math_program,
+                                         vector_legacy_float_math_state.get(),
+                                         &error_message),
+              error_message.c_str()) ||
+      !Expect(vector_legacy_float_math_state->halted,
+              "expected decoded legacy float math program to halt") ||
+      !Expect(vector_legacy_float_math_state->vgprs[104][0] ==
+                  FloatBits(2.0f),
+              "expected decoded v_exp_legacy_f32 lane 0 result") ||
+      !Expect(vector_legacy_float_math_state->vgprs[104][1] ==
+                  FloatBits(4.0f),
+              "expected decoded v_exp_legacy_f32 lane 1 result") ||
+      !Expect(vector_legacy_float_math_state->vgprs[104][2] == 0xdeadbeefu,
+              "expected inactive decoded v_exp_legacy_f32 result") ||
+      !Expect(vector_legacy_float_math_state->vgprs[104][3] ==
+                  FloatBits(0.5f),
+              "expected decoded v_exp_legacy_f32 lane 3 result") ||
+      !Expect(vector_legacy_float_math_state->vgprs[105][0] ==
+                  FloatBits(0.0f),
+              "expected decoded v_log_legacy_f32 lane 0 result") ||
+      !Expect(vector_legacy_float_math_state->vgprs[105][1] ==
+                  FloatBits(3.0f),
+              "expected decoded v_log_legacy_f32 lane 1 result") ||
+      !Expect(vector_legacy_float_math_state->vgprs[105][2] == 0xdeadbeefu,
+              "expected inactive decoded v_log_legacy_f32 result") ||
+      !Expect(vector_legacy_float_math_state->vgprs[105][3] ==
+                  FloatBits(-1.0f),
+              "expected decoded v_log_legacy_f32 lane 3 result")) {
+    return 1;
+  }
+
+  std::vector<CompiledInstruction> compiled_vector_legacy_float_math_program;
+  if (!Expect(interpreter.CompileProgram(vector_legacy_float_math_program,
+                                         &compiled_vector_legacy_float_math_program,
+                                         &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+
+  auto compiled_vector_legacy_float_math_state =
+      std::make_unique<WaveExecutionState>();
+  compiled_vector_legacy_float_math_state->exec_mask = 0b1011ULL;
+  compiled_vector_legacy_float_math_state->vgprs[95][0] = FloatBits(1.0f);
+  compiled_vector_legacy_float_math_state->vgprs[95][1] = FloatBits(2.0f);
+  compiled_vector_legacy_float_math_state->vgprs[95][3] = FloatBits(-1.0f);
+  compiled_vector_legacy_float_math_state->vgprs[96][0] = FloatBits(1.0f);
+  compiled_vector_legacy_float_math_state->vgprs[96][1] = FloatBits(8.0f);
+  compiled_vector_legacy_float_math_state->vgprs[96][3] = FloatBits(0.5f);
+  compiled_vector_legacy_float_math_state->vgprs[104][2] = 0xdeadbeefu;
+  compiled_vector_legacy_float_math_state->vgprs[105][2] = 0xdeadbeefu;
+  if (!Expect(interpreter.ExecuteProgram(
+                  compiled_vector_legacy_float_math_program,
+                  compiled_vector_legacy_float_math_state.get(),
+                  &error_message),
+              error_message.c_str()) ||
+      !Expect(compiled_vector_legacy_float_math_state->halted,
+              "expected compiled legacy float math program to halt") ||
+      !Expect(compiled_vector_legacy_float_math_state->vgprs[104][0] ==
+                  FloatBits(2.0f),
+              "expected compiled v_exp_legacy_f32 lane 0 result") ||
+      !Expect(compiled_vector_legacy_float_math_state->vgprs[104][1] ==
+                  FloatBits(4.0f),
+              "expected compiled v_exp_legacy_f32 lane 1 result") ||
+      !Expect(compiled_vector_legacy_float_math_state->vgprs[104][2] ==
+                  0xdeadbeefu,
+              "expected inactive compiled v_exp_legacy_f32 result") ||
+      !Expect(compiled_vector_legacy_float_math_state->vgprs[104][3] ==
+                  FloatBits(0.5f),
+              "expected compiled v_exp_legacy_f32 lane 3 result") ||
+      !Expect(compiled_vector_legacy_float_math_state->vgprs[105][0] ==
+                  FloatBits(0.0f),
+              "expected compiled v_log_legacy_f32 lane 0 result") ||
+      !Expect(compiled_vector_legacy_float_math_state->vgprs[105][1] ==
+                  FloatBits(3.0f),
+              "expected compiled v_log_legacy_f32 lane 1 result") ||
+      !Expect(compiled_vector_legacy_float_math_state->vgprs[105][2] ==
+                  0xdeadbeefu,
+              "expected inactive compiled v_log_legacy_f32 result") ||
+      !Expect(compiled_vector_legacy_float_math_state->vgprs[105][3] ==
+                  FloatBits(-1.0f),
+              "expected compiled v_log_legacy_f32 lane 3 result")) {
     return 1;
   }
 
@@ -5862,6 +6431,7 @@ int main() {
   ds_state.vgprs[2][3] = 4u;
   ds_state.vgprs[3][2] = 0xdeadbeefu;
   const std::vector<DecodedInstruction> ds_program = {
+      DecodedInstruction::Nullary("DS_NOP"),
       DecodedInstruction::ThreeOperand("DS_WRITE_B32", InstructionOperand::Vgpr(0),
                                        InstructionOperand::Vgpr(1),
                                        InstructionOperand::Imm32(0)),
@@ -5938,6 +6508,7 @@ int main() {
   ds_integer_state.vgprs[12][3] = 5u;
   ds_integer_state.vgprs[13][2] = 0xdeadbeefu;
   const std::vector<DecodedInstruction> ds_integer_program = {
+      DecodedInstruction::Nullary("DS_NOP"),
       DecodedInstruction::ThreeOperand("DS_WRITE_B32", InstructionOperand::Vgpr(0),
                                        InstructionOperand::Vgpr(1),
                                        InstructionOperand::Imm32(0)),

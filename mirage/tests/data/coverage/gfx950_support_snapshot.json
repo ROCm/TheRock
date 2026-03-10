@@ -291,14 +291,18 @@
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "DS_NOP"
+      ],
       "instruction_name": "DS_NOP",
       "measured_encodings": [
         "ENC_DS:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_DS:default"
+      ]
     },
     {
       "decode_measured": true,
@@ -5815,7 +5819,7 @@
       "measured_encodings": [
         "ENC_SOP2:default"
       ],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": [
         "ENC_SOP2:default"
       ]
@@ -5830,7 +5834,7 @@
       "measured_encodings": [
         "ENC_SOP2:default"
       ],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": [
         "ENC_SOP2:default"
       ]
@@ -5875,7 +5879,7 @@
       "measured_encodings": [
         "ENC_SOP2:default"
       ],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": [
         "ENC_SOP2:default"
       ]
@@ -5890,7 +5894,7 @@
       "measured_encodings": [
         "ENC_SOP2:default"
       ],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": [
         "ENC_SOP2:default"
       ]
@@ -5905,7 +5909,7 @@
       "measured_encodings": [
         "ENC_SOP2:default"
       ],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": [
         "ENC_SOP2:default"
       ]
@@ -5920,7 +5924,7 @@
       "measured_encodings": [
         "ENC_SOP2:default"
       ],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": [
         "ENC_SOP2:default"
       ]
@@ -6850,7 +6854,7 @@
       "measured_encodings": [
         "ENC_SOPC:default"
       ],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": [
         "ENC_SOPC:default"
       ]
@@ -6865,7 +6869,7 @@
       "measured_encodings": [
         "ENC_SOPC:default"
       ],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": [
         "ENC_SOPC:default"
       ]
@@ -7562,7 +7566,7 @@
         "ENC_VOP1:default",
         "ENC_VOP3:default"
       ],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": [
         "ENC_VOP1:default"
       ]
@@ -7829,7 +7833,7 @@
         "ENC_VOP1:default",
         "ENC_VOP3:default"
       ],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": [
         "ENC_VOP1:default"
       ]
@@ -7845,7 +7849,7 @@
         "ENC_VOP1:default",
         "ENC_VOP3:default"
       ],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": [
         "ENC_VOP1:default"
       ]
@@ -7861,7 +7865,7 @@
         "ENC_VOP1:default",
         "ENC_VOP3:default"
       ],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": [
         "ENC_VOP1:default"
       ]
@@ -7877,7 +7881,7 @@
         "ENC_VOP1:default",
         "ENC_VOP3:default"
       ],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": [
         "ENC_VOP1:default"
       ]
@@ -8461,7 +8465,7 @@
         "ENC_VOP1:default",
         "ENC_VOP3:default"
       ],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": [
         "ENC_VOP1:default"
       ]
@@ -8477,7 +8481,7 @@
         "ENC_VOP1:default",
         "ENC_VOP3:default"
       ],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": [
         "ENC_VOP1:default"
       ]
@@ -8493,7 +8497,7 @@
         "ENC_VOP1:default",
         "ENC_VOP3:default"
       ],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": [
         "ENC_VOP1:default"
       ]
@@ -8509,7 +8513,7 @@
         "ENC_VOP1:default",
         "ENC_VOP3:default"
       ],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": [
         "ENC_VOP1:default"
       ]
@@ -8749,7 +8753,7 @@
         "ENC_VOP1:default",
         "ENC_VOP3:default"
       ],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": [
         "ENC_VOP1:default"
       ]
@@ -8765,7 +8769,7 @@
         "ENC_VOP1:default",
         "ENC_VOP3:default"
       ],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": [
         "ENC_VOP1:default"
       ]
@@ -8813,7 +8817,7 @@
         "ENC_VOP1:default",
         "ENC_VOP3:default"
       ],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": [
         "ENC_VOP1:default"
       ]
@@ -15946,11 +15950,11 @@
   ],
   "summary": {
     "decode_measured": 1014,
-    "decode_supported": 553,
-    "decode_supported_percent_measured": 0.545365,
-    "decode_supported_percent_total": 0.44525,
-    "semantic_supported": 510,
-    "semantic_supported_percent_total": 0.410628
+    "decode_supported": 554,
+    "decode_supported_percent_measured": 0.546351,
+    "decode_supported_percent_total": 0.446055,
+    "semantic_supported": 531,
+    "semantic_supported_percent_total": 0.427536
   },
   "unmeasured_encoding_families": [
     "ENC_FLAT_SCRATCH",

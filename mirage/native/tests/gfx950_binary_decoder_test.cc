@@ -3,6 +3,7 @@
 #include <cstring>
 #include <cstdint>
 #include <iostream>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -406,6 +407,13 @@ struct ScalarPairBinaryBinaryCase {
   bool expected_scc = false;
 };
 
+struct ScalarPairCompareBinaryCase {
+  std::string_view opcode;
+  std::uint64_t lhs = 0;
+  std::uint64_t rhs = 0;
+  bool expected_scc = false;
+};
+
 bool RunSaveexecBinaryCase(
     const mirage::sim::isa::Gfx950BinaryDecoder& decoder,
     const mirage::sim::isa::Gfx950Interpreter& interpreter,
@@ -732,6 +740,48 @@ bool RunScalarPairBinaryBinaryCase(
   return true;
 }
 
+bool RunScalarPairCompareBinaryCase(
+    const mirage::sim::isa::Gfx950BinaryDecoder& decoder,
+    const mirage::sim::isa::Gfx950Interpreter& interpreter,
+    const ScalarPairCompareBinaryCase& test_case) {
+  using namespace mirage::sim::isa;
+
+  const auto opcode = FindDefaultEncodingOpcode(test_case.opcode, "ENC_SOPC");
+  if (!Expect(opcode.has_value(), "expected scalar pair compare opcode lookup")) {
+    std::cerr << test_case.opcode << '\n';
+    return false;
+  }
+
+  std::vector<DecodedInstruction> decoded_program;
+  std::string error_message;
+  const std::vector<std::uint32_t> encoded_program = {
+      MakeSopc(*opcode, 20, 24),
+      MakeSopp(1),
+  };
+  if (!decoder.DecodeProgram(encoded_program, &decoded_program, &error_message)) {
+    std::cerr << test_case.opcode << " decode: " << error_message << '\n';
+    return false;
+  }
+
+  WaveExecutionState state;
+  SplitU64(test_case.lhs, &state.sgprs[20], &state.sgprs[21]);
+  SplitU64(test_case.rhs, &state.sgprs[24], &state.sgprs[25]);
+  if (!interpreter.ExecuteProgram(decoded_program, &state, &error_message)) {
+    std::cerr << test_case.opcode << " execute: " << error_message << '\n';
+    return false;
+  }
+
+  if (!Expect(state.halted,
+              "expected scalar pair compare decoder test to halt") ||
+      !Expect(state.scc == test_case.expected_scc,
+              "expected scalar pair compare decoder SCC")) {
+    std::cerr << test_case.opcode << " actual=" << state.scc
+              << " expected=" << test_case.expected_scc << '\n';
+    return false;
+  }
+  return true;
+}
+
 }  // namespace
 
 int main() {
@@ -850,10 +900,16 @@ int main() {
     }
   }
 
-  const std::array<ScalarBinaryBinaryCase, 24> kScalarBinaryCases = {{
+  const std::array<ScalarBinaryBinaryCase, 30> kScalarBinaryCases = {{
       {"S_CSELECT_B32", 0x11111111U, 0x22222222U, 0x11111111U, true, true},
       {"S_CSELECT_B32", 0x11111111U, 0x22222222U, 0x22222222U, false, false},
       {"S_ABSDIFF_I32", 5U, 17U, 12U, false, true},
+      {"S_ADD_I32", 0xffffffffU, 1U, 0x00000000U, false, true},
+      {"S_SUB_I32", 0U, 1U, 0xffffffffU, false, false},
+      {"S_MIN_I32", 0xfffffffbu, 3U, 0xfffffffbu, false, true},
+      {"S_MIN_U32", 5U, 3U, 3U, true, false},
+      {"S_MAX_I32", 0xfffffffbu, 3U, 3U, true, false},
+      {"S_MAX_U32", 5U, 3U, 5U, false, true},
       {"S_BFE_U32", 0x12345678U, 0x00080008U, 0x00000056U, false, true},
       {"S_BFE_I32", 0x0000f000U, 0x0004000cU, 0xffffffffU, false, true},
       {"S_ANDN2_B32", 0x55ff0f0fU, 0x3300aa55U, 0x44ff050aU, false, true},
@@ -972,6 +1028,18 @@ int main() {
   }};
   for (const ScalarPairBinaryBinaryCase& test_case : kScalarPairBinaryCases) {
     if (!RunScalarPairBinaryBinaryCase(decoder, interpreter, test_case)) {
+      return 1;
+    }
+  }
+
+  const std::array<ScalarPairCompareBinaryCase, 4> kScalarPairCompareCases = {{
+      {"S_CMP_EQ_U64", 0x123456789abcdef0ULL, 0x123456789abcdef0ULL, true},
+      {"S_CMP_EQ_U64", 0x123456789abcdef0ULL, 0x123456789abcdef1ULL, false},
+      {"S_CMP_LG_U64", 0x0000000000000001ULL, 0x0000000000000002ULL, true},
+      {"S_CMP_LG_U64", 0xabcdef0123456789ULL, 0xabcdef0123456789ULL, false},
+  }};
+  for (const ScalarPairCompareBinaryCase& test_case : kScalarPairCompareCases) {
+    if (!RunScalarPairCompareBinaryCase(decoder, interpreter, test_case)) {
       return 1;
     }
   }
@@ -1324,10 +1392,29 @@ int main() {
       FindDefaultEncodingOpcode("V_FFBL_B32", "ENC_VOP1");
   const auto v_ffbh_i32_opcode =
       FindDefaultEncodingOpcode("V_FFBH_I32", "ENC_VOP1");
+  const auto v_nop_opcode = FindDefaultEncodingOpcode("V_NOP", "ENC_VOP1");
+  const auto v_cvt_f16_u16_opcode =
+      FindDefaultEncodingOpcode("V_CVT_F16_U16", "ENC_VOP1");
+  const auto v_cvt_f16_i16_opcode =
+      FindDefaultEncodingOpcode("V_CVT_F16_I16", "ENC_VOP1");
   const auto v_cvt_f32_i32_opcode =
       FindDefaultEncodingOpcode("V_CVT_F32_I32", "ENC_VOP1");
   const auto v_cvt_f32_u32_opcode =
       FindDefaultEncodingOpcode("V_CVT_F32_U32", "ENC_VOP1");
+  const auto v_cvt_u16_f16_opcode =
+      FindDefaultEncodingOpcode("V_CVT_U16_F16", "ENC_VOP1");
+  const auto v_cvt_i16_f16_opcode =
+      FindDefaultEncodingOpcode("V_CVT_I16_F16", "ENC_VOP1");
+  const auto v_sat_pk_u8_i16_opcode =
+      FindDefaultEncodingOpcode("V_SAT_PK_U8_I16", "ENC_VOP1");
+  const auto v_cvt_f32_ubyte0_opcode =
+      FindDefaultEncodingOpcode("V_CVT_F32_UBYTE0", "ENC_VOP1");
+  const auto v_cvt_f32_ubyte1_opcode =
+      FindDefaultEncodingOpcode("V_CVT_F32_UBYTE1", "ENC_VOP1");
+  const auto v_cvt_f32_ubyte2_opcode =
+      FindDefaultEncodingOpcode("V_CVT_F32_UBYTE2", "ENC_VOP1");
+  const auto v_cvt_f32_ubyte3_opcode =
+      FindDefaultEncodingOpcode("V_CVT_F32_UBYTE3", "ENC_VOP1");
   const auto v_cvt_u32_f32_opcode =
       FindDefaultEncodingOpcode("V_CVT_U32_F32", "ENC_VOP1");
   const auto v_cvt_i32_f32_opcode =
@@ -1348,6 +1435,10 @@ int main() {
       FindDefaultEncodingOpcode("V_CVT_F64_I32", "ENC_VOP1");
   const auto v_cvt_f64_u32_opcode =
       FindDefaultEncodingOpcode("V_CVT_F64_U32", "ENC_VOP1");
+  const auto v_exp_legacy_f32_opcode =
+      FindDefaultEncodingOpcode("V_EXP_LEGACY_F32", "ENC_VOP1");
+  const auto v_log_legacy_f32_opcode =
+      FindDefaultEncodingOpcode("V_LOG_LEGACY_F32", "ENC_VOP1");
   if (!Expect(v_not_b32_opcode.has_value(), "expected V_NOT_B32 opcode lookup") ||
       !Expect(v_bfrev_b32_opcode.has_value(),
               "expected V_BFREV_B32 opcode lookup") ||
@@ -1357,10 +1448,29 @@ int main() {
               "expected V_FFBL_B32 opcode lookup") ||
       !Expect(v_ffbh_i32_opcode.has_value(),
               "expected V_FFBH_I32 opcode lookup") ||
+      !Expect(v_nop_opcode.has_value(), "expected V_NOP opcode lookup") ||
+      !Expect(v_cvt_f16_u16_opcode.has_value(),
+              "expected V_CVT_F16_U16 opcode lookup") ||
+      !Expect(v_cvt_f16_i16_opcode.has_value(),
+              "expected V_CVT_F16_I16 opcode lookup") ||
       !Expect(v_cvt_f32_i32_opcode.has_value(),
               "expected V_CVT_F32_I32 opcode lookup") ||
       !Expect(v_cvt_f32_u32_opcode.has_value(),
               "expected V_CVT_F32_U32 opcode lookup") ||
+      !Expect(v_cvt_u16_f16_opcode.has_value(),
+              "expected V_CVT_U16_F16 opcode lookup") ||
+      !Expect(v_cvt_i16_f16_opcode.has_value(),
+              "expected V_CVT_I16_F16 opcode lookup") ||
+      !Expect(v_sat_pk_u8_i16_opcode.has_value(),
+              "expected V_SAT_PK_U8_I16 opcode lookup") ||
+      !Expect(v_cvt_f32_ubyte0_opcode.has_value(),
+              "expected V_CVT_F32_UBYTE0 opcode lookup") ||
+      !Expect(v_cvt_f32_ubyte1_opcode.has_value(),
+              "expected V_CVT_F32_UBYTE1 opcode lookup") ||
+      !Expect(v_cvt_f32_ubyte2_opcode.has_value(),
+              "expected V_CVT_F32_UBYTE2 opcode lookup") ||
+      !Expect(v_cvt_f32_ubyte3_opcode.has_value(),
+              "expected V_CVT_F32_UBYTE3 opcode lookup") ||
       !Expect(v_cvt_u32_f32_opcode.has_value(),
               "expected V_CVT_U32_F32 opcode lookup") ||
       !Expect(v_cvt_i32_f32_opcode.has_value(),
@@ -1380,7 +1490,11 @@ int main() {
       !Expect(v_cvt_f64_i32_opcode.has_value(),
               "expected V_CVT_F64_I32 opcode lookup") ||
       !Expect(v_cvt_f64_u32_opcode.has_value(),
-              "expected V_CVT_F64_U32 opcode lookup")) {
+              "expected V_CVT_F64_U32 opcode lookup") ||
+      !Expect(v_exp_legacy_f32_opcode.has_value(),
+              "expected V_EXP_LEGACY_F32 opcode lookup") ||
+      !Expect(v_log_legacy_f32_opcode.has_value(),
+              "expected V_LOG_LEGACY_F32 opcode lookup")) {
     return 1;
   }
 
@@ -1583,6 +1697,289 @@ int main() {
       !Expect(vector_conversion_vop1_state.vgprs[88][2] == 0xdeadbeefu &&
                   vector_conversion_vop1_state.vgprs[89][2] == 0xcafebabeu,
               "expected inactive VOP1 v_cvt_f64_u32 result")) {
+    return 1;
+  }
+
+  const std::vector<std::uint32_t> vector_byte_conversion_vop1_program = {
+      MakeVop1(*v_nop_opcode, 0, 0),                 // v_nop
+      MakeVop1(*v_cvt_f16_u16_opcode, 96, 346),      // v_cvt_f16_u16 v96, v90
+      MakeVop1(*v_cvt_f32_ubyte0_opcode, 97, 347),   // v_cvt_f32_ubyte0 v97, v91
+      MakeVop1(*v_cvt_f32_ubyte1_opcode, 98, 347),   // v_cvt_f32_ubyte1 v98, v91
+      MakeVop1(*v_cvt_f32_ubyte2_opcode, 99, 347),   // v_cvt_f32_ubyte2 v99, v91
+      MakeVop1(*v_cvt_f32_ubyte3_opcode, 100, 347),  // v_cvt_f32_ubyte3 v100, v91
+      MakeSopp(1),
+  };
+  decoded_program.clear();
+  if (!Expect(decoder.DecodeProgram(vector_byte_conversion_vop1_program,
+                                    &decoded_program, &error_message),
+              error_message.c_str()) ||
+      !Expect(decoded_program.size() == 7,
+              "expected decoded vector byte conversion VOP1 program size") ||
+      !Expect(decoded_program[0].opcode == "V_NOP", "expected V_NOP decode") ||
+      !Expect(decoded_program[0].operand_count == 0,
+              "expected V_NOP nullary decode") ||
+      !Expect(decoded_program[1].opcode == "V_CVT_F16_U16",
+              "expected V_CVT_F16_U16 decode") ||
+      !Expect(decoded_program[2].opcode == "V_CVT_F32_UBYTE0",
+              "expected V_CVT_F32_UBYTE0 decode") ||
+      !Expect(decoded_program[3].opcode == "V_CVT_F32_UBYTE1",
+              "expected V_CVT_F32_UBYTE1 decode") ||
+      !Expect(decoded_program[4].opcode == "V_CVT_F32_UBYTE2",
+              "expected V_CVT_F32_UBYTE2 decode") ||
+      !Expect(decoded_program[5].opcode == "V_CVT_F32_UBYTE3",
+              "expected V_CVT_F32_UBYTE3 decode")) {
+    return 1;
+  }
+
+  WaveExecutionState vector_byte_conversion_vop1_state;
+  vector_byte_conversion_vop1_state.exec_mask = 0b1011ULL;
+  vector_byte_conversion_vop1_state.vgprs[90][0] = 1u;
+  vector_byte_conversion_vop1_state.vgprs[90][1] = 2u;
+  vector_byte_conversion_vop1_state.vgprs[90][3] = 3u;
+  vector_byte_conversion_vop1_state.vgprs[91][0] = 0x44332211u;
+  vector_byte_conversion_vop1_state.vgprs[91][1] = 0xaabbccddu;
+  vector_byte_conversion_vop1_state.vgprs[91][3] = 0x01020304u;
+  vector_byte_conversion_vop1_state.vgprs[96][2] = 0xdeadbeefu;
+  vector_byte_conversion_vop1_state.vgprs[97][2] = 0xdeadbeefu;
+  vector_byte_conversion_vop1_state.vgprs[98][2] = 0xdeadbeefu;
+  vector_byte_conversion_vop1_state.vgprs[99][2] = 0xdeadbeefu;
+  vector_byte_conversion_vop1_state.vgprs[100][2] = 0xdeadbeefu;
+  if (!Expect(interpreter.ExecuteProgram(decoded_program,
+                                         &vector_byte_conversion_vop1_state,
+                                         &error_message),
+              error_message.c_str()) ||
+      !Expect(vector_byte_conversion_vop1_state.halted,
+              "expected vector byte conversion VOP1 program to halt") ||
+      !Expect(vector_byte_conversion_vop1_state.vgprs[96][0] == 0x00003c00u,
+              "expected VOP1 v_cvt_f16_u16 lane 0 result") ||
+      !Expect(vector_byte_conversion_vop1_state.vgprs[96][1] == 0x00004000u,
+              "expected VOP1 v_cvt_f16_u16 lane 1 result") ||
+      !Expect(vector_byte_conversion_vop1_state.vgprs[96][2] == 0xdeadbeefu,
+              "expected inactive VOP1 v_cvt_f16_u16 result") ||
+      !Expect(vector_byte_conversion_vop1_state.vgprs[96][3] == 0x00004200u,
+              "expected VOP1 v_cvt_f16_u16 lane 3 result") ||
+      !Expect(vector_byte_conversion_vop1_state.vgprs[97][0] ==
+                  FloatBits(17.0f),
+              "expected VOP1 v_cvt_f32_ubyte0 lane 0 result") ||
+      !Expect(vector_byte_conversion_vop1_state.vgprs[97][1] ==
+                  FloatBits(221.0f),
+              "expected VOP1 v_cvt_f32_ubyte0 lane 1 result") ||
+      !Expect(vector_byte_conversion_vop1_state.vgprs[97][2] == 0xdeadbeefu,
+              "expected inactive VOP1 v_cvt_f32_ubyte0 result") ||
+      !Expect(vector_byte_conversion_vop1_state.vgprs[97][3] ==
+                  FloatBits(4.0f),
+              "expected VOP1 v_cvt_f32_ubyte0 lane 3 result") ||
+      !Expect(vector_byte_conversion_vop1_state.vgprs[98][0] ==
+                  FloatBits(34.0f),
+              "expected VOP1 v_cvt_f32_ubyte1 lane 0 result") ||
+      !Expect(vector_byte_conversion_vop1_state.vgprs[98][1] ==
+                  FloatBits(204.0f),
+              "expected VOP1 v_cvt_f32_ubyte1 lane 1 result") ||
+      !Expect(vector_byte_conversion_vop1_state.vgprs[98][2] == 0xdeadbeefu,
+              "expected inactive VOP1 v_cvt_f32_ubyte1 result") ||
+      !Expect(vector_byte_conversion_vop1_state.vgprs[98][3] ==
+                  FloatBits(3.0f),
+              "expected VOP1 v_cvt_f32_ubyte1 lane 3 result") ||
+      !Expect(vector_byte_conversion_vop1_state.vgprs[99][0] ==
+                  FloatBits(51.0f),
+              "expected VOP1 v_cvt_f32_ubyte2 lane 0 result") ||
+      !Expect(vector_byte_conversion_vop1_state.vgprs[99][1] ==
+                  FloatBits(187.0f),
+              "expected VOP1 v_cvt_f32_ubyte2 lane 1 result") ||
+      !Expect(vector_byte_conversion_vop1_state.vgprs[99][2] == 0xdeadbeefu,
+              "expected inactive VOP1 v_cvt_f32_ubyte2 result") ||
+      !Expect(vector_byte_conversion_vop1_state.vgprs[99][3] ==
+                  FloatBits(2.0f),
+              "expected VOP1 v_cvt_f32_ubyte2 lane 3 result") ||
+      !Expect(vector_byte_conversion_vop1_state.vgprs[100][0] ==
+                  FloatBits(68.0f),
+              "expected VOP1 v_cvt_f32_ubyte3 lane 0 result") ||
+      !Expect(vector_byte_conversion_vop1_state.vgprs[100][1] ==
+                  FloatBits(170.0f),
+              "expected VOP1 v_cvt_f32_ubyte3 lane 1 result") ||
+      !Expect(vector_byte_conversion_vop1_state.vgprs[100][2] ==
+                  0xdeadbeefu,
+              "expected inactive VOP1 v_cvt_f32_ubyte3 result") ||
+      !Expect(vector_byte_conversion_vop1_state.vgprs[100][3] ==
+                  FloatBits(1.0f),
+              "expected VOP1 v_cvt_f32_ubyte3 lane 3 result")) {
+    return 1;
+  }
+
+  const std::vector<std::uint32_t> vector_half_int_conversion_vop1_program = {
+      MakeVop1(*v_cvt_f16_i16_opcode, 101, 348),  // v_cvt_f16_i16 v101, v92
+      MakeVop1(*v_cvt_u16_f16_opcode, 102, 349),  // v_cvt_u16_f16 v102, v93
+      MakeVop1(*v_cvt_i16_f16_opcode, 103, 350),  // v_cvt_i16_f16 v103, v94
+      MakeSopp(1),
+  };
+  decoded_program.clear();
+  if (!Expect(decoder.DecodeProgram(vector_half_int_conversion_vop1_program,
+                                    &decoded_program, &error_message),
+              error_message.c_str()) ||
+      !Expect(decoded_program.size() == 4,
+              "expected decoded vector half/int conversion VOP1 program size") ||
+      !Expect(decoded_program[0].opcode == "V_CVT_F16_I16",
+              "expected V_CVT_F16_I16 decode") ||
+      !Expect(decoded_program[1].opcode == "V_CVT_U16_F16",
+              "expected V_CVT_U16_F16 decode") ||
+      !Expect(decoded_program[2].opcode == "V_CVT_I16_F16",
+              "expected V_CVT_I16_F16 decode")) {
+    return 1;
+  }
+
+  auto vector_half_int_conversion_vop1_state =
+      std::make_unique<WaveExecutionState>();
+  vector_half_int_conversion_vop1_state->exec_mask = 0b1011ULL;
+  vector_half_int_conversion_vop1_state->vgprs[92][0] = 0xffffu;
+  vector_half_int_conversion_vop1_state->vgprs[92][1] = 0x0002u;
+  vector_half_int_conversion_vop1_state->vgprs[92][3] = 0xfffdu;
+  vector_half_int_conversion_vop1_state->vgprs[93][0] = 0x00003e00u;
+  vector_half_int_conversion_vop1_state->vgprs[93][1] = 0x00004000u;
+  vector_half_int_conversion_vop1_state->vgprs[93][3] = 0x00004300u;
+  vector_half_int_conversion_vop1_state->vgprs[94][0] = 0x0000be00u;
+  vector_half_int_conversion_vop1_state->vgprs[94][1] = 0x00004000u;
+  vector_half_int_conversion_vop1_state->vgprs[94][3] = 0x0000c200u;
+  vector_half_int_conversion_vop1_state->vgprs[101][2] = 0xdeadbeefu;
+  vector_half_int_conversion_vop1_state->vgprs[102][2] = 0xdeadbeefu;
+  vector_half_int_conversion_vop1_state->vgprs[103][2] = 0xdeadbeefu;
+  if (!Expect(interpreter.ExecuteProgram(decoded_program,
+                                         vector_half_int_conversion_vop1_state.get(),
+                                         &error_message),
+              error_message.c_str()) ||
+      !Expect(vector_half_int_conversion_vop1_state->halted,
+              "expected vector half/int conversion VOP1 program to halt") ||
+      !Expect(vector_half_int_conversion_vop1_state->vgprs[101][0] ==
+                  0x0000bc00u,
+              "expected VOP1 v_cvt_f16_i16 lane 0 result") ||
+      !Expect(vector_half_int_conversion_vop1_state->vgprs[101][1] ==
+                  0x00004000u,
+              "expected VOP1 v_cvt_f16_i16 lane 1 result") ||
+      !Expect(vector_half_int_conversion_vop1_state->vgprs[101][2] ==
+                  0xdeadbeefu,
+              "expected inactive VOP1 v_cvt_f16_i16 result") ||
+      !Expect(vector_half_int_conversion_vop1_state->vgprs[101][3] ==
+                  0x0000c200u,
+              "expected VOP1 v_cvt_f16_i16 lane 3 result") ||
+      !Expect(vector_half_int_conversion_vop1_state->vgprs[102][0] == 1u,
+              "expected VOP1 v_cvt_u16_f16 lane 0 result") ||
+      !Expect(vector_half_int_conversion_vop1_state->vgprs[102][1] == 2u,
+              "expected VOP1 v_cvt_u16_f16 lane 1 result") ||
+      !Expect(vector_half_int_conversion_vop1_state->vgprs[102][2] ==
+                  0xdeadbeefu,
+              "expected inactive VOP1 v_cvt_u16_f16 result") ||
+      !Expect(vector_half_int_conversion_vop1_state->vgprs[102][3] == 3u,
+              "expected VOP1 v_cvt_u16_f16 lane 3 result") ||
+      !Expect(vector_half_int_conversion_vop1_state->vgprs[103][0] ==
+                  0x0000ffffu,
+              "expected VOP1 v_cvt_i16_f16 lane 0 result") ||
+      !Expect(vector_half_int_conversion_vop1_state->vgprs[103][1] ==
+                  0x00000002u,
+              "expected VOP1 v_cvt_i16_f16 lane 1 result") ||
+      !Expect(vector_half_int_conversion_vop1_state->vgprs[103][2] ==
+                  0xdeadbeefu,
+              "expected inactive VOP1 v_cvt_i16_f16 result") ||
+      !Expect(vector_half_int_conversion_vop1_state->vgprs[103][3] ==
+                  0x0000fffdu,
+              "expected VOP1 v_cvt_i16_f16 lane 3 result")) {
+    return 1;
+  }
+
+  const std::vector<std::uint32_t> vector_sat_pk_vop1_program = {
+      MakeVop1(*v_sat_pk_u8_i16_opcode, 106, 353),  // v_sat_pk_u8_i16 v106, v97
+      MakeSopp(1),
+  };
+  decoded_program.clear();
+  if (!Expect(decoder.DecodeProgram(vector_sat_pk_vop1_program, &decoded_program,
+                                    &error_message),
+              error_message.c_str()) ||
+      !Expect(decoded_program.size() == 2,
+              "expected decoded v_sat_pk_u8_i16 VOP1 program size") ||
+      !Expect(decoded_program[0].opcode == "V_SAT_PK_U8_I16",
+              "expected V_SAT_PK_U8_I16 decode")) {
+    return 1;
+  }
+
+  auto vector_sat_pk_vop1_state = std::make_unique<WaveExecutionState>();
+  vector_sat_pk_vop1_state->exec_mask = 0b1011ULL;
+  vector_sat_pk_vop1_state->vgprs[97][0] = 0x007f0100u;
+  vector_sat_pk_vop1_state->vgprs[97][1] = 0xffff0001u;
+  vector_sat_pk_vop1_state->vgprs[97][3] = 0x12340080u;
+  vector_sat_pk_vop1_state->vgprs[106][2] = 0xdeadbeefu;
+  if (!Expect(interpreter.ExecuteProgram(decoded_program,
+                                         vector_sat_pk_vop1_state.get(),
+                                         &error_message),
+              error_message.c_str()) ||
+      !Expect(vector_sat_pk_vop1_state->halted,
+              "expected v_sat_pk_u8_i16 VOP1 program to halt") ||
+      !Expect(vector_sat_pk_vop1_state->vgprs[106][0] == 0x00007fffu,
+              "expected VOP1 v_sat_pk_u8_i16 lane 0 result") ||
+      !Expect(vector_sat_pk_vop1_state->vgprs[106][1] == 0x00000001u,
+              "expected VOP1 v_sat_pk_u8_i16 lane 1 result") ||
+      !Expect(vector_sat_pk_vop1_state->vgprs[106][2] == 0xdeadbeefu,
+              "expected inactive VOP1 v_sat_pk_u8_i16 result") ||
+      !Expect(vector_sat_pk_vop1_state->vgprs[106][3] == 0x0000ff80u,
+              "expected VOP1 v_sat_pk_u8_i16 lane 3 result")) {
+    return 1;
+  }
+
+  const std::vector<std::uint32_t> vector_legacy_float_math_vop1_program = {
+      MakeVop1(*v_exp_legacy_f32_opcode, 104, 351),  // v_exp_legacy_f32 v104, v95
+      MakeVop1(*v_log_legacy_f32_opcode, 105, 352),  // v_log_legacy_f32 v105, v96
+      MakeSopp(1),
+  };
+  decoded_program.clear();
+  if (!Expect(decoder.DecodeProgram(vector_legacy_float_math_vop1_program,
+                                    &decoded_program, &error_message),
+              error_message.c_str()) ||
+      !Expect(decoded_program.size() == 3,
+              "expected decoded legacy float math VOP1 program size") ||
+      !Expect(decoded_program[0].opcode == "V_EXP_LEGACY_F32",
+              "expected V_EXP_LEGACY_F32 decode") ||
+      !Expect(decoded_program[1].opcode == "V_LOG_LEGACY_F32",
+              "expected V_LOG_LEGACY_F32 decode")) {
+    return 1;
+  }
+
+  WaveExecutionState vector_legacy_float_math_vop1_state;
+  vector_legacy_float_math_vop1_state.exec_mask = 0b1011ULL;
+  vector_legacy_float_math_vop1_state.vgprs[95][0] = FloatBits(1.0f);
+  vector_legacy_float_math_vop1_state.vgprs[95][1] = FloatBits(2.0f);
+  vector_legacy_float_math_vop1_state.vgprs[95][3] = FloatBits(-1.0f);
+  vector_legacy_float_math_vop1_state.vgprs[96][0] = FloatBits(1.0f);
+  vector_legacy_float_math_vop1_state.vgprs[96][1] = FloatBits(8.0f);
+  vector_legacy_float_math_vop1_state.vgprs[96][3] = FloatBits(0.5f);
+  vector_legacy_float_math_vop1_state.vgprs[104][2] = 0xdeadbeefu;
+  vector_legacy_float_math_vop1_state.vgprs[105][2] = 0xdeadbeefu;
+  if (!Expect(interpreter.ExecuteProgram(decoded_program,
+                                         &vector_legacy_float_math_vop1_state,
+                                         &error_message),
+              error_message.c_str()) ||
+      !Expect(vector_legacy_float_math_vop1_state.halted,
+              "expected legacy float math VOP1 program to halt") ||
+      !Expect(vector_legacy_float_math_vop1_state.vgprs[104][0] ==
+                  FloatBits(2.0f),
+              "expected VOP1 v_exp_legacy_f32 lane 0 result") ||
+      !Expect(vector_legacy_float_math_vop1_state.vgprs[104][1] ==
+                  FloatBits(4.0f),
+              "expected VOP1 v_exp_legacy_f32 lane 1 result") ||
+      !Expect(vector_legacy_float_math_vop1_state.vgprs[104][2] ==
+                  0xdeadbeefu,
+              "expected inactive VOP1 v_exp_legacy_f32 result") ||
+      !Expect(vector_legacy_float_math_vop1_state.vgprs[104][3] ==
+                  FloatBits(0.5f),
+              "expected VOP1 v_exp_legacy_f32 lane 3 result") ||
+      !Expect(vector_legacy_float_math_vop1_state.vgprs[105][0] ==
+                  FloatBits(0.0f),
+              "expected VOP1 v_log_legacy_f32 lane 0 result") ||
+      !Expect(vector_legacy_float_math_vop1_state.vgprs[105][1] ==
+                  FloatBits(3.0f),
+              "expected VOP1 v_log_legacy_f32 lane 1 result") ||
+      !Expect(vector_legacy_float_math_vop1_state.vgprs[105][2] ==
+                  0xdeadbeefu,
+              "expected inactive VOP1 v_log_legacy_f32 result") ||
+      !Expect(vector_legacy_float_math_vop1_state.vgprs[105][3] ==
+                  FloatBits(-1.0f),
+              "expected VOP1 v_log_legacy_f32 lane 3 result")) {
     return 1;
   }
 
@@ -5444,22 +5841,26 @@ int main() {
     return 1;
   }
 
+  const auto ds_nop_opcode = FindDefaultEncodingOpcode("DS_NOP", "ENC_DS");
   const auto ds_write_opcode =
       FindDefaultEncodingOpcode("DS_WRITE_B32", "ENC_DS");
   const auto ds_add_opcode =
       FindDefaultEncodingOpcode("DS_ADD_U32", "ENC_DS");
   const auto ds_read_opcode =
       FindDefaultEncodingOpcode("DS_READ_B32", "ENC_DS");
-  if (!Expect(ds_write_opcode.has_value(), "expected ds write opcode lookup") ||
+  if (!Expect(ds_nop_opcode.has_value(), "expected ds nop opcode lookup") ||
+      !Expect(ds_write_opcode.has_value(), "expected ds write opcode lookup") ||
       !Expect(ds_add_opcode.has_value(), "expected ds add opcode lookup") ||
       !Expect(ds_read_opcode.has_value(), "expected ds read opcode lookup")) {
     return 1;
   }
 
+  const auto ds_nop_word = MakeDs(*ds_nop_opcode, 0, 0, 0, 0, 0);
   const auto ds_write_word = MakeDs(*ds_write_opcode, 0, 0, 1, 0, 0);
   const auto ds_add_word = MakeDs(*ds_add_opcode, 0, 0, 2, 0, 0);
   const auto ds_read_word = MakeDs(*ds_read_opcode, 3, 0, 0, 0, 0);
   const std::vector<std::uint32_t> ds_program = {
+      ds_nop_word[0],   ds_nop_word[1],
       ds_write_word[0], ds_write_word[1],
       ds_add_word[0], ds_add_word[1],
       ds_read_word[0], ds_read_word[1],
@@ -5468,16 +5869,18 @@ int main() {
   decoded_program.clear();
   if (!Expect(decoder.DecodeProgram(ds_program, &decoded_program, &error_message),
               error_message.c_str()) ||
-      !Expect(decoded_program.size() == 4, "expected decoded ds program size") ||
-      !Expect(decoded_program[0].opcode == "DS_WRITE_B32",
+      !Expect(decoded_program.size() == 5, "expected decoded ds program size") ||
+      !Expect(decoded_program[0].opcode == "DS_NOP",
+              "expected ds nop decode") ||
+      !Expect(decoded_program[1].opcode == "DS_WRITE_B32",
               "expected ds write decode") ||
-      !Expect(decoded_program[1].opcode == "DS_ADD_U32",
+      !Expect(decoded_program[2].opcode == "DS_ADD_U32",
               "expected ds add decode") ||
-      !Expect(decoded_program[2].opcode == "DS_READ_B32",
+      !Expect(decoded_program[3].opcode == "DS_READ_B32",
               "expected ds read decode") ||
-      !Expect(decoded_program[2].operands[0].kind == OperandKind::kVgpr,
+      !Expect(decoded_program[3].operands[0].kind == OperandKind::kVgpr,
               "expected ds read destination decode") ||
-      !Expect(decoded_program[2].operands[0].index == 3,
+      !Expect(decoded_program[3].operands[0].index == 3,
               "expected ds read destination index")) {
     return 1;
   }

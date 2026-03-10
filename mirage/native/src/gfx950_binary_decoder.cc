@@ -221,7 +221,8 @@ bool IsSupportedGlobalVectorMemoryOpcode(std::string_view opcode_name) {
 }
 
 bool IsSupportedDsOpcode(std::string_view opcode_name) {
-  return opcode_name == "DS_WRITE_B32" || opcode_name == "DS_READ_B32" ||
+  return opcode_name == "DS_NOP" ||
+         opcode_name == "DS_WRITE_B32" || opcode_name == "DS_READ_B32" ||
          opcode_name == "DS_ADD_U32" || opcode_name == "DS_SUB_U32" ||
          opcode_name == "DS_RSUB_U32" || opcode_name == "DS_INC_U32" ||
          opcode_name == "DS_DEC_U32" || opcode_name == "DS_MIN_I32" ||
@@ -566,6 +567,12 @@ bool Gfx950BinaryDecoder::DecodeDs(std::span<const std::uint32_t> words,
     return false;
   }
 
+  if (opcode_name == "DS_NOP") {
+    *instruction = DecodedInstruction::Nullary(instruction_name);
+    *words_consumed = 2;
+    return true;
+  }
+
   InstructionOperand addr;
   if (!DecodeVectorRegisterSource(
           static_cast<std::uint32_t>(ExtractBits(instruction_word, 32, 8)), &addr,
@@ -901,6 +908,12 @@ bool Gfx950BinaryDecoder::DecodeVop1(std::span<const std::uint32_t> words,
       *error_message = "unknown VOP1 opcode";
     }
     return false;
+  }
+
+  if (instruction_name == std::string_view("V_NOP")) {
+    *instruction = DecodedInstruction::Nullary(instruction_name);
+    *words_consumed = 1;
+    return true;
   }
 
   InstructionOperand dst;

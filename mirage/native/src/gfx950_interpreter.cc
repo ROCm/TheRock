@@ -339,6 +339,42 @@ std::uint32_t TruncateFloatToU32(float value) {
   return static_cast<std::uint32_t>(truncated);
 }
 
+std::int16_t TruncateFloatToI16(float value) {
+  if (std::isnan(value)) {
+    return 0;
+  }
+  const double truncated = std::trunc(static_cast<double>(value));
+  if (truncated <= static_cast<double>(std::numeric_limits<std::int16_t>::min())) {
+    return std::numeric_limits<std::int16_t>::min();
+  }
+  if (truncated >= static_cast<double>(std::numeric_limits<std::int16_t>::max())) {
+    return std::numeric_limits<std::int16_t>::max();
+  }
+  return static_cast<std::int16_t>(truncated);
+}
+
+std::uint8_t SaturateI16ToU8(std::int16_t value) {
+  if (value <= 0) {
+    return 0;
+  }
+  if (value >= 255) {
+    return 255;
+  }
+  return static_cast<std::uint8_t>(value);
+}
+
+std::uint16_t TruncateFloatToU16(float value) {
+  if (!(value > 0.0f)) {
+    return 0u;
+  }
+  const double truncated = std::trunc(static_cast<double>(value));
+  if (!std::isfinite(truncated) ||
+      truncated >= static_cast<double>(std::numeric_limits<std::uint16_t>::max())) {
+    return std::numeric_limits<std::uint16_t>::max();
+  }
+  return static_cast<std::uint16_t>(truncated);
+}
+
 std::int32_t TruncateDoubleToI32(double value) {
   if (std::isnan(value)) {
     return 0;
@@ -418,10 +454,10 @@ float EvaluateUnaryFloatMathF16(CompiledOpcode opcode, float input) {
 }
 
 float EvaluateUnaryFloatMathF32(std::string_view opcode, float input) {
-  if (opcode == "V_EXP_F32") {
+  if (opcode == "V_EXP_F32" || opcode == "V_EXP_LEGACY_F32") {
     return std::exp2(input);
   }
-  if (opcode == "V_LOG_F32") {
+  if (opcode == "V_LOG_F32" || opcode == "V_LOG_LEGACY_F32") {
     return std::log2(input);
   }
   if (opcode == "V_RCP_F32" || opcode == "V_RCP_IFLAG_F32") {
@@ -442,8 +478,10 @@ float EvaluateUnaryFloatMathF32(std::string_view opcode, float input) {
 float EvaluateUnaryFloatMathF32(CompiledOpcode opcode, float input) {
   switch (opcode) {
     case CompiledOpcode::kVExpF32:
+    case CompiledOpcode::kVExpLegacyF32:
       return std::exp2(input);
     case CompiledOpcode::kVLogF32:
+    case CompiledOpcode::kVLogLegacyF32:
       return std::log2(input);
     case CompiledOpcode::kVRcpF32:
     case CompiledOpcode::kVRcpIflagF32:
@@ -547,6 +585,46 @@ std::uint32_t EvaluateVectorUnary32(std::string_view opcode, std::uint32_t value
   if (opcode == "V_FFBH_I32") {
     return FindFirstBitHighSigned(value);
   }
+  if (opcode == "V_CVT_F16_U16") {
+    return static_cast<std::uint32_t>(
+        FloatToHalf(static_cast<float>(value & 0xffffu)));
+  }
+  if (opcode == "V_CVT_F16_I16") {
+    return static_cast<std::uint32_t>(FloatToHalf(
+        static_cast<float>(static_cast<std::int16_t>(value & 0xffffu))));
+  }
+  if (opcode == "V_CVT_U16_F16") {
+    return static_cast<std::uint32_t>(TruncateFloatToU16(
+        HalfToFloat(static_cast<std::uint16_t>(value))));
+  }
+  if (opcode == "V_CVT_I16_F16") {
+    return static_cast<std::uint32_t>(static_cast<std::uint16_t>(
+        TruncateFloatToI16(HalfToFloat(static_cast<std::uint16_t>(value)))));
+  }
+  if (opcode == "V_SAT_PK_U8_I16") {
+    const std::uint8_t low = SaturateI16ToU8(
+        static_cast<std::int16_t>(value & 0xffffu));
+    const std::uint8_t high = SaturateI16ToU8(
+        static_cast<std::int16_t>((value >> 16) & 0xffffu));
+    return static_cast<std::uint32_t>(low) |
+           (static_cast<std::uint32_t>(high) << 8);
+  }
+  if (opcode == "V_CVT_F32_UBYTE0") {
+    return BitCast<std::uint32_t>(
+        static_cast<float>(static_cast<std::uint8_t>(value & 0xffu)));
+  }
+  if (opcode == "V_CVT_F32_UBYTE1") {
+    return BitCast<std::uint32_t>(
+        static_cast<float>(static_cast<std::uint8_t>((value >> 8) & 0xffu)));
+  }
+  if (opcode == "V_CVT_F32_UBYTE2") {
+    return BitCast<std::uint32_t>(
+        static_cast<float>(static_cast<std::uint8_t>((value >> 16) & 0xffu)));
+  }
+  if (opcode == "V_CVT_F32_UBYTE3") {
+    return BitCast<std::uint32_t>(
+        static_cast<float>(static_cast<std::uint8_t>((value >> 24) & 0xffu)));
+  }
   if (opcode == "V_CVT_F32_I32") {
     return BitCast<std::uint32_t>(static_cast<float>(BitCast<std::int32_t>(value)));
   }
@@ -574,7 +652,8 @@ std::uint32_t EvaluateVectorUnary32(std::string_view opcode, std::uint32_t value
   }
   if (opcode == "V_RCP_F32" || opcode == "V_RCP_IFLAG_F32" ||
       opcode == "V_RSQ_F32" || opcode == "V_SQRT_F32" ||
-      opcode == "V_LOG_F32" || opcode == "V_EXP_F32" ||
+      opcode == "V_LOG_F32" || opcode == "V_LOG_LEGACY_F32" ||
+      opcode == "V_EXP_F32" || opcode == "V_EXP_LEGACY_F32" ||
       opcode == "V_SIN_F32" || opcode == "V_COS_F32") {
     return BitCast<std::uint32_t>(
         EvaluateUnaryFloatMathF32(opcode, BitCast<float>(value)));
@@ -652,6 +731,38 @@ std::uint32_t EvaluateVectorUnary32(CompiledOpcode opcode, std::uint32_t value) 
       return FindFirstBitLow(value);
     case CompiledOpcode::kVFfbhI32:
       return FindFirstBitHighSigned(value);
+    case CompiledOpcode::kVCvtF16U16:
+      return static_cast<std::uint32_t>(
+          FloatToHalf(static_cast<float>(value & 0xffffu)));
+    case CompiledOpcode::kVCvtF16I16:
+      return static_cast<std::uint32_t>(FloatToHalf(
+          static_cast<float>(static_cast<std::int16_t>(value & 0xffffu))));
+    case CompiledOpcode::kVCvtU16F16:
+      return static_cast<std::uint32_t>(TruncateFloatToU16(
+          HalfToFloat(static_cast<std::uint16_t>(value))));
+    case CompiledOpcode::kVCvtI16F16:
+      return static_cast<std::uint32_t>(static_cast<std::uint16_t>(
+          TruncateFloatToI16(HalfToFloat(static_cast<std::uint16_t>(value)))));
+    case CompiledOpcode::kVSatPkU8I16: {
+      const std::uint8_t low = SaturateI16ToU8(
+          static_cast<std::int16_t>(value & 0xffffu));
+      const std::uint8_t high = SaturateI16ToU8(
+          static_cast<std::int16_t>((value >> 16) & 0xffffu));
+      return static_cast<std::uint32_t>(low) |
+             (static_cast<std::uint32_t>(high) << 8);
+    }
+    case CompiledOpcode::kVCvtF32Ubyte0:
+      return BitCast<std::uint32_t>(
+          static_cast<float>(static_cast<std::uint8_t>(value & 0xffu)));
+    case CompiledOpcode::kVCvtF32Ubyte1:
+      return BitCast<std::uint32_t>(
+          static_cast<float>(static_cast<std::uint8_t>((value >> 8) & 0xffu)));
+    case CompiledOpcode::kVCvtF32Ubyte2:
+      return BitCast<std::uint32_t>(
+          static_cast<float>(static_cast<std::uint8_t>((value >> 16) & 0xffu)));
+    case CompiledOpcode::kVCvtF32Ubyte3:
+      return BitCast<std::uint32_t>(
+          static_cast<float>(static_cast<std::uint8_t>((value >> 24) & 0xffu)));
     case CompiledOpcode::kVCvtF32I32:
       return BitCast<std::uint32_t>(
           static_cast<float>(BitCast<std::int32_t>(value)));
@@ -676,7 +787,9 @@ std::uint32_t EvaluateVectorUnary32(CompiledOpcode opcode, std::uint32_t value) 
     case CompiledOpcode::kVRsqF32:
     case CompiledOpcode::kVSqrtF32:
     case CompiledOpcode::kVLogF32:
+    case CompiledOpcode::kVLogLegacyF32:
     case CompiledOpcode::kVExpF32:
+    case CompiledOpcode::kVExpLegacyF32:
     case CompiledOpcode::kVSinF32:
     case CompiledOpcode::kVCosF32:
       return BitCast<std::uint32_t>(
@@ -924,8 +1037,10 @@ bool IsScalarMoveOpcode(std::string_view opcode) {
 }
 
 bool IsScalarBinaryOpcode(std::string_view opcode) {
-  return opcode == "S_ADD_U32" || opcode == "S_ADDK_I32" ||
+  return opcode == "S_ADD_U32" || opcode == "S_ADD_I32" ||
+         opcode == "S_ADDK_I32" ||
          opcode == "S_ADDC_U32" || opcode == "S_SUB_U32" ||
+         opcode == "S_SUB_I32" ||
          opcode == "S_SUBB_U32" || opcode == "S_MUL_I32" ||
          opcode == "S_MULK_I32" || opcode == "S_MUL_HI_U32" ||
          opcode == "S_MUL_HI_I32" || opcode == "S_LSHL_B32" ||
@@ -937,6 +1052,8 @@ bool IsScalarBinaryOpcode(std::string_view opcode) {
          opcode == "S_LSHL4_ADD_U32" || opcode == "S_PACK_LL_B32_B16" ||
          opcode == "S_PACK_LH_B32_B16" ||
          opcode == "S_PACK_HH_B32_B16" ||
+         opcode == "S_MIN_I32" || opcode == "S_MIN_U32" ||
+         opcode == "S_MAX_I32" || opcode == "S_MAX_U32" ||
          opcode == "S_CSELECT_B32" || opcode == "S_CSELECT_B64" ||
          opcode == "S_ABSDIFF_I32" ||
          opcode == "S_BFE_U32" || opcode == "S_BFE_I32" ||
@@ -989,6 +1106,7 @@ bool IsScalarCompareOpcode(std::string_view opcode) {
          opcode == "S_CMP_GE_U32" || opcode == "S_CMPK_GE_U32" ||
          opcode == "S_CMP_LT_U32" || opcode == "S_CMPK_LT_U32" ||
          opcode == "S_CMP_LE_U32" || opcode == "S_CMPK_LE_U32" ||
+         opcode == "S_CMP_EQ_U64" || opcode == "S_CMP_LG_U64" ||
          opcode == "S_BITCMP0_B32" || opcode == "S_BITCMP1_B32" ||
          opcode == "S_BITCMP0_B64" || opcode == "S_BITCMP1_B64";
 }
@@ -1043,6 +1161,15 @@ bool IsVectorUnaryOpcode(std::string_view opcode) {
   return opcode == "V_NOT_B32" || opcode == "V_BFREV_B32" ||
          opcode == "V_FFBH_U32" || opcode == "V_FFBL_B32" ||
          opcode == "V_FFBH_I32" ||
+         opcode == "V_CVT_F16_U16" ||
+         opcode == "V_CVT_F16_I16" ||
+         opcode == "V_CVT_U16_F16" ||
+         opcode == "V_CVT_I16_F16" ||
+         opcode == "V_SAT_PK_U8_I16" ||
+         opcode == "V_CVT_F32_UBYTE0" ||
+         opcode == "V_CVT_F32_UBYTE1" ||
+         opcode == "V_CVT_F32_UBYTE2" ||
+         opcode == "V_CVT_F32_UBYTE3" ||
          opcode == "V_RCP_F16" || opcode == "V_SQRT_F16" ||
          opcode == "V_RSQ_F16" || opcode == "V_LOG_F16" ||
          opcode == "V_EXP_F16" || opcode == "V_SIN_F16" ||
@@ -1058,7 +1185,8 @@ bool IsVectorUnaryOpcode(std::string_view opcode) {
          opcode == "V_CVT_F16_F32" || opcode == "V_CVT_F32_F16" ||
          opcode == "V_CVT_F32_F64" || opcode == "V_CVT_F64_F32" ||
          opcode == "V_CVT_F64_I32" || opcode == "V_CVT_F64_U32" ||
-         opcode == "V_EXP_F32" || opcode == "V_LOG_F32" ||
+         opcode == "V_EXP_F32" || opcode == "V_EXP_LEGACY_F32" ||
+         opcode == "V_LOG_F32" || opcode == "V_LOG_LEGACY_F32" ||
          opcode == "V_RCP_F32" || opcode == "V_RCP_IFLAG_F32" ||
          opcode == "V_RSQ_F32" || opcode == "V_SQRT_F32" ||
          opcode == "V_SIN_F32" || opcode == "V_COS_F32" ||
@@ -1411,7 +1539,8 @@ bool IsVectorMemoryOpcode(std::string_view opcode) {
 }
 
 bool IsDsOpcode(std::string_view opcode) {
-  return opcode == "DS_WRITE_B32" || opcode == "DS_READ_B32" ||
+  return opcode == "DS_NOP" ||
+         opcode == "DS_WRITE_B32" || opcode == "DS_READ_B32" ||
          opcode == "DS_ADD_U32" || opcode == "DS_SUB_U32" ||
          opcode == "DS_RSUB_U32" || opcode == "DS_INC_U32" ||
          opcode == "DS_DEC_U32" || opcode == "DS_MIN_I32" ||
@@ -3304,6 +3433,10 @@ bool TryCompileOpcode(std::string_view opcode,
     compiled_instruction->opcode = CompiledOpcode::kSAndn2WrexecB64;
     return true;
   }
+  if (opcode == "V_NOP") {
+    compiled_instruction->opcode = CompiledOpcode::kVNop;
+    return true;
+  }
   if (opcode == "V_MOV_B32") {
     compiled_instruction->opcode = CompiledOpcode::kVMovB32;
     return true;
@@ -3338,6 +3471,42 @@ bool TryCompileOpcode(std::string_view opcode,
   }
   if (opcode == "V_FFBH_I32") {
     compiled_instruction->opcode = CompiledOpcode::kVFfbhI32;
+    return true;
+  }
+  if (opcode == "V_CVT_F16_U16") {
+    compiled_instruction->opcode = CompiledOpcode::kVCvtF16U16;
+    return true;
+  }
+  if (opcode == "V_CVT_F16_I16") {
+    compiled_instruction->opcode = CompiledOpcode::kVCvtF16I16;
+    return true;
+  }
+  if (opcode == "V_CVT_U16_F16") {
+    compiled_instruction->opcode = CompiledOpcode::kVCvtU16F16;
+    return true;
+  }
+  if (opcode == "V_CVT_I16_F16") {
+    compiled_instruction->opcode = CompiledOpcode::kVCvtI16F16;
+    return true;
+  }
+  if (opcode == "V_SAT_PK_U8_I16") {
+    compiled_instruction->opcode = CompiledOpcode::kVSatPkU8I16;
+    return true;
+  }
+  if (opcode == "V_CVT_F32_UBYTE0") {
+    compiled_instruction->opcode = CompiledOpcode::kVCvtF32Ubyte0;
+    return true;
+  }
+  if (opcode == "V_CVT_F32_UBYTE1") {
+    compiled_instruction->opcode = CompiledOpcode::kVCvtF32Ubyte1;
+    return true;
+  }
+  if (opcode == "V_CVT_F32_UBYTE2") {
+    compiled_instruction->opcode = CompiledOpcode::kVCvtF32Ubyte2;
+    return true;
+  }
+  if (opcode == "V_CVT_F32_UBYTE3") {
+    compiled_instruction->opcode = CompiledOpcode::kVCvtF32Ubyte3;
     return true;
   }
   if (opcode == "V_CVT_F32_I32") {
@@ -3456,8 +3625,16 @@ bool TryCompileOpcode(std::string_view opcode,
     compiled_instruction->opcode = CompiledOpcode::kVExpF32;
     return true;
   }
+  if (opcode == "V_EXP_LEGACY_F32") {
+    compiled_instruction->opcode = CompiledOpcode::kVExpLegacyF32;
+    return true;
+  }
   if (opcode == "V_LOG_F32") {
     compiled_instruction->opcode = CompiledOpcode::kVLogF32;
+    return true;
+  }
+  if (opcode == "V_LOG_LEGACY_F32") {
+    compiled_instruction->opcode = CompiledOpcode::kVLogLegacyF32;
     return true;
   }
   if (opcode == "V_RCP_F32") {
@@ -4428,6 +4605,10 @@ bool TryCompileOpcode(std::string_view opcode,
     compiled_instruction->opcode = CompiledOpcode::kSAddU32;
     return true;
   }
+  if (opcode == "S_ADD_I32") {
+    compiled_instruction->opcode = CompiledOpcode::kSAddU32;
+    return true;
+  }
   if (opcode == "S_ADDK_I32") {
     compiled_instruction->opcode = CompiledOpcode::kSAddU32;
     return true;
@@ -4440,8 +4621,28 @@ bool TryCompileOpcode(std::string_view opcode,
     compiled_instruction->opcode = CompiledOpcode::kSSubU32;
     return true;
   }
+  if (opcode == "S_SUB_I32") {
+    compiled_instruction->opcode = CompiledOpcode::kSSubU32;
+    return true;
+  }
   if (opcode == "S_SUBB_U32") {
     compiled_instruction->opcode = CompiledOpcode::kSSubbU32;
+    return true;
+  }
+  if (opcode == "S_MIN_I32") {
+    compiled_instruction->opcode = CompiledOpcode::kSMinI32;
+    return true;
+  }
+  if (opcode == "S_MIN_U32") {
+    compiled_instruction->opcode = CompiledOpcode::kSMinU32;
+    return true;
+  }
+  if (opcode == "S_MAX_I32") {
+    compiled_instruction->opcode = CompiledOpcode::kSMaxI32;
+    return true;
+  }
+  if (opcode == "S_MAX_U32") {
+    compiled_instruction->opcode = CompiledOpcode::kSMaxU32;
     return true;
   }
   if (opcode == "S_MUL_I32" || opcode == "S_MULK_I32") {
@@ -4612,12 +4813,20 @@ bool TryCompileOpcode(std::string_view opcode,
     compiled_instruction->opcode = CompiledOpcode::kSCmpEqU32;
     return true;
   }
+  if (opcode == "S_CMP_EQ_U64") {
+    compiled_instruction->opcode = CompiledOpcode::kSCmpEqU64;
+    return true;
+  }
   if (opcode == "S_CMP_EQ_I32" || opcode == "S_CMPK_EQ_I32") {
     compiled_instruction->opcode = CompiledOpcode::kSCmpEqI32;
     return true;
   }
   if (opcode == "S_CMP_LG_U32") {
     compiled_instruction->opcode = CompiledOpcode::kSCmpLgU32;
+    return true;
+  }
+  if (opcode == "S_CMP_LG_U64") {
+    compiled_instruction->opcode = CompiledOpcode::kSCmpLgU64;
     return true;
   }
   if (opcode == "S_CMP_LG_I32" || opcode == "S_CMPK_LG_I32") {
@@ -4766,6 +4975,10 @@ bool TryCompileOpcode(std::string_view opcode,
   }
   if (opcode == "V_XOR_B32") {
     compiled_instruction->opcode = CompiledOpcode::kVXorB32;
+    return true;
+  }
+  if (opcode == "DS_NOP") {
+    compiled_instruction->opcode = CompiledOpcode::kDsNop;
     return true;
   }
   if (opcode == "DS_WRITE_B32") {
@@ -5186,6 +5399,7 @@ bool Gfx950Interpreter::Supports(std::string_view opcode) const {
   }
 
   return IsScalarMoveOpcode(opcode) || opcode == "S_ENDPGM" ||
+         opcode == "V_NOP" || opcode == "DS_NOP" ||
          opcode == "V_MOV_B32" || opcode == "V_MOV_B64" ||
          IsExecMaskOpcode(opcode) || IsVectorToScalarOpcode(opcode) ||
          IsVectorUnaryOpcode(opcode) ||
@@ -5429,6 +5643,14 @@ bool Gfx950Interpreter::ExecuteInstruction(const DecodedInstruction& instruction
     return true;
   }
 
+  if (instruction.opcode == "V_NOP") {
+    return ValidateOperandCount(instruction, 0, error_message);
+  }
+
+  if (instruction.opcode == "DS_NOP") {
+    return ValidateOperandCount(instruction, 0, error_message);
+  }
+
   if (IsBarrierOpcode(instruction.opcode)) {
     return ExecuteBarrier(instruction, state, workgroup, wave_yielded,
                           error_message);
@@ -5507,6 +5729,8 @@ bool Gfx950Interpreter::ExecuteInstruction(const CompiledInstruction& instructio
       state->halted = true;
       state->waiting_on_barrier = false;
       return true;
+    case CompiledOpcode::kVNop:
+      return ValidateOperandCount(instruction, 0, error_message);
     case CompiledOpcode::kSBarrier:
       return ExecuteBarrier(instruction, state, workgroup, wave_yielded,
                             error_message);
@@ -5565,6 +5789,15 @@ bool Gfx950Interpreter::ExecuteInstruction(const CompiledInstruction& instructio
     case CompiledOpcode::kVFfbhU32:
     case CompiledOpcode::kVFfblB32:
     case CompiledOpcode::kVFfbhI32:
+    case CompiledOpcode::kVCvtF16U16:
+    case CompiledOpcode::kVCvtF16I16:
+    case CompiledOpcode::kVCvtU16F16:
+    case CompiledOpcode::kVCvtI16F16:
+    case CompiledOpcode::kVSatPkU8I16:
+    case CompiledOpcode::kVCvtF32Ubyte0:
+    case CompiledOpcode::kVCvtF32Ubyte1:
+    case CompiledOpcode::kVCvtF32Ubyte2:
+    case CompiledOpcode::kVCvtF32Ubyte3:
     case CompiledOpcode::kVCvtF32I32:
     case CompiledOpcode::kVCvtF32U32:
     case CompiledOpcode::kVCvtU32F32:
@@ -5594,7 +5827,9 @@ bool Gfx950Interpreter::ExecuteInstruction(const CompiledInstruction& instructio
     case CompiledOpcode::kVRndneF16:
     case CompiledOpcode::kVFloorF16:
     case CompiledOpcode::kVExpF32:
+    case CompiledOpcode::kVExpLegacyF32:
     case CompiledOpcode::kVLogF32:
+    case CompiledOpcode::kVLogLegacyF32:
     case CompiledOpcode::kVRcpF32:
     case CompiledOpcode::kVRcpIflagF32:
     case CompiledOpcode::kVRsqF32:
@@ -5623,6 +5858,10 @@ bool Gfx950Interpreter::ExecuteInstruction(const CompiledInstruction& instructio
     case CompiledOpcode::kSAddcU32:
     case CompiledOpcode::kSSubU32:
     case CompiledOpcode::kSSubbU32:
+    case CompiledOpcode::kSMinI32:
+    case CompiledOpcode::kSMinU32:
+    case CompiledOpcode::kSMaxI32:
+    case CompiledOpcode::kSMaxU32:
     case CompiledOpcode::kSMulI32:
     case CompiledOpcode::kSMulHiU32:
     case CompiledOpcode::kSMulHiI32:
@@ -5677,6 +5916,8 @@ bool Gfx950Interpreter::ExecuteInstruction(const CompiledInstruction& instructio
     case CompiledOpcode::kSCmpGeU32:
     case CompiledOpcode::kSCmpLtU32:
     case CompiledOpcode::kSCmpLeU32:
+    case CompiledOpcode::kSCmpEqU64:
+    case CompiledOpcode::kSCmpLgU64:
     case CompiledOpcode::kSBitcmp0B32:
     case CompiledOpcode::kSBitcmp1B32:
     case CompiledOpcode::kSBitcmp0B64:
@@ -5956,6 +6197,8 @@ bool Gfx950Interpreter::ExecuteInstruction(const CompiledInstruction& instructio
     case CompiledOpcode::kGlobalStoreDwordX3:
     case CompiledOpcode::kGlobalStoreDwordX4:
       return ExecuteVectorMemory(instruction, state, memory, error_message);
+    case CompiledOpcode::kDsNop:
+      return ValidateOperandCount(instruction, 0, error_message);
     case CompiledOpcode::kDsWriteB32:
     case CompiledOpcode::kDsReadB32:
     case CompiledOpcode::kDsAddU32:
@@ -6683,7 +6926,8 @@ bool Gfx950Interpreter::ExecuteScalarBinary(const DecodedInstruction& instructio
   std::uint32_t result = 0;
   bool scc = state->scc;
   bool update_scc = true;
-  if (instruction.opcode == "S_ADD_U32" || instruction.opcode == "S_ADDK_I32") {
+  if (instruction.opcode == "S_ADD_U32" || instruction.opcode == "S_ADD_I32" ||
+      instruction.opcode == "S_ADDK_I32") {
     const std::uint64_t wide = static_cast<std::uint64_t>(lhs) + rhs;
     result = static_cast<std::uint32_t>(wide);
     scc = wide > std::numeric_limits<std::uint32_t>::max();
@@ -6692,7 +6936,8 @@ bool Gfx950Interpreter::ExecuteScalarBinary(const DecodedInstruction& instructio
         static_cast<std::uint64_t>(lhs) + rhs + (state->scc ? 1u : 0u);
     result = static_cast<std::uint32_t>(wide);
     scc = wide > std::numeric_limits<std::uint32_t>::max();
-  } else if (instruction.opcode == "S_SUB_U32") {
+  } else if (instruction.opcode == "S_SUB_U32" ||
+             instruction.opcode == "S_SUB_I32") {
     result = lhs - rhs;
     scc = lhs >= rhs;
   } else if (instruction.opcode == "S_SUBB_U32") {
@@ -6740,6 +6985,26 @@ bool Gfx950Interpreter::ExecuteScalarBinary(const DecodedInstruction& instructio
   } else if (instruction.opcode == "S_PACK_HH_B32_B16") {
     result = ((lhs >> 16) & 0xffffu) | (rhs & 0xffff0000u);
     update_scc = false;
+  } else if (instruction.opcode == "S_MIN_I32") {
+    const std::int32_t lhs_signed = BitCast<std::int32_t>(lhs);
+    const std::int32_t rhs_signed = BitCast<std::int32_t>(rhs);
+    const bool select_lhs = lhs_signed <= rhs_signed;
+    result = select_lhs ? lhs : rhs;
+    scc = select_lhs;
+  } else if (instruction.opcode == "S_MIN_U32") {
+    const bool select_lhs = lhs <= rhs;
+    result = select_lhs ? lhs : rhs;
+    scc = select_lhs;
+  } else if (instruction.opcode == "S_MAX_I32") {
+    const std::int32_t lhs_signed = BitCast<std::int32_t>(lhs);
+    const std::int32_t rhs_signed = BitCast<std::int32_t>(rhs);
+    const bool select_lhs = lhs_signed >= rhs_signed;
+    result = select_lhs ? lhs : rhs;
+    scc = select_lhs;
+  } else if (instruction.opcode == "S_MAX_U32") {
+    const bool select_lhs = lhs >= rhs;
+    result = select_lhs ? lhs : rhs;
+    scc = select_lhs;
   } else if (instruction.opcode == "S_CSELECT_B32") {
     result = state->scc ? lhs : rhs;
     update_scc = false;
@@ -7000,6 +7265,30 @@ bool Gfx950Interpreter::ExecuteScalarBinary(const CompiledInstruction& instructi
       scc = static_cast<std::uint64_t>(lhs) >= subtrahend;
       break;
     }
+    case CompiledOpcode::kSMinI32: {
+      const std::int32_t lhs_signed = BitCast<std::int32_t>(lhs);
+      const std::int32_t rhs_signed = BitCast<std::int32_t>(rhs);
+      const bool select_lhs = lhs_signed <= rhs_signed;
+      result = select_lhs ? lhs : rhs;
+      scc = select_lhs;
+      break;
+    }
+    case CompiledOpcode::kSMinU32:
+      scc = lhs <= rhs;
+      result = scc ? lhs : rhs;
+      break;
+    case CompiledOpcode::kSMaxI32: {
+      const std::int32_t lhs_signed = BitCast<std::int32_t>(lhs);
+      const std::int32_t rhs_signed = BitCast<std::int32_t>(rhs);
+      const bool select_lhs = lhs_signed >= rhs_signed;
+      result = select_lhs ? lhs : rhs;
+      scc = select_lhs;
+      break;
+    }
+    case CompiledOpcode::kSMaxU32:
+      scc = lhs >= rhs;
+      result = scc ? lhs : rhs;
+      break;
     case CompiledOpcode::kSMulI32: {
       const std::int64_t product =
           static_cast<std::int64_t>(BitCast<std::int32_t>(lhs)) *
@@ -7155,6 +7444,21 @@ bool Gfx950Interpreter::ExecuteScalarCompare(const DecodedInstruction& instructi
     return true;
   }
 
+  if (instruction.opcode == "S_CMP_EQ_U64" || instruction.opcode == "S_CMP_LG_U64") {
+    const std::uint64_t lhs =
+        ReadScalarPairOperand(instruction.operands[0], *state, error_message);
+    if (error_message != nullptr && !error_message->empty()) {
+      return false;
+    }
+    const std::uint64_t rhs =
+        ReadScalarPairOperand(instruction.operands[1], *state, error_message);
+    if (error_message != nullptr && !error_message->empty()) {
+      return false;
+    }
+    state->scc = instruction.opcode == "S_CMP_EQ_U64" ? (lhs == rhs) : (lhs != rhs);
+    return true;
+  }
+
   const std::uint32_t lhs =
       ReadScalarOperand(instruction.operands[0], *state, error_message);
   if (error_message != nullptr && !error_message->empty()) {
@@ -7252,6 +7556,23 @@ bool Gfx950Interpreter::ExecuteScalarCompare(const CompiledInstruction& instruct
     state->scc =
         instruction.opcode == CompiledOpcode::kSBitcmp0B64 ? !bit_is_set
                                                             : bit_is_set;
+    return true;
+  }
+
+  if (instruction.opcode == CompiledOpcode::kSCmpEqU64 ||
+      instruction.opcode == CompiledOpcode::kSCmpLgU64) {
+    const std::uint64_t lhs =
+        ReadScalarPairOperand(instruction.operands[0], *state, error_message);
+    if (error_message != nullptr && !error_message->empty()) {
+      return false;
+    }
+    const std::uint64_t rhs =
+        ReadScalarPairOperand(instruction.operands[1], *state, error_message);
+    if (error_message != nullptr && !error_message->empty()) {
+      return false;
+    }
+    state->scc = instruction.opcode == CompiledOpcode::kSCmpEqU64 ? (lhs == rhs)
+                                                                   : (lhs != rhs);
     return true;
   }
 
@@ -7773,6 +8094,15 @@ bool Gfx950Interpreter::ExecuteVectorUnary(const DecodedInstruction& instruction
         instruction.opcode != "V_FFBH_U32" &&
         instruction.opcode != "V_FFBL_B32" &&
         instruction.opcode != "V_FFBH_I32" &&
+        instruction.opcode != "V_CVT_F16_U16" &&
+        instruction.opcode != "V_CVT_F16_I16" &&
+        instruction.opcode != "V_CVT_U16_F16" &&
+        instruction.opcode != "V_CVT_I16_F16" &&
+        instruction.opcode != "V_SAT_PK_U8_I16" &&
+        instruction.opcode != "V_CVT_F32_UBYTE0" &&
+        instruction.opcode != "V_CVT_F32_UBYTE1" &&
+        instruction.opcode != "V_CVT_F32_UBYTE2" &&
+        instruction.opcode != "V_CVT_F32_UBYTE3" &&
         instruction.opcode != "V_CVT_F32_I32" &&
         instruction.opcode != "V_CVT_F32_U32" &&
         instruction.opcode != "V_CVT_U32_F32" &&
@@ -7796,7 +8126,9 @@ bool Gfx950Interpreter::ExecuteVectorUnary(const DecodedInstruction& instruction
         instruction.opcode != "V_RNDNE_F16" &&
         instruction.opcode != "V_FLOOR_F16" &&
         instruction.opcode != "V_EXP_F32" &&
+        instruction.opcode != "V_EXP_LEGACY_F32" &&
         instruction.opcode != "V_LOG_F32" &&
+        instruction.opcode != "V_LOG_LEGACY_F32" &&
         instruction.opcode != "V_RCP_F32" &&
         instruction.opcode != "V_RCP_IFLAG_F32" &&
         instruction.opcode != "V_RSQ_F32" &&
@@ -7932,6 +8264,15 @@ bool Gfx950Interpreter::ExecuteVectorUnary(const CompiledInstruction& instructio
       case CompiledOpcode::kVFfbhU32:
       case CompiledOpcode::kVFfblB32:
       case CompiledOpcode::kVFfbhI32:
+      case CompiledOpcode::kVCvtF16U16:
+      case CompiledOpcode::kVCvtF16I16:
+      case CompiledOpcode::kVCvtU16F16:
+      case CompiledOpcode::kVCvtI16F16:
+      case CompiledOpcode::kVSatPkU8I16:
+      case CompiledOpcode::kVCvtF32Ubyte0:
+      case CompiledOpcode::kVCvtF32Ubyte1:
+      case CompiledOpcode::kVCvtF32Ubyte2:
+      case CompiledOpcode::kVCvtF32Ubyte3:
       case CompiledOpcode::kVCvtF32I32:
       case CompiledOpcode::kVCvtF32U32:
       case CompiledOpcode::kVCvtU32F32:
@@ -7955,7 +8296,9 @@ bool Gfx950Interpreter::ExecuteVectorUnary(const CompiledInstruction& instructio
       case CompiledOpcode::kVRndneF16:
       case CompiledOpcode::kVFloorF16:
       case CompiledOpcode::kVExpF32:
+      case CompiledOpcode::kVExpLegacyF32:
       case CompiledOpcode::kVLogF32:
+      case CompiledOpcode::kVLogLegacyF32:
       case CompiledOpcode::kVRcpF32:
       case CompiledOpcode::kVRcpIflagF32:
       case CompiledOpcode::kVRsqF32:

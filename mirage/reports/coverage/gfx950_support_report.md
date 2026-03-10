@@ -1,15 +1,15 @@
 # GFX950 Coverage Report
 
 - Catalog instructions: 1242
-- Semantic support: 510 (41.1%)
-- Raw decode support: 553 (44.5% of total, 54.5% of measured)
+- Semantic support: 531 (42.8%)
+- Raw decode support: 554 (44.6% of total, 54.6% of measured)
 - Raw decode measurable instructions: 1014
 
 ## Gaps
 
 - Semantic-only coverage without measured decode: 36
-- Decode-only without semantic support: 79
-- Missing both semantic and decode support: 653
+- Decode-only without semantic support: 59
+- Missing both semantic and decode support: 652
 
 ## Unmeasured Encoding Families
 
@@ -75,19 +75,19 @@
 - `S_MOVRELD_B64`
 - `S_CBRANCH_JOIN`
 - `S_SET_GPR_IDX_IDX`
-- `S_ADD_I32`
-- `S_SUB_I32`
-- `S_MIN_I32`
-- `S_MIN_U32`
-- `S_MAX_I32`
-- `S_MAX_U32`
 - `S_CBRANCH_G_FORK`
 - `S_RFE_RESTORE_B64`
 - `S_SETVSKIP`
 - `S_SET_GPR_IDX_ON`
-- `S_CMP_EQ_U64`
-- `S_CMP_LG_U64`
-- `V_NOP`
+- `V_CVT_OFF_F32_I4`
+- `V_CLREXCP`
+- `V_SCREEN_PARTITION_4SE_B32`
+- `V_CVT_NORM_I16_F16`
+- `V_CVT_NORM_U16_F16`
+- `V_SWAP_B32`
+- `V_ACCVGPR_MOV_B32`
+- `V_CVT_F32_FP8`
+- `V_CVT_F32_BF8`
 
 ## Missing-Both Sample
 
@@ -96,7 +96,6 @@
 - `DS_WRITE2ST64_B32`
 - `DS_CMPST_B32`
 - `DS_CMPST_F32`
-- `DS_NOP`
 - `DS_PK_ADD_F16`
 - `DS_PK_ADD_BF16`
 - `DS_WRITE_ADDTID_B32`
@@ -116,3 +115,4 @@
 - `DS_WRXCHG_RTN_B32`
 - `DS_WRXCHG2_RTN_B32`
 - `DS_WRXCHG2ST64_RTN_B32`
+- `DS_CMPST_RTN_B32`
