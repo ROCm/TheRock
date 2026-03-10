@@ -14,26 +14,25 @@ if THEROCK_BIN_DIR_STR is None:
     )
     sys.exit(1)
 THEROCK_BIN_DIR = Path(THEROCK_BIN_DIR_STR)
+THEROCK_DIR = Path(THEROCK_BIN_DIR).resolve().parent
 env = os.environ.copy()
 
 
 def setup_env(env):
-    # catch/ctest framework
-    # Linux
-    #   LD_LIBRARY_PATH needs to be used
-    #   tests are hardcoded to look at THEROCK_BIN_DIR or /opt/rocm/lib path
-    # Windows
-    #   tests load the dlls present in the local exe folder
-    # Set ROCM Path, to find rocm_agent_enum etc
-    ROCM_PATH = Path(THEROCK_BIN_DIR).resolve().parent
+    ROCM_PATH = Path(THEROCK_DIR)
     env["ROCM_PATH"] = str(ROCM_PATH)
     if platform.system() == "Linux":
-        ROCK_LIB_PATH = Path(THEROCK_BIN_DIR).parent / "lib"
+        ROCK_LIB_PATH = Path(THEROCK_DIR) / "lib"
         OCL_LIB = Path(ROCK_LIB_PATH) / "opencl"
         LLVM_LIB = Path(ROCK_LIB_PATH) / "llvm" / "lib"
         ROCM_SYSDEPS_LIB = Path(ROCK_LIB_PATH) / "rocm_sysdeps" / "lib"
-        OCL_ICD_VENDORS = Path(THEROCK_BIN_DIR).parent / "etc" / "OpenCL" / "vendors"
-        # logging.info(f"++ contents of ROCK_LIB_PATH={os.listdir(ROCK_LIB_PATH)}")
+        OCL_ICD_VENDORS = Path(THEROCK_DIR) / "etc" / "OpenCL" / "vendors"
+        logging.info(f"++ contents of ROCK_LIB_PATH={os.listdir(ROCK_LIB_PATH)}")
+        logging.info(f"++ contents of OCL_LIB={os.listdir(OCL_LIB)}")
+        logging.info(f"++ contents of LLVM_LIB={os.listdir(LLVM_LIB)}")
+        logging.info(f"++ contents of ROCM_SYSDEPS_LIB={os.listdir(ROCM_SYSDEPS_LIB)}")
+        logging.info(f"++ contents of ROCK dir={os.listdir(THEROCK_DIR)}")
+        #logging.info(f"++ contents of OCL_ICD_VENDORS={os.listdir(OCL_ICD_VENDORS)}")
         LD_LIBRARY_PATH = os.getenv("LD_LIBRARY_PATH")
         if LD_LIBRARY_PATH is not None:
             LD_LIBRARY_PATH = Path(LD_LIBRARY_PATH)
@@ -45,7 +44,7 @@ def setup_env(env):
 
 def execute_tests(env):
     if platform.system() == "Linux":
-        OCLTST_PATH = str(Path(THEROCK_BIN_DIR).parent / "share" / "opencl" / "ocltst")
+        OCLTST_PATH = Path(THEROCK_DIR) / "share" / "opencl" / "ocltst"
         cmd = [
             "./ocltst",
             "-J",
@@ -76,7 +75,7 @@ def execute_tests(env):
         subprocess.run(cmd_strace, cwd=OCLTST_PATH, check=True, env=env, shell=shell_var)
         logging.info(f"++++++++++++ DEBUGGING LIBS LOADING : ocltst_debug end+++++++++++++++++")
     elif platform.system() == "Windows":
-        OCLTST_PATH = str(Path(THEROCK_BIN_DIR).parent / "tests" / "ocltst")
+        OCLTST_PATH = Path(THEROCK_DIR) / "tests" / "ocltst"
         cmd = [
             "ocltst.exe",
             "-J",
