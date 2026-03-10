@@ -14,10 +14,9 @@ THEROCK_PATH = THEROCK_BIN_PATH.parent
 THEROCK_LIB_PATH = str(THEROCK_PATH / "lib")
 ROCPROFILER_COMPUTE_DIRECTORY = THEROCK_PATH / "libexec" / "rocprofiler-compute"
 
-# Set up excluded tests (include Jiras/GitHub issues)
+# Set up excluded tests
 EXCLUDED_TESTS = [
-    "test_profile_pc_sampling",  # AIPROFSDK-36: rocr issue causing test to fail
-    "test_profile_live_attach_detach",  # https://github.com/ROCm/TheRock/issues/3778
+    "test_profile_live_attach_detach",
 ]
 
 # Smoke Tests
