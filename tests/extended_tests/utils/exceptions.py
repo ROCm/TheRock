@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """
 Custom exceptions for test execution and system operations.
 """
@@ -35,6 +38,12 @@ class ROCmVersionError(FrameworkException):
 
 class TestExecutionError(FrameworkException):
     """Test execution failures (script not found, timeout, critical errors)."""
+
+    pass
+
+
+class TestResultError(FrameworkException):
+    """Test result failures (tests ran successfully but results show failures)."""
 
     pass
 

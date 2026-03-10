@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Subdirectory load order here is carefully balanced - see usage from the root
 # CMakeLists.txt. Notably this file does *not* include the sysdeps subdirectory,
 # which is expected to be included *first*. This allows for bootstrapping
@@ -35,6 +38,11 @@ if(THEROCK_ENABLE_HOST_BLAS)
 endif()
 if(THEROCK_ENABLE_HOST_SUITE_SPARSE)
   add_subdirectory(SuiteSparse)
+endif()
+
+# OpenMPI implementation of MPI
+if(THEROCK_ENABLE_MPI)
+  add_subdirectory(openmpi)
 endif()
 
 # gRPC: Static library for RDC (built on-demand when depended upon)

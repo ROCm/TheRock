@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 name: Test Linux JAX Wheels
 
 on:
@@ -38,7 +41,15 @@ on:
         required: false
         type: string
       jaxlib_version:
-        description: "Full jaxlib version including rocm suffix (e.g. 0.8.0+rocm7.12.0). Extracted from built wheels by write_jax_versions.py."
+        description: "jaxlib wheel version (e.g. 0.9.0+rocm7 or 0.8.0+rocm7.12.0). Extracted from built wheels by write_jax_versions.py."
+        required: false
+        type: string
+      jax_plugin_version:
+        description: "jax_rocm7_plugin wheel version. Extracted from built wheels by write_jax_versions.py."
+        required: false
+        type: string
+      jax_pjrt_version:
+        description: "jax_rocm7_pjrt wheel version. Extracted from built wheels by write_jax_versions.py."
         required: false
         type: string
       ref:
@@ -61,7 +72,9 @@ on:
           - gfx1152
           - gfx1153
           - gfx120X-all
-          - gfx90X-dcgpu
+          - gfx906
+          - gfx908
+          - gfx90a
           - gfx94X-dcgpu
           - gfx950-dcgpu
         default: gfx94X-dcgpu
@@ -98,7 +111,15 @@ on:
         required: false
         type: string
       jaxlib_version:
-        description: "Full jaxlib version with rocm suffix (e.g. 0.8.0+rocm7.12.0). Leave empty to auto-compute from rocm_version."
+        description: "jaxlib wheel version (e.g. 0.9.0+rocm7 or 0.8.0+rocm7.12.0). Leave empty to auto-compute from rocm_version."
+        required: false
+        type: string
+      jax_plugin_version:
+        description: "jax_rocm7_plugin wheel version. Leave empty to use jaxlib_version."
+        required: false
+        type: string
+      jax_pjrt_version:
+        description: "jax_rocm7_pjrt wheel version. Leave empty to use jaxlib_version."
         required: false
         type: string
       test_runs_on:
@@ -201,6 +222,8 @@ jobs:
             echo "Using versions passed from build workflow"
             echo "JAXLIB_VERSION=${{ inputs.jaxlib_version }}" >> "$GITHUB_ENV"
             echo "JAX_VERSION=${{ inputs.jax_version }}" >> "$GITHUB_ENV"
+            echo "JAX_PLUGIN_VERSION=${{ inputs.jax_plugin_version }}" >> "$GITHUB_ENV"
+            echo "JAX_PJRT_VERSION=${{ inputs.jax_pjrt_version }}" >> "$GITHUB_ENV"
           else
             echo "Computing versions from rocm_version and rocm-jax requirements"
             pip install packaging
@@ -213,12 +236,14 @@ jobs:
         run: |
           echo "Installing JAX packages:"
           echo "  JAXLIB_VERSION=${JAXLIB_VERSION}"
+          echo "  JAX_PLUGIN_VERSION=${JAX_PLUGIN_VERSION}"
+          echo "  JAX_PJRT_VERSION=${JAX_PJRT_VERSION}"
           echo "  JAX_VERSION=${JAX_VERSION}"
           # Install jaxlib/plugin/pjrt from the GPU-family index; install jax from PyPI to match the version
           pip install --index-url "${{ env.WHEEL_INDEX_URL }}" \
             "jaxlib==${JAXLIB_VERSION}" \
-            "jax_rocm7_plugin==${JAXLIB_VERSION}" \
-            "jax_rocm7_pjrt==${JAXLIB_VERSION}"
+            "jax_rocm7_plugin==${JAX_PLUGIN_VERSION}" \
+            "jax_rocm7_pjrt==${JAX_PJRT_VERSION}"
           pip install jax==${JAX_VERSION}
 
       - name: Run JAX tests

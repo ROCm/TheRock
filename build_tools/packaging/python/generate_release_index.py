@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Creates an HTML page for releases for `pip install --find-links` from a subdirectory in an S3 bucket.
 
 Sample usage:

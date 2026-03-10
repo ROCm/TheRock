@@ -193,11 +193,11 @@ artifact_groups = ["media-libs"]
 # These define build dependencies and source requirements
 
 [artifact_groups.third-party-sysdeps]
-description = "Critical system dependencies (always needed)"
+description = "Third-party system libraries bundled for portable distribution"
 type = "generic"
 
 [artifact_groups.third-party-libs]
-description = "Optional third-party libraries (for tests/specific features)"
+description = "Third-party libraries (typically internal dependencies, not distributed as sysdeps are)"
 type = "generic"
 artifact_group_deps = ["compiler"]
 source_sets = []  # No submodules - uses vendored/in-tree deps
@@ -249,7 +249,7 @@ source_sets = ["rocm-systems"]  # clr is in rocm-systems
 
 [artifact_groups.rocrtst]
 description = "Core runtime tests (ROCR-Runtime, rocminfo)"
-type = "per-arch"
+type = "generic"
 artifact_group_deps = ["opencl-runtime", "core-runtime"]
 source_sets = ["rocm-systems"]
 
@@ -316,7 +316,10 @@ source_sets = ["amd-mesa", "rocm-systems"]
 # Artifacts are the fundamental packaging units
 # Each artifact produces components: dbg, dev, doc, lib, run, test
 
-# --- Third-party Dependencies ---
+# --- Sysdeps: Bundled system libraries ---
+# Libraries built from source with SONAME rewriting and symbol versioning
+# for portable distribution. Installed into lib/rocm_sysdeps/.
+# See docs/development/dependencies.md.
 
 [artifacts.sysdeps]
 artifact_group = "third-party-sysdeps"
@@ -373,6 +376,9 @@ artifact_deps = ["sysdeps", "sysdeps-libpciaccess"]  # hwloc depends on numactl 
 feature_group = "CORE"
 disable_platforms = ["windows"]
 
+# --- Third-party libraries ---
+# Unlike third-party-sysdeps, these libraries are not given special treatment for portable distribution.
+
 [artifacts.host-blas]
 artifact_group = "third-party-libs"
 type = "target-neutral"
@@ -415,6 +421,12 @@ feature_group = "CORE"
 artifact_group = "third-party-libs"
 type = "target-neutral"
 artifact_deps = ["amd-llvm"]
+feature_group = "CORE"
+
+[artifacts.openmpi]
+artifact_group = "third-party-libs"
+type = "target-neutral"
+artifact_deps = []
 feature_group = "CORE"
 
 # --- Base Infrastructure ---
@@ -565,17 +577,17 @@ artifact_deps = ["core-runtime", "core-hip", "spdlog"]
 [artifacts.miopenprovider]
 artifact_group = "ml-libs"
 type = "target-neutral"
-artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "spdlog"]
+artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn"]
 
 [artifacts.hipblasltprovider]
 artifact_group = "ml-libs"
 type = "target-neutral"
-artifact_deps = ["core-runtime", "core-hip", "blas", "hipdnn", "spdlog"]
+artifact_deps = ["core-runtime", "core-hip", "blas", "hipdnn"]
 
 [artifacts.hipdnn-samples]
 artifact_group = "ml-libs"
 type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "miopenprovider", "spdlog"]
+artifact_deps = ["core-runtime", "core-hip", "miopen", "hipdnn", "miopenprovider"]
 
 # --- IREE Integration ---
 
@@ -588,7 +600,7 @@ disable_platforms = ["windows"]
 [artifacts.fusilliprovider]
 artifact_group = "iree-libs"
 type = "target-neutral"
-artifact_deps = ["core-runtime", "core-hip", "hipdnn", "spdlog", "iree-compiler"]
+artifact_deps = ["core-runtime", "core-hip", "hipdnn", "iree-compiler"]
 disable_platforms = ["windows"]
 
 # --- Media Integration ---
@@ -612,23 +624,29 @@ disable_platforms = ["windows"]
 [artifacts.rccl]
 artifact_group = "comm-libs"
 type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip", "hipify", "rocprofiler-sdk", "core-amdsmi"]
+artifact_deps = ["core-runtime", "core-hip", "hipify", "rocprofiler-sdk", "core-amdsmi", "openmpi"]
+disable_platforms = ["windows"]
+
+[artifacts.rocshmem]
+artifact_group = "comm-libs"
+type = "target-specific"
+artifact_deps = ["core-runtime", "core-hip", "sysdeps"]
 disable_platforms = ["windows"]
 
 # --- Profiler Tools ---
 
-[artifacts.rocprofiler-sdk]
-artifact_group = "profiler-core"
-type = "target-neutral"
-artifact_deps = ["core-runtime", "base"]  # rocprofiler-register is in base
-feature_name = "ROCPROFV3"
-feature_group = "PROFILER"
-disable_platforms = ["windows"]
-
-[artifacts.aqlprofile-tests]
+[artifacts.aqlprofile]
 artifact_group = "profiler-core"
 type = "target-neutral"
 artifact_deps = ["core-runtime"]
+feature_group = "PROFILER"
+disable_platforms = ["windows"]
+
+[artifacts.rocprofiler-sdk]
+artifact_group = "profiler-core"
+type = "target-neutral"
+artifact_deps = ["core-runtime", "base", "aqlprofile"]  # rocprofiler-register is in base
+feature_name = "ROCPROFV3"
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
 

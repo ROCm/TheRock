@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 name: Test component
 
 on:
@@ -128,12 +131,27 @@ jobs:
         run: |
           python ./build_tools/print_driver_gpu_info.py
 
+      - name: Setup Additional Requirements
+        if: ${{ fromJSON(inputs.component).additional_requirements_files != '' }}
+        run: |
+          python ./build_tools/install_additional_requirements.py \
+            --requirements-files ${{ join(fromJSON(inputs.component).additional_requirements_files, ',') }}
+
+        # TODO(#3755): Clean this up after final sanitizer environment variable flags are determined
+      - name: Enable sanitizer-specific test flags
+        if: ${{ contains(inputs.artifact_group, 'asan') }}
+        run: |
+          echo "ASAN_OPTIONS=detect_odr_violation=0:quarantine_size_mb=600" >> $GITHUB_ENV
+          echo "HSA_XNACK=1" >> $GITHUB_ENV
+          echo "ASAN_SYMBOLIZER_PATH=${{ env.OUTPUT_ARTIFACTS_DIR }}/llvm/bin/llvm-symbolizer" >> $GITHUB_ENV
+
       - name: Test
         timeout-minutes: ${{ fromJSON(inputs.component).timeout_minutes }}
         env:
           SHARD_INDEX: ${{ matrix.shard }}
           TOTAL_SHARDS: ${{ fromJSON(inputs.component).total_shards }}
           TEST_TYPE: ${{ fromJSON(inputs.component).test_type }}
+          ROCM_KPACK_DEBUG: "1"
         run: |
           ${{ fromJSON(inputs.component).test_script }}
 
