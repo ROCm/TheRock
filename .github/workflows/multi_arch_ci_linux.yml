@@ -57,6 +57,25 @@ jobs:
       contents: read
       id-token: write
 
+  validate_artifact_structure:
+    needs: [build_multi_arch_stages]
+    name: Validate Artifact Structure
+    if: >-
+      ${{
+        !failure() &&
+        !cancelled() &&
+        (
+          inputs.use_prebuilt_artifacts == 'false' ||
+          inputs.use_prebuilt_artifacts == 'true'
+        ) &&
+        inputs.expect_failure == false
+      }}
+    uses: ./.github/workflows/test_artifacts_structure.yml
+    with:
+      artifact_group: ${{ inputs.artifact_group }}
+      artifact_run_id: ${{ inputs.artifact_run_id }}
+      platform: linux
+
   test_artifacts_per_family:
     needs: [build_multi_arch_stages]
     name: Test ${{ matrix.family_info.amdgpu_family }}

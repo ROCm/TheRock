@@ -76,7 +76,7 @@ ______________________________________________________________________
 
 1. **In the component (e.g. CMake/CTest):**
 
-- Name GPU-specific tests `{target}-{category}-{gpu_arch}-suite`.
+- Name GPU-specific tests `{target}_{category}_{gpu_arch}_suite`.
 - Assign labels `ex_gpu_{gpu_arch}` and the category label (`quick` / `standard` or equivalent).
 
 2. **In TheRock:**
