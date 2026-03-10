@@ -21,6 +21,8 @@ __all__ = [
     "exceptions",
     # Main API
     "ExtendedTestClient",
+    # Shared test base class
+    "ExtendedTestBase",
     # Commonly used exports
     "SystemContext",
     "SystemDetector",
