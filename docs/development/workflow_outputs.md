@@ -81,27 +81,51 @@ The `comp-summary.*` files appear both in the `therock-build-prof/` subdirectory
 
 ### Bucket selection
 
-The bucket is determined by `_retrieve_bucket_info()`:
+The bucket is determined by `_retrieve_bucket_info()` in `workflow_outputs.py`.
+
+#### Buckets
+
+| Bucket                                                                                     | Used for                                                                      | Upload auth                                         |
+| ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- | --------------------------------------------------- |
+| [`therock-ci-artifacts`](https://therock-ci-artifacts.s3.amazonaws.com/)                   | CI runs on `ROCm/TheRock`                                                     | `therock-ci` role (OIDC)                            |
+| [`therock-ci-artifacts-external`](https://therock-ci-artifacts-external.s3.amazonaws.com/) | CI runs from forks and other repos<br>(e.g. `rocm-libraries`, `rocm-systems`) | Runner baseline credentials (no extra setup needed) |
+| [`therock-dev-artifacts`](https://therock-dev-artifacts.s3.amazonaws.com/)                 | Release type `dev`                                                            | `therock-dev` role (OIDC)                           |
+| [`therock-nightly-artifacts`](https://therock-nightly-artifacts.s3.amazonaws.com/)         | Release type `nightly`                                                        | `therock-nightly` role (OIDC)                       |
+| [`therock-prerelease-artifacts`](https://therock-prerelease-artifacts.s3.amazonaws.com/)   | Release type `prerelease`                                                     | `therock-prerelease` role (OIDC)                    |
+| [`therock-artifacts`](https://therock-artifacts.s3.amazonaws.com/)                         | Pre-cutover `ROCm/TheRock` runs (legacy)                                      | —                                                   |
+| [`therock-artifacts-external`](https://therock-artifacts-external.s3.amazonaws.com/)       | Pre-cutover fork/external runs (legacy)                                       | —                                                   |
+
+**Authentication:** Our CI runners come with baseline credentials that allow
+uploading to `therock-ci-artifacts-external`. To upload to any other bucket,
+workflows must assume an IAM role via
+[`aws-actions/configure-aws-credentials`](https://github.com/aws-actions/configure-aws-credentials)
+using OIDC (`id-token: write` permission). The role name follows the pattern
+`arn:aws:iam::692859939525:role/therock-{ci,dev,nightly,prerelease}`.
+
+Workflows in downstream repos like `rocm-libraries`, `rocm-systems`, and
+`llvm-project` upload to `therock-ci-artifacts-external` and do not need to
+run `aws-actions/configure-aws-credentials` at all.
+
+#### Selection logic
 
 ```
-RELEASE_TYPE set?
-├─ Yes ──> therock-{RELEASE_TYPE}-artifacts
-└─ No
-   └─ ROCm/TheRock and not fork?
-      ├─ Yes
-      │  └─ Pre-cutover? ─Yes─> therock-artifacts
-      │                  ─No──> therock-ci-artifacts
-      └─ No
-         └─ ROCm/therock-releases-internal and not fork?
-            ├─ Yes ──> therock-artifacts-internal
-            └─ No
-               └─ Pre-cutover? ─Yes─> therock-artifacts-external
-                               ─No──> therock-ci-artifacts-external
+RELEASE_TYPE set? ──Yes──> therock-{RELEASE_TYPE}-artifacts
+       │
+       No
+       │
+ROCm/TheRock (not fork)? ──Yes──> therock-ci-artifacts
+       │
+       No
+       │
+       └──> therock-ci-artifacts-external
+
+Legacy (pre-cutover):
+  Runs before 2025-11-11 (TheRock #2046) use the old bucket names:
+    therock-ci-artifacts          → therock-artifacts
+    therock-ci-artifacts-external → therock-artifacts-external
 ```
 
-"Pre-cutover" means the workflow run's `updated_at` timestamp is before
-2025-11-11 (TheRock #2046). Valid `RELEASE_TYPE` values are `dev`, `nightly`,
-and `prerelease`.
+Valid `RELEASE_TYPE` values are `dev`, `nightly`, and `prerelease`.
 
 ## Python API
 
