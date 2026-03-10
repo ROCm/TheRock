@@ -135,6 +135,69 @@ jobs:
             --pkg-type ${{ inputs.native_package_type }} \
             --version-suffix ${{ env.ARTIFACT_RUN_ID }}
 
+      # ==================== Package Signing with OIDC ====================
+
+      - name: Get OIDC token for package signing
+        id: oidc
+        if: env.RELEASE_TYPE != ''
+        run: |
+          echo "Requesting OIDC token from GitHub for signing authentication..."
+          OIDC_TOKEN=$(curl -sSL \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=amd-signing-service" \
+            | jq -r '.value')
+
+          # Mask token in logs for security
+          echo "::add-mask::$OIDC_TOKEN"
+
+          # Export token for use in signing steps
+          echo "token=$OIDC_TOKEN" >> $GITHUB_OUTPUT
+          echo "✅ OIDC token obtained (valid for ~10 minutes)"
+
+      - name: Install gpgshim for RPM signing
+        if: inputs.native_package_type == 'rpm' && env.RELEASE_TYPE != ''
+        run: |
+          echo "Installing gpgshim client for remote RPM signing..."
+          mkdir -p ~/.local/bin
+          cp build_tools/packaging/linux/gpgshim ~/.local/bin/gpgshim
+          chmod +x ~/.local/bin/gpgshim
+          echo "✅ gpgshim installed at ~/.local/bin/gpgshim"
+
+      - name: Sign RPM packages
+        if: inputs.native_package_type == 'rpm' && env.RELEASE_TYPE != ''
+        env:
+          # gpgshim reads these environment variables
+          GPG_SIGNING_SERVER: ${{ secrets.GPG_SIGNING_SERVER }}
+          GPG_SERVER_TOKEN: ${{ steps.oidc.outputs.token }}
+          PATH: /home/runner/.local/bin:${{ env.PATH }}
+        run: |
+          echo "Signing RPM packages with remote signing server..."
+          cd ${{ env.PACKAGE_DIST_DIR }}
+
+          # Find and sign all RPM packages
+          RPM_COUNT=$(find . -name "*.rpm" -type f | wc -l)
+          echo "Found $RPM_COUNT RPM packages to sign"
+
+          find . -name "*.rpm" -type f | while read rpm_file; do
+            echo "  Signing: $(basename $rpm_file)"
+
+            # rpmsign calls gpgshim (via _gpg_path macro)
+            # gpgshim reads GPG_SERVER_TOKEN env var and sends OIDC token to signing server
+            rpmsign --addsign \
+              --define "_gpg_path $HOME/.local/bin/gpgshim" \
+              "$rpm_file"
+
+            # Verify signature was applied
+            rpm --checksig "$rpm_file"
+            echo "  ✅ Signed: $(basename $rpm_file)"
+          done
+
+          echo "✅ All $RPM_COUNT RPM packages signed successfully"
+
+      # ==================== End Package Signing ====================
+      # Note: Repository metadata signing (Release, repomd.xml) happens inside
+      # upload_package_repo.py after metadata generation
+
       - name: Install AWS CLI
         run: bash ./dockerfiles/install_awscli.sh
 
@@ -146,11 +209,27 @@ jobs:
 
       - name: Upload Package repo to S3
         id: upload-packages
+        env:
+          GPG_SIGNING_SERVER: ${{ secrets.GPG_SIGNING_SERVER }}
+          GPG_SERVER_TOKEN: ${{ steps.oidc.outputs.token }}
         run: |
           echo "Uploading to s3 bucket : ${{ inputs.release_type }}"
-          python ./build_tools/packaging/linux/upload_package_repo.py \
+
+          # Build command with optional signing parameters
+          CMD="python ./build_tools/packaging/linux/upload_package_repo.py \
             --pkg-type ${{ inputs.native_package_type }} \
             --s3-bucket ${{ env.S3_BUCKET_NATIVE }} \
             --amdgpu-family ${{ inputs.artifact_group }} \
             --artifact-id ${{ env.ARTIFACT_RUN_ID }} \
-            --job ${{ inputs.release_type }}
+            --job ${{ inputs.release_type }}"
+
+          # Add signing parameters if release_type is set (enables signing)
+          if [ -n "${{ env.RELEASE_TYPE }}" ] && [ -n "$GPG_SIGNING_SERVER" ] && [ -n "$GPG_SERVER_TOKEN" ]; then
+            CMD="$CMD --gpg-signing-server \"$GPG_SIGNING_SERVER\" --gpg-server-token \"$GPG_SERVER_TOKEN\""
+            echo "Repository metadata signing: ENABLED"
+          else
+            echo "Repository metadata signing: DISABLED (no release_type or missing credentials)"
+          fi
+
+          # Execute command
+          eval $CMD

@@ -44,12 +44,16 @@ import hashlib
 # Import authentication module (if auth is enabled)
 try:
     from auth import (
-        validate_jwt_token, load_secrets, load_authorization_config,
-        authorize_request, check_rate_limit, audit_log
+        validate_jwt_token, validate_github_oidc_token,
+        load_secrets, load_authorization_config,
+        authorize_request, authorize_oidc_request,
+        check_rate_limit, audit_log,
+        OIDC_AVAILABLE
     )
     AUTH_AVAILABLE = True
 except ImportError:
     AUTH_AVAILABLE = False
+    OIDC_AVAILABLE = False
 
 
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
@@ -106,27 +110,49 @@ class SigningHandler(BaseHTTPRequestHandler):
 
     def authenticate_request(self):
         """
-        Extract and validate JWT token from Authorization header.
+        Extract and validate token from Authorization header.
+
+        Supports both JWT (HMAC-SHA256) and OIDC (RS256) tokens:
+        - First tries OIDC validation (if PyJWT available)
+        - Falls back to JWT validation (stdlib only)
 
         Returns:
-            Decoded token payload dict if valid, None otherwise
+            Tuple (payload: dict, auth_type: str) if valid, (None, None) otherwise
+            auth_type is 'oidc' or 'jwt'
         """
         if not self.AUTH_ENABLED or not AUTH_AVAILABLE:
-            return None
+            return None, None
 
         auth_header = self.headers.get('Authorization', '')
         if not auth_header.startswith('Bearer '):
-            return None
+            return None, None
 
         token = auth_header[7:]  # Remove "Bearer " prefix
 
+        # Try OIDC validation first (if available)
+        if OIDC_AVAILABLE:
+            oidc_audience = os.environ.get('OIDC_AUDIENCE', 'amd-signing-service')
+            oidc_payload = validate_github_oidc_token(token, oidc_audience)
+            if oidc_payload:
+                self.log_message("OIDC token validated for repository: %s, ref: %s",
+                               oidc_payload.get('repository', 'unknown'),
+                               oidc_payload.get('ref', 'unknown'))
+                return oidc_payload, 'oidc'
+
+        # Fall back to JWT validation
         # Load secrets (cached)
         if self._secrets_cache is None:
             self.__class__._secrets_cache = load_secrets(self.SECRETS_FILE)
 
-        # Validate token
-        payload = validate_jwt_token(token, self._secrets_cache)
-        return payload
+        jwt_payload = validate_jwt_token(token, self._secrets_cache)
+        if jwt_payload:
+            self.log_message("JWT token validated for client: %s, role: %s",
+                           jwt_payload.get('client_id', 'unknown'),
+                           jwt_payload.get('role', 'unknown'))
+            return jwt_payload, 'jwt'
+
+        # No valid token
+        return None, None
 
     def do_POST(self):
         """Handle POST requests."""
@@ -181,16 +207,17 @@ class SigningHandler(BaseHTTPRequestHandler):
 
             # AUTHENTICATION: Validate token if auth is enabled
             payload = None
+            auth_type = None
             if self.AUTH_ENABLED:
                 if not AUTH_AVAILABLE:
                     self.send_json_error(500, "Authentication enabled but auth module not available")
                     return
 
-                payload = self.authenticate_request()
+                payload, auth_type = self.authenticate_request()
                 if not payload:
                     self.send_json_error(401, "Unauthorized: Invalid or missing token")
                     audit_log('AUTH_FAILED', 'unknown', 'none', '', '',
-                             self.client_address[0], False, self.AUDIT_LOG_FILE)
+                             self.client_address[0], False, self.AUDIT_LOG_FILE, None)
                     return
 
             # Validate request
@@ -238,25 +265,61 @@ class SigningHandler(BaseHTTPRequestHandler):
                 if self._authz_cache is None:
                     self.__class__._authz_cache = load_authorization_config(self.AUTHZ_CONFIG_FILE)
 
-                role = payload.get('role', '')
-                client_id = payload.get('client_id', '')
+                # Handle OIDC vs JWT authorization differently
+                if auth_type == 'oidc':
+                    # OIDC authorization with workflow restriction
+                    role, authorized, reason = authorize_oidc_request(
+                        payload, key_id, digest_algo, self._authz_cache
+                    )
+                    client_id = f"oidc:{payload.get('repository', 'unknown')}"
 
-                # Check rate limit
+                    if not authorized:
+                        self.log_message("Authorization denied: %s", reason)
+                        self.send_json_error(403, f"Forbidden: {reason}")
+                        oidc_context = {
+                            'repository': payload.get('repository'),
+                            'ref': payload.get('ref'),
+                            'workflow': payload.get('workflow'),
+                            'actor': payload.get('actor'),
+                            'run_id': payload.get('run_id'),
+                            'run_number': payload.get('run_number'),
+                            'event_name': payload.get('event_name'),
+                            'job_workflow_ref': payload.get('job_workflow_ref')
+                        }
+                        audit_log('DENIED', client_id, role or 'unknown', key_id, digest_algo,
+                                 self.client_address[0], False, self.AUDIT_LOG_FILE, oidc_context)
+                        return
+                else:
+                    # JWT authorization (existing logic)
+                    role = payload.get('role', '')
+                    client_id = payload.get('client_id', '')
+
+                    authorized, reason = authorize_request(role, key_id, digest_algo, self._authz_cache)
+                    if not authorized:
+                        self.log_message("Authorization denied: %s", reason)
+                        self.send_json_error(403, f"Forbidden: {reason}")
+                        audit_log('DENIED', client_id, role, key_id, digest_algo,
+                                 self.client_address[0], False, self.AUDIT_LOG_FILE, None)
+                        return
+
+                # Check rate limit (both JWT and OIDC)
                 if not check_rate_limit(client_id, role, self._rate_limits, self._authz_cache):
                     self.log_message("Rate limit exceeded for client %s (role: %s)", client_id, role)
                     self.send_json_error(429, "Rate limit exceeded")
+                    oidc_context = None
+                    if auth_type == 'oidc':
+                        oidc_context = {
+                            'repository': payload.get('repository'),
+                            'ref': payload.get('ref'),
+                            'workflow': payload.get('workflow'),
+                            'actor': payload.get('actor'),
+                            'run_id': payload.get('run_id'),
+                            'run_number': payload.get('run_number'),
+                            'event_name': payload.get('event_name'),
+                            'job_workflow_ref': payload.get('job_workflow_ref')
+                        }
                     audit_log('RATE_LIMITED', client_id, role, key_id, digest_algo,
-                             self.client_address[0], False, self.AUDIT_LOG_FILE)
-                    return
-
-                # Check authorization for key and digest algorithm
-                authorized, reason = authorize_request(role, key_id, digest_algo, self._authz_cache)
-                if not authorized:
-                    self.log_message("Authorization denied for client %s (role: %s): %s",
-                                   client_id, role, reason)
-                    self.send_json_error(403, f"Forbidden: {reason}")
-                    audit_log('DENIED', client_id, role, key_id, digest_algo,
-                             self.client_address[0], False, self.AUDIT_LOG_FILE)
+                             self.client_address[0], False, self.AUDIT_LOG_FILE, oidc_context)
                     return
 
             # Acquire semaphore to limit concurrent signing operations
@@ -290,10 +353,25 @@ class SigningHandler(BaseHTTPRequestHandler):
 
             # AUDIT LOG: Log successful signing if auth is enabled
             if self.AUTH_ENABLED and payload:
-                audit_log('SIGNED', payload.get('client_id', 'unknown'),
-                         payload.get('role', 'unknown'),
-                         key_id, digest_algo, self.client_address[0], True,
-                         self.AUDIT_LOG_FILE)
+                if auth_type == 'oidc':
+                    client_id = f"oidc:{payload.get('repository', 'unknown')}"
+                    oidc_context = {
+                        'repository': payload.get('repository'),
+                        'ref': payload.get('ref'),
+                        'workflow': payload.get('workflow'),
+                        'actor': payload.get('actor'),
+                        'run_id': payload.get('run_id'),
+                        'run_number': payload.get('run_number'),
+                        'event_name': payload.get('event_name'),
+                        'job_workflow_ref': payload.get('job_workflow_ref')
+                    }
+                    audit_log('SIGNED', client_id, role, key_id, digest_algo,
+                             self.client_address[0], True, self.AUDIT_LOG_FILE, oidc_context)
+                else:
+                    audit_log('SIGNED', payload.get('client_id', 'unknown'),
+                             payload.get('role', 'unknown'),
+                             key_id, digest_algo, self.client_address[0], True,
+                             self.AUDIT_LOG_FILE, None)
 
         except json.JSONDecodeError as e:
             self.send_json_error(400, f"Invalid JSON: {str(e)}")

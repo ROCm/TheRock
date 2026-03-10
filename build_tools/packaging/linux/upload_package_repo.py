@@ -24,13 +24,17 @@ Nightly upload location:
 """
 
 import argparse
+import base64
 import boto3
 import datetime
+import json
 import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
 
 
 # Import index generation helpers generate_package_indexes.py
@@ -44,7 +48,8 @@ from generate_package_indexes import (
 )
 
 
-def regenerate_rpm_metadata_from_s3(s3, bucket, prefix, uploaded_packages):
+def regenerate_rpm_metadata_from_s3(s3, bucket, prefix, uploaded_packages,
+                                     gpg_signing_server="", gpg_server_token=""):
     """Regenerate RPM repository metadata using merge approach.
 
     Downloads existing repodata from S3, generates metadata for new packages,
@@ -157,8 +162,12 @@ def regenerate_rpm_metadata_from_s3(s3, bucket, prefix, uploaded_packages):
                 new_repo_dir / "x86_64" / "repodata", merged_arch_dir / "repodata"
             )
 
-        # Step 4: Upload merged repodata to S3
+        # Step 3.5: Sign repomd.xml if signing server is configured
         merged_repodata = merged_arch_dir / "repodata"
+        if merged_repodata.exists() and gpg_signing_server and gpg_server_token:
+            sign_rpm_repomd_files(merged_arch_dir, gpg_signing_server, gpg_server_token)
+
+        # Step 4: Upload merged repodata to S3
         if merged_repodata.exists():
             print("Uploading merged repository metadata to S3...")
             uploaded_metadata = []
@@ -290,7 +299,8 @@ def upload_deb_metadata_to_s3(s3, bucket, prefix, dists_dir, release_file):
 
 
 def regenerate_deb_metadata_from_s3(
-    s3, bucket, prefix, uploaded_packages, job_type="nightly"
+    s3, bucket, prefix, uploaded_packages, job_type="nightly",
+    gpg_signing_server="", gpg_server_token=""
 ):
     """Regenerate Debian repository metadata efficiently with proper checksums.
 
@@ -429,12 +439,17 @@ def regenerate_deb_metadata_from_s3(
 
         generate_release_file_with_checksums(release_file, job_type, dists_dir)
 
+        # Step 4.5: Sign Release file if signing server is configured
+        if gpg_signing_server and gpg_server_token:
+            sign_deb_release_file(release_file, gpg_signing_server, gpg_server_token)
+
         # Step 5: Upload merged files to S3
         upload_deb_metadata_to_s3(s3, bucket, prefix, dists_dir, release_file)
 
 
 def regenerate_repo_metadata_from_s3(
-    s3, bucket, prefix, pkg_type, uploaded_packages, job_type="nightly"
+    s3, bucket, prefix, pkg_type, uploaded_packages, job_type="nightly",
+    gpg_signing_server="", gpg_server_token=""
 ):
     """Regenerate repository metadata efficiently using merge approach.
 
@@ -448,11 +463,15 @@ def regenerate_repo_metadata_from_s3(
         pkg_type: Package type ('rpm' or 'deb')
         uploaded_packages: List of actually uploaded package file paths (avoids duplicates from deduplication)
         job_type: Job type for Release file metadata (default: 'nightly')
+        gpg_signing_server: GPG signing server URL (optional)
+        gpg_server_token: Authentication token for signing server (optional)
     """
     if pkg_type == "rpm":
-        regenerate_rpm_metadata_from_s3(s3, bucket, prefix, uploaded_packages)
+        regenerate_rpm_metadata_from_s3(s3, bucket, prefix, uploaded_packages,
+                                         gpg_signing_server, gpg_server_token)
     elif pkg_type == "deb":
-        regenerate_deb_metadata_from_s3(s3, bucket, prefix, uploaded_packages, job_type)
+        regenerate_deb_metadata_from_s3(s3, bucket, prefix, uploaded_packages, job_type,
+                                         gpg_signing_server, gpg_server_token)
     else:
         raise ValueError(f"Unsupported package type: {pkg_type}")
 
@@ -599,6 +618,181 @@ def upload_to_s3(source_dir, bucket, prefix, dedupe=False):
     return s3, uploaded_packages  # Return S3 client and list of uploaded packages
 
 
+def sign_metadata_file(
+    metadata_file: Path,
+    output_file: Path,
+    server_url: str,
+    token: str,
+    clearsign: bool = False,
+    timeout: int = 60
+):
+    """Sign repository metadata file using remote signing server.
+
+    Args:
+        metadata_file: Path to metadata file (Release, repomd.xml, etc.)
+        output_file: Path to write signature
+        server_url: Signing server URL (e.g., https://signing.example.com/sign)
+        token: Authentication token (OIDC or JWT)
+        clearsign: Create clearsigned output (for InRelease files)
+        timeout: Request timeout in seconds
+
+    Raises:
+        FileNotFoundError: If metadata_file doesn't exist
+        HTTPError: If server returns error response
+        URLError: If network error occurs
+    """
+    # Read metadata file
+    if not metadata_file.exists():
+        raise FileNotFoundError(f"Metadata file not found: {metadata_file}")
+
+    with open(metadata_file, 'rb') as f:
+        metadata_data = f.read()
+
+    print(f"📝 Signing metadata: {metadata_file.name} ({len(metadata_data)} bytes)")
+
+    # Prepare signing request
+    payload = {
+        'data': base64.b64encode(metadata_data).decode('ascii'),
+        'digest_algo': 'SHA256',
+        'armor': True,  # Metadata signatures are ASCII-armored
+    }
+
+    if clearsign:
+        payload['clearsign'] = True
+
+    # Prepare HTTP request
+    json_data = json.dumps(payload).encode('utf-8')
+
+    headers = {
+        'Content-Type': 'application/json',
+        'Authorization': f'Bearer {token}',
+        'User-Agent': 'upload_package_repo/1.0'
+    }
+
+    print(f"🔐 Sending signing request to: {server_url}")
+    print(f"   Clearsign: {clearsign}")
+
+    # Send request to signing server
+    try:
+        request = Request(server_url, data=json_data, headers=headers)
+        response = urlopen(request, timeout=timeout)
+
+        # Parse response
+        response_data = response.read()
+        result = json.loads(response_data)
+
+        # Extract signature
+        if 'signature' in result:
+            signature_b64 = result['signature']
+            signature = base64.b64decode(signature_b64)
+        else:
+            raise ValueError("Server response missing 'signature' field")
+
+        print(f"✅ Signature received ({len(signature)} bytes)")
+
+        # Write signature to output file
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(output_file, 'wb') as f:
+            f.write(signature)
+
+        print(f"✅ Signature written to: {output_file.name}")
+
+        return True
+
+    except HTTPError as e:
+        error_body = e.read().decode('utf-8')
+        print(f"❌ HTTP Error {e.code}: {e.reason}", file=sys.stderr)
+        print(f"   Server response: {error_body}", file=sys.stderr)
+
+        try:
+            error_json = json.loads(error_body)
+            if 'error' in error_json:
+                print(f"   Error detail: {error_json['error']}", file=sys.stderr)
+        except json.JSONDecodeError:
+            pass
+
+        raise
+
+    except URLError as e:
+        print(f"❌ Network error: {e.reason}", file=sys.stderr)
+        raise
+
+    except Exception as e:
+        print(f"❌ Unexpected error: {str(e)}", file=sys.stderr)
+        raise
+
+
+def sign_deb_release_file(release_file: Path, server_url: str, token: str):
+    """Sign DEB Release file (creates InRelease and Release.gpg).
+
+    Args:
+        release_file: Path to Release file
+        server_url: Signing server URL
+        token: Authentication token (OIDC or JWT)
+    """
+    print(f"\n{'='*60}")
+    print(f"Signing DEB Release file")
+    print(f"{'='*60}")
+
+    # Create InRelease (clearsigned)
+    inrelease_file = release_file.parent / "InRelease"
+    sign_metadata_file(
+        release_file,
+        inrelease_file,
+        server_url,
+        token,
+        clearsign=True
+    )
+
+    # Create Release.gpg (detached signature)
+    release_gpg = release_file.parent / "Release.gpg"
+    sign_metadata_file(
+        release_file,
+        release_gpg,
+        server_url,
+        token,
+        clearsign=False
+    )
+
+    print(f"✅ DEB Release file signed: InRelease, Release.gpg")
+
+
+def sign_rpm_repomd_files(rpm_dir: Path, server_url: str, token: str):
+    """Sign RPM repomd.xml files (one per architecture).
+
+    Args:
+        rpm_dir: RPM repository root directory
+        server_url: Signing server URL
+        token: Authentication token (OIDC or JWT)
+    """
+    print(f"\n{'='*60}")
+    print(f"Signing RPM repomd.xml files")
+    print(f"{'='*60}")
+
+    # Find all repomd.xml files (one per architecture)
+    repomd_files = list(rpm_dir.rglob("repodata/repomd.xml"))
+
+    if not repomd_files:
+        print(f"⚠️  Warning: No repomd.xml files found in {rpm_dir}")
+        return
+
+    print(f"Found {len(repomd_files)} repomd.xml file(s) to sign")
+
+    for repomd_file in repomd_files:
+        # Create detached signature (repomd.xml.asc)
+        repomd_asc = repomd_file.parent / "repomd.xml.asc"
+
+        sign_metadata_file(
+            repomd_file,
+            repomd_asc,
+            server_url,
+            token,
+            clearsign=False
+        )
+
+    print(f"✅ All RPM repomd.xml files signed")
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--pkg-type", required=True, choices=["deb", "rpm"])
@@ -610,6 +804,18 @@ def main():
         default="dev",
         choices=["dev", "nightly", "prerelease"],
         help="Enable dev or nightly shared repo",
+    )
+    parser.add_argument(
+        "--gpg-signing-server",
+        type=str,
+        default="",
+        help="GPG signing server URL (e.g., https://signing.example.com/sign)"
+    )
+    parser.add_argument(
+        "--gpg-server-token",
+        type=str,
+        default="",
+        help="Authentication token for signing server (OIDC or JWT)"
     )
 
     args = parser.parse_args()
@@ -637,7 +843,8 @@ def main():
     # (avoids re-downloading all packages from S3)
     # Only generates metadata for actually uploaded packages (avoids duplicates from deduplication)
     regenerate_repo_metadata_from_s3(
-        s3_client, args.s3_bucket, prefix, args.pkg_type, uploaded_packages, args.job
+        s3_client, args.s3_bucket, prefix, args.pkg_type, uploaded_packages, args.job,
+        args.gpg_signing_server, args.gpg_server_token
     )
 
     # Generate index.html files from S3 state (recursive for specific upload)
