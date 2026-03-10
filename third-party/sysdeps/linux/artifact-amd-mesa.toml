@@ -5,5 +5,5 @@ unmatched_exclude = [
 ]
 
 # amd-mesa
-[components.dev."third-party/sysdeps/linux/amd-mesa/build/stage"]
 [components.lib."third-party/sysdeps/linux/amd-mesa/build/stage"]
+[components.dev."third-party/sysdeps/linux/amd-mesa/build/stage"]

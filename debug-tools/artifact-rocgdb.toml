@@ -1,4 +1,8 @@
 # rocgdb
+[components.lib."debug-tools/rocgdb/stage"]
+include = [
+  "lib/**"
+]
 [components.dbg."debug-tools/rocgdb/stage"]
 [components.dev."debug-tools/rocgdb/stage"]
 exclude = [
@@ -10,10 +14,6 @@ include = [
   "share/html/**",
   "share/info/**",
   "share/man/**"
-]
-[components.lib."debug-tools/rocgdb/stage"]
-include = [
-  "lib/**"
 ]
 # Also include share/ here since rocgdb depends on loading some of
 # these at runtime.
