@@ -1,0 +1,116 @@
+name: Manifest Diff Report
+
+on:
+  workflow_dispatch:
+    inputs:
+      start_commit:
+        description: 'Start Commit SHA or Workflow Run ID'
+        required: false
+        type: string
+      end_commit:
+        description: 'End Commit SHA or Workflow Run ID'
+        required: true
+        type: string
+      workflow_mode:
+        description: 'Treat inputs as workflow run IDs instead of commit SHAs'
+        required: false
+        type: boolean
+        default: false
+      find_last_successful:
+        description: 'Workflow file to find last successful run (e.g., ci_nightly.yml)'
+        required: false
+        type: string
+  workflow_call:
+    inputs:
+      start_commit:
+        required: false
+        type: string
+      end_commit:
+        required: true
+        type: string
+      workflow_mode:
+        required: false
+        type: boolean
+        default: false
+      find_last_successful:
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  generate-report:
+    name: Generate Manifest Diff Report
+    runs-on: ubuntu-24.04
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # Case 1: find_last_successful + workflow_mode (find start, end as workflow ID)
+      - name: Run with find-last-successful and workflow mode
+        if: ${{ inputs.find_last_successful && inputs.workflow_mode }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python3 build_tools/generate_manifest_diff_report.py \
+            --find-last-successful "${{ inputs.find_last_successful }}" \
+            --workflow-mode \
+            --end "${{ inputs.end_commit }}" \
+            --output-dir reports
+
+      # Case 2: find_last_successful only (find start, end as commit SHA)
+      - name: Run with find-last-successful
+        if: ${{ inputs.find_last_successful && !inputs.workflow_mode }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python3 build_tools/generate_manifest_diff_report.py \
+            --find-last-successful "${{ inputs.find_last_successful }}" \
+            --end "${{ inputs.end_commit }}" \
+            --output-dir reports
+
+      # Case 3: workflow_mode only (both start and end as workflow IDs)
+      - name: Run with workflow mode
+        if: ${{ !inputs.find_last_successful && inputs.workflow_mode }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python3 build_tools/generate_manifest_diff_report.py \
+            --workflow-mode \
+            --start "${{ inputs.start_commit }}" \
+            --end "${{ inputs.end_commit }}" \
+            --output-dir reports
+
+      # Case 4: Neither (both start and end as commit SHAs)
+      - name: Run with commit SHAs
+        if: ${{ !inputs.find_last_successful && !inputs.workflow_mode }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python3 build_tools/generate_manifest_diff_report.py \
+            --start "${{ inputs.start_commit }}" \
+            --end "${{ inputs.end_commit }}" \
+            --output-dir reports
+
+      - name: Configure AWS Credentials
+        if: ${{ !cancelled() && !github.event.pull_request.head.repo.fork }}
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::692859939525:role/therock-ci
+
+      - name: Upload Report to S3
+        if: ${{ !cancelled() && !github.event.pull_request.head.repo.fork }}
+        run: |
+          python3 build_tools/github_actions/upload_test_report_script.py \
+            --run-id ${{ github.run_id }} \
+            --amdgpu-family manifest-diff \
+            --report-path reports \
+            --log-destination logs/manifest-diff \
+            --index-file-name index.html
