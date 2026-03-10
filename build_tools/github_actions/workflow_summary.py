@@ -23,6 +23,15 @@ Usage in a workflow:
             python build_tools/github_actions/workflow_summary.py \
               --needs-json '${{ toJSON(needs) }}'
 
+Local testing (https://github.com/ROCm/TheRock/actions/runs/22879205184?pr=3865):
+
+    ```
+    python build_tools/github_actions/workflow_summary.py \
+        --needs-json="{ \"setup\": { \"result\": \"success\" }, \"linux_build_and_test\": { \"result\": \"cancelled\" }, \"windows_build_and_test\": { \"result\": \"failure\" } }" \
+        --github-repository=ROCm/TheRock \
+        --github-run-id=22879205184
+    ```
+
 Notes:
   * Choose a name for the summary step that is unique across workflow files.
     ci.yml should use ci_summary, unit_tests.yml should use unit_tests_summary, etc.
