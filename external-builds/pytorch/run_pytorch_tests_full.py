@@ -247,43 +247,42 @@ def build_run_test_cmd(
     return cmd
 
 
-def main() -> int:
-    try:
-        args, passthrough_args = cmd_arguments(sys.argv[1:])
+def main(argv: list[str]) -> int:
+    args, passthrough_args = cmd_arguments(argv)
 
-        ((first_arch, _),) = set_gpu_execution_policy(
-            args.amdgpu_family, policy="single"
+    ((first_arch, _),) = set_gpu_execution_policy(
+        args.amdgpu_family, policy="single"
+    )
+    print(f"Using AMDGPU family: {first_arch}")
+
+    pytorch_version = args.pytorch_version
+    if not pytorch_version:
+        pytorch_version = detect_pytorch_version()
+    print(f"Using PyTorch version: {pytorch_version}")
+
+    if args.k:
+        tests_to_skip = args.k
+    else:
+        tests_to_skip = get_tests(
+            amdgpu_family=first_arch,
+            pytorch_version=pytorch_version,
+            platform=platform.system(),
+            create_skip_list=not args.debug,
         )
-        print(f"Using AMDGPU family: {first_arch}")
 
-        pytorch_version = args.pytorch_version
-        if not pytorch_version:
-            pytorch_version = detect_pytorch_version()
-        print(f"Using PyTorch version: {pytorch_version}")
+    setup_env(
+        pytorch_dir=args.pytorch_dir,
+        test_config=args.test_config,
+        amdgpu_family=args.amdgpu_family,
+    )
+    print_env()
 
-        if args.k:
-            tests_to_skip = args.k
-        else:
-            tests_to_skip = get_tests(
-                amdgpu_family=first_arch,
-                pytorch_version=pytorch_version,
-                platform=platform.system(),
-                create_skip_list=not args.debug,
-            )
+    cmd = build_run_test_cmd(args, tests_to_skip, passthrough_args)
+    print(f"Executing: {' '.join(cmd)}")
 
-        setup_env(args.pytorch_dir, args.test_config, amdgpu_family=args.amdgpu_family)
-        print_env()
-
-        cmd = build_run_test_cmd(args, tests_to_skip, passthrough_args)
-        print(f"Executing: {' '.join(cmd)}")
-
-        result = subprocess.run(cmd, cwd=str(args.pytorch_dir))
-        print(f"run_test.py finished with return code: {result.returncode}")
-        return result.returncode
-
-    except (ValueError, IndexError) as e:
-        print(f"[ERROR] Exception in PyTorch full test runner: {e}")
-        return 1
+    result = subprocess.run(cmd, cwd=str(args.pytorch_dir))
+    print(f"run_test.py finished with return code: {result.returncode}")
+    return result.returncode
 
 
 def force_exit_with_code(retcode: int) -> None:
@@ -292,15 +291,14 @@ def force_exit_with_code(retcode: int) -> None:
     retcode_file = Path("run_pytorch_tests_full_exit_code.txt")
     retcode_int = int(retcode)
     print(f"Writing retcode {retcode_int} to '{retcode_file}'")
-    with open(retcode_file, "w") as f:
-        f.write(str(retcode_int))
+    retcode_file.write_text(str(retcode_int))
 
     sys.stdout.flush()
     os.kill(os.getpid(), signal.SIGTERM)
 
 
 if __name__ == "__main__":
-    retcode = main()
+    retcode = main(sys.argv[1:])
     if platform.system() == "Windows":
         force_exit_with_code(retcode)
     else:
