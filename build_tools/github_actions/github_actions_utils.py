@@ -598,5 +598,5 @@ def get_first_gpu_architecture(env=None, therock_bin_dir: str | None = None) -> 
 
 def is_asan():
     """Using artifact_group, determines if this is an asan build"""
-    ARTIFACT_GROUP = os.getenv("ARTIFACT_GROUP")
+    ARTIFACT_GROUP = os.getenv("ARTIFACT_GROUP", "")
     return "asan" in ARTIFACT_GROUP

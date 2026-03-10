@@ -135,7 +135,7 @@ jobs:
         if: ${{ fromJSON(inputs.component).additional_requirements_files != '' }}
         run: |
           python ./build_tools/install_additional_requirements.py \
-            --requirements-files=${{ join(fromJSON(inputs.component).additional_requirements_files, ',') }}
+            --requirements-files ${{ join(fromJSON(inputs.component).additional_requirements_files, ',') }}
 
         # TODO(#3755): Clean this up after final sanitizer environment variable flags are determined
       - name: Enable sanitizer-specific test flags

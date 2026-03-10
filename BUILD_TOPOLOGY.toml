@@ -423,6 +423,12 @@ type = "target-neutral"
 artifact_deps = ["amd-llvm"]
 feature_group = "CORE"
 
+[artifacts.openmpi]
+artifact_group = "third-party-libs"
+type = "target-neutral"
+artifact_deps = []
+feature_group = "CORE"
+
 # --- Base Infrastructure ---
 
 [artifacts.base]
@@ -618,7 +624,7 @@ disable_platforms = ["windows"]
 [artifacts.rccl]
 artifact_group = "comm-libs"
 type = "target-specific"
-artifact_deps = ["core-runtime", "core-hip", "hipify", "rocprofiler-sdk", "core-amdsmi"]
+artifact_deps = ["core-runtime", "core-hip", "hipify", "rocprofiler-sdk", "core-amdsmi", "openmpi"]
 disable_platforms = ["windows"]
 
 [artifacts.rocshmem]
