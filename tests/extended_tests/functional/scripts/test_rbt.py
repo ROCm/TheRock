@@ -2,13 +2,12 @@
 """
 ROCm Bandwidth Test (RBT) Test.
 
-Clones, builds and executes ROCm Bandwidth Test to validate GPU memory bandwidth
-and peer-to-peer communication functionality.
+Executes the pre-built ROCm Bandwidth Test binary to validate GPU memory
+bandwidth and peer-to-peer communication functionality.
 """
 
 import json
 import os
-import re
 import shlex
 import sys
 from pathlib import Path
@@ -30,16 +29,8 @@ class RBTTest(FunctionalBase):
         self.results_json = self.script_dir / "rbt_results.json"
         self.log_file = self.script_dir / "rbt.log"
 
-        # RBT directory paths
-        self.rbt_dir = self.rocm_path / "bin" / "rbt"
-        self.rbt_build_dir = self.rbt_dir / "build"
-        # Install directly to rocm_path so plugins are found correctly
-        self.rbt_install_dir = self.rocm_path
-
         # Load test configuration from JSON
         config = self.load_config("rbt.json")
-        self.git_url = config["git_url"]
-        self.git_branch = config["git_branch"]
 
         # Test configuration (env var overrides config)
         self.test_type = os.getenv("TEST_TYPE", config.get("test_type", "full"))
@@ -49,168 +40,60 @@ class RBTTest(FunctionalBase):
         self.tests_by_type = config.get("tests", {})
         self.test_definitions = config.get("test_definitions", {})
 
-    def _patch_transferbench_cmake(self, gpu_target: str) -> bool:
-        """Patch TransferBench CMakeLists.txt to build only for detected GPU.
+    @staticmethod
+    def _get_skip_reason(
+        requires: Dict[str, Any], num_gpus: int, gfx_version: str
+    ) -> str | None:
+        """Return a skip-reason string if *requires* are NOT met, else None.
 
-        Args:
-            gpu_target: GPU architecture to build for (e.g., 'gfx942')
-
-        Returns:
-            True if patched successfully, False otherwise
+        Supported config keys: arch_prefix, min_gpus, gpu_count.
         """
-        cmake_file = self.rbt_dir / "plugins" / "tb" / "transferbench" / "CMakeLists.txt"
-        if not cmake_file.exists():
-            log.warning(f"TransferBench CMakeLists.txt not found: {cmake_file}")
-            return False
+        if not requires:
+            return None
 
-        content = cmake_file.read_text()
-        pattern = r'set\(DEFAULT_GPUS[^)]+\)'
-        new_section = f"set(DEFAULT_GPUS\n      {gpu_target})"
+        arch_prefix = requires.get("arch_prefix")
+        if arch_prefix and (not gfx_version or not gfx_version.startswith(arch_prefix)):
+            return f"requires arch {arch_prefix}* (detected {gfx_version or 'unknown'})"
 
-        if re.search(pattern, content, re.DOTALL):
-            cmake_file.write_text(re.sub(pattern, new_section, content, flags=re.DOTALL))
-            log.info(f"Patched TransferBench CMakeLists.txt for GPU: {gpu_target}")
-            return True
+        min_gpus = requires.get("min_gpus")
+        if min_gpus is not None and num_gpus < min_gpus:
+            return f"requires {min_gpus}+ GPUs (have {num_gpus})"
 
-        log.warning("Could not find DEFAULT_GPUS section to patch")
-        return False
+        gpu_count = requires.get("gpu_count")
+        if gpu_count is not None and num_gpus != gpu_count:
+            return f"requires exactly {gpu_count} GPUs (have {num_gpus})"
 
-    def _build_rbt(self, gpu_target: str) -> None:
-        """Build ROCm Bandwidth Test.
-
-        Args:
-            gpu_target: GPU architecture to build for (e.g., 'gfx942')
-        """
-        log.info(f"Building ROCm Bandwidth Test for {gpu_target}")
-
-        # Patch TransferBench to build only for current GPU (more reliable than -DGPU_TARGETS)
-        self._patch_transferbench_cmake(gpu_target)
-
-        # Setup environment for build
-        env = self.get_rocm_env()
-        env["HIP_PLATFORM"] = "amd"
-        env["ROCM_PATH"] = str(self.rocm_path)
-        env["HIP_PATH"] = str(self.rocm_path)
-        env["HIP_CLANG_PATH"] = str(self.rocm_path / "lib" / "llvm" / "bin")
-
-        # Device library path for TheRock layout
-        device_lib_path = self.rocm_path / "lib" / "llvm" / "amdgcn" / "bitcode"
-        if device_lib_path.exists():
-            env["HIP_DEVICE_LIB_PATH"] = str(device_lib_path)
-        else:
-            std_device_lib = self.rocm_path / "amdgcn" / "bitcode"
-            if std_device_lib.exists():
-                env["HIP_DEVICE_LIB_PATH"] = str(std_device_lib)
-
-        # Add ROCm bin to PATH
-        rocm_bin = str(self.rocm_path / "bin")
-        llvm_bin = str(self.rocm_path / "lib" / "llvm" / "bin")
-        env["PATH"] = f"{rocm_bin}:{llvm_bin}:{env.get('PATH', '')}"
-
-        # Create build directory
-        self.rbt_build_dir.mkdir(parents=True, exist_ok=True)
-
-        # RPATH settings
-        lib_rpath = "$ORIGIN/../lib:$ORIGIN/../lib64:$ORIGIN/../lib/llvm/lib"
-
-        # CMake configure
-        cmake_args = [
-            "cmake",
-            "-DCMAKE_BUILD_TYPE=Release",
-            "-DAMD_APP_STANDALONE_BUILD_PACKAGE=OFF",
-            "-DAMD_APP_ROCM_BUILD_PACKAGE=ON",
-            f"-DCMAKE_PREFIX_PATH={self.rocm_path}",
-            f"-DROCM_PATH={self.rocm_path}",
-            f"-DCMAKE_INSTALL_PREFIX={self.rbt_install_dir}",
-            f"-DCMAKE_INSTALL_RPATH={lib_rpath}",
-            "-DCMAKE_BUILD_WITH_INSTALL_RPATH=ON",
-            "-DCMAKE_SKIP_BUILD_RPATH=OFF",
-            "-DAMD_APP_BUILD_TESTS=OFF",
-            "..",
-        ]
-
-        build_steps = [
-            {
-                "name": "cmake configure",
-                "cmd": cmake_args,
-                "cwd": self.rbt_build_dir,
-            },
-            {
-                "name": "cmake build",
-                "cmd": ["cmake", "--build", ".", f"-j{os.cpu_count()}"],
-                "cwd": self.rbt_build_dir,
-            },
-            {
-                "name": "cmake install",
-                "cmd": ["cmake", "--install", "."],
-                "cwd": self.rbt_build_dir,
-            },
-        ]
-
-        with open(self.log_file, "w") as f:
-            for step in build_steps:
-                log.info(f"Running build step: {step['name']}")
-                f.write(f"\n=== {step['name']} ===\n")
-
-                return_code, _ = self.execute_command(
-                    step["cmd"], cwd=step["cwd"], env=env, log_file_handle=f
-                )
-
-                if return_code != 0:
-                    raise TestExecutionError(
-                        f"RBT build failed at step '{step['name']}'\n"
-                        f"Check {self.log_file} for details"
-                    )
-
-        log.info("RBT build completed")
+        return None
 
     def run_tests(self) -> None:
-        """Clone, build, and run RBT tests, save results to JSON."""
+        """Run RBT tests using the pre-built binary, save results to JSON."""
         log.info(f"Running {self.display_name}")
 
-        # Get GPU info first (needed for build target selection)
+        # Get GPU info
         num_gpus, gfx_version = self.get_gpu_architecture()
-        has_gfx94x = gfx_version.startswith("gfx94") if gfx_version else False
         log.info(f"Detected {num_gpus} GPU(s), arch: {gfx_version}")
 
-        # Check if RBT binary already exists in ROCm bin
-        system_rbt = self.rocm_path / "bin" / "rocm-bandwidth-test"
-        if system_rbt.exists():
-            log.info(f"RBT binary found at {system_rbt}, skipping build")
-            self.rbt_binary = system_rbt
-            rbt_root = self.rocm_path  # For ROCM_PATH and lib paths
-        else:
-            log.info("RBT binary not found in ROCm, building from source")
-            # Clone RBT repository and update submodules
-            self.clone_repository(
-                git_url=self.git_url,
-                branch=self.git_branch,
-                target_dir=self.rbt_dir,
-                update_submodules=True,
+        # Locate pre-built RBT binary (built by TheRock build system)
+        self.rbt_binary = self.rocm_path / "bin" / "rocm-bandwidth-test"
+        if not self.rbt_binary.exists():
+            raise TestExecutionError(
+                f"RBT binary not found at {self.rbt_binary}\n"
+                "Ensure TheRock was built with THEROCK_ENABLE_ROCM_BANDWIDTH_TEST=ON"
             )
-
-            # Build RBT for current GPU target only
-            self._build_rbt(gpu_target=gfx_version)
-
-            # Set binary path
-            self.rbt_binary = self.rbt_install_dir / "bin" / "rocm-bandwidth-test"
-            rbt_root = self.rbt_install_dir  # For ROCM_PATH and lib paths
-
-            if not self.rbt_binary.exists():
-                raise TestExecutionError(
-                    f"RBT binary not found at {self.rbt_binary}\n"
-                    f"Build may have failed, check {self.log_file}"
-                )
+        log.info(f"Using RBT binary: {self.rbt_binary}")
 
         # Setup environment - RBT needs ROCM_PATH to find plugins
-        rbt_lib = rbt_root / "lib"
-        env = self.get_rocm_env(additional_paths=[rbt_lib] if rbt_lib.exists() else None)
-        env["ROCM_PATH"] = str(rbt_root)
-        env["PATH"] = f"{rbt_root / 'bin'}:{env.get('PATH', '')}"
+        rbt_lib = self.rocm_path / "lib"
+        env = self.get_rocm_env(
+            additional_paths=[rbt_lib] if rbt_lib.exists() else None
+        )
+        env["ROCM_PATH"] = str(self.rocm_path)
+        env["PATH"] = f"{self.rocm_path / 'bin'}:{env.get('PATH', '')}"
 
         # Get tests to run based on test type (from config)
-        rbt = str(self.rbt_binary)
-        tests_to_run = self.tests_by_type.get(self.test_type) or self.tests_by_type.get("full", [])
+        tests_to_run = self.tests_by_type.get(self.test_type) or self.tests_by_type.get(
+            "full", []
+        )
         log.info(f"Test type: {self.test_type.upper()}, Tests: {len(tests_to_run)}")
 
         # Run tests and collect results
@@ -220,27 +103,22 @@ class RBTTest(FunctionalBase):
             # Get test definition from config
             test_def = self.test_definitions.get(test_name, {})
             cmd_str = test_def.get("cmd", "")
-            cmd = [rbt] + shlex.split(cmd_str)
-            requirement = test_def.get("requires")
+            cmd = [str(self.rbt_binary)] + shlex.split(cmd_str)
+            requires = test_def.get("requires", {})
             extra_env = test_def.get("env")
 
-            # Check requirements
-            skip_reason = None
-            if requirement == "multi_gpu" and num_gpus < 2:
-                skip_reason = f"requires 2+ GPUs (have {num_gpus})"
-            elif requirement == "gfx94x_8gpu":
-                if not has_gfx94x:
-                    skip_reason = "requires MI300 GPU"
-                elif num_gpus != 8:
-                    skip_reason = f"requires exactly 8 GPUs (have {num_gpus})"
+            # Check requirements (all driven by config, no hardcoded arch names)
+            skip_reason = self._get_skip_reason(requires, num_gpus, gfx_version)
 
             if skip_reason:
                 log.info(f"SKIP: {test_name} - {skip_reason}")
-                all_results.append({
-                    "test_name": test_name,
-                    "status": "SKIP",
-                    "reason": skip_reason,
-                })
+                all_results.append(
+                    {
+                        "test_name": test_name,
+                        "status": "SKIP",
+                        "reason": skip_reason,
+                    }
+                )
                 continue
 
             # Setup test environment
@@ -258,11 +136,13 @@ class RBTTest(FunctionalBase):
 
             log.info(f"{'PASS' if passed else 'FAIL'}: {test_name}")
 
-            all_results.append({
-                "test_name": test_name,
-                "status": "PASS" if passed else "FAIL",
-                "reason": "" if passed else "Test execution failed",
-            })
+            all_results.append(
+                {
+                    "test_name": test_name,
+                    "status": "PASS" if passed else "FAIL",
+                    "reason": "" if passed else "Test execution failed",
+                }
+            )
 
         # Write results to JSON
         with open(self.results_json, "w") as f:
