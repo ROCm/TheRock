@@ -2,7 +2,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Unit tests for generate_package_index.py.
+"""Unit tests for generate_local_index.py.
 
 Tests verify that index generation creates correct HTML structure with proper
 relative paths for local and parent files, and that multi-arch mode correctly
@@ -15,10 +15,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-# Add build_tools to path so generate_package_index and _therock_utils are importable.
-sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
+# Add build_tools/packaging/python to path so generate_local_index is importable.
+sys.path.insert(0, os.fspath(Path(__file__).parent.parent / "python"))
 
-from generate_package_index import generate_simple_index, generate_multiarch_indexes
+from generate_local_index import generate_simple_index, generate_multiarch_indexes
 
 
 class TestGenerateSimpleIndex(unittest.TestCase):
@@ -207,18 +207,14 @@ class TestGenerateMultiarchIndexes(unittest.TestCase):
             self.assertIn("ROCm Python Packages - gfx94X-dcgpu", content_94x)
             self.assertIn("ROCm Python Packages - gfx120X-all", content_120x)
 
-    def test_no_subdirectories(self):
-        """Test behavior when no family subdirectories exist."""
+    def test_no_subdirectories_raises(self):
+        """Test that missing family subdirectories raises an error."""
         with tempfile.TemporaryDirectory() as tmp:
             dist_dir = Path(tmp)
             (dist_dir / "rocm_sdk_core-1.0.whl").write_bytes(b"core")
 
-            # Should not raise, just warn
-            generate_multiarch_indexes(dist_dir)
-
-            # No indexes should be created
-            indexes = list(dist_dir.rglob("index.html"))
-            self.assertEqual(len(indexes), 0)
+            with self.assertRaises(FileNotFoundError):
+                generate_multiarch_indexes(dist_dir)
 
     def test_empty_family_directory(self):
         """Test family directory with no packages."""

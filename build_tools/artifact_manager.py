@@ -141,7 +141,7 @@ def parse_target_families(args: argparse.Namespace) -> List[str]:
         log("Using generic (host) artifacts only")
     else:
         if args.amdgpu_families:
-            target_families.extend(args.amdgpu_families.split(","))
+            target_families.extend(args.amdgpu_families.replace(";", ",").split(","))
         if args.amdgpu_targets:
             target_families.extend(
                 t.strip() for t in args.amdgpu_targets.split(",") if t.strip()
@@ -355,22 +355,7 @@ def do_fetch(args: argparse.Namespace):
     download_dir = output_dir / ".download_cache"
     download_dir.mkdir(parents=True, exist_ok=True)
 
-    fetch_all_families = not args.generic_only and args.amdgpu_families == "all"
-
-    if fetch_all_families:
-        # Fetch all available artifacts matching the inbound set by prefix.
-        # Used when --amdgpu-families=all to grab every family without
-        # enumerating them explicitly.
-        log("Fetching all available families")
-        matched_filenames = [
-            filename
-            for filename in sorted(available)
-            if any(filename.startswith(f"{name}_") for name in inbound)
-        ]
-    else:
-        matched_filenames = find_available_artifacts(
-            inbound, target_families, available
-        )
+    matched_filenames = find_available_artifacts(inbound, target_families, available)
 
     download_requests = [
         DownloadRequest(
@@ -928,7 +913,7 @@ def do_info(args: argparse.Namespace):
 
     # Show target families if provided
     if args.amdgpu_families:
-        families = args.amdgpu_families.split(",")
+        families = args.amdgpu_families.replace(";", ",").split(",")
         target_families = ["generic"] + families
         log(f"\nTarget families: {', '.join(target_families)}")
 
@@ -969,7 +954,7 @@ def _add_target_args(parser: argparse.ArgumentParser):
     target_group.add_argument(
         "--amdgpu-families",
         type=str,
-        help="Comma-separated GPU families (e.g., gfx94X-dcgpu,gfx1100)",
+        help="Comma or semicolon-separated GPU families (e.g., gfx94X-dcgpu,gfx1100)",
     )
     target_group.add_argument(
         "--generic-only",

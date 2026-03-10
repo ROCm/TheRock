@@ -115,7 +115,7 @@ jobs:
     with:
       artifact_run_id: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
       artifact_group: ${{ inputs.artifact_group }}
-      amdgpu_families: "all"
+      amdgpu_families: ${{ inputs.dist_amdgpu_families }}
       multiarch_index: true
       package_version: ${{ inputs.rocm_package_version }}
     permissions:

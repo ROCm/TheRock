@@ -46,11 +46,13 @@ import shlex
 import subprocess
 import sys
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+_BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_BUILD_TOOLS_DIR))
+sys.path.insert(0, str(_BUILD_TOOLS_DIR / "packaging" / "python"))
 from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from _therock_utils.storage_location import StorageLocation
 from _therock_utils.storage_backend import StorageBackend, create_storage_backend
-from generate_package_index import generate_multiarch_indexes
+from generate_local_index import generate_multiarch_indexes
 from github_actions_utils import (
     gha_append_step_summary,
     gha_set_output,
@@ -141,31 +143,33 @@ def upload_packages(
     log(f"[INFO] Uploaded {count} files")
 
 
-def write_gha_upload_summary(packages_loc: StorageLocation, multiarch: bool = False):
+def write_gha_upload_summary(
+    packages_loc: StorageLocation, families: list[str] | None = None
+):
     """Write GitHub Actions summary with pip install instructions.
 
     Args:
         packages_loc: Storage location for packages
-        multiarch: If True, this is a multi-arch build with per-family indexes
+        families: For multi-arch builds, the list of GPU family names that were
+            uploaded (e.g. ["gfx94X-dcgpu", "gfx120X-all"]). When provided,
+            per-family install links are emitted. When None, single-arch mode.
     """
-    if multiarch:
-        # Multi-arch: show base URL with explanation
+    if families is not None:
         base_url = packages_loc.https_url
-        install_instructions_markdown = f"""[ROCm Python packages]({base_url})
+        family_links = "\n".join(
+            f"- [{family}]({base_url}/{family}/index.html)" for family in families
+        )
+        family_installs = "\n\n".join(
+            f"```bash\npip install rocm[libraries,devel] --pre {LINE_CONTINUATION_CHAR}\n"
+            f"    --find-links={base_url}/{family}/index.html\n```"
+            for family in families
+        )
+        install_instructions_markdown = f"""ROCm Python packages (multi-arch build)
 
-**Multi-arch build:** Per-family indexes available at `{base_url}/{{family}}/index.html`
+Per-family indexes:
+{family_links}
 
-Example for gfx94X-dcgpu:
-```bash
-pip install rocm[libraries,devel] --pre {LINE_CONTINUATION_CHAR}
-    --find-links={base_url}/gfx94X-dcgpu/index.html
-```
-
-Example for gfx120X-all:
-```bash
-pip install rocm[libraries,devel] --pre {LINE_CONTINUATION_CHAR}
-    --find-links={base_url}/gfx120X-all/index.html
-```
+{family_installs}
 """
     else:
         # Single-arch: traditional index URL
@@ -239,7 +243,12 @@ def run(args: argparse.Namespace):
 
         log("Write github actions build summary")
         log("----------------------------------")
-        write_gha_upload_summary(packages_loc, multiarch=args.multiarch)
+        families = (
+            sorted(d.name for d in dist_dir.iterdir() if d.is_dir())
+            if args.multiarch
+            else None
+        )
+        write_gha_upload_summary(packages_loc, families=families)
 
     log("")
     log("[INFO] Done!")

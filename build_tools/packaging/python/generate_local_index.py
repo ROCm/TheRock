@@ -2,15 +2,17 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Generate simple HTML index files for pip --find-links.
+"""Generate simple HTML index files for pip --find-links from local files.
 
 This module provides utilities to generate index.html files that pip can use
 with the --find-links option. It supports both simple single-directory indexes
 and multi-arch builds where each GPU family needs its own index that includes
 both family-specific packages and generic packages from the parent directory.
 
+For generating an index from packages already in S3, see generate_s3_index.py.
+
 Usage as a library:
-    from generate_package_index import generate_simple_index
+    from generate_local_index import generate_simple_index
 
     generate_simple_index(
         output_path=Path("dist/gfx94X-dcgpu/index.html"),
@@ -19,8 +21,8 @@ Usage as a library:
     )
 
 Usage as a script:
-    python generate_package_index.py dist/ --output dist/index.html
-    python generate_package_index.py dist/gfx94X-dcgpu/ --output dist/gfx94X-dcgpu/index.html --parent-dir dist/
+    python generate_local_index.py dist/ --output dist/index.html
+    python generate_local_index.py dist/gfx94X-dcgpu/ --output dist/gfx94X-dcgpu/index.html --parent-dir dist/
 """
 
 import argparse
@@ -138,9 +140,10 @@ def generate_multiarch_indexes(
     family_dirs = [d for d in dist_dir.iterdir() if d.is_dir()]
 
     if not family_dirs:
-        print(f"Warning: No family subdirectories found in {dist_dir}")
-        print("This may not be a multi-arch build.")
-        return
+        raise FileNotFoundError(
+            f"No family subdirectories found in {dist_dir}. "
+            "generate_multiarch_indexes requires a multi-arch dist layout."
+        )
 
     for family_dir in sorted(family_dirs):
         family = family_dir.name
