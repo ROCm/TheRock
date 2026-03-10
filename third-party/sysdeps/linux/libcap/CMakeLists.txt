@@ -96,11 +96,13 @@ add_custom_target(
       "PATCHELF=${PATCHELF}"
       "THEROCK_SOURCE_DIR=${THEROCK_SOURCE_DIR}"
       "Python3_EXECUTABLE=${Python3_EXECUTABLE}" --
-    "${CMAKE_CURRENT_SOURCE_DIR}/patch_install.sh" "${CMAKE_INSTALL_PREFIX}"
+    "${Python3_EXECUTABLE}" "${THEROCK_SOURCE_DIR}/build_tools/patch_sysdeps_install.py"
+      "${CMAKE_INSTALL_PREFIX}"
+      --normalize "librocm_sysdeps_cap.so:libcap.so"
+      --normalize "librocm_sysdeps_psx.so:libpsx.so"
 
   DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/patch_source.sh"
-    "${CMAKE_CURRENT_SOURCE_DIR}/patch_install.sh"
     "${CMAKE_CURRENT_SOURCE_DIR}/libcap.map"
     "${CMAKE_CURRENT_SOURCE_DIR}/libpsx.map"
   VERBATIM
