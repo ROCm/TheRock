@@ -31,6 +31,7 @@ include(therock_sanitizers)
 include(therock_subproject)
 include(therock_job_pools)
 include(therock_testing)
+include("${CMAKE_CURRENT_SOURCE_DIR}/FLAGS.cmake")
 
 ################################################################################
 # Python is used throughout the build. Ensure it is initialized early.
@@ -107,19 +108,11 @@ set(ROCM_SYMLINK_LIBS OFF)
 
 set(THEROCK_ARTIFACT_ARCHIVE_SUFFIX "" CACHE STRING "Suffix to add to artifact archive file stem names")
 
-# Kpack artifact splitting
-option(THEROCK_KPACK_SPLIT_ARTIFACTS "Split target-specific artifacts into generic and arch-specific components" OFF)
-# TODO: Once rocm-kpack is moved into the rocm-systems repo, hard-code the path.
-# Check for unset OR empty to handle -DTHEROCK_KPACK_DIR="" edge case.
-if(NOT THEROCK_KPACK_DIR)
-  set(THEROCK_KPACK_DIR "${THEROCK_SOURCE_DIR}/base/rocm-kpack")
-endif()
-if(THEROCK_KPACK_SPLIT_ARTIFACTS AND NOT THEROCK_KPACK_DIR)
-  message(FATAL_ERROR "THEROCK_KPACK_DIR must be set when THEROCK_KPACK_SPLIT_ARTIFACTS=ON")
-endif()
-
 option(THEROCK_BUNDLE_SYSDEPS "Builds bundled system deps for portable builds into lib/rocm_sysdeps" ON)
-option(THEROCK_ENABLE_MPI "Enables building components with Message Passing Interface (MPI) support" OFF)
+# TODO: Set default to true for Linux branch after necessary changes land
+cmake_dependent_option(THEROCK_ENABLE_MPI
+  "Enables building components with Message Passing Interface (MPI) support"
+  OFF "NOT WIN32" OFF)
 option(THEROCK_ENABLE_LLVM_TESTS "Enables building LLVM LIT tests" OFF)
 
 set(THEROCK_SANITIZER "" CACHE STRING "Enable project wide sanitizer build ('ASAN' for host+device, 'HOST_ASAN' for host-only)")
@@ -198,13 +191,6 @@ endblock()
 # Feature flags
 # Project wide flags for controlling the build system.
 ################################################################################
-
-# Note that delay-loading is incompatible with ASAN until a more robust mechanism
-# is implemented. See: https://github.com/ROCm/TheRock/issues/1783
-cmake_dependent_option(
-  THEROCK_FLAG_COMGR_DELAY_LOAD
-  "Enables delay loading and linker namespacing of the amd_comgr library (Linux only)"
-  ON "LINUX" OFF)
 
 # Flag: -DTHEROCK_FLAG_INCLUDE_PROFILER=OFF
 # Note that the profiler is an integral part of the system and disabling it is not
