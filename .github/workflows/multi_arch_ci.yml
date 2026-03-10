@@ -94,6 +94,7 @@ jobs:
       use_prebuilt_artifacts: ${{ inputs.linux_use_prebuilt_artifacts == true && 'true' || 'false' }}
       rocm_package_version: ${{ needs.setup.outputs.rocm_package_version }}
       test_type: ${{ needs.setup.outputs.test_type }}
+      build_pytorch: ${{ matrix.variant.build_pytorch == true }}
     permissions:
       contents: read
       id-token: write

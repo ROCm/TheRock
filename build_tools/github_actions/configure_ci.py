@@ -207,6 +207,14 @@ def generate_multi_arch_matrix(
                         "sanity_check_only_for_family": platform_info.get(
                             "sanity_check_only_for_family", False
                         ),
+                        # Per-family pytorch flag. False for families with known
+                        # build failures. Used to gate per-family pytorch wheel
+                        # builds in multi_arch_ci_linux.yml.
+                        # NOTE: This is distinct from a future combined (multi-arch)
+                        # pytorch build that would build once against the full index.
+                        "build_pytorch": not platform_info.get(
+                            "expect_pytorch_failure", False
+                        ),
                     }
                 )
 
