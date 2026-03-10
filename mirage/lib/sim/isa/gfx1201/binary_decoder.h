@@ -11,6 +11,7 @@
 #include "lib/sim/isa/common/decoded_instruction.h"
 #include "lib/sim/isa/gfx1201/architecture_profile.h"
 #include "lib/sim/isa/gfx1201/decoder_seed.h"
+#include "lib/sim/isa/gfx1201/opcode_selector.h"
 
 namespace mirage::sim::isa {
 
@@ -24,7 +25,11 @@ class Gfx1201BinaryDecoder {
                      std::vector<DecodedInstruction>* program,
                      std::string* error_message = nullptr) const;
 
+  bool SelectPhase0ComputeRoute(std::span<const std::uint32_t> words,
+                                Gfx1201OpcodeRoute* route,
+                                std::string* error_message = nullptr) const;
   std::span<const Gfx1201DecoderSeedEncoding> Phase0ComputeSeeds() const;
+  std::span<const Gfx1201OpcodeSelectorRule> Phase0ComputeSelectorRules() const;
   const Gfx1201DecoderSeedEncoding* FindPhase0ComputeSeed(
       std::string_view encoding_name) const;
   std::span<const Gfx1201EncodingFocus> Phase0EncodingFocus() const;

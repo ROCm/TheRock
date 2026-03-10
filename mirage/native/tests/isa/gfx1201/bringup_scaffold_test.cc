@@ -54,7 +54,11 @@ int main() {
   if (!Expect(decoder.Phase0EncodingFocus().size() == 12u,
               "expected phase-0 encoding focus list") ||
       !Expect(decoder.Phase1EncodingFocus().size() == 8u,
-              "expected phase-1 encoding focus list")) {
+              "expected phase-1 encoding focus list") ||
+      !Expect(decoder.Phase0ComputeSeeds().size() == 12u,
+              "expected phase-0 compute seed list") ||
+      !Expect(decoder.Phase0ComputeSelectorRules().size() == 12u,
+              "expected phase-0 selector rule list")) {
     return 1;
   }
 
@@ -66,10 +70,10 @@ int main() {
                                          &words_consumed, &error_message),
               "decoder scaffold should fail on non-empty input") ||
       !Expect(words_consumed == 0u, "expected no words consumed") ||
-      !Expect(error_message.find("ENC_SOPP") != std::string::npos,
-              "expected phase-0 scalar control in error") ||
-      !Expect(error_message.find("ENC_VGLOBAL") != std::string::npos,
-              "expected phase-0 global memory in error")) {
+      !Expect(error_message.find("ENC_VOP2 opcode 0") != std::string::npos,
+              "expected phase-0 route in error") ||
+      !Expect(error_message.find("no matching seed entry") != std::string::npos,
+              "expected seed-aware route miss in error")) {
     return 1;
   }
 
