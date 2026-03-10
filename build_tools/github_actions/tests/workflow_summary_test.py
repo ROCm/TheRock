@@ -2,11 +2,14 @@
 # SPDX-License-Identifier: MIT
 
 import json
+from unittest.mock import patch
 
 import pytest
 
 from workflow_summary import (
+    FailedJobInfo,
     evaluate_results,
+    fetch_failed_jobs,
     main,
     parse_needs_json,
 )
@@ -137,6 +140,58 @@ class TestEvaluateResults:
 
 
 # ---------------------------------------------------------------------------
+# fetch_failed_jobs
+# ---------------------------------------------------------------------------
+
+
+class TestFetchFailedJobs:
+    def test_parses_failed_jobs(self):
+        api_response = {
+            "jobs": [
+                {
+                    "name": "Build",
+                    "conclusion": "success",
+                    "html_url": "https://github.com/test/run/1",
+                },
+                {
+                    "name": "Test hip-tests (shard 1/1)",
+                    "conclusion": "failure",
+                    "html_url": "https://github.com/test/run/2",
+                },
+                {
+                    "name": "Test rocthrust (shard 1/1)",
+                    "conclusion": "failure",
+                    "html_url": "https://github.com/test/run/3",
+                },
+            ]
+        }
+        with patch("workflow_summary.gha_send_request", return_value=api_response):
+            failed = fetch_failed_jobs("owner/repo", "12345")
+
+        assert len(failed) == 2
+        assert failed[0].name == "Test hip-tests (shard 1/1)"
+        assert failed[0].html_url == "https://github.com/test/run/2"
+        assert failed[1].name == "Test rocthrust (shard 1/1)"
+
+    def test_no_failures(self):
+        api_response = {
+            "jobs": [
+                {"name": "Build", "conclusion": "success", "html_url": ""},
+            ]
+        }
+        with patch("workflow_summary.gha_send_request", return_value=api_response):
+            failed = fetch_failed_jobs("owner/repo", "12345")
+
+        assert len(failed) == 0
+
+    def test_empty_jobs_list(self):
+        with patch("workflow_summary.gha_send_request", return_value={"jobs": []}):
+            failed = fetch_failed_jobs("owner/repo", "12345")
+
+        assert len(failed) == 0
+
+
+# ---------------------------------------------------------------------------
 # main (integration)
 # ---------------------------------------------------------------------------
 
@@ -156,3 +211,61 @@ class TestMain:
         rc = main(["--needs-json", json.dumps(FAILURE_WITH_CONTINUE_ON_ERROR)])
         assert rc == 0
         assert "succeeded" in capsys.readouterr().out
+
+    def test_failure_with_api_prints_urls(self, capsys):
+        api_response = {
+            "jobs": [
+                {
+                    "name": "Test hip-tests",
+                    "conclusion": "failure",
+                    "html_url": "https://github.com/test/run/2",
+                },
+            ]
+        }
+        with patch("workflow_summary.gha_send_request", return_value=api_response):
+            rc = main(
+                [
+                    "--needs-json",
+                    json.dumps(ONE_FAILURE),
+                    "--github-repository",
+                    "owner/repo",
+                    "--github-run-id",
+                    "12345",
+                ]
+            )
+
+        assert rc == 1
+        out = capsys.readouterr().out
+        assert "Test hip-tests" in out
+        assert "https://github.com/test/run/2" in out
+
+    def test_failure_without_api_args_still_works(self, capsys, monkeypatch):
+        """Without repo/run-id, the script should still report failures."""
+        monkeypatch.delenv("GITHUB_REPOSITORY", raising=False)
+        monkeypatch.delenv("GITHUB_RUN_ID", raising=False)
+        rc = main(["--needs-json", json.dumps(ONE_FAILURE)])
+        assert rc == 1
+        assert "failed" in capsys.readouterr().out
+
+    def test_failure_with_api_error_still_fails(self, capsys):
+        """API errors should not prevent the script from reporting failures."""
+        from github_actions_utils import GitHubAPIError
+
+        with patch(
+            "workflow_summary.gha_send_request",
+            side_effect=GitHubAPIError("test error"),
+        ):
+            rc = main(
+                [
+                    "--needs-json",
+                    json.dumps(ONE_FAILURE),
+                    "--github-repository",
+                    "owner/repo",
+                    "--github-run-id",
+                    "12345",
+                ]
+            )
+
+        assert rc == 1
+        out = capsys.readouterr().out
+        assert "Could not fetch job details" in out

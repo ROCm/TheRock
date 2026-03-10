@@ -17,6 +17,8 @@ Usage in a workflow:
       steps:
         - uses: actions/checkout@<sha>
         - name: Evaluate workflow results
+          env:
+            GITHUB_TOKEN: ${{ github.token }}
           run: |
             python build_tools/github_actions/workflow_summary.py \
               --needs-json '${{ toJSON(needs) }}'
@@ -31,10 +33,11 @@ Notes:
 
 import argparse
 import json
+import os
 import sys
 from dataclasses import dataclass
 
-from github_actions_utils import str2bool
+from github_actions_utils import GitHubAPIError, gha_send_request, str2bool
 
 
 # ---------------------------------------------------------------------------
@@ -49,6 +52,14 @@ class JobResult:
     name: str
     result: str
     continue_on_error: bool
+
+
+@dataclass
+class FailedJobInfo:
+    """A failed sub-job from the GitHub API with a link to its log."""
+
+    name: str
+    html_url: str
 
 
 # ---------------------------------------------------------------------------
@@ -113,6 +124,41 @@ def evaluate_results(jobs: list[JobResult]) -> tuple[list[JobResult], list[JobRe
     return failed, ok
 
 
+def fetch_failed_jobs(
+    github_repository: str, github_run_id: str
+) -> list[FailedJobInfo]:
+    """Fetch the list of failed sub-jobs from the GitHub Actions API.
+
+    This gives more granular information than the ``needs`` context, which
+    only sees top-level reusable workflow callers. The API returns all
+    sub-jobs including those inside reusable workflows.
+
+    Args:
+        github_repository: Repository in "owner/repo" format.
+        github_run_id: The workflow run ID.
+
+    Returns:
+        A list of failed jobs with names and URLs.
+    """
+    url = (
+        f"https://api.github.com/repos/{github_repository}"
+        f"/actions/runs/{github_run_id}/jobs?filter=latest&per_page=100"
+    )
+    response = gha_send_request(url)
+    jobs = response.get("jobs", [])
+
+    failed: list[FailedJobInfo] = []
+    for job in jobs:
+        if job.get("conclusion") == "failure":
+            failed.append(
+                FailedJobInfo(
+                    name=job.get("name", "unknown"),
+                    html_url=job.get("html_url", ""),
+                )
+            )
+    return failed
+
+
 # ---------------------------------------------------------------------------
 # ANSI colors (supported by GitHub Actions log output)
 # ---------------------------------------------------------------------------
@@ -144,6 +190,16 @@ def main(argv: list[str]) -> int:
         required=True,
         help="Raw JSON string from ${{ toJSON(needs) }}.",
     )
+    parser.add_argument(
+        "--github-repository",
+        default=os.environ.get("GITHUB_REPOSITORY", ""),
+        help="Repository in owner/repo format (default: $GITHUB_REPOSITORY).",
+    )
+    parser.add_argument(
+        "--github-run-id",
+        default=os.environ.get("GITHUB_RUN_ID", ""),
+        help="Workflow run ID (default: $GITHUB_RUN_ID).",
+    )
     args = parser.parse_args(argv)
 
     jobs = parse_needs_json(args.needs_json)
@@ -158,11 +214,33 @@ def main(argv: list[str]) -> int:
         print(f"\n{_RED}The following jobs failed:{_RESET}")
         for job in failed:
             print(f"  {_RED}{job.name}{_RESET}")
-        print(f"\n{_RED}Check those jobs to see what failed{_RESET}")
+
+        # Try to fetch granular failure info from the API.
+        if args.github_repository and args.github_run_id:
+            _print_failed_job_urls(args.github_repository, args.github_run_id)
+
         return 1
 
     print(f"\n{_GREEN}All required jobs succeeded.{_RESET}")
     return 0
+
+
+def _print_failed_job_urls(github_repository: str, github_run_id: str) -> None:
+    """Best-effort: fetch and print URLs for failed sub-jobs."""
+    try:
+        failed_jobs = fetch_failed_jobs(github_repository, github_run_id)
+    except GitHubAPIError as e:
+        print(f"\n  (Could not fetch job details: {e})")
+        return
+
+    if not failed_jobs:
+        return
+
+    print(f"\n{_RED}Failed jobs:{_RESET}")
+    for job in failed_jobs:
+        print(f"  {_RED}{job.name}{_RESET}")
+        if job.html_url:
+            print(f"    {job.html_url}")
 
 
 if __name__ == "__main__":
