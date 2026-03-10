@@ -159,6 +159,40 @@ def fetch_failed_jobs(
     return failed
 
 
+def fetch_needs_json_from_api(github_repository: str, github_run_id: str) -> str:
+    """Build a synthetic ``needs`` JSON from the GitHub Actions API.
+
+    This enables local testing: instead of constructing ``--needs-json`` by
+    hand, pass ``--github-run-id`` and ``--github-repository`` and the script
+    will fetch the job list and build the JSON automatically.
+
+    Only completed jobs (those with a ``conclusion``) are included.
+
+    Args:
+        github_repository: Repository in "owner/repo" format.
+        github_run_id: The workflow run ID.
+
+    Returns:
+        A JSON string in the same shape as ``${{ toJSON(needs) }}``.
+    """
+    url = (
+        f"https://api.github.com/repos/{github_repository}"
+        f"/actions/runs/{github_run_id}/jobs?filter=latest&per_page=100"
+    )
+    response = gha_send_request(url)
+    api_jobs = response.get("jobs", [])
+
+    needs: dict[str, dict[str, object]] = {}
+    for job in api_jobs:
+        conclusion = job.get("conclusion")
+        if conclusion is None:
+            continue
+        name = job.get("name", "unknown")
+        needs[name] = {"result": conclusion, "outputs": {}}
+
+    return json.dumps(needs)
+
+
 # ---------------------------------------------------------------------------
 # ANSI colors (supported by GitHub Actions log output)
 # ---------------------------------------------------------------------------
@@ -187,8 +221,11 @@ def main(argv: list[str]) -> int:
     )
     parser.add_argument(
         "--needs-json",
-        required=True,
-        help="Raw JSON string from ${{ toJSON(needs) }}.",
+        default="",
+        help=(
+            "Raw JSON string from ${{ toJSON(needs) }}. "
+            "If omitted, fetched from the API using --github-run-id."
+        ),
     )
     parser.add_argument(
         "--github-repository",
@@ -202,7 +239,18 @@ def main(argv: list[str]) -> int:
     )
     args = parser.parse_args(argv)
 
-    jobs = parse_needs_json(args.needs_json)
+    needs_json = args.needs_json
+    if not needs_json:
+        if not args.github_repository or not args.github_run_id:
+            parser.error(
+                "--needs-json is required when --github-repository "
+                "and --github-run-id are not both provided."
+            )
+        needs_json = fetch_needs_json_from_api(
+            args.github_repository, args.github_run_id
+        )
+
+    jobs = parse_needs_json(needs_json)
     failed, ok = evaluate_results(jobs)
 
     print(f"Checking status for {len(jobs)} job(s):")
