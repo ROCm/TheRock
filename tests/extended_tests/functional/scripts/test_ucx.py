@@ -4,7 +4,8 @@
 """
 Unified Communication X (UCX) ROCm integration tests.
 
-Runs the pre-built UCX gtest binary to validate ROCm integration.
+UCX is a communication framework used by MPI and RCCL for GPU-to-GPU data transfers.
+This test validates GPU memory registration and GPU direct communication paths.
 """
 
 import json
