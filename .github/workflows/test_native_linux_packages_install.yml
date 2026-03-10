@@ -29,6 +29,11 @@ on:
         required: false
         type: string
         default: "/opt/rocm/core"
+      test_type:
+        description: "Test type: sanity (basic verification only) or full (basic + full verification)."
+        required: false
+        type: string
+        default: "sanity"
   workflow_dispatch:
     inputs:
       repo_url:
@@ -65,6 +70,13 @@ on:
         type: string
         default: "/opt/rocm/core"
         required: false
+      test_type:
+        description: "Test type: sanity or full"
+        type: choice
+        options:
+          - sanity
+          - full
+        default: "sanity"
 
 permissions:
   id-token: write
@@ -87,21 +99,19 @@ jobs:
       REPO_URL: ${{ inputs.repo_url }}
       GPG_KEY_URL: ${{ inputs.gpg_key_url || '' }}
       OS_PROFILE: ${{ inputs.os_profile }}
+      # Package type from os_profile: ubuntu/debian -> deb, else rpm
+      PKG_TYPE: ${{ (startsWith(inputs.os_profile, 'ubuntu') || startsWith(inputs.os_profile, 'debian')) && 'deb' || 'rpm' }}
       GFX_ARCH: ${{ inputs.gfx_arch || 'gfx94x' }}
       INSTALL_PREFIX: ${{ inputs.install_prefix || '/opt/rocm/core' }}
       # Release type for script: prerelease if GPG key URL is set, else nightly
       RELEASE_TYPE: ${{ inputs.gpg_key_url != '' && 'prerelease' || 'nightly' }}
+      TEST_TYPE: ${{ inputs.test_type || 'sanity' }}
     steps:
       - name: Install System Prerequisites
         run: |
-          # Derive package type from os_profile for install steps
-          case "${{ inputs.os_profile }}" in
-            ubuntu*|debian*) PKG_TYPE=deb ;;
-            *)               PKG_TYPE=rpm ;;
-          esac
-          echo "Installing prerequisites for ${PKG_TYPE} on container"
+          echo "Installing prerequisites for ${{ env.PKG_TYPE }} on container"
 
-          if [ "${PKG_TYPE}" = "deb" ]; then
+          if [ "${{ env.PKG_TYPE }}" = "deb" ]; then
             apt update
             apt install -y \
               wget \
@@ -165,7 +175,7 @@ jobs:
         id: install-test
         run: |
           echo "=========================================================================="
-          echo "FULL INSTALLATION TEST - NATIVE LINUX PACKAGES"
+          echo "INSTALLATION TEST - NATIVE LINUX PACKAGES"
           echo "=========================================================================="
           echo "OS Profile: ${{ inputs.os_profile }}"
           echo "Repository URL: ${{ env.REPO_URL }}"
@@ -181,6 +191,7 @@ jobs:
           CMD="$CMD --gfx-arch ${{ env.GFX_ARCH }}"
           CMD="$CMD --install-prefix \"${{ env.INSTALL_PREFIX }}\""
           CMD="$CMD --release-type ${{ env.RELEASE_TYPE }}"
+          CMD="$CMD --test-type ${{ env.TEST_TYPE }}"
           if [ -n "${{ env.GPG_KEY_URL }}" ]; then
             CMD="$CMD --gpg-key-url \"${{ env.GPG_KEY_URL }}\""
           fi
@@ -249,7 +260,7 @@ jobs:
           echo "=========================================================================="
 
           if [ "${{ steps.install-test.outcome }}" = "success" ]; then
-            echo "FULL INSTALLATION TEST PASSED"
+            echo "INSTALLATION TEST PASSED"
             echo ""
             echo "Summary:"
             echo "  - Repository setup: SUCCESS"
@@ -259,7 +270,7 @@ jobs:
             echo "Installed at: ${{ env.INSTALL_PREFIX }}"
             echo "From: ${{ env.REPO_URL }}"
           else
-            echo "FULL INSTALLATION TEST FAILED"
+            echo "INSTALLATION TEST FAILED"
             echo ""
             echo "The test failed during repository setup or package installation."
             echo "Please check the logs above for detailed error messages."
