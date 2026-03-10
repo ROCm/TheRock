@@ -1189,6 +1189,17 @@ int main() {
     }
   }
 
+  const std::array<std::string_view, 1> kDsWideWriteOpcodes = {
+      "DS_WRITE_B64",
+  };
+  for (std::string_view opcode : kDsWideWriteOpcodes) {
+    if (!Expect(interpreter.Supports(opcode),
+                "expected ds wide-write opcode support")) {
+      std::cerr << opcode << '\n';
+      return 1;
+    }
+  }
+
   const std::array<std::string_view, 2> kDsPairWriteOpcodes = {
       "DS_WRITE2_B32",
       "DS_WRITE2ST64_B32",
@@ -1201,6 +1212,29 @@ int main() {
     }
   }
 
+  const std::array<std::string_view, 2> kDsWidePairWriteOpcodes = {
+      "DS_WRITE2_B64",
+      "DS_WRITE2ST64_B64",
+  };
+  for (std::string_view opcode : kDsWidePairWriteOpcodes) {
+    if (!Expect(interpreter.Supports(opcode),
+                "expected ds wide pair-write opcode support")) {
+      std::cerr << opcode << '\n';
+      return 1;
+    }
+  }
+
+  const std::array<std::string_view, 1> kDsWideReadOpcodes = {
+      "DS_READ_B64",
+  };
+  for (std::string_view opcode : kDsWideReadOpcodes) {
+    if (!Expect(interpreter.Supports(opcode),
+                "expected ds wide-read opcode support")) {
+      std::cerr << opcode << '\n';
+      return 1;
+    }
+  }
+
   const std::array<std::string_view, 2> kDsPairReadOpcodes = {
       "DS_READ2_B32",
       "DS_READ2ST64_B32",
@@ -1208,6 +1242,18 @@ int main() {
   for (std::string_view opcode : kDsPairReadOpcodes) {
     if (!Expect(interpreter.Supports(opcode),
                 "expected ds pair-read opcode support")) {
+      std::cerr << opcode << '\n';
+      return 1;
+    }
+  }
+
+  const std::array<std::string_view, 2> kDsWidePairReadOpcodes = {
+      "DS_READ2_B64",
+      "DS_READ2ST64_B64",
+  };
+  for (std::string_view opcode : kDsWidePairReadOpcodes) {
+    if (!Expect(interpreter.Supports(opcode),
+                "expected ds wide pair-read opcode support")) {
       std::cerr << opcode << '\n';
       return 1;
     }
@@ -7299,6 +7345,226 @@ int main() {
                                          &error_message),
               error_message.c_str()) ||
       !validate_ds_access_state(compiled_ds_access_state, "compiled")) {
+    return 1;
+  }
+  }
+
+  {
+  const std::vector<DecodedInstruction> ds_b64_access_program = {
+      DecodedInstruction::ThreeOperand("DS_WRITE_B64", InstructionOperand::Vgpr(0),
+                                       InstructionOperand::Vgpr(1),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_READ_B64", InstructionOperand::Vgpr(20),
+                                       InstructionOperand::Vgpr(0),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::FiveOperand("DS_WRITE2_B64", InstructionOperand::Vgpr(3),
+                                      InstructionOperand::Vgpr(4),
+                                      InstructionOperand::Vgpr(6),
+                                      InstructionOperand::Imm32(1),
+                                      InstructionOperand::Imm32(3)),
+      DecodedInstruction::FourOperand("DS_READ2_B64", InstructionOperand::Vgpr(22),
+                                      InstructionOperand::Vgpr(3),
+                                      InstructionOperand::Imm32(1),
+                                      InstructionOperand::Imm32(3)),
+      DecodedInstruction::FiveOperand(
+          "DS_WRITE2ST64_B64", InstructionOperand::Vgpr(8),
+          InstructionOperand::Vgpr(9), InstructionOperand::Vgpr(11),
+          InstructionOperand::Imm32(1), InstructionOperand::Imm32(2)),
+      DecodedInstruction::FourOperand(
+          "DS_READ2ST64_B64", InstructionOperand::Vgpr(26),
+          InstructionOperand::Vgpr(8), InstructionOperand::Imm32(1),
+          InstructionOperand::Imm32(2)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  auto make_ds_b64_access_state = []() {
+    WaveExecutionState state;
+    state.exec_mask = 0b1011ULL;
+    state.vgprs[0][0] = 0u;
+    state.vgprs[0][1] = 8u;
+    state.vgprs[0][3] = 16u;
+    state.vgprs[1][0] = 0x11111111u;
+    state.vgprs[2][0] = 0xaaaaaaaau;
+    state.vgprs[1][1] = 0x22222222u;
+    state.vgprs[2][1] = 0xbbbbbbbbu;
+    state.vgprs[1][3] = 0x33333333u;
+    state.vgprs[2][3] = 0xccccccccu;
+
+    state.vgprs[3][0] = 32u;
+    state.vgprs[3][1] = 64u;
+    state.vgprs[3][3] = 96u;
+    state.vgprs[4][0] = 0x44444444u;
+    state.vgprs[5][0] = 0xddddddddu;
+    state.vgprs[6][0] = 0x55555555u;
+    state.vgprs[7][0] = 0xeeeeeeeeu;
+    state.vgprs[4][1] = 0x66666666u;
+    state.vgprs[5][1] = 0xf0f0f0f0u;
+    state.vgprs[6][1] = 0x77777777u;
+    state.vgprs[7][1] = 0x12345678u;
+    state.vgprs[4][3] = 0x88888888u;
+    state.vgprs[5][3] = 0x9abcdef0u;
+    state.vgprs[6][3] = 0x99999999u;
+    state.vgprs[7][3] = 0x0fedcba9u;
+
+    state.vgprs[8][0] = 128u;
+    state.vgprs[8][1] = 160u;
+    state.vgprs[8][3] = 192u;
+    state.vgprs[9][0] = 0x01010101u;
+    state.vgprs[10][0] = 0x11111111u;
+    state.vgprs[11][0] = 0x02020202u;
+    state.vgprs[12][0] = 0x22222222u;
+    state.vgprs[9][1] = 0x03030303u;
+    state.vgprs[10][1] = 0x33333333u;
+    state.vgprs[11][1] = 0x04040404u;
+    state.vgprs[12][1] = 0x44444444u;
+    state.vgprs[9][3] = 0x05050505u;
+    state.vgprs[10][3] = 0x55555555u;
+    state.vgprs[11][3] = 0x06060606u;
+    state.vgprs[12][3] = 0x66666666u;
+
+    for (std::uint16_t vgpr = 20; vgpr <= 29; ++vgpr) {
+      state.vgprs[vgpr][2] = 0x90000000u + vgpr;
+    }
+    return state;
+  };
+  auto validate_ds_b64_access_state = [&](const WaveExecutionState& state,
+                                          const char* mode) {
+    if (!Expect(state.halted, "expected ds b64 access program to halt")) {
+      std::cerr << mode << '\n';
+      return false;
+    }
+
+    if (!Expect(ComposeU64(state.vgprs[20][0], state.vgprs[21][0]) ==
+                    0xaaaaaaaa11111111ULL,
+                "expected ds_read_b64 lane 0 result") ||
+        !Expect(ComposeU64(state.vgprs[20][1], state.vgprs[21][1]) ==
+                    0xbbbbbbbb22222222ULL,
+                "expected ds_read_b64 lane 1 result") ||
+        !Expect(ComposeU64(state.vgprs[20][3], state.vgprs[21][3]) ==
+                    0xcccccccc33333333ULL,
+                "expected ds_read_b64 lane 3 result") ||
+        !Expect(ComposeU64(state.vgprs[22][0], state.vgprs[23][0]) ==
+                    0xdddddddd44444444ULL,
+                "expected ds_read2_b64 low lane 0 result") ||
+        !Expect(ComposeU64(state.vgprs[24][0], state.vgprs[25][0]) ==
+                    0xeeeeeeee55555555ULL,
+                "expected ds_read2_b64 high lane 0 result") ||
+        !Expect(ComposeU64(state.vgprs[22][1], state.vgprs[23][1]) ==
+                    0xf0f0f0f066666666ULL,
+                "expected ds_read2_b64 low lane 1 result") ||
+        !Expect(ComposeU64(state.vgprs[24][1], state.vgprs[25][1]) ==
+                    0x1234567877777777ULL,
+                "expected ds_read2_b64 high lane 1 result") ||
+        !Expect(ComposeU64(state.vgprs[22][3], state.vgprs[23][3]) ==
+                    0x9abcdef088888888ULL,
+                "expected ds_read2_b64 low lane 3 result") ||
+        !Expect(ComposeU64(state.vgprs[24][3], state.vgprs[25][3]) ==
+                    0x0fedcba999999999ULL,
+                "expected ds_read2_b64 high lane 3 result") ||
+        !Expect(ComposeU64(state.vgprs[26][0], state.vgprs[27][0]) ==
+                    0x1111111101010101ULL,
+                "expected ds_read2st64_b64 low lane 0 result") ||
+        !Expect(ComposeU64(state.vgprs[28][0], state.vgprs[29][0]) ==
+                    0x2222222202020202ULL,
+                "expected ds_read2st64_b64 high lane 0 result") ||
+        !Expect(ComposeU64(state.vgprs[26][1], state.vgprs[27][1]) ==
+                    0x3333333303030303ULL,
+                "expected ds_read2st64_b64 low lane 1 result") ||
+        !Expect(ComposeU64(state.vgprs[28][1], state.vgprs[29][1]) ==
+                    0x4444444404040404ULL,
+                "expected ds_read2st64_b64 high lane 1 result") ||
+        !Expect(ComposeU64(state.vgprs[26][3], state.vgprs[27][3]) ==
+                    0x5555555505050505ULL,
+                "expected ds_read2st64_b64 low lane 3 result") ||
+        !Expect(ComposeU64(state.vgprs[28][3], state.vgprs[29][3]) ==
+                    0x6666666606060606ULL,
+                "expected ds_read2st64_b64 high lane 3 result")) {
+      std::cerr << mode << '\n';
+      return false;
+    }
+
+    for (std::uint16_t vgpr = 20; vgpr <= 29; ++vgpr) {
+      const std::uint32_t expected = 0x90000000u + vgpr;
+      if (!Expect(state.vgprs[vgpr][2] == expected,
+                  "expected inactive ds b64 destination preservation")) {
+        std::cerr << mode << " vgpr=" << vgpr << '\n';
+        return false;
+      }
+    }
+
+    std::uint64_t value = 0;
+    if (!Expect((std::memcpy(&value, state.lds_bytes.data() + 0, sizeof(value)), value) ==
+                    0xaaaaaaaa11111111ULL,
+                "expected ds_write_b64 lane 0 store") ||
+        !Expect((std::memcpy(&value, state.lds_bytes.data() + 8, sizeof(value)), value) ==
+                    0xbbbbbbbb22222222ULL,
+                "expected ds_write_b64 lane 1 store") ||
+        !Expect((std::memcpy(&value, state.lds_bytes.data() + 16, sizeof(value)), value) ==
+                    0xcccccccc33333333ULL,
+                "expected ds_write_b64 lane 3 store") ||
+        !Expect((std::memcpy(&value, state.lds_bytes.data() + 40, sizeof(value)), value) ==
+                    0xdddddddd44444444ULL,
+                "expected ds_write2_b64 lane 0 low store") ||
+        !Expect((std::memcpy(&value, state.lds_bytes.data() + 56, sizeof(value)), value) ==
+                    0xeeeeeeee55555555ULL,
+                "expected ds_write2_b64 lane 0 high store") ||
+        !Expect((std::memcpy(&value, state.lds_bytes.data() + 72, sizeof(value)), value) ==
+                    0xf0f0f0f066666666ULL,
+                "expected ds_write2_b64 lane 1 low store") ||
+        !Expect((std::memcpy(&value, state.lds_bytes.data() + 88, sizeof(value)), value) ==
+                    0x1234567877777777ULL,
+                "expected ds_write2_b64 lane 1 high store") ||
+        !Expect((std::memcpy(&value, state.lds_bytes.data() + 104, sizeof(value)), value) ==
+                    0x9abcdef088888888ULL,
+                "expected ds_write2_b64 lane 3 low store") ||
+        !Expect((std::memcpy(&value, state.lds_bytes.data() + 120, sizeof(value)), value) ==
+                    0x0fedcba999999999ULL,
+                "expected ds_write2_b64 lane 3 high store") ||
+        !Expect((std::memcpy(&value, state.lds_bytes.data() + 640, sizeof(value)), value) ==
+                    0x1111111101010101ULL,
+                "expected ds_write2st64_b64 lane 0 low store") ||
+        !Expect((std::memcpy(&value, state.lds_bytes.data() + 1152, sizeof(value)), value) ==
+                    0x2222222202020202ULL,
+                "expected ds_write2st64_b64 lane 0 high store") ||
+        !Expect((std::memcpy(&value, state.lds_bytes.data() + 672, sizeof(value)), value) ==
+                    0x3333333303030303ULL,
+                "expected ds_write2st64_b64 lane 1 low store") ||
+        !Expect((std::memcpy(&value, state.lds_bytes.data() + 1184, sizeof(value)), value) ==
+                    0x4444444404040404ULL,
+                "expected ds_write2st64_b64 lane 1 high store") ||
+        !Expect((std::memcpy(&value, state.lds_bytes.data() + 704, sizeof(value)), value) ==
+                    0x5555555505050505ULL,
+                "expected ds_write2st64_b64 lane 3 low store") ||
+        !Expect((std::memcpy(&value, state.lds_bytes.data() + 1216, sizeof(value)), value) ==
+                    0x6666666606060606ULL,
+                "expected ds_write2st64_b64 lane 3 high store")) {
+      std::cerr << mode << '\n';
+      return false;
+    }
+    return true;
+  };
+
+  WaveExecutionState decoded_ds_b64_access_state = make_ds_b64_access_state();
+  if (!Expect(interpreter.ExecuteProgram(ds_b64_access_program,
+                                         &decoded_ds_b64_access_state,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_ds_b64_access_state(decoded_ds_b64_access_state, "decoded")) {
+    return 1;
+  }
+
+  std::vector<CompiledInstruction> compiled_ds_b64_access_program;
+  if (!Expect(interpreter.CompileProgram(ds_b64_access_program,
+                                         &compiled_ds_b64_access_program,
+                                         &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+  WaveExecutionState compiled_ds_b64_access_state = make_ds_b64_access_state();
+  if (!Expect(interpreter.ExecuteProgram(compiled_ds_b64_access_program,
+                                         &compiled_ds_b64_access_state,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_ds_b64_access_state(compiled_ds_b64_access_state, "compiled")) {
     return 1;
   }
   }

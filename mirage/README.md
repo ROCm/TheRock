@@ -135,6 +135,8 @@ internal-opcode entrypoints for a small subset of ops: `S_MOV_B32`,
 `DS_CMPST_{B32,F32}`,
 `DS_{ADD,MIN,MAX}_F32`,
 `DS_WRITE2_{,ST64}_B32`, `DS_READ2_{,ST64}_B32`,
+`DS_WRITE_B64`, `DS_WRITE2_{,ST64}_B64`,
+`DS_READ_B64`, `DS_READ2_{,ST64}_B64`,
 `DS_READ_{I,U}{8,16}`,
 `DS_{ADD,SUB,RSUB,INC,DEC}_RTN_U32`,
 `DS_{MIN,MAX}_RTN_{I32,U32,F32}`,
@@ -175,9 +177,10 @@ scalar and vector memory traffic, plus DS return-atomic decode for
 `DS_{MIN,MAX}_RTN_{I32,U32,F32}`,
 `DS_{AND,OR,XOR,MSKOR}_RTN_B32`, `DS_WRXCHG_RTN_B32`,
 `DS_CMPST_RTN_{B32,F32}`, `DS_WRAP_RTN_B32`, `DS_ADD_RTN_F32`,
-plus DS pair/narrow access decode for
-`DS_WRITE2_{,ST64}_B32`, `DS_READ2_{,ST64}_B32`,
-`DS_READ_{I,U}{8,16}`, `DS_MSKOR_B32`, `DS_CMPST_{B32,F32}`, and special scalar sources
+plus DS pair/narrow/wide access decode for
+`DS_WRITE2_{,ST64}_{B32,B64}`, `DS_READ_B64`,
+`DS_READ2_{,ST64}_{B32,B64}`, `DS_READ_{I,U}{8,16}`,
+`DS_MSKOR_B32`, `DS_CMPST_{B32,F32}`, and special scalar sources
 `SRC_VCCZ`,
 `SRC_EXECZ`, and `SRC_SCC`.
 

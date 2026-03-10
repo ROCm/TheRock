@@ -235,10 +235,16 @@ bool IsSupportedDsOpcode(std::string_view opcode_name) {
          opcode_name == "DS_ADD_F32" || opcode_name == "DS_MIN_F32" ||
          opcode_name == "DS_MAX_F32" || opcode_name == "DS_WRITE_B8" ||
          opcode_name == "DS_WRITE_B16" ||
+         opcode_name == "DS_WRITE_B64" ||
          opcode_name == "DS_WRITE2_B32" ||
          opcode_name == "DS_WRITE2ST64_B32" ||
+         opcode_name == "DS_WRITE2_B64" ||
+         opcode_name == "DS_WRITE2ST64_B64" ||
          opcode_name == "DS_READ2_B32" ||
          opcode_name == "DS_READ2ST64_B32" ||
+         opcode_name == "DS_READ_B64" ||
+         opcode_name == "DS_READ2_B64" ||
+         opcode_name == "DS_READ2ST64_B64" ||
          opcode_name == "DS_READ_I8" ||
          opcode_name == "DS_READ_U8" ||
          opcode_name == "DS_READ_I16" ||
@@ -267,12 +273,16 @@ bool IsSupportedDsOpcode(std::string_view opcode_name) {
 
 bool IsDsPairWriteOpcode(std::string_view opcode_name) {
   return opcode_name == "DS_WRITE2_B32" ||
-         opcode_name == "DS_WRITE2ST64_B32";
+         opcode_name == "DS_WRITE2ST64_B32" ||
+         opcode_name == "DS_WRITE2_B64" ||
+         opcode_name == "DS_WRITE2ST64_B64";
 }
 
 bool IsDsPairReadOpcode(std::string_view opcode_name) {
   return opcode_name == "DS_READ2_B32" ||
-         opcode_name == "DS_READ2ST64_B32";
+         opcode_name == "DS_READ2ST64_B32" ||
+         opcode_name == "DS_READ2_B64" ||
+         opcode_name == "DS_READ2ST64_B64";
 }
 
 bool IsDsNarrowReadOpcode(std::string_view opcode_name) {
@@ -708,7 +718,8 @@ bool Gfx950BinaryDecoder::DecodeDs(std::span<const std::uint32_t> words,
     }
     *instruction = DecodedInstruction::FiveOperand(instruction_name, dst, addr,
                                                    data0, data1, offset0);
-  } else if (opcode_name == "DS_READ_B32" || IsDsNarrowReadOpcode(opcode_name)) {
+  } else if (opcode_name == "DS_READ_B32" || opcode_name == "DS_READ_B64" ||
+             IsDsNarrowReadOpcode(opcode_name)) {
     InstructionOperand dst;
     if (!DecodeVectorDestination(
             static_cast<std::uint32_t>(ExtractBits(instruction_word, 56, 8)),
