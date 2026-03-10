@@ -39,6 +39,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--rocprofiler-systems | --no-rocprofiler-systems]
     [--rocrtst | --no-rocrtst]
     [--rocwmma | --no-rocwmma]
+    [--hiptensor | --no-hiptensor]
     [--libhipcxx | --no-libhipcxx]
     [--tests | --no-tests]
     [--base-only]
@@ -344,6 +345,7 @@ def retrieve_artifacts_by_run_id(args):
             args.debug_tools,
             args.fft,
             args.hipdnn,
+            args.hiptensor,
             args.hipdnn_samples,
             args.miopen,
             args.miopenprovider,
@@ -392,6 +394,8 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("fftw3")
         if args.hipdnn:
             extra_artifacts.append("hipdnn")
+        if args.hiptensor:
+            extra_artifacts.append("hiptensor")
         if args.hipdnn_samples:
             extra_artifacts.append("hipdnn-samples")
         if args.miopen:
@@ -670,6 +674,13 @@ def main(argv):
         "--hipdnn",
         default=False,
         help="Include 'hipdnn' artifacts",
+        action=argparse.BooleanOptionalAction,
+    )
+
+    artifacts_group.add_argument(
+        "--hiptensor",
+        default=False,
+        help="Include 'hiptensor' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
