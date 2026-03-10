@@ -124,6 +124,115 @@ bool IsFocusInstruction(std::string_view instruction_name) {{
 """
 
 
+def render_target_catalog_cc(llvm_inventory: dict, rdna4_inventory: dict, delta: dict) -> str:
+    rdna4_names = {
+        instruction["instruction_name"] for instruction in rdna4_inventory["instructions"]
+    }
+    normalized_entries = {}
+    for entry in llvm_inventory["entries"]:
+        info = normalized_entries.setdefault(
+            entry["normalized_symbol"],
+            {
+                "instruction_name": entry["normalized_symbol"],
+                "llvm_file": entry["file"],
+                "llvm_line": entry["line"],
+                "is_vop3": False,
+                "is_vop3p": False,
+                "is_wmma": False,
+                "is_fp8_bf8": False,
+                "is_scale_paired": False,
+            },
+        )
+        info["llvm_line"] = min(info["llvm_line"], entry["line"])
+        for category in entry["categories"]:
+            if category == "vop3":
+                info["is_vop3"] = True
+            elif category == "vop3p":
+                info["is_vop3p"] = True
+            elif category == "wmma":
+                info["is_wmma"] = True
+            elif category == "fp8_bf8":
+                info["is_fp8_bf8"] = True
+            elif category == "scale_paired":
+                info["is_scale_paired"] = True
+
+    sorted_entries = []
+    for name in sorted(normalized_entries):
+        info = normalized_entries[name]
+        info["appears_in_rdna4_xml"] = name in rdna4_names
+        info["is_target_specific"] = name not in rdna4_names
+        sorted_entries.append(info)
+
+    entry_lines = []
+    for info in sorted_entries:
+        entry_lines.append(
+            "    {"
+            f'"{info["instruction_name"]}", '
+            f'"{info["llvm_file"]}", '
+            f'{info["llvm_line"]}, '
+            f'{"true" if info["appears_in_rdna4_xml"] else "false"}, '
+            f'{"true" if info["is_target_specific"] else "false"}, '
+            f'{"true" if info["is_vop3"] else "false"}, '
+            f'{"true" if info["is_vop3p"] else "false"}, '
+            f'{"true" if info["is_wmma"] else "false"}, '
+            f'{"true" if info["is_fp8_bf8"] else "false"}, '
+            f'{"true" if info["is_scale_paired"] else "false"}'
+            "},"
+        )
+
+    shared_sample_lines = "\n".join(
+        f'    "{value}",' for value in delta["shared_sample"][:32]
+    )
+    rdna4_only_lines = "\n".join(
+        f'    "{value}",' for value in delta["rdna4_only_sample"][:32]
+    )
+
+    return f"""#include "lib/sim/isa/gfx1250/target_catalog.h"
+
+#include <array>
+
+namespace mirage::sim::isa::gfx1250 {{
+namespace {{
+
+constexpr std::array<TargetOpcodeInfo, {len(sorted_entries)}> kTargetOpcodeInfos{{{{
+{chr(10).join(entry_lines)}
+}}}};
+
+constexpr std::array<std::string_view, {min(32, len(delta["shared_sample"]))}> kSharedInstructionSample{{{{
+{shared_sample_lines}
+}}}};
+
+constexpr std::array<std::string_view, {min(32, len(delta["rdna4_only_sample"]))}> kRdna4OnlyInstructionSample{{{{
+{rdna4_only_lines}
+}}}};
+
+}}  // namespace
+
+std::span<const TargetOpcodeInfo> GetTargetOpcodeInfos() {{
+  return kTargetOpcodeInfos;
+}}
+
+const TargetOpcodeInfo* FindTargetOpcodeInfo(std::string_view instruction_name) {{
+  for (const TargetOpcodeInfo& info : kTargetOpcodeInfos) {{
+    if (info.instruction_name == instruction_name) {{
+      return &info;
+    }}
+  }}
+  return nullptr;
+}}
+
+std::span<const std::string_view> GetSharedInstructionSample() {{
+  return kSharedInstructionSample;
+}}
+
+std::span<const std::string_view> GetRdna4OnlyInstructionSample() {{
+  return kRdna4OnlyInstructionSample;
+}}
+
+}}  // namespace mirage::sim::isa::gfx1250
+"""
+
+
 def render_report(summary: dict, category_values: dict[str, list[str]]) -> str:
     lines = [
         "# gfx1250 Bring-up Plan",
@@ -176,9 +285,11 @@ def main() -> int:
 
     delta_path = mirage_root / "tests" / "data" / "architecture_import" / "gfx1250" / "gfx1250_delta_vs_gfx950.json"
     llvm_path = mirage_root / "tests" / "data" / "architecture_import" / "gfx1250" / "gfx1250_llvm_inventory.json"
+    rdna4_path = mirage_root / "tests" / "data" / "architecture_import" / "gfx1250" / "rdna4_instruction_inventory.json"
 
     delta = read_json(delta_path)
     llvm_inventory = read_json(llvm_path)
+    rdna4_inventory = read_json(rdna4_path)
 
     category_values: dict[str, list[str]] = {}
     for category_name in FOCUS_AREAS.values():
@@ -210,15 +321,21 @@ def main() -> int:
     }
 
     cc_path = mirage_root / "native" / "src" / "isa" / "gfx1250" / "bringup_profile.cc"
+    target_catalog_cc_path = mirage_root / "native" / "src" / "isa" / "gfx1250" / "target_catalog.cc"
     report_path = mirage_root / "reports" / "architectures" / "gfx1250" / "gfx1250_bringup_plan.md"
 
     cc_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.parent.mkdir(parents=True, exist_ok=True)
 
     cc_path.write_text(render_cc(summary, category_values), encoding="utf-8")
+    target_catalog_cc_path.write_text(
+        render_target_catalog_cc(llvm_inventory, rdna4_inventory, delta),
+        encoding="utf-8",
+    )
     report_path.write_text(render_report(summary, category_values), encoding="utf-8")
 
     print(f"Wrote {cc_path}")
+    print(f"Wrote {target_catalog_cc_path}")
     print(f"Wrote {report_path}")
     return 0
 
