@@ -1,15 +1,15 @@
 # GFX950 Coverage Report
 
 - Catalog instructions: 1242
-- Semantic support: 494 (39.8%)
-- Raw decode support: 537 (43.2% of total, 53.0% of measured)
+- Semantic support: 510 (41.1%)
+- Raw decode support: 553 (44.5% of total, 54.5% of measured)
 - Raw decode measurable instructions: 1014
 
 ## Gaps
 
 - Semantic-only coverage without measured decode: 36
 - Decode-only without semantic support: 79
-- Missing both semantic and decode support: 669
+- Missing both semantic and decode support: 653
 
 ## Unmeasured Encoding Families
 
@@ -91,28 +91,28 @@
 
 ## Missing-Both Sample
 
-- `DS_SUB_U32`
-- `DS_RSUB_U32`
-- `DS_INC_U32`
-- `DS_DEC_U32`
-- `DS_MIN_I32`
-- `DS_MAX_I32`
-- `DS_MIN_U32`
-- `DS_MAX_U32`
-- `DS_AND_B32`
-- `DS_OR_B32`
-- `DS_XOR_B32`
 - `DS_MSKOR_B32`
 - `DS_WRITE2_B32`
 - `DS_WRITE2ST64_B32`
 - `DS_CMPST_B32`
 - `DS_CMPST_F32`
-- `DS_MIN_F32`
-- `DS_MAX_F32`
 - `DS_NOP`
-- `DS_ADD_F32`
 - `DS_PK_ADD_F16`
 - `DS_PK_ADD_BF16`
 - `DS_WRITE_ADDTID_B32`
-- `DS_WRITE_B8`
-- `DS_WRITE_B16`
+- `DS_ADD_RTN_U32`
+- `DS_SUB_RTN_U32`
+- `DS_RSUB_RTN_U32`
+- `DS_INC_RTN_U32`
+- `DS_DEC_RTN_U32`
+- `DS_MIN_RTN_I32`
+- `DS_MAX_RTN_I32`
+- `DS_MIN_RTN_U32`
+- `DS_MAX_RTN_U32`
+- `DS_AND_RTN_B32`
+- `DS_OR_RTN_B32`
+- `DS_XOR_RTN_B32`
+- `DS_MSKOR_RTN_B32`
+- `DS_WRXCHG_RTN_B32`
+- `DS_WRXCHG2_RTN_B32`
+- `DS_WRXCHG2ST64_RTN_B32`

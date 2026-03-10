@@ -5507,6 +5507,36 @@ int main() {
     return 1;
   }
 
+  const std::array<std::string_view, 16> kExtendedDsOpcodes = {
+      "DS_SUB_U32", "DS_RSUB_U32", "DS_INC_U32", "DS_DEC_U32",
+      "DS_MIN_I32", "DS_MAX_I32",  "DS_MIN_U32", "DS_MAX_U32",
+      "DS_AND_B32", "DS_OR_B32",   "DS_XOR_B32", "DS_ADD_F32",
+      "DS_MIN_F32", "DS_MAX_F32",  "DS_WRITE_B8", "DS_WRITE_B16",
+  };
+  for (std::string_view opcode_name : kExtendedDsOpcodes) {
+    const auto opcode = FindDefaultEncodingOpcode(opcode_name, "ENC_DS");
+    if (!Expect(opcode.has_value(), "expected extended ds opcode lookup")) {
+      std::cerr << opcode_name << '\n';
+      return 1;
+    }
+
+    const auto encoded = MakeDs(*opcode, 0, 0, 1, 0, 0);
+    const std::vector<std::uint32_t> encoded_program = {
+        encoded[0], encoded[1], MakeSopp(1),
+    };
+    decoded_program.clear();
+    if (!Expect(decoder.DecodeProgram(encoded_program, &decoded_program,
+                                      &error_message),
+            error_message.c_str()) ||
+        !Expect(decoded_program.size() == 2,
+                "expected extended ds decode program size") ||
+        !Expect(decoded_program[0].opcode == opcode_name,
+                "expected extended ds opcode decode")) {
+      std::cerr << opcode_name << '\n';
+      return 1;
+    }
+  }
+
   const auto flat_load_word = MakeFlat(20, 10, 0, 0, 4);
   const auto flat_store_word = MakeFlat(28, 0, 0, 2, 0);
   const auto global_load_word = MakeGlobal(20, 11, 4, 0, 0, -4);

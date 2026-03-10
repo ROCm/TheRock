@@ -1065,6 +1065,20 @@ int main() {
     return 1;
   }
 
+  const std::array<std::string_view, 16> kExtendedDsOpcodes = {
+      "DS_SUB_U32", "DS_RSUB_U32", "DS_INC_U32", "DS_DEC_U32",
+      "DS_MIN_I32", "DS_MAX_I32",  "DS_MIN_U32", "DS_MAX_U32",
+      "DS_AND_B32", "DS_OR_B32",   "DS_XOR_B32", "DS_ADD_F32",
+      "DS_MIN_F32", "DS_MAX_F32",  "DS_WRITE_B8", "DS_WRITE_B16",
+  };
+  for (std::string_view opcode : kExtendedDsOpcodes) {
+    if (!Expect(interpreter.Supports(opcode),
+                "expected extended DS opcode support")) {
+      std::cerr << opcode << '\n';
+      return 1;
+    }
+  }
+
   const std::array<std::string_view, 16> kVectorCompare64Opcodes = {
       "V_CMP_F_I64",  "V_CMP_LT_I64", "V_CMP_EQ_I64", "V_CMP_LE_I64",
       "V_CMP_GT_I64", "V_CMP_NE_I64", "V_CMP_GE_I64", "V_CMP_T_I64",
@@ -5878,6 +5892,233 @@ int main() {
   if (!Expect(lds_lane0 == 11u, "expected lds lane 0 result") ||
       !Expect(lds_lane1 == 22u, "expected lds lane 1 result") ||
       !Expect(lds_lane3 == 44u, "expected lds lane 3 result")) {
+    return 1;
+  }
+
+  WaveExecutionState ds_integer_state;
+  ds_integer_state.exec_mask = 0b1011ULL;
+  ds_integer_state.vgprs[0][0] = 0u;
+  ds_integer_state.vgprs[0][1] = 4u;
+  ds_integer_state.vgprs[0][3] = 8u;
+  ds_integer_state.vgprs[1][0] = 10u;
+  ds_integer_state.vgprs[1][1] = 20u;
+  ds_integer_state.vgprs[1][3] = 40u;
+  ds_integer_state.vgprs[2][0] = 1u;
+  ds_integer_state.vgprs[2][1] = 2u;
+  ds_integer_state.vgprs[2][3] = 4u;
+  ds_integer_state.vgprs[3][0] = 100u;
+  ds_integer_state.vgprs[3][1] = 100u;
+  ds_integer_state.vgprs[3][3] = 100u;
+  ds_integer_state.vgprs[4][0] = 100u;
+  ds_integer_state.vgprs[4][1] = 82u;
+  ds_integer_state.vgprs[4][3] = 63u;
+  ds_integer_state.vgprs[5][0] = 10u;
+  ds_integer_state.vgprs[5][1] = 0u;
+  ds_integer_state.vgprs[5][3] = 5u;
+  ds_integer_state.vgprs[6][0] = 0xfffffff0u;
+  ds_integer_state.vgprs[6][1] = 5u;
+  ds_integer_state.vgprs[6][3] = 0xffffff00u;
+  ds_integer_state.vgprs[7][0] = 0xfffffff8u;
+  ds_integer_state.vgprs[7][1] = 0xffffffffu;
+  ds_integer_state.vgprs[7][3] = 0xffffff80u;
+  ds_integer_state.vgprs[8][0] = 3u;
+  ds_integer_state.vgprs[8][1] = 7u;
+  ds_integer_state.vgprs[8][3] = 1u;
+  ds_integer_state.vgprs[9][0] = 5u;
+  ds_integer_state.vgprs[9][1] = 9u;
+  ds_integer_state.vgprs[9][3] = 2u;
+  ds_integer_state.vgprs[10][0] = 7u;
+  ds_integer_state.vgprs[10][1] = 6u;
+  ds_integer_state.vgprs[10][3] = 3u;
+  ds_integer_state.vgprs[11][0] = 8u;
+  ds_integer_state.vgprs[11][1] = 1u;
+  ds_integer_state.vgprs[11][3] = 4u;
+  ds_integer_state.vgprs[12][0] = 2u;
+  ds_integer_state.vgprs[12][1] = 3u;
+  ds_integer_state.vgprs[12][3] = 5u;
+  ds_integer_state.vgprs[13][2] = 0xdeadbeefu;
+  const std::vector<DecodedInstruction> ds_integer_program = {
+      DecodedInstruction::ThreeOperand("DS_WRITE_B32", InstructionOperand::Vgpr(0),
+                                       InstructionOperand::Vgpr(1),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_SUB_U32", InstructionOperand::Vgpr(0),
+                                       InstructionOperand::Vgpr(2),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_RSUB_U32", InstructionOperand::Vgpr(0),
+                                       InstructionOperand::Vgpr(3),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_INC_U32", InstructionOperand::Vgpr(0),
+                                       InstructionOperand::Vgpr(4),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_DEC_U32", InstructionOperand::Vgpr(0),
+                                       InstructionOperand::Vgpr(5),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_MIN_I32", InstructionOperand::Vgpr(0),
+                                       InstructionOperand::Vgpr(6),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_MAX_I32", InstructionOperand::Vgpr(0),
+                                       InstructionOperand::Vgpr(7),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_MIN_U32", InstructionOperand::Vgpr(0),
+                                       InstructionOperand::Vgpr(8),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_MAX_U32", InstructionOperand::Vgpr(0),
+                                       InstructionOperand::Vgpr(9),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_AND_B32", InstructionOperand::Vgpr(0),
+                                       InstructionOperand::Vgpr(10),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_OR_B32", InstructionOperand::Vgpr(0),
+                                       InstructionOperand::Vgpr(11),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_XOR_B32", InstructionOperand::Vgpr(0),
+                                       InstructionOperand::Vgpr(12),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_READ_B32", InstructionOperand::Vgpr(13),
+                                       InstructionOperand::Vgpr(0),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  std::vector<CompiledInstruction> compiled_ds_integer_program;
+  if (!Expect(interpreter.CompileProgram(ds_integer_program,
+                                         &compiled_ds_integer_program,
+                                         &error_message),
+              error_message.c_str()) ||
+      !Expect(interpreter.ExecuteProgram(compiled_ds_integer_program,
+                                         &ds_integer_state, &error_message),
+              error_message.c_str()) ||
+      !Expect(ds_integer_state.vgprs[13][0] == 15u,
+              "expected compiled ds integer lane 0 result") ||
+      !Expect(ds_integer_state.vgprs[13][1] == 2u,
+              "expected compiled ds integer lane 1 result") ||
+      !Expect(ds_integer_state.vgprs[13][2] == 0xdeadbeefu,
+              "expected compiled ds integer inactive lane result") ||
+      !Expect(ds_integer_state.vgprs[13][3] == 3u,
+              "expected compiled ds integer lane 3 result")) {
+    return 1;
+  }
+
+  lds_lane0 = 0;
+  lds_lane1 = 0;
+  lds_lane3 = 0;
+  std::memcpy(&lds_lane0, ds_integer_state.lds_bytes.data() + 0,
+              sizeof(lds_lane0));
+  std::memcpy(&lds_lane1, ds_integer_state.lds_bytes.data() + 4,
+              sizeof(lds_lane1));
+  std::memcpy(&lds_lane3, ds_integer_state.lds_bytes.data() + 8,
+              sizeof(lds_lane3));
+  if (!Expect(lds_lane0 == 15u, "expected compiled ds integer lds lane 0") ||
+      !Expect(lds_lane1 == 2u, "expected compiled ds integer lds lane 1") ||
+      !Expect(lds_lane3 == 3u, "expected compiled ds integer lds lane 3")) {
+    return 1;
+  }
+
+  WaveExecutionState ds_float_state;
+  ds_float_state.exec_mask = 0b1011ULL;
+  ds_float_state.vgprs[0][0] = 0u;
+  ds_float_state.vgprs[0][1] = 4u;
+  ds_float_state.vgprs[0][3] = 8u;
+  ds_float_state.vgprs[1][0] = 0x3fc00000u;
+  ds_float_state.vgprs[1][1] = 0xc0000000u;
+  ds_float_state.vgprs[1][3] = 0x41200000u;
+  ds_float_state.vgprs[2][0] = 0x40100000u;
+  ds_float_state.vgprs[2][1] = 0x3f800000u;
+  ds_float_state.vgprs[2][3] = 0xc0a00000u;
+  ds_float_state.vgprs[3][0] = 0x40800000u;
+  ds_float_state.vgprs[3][1] = 0xc0400000u;
+  ds_float_state.vgprs[3][3] = 0x40c00000u;
+  ds_float_state.vgprs[4][0] = 0x40600000u;
+  ds_float_state.vgprs[4][1] = 0xc0200000u;
+  ds_float_state.vgprs[4][3] = 0x40e00000u;
+  ds_float_state.vgprs[5][2] = 0xdeadbeefu;
+  ds_float_state.vgprs[6][0] = 16u;
+  ds_float_state.vgprs[6][1] = 20u;
+  ds_float_state.vgprs[6][3] = 24u;
+  ds_float_state.vgprs[7][0] = 0x11223344u;
+  ds_float_state.vgprs[7][1] = 0xaabbccddu;
+  ds_float_state.vgprs[7][3] = 0x01020304u;
+  ds_float_state.vgprs[8][0] = 0x77u;
+  ds_float_state.vgprs[8][1] = 0x66u;
+  ds_float_state.vgprs[8][3] = 0xcdu;
+  ds_float_state.vgprs[10][2] = 0xdeadbeefu;
+  ds_float_state.vgprs[11][0] = 32u;
+  ds_float_state.vgprs[11][1] = 36u;
+  ds_float_state.vgprs[11][3] = 40u;
+  ds_float_state.vgprs[12][0] = 0x11223344u;
+  ds_float_state.vgprs[12][1] = 0xaabbccddu;
+  ds_float_state.vgprs[12][3] = 0x01020304u;
+  ds_float_state.vgprs[14][0] = 0x5566u;
+  ds_float_state.vgprs[14][1] = 0x1234u;
+  ds_float_state.vgprs[14][3] = 0xabcdu;
+  ds_float_state.vgprs[15][2] = 0xdeadbeefu;
+  const std::vector<DecodedInstruction> ds_float_program = {
+      DecodedInstruction::ThreeOperand("DS_WRITE_B32", InstructionOperand::Vgpr(0),
+                                       InstructionOperand::Vgpr(1),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_ADD_F32", InstructionOperand::Vgpr(0),
+                                       InstructionOperand::Vgpr(2),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_MIN_F32", InstructionOperand::Vgpr(0),
+                                       InstructionOperand::Vgpr(3),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_MAX_F32", InstructionOperand::Vgpr(0),
+                                       InstructionOperand::Vgpr(4),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_READ_B32", InstructionOperand::Vgpr(5),
+                                       InstructionOperand::Vgpr(0),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_WRITE_B32", InstructionOperand::Vgpr(6),
+                                       InstructionOperand::Vgpr(7),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_WRITE_B8", InstructionOperand::Vgpr(6),
+                                       InstructionOperand::Vgpr(8),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_READ_B32", InstructionOperand::Vgpr(10),
+                                       InstructionOperand::Vgpr(6),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_WRITE_B32", InstructionOperand::Vgpr(11),
+                                       InstructionOperand::Vgpr(12),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_WRITE_B16", InstructionOperand::Vgpr(11),
+                                       InstructionOperand::Vgpr(14),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_READ_B32", InstructionOperand::Vgpr(15),
+                                       InstructionOperand::Vgpr(11),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  std::vector<CompiledInstruction> compiled_ds_float_program;
+  if (!Expect(interpreter.CompileProgram(ds_float_program,
+                                         &compiled_ds_float_program,
+                                         &error_message),
+              error_message.c_str()) ||
+      !Expect(interpreter.ExecuteProgram(compiled_ds_float_program,
+                                         &ds_float_state, &error_message),
+              error_message.c_str()) ||
+      !Expect(ds_float_state.vgprs[5][0] == 0x40700000u,
+              "expected compiled ds float lane 0 result") ||
+      !Expect(ds_float_state.vgprs[5][1] == 0xc0200000u,
+              "expected compiled ds float lane 1 result") ||
+      !Expect(ds_float_state.vgprs[5][2] == 0xdeadbeefu,
+              "expected compiled ds float inactive lane result") ||
+      !Expect(ds_float_state.vgprs[5][3] == 0x40e00000u,
+              "expected compiled ds float lane 3 result") ||
+      !Expect(ds_float_state.vgprs[10][0] == 0x11223377u,
+              "expected compiled ds byte-write lane 0 result") ||
+      !Expect(ds_float_state.vgprs[10][1] == 0xaabbcc66u,
+              "expected compiled ds byte-write lane 1 result") ||
+      !Expect(ds_float_state.vgprs[10][2] == 0xdeadbeefu,
+              "expected compiled ds byte-write inactive lane result") ||
+      !Expect(ds_float_state.vgprs[10][3] == 0x010203cdu,
+              "expected compiled ds byte-write lane 3 result") ||
+      !Expect(ds_float_state.vgprs[15][0] == 0x11225566u,
+              "expected compiled ds half-write lane 0 result") ||
+      !Expect(ds_float_state.vgprs[15][1] == 0xaabb1234u,
+              "expected compiled ds half-write lane 1 result") ||
+      !Expect(ds_float_state.vgprs[15][2] == 0xdeadbeefu,
+              "expected compiled ds half-write inactive lane result") ||
+      !Expect(ds_float_state.vgprs[15][3] == 0x0102abcdu,
+              "expected compiled ds half-write lane 3 result")) {
     return 1;
   }
 

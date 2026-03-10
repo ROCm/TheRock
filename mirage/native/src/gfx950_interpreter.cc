@@ -1412,7 +1412,149 @@ bool IsVectorMemoryOpcode(std::string_view opcode) {
 
 bool IsDsOpcode(std::string_view opcode) {
   return opcode == "DS_WRITE_B32" || opcode == "DS_READ_B32" ||
-         opcode == "DS_ADD_U32";
+         opcode == "DS_ADD_U32" || opcode == "DS_SUB_U32" ||
+         opcode == "DS_RSUB_U32" || opcode == "DS_INC_U32" ||
+         opcode == "DS_DEC_U32" || opcode == "DS_MIN_I32" ||
+         opcode == "DS_MAX_I32" || opcode == "DS_MIN_U32" ||
+         opcode == "DS_MAX_U32" || opcode == "DS_AND_B32" ||
+         opcode == "DS_OR_B32" || opcode == "DS_XOR_B32" ||
+         opcode == "DS_ADD_F32" || opcode == "DS_MIN_F32" ||
+         opcode == "DS_MAX_F32" || opcode == "DS_WRITE_B8" ||
+         opcode == "DS_WRITE_B16";
+}
+
+std::size_t GetDsAccessSize(std::string_view opcode) {
+  if (opcode == "DS_WRITE_B8") {
+    return 1;
+  }
+  if (opcode == "DS_WRITE_B16") {
+    return 2;
+  }
+  return sizeof(std::uint32_t);
+}
+
+std::size_t GetDsAccessSize(CompiledOpcode opcode) {
+  switch (opcode) {
+    case CompiledOpcode::kDsWriteB8:
+      return 1;
+    case CompiledOpcode::kDsWriteB16:
+      return 2;
+    default:
+      return sizeof(std::uint32_t);
+  }
+}
+
+std::uint32_t EvaluateDsUpdate(std::string_view opcode,
+                               std::uint32_t old_value,
+                               std::uint32_t data_value,
+                               std::string* error_message) {
+  if (opcode == "DS_ADD_U32") {
+    return old_value + data_value;
+  }
+  if (opcode == "DS_SUB_U32") {
+    return old_value - data_value;
+  }
+  if (opcode == "DS_RSUB_U32") {
+    return data_value - old_value;
+  }
+  if (opcode == "DS_INC_U32") {
+    return old_value >= data_value ? 0u : old_value + 1u;
+  }
+  if (opcode == "DS_DEC_U32") {
+    return old_value == 0 ? data_value : old_value - 1u;
+  }
+  if (opcode == "DS_MIN_I32") {
+    return BitCast<std::uint32_t>(
+        std::min(BitCast<std::int32_t>(old_value),
+                 BitCast<std::int32_t>(data_value)));
+  }
+  if (opcode == "DS_MAX_I32") {
+    return BitCast<std::uint32_t>(
+        std::max(BitCast<std::int32_t>(old_value),
+                 BitCast<std::int32_t>(data_value)));
+  }
+  if (opcode == "DS_MIN_U32") {
+    return std::min(old_value, data_value);
+  }
+  if (opcode == "DS_MAX_U32") {
+    return std::max(old_value, data_value);
+  }
+  if (opcode == "DS_AND_B32") {
+    return old_value & data_value;
+  }
+  if (opcode == "DS_OR_B32") {
+    return old_value | data_value;
+  }
+  if (opcode == "DS_XOR_B32") {
+    return old_value ^ data_value;
+  }
+  if (opcode == "DS_ADD_F32") {
+    return BitCast<std::uint32_t>(BitCast<float>(old_value) +
+                                  BitCast<float>(data_value));
+  }
+  if (opcode == "DS_MIN_F32") {
+    return BitCast<std::uint32_t>(
+        std::fmin(BitCast<float>(old_value), BitCast<float>(data_value)));
+  }
+  if (opcode == "DS_MAX_F32") {
+    return BitCast<std::uint32_t>(
+        std::fmax(BitCast<float>(old_value), BitCast<float>(data_value)));
+  }
+
+  if (error_message != nullptr) {
+    *error_message = "unsupported ds opcode";
+  }
+  return 0;
+}
+
+std::uint32_t EvaluateDsUpdate(CompiledOpcode opcode,
+                               std::uint32_t old_value,
+                               std::uint32_t data_value,
+                               std::string* error_message) {
+  switch (opcode) {
+    case CompiledOpcode::kDsAddU32:
+      return old_value + data_value;
+    case CompiledOpcode::kDsSubU32:
+      return old_value - data_value;
+    case CompiledOpcode::kDsRsubU32:
+      return data_value - old_value;
+    case CompiledOpcode::kDsIncU32:
+      return old_value >= data_value ? 0u : old_value + 1u;
+    case CompiledOpcode::kDsDecU32:
+      return old_value == 0 ? data_value : old_value - 1u;
+    case CompiledOpcode::kDsMinI32:
+      return BitCast<std::uint32_t>(
+          std::min(BitCast<std::int32_t>(old_value),
+                   BitCast<std::int32_t>(data_value)));
+    case CompiledOpcode::kDsMaxI32:
+      return BitCast<std::uint32_t>(
+          std::max(BitCast<std::int32_t>(old_value),
+                   BitCast<std::int32_t>(data_value)));
+    case CompiledOpcode::kDsMinU32:
+      return std::min(old_value, data_value);
+    case CompiledOpcode::kDsMaxU32:
+      return std::max(old_value, data_value);
+    case CompiledOpcode::kDsAndB32:
+      return old_value & data_value;
+    case CompiledOpcode::kDsOrB32:
+      return old_value | data_value;
+    case CompiledOpcode::kDsXorB32:
+      return old_value ^ data_value;
+    case CompiledOpcode::kDsAddF32:
+      return BitCast<std::uint32_t>(BitCast<float>(old_value) +
+                                    BitCast<float>(data_value));
+    case CompiledOpcode::kDsMinF32:
+      return BitCast<std::uint32_t>(
+          std::fmin(BitCast<float>(old_value), BitCast<float>(data_value)));
+    case CompiledOpcode::kDsMaxF32:
+      return BitCast<std::uint32_t>(
+          std::fmax(BitCast<float>(old_value), BitCast<float>(data_value)));
+    default:
+      if (error_message != nullptr) {
+        *error_message = "unsupported compiled ds opcode";
+      }
+      return 0;
+  }
 }
 
 bool IsGlobalAtomicOpcode(std::string_view opcode) {
@@ -4638,6 +4780,70 @@ bool TryCompileOpcode(std::string_view opcode,
     compiled_instruction->opcode = CompiledOpcode::kDsAddU32;
     return true;
   }
+  if (opcode == "DS_SUB_U32") {
+    compiled_instruction->opcode = CompiledOpcode::kDsSubU32;
+    return true;
+  }
+  if (opcode == "DS_RSUB_U32") {
+    compiled_instruction->opcode = CompiledOpcode::kDsRsubU32;
+    return true;
+  }
+  if (opcode == "DS_INC_U32") {
+    compiled_instruction->opcode = CompiledOpcode::kDsIncU32;
+    return true;
+  }
+  if (opcode == "DS_DEC_U32") {
+    compiled_instruction->opcode = CompiledOpcode::kDsDecU32;
+    return true;
+  }
+  if (opcode == "DS_MIN_I32") {
+    compiled_instruction->opcode = CompiledOpcode::kDsMinI32;
+    return true;
+  }
+  if (opcode == "DS_MAX_I32") {
+    compiled_instruction->opcode = CompiledOpcode::kDsMaxI32;
+    return true;
+  }
+  if (opcode == "DS_MIN_U32") {
+    compiled_instruction->opcode = CompiledOpcode::kDsMinU32;
+    return true;
+  }
+  if (opcode == "DS_MAX_U32") {
+    compiled_instruction->opcode = CompiledOpcode::kDsMaxU32;
+    return true;
+  }
+  if (opcode == "DS_AND_B32") {
+    compiled_instruction->opcode = CompiledOpcode::kDsAndB32;
+    return true;
+  }
+  if (opcode == "DS_OR_B32") {
+    compiled_instruction->opcode = CompiledOpcode::kDsOrB32;
+    return true;
+  }
+  if (opcode == "DS_XOR_B32") {
+    compiled_instruction->opcode = CompiledOpcode::kDsXorB32;
+    return true;
+  }
+  if (opcode == "DS_ADD_F32") {
+    compiled_instruction->opcode = CompiledOpcode::kDsAddF32;
+    return true;
+  }
+  if (opcode == "DS_MIN_F32") {
+    compiled_instruction->opcode = CompiledOpcode::kDsMinF32;
+    return true;
+  }
+  if (opcode == "DS_MAX_F32") {
+    compiled_instruction->opcode = CompiledOpcode::kDsMaxF32;
+    return true;
+  }
+  if (opcode == "DS_WRITE_B8") {
+    compiled_instruction->opcode = CompiledOpcode::kDsWriteB8;
+    return true;
+  }
+  if (opcode == "DS_WRITE_B16") {
+    compiled_instruction->opcode = CompiledOpcode::kDsWriteB16;
+    return true;
+  }
   if (opcode == "S_BRANCH") {
     compiled_instruction->opcode = CompiledOpcode::kSBranch;
     return true;
@@ -5753,6 +5959,22 @@ bool Gfx950Interpreter::ExecuteInstruction(const CompiledInstruction& instructio
     case CompiledOpcode::kDsWriteB32:
     case CompiledOpcode::kDsReadB32:
     case CompiledOpcode::kDsAddU32:
+    case CompiledOpcode::kDsSubU32:
+    case CompiledOpcode::kDsRsubU32:
+    case CompiledOpcode::kDsIncU32:
+    case CompiledOpcode::kDsDecU32:
+    case CompiledOpcode::kDsMinI32:
+    case CompiledOpcode::kDsMaxI32:
+    case CompiledOpcode::kDsMinU32:
+    case CompiledOpcode::kDsMaxU32:
+    case CompiledOpcode::kDsAndB32:
+    case CompiledOpcode::kDsOrB32:
+    case CompiledOpcode::kDsXorB32:
+    case CompiledOpcode::kDsAddF32:
+    case CompiledOpcode::kDsMinF32:
+    case CompiledOpcode::kDsMaxF32:
+    case CompiledOpcode::kDsWriteB8:
+    case CompiledOpcode::kDsWriteB16:
       return ExecuteDsMemory(instruction, state, workgroup, error_message);
     case CompiledOpcode::kGlobalAtomicSwap:
     case CompiledOpcode::kGlobalAtomicCmpSwap:
@@ -9582,6 +9804,7 @@ bool Gfx950Interpreter::ExecuteDsMemory(const DecodedInstruction& instruction,
   }
 
   const std::uint32_t offset = offset_operand.imm32;
+  const std::size_t access_size = GetDsAccessSize(instruction.opcode);
   std::span<std::byte> lds_storage(
       state->lds_bytes.data(), state->lds_bytes.size());
   if (workgroup != nullptr && !workgroup->shared_lds.empty()) {
@@ -9601,7 +9824,7 @@ bool Gfx950Interpreter::ExecuteDsMemory(const DecodedInstruction& instruction,
     const std::uint64_t lds_address =
         static_cast<std::uint64_t>(base_address) + offset;
     if (lds_address > lds_storage.size() ||
-        sizeof(std::uint32_t) >
+        access_size >
             lds_storage.size() - static_cast<std::size_t>(lds_address)) {
       if (error_message != nullptr) {
         *error_message = "lds address out of range";
@@ -9609,9 +9832,10 @@ bool Gfx950Interpreter::ExecuteDsMemory(const DecodedInstruction& instruction,
       return false;
     }
 
-    std::uint32_t lds_value = 0;
-    std::memcpy(&lds_value, lds_storage.data() + lds_address, sizeof(lds_value));
     if (instruction.opcode == "DS_READ_B32") {
+      std::uint32_t lds_value = 0;
+      std::memcpy(&lds_value, lds_storage.data() + lds_address,
+                  sizeof(lds_value));
       if (!WriteVectorOperand(data_operand, lane_index, lds_value, state,
                               error_message)) {
         return false;
@@ -9625,10 +9849,30 @@ bool Gfx950Interpreter::ExecuteDsMemory(const DecodedInstruction& instruction,
       return false;
     }
     if (instruction.opcode == "DS_WRITE_B32") {
-      lds_value = data_value;
-    } else if (instruction.opcode == "DS_ADD_U32") {
-      lds_value += data_value;
-    } else {
+      std::memcpy(lds_storage.data() + lds_address, &data_value,
+                  sizeof(data_value));
+      continue;
+    }
+    if (instruction.opcode == "DS_WRITE_B8") {
+      lds_storage[static_cast<std::size_t>(lds_address)] =
+          static_cast<std::byte>(data_value & 0xffu);
+      continue;
+    }
+    if (instruction.opcode == "DS_WRITE_B16") {
+      const std::uint16_t truncated = static_cast<std::uint16_t>(data_value);
+      std::memcpy(lds_storage.data() + lds_address, &truncated,
+                  sizeof(truncated));
+      continue;
+    }
+
+    std::uint32_t lds_value = 0;
+    std::memcpy(&lds_value, lds_storage.data() + lds_address, sizeof(lds_value));
+    lds_value = EvaluateDsUpdate(instruction.opcode, lds_value, data_value,
+                                 error_message);
+    if (error_message != nullptr && !error_message->empty()) {
+      return false;
+    }
+    if (!IsDsOpcode(instruction.opcode)) {
       if (error_message != nullptr) {
         *error_message = "unsupported ds opcode";
       }
@@ -9673,6 +9917,7 @@ bool Gfx950Interpreter::ExecuteDsMemory(const CompiledInstruction& instruction,
   }
 
   const std::uint32_t offset = offset_operand.imm32;
+  const std::size_t access_size = GetDsAccessSize(instruction.opcode);
   if (address_operand.index >= state->vgprs.size() ||
       data_operand.index >= state->vgprs.size()) {
     if (error_message != nullptr) {
@@ -9697,7 +9942,7 @@ bool Gfx950Interpreter::ExecuteDsMemory(const CompiledInstruction& instruction,
     const std::uint64_t lds_address =
         static_cast<std::uint64_t>(base_address) + offset;
     if (lds_address > lds_storage.size() ||
-        sizeof(std::uint32_t) >
+        access_size >
             lds_storage.size() - static_cast<std::size_t>(lds_address)) {
       if (error_message != nullptr) {
         *error_message = "lds address out of range";
@@ -9705,26 +9950,38 @@ bool Gfx950Interpreter::ExecuteDsMemory(const CompiledInstruction& instruction,
       return false;
     }
 
-    std::uint32_t lds_value = 0;
-    std::memcpy(&lds_value, lds_storage.data() + lds_address, sizeof(lds_value));
     if (instruction.opcode == CompiledOpcode::kDsReadB32) {
+      std::uint32_t lds_value = 0;
+      std::memcpy(&lds_value, lds_storage.data() + lds_address,
+                  sizeof(lds_value));
       state->vgprs[data_reg][lane_index] = lds_value;
       continue;
     }
 
     const std::uint32_t data_value = state->vgprs[data_reg][lane_index];
-    switch (instruction.opcode) {
-      case CompiledOpcode::kDsWriteB32:
-        lds_value = data_value;
-        break;
-      case CompiledOpcode::kDsAddU32:
-        lds_value += data_value;
-        break;
-      default:
-        if (error_message != nullptr) {
-          *error_message = "unsupported compiled ds opcode";
-        }
-        return false;
+    if (instruction.opcode == CompiledOpcode::kDsWriteB32) {
+      std::memcpy(lds_storage.data() + lds_address, &data_value,
+                  sizeof(data_value));
+      continue;
+    }
+    if (instruction.opcode == CompiledOpcode::kDsWriteB8) {
+      lds_storage[static_cast<std::size_t>(lds_address)] =
+          static_cast<std::byte>(data_value & 0xffu);
+      continue;
+    }
+    if (instruction.opcode == CompiledOpcode::kDsWriteB16) {
+      const std::uint16_t truncated = static_cast<std::uint16_t>(data_value);
+      std::memcpy(lds_storage.data() + lds_address, &truncated,
+                  sizeof(truncated));
+      continue;
+    }
+
+    std::uint32_t lds_value = 0;
+    std::memcpy(&lds_value, lds_storage.data() + lds_address, sizeof(lds_value));
+    lds_value = EvaluateDsUpdate(instruction.opcode, lds_value, data_value,
+                                 error_message);
+    if (error_message != nullptr && !error_message->empty()) {
+      return false;
     }
     std::memcpy(lds_storage.data() + lds_address, &lds_value, sizeof(lds_value));
   }

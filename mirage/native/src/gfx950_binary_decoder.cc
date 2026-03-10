@@ -220,6 +220,19 @@ bool IsSupportedGlobalVectorMemoryOpcode(std::string_view opcode_name) {
          opcode_name == "GLOBAL_STORE_DWORDX4";
 }
 
+bool IsSupportedDsOpcode(std::string_view opcode_name) {
+  return opcode_name == "DS_WRITE_B32" || opcode_name == "DS_READ_B32" ||
+         opcode_name == "DS_ADD_U32" || opcode_name == "DS_SUB_U32" ||
+         opcode_name == "DS_RSUB_U32" || opcode_name == "DS_INC_U32" ||
+         opcode_name == "DS_DEC_U32" || opcode_name == "DS_MIN_I32" ||
+         opcode_name == "DS_MAX_I32" || opcode_name == "DS_MIN_U32" ||
+         opcode_name == "DS_MAX_U32" || opcode_name == "DS_AND_B32" ||
+         opcode_name == "DS_OR_B32" || opcode_name == "DS_XOR_B32" ||
+         opcode_name == "DS_ADD_F32" || opcode_name == "DS_MIN_F32" ||
+         opcode_name == "DS_MAX_F32" || opcode_name == "DS_WRITE_B8" ||
+         opcode_name == "DS_WRITE_B16";
+}
+
 }  // namespace
 
 bool Gfx950BinaryDecoder::DecodeInstruction(
@@ -539,8 +552,7 @@ bool Gfx950BinaryDecoder::DecodeDs(std::span<const std::uint32_t> words,
   }
 
   const std::string_view opcode_name(instruction_name);
-  if (opcode_name != "DS_WRITE_B32" && opcode_name != "DS_READ_B32" &&
-      opcode_name != "DS_ADD_U32") {
+  if (!IsSupportedDsOpcode(opcode_name)) {
     if (error_message != nullptr) {
       *error_message = "unsupported ds opcode";
     }
