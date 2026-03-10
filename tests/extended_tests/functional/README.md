@@ -103,7 +103,9 @@ class YourTest(FunctionalBase):
         log.info(f"Running {self.display_name}")
 
         # Optional: Get GPU architecture for GPU-specific behavior
-        gfx_id = self.get_gpu_architecture()
+        from github_actions_utils import get_first_gpu_architecture
+
+        gfx_id = get_first_gpu_architecture(therock_bin_dir=self.therock_bin_dir)
 
         all_results = []
         for test_case in self.test_cases:
@@ -154,12 +156,12 @@ if __name__ == "__main__":
   - Status must be: `"PASS"`, `"FAIL"`, `"ERROR"`, or `"SKIP"`
   - Base class generates detailed table and calculates num_suites automatically
 
-**Available Helper Methods (from FunctionalBase):**
+**Available Helper Methods (inherited from ExtendedTestBase):**
 
 - `self.load_config(filename)` → Load JSON config from `configs/` directory
-- `self.get_gpu_architecture()` → Get GPU gfx version (e.g., 'gfx942')
-- `self.execute_command(cmd, cwd, env, log_file_handle)` → Execute command with streaming output
+- `self.execute_command(cmd, env=env)` → Execute command with streaming output
 - `self.create_test_result(...)` → Create standardized result dictionary
+- `self.get_rocm_env()` → Get environment with LD_LIBRARY_PATH for ROCm libraries
 
 ### 2. Create Configuration File
 

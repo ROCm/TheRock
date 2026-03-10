@@ -38,15 +38,7 @@ class FunctionalBase(ExtendedTestBase):
     def create_result_tables(
         self, test_results: List[Dict[str, Any]], stats: Dict[str, Any]
     ) -> tuple:
-        """Create detailed and summary result tables.
-
-        Args:
-            test_results: List of test result dictionaries
-            stats: Test statistics dictionary
-
-        Returns:
-            tuple: (detailed_table, summary_table)
-        """
+        """Create detailed and summary result tables."""
         # Build detailed table and count suites
         detailed_table = PrettyTable()
         detailed_table.field_names = ["TestSuite", "TestCase", "Status"]
