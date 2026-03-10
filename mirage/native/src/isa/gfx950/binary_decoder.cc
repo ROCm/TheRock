@@ -232,6 +232,14 @@ bool IsSupportedDsOpcode(std::string_view opcode_name) {
          opcode_name == "DS_ADD_F32" || opcode_name == "DS_MIN_F32" ||
          opcode_name == "DS_MAX_F32" || opcode_name == "DS_WRITE_B8" ||
          opcode_name == "DS_WRITE_B16" ||
+         opcode_name == "DS_WRITE2_B32" ||
+         opcode_name == "DS_WRITE2ST64_B32" ||
+         opcode_name == "DS_READ2_B32" ||
+         opcode_name == "DS_READ2ST64_B32" ||
+         opcode_name == "DS_READ_I8" ||
+         opcode_name == "DS_READ_U8" ||
+         opcode_name == "DS_READ_I16" ||
+         opcode_name == "DS_READ_U16" ||
          opcode_name == "DS_ADD_RTN_U32" ||
          opcode_name == "DS_SUB_RTN_U32" ||
          opcode_name == "DS_RSUB_RTN_U32" ||
@@ -247,6 +255,21 @@ bool IsSupportedDsOpcode(std::string_view opcode_name) {
          opcode_name == "DS_ADD_RTN_F32" ||
          opcode_name == "DS_MIN_RTN_F32" ||
          opcode_name == "DS_MAX_RTN_F32";
+}
+
+bool IsDsPairWriteOpcode(std::string_view opcode_name) {
+  return opcode_name == "DS_WRITE2_B32" ||
+         opcode_name == "DS_WRITE2ST64_B32";
+}
+
+bool IsDsPairReadOpcode(std::string_view opcode_name) {
+  return opcode_name == "DS_READ2_B32" ||
+         opcode_name == "DS_READ2ST64_B32";
+}
+
+bool IsDsNarrowReadOpcode(std::string_view opcode_name) {
+  return opcode_name == "DS_READ_I8" || opcode_name == "DS_READ_U8" ||
+         opcode_name == "DS_READ_I16" || opcode_name == "DS_READ_U16";
 }
 
 bool IsDsReturnOpcode(std::string_view opcode_name) {
@@ -593,7 +616,12 @@ bool Gfx950BinaryDecoder::DecodeDs(std::span<const std::uint32_t> words,
     return false;
   }
 
-  if (ExtractBits(instruction_word, 8, 8) != 0) {
+  const InstructionOperand offset0 = InstructionOperand::Imm32(
+      static_cast<std::uint32_t>(ExtractBits(instruction_word, 0, 8)));
+  const InstructionOperand offset1 = InstructionOperand::Imm32(
+      static_cast<std::uint32_t>(ExtractBits(instruction_word, 8, 8)));
+  if (!IsDsPairWriteOpcode(opcode_name) && !IsDsPairReadOpcode(opcode_name) &&
+      offset1.imm32 != 0) {
     if (error_message != nullptr) {
       *error_message = "offset1 ds forms are not implemented";
     }
@@ -612,10 +640,32 @@ bool Gfx950BinaryDecoder::DecodeDs(std::span<const std::uint32_t> words,
           error_message)) {
     return false;
   }
-  const InstructionOperand offset = InstructionOperand::Imm32(
-      static_cast<std::uint32_t>(ExtractBits(instruction_word, 0, 8)));
 
-  if (opcode_name == "DS_READ_B32") {
+  if (IsDsPairWriteOpcode(opcode_name)) {
+    InstructionOperand data0;
+    if (!DecodeVectorRegisterSource(
+            static_cast<std::uint32_t>(ExtractBits(instruction_word, 40, 8)),
+            &data0, error_message)) {
+      return false;
+    }
+    InstructionOperand data1;
+    if (!DecodeVectorRegisterSource(
+            static_cast<std::uint32_t>(ExtractBits(instruction_word, 48, 8)),
+            &data1, error_message)) {
+      return false;
+    }
+    *instruction = DecodedInstruction::FiveOperand(instruction_name, addr, data0,
+                                                   data1, offset0, offset1);
+  } else if (IsDsPairReadOpcode(opcode_name)) {
+    InstructionOperand dst;
+    if (!DecodeVectorDestination(
+            static_cast<std::uint32_t>(ExtractBits(instruction_word, 56, 8)),
+            &dst, error_message)) {
+      return false;
+    }
+    *instruction = DecodedInstruction::FourOperand(instruction_name, dst, addr,
+                                                   offset0, offset1);
+  } else if (opcode_name == "DS_READ_B32" || IsDsNarrowReadOpcode(opcode_name)) {
     InstructionOperand dst;
     if (!DecodeVectorDestination(
             static_cast<std::uint32_t>(ExtractBits(instruction_word, 56, 8)),
@@ -623,7 +673,7 @@ bool Gfx950BinaryDecoder::DecodeDs(std::span<const std::uint32_t> words,
       return false;
     }
     *instruction = DecodedInstruction::ThreeOperand(instruction_name, dst, addr,
-                                                    offset);
+                                                    offset0);
   } else if (IsDsReturnOpcode(opcode_name)) {
     InstructionOperand dst;
     if (!DecodeVectorDestination(
@@ -638,7 +688,7 @@ bool Gfx950BinaryDecoder::DecodeDs(std::span<const std::uint32_t> words,
       return false;
     }
     *instruction = DecodedInstruction::FourOperand(instruction_name, dst, addr,
-                                                   data, offset);
+                                                   data, offset0);
   } else {
     InstructionOperand data;
     if (!DecodeVectorRegisterSource(
@@ -647,7 +697,7 @@ bool Gfx950BinaryDecoder::DecodeDs(std::span<const std::uint32_t> words,
       return false;
     }
     *instruction = DecodedInstruction::ThreeOperand(instruction_name, addr, data,
-                                                    offset);
+                                                    offset0);
   }
 
   *words_consumed = 2;

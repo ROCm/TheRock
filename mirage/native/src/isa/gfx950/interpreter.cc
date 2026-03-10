@@ -1549,7 +1549,11 @@ bool IsDsOpcode(std::string_view opcode) {
          opcode == "DS_OR_B32" || opcode == "DS_XOR_B32" ||
          opcode == "DS_ADD_F32" || opcode == "DS_MIN_F32" ||
          opcode == "DS_MAX_F32" || opcode == "DS_WRITE_B8" ||
-         opcode == "DS_WRITE_B16" ||
+         opcode == "DS_WRITE_B16" || opcode == "DS_WRITE2_B32" ||
+         opcode == "DS_WRITE2ST64_B32" || opcode == "DS_READ2_B32" ||
+         opcode == "DS_READ2ST64_B32" || opcode == "DS_READ_I8" ||
+         opcode == "DS_READ_U8" || opcode == "DS_READ_I16" ||
+         opcode == "DS_READ_U16" ||
          opcode == "DS_ADD_RTN_U32" || opcode == "DS_SUB_RTN_U32" ||
          opcode == "DS_RSUB_RTN_U32" || opcode == "DS_INC_RTN_U32" ||
          opcode == "DS_DEC_RTN_U32" || opcode == "DS_MIN_RTN_I32" ||
@@ -1558,6 +1562,23 @@ bool IsDsOpcode(std::string_view opcode) {
          opcode == "DS_OR_RTN_B32" || opcode == "DS_XOR_RTN_B32" ||
          opcode == "DS_ADD_RTN_F32" || opcode == "DS_MIN_RTN_F32" ||
          opcode == "DS_MAX_RTN_F32";
+}
+
+bool IsDsPairWriteOpcode(std::string_view opcode) {
+  return opcode == "DS_WRITE2_B32" || opcode == "DS_WRITE2ST64_B32";
+}
+
+bool IsDsPairReadOpcode(std::string_view opcode) {
+  return opcode == "DS_READ2_B32" || opcode == "DS_READ2ST64_B32";
+}
+
+bool IsDsNarrowReadOpcode(std::string_view opcode) {
+  return opcode == "DS_READ_I8" || opcode == "DS_READ_U8" ||
+         opcode == "DS_READ_I16" || opcode == "DS_READ_U16";
+}
+
+bool IsDsSignedReadOpcode(std::string_view opcode) {
+  return opcode == "DS_READ_I8" || opcode == "DS_READ_I16";
 }
 
 bool IsDsReturnOpcode(std::string_view opcode) {
@@ -1572,10 +1593,12 @@ bool IsDsReturnOpcode(std::string_view opcode) {
 }
 
 std::size_t GetDsAccessSize(std::string_view opcode) {
-  if (opcode == "DS_WRITE_B8") {
+  if (opcode == "DS_WRITE_B8" || opcode == "DS_READ_I8" ||
+      opcode == "DS_READ_U8") {
     return 1;
   }
-  if (opcode == "DS_WRITE_B16") {
+  if (opcode == "DS_WRITE_B16" || opcode == "DS_READ_I16" ||
+      opcode == "DS_READ_U16") {
     return 2;
   }
   return sizeof(std::uint32_t);
@@ -1584,12 +1607,50 @@ std::size_t GetDsAccessSize(std::string_view opcode) {
 std::size_t GetDsAccessSize(CompiledOpcode opcode) {
   switch (opcode) {
     case CompiledOpcode::kDsWriteB8:
+    case CompiledOpcode::kDsReadI8:
+    case CompiledOpcode::kDsReadU8:
       return 1;
     case CompiledOpcode::kDsWriteB16:
+    case CompiledOpcode::kDsReadI16:
+    case CompiledOpcode::kDsReadU16:
       return 2;
     default:
       return sizeof(std::uint32_t);
   }
+}
+
+bool IsDsPairWriteOpcode(CompiledOpcode opcode) {
+  return opcode == CompiledOpcode::kDsWrite2B32 ||
+         opcode == CompiledOpcode::kDsWrite2St64B32;
+}
+
+bool IsDsPairReadOpcode(CompiledOpcode opcode) {
+  return opcode == CompiledOpcode::kDsRead2B32 ||
+         opcode == CompiledOpcode::kDsRead2St64B32;
+}
+
+bool IsDsNarrowReadOpcode(CompiledOpcode opcode) {
+  return opcode == CompiledOpcode::kDsReadI8 ||
+         opcode == CompiledOpcode::kDsReadU8 ||
+         opcode == CompiledOpcode::kDsReadI16 ||
+         opcode == CompiledOpcode::kDsReadU16;
+}
+
+bool IsDsSignedReadOpcode(CompiledOpcode opcode) {
+  return opcode == CompiledOpcode::kDsReadI8 ||
+         opcode == CompiledOpcode::kDsReadI16;
+}
+
+std::uint32_t GetDsPairOffsetScale(std::string_view opcode) {
+  return opcode == "DS_WRITE2ST64_B32" || opcode == "DS_READ2ST64_B32" ? 256u
+                                                                        : 4u;
+}
+
+std::uint32_t GetDsPairOffsetScale(CompiledOpcode opcode) {
+  return opcode == CompiledOpcode::kDsWrite2St64B32 ||
+                 opcode == CompiledOpcode::kDsRead2St64B32
+             ? 256u
+             : 4u;
 }
 
 bool IsDsReturnOpcode(CompiledOpcode opcode) {
@@ -1699,6 +1760,122 @@ CompiledOpcode GetDsUpdateOpcode(CompiledOpcode opcode) {
     default:
       return opcode;
   }
+}
+
+bool ComputeDsAddress(std::uint32_t base_address,
+                      std::uint32_t offset,
+                      std::uint32_t scale,
+                      std::uint64_t* lds_address,
+                      std::string* error_message) {
+  if (lds_address == nullptr) {
+    if (error_message != nullptr) {
+      *error_message = "ds address output must not be null";
+    }
+    return false;
+  }
+
+  const std::uint64_t scaled_offset =
+      static_cast<std::uint64_t>(offset) * static_cast<std::uint64_t>(scale);
+  if (scaled_offset >
+      std::numeric_limits<std::uint64_t>::max() -
+          static_cast<std::uint64_t>(base_address)) {
+    if (error_message != nullptr) {
+      *error_message = "lds address overflow";
+    }
+    return false;
+  }
+  *lds_address = static_cast<std::uint64_t>(base_address) + scaled_offset;
+  return true;
+}
+
+bool IsLdsAccessInBounds(std::span<std::byte> lds_storage,
+                         std::uint64_t lds_address,
+                         std::size_t access_size,
+                         std::string* error_message) {
+  if (lds_address > lds_storage.size() ||
+      access_size > lds_storage.size() - static_cast<std::size_t>(lds_address)) {
+    if (error_message != nullptr) {
+      *error_message = "lds address out of range";
+    }
+    return false;
+  }
+  return true;
+}
+
+bool ReadLdsValue(std::span<std::byte> lds_storage,
+                  std::uint64_t lds_address,
+                  std::size_t access_size,
+                  bool sign_extend,
+                  std::uint32_t* value,
+                  std::string* error_message) {
+  if (value == nullptr) {
+    if (error_message != nullptr) {
+      *error_message = "lds read output must not be null";
+    }
+    return false;
+  }
+  if (!IsLdsAccessInBounds(lds_storage, lds_address, access_size, error_message)) {
+    return false;
+  }
+
+  if (access_size == 1) {
+    std::uint8_t raw_value = 0;
+    std::memcpy(&raw_value, lds_storage.data() + lds_address, sizeof(raw_value));
+    *value = sign_extend
+                 ? static_cast<std::uint32_t>(
+                       static_cast<std::int32_t>(static_cast<std::int8_t>(raw_value)))
+                 : static_cast<std::uint32_t>(raw_value);
+    return true;
+  }
+  if (access_size == 2) {
+    std::uint16_t raw_value = 0;
+    std::memcpy(&raw_value, lds_storage.data() + lds_address, sizeof(raw_value));
+    *value =
+        sign_extend
+            ? static_cast<std::uint32_t>(static_cast<std::int32_t>(
+                  static_cast<std::int16_t>(raw_value)))
+            : static_cast<std::uint32_t>(raw_value);
+    return true;
+  }
+  if (access_size == sizeof(std::uint32_t)) {
+    std::memcpy(value, lds_storage.data() + lds_address, sizeof(*value));
+    return true;
+  }
+
+  if (error_message != nullptr) {
+    *error_message = "unsupported ds access size";
+  }
+  return false;
+}
+
+bool WriteLdsValue(std::span<std::byte> lds_storage,
+                   std::uint64_t lds_address,
+                   std::size_t access_size,
+                   std::uint32_t value,
+                   std::string* error_message) {
+  if (!IsLdsAccessInBounds(lds_storage, lds_address, access_size, error_message)) {
+    return false;
+  }
+
+  if (access_size == 1) {
+    const std::uint8_t truncated = static_cast<std::uint8_t>(value);
+    std::memcpy(lds_storage.data() + lds_address, &truncated, sizeof(truncated));
+    return true;
+  }
+  if (access_size == 2) {
+    const std::uint16_t truncated = static_cast<std::uint16_t>(value);
+    std::memcpy(lds_storage.data() + lds_address, &truncated, sizeof(truncated));
+    return true;
+  }
+  if (access_size == sizeof(std::uint32_t)) {
+    std::memcpy(lds_storage.data() + lds_address, &value, sizeof(value));
+    return true;
+  }
+
+  if (error_message != nullptr) {
+    *error_message = "unsupported ds access size";
+  }
+  return false;
 }
 
 std::uint32_t EvaluateDsUpdate(std::string_view opcode,
@@ -5185,6 +5362,38 @@ bool TryCompileOpcode(std::string_view opcode,
     compiled_instruction->opcode = CompiledOpcode::kDsWriteB16;
     return true;
   }
+  if (opcode == "DS_WRITE2_B32") {
+    compiled_instruction->opcode = CompiledOpcode::kDsWrite2B32;
+    return true;
+  }
+  if (opcode == "DS_WRITE2ST64_B32") {
+    compiled_instruction->opcode = CompiledOpcode::kDsWrite2St64B32;
+    return true;
+  }
+  if (opcode == "DS_READ2_B32") {
+    compiled_instruction->opcode = CompiledOpcode::kDsRead2B32;
+    return true;
+  }
+  if (opcode == "DS_READ2ST64_B32") {
+    compiled_instruction->opcode = CompiledOpcode::kDsRead2St64B32;
+    return true;
+  }
+  if (opcode == "DS_READ_I8") {
+    compiled_instruction->opcode = CompiledOpcode::kDsReadI8;
+    return true;
+  }
+  if (opcode == "DS_READ_U8") {
+    compiled_instruction->opcode = CompiledOpcode::kDsReadU8;
+    return true;
+  }
+  if (opcode == "DS_READ_I16") {
+    compiled_instruction->opcode = CompiledOpcode::kDsReadI16;
+    return true;
+  }
+  if (opcode == "DS_READ_U16") {
+    compiled_instruction->opcode = CompiledOpcode::kDsReadU16;
+    return true;
+  }
   if (opcode == "DS_ADD_RTN_U32") {
     compiled_instruction->opcode = CompiledOpcode::kDsAddRtnU32;
     return true;
@@ -6406,6 +6615,14 @@ bool Gfx950Interpreter::ExecuteInstruction(const CompiledInstruction& instructio
     case CompiledOpcode::kDsMaxF32:
     case CompiledOpcode::kDsWriteB8:
     case CompiledOpcode::kDsWriteB16:
+    case CompiledOpcode::kDsWrite2B32:
+    case CompiledOpcode::kDsWrite2St64B32:
+    case CompiledOpcode::kDsRead2B32:
+    case CompiledOpcode::kDsRead2St64B32:
+    case CompiledOpcode::kDsReadI8:
+    case CompiledOpcode::kDsReadU8:
+    case CompiledOpcode::kDsReadI16:
+    case CompiledOpcode::kDsReadU16:
     case CompiledOpcode::kDsAddRtnU32:
     case CompiledOpcode::kDsSubRtnU32:
     case CompiledOpcode::kDsRsubRtnU32:
@@ -10324,43 +10541,85 @@ bool Gfx950Interpreter::ExecuteDsMemory(const DecodedInstruction& instruction,
                                         WaveExecutionState* state,
                                         const WorkgroupExecutionContext* workgroup,
                                         std::string* error_message) const {
-  const bool is_read = instruction.opcode == "DS_READ_B32";
+  const bool is_pair_write = IsDsPairWriteOpcode(instruction.opcode);
+  const bool is_pair_read = IsDsPairReadOpcode(instruction.opcode);
+  const bool is_narrow_read = IsDsNarrowReadOpcode(instruction.opcode);
   const bool is_return = IsDsReturnOpcode(instruction.opcode);
-  if (!ValidateOperandCount(instruction, is_return ? 4 : 3, error_message)) {
+  const bool is_read =
+      instruction.opcode == "DS_READ_B32" || is_pair_read || is_narrow_read;
+  const std::uint8_t expected_operands =
+      is_pair_write ? 5 : (is_pair_read ? 4 : (is_return ? 4 : 3));
+  if (!ValidateOperandCount(instruction, expected_operands, error_message)) {
     return false;
   }
 
-  const InstructionOperand* return_operand =
-      is_read || is_return ? &instruction.operands[0] : nullptr;
-  const InstructionOperand& address_operand =
-      instruction.operands[return_operand != nullptr ? 1 : 0];
-  const InstructionOperand& offset_operand =
-      instruction.operands[is_return ? 3 : 2];
-  const InstructionOperand& data_operand =
-      instruction.operands[is_read ? 0 : (is_return ? 2 : 1)];
+  const InstructionOperand* destination_operand = nullptr;
+  const InstructionOperand* address_operand = nullptr;
+  const InstructionOperand* data_operand = nullptr;
+  const InstructionOperand* second_data_operand = nullptr;
+  const InstructionOperand* offset0_operand = nullptr;
+  const InstructionOperand* offset1_operand = nullptr;
+  if (is_pair_write) {
+    address_operand = &instruction.operands[0];
+    data_operand = &instruction.operands[1];
+    second_data_operand = &instruction.operands[2];
+    offset0_operand = &instruction.operands[3];
+    offset1_operand = &instruction.operands[4];
+  } else if (is_pair_read) {
+    destination_operand = &instruction.operands[0];
+    address_operand = &instruction.operands[1];
+    offset0_operand = &instruction.operands[2];
+    offset1_operand = &instruction.operands[3];
+  } else if (is_return) {
+    destination_operand = &instruction.operands[0];
+    address_operand = &instruction.operands[1];
+    data_operand = &instruction.operands[2];
+    offset0_operand = &instruction.operands[3];
+  } else if (is_read) {
+    destination_operand = &instruction.operands[0];
+    address_operand = &instruction.operands[1];
+    offset0_operand = &instruction.operands[2];
+  } else {
+    address_operand = &instruction.operands[0];
+    data_operand = &instruction.operands[1];
+    offset0_operand = &instruction.operands[2];
+  }
 
-  if (address_operand.kind != OperandKind::kVgpr ||
-      data_operand.kind != OperandKind::kVgpr) {
+  if (address_operand->kind != OperandKind::kVgpr ||
+      (data_operand != nullptr && data_operand->kind != OperandKind::kVgpr) ||
+      (second_data_operand != nullptr &&
+       second_data_operand->kind != OperandKind::kVgpr)) {
     if (error_message != nullptr) {
       *error_message = "ds operands must use VGPRs";
     }
     return false;
   }
-  if (return_operand != nullptr && return_operand->kind != OperandKind::kVgpr) {
+  if (destination_operand != nullptr &&
+      destination_operand->kind != OperandKind::kVgpr) {
     if (error_message != nullptr) {
-      *error_message = "ds return destination must use a VGPR";
+      *error_message = "ds destination must use a VGPR";
     }
     return false;
   }
-  if (offset_operand.kind != OperandKind::kImm32) {
+  if (offset0_operand->kind != OperandKind::kImm32 ||
+      (offset1_operand != nullptr && offset1_operand->kind != OperandKind::kImm32)) {
     if (error_message != nullptr) {
       *error_message = "ds offset must be an immediate";
     }
     return false;
   }
+  if (is_pair_read &&
+      destination_operand->index + 1u >= state->vgprs.size()) {
+    if (error_message != nullptr) {
+      *error_message = "ds read2 destination pair is out of bounds";
+    }
+    return false;
+  }
 
-  const std::uint32_t offset = offset_operand.imm32;
   const std::size_t access_size = GetDsAccessSize(instruction.opcode);
+  const bool sign_extend = IsDsSignedReadOpcode(instruction.opcode);
+  const std::uint32_t offset_scale =
+      is_pair_write || is_pair_read ? GetDsPairOffsetScale(instruction.opcode) : 1u;
   std::span<std::byte> lds_storage(
       state->lds_bytes.data(), state->lds_bytes.size());
   if (workgroup != nullptr && !workgroup->shared_lds.empty()) {
@@ -10373,26 +10632,69 @@ bool Gfx950Interpreter::ExecuteDsMemory(const DecodedInstruction& instruction,
     }
 
     const std::uint32_t base_address =
-        ReadVectorOperand(address_operand, *state, lane_index, error_message);
+        ReadVectorOperand(*address_operand, *state, lane_index, error_message);
     if (error_message != nullptr && !error_message->empty()) {
       return false;
     }
-    const std::uint64_t lds_address =
-        static_cast<std::uint64_t>(base_address) + offset;
-    if (lds_address > lds_storage.size() ||
-        access_size >
-            lds_storage.size() - static_cast<std::size_t>(lds_address)) {
-      if (error_message != nullptr) {
-        *error_message = "lds address out of range";
-      }
+    std::uint64_t lds_address0 = 0;
+    if (!ComputeDsAddress(base_address, offset0_operand->imm32, offset_scale,
+                          &lds_address0, error_message)) {
+      return false;
+    }
+    std::uint64_t lds_address1 = 0;
+    if ((is_pair_write || is_pair_read) &&
+        !ComputeDsAddress(base_address, offset1_operand->imm32, offset_scale,
+                          &lds_address1, error_message)) {
       return false;
     }
 
-    if (instruction.opcode == "DS_READ_B32") {
+    if (is_pair_write) {
+      const std::uint32_t data_value0 =
+          ReadVectorOperand(*data_operand, *state, lane_index, error_message);
+      if (error_message != nullptr && !error_message->empty()) {
+        return false;
+      }
+      const std::uint32_t data_value1 = ReadVectorOperand(
+          *second_data_operand, *state, lane_index, error_message);
+      if (error_message != nullptr && !error_message->empty()) {
+        return false;
+      }
+      if (!WriteLdsValue(lds_storage, lds_address0, access_size, data_value0,
+                         error_message) ||
+          !WriteLdsValue(lds_storage, lds_address1, access_size, data_value1,
+                         error_message)) {
+        return false;
+      }
+      continue;
+    }
+
+    if (is_pair_read) {
+      std::uint32_t lds_value0 = 0;
+      std::uint32_t lds_value1 = 0;
+      if (!ReadLdsValue(lds_storage, lds_address0, access_size, false,
+                        &lds_value0, error_message) ||
+          !ReadLdsValue(lds_storage, lds_address1, access_size, false,
+                        &lds_value1, error_message)) {
+        return false;
+      }
+      if (!WriteVectorOperand(*destination_operand, lane_index, lds_value0, state,
+                              error_message)) {
+        return false;
+      }
+      const InstructionOperand second_destination = InstructionOperand::Vgpr(
+          static_cast<std::uint16_t>(destination_operand->index + 1u));
+      if (!WriteVectorOperand(second_destination, lane_index, lds_value1, state,
+                              error_message)) {
+        return false;
+      }
+      continue;
+    }
+
+    if (is_read) {
       std::uint32_t lds_value = 0;
-      std::memcpy(&lds_value, lds_storage.data() + lds_address,
-                  sizeof(lds_value));
-      if (!WriteVectorOperand(*return_operand, lane_index, lds_value, state,
+      if (!ReadLdsValue(lds_storage, lds_address0, access_size, sign_extend,
+                        &lds_value, error_message) ||
+          !WriteVectorOperand(*destination_operand, lane_index, lds_value, state,
                               error_message)) {
         return false;
       }
@@ -10400,31 +10702,26 @@ bool Gfx950Interpreter::ExecuteDsMemory(const DecodedInstruction& instruction,
     }
 
     const std::uint32_t data_value =
-        ReadVectorOperand(data_operand, *state, lane_index, error_message);
+        ReadVectorOperand(*data_operand, *state, lane_index, error_message);
     if (error_message != nullptr && !error_message->empty()) {
       return false;
     }
-    if (instruction.opcode == "DS_WRITE_B32") {
-      std::memcpy(lds_storage.data() + lds_address, &data_value,
-                  sizeof(data_value));
-      continue;
-    }
-    if (instruction.opcode == "DS_WRITE_B8") {
-      lds_storage[static_cast<std::size_t>(lds_address)] =
-          static_cast<std::byte>(data_value & 0xffu);
-      continue;
-    }
-    if (instruction.opcode == "DS_WRITE_B16") {
-      const std::uint16_t truncated = static_cast<std::uint16_t>(data_value);
-      std::memcpy(lds_storage.data() + lds_address, &truncated,
-                  sizeof(truncated));
+    if (instruction.opcode == "DS_WRITE_B32" || instruction.opcode == "DS_WRITE_B8" ||
+        instruction.opcode == "DS_WRITE_B16") {
+      if (!WriteLdsValue(lds_storage, lds_address0, access_size, data_value,
+                         error_message)) {
+        return false;
+      }
       continue;
     }
 
     std::uint32_t lds_value = 0;
-    std::memcpy(&lds_value, lds_storage.data() + lds_address, sizeof(lds_value));
+    if (!ReadLdsValue(lds_storage, lds_address0, access_size, false, &lds_value,
+                      error_message)) {
+      return false;
+    }
     if (is_return &&
-        !WriteVectorOperand(*return_operand, lane_index, lds_value, state,
+        !WriteVectorOperand(*destination_operand, lane_index, lds_value, state,
                             error_message)) {
       return false;
     }
@@ -10434,13 +10731,10 @@ bool Gfx950Interpreter::ExecuteDsMemory(const DecodedInstruction& instruction,
     if (error_message != nullptr && !error_message->empty()) {
       return false;
     }
-    if (!IsDsOpcode(instruction.opcode)) {
-      if (error_message != nullptr) {
-        *error_message = "unsupported ds opcode";
-      }
+    if (!WriteLdsValue(lds_storage, lds_address0, access_size, lds_value,
+                       error_message)) {
       return false;
     }
-    std::memcpy(lds_storage.data() + lds_address, &lds_value, sizeof(lds_value));
   }
 
   if (error_message != nullptr) {
@@ -10453,60 +10747,106 @@ bool Gfx950Interpreter::ExecuteDsMemory(const CompiledInstruction& instruction,
                                         WaveExecutionState* state,
                                         const WorkgroupExecutionContext* workgroup,
                                         std::string* error_message) const {
-  const bool is_read = instruction.opcode == CompiledOpcode::kDsReadB32;
+  const bool is_pair_write = IsDsPairWriteOpcode(instruction.opcode);
+  const bool is_pair_read = IsDsPairReadOpcode(instruction.opcode);
+  const bool is_narrow_read = IsDsNarrowReadOpcode(instruction.opcode);
   const bool is_return = IsDsReturnOpcode(instruction.opcode);
-  if (!ValidateOperandCount(instruction, is_return ? 4 : 3, error_message)) {
+  const bool is_read = instruction.opcode == CompiledOpcode::kDsReadB32 ||
+                       is_pair_read || is_narrow_read;
+  const std::uint8_t expected_operands =
+      is_pair_write ? 5 : (is_pair_read ? 4 : (is_return ? 4 : 3));
+  if (!ValidateOperandCount(instruction, expected_operands, error_message)) {
     return false;
   }
 
-  const InstructionOperand* return_operand =
-      is_read || is_return ? &instruction.operands[0] : nullptr;
-  const InstructionOperand& address_operand =
-      instruction.operands[return_operand != nullptr ? 1 : 0];
-  const InstructionOperand& offset_operand =
-      instruction.operands[is_return ? 3 : 2];
-  const InstructionOperand& data_operand =
-      instruction.operands[is_read ? 0 : (is_return ? 2 : 1)];
+  const InstructionOperand* destination_operand = nullptr;
+  const InstructionOperand* address_operand = nullptr;
+  const InstructionOperand* data_operand = nullptr;
+  const InstructionOperand* second_data_operand = nullptr;
+  const InstructionOperand* offset0_operand = nullptr;
+  const InstructionOperand* offset1_operand = nullptr;
+  if (is_pair_write) {
+    address_operand = &instruction.operands[0];
+    data_operand = &instruction.operands[1];
+    second_data_operand = &instruction.operands[2];
+    offset0_operand = &instruction.operands[3];
+    offset1_operand = &instruction.operands[4];
+  } else if (is_pair_read) {
+    destination_operand = &instruction.operands[0];
+    address_operand = &instruction.operands[1];
+    offset0_operand = &instruction.operands[2];
+    offset1_operand = &instruction.operands[3];
+  } else if (is_return) {
+    destination_operand = &instruction.operands[0];
+    address_operand = &instruction.operands[1];
+    data_operand = &instruction.operands[2];
+    offset0_operand = &instruction.operands[3];
+  } else if (is_read) {
+    destination_operand = &instruction.operands[0];
+    address_operand = &instruction.operands[1];
+    offset0_operand = &instruction.operands[2];
+  } else {
+    address_operand = &instruction.operands[0];
+    data_operand = &instruction.operands[1];
+    offset0_operand = &instruction.operands[2];
+  }
 
-  if (address_operand.kind != OperandKind::kVgpr ||
-      data_operand.kind != OperandKind::kVgpr) {
+  if (address_operand->kind != OperandKind::kVgpr ||
+      (data_operand != nullptr && data_operand->kind != OperandKind::kVgpr) ||
+      (second_data_operand != nullptr &&
+       second_data_operand->kind != OperandKind::kVgpr)) {
     if (error_message != nullptr) {
       *error_message = "ds operands must use VGPRs";
     }
     return false;
   }
-  if (return_operand != nullptr && return_operand->kind != OperandKind::kVgpr) {
+  if (destination_operand != nullptr &&
+      destination_operand->kind != OperandKind::kVgpr) {
     if (error_message != nullptr) {
-      *error_message = "ds return destination must use a VGPR";
+      *error_message = "ds destination must use a VGPR";
     }
     return false;
   }
-  if (offset_operand.kind != OperandKind::kImm32) {
+  if (offset0_operand->kind != OperandKind::kImm32 ||
+      (offset1_operand != nullptr && offset1_operand->kind != OperandKind::kImm32)) {
     if (error_message != nullptr) {
       *error_message = "ds offset must be an immediate";
     }
     return false;
   }
 
-  const std::uint32_t offset = offset_operand.imm32;
   const std::size_t access_size = GetDsAccessSize(instruction.opcode);
-  if (address_operand.index >= state->vgprs.size() ||
-      data_operand.index >= state->vgprs.size()) {
+  const bool sign_extend = IsDsSignedReadOpcode(instruction.opcode);
+  const std::uint32_t offset_scale =
+      is_pair_write || is_pair_read ? GetDsPairOffsetScale(instruction.opcode) : 1u;
+  if (address_operand->index >= state->vgprs.size() ||
+      (data_operand != nullptr && data_operand->index >= state->vgprs.size()) ||
+      (second_data_operand != nullptr &&
+       second_data_operand->index >= state->vgprs.size())) {
     if (error_message != nullptr) {
       *error_message = "ds register index out of bounds";
     }
     return false;
   }
-  if (return_operand != nullptr && return_operand->index >= state->vgprs.size()) {
+  if (destination_operand != nullptr &&
+      destination_operand->index >= state->vgprs.size()) {
     if (error_message != nullptr) {
-      *error_message = "ds return register index out of bounds";
+      *error_message = "ds destination register index out of bounds";
     }
     return false;
   }
-  const std::uint16_t address_reg = address_operand.index;
-  const std::uint16_t data_reg = data_operand.index;
-  const std::uint16_t return_reg =
-      return_operand != nullptr ? return_operand->index : 0;
+  if (is_pair_read && destination_operand->index + 1u >= state->vgprs.size()) {
+    if (error_message != nullptr) {
+      *error_message = "ds read2 destination pair is out of bounds";
+    }
+    return false;
+  }
+  const std::uint16_t address_reg = address_operand->index;
+  const std::uint16_t data_reg = data_operand != nullptr ? data_operand->index : 0;
+  const std::uint16_t data_reg1 =
+      second_data_operand != nullptr ? second_data_operand->index : 0;
+  const std::uint16_t destination_reg =
+      destination_operand != nullptr ? destination_operand->index : 0;
   std::span<std::byte> lds_storage(
       state->lds_bytes.data(), state->lds_bytes.size());
   if (workgroup != nullptr && !workgroup->shared_lds.empty()) {
@@ -10519,54 +10859,80 @@ bool Gfx950Interpreter::ExecuteDsMemory(const CompiledInstruction& instruction,
     }
 
     const std::uint32_t base_address = state->vgprs[address_reg][lane_index];
-    const std::uint64_t lds_address =
-        static_cast<std::uint64_t>(base_address) + offset;
-    if (lds_address > lds_storage.size() ||
-        access_size >
-            lds_storage.size() - static_cast<std::size_t>(lds_address)) {
-      if (error_message != nullptr) {
-        *error_message = "lds address out of range";
-      }
+    std::uint64_t lds_address0 = 0;
+    if (!ComputeDsAddress(base_address, offset0_operand->imm32, offset_scale,
+                          &lds_address0, error_message)) {
+      return false;
+    }
+    std::uint64_t lds_address1 = 0;
+    if ((is_pair_write || is_pair_read) &&
+        !ComputeDsAddress(base_address, offset1_operand->imm32, offset_scale,
+                          &lds_address1, error_message)) {
       return false;
     }
 
-    if (instruction.opcode == CompiledOpcode::kDsReadB32) {
+    if (is_pair_write) {
+      if (!WriteLdsValue(lds_storage, lds_address0, access_size,
+                         state->vgprs[data_reg][lane_index], error_message) ||
+          !WriteLdsValue(lds_storage, lds_address1, access_size,
+                         state->vgprs[data_reg1][lane_index], error_message)) {
+        return false;
+      }
+      continue;
+    }
+
+    if (is_pair_read) {
+      std::uint32_t lds_value0 = 0;
+      std::uint32_t lds_value1 = 0;
+      if (!ReadLdsValue(lds_storage, lds_address0, access_size, false,
+                        &lds_value0, error_message) ||
+          !ReadLdsValue(lds_storage, lds_address1, access_size, false,
+                        &lds_value1, error_message)) {
+        return false;
+      }
+      state->vgprs[destination_reg][lane_index] = lds_value0;
+      state->vgprs[destination_reg + 1u][lane_index] = lds_value1;
+      continue;
+    }
+
+    if (is_read) {
       std::uint32_t lds_value = 0;
-      std::memcpy(&lds_value, lds_storage.data() + lds_address,
-                  sizeof(lds_value));
-      state->vgprs[return_reg][lane_index] = lds_value;
+      if (!ReadLdsValue(lds_storage, lds_address0, access_size, sign_extend,
+                        &lds_value, error_message)) {
+        return false;
+      }
+      state->vgprs[destination_reg][lane_index] = lds_value;
       continue;
     }
 
     const std::uint32_t data_value = state->vgprs[data_reg][lane_index];
-    if (instruction.opcode == CompiledOpcode::kDsWriteB32) {
-      std::memcpy(lds_storage.data() + lds_address, &data_value,
-                  sizeof(data_value));
-      continue;
-    }
-    if (instruction.opcode == CompiledOpcode::kDsWriteB8) {
-      lds_storage[static_cast<std::size_t>(lds_address)] =
-          static_cast<std::byte>(data_value & 0xffu);
-      continue;
-    }
-    if (instruction.opcode == CompiledOpcode::kDsWriteB16) {
-      const std::uint16_t truncated = static_cast<std::uint16_t>(data_value);
-      std::memcpy(lds_storage.data() + lds_address, &truncated,
-                  sizeof(truncated));
+    if (instruction.opcode == CompiledOpcode::kDsWriteB32 ||
+        instruction.opcode == CompiledOpcode::kDsWriteB8 ||
+        instruction.opcode == CompiledOpcode::kDsWriteB16) {
+      if (!WriteLdsValue(lds_storage, lds_address0, access_size, data_value,
+                         error_message)) {
+        return false;
+      }
       continue;
     }
 
     std::uint32_t lds_value = 0;
-    std::memcpy(&lds_value, lds_storage.data() + lds_address, sizeof(lds_value));
+    if (!ReadLdsValue(lds_storage, lds_address0, access_size, false, &lds_value,
+                      error_message)) {
+      return false;
+    }
     if (is_return) {
-      state->vgprs[return_reg][lane_index] = lds_value;
+      state->vgprs[destination_reg][lane_index] = lds_value;
     }
     lds_value = EvaluateDsUpdate(GetDsUpdateOpcode(instruction.opcode), lds_value,
                                  data_value, error_message);
     if (error_message != nullptr && !error_message->empty()) {
       return false;
     }
-    std::memcpy(lds_storage.data() + lds_address, &lds_value, sizeof(lds_value));
+    if (!WriteLdsValue(lds_storage, lds_address0, access_size, lds_value,
+                       error_message)) {
+      return false;
+    }
   }
 
   if (error_message != nullptr) {

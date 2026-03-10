@@ -133,6 +133,8 @@ internal-opcode entrypoints for a small subset of ops: `S_MOV_B32`,
 `DS_{ADD,SUB,RSUB,INC,DEC,MIN,MAX}_{U32}`,
 `DS_{MIN,MAX}_I32`, `DS_{AND,OR,XOR}_B32`,
 `DS_{ADD,MIN,MAX}_F32`,
+`DS_WRITE2_{,ST64}_B32`, `DS_READ2_{,ST64}_B32`,
+`DS_READ_{I,U}{8,16}`,
 `DS_{ADD,SUB,RSUB,INC,DEC}_RTN_U32`,
 `DS_{MIN,MAX}_RTN_{I32,U32,F32}`,
 `DS_{AND,OR,XOR}_RTN_B32`, `DS_ADD_RTN_F32`, `FLAT_LOAD_DWORD`,
@@ -168,7 +170,9 @@ atomic decode via `SC0`, and the first 64-bit instruction decode paths for
 scalar and vector memory traffic, plus DS return-atomic decode for
 `DS_{ADD,SUB,RSUB,INC,DEC}_RTN_U32`,
 `DS_{MIN,MAX}_RTN_{I32,U32,F32}`,
-`DS_{AND,OR,XOR}_RTN_B32`, `DS_ADD_RTN_F32`, and special scalar sources
+`DS_{AND,OR,XOR}_RTN_B32`, `DS_ADD_RTN_F32`, DS pair/narrow access decode for
+`DS_WRITE2_{,ST64}_B32`, `DS_READ2_{,ST64}_B32`,
+`DS_READ_{I,U}{8,16}`, and special scalar sources
 `SRC_VCCZ`,
 `SRC_EXECZ`, and `SRC_SCC`.
 

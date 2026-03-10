@@ -1176,6 +1176,44 @@ int main() {
     }
   }
 
+  const std::array<std::string_view, 2> kDsPairWriteOpcodes = {
+      "DS_WRITE2_B32",
+      "DS_WRITE2ST64_B32",
+  };
+  for (std::string_view opcode : kDsPairWriteOpcodes) {
+    if (!Expect(interpreter.Supports(opcode),
+                "expected ds pair-write opcode support")) {
+      std::cerr << opcode << '\n';
+      return 1;
+    }
+  }
+
+  const std::array<std::string_view, 2> kDsPairReadOpcodes = {
+      "DS_READ2_B32",
+      "DS_READ2ST64_B32",
+  };
+  for (std::string_view opcode : kDsPairReadOpcodes) {
+    if (!Expect(interpreter.Supports(opcode),
+                "expected ds pair-read opcode support")) {
+      std::cerr << opcode << '\n';
+      return 1;
+    }
+  }
+
+  const std::array<std::string_view, 4> kDsNarrowReadOpcodes = {
+      "DS_READ_I8",
+      "DS_READ_U8",
+      "DS_READ_I16",
+      "DS_READ_U16",
+  };
+  for (std::string_view opcode : kDsNarrowReadOpcodes) {
+    if (!Expect(interpreter.Supports(opcode),
+                "expected ds narrow-read opcode support")) {
+      std::cerr << opcode << '\n';
+      return 1;
+    }
+  }
+
   const std::array<std::string_view, 15> kReturningDsOpcodes = {
       "DS_ADD_RTN_U32", "DS_SUB_RTN_U32", "DS_RSUB_RTN_U32",
       "DS_INC_RTN_U32", "DS_DEC_RTN_U32", "DS_MIN_RTN_I32",
@@ -6849,6 +6887,221 @@ int main() {
         !run_ds_return_case(test_case, true)) {
       return 1;
     }
+  }
+
+  {
+  const std::vector<DecodedInstruction> ds_access_program = {
+      DecodedInstruction::ThreeOperand("DS_WRITE_B32", InstructionOperand::Vgpr(0),
+                                       InstructionOperand::Vgpr(1),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_READ_I8", InstructionOperand::Vgpr(10),
+                                       InstructionOperand::Vgpr(0),
+                                       InstructionOperand::Imm32(3)),
+      DecodedInstruction::ThreeOperand("DS_READ_U8", InstructionOperand::Vgpr(11),
+                                       InstructionOperand::Vgpr(0),
+                                       InstructionOperand::Imm32(2)),
+      DecodedInstruction::ThreeOperand("DS_READ_I16", InstructionOperand::Vgpr(12),
+                                       InstructionOperand::Vgpr(0),
+                                       InstructionOperand::Imm32(2)),
+      DecodedInstruction::ThreeOperand("DS_READ_U16", InstructionOperand::Vgpr(13),
+                                       InstructionOperand::Vgpr(0),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::FiveOperand("DS_WRITE2_B32", InstructionOperand::Vgpr(2),
+                                      InstructionOperand::Vgpr(3),
+                                      InstructionOperand::Vgpr(4),
+                                      InstructionOperand::Imm32(1),
+                                      InstructionOperand::Imm32(3)),
+      DecodedInstruction::FourOperand("DS_READ2_B32", InstructionOperand::Vgpr(14),
+                                      InstructionOperand::Vgpr(2),
+                                      InstructionOperand::Imm32(1),
+                                      InstructionOperand::Imm32(3)),
+      DecodedInstruction::FiveOperand(
+          "DS_WRITE2ST64_B32", InstructionOperand::Vgpr(5),
+          InstructionOperand::Vgpr(6), InstructionOperand::Vgpr(7),
+          InstructionOperand::Imm32(1), InstructionOperand::Imm32(2)),
+      DecodedInstruction::FourOperand(
+          "DS_READ2ST64_B32", InstructionOperand::Vgpr(16),
+          InstructionOperand::Vgpr(5), InstructionOperand::Imm32(1),
+          InstructionOperand::Imm32(2)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  auto make_ds_access_state = []() {
+    WaveExecutionState state;
+    state.exec_mask = 0b1011ULL;
+    state.vgprs[0][0] = 0u;
+    state.vgprs[0][1] = 4u;
+    state.vgprs[0][3] = 8u;
+    state.vgprs[1][0] = 0x80ff1122u;
+    state.vgprs[1][1] = 0x7f008877u;
+    state.vgprs[1][3] = 0x1234fedcu;
+    state.vgprs[2][0] = 32u;
+    state.vgprs[2][1] = 64u;
+    state.vgprs[2][3] = 96u;
+    state.vgprs[3][0] = 0xaaaaaaaau;
+    state.vgprs[3][1] = 0x11111111u;
+    state.vgprs[3][3] = 0xfeedfaceu;
+    state.vgprs[4][0] = 0xbbbbbbbbu;
+    state.vgprs[4][1] = 0x22222222u;
+    state.vgprs[4][3] = 0xcafebeefu;
+    state.vgprs[5][0] = 128u;
+    state.vgprs[5][1] = 160u;
+    state.vgprs[5][3] = 192u;
+    state.vgprs[6][0] = 0x01020304u;
+    state.vgprs[6][1] = 0x05060708u;
+    state.vgprs[6][3] = 0x090a0b0cu;
+    state.vgprs[7][0] = 0xa0b0c0d0u;
+    state.vgprs[7][1] = 0x0badf00du;
+    state.vgprs[7][3] = 0x13579bdfu;
+    for (std::uint16_t vgpr = 10; vgpr <= 17; ++vgpr) {
+      state.vgprs[vgpr][2] = (vgpr & 1u) == 0u ? 0xdeadbeefu : 0xcafebabeu;
+    }
+    return state;
+  };
+  auto validate_ds_access_state = [&](const WaveExecutionState& state,
+                                      const char* mode) {
+    if (!Expect(state.halted, "expected ds access program to halt")) {
+      std::cerr << mode << '\n';
+      return false;
+    }
+
+    if (!Expect(state.vgprs[10][0] == 0xffffff80u,
+                "expected ds_read_i8 lane 0 result") ||
+        !Expect(state.vgprs[10][1] == 0x7fu,
+                "expected ds_read_i8 lane 1 result") ||
+        !Expect(state.vgprs[10][3] == 0x12u,
+                "expected ds_read_i8 lane 3 result") ||
+        !Expect(state.vgprs[11][0] == 0xffu,
+                "expected ds_read_u8 lane 0 result") ||
+        !Expect(state.vgprs[11][1] == 0x0u,
+                "expected ds_read_u8 lane 1 result") ||
+        !Expect(state.vgprs[11][3] == 0x34u,
+                "expected ds_read_u8 lane 3 result") ||
+        !Expect(state.vgprs[12][0] == 0xffff80ffu,
+                "expected ds_read_i16 lane 0 result") ||
+        !Expect(state.vgprs[12][1] == 0x7f00u,
+                "expected ds_read_i16 lane 1 result") ||
+        !Expect(state.vgprs[12][3] == 0x1234u,
+                "expected ds_read_i16 lane 3 result") ||
+        !Expect(state.vgprs[13][0] == 0x1122u,
+                "expected ds_read_u16 lane 0 result") ||
+        !Expect(state.vgprs[13][1] == 0x8877u,
+                "expected ds_read_u16 lane 1 result") ||
+        !Expect(state.vgprs[13][3] == 0xfedcu,
+                "expected ds_read_u16 lane 3 result") ||
+        !Expect(state.vgprs[14][0] == 0xaaaaaaaau,
+                "expected ds_read2 low lane 0 result") ||
+        !Expect(state.vgprs[14][1] == 0x11111111u,
+                "expected ds_read2 low lane 1 result") ||
+        !Expect(state.vgprs[14][3] == 0xfeedfaceu,
+                "expected ds_read2 low lane 3 result") ||
+        !Expect(state.vgprs[15][0] == 0xbbbbbbbbu,
+                "expected ds_read2 high lane 0 result") ||
+        !Expect(state.vgprs[15][1] == 0x22222222u,
+                "expected ds_read2 high lane 1 result") ||
+        !Expect(state.vgprs[15][3] == 0xcafebeefu,
+                "expected ds_read2 high lane 3 result") ||
+        !Expect(state.vgprs[16][0] == 0x01020304u,
+                "expected ds_read2st64 low lane 0 result") ||
+        !Expect(state.vgprs[16][1] == 0x05060708u,
+                "expected ds_read2st64 low lane 1 result") ||
+        !Expect(state.vgprs[16][3] == 0x090a0b0cu,
+                "expected ds_read2st64 low lane 3 result") ||
+        !Expect(state.vgprs[17][0] == 0xa0b0c0d0u,
+                "expected ds_read2st64 high lane 0 result") ||
+        !Expect(state.vgprs[17][1] == 0x0badf00du,
+                "expected ds_read2st64 high lane 1 result") ||
+        !Expect(state.vgprs[17][3] == 0x13579bdfu,
+                "expected ds_read2st64 high lane 3 result")) {
+      std::cerr << mode << '\n';
+      return false;
+    }
+
+    if (!Expect(state.vgprs[10][2] == 0xdeadbeefu,
+                "expected inactive ds_read_i8 preservation") ||
+        !Expect(state.vgprs[11][2] == 0xcafebabeu,
+                "expected inactive ds_read_u8 preservation") ||
+        !Expect(state.vgprs[12][2] == 0xdeadbeefu,
+                "expected inactive ds_read_i16 preservation") ||
+        !Expect(state.vgprs[13][2] == 0xcafebabeu,
+                "expected inactive ds_read_u16 preservation") ||
+        !Expect(state.vgprs[14][2] == 0xdeadbeefu,
+                "expected inactive ds_read2 low preservation") ||
+        !Expect(state.vgprs[15][2] == 0xcafebabeu,
+                "expected inactive ds_read2 high preservation") ||
+        !Expect(state.vgprs[16][2] == 0xdeadbeefu,
+                "expected inactive ds_read2st64 low preservation") ||
+        !Expect(state.vgprs[17][2] == 0xcafebabeu,
+                "expected inactive ds_read2st64 high preservation")) {
+      std::cerr << mode << '\n';
+      return false;
+    }
+
+    std::uint32_t value = 0;
+    if (!Expect((std::memcpy(&value, state.lds_bytes.data() + 36, sizeof(value)), value) ==
+                    0xaaaaaaaau,
+                "expected ds_write2 lane 0 low store") ||
+        !Expect((std::memcpy(&value, state.lds_bytes.data() + 44, sizeof(value)), value) ==
+                    0xbbbbbbbbu,
+                "expected ds_write2 lane 0 high store") ||
+        !Expect((std::memcpy(&value, state.lds_bytes.data() + 68, sizeof(value)), value) ==
+                    0x11111111u,
+                "expected ds_write2 lane 1 low store") ||
+        !Expect((std::memcpy(&value, state.lds_bytes.data() + 76, sizeof(value)), value) ==
+                    0x22222222u,
+                "expected ds_write2 lane 1 high store") ||
+        !Expect((std::memcpy(&value, state.lds_bytes.data() + 100, sizeof(value)), value) ==
+                    0xfeedfaceu,
+                "expected ds_write2 lane 3 low store") ||
+        !Expect((std::memcpy(&value, state.lds_bytes.data() + 108, sizeof(value)), value) ==
+                    0xcafebeefu,
+                "expected ds_write2 lane 3 high store") ||
+        !Expect((std::memcpy(&value, state.lds_bytes.data() + 384, sizeof(value)), value) ==
+                    0x01020304u,
+                "expected ds_write2st64 lane 0 low store") ||
+        !Expect((std::memcpy(&value, state.lds_bytes.data() + 640, sizeof(value)), value) ==
+                    0xa0b0c0d0u,
+                "expected ds_write2st64 lane 0 high store") ||
+        !Expect((std::memcpy(&value, state.lds_bytes.data() + 416, sizeof(value)), value) ==
+                    0x05060708u,
+                "expected ds_write2st64 lane 1 low store") ||
+        !Expect((std::memcpy(&value, state.lds_bytes.data() + 672, sizeof(value)), value) ==
+                    0x0badf00du,
+                "expected ds_write2st64 lane 1 high store") ||
+        !Expect((std::memcpy(&value, state.lds_bytes.data() + 448, sizeof(value)), value) ==
+                    0x090a0b0cu,
+                "expected ds_write2st64 lane 3 low store") ||
+        !Expect((std::memcpy(&value, state.lds_bytes.data() + 704, sizeof(value)), value) ==
+                    0x13579bdfu,
+                "expected ds_write2st64 lane 3 high store")) {
+      std::cerr << mode << '\n';
+      return false;
+    }
+    return true;
+  };
+
+  WaveExecutionState decoded_ds_access_state = make_ds_access_state();
+  if (!Expect(interpreter.ExecuteProgram(ds_access_program, &decoded_ds_access_state,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_ds_access_state(decoded_ds_access_state, "decoded")) {
+    return 1;
+  }
+
+  std::vector<CompiledInstruction> compiled_ds_access_program;
+  if (!Expect(interpreter.CompileProgram(ds_access_program,
+                                         &compiled_ds_access_program,
+                                         &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+  WaveExecutionState compiled_ds_access_state = make_ds_access_state();
+  if (!Expect(interpreter.ExecuteProgram(compiled_ds_access_program,
+                                         &compiled_ds_access_state,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_ds_access_state(compiled_ds_access_state, "compiled")) {
+    return 1;
+  }
   }
 
   WaveExecutionState writer_wave;

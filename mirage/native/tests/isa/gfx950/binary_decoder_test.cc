@@ -5940,6 +5940,146 @@ int main() {
     }
   }
 
+  const std::array<std::string_view, 2> kDsPairWriteOpcodes = {
+      "DS_WRITE2_B32",
+      "DS_WRITE2ST64_B32",
+  };
+  for (std::string_view opcode_name : kDsPairWriteOpcodes) {
+    const auto opcode = FindDefaultEncodingOpcode(opcode_name, "ENC_DS");
+    if (!Expect(opcode.has_value(), "expected ds pair-write opcode lookup")) {
+      std::cerr << opcode_name << '\n';
+      return 1;
+    }
+
+    const auto encoded = MakeDs(*opcode, 0, 1, 2, 3, 4, 7);
+    const std::vector<std::uint32_t> encoded_program = {
+        encoded[0], encoded[1], MakeSopp(1),
+    };
+    decoded_program.clear();
+    if (!Expect(decoder.DecodeProgram(encoded_program, &decoded_program,
+                                      &error_message),
+                error_message.c_str()) ||
+        !Expect(decoded_program.size() == 2,
+                "expected ds pair-write decode program size") ||
+        !Expect(decoded_program[0].opcode == opcode_name,
+                "expected ds pair-write opcode decode") ||
+        !Expect(decoded_program[0].operand_count == 5,
+                "expected ds pair-write operand count") ||
+        !Expect(decoded_program[0].operands[0].kind == OperandKind::kVgpr,
+                "expected ds pair-write address kind") ||
+        !Expect(decoded_program[0].operands[0].index == 1,
+                "expected ds pair-write address index") ||
+        !Expect(decoded_program[0].operands[1].kind == OperandKind::kVgpr,
+                "expected ds pair-write data0 kind") ||
+        !Expect(decoded_program[0].operands[1].index == 2,
+                "expected ds pair-write data0 index") ||
+        !Expect(decoded_program[0].operands[2].kind == OperandKind::kVgpr,
+                "expected ds pair-write data1 kind") ||
+        !Expect(decoded_program[0].operands[2].index == 3,
+                "expected ds pair-write data1 index") ||
+        !Expect(decoded_program[0].operands[3].kind == OperandKind::kImm32,
+                "expected ds pair-write offset0 kind") ||
+        !Expect(decoded_program[0].operands[3].imm32 == 4u,
+                "expected ds pair-write offset0 value") ||
+        !Expect(decoded_program[0].operands[4].kind == OperandKind::kImm32,
+                "expected ds pair-write offset1 kind") ||
+        !Expect(decoded_program[0].operands[4].imm32 == 7u,
+                "expected ds pair-write offset1 value")) {
+      std::cerr << opcode_name << '\n';
+      return 1;
+    }
+  }
+
+  const std::array<std::string_view, 2> kDsPairReadOpcodes = {
+      "DS_READ2_B32",
+      "DS_READ2ST64_B32",
+  };
+  for (std::string_view opcode_name : kDsPairReadOpcodes) {
+    const auto opcode = FindDefaultEncodingOpcode(opcode_name, "ENC_DS");
+    if (!Expect(opcode.has_value(), "expected ds pair-read opcode lookup")) {
+      std::cerr << opcode_name << '\n';
+      return 1;
+    }
+
+    const auto encoded = MakeDs(*opcode, 8, 1, 0, 0, 4, 7);
+    const std::vector<std::uint32_t> encoded_program = {
+        encoded[0], encoded[1], MakeSopp(1),
+    };
+    decoded_program.clear();
+    if (!Expect(decoder.DecodeProgram(encoded_program, &decoded_program,
+                                      &error_message),
+                error_message.c_str()) ||
+        !Expect(decoded_program.size() == 2,
+                "expected ds pair-read decode program size") ||
+        !Expect(decoded_program[0].opcode == opcode_name,
+                "expected ds pair-read opcode decode") ||
+        !Expect(decoded_program[0].operand_count == 4,
+                "expected ds pair-read operand count") ||
+        !Expect(decoded_program[0].operands[0].kind == OperandKind::kVgpr,
+                "expected ds pair-read destination kind") ||
+        !Expect(decoded_program[0].operands[0].index == 8,
+                "expected ds pair-read destination index") ||
+        !Expect(decoded_program[0].operands[1].kind == OperandKind::kVgpr,
+                "expected ds pair-read address kind") ||
+        !Expect(decoded_program[0].operands[1].index == 1,
+                "expected ds pair-read address index") ||
+        !Expect(decoded_program[0].operands[2].kind == OperandKind::kImm32,
+                "expected ds pair-read offset0 kind") ||
+        !Expect(decoded_program[0].operands[2].imm32 == 4u,
+                "expected ds pair-read offset0 value") ||
+        !Expect(decoded_program[0].operands[3].kind == OperandKind::kImm32,
+                "expected ds pair-read offset1 kind") ||
+        !Expect(decoded_program[0].operands[3].imm32 == 7u,
+                "expected ds pair-read offset1 value")) {
+      std::cerr << opcode_name << '\n';
+      return 1;
+    }
+  }
+
+  const std::array<std::string_view, 4> kDsNarrowReadOpcodes = {
+      "DS_READ_I8",
+      "DS_READ_U8",
+      "DS_READ_I16",
+      "DS_READ_U16",
+  };
+  for (std::string_view opcode_name : kDsNarrowReadOpcodes) {
+    const auto opcode = FindDefaultEncodingOpcode(opcode_name, "ENC_DS");
+    if (!Expect(opcode.has_value(), "expected ds narrow-read opcode lookup")) {
+      std::cerr << opcode_name << '\n';
+      return 1;
+    }
+
+    const auto encoded = MakeDs(*opcode, 9, 1, 0, 0, 6);
+    const std::vector<std::uint32_t> encoded_program = {
+        encoded[0], encoded[1], MakeSopp(1),
+    };
+    decoded_program.clear();
+    if (!Expect(decoder.DecodeProgram(encoded_program, &decoded_program,
+                                      &error_message),
+                error_message.c_str()) ||
+        !Expect(decoded_program.size() == 2,
+                "expected ds narrow-read decode program size") ||
+        !Expect(decoded_program[0].opcode == opcode_name,
+                "expected ds narrow-read opcode decode") ||
+        !Expect(decoded_program[0].operand_count == 3,
+                "expected ds narrow-read operand count") ||
+        !Expect(decoded_program[0].operands[0].kind == OperandKind::kVgpr,
+                "expected ds narrow-read destination kind") ||
+        !Expect(decoded_program[0].operands[0].index == 9,
+                "expected ds narrow-read destination index") ||
+        !Expect(decoded_program[0].operands[1].kind == OperandKind::kVgpr,
+                "expected ds narrow-read address kind") ||
+        !Expect(decoded_program[0].operands[1].index == 1,
+                "expected ds narrow-read address index") ||
+        !Expect(decoded_program[0].operands[2].kind == OperandKind::kImm32,
+                "expected ds narrow-read offset kind") ||
+        !Expect(decoded_program[0].operands[2].imm32 == 6u,
+                "expected ds narrow-read offset value")) {
+      std::cerr << opcode_name << '\n';
+      return 1;
+    }
+  }
+
   const std::array<std::string_view, 15> kReturningDsOpcodes = {
       "DS_ADD_RTN_U32", "DS_SUB_RTN_U32", "DS_RSUB_RTN_U32",
       "DS_INC_RTN_U32", "DS_DEC_RTN_U32", "DS_MIN_RTN_I32",
