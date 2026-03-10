@@ -58,6 +58,13 @@ DECODE_HINTS = [
     "kMimgTensor",
 ]
 
+STUB_ROUTE_ORDER = [
+    ("kVop3p", "VOP3P packed/vector forms", 1),
+    ("kMimgTensor", "tensor MIMG forms", 2),
+    ("kVop1", "VOP1 conversion forms", 3),
+    ("kVop3Sdst", "VOP3 SDST forms", 4),
+]
+
 
 def read_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
@@ -324,6 +331,18 @@ def determine_decode_hint(info: dict, preferred_encoding: dict | None) -> str:
     return "kUnknown"
 
 
+def select_stub_route(decode_hint: str) -> str | None:
+    if decode_hint == "kVop3p":
+        return "kVop3p"
+    if decode_hint == "kMimgTensor":
+        return "kMimgTensor"
+    if decode_hint == "kVop1":
+        return "kVop1"
+    if decode_hint == "kVop3Sdst":
+        return "kVop3Sdst"
+    return None
+
+
 def render_decoder_seed_catalog_cc(
     llvm_inventory: dict,
     rdna4_inventory: dict,
@@ -586,6 +605,93 @@ def render_decoder_seed_report(llvm_inventory: dict, rdna4_inventory: dict) -> s
     return "\n".join(lines) + "\n"
 
 
+def render_stub_decoder_routing_report(llvm_inventory: dict, rdna4_inventory: dict) -> str:
+    normalized_entries = normalize_llvm_entries(llvm_inventory)
+    rdna4_by_name = {
+        instruction["instruction_name"]: instruction
+        for instruction in rdna4_inventory["instructions"]
+    }
+    seeded_union = set()
+    for category_name in SEED_FAMILIES.values():
+        seeded_union.update(order_family_values(category_name, llvm_inventory["categories"][category_name]))
+
+    route_members = {route_name: [] for route_name, _, _ in STUB_ROUTE_ORDER}
+    unsupported = []
+    for instruction_name in sorted(seeded_union):
+        info = normalized_entries[instruction_name]
+        preferred_encoding = choose_preferred_encoding(rdna4_by_name.get(instruction_name))
+        decode_hint = determine_decode_hint(info, preferred_encoding)
+        route_name = select_stub_route(decode_hint)
+        record = {
+            "instruction_name": instruction_name,
+            "appears_in_rdna4_xml": instruction_name in rdna4_by_name,
+            "is_target_specific": instruction_name not in rdna4_by_name,
+        }
+        if route_name is None:
+            unsupported.append(record)
+        else:
+            route_members[route_name].append(record)
+
+    lines = [
+        "# gfx1250 Stub Decoder Routing Report",
+        "",
+        "## Summary",
+        "",
+        f"- Seeded instruction union: `{len(seeded_union)}`",
+        f"- Routed into first stub decoder layer: `{sum(len(values) for values in route_members.values())}`",
+        f"- Deferred for later decoder work: `{len(unsupported)}`",
+        "",
+        "## Route Priority",
+        "",
+        "1. `kVop3p`",
+        "2. `kMimgTensor`",
+        "3. `kVop1`",
+        "4. `kVop3Sdst`",
+        "",
+    ]
+
+    for route_name, description, priority in STUB_ROUTE_ORDER:
+        values = route_members[route_name]
+        lines.extend(
+            [
+                f"## {route_name}",
+                "",
+                f"- Priority: `{priority}`",
+                f"- Description: {description}",
+                f"- Routed instruction count: `{len(values)}`",
+                f'- XML-backed: `{sum(1 for value in values if value["appears_in_rdna4_xml"])}`',
+                f'- LLVM-only: `{sum(1 for value in values if not value["appears_in_rdna4_xml"])}`',
+                f'- Target-specific: `{sum(1 for value in values if value["is_target_specific"])}`',
+                "",
+            ]
+        )
+        for value in values[:24]:
+            lines.append(f'- `{value["instruction_name"]}`')
+        lines.append("")
+
+    lines.extend(
+        [
+            "## Deferred Seed Hints",
+            "",
+            f"- Deferred `kVop3` / unsupported-first-pass seeds: `{len(unsupported)}`",
+            "",
+        ]
+    )
+    for value in unsupported[:24]:
+        lines.append(f'- `{value["instruction_name"]}`')
+    lines.extend(
+        [
+            "",
+            "## Recommended Next Slice",
+            "",
+            "- Add architecture-local stub decoder entry points keyed by `StubDecoderRoute` instead of instruction name.",
+            "- Implement the first `kVop3p` selector stubs for `V_PK_ADD_BF16`, `V_PK_FMA_BF16`, and `V_WMMA_F32_16X16X4_F32_w32`.",
+            "- Add `kMimgTensor` stubs for `TENSOR_LOAD_TO_LDS` and `TENSOR_STORE_FROM_LDS`, then wire `kVop1` and `kVop3Sdst` after those are stable.",
+        ]
+    )
+    return "\n".join(lines) + "\n"
+
+
 def render_report(summary: dict, category_values: dict[str, list[str]]) -> str:
     lines = [
         "# gfx1250 Bring-up Plan",
@@ -671,6 +777,7 @@ def main() -> int:
     decoder_seed_catalog_cc_path = mirage_root / "native" / "src" / "isa" / "gfx1250" / "decoder_seed_catalog.cc"
     report_path = mirage_root / "reports" / "architectures" / "gfx1250" / "gfx1250_bringup_plan.md"
     decoder_report_path = mirage_root / "reports" / "architectures" / "gfx1250" / "gfx1250_decoder_seed_report.md"
+    stub_decoder_routing_report_path = mirage_root / "reports" / "architectures" / "gfx1250" / "gfx1250_stub_decoder_routing_report.md"
 
     cc_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.parent.mkdir(parents=True, exist_ok=True)
@@ -689,12 +796,17 @@ def main() -> int:
         render_decoder_seed_report(llvm_inventory, rdna4_inventory),
         encoding="utf-8",
     )
+    stub_decoder_routing_report_path.write_text(
+        render_stub_decoder_routing_report(llvm_inventory, rdna4_inventory),
+        encoding="utf-8",
+    )
 
     print(f"Wrote {cc_path}")
     print(f"Wrote {target_catalog_cc_path}")
     print(f"Wrote {decoder_seed_catalog_cc_path}")
     print(f"Wrote {report_path}")
     print(f"Wrote {decoder_report_path}")
+    print(f"Wrote {stub_decoder_routing_report_path}")
     return 0
 
 
