@@ -1,7 +1,7 @@
 # opencl-cts
 [components.test."opencl/opencl-cts/stage"]
 include = [
-  "bin/**",
+  "share/opencl/opencl-cts/**",
 ]
 [components.test."opencl/opencl-icd-loader/stage"]
 include = [

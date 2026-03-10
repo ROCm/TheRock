@@ -19,7 +19,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 ROCM_PATH = THEROCK_BIN_DIR.parent
 
-CTS_BIN_DIR = THEROCK_BIN_DIR / "Release"
+CTS_BIN_DIR = THEROCK_BIN_DIR / "share" / "opencl" / "opencl-cts"
 OPENCL_ICD_FILENAMES = ROCM_PATH / "lib" / "opencl" / "libamdocl64.so"
 
 logging.info(f"THEROCK_BIN_DIR: {THEROCK_BIN_DIR}")
