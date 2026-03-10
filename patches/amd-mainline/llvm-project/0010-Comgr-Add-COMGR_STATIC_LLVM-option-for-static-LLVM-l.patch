@@ -1,0 +1,54 @@
+From 9ac2186ab638947f5c532e2aef4eedcf45d92870 Mon Sep 17 00:00:00 2001
+From: Stella Laurenzo <stellaraccident@gmail.com>
+Date: Tue, 3 Mar 2026 13:21:10 -0800
+Subject: [PATCH] [Comgr] Add COMGR_STATIC_LLVM option for static LLVM linking
+
+Add a COMGR_STATIC_LLVM CMake option that, when enabled, forces comgr
+to statically link LLVM and Clang component libraries instead of using
+libLLVM.so and libclang-cpp.so.
+
+Combined with comgr's existing -fvisibility=hidden and version script
+(local: *;), this hides all LLVM symbols inside libamd_comgr.so,
+preventing symbol interposition issues without requiring namespace
+isolation via dlmopen.
+
+This is needed because the delay-load stub approach (using dlmopen for
+linker namespace isolation) is being abandoned due to insufficient glibc
+namespace support across supported distributions.
+
+The option defaults to OFF, preserving existing behavior. When LLVM is
+built with LLVM_BUILD_LLVM_DYLIB=ON and BUILD_SHARED_LIBS=OFF (as in
+TheRock), both the monolithic libLLVM.so and individual PIC-enabled
+static .a component libraries are produced, so comgr can link the
+static libraries while tools continue using libLLVM.so.
+
+See: https://github.com/ROCm/TheRock/issues/3729
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+---
+ amd/comgr/CMakeLists.txt | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/amd/comgr/CMakeLists.txt b/amd/comgr/CMakeLists.txt
+index 914eb67d751a..d482296c46c5 100644
+--- a/amd/comgr/CMakeLists.txt
++++ b/amd/comgr/CMakeLists.txt
+@@ -134,6 +134,15 @@ else()
+   endif()
+ endif()
+ 
++# Allow the super-project to force static linking of LLVM/Clang into comgr.
++# When ON, LLVM symbols are hidden by comgr's version script (local: *;),
++# avoiding symbol interposition issues without requiring namespace isolation.
++option(COMGR_STATIC_LLVM "Statically link LLVM/Clang into comgr (hides LLVM symbols)" OFF)
++if(COMGR_STATIC_LLVM)
++  set(LLVM_LINK_LLVM_DYLIB OFF)
++  set(CLANG_LINK_CLANG_DYLIB OFF)
++endif()
++
+ target_include_directories(amd_comgr
+   PRIVATE
+   ${CMAKE_CURRENT_SOURCE_DIR}/src)
+-- 
+2.48.1
+
