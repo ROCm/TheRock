@@ -16,8 +16,8 @@
 - `s`: 153
 - `v`: 129
 - `image`: 91
-- `global`: 62
 - `buffer`: 62
+- `global`: 62
 - `lds`: 60
 - `flat`: 52
 - `scratch`: 24
@@ -33,8 +33,8 @@
 - `global`: 58
 - `flat`: 51
 - `scratch`: 27
-- `tbuffer`: 8
 - `packed`: 8
+- `tbuffer`: 8
 
 ## Encoding Family Deltas
 

@@ -1,0 +1,142 @@
+{
+  "generated_artifacts": {
+    "delta_vs_gfx950": "tests/data/architecture_import/gfx1250/gfx1250_delta_vs_gfx950.json",
+    "llvm_inventory": "tests/data/architecture_import/gfx1250/gfx1250_llvm_inventory.json",
+    "rdna4_inventory": "tests/data/architecture_import/gfx1250/rdna4_instruction_inventory.json",
+    "report": "reports/architectures/gfx1250/gfx1250_ingest_report.md"
+  },
+  "llvm_mapping": {
+    "feature_markers": [
+      {
+        "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/GCNProcessors.td",
+        "line": 330,
+        "text": "FeatureISAVersion12_50.Features"
+      },
+      {
+        "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/AMDGPU.td",
+        "line": 535,
+        "text": "def FeatureGFX1250Insts : SubtargetFeature<\"gfx1250-insts\","
+      },
+      {
+        "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/AMDGPU.td",
+        "line": 2142,
+        "text": "def FeatureISAVersion12_50_Common : FeatureSet<"
+      },
+      {
+        "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/AMDGPU.td",
+        "line": 2144,
+        "text": "FeatureGFX1250Insts,"
+      },
+      {
+        "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/AMDGPU.td",
+        "line": 2224,
+        "text": "def FeatureISAVersion12_50 : FeatureSet<"
+      },
+      {
+        "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/AMDGPU.td",
+        "line": 2225,
+        "text": "!listconcat(FeatureISAVersion12_50_Common.Features,"
+      },
+      {
+        "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/AMDGPU.td",
+        "line": 2229,
+        "text": "!listconcat(FeatureISAVersion12_50.Features,"
+      },
+      {
+        "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/AMDGPU.td",
+        "line": 2536,
+        "text": "AssemblerPredicate<(all_of FeatureGFX12Insts, (not FeatureGFX1250Insts))>;"
+      },
+      {
+        "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/AMDGPU.td",
+        "line": 2544,
+        "text": "AssemblerPredicate<(all_of FeatureGFX12Insts, (not FeatureGFX1250Insts))>;"
+      },
+      {
+        "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/AMDGPU.td",
+        "line": 2548,
+        "text": "AssemblerPredicate<(all_of FeatureGFX1250Insts)>;"
+      },
+      {
+        "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/AMDGPU.td",
+        "line": 2552,
+        "text": "AssemblerPredicate<(all_of FeatureGFX1250Insts)>;"
+      },
+      {
+        "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/AMDGPU.td",
+        "line": 2556,
+        "text": "AssemblerPredicate<(all_of (not FeatureGFX1250Insts))>;"
+      },
+      {
+        "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/AMDGPU.td",
+        "line": 2560,
+        "text": "AssemblerPredicate<(any_of FeatureGFX940Insts, FeatureGFX1250Insts)>;"
+      },
+      {
+        "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/AMDGPU.td",
+        "line": 2612,
+        "text": "AssemblerPredicate<(any_of FeatureGFX90AInsts, FeatureGFX1250Insts)>;"
+      },
+      {
+        "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/AMDGPU.td",
+        "line": 2655,
+        "text": "AssemblerPredicate<(all_of (not FeatureGFX1250Insts))>;"
+      },
+      {
+        "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/AMDGPU.td",
+        "line": 2658,
+        "text": "AssemblerPredicate<(all_of (not FeatureGFX1250Insts))>;"
+      },
+      {
+        "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/AMDGPU.td",
+        "line": 2661,
+        "text": "AssemblerPredicate<(all_of (not FeatureGFX90AInsts), (not FeatureGFX1250Insts))>;"
+      },
+      {
+        "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/AMDGPU.td",
+        "line": 2664,
+        "text": "AssemblerPredicate<(all_of FeatureGFX11Insts, (not FeatureGFX1250Insts))>;"
+      },
+      {
+        "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/AMDGPU.td",
+        "line": 2763,
+        "text": "AssemblerPredicate<(any_of FeatureGFX1250Insts)>;"
+      },
+      {
+        "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/AMDGPU.td",
+        "line": 2775,
+        "text": "AssemblerPredicate<(any_of FeatureGFX1250Insts)>;"
+      },
+      {
+        "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/AMDGPU.td",
+        "line": 2779,
+        "text": "AssemblerPredicate<(any_of FeatureGFX1250Insts)>;"
+      },
+      {
+        "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/AMDGPU.td",
+        "line": 2981,
+        "text": "AssemblerPredicate<(any_of FeatureGFX1250Insts)>;"
+      }
+    ],
+    "processor_model": {
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/GCNProcessors.td",
+      "line": 329,
+      "text": "def : ProcessorModel<\"gfx1250\", GFX1250SpeedModel,"
+    }
+  },
+  "official_source": {
+    "architecture_name": "AMD RDNA 4",
+    "bundle_effective_url": "https://gpuopen.com/download/AMD_GPU_MR_ISA_XML_2025_09_05.zip",
+    "bundle_request_url": "https://gpuopen.com/download/machine-readable-isa/latest/",
+    "bundle_sha256": "6c656832cffa8198fe8db72007697d592fdeadc14194b9b4fbdcc8ec7f5c5223",
+    "license": "MIT",
+    "release_date": "2025-02-19",
+    "schema_version": "1.1.0",
+    "xml_name": "amdgpu_isa_rdna4.xml",
+    "xml_sha256": "6b0831a4ebc731ff1ab5c3f3e9abdbab95bc13f8c2ee1fb65bbd67fb7d8e9efd"
+  },
+  "target_mapping": {
+    "mapping_note": "GPUOpen publishes a single RDNA4 architecture XML; gfx1250 target binding comes from the local LLVM gfx1250 processor model and feature set.",
+    "target_name": "gfx1250"
+  }
+}

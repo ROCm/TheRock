@@ -1,0 +1,38 @@
+{
+  "match_count": 6,
+  "matching_files": [
+    {
+      "occurrences": 11,
+      "path": "compiler/amd-llvm/llvm/test/CodeGen/AMDGPU/amdgpu-expand-feature-predicates.ll"
+    },
+    {
+      "occurrences": 2,
+      "path": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/GCNProcessors.td"
+    },
+    {
+      "occurrences": 2,
+      "path": "compiler/amd-llvm/llvm/test/CodeGen/AMDGPU/directive-amdgcn-target.ll"
+    },
+    {
+      "occurrences": 1,
+      "path": "compiler/amd-llvm/llvm/test/CodeGen/AMDGPU/debug-type-mutate.ll"
+    },
+    {
+      "occurrences": 1,
+      "path": "compiler/amd-llvm/llvm/test/CodeGen/AMDGPU/elf-header-flags-mach.ll"
+    },
+    {
+      "occurrences": 1,
+      "path": "compiler/amd-llvm/llvm/test/CodeGen/AMDGPU/hazard-recognizer-src-shared-base.ll"
+    }
+  ],
+  "processor_model_entries": [
+    {
+      "line": 320,
+      "path": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/GCNProcessors.td",
+      "snippet": "def : ProcessorModel<\"gfx1201\", GFX12SpeedModel,\n  FeatureISAVersion12.Features"
+    }
+  ],
+  "target": "gfx1201",
+  "total_occurrences": 18
+}

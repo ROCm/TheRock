@@ -1,0 +1,3010 @@
+{
+  "categories": {
+    "fp8_bf8": [
+      "V_CVT_F16_BF8",
+      "V_CVT_F16_FP8",
+      "V_CVT_F32_FP8",
+      "V_CVT_PK_BF8_F16",
+      "V_CVT_PK_F16_BF8",
+      "V_CVT_PK_F16_FP8",
+      "V_CVT_PK_FP8_F16",
+      "V_CVT_PK_FP8_F32",
+      "V_CVT_SCALEF32_PK16_BF6_BF16",
+      "V_CVT_SCALEF32_PK16_BF6_F16",
+      "V_CVT_SCALEF32_PK16_BF6_F32",
+      "V_CVT_SCALEF32_PK16_FP6_BF16",
+      "V_CVT_SCALEF32_PK16_FP6_F16",
+      "V_CVT_SCALEF32_PK16_FP6_F32",
+      "V_CVT_SCALEF32_PK8_BF8_BF16",
+      "V_CVT_SCALEF32_PK8_BF8_F16",
+      "V_CVT_SCALEF32_PK8_BF8_F32",
+      "V_CVT_SCALEF32_PK8_FP4_BF16",
+      "V_CVT_SCALEF32_PK8_FP4_F16",
+      "V_CVT_SCALEF32_PK8_FP4_F32",
+      "V_CVT_SCALEF32_PK8_FP8_BF16",
+      "V_CVT_SCALEF32_PK8_FP8_F16",
+      "V_CVT_SCALEF32_PK8_FP8_F32",
+      "V_CVT_SCALEF32_SR_PK16_BF6_BF16",
+      "V_CVT_SCALEF32_SR_PK16_BF6_F16",
+      "V_CVT_SCALEF32_SR_PK16_BF6_F32",
+      "V_CVT_SCALEF32_SR_PK16_FP6_BF16",
+      "V_CVT_SCALEF32_SR_PK16_FP6_F16",
+      "V_CVT_SCALEF32_SR_PK16_FP6_F32",
+      "V_CVT_SCALEF32_SR_PK8_BF8_BF16",
+      "V_CVT_SCALEF32_SR_PK8_BF8_F16",
+      "V_CVT_SCALEF32_SR_PK8_BF8_F32",
+      "V_CVT_SCALEF32_SR_PK8_FP4_BF16",
+      "V_CVT_SCALEF32_SR_PK8_FP4_F16",
+      "V_CVT_SCALEF32_SR_PK8_FP4_F32",
+      "V_CVT_SCALEF32_SR_PK8_FP8_BF16",
+      "V_CVT_SCALEF32_SR_PK8_FP8_F16",
+      "V_CVT_SCALEF32_SR_PK8_FP8_F32",
+      "V_CVT_SCALE_PK16_BF16_BF6",
+      "V_CVT_SCALE_PK16_BF16_FP6",
+      "V_CVT_SCALE_PK16_F16_BF6",
+      "V_CVT_SCALE_PK16_F16_FP6",
+      "V_CVT_SCALE_PK16_F32_BF6",
+      "V_CVT_SCALE_PK16_F32_FP6",
+      "V_CVT_SCALE_PK8_BF16_BF8",
+      "V_CVT_SCALE_PK8_BF16_FP4",
+      "V_CVT_SCALE_PK8_BF16_FP8",
+      "V_CVT_SCALE_PK8_F16_BF8",
+      "V_CVT_SCALE_PK8_F16_FP4",
+      "V_CVT_SCALE_PK8_F16_FP8",
+      "V_CVT_SCALE_PK8_F32_BF8",
+      "V_CVT_SCALE_PK8_F32_FP4",
+      "V_CVT_SCALE_PK8_F32_FP8",
+      "V_CVT_SR_BF8_F16",
+      "V_CVT_SR_FP8_F16",
+      "V_CVT_SR_FP8_F32",
+      "V_CVT_SR_FP8_F32_gfx12",
+      "V_SWMMAC_F16_16X16X128_BF8_BF8_w32",
+      "V_SWMMAC_F16_16X16X128_BF8_FP8_w32",
+      "V_SWMMAC_F16_16X16X128_FP8_BF8_w32",
+      "V_SWMMAC_F16_16X16X128_FP8_FP8_w32",
+      "V_SWMMAC_F32_16X16X128_BF8_BF8_w32",
+      "V_SWMMAC_F32_16X16X128_BF8_FP8_w32",
+      "V_SWMMAC_F32_16X16X128_FP8_BF8_w32",
+      "V_SWMMAC_F32_16X16X128_FP8_FP8_w32",
+      "V_WMMA_F16_16X16X128_BF8_BF8_w32",
+      "V_WMMA_F16_16X16X128_BF8_FP8_w32",
+      "V_WMMA_F16_16X16X128_FP8_BF8_w32",
+      "V_WMMA_F16_16X16X128_FP8_FP8_w32",
+      "V_WMMA_F16_16X16X64_BF8_BF8_w32",
+      "V_WMMA_F16_16X16X64_BF8_FP8_w32",
+      "V_WMMA_F16_16X16X64_FP8_BF8_w32",
+      "V_WMMA_F16_16X16X64_FP8_FP8_w32",
+      "V_WMMA_F32_16X16X128_BF8_BF8_w32",
+      "V_WMMA_F32_16X16X128_BF8_FP8_w32",
+      "V_WMMA_F32_16X16X128_F8F6F4",
+      "V_WMMA_F32_16X16X128_FP8_BF8_w32",
+      "V_WMMA_F32_16X16X128_FP8_FP8_w32",
+      "V_WMMA_F32_16X16X64_BF8_BF8_w32",
+      "V_WMMA_F32_16X16X64_BF8_FP8_w32",
+      "V_WMMA_F32_16X16X64_FP8_BF8_w32",
+      "V_WMMA_F32_16X16X64_FP8_FP8_w32",
+      "V_WMMA_F32_32X16X128_F4_w32",
+      "V_WMMA_SCALE16_F32_16X16X128_F8F6F4",
+      "V_WMMA_SCALE16_F32_32X16X128_F4_w32",
+      "V_WMMA_SCALE_F32_16X16X128_F8F6F4",
+      "V_WMMA_SCALE_F32_32X16X128_F4_w32"
+    ],
+    "scale_paired": [
+      "V_CVT_SCALEF32_PK16_BF6_BF16",
+      "V_CVT_SCALEF32_PK16_BF6_F16",
+      "V_CVT_SCALEF32_PK16_BF6_F32",
+      "V_CVT_SCALEF32_PK16_FP6_BF16",
+      "V_CVT_SCALEF32_PK16_FP6_F16",
+      "V_CVT_SCALEF32_PK16_FP6_F32",
+      "V_CVT_SCALEF32_PK8_BF8_BF16",
+      "V_CVT_SCALEF32_PK8_BF8_F16",
+      "V_CVT_SCALEF32_PK8_BF8_F32",
+      "V_CVT_SCALEF32_PK8_FP4_BF16",
+      "V_CVT_SCALEF32_PK8_FP4_F16",
+      "V_CVT_SCALEF32_PK8_FP4_F32",
+      "V_CVT_SCALEF32_PK8_FP8_BF16",
+      "V_CVT_SCALEF32_PK8_FP8_F16",
+      "V_CVT_SCALEF32_PK8_FP8_F32",
+      "V_CVT_SCALEF32_SR_PK16_BF6_BF16",
+      "V_CVT_SCALEF32_SR_PK16_BF6_F16",
+      "V_CVT_SCALEF32_SR_PK16_BF6_F32",
+      "V_CVT_SCALEF32_SR_PK16_FP6_BF16",
+      "V_CVT_SCALEF32_SR_PK16_FP6_F16",
+      "V_CVT_SCALEF32_SR_PK16_FP6_F32",
+      "V_CVT_SCALEF32_SR_PK8_BF8_BF16",
+      "V_CVT_SCALEF32_SR_PK8_BF8_F16",
+      "V_CVT_SCALEF32_SR_PK8_BF8_F32",
+      "V_CVT_SCALEF32_SR_PK8_FP4_BF16",
+      "V_CVT_SCALEF32_SR_PK8_FP4_F16",
+      "V_CVT_SCALEF32_SR_PK8_FP4_F32",
+      "V_CVT_SCALEF32_SR_PK8_FP8_BF16",
+      "V_CVT_SCALEF32_SR_PK8_FP8_F16",
+      "V_CVT_SCALEF32_SR_PK8_FP8_F32",
+      "V_CVT_SCALE_PK16_BF16_BF6",
+      "V_CVT_SCALE_PK16_BF16_FP6",
+      "V_CVT_SCALE_PK16_F16_BF6",
+      "V_CVT_SCALE_PK16_F16_FP6",
+      "V_CVT_SCALE_PK16_F32_BF6",
+      "V_CVT_SCALE_PK16_F32_FP6",
+      "V_CVT_SCALE_PK8_BF16_BF8",
+      "V_CVT_SCALE_PK8_BF16_FP4",
+      "V_CVT_SCALE_PK8_BF16_FP8",
+      "V_CVT_SCALE_PK8_F16_BF8",
+      "V_CVT_SCALE_PK8_F16_FP4",
+      "V_CVT_SCALE_PK8_F16_FP8",
+      "V_CVT_SCALE_PK8_F32_BF8",
+      "V_CVT_SCALE_PK8_F32_FP4",
+      "V_CVT_SCALE_PK8_F32_FP8",
+      "V_DIV_SCALE_F64",
+      "V_WMMA_LD_SCALE16_PAIRED_B64",
+      "V_WMMA_LD_SCALE_PAIRED_B32",
+      "V_WMMA_SCALE16_F32_16X16X128_F8F6F4",
+      "V_WMMA_SCALE16_F32_32X16X128_F4_w32",
+      "V_WMMA_SCALE_F32_16X16X128_F8F6F4",
+      "V_WMMA_SCALE_F32_32X16X128_F4_w32"
+    ],
+    "vop3": [
+      "V_ADD_MAX_I32",
+      "V_ADD_MAX_U32",
+      "V_ADD_MIN_I32",
+      "V_ADD_MIN_U32",
+      "V_ASHRREV_I64",
+      "V_ASHR_PK_I8_I32",
+      "V_ASHR_PK_U8_I32",
+      "V_BITOP3_B16",
+      "V_BITOP3_B32",
+      "V_CVT_PK_BF16_F32",
+      "V_CVT_PK_BF8_F16",
+      "V_CVT_PK_F16_F32",
+      "V_CVT_PK_FP8_F16",
+      "V_CVT_PK_FP8_F32",
+      "V_CVT_SCALEF32_PK16_BF6_BF16",
+      "V_CVT_SCALEF32_PK16_BF6_F16",
+      "V_CVT_SCALEF32_PK16_BF6_F32",
+      "V_CVT_SCALEF32_PK16_FP6_BF16",
+      "V_CVT_SCALEF32_PK16_FP6_F16",
+      "V_CVT_SCALEF32_PK16_FP6_F32",
+      "V_CVT_SCALEF32_PK8_BF8_BF16",
+      "V_CVT_SCALEF32_PK8_BF8_F16",
+      "V_CVT_SCALEF32_PK8_BF8_F32",
+      "V_CVT_SCALEF32_PK8_FP4_BF16",
+      "V_CVT_SCALEF32_PK8_FP4_F16",
+      "V_CVT_SCALEF32_PK8_FP4_F32",
+      "V_CVT_SCALEF32_PK8_FP8_BF16",
+      "V_CVT_SCALEF32_PK8_FP8_F16",
+      "V_CVT_SCALEF32_PK8_FP8_F32",
+      "V_CVT_SCALEF32_SR_PK16_BF6_BF16",
+      "V_CVT_SCALEF32_SR_PK16_BF6_F16",
+      "V_CVT_SCALEF32_SR_PK16_BF6_F32",
+      "V_CVT_SCALEF32_SR_PK16_FP6_BF16",
+      "V_CVT_SCALEF32_SR_PK16_FP6_F16",
+      "V_CVT_SCALEF32_SR_PK16_FP6_F32",
+      "V_CVT_SCALEF32_SR_PK8_BF8_BF16",
+      "V_CVT_SCALEF32_SR_PK8_BF8_F16",
+      "V_CVT_SCALEF32_SR_PK8_BF8_F32",
+      "V_CVT_SCALEF32_SR_PK8_FP4_BF16",
+      "V_CVT_SCALEF32_SR_PK8_FP4_F16",
+      "V_CVT_SCALEF32_SR_PK8_FP4_F32",
+      "V_CVT_SCALEF32_SR_PK8_FP8_BF16",
+      "V_CVT_SCALEF32_SR_PK8_FP8_F16",
+      "V_CVT_SCALEF32_SR_PK8_FP8_F32",
+      "V_CVT_SCALE_PK16_BF16_BF6",
+      "V_CVT_SCALE_PK16_BF16_FP6",
+      "V_CVT_SCALE_PK16_F16_BF6",
+      "V_CVT_SCALE_PK16_F16_FP6",
+      "V_CVT_SCALE_PK16_F32_BF6",
+      "V_CVT_SCALE_PK16_F32_FP6",
+      "V_CVT_SCALE_PK8_BF16_BF8",
+      "V_CVT_SCALE_PK8_BF16_FP4",
+      "V_CVT_SCALE_PK8_BF16_FP8",
+      "V_CVT_SCALE_PK8_F16_BF8",
+      "V_CVT_SCALE_PK8_F16_FP4",
+      "V_CVT_SCALE_PK8_F16_FP8",
+      "V_CVT_SCALE_PK8_F32_BF8",
+      "V_CVT_SCALE_PK8_F32_FP4",
+      "V_CVT_SCALE_PK8_F32_FP8",
+      "V_CVT_SR_BF8_F16",
+      "V_CVT_SR_FP8_F16",
+      "V_CVT_SR_FP8_F32",
+      "V_CVT_SR_FP8_F32_gfx12",
+      "V_CVT_SR_PK_BF16_F32",
+      "V_CVT_SR_PK_F16_F32",
+      "V_DIV_FIXUP_F64",
+      "V_DIV_FMAS_F64",
+      "V_DIV_SCALE_F64",
+      "V_FMA_F64",
+      "V_LDEXP_F64",
+      "V_LSHL_ADD_U64",
+      "V_LSHRREV_B64",
+      "V_MAD_NC_I64_I32",
+      "V_MAD_NC_U64_U32",
+      "V_MAD_U32",
+      "V_MAX_I64",
+      "V_MAX_U64",
+      "V_MIN_I64",
+      "V_MIN_U64",
+      "V_MUL_HI_I32",
+      "V_MUL_HI_U32",
+      "V_MUL_LO_U32",
+      "V_PERM_PK16_B4_U4",
+      "V_PERM_PK16_B6_U4",
+      "V_PERM_PK16_B8_U4",
+      "V_PK_ADD_BF16",
+      "V_PK_ADD_MAX_I16",
+      "V_PK_ADD_MAX_U16",
+      "V_PK_ADD_MIN_I16",
+      "V_PK_ADD_MIN_U16",
+      "V_PK_FMA_BF16",
+      "V_PK_MAX3_I16",
+      "V_PK_MAX3_NUM_F16",
+      "V_PK_MAX3_U16",
+      "V_PK_MAXIMUM3_F16",
+      "V_PK_MAX_NUM_BF16",
+      "V_PK_MIN3_I16",
+      "V_PK_MIN3_NUM_F16",
+      "V_PK_MIN3_U16",
+      "V_PK_MINIMUM3_F16",
+      "V_PK_MIN_NUM_BF16",
+      "V_PK_MUL_BF16",
+      "V_SWMMAC_BF16F32_16X16X64_BF16_w32",
+      "V_SWMMAC_BF16_16X16X64_BF16_w32",
+      "V_SWMMAC_F16_16X16X128_BF8_BF8_w32",
+      "V_SWMMAC_F16_16X16X128_BF8_FP8_w32",
+      "V_SWMMAC_F16_16X16X128_FP8_BF8_w32",
+      "V_SWMMAC_F16_16X16X128_FP8_FP8_w32",
+      "V_SWMMAC_F16_16X16X64_F16_w32",
+      "V_SWMMAC_F32_16X16X128_BF8_BF8_w32",
+      "V_SWMMAC_F32_16X16X128_BF8_FP8_w32",
+      "V_SWMMAC_F32_16X16X128_FP8_BF8_w32",
+      "V_SWMMAC_F32_16X16X128_FP8_FP8_w32",
+      "V_SWMMAC_F32_16X16X64_BF16_w32",
+      "V_SWMMAC_F32_16X16X64_F16_w32",
+      "V_SWMMAC_I32_16X16X128_IU8_w32",
+      "V_WMMA_BF16F32_16X16X32_BF16_w32",
+      "V_WMMA_BF16_16X16X32_BF16_w32",
+      "V_WMMA_F16_16X16X128_BF8_BF8_w32",
+      "V_WMMA_F16_16X16X128_BF8_FP8_w32",
+      "V_WMMA_F16_16X16X128_FP8_BF8_w32",
+      "V_WMMA_F16_16X16X128_FP8_FP8_w32",
+      "V_WMMA_F16_16X16X32_F16_w32",
+      "V_WMMA_F16_16X16X64_BF8_BF8_w32",
+      "V_WMMA_F16_16X16X64_BF8_FP8_w32",
+      "V_WMMA_F16_16X16X64_FP8_BF8_w32",
+      "V_WMMA_F16_16X16X64_FP8_FP8_w32",
+      "V_WMMA_F32_16X16X128_BF8_BF8_w32",
+      "V_WMMA_F32_16X16X128_BF8_FP8_w32",
+      "V_WMMA_F32_16X16X128_F8F6F4",
+      "V_WMMA_F32_16X16X128_FP8_BF8_w32",
+      "V_WMMA_F32_16X16X128_FP8_FP8_w32",
+      "V_WMMA_F32_16X16X32_BF16_w32",
+      "V_WMMA_F32_16X16X32_F16_w32",
+      "V_WMMA_F32_16X16X4_F32_w32",
+      "V_WMMA_F32_16X16X64_BF8_BF8_w32",
+      "V_WMMA_F32_16X16X64_BF8_FP8_w32",
+      "V_WMMA_F32_16X16X64_FP8_BF8_w32",
+      "V_WMMA_F32_16X16X64_FP8_FP8_w32",
+      "V_WMMA_F32_32X16X128_F4_w32",
+      "V_WMMA_I32_16X16X64_IU8_w32",
+      "V_WMMA_LD_SCALE16_PAIRED_B64",
+      "V_WMMA_LD_SCALE_PAIRED_B32",
+      "V_WMMA_SCALE16_F32_16X16X128_F8F6F4",
+      "V_WMMA_SCALE16_F32_32X16X128_F4_w32",
+      "V_WMMA_SCALE_F32_16X16X128_F8F6F4",
+      "V_WMMA_SCALE_F32_32X16X128_F4_w32"
+    ],
+    "vop3p": [
+      "V_PK_ADD_BF16",
+      "V_PK_ADD_MAX_I16",
+      "V_PK_ADD_MAX_U16",
+      "V_PK_ADD_MIN_I16",
+      "V_PK_ADD_MIN_U16",
+      "V_PK_FMA_BF16",
+      "V_PK_MAX3_I16",
+      "V_PK_MAX3_NUM_F16",
+      "V_PK_MAX3_U16",
+      "V_PK_MAXIMUM3_F16",
+      "V_PK_MAX_NUM_BF16",
+      "V_PK_MIN3_I16",
+      "V_PK_MIN3_NUM_F16",
+      "V_PK_MIN3_U16",
+      "V_PK_MINIMUM3_F16",
+      "V_PK_MIN_NUM_BF16",
+      "V_PK_MUL_BF16",
+      "V_SWMMAC_BF16F32_16X16X64_BF16_w32",
+      "V_SWMMAC_BF16_16X16X64_BF16_w32",
+      "V_SWMMAC_F16_16X16X128_BF8_BF8_w32",
+      "V_SWMMAC_F16_16X16X128_BF8_FP8_w32",
+      "V_SWMMAC_F16_16X16X128_FP8_BF8_w32",
+      "V_SWMMAC_F16_16X16X128_FP8_FP8_w32",
+      "V_SWMMAC_F16_16X16X64_F16_w32",
+      "V_SWMMAC_F32_16X16X128_BF8_BF8_w32",
+      "V_SWMMAC_F32_16X16X128_BF8_FP8_w32",
+      "V_SWMMAC_F32_16X16X128_FP8_BF8_w32",
+      "V_SWMMAC_F32_16X16X128_FP8_FP8_w32",
+      "V_SWMMAC_F32_16X16X64_BF16_w32",
+      "V_SWMMAC_F32_16X16X64_F16_w32",
+      "V_SWMMAC_I32_16X16X128_IU8_w32",
+      "V_WMMA_BF16F32_16X16X32_BF16_w32",
+      "V_WMMA_BF16_16X16X32_BF16_w32",
+      "V_WMMA_F16_16X16X128_BF8_BF8_w32",
+      "V_WMMA_F16_16X16X128_BF8_FP8_w32",
+      "V_WMMA_F16_16X16X128_FP8_BF8_w32",
+      "V_WMMA_F16_16X16X128_FP8_FP8_w32",
+      "V_WMMA_F16_16X16X32_F16_w32",
+      "V_WMMA_F16_16X16X64_BF8_BF8_w32",
+      "V_WMMA_F16_16X16X64_BF8_FP8_w32",
+      "V_WMMA_F16_16X16X64_FP8_BF8_w32",
+      "V_WMMA_F16_16X16X64_FP8_FP8_w32",
+      "V_WMMA_F32_16X16X128_BF8_BF8_w32",
+      "V_WMMA_F32_16X16X128_BF8_FP8_w32",
+      "V_WMMA_F32_16X16X128_F8F6F4",
+      "V_WMMA_F32_16X16X128_FP8_BF8_w32",
+      "V_WMMA_F32_16X16X128_FP8_FP8_w32",
+      "V_WMMA_F32_16X16X32_BF16_w32",
+      "V_WMMA_F32_16X16X32_F16_w32",
+      "V_WMMA_F32_16X16X4_F32_w32",
+      "V_WMMA_F32_16X16X64_BF8_BF8_w32",
+      "V_WMMA_F32_16X16X64_BF8_FP8_w32",
+      "V_WMMA_F32_16X16X64_FP8_BF8_w32",
+      "V_WMMA_F32_16X16X64_FP8_FP8_w32",
+      "V_WMMA_F32_32X16X128_F4_w32",
+      "V_WMMA_I32_16X16X64_IU8_w32",
+      "V_WMMA_LD_SCALE16_PAIRED_B64",
+      "V_WMMA_LD_SCALE_PAIRED_B32",
+      "V_WMMA_SCALE16_F32_16X16X128_F8F6F4",
+      "V_WMMA_SCALE16_F32_32X16X128_F4_w32",
+      "V_WMMA_SCALE_F32_16X16X128_F8F6F4",
+      "V_WMMA_SCALE_F32_32X16X128_F4_w32"
+    ],
+    "wmma": [
+      "TENSOR_LOAD_TO_LDS",
+      "TENSOR_STORE_FROM_LDS",
+      "V_SWMMAC_BF16F32_16X16X64_BF16_w32",
+      "V_SWMMAC_BF16_16X16X64_BF16_w32",
+      "V_SWMMAC_F16_16X16X128_BF8_BF8_w32",
+      "V_SWMMAC_F16_16X16X128_BF8_FP8_w32",
+      "V_SWMMAC_F16_16X16X128_FP8_BF8_w32",
+      "V_SWMMAC_F16_16X16X128_FP8_FP8_w32",
+      "V_SWMMAC_F16_16X16X64_F16_w32",
+      "V_SWMMAC_F32_16X16X128_BF8_BF8_w32",
+      "V_SWMMAC_F32_16X16X128_BF8_FP8_w32",
+      "V_SWMMAC_F32_16X16X128_FP8_BF8_w32",
+      "V_SWMMAC_F32_16X16X128_FP8_FP8_w32",
+      "V_SWMMAC_F32_16X16X64_BF16_w32",
+      "V_SWMMAC_F32_16X16X64_F16_w32",
+      "V_SWMMAC_I32_16X16X128_IU8_w32",
+      "V_WMMA_BF16F32_16X16X32_BF16_w32",
+      "V_WMMA_BF16_16X16X32_BF16_w32",
+      "V_WMMA_F16_16X16X128_BF8_BF8_w32",
+      "V_WMMA_F16_16X16X128_BF8_FP8_w32",
+      "V_WMMA_F16_16X16X128_FP8_BF8_w32",
+      "V_WMMA_F16_16X16X128_FP8_FP8_w32",
+      "V_WMMA_F16_16X16X32_F16_w32",
+      "V_WMMA_F16_16X16X64_BF8_BF8_w32",
+      "V_WMMA_F16_16X16X64_BF8_FP8_w32",
+      "V_WMMA_F16_16X16X64_FP8_BF8_w32",
+      "V_WMMA_F16_16X16X64_FP8_FP8_w32",
+      "V_WMMA_F32_16X16X128_BF8_BF8_w32",
+      "V_WMMA_F32_16X16X128_BF8_FP8_w32",
+      "V_WMMA_F32_16X16X128_F8F6F4",
+      "V_WMMA_F32_16X16X128_FP8_BF8_w32",
+      "V_WMMA_F32_16X16X128_FP8_FP8_w32",
+      "V_WMMA_F32_16X16X32_BF16_w32",
+      "V_WMMA_F32_16X16X32_F16_w32",
+      "V_WMMA_F32_16X16X4_F32_w32",
+      "V_WMMA_F32_16X16X64_BF8_BF8_w32",
+      "V_WMMA_F32_16X16X64_BF8_FP8_w32",
+      "V_WMMA_F32_16X16X64_FP8_BF8_w32",
+      "V_WMMA_F32_16X16X64_FP8_FP8_w32",
+      "V_WMMA_F32_32X16X128_F4_w32",
+      "V_WMMA_I32_16X16X64_IU8_w32",
+      "V_WMMA_LD_SCALE16_PAIRED_B64",
+      "V_WMMA_LD_SCALE_PAIRED_B32",
+      "V_WMMA_SCALE16_F32_16X16X128_F8F6F4",
+      "V_WMMA_SCALE16_F32_32X16X128_F4_w32",
+      "V_WMMA_SCALE_F32_16X16X128_F8F6F4",
+      "V_WMMA_SCALE_F32_32X16X128_F4_w32"
+    ]
+  },
+  "entries": [
+    {
+      "categories": [],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/SOPInstructions.td",
+      "line": 2227,
+      "normalized_symbol": "S_GETPC_B64",
+      "symbol": "S_GETPC_B64",
+      "text": "defm S_GETPC_B64                  : SOP1_Real_gfx1250<0x047, \"s_get_pc_i64\">;"
+    },
+    {
+      "categories": [],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/SOPInstructions.td",
+      "line": 2228,
+      "normalized_symbol": "S_SETPC_B64",
+      "symbol": "S_SETPC_B64",
+      "text": "defm S_SETPC_B64                  : SOP1_Real_gfx1250<0x048, \"s_set_pc_i64\">;"
+    },
+    {
+      "categories": [],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/SOPInstructions.td",
+      "line": 2229,
+      "normalized_symbol": "S_SWAPPC_B64",
+      "symbol": "S_SWAPPC_B64",
+      "text": "defm S_SWAPPC_B64                 : SOP1_Real_gfx1250<0x049, \"s_swap_pc_i64\">;"
+    },
+    {
+      "categories": [],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/SOPInstructions.td",
+      "line": 2230,
+      "normalized_symbol": "S_RFE_B64",
+      "symbol": "S_RFE_B64",
+      "text": "defm S_RFE_B64                    : SOP1_Real_gfx1250<0x04a, \"s_rfe_i64\">;"
+    },
+    {
+      "categories": [],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/SOPInstructions.td",
+      "line": 2629,
+      "normalized_symbol": "S_CALL_B64",
+      "symbol": "S_CALL_B64",
+      "text": "defm S_CALL_B64             : SOPK_Real32_gfx1250<0x014, \"s_call_i64\">;"
+    },
+    {
+      "categories": [],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP1Instructions.td",
+      "line": 318,
+      "normalized_symbol": "V_CVT_F32_BF16",
+      "symbol": "V_CVT_F32_BF16_gfx1250_t16",
+      "text": "defm V_CVT_F32_BF16_gfx1250_t16 : VOP1Inst <\"V_CVT_F32_BF16_gfx1250_t16\", VOPProfile_CVT_F32_BF16_gfx1250_t16>;"
+    },
+    {
+      "categories": [],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP1Instructions.td",
+      "line": 320,
+      "normalized_symbol": "V_CVT_F32_BF16",
+      "symbol": "V_CVT_F32_BF16_gfx1250_fake16",
+      "text": "defm V_CVT_F32_BF16_gfx1250_fake16 : VOP1Inst <\"V_CVT_F32_BF16_gfx1250_fake16\", VOPProfile_CVT_F32_BF16_gfx1250_fake16>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP1Instructions.td",
+      "line": 738,
+      "normalized_symbol": "V_CVT_F32_FP8",
+      "symbol": "V_CVT_F32_FP8_gfx1250",
+      "text": "defm V_CVT_F32_FP8_gfx1250   : VOP1Inst<\"v_cvt_f32_fp8_gfx1250\", VOPProfile_Base_CVT_F_F8_ByteSel<f32, 1>>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP1Instructions.td",
+      "line": 1108,
+      "normalized_symbol": "V_CVT_F32_FP8",
+      "symbol": "V_CVT_F32_FP8",
+      "text": "defm V_CVT_F32_FP8           : VOP1_Real_FULL_with_name_gfx11_gfx12_not_gfx1250<0x06c, \"V_CVT_F32_FP8_OP_SEL\", \"v_cvt_f32_fp8\">;"
+    },
+    {
+      "categories": [
+        "fp8_bf8"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP1Instructions.td",
+      "line": 1109,
+      "normalized_symbol": "V_CVT_F32_FP8",
+      "symbol": "V_CVT_F32_FP8",
+      "text": "defm V_CVT_F32_FP8           : VOP1_Real_FULL_with_name<GFX1250Gen, 0x06c, \"V_CVT_F32_FP8_gfx1250\", \"v_cvt_f32_fp8\">;"
+    },
+    {
+      "categories": [],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP1Instructions.td",
+      "line": 1174,
+      "normalized_symbol": "V_TANH_F16",
+      "symbol": "V_TANH_F16",
+      "text": "defm V_TANH_F16              : VOP1_Real_FULL_t16_and_fake16_gfx1250<0x01f>;"
+    },
+    {
+      "categories": [],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP1Instructions.td",
+      "line": 1175,
+      "normalized_symbol": "V_PERMLANE16_SWAP_B32",
+      "symbol": "V_PERMLANE16_SWAP_B32",
+      "text": "defm V_PERMLANE16_SWAP_B32   : VOP1_Real_OpSelIsDPP_gfx1250<0x049>;"
+    },
+    {
+      "categories": [],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP1Instructions.td",
+      "line": 1176,
+      "normalized_symbol": "V_TANH_BF16",
+      "symbol": "V_TANH_BF16",
+      "text": "defm V_TANH_BF16             : VOP1_Real_FULL_t16_and_fake16_gfx1250<0x04a>;"
+    },
+    {
+      "categories": [],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP1Instructions.td",
+      "line": 1178,
+      "normalized_symbol": "V_CVT_F32_BF16",
+      "symbol": "V_CVT_F32_BF16_gfx1250",
+      "text": "defm V_CVT_F32_BF16_gfx1250  : VOP1_Real_FULL_t16_and_fake16_gfx1250<0x072, \"v_cvt_f32_bf16\">;"
+    },
+    {
+      "categories": [],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP1Instructions.td",
+      "line": 1179,
+      "normalized_symbol": "V_SAT_PK4_I4_I8",
+      "symbol": "V_SAT_PK4_I4_I8",
+      "text": "defm V_SAT_PK4_I4_I8         : VOP1_Real_FULL_t16_and_fake16_gfx1250<0x073>;"
+    },
+    {
+      "categories": [],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP1Instructions.td",
+      "line": 1180,
+      "normalized_symbol": "V_SAT_PK4_U4_U8",
+      "symbol": "V_SAT_PK4_U4_U8",
+      "text": "defm V_SAT_PK4_U4_U8         : VOP1_Real_FULL_t16_and_fake16_gfx1250<0x074>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP1Instructions.td",
+      "line": 1181,
+      "normalized_symbol": "V_CVT_PK_F16_FP8",
+      "symbol": "V_CVT_PK_F16_FP8",
+      "text": "defm V_CVT_PK_F16_FP8        : VOP1_Real_FULL_t16_and_fake16_gfx1250<0x075>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP1Instructions.td",
+      "line": 1182,
+      "normalized_symbol": "V_CVT_PK_F16_BF8",
+      "symbol": "V_CVT_PK_F16_BF8",
+      "text": "defm V_CVT_PK_F16_BF8        : VOP1_Real_FULL_t16_and_fake16_gfx1250<0x076>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP1Instructions.td",
+      "line": 1183,
+      "normalized_symbol": "V_CVT_F16_FP8",
+      "symbol": "V_CVT_F16_FP8",
+      "text": "defm V_CVT_F16_FP8           : VOP1_Real_FULL_t16_and_fake16_gfx1250<0x077>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP1Instructions.td",
+      "line": 1184,
+      "normalized_symbol": "V_CVT_F16_BF8",
+      "symbol": "V_CVT_F16_BF8",
+      "text": "defm V_CVT_F16_BF8           : VOP1_Real_FULL_t16_and_fake16_gfx1250<0x078>;"
+    },
+    {
+      "categories": [],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP1Instructions.td",
+      "line": 1185,
+      "normalized_symbol": "V_RCP_BF16",
+      "symbol": "V_RCP_BF16",
+      "text": "defm V_RCP_BF16              : VOP1_Real_FULL_t16_and_fake16_gfx1250<0x079>;"
+    },
+    {
+      "categories": [],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP1Instructions.td",
+      "line": 1186,
+      "normalized_symbol": "V_SQRT_BF16",
+      "symbol": "V_SQRT_BF16",
+      "text": "defm V_SQRT_BF16             : VOP1_Real_FULL_t16_and_fake16_gfx1250<0x07a>;"
+    },
+    {
+      "categories": [],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP1Instructions.td",
+      "line": 1187,
+      "normalized_symbol": "V_RSQ_BF16",
+      "symbol": "V_RSQ_BF16",
+      "text": "defm V_RSQ_BF16              : VOP1_Real_FULL_t16_and_fake16_gfx1250<0x07b>;"
+    },
+    {
+      "categories": [],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP1Instructions.td",
+      "line": 1188,
+      "normalized_symbol": "V_LOG_BF16",
+      "symbol": "V_LOG_BF16",
+      "text": "defm V_LOG_BF16              : VOP1_Real_FULL_t16_and_fake16_gfx1250<0x07c>;"
+    },
+    {
+      "categories": [],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP1Instructions.td",
+      "line": 1189,
+      "normalized_symbol": "V_EXP_BF16",
+      "symbol": "V_EXP_BF16",
+      "text": "defm V_EXP_BF16              : VOP1_Real_FULL_t16_and_fake16_gfx1250<0x07d>;"
+    },
+    {
+      "categories": [],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP1Instructions.td",
+      "line": 1190,
+      "normalized_symbol": "V_SIN_BF16",
+      "symbol": "V_SIN_BF16",
+      "text": "defm V_SIN_BF16              : VOP1_Real_FULL_t16_and_fake16_gfx1250<0x07e>;"
+    },
+    {
+      "categories": [],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP1Instructions.td",
+      "line": 1191,
+      "normalized_symbol": "V_COS_BF16",
+      "symbol": "V_COS_BF16",
+      "text": "defm V_COS_BF16              : VOP1_Real_FULL_t16_and_fake16_gfx1250<0x07f>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 815,
+      "normalized_symbol": "V_CVT_PK_FP8_F32",
+      "symbol": "V_CVT_PK_FP8_F32_gfx1250",
+      "text": "defm V_CVT_PK_FP8_F32_gfx1250 : VOP3Inst_t16_with_profiles<\"v_cvt_pk_fp8_f32_gfx1250\", VOP3_CVT_PK_F8_F32_Profile<true>,"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 826,
+      "normalized_symbol": "V_CVT_SR_FP8_F32",
+      "symbol": "V_CVT_SR_FP8_F32_gfx1250",
+      "text": "defm V_CVT_SR_FP8_F32_gfx1250 : VOP3Inst<\"v_cvt_sr_fp8_f32_gfx1250\", VOP3_CVT_SR_F8_ByteSel_Profile<f32, true>>;"
+    },
+    {
+      "categories": [
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 1610,
+      "normalized_symbol": "V_BITOP3_B16",
+      "symbol": "V_BITOP3_B16_gfx1250",
+      "text": "defm V_BITOP3_B16_gfx1250 : VOP3Inst_t16_with_profiles <\"v_bitop3_b16_gfx1250\", BitOp3_B16_Profile,"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 1804,
+      "normalized_symbol": "V_CVT_PK_FP8_F16",
+      "symbol": "V_CVT_PK_FP8_F16_gfx1250",
+      "text": "defm V_CVT_PK_FP8_F16_gfx1250 : VOP3Inst_t16_with_profiles<\"v_cvt_pk_fp8_f16_gfx1250\","
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 1809,
+      "normalized_symbol": "V_CVT_PK_BF8_F16",
+      "symbol": "V_CVT_PK_BF8_F16_gfx1250",
+      "text": "defm V_CVT_PK_BF8_F16_gfx1250 : VOP3Inst_t16_with_profiles<\"v_cvt_pk_bf8_f16_gfx1250\","
+    },
+    {
+      "categories": [
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2114,
+      "normalized_symbol": "V_BITOP3_B16",
+      "symbol": "V_BITOP3_B16_gfx1250",
+      "text": "defm V_BITOP3_B16_gfx1250 : VOP3_Real_BITOP3_t16_and_fake16_gfx1250<0x233, \"v_bitop3_b16\">;"
+    },
+    {
+      "categories": [
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2115,
+      "normalized_symbol": "V_BITOP3_B32",
+      "symbol": "V_BITOP3_B32",
+      "text": "defm V_BITOP3_B32         : VOP3_Real_BITOP3_gfx1250<0x234>;"
+    },
+    {
+      "categories": [
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2117,
+      "normalized_symbol": "V_MAD_U32",
+      "symbol": "V_MAD_U32",
+      "text": "defm V_MAD_U32 : VOP3Only_Realtriple_gfx1250<0x235>;"
+    },
+    {
+      "categories": [
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2118,
+      "normalized_symbol": "V_MAD_NC_U64_U32",
+      "symbol": "V_MAD_NC_U64_U32",
+      "text": "defm V_MAD_NC_U64_U32 : VOP3Only_Realtriple_gfx1250<0x2fa>;"
+    },
+    {
+      "categories": [
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2119,
+      "normalized_symbol": "V_MAD_NC_I64_I32",
+      "symbol": "V_MAD_NC_I64_I32",
+      "text": "defm V_MAD_NC_I64_I32 : VOP3Only_Realtriple_gfx1250<0x2fb>;"
+    },
+    {
+      "categories": [
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2120,
+      "normalized_symbol": "V_MIN_U64",
+      "symbol": "V_MIN_U64",
+      "text": "defm V_MIN_U64 : VOP3Only_Realtriple_gfx1250<0x318>;"
+    },
+    {
+      "categories": [
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2121,
+      "normalized_symbol": "V_MAX_U64",
+      "symbol": "V_MAX_U64",
+      "text": "defm V_MAX_U64 : VOP3Only_Realtriple_gfx1250<0x319>;"
+    },
+    {
+      "categories": [
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2122,
+      "normalized_symbol": "V_MIN_I64",
+      "symbol": "V_MIN_I64",
+      "text": "defm V_MIN_I64 : VOP3Only_Realtriple_gfx1250<0x31a>;"
+    },
+    {
+      "categories": [
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2123,
+      "normalized_symbol": "V_MAX_I64",
+      "symbol": "V_MAX_I64",
+      "text": "defm V_MAX_I64 : VOP3Only_Realtriple_gfx1250<0x31b>;"
+    },
+    {
+      "categories": [
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2124,
+      "normalized_symbol": "V_ADD_MAX_I32",
+      "symbol": "V_ADD_MAX_I32",
+      "text": "defm V_ADD_MAX_I32 : VOP3Only_Realtriple_gfx1250<0x25e>;"
+    },
+    {
+      "categories": [
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2125,
+      "normalized_symbol": "V_ADD_MAX_U32",
+      "symbol": "V_ADD_MAX_U32",
+      "text": "defm V_ADD_MAX_U32 : VOP3Only_Realtriple_gfx1250<0x25f>;"
+    },
+    {
+      "categories": [
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2126,
+      "normalized_symbol": "V_ADD_MIN_I32",
+      "symbol": "V_ADD_MIN_I32",
+      "text": "defm V_ADD_MIN_I32 : VOP3Only_Realtriple_gfx1250<0x260>;"
+    },
+    {
+      "categories": [
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2127,
+      "normalized_symbol": "V_ADD_MIN_U32",
+      "symbol": "V_ADD_MIN_U32",
+      "text": "defm V_ADD_MIN_U32 : VOP3Only_Realtriple_gfx1250<0x261>;"
+    },
+    {
+      "categories": [
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2198,
+      "normalized_symbol": "V_FMA_F64",
+      "symbol": "V_FMA_F64",
+      "text": "defm V_FMA_F64             : VOP3_Real_Base_gfx11_gfx12_not_gfx1250<0x214>;"
+    },
+    {
+      "categories": [
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2218,
+      "normalized_symbol": "V_DIV_FIXUP_F64",
+      "symbol": "V_DIV_FIXUP_F64",
+      "text": "defm V_DIV_FIXUP_F64       : VOP3_Real_Base_gfx11_gfx12_not_gfx1250<0x228>;"
+    },
+    {
+      "categories": [
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2220,
+      "normalized_symbol": "V_DIV_FMAS_F64",
+      "symbol": "V_DIV_FMAS_F64",
+      "text": "defm V_DIV_FMAS_F64        : VOP3_Real_Base_gfx11_gfx12_not_gfx1250<0x238>;"
+    },
+    {
+      "categories": [
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2262,
+      "normalized_symbol": "V_DIV_SCALE_F64",
+      "symbol": "V_DIV_SCALE_F64",
+      "text": "defm V_DIV_SCALE_F64       : VOP3be_Real_gfx11_gfx12_not_gfx1250<0x2fd, \"V_DIV_SCALE_F64\", \"v_div_scale_f64\">;"
+    },
+    {
+      "categories": [
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2285,
+      "normalized_symbol": "V_LDEXP_F64",
+      "symbol": "V_LDEXP_F64",
+      "text": "defm V_LDEXP_F64           : VOP3_Real_Base_gfx11_gfx12_not_gfx1250<0x32b>;"
+    },
+    {
+      "categories": [
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2286,
+      "normalized_symbol": "V_MUL_LO_U32",
+      "symbol": "V_MUL_LO_U32",
+      "text": "defm V_MUL_LO_U32          : VOP3_Real_Base_gfx11_gfx12_not_gfx1250<0x32c>;"
+    },
+    {
+      "categories": [
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2287,
+      "normalized_symbol": "V_MUL_HI_U32",
+      "symbol": "V_MUL_HI_U32",
+      "text": "defm V_MUL_HI_U32          : VOP3_Real_Base_gfx11_gfx12_not_gfx1250<0x32d>;"
+    },
+    {
+      "categories": [
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2288,
+      "normalized_symbol": "V_MUL_HI_I32",
+      "symbol": "V_MUL_HI_I32",
+      "text": "defm V_MUL_HI_I32          : VOP3_Real_Base_gfx11_gfx12_not_gfx1250<0x32e>;"
+    },
+    {
+      "categories": [
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2294,
+      "normalized_symbol": "V_LSHRREV_B64",
+      "symbol": "V_LSHRREV_B64",
+      "text": "defm V_LSHRREV_B64         : VOP3_Real_Base_gfx11_gfx12_not_gfx1250<0x33d>;"
+    },
+    {
+      "categories": [
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2295,
+      "normalized_symbol": "V_ASHRREV_I64",
+      "symbol": "V_ASHRREV_I64",
+      "text": "defm V_ASHRREV_I64         : VOP3_Real_Base_gfx11_gfx12_not_gfx1250<0x33e>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2304,
+      "normalized_symbol": "V_CVT_PK_FP8_F32",
+      "symbol": "V_CVT_PK_FP8_F32",
+      "text": "defm V_CVT_PK_FP8_F32         : VOP3Only_Realtriple_t16_and_fake16_gfx11_gfx12_not_gfx1250<0x369, \"v_cvt_pk_fp8_f32\">;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2305,
+      "normalized_symbol": "V_CVT_PK_FP8_F32",
+      "symbol": "V_CVT_PK_FP8_F32_gfx1250",
+      "text": "defm V_CVT_PK_FP8_F32_gfx1250 : VOP3Only_Realtriple_t16_and_fake16_gfx1250<0x369, \"v_cvt_pk_fp8_f32\">;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2307,
+      "normalized_symbol": "V_CVT_SR_FP8_F32_gfx12",
+      "symbol": "V_CVT_SR_FP8_F32_gfx12",
+      "text": "defm V_CVT_SR_FP8_F32_gfx12   : VOP3_Realtriple_with_name_gfx11_gfx12_not_gfx1250<0x36b, \"V_CVT_SR_FP8_F32_gfx12\", \"v_cvt_sr_fp8_f32\">;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2308,
+      "normalized_symbol": "V_CVT_SR_FP8_F32",
+      "symbol": "V_CVT_SR_FP8_F32_gfx1250",
+      "text": "defm V_CVT_SR_FP8_F32_gfx1250 : VOP3Only_Realtriple_with_name_gfx1250<0x36b, \"V_CVT_SR_FP8_F32_gfx1250\", \"v_cvt_sr_fp8_f32\">;"
+    },
+    {
+      "categories": [
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2317,
+      "normalized_symbol": "V_FMA_F64",
+      "symbol": "V_FMA_F64",
+      "text": "defm V_FMA_F64                       : VOP3Only_Realtriple_gfx1250<0x214>;"
+    },
+    {
+      "categories": [
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2318,
+      "normalized_symbol": "V_DIV_FIXUP_F64",
+      "symbol": "V_DIV_FIXUP_F64",
+      "text": "defm V_DIV_FIXUP_F64                 : VOP3Only_Realtriple_gfx1250<0x228>;"
+    },
+    {
+      "categories": [
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2319,
+      "normalized_symbol": "V_DIV_FMAS_F64",
+      "symbol": "V_DIV_FMAS_F64",
+      "text": "defm V_DIV_FMAS_F64                  : VOP3Only_Realtriple_gfx1250<0x238>;"
+    },
+    {
+      "categories": [
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2320,
+      "normalized_symbol": "V_DIV_SCALE_F64",
+      "symbol": "V_DIV_SCALE_F64",
+      "text": "defm V_DIV_SCALE_F64                 : VOP3be_Realtriple_gfx1250<0x2fd>;"
+    },
+    {
+      "categories": [
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2321,
+      "normalized_symbol": "V_LDEXP_F64",
+      "symbol": "V_LDEXP_F64",
+      "text": "defm V_LDEXP_F64                     : VOP3Only_Realtriple_gfx1250<0x32b>;"
+    },
+    {
+      "categories": [
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2322,
+      "normalized_symbol": "V_MUL_LO_U32",
+      "symbol": "V_MUL_LO_U32",
+      "text": "defm V_MUL_LO_U32                    : VOP3Only_Realtriple_gfx1250<0x32c>;"
+    },
+    {
+      "categories": [
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2323,
+      "normalized_symbol": "V_MUL_HI_U32",
+      "symbol": "V_MUL_HI_U32",
+      "text": "defm V_MUL_HI_U32                    : VOP3Only_Realtriple_gfx1250<0x32d>;"
+    },
+    {
+      "categories": [
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2324,
+      "normalized_symbol": "V_MUL_HI_I32",
+      "symbol": "V_MUL_HI_I32",
+      "text": "defm V_MUL_HI_I32                    : VOP3Only_Realtriple_gfx1250<0x32e>;"
+    },
+    {
+      "categories": [
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2325,
+      "normalized_symbol": "V_LSHRREV_B64",
+      "symbol": "V_LSHRREV_B64",
+      "text": "defm V_LSHRREV_B64                   : VOP3Only_Realtriple_gfx1250<0x33d>;"
+    },
+    {
+      "categories": [
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2326,
+      "normalized_symbol": "V_ASHRREV_I64",
+      "symbol": "V_ASHRREV_I64",
+      "text": "defm V_ASHRREV_I64                   : VOP3Only_Realtriple_gfx1250<0x33e>;"
+    },
+    {
+      "categories": [
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2328,
+      "normalized_symbol": "V_PERM_PK16_B4_U4",
+      "symbol": "V_PERM_PK16_B4_U4",
+      "text": "defm V_PERM_PK16_B4_U4               : VOP3Only_Real_Base_gfx1250<0x23f>;"
+    },
+    {
+      "categories": [
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2329,
+      "normalized_symbol": "V_PERM_PK16_B6_U4",
+      "symbol": "V_PERM_PK16_B6_U4",
+      "text": "defm V_PERM_PK16_B6_U4               : VOP3Only_Real_Base_gfx1250<0x242>;"
+    },
+    {
+      "categories": [
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2330,
+      "normalized_symbol": "V_PERM_PK16_B8_U4",
+      "symbol": "V_PERM_PK16_B8_U4",
+      "text": "defm V_PERM_PK16_B8_U4               : VOP3Only_Real_Base_gfx1250<0x243>;"
+    },
+    {
+      "categories": [
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2331,
+      "normalized_symbol": "V_LSHL_ADD_U64",
+      "symbol": "V_LSHL_ADD_U64",
+      "text": "defm V_LSHL_ADD_U64                  : VOP3Only_Realtriple_gfx1250<0x252>;"
+    },
+    {
+      "categories": [
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2332,
+      "normalized_symbol": "V_ASHR_PK_I8_I32",
+      "symbol": "V_ASHR_PK_I8_I32",
+      "text": "defm V_ASHR_PK_I8_I32                : VOP3Only_Realtriple_gfx1250<0x290>;"
+    },
+    {
+      "categories": [
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2333,
+      "normalized_symbol": "V_ASHR_PK_U8_I32",
+      "symbol": "V_ASHR_PK_U8_I32",
+      "text": "defm V_ASHR_PK_U8_I32                : VOP3Only_Realtriple_gfx1250<0x291>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2334,
+      "normalized_symbol": "V_CVT_SCALE_PK8_F16_FP4",
+      "symbol": "V_CVT_SCALE_PK8_F16_FP4",
+      "text": "defm V_CVT_SCALE_PK8_F16_FP4         : VOP3Only_ScaleSel_Real_gfx1250<0x29f>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2335,
+      "normalized_symbol": "V_CVT_SCALE_PK8_BF16_FP4",
+      "symbol": "V_CVT_SCALE_PK8_BF16_FP4",
+      "text": "defm V_CVT_SCALE_PK8_BF16_FP4        : VOP3Only_ScaleSel_Real_gfx1250<0x2a0>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2336,
+      "normalized_symbol": "V_CVT_SCALE_PK8_F32_FP4",
+      "symbol": "V_CVT_SCALE_PK8_F32_FP4",
+      "text": "defm V_CVT_SCALE_PK8_F32_FP4         : VOP3Only_ScaleSel_Real_gfx1250<0x2a1>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2337,
+      "normalized_symbol": "V_CVT_SCALE_PK8_F16_FP8",
+      "symbol": "V_CVT_SCALE_PK8_F16_FP8",
+      "text": "defm V_CVT_SCALE_PK8_F16_FP8         : VOP3Only_ScaleSel_Real_gfx1250<0x2a8>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2338,
+      "normalized_symbol": "V_CVT_SCALE_PK8_BF16_FP8",
+      "symbol": "V_CVT_SCALE_PK8_BF16_FP8",
+      "text": "defm V_CVT_SCALE_PK8_BF16_FP8        : VOP3Only_ScaleSel_Real_gfx1250<0x2a9>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2339,
+      "normalized_symbol": "V_CVT_SCALE_PK8_F32_FP8",
+      "symbol": "V_CVT_SCALE_PK8_F32_FP8",
+      "text": "defm V_CVT_SCALE_PK8_F32_FP8         : VOP3Only_ScaleSel_Real_gfx1250<0x2aa>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2340,
+      "normalized_symbol": "V_CVT_SCALE_PK8_F16_BF8",
+      "symbol": "V_CVT_SCALE_PK8_F16_BF8",
+      "text": "defm V_CVT_SCALE_PK8_F16_BF8         : VOP3Only_ScaleSel_Real_gfx1250<0x2ab>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2341,
+      "normalized_symbol": "V_CVT_SCALE_PK8_BF16_BF8",
+      "symbol": "V_CVT_SCALE_PK8_BF16_BF8",
+      "text": "defm V_CVT_SCALE_PK8_BF16_BF8        : VOP3Only_ScaleSel_Real_gfx1250<0x2ac>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2342,
+      "normalized_symbol": "V_CVT_SCALE_PK8_F32_BF8",
+      "symbol": "V_CVT_SCALE_PK8_F32_BF8",
+      "text": "defm V_CVT_SCALE_PK8_F32_BF8         : VOP3Only_ScaleSel_Real_gfx1250<0x2ad>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2343,
+      "normalized_symbol": "V_CVT_SCALEF32_PK8_FP4_F32",
+      "symbol": "V_CVT_SCALEF32_PK8_FP4_F32",
+      "text": "defm V_CVT_SCALEF32_PK8_FP4_F32      : VOP3Only_Real_Base_gfx1250<0x2b0>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2344,
+      "normalized_symbol": "V_CVT_SCALEF32_PK8_FP4_F16",
+      "symbol": "V_CVT_SCALEF32_PK8_FP4_F16",
+      "text": "defm V_CVT_SCALEF32_PK8_FP4_F16      : VOP3Only_Real_Base_gfx1250<0x2b3>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2345,
+      "normalized_symbol": "V_CVT_SCALEF32_PK8_FP8_BF16",
+      "symbol": "V_CVT_SCALEF32_PK8_FP8_BF16",
+      "text": "defm V_CVT_SCALEF32_PK8_FP8_BF16     : VOP3Only_Real_Base_gfx1250<0x2b4>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2346,
+      "normalized_symbol": "V_CVT_SCALEF32_PK8_BF8_BF16",
+      "symbol": "V_CVT_SCALEF32_PK8_BF8_BF16",
+      "text": "defm V_CVT_SCALEF32_PK8_BF8_BF16     : VOP3Only_Real_Base_gfx1250<0x2b5>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2347,
+      "normalized_symbol": "V_CVT_SCALEF32_PK8_FP4_BF16",
+      "symbol": "V_CVT_SCALEF32_PK8_FP4_BF16",
+      "text": "defm V_CVT_SCALEF32_PK8_FP4_BF16     : VOP3Only_Real_Base_gfx1250<0x2b8>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2348,
+      "normalized_symbol": "V_CVT_SCALEF32_PK8_FP8_F32",
+      "symbol": "V_CVT_SCALEF32_PK8_FP8_F32",
+      "text": "defm V_CVT_SCALEF32_PK8_FP8_F32      : VOP3Only_Real_Base_gfx1250<0x2c3>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2349,
+      "normalized_symbol": "V_CVT_SCALEF32_PK8_FP8_F16",
+      "symbol": "V_CVT_SCALEF32_PK8_FP8_F16",
+      "text": "defm V_CVT_SCALEF32_PK8_FP8_F16      : VOP3Only_Real_Base_gfx1250<0x2c4>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2350,
+      "normalized_symbol": "V_CVT_SCALEF32_PK8_BF8_F32",
+      "symbol": "V_CVT_SCALEF32_PK8_BF8_F32",
+      "text": "defm V_CVT_SCALEF32_PK8_BF8_F32      : VOP3Only_Real_Base_gfx1250<0x2c5>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2351,
+      "normalized_symbol": "V_CVT_SCALEF32_PK8_BF8_F16",
+      "symbol": "V_CVT_SCALEF32_PK8_BF8_F16",
+      "text": "defm V_CVT_SCALEF32_PK8_BF8_F16      : VOP3Only_Real_Base_gfx1250<0x2c6>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2352,
+      "normalized_symbol": "V_CVT_SCALE_PK16_F16_FP6",
+      "symbol": "V_CVT_SCALE_PK16_F16_FP6",
+      "text": "defm V_CVT_SCALE_PK16_F16_FP6        : VOP3Only_ScaleSel_Real_gfx1250<0x2c7>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2353,
+      "normalized_symbol": "V_CVT_SCALE_PK16_BF16_FP6",
+      "symbol": "V_CVT_SCALE_PK16_BF16_FP6",
+      "text": "defm V_CVT_SCALE_PK16_BF16_FP6       : VOP3Only_ScaleSel_Real_gfx1250<0x2c8>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2354,
+      "normalized_symbol": "V_CVT_SCALE_PK16_F32_FP6",
+      "symbol": "V_CVT_SCALE_PK16_F32_FP6",
+      "text": "defm V_CVT_SCALE_PK16_F32_FP6        : VOP3Only_ScaleSel_Real_gfx1250<0x2c9>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2355,
+      "normalized_symbol": "V_CVT_SCALE_PK16_F16_BF6",
+      "symbol": "V_CVT_SCALE_PK16_F16_BF6",
+      "text": "defm V_CVT_SCALE_PK16_F16_BF6        : VOP3Only_ScaleSel_Real_gfx1250<0x2ca>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2356,
+      "normalized_symbol": "V_CVT_SCALE_PK16_BF16_BF6",
+      "symbol": "V_CVT_SCALE_PK16_BF16_BF6",
+      "text": "defm V_CVT_SCALE_PK16_BF16_BF6       : VOP3Only_ScaleSel_Real_gfx1250<0x2cb>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2357,
+      "normalized_symbol": "V_CVT_SCALE_PK16_F32_BF6",
+      "symbol": "V_CVT_SCALE_PK16_F32_BF6",
+      "text": "defm V_CVT_SCALE_PK16_F32_BF6        : VOP3Only_ScaleSel_Real_gfx1250<0x2cc>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2358,
+      "normalized_symbol": "V_CVT_SCALEF32_PK16_FP6_F32",
+      "symbol": "V_CVT_SCALEF32_PK16_FP6_F32",
+      "text": "defm V_CVT_SCALEF32_PK16_FP6_F32     : VOP3Only_Real_Base_gfx1250<0x2cd>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2359,
+      "normalized_symbol": "V_CVT_SCALEF32_PK16_BF6_F32",
+      "symbol": "V_CVT_SCALEF32_PK16_BF6_F32",
+      "text": "defm V_CVT_SCALEF32_PK16_BF6_F32     : VOP3Only_Real_Base_gfx1250<0x2ce>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2360,
+      "normalized_symbol": "V_CVT_SCALEF32_PK16_FP6_F16",
+      "symbol": "V_CVT_SCALEF32_PK16_FP6_F16",
+      "text": "defm V_CVT_SCALEF32_PK16_FP6_F16     : VOP3Only_Real_Base_gfx1250<0x2cf>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2361,
+      "normalized_symbol": "V_CVT_SCALEF32_PK16_BF6_F16",
+      "symbol": "V_CVT_SCALEF32_PK16_BF6_F16",
+      "text": "defm V_CVT_SCALEF32_PK16_BF6_F16     : VOP3Only_Real_Base_gfx1250<0x2d0>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2362,
+      "normalized_symbol": "V_CVT_SCALEF32_PK16_FP6_BF16",
+      "symbol": "V_CVT_SCALEF32_PK16_FP6_BF16",
+      "text": "defm V_CVT_SCALEF32_PK16_FP6_BF16    : VOP3Only_Real_Base_gfx1250<0x2d1>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2363,
+      "normalized_symbol": "V_CVT_SCALEF32_PK16_BF6_BF16",
+      "symbol": "V_CVT_SCALEF32_PK16_BF6_BF16",
+      "text": "defm V_CVT_SCALEF32_PK16_BF6_BF16    : VOP3Only_Real_Base_gfx1250<0x2d2>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2364,
+      "normalized_symbol": "V_CVT_SCALEF32_SR_PK16_FP6_F32",
+      "symbol": "V_CVT_SCALEF32_SR_PK16_FP6_F32",
+      "text": "defm V_CVT_SCALEF32_SR_PK16_FP6_F32  : VOP3Only_Real_Base_gfx1250<0x2d3>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2365,
+      "normalized_symbol": "V_CVT_SCALEF32_SR_PK16_BF6_F32",
+      "symbol": "V_CVT_SCALEF32_SR_PK16_BF6_F32",
+      "text": "defm V_CVT_SCALEF32_SR_PK16_BF6_F32  : VOP3Only_Real_Base_gfx1250<0x2d4>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2366,
+      "normalized_symbol": "V_CVT_SCALEF32_SR_PK16_FP6_F16",
+      "symbol": "V_CVT_SCALEF32_SR_PK16_FP6_F16",
+      "text": "defm V_CVT_SCALEF32_SR_PK16_FP6_F16  : VOP3Only_Real_Base_gfx1250<0x2d5>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2367,
+      "normalized_symbol": "V_CVT_SCALEF32_SR_PK16_BF6_F16",
+      "symbol": "V_CVT_SCALEF32_SR_PK16_BF6_F16",
+      "text": "defm V_CVT_SCALEF32_SR_PK16_BF6_F16  : VOP3Only_Real_Base_gfx1250<0x2d6>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2368,
+      "normalized_symbol": "V_CVT_SCALEF32_SR_PK16_FP6_BF16",
+      "symbol": "V_CVT_SCALEF32_SR_PK16_FP6_BF16",
+      "text": "defm V_CVT_SCALEF32_SR_PK16_FP6_BF16 : VOP3Only_Real_Base_gfx1250<0x2d7>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2369,
+      "normalized_symbol": "V_CVT_SCALEF32_SR_PK16_BF6_BF16",
+      "symbol": "V_CVT_SCALEF32_SR_PK16_BF6_BF16",
+      "text": "defm V_CVT_SCALEF32_SR_PK16_BF6_BF16 : VOP3Only_Real_Base_gfx1250<0x2d8>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2370,
+      "normalized_symbol": "V_CVT_SCALEF32_SR_PK8_FP4_F32",
+      "symbol": "V_CVT_SCALEF32_SR_PK8_FP4_F32",
+      "text": "defm V_CVT_SCALEF32_SR_PK8_FP4_F32   : VOP3Only_Real_Base_gfx1250<0x297>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2371,
+      "normalized_symbol": "V_CVT_SCALEF32_SR_PK8_FP8_F32",
+      "symbol": "V_CVT_SCALEF32_SR_PK8_FP8_F32",
+      "text": "defm V_CVT_SCALEF32_SR_PK8_FP8_F32   : VOP3Only_Real_Base_gfx1250<0x298>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2372,
+      "normalized_symbol": "V_CVT_SCALEF32_SR_PK8_BF8_F32",
+      "symbol": "V_CVT_SCALEF32_SR_PK8_BF8_F32",
+      "text": "defm V_CVT_SCALEF32_SR_PK8_BF8_F32   : VOP3Only_Real_Base_gfx1250<0x299>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2373,
+      "normalized_symbol": "V_CVT_SCALEF32_SR_PK8_FP4_F16",
+      "symbol": "V_CVT_SCALEF32_SR_PK8_FP4_F16",
+      "text": "defm V_CVT_SCALEF32_SR_PK8_FP4_F16   : VOP3Only_Real_Base_gfx1250<0x2b9>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2374,
+      "normalized_symbol": "V_CVT_SCALEF32_SR_PK8_FP4_BF16",
+      "symbol": "V_CVT_SCALEF32_SR_PK8_FP4_BF16",
+      "text": "defm V_CVT_SCALEF32_SR_PK8_FP4_BF16  : VOP3Only_Real_Base_gfx1250<0x2bc>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2375,
+      "normalized_symbol": "V_CVT_SCALEF32_SR_PK8_FP8_F16",
+      "symbol": "V_CVT_SCALEF32_SR_PK8_FP8_F16",
+      "text": "defm V_CVT_SCALEF32_SR_PK8_FP8_F16   : VOP3Only_Real_Base_gfx1250<0x2bf>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2376,
+      "normalized_symbol": "V_CVT_SCALEF32_SR_PK8_FP8_BF16",
+      "symbol": "V_CVT_SCALEF32_SR_PK8_FP8_BF16",
+      "text": "defm V_CVT_SCALEF32_SR_PK8_FP8_BF16  : VOP3Only_Real_Base_gfx1250<0x2c0>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2377,
+      "normalized_symbol": "V_CVT_SCALEF32_SR_PK8_BF8_F16",
+      "symbol": "V_CVT_SCALEF32_SR_PK8_BF8_F16",
+      "text": "defm V_CVT_SCALEF32_SR_PK8_BF8_F16   : VOP3Only_Real_Base_gfx1250<0x2c1>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2378,
+      "normalized_symbol": "V_CVT_SCALEF32_SR_PK8_BF8_BF16",
+      "symbol": "V_CVT_SCALEF32_SR_PK8_BF8_BF16",
+      "text": "defm V_CVT_SCALEF32_SR_PK8_BF8_BF16  : VOP3Only_Real_Base_gfx1250<0x2c2>;"
+    },
+    {
+      "categories": [
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2379,
+      "normalized_symbol": "V_CVT_PK_BF16_F32",
+      "symbol": "V_CVT_PK_BF16_F32",
+      "text": "defm V_CVT_PK_BF16_F32               : VOP3Only_Realtriple_gfx1250<0x36d>;"
+    },
+    {
+      "categories": [
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2380,
+      "normalized_symbol": "V_CVT_SR_PK_BF16_F32",
+      "symbol": "V_CVT_SR_PK_BF16_F32",
+      "text": "defm V_CVT_SR_PK_BF16_F32            : VOP3Only_Realtriple_gfx1250<0x36e>;"
+    },
+    {
+      "categories": [
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2381,
+      "normalized_symbol": "V_CVT_PK_F16_F32",
+      "symbol": "V_CVT_PK_F16_F32",
+      "text": "defm V_CVT_PK_F16_F32                : VOP3Only_Realtriple_gfx1250<0x36f>;"
+    },
+    {
+      "categories": [
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2382,
+      "normalized_symbol": "V_CVT_SR_PK_F16_F32",
+      "symbol": "V_CVT_SR_PK_F16_F32",
+      "text": "defm V_CVT_SR_PK_F16_F32             : VOP3Only_Realtriple_gfx1250<0x370>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2383,
+      "normalized_symbol": "V_CVT_PK_FP8_F16",
+      "symbol": "V_CVT_PK_FP8_F16_gfx1250",
+      "text": "defm V_CVT_PK_FP8_F16_gfx1250        : VOP3Only_Realtriple_t16_and_fake16_gfx1250<0x372, \"v_cvt_pk_fp8_f16\">;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2384,
+      "normalized_symbol": "V_CVT_PK_BF8_F16",
+      "symbol": "V_CVT_PK_BF8_F16_gfx1250",
+      "text": "defm V_CVT_PK_BF8_F16_gfx1250        : VOP3Only_Realtriple_t16_and_fake16_gfx1250<0x373, \"v_cvt_pk_bf8_f16\">;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2385,
+      "normalized_symbol": "V_CVT_SR_FP8_F16",
+      "symbol": "V_CVT_SR_FP8_F16",
+      "text": "defm V_CVT_SR_FP8_F16                : VOP3Only_Realtriple_t16_and_fake16_gfx1250<0x374>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "vop3"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3Instructions.td",
+      "line": 2386,
+      "normalized_symbol": "V_CVT_SR_BF8_F16",
+      "symbol": "V_CVT_SR_BF8_F16",
+      "text": "defm V_CVT_SR_BF8_F16                : VOP3Only_Realtriple_t16_and_fake16_gfx1250<0x375>;"
+    },
+    {
+      "categories": [
+        "vop3",
+        "vop3p",
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2369,
+      "normalized_symbol": "V_WMMA_F32_16X16X4_F32_w32",
+      "symbol": "V_WMMA_F32_16X16X4_F32_w32",
+      "text": "defm V_WMMA_F32_16X16X4_F32_w32       : VOP3P_Real_WMMA_gfx1250 <0x05d, F32_F32_WMMA_w32>;"
+    },
+    {
+      "categories": [
+        "vop3",
+        "vop3p",
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2370,
+      "normalized_symbol": "V_WMMA_F32_16X16X32_BF16_w32",
+      "symbol": "V_WMMA_F32_16X16X32_BF16_w32",
+      "text": "defm V_WMMA_F32_16X16X32_BF16_w32     : VOP3P_Real_WMMA_gfx1250 <0x062, F32_BF16X32_WMMA_w32>;"
+    },
+    {
+      "categories": [
+        "vop3",
+        "vop3p",
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2371,
+      "normalized_symbol": "V_WMMA_F32_16X16X32_F16_w32",
+      "symbol": "V_WMMA_F32_16X16X32_F16_w32",
+      "text": "defm V_WMMA_F32_16X16X32_F16_w32      : VOP3P_Real_WMMA_gfx1250 <0x060, F32_F16X32_WMMA_w32>;"
+    },
+    {
+      "categories": [
+        "vop3",
+        "vop3p",
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2372,
+      "normalized_symbol": "V_WMMA_F16_16X16X32_F16_w32",
+      "symbol": "V_WMMA_F16_16X16X32_F16_w32",
+      "text": "defm V_WMMA_F16_16X16X32_F16_w32      : VOP3P_Real_WMMA_gfx1250 <0x061, F16_F16X32_WMMA_w32>;"
+    },
+    {
+      "categories": [
+        "vop3",
+        "vop3p",
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2373,
+      "normalized_symbol": "V_WMMA_BF16_16X16X32_BF16_w32",
+      "symbol": "V_WMMA_BF16_16X16X32_BF16_w32",
+      "text": "defm V_WMMA_BF16_16X16X32_BF16_w32    : VOP3P_Real_WMMA_gfx1250 <0x063, BF16_BF16X32_WMMA_w32>;"
+    },
+    {
+      "categories": [
+        "vop3",
+        "vop3p",
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2374,
+      "normalized_symbol": "V_WMMA_BF16F32_16X16X32_BF16_w32",
+      "symbol": "V_WMMA_BF16F32_16X16X32_BF16_w32",
+      "text": "defm V_WMMA_BF16F32_16X16X32_BF16_w32 : VOP3P_Real_WMMA_gfx1250 <0x064, BF16F32_BF16_WMMA_w32>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "vop3",
+        "vop3p",
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2375,
+      "normalized_symbol": "V_WMMA_F32_16X16X64_FP8_FP8_w32",
+      "symbol": "V_WMMA_F32_16X16X64_FP8_FP8_w32",
+      "text": "defm V_WMMA_F32_16X16X64_FP8_FP8_w32  : VOP3P_Real_WMMA_gfx1250 <0x06a, F32_FP8BF8X64_WMMA_w32>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "vop3",
+        "vop3p",
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2376,
+      "normalized_symbol": "V_WMMA_F32_16X16X64_FP8_BF8_w32",
+      "symbol": "V_WMMA_F32_16X16X64_FP8_BF8_w32",
+      "text": "defm V_WMMA_F32_16X16X64_FP8_BF8_w32  : VOP3P_Real_WMMA_gfx1250 <0x06b, F32_FP8BF8X64_WMMA_w32>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "vop3",
+        "vop3p",
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2377,
+      "normalized_symbol": "V_WMMA_F32_16X16X64_BF8_FP8_w32",
+      "symbol": "V_WMMA_F32_16X16X64_BF8_FP8_w32",
+      "text": "defm V_WMMA_F32_16X16X64_BF8_FP8_w32  : VOP3P_Real_WMMA_gfx1250 <0x06c, F32_FP8BF8X64_WMMA_w32>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "vop3",
+        "vop3p",
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2378,
+      "normalized_symbol": "V_WMMA_F32_16X16X64_BF8_BF8_w32",
+      "symbol": "V_WMMA_F32_16X16X64_BF8_BF8_w32",
+      "text": "defm V_WMMA_F32_16X16X64_BF8_BF8_w32  : VOP3P_Real_WMMA_gfx1250 <0x06d, F32_FP8BF8X64_WMMA_w32>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "vop3",
+        "vop3p",
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2379,
+      "normalized_symbol": "V_WMMA_F16_16X16X64_FP8_FP8_w32",
+      "symbol": "V_WMMA_F16_16X16X64_FP8_FP8_w32",
+      "text": "defm V_WMMA_F16_16X16X64_FP8_FP8_w32  : VOP3P_Real_WMMA_gfx1250 <0x06e, F16_FP8BF8X64_WMMA_w32>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "vop3",
+        "vop3p",
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2380,
+      "normalized_symbol": "V_WMMA_F16_16X16X64_FP8_BF8_w32",
+      "symbol": "V_WMMA_F16_16X16X64_FP8_BF8_w32",
+      "text": "defm V_WMMA_F16_16X16X64_FP8_BF8_w32  : VOP3P_Real_WMMA_gfx1250 <0x06f, F16_FP8BF8X64_WMMA_w32>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "vop3",
+        "vop3p",
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2381,
+      "normalized_symbol": "V_WMMA_F16_16X16X64_BF8_FP8_w32",
+      "symbol": "V_WMMA_F16_16X16X64_BF8_FP8_w32",
+      "text": "defm V_WMMA_F16_16X16X64_BF8_FP8_w32  : VOP3P_Real_WMMA_gfx1250 <0x070, F16_FP8BF8X64_WMMA_w32>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "vop3",
+        "vop3p",
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2382,
+      "normalized_symbol": "V_WMMA_F16_16X16X64_BF8_BF8_w32",
+      "symbol": "V_WMMA_F16_16X16X64_BF8_BF8_w32",
+      "text": "defm V_WMMA_F16_16X16X64_BF8_BF8_w32  : VOP3P_Real_WMMA_gfx1250 <0x071, F16_FP8BF8X64_WMMA_w32>;"
+    },
+    {
+      "categories": [
+        "vop3",
+        "vop3p",
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2383,
+      "normalized_symbol": "V_WMMA_I32_16X16X64_IU8_w32",
+      "symbol": "V_WMMA_I32_16X16X64_IU8_w32",
+      "text": "defm V_WMMA_I32_16X16X64_IU8_w32      : VOP3P_Real_WMMA_gfx1250 <0x072, I32_IU8X64_WMMA_w32>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "vop3",
+        "vop3p",
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2384,
+      "normalized_symbol": "V_WMMA_F32_16X16X128_FP8_FP8_w32",
+      "symbol": "V_WMMA_F32_16X16X128_FP8_FP8_w32",
+      "text": "defm V_WMMA_F32_16X16X128_FP8_FP8_w32 : VOP3P_Real_WMMA_gfx1250 <0x080, F32_FP8BF8X128_WMMA_w32>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "vop3",
+        "vop3p",
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2385,
+      "normalized_symbol": "V_WMMA_F32_16X16X128_FP8_BF8_w32",
+      "symbol": "V_WMMA_F32_16X16X128_FP8_BF8_w32",
+      "text": "defm V_WMMA_F32_16X16X128_FP8_BF8_w32 : VOP3P_Real_WMMA_gfx1250 <0x081, F32_FP8BF8X128_WMMA_w32>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "vop3",
+        "vop3p",
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2386,
+      "normalized_symbol": "V_WMMA_F32_16X16X128_BF8_FP8_w32",
+      "symbol": "V_WMMA_F32_16X16X128_BF8_FP8_w32",
+      "text": "defm V_WMMA_F32_16X16X128_BF8_FP8_w32 : VOP3P_Real_WMMA_gfx1250 <0x082, F32_FP8BF8X128_WMMA_w32>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "vop3",
+        "vop3p",
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2387,
+      "normalized_symbol": "V_WMMA_F32_16X16X128_BF8_BF8_w32",
+      "symbol": "V_WMMA_F32_16X16X128_BF8_BF8_w32",
+      "text": "defm V_WMMA_F32_16X16X128_BF8_BF8_w32 : VOP3P_Real_WMMA_gfx1250 <0x083, F32_FP8BF8X128_WMMA_w32>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "vop3",
+        "vop3p",
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2388,
+      "normalized_symbol": "V_WMMA_F16_16X16X128_FP8_FP8_w32",
+      "symbol": "V_WMMA_F16_16X16X128_FP8_FP8_w32",
+      "text": "defm V_WMMA_F16_16X16X128_FP8_FP8_w32 : VOP3P_Real_WMMA_gfx1250 <0x084, F16_FP8BF8X128_WMMA_w32>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "vop3",
+        "vop3p",
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2389,
+      "normalized_symbol": "V_WMMA_F16_16X16X128_FP8_BF8_w32",
+      "symbol": "V_WMMA_F16_16X16X128_FP8_BF8_w32",
+      "text": "defm V_WMMA_F16_16X16X128_FP8_BF8_w32 : VOP3P_Real_WMMA_gfx1250 <0x085, F16_FP8BF8X128_WMMA_w32>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "vop3",
+        "vop3p",
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2390,
+      "normalized_symbol": "V_WMMA_F16_16X16X128_BF8_FP8_w32",
+      "symbol": "V_WMMA_F16_16X16X128_BF8_FP8_w32",
+      "text": "defm V_WMMA_F16_16X16X128_BF8_FP8_w32 : VOP3P_Real_WMMA_gfx1250 <0x086, F16_FP8BF8X128_WMMA_w32>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "vop3",
+        "vop3p",
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2391,
+      "normalized_symbol": "V_WMMA_F16_16X16X128_BF8_BF8_w32",
+      "symbol": "V_WMMA_F16_16X16X128_BF8_BF8_w32",
+      "text": "defm V_WMMA_F16_16X16X128_BF8_BF8_w32 : VOP3P_Real_WMMA_gfx1250 <0x087, F16_FP8BF8X128_WMMA_w32>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "vop3",
+        "vop3p",
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2392,
+      "normalized_symbol": "V_WMMA_F32_32X16X128_F4_w32",
+      "symbol": "V_WMMA_F32_32X16X128_F4_w32",
+      "text": "defm V_WMMA_F32_32X16X128_F4_w32      : VOP3P_Real_WMMA_gfx1250 <0x088, F32_32X16X128_F4_WMMA_w32>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "vop3",
+        "vop3p",
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2395,
+      "normalized_symbol": "V_WMMA_F32_16X16X128_F8F6F4",
+      "symbol": "V_WMMA_F32_16X16X128_F8F6F4",
+      "text": "defm V_WMMA_F32_16X16X128_F8F6F4         : VOP3P_Real_WMMA_SrcFormats <\"gfx1250\", 0x033, \"F32_16X16X128_F8F6F4\">;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3",
+        "vop3p",
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2396,
+      "normalized_symbol": "V_WMMA_SCALE_F32_16X16X128_F8F6F4",
+      "symbol": "V_WMMA_SCALE_F32_16X16X128_F8F6F4",
+      "text": "defm V_WMMA_SCALE_F32_16X16X128_F8F6F4   : VOP3PX2_Real_ScaledWMMA_SrcFormats <\"gfx1250\", 0x033, 0x35, \"F32_16X16X128_F8F6F4_SCALE\">;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3",
+        "vop3p",
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2397,
+      "normalized_symbol": "V_WMMA_SCALE16_F32_16X16X128_F8F6F4",
+      "symbol": "V_WMMA_SCALE16_F32_16X16X128_F8F6F4",
+      "text": "defm V_WMMA_SCALE16_F32_16X16X128_F8F6F4 : VOP3PX2_Real_ScaledWMMA_SrcFormats <\"gfx1250\", 0x033, 0x3a, \"F32_16X16X128_F8F6F4_SCALE16\">;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3",
+        "vop3p",
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2399,
+      "normalized_symbol": "V_WMMA_SCALE_F32_32X16X128_F4_w32",
+      "symbol": "V_WMMA_SCALE_F32_32X16X128_F4_w32",
+      "text": "defm V_WMMA_SCALE_F32_32X16X128_F4_w32   : VOP3PX2_Real_ScaledWMMA_F4 <\"gfx1250\", 0x088, 0x35, F32_32X16X128_F4_SCALE_w32>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "scale_paired",
+        "vop3",
+        "vop3p",
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2400,
+      "normalized_symbol": "V_WMMA_SCALE16_F32_32X16X128_F4_w32",
+      "symbol": "V_WMMA_SCALE16_F32_32X16X128_F4_w32",
+      "text": "defm V_WMMA_SCALE16_F32_32X16X128_F4_w32 : VOP3PX2_Real_ScaledWMMA_F4 <\"gfx1250\", 0x088, 0x3a, F32_32X16X128_F4_SCALE16_w32>;"
+    },
+    {
+      "categories": [
+        "vop3",
+        "vop3p",
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2403,
+      "normalized_symbol": "V_SWMMAC_F32_16X16X64_F16_w32",
+      "symbol": "V_SWMMAC_F32_16X16X64_F16_w32",
+      "text": "defm V_SWMMAC_F32_16X16X64_F16_w32      : VOP3P_Real_WMMA_gfx1250 <0x065, F32_F16X64_SWMMAC_w32>;"
+    },
+    {
+      "categories": [
+        "vop3",
+        "vop3p",
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2404,
+      "normalized_symbol": "V_SWMMAC_F32_16X16X64_BF16_w32",
+      "symbol": "V_SWMMAC_F32_16X16X64_BF16_w32",
+      "text": "defm V_SWMMAC_F32_16X16X64_BF16_w32     : VOP3P_Real_WMMA_gfx1250 <0x066, F32_BF16X64_SWMMAC_w32>;"
+    },
+    {
+      "categories": [
+        "vop3",
+        "vop3p",
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2405,
+      "normalized_symbol": "V_SWMMAC_F16_16X16X64_F16_w32",
+      "symbol": "V_SWMMAC_F16_16X16X64_F16_w32",
+      "text": "defm V_SWMMAC_F16_16X16X64_F16_w32      : VOP3P_Real_WMMA_gfx1250 <0x067, F16_F16X64_SWMMAC_w32>;"
+    },
+    {
+      "categories": [
+        "vop3",
+        "vop3p",
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2406,
+      "normalized_symbol": "V_SWMMAC_BF16_16X16X64_BF16_w32",
+      "symbol": "V_SWMMAC_BF16_16X16X64_BF16_w32",
+      "text": "defm V_SWMMAC_BF16_16X16X64_BF16_w32    : VOP3P_Real_WMMA_gfx1250 <0x068, BF16_BF16X64_SWMMAC_w32>;"
+    },
+    {
+      "categories": [
+        "vop3",
+        "vop3p",
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2407,
+      "normalized_symbol": "V_SWMMAC_BF16F32_16X16X64_BF16_w32",
+      "symbol": "V_SWMMAC_BF16F32_16X16X64_BF16_w32",
+      "text": "defm V_SWMMAC_BF16F32_16X16X64_BF16_w32 : VOP3P_Real_WMMA_gfx1250 <0x069, F32_BF16X64_SWMMAC_w32>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "vop3",
+        "vop3p",
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2408,
+      "normalized_symbol": "V_SWMMAC_F32_16X16X128_FP8_FP8_w32",
+      "symbol": "V_SWMMAC_F32_16X16X128_FP8_FP8_w32",
+      "text": "defm V_SWMMAC_F32_16X16X128_FP8_FP8_w32 : VOP3P_Real_WMMA_gfx1250 <0x073, F32_FP8BF8X128_SWMMAC_w32>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "vop3",
+        "vop3p",
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2409,
+      "normalized_symbol": "V_SWMMAC_F32_16X16X128_FP8_BF8_w32",
+      "symbol": "V_SWMMAC_F32_16X16X128_FP8_BF8_w32",
+      "text": "defm V_SWMMAC_F32_16X16X128_FP8_BF8_w32 : VOP3P_Real_WMMA_gfx1250 <0x074, F32_FP8BF8X128_SWMMAC_w32>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "vop3",
+        "vop3p",
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2410,
+      "normalized_symbol": "V_SWMMAC_F32_16X16X128_BF8_FP8_w32",
+      "symbol": "V_SWMMAC_F32_16X16X128_BF8_FP8_w32",
+      "text": "defm V_SWMMAC_F32_16X16X128_BF8_FP8_w32 : VOP3P_Real_WMMA_gfx1250 <0x075, F32_FP8BF8X128_SWMMAC_w32>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "vop3",
+        "vop3p",
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2411,
+      "normalized_symbol": "V_SWMMAC_F32_16X16X128_BF8_BF8_w32",
+      "symbol": "V_SWMMAC_F32_16X16X128_BF8_BF8_w32",
+      "text": "defm V_SWMMAC_F32_16X16X128_BF8_BF8_w32 : VOP3P_Real_WMMA_gfx1250 <0x076, F32_FP8BF8X128_SWMMAC_w32>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "vop3",
+        "vop3p",
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2412,
+      "normalized_symbol": "V_SWMMAC_F16_16X16X128_FP8_FP8_w32",
+      "symbol": "V_SWMMAC_F16_16X16X128_FP8_FP8_w32",
+      "text": "defm V_SWMMAC_F16_16X16X128_FP8_FP8_w32 : VOP3P_Real_WMMA_gfx1250 <0x077, F16_FP8BF8X128_SWMMAC_w32>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "vop3",
+        "vop3p",
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2413,
+      "normalized_symbol": "V_SWMMAC_F16_16X16X128_FP8_BF8_w32",
+      "symbol": "V_SWMMAC_F16_16X16X128_FP8_BF8_w32",
+      "text": "defm V_SWMMAC_F16_16X16X128_FP8_BF8_w32 : VOP3P_Real_WMMA_gfx1250 <0x078, F16_FP8BF8X128_SWMMAC_w32>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "vop3",
+        "vop3p",
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2414,
+      "normalized_symbol": "V_SWMMAC_F16_16X16X128_BF8_FP8_w32",
+      "symbol": "V_SWMMAC_F16_16X16X128_BF8_FP8_w32",
+      "text": "defm V_SWMMAC_F16_16X16X128_BF8_FP8_w32 : VOP3P_Real_WMMA_gfx1250 <0x079, F16_FP8BF8X128_SWMMAC_w32>;"
+    },
+    {
+      "categories": [
+        "fp8_bf8",
+        "vop3",
+        "vop3p",
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2415,
+      "normalized_symbol": "V_SWMMAC_F16_16X16X128_BF8_BF8_w32",
+      "symbol": "V_SWMMAC_F16_16X16X128_BF8_BF8_w32",
+      "text": "defm V_SWMMAC_F16_16X16X128_BF8_BF8_w32 : VOP3P_Real_WMMA_gfx1250 <0x07a, F16_FP8BF8X128_SWMMAC_w32>;"
+    },
+    {
+      "categories": [
+        "vop3",
+        "vop3p",
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2416,
+      "normalized_symbol": "V_SWMMAC_I32_16X16X128_IU8_w32",
+      "symbol": "V_SWMMAC_I32_16X16X128_IU8_w32",
+      "text": "defm V_SWMMAC_I32_16X16X128_IU8_w32     : VOP3P_Real_WMMA_gfx1250 <0x07b, I32_IU8X128_SWMMAC_w32>;"
+    },
+    {
+      "categories": [
+        "vop3",
+        "vop3p"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2492,
+      "normalized_symbol": "V_PK_ADD_MAX_I16",
+      "symbol": "V_PK_ADD_MAX_I16",
+      "text": "defm V_PK_ADD_MAX_I16  : VOP3P_Real_gfx1250<0x14>;"
+    },
+    {
+      "categories": [
+        "vop3",
+        "vop3p"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2493,
+      "normalized_symbol": "V_PK_ADD_MAX_U16",
+      "symbol": "V_PK_ADD_MAX_U16",
+      "text": "defm V_PK_ADD_MAX_U16  : VOP3P_Real_gfx1250<0x15>;"
+    },
+    {
+      "categories": [
+        "vop3",
+        "vop3p"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2494,
+      "normalized_symbol": "V_PK_ADD_MIN_I16",
+      "symbol": "V_PK_ADD_MIN_I16",
+      "text": "defm V_PK_ADD_MIN_I16  : VOP3P_Real_gfx1250<0x2d>;"
+    },
+    {
+      "categories": [
+        "vop3",
+        "vop3p"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2495,
+      "normalized_symbol": "V_PK_ADD_MIN_U16",
+      "symbol": "V_PK_ADD_MIN_U16",
+      "text": "defm V_PK_ADD_MIN_U16  : VOP3P_Real_gfx1250<0x2e>;"
+    },
+    {
+      "categories": [
+        "vop3",
+        "vop3p"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2496,
+      "normalized_symbol": "V_PK_MAX3_I16",
+      "symbol": "V_PK_MAX3_I16",
+      "text": "defm V_PK_MAX3_I16     : VOP3P_Real_gfx1250<0x2f>;"
+    },
+    {
+      "categories": [
+        "vop3",
+        "vop3p"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2497,
+      "normalized_symbol": "V_PK_MAX3_U16",
+      "symbol": "V_PK_MAX3_U16",
+      "text": "defm V_PK_MAX3_U16     : VOP3P_Real_gfx1250<0x30>;"
+    },
+    {
+      "categories": [
+        "vop3",
+        "vop3p"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2498,
+      "normalized_symbol": "V_PK_MIN3_I16",
+      "symbol": "V_PK_MIN3_I16",
+      "text": "defm V_PK_MIN3_I16     : VOP3P_Real_gfx1250<0x31>;"
+    },
+    {
+      "categories": [
+        "vop3",
+        "vop3p"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2499,
+      "normalized_symbol": "V_PK_MIN3_U16",
+      "symbol": "V_PK_MIN3_U16",
+      "text": "defm V_PK_MIN3_U16     : VOP3P_Real_gfx1250<0x32>;"
+    },
+    {
+      "categories": [
+        "vop3",
+        "vop3p"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2500,
+      "normalized_symbol": "V_PK_FMA_BF16",
+      "symbol": "V_PK_FMA_BF16",
+      "text": "defm V_PK_FMA_BF16     : VOP3P_Real_gfx1250<0x11>;"
+    },
+    {
+      "categories": [
+        "vop3",
+        "vop3p"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2501,
+      "normalized_symbol": "V_PK_ADD_BF16",
+      "symbol": "V_PK_ADD_BF16",
+      "text": "defm V_PK_ADD_BF16     : VOP3P_Real_gfx1250<0x23>;"
+    },
+    {
+      "categories": [
+        "vop3",
+        "vop3p"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2502,
+      "normalized_symbol": "V_PK_MUL_BF16",
+      "symbol": "V_PK_MUL_BF16",
+      "text": "defm V_PK_MUL_BF16     : VOP3P_Real_gfx1250<0x2a>;"
+    },
+    {
+      "categories": [
+        "vop3",
+        "vop3p"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2503,
+      "normalized_symbol": "V_PK_MIN_NUM_BF16",
+      "symbol": "V_PK_MIN_NUM_BF16",
+      "text": "defm V_PK_MIN_NUM_BF16 : VOP3P_Real_gfx1250<0x2b>;"
+    },
+    {
+      "categories": [
+        "vop3",
+        "vop3p"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2504,
+      "normalized_symbol": "V_PK_MAX_NUM_BF16",
+      "symbol": "V_PK_MAX_NUM_BF16",
+      "text": "defm V_PK_MAX_NUM_BF16 : VOP3P_Real_gfx1250<0x2c>;"
+    },
+    {
+      "categories": [
+        "vop3",
+        "vop3p"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2505,
+      "normalized_symbol": "V_PK_MINIMUM3_F16",
+      "symbol": "V_PK_MINIMUM3_F16",
+      "text": "defm V_PK_MINIMUM3_F16 : VOP3P_Real_gfx1250<0x36>;"
+    },
+    {
+      "categories": [
+        "vop3",
+        "vop3p"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2506,
+      "normalized_symbol": "V_PK_MAXIMUM3_F16",
+      "symbol": "V_PK_MAXIMUM3_F16",
+      "text": "defm V_PK_MAXIMUM3_F16 : VOP3P_Real_gfx1250<0x37>;"
+    },
+    {
+      "categories": [
+        "vop3",
+        "vop3p"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2507,
+      "normalized_symbol": "V_PK_MIN3_NUM_F16",
+      "symbol": "V_PK_MIN3_NUM_F16",
+      "text": "defm V_PK_MIN3_NUM_F16 : VOP3P_Real_gfx1250<0x38>;"
+    },
+    {
+      "categories": [
+        "vop3",
+        "vop3p"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2508,
+      "normalized_symbol": "V_PK_MAX3_NUM_F16",
+      "symbol": "V_PK_MAX3_NUM_F16",
+      "text": "defm V_PK_MAX3_NUM_F16 : VOP3P_Real_gfx1250<0x39>;"
+    },
+    {
+      "categories": [
+        "scale_paired",
+        "vop3",
+        "vop3p",
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2514,
+      "normalized_symbol": "V_WMMA_LD_SCALE_PAIRED_B32",
+      "symbol": "V_WMMA_LD_SCALE_PAIRED_B32",
+      "text": "defm V_WMMA_LD_SCALE_PAIRED_B32   : VOP3P_Real_LD_SCALE_gfx1250<0x35>;"
+    },
+    {
+      "categories": [
+        "scale_paired",
+        "vop3",
+        "vop3p",
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/VOP3PInstructions.td",
+      "line": 2515,
+      "normalized_symbol": "V_WMMA_LD_SCALE16_PAIRED_B64",
+      "symbol": "V_WMMA_LD_SCALE16_PAIRED_B64",
+      "text": "defm V_WMMA_LD_SCALE16_PAIRED_B64 : VOP3P_Real_LD_SCALE_gfx1250<0x3a>;"
+    },
+    {
+      "categories": [
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/MIMGInstructions.td",
+      "line": 2142,
+      "normalized_symbol": "TENSOR_LOAD_TO_LDS",
+      "symbol": "TENSOR_LOAD_TO_LDS",
+      "text": "defm TENSOR_LOAD_TO_LDS    : VIMAGE_TENSOR_Real_gfx1250<0xc4>;"
+    },
+    {
+      "categories": [
+        "wmma"
+      ],
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/MIMGInstructions.td",
+      "line": 2143,
+      "normalized_symbol": "TENSOR_STORE_FROM_LDS",
+      "symbol": "TENSOR_STORE_FROM_LDS",
+      "text": "defm TENSOR_STORE_FROM_LDS : VIMAGE_TENSOR_Real_gfx1250<0xc5>;"
+    }
+  ],
+  "entry_count": 192,
+  "feature_markers": [
+    {
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/GCNProcessors.td",
+      "line": 330,
+      "text": "FeatureISAVersion12_50.Features"
+    },
+    {
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/AMDGPU.td",
+      "line": 535,
+      "text": "def FeatureGFX1250Insts : SubtargetFeature<\"gfx1250-insts\","
+    },
+    {
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/AMDGPU.td",
+      "line": 2142,
+      "text": "def FeatureISAVersion12_50_Common : FeatureSet<"
+    },
+    {
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/AMDGPU.td",
+      "line": 2144,
+      "text": "FeatureGFX1250Insts,"
+    },
+    {
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/AMDGPU.td",
+      "line": 2224,
+      "text": "def FeatureISAVersion12_50 : FeatureSet<"
+    },
+    {
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/AMDGPU.td",
+      "line": 2225,
+      "text": "!listconcat(FeatureISAVersion12_50_Common.Features,"
+    },
+    {
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/AMDGPU.td",
+      "line": 2229,
+      "text": "!listconcat(FeatureISAVersion12_50.Features,"
+    },
+    {
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/AMDGPU.td",
+      "line": 2536,
+      "text": "AssemblerPredicate<(all_of FeatureGFX12Insts, (not FeatureGFX1250Insts))>;"
+    },
+    {
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/AMDGPU.td",
+      "line": 2544,
+      "text": "AssemblerPredicate<(all_of FeatureGFX12Insts, (not FeatureGFX1250Insts))>;"
+    },
+    {
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/AMDGPU.td",
+      "line": 2548,
+      "text": "AssemblerPredicate<(all_of FeatureGFX1250Insts)>;"
+    },
+    {
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/AMDGPU.td",
+      "line": 2552,
+      "text": "AssemblerPredicate<(all_of FeatureGFX1250Insts)>;"
+    },
+    {
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/AMDGPU.td",
+      "line": 2556,
+      "text": "AssemblerPredicate<(all_of (not FeatureGFX1250Insts))>;"
+    },
+    {
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/AMDGPU.td",
+      "line": 2560,
+      "text": "AssemblerPredicate<(any_of FeatureGFX940Insts, FeatureGFX1250Insts)>;"
+    },
+    {
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/AMDGPU.td",
+      "line": 2612,
+      "text": "AssemblerPredicate<(any_of FeatureGFX90AInsts, FeatureGFX1250Insts)>;"
+    },
+    {
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/AMDGPU.td",
+      "line": 2655,
+      "text": "AssemblerPredicate<(all_of (not FeatureGFX1250Insts))>;"
+    },
+    {
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/AMDGPU.td",
+      "line": 2658,
+      "text": "AssemblerPredicate<(all_of (not FeatureGFX1250Insts))>;"
+    },
+    {
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/AMDGPU.td",
+      "line": 2661,
+      "text": "AssemblerPredicate<(all_of (not FeatureGFX90AInsts), (not FeatureGFX1250Insts))>;"
+    },
+    {
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/AMDGPU.td",
+      "line": 2664,
+      "text": "AssemblerPredicate<(all_of FeatureGFX11Insts, (not FeatureGFX1250Insts))>;"
+    },
+    {
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/AMDGPU.td",
+      "line": 2763,
+      "text": "AssemblerPredicate<(any_of FeatureGFX1250Insts)>;"
+    },
+    {
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/AMDGPU.td",
+      "line": 2775,
+      "text": "AssemblerPredicate<(any_of FeatureGFX1250Insts)>;"
+    },
+    {
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/AMDGPU.td",
+      "line": 2779,
+      "text": "AssemblerPredicate<(any_of FeatureGFX1250Insts)>;"
+    },
+    {
+      "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/AMDGPU.td",
+      "line": 2981,
+      "text": "AssemblerPredicate<(any_of FeatureGFX1250Insts)>;"
+    }
+  ],
+  "normalized_symbol_count": 172,
+  "normalized_symbols": [
+    "S_CALL_B64",
+    "S_GETPC_B64",
+    "S_RFE_B64",
+    "S_SETPC_B64",
+    "S_SWAPPC_B64",
+    "TENSOR_LOAD_TO_LDS",
+    "TENSOR_STORE_FROM_LDS",
+    "V_ADD_MAX_I32",
+    "V_ADD_MAX_U32",
+    "V_ADD_MIN_I32",
+    "V_ADD_MIN_U32",
+    "V_ASHRREV_I64",
+    "V_ASHR_PK_I8_I32",
+    "V_ASHR_PK_U8_I32",
+    "V_BITOP3_B16",
+    "V_BITOP3_B32",
+    "V_COS_BF16",
+    "V_CVT_F16_BF8",
+    "V_CVT_F16_FP8",
+    "V_CVT_F32_BF16",
+    "V_CVT_F32_FP8",
+    "V_CVT_PK_BF16_F32",
+    "V_CVT_PK_BF8_F16",
+    "V_CVT_PK_F16_BF8",
+    "V_CVT_PK_F16_F32",
+    "V_CVT_PK_F16_FP8",
+    "V_CVT_PK_FP8_F16",
+    "V_CVT_PK_FP8_F32",
+    "V_CVT_SCALEF32_PK16_BF6_BF16",
+    "V_CVT_SCALEF32_PK16_BF6_F16",
+    "V_CVT_SCALEF32_PK16_BF6_F32",
+    "V_CVT_SCALEF32_PK16_FP6_BF16",
+    "V_CVT_SCALEF32_PK16_FP6_F16",
+    "V_CVT_SCALEF32_PK16_FP6_F32",
+    "V_CVT_SCALEF32_PK8_BF8_BF16",
+    "V_CVT_SCALEF32_PK8_BF8_F16",
+    "V_CVT_SCALEF32_PK8_BF8_F32",
+    "V_CVT_SCALEF32_PK8_FP4_BF16",
+    "V_CVT_SCALEF32_PK8_FP4_F16",
+    "V_CVT_SCALEF32_PK8_FP4_F32",
+    "V_CVT_SCALEF32_PK8_FP8_BF16",
+    "V_CVT_SCALEF32_PK8_FP8_F16",
+    "V_CVT_SCALEF32_PK8_FP8_F32",
+    "V_CVT_SCALEF32_SR_PK16_BF6_BF16",
+    "V_CVT_SCALEF32_SR_PK16_BF6_F16",
+    "V_CVT_SCALEF32_SR_PK16_BF6_F32",
+    "V_CVT_SCALEF32_SR_PK16_FP6_BF16",
+    "V_CVT_SCALEF32_SR_PK16_FP6_F16",
+    "V_CVT_SCALEF32_SR_PK16_FP6_F32",
+    "V_CVT_SCALEF32_SR_PK8_BF8_BF16",
+    "V_CVT_SCALEF32_SR_PK8_BF8_F16",
+    "V_CVT_SCALEF32_SR_PK8_BF8_F32",
+    "V_CVT_SCALEF32_SR_PK8_FP4_BF16",
+    "V_CVT_SCALEF32_SR_PK8_FP4_F16",
+    "V_CVT_SCALEF32_SR_PK8_FP4_F32",
+    "V_CVT_SCALEF32_SR_PK8_FP8_BF16",
+    "V_CVT_SCALEF32_SR_PK8_FP8_F16",
+    "V_CVT_SCALEF32_SR_PK8_FP8_F32",
+    "V_CVT_SCALE_PK16_BF16_BF6",
+    "V_CVT_SCALE_PK16_BF16_FP6",
+    "V_CVT_SCALE_PK16_F16_BF6",
+    "V_CVT_SCALE_PK16_F16_FP6",
+    "V_CVT_SCALE_PK16_F32_BF6",
+    "V_CVT_SCALE_PK16_F32_FP6",
+    "V_CVT_SCALE_PK8_BF16_BF8",
+    "V_CVT_SCALE_PK8_BF16_FP4",
+    "V_CVT_SCALE_PK8_BF16_FP8",
+    "V_CVT_SCALE_PK8_F16_BF8",
+    "V_CVT_SCALE_PK8_F16_FP4",
+    "V_CVT_SCALE_PK8_F16_FP8",
+    "V_CVT_SCALE_PK8_F32_BF8",
+    "V_CVT_SCALE_PK8_F32_FP4",
+    "V_CVT_SCALE_PK8_F32_FP8",
+    "V_CVT_SR_BF8_F16",
+    "V_CVT_SR_FP8_F16",
+    "V_CVT_SR_FP8_F32",
+    "V_CVT_SR_FP8_F32_gfx12",
+    "V_CVT_SR_PK_BF16_F32",
+    "V_CVT_SR_PK_F16_F32",
+    "V_DIV_FIXUP_F64",
+    "V_DIV_FMAS_F64",
+    "V_DIV_SCALE_F64",
+    "V_EXP_BF16",
+    "V_FMA_F64",
+    "V_LDEXP_F64",
+    "V_LOG_BF16",
+    "V_LSHL_ADD_U64",
+    "V_LSHRREV_B64",
+    "V_MAD_NC_I64_I32",
+    "V_MAD_NC_U64_U32",
+    "V_MAD_U32",
+    "V_MAX_I64",
+    "V_MAX_U64",
+    "V_MIN_I64",
+    "V_MIN_U64",
+    "V_MUL_HI_I32",
+    "V_MUL_HI_U32",
+    "V_MUL_LO_U32",
+    "V_PERMLANE16_SWAP_B32",
+    "V_PERM_PK16_B4_U4",
+    "V_PERM_PK16_B6_U4",
+    "V_PERM_PK16_B8_U4",
+    "V_PK_ADD_BF16",
+    "V_PK_ADD_MAX_I16",
+    "V_PK_ADD_MAX_U16",
+    "V_PK_ADD_MIN_I16",
+    "V_PK_ADD_MIN_U16",
+    "V_PK_FMA_BF16",
+    "V_PK_MAX3_I16",
+    "V_PK_MAX3_NUM_F16",
+    "V_PK_MAX3_U16",
+    "V_PK_MAXIMUM3_F16",
+    "V_PK_MAX_NUM_BF16",
+    "V_PK_MIN3_I16",
+    "V_PK_MIN3_NUM_F16",
+    "V_PK_MIN3_U16",
+    "V_PK_MINIMUM3_F16",
+    "V_PK_MIN_NUM_BF16",
+    "V_PK_MUL_BF16",
+    "V_RCP_BF16",
+    "V_RSQ_BF16",
+    "V_SAT_PK4_I4_I8",
+    "V_SAT_PK4_U4_U8",
+    "V_SIN_BF16",
+    "V_SQRT_BF16",
+    "V_SWMMAC_BF16F32_16X16X64_BF16_w32",
+    "V_SWMMAC_BF16_16X16X64_BF16_w32",
+    "V_SWMMAC_F16_16X16X128_BF8_BF8_w32",
+    "V_SWMMAC_F16_16X16X128_BF8_FP8_w32",
+    "V_SWMMAC_F16_16X16X128_FP8_BF8_w32",
+    "V_SWMMAC_F16_16X16X128_FP8_FP8_w32",
+    "V_SWMMAC_F16_16X16X64_F16_w32",
+    "V_SWMMAC_F32_16X16X128_BF8_BF8_w32",
+    "V_SWMMAC_F32_16X16X128_BF8_FP8_w32",
+    "V_SWMMAC_F32_16X16X128_FP8_BF8_w32",
+    "V_SWMMAC_F32_16X16X128_FP8_FP8_w32",
+    "V_SWMMAC_F32_16X16X64_BF16_w32",
+    "V_SWMMAC_F32_16X16X64_F16_w32",
+    "V_SWMMAC_I32_16X16X128_IU8_w32",
+    "V_TANH_BF16",
+    "V_TANH_F16",
+    "V_WMMA_BF16F32_16X16X32_BF16_w32",
+    "V_WMMA_BF16_16X16X32_BF16_w32",
+    "V_WMMA_F16_16X16X128_BF8_BF8_w32",
+    "V_WMMA_F16_16X16X128_BF8_FP8_w32",
+    "V_WMMA_F16_16X16X128_FP8_BF8_w32",
+    "V_WMMA_F16_16X16X128_FP8_FP8_w32",
+    "V_WMMA_F16_16X16X32_F16_w32",
+    "V_WMMA_F16_16X16X64_BF8_BF8_w32",
+    "V_WMMA_F16_16X16X64_BF8_FP8_w32",
+    "V_WMMA_F16_16X16X64_FP8_BF8_w32",
+    "V_WMMA_F16_16X16X64_FP8_FP8_w32",
+    "V_WMMA_F32_16X16X128_BF8_BF8_w32",
+    "V_WMMA_F32_16X16X128_BF8_FP8_w32",
+    "V_WMMA_F32_16X16X128_F8F6F4",
+    "V_WMMA_F32_16X16X128_FP8_BF8_w32",
+    "V_WMMA_F32_16X16X128_FP8_FP8_w32",
+    "V_WMMA_F32_16X16X32_BF16_w32",
+    "V_WMMA_F32_16X16X32_F16_w32",
+    "V_WMMA_F32_16X16X4_F32_w32",
+    "V_WMMA_F32_16X16X64_BF8_BF8_w32",
+    "V_WMMA_F32_16X16X64_BF8_FP8_w32",
+    "V_WMMA_F32_16X16X64_FP8_BF8_w32",
+    "V_WMMA_F32_16X16X64_FP8_FP8_w32",
+    "V_WMMA_F32_32X16X128_F4_w32",
+    "V_WMMA_I32_16X16X64_IU8_w32",
+    "V_WMMA_LD_SCALE16_PAIRED_B64",
+    "V_WMMA_LD_SCALE_PAIRED_B32",
+    "V_WMMA_SCALE16_F32_16X16X128_F8F6F4",
+    "V_WMMA_SCALE16_F32_32X16X128_F4_w32",
+    "V_WMMA_SCALE_F32_16X16X128_F8F6F4",
+    "V_WMMA_SCALE_F32_32X16X128_F4_w32"
+  ],
+  "processor_model": {
+    "file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/GCNProcessors.td",
+    "line": 329,
+    "text": "def : ProcessorModel<\"gfx1250\", GFX1250SpeedModel,"
+  },
+  "unique_symbol_count": 176,
+  "unique_symbols": [
+    "S_CALL_B64",
+    "S_GETPC_B64",
+    "S_RFE_B64",
+    "S_SETPC_B64",
+    "S_SWAPPC_B64",
+    "TENSOR_LOAD_TO_LDS",
+    "TENSOR_STORE_FROM_LDS",
+    "V_ADD_MAX_I32",
+    "V_ADD_MAX_U32",
+    "V_ADD_MIN_I32",
+    "V_ADD_MIN_U32",
+    "V_ASHRREV_I64",
+    "V_ASHR_PK_I8_I32",
+    "V_ASHR_PK_U8_I32",
+    "V_BITOP3_B16_gfx1250",
+    "V_BITOP3_B32",
+    "V_COS_BF16",
+    "V_CVT_F16_BF8",
+    "V_CVT_F16_FP8",
+    "V_CVT_F32_BF16_gfx1250",
+    "V_CVT_F32_BF16_gfx1250_fake16",
+    "V_CVT_F32_BF16_gfx1250_t16",
+    "V_CVT_F32_FP8",
+    "V_CVT_F32_FP8_gfx1250",
+    "V_CVT_PK_BF16_F32",
+    "V_CVT_PK_BF8_F16_gfx1250",
+    "V_CVT_PK_F16_BF8",
+    "V_CVT_PK_F16_F32",
+    "V_CVT_PK_F16_FP8",
+    "V_CVT_PK_FP8_F16_gfx1250",
+    "V_CVT_PK_FP8_F32",
+    "V_CVT_PK_FP8_F32_gfx1250",
+    "V_CVT_SCALEF32_PK16_BF6_BF16",
+    "V_CVT_SCALEF32_PK16_BF6_F16",
+    "V_CVT_SCALEF32_PK16_BF6_F32",
+    "V_CVT_SCALEF32_PK16_FP6_BF16",
+    "V_CVT_SCALEF32_PK16_FP6_F16",
+    "V_CVT_SCALEF32_PK16_FP6_F32",
+    "V_CVT_SCALEF32_PK8_BF8_BF16",
+    "V_CVT_SCALEF32_PK8_BF8_F16",
+    "V_CVT_SCALEF32_PK8_BF8_F32",
+    "V_CVT_SCALEF32_PK8_FP4_BF16",
+    "V_CVT_SCALEF32_PK8_FP4_F16",
+    "V_CVT_SCALEF32_PK8_FP4_F32",
+    "V_CVT_SCALEF32_PK8_FP8_BF16",
+    "V_CVT_SCALEF32_PK8_FP8_F16",
+    "V_CVT_SCALEF32_PK8_FP8_F32",
+    "V_CVT_SCALEF32_SR_PK16_BF6_BF16",
+    "V_CVT_SCALEF32_SR_PK16_BF6_F16",
+    "V_CVT_SCALEF32_SR_PK16_BF6_F32",
+    "V_CVT_SCALEF32_SR_PK16_FP6_BF16",
+    "V_CVT_SCALEF32_SR_PK16_FP6_F16",
+    "V_CVT_SCALEF32_SR_PK16_FP6_F32",
+    "V_CVT_SCALEF32_SR_PK8_BF8_BF16",
+    "V_CVT_SCALEF32_SR_PK8_BF8_F16",
+    "V_CVT_SCALEF32_SR_PK8_BF8_F32",
+    "V_CVT_SCALEF32_SR_PK8_FP4_BF16",
+    "V_CVT_SCALEF32_SR_PK8_FP4_F16",
+    "V_CVT_SCALEF32_SR_PK8_FP4_F32",
+    "V_CVT_SCALEF32_SR_PK8_FP8_BF16",
+    "V_CVT_SCALEF32_SR_PK8_FP8_F16",
+    "V_CVT_SCALEF32_SR_PK8_FP8_F32",
+    "V_CVT_SCALE_PK16_BF16_BF6",
+    "V_CVT_SCALE_PK16_BF16_FP6",
+    "V_CVT_SCALE_PK16_F16_BF6",
+    "V_CVT_SCALE_PK16_F16_FP6",
+    "V_CVT_SCALE_PK16_F32_BF6",
+    "V_CVT_SCALE_PK16_F32_FP6",
+    "V_CVT_SCALE_PK8_BF16_BF8",
+    "V_CVT_SCALE_PK8_BF16_FP4",
+    "V_CVT_SCALE_PK8_BF16_FP8",
+    "V_CVT_SCALE_PK8_F16_BF8",
+    "V_CVT_SCALE_PK8_F16_FP4",
+    "V_CVT_SCALE_PK8_F16_FP8",
+    "V_CVT_SCALE_PK8_F32_BF8",
+    "V_CVT_SCALE_PK8_F32_FP4",
+    "V_CVT_SCALE_PK8_F32_FP8",
+    "V_CVT_SR_BF8_F16",
+    "V_CVT_SR_FP8_F16",
+    "V_CVT_SR_FP8_F32_gfx12",
+    "V_CVT_SR_FP8_F32_gfx1250",
+    "V_CVT_SR_PK_BF16_F32",
+    "V_CVT_SR_PK_F16_F32",
+    "V_DIV_FIXUP_F64",
+    "V_DIV_FMAS_F64",
+    "V_DIV_SCALE_F64",
+    "V_EXP_BF16",
+    "V_FMA_F64",
+    "V_LDEXP_F64",
+    "V_LOG_BF16",
+    "V_LSHL_ADD_U64",
+    "V_LSHRREV_B64",
+    "V_MAD_NC_I64_I32",
+    "V_MAD_NC_U64_U32",
+    "V_MAD_U32",
+    "V_MAX_I64",
+    "V_MAX_U64",
+    "V_MIN_I64",
+    "V_MIN_U64",
+    "V_MUL_HI_I32",
+    "V_MUL_HI_U32",
+    "V_MUL_LO_U32",
+    "V_PERMLANE16_SWAP_B32",
+    "V_PERM_PK16_B4_U4",
+    "V_PERM_PK16_B6_U4",
+    "V_PERM_PK16_B8_U4",
+    "V_PK_ADD_BF16",
+    "V_PK_ADD_MAX_I16",
+    "V_PK_ADD_MAX_U16",
+    "V_PK_ADD_MIN_I16",
+    "V_PK_ADD_MIN_U16",
+    "V_PK_FMA_BF16",
+    "V_PK_MAX3_I16",
+    "V_PK_MAX3_NUM_F16",
+    "V_PK_MAX3_U16",
+    "V_PK_MAXIMUM3_F16",
+    "V_PK_MAX_NUM_BF16",
+    "V_PK_MIN3_I16",
+    "V_PK_MIN3_NUM_F16",
+    "V_PK_MIN3_U16",
+    "V_PK_MINIMUM3_F16",
+    "V_PK_MIN_NUM_BF16",
+    "V_PK_MUL_BF16",
+    "V_RCP_BF16",
+    "V_RSQ_BF16",
+    "V_SAT_PK4_I4_I8",
+    "V_SAT_PK4_U4_U8",
+    "V_SIN_BF16",
+    "V_SQRT_BF16",
+    "V_SWMMAC_BF16F32_16X16X64_BF16_w32",
+    "V_SWMMAC_BF16_16X16X64_BF16_w32",
+    "V_SWMMAC_F16_16X16X128_BF8_BF8_w32",
+    "V_SWMMAC_F16_16X16X128_BF8_FP8_w32",
+    "V_SWMMAC_F16_16X16X128_FP8_BF8_w32",
+    "V_SWMMAC_F16_16X16X128_FP8_FP8_w32",
+    "V_SWMMAC_F16_16X16X64_F16_w32",
+    "V_SWMMAC_F32_16X16X128_BF8_BF8_w32",
+    "V_SWMMAC_F32_16X16X128_BF8_FP8_w32",
+    "V_SWMMAC_F32_16X16X128_FP8_BF8_w32",
+    "V_SWMMAC_F32_16X16X128_FP8_FP8_w32",
+    "V_SWMMAC_F32_16X16X64_BF16_w32",
+    "V_SWMMAC_F32_16X16X64_F16_w32",
+    "V_SWMMAC_I32_16X16X128_IU8_w32",
+    "V_TANH_BF16",
+    "V_TANH_F16",
+    "V_WMMA_BF16F32_16X16X32_BF16_w32",
+    "V_WMMA_BF16_16X16X32_BF16_w32",
+    "V_WMMA_F16_16X16X128_BF8_BF8_w32",
+    "V_WMMA_F16_16X16X128_BF8_FP8_w32",
+    "V_WMMA_F16_16X16X128_FP8_BF8_w32",
+    "V_WMMA_F16_16X16X128_FP8_FP8_w32",
+    "V_WMMA_F16_16X16X32_F16_w32",
+    "V_WMMA_F16_16X16X64_BF8_BF8_w32",
+    "V_WMMA_F16_16X16X64_BF8_FP8_w32",
+    "V_WMMA_F16_16X16X64_FP8_BF8_w32",
+    "V_WMMA_F16_16X16X64_FP8_FP8_w32",
+    "V_WMMA_F32_16X16X128_BF8_BF8_w32",
+    "V_WMMA_F32_16X16X128_BF8_FP8_w32",
+    "V_WMMA_F32_16X16X128_F8F6F4",
+    "V_WMMA_F32_16X16X128_FP8_BF8_w32",
+    "V_WMMA_F32_16X16X128_FP8_FP8_w32",
+    "V_WMMA_F32_16X16X32_BF16_w32",
+    "V_WMMA_F32_16X16X32_F16_w32",
+    "V_WMMA_F32_16X16X4_F32_w32",
+    "V_WMMA_F32_16X16X64_BF8_BF8_w32",
+    "V_WMMA_F32_16X16X64_BF8_FP8_w32",
+    "V_WMMA_F32_16X16X64_FP8_BF8_w32",
+    "V_WMMA_F32_16X16X64_FP8_FP8_w32",
+    "V_WMMA_F32_32X16X128_F4_w32",
+    "V_WMMA_I32_16X16X64_IU8_w32",
+    "V_WMMA_LD_SCALE16_PAIRED_B64",
+    "V_WMMA_LD_SCALE_PAIRED_B32",
+    "V_WMMA_SCALE16_F32_16X16X128_F8F6F4",
+    "V_WMMA_SCALE16_F32_32X16X128_F4_w32",
+    "V_WMMA_SCALE_F32_16X16X128_F8F6F4",
+    "V_WMMA_SCALE_F32_32X16X128_F4_w32"
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "bundle": {
+    "content_length": "1997146",
+    "etag": "\"0x8DDF9E0D065778C\"",
+    "filename": "AMD_GPU_MR_ISA_XML_2025_09_05.zip",
+    "last_modified": "Mon, 22 Sep 2025 14:03:32 GMT",
+    "requested_url": "https://gpuopen.com/download/AMD_GPU_MR_ISA_XML_2025_09_05.zip",
+    "resolved_url": "https://gpuopen.com/download/AMD_GPU_MR_ISA_XML_2025_09_05.zip"
+  },
+  "llvm_mapping": {
+    "match_count": 6,
+    "processor_model_entries": [
+      {
+        "line": 320,
+        "path": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/GCNProcessors.td",
+        "snippet": "def : ProcessorModel<\"gfx1201\", GFX12SpeedModel,\n  FeatureISAVersion12.Features"
+      }
+    ],
+    "processor_model_file": "compiler/amd-llvm/llvm/lib/Target/AMDGPU/GCNProcessors.td"
+  },
+  "preferred_source": "official_gpuopen_machine_readable_isa",
+  "source_xml": {
+    "architecture_name": "AMD RDNA 4",
+    "filename": "amdgpu_isa_rdna4.xml",
+    "local_path": "third_party/amd_gpu_isa/gfx1201/amdgpu_isa_rdna4.xml",
+    "release_date": "2025-02-19",
+    "schema_version": "1.1.0"
+  },
+  "target": "gfx1201"
+}
