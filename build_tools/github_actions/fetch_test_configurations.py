@@ -2,7 +2,14 @@
 # SPDX-License-Identifier: MIT
 
 """
-This script determines what test configurations to run
+This script determines what test configurations to run.
+
+Outputs (written to $GITHUB_OUTPUT):
+  - sanity_component: JSON object for the sanity component, always present as a
+    prerequisite that must pass before other components are run.
+  - components: JSON array of component configs for the regular test matrix
+    (excludes sanity, which is output separately above).
+  - platform: lowercase OS name derived from RUNNER_OS.
 
 Required environment variables:
   - RUNNER_OS (https://docs.github.com/en/actions/how-tos/writing-workflows/choosing-what-your-workflow-does/store-information-in-variables#detecting-the-operating-system)
@@ -36,6 +43,21 @@ def _get_script_path(script_name: str) -> str:
 
 
 test_matrix = {
+    # Sanity tests - always run first as a prerequisite for other component tests
+    "sanity": {
+        "job_name": "sanity",
+        "fetch_artifact_args": "--base-only",
+        "timeout_minutes": 5,
+        "test_script": f"python {_get_script_path('test_sanity.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
+        # Running docker with cap-add and -v /lib/modules, by recommendation of GitHub:
+        # https://rocm.docs.amd.com/projects/amdsmi/en/amd-staging/how-to/setup-docker-container.html
+        "container_options": "--cap-add SYS_MODULE -v /lib/modules:/lib/modules",
+    },
     # hip-tests
     "hip-tests": {
         "job_name": "hip-tests",
@@ -475,7 +497,7 @@ def run():
     # This string -> array conversion ensures no partial strings are detected during test selection (ex: "hipblas" in ["hipblaslt", "rocblas"] = false)
     project_array = [item.strip() for item in projects_to_test.split(",")]
 
-    output_matrix = []
+    all_components = []
     for key in selected_matrix:
         job_name = selected_matrix[key]["job_name"]
 
@@ -492,13 +514,15 @@ def run():
 
         # If test labels are populated, and the test job name is not in the test labels, skip the test
         # Note: Benchmarks never use test_labels (always empty list)
-        if test_labels and key not in test_labels:
+        if key != "sanity" and test_labels and key not in test_labels:
             logging.info(f"Excluding job {job_name} since it's not in the test labels")
             continue
 
-        # If the test is enabled for a particular platform and a particular (or all) projects are selected
+        # If the test is enabled for a particular platform and a particular (or all) projects are selected.
+        # Note: Sanity goes through the same all_components loop as other components, but is separated
+        # into its own sanity_component GHA output after the loop (see gha_set_output below).
         if platform in selected_matrix[key]["platform"] and (
-            key in project_array or "*" in project_array
+            key == "sanity" or key in project_array or "*" in project_array
         ):
             logging.info(f"Including job {job_name} with test_type {test_type}")
             job_config_data = selected_matrix[key]
@@ -546,10 +570,17 @@ def run():
                     )
                     continue
 
-            output_matrix.append(job_config_data)
+            all_components.append(job_config_data)
+
+    # Separate sanity (always a prerequisite) from the regular component matrix.
+    sanity_component = next(
+        (c for c in all_components if c.get("job_name") == "sanity"), None
+    )
+    output_matrix = [c for c in all_components if c.get("job_name") != "sanity"]
 
     gha_set_output(
         {
+            "sanity_component": json.dumps(sanity_component),
             "components": json.dumps(output_matrix),
             "platform": platform,
         }
