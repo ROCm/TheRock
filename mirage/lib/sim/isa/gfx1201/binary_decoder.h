@@ -10,6 +10,7 @@
 
 #include "lib/sim/isa/common/decoded_instruction.h"
 #include "lib/sim/isa/gfx1201/architecture_profile.h"
+#include "lib/sim/isa/gfx1201/decoder_seed.h"
 
 namespace mirage::sim::isa {
 
@@ -23,6 +24,9 @@ class Gfx1201BinaryDecoder {
                      std::vector<DecodedInstruction>* program,
                      std::string* error_message = nullptr) const;
 
+  std::span<const Gfx1201DecoderSeedEncoding> Phase0ComputeSeeds() const;
+  const Gfx1201DecoderSeedEncoding* FindPhase0ComputeSeed(
+      std::string_view encoding_name) const;
   std::span<const Gfx1201EncodingFocus> Phase0EncodingFocus() const;
   std::span<const Gfx1201EncodingFocus> Phase1EncodingFocus() const;
   std::string_view BringupStatus() const;

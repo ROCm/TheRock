@@ -7,11 +7,12 @@ namespace {
 
 std::string BuildDecoderBringupMessage() {
   std::string message =
-      "gfx1201 decoder scaffold only; phase-0 encodings:";
+      "gfx1201 decoder scaffold only; phase-0 compute seed encodings:";
   bool first = true;
-  for (const Gfx1201EncodingFocus& focus : GetGfx1201Phase0DecoderFocus()) {
+  for (const Gfx1201DecoderSeedEncoding& encoding :
+       GetGfx1201Phase0ComputeDecoderSeeds()) {
     message.append(first ? " " : ", ");
-    message.append(focus.encoding_name);
+    message.append(encoding.encoding_name);
     first = false;
   }
   return message;
@@ -66,6 +67,16 @@ bool Gfx1201BinaryDecoder::DecodeProgram(std::span<const std::uint32_t> words,
     *error_message = BuildDecoderBringupMessage();
   }
   return false;
+}
+
+std::span<const Gfx1201DecoderSeedEncoding>
+Gfx1201BinaryDecoder::Phase0ComputeSeeds() const {
+  return GetGfx1201Phase0ComputeDecoderSeeds();
+}
+
+const Gfx1201DecoderSeedEncoding* Gfx1201BinaryDecoder::FindPhase0ComputeSeed(
+    std::string_view encoding_name) const {
+  return FindGfx1201Phase0ComputeDecoderSeed(encoding_name);
 }
 
 std::span<const Gfx1201EncodingFocus> Gfx1201BinaryDecoder::Phase0EncodingFocus()
