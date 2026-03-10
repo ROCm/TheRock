@@ -25,14 +25,14 @@ from pytorch_utils import (
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 
-# Maps gfx arch to BUILD_ENVIRONMENT for test timing data lookup.
+# Maps AMDGPU_FAMILY to BUILD_ENVIRONMENT for test timing data lookup.
 # Must stay in sync with pytorch/pytorch PR #176445.
 # mi300 uses noble/py3.12; all others use jammy/py3.10.
-GFX_TO_BUILD_ENV = {
-    "gfx90a": "linux-jammy-rocm-py3.10-mi200",
-    "gfx942": "linux-noble-rocm-py3.12-mi300",
-    "gfx950": "linux-jammy-rocm-py3.10-mi355",
-    "gfx1100": "linux-jammy-rocm-py3.10-navi31",
+AMDGPU_FAMILY_TO_BUILD_ENV = {
+    "gfx90X-dcgpu": "linux-jammy-rocm-py3.10-mi200",
+    "gfx94X-dcgpu": "linux-noble-rocm-py3.12-mi300",
+    "gfx950-dcgpu": "linux-jammy-rocm-py3.10-mi355",
+    "gfx110X-all": "linux-jammy-rocm-py3.10-navi31",
 }
 ROCM_BUILD_ENVIRONMENT_DEFAULT = "linux-noble-rocm-py3.12-mi300"
 
@@ -53,9 +53,11 @@ THEROCK_ENV_VARS = [
 ]
 
 
-def setup_env(pytorch_dir: Path, test_config: str, gfx_arch: str = "") -> None:
+def setup_env(pytorch_dir: Path, test_config: str, amdgpu_family: str = "") -> None:
     os.environ.setdefault("CI", "1")
-    build_env = GFX_TO_BUILD_ENV.get(gfx_arch, ROCM_BUILD_ENVIRONMENT_DEFAULT)
+    build_env = AMDGPU_FAMILY_TO_BUILD_ENV.get(
+        amdgpu_family, ROCM_BUILD_ENVIRONMENT_DEFAULT
+    )
     os.environ.setdefault("BUILD_ENVIRONMENT", build_env)
     os.environ.setdefault("PYTORCH_TEST_WITH_ROCM", "1")
     os.environ.setdefault("PYTORCH_TESTING_DEVICE_ONLY_FOR", "cuda")
@@ -269,7 +271,7 @@ def main() -> int:
                 create_skip_list=not args.debug,
             )
 
-        setup_env(args.pytorch_dir, args.test_config, gfx_arch=first_arch)
+        setup_env(args.pytorch_dir, args.test_config, amdgpu_family=args.amdgpu_family)
         print_env()
 
         cmd = build_run_test_cmd(args, tests_to_skip, passthrough_args)
