@@ -162,12 +162,12 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
     )
   endif()
 
-  # Conditional rocm-kpack support for kpack split artifacts
+  # Conditional rocm-kpack support for kpack split artifacts.
+  # Note: ROCM_KPACK_ENABLED is injected by the flag system (see FLAGS.cmake).
+  # Only the runtime dep needs explicit handling here.
   set(_hip_clr_kpack_runtime_deps)
-  set(_hip_clr_kpack_cmake_args)
-  if(THEROCK_KPACK_SPLIT_ARTIFACTS)
+  if(THEROCK_FLAG_KPACK_SPLIT_ARTIFACTS)
     list(APPEND _hip_clr_kpack_runtime_deps rocm-kpack)
-    list(APPEND _hip_clr_kpack_cmake_args "-DROCM_KPACK_ENABLED=ON")
   endif()
 
   therock_cmake_subproject_declare(hip-clr
@@ -187,7 +187,6 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       # and can use local machine tools.
       "-DHIPCC_BIN_DIR="
       ${HIP_CLR_CMAKE_ARGS}
-      ${_hip_clr_kpack_cmake_args}
     BUILD_DEPS
       rocm-cmake
       therock-simde
@@ -267,7 +266,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
     set(HIP_TESTS_CMAKE_ARGS)
     set(_hip_tests_subproject_names)
     therock_cmake_subproject_declare(hip-tests
-      USE_DIST_AMDGPU_TARGETS
+      USE_TEST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/hip-tests/catch"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/hip-tests"
       BACKGROUND_BUILD
@@ -294,6 +293,7 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
     therock_cmake_subproject_activate(hip-tests)
     # Provide it as an artifact:
     therock_provide_artifact(core-hiptests
+      TARGET_NEUTRAL
       DESCRIPTOR artifact-core-hiptests.toml
       COMPONENTS
         test
@@ -437,7 +437,7 @@ if(THEROCK_BUILD_TESTING)
     endif()
 
     therock_cmake_subproject_declare(rocrtst
-      USE_DIST_AMDGPU_TARGETS
+      USE_TEST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime/rocrtst/suites/test_common"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocrtst"
       BACKGROUND_BUILD
@@ -465,6 +465,7 @@ if(THEROCK_BUILD_TESTING)
     therock_cmake_subproject_activate(rocrtst)
 
     therock_provide_artifact(rocrtst
+      TARGET_NEUTRAL
       DESCRIPTOR artifact-core-rocrtst.toml
       COMPONENTS
         dbg
