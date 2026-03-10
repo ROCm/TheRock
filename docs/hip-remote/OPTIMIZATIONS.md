@@ -272,11 +272,11 @@ bandwidth.
 |------|---------|
 | `hip_remote_protocol.h` | `HIP_REMOTE_FLAG_NO_REPLY`, `HIP_OP_MALLOC_VADDR` / `HIP_OP_MALLOC_ASYNC_VADDR` opcodes, `HipRemoteMallocVaddrRequest` struct, `vhandle` field in `HipRemoteStreamCreateRequest` |
 | `hip_api_memory.c` | Virtual address allocator (`vaddr_alloc`), hipMalloc/MallocManaged/MallocAsync converted to FnF with vaddr, hipFreeHost made local-only |
-| `hip_api_stream.c` | Virtual stream handle allocator, hipStreamCreate variants converted to FnF |
+| `hip_api_stream.c` | Virtual stream handle allocator, hipStreamCreate FnF, capture state tracking (`g_capture_depth`), `hipStreamGetCaptureInfo` forwarding |
 | `hip_api_module.c` | hipLaunchKernel/hipModuleLaunchKernel fire-and-forget |
-| `hip_api_device.c` | CPU pointer validation in `hipPointerGetAttribute` (rejects non-vaddr pointers) |
+| `hip_api_device.c` | CPU pointer validation, raw `hipDeviceProp_t` transfer (all fields populated) |
 | `hip_client.c` | Write coalescing buffer, `hip_remote_request_fire_and_forget()` and `_with_data` variant |
-| `hip_worker_main.c` | vaddr hash map + sorted alloc list + last-hit cache, `vaddr_translate()`, COMGR `is_pointer` extraction, cache invalidation on module unload, blind scan for assembly kernels, `hipDeviceSynchronize` guard before module loads, deferred error reporting, dynamically growable caches, TCP keepalive |
+| `hip_worker_main.c` | vaddr hash map + sorted alloc list + last-hit cache, `vaddr_translate()`, COMGR `is_pointer` extraction, cache invalidation on module unload, blind scan for assembly kernels, GPU error guard, deferred error reporting, dynamically growable caches, raw `hipDeviceProp_t` response, TCP keepalive |
 
 ---
 
@@ -322,11 +322,40 @@ wrong `is_pointer` flags and parameter sizes. The worker now invalidates
 ### GPU Error Guard
 
 A `hipDeviceSynchronize` call before every `hipModuleLoadData` drains
-any pending async GPU errors from prior fire-and-forget kernel launches.
-Without this, a kernel argument translation error would cause
-`hipModuleLoadData` to hang indefinitely on a poisoned GPU context.
+pending async GPU errors. Errors are logged and cleared (via
+`hipGetLastError`) so module loads can proceed -- MIOpen's solver search
+triggers many module loads and recovers from transient errors.
 
-## 8. Known Limitations
+### CUDA Graph Capture
+
+During `hipStreamBeginCapture` / `hipStreamEndCapture`, the client
+tracks capture depth. While capturing, `hipMalloc` and `hipMallocAsync`
+fall back to synchronous allocation instead of FnF MALLOC_VADDR, since
+device-level allocations outside the capture context would invalidate
+the graph.
+
+### Device Properties
+
+The worker sends the raw `hipDeviceProp_t` struct (all 80+ fields) via
+`memcpy`. Both sides include the same `hip_runtime_api.h`, so the struct
+layout is identical. This ensures every field is populated, including
+`regsPerMultiprocessor` (required by `torch.compile` / Inductor).
+
+## 8. torch.compile Support
+
+`torch.compile` works over hip-remote. Inductor fuses operations into
+Triton-JIT kernels that are compiled on the client and loaded on the
+worker. Significant per-token speedup after a one-time warmup:
+
+| Test | Eager | Compiled | Speedup |
+|------|-------|----------|---------|
+| **GPT-2 per token** | 3.74s | **1.35s** | **2.8x** |
+| **SDXL generation** | 45.7s | **89.9s*** | -- |
+
+\*SDXL compiled time includes Triton JIT warmup during the first few
+inference steps. Subsequent runs with Triton cache are faster.
+
+## 9. Known Limitations
 
 ### Device-Side Assertions
 

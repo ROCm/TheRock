@@ -248,4 +248,6 @@ message has a fixed-size header followed by a variable-length payload:
 Fire-and-forget requests set `HIP_REMOTE_FLAG_NO_REPLY` in the flags field.
 The worker processes the request but does not send a response.
 
-See [PROTOCOL.md](PROTOCOL.md) for the full protocol specification.
+See [PROTOCOL.md](PROTOCOL.md) for the full protocol specification and
+[OPTIMIZATIONS.md](OPTIMIZATIONS.md) for details on fire-and-forget pipelining,
+virtual address allocation, and kernel argument translation.

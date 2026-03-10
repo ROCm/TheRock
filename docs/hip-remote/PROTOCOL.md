@@ -108,7 +108,7 @@ Operation-specific response fields follow after the error code.
 | `0x0100` | `GET_DEVICE_COUNT` | (none) | `{error_code, count}` |
 | `0x0101` | `SET_DEVICE` | `{device_id}` | `{error_code}` |
 | `0x0102` | `GET_DEVICE` | (none) | `{error_code, device_id}` |
-| `0x0103` | `GET_DEVICE_PROPERTIES` | `{device_id}` | `{error_code, name[256], total_global_mem, ...}` |
+| `0x0103` | `GET_DEVICE_PROPERTIES` | `{device_id}` | `{error_code, hipDeviceProp_t}` (raw struct, all fields) |
 | `0x0104` | `DEVICE_SYNCHRONIZE` | (none) | `{error_code}` |
 | `0x0106` | `DEVICE_GET_ATTRIBUTE` | `{device_id, attribute}` | `{error_code, value}` |
 | `0x0107` | `DEVICE_GET_LIMIT` | `{limit, value}` | `{error_code, value}` |
