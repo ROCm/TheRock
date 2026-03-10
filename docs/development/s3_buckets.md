@@ -6,31 +6,51 @@ and explains the authentication needed to upload to them.
 
 ## CI buckets
 
-| Bucket                                                                                     | Used for                                                                      | Upload authentication methods                                                                               |
-| ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| [`therock-ci-artifacts`](https://therock-ci-artifacts.s3.amazonaws.com/)                   | CI runs on `ROCm/TheRock`                                                     | <ul><li>`therock-ci` role (OIDC)</li></ul>                                                                  |
-| [`therock-ci-artifacts-external`](https://therock-ci-artifacts-external.s3.amazonaws.com/) | CI runs from forks and other repos<br>(e.g. `rocm-libraries`, `rocm-systems`) | <ul><li>`therock-ci-external` role (OIDC)</li><li>Runner base credentials (no extra setup needed)</li></ul> |
+| Bucket                                                                                     | Contents                                                   | IAM role                                          |
+| ------------------------------------------------------------------------------------------ | ---------------------------------------------------------- | ------------------------------------------------- |
+| [`therock-ci-artifacts`](https://therock-ci-artifacts.s3.amazonaws.com/)                   | Build artifacts, logs, manifests for `ROCm/TheRock`        | `therock-ci`                                      |
+| [`therock-ci-artifacts-external`](https://therock-ci-artifacts-external.s3.amazonaws.com/) | Build artifacts, logs, manifests for forks and other repos | `therock-ci-external`, or runner base credentials |
 
 ## Release buckets
 
-| Bucket                                                                                   | Used for                  | Upload authentication methods                      |
-| ---------------------------------------------------------------------------------------- | ------------------------- | -------------------------------------------------- |
-| [`therock-dev-artifacts`](https://therock-dev-artifacts.s3.amazonaws.com/)               | Release type `dev`        | <ul><li>`therock-dev` role (OIDC)</li></ul>        |
-| [`therock-nightly-artifacts`](https://therock-nightly-artifacts.s3.amazonaws.com/)       | Release type `nightly`    | <ul><li>`therock-nightly` role (OIDC)</li></ul>    |
-| [`therock-prerelease-artifacts`](https://therock-prerelease-artifacts.s3.amazonaws.com/) | Release type `prerelease` | <ul><li>`therock-prerelease` role (OIDC)</li></ul> |
+Each release type (`dev`, `nightly`, `prerelease`) has a matching set of
+buckets. All buckets for a given release type are accessed via the
+`therock-{release_type}` IAM role.
+
+| Bucket                                                                                   | Contents                          | IAM role             |
+| ---------------------------------------------------------------------------------------- | --------------------------------- | -------------------- |
+| [`therock-dev-artifacts`](https://therock-dev-artifacts.s3.amazonaws.com/)               | Build artifacts, logs, manifests  | `therock-dev`        |
+| [`therock-dev-python`](https://therock-dev-python.s3.amazonaws.com/)                     | Python wheels and pip index pages | `therock-dev`        |
+| [`therock-dev-tarball`](https://therock-dev-tarball.s3.amazonaws.com/)                   | ROCm SDK tarballs                 | `therock-dev`        |
+| [`therock-nightly-artifacts`](https://therock-nightly-artifacts.s3.amazonaws.com/)       | Build artifacts, logs, manifests  | `therock-nightly`    |
+| [`therock-nightly-python`](https://therock-nightly-python.s3.amazonaws.com/)             | Python wheels and pip index pages | `therock-nightly`    |
+| [`therock-nightly-tarball`](https://therock-nightly-tarball.s3.amazonaws.com/)           | ROCm SDK tarballs                 | `therock-nightly`    |
+| [`therock-prerelease-artifacts`](https://therock-prerelease-artifacts.s3.amazonaws.com/) | Build artifacts, logs, manifests  | `therock-prerelease` |
+| [`therock-prerelease-python`](https://therock-prerelease-python.s3.amazonaws.com/)       | Python wheels and pip index pages | `therock-prerelease` |
+| [`therock-prerelease-tarball`](https://therock-prerelease-tarball.s3.amazonaws.com/)     | ROCm SDK tarballs                 | `therock-prerelease` |
+
+## Cache buckets
+
+| Bucket                                                                                               | Contents                   | IAM role             |
+| ---------------------------------------------------------------------------------------------------- | -------------------------- | -------------------- |
+| [`therock-ci-pytorch-sccache`](https://therock-ci-pytorch-sccache.s3.amazonaws.com/)                 | PyTorch CI sccache         | `therock-ci`         |
+| [`therock-dev-pytorch-sccache`](https://therock-dev-pytorch-sccache.s3.amazonaws.com/)               | PyTorch dev sccache        | `therock-dev`        |
+| [`therock-nightly-pytorch-sccache`](https://therock-nightly-pytorch-sccache.s3.amazonaws.com/)       | PyTorch nightly sccache    | `therock-nightly`    |
+| [`therock-prerelease-pytorch-sccache`](https://therock-prerelease-pytorch-sccache.s3.amazonaws.com/) | PyTorch prerelease sccache | `therock-prerelease` |
 
 ## Authentication
 
-Our CI runners come with baseline credentials that allow uploading to
-`therock-ci-artifacts-external`. To upload to any other bucket, workflows must
-assume an IAM role via
+All buckets except `therock-ci-artifacts-external` require assuming an IAM
+role via
 [`aws-actions/configure-aws-credentials`](https://github.com/aws-actions/configure-aws-credentials)
-using OIDC (`id-token: write` permission). The role name follows the pattern
+using OIDC. This requires `id-token: write` in the job's `permissions` block.
+The full ARN pattern is
 `arn:aws:iam::692859939525:role/therock-{ci,dev,nightly,prerelease}`.
 
-Workflows in downstream repos like `rocm-libraries`, `rocm-systems`, and
-`llvm-project` upload to `therock-ci-artifacts-external` and do not need to
-run `aws-actions/configure-aws-credentials` at all.
+Our CI runners come with baseline credentials that allow uploading to
+`therock-ci-artifacts-external` without any extra setup. Workflows in
+downstream repos like `rocm-libraries`, `rocm-systems`, and `llvm-project`
+upload to this bucket and do not need `aws-actions/configure-aws-credentials`.
 
 ## Legacy buckets
 
@@ -38,7 +58,7 @@ Runs before 2025-11-11 ([TheRock #2046](https://github.com/ROCm/TheRock/issues/2
 used different bucket names. These are no longer written to but still contain
 historical data.
 
-| Legacy bucket                                                                        | Replaced by                     | Upload auth                                                |
-| ------------------------------------------------------------------------------------ | ------------------------------- | ---------------------------------------------------------- |
-| [`therock-artifacts`](https://therock-artifacts.s3.amazonaws.com/)                   | `therock-ci-artifacts`          | <ul><li>`therock-artifacts` role (OIDC)</li></ul>          |
-| [`therock-artifacts-external`](https://therock-artifacts-external.s3.amazonaws.com/) | `therock-ci-artifacts-external` | <ul><li>`therock-artifacts-external` role (OIDC)</li></ul> |
+| Legacy bucket                                                                        | Replaced by                     | IAM role                     |
+| ------------------------------------------------------------------------------------ | ------------------------------- | ---------------------------- |
+| [`therock-artifacts`](https://therock-artifacts.s3.amazonaws.com/)                   | `therock-ci-artifacts`          | `therock-artifacts`          |
+| [`therock-artifacts-external`](https://therock-artifacts-external.s3.amazonaws.com/) | `therock-ci-artifacts-external` | `therock-artifacts-external` |
