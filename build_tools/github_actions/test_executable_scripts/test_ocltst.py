@@ -40,6 +40,7 @@ def setup_env(env):
             f"{ROCK_LIB_PATH}:{OCL_LIB}:{LLVM_LIB}:{ROCM_SYSDEPS_LIB}:{LD_LIBRARY_PATH}"
         )
         env["OCL_ICD_VENDORS"] = f"{OCL_ICD_VENDORS}/"
+        env["AMD_LOG_LEVEL"] = "5"
 
 
 def execute_tests(env):
