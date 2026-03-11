@@ -156,6 +156,10 @@ class TestWorkflowOutputRootLocations(unittest.TestCase):
         loc = self.root.python_packages("gfx110X-all")
         self._assert_relative_path(loc, "99999-linux/python/gfx110X-all")
 
+    def test_python_packages_no_artifact_group(self):
+        loc = self.root.python_packages()
+        self._assert_relative_path(loc, "99999-linux/python")
+
 
 class TestWorkflowOutputRootLocationsExternalRepo(unittest.TestCase):
     """Verify external_repo prefix propagates through location methods."""
