@@ -204,9 +204,8 @@ jobs:
     outputs:
       os_profiles: ${{ steps.set.outputs.os_profiles }}
       gfx_arch: ${{ steps.set.outputs.gfx_arch }}
-      test_type: ${{ steps.set.outputs.test_type }}
     steps:
-      - name: Set os_profiles, gfx_arch and test_type
+      - name: Set os_profiles and gfx_arch
         id: set
         run: |
           PKG_TYPE="${{ inputs.native_package_type }}"
@@ -216,16 +215,8 @@ jobs:
             OS_PROFILES='["rhel8","rhel9","rhel10","sles15","sles16","azl3"]'
           fi
           GFX_ARCH=$(echo "${{ inputs.artifact_group }}" | cut -d'-' -f1 | tr '[:upper:]' '[:lower:]')
-          # Install test type: dev -> sanity (faster), nightly/prerelease -> full
-          RELEASE_TYPE="${{ inputs.release_type || 'dev' }}"
-          if [ "${RELEASE_TYPE}" = "dev" ]; then
-            TEST_TYPE="sanity"
-          else
-            TEST_TYPE="full"
-          fi
           echo "os_profiles=${OS_PROFILES}" >> $GITHUB_OUTPUT
           echo "gfx_arch=${GFX_ARCH}" >> $GITHUB_OUTPUT
-          echo "test_type=${TEST_TYPE}" >> $GITHUB_OUTPUT
 
   test_native_linux_packages_install:
     name: Test Native Linux Packages Install - ${{ matrix.os_profile }}
@@ -241,4 +232,3 @@ jobs:
       os_profile: ${{ matrix.os_profile }}
       gfx_arch: ${{ needs.get_install_test_profiles.outputs.gfx_arch }}
       install_prefix: ${{ inputs.install_prefix || '/opt/rocm/core' }}
-      test_type: ${{ needs.get_install_test_profiles.outputs.test_type }}

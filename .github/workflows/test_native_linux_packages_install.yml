@@ -29,11 +29,6 @@ on:
         required: false
         type: string
         default: "/opt/rocm/core"
-      test_type:
-        description: "Test type: sanity (basic verification only) or full (basic + full verification)."
-        required: false
-        type: string
-        default: "sanity"
   workflow_dispatch:
     inputs:
       repo_url:
@@ -70,13 +65,6 @@ on:
         type: string
         default: "/opt/rocm/core"
         required: false
-      test_type:
-        description: "Test type: sanity or full"
-        type: choice
-        options:
-          - sanity
-          - full
-        default: "sanity"
 
 permissions:
   id-token: write
@@ -105,7 +93,6 @@ jobs:
       INSTALL_PREFIX: ${{ inputs.install_prefix || '/opt/rocm/core' }}
       # Release type for script: prerelease if GPG key URL is set, else nightly
       RELEASE_TYPE: ${{ inputs.gpg_key_url != '' && 'prerelease' || 'nightly' }}
-      TEST_TYPE: ${{ inputs.test_type || 'sanity' }}
     steps:
       - name: Install System Prerequisites
         run: |
@@ -191,7 +178,6 @@ jobs:
           CMD="$CMD --gfx-arch ${{ env.GFX_ARCH }}"
           CMD="$CMD --install-prefix \"${{ env.INSTALL_PREFIX }}\""
           CMD="$CMD --release-type ${{ env.RELEASE_TYPE }}"
-          CMD="$CMD --test-type ${{ env.TEST_TYPE }}"
           if [ -n "${{ env.GPG_KEY_URL }}" ]; then
             CMD="$CMD --gpg-key-url \"${{ env.GPG_KEY_URL }}\""
           fi
