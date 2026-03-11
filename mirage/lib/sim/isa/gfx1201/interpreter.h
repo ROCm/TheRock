@@ -17,9 +17,13 @@ enum class Gfx1201CompiledOpcode : std::uint8_t {
   kUnknown,
   kSEndpgm,
   kSNop,
+  kSAddU32,
+  kSAddI32,
+  kSSubU32,
   kSMovB32,
   kSMovkI32,
   kVMovB32,
+  kVAddU32,
 };
 
 struct Gfx1201CompiledInstruction {

@@ -4,14 +4,23 @@
   "executable_opcodes": [
     "S_ENDPGM",
     "S_NOP",
+    "S_ADD_U32",
+    "S_ADD_I32",
+    "S_SUB_U32",
     "S_MOV_B32",
     "S_MOVK_I32",
-    "V_MOV_B32"
+    "V_MOV_B32",
+    "V_ADD_U32"
   ],
   "covered_encodings": {
     "ENC_SOPP": [
       "S_ENDPGM",
       "S_NOP"
+    ],
+    "ENC_SOP2": [
+      "S_ADD_CO_U32 -> S_ADD_U32",
+      "S_ADD_CO_I32 -> S_ADD_I32",
+      "S_SUB_CO_U32 -> S_SUB_U32"
     ],
     "ENC_SOP1": [
       "S_MOV_B32"
@@ -21,25 +30,31 @@
     ],
     "ENC_VOP1": [
       "V_MOV_B32"
+    ],
+    "ENC_VOP2": [
+      "V_ADD_NC_U32 -> V_ADD_U32"
     ]
   },
   "decoder_capabilities": [
     "Returns real DecodedInstruction values for the executable slice.",
+    "Normalizes imported arithmetic/control opcodes onto the Mirage alias surface for the new subset.",
+    "Decodes S_ADD_U32, S_ADD_I32, and S_SUB_U32 from ENC_SOP2.",
     "Decodes SGPR, inline integer, and literal sources for S_MOV_B32 and V_MOV_B32.",
+    "Decodes V_ADD_U32 from ENC_VOP2.",
     "Sign-extends SIMM16 for S_MOVK_I32."
   ],
   "execution_capabilities": [
     "Halts waves with S_ENDPGM.",
     "Accepts S_NOP as a no-op seed instruction.",
+    "Executes scalar add/subtract and updates SCC using carry/borrow behavior.",
     "Executes scalar move and scalar immediate move.",
-    "Executes exec-masked V_MOV_B32."
+    "Executes exec-masked V_MOV_B32.",
+    "Executes exec-masked V_ADD_U32 lane-wise."
   ],
   "still_scaffolded": [
     "Route-matched but non-executable phase-0 compute instructions still return selector-aware stub errors.",
-    "ENC_SOP2",
     "ENC_SOPC",
     "ENC_SMEM",
-    "ENC_VOP2",
     "ENC_VOPC",
     "ENC_VOP3",
     "ENC_VDS",

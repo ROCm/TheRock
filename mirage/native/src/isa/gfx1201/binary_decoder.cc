@@ -15,12 +15,16 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 5> kPhase0ExecutableOpcodes{{
+constexpr std::array<std::string_view, 9> kPhase0ExecutableOpcodes{{
     "S_ENDPGM",
     "S_NOP",
+    "S_ADD_U32",
+    "S_ADD_I32",
+    "S_SUB_U32",
     "S_MOV_B32",
     "S_MOVK_I32",
     "V_MOV_B32",
+    "V_ADD_U32",
 }};
 
 constexpr std::uint32_t ExtractBits(std::uint32_t value,
@@ -56,6 +60,22 @@ bool IsPhase0ExecutableOpcode(std::string_view opcode) {
     }
   }
   return false;
+}
+
+std::string_view NormalizeExecutableInstructionName(std::string_view opcode) {
+  if (opcode == "S_ADD_CO_U32") {
+    return "S_ADD_U32";
+  }
+  if (opcode == "S_ADD_CO_I32") {
+    return "S_ADD_I32";
+  }
+  if (opcode == "S_SUB_CO_U32") {
+    return "S_SUB_U32";
+  }
+  if (opcode == "V_ADD_NC_U32") {
+    return "V_ADD_U32";
+  }
+  return opcode;
 }
 
 std::string BuildExecutableOpcodeList() {
@@ -233,6 +253,29 @@ bool DecodeVectorSource(std::uint32_t raw_value,
   return true;
 }
 
+bool DecodeVectorRegisterSource(std::uint32_t raw_value,
+                                InstructionOperand* operand,
+                                std::string* error_message) {
+  if (operand == nullptr) {
+    if (error_message != nullptr) {
+      *error_message = "vector register source output must not be null";
+    }
+    return false;
+  }
+  if (raw_value >= WaveExecutionState::kVectorRegisterCount) {
+    if (error_message != nullptr) {
+      *error_message = "unsupported VSRC1 register";
+    }
+    return false;
+  }
+
+  *operand = InstructionOperand::Vgpr(static_cast<std::uint16_t>(raw_value));
+  if (error_message != nullptr) {
+    error_message->clear();
+  }
+  return true;
+}
+
 bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
                                         std::span<const std::uint32_t> words,
                                         DecodedInstruction* instruction,
@@ -248,7 +291,8 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
     return false;
   }
 
-  const std::string_view instruction_name = route.seed_entry->instruction_name;
+  const std::string_view instruction_name =
+      NormalizeExecutableInstructionName(route.seed_entry->instruction_name);
   if (!IsPhase0ExecutableOpcode(instruction_name)) {
     return false;
   }
@@ -290,6 +334,33 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
         InstructionOperand::Imm32(static_cast<std::uint32_t>(
             SignExtend16(ExtractBits(word, 0, 16)))));
     *words_consumed = 1;
+  } else if (instruction_name == "S_ADD_U32" || instruction_name == "S_ADD_I32" ||
+             instruction_name == "S_SUB_U32") {
+    InstructionOperand dst;
+    if (!DecodeScalarDestination(ExtractBits(word, 16, 7), &dst, error_message)) {
+      return false;
+    }
+
+    std::size_t src0_literal_words_consumed = 0;
+    InstructionOperand src0;
+    if (!DecodeScalarSource(ExtractBits(word, 0, 8), words.subspan(1),
+                            &src0_literal_words_consumed, &src0,
+                            error_message)) {
+      return false;
+    }
+
+    std::size_t src1_literal_words_consumed = 0;
+    InstructionOperand src1;
+    if (!DecodeScalarSource(ExtractBits(word, 8, 8),
+                            words.subspan(1 + src0_literal_words_consumed),
+                            &src1_literal_words_consumed, &src1,
+                            error_message)) {
+      return false;
+    }
+
+    *instruction = DecodedInstruction::Binary(instruction_name, dst, src0, src1);
+    *words_consumed =
+        1 + src0_literal_words_consumed + src1_literal_words_consumed;
   } else if (instruction_name == "V_MOV_B32") {
     InstructionOperand dst;
     if (!DecodeVectorDestination(ExtractBits(word, 17, 8), &dst, error_message)) {
@@ -304,6 +375,27 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
     }
 
     *instruction = DecodedInstruction::Unary(instruction_name, dst, src0);
+    *words_consumed = 1 + literal_words_consumed;
+  } else if (instruction_name == "V_ADD_U32") {
+    InstructionOperand dst;
+    if (!DecodeVectorDestination(ExtractBits(word, 17, 8), &dst, error_message)) {
+      return false;
+    }
+
+    std::size_t literal_words_consumed = 0;
+    InstructionOperand src0;
+    if (!DecodeVectorSource(ExtractBits(word, 0, 9), words.subspan(1),
+                            &literal_words_consumed, &src0, error_message)) {
+      return false;
+    }
+
+    InstructionOperand src1;
+    if (!DecodeVectorRegisterSource(ExtractBits(word, 9, 8), &src1,
+                                    error_message)) {
+      return false;
+    }
+
+    *instruction = DecodedInstruction::Binary(instruction_name, dst, src0, src1);
     *words_consumed = 1 + literal_words_consumed;
   } else {
     return false;
@@ -411,7 +503,7 @@ bool Gfx1201BinaryDecoder::SelectPhase0ComputeRoute(
 
 bool Gfx1201BinaryDecoder::SupportsPhase0ExecutableOpcode(
     std::string_view opcode) const {
-  return IsPhase0ExecutableOpcode(opcode);
+  return IsPhase0ExecutableOpcode(NormalizeExecutableInstructionName(opcode));
 }
 
 std::span<const Gfx1201DecoderSeedEncoding>

@@ -87,8 +87,14 @@ int main() {
               "expected phase-0 compute seed list") ||
       !Expect(decoder.Phase0ComputeSelectorRules().size() == 12u,
               "expected phase-0 selector rule list") ||
-      !Expect(decoder.Phase0ExecutableOpcodes().size() == 5u,
+      !Expect(decoder.Phase0ExecutableOpcodes().size() == 9u,
               "expected phase-0 executable opcode slice") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("S_ADD_U32"),
+              "expected S_ADD_U32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("S_SUB_U32"),
+              "expected S_SUB_U32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_ADD_U32"),
+              "expected V_ADD_U32 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_MOV_B32"),
               "expected S_MOV_B32 executable decode support") ||
       !Expect(!decoder.SupportsPhase0ExecutableOpcode("V_ADD_F32"),
@@ -124,12 +130,20 @@ int main() {
   }
 
   Gfx1201Interpreter interpreter;
-  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 5u,
+  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 9u,
               "expected executable seed opcode list") ||
       !Expect(interpreter.Supports("S_ENDPGM"),
               "expected interpreter support for S_ENDPGM") ||
+      !Expect(interpreter.Supports("S_ADD_U32"),
+              "expected interpreter support for S_ADD_U32") ||
+      !Expect(interpreter.Supports("S_ADD_I32"),
+              "expected interpreter support for S_ADD_I32") ||
+      !Expect(interpreter.Supports("S_SUB_U32"),
+              "expected interpreter support for S_SUB_U32") ||
       !Expect(interpreter.Supports("S_MOV_B32"),
               "expected interpreter support for S_MOV_B32") ||
+      !Expect(interpreter.Supports("V_ADD_U32"),
+              "expected interpreter support for V_ADD_U32") ||
       !Expect(interpreter.Supports("V_MOV_B32"),
               "expected interpreter support for V_MOV_B32") ||
       !Expect(!interpreter.Supports("V_ADD_F32"),
@@ -141,9 +155,12 @@ int main() {
     return 1;
   }
 
-  const std::array<DecodedInstruction, 2> supported_program{
+  const std::array<DecodedInstruction, 3> supported_program{
       DecodedInstruction::Unary("S_MOVK_I32", InstructionOperand::Sgpr(1),
                                 InstructionOperand::Imm32(7u)),
+      DecodedInstruction::Binary("S_ADD_U32", InstructionOperand::Sgpr(2),
+                                 InstructionOperand::Sgpr(1),
+                                 InstructionOperand::Imm32(5u)),
       DecodedInstruction::Nullary("S_ENDPGM"),
   };
   std::vector<Gfx1201CompiledInstruction> compiled_program;
@@ -159,6 +176,7 @@ int main() {
   if (!Expect(interpreter.ExecuteProgram(supported_program, &state, &error_message),
               "expected decoded execution success for executable seed slice") ||
       !Expect(state.sgprs[1] == 7u, "expected decoded execution to write SGPR") ||
+      !Expect(state.sgprs[2] == 12u, "expected decoded execution to add into SGPR") ||
       !Expect(state.halted, "expected decoded execution to halt")) {
     return 1;
   }

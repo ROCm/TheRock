@@ -15,12 +15,16 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 5> kExecutableSeedOpcodes{{
+constexpr std::array<std::string_view, 9> kExecutableSeedOpcodes{{
     "S_ENDPGM",
     "S_NOP",
+    "S_ADD_U32",
+    "S_ADD_I32",
+    "S_SUB_U32",
     "S_MOV_B32",
     "S_MOVK_I32",
     "V_MOV_B32",
+    "V_ADD_U32",
 }};
 
 bool IsExecutableSeedOpcode(std::string_view opcode) {
@@ -30,6 +34,39 @@ bool IsExecutableSeedOpcode(std::string_view opcode) {
     }
   }
   return false;
+}
+
+std::string_view NormalizeExecutableSeedOpcode(std::string_view opcode) {
+  if (opcode == "S_ADD_CO_U32") {
+    return "S_ADD_U32";
+  }
+  if (opcode == "S_ADD_CO_I32") {
+    return "S_ADD_I32";
+  }
+  if (opcode == "S_SUB_CO_U32") {
+    return "S_SUB_U32";
+  }
+  if (opcode == "V_ADD_NC_U32") {
+    return "V_ADD_U32";
+  }
+  return opcode;
+}
+
+std::string_view ImportedSupportOpcode(std::string_view opcode) {
+  const std::string_view normalized_opcode = NormalizeExecutableSeedOpcode(opcode);
+  if (normalized_opcode == "S_ADD_U32") {
+    return "S_ADD_CO_U32";
+  }
+  if (normalized_opcode == "S_ADD_I32") {
+    return "S_ADD_CO_I32";
+  }
+  if (normalized_opcode == "S_SUB_U32") {
+    return "S_SUB_CO_U32";
+  }
+  if (normalized_opcode == "V_ADD_U32") {
+    return "V_ADD_NC_U32";
+  }
+  return normalized_opcode;
 }
 
 std::string BuildExecutableOpcodeList() {
@@ -87,6 +124,18 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
     *compiled_opcode = Gfx1201CompiledOpcode::kSNop;
     return true;
   }
+  if (opcode == "S_ADD_U32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kSAddU32;
+    return true;
+  }
+  if (opcode == "S_ADD_I32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kSAddI32;
+    return true;
+  }
+  if (opcode == "S_SUB_U32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kSSubU32;
+    return true;
+  }
   if (opcode == "S_MOV_B32") {
     *compiled_opcode = Gfx1201CompiledOpcode::kSMovB32;
     return true;
@@ -97,6 +146,10 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
   }
   if (opcode == "V_MOV_B32") {
     *compiled_opcode = Gfx1201CompiledOpcode::kVMovB32;
+    return true;
+  }
+  if (opcode == "V_ADD_U32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVAddU32;
     return true;
   }
   *compiled_opcode = Gfx1201CompiledOpcode::kUnknown;
@@ -272,6 +325,34 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
     return ValidateOperandCount(instruction, 1, error_message);
   }
 
+  if (instruction.opcode == "S_ADD_U32" || instruction.opcode == "S_ADD_I32" ||
+      instruction.opcode == "S_SUB_U32") {
+    if (!ValidateOperandCount(instruction, 3, error_message)) {
+      return false;
+    }
+    const std::uint32_t lhs =
+        ReadScalarOperand(instruction.operands[1], *state, error_message);
+    if (error_message != nullptr && !error_message->empty()) {
+      return false;
+    }
+    const std::uint32_t rhs =
+        ReadScalarOperand(instruction.operands[2], *state, error_message);
+    if (error_message != nullptr && !error_message->empty()) {
+      return false;
+    }
+
+    std::uint32_t result = 0;
+    if (instruction.opcode == "S_SUB_U32") {
+      result = lhs - rhs;
+      state->scc = lhs >= rhs;
+    } else {
+      const std::uint64_t wide = static_cast<std::uint64_t>(lhs) + rhs;
+      result = static_cast<std::uint32_t>(wide);
+      state->scc = wide > 0xffffffffULL;
+    }
+    return WriteScalarOperand(instruction.operands[0], result, state, error_message);
+  }
+
   if (instruction.opcode == "S_MOV_B32" || instruction.opcode == "S_MOVK_I32") {
     if (!ValidateOperandCount(instruction, 2, error_message)) {
       return false;
@@ -306,6 +387,33 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
     return true;
   }
 
+  if (instruction.opcode == "V_ADD_U32") {
+    if (!ValidateOperandCount(instruction, 3, error_message)) {
+      return false;
+    }
+    for (std::size_t lane_index = 0; lane_index < WaveExecutionState::kLaneCount;
+         ++lane_index) {
+      if (((state->exec_mask >> lane_index) & 1ULL) == 0) {
+        continue;
+      }
+      const std::uint32_t lhs = ReadVectorOperand(instruction.operands[1], *state,
+                                                  lane_index, error_message);
+      if (error_message != nullptr && !error_message->empty()) {
+        return false;
+      }
+      const std::uint32_t rhs = ReadVectorOperand(instruction.operands[2], *state,
+                                                  lane_index, error_message);
+      if (error_message != nullptr && !error_message->empty()) {
+        return false;
+      }
+      if (!WriteVectorOperand(instruction.operands[0], lane_index, lhs + rhs, state,
+                              error_message)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   if (error_message != nullptr) {
     *error_message = BuildInterpreterBringupMessage(instruction.opcode);
   }
@@ -318,9 +426,13 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
   switch (instruction.opcode) {
     case Gfx1201CompiledOpcode::kSEndpgm:
     case Gfx1201CompiledOpcode::kSNop:
+    case Gfx1201CompiledOpcode::kSAddU32:
+    case Gfx1201CompiledOpcode::kSAddI32:
+    case Gfx1201CompiledOpcode::kSSubU32:
     case Gfx1201CompiledOpcode::kSMovB32:
     case Gfx1201CompiledOpcode::kSMovkI32:
     case Gfx1201CompiledOpcode::kVMovB32:
+    case Gfx1201CompiledOpcode::kVAddU32:
       return ExecuteDecodedSeedInstruction(instruction.decoded_instruction, state,
                                            error_message);
     case Gfx1201CompiledOpcode::kUnknown:
@@ -352,8 +464,11 @@ bool ValidateStateAndResetForExecution(WaveExecutionState* state,
 }  // namespace
 
 bool Gfx1201Interpreter::Supports(std::string_view opcode) const {
-  return FindGfx1201InstructionSupport(opcode) != nullptr &&
-         IsExecutableSeedOpcode(opcode);
+  const std::string_view normalized_opcode =
+      NormalizeExecutableSeedOpcode(opcode);
+  return FindGfx1201InstructionSupport(ImportedSupportOpcode(normalized_opcode)) !=
+             nullptr &&
+         IsExecutableSeedOpcode(normalized_opcode);
 }
 
 bool Gfx1201Interpreter::CompileProgram(
@@ -370,7 +485,10 @@ bool Gfx1201Interpreter::CompileProgram(
   compiled_program->clear();
   compiled_program->reserve(program.size());
   for (const DecodedInstruction& instruction : program) {
-    if (FindGfx1201InstructionSupport(instruction.opcode) == nullptr) {
+    const std::string_view normalized_opcode =
+        NormalizeExecutableSeedOpcode(instruction.opcode);
+    if (FindGfx1201InstructionSupport(ImportedSupportOpcode(normalized_opcode)) ==
+        nullptr) {
       if (error_message != nullptr) {
         *error_message = "unknown gfx1201 opcode";
       }
@@ -379,9 +497,11 @@ bool Gfx1201Interpreter::CompileProgram(
 
     Gfx1201CompiledInstruction compiled_instruction;
     compiled_instruction.decoded_instruction = instruction;
-    if (!TryCompileExecutableOpcode(instruction.opcode, &compiled_instruction.opcode)) {
+    compiled_instruction.decoded_instruction.opcode = normalized_opcode;
+    if (!TryCompileExecutableOpcode(normalized_opcode,
+                                    &compiled_instruction.opcode)) {
       if (error_message != nullptr) {
-        *error_message = BuildInterpreterBringupMessage(instruction.opcode);
+        *error_message = BuildInterpreterBringupMessage(normalized_opcode);
       }
       return false;
     }
