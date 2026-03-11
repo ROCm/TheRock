@@ -52,3 +52,6 @@
 	path = debug-tools/rocgdb/source
 	url = https://github.com/ROCm/rocgdb.git
 	branch = amd-staging-rocgdb-16
+[submodule "third-party/HeCBench"]
+	path = third-party/HeCBench
+	url = https://github.com/zjin-lcf/HeCBench
