@@ -27,6 +27,7 @@ from urllib.parse import urlparse
 
 # --- base_url ---
 
+
 def get_base_url(url: str) -> str:
     """Return base URL (scheme + netloc only). No path, query, or fragment."""
     parsed = urlparse(url)
@@ -75,6 +76,7 @@ def cmd_repo_sub_folder(args: argparse.Namespace) -> int:
 
 # --- main ---
 
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Get URL/repo parameters: base URL (from CloudFront URL) or repo_sub_folder (from S3 prefix).",
@@ -85,7 +87,9 @@ def main() -> int:
         default="env",
         help="Output: env = KEY=value (default); value = value only",
     )
-    subparsers = parser.add_subparsers(dest="command", required=True, help="Get operation to run")
+    subparsers = parser.add_subparsers(
+        dest="command", required=True, help="Get operation to run"
+    )
 
     # get-base-url: get base URL from a CloudFront URL
     p_base = subparsers.add_parser(
