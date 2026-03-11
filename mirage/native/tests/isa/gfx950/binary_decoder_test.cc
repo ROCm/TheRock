@@ -5859,6 +5859,122 @@ int main() {
     return 1;
   }
 
+  {
+    const auto loadx4_opcode = FindDefaultEncodingOpcode("S_LOAD_DWORDX4", "ENC_SMEM");
+    const auto loadx8_opcode = FindDefaultEncodingOpcode("S_LOAD_DWORDX8", "ENC_SMEM");
+    const auto loadx16_opcode =
+        FindDefaultEncodingOpcode("S_LOAD_DWORDX16", "ENC_SMEM");
+    const auto storex2_opcode =
+        FindDefaultEncodingOpcode("S_STORE_DWORDX2", "ENC_SMEM");
+    const auto storex4_opcode =
+        FindDefaultEncodingOpcode("S_STORE_DWORDX4", "ENC_SMEM");
+    if (!Expect(loadx4_opcode.has_value(), "expected smem loadx4 opcode lookup") ||
+        !Expect(loadx8_opcode.has_value(), "expected smem loadx8 opcode lookup") ||
+        !Expect(loadx16_opcode.has_value(), "expected smem loadx16 opcode lookup") ||
+        !Expect(storex2_opcode.has_value(), "expected smem storex2 opcode lookup") ||
+        !Expect(storex4_opcode.has_value(), "expected smem storex4 opcode lookup")) {
+      return 1;
+    }
+
+    const auto loadx4_word = MakeSmem(*loadx4_opcode, 8, 0, true, 0x20);
+    const auto loadx8_word = MakeSmem(*loadx8_opcode, 16, 0, true, 0x40);
+    const auto loadx16_word = MakeSmem(*loadx16_opcode, 32, 0, true, 0x80);
+    const auto storex2_word = MakeSmem(*storex2_opcode, 16, 0, false, 2, true);
+    const auto storex4_word = MakeSmem(*storex4_opcode, 8, 0, false, 3, true);
+    const std::vector<std::uint32_t> wide_smem_program = {
+        loadx4_word[0],  loadx4_word[1],  loadx8_word[0],  loadx8_word[1],
+        loadx16_word[0], loadx16_word[1], storex2_word[0], storex2_word[1],
+        storex4_word[0], storex4_word[1], MakeSopp(1),
+    };
+    decoded_program.clear();
+    if (!Expect(decoder.DecodeProgram(wide_smem_program, &decoded_program,
+                                      &error_message),
+                error_message.c_str()) ||
+        !Expect(decoded_program.size() == 6,
+                "expected decoded wide smem program size") ||
+        !Expect(decoded_program[0].opcode == "S_LOAD_DWORDX4",
+                "expected smem loadx4 decode") ||
+        !Expect(decoded_program[1].opcode == "S_LOAD_DWORDX8",
+                "expected smem loadx8 decode") ||
+        !Expect(decoded_program[2].opcode == "S_LOAD_DWORDX16",
+                "expected smem loadx16 decode") ||
+        !Expect(decoded_program[3].opcode == "S_STORE_DWORDX2",
+                "expected smem storex2 decode") ||
+        !Expect(decoded_program[4].opcode == "S_STORE_DWORDX4",
+                "expected smem storex4 decode") ||
+        !Expect(decoded_program[4].operands[2].kind == OperandKind::kSgpr &&
+                    decoded_program[4].operands[2].index == 3,
+                "expected smem wide soffset decode")) {
+      return 1;
+    }
+
+    LinearExecutionMemory wide_memory(0x600, 0);
+    for (std::uint32_t index = 0; index < 4; ++index) {
+      if (!Expect(wide_memory.WriteU32(0x120u + index * 4u, 0x100u + index),
+                  "expected smem loadx4 seed write")) {
+        return 1;
+      }
+    }
+    for (std::uint32_t index = 0; index < 8; ++index) {
+      if (!Expect(wide_memory.WriteU32(0x140u + index * 4u, 0x200u + index),
+                  "expected smem loadx8 seed write")) {
+        return 1;
+      }
+    }
+    for (std::uint32_t index = 0; index < 16; ++index) {
+      if (!Expect(wide_memory.WriteU32(0x180u + index * 4u, 0x300u + index),
+                  "expected smem loadx16 seed write")) {
+        return 1;
+      }
+    }
+    WaveExecutionState wide_smem_state;
+    wide_smem_state.sgprs[0] = 0x100u;
+    wide_smem_state.sgprs[1] = 0u;
+    wide_smem_state.sgprs[2] = 0x140u;
+    wide_smem_state.sgprs[3] = 0x160u;
+    if (!Expect(interpreter.ExecuteProgram(decoded_program, &wide_smem_state,
+                                           &wide_memory, &error_message),
+                error_message.c_str())) {
+      return 1;
+    }
+    for (std::uint32_t index = 0; index < 4; ++index) {
+      if (!Expect(wide_smem_state.sgprs[8 + index] == 0x100u + index,
+                  "expected decoded smem loadx4 result")) {
+        return 1;
+      }
+    }
+    for (std::uint32_t index = 0; index < 8; ++index) {
+      if (!Expect(wide_smem_state.sgprs[16 + index] == 0x200u + index,
+                  "expected decoded smem loadx8 result")) {
+        return 1;
+      }
+    }
+    for (std::uint32_t index = 0; index < 16; ++index) {
+      if (!Expect(wide_smem_state.sgprs[32 + index] == 0x300u + index,
+                  "expected decoded smem loadx16 result")) {
+        return 1;
+      }
+    }
+    for (std::uint32_t index = 0; index < 2; ++index) {
+      std::uint32_t value = 0;
+      if (!Expect(wide_memory.ReadU32(0x240u + index * 4u, &value),
+                  "expected decoded smem storex2 read") ||
+          !Expect(value == 0x200u + index,
+                  "expected decoded smem storex2 result")) {
+        return 1;
+      }
+    }
+    for (std::uint32_t index = 0; index < 4; ++index) {
+      std::uint32_t value = 0;
+      if (!Expect(wide_memory.ReadU32(0x260u + index * 4u, &value),
+                  "expected decoded smem storex4 read") ||
+          !Expect(value == 0x100u + index,
+                  "expected decoded smem storex4 result")) {
+        return 1;
+      }
+    }
+  }
+
   const auto ds_nop_opcode = FindDefaultEncodingOpcode("DS_NOP", "ENC_DS");
   const auto ds_write_opcode =
       FindDefaultEncodingOpcode("DS_WRITE_B32", "ENC_DS");

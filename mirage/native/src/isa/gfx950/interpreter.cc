@@ -977,7 +977,31 @@ bool IsScalarCompareOpcode(std::string_view opcode) {
 
 bool IsScalarMemoryOpcode(std::string_view opcode) {
   return opcode == "S_LOAD_DWORD" || opcode == "S_LOAD_DWORDX2" ||
-         opcode == "S_STORE_DWORD";
+         opcode == "S_LOAD_DWORDX4" || opcode == "S_LOAD_DWORDX8" ||
+         opcode == "S_LOAD_DWORDX16" || opcode == "S_STORE_DWORD" ||
+         opcode == "S_STORE_DWORDX2" || opcode == "S_STORE_DWORDX4";
+}
+
+bool IsScalarMemoryLoadOpcode(std::string_view opcode) {
+  return opcode == "S_LOAD_DWORD" || opcode == "S_LOAD_DWORDX2" ||
+         opcode == "S_LOAD_DWORDX4" || opcode == "S_LOAD_DWORDX8" ||
+         opcode == "S_LOAD_DWORDX16";
+}
+
+std::uint8_t GetScalarMemoryRegisterDwordCount(std::string_view opcode) {
+  if (opcode == "S_LOAD_DWORDX16") {
+    return 16;
+  }
+  if (opcode == "S_LOAD_DWORDX8") {
+    return 8;
+  }
+  if (opcode == "S_LOAD_DWORDX4" || opcode == "S_STORE_DWORDX4") {
+    return 4;
+  }
+  if (opcode == "S_LOAD_DWORDX2" || opcode == "S_STORE_DWORDX2") {
+    return 2;
+  }
+  return 1;
 }
 
 bool IsVectorBinaryOpcode(std::string_view opcode) {
@@ -4715,6 +4739,15 @@ void SetVectorMemoryMetadata(CompiledInstruction* instruction,
   instruction->element_size_bytes = element_size_bytes;
 }
 
+void SetScalarMemoryMetadata(CompiledInstruction* instruction,
+                             CompiledOpcode opcode,
+                             bool is_load,
+                             std::uint8_t register_dword_count) {
+  instruction->opcode = opcode;
+  instruction->flags = is_load ? CompiledInstruction::kFlagIsLoad : 0u;
+  instruction->register_dword_count = register_dword_count;
+}
+
 void SetAtomicMetadata(CompiledInstruction* instruction,
                        CompiledOpcode opcode,
                        bool is_global,
@@ -6484,15 +6517,43 @@ bool TryCompileOpcode(std::string_view opcode,
     return true;
   }
   if (opcode == "S_LOAD_DWORD") {
-    compiled_instruction->opcode = CompiledOpcode::kSLoadDword;
+    SetScalarMemoryMetadata(compiled_instruction, CompiledOpcode::kSLoadDword,
+                            true, 1);
     return true;
   }
   if (opcode == "S_LOAD_DWORDX2") {
-    compiled_instruction->opcode = CompiledOpcode::kSLoadDwordX2;
+    SetScalarMemoryMetadata(compiled_instruction, CompiledOpcode::kSLoadDwordX2,
+                            true, 2);
+    return true;
+  }
+  if (opcode == "S_LOAD_DWORDX4") {
+    SetScalarMemoryMetadata(compiled_instruction, CompiledOpcode::kSLoadDwordX2,
+                            true, 4);
+    return true;
+  }
+  if (opcode == "S_LOAD_DWORDX8") {
+    SetScalarMemoryMetadata(compiled_instruction, CompiledOpcode::kSLoadDwordX2,
+                            true, 8);
+    return true;
+  }
+  if (opcode == "S_LOAD_DWORDX16") {
+    SetScalarMemoryMetadata(compiled_instruction, CompiledOpcode::kSLoadDwordX2,
+                            true, 16);
     return true;
   }
   if (opcode == "S_STORE_DWORD") {
-    compiled_instruction->opcode = CompiledOpcode::kSStoreDword;
+    SetScalarMemoryMetadata(compiled_instruction, CompiledOpcode::kSStoreDword,
+                            false, 1);
+    return true;
+  }
+  if (opcode == "S_STORE_DWORDX2") {
+    SetScalarMemoryMetadata(compiled_instruction, CompiledOpcode::kSStoreDword,
+                            false, 2);
+    return true;
+  }
+  if (opcode == "S_STORE_DWORDX4") {
+    SetScalarMemoryMetadata(compiled_instruction, CompiledOpcode::kSStoreDword,
+                            false, 4);
     return true;
   }
   if (opcode == "V_ADD_U32") {
@@ -9762,6 +9823,16 @@ bool Gfx950Interpreter::ExecuteScalarMemory(const DecodedInstruction& instructio
     }
     return false;
   }
+  const bool is_load = IsScalarMemoryLoadOpcode(instruction.opcode);
+  const std::uint8_t register_dword_count =
+      GetScalarMemoryRegisterDwordCount(instruction.opcode);
+  if (instruction.operands[0].index + register_dword_count - 1 >=
+      state->sgprs.size()) {
+    if (error_message != nullptr) {
+      *error_message = "smem data register range out of bounds";
+    }
+    return false;
+  }
 
   const std::uint64_t base_address =
       static_cast<std::uint64_t>(state->sgprs[instruction.operands[1].index]) |
@@ -9771,20 +9842,25 @@ bool Gfx950Interpreter::ExecuteScalarMemory(const DecodedInstruction& instructio
 
   std::uint64_t address = base_address;
   if (instruction.operands[2].kind == OperandKind::kImm32) {
-    const std::int64_t signed_address =
-        static_cast<std::int64_t>(base_address) +
-        static_cast<std::int32_t>(instruction.operands[2].imm32);
-    if (signed_address < 0) {
-      if (error_message != nullptr) {
-        *error_message = "smem address underflow";
-      }
+    if (!AddSignedOffsetToAddress(
+            base_address,
+            static_cast<std::int32_t>(instruction.operands[2].imm32),
+            "smem address underflow", "smem address overflow", &address,
+            error_message)) {
       return false;
     }
-    address = static_cast<std::uint64_t>(signed_address);
   } else if (instruction.operands[2].kind == OperandKind::kSgpr) {
     if (instruction.operands[2].index >= state->sgprs.size()) {
       if (error_message != nullptr) {
         *error_message = "smem offset register out of range";
+      }
+      return false;
+    }
+    if (address >
+        std::numeric_limits<std::uint64_t>::max() -
+            state->sgprs[instruction.operands[2].index]) {
+      if (error_message != nullptr) {
+        *error_message = "smem address overflow";
       }
       return false;
     }
@@ -9796,45 +9872,48 @@ bool Gfx950Interpreter::ExecuteScalarMemory(const DecodedInstruction& instructio
     return false;
   }
 
-  if (instruction.opcode == "S_LOAD_DWORD") {
-    std::uint32_t value = 0;
-    if (!ReadMemoryU32(memory, address, &value, error_message)) {
-      return false;
+  const std::uint64_t transfer_size_bytes =
+      static_cast<std::uint64_t>(register_dword_count) * sizeof(std::uint32_t);
+  if (address >
+      std::numeric_limits<std::uint64_t>::max() - (transfer_size_bytes - 1u)) {
+    if (error_message != nullptr) {
+      *error_message = "smem transfer address overflow";
     }
-    return WriteScalarOperand(instruction.operands[0], value, state, error_message);
+    return false;
   }
 
-  if (instruction.opcode == "S_LOAD_DWORDX2") {
-    if (instruction.operands[0].index + 1 >= state->sgprs.size()) {
-      if (error_message != nullptr) {
-        *error_message = "load dwordx2 destination pair out of range";
+  if (is_load) {
+    for (std::uint8_t dword_index = 0; dword_index < register_dword_count;
+         ++dword_index) {
+      std::uint32_t value = 0;
+      if (!ReadMemoryU32(memory, address + dword_index * sizeof(std::uint32_t),
+                         &value, error_message)) {
+        return false;
       }
-      return false;
+      state->sgprs[static_cast<std::uint16_t>(instruction.operands[0].index +
+                                              dword_index)] = value;
     }
-    std::uint32_t low = 0;
-    std::uint32_t high = 0;
-    if (!ReadMemoryU32(memory, address, &low, error_message) ||
-        !ReadMemoryU32(memory, address + 4, &high, error_message)) {
-      return false;
-    }
-    state->sgprs[instruction.operands[0].index] = low;
-    state->sgprs[instruction.operands[0].index + 1] = high;
     if (error_message != nullptr) {
       error_message->clear();
     }
     return true;
   }
 
-  if (instruction.opcode == "S_STORE_DWORD") {
-    return WriteMemoryU32(memory, address,
-                          state->sgprs[instruction.operands[0].index],
-                          error_message);
+  for (std::uint8_t dword_index = 0; dword_index < register_dword_count;
+       ++dword_index) {
+    if (!WriteMemoryU32(
+            memory, address + dword_index * sizeof(std::uint32_t),
+            state->sgprs[static_cast<std::uint16_t>(instruction.operands[0].index +
+                                                    dword_index)],
+            error_message)) {
+      return false;
+    }
   }
 
   if (error_message != nullptr) {
-    *error_message = "unsupported scalar memory opcode";
+    error_message->clear();
   }
-  return false;
+  return true;
 }
 
 bool Gfx950Interpreter::ExecuteScalarMemory(const CompiledInstruction& instruction,
@@ -9863,6 +9942,16 @@ bool Gfx950Interpreter::ExecuteScalarMemory(const CompiledInstruction& instructi
     }
     return false;
   }
+  const bool is_load = instruction.IsLoad();
+  const std::uint8_t register_dword_count =
+      instruction.register_dword_count == 0u ? 1u : instruction.register_dword_count;
+  if (instruction.operands[0].index + register_dword_count - 1 >=
+      state->sgprs.size()) {
+    if (error_message != nullptr) {
+      *error_message = "smem data register range out of bounds";
+    }
+    return false;
+  }
 
   const std::uint64_t base_address =
       static_cast<std::uint64_t>(state->sgprs[instruction.operands[1].index]) |
@@ -9872,20 +9961,25 @@ bool Gfx950Interpreter::ExecuteScalarMemory(const CompiledInstruction& instructi
 
   std::uint64_t address = base_address;
   if (instruction.operands[2].kind == OperandKind::kImm32) {
-    const std::int64_t signed_address =
-        static_cast<std::int64_t>(base_address) +
-        static_cast<std::int32_t>(instruction.operands[2].imm32);
-    if (signed_address < 0) {
-      if (error_message != nullptr) {
-        *error_message = "smem address underflow";
-      }
+    if (!AddSignedOffsetToAddress(
+            base_address,
+            static_cast<std::int32_t>(instruction.operands[2].imm32),
+            "smem address underflow", "smem address overflow", &address,
+            error_message)) {
       return false;
     }
-    address = static_cast<std::uint64_t>(signed_address);
   } else if (instruction.operands[2].kind == OperandKind::kSgpr) {
     if (instruction.operands[2].index >= state->sgprs.size()) {
       if (error_message != nullptr) {
         *error_message = "smem offset register out of range";
+      }
+      return false;
+    }
+    if (address >
+        std::numeric_limits<std::uint64_t>::max() -
+            state->sgprs[instruction.operands[2].index]) {
+      if (error_message != nullptr) {
+        *error_message = "smem address overflow";
       }
       return false;
     }
@@ -9897,44 +9991,48 @@ bool Gfx950Interpreter::ExecuteScalarMemory(const CompiledInstruction& instructi
     return false;
   }
 
-  switch (instruction.opcode) {
-    case CompiledOpcode::kSLoadDword: {
-      std::uint32_t value = 0;
-      if (!ReadMemoryU32(memory, address, &value, error_message)) {
-        return false;
-      }
-      return WriteScalarOperand(instruction.operands[0], value, state, error_message);
+  const std::uint64_t transfer_size_bytes =
+      static_cast<std::uint64_t>(register_dword_count) * sizeof(std::uint32_t);
+  if (address >
+      std::numeric_limits<std::uint64_t>::max() - (transfer_size_bytes - 1u)) {
+    if (error_message != nullptr) {
+      *error_message = "smem transfer address overflow";
     }
-    case CompiledOpcode::kSLoadDwordX2: {
-      if (instruction.operands[0].index + 1 >= state->sgprs.size()) {
-        if (error_message != nullptr) {
-          *error_message = "load dwordx2 destination pair out of range";
-        }
-        return false;
-      }
-      std::uint32_t low = 0;
-      std::uint32_t high = 0;
-      if (!ReadMemoryU32(memory, address, &low, error_message) ||
-          !ReadMemoryU32(memory, address + 4, &high, error_message)) {
-        return false;
-      }
-      state->sgprs[instruction.operands[0].index] = low;
-      state->sgprs[instruction.operands[0].index + 1] = high;
-      if (error_message != nullptr) {
-        error_message->clear();
-      }
-      return true;
-    }
-    case CompiledOpcode::kSStoreDword:
-      return WriteMemoryU32(memory, address,
-                            state->sgprs[instruction.operands[0].index],
-                            error_message);
-    default:
-      if (error_message != nullptr) {
-        *error_message = "unsupported compiled scalar memory opcode";
-      }
-      return false;
+    return false;
   }
+
+  if (is_load) {
+    for (std::uint8_t dword_index = 0; dword_index < register_dword_count;
+         ++dword_index) {
+      std::uint32_t value = 0;
+      if (!ReadMemoryU32(memory, address + dword_index * sizeof(std::uint32_t),
+                         &value, error_message)) {
+        return false;
+      }
+      state->sgprs[static_cast<std::uint16_t>(instruction.operands[0].index +
+                                              dword_index)] = value;
+    }
+    if (error_message != nullptr) {
+      error_message->clear();
+    }
+    return true;
+  }
+
+  for (std::uint8_t dword_index = 0; dword_index < register_dword_count;
+       ++dword_index) {
+    if (!WriteMemoryU32(
+            memory, address + dword_index * sizeof(std::uint32_t),
+            state->sgprs[static_cast<std::uint16_t>(instruction.operands[0].index +
+                                                    dword_index)],
+            error_message)) {
+      return false;
+    }
+  }
+
+  if (error_message != nullptr) {
+    error_message->clear();
+  }
+  return true;
 }
 
 bool Gfx950Interpreter::ExecuteVectorMove(const DecodedInstruction& instruction,

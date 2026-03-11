@@ -4693,36 +4693,48 @@
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_LOAD_DWORDX4"
+      ],
       "instruction_name": "S_LOAD_DWORDX4",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_LOAD_DWORDX8"
+      ],
       "instruction_name": "S_LOAD_DWORDX8",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_LOAD_DWORDX16"
+      ],
       "instruction_name": "S_LOAD_DWORDX16",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
@@ -4829,25 +4841,33 @@
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_STORE_DWORDX2"
+      ],
       "instruction_name": "S_STORE_DWORDX2",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_STORE_DWORDX4"
+      ],
       "instruction_name": "S_STORE_DWORDX4",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
@@ -16578,11 +16598,11 @@
   ],
   "summary": {
     "decode_measured": 1014,
-    "decode_supported": 711,
-    "decode_supported_percent_measured": 0.701183,
-    "decode_supported_percent_total": 0.572464,
-    "semantic_supported": 688,
-    "semantic_supported_percent_total": 0.553945
+    "decode_supported": 716,
+    "decode_supported_percent_measured": 0.706114,
+    "decode_supported_percent_total": 0.57649,
+    "semantic_supported": 693,
+    "semantic_supported_percent_total": 0.557971
   },
   "unmeasured_encoding_families": [
     "ENC_FLAT_SCRATCH",
