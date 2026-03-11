@@ -189,6 +189,16 @@ if(THEROCK_ENABLE_PRIM)
   therock_cmake_subproject_provide_package(rocThrust rocthrust lib/cmake/rocthrust)
   therock_cmake_subproject_activate(rocThrust)
 
+  set(_prim_subproject_deps
+    rocPRIM
+    hipCUB
+    rocThrust
+  )
+
+  if(THEROCK_BUILD_TESTING)
+    list(APPEND _prim_subproject_deps rocPRIM_tests)
+  endif()
+
   therock_provide_artifact(prim
     DESCRIPTOR artifact-prim.toml
     COMPONENTS
@@ -196,7 +206,8 @@ if(THEROCK_ENABLE_PRIM)
       dev
       doc
       test
-    SUBPROJECT_DEPS rocPRIM hipCUB rocThrust rocPRIM_tests
+    SUBPROJECT_DEPS
+      ${_prim_subproject_deps}
   )
 endif(THEROCK_ENABLE_PRIM)
 
