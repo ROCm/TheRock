@@ -1,0 +1,30 @@
+{
+  "description": "HIP Samples Test Configurations",
+  "skip_conditions": {
+    "14_gpu_arch": {
+      "description": "Requires gfx908 GPU architecture",
+      "requires_gpu": "gfx908"
+    },
+    "8_peer2peer": {
+      "description": "Requires multiple GPUs",
+      "requires_gpu_count": 2
+    },
+    "17_llvm_ir_to_executable": {
+      "description": "Requires llvm-dis tool (rocm-llvm-dev/rocm-llvm-devel package)",
+      "requires_tool": "llvm-dis",
+      "tool_paths": [
+        "/opt/rocm/llvm/bin/llvm-dis"
+      ]
+    }
+  },
+  "skip_executables": [
+    "hipDispatchEnqueueRateMT"
+  ],
+  "special_compiler_cases": {
+    "19_cmake_lang": {
+      "description": "Requires clang++ and gfortran",
+      "cxx_compiler": "clang++",
+      "fortran_compiler": "gfortran"
+    }
+  }
+}
