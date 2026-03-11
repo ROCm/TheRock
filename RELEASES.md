@@ -27,15 +27,15 @@ Table of contents:
   - [Using ROCm Python packages](#using-rocm-python-packages)
   - [Installing PyTorch Python packages](#installing-pytorch-python-packages)
   - [Using PyTorch Python packages](#using-pytorch-python-packages)
+- [Installing from native packages](#installing-from-native-packages)
+  - [Native packages release status](#native-packages-release-status)
+  - [Installing on Debian-based systems](#installing-on-debian-based-systems-ubuntu-debian-etc)
+  - [Installing on RPM-based systems](#installing-on-rpm-based-systems-rhel-sles-almalinux-etc)
 - [Installing from tarballs](#installing-from-tarballs)
   - [Browsing release tarballs](#browsing-release-tarballs)
   - [Manual tarball extraction](#manual-tarball-extraction)
   - [Automated tarball extraction](#automated-tarball-extraction)
   - [Using installed tarballs](#using-installed-tarballs)
-- [Installing from native packages](#installing-from-native-packages)
-  - [Native packages release status](#native-packages-release-status)
-  - [Installing on Debian-based systems](#installing-on-debian-based-systems-ubuntu-debian-etc)
-  - [Installing on RPM-based systems](#installing-on-rpm-based-systems-rhel-sles-almalinux-etc)
 - [Verifying your installation](#verifying-your-installation)
 
 ## Installing releases using pip
@@ -504,6 +504,13 @@ published for Debian-based and RPM-based distributions.
 > These builds are primarily intended for development and testing and are currently **unsigned**.
 
 ### Native packages release status
+
+| Platform |                                                                                                                                                                                                                     Native Linux packages |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
+| Linux    | [![Build Native Linux Packages](https://github.com/ROCm/TheRock/actions/workflows/build_native_linux_packages.yml/badge.svg?branch=main)](https://github.com/ROCm/TheRock/actions/workflows/build_native_linux_packages.yml?query=branch%3Amain) |
+| Windows  |                                                                                                                                                                                                                      (Coming soon)           |
+
+### Index page listing
 
 | Product Name                       | GFX Target | GFX Family   | Install instructions                                    |
 | ---------------------------------- | ---------- | ------------ | ------------------------------------------------------- |
