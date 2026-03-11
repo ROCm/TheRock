@@ -1,15 +1,15 @@
 # GFX950 Coverage Report
 
 - Catalog instructions: 1242
-- Semantic support: 693 (55.8%)
-- Raw decode support: 716 (57.6% of total, 70.6% of measured)
+- Semantic support: 701 (56.4%)
+- Raw decode support: 724 (58.3% of total, 71.4% of measured)
 - Raw decode measurable instructions: 1014
 
 ## Gaps
 
 - Semantic-only coverage without measured decode: 36
 - Decode-only without semantic support: 59
-- Missing both semantic and decode support: 490
+- Missing both semantic and decode support: 482
 
 ## Unmeasured Encoding Families
 

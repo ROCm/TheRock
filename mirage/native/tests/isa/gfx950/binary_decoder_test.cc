@@ -5975,6 +5975,182 @@ int main() {
     }
   }
 
+  {
+    const auto load_opcode =
+        FindDefaultEncodingOpcode("S_BUFFER_LOAD_DWORD", "ENC_SMEM");
+    const auto loadx2_opcode =
+        FindDefaultEncodingOpcode("S_BUFFER_LOAD_DWORDX2", "ENC_SMEM");
+    const auto loadx4_opcode =
+        FindDefaultEncodingOpcode("S_BUFFER_LOAD_DWORDX4", "ENC_SMEM");
+    const auto loadx8_opcode =
+        FindDefaultEncodingOpcode("S_BUFFER_LOAD_DWORDX8", "ENC_SMEM");
+    const auto loadx16_opcode =
+        FindDefaultEncodingOpcode("S_BUFFER_LOAD_DWORDX16", "ENC_SMEM");
+    const auto store_opcode =
+        FindDefaultEncodingOpcode("S_BUFFER_STORE_DWORD", "ENC_SMEM");
+    const auto storex2_opcode =
+        FindDefaultEncodingOpcode("S_BUFFER_STORE_DWORDX2", "ENC_SMEM");
+    const auto storex4_opcode =
+        FindDefaultEncodingOpcode("S_BUFFER_STORE_DWORDX4", "ENC_SMEM");
+    if (!Expect(load_opcode.has_value(), "expected s_buffer_load opcode lookup") ||
+        !Expect(loadx2_opcode.has_value(),
+                "expected s_buffer_loadx2 opcode lookup") ||
+        !Expect(loadx4_opcode.has_value(),
+                "expected s_buffer_loadx4 opcode lookup") ||
+        !Expect(loadx8_opcode.has_value(),
+                "expected s_buffer_loadx8 opcode lookup") ||
+        !Expect(loadx16_opcode.has_value(),
+                "expected s_buffer_loadx16 opcode lookup") ||
+        !Expect(store_opcode.has_value(),
+                "expected s_buffer_store opcode lookup") ||
+        !Expect(storex2_opcode.has_value(),
+                "expected s_buffer_storex2 opcode lookup") ||
+        !Expect(storex4_opcode.has_value(),
+                "expected s_buffer_storex4 opcode lookup")) {
+      return 1;
+    }
+
+    const auto load_word = MakeSmem(*load_opcode, 4, 0, true, 0);
+    const auto loadx2_word = MakeSmem(*loadx2_opcode, 8, 0, true, 0x10);
+    const auto loadx4_word = MakeSmem(*loadx4_opcode, 16, 0, true, 0x20);
+    const auto loadx8_word = MakeSmem(*loadx8_opcode, 24, 0, true, 0x40);
+    const auto loadx16_word = MakeSmem(*loadx16_opcode, 40, 0, true, 0x80);
+    const auto store_word = MakeSmem(*store_opcode, 4, 0, true, 0x200);
+    const auto storex2_word = MakeSmem(*storex2_opcode, 8, 0, true, 0x210);
+    const auto storex4_word = MakeSmem(*storex4_opcode, 16, 0, false, 72, true);
+    const std::vector<std::uint32_t> scalar_buffer_program = {
+        load_word[0],    load_word[1],    loadx2_word[0],  loadx2_word[1],
+        loadx4_word[0],  loadx4_word[1],  loadx8_word[0],  loadx8_word[1],
+        loadx16_word[0], loadx16_word[1], store_word[0],   store_word[1],
+        storex2_word[0], storex2_word[1], storex4_word[0], storex4_word[1],
+        MakeSopp(1),
+    };
+    decoded_program.clear();
+    if (!Expect(decoder.DecodeProgram(scalar_buffer_program, &decoded_program,
+                                      &error_message),
+                error_message.c_str()) ||
+        !Expect(decoded_program.size() == 9,
+                "expected decoded scalar buffer program size") ||
+        !Expect(decoded_program[0].opcode == "S_BUFFER_LOAD_DWORD",
+                "expected scalar buffer load decode") ||
+        !Expect(decoded_program[1].opcode == "S_BUFFER_LOAD_DWORDX2",
+                "expected scalar buffer loadx2 decode") ||
+        !Expect(decoded_program[2].opcode == "S_BUFFER_LOAD_DWORDX4",
+                "expected scalar buffer loadx4 decode") ||
+        !Expect(decoded_program[3].opcode == "S_BUFFER_LOAD_DWORDX8",
+                "expected scalar buffer loadx8 decode") ||
+        !Expect(decoded_program[4].opcode == "S_BUFFER_LOAD_DWORDX16",
+                "expected scalar buffer loadx16 decode") ||
+        !Expect(decoded_program[5].opcode == "S_BUFFER_STORE_DWORD",
+                "expected scalar buffer store decode") ||
+        !Expect(decoded_program[6].opcode == "S_BUFFER_STORE_DWORDX2",
+                "expected scalar buffer storex2 decode") ||
+        !Expect(decoded_program[7].opcode == "S_BUFFER_STORE_DWORDX4",
+                "expected scalar buffer storex4 decode") ||
+        !Expect(decoded_program[7].operands[2].kind == OperandKind::kSgpr &&
+                    decoded_program[7].operands[2].index == 72,
+                "expected scalar buffer soffset decode")) {
+      return 1;
+    }
+
+    LinearExecutionMemory scalar_buffer_memory(0x700, 0);
+    if (!Expect(scalar_buffer_memory.WriteU32(0x100u, 0x11110000u),
+                "expected scalar buffer seed write")) {
+      return 1;
+    }
+    for (std::uint32_t index = 0; index < 2; ++index) {
+      if (!Expect(scalar_buffer_memory.WriteU32(0x110u + index * 4u,
+                                                0x22220000u + index),
+                  "expected scalar buffer seed write")) {
+        return 1;
+      }
+    }
+    for (std::uint32_t index = 0; index < 4; ++index) {
+      if (!Expect(scalar_buffer_memory.WriteU32(0x120u + index * 4u,
+                                                0x33330000u + index),
+                  "expected scalar buffer seed write")) {
+        return 1;
+      }
+    }
+    for (std::uint32_t index = 0; index < 8; ++index) {
+      if (!Expect(scalar_buffer_memory.WriteU32(0x140u + index * 4u,
+                                                0x44440000u + index),
+                  "expected scalar buffer seed write")) {
+        return 1;
+      }
+    }
+    for (std::uint32_t index = 0; index < 16; ++index) {
+      if (!Expect(scalar_buffer_memory.WriteU32(0x180u + index * 4u,
+                                                0x55550000u + index),
+                  "expected scalar buffer seed write")) {
+        return 1;
+      }
+    }
+
+    WaveExecutionState scalar_buffer_state;
+    scalar_buffer_state.sgprs[0] = 0x100u;
+    scalar_buffer_state.sgprs[1] = 0u;
+    scalar_buffer_state.sgprs[2] = 0x400u;
+    scalar_buffer_state.sgprs[3] = 0u;
+    scalar_buffer_state.sgprs[72] = 0x220u;
+    if (!Expect(interpreter.ExecuteProgram(decoded_program, &scalar_buffer_state,
+                                           &scalar_buffer_memory,
+                                           &error_message),
+                error_message.c_str()) ||
+        !Expect(scalar_buffer_state.sgprs[4] == 0x11110000u,
+                "expected scalar buffer load result")) {
+      return 1;
+    }
+    for (std::uint32_t index = 0; index < 2; ++index) {
+      if (!Expect(scalar_buffer_state.sgprs[8 + index] == 0x22220000u + index,
+                  "expected scalar buffer loadx2 result")) {
+        return 1;
+      }
+    }
+    for (std::uint32_t index = 0; index < 4; ++index) {
+      if (!Expect(scalar_buffer_state.sgprs[16 + index] == 0x33330000u + index,
+                  "expected scalar buffer loadx4 result")) {
+        return 1;
+      }
+    }
+    for (std::uint32_t index = 0; index < 8; ++index) {
+      if (!Expect(scalar_buffer_state.sgprs[24 + index] == 0x44440000u + index,
+                  "expected scalar buffer loadx8 result")) {
+        return 1;
+      }
+    }
+    for (std::uint32_t index = 0; index < 16; ++index) {
+      if (!Expect(scalar_buffer_state.sgprs[40 + index] == 0x55550000u + index,
+                  "expected scalar buffer loadx16 result")) {
+        return 1;
+      }
+    }
+
+    std::uint32_t value = 0;
+    if (!Expect(scalar_buffer_memory.ReadU32(0x300u, &value),
+                "expected scalar buffer store read") ||
+        !Expect(value == 0x11110000u,
+                "expected scalar buffer store result")) {
+      return 1;
+    }
+    for (std::uint32_t index = 0; index < 2; ++index) {
+      if (!Expect(scalar_buffer_memory.ReadU32(0x310u + index * 4u, &value),
+                  "expected scalar buffer storex2 read") ||
+          !Expect(value == 0x22220000u + index,
+                  "expected scalar buffer storex2 result")) {
+        return 1;
+      }
+    }
+    for (std::uint32_t index = 0; index < 4; ++index) {
+      if (!Expect(scalar_buffer_memory.ReadU32(0x320u + index * 4u, &value),
+                  "expected scalar buffer storex4 read") ||
+          !Expect(value == 0x33330000u + index,
+                  "expected scalar buffer storex4 result")) {
+        return 1;
+      }
+    }
+  }
+
   const auto ds_nop_opcode = FindDefaultEncodingOpcode("DS_NOP", "ENC_DS");
   const auto ds_write_opcode =
       FindDefaultEncodingOpcode("DS_WRITE_B32", "ENC_DS");

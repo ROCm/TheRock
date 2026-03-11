@@ -2575,6 +2575,19 @@ int main() {
     }
   }
 
+  const std::array<std::string_view, 8> kScalarBufferMemoryOpcodes = {
+      "S_BUFFER_LOAD_DWORD",   "S_BUFFER_LOAD_DWORDX2",
+      "S_BUFFER_LOAD_DWORDX4", "S_BUFFER_LOAD_DWORDX8",
+      "S_BUFFER_LOAD_DWORDX16", "S_BUFFER_STORE_DWORD",
+      "S_BUFFER_STORE_DWORDX2", "S_BUFFER_STORE_DWORDX4",
+  };
+  for (std::string_view opcode : kScalarBufferMemoryOpcodes) {
+    const std::string message = "expected " + std::string(opcode) + " support";
+    if (!Expect(interpreter.Supports(opcode), message.c_str())) {
+      return 1;
+    }
+  }
+
   const std::array<std::string_view, 32> kGlobalAtomicOpcodes = {
       "GLOBAL_ATOMIC_SWAP",
       "GLOBAL_ATOMIC_CMPSWAP",
@@ -10314,6 +10327,195 @@ int main() {
       !validate_wide_scalar_memory_state(compiled_wide_scalar_memory_state,
                                          compiled_wide_scalar_memory,
                                          "compiled")) {
+    return 1;
+  }
+  }
+
+  {
+  const auto seed_scalar_buffer_memory = [](LinearExecutionMemory* memory) {
+    if (memory == nullptr) {
+      return false;
+    }
+    if (!memory->WriteU32(0x100u, 0x11110000u)) {
+      return false;
+    }
+    for (std::uint32_t index = 0; index < 2; ++index) {
+      if (!memory->WriteU32(0x110u + index * 4u, 0x22220000u + index)) {
+        return false;
+      }
+    }
+    for (std::uint32_t index = 0; index < 4; ++index) {
+      if (!memory->WriteU32(0x120u + index * 4u, 0x33330000u + index)) {
+        return false;
+      }
+    }
+    for (std::uint32_t index = 0; index < 8; ++index) {
+      if (!memory->WriteU32(0x140u + index * 4u, 0x44440000u + index)) {
+        return false;
+      }
+    }
+    for (std::uint32_t index = 0; index < 16; ++index) {
+      if (!memory->WriteU32(0x180u + index * 4u, 0x55550000u + index)) {
+        return false;
+      }
+    }
+    return true;
+  };
+  const auto make_scalar_buffer_state = []() {
+    WaveExecutionState state{};
+    state.sgprs[0] = 0x100u;
+    state.sgprs[1] = 0u;
+    state.sgprs[2] = 0x400u;
+    state.sgprs[3] = 0u;
+    state.sgprs[72] = 0x220u;
+    return state;
+  };
+  const auto validate_scalar_buffer_state =
+      [](const WaveExecutionState& state,
+         const LinearExecutionMemory& memory,
+         const char* mode) {
+        if (!Expect(state.halted,
+                    "expected scalar buffer memory program to halt")) {
+          std::cerr << mode << '\n';
+          return false;
+        }
+        if (!Expect(state.sgprs[4] == 0x11110000u,
+                    "expected s_buffer_load_dword result")) {
+          std::cerr << mode << '\n';
+          return false;
+        }
+        for (std::uint32_t index = 0; index < 2; ++index) {
+          if (!Expect(state.sgprs[8 + index] == 0x22220000u + index,
+                      "expected s_buffer_load_dwordx2 result")) {
+            std::cerr << mode << " index=" << index << '\n';
+            return false;
+          }
+        }
+        for (std::uint32_t index = 0; index < 4; ++index) {
+          if (!Expect(state.sgprs[16 + index] == 0x33330000u + index,
+                      "expected s_buffer_load_dwordx4 result")) {
+            std::cerr << mode << " index=" << index << '\n';
+            return false;
+          }
+        }
+        for (std::uint32_t index = 0; index < 8; ++index) {
+          if (!Expect(state.sgprs[24 + index] == 0x44440000u + index,
+                      "expected s_buffer_load_dwordx8 result")) {
+            std::cerr << mode << " index=" << index << '\n';
+            return false;
+          }
+        }
+        for (std::uint32_t index = 0; index < 16; ++index) {
+          if (!Expect(state.sgprs[40 + index] == 0x55550000u + index,
+                      "expected s_buffer_load_dwordx16 result")) {
+            std::cerr << mode << " index=" << index << '\n';
+            return false;
+          }
+        }
+        std::uint32_t value = 0;
+        if (!Expect(memory.ReadU32(0x300u, &value),
+                    "expected s_buffer_store_dword read") ||
+            !Expect(value == 0x11110000u,
+                    "expected s_buffer_store_dword result")) {
+          std::cerr << mode << '\n';
+          return false;
+        }
+        for (std::uint32_t index = 0; index < 2; ++index) {
+          if (!Expect(memory.ReadU32(0x310u + index * 4u, &value),
+                      "expected s_buffer_store_dwordx2 read") ||
+              !Expect(value == 0x22220000u + index,
+                      "expected s_buffer_store_dwordx2 result")) {
+            std::cerr << mode << " index=" << index << '\n';
+            return false;
+          }
+        }
+        for (std::uint32_t index = 0; index < 4; ++index) {
+          if (!Expect(memory.ReadU32(0x320u + index * 4u, &value),
+                      "expected s_buffer_store_dwordx4 read") ||
+              !Expect(value == 0x33330000u + index,
+                      "expected s_buffer_store_dwordx4 result")) {
+            std::cerr << mode << " index=" << index << '\n';
+            return false;
+          }
+        }
+        return true;
+      };
+
+  const std::vector<DecodedInstruction> scalar_buffer_memory_program = {
+      DecodedInstruction::ThreeOperand("S_BUFFER_LOAD_DWORD",
+                                       InstructionOperand::Sgpr(4),
+                                       InstructionOperand::Sgpr(0),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("S_BUFFER_LOAD_DWORDX2",
+                                       InstructionOperand::Sgpr(8),
+                                       InstructionOperand::Sgpr(0),
+                                       InstructionOperand::Imm32(0x10)),
+      DecodedInstruction::ThreeOperand("S_BUFFER_LOAD_DWORDX4",
+                                       InstructionOperand::Sgpr(16),
+                                       InstructionOperand::Sgpr(0),
+                                       InstructionOperand::Imm32(0x20)),
+      DecodedInstruction::ThreeOperand("S_BUFFER_LOAD_DWORDX8",
+                                       InstructionOperand::Sgpr(24),
+                                       InstructionOperand::Sgpr(0),
+                                       InstructionOperand::Imm32(0x40)),
+      DecodedInstruction::ThreeOperand("S_BUFFER_LOAD_DWORDX16",
+                                       InstructionOperand::Sgpr(40),
+                                       InstructionOperand::Sgpr(0),
+                                       InstructionOperand::Imm32(0x80)),
+      DecodedInstruction::ThreeOperand("S_BUFFER_STORE_DWORD",
+                                       InstructionOperand::Sgpr(4),
+                                       InstructionOperand::Sgpr(0),
+                                       InstructionOperand::Imm32(0x200)),
+      DecodedInstruction::ThreeOperand("S_BUFFER_STORE_DWORDX2",
+                                       InstructionOperand::Sgpr(8),
+                                       InstructionOperand::Sgpr(0),
+                                       InstructionOperand::Imm32(0x210)),
+      DecodedInstruction::ThreeOperand("S_BUFFER_STORE_DWORDX4",
+                                       InstructionOperand::Sgpr(16),
+                                       InstructionOperand::Sgpr(0),
+                                       InstructionOperand::Sgpr(72)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+
+  LinearExecutionMemory decoded_scalar_buffer_memory(0x700, 0);
+  if (!Expect(seed_scalar_buffer_memory(&decoded_scalar_buffer_memory),
+              "expected decoded scalar buffer seed writes")) {
+    return 1;
+  }
+  WaveExecutionState decoded_scalar_buffer_memory_state =
+      make_scalar_buffer_state();
+  if (!Expect(interpreter.ExecuteProgram(scalar_buffer_memory_program,
+                                         &decoded_scalar_buffer_memory_state,
+                                         &decoded_scalar_buffer_memory,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_scalar_buffer_state(decoded_scalar_buffer_memory_state,
+                                    decoded_scalar_buffer_memory, "decoded")) {
+    return 1;
+  }
+
+  std::vector<CompiledInstruction> compiled_scalar_buffer_memory_program;
+  if (!Expect(interpreter.CompileProgram(scalar_buffer_memory_program,
+                                         &compiled_scalar_buffer_memory_program,
+                                         &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+  LinearExecutionMemory compiled_scalar_buffer_memory(0x700, 0);
+  if (!Expect(seed_scalar_buffer_memory(&compiled_scalar_buffer_memory),
+              "expected compiled scalar buffer seed writes")) {
+    return 1;
+  }
+  WaveExecutionState compiled_scalar_buffer_memory_state =
+      make_scalar_buffer_state();
+  if (!Expect(interpreter.ExecuteProgram(compiled_scalar_buffer_memory_program,
+                                         &compiled_scalar_buffer_memory_state,
+                                         &compiled_scalar_buffer_memory,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_scalar_buffer_state(compiled_scalar_buffer_memory_state,
+                                    compiled_scalar_buffer_memory,
+                                    "compiled")) {
     return 1;
   }
   }
