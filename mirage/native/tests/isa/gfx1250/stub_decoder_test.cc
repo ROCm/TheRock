@@ -13,11 +13,15 @@ using mirage::sim::isa::gfx1250::DecodeVop3pStub;
 using mirage::sim::isa::gfx1250::FindStubDecoderEntrypointManifest;
 using mirage::sim::isa::gfx1250::FindStubDecoderRouteInfo;
 using mirage::sim::isa::gfx1250::GetStubDecoderEntrypointManifests;
+using mirage::sim::isa::gfx1250::GetStubExecutionDomainName;
+using mirage::sim::isa::gfx1250::GetStubOpcodeShapeName;
 using mirage::sim::isa::gfx1250::GetStubDecoderRouteInfos;
 using mirage::sim::isa::gfx1250::StubDecodedInstruction;
 using mirage::sim::isa::gfx1250::StubDecodeStatus;
 using mirage::sim::isa::gfx1250::StubDecoderEntrypointManifest;
 using mirage::sim::isa::gfx1250::StubDecoderRoute;
+using mirage::sim::isa::gfx1250::StubExecutionDomain;
+using mirage::sim::isa::gfx1250::StubOpcodeShape;
 
 bool Expect(bool condition, const char* message) {
   if (!condition) {
@@ -48,6 +52,55 @@ int main() {
               "expected VOP3P entrypoint name")) {
     return 1;
   }
+  if (!Expect(vop3p.opcode_shape == StubOpcodeShape::kVop3pPackedBinary,
+              "expected packed-binary shape for V_PK_ADD_BF16")) {
+    return 1;
+  }
+  if (!Expect(vop3p.execution_domain == StubExecutionDomain::kVectorAlu,
+              "expected vector-ALU domain for V_PK_ADD_BF16")) {
+    return 1;
+  }
+  if (!Expect(vop3p.uses_paired_operands,
+              "expected packed VOP3P op to use paired operands")) {
+    return 1;
+  }
+
+  const StubDecodedInstruction vop3p_fma = DecodeVop3pStub("V_PK_FMA_BF16");
+  if (!Expect(vop3p_fma.opcode_shape == StubOpcodeShape::kVop3pPackedFma,
+              "expected packed-FMA shape for V_PK_FMA_BF16")) {
+    return 1;
+  }
+
+  const StubDecodedInstruction wmma =
+      DecodeVop3pStub("V_WMMA_F32_16X16X4_F32_w32");
+  if (!Expect(wmma.opcode_shape == StubOpcodeShape::kWmmaCore,
+              "expected WMMA core shape for WMMA seed")) {
+    return 1;
+  }
+  if (!Expect(wmma.execution_domain == StubExecutionDomain::kMatrix,
+              "expected matrix domain for WMMA seed")) {
+    return 1;
+  }
+  if (!Expect(wmma.uses_accumulator,
+              "expected WMMA seed to consume accumulator path")) {
+    return 1;
+  }
+
+  const StubDecodedInstruction paired_scale =
+      DecodeVop3pStub("V_WMMA_LD_SCALE_PAIRED_B32");
+  if (!Expect(
+          paired_scale.opcode_shape == StubOpcodeShape::kWmmaScalePairedLoad,
+          "expected paired WMMA scale-load shape")) {
+    return 1;
+  }
+  if (!Expect(paired_scale.uses_scale_path,
+              "expected paired WMMA scale load to use scale path")) {
+    return 1;
+  }
+  if (!Expect(paired_scale.uses_paired_operands,
+              "expected paired WMMA scale load to use paired operands")) {
+    return 1;
+  }
 
   const StubDecodedInstruction tensor =
       DecodeMimgTensorStub("TENSOR_LOAD_TO_LDS");
@@ -57,6 +110,14 @@ int main() {
   }
   if (!Expect(tensor.entrypoint_name == "DecodeMimgTensorStub",
               "expected tensor entrypoint name")) {
+    return 1;
+  }
+  if (!Expect(tensor.opcode_shape == StubOpcodeShape::kTensorLoadToLds,
+              "expected tensor-load shape")) {
+    return 1;
+  }
+  if (!Expect(tensor.uses_tensor_memory,
+              "expected tensor load to touch tensor-memory path")) {
     return 1;
   }
 
@@ -69,6 +130,25 @@ int main() {
               "expected VOP1 stub priority to be preserved")) {
     return 1;
   }
+  if (!Expect(vop1.opcode_shape == StubOpcodeShape::kFp8ConvertToF16,
+              "expected F16 conversion shape for V_CVT_F16_FP8")) {
+    return 1;
+  }
+  if (!Expect(vop1.execution_domain == StubExecutionDomain::kConversion,
+              "expected conversion domain for VOP1 FP8 seed")) {
+    return 1;
+  }
+
+  const StubDecodedInstruction packed_vop1 =
+      DecodeVop1Stub("V_CVT_PK_F16_FP8");
+  if (!Expect(packed_vop1.opcode_shape == StubOpcodeShape::kFp8PackedConvert,
+              "expected packed-conversion shape for V_CVT_PK_F16_FP8")) {
+    return 1;
+  }
+  if (!Expect(packed_vop1.uses_paired_operands,
+              "expected packed-conversion shape to use paired operands")) {
+    return 1;
+  }
 
   const StubDecodedInstruction sdst = DecodeVop3SdstStub("V_DIV_SCALE_F64");
   if (!Expect(sdst.status == StubDecodeStatus::kDecodedStub,
@@ -77,6 +157,18 @@ int main() {
   }
   if (!Expect(sdst.rdna4_encoding_name == "VOP3_SDST_ENC",
               "expected SDST stub to preserve RDNA4 encoding name")) {
+    return 1;
+  }
+  if (!Expect(sdst.opcode_shape == StubOpcodeShape::kVop3SdstScale,
+              "expected VOP3 SDST scale shape")) {
+    return 1;
+  }
+  if (!Expect(sdst.execution_domain == StubExecutionDomain::kScaleAssist,
+              "expected scale-assist domain for V_DIV_SCALE_F64")) {
+    return 1;
+  }
+  if (!Expect(sdst.uses_scale_path,
+              "expected VOP3 SDST scale path flag")) {
     return 1;
   }
 
@@ -102,6 +194,10 @@ int main() {
       DecodeStubInstruction("NO_SUCH_GFX1250_OPCODE");
   if (!Expect(unknown.status == StubDecodeStatus::kUnknownInstruction,
               "expected unknown instruction status for missing opcode")) {
+    return 1;
+  }
+  if (!Expect(unknown.opcode_shape == StubOpcodeShape::kUnknown,
+              "expected unknown opcode shape for missing opcode")) {
     return 1;
   }
 
@@ -134,6 +230,15 @@ int main() {
   const StubDecodedInstruction via_route_info = DecodeStubInstruction(*route_info);
   if (!Expect(via_route_info.entrypoint_name == "DecodeVop3pStub",
               "expected WMMA route info to dispatch through VOP3P stub")) {
+    return 1;
+  }
+  if (!Expect(GetStubOpcodeShapeName(via_route_info.opcode_shape) == "kWmmaCore",
+              "expected opcode-shape name helper to match WMMA route")) {
+    return 1;
+  }
+  if (!Expect(GetStubExecutionDomainName(via_route_info.execution_domain) ==
+                  "kMatrix",
+              "expected execution-domain helper to match WMMA route")) {
     return 1;
   }
 

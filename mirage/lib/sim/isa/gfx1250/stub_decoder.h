@@ -15,6 +15,31 @@ enum class StubDecodeStatus {
   kUnknownInstruction,
 };
 
+enum class StubOpcodeShape {
+  kUnknown,
+  kVop3pPackedBinary,
+  kVop3pPackedFma,
+  kWmmaCore,
+  kWmmaScale,
+  kWmmaScalePairedLoad,
+  kSwmmacCore,
+  kTensorLoadToLds,
+  kTensorStoreFromLds,
+  kFp8ConvertToF16,
+  kFp8ConvertToF32,
+  kFp8PackedConvert,
+  kVop3SdstScale,
+};
+
+enum class StubExecutionDomain {
+  kUnknown,
+  kVectorAlu,
+  kMatrix,
+  kTensorMemory,
+  kConversion,
+  kScaleAssist,
+};
+
 struct StubDecodedInstruction {
   std::string_view instruction_name{};
   StubDecodeStatus status = StubDecodeStatus::kUnknownInstruction;
@@ -27,6 +52,12 @@ struct StubDecodedInstruction {
   std::uint32_t rdna4_operand_count = 0;
   bool appears_in_rdna4_xml = false;
   bool is_target_specific = false;
+  StubOpcodeShape opcode_shape = StubOpcodeShape::kUnknown;
+  StubExecutionDomain execution_domain = StubExecutionDomain::kUnknown;
+  bool uses_accumulator = false;
+  bool uses_tensor_memory = false;
+  bool uses_scale_path = false;
+  bool uses_paired_operands = false;
 };
 
 struct StubDecoderEntrypointManifest {
@@ -43,6 +74,9 @@ StubDecodedInstruction DecodeVop3pStub(std::string_view instruction_name);
 StubDecodedInstruction DecodeMimgTensorStub(std::string_view instruction_name);
 StubDecodedInstruction DecodeVop1Stub(std::string_view instruction_name);
 StubDecodedInstruction DecodeVop3SdstStub(std::string_view instruction_name);
+std::string_view GetStubOpcodeShapeName(StubOpcodeShape opcode_shape);
+std::string_view GetStubExecutionDomainName(
+    StubExecutionDomain execution_domain);
 std::span<const StubDecoderEntrypointManifest> GetStubDecoderEntrypointManifests();
 const StubDecoderEntrypointManifest* FindStubDecoderEntrypointManifest(
     StubDecoderRoute route);

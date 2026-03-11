@@ -10,6 +10,15 @@ struct RouteEntrypointSpec {
   std::string_view entrypoint_name;
 };
 
+struct ClassifiedStubShape {
+  StubOpcodeShape opcode_shape = StubOpcodeShape::kUnknown;
+  StubExecutionDomain execution_domain = StubExecutionDomain::kUnknown;
+  bool uses_accumulator = false;
+  bool uses_tensor_memory = false;
+  bool uses_scale_path = false;
+  bool uses_paired_operands = false;
+};
+
 constexpr std::array<RouteEntrypointSpec, 4> kRouteEntrypointSpecs{{
     {StubDecoderRoute::kVop3p, "DecodeVop3pStub"},
     {StubDecoderRoute::kMimgTensor, "DecodeMimgTensorStub"},
@@ -26,9 +35,170 @@ constexpr std::string_view FindEntrypointName(StubDecoderRoute route) {
   return "DecodeUnsupportedStub";
 }
 
+bool StartsWith(std::string_view value, std::string_view prefix) {
+  return value.size() >= prefix.size() &&
+         value.substr(0, prefix.size()) == prefix;
+}
+
+ClassifiedStubShape ClassifyVop3pShape(std::string_view instruction_name) {
+  if (StartsWith(instruction_name, "V_WMMA_LD_SCALE")) {
+    return {
+        StubOpcodeShape::kWmmaScalePairedLoad,
+        StubExecutionDomain::kMatrix,
+        false,
+        false,
+        true,
+        true,
+    };
+  }
+  if (StartsWith(instruction_name, "V_WMMA_SCALE")) {
+    return {
+        StubOpcodeShape::kWmmaScale,
+        StubExecutionDomain::kMatrix,
+        true,
+        false,
+        true,
+        false,
+    };
+  }
+  if (StartsWith(instruction_name, "V_WMMA_")) {
+    return {
+        StubOpcodeShape::kWmmaCore,
+        StubExecutionDomain::kMatrix,
+        true,
+        false,
+        false,
+        false,
+    };
+  }
+  if (StartsWith(instruction_name, "V_SWMMAC_")) {
+    return {
+        StubOpcodeShape::kSwmmacCore,
+        StubExecutionDomain::kMatrix,
+        true,
+        false,
+        false,
+        false,
+    };
+  }
+  if (StartsWith(instruction_name, "V_PK_FMA")) {
+    return {
+        StubOpcodeShape::kVop3pPackedFma,
+        StubExecutionDomain::kVectorAlu,
+        false,
+        false,
+        false,
+        true,
+    };
+  }
+  if (StartsWith(instruction_name, "V_PK_")) {
+    return {
+        StubOpcodeShape::kVop3pPackedBinary,
+        StubExecutionDomain::kVectorAlu,
+        false,
+        false,
+        false,
+        true,
+    };
+  }
+  return {};
+}
+
+ClassifiedStubShape ClassifyMimgTensorShape(std::string_view instruction_name) {
+  if (instruction_name == "TENSOR_LOAD_TO_LDS") {
+    return {
+        StubOpcodeShape::kTensorLoadToLds,
+        StubExecutionDomain::kTensorMemory,
+        false,
+        true,
+        false,
+        false,
+    };
+  }
+  if (instruction_name == "TENSOR_STORE_FROM_LDS") {
+    return {
+        StubOpcodeShape::kTensorStoreFromLds,
+        StubExecutionDomain::kTensorMemory,
+        false,
+        true,
+        false,
+        false,
+    };
+  }
+  return {};
+}
+
+ClassifiedStubShape ClassifyVop1Shape(std::string_view instruction_name) {
+  if (StartsWith(instruction_name, "V_CVT_F16_")) {
+    return {
+        StubOpcodeShape::kFp8ConvertToF16,
+        StubExecutionDomain::kConversion,
+        false,
+        false,
+        false,
+        false,
+    };
+  }
+  if (StartsWith(instruction_name, "V_CVT_F32_")) {
+    return {
+        StubOpcodeShape::kFp8ConvertToF32,
+        StubExecutionDomain::kConversion,
+        false,
+        false,
+        false,
+        false,
+    };
+  }
+  if (StartsWith(instruction_name, "V_CVT_PK_")) {
+    return {
+        StubOpcodeShape::kFp8PackedConvert,
+        StubExecutionDomain::kConversion,
+        false,
+        false,
+        false,
+        true,
+    };
+  }
+  return {};
+}
+
+ClassifiedStubShape ClassifyVop3SdstShape(std::string_view instruction_name) {
+  if (instruction_name == "V_DIV_SCALE_F64") {
+    return {
+        StubOpcodeShape::kVop3SdstScale,
+        StubExecutionDomain::kScaleAssist,
+        false,
+        false,
+        true,
+        false,
+    };
+  }
+  return {};
+}
+
+ClassifiedStubShape ClassifyStubShape(
+    StubDecoderRoute route,
+    std::string_view instruction_name) {
+  switch (route) {
+    case StubDecoderRoute::kVop3p:
+      return ClassifyVop3pShape(instruction_name);
+    case StubDecoderRoute::kMimgTensor:
+      return ClassifyMimgTensorShape(instruction_name);
+    case StubDecoderRoute::kVop1:
+      return ClassifyVop1Shape(instruction_name);
+    case StubDecoderRoute::kVop3Sdst:
+      return ClassifyVop3SdstShape(instruction_name);
+    case StubDecoderRoute::kUnsupported:
+      break;
+  }
+  return {};
+}
+
 StubDecodedInstruction BuildDecodedStub(
     const StubDecoderRouteInfo& route_info,
     std::string_view entrypoint_name) {
+  const ClassifiedStubShape classified_shape =
+      ClassifyStubShape(route_info.route, route_info.instruction_name);
   return {
       route_info.instruction_name,
       StubDecodeStatus::kDecodedStub,
@@ -41,6 +211,36 @@ StubDecodedInstruction BuildDecodedStub(
       route_info.rdna4_operand_count,
       route_info.appears_in_rdna4_xml,
       route_info.is_target_specific,
+      classified_shape.opcode_shape,
+      classified_shape.execution_domain,
+      classified_shape.uses_accumulator,
+      classified_shape.uses_tensor_memory,
+      classified_shape.uses_scale_path,
+      classified_shape.uses_paired_operands,
+  };
+}
+
+StubDecodedInstruction MakeUnsupportedInstruction(
+    std::string_view instruction_name,
+    StubDecodeStatus status) {
+  return {
+      instruction_name,
+      status,
+      StubDecoderRoute::kUnsupported,
+      "kUnsupported",
+      "DecodeUnsupportedStub",
+      0,
+      "",
+      0,
+      0,
+      false,
+      false,
+      StubOpcodeShape::kUnknown,
+      StubExecutionDomain::kUnknown,
+      false,
+      false,
+      false,
+      false,
   };
 }
 
@@ -51,48 +251,24 @@ StubDecodedInstruction DecodeRouteStub(
       FindStubDecoderRouteInfo(instruction_name);
   if (route_info == nullptr) {
     if (FindDecoderSeedInfo(instruction_name) != nullptr) {
-      return {
-          instruction_name,
-          StubDecodeStatus::kUnsupportedRoute,
-          StubDecoderRoute::kUnsupported,
-          "kUnsupported",
-          "DecodeUnsupportedStub",
-          0,
-          "",
-          0,
-          0,
-          false,
-          false,
-      };
+      return MakeUnsupportedInstruction(instruction_name,
+                                        StubDecodeStatus::kUnsupportedRoute);
     }
-    return {
-        instruction_name,
-        StubDecodeStatus::kUnknownInstruction,
-        StubDecoderRoute::kUnsupported,
-        "kUnsupported",
-        "DecodeUnsupportedStub",
-        0,
-        "",
-        0,
-        0,
-        false,
-        false,
-    };
+    return MakeUnsupportedInstruction(instruction_name,
+                                      StubDecodeStatus::kUnknownInstruction);
   }
   if (route_info->route != expected_route) {
-    return {
-        instruction_name,
-        StubDecodeStatus::kUnsupportedRoute,
-        route_info->route,
-        route_info->route_name,
-        "DecodeUnsupportedStub",
-        route_info->route_priority,
-        route_info->rdna4_encoding_name,
-        route_info->rdna4_opcode,
-        route_info->rdna4_operand_count,
-        route_info->appears_in_rdna4_xml,
-        route_info->is_target_specific,
-    };
+    StubDecodedInstruction result = MakeUnsupportedInstruction(
+        instruction_name, StubDecodeStatus::kUnsupportedRoute);
+    result.route = route_info->route;
+    result.route_name = route_info->route_name;
+    result.route_priority = route_info->route_priority;
+    result.rdna4_encoding_name = route_info->rdna4_encoding_name;
+    result.rdna4_opcode = route_info->rdna4_opcode;
+    result.rdna4_operand_count = route_info->rdna4_operand_count;
+    result.appears_in_rdna4_xml = route_info->appears_in_rdna4_xml;
+    result.is_target_specific = route_info->is_target_specific;
+    return result;
   }
   return BuildDecodedStub(*route_info, FindEntrypointName(expected_route));
 }
@@ -104,33 +280,11 @@ StubDecodedInstruction DecodeStubInstruction(std::string_view instruction_name) 
       FindStubDecoderRouteInfo(instruction_name);
   if (route_info == nullptr) {
     if (FindDecoderSeedInfo(instruction_name) != nullptr) {
-      return {
-          instruction_name,
-          StubDecodeStatus::kUnsupportedRoute,
-          StubDecoderRoute::kUnsupported,
-          "kUnsupported",
-          "DecodeUnsupportedStub",
-          0,
-          "",
-          0,
-          0,
-          false,
-          false,
-      };
+      return MakeUnsupportedInstruction(instruction_name,
+                                        StubDecodeStatus::kUnsupportedRoute);
     }
-    return {
-        instruction_name,
-        StubDecodeStatus::kUnknownInstruction,
-        StubDecoderRoute::kUnsupported,
-        "kUnsupported",
-        "DecodeUnsupportedStub",
-        0,
-        "",
-        0,
-        0,
-        false,
-        false,
-    };
+    return MakeUnsupportedInstruction(instruction_name,
+                                      StubDecodeStatus::kUnknownInstruction);
   }
   return DecodeStubInstruction(*route_info);
 }
@@ -149,19 +303,8 @@ StubDecodedInstruction DecodeStubInstruction(
     case StubDecoderRoute::kUnsupported:
       break;
   }
-  return {
-      route_info.instruction_name,
-      StubDecodeStatus::kUnsupportedRoute,
-      StubDecoderRoute::kUnsupported,
-      "kUnsupported",
-      "DecodeUnsupportedStub",
-      0,
-      "",
-      0,
-      0,
-      false,
-      false,
-  };
+  return MakeUnsupportedInstruction(route_info.instruction_name,
+                                    StubDecodeStatus::kUnsupportedRoute);
 }
 
 StubDecodedInstruction DecodeVop3pStub(std::string_view instruction_name) {
@@ -178,6 +321,57 @@ StubDecodedInstruction DecodeVop1Stub(std::string_view instruction_name) {
 
 StubDecodedInstruction DecodeVop3SdstStub(std::string_view instruction_name) {
   return DecodeRouteStub(instruction_name, StubDecoderRoute::kVop3Sdst);
+}
+
+std::string_view GetStubOpcodeShapeName(StubOpcodeShape opcode_shape) {
+  switch (opcode_shape) {
+    case StubOpcodeShape::kVop3pPackedBinary:
+      return "kVop3pPackedBinary";
+    case StubOpcodeShape::kVop3pPackedFma:
+      return "kVop3pPackedFma";
+    case StubOpcodeShape::kWmmaCore:
+      return "kWmmaCore";
+    case StubOpcodeShape::kWmmaScale:
+      return "kWmmaScale";
+    case StubOpcodeShape::kWmmaScalePairedLoad:
+      return "kWmmaScalePairedLoad";
+    case StubOpcodeShape::kSwmmacCore:
+      return "kSwmmacCore";
+    case StubOpcodeShape::kTensorLoadToLds:
+      return "kTensorLoadToLds";
+    case StubOpcodeShape::kTensorStoreFromLds:
+      return "kTensorStoreFromLds";
+    case StubOpcodeShape::kFp8ConvertToF16:
+      return "kFp8ConvertToF16";
+    case StubOpcodeShape::kFp8ConvertToF32:
+      return "kFp8ConvertToF32";
+    case StubOpcodeShape::kFp8PackedConvert:
+      return "kFp8PackedConvert";
+    case StubOpcodeShape::kVop3SdstScale:
+      return "kVop3SdstScale";
+    case StubOpcodeShape::kUnknown:
+      break;
+  }
+  return "kUnknown";
+}
+
+std::string_view GetStubExecutionDomainName(
+    StubExecutionDomain execution_domain) {
+  switch (execution_domain) {
+    case StubExecutionDomain::kVectorAlu:
+      return "kVectorAlu";
+    case StubExecutionDomain::kMatrix:
+      return "kMatrix";
+    case StubExecutionDomain::kTensorMemory:
+      return "kTensorMemory";
+    case StubExecutionDomain::kConversion:
+      return "kConversion";
+    case StubExecutionDomain::kScaleAssist:
+      return "kScaleAssist";
+    case StubExecutionDomain::kUnknown:
+      break;
+  }
+  return "kUnknown";
 }
 
 std::span<const StubDecoderEntrypointManifest> GetStubDecoderEntrypointManifests() {

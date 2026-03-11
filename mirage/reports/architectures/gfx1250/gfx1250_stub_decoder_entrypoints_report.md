@@ -9,6 +9,10 @@
   - `DecodeVop1Stub`
   - `DecodeVop3SdstStub`
 - Current first-pass routed seed coverage: `70`
+- Stub decode results now include:
+  - opcode shape classification
+  - execution-domain classification
+  - scale/paired/tensor/accumulator flags
 
 ## Entrypoint Coverage
 
@@ -16,6 +20,13 @@
   - Route: `kVop3p`
   - Priority: `1`
   - Routed instructions: `62`
+  - Shapes:
+    - `kVop3pPackedBinary`
+    - `kVop3pPackedFma`
+    - `kWmmaCore`
+    - `kWmmaScale`
+    - `kWmmaScalePairedLoad`
+    - `kSwmmacCore`
   - Representative seeds:
     - `V_PK_ADD_BF16`
     - `V_PK_FMA_BF16`
@@ -26,6 +37,9 @@
   - Route: `kMimgTensor`
   - Priority: `2`
   - Routed instructions: `2`
+  - Shapes:
+    - `kTensorLoadToLds`
+    - `kTensorStoreFromLds`
   - Representative seeds:
     - `TENSOR_LOAD_TO_LDS`
     - `TENSOR_STORE_FROM_LDS`
@@ -34,6 +48,10 @@
   - Route: `kVop1`
   - Priority: `3`
   - Routed instructions: `5`
+  - Shapes:
+    - `kFp8ConvertToF16`
+    - `kFp8ConvertToF32`
+    - `kFp8PackedConvert`
   - Representative seeds:
     - `V_CVT_F16_FP8`
     - `V_CVT_F16_BF8`
@@ -43,6 +61,8 @@
   - Route: `kVop3Sdst`
   - Priority: `4`
   - Routed instructions: `1`
+  - Shape:
+    - `kVop3SdstScale`
   - Representative seed:
     - `V_DIV_SCALE_F64`
 
@@ -55,6 +75,6 @@
 
 ## Recommended Next Slice
 
-- Replace the current route-keyed stub return values with per-route opcode-shape records.
-- Start `DecodeVop3pStub` on `V_PK_ADD_BF16`, `V_PK_FMA_BF16`, and `V_WMMA_F32_16X16X4_F32_w32`.
+- Turn the current shape records into route-local operand-layout records for the first representative seeds.
+- Start `DecodeVop3pStub` on `V_PK_ADD_BF16`, `V_PK_FMA_BF16`, `V_WMMA_F32_16X16X4_F32_w32`, and `V_WMMA_LD_SCALE_PAIRED_B32`.
 - Start `DecodeMimgTensorStub` on `TENSOR_LOAD_TO_LDS` and `TENSOR_STORE_FROM_LDS` before expanding the deferred `kVop3` set.
