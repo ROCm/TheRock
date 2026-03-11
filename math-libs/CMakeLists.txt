@@ -85,7 +85,6 @@ if(THEROCK_ENABLE_PRIM)
   therock_cmake_subproject_declare(rocPRIM
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocprim"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocPRIM"
-    BACKGROUND_BUILD
     CMAKE_ARGS
       -DHIP_PLATFORM=amd
       -DROCM_PATH=
