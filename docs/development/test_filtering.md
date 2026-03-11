@@ -44,6 +44,7 @@ To do this the implementation uses a test_categories.yaml file which provides th
 TheRock CI uses the environment variables `TEST_TYPE` to specify the test category and `AMDGPU_FAMILIES` for gpu.
 
 A sample ctest command for a `quick` test run on `gfx110X` will look like
+
 ```
 ctest -L quick -L ex_gpu_gfx110X
 ```
@@ -52,7 +53,6 @@ More information on implementation and integration is available in the below lin
 
 https://github.com/ROCm/rocm-libraries/blob/develop/shared/ctest/README.md
 https://github.com/ROCm/TheRock/blob/main/build_tools/github_actions/test_executable_scripts/README.md
-
 
 ## Additional information
 
