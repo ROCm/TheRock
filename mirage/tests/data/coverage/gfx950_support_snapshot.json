@@ -2215,355 +2215,483 @@
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "FLAT_ATOMIC_SWAP"
+      ],
       "instruction_name": "FLAT_ATOMIC_SWAP",
       "measured_encodings": [
         "ENC_FLAT:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "FLAT_ATOMIC_CMPSWAP"
+      ],
       "instruction_name": "FLAT_ATOMIC_CMPSWAP",
       "measured_encodings": [
         "ENC_FLAT:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "FLAT_ATOMIC_ADD"
+      ],
       "instruction_name": "FLAT_ATOMIC_ADD",
       "measured_encodings": [
         "ENC_FLAT:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "FLAT_ATOMIC_SUB"
+      ],
       "instruction_name": "FLAT_ATOMIC_SUB",
       "measured_encodings": [
         "ENC_FLAT:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "FLAT_ATOMIC_SMIN"
+      ],
       "instruction_name": "FLAT_ATOMIC_SMIN",
       "measured_encodings": [
         "ENC_FLAT:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "FLAT_ATOMIC_UMIN"
+      ],
       "instruction_name": "FLAT_ATOMIC_UMIN",
       "measured_encodings": [
         "ENC_FLAT:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "FLAT_ATOMIC_SMAX"
+      ],
       "instruction_name": "FLAT_ATOMIC_SMAX",
       "measured_encodings": [
         "ENC_FLAT:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "FLAT_ATOMIC_UMAX"
+      ],
       "instruction_name": "FLAT_ATOMIC_UMAX",
       "measured_encodings": [
         "ENC_FLAT:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "FLAT_ATOMIC_AND"
+      ],
       "instruction_name": "FLAT_ATOMIC_AND",
       "measured_encodings": [
         "ENC_FLAT:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "FLAT_ATOMIC_OR"
+      ],
       "instruction_name": "FLAT_ATOMIC_OR",
       "measured_encodings": [
         "ENC_FLAT:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "FLAT_ATOMIC_XOR"
+      ],
       "instruction_name": "FLAT_ATOMIC_XOR",
       "measured_encodings": [
         "ENC_FLAT:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "FLAT_ATOMIC_INC"
+      ],
       "instruction_name": "FLAT_ATOMIC_INC",
       "measured_encodings": [
         "ENC_FLAT:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "FLAT_ATOMIC_DEC"
+      ],
       "instruction_name": "FLAT_ATOMIC_DEC",
       "measured_encodings": [
         "ENC_FLAT:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "FLAT_ATOMIC_ADD_F32"
+      ],
       "instruction_name": "FLAT_ATOMIC_ADD_F32",
       "measured_encodings": [
         "ENC_FLAT:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "FLAT_ATOMIC_PK_ADD_F16"
+      ],
       "instruction_name": "FLAT_ATOMIC_PK_ADD_F16",
       "measured_encodings": [
         "ENC_FLAT:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "FLAT_ATOMIC_ADD_F64"
+      ],
       "instruction_name": "FLAT_ATOMIC_ADD_F64",
       "measured_encodings": [
         "ENC_FLAT:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "FLAT_ATOMIC_MIN_F64"
+      ],
       "instruction_name": "FLAT_ATOMIC_MIN_F64",
       "measured_encodings": [
         "ENC_FLAT:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "FLAT_ATOMIC_MAX_F64"
+      ],
       "instruction_name": "FLAT_ATOMIC_MAX_F64",
       "measured_encodings": [
         "ENC_FLAT:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "FLAT_ATOMIC_PK_ADD_BF16"
+      ],
       "instruction_name": "FLAT_ATOMIC_PK_ADD_BF16",
       "measured_encodings": [
         "ENC_FLAT:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "FLAT_ATOMIC_SWAP_X2"
+      ],
       "instruction_name": "FLAT_ATOMIC_SWAP_X2",
       "measured_encodings": [
         "ENC_FLAT:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "FLAT_ATOMIC_CMPSWAP_X2"
+      ],
       "instruction_name": "FLAT_ATOMIC_CMPSWAP_X2",
       "measured_encodings": [
         "ENC_FLAT:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "FLAT_ATOMIC_ADD_X2"
+      ],
       "instruction_name": "FLAT_ATOMIC_ADD_X2",
       "measured_encodings": [
         "ENC_FLAT:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "FLAT_ATOMIC_SUB_X2"
+      ],
       "instruction_name": "FLAT_ATOMIC_SUB_X2",
       "measured_encodings": [
         "ENC_FLAT:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "FLAT_ATOMIC_SMIN_X2"
+      ],
       "instruction_name": "FLAT_ATOMIC_SMIN_X2",
       "measured_encodings": [
         "ENC_FLAT:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "FLAT_ATOMIC_UMIN_X2"
+      ],
       "instruction_name": "FLAT_ATOMIC_UMIN_X2",
       "measured_encodings": [
         "ENC_FLAT:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "FLAT_ATOMIC_SMAX_X2"
+      ],
       "instruction_name": "FLAT_ATOMIC_SMAX_X2",
       "measured_encodings": [
         "ENC_FLAT:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "FLAT_ATOMIC_UMAX_X2"
+      ],
       "instruction_name": "FLAT_ATOMIC_UMAX_X2",
       "measured_encodings": [
         "ENC_FLAT:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "FLAT_ATOMIC_AND_X2"
+      ],
       "instruction_name": "FLAT_ATOMIC_AND_X2",
       "measured_encodings": [
         "ENC_FLAT:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "FLAT_ATOMIC_OR_X2"
+      ],
       "instruction_name": "FLAT_ATOMIC_OR_X2",
       "measured_encodings": [
         "ENC_FLAT:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "FLAT_ATOMIC_XOR_X2"
+      ],
       "instruction_name": "FLAT_ATOMIC_XOR_X2",
       "measured_encodings": [
         "ENC_FLAT:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "FLAT_ATOMIC_INC_X2"
+      ],
       "instruction_name": "FLAT_ATOMIC_INC_X2",
       "measured_encodings": [
         "ENC_FLAT:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "FLAT_ATOMIC_DEC_X2"
+      ],
       "instruction_name": "FLAT_ATOMIC_DEC_X2",
       "measured_encodings": [
         "ENC_FLAT:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT:default"
+      ]
     },
     {
       "decode_measured": true,
@@ -16422,11 +16550,11 @@
   ],
   "summary": {
     "decode_measured": 1014,
-    "decode_supported": 672,
-    "decode_supported_percent_measured": 0.662722,
-    "decode_supported_percent_total": 0.541063,
-    "semantic_supported": 649,
-    "semantic_supported_percent_total": 0.522544
+    "decode_supported": 704,
+    "decode_supported_percent_measured": 0.69428,
+    "decode_supported_percent_total": 0.566828,
+    "semantic_supported": 681,
+    "semantic_supported_percent_total": 0.548309
   },
   "unmeasured_encoding_families": [
     "ENC_FLAT_SCRATCH",

@@ -2962,8 +2962,23 @@ std::uint64_t EvaluateDsDualDataUpdate64(CompiledOpcode opcode,
   }
 }
 
+bool IsFlatAtomicOpcode(std::string_view opcode) {
+  return HasPrefix(opcode, "FLAT_ATOMIC_");
+}
+
 bool IsGlobalAtomicOpcode(std::string_view opcode) {
   return HasPrefix(opcode, "GLOBAL_ATOMIC_");
+}
+
+bool IsVectorAtomicOpcode(std::string_view opcode) {
+  return IsFlatAtomicOpcode(opcode) || IsGlobalAtomicOpcode(opcode);
+}
+
+std::string NormalizeVectorAtomicOpcode(std::string_view opcode) {
+  if (IsFlatAtomicOpcode(opcode)) {
+    return "GLOBAL_" + std::string(opcode.substr(5));
+  }
+  return std::string(opcode);
 }
 
 bool IsVectorMemoryStoreOpcode(std::string_view opcode) {
@@ -4631,15 +4646,132 @@ void SetVectorMemoryMetadata(CompiledInstruction* instruction,
 
 void SetAtomicMetadata(CompiledInstruction* instruction,
                        CompiledOpcode opcode,
+                       bool is_global,
                        bool has_return,
                        std::uint8_t memory_dword_count,
                        std::uint8_t data_dword_count) {
   instruction->opcode = opcode;
   instruction->flags =
-      CompiledInstruction::kFlagIsGlobal |
+      (is_global ? CompiledInstruction::kFlagIsGlobal : 0u) |
       (has_return ? CompiledInstruction::kFlagHasReturn : 0u);
   instruction->memory_dword_count = memory_dword_count;
   instruction->data_dword_count = data_dword_count;
+}
+
+bool TrySetVectorAtomicMetadata(std::string_view opcode,
+                                CompiledInstruction* compiled_instruction) {
+  if (compiled_instruction == nullptr || !IsVectorAtomicOpcode(opcode)) {
+    return false;
+  }
+
+  const bool is_global = IsGlobalAtomicOpcode(opcode);
+  const std::string normalized_opcode = NormalizeVectorAtomicOpcode(opcode);
+  const auto set_atomic =
+      [&](CompiledOpcode compiled_opcode,
+          std::uint8_t memory_dword_count,
+          std::uint8_t data_dword_count) {
+        SetAtomicMetadata(compiled_instruction, compiled_opcode, is_global,
+                          false, memory_dword_count, data_dword_count);
+        return true;
+      };
+
+  if (normalized_opcode == "GLOBAL_ATOMIC_SWAP") {
+    return set_atomic(CompiledOpcode::kGlobalAtomicSwap, 1, 1);
+  }
+  if (normalized_opcode == "GLOBAL_ATOMIC_CMPSWAP") {
+    return set_atomic(CompiledOpcode::kGlobalAtomicCmpSwap, 1, 2);
+  }
+  if (normalized_opcode == "GLOBAL_ATOMIC_ADD") {
+    return set_atomic(CompiledOpcode::kGlobalAtomicAdd, 1, 1);
+  }
+  if (normalized_opcode == "GLOBAL_ATOMIC_SUB") {
+    return set_atomic(CompiledOpcode::kGlobalAtomicSub, 1, 1);
+  }
+  if (normalized_opcode == "GLOBAL_ATOMIC_SMIN") {
+    return set_atomic(CompiledOpcode::kGlobalAtomicSMin, 1, 1);
+  }
+  if (normalized_opcode == "GLOBAL_ATOMIC_UMIN") {
+    return set_atomic(CompiledOpcode::kGlobalAtomicUMin, 1, 1);
+  }
+  if (normalized_opcode == "GLOBAL_ATOMIC_SMAX") {
+    return set_atomic(CompiledOpcode::kGlobalAtomicSMax, 1, 1);
+  }
+  if (normalized_opcode == "GLOBAL_ATOMIC_UMAX") {
+    return set_atomic(CompiledOpcode::kGlobalAtomicUMax, 1, 1);
+  }
+  if (normalized_opcode == "GLOBAL_ATOMIC_AND") {
+    return set_atomic(CompiledOpcode::kGlobalAtomicAnd, 1, 1);
+  }
+  if (normalized_opcode == "GLOBAL_ATOMIC_OR") {
+    return set_atomic(CompiledOpcode::kGlobalAtomicOr, 1, 1);
+  }
+  if (normalized_opcode == "GLOBAL_ATOMIC_XOR") {
+    return set_atomic(CompiledOpcode::kGlobalAtomicXor, 1, 1);
+  }
+  if (normalized_opcode == "GLOBAL_ATOMIC_INC") {
+    return set_atomic(CompiledOpcode::kGlobalAtomicInc, 1, 1);
+  }
+  if (normalized_opcode == "GLOBAL_ATOMIC_DEC") {
+    return set_atomic(CompiledOpcode::kGlobalAtomicDec, 1, 1);
+  }
+  if (normalized_opcode == "GLOBAL_ATOMIC_ADD_F32") {
+    return set_atomic(CompiledOpcode::kGlobalAtomicAddF32, 1, 1);
+  }
+  if (normalized_opcode == "GLOBAL_ATOMIC_PK_ADD_F16") {
+    return set_atomic(CompiledOpcode::kGlobalAtomicPkAddF16, 1, 1);
+  }
+  if (normalized_opcode == "GLOBAL_ATOMIC_ADD_F64") {
+    return set_atomic(CompiledOpcode::kGlobalAtomicAddF64, 2, 2);
+  }
+  if (normalized_opcode == "GLOBAL_ATOMIC_MIN_F64") {
+    return set_atomic(CompiledOpcode::kGlobalAtomicMinF64, 2, 2);
+  }
+  if (normalized_opcode == "GLOBAL_ATOMIC_MAX_F64") {
+    return set_atomic(CompiledOpcode::kGlobalAtomicMaxF64, 2, 2);
+  }
+  if (normalized_opcode == "GLOBAL_ATOMIC_PK_ADD_BF16") {
+    return set_atomic(CompiledOpcode::kGlobalAtomicPkAddBf16, 1, 1);
+  }
+  if (normalized_opcode == "GLOBAL_ATOMIC_SWAP_X2") {
+    return set_atomic(CompiledOpcode::kGlobalAtomicSwapX2, 2, 2);
+  }
+  if (normalized_opcode == "GLOBAL_ATOMIC_CMPSWAP_X2") {
+    return set_atomic(CompiledOpcode::kGlobalAtomicCmpSwapX2, 2, 4);
+  }
+  if (normalized_opcode == "GLOBAL_ATOMIC_ADD_X2") {
+    return set_atomic(CompiledOpcode::kGlobalAtomicAddX2, 2, 2);
+  }
+  if (normalized_opcode == "GLOBAL_ATOMIC_SUB_X2") {
+    return set_atomic(CompiledOpcode::kGlobalAtomicSubX2, 2, 2);
+  }
+  if (normalized_opcode == "GLOBAL_ATOMIC_SMIN_X2") {
+    return set_atomic(CompiledOpcode::kGlobalAtomicSMinX2, 2, 2);
+  }
+  if (normalized_opcode == "GLOBAL_ATOMIC_UMIN_X2") {
+    return set_atomic(CompiledOpcode::kGlobalAtomicUMinX2, 2, 2);
+  }
+  if (normalized_opcode == "GLOBAL_ATOMIC_SMAX_X2") {
+    return set_atomic(CompiledOpcode::kGlobalAtomicSMaxX2, 2, 2);
+  }
+  if (normalized_opcode == "GLOBAL_ATOMIC_UMAX_X2") {
+    return set_atomic(CompiledOpcode::kGlobalAtomicUMaxX2, 2, 2);
+  }
+  if (normalized_opcode == "GLOBAL_ATOMIC_AND_X2") {
+    return set_atomic(CompiledOpcode::kGlobalAtomicAndX2, 2, 2);
+  }
+  if (normalized_opcode == "GLOBAL_ATOMIC_OR_X2") {
+    return set_atomic(CompiledOpcode::kGlobalAtomicOrX2, 2, 2);
+  }
+  if (normalized_opcode == "GLOBAL_ATOMIC_XOR_X2") {
+    return set_atomic(CompiledOpcode::kGlobalAtomicXorX2, 2, 2);
+  }
+  if (normalized_opcode == "GLOBAL_ATOMIC_INC_X2") {
+    return set_atomic(CompiledOpcode::kGlobalAtomicIncX2, 2, 2);
+  }
+  if (normalized_opcode == "GLOBAL_ATOMIC_DEC_X2") {
+    return set_atomic(CompiledOpcode::kGlobalAtomicDecX2, 2, 2);
+  }
+  return false;
 }
 
 bool TryCompileOpcode(std::string_view opcode,
@@ -7126,164 +7258,7 @@ bool TryCompileOpcode(std::string_view opcode,
     return true;
   }
 
-  if (opcode == "GLOBAL_ATOMIC_SWAP") {
-    SetAtomicMetadata(compiled_instruction, CompiledOpcode::kGlobalAtomicSwap,
-                      true, 1, 1);
-    return true;
-  }
-  if (opcode == "GLOBAL_ATOMIC_CMPSWAP") {
-    SetAtomicMetadata(compiled_instruction, CompiledOpcode::kGlobalAtomicCmpSwap,
-                      true, 1, 2);
-    return true;
-  }
-  if (opcode == "GLOBAL_ATOMIC_ADD") {
-    SetAtomicMetadata(compiled_instruction, CompiledOpcode::kGlobalAtomicAdd,
-                      true, 1, 1);
-    return true;
-  }
-  if (opcode == "GLOBAL_ATOMIC_SUB") {
-    SetAtomicMetadata(compiled_instruction, CompiledOpcode::kGlobalAtomicSub,
-                      true, 1, 1);
-    return true;
-  }
-  if (opcode == "GLOBAL_ATOMIC_SMIN") {
-    SetAtomicMetadata(compiled_instruction, CompiledOpcode::kGlobalAtomicSMin,
-                      true, 1, 1);
-    return true;
-  }
-  if (opcode == "GLOBAL_ATOMIC_UMIN") {
-    SetAtomicMetadata(compiled_instruction, CompiledOpcode::kGlobalAtomicUMin,
-                      true, 1, 1);
-    return true;
-  }
-  if (opcode == "GLOBAL_ATOMIC_SMAX") {
-    SetAtomicMetadata(compiled_instruction, CompiledOpcode::kGlobalAtomicSMax,
-                      true, 1, 1);
-    return true;
-  }
-  if (opcode == "GLOBAL_ATOMIC_UMAX") {
-    SetAtomicMetadata(compiled_instruction, CompiledOpcode::kGlobalAtomicUMax,
-                      true, 1, 1);
-    return true;
-  }
-  if (opcode == "GLOBAL_ATOMIC_AND") {
-    SetAtomicMetadata(compiled_instruction, CompiledOpcode::kGlobalAtomicAnd,
-                      true, 1, 1);
-    return true;
-  }
-  if (opcode == "GLOBAL_ATOMIC_OR") {
-    SetAtomicMetadata(compiled_instruction, CompiledOpcode::kGlobalAtomicOr,
-                      true, 1, 1);
-    return true;
-  }
-  if (opcode == "GLOBAL_ATOMIC_XOR") {
-    SetAtomicMetadata(compiled_instruction, CompiledOpcode::kGlobalAtomicXor,
-                      true, 1, 1);
-    return true;
-  }
-  if (opcode == "GLOBAL_ATOMIC_INC") {
-    SetAtomicMetadata(compiled_instruction, CompiledOpcode::kGlobalAtomicInc,
-                      true, 1, 1);
-    return true;
-  }
-  if (opcode == "GLOBAL_ATOMIC_DEC") {
-    SetAtomicMetadata(compiled_instruction, CompiledOpcode::kGlobalAtomicDec,
-                      true, 1, 1);
-    return true;
-  }
-  if (opcode == "GLOBAL_ATOMIC_ADD_F32") {
-    SetAtomicMetadata(compiled_instruction, CompiledOpcode::kGlobalAtomicAddF32,
-                      true, 1, 1);
-    return true;
-  }
-  if (opcode == "GLOBAL_ATOMIC_PK_ADD_F16") {
-    SetAtomicMetadata(compiled_instruction, CompiledOpcode::kGlobalAtomicPkAddF16,
-                      true, 1, 1);
-    return true;
-  }
-  if (opcode == "GLOBAL_ATOMIC_ADD_F64") {
-    SetAtomicMetadata(compiled_instruction, CompiledOpcode::kGlobalAtomicAddF64,
-                      true, 2, 2);
-    return true;
-  }
-  if (opcode == "GLOBAL_ATOMIC_MIN_F64") {
-    SetAtomicMetadata(compiled_instruction, CompiledOpcode::kGlobalAtomicMinF64,
-                      true, 2, 2);
-    return true;
-  }
-  if (opcode == "GLOBAL_ATOMIC_MAX_F64") {
-    SetAtomicMetadata(compiled_instruction, CompiledOpcode::kGlobalAtomicMaxF64,
-                      true, 2, 2);
-    return true;
-  }
-  if (opcode == "GLOBAL_ATOMIC_PK_ADD_BF16") {
-    SetAtomicMetadata(compiled_instruction, CompiledOpcode::kGlobalAtomicPkAddBf16,
-                      true, 1, 1);
-    return true;
-  }
-  if (opcode == "GLOBAL_ATOMIC_SWAP_X2") {
-    SetAtomicMetadata(compiled_instruction, CompiledOpcode::kGlobalAtomicSwapX2,
-                      true, 2, 2);
-    return true;
-  }
-  if (opcode == "GLOBAL_ATOMIC_CMPSWAP_X2") {
-    SetAtomicMetadata(compiled_instruction, CompiledOpcode::kGlobalAtomicCmpSwapX2,
-                      true, 2, 4);
-    return true;
-  }
-  if (opcode == "GLOBAL_ATOMIC_ADD_X2") {
-    SetAtomicMetadata(compiled_instruction, CompiledOpcode::kGlobalAtomicAddX2,
-                      true, 2, 2);
-    return true;
-  }
-  if (opcode == "GLOBAL_ATOMIC_SUB_X2") {
-    SetAtomicMetadata(compiled_instruction, CompiledOpcode::kGlobalAtomicSubX2,
-                      true, 2, 2);
-    return true;
-  }
-  if (opcode == "GLOBAL_ATOMIC_SMIN_X2") {
-    SetAtomicMetadata(compiled_instruction, CompiledOpcode::kGlobalAtomicSMinX2,
-                      true, 2, 2);
-    return true;
-  }
-  if (opcode == "GLOBAL_ATOMIC_UMIN_X2") {
-    SetAtomicMetadata(compiled_instruction, CompiledOpcode::kGlobalAtomicUMinX2,
-                      true, 2, 2);
-    return true;
-  }
-  if (opcode == "GLOBAL_ATOMIC_SMAX_X2") {
-    SetAtomicMetadata(compiled_instruction, CompiledOpcode::kGlobalAtomicSMaxX2,
-                      true, 2, 2);
-    return true;
-  }
-  if (opcode == "GLOBAL_ATOMIC_UMAX_X2") {
-    SetAtomicMetadata(compiled_instruction, CompiledOpcode::kGlobalAtomicUMaxX2,
-                      true, 2, 2);
-    return true;
-  }
-  if (opcode == "GLOBAL_ATOMIC_AND_X2") {
-    SetAtomicMetadata(compiled_instruction, CompiledOpcode::kGlobalAtomicAndX2,
-                      true, 2, 2);
-    return true;
-  }
-  if (opcode == "GLOBAL_ATOMIC_OR_X2") {
-    SetAtomicMetadata(compiled_instruction, CompiledOpcode::kGlobalAtomicOrX2,
-                      true, 2, 2);
-    return true;
-  }
-  if (opcode == "GLOBAL_ATOMIC_XOR_X2") {
-    SetAtomicMetadata(compiled_instruction, CompiledOpcode::kGlobalAtomicXorX2,
-                      true, 2, 2);
-    return true;
-  }
-  if (opcode == "GLOBAL_ATOMIC_INC_X2") {
-    SetAtomicMetadata(compiled_instruction, CompiledOpcode::kGlobalAtomicIncX2,
-                      true, 2, 2);
-    return true;
-  }
-  if (opcode == "GLOBAL_ATOMIC_DEC_X2") {
-    SetAtomicMetadata(compiled_instruction, CompiledOpcode::kGlobalAtomicDecX2,
-                      true, 2, 2);
+  if (TrySetVectorAtomicMetadata(opcode, compiled_instruction)) {
     return true;
   }
 
@@ -7307,7 +7282,7 @@ bool Gfx950Interpreter::Supports(std::string_view opcode) const {
          IsVectorBinaryOpcode(opcode) || IsVectorTernaryOpcode(opcode) ||
          IsVectorCompareOpcode(opcode) ||
          IsVectorMemoryOpcode(opcode) ||
-         IsDsOpcode(opcode) || IsGlobalAtomicOpcode(opcode) ||
+         IsDsOpcode(opcode) || IsVectorAtomicOpcode(opcode) ||
          IsBranchOpcode(opcode) || IsBarrierOpcode(opcode);
 }
 
@@ -7363,10 +7338,10 @@ bool Gfx950Interpreter::CompileInstruction(
 
   compiled_instruction->operands = instruction.operands;
   compiled_instruction->operand_count = instruction.operand_count;
-  if ((compiled_instruction->flags & CompiledInstruction::kFlagIsGlobal) != 0 &&
-      compiled_instruction->memory_dword_count != 0) {
+  if (compiled_instruction->memory_dword_count != 0) {
     compiled_instruction->flags &= ~CompiledInstruction::kFlagHasReturn;
-    if (instruction.operand_count == 5) {
+    if (instruction.operand_count ==
+        (compiled_instruction->IsGlobal() ? 5 : 4)) {
       compiled_instruction->flags |= CompiledInstruction::kFlagHasReturn;
     }
   }
@@ -7593,7 +7568,7 @@ bool Gfx950Interpreter::ExecuteInstruction(const DecodedInstruction& instruction
   if (IsDsOpcode(instruction.opcode)) {
     return ExecuteDsMemory(instruction, state, workgroup, error_message);
   }
-  if (IsGlobalAtomicOpcode(instruction.opcode)) {
+  if (IsVectorAtomicOpcode(instruction.opcode)) {
     return ExecuteGlobalAtomic(instruction, state, memory, error_message);
   }
   if (IsBranchOpcode(instruction.opcode)) {
@@ -13392,13 +13367,17 @@ bool Gfx950Interpreter::ExecuteGlobalAtomic(const DecodedInstruction& instructio
                                             std::string* error_message) const {
   if (memory == nullptr) {
     if (error_message != nullptr) {
-      *error_message = "global atomic instruction requires execution memory";
+      *error_message = "vector atomic instruction requires execution memory";
     }
     return false;
   }
 
-  const bool has_return = instruction.operand_count == 5;
-  if (instruction.operand_count != 4 && instruction.operand_count != 5) {
+  const bool is_global = IsGlobalAtomicOpcode(instruction.opcode);
+  const std::uint8_t no_return_operand_count = is_global ? 4 : 3;
+  const std::uint8_t return_operand_count = is_global ? 5 : 4;
+  const bool has_return = instruction.operand_count == return_operand_count;
+  if (instruction.operand_count != no_return_operand_count &&
+      instruction.operand_count != return_operand_count) {
     if (error_message != nullptr) {
       *error_message = "unexpected operand count";
     }
@@ -13411,43 +13390,66 @@ bool Gfx950Interpreter::ExecuteGlobalAtomic(const DecodedInstruction& instructio
       instruction.operands[has_return ? 1 : 0];
   const InstructionOperand& data_operand =
       instruction.operands[has_return ? 2 : 1];
-  const InstructionOperand& scalar_base_operand =
-      instruction.operands[has_return ? 3 : 2];
+  const InstructionOperand* scalar_base_operand =
+      is_global ? &instruction.operands[has_return ? 3 : 2] : nullptr;
   const InstructionOperand& offset_operand =
-      instruction.operands[has_return ? 4 : 3];
+      instruction.operands[is_global ? (has_return ? 4 : 3)
+                                     : (has_return ? 3 : 2)];
+  if (address_operand.kind != OperandKind::kVgpr) {
+    if (error_message != nullptr) {
+      *error_message = "vector atomic address operand must be a VGPR pair";
+    }
+    return false;
+  }
   if (return_operand != nullptr && return_operand->kind != OperandKind::kVgpr) {
     if (error_message != nullptr) {
-      *error_message = "global atomic return operand must be a VGPR";
+      *error_message = "vector atomic return operand must be a VGPR";
     }
     return false;
   }
   if (data_operand.kind != OperandKind::kVgpr) {
     if (error_message != nullptr) {
-      *error_message = "global atomic data operand must be a VGPR";
+      *error_message = "vector atomic data operand must be a VGPR";
+    }
+    return false;
+  }
+  if (scalar_base_operand != nullptr &&
+      scalar_base_operand->kind != OperandKind::kSgpr) {
+    if (error_message != nullptr) {
+      *error_message = "vector atomic scalar base must be an SGPR pair";
     }
     return false;
   }
   if (offset_operand.kind != OperandKind::kImm32) {
     if (error_message != nullptr) {
-      *error_message = "global atomic offset must be an immediate";
+      *error_message = "vector atomic offset must be an immediate";
     }
     return false;
   }
 
+  const std::string normalized_opcode =
+      NormalizeVectorAtomicOpcode(instruction.opcode);
   const std::uint8_t memory_dword_count =
-      GetGlobalAtomicMemoryDwordCount(instruction.opcode);
+      GetGlobalAtomicMemoryDwordCount(normalized_opcode);
   const std::uint8_t data_dword_count =
-      GetGlobalAtomicDataDwordCount(instruction.opcode);
+      GetGlobalAtomicDataDwordCount(normalized_opcode);
   if (data_operand.index + data_dword_count - 1 >= state->vgprs.size()) {
     if (error_message != nullptr) {
-      *error_message = "global atomic data register range out of bounds";
+      *error_message = "vector atomic data register range out of bounds";
+    }
+    return false;
+  }
+  if (scalar_base_operand != nullptr &&
+      scalar_base_operand->index + 1 >= state->sgprs.size()) {
+    if (error_message != nullptr) {
+      *error_message = "vector atomic scalar base out of bounds";
     }
     return false;
   }
   if (return_operand != nullptr &&
       return_operand->index + memory_dword_count - 1 >= state->vgprs.size()) {
     if (error_message != nullptr) {
-      *error_message = "global atomic return register range out of bounds";
+      *error_message = "vector atomic return register range out of bounds";
     }
     return false;
   }
@@ -13461,7 +13463,7 @@ bool Gfx950Interpreter::ExecuteGlobalAtomic(const DecodedInstruction& instructio
     }
 
     std::uint64_t address = 0;
-    if (!ResolveVectorMemoryAddress(address_operand, &scalar_base_operand,
+    if (!ResolveVectorMemoryAddress(address_operand, scalar_base_operand,
                                     signed_offset, *state, lane_index, &address,
                                     error_message)) {
       return false;
@@ -13476,7 +13478,7 @@ bool Gfx950Interpreter::ExecuteGlobalAtomic(const DecodedInstruction& instructio
           static_cast<std::uint64_t>(dword_index) * 4u;
       if (address > std::numeric_limits<std::uint64_t>::max() - byte_offset) {
         if (error_message != nullptr) {
-          *error_message = "global atomic address overflow";
+          *error_message = "vector atomic address overflow";
         }
         return false;
       }
@@ -13497,124 +13499,124 @@ bool Gfx950Interpreter::ExecuteGlobalAtomic(const DecodedInstruction& instructio
       }
     }
 
-    if (instruction.opcode == "GLOBAL_ATOMIC_SWAP") {
+    if (normalized_opcode == "GLOBAL_ATOMIC_SWAP") {
       new_dwords[0] = data_dwords[0];
-    } else if (instruction.opcode == "GLOBAL_ATOMIC_CMPSWAP") {
+    } else if (normalized_opcode == "GLOBAL_ATOMIC_CMPSWAP") {
       if (old_dwords[0] == data_dwords[0]) {
         new_dwords[0] = data_dwords[1];
       }
-    } else if (instruction.opcode == "GLOBAL_ATOMIC_ADD") {
+    } else if (normalized_opcode == "GLOBAL_ATOMIC_ADD") {
       new_dwords[0] = old_dwords[0] + data_dwords[0];
-    } else if (instruction.opcode == "GLOBAL_ATOMIC_SUB") {
+    } else if (normalized_opcode == "GLOBAL_ATOMIC_SUB") {
       new_dwords[0] = old_dwords[0] - data_dwords[0];
-    } else if (instruction.opcode == "GLOBAL_ATOMIC_SMIN") {
+    } else if (normalized_opcode == "GLOBAL_ATOMIC_SMIN") {
       new_dwords[0] =
           BitCast<std::int32_t>(old_dwords[0]) < BitCast<std::int32_t>(data_dwords[0])
               ? old_dwords[0]
               : data_dwords[0];
-    } else if (instruction.opcode == "GLOBAL_ATOMIC_UMIN") {
+    } else if (normalized_opcode == "GLOBAL_ATOMIC_UMIN") {
       new_dwords[0] = old_dwords[0] < data_dwords[0] ? old_dwords[0]
                                                      : data_dwords[0];
-    } else if (instruction.opcode == "GLOBAL_ATOMIC_SMAX") {
+    } else if (normalized_opcode == "GLOBAL_ATOMIC_SMAX") {
       new_dwords[0] =
           BitCast<std::int32_t>(old_dwords[0]) > BitCast<std::int32_t>(data_dwords[0])
               ? old_dwords[0]
               : data_dwords[0];
-    } else if (instruction.opcode == "GLOBAL_ATOMIC_UMAX") {
+    } else if (normalized_opcode == "GLOBAL_ATOMIC_UMAX") {
       new_dwords[0] = old_dwords[0] > data_dwords[0] ? old_dwords[0]
                                                      : data_dwords[0];
-    } else if (instruction.opcode == "GLOBAL_ATOMIC_AND") {
+    } else if (normalized_opcode == "GLOBAL_ATOMIC_AND") {
       new_dwords[0] = old_dwords[0] & data_dwords[0];
-    } else if (instruction.opcode == "GLOBAL_ATOMIC_OR") {
+    } else if (normalized_opcode == "GLOBAL_ATOMIC_OR") {
       new_dwords[0] = old_dwords[0] | data_dwords[0];
-    } else if (instruction.opcode == "GLOBAL_ATOMIC_XOR") {
+    } else if (normalized_opcode == "GLOBAL_ATOMIC_XOR") {
       new_dwords[0] = old_dwords[0] ^ data_dwords[0];
-    } else if (instruction.opcode == "GLOBAL_ATOMIC_INC") {
+    } else if (normalized_opcode == "GLOBAL_ATOMIC_INC") {
       new_dwords[0] = AtomicIncU32(old_dwords[0], data_dwords[0]);
-    } else if (instruction.opcode == "GLOBAL_ATOMIC_DEC") {
+    } else if (normalized_opcode == "GLOBAL_ATOMIC_DEC") {
       new_dwords[0] = AtomicDecU32(old_dwords[0], data_dwords[0]);
-    } else if (instruction.opcode == "GLOBAL_ATOMIC_ADD_F32") {
+    } else if (normalized_opcode == "GLOBAL_ATOMIC_ADD_F32") {
       new_dwords[0] =
           BitCast<std::uint32_t>(BitCast<float>(old_dwords[0]) +
                                  BitCast<float>(data_dwords[0]));
-    } else if (instruction.opcode == "GLOBAL_ATOMIC_PK_ADD_F16") {
+    } else if (normalized_opcode == "GLOBAL_ATOMIC_PK_ADD_F16") {
       new_dwords[0] = PackedHalfAdd(old_dwords[0], data_dwords[0]);
-    } else if (instruction.opcode == "GLOBAL_ATOMIC_PK_ADD_BF16") {
+    } else if (normalized_opcode == "GLOBAL_ATOMIC_PK_ADD_BF16") {
       new_dwords[0] = PackedBFloat16Add(old_dwords[0], data_dwords[0]);
-    } else if (instruction.opcode == "GLOBAL_ATOMIC_ADD_F64" ||
-               instruction.opcode == "GLOBAL_ATOMIC_MIN_F64" ||
-               instruction.opcode == "GLOBAL_ATOMIC_MAX_F64") {
+    } else if (normalized_opcode == "GLOBAL_ATOMIC_ADD_F64" ||
+               normalized_opcode == "GLOBAL_ATOMIC_MIN_F64" ||
+               normalized_opcode == "GLOBAL_ATOMIC_MAX_F64") {
       const std::uint64_t old_value = ComposeU64(old_dwords[0], old_dwords[1]);
       const std::uint64_t data_value = ComposeU64(data_dwords[0], data_dwords[1]);
       const double old_double = BitCast<double>(old_value);
       const double data_double = BitCast<double>(data_value);
       double new_double = old_double;
-      if (instruction.opcode == "GLOBAL_ATOMIC_ADD_F64") {
+      if (normalized_opcode == "GLOBAL_ATOMIC_ADD_F64") {
         new_double = old_double + data_double;
-      } else if (instruction.opcode == "GLOBAL_ATOMIC_MIN_F64") {
+      } else if (normalized_opcode == "GLOBAL_ATOMIC_MIN_F64") {
         new_double = std::fmin(old_double, data_double);
       } else {
         new_double = std::fmax(old_double, data_double);
       }
       const std::uint64_t new_value = BitCast<std::uint64_t>(new_double);
       SplitU64(new_value, &new_dwords[0], &new_dwords[1]);
-    } else if (instruction.opcode == "GLOBAL_ATOMIC_SWAP_X2" ||
-               instruction.opcode == "GLOBAL_ATOMIC_CMPSWAP_X2" ||
-               instruction.opcode == "GLOBAL_ATOMIC_ADD_X2" ||
-               instruction.opcode == "GLOBAL_ATOMIC_SUB_X2" ||
-               instruction.opcode == "GLOBAL_ATOMIC_SMIN_X2" ||
-               instruction.opcode == "GLOBAL_ATOMIC_UMIN_X2" ||
-               instruction.opcode == "GLOBAL_ATOMIC_SMAX_X2" ||
-               instruction.opcode == "GLOBAL_ATOMIC_UMAX_X2" ||
-               instruction.opcode == "GLOBAL_ATOMIC_AND_X2" ||
-               instruction.opcode == "GLOBAL_ATOMIC_OR_X2" ||
-               instruction.opcode == "GLOBAL_ATOMIC_XOR_X2" ||
-               instruction.opcode == "GLOBAL_ATOMIC_INC_X2" ||
-               instruction.opcode == "GLOBAL_ATOMIC_DEC_X2") {
+    } else if (normalized_opcode == "GLOBAL_ATOMIC_SWAP_X2" ||
+               normalized_opcode == "GLOBAL_ATOMIC_CMPSWAP_X2" ||
+               normalized_opcode == "GLOBAL_ATOMIC_ADD_X2" ||
+               normalized_opcode == "GLOBAL_ATOMIC_SUB_X2" ||
+               normalized_opcode == "GLOBAL_ATOMIC_SMIN_X2" ||
+               normalized_opcode == "GLOBAL_ATOMIC_UMIN_X2" ||
+               normalized_opcode == "GLOBAL_ATOMIC_SMAX_X2" ||
+               normalized_opcode == "GLOBAL_ATOMIC_UMAX_X2" ||
+               normalized_opcode == "GLOBAL_ATOMIC_AND_X2" ||
+               normalized_opcode == "GLOBAL_ATOMIC_OR_X2" ||
+               normalized_opcode == "GLOBAL_ATOMIC_XOR_X2" ||
+               normalized_opcode == "GLOBAL_ATOMIC_INC_X2" ||
+               normalized_opcode == "GLOBAL_ATOMIC_DEC_X2") {
       const std::uint64_t old_value = ComposeU64(old_dwords[0], old_dwords[1]);
       const std::uint64_t data_value = ComposeU64(data_dwords[0], data_dwords[1]);
       std::uint64_t new_value = old_value;
-      if (instruction.opcode == "GLOBAL_ATOMIC_SWAP_X2") {
+      if (normalized_opcode == "GLOBAL_ATOMIC_SWAP_X2") {
         new_value = data_value;
-      } else if (instruction.opcode == "GLOBAL_ATOMIC_CMPSWAP_X2") {
+      } else if (normalized_opcode == "GLOBAL_ATOMIC_CMPSWAP_X2") {
         const std::uint64_t replacement_value =
             ComposeU64(data_dwords[2], data_dwords[3]);
         if (old_value == data_value) {
           new_value = replacement_value;
         }
-      } else if (instruction.opcode == "GLOBAL_ATOMIC_ADD_X2") {
+      } else if (normalized_opcode == "GLOBAL_ATOMIC_ADD_X2") {
         new_value = old_value + data_value;
-      } else if (instruction.opcode == "GLOBAL_ATOMIC_SUB_X2") {
+      } else if (normalized_opcode == "GLOBAL_ATOMIC_SUB_X2") {
         new_value = old_value - data_value;
-      } else if (instruction.opcode == "GLOBAL_ATOMIC_SMIN_X2") {
+      } else if (normalized_opcode == "GLOBAL_ATOMIC_SMIN_X2") {
         new_value =
             BitCast<std::int64_t>(old_value) < BitCast<std::int64_t>(data_value)
                 ? old_value
                 : data_value;
-      } else if (instruction.opcode == "GLOBAL_ATOMIC_UMIN_X2") {
+      } else if (normalized_opcode == "GLOBAL_ATOMIC_UMIN_X2") {
         new_value = old_value < data_value ? old_value : data_value;
-      } else if (instruction.opcode == "GLOBAL_ATOMIC_SMAX_X2") {
+      } else if (normalized_opcode == "GLOBAL_ATOMIC_SMAX_X2") {
         new_value =
             BitCast<std::int64_t>(old_value) > BitCast<std::int64_t>(data_value)
                 ? old_value
                 : data_value;
-      } else if (instruction.opcode == "GLOBAL_ATOMIC_UMAX_X2") {
+      } else if (normalized_opcode == "GLOBAL_ATOMIC_UMAX_X2") {
         new_value = old_value > data_value ? old_value : data_value;
-      } else if (instruction.opcode == "GLOBAL_ATOMIC_AND_X2") {
+      } else if (normalized_opcode == "GLOBAL_ATOMIC_AND_X2") {
         new_value = old_value & data_value;
-      } else if (instruction.opcode == "GLOBAL_ATOMIC_OR_X2") {
+      } else if (normalized_opcode == "GLOBAL_ATOMIC_OR_X2") {
         new_value = old_value | data_value;
-      } else if (instruction.opcode == "GLOBAL_ATOMIC_XOR_X2") {
+      } else if (normalized_opcode == "GLOBAL_ATOMIC_XOR_X2") {
         new_value = old_value ^ data_value;
-      } else if (instruction.opcode == "GLOBAL_ATOMIC_INC_X2") {
+      } else if (normalized_opcode == "GLOBAL_ATOMIC_INC_X2") {
         new_value = AtomicIncU64(old_value, data_value);
-      } else if (instruction.opcode == "GLOBAL_ATOMIC_DEC_X2") {
+      } else if (normalized_opcode == "GLOBAL_ATOMIC_DEC_X2") {
         new_value = AtomicDecU64(old_value, data_value);
       }
       SplitU64(new_value, &new_dwords[0], &new_dwords[1]);
     } else {
       if (error_message != nullptr) {
-        *error_message = "unsupported global atomic opcode";
+        *error_message = "unsupported vector atomic opcode";
       }
       return false;
     }
@@ -13645,13 +13647,16 @@ bool Gfx950Interpreter::ExecuteGlobalAtomic(const CompiledInstruction& instructi
                                             std::string* error_message) const {
   if (memory == nullptr) {
     if (error_message != nullptr) {
-      *error_message = "global atomic instruction requires execution memory";
+      *error_message = "vector atomic instruction requires execution memory";
     }
     return false;
   }
 
+  const bool is_global = instruction.IsGlobal();
   const bool has_return = instruction.HasReturn();
-  if (instruction.operand_count != (has_return ? 5 : 4)) {
+  const std::uint8_t expected_operand_count =
+      has_return ? (is_global ? 5 : 4) : (is_global ? 4 : 3);
+  if (instruction.operand_count != expected_operand_count) {
     if (error_message != nullptr) {
       *error_message = "unexpected operand count";
     }
@@ -13664,37 +13669,39 @@ bool Gfx950Interpreter::ExecuteGlobalAtomic(const CompiledInstruction& instructi
       instruction.operands[has_return ? 1 : 0];
   const InstructionOperand& data_operand =
       instruction.operands[has_return ? 2 : 1];
-  const InstructionOperand& scalar_base_operand =
-      instruction.operands[has_return ? 3 : 2];
+  const InstructionOperand* scalar_base_operand =
+      is_global ? &instruction.operands[has_return ? 3 : 2] : nullptr;
   const InstructionOperand& offset_operand =
-      instruction.operands[has_return ? 4 : 3];
+      instruction.operands[is_global ? (has_return ? 4 : 3)
+                                     : (has_return ? 3 : 2)];
   if (address_operand.kind != OperandKind::kVgpr) {
     if (error_message != nullptr) {
-      *error_message = "global atomic address operand must be a VGPR pair";
+      *error_message = "vector atomic address operand must be a VGPR pair";
     }
     return false;
   }
   if (return_operand != nullptr && return_operand->kind != OperandKind::kVgpr) {
     if (error_message != nullptr) {
-      *error_message = "global atomic return operand must be a VGPR";
+      *error_message = "vector atomic return operand must be a VGPR";
     }
     return false;
   }
   if (data_operand.kind != OperandKind::kVgpr) {
     if (error_message != nullptr) {
-      *error_message = "global atomic data operand must be a VGPR";
+      *error_message = "vector atomic data operand must be a VGPR";
     }
     return false;
   }
-  if (scalar_base_operand.kind != OperandKind::kSgpr) {
+  if (scalar_base_operand != nullptr &&
+      scalar_base_operand->kind != OperandKind::kSgpr) {
     if (error_message != nullptr) {
-      *error_message = "global atomic scalar base must be an SGPR pair";
+      *error_message = "vector atomic scalar base must be an SGPR pair";
     }
     return false;
   }
   if (offset_operand.kind != OperandKind::kImm32) {
     if (error_message != nullptr) {
-      *error_message = "global atomic offset must be an immediate";
+      *error_message = "vector atomic offset must be an immediate";
     }
     return false;
   }
@@ -13703,84 +13710,46 @@ bool Gfx950Interpreter::ExecuteGlobalAtomic(const CompiledInstruction& instructi
   const std::uint8_t data_dword_count = instruction.data_dword_count;
   if (memory_dword_count == 0 || data_dword_count == 0) {
     if (error_message != nullptr) {
-      *error_message = "global atomic metadata is incomplete";
+      *error_message = "vector atomic metadata is incomplete";
     }
     return false;
   }
   if (address_operand.index + 1 >= state->vgprs.size()) {
     if (error_message != nullptr) {
-      *error_message = "global atomic address register pair out of bounds";
+      *error_message = "vector atomic address register pair out of bounds";
     }
     return false;
   }
   if (data_operand.index + data_dword_count - 1 >= state->vgprs.size()) {
     if (error_message != nullptr) {
-      *error_message = "global atomic data register range out of bounds";
+      *error_message = "vector atomic data register range out of bounds";
     }
     return false;
   }
-  if (scalar_base_operand.index + 1 >= state->sgprs.size()) {
+  if (scalar_base_operand != nullptr &&
+      scalar_base_operand->index + 1 >= state->sgprs.size()) {
     if (error_message != nullptr) {
-      *error_message = "global atomic scalar base out of bounds";
+      *error_message = "vector atomic scalar base out of bounds";
     }
     return false;
   }
   if (return_operand != nullptr &&
       return_operand->index + memory_dword_count - 1 >= state->vgprs.size()) {
     if (error_message != nullptr) {
-      *error_message = "global atomic return register range out of bounds";
+      *error_message = "vector atomic return register range out of bounds";
     }
     return false;
   }
   const std::int32_t signed_offset =
       static_cast<std::int32_t>(offset_operand.imm32);
-  const std::uint16_t address_reg = address_operand.index;
   const std::uint16_t data_reg = data_operand.index;
   const std::uint16_t return_reg =
       return_operand != nullptr ? return_operand->index : 0;
-  const std::uint64_t scalar_base =
-      ComposeU64(state->sgprs[scalar_base_operand.index],
-                 state->sgprs[scalar_base_operand.index + 1]);
   const auto resolve_address = [&](std::size_t lane_index,
                                    std::uint64_t* address) -> bool {
-    if (address == nullptr) {
-      if (error_message != nullptr) {
-        *error_message = "global atomic address output must not be null";
-      }
-      return false;
-    }
-
-    *address = ComposeU64(state->vgprs[address_reg][lane_index],
-                          state->vgprs[address_reg + 1][lane_index]);
-    if (*address > std::numeric_limits<std::uint64_t>::max() - scalar_base) {
-      if (error_message != nullptr) {
-        *error_message = "global address overflow";
-      }
-      return false;
-    }
-    *address += scalar_base;
-    if (signed_offset < 0) {
-      const std::uint64_t magnitude =
-          static_cast<std::uint64_t>(-signed_offset);
-      if (*address < magnitude) {
-        if (error_message != nullptr) {
-          *error_message = "vector memory address underflow";
-        }
-        return false;
-      }
-      *address -= magnitude;
-    } else {
-      const std::uint64_t magnitude =
-          static_cast<std::uint64_t>(signed_offset);
-      if (*address > std::numeric_limits<std::uint64_t>::max() - magnitude) {
-        if (error_message != nullptr) {
-          *error_message = "vector memory address overflow";
-        }
-        return false;
-      }
-      *address += magnitude;
-    }
-    return true;
+    return ResolveVectorMemoryAddress(address_operand, scalar_base_operand,
+                                      signed_offset, *state, lane_index, address,
+                                      error_message);
   };
 
   if (!has_return && memory_dword_count == 1 && data_dword_count == 1) {
@@ -14039,11 +14008,11 @@ bool Gfx950Interpreter::ExecuteGlobalAtomic(const CompiledInstruction& instructi
           new_value = AtomicDecU64(old_value, data_value);
         }
         SplitU64(new_value, &new_dwords[0], &new_dwords[1]);
-        break;
+      break;
       }
       default:
         if (error_message != nullptr) {
-          *error_message = "unsupported compiled global atomic opcode";
+          *error_message = "unsupported compiled vector atomic opcode";
         }
         return false;
     }

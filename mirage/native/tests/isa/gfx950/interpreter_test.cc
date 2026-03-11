@@ -2591,6 +2591,14 @@ int main() {
       return 1;
     }
   }
+  for (std::string_view global_opcode : kGlobalAtomicOpcodes) {
+    const std::string opcode =
+        "FLAT_" + std::string(global_opcode.substr(7));
+    const std::string message = "expected " + opcode + " support";
+    if (!Expect(interpreter.Supports(opcode), message.c_str())) {
+      return 1;
+    }
+  }
 
   WaveExecutionState state;
   state.exec_mask = 0b1011ULL;
@@ -11152,6 +11160,241 @@ int main() {
       !Expect(atomic_memory.ReadU32(0x54c, &atomic_value),
               "expected lane 3 atomic cmpswap read") ||
       !Expect(atomic_value == 900u, "expected lane 3 atomic cmpswap result")) {
+    return 1;
+  }
+
+  const std::vector<DecodedInstruction> flat_atomic_program = {
+      DecodedInstruction::FourOperand("FLAT_ATOMIC_ADD",
+                                      InstructionOperand::Vgpr(30),
+                                      InstructionOperand::Vgpr(14),
+                                      InstructionOperand::Vgpr(20),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("FLAT_ATOMIC_SWAP",
+                                       InstructionOperand::Vgpr(16),
+                                       InstructionOperand::Vgpr(21),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::FourOperand("FLAT_ATOMIC_CMPSWAP",
+                                      InstructionOperand::Vgpr(31),
+                                      InstructionOperand::Vgpr(18),
+                                      InstructionOperand::Vgpr(22),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FourOperand("FLAT_ATOMIC_ADD_X2",
+                                      InstructionOperand::Vgpr(32),
+                                      InstructionOperand::Vgpr(24),
+                                      InstructionOperand::Vgpr(26),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  auto seed_flat_atomic_memory = [](LinearExecutionMemory* memory) {
+    if (memory == nullptr) {
+      return false;
+    }
+    auto write_u64 = [&](std::uint64_t address, std::uint64_t value) {
+      std::uint32_t low = 0;
+      std::uint32_t high = 0;
+      SplitU64(value, &low, &high);
+      return memory->WriteU32(address, low) &&
+             memory->WriteU32(address + 4u, high);
+    };
+    return memory->WriteU32(0x520, 10u) && memory->WriteU32(0x524, 20u) &&
+           memory->WriteU32(0x52c, 40u) && memory->WriteU32(0x530, 50u) &&
+           memory->WriteU32(0x534, 60u) && memory->WriteU32(0x53c, 80u) &&
+           memory->WriteU32(0x540, 100u) && memory->WriteU32(0x544, 110u) &&
+           memory->WriteU32(0x54c, 130u) && write_u64(0x560, 1000ULL) &&
+           write_u64(0x568, 2000ULL) && write_u64(0x578, 3000ULL);
+  };
+  auto make_flat_atomic_state = []() {
+    WaveExecutionState state;
+    state.exec_mask = 0b1011ULL;
+    auto set_lane_u64 = [&](std::uint16_t reg, std::size_t lane,
+                            std::uint64_t value) {
+      std::uint32_t low = 0;
+      std::uint32_t high = 0;
+      SplitU64(value, &low, &high);
+      state.vgprs[reg][lane] = low;
+      state.vgprs[reg + 1][lane] = high;
+    };
+    set_lane_u64(14, 0u, 0x520ULL);
+    set_lane_u64(14, 1u, 0x524ULL);
+    set_lane_u64(14, 3u, 0x52cULL);
+    set_lane_u64(16, 0u, 0x530ULL);
+    set_lane_u64(16, 1u, 0x534ULL);
+    set_lane_u64(16, 3u, 0x53cULL);
+    set_lane_u64(18, 0u, 0x540ULL);
+    set_lane_u64(18, 1u, 0x544ULL);
+    set_lane_u64(18, 3u, 0x54cULL);
+    set_lane_u64(24, 0u, 0x560ULL);
+    set_lane_u64(24, 1u, 0x568ULL);
+    set_lane_u64(24, 3u, 0x578ULL);
+    state.vgprs[20][0] = 1u;
+    state.vgprs[20][1] = 2u;
+    state.vgprs[20][3] = 4u;
+    state.vgprs[21][0] = 500u;
+    state.vgprs[21][1] = 600u;
+    state.vgprs[21][3] = 800u;
+    state.vgprs[22][0] = 100u;
+    state.vgprs[22][1] = 999u;
+    state.vgprs[22][3] = 130u;
+    state.vgprs[23][0] = 700u;
+    state.vgprs[23][1] = 777u;
+    state.vgprs[23][3] = 900u;
+    set_lane_u64(26, 0u, 3ULL);
+    set_lane_u64(26, 1u, 5ULL);
+    set_lane_u64(26, 3u, 9ULL);
+    state.vgprs[31][0] = 0xdeadbeefu;
+    state.vgprs[31][2] = 0xdeadbeefu;
+    state.vgprs[32][2] = 0xdeadbeefu;
+    state.vgprs[33][2] = 0xcafebabeu;
+    return state;
+  };
+  auto validate_flat_atomic_state =
+      [&](const WaveExecutionState& state,
+          LinearExecutionMemory* memory,
+          const char* mode) {
+        if (memory == nullptr) {
+          std::cerr << mode << " missing flat atomic memory\n";
+          return false;
+        }
+        if (!Expect(state.halted, "expected flat atomic test program to halt")) {
+          std::cerr << mode << '\n';
+          return false;
+        }
+        if (!Expect(state.vgprs[30][0] == 10u,
+                    "expected flat atomic add lane 0 return value") ||
+            !Expect(state.vgprs[30][1] == 20u,
+                    "expected flat atomic add lane 1 return value") ||
+            !Expect(state.vgprs[30][2] == 0u,
+                    "expected inactive flat atomic add return to remain untouched") ||
+            !Expect(state.vgprs[30][3] == 40u,
+                    "expected flat atomic add lane 3 return value") ||
+            !Expect(state.vgprs[31][0] == 100u,
+                    "expected flat atomic cmpswap lane 0 return value") ||
+            !Expect(state.vgprs[31][1] == 110u,
+                    "expected flat atomic cmpswap lane 1 return value") ||
+            !Expect(state.vgprs[31][2] == 0xdeadbeefu,
+                    "expected inactive flat atomic cmpswap destination to remain untouched") ||
+            !Expect(state.vgprs[31][3] == 130u,
+                    "expected flat atomic cmpswap lane 3 return value")) {
+          std::cerr << mode << '\n';
+          return false;
+        }
+
+        std::uint32_t read_value = 0;
+        if (!Expect(memory->ReadU32(0x520, &read_value),
+                    "expected flat atomic add lane 0 read") ||
+            !Expect(read_value == 11u,
+                    "expected flat atomic add lane 0 result") ||
+            !Expect(memory->ReadU32(0x524, &read_value),
+                    "expected flat atomic add lane 1 read") ||
+            !Expect(read_value == 22u,
+                    "expected flat atomic add lane 1 result") ||
+            !Expect(memory->ReadU32(0x52c, &read_value),
+                    "expected flat atomic add lane 3 read") ||
+            !Expect(read_value == 44u,
+                    "expected flat atomic add lane 3 result") ||
+            !Expect(memory->ReadU32(0x530, &read_value),
+                    "expected flat atomic swap lane 0 read") ||
+            !Expect(read_value == 500u,
+                    "expected flat atomic swap lane 0 result") ||
+            !Expect(memory->ReadU32(0x534, &read_value),
+                    "expected flat atomic swap lane 1 read") ||
+            !Expect(read_value == 600u,
+                    "expected flat atomic swap lane 1 result") ||
+            !Expect(memory->ReadU32(0x53c, &read_value),
+                    "expected flat atomic swap lane 3 read") ||
+            !Expect(read_value == 800u,
+                    "expected flat atomic swap lane 3 result") ||
+            !Expect(memory->ReadU32(0x540, &read_value),
+                    "expected flat atomic cmpswap lane 0 read") ||
+            !Expect(read_value == 700u,
+                    "expected flat atomic cmpswap lane 0 result") ||
+            !Expect(memory->ReadU32(0x544, &read_value),
+                    "expected flat atomic cmpswap lane 1 read") ||
+            !Expect(read_value == 110u,
+                    "expected flat atomic cmpswap mismatch result") ||
+            !Expect(memory->ReadU32(0x54c, &read_value),
+                    "expected flat atomic cmpswap lane 3 read") ||
+            !Expect(read_value == 900u,
+                    "expected flat atomic cmpswap lane 3 result")) {
+          std::cerr << mode << '\n';
+          return false;
+        }
+
+        static constexpr std::array<std::size_t, 3> kObservedLanes = {0u, 1u, 3u};
+        static constexpr std::array<std::uint64_t, 3> kExpectedOldX2 = {
+            1000ULL, 2000ULL, 3000ULL};
+        static constexpr std::array<std::uint64_t, 3> kExpectedNewX2 = {
+            1003ULL, 2005ULL, 3009ULL};
+        static constexpr std::array<std::uint64_t, 3> kExpectedX2Addresses = {
+            0x560ULL, 0x568ULL, 0x578ULL};
+        for (std::size_t index = 0; index < kObservedLanes.size(); ++index) {
+          const std::size_t lane = kObservedLanes[index];
+          const std::uint64_t return_value =
+              ComposeU64(state.vgprs[32][lane], state.vgprs[33][lane]);
+          if (!Expect(return_value == kExpectedOldX2[index],
+                      "expected flat atomic add x2 return value")) {
+            std::cerr << mode << " lane=" << lane << '\n';
+            return false;
+          }
+          std::uint32_t low = 0;
+          std::uint32_t high = 0;
+          if (!Expect(memory->ReadU32(kExpectedX2Addresses[index], &low),
+                      "expected flat atomic add x2 low read") ||
+              !Expect(memory->ReadU32(kExpectedX2Addresses[index] + 4u, &high),
+                      "expected flat atomic add x2 high read") ||
+              !Expect(ComposeU64(low, high) == kExpectedNewX2[index],
+                      "expected flat atomic add x2 result")) {
+            std::cerr << mode << " lane=" << lane << '\n';
+            return false;
+          }
+        }
+
+        if (!Expect(state.vgprs[32][2] == 0xdeadbeefu,
+                    "expected inactive flat atomic add x2 low return to remain untouched") ||
+            !Expect(state.vgprs[33][2] == 0xcafebabeu,
+                    "expected inactive flat atomic add x2 high return to remain untouched")) {
+          std::cerr << mode << '\n';
+          return false;
+        }
+        return true;
+      };
+
+  LinearExecutionMemory decoded_flat_atomic_memory(0x1000, 0);
+  if (!Expect(seed_flat_atomic_memory(&decoded_flat_atomic_memory),
+              "expected decoded flat atomic seed writes")) {
+    return 1;
+  }
+  WaveExecutionState decoded_flat_atomic_state = make_flat_atomic_state();
+  if (!Expect(interpreter.ExecuteProgram(flat_atomic_program,
+                                         &decoded_flat_atomic_state,
+                                         &decoded_flat_atomic_memory,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_flat_atomic_state(decoded_flat_atomic_state,
+                                  &decoded_flat_atomic_memory, "decoded")) {
+    return 1;
+  }
+
+  std::vector<CompiledInstruction> compiled_flat_atomic_program;
+  if (!Expect(interpreter.CompileProgram(flat_atomic_program,
+                                         &compiled_flat_atomic_program,
+                                         &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+  LinearExecutionMemory compiled_flat_atomic_memory(0x1000, 0);
+  if (!Expect(seed_flat_atomic_memory(&compiled_flat_atomic_memory),
+              "expected compiled flat atomic seed writes")) {
+    return 1;
+  }
+  WaveExecutionState compiled_flat_atomic_state = make_flat_atomic_state();
+  if (!Expect(interpreter.ExecuteProgram(compiled_flat_atomic_program,
+                                         &compiled_flat_atomic_state,
+                                         &compiled_flat_atomic_memory,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_flat_atomic_state(compiled_flat_atomic_state,
+                                  &compiled_flat_atomic_memory, "compiled")) {
     return 1;
   }
 

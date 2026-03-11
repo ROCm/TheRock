@@ -1,15 +1,15 @@
 # GFX950 Coverage Report
 
 - Catalog instructions: 1242
-- Semantic support: 649 (52.3%)
-- Raw decode support: 672 (54.1% of total, 66.3% of measured)
+- Semantic support: 681 (54.8%)
+- Raw decode support: 704 (56.7% of total, 69.4% of measured)
 - Raw decode measurable instructions: 1014
 
 ## Gaps
 
 - Semantic-only coverage without measured decode: 36
 - Decode-only without semantic support: 59
-- Missing both semantic and decode support: 534
+- Missing both semantic and decode support: 502
 
 ## Unmeasured Encoding Families
 
@@ -95,24 +95,24 @@
 - `DS_READ_B96_TR_B6`
 - `DS_READ_B64_TR_B8`
 - `DS_READ_B64_TR_B16`
-- `FLAT_ATOMIC_SWAP`
-- `FLAT_ATOMIC_CMPSWAP`
-- `FLAT_ATOMIC_ADD`
-- `FLAT_ATOMIC_SUB`
-- `FLAT_ATOMIC_SMIN`
-- `FLAT_ATOMIC_UMIN`
-- `FLAT_ATOMIC_SMAX`
-- `FLAT_ATOMIC_UMAX`
-- `FLAT_ATOMIC_AND`
-- `FLAT_ATOMIC_OR`
-- `FLAT_ATOMIC_XOR`
-- `FLAT_ATOMIC_INC`
-- `FLAT_ATOMIC_DEC`
-- `FLAT_ATOMIC_ADD_F32`
-- `FLAT_ATOMIC_PK_ADD_F16`
-- `FLAT_ATOMIC_ADD_F64`
-- `FLAT_ATOMIC_MIN_F64`
-- `FLAT_ATOMIC_MAX_F64`
-- `FLAT_ATOMIC_PK_ADD_BF16`
-- `FLAT_ATOMIC_SWAP_X2`
-- `FLAT_ATOMIC_CMPSWAP_X2`
+- `GLOBAL_LOAD_LDS_UBYTE`
+- `GLOBAL_LOAD_LDS_SBYTE`
+- `GLOBAL_LOAD_LDS_USHORT`
+- `GLOBAL_LOAD_LDS_SSHORT`
+- `GLOBAL_LOAD_LDS_DWORD`
+- `GLOBAL_LOAD_LDS_DWORDX4`
+- `GLOBAL_LOAD_LDS_DWORDX3`
+- `SCRATCH_LOAD_UBYTE`
+- `SCRATCH_LOAD_SBYTE`
+- `SCRATCH_LOAD_USHORT`
+- `SCRATCH_LOAD_SSHORT`
+- `SCRATCH_LOAD_DWORD`
+- `SCRATCH_LOAD_DWORDX2`
+- `SCRATCH_LOAD_DWORDX3`
+- `SCRATCH_LOAD_DWORDX4`
+- `SCRATCH_STORE_BYTE`
+- `SCRATCH_STORE_BYTE_D16_HI`
+- `SCRATCH_STORE_SHORT`
+- `SCRATCH_STORE_SHORT_D16_HI`
+- `SCRATCH_STORE_DWORD`
+- `SCRATCH_STORE_DWORDX2`

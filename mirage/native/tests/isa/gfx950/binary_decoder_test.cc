@@ -332,6 +332,24 @@ std::array<std::uint32_t, 2> MakeGlobalAtomic(std::uint32_t op,
           static_cast<std::uint32_t>(word >> 32)};
 }
 
+std::array<std::uint32_t, 2> MakeFlatAtomic(std::uint32_t op,
+                                            bool return_prior_value,
+                                            std::uint32_t vdst,
+                                            std::uint32_t addr,
+                                            std::uint32_t data,
+                                            std::uint32_t offset) {
+  std::uint64_t word = 0;
+  word |= static_cast<std::uint64_t>(55u) << 26;
+  word |= static_cast<std::uint64_t>(offset & 0xfffu) << 0;
+  word |= static_cast<std::uint64_t>(return_prior_value ? 1u : 0u) << 16;
+  word |= static_cast<std::uint64_t>(op & 0x7fu) << 18;
+  word |= static_cast<std::uint64_t>(addr & 0xffu) << 32;
+  word |= static_cast<std::uint64_t>(data & 0xffu) << 40;
+  word |= static_cast<std::uint64_t>(vdst & 0xffu) << 56;
+  return {static_cast<std::uint32_t>(word),
+          static_cast<std::uint32_t>(word >> 32)};
+}
+
 void SplitU64(std::uint64_t value,
               std::uint32_t* low,
               std::uint32_t* high) {
@@ -7962,6 +7980,158 @@ int main() {
     return 1;
   }
 
+  const auto flat_atomic_add_word = MakeFlatAtomic(66, true, 30, 14, 20, 0);
+  const auto flat_atomic_swap_word = MakeFlatAtomic(64, false, 9, 16, 21, 0);
+  const auto flat_atomic_cmpswap_word =
+      MakeFlatAtomic(65, true, 31, 18, 22, 0);
+  const std::vector<std::uint32_t> flat_atomic_program = {
+      flat_atomic_add_word[0],      flat_atomic_add_word[1],
+      flat_atomic_swap_word[0],     flat_atomic_swap_word[1],
+      flat_atomic_cmpswap_word[0],  flat_atomic_cmpswap_word[1],
+      MakeSopp(1),
+  };
+  decoded_program.clear();
+  if (!Expect(
+          decoder.DecodeProgram(flat_atomic_program, &decoded_program, &error_message),
+          error_message.c_str()) ||
+      !Expect(decoded_program.size() == 4,
+              "expected decoded flat atomic program size") ||
+      !Expect(decoded_program[0].opcode == "FLAT_ATOMIC_ADD",
+              "expected flat atomic add decode") ||
+      !Expect(decoded_program[0].operand_count == 4,
+              "expected flat atomic add return form operand count") ||
+      !Expect(decoded_program[1].opcode == "FLAT_ATOMIC_SWAP",
+              "expected flat atomic swap decode") ||
+      !Expect(decoded_program[1].operand_count == 3,
+              "expected flat atomic swap no-return operand count") ||
+      !Expect(decoded_program[2].opcode == "FLAT_ATOMIC_CMPSWAP",
+              "expected flat atomic cmpswap decode") ||
+      !Expect(decoded_program[2].operand_count == 4,
+              "expected flat atomic cmpswap return form operand count") ||
+      !Expect(decoded_program[2].operands[2].kind == OperandKind::kVgpr,
+              "expected flat atomic cmpswap data operand decode") ||
+      !Expect(decoded_program[2].operands[2].index == 22,
+              "expected flat atomic cmpswap data start index")) {
+    return 1;
+  }
+
+  LinearExecutionMemory flat_atomic_memory(0x1000, 0);
+  if (!Expect(flat_atomic_memory.WriteU32(0x520, 10u),
+              "expected flat atomic add seed write") ||
+      !Expect(flat_atomic_memory.WriteU32(0x524, 20u),
+              "expected flat atomic add seed write") ||
+      !Expect(flat_atomic_memory.WriteU32(0x52c, 40u),
+              "expected flat atomic add seed write") ||
+      !Expect(flat_atomic_memory.WriteU32(0x530, 50u),
+              "expected flat atomic swap seed write") ||
+      !Expect(flat_atomic_memory.WriteU32(0x534, 60u),
+              "expected flat atomic swap seed write") ||
+      !Expect(flat_atomic_memory.WriteU32(0x53c, 80u),
+              "expected flat atomic swap seed write") ||
+      !Expect(flat_atomic_memory.WriteU32(0x540, 100u),
+              "expected flat atomic cmpswap seed write") ||
+      !Expect(flat_atomic_memory.WriteU32(0x544, 110u),
+              "expected flat atomic cmpswap seed write") ||
+      !Expect(flat_atomic_memory.WriteU32(0x54c, 130u),
+              "expected flat atomic cmpswap seed write")) {
+    return 1;
+  }
+
+  WaveExecutionState flat_atomic_state;
+  flat_atomic_state.exec_mask = 0b1011ULL;
+  flat_atomic_state.vgprs[14][0] = 0x520;
+  flat_atomic_state.vgprs[14][1] = 0x524;
+  flat_atomic_state.vgprs[14][3] = 0x52c;
+  flat_atomic_state.vgprs[15][0] = 0x0;
+  flat_atomic_state.vgprs[15][1] = 0x0;
+  flat_atomic_state.vgprs[15][3] = 0x0;
+  flat_atomic_state.vgprs[16][0] = 0x530;
+  flat_atomic_state.vgprs[16][1] = 0x534;
+  flat_atomic_state.vgprs[16][3] = 0x53c;
+  flat_atomic_state.vgprs[17][0] = 0x0;
+  flat_atomic_state.vgprs[17][1] = 0x0;
+  flat_atomic_state.vgprs[17][3] = 0x0;
+  flat_atomic_state.vgprs[18][0] = 0x540;
+  flat_atomic_state.vgprs[18][1] = 0x544;
+  flat_atomic_state.vgprs[18][3] = 0x54c;
+  flat_atomic_state.vgprs[19][0] = 0x0;
+  flat_atomic_state.vgprs[19][1] = 0x0;
+  flat_atomic_state.vgprs[19][3] = 0x0;
+  flat_atomic_state.vgprs[20][0] = 1u;
+  flat_atomic_state.vgprs[20][1] = 2u;
+  flat_atomic_state.vgprs[20][3] = 4u;
+  flat_atomic_state.vgprs[21][0] = 500u;
+  flat_atomic_state.vgprs[21][1] = 600u;
+  flat_atomic_state.vgprs[21][3] = 800u;
+  flat_atomic_state.vgprs[22][0] = 100u;
+  flat_atomic_state.vgprs[22][1] = 999u;
+  flat_atomic_state.vgprs[22][3] = 130u;
+  flat_atomic_state.vgprs[23][0] = 700u;
+  flat_atomic_state.vgprs[23][1] = 777u;
+  flat_atomic_state.vgprs[23][3] = 900u;
+  flat_atomic_state.vgprs[31][0] = 0xdeadbeefu;
+  flat_atomic_state.vgprs[31][2] = 0xdeadbeefu;
+  if (!Expect(interpreter.ExecuteProgram(decoded_program, &flat_atomic_state,
+                                         &flat_atomic_memory, &error_message),
+              error_message.c_str()) ||
+      !Expect(flat_atomic_state.vgprs[30][0] == 10u,
+              "expected decoded flat atomic add lane 0 return value") ||
+      !Expect(flat_atomic_state.vgprs[30][1] == 20u,
+              "expected decoded flat atomic add lane 1 return value") ||
+      !Expect(flat_atomic_state.vgprs[30][2] == 0u,
+              "expected decoded flat atomic add inactive lane return") ||
+      !Expect(flat_atomic_state.vgprs[30][3] == 40u,
+              "expected decoded flat atomic add lane 3 return value") ||
+      !Expect(flat_atomic_state.vgprs[31][0] == 100u,
+              "expected decoded flat atomic cmpswap lane 0 return value") ||
+      !Expect(flat_atomic_state.vgprs[31][1] == 110u,
+              "expected decoded flat atomic cmpswap lane 1 return value") ||
+      !Expect(flat_atomic_state.vgprs[31][2] == 0xdeadbeefu,
+              "expected decoded flat atomic cmpswap inactive lane destination") ||
+      !Expect(flat_atomic_state.vgprs[31][3] == 130u,
+              "expected decoded flat atomic cmpswap lane 3 return value")) {
+    return 1;
+  }
+
+  if (!Expect(flat_atomic_memory.ReadU32(0x520, &atomic_value),
+              "expected decoded flat atomic add lane 0 read") ||
+      !Expect(atomic_value == 11u,
+              "expected decoded flat atomic add lane 0 result") ||
+      !Expect(flat_atomic_memory.ReadU32(0x524, &atomic_value),
+              "expected decoded flat atomic add lane 1 read") ||
+      !Expect(atomic_value == 22u,
+              "expected decoded flat atomic add lane 1 result") ||
+      !Expect(flat_atomic_memory.ReadU32(0x52c, &atomic_value),
+              "expected decoded flat atomic add lane 3 read") ||
+      !Expect(atomic_value == 44u,
+              "expected decoded flat atomic add lane 3 result") ||
+      !Expect(flat_atomic_memory.ReadU32(0x530, &atomic_value),
+              "expected decoded flat atomic swap lane 0 read") ||
+      !Expect(atomic_value == 500u,
+              "expected decoded flat atomic swap lane 0 result") ||
+      !Expect(flat_atomic_memory.ReadU32(0x534, &atomic_value),
+              "expected decoded flat atomic swap lane 1 read") ||
+      !Expect(atomic_value == 600u,
+              "expected decoded flat atomic swap lane 1 result") ||
+      !Expect(flat_atomic_memory.ReadU32(0x53c, &atomic_value),
+              "expected decoded flat atomic swap lane 3 read") ||
+      !Expect(atomic_value == 800u,
+              "expected decoded flat atomic swap lane 3 result") ||
+      !Expect(flat_atomic_memory.ReadU32(0x540, &atomic_value),
+              "expected decoded flat atomic cmpswap lane 0 read") ||
+      !Expect(atomic_value == 700u,
+              "expected decoded flat atomic cmpswap lane 0 result") ||
+      !Expect(flat_atomic_memory.ReadU32(0x544, &atomic_value),
+              "expected decoded flat atomic cmpswap lane 1 read") ||
+      !Expect(atomic_value == 110u,
+              "expected decoded flat atomic cmpswap mismatch result") ||
+      !Expect(flat_atomic_memory.ReadU32(0x54c, &atomic_value),
+              "expected decoded flat atomic cmpswap lane 3 read") ||
+      !Expect(atomic_value == 900u,
+              "expected decoded flat atomic cmpswap lane 3 result")) {
+    return 1;
+  }
+
   const std::array<std::string_view, 20> kAdditionalFlatMemoryOpcodes = {
       "FLAT_LOAD_UBYTE",        "FLAT_LOAD_UBYTE_D16",
       "FLAT_LOAD_UBYTE_D16_HI", "FLAT_LOAD_SBYTE",
@@ -8202,6 +8372,83 @@ int main() {
                           static_cast<std::uint32_t>(-8),
                   ("expected offset decode for " + std::string(opcode_name))
                       .c_str())) {
+        return 1;
+      }
+    }
+  }
+
+  for (std::size_t opcode_index = 0; opcode_index < kGlobalAtomicOpcodes.size();
+       ++opcode_index) {
+    const std::string_view global_opcode_name = kGlobalAtomicOpcodes[opcode_index];
+    const std::string opcode_name =
+        "FLAT_" + std::string(global_opcode_name.substr(7));
+    const std::optional<std::uint32_t> opcode_value =
+        FindDefaultEncodingOpcode(opcode_name, "ENC_FLAT");
+    if (!Expect(opcode_value.has_value(),
+                ("expected catalog opcode for " + opcode_name).c_str())) {
+      return 1;
+    }
+
+    const bool return_prior_value = (opcode_index % 2) == 0;
+    const auto atomic_word =
+        MakeFlatAtomic(*opcode_value, return_prior_value, 60, 10, 20, 4);
+    const std::array<std::uint32_t, 2> encoded_atomic_word = {atomic_word[0],
+                                                               atomic_word[1]};
+    DecodedInstruction instruction;
+    std::size_t words_consumed = 0;
+    if (!Expect(decoder.DecodeInstruction(encoded_atomic_word, &instruction,
+                                          &words_consumed,
+                                          &error_message),
+                error_message.c_str())) {
+      return 1;
+    }
+
+    const std::string consumed_message =
+        "expected two-word decode for " + opcode_name;
+    if (!Expect(words_consumed == 2, consumed_message.c_str())) {
+      return 1;
+    }
+    const std::string opcode_message =
+        "expected opcode decode for " + opcode_name;
+    if (!Expect(instruction.opcode == opcode_name, opcode_message.c_str())) {
+      return 1;
+    }
+    const std::string operand_count_message =
+        "expected operand count for " + opcode_name;
+    if (!Expect(instruction.operand_count == (return_prior_value ? 4 : 3),
+                operand_count_message.c_str())) {
+      return 1;
+    }
+
+    if (return_prior_value) {
+      const std::string dst_message =
+          "expected return VGPR decode for " + opcode_name;
+      if (!Expect(instruction.operands[0].kind == OperandKind::kVgpr &&
+                      instruction.operands[0].index == 60,
+                  dst_message.c_str()) ||
+          !Expect(instruction.operands[1].kind == OperandKind::kVgpr &&
+                      instruction.operands[1].index == 10,
+                  ("expected address VGPR decode for " + opcode_name).c_str()) ||
+          !Expect(instruction.operands[2].kind == OperandKind::kVgpr &&
+                      instruction.operands[2].index == 20,
+                  ("expected data VGPR decode for " + opcode_name).c_str()) ||
+          !Expect(instruction.operands[3].kind == OperandKind::kImm32 &&
+                      instruction.operands[3].imm32 == 4u,
+                  ("expected offset decode for " + opcode_name).c_str())) {
+        return 1;
+      }
+    } else {
+      const std::string addr_message =
+          "expected address VGPR decode for " + opcode_name;
+      if (!Expect(instruction.operands[0].kind == OperandKind::kVgpr &&
+                      instruction.operands[0].index == 10,
+                  addr_message.c_str()) ||
+          !Expect(instruction.operands[1].kind == OperandKind::kVgpr &&
+                      instruction.operands[1].index == 20,
+                  ("expected data VGPR decode for " + opcode_name).c_str()) ||
+          !Expect(instruction.operands[2].kind == OperandKind::kImm32 &&
+                      instruction.operands[2].imm32 == 4u,
+                  ("expected offset decode for " + opcode_name).c_str())) {
         return 1;
       }
     }

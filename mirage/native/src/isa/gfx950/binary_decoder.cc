@@ -715,7 +715,8 @@ bool Gfx950BinaryDecoder::DecodeFlat(std::span<const std::uint32_t> words,
   }
 
   const std::string_view opcode_name(instruction_name);
-  if (!IsSupportedFlatVectorMemoryOpcode(opcode_name)) {
+  if (!IsSupportedFlatVectorMemoryOpcode(opcode_name) &&
+      !opcode_name.starts_with("FLAT_ATOMIC_")) {
     if (error_message != nullptr) {
       *error_message = "unsupported flat opcode";
     }
@@ -730,6 +731,7 @@ bool Gfx950BinaryDecoder::DecodeFlat(std::span<const std::uint32_t> words,
   }
   const InstructionOperand offset = InstructionOperand::Imm32(
       static_cast<std::uint32_t>(ExtractBits(instruction_word, 0, 12)));
+  const bool return_prior_value = ExtractBits(instruction_word, 16, 1) != 0;
 
   if (opcode_name.starts_with("FLAT_LOAD_")) {
     InstructionOperand dst;
@@ -747,8 +749,22 @@ bool Gfx950BinaryDecoder::DecodeFlat(std::span<const std::uint32_t> words,
             &data, error_message)) {
       return false;
     }
-    *instruction = DecodedInstruction::ThreeOperand(instruction_name, addr, data,
-                                                    offset);
+    if (opcode_name.starts_with("FLAT_STORE_")) {
+      *instruction = DecodedInstruction::ThreeOperand(instruction_name, addr,
+                                                      data, offset);
+    } else if (return_prior_value) {
+      InstructionOperand dst;
+      if (!DecodeVectorDestination(
+              static_cast<std::uint32_t>(ExtractBits(instruction_word, 56, 8)),
+              &dst, error_message)) {
+        return false;
+      }
+      *instruction = DecodedInstruction::FourOperand(instruction_name, dst, addr,
+                                                     data, offset);
+    } else {
+      *instruction =
+          DecodedInstruction::ThreeOperand(instruction_name, addr, data, offset);
+    }
   }
 
   *words_consumed = 2;
