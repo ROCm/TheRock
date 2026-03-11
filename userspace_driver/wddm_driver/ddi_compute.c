@@ -66,7 +66,7 @@ AmdGpuComputeCleanup(_Inout_ AMDGPU_ADAPTER *pAdapter)
                 IoFreeMdl(cs->Allocs[i].Mdl);
             }
             if (cs->Allocs[i].KernelVa) {
-                ExFreePoolWithTag(cs->Allocs[i].KernelVa, AMDGPU_POOL_TAG);
+                MmFreeContiguousMemory(cs->Allocs[i].KernelVa);
             }
             cs->Allocs[i].InUse = FALSE;
         }
@@ -101,7 +101,7 @@ AmdGpuComputeCleanup(_Inout_ AMDGPU_ADAPTER *pAdapter)
             IoFreeMdl(cs->EventPage.Mdl);
         }
         if (cs->EventPage.KernelVa) {
-            ExFreePoolWithTag(cs->EventPage.KernelVa, AMDGPU_POOL_TAG);
+            MmFreeContiguousMemory(cs->EventPage.KernelVa);
         }
         cs->EventPage.Allocated = FALSE;
     }
@@ -118,6 +118,7 @@ EscapeAllocMemory(_In_ AMDGPU_ADAPTER *pAdapter,
                   _Inout_ AMDGPU_ESCAPE_ALLOC_MEMORY_DATA *pData)
 {
     AMDGPU_COMPUTE_STATE *cs = &pAdapter->Compute;
+    PHYSICAL_ADDRESS lowAddr, highAddr, boundary;
     KIRQL oldIrql;
     ULONG i;
     ULONG slotIdx = (ULONG)-1;
@@ -187,19 +188,27 @@ EscapeAllocMemory(_In_ AMDGPU_ADAPTER *pAdapter,
         return STATUS_SUCCESS;
     }
 
-    /*
-     * System/GTT memory: allocate non-paged pool (not contiguous).
-     * This works for any size since it doesn't require physically
-     * contiguous pages.
-     */
-    kernelVa = ExAllocatePool2(POOL_FLAG_NON_PAGED, allocSize, AMDGPU_POOL_TAG);
+    /* Allocate contiguous physical memory */
+    lowAddr.QuadPart = 0;
+    highAddr.QuadPart = 0xFFFFFFFFFFFFFFFFULL;
+    boundary.QuadPart = 0;
+
+    if (pData->Alignment > 0) {
+        boundary.QuadPart = pData->Alignment;
+    }
+
+    kernelVa = MmAllocateContiguousMemorySpecifyCache(
+        allocSize, lowAddr, highAddr, boundary,
+        (pData->Flags & AMDGPU_MEM_FLAG_UNCACHED) ?
+            MmNonCached : MmWriteCombined);
+
     if (!kernelVa) {
         cs->Allocs[slotIdx].InUse = FALSE;
         return STATUS_NO_MEMORY;
     }
 
-    RtlZeroMemory(kernelVa, allocSize);
     physAddr = MmGetPhysicalAddress(kernelVa);
+    RtlZeroMemory(kernelVa, allocSize);
 
     /* Fill allocation record */
     cs->Allocs[slotIdx].Flags = pData->Flags;
@@ -208,17 +217,15 @@ EscapeAllocMemory(_In_ AMDGPU_ADAPTER *pAdapter,
     cs->Allocs[slotIdx].PhysAddr = physAddr;
     cs->Allocs[slotIdx].GpuVa = physAddr.QuadPart; /* Identity map for now */
 
-    /* Map to userspace — always create mapping so caller gets a handle */
-    {
+    /* Map to userspace if host-accessible */
+    if (pData->Flags & AMDGPU_MEM_FLAG_HOST_ACCESS) {
         PMDL mdl = IoAllocateMdl(kernelVa, (ULONG)allocSize,
                                   FALSE, FALSE, NULL);
         if (mdl) {
             MmBuildMdlForNonPagedPool(mdl);
             __try {
                 PVOID userVa = MmMapLockedPagesSpecifyCache(
-                    mdl, UserMode,
-                    (pData->Flags & AMDGPU_MEM_FLAG_UNCACHED) ?
-                        MmNonCached : MmCached,
+                    mdl, UserMode, MmWriteCombined,
                     NULL, FALSE, NormalPagePriority);
                 cs->Allocs[slotIdx].Mdl = mdl;
                 cs->Allocs[slotIdx].CpuVa = userVa;
@@ -286,7 +293,7 @@ EscapeFreeMemory(_In_ AMDGPU_ADAPTER *pAdapter,
     }
 
     if (cs->Allocs[slotIdx].KernelVa) {
-        ExFreePoolWithTag(cs->Allocs[slotIdx].KernelVa, AMDGPU_POOL_TAG);
+        MmFreeContiguousMemory(cs->Allocs[slotIdx].KernelVa);
     }
 
     RtlZeroMemory(&cs->Allocs[slotIdx], sizeof(AMDGPU_GPU_ALLOC));
@@ -471,13 +478,18 @@ static NTSTATUS
 EnsureEventPage(_In_ AMDGPU_ADAPTER *pAdapter)
 {
     AMDGPU_COMPUTE_STATE *cs = &pAdapter->Compute;
+    PHYSICAL_ADDRESS lowAddr, highAddr, boundary;
     SIZE_T pageSize = 4096;
 
     if (cs->EventPage.Allocated)
         return STATUS_SUCCESS;
 
-    cs->EventPage.KernelVa = ExAllocatePool2(
-        POOL_FLAG_NON_PAGED, pageSize, AMDGPU_POOL_TAG);
+    lowAddr.QuadPart = 0;
+    highAddr.QuadPart = 0xFFFFFFFFFFFFFFFFULL;
+    boundary.QuadPart = 0;
+
+    cs->EventPage.KernelVa = MmAllocateContiguousMemorySpecifyCache(
+        pageSize, lowAddr, highAddr, boundary, MmNonCached);
 
     if (!cs->EventPage.KernelVa)
         return STATUS_NO_MEMORY;
@@ -490,7 +502,7 @@ EnsureEventPage(_In_ AMDGPU_ADAPTER *pAdapter)
                                        (ULONG)pageSize,
                                        FALSE, FALSE, NULL);
     if (!cs->EventPage.Mdl) {
-        ExFreePoolWithTag(cs->EventPage.KernelVa, AMDGPU_POOL_TAG);
+        MmFreeContiguousMemory(cs->EventPage.KernelVa);
         cs->EventPage.KernelVa = NULL;
         return STATUS_NO_MEMORY;
     }
@@ -504,7 +516,7 @@ EnsureEventPage(_In_ AMDGPU_ADAPTER *pAdapter)
     }
     __except (EXCEPTION_EXECUTE_HANDLER) {
         IoFreeMdl(cs->EventPage.Mdl);
-        ExFreePoolWithTag(cs->EventPage.KernelVa, AMDGPU_POOL_TAG);
+        MmFreeContiguousMemory(cs->EventPage.KernelVa);
         cs->EventPage.Mdl = NULL;
         cs->EventPage.KernelVa = NULL;
         return STATUS_UNSUCCESSFUL;
