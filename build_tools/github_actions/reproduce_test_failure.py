@@ -64,32 +64,31 @@ def run_reproduction(args: argparse.Namespace) -> int:
     if args.fetch_artifact_args:
         fetch_cmd += f" {args.fetch_artifact_args}"
 
-    total_steps = 7 if args.setup_only else 8
-    step = 0
-
-    def add_step(desc: str, cmd: str) -> list[str]:
-        nonlocal step
-        step += 1
-        return [f"echo '[{step}/{total_steps}] {desc}'", cmd]
-
-    lines = ["set -e"]
-    lines += add_step("Installing uv", "curl -LsSf https://astral.sh/uv/install.sh | bash && source $HOME/.local/bin/env")
-    lines += add_step("Cloning TheRock", "git clone https://github.com/ROCm/TheRock.git && cd TheRock")
-    lines += add_step("Creating virtual environment", "uv venv .venv && source .venv/bin/activate")
-    lines += add_step("Installing dependencies", "uv pip install -r requirements-test.txt")
-    lines += add_step("Downloading artifacts", fetch_cmd)
-    lines += add_step("Setting environment variables", "\n".join([
-        "export THEROCK_BIN_DIR=./therock-build/bin",
-        "export OUTPUT_ARTIFACTS_DIR=./therock-build",
-        f"export SHARD_INDEX={args.shard_index}",
-        f"export TOTAL_SHARDS={args.total_shards}",
-        f"export TEST_TYPE={args.test_type}",
-    ]))
+    steps = [
+        ("Installing uv", "curl -LsSf https://astral.sh/uv/install.sh | bash && source $HOME/.local/bin/env"),
+        ("Cloning TheRock", "git clone https://github.com/ROCm/TheRock.git && cd TheRock"),
+        ("Creating virtual environment", "uv venv .venv && source .venv/bin/activate"),
+        ("Installing dependencies", "uv pip install -r requirements-test.txt"),
+        ("Downloading artifacts", fetch_cmd),
+        ("Setting environment variables", " && ".join([
+            "export THEROCK_BIN_DIR=./therock-build/bin",
+            "export OUTPUT_ARTIFACTS_DIR=./therock-build",
+            f"export SHARD_INDEX={args.shard_index}",
+            f"export TOTAL_SHARDS={args.total_shards}",
+            f"export TEST_TYPE={args.test_type}",
+        ])),
+    ]
 
     if args.setup_only:
-        lines += add_step("Setup complete", f"echo 'Run: {args.test_script}' && exec /bin/bash")
+        steps.append(("Setup complete", f"echo 'Run: {args.test_script}' && exec /bin/bash"))
     else:
-        lines += add_step("Running test", args.test_script)
+        steps.append(("Running test", args.test_script))
+
+    total = len(steps)
+    lines = ["set -e"]
+    for i, (desc, cmd) in enumerate(steps, 1):
+        lines.append(f"echo '[{i}/{total}] {desc}'")
+        lines.append(cmd)
 
     cmd = [
         "docker", "run", "--rm", "-it",
