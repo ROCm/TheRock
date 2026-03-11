@@ -1,0 +1,82 @@
+{
+  "test_type": "full",
+  "tests": {
+    "smoke": [
+      "Plugin_List",
+      "Hello"
+    ],
+    "standard": [
+      "Plugin_List",
+      "Plugin_Info",
+      "Hello",
+      "TB"
+    ],
+    "full": [
+      "Plugin_List",
+      "Plugin_Info",
+      "Hello",
+      "TB",
+      "TB_P2P",
+      "TB_Scaling",
+      "TB_Schmoo",
+      "TB_Sweep",
+      "TB_RSweep",
+      "TB_One2All",
+      "TB_Healthcheck"
+    ]
+  },
+  "test_definitions": {
+    "Plugin_List": {
+      "cmd": "plugin --list"
+    },
+    "Plugin_Info": {
+      "cmd": "plugin -i"
+    },
+    "Hello": {
+      "cmd": "run Hello"
+    },
+    "TB": {
+      "cmd": "run tb"
+    },
+    "TB_P2P": {
+      "cmd": "run tb p2p"
+    },
+    "TB_Scaling": {
+      "cmd": "run tb scaling"
+    },
+    "TB_Schmoo": {
+      "cmd": "run tb schmoo",
+      "requires": {
+        "min_gpus": 2
+      }
+    },
+    "TB_Sweep": {
+      "cmd": "run tb sweep",
+      "env": {
+        "SWEEP_TIME_LIMIT": "10"
+      }
+    },
+    "TB_RSweep": {
+      "cmd": "run tb rsweep",
+      "env": {
+        "SWEEP_TIME_LIMIT": "10"
+      }
+    },
+    "TB_One2All": {
+      "cmd": "run tb one2all",
+      "requires": {
+        "min_gpus": 2
+      },
+      "env": {
+        "NUM_GPU_DEVICES": "2"
+      }
+    },
+    "TB_Healthcheck": {
+      "cmd": "run tb healthcheck",
+      "requires": {
+        "arch_prefix": "gfx94",
+        "gpu_count": 8
+      }
+    }
+  }
+}
