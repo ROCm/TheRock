@@ -43,9 +43,12 @@
   - parser-backed representative routed variants:
     - `V_WMMA_BF16F32_16X16X32_BF16_w32`
     - `V_WMMA_BF16_16X16X32_BF16_w32`
+    - `V_WMMA_F16_16X16X128_BF8_BF8_w32`
     - `V_WMMA_F16_16X16X128_FP8_BF8_w32`
+    - `V_WMMA_F16_16X16X64_FP8_FP8_w32`
     - `V_WMMA_F16_16X16X64_BF8_FP8_w32`
     - `V_WMMA_F32_16X16X128_BF8_BF8_w32`
+    - `V_WMMA_F32_16X16X128_BF8_FP8_w32`
     - `V_WMMA_F32_16X16X64_FP8_BF8_w32`
     - `V_WMMA_F32_16X16X128_F8F6F4`
     - `V_WMMA_F32_16X16X32_F16_w32`
@@ -53,10 +56,12 @@
     - `V_WMMA_I32_16X16X64_IU8_w32`
     - `V_SWMMAC_BF16F32_16X16X64_BF16_w32`
     - `V_SWMMAC_BF16_16X16X64_BF16_w32`
+    - `V_SWMMAC_F16_16X16X128_BF8_BF8_w32`
     - `V_SWMMAC_F16_16X16X128_BF8_FP8_w32`
     - `V_SWMMAC_F16_16X16X128_FP8_BF8_w32`
     - `V_SWMMAC_F32_16X16X128_BF8_BF8_w32`
     - `V_SWMMAC_F32_16X16X128_BF8_FP8_w32`
+    - `V_SWMMAC_F32_16X16X128_FP8_BF8_w32`
     - `V_SWMMAC_F32_16X16X64_BF16_w32`
     - `V_SWMMAC_F32_16X16X64_F16_w32`
     - `V_SWMMAC_I32_16X16X128_IU8_w32`
@@ -104,9 +109,12 @@
   - representative seeds:
     - `V_WMMA_BF16F32_16X16X32_BF16_w32`
     - `V_WMMA_BF16_16X16X32_BF16_w32`
+    - `V_WMMA_F16_16X16X128_BF8_BF8_w32`
     - `V_WMMA_F16_16X16X128_FP8_BF8_w32`
+    - `V_WMMA_F16_16X16X64_FP8_FP8_w32`
     - `V_WMMA_F16_16X16X64_BF8_FP8_w32`
     - `V_WMMA_F32_16X16X128_BF8_BF8_w32`
+    - `V_WMMA_F32_16X16X128_BF8_FP8_w32`
     - `V_WMMA_F32_16X16X64_FP8_BF8_w32`
     - `V_WMMA_F32_16X16X128_F8F6F4`
     - `V_WMMA_F32_16X16X32_F16_w32`
@@ -144,10 +152,12 @@
   - representative seeds:
     - `V_SWMMAC_BF16F32_16X16X64_BF16_w32`
     - `V_SWMMAC_BF16_16X16X64_BF16_w32`
+    - `V_SWMMAC_F16_16X16X128_BF8_BF8_w32`
     - `V_SWMMAC_F16_16X16X128_BF8_FP8_w32`
     - `V_SWMMAC_F16_16X16X128_FP8_BF8_w32`
     - `V_SWMMAC_F32_16X16X128_BF8_BF8_w32`
     - `V_SWMMAC_F32_16X16X128_BF8_FP8_w32`
+    - `V_SWMMAC_F32_16X16X128_FP8_BF8_w32`
     - `V_SWMMAC_F32_16X16X64_BF16_w32`
     - `V_SWMMAC_F32_16X16X64_F16_w32`
     - `V_SWMMAC_I32_16X16X128_IU8_w32`
@@ -274,7 +284,7 @@
   - tensor descriptor / coordinate read descriptors on both load and store routes
   - FP8/BF8 conversion source and destination descriptors
   - WMMA scale-source read descriptors
-  - paired scale-load scalar scale / paired-scale read descriptors
+  - explicit paired scale-load scalar scale / paired-scale read descriptors for both `B32` and `B64` routes
   - paired scale-load `B64` destination descriptors
   - `V_DIV_SCALE_F64` scalar-destination write descriptors
   - `V_DIV_SCALE_F64` scale-source read descriptors
@@ -298,9 +308,12 @@
   - parser-backed generic routed variants:
     - `V_WMMA_BF16F32_16X16X32_BF16_w32`: source matrix `16x16x32`, `16-bit`; destination/accumulator `32-bit`
     - `V_WMMA_BF16_16X16X32_BF16_w32`: source matrix `16x16x32`, `16-bit`; destination/accumulator `16-bit`
+    - `V_WMMA_F16_16X16X128_BF8_BF8_w32`: source matrix `16x16x128`, `8-bit`; destination/accumulator `16-bit`
     - `V_WMMA_F16_16X16X128_FP8_BF8_w32`: source matrix `16x16x128`, `8-bit`; destination/accumulator `16-bit`
+    - `V_WMMA_F16_16X16X64_FP8_FP8_w32`: source matrix `16x16x64`, `8-bit`; destination/accumulator `16-bit`
     - `V_WMMA_F16_16X16X64_BF8_FP8_w32`: source matrix `16x16x64`, `8-bit`; destination/accumulator `16-bit`
     - `V_WMMA_F32_16X16X128_BF8_BF8_w32`: source matrix `16x16x128`, `8-bit`; destination/accumulator `32-bit`
+    - `V_WMMA_F32_16X16X128_BF8_FP8_w32`: source matrix `16x16x128`, `8-bit`; destination/accumulator `32-bit`
     - `V_WMMA_F32_16X16X64_FP8_BF8_w32`: source matrix `16x16x64`, `8-bit`; destination/accumulator `32-bit`
     - `V_WMMA_F32_16X16X128_F8F6F4`: source matrix `16x16x128`, `8-bit`; destination/accumulator `32-bit`
     - `V_WMMA_F32_16X16X32_F16_w32`: source matrix `16x16x32`, `16-bit`; destination/accumulator `32-bit`
@@ -308,10 +321,12 @@
     - `V_WMMA_I32_16X16X64_IU8_w32`: source matrix `16x16x64`, `8-bit`; destination/accumulator `32-bit`
     - `V_SWMMAC_BF16F32_16X16X64_BF16_w32`: source matrix `16x16x64`, `16-bit`; destination/accumulator `32-bit`
     - `V_SWMMAC_BF16_16X16X64_BF16_w32`: source matrix `16x16x64`, `16-bit`; destination/accumulator `16-bit`
+    - `V_SWMMAC_F16_16X16X128_BF8_BF8_w32`: source matrix `16x16x128`, `8-bit`; destination/accumulator `16-bit`
     - `V_SWMMAC_F16_16X16X128_BF8_FP8_w32`: source matrix `16x16x128`, `8-bit`; destination/accumulator `16-bit`
     - `V_SWMMAC_F16_16X16X128_FP8_BF8_w32`: source matrix `16x16x128`, `8-bit`; destination/accumulator `16-bit`
     - `V_SWMMAC_F32_16X16X128_BF8_BF8_w32`: source matrix `16x16x128`, `8-bit`; destination/accumulator `32-bit`
     - `V_SWMMAC_F32_16X16X128_BF8_FP8_w32`: source matrix `16x16x128`, `8-bit`; destination/accumulator `32-bit`
+    - `V_SWMMAC_F32_16X16X128_FP8_BF8_w32`: source matrix `16x16x128`, `8-bit`; destination/accumulator `32-bit`
     - `V_SWMMAC_F32_16X16X64_BF16_w32`: source matrix `16x16x64`, `16-bit`; destination/accumulator `32-bit`
     - `V_SWMMAC_F32_16X16X64_F16_w32`: source matrix `16x16x64`, `16-bit`; destination/accumulator `32-bit`
     - `V_SWMMAC_I32_16X16X128_IU8_w32`: source matrix `16x16x128`, `8-bit`; destination/accumulator `32-bit`
