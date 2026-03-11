@@ -87,7 +87,7 @@ int main() {
               "expected phase-0 compute seed list") ||
       !Expect(decoder.Phase0ComputeSelectorRules().size() == 12u,
               "expected phase-0 selector rule list") ||
-      !Expect(decoder.Phase0ExecutableOpcodes().size() == 74u,
+      !Expect(decoder.Phase0ExecutableOpcodes().size() == 90u,
               "expected phase-0 executable opcode slice") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_ADD_U32"),
               "expected S_ADD_U32 executable decode support") ||
@@ -113,6 +113,10 @@ int main() {
               "expected V_CMP_EQ_U32 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("V_CMPX_EQ_U32"),
               "expected V_CMPX_EQ_U32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_CMP_EQ_F32"),
+              "expected V_CMP_EQ_F32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_CMPX_CLASS_F32"),
+              "expected V_CMPX_CLASS_F32 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("V_CMP_GE_I32"),
               "expected V_CMP_GE_I32 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("V_CMPX_GE_I32"),
@@ -166,7 +170,7 @@ int main() {
   }
 
   Gfx1201Interpreter interpreter;
-  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 74u,
+  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 90u,
               "expected executable seed opcode list") ||
       !Expect(interpreter.Supports("S_ENDPGM"),
               "expected interpreter support for S_ENDPGM") ||
@@ -216,6 +220,10 @@ int main() {
               "expected interpreter support for V_CMP_EQ_U32") ||
       !Expect(interpreter.Supports("V_CMPX_EQ_U32"),
               "expected interpreter support for V_CMPX_EQ_U32") ||
+      !Expect(interpreter.Supports("V_CMP_EQ_F32"),
+              "expected interpreter support for V_CMP_EQ_F32") ||
+      !Expect(interpreter.Supports("V_CMPX_CLASS_F32"),
+              "expected interpreter support for V_CMPX_CLASS_F32") ||
       !Expect(interpreter.Supports("V_CMP_GE_I32"),
               "expected interpreter support for V_CMP_GE_I32") ||
       !Expect(interpreter.Supports("V_CMPX_GE_I32"),

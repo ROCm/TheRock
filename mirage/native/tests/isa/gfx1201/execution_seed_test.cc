@@ -14,6 +14,7 @@
 namespace {
 
 constexpr std::uint16_t kImplicitVccPairSgprIndex = 248;
+constexpr std::uint32_t kQuietNaNF32Bits = 0x7fc00000u;
 
 bool Expect(bool condition, const char* message) {
   if (!condition) {
@@ -442,6 +443,26 @@ bool ExpectSignedVectorCmpxState(
          state.sgprs[99] == 321u && state.exec_mask == 0u &&
          state.vcc_mask == 0u && state.halted &&
          !state.waiting_on_barrier && state.pc == 20u;
+}
+
+bool ExpectFloatVectorCompareState(
+    const mirage::sim::isa::WaveExecutionState& state) {
+  return state.sgprs[100] == 222u && state.sgprs[101] == 333u &&
+         state.sgprs[110] == FloatBits(1.5f) &&
+         state.sgprs[111] == FloatBits(2.5f) &&
+         state.sgprs[112] == kQuietNaNF32Bits && state.vcc_mask == 9u &&
+         state.halted && !state.waiting_on_barrier && state.pc == 19u;
+}
+
+bool ExpectFloatVectorCmpxState(
+    const mirage::sim::isa::WaveExecutionState& state) {
+  return state.sgprs[102] == 111u && state.sgprs[103] == 444u &&
+         state.sgprs[104] == 666u &&
+         state.sgprs[113] == FloatBits(1.5f) &&
+         state.sgprs[114] == FloatBits(2.5f) &&
+         state.sgprs[115] == kQuietNaNF32Bits && state.exec_mask == 0u &&
+         state.vcc_mask == 0u && state.halted &&
+         !state.waiting_on_barrier && state.pc == 23u;
 }
 
 }  // namespace
@@ -1037,6 +1058,68 @@ int main() {
                   OperandSlotKind::kSource0, OperandValueClass::kUnknown,
                   OperandAccess::kRead, FragmentKind::kScalar, 32u, 1u, false),
               "expected V_CMPX_NE_I32 literal source descriptor")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_cmp_eq_f32_words{
+      MakeVopc(18u, 110u, 70u)};
+  if (!Expect(decoder.DecodeInstruction(v_cmp_eq_f32_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_CMP_EQ_F32 decode success") ||
+      !Expect(ExpectBinaryInstruction(instruction, "V_CMP_EQ_F32",
+                                      OperandKind::kSgpr,
+                                      kImplicitVccPairSgprIndex,
+                                      OperandKind::kSgpr, 110u,
+                                      OperandKind::kVgpr, 70u),
+              "expected decoded V_CMP_EQ_F32 operands") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[0], OperandRole::kDestination,
+                  OperandSlotKind::kScalarDestination,
+                  OperandValueClass::kScalarRegister, OperandAccess::kWrite,
+                  FragmentKind::kScalar, 64u, 2u, true),
+              "expected implicit VCC destination descriptor for V_CMP_EQ_F32")
+      ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[1], OperandRole::kSource0,
+                  OperandSlotKind::kSource0,
+                  OperandValueClass::kScalarRegister, OperandAccess::kRead,
+                  FragmentKind::kScalar, 32u, 1u, false),
+              "expected V_CMP_EQ_F32 source0 descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[2], OperandRole::kSource1,
+                  OperandSlotKind::kSource1,
+                  OperandValueClass::kVectorRegister, OperandAccess::kRead,
+                  FragmentKind::kVector, 32u, 1u, false),
+              "expected V_CMP_EQ_F32 source1 descriptor")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 2> v_cmpx_class_f32_literal_words{
+      MakeVopc(254u, 255u, 71u), kQuietNaNF32Bits};
+  if (!Expect(decoder.DecodeInstruction(v_cmpx_class_f32_literal_words,
+                                        &instruction, &words_consumed,
+                                        &error_message),
+              "expected V_CMPX_CLASS_F32 literal decode success") ||
+      !Expect(words_consumed == 2u,
+              "expected literal V_CMPX_CLASS_F32 decode to consume 2 dwords")
+      ||
+      !Expect(ExpectBinaryInstruction(instruction, "V_CMPX_CLASS_F32",
+                                      OperandKind::kSgpr,
+                                      kImplicitVccPairSgprIndex,
+                                      OperandKind::kImm32, kQuietNaNF32Bits,
+                                      OperandKind::kVgpr, 71u),
+              "expected decoded V_CMPX_CLASS_F32 operands") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[1], OperandRole::kSource0,
+                  OperandSlotKind::kSource0, OperandValueClass::kUnknown,
+                  OperandAccess::kRead, FragmentKind::kScalar, 32u, 1u, false),
+              "expected V_CMPX_CLASS_F32 literal source descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[2], OperandRole::kSource1,
+                  OperandSlotKind::kSource1,
+                  OperandValueClass::kVectorRegister, OperandAccess::kRead,
+                  FragmentKind::kVector, 32u, 1u, false),
+              "expected V_CMPX_CLASS_F32 source1 descriptor")) {
     return 1;
   }
 
@@ -2376,6 +2459,271 @@ int main() {
       !Expect(ExpectSignedVectorCmpxState(
                   compiled_signed_vector_cmpx_state),
               "expected compiled signed vector CMPX state")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 23> float_vector_compare_words{
+      MakeSop1(0u, 110u, 255u),
+      FloatBits(1.5f),
+      MakeSop1(0u, 111u, 255u),
+      FloatBits(2.5f),
+      MakeSop1(0u, 112u, 255u),
+      kQuietNaNF32Bits,
+      MakeVopc(18u, 110u, 70u),
+      MakeSopp(36u, 2u),
+      MakeSopk(0u, 100u, 111u),
+      MakeSopp(32u, 1u),
+      MakeSopk(0u, 100u, 222u),
+      MakeVopc(17u, 110u, 71u),
+      MakeSopp(35u, 2u),
+      MakeSopk(0u, 101u, 333u),
+      MakeSopp(32u, 1u),
+      MakeSopk(0u, 101u, 444u),
+      MakeVopc(19u, 110u, 71u),
+      MakeVopc(20u, 111u, 74u),
+      MakeVopc(22u, 111u, 74u),
+      MakeVopc(21u, 110u, 75u),
+      MakeVopc(29u, 110u, 75u),
+      MakeVopc(126u, 112u, 76u),
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> float_vector_compare_program;
+  if (!Expect(decoder.DecodeProgram(float_vector_compare_words,
+                                    &float_vector_compare_program,
+                                    &error_message),
+              "expected float vector compare program decode success") ||
+      !Expect(float_vector_compare_program.size() == 20u,
+              "expected twenty decoded float vector compare instructions") ||
+      !Expect(float_vector_compare_program[3].opcode == "V_CMP_EQ_F32",
+              "expected decoded V_CMP_EQ_F32") ||
+      !Expect(float_vector_compare_program[8].opcode == "V_CMP_LT_F32",
+              "expected decoded V_CMP_LT_F32") ||
+      !Expect(float_vector_compare_program[13].opcode == "V_CMP_LE_F32",
+              "expected decoded V_CMP_LE_F32") ||
+      !Expect(float_vector_compare_program[14].opcode == "V_CMP_GT_F32",
+              "expected decoded V_CMP_GT_F32") ||
+      !Expect(float_vector_compare_program[15].opcode == "V_CMP_GE_F32",
+              "expected decoded V_CMP_GE_F32") ||
+      !Expect(float_vector_compare_program[16].opcode == "V_CMP_LG_F32",
+              "expected decoded V_CMP_LG_F32") ||
+      !Expect(float_vector_compare_program[17].opcode == "V_CMP_NEQ_F32",
+              "expected decoded V_CMP_NEQ_F32") ||
+      !Expect(float_vector_compare_program[18].opcode == "V_CMP_CLASS_F32",
+              "expected decoded V_CMP_CLASS_F32")) {
+    return 1;
+  }
+
+  WaveExecutionState decoded_float_vector_compare_state;
+  decoded_float_vector_compare_state.exec_mask = 0xbu;
+  decoded_float_vector_compare_state.vgprs[70][0] = FloatBits(1.5f);
+  decoded_float_vector_compare_state.vgprs[70][1] = FloatBits(2.0f);
+  decoded_float_vector_compare_state.vgprs[70][3] = FloatBits(1.5f);
+  decoded_float_vector_compare_state.vgprs[71][0] = FloatBits(2.0f);
+  decoded_float_vector_compare_state.vgprs[71][1] = FloatBits(1.5f);
+  decoded_float_vector_compare_state.vgprs[71][3] = kQuietNaNF32Bits;
+  decoded_float_vector_compare_state.vgprs[74][0] = FloatBits(1.0f);
+  decoded_float_vector_compare_state.vgprs[74][1] = FloatBits(2.5f);
+  decoded_float_vector_compare_state.vgprs[74][3] = FloatBits(1.0f);
+  decoded_float_vector_compare_state.vgprs[75][0] = FloatBits(2.0f);
+  decoded_float_vector_compare_state.vgprs[75][1] = FloatBits(1.5f);
+  decoded_float_vector_compare_state.vgprs[75][3] = kQuietNaNF32Bits;
+  decoded_float_vector_compare_state.vgprs[76][0] = 0x002u;
+  decoded_float_vector_compare_state.vgprs[76][1] = 0x001u;
+  decoded_float_vector_compare_state.vgprs[76][3] = 0x003u;
+  if (!Expect(interpreter.ExecuteProgram(float_vector_compare_program,
+                                         &decoded_float_vector_compare_state,
+                                         &error_message),
+              "expected decoded float vector compare execution success") ||
+      !Expect(ExpectFloatVectorCompareState(decoded_float_vector_compare_state),
+              "expected decoded float vector compare state")) {
+    return 1;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_float_vector_compare_program;
+  if (!Expect(interpreter.CompileProgram(float_vector_compare_program,
+                                         &compiled_float_vector_compare_program,
+                                         &error_message),
+              "expected compiled float vector compare program success") ||
+      !Expect(compiled_float_vector_compare_program[3].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpEqF32,
+              "expected compiled V_CMP_EQ_F32 opcode") ||
+      !Expect(compiled_float_vector_compare_program[8].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpLtF32,
+              "expected compiled V_CMP_LT_F32 opcode") ||
+      !Expect(compiled_float_vector_compare_program[13].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpLeF32,
+              "expected compiled V_CMP_LE_F32 opcode") ||
+      !Expect(compiled_float_vector_compare_program[14].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpGtF32,
+              "expected compiled V_CMP_GT_F32 opcode") ||
+      !Expect(compiled_float_vector_compare_program[15].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpGeF32,
+              "expected compiled V_CMP_GE_F32 opcode") ||
+      !Expect(compiled_float_vector_compare_program[16].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpLgF32,
+              "expected compiled V_CMP_LG_F32 opcode") ||
+      !Expect(compiled_float_vector_compare_program[17].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpNeqF32,
+              "expected compiled V_CMP_NEQ_F32 opcode") ||
+      !Expect(compiled_float_vector_compare_program[18].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpClassF32,
+              "expected compiled V_CMP_CLASS_F32 opcode")) {
+    return 1;
+  }
+
+  WaveExecutionState compiled_float_vector_compare_state;
+  compiled_float_vector_compare_state.exec_mask = 0xbu;
+  compiled_float_vector_compare_state.vgprs[70][0] = FloatBits(1.5f);
+  compiled_float_vector_compare_state.vgprs[70][1] = FloatBits(2.0f);
+  compiled_float_vector_compare_state.vgprs[70][3] = FloatBits(1.5f);
+  compiled_float_vector_compare_state.vgprs[71][0] = FloatBits(2.0f);
+  compiled_float_vector_compare_state.vgprs[71][1] = FloatBits(1.5f);
+  compiled_float_vector_compare_state.vgprs[71][3] = kQuietNaNF32Bits;
+  compiled_float_vector_compare_state.vgprs[74][0] = FloatBits(1.0f);
+  compiled_float_vector_compare_state.vgprs[74][1] = FloatBits(2.5f);
+  compiled_float_vector_compare_state.vgprs[74][3] = FloatBits(1.0f);
+  compiled_float_vector_compare_state.vgprs[75][0] = FloatBits(2.0f);
+  compiled_float_vector_compare_state.vgprs[75][1] = FloatBits(1.5f);
+  compiled_float_vector_compare_state.vgprs[75][3] = kQuietNaNF32Bits;
+  compiled_float_vector_compare_state.vgprs[76][0] = 0x002u;
+  compiled_float_vector_compare_state.vgprs[76][1] = 0x001u;
+  compiled_float_vector_compare_state.vgprs[76][3] = 0x003u;
+  if (!Expect(interpreter.ExecuteProgram(compiled_float_vector_compare_program,
+                                         &compiled_float_vector_compare_state,
+                                         &error_message),
+              "expected compiled float vector compare execution success") ||
+      !Expect(ExpectFloatVectorCompareState(
+                  compiled_float_vector_compare_state),
+              "expected compiled float vector compare state")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 27> float_vector_cmpx_words{
+      MakeSop1(0u, 113u, 255u),
+      FloatBits(1.5f),
+      MakeSop1(0u, 114u, 255u),
+      FloatBits(2.5f),
+      MakeSop1(0u, 115u, 255u),
+      kQuietNaNF32Bits,
+      MakeVopc(146u, 113u, 80u),
+      MakeSopp(37u, 2u),
+      MakeSopk(0u, 102u, 111u),
+      MakeSopp(32u, 1u),
+      MakeSopk(0u, 102u, 222u),
+      MakeVopc(145u, 113u, 81u),
+      MakeSopp(38u, 2u),
+      MakeSopk(0u, 103u, 333u),
+      MakeSopp(32u, 1u),
+      MakeSopk(0u, 103u, 444u),
+      MakeVopc(147u, 113u, 81u),
+      MakeVopc(148u, 114u, 84u),
+      MakeVopc(150u, 114u, 84u),
+      MakeVopc(149u, 113u, 85u),
+      MakeVopc(157u, 113u, 86u),
+      MakeVopc(254u, 115u, 87u),
+      MakeSopp(37u, 2u),
+      MakeSopk(0u, 104u, 555u),
+      MakeSopp(32u, 1u),
+      MakeSopk(0u, 104u, 666u),
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> float_vector_cmpx_program;
+  if (!Expect(decoder.DecodeProgram(float_vector_cmpx_words,
+                                    &float_vector_cmpx_program,
+                                    &error_message),
+              "expected float vector CMPX program decode success") ||
+      !Expect(float_vector_cmpx_program.size() == 24u,
+              "expected twenty-four decoded float vector CMPX instructions") ||
+      !Expect(float_vector_cmpx_program[3].opcode == "V_CMPX_EQ_F32",
+              "expected decoded V_CMPX_EQ_F32") ||
+      !Expect(float_vector_cmpx_program[8].opcode == "V_CMPX_LT_F32",
+              "expected decoded V_CMPX_LT_F32") ||
+      !Expect(float_vector_cmpx_program[13].opcode == "V_CMPX_LE_F32",
+              "expected decoded V_CMPX_LE_F32") ||
+      !Expect(float_vector_cmpx_program[14].opcode == "V_CMPX_GT_F32",
+              "expected decoded V_CMPX_GT_F32") ||
+      !Expect(float_vector_cmpx_program[15].opcode == "V_CMPX_GE_F32",
+              "expected decoded V_CMPX_GE_F32") ||
+      !Expect(float_vector_cmpx_program[16].opcode == "V_CMPX_LG_F32",
+              "expected decoded V_CMPX_LG_F32") ||
+      !Expect(float_vector_cmpx_program[17].opcode == "V_CMPX_NEQ_F32",
+              "expected decoded V_CMPX_NEQ_F32") ||
+      !Expect(float_vector_cmpx_program[18].opcode == "V_CMPX_CLASS_F32",
+              "expected decoded V_CMPX_CLASS_F32")) {
+    return 1;
+  }
+
+  WaveExecutionState decoded_float_vector_cmpx_state;
+  decoded_float_vector_cmpx_state.exec_mask = 0xbu;
+  decoded_float_vector_cmpx_state.vgprs[80][0] = FloatBits(1.5f);
+  decoded_float_vector_cmpx_state.vgprs[80][1] = FloatBits(2.0f);
+  decoded_float_vector_cmpx_state.vgprs[80][3] = FloatBits(1.5f);
+  decoded_float_vector_cmpx_state.vgprs[81][0] = FloatBits(2.0f);
+  decoded_float_vector_cmpx_state.vgprs[81][1] = FloatBits(1.5f);
+  decoded_float_vector_cmpx_state.vgprs[81][3] = kQuietNaNF32Bits;
+  decoded_float_vector_cmpx_state.vgprs[84][0] = FloatBits(1.0f);
+  decoded_float_vector_cmpx_state.vgprs[85][0] = FloatBits(2.0f);
+  decoded_float_vector_cmpx_state.vgprs[86][0] = kQuietNaNF32Bits;
+  decoded_float_vector_cmpx_state.vgprs[87][0] = 0x001u;
+  if (!Expect(interpreter.ExecuteProgram(float_vector_cmpx_program,
+                                         &decoded_float_vector_cmpx_state,
+                                         &error_message),
+              "expected decoded float vector CMPX execution success") ||
+      !Expect(ExpectFloatVectorCmpxState(decoded_float_vector_cmpx_state),
+              "expected decoded float vector CMPX state")) {
+    return 1;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_float_vector_cmpx_program;
+  if (!Expect(interpreter.CompileProgram(float_vector_cmpx_program,
+                                         &compiled_float_vector_cmpx_program,
+                                         &error_message),
+              "expected compiled float vector CMPX program success") ||
+      !Expect(compiled_float_vector_cmpx_program[3].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpxEqF32,
+              "expected compiled V_CMPX_EQ_F32 opcode") ||
+      !Expect(compiled_float_vector_cmpx_program[8].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpxLtF32,
+              "expected compiled V_CMPX_LT_F32 opcode") ||
+      !Expect(compiled_float_vector_cmpx_program[13].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpxLeF32,
+              "expected compiled V_CMPX_LE_F32 opcode") ||
+      !Expect(compiled_float_vector_cmpx_program[14].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpxGtF32,
+              "expected compiled V_CMPX_GT_F32 opcode") ||
+      !Expect(compiled_float_vector_cmpx_program[15].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpxGeF32,
+              "expected compiled V_CMPX_GE_F32 opcode") ||
+      !Expect(compiled_float_vector_cmpx_program[16].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpxLgF32,
+              "expected compiled V_CMPX_LG_F32 opcode") ||
+      !Expect(compiled_float_vector_cmpx_program[17].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpxNeqF32,
+              "expected compiled V_CMPX_NEQ_F32 opcode") ||
+      !Expect(compiled_float_vector_cmpx_program[18].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpxClassF32,
+              "expected compiled V_CMPX_CLASS_F32 opcode")) {
+    return 1;
+  }
+
+  WaveExecutionState compiled_float_vector_cmpx_state;
+  compiled_float_vector_cmpx_state.exec_mask = 0xbu;
+  compiled_float_vector_cmpx_state.vgprs[80][0] = FloatBits(1.5f);
+  compiled_float_vector_cmpx_state.vgprs[80][1] = FloatBits(2.0f);
+  compiled_float_vector_cmpx_state.vgprs[80][3] = FloatBits(1.5f);
+  compiled_float_vector_cmpx_state.vgprs[81][0] = FloatBits(2.0f);
+  compiled_float_vector_cmpx_state.vgprs[81][1] = FloatBits(1.5f);
+  compiled_float_vector_cmpx_state.vgprs[81][3] = kQuietNaNF32Bits;
+  compiled_float_vector_cmpx_state.vgprs[84][0] = FloatBits(1.0f);
+  compiled_float_vector_cmpx_state.vgprs[85][0] = FloatBits(2.0f);
+  compiled_float_vector_cmpx_state.vgprs[86][0] = kQuietNaNF32Bits;
+  compiled_float_vector_cmpx_state.vgprs[87][0] = 0x001u;
+  if (!Expect(interpreter.ExecuteProgram(compiled_float_vector_cmpx_program,
+                                         &compiled_float_vector_cmpx_state,
+                                         &error_message),
+              "expected compiled float vector CMPX execution success") ||
+      !Expect(ExpectFloatVectorCmpxState(compiled_float_vector_cmpx_state),
+              "expected compiled float vector CMPX state")) {
     return 1;
   }
 

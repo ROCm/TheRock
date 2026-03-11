@@ -2,7 +2,7 @@
 
 This report captures the current executable `gfx1201` seed slice layered on top of the
 existing phase-0 compute selector and seed catalog. The local seed surface now covers
-74 executable phase-0 ops without leaving architecture-local `gfx1201` files.
+90 executable phase-0 ops without leaving architecture-local `gfx1201` files.
 
 ## Executable opcodes
 
@@ -57,6 +57,22 @@ existing phase-0 compute selector and seed catalog. The local seed surface now c
 - `V_CMPX_LE_U32`
 - `V_CMPX_GT_U32`
 - `V_CMPX_GE_U32`
+- `V_CMP_CLASS_F32`
+- `V_CMP_EQ_F32`
+- `V_CMP_GE_F32`
+- `V_CMP_GT_F32`
+- `V_CMP_LE_F32`
+- `V_CMP_LG_F32`
+- `V_CMP_LT_F32`
+- `V_CMP_NEQ_F32`
+- `V_CMPX_CLASS_F32`
+- `V_CMPX_EQ_F32`
+- `V_CMPX_GE_F32`
+- `V_CMPX_GT_F32`
+- `V_CMPX_LE_F32`
+- `V_CMPX_LG_F32`
+- `V_CMPX_LT_F32`
+- `V_CMPX_NEQ_F32`
 - `V_NOT_B32`
 - `V_BFREV_B32`
 - `V_CVT_F32_UBYTE0`
@@ -90,7 +106,7 @@ existing phase-0 compute selector and seed catalog. The local seed surface now c
 - `ENC_SOPK`: `S_MOVK_I32`
 - `ENC_VOP1`: `V_MOV_B32`, `V_NOT_B32`, `V_BFREV_B32`, `V_CVT_F32_UBYTE0`, `V_CVT_F32_UBYTE1`, `V_CVT_F32_UBYTE2`, `V_CVT_F32_UBYTE3`, `V_CVT_F32_I32`, `V_CVT_F32_U32`, `V_CVT_U32_F32`, `V_CVT_I32_F32`
 - `ENC_VOP2`: imported `V_ADD_NC_U32`, `V_SUB_NC_U32`, `V_SUBREV_NC_U32` normalized to `V_ADD_U32`, `V_SUB_U32`, `V_SUBREV_U32`; plus `V_MIN_I32`, `V_MAX_I32`, `V_MIN_U32`, `V_MAX_U32`, `V_LSHRREV_B32`, `V_ASHRREV_I32`, `V_LSHLREV_B32`, `V_AND_B32`, `V_OR_B32`, `V_XOR_B32`
-- `ENC_VOPC`: `V_CMP_EQ/NE/LT/LE/GT/GE_I32`, `V_CMP_EQ/NE/LT/LE/GT/GE_U32`, `V_CMPX_EQ/NE/LT/LE/GT/GE_I32`, and `V_CMPX_EQ/NE/LT/LE/GT/GE_U32`, each decoded with an implicit `VCC` destination
+- `ENC_VOPC`: `V_CMP_EQ/NE/LT/LE/GT/GE_I32`, `V_CMP_EQ/NE/LT/LE/GT/GE_U32`, `V_CMPX_EQ/NE/LT/LE/GT/GE_I32`, `V_CMPX_EQ/NE/LT/LE/GT/GE_U32`, plus the first local F32 compare/class subset: `V_CMP_CLASS_F32`, `V_CMP_EQ/GE/GT/LE/LG/LT/NEQ_F32`, `V_CMPX_CLASS_F32`, and `V_CMPX_EQ/GE/GT/LE/LG/LT/NEQ_F32`
 
 ## Seed behavior
 
@@ -105,6 +121,7 @@ existing phase-0 compute selector and seed catalog. The local seed surface now c
 - `V_CVT_F32_I32`, `V_CVT_F32_U32`, `V_CVT_U32_F32`, and `V_CVT_I32_F32` continue to decode from `ENC_VOP1`.
 - `V_ADD_U32`, `V_SUB_U32`, `V_SUBREV_U32`, `V_MIN/MAX_I32`, `V_MIN/MAX_U32`, `V_LSHRREV_B32`, `V_ASHRREV_I32`, `V_LSHLREV_B32`, `V_AND_B32`, `V_OR_B32`, and `V_XOR_B32` now decode from `ENC_VOP2` with the existing phase-0 selector path.
 - `V_CMP_EQ/NE/LT/LE/GT/GE_I32`, `V_CMP_EQ/NE/LT/LE/GT/GE_U32`, `V_CMPX_EQ/NE/LT/LE/GT/GE_I32`, and `V_CMPX_EQ/NE/LT/LE/GT/GE_U32` now decode from `ENC_VOPC` with SGPR/VGPR/inline/literal source handling on the existing selector path.
+- The first local F32 compare/class subset now decodes from `ENC_VOPC` on the same shared-descriptor path: `V_CMP_CLASS_F32`, `V_CMP_EQ/GE/GT/LE/LG/LT/NEQ_F32`, `V_CMPX_CLASS_F32`, and `V_CMPX_EQ/GE/GT/LE/LG/LT/NEQ_F32`.
 - `S_MOVK_I32` sign-extends the imported `SIMM16` operand into the decoded `Imm32` form.
 - Interpreter now compiles and executes the seed slice locally.
 - Scalar compare updates `SCC` across the full local 32-bit signed/unsigned compare set.
@@ -113,6 +130,7 @@ existing phase-0 compute selector and seed catalog. The local seed surface now c
 - `V_MOV_B32` execution respects `exec_mask`.
 - `V_CMP_EQ/NE/LT/LE/GT/GE_I32` and `V_CMP_EQ/NE/LT/LE/GT/GE_U32` execute lane-wise under `exec_mask` while preserving inactive-lane `vcc_mask` bits.
 - `V_CMPX_EQ/NE/LT/LE/GT/GE_I32` and `V_CMPX_EQ/NE/LT/LE/GT/GE_U32` execute lane-wise under `exec_mask` and materialize the resulting active-lane compare mask into both `vcc_mask` and `exec_mask`.
+- `V_CMP_CLASS_F32`, `V_CMP_EQ/GE/GT/LE/LG/LT/NEQ_F32`, and `V_CMPX_CLASS_F32`, `V_CMPX_EQ/GE/GT/LE/LG/LT/NEQ_F32` now execute lane-wise under the same `VOPC` compare path, including ordered vs unordered F32 behavior and `QNaN` class-mask checks.
 - `V_NOT_B32`, `V_BFREV_B32`, and `V_CVT_F32_UBYTE0/1/2/3` execute lane-wise under `exec_mask`.
 - `V_CVT_F32_I32`, `V_CVT_F32_U32`, `V_CVT_U32_F32`, and `V_CVT_I32_F32` execute lane-wise under `exec_mask` with gfx950-consistent truncation for the float-to-int subset.
 - `V_ADD_U32`, `V_SUB_U32`, `V_SUBREV_U32`, `V_MIN/MAX_I32`, `V_MIN/MAX_U32`, `V_LSHRREV_B32`, `V_ASHRREV_I32`, `V_LSHLREV_B32`, `V_AND_B32`, `V_OR_B32`, and `V_XOR_B32` execute lane-wise under `exec_mask`.
@@ -122,5 +140,5 @@ existing phase-0 compute selector and seed catalog. The local seed surface now c
 - Route-matched but non-executable phase-0 compute instructions continue to fail with
   the existing selector-aware stub errors.
 - `ENC_SMEM`, `ENC_VOP3`, `ENC_VDS`, and `ENC_VGLOBAL` remain route-only in this slice.
-- The remaining `ENC_VOPC` surface outside this seed is still scaffolded: floating-point, 64-bit, and 16-bit compare families.
-- The next coherent extension point is the remaining `ENC_VOPC` floating-point/wider compare work or `ENC_VOP3`/half-conversion work rather than more `SOPC`/`SOPP`/`VOP1`/`VOP2` integer seed growth.
+- The remaining `ENC_VOPC` surface outside this seed is still scaffolded: the remaining ordered/unordered F32 compare forms plus the floating-point F64, 64-bit integer, and 16-bit compare families.
+- The next coherent extension point is the remaining `ENC_VOPC` floating-point/wider compare work or `ENC_VOP3`/half-conversion work rather than more `SOPC`/`SOPP`/`VOP1`/`VOP2`/`VOPC` 1-dword seed growth.
