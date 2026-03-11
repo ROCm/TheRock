@@ -1552,6 +1552,15 @@ bool IsDsOpcode(std::string_view opcode) {
          opcode == "DS_ADD_F32" || opcode == "DS_MIN_F32" ||
          opcode == "DS_MAX_F32" || opcode == "DS_WRITE_B8" ||
          opcode == "DS_WRITE_B16" || opcode == "DS_WRITE_B64" ||
+         opcode == "DS_ADD_U64" || opcode == "DS_SUB_U64" ||
+         opcode == "DS_RSUB_U64" || opcode == "DS_INC_U64" ||
+         opcode == "DS_DEC_U64" || opcode == "DS_MIN_I64" ||
+         opcode == "DS_MAX_I64" || opcode == "DS_MIN_U64" ||
+         opcode == "DS_MAX_U64" || opcode == "DS_AND_B64" ||
+         opcode == "DS_OR_B64" || opcode == "DS_XOR_B64" ||
+         opcode == "DS_MSKOR_B64" || opcode == "DS_CMPST_B64" ||
+         opcode == "DS_CMPST_F64" || opcode == "DS_ADD_F64" ||
+         opcode == "DS_MIN_F64" || opcode == "DS_MAX_F64" ||
          opcode == "DS_WRITE2_B32" || opcode == "DS_WRITE2ST64_B32" ||
          opcode == "DS_WRITE2_B64" || opcode == "DS_WRITE2ST64_B64" ||
          opcode == "DS_READ_B64" || opcode == "DS_READ2_B32" ||
@@ -1588,14 +1597,24 @@ bool IsDsNarrowReadOpcode(std::string_view opcode) {
 }
 
 bool IsDsWide64AccessOpcode(std::string_view opcode) {
-  return opcode == "DS_WRITE_B64" || opcode == "DS_WRITE2_B64" ||
+  return opcode == "DS_WRITE_B64" || opcode == "DS_ADD_U64" ||
+         opcode == "DS_SUB_U64" || opcode == "DS_RSUB_U64" ||
+         opcode == "DS_INC_U64" || opcode == "DS_DEC_U64" ||
+         opcode == "DS_MIN_I64" || opcode == "DS_MAX_I64" ||
+         opcode == "DS_MIN_U64" || opcode == "DS_MAX_U64" ||
+         opcode == "DS_AND_B64" || opcode == "DS_OR_B64" ||
+         opcode == "DS_XOR_B64" || opcode == "DS_MSKOR_B64" ||
+         opcode == "DS_CMPST_B64" || opcode == "DS_CMPST_F64" ||
+         opcode == "DS_ADD_F64" || opcode == "DS_MIN_F64" ||
+         opcode == "DS_MAX_F64" || opcode == "DS_WRITE2_B64" ||
          opcode == "DS_WRITE2ST64_B64" || opcode == "DS_READ_B64" ||
          opcode == "DS_READ2_B64" || opcode == "DS_READ2ST64_B64";
 }
 
 bool IsDsDualDataOpcode(std::string_view opcode) {
   return opcode == "DS_MSKOR_B32" || opcode == "DS_CMPST_B32" ||
-         opcode == "DS_CMPST_F32";
+         opcode == "DS_CMPST_F32" || opcode == "DS_MSKOR_B64" ||
+         opcode == "DS_CMPST_B64" || opcode == "DS_CMPST_F64";
 }
 
 bool IsDsDualDataReturnOpcode(std::string_view opcode) {
@@ -1637,6 +1656,24 @@ std::size_t GetDsAccessSize(std::string_view opcode) {
 std::size_t GetDsAccessSize(CompiledOpcode opcode) {
   switch (opcode) {
     case CompiledOpcode::kDsWriteB64:
+    case CompiledOpcode::kDsAddU64:
+    case CompiledOpcode::kDsSubU64:
+    case CompiledOpcode::kDsRsubU64:
+    case CompiledOpcode::kDsIncU64:
+    case CompiledOpcode::kDsDecU64:
+    case CompiledOpcode::kDsMinI64:
+    case CompiledOpcode::kDsMaxI64:
+    case CompiledOpcode::kDsMinU64:
+    case CompiledOpcode::kDsMaxU64:
+    case CompiledOpcode::kDsAndB64:
+    case CompiledOpcode::kDsOrB64:
+    case CompiledOpcode::kDsXorB64:
+    case CompiledOpcode::kDsMskorB64:
+    case CompiledOpcode::kDsCmpstB64:
+    case CompiledOpcode::kDsCmpstF64:
+    case CompiledOpcode::kDsAddF64:
+    case CompiledOpcode::kDsMinF64:
+    case CompiledOpcode::kDsMaxF64:
     case CompiledOpcode::kDsWrite2B64:
     case CompiledOpcode::kDsWrite2St64B64:
     case CompiledOpcode::kDsReadB64:
@@ -1663,6 +1700,24 @@ std::uint8_t GetDsRegisterDwordCount(std::string_view opcode) {
 std::uint8_t GetDsRegisterDwordCount(CompiledOpcode opcode) {
   switch (opcode) {
     case CompiledOpcode::kDsWriteB64:
+    case CompiledOpcode::kDsAddU64:
+    case CompiledOpcode::kDsSubU64:
+    case CompiledOpcode::kDsRsubU64:
+    case CompiledOpcode::kDsIncU64:
+    case CompiledOpcode::kDsDecU64:
+    case CompiledOpcode::kDsMinI64:
+    case CompiledOpcode::kDsMaxI64:
+    case CompiledOpcode::kDsMinU64:
+    case CompiledOpcode::kDsMaxU64:
+    case CompiledOpcode::kDsAndB64:
+    case CompiledOpcode::kDsOrB64:
+    case CompiledOpcode::kDsXorB64:
+    case CompiledOpcode::kDsMskorB64:
+    case CompiledOpcode::kDsCmpstB64:
+    case CompiledOpcode::kDsCmpstF64:
+    case CompiledOpcode::kDsAddF64:
+    case CompiledOpcode::kDsMinF64:
+    case CompiledOpcode::kDsMaxF64:
     case CompiledOpcode::kDsWrite2B64:
     case CompiledOpcode::kDsWrite2St64B64:
     case CompiledOpcode::kDsReadB64:
@@ -1697,6 +1752,24 @@ bool IsDsNarrowReadOpcode(CompiledOpcode opcode) {
 
 bool IsDsWide64AccessOpcode(CompiledOpcode opcode) {
   return opcode == CompiledOpcode::kDsWriteB64 ||
+         opcode == CompiledOpcode::kDsAddU64 ||
+         opcode == CompiledOpcode::kDsSubU64 ||
+         opcode == CompiledOpcode::kDsRsubU64 ||
+         opcode == CompiledOpcode::kDsIncU64 ||
+         opcode == CompiledOpcode::kDsDecU64 ||
+         opcode == CompiledOpcode::kDsMinI64 ||
+         opcode == CompiledOpcode::kDsMaxI64 ||
+         opcode == CompiledOpcode::kDsMinU64 ||
+         opcode == CompiledOpcode::kDsMaxU64 ||
+         opcode == CompiledOpcode::kDsAndB64 ||
+         opcode == CompiledOpcode::kDsOrB64 ||
+         opcode == CompiledOpcode::kDsXorB64 ||
+         opcode == CompiledOpcode::kDsMskorB64 ||
+         opcode == CompiledOpcode::kDsCmpstB64 ||
+         opcode == CompiledOpcode::kDsCmpstF64 ||
+         opcode == CompiledOpcode::kDsAddF64 ||
+         opcode == CompiledOpcode::kDsMinF64 ||
+         opcode == CompiledOpcode::kDsMaxF64 ||
          opcode == CompiledOpcode::kDsWrite2B64 ||
          opcode == CompiledOpcode::kDsWrite2St64B64 ||
          opcode == CompiledOpcode::kDsReadB64 ||
@@ -1707,7 +1780,10 @@ bool IsDsWide64AccessOpcode(CompiledOpcode opcode) {
 bool IsDsDualDataOpcode(CompiledOpcode opcode) {
   return opcode == CompiledOpcode::kDsMskorB32 ||
          opcode == CompiledOpcode::kDsCmpstB32 ||
-         opcode == CompiledOpcode::kDsCmpstF32;
+         opcode == CompiledOpcode::kDsCmpstF32 ||
+         opcode == CompiledOpcode::kDsMskorB64 ||
+         opcode == CompiledOpcode::kDsCmpstB64 ||
+         opcode == CompiledOpcode::kDsCmpstF64;
 }
 
 bool IsDsDualDataReturnOpcode(CompiledOpcode opcode) {
@@ -2089,6 +2165,10 @@ bool DsCmpstF32Equal(std::uint32_t lhs_bits, std::uint32_t rhs_bits) {
   return BitCast<float>(lhs_bits) == BitCast<float>(rhs_bits);
 }
 
+bool DsCmpstF64Equal(std::uint64_t lhs_bits, std::uint64_t rhs_bits) {
+  return BitCast<double>(lhs_bits) == BitCast<double>(rhs_bits);
+}
+
 std::uint32_t EvaluateDsDualDataUpdate(std::string_view opcode,
                                        std::uint32_t old_value,
                                        std::uint32_t data0_value,
@@ -2110,6 +2190,91 @@ std::uint32_t EvaluateDsDualDataUpdate(std::string_view opcode,
 
   if (error_message != nullptr) {
     *error_message = "unsupported dual-data ds opcode";
+  }
+  return 0;
+}
+
+std::uint64_t EvaluateDsUpdate64(std::string_view opcode,
+                                 std::uint64_t old_value,
+                                 std::uint64_t data_value,
+                                 std::string* error_message) {
+  if (opcode == "DS_ADD_U64") {
+    return old_value + data_value;
+  }
+  if (opcode == "DS_SUB_U64") {
+    return old_value - data_value;
+  }
+  if (opcode == "DS_RSUB_U64") {
+    return data_value - old_value;
+  }
+  if (opcode == "DS_INC_U64") {
+    return old_value >= data_value ? 0u : old_value + 1u;
+  }
+  if (opcode == "DS_DEC_U64") {
+    return (old_value == 0u || old_value > data_value) ? data_value
+                                                        : old_value - 1u;
+  }
+  if (opcode == "DS_MIN_I64") {
+    return BitCast<std::uint64_t>(
+        std::min(BitCast<std::int64_t>(old_value),
+                 BitCast<std::int64_t>(data_value)));
+  }
+  if (opcode == "DS_MAX_I64") {
+    return BitCast<std::uint64_t>(
+        std::max(BitCast<std::int64_t>(old_value),
+                 BitCast<std::int64_t>(data_value)));
+  }
+  if (opcode == "DS_MIN_U64") {
+    return std::min(old_value, data_value);
+  }
+  if (opcode == "DS_MAX_U64") {
+    return std::max(old_value, data_value);
+  }
+  if (opcode == "DS_AND_B64") {
+    return old_value & data_value;
+  }
+  if (opcode == "DS_OR_B64") {
+    return old_value | data_value;
+  }
+  if (opcode == "DS_XOR_B64") {
+    return old_value ^ data_value;
+  }
+  if (opcode == "DS_ADD_F64") {
+    return BitCast<std::uint64_t>(BitCast<double>(old_value) +
+                                  BitCast<double>(data_value));
+  }
+  if (opcode == "DS_MIN_F64") {
+    return BitCast<std::uint64_t>(
+        std::fmin(BitCast<double>(old_value), BitCast<double>(data_value)));
+  }
+  if (opcode == "DS_MAX_F64") {
+    return BitCast<std::uint64_t>(
+        std::fmax(BitCast<double>(old_value), BitCast<double>(data_value)));
+  }
+
+  if (error_message != nullptr) {
+    *error_message = "unsupported wide ds opcode";
+  }
+  return 0;
+}
+
+std::uint64_t EvaluateDsDualDataUpdate64(std::string_view opcode,
+                                         std::uint64_t old_value,
+                                         std::uint64_t data0_value,
+                                         std::uint64_t data1_value,
+                                         std::string* error_message) {
+  if (opcode == "DS_MSKOR_B64") {
+    return (old_value & ~data0_value) | data1_value;
+  }
+  if (opcode == "DS_CMPST_B64") {
+    return old_value == data0_value ? data1_value : old_value;
+  }
+  if (opcode == "DS_CMPST_F64") {
+    return DsCmpstF64Equal(old_value, data0_value) ? data1_value : old_value;
+  }
+
+  if (error_message != nullptr) {
+    *error_message = "unsupported wide dual-data ds opcode";
   }
   return 0;
 }
@@ -2187,6 +2352,77 @@ std::uint32_t EvaluateDsDualDataUpdate(CompiledOpcode opcode,
     default:
       if (error_message != nullptr) {
         *error_message = "unsupported compiled dual-data ds opcode";
+      }
+      return 0;
+  }
+}
+
+std::uint64_t EvaluateDsUpdate64(CompiledOpcode opcode,
+                                 std::uint64_t old_value,
+                                 std::uint64_t data_value,
+                                 std::string* error_message) {
+  switch (opcode) {
+    case CompiledOpcode::kDsAddU64:
+      return old_value + data_value;
+    case CompiledOpcode::kDsSubU64:
+      return old_value - data_value;
+    case CompiledOpcode::kDsRsubU64:
+      return data_value - old_value;
+    case CompiledOpcode::kDsIncU64:
+      return old_value >= data_value ? 0u : old_value + 1u;
+    case CompiledOpcode::kDsDecU64:
+      return (old_value == 0u || old_value > data_value) ? data_value
+                                                          : old_value - 1u;
+    case CompiledOpcode::kDsMinI64:
+      return BitCast<std::uint64_t>(
+          std::min(BitCast<std::int64_t>(old_value),
+                   BitCast<std::int64_t>(data_value)));
+    case CompiledOpcode::kDsMaxI64:
+      return BitCast<std::uint64_t>(
+          std::max(BitCast<std::int64_t>(old_value),
+                   BitCast<std::int64_t>(data_value)));
+    case CompiledOpcode::kDsMinU64:
+      return std::min(old_value, data_value);
+    case CompiledOpcode::kDsMaxU64:
+      return std::max(old_value, data_value);
+    case CompiledOpcode::kDsAndB64:
+      return old_value & data_value;
+    case CompiledOpcode::kDsOrB64:
+      return old_value | data_value;
+    case CompiledOpcode::kDsXorB64:
+      return old_value ^ data_value;
+    case CompiledOpcode::kDsAddF64:
+      return BitCast<std::uint64_t>(BitCast<double>(old_value) +
+                                    BitCast<double>(data_value));
+    case CompiledOpcode::kDsMinF64:
+      return BitCast<std::uint64_t>(
+          std::fmin(BitCast<double>(old_value), BitCast<double>(data_value)));
+    case CompiledOpcode::kDsMaxF64:
+      return BitCast<std::uint64_t>(
+          std::fmax(BitCast<double>(old_value), BitCast<double>(data_value)));
+    default:
+      if (error_message != nullptr) {
+        *error_message = "unsupported compiled wide ds opcode";
+      }
+      return 0;
+  }
+}
+
+std::uint64_t EvaluateDsDualDataUpdate64(CompiledOpcode opcode,
+                                         std::uint64_t old_value,
+                                         std::uint64_t data0_value,
+                                         std::uint64_t data1_value,
+                                         std::string* error_message) {
+  switch (opcode) {
+    case CompiledOpcode::kDsMskorB64:
+      return (old_value & ~data0_value) | data1_value;
+    case CompiledOpcode::kDsCmpstB64:
+      return old_value == data0_value ? data1_value : old_value;
+    case CompiledOpcode::kDsCmpstF64:
+      return DsCmpstF64Equal(old_value, data0_value) ? data1_value : old_value;
+    default:
+      if (error_message != nullptr) {
+        *error_message = "unsupported compiled wide dual-data ds opcode";
       }
       return 0;
   }
@@ -5579,6 +5815,78 @@ bool TryCompileOpcode(std::string_view opcode,
     compiled_instruction->opcode = CompiledOpcode::kDsWriteB64;
     return true;
   }
+  if (opcode == "DS_ADD_U64") {
+    compiled_instruction->opcode = CompiledOpcode::kDsAddU64;
+    return true;
+  }
+  if (opcode == "DS_SUB_U64") {
+    compiled_instruction->opcode = CompiledOpcode::kDsSubU64;
+    return true;
+  }
+  if (opcode == "DS_RSUB_U64") {
+    compiled_instruction->opcode = CompiledOpcode::kDsRsubU64;
+    return true;
+  }
+  if (opcode == "DS_INC_U64") {
+    compiled_instruction->opcode = CompiledOpcode::kDsIncU64;
+    return true;
+  }
+  if (opcode == "DS_DEC_U64") {
+    compiled_instruction->opcode = CompiledOpcode::kDsDecU64;
+    return true;
+  }
+  if (opcode == "DS_MIN_I64") {
+    compiled_instruction->opcode = CompiledOpcode::kDsMinI64;
+    return true;
+  }
+  if (opcode == "DS_MAX_I64") {
+    compiled_instruction->opcode = CompiledOpcode::kDsMaxI64;
+    return true;
+  }
+  if (opcode == "DS_MIN_U64") {
+    compiled_instruction->opcode = CompiledOpcode::kDsMinU64;
+    return true;
+  }
+  if (opcode == "DS_MAX_U64") {
+    compiled_instruction->opcode = CompiledOpcode::kDsMaxU64;
+    return true;
+  }
+  if (opcode == "DS_AND_B64") {
+    compiled_instruction->opcode = CompiledOpcode::kDsAndB64;
+    return true;
+  }
+  if (opcode == "DS_OR_B64") {
+    compiled_instruction->opcode = CompiledOpcode::kDsOrB64;
+    return true;
+  }
+  if (opcode == "DS_XOR_B64") {
+    compiled_instruction->opcode = CompiledOpcode::kDsXorB64;
+    return true;
+  }
+  if (opcode == "DS_MSKOR_B64") {
+    compiled_instruction->opcode = CompiledOpcode::kDsMskorB64;
+    return true;
+  }
+  if (opcode == "DS_CMPST_B64") {
+    compiled_instruction->opcode = CompiledOpcode::kDsCmpstB64;
+    return true;
+  }
+  if (opcode == "DS_CMPST_F64") {
+    compiled_instruction->opcode = CompiledOpcode::kDsCmpstF64;
+    return true;
+  }
+  if (opcode == "DS_ADD_F64") {
+    compiled_instruction->opcode = CompiledOpcode::kDsAddF64;
+    return true;
+  }
+  if (opcode == "DS_MIN_F64") {
+    compiled_instruction->opcode = CompiledOpcode::kDsMinF64;
+    return true;
+  }
+  if (opcode == "DS_MAX_F64") {
+    compiled_instruction->opcode = CompiledOpcode::kDsMaxF64;
+    return true;
+  }
   if (opcode == "DS_WRITE2_B32") {
     compiled_instruction->opcode = CompiledOpcode::kDsWrite2B32;
     return true;
@@ -6876,6 +7184,24 @@ bool Gfx950Interpreter::ExecuteInstruction(const CompiledInstruction& instructio
     case CompiledOpcode::kDsWriteB8:
     case CompiledOpcode::kDsWriteB16:
     case CompiledOpcode::kDsWriteB64:
+    case CompiledOpcode::kDsAddU64:
+    case CompiledOpcode::kDsSubU64:
+    case CompiledOpcode::kDsRsubU64:
+    case CompiledOpcode::kDsIncU64:
+    case CompiledOpcode::kDsDecU64:
+    case CompiledOpcode::kDsMinI64:
+    case CompiledOpcode::kDsMaxI64:
+    case CompiledOpcode::kDsMinU64:
+    case CompiledOpcode::kDsMaxU64:
+    case CompiledOpcode::kDsAndB64:
+    case CompiledOpcode::kDsOrB64:
+    case CompiledOpcode::kDsXorB64:
+    case CompiledOpcode::kDsMskorB64:
+    case CompiledOpcode::kDsCmpstB64:
+    case CompiledOpcode::kDsCmpstF64:
+    case CompiledOpcode::kDsAddF64:
+    case CompiledOpcode::kDsMinF64:
+    case CompiledOpcode::kDsMaxF64:
     case CompiledOpcode::kDsWrite2B32:
     case CompiledOpcode::kDsWrite2St64B32:
     case CompiledOpcode::kDsWrite2B64:
@@ -10909,13 +11235,11 @@ bool Gfx950Interpreter::ExecuteDsMemory(const DecodedInstruction& instruction,
   const std::uint32_t offset_scale =
       is_pair_write || is_pair_read ? GetDsPairOffsetScale(instruction.opcode) : 1u;
   const std::uint16_t data_register_count =
-      ((instruction.opcode == "DS_WRITE_B64") || is_pair_write)
-          ? register_dword_count
-          : 1u;
+      data_operand != nullptr ? register_dword_count : 1u;
   const std::uint16_t destination_register_count =
-      is_pair_read ? static_cast<std::uint16_t>(2u * register_dword_count)
-                   : (instruction.opcode == "DS_READ_B64" ? register_dword_count
-                                                           : 1u);
+      is_pair_read
+          ? static_cast<std::uint16_t>(2u * register_dword_count)
+          : ((is_read || is_return) ? register_dword_count : 1u);
   if (data_operand != nullptr &&
       data_operand->index + data_register_count - 1u >= state->vgprs.size()) {
     if (error_message != nullptr) {
@@ -11096,30 +11420,118 @@ bool Gfx950Interpreter::ExecuteDsMemory(const DecodedInstruction& instruction,
     }
 
     if (is_dual_data || is_dual_data_return) {
-      const std::uint32_t data0_value =
+      if (register_dword_count == 2u) {
+        std::array<std::uint32_t, 2> data0_values{};
+        std::array<std::uint32_t, 2> data1_values{};
+        std::array<std::uint32_t, 2> lds_values{};
+        std::array<std::uint32_t, 2> new_values{};
+        if (!read_vector_dwords(*data_operand, register_dword_count,
+                                data0_values.data()) ||
+            !read_vector_dwords(*second_data_operand, register_dword_count,
+                                data1_values.data()) ||
+            !ReadLdsDwords(lds_storage, lds_address0, register_dword_count,
+                           lds_values.data(), error_message)) {
+          return false;
+        }
+        if (is_dual_data_return &&
+            !write_vector_dwords(*destination_operand, register_dword_count,
+                                 lds_values.data())) {
+          return false;
+        }
+        const std::uint64_t new_value = EvaluateDsDualDataUpdate64(
+            instruction.opcode, ComposeU64(lds_values[0], lds_values[1]),
+            ComposeU64(data0_values[0], data0_values[1]),
+            ComposeU64(data1_values[0], data1_values[1]), error_message);
+        if (error_message != nullptr && !error_message->empty()) {
+          return false;
+        }
+        SplitU64(new_value, &new_values[0], &new_values[1]);
+        if (!WriteLdsDwords(lds_storage, lds_address0, register_dword_count,
+                            new_values.data(), error_message)) {
+          return false;
+        }
+      } else {
+        const std::uint32_t data0_value =
+            ReadVectorOperand(*data_operand, *state, lane_index, error_message);
+        if (error_message != nullptr && !error_message->empty()) {
+          return false;
+        }
+        const std::uint32_t data1_value = ReadVectorOperand(
+            *second_data_operand, *state, lane_index, error_message);
+        if (error_message != nullptr && !error_message->empty()) {
+          return false;
+        }
+
+        std::uint32_t lds_value = 0;
+        if (!ReadLdsValue(lds_storage, lds_address0, access_size, false,
+                          &lds_value, error_message)) {
+          return false;
+        }
+        if (is_dual_data_return &&
+            !WriteVectorOperand(*destination_operand, lane_index, lds_value, state,
+                                error_message)) {
+          return false;
+        }
+        lds_value = EvaluateDsDualDataUpdate(instruction.opcode, lds_value,
+                                             data0_value, data1_value,
+                                             error_message);
+        if (error_message != nullptr && !error_message->empty()) {
+          return false;
+        }
+        if (!WriteLdsValue(lds_storage, lds_address0, access_size, lds_value,
+                           error_message)) {
+          return false;
+        }
+      }
+      continue;
+    }
+
+    if (register_dword_count == 2u) {
+      std::array<std::uint32_t, 2> data_values{};
+      std::array<std::uint32_t, 2> lds_values{};
+      std::array<std::uint32_t, 2> new_values{};
+      if (!read_vector_dwords(*data_operand, register_dword_count,
+                              data_values.data()) ||
+          !ReadLdsDwords(lds_storage, lds_address0, register_dword_count,
+                         lds_values.data(), error_message)) {
+        return false;
+      }
+      if (is_return &&
+          !write_vector_dwords(*destination_operand, register_dword_count,
+                               lds_values.data())) {
+        return false;
+      }
+      const std::uint64_t new_value = EvaluateDsUpdate64(
+          GetDsUpdateOpcode(instruction.opcode),
+          ComposeU64(lds_values[0], lds_values[1]),
+          ComposeU64(data_values[0], data_values[1]), error_message);
+      if (error_message != nullptr && !error_message->empty()) {
+        return false;
+      }
+      SplitU64(new_value, &new_values[0], &new_values[1]);
+      if (!WriteLdsDwords(lds_storage, lds_address0, register_dword_count,
+                          new_values.data(), error_message)) {
+        return false;
+      }
+    } else {
+      const std::uint32_t data_value =
           ReadVectorOperand(*data_operand, *state, lane_index, error_message);
       if (error_message != nullptr && !error_message->empty()) {
         return false;
       }
-      const std::uint32_t data1_value = ReadVectorOperand(
-          *second_data_operand, *state, lane_index, error_message);
-      if (error_message != nullptr && !error_message->empty()) {
-        return false;
-      }
-
       std::uint32_t lds_value = 0;
-      if (!ReadLdsValue(lds_storage, lds_address0, access_size, false, &lds_value,
-                        error_message)) {
+      if (!ReadLdsValue(lds_storage, lds_address0, access_size, false,
+                        &lds_value, error_message)) {
         return false;
       }
-      if (is_dual_data_return &&
+      if (is_return &&
           !WriteVectorOperand(*destination_operand, lane_index, lds_value, state,
                               error_message)) {
         return false;
       }
-      lds_value = EvaluateDsDualDataUpdate(instruction.opcode, lds_value,
-                                           data0_value, data1_value,
-                                           error_message);
+      const std::string_view update_opcode = GetDsUpdateOpcode(instruction.opcode);
+      lds_value =
+          EvaluateDsUpdate(update_opcode, lds_value, data_value, error_message);
       if (error_message != nullptr && !error_message->empty()) {
         return false;
       }
@@ -11127,33 +11539,6 @@ bool Gfx950Interpreter::ExecuteDsMemory(const DecodedInstruction& instruction,
                          error_message)) {
         return false;
       }
-      continue;
-    }
-
-    const std::uint32_t data_value =
-        ReadVectorOperand(*data_operand, *state, lane_index, error_message);
-    if (error_message != nullptr && !error_message->empty()) {
-      return false;
-    }
-    std::uint32_t lds_value = 0;
-    if (!ReadLdsValue(lds_storage, lds_address0, access_size, false, &lds_value,
-                      error_message)) {
-      return false;
-    }
-    if (is_return &&
-        !WriteVectorOperand(*destination_operand, lane_index, lds_value, state,
-                            error_message)) {
-      return false;
-    }
-    const std::string_view update_opcode = GetDsUpdateOpcode(instruction.opcode);
-    lds_value =
-        EvaluateDsUpdate(update_opcode, lds_value, data_value, error_message);
-    if (error_message != nullptr && !error_message->empty()) {
-      return false;
-    }
-    if (!WriteLdsValue(lds_storage, lds_address0, access_size, lds_value,
-                       error_message)) {
-      return false;
     }
   }
 
@@ -11264,14 +11649,11 @@ bool Gfx950Interpreter::ExecuteDsMemory(const CompiledInstruction& instruction,
   const std::uint32_t offset_scale =
       is_pair_write || is_pair_read ? GetDsPairOffsetScale(instruction.opcode) : 1u;
   const std::uint16_t data_register_count =
-      ((instruction.opcode == CompiledOpcode::kDsWriteB64) || is_pair_write)
-          ? register_dword_count
-          : 1u;
+      data_operand != nullptr ? register_dword_count : 1u;
   const std::uint16_t destination_register_count =
-      is_pair_read ? static_cast<std::uint16_t>(2u * register_dword_count)
-                   : (instruction.opcode == CompiledOpcode::kDsReadB64
-                          ? register_dword_count
-                          : 1u);
+      is_pair_read
+          ? static_cast<std::uint16_t>(2u * register_dword_count)
+          : ((is_read || is_return) ? register_dword_count : 1u);
   if (address_operand->index >= state->vgprs.size() ||
       (data_operand != nullptr &&
        data_operand->index + data_register_count - 1u >= state->vgprs.size()) ||
@@ -11428,19 +11810,95 @@ bool Gfx950Interpreter::ExecuteDsMemory(const CompiledInstruction& instruction,
     }
 
     if (is_dual_data || is_dual_data_return) {
-      const std::uint32_t data0_value = state->vgprs[data_reg][lane_index];
-      const std::uint32_t data1_value = state->vgprs[data_reg1][lane_index];
-      std::uint32_t lds_value = 0;
-      if (!ReadLdsValue(lds_storage, lds_address0, access_size, false, &lds_value,
-                        error_message)) {
+      if (register_dword_count == 2u) {
+        std::array<std::uint32_t, 2> data0_values{};
+        std::array<std::uint32_t, 2> data1_values{};
+        std::array<std::uint32_t, 2> lds_values{};
+        std::array<std::uint32_t, 2> new_values{};
+        read_vgpr_dwords(data_reg, register_dword_count, data0_values.data());
+        read_vgpr_dwords(data_reg1, register_dword_count, data1_values.data());
+        if (!ReadLdsDwords(lds_storage, lds_address0, register_dword_count,
+                           lds_values.data(), error_message)) {
+          return false;
+        }
+        if (is_dual_data_return) {
+          write_vgpr_dwords(destination_reg, register_dword_count,
+                           lds_values.data());
+        }
+        const std::uint64_t new_value = EvaluateDsDualDataUpdate64(
+            instruction.opcode, ComposeU64(lds_values[0], lds_values[1]),
+            ComposeU64(data0_values[0], data0_values[1]),
+            ComposeU64(data1_values[0], data1_values[1]), error_message);
+        if (error_message != nullptr && !error_message->empty()) {
+          return false;
+        }
+        SplitU64(new_value, &new_values[0], &new_values[1]);
+        if (!WriteLdsDwords(lds_storage, lds_address0, register_dword_count,
+                            new_values.data(), error_message)) {
+          return false;
+        }
+      } else {
+        const std::uint32_t data0_value = state->vgprs[data_reg][lane_index];
+        const std::uint32_t data1_value = state->vgprs[data_reg1][lane_index];
+        std::uint32_t lds_value = 0;
+        if (!ReadLdsValue(lds_storage, lds_address0, access_size, false,
+                          &lds_value, error_message)) {
+          return false;
+        }
+        if (is_dual_data_return) {
+          state->vgprs[destination_reg][lane_index] = lds_value;
+        }
+        lds_value = EvaluateDsDualDataUpdate(instruction.opcode, lds_value,
+                                             data0_value, data1_value,
+                                             error_message);
+        if (error_message != nullptr && !error_message->empty()) {
+          return false;
+        }
+        if (!WriteLdsValue(lds_storage, lds_address0, access_size, lds_value,
+                           error_message)) {
+          return false;
+        }
+      }
+      continue;
+    }
+
+    if (register_dword_count == 2u) {
+      std::array<std::uint32_t, 2> data_values{};
+      std::array<std::uint32_t, 2> lds_values{};
+      std::array<std::uint32_t, 2> new_values{};
+      read_vgpr_dwords(data_reg, register_dword_count, data_values.data());
+      if (!ReadLdsDwords(lds_storage, lds_address0, register_dword_count,
+                         lds_values.data(), error_message)) {
         return false;
       }
-      if (is_dual_data_return) {
+      if (is_return) {
+        write_vgpr_dwords(destination_reg, register_dword_count,
+                         lds_values.data());
+      }
+      const std::uint64_t new_value = EvaluateDsUpdate64(
+          GetDsUpdateOpcode(instruction.opcode),
+          ComposeU64(lds_values[0], lds_values[1]),
+          ComposeU64(data_values[0], data_values[1]), error_message);
+      if (error_message != nullptr && !error_message->empty()) {
+        return false;
+      }
+      SplitU64(new_value, &new_values[0], &new_values[1]);
+      if (!WriteLdsDwords(lds_storage, lds_address0, register_dword_count,
+                          new_values.data(), error_message)) {
+        return false;
+      }
+    } else {
+      const std::uint32_t data_value = state->vgprs[data_reg][lane_index];
+      std::uint32_t lds_value = 0;
+      if (!ReadLdsValue(lds_storage, lds_address0, access_size, false,
+                        &lds_value, error_message)) {
+        return false;
+      }
+      if (is_return) {
         state->vgprs[destination_reg][lane_index] = lds_value;
       }
-      lds_value = EvaluateDsDualDataUpdate(instruction.opcode, lds_value,
-                                           data0_value, data1_value,
-                                           error_message);
+      lds_value = EvaluateDsUpdate(GetDsUpdateOpcode(instruction.opcode),
+                                   lds_value, data_value, error_message);
       if (error_message != nullptr && !error_message->empty()) {
         return false;
       }
@@ -11448,26 +11906,6 @@ bool Gfx950Interpreter::ExecuteDsMemory(const CompiledInstruction& instruction,
                          error_message)) {
         return false;
       }
-      continue;
-    }
-
-    const std::uint32_t data_value = state->vgprs[data_reg][lane_index];
-    std::uint32_t lds_value = 0;
-    if (!ReadLdsValue(lds_storage, lds_address0, access_size, false, &lds_value,
-                      error_message)) {
-      return false;
-    }
-    if (is_return) {
-      state->vgprs[destination_reg][lane_index] = lds_value;
-    }
-    lds_value = EvaluateDsUpdate(GetDsUpdateOpcode(instruction.opcode), lds_value,
-                                 data_value, error_message);
-    if (error_message != nullptr && !error_message->empty()) {
-      return false;
-    }
-    if (!WriteLdsValue(lds_storage, lds_address0, access_size, lds_value,
-                       error_message)) {
-      return false;
     }
   }
 

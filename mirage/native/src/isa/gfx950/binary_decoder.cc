@@ -235,11 +235,29 @@ bool IsSupportedDsOpcode(std::string_view opcode_name) {
          opcode_name == "DS_ADD_F32" || opcode_name == "DS_MIN_F32" ||
          opcode_name == "DS_MAX_F32" || opcode_name == "DS_WRITE_B8" ||
          opcode_name == "DS_WRITE_B16" ||
+         opcode_name == "DS_ADD_U64" ||
+         opcode_name == "DS_SUB_U64" ||
+         opcode_name == "DS_RSUB_U64" ||
+         opcode_name == "DS_INC_U64" ||
+         opcode_name == "DS_DEC_U64" ||
+         opcode_name == "DS_MIN_I64" ||
+         opcode_name == "DS_MAX_I64" ||
+         opcode_name == "DS_MIN_U64" ||
+         opcode_name == "DS_MAX_U64" ||
+         opcode_name == "DS_AND_B64" ||
+         opcode_name == "DS_OR_B64" ||
+         opcode_name == "DS_XOR_B64" ||
+         opcode_name == "DS_MSKOR_B64" ||
          opcode_name == "DS_WRITE_B64" ||
          opcode_name == "DS_WRITE2_B32" ||
          opcode_name == "DS_WRITE2ST64_B32" ||
          opcode_name == "DS_WRITE2_B64" ||
          opcode_name == "DS_WRITE2ST64_B64" ||
+         opcode_name == "DS_CMPST_B64" ||
+         opcode_name == "DS_CMPST_F64" ||
+         opcode_name == "DS_ADD_F64" ||
+         opcode_name == "DS_MIN_F64" ||
+         opcode_name == "DS_MAX_F64" ||
          opcode_name == "DS_READ2_B32" ||
          opcode_name == "DS_READ2ST64_B32" ||
          opcode_name == "DS_READ_B64" ||
@@ -293,7 +311,10 @@ bool IsDsNarrowReadOpcode(std::string_view opcode_name) {
 bool IsDsDualDataOpcode(std::string_view opcode_name) {
   return opcode_name == "DS_MSKOR_B32" ||
          opcode_name == "DS_CMPST_B32" ||
-         opcode_name == "DS_CMPST_F32";
+         opcode_name == "DS_CMPST_F32" ||
+         opcode_name == "DS_MSKOR_B64" ||
+         opcode_name == "DS_CMPST_B64" ||
+         opcode_name == "DS_CMPST_F64";
 }
 
 bool IsDsReturnOpcode(std::string_view opcode_name) {

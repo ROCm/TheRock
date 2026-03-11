@@ -6198,6 +6198,49 @@ int main() {
     }
   }
 
+  const std::array<std::string_view, 15> kDsWideUpdateOpcodes = {
+      "DS_ADD_U64", "DS_SUB_U64", "DS_RSUB_U64", "DS_INC_U64", "DS_DEC_U64",
+      "DS_MIN_I64", "DS_MAX_I64", "DS_MIN_U64", "DS_MAX_U64", "DS_AND_B64",
+      "DS_OR_B64",  "DS_XOR_B64", "DS_ADD_F64",  "DS_MIN_F64", "DS_MAX_F64",
+  };
+  for (std::string_view opcode_name : kDsWideUpdateOpcodes) {
+    const auto opcode = FindDefaultEncodingOpcode(opcode_name, "ENC_DS");
+    if (!Expect(opcode.has_value(), "expected ds wide update opcode lookup")) {
+      std::cerr << opcode_name << '\n';
+      return 1;
+    }
+
+    const auto encoded = MakeDs(*opcode, 0, 1, 2, 0, 6);
+    const std::vector<std::uint32_t> encoded_program = {
+        encoded[0], encoded[1], MakeSopp(1),
+    };
+    decoded_program.clear();
+    if (!Expect(decoder.DecodeProgram(encoded_program, &decoded_program,
+                                      &error_message),
+                error_message.c_str()) ||
+        !Expect(decoded_program.size() == 2,
+                "expected ds wide update decode program size") ||
+        !Expect(decoded_program[0].opcode == opcode_name,
+                "expected ds wide update opcode decode") ||
+        !Expect(decoded_program[0].operand_count == 3,
+                "expected ds wide update operand count") ||
+        !Expect(decoded_program[0].operands[0].kind == OperandKind::kVgpr,
+                "expected ds wide update address kind") ||
+        !Expect(decoded_program[0].operands[0].index == 1,
+                "expected ds wide update address index") ||
+        !Expect(decoded_program[0].operands[1].kind == OperandKind::kVgpr,
+                "expected ds wide update data kind") ||
+        !Expect(decoded_program[0].operands[1].index == 2,
+                "expected ds wide update data index") ||
+        !Expect(decoded_program[0].operands[2].kind == OperandKind::kImm32,
+                "expected ds wide update offset kind") ||
+        !Expect(decoded_program[0].operands[2].imm32 == 6u,
+                "expected ds wide update offset value")) {
+      std::cerr << opcode_name << '\n';
+      return 1;
+    }
+  }
+
   const std::array<std::string_view, 4> kDsNarrowReadOpcodes = {
       "DS_READ_I8",
       "DS_READ_U8",
@@ -6284,6 +6327,54 @@ int main() {
                 "expected ds dual-data offset kind") ||
         !Expect(decoded_program[0].operands[3].imm32 == 6u,
                 "expected ds dual-data offset value")) {
+      std::cerr << opcode_name << '\n';
+      return 1;
+    }
+  }
+
+  const std::array<std::string_view, 3> kDsWideDualDataOpcodes = {
+      "DS_MSKOR_B64",
+      "DS_CMPST_B64",
+      "DS_CMPST_F64",
+  };
+  for (std::string_view opcode_name : kDsWideDualDataOpcodes) {
+    const auto opcode = FindDefaultEncodingOpcode(opcode_name, "ENC_DS");
+    if (!Expect(opcode.has_value(),
+                "expected ds wide dual-data opcode lookup")) {
+      std::cerr << opcode_name << '\n';
+      return 1;
+    }
+
+    const auto encoded = MakeDs(*opcode, 0, 1, 2, 4, 7);
+    const std::vector<std::uint32_t> encoded_program = {
+        encoded[0], encoded[1], MakeSopp(1),
+    };
+    decoded_program.clear();
+    if (!Expect(decoder.DecodeProgram(encoded_program, &decoded_program,
+                                      &error_message),
+                error_message.c_str()) ||
+        !Expect(decoded_program.size() == 2,
+                "expected ds wide dual-data decode program size") ||
+        !Expect(decoded_program[0].opcode == opcode_name,
+                "expected ds wide dual-data opcode decode") ||
+        !Expect(decoded_program[0].operand_count == 4,
+                "expected ds wide dual-data operand count") ||
+        !Expect(decoded_program[0].operands[0].kind == OperandKind::kVgpr,
+                "expected ds wide dual-data address kind") ||
+        !Expect(decoded_program[0].operands[0].index == 1,
+                "expected ds wide dual-data address index") ||
+        !Expect(decoded_program[0].operands[1].kind == OperandKind::kVgpr,
+                "expected ds wide dual-data data0 kind") ||
+        !Expect(decoded_program[0].operands[1].index == 2,
+                "expected ds wide dual-data data0 index") ||
+        !Expect(decoded_program[0].operands[2].kind == OperandKind::kVgpr,
+                "expected ds wide dual-data data1 kind") ||
+        !Expect(decoded_program[0].operands[2].index == 4,
+                "expected ds wide dual-data data1 index") ||
+        !Expect(decoded_program[0].operands[3].kind == OperandKind::kImm32,
+                "expected ds wide dual-data offset kind") ||
+        !Expect(decoded_program[0].operands[3].imm32 == 7u,
+                "expected ds wide dual-data offset value")) {
       std::cerr << opcode_name << '\n';
       return 1;
     }

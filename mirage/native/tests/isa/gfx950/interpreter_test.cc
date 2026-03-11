@@ -1259,6 +1259,19 @@ int main() {
     }
   }
 
+  const std::array<std::string_view, 15> kDsWideUpdateOpcodes = {
+      "DS_ADD_U64", "DS_SUB_U64", "DS_RSUB_U64", "DS_INC_U64", "DS_DEC_U64",
+      "DS_MIN_I64", "DS_MAX_I64", "DS_MIN_U64", "DS_MAX_U64", "DS_AND_B64",
+      "DS_OR_B64",  "DS_XOR_B64", "DS_ADD_F64",  "DS_MIN_F64", "DS_MAX_F64",
+  };
+  for (std::string_view opcode : kDsWideUpdateOpcodes) {
+    if (!Expect(interpreter.Supports(opcode),
+                "expected ds wide update opcode support")) {
+      std::cerr << opcode << '\n';
+      return 1;
+    }
+  }
+
   const std::array<std::string_view, 4> kDsNarrowReadOpcodes = {
       "DS_READ_I8",
       "DS_READ_U8",
@@ -1282,6 +1295,19 @@ int main() {
   for (std::string_view opcode : kDsDualDataReturnOpcodes) {
     if (!Expect(interpreter.Supports(opcode),
                 "expected ds dual-data return opcode support")) {
+      std::cerr << opcode << '\n';
+      return 1;
+    }
+  }
+
+  const std::array<std::string_view, 3> kDsWideDualDataOpcodes = {
+      "DS_MSKOR_B64",
+      "DS_CMPST_B64",
+      "DS_CMPST_F64",
+  };
+  for (std::string_view opcode : kDsWideDualDataOpcodes) {
+    if (!Expect(interpreter.Supports(opcode),
+                "expected ds wide dual-data opcode support")) {
       std::cerr << opcode << '\n';
       return 1;
     }
@@ -7565,6 +7591,211 @@ int main() {
                                          &error_message),
               error_message.c_str()) ||
       !validate_ds_b64_access_state(compiled_ds_b64_access_state, "compiled")) {
+    return 1;
+  }
+  }
+
+  {
+  const std::vector<DecodedInstruction> ds_b64_update_program = {
+      DecodedInstruction::ThreeOperand("DS_ADD_U64", InstructionOperand::Vgpr(0),
+                                       InstructionOperand::Vgpr(1),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_SUB_U64", InstructionOperand::Vgpr(3),
+                                       InstructionOperand::Vgpr(4),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_RSUB_U64", InstructionOperand::Vgpr(6),
+                                       InstructionOperand::Vgpr(7),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_INC_U64", InstructionOperand::Vgpr(9),
+                                       InstructionOperand::Vgpr(10),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_DEC_U64", InstructionOperand::Vgpr(12),
+                                       InstructionOperand::Vgpr(13),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_MIN_I64", InstructionOperand::Vgpr(15),
+                                       InstructionOperand::Vgpr(16),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_MAX_I64", InstructionOperand::Vgpr(18),
+                                       InstructionOperand::Vgpr(19),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_MIN_U64", InstructionOperand::Vgpr(21),
+                                       InstructionOperand::Vgpr(22),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_MAX_U64", InstructionOperand::Vgpr(24),
+                                       InstructionOperand::Vgpr(25),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_AND_B64", InstructionOperand::Vgpr(27),
+                                       InstructionOperand::Vgpr(28),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_OR_B64", InstructionOperand::Vgpr(30),
+                                       InstructionOperand::Vgpr(31),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_XOR_B64", InstructionOperand::Vgpr(33),
+                                       InstructionOperand::Vgpr(34),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::FourOperand("DS_MSKOR_B64", InstructionOperand::Vgpr(36),
+                                      InstructionOperand::Vgpr(37),
+                                      InstructionOperand::Vgpr(39),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FourOperand("DS_CMPST_B64", InstructionOperand::Vgpr(42),
+                                      InstructionOperand::Vgpr(43),
+                                      InstructionOperand::Vgpr(45),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FourOperand("DS_CMPST_F64", InstructionOperand::Vgpr(48),
+                                      InstructionOperand::Vgpr(49),
+                                      InstructionOperand::Vgpr(51),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_ADD_F64", InstructionOperand::Vgpr(54),
+                                       InstructionOperand::Vgpr(55),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_MIN_F64", InstructionOperand::Vgpr(57),
+                                       InstructionOperand::Vgpr(58),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_MAX_F64", InstructionOperand::Vgpr(60),
+                                       InstructionOperand::Vgpr(61),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  struct DsLds64Expectation {
+    std::uint64_t address;
+    std::uint64_t expected;
+    const char* label;
+  };
+  auto make_ds_b64_update_state = []() {
+    WaveExecutionState state;
+    state.exec_mask = 0x1ULL;
+    auto write_lds_u64 = [](WaveExecutionState* wave,
+                            std::uint64_t address,
+                            std::uint64_t value) {
+      std::memcpy(wave->lds_bytes.data() + address, &value, sizeof(value));
+    };
+
+    state.vgprs[0][0] = 0u;
+    SetLane0VgprU64(&state, 1, 5u);
+    state.vgprs[3][0] = 16u;
+    SetLane0VgprU64(&state, 4, 6u);
+    state.vgprs[6][0] = 32u;
+    SetLane0VgprU64(&state, 7, 10u);
+    state.vgprs[9][0] = 48u;
+    SetLane0VgprU64(&state, 10, 7u);
+    state.vgprs[12][0] = 64u;
+    SetLane0VgprU64(&state, 13, 11u);
+    state.vgprs[15][0] = 80u;
+    SetLane0VgprU64(&state, 16, 2u);
+    state.vgprs[18][0] = 96u;
+    SetLane0VgprU64(&state, 19, 2u);
+    state.vgprs[21][0] = 112u;
+    SetLane0VgprU64(&state, 22, 4u);
+    state.vgprs[24][0] = 128u;
+    SetLane0VgprU64(&state, 25, 14u);
+    state.vgprs[27][0] = 144u;
+    SetLane0VgprU64(&state, 28, 0x0f0f0f0f0f0f0f0fULL);
+    state.vgprs[30][0] = 160u;
+    SetLane0VgprU64(&state, 31, 0x1100110011001100ULL);
+    state.vgprs[33][0] = 176u;
+    SetLane0VgprU64(&state, 34, 0x00ff00ff00ff00ffULL);
+    state.vgprs[36][0] = 192u;
+    SetLane0VgprU64(&state, 37, 0xff00ff0000ff00ffULL);
+    SetLane0VgprU64(&state, 39, 0x005500aa550000aaULL);
+    state.vgprs[42][0] = 208u;
+    SetLane0VgprU64(&state, 43, 0x1122334455667788ULL);
+    SetLane0VgprU64(&state, 45, 0x8877665544332211ULL);
+    state.vgprs[48][0] = 224u;
+    SetLane0VgprU64(&state, 49, DoubleBits(3.5));
+    SetLane0VgprU64(&state, 51, DoubleBits(9.0));
+    state.vgprs[54][0] = 240u;
+    SetLane0VgprU64(&state, 55, DoubleBits(2.25));
+    state.vgprs[57][0] = 256u;
+    SetLane0VgprU64(&state, 58, DoubleBits(-1.0));
+    state.vgprs[60][0] = 272u;
+    SetLane0VgprU64(&state, 61, DoubleBits(8.0));
+
+    write_lds_u64(&state, 0u, 10u);
+    write_lds_u64(&state, 16u, 20u);
+    write_lds_u64(&state, 32u, 4u);
+    write_lds_u64(&state, 48u, 7u);
+    write_lds_u64(&state, 64u, 0u);
+    write_lds_u64(&state, 80u, 0xfffffffffffffffcULL);
+    write_lds_u64(&state, 96u, 0xfffffffffffffffdULL);
+    write_lds_u64(&state, 112u, 9u);
+    write_lds_u64(&state, 128u, 9u);
+    write_lds_u64(&state, 144u, 0xff00ff00ff00ff00ULL);
+    write_lds_u64(&state, 160u, 0x0011001100110011ULL);
+    write_lds_u64(&state, 176u, 0xffff0000ffff0000ULL);
+    write_lds_u64(&state, 192u, 0xffff0000aaaa5555ULL);
+    write_lds_u64(&state, 208u, 0x1122334455667788ULL);
+    write_lds_u64(&state, 224u, DoubleBits(2.5));
+    write_lds_u64(&state, 240u, DoubleBits(1.5));
+    write_lds_u64(&state, 256u, DoubleBits(4.0));
+    write_lds_u64(&state, 272u, DoubleBits(4.0));
+    return state;
+  };
+  auto validate_ds_b64_update_state = [&](const WaveExecutionState& state,
+                                          const char* mode) {
+    if (!Expect(state.halted, "expected ds b64 update program to halt")) {
+      std::cerr << mode << '\n';
+      return false;
+    }
+    const auto read_lds_u64 = [&](std::uint64_t address) {
+      std::uint64_t value = 0;
+      std::memcpy(&value, state.lds_bytes.data() + address, sizeof(value));
+      return value;
+    };
+    const std::array<DsLds64Expectation, 18> expectations = {{
+        {0u, 15u, "expected ds_add_u64 result"},
+        {16u, 14u, "expected ds_sub_u64 result"},
+        {32u, 6u, "expected ds_rsub_u64 result"},
+        {48u, 0u, "expected ds_inc_u64 result"},
+        {64u, 11u, "expected ds_dec_u64 result"},
+        {80u, 0xfffffffffffffffcULL, "expected ds_min_i64 result"},
+        {96u, 2u, "expected ds_max_i64 result"},
+        {112u, 4u, "expected ds_min_u64 result"},
+        {128u, 14u, "expected ds_max_u64 result"},
+        {144u, 0x0f000f000f000f00ULL, "expected ds_and_b64 result"},
+        {160u, 0x1111111111111111ULL, "expected ds_or_b64 result"},
+        {176u, 0xff0000ffff0000ffULL, "expected ds_xor_b64 result"},
+        {192u,
+         (0xffff0000aaaa5555ULL & ~0xff00ff0000ff00ffULL) |
+             0x005500aa550000aaULL,
+         "expected ds_mskor_b64 result"},
+        {208u, 0x8877665544332211ULL, "expected ds_cmpst_b64 result"},
+        {224u, DoubleBits(2.5), "expected ds_cmpst_f64 result"},
+        {240u, DoubleBits(3.75), "expected ds_add_f64 result"},
+        {256u, DoubleBits(-1.0), "expected ds_min_f64 result"},
+        {272u, DoubleBits(8.0), "expected ds_max_f64 result"},
+    }};
+    for (const DsLds64Expectation& expectation : expectations) {
+      if (!Expect(read_lds_u64(expectation.address) == expectation.expected,
+                  expectation.label)) {
+        std::cerr << mode << " address=" << expectation.address << '\n';
+        return false;
+      }
+    }
+    return true;
+  };
+
+  WaveExecutionState decoded_ds_b64_update_state = make_ds_b64_update_state();
+  if (!Expect(interpreter.ExecuteProgram(ds_b64_update_program,
+                                         &decoded_ds_b64_update_state,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_ds_b64_update_state(decoded_ds_b64_update_state, "decoded")) {
+    return 1;
+  }
+
+  std::vector<CompiledInstruction> compiled_ds_b64_update_program;
+  if (!Expect(interpreter.CompileProgram(ds_b64_update_program,
+                                         &compiled_ds_b64_update_program,
+                                         &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+  WaveExecutionState compiled_ds_b64_update_state = make_ds_b64_update_state();
+  if (!Expect(interpreter.ExecuteProgram(compiled_ds_b64_update_program,
+                                         &compiled_ds_b64_update_state,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_ds_b64_update_state(compiled_ds_b64_update_state, "compiled")) {
     return 1;
   }
   }
