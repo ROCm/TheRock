@@ -339,6 +339,33 @@ function(therock_provide_artifact slice_name)
   set(_archive_sha_files)
   set(_artifacts_dir "${THEROCK_BINARY_DIR}/artifacts")
   file(MAKE_DIRECTORY "${_artifacts_dir}")
+
+  # Write fingerprint file for the artifact slice.
+  # This is written at the artifact level (not per-component) since the
+  # fingerprint represents the composite of all subproject dependencies.
+  # The file contains key=value pairs (one per line) for each subproject
+  # fingerprint, allowing each subproject to validate its own fingerprint
+  # during bootstrap.
+  #
+  # Format:
+  #   ARTIFACT={slice_name}
+  #   DESCRIPTOR={descriptor_hash}
+  #   {subproject_name}={subproject_fprint}
+  #   ...
+  set(_slice_fprint_file "${_artifacts_dir}/${slice_name}.fprint")
+  if(_fprint_is_valid)
+    # Convert CMake list to newline-separated content
+    list(JOIN _fprint_content "\n" _slice_fprint_value)
+  else()
+    # Write INVALID marker so prebuilt validation knows fingerprint couldn't be computed
+    set(_slice_fprint_value "INVALID")
+  endif()
+
+  # Write the fingerprint file at configure time since we have all the data.
+  # The file is regenerated on reconfigure, which happens when dependencies change.
+  file(WRITE "${_slice_fprint_file}" "${_slice_fprint_value}\n")
+  list(APPEND _archive_files "${_slice_fprint_file}")
+
   if(_should_split)
     message(STATUS "Skipping archive generation for split artifact: ${slice_name}")
   endif()
@@ -347,15 +374,6 @@ function(therock_provide_artifact slice_name)
       continue()
     endif()
     set(_component_dir "${_artifacts_dir}/${slice_name}_${_component}${_bundle_suffix}")
-    # Write fingerprint file INSIDE the component directory so it gets archived
-    set(_fprint_file "${_component_dir}/.fprint")
-    # Always write fprint file for validation, even if invalid
-    if(_fprint_is_valid)
-      file(WRITE "${_fprint_file}" "${_fprint}")
-    else()
-      # Write INVALID marker so prebuilt validation knows fingerprint couldn't be computed
-      file(WRITE "${_fprint_file}" "INVALID")
-    endif()
     set(_manifest_file "${_component_dir}/artifact_manifest.txt")
     set(_archive_file "${_component_dir}${THEROCK_ARTIFACT_ARCHIVE_SUFFIX}.tar.xz")
     list(APPEND _archive_files "${_archive_file}")
