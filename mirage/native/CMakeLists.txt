@@ -33,6 +33,11 @@ add_executable(mirage_instruction_catalog_test
 )
 target_link_libraries(mirage_instruction_catalog_test PRIVATE mirage_sim_core)
 
+add_executable(mirage_isa_common_test
+  tests/isa/common/common_isa_test.cc
+)
+target_link_libraries(mirage_isa_common_test PRIVATE mirage_sim_core)
+
 add_executable(mirage_gfx950_interpreter_test
   tests/isa/gfx950/interpreter_test.cc
 )
@@ -65,6 +70,7 @@ target_compile_features(mirage_simdojo_smoke_test PRIVATE cxx_std_20)
 target_link_libraries(mirage_simdojo_smoke_test PRIVATE simdojo Threads::Threads)
 
 add_test(NAME mirage_instruction_catalog_test COMMAND mirage_instruction_catalog_test)
+add_test(NAME mirage_isa_common_test COMMAND mirage_isa_common_test)
 add_test(NAME mirage_gfx950_binary_decoder_test COMMAND mirage_gfx950_binary_decoder_test)
 add_test(NAME mirage_gfx950_interpreter_test COMMAND mirage_gfx950_interpreter_test)
 add_test(NAME mirage_sim_core_test COMMAND mirage_sim_core_test)

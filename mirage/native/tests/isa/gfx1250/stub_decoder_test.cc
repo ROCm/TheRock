@@ -25,6 +25,7 @@ using mirage::sim::isa::gfx1250::StubDecodeStatus;
 using mirage::sim::isa::gfx1250::StubDecoderEntrypointManifest;
 using mirage::sim::isa::gfx1250::StubDecoderRoute;
 using mirage::sim::isa::gfx1250::StubExecutionDomain;
+using mirage::sim::isa::gfx1250::StubFragmentKind;
 using mirage::sim::isa::gfx1250::StubOperandLayoutKind;
 using mirage::sim::isa::gfx1250::StubOperandRole;
 using mirage::sim::isa::gfx1250::StubOperandSlotKind;
@@ -66,6 +67,29 @@ bool ContainsSlot(const StubDecodedInstruction& instruction,
         binding.logical_operand_index == logical_operand_index &&
         binding.component_count == component_count &&
         binding.is_output == is_output) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool ContainsSlotFragment(const StubDecodedInstruction& instruction,
+                          StubOperandSlotKind slot_kind,
+                          StubFragmentKind fragment_kind,
+                          std::uint16_t rows,
+                          std::uint16_t columns,
+                          std::uint16_t depth,
+                          std::uint8_t element_bit_width,
+                          std::uint8_t packed_elements) {
+  for (std::uint32_t i = 0; i < instruction.operand_slots.binding_count; ++i) {
+    const auto& binding = instruction.operand_slots.bindings[i];
+    if (binding.slot_kind == slot_kind &&
+        binding.fragment_shape.kind == fragment_kind &&
+        binding.fragment_shape.rows == rows &&
+        binding.fragment_shape.columns == columns &&
+        binding.fragment_shape.depth == depth &&
+        binding.fragment_shape.element_bit_width == element_bit_width &&
+        binding.fragment_shape.packed_elements == packed_elements) {
       return true;
     }
   }
@@ -137,6 +161,11 @@ int main() {
               ContainsSlot(vop3p, StubOperandSlotKind::kSource1,
                            StubOperandValueClass::kPackedVector, 2, 2, false),
           "expected PK_ADD operand slots")) {
+    return 1;
+  }
+  if (!Expect(ContainsSlotFragment(vop3p, StubOperandSlotKind::kDestination,
+                                   StubFragmentKind::kPacked, 1, 1, 1, 16, 2),
+              "expected PK_ADD destination fragment shape")) {
     return 1;
   }
 
@@ -232,6 +261,13 @@ int main() {
                        StubOperandValueClass::kAccumulatorFragment, 3, 1,
                        false),
           "expected WMMA accumulator slot")) {
+    return 1;
+  }
+  if (!Expect(ContainsSlotFragment(wmma,
+                                   StubOperandSlotKind::kAccumulatorSource,
+                                   StubFragmentKind::kMatrix, 16, 16, 4, 32,
+                                   0),
+              "expected WMMA accumulator fragment shape")) {
     return 1;
   }
 
@@ -380,6 +416,12 @@ int main() {
           "expected tensor-load operand slots")) {
     return 1;
   }
+  if (!Expect(ContainsSlotFragment(
+                  tensor, StubOperandSlotKind::kTensorDescriptorSource,
+                  StubFragmentKind::kTensorDescriptor, 1, 1, 1, 0, 1),
+              "expected tensor-load descriptor fragment shape")) {
+    return 1;
+  }
 
   const StubDecodedInstruction tensor_store =
       DecodeMimgTensorStub("TENSOR_STORE_FROM_LDS");
@@ -484,6 +526,11 @@ int main() {
               "expected V_CVT_F32_FP8 operand roles")) {
     return 1;
   }
+  if (!Expect(ContainsSlotFragment(vop1_f32, StubOperandSlotKind::kSource0,
+                                   StubFragmentKind::kVector, 1, 1, 1, 32, 1),
+              "expected V_CVT_F32_FP8 source fragment shape")) {
+    return 1;
+  }
 
   const StubDecodedInstruction packed_vop1 =
       DecodeVop1Stub("V_CVT_PK_F16_FP8");
@@ -503,6 +550,12 @@ int main() {
   if (!Expect(ContainsSlot(packed_vop1, StubOperandSlotKind::kDestination,
                            StubOperandValueClass::kPackedVector, 0, 2, true),
               "expected packed FP8 conversion destination slot")) {
+    return 1;
+  }
+  if (!Expect(ContainsSlotFragment(
+                  packed_vop1, StubOperandSlotKind::kSource0,
+                  StubFragmentKind::kPacked, 1, 1, 1, 8, 2),
+              "expected packed FP8 conversion source fragment shape")) {
     return 1;
   }
 

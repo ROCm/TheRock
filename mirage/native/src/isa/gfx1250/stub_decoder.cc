@@ -47,6 +47,65 @@ StubOperandSlotRecord MakeOperandSlots(
   return record;
 }
 
+FragmentShape ClassifyOperandFragmentShape(
+    std::string_view instruction_name,
+    const StubOperandSlotBinding& binding) {
+  switch (binding.value_class) {
+    case StubOperandValueClass::kPackedVector:
+      if (instruction_name == "V_CVT_PK_F16_FP8" ||
+          instruction_name == "V_CVT_PK_F16_BF8") {
+        if (binding.slot_kind == StubOperandSlotKind::kSource0) {
+          return MakePackedFragmentShape(2, 8);
+        }
+        return MakePackedFragmentShape(2, 16);
+      }
+      return MakePackedFragmentShape(binding.component_count, 16);
+    case StubOperandValueClass::kVectorRegister:
+      return MakeVectorFragmentShape(binding.component_count, 32);
+    case StubOperandValueClass::kScalarRegister:
+      return MakeScalarFragmentShape(32);
+    case StubOperandValueClass::kTensorDescriptor:
+      return MakeTensorDescriptorFragmentShape();
+    case StubOperandValueClass::kTensorCoordinate:
+      return MakeTensorCoordinateFragmentShape();
+    case StubOperandValueClass::kLdsAddress:
+      return MakeAddressFragmentShape(32);
+    case StubOperandValueClass::kMatrixFragment:
+    case StubOperandValueClass::kAccumulatorFragment:
+      if (instruction_name == "V_WMMA_F32_16X16X4_F32_w32") {
+        return MakeMatrixFragmentShape(
+            16, 16, 4,
+            binding.value_class == StubOperandValueClass::kAccumulatorFragment ||
+                    binding.slot_kind == StubOperandSlotKind::kDestination
+                ? 32
+                : 32,
+            32);
+      }
+      if (instruction_name == "V_SWMMAC_F32_16X16X128_FP8_FP8_w32" ||
+          instruction_name == "V_WMMA_SCALE_F32_16X16X128_F8F6F4" ||
+          instruction_name == "V_WMMA_SCALE16_F32_16X16X128_F8F6F4") {
+        const bool wide_result =
+            binding.value_class == StubOperandValueClass::kAccumulatorFragment ||
+            binding.slot_kind == StubOperandSlotKind::kDestination;
+        return MakeMatrixFragmentShape(16, 16, 128, wide_result ? 32 : 8, 32);
+      }
+      break;
+    case StubOperandValueClass::kUnknown:
+      break;
+  }
+  return {};
+}
+
+StubOperandSlotRecord AttachFragmentShapes(
+    std::string_view instruction_name,
+    StubOperandSlotRecord record) {
+  for (std::uint32_t index = 0; index < record.binding_count; ++index) {
+    record.bindings[index].fragment_shape =
+        ClassifyOperandFragmentShape(instruction_name, record.bindings[index]);
+  }
+  return record;
+}
+
 StubOperandLayoutRecord ClassifyOperandLayout(std::string_view instruction_name) {
   if (instruction_name == "V_PK_ADD_BF16") {
     return {
@@ -577,7 +636,7 @@ StubOperandSlotRecord ClassifyOperandSlots(std::string_view instruction_name) {
       instruction_name == "V_PK_MUL_BF16" ||
       instruction_name == "V_PK_MIN_NUM_BF16" ||
       instruction_name == "V_PK_MAX_NUM_BF16") {
-    return MakeOperandSlots({
+    return AttachFragmentShapes(instruction_name, MakeOperandSlots({
         {StubOperandSlotKind::kDestination,
          StubOperandValueClass::kPackedVector,
          0,
@@ -596,10 +655,10 @@ StubOperandSlotRecord ClassifyOperandSlots(std::string_view instruction_name) {
          2,
          false,
          false},
-    });
+    }));
   }
   if (instruction_name == "V_PK_FMA_BF16") {
-    return MakeOperandSlots({
+    return AttachFragmentShapes(instruction_name, MakeOperandSlots({
         {StubOperandSlotKind::kDestination,
          StubOperandValueClass::kPackedVector,
          0,
@@ -624,11 +683,11 @@ StubOperandSlotRecord ClassifyOperandSlots(std::string_view instruction_name) {
          2,
          false,
          false},
-    });
+    }));
   }
   if (instruction_name == "V_WMMA_F32_16X16X4_F32_w32" ||
       instruction_name == "V_SWMMAC_F32_16X16X128_FP8_FP8_w32") {
-    return MakeOperandSlots({
+    return AttachFragmentShapes(instruction_name, MakeOperandSlots({
         {StubOperandSlotKind::kDestination,
          StubOperandValueClass::kMatrixFragment,
          0,
@@ -653,11 +712,11 @@ StubOperandSlotRecord ClassifyOperandSlots(std::string_view instruction_name) {
          1,
          false,
          false},
-    });
+    }));
   }
   if (instruction_name == "V_WMMA_SCALE_F32_16X16X128_F8F6F4" ||
       instruction_name == "V_WMMA_SCALE16_F32_16X16X128_F8F6F4") {
-    return MakeOperandSlots({
+    return AttachFragmentShapes(instruction_name, MakeOperandSlots({
         {StubOperandSlotKind::kDestination,
          StubOperandValueClass::kMatrixFragment,
          0,
@@ -688,11 +747,11 @@ StubOperandSlotRecord ClassifyOperandSlots(std::string_view instruction_name) {
          1,
          false,
          false},
-    });
+    }));
   }
   if (instruction_name == "V_WMMA_LD_SCALE_PAIRED_B32" ||
       instruction_name == "V_WMMA_LD_SCALE16_PAIRED_B64") {
-    return MakeOperandSlots({
+    return AttachFragmentShapes(instruction_name, MakeOperandSlots({
         {StubOperandSlotKind::kDestination,
          StubOperandValueClass::kVectorRegister,
          0,
@@ -717,10 +776,10 @@ StubOperandSlotRecord ClassifyOperandSlots(std::string_view instruction_name) {
          1,
          false,
          false},
-    });
+    }));
   }
   if (instruction_name == "TENSOR_LOAD_TO_LDS") {
-    return MakeOperandSlots({
+    return AttachFragmentShapes(instruction_name, MakeOperandSlots({
         {StubOperandSlotKind::kTensorDescriptorSource,
          StubOperandValueClass::kTensorDescriptor,
          0,
@@ -739,10 +798,10 @@ StubOperandSlotRecord ClassifyOperandSlots(std::string_view instruction_name) {
          1,
          true,
          false},
-    });
+    }));
   }
   if (instruction_name == "TENSOR_STORE_FROM_LDS") {
-    return MakeOperandSlots({
+    return AttachFragmentShapes(instruction_name, MakeOperandSlots({
         {StubOperandSlotKind::kTensorDescriptorSource,
          StubOperandValueClass::kTensorDescriptor,
          0,
@@ -761,12 +820,12 @@ StubOperandSlotRecord ClassifyOperandSlots(std::string_view instruction_name) {
          1,
          false,
          false},
-    });
+    }));
   }
   if (instruction_name == "V_CVT_F16_FP8" ||
       instruction_name == "V_CVT_F16_BF8" ||
       instruction_name == "V_CVT_F32_FP8") {
-    return MakeOperandSlots({
+    return AttachFragmentShapes(instruction_name, MakeOperandSlots({
         {StubOperandSlotKind::kDestination,
          StubOperandValueClass::kVectorRegister,
          0,
@@ -779,11 +838,11 @@ StubOperandSlotRecord ClassifyOperandSlots(std::string_view instruction_name) {
          1,
          false,
          false},
-    });
+    }));
   }
   if (instruction_name == "V_CVT_PK_F16_FP8" ||
       instruction_name == "V_CVT_PK_F16_BF8") {
-    return MakeOperandSlots({
+    return AttachFragmentShapes(instruction_name, MakeOperandSlots({
         {StubOperandSlotKind::kDestination,
          StubOperandValueClass::kPackedVector,
          0,
@@ -796,10 +855,10 @@ StubOperandSlotRecord ClassifyOperandSlots(std::string_view instruction_name) {
          2,
          false,
          false},
-    });
+    }));
   }
   if (instruction_name == "V_DIV_SCALE_F64") {
-    return MakeOperandSlots({
+    return AttachFragmentShapes(instruction_name, MakeOperandSlots({
         {StubOperandSlotKind::kDestination,
          StubOperandValueClass::kVectorRegister,
          0,
@@ -830,7 +889,7 @@ StubOperandSlotRecord ClassifyOperandSlots(std::string_view instruction_name) {
          2,
          false,
          false},
-    });
+    }));
   }
   return {};
 }

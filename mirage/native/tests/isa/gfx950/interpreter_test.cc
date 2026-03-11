@@ -247,7 +247,8 @@ bool RunAtomicSemanticCase(
     }
   }
 
-  WaveExecutionState state;
+  static thread_local WaveExecutionState state;
+  state = {};
   state.exec_mask = 0x1ULL;
   SetLane0VgprU64(&state, kAddressReg, kAtomicAddress);
   state.sgprs[kScalarBaseReg] = 0;
@@ -312,9 +313,9 @@ bool RunSaveexecSemanticCase(
       DecodedInstruction::Nullary("S_ENDPGM"),
   };
 
-  WaveExecutionState state;
-  state.exec_mask = test_case.initial_exec;
-  SplitU64(test_case.source, &state.sgprs[20], &state.sgprs[21]);
+  auto state = std::make_unique<WaveExecutionState>();
+  state->exec_mask = test_case.initial_exec;
+  SplitU64(test_case.source, &state->sgprs[20], &state->sgprs[21]);
 
   std::string error_message;
   if (use_compiled_program) {
@@ -323,20 +324,23 @@ bool RunSaveexecSemanticCase(
       std::cerr << test_case.opcode << " compile: " << error_message << '\n';
       return false;
     }
-    if (!interpreter.ExecuteProgram(compiled_program, &state, &error_message)) {
+    if (!interpreter.ExecuteProgram(compiled_program, state.get(),
+                                    &error_message)) {
       std::cerr << test_case.opcode << " compiled execute: " << error_message
                 << '\n';
       return false;
     }
-  } else if (!interpreter.ExecuteProgram(program, &state, &error_message)) {
+  } else if (!interpreter.ExecuteProgram(program, state.get(),
+                                         &error_message)) {
     std::cerr << test_case.opcode << " decoded execute: " << error_message
               << '\n';
     return false;
   }
 
-  const std::uint64_t saved_exec = ComposeU64(state.sgprs[40], state.sgprs[41]);
+  const std::uint64_t saved_exec =
+      ComposeU64(state->sgprs[40], state->sgprs[41]);
   const char* mode = use_compiled_program ? "compiled" : "decoded";
-  if (!Expect(state.halted, "expected saveexec test program to halt")) {
+  if (!Expect(state->halted, "expected saveexec test program to halt")) {
     std::cerr << test_case.opcode << ' ' << mode << '\n';
     return false;
   }
@@ -345,14 +349,14 @@ bool RunSaveexecSemanticCase(
     std::cerr << test_case.opcode << ' ' << mode << '\n';
     return false;
   }
-  if (!Expect(state.exec_mask == test_case.expected_exec,
+  if (!Expect(state->exec_mask == test_case.expected_exec,
               "expected saveexec result exec mask")) {
     std::cerr << test_case.opcode << ' ' << mode << " actual=0x" << std::hex
-              << state.exec_mask << " expected=0x" << test_case.expected_exec
+              << state->exec_mask << " expected=0x" << test_case.expected_exec
               << std::dec << '\n';
     return false;
   }
-  if (!Expect(state.scc == (test_case.expected_exec != 0),
+  if (!Expect(state->scc == (test_case.expected_exec != 0),
               "expected saveexec SCC to reflect result nonzero")) {
     std::cerr << test_case.opcode << ' ' << mode << '\n';
     return false;
@@ -372,7 +376,8 @@ bool RunScalarUnaryCase(
       DecodedInstruction::Nullary("S_ENDPGM"),
   };
 
-  WaveExecutionState state;
+  static thread_local WaveExecutionState state;
+  state = {};
   state.scc = test_case.initial_scc;
   state.sgprs[20] = test_case.source;
   state.sgprs[40] = test_case.initial_dest;
@@ -428,7 +433,8 @@ bool RunScalarBinaryCase(
       DecodedInstruction::Nullary("S_ENDPGM"),
   };
 
-  WaveExecutionState state;
+  static thread_local WaveExecutionState state;
+  state = {};
   state.scc = test_case.initial_scc;
   state.sgprs[20] = test_case.lhs;
   state.sgprs[24] = test_case.rhs;
@@ -483,7 +489,8 @@ bool RunScalarPairUnaryCase(
       DecodedInstruction::Nullary("S_ENDPGM"),
   };
 
-  WaveExecutionState state;
+  static thread_local WaveExecutionState state;
+  state = {};
   state.scc = test_case.initial_scc;
   SplitU64(test_case.initial_dest, &state.sgprs[40], &state.sgprs[41]);
   SplitU64(test_case.source, &state.sgprs[20], &state.sgprs[21]);
@@ -530,7 +537,8 @@ bool RunScalarPairCompareCase(
       DecodedInstruction::Nullary("S_ENDPGM"),
   };
 
-  WaveExecutionState state;
+  static thread_local WaveExecutionState state;
+  state = {};
   SplitU64(test_case.lhs, &state.sgprs[20], &state.sgprs[21]);
   SplitU64(test_case.rhs, &state.sgprs[24], &state.sgprs[25]);
 
@@ -577,7 +585,8 @@ bool RunScalarPairFromScalarUnaryCase(
       DecodedInstruction::Nullary("S_ENDPGM"),
   };
 
-  WaveExecutionState state;
+  static thread_local WaveExecutionState state;
+  state = {};
   state.scc = test_case.initial_scc;
   state.sgprs[20] = test_case.source;
 
@@ -623,7 +632,8 @@ bool RunScalarFromPairUnaryCase(
       DecodedInstruction::Nullary("S_ENDPGM"),
   };
 
-  WaveExecutionState state;
+  static thread_local WaveExecutionState state;
+  state = {};
   state.scc = test_case.initial_scc;
   SplitU64(test_case.source, &state.sgprs[20], &state.sgprs[21]);
 
@@ -678,7 +688,8 @@ bool RunScalarPairBinaryCase(
       DecodedInstruction::Nullary("S_ENDPGM"),
   };
 
-  WaveExecutionState state;
+  static thread_local WaveExecutionState state;
+  state = {};
   state.scc = test_case.initial_scc;
   SplitU64(test_case.lhs, &state.sgprs[20], &state.sgprs[21]);
   SplitU64(test_case.rhs, &state.sgprs[24], &state.sgprs[25]);

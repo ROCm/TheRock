@@ -4,7 +4,10 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <initializer_list>
 #include <string_view>
+
+#include "lib/sim/isa/common/operand_metadata.h"
 
 namespace mirage::sim::isa {
 
@@ -18,35 +21,64 @@ struct InstructionOperand {
   OperandKind kind = OperandKind::kImm32;
   std::uint16_t index = 0;
   std::uint32_t imm32 = 0;
+  OperandDescriptor descriptor{};
 
-  static InstructionOperand Sgpr(std::uint16_t index_value) {
+  static InstructionOperand Sgpr(std::uint16_t index_value,
+                                 OperandDescriptor descriptor_value = {}) {
     InstructionOperand operand;
     operand.kind = OperandKind::kSgpr;
     operand.index = index_value;
+    operand.descriptor = descriptor_value;
     return operand;
   }
 
-  static InstructionOperand Vgpr(std::uint16_t index_value) {
+  static InstructionOperand Vgpr(std::uint16_t index_value,
+                                 OperandDescriptor descriptor_value = {}) {
     InstructionOperand operand;
     operand.kind = OperandKind::kVgpr;
     operand.index = index_value;
+    operand.descriptor = descriptor_value;
     return operand;
   }
 
-  static InstructionOperand Imm32(std::uint32_t value) {
+  static InstructionOperand Imm32(std::uint32_t value,
+                                  OperandDescriptor descriptor_value = {}) {
     InstructionOperand operand;
     operand.kind = OperandKind::kImm32;
     operand.imm32 = value;
+    operand.descriptor = descriptor_value;
+    return operand;
+  }
+
+  InstructionOperand WithDescriptor(OperandDescriptor descriptor_value) const {
+    InstructionOperand operand = *this;
+    operand.descriptor = descriptor_value;
     return operand;
   }
 };
 
 struct DecodedInstruction {
-  static constexpr std::size_t kMaxOperands = 5;
+  static constexpr std::size_t kMaxOperands = 8;
 
   std::string_view opcode;
   std::array<InstructionOperand, kMaxOperands> operands{};
   std::uint8_t operand_count = 0;
+
+ private:
+  template <typename... OperandTypes>
+  static DecodedInstruction MakeWithOperands(std::string_view opcode_value,
+                                             OperandTypes... operand_values) {
+    static_assert(sizeof...(operand_values) <= kMaxOperands);
+    DecodedInstruction instruction;
+    instruction.opcode = opcode_value;
+    std::size_t operand_index = 0;
+    (void)std::initializer_list<int>{
+        ((instruction.operands[operand_index++] = operand_values), 0)...};
+    instruction.operand_count = static_cast<std::uint8_t>(operand_index);
+    return instruction;
+  }
+
+ public:
 
   static DecodedInstruction Nullary(std::string_view opcode_value) {
     DecodedInstruction instruction;
@@ -56,32 +88,20 @@ struct DecodedInstruction {
 
   static DecodedInstruction OneOperand(std::string_view opcode_value,
                                        InstructionOperand operand0) {
-    DecodedInstruction instruction;
-    instruction.opcode = opcode_value;
-    instruction.operands = {operand0, {}, {}, {}, {}};
-    instruction.operand_count = 1;
-    return instruction;
+    return MakeWithOperands(opcode_value, operand0);
   }
 
   static DecodedInstruction TwoOperand(std::string_view opcode_value,
                                        InstructionOperand operand0,
                                        InstructionOperand operand1) {
-    DecodedInstruction instruction;
-    instruction.opcode = opcode_value;
-    instruction.operands = {operand0, operand1, {}, {}, {}};
-    instruction.operand_count = 2;
-    return instruction;
+    return MakeWithOperands(opcode_value, operand0, operand1);
   }
 
   static DecodedInstruction ThreeOperand(std::string_view opcode_value,
                                          InstructionOperand operand0,
                                          InstructionOperand operand1,
                                          InstructionOperand operand2) {
-    DecodedInstruction instruction;
-    instruction.opcode = opcode_value;
-    instruction.operands = {operand0, operand1, operand2, {}, {}};
-    instruction.operand_count = 3;
-    return instruction;
+    return MakeWithOperands(opcode_value, operand0, operand1, operand2);
   }
 
   static DecodedInstruction FourOperand(std::string_view opcode_value,
@@ -89,11 +109,8 @@ struct DecodedInstruction {
                                         InstructionOperand operand1,
                                         InstructionOperand operand2,
                                         InstructionOperand operand3) {
-    DecodedInstruction instruction;
-    instruction.opcode = opcode_value;
-    instruction.operands = {operand0, operand1, operand2, operand3, {}};
-    instruction.operand_count = 4;
-    return instruction;
+    return MakeWithOperands(opcode_value, operand0, operand1, operand2,
+                            operand3);
   }
 
   static DecodedInstruction FiveOperand(std::string_view opcode_value,
@@ -102,11 +119,44 @@ struct DecodedInstruction {
                                         InstructionOperand operand2,
                                         InstructionOperand operand3,
                                         InstructionOperand operand4) {
-    DecodedInstruction instruction;
-    instruction.opcode = opcode_value;
-    instruction.operands = {operand0, operand1, operand2, operand3, operand4};
-    instruction.operand_count = 5;
-    return instruction;
+    return MakeWithOperands(opcode_value, operand0, operand1, operand2,
+                            operand3, operand4);
+  }
+
+  static DecodedInstruction SixOperand(std::string_view opcode_value,
+                                       InstructionOperand operand0,
+                                       InstructionOperand operand1,
+                                       InstructionOperand operand2,
+                                       InstructionOperand operand3,
+                                       InstructionOperand operand4,
+                                       InstructionOperand operand5) {
+    return MakeWithOperands(opcode_value, operand0, operand1, operand2,
+                            operand3, operand4, operand5);
+  }
+
+  static DecodedInstruction SevenOperand(std::string_view opcode_value,
+                                         InstructionOperand operand0,
+                                         InstructionOperand operand1,
+                                         InstructionOperand operand2,
+                                         InstructionOperand operand3,
+                                         InstructionOperand operand4,
+                                         InstructionOperand operand5,
+                                         InstructionOperand operand6) {
+    return MakeWithOperands(opcode_value, operand0, operand1, operand2,
+                            operand3, operand4, operand5, operand6);
+  }
+
+  static DecodedInstruction EightOperand(std::string_view opcode_value,
+                                         InstructionOperand operand0,
+                                         InstructionOperand operand1,
+                                         InstructionOperand operand2,
+                                         InstructionOperand operand3,
+                                         InstructionOperand operand4,
+                                         InstructionOperand operand5,
+                                         InstructionOperand operand6,
+                                         InstructionOperand operand7) {
+    return MakeWithOperands(opcode_value, operand0, operand1, operand2,
+                            operand3, operand4, operand5, operand6, operand7);
   }
 
   static DecodedInstruction Unary(std::string_view opcode_value,

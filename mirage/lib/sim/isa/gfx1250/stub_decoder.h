@@ -6,6 +6,7 @@
 #include <span>
 #include <string_view>
 
+#include "lib/sim/isa/common/operand_metadata.h"
 #include "lib/sim/isa/gfx1250/stub_decoder_selector.h"
 
 namespace mirage::sim::isa::gfx1250 {
@@ -76,74 +77,15 @@ struct StubOperandLayoutRecord {
   bool is_store = false;
 };
 
-enum class StubOperandRole {
-  kUnknown,
-  kDestination,
-  kSource0,
-  kSource1,
-  kSource2,
-  kAccumulator,
-  kScale,
-  kPairedScale,
-  kTensorDescriptor,
-  kTensorCoordinate,
-  kLdsDestination,
-  kLdsSource,
-};
-
-struct StubOperandRoleBinding {
-  StubOperandRole role = StubOperandRole::kUnknown;
-  std::uint32_t count = 0;
-  bool is_output = false;
-  bool is_implicit = false;
-};
-
-struct StubOperandRoleRecord {
-  std::array<StubOperandRoleBinding, 6> bindings{};
-  std::uint32_t binding_count = 0;
-};
-
-enum class StubOperandSlotKind {
-  kUnknown,
-  kDestination,
-  kScalarDestination,
-  kSource0,
-  kSource1,
-  kSource2,
-  kAccumulatorSource,
-  kScaleSource,
-  kPairedScaleSource,
-  kTensorDescriptorSource,
-  kTensorCoordinateSource,
-  kLdsDestination,
-  kLdsSource,
-};
-
-enum class StubOperandValueClass {
-  kUnknown,
-  kVectorRegister,
-  kScalarRegister,
-  kPackedVector,
-  kMatrixFragment,
-  kAccumulatorFragment,
-  kTensorDescriptor,
-  kTensorCoordinate,
-  kLdsAddress,
-};
-
-struct StubOperandSlotBinding {
-  StubOperandSlotKind slot_kind = StubOperandSlotKind::kUnknown;
-  StubOperandValueClass value_class = StubOperandValueClass::kUnknown;
-  std::uint32_t logical_operand_index = 0;
-  std::uint32_t component_count = 0;
-  bool is_output = false;
-  bool is_implicit = false;
-};
-
-struct StubOperandSlotRecord {
-  std::array<StubOperandSlotBinding, 8> bindings{};
-  std::uint32_t binding_count = 0;
-};
+using StubFragmentKind = FragmentKind;
+using StubFragmentShape = FragmentShape;
+using StubOperandRole = OperandRole;
+using StubOperandRoleBinding = OperandRoleBinding;
+using StubOperandRoleRecord = OperandRoleRecord;
+using StubOperandSlotKind = OperandSlotKind;
+using StubOperandValueClass = OperandValueClass;
+using StubOperandSlotBinding = OperandSlotBinding;
+using StubOperandSlotRecord = OperandSlotRecord;
 
 struct StubDecodedInstruction {
   std::string_view instruction_name{};
