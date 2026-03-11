@@ -15,12 +15,12 @@
 #   - Missing plugins are detected (the harness verifies expected plugins load)
 #
 # Schema:
-#   [plugins.<name>]     - Plugin definition (path to .so, engine names)
+#   [plugins.<name>]     - Plugin definition (plugin name, engine names)
 #   [engines.<name>]     - Per-engine config (tolerance mode, expected failures)
 #
 # Example:
 #   [plugins.example]
-#   path = "libexample_plugin.so"
+#   name = "example_plugin"
 #   engines = ["EXAMPLE_ENGINE"]
 #
 #   [engines.EXAMPLE_ENGINE]
@@ -30,9 +30,9 @@
 #   ]
 
 [plugins.miopen]
-path = "libmiopen_legacy_plugin.so"
+name = "miopen_provider_plugin"
 engines = ["MIOPEN_PLUGIN"]
 
 [plugins.fusilli]
-path = "libfusilli_plugin.so"
+name = "fusilli_plugin"
 engines = ["FUSILLI"]
