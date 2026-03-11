@@ -680,7 +680,6 @@ def main(base_args, linux_families, windows_families):
                 matrix_row["sanity_check_only_for_family"] = True
 
     print(f"test_type decision: '{test_type}' (reason: {test_type_reason})")
-    print(f"run_functional_tests: {run_functional_tests}")
 
     # Format variants for summary - handle both regular and multi-arch modes
     def format_variants(variants):

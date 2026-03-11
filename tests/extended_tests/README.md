@@ -39,7 +39,7 @@ All tests require these environment variables. **Note:** These are automatically
 
 ```bash
 # Required: Path to TheRock bin/ directory (see above for how to obtain)
-export THEROCK_BIN_DIR=/path/to/therock/install/bin
+export THEROCK_BIN_DIR=/path/to/therock/therock-build/bin
 
 # Required: GitHub Actions run ID (from CI run URL, e.g., https://github.com/ROCm/TheRock/actions/runs/16948046392)
 export ARTIFACT_RUN_ID=16948046392
