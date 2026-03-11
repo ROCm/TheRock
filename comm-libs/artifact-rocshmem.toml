@@ -2,6 +2,7 @@
 [components.dev."comm-libs/rocshmem/stage"]
 include = [
   "include/**",
+  "lib/*.a",
 ]
 
 [components.doc."comm-libs/rocshmem/stage"]
@@ -12,6 +13,9 @@ include = [
 [components.lib."comm-libs/rocshmem/stage"]
 include = [
   "lib/**",
+]
+exclude = [
+  "lib/*.a",
 ]
 
 [components.run."comm-libs/rocshmem/stage"]
