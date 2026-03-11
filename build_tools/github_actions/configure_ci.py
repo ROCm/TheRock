@@ -207,6 +207,14 @@ def generate_multi_arch_matrix(
                         "sanity_check_only_for_family": platform_info.get(
                             "sanity_check_only_for_family", False
                         ),
+                        # Per-family pytorch flag. False for families with known
+                        # build failures. Used to gate per-family pytorch wheel
+                        # builds in multi_arch_ci_linux.yml.
+                        # NOTE: This is distinct from a future combined (multi-arch)
+                        # pytorch build that would build once against the full index.
+                        "build_pytorch": not platform_info.get(
+                            "expect_pytorch_failure", False
+                        ),
                     }
                 )
 
@@ -637,12 +645,21 @@ def main(base_args, linux_families, windows_families):
     test_type = "smoke"
     test_type_reason = "default (smoke tests)"
 
-    # In the case of a scheduled run, we always want to build and we want to run full tests
     if is_schedule:
+        # Always build and run full tests on scheduled runs.
         enable_build_jobs = True
         test_type = "full"
         test_type_reason = "scheduled run triggers full tests"
+    elif is_workflow_dispatch:
+        # Always build and conditionally run full tests for workflow dispatch.
+        enable_build_jobs = True
+        if linux_test_output or windows_test_output:
+            combined_test_labels = list(set(linux_test_output + windows_test_output))
+            test_type = "full"
+            test_type_reason = f"test label(s) specified: {combined_test_labels}"
     else:
+        # Conditionally build and conditionally run full tests for other
+        # triggers (pull_request), based on modified paths and other inputs.
         modified_paths = get_git_modified_paths(base_ref)
         print("modified_paths (max 200):", modified_paths[:200])
         print(f"Checking modified files since this had a {github_event_name} trigger")

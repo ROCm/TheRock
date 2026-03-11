@@ -11,3 +11,6 @@ include = [
   "bin/miopen_gtest*",
 ]
 [components.run."ml-libs/MIOpen/stage"]
+exclude = [
+  "bin/miopen_gtest*",
+]
