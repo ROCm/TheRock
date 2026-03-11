@@ -25,6 +25,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tests"))
 from github_actions_utils import *
 from extended_tests.benchmark.benchmark_test_matrix import benchmark_matrix
+from extended_tests.functional.functional_test_matrix import functional_matrix
 from amdgpu_family_matrix import get_all_families_for_trigger_types
 
 logging.basicConfig(level=logging.INFO)
@@ -490,9 +491,10 @@ def run():
         logging.info("Using benchmark_matrix only (benchmark tests)")
         selected_matrix = benchmark_matrix.copy()
     else:
-        # For regular workflow, use ONLY test_matrix
-        logging.info("Using test_matrix only (regular tests)")
+        # For regular workflow, use test_matrix + functional_matrix
+        logging.info("Using test_matrix + functional_matrix (regular + functional tests)")
         selected_matrix = test_matrix.copy()
+        selected_matrix.update(functional_matrix)
 
     # This string -> array conversion ensures no partial strings are detected during test selection (ex: "hipblas" in ["hipblaslt", "rocblas"] = false)
     project_array = [item.strip() for item in projects_to_test.split(",")]

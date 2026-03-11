@@ -10,6 +10,7 @@ Both BenchmarkBase and FunctionalBase inherit from ExtendedTestBase.
 import json
 import os
 import shlex
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -47,15 +48,33 @@ class ExtendedTestBase:
         self.artifact_run_id = os.getenv("ARTIFACT_RUN_ID")
         self.amdgpu_families = os.getenv("AMDGPU_FAMILIES")
         self.therock_dir = Path(__file__).resolve().parents[3]
-        self.rocm_path = (
-            Path(self.therock_bin_dir).resolve().parent
-            if self.therock_bin_dir
-            else None
-        )
+        self.rocm_path = self._resolve_rocm_path()
 
         # Initialize test client with auto-detection
         self.client = ExtendedTestClient(auto_detect=True)
         self.client.print_system_summary()
+
+    def _resolve_rocm_path(self) -> Path:
+        """Resolve ROCm installation path with CI and local fallbacks.
+
+        Priority: THEROCK_BIN_DIR (CI) > ROCM_PATH env > hipcc on PATH > /opt/rocm
+        """
+        if self.therock_bin_dir:
+            return Path(self.therock_bin_dir).resolve().parent
+
+        rocm_env = os.getenv("ROCM_PATH")
+        if rocm_env:
+            return Path(rocm_env).resolve()
+
+        hipcc_in_path = shutil.which("hipcc")
+        if hipcc_in_path:
+            hipcc_path = Path(hipcc_in_path).resolve()
+            if hipcc_path.parent.name == "bin":
+                if hipcc_path.parent.parent.name == "hip":
+                    return hipcc_path.parent.parent.parent
+                return hipcc_path.parent.parent
+
+        return Path("/opt/rocm")
 
     def load_config(self, config_filename: str) -> Dict[str, Any]:
         """Load test configuration from JSON file in configs/ directory.
