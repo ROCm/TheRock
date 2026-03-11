@@ -9,7 +9,6 @@
 ### Build system
 
 - [Artifacts](artifacts.md)
-- [Build Containers](build_containers.md)
 - [Build System](build_system.md)
 - [Dependencies](dependencies.md)
 - [Development Guide](development_guide.md)
@@ -27,6 +26,7 @@
 
 ### Infrastructure
 
+- [CI Workflow Outputs Layout](workflow_outputs.md)
 - [GitHub Actions Debugging](github_actions_debugging.md)
 - [CI Behavior Manipulation](ci_behavior_manipulation.md)
 

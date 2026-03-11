@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Sets up ccache in a way that is compatible with the project.
 
 Building ROCm involves bootstrapping various compiler tools and is therefore a

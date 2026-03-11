@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Many things need to be configured with paths to additional LLVM tools.
 # If a project is using an amd-hip or amd-llvm toolchain, then it will already
 # have an implicit dep on the toolchain, so it is safe to reference binaries
@@ -94,13 +97,15 @@ endif()
 # hipBLASLt
 ##############################################################################
 
-set(hipBLASLt_optional_deps)
+set(hipBLASLt_runtime_deps)
 if(NOT WIN32)
-  # hipBLASLt is hard-coded to not expect rocm-smi and amdsmi on Windows.
-  list(APPEND hipBLASLt_optional_deps
-    amdsmi
-    rocm_smi_lib
-  )
+  # Required on Linux.
+  list(APPEND hipBLASLt_runtime_deps amdsmi)
+
+  # rocm_smi_lib remains optional (guarded).
+  if(TARGET rocm_smi_lib)
+    list(APPEND hipBLASLt_runtime_deps rocm_smi_lib)
+  endif()
 endif()
 
 set(hipBLASLt_rocRoller_deps)
@@ -146,11 +151,11 @@ therock_cmake_subproject_declare(hipBLASLt
     hip-clr
     therock-host-blas
     ${hipBLASLt_rocRoller_runtime_deps}
-    ${hipBLASLt_optional_deps}
+    ${hipBLASLt_runtime_deps}
     ${optional_profiler_deps}
 )
 therock_cmake_subproject_glob_c_sources(hipBLASLt
-SUBDIRS
+  SUBDIRS
     .
 )
 therock_cmake_subproject_provide_package(hipBLASLt hipblaslt lib/cmake/hipblaslt)
@@ -165,7 +170,9 @@ list(APPEND _blas_subproject_names hipBLASLt)
 set(rocBLAS_optional_runtime_deps)
 if(NOT WIN32)
   # rocBLAS is hard-coded to not expect rocm-smi.
-  list(APPEND rocBLAS_optional_runtime_deps rocm_smi_lib)
+  if(TARGET rocm_smi_lib)
+    list(APPEND rocBLAS_optional_runtime_deps rocm_smi_lib)
+  endif()
 elseif(THEROCK_BUILD_TESTING)
   list(APPEND rocBLAS_optional_runtime_deps therock-host-blas)
 endif()
@@ -289,13 +296,15 @@ if(THEROCK_ENABLE_SPARSE)
   ##############################################################################
 
   if(NOT WIN32) # Remove this block once hipSPARSELt is supported on Windows
-    set(hipSPARSELt_optional_deps)
-    if(NOT WIN32)
-      # hipSPARSELt is hard-coded to not expect rocm-smi and amdsmi on Windows.
-      list(APPEND hipSPARSELt_optional_deps
-        amdsmi
-        rocm_smi_lib
-      )
+    # hipSPARSELt expects amd_smi on Linux.
+    set(hipSPARSELt_runtime_deps)
+
+    # Required on Linux.
+    list(APPEND hipSPARSELt_runtime_deps amdsmi)
+
+    # rocm_smi_lib is optional.
+    if(TARGET rocm_smi_lib)
+      list(APPEND hipSPARSELt_runtime_deps rocm_smi_lib)
     endif()
 
     therock_cmake_subproject_declare(hipSPARSELt
@@ -320,7 +329,7 @@ if(THEROCK_ENABLE_SPARSE)
       RUNTIME_DEPS
         hip-clr
         therock-host-blas
-        ${hipSPARSELt_optional_deps}
+        ${hipSPARSELt_runtime_deps}
         ${optional_profiler_deps}
     )
     therock_cmake_subproject_glob_c_sources(hipSPARSELt
@@ -437,7 +446,9 @@ if(THEROCK_ENABLE_SOLVER)
   list(APPEND hipBLAS_optional_deps rocSOLVER)
 endif()
 if(THEROCK_BUILD_TESTING)
-  list(APPEND hipBLAS_optional_deps therock-host-blas)
+  # Note: hipBLAS tests require ILP64 host blas
+  # https://rocm.docs.amd.com/projects/hipBLAS/en/latest/install/Linux_Install_Guide.html#dependencies-for-building-the-library
+  list(APPEND hipBLAS_optional_deps therock-host-blas64)
 endif()
 
 therock_cmake_subproject_declare(hipBLAS

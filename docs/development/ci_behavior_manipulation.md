@@ -16,6 +16,7 @@ However, if additional options are wanted, you can add a label to manipulate the
 - `run-all-archs-ci`: The CI will build all possible architectures
 - `gfx...`: A build and test (if a test machine is available) is added to the CI matrix for the specified gfx family. (ex: `gfx120X`, `gfx950`)
 - `test:...`: The full test will run only for the specified label and other labeled projects (ex: `test:rocthrust`, `test:hipblaslt`)
+- `test_runner:...`: The CI will run tests on only custom test machines (ex: `test_runner:oem`)
 
 ## Workflow dispatch behavior
 

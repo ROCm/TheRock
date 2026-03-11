@@ -1,0 +1,6 @@
+# hipDNN Samples
+[components.test."ml-libs/hipdnn_samples/stage"]
+include = [
+  "bin/**",
+  "bin/hipdnn_samples/CTestTestfile.cmake"
+]

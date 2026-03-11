@@ -9,6 +9,10 @@
 optional = true
 [components.dev."math-libs/BLAS/rocRoller/stage"]
 optional = true
+exclude = [
+  "include/mxDataGenerator/**",
+  "lib/cmake/mxDataGenerator/**",
+]
 [components.doc."math-libs/BLAS/rocRoller/stage"]
 optional = true
 [components.lib."math-libs/BLAS/rocRoller/stage"]
@@ -73,6 +77,9 @@ include = [
   "bin/hipblaslt_gentest.py",
   "bin/hipblaslt_gtest.data",
   "bin/hipblaslt_*.yaml",
+  # hipblaslt-perf and python modules
+  "bin/hipblaslt-perf",
+  "share/hipblaslt/performance/**",
   # Built samples (may want these in a samples component at some point).
   "libexec/hipblaslt-samples/**",
 ]
@@ -179,6 +186,9 @@ optional = true
 optional = true
 include = [
   "**/*.cmake"
+]
+exclude = [
+  "share/hipsparse/test/**",
 ]
 [components.doc."math-libs/BLAS/hipSPARSE/stage"]
 optional = true

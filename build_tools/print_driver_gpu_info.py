@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """
 Sanity check script for CI runners.
 
@@ -119,6 +122,12 @@ def run_sanity(os_name: str) -> None:
             label="rocminfo",
             command="rocminfo",
             args=[],
+            extra_command_search_paths=[bin_dir],
+        )
+        run_command_with_search(
+            label="Kernel version",
+            command="uname",
+            args=["-r"],
             extra_command_search_paths=[bin_dir],
         )
 

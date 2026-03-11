@@ -1,14 +1,19 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 import logging
 import os
 import shlex
 import subprocess
 from pathlib import Path
+import platform
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
+os_type = platform.system().lower()
 
 # GTest sharding
 SHARD_INDEX = os.getenv("SHARD_INDEX", 1)
@@ -106,6 +111,7 @@ positive_filter.append("*/GPU_Dropout*")
 positive_filter.append("*/GPU_MhaBackward_*")
 positive_filter.append("*/GPU_MhaForward_*")
 positive_filter.append("*GPU_TestMhaFind20*")
+positive_filter.append("*/GPU_MIOpenDriver*")
 
 #############################################
 
@@ -114,6 +120,7 @@ negative_filter.append("*MIOpenTestConv*")
 
 # For sake of time saving on pre-commit step
 ####################################################
+negative_filter.append("Full/GPU_MIOpenDriverConv2dTransTest*")  # 4 min 45 sec
 negative_filter.append("Full/GPU_Reduce_FP64*")  # 4 min 19 sec
 negative_filter.append("Full/GPU_BNOCLFWDTrainSerialRun3D_BFP16*")  # 3 min 37 sec
 negative_filter.append("Full/GPU_Lrn_FP32*")  # 2 min 50 sec
@@ -126,6 +133,10 @@ negative_filter.append("Smoke/GPU_BNOCLBWDLarge2D_BFP16*")  # 1 min 19 sec
 
 negative_filter.append("Full/GPU_UnitTestActivationDescriptor_FP32*")  # 1 min 23 sec
 negative_filter.append("Full/GPU_UnitTestActivationDescriptor_FP16*")  # 1 min 0 sec
+
+negative_filter.append(
+    "Full/GPU_MIOpenDriverRegressionBigTensorTest_FP32*"
+)  # 0 min 59 sec
 
 negative_filter.append(
     "Smoke/GPU_BNOCLBWDLargeFusedActivation2D_BFP16*"
@@ -149,13 +160,17 @@ negative_filter.append("Full/GPU_ConvGrpActivInfer3D_FP32*")  # 0 min 22 sec
 negative_filter.append("Full/GPU_ConvGrpActivInfer3D_FP16*")  # 0 min 16 sec
 
 # Flaky tests
-negative_filter.append(
-    "Smoke/GPU_UnitTestConvSolverHipImplicitGemmV4R1Fwd_BFP16.ConvHipImplicitGemmV4R1Fwd/0"
-)  # https://github.com/ROCm/TheRock/issues/1682
+TEST_TO_IGNORE = {
+    "gfx1151": {
+        # TODO(#3202): Re-enable tests once issues are resolved
+        "windows": ["Full/GPU_UnitTestConvSolverGemmBwdRestBwd_FP16.GemmBwdRest/0"]
+    }
+}
 
-# Don't run while investigating to allow CI to pass
-# Jira Ticket ALMIOPEN-990
-negative_filter.append("*/GPU_MIOpenDriver*")
+if AMDGPU_FAMILIES in TEST_TO_IGNORE and os_type in TEST_TO_IGNORE[AMDGPU_FAMILIES]:
+    ignored_tests = TEST_TO_IGNORE[AMDGPU_FAMILIES][os_type]
+    for ignored_test in ignored_tests:
+        negative_filter.append(ignored_test)
 
 # TODO(rocm-libraries#2266): re-enable test for gfx950-dcgpu
 if AMDGPU_FAMILIES == "gfx950-dcgpu":
@@ -165,7 +180,7 @@ if AMDGPU_FAMILIES == "gfx950-dcgpu":
 # 1- Ignore gfx942 tests
 # TODO: There is no FP32 wmma on Navi, remove all FP32 conv tests. These should already be skipped via applicability for
 # CK solvers
-if AMDGPU_FAMILIES in ["gfx110X-all", "gfx1150", "gfx1151", "gfx120X-all"]:
+if any(prefix in AMDGPU_FAMILIES for prefix in ["gfx110", "gfx115", "gfx120"]):
     # These are ignored in miopen
     negative_filter.append(
         "Smoke/GPU_BNFWDTrainLargeFusedActivation2D_FP32.BnV2LargeFWD_TrainCKfp32Activation/NCHW_BNSpatial_testBNAPIV1_Dim_2_test_id_32"
@@ -208,6 +223,13 @@ if AMDGPU_FAMILIES in ["gfx110X-all", "gfx1150", "gfx1151", "gfx120X-all"]:
     negative_filter.append(
         "*CPU_UnitTestConvSolverImplicitGemmGroupWrwXdlopsDevApplicability_FP16.ConvHipImplicitGemmGroupWrwXdlops*"
     )
+
+    # Disable long running tests
+    negative_filter.append("Full/GPU_Softmax_FP32*")  # 24 min
+    negative_filter.append("Full/GPU_Softmax_BFP16*")  # 13 min
+    negative_filter.append("Full/GPU_Softmax_FP16*")  # 11.5 min
+    negative_filter.append("Smoke/GPU_Reduce_FP32*")  # 6.5 min
+    negative_filter.append("Smoke/GPU_Reduce_FP16*")  # 4.5 min
 
 ####################################################
 

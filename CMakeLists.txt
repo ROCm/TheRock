@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 if ("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
     message(FATAL_ERROR "In-source builds are not allowed. Please create a separate build directory.")
 endif()
@@ -28,6 +31,7 @@ include(therock_sanitizers)
 include(therock_subproject)
 include(therock_job_pools)
 include(therock_testing)
+include("${CMAKE_CURRENT_SOURCE_DIR}/FLAGS.cmake")
 
 ################################################################################
 # Python is used throughout the build. Ensure it is initialized early.
@@ -104,22 +108,18 @@ set(ROCM_SYMLINK_LIBS OFF)
 
 set(THEROCK_ARTIFACT_ARCHIVE_SUFFIX "" CACHE STRING "Suffix to add to artifact archive file stem names")
 
-# Kpack artifact splitting
-option(THEROCK_KPACK_SPLIT_ARTIFACTS "Split target-specific artifacts into generic and arch-specific components" OFF)
-# TODO: Once rocm-kpack is moved into the rocm-systems repo, hard-code the path.
-# Check for unset OR empty to handle -DTHEROCK_KPACK_DIR="" edge case.
-if(NOT THEROCK_KPACK_DIR)
-  set(THEROCK_KPACK_DIR "${THEROCK_SOURCE_DIR}/base/rocm-kpack")
-endif()
-if(THEROCK_KPACK_SPLIT_ARTIFACTS AND NOT THEROCK_KPACK_DIR)
-  message(FATAL_ERROR "THEROCK_KPACK_DIR must be set when THEROCK_KPACK_SPLIT_ARTIFACTS=ON")
-endif()
-
 option(THEROCK_BUNDLE_SYSDEPS "Builds bundled system deps for portable builds into lib/rocm_sysdeps" ON)
-option(THEROCK_ENABLE_MPI "Enables building components with Message Passing Interface (MPI) support" OFF)
+# TODO: Set default to true for Linux branch after necessary changes land
+cmake_dependent_option(THEROCK_ENABLE_MPI
+  "Enables building components with Message Passing Interface (MPI) support"
+  OFF "NOT WIN32" OFF)
 option(THEROCK_ENABLE_LLVM_TESTS "Enables building LLVM LIT tests" OFF)
 
-set(THEROCK_SANITIZER "" CACHE STRING "Enable project wide sanitizer build (e.g. 'ASAN')")
+set(THEROCK_SANITIZER "" CACHE STRING "Enable project wide sanitizer build ('ASAN' for host+device, 'HOST_ASAN' for host-only)")
+
+# Options to control the concurrency for building LLVM.
+set(FLANG_PARALLEL_COMPILE_JOBS "" CACHE STRING "Limit parallel compile jobs for Flang (reduces memory usage on systems with many cores)")
+set(LLVM_PARALLEL_LINK_JOBS "" CACHE STRING "Limit parallel link jobs for LLVM (reduces memory usage on systems with many cores)")
 
 # List of python executables to use for multi-version python builds
 set(THEROCK_DIST_PYTHON_EXECUTABLES "" CACHE STRING "Build for multiple python versions in supported projects (default to Python3_EXECUTABLE if empty)")
@@ -145,8 +145,6 @@ cmake_path(ABSOLUTE_PATH THEROCK_ROCM_SYSTEMS_SOURCE_DIR NORMALIZE)
 
 # Allow to specify alternative source locations instead of using
 # repositories tracked in TheRock's `.gitmodules`.
-therock_enable_external_source("rccl" "${THEROCK_SOURCE_DIR}/comm-libs/rccl" OFF)
-therock_enable_external_source("rccl-tests" "${THEROCK_SOURCE_DIR}/comm-libs/rccl-tests" OFF)
 therock_enable_external_source("composable-kernel" "${THEROCK_SOURCE_DIR}/ml-libs/composable_kernel" OFF)
 
 # Overall build settings.
@@ -194,13 +192,6 @@ endblock()
 # Project wide flags for controlling the build system.
 ################################################################################
 
-# Note that delay-loading is incompatible with ASAN until a more robust mechanism
-# is implemented. See: https://github.com/ROCm/TheRock/issues/1783
-cmake_dependent_option(
-  THEROCK_FLAG_COMGR_DELAY_LOAD
-  "Enables delay loading and linker namespacing of the amd_comgr library (Linux only)"
-  ON "LINUX" OFF)
-
 # Flag: -DTHEROCK_FLAG_INCLUDE_PROFILER=OFF
 # Note that the profiler is an integral part of the system and disabling it is not
 # fully supported. However, in early bringup, it can be useful to disable building
@@ -236,6 +227,7 @@ option(THEROCK_ENABLE_MATH_LIBS "Enable building of math libraries" "${THEROCK_E
 option(THEROCK_ENABLE_ML_LIBS "Enable building of ML libraries" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_PROFILER "Enable building the profiler libraries" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_DC_TOOLS "Enable building of data center tools" "${THEROCK_ENABLE_ALL}")
+option(THEROCK_ENABLE_MEDIA_LIBS "Enable building of Media libraries" "${THEROCK_ENABLE_ALL}")
 option(THEROCK_ENABLE_HOST_MATH "Build all bundled host math libraries by default" OFF)
 option(THEROCK_RESET_FEATURES "One-shot flag which forces all feature flags to their default state for this configuration run" OFF)
 # TODO(iree-org/fusilli/issues/57): Enable fusilli build once multi-arch support lands.
@@ -280,26 +272,6 @@ if(THEROCK_FLAG_INCLUDE_PROFILER)
   )
 endif()
 
-# Optional sub-features that control behavior within artifacts
-
-# Math library sub-components (control what gets built within BLAS artifact)
-therock_add_feature(SPARSE
-  GROUP MATH_LIBS
-  DESCRIPTION "Enables sparse libraries (hipsparse, hipsparselt, rocsparse) within BLAS"
-  REQUIRES BLAS PRIM
-)
-
-if(NOT WIN32)
-  set(_solver_platform_requirements "HOST_SUITE_SPARSE")
-else()
-  set(_solver_platform_requirements "")
-endif()
-therock_add_feature(SOLVER
-  GROUP MATH_LIBS
-  DESCRIPTION "Enables solver libraries (hipsolver, rocsolver) within BLAS"
-  REQUIRES BLAS PRIM SPARSE ${_solver_platform_requirements}
-)
-
 # Finalize all feature flags.
 therock_finalize_features()
 therock_report_features()
@@ -328,6 +300,20 @@ set(THEROCK_AMDGPU_FAMILIES "" CACHE STRING "AMDGPU target families to build for
 set(THEROCK_AMDGPU_TARGETS "" CACHE STRING "AMDGPU targets to build for")
 set(THEROCK_AMDGPU_DIST_BUNDLE_NAME "" CACHE STRING "Distribution bundle name for AMDGPU packages")
 
+# Note that if THEROCK_DIST_AMDGPU_FAMILIES and THEROCK_DIST_AMDGPU_TARGETS are empty, then
+# this defaults to the build targets (THEROCK_AMDGPU_FAMILIES). These "dist" targets are used
+# for runtime libraries that embed device code and are marked as target-neutral (which typically
+# means generate for all supported architectures). They are also reported in dist_info.json
+# and consumed by downstream tools such as PyTorch via `rocm-sdk targets`.
+set(THEROCK_DIST_AMDGPU_FAMILIES "" CACHE STRING "AMDGPU target families to use for target-neutral dist projects")
+set(THEROCK_DIST_AMDGPU_TARGETS "" CACHE STRING "AMDGPU targets for target-neutral dist projects (individual gfx targets in addition to those expanded from THEROCK_DIST_AMDGPU_FAMILIES)")
+
+# Test targets control what architectures TARGET_NEUTRAL test artifacts compile device code for.
+# Defaults to all available targets so that a single _generic artifact works on any architecture,
+# making classic CI upload races harmless. Does NOT affect dist_info.json.
+set(THEROCK_TEST_AMDGPU_FAMILIES "" CACHE STRING "AMDGPU target families to build for TARGET_NEUTRAL test artifacts (default: all available)")
+set(THEROCK_TEST_AMDGPU_TARGETS "" CACHE STRING "AMDGPU targets to build for TARGET_NEUTRAL test artifacts (default: all available)")
+
 therock_validate_amdgpu_targets()
 
 ################################################################################
@@ -348,6 +334,27 @@ if(CMAKE_CXX_VISIBILITY_PRESET)
 endif()
 
 ################################################################################
+# patchelf / install_name_tool
+# Building with bundled sysdep or rocGDB requires patchelf on Linux and
+# install_name_tool on macOS to set RPATH.
+################################################################################
+
+if(THEROCK_BUNDLE_SYSDEPS OR THEROCK_ENABLE_ROCGDB)
+  if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    find_program(PATCHELF patchelf)
+    if(NOT PATCHELF)
+      message(FATAL_ERROR "Building with THEROCK_BUNDLE_SYSDEPS=ON or THEROCK_ENABLE_ROCGDB=ON on Linux requires `patchelf`")
+    endif()
+  elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    # macOS uses install_name_tool (from Xcode) instead of patchelf
+    find_program(INSTALL_NAME_TOOL install_name_tool)
+    if(NOT INSTALL_NAME_TOOL)
+      message(FATAL_ERROR "Building with THEROCK_BUNDLE_SYSDEPS=ON or THEROCK_ENABLE_ROCGDB=ON on macOS requires `install_name_tool` (install Xcode Command Line Tools)")
+    endif()
+  endif()
+endif()
+
+################################################################################
 # Sysdep bundling
 # Each available bundled sysdep is made available with a global variable like
 # `THEROCK_BUNDLED_{name}`. This can be included in subproject RUNTIME_DEPS.
@@ -362,6 +369,7 @@ set(THEROCK_BUNDLED_BZIP2)
 set(THEROCK_BUNDLED_ELFUTILS)
 set(THEROCK_BUNDLED_EXPAT)
 set(THEROCK_BUNDLED_GMP)
+set(THEROCK_BUNDLED_HWLOC)
 set(THEROCK_BUNDLED_LIBBACKTRACE)
 set(THEROCK_BUNDLED_LIBCAP)
 set(THEROCK_BUNDLED_LIBDRM)
@@ -372,29 +380,48 @@ set(THEROCK_BUNDLED_NUMACTL)
 set(THEROCK_BUNDLED_SQLITE3)
 set(THEROCK_BUNDLED_ZLIB)
 set(THEROCK_BUNDLED_ZSTD)
+set(THEROCK_BUNDLED_AMDMESA)
+
 
 if(THEROCK_BUNDLE_SYSDEPS)
   message(STATUS "Building with bundled system dependencies enabled")
   if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    find_program(PATCHELF patchelf)
-    if(NOT PATCHELF)
-      message(FATAL_ERROR "Building with THEROCK_BUNDLE_SYSDEPS=ON on Linux requires `patchelf`")
-    endif()
     find_program(MESON_BUILD meson)
     if(NOT MESON_BUILD)
       message(FATAL_ERROR "Building with THEROCK_BUNDLE_SYSDEPS=ON on Linux requires (easiest: `pip install meson`)")
     endif()
     set(THEROCK_BUNDLED_BZIP2 therock-bzip2)
     set(THEROCK_BUNDLED_ELFUTILS therock-elfutils)
-    set(THEROCK_BUNDLED_EXPAT, therock-expat)
-    set(THEROCK_BUNDLED_GMP, therock-gmp)
+    set(THEROCK_BUNDLED_EXPAT therock-expat)
+    set(THEROCK_BUNDLED_GMP therock-gmp)
+    set(THEROCK_BUNDLED_HWLOC therock-hwloc)
     set(THEROCK_BUNDLED_LIBBACKTRACE therock-libbacktrace)
     set(THEROCK_BUNDLED_LIBCAP therock-libcap)
     set(THEROCK_BUNDLED_LIBDRM therock-libdrm)
     set(THEROCK_BUNDLED_LIBLZMA therock-liblzma)
+    set(THEROCK_BUNDLED_MPFR therock-mpfr)
+    set(THEROCK_BUNDLED_NCURSES therock-ncurses)
+    set(THEROCK_BUNDLED_NUMACTL therock-numactl)
+    set(THEROCK_BUNDLED_SQLITE3 therock-sqlite3)
+    set(THEROCK_BUNDLED_ZLIB therock-zlib)
+    set(THEROCK_BUNDLED_ZSTD therock-zstd)
+    if(THEROCK_ENABLE_SYSDEPS_AMD_MESA)
+      set(THEROCK_BUNDLED_AMDMESA therock-amd-mesa)
+    endif()
+  elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    find_program(MESON_BUILD meson)
+    if(NOT MESON_BUILD)
+      message(FATAL_ERROR "Building with THEROCK_BUNDLE_SYSDEPS=ON on macOS requires `meson` (easiest: `pip install meson`)")
+    endif()
+    # macOS bundled deps - note: libcap, libdrm, numactl are Linux-specific
+    set(THEROCK_BUNDLED_BZIP2 therock-bzip2)
+    set(THEROCK_BUNDLED_ELFUTILS therock-elfutils)
+    set(THEROCK_BUNDLED_EXPAT, therock-expat)
+    set(THEROCK_BUNDLED_GMP, therock-gmp)
+    set(THEROCK_BUNDLED_LIBBACKTRACE therock-libbacktrace)
+    set(THEROCK_BUNDLED_LIBLZMA therock-liblzma)
     set(THEROCK_BUNDLED_MPFR, therock-mpfr)
     set(THEROCK_BUNDLED_NCURSES, therock-ncurses)
-    set(THEROCK_BUNDLED_NUMACTL therock-numactl)
     set(THEROCK_BUNDLED_SQLITE3 therock-sqlite3)
     set(THEROCK_BUNDLED_ZLIB therock-zlib)
     set(THEROCK_BUNDLED_ZSTD therock-zstd)
@@ -426,9 +453,10 @@ endif()
 
 # Add subdirectories in dependency DAG order (which happens to be semi-alpha:
 # don't be fooled).
-add_subdirectory(third-party)
+add_subdirectory(third-party/sysdeps)
 add_subdirectory(base)
 add_subdirectory(compiler)
+add_subdirectory(third-party)
 add_subdirectory(core)
 add_subdirectory(debug-tools)
 # Note that rocprofiler-register is in base and is what higher level clients
@@ -440,6 +468,7 @@ add_subdirectory(comm-libs)
 add_subdirectory(math-libs)
 add_subdirectory(ml-libs)
 add_subdirectory(iree-libs)
+add_subdirectory(media-libs)
 
 if(THEROCK_BUILD_TESTING)
   add_subdirectory(examples)

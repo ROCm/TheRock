@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """PyTorch ROCm Pytest Runner with additional test exclusion capabilities.
 
 This script runs PyTorch unit tests using pytest with additional test exclusion
@@ -191,11 +194,11 @@ By default the pytorch directory is determined based on this script's location
     )
 
     parser.add_argument(
-        "--no-cache",
-        default=False,
+        "--cache",
+        default=True,
         required=False,
         action=argparse.BooleanOptionalAction,
-        help="""Disable pytest caching. Useful when only having read-only access to pytorch directory""",
+        help="""Enable pytest caching (default). Use --no-cache when only having read-only access to pytorch directory""",
     )
 
     args = parser.parse_args(argv)
@@ -264,7 +267,7 @@ def main() -> int:
             #         Forced to 0 (disabled) when used with --pdb.
         ]
 
-        if args.no_cache:
+        if not args.cache:
             pytest_args += [
                 "-p",
                 "no:cacheprovider",  # Disable caching: useful when running in a container
@@ -290,9 +293,11 @@ def force_exit_with_code(retcode):
     # TODO(#2258): output a test report file that can be inspected on both
     #              Linux and Windows then remove this special file
     retcode_file = Path("run_pytorch_tests_exit_code.txt")
-    print(f"Writing retcode {retcode} to '{retcode_file}'")
+    # Convert to int in case retcode is a pytest.ExitCode enum
+    retcode_int = int(retcode)
+    print(f"Writing retcode {retcode_int} to '{retcode_file}'")
     with open(retcode_file, "w") as f:
-        f.write(str(retcode))
+        f.write(str(retcode_int))
 
     print("Forcefully terminating to avoid https://github.com/ROCm/TheRock/issues/999")
 

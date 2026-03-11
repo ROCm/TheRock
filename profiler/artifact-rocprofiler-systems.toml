@@ -7,10 +7,24 @@ include = [
 ]
 [components.lib."profiler/rocprofiler-systems/stage"]
 include = [
-  "libexec/rocprofiler-systems/**"
+  "libexec/rocprofiler-systems/**",
+  "share/rocprofiler-systems/**",
+]
+exclude = [
+  "share/rocprofiler-systems/tests/**",
+  "share/rocprofiler-systems/examples/**",
 ]
 [components.run."profiler/rocprofiler-systems/stage"]
 include = [
   "bin/**",
-  "share/rocprofiler-systems/**"
+  "share/rocprofiler-systems/**",
+]
+exclude = [
+  "share/rocprofiler-systems/tests/**",
+  "share/rocprofiler-systems/examples/**",
+]
+[components.test."profiler/rocprofiler-systems/stage"]
+include = [
+  "share/rocprofiler-systems/tests/**",
+  "share/rocprofiler-systems/examples/**",
 ]

@@ -180,11 +180,99 @@ All path patterns follow a subset of the [ant path pattern language](https://ant
 
 While artifacts can be defined with any component type mnemonic, the following are standardized across the build and have default patterns that match the majority of situations:
 
-- `dbg`: Platform-specific debug-symbol files. These are typically produced in a platform specific way by the build system and bundled into one component.
-- `dev`: Files needed in order to depend on the artifact's contents at build time. This typically includes static libraries, CMake package config files, pkgconfig files, modulefiles, and any tools needed at build time. Notably it does not include shared libraries but does include import libraries (Windows). It is expected that the `dev` component is combined with the `lib` component to produce a fully functional development tree.
 - `lib`: Files needed in order to depend on the artifact's contents as a library at runtime. This typically includes shared libraries, DLLs, dylibs, etc. It also includes any file level dependencies that the shared-libraries require in order to function (i.e. for HIP, this can include headers, compiler resources, etc).
 - `run`: Files needed in order to use the artifact's contents as a tool. This includes CLI tools (not required at build time), etc.
-- `test`: Additional files on top of all above artifacts needed in order to run tests, build test projects, etc. This typically includes test binaries, data file dependencies, and standalone test project trees.
+- `dbg`: Platform-specific debug-symbol files. These are typically produced in a platform specific way by the build system and bundled into one component.
+- `dev`: Files needed in order to depend on the artifact's contents at build time. This typically includes static libraries, CMake package config files, pkgconfig files, modulefiles, and any tools needed at build time. Notably it does not include shared libraries but does include import libraries (Windows). It is expected that the `dev` component is combined with the `lib` component to produce a fully functional development tree.
+- `doc`: Documentation files (typically under `share/doc/`).
+- `test`: Additional files needed in order to run tests, build test projects, etc. This typically includes test binaries, data file dependencies, and standalone test project trees.
+
+### Component Extends Chain
+
+Components are processed in a defined order via an *extends chain*. Each component extends its predecessor, meaning it will not include files already claimed by an earlier component:
+
+```
+lib → run → dbg → dev → doc → test
+```
+
+This ordering ensures that components are **disjoint** — each file in a stage directory appears in exactly one component. The mechanism works through `transitive_relpaths`: when a component is processed, it inherits the set of file paths already claimed by all components it extends (directly or transitively) and skips those files.
+
+### Default Patterns
+
+Each component has default include patterns that determine what it matches (defined in `artifact_builder.py`):
+
+| Component | Default includes                                                                                   | Notes                                                                                                 |
+| --------- | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `lib`     | `**/*.so`, `**/*.so.*`, `**/*.dll`, `**/*.dylib`, `**/*.dylib.*`                                   | Shared libraries                                                                                      |
+| `run`     | *(none)*                                                                                           | **Catch-all if no includes specified** — descriptors should use explicit includes (see warning below) |
+| `dbg`     | `.build-id/**/*.debug`                                                                             | Debug symbol files                                                                                    |
+| `dev`     | `**/*.a`, `**/*.lib`, `**/cmake/**`, `**/include/**`, `**/share/modulefiles/**`, `**/pkgconfig/**` | Build-time dependencies                                                                               |
+| `doc`     | `**/share/doc/**`                                                                                  | Documentation                                                                                         |
+| `test`    | *(none)*                                                                                           | Only matches files not claimed by earlier components                                                  |
+
+When a descriptor specifies `include` patterns for a component, those patterns are **added to** the defaults (not replacing them). To override defaults, set `default_patterns = false`. Use `exclude` patterns to carve out files that would otherwise match.
+
+> [!WARNING]
+> Because `run` has no default include patterns, a bare entry like `[components.run."some/stage"]` acts as a **catch-all** that claims ALL files not matched by `lib` — including headers, cmake configs, and test binaries that should go to `dev` or `test`. Always use explicit `include` patterns on `run` to select specific runtime tools (e.g. `include = ["bin/mytool"]`), or omit `run` entirely for stage dirs where `dev`/`test` content is expected.
+
+### Routing Files to the Right Component
+
+Since `run` is a catch-all that claims files before `test`, care is needed when a stage directory has both `run` and `test` content. There are two approaches:
+
+**Approach 1: Don't assign the stage dir to `run`.** If a subproject only produces libraries and test binaries (no runtime tools), simply omit `run` from its component entries. The auto-created `run` component exists at the artifact level but only scans stage dirs explicitly assigned to it.
+
+This is the most common pattern in blas, where each subproject lists only the components it needs:
+
+```toml
+[components.dbg."math-libs/BLAS/rocBLAS/stage"]
+[components.dev."math-libs/BLAS/rocBLAS/stage"]
+[components.doc."math-libs/BLAS/rocBLAS/stage"]
+[components.lib."math-libs/BLAS/rocBLAS/stage"]
+include = ["bin/rocblas/library/**", "lib/rocblas/library/**"]
+
+# NOTE: 'run' is intentionally omitted — rocBLAS has no runtime tools, only test
+# binaries. If 'run' were listed here, its catch-all behavior would claim the
+# test binaries before 'test' could.
+# [components.run."math-libs/BLAS/rocBLAS/stage"]
+
+# rocBLAS test binaries and data files. Explicit includes limit the test
+# archive to known test content — without them, test would catch-all remaining
+# files not claimed by lib/dev/doc.
+[components.test."math-libs/BLAS/rocBLAS/stage"]
+include = ["bin/rocblas-bench*", "bin/rocblas-test*", ...]
+```
+
+Compare with rocSPARSE, which *does* have runtime tools — it uses an explicit `run` with specific includes (not a catch-all):
+
+```toml
+[components.run."math-libs/BLAS/rocSPARSE/stage"]
+include = ["bin/rocsparse_mtx2csr", "lib/rocsparse/rocsparseio-convert"]
+[components.test."math-libs/BLAS/rocSPARSE/stage"]
+include = ["bin/rocsparse-bench*", "bin/rocsparse-test*", ...]
+```
+
+**Approach 2: Exclude test content from `run`.** When a stage dir must be assigned to both `run` and `test` (e.g. the subproject produces both runtime tools and test binaries from the same stage dir), add an `exclude` on `run` for the test content:
+
+```toml
+# MIOpen — run needs to catch runtime files, but miopen_gtest should go to test
+[components.test."ml-libs/MIOpen/stage"]
+include = ["bin/miopen_gtest*"]
+
+[components.run."ml-libs/MIOpen/stage"]
+exclude = ["bin/miopen_gtest*"]
+```
+
+Without the `exclude` on `run`, the test binary would be claimed by `run` (catch-all) and `test` would skip it.
+
+For artifacts that are entirely test content (e.g. `core-rocrtst`), exclude all test paths from `run` so they fall through to `test`:
+
+```toml
+[components.run."core/rocrtst/stage"]
+exclude = ["bin/**"]
+
+[components.test."core/rocrtst/stage"]
+# Gets everything in bin/ that run excluded
+```
 
 ## Current Artifact Inventory
 
@@ -208,6 +296,7 @@ These artifacts are built if any project features requiring them are enabled:
 ### Core Artifacts
 
 - `base`: Base ROCM tools and structural components. ROCM sub-projects that do not depend on anything outside of this set are included here so that everything can depend on them.
+- `core-amdsmi`: AMD System Management Interface (amdsmi) library and tools for GPU and driver management, packaged as a standalone core artifact due to distinct product and usage semantics.
 - `core-runtime`: Low level runtime components used for interfacing with kernel drivers.
 - `core-hip`: HIP runtime, compiler interface, and build tools.
 
@@ -224,6 +313,8 @@ These artifacts are built if any project features requiring them are enabled:
 - `rand`: Random number generator libraries.
 - `rccl`: Collective communication libraries.
 - `MIOpen`: MIOpen kernel-select/fusion library.
+- `rocdecode`: Video decode library (Linux only).
+- `rocjpeg`: JPEG decode library (Linux only).
 
 > [!NOTE]
 > After adding a new artifact via `therock_provide_artifact()`, you may need to update `install_rocm_from_artifacts.py` to allow CI workflows and users to selectively install it. <br>
