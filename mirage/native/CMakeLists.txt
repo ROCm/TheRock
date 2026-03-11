@@ -2,7 +2,15 @@ cmake_minimum_required(VERSION 3.25)
 
 project(MirageSimCore LANGUAGES CXX)
 
+find_package(Threads REQUIRED)
+
 enable_testing()
+
+add_subdirectory(
+  "${CMAKE_CURRENT_LIST_DIR}/../third_party/simdojo"
+  "${CMAKE_CURRENT_BINARY_DIR}/third_party/simdojo"
+)
+target_compile_features(simdojo PUBLIC cxx_std_20)
 
 add_library(mirage_sim_core STATIC
   generated/gfx950_instruction_catalog.cc
@@ -43,8 +51,15 @@ add_executable(mirage_gfx950_runtime_test
 )
 target_link_libraries(mirage_gfx950_runtime_test PRIVATE mirage_sim_core)
 
+add_executable(mirage_simdojo_smoke_test
+  tests/simdojo_smoke_test.cc
+)
+target_compile_features(mirage_simdojo_smoke_test PRIVATE cxx_std_20)
+target_link_libraries(mirage_simdojo_smoke_test PRIVATE simdojo Threads::Threads)
+
 add_test(NAME mirage_instruction_catalog_test COMMAND mirage_instruction_catalog_test)
 add_test(NAME mirage_gfx950_binary_decoder_test COMMAND mirage_gfx950_binary_decoder_test)
 add_test(NAME mirage_gfx950_interpreter_test COMMAND mirage_gfx950_interpreter_test)
 add_test(NAME mirage_sim_core_test COMMAND mirage_sim_core_test)
 add_test(NAME mirage_gfx950_runtime_test COMMAND mirage_gfx950_runtime_test)
+add_test(NAME mirage_simdojo_smoke_test COMMAND mirage_simdojo_smoke_test)

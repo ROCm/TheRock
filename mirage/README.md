@@ -43,6 +43,11 @@ ctest --test-dir build/native --output-on-failure
 ./build/native/mirage_gfx950_runtime_test
 ```
 
+The standalone native build also vendors and builds the `simdojo` discrete
+event simulation library from `third_party/simdojo/`, with a dedicated smoke
+test `mirage_simdojo_smoke_test` to verify the import compiles and links
+cleanly inside Mirage without pulling in other `rocjitsu` infrastructure.
+
 The current native target brings up a single-GPU functional simulator slice:
 one virtual device, HBM-backed allocations, compute queue state, and a narrow
 dispatch path for smoke-testing execution without wiring Mirage into the
