@@ -87,7 +87,7 @@ int main() {
               "expected phase-0 compute seed list") ||
       !Expect(decoder.Phase0ComputeSelectorRules().size() == 12u,
               "expected phase-0 selector rule list") ||
-      !Expect(decoder.Phase0ExecutableOpcodes().size() == 15u,
+      !Expect(decoder.Phase0ExecutableOpcodes().size() == 25u,
               "expected phase-0 executable opcode slice") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_ADD_U32"),
               "expected S_ADD_U32 executable decode support") ||
@@ -95,12 +95,22 @@ int main() {
               "expected S_SUB_U32 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_CMP_EQ_U32"),
               "expected S_CMP_EQ_U32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("S_CMP_GE_I32"),
+              "expected S_CMP_GE_I32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("S_CMP_LT_U32"),
+              "expected S_CMP_LT_U32 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_CBRANCH_SCC1"),
               "expected S_CBRANCH_SCC1 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("S_CBRANCH_EXECZ"),
+              "expected S_CBRANCH_EXECZ executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("V_ADD_U32"),
               "expected V_ADD_U32 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("V_SUB_U32"),
               "expected V_SUB_U32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_CVT_F32_I32"),
+              "expected V_CVT_F32_I32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_CVT_I32_F32"),
+              "expected V_CVT_I32_F32 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_MOV_B32"),
               "expected S_MOV_B32 executable decode support") ||
       !Expect(!decoder.SupportsPhase0ExecutableOpcode("V_ADD_F32"),
@@ -136,7 +146,7 @@ int main() {
   }
 
   Gfx1201Interpreter interpreter;
-  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 15u,
+  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 25u,
               "expected executable seed opcode list") ||
       !Expect(interpreter.Supports("S_ENDPGM"),
               "expected interpreter support for S_ENDPGM") ||
@@ -150,14 +160,34 @@ int main() {
               "expected interpreter support for S_CMP_EQ_U32") ||
       !Expect(interpreter.Supports("S_CMP_LG_U32"),
               "expected interpreter support for S_CMP_LG_U32") ||
+      !Expect(interpreter.Supports("S_CMP_GE_I32"),
+              "expected interpreter support for S_CMP_GE_I32") ||
+      !Expect(interpreter.Supports("S_CMP_LT_I32"),
+              "expected interpreter support for S_CMP_LT_I32") ||
+      !Expect(interpreter.Supports("S_CMP_GE_U32"),
+              "expected interpreter support for S_CMP_GE_U32") ||
+      !Expect(interpreter.Supports("S_CMP_LT_U32"),
+              "expected interpreter support for S_CMP_LT_U32") ||
       !Expect(interpreter.Supports("S_BRANCH"),
               "expected interpreter support for S_BRANCH") ||
       !Expect(interpreter.Supports("S_CBRANCH_SCC0"),
               "expected interpreter support for S_CBRANCH_SCC0") ||
       !Expect(interpreter.Supports("S_CBRANCH_SCC1"),
               "expected interpreter support for S_CBRANCH_SCC1") ||
+      !Expect(interpreter.Supports("S_CBRANCH_EXECZ"),
+              "expected interpreter support for S_CBRANCH_EXECZ") ||
+      !Expect(interpreter.Supports("S_CBRANCH_EXECNZ"),
+              "expected interpreter support for S_CBRANCH_EXECNZ") ||
       !Expect(interpreter.Supports("S_MOV_B32"),
               "expected interpreter support for S_MOV_B32") ||
+      !Expect(interpreter.Supports("V_CVT_F32_I32"),
+              "expected interpreter support for V_CVT_F32_I32") ||
+      !Expect(interpreter.Supports("V_CVT_F32_U32"),
+              "expected interpreter support for V_CVT_F32_U32") ||
+      !Expect(interpreter.Supports("V_CVT_U32_F32"),
+              "expected interpreter support for V_CVT_U32_F32") ||
+      !Expect(interpreter.Supports("V_CVT_I32_F32"),
+              "expected interpreter support for V_CVT_I32_F32") ||
       !Expect(interpreter.Supports("V_ADD_U32"),
               "expected interpreter support for V_ADD_U32") ||
       !Expect(interpreter.Supports("V_SUB_U32"),

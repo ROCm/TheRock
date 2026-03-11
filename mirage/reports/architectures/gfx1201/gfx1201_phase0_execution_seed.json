@@ -9,12 +9,22 @@
     "S_SUB_U32",
     "S_CMP_EQ_U32",
     "S_CMP_LG_U32",
+    "S_CMP_GE_I32",
+    "S_CMP_LT_I32",
+    "S_CMP_GE_U32",
+    "S_CMP_LT_U32",
     "S_BRANCH",
     "S_CBRANCH_SCC0",
     "S_CBRANCH_SCC1",
+    "S_CBRANCH_EXECZ",
+    "S_CBRANCH_EXECNZ",
     "S_MOV_B32",
     "S_MOVK_I32",
     "V_MOV_B32",
+    "V_CVT_F32_I32",
+    "V_CVT_F32_U32",
+    "V_CVT_U32_F32",
+    "V_CVT_I32_F32",
     "V_ADD_U32",
     "V_SUB_U32"
   ],
@@ -24,7 +34,9 @@
       "S_NOP",
       "S_BRANCH",
       "S_CBRANCH_SCC0",
-      "S_CBRANCH_SCC1"
+      "S_CBRANCH_SCC1",
+      "S_CBRANCH_EXECZ",
+      "S_CBRANCH_EXECNZ"
     ],
     "ENC_SOP2": [
       "S_ADD_CO_U32 -> S_ADD_U32",
@@ -33,7 +45,11 @@
     ],
     "ENC_SOPC": [
       "S_CMP_EQ_U32",
-      "S_CMP_LG_U32"
+      "S_CMP_LG_U32",
+      "S_CMP_GE_I32",
+      "S_CMP_LT_I32",
+      "S_CMP_GE_U32",
+      "S_CMP_LT_U32"
     ],
     "ENC_SOP1": [
       "S_MOV_B32"
@@ -42,7 +58,11 @@
       "S_MOVK_I32"
     ],
     "ENC_VOP1": [
-      "V_MOV_B32"
+      "V_MOV_B32",
+      "V_CVT_F32_I32",
+      "V_CVT_F32_U32",
+      "V_CVT_U32_F32",
+      "V_CVT_I32_F32"
     ],
     "ENC_VOP2": [
       "V_ADD_NC_U32 -> V_ADD_U32",
@@ -53,20 +73,22 @@
     "Returns real DecodedInstruction values for the executable slice.",
     "Normalizes imported arithmetic/control opcodes onto the Mirage alias surface for the new subset.",
     "Decodes S_ADD_U32, S_ADD_I32, and S_SUB_U32 from ENC_SOP2.",
-    "Decodes S_CMP_EQ_U32 and S_CMP_LG_U32 from ENC_SOPC.",
-    "Decodes S_BRANCH, S_CBRANCH_SCC0, and S_CBRANCH_SCC1 from ENC_SOPP with sign-extended relative deltas.",
+    "Decodes S_CMP_EQ_U32, S_CMP_LG_U32, S_CMP_GE_I32, S_CMP_LT_I32, S_CMP_GE_U32, and S_CMP_LT_U32 from ENC_SOPC.",
+    "Decodes S_BRANCH, S_CBRANCH_SCC0, S_CBRANCH_SCC1, S_CBRANCH_EXECZ, and S_CBRANCH_EXECNZ from ENC_SOPP with sign-extended relative deltas.",
     "Decodes SGPR, inline integer, and literal sources for S_MOV_B32 and V_MOV_B32.",
+    "Decodes V_CVT_F32_I32, V_CVT_F32_U32, V_CVT_U32_F32, and V_CVT_I32_F32 from ENC_VOP1.",
     "Decodes V_ADD_U32 and V_SUB_U32 from ENC_VOP2.",
     "Sign-extends SIMM16 for S_MOVK_I32."
   ],
   "execution_capabilities": [
     "Halts waves with S_ENDPGM.",
     "Accepts S_NOP as a no-op seed instruction.",
-    "Executes scalar compare and updates SCC for control flow.",
-    "Executes S_BRANCH, S_CBRANCH_SCC0, and S_CBRANCH_SCC1 with relative instruction deltas.",
+    "Executes scalar compare and updates SCC for signed and unsigned control flow.",
+    "Executes S_BRANCH, S_CBRANCH_SCC0, S_CBRANCH_SCC1, S_CBRANCH_EXECZ, and S_CBRANCH_EXECNZ with relative instruction deltas.",
     "Executes scalar add/subtract and updates SCC using carry/borrow behavior.",
     "Executes scalar move and scalar immediate move.",
     "Executes exec-masked V_MOV_B32.",
+    "Executes exec-masked V_CVT_F32_I32, V_CVT_F32_U32, V_CVT_U32_F32, and V_CVT_I32_F32.",
     "Executes exec-masked V_ADD_U32 and V_SUB_U32 lane-wise."
   ],
   "still_scaffolded": [
