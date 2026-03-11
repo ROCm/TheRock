@@ -2,7 +2,7 @@
 
 This report captures the current executable `gfx1201` seed slice layered on top of the
 existing phase-0 compute selector and seed catalog. The local seed surface now covers
-105 executable phase-0 ops without leaving architecture-local `gfx1201` files.
+135 executable phase-0 ops without leaving architecture-local `gfx1201` files.
 
 ## Executable opcodes
 
@@ -87,6 +87,36 @@ existing phase-0 compute selector and seed catalog. The local seed surface now c
 - `V_CMPX_NGT_F32`
 - `V_CMPX_NLE_F32`
 - `V_CMPX_NLT_F32`
+- `V_CMP_CLASS_F64`
+- `V_CMP_EQ_F64`
+- `V_CMP_GE_F64`
+- `V_CMP_GT_F64`
+- `V_CMP_LE_F64`
+- `V_CMP_LG_F64`
+- `V_CMP_LT_F64`
+- `V_CMP_NEQ_F64`
+- `V_CMP_O_F64`
+- `V_CMP_U_F64`
+- `V_CMP_NGE_F64`
+- `V_CMP_NLG_F64`
+- `V_CMP_NGT_F64`
+- `V_CMP_NLE_F64`
+- `V_CMP_NLT_F64`
+- `V_CMPX_CLASS_F64`
+- `V_CMPX_EQ_F64`
+- `V_CMPX_GE_F64`
+- `V_CMPX_GT_F64`
+- `V_CMPX_LE_F64`
+- `V_CMPX_LG_F64`
+- `V_CMPX_LT_F64`
+- `V_CMPX_NEQ_F64`
+- `V_CMPX_O_F64`
+- `V_CMPX_U_F64`
+- `V_CMPX_NGE_F64`
+- `V_CMPX_NLG_F64`
+- `V_CMPX_NGT_F64`
+- `V_CMPX_NLE_F64`
+- `V_CMPX_NLT_F64`
 - `V_NOT_B32`
 - `V_BFREV_B32`
 - `V_CVT_F32_UBYTE0`
@@ -121,7 +151,7 @@ existing phase-0 compute selector and seed catalog. The local seed surface now c
 - `ENC_SOPK`: `S_MOVK_I32`
 - `ENC_VOP1`: `V_MOV_B32`, `V_NOT_B32`, `V_BFREV_B32`, `V_CVT_F32_UBYTE0`, `V_CVT_F32_UBYTE1`, `V_CVT_F32_UBYTE2`, `V_CVT_F32_UBYTE3`, `V_CVT_F32_I32`, `V_CVT_F32_U32`, `V_CVT_U32_F32`, `V_CVT_I32_F32`
 - `ENC_VOP2`: imported `V_ADD_NC_U32`, `V_SUB_NC_U32`, `V_SUBREV_NC_U32` normalized to `V_ADD_U32`, `V_SUB_U32`, `V_SUBREV_U32`; plus `V_MIN_I32`, `V_MAX_I32`, `V_MIN_U32`, `V_MAX_U32`, `V_CNDMASK_B32`, `V_LSHRREV_B32`, `V_ASHRREV_I32`, `V_LSHLREV_B32`, `V_AND_B32`, `V_OR_B32`, `V_XOR_B32`
-- `ENC_VOPC`: `V_CMP_EQ/NE/LT/LE/GT/GE_I32`, `V_CMP_EQ/NE/LT/LE/GT/GE_U32`, `V_CMPX_EQ/NE/LT/LE/GT/GE_I32`, `V_CMPX_EQ/NE/LT/LE/GT/GE_U32`, plus the full local F32 compare/class subset currently present in the 1-dword seed path: `V_CMP_CLASS_F32`, `V_CMP_EQ/GE/GT/LE/LG/LT/NEQ/O/U/NGE/NLG/NGT/NLE/NLT_F32`, `V_CMPX_CLASS_F32`, and `V_CMPX_EQ/GE/GT/LE/LG/LT/NEQ/O/U/NGE/NLG/NGT/NLE/NLT_F32`
+- `ENC_VOPC`: `V_CMP_EQ/NE/LT/LE/GT/GE_I32`, `V_CMP_EQ/NE/LT/LE/GT/GE_U32`, `V_CMPX_EQ/NE/LT/LE/GT/GE_I32`, `V_CMPX_EQ/NE/LT/LE/GT/GE_U32`, the full local F32 compare/class subset currently present in the 1-dword seed path, and the local F64 compare/class subset now brought onto the same path: `V_CMP_CLASS_F64`, `V_CMP_EQ/GE/GT/LE/LG/LT/NEQ/O/U/NGE/NLG/NGT/NLE/NLT_F64`, `V_CMPX_CLASS_F64`, and `V_CMPX_EQ/GE/GT/LE/LG/LT/NEQ/O/U/NGE/NLG/NGT/NLE/NLT_F64`
 
 ## Seed behavior
 
@@ -137,6 +167,7 @@ existing phase-0 compute selector and seed catalog. The local seed surface now c
 - `V_ADD_U32`, `V_SUB_U32`, `V_SUBREV_U32`, `V_MIN/MAX_I32`, `V_MIN/MAX_U32`, `V_CNDMASK_B32`, `V_LSHRREV_B32`, `V_ASHRREV_I32`, `V_LSHLREV_B32`, `V_AND_B32`, `V_OR_B32`, and `V_XOR_B32` now decode from `ENC_VOP2` with the existing phase-0 selector path.
 - `V_CMP_EQ/NE/LT/LE/GT/GE_I32`, `V_CMP_EQ/NE/LT/LE/GT/GE_U32`, `V_CMPX_EQ/NE/LT/LE/GT/GE_I32`, and `V_CMPX_EQ/NE/LT/LE/GT/GE_U32` now decode from `ENC_VOPC` with SGPR/VGPR/inline/literal source handling on the existing selector path.
 - The full local F32 compare/class subset currently present in the phase-0 seed now decodes from `ENC_VOPC` on the same shared-descriptor path: `V_CMP_CLASS_F32`, `V_CMP_EQ/GE/GT/LE/LG/LT/NEQ/O/U/NGE/NLG/NGT/NLE/NLT_F32`, `V_CMPX_CLASS_F32`, and `V_CMPX_EQ/GE/GT/LE/LG/LT/NEQ/O/U/NGE/NLG/NGT/NLE/NLT_F32`.
+- The local F64 compare/class subset now decodes from `ENC_VOPC` on the same real path, using architecture-local wide source descriptors for SGPR/VGPR register pairs while keeping the shared implicit `VCC` destination model: `V_CMP_CLASS_F64`, `V_CMP_EQ/GE/GT/LE/LG/LT/NEQ/O/U/NGE/NLG/NGT/NLE/NLT_F64`, `V_CMPX_CLASS_F64`, and `V_CMPX_EQ/GE/GT/LE/LG/LT/NEQ/O/U/NGE/NLG/NGT/NLE/NLT_F64`.
 - `S_MOVK_I32` sign-extends the imported `SIMM16` operand into the decoded `Imm32` form.
 - Interpreter now compiles and executes the seed slice locally.
 - Scalar compare updates `SCC` across the full local 32-bit signed/unsigned compare set.
@@ -146,6 +177,7 @@ existing phase-0 compute selector and seed catalog. The local seed surface now c
 - `V_CMP_EQ/NE/LT/LE/GT/GE_I32` and `V_CMP_EQ/NE/LT/LE/GT/GE_U32` execute lane-wise under `exec_mask` while preserving inactive-lane `vcc_mask` bits.
 - `V_CMPX_EQ/NE/LT/LE/GT/GE_I32` and `V_CMPX_EQ/NE/LT/LE/GT/GE_U32` execute lane-wise under `exec_mask` and materialize the resulting active-lane compare mask into both `vcc_mask` and `exec_mask`.
 - `V_CMP_CLASS_F32`, `V_CMP_EQ/GE/GT/LE/LG/LT/NEQ/O/U/NGE/NLG/NGT/NLE/NLT_F32`, and their `V_CMPX_*` forms now execute lane-wise under the same `VOPC` compare path, including ordered vs unordered F32 behavior, `QNaN` class-mask checks, and `CMPX -> EXEC` updates.
+- `V_CMP_CLASS_F64`, `V_CMP_EQ/GE/GT/LE/LG/LT/NEQ/O/U/NGE/NLG/NGT/NLE/NLT_F64`, and their `V_CMPX_*` forms now execute lane-wise under the same phase-0 `VOPC` compare path, including 64-bit ordered vs unordered behavior, `QNaN` class-mask checks, and `CMPX -> EXEC` updates.
 - `V_NOT_B32`, `V_BFREV_B32`, and `V_CVT_F32_UBYTE0/1/2/3` execute lane-wise under `exec_mask`.
 - `V_CVT_F32_I32`, `V_CVT_F32_U32`, `V_CVT_U32_F32`, and `V_CVT_I32_F32` execute lane-wise under `exec_mask` with gfx950-consistent truncation for the float-to-int subset.
 - `V_ADD_U32`, `V_SUB_U32`, `V_SUBREV_U32`, `V_MIN/MAX_I32`, `V_MIN/MAX_U32`, `V_CNDMASK_B32`, `V_LSHRREV_B32`, `V_ASHRREV_I32`, `V_LSHLREV_B32`, `V_AND_B32`, `V_OR_B32`, and `V_XOR_B32` execute lane-wise under `exec_mask`.
@@ -155,5 +187,5 @@ existing phase-0 compute selector and seed catalog. The local seed surface now c
 - Route-matched but non-executable phase-0 compute instructions continue to fail with
   the existing selector-aware stub errors.
 - `ENC_SMEM`, `ENC_VOP3`, `ENC_VDS`, and `ENC_VGLOBAL` remain route-only in this slice.
-- The remaining `ENC_VOPC` surface outside this seed is now the wider/floating-point families beyond the local F32/class set: the F64, 64-bit integer, and 16-bit compare families.
-- The next coherent extension point is the wider `ENC_VOPC` compare work or `ENC_VOP3`/half-conversion work rather than more `SOPC`/`SOPP`/`VOP1`/`VOP2`/`VOPC` 1-dword seed growth.
+- The remaining `ENC_VOPC` surface outside this seed is now the wider integer and 16-bit compare families.
+- The next coherent extension point is the remaining wider/packed `ENC_VOPC` compare work or `ENC_VOP3`/half-conversion work rather than more `SOPC`/`SOPP`/`VOP1`/`VOP2`/`VOPC` 1-dword seed growth.

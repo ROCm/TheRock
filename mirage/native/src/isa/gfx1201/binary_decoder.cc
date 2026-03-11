@@ -16,7 +16,7 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 105> kPhase0ExecutableOpcodes{{
+constexpr std::array<std::string_view, 135> kPhase0ExecutableOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_ADD_U32",
@@ -98,6 +98,36 @@ constexpr std::array<std::string_view, 105> kPhase0ExecutableOpcodes{{
     "V_CMPX_NGT_F32",
     "V_CMPX_NLE_F32",
     "V_CMPX_NLT_F32",
+    "V_CMP_CLASS_F64",
+    "V_CMP_EQ_F64",
+    "V_CMP_GE_F64",
+    "V_CMP_GT_F64",
+    "V_CMP_LE_F64",
+    "V_CMP_LG_F64",
+    "V_CMP_LT_F64",
+    "V_CMP_NEQ_F64",
+    "V_CMP_O_F64",
+    "V_CMP_U_F64",
+    "V_CMP_NGE_F64",
+    "V_CMP_NLG_F64",
+    "V_CMP_NGT_F64",
+    "V_CMP_NLE_F64",
+    "V_CMP_NLT_F64",
+    "V_CMPX_CLASS_F64",
+    "V_CMPX_EQ_F64",
+    "V_CMPX_GE_F64",
+    "V_CMPX_GT_F64",
+    "V_CMPX_LE_F64",
+    "V_CMPX_LG_F64",
+    "V_CMPX_LT_F64",
+    "V_CMPX_NEQ_F64",
+    "V_CMPX_O_F64",
+    "V_CMPX_U_F64",
+    "V_CMPX_NGE_F64",
+    "V_CMPX_NLG_F64",
+    "V_CMPX_NGT_F64",
+    "V_CMPX_NLE_F64",
+    "V_CMPX_NLT_F64",
     "V_NOT_B32",
     "V_BFREV_B32",
     "V_CVT_F32_UBYTE0",
@@ -227,14 +257,15 @@ OperandDescriptor MakeScalarRegisterDescriptor(OperandRole role,
 OperandDescriptor MakeVectorRegisterDescriptor(OperandRole role,
                                                OperandSlotKind slot_kind,
                                                OperandAccess access,
-                                               std::uint8_t element_bit_width = 32) {
+                                               std::uint8_t element_bit_width = 32,
+                                               std::uint8_t component_count = 1) {
   OperandDescriptor descriptor;
   descriptor.role = role;
   descriptor.slot_kind = slot_kind;
   descriptor.value_class = OperandValueClass::kVectorRegister;
   descriptor.access = access;
   descriptor.fragment_shape = MakeVectorFragmentShape(1u, element_bit_width);
-  descriptor.component_count = 1;
+  descriptor.component_count = component_count;
   return descriptor;
 }
 
@@ -262,6 +293,20 @@ InstructionOperand DescribeSourceOperand(InstructionOperand operand,
         MakeVectorRegisterDescriptor(role, slot_kind, OperandAccess::kRead));
   }
   return operand.WithDescriptor(MakeImmediateDescriptor(role, slot_kind));
+}
+
+InstructionOperand DescribeWideSourceOperand(InstructionOperand operand,
+                                             OperandRole role,
+                                             OperandSlotKind slot_kind) {
+  if (operand.kind == OperandKind::kSgpr) {
+    return operand.WithDescriptor(MakeScalarRegisterDescriptor(
+        role, slot_kind, OperandAccess::kRead, 64, 2));
+  }
+  if (operand.kind == OperandKind::kVgpr) {
+    return operand.WithDescriptor(
+        MakeVectorRegisterDescriptor(role, slot_kind, OperandAccess::kRead, 64, 2));
+  }
+  return operand.WithDescriptor(MakeImmediateDescriptor(role, slot_kind, 64));
 }
 
 InstructionOperand DescribeScalarDestinationOperand(InstructionOperand operand,
@@ -709,6 +754,76 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
                               OperandSlotKind::kSource0),
         DescribeSourceOperand(src1, OperandRole::kSource1,
                               OperandSlotKind::kSource1));
+    *words_consumed = 1 + literal_words_consumed;
+  } else if (instruction_name == "V_CMP_CLASS_F64" ||
+             instruction_name == "V_CMPX_CLASS_F64") {
+    std::size_t literal_words_consumed = 0;
+    InstructionOperand src0;
+    if (!DecodeVectorSource(ExtractBits(word, 0, 9), words.subspan(1),
+                            &literal_words_consumed, &src0, error_message)) {
+      return false;
+    }
+
+    InstructionOperand src1;
+    if (!DecodeVectorRegisterSource(ExtractBits(word, 9, 8), &src1,
+                                    error_message)) {
+      return false;
+    }
+
+    *instruction = DecodedInstruction::Binary(
+        instruction_name, MakeImplicitVccDestinationOperand(),
+        DescribeWideSourceOperand(src0, OperandRole::kSource0,
+                                  OperandSlotKind::kSource0),
+        DescribeSourceOperand(src1, OperandRole::kSource1,
+                              OperandSlotKind::kSource1));
+    *words_consumed = 1 + literal_words_consumed;
+  } else if (instruction_name == "V_CMP_EQ_F64" ||
+             instruction_name == "V_CMP_GE_F64" ||
+             instruction_name == "V_CMP_GT_F64" ||
+             instruction_name == "V_CMP_LE_F64" ||
+             instruction_name == "V_CMP_LG_F64" ||
+             instruction_name == "V_CMP_LT_F64" ||
+             instruction_name == "V_CMP_NEQ_F64" ||
+             instruction_name == "V_CMP_O_F64" ||
+             instruction_name == "V_CMP_U_F64" ||
+             instruction_name == "V_CMP_NGE_F64" ||
+             instruction_name == "V_CMP_NLG_F64" ||
+             instruction_name == "V_CMP_NGT_F64" ||
+             instruction_name == "V_CMP_NLE_F64" ||
+             instruction_name == "V_CMP_NLT_F64" ||
+             instruction_name == "V_CMPX_EQ_F64" ||
+             instruction_name == "V_CMPX_GE_F64" ||
+             instruction_name == "V_CMPX_GT_F64" ||
+             instruction_name == "V_CMPX_LE_F64" ||
+             instruction_name == "V_CMPX_LG_F64" ||
+             instruction_name == "V_CMPX_LT_F64" ||
+             instruction_name == "V_CMPX_NEQ_F64" ||
+             instruction_name == "V_CMPX_O_F64" ||
+             instruction_name == "V_CMPX_U_F64" ||
+             instruction_name == "V_CMPX_NGE_F64" ||
+             instruction_name == "V_CMPX_NLG_F64" ||
+             instruction_name == "V_CMPX_NGT_F64" ||
+             instruction_name == "V_CMPX_NLE_F64" ||
+             instruction_name == "V_CMPX_NLT_F64") {
+    std::size_t literal_words_consumed = 0;
+    InstructionOperand src0;
+    if (!DecodeVectorSource(ExtractBits(word, 0, 9), words.subspan(1),
+                            &literal_words_consumed, &src0, error_message)) {
+      return false;
+    }
+
+    InstructionOperand src1;
+    if (!DecodeVectorRegisterSource(ExtractBits(word, 9, 8), &src1,
+                                    error_message)) {
+      return false;
+    }
+
+    *instruction = DecodedInstruction::Binary(
+        instruction_name, MakeImplicitVccDestinationOperand(),
+        DescribeWideSourceOperand(src0, OperandRole::kSource0,
+                                  OperandSlotKind::kSource0),
+        DescribeWideSourceOperand(src1, OperandRole::kSource1,
+                                  OperandSlotKind::kSource1));
     *words_consumed = 1 + literal_words_consumed;
   } else if (instruction_name == "V_ADD_U32" ||
              instruction_name == "V_SUBREV_U32" ||

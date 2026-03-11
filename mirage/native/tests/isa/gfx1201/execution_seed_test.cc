@@ -15,6 +15,7 @@ namespace {
 
 constexpr std::uint16_t kImplicitVccPairSgprIndex = 248;
 constexpr std::uint32_t kQuietNaNF32Bits = 0x7fc00000u;
+constexpr std::uint64_t kQuietNaNF64Bits = 0x7ff8000000000000ULL;
 
 bool Expect(bool condition, const char* message) {
   if (!condition) {
@@ -28,6 +29,17 @@ std::uint32_t FloatBits(float value) {
   std::uint32_t result = 0;
   std::memcpy(&result, &value, sizeof(result));
   return result;
+}
+
+std::uint64_t DoubleBits(double value) {
+  std::uint64_t result = 0;
+  std::memcpy(&result, &value, sizeof(result));
+  return result;
+}
+
+void SplitU64(std::uint64_t value, std::uint32_t* low, std::uint32_t* high) {
+  *low = static_cast<std::uint32_t>(value);
+  *high = static_cast<std::uint32_t>(value >> 32);
 }
 
 constexpr std::uint32_t ReverseBits32(std::uint32_t value) {
@@ -479,6 +491,21 @@ bool ExpectFloatVectorCmpxExecBranchState(
   return state.sgprs[117] == FloatBits(2.0f) && state.sgprs[121] == 222u &&
          state.vcc_mask == 8u && state.exec_mask == 8u && state.halted &&
          !state.waiting_on_barrier && state.pc == 6u;
+}
+
+bool ExpectF64ClassCndmaskState(
+    const mirage::sim::isa::WaveExecutionState& state) {
+  return state.vgprs[60][0] == 20u && state.vgprs[60][1] == 10u &&
+         state.vgprs[60][2] == 20u && state.vgprs[60][3] == 10u &&
+         state.vcc_mask == 5u && state.exec_mask == 0xfu && state.halted &&
+         !state.waiting_on_barrier && state.pc == 4u;
+}
+
+bool ExpectF64CmpxClassBranchState(
+    const mirage::sim::isa::WaveExecutionState& state) {
+  return state.sgprs[119] == 222u && state.vcc_mask == 6u &&
+         state.exec_mask == 6u && state.halted &&
+         !state.waiting_on_barrier && state.pc == 7u;
 }
 
 }  // namespace
@@ -1196,6 +1223,65 @@ int main() {
                   OperandValueClass::kVectorRegister, OperandAccess::kRead,
                   FragmentKind::kVector, 32u, 1u, false),
               "expected V_CNDMASK_B32 source1 descriptor")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_cmp_eq_f64_words{
+      MakeVopc(34u, 120u, 94u)};
+  if (!Expect(decoder.DecodeInstruction(v_cmp_eq_f64_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_CMP_EQ_F64 decode success") ||
+      !Expect(ExpectBinaryInstruction(instruction, "V_CMP_EQ_F64",
+                                      OperandKind::kSgpr,
+                                      kImplicitVccPairSgprIndex,
+                                      OperandKind::kSgpr, 120u,
+                                      OperandKind::kVgpr, 94u),
+              "expected decoded V_CMP_EQ_F64 operands") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[0], OperandRole::kDestination,
+                  OperandSlotKind::kScalarDestination,
+                  OperandValueClass::kScalarRegister, OperandAccess::kWrite,
+                  FragmentKind::kScalar, 64u, 2u, true),
+              "expected implicit VCC destination descriptor for V_CMP_EQ_F64")
+      ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[1], OperandRole::kSource0,
+                  OperandSlotKind::kSource0,
+                  OperandValueClass::kScalarRegister, OperandAccess::kRead,
+                  FragmentKind::kScalar, 64u, 2u, false),
+              "expected V_CMP_EQ_F64 source0 descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[2], OperandRole::kSource1,
+                  OperandSlotKind::kSource1,
+                  OperandValueClass::kVectorRegister, OperandAccess::kRead,
+                  FragmentKind::kVector, 64u, 2u, false),
+              "expected V_CMP_EQ_F64 source1 descriptor")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_cmpx_class_f64_words{
+      MakeVopc(255u, 122u, 95u)};
+  if (!Expect(decoder.DecodeInstruction(v_cmpx_class_f64_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_CMPX_CLASS_F64 decode success") ||
+      !Expect(ExpectBinaryInstruction(instruction, "V_CMPX_CLASS_F64",
+                                      OperandKind::kSgpr,
+                                      kImplicitVccPairSgprIndex,
+                                      OperandKind::kSgpr, 122u,
+                                      OperandKind::kVgpr, 95u),
+              "expected decoded V_CMPX_CLASS_F64 operands") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[1], OperandRole::kSource0,
+                  OperandSlotKind::kSource0,
+                  OperandValueClass::kScalarRegister, OperandAccess::kRead,
+                  FragmentKind::kScalar, 64u, 2u, false),
+              "expected V_CMPX_CLASS_F64 source0 descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[2], OperandRole::kSource1,
+                  OperandSlotKind::kSource1,
+                  OperandValueClass::kVectorRegister, OperandAccess::kRead,
+                  FragmentKind::kVector, 32u, 1u, false),
+              "expected V_CMPX_CLASS_F64 source1 descriptor")) {
     return 1;
   }
 
@@ -3090,6 +3176,297 @@ int main() {
       !Expect(ExpectFloatVectorCmpxExecBranchState(
                   compiled_float_cmpx_exec_branch_state),
               "expected compiled float CMPX exec-branch state")) {
+    return 1;
+  }
+
+  struct RemainingF64CompareCase {
+    const char* opcode;
+    std::uint32_t encoded_opcode;
+    std::uint64_t expected_mask;
+    Gfx1201CompiledOpcode compiled_opcode;
+    bool writes_exec;
+  };
+
+  constexpr std::array<RemainingF64CompareCase, 28> kRemainingF64CompareCases{{
+      {"V_CMP_EQ_F64", 34u, 2u, Gfx1201CompiledOpcode::kVCmpEqF64, false},
+      {"V_CMP_GE_F64", 38u, 3u, Gfx1201CompiledOpcode::kVCmpGeF64, false},
+      {"V_CMP_GT_F64", 36u, 1u, Gfx1201CompiledOpcode::kVCmpGtF64, false},
+      {"V_CMP_LE_F64", 35u, 6u, Gfx1201CompiledOpcode::kVCmpLeF64, false},
+      {"V_CMP_LG_F64", 37u, 5u, Gfx1201CompiledOpcode::kVCmpLgF64, false},
+      {"V_CMP_LT_F64", 33u, 4u, Gfx1201CompiledOpcode::kVCmpLtF64, false},
+      {"V_CMP_NEQ_F64", 45u, 13u, Gfx1201CompiledOpcode::kVCmpNeqF64, false},
+      {"V_CMP_O_F64", 39u, 7u, Gfx1201CompiledOpcode::kVCmpOF64, false},
+      {"V_CMP_U_F64", 40u, 8u, Gfx1201CompiledOpcode::kVCmpUF64, false},
+      {"V_CMP_NGE_F64", 41u, 12u, Gfx1201CompiledOpcode::kVCmpNgeF64, false},
+      {"V_CMP_NLG_F64", 42u, 10u, Gfx1201CompiledOpcode::kVCmpNlgF64, false},
+      {"V_CMP_NGT_F64", 43u, 14u, Gfx1201CompiledOpcode::kVCmpNgtF64, false},
+      {"V_CMP_NLE_F64", 44u, 9u, Gfx1201CompiledOpcode::kVCmpNleF64, false},
+      {"V_CMP_NLT_F64", 46u, 11u, Gfx1201CompiledOpcode::kVCmpNltF64, false},
+      {"V_CMPX_EQ_F64", 162u, 2u, Gfx1201CompiledOpcode::kVCmpxEqF64, true},
+      {"V_CMPX_GE_F64", 166u, 3u, Gfx1201CompiledOpcode::kVCmpxGeF64, true},
+      {"V_CMPX_GT_F64", 164u, 1u, Gfx1201CompiledOpcode::kVCmpxGtF64, true},
+      {"V_CMPX_LE_F64", 163u, 6u, Gfx1201CompiledOpcode::kVCmpxLeF64, true},
+      {"V_CMPX_LG_F64", 165u, 5u, Gfx1201CompiledOpcode::kVCmpxLgF64, true},
+      {"V_CMPX_LT_F64", 161u, 4u, Gfx1201CompiledOpcode::kVCmpxLtF64, true},
+      {"V_CMPX_NEQ_F64", 173u, 13u, Gfx1201CompiledOpcode::kVCmpxNeqF64,
+       true},
+      {"V_CMPX_O_F64", 167u, 7u, Gfx1201CompiledOpcode::kVCmpxOF64, true},
+      {"V_CMPX_U_F64", 168u, 8u, Gfx1201CompiledOpcode::kVCmpxUF64, true},
+      {"V_CMPX_NGE_F64", 169u, 12u, Gfx1201CompiledOpcode::kVCmpxNgeF64,
+       true},
+      {"V_CMPX_NLG_F64", 170u, 10u, Gfx1201CompiledOpcode::kVCmpxNlgF64,
+       true},
+      {"V_CMPX_NGT_F64", 171u, 14u, Gfx1201CompiledOpcode::kVCmpxNgtF64,
+       true},
+      {"V_CMPX_NLE_F64", 172u, 9u, Gfx1201CompiledOpcode::kVCmpxNleF64, true},
+      {"V_CMPX_NLT_F64", 174u, 11u, Gfx1201CompiledOpcode::kVCmpxNltF64,
+       true},
+  }};
+
+  const std::uint64_t lhs_f64_bits = DoubleBits(2.0);
+  const std::uint64_t rhs_f64_lane0 = DoubleBits(1.0);
+  const std::uint64_t rhs_f64_lane1 = DoubleBits(2.0);
+  const std::uint64_t rhs_f64_lane2 = DoubleBits(3.0);
+
+  for (const RemainingF64CompareCase& test_case : kRemainingF64CompareCases) {
+    std::uint32_t lhs_low = 0;
+    std::uint32_t lhs_high = 0;
+    SplitU64(lhs_f64_bits, &lhs_low, &lhs_high);
+    const std::array<std::uint32_t, 6> remaining_f64_compare_words{
+        MakeSop1(0u, 120u, 255u),
+        lhs_low,
+        MakeSop1(0u, 121u, 255u),
+        lhs_high,
+        MakeVopc(test_case.encoded_opcode, 120u, 96u),
+        MakeSopp(48u),
+    };
+    std::vector<DecodedInstruction> remaining_f64_compare_program;
+    if (!Expect(decoder.DecodeProgram(remaining_f64_compare_words,
+                                      &remaining_f64_compare_program,
+                                      &error_message),
+                "expected remaining F64 compare program decode success") ||
+        !Expect(remaining_f64_compare_program.size() == 4u,
+                "expected four decoded remaining F64 compare instructions") ||
+        !Expect(remaining_f64_compare_program[2].opcode == test_case.opcode,
+                "expected decoded remaining F64 compare opcode")) {
+      return 1;
+    }
+
+    auto initialize_f64_compare_state = [&](WaveExecutionState* state) {
+      state->exec_mask = 0xfu;
+      state->vcc_mask = 0x80u;
+      SplitU64(rhs_f64_lane0, &state->vgprs[96][0], &state->vgprs[97][0]);
+      SplitU64(rhs_f64_lane1, &state->vgprs[96][1], &state->vgprs[97][1]);
+      SplitU64(rhs_f64_lane2, &state->vgprs[96][2], &state->vgprs[97][2]);
+      SplitU64(kQuietNaNF64Bits, &state->vgprs[96][3], &state->vgprs[97][3]);
+    };
+
+    WaveExecutionState decoded_remaining_f64_compare_state;
+    initialize_f64_compare_state(&decoded_remaining_f64_compare_state);
+    if (!Expect(interpreter.ExecuteProgram(remaining_f64_compare_program,
+                                           &decoded_remaining_f64_compare_state,
+                                           &error_message),
+                "expected decoded remaining F64 compare execution success") ||
+        !Expect(decoded_remaining_f64_compare_state.vcc_mask ==
+                    (test_case.writes_exec
+                         ? test_case.expected_mask
+                         : (test_case.expected_mask | 0x80u)),
+                "expected remaining F64 compare VCC mask") ||
+        !Expect(decoded_remaining_f64_compare_state.exec_mask ==
+                    (test_case.writes_exec ? test_case.expected_mask : 0xfu),
+                "expected remaining F64 compare EXEC mask") ||
+        !Expect(decoded_remaining_f64_compare_state.halted,
+                "expected remaining F64 compare program to halt") ||
+        !Expect(decoded_remaining_f64_compare_state.pc == 3u,
+                "expected remaining F64 compare program advance")) {
+      return 1;
+    }
+
+    std::vector<Gfx1201CompiledInstruction>
+        compiled_remaining_f64_compare_program;
+    if (!Expect(interpreter.CompileProgram(remaining_f64_compare_program,
+                                           &compiled_remaining_f64_compare_program,
+                                           &error_message),
+                "expected compiled remaining F64 compare program success") ||
+        !Expect(compiled_remaining_f64_compare_program[2].opcode ==
+                    test_case.compiled_opcode,
+                "expected compiled remaining F64 compare opcode")) {
+      return 1;
+    }
+
+    WaveExecutionState compiled_remaining_f64_compare_state;
+    initialize_f64_compare_state(&compiled_remaining_f64_compare_state);
+    if (!Expect(interpreter.ExecuteProgram(
+                    compiled_remaining_f64_compare_program,
+                    &compiled_remaining_f64_compare_state, &error_message),
+                "expected compiled remaining F64 compare execution success")
+        ||
+        !Expect(compiled_remaining_f64_compare_state.vcc_mask ==
+                    (test_case.writes_exec
+                         ? test_case.expected_mask
+                         : (test_case.expected_mask | 0x80u)),
+                "expected compiled remaining F64 compare VCC mask") ||
+        !Expect(compiled_remaining_f64_compare_state.exec_mask ==
+                    (test_case.writes_exec ? test_case.expected_mask : 0xfu),
+                "expected compiled remaining F64 compare EXEC mask") ||
+        !Expect(compiled_remaining_f64_compare_state.halted,
+                "expected compiled remaining F64 compare program to halt") ||
+        !Expect(compiled_remaining_f64_compare_state.pc == 3u,
+                "expected compiled remaining F64 compare program advance")) {
+      return 1;
+    }
+  }
+
+  std::uint32_t neg_zero_low = 0;
+  std::uint32_t neg_zero_high = 0;
+  SplitU64(DoubleBits(-0.0), &neg_zero_low, &neg_zero_high);
+  const std::array<std::uint32_t, 7> f64_class_cndmask_words{
+      MakeSop1(0u, 124u, 255u),
+      neg_zero_low,
+      MakeSop1(0u, 125u, 255u),
+      neg_zero_high,
+      MakeVopc(127u, 124u, 98u),
+      MakeVop2(1u, 60u, 314u, 59u),
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> f64_class_cndmask_program;
+  if (!Expect(decoder.DecodeProgram(f64_class_cndmask_words,
+                                    &f64_class_cndmask_program,
+                                    &error_message),
+              "expected F64 class cndmask program decode success") ||
+      !Expect(f64_class_cndmask_program.size() == 5u,
+              "expected five decoded F64 class cndmask instructions") ||
+      !Expect(f64_class_cndmask_program[2].opcode == "V_CMP_CLASS_F64",
+              "expected decoded V_CMP_CLASS_F64") ||
+      !Expect(f64_class_cndmask_program[3].opcode == "V_CNDMASK_B32",
+              "expected decoded V_CNDMASK_B32 after F64 class")) {
+    return 1;
+  }
+
+  auto initialize_f64_class_cndmask_state = [](WaveExecutionState* state) {
+    state->exec_mask = 0xfu;
+    state->vgprs[58][0] = 10u;
+    state->vgprs[58][1] = 10u;
+    state->vgprs[58][2] = 10u;
+    state->vgprs[58][3] = 10u;
+    state->vgprs[59][0] = 20u;
+    state->vgprs[59][1] = 20u;
+    state->vgprs[59][2] = 20u;
+    state->vgprs[59][3] = 20u;
+    state->vgprs[98][0] = 0x20u;
+    state->vgprs[98][1] = 0x40u;
+    state->vgprs[98][2] = 0x60u;
+    state->vgprs[98][3] = 0x001u;
+  };
+
+  WaveExecutionState decoded_f64_class_cndmask_state;
+  initialize_f64_class_cndmask_state(&decoded_f64_class_cndmask_state);
+  if (!Expect(interpreter.ExecuteProgram(f64_class_cndmask_program,
+                                         &decoded_f64_class_cndmask_state,
+                                         &error_message),
+              "expected decoded F64 class cndmask execution success") ||
+      !Expect(ExpectF64ClassCndmaskState(decoded_f64_class_cndmask_state),
+              "expected decoded F64 class cndmask state")) {
+    return 1;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_f64_class_cndmask_program;
+  if (!Expect(interpreter.CompileProgram(f64_class_cndmask_program,
+                                         &compiled_f64_class_cndmask_program,
+                                         &error_message),
+              "expected compiled F64 class cndmask program success") ||
+      !Expect(compiled_f64_class_cndmask_program[2].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpClassF64,
+              "expected compiled V_CMP_CLASS_F64 opcode") ||
+      !Expect(compiled_f64_class_cndmask_program[3].opcode ==
+                  Gfx1201CompiledOpcode::kVCndmaskB32,
+              "expected compiled V_CNDMASK_B32 after F64 class")) {
+    return 1;
+  }
+
+  WaveExecutionState compiled_f64_class_cndmask_state;
+  initialize_f64_class_cndmask_state(&compiled_f64_class_cndmask_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_f64_class_cndmask_program,
+                                         &compiled_f64_class_cndmask_state,
+                                         &error_message),
+              "expected compiled F64 class cndmask execution success") ||
+      !Expect(ExpectF64ClassCndmaskState(compiled_f64_class_cndmask_state),
+              "expected compiled F64 class cndmask state")) {
+    return 1;
+  }
+
+  std::uint32_t qnan64_low = 0;
+  std::uint32_t qnan64_high = 0;
+  SplitU64(kQuietNaNF64Bits, &qnan64_low, &qnan64_high);
+  const std::array<std::uint32_t, 10> f64_cmpx_class_branch_words{
+      MakeSop1(0u, 114u, 255u),
+      qnan64_low,
+      MakeSop1(0u, 115u, 255u),
+      qnan64_high,
+      MakeVopc(255u, 114u, 99u),
+      MakeSopp(38u, 2u),
+      MakeSopk(0u, 119u, 111u),
+      MakeSopp(32u, 1u),
+      MakeSopk(0u, 119u, 222u),
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> f64_cmpx_class_branch_program;
+  if (!Expect(decoder.DecodeProgram(f64_cmpx_class_branch_words,
+                                    &f64_cmpx_class_branch_program,
+                                    &error_message),
+              "expected F64 CMPX class branch program decode success") ||
+      !Expect(f64_cmpx_class_branch_program.size() == 8u,
+              "expected eight decoded F64 CMPX class branch instructions") ||
+      !Expect(f64_cmpx_class_branch_program[2].opcode == "V_CMPX_CLASS_F64",
+              "expected decoded V_CMPX_CLASS_F64") ||
+      !Expect(f64_cmpx_class_branch_program[3].opcode == "S_CBRANCH_EXECNZ",
+              "expected decoded S_CBRANCH_EXECNZ after F64 CMPX class")) {
+    return 1;
+  }
+
+  auto initialize_f64_cmpx_class_branch_state = [](WaveExecutionState* state) {
+    state->exec_mask = 0xfu;
+    state->vgprs[99][0] = 0x001u;
+    state->vgprs[99][1] = 0x002u;
+    state->vgprs[99][2] = 0x003u;
+    state->vgprs[99][3] = 0x200u;
+  };
+
+  WaveExecutionState decoded_f64_cmpx_class_branch_state;
+  initialize_f64_cmpx_class_branch_state(&decoded_f64_cmpx_class_branch_state);
+  if (!Expect(interpreter.ExecuteProgram(f64_cmpx_class_branch_program,
+                                         &decoded_f64_cmpx_class_branch_state,
+                                         &error_message),
+              "expected decoded F64 CMPX class branch execution success") ||
+      !Expect(ExpectF64CmpxClassBranchState(
+                  decoded_f64_cmpx_class_branch_state),
+              "expected decoded F64 CMPX class branch state")) {
+    return 1;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_f64_cmpx_class_branch_program;
+  if (!Expect(interpreter.CompileProgram(f64_cmpx_class_branch_program,
+                                         &compiled_f64_cmpx_class_branch_program,
+                                         &error_message),
+              "expected compiled F64 CMPX class branch program success") ||
+      !Expect(compiled_f64_cmpx_class_branch_program[2].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpxClassF64,
+              "expected compiled V_CMPX_CLASS_F64 opcode") ||
+      !Expect(compiled_f64_cmpx_class_branch_program[3].opcode ==
+                  Gfx1201CompiledOpcode::kSCbranchExecnz,
+              "expected compiled S_CBRANCH_EXECNZ after F64 CMPX class")) {
+    return 1;
+  }
+
+  WaveExecutionState compiled_f64_cmpx_class_branch_state;
+  initialize_f64_cmpx_class_branch_state(&compiled_f64_cmpx_class_branch_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_f64_cmpx_class_branch_program,
+                                         &compiled_f64_cmpx_class_branch_state,
+                                         &error_message),
+              "expected compiled F64 CMPX class branch execution success") ||
+      !Expect(ExpectF64CmpxClassBranchState(
+                  compiled_f64_cmpx_class_branch_state),
+              "expected compiled F64 CMPX class branch state")) {
     return 1;
   }
 
