@@ -33,6 +33,20 @@ StubOperandRoleRecord MakeOperandRoles(
   return record;
 }
 
+StubOperandSlotRecord MakeOperandSlots(
+    std::initializer_list<StubOperandSlotBinding> bindings) {
+  StubOperandSlotRecord record;
+  std::uint32_t index = 0;
+  for (const StubOperandSlotBinding& binding : bindings) {
+    if (index >= record.bindings.size()) {
+      break;
+    }
+    record.bindings[index++] = binding;
+  }
+  record.binding_count = index;
+  return record;
+}
+
 StubOperandLayoutRecord ClassifyOperandLayout(std::string_view instruction_name) {
   if (instruction_name == "V_PK_ADD_BF16") {
     return {
@@ -60,6 +74,45 @@ StubOperandLayoutRecord ClassifyOperandLayout(std::string_view instruction_name)
         false,
     };
   }
+  if (instruction_name == "V_PK_MUL_BF16") {
+    return {
+        StubOperandLayoutKind::kPkMulBf16,
+        2,
+        1,
+        0,
+        false,
+        false,
+        false,
+        false,
+        false,
+    };
+  }
+  if (instruction_name == "V_PK_MIN_NUM_BF16") {
+    return {
+        StubOperandLayoutKind::kPkMinNumBf16,
+        2,
+        1,
+        0,
+        false,
+        false,
+        false,
+        false,
+        false,
+    };
+  }
+  if (instruction_name == "V_PK_MAX_NUM_BF16") {
+    return {
+        StubOperandLayoutKind::kPkMaxNumBf16,
+        2,
+        1,
+        0,
+        false,
+        false,
+        false,
+        false,
+        false,
+    };
+  }
   if (instruction_name == "V_WMMA_F32_16X16X4_F32_w32") {
     return {
         StubOperandLayoutKind::kWmmaF32_16x16x4_F32W32,
@@ -67,6 +120,32 @@ StubOperandLayoutRecord ClassifyOperandLayout(std::string_view instruction_name)
         1,
         1,
         false,
+        false,
+        false,
+        false,
+        false,
+    };
+  }
+  if (instruction_name == "V_WMMA_SCALE_F32_16X16X128_F8F6F4") {
+    return {
+        StubOperandLayoutKind::kWmmaScaleF32_16x16x128_F8F6F4,
+        3,
+        1,
+        1,
+        true,
+        false,
+        false,
+        false,
+        false,
+    };
+  }
+  if (instruction_name == "V_WMMA_SCALE16_F32_16X16X128_F8F6F4") {
+    return {
+        StubOperandLayoutKind::kWmmaScale16F32_16x16x128_F8F6F4,
+        3,
+        1,
+        1,
+        true,
         false,
         false,
         false,
@@ -81,6 +160,32 @@ StubOperandLayoutRecord ClassifyOperandLayout(std::string_view instruction_name)
         0,
         true,
         true,
+        false,
+        false,
+        false,
+    };
+  }
+  if (instruction_name == "V_WMMA_LD_SCALE16_PAIRED_B64") {
+    return {
+        StubOperandLayoutKind::kWmmaLdScale16PairedB64,
+        2,
+        1,
+        0,
+        true,
+        true,
+        false,
+        false,
+        false,
+    };
+  }
+  if (instruction_name == "V_SWMMAC_F32_16X16X128_FP8_FP8_w32") {
+    return {
+        StubOperandLayoutKind::kSwmmacF32_16x16x128_Fp8Fp8W32,
+        2,
+        1,
+        1,
+        false,
+        false,
         false,
         false,
         false,
@@ -112,6 +217,19 @@ StubOperandLayoutRecord ClassifyOperandLayout(std::string_view instruction_name)
         true,
     };
   }
+  if (instruction_name == "V_CVT_F16_BF8") {
+    return {
+        StubOperandLayoutKind::kCvtF16Bf8,
+        1,
+        1,
+        0,
+        false,
+        false,
+        false,
+        false,
+        false,
+    };
+  }
   if (instruction_name == "V_CVT_F16_FP8") {
     return {
         StubOperandLayoutKind::kCvtF16Fp8,
@@ -138,11 +256,37 @@ StubOperandLayoutRecord ClassifyOperandLayout(std::string_view instruction_name)
         false,
     };
   }
+  if (instruction_name == "V_CVT_PK_F16_FP8") {
+    return {
+        StubOperandLayoutKind::kCvtPkF16Fp8,
+        1,
+        1,
+        0,
+        false,
+        false,
+        false,
+        false,
+        false,
+    };
+  }
+  if (instruction_name == "V_CVT_PK_F16_BF8") {
+    return {
+        StubOperandLayoutKind::kCvtPkF16Bf8,
+        1,
+        1,
+        0,
+        false,
+        false,
+        false,
+        false,
+        false,
+    };
+  }
   if (instruction_name == "V_DIV_SCALE_F64") {
     return {
         StubOperandLayoutKind::kVDivScaleF64,
+        3,
         2,
-        1,
         0,
         true,
         false,
@@ -327,6 +471,15 @@ StubOperandRoleRecord ClassifyOperandRoles(std::string_view instruction_name) {
         {StubOperandRole::kDestination, 1, true, false},
     });
   }
+  if (instruction_name == "V_PK_MUL_BF16" ||
+      instruction_name == "V_PK_MIN_NUM_BF16" ||
+      instruction_name == "V_PK_MAX_NUM_BF16") {
+    return MakeOperandRoles({
+        {StubOperandRole::kSource0, 1, false, false},
+        {StubOperandRole::kSource1, 1, false, false},
+        {StubOperandRole::kDestination, 1, true, false},
+    });
+  }
   if (instruction_name == "V_WMMA_F32_16X16X4_F32_w32") {
     return MakeOperandRoles({
         {StubOperandRole::kSource0, 1, false, false},
@@ -335,11 +488,37 @@ StubOperandRoleRecord ClassifyOperandRoles(std::string_view instruction_name) {
         {StubOperandRole::kDestination, 1, true, false},
     });
   }
+  if (instruction_name == "V_WMMA_SCALE_F32_16X16X128_F8F6F4" ||
+      instruction_name == "V_WMMA_SCALE16_F32_16X16X128_F8F6F4") {
+    return MakeOperandRoles({
+        {StubOperandRole::kSource0, 1, false, false},
+        {StubOperandRole::kSource1, 1, false, false},
+        {StubOperandRole::kAccumulator, 1, false, false},
+        {StubOperandRole::kScale, 1, false, false},
+        {StubOperandRole::kDestination, 1, true, false},
+    });
+  }
   if (instruction_name == "V_WMMA_LD_SCALE_PAIRED_B32") {
     return MakeOperandRoles({
         {StubOperandRole::kSource0, 1, false, false},
         {StubOperandRole::kScale, 1, false, false},
         {StubOperandRole::kPairedScale, 1, false, false},
+        {StubOperandRole::kDestination, 1, true, false},
+    });
+  }
+  if (instruction_name == "V_WMMA_LD_SCALE16_PAIRED_B64") {
+    return MakeOperandRoles({
+        {StubOperandRole::kSource0, 1, false, false},
+        {StubOperandRole::kScale, 1, false, false},
+        {StubOperandRole::kPairedScale, 1, false, false},
+        {StubOperandRole::kDestination, 1, true, false},
+    });
+  }
+  if (instruction_name == "V_SWMMAC_F32_16X16X128_FP8_FP8_w32") {
+    return MakeOperandRoles({
+        {StubOperandRole::kSource0, 1, false, false},
+        {StubOperandRole::kSource1, 1, false, false},
+        {StubOperandRole::kAccumulator, 1, false, false},
         {StubOperandRole::kDestination, 1, true, false},
     });
   }
@@ -363,7 +542,20 @@ StubOperandRoleRecord ClassifyOperandRoles(std::string_view instruction_name) {
         {StubOperandRole::kDestination, 1, true, false},
     });
   }
+  if (instruction_name == "V_CVT_F16_BF8") {
+    return MakeOperandRoles({
+        {StubOperandRole::kSource0, 1, false, false},
+        {StubOperandRole::kDestination, 1, true, false},
+    });
+  }
   if (instruction_name == "V_CVT_F32_FP8") {
+    return MakeOperandRoles({
+        {StubOperandRole::kSource0, 1, false, false},
+        {StubOperandRole::kDestination, 1, true, false},
+    });
+  }
+  if (instruction_name == "V_CVT_PK_F16_FP8" ||
+      instruction_name == "V_CVT_PK_F16_BF8") {
     return MakeOperandRoles({
         {StubOperandRole::kSource0, 1, false, false},
         {StubOperandRole::kDestination, 1, true, false},
@@ -372,8 +564,272 @@ StubOperandRoleRecord ClassifyOperandRoles(std::string_view instruction_name) {
   if (instruction_name == "V_DIV_SCALE_F64") {
     return MakeOperandRoles({
         {StubOperandRole::kSource0, 1, false, false},
+        {StubOperandRole::kSource1, 1, false, false},
         {StubOperandRole::kScale, 1, false, false},
         {StubOperandRole::kDestination, 1, true, false},
+    });
+  }
+  return {};
+}
+
+StubOperandSlotRecord ClassifyOperandSlots(std::string_view instruction_name) {
+  if (instruction_name == "V_PK_ADD_BF16" ||
+      instruction_name == "V_PK_MUL_BF16" ||
+      instruction_name == "V_PK_MIN_NUM_BF16" ||
+      instruction_name == "V_PK_MAX_NUM_BF16") {
+    return MakeOperandSlots({
+        {StubOperandSlotKind::kDestination,
+         StubOperandValueClass::kPackedVector,
+         0,
+         2,
+         true,
+         false},
+        {StubOperandSlotKind::kSource0,
+         StubOperandValueClass::kPackedVector,
+         1,
+         2,
+         false,
+         false},
+        {StubOperandSlotKind::kSource1,
+         StubOperandValueClass::kPackedVector,
+         2,
+         2,
+         false,
+         false},
+    });
+  }
+  if (instruction_name == "V_PK_FMA_BF16") {
+    return MakeOperandSlots({
+        {StubOperandSlotKind::kDestination,
+         StubOperandValueClass::kPackedVector,
+         0,
+         2,
+         true,
+         false},
+        {StubOperandSlotKind::kSource0,
+         StubOperandValueClass::kPackedVector,
+         1,
+         2,
+         false,
+         false},
+        {StubOperandSlotKind::kSource1,
+         StubOperandValueClass::kPackedVector,
+         2,
+         2,
+         false,
+         false},
+        {StubOperandSlotKind::kSource2,
+         StubOperandValueClass::kPackedVector,
+         3,
+         2,
+         false,
+         false},
+    });
+  }
+  if (instruction_name == "V_WMMA_F32_16X16X4_F32_w32" ||
+      instruction_name == "V_SWMMAC_F32_16X16X128_FP8_FP8_w32") {
+    return MakeOperandSlots({
+        {StubOperandSlotKind::kDestination,
+         StubOperandValueClass::kMatrixFragment,
+         0,
+         1,
+         true,
+         false},
+        {StubOperandSlotKind::kSource0,
+         StubOperandValueClass::kMatrixFragment,
+         1,
+         1,
+         false,
+         false},
+        {StubOperandSlotKind::kSource1,
+         StubOperandValueClass::kMatrixFragment,
+         2,
+         1,
+         false,
+         false},
+        {StubOperandSlotKind::kAccumulatorSource,
+         StubOperandValueClass::kAccumulatorFragment,
+         3,
+         1,
+         false,
+         false},
+    });
+  }
+  if (instruction_name == "V_WMMA_SCALE_F32_16X16X128_F8F6F4" ||
+      instruction_name == "V_WMMA_SCALE16_F32_16X16X128_F8F6F4") {
+    return MakeOperandSlots({
+        {StubOperandSlotKind::kDestination,
+         StubOperandValueClass::kMatrixFragment,
+         0,
+         1,
+         true,
+         false},
+        {StubOperandSlotKind::kSource0,
+         StubOperandValueClass::kMatrixFragment,
+         1,
+         1,
+         false,
+         false},
+        {StubOperandSlotKind::kSource1,
+         StubOperandValueClass::kMatrixFragment,
+         2,
+         1,
+         false,
+         false},
+        {StubOperandSlotKind::kAccumulatorSource,
+         StubOperandValueClass::kAccumulatorFragment,
+         3,
+         1,
+         false,
+         false},
+        {StubOperandSlotKind::kScaleSource,
+         StubOperandValueClass::kScalarRegister,
+         4,
+         1,
+         false,
+         false},
+    });
+  }
+  if (instruction_name == "V_WMMA_LD_SCALE_PAIRED_B32" ||
+      instruction_name == "V_WMMA_LD_SCALE16_PAIRED_B64") {
+    return MakeOperandSlots({
+        {StubOperandSlotKind::kDestination,
+         StubOperandValueClass::kVectorRegister,
+         0,
+         1,
+         true,
+         false},
+        {StubOperandSlotKind::kSource0,
+         StubOperandValueClass::kVectorRegister,
+         1,
+         1,
+         false,
+         false},
+        {StubOperandSlotKind::kScaleSource,
+         StubOperandValueClass::kScalarRegister,
+         2,
+         1,
+         false,
+         false},
+        {StubOperandSlotKind::kPairedScaleSource,
+         StubOperandValueClass::kScalarRegister,
+         3,
+         1,
+         false,
+         false},
+    });
+  }
+  if (instruction_name == "TENSOR_LOAD_TO_LDS") {
+    return MakeOperandSlots({
+        {StubOperandSlotKind::kTensorDescriptorSource,
+         StubOperandValueClass::kTensorDescriptor,
+         0,
+         1,
+         false,
+         false},
+        {StubOperandSlotKind::kTensorCoordinateSource,
+         StubOperandValueClass::kTensorCoordinate,
+         1,
+         1,
+         false,
+         false},
+        {StubOperandSlotKind::kLdsDestination,
+         StubOperandValueClass::kLdsAddress,
+         2,
+         1,
+         true,
+         false},
+    });
+  }
+  if (instruction_name == "TENSOR_STORE_FROM_LDS") {
+    return MakeOperandSlots({
+        {StubOperandSlotKind::kTensorDescriptorSource,
+         StubOperandValueClass::kTensorDescriptor,
+         0,
+         1,
+         false,
+         false},
+        {StubOperandSlotKind::kTensorCoordinateSource,
+         StubOperandValueClass::kTensorCoordinate,
+         1,
+         1,
+         false,
+         false},
+        {StubOperandSlotKind::kLdsSource,
+         StubOperandValueClass::kLdsAddress,
+         2,
+         1,
+         false,
+         false},
+    });
+  }
+  if (instruction_name == "V_CVT_F16_FP8" ||
+      instruction_name == "V_CVT_F16_BF8" ||
+      instruction_name == "V_CVT_F32_FP8") {
+    return MakeOperandSlots({
+        {StubOperandSlotKind::kDestination,
+         StubOperandValueClass::kVectorRegister,
+         0,
+         1,
+         true,
+         false},
+        {StubOperandSlotKind::kSource0,
+         StubOperandValueClass::kVectorRegister,
+         1,
+         1,
+         false,
+         false},
+    });
+  }
+  if (instruction_name == "V_CVT_PK_F16_FP8" ||
+      instruction_name == "V_CVT_PK_F16_BF8") {
+    return MakeOperandSlots({
+        {StubOperandSlotKind::kDestination,
+         StubOperandValueClass::kPackedVector,
+         0,
+         2,
+         true,
+         false},
+        {StubOperandSlotKind::kSource0,
+         StubOperandValueClass::kPackedVector,
+         1,
+         2,
+         false,
+         false},
+    });
+  }
+  if (instruction_name == "V_DIV_SCALE_F64") {
+    return MakeOperandSlots({
+        {StubOperandSlotKind::kDestination,
+         StubOperandValueClass::kVectorRegister,
+         0,
+         2,
+         true,
+         false},
+        {StubOperandSlotKind::kScalarDestination,
+         StubOperandValueClass::kScalarRegister,
+         1,
+         1,
+         true,
+         false},
+        {StubOperandSlotKind::kSource0,
+         StubOperandValueClass::kVectorRegister,
+         2,
+         2,
+         false,
+         false},
+        {StubOperandSlotKind::kSource1,
+         StubOperandValueClass::kVectorRegister,
+         3,
+         2,
+         false,
+         false},
+        {StubOperandSlotKind::kScaleSource,
+         StubOperandValueClass::kVectorRegister,
+         4,
+         2,
+         false,
+         false},
     });
   }
   return {};
@@ -406,6 +862,8 @@ StubDecodedInstruction BuildDecodedStub(
       ClassifyOperandLayout(route_info.instruction_name);
   const StubOperandRoleRecord operand_roles =
       ClassifyOperandRoles(route_info.instruction_name);
+  const StubOperandSlotRecord operand_slots =
+      ClassifyOperandSlots(route_info.instruction_name);
   return {
       route_info.instruction_name,
       StubDecodeStatus::kDecodedStub,
@@ -426,6 +884,7 @@ StubDecodedInstruction BuildDecodedStub(
       classified_shape.uses_paired_operands,
       operand_layout,
       operand_roles,
+      operand_slots,
   };
 }
 
@@ -450,6 +909,7 @@ StubDecodedInstruction MakeUnsupportedInstruction(
       false,
       false,
       false,
+      {},
       {},
       {},
   };
@@ -592,18 +1052,38 @@ std::string_view GetStubOperandLayoutName(
       return "kPkAddBf16";
     case StubOperandLayoutKind::kPkFmaBf16:
       return "kPkFmaBf16";
+    case StubOperandLayoutKind::kPkMulBf16:
+      return "kPkMulBf16";
+    case StubOperandLayoutKind::kPkMinNumBf16:
+      return "kPkMinNumBf16";
+    case StubOperandLayoutKind::kPkMaxNumBf16:
+      return "kPkMaxNumBf16";
     case StubOperandLayoutKind::kWmmaF32_16x16x4_F32W32:
       return "kWmmaF32_16x16x4_F32W32";
+    case StubOperandLayoutKind::kWmmaScaleF32_16x16x128_F8F6F4:
+      return "kWmmaScaleF32_16x16x128_F8F6F4";
+    case StubOperandLayoutKind::kWmmaScale16F32_16x16x128_F8F6F4:
+      return "kWmmaScale16F32_16x16x128_F8F6F4";
     case StubOperandLayoutKind::kWmmaLdScalePairedB32:
       return "kWmmaLdScalePairedB32";
+    case StubOperandLayoutKind::kWmmaLdScale16PairedB64:
+      return "kWmmaLdScale16PairedB64";
+    case StubOperandLayoutKind::kSwmmacF32_16x16x128_Fp8Fp8W32:
+      return "kSwmmacF32_16x16x128_Fp8Fp8W32";
     case StubOperandLayoutKind::kTensorLoadToLds:
       return "kTensorLoadToLds";
     case StubOperandLayoutKind::kTensorStoreFromLds:
       return "kTensorStoreFromLds";
+    case StubOperandLayoutKind::kCvtF16Bf8:
+      return "kCvtF16Bf8";
     case StubOperandLayoutKind::kCvtF16Fp8:
       return "kCvtF16Fp8";
     case StubOperandLayoutKind::kCvtF32Fp8:
       return "kCvtF32Fp8";
+    case StubOperandLayoutKind::kCvtPkF16Fp8:
+      return "kCvtPkF16Fp8";
+    case StubOperandLayoutKind::kCvtPkF16Bf8:
+      return "kCvtPkF16Bf8";
     case StubOperandLayoutKind::kVDivScaleF64:
       return "kVDivScaleF64";
     case StubOperandLayoutKind::kUnknown:
@@ -637,6 +1117,64 @@ std::string_view GetStubOperandRoleName(StubOperandRole operand_role) {
     case StubOperandRole::kLdsSource:
       return "kLdsSource";
     case StubOperandRole::kUnknown:
+      break;
+  }
+  return "kUnknown";
+}
+
+std::string_view GetStubOperandSlotKindName(
+    StubOperandSlotKind operand_slot_kind) {
+  switch (operand_slot_kind) {
+    case StubOperandSlotKind::kDestination:
+      return "kDestination";
+    case StubOperandSlotKind::kScalarDestination:
+      return "kScalarDestination";
+    case StubOperandSlotKind::kSource0:
+      return "kSource0";
+    case StubOperandSlotKind::kSource1:
+      return "kSource1";
+    case StubOperandSlotKind::kSource2:
+      return "kSource2";
+    case StubOperandSlotKind::kAccumulatorSource:
+      return "kAccumulatorSource";
+    case StubOperandSlotKind::kScaleSource:
+      return "kScaleSource";
+    case StubOperandSlotKind::kPairedScaleSource:
+      return "kPairedScaleSource";
+    case StubOperandSlotKind::kTensorDescriptorSource:
+      return "kTensorDescriptorSource";
+    case StubOperandSlotKind::kTensorCoordinateSource:
+      return "kTensorCoordinateSource";
+    case StubOperandSlotKind::kLdsDestination:
+      return "kLdsDestination";
+    case StubOperandSlotKind::kLdsSource:
+      return "kLdsSource";
+    case StubOperandSlotKind::kUnknown:
+      break;
+  }
+  return "kUnknown";
+}
+
+std::string_view GetStubOperandValueClassName(
+    StubOperandValueClass operand_value_class) {
+  switch (operand_value_class) {
+    case StubOperandValueClass::kVectorRegister:
+      return "kVectorRegister";
+    case StubOperandValueClass::kScalarRegister:
+      return "kScalarRegister";
+    case StubOperandValueClass::kPackedVector:
+      return "kPackedVector";
+    case StubOperandValueClass::kMatrixFragment:
+      return "kMatrixFragment";
+    case StubOperandValueClass::kAccumulatorFragment:
+      return "kAccumulatorFragment";
+    case StubOperandValueClass::kTensorDescriptor:
+      return "kTensorDescriptor";
+    case StubOperandValueClass::kTensorCoordinate:
+      return "kTensorCoordinate";
+    case StubOperandValueClass::kLdsAddress:
+      return "kLdsAddress";
+    case StubOperandValueClass::kUnknown:
       break;
   }
   return "kUnknown";

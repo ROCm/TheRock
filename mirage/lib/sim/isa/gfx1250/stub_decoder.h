@@ -45,12 +45,22 @@ enum class StubOperandLayoutKind {
   kUnknown,
   kPkAddBf16,
   kPkFmaBf16,
+  kPkMulBf16,
+  kPkMinNumBf16,
+  kPkMaxNumBf16,
   kWmmaF32_16x16x4_F32W32,
+  kWmmaScaleF32_16x16x128_F8F6F4,
+  kWmmaScale16F32_16x16x128_F8F6F4,
   kWmmaLdScalePairedB32,
+  kWmmaLdScale16PairedB64,
+  kSwmmacF32_16x16x128_Fp8Fp8W32,
   kTensorLoadToLds,
   kTensorStoreFromLds,
+  kCvtF16Bf8,
   kCvtF16Fp8,
   kCvtF32Fp8,
+  kCvtPkF16Fp8,
+  kCvtPkF16Bf8,
   kVDivScaleF64,
 };
 
@@ -93,6 +103,48 @@ struct StubOperandRoleRecord {
   std::uint32_t binding_count = 0;
 };
 
+enum class StubOperandSlotKind {
+  kUnknown,
+  kDestination,
+  kScalarDestination,
+  kSource0,
+  kSource1,
+  kSource2,
+  kAccumulatorSource,
+  kScaleSource,
+  kPairedScaleSource,
+  kTensorDescriptorSource,
+  kTensorCoordinateSource,
+  kLdsDestination,
+  kLdsSource,
+};
+
+enum class StubOperandValueClass {
+  kUnknown,
+  kVectorRegister,
+  kScalarRegister,
+  kPackedVector,
+  kMatrixFragment,
+  kAccumulatorFragment,
+  kTensorDescriptor,
+  kTensorCoordinate,
+  kLdsAddress,
+};
+
+struct StubOperandSlotBinding {
+  StubOperandSlotKind slot_kind = StubOperandSlotKind::kUnknown;
+  StubOperandValueClass value_class = StubOperandValueClass::kUnknown;
+  std::uint32_t logical_operand_index = 0;
+  std::uint32_t component_count = 0;
+  bool is_output = false;
+  bool is_implicit = false;
+};
+
+struct StubOperandSlotRecord {
+  std::array<StubOperandSlotBinding, 8> bindings{};
+  std::uint32_t binding_count = 0;
+};
+
 struct StubDecodedInstruction {
   std::string_view instruction_name{};
   StubDecodeStatus status = StubDecodeStatus::kUnknownInstruction;
@@ -113,6 +165,7 @@ struct StubDecodedInstruction {
   bool uses_paired_operands = false;
   StubOperandLayoutRecord operand_layout{};
   StubOperandRoleRecord operand_roles{};
+  StubOperandSlotRecord operand_slots{};
 };
 
 struct StubDecoderEntrypointManifest {
@@ -135,6 +188,10 @@ std::string_view GetStubExecutionDomainName(
 std::string_view GetStubOperandLayoutName(
     StubOperandLayoutKind operand_layout_kind);
 std::string_view GetStubOperandRoleName(StubOperandRole operand_role);
+std::string_view GetStubOperandSlotKindName(
+    StubOperandSlotKind operand_slot_kind);
+std::string_view GetStubOperandValueClassName(
+    StubOperandValueClass operand_value_class);
 std::span<const StubDecoderEntrypointManifest> GetStubDecoderEntrypointManifests();
 const StubDecoderEntrypointManifest* FindStubDecoderEntrypointManifest(
     StubDecoderRoute route);
