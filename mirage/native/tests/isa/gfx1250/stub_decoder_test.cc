@@ -288,6 +288,11 @@ int main() {
               "expected V_CVT_F32_FP8 operand layout counts")) {
     return 1;
   }
+  if (!Expect(ContainsRole(vop1_f32, StubOperandRole::kSource0, 1, false) &&
+                  ContainsRole(vop1_f32, StubOperandRole::kDestination, 1, true),
+              "expected V_CVT_F32_FP8 operand roles")) {
+    return 1;
+  }
 
   const StubDecodedInstruction packed_vop1 =
       DecodeVop1Stub("V_CVT_PK_F16_FP8");
@@ -330,6 +335,12 @@ int main() {
                   sdst.operand_layout.destination_count == 1 &&
                   sdst.operand_layout.has_scale_operand,
               "expected V_DIV_SCALE_F64 operand layout counts and flags")) {
+    return 1;
+  }
+  if (!Expect(ContainsRole(sdst, StubOperandRole::kSource0, 1, false) &&
+                  ContainsRole(sdst, StubOperandRole::kScale, 1, false) &&
+                  ContainsRole(sdst, StubOperandRole::kDestination, 1, true),
+              "expected V_DIV_SCALE_F64 operand roles")) {
     return 1;
   }
 
