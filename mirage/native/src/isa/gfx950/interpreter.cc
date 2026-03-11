@@ -1578,7 +1578,16 @@ bool IsDsOpcode(std::string_view opcode) {
          opcode == "DS_CMPST_RTN_B32" || opcode == "DS_CMPST_RTN_F32" ||
          opcode == "DS_WRAP_RTN_B32" ||
          opcode == "DS_ADD_RTN_F32" || opcode == "DS_MIN_RTN_F32" ||
-         opcode == "DS_MAX_RTN_F32";
+         opcode == "DS_MAX_RTN_F32" || opcode == "DS_ADD_RTN_U64" ||
+         opcode == "DS_SUB_RTN_U64" || opcode == "DS_RSUB_RTN_U64" ||
+         opcode == "DS_INC_RTN_U64" || opcode == "DS_DEC_RTN_U64" ||
+         opcode == "DS_MIN_RTN_I64" || opcode == "DS_MAX_RTN_I64" ||
+         opcode == "DS_MIN_RTN_U64" || opcode == "DS_MAX_RTN_U64" ||
+         opcode == "DS_AND_RTN_B64" || opcode == "DS_OR_RTN_B64" ||
+         opcode == "DS_XOR_RTN_B64" || opcode == "DS_MSKOR_RTN_B64" ||
+         opcode == "DS_WRXCHG_RTN_B64" || opcode == "DS_CMPST_RTN_B64" ||
+         opcode == "DS_CMPST_RTN_F64" || opcode == "DS_ADD_RTN_F64" ||
+         opcode == "DS_MIN_RTN_F64" || opcode == "DS_MAX_RTN_F64";
 }
 
 bool IsDsPairWriteOpcode(std::string_view opcode) {
@@ -1606,7 +1615,17 @@ bool IsDsWide64AccessOpcode(std::string_view opcode) {
          opcode == "DS_XOR_B64" || opcode == "DS_MSKOR_B64" ||
          opcode == "DS_CMPST_B64" || opcode == "DS_CMPST_F64" ||
          opcode == "DS_ADD_F64" || opcode == "DS_MIN_F64" ||
-         opcode == "DS_MAX_F64" || opcode == "DS_WRITE2_B64" ||
+         opcode == "DS_MAX_F64" || opcode == "DS_ADD_RTN_U64" ||
+         opcode == "DS_SUB_RTN_U64" || opcode == "DS_RSUB_RTN_U64" ||
+         opcode == "DS_INC_RTN_U64" || opcode == "DS_DEC_RTN_U64" ||
+         opcode == "DS_MIN_RTN_I64" || opcode == "DS_MAX_RTN_I64" ||
+         opcode == "DS_MIN_RTN_U64" || opcode == "DS_MAX_RTN_U64" ||
+         opcode == "DS_AND_RTN_B64" || opcode == "DS_OR_RTN_B64" ||
+         opcode == "DS_XOR_RTN_B64" || opcode == "DS_MSKOR_RTN_B64" ||
+         opcode == "DS_WRXCHG_RTN_B64" || opcode == "DS_CMPST_RTN_B64" ||
+         opcode == "DS_CMPST_RTN_F64" || opcode == "DS_ADD_RTN_F64" ||
+         opcode == "DS_MIN_RTN_F64" || opcode == "DS_MAX_RTN_F64" ||
+         opcode == "DS_WRITE2_B64" ||
          opcode == "DS_WRITE2ST64_B64" || opcode == "DS_READ_B64" ||
          opcode == "DS_READ2_B64" || opcode == "DS_READ2ST64_B64";
 }
@@ -1619,7 +1638,9 @@ bool IsDsDualDataOpcode(std::string_view opcode) {
 
 bool IsDsDualDataReturnOpcode(std::string_view opcode) {
   return opcode == "DS_MSKOR_RTN_B32" || opcode == "DS_CMPST_RTN_B32" ||
-         opcode == "DS_CMPST_RTN_F32" || opcode == "DS_WRAP_RTN_B32";
+         opcode == "DS_CMPST_RTN_F32" || opcode == "DS_WRAP_RTN_B32" ||
+         opcode == "DS_MSKOR_RTN_B64" || opcode == "DS_CMPST_RTN_B64" ||
+         opcode == "DS_CMPST_RTN_F64";
 }
 
 bool IsDsSignedReadOpcode(std::string_view opcode) {
@@ -1635,7 +1656,15 @@ bool IsDsReturnOpcode(std::string_view opcode) {
          opcode == "DS_OR_RTN_B32" || opcode == "DS_XOR_RTN_B32" ||
          opcode == "DS_WRXCHG_RTN_B32" ||
          opcode == "DS_ADD_RTN_F32" || opcode == "DS_MIN_RTN_F32" ||
-         opcode == "DS_MAX_RTN_F32";
+         opcode == "DS_MAX_RTN_F32" || opcode == "DS_ADD_RTN_U64" ||
+         opcode == "DS_SUB_RTN_U64" || opcode == "DS_RSUB_RTN_U64" ||
+         opcode == "DS_INC_RTN_U64" || opcode == "DS_DEC_RTN_U64" ||
+         opcode == "DS_MIN_RTN_I64" || opcode == "DS_MAX_RTN_I64" ||
+         opcode == "DS_MIN_RTN_U64" || opcode == "DS_MAX_RTN_U64" ||
+         opcode == "DS_AND_RTN_B64" || opcode == "DS_OR_RTN_B64" ||
+         opcode == "DS_XOR_RTN_B64" || opcode == "DS_WRXCHG_RTN_B64" ||
+         opcode == "DS_ADD_RTN_F64" || opcode == "DS_MIN_RTN_F64" ||
+         opcode == "DS_MAX_RTN_F64";
 }
 
 std::size_t GetDsAccessSize(std::string_view opcode) {
@@ -1674,6 +1703,25 @@ std::size_t GetDsAccessSize(CompiledOpcode opcode) {
     case CompiledOpcode::kDsAddF64:
     case CompiledOpcode::kDsMinF64:
     case CompiledOpcode::kDsMaxF64:
+    case CompiledOpcode::kDsAddRtnU64:
+    case CompiledOpcode::kDsSubRtnU64:
+    case CompiledOpcode::kDsRsubRtnU64:
+    case CompiledOpcode::kDsIncRtnU64:
+    case CompiledOpcode::kDsDecRtnU64:
+    case CompiledOpcode::kDsMinRtnI64:
+    case CompiledOpcode::kDsMaxRtnI64:
+    case CompiledOpcode::kDsMinRtnU64:
+    case CompiledOpcode::kDsMaxRtnU64:
+    case CompiledOpcode::kDsAndRtnB64:
+    case CompiledOpcode::kDsOrRtnB64:
+    case CompiledOpcode::kDsXorRtnB64:
+    case CompiledOpcode::kDsMskorRtnB64:
+    case CompiledOpcode::kDsWrxchgRtnB64:
+    case CompiledOpcode::kDsCmpstRtnB64:
+    case CompiledOpcode::kDsCmpstRtnF64:
+    case CompiledOpcode::kDsAddRtnF64:
+    case CompiledOpcode::kDsMinRtnF64:
+    case CompiledOpcode::kDsMaxRtnF64:
     case CompiledOpcode::kDsWrite2B64:
     case CompiledOpcode::kDsWrite2St64B64:
     case CompiledOpcode::kDsReadB64:
@@ -1718,6 +1766,25 @@ std::uint8_t GetDsRegisterDwordCount(CompiledOpcode opcode) {
     case CompiledOpcode::kDsAddF64:
     case CompiledOpcode::kDsMinF64:
     case CompiledOpcode::kDsMaxF64:
+    case CompiledOpcode::kDsAddRtnU64:
+    case CompiledOpcode::kDsSubRtnU64:
+    case CompiledOpcode::kDsRsubRtnU64:
+    case CompiledOpcode::kDsIncRtnU64:
+    case CompiledOpcode::kDsDecRtnU64:
+    case CompiledOpcode::kDsMinRtnI64:
+    case CompiledOpcode::kDsMaxRtnI64:
+    case CompiledOpcode::kDsMinRtnU64:
+    case CompiledOpcode::kDsMaxRtnU64:
+    case CompiledOpcode::kDsAndRtnB64:
+    case CompiledOpcode::kDsOrRtnB64:
+    case CompiledOpcode::kDsXorRtnB64:
+    case CompiledOpcode::kDsMskorRtnB64:
+    case CompiledOpcode::kDsWrxchgRtnB64:
+    case CompiledOpcode::kDsCmpstRtnB64:
+    case CompiledOpcode::kDsCmpstRtnF64:
+    case CompiledOpcode::kDsAddRtnF64:
+    case CompiledOpcode::kDsMinRtnF64:
+    case CompiledOpcode::kDsMaxRtnF64:
     case CompiledOpcode::kDsWrite2B64:
     case CompiledOpcode::kDsWrite2St64B64:
     case CompiledOpcode::kDsReadB64:
@@ -1770,6 +1837,25 @@ bool IsDsWide64AccessOpcode(CompiledOpcode opcode) {
          opcode == CompiledOpcode::kDsAddF64 ||
          opcode == CompiledOpcode::kDsMinF64 ||
          opcode == CompiledOpcode::kDsMaxF64 ||
+         opcode == CompiledOpcode::kDsAddRtnU64 ||
+         opcode == CompiledOpcode::kDsSubRtnU64 ||
+         opcode == CompiledOpcode::kDsRsubRtnU64 ||
+         opcode == CompiledOpcode::kDsIncRtnU64 ||
+         opcode == CompiledOpcode::kDsDecRtnU64 ||
+         opcode == CompiledOpcode::kDsMinRtnI64 ||
+         opcode == CompiledOpcode::kDsMaxRtnI64 ||
+         opcode == CompiledOpcode::kDsMinRtnU64 ||
+         opcode == CompiledOpcode::kDsMaxRtnU64 ||
+         opcode == CompiledOpcode::kDsAndRtnB64 ||
+         opcode == CompiledOpcode::kDsOrRtnB64 ||
+         opcode == CompiledOpcode::kDsXorRtnB64 ||
+         opcode == CompiledOpcode::kDsMskorRtnB64 ||
+         opcode == CompiledOpcode::kDsWrxchgRtnB64 ||
+         opcode == CompiledOpcode::kDsCmpstRtnB64 ||
+         opcode == CompiledOpcode::kDsCmpstRtnF64 ||
+         opcode == CompiledOpcode::kDsAddRtnF64 ||
+         opcode == CompiledOpcode::kDsMinRtnF64 ||
+         opcode == CompiledOpcode::kDsMaxRtnF64 ||
          opcode == CompiledOpcode::kDsWrite2B64 ||
          opcode == CompiledOpcode::kDsWrite2St64B64 ||
          opcode == CompiledOpcode::kDsReadB64 ||
@@ -1790,7 +1876,10 @@ bool IsDsDualDataReturnOpcode(CompiledOpcode opcode) {
   return opcode == CompiledOpcode::kDsMskorRtnB32 ||
          opcode == CompiledOpcode::kDsCmpstRtnB32 ||
          opcode == CompiledOpcode::kDsCmpstRtnF32 ||
-         opcode == CompiledOpcode::kDsWrapRtnB32;
+         opcode == CompiledOpcode::kDsWrapRtnB32 ||
+         opcode == CompiledOpcode::kDsMskorRtnB64 ||
+         opcode == CompiledOpcode::kDsCmpstRtnB64 ||
+         opcode == CompiledOpcode::kDsCmpstRtnF64;
 }
 
 bool IsDsSignedReadOpcode(CompiledOpcode opcode) {
@@ -1842,6 +1931,22 @@ bool IsDsReturnOpcode(CompiledOpcode opcode) {
     case CompiledOpcode::kDsAddRtnF32:
     case CompiledOpcode::kDsMinRtnF32:
     case CompiledOpcode::kDsMaxRtnF32:
+    case CompiledOpcode::kDsAddRtnU64:
+    case CompiledOpcode::kDsSubRtnU64:
+    case CompiledOpcode::kDsRsubRtnU64:
+    case CompiledOpcode::kDsIncRtnU64:
+    case CompiledOpcode::kDsDecRtnU64:
+    case CompiledOpcode::kDsMinRtnI64:
+    case CompiledOpcode::kDsMaxRtnI64:
+    case CompiledOpcode::kDsMinRtnU64:
+    case CompiledOpcode::kDsMaxRtnU64:
+    case CompiledOpcode::kDsAndRtnB64:
+    case CompiledOpcode::kDsOrRtnB64:
+    case CompiledOpcode::kDsXorRtnB64:
+    case CompiledOpcode::kDsWrxchgRtnB64:
+    case CompiledOpcode::kDsAddRtnF64:
+    case CompiledOpcode::kDsMinRtnF64:
+    case CompiledOpcode::kDsMaxRtnF64:
       return true;
     default:
       return false;
@@ -1897,6 +2002,54 @@ std::string_view GetDsUpdateOpcode(std::string_view opcode) {
   if (opcode == "DS_MAX_RTN_F32") {
     return "DS_MAX_F32";
   }
+  if (opcode == "DS_ADD_RTN_U64") {
+    return "DS_ADD_U64";
+  }
+  if (opcode == "DS_SUB_RTN_U64") {
+    return "DS_SUB_U64";
+  }
+  if (opcode == "DS_RSUB_RTN_U64") {
+    return "DS_RSUB_U64";
+  }
+  if (opcode == "DS_INC_RTN_U64") {
+    return "DS_INC_U64";
+  }
+  if (opcode == "DS_DEC_RTN_U64") {
+    return "DS_DEC_U64";
+  }
+  if (opcode == "DS_MIN_RTN_I64") {
+    return "DS_MIN_I64";
+  }
+  if (opcode == "DS_MAX_RTN_I64") {
+    return "DS_MAX_I64";
+  }
+  if (opcode == "DS_MIN_RTN_U64") {
+    return "DS_MIN_U64";
+  }
+  if (opcode == "DS_MAX_RTN_U64") {
+    return "DS_MAX_U64";
+  }
+  if (opcode == "DS_AND_RTN_B64") {
+    return "DS_AND_B64";
+  }
+  if (opcode == "DS_OR_RTN_B64") {
+    return "DS_OR_B64";
+  }
+  if (opcode == "DS_XOR_RTN_B64") {
+    return "DS_XOR_B64";
+  }
+  if (opcode == "DS_WRXCHG_RTN_B64") {
+    return "DS_WRITE_B64";
+  }
+  if (opcode == "DS_ADD_RTN_F64") {
+    return "DS_ADD_F64";
+  }
+  if (opcode == "DS_MIN_RTN_F64") {
+    return "DS_MIN_F64";
+  }
+  if (opcode == "DS_MAX_RTN_F64") {
+    return "DS_MAX_F64";
+  }
   return opcode;
 }
 
@@ -1934,6 +2087,38 @@ CompiledOpcode GetDsUpdateOpcode(CompiledOpcode opcode) {
       return CompiledOpcode::kDsMinF32;
     case CompiledOpcode::kDsMaxRtnF32:
       return CompiledOpcode::kDsMaxF32;
+    case CompiledOpcode::kDsAddRtnU64:
+      return CompiledOpcode::kDsAddU64;
+    case CompiledOpcode::kDsSubRtnU64:
+      return CompiledOpcode::kDsSubU64;
+    case CompiledOpcode::kDsRsubRtnU64:
+      return CompiledOpcode::kDsRsubU64;
+    case CompiledOpcode::kDsIncRtnU64:
+      return CompiledOpcode::kDsIncU64;
+    case CompiledOpcode::kDsDecRtnU64:
+      return CompiledOpcode::kDsDecU64;
+    case CompiledOpcode::kDsMinRtnI64:
+      return CompiledOpcode::kDsMinI64;
+    case CompiledOpcode::kDsMaxRtnI64:
+      return CompiledOpcode::kDsMaxI64;
+    case CompiledOpcode::kDsMinRtnU64:
+      return CompiledOpcode::kDsMinU64;
+    case CompiledOpcode::kDsMaxRtnU64:
+      return CompiledOpcode::kDsMaxU64;
+    case CompiledOpcode::kDsAndRtnB64:
+      return CompiledOpcode::kDsAndB64;
+    case CompiledOpcode::kDsOrRtnB64:
+      return CompiledOpcode::kDsOrB64;
+    case CompiledOpcode::kDsXorRtnB64:
+      return CompiledOpcode::kDsXorB64;
+    case CompiledOpcode::kDsWrxchgRtnB64:
+      return CompiledOpcode::kDsWriteB64;
+    case CompiledOpcode::kDsAddRtnF64:
+      return CompiledOpcode::kDsAddF64;
+    case CompiledOpcode::kDsMinRtnF64:
+      return CompiledOpcode::kDsMinF64;
+    case CompiledOpcode::kDsMaxRtnF64:
+      return CompiledOpcode::kDsMaxF64;
     default:
       return opcode;
   }
@@ -2198,6 +2383,9 @@ std::uint64_t EvaluateDsUpdate64(std::string_view opcode,
                                  std::uint64_t old_value,
                                  std::uint64_t data_value,
                                  std::string* error_message) {
+  if (opcode == "DS_WRITE_B64") {
+    return data_value;
+  }
   if (opcode == "DS_ADD_U64") {
     return old_value + data_value;
   }
@@ -2263,13 +2451,13 @@ std::uint64_t EvaluateDsDualDataUpdate64(std::string_view opcode,
                                          std::uint64_t data0_value,
                                          std::uint64_t data1_value,
                                          std::string* error_message) {
-  if (opcode == "DS_MSKOR_B64") {
+  if (opcode == "DS_MSKOR_B64" || opcode == "DS_MSKOR_RTN_B64") {
     return (old_value & ~data0_value) | data1_value;
   }
-  if (opcode == "DS_CMPST_B64") {
+  if (opcode == "DS_CMPST_B64" || opcode == "DS_CMPST_RTN_B64") {
     return old_value == data0_value ? data1_value : old_value;
   }
-  if (opcode == "DS_CMPST_F64") {
+  if (opcode == "DS_CMPST_F64" || opcode == "DS_CMPST_RTN_F64") {
     return DsCmpstF64Equal(old_value, data0_value) ? data1_value : old_value;
   }
 
@@ -2362,6 +2550,8 @@ std::uint64_t EvaluateDsUpdate64(CompiledOpcode opcode,
                                  std::uint64_t data_value,
                                  std::string* error_message) {
   switch (opcode) {
+    case CompiledOpcode::kDsWriteB64:
+      return data_value;
     case CompiledOpcode::kDsAddU64:
       return old_value + data_value;
     case CompiledOpcode::kDsSubU64:
@@ -2415,10 +2605,13 @@ std::uint64_t EvaluateDsDualDataUpdate64(CompiledOpcode opcode,
                                          std::string* error_message) {
   switch (opcode) {
     case CompiledOpcode::kDsMskorB64:
+    case CompiledOpcode::kDsMskorRtnB64:
       return (old_value & ~data0_value) | data1_value;
     case CompiledOpcode::kDsCmpstB64:
+    case CompiledOpcode::kDsCmpstRtnB64:
       return old_value == data0_value ? data1_value : old_value;
     case CompiledOpcode::kDsCmpstF64:
+    case CompiledOpcode::kDsCmpstRtnF64:
       return DsCmpstF64Equal(old_value, data0_value) ? data1_value : old_value;
     default:
       if (error_message != nullptr) {
@@ -6019,6 +6212,82 @@ bool TryCompileOpcode(std::string_view opcode,
     compiled_instruction->opcode = CompiledOpcode::kDsMaxRtnF32;
     return true;
   }
+  if (opcode == "DS_ADD_RTN_U64") {
+    compiled_instruction->opcode = CompiledOpcode::kDsAddRtnU64;
+    return true;
+  }
+  if (opcode == "DS_SUB_RTN_U64") {
+    compiled_instruction->opcode = CompiledOpcode::kDsSubRtnU64;
+    return true;
+  }
+  if (opcode == "DS_RSUB_RTN_U64") {
+    compiled_instruction->opcode = CompiledOpcode::kDsRsubRtnU64;
+    return true;
+  }
+  if (opcode == "DS_INC_RTN_U64") {
+    compiled_instruction->opcode = CompiledOpcode::kDsIncRtnU64;
+    return true;
+  }
+  if (opcode == "DS_DEC_RTN_U64") {
+    compiled_instruction->opcode = CompiledOpcode::kDsDecRtnU64;
+    return true;
+  }
+  if (opcode == "DS_MIN_RTN_I64") {
+    compiled_instruction->opcode = CompiledOpcode::kDsMinRtnI64;
+    return true;
+  }
+  if (opcode == "DS_MAX_RTN_I64") {
+    compiled_instruction->opcode = CompiledOpcode::kDsMaxRtnI64;
+    return true;
+  }
+  if (opcode == "DS_MIN_RTN_U64") {
+    compiled_instruction->opcode = CompiledOpcode::kDsMinRtnU64;
+    return true;
+  }
+  if (opcode == "DS_MAX_RTN_U64") {
+    compiled_instruction->opcode = CompiledOpcode::kDsMaxRtnU64;
+    return true;
+  }
+  if (opcode == "DS_AND_RTN_B64") {
+    compiled_instruction->opcode = CompiledOpcode::kDsAndRtnB64;
+    return true;
+  }
+  if (opcode == "DS_OR_RTN_B64") {
+    compiled_instruction->opcode = CompiledOpcode::kDsOrRtnB64;
+    return true;
+  }
+  if (opcode == "DS_XOR_RTN_B64") {
+    compiled_instruction->opcode = CompiledOpcode::kDsXorRtnB64;
+    return true;
+  }
+  if (opcode == "DS_MSKOR_RTN_B64") {
+    compiled_instruction->opcode = CompiledOpcode::kDsMskorRtnB64;
+    return true;
+  }
+  if (opcode == "DS_WRXCHG_RTN_B64") {
+    compiled_instruction->opcode = CompiledOpcode::kDsWrxchgRtnB64;
+    return true;
+  }
+  if (opcode == "DS_CMPST_RTN_B64") {
+    compiled_instruction->opcode = CompiledOpcode::kDsCmpstRtnB64;
+    return true;
+  }
+  if (opcode == "DS_CMPST_RTN_F64") {
+    compiled_instruction->opcode = CompiledOpcode::kDsCmpstRtnF64;
+    return true;
+  }
+  if (opcode == "DS_ADD_RTN_F64") {
+    compiled_instruction->opcode = CompiledOpcode::kDsAddRtnF64;
+    return true;
+  }
+  if (opcode == "DS_MIN_RTN_F64") {
+    compiled_instruction->opcode = CompiledOpcode::kDsMinRtnF64;
+    return true;
+  }
+  if (opcode == "DS_MAX_RTN_F64") {
+    compiled_instruction->opcode = CompiledOpcode::kDsMaxRtnF64;
+    return true;
+  }
   if (opcode == "S_BRANCH") {
     compiled_instruction->opcode = CompiledOpcode::kSBranch;
     return true;
@@ -7235,6 +7504,25 @@ bool Gfx950Interpreter::ExecuteInstruction(const CompiledInstruction& instructio
     case CompiledOpcode::kDsAddRtnF32:
     case CompiledOpcode::kDsMinRtnF32:
     case CompiledOpcode::kDsMaxRtnF32:
+    case CompiledOpcode::kDsAddRtnU64:
+    case CompiledOpcode::kDsSubRtnU64:
+    case CompiledOpcode::kDsRsubRtnU64:
+    case CompiledOpcode::kDsIncRtnU64:
+    case CompiledOpcode::kDsDecRtnU64:
+    case CompiledOpcode::kDsMinRtnI64:
+    case CompiledOpcode::kDsMaxRtnI64:
+    case CompiledOpcode::kDsMinRtnU64:
+    case CompiledOpcode::kDsMaxRtnU64:
+    case CompiledOpcode::kDsAndRtnB64:
+    case CompiledOpcode::kDsOrRtnB64:
+    case CompiledOpcode::kDsXorRtnB64:
+    case CompiledOpcode::kDsMskorRtnB64:
+    case CompiledOpcode::kDsWrxchgRtnB64:
+    case CompiledOpcode::kDsCmpstRtnB64:
+    case CompiledOpcode::kDsCmpstRtnF64:
+    case CompiledOpcode::kDsAddRtnF64:
+    case CompiledOpcode::kDsMinRtnF64:
+    case CompiledOpcode::kDsMaxRtnF64:
       return ExecuteDsMemory(instruction, state, workgroup, error_message);
     case CompiledOpcode::kGlobalAtomicSwap:
     case CompiledOpcode::kGlobalAtomicCmpSwap:

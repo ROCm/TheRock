@@ -1329,6 +1329,35 @@ int main() {
     }
   }
 
+  const std::array<std::string_view, 3> kWideReturningDsDualDataOpcodes = {
+      "DS_MSKOR_RTN_B64",
+      "DS_CMPST_RTN_B64",
+      "DS_CMPST_RTN_F64",
+  };
+  for (std::string_view opcode : kWideReturningDsDualDataOpcodes) {
+    if (!Expect(interpreter.Supports(opcode),
+                "expected wide returning ds dual-data opcode support")) {
+      std::cerr << opcode << '\n';
+      return 1;
+    }
+  }
+
+  const std::array<std::string_view, 16> kWideReturningDsOpcodes = {
+      "DS_ADD_RTN_U64", "DS_SUB_RTN_U64", "DS_RSUB_RTN_U64",
+      "DS_INC_RTN_U64", "DS_DEC_RTN_U64", "DS_MIN_RTN_I64",
+      "DS_MAX_RTN_I64", "DS_MIN_RTN_U64", "DS_MAX_RTN_U64",
+      "DS_AND_RTN_B64", "DS_OR_RTN_B64",  "DS_XOR_RTN_B64",
+      "DS_WRXCHG_RTN_B64", "DS_ADD_RTN_F64", "DS_MIN_RTN_F64",
+      "DS_MAX_RTN_F64",
+  };
+  for (std::string_view opcode : kWideReturningDsOpcodes) {
+    if (!Expect(interpreter.Supports(opcode),
+                "expected wide returning ds opcode support")) {
+      std::cerr << opcode << '\n';
+      return 1;
+    }
+  }
+
   const std::array<std::string_view, 16> kVectorCompare64Opcodes = {
       "V_CMP_F_I64",  "V_CMP_LT_I64", "V_CMP_EQ_I64", "V_CMP_LE_I64",
       "V_CMP_GT_I64", "V_CMP_NE_I64", "V_CMP_GE_I64", "V_CMP_T_I64",
@@ -7796,6 +7825,263 @@ int main() {
                                          &error_message),
               error_message.c_str()) ||
       !validate_ds_b64_update_state(compiled_ds_b64_update_state, "compiled")) {
+    return 1;
+  }
+  }
+
+  {
+  const std::vector<DecodedInstruction> ds_b64_return_program = {
+      DecodedInstruction::FourOperand("DS_ADD_RTN_U64", InstructionOperand::Vgpr(80),
+                                      InstructionOperand::Vgpr(0),
+                                      InstructionOperand::Vgpr(1),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FourOperand("DS_SUB_RTN_U64", InstructionOperand::Vgpr(83),
+                                      InstructionOperand::Vgpr(3),
+                                      InstructionOperand::Vgpr(4),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FourOperand("DS_RSUB_RTN_U64", InstructionOperand::Vgpr(86),
+                                      InstructionOperand::Vgpr(6),
+                                      InstructionOperand::Vgpr(7),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FourOperand("DS_INC_RTN_U64", InstructionOperand::Vgpr(89),
+                                      InstructionOperand::Vgpr(9),
+                                      InstructionOperand::Vgpr(10),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FourOperand("DS_DEC_RTN_U64", InstructionOperand::Vgpr(92),
+                                      InstructionOperand::Vgpr(12),
+                                      InstructionOperand::Vgpr(13),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FourOperand("DS_MIN_RTN_I64", InstructionOperand::Vgpr(95),
+                                      InstructionOperand::Vgpr(15),
+                                      InstructionOperand::Vgpr(16),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FourOperand("DS_MAX_RTN_I64", InstructionOperand::Vgpr(98),
+                                      InstructionOperand::Vgpr(18),
+                                      InstructionOperand::Vgpr(19),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FourOperand("DS_MIN_RTN_U64", InstructionOperand::Vgpr(101),
+                                      InstructionOperand::Vgpr(21),
+                                      InstructionOperand::Vgpr(22),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FourOperand("DS_MAX_RTN_U64", InstructionOperand::Vgpr(104),
+                                      InstructionOperand::Vgpr(24),
+                                      InstructionOperand::Vgpr(25),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FourOperand("DS_AND_RTN_B64", InstructionOperand::Vgpr(107),
+                                      InstructionOperand::Vgpr(27),
+                                      InstructionOperand::Vgpr(28),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FourOperand("DS_OR_RTN_B64", InstructionOperand::Vgpr(110),
+                                      InstructionOperand::Vgpr(30),
+                                      InstructionOperand::Vgpr(31),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FourOperand("DS_XOR_RTN_B64", InstructionOperand::Vgpr(113),
+                                      InstructionOperand::Vgpr(33),
+                                      InstructionOperand::Vgpr(34),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FourOperand(
+          "DS_WRXCHG_RTN_B64", InstructionOperand::Vgpr(116),
+          InstructionOperand::Vgpr(36), InstructionOperand::Vgpr(37),
+          InstructionOperand::Imm32(0)),
+      DecodedInstruction::FourOperand("DS_ADD_RTN_F64", InstructionOperand::Vgpr(119),
+                                      InstructionOperand::Vgpr(42),
+                                      InstructionOperand::Vgpr(43),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FourOperand("DS_MIN_RTN_F64", InstructionOperand::Vgpr(122),
+                                      InstructionOperand::Vgpr(45),
+                                      InstructionOperand::Vgpr(46),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FourOperand("DS_MAX_RTN_F64", InstructionOperand::Vgpr(125),
+                                      InstructionOperand::Vgpr(48),
+                                      InstructionOperand::Vgpr(49),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FiveOperand(
+          "DS_MSKOR_RTN_B64", InstructionOperand::Vgpr(68),
+          InstructionOperand::Vgpr(51), InstructionOperand::Vgpr(52),
+          InstructionOperand::Vgpr(54), InstructionOperand::Imm32(0)),
+      DecodedInstruction::FiveOperand(
+          "DS_CMPST_RTN_B64", InstructionOperand::Vgpr(71),
+          InstructionOperand::Vgpr(57), InstructionOperand::Vgpr(58),
+          InstructionOperand::Vgpr(60), InstructionOperand::Imm32(0)),
+      DecodedInstruction::FiveOperand(
+          "DS_CMPST_RTN_F64", InstructionOperand::Vgpr(74),
+          InstructionOperand::Vgpr(63), InstructionOperand::Vgpr(64),
+          InstructionOperand::Vgpr(66), InstructionOperand::Imm32(0)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  struct DsReturn64Expectation {
+    std::uint16_t destination_reg;
+    std::uint64_t expected_return;
+    std::uint64_t address;
+    std::uint64_t expected_memory;
+    const char* return_label;
+    const char* memory_label;
+  };
+  auto make_ds_b64_return_state = []() {
+    WaveExecutionState state;
+    state.exec_mask = 0x1ULL;
+    auto write_lds_u64 = [](WaveExecutionState* wave,
+                            std::uint64_t address,
+                            std::uint64_t value) {
+      std::memcpy(wave->lds_bytes.data() + address, &value, sizeof(value));
+    };
+
+    state.vgprs[0][0] = 0u;
+    SetLane0VgprU64(&state, 1, 5u);
+    state.vgprs[3][0] = 16u;
+    SetLane0VgprU64(&state, 4, 6u);
+    state.vgprs[6][0] = 32u;
+    SetLane0VgprU64(&state, 7, 10u);
+    state.vgprs[9][0] = 48u;
+    SetLane0VgprU64(&state, 10, 7u);
+    state.vgprs[12][0] = 64u;
+    SetLane0VgprU64(&state, 13, 11u);
+    state.vgprs[15][0] = 80u;
+    SetLane0VgprU64(&state, 16, 2u);
+    state.vgprs[18][0] = 96u;
+    SetLane0VgprU64(&state, 19, 2u);
+    state.vgprs[21][0] = 112u;
+    SetLane0VgprU64(&state, 22, 4u);
+    state.vgprs[24][0] = 128u;
+    SetLane0VgprU64(&state, 25, 14u);
+    state.vgprs[27][0] = 144u;
+    SetLane0VgprU64(&state, 28, 0x0f0f0f0f0f0f0f0fULL);
+    state.vgprs[30][0] = 160u;
+    SetLane0VgprU64(&state, 31, 0x1100110011001100ULL);
+    state.vgprs[33][0] = 176u;
+    SetLane0VgprU64(&state, 34, 0x00ff00ff00ff00ffULL);
+    state.vgprs[36][0] = 192u;
+    SetLane0VgprU64(&state, 37, 0xfedcba9876543210ULL);
+    state.vgprs[42][0] = 208u;
+    SetLane0VgprU64(&state, 43, DoubleBits(2.25));
+    state.vgprs[45][0] = 224u;
+    SetLane0VgprU64(&state, 46, DoubleBits(-1.0));
+    state.vgprs[48][0] = 240u;
+    SetLane0VgprU64(&state, 49, DoubleBits(8.0));
+    state.vgprs[51][0] = 256u;
+    SetLane0VgprU64(&state, 52, 0xff00ff0000ff00ffULL);
+    SetLane0VgprU64(&state, 54, 0x005500aa550000aaULL);
+    state.vgprs[57][0] = 272u;
+    SetLane0VgprU64(&state, 58, 0x1122334455667788ULL);
+    SetLane0VgprU64(&state, 60, 0x8877665544332211ULL);
+    state.vgprs[63][0] = 288u;
+    SetLane0VgprU64(&state, 64, DoubleBits(3.5));
+    SetLane0VgprU64(&state, 66, DoubleBits(9.0));
+
+    for (std::uint16_t reg = 68; reg <= 125; ++reg) {
+      state.vgprs[reg][0] = 0xdead0000u + reg;
+    }
+
+    write_lds_u64(&state, 0u, 10u);
+    write_lds_u64(&state, 16u, 20u);
+    write_lds_u64(&state, 32u, 4u);
+    write_lds_u64(&state, 48u, 7u);
+    write_lds_u64(&state, 64u, 0u);
+    write_lds_u64(&state, 80u, 0xfffffffffffffffcULL);
+    write_lds_u64(&state, 96u, 0xfffffffffffffffdULL);
+    write_lds_u64(&state, 112u, 9u);
+    write_lds_u64(&state, 128u, 9u);
+    write_lds_u64(&state, 144u, 0xff00ff00ff00ff00ULL);
+    write_lds_u64(&state, 160u, 0x0011001100110011ULL);
+    write_lds_u64(&state, 176u, 0xffff0000ffff0000ULL);
+    write_lds_u64(&state, 192u, 0x0123456789abcdefULL);
+    write_lds_u64(&state, 208u, DoubleBits(1.5));
+    write_lds_u64(&state, 224u, DoubleBits(4.0));
+    write_lds_u64(&state, 240u, DoubleBits(4.0));
+    write_lds_u64(&state, 256u, 0xffff0000aaaa5555ULL);
+    write_lds_u64(&state, 272u, 0x1122334455667788ULL);
+    write_lds_u64(&state, 288u, DoubleBits(2.5));
+    return state;
+  };
+  auto validate_ds_b64_return_state = [&](const WaveExecutionState& state,
+                                          const char* mode) {
+    if (!Expect(state.halted, "expected ds b64 return program to halt")) {
+      std::cerr << mode << '\n';
+      return false;
+    }
+    const auto read_lds_u64 = [&](std::uint64_t address) {
+      std::uint64_t value = 0;
+      std::memcpy(&value, state.lds_bytes.data() + address, sizeof(value));
+      return value;
+    };
+    const std::array<DsReturn64Expectation, 19> expectations = {{
+        {80u, 10u, 0u, 15u, "expected ds_add_rtn_u64 return",
+         "expected ds_add_rtn_u64 memory"},
+        {83u, 20u, 16u, 14u, "expected ds_sub_rtn_u64 return",
+         "expected ds_sub_rtn_u64 memory"},
+        {86u, 4u, 32u, 6u, "expected ds_rsub_rtn_u64 return",
+         "expected ds_rsub_rtn_u64 memory"},
+        {89u, 7u, 48u, 0u, "expected ds_inc_rtn_u64 return",
+         "expected ds_inc_rtn_u64 memory"},
+        {92u, 0u, 64u, 11u, "expected ds_dec_rtn_u64 return",
+         "expected ds_dec_rtn_u64 memory"},
+        {95u, 0xfffffffffffffffcULL, 80u, 0xfffffffffffffffcULL,
+         "expected ds_min_rtn_i64 return", "expected ds_min_rtn_i64 memory"},
+        {98u, 0xfffffffffffffffdULL, 96u, 2u,
+         "expected ds_max_rtn_i64 return", "expected ds_max_rtn_i64 memory"},
+        {101u, 9u, 112u, 4u, "expected ds_min_rtn_u64 return",
+         "expected ds_min_rtn_u64 memory"},
+        {104u, 9u, 128u, 14u, "expected ds_max_rtn_u64 return",
+         "expected ds_max_rtn_u64 memory"},
+        {107u, 0xff00ff00ff00ff00ULL, 144u, 0x0f000f000f000f00ULL,
+         "expected ds_and_rtn_b64 return", "expected ds_and_rtn_b64 memory"},
+        {110u, 0x0011001100110011ULL, 160u, 0x1111111111111111ULL,
+         "expected ds_or_rtn_b64 return", "expected ds_or_rtn_b64 memory"},
+        {113u, 0xffff0000ffff0000ULL, 176u, 0xff0000ffff0000ffULL,
+         "expected ds_xor_rtn_b64 return", "expected ds_xor_rtn_b64 memory"},
+        {116u, 0x0123456789abcdefULL, 192u, 0xfedcba9876543210ULL,
+         "expected ds_wrxchg_rtn_b64 return",
+         "expected ds_wrxchg_rtn_b64 memory"},
+        {119u, DoubleBits(1.5), 208u, DoubleBits(3.75),
+         "expected ds_add_rtn_f64 return", "expected ds_add_rtn_f64 memory"},
+        {122u, DoubleBits(4.0), 224u, DoubleBits(-1.0),
+         "expected ds_min_rtn_f64 return", "expected ds_min_rtn_f64 memory"},
+        {125u, DoubleBits(4.0), 240u, DoubleBits(8.0),
+         "expected ds_max_rtn_f64 return", "expected ds_max_rtn_f64 memory"},
+        {68u, 0xffff0000aaaa5555ULL, 256u,
+         (0xffff0000aaaa5555ULL & ~0xff00ff0000ff00ffULL) |
+             0x005500aa550000aaULL,
+         "expected ds_mskor_rtn_b64 return", "expected ds_mskor_rtn_b64 memory"},
+        {71u, 0x1122334455667788ULL, 272u, 0x8877665544332211ULL,
+         "expected ds_cmpst_rtn_b64 return", "expected ds_cmpst_rtn_b64 memory"},
+        {74u, DoubleBits(2.5), 288u, DoubleBits(2.5),
+         "expected ds_cmpst_rtn_f64 return", "expected ds_cmpst_rtn_f64 memory"},
+    }};
+    for (const DsReturn64Expectation& expectation : expectations) {
+      if (!Expect(ReadLane0VgprU64(state, expectation.destination_reg) ==
+                      expectation.expected_return,
+                  expectation.return_label) ||
+          !Expect(read_lds_u64(expectation.address) == expectation.expected_memory,
+                  expectation.memory_label)) {
+        std::cerr << mode << " dest=" << expectation.destination_reg << '\n';
+        return false;
+      }
+    }
+    return true;
+  };
+
+  WaveExecutionState decoded_ds_b64_return_state = make_ds_b64_return_state();
+  if (!Expect(interpreter.ExecuteProgram(ds_b64_return_program,
+                                         &decoded_ds_b64_return_state,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_ds_b64_return_state(decoded_ds_b64_return_state, "decoded")) {
+    return 1;
+  }
+
+  std::vector<CompiledInstruction> compiled_ds_b64_return_program;
+  if (!Expect(interpreter.CompileProgram(ds_b64_return_program,
+                                         &compiled_ds_b64_return_program,
+                                         &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+  WaveExecutionState compiled_ds_b64_return_state = make_ds_b64_return_state();
+  if (!Expect(interpreter.ExecuteProgram(compiled_ds_b64_return_program,
+                                         &compiled_ds_b64_return_state,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_ds_b64_return_state(compiled_ds_b64_return_state, "compiled")) {
     return 1;
   }
   }

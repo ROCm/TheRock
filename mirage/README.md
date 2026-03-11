@@ -155,6 +155,10 @@ internal-opcode entrypoints for a small subset of ops: `S_MOV_B32`,
 `DS_{MIN,MAX}_RTN_{I32,U32,F32}`,
 `DS_{AND,OR,XOR,MSKOR}_RTN_B32`, `DS_WRXCHG_RTN_B32`,
 `DS_CMPST_RTN_{B32,F32}`, `DS_WRAP_RTN_B32`, `DS_ADD_RTN_F32`,
+`DS_{ADD,SUB,RSUB,INC,DEC}_RTN_U64`,
+`DS_{MIN,MAX}_RTN_{I64,U64,F64}`,
+`DS_{AND,OR,XOR,MSKOR}_RTN_B64`, `DS_WRXCHG_RTN_B64`,
+`DS_CMPST_RTN_{B64,F64}`, `DS_ADD_RTN_F64`,
 `FLAT_LOAD_DWORD`,
 `FLAT_LOAD/STORE_{U,S}{BYTE,SHORT}`, `FLAT_LOAD/STORE_DWORDX{2,3,4}`,
 `FLAT_STORE_DWORD`, `GLOBAL_LOAD/STORE_{U,S}{BYTE,SHORT}`,
@@ -196,6 +200,11 @@ plus DS pair/narrow/wide access decode and non-return wide LDS update decode for
 `DS_{ADD,SUB,RSUB,INC,DEC}_{U64}`,
 `DS_{MIN,MAX}_{I64,U64,F64}`, `DS_{AND,OR,XOR,MSKOR}_B64`,
 `DS_CMPST_{B64,F64}`, `DS_ADD_F64`,
+plus wide DS return-atomic decode for
+`DS_{ADD,SUB,RSUB,INC,DEC}_RTN_U64`,
+`DS_{MIN,MAX}_RTN_{I64,U64,F64}`,
+`DS_{AND,OR,XOR,MSKOR}_RTN_B64`, `DS_WRXCHG_RTN_B64`,
+`DS_CMPST_RTN_{B64,F64}`, `DS_ADD_RTN_F64`,
 `DS_MSKOR_B32`, `DS_CMPST_{B32,F32}`, and special scalar sources
 `SRC_VCCZ`,
 `SRC_EXECZ`, and `SRC_SCC`.

@@ -286,7 +286,26 @@ bool IsSupportedDsOpcode(std::string_view opcode_name) {
          opcode_name == "DS_WRAP_RTN_B32" ||
          opcode_name == "DS_ADD_RTN_F32" ||
          opcode_name == "DS_MIN_RTN_F32" ||
-         opcode_name == "DS_MAX_RTN_F32";
+         opcode_name == "DS_MAX_RTN_F32" ||
+         opcode_name == "DS_ADD_RTN_U64" ||
+         opcode_name == "DS_SUB_RTN_U64" ||
+         opcode_name == "DS_RSUB_RTN_U64" ||
+         opcode_name == "DS_INC_RTN_U64" ||
+         opcode_name == "DS_DEC_RTN_U64" ||
+         opcode_name == "DS_MIN_RTN_I64" ||
+         opcode_name == "DS_MAX_RTN_I64" ||
+         opcode_name == "DS_MIN_RTN_U64" ||
+         opcode_name == "DS_MAX_RTN_U64" ||
+         opcode_name == "DS_AND_RTN_B64" ||
+         opcode_name == "DS_OR_RTN_B64" ||
+         opcode_name == "DS_XOR_RTN_B64" ||
+         opcode_name == "DS_MSKOR_RTN_B64" ||
+         opcode_name == "DS_WRXCHG_RTN_B64" ||
+         opcode_name == "DS_CMPST_RTN_B64" ||
+         opcode_name == "DS_CMPST_RTN_F64" ||
+         opcode_name == "DS_ADD_RTN_F64" ||
+         opcode_name == "DS_MIN_RTN_F64" ||
+         opcode_name == "DS_MAX_RTN_F64";
 }
 
 bool IsDsPairWriteOpcode(std::string_view opcode_name) {
@@ -333,14 +352,33 @@ bool IsDsReturnOpcode(std::string_view opcode_name) {
          opcode_name == "DS_WRXCHG_RTN_B32" ||
          opcode_name == "DS_ADD_RTN_F32" ||
          opcode_name == "DS_MIN_RTN_F32" ||
-         opcode_name == "DS_MAX_RTN_F32";
+         opcode_name == "DS_MAX_RTN_F32" ||
+         opcode_name == "DS_ADD_RTN_U64" ||
+         opcode_name == "DS_SUB_RTN_U64" ||
+         opcode_name == "DS_RSUB_RTN_U64" ||
+         opcode_name == "DS_INC_RTN_U64" ||
+         opcode_name == "DS_DEC_RTN_U64" ||
+         opcode_name == "DS_MIN_RTN_I64" ||
+         opcode_name == "DS_MAX_RTN_I64" ||
+         opcode_name == "DS_MIN_RTN_U64" ||
+         opcode_name == "DS_MAX_RTN_U64" ||
+         opcode_name == "DS_AND_RTN_B64" ||
+         opcode_name == "DS_OR_RTN_B64" ||
+         opcode_name == "DS_XOR_RTN_B64" ||
+         opcode_name == "DS_WRXCHG_RTN_B64" ||
+         opcode_name == "DS_ADD_RTN_F64" ||
+         opcode_name == "DS_MIN_RTN_F64" ||
+         opcode_name == "DS_MAX_RTN_F64";
 }
 
 bool IsDsDualDataReturnOpcode(std::string_view opcode_name) {
   return opcode_name == "DS_MSKOR_RTN_B32" ||
          opcode_name == "DS_CMPST_RTN_B32" ||
          opcode_name == "DS_CMPST_RTN_F32" ||
-         opcode_name == "DS_WRAP_RTN_B32";
+         opcode_name == "DS_WRAP_RTN_B32" ||
+         opcode_name == "DS_MSKOR_RTN_B64" ||
+         opcode_name == "DS_CMPST_RTN_B64" ||
+         opcode_name == "DS_CMPST_RTN_F64";
 }
 
 }  // namespace
