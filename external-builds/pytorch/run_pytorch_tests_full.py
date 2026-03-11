@@ -93,6 +93,7 @@ def print_env() -> None:
 
 
 def cmd_arguments(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
+    # Extract passthrough pytest args after "--"
     try:
         rest_pos = argv.index("--")
     except ValueError:
@@ -107,54 +108,60 @@ def cmd_arguments(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
         "--amdgpu-family",
         type=str,
         default=os.getenv("AMDGPU_FAMILY", ""),
-        help='AMDGPU family (e.g. "gfx942"). Auto-detected if not set.',
+        help='AMDGPU family string (e.g. "gfx94X-dcgpu", "gfx110X-all"). '
+        "Falls back to AMDGPU_FAMILY env var, then auto-detection.",
     )
     parser.add_argument(
         "--pytorch-version",
         type=str,
         default=os.getenv("PYTORCH_VERSION", ""),
-        help='PyTorch version (e.g. "2.7" or "all"). Auto-detected if not set.',
+        help='PyTorch version for skip-list lookup (e.g. "2.9", "2.12"). '
+        "Auto-detected from the installed torch package if not set.",
     )
     parser.add_argument(
         "--pytorch-dir",
         type=Path,
         default=THIS_SCRIPT_DIR / "pytorch",
-        help="Path to the PyTorch repository root.",
+        help="Path to the PyTorch source checkout (must contain test/run_test.py).",
     )
     parser.add_argument(
         "--test-config",
         type=str,
         default=os.getenv("TEST_CONFIG", "default"),
-        help='TEST_CONFIG value for run_test.py sharding/config logic (default: "default").',
+        help='PyTorch test configuration: "default", "distributed", or "inductor". '
+        "Controls which test suites run_test.py selects. Also reads TEST_CONFIG env var.",
     )
     parser.add_argument(
         "--shard",
         type=int,
         default=int(os.getenv("SHARD_NUMBER", "0")),
-        help="1-indexed shard number to run. Also reads SHARD_NUMBER env var.",
+        help="1-indexed shard number (e.g. --shard 2 --num-shards 4 runs shard 2 of 4). "
+        "Also reads SHARD_NUMBER env var. Set to 0 to disable sharding.",
     )
     parser.add_argument(
         "--num-shards",
         type=int,
         default=int(os.getenv("NUM_TEST_SHARDS", "0")),
-        help="Total number of shards. Also reads NUM_TEST_SHARDS env var.",
+        help="Total number of shards. Also reads NUM_TEST_SHARDS env var. "
+        "Must be set together with --shard.",
     )
     parser.add_argument(
         "--include",
         nargs="+",
         default=None,
         metavar="TEST",
-        help="Only run these test files (passed to run_test.py --include). "
-        "Also settable via TESTS_TO_INCLUDE env var (run_test.py reads it directly). "
-        "If neither is set, run_test.py runs all tests. The workflow may "
-        "provide a limited default set via TESTS_TO_INCLUDE.",
+        help="Only run these test files (e.g. --include test_nn test_torch). "
+        "Passed to run_test.py --include. Also settable via TESTS_TO_INCLUDE "
+        "env var, which run_test.py reads directly. If neither is set, "
+        "run_test.py runs all tests for the given test config.",
     )
     parser.add_argument(
         "--exclude",
         nargs="+",
         default=None,
         metavar="TEST",
-        help="Exclude these test files (passed to run_test.py --exclude).",
+        help="Exclude these test files (e.g. --exclude test_dynamo test_inductor). "
+        "Passed to run_test.py --exclude.",
     )
     parser.add_argument(
         "--no-exclude-jit-executor",
@@ -184,6 +191,13 @@ def cmd_arguments(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
         "-k",
         default="",
         help="Override the pytest -k expression (bypasses TheRock skip-test generation).",
+    )
+    parser.add_argument(
+        "--cache",
+        default=True,
+        action=argparse.BooleanOptionalAction,
+        help="Enable pytest caching (default). Use --no-cache when only having "
+        "read-only access to the pytorch directory.",
     )
     parser.add_argument(
         "--dry-run",
@@ -216,6 +230,11 @@ def build_run_test_cmd(
     tests_to_skip: str,
     passthrough_args: list[str],
 ) -> list[str]:
+    """Build the command line for PyTorch's test/run_test.py.
+
+    Assembles flags for sharding, test selection, skip expressions, and any
+    extra pytest arguments that were passed after ``--``.
+    """
     run_test_path = str(args.pytorch_dir / "test" / "run_test.py")
     cmd = [sys.executable, run_test_path]
 
@@ -243,6 +262,10 @@ def build_run_test_cmd(
     if tests_to_skip:
         cmd.extend(["-k", tests_to_skip])
 
+    if not args.cache:
+        passthrough_args.append("-p")
+        passthrough_args.append("no:cacheprovider")
+
     cmd.extend(passthrough_args)
     return cmd
 
@@ -250,6 +273,10 @@ def build_run_test_cmd(
 def main(argv: list[str]) -> int:
     args, passthrough_args = cmd_arguments(argv)
 
+    # Determine AMDGPU family and set HIP_VISIBLE_DEVICES BEFORE importing
+    # torch or running pytest.  Once torch.cuda is initialized, changing
+    # HIP_VISIBLE_DEVICES has no effect.  For unit tests we run on a single
+    # device (policy="single") to avoid multi-GPU contention.
     ((first_arch, _),) = set_gpu_execution_policy(args.amdgpu_family, policy="single")
     print(f"Using AMDGPU family: {first_arch}")
 
@@ -284,14 +311,30 @@ def main(argv: list[str]) -> int:
 
 
 def force_exit_with_code(retcode: int) -> None:
+    """Forces termination to work around https://github.com/ROCm/TheRock/issues/999."""
     import signal
 
+    # We're going to kill the current process with SIGTERM below, which will
+    # return exit code 15. This preserves the original exit code in a file.
+    # Note: this path is relative to CWD, *not the script directory*.
+    # TODO(#2258): output a test report file that can be inspected on both
+    #              Linux and Windows then remove this special file
     retcode_file = Path("run_pytorch_tests_full_exit_code.txt")
     retcode_int = int(retcode)
     print(f"Writing retcode {retcode_int} to '{retcode_file}'")
     retcode_file.write_text(str(retcode_int))
 
+    print("Forcefully terminating to avoid https://github.com/ROCm/TheRock/issues/999")
+
+    # Flush output before we force exit so no logs get missed.
     sys.stdout.flush()
+
+    # In order from "asking nicely" to "tear down immediately":
+    #   1. `sys.exit(retcode)`
+    #   2. `os._exit(retcode)`
+    #   3. `os.kill(os.getpid(), signal.SIGTERM)`
+    #   4. `subprocess.Popen(f'taskkill /F /PID {os.getpid()}', shell=True)`
+    # As options (1) and (2) are not sufficient, we use option (3) here.
     os.kill(os.getpid(), signal.SIGTERM)
 
 

@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 name: Test PyTorch Wheels (Full Suite)
 
 on:
@@ -27,13 +30,13 @@ on:
         required: true
         type: string
       pytorch_git_ref:
-        description: PyTorch ref to checkout test sources from. (e.g. "nightly", or "release/2.7")
+        description: PyTorch ref to checkout test sources from. (e.g. "nightly", or "release/2.9")
         type: string
-        default: "release/2.7"
+        default: "release/2.9"
       tests_to_include:
         description: List of test suites to run
         type: string
-        default: test_nn test_torch test_cuda test_unary_ufuncs test_binary_ufuncs test_autograd
+        default: "test_nn test_torch test_cuda test_unary_ufuncs test_binary_ufuncs test_autograd"
 
   workflow_call:
     inputs:
@@ -54,7 +57,7 @@ on:
         type: string
       pytorch_git_ref:
         type: string
-        default: "release/2.7"
+        default: "release/2.9"
       repository:
         description: "Repository to checkout. Otherwise, defaults to `github.repository`."
         type: string
@@ -64,7 +67,7 @@ on:
       tests_to_include:
         description: List of test suites to run
         type: string
-        default: test_nn test_torch test_cuda test_unary_ufuncs test_binary_ufuncs test_autograd
+        default: "test_nn test_torch test_cuda test_unary_ufuncs test_binary_ufuncs test_autograd"
 
 
 permissions:
@@ -97,6 +100,9 @@ jobs:
     defaults:
       run:
         shell: bash
+    # These env vars are set at the job level so they are available to all steps
+    # (e.g. export_test_times.py, run_pytorch_tests_full.py). The Python script
+    # uses os.environ.setdefault() so values set here take precedence.
     env:
       VENV_DIR: ${{ github.workspace }}/.venv
       AMDGPU_FAMILY: ${{ inputs.amdgpu_family }}
