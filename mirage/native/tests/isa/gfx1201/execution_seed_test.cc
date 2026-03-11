@@ -1285,6 +1285,65 @@ int main() {
     return 1;
   }
 
+  const std::array<std::uint32_t, 1> v_cmp_eq_i64_words{
+      MakeVopc(82u, 118u, 100u)};
+  if (!Expect(decoder.DecodeInstruction(v_cmp_eq_i64_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_CMP_EQ_I64 decode success") ||
+      !Expect(ExpectBinaryInstruction(instruction, "V_CMP_EQ_I64",
+                                      OperandKind::kSgpr,
+                                      kImplicitVccPairSgprIndex,
+                                      OperandKind::kSgpr, 118u,
+                                      OperandKind::kVgpr, 100u),
+              "expected decoded V_CMP_EQ_I64 operands") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[0], OperandRole::kDestination,
+                  OperandSlotKind::kScalarDestination,
+                  OperandValueClass::kScalarRegister, OperandAccess::kWrite,
+                  FragmentKind::kScalar, 64u, 2u, true),
+              "expected implicit VCC destination descriptor for V_CMP_EQ_I64")
+      ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[1], OperandRole::kSource0,
+                  OperandSlotKind::kSource0,
+                  OperandValueClass::kScalarRegister, OperandAccess::kRead,
+                  FragmentKind::kScalar, 64u, 2u, false),
+              "expected V_CMP_EQ_I64 source0 descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[2], OperandRole::kSource1,
+                  OperandSlotKind::kSource1,
+                  OperandValueClass::kVectorRegister, OperandAccess::kRead,
+                  FragmentKind::kVector, 64u, 2u, false),
+              "expected V_CMP_EQ_I64 source1 descriptor")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_cmpx_eq_u64_words{
+      MakeVopc(218u, 120u, 102u)};
+  if (!Expect(decoder.DecodeInstruction(v_cmpx_eq_u64_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_CMPX_EQ_U64 decode success") ||
+      !Expect(ExpectBinaryInstruction(instruction, "V_CMPX_EQ_U64",
+                                      OperandKind::kSgpr,
+                                      kImplicitVccPairSgprIndex,
+                                      OperandKind::kSgpr, 120u,
+                                      OperandKind::kVgpr, 102u),
+              "expected decoded V_CMPX_EQ_U64 operands") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[1], OperandRole::kSource0,
+                  OperandSlotKind::kSource0,
+                  OperandValueClass::kScalarRegister, OperandAccess::kRead,
+                  FragmentKind::kScalar, 64u, 2u, false),
+              "expected V_CMPX_EQ_U64 source0 descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[2], OperandRole::kSource1,
+                  OperandSlotKind::kSource1,
+                  OperandValueClass::kVectorRegister, OperandAccess::kRead,
+                  FragmentKind::kVector, 64u, 2u, false),
+              "expected V_CMPX_EQ_U64 source1 descriptor")) {
+    return 1;
+  }
+
   const std::array<std::uint32_t, 9> arithmetic_program_words{
       MakeSopk(0u, 1u, 10u),
       MakeSopk(0u, 2u, 3u),
@@ -3313,6 +3372,189 @@ int main() {
                 "expected compiled remaining F64 compare program to halt") ||
         !Expect(compiled_remaining_f64_compare_state.pc == 3u,
                 "expected compiled remaining F64 compare program advance")) {
+      return 1;
+    }
+  }
+
+  struct RemainingI64U64CompareCase {
+    const char* opcode;
+    std::uint32_t encoded_opcode;
+    std::uint64_t expected_mask;
+    Gfx1201CompiledOpcode compiled_opcode;
+    bool writes_exec;
+    bool is_signed;
+  };
+
+  constexpr std::array<RemainingI64U64CompareCase, 24>
+      kRemainingI64U64CompareCases{{
+          {"V_CMP_EQ_I64", 82u, 2u, Gfx1201CompiledOpcode::kVCmpEqI64, false,
+           true},
+          {"V_CMP_NE_I64", 85u, 13u, Gfx1201CompiledOpcode::kVCmpNeI64, false,
+           true},
+          {"V_CMP_LT_I64", 81u, 12u, Gfx1201CompiledOpcode::kVCmpLtI64, false,
+           true},
+          {"V_CMP_LE_I64", 83u, 14u, Gfx1201CompiledOpcode::kVCmpLeI64, false,
+           true},
+          {"V_CMP_GT_I64", 84u, 1u, Gfx1201CompiledOpcode::kVCmpGtI64, false,
+           true},
+          {"V_CMP_GE_I64", 86u, 3u, Gfx1201CompiledOpcode::kVCmpGeI64, false,
+           true},
+          {"V_CMP_EQ_U64", 90u, 2u, Gfx1201CompiledOpcode::kVCmpEqU64, false,
+           false},
+          {"V_CMP_NE_U64", 93u, 13u, Gfx1201CompiledOpcode::kVCmpNeU64, false,
+           false},
+          {"V_CMP_LT_U64", 89u, 12u, Gfx1201CompiledOpcode::kVCmpLtU64, false,
+           false},
+          {"V_CMP_LE_U64", 91u, 14u, Gfx1201CompiledOpcode::kVCmpLeU64, false,
+           false},
+          {"V_CMP_GT_U64", 92u, 1u, Gfx1201CompiledOpcode::kVCmpGtU64, false,
+           false},
+          {"V_CMP_GE_U64", 94u, 3u, Gfx1201CompiledOpcode::kVCmpGeU64, false,
+           false},
+          {"V_CMPX_EQ_I64", 210u, 2u, Gfx1201CompiledOpcode::kVCmpxEqI64, true,
+           true},
+          {"V_CMPX_NE_I64", 213u, 13u, Gfx1201CompiledOpcode::kVCmpxNeI64,
+           true, true},
+          {"V_CMPX_LT_I64", 209u, 12u, Gfx1201CompiledOpcode::kVCmpxLtI64,
+           true, true},
+          {"V_CMPX_LE_I64", 211u, 14u, Gfx1201CompiledOpcode::kVCmpxLeI64,
+           true, true},
+          {"V_CMPX_GT_I64", 212u, 1u, Gfx1201CompiledOpcode::kVCmpxGtI64, true,
+           true},
+          {"V_CMPX_GE_I64", 214u, 3u, Gfx1201CompiledOpcode::kVCmpxGeI64, true,
+           true},
+          {"V_CMPX_EQ_U64", 218u, 2u, Gfx1201CompiledOpcode::kVCmpxEqU64, true,
+           false},
+          {"V_CMPX_NE_U64", 221u, 13u, Gfx1201CompiledOpcode::kVCmpxNeU64,
+           true, false},
+          {"V_CMPX_LT_U64", 217u, 12u, Gfx1201CompiledOpcode::kVCmpxLtU64,
+           true, false},
+          {"V_CMPX_LE_U64", 219u, 14u, Gfx1201CompiledOpcode::kVCmpxLeU64,
+           true, false},
+          {"V_CMPX_GT_U64", 220u, 1u, Gfx1201CompiledOpcode::kVCmpxGtU64, true,
+           false},
+          {"V_CMPX_GE_U64", 222u, 3u, Gfx1201CompiledOpcode::kVCmpxGeU64, true,
+           false},
+      }};
+
+  const std::uint64_t lhs_i64_bits =
+      static_cast<std::uint64_t>(static_cast<std::int64_t>(-2));
+  const std::uint64_t rhs_i64_lane0 =
+      static_cast<std::uint64_t>(static_cast<std::int64_t>(-3));
+  const std::uint64_t rhs_i64_lane1 =
+      static_cast<std::uint64_t>(static_cast<std::int64_t>(-2));
+  const std::uint64_t rhs_i64_lane2 =
+      static_cast<std::uint64_t>(static_cast<std::int64_t>(1));
+  const std::uint64_t rhs_i64_lane3 =
+      static_cast<std::uint64_t>(static_cast<std::int64_t>(-1));
+  constexpr std::uint64_t lhs_u64_bits = 2u;
+  constexpr std::uint64_t rhs_u64_lane0 = 1u;
+  constexpr std::uint64_t rhs_u64_lane1 = 2u;
+  constexpr std::uint64_t rhs_u64_lane2 = 3u;
+  constexpr std::uint64_t rhs_u64_lane3 = 0xffffffffffffffffULL;
+
+  for (const RemainingI64U64CompareCase& test_case :
+       kRemainingI64U64CompareCases) {
+    const std::uint64_t lhs_bits =
+        test_case.is_signed ? lhs_i64_bits : lhs_u64_bits;
+    const std::uint64_t rhs_lane0 =
+        test_case.is_signed ? rhs_i64_lane0 : rhs_u64_lane0;
+    const std::uint64_t rhs_lane1 =
+        test_case.is_signed ? rhs_i64_lane1 : rhs_u64_lane1;
+    const std::uint64_t rhs_lane2 =
+        test_case.is_signed ? rhs_i64_lane2 : rhs_u64_lane2;
+    const std::uint64_t rhs_lane3 =
+        test_case.is_signed ? rhs_i64_lane3 : rhs_u64_lane3;
+
+    std::uint32_t lhs_low = 0;
+    std::uint32_t lhs_high = 0;
+    SplitU64(lhs_bits, &lhs_low, &lhs_high);
+    const std::array<std::uint32_t, 6> remaining_i64_u64_compare_words{
+        MakeSop1(0u, 118u, 255u),
+        lhs_low,
+        MakeSop1(0u, 119u, 255u),
+        lhs_high,
+        MakeVopc(test_case.encoded_opcode, 118u, 100u),
+        MakeSopp(48u),
+    };
+    std::vector<DecodedInstruction> remaining_i64_u64_compare_program;
+    if (!Expect(decoder.DecodeProgram(remaining_i64_u64_compare_words,
+                                      &remaining_i64_u64_compare_program,
+                                      &error_message),
+                "expected remaining I64/U64 compare program decode success") ||
+        !Expect(remaining_i64_u64_compare_program.size() == 4u,
+                "expected four decoded remaining I64/U64 compare instructions")
+        ||
+        !Expect(remaining_i64_u64_compare_program[2].opcode == test_case.opcode,
+                "expected decoded remaining I64/U64 compare opcode")) {
+      return 1;
+    }
+
+    auto initialize_i64_u64_compare_state = [&](WaveExecutionState* state) {
+      state->exec_mask = 0xfu;
+      state->vcc_mask = 0x80u;
+      SplitU64(rhs_lane0, &state->vgprs[100][0], &state->vgprs[101][0]);
+      SplitU64(rhs_lane1, &state->vgprs[100][1], &state->vgprs[101][1]);
+      SplitU64(rhs_lane2, &state->vgprs[100][2], &state->vgprs[101][2]);
+      SplitU64(rhs_lane3, &state->vgprs[100][3], &state->vgprs[101][3]);
+    };
+
+    WaveExecutionState decoded_remaining_i64_u64_compare_state;
+    initialize_i64_u64_compare_state(&decoded_remaining_i64_u64_compare_state);
+    if (!Expect(interpreter.ExecuteProgram(remaining_i64_u64_compare_program,
+                                           &decoded_remaining_i64_u64_compare_state,
+                                           &error_message),
+                "expected decoded remaining I64/U64 compare execution success")
+        ||
+        !Expect(decoded_remaining_i64_u64_compare_state.vcc_mask ==
+                    (test_case.writes_exec
+                         ? test_case.expected_mask
+                         : (test_case.expected_mask | 0x80u)),
+                "expected remaining I64/U64 compare VCC mask") ||
+        !Expect(decoded_remaining_i64_u64_compare_state.exec_mask ==
+                    (test_case.writes_exec ? test_case.expected_mask : 0xfu),
+                "expected remaining I64/U64 compare EXEC mask") ||
+        !Expect(decoded_remaining_i64_u64_compare_state.halted,
+                "expected remaining I64/U64 compare program to halt") ||
+        !Expect(decoded_remaining_i64_u64_compare_state.pc == 3u,
+                "expected remaining I64/U64 compare program advance")) {
+      return 1;
+    }
+
+    std::vector<Gfx1201CompiledInstruction>
+        compiled_remaining_i64_u64_compare_program;
+    if (!Expect(interpreter.CompileProgram(
+                    remaining_i64_u64_compare_program,
+                    &compiled_remaining_i64_u64_compare_program,
+                    &error_message),
+                "expected compiled remaining I64/U64 compare program success")
+        ||
+        !Expect(compiled_remaining_i64_u64_compare_program[2].opcode ==
+                    test_case.compiled_opcode,
+                "expected compiled remaining I64/U64 compare opcode")) {
+      return 1;
+    }
+
+    WaveExecutionState compiled_remaining_i64_u64_compare_state;
+    initialize_i64_u64_compare_state(&compiled_remaining_i64_u64_compare_state);
+    if (!Expect(interpreter.ExecuteProgram(
+                    compiled_remaining_i64_u64_compare_program,
+                    &compiled_remaining_i64_u64_compare_state, &error_message),
+                "expected compiled remaining I64/U64 compare execution success")
+        ||
+        !Expect(compiled_remaining_i64_u64_compare_state.vcc_mask ==
+                    (test_case.writes_exec
+                         ? test_case.expected_mask
+                         : (test_case.expected_mask | 0x80u)),
+                "expected compiled remaining I64/U64 compare VCC mask") ||
+        !Expect(compiled_remaining_i64_u64_compare_state.exec_mask ==
+                    (test_case.writes_exec ? test_case.expected_mask : 0xfu),
+                "expected compiled remaining I64/U64 compare EXEC mask") ||
+        !Expect(compiled_remaining_i64_u64_compare_state.halted,
+                "expected compiled remaining I64/U64 compare program to halt")
+        ||
+        !Expect(compiled_remaining_i64_u64_compare_state.pc == 3u,
+                "expected compiled remaining I64/U64 compare program advance")) {
       return 1;
     }
   }

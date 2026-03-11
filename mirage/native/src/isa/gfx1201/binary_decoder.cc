@@ -16,7 +16,7 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 135> kPhase0ExecutableOpcodes{{
+constexpr std::array<std::string_view, 159> kPhase0ExecutableOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_ADD_U32",
@@ -68,6 +68,30 @@ constexpr std::array<std::string_view, 135> kPhase0ExecutableOpcodes{{
     "V_CMPX_LE_U32",
     "V_CMPX_GT_U32",
     "V_CMPX_GE_U32",
+    "V_CMP_EQ_I64",
+    "V_CMP_NE_I64",
+    "V_CMP_LT_I64",
+    "V_CMP_LE_I64",
+    "V_CMP_GT_I64",
+    "V_CMP_GE_I64",
+    "V_CMP_EQ_U64",
+    "V_CMP_NE_U64",
+    "V_CMP_LT_U64",
+    "V_CMP_LE_U64",
+    "V_CMP_GT_U64",
+    "V_CMP_GE_U64",
+    "V_CMPX_EQ_I64",
+    "V_CMPX_NE_I64",
+    "V_CMPX_LT_I64",
+    "V_CMPX_LE_I64",
+    "V_CMPX_GT_I64",
+    "V_CMPX_GE_I64",
+    "V_CMPX_EQ_U64",
+    "V_CMPX_NE_U64",
+    "V_CMPX_LT_U64",
+    "V_CMPX_LE_U64",
+    "V_CMPX_GT_U64",
+    "V_CMPX_GE_U64",
     "V_CMP_CLASS_F32",
     "V_CMP_EQ_F32",
     "V_CMP_GE_F32",
@@ -778,6 +802,18 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
                               OperandSlotKind::kSource1));
     *words_consumed = 1 + literal_words_consumed;
   } else if (instruction_name == "V_CMP_EQ_F64" ||
+             instruction_name == "V_CMP_NE_I64" ||
+             instruction_name == "V_CMP_LT_I64" ||
+             instruction_name == "V_CMP_LE_I64" ||
+             instruction_name == "V_CMP_GT_I64" ||
+             instruction_name == "V_CMP_GE_I64" ||
+             instruction_name == "V_CMP_EQ_I64" ||
+             instruction_name == "V_CMP_NE_U64" ||
+             instruction_name == "V_CMP_LT_U64" ||
+             instruction_name == "V_CMP_LE_U64" ||
+             instruction_name == "V_CMP_GT_U64" ||
+             instruction_name == "V_CMP_GE_U64" ||
+             instruction_name == "V_CMP_EQ_U64" ||
              instruction_name == "V_CMP_GE_F64" ||
              instruction_name == "V_CMP_GT_F64" ||
              instruction_name == "V_CMP_LE_F64" ||
@@ -791,6 +827,18 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
              instruction_name == "V_CMP_NGT_F64" ||
              instruction_name == "V_CMP_NLE_F64" ||
              instruction_name == "V_CMP_NLT_F64" ||
+             instruction_name == "V_CMPX_NE_I64" ||
+             instruction_name == "V_CMPX_LT_I64" ||
+             instruction_name == "V_CMPX_LE_I64" ||
+             instruction_name == "V_CMPX_GT_I64" ||
+             instruction_name == "V_CMPX_GE_I64" ||
+             instruction_name == "V_CMPX_EQ_I64" ||
+             instruction_name == "V_CMPX_NE_U64" ||
+             instruction_name == "V_CMPX_LT_U64" ||
+             instruction_name == "V_CMPX_LE_U64" ||
+             instruction_name == "V_CMPX_GT_U64" ||
+             instruction_name == "V_CMPX_GE_U64" ||
+             instruction_name == "V_CMPX_EQ_U64" ||
              instruction_name == "V_CMPX_EQ_F64" ||
              instruction_name == "V_CMPX_GE_F64" ||
              instruction_name == "V_CMPX_GT_F64" ||
