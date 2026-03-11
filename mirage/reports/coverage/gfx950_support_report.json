@@ -1717,25 +1717,33 @@
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "DS_WRITE_B96"
+      ],
       "instruction_name": "DS_WRITE_B96",
       "measured_encodings": [
         "ENC_DS:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_DS:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "DS_WRITE_B128"
+      ],
       "instruction_name": "DS_WRITE_B128",
       "measured_encodings": [
         "ENC_DS:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_DS:default"
+      ]
     },
     {
       "decode_measured": true,
@@ -1783,25 +1791,33 @@
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "DS_READ_B96"
+      ],
       "instruction_name": "DS_READ_B96",
       "measured_encodings": [
         "ENC_DS:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_DS:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "DS_READ_B128"
+      ],
       "instruction_name": "DS_READ_B128",
       "measured_encodings": [
         "ENC_DS:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_DS:default"
+      ]
     },
     {
       "decode_measured": true,
@@ -16278,11 +16294,11 @@
   ],
   "summary": {
     "decode_measured": 1014,
-    "decode_supported": 636,
-    "decode_supported_percent_measured": 0.627219,
-    "decode_supported_percent_total": 0.512077,
-    "semantic_supported": 613,
-    "semantic_supported_percent_total": 0.493559
+    "decode_supported": 640,
+    "decode_supported_percent_measured": 0.631164,
+    "decode_supported_percent_total": 0.515298,
+    "semantic_supported": 617,
+    "semantic_supported_percent_total": 0.496779
   },
   "unmeasured_encoding_families": [
     "ENC_FLAT_SCRATCH",

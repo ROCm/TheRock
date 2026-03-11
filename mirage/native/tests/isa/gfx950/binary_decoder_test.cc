@@ -6198,6 +6198,92 @@ int main() {
     }
   }
 
+  const std::array<std::string_view, 2> kDsMultiDwordWriteOpcodes = {
+      "DS_WRITE_B96",
+      "DS_WRITE_B128",
+  };
+  for (std::string_view opcode_name : kDsMultiDwordWriteOpcodes) {
+    const auto opcode = FindDefaultEncodingOpcode(opcode_name, "ENC_DS");
+    if (!Expect(opcode.has_value(),
+                "expected ds multi-dword write opcode lookup")) {
+      std::cerr << opcode_name << '\n';
+      return 1;
+    }
+
+    const auto encoded = MakeDs(*opcode, 0, 1, 2, 0, 6);
+    const std::vector<std::uint32_t> encoded_program = {
+        encoded[0], encoded[1], MakeSopp(1),
+    };
+    decoded_program.clear();
+    if (!Expect(decoder.DecodeProgram(encoded_program, &decoded_program,
+                                      &error_message),
+                error_message.c_str()) ||
+        !Expect(decoded_program.size() == 2,
+                "expected ds multi-dword write decode program size") ||
+        !Expect(decoded_program[0].opcode == opcode_name,
+                "expected ds multi-dword write opcode decode") ||
+        !Expect(decoded_program[0].operand_count == 3,
+                "expected ds multi-dword write operand count") ||
+        !Expect(decoded_program[0].operands[0].kind == OperandKind::kVgpr,
+                "expected ds multi-dword write address kind") ||
+        !Expect(decoded_program[0].operands[0].index == 1,
+                "expected ds multi-dword write address index") ||
+        !Expect(decoded_program[0].operands[1].kind == OperandKind::kVgpr,
+                "expected ds multi-dword write data kind") ||
+        !Expect(decoded_program[0].operands[1].index == 2,
+                "expected ds multi-dword write data index") ||
+        !Expect(decoded_program[0].operands[2].kind == OperandKind::kImm32,
+                "expected ds multi-dword write offset kind") ||
+        !Expect(decoded_program[0].operands[2].imm32 == 6u,
+                "expected ds multi-dword write offset value")) {
+      std::cerr << opcode_name << '\n';
+      return 1;
+    }
+  }
+
+  const std::array<std::string_view, 2> kDsMultiDwordReadOpcodes = {
+      "DS_READ_B96",
+      "DS_READ_B128",
+  };
+  for (std::string_view opcode_name : kDsMultiDwordReadOpcodes) {
+    const auto opcode = FindDefaultEncodingOpcode(opcode_name, "ENC_DS");
+    if (!Expect(opcode.has_value(),
+                "expected ds multi-dword read opcode lookup")) {
+      std::cerr << opcode_name << '\n';
+      return 1;
+    }
+
+    const auto encoded = MakeDs(*opcode, 8, 1, 0, 0, 6);
+    const std::vector<std::uint32_t> encoded_program = {
+        encoded[0], encoded[1], MakeSopp(1),
+    };
+    decoded_program.clear();
+    if (!Expect(decoder.DecodeProgram(encoded_program, &decoded_program,
+                                      &error_message),
+                error_message.c_str()) ||
+        !Expect(decoded_program.size() == 2,
+                "expected ds multi-dword read decode program size") ||
+        !Expect(decoded_program[0].opcode == opcode_name,
+                "expected ds multi-dword read opcode decode") ||
+        !Expect(decoded_program[0].operand_count == 3,
+                "expected ds multi-dword read operand count") ||
+        !Expect(decoded_program[0].operands[0].kind == OperandKind::kVgpr,
+                "expected ds multi-dword read destination kind") ||
+        !Expect(decoded_program[0].operands[0].index == 8,
+                "expected ds multi-dword read destination index") ||
+        !Expect(decoded_program[0].operands[1].kind == OperandKind::kVgpr,
+                "expected ds multi-dword read address kind") ||
+        !Expect(decoded_program[0].operands[1].index == 1,
+                "expected ds multi-dword read address index") ||
+        !Expect(decoded_program[0].operands[2].kind == OperandKind::kImm32,
+                "expected ds multi-dword read offset kind") ||
+        !Expect(decoded_program[0].operands[2].imm32 == 6u,
+                "expected ds multi-dword read offset value")) {
+      std::cerr << opcode_name << '\n';
+      return 1;
+    }
+  }
+
   const std::array<std::string_view, 15> kDsWideUpdateOpcodes = {
       "DS_ADD_U64", "DS_SUB_U64", "DS_RSUB_U64", "DS_INC_U64", "DS_DEC_U64",
       "DS_MIN_I64", "DS_MAX_I64", "DS_MIN_U64", "DS_MAX_U64", "DS_AND_B64",

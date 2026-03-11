@@ -1200,6 +1200,18 @@ int main() {
     }
   }
 
+  const std::array<std::string_view, 2> kDsMultiDwordWriteOpcodes = {
+      "DS_WRITE_B96",
+      "DS_WRITE_B128",
+  };
+  for (std::string_view opcode : kDsMultiDwordWriteOpcodes) {
+    if (!Expect(interpreter.Supports(opcode),
+                "expected ds multi-dword write opcode support")) {
+      std::cerr << opcode << '\n';
+      return 1;
+    }
+  }
+
   const std::array<std::string_view, 2> kDsPairWriteOpcodes = {
       "DS_WRITE2_B32",
       "DS_WRITE2ST64_B32",
@@ -1230,6 +1242,18 @@ int main() {
   for (std::string_view opcode : kDsWideReadOpcodes) {
     if (!Expect(interpreter.Supports(opcode),
                 "expected ds wide-read opcode support")) {
+      std::cerr << opcode << '\n';
+      return 1;
+    }
+  }
+
+  const std::array<std::string_view, 2> kDsMultiDwordReadOpcodes = {
+      "DS_READ_B96",
+      "DS_READ_B128",
+  };
+  for (std::string_view opcode : kDsMultiDwordReadOpcodes) {
+    if (!Expect(interpreter.Supports(opcode),
+                "expected ds multi-dword read opcode support")) {
       std::cerr << opcode << '\n';
       return 1;
     }
@@ -7773,6 +7797,172 @@ int main() {
                                          &error_message),
               error_message.c_str()) ||
       !validate_ds_b64_access_state(compiled_ds_b64_access_state, "compiled")) {
+    return 1;
+  }
+  }
+
+  {
+  const std::vector<DecodedInstruction> ds_multi_dword_access_program = {
+      DecodedInstruction::ThreeOperand("DS_WRITE_B96", InstructionOperand::Vgpr(0),
+                                       InstructionOperand::Vgpr(1),
+                                       InstructionOperand::Imm32(4)),
+      DecodedInstruction::ThreeOperand("DS_READ_B96", InstructionOperand::Vgpr(10),
+                                       InstructionOperand::Vgpr(0),
+                                       InstructionOperand::Imm32(4)),
+      DecodedInstruction::ThreeOperand("DS_WRITE_B128", InstructionOperand::Vgpr(4),
+                                       InstructionOperand::Vgpr(5),
+                                       InstructionOperand::Imm32(8)),
+      DecodedInstruction::ThreeOperand("DS_READ_B128", InstructionOperand::Vgpr(20),
+                                       InstructionOperand::Vgpr(4),
+                                       InstructionOperand::Imm32(8)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  auto make_ds_multi_dword_access_state = []() {
+    WaveExecutionState state;
+    state.exec_mask = 0b1011ULL;
+    state.vgprs[0][0] = 0u;
+    state.vgprs[0][1] = 16u;
+    state.vgprs[0][3] = 32u;
+    state.vgprs[1][0] = 0x11111111u;
+    state.vgprs[1][1] = 0x44444444u;
+    state.vgprs[1][3] = 0x77777777u;
+    state.vgprs[2][0] = 0x22222222u;
+    state.vgprs[2][1] = 0x55555555u;
+    state.vgprs[2][3] = 0x88888888u;
+    state.vgprs[3][0] = 0x33333333u;
+    state.vgprs[3][1] = 0x66666666u;
+    state.vgprs[3][3] = 0x99999999u;
+    state.vgprs[4][0] = 64u;
+    state.vgprs[4][1] = 96u;
+    state.vgprs[4][3] = 128u;
+    state.vgprs[5][0] = 0x0a0b0c0du;
+    state.vgprs[5][1] = 0x10203040u;
+    state.vgprs[5][3] = 0x55667788u;
+    state.vgprs[6][0] = 0x1a1b1c1du;
+    state.vgprs[6][1] = 0x20304050u;
+    state.vgprs[6][3] = 0x66778899u;
+    state.vgprs[7][0] = 0x2a2b2c2du;
+    state.vgprs[7][1] = 0x30405060u;
+    state.vgprs[7][3] = 0x778899aau;
+    state.vgprs[8][0] = 0x3a3b3c3du;
+    state.vgprs[8][1] = 0x40506070u;
+    state.vgprs[8][3] = 0x8899aabbu;
+    for (std::uint16_t vgpr = 10; vgpr <= 23; ++vgpr) {
+      state.vgprs[vgpr][2] = (vgpr & 1u) == 0u ? 0xdeadbeefu : 0xcafebabeu;
+    }
+    return state;
+  };
+  auto validate_ds_multi_dword_access_state =
+      [&](const WaveExecutionState& state, const char* mode) {
+        if (!Expect(state.halted,
+                    "expected ds multi-dword access program to halt")) {
+          std::cerr << mode << '\n';
+          return false;
+        }
+        const std::array<std::size_t, 3> lanes = {0u, 1u, 3u};
+        const std::array<std::array<std::uint32_t, 3>, 3> b96_expected = {{
+            {{0x11111111u, 0x22222222u, 0x33333333u}},
+            {{0x44444444u, 0x55555555u, 0x66666666u}},
+            {{0x77777777u, 0x88888888u, 0x99999999u}},
+        }};
+        const std::array<std::array<std::uint32_t, 4>, 3> b128_expected = {{
+            {{0x0a0b0c0du, 0x1a1b1c1du, 0x2a2b2c2du, 0x3a3b3c3du}},
+            {{0x10203040u, 0x20304050u, 0x30405060u, 0x40506070u}},
+            {{0x55667788u, 0x66778899u, 0x778899aau, 0x8899aabbu}},
+        }};
+        for (std::size_t lane_index = 0; lane_index < lanes.size();
+             ++lane_index) {
+          const std::size_t lane = lanes[lane_index];
+          for (std::size_t dword_index = 0; dword_index < 3; ++dword_index) {
+            if (!Expect(state.vgprs[static_cast<std::uint16_t>(10 + dword_index)]
+                                       [lane] ==
+                           b96_expected[lane_index][dword_index],
+                       "expected ds_read_b96 result")) {
+              std::cerr << mode << " lane=" << lane
+                        << " dword=" << dword_index << '\n';
+              return false;
+            }
+          }
+          for (std::size_t dword_index = 0; dword_index < 4; ++dword_index) {
+            if (!Expect(state.vgprs[static_cast<std::uint16_t>(20 + dword_index)]
+                                       [lane] ==
+                           b128_expected[lane_index][dword_index],
+                       "expected ds_read_b128 result")) {
+              std::cerr << mode << " lane=" << lane
+                        << " dword=" << dword_index << '\n';
+              return false;
+            }
+          }
+        }
+        for (std::uint16_t vgpr = 10; vgpr <= 23; ++vgpr) {
+          const std::uint32_t expected = (vgpr & 1u) == 0u ? 0xdeadbeefu
+                                                           : 0xcafebabeu;
+          if (!Expect(state.vgprs[vgpr][2] == expected,
+                      "expected inactive ds multi-dword destination preservation")) {
+            std::cerr << mode << " vgpr=" << vgpr << '\n';
+            return false;
+          }
+        }
+        const auto expect_lds_value = [&](std::uint64_t address,
+                                          std::uint32_t expected,
+                                          const char* label) {
+          std::uint32_t value = 0;
+          std::memcpy(&value, state.lds_bytes.data() + address, sizeof(value));
+          return Expect(value == expected, label);
+        };
+        if (!expect_lds_value(4u, 0x11111111u, "expected ds_write_b96 lane 0 dword 0") ||
+            !expect_lds_value(8u, 0x22222222u, "expected ds_write_b96 lane 0 dword 1") ||
+            !expect_lds_value(12u, 0x33333333u, "expected ds_write_b96 lane 0 dword 2") ||
+            !expect_lds_value(20u, 0x44444444u, "expected ds_write_b96 lane 1 dword 0") ||
+            !expect_lds_value(24u, 0x55555555u, "expected ds_write_b96 lane 1 dword 1") ||
+            !expect_lds_value(28u, 0x66666666u, "expected ds_write_b96 lane 1 dword 2") ||
+            !expect_lds_value(36u, 0x77777777u, "expected ds_write_b96 lane 3 dword 0") ||
+            !expect_lds_value(40u, 0x88888888u, "expected ds_write_b96 lane 3 dword 1") ||
+            !expect_lds_value(44u, 0x99999999u, "expected ds_write_b96 lane 3 dword 2") ||
+            !expect_lds_value(72u, 0x0a0b0c0du, "expected ds_write_b128 lane 0 dword 0") ||
+            !expect_lds_value(76u, 0x1a1b1c1du, "expected ds_write_b128 lane 0 dword 1") ||
+            !expect_lds_value(80u, 0x2a2b2c2du, "expected ds_write_b128 lane 0 dword 2") ||
+            !expect_lds_value(84u, 0x3a3b3c3du, "expected ds_write_b128 lane 0 dword 3") ||
+            !expect_lds_value(104u, 0x10203040u, "expected ds_write_b128 lane 1 dword 0") ||
+            !expect_lds_value(108u, 0x20304050u, "expected ds_write_b128 lane 1 dword 1") ||
+            !expect_lds_value(112u, 0x30405060u, "expected ds_write_b128 lane 1 dword 2") ||
+            !expect_lds_value(116u, 0x40506070u, "expected ds_write_b128 lane 1 dword 3") ||
+            !expect_lds_value(136u, 0x55667788u, "expected ds_write_b128 lane 3 dword 0") ||
+            !expect_lds_value(140u, 0x66778899u, "expected ds_write_b128 lane 3 dword 1") ||
+            !expect_lds_value(144u, 0x778899aau, "expected ds_write_b128 lane 3 dword 2") ||
+            !expect_lds_value(148u, 0x8899aabbu, "expected ds_write_b128 lane 3 dword 3")) {
+          std::cerr << mode << '\n';
+          return false;
+        }
+        return true;
+      };
+
+  WaveExecutionState decoded_ds_multi_dword_access_state =
+      make_ds_multi_dword_access_state();
+  if (!Expect(interpreter.ExecuteProgram(ds_multi_dword_access_program,
+                                         &decoded_ds_multi_dword_access_state,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_ds_multi_dword_access_state(decoded_ds_multi_dword_access_state,
+                                            "decoded")) {
+    return 1;
+  }
+
+  std::vector<CompiledInstruction> compiled_ds_multi_dword_access_program;
+  if (!Expect(interpreter.CompileProgram(ds_multi_dword_access_program,
+                                         &compiled_ds_multi_dword_access_program,
+                                         &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+  WaveExecutionState compiled_ds_multi_dword_access_state =
+      make_ds_multi_dword_access_state();
+  if (!Expect(interpreter.ExecuteProgram(compiled_ds_multi_dword_access_program,
+                                         &compiled_ds_multi_dword_access_state,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_ds_multi_dword_access_state(compiled_ds_multi_dword_access_state,
+                                            "compiled")) {
     return 1;
   }
   }

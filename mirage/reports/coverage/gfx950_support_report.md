@@ -1,15 +1,15 @@
 # GFX950 Coverage Report
 
 - Catalog instructions: 1242
-- Semantic support: 613 (49.4%)
-- Raw decode support: 636 (51.2% of total, 62.7% of measured)
+- Semantic support: 617 (49.7%)
+- Raw decode support: 640 (51.5% of total, 63.1% of measured)
 - Raw decode measurable instructions: 1014
 
 ## Gaps
 
 - Semantic-only coverage without measured decode: 36
 - Decode-only without semantic support: 59
-- Missing both semantic and decode support: 570
+- Missing both semantic and decode support: 566
 
 ## Unmeasured Encoding Families
 
@@ -107,12 +107,12 @@
 - `DS_PK_ADD_RTN_BF16`
 - `DS_CONSUME`
 - `DS_APPEND`
-- `DS_WRITE_B96`
-- `DS_WRITE_B128`
 - `DS_READ_B64_TR_B4`
 - `DS_READ_B96_TR_B6`
 - `DS_READ_B64_TR_B8`
 - `DS_READ_B64_TR_B16`
-- `DS_READ_B96`
-- `DS_READ_B128`
 - `FLAT_STORE_BYTE_D16_HI`
+- `FLAT_STORE_SHORT_D16_HI`
+- `FLAT_LOAD_UBYTE_D16`
+- `FLAT_LOAD_UBYTE_D16_HI`
+- `FLAT_LOAD_SBYTE_D16`

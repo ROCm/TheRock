@@ -1554,6 +1554,8 @@ bool IsDsOpcode(std::string_view opcode) {
          opcode == "DS_WRITE_B16" ||
          opcode == "DS_WRITE_B8_D16_HI" ||
          opcode == "DS_WRITE_B16_D16_HI" ||
+         opcode == "DS_WRITE_B96" ||
+         opcode == "DS_WRITE_B128" ||
          opcode == "DS_WRITE_B64" ||
          opcode == "DS_ADD_U64" || opcode == "DS_SUB_U64" ||
          opcode == "DS_RSUB_U64" || opcode == "DS_INC_U64" ||
@@ -1567,7 +1569,8 @@ bool IsDsOpcode(std::string_view opcode) {
          opcode == "DS_WRITE2_B32" || opcode == "DS_WRITE2ST64_B32" ||
          opcode == "DS_WRITE2_B64" || opcode == "DS_WRITE2ST64_B64" ||
          opcode == "DS_READ_B64" || opcode == "DS_READ2_B32" ||
-         opcode == "DS_READ2ST64_B32" || opcode == "DS_READ2_B64" ||
+         opcode == "DS_READ2ST64_B32" || opcode == "DS_READ_B96" ||
+         opcode == "DS_READ_B128" || opcode == "DS_READ2_B64" ||
          opcode == "DS_READ2ST64_B64" || opcode == "DS_READ_I8" ||
          opcode == "DS_READ_U8" || opcode == "DS_READ_I16" ||
          opcode == "DS_READ_U16" ||
@@ -1622,10 +1625,17 @@ bool IsDsD16WriteOpcode(std::string_view opcode) {
          opcode == "DS_WRITE_B16_D16_HI";
 }
 
+bool IsDsDirectReadOpcode(std::string_view opcode) {
+  return opcode == "DS_READ_B32" || opcode == "DS_READ_B64" ||
+         opcode == "DS_READ_B96" || opcode == "DS_READ_B128" ||
+         IsDsNarrowReadOpcode(opcode);
+}
+
 bool IsDsDirectWriteOpcode(std::string_view opcode) {
   return opcode == "DS_WRITE_B32" || opcode == "DS_WRITE_B8" ||
          opcode == "DS_WRITE_B16" || IsDsD16WriteOpcode(opcode) ||
-         opcode == "DS_WRITE_B64";
+         opcode == "DS_WRITE_B64" || opcode == "DS_WRITE_B96" ||
+         opcode == "DS_WRITE_B128";
 }
 
 enum class DsD16AccessKind : std::uint8_t {
@@ -1865,11 +1875,23 @@ std::size_t GetDsAccessSize(CompiledOpcode opcode) {
 }
 
 std::uint8_t GetDsRegisterDwordCount(std::string_view opcode) {
+  if (opcode == "DS_WRITE_B128" || opcode == "DS_READ_B128") {
+    return 4u;
+  }
+  if (opcode == "DS_WRITE_B96" || opcode == "DS_READ_B96") {
+    return 3u;
+  }
   return IsDsWide64AccessOpcode(opcode) ? 2u : 1u;
 }
 
 std::uint8_t GetDsRegisterDwordCount(CompiledOpcode opcode) {
   switch (opcode) {
+    case CompiledOpcode::kDsWriteB128:
+    case CompiledOpcode::kDsReadB128:
+      return 4u;
+    case CompiledOpcode::kDsWriteB96:
+    case CompiledOpcode::kDsReadB96:
+      return 3u;
     case CompiledOpcode::kDsWriteB64:
     case CompiledOpcode::kDsAddU64:
     case CompiledOpcode::kDsSubU64:
@@ -1951,12 +1973,22 @@ bool IsDsD16WriteOpcode(CompiledOpcode opcode) {
          opcode == CompiledOpcode::kDsWriteB16D16Hi;
 }
 
+bool IsDsDirectReadOpcode(CompiledOpcode opcode) {
+  return opcode == CompiledOpcode::kDsReadB32 ||
+         opcode == CompiledOpcode::kDsReadB64 ||
+         opcode == CompiledOpcode::kDsReadB96 ||
+         opcode == CompiledOpcode::kDsReadB128 ||
+         IsDsNarrowReadOpcode(opcode);
+}
+
 bool IsDsDirectWriteOpcode(CompiledOpcode opcode) {
   return opcode == CompiledOpcode::kDsWriteB32 ||
          opcode == CompiledOpcode::kDsWriteB8 ||
          opcode == CompiledOpcode::kDsWriteB16 ||
          IsDsD16WriteOpcode(opcode) ||
-         opcode == CompiledOpcode::kDsWriteB64;
+         opcode == CompiledOpcode::kDsWriteB64 ||
+         opcode == CompiledOpcode::kDsWriteB96 ||
+         opcode == CompiledOpcode::kDsWriteB128;
 }
 
 DsD16AccessKind GetDsD16AccessKind(CompiledOpcode opcode) {
@@ -6179,6 +6211,14 @@ bool TryCompileOpcode(std::string_view opcode,
     compiled_instruction->opcode = CompiledOpcode::kDsWriteB64;
     return true;
   }
+  if (opcode == "DS_WRITE_B96") {
+    compiled_instruction->opcode = CompiledOpcode::kDsWriteB96;
+    return true;
+  }
+  if (opcode == "DS_WRITE_B128") {
+    compiled_instruction->opcode = CompiledOpcode::kDsWriteB128;
+    return true;
+  }
   if (opcode == "DS_ADD_U64") {
     compiled_instruction->opcode = CompiledOpcode::kDsAddU64;
     return true;
@@ -6269,6 +6309,14 @@ bool TryCompileOpcode(std::string_view opcode,
   }
   if (opcode == "DS_READ_B64") {
     compiled_instruction->opcode = CompiledOpcode::kDsReadB64;
+    return true;
+  }
+  if (opcode == "DS_READ_B96") {
+    compiled_instruction->opcode = CompiledOpcode::kDsReadB96;
+    return true;
+  }
+  if (opcode == "DS_READ_B128") {
+    compiled_instruction->opcode = CompiledOpcode::kDsReadB128;
     return true;
   }
   if (opcode == "DS_READ2_B32") {
@@ -7650,6 +7698,8 @@ bool Gfx950Interpreter::ExecuteInstruction(const CompiledInstruction& instructio
     case CompiledOpcode::kDsWriteB8D16Hi:
     case CompiledOpcode::kDsWriteB16D16Hi:
     case CompiledOpcode::kDsWriteB64:
+    case CompiledOpcode::kDsWriteB96:
+    case CompiledOpcode::kDsWriteB128:
     case CompiledOpcode::kDsAddU64:
     case CompiledOpcode::kDsSubU64:
     case CompiledOpcode::kDsRsubU64:
@@ -7673,6 +7723,8 @@ bool Gfx950Interpreter::ExecuteInstruction(const CompiledInstruction& instructio
     case CompiledOpcode::kDsWrite2B64:
     case CompiledOpcode::kDsWrite2St64B64:
     case CompiledOpcode::kDsReadB64:
+    case CompiledOpcode::kDsReadB96:
+    case CompiledOpcode::kDsReadB128:
     case CompiledOpcode::kDsRead2B32:
     case CompiledOpcode::kDsRead2St64B32:
     case CompiledOpcode::kDsRead2B64:
@@ -11639,9 +11691,7 @@ bool Gfx950Interpreter::ExecuteDsMemory(const DecodedInstruction& instruction,
       IsDsDualDataReturnOpcode(instruction.opcode);
   const bool is_return =
       IsDsReturnOpcode(instruction.opcode) || is_dual_data_return;
-  const bool is_read =
-      instruction.opcode == "DS_READ_B32" || instruction.opcode == "DS_READ_B64" ||
-      is_pair_read || is_narrow_read;
+  const bool is_read = IsDsDirectReadOpcode(instruction.opcode) || is_pair_read;
   const std::uint8_t expected_operands =
       is_pair_write ? 5
                     : (is_pair_read ? 4
@@ -11883,8 +11933,8 @@ bool Gfx950Interpreter::ExecuteDsMemory(const DecodedInstruction& instruction,
         }
         continue;
       }
-      if (register_dword_count == 2u) {
-        std::array<std::uint32_t, 2> lds_values{};
+      if (register_dword_count > 1u) {
+        std::array<std::uint32_t, 4> lds_values{};
         if (!ReadLdsDwords(lds_storage, lds_address0, register_dword_count,
                            lds_values.data(), error_message) ||
             !write_vector_dwords(*destination_operand, register_dword_count,
@@ -11925,8 +11975,8 @@ bool Gfx950Interpreter::ExecuteDsMemory(const DecodedInstruction& instruction,
         }
         continue;
       }
-      if (register_dword_count == 2u) {
-        std::array<std::uint32_t, 2> data_values{};
+      if (register_dword_count > 1u) {
+        std::array<std::uint32_t, 4> data_values{};
         if (!read_vector_dwords(*data_operand, register_dword_count,
                                 data_values.data()) ||
             !WriteLdsDwords(lds_storage, lds_address0, register_dword_count,
@@ -12090,9 +12140,7 @@ bool Gfx950Interpreter::ExecuteDsMemory(const CompiledInstruction& instruction,
       IsDsDualDataReturnOpcode(instruction.opcode);
   const bool is_return =
       IsDsReturnOpcode(instruction.opcode) || is_dual_data_return;
-  const bool is_read = instruction.opcode == CompiledOpcode::kDsReadB32 ||
-                       instruction.opcode == CompiledOpcode::kDsReadB64 ||
-                       is_pair_read || is_narrow_read;
+  const bool is_read = IsDsDirectReadOpcode(instruction.opcode) || is_pair_read;
   const std::uint8_t expected_operands =
       is_pair_write ? 5
                     : (is_pair_read ? 4
@@ -12310,8 +12358,8 @@ bool Gfx950Interpreter::ExecuteDsMemory(const CompiledInstruction& instruction,
             ExtractDsD16Value(container_value, d16_access_kind, sign_extend);
         continue;
       }
-      if (register_dword_count == 2u) {
-        std::array<std::uint32_t, 2> lds_values{};
+      if (register_dword_count > 1u) {
+        std::array<std::uint32_t, 4> lds_values{};
         if (!ReadLdsDwords(lds_storage, lds_address0, register_dword_count,
                            lds_values.data(), error_message)) {
           return false;
@@ -12347,8 +12395,8 @@ bool Gfx950Interpreter::ExecuteDsMemory(const CompiledInstruction& instruction,
         }
         continue;
       }
-      if (register_dword_count == 2u) {
-        std::array<std::uint32_t, 2> data_values{};
+      if (register_dword_count > 1u) {
+        std::array<std::uint32_t, 4> data_values{};
         read_vgpr_dwords(data_reg, register_dword_count, data_values.data());
         if (!WriteLdsDwords(lds_storage, lds_address0, register_dword_count,
                             data_values.data(), error_message)) {
