@@ -27,6 +27,9 @@ on:
       prerelease_version:
         description: "(Optional) Number of the prerelease"
         type: string
+      extra_cmake_options:
+        description: "Extra options to pass to the CMake configure command"
+        type: string
       repository:
         description: "Repository to checkout. Otherwise, defaults to `github.repository`."
         type: string
