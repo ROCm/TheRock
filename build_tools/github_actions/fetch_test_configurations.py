@@ -92,7 +92,10 @@ test_matrix = {
         "timeout_minutes": 5,
         "test_script": f"python {_get_script_path('test_origami.py')}",
         "platform": ["linux", "windows"],
-        "total_shards": 1,
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
     },
     "hipblas": {
         "job_name": "hipblas",
