@@ -162,12 +162,12 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
     )
   endif()
 
-  # Conditional rocm-kpack support for kpack split artifacts
+  # Conditional rocm-kpack support for kpack split artifacts.
+  # Note: ROCM_KPACK_ENABLED is injected by the flag system (see FLAGS.cmake).
+  # Only the runtime dep needs explicit handling here.
   set(_hip_clr_kpack_runtime_deps)
-  set(_hip_clr_kpack_cmake_args)
-  if(THEROCK_KPACK_SPLIT_ARTIFACTS)
+  if(THEROCK_FLAG_KPACK_SPLIT_ARTIFACTS)
     list(APPEND _hip_clr_kpack_runtime_deps rocm-kpack)
-    list(APPEND _hip_clr_kpack_cmake_args "-DROCM_KPACK_ENABLED=ON")
   endif()
 
   therock_cmake_subproject_declare(hip-clr
@@ -187,7 +187,6 @@ if(THEROCK_ENABLE_HIP_RUNTIME)
       # and can use local machine tools.
       "-DHIPCC_BIN_DIR="
       ${HIP_CLR_CMAKE_ARGS}
-      ${_hip_clr_kpack_cmake_args}
     BUILD_DEPS
       rocm-cmake
       therock-simde

@@ -4,6 +4,11 @@
 if(THEROCK_ENABLE_ROCPROFV3)
   set(_rocprofiler_sdk_optional_deps)
 
+  set(_openmpi_optional_dep)
+  if(THEROCK_ENABLE_MPI)
+    set(_openmpi_optional_dep therock-openmpi)
+  endif()
+
   ##############################################################################
   # rocprof-trace-decoder-binary
   # The trace decoder is responsible for decoding advanced thread traces from
@@ -149,6 +154,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
       ${THEROCK_BUNDLED_ELFUTILS}
       ${THEROCK_BUNDLED_LIBDRM}
       ${THEROCK_BUNDLED_SQLITE3}
+      ${_openmpi_optional_dep}
     )
     therock_cmake_subproject_glob_c_sources(rocprofiler-compute
       SUBDIRS .
@@ -234,19 +240,14 @@ if(THEROCK_ENABLE_ROCPROFV3)
   # Skip enabling rocprofiler-systems when building with sanitizers.
   if (THEROCK_ENABLE_ROCPROFSYS AND THEROCK_SANITIZER STREQUAL "")
     # Escape semicolons in GPU targets list to prevent shell interpretation
-    if (THEROCK_DIST_AMDGPU_TARGETS STREQUAL "THEROCK_DIST_AMDGPU_TARGETS-NOTFOUND")
+    if (THEROCK_TEST_AMDGPU_TARGETS STREQUAL "THEROCK_TEST_AMDGPU_TARGETS-NOTFOUND")
       set(_ROCPROFSYS_GFX_TARGETS_ESCAPED "")
     else()
-      string(REPLACE ";" "\\;" _ROCPROFSYS_GFX_TARGETS_ESCAPED "${THEROCK_DIST_AMDGPU_TARGETS}")
-    endif()
-
-    set(_rocprofiler_systems_optional_deps)
-    if(THEROCK_ENABLE_MPI)
-      set(_rocprofiler_systems_optional_deps therock-openmpi)
+      string(REPLACE ";" "\\;" _ROCPROFSYS_GFX_TARGETS_ESCAPED "${THEROCK_TEST_AMDGPU_TARGETS}")
     endif()
 
     therock_cmake_subproject_declare(rocprofiler-systems
-      USE_DIST_AMDGPU_TARGETS
+      USE_TEST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-systems"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-systems"
       BACKGROUND_BUILD
@@ -278,7 +279,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
         rocprofiler-sdk
         ${THEROCK_BUNDLED_LIBDRM}
         ${THEROCK_BUNDLED_SQLITE3}
-        ${_rocprofiler_systems_optional_deps}
+        ${_openmpi_optional_dep}
     )
     therock_cmake_subproject_glob_c_sources(rocprofiler-systems
       SUBDIRS .
@@ -295,6 +296,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
         doc
         lib
         run
+        test
       SUBPROJECT_DEPS
         amdsmi
         rocprofiler-sdk

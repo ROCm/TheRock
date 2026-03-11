@@ -90,6 +90,8 @@ class TestMain(unittest.TestCase):
                     "nightly",
                     "--output-dir",
                     str(staging_dir),
+                    "--bucket",
+                    "test",
                 ]
             )
 
@@ -127,6 +129,8 @@ class TestMain(unittest.TestCase):
                     "release/2.7",
                     "--output-dir",
                     str(staging_dir),
+                    "--bucket",
+                    "test",
                 ]
             )
 
@@ -160,6 +164,8 @@ class TestMain(unittest.TestCase):
                         "nightly",
                         "--output-dir",
                         str(staging),
+                        "--bucket",
+                        "test",
                     ]
                 )
 
@@ -187,6 +193,8 @@ class TestMain(unittest.TestCase):
                     "nightly",
                     "--output-dir",
                     str(staging_dir),
+                    "--bucket",
+                    "test",
                     "--dry-run",
                 ]
             )

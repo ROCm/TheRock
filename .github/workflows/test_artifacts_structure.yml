@@ -1,0 +1,77 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+name: Test Artifact Structure
+
+on:
+  workflow_dispatch:
+    inputs:
+      artifact_group:
+        type: string
+        description: "Artifact group (e.g. gfx94X-dcgpu, gfx110X-all)"
+        required: true
+      artifact_run_id:
+        type: string
+        description: "Run ID to fetch artifacts from (defaults to current run)"
+        default: ""
+      platform:
+        type: choice
+        description: "Platform to fetch artifacts for"
+        options:
+          - linux
+          - windows
+        default: "linux"
+  workflow_call:
+    inputs:
+      artifact_group:
+        type: string
+        required: true
+      artifact_run_id:
+        type: string
+        default: ""
+      platform:
+        type: string
+        default: "linux"
+
+permissions:
+  contents: read
+
+jobs:
+  test_artifact_structure:
+    name: "Validate artifact structure (${{ inputs.artifact_group }})"
+    runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
+    env:
+      ARTIFACT_RUN_ID: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
+      ARTIFACT_GROUP: ${{ inputs.artifact_group }}
+      PLATFORM: ${{ inputs.platform }}
+      ARTIFACTS_DIR: ${{ github.workspace }}/artifacts
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setting up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Install test requirements
+        run: |
+          pip install -r requirements-test.txt
+
+      - name: Fetch artifact archives (no extract)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python ./build_tools/fetch_artifacts.py \
+            --run-id=${ARTIFACT_RUN_ID} \
+            --artifact-group=${ARTIFACT_GROUP} \
+            --platform=${PLATFORM} \
+            --output-dir=${ARTIFACTS_DIR} \
+            --no-extract
+
+      - name: Validate artifact structure
+        env:
+          THEROCK_ARTIFACTS_DIR: ${{ env.ARTIFACTS_DIR }}
+        run: |
+          python -m pytest tests/test_artifact_structure.py \
+            -v --log-cli-level=info --timeout=300
