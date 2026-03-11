@@ -157,7 +157,7 @@ jobs:
         run: |
           ${{ fromJSON(inputs.component).test_script }}
 
-      - name: Print test reproduction steps
+      - name: Print test reproduction command
         # TODO: Add windows reproduction steps
         if: ${{ failure() && steps.test.outcome == 'failure' && inputs.platform == 'linux' }}
         run: |
@@ -170,7 +170,7 @@ jobs:
             --total-shards "${{ fromJSON(inputs.component).total_shards }}" \
             --test-type "${{ fromJSON(inputs.component).test_type }}" \
             --fetch-artifact-args "${{ fromJSON(inputs.component).fetch_artifact_args }}" \
-            --print-steps
+            --print-cmd
 
       # GitHub's 'Complete job' step is unaware of launched executables
       # and will fail to clean up orphan processes.
