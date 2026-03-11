@@ -301,6 +301,8 @@ bool IsSupportedDsOpcode(std::string_view opcode_name) {
          opcode_name == "DS_XOR_RTN_B32" ||
          opcode_name == "DS_MSKOR_RTN_B32" ||
          opcode_name == "DS_WRXCHG_RTN_B32" ||
+         opcode_name == "DS_WRXCHG2_RTN_B32" ||
+         opcode_name == "DS_WRXCHG2ST64_RTN_B32" ||
          opcode_name == "DS_CMPST_RTN_B32" ||
          opcode_name == "DS_CMPST_RTN_F32" ||
          opcode_name == "DS_WRAP_RTN_B32" ||
@@ -323,6 +325,8 @@ bool IsSupportedDsOpcode(std::string_view opcode_name) {
          opcode_name == "DS_XOR_RTN_B64" ||
          opcode_name == "DS_MSKOR_RTN_B64" ||
          opcode_name == "DS_WRXCHG_RTN_B64" ||
+         opcode_name == "DS_WRXCHG2_RTN_B64" ||
+         opcode_name == "DS_WRXCHG2ST64_RTN_B64" ||
          opcode_name == "DS_CMPST_RTN_B64" ||
          opcode_name == "DS_CMPST_RTN_F64" ||
          opcode_name == "DS_CONDXCHG32_RTN_B64" ||
@@ -343,6 +347,13 @@ bool IsDsPairReadOpcode(std::string_view opcode_name) {
          opcode_name == "DS_READ2ST64_B32" ||
          opcode_name == "DS_READ2_B64" ||
          opcode_name == "DS_READ2ST64_B64";
+}
+
+bool IsDsPairReturnOpcode(std::string_view opcode_name) {
+  return opcode_name == "DS_WRXCHG2_RTN_B32" ||
+         opcode_name == "DS_WRXCHG2ST64_RTN_B32" ||
+         opcode_name == "DS_WRXCHG2_RTN_B64" ||
+         opcode_name == "DS_WRXCHG2ST64_RTN_B64";
 }
 
 bool IsDsNarrowReadOpcode(std::string_view opcode_name) {
@@ -775,6 +786,7 @@ bool Gfx950BinaryDecoder::DecodeDs(std::span<const std::uint32_t> words,
   const InstructionOperand combined_offset = InstructionOperand::Imm32(
       raw_offset0 | (raw_offset1 << 8));
   if (!IsDsPairWriteOpcode(opcode_name) && !IsDsPairReadOpcode(opcode_name) &&
+      !IsDsPairReturnOpcode(opcode_name) &&
       !IsDsLaneRoutingOpcode(opcode_name) && offset1.imm32 != 0) {
     if (error_message != nullptr) {
       *error_message = "offset1 ds forms are not implemented";
@@ -819,6 +831,28 @@ bool Gfx950BinaryDecoder::DecodeDs(std::span<const std::uint32_t> words,
     }
     *instruction = DecodedInstruction::FourOperand(instruction_name, dst, addr,
                                                    offset0, offset1);
+  } else if (IsDsPairReturnOpcode(opcode_name)) {
+    InstructionOperand dst;
+    if (!DecodeVectorDestination(
+            static_cast<std::uint32_t>(ExtractBits(instruction_word, 56, 8)),
+            &dst, error_message)) {
+      return false;
+    }
+    InstructionOperand data0;
+    if (!DecodeVectorRegisterSource(
+            static_cast<std::uint32_t>(ExtractBits(instruction_word, 40, 8)),
+            &data0, error_message)) {
+      return false;
+    }
+    InstructionOperand data1;
+    if (!DecodeVectorRegisterSource(
+            static_cast<std::uint32_t>(ExtractBits(instruction_word, 48, 8)),
+            &data1, error_message)) {
+      return false;
+    }
+    *instruction = DecodedInstruction::SixOperand(instruction_name, dst, addr,
+                                                  data0, data1, offset0,
+                                                  offset1);
   } else if (IsDsSwizzleOpcode(opcode_name)) {
     InstructionOperand dst;
     if (!DecodeVectorDestination(

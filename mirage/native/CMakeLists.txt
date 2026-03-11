@@ -72,7 +72,12 @@ target_link_libraries(mirage_simdojo_smoke_test PRIVATE simdojo Threads::Threads
 add_test(NAME mirage_instruction_catalog_test COMMAND mirage_instruction_catalog_test)
 add_test(NAME mirage_isa_common_test COMMAND mirage_isa_common_test)
 add_test(NAME mirage_gfx950_binary_decoder_test COMMAND mirage_gfx950_binary_decoder_test)
-add_test(NAME mirage_gfx950_interpreter_test COMMAND mirage_gfx950_interpreter_test)
+add_test(
+  NAME mirage_gfx950_interpreter_test
+  COMMAND
+    "${CMAKE_CURRENT_LIST_DIR}/tests/run_with_unlimited_stack.sh"
+    "$<TARGET_FILE:mirage_gfx950_interpreter_test>"
+)
 add_test(NAME mirage_sim_core_test COMMAND mirage_sim_core_test)
 add_test(NAME mirage_gfx950_runtime_test COMMAND mirage_gfx950_runtime_test)
 add_test(NAME mirage_simdojo_dispatch_harness_test COMMAND mirage_simdojo_dispatch_harness_test)
