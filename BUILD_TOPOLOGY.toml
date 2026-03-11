@@ -667,14 +667,14 @@ disable_platforms = ["windows"]
 [artifacts.rocprofiler-compute]
 artifact_group = "profiler-core"
 type = "target-neutral"
-artifact_deps = ["rocprofiler-sdk"]
+artifact_deps = ["rocprofiler-sdk", "openmpi"]
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
 
 [artifacts.rocprofiler-systems]
 artifact_group = "profiler-apps"
 type = "target-neutral"
-artifact_deps = ["amd-llvm", "core-hip", "rocprofiler-sdk", "core-amdsmi", "spdlog"]
+artifact_deps = ["amd-llvm", "core-hip", "rocprofiler-sdk", "core-amdsmi", "spdlog", "openmpi"]
 feature_name = "ROCPROFSYS"
 feature_group = "PROFILER"
 disable_platforms = ["windows"]
