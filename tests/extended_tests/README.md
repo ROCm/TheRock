@@ -14,10 +14,10 @@ Unified testing framework for TheRock ROCm distribution, supporting benchmark an
 
 The test framework provides infrastructure for two test types:
 
-| Test Type                     | Purpose                          | Result Types         | When to Use                                  |
-| ----------------------------- | -------------------------------- | -------------------- | -------------------------------------------- |
-| **[Benchmark](benchmark/)**   | Performance regression detection | PASS/FAIL/UNKNOWN    | Prevent performance degradation (nightly CI) |
-| **[Functional](functional/)** | Correctness validation           | PASS/FAIL/ERROR/SKIP | Verify expected behavior (nightly CI)        |
+| Test Type                     | Purpose                          | Result Types         | When to Use                                  | Status            |
+| ----------------------------- | -------------------------------- | -------------------- | -------------------------------------------- | ----------------- |
+| **[Benchmark](benchmark/)**   | Performance regression detection | PASS/FAIL/UNKNOWN    | Prevent performance degradation (nightly CI) | Implemented       |
+| **[Functional](functional/)** | Correctness validation           | PASS/FAIL/ERROR/SKIP | Verify expected behavior (nightly CI)        | Under Development |
 
 ### Key Features
 
@@ -39,7 +39,7 @@ All tests require these environment variables. **Note:** These are automatically
 
 ```bash
 # Required: Path to TheRock bin/ directory (see above for how to obtain)
-export THEROCK_BIN_DIR=/path/to/therock/therock-build/bin
+export THEROCK_BIN_DIR=/path/to/therock/build/bin
 
 # Required: GitHub Actions run ID (from CI run URL, e.g., https://github.com/ROCm/TheRock/actions/runs/16948046392)
 export ARTIFACT_RUN_ID=16948046392
@@ -88,6 +88,7 @@ extended_tests/
     │   ├── BenchmarkExecutionError   # Execution/parsing failures
     │   ├── BenchmarkResultError      # Result validation failures
     │   └── FrameworkException        # Base exception
+    │
     ├── logger.py                  # Logging utilities
     ├── constants.py               # Global constants
     │
