@@ -94,7 +94,7 @@ amdgpu_family_info_matrix_presubmit = {
             "sanity_check_only_for_family": True,
         },
         "windows": {
-            "test-runs-on": "test-gfx110X-gpu-rocm",
+            "test-runs-on": "azure-windows-11-gfx1101-gpu-rocm-runner-17,azure-windows-11-gfx1101-gpu-rocm-runner-18,azure-windows-11-gfx1101-gpu-rocm-runner-19",
             "family": "gfx110X-all",
             "fetch-gfx-targets": ["gfx1100"],
             "bypass_tests_for_releases": True,
