@@ -6285,6 +6285,94 @@ int main() {
     }
   }
 
+  const std::array<std::string_view, 2> kDsD16WriteOpcodes = {
+      "DS_WRITE_B8_D16_HI",
+      "DS_WRITE_B16_D16_HI",
+  };
+  for (std::string_view opcode_name : kDsD16WriteOpcodes) {
+    const auto opcode = FindDefaultEncodingOpcode(opcode_name, "ENC_DS");
+    if (!Expect(opcode.has_value(), "expected ds d16 write opcode lookup")) {
+      std::cerr << opcode_name << '\n';
+      return 1;
+    }
+
+    const auto encoded = MakeDs(*opcode, 0, 1, 2, 0, 6);
+    const std::vector<std::uint32_t> encoded_program = {
+        encoded[0], encoded[1], MakeSopp(1),
+    };
+    decoded_program.clear();
+    if (!Expect(decoder.DecodeProgram(encoded_program, &decoded_program,
+                                      &error_message),
+                error_message.c_str()) ||
+        !Expect(decoded_program.size() == 2,
+                "expected ds d16 write decode program size") ||
+        !Expect(decoded_program[0].opcode == opcode_name,
+                "expected ds d16 write opcode decode") ||
+        !Expect(decoded_program[0].operand_count == 3,
+                "expected ds d16 write operand count") ||
+        !Expect(decoded_program[0].operands[0].kind == OperandKind::kVgpr,
+                "expected ds d16 write address kind") ||
+        !Expect(decoded_program[0].operands[0].index == 1,
+                "expected ds d16 write address index") ||
+        !Expect(decoded_program[0].operands[1].kind == OperandKind::kVgpr,
+                "expected ds d16 write data kind") ||
+        !Expect(decoded_program[0].operands[1].index == 2,
+                "expected ds d16 write data index") ||
+        !Expect(decoded_program[0].operands[2].kind == OperandKind::kImm32,
+                "expected ds d16 write offset kind") ||
+        !Expect(decoded_program[0].operands[2].imm32 == 6u,
+                "expected ds d16 write offset value")) {
+      std::cerr << opcode_name << '\n';
+      return 1;
+    }
+  }
+
+  const std::array<std::string_view, 6> kDsD16ReadOpcodes = {
+      "DS_READ_U8_D16",
+      "DS_READ_U8_D16_HI",
+      "DS_READ_I8_D16",
+      "DS_READ_I8_D16_HI",
+      "DS_READ_U16_D16",
+      "DS_READ_U16_D16_HI",
+  };
+  for (std::string_view opcode_name : kDsD16ReadOpcodes) {
+    const auto opcode = FindDefaultEncodingOpcode(opcode_name, "ENC_DS");
+    if (!Expect(opcode.has_value(), "expected ds d16 read opcode lookup")) {
+      std::cerr << opcode_name << '\n';
+      return 1;
+    }
+
+    const auto encoded = MakeDs(*opcode, 9, 1, 0, 0, 6);
+    const std::vector<std::uint32_t> encoded_program = {
+        encoded[0], encoded[1], MakeSopp(1),
+    };
+    decoded_program.clear();
+    if (!Expect(decoder.DecodeProgram(encoded_program, &decoded_program,
+                                      &error_message),
+                error_message.c_str()) ||
+        !Expect(decoded_program.size() == 2,
+                "expected ds d16 read decode program size") ||
+        !Expect(decoded_program[0].opcode == opcode_name,
+                "expected ds d16 read opcode decode") ||
+        !Expect(decoded_program[0].operand_count == 3,
+                "expected ds d16 read operand count") ||
+        !Expect(decoded_program[0].operands[0].kind == OperandKind::kVgpr,
+                "expected ds d16 read destination kind") ||
+        !Expect(decoded_program[0].operands[0].index == 9,
+                "expected ds d16 read destination index") ||
+        !Expect(decoded_program[0].operands[1].kind == OperandKind::kVgpr,
+                "expected ds d16 read address kind") ||
+        !Expect(decoded_program[0].operands[1].index == 1,
+                "expected ds d16 read address index") ||
+        !Expect(decoded_program[0].operands[2].kind == OperandKind::kImm32,
+                "expected ds d16 read offset kind") ||
+        !Expect(decoded_program[0].operands[2].imm32 == 6u,
+                "expected ds d16 read offset value")) {
+      std::cerr << opcode_name << '\n';
+      return 1;
+    }
+  }
+
   const std::array<std::string_view, 3> kDsDualDataOpcodes = {
       "DS_MSKOR_B32",
       "DS_CMPST_B32",

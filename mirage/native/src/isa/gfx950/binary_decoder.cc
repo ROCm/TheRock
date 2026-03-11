@@ -235,6 +235,8 @@ bool IsSupportedDsOpcode(std::string_view opcode_name) {
          opcode_name == "DS_ADD_F32" || opcode_name == "DS_MIN_F32" ||
          opcode_name == "DS_MAX_F32" || opcode_name == "DS_WRITE_B8" ||
          opcode_name == "DS_WRITE_B16" ||
+         opcode_name == "DS_WRITE_B8_D16_HI" ||
+         opcode_name == "DS_WRITE_B16_D16_HI" ||
          opcode_name == "DS_ADD_U64" ||
          opcode_name == "DS_SUB_U64" ||
          opcode_name == "DS_RSUB_U64" ||
@@ -267,6 +269,12 @@ bool IsSupportedDsOpcode(std::string_view opcode_name) {
          opcode_name == "DS_READ_U8" ||
          opcode_name == "DS_READ_I16" ||
          opcode_name == "DS_READ_U16" ||
+         opcode_name == "DS_READ_U8_D16" ||
+         opcode_name == "DS_READ_U8_D16_HI" ||
+         opcode_name == "DS_READ_I8_D16" ||
+         opcode_name == "DS_READ_I8_D16_HI" ||
+         opcode_name == "DS_READ_U16_D16" ||
+         opcode_name == "DS_READ_U16_D16_HI" ||
          opcode_name == "DS_ADD_RTN_U32" ||
          opcode_name == "DS_SUB_RTN_U32" ||
          opcode_name == "DS_RSUB_RTN_U32" ||
@@ -324,7 +332,13 @@ bool IsDsPairReadOpcode(std::string_view opcode_name) {
 
 bool IsDsNarrowReadOpcode(std::string_view opcode_name) {
   return opcode_name == "DS_READ_I8" || opcode_name == "DS_READ_U8" ||
-         opcode_name == "DS_READ_I16" || opcode_name == "DS_READ_U16";
+         opcode_name == "DS_READ_I16" || opcode_name == "DS_READ_U16" ||
+         opcode_name == "DS_READ_U8_D16" ||
+         opcode_name == "DS_READ_U8_D16_HI" ||
+         opcode_name == "DS_READ_I8_D16" ||
+         opcode_name == "DS_READ_I8_D16_HI" ||
+         opcode_name == "DS_READ_U16_D16" ||
+         opcode_name == "DS_READ_U16_D16_HI";
 }
 
 bool IsDsDualDataOpcode(std::string_view opcode_name) {

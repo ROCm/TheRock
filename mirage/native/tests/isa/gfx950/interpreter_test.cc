@@ -1286,6 +1286,34 @@ int main() {
     }
   }
 
+  const std::array<std::string_view, 2> kDsD16WriteOpcodes = {
+      "DS_WRITE_B8_D16_HI",
+      "DS_WRITE_B16_D16_HI",
+  };
+  for (std::string_view opcode : kDsD16WriteOpcodes) {
+    if (!Expect(interpreter.Supports(opcode),
+                "expected ds d16 write opcode support")) {
+      std::cerr << opcode << '\n';
+      return 1;
+    }
+  }
+
+  const std::array<std::string_view, 6> kDsD16ReadOpcodes = {
+      "DS_READ_U8_D16",
+      "DS_READ_U8_D16_HI",
+      "DS_READ_I8_D16",
+      "DS_READ_I8_D16_HI",
+      "DS_READ_U16_D16",
+      "DS_READ_U16_D16_HI",
+  };
+  for (std::string_view opcode : kDsD16ReadOpcodes) {
+    if (!Expect(interpreter.Supports(opcode),
+                "expected ds d16 read opcode support")) {
+      std::cerr << opcode << '\n';
+      return 1;
+    }
+  }
+
   const std::array<std::string_view, 4> kDsDualDataReturnOpcodes = {
       "DS_MSKOR_RTN_B32",
       "DS_CMPST_RTN_B32",
@@ -7223,6 +7251,39 @@ int main() {
           "DS_READ2ST64_B32", InstructionOperand::Vgpr(16),
           InstructionOperand::Vgpr(5), InstructionOperand::Imm32(1),
           InstructionOperand::Imm32(2)),
+      DecodedInstruction::ThreeOperand("DS_WRITE_B16", InstructionOperand::Vgpr(18),
+                                       InstructionOperand::Vgpr(19),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand(
+          "DS_WRITE_B8_D16_HI", InstructionOperand::Vgpr(18),
+          InstructionOperand::Vgpr(20), InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_READ_U8_D16", InstructionOperand::Vgpr(21),
+                                       InstructionOperand::Vgpr(18),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand(
+          "DS_READ_U8_D16_HI", InstructionOperand::Vgpr(22),
+          InstructionOperand::Vgpr(18), InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_READ_I8_D16", InstructionOperand::Vgpr(23),
+                                       InstructionOperand::Vgpr(18),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand(
+          "DS_READ_I8_D16_HI", InstructionOperand::Vgpr(24),
+          InstructionOperand::Vgpr(18), InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_WRITE_B32", InstructionOperand::Vgpr(25),
+                                       InstructionOperand::Vgpr(26),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand(
+          "DS_WRITE_B16_D16_HI", InstructionOperand::Vgpr(25),
+          InstructionOperand::Vgpr(27), InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_READ_U16_D16", InstructionOperand::Vgpr(28),
+                                       InstructionOperand::Vgpr(25),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand(
+          "DS_READ_U16_D16_HI", InstructionOperand::Vgpr(29),
+          InstructionOperand::Vgpr(25), InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_READ_B32", InstructionOperand::Vgpr(30),
+                                       InstructionOperand::Vgpr(25),
+                                       InstructionOperand::Imm32(0)),
       DecodedInstruction::Nullary("S_ENDPGM"),
   };
   auto make_ds_access_state = []() {
@@ -7252,7 +7313,25 @@ int main() {
     state.vgprs[7][0] = 0xa0b0c0d0u;
     state.vgprs[7][1] = 0x0badf00du;
     state.vgprs[7][3] = 0x13579bdfu;
-    for (std::uint16_t vgpr = 10; vgpr <= 17; ++vgpr) {
+    state.vgprs[18][0] = 224u;
+    state.vgprs[18][1] = 228u;
+    state.vgprs[18][3] = 232u;
+    state.vgprs[19][0] = 0x1234u;
+    state.vgprs[19][1] = 0x8856u;
+    state.vgprs[19][3] = 0x00cdu;
+    state.vgprs[20][0] = 0x00000180u;
+    state.vgprs[20][1] = 0x1234007fu;
+    state.vgprs[20][3] = 0xffff00ffu;
+    state.vgprs[25][0] = 256u;
+    state.vgprs[25][1] = 260u;
+    state.vgprs[25][3] = 264u;
+    state.vgprs[26][0] = 0x11223344u;
+    state.vgprs[26][1] = 0xaabbccddu;
+    state.vgprs[26][3] = 0x01020304u;
+    state.vgprs[27][0] = 0xaaaa5566u;
+    state.vgprs[27][1] = 0xbbbb1234u;
+    state.vgprs[27][3] = 0xccccabcdu;
+    for (std::uint16_t vgpr = 10; vgpr <= 30; ++vgpr) {
       state.vgprs[vgpr][2] = (vgpr & 1u) == 0u ? 0xdeadbeefu : 0xcafebabeu;
     }
     return state;
@@ -7311,7 +7390,49 @@ int main() {
         !Expect(state.vgprs[17][1] == 0x0badf00du,
                 "expected ds_read2st64 high lane 1 result") ||
         !Expect(state.vgprs[17][3] == 0x13579bdfu,
-                "expected ds_read2st64 high lane 3 result")) {
+                "expected ds_read2st64 high lane 3 result") ||
+        !Expect(state.vgprs[21][0] == 0x34u,
+                "expected ds_read_u8_d16 lane 0 result") ||
+        !Expect(state.vgprs[21][1] == 0x56u,
+                "expected ds_read_u8_d16 lane 1 result") ||
+        !Expect(state.vgprs[21][3] == 0xcdu,
+                "expected ds_read_u8_d16 lane 3 result") ||
+        !Expect(state.vgprs[22][0] == 0x80u,
+                "expected ds_read_u8_d16_hi lane 0 result") ||
+        !Expect(state.vgprs[22][1] == 0x7fu,
+                "expected ds_read_u8_d16_hi lane 1 result") ||
+        !Expect(state.vgprs[22][3] == 0xffu,
+                "expected ds_read_u8_d16_hi lane 3 result") ||
+        !Expect(state.vgprs[23][0] == 0x34u,
+                "expected ds_read_i8_d16 lane 0 result") ||
+        !Expect(state.vgprs[23][1] == 0x56u,
+                "expected ds_read_i8_d16 lane 1 result") ||
+        !Expect(state.vgprs[23][3] == 0xffffffcdu,
+                "expected ds_read_i8_d16 lane 3 result") ||
+        !Expect(state.vgprs[24][0] == 0xffffff80u,
+                "expected ds_read_i8_d16_hi lane 0 result") ||
+        !Expect(state.vgprs[24][1] == 0x7fu,
+                "expected ds_read_i8_d16_hi lane 1 result") ||
+        !Expect(state.vgprs[24][3] == 0xffffffffu,
+                "expected ds_read_i8_d16_hi lane 3 result") ||
+        !Expect(state.vgprs[28][0] == 0x3344u,
+                "expected ds_read_u16_d16 lane 0 result") ||
+        !Expect(state.vgprs[28][1] == 0xccddu,
+                "expected ds_read_u16_d16 lane 1 result") ||
+        !Expect(state.vgprs[28][3] == 0x0304u,
+                "expected ds_read_u16_d16 lane 3 result") ||
+        !Expect(state.vgprs[29][0] == 0x5566u,
+                "expected ds_read_u16_d16_hi lane 0 result") ||
+        !Expect(state.vgprs[29][1] == 0x1234u,
+                "expected ds_read_u16_d16_hi lane 1 result") ||
+        !Expect(state.vgprs[29][3] == 0xabcdu,
+                "expected ds_read_u16_d16_hi lane 3 result") ||
+        !Expect(state.vgprs[30][0] == 0x55663344u,
+                "expected ds d16 full lane 0 result") ||
+        !Expect(state.vgprs[30][1] == 0x1234ccddu,
+                "expected ds d16 full lane 1 result") ||
+        !Expect(state.vgprs[30][3] == 0xabcd0304u,
+                "expected ds d16 full lane 3 result")) {
       std::cerr << mode << '\n';
       return false;
     }
@@ -7331,7 +7452,21 @@ int main() {
         !Expect(state.vgprs[16][2] == 0xdeadbeefu,
                 "expected inactive ds_read2st64 low preservation") ||
         !Expect(state.vgprs[17][2] == 0xcafebabeu,
-                "expected inactive ds_read2st64 high preservation")) {
+                "expected inactive ds_read2st64 high preservation") ||
+        !Expect(state.vgprs[21][2] == 0xcafebabeu,
+                "expected inactive ds_read_u8_d16 preservation") ||
+        !Expect(state.vgprs[22][2] == 0xdeadbeefu,
+                "expected inactive ds_read_u8_d16_hi preservation") ||
+        !Expect(state.vgprs[23][2] == 0xcafebabeu,
+                "expected inactive ds_read_i8_d16 preservation") ||
+        !Expect(state.vgprs[24][2] == 0xdeadbeefu,
+                "expected inactive ds_read_i8_d16_hi preservation") ||
+        !Expect(state.vgprs[28][2] == 0xdeadbeefu,
+                "expected inactive ds_read_u16_d16 preservation") ||
+        !Expect(state.vgprs[29][2] == 0xcafebabeu,
+                "expected inactive ds_read_u16_d16_hi preservation") ||
+        !Expect(state.vgprs[30][2] == 0xdeadbeefu,
+                "expected inactive ds d16 full preservation")) {
       std::cerr << mode << '\n';
       return false;
     }
@@ -7372,7 +7507,25 @@ int main() {
                 "expected ds_write2st64 lane 3 low store") ||
         !Expect((std::memcpy(&value, state.lds_bytes.data() + 704, sizeof(value)), value) ==
                     0x13579bdfu,
-                "expected ds_write2st64 lane 3 high store")) {
+                "expected ds_write2st64 lane 3 high store") ||
+        !Expect((std::memcpy(&value, state.lds_bytes.data() + 224, sizeof(std::uint16_t)), value & 0xffffu) ==
+                    0x8034u,
+                "expected ds_write_b8_d16_hi lane 0 store") ||
+        !Expect((std::memcpy(&value, state.lds_bytes.data() + 228, sizeof(std::uint16_t)), value & 0xffffu) ==
+                    0x7f56u,
+                "expected ds_write_b8_d16_hi lane 1 store") ||
+        !Expect((std::memcpy(&value, state.lds_bytes.data() + 232, sizeof(std::uint16_t)), value & 0xffffu) ==
+                    0xffcdu,
+                "expected ds_write_b8_d16_hi lane 3 store") ||
+        !Expect((std::memcpy(&value, state.lds_bytes.data() + 256, sizeof(value)), value) ==
+                    0x55663344u,
+                "expected ds_write_b16_d16_hi lane 0 store") ||
+        !Expect((std::memcpy(&value, state.lds_bytes.data() + 260, sizeof(value)), value) ==
+                    0x1234ccddu,
+                "expected ds_write_b16_d16_hi lane 1 store") ||
+        !Expect((std::memcpy(&value, state.lds_bytes.data() + 264, sizeof(value)), value) ==
+                    0xabcd0304u,
+                "expected ds_write_b16_d16_hi lane 3 store")) {
       std::cerr << mode << '\n';
       return false;
     }
