@@ -239,19 +239,6 @@
             ]
           }
         ]
-      },
-      {
-        "Artifact": "amd-llvm",
-        "Artifact_Subdir": [
-          {
-            "Name": "amd-comgr-stub",
-            "Components": [
-              "lib",
-              "run",
-              "doc"
-            ]
-          }
-        ]
       }
     ],
     "Gfxarch": "False"
