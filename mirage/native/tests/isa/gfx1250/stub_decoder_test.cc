@@ -14,6 +14,7 @@ using mirage::sim::isa::gfx1250::FindStubDecoderEntrypointManifest;
 using mirage::sim::isa::gfx1250::FindStubDecoderRouteInfo;
 using mirage::sim::isa::gfx1250::GetStubDecoderEntrypointManifests;
 using mirage::sim::isa::gfx1250::GetStubExecutionDomainName;
+using mirage::sim::isa::gfx1250::GetStubOperandLayoutName;
 using mirage::sim::isa::gfx1250::GetStubOpcodeShapeName;
 using mirage::sim::isa::gfx1250::GetStubDecoderRouteInfos;
 using mirage::sim::isa::gfx1250::StubDecodedInstruction;
@@ -21,6 +22,7 @@ using mirage::sim::isa::gfx1250::StubDecodeStatus;
 using mirage::sim::isa::gfx1250::StubDecoderEntrypointManifest;
 using mirage::sim::isa::gfx1250::StubDecoderRoute;
 using mirage::sim::isa::gfx1250::StubExecutionDomain;
+using mirage::sim::isa::gfx1250::StubOperandLayoutKind;
 using mirage::sim::isa::gfx1250::StubOpcodeShape;
 
 bool Expect(bool condition, const char* message) {
@@ -64,10 +66,30 @@ int main() {
               "expected packed VOP3P op to use paired operands")) {
     return 1;
   }
+  if (!Expect(vop3p.operand_layout.layout_kind ==
+                  StubOperandLayoutKind::kPkAddBf16,
+              "expected PK_ADD operand layout")) {
+    return 1;
+  }
+  if (!Expect(vop3p.operand_layout.source_count == 2 &&
+                  vop3p.operand_layout.destination_count == 1,
+              "expected PK_ADD operand layout counts")) {
+    return 1;
+  }
 
   const StubDecodedInstruction vop3p_fma = DecodeVop3pStub("V_PK_FMA_BF16");
   if (!Expect(vop3p_fma.opcode_shape == StubOpcodeShape::kVop3pPackedFma,
               "expected packed-FMA shape for V_PK_FMA_BF16")) {
+    return 1;
+  }
+  if (!Expect(vop3p_fma.operand_layout.layout_kind ==
+                  StubOperandLayoutKind::kPkFmaBf16,
+              "expected PK_FMA operand layout")) {
+    return 1;
+  }
+  if (!Expect(vop3p_fma.operand_layout.source_count == 3 &&
+                  vop3p_fma.operand_layout.destination_count == 1,
+              "expected PK_FMA operand layout counts")) {
     return 1;
   }
 
@@ -85,6 +107,17 @@ int main() {
               "expected WMMA seed to consume accumulator path")) {
     return 1;
   }
+  if (!Expect(wmma.operand_layout.layout_kind ==
+                  StubOperandLayoutKind::kWmmaF32_16x16x4_F32W32,
+              "expected WMMA core operand layout")) {
+    return 1;
+  }
+  if (!Expect(wmma.operand_layout.source_count == 2 &&
+                  wmma.operand_layout.destination_count == 1 &&
+                  wmma.operand_layout.accumulator_source_count == 1,
+              "expected WMMA operand layout counts")) {
+    return 1;
+  }
 
   const StubDecodedInstruction paired_scale =
       DecodeVop3pStub("V_WMMA_LD_SCALE_PAIRED_B32");
@@ -99,6 +132,16 @@ int main() {
   }
   if (!Expect(paired_scale.uses_paired_operands,
               "expected paired WMMA scale load to use paired operands")) {
+    return 1;
+  }
+  if (!Expect(paired_scale.operand_layout.layout_kind ==
+                  StubOperandLayoutKind::kWmmaLdScalePairedB32,
+              "expected paired WMMA scale-load operand layout")) {
+    return 1;
+  }
+  if (!Expect(paired_scale.operand_layout.has_scale_operand &&
+                  paired_scale.operand_layout.has_paired_scale_operand,
+              "expected paired WMMA scale-load operand flags")) {
     return 1;
   }
 
@@ -120,6 +163,31 @@ int main() {
               "expected tensor load to touch tensor-memory path")) {
     return 1;
   }
+  if (!Expect(tensor.operand_layout.layout_kind ==
+                  StubOperandLayoutKind::kTensorLoadToLds,
+              "expected tensor-load operand layout")) {
+    return 1;
+  }
+  if (!Expect(tensor.operand_layout.has_tensor_descriptor &&
+                  tensor.operand_layout.touches_lds &&
+                  !tensor.operand_layout.is_store,
+              "expected tensor-load operand layout flags")) {
+    return 1;
+  }
+
+  const StubDecodedInstruction tensor_store =
+      DecodeMimgTensorStub("TENSOR_STORE_FROM_LDS");
+  if (!Expect(tensor_store.operand_layout.layout_kind ==
+                  StubOperandLayoutKind::kTensorStoreFromLds,
+              "expected tensor-store operand layout")) {
+    return 1;
+  }
+  if (!Expect(tensor_store.operand_layout.has_tensor_descriptor &&
+                  tensor_store.operand_layout.touches_lds &&
+                  tensor_store.operand_layout.is_store,
+              "expected tensor-store operand layout flags")) {
+    return 1;
+  }
 
   const StubDecodedInstruction vop1 = DecodeVop1Stub("V_CVT_F16_FP8");
   if (!Expect(vop1.status == StubDecodeStatus::kDecodedStub,
@@ -136,6 +204,11 @@ int main() {
   }
   if (!Expect(vop1.execution_domain == StubExecutionDomain::kConversion,
               "expected conversion domain for VOP1 FP8 seed")) {
+    return 1;
+  }
+  if (!Expect(vop1.operand_layout.layout_kind ==
+                  StubOperandLayoutKind::kUnknown,
+              "expected no explicit operand layout for V_CVT_F16_FP8 yet")) {
     return 1;
   }
 
@@ -169,6 +242,11 @@ int main() {
   }
   if (!Expect(sdst.uses_scale_path,
               "expected VOP3 SDST scale path flag")) {
+    return 1;
+  }
+  if (!Expect(sdst.operand_layout.layout_kind ==
+                  StubOperandLayoutKind::kUnknown,
+              "expected no explicit operand layout for V_DIV_SCALE_F64 yet")) {
     return 1;
   }
 
@@ -239,6 +317,11 @@ int main() {
   if (!Expect(GetStubExecutionDomainName(via_route_info.execution_domain) ==
                   "kMatrix",
               "expected execution-domain helper to match WMMA route")) {
+    return 1;
+  }
+  if (!Expect(GetStubOperandLayoutName(via_route_info.operand_layout.layout_kind) ==
+                  "kWmmaF32_16x16x4_F32W32",
+              "expected operand-layout helper to match WMMA route")) {
     return 1;
   }
 

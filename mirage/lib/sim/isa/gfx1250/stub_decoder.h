@@ -40,6 +40,28 @@ enum class StubExecutionDomain {
   kScaleAssist,
 };
 
+enum class StubOperandLayoutKind {
+  kUnknown,
+  kPkAddBf16,
+  kPkFmaBf16,
+  kWmmaF32_16x16x4_F32W32,
+  kWmmaLdScalePairedB32,
+  kTensorLoadToLds,
+  kTensorStoreFromLds,
+};
+
+struct StubOperandLayoutRecord {
+  StubOperandLayoutKind layout_kind = StubOperandLayoutKind::kUnknown;
+  std::uint32_t source_count = 0;
+  std::uint32_t destination_count = 0;
+  std::uint32_t accumulator_source_count = 0;
+  bool has_scale_operand = false;
+  bool has_paired_scale_operand = false;
+  bool has_tensor_descriptor = false;
+  bool touches_lds = false;
+  bool is_store = false;
+};
+
 struct StubDecodedInstruction {
   std::string_view instruction_name{};
   StubDecodeStatus status = StubDecodeStatus::kUnknownInstruction;
@@ -58,6 +80,7 @@ struct StubDecodedInstruction {
   bool uses_tensor_memory = false;
   bool uses_scale_path = false;
   bool uses_paired_operands = false;
+  StubOperandLayoutRecord operand_layout{};
 };
 
 struct StubDecoderEntrypointManifest {
@@ -77,6 +100,8 @@ StubDecodedInstruction DecodeVop3SdstStub(std::string_view instruction_name);
 std::string_view GetStubOpcodeShapeName(StubOpcodeShape opcode_shape);
 std::string_view GetStubExecutionDomainName(
     StubExecutionDomain execution_domain);
+std::string_view GetStubOperandLayoutName(
+    StubOperandLayoutKind operand_layout_kind);
 std::span<const StubDecoderEntrypointManifest> GetStubDecoderEntrypointManifests();
 const StubDecoderEntrypointManifest* FindStubDecoderEntrypointManifest(
     StubDecoderRoute route);

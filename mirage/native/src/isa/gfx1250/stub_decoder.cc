@@ -19,6 +19,88 @@ struct ClassifiedStubShape {
   bool uses_paired_operands = false;
 };
 
+StubOperandLayoutRecord ClassifyOperandLayout(std::string_view instruction_name) {
+  if (instruction_name == "V_PK_ADD_BF16") {
+    return {
+        StubOperandLayoutKind::kPkAddBf16,
+        2,
+        1,
+        0,
+        false,
+        false,
+        false,
+        false,
+        false,
+    };
+  }
+  if (instruction_name == "V_PK_FMA_BF16") {
+    return {
+        StubOperandLayoutKind::kPkFmaBf16,
+        3,
+        1,
+        0,
+        false,
+        false,
+        false,
+        false,
+        false,
+    };
+  }
+  if (instruction_name == "V_WMMA_F32_16X16X4_F32_w32") {
+    return {
+        StubOperandLayoutKind::kWmmaF32_16x16x4_F32W32,
+        2,
+        1,
+        1,
+        false,
+        false,
+        false,
+        false,
+        false,
+    };
+  }
+  if (instruction_name == "V_WMMA_LD_SCALE_PAIRED_B32") {
+    return {
+        StubOperandLayoutKind::kWmmaLdScalePairedB32,
+        2,
+        1,
+        0,
+        true,
+        true,
+        false,
+        false,
+        false,
+    };
+  }
+  if (instruction_name == "TENSOR_LOAD_TO_LDS") {
+    return {
+        StubOperandLayoutKind::kTensorLoadToLds,
+        2,
+        0,
+        0,
+        false,
+        false,
+        true,
+        true,
+        false,
+    };
+  }
+  if (instruction_name == "TENSOR_STORE_FROM_LDS") {
+    return {
+        StubOperandLayoutKind::kTensorStoreFromLds,
+        2,
+        0,
+        0,
+        false,
+        false,
+        true,
+        true,
+        true,
+    };
+  }
+  return {};
+}
+
 constexpr std::array<RouteEntrypointSpec, 4> kRouteEntrypointSpecs{{
     {StubDecoderRoute::kVop3p, "DecodeVop3pStub"},
     {StubDecoderRoute::kMimgTensor, "DecodeMimgTensorStub"},
@@ -199,6 +281,8 @@ StubDecodedInstruction BuildDecodedStub(
     std::string_view entrypoint_name) {
   const ClassifiedStubShape classified_shape =
       ClassifyStubShape(route_info.route, route_info.instruction_name);
+  const StubOperandLayoutRecord operand_layout =
+      ClassifyOperandLayout(route_info.instruction_name);
   return {
       route_info.instruction_name,
       StubDecodeStatus::kDecodedStub,
@@ -217,6 +301,7 @@ StubDecodedInstruction BuildDecodedStub(
       classified_shape.uses_tensor_memory,
       classified_shape.uses_scale_path,
       classified_shape.uses_paired_operands,
+      operand_layout,
   };
 }
 
@@ -241,6 +326,7 @@ StubDecodedInstruction MakeUnsupportedInstruction(
       false,
       false,
       false,
+      {},
   };
 }
 
@@ -369,6 +455,27 @@ std::string_view GetStubExecutionDomainName(
     case StubExecutionDomain::kScaleAssist:
       return "kScaleAssist";
     case StubExecutionDomain::kUnknown:
+      break;
+  }
+  return "kUnknown";
+}
+
+std::string_view GetStubOperandLayoutName(
+    StubOperandLayoutKind operand_layout_kind) {
+  switch (operand_layout_kind) {
+    case StubOperandLayoutKind::kPkAddBf16:
+      return "kPkAddBf16";
+    case StubOperandLayoutKind::kPkFmaBf16:
+      return "kPkFmaBf16";
+    case StubOperandLayoutKind::kWmmaF32_16x16x4_F32W32:
+      return "kWmmaF32_16x16x4_F32W32";
+    case StubOperandLayoutKind::kWmmaLdScalePairedB32:
+      return "kWmmaLdScalePairedB32";
+    case StubOperandLayoutKind::kTensorLoadToLds:
+      return "kTensorLoadToLds";
+    case StubOperandLayoutKind::kTensorStoreFromLds:
+      return "kTensorStoreFromLds";
+    case StubOperandLayoutKind::kUnknown:
       break;
   }
   return "kUnknown";
