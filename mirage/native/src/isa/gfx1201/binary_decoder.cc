@@ -16,7 +16,7 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 62> kPhase0ExecutableOpcodes{{
+constexpr std::array<std::string_view, 74> kPhase0ExecutableOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_ADD_U32",
@@ -56,6 +56,18 @@ constexpr std::array<std::string_view, 62> kPhase0ExecutableOpcodes{{
     "V_CMP_LE_U32",
     "V_CMP_GT_U32",
     "V_CMP_GE_U32",
+    "V_CMPX_EQ_I32",
+    "V_CMPX_NE_I32",
+    "V_CMPX_LT_I32",
+    "V_CMPX_LE_I32",
+    "V_CMPX_GT_I32",
+    "V_CMPX_GE_I32",
+    "V_CMPX_EQ_U32",
+    "V_CMPX_NE_U32",
+    "V_CMPX_LT_U32",
+    "V_CMPX_LE_U32",
+    "V_CMPX_GT_U32",
+    "V_CMPX_GE_U32",
     "V_NOT_B32",
     "V_BFREV_B32",
     "V_CVT_F32_UBYTE0",
@@ -604,7 +616,19 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
              instruction_name == "V_CMP_LT_U32" ||
              instruction_name == "V_CMP_LE_U32" ||
              instruction_name == "V_CMP_GT_U32" ||
-             instruction_name == "V_CMP_GE_U32") {
+             instruction_name == "V_CMP_GE_U32" ||
+             instruction_name == "V_CMPX_EQ_I32" ||
+             instruction_name == "V_CMPX_NE_I32" ||
+             instruction_name == "V_CMPX_LT_I32" ||
+             instruction_name == "V_CMPX_LE_I32" ||
+             instruction_name == "V_CMPX_GT_I32" ||
+             instruction_name == "V_CMPX_GE_I32" ||
+             instruction_name == "V_CMPX_EQ_U32" ||
+             instruction_name == "V_CMPX_NE_U32" ||
+             instruction_name == "V_CMPX_LT_U32" ||
+             instruction_name == "V_CMPX_LE_U32" ||
+             instruction_name == "V_CMPX_GT_U32" ||
+             instruction_name == "V_CMPX_GE_U32") {
     std::size_t literal_words_consumed = 0;
     InstructionOperand src0;
     if (!DecodeVectorSource(ExtractBits(word, 0, 9), words.subspan(1),

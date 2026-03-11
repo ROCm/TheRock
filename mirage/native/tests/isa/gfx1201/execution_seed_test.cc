@@ -420,6 +420,30 @@ bool ExpectSignedVectorCompareState(
          !state.waiting_on_barrier && state.pc == 17u;
 }
 
+bool ExpectMaskedVectorComparePreservesInactiveVccState(
+    const mirage::sim::isa::WaveExecutionState& state) {
+  return state.vcc_mask == 5u && state.exec_mask == 1u && state.halted &&
+         !state.waiting_on_barrier && state.pc == 1u;
+}
+
+bool ExpectUnsignedVectorCmpxState(
+    const mirage::sim::isa::WaveExecutionState& state) {
+  return state.sgprs[74] == 7u && state.sgprs[75] == 5u &&
+         state.sgprs[94] == 111u && state.sgprs[95] == 444u &&
+         state.sgprs[96] == 666u && state.exec_mask == 0u &&
+         state.vcc_mask == 0u && state.halted &&
+         !state.waiting_on_barrier && state.pc == 20u;
+}
+
+bool ExpectSignedVectorCmpxState(
+    const mirage::sim::isa::WaveExecutionState& state) {
+  return state.sgprs[76] == 0xfffffffdu && state.sgprs[77] == 2u &&
+         state.sgprs[97] == 777u && state.sgprs[98] == 1001u &&
+         state.sgprs[99] == 321u && state.exec_mask == 0u &&
+         state.vcc_mask == 0u && state.halted &&
+         !state.waiting_on_barrier && state.pc == 20u;
+}
+
 }  // namespace
 
 int main() {
@@ -959,6 +983,60 @@ int main() {
                   OperandSlotKind::kSource0, OperandValueClass::kUnknown,
                   OperandAccess::kRead, FragmentKind::kScalar, 32u, 1u, false),
               "expected V_CMP_NE_I32 literal source descriptor")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_cmpx_eq_u32_words{
+      MakeVopc(202u, 1u, 4u)};
+  if (!Expect(decoder.DecodeInstruction(v_cmpx_eq_u32_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_CMPX_EQ_U32 decode success") ||
+      !Expect(ExpectBinaryInstruction(instruction, "V_CMPX_EQ_U32",
+                                      OperandKind::kSgpr,
+                                      kImplicitVccPairSgprIndex,
+                                      OperandKind::kSgpr, 1u,
+                                      OperandKind::kVgpr, 4u),
+              "expected decoded V_CMPX_EQ_U32 operands") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[0], OperandRole::kDestination,
+                  OperandSlotKind::kScalarDestination,
+                  OperandValueClass::kScalarRegister, OperandAccess::kWrite,
+                  FragmentKind::kScalar, 64u, 2u, true),
+              "expected implicit VCC destination descriptor for V_CMPX_EQ_U32")
+      ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[1], OperandRole::kSource0,
+                  OperandSlotKind::kSource0,
+                  OperandValueClass::kScalarRegister, OperandAccess::kRead,
+                  FragmentKind::kScalar, 32u, 1u, false),
+              "expected V_CMPX_EQ_U32 source0 descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[2], OperandRole::kSource1,
+                  OperandSlotKind::kSource1,
+                  OperandValueClass::kVectorRegister, OperandAccess::kRead,
+                  FragmentKind::kVector, 32u, 1u, false),
+              "expected V_CMPX_EQ_U32 source1 descriptor")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 2> v_cmpx_ne_i32_literal_words{
+      MakeVopc(197u, 255u, 5u), 0xfffffffdu};
+  if (!Expect(decoder.DecodeInstruction(v_cmpx_ne_i32_literal_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_CMPX_NE_I32 literal decode success") ||
+      !Expect(words_consumed == 2u,
+              "expected literal V_CMPX_NE_I32 decode to consume 2 dwords") ||
+      !Expect(ExpectBinaryInstruction(instruction, "V_CMPX_NE_I32",
+                                      OperandKind::kSgpr,
+                                      kImplicitVccPairSgprIndex,
+                                      OperandKind::kImm32, 0xfffffffdu,
+                                      OperandKind::kVgpr, 5u),
+              "expected decoded V_CMPX_NE_I32 literal operands") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[1], OperandRole::kSource0,
+                  OperandSlotKind::kSource0, OperandValueClass::kUnknown,
+                  OperandAccess::kRead, FragmentKind::kScalar, 32u, 1u, false),
+              "expected V_CMPX_NE_I32 literal source descriptor")) {
     return 1;
   }
 
@@ -2020,6 +2098,284 @@ int main() {
       !Expect(ExpectSignedVectorCompareState(
                   compiled_signed_vector_compare_state),
               "expected compiled signed vector compare state")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 2> masked_vector_compare_words{
+      MakeVopc(74u, 1u, 4u),
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> masked_vector_compare_program;
+  if (!Expect(decoder.DecodeProgram(masked_vector_compare_words,
+                                    &masked_vector_compare_program,
+                                    &error_message),
+              "expected masked vector compare program decode success") ||
+      !Expect(masked_vector_compare_program.size() == 2u,
+              "expected two decoded masked vector compare instructions")) {
+    return 1;
+  }
+
+  WaveExecutionState decoded_masked_vector_compare_state;
+  decoded_masked_vector_compare_state.exec_mask = 1u;
+  decoded_masked_vector_compare_state.vcc_mask = 4u;
+  decoded_masked_vector_compare_state.sgprs[1] = 7u;
+  decoded_masked_vector_compare_state.vgprs[4][0] = 7u;
+  if (!Expect(interpreter.ExecuteProgram(masked_vector_compare_program,
+                                         &decoded_masked_vector_compare_state,
+                                         &error_message),
+              "expected decoded masked vector compare execution success") ||
+      !Expect(ExpectMaskedVectorComparePreservesInactiveVccState(
+                  decoded_masked_vector_compare_state),
+              "expected decoded masked vector compare state")) {
+    return 1;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_masked_vector_compare_program;
+  if (!Expect(interpreter.CompileProgram(masked_vector_compare_program,
+                                         &compiled_masked_vector_compare_program,
+                                         &error_message),
+              "expected compiled masked vector compare program success") ||
+      !Expect(compiled_masked_vector_compare_program[0].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpEqU32,
+              "expected compiled masked V_CMP_EQ_U32 opcode")) {
+    return 1;
+  }
+
+  WaveExecutionState compiled_masked_vector_compare_state;
+  compiled_masked_vector_compare_state.exec_mask = 1u;
+  compiled_masked_vector_compare_state.vcc_mask = 4u;
+  compiled_masked_vector_compare_state.sgprs[1] = 7u;
+  compiled_masked_vector_compare_state.vgprs[4][0] = 7u;
+  if (!Expect(interpreter.ExecuteProgram(compiled_masked_vector_compare_program,
+                                         &compiled_masked_vector_compare_state,
+                                         &error_message),
+              "expected compiled masked vector compare execution success") ||
+      !Expect(ExpectMaskedVectorComparePreservesInactiveVccState(
+                  compiled_masked_vector_compare_state),
+              "expected compiled masked vector compare state")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 21> unsigned_vector_cmpx_words{
+      MakeSopk(0u, 74u, 7u),
+      MakeSopk(0u, 75u, 5u),
+      MakeVopc(202u, 74u, 60u),
+      MakeSopp(37u, 2u),
+      MakeSopk(0u, 94u, 111u),
+      MakeSopp(32u, 1u),
+      MakeSopk(0u, 94u, 222u),
+      MakeVopc(205u, 137u, 61u),
+      MakeSopp(38u, 2u),
+      MakeSopk(0u, 95u, 333u),
+      MakeSopp(32u, 1u),
+      MakeSopk(0u, 95u, 444u),
+      MakeVopc(201u, 75u, 62u),
+      MakeVopc(203u, 75u, 62u),
+      MakeVopc(204u, 75u, 63u),
+      MakeSopp(37u, 2u),
+      MakeSopk(0u, 96u, 555u),
+      MakeSopp(32u, 1u),
+      MakeSopk(0u, 96u, 666u),
+      MakeVopc(206u, 75u, 63u),
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> unsigned_vector_cmpx_program;
+  if (!Expect(decoder.DecodeProgram(unsigned_vector_cmpx_words,
+                                    &unsigned_vector_cmpx_program,
+                                    &error_message),
+              "expected unsigned vector CMPX program decode success") ||
+      !Expect(unsigned_vector_cmpx_program.size() == 21u,
+              "expected twenty-one decoded unsigned vector CMPX instructions")
+      ||
+      !Expect(unsigned_vector_cmpx_program[2].opcode == "V_CMPX_EQ_U32",
+              "expected decoded V_CMPX_EQ_U32") ||
+      !Expect(unsigned_vector_cmpx_program[7].opcode == "V_CMPX_NE_U32",
+              "expected decoded V_CMPX_NE_U32") ||
+      !Expect(unsigned_vector_cmpx_program[12].opcode == "V_CMPX_LT_U32",
+              "expected decoded V_CMPX_LT_U32") ||
+      !Expect(unsigned_vector_cmpx_program[13].opcode == "V_CMPX_LE_U32",
+              "expected decoded V_CMPX_LE_U32") ||
+      !Expect(unsigned_vector_cmpx_program[14].opcode == "V_CMPX_GT_U32",
+              "expected decoded V_CMPX_GT_U32") ||
+      !Expect(unsigned_vector_cmpx_program[19].opcode == "V_CMPX_GE_U32",
+              "expected decoded V_CMPX_GE_U32")) {
+    return 1;
+  }
+
+  WaveExecutionState decoded_unsigned_vector_cmpx_state;
+  decoded_unsigned_vector_cmpx_state.exec_mask = 0xbu;
+  decoded_unsigned_vector_cmpx_state.vgprs[60][0] = 7u;
+  decoded_unsigned_vector_cmpx_state.vgprs[60][1] = 4u;
+  decoded_unsigned_vector_cmpx_state.vgprs[60][3] = 7u;
+  decoded_unsigned_vector_cmpx_state.vgprs[61][0] = 8u;
+  decoded_unsigned_vector_cmpx_state.vgprs[61][1] = 9u;
+  decoded_unsigned_vector_cmpx_state.vgprs[61][3] = 9u;
+  decoded_unsigned_vector_cmpx_state.vgprs[62][0] = 6u;
+  decoded_unsigned_vector_cmpx_state.vgprs[63][0] = 6u;
+  if (!Expect(interpreter.ExecuteProgram(unsigned_vector_cmpx_program,
+                                         &decoded_unsigned_vector_cmpx_state,
+                                         &error_message),
+              "expected decoded unsigned vector CMPX execution success") ||
+      !Expect(ExpectUnsignedVectorCmpxState(
+                  decoded_unsigned_vector_cmpx_state),
+              "expected decoded unsigned vector CMPX state")) {
+    return 1;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_unsigned_vector_cmpx_program;
+  if (!Expect(interpreter.CompileProgram(unsigned_vector_cmpx_program,
+                                         &compiled_unsigned_vector_cmpx_program,
+                                         &error_message),
+              "expected compiled unsigned vector CMPX program success") ||
+      !Expect(compiled_unsigned_vector_cmpx_program[2].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpxEqU32,
+              "expected compiled V_CMPX_EQ_U32 opcode") ||
+      !Expect(compiled_unsigned_vector_cmpx_program[7].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpxNeU32,
+              "expected compiled V_CMPX_NE_U32 opcode") ||
+      !Expect(compiled_unsigned_vector_cmpx_program[12].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpxLtU32,
+              "expected compiled V_CMPX_LT_U32 opcode") ||
+      !Expect(compiled_unsigned_vector_cmpx_program[13].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpxLeU32,
+              "expected compiled V_CMPX_LE_U32 opcode") ||
+      !Expect(compiled_unsigned_vector_cmpx_program[14].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpxGtU32,
+              "expected compiled V_CMPX_GT_U32 opcode") ||
+      !Expect(compiled_unsigned_vector_cmpx_program[19].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpxGeU32,
+              "expected compiled V_CMPX_GE_U32 opcode")) {
+    return 1;
+  }
+
+  WaveExecutionState compiled_unsigned_vector_cmpx_state;
+  compiled_unsigned_vector_cmpx_state.exec_mask = 0xbu;
+  compiled_unsigned_vector_cmpx_state.vgprs[60][0] = 7u;
+  compiled_unsigned_vector_cmpx_state.vgprs[60][1] = 4u;
+  compiled_unsigned_vector_cmpx_state.vgprs[60][3] = 7u;
+  compiled_unsigned_vector_cmpx_state.vgprs[61][0] = 8u;
+  compiled_unsigned_vector_cmpx_state.vgprs[61][1] = 9u;
+  compiled_unsigned_vector_cmpx_state.vgprs[61][3] = 9u;
+  compiled_unsigned_vector_cmpx_state.vgprs[62][0] = 6u;
+  compiled_unsigned_vector_cmpx_state.vgprs[63][0] = 6u;
+  if (!Expect(interpreter.ExecuteProgram(compiled_unsigned_vector_cmpx_program,
+                                         &compiled_unsigned_vector_cmpx_state,
+                                         &error_message),
+              "expected compiled unsigned vector CMPX execution success") ||
+      !Expect(ExpectUnsignedVectorCmpxState(
+                  compiled_unsigned_vector_cmpx_state),
+              "expected compiled unsigned vector CMPX state")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 21> signed_vector_cmpx_words{
+      MakeSopk(0u, 76u, 0xfffdu),
+      MakeSopk(0u, 77u, 2u),
+      MakeVopc(194u, 76u, 64u),
+      MakeSopp(37u, 2u),
+      MakeSopk(0u, 97u, 777u),
+      MakeSopp(32u, 1u),
+      MakeSopk(0u, 97u, 888u),
+      MakeVopc(197u, 76u, 65u),
+      MakeSopp(38u, 2u),
+      MakeSopk(0u, 98u, 999u),
+      MakeSopp(32u, 1u),
+      MakeSopk(0u, 98u, 1001u),
+      MakeVopc(193u, 76u, 66u),
+      MakeVopc(195u, 76u, 66u),
+      MakeVopc(196u, 77u, 67u),
+      MakeSopp(37u, 2u),
+      MakeSopk(0u, 99u, 123u),
+      MakeSopp(32u, 1u),
+      MakeSopk(0u, 99u, 321u),
+      MakeVopc(198u, 77u, 67u),
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> signed_vector_cmpx_program;
+  if (!Expect(decoder.DecodeProgram(signed_vector_cmpx_words,
+                                    &signed_vector_cmpx_program,
+                                    &error_message),
+              "expected signed vector CMPX program decode success") ||
+      !Expect(signed_vector_cmpx_program.size() == 21u,
+              "expected twenty-one decoded signed vector CMPX instructions") ||
+      !Expect(signed_vector_cmpx_program[2].opcode == "V_CMPX_EQ_I32",
+              "expected decoded V_CMPX_EQ_I32") ||
+      !Expect(signed_vector_cmpx_program[7].opcode == "V_CMPX_NE_I32",
+              "expected decoded V_CMPX_NE_I32") ||
+      !Expect(signed_vector_cmpx_program[12].opcode == "V_CMPX_LT_I32",
+              "expected decoded V_CMPX_LT_I32") ||
+      !Expect(signed_vector_cmpx_program[13].opcode == "V_CMPX_LE_I32",
+              "expected decoded V_CMPX_LE_I32") ||
+      !Expect(signed_vector_cmpx_program[14].opcode == "V_CMPX_GT_I32",
+              "expected decoded V_CMPX_GT_I32") ||
+      !Expect(signed_vector_cmpx_program[19].opcode == "V_CMPX_GE_I32",
+              "expected decoded V_CMPX_GE_I32")) {
+    return 1;
+  }
+
+  WaveExecutionState decoded_signed_vector_cmpx_state;
+  decoded_signed_vector_cmpx_state.exec_mask = 0xbu;
+  decoded_signed_vector_cmpx_state.vgprs[64][0] = 0xfffffffdu;
+  decoded_signed_vector_cmpx_state.vgprs[64][1] = 4u;
+  decoded_signed_vector_cmpx_state.vgprs[64][3] = 0xfffffffdu;
+  decoded_signed_vector_cmpx_state.vgprs[65][0] = 0xfffffffcu;
+  decoded_signed_vector_cmpx_state.vgprs[65][1] = 0xfffffffdu;
+  decoded_signed_vector_cmpx_state.vgprs[65][3] = 0xfffffffdu;
+  decoded_signed_vector_cmpx_state.vgprs[66][0] = 0xffffffffu;
+  decoded_signed_vector_cmpx_state.vgprs[67][0] = 3u;
+  if (!Expect(interpreter.ExecuteProgram(signed_vector_cmpx_program,
+                                         &decoded_signed_vector_cmpx_state,
+                                         &error_message),
+              "expected decoded signed vector CMPX execution success") ||
+      !Expect(ExpectSignedVectorCmpxState(
+                  decoded_signed_vector_cmpx_state),
+              "expected decoded signed vector CMPX state")) {
+    return 1;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_signed_vector_cmpx_program;
+  if (!Expect(interpreter.CompileProgram(signed_vector_cmpx_program,
+                                         &compiled_signed_vector_cmpx_program,
+                                         &error_message),
+              "expected compiled signed vector CMPX program success") ||
+      !Expect(compiled_signed_vector_cmpx_program[2].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpxEqI32,
+              "expected compiled V_CMPX_EQ_I32 opcode") ||
+      !Expect(compiled_signed_vector_cmpx_program[7].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpxNeI32,
+              "expected compiled V_CMPX_NE_I32 opcode") ||
+      !Expect(compiled_signed_vector_cmpx_program[12].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpxLtI32,
+              "expected compiled V_CMPX_LT_I32 opcode") ||
+      !Expect(compiled_signed_vector_cmpx_program[13].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpxLeI32,
+              "expected compiled V_CMPX_LE_I32 opcode") ||
+      !Expect(compiled_signed_vector_cmpx_program[14].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpxGtI32,
+              "expected compiled V_CMPX_GT_I32 opcode") ||
+      !Expect(compiled_signed_vector_cmpx_program[19].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpxGeI32,
+              "expected compiled V_CMPX_GE_I32 opcode")) {
+    return 1;
+  }
+
+  WaveExecutionState compiled_signed_vector_cmpx_state;
+  compiled_signed_vector_cmpx_state.exec_mask = 0xbu;
+  compiled_signed_vector_cmpx_state.vgprs[64][0] = 0xfffffffdu;
+  compiled_signed_vector_cmpx_state.vgprs[64][1] = 4u;
+  compiled_signed_vector_cmpx_state.vgprs[64][3] = 0xfffffffdu;
+  compiled_signed_vector_cmpx_state.vgprs[65][0] = 0xfffffffcu;
+  compiled_signed_vector_cmpx_state.vgprs[65][1] = 0xfffffffdu;
+  compiled_signed_vector_cmpx_state.vgprs[65][3] = 0xfffffffdu;
+  compiled_signed_vector_cmpx_state.vgprs[66][0] = 0xffffffffu;
+  compiled_signed_vector_cmpx_state.vgprs[67][0] = 3u;
+  if (!Expect(interpreter.ExecuteProgram(compiled_signed_vector_cmpx_program,
+                                         &compiled_signed_vector_cmpx_state,
+                                         &error_message),
+              "expected compiled signed vector CMPX execution success") ||
+      !Expect(ExpectSignedVectorCmpxState(
+                  compiled_signed_vector_cmpx_state),
+              "expected compiled signed vector CMPX state")) {
     return 1;
   }
 
