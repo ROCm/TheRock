@@ -111,6 +111,7 @@ if(THEROCK_ENABLE_PRIM)
 
     # rocPRIM_tests declared as a separate target to stop the tests from clogging up the critical build path for libs
     # that depend on rocPRIM
+    # passing BACKGROUND_BUILD ensures that the tests aren't built (too) concurrently with other projects that are demanding
     therock_cmake_subproject_declare(rocPRIM_tests
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_LIBRARIES_SOURCE_DIR}/projects/rocprim"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocPRIM_tests"
