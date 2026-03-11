@@ -1,6 +1,7 @@
 # rocdecode
 [components.dbg."media-libs/rocdecode/stage"]
 [components.dev."media-libs/rocdecode/stage"]
+[components.doc."media-libs/rocdecode/stage"]
 [components.lib."media-libs/rocdecode/stage"]
 [components.test."media-libs/rocdecode/stage"]
 include = [

@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Builds artifacts from a descriptor.
 
 See `artifacts` for a general description of artifacts and utilities for processing

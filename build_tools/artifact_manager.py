@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Stage-aware artifact manager for multi-stage CI/CD pipeline.
 
 This CLI tool manages artifacts between build stages, supporting both local
@@ -55,9 +58,16 @@ from typing import List, Optional, Set
 from _therock_utils.build_topology import BuildTopology
 from _therock_utils.artifact_backend import (
     ArtifactBackend,
+    ARTIFACT_EXTENSIONS,
+    LocalDirectoryBackend,
+    S3Backend,
     create_backend_from_env,
 )
 from _therock_utils.artifacts import ArtifactName, ArtifactPopulator
+from _therock_utils.workflow_outputs import WorkflowOutputRoot
+
+# Component types that artifacts are split into
+ARTIFACT_COMPONENTS = ["lib", "run", "dev", "dbg", "doc", "test"]
 
 
 def log(msg: str):
@@ -113,6 +123,53 @@ def get_topology(topology_path: Optional[Path] = None) -> BuildTopology:
     if not topology_path.exists():
         raise FileNotFoundError(f"BUILD_TOPOLOGY.toml not found at {topology_path}")
     return BuildTopology(str(topology_path))
+
+
+# =============================================================================
+# Shared Helpers
+# =============================================================================
+
+
+def parse_target_families(args: argparse.Namespace) -> List[str]:
+    """Parse target families from argparse args.
+
+    Returns a list starting with "generic", extended with any families and
+    individual targets from the args.
+    """
+    target_families = ["generic"]
+    if args.generic_only:
+        log("Using generic (host) artifacts only")
+    else:
+        if args.amdgpu_families:
+            target_families.extend(args.amdgpu_families.split(","))
+        if args.amdgpu_targets:
+            target_families.extend(
+                t.strip() for t in args.amdgpu_targets.split(",") if t.strip()
+            )
+    return target_families
+
+
+def find_available_artifacts(
+    artifact_names: Set[str],
+    target_families: List[str],
+    available: Set[str],
+) -> List[str]:
+    """Find which artifacts exist in the available set.
+
+    Iterates artifact_names × target_families × components × extensions,
+    returning filenames that are present in `available`. Prefers .tar.zst
+    over .tar.xz when both exist.
+    """
+    matched = []
+    for artifact_name in sorted(artifact_names):
+        for tf in target_families:
+            for comp in ARTIFACT_COMPONENTS:
+                for ext in ARTIFACT_EXTENSIONS:
+                    filename = f"{artifact_name}_{comp}_{tf}{ext}"
+                    if filename in available:
+                        matched.append(filename)
+                        break  # Found this artifact, don't check other extensions
+    return matched
 
 
 # =============================================================================
@@ -280,18 +337,7 @@ def do_fetch(args: argparse.Namespace):
             f"Stage '{args.stage}' needs {len(inbound)} artifacts: {', '.join(sorted(inbound))}"
         )
 
-    # Determine target families to fetch (inclusive: both family names and
-    # individual targets are tried, whichever is in the bucket gets fetched).
-    target_families = ["generic"]
-    if args.generic_only:
-        log("Fetching generic (host) artifacts only")
-    else:
-        if args.amdgpu_families:
-            target_families.extend(args.amdgpu_families.split(","))
-        if args.amdgpu_targets:
-            target_families.extend(
-                t.strip() for t in args.amdgpu_targets.split(",") if t.strip()
-            )
+    target_families = parse_target_families(args)
 
     # Create backend
     backend = create_backend_from_env(
@@ -309,24 +355,15 @@ def do_fetch(args: argparse.Namespace):
     download_dir = output_dir / ".download_cache"
     download_dir.mkdir(parents=True, exist_ok=True)
 
-    components = ["lib", "run", "dev", "dbg", "doc", "test"]
-    download_requests = []
-
-    for artifact_name in sorted(inbound):
-        for tf in target_families:
-            for comp in components:
-                # Try zstd first (new format), then xz (legacy format)
-                for ext in [".tar.zst", ".tar.xz"]:
-                    filename = f"{artifact_name}_{comp}_{tf}{ext}"
-                    if filename in available:
-                        download_requests.append(
-                            DownloadRequest(
-                                artifact_key=filename,
-                                dest_path=download_dir / filename,
-                                backend=backend,
-                            )
-                        )
-                        break  # Found this artifact, don't check other extensions
+    matched_filenames = find_available_artifacts(inbound, target_families, available)
+    download_requests = [
+        DownloadRequest(
+            artifact_key=filename,
+            dest_path=download_dir / filename,
+            backend=backend,
+        )
+        for filename in matched_filenames
+    ]
 
     if not download_requests:
         log("No matching artifacts found to download")
@@ -677,6 +714,163 @@ def do_push(args: argparse.Namespace):
 
 
 # =============================================================================
+# Copy (Server-side S3 copy between run IDs)
+# =============================================================================
+
+
+@dataclass
+class CopyRequest:
+    """Request to copy a single artifact between backends."""
+
+    artifact_key: str
+    source_backend: ArtifactBackend
+    dest_backend: ArtifactBackend
+
+
+def copy_single_artifact(request: CopyRequest) -> bool:
+    """Copy a single artifact with retry logic."""
+    MAX_RETRIES = 3
+    BASE_DELAY_SECONDS = 2
+
+    for attempt in range(MAX_RETRIES):
+        try:
+            log(f"  ++ Copying {request.artifact_key}")
+            request.dest_backend.copy_artifact(
+                request.artifact_key, request.source_backend
+            )
+            return True
+        except Exception as e:
+            if attempt < MAX_RETRIES - 1:
+                delay = BASE_DELAY_SECONDS * (2**attempt)
+                log(
+                    f"  ++ Retry {attempt + 1}/{MAX_RETRIES} for {request.artifact_key}: {e}"
+                )
+                _delay_for_retry(delay)
+            else:
+                log(f"  !! Failed to copy {request.artifact_key}: {e}")
+                return False
+    return False
+
+
+def _create_source_backend(
+    source_run_id: str, platform: str, local_staging_dir: Optional[Path] = None
+) -> ArtifactBackend:
+    """Create a backend for the source run ID.
+
+    For S3, uses WorkflowOutputRoot.from_workflow_run(lookup_workflow_run=True)
+    to resolve the correct bucket (which may differ from the current run's bucket).
+
+    For local backends, creates a LocalDirectoryBackend in the same staging dir.
+    """
+    if local_staging_dir or os.getenv("THEROCK_LOCAL_STAGING_DIR"):
+        staging = local_staging_dir or Path(os.environ["THEROCK_LOCAL_STAGING_DIR"])
+        output_root = WorkflowOutputRoot.for_local(
+            run_id=source_run_id, platform=platform
+        )
+        return LocalDirectoryBackend(
+            staging_dir=staging,
+            output_root=output_root,
+        )
+
+    output_root = WorkflowOutputRoot.from_workflow_run(
+        run_id=source_run_id, platform=platform, lookup_workflow_run=True
+    )
+    return S3Backend(output_root=output_root)
+
+
+def do_copy(args: argparse.Namespace):
+    """Copy produced artifacts for one or more stages from one run to another."""
+    topology = get_topology(args.topology)
+
+    # Parse and validate stages (comma-separated). Unlike fetch/push which
+    # operate on a single stage, copy accepts multiple stages at once so that
+    # a single setup job can copy all prebuilt stages in one invocation.
+    stage_names = [s.strip() for s in args.stage.split(",") if s.strip()]
+    available_stages = topology.build_stages.keys()
+    for stage_name in stage_names:
+        if stage_name not in available_stages:
+            log(f"ERROR: Stage '{stage_name}' not found")
+            log(f"Available stages: {', '.join(available_stages)}")
+            sys.exit(1)
+
+    # Union produced artifacts across all specified stages
+    produced: Set[str] = set()
+    for stage_name in stage_names:
+        stage_produced = topology.get_produced_artifacts(stage_name)
+        log(
+            f"Stage '{stage_name}' produces {len(stage_produced)} artifacts: {', '.join(sorted(stage_produced))}"
+        )
+        produced.update(stage_produced)
+
+    if not produced:
+        log("Specified stages produce no artifacts")
+        return
+
+    target_families = parse_target_families(args)
+
+    # Create source and dest backends
+    source_backend = _create_source_backend(
+        source_run_id=args.source_run_id,
+        platform=args.platform,
+        local_staging_dir=args.local_staging_dir,
+    )
+    dest_backend = create_backend_from_env(
+        run_id=args.run_id,
+        platform=args.platform,
+    )
+
+    log(f"Source: {source_backend.base_uri}")
+    log(f"Dest:   {dest_backend.base_uri}")
+
+    # List available artifacts in source
+    available = set(source_backend.list_artifacts())
+    log(f"Found {len(available)} artifacts in source")
+
+    # Build copy requests from matched artifacts
+    matched_filenames = find_available_artifacts(produced, target_families, available)
+    copy_requests = [
+        CopyRequest(
+            artifact_key=filename,
+            source_backend=source_backend,
+            dest_backend=dest_backend,
+        )
+        for filename in matched_filenames
+    ]
+
+    if not copy_requests:
+        log("No matching artifacts found to copy")
+        return
+
+    if args.dry_run:
+        log(f"\nDry run: would copy {len(copy_requests)} artifacts:")
+        for req in copy_requests:
+            log(f"  {req.artifact_key}")
+        return
+
+    log(f"\nCopying {len(copy_requests)} artifacts...")
+
+    failed_artifacts = []
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=args.concurrency
+    ) as executor:
+        futures = {
+            executor.submit(copy_single_artifact, req): req for req in copy_requests
+        }
+        for future in concurrent.futures.as_completed(futures):
+            if not future.result():
+                failed_artifacts.append(futures[future].artifact_key)
+
+    copied_count = len(copy_requests) - len(failed_artifacts)
+    log(f"\nCopied {copied_count}/{len(copy_requests)} artifacts")
+
+    if failed_artifacts:
+        log(f"ERROR: {len(failed_artifacts)} artifacts failed to copy:")
+        for name in sorted(failed_artifacts):
+            log(f"  - {name}")
+        sys.exit(1)
+
+
+# =============================================================================
 # Info Commands
 # =============================================================================
 
@@ -753,6 +947,27 @@ def _add_common_args(parser: argparse.ArgumentParser):
     )
 
 
+def _add_target_args(parser: argparse.ArgumentParser):
+    """Add target family/GPU arguments to a subparser."""
+    target_group = parser.add_mutually_exclusive_group()
+    target_group.add_argument(
+        "--amdgpu-families",
+        type=str,
+        help="Comma-separated GPU families (e.g., gfx94X-dcgpu,gfx1100)",
+    )
+    target_group.add_argument(
+        "--generic-only",
+        action="store_true",
+        help="Only use generic (host) artifacts, skip device-specific artifacts",
+    )
+    parser.add_argument(
+        "--amdgpu-targets",
+        type=str,
+        default="",
+        help="Comma-separated individual GPU targets for split artifacts (e.g. 'gfx942')",
+    )
+
+
 def _add_backend_args(parser: argparse.ArgumentParser):
     """Add common backend-related arguments to a subparser."""
     _add_common_args(parser)
@@ -795,23 +1010,7 @@ def main(argv: Optional[List[str]] = None):
         default="all",
         help="Build stage name (default: 'all' fetches all artifacts)",
     )
-    fetch_target_group = fetch_parser.add_mutually_exclusive_group()
-    fetch_target_group.add_argument(
-        "--amdgpu-families",
-        type=str,
-        help="Comma-separated GPU families to fetch (e.g., gfx94X-dcgpu,gfx1100)",
-    )
-    fetch_target_group.add_argument(
-        "--generic-only",
-        action="store_true",
-        help="Only fetch generic (host) artifacts, skip device-specific artifacts",
-    )
-    fetch_parser.add_argument(
-        "--amdgpu-targets",
-        type=str,
-        default="",
-        help="Comma-separated individual GPU targets for fetching split artifacts (e.g. 'gfx942')",
-    )
+    _add_target_args(fetch_parser)
     fetch_parser.add_argument(
         "--output-dir",
         type=Path,
@@ -888,6 +1087,38 @@ def main(argv: Optional[List[str]] = None):
         help="Number of concurrent uploads (default: 10)",
     )
     push_parser.set_defaults(func=do_push)
+
+    # copy command
+    copy_parser = subparsers.add_parser(
+        "copy",
+        help="Copy produced artifacts for a stage from one run to another",
+    )
+    _add_backend_args(copy_parser)
+    copy_parser.add_argument(
+        "--source-run-id",
+        type=str,
+        required=True,
+        help="Run ID to copy artifacts from (bucket resolved via GitHub API)",
+    )
+    copy_parser.add_argument(
+        "--stage",
+        type=str,
+        required=True,
+        help="Build stage name(s), comma-separated (e.g., 'foundation,compiler-runtime')",
+    )
+    _add_target_args(copy_parser)
+    copy_parser.add_argument(
+        "--concurrency",
+        type=int,
+        default=10,
+        help="Number of concurrent copy operations (default: 10)",
+    )
+    copy_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="List what would be copied without actually copying",
+    )
+    copy_parser.set_defaults(func=do_copy)
 
     # info command
     info_parser = subparsers.add_parser(

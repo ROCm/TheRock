@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Module and CLI script for finding the most recent CI artifacts from a branch.
 
 This script
@@ -8,15 +11,20 @@ It skips over commits that are missing artifacts for any reason.
 
 Usage:
     python find_latest_artifacts.py --artifact-group gfx94X-dcgpu
+    python find_latest_artifacts.py --artifact-group gfx110X-all gfx120X-all
 
 For script-to-script composition:
 
     from find_latest_artifacts import find_latest_artifacts
 
-    # Using the default branch, repository, etc.
-    info = find_latest_artifacts(artifact_group="gfx94X-dcgpu")
-    if info:
-        print(f"Found artifacts at {info.s3_uri}")
+    # Single group
+    results = find_latest_artifacts(artifact_groups=["gfx94X-dcgpu"])
+
+    # Multiple groups — finds the most recent commit with ALL groups
+    results = find_latest_artifacts(artifact_groups=["gfx110X-all", "gfx120X-all"])
+    if results:
+        for info in results:
+            print(f"Found artifacts at {info.s3_uri}")
 """
 
 import argparse
@@ -34,23 +42,23 @@ from github_actions.github_actions_utils import (
 
 
 def find_latest_artifacts(
-    artifact_group: str,
+    artifact_groups: list[str],
     github_repository_name: str = "ROCm/TheRock",
     workflow_file_name: str = "ci.yml",
     platform: str = platform_module.system().lower(),
     branch: str = "main",
     max_commits: int = 50,
     verbose: bool = False,
-) -> ArtifactRunInfo | None:
-    """Find the most recent commit on a branch with artifacts.
+) -> list[ArtifactRunInfo] | None:
+    """Find the most recent commit on a branch with artifacts for all groups.
 
     Searches through commits on the branch and checks if artifacts actually
-    exist in S3 for the requested GPU family. This handles cases where:
-    - A workflow is still in progress but artifacts for this family are uploaded
-    - A workflow failed for other families but this family succeeded
+    exist in S3 for ALL requested GPU families. This handles cases where:
+    - A workflow is still in progress but artifacts for some families are uploaded
+    - A workflow failed for some families but others succeeded
 
     Args:
-        artifact_group: Artifact group to find (e.g., "gfx94X-dcgpu", "gfx950-dcgpu-asan")
+        artifact_groups: Artifact groups to find (e.g., ["gfx94X-dcgpu", "gfx120X-all"])
         github_repository_name: GitHub repository in "owner/repo" format
         workflow_file_name: Workflow filename, or None to infer from repo
         branch: Branch name to search (default: "main")
@@ -59,8 +67,8 @@ def find_latest_artifacts(
         verbose: If True, print progress information
 
     Returns:
-        ArtifactRunInfo for the most recent commit with artifacts, or None
-        if no matching commit found within max_commits.
+        List of ArtifactRunInfo (one per group) for the most recent commit
+        where ALL groups have artifacts, or None if no such commit found.
 
     Raises:
         GitHubAPIError: If the GitHub API request fails (rate limit, network
@@ -74,7 +82,8 @@ def find_latest_artifacts(
 
     if verbose:
         print(
-            f"Searching {len(commits)} commits on {github_repository_name}/{branch}...",
+            f"Searching {len(commits)} commits on {github_repository_name}/{branch} "
+            f"for {len(artifact_groups)} group(s): {', '.join(artifact_groups)}...",
             file=sys.stderr,
         )
 
@@ -85,26 +94,38 @@ def find_latest_artifacts(
                 file=sys.stderr,
             )
 
-        info = find_artifacts_for_commit(
+        results = find_artifacts_for_commit(
             commit=commit,
+            artifact_groups=artifact_groups,
             github_repository_name=github_repository_name,
             workflow_file_name=workflow_file_name,
-            artifact_group=artifact_group,
             platform=platform,
         )
 
-        if info is None:
+        if not results:
             if verbose:
-                print("    No workflow run found", file=sys.stderr)
+                print("    No artifacts found", file=sys.stderr)
+            continue
+
+        if len(results) < len(artifact_groups):
+            found_groups = [r.artifact_group for r in results]
+            if verbose:
+                print(
+                    f"    Partial: found {', '.join(found_groups)} "
+                    f"(need all {len(artifact_groups)})",
+                    file=sys.stderr,
+                )
             continue
 
         if verbose:
+            run_ids = sorted(set(r.workflow_run_id for r in results))
             print(
-                f"    Found artifacts: run {info.workflow_run_id}",
+                f"    Found all {len(artifact_groups)} group(s): "
+                f"run(s) {', '.join(run_ids)}",
                 file=sys.stderr,
             )
 
-        return info
+        return results
 
     return None
 
@@ -137,8 +158,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--artifact-group",
         type=str,
+        nargs="+",
         required=True,
-        help="Artifact group (e.g., gfx94X-dcgpu, gfx950-dcgpu-asan)",
+        help="Artifact group(s) (e.g., gfx94X-dcgpu gfx120X-all)",
     )
     parser.add_argument(
         "--branch",
@@ -162,8 +184,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        info = find_latest_artifacts(
-            artifact_group=args.artifact_group,
+        results = find_latest_artifacts(
+            artifact_groups=args.artifact_group,
             github_repository_name=args.repo,
             workflow_file_name=args.workflow,
             platform=args.platform,
@@ -175,14 +197,16 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Error: {e}", file=sys.stderr)
         return 2
 
-    if info is None:
+    if results is None:
         print(
             f"No artifacts found in last {args.max_commits} commits on {args.repo}/{args.branch}",
             file=sys.stderr,
         )
         return 1
 
-    info.print()
+    for info in results:
+        info.print()
+        print()
     return 0
 
 

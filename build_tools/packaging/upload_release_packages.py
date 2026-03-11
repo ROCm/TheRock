@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Upload promoted packages to S3 release bucket.
 
 This script uploads promoted packages to S3 release buckets. It uploads wheel

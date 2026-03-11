@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Extended Test Client for system detection and result reporting.
 
 Unified interface for collecting system information (OS, hardware, ROCm) and

@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 therock_subproject_fetch(therock-spdlog-sources
   CMAKE_PROJECT
   # Originally mirrored from: https://github.com/gabime/spdlog/archive/refs/tags/v1.15.3.tar.gz
@@ -24,14 +27,5 @@ therock_cmake_subproject_declare(therock-spdlog
 )
 therock_cmake_subproject_provide_package(therock-spdlog spdlog lib/cmake)
 therock_cmake_subproject_activate(therock-spdlog)
-
-therock_provide_artifact(spdlog
-  TARGET_NEUTRAL
-  DESCRIPTOR artifact-spdlog.toml
-  COMPONENTS
-    dev
-  SUBPROJECT_DEPS
-    therock-spdlog
-)
 
 add_dependencies(therock-third-party therock-spdlog)

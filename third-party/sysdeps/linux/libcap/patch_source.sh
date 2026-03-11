@@ -1,4 +1,7 @@
 #!/bin/bash
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Symbol versioning for libcap 2.69 (similar to elfutils)
 set -e
 

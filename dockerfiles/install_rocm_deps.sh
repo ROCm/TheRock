@@ -1,4 +1,7 @@
 #!/bin/bash
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # install_rocm_deps.sh
 #
 # Installs runtime dependencies for ROCm on various Linux distributions.
