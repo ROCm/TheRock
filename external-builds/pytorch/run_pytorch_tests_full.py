@@ -6,6 +6,33 @@ Mirrors how PyTorch CI's test.sh invokes test_python_shard():
     python test/run_test.py \\
         --exclude-jit-executor --exclude-distributed-tests \\
         --exclude-quantization-tests --shard N M --verbose
+
+Usage examples:
+
+    # Run all tests (no sharding):
+    python run_pytorch_tests_full.py
+
+    # Run shard 2 of 4 with the "default" config:
+    python run_pytorch_tests_full.py --shard 2 --num-shards 4
+
+    # Run only specific test files:
+    python run_pytorch_tests_full.py --include test_nn test_torch
+
+    # Run with the "distributed" config on a multi-GPU runner:
+    python run_pytorch_tests_full.py --test-config distributed
+
+    # Pass extra pytest arguments after "--":
+    python run_pytorch_tests_full.py -- --continue-on-collection-errors
+
+    # Dry run to list tests without executing them:
+    python run_pytorch_tests_full.py --dry-run
+
+    # Disable pytest caching (useful with read-only pytorch directory):
+    python run_pytorch_tests_full.py --no-cache
+
+Environment variables (all overridable via CLI flags or workflow YAML):
+    AMDGPU_FAMILY, TEST_CONFIG, SHARD_NUMBER, NUM_TEST_SHARDS,
+    TESTS_TO_INCLUDE, PYTORCH_VERSION
 """
 
 import argparse
@@ -75,6 +102,8 @@ def setup_env(pytorch_dir: Path, test_config: str, amdgpu_family: str = "") -> N
     if test_config != "distributed":
         os.environ["PYTORCH_TEST_RUN_EVERYTHING_IN_SERIAL"] = "1"
 
+    # Add PyTorch test directory to PYTHONPATH so that run_test.py and pytest
+    # can locate test helpers and internal modules.
     test_dir = str(pytorch_dir / "test")
     old_pythonpath = os.getenv("PYTHONPATH", "")
     if old_pythonpath:
@@ -84,11 +113,15 @@ def setup_env(pytorch_dir: Path, test_config: str, amdgpu_family: str = "") -> N
 
 
 def print_env() -> None:
-    print("=== TheRock PyTorch Test Environment ===")
+    title = " TheRock PyTorch Test Environment "
+    bar = f"{'=' * len(title)}"
+    print(bar)
+    print(title)
+    print(bar)
     for var in THEROCK_ENV_VARS:
         val = os.environ.get(var, "<not set>")
         print(f"  {var}={val}")
-    print("=========================================")
+    print(bar)
     sys.stdout.flush()
 
 
@@ -128,8 +161,7 @@ def cmd_arguments(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
         "--test-config",
         type=str,
         default=os.getenv("TEST_CONFIG", "default"),
-        help='PyTorch test configuration: "default", "distributed", or "inductor". '
-        "Controls which test suites run_test.py selects. Also reads TEST_CONFIG env var.",
+        help='TEST_CONFIG value for run_test.py sharding/config logic (default: "default").',
     )
     parser.add_argument(
         "--shard",
@@ -164,22 +196,26 @@ def cmd_arguments(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
         "Passed to run_test.py --exclude.",
     )
     parser.add_argument(
-        "--no-exclude-jit-executor",
-        action="store_true",
-        default=False,
-        help="Do NOT pass --exclude-jit-executor (excluded by default).",
+        "--exclude-jit-executor",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Pass --exclude-jit-executor to run_test.py (default: enabled). "
+        "Use --no-exclude-jit-executor to include JIT executor tests.",
     )
     parser.add_argument(
-        "--no-exclude-distributed",
-        action="store_true",
-        default=False,
-        help="Do NOT pass --exclude-distributed-tests (excluded by default).",
+        "--exclude-distributed",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Pass --exclude-distributed-tests to run_test.py (default: enabled). "
+        "Use --no-exclude-distributed to include distributed tests. "
+        "Automatically disabled when --test-config=distributed.",
     )
     parser.add_argument(
-        "--no-exclude-quantization",
-        action="store_true",
-        default=False,
-        help="Do NOT pass --exclude-quantization-tests (excluded by default).",
+        "--exclude-quantization",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Pass --exclude-quantization-tests to run_test.py (default: enabled). "
+        "Use --no-exclude-quantization to include quantization tests.",
     )
     parser.add_argument(
         "--debug",
@@ -238,11 +274,11 @@ def build_run_test_cmd(
     run_test_path = str(args.pytorch_dir / "test" / "run_test.py")
     cmd = [sys.executable, run_test_path]
 
-    if not args.no_exclude_jit_executor:
+    if args.exclude_jit_executor:
         cmd.append("--exclude-jit-executor")
-    if not args.no_exclude_distributed and args.test_config != "distributed":
+    if args.exclude_distributed and args.test_config != "distributed":
         cmd.append("--exclude-distributed-tests")
-    if not args.no_exclude_quantization:
+    if args.exclude_quantization:
         cmd.append("--exclude-quantization-tests")
 
     cmd.append("--keep-going")

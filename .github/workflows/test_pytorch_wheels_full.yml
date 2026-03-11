@@ -135,10 +135,20 @@ jobs:
             --index-url=${{ inputs.package_index_url }} \
             --index-subdir=${{ inputs.amdgpu_family }}
 
-      - name: Set git options
+      # safe.directory must be set before Runner Health Status
+      - name: Adjust git config
         run: |
+          git config --global --add safe.directory $PWD
+          git config fetch.parallel 10
           git config --global core.longpaths true
 
+      - name: Runner health status
+        run: |
+          ./build_tools/health_status.py
+
+      # Here we checkout the same version of PyTorch that wheels were built from
+      # so we have the right set of test source files. We _probably_ don't need
+      # to run HIPIFY or apply any patches, so we skip those steps to save time.
       - name: Checkout PyTorch Source Repos from nightly branch
         if: ${{ (inputs.pytorch_git_ref == 'nightly') }}
         run: |
@@ -173,25 +183,10 @@ jobs:
         run: |
           python -m pip install -r external-builds/pytorch/requirements-test.txt
           python -m pip install -r external-builds/pytorch/pytorch/.ci/docker/requirements-ci.txt
-          pip freeze
 
       - name: Run rocm-sdk sanity tests
         run: |
           rocm-sdk test
-
-      - name: Print environment variables
-        run: |
-          echo "=== Environment Variables ==="
-          env | sort
-          echo ""
-          echo "=== Python packages ==="
-          pip list
-          echo ""
-          echo "=== GPU Information ==="
-          rocm-smi || true
-          echo ""
-          echo "=== ROCm Version ==="
-          cat /opt/rocm/.info/version 2>/dev/null || echo "ROCm version file not found"
 
       - name: Run PyTorch smoketests
         run: |
