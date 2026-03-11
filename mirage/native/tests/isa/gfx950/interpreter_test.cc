@@ -1177,6 +1177,19 @@ int main() {
     }
   }
 
+  const std::array<std::string_view, 3> kDsLaneRoutingOpcodes = {
+      "DS_SWIZZLE_B32",
+      "DS_PERMUTE_B32",
+      "DS_BPERMUTE_B32",
+  };
+  for (std::string_view opcode : kDsLaneRoutingOpcodes) {
+    if (!Expect(interpreter.Supports(opcode),
+                "expected ds lane-routing opcode support")) {
+      std::cerr << opcode << '\n';
+      return 1;
+    }
+  }
+
   const std::array<std::string_view, 3> kDsDualDataOpcodes = {
       "DS_MSKOR_B32",
       "DS_CMPST_B32",
@@ -7062,6 +7075,166 @@ int main() {
                                          &error_message),
               error_message.c_str()) ||
       !validate_ds_packed_add_state(compiled_ds_packed_add_state, "compiled")) {
+    return 1;
+  }
+  }
+
+  {
+  const std::vector<DecodedInstruction> ds_swizzle_program = {
+      DecodedInstruction::ThreeOperand("DS_SWIZZLE_B32",
+                                       InstructionOperand::Vgpr(1),
+                                       InstructionOperand::Vgpr(0),
+                                       InstructionOperand::Imm32(0x041fu)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  auto make_ds_swizzle_state = []() {
+    WaveExecutionState state;
+    state.exec_mask = (1ULL << 0) | (1ULL << 1) | (1ULL << 3) |
+                      (1ULL << 32) | (1ULL << 33);
+    state.vgprs[0][0] = 11u;
+    state.vgprs[0][1] = 22u;
+    state.vgprs[0][2] = 33u;
+    state.vgprs[0][3] = 44u;
+    state.vgprs[0][32] = 320u;
+    state.vgprs[0][33] = 330u;
+    state.vgprs[1][2] = 0xdeadbeefu;
+    return state;
+  };
+  auto validate_ds_swizzle_state = [&](const WaveExecutionState& state,
+                                       const char* mode) {
+    if (!Expect(state.halted, "expected ds swizzle program to halt") ||
+        !Expect(state.vgprs[1][0] == 22u,
+                "expected ds swizzle lane 0 result") ||
+        !Expect(state.vgprs[1][1] == 11u,
+                "expected ds swizzle lane 1 result") ||
+        !Expect(state.vgprs[1][2] == 0xdeadbeefu,
+                "expected ds swizzle inactive lane preservation") ||
+        !Expect(state.vgprs[1][3] == 0u,
+                "expected ds swizzle inactive-source zero result") ||
+        !Expect(state.vgprs[1][32] == 330u,
+                "expected ds swizzle lane 32 result") ||
+        !Expect(state.vgprs[1][33] == 320u,
+                "expected ds swizzle lane 33 result")) {
+      std::cerr << mode << '\n';
+      return false;
+    }
+    return true;
+  };
+
+  WaveExecutionState decoded_ds_swizzle_state = make_ds_swizzle_state();
+  if (!Expect(interpreter.ExecuteProgram(ds_swizzle_program,
+                                         &decoded_ds_swizzle_state,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_ds_swizzle_state(decoded_ds_swizzle_state, "decoded")) {
+    return 1;
+  }
+
+  std::vector<CompiledInstruction> compiled_ds_swizzle_program;
+  if (!Expect(interpreter.CompileProgram(ds_swizzle_program,
+                                         &compiled_ds_swizzle_program,
+                                         &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+  WaveExecutionState compiled_ds_swizzle_state = make_ds_swizzle_state();
+  if (!Expect(interpreter.ExecuteProgram(compiled_ds_swizzle_program,
+                                         &compiled_ds_swizzle_state,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_ds_swizzle_state(compiled_ds_swizzle_state, "compiled")) {
+    return 1;
+  }
+  }
+
+  {
+  const std::vector<DecodedInstruction> ds_permute_program = {
+      DecodedInstruction::FourOperand("DS_BPERMUTE_B32",
+                                      InstructionOperand::Vgpr(2),
+                                      InstructionOperand::Vgpr(0),
+                                      InstructionOperand::Vgpr(1),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FourOperand("DS_PERMUTE_B32",
+                                      InstructionOperand::Vgpr(6),
+                                      InstructionOperand::Vgpr(4),
+                                      InstructionOperand::Vgpr(5),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  auto make_ds_permute_state = []() {
+    WaveExecutionState state;
+    state.exec_mask = 0x0fULL;
+    state.vgprs[0][0] = 8u;
+    state.vgprs[0][1] = 0u;
+    state.vgprs[0][2] = 12u;
+    state.vgprs[0][3] = 4u;
+    state.vgprs[1][0] = 101u;
+    state.vgprs[1][1] = 202u;
+    state.vgprs[1][2] = 303u;
+    state.vgprs[1][3] = 404u;
+    state.vgprs[4][0] = 4u;
+    state.vgprs[4][1] = 0u;
+    state.vgprs[4][2] = 12u;
+    state.vgprs[4][3] = 0u;
+    state.vgprs[5][0] = 1001u;
+    state.vgprs[5][1] = 1002u;
+    state.vgprs[5][2] = 1003u;
+    state.vgprs[5][3] = 1004u;
+    state.vgprs[2][4] = 0xdeadbeefu;
+    state.vgprs[6][4] = 0xcafebabeu;
+    return state;
+  };
+  auto validate_ds_permute_state = [&](const WaveExecutionState& state,
+                                       const char* mode) {
+    if (!Expect(state.halted, "expected ds permute program to halt") ||
+        !Expect(state.vgprs[2][0] == 303u,
+                "expected ds_bpermute lane 0 result") ||
+        !Expect(state.vgprs[2][1] == 101u,
+                "expected ds_bpermute lane 1 result") ||
+        !Expect(state.vgprs[2][2] == 404u,
+                "expected ds_bpermute lane 2 result") ||
+        !Expect(state.vgprs[2][3] == 202u,
+                "expected ds_bpermute lane 3 result") ||
+        !Expect(state.vgprs[2][4] == 0xdeadbeefu,
+                "expected ds_bpermute inactive lane preservation") ||
+        !Expect(state.vgprs[6][0] == 1004u,
+                "expected ds_permute lane 0 result") ||
+        !Expect(state.vgprs[6][1] == 1001u,
+                "expected ds_permute lane 1 result") ||
+        !Expect(state.vgprs[6][2] == 0u,
+                "expected ds_permute lane 2 zero result") ||
+        !Expect(state.vgprs[6][3] == 1003u,
+                "expected ds_permute lane 3 result") ||
+        !Expect(state.vgprs[6][4] == 0xcafebabeu,
+                "expected ds_permute inactive lane preservation")) {
+      std::cerr << mode << '\n';
+      return false;
+    }
+    return true;
+  };
+
+  WaveExecutionState decoded_ds_permute_state = make_ds_permute_state();
+  if (!Expect(interpreter.ExecuteProgram(ds_permute_program,
+                                         &decoded_ds_permute_state,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_ds_permute_state(decoded_ds_permute_state, "decoded")) {
+    return 1;
+  }
+
+  std::vector<CompiledInstruction> compiled_ds_permute_program;
+  if (!Expect(interpreter.CompileProgram(ds_permute_program,
+                                         &compiled_ds_permute_program,
+                                         &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+  WaveExecutionState compiled_ds_permute_state = make_ds_permute_state();
+  if (!Expect(interpreter.ExecuteProgram(compiled_ds_permute_program,
+                                         &compiled_ds_permute_state,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_ds_permute_state(compiled_ds_permute_state, "compiled")) {
     return 1;
   }
   }

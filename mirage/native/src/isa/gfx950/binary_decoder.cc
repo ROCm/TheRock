@@ -223,6 +223,9 @@ bool IsSupportedGlobalVectorMemoryOpcode(std::string_view opcode_name) {
 bool IsSupportedDsOpcode(std::string_view opcode_name) {
   return opcode_name == "DS_NOP" ||
          opcode_name == "DS_WRITE_B32" || opcode_name == "DS_READ_B32" ||
+         opcode_name == "DS_SWIZZLE_B32" ||
+         opcode_name == "DS_PERMUTE_B32" ||
+         opcode_name == "DS_BPERMUTE_B32" ||
          opcode_name == "DS_ADD_U32" || opcode_name == "DS_SUB_U32" ||
          opcode_name == "DS_RSUB_U32" || opcode_name == "DS_INC_U32" ||
          opcode_name == "DS_DEC_U32" || opcode_name == "DS_MIN_I32" ||
@@ -351,6 +354,19 @@ bool IsDsNarrowReadOpcode(std::string_view opcode_name) {
          opcode_name == "DS_READ_I8_D16_HI" ||
          opcode_name == "DS_READ_U16_D16" ||
          opcode_name == "DS_READ_U16_D16_HI";
+}
+
+bool IsDsSwizzleOpcode(std::string_view opcode_name) {
+  return opcode_name == "DS_SWIZZLE_B32";
+}
+
+bool IsDsPermuteOpcode(std::string_view opcode_name) {
+  return opcode_name == "DS_PERMUTE_B32" ||
+         opcode_name == "DS_BPERMUTE_B32";
+}
+
+bool IsDsLaneRoutingOpcode(std::string_view opcode_name) {
+  return IsDsSwizzleOpcode(opcode_name) || IsDsPermuteOpcode(opcode_name);
 }
 
 bool IsDsDirectReadOpcode(std::string_view opcode_name) {
@@ -750,12 +766,16 @@ bool Gfx950BinaryDecoder::DecodeDs(std::span<const std::uint32_t> words,
     return false;
   }
 
-  const InstructionOperand offset0 = InstructionOperand::Imm32(
-      static_cast<std::uint32_t>(ExtractBits(instruction_word, 0, 8)));
-  const InstructionOperand offset1 = InstructionOperand::Imm32(
-      static_cast<std::uint32_t>(ExtractBits(instruction_word, 8, 8)));
+  const std::uint32_t raw_offset0 =
+      static_cast<std::uint32_t>(ExtractBits(instruction_word, 0, 8));
+  const std::uint32_t raw_offset1 =
+      static_cast<std::uint32_t>(ExtractBits(instruction_word, 8, 8));
+  const InstructionOperand offset0 = InstructionOperand::Imm32(raw_offset0);
+  const InstructionOperand offset1 = InstructionOperand::Imm32(raw_offset1);
+  const InstructionOperand combined_offset = InstructionOperand::Imm32(
+      raw_offset0 | (raw_offset1 << 8));
   if (!IsDsPairWriteOpcode(opcode_name) && !IsDsPairReadOpcode(opcode_name) &&
-      offset1.imm32 != 0) {
+      !IsDsLaneRoutingOpcode(opcode_name) && offset1.imm32 != 0) {
     if (error_message != nullptr) {
       *error_message = "offset1 ds forms are not implemented";
     }
@@ -799,6 +819,30 @@ bool Gfx950BinaryDecoder::DecodeDs(std::span<const std::uint32_t> words,
     }
     *instruction = DecodedInstruction::FourOperand(instruction_name, dst, addr,
                                                    offset0, offset1);
+  } else if (IsDsSwizzleOpcode(opcode_name)) {
+    InstructionOperand dst;
+    if (!DecodeVectorDestination(
+            static_cast<std::uint32_t>(ExtractBits(instruction_word, 56, 8)),
+            &dst, error_message)) {
+      return false;
+    }
+    *instruction = DecodedInstruction::ThreeOperand(instruction_name, dst, addr,
+                                                    combined_offset);
+  } else if (IsDsPermuteOpcode(opcode_name)) {
+    InstructionOperand dst;
+    if (!DecodeVectorDestination(
+            static_cast<std::uint32_t>(ExtractBits(instruction_word, 56, 8)),
+            &dst, error_message)) {
+      return false;
+    }
+    InstructionOperand data0;
+    if (!DecodeVectorRegisterSource(
+            static_cast<std::uint32_t>(ExtractBits(instruction_word, 40, 8)),
+            &data0, error_message)) {
+      return false;
+    }
+    *instruction = DecodedInstruction::FourOperand(instruction_name, dst, addr,
+                                                   data0, combined_offset);
   } else if (IsDsDualDataReturnOpcode(opcode_name)) {
     InstructionOperand dst;
     if (!DecodeVectorDestination(

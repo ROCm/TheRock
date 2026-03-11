@@ -1,15 +1,15 @@
 # GFX950 Coverage Report
 
 - Catalog instructions: 1242
-- Semantic support: 624 (50.2%)
-- Raw decode support: 647 (52.1% of total, 63.8% of measured)
+- Semantic support: 627 (50.5%)
+- Raw decode support: 650 (52.3% of total, 64.1% of measured)
 - Raw decode measurable instructions: 1014
 
 ## Gaps
 
 - Semantic-only coverage without measured decode: 36
 - Decode-only without semantic support: 59
-- Missing both semantic and decode support: 559
+- Missing both semantic and decode support: 556
 
 ## Unmeasured Encoding Families
 
@@ -93,9 +93,6 @@
 
 - `DS_WRXCHG2_RTN_B32`
 - `DS_WRXCHG2ST64_RTN_B32`
-- `DS_SWIZZLE_B32`
-- `DS_PERMUTE_B32`
-- `DS_BPERMUTE_B32`
 - `DS_WRXCHG2_RTN_B64`
 - `DS_WRXCHG2ST64_RTN_B64`
 - `DS_CONSUME`
@@ -116,3 +113,6 @@
 - `FLAT_ATOMIC_CMPSWAP`
 - `FLAT_ATOMIC_ADD`
 - `FLAT_ATOMIC_SUB`
+- `FLAT_ATOMIC_SMIN`
+- `FLAT_ATOMIC_UMIN`
+- `FLAT_ATOMIC_SMAX`

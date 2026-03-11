@@ -1541,6 +1541,9 @@ bool IsVectorMemoryOpcode(std::string_view opcode) {
 bool IsDsOpcode(std::string_view opcode) {
   return opcode == "DS_NOP" ||
          opcode == "DS_WRITE_B32" || opcode == "DS_READ_B32" ||
+         opcode == "DS_SWIZZLE_B32" ||
+         opcode == "DS_PERMUTE_B32" ||
+         opcode == "DS_BPERMUTE_B32" ||
          opcode == "DS_ADD_U32" || opcode == "DS_SUB_U32" ||
          opcode == "DS_RSUB_U32" || opcode == "DS_INC_U32" ||
          opcode == "DS_DEC_U32" || opcode == "DS_MIN_I32" ||
@@ -1629,6 +1632,19 @@ bool IsDsNarrowReadOpcode(std::string_view opcode) {
 bool IsDsD16WriteOpcode(std::string_view opcode) {
   return opcode == "DS_WRITE_B8_D16_HI" ||
          opcode == "DS_WRITE_B16_D16_HI";
+}
+
+bool IsDsSwizzleOpcode(std::string_view opcode) {
+  return opcode == "DS_SWIZZLE_B32";
+}
+
+bool IsDsPermuteOpcode(std::string_view opcode) {
+  return opcode == "DS_PERMUTE_B32" ||
+         opcode == "DS_BPERMUTE_B32";
+}
+
+bool IsDsLaneRoutingOpcode(std::string_view opcode) {
+  return IsDsSwizzleOpcode(opcode) || IsDsPermuteOpcode(opcode);
 }
 
 bool IsDsAddTidWriteOpcode(std::string_view opcode) {
@@ -1995,6 +2011,19 @@ bool IsDsNarrowReadOpcode(CompiledOpcode opcode) {
 bool IsDsD16WriteOpcode(CompiledOpcode opcode) {
   return opcode == CompiledOpcode::kDsWriteB8D16Hi ||
          opcode == CompiledOpcode::kDsWriteB16D16Hi;
+}
+
+bool IsDsSwizzleOpcode(CompiledOpcode opcode) {
+  return opcode == CompiledOpcode::kDsSwizzleB32;
+}
+
+bool IsDsPermuteOpcode(CompiledOpcode opcode) {
+  return opcode == CompiledOpcode::kDsPermuteB32 ||
+         opcode == CompiledOpcode::kDsBpermuteB32;
+}
+
+bool IsDsLaneRoutingOpcode(CompiledOpcode opcode) {
+  return IsDsSwizzleOpcode(opcode) || IsDsPermuteOpcode(opcode);
 }
 
 bool IsDsAddTidWriteOpcode(CompiledOpcode opcode) {
@@ -2416,6 +2445,88 @@ bool ComputeDsAddTidAddress(std::uint32_t offset,
   }
   *lds_address = m0_offset + offset + lane_offset;
   return true;
+}
+
+std::size_t ComputeDsPermuteLane(std::uint32_t address, std::uint16_t offset) {
+  return static_cast<std::size_t>(((address + offset) >> 2) & 63u);
+}
+
+std::size_t ComputeDsSwizzleSourceLane(std::size_t lane_index,
+                                       std::uint16_t pattern) {
+  if ((pattern & 0x8000u) != 0u) {
+    const std::size_t quad_base = lane_index & ~std::size_t{3};
+    const std::uint32_t selector_shift =
+        static_cast<std::uint32_t>(lane_index & 0x3u) * 2u;
+    const std::size_t selector =
+        static_cast<std::size_t>((pattern >> selector_shift) & 0x3u);
+    return quad_base + selector;
+  }
+
+  const std::size_t half_base = lane_index & ~std::size_t{31};
+  const std::uint32_t lane_in_half = static_cast<std::uint32_t>(lane_index & 31u);
+  const std::uint32_t and_mask = pattern & 0x1fu;
+  const std::uint32_t or_mask = (pattern >> 5) & 0x1fu;
+  const std::uint32_t xor_mask = (pattern >> 10) & 0x1fu;
+  return half_base + static_cast<std::size_t>(((lane_in_half & and_mask) |
+                                               or_mask) ^
+                                              xor_mask);
+}
+
+void ComputeDsSwizzleResults(
+    std::uint64_t exec_mask,
+    std::uint16_t pattern,
+    const std::array<std::uint32_t, WaveExecutionState::kLaneCount>& source_values,
+    std::array<std::uint32_t, WaveExecutionState::kLaneCount>* result_values) {
+  result_values->fill(0u);
+  for (std::size_t lane_index = 0; lane_index < WaveExecutionState::kLaneCount;
+       ++lane_index) {
+    if (((exec_mask >> lane_index) & 1ULL) == 0) {
+      continue;
+    }
+    const std::size_t source_lane =
+        ComputeDsSwizzleSourceLane(lane_index, pattern);
+    if (((exec_mask >> source_lane) & 1ULL) != 0) {
+      (*result_values)[lane_index] = source_values[source_lane];
+    }
+  }
+}
+
+void ComputeDsPermuteResults(
+    std::uint64_t exec_mask,
+    std::uint16_t offset,
+    const std::array<std::uint32_t, WaveExecutionState::kLaneCount>& address_values,
+    const std::array<std::uint32_t, WaveExecutionState::kLaneCount>& data_values,
+    std::array<std::uint32_t, WaveExecutionState::kLaneCount>* result_values) {
+  result_values->fill(0u);
+  for (std::size_t lane_index = 0; lane_index < WaveExecutionState::kLaneCount;
+       ++lane_index) {
+    if (((exec_mask >> lane_index) & 1ULL) == 0) {
+      continue;
+    }
+    const std::size_t destination_lane =
+        ComputeDsPermuteLane(address_values[lane_index], offset);
+    (*result_values)[destination_lane] = data_values[lane_index];
+  }
+}
+
+void ComputeDsBpermuteResults(
+    std::uint64_t exec_mask,
+    std::uint16_t offset,
+    const std::array<std::uint32_t, WaveExecutionState::kLaneCount>& address_values,
+    const std::array<std::uint32_t, WaveExecutionState::kLaneCount>& data_values,
+    std::array<std::uint32_t, WaveExecutionState::kLaneCount>* result_values) {
+  result_values->fill(0u);
+  for (std::size_t lane_index = 0; lane_index < WaveExecutionState::kLaneCount;
+       ++lane_index) {
+    if (((exec_mask >> lane_index) & 1ULL) == 0) {
+      continue;
+    }
+    const std::size_t source_lane =
+        ComputeDsPermuteLane(address_values[lane_index], offset);
+    if (((exec_mask >> source_lane) & 1ULL) != 0) {
+      (*result_values)[lane_index] = data_values[source_lane];
+    }
+  }
 }
 
 bool IsLdsAccessInBounds(std::span<std::byte> lds_storage,
@@ -6228,6 +6339,18 @@ bool TryCompileOpcode(std::string_view opcode,
     compiled_instruction->opcode = CompiledOpcode::kDsReadB32;
     return true;
   }
+  if (opcode == "DS_SWIZZLE_B32") {
+    compiled_instruction->opcode = CompiledOpcode::kDsSwizzleB32;
+    return true;
+  }
+  if (opcode == "DS_PERMUTE_B32") {
+    compiled_instruction->opcode = CompiledOpcode::kDsPermuteB32;
+    return true;
+  }
+  if (opcode == "DS_BPERMUTE_B32") {
+    compiled_instruction->opcode = CompiledOpcode::kDsBpermuteB32;
+    return true;
+  }
   if (opcode == "DS_ADD_U32") {
     compiled_instruction->opcode = CompiledOpcode::kDsAddU32;
     return true;
@@ -7812,6 +7935,9 @@ bool Gfx950Interpreter::ExecuteInstruction(const CompiledInstruction& instructio
       return ValidateOperandCount(instruction, 0, error_message);
     case CompiledOpcode::kDsWriteB32:
     case CompiledOpcode::kDsReadB32:
+    case CompiledOpcode::kDsSwizzleB32:
+    case CompiledOpcode::kDsPermuteB32:
+    case CompiledOpcode::kDsBpermuteB32:
     case CompiledOpcode::kDsAddU32:
     case CompiledOpcode::kDsSubU32:
     case CompiledOpcode::kDsRsubU32:
@@ -11830,6 +11956,9 @@ bool Gfx950Interpreter::ExecuteDsMemory(const DecodedInstruction& instruction,
   const bool is_narrow_read = IsDsNarrowReadOpcode(instruction.opcode);
   const DsD16AccessKind d16_access_kind = GetDsD16AccessKind(instruction.opcode);
   const bool is_d16_write = IsDsD16WriteOpcode(instruction.opcode);
+  const bool is_swizzle = IsDsSwizzleOpcode(instruction.opcode);
+  const bool is_permute = IsDsPermuteOpcode(instruction.opcode);
+  const bool is_lane_routing = is_swizzle || is_permute;
   const bool is_addtid_write = IsDsAddTidWriteOpcode(instruction.opcode);
   const bool is_addtid_read = IsDsAddTidReadOpcode(instruction.opcode);
   const bool is_dual_data = IsDsDualDataOpcode(instruction.opcode);
@@ -11842,6 +11971,8 @@ bool Gfx950Interpreter::ExecuteDsMemory(const DecodedInstruction& instruction,
   if (is_pair_write) {
     expected_operands = 5;
   } else if (is_pair_read) {
+    expected_operands = 4;
+  } else if (is_permute) {
     expected_operands = 4;
   } else if (is_dual_data_return) {
     expected_operands = 5;
@@ -11871,6 +12002,15 @@ bool Gfx950Interpreter::ExecuteDsMemory(const DecodedInstruction& instruction,
     address_operand = &instruction.operands[1];
     offset0_operand = &instruction.operands[2];
     offset1_operand = &instruction.operands[3];
+  } else if (is_swizzle) {
+    destination_operand = &instruction.operands[0];
+    address_operand = &instruction.operands[1];
+    offset0_operand = &instruction.operands[2];
+  } else if (is_permute) {
+    destination_operand = &instruction.operands[0];
+    address_operand = &instruction.operands[1];
+    data_operand = &instruction.operands[2];
+    offset0_operand = &instruction.operands[3];
   } else if (is_dual_data_return) {
     destination_operand = &instruction.operands[0];
     address_operand = &instruction.operands[1];
@@ -11963,6 +12103,61 @@ bool Gfx950Interpreter::ExecuteDsMemory(const DecodedInstruction& instruction,
     }
     return false;
   }
+
+  if (is_lane_routing) {
+    std::array<std::uint32_t, WaveExecutionState::kLaneCount> address_values{};
+    std::array<std::uint32_t, WaveExecutionState::kLaneCount> data_values{};
+    std::array<std::uint32_t, WaveExecutionState::kLaneCount> result_values{};
+    for (std::size_t lane_index = 0; lane_index < WaveExecutionState::kLaneCount;
+         ++lane_index) {
+      if (((state->exec_mask >> lane_index) & 1ULL) == 0) {
+        continue;
+      }
+      address_values[lane_index] =
+          ReadVectorOperand(*address_operand, *state, lane_index, error_message);
+      if (error_message != nullptr && !error_message->empty()) {
+        return false;
+      }
+      data_values[lane_index] =
+          is_swizzle
+              ? address_values[lane_index]
+              : ReadVectorOperand(*data_operand, *state, lane_index,
+                                  error_message);
+      if (error_message != nullptr && !error_message->empty()) {
+        return false;
+      }
+    }
+
+    const std::uint16_t swizzle_pattern =
+        static_cast<std::uint16_t>(offset0_operand->imm32);
+    if (is_swizzle) {
+      ComputeDsSwizzleResults(state->exec_mask, swizzle_pattern, data_values,
+                              &result_values);
+    } else if (instruction.opcode == "DS_PERMUTE_B32") {
+      ComputeDsPermuteResults(state->exec_mask, swizzle_pattern, address_values,
+                              data_values, &result_values);
+    } else {
+      ComputeDsBpermuteResults(state->exec_mask, swizzle_pattern, address_values,
+                               data_values, &result_values);
+    }
+
+    for (std::size_t lane_index = 0; lane_index < WaveExecutionState::kLaneCount;
+         ++lane_index) {
+      if (((state->exec_mask >> lane_index) & 1ULL) == 0) {
+        continue;
+      }
+      if (!WriteVectorOperand(*destination_operand, lane_index,
+                              result_values[lane_index], state,
+                              error_message)) {
+        return false;
+      }
+    }
+    if (error_message != nullptr) {
+      error_message->clear();
+    }
+    return true;
+  }
+
   std::span<std::byte> lds_storage(
       state->lds_bytes.data(), state->lds_bytes.size());
   if (workgroup != nullptr && !workgroup->shared_lds.empty()) {
@@ -12324,6 +12519,9 @@ bool Gfx950Interpreter::ExecuteDsMemory(const CompiledInstruction& instruction,
   const bool is_narrow_read = IsDsNarrowReadOpcode(instruction.opcode);
   const DsD16AccessKind d16_access_kind = GetDsD16AccessKind(instruction.opcode);
   const bool is_d16_write = IsDsD16WriteOpcode(instruction.opcode);
+  const bool is_swizzle = IsDsSwizzleOpcode(instruction.opcode);
+  const bool is_permute = IsDsPermuteOpcode(instruction.opcode);
+  const bool is_lane_routing = is_swizzle || is_permute;
   const bool is_addtid_write = IsDsAddTidWriteOpcode(instruction.opcode);
   const bool is_addtid_read = IsDsAddTidReadOpcode(instruction.opcode);
   const bool is_dual_data = IsDsDualDataOpcode(instruction.opcode);
@@ -12336,6 +12534,8 @@ bool Gfx950Interpreter::ExecuteDsMemory(const CompiledInstruction& instruction,
   if (is_pair_write) {
     expected_operands = 5;
   } else if (is_pair_read) {
+    expected_operands = 4;
+  } else if (is_permute) {
     expected_operands = 4;
   } else if (is_dual_data_return) {
     expected_operands = 5;
@@ -12365,6 +12565,15 @@ bool Gfx950Interpreter::ExecuteDsMemory(const CompiledInstruction& instruction,
     address_operand = &instruction.operands[1];
     offset0_operand = &instruction.operands[2];
     offset1_operand = &instruction.operands[3];
+  } else if (is_swizzle) {
+    destination_operand = &instruction.operands[0];
+    address_operand = &instruction.operands[1];
+    offset0_operand = &instruction.operands[2];
+  } else if (is_permute) {
+    destination_operand = &instruction.operands[0];
+    address_operand = &instruction.operands[1];
+    data_operand = &instruction.operands[2];
+    offset0_operand = &instruction.operands[3];
   } else if (is_dual_data_return) {
     destination_operand = &instruction.operands[0];
     address_operand = &instruction.operands[1];
@@ -12460,6 +12669,48 @@ bool Gfx950Interpreter::ExecuteDsMemory(const CompiledInstruction& instruction,
       second_data_operand != nullptr ? second_data_operand->index : 0;
   const std::uint16_t destination_reg =
       destination_operand != nullptr ? destination_operand->index : 0;
+
+  if (is_lane_routing) {
+    std::array<std::uint32_t, WaveExecutionState::kLaneCount> address_values{};
+    std::array<std::uint32_t, WaveExecutionState::kLaneCount> data_values{};
+    std::array<std::uint32_t, WaveExecutionState::kLaneCount> result_values{};
+    for (std::size_t lane_index = 0; lane_index < WaveExecutionState::kLaneCount;
+         ++lane_index) {
+      if (((state->exec_mask >> lane_index) & 1ULL) == 0) {
+        continue;
+      }
+      address_values[lane_index] = state->vgprs[address_reg][lane_index];
+      data_values[lane_index] =
+          is_swizzle ? address_values[lane_index]
+                     : state->vgprs[data_reg][lane_index];
+    }
+
+    const std::uint16_t swizzle_pattern =
+        static_cast<std::uint16_t>(offset0_operand->imm32);
+    if (is_swizzle) {
+      ComputeDsSwizzleResults(state->exec_mask, swizzle_pattern, data_values,
+                              &result_values);
+    } else if (instruction.opcode == CompiledOpcode::kDsPermuteB32) {
+      ComputeDsPermuteResults(state->exec_mask, swizzle_pattern, address_values,
+                              data_values, &result_values);
+    } else {
+      ComputeDsBpermuteResults(state->exec_mask, swizzle_pattern, address_values,
+                               data_values, &result_values);
+    }
+
+    for (std::size_t lane_index = 0; lane_index < WaveExecutionState::kLaneCount;
+         ++lane_index) {
+      if (((state->exec_mask >> lane_index) & 1ULL) == 0) {
+        continue;
+      }
+      state->vgprs[destination_reg][lane_index] = result_values[lane_index];
+    }
+    if (error_message != nullptr) {
+      error_message->clear();
+    }
+    return true;
+  }
+
   std::span<std::byte> lds_storage(
       state->lds_bytes.data(), state->lds_bytes.size());
   if (workgroup != nullptr && !workgroup->shared_lds.empty()) {

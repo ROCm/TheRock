@@ -5941,6 +5941,90 @@ int main() {
     }
   }
 
+  {
+    const auto ds_swizzle_opcode =
+        FindDefaultEncodingOpcode("DS_SWIZZLE_B32", "ENC_DS");
+    if (!Expect(ds_swizzle_opcode.has_value(),
+                "expected ds swizzle opcode lookup")) {
+      return 1;
+    }
+
+    const auto encoded = MakeDs(*ds_swizzle_opcode, 9, 1, 0, 0, 0xc1, 0x80);
+    const std::vector<std::uint32_t> encoded_program = {
+        encoded[0], encoded[1], MakeSopp(1),
+    };
+    decoded_program.clear();
+    if (!Expect(decoder.DecodeProgram(encoded_program, &decoded_program,
+                                      &error_message),
+                error_message.c_str()) ||
+        !Expect(decoded_program.size() == 2,
+                "expected ds swizzle decode program size") ||
+        !Expect(decoded_program[0].opcode == "DS_SWIZZLE_B32",
+                "expected ds swizzle opcode decode") ||
+        !Expect(decoded_program[0].operand_count == 3,
+                "expected ds swizzle operand count") ||
+        !Expect(decoded_program[0].operands[0].kind == OperandKind::kVgpr,
+                "expected ds swizzle destination kind") ||
+        !Expect(decoded_program[0].operands[0].index == 9,
+                "expected ds swizzle destination index") ||
+        !Expect(decoded_program[0].operands[1].kind == OperandKind::kVgpr,
+                "expected ds swizzle source kind") ||
+        !Expect(decoded_program[0].operands[1].index == 1,
+                "expected ds swizzle source index") ||
+        !Expect(decoded_program[0].operands[2].kind == OperandKind::kImm32,
+                "expected ds swizzle offset kind") ||
+        !Expect(decoded_program[0].operands[2].imm32 == 0x80c1u,
+                "expected ds swizzle combined offset value")) {
+      return 1;
+    }
+  }
+
+  const std::array<std::string_view, 2> kDsPermuteOpcodes = {
+      "DS_PERMUTE_B32",
+      "DS_BPERMUTE_B32",
+  };
+  for (std::string_view opcode_name : kDsPermuteOpcodes) {
+    const auto opcode = FindDefaultEncodingOpcode(opcode_name, "ENC_DS");
+    if (!Expect(opcode.has_value(), "expected ds permute opcode lookup")) {
+      std::cerr << opcode_name << '\n';
+      return 1;
+    }
+
+    const auto encoded = MakeDs(*opcode, 9, 1, 2, 0, 0x34, 0x12);
+    const std::vector<std::uint32_t> encoded_program = {
+        encoded[0], encoded[1], MakeSopp(1),
+    };
+    decoded_program.clear();
+    if (!Expect(decoder.DecodeProgram(encoded_program, &decoded_program,
+                                      &error_message),
+                error_message.c_str()) ||
+        !Expect(decoded_program.size() == 2,
+                "expected ds permute decode program size") ||
+        !Expect(decoded_program[0].opcode == opcode_name,
+                "expected ds permute opcode decode") ||
+        !Expect(decoded_program[0].operand_count == 4,
+                "expected ds permute operand count") ||
+        !Expect(decoded_program[0].operands[0].kind == OperandKind::kVgpr,
+                "expected ds permute destination kind") ||
+        !Expect(decoded_program[0].operands[0].index == 9,
+                "expected ds permute destination index") ||
+        !Expect(decoded_program[0].operands[1].kind == OperandKind::kVgpr,
+                "expected ds permute address kind") ||
+        !Expect(decoded_program[0].operands[1].index == 1,
+                "expected ds permute address index") ||
+        !Expect(decoded_program[0].operands[2].kind == OperandKind::kVgpr,
+                "expected ds permute data kind") ||
+        !Expect(decoded_program[0].operands[2].index == 2,
+                "expected ds permute data index") ||
+        !Expect(decoded_program[0].operands[3].kind == OperandKind::kImm32,
+                "expected ds permute offset kind") ||
+        !Expect(decoded_program[0].operands[3].imm32 == 0x1234u,
+                "expected ds permute combined offset value")) {
+      std::cerr << opcode_name << '\n';
+      return 1;
+    }
+  }
+
   const std::array<std::string_view, 2> kDsPairWriteOpcodes = {
       "DS_WRITE2_B32",
       "DS_WRITE2ST64_B32",

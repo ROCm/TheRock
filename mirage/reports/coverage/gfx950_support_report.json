@@ -843,36 +843,48 @@
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "DS_SWIZZLE_B32"
+      ],
       "instruction_name": "DS_SWIZZLE_B32",
       "measured_encodings": [
         "ENC_DS:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_DS:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "DS_PERMUTE_B32"
+      ],
       "instruction_name": "DS_PERMUTE_B32",
       "measured_encodings": [
         "ENC_DS:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_DS:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "DS_BPERMUTE_B32"
+      ],
       "instruction_name": "DS_BPERMUTE_B32",
       "measured_encodings": [
         "ENC_DS:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_DS:default"
+      ]
     },
     {
       "decode_measured": true,
@@ -16322,11 +16334,11 @@
   ],
   "summary": {
     "decode_measured": 1014,
-    "decode_supported": 647,
-    "decode_supported_percent_measured": 0.638067,
-    "decode_supported_percent_total": 0.520934,
-    "semantic_supported": 624,
-    "semantic_supported_percent_total": 0.502415
+    "decode_supported": 650,
+    "decode_supported_percent_measured": 0.641026,
+    "decode_supported_percent_total": 0.523349,
+    "semantic_supported": 627,
+    "semantic_supported_percent_total": 0.504831
   },
   "unmeasured_encoding_families": [
     "ENC_FLAT_SCRATCH",
