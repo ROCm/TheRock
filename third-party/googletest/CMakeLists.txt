@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 therock_subproject_fetch(therock-googletest-sources
   CMAKE_PROJECT
   # Originally mirrored from: https://github.com/google/googletest/releases/download/v1.16.0/googletest-1.16.0.tar.gz
@@ -6,6 +9,7 @@ therock_subproject_fetch(therock-googletest-sources
 )
 
 therock_cmake_subproject_declare(therock-googletest
+  USE_DIST_AMDGPU_TARGETS
   BACKGROUND_BUILD
   EXCLUDE_FROM_ALL
   NO_MERGE_COMPILE_COMMANDS

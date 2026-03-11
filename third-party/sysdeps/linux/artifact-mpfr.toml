@@ -1,0 +1,10 @@
+[options]
+unmatched_exclude = [
+  "lib/rocm_sysdeps/share/locale/**",
+  "lib/rocm_sysdeps/share/man/**",
+]
+
+# MPFR (depends on GMP from sysdeps-gmp artifact)
+[components.dev."third-party/sysdeps/linux/mpfr/build/stage"]
+[components.doc."third-party/sysdeps/linux/mpfr/build/stage"]
+[components.lib."third-party/sysdeps/linux/mpfr/build/stage"]

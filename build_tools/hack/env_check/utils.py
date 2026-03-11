@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 from __future__ import annotations
 from typing import Literal, Optional, Union, Tuple
 import subprocess
@@ -9,14 +12,17 @@ import platform
 if platform.system() == "Windows":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
 
+
 # Define Color string print.
 def cstring(
     msg: Union[str],
-    color: Union[
-        Optional[Literal["err", "warn", "hint", "pass"]],
-        Tuple[int, int, int],
-    ]
-    | None = None,
+    color: (
+        Union[
+            Optional[Literal["err", "warn", "hint", "pass"]],
+            Tuple[int, int, int],
+        ]
+        | None
+    ) = None,
 ) -> str:
     """
     ## Color String
@@ -142,7 +148,6 @@ class RepoInfo:
 
     @staticmethod
     def __logo__(monospace=False):
-
         """
         ![image](https://upload.wikimedia.org/wikipedia/commons/6/6a/AMD_Logo.png)
         # Advanced Micro Devices Inc.

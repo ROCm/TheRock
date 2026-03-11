@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Exports a canonical source archive from a pristine git worktree.
 
 Many downstream packagers operate off of source archives, and this utility exports
@@ -77,20 +80,16 @@ class ArchiveWriter(ABC):
             raise ValueError(f"Unsupported archive file extension for: {name}")
 
     @abstractmethod
-    def close(self):
-        ...
+    def close(self): ...
 
     @abstractmethod
-    def add_file(self, path: Path, arcname: str):
-        ...
+    def add_file(self, path: Path, arcname: str): ...
 
     @abstractmethod
-    def add_directory(self, path: Path, arcname: str):
-        ...
+    def add_directory(self, path: Path, arcname: str): ...
 
     @abstractmethod
-    def add_text(self, text: str, arcname: str):
-        ...
+    def add_text(self, text: str, arcname: str): ...
 
 
 class TarArchiveWriter(ArchiveWriter):

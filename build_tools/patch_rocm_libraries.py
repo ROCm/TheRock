@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Applies patches to a monorepo.
 This script is available for users, but it is primarily the mechanism
 the CI uses to apply patches to a monorepo.
@@ -36,7 +39,7 @@ def log(*args, **kwargs):
     sys.stdout.flush()
 
 
-def exec(args: list[str | Path], cwd: Path):
+def run_command(args: list[str | Path], cwd: Path):
     args = [str(arg) for arg in args]
     log(f"++ Exec [{cwd}]$ {shlex.join(args)}")
     sys.stdout.flush()
@@ -60,7 +63,7 @@ def run(args):
     # we manually set it to skip-worktree since recording the commit is
     # then meaningless. Here on each fetch, we reset the flag so that if
     # patches are aged out, the tree is restored to normal.
-    exec(
+    run_command(
         ["git", "update-index", "--skip-worktree"],
         cwd=args.repo,
     )
@@ -86,7 +89,7 @@ def run(args):
         patch_files.sort()
         log(f"Applying {len(patch_files)} patches to {project_to_patch}")
         apply_directory = str(project_path.relative_to(args.repo))
-        exec(
+        run_command(
             [
                 "git",
                 "-c",
@@ -105,7 +108,7 @@ def run(args):
     # TODO: This is take over from `fetch_sources` and likley only applies
     #   to submodules. Re-evaluate here if needed.
     # Since it is in a patched state, make it invisible to changes.
-    exec(
+    run_command(
         ["git", "update-index", "--skip-worktree"],
         cwd=args.repo,
     )

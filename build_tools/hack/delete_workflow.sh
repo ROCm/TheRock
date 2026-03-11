@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
 
 # GitHub doesn't currently support deleting old workflows unless you delete
 # all previous runs of it. This scripts will delete all the runs for a given

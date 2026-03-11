@@ -17,6 +17,7 @@ include = [
 include = [
   "bin/test_*",
   "bin/hipcub/CTestTestfile.cmake",
+  "bin/hipcub/generate_resource_spec*",
 ]
 
 # rocThrust
@@ -29,4 +30,5 @@ include = [
   "bin/*.hip",
   "bin/*.hip.exe", # Windows
   "bin/rocthrust/CTestTestfile.cmake",
+  "bin/rocthrust/generate_resource_spec*",
 ]

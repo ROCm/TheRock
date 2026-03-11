@@ -25,10 +25,12 @@ We generate three types of packages:
   a relative binary).
 - Devel package: The `rocm-sdk-devel` package is the catch-all for everything.
   For any file already populated in a runtime package, it will include it as
-  a relative symlink (also rewriting shared library soname links as needed).
-  Since symlinks and non-standard attributes cannot be included in a wheel file,
-  the platform contents are stored in a `_devel.tar` or `_devel.tar.xz` file.
-  The installed package is extended in response to requesting a path to it
+  a relative symlink in the tarball. During extraction, file symlinks are
+  converted to hardlinks to improve compatibility, while directory symlinks
+  remain as symlinks. Shared library soname links are also rewritten as needed.
+  Since symlinks/hardlinks and non-standard attributes cannot be included in a
+  wheel file, the platform contents are stored in a `_devel.tar` or `_devel.tar.xz`
+  file. The installed package is extended in response to requesting a path to it
   via the `rocm-sdk` tool.
 
 Runtime packages can either be target neutral or target specific. Target specific
@@ -44,7 +46,19 @@ built-in tests (via `rocm-sdk test`) verify these conditions.
 
 ## Building Packages
 
-### Target Family Selection
+ROCm Python packages are built using the
+[`build_tools/build_python_packages.py`](/build_tools/build_python_packages.py)
+script.
+
+### Build Package Versions
+
+By default, development packages have versions like `7.10.0.dev0` (possibly
+including a commit hash). You can also set an explicit fixed version with the
+`--version` argument to `build_python_packages.py`. See
+[`build_tools/compute_rocm_package_version.py`](/build_tools/compute_rocm_package_version.py).
+and the [versioning documentation](versioning.md) for more version formats.
+
+### Build Target Family Selection
 
 The target GPU family used when building packages is determined in the following order:
 
@@ -60,7 +74,9 @@ In case of multiple GPU architectures present, the dynamically discovered target
 defaults to the first available family, in which case it might be necessary to set the
 `ROCM_SDK_TARGET_FAMILY` environment variable.
 
-### Example
+### Building from Local Artifacts
+
+If you have a local build with artifacts:
 
 ```bash
 ./build_tools/build_python_packages.py \
@@ -73,36 +89,70 @@ patching via patchelf. On Linux, it is recommended to run this in the same
 portable container as was used to build the SDK (so as to avoid the possibility
 of accidentally referencing too-new glibc symbols).
 
-To install locally built packages you can either
+### Building from CI Artifacts
 
-1. Generate a local index using [piprepo](https://pypi.org/project/piprepo/) and
-   install using more natural package names:
+You can also build packages from artifacts uploaded by CI workflows:
 
-   ```
-   python3 -m venv .venv && source .venv/bin/activate
-   pip install piprepo setuptools
-   piprepo build ${HOME}/tmp/packages/dist
-   pip install rocm[libraries,devel] \
-     --pre \
-     --extra-index-url ${HOME}/tmp/packages/dist/simple \
-     --force-reinstall --no-cache-dir
-   ```
+```bash
+# 1. Fetch artifacts from a CI run (find run IDs at github.com/ROCm/TheRock/actions)
+RUN_ID=21440027240
+ARTIFACT_GROUP=gfx110X-all
+ARTIFACTS_DIR=${HOME}/therock/${RUN_ID}/artifacts
+PACKAGES_DIR=${HOME}/therock/${RUN_ID}/packages
 
-1. Directly install the Python packages by file name:
+python ./build_tools/fetch_artifacts.py \
+    --run-id=${RUN_ID} \
+    --artifact-group=${ARTIFACT_GROUP} \
+    --output-dir=${ARTIFACTS_DIR}
 
-   ```bash
-   python3 -m venv .venv && source .venv/bin/activate
-   pip install ${HOME}/tmp/packages/dist/rocm-7.10.0.dev0.tar.gz \
-               ${HOME}/tmp/packages/dist/rocm_sdk_core-7.10.0.dev0-py3-none-linux_x86_64.whl
-   # Optionally install rocm_sdk_devel and rocm_sdk_libraries wheels too
-   ```
+# 2. Build Python packages from the fetched artifacts
+python ./build_tools/build_python_packages.py \
+    --artifact-dir=${ARTIFACTS_DIR} \
+    --dest-dir=${PACKAGES_DIR}
+
+# 3. Check the packages that were built
+ls ${PACKAGES_DIR}
+# rocm_sdk_core-7.12.0.dev0-py3-none-win_amd64.whl
+# rocm_sdk_devel-7.12.0.dev0-py3-none-win_amd64.whl
+# rocm_sdk_libraries_gfx110x_all-7.12.0.dev0-py3-none-win_amd64.whl
+# rocm-7.12.0.dev0.tar.gz
+```
+
+### Installing Locally Built Packages
+
+To install locally built packages, you can use the
+[`-f, --find-links`](https://pip.pypa.io/en/stable/cli/pip_install/#cmdoption-f)
+option:
+
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install rocm[libraries,devel] --pre \
+    --find-links=${PACKAGES_DIR}/dist
+
+# Run sanity tests to verify the installation
+rocm-sdk test
+```
+
+You can also create an index.html page with the
+[`indexer.py` script](/third-party/indexer/indexer.py):
+
+```bash
+# Generate index.html in the dist directory
+python ./third-party/indexer/indexer.py ${PACKAGES_DIR}/dist \
+    --filter "*.whl" "*.tar.gz"
+
+# Install using --find-links
+python -m venv .venv && source .venv/bin/activate
+pip install rocm[libraries,devel] --pre \
+    --find-links=${PACKAGES_DIR}/dist/index.html
+```
 
 > [!TIP]
-> By default, development packages have versions like
-> `7.10.0.dev0`. You can also set an explicit fixed version with the
-> `--version` argument to `build_python_packages.py`. See
-> [`build_tools/compute_rocm_package_version.py`](/build_tools/compute_rocm_package_version.py)
-> for more version formats.
+> For CI-style testing with the same directory layout used by workflows, use
+> [`build_tools/github_actions/upload_python_packages.py`](/build_tools/github_actions/upload_python_packages.py)
+> with `--output-dir` instead of directly calling the indexer. This generates
+> the index and organizes files into the `{run_id}-{platform}/python/{artifact_group}/`
+> structure used by CI uploads.
 
 ## Using Packages from Frameworks
 
@@ -179,10 +229,12 @@ def initialize():
     'hipfft',
     'hiprand',
     'hipsparse',
+    'hipsparselt',
     'hipsolver',
     'rccl',
     'hipblaslt',
     'miopen',
+    'hipdnn',
   ],
   check_version='$(rocm-sdk version)')
 " > torch/_rocm_init.py

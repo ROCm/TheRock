@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 therock_subproject_fetch(therock-fftw3-sources
   CMAKE_PROJECT
   # Originally mirrored from: https://fftw.org/fftw-3.3.10.tar.gz
@@ -12,6 +15,7 @@ else()
 endif()
 
 therock_cmake_subproject_declare(therock-fftw3
+  USE_DIST_AMDGPU_TARGETS
   BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/build_fftw3"
   BACKGROUND_BUILD
   EXCLUDE_FROM_ALL
@@ -21,6 +25,8 @@ therock_cmake_subproject_declare(therock-fftw3
   CMAKE_ARGS
     -DBUILD_SHARED_LIBS=ON
     -DENABLE_THREADS=${_fftw3_enable_threads}
+    -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+    -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 )
 therock_cmake_subproject_provide_package(therock-fftw3 FFTW3 lib/cmake/fftw3)
 therock_cmake_subproject_activate(therock-fftw3)
@@ -28,6 +34,7 @@ therock_cmake_subproject_activate(therock-fftw3)
 add_dependencies(therock-third-party therock-fftw3)
 
 therock_cmake_subproject_declare(therock-fftw3f
+  USE_DIST_AMDGPU_TARGETS
   BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/build_fftw3f"
   BACKGROUND_BUILD
   EXCLUDE_FROM_ALL
@@ -38,6 +45,8 @@ therock_cmake_subproject_declare(therock-fftw3f
     -DENABLE_FLOAT=ON
     -DBUILD_SHARED_LIBS=ON
     -DENABLE_THREADS=${_fftw3_enable_threads}
+    -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+    -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 )
 therock_cmake_subproject_provide_package(therock-fftw3f FFTW3f lib/cmake/fftw3f)
 therock_cmake_subproject_activate(therock-fftw3f)

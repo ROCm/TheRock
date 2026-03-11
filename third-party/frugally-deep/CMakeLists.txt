@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 therock_subproject_fetch(therock-frugally-deep-sources
   CMAKE_PROJECT
   # Use frugally-deep 0.15.x for MIOpen until the following issue is fixed
@@ -8,6 +11,7 @@ therock_subproject_fetch(therock-frugally-deep-sources
 )
 
 therock_cmake_subproject_declare(therock-frugally-deep
+  USE_DIST_AMDGPU_TARGETS
   BACKGROUND_BUILD
   EXCLUDE_FROM_ALL
   NO_MERGE_COMPILE_COMMANDS

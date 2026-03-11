@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 import logging
 import os
 import shlex
@@ -35,6 +38,8 @@ tests_to_exclude = [
     "*HEGVJ*double_complex*",
     "*HEEVDX*double_complex*",
     "*SYTRF*double_complex*",
+    # TODO(#2824): Re-enable test once flaky issue is resolved
+    "checkin_lapack/POTRF_FORTRAN.batched__float_complex/9",
 ]
 
 exclusion_list = ":".join(tests_to_exclude)

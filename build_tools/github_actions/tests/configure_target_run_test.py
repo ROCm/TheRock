@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 from pathlib import Path
 import os
 import sys
@@ -24,7 +27,7 @@ class ConfigureTargetRunTest(unittest.TestCase):
 
     def test_windows_gfx115x(self):
         runner_label = configure_target_run.get_runner_label("gfx1151", "windows")
-        self.assertEqual(runner_label, "windows-strix-halo-gpu-rocm")
+        self.assertEqual(runner_label, "windows-gfx1151-gpu-rocm")
 
     def test_windows_gfx120X_all(self):
         runner_label = configure_target_run.get_runner_label("gfx120X-all", "windows")

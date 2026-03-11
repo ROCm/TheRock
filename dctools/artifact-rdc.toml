@@ -1,0 +1,30 @@
+# RDC (ROCm Data Center Tool)
+# Portable distribution with statically-linked gRPC per RFC0007
+
+[components.dbg."dctools/rdc/stage/portable-rdc"]
+
+[components.dev."dctools/rdc/stage/portable-rdc"]
+
+[components.doc."dctools/rdc/stage/portable-rdc"]
+include = [
+  "share/doc/**",
+]
+
+[components.lib."dctools/rdc/stage/portable-rdc"]
+include = [
+  "lib/*.so*",
+  "lib/rdc/*.so*",
+  "lib/rdc/hsaco/**/*.hsaco",
+]
+
+[components.run."dctools/rdc/stage/portable-rdc"]
+include = [
+  "bin/**",
+  "libexec/**",
+  "share/rdc/conf/**",
+]
+
+[components.test."dctools/rdc/stage/portable-rdc"]
+include = [
+  "share/rdc/rdctst_tests/**",
+]

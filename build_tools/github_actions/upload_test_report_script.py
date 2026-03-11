@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """
 Uploads test reports to AWS S3 bucket for a GitHub run ID and AMD GPU family
+
+TODO: Migrate to StorageBackend (like post_build_upload.py) to replace the
+raw `aws s3 cp` calls and gain --output-dir / --dry-run support.
 """
 
 import argparse
@@ -11,7 +17,7 @@ import platform
 import shlex
 import subprocess
 import sys
-from github_actions.github_actions_utils import retrieve_bucket_info
+from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
 
 logging.basicConfig(level=logging.INFO)
@@ -24,7 +30,7 @@ sys.path.append(str(THEROCK_DIR / "third-party" / "indexer"))
 from indexer import process_dir
 
 
-def exec(cmd: list[str], cwd: Path):
+def run_command(cmd: list[str], cwd: Path):
     logging.info(f"++ Exec [{cwd}]$ {shlex.join(cmd)}")
     subprocess.run(cmd, check=True)
 
@@ -56,7 +62,7 @@ def upload_test_report(report_dir: Path, bucket_uri: str, log_destination: str):
     # Join S3 bucket and log path cleanly by trimming slashes to avoid double “//”.
     # Example: "s3://bucket//logs/" → "s3://bucket/logs/"
     # Resulting upload path:
-    # s3://therock-artifacts-external/ROCm-rccl/18718690315-linux/logs/gfx950-dcgpu/index_rccl_test_report.html
+    # s3://therock-ci-artifacts-external/ROCm-rccl/18718690315-linux/logs/gfx950-dcgpu/index_rccl_test_report.html
     dest_uri = f"{bucket_uri.rstrip('/')}/{log_destination.lstrip('/')}"
     logging.info(
         "Uploading HTML reports from %s to %s",
@@ -78,14 +84,15 @@ def upload_test_report(report_dir: Path, bucket_uri: str, log_destination: str):
         "--content-type",
         "text/html",
     ]
-    exec(cmd, cwd=Path.cwd())
+    run_command(cmd, cwd=Path.cwd())
     logging.info("Uploaded all .html files from %s to %s", report_dir, bucket_uri)
 
 
 def run(args: argparse.Namespace):
-    external_repo_path, bucket = retrieve_bucket_info()
-    run_id = args.run_id
-    bucket_uri = f"s3://{bucket}/{external_repo_path}{run_id}-{PLATFORM}"
+    output_root = WorkflowOutputRoot.from_workflow_run(
+        run_id=args.run_id, platform=PLATFORM
+    )
+    base_uri = f"s3://{output_root.bucket}/{output_root.prefix}"
 
     if not args.report_path.exists():
         logging.error(
@@ -94,7 +101,7 @@ def run(args: argparse.Namespace):
         return
 
     create_index_file(args)
-    upload_test_report(args.report_path, bucket_uri, args.log_destination)
+    upload_test_report(args.report_path, base_uri, args.log_destination)
 
 
 def main(argv):

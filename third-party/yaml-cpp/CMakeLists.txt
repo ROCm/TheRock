@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 therock_subproject_fetch(therock-yaml-cpp-sources
   CMAKE_PROJECT
   # Originally mirrored from: https://github.com/jbeder/yaml-cpp/archive/refs/tags/0.8.0.tar.gz
@@ -7,6 +10,7 @@ therock_subproject_fetch(therock-yaml-cpp-sources
 )
 
 therock_cmake_subproject_declare(therock-yaml-cpp
+  USE_DIST_AMDGPU_TARGETS
   BACKGROUND_BUILD
   EXCLUDE_FROM_ALL
   NO_MERGE_COMPILE_COMMANDS

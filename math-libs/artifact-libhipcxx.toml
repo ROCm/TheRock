@@ -1,0 +1,18 @@
+# libhipcxx
+[components.dbg."math-libs/libhipcxx/stage"]
+optional = true
+[components.dev."math-libs/libhipcxx/stage"]
+include = [
+  "include/*",
+]
+[components.lib."math-libs/libhipcxx/stage"]
+optional = true
+[components.test."math-libs/libhipcxx/build"]
+include = [
+  "libhipcxx/**/*",
+]
+exclude = [
+  # Exclude folders not needed for testing
+  "libhipcxx/._upstream/**",
+  "libhipcxx/docs/**",
+]

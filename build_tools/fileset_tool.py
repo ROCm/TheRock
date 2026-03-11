@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """fileset_tool.py
 
 Helper tool for manipulating filesets by listing matching files, copying,
@@ -46,7 +49,9 @@ def do_artifact(args):
     """Produces an 'artifact directory', which is a slice of installed stage/
     directories, split into components (i.e. run, dev, dbg, doc, test).
     """
-    descriptor = artifact_builder.ArtifactDescriptor.load_toml_file(args.descriptor)
+    descriptor = artifact_builder.ArtifactDescriptor.load_toml_file(
+        args.descriptor, artifact_name=args.artifact_name
+    )
     scanner = artifact_builder.ComponentScanner(args.root_dir, descriptor)
     # Disable strict verification temporarily until debug builds are tested/fixed.
     # scanner.verify()
@@ -79,7 +84,9 @@ def do_artifact_archive(args):
         output_path.unlink()
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with _open_archive(output_path, args.compression_level) as arc:
+    with _open_archive(
+        output_path, args.compression_type, args.compression_level
+    ) as arc:
         for artifact_path in args.artifact:
             manifest_path: Path = artifact_path / "artifact_manifest.txt"
             relpaths = manifest_path.read_text().splitlines()
@@ -102,8 +109,45 @@ def do_artifact_archive(args):
         write_hash(args.hash_file, digest)
 
 
-def _open_archive(p: Path, compression_level: int) -> tarfile.TarFile:
-    return tarfile.TarFile.open(p, mode="x:xz", preset=compression_level)
+def _get_pyzstd():
+    """Lazy import pyzstd with helpful error message."""
+    try:
+        import pyzstd
+
+        return pyzstd
+    except ModuleNotFoundError:
+        raise ModuleNotFoundError(
+            "pyzstd is required for zstd compression. "
+            "Install it with: pip install pyzstd"
+        )
+
+
+class _ZstdTarFile(tarfile.TarFile):
+    """TarFile wrapper that writes to a zstd-compressed file."""
+
+    def __init__(self, path: Path, compression_level: int) -> None:
+        pyzstd = _get_pyzstd()
+        self._zstd_file = pyzstd.ZstdFile(
+            path, mode="wb", level_or_option=compression_level
+        )
+        super().__init__(fileobj=self._zstd_file, mode="w")
+
+    def close(self) -> None:
+        super().close()
+        self._zstd_file.close()
+
+
+def _open_archive(
+    p: Path, compression_type: str, compression_level: int | None
+) -> tarfile.TarFile:
+    if compression_type == "zstd":
+        level = compression_level if compression_level is not None else 3
+        return _ZstdTarFile(p, level)
+    elif compression_type == "xz":
+        level = compression_level if compression_level is not None else 6
+        return tarfile.TarFile.open(p, mode="x:xz", preset=level)
+    else:
+        raise ValueError(f"Unknown compression type: {compression_type}")
 
 
 def _do_artifact_flatten(args):
@@ -111,6 +155,42 @@ def _do_artifact_flatten(args):
         output_path=args.o, verbose=args.verbose, flatten=True
     )
     flattener(*args.artifact)
+    relpaths = list(flattener.relpaths)
+    relpaths.sort()
+    if args.verbose:
+        for relpath in relpaths:
+            print(relpath)
+
+
+def _do_artifact_flatten_split(args):
+    """Flatten split artifacts discovered by globbing at build time.
+
+    Split artifacts produce directories like:
+      artifacts/miopen_lib_generic/
+      artifacts/miopen_lib_gfx1201/
+    The exact per-target names can't be predicted at CMake configure time
+    (xnack suffixes, clang defaults), so we discover them by globbing.
+    """
+    artifacts_dir: Path = args.artifacts_dir
+    discovered_dirs: list[Path] = []
+    for prefix in args.prefixes:
+        for candidate in sorted(artifacts_dir.glob(f"{prefix}_*")):
+            if candidate.is_dir() and (candidate / "artifact_manifest.txt").exists():
+                discovered_dirs.append(candidate)
+    if not discovered_dirs:
+        print(
+            f"Warning: no split artifact dirs found in {artifacts_dir} "
+            f"for prefixes: {args.prefixes}"
+        )
+        return
+    if args.verbose:
+        print(f"Discovered {len(discovered_dirs)} split artifact dirs:")
+        for d in discovered_dirs:
+            print(f"  {d.name}")
+    flattener = ArtifactPopulator(
+        output_path=args.o, verbose=args.verbose, flatten=True
+    )
+    flattener(*discovered_dirs)
     relpaths = list(flattener.relpaths)
     relpaths.sort()
     if args.verbose:
@@ -180,6 +260,12 @@ def main(cl_args: list[str]):
         help="TOML file describing the artifact",
     )
     artifact_p.add_argument(
+        "--artifact-name",
+        type=str,
+        required=True,
+        help="Name of the artifact (e.g., rccl, blas) for kpack pattern matching",
+    )
+    artifact_p.add_argument(
         "component_dirs",
         nargs="+",
         help="Alternating list of component name and directory to write it to",
@@ -198,10 +284,16 @@ def main(cl_args: list[str]):
         "-o", type=Path, required=True, help="Output archive name"
     )
     artifact_archive_p.add_argument(
+        "--compression-type",
+        choices=["zstd", "xz"],
+        default="xz",
+        help="Compression algorithm (default: xz)",
+    )
+    artifact_archive_p.add_argument(
         "--compression-level",
         type=int,
-        default=6,
-        help="LZMA compression preset level [0-9, default 6]",
+        default=None,
+        help="Compression level (default: 3 for zstd, 6 for xz)",
     )
     artifact_archive_p.add_argument(
         "--hash-file",
@@ -228,6 +320,30 @@ def main(cl_args: list[str]):
         "--verbose", action="store_true", help="Print verbose status"
     )
     artifact_flatten_p.set_defaults(func=_do_artifact_flatten)
+
+    # 'artifact-flatten-split' command
+    artifact_flatten_split_p = sub_p.add_parser(
+        "artifact-flatten-split",
+        help="Flatten split artifact directories discovered by globbing",
+    )
+    artifact_flatten_split_p.add_argument(
+        "prefixes",
+        nargs="+",
+        help="Artifact prefixes to match (e.g., miopen_lib miopen_dev)",
+    )
+    artifact_flatten_split_p.add_argument(
+        "-o", type=Path, required=True, help="Output directory"
+    )
+    artifact_flatten_split_p.add_argument(
+        "--artifacts-dir",
+        type=Path,
+        required=True,
+        help="Base directory containing split artifact dirs",
+    )
+    artifact_flatten_split_p.add_argument(
+        "--verbose", action="store_true", help="Print verbose status"
+    )
+    artifact_flatten_split_p.set_defaults(func=_do_artifact_flatten_split)
 
     args = p.parse_args(cl_args)
     args.func(args)

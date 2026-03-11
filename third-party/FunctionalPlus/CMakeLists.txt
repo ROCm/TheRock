@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 therock_subproject_fetch(therock-FunctionalPlus-sources
   CMAKE_PROJECT
   # Originally mirrored from: https://github.com/Dobiasd/FunctionalPlus/archive/refs/tags/v0.2.25.tar.gz
@@ -6,6 +9,7 @@ therock_subproject_fetch(therock-FunctionalPlus-sources
 )
 
 therock_cmake_subproject_declare(therock-FunctionalPlus
+  USE_DIST_AMDGPU_TARGETS
   BACKGROUND_BUILD
   EXCLUDE_FROM_ALL
   NO_MERGE_COMPILE_COMMANDS

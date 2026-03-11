@@ -1,15 +1,24 @@
 #!/usr/bin/env python3
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 
 """
 Usage:
-post_build_upload.py [-h] [--build-dir BUILD_DIR] --artifact-group ARTIFACT_GROUP [--run-id RUN_ID] [--upload | --no-upload]
+post_build_upload.py [-h]
+  --artifact-group ARTIFACT_GROUP
+  [--build-dir BUILD_DIR]
+  [--upload | --no-upload] (default enabled if the `CI` env var is set)
+  [--run-id RUN_ID]
+  [--output-dir OUTPUT_DIR]
+  [--dry-run]
 
 This script runs after building TheRock, where this script does:
-1. Create log archives
-2. Create log index files
-3. (optional) upload artifacts
-4. (optional) upload logs
-5. (optional) add links to GitHub job summary
+  1. Create log archives
+  2. Create log index files
+  3. (optional) upload artifacts
+  4. (optional) upload logs
+  5. (optional) add links to GitHub job summary
 
 In the case that a CI build fails, this step will always upload available logs and artifacts.
 
@@ -17,23 +26,28 @@ For AWS credentials to upload, reach out to the #rocm-ci channel in the AMD Deve
 """
 
 import argparse
+from datetime import datetime
 import os
-import tarfile
 from pathlib import Path
 import platform
 import shlex
-import shutil
 import subprocess
 import sys
-from functools import lru_cache  # <-- added
+import tarfile
+
+from github_actions_utils import gha_append_step_summary, str2bool
 
 THEROCK_DIR = Path(__file__).resolve().parent.parent.parent
 PLATFORM = platform.system().lower()
 
+# Add build_tools to path for _therock_utils imports.
+sys.path.insert(0, str(THEROCK_DIR / "build_tools"))
+from _therock_utils.workflow_outputs import WorkflowOutputRoot
+from _therock_utils.storage_backend import StorageBackend, create_storage_backend
+
 # Importing indexer.py
 sys.path.append(str(THEROCK_DIR / "third-party" / "indexer"))
-from indexer import process_dir
-from github_actions_utils import *
+import indexer
 
 
 def log(*args):
@@ -41,34 +55,40 @@ def log(*args):
     sys.stdout.flush()
 
 
-def exec(cmd: list[str], cwd: Path):
+def run_command(cmd: list[str], cwd: Path):
     log(f"++ Exec [{cwd}]$ {shlex.join(cmd)}")
     subprocess.run(cmd, check=True)
 
 
-def is_windows():
-    return platform.system().lower() == "windows"
+# This method will output logs of the Windows Time Service and is meant
+# to help debug spurious AWS auth issues caused by time differences when
+# uploading with the AWS CLI tool. For context, see this issue and PR:
+# https://github.com/ROCm/TheRock/issues/875
+# https://github.com/ROCm/TheRock/pull/1581#issuecomment-3490177590
+def write_time_sync_log():
+    if platform.system().lower() != "windows":
+        log("[*] Current OS not windows, Skipping.")
+        return
 
+    # Logs are from `w32tm` run in Windows HostProcess containers on Azure VMs
+    # with `/query /status` and `/stripchart /computer:time.aws.com /dataonly`
+    # and are mounted via the readonly H: drive for Github Runner Pods to access
+    startfile = Path("H:\\start.log")
+    timefile = Path("H:\\time.log")
 
-def check_aws_cli_available():
-    if not shutil.which("aws"):
-        log("[ERROR] AWS CLI not found in PATH.")
-        sys.exit(1)
+    # Only output if these files exist in the H: drive as expected on Build VMs
+    if startfile.is_file() and timefile.is_file():
+        log(f"[*] Checking time sync at: {datetime.now()}")
 
+        log("[*] Start Time Sync Log:")
+        log(startfile.read_text())
 
-def run_aws_cp(source_path: Path, s3_destination: str, content_type: str = None):
-    if source_path.is_dir():
-        cmd = ["aws", "s3", "cp", str(source_path), s3_destination, "--recursive"]
+        log("[*] Time Sync Log (last ~50 lines):")
+        timef = open(timefile)
+        timelines = timef.readlines()
+        log("".join(timelines[-51:]))
     else:
-        cmd = ["aws", "s3", "cp", str(source_path), s3_destination]
-
-    if content_type:
-        cmd += ["--content-type", content_type]
-    try:
-        log(f"[INFO] Running: {' '.join(cmd)}")
-        subprocess.run(cmd, check=True)
-    except subprocess.CalledProcessError as e:
-        log(f"[ERROR] Failed to upload {source_path} to {s3_destination}: {e}")
+        log("[*] time.log and/or start.log not present in H:")
 
 
 def create_ninja_log_archive(build_dir: Path):
@@ -110,16 +130,16 @@ def index_log_files(build_dir: Path, artifact_group: str):
         log(
             f"[INFO] Found '{log_dir}' directory. Indexing '*.log' and '*.tar.gz' files..."
         )
-        subprocess.run(
+        run_command(
             [
-                "python",
+                sys.executable,
                 str(indexer_path),
                 log_dir.as_posix(),  # unnamed path arg in front of -f
                 "-f",
                 "*.log",
                 "*.tar.gz",  # accepts nargs! Take care not to consume path
             ],
-            check=True,
+            cwd=Path.cwd(),
         )
     else:
         log(f"[WARN] Log directory '{log_dir}' not found. Skipping indexing.")
@@ -139,148 +159,123 @@ def index_log_files(build_dir: Path, artifact_group: str):
         log(f"[WARN] '{index_file}' not found. Skipping link rewrite.")
 
 
-def create_index_file(args: argparse.Namespace):
-    build_dir = args.build_dir / "artifacts"
-    log(f"Creating index file at {str(build_dir / 'index.html')}")
+def index_artifact_files(build_dir: Path):
+    artifacts_dir = build_dir / "artifacts"
+    log(f"Creating index file at {str(artifacts_dir / 'index.html')}")
 
     indexer_args = argparse.Namespace()
     indexer_args.filter = ["*.tar.xz*"]
     indexer_args.output_file = "index.html"
     indexer_args.verbose = False
     indexer_args.recursive = False
-    process_dir(build_dir, indexer_args)
+    indexer.process_dir(artifacts_dir, indexer_args)
 
 
-def upload_artifacts(args: argparse.Namespace, bucket_uri: str):
-    log("Uploading artifacts to S3")
-    build_dir = args.build_dir
-    artifact_group = args.artifact_group
+def upload_artifacts(
+    artifact_group: str,
+    build_dir: Path,
+    output_root: WorkflowOutputRoot,
+    backend: StorageBackend,
+):
+    """Upload build artifacts (.tar.xz archives and checksums) and index."""
+    artifacts_dir = build_dir / "artifacts"
+    if not artifacts_dir.is_dir():
+        log(f"[INFO] Artifacts directory {artifacts_dir} not found. Skipping.")
+        return
 
-    # Uploading artifacts to S3 bucket
-    cmd = [
-        "aws",
-        "s3",
-        "cp",
-        str(build_dir / "artifacts"),
-        bucket_uri,
-        "--recursive",
-        "--no-follow-symlinks",
-        "--exclude",
-        "*",
-        "--include",
-        "*.tar.xz*",
-    ]
-    exec(cmd, cwd=Path.cwd())
+    log("Uploading artifacts")
+    count = backend.upload_directory(
+        artifacts_dir, output_root.root(), include=["*.tar.xz*"]
+    )
+    log(f"[INFO] Uploaded {count} artifact files")
 
-    # Uploading index.html to S3 bucket
-    cmd = [
-        "aws",
-        "s3",
-        "cp",
-        str(build_dir / "artifacts" / "index.html"),
-        f"{bucket_uri}/index-{artifact_group}.html",
-    ]
-    exec(cmd, cwd=Path.cwd())
+    # Upload the artifact index (generated by index_artifact_files earlier).
+    index_path = artifacts_dir / "index.html"
+    if index_path.is_file():
+        backend.upload_file(index_path, output_root.artifact_index(artifact_group))
 
 
-@lru_cache(maxsize=1)
-def get_bucket_info_cached():
-    """Returns (external_repo_path, bucket) from retrieve_bucket_info(), cached."""
-    return retrieve_bucket_info()
-
-
-def upload_logs_to_s3(run_id: str, artifact_group: str, build_dir: Path):
-    external_repo_path, bucket = get_bucket_info_cached()
-    bucket_uri = f"s3://{bucket}/{external_repo_path}{run_id}-{PLATFORM}"
-    s3_base_path = f"{bucket_uri}/logs/{artifact_group}"
-
+def upload_logs(
+    artifact_group: str,
+    build_dir: Path,
+    output_root: WorkflowOutputRoot,
+    backend: StorageBackend,
+):
+    """Upload build logs, resource profiling summaries, and observability reports."""
     log_dir = build_dir / "logs"
-
     if not log_dir.is_dir():
         log(f"[INFO] Log directory {log_dir} not found. Skipping upload.")
         return
 
-    # Upload .log files
-    log_files = list(log_dir.glob("*.log")) + list(log_dir.glob("*.tar.gz"))
-    if not log_files:
-        log("[WARN] No .log or .tar.gz files found. Skipping log upload.")
-    else:
-        run_aws_cp(log_dir, s3_base_path, content_type="text/plain")
+    # Upload all log files recursively. This covers:
+    #   - build.log, configure.log, etc.
+    #   - ninja_logs.tar.gz
+    #   - build_observability.html (when generated)
+    #   - index.html (generated by index_log_files)
+    #   - therock-build-prof/ subdirectory (resource profiling)
+    # Content-type is inferred per file by the backend.
+    log("Uploading logs")
+    backend.upload_directory(log_dir, output_root.log_dir(artifact_group))
 
-    # Upload index.html
-    index_path = log_dir / "index.html"
-    if index_path.is_file():
-        index_s3_dest = f"{s3_base_path}/index.html"
-        run_aws_cp(index_path, index_s3_dest, content_type="text/html")
-        log(f"[INFO] Uploaded {index_path} to {index_s3_dest}")
-    else:
-        log(f"[INFO] No index.html found at {log_dir}. Skipping index upload.")
-
-
-def get_manifest_from_build(build_dir: Path):
-    """
-    Look only in the aux-overlay *build* directory.
-    """
-    build_path = build_dir / "base" / "aux-overlay" / "build" / "therock_manifest.json"
-
-    if build_path.is_file():
-        return build_path
-
-    return None
+    # Resource profiling summaries (generated by resource_info.py --finalize)
+    # live in a subdirectory but are also expected at the log root for direct
+    # linking. Upload a flattened copy to preserve current S3 layout.
+    resource_prof_dir = log_dir / "therock-build-prof"
+    if resource_prof_dir.is_dir():
+        for filename in ["comp-summary.html", "comp-summary.md"]:
+            file_path = resource_prof_dir / filename
+            if file_path.is_file():
+                backend.upload_file(
+                    file_path, output_root.log_file(artifact_group, filename)
+                )
+                log(f"[INFO] Uploaded {file_path} (flattened)")
 
 
-def upload_manifest_to_s3(run_id: str, artifact_group: str, build_dir: Path):
-    """
-    Upload therock_manifest.json to:
-      s3://<bucket>/<external_repo_path><run_id>-<platform>/manifests/<artifact_group>/therock_manifest.json
-    """
-    external_repo_path, bucket = get_bucket_info_cached()
-    bucket_uri = f"s3://{bucket}/{external_repo_path}{run_id}-{PLATFORM}"
-
-    manifest = get_manifest_from_build(build_dir)
-    if not manifest:
-        raise FileNotFoundError(
-            f"therock_manifest.json not found at {build_dir / 'base' / 'aux-overlay' / 'build'}"
-        )
-
-    dest = f"{bucket_uri}/manifests/{artifact_group}/therock_manifest.json"
-    log(f"[INFO] Uploading manifest {manifest} -> {dest}")
-    run_aws_cp(manifest, dest, content_type="application/json")
-
-
-def upload_build_summary(args):
-    external_repo_path, bucket = get_bucket_info_cached()
-    run_id = args.run_id
-    bucket_url = (
-        f"https://{bucket}.s3.amazonaws.com/{external_repo_path}{run_id}-{PLATFORM}"
+def upload_manifest(
+    artifact_group: str,
+    build_dir: Path,
+    output_root: WorkflowOutputRoot,
+    backend: StorageBackend,
+):
+    """Upload therock_manifest.json."""
+    manifest_path = (
+        build_dir / "base" / "aux-overlay" / "build" / "therock_manifest.json"
     )
-    log(f"Adding links to job summary to bucket {bucket}")
-    build_dir = args.build_dir
-    artifact_group = args.artifact_group
+    if not manifest_path.is_file():
+        raise FileNotFoundError(f"therock_manifest.json not found at {manifest_path}")
 
-    log_url = f"{bucket_url}/logs/{artifact_group}/index.html"
-    gha_append_step_summary(f"[Build Logs]({log_url})")
+    log(f"[INFO] Uploading manifest {manifest_path}")
+    backend.upload_file(manifest_path, output_root.manifest(artifact_group))
 
-    if os.path.exists(build_dir / "artifacts" / "index.html"):
-        artifact_url = f"{bucket_url}/index-{artifact_group}.html"
-        gha_append_step_summary(f"[Artifacts]({artifact_url})")
+
+def write_gha_build_summary(
+    artifact_group: str,
+    build_dir: Path,
+    output_root: WorkflowOutputRoot,
+    job_status: str,
+):
+    log(f"Adding links to job summary for {output_root.prefix}")
+
+    log_index_url = output_root.log_index(artifact_group).https_url
+    gha_append_step_summary(f"[Build Logs]({log_index_url})")
+
+    observability_path = build_dir / "logs" / "build_observability.html"
+    if observability_path.is_file():
+        analysis_url = output_root.build_observability(artifact_group).https_url
+        gha_append_step_summary(f"[Build Observability]({analysis_url})")
     else:
-        log("No artifacts index found. Skipping artifact link.")
+        log("[INFO] Build Observability: Not generated")
 
-    manifest_url = f"{bucket_url}/manifests/{artifact_group}/therock_manifest.json"
+    # Only add artifact links if the job not failed
+    if not job_status or job_status == "success":
+        artifact_url = output_root.artifact_index(artifact_group).https_url
+        gha_append_step_summary(f"[Artifacts]({artifact_url})")
+
+    manifest_url = output_root.manifest(artifact_group).https_url
     gha_append_step_summary(f"[TheRock Manifest]({manifest_url})")
 
 
 def run(args):
-    if not args.build_dir.is_dir():
-        log(
-            f"""
-[ERROR] No build directory ({str(args.build_dir)}) found. Skipping upload of log files!
-        This can be due to the CI job being cancelled before the build was started.
-            """
-        )
-        sys.exit(1)
-
     log("Creating Ninja log archive")
     log("--------------------------")
     create_ninja_log_archive(args.build_dir)
@@ -289,38 +284,45 @@ def run(args):
     log("------------------")
     index_log_files(args.build_dir, args.artifact_group)
 
-    if args.upload:
-        check_aws_cli_available()
+    log(f"Indexing artifact files in {str(args.build_dir)}")
+    log("------------------")
+    index_artifact_files(args.build_dir)
+
+    if not args.upload:
+        return
+
+    output_root = WorkflowOutputRoot.from_workflow_run(
+        run_id=args.run_id, platform=PLATFORM
+    )
+    backend = create_storage_backend(staging_dir=args.output_dir, dry_run=args.dry_run)
+
+    log("Write Windows time sync log")
+    log("----------------------")
+    write_time_sync_log()
+
+    # Upload artifacts only if the job not failed
+    if not args.job_status or args.job_status == "success":
         log("Upload build artifacts")
         log("----------------------")
-        external_repo_path, bucket = get_bucket_info_cached()
-        run_id = args.run_id
-        bucket_uri = f"s3://{bucket}/{external_repo_path}{run_id}-{PLATFORM}"
+        upload_artifacts(args.artifact_group, args.build_dir, output_root, backend)
 
-        create_index_file(args)
-        upload_artifacts(args, bucket_uri)
+    log("Upload log")
+    log("----------")
+    upload_logs(args.artifact_group, args.build_dir, output_root, backend)
 
-        log("Upload log")
-        log("----------")
-        upload_logs_to_s3(args.run_id, args.artifact_group, args.build_dir)
+    log("Upload manifest")
+    log("----------------")
+    upload_manifest(args.artifact_group, args.build_dir, output_root, backend)
 
-        log("Upload manifest")
-        log("----------------")
-        upload_manifest_to_s3(args.run_id, args.artifact_group, args.build_dir)
-
-        log("Upload build summary")
-        log("--------------------")
-        upload_build_summary(args)
+    log("Write github actions build summary")
+    log("--------------------")
+    write_gha_build_summary(
+        args.artifact_group, args.build_dir, output_root, args.job_status
+    )
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Post Build Upload steps")
-    parser.add_argument(
-        "--build-dir",
-        type=Path,
-        default=Path(os.getenv("BUILD_DIR", "build")),
-        help="Build directory containing logs (default: 'build' or $BUILD_DIR)",
-    )
     parser.add_argument(
         "--artifact-group",
         type=str,
@@ -328,13 +330,48 @@ if __name__ == "__main__":
         required=True,
         help="Artifact group to upload (default: $ARTIFACT_GROUP)",
     )
-    parser.add_argument("--run-id", type=str, help="GitHub run ID of this workflow run")
+    parser.add_argument(
+        "--build-dir",
+        type=Path,
+        default=Path(os.getenv("BUILD_DIR", "build")),
+        help="Build directory containing logs, artifacts, etc. (default: 'build' or $BUILD_DIR)",
+    )
     is_ci = str2bool(os.getenv("CI", "false"))
     parser.add_argument(
         "--upload",
         default=is_ci,
-        help="Enable upload steps",
+        help="Enable upload steps (default enabled if $CI is set)",
         action=argparse.BooleanOptionalAction,
     )
+    parser.add_argument("--run-id", type=str, help="GitHub run ID of this workflow run")
+    parser.add_argument(
+        "--job-status", type=str, help="Status of this Job ('success', 'failure')"
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="Output to local directory instead of S3 (for testing)",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print what would be uploaded without actually uploading",
+    )
     args = parser.parse_args()
+
+    # Check preconditions for provided arguments before proceeding.
+
+    if args.upload:
+        if not args.run_id:
+            parser.error("when --upload is true, --run_id must also be set")
+
+    if not args.build_dir.is_dir():
+        raise FileNotFoundError(
+            f"""
+Build directory ({str(args.build_dir)}) not found. Skipping upload!
+This can be due to the CI job being cancelled before the build was started.
+            """
+        )
+
     run(args)

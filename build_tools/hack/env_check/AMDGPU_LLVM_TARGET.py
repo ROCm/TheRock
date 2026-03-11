@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # AMDGPU_LLVM_TARGET
 # Information from: [
 #     https://rocm.docs.amd.com/en/latest/reference/gpu-arch-specs.html
@@ -46,6 +49,9 @@ _amdgpu = {
     ],
     "gfx1152": [
         " AMD Krackan Point",
+    ],
+    "gfx1153": [
+        "AMD Radeon 820M",
     ],
     # RDNA 4
     "gfx1201": [

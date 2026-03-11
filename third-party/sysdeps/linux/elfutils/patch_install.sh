@@ -1,4 +1,7 @@
 #!/bin/bash
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 set -e
 
 PREFIX="${1:?Expected install prefix argument}"
@@ -41,9 +44,14 @@ update_library_links() {
     if [[ "$realname" != "$dir/$lib_soname" ]]; then
         # Move the real file to $dir/$lib_soname
         mv -v -- "$realname" "$dir/$lib_soname"
-    fi
+        pushd "$dir" > /dev/null
+        ln -sf "$lib_soname" "$linker_name"
+        popd > /dev/null
+        rm "$libfile"
+    else
     # Rename symlink in the same directory
-    mv "$libfile" "$dir/$linker_name"
+        mv "$libfile" "$dir/$linker_name"
+    fi
 }
 
 update_library_links "$PREFIX/lib/librocm_sysdeps_elf.so" "libelf.so"

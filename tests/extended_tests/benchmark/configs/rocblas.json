@@ -1,0 +1,222 @@
+{
+  "benchmark_config": {
+    "iterations": 1000,
+    "cold_iterations": 1000,
+    "benchmarks": [
+      {
+        "name": "gemm",
+        "function": "gemm",
+        "log_file": "rocblas-gemm_bench.log",
+        "dimensions": "sizes",
+        "extra_args": {
+          "h": {
+            "alpha": "1",
+            "beta": "0",
+            "transposeA": "N"
+          }
+        }
+      },
+      {
+        "name": "gemv",
+        "function": "gemv",
+        "log_file": "rocblas-gemv_bench.log",
+        "dimensions": "separate"
+      },
+      {
+        "name": "ger",
+        "function": "ger",
+        "log_file": "rocblas-ger_bench.log",
+        "dimensions": "separate"
+      },
+      {
+        "name": "dot",
+        "function": "dot",
+        "log_file": "rocblas-dot_bench.log",
+        "dimensions": "simple"
+      },
+      {
+        "name": "gemm_hpa_hgemm",
+        "function": "gemm_ex",
+        "log_file": "rocblas-gemm_hpa_hgemm_bench.log",
+        "dimensions": "sizes",
+        "has_compute_type": true
+      }
+    ]
+  },
+  "gemm": {
+    "sizes": [
+      2047,
+      2048,
+      4095,
+      4096,
+      5503,
+      5504,
+      5760,
+      6143,
+      6144,
+      7744,
+      8191,
+      8192
+    ],
+    "transpose": [
+      "T",
+      "N"
+    ],
+    "precision": [
+      "s",
+      "d",
+      "h"
+    ],
+    "alpha": 1,
+    "beta": 0
+  },
+  "gemv": {
+    "m": [
+      1000,
+      10001
+    ],
+    "n": [
+      1000,
+      10001
+    ],
+    "lda": [
+      1000,
+      10002
+    ],
+    "transpose": [
+      "N",
+      "T"
+    ],
+    "precision": [
+      "s",
+      "d"
+    ],
+    "gpu_overrides": {
+      "gfx110X": {
+        "m": [
+          30001,
+          20001
+        ],
+        "n": [
+          30001,
+          20001
+        ],
+        "lda": [
+          30002,
+          20001
+        ]
+      },
+      "gfx94X-dcgpu": {
+        "m": [
+          30001,
+          20001
+        ],
+        "n": [
+          30001,
+          20001
+        ],
+        "lda": [
+          30002,
+          20001
+        ]
+      }
+    }
+  },
+  "ger": {
+    "m": [
+      1000,
+      10001
+    ],
+    "n": [
+      1000,
+      10001
+    ],
+    "lda": [
+      1000,
+      10002
+    ],
+    "precision": [
+      "s",
+      "d"
+    ],
+    "gpu_overrides": {
+      "gfx110X": {
+        "m": [
+          30001,
+          20001
+        ],
+        "n": [
+          30001,
+          20001
+        ],
+        "lda": [
+          30002,
+          20001
+        ]
+      },
+      "gfx94X-dcgpu": {
+        "m": [
+          30001,
+          20001
+        ],
+        "n": [
+          30001,
+          20001
+        ],
+        "lda": [
+          30002,
+          20001
+        ]
+      }
+    }
+  },
+  "dot": {
+    "n": [
+      1000,
+      100001,
+      10000002
+    ],
+    "precision": [
+      "s",
+      "d"
+    ],
+    "gpu_overrides": {
+      "gfx110X": {
+        "n": [
+          1000,
+          100000002,
+          50000002
+        ]
+      },
+      "gfx94X-dcgpu": {
+        "n": [
+          1000,
+          100000002,
+          50000002
+        ]
+      }
+    }
+  },
+  "gemm_hpa_hgemm": {
+    "sizes": [
+      2047,
+      2048,
+      4095,
+      4096,
+      5503,
+      5504,
+      5760,
+      6143,
+      6144,
+      7744,
+      8191,
+      8192
+    ],
+    "transpose": [
+      "T",
+      "N"
+    ],
+    "precision": "h",
+    "compute_type": "s"
+  }
+}

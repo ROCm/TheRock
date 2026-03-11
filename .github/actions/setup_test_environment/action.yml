@@ -1,20 +1,30 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 name: "Setup test environment"
+
+description: Setup ROCm test environment from built artifacts
 
 inputs:
   VENV_DIR:
-    type: string
+    description: (string) Directory in which to create a Python virtual environment (e.g. `github.workspace/.venv`)
     required: true
   OUTPUT_ARTIFACTS_DIR:
-    type: string
+    description: (string) Directory to download/unpack test artifacts into (e.g. `github.workspace/build`)
     required: true
   ARTIFACT_GROUP:
-    type: string
+    description: (string) Artifact group (e.g. `gfx110X-all`)
+    required: true
+  AMDGPU_TARGETS:
+    description: (string) Comma-separated individual GPU targets for fetching split artifacts (e.g. `gfx942`)
+    default: ""
   ARTIFACT_RUN_ID:
-    type: string
+    description: (string) Run ID to download artifacts from (`env.ARTIFACT_RUN_ID` or a value like `19716407405`)
+    required: true
   FETCH_ARTIFACT_ARGS:
-    type: string
+    description: (string) Extra arguments to install_rocm_from_artifacts.py (e.g. `--blas --tests`)
   IS_PR_FROM_FORK:
-    type: boolean
+    description: (boolean) True if this workflow run is from a PR on a fork (often `github.event.pull_request.head.repo.fork`)
     default: false
 
 runs:
@@ -25,37 +35,42 @@ runs:
       with:
         python-version: 3.12
 
+    - name: "Install UV"
+      shell: bash
+      run: |
+        if [[ "$RUNNER_OS" == "Windows" ]]; then
+          powershell -Command "irm https://astral.sh/uv/install.ps1 | iex"
+        else
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+        fi
+
     - name: Create Python venv
       shell: bash
       env:
         VENV_DIR: ${{ inputs.VENV_DIR }}
       run: |
         python build_tools/setup_venv.py ${VENV_DIR} \
-          --activate-in-future-github-actions-steps
+          --activate-in-future-github-actions-steps \
+          --use-uv
 
     - name: Install test requirements
       shell: bash
       run: |
-        pip install -r requirements-test.txt
-        pip freeze
+        uv pip install -r requirements-test.txt
+        uv pip freeze
 
-    - name: Install the AWS tool
-      if: ${{ runner.os == 'Linux' }}
-      shell: bash
-      run: ./dockerfiles/install_awscli.sh
-
-    - name: Install the AWS tool
+    - name: Install Choco tools
       if: ${{ runner.os == 'Windows' }}
       shell: bash
       run: |
-        choco install --no-progress -y awscli
-        echo "$PATH;C:\Program Files\Amazon\AWSCLIV2" >> $GITHUB_PATH
+        choco install --no-progress -y ninja
 
     - name: Download and Unpack Artifacts
       shell: bash
       env:
         OUTPUT_ARTIFACTS_DIR: ${{ inputs.OUTPUT_ARTIFACTS_DIR }}
         ARTIFACT_GROUP: ${{ inputs.ARTIFACT_GROUP }}
+        AMDGPU_TARGETS: ${{ inputs.AMDGPU_TARGETS }}
         ARTIFACT_RUN_ID: ${{ inputs.ARTIFACT_RUN_ID }}
         FETCH_ARTIFACT_ARGS: ${{ inputs.FETCH_ARTIFACT_ARGS }}
         GITHUB_TOKEN: ${{ github.token }}
@@ -64,5 +79,6 @@ runs:
         python ./build_tools/install_rocm_from_artifacts.py \
           --run-id=${ARTIFACT_RUN_ID} \
           --artifact-group=${ARTIFACT_GROUP} \
+          --amdgpu-targets=${AMDGPU_TARGETS} \
           --output-dir=${OUTPUT_ARTIFACTS_DIR} \
           ${FETCH_ARTIFACT_ARGS}

@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 therock_subproject_fetch(therock-spdlog-sources
   CMAKE_PROJECT
   # Originally mirrored from: https://github.com/gabime/spdlog/archive/refs/tags/v1.15.3.tar.gz
@@ -6,17 +9,21 @@ therock_subproject_fetch(therock-spdlog-sources
 )
 
 therock_cmake_subproject_declare(therock-spdlog
+  USE_DIST_AMDGPU_TARGETS
   BACKGROUND_BUILD
   EXCLUDE_FROM_ALL
   NO_MERGE_COMPILE_COMMANDS
   OUTPUT_ON_FAILURE
   EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/source"
+  COMPILER_TOOLCHAIN
+    amd-llvm
   BUILD_DEPS
     therock-fmt
   CMAKE_ARGS
     -DSPDLOG_BUILD_EXAMPLE=OFF
     -DSPDLOG_INSTALL=ON
     -DSPDLOG_FMT_EXTERNAL=ON
+    -DSPDLOG_BUILD_PIC=ON
 )
 therock_cmake_subproject_provide_package(therock-spdlog spdlog lib/cmake)
 therock_cmake_subproject_activate(therock-spdlog)

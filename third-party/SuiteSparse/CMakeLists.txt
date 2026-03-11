@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 therock_subproject_fetch(therock-SuiteSparse-sources
   CMAKE_PROJECT
   # Originally mirrored from: https://github.com/DrTimothyAldenDavis/SuiteSparse/archive/refs/tags/v7.8.3.tar.gz
@@ -6,7 +9,7 @@ therock_subproject_fetch(therock-SuiteSparse-sources
 )
 
 therock_cmake_subproject_declare(therock-SuiteSparse
-  TARGET_NEUTRAL
+  USE_DIST_AMDGPU_TARGETS
   BACKGROUND_BUILD
   EXCLUDE_FROM_ALL
   NO_MERGE_COMPILE_COMMANDS

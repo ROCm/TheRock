@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Main rocm-sdk-core (OS specific)."""
 
 import importlib.util
@@ -61,6 +64,7 @@ setup(
             "amdlld=rocm_sdk_core._cli:amdlld",
             "hipcc=rocm_sdk_core._cli:hipcc",
             "hipconfig=rocm_sdk_core._cli:hipconfig",
+            "hipify-clang=rocm_sdk_core._cli:hipify_clang",
             "offload-arch=rocm_sdk_core._cli:offload_arch",
             "roc-obj=rocm_sdk_core._cli:roc_obj",
             "roc-obj-extract=rocm_sdk_core._cli:roc_obj_extract",
@@ -70,9 +74,15 @@ setup(
             [
                 # These tools are only available on Linux.
                 "amd-smi=rocm_sdk_core._cli:amd_smi",
+                "hipify-perl=rocm_sdk_core._cli:hipify_perl",
                 "rocm_agent_enumerator=rocm_sdk_core._cli:rocm_agent_enumerator",
                 "rocminfo=rocm_sdk_core._cli:rocm_info",
                 "rocm-smi=rocm_sdk_core._cli:rocm_smi",
+                "roccoremerge=rocm_sdk_core._cli:roccoremerge",
+                "rocgdb=rocm_sdk_core._cli:rocgdb",
+                "rocprofv3=rocm_sdk_core._cli:rocprofv3",
+                "rocprofv3-attach=rocm_sdk_core._cli:rocprofv3_attach",
+                "rocprofv3-avail=rocm_sdk_core._cli:rocprofv3_avail",
             ]
             if platform.system() != "Windows"
             else [

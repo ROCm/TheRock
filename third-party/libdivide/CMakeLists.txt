@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 therock_subproject_fetch(therock-libdivide-sources
   CMAKE_PROJECT
   # Originally mirrored from: https://github.com/ridiculousfish/libdivide/archive/refs/tags/v5.2.0.tar.gz
@@ -6,6 +9,7 @@ therock_subproject_fetch(therock-libdivide-sources
 )
 
 therock_cmake_subproject_declare(therock-libdivide
+  USE_DIST_AMDGPU_TARGETS
   BACKGROUND_BUILD
   EXCLUDE_FROM_ALL
   NO_MERGE_COMPILE_COMMANDS

@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Installs a limited subset of boost sufficient to build ROCM subprojects.
 # Currently, this includes:
 #   atomic
@@ -22,6 +25,7 @@ therock_subproject_fetch(boost-sources
 
 therock_cmake_subproject_declare(therock-boost
   EXTERNAL_SOURCE_DIR "cmake_project"
+  USE_DIST_AMDGPU_TARGETS
   EXCLUDE_FROM_ALL
   NO_MERGE_COMPILE_COMMANDS
   BACKGROUND_BUILD

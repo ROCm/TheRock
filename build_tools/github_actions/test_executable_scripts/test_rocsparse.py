@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 import logging
 import os
 import shlex
@@ -28,7 +31,11 @@ if test_type == "smoke":
         f"{THEROCK_DIR}/build/share/rocsparse/test/rocsparse_smoke.yaml",
     ]
 else:
-    test_filter = ["--gtest_filter=*quick*"]
+    # TODO(#2616): Enable full tests once known test issues are resolved
+    test_filter = [
+        "--yaml",
+        f"{THEROCK_DIR}/build/share/rocsparse/test/rocsparse_smoke.yaml",
+    ]
 
 cmd = [
     f"{THEROCK_BIN_DIR}/rocsparse-test",

@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 therock_subproject_fetch(therock-msgpack-cxx-sources
   CMAKE_PROJECT
   # Originally mirrored from: https://github.com/msgpack/msgpack-c/releases/download/cpp-7.0.0/msgpack-cxx-7.0.0.tar.gz
@@ -6,6 +9,7 @@ therock_subproject_fetch(therock-msgpack-cxx-sources
 )
 
 therock_cmake_subproject_declare(therock-msgpack-cxx
+  USE_DIST_AMDGPU_TARGETS
   BACKGROUND_BUILD
   EXCLUDE_FROM_ALL
   NO_MERGE_COMPILE_COMMANDS
