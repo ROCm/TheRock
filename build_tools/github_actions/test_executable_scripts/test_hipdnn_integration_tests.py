@@ -7,7 +7,7 @@ import tempfile
 import tomllib
 from pathlib import Path
 
-THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
+THEROCK_BIN_DIR = Path(os.getenv("THEROCK_BIN_DIR")).resolve()
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
@@ -21,7 +21,7 @@ logging.info(f"Loaded test config from: {config_path}")
 
 # Load build manifest produced by TheRock build - lists which plugins THIS build produced.
 enabled_plugins_path = (
-    Path(THEROCK_BIN_DIR)
+    THEROCK_BIN_DIR
     / "hipdnn_integration_tests_test_infra"
     / "build_enabled_hipdnn_plugins_manifest.json"
 )

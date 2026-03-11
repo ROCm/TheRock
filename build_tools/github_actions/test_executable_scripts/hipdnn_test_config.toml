@@ -34,5 +34,5 @@ name = "miopen_provider_plugin"
 engines = ["MIOPEN_PLUGIN"]
 
 [plugins.fusilli]
-name = "fusilli_plugin"
-engines = ["FUSILLI"]
+name = "FUSILLI_ENGINE"
+engines = ["FUSILLI_ENGINE"]
