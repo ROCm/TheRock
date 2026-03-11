@@ -59,7 +59,7 @@ from amdgpu_family_matrix import (
     all_build_variants,
     get_all_families_for_trigger_types,
 )
-from fetch_test_configurations import test_matrix
+from fetch_test_configurations import test_matrix, functional_matrix
 
 from configure_ci_path_filters import (
     get_git_modified_paths,
@@ -115,7 +115,10 @@ def filter_known_names(
         ), "target_matrix must be provided for 'target' name_type"
         known_references = {"target": target_matrix}
     else:
-        known_references = {"test": test_matrix}
+        # Merge test_matrix and functional_matrix so that functional test
+        # names/labels will be recognised.
+        combined_test_matrix = {**test_matrix, **functional_matrix}
+        known_references = {"test": combined_test_matrix}
 
     filtered_names = []
     if name_type not in known_references:
