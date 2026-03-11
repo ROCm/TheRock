@@ -49,11 +49,13 @@
     - `V_WMMA_F16_16X16X64_BF8_BF8_w32`
     - `V_WMMA_F16_16X16X64_FP8_FP8_w32`
     - `V_WMMA_F16_16X16X64_BF8_FP8_w32`
+    - `V_WMMA_F16_16X16X64_FP8_BF8_w32`
     - `V_WMMA_F32_16X16X128_BF8_BF8_w32`
     - `V_WMMA_F32_16X16X128_BF8_FP8_w32`
     - `V_WMMA_F32_16X16X128_FP8_BF8_w32`
     - `V_WMMA_F32_16X16X32_BF16_w32`
     - `V_WMMA_F32_16X16X64_BF8_BF8_w32`
+    - `V_WMMA_F32_16X16X64_BF8_FP8_w32`
     - `V_WMMA_F32_16X16X64_FP8_BF8_w32`
     - `V_WMMA_F32_16X16X128_F8F6F4`
     - `V_WMMA_F32_16X16X32_F16_w32`
@@ -114,12 +116,19 @@
   - representative seeds:
     - `V_WMMA_BF16F32_16X16X32_BF16_w32`
     - `V_WMMA_BF16_16X16X32_BF16_w32`
+    - `V_WMMA_F16_16X16X32_F16_w32`
     - `V_WMMA_F16_16X16X128_BF8_BF8_w32`
     - `V_WMMA_F16_16X16X128_FP8_BF8_w32`
+    - `V_WMMA_F16_16X16X64_BF8_BF8_w32`
     - `V_WMMA_F16_16X16X64_FP8_FP8_w32`
     - `V_WMMA_F16_16X16X64_BF8_FP8_w32`
+    - `V_WMMA_F16_16X16X64_FP8_BF8_w32`
     - `V_WMMA_F32_16X16X128_BF8_BF8_w32`
     - `V_WMMA_F32_16X16X128_BF8_FP8_w32`
+    - `V_WMMA_F32_16X16X128_FP8_BF8_w32`
+    - `V_WMMA_F32_16X16X32_BF16_w32`
+    - `V_WMMA_F32_16X16X64_BF8_BF8_w32`
+    - `V_WMMA_F32_16X16X64_BF8_FP8_w32`
     - `V_WMMA_F32_16X16X64_FP8_BF8_w32`
     - `V_WMMA_F32_16X16X128_F8F6F4`
     - `V_WMMA_F32_16X16X32_F16_w32`
@@ -138,6 +147,9 @@
   - representative seeds:
     - `V_WMMA_SCALE_F32_32X16X128_F4_w32`
     - `V_WMMA_SCALE16_F32_32X16X128_F4_w32`
+  - Descriptor depth:
+    - matrix `source1` fragment coverage on scale and scale16 routes
+    - accumulator descriptor coverage on scale and scale16 routes
 - WMMA scale paired loads:
   - `V_WMMA_LD_SCALE_PAIRED_B32` -> `kWmmaLdScalePairedB32`
   - `V_WMMA_LD_SCALE16_PAIRED_B64` -> `kWmmaLdScale16PairedB64`
@@ -146,6 +158,9 @@
   - Flags:
     - `has_scale_operand`
     - `has_paired_scale_operand`
+  - Descriptor depth:
+    - vector `source0` and destination descriptor coverage on `B32`
+    - vector `source0` and destination fragment coverage on `B64`
 - SWMMAC:
   - `V_SWMMAC_F32_16X16X128_FP8_FP8_w32` -> `kSwmmacF32_16x16x128_Fp8Fp8W32`
   - `V_SWMMAC_F16_16X16X128_FP8_FP8_w32` -> `kSwmmacF16_16x16x128_Fp8Fp8W32`
@@ -167,6 +182,9 @@
     - `V_SWMMAC_F32_16X16X64_BF16_w32`
     - `V_SWMMAC_F32_16X16X64_F16_w32`
     - `V_SWMMAC_I32_16X16X128_IU8_w32`
+  - Descriptor depth:
+    - source1 fragment coverage on routed FP8/BF8 variants
+    - accumulator descriptor coverage on routed F16 and F32 variants
 - Tensor routes:
   - `TENSOR_LOAD_TO_LDS` -> `kTensorLoadToLds`
   - `TENSOR_STORE_FROM_LDS` -> `kTensorStoreFromLds`

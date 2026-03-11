@@ -392,6 +392,20 @@ int main() {
               "expected WMMA scale descriptor")) {
     return 1;
   }
+  if (!Expect(ContainsSlotFragment(wmma_scale, StubOperandSlotKind::kSource1,
+                                   StubFragmentKind::kMatrix, 16, 16, 128, 8,
+                                   0),
+              "expected WMMA scale source1 fragment shape")) {
+    return 1;
+  }
+  if (!Expect(ContainsDescriptor(wmma_scale, StubOperandRole::kAccumulator,
+                                 StubOperandSlotKind::kAccumulatorSource,
+                                 StubOperandValueClass::kAccumulatorFragment,
+                                 StubOperandAccess::kRead, 1,
+                                 StubFragmentKind::kMatrix, 32),
+              "expected WMMA scale accumulator descriptor")) {
+    return 1;
+  }
 
   const StubDecodedInstruction wmma_scale16 =
       DecodeVop3pStub("V_WMMA_SCALE16_F32_16X16X128_F8F6F4");
@@ -406,6 +420,21 @@ int main() {
                                  StubOperandAccess::kRead, 1,
                                  StubFragmentKind::kScalar, 32),
               "expected WMMA scale16 descriptor")) {
+    return 1;
+  }
+  if (!Expect(ContainsSlotFragment(wmma_scale16,
+                                   StubOperandSlotKind::kSource1,
+                                   StubFragmentKind::kMatrix, 16, 16, 128, 8,
+                                   0),
+              "expected WMMA scale16 source1 fragment shape")) {
+    return 1;
+  }
+  if (!Expect(ContainsDescriptor(wmma_scale16, StubOperandRole::kAccumulator,
+                                 StubOperandSlotKind::kAccumulatorSource,
+                                 StubOperandValueClass::kAccumulatorFragment,
+                                 StubOperandAccess::kRead, 1,
+                                 StubFragmentKind::kMatrix, 32),
+              "expected WMMA scale16 accumulator descriptor")) {
     return 1;
   }
 
@@ -464,6 +493,27 @@ int main() {
           "expected paired WMMA scale-load descriptors")) {
     return 1;
   }
+  if (!Expect(ContainsSlotFragment(paired_scale, StubOperandSlotKind::kSource0,
+                                   StubFragmentKind::kVector, 1, 1, 1, 32, 1),
+              "expected paired WMMA scale-load source fragment shape")) {
+    return 1;
+  }
+  if (!Expect(ContainsDescriptor(paired_scale, StubOperandRole::kSource0,
+                                 StubOperandSlotKind::kSource0,
+                                 StubOperandValueClass::kVectorRegister,
+                                 StubOperandAccess::kRead, 1,
+                                 StubFragmentKind::kVector, 32),
+              "expected paired WMMA scale-load source descriptor")) {
+    return 1;
+  }
+  if (!Expect(ContainsDescriptor(paired_scale, StubOperandRole::kDestination,
+                                 StubOperandSlotKind::kDestination,
+                                 StubOperandValueClass::kVectorRegister,
+                                 StubOperandAccess::kWrite, 1,
+                                 StubFragmentKind::kVector, 32),
+              "expected paired WMMA scale-load destination descriptor")) {
+    return 1;
+  }
 
   const StubDecodedInstruction paired_scale16 =
       DecodeVop3pStub("V_WMMA_LD_SCALE16_PAIRED_B64");
@@ -486,6 +536,18 @@ int main() {
                                  StubOperandAccess::kRead, 1,
                                  StubFragmentKind::kScalar, 32),
               "expected paired WMMA scale16 paired-scale descriptor")) {
+    return 1;
+  }
+  if (!Expect(ContainsSlotFragment(
+                  paired_scale16, StubOperandSlotKind::kSource0,
+                  StubFragmentKind::kVector, 1, 1, 1, 64, 1),
+              "expected paired WMMA scale16 source fragment shape")) {
+    return 1;
+  }
+  if (!Expect(ContainsSlotFragment(
+                  paired_scale16, StubOperandSlotKind::kDestination,
+                  StubFragmentKind::kVector, 1, 1, 1, 64, 1),
+              "expected paired WMMA scale16 destination fragment shape")) {
     return 1;
   }
 
@@ -512,6 +574,20 @@ int main() {
               "expected SWMMAC source fragment shape")) {
     return 1;
   }
+  if (!Expect(ContainsSlotFragment(swmmac, StubOperandSlotKind::kSource1,
+                                   StubFragmentKind::kMatrix, 16, 16, 128, 8,
+                                   0),
+              "expected SWMMAC source1 fragment shape")) {
+    return 1;
+  }
+  if (!Expect(ContainsDescriptor(swmmac, StubOperandRole::kAccumulator,
+                                 StubOperandSlotKind::kAccumulatorSource,
+                                 StubOperandValueClass::kAccumulatorFragment,
+                                 StubOperandAccess::kRead, 1,
+                                 StubFragmentKind::kMatrix, 32),
+              "expected SWMMAC accumulator descriptor")) {
+    return 1;
+  }
 
   const StubDecodedInstruction swmmac_f16 =
       DecodeVop3pStub("V_SWMMAC_F16_16X16X128_FP8_FP8_w32");
@@ -525,6 +601,14 @@ int main() {
                                    StubFragmentKind::kMatrix, 16, 16, 128, 16,
                                    0),
               "expected SWMMAC F16 destination fragment shape")) {
+    return 1;
+  }
+  if (!Expect(ContainsDescriptor(swmmac_f16, StubOperandRole::kAccumulator,
+                                 StubOperandSlotKind::kAccumulatorSource,
+                                 StubOperandValueClass::kAccumulatorFragment,
+                                 StubOperandAccess::kRead, 1,
+                                 StubFragmentKind::kMatrix, 16),
+              "expected SWMMAC F16 accumulator descriptor")) {
     return 1;
   }
 
@@ -804,6 +888,29 @@ int main() {
     return 1;
   }
 
+  const StubDecodedInstruction wmma_f16_fp8_bf8_64_generic =
+      DecodeVop3pStub("V_WMMA_F16_16X16X64_FP8_BF8_w32");
+  if (!Expect(wmma_f16_fp8_bf8_64_generic.operand_layout.layout_kind ==
+                  StubOperandLayoutKind::kWmmaCoreGeneric,
+              "expected generic WMMA F16 FP8/BF8 64 operand layout")) {
+    return 1;
+  }
+  if (!Expect(ContainsSlotFragment(wmma_f16_fp8_bf8_64_generic,
+                                   StubOperandSlotKind::kSource1,
+                                   StubFragmentKind::kMatrix, 16, 16, 64, 8,
+                                   0),
+              "expected generic WMMA F16 FP8/BF8 64 source1 fragment shape")) {
+    return 1;
+  }
+  if (!Expect(ContainsDescriptor(
+                  wmma_f16_fp8_bf8_64_generic, StubOperandRole::kAccumulator,
+                  StubOperandSlotKind::kAccumulatorSource,
+                  StubOperandValueClass::kAccumulatorFragment,
+                  StubOperandAccess::kRead, 1, StubFragmentKind::kMatrix, 16),
+              "expected generic WMMA F16 FP8/BF8 64 accumulator descriptor")) {
+    return 1;
+  }
+
   const StubDecodedInstruction wmma_f16_fp8_bf8_generic =
       DecodeVop3pStub("V_WMMA_F16_16X16X128_FP8_BF8_w32");
   if (!Expect(wmma_f16_fp8_bf8_generic.operand_layout.layout_kind ==
@@ -886,6 +993,13 @@ int main() {
               "expected generic WMMA F32 BF8/FP8 source fragment shape")) {
     return 1;
   }
+  if (!Expect(ContainsSlotFragment(wmma_f32_bf8_fp8_generic,
+                                   StubOperandSlotKind::kSource1,
+                                   StubFragmentKind::kMatrix, 16, 16, 128, 8,
+                                   0),
+              "expected generic WMMA F32 BF8/FP8 source1 fragment shape")) {
+    return 1;
+  }
 
   const StubDecodedInstruction wmma_f32_fp8_bf8_128_generic =
       DecodeVop3pStub("V_WMMA_F32_16X16X128_FP8_BF8_w32");
@@ -907,6 +1021,29 @@ int main() {
                   StubOperandValueClass::kMatrixFragment,
                   StubOperandAccess::kWrite, 1, StubFragmentKind::kMatrix, 32),
               "expected generic WMMA F32 FP8/BF8 128 destination descriptor")) {
+    return 1;
+  }
+
+  const StubDecodedInstruction wmma_f32_bf8_fp8_64_generic =
+      DecodeVop3pStub("V_WMMA_F32_16X16X64_BF8_FP8_w32");
+  if (!Expect(wmma_f32_bf8_fp8_64_generic.operand_layout.layout_kind ==
+                  StubOperandLayoutKind::kWmmaCoreGeneric,
+              "expected generic WMMA F32 BF8/FP8 64 operand layout")) {
+    return 1;
+  }
+  if (!Expect(ContainsSlotFragment(wmma_f32_bf8_fp8_64_generic,
+                                   StubOperandSlotKind::kSource1,
+                                   StubFragmentKind::kMatrix, 16, 16, 64, 8,
+                                   0),
+              "expected generic WMMA F32 BF8/FP8 64 source1 fragment shape")) {
+    return 1;
+  }
+  if (!Expect(ContainsDescriptor(
+                  wmma_f32_bf8_fp8_64_generic, StubOperandRole::kAccumulator,
+                  StubOperandSlotKind::kAccumulatorSource,
+                  StubOperandValueClass::kAccumulatorFragment,
+                  StubOperandAccess::kRead, 1, StubFragmentKind::kMatrix, 32),
+              "expected generic WMMA F32 BF8/FP8 64 accumulator descriptor")) {
     return 1;
   }
 
