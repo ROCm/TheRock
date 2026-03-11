@@ -80,15 +80,19 @@ def run_reproduction(args: argparse.Namespace) -> int:
     ]
 
     if args.setup_only:
-        steps.append(("Setup complete", f"echo 'Run: {args.test_script}' && exec /bin/bash"))
+        steps.append(("Setup complete", f"echo 'Run: {args.test_script}'"))
     else:
-        steps.append(("Running test", args.test_script))
+        steps.append(("Running test", f"{args.test_script} || echo 'Test failed with exit code '$?"))
 
     total = len(steps)
     lines = ["set -e"]
     for i, (desc, cmd) in enumerate(steps, 1):
         lines.append(f"echo '[{i}/{total}] {desc}'")
+        # Disable set -e for the last step so we can drop into shell after
+        if i == total:
+            lines.append("set +e")
         lines.append(cmd)
+    lines.append("exec /bin/bash")
 
     cmd = [
         "docker", "run", "--rm", "-it",
