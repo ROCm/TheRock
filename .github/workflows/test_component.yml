@@ -169,7 +169,7 @@ jobs:
             --shard-index "${{ matrix.shard }}" \
             --total-shards "${{ fromJSON(inputs.component).total_shards }}" \
             --test-type "${{ fromJSON(inputs.component).test_type }}" \
-            --fetch-artifact-args "${{ fromJSON(inputs.component).fetch_artifact_args }}" \
+            --fetch-artifact-args="${{ fromJSON(inputs.component).fetch_artifact_args }}" \
             --print-cmd
 
       # GitHub's 'Complete job' step is unaware of launched executables
