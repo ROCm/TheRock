@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Configuration module for loading, parsing, and validation."""
 
 from .config_helper import ConfigHelper

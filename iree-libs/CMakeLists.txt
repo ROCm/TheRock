@@ -1,8 +1,16 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 ##############################################################################
 # IREE Compiler - builds libIREECompiler.so
 ##############################################################################
 if(THEROCK_ENABLE_IREE_COMPILER)
   therock_cmake_subproject_declare(iree-compiler
+    # IREE compiler has general support for many GPUs/backends and doesn't
+    # compile device code. The build infrastructure requires generic stages to
+    # pass through DIST_AMDGPU_TARGETS even if the list isn't used by the
+    # underlying project.
+    USE_DIST_AMDGPU_TARGETS
     NO_MERGE_COMPILE_COMMANDS
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/iree-compiler"
     EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/iree"
@@ -94,10 +102,8 @@ if(THEROCK_ENABLE_FUSILLIPROVIDER)
       fusilli
       hipDNN
       therock-flatbuffers
-      therock-fmt
       therock-googletest
       therock-nlohmann-json
-      therock-spdlog
     RUNTIME_DEPS
       hip-clr
       hipDNN
@@ -111,6 +117,7 @@ if(THEROCK_ENABLE_FUSILLIPROVIDER)
   therock_cmake_subproject_activate(fusilliprovider)
 
   therock_provide_artifact(fusilliprovider
+    TARGET_NEUTRAL
     DESCRIPTOR artifact-fusilliprovider.toml
     COMPONENTS
       dbg

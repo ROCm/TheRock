@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # TODO: Relocate non header-only libraries here (i.e. boost, host-blas).
 if(THEROCK_BUNDLE_SYSDEPS)
   if(CMAKE_SYSTEM_NAME STREQUAL "Linux")

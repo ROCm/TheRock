@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Multi-Arch Build - Sharded Pipeline for Windows
 #
 # This workflow builds TheRock in stages:

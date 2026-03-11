@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """
 This script determines the job status for different job runs
 as part of GitHub workflow based on RUN_ID and ATTEMPT

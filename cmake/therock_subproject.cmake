@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # therock_subproject.cmake
 # Facilities for defining build subprojects. This has some similarity to the
 # built-in ExternalProject and FetchContent facilities, but it is intended to
@@ -206,11 +209,16 @@ endfunction()
 # ACTIVATE: Option to signify that this call should end by calling
 #   therock_cmake_subproject_activate. Do not specify this option if wishing to
 #   further configure the sub-project.
-# USE_DIST_AMDGPU_TARGETS: Use the dist GPU targets vs the shard specific GPU
-#   targets. Typically this is set on runtime components that are intended to
-#    work for all supported targets, whereas it is ommitted for components which
-#    are meant to be built only for the given targets (typically for kernel
-#    libraries).
+# USE_DIST_AMDGPU_TARGETS: Use the dist GPU targets (THEROCK_DIST_AMDGPU_TARGETS)
+#   vs the shard specific GPU targets. Typically this is set on runtime components
+#   that are intended to work for all supported targets, whereas it is omitted for
+#   components which are meant to be built only for the given targets (typically
+#   for kernel libraries).
+# USE_TEST_AMDGPU_TARGETS: Use the test GPU targets (THEROCK_TEST_AMDGPU_TARGETS)
+#   which default to all available architectures. Set this on test subprojects whose
+#   artifacts are marked TARGET_NEUTRAL so that the resulting _generic artifact
+#   contains device code for every architecture, making upload races in classic CI
+#   harmless. Does not affect dist_info.json (unlike USE_DIST_AMDGPU_TARGETS).
 # DISABLE_AMDGPU_TARGETS: Do not set any GPU_TARGETS or AMDGPU_TARGETS variables
 #   in the project. This is largely used for broken projects that cannot
 #   build with an explicit target list.
@@ -327,7 +335,7 @@ endfunction()
 function(therock_cmake_subproject_declare target_name)
   cmake_parse_arguments(
     PARSE_ARGV 1 ARG
-    "ACTIVATE;USE_DIST_AMDGPU_TARGETS;DISABLE_AMDGPU_TARGETS;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH;FPRINT_SOURCE_HASH"
+    "ACTIVATE;USE_DIST_AMDGPU_TARGETS;USE_TEST_AMDGPU_TARGETS;DISABLE_AMDGPU_TARGETS;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH;FPRINT_SOURCE_HASH"
     "EXTERNAL_SOURCE_DIR;BINARY_DIR;DIR_PREFIX;INSTALL_DESTINATION;COMPILER_TOOLCHAIN;INTERFACE_PROGRAM_DIRS;CMAKE_LISTS_RELPATH;INTERFACE_PKG_CONFIG_DIRS;INSTALL_RPATH_EXECUTABLE_DIR;INSTALL_RPATH_LIBRARY_DIR;LOGICAL_TARGET_NAME;FPRINT_SOURCE_DIR"
     "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS;DEFAULT_GPU_TARGETS;FPRINT_FILE_GLOBS"
   )
@@ -468,6 +476,8 @@ function(therock_cmake_subproject_declare target_name)
   # GPU Targets.
   if(ARG_DISABLE_AMDGPU_TARGETS)
     set(_gpu_targets)
+  elseif(ARG_USE_TEST_AMDGPU_TARGETS)
+    set(_gpu_targets "${THEROCK_TEST_AMDGPU_TARGETS}")
   elseif(ARG_USE_DIST_AMDGPU_TARGETS)
     set(_gpu_targets "${THEROCK_DIST_AMDGPU_TARGETS}")
   else()
@@ -837,6 +847,11 @@ function(therock_cmake_subproject_activate target_name)
     endif()
     string(APPEND _init_contents "include(\"${_addl_cmake_include}\")\n")
   endforeach()
+
+  # Flag system: inject flag-controlled variables and defines.
+  _therock_get_flag_init_contents(_flag_init_contents "${target_name}")
+  string(APPEND _init_contents "${_flag_init_contents}")
+
   file(CONFIGURE OUTPUT "${_cmake_project_init_file}" CONTENT "${_init_contents}" @ONLY ESCAPE_QUOTES)
   list(APPEND _fprint_files "${_cmake_project_init_file}")
 
@@ -1399,6 +1414,10 @@ function(_therock_cmake_subproject_setup_toolchain
         message(FATAL_ERROR
           "Subproject ${target_name} requires dist AMDGPU targets but none were set. "
           "Set THEROCK_DIST_AMDGPU_FAMILIES.")
+      elseif("${_filtered_gpu_targets}" STREQUAL "THEROCK_TEST_AMDGPU_TARGETS-NOTFOUND")
+        message(FATAL_ERROR
+          "Subproject ${target_name} requires test AMDGPU targets but none are available. "
+          "This is unexpected since test targets default to all registered targets.")
       else()
         message(FATAL_ERROR
           "Internal error: Subproject ${target_name} received unexpected NOTFOUND sentinel "

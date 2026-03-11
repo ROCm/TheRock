@@ -1,4 +1,7 @@
 #!/usr/bin/bash
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 set -e
 
 SOURCE_DIR="${1:?Source directory must be given}"

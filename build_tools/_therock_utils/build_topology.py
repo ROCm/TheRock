@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """
 Build topology parsing and manipulation for TheRock CI/CD pipeline.
 

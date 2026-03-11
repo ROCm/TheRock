@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # therock_explicit_finders.cmake
 # Overrides find_library / find_path within a sub-project such that it will only
 # find explicit things from the super-project. Unlike find_package, CMake does

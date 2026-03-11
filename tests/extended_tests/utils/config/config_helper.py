@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Configuration helper for loading, validation, and logging setup."""
 
 from pathlib import Path

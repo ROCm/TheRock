@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """This file looks up the test-runs-on runner label for a given GPU family.
 
 Environment variable inputs:

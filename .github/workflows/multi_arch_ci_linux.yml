@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 name: Multi-Arch CI - Linux
 
 on:
@@ -29,6 +32,9 @@ on:
         type: string
       test_type:
         type: string
+      build_pytorch:
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -54,13 +60,32 @@ jobs:
       contents: read
       id-token: write
 
+  validate_artifact_structure:
+    needs: [build_multi_arch_stages]
+    name: Validate Artifact Structure
+    if: >-
+      ${{
+        !failure() &&
+        !cancelled() &&
+        (
+          inputs.use_prebuilt_artifacts == 'false' ||
+          inputs.use_prebuilt_artifacts == 'true'
+        ) &&
+        inputs.expect_failure == false
+      }}
+    uses: ./.github/workflows/test_artifacts_structure.yml
+    with:
+      artifact_group: ${{ inputs.artifact_group }}
+      artifact_run_id: ${{ inputs.artifact_run_id }}
+      platform: linux
+
   test_artifacts_per_family:
     needs: [build_multi_arch_stages]
     name: Test ${{ matrix.family_info.amdgpu_family }}
     # If the dependent job failed/cancelled, this job will not be run
     # The use_prebuilt_artifacts "or" statement ensures that tests will run if
     # previous build step is run or skipped.
-    # If we are expecting a build failure, do not run tests to save machine capacity
+    # If we are expecting a build failure, do not run tests to save machine capacity.
     if: >-
       ${{
         !failure() &&
@@ -91,3 +116,99 @@ jobs:
       test_type: ${{ inputs.test_type }}
       test_labels: ${{ inputs.test_labels }}
       sanity_check_only_for_family: ${{ matrix.family_info.sanity_check_only_for_family }}
+
+  build_python_packages:
+    needs: [build_multi_arch_stages]
+    name: Build Python Packages
+    # If the dependent job failed/cancelled, this job will not be run
+    # The use_prebuilt_artifacts "or" statement ensures that tests will run if
+    # previous build step is run or skipped.
+    if: >-
+      ${{
+        !failure() &&
+        !cancelled() &&
+        (
+          inputs.use_prebuilt_artifacts == 'false' ||
+          inputs.use_prebuilt_artifacts == 'true'
+        ) &&
+        inputs.expect_failure == false
+      }}
+    uses: ./.github/workflows/build_portable_linux_python_packages.yml
+    with:
+      artifact_run_id: "${{ inputs.artifact_run_id != '' && inputs.artifact_run_id || github.run_id }}"
+      artifact_group: ${{ inputs.artifact_group }}
+      amdgpu_families: ${{ inputs.dist_amdgpu_families }}
+      multiarch_index: true
+      package_version: ${{ inputs.rocm_package_version }}
+    permissions:
+      contents: read
+      id-token: write
+
+  # NOTE: Per-family PyTorch builds — each family gets its own wheel built
+  # against that family's ROCm package index slice.
+  # TODO(future): Consider adding a combined multi-arch pytorch build job
+  # that builds once against the full multi-arch index (amdgpu_families=all).
+  build_pytorch_wheels_per_family:
+    needs: [build_python_packages]
+    name: Build PyTorch | ${{ matrix.family_info.amdgpu_family }}
+    if: >-
+      ${{
+        !failure() &&
+        !cancelled() &&
+        (
+          inputs.use_prebuilt_artifacts == 'false' ||
+          inputs.use_prebuilt_artifacts == 'true'
+        ) &&
+        inputs.expect_failure == false &&
+        inputs.build_pytorch == true
+      }}
+    strategy:
+      fail-fast: false
+      matrix:
+        family_info: ${{ fromJSON(inputs.matrix_per_family_json) }}
+        # TODO(TheRock#3288): Re-enable gfx950-dcgpu runners once we get more capacity
+        exclude:
+          - family_info:
+              amdgpu_family: gfx950-dcgpu
+    uses: ./.github/workflows/build_portable_linux_pytorch_wheels_ci.yml
+    with:
+      artifact_group: ${{ matrix.family_info.amdgpu_family }}
+      python_version: "3.12"
+      pytorch_git_ref: "release/2.10"
+      rocm_package_find_links_url: "${{ needs.build_python_packages.outputs.package_find_links_url }}/${{ matrix.family_info.amdgpu_family }}/index.html"
+      rocm_version: ${{ inputs.rocm_package_version }}
+    permissions:
+      contents: read
+      id-token: write
+
+  test_python_packages_per_family:
+    needs: [build_python_packages]
+    name: Test Python ${{ matrix.family_info.amdgpu_family }}
+    # If the dependent job failed/cancelled, this job will not be run
+    # The use_prebuilt_artifacts "or" statement ensures that tests will run if
+    # previous build step is run or skipped.
+    if: >-
+      ${{
+        !failure() &&
+        !cancelled() &&
+        (
+          inputs.use_prebuilt_artifacts == 'false' ||
+          inputs.use_prebuilt_artifacts == 'true'
+        ) &&
+        inputs.expect_failure == false
+      }}
+    strategy:
+      fail-fast: false
+      matrix:
+        family_info: ${{ fromJSON(inputs.matrix_per_family_json) }}
+        # TODO(TheRock#3288): Re-enable gfx950-dcgpu runners once we get more capacity
+        exclude:
+          - family_info:
+              amdgpu_family: gfx950-dcgpu
+    uses: ./.github/workflows/test_rocm_wheels.yml
+    with:
+      amdgpu_family: ${{ matrix.family_info.amdgpu_family }}
+      test_runs_on: ${{ matrix.family_info.test-runs-on }}
+      package_find_links_url: "${{ needs.build_python_packages.outputs.package_find_links_url }}/${{ matrix.family_info.amdgpu_family }}/index.html"
+      python_version: "3.12"
+      rocm_version: ${{ inputs.rocm_package_version }}

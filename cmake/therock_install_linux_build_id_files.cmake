@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # This script is included during cmake_install.cmake at the top level of any
 # sub-project which is seeking to split its debug files into a .build-id
 # root folder on Linux.

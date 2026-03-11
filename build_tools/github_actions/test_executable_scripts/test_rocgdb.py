@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 import argparse
 import glob
 import logging
@@ -417,6 +420,13 @@ class TestResults:
                     self.test_data[compiler_label]["TIMEOUT"][test_file].append(
                         test_name
                     )
+
+                # Ignore timeouts that happen on anything other than FAIL or
+                # UNRESOLVED. For instance, if we have a timeout for a KFAIL,
+                # we don't want to add it to the failed tests list since it is
+                # harmless.
+                if is_timeout and status not in ["FAIL", "UNRESOLVED"]:
+                    is_timeout = False
 
                 # Track the current list of failed tests.
                 if status in ["FAIL", "UNRESOLVED"] or is_timeout:

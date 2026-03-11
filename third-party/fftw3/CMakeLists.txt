@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 therock_subproject_fetch(therock-fftw3-sources
   CMAKE_PROJECT
   # Originally mirrored from: https://fftw.org/fftw-3.3.10.tar.gz

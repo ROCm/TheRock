@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Various top level targets that have dependencies added to them build system
 # wide. In general, the canonical name for all such targets is prefixed with
 # "therock-{name}", but also bare name targets are defined if not already.

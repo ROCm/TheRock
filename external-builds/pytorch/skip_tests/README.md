@@ -41,11 +41,17 @@ skip_tests = {
     "common": {
         <PyTorch test module> : [ <Tests> ],
     },
-    "<amdgpu family>": {,
+    "<amdgpu family short form>": {,
         <PyTorch test module> : [ <Tests> ],
     },
 }
 ```
+
+`Amdgpu family short form` is the minimum entry needed to match the right architecture. E.g.
+
+- `gfx94` to match `gf94X-dcgpu` and its arch `gfx942`
+- `gfx120` to match `gfx120X-all` and its archs `gfx1200` and `gfx1201`
+- `gfx1150` to match `gfx1150`
 
 The PyTorch test modules are `nn`, `cuda`, `unary_ufuncs` etc.
 This ordering is mainly added for easier debugging as otherwise it is difficult to determine which test module contains a given tests like `test_host_memory_stats` belongs to.
@@ -62,7 +68,7 @@ skip_tests = {
             "test_host_memory_stats",
         ]
     },
-    "gfx942": {
+    "gfx94": {
         "autograd": [
             "test_multi_grad_all_hooks",
             "test_side_stream_backward_overlap"

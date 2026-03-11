@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Configuration validation using JSON Schema for early error detection."""
 
 from jsonschema import validate, ValidationError, Draft7Validator

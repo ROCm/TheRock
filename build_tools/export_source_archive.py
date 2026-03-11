@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Exports a canonical source archive from a pristine git worktree.
 
 Many downstream packagers operate off of source archives, and this utility exports
