@@ -2,9 +2,15 @@
 # SPDX-License-Identifier: MIT
 
 import json
+import os
+import sys
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+
+# Add github_actions to path so workflow_summary is importable.
+sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from workflow_summary import (
     FailedJobInfo,
@@ -169,9 +175,12 @@ class TestFetchFailedJobs:
             failed = fetch_failed_jobs("owner/repo", "12345")
 
         assert len(failed) == 2
-        assert failed[0].name == "Test hip-tests (shard 1/1)"
-        assert failed[0].html_url == "https://github.com/test/run/2"
-        assert failed[1].name == "Test rocthrust (shard 1/1)"
+        assert failed[0] == FailedJobInfo(
+            name="Test hip-tests (shard 1/1)", html_url="https://github.com/test/run/2"
+        )
+        assert failed[1] == FailedJobInfo(
+            name="Test rocthrust (shard 1/1)", html_url="https://github.com/test/run/3"
+        )
 
     def test_no_failures(self):
         api_response = {
@@ -189,6 +198,34 @@ class TestFetchFailedJobs:
             failed = fetch_failed_jobs("owner/repo", "12345")
 
         assert len(failed) == 0
+
+    def test_paginates_when_more_than_100_jobs(self):
+        """Runs with >100 jobs require multiple API pages."""
+        # Page 1: 100 successful jobs.
+        page1 = {
+            "jobs": [
+                {"name": f"Job {i}", "conclusion": "success", "html_url": ""}
+                for i in range(100)
+            ]
+        }
+        # Page 2: 2 jobs, one failed.
+        page2 = {
+            "jobs": [
+                {"name": "Job 100", "conclusion": "success", "html_url": ""},
+                {
+                    "name": "Job 101",
+                    "conclusion": "failure",
+                    "html_url": "https://github.com/test/run/101",
+                },
+            ]
+        }
+        with patch("workflow_summary.gha_send_request", side_effect=[page1, page2]):
+            failed = fetch_failed_jobs("owner/repo", "12345")
+
+        assert len(failed) == 1
+        assert failed[0] == FailedJobInfo(
+            name="Job 101", html_url="https://github.com/test/run/101"
+        )
 
 
 # ---------------------------------------------------------------------------

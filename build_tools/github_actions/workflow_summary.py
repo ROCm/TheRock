@@ -149,15 +149,29 @@ def fetch_failed_jobs(
     Returns:
         A list of failed jobs with names and URLs.
     """
-    url = (
-        f"https://api.github.com/repos/{github_repository}"
-        f"/actions/runs/{github_run_id}/jobs?filter=latest&per_page=100"
-    )
-    response = gha_send_request(url)
-    jobs = response.get("jobs", [])
+    max_pages = 10
+    all_jobs: list[dict] = []
+    page = 1
+    while page <= max_pages:
+        url = (
+            f"https://api.github.com/repos/{github_repository}"
+            f"/actions/runs/{github_run_id}/jobs"
+            f"?filter=latest&per_page=100&page={page}"
+        )
+        response = gha_send_request(url)
+        jobs = response.get("jobs", [])
+        all_jobs.extend(jobs)
+        if len(jobs) < 100:
+            break
+        page += 1
+    else:
+        print(
+            f"  Warning: fetched {len(all_jobs)} jobs across {max_pages} pages;"
+            f" results may be incomplete."
+        )
 
     failed: list[FailedJobInfo] = []
-    for job in jobs:
+    for job in all_jobs:
         if job.get("conclusion") == "failure":
             failed.append(
                 FailedJobInfo(
