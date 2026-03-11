@@ -18,6 +18,7 @@
   - operand-slot records for routed high-value seeds
   - shared common `OperandDescriptor` records derived from routed slot metadata
   - shared common fragment-shape metadata on routed operand slots
+  - parser-backed generic matrix fragment metadata for routed WMMA / SWMMAC variants
 
 ## Routed Seed Metadata Coverage
 
@@ -38,6 +39,13 @@
   - `V_WMMA_LD_SCALE16_PAIRED_B64`
   - `V_SWMMAC_F32_16X16X128_FP8_FP8_w32`
   - `V_SWMMAC_F16_16X16X128_FP8_FP8_w32`
+  - parser-backed representative routed variants:
+    - `V_WMMA_BF16F32_16X16X32_BF16_w32`
+    - `V_WMMA_I32_16X16X64_IU8_w32`
+    - `V_SWMMAC_BF16F32_16X16X64_BF16_w32`
+    - `V_SWMMAC_I32_16X16X128_IU8_w32`
+    - `V_WMMA_SCALE_F32_32X16X128_F4_w32`
+    - `V_WMMA_SCALE16_F32_32X16X128_F4_w32`
 - `MIMG tensor` slice:
   - `TENSOR_LOAD_TO_LDS`
   - `TENSOR_STORE_FROM_LDS`
@@ -75,6 +83,11 @@
   - Sources: `2`
   - Destinations: `1`
   - Accumulator sources: `1`
+- Generic WMMA core variants:
+  - parser-backed `V_WMMA_*` routed variants now fall back to `kWmmaCoreGeneric`
+  - representative seeds:
+    - `V_WMMA_BF16F32_16X16X32_BF16_w32`
+    - `V_WMMA_I32_16X16X64_IU8_w32`
 - WMMA scale:
   - `V_WMMA_SCALE_F32_16X16X128_F8F6F4` -> `kWmmaScaleF32_16x16x128_F8F6F4`
   - `V_WMMA_SCALE16_F32_16X16X128_F8F6F4` -> `kWmmaScale16F32_16x16x128_F8F6F4`
@@ -83,6 +96,11 @@
   - Accumulator sources: `1`
   - Flags:
     - `has_scale_operand`
+- Generic WMMA scale variants:
+  - parser-backed `V_WMMA_SCALE*` routed variants now fall back to `kWmmaScaleGeneric`
+  - representative seeds:
+    - `V_WMMA_SCALE_F32_32X16X128_F4_w32`
+    - `V_WMMA_SCALE16_F32_32X16X128_F4_w32`
 - WMMA scale paired loads:
   - `V_WMMA_LD_SCALE_PAIRED_B32` -> `kWmmaLdScalePairedB32`
   - `V_WMMA_LD_SCALE16_PAIRED_B64` -> `kWmmaLdScale16PairedB64`
@@ -97,6 +115,11 @@
   - Sources: `2`
   - Destinations: `1`
   - Accumulator sources: `1`
+- Generic SWMMAC variants:
+  - parser-backed `V_SWMMAC_*` routed variants now fall back to `kSwmmacCoreGeneric`
+  - representative seeds:
+    - `V_SWMMAC_BF16F32_16X16X64_BF16_w32`
+    - `V_SWMMAC_I32_16X16X128_IU8_w32`
 - Tensor routes:
   - `TENSOR_LOAD_TO_LDS` -> `kTensorLoadToLds`
   - `TENSOR_STORE_FROM_LDS` -> `kTensorStoreFromLds`
@@ -233,6 +256,13 @@
   - `V_WMMA_F32_16X16X128_FP8_FP8_w32`: source matrix `16x16x128`, `8-bit`; destination/accumulator `32-bit`
   - `V_WMMA_F16_16X16X128_FP8_FP8_w32`: source matrix `16x16x128`, `8-bit`; destination/accumulator `16-bit`
   - `V_WMMA_F32_16X16X64_FP8_FP8_w32`: source matrix `16x16x64`, `8-bit`; destination/accumulator `32-bit`
+  - parser-backed generic routed variants:
+    - `V_WMMA_BF16F32_16X16X32_BF16_w32`: source matrix `16x16x32`, `16-bit`; destination/accumulator `32-bit`
+    - `V_WMMA_I32_16X16X64_IU8_w32`: source matrix `16x16x64`, `8-bit`; destination/accumulator `32-bit`
+    - `V_SWMMAC_BF16F32_16X16X64_BF16_w32`: source matrix `16x16x64`, `16-bit`; destination/accumulator `32-bit`
+    - `V_SWMMAC_I32_16X16X128_IU8_w32`: source matrix `16x16x128`, `8-bit`; destination/accumulator `32-bit`
+    - `V_WMMA_SCALE_F32_32X16X128_F4_w32`: source matrix `32x16x128`, `4-bit`; destination/accumulator `32-bit`
+    - `V_WMMA_SCALE16_F32_32X16X128_F4_w32`: source matrix `32x16x128`, `4-bit`; destination/accumulator `32-bit`
 - Tensor routes:
   - tensor descriptor fragment
   - tensor coordinate fragment

@@ -19,6 +19,16 @@ struct ClassifiedStubShape {
   bool uses_paired_operands = false;
 };
 
+struct ParsedMatrixInstructionShape {
+  bool valid = false;
+  std::uint16_t rows = 0;
+  std::uint16_t columns = 0;
+  std::uint16_t depth = 0;
+  std::uint8_t input_element_bit_width = 0;
+  std::uint8_t result_element_bit_width = 0;
+  std::uint8_t wave_size = 0;
+};
+
 StubOperandRoleRecord MakeOperandRoles(
     std::initializer_list<StubOperandRoleBinding> bindings) {
   StubOperandRoleRecord record;
@@ -45,6 +55,145 @@ StubOperandSlotRecord MakeOperandSlots(
   }
   record.binding_count = index;
   return record;
+}
+
+bool HasPrefix(std::string_view value, std::string_view prefix) {
+  return value.size() >= prefix.size() &&
+         value.substr(0, prefix.size()) == prefix;
+}
+
+bool ContainsToken(std::string_view value, std::string_view token) {
+  return value.find(token) != std::string_view::npos;
+}
+
+bool ParseUnsigned16(std::string_view token, std::uint16_t* out) {
+  if (token.empty()) {
+    return false;
+  }
+  std::uint32_t parsed = 0;
+  for (char ch : token) {
+    if (ch < '0' || ch > '9') {
+      return false;
+    }
+    parsed = parsed * 10u + static_cast<std::uint32_t>(ch - '0');
+  }
+  *out = static_cast<std::uint16_t>(parsed);
+  return true;
+}
+
+bool ParseDimensionTriplet(std::string_view instruction_name,
+                           std::uint16_t* rows,
+                           std::uint16_t* columns,
+                           std::uint16_t* depth) {
+  for (std::size_t start = 0; start < instruction_name.size(); ++start) {
+    if (instruction_name[start] < '0' || instruction_name[start] > '9') {
+      continue;
+    }
+    const std::size_t first_x = instruction_name.find('X', start);
+    if (first_x == std::string_view::npos) {
+      continue;
+    }
+    const std::size_t second_x = instruction_name.find('X', first_x + 1);
+    if (second_x == std::string_view::npos) {
+      continue;
+    }
+    const std::size_t end =
+        instruction_name.find('_', second_x + 1) == std::string_view::npos
+            ? instruction_name.size()
+            : instruction_name.find('_', second_x + 1);
+    std::uint16_t parsed_rows = 0;
+    std::uint16_t parsed_columns = 0;
+    std::uint16_t parsed_depth = 0;
+    if (!ParseUnsigned16(instruction_name.substr(start, first_x - start),
+                         &parsed_rows) ||
+        !ParseUnsigned16(
+            instruction_name.substr(first_x + 1, second_x - first_x - 1),
+            &parsed_columns) ||
+        !ParseUnsigned16(instruction_name.substr(second_x + 1, end - second_x - 1),
+                         &parsed_depth)) {
+      continue;
+    }
+    *rows = parsed_rows;
+    *columns = parsed_columns;
+    *depth = parsed_depth;
+    return true;
+  }
+  return false;
+}
+
+std::uint8_t InferMatrixResultWidth(std::string_view instruction_name) {
+  if (HasPrefix(instruction_name, "V_WMMA_F32_") ||
+      HasPrefix(instruction_name, "V_SWMMAC_F32_") ||
+      HasPrefix(instruction_name, "V_WMMA_SCALE_F32_") ||
+      HasPrefix(instruction_name, "V_WMMA_SCALE16_F32_") ||
+      HasPrefix(instruction_name, "V_WMMA_BF16F32_") ||
+      HasPrefix(instruction_name, "V_SWMMAC_BF16F32_") ||
+      HasPrefix(instruction_name, "V_WMMA_I32_") ||
+      HasPrefix(instruction_name, "V_SWMMAC_I32_")) {
+    return 32;
+  }
+  if (HasPrefix(instruction_name, "V_WMMA_F16_") ||
+      HasPrefix(instruction_name, "V_SWMMAC_F16_") ||
+      HasPrefix(instruction_name, "V_WMMA_BF16_") ||
+      HasPrefix(instruction_name, "V_SWMMAC_BF16_")) {
+    return 16;
+  }
+  return 0;
+}
+
+std::uint8_t InferMatrixInputWidth(std::string_view instruction_name) {
+  if (ContainsToken(instruction_name, "_F4_")) {
+    return 4;
+  }
+  if (ContainsToken(instruction_name, "FP8") ||
+      ContainsToken(instruction_name, "BF8") ||
+      ContainsToken(instruction_name, "IU8") ||
+      ContainsToken(instruction_name, "F8F6F4")) {
+    return 8;
+  }
+  if (ContainsToken(instruction_name, "BF16") ||
+      ContainsToken(instruction_name, "_F16_")) {
+    return 16;
+  }
+  if (ContainsToken(instruction_name, "_F32_") &&
+      ContainsToken(instruction_name, "16X16X4")) {
+    return 32;
+  }
+  return 0;
+}
+
+std::uint8_t InferWaveSize(std::string_view instruction_name) {
+  const std::size_t wave_marker = instruction_name.rfind("_w");
+  if (wave_marker == std::string_view::npos) {
+    return 0;
+  }
+  std::uint16_t parsed_wave = 0;
+  if (!ParseUnsigned16(instruction_name.substr(wave_marker + 2), &parsed_wave)) {
+    return 0;
+  }
+  return static_cast<std::uint8_t>(parsed_wave);
+}
+
+ParsedMatrixInstructionShape ParseMatrixInstructionShape(
+    std::string_view instruction_name) {
+  if (!HasPrefix(instruction_name, "V_WMMA_") &&
+      !HasPrefix(instruction_name, "V_SWMMAC_")) {
+    return {};
+  }
+
+  ParsedMatrixInstructionShape parsed;
+  parsed.valid = ParseDimensionTriplet(instruction_name, &parsed.rows,
+                                       &parsed.columns, &parsed.depth);
+  if (!parsed.valid) {
+    return {};
+  }
+  parsed.input_element_bit_width = InferMatrixInputWidth(instruction_name);
+  parsed.result_element_bit_width = InferMatrixResultWidth(instruction_name);
+  parsed.wave_size = InferWaveSize(instruction_name);
+  parsed.valid = parsed.input_element_bit_width != 0 &&
+                 parsed.result_element_bit_width != 0 &&
+                 parsed.wave_size != 0;
+  return parsed;
 }
 
 FragmentShape ClassifyOperandFragmentShape(
@@ -88,36 +237,17 @@ FragmentShape ClassifyOperandFragmentShape(
       return MakeAddressFragmentShape(32);
     case StubOperandValueClass::kMatrixFragment:
     case StubOperandValueClass::kAccumulatorFragment:
-      if (instruction_name == "V_WMMA_F32_16X16X4_F32_w32") {
+      if (const ParsedMatrixInstructionShape parsed =
+              ParseMatrixInstructionShape(instruction_name);
+          parsed.valid) {
+        const bool wide_result =
+            binding.value_class == StubOperandValueClass::kAccumulatorFragment ||
+            is_result_slot;
         return MakeMatrixFragmentShape(
-            16, 16, 4,
-            binding.value_class == StubOperandValueClass::kAccumulatorFragment ||
-                    binding.slot_kind == StubOperandSlotKind::kDestination
-                ? 32
-                : 32,
-            32);
-      }
-      if (instruction_name == "V_WMMA_F32_16X16X128_FP8_FP8_w32" ||
-          instruction_name == "V_SWMMAC_F32_16X16X128_FP8_FP8_w32" ||
-          instruction_name == "V_WMMA_SCALE_F32_16X16X128_F8F6F4" ||
-          instruction_name == "V_WMMA_SCALE16_F32_16X16X128_F8F6F4") {
-        const bool wide_result =
-            binding.value_class == StubOperandValueClass::kAccumulatorFragment ||
-            is_result_slot;
-        return MakeMatrixFragmentShape(16, 16, 128, wide_result ? 32 : 8, 32);
-      }
-      if (instruction_name == "V_WMMA_F16_16X16X128_FP8_FP8_w32" ||
-          instruction_name == "V_SWMMAC_F16_16X16X128_FP8_FP8_w32") {
-        const bool wide_result =
-            binding.value_class == StubOperandValueClass::kAccumulatorFragment ||
-            is_result_slot;
-        return MakeMatrixFragmentShape(16, 16, 128, wide_result ? 16 : 8, 32);
-      }
-      if (instruction_name == "V_WMMA_F32_16X16X64_FP8_FP8_w32") {
-        const bool wide_result =
-            binding.value_class == StubOperandValueClass::kAccumulatorFragment ||
-            is_result_slot;
-        return MakeMatrixFragmentShape(16, 16, 64, wide_result ? 32 : 8, 32);
+            parsed.rows, parsed.columns, parsed.depth,
+            wide_result ? parsed.result_element_bit_width
+                        : parsed.input_element_bit_width,
+            parsed.wave_size);
       }
       break;
     case StubOperandValueClass::kUnknown:
@@ -394,6 +524,48 @@ StubOperandLayoutRecord ClassifyOperandLayout(std::string_view instruction_name)
   if (instruction_name == "V_SWMMAC_F16_16X16X128_FP8_FP8_w32") {
     return {
         StubOperandLayoutKind::kSwmmacF16_16x16x128_Fp8Fp8W32,
+        2,
+        1,
+        1,
+        false,
+        false,
+        false,
+        false,
+        false,
+    };
+  }
+  if (HasPrefix(instruction_name, "V_WMMA_SCALE") &&
+      !HasPrefix(instruction_name, "V_WMMA_LD_SCALE")) {
+    return {
+        StubOperandLayoutKind::kWmmaScaleGeneric,
+        3,
+        1,
+        1,
+        true,
+        false,
+        false,
+        false,
+        false,
+    };
+  }
+  if (HasPrefix(instruction_name, "V_WMMA_") &&
+      !HasPrefix(instruction_name, "V_WMMA_SCALE") &&
+      !HasPrefix(instruction_name, "V_WMMA_LD_SCALE")) {
+    return {
+        StubOperandLayoutKind::kWmmaCoreGeneric,
+        2,
+        1,
+        1,
+        false,
+        false,
+        false,
+        false,
+        false,
+    };
+  }
+  if (HasPrefix(instruction_name, "V_SWMMAC_")) {
+    return {
+        StubOperandLayoutKind::kSwmmacCoreGeneric,
         2,
         1,
         1,
@@ -739,6 +911,34 @@ StubOperandRoleRecord ClassifyOperandRoles(std::string_view instruction_name) {
         {StubOperandRole::kDestination, 1, true, false},
     });
   }
+  if (HasPrefix(instruction_name, "V_WMMA_SCALE") &&
+      !HasPrefix(instruction_name, "V_WMMA_LD_SCALE")) {
+    return MakeOperandRoles({
+        {StubOperandRole::kSource0, 1, false, false},
+        {StubOperandRole::kSource1, 1, false, false},
+        {StubOperandRole::kAccumulator, 1, false, false},
+        {StubOperandRole::kScale, 1, false, false},
+        {StubOperandRole::kDestination, 1, true, false},
+    });
+  }
+  if (HasPrefix(instruction_name, "V_WMMA_") &&
+      !HasPrefix(instruction_name, "V_WMMA_SCALE") &&
+      !HasPrefix(instruction_name, "V_WMMA_LD_SCALE")) {
+    return MakeOperandRoles({
+        {StubOperandRole::kSource0, 1, false, false},
+        {StubOperandRole::kSource1, 1, false, false},
+        {StubOperandRole::kAccumulator, 1, false, false},
+        {StubOperandRole::kDestination, 1, true, false},
+    });
+  }
+  if (HasPrefix(instruction_name, "V_SWMMAC_")) {
+    return MakeOperandRoles({
+        {StubOperandRole::kSource0, 1, false, false},
+        {StubOperandRole::kSource1, 1, false, false},
+        {StubOperandRole::kAccumulator, 1, false, false},
+        {StubOperandRole::kDestination, 1, true, false},
+    });
+  }
   if (instruction_name == "TENSOR_LOAD_TO_LDS") {
     return MakeOperandRoles({
         {StubOperandRole::kTensorDescriptor, 1, false, false},
@@ -934,6 +1134,99 @@ StubOperandSlotRecord ClassifyOperandSlots(std::string_view instruction_name) {
          false},
         {StubOperandSlotKind::kPairedScaleSource,
          StubOperandValueClass::kScalarRegister,
+         3,
+         1,
+         false,
+         false},
+    }));
+  }
+  if (HasPrefix(instruction_name, "V_WMMA_SCALE") &&
+      !HasPrefix(instruction_name, "V_WMMA_LD_SCALE")) {
+    return AttachFragmentShapes(instruction_name, MakeOperandSlots({
+        {StubOperandSlotKind::kDestination,
+         StubOperandValueClass::kMatrixFragment,
+         0,
+         1,
+         true,
+         false},
+        {StubOperandSlotKind::kSource0,
+         StubOperandValueClass::kMatrixFragment,
+         1,
+         1,
+         false,
+         false},
+        {StubOperandSlotKind::kSource1,
+         StubOperandValueClass::kMatrixFragment,
+         2,
+         1,
+         false,
+         false},
+        {StubOperandSlotKind::kAccumulatorSource,
+         StubOperandValueClass::kAccumulatorFragment,
+         3,
+         1,
+         false,
+         false},
+        {StubOperandSlotKind::kScaleSource,
+         StubOperandValueClass::kScalarRegister,
+         4,
+         1,
+         false,
+         false},
+    }));
+  }
+  if (HasPrefix(instruction_name, "V_WMMA_") &&
+      !HasPrefix(instruction_name, "V_WMMA_SCALE") &&
+      !HasPrefix(instruction_name, "V_WMMA_LD_SCALE")) {
+    return AttachFragmentShapes(instruction_name, MakeOperandSlots({
+        {StubOperandSlotKind::kDestination,
+         StubOperandValueClass::kMatrixFragment,
+         0,
+         1,
+         true,
+         false},
+        {StubOperandSlotKind::kSource0,
+         StubOperandValueClass::kMatrixFragment,
+         1,
+         1,
+         false,
+         false},
+        {StubOperandSlotKind::kSource1,
+         StubOperandValueClass::kMatrixFragment,
+         2,
+         1,
+         false,
+         false},
+        {StubOperandSlotKind::kAccumulatorSource,
+         StubOperandValueClass::kAccumulatorFragment,
+         3,
+         1,
+         false,
+         false},
+    }));
+  }
+  if (HasPrefix(instruction_name, "V_SWMMAC_")) {
+    return AttachFragmentShapes(instruction_name, MakeOperandSlots({
+        {StubOperandSlotKind::kDestination,
+         StubOperandValueClass::kMatrixFragment,
+         0,
+         1,
+         true,
+         false},
+        {StubOperandSlotKind::kSource0,
+         StubOperandValueClass::kMatrixFragment,
+         1,
+         1,
+         false,
+         false},
+        {StubOperandSlotKind::kSource1,
+         StubOperandValueClass::kMatrixFragment,
+         2,
+         1,
+         false,
+         false},
+        {StubOperandSlotKind::kAccumulatorSource,
+         StubOperandValueClass::kAccumulatorFragment,
          3,
          1,
          false,
@@ -1291,10 +1584,14 @@ std::string_view GetStubOperandLayoutName(
       return "kWmmaF16_16x16x128_Fp8Fp8W32";
     case StubOperandLayoutKind::kWmmaF32_16x16x64_Fp8Fp8W32:
       return "kWmmaF32_16x16x64_Fp8Fp8W32";
+    case StubOperandLayoutKind::kWmmaCoreGeneric:
+      return "kWmmaCoreGeneric";
     case StubOperandLayoutKind::kWmmaScaleF32_16x16x128_F8F6F4:
       return "kWmmaScaleF32_16x16x128_F8F6F4";
     case StubOperandLayoutKind::kWmmaScale16F32_16x16x128_F8F6F4:
       return "kWmmaScale16F32_16x16x128_F8F6F4";
+    case StubOperandLayoutKind::kWmmaScaleGeneric:
+      return "kWmmaScaleGeneric";
     case StubOperandLayoutKind::kWmmaLdScalePairedB32:
       return "kWmmaLdScalePairedB32";
     case StubOperandLayoutKind::kWmmaLdScale16PairedB64:
@@ -1303,6 +1600,8 @@ std::string_view GetStubOperandLayoutName(
       return "kSwmmacF32_16x16x128_Fp8Fp8W32";
     case StubOperandLayoutKind::kSwmmacF16_16x16x128_Fp8Fp8W32:
       return "kSwmmacF16_16x16x128_Fp8Fp8W32";
+    case StubOperandLayoutKind::kSwmmacCoreGeneric:
+      return "kSwmmacCoreGeneric";
     case StubOperandLayoutKind::kTensorLoadToLds:
       return "kTensorLoadToLds";
     case StubOperandLayoutKind::kTensorStoreFromLds:
