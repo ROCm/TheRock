@@ -15,12 +15,14 @@ reads instead of network downloads.
 
 ```text
 Without mirrors:
-  git submodule update --init
-    -> fetches ~3GB+ for llvm-project from github.com  (10-20 min)
+  python fetch_sources.py
+    -> fetches ~3GB+ for llvm-project from github.com       (10-20 min)
+    -> repeats for each of the 14+ submodules
 
-With mirrors:
-  git submodule update --init --reference /path/to/mirrors/ROCm/llvm-project.git
-    -> reads objects from local disk                     (~5 sec)
+With mirrors (using fetch_sources.py --reference-dir):
+  python fetch_sources.py --reference-dir ~/.rocm-git-mirrors
+    -> selects the correct mirror for each submodule automatically
+    -> reads most objects from local disk                    (~5 sec per submodule)
     -> fetches only missing objects (if any) from remote
 ```
 
