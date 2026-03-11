@@ -1,6 +1,9 @@
 # rocgdb
 [components.dbg."debug-tools/rocgdb/stage"]
 [components.dev."debug-tools/rocgdb/stage"]
+exclude = [
+  "tests/**",
+]
 [components.doc."debug-tools/rocgdb/stage"]
 include = [
   "share/doc/**",

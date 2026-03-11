@@ -159,6 +159,23 @@ amdgpu_family_info_matrix_postsubmit = {
 
 # The 'nightly' matrix runs on 'schedule' triggers.
 amdgpu_family_info_matrix_nightly = {
+    "gfx900": {
+        "linux": {
+            # Disabled due to hardware availability
+            "test-runs-on": "",
+            "family": "gfx900",
+            "fetch-gfx-targets": [],
+            "sanity_check_only_for_family": True,
+            "build_variants": ["release"],
+        },
+        "windows": {
+            "test-runs-on": "",
+            "family": "gfx900",
+            "fetch-gfx-targets": [],
+            "build_variants": ["release"],
+            "expect_pytorch_failure": True,
+        },
+    },
     # gfx906/908/90a split into separate families - each has different instruction
     # support (e.g., fp8 variants, WMMA) so CK/MIOpen need to build/test individually.
     "gfx906": {
