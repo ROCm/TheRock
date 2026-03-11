@@ -1,0 +1,48 @@
+{
+  "target": "gfx1201",
+  "slice": "phase0_execution_seed",
+  "executable_opcodes": [
+    "S_ENDPGM",
+    "S_NOP",
+    "S_MOV_B32",
+    "S_MOVK_I32",
+    "V_MOV_B32"
+  ],
+  "covered_encodings": {
+    "ENC_SOPP": [
+      "S_ENDPGM",
+      "S_NOP"
+    ],
+    "ENC_SOP1": [
+      "S_MOV_B32"
+    ],
+    "ENC_SOPK": [
+      "S_MOVK_I32"
+    ],
+    "ENC_VOP1": [
+      "V_MOV_B32"
+    ]
+  },
+  "decoder_capabilities": [
+    "Returns real DecodedInstruction values for the executable slice.",
+    "Decodes SGPR, inline integer, and literal sources for S_MOV_B32 and V_MOV_B32.",
+    "Sign-extends SIMM16 for S_MOVK_I32."
+  ],
+  "execution_capabilities": [
+    "Halts waves with S_ENDPGM.",
+    "Accepts S_NOP as a no-op seed instruction.",
+    "Executes scalar move and scalar immediate move.",
+    "Executes exec-masked V_MOV_B32."
+  ],
+  "still_scaffolded": [
+    "Route-matched but non-executable phase-0 compute instructions still return selector-aware stub errors.",
+    "ENC_SOP2",
+    "ENC_SOPC",
+    "ENC_SMEM",
+    "ENC_VOP2",
+    "ENC_VOPC",
+    "ENC_VOP3",
+    "ENC_VDS",
+    "ENC_VGLOBAL"
+  ]
+}

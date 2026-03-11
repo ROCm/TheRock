@@ -13,7 +13,17 @@
 
 namespace mirage::sim::isa {
 
+enum class Gfx1201CompiledOpcode : std::uint8_t {
+  kUnknown,
+  kSEndpgm,
+  kSNop,
+  kSMovB32,
+  kSMovkI32,
+  kVMovB32,
+};
+
 struct Gfx1201CompiledInstruction {
+  Gfx1201CompiledOpcode opcode = Gfx1201CompiledOpcode::kUnknown;
   DecodedInstruction decoded_instruction;
 };
 
@@ -38,6 +48,7 @@ class Gfx1201Interpreter {
                       ExecutionMemory* memory,
                       std::string* error_message) const;
 
+  std::span<const std::string_view> ExecutableSeedOpcodes() const;
   std::span<const Gfx1201FamilyFocus> CarryOverFamilyFocus() const;
   std::span<const Gfx1201FamilyFocus> Rdna4DeltaFamilyFocus() const;
   std::string_view BringupStatus() const;

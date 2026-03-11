@@ -28,7 +28,9 @@ class Gfx1201BinaryDecoder {
   bool SelectPhase0ComputeRoute(std::span<const std::uint32_t> words,
                                 Gfx1201OpcodeRoute* route,
                                 std::string* error_message = nullptr) const;
+  bool SupportsPhase0ExecutableOpcode(std::string_view opcode) const;
   std::span<const Gfx1201DecoderSeedEncoding> Phase0ComputeSeeds() const;
+  std::span<const std::string_view> Phase0ExecutableOpcodes() const;
   std::span<const Gfx1201OpcodeSelectorRule> Phase0ComputeSelectorRules() const;
   const Gfx1201DecoderSeedEncoding* FindPhase0ComputeSeed(
       std::string_view encoding_name) const;

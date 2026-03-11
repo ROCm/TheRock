@@ -1,14 +1,79 @@
 #include "lib/sim/isa/gfx1201/binary_decoder.h"
 
+#include <array>
+#include <cstddef>
+#include <cstdint>
 #include <sstream>
 #include <string>
+
+#include "lib/sim/isa/common/wave_execution_state.h"
 
 namespace mirage::sim::isa {
 namespace {
 
+constexpr std::uint16_t kSrcVcczSgprIndex = 251;
+constexpr std::uint16_t kSrcExeczSgprIndex = 252;
+constexpr std::uint16_t kSrcSccSgprIndex = 253;
+
+constexpr std::array<std::string_view, 5> kPhase0ExecutableOpcodes{{
+    "S_ENDPGM",
+    "S_NOP",
+    "S_MOV_B32",
+    "S_MOVK_I32",
+    "V_MOV_B32",
+}};
+
+constexpr std::uint32_t ExtractBits(std::uint32_t value,
+                                    std::uint32_t bit_offset,
+                                    std::uint32_t bit_count) {
+  if (bit_count == 32) {
+    return value;
+  }
+  return (value >> bit_offset) & ((1u << bit_count) - 1u);
+}
+
+constexpr bool IsInlineInteger(std::uint32_t raw_value) {
+  return raw_value >= 128u && raw_value <= 208u;
+}
+
+constexpr std::uint32_t DecodeInlineInteger(std::uint32_t raw_value) {
+  if (raw_value <= 192u) {
+    return raw_value - 128u;
+  }
+  const std::int32_t signed_value =
+      -static_cast<std::int32_t>(raw_value - 192u);
+  return static_cast<std::uint32_t>(signed_value);
+}
+
+constexpr std::int32_t SignExtend16(std::uint32_t value) {
+  return static_cast<std::int32_t>(static_cast<std::int16_t>(value & 0xffffu));
+}
+
+bool IsPhase0ExecutableOpcode(std::string_view opcode) {
+  for (std::string_view executable_opcode : kPhase0ExecutableOpcodes) {
+    if (executable_opcode == opcode) {
+      return true;
+    }
+  }
+  return false;
+}
+
+std::string BuildExecutableOpcodeList() {
+  std::string message;
+  bool first = true;
+  for (std::string_view opcode : kPhase0ExecutableOpcodes) {
+    message.append(first ? "" : ", ");
+    message.append(opcode);
+    first = false;
+  }
+  return message;
+}
+
 std::string BuildDecoderBringupMessage() {
-  std::string message =
-      "gfx1201 decoder scaffold only; phase-0 compute seed encodings:";
+  std::string message = "gfx1201 decoder seed slice supports ";
+  message.append(BuildExecutableOpcodeList());
+  message.append("; remaining phase-0 compute seed encodings:");
+
   bool first = true;
   for (const Gfx1201DecoderSeedEncoding& encoding :
        GetGfx1201Phase0ComputeDecoderSeeds()) {
@@ -32,6 +97,222 @@ std::string BuildRouteMessage(const Gfx1201OpcodeRoute& route) {
     stream << " with no matching seed entry";
   }
   return stream.str();
+}
+
+bool DecodeScalarDestination(std::uint32_t raw_value,
+                             InstructionOperand* operand,
+                             std::string* error_message) {
+  if (operand == nullptr) {
+    if (error_message != nullptr) {
+      *error_message = "scalar destination output must not be null";
+    }
+    return false;
+  }
+  if (raw_value >= WaveExecutionState::kScalarRegisterCount) {
+    if (error_message != nullptr) {
+      *error_message = "scalar destination out of range";
+    }
+    return false;
+  }
+
+  *operand = InstructionOperand::Sgpr(static_cast<std::uint16_t>(raw_value));
+  if (error_message != nullptr) {
+    error_message->clear();
+  }
+  return true;
+}
+
+bool DecodeVectorDestination(std::uint32_t raw_value,
+                             InstructionOperand* operand,
+                             std::string* error_message) {
+  if (operand == nullptr) {
+    if (error_message != nullptr) {
+      *error_message = "vector destination output must not be null";
+    }
+    return false;
+  }
+  if (raw_value >= WaveExecutionState::kVectorRegisterCount) {
+    if (error_message != nullptr) {
+      *error_message = "vector destination out of range";
+    }
+    return false;
+  }
+
+  *operand = InstructionOperand::Vgpr(static_cast<std::uint16_t>(raw_value));
+  if (error_message != nullptr) {
+    error_message->clear();
+  }
+  return true;
+}
+
+bool DecodeScalarSource(std::uint32_t raw_value,
+                        std::span<const std::uint32_t> literal_words,
+                        std::size_t* literal_words_consumed,
+                        InstructionOperand* operand,
+                        std::string* error_message) {
+  if (literal_words_consumed == nullptr || operand == nullptr) {
+    if (error_message != nullptr) {
+      *error_message = "scalar source outputs must not be null";
+    }
+    return false;
+  }
+  *literal_words_consumed = 0;
+
+  if (raw_value < WaveExecutionState::kScalarRegisterCount) {
+    *operand = InstructionOperand::Sgpr(static_cast<std::uint16_t>(raw_value));
+  } else if (raw_value == kSrcVcczSgprIndex || raw_value == kSrcExeczSgprIndex ||
+             raw_value == kSrcSccSgprIndex) {
+    *operand = InstructionOperand::Sgpr(static_cast<std::uint16_t>(raw_value));
+  } else if (IsInlineInteger(raw_value)) {
+    *operand = InstructionOperand::Imm32(DecodeInlineInteger(raw_value));
+  } else if (raw_value == 255u) {
+    if (literal_words.empty()) {
+      if (error_message != nullptr) {
+        *error_message = "missing literal dword";
+      }
+      return false;
+    }
+    *operand = InstructionOperand::Imm32(literal_words.front());
+    *literal_words_consumed = 1;
+  } else {
+    if (error_message != nullptr) {
+      *error_message = "unsupported scalar source operand encoding";
+    }
+    return false;
+  }
+
+  if (error_message != nullptr) {
+    error_message->clear();
+  }
+  return true;
+}
+
+bool DecodeVectorSource(std::uint32_t raw_value,
+                        std::span<const std::uint32_t> literal_words,
+                        std::size_t* literal_words_consumed,
+                        InstructionOperand* operand,
+                        std::string* error_message) {
+  if (literal_words_consumed == nullptr || operand == nullptr) {
+    if (error_message != nullptr) {
+      *error_message = "vector source outputs must not be null";
+    }
+    return false;
+  }
+  *literal_words_consumed = 0;
+
+  if (raw_value < WaveExecutionState::kScalarRegisterCount) {
+    *operand = InstructionOperand::Sgpr(static_cast<std::uint16_t>(raw_value));
+  } else if (raw_value == kSrcVcczSgprIndex || raw_value == kSrcExeczSgprIndex ||
+             raw_value == kSrcSccSgprIndex) {
+    *operand = InstructionOperand::Sgpr(static_cast<std::uint16_t>(raw_value));
+  } else if (IsInlineInteger(raw_value)) {
+    *operand = InstructionOperand::Imm32(DecodeInlineInteger(raw_value));
+  } else if (raw_value == 255u) {
+    if (literal_words.empty()) {
+      if (error_message != nullptr) {
+        *error_message = "missing literal dword";
+      }
+      return false;
+    }
+    *operand = InstructionOperand::Imm32(literal_words.front());
+    *literal_words_consumed = 1;
+  } else if (raw_value >= 256u &&
+             raw_value < 256u + WaveExecutionState::kVectorRegisterCount) {
+    *operand =
+        InstructionOperand::Vgpr(static_cast<std::uint16_t>(raw_value - 256u));
+  } else {
+    if (error_message != nullptr) {
+      *error_message = "unsupported vector source operand encoding";
+    }
+    return false;
+  }
+
+  if (error_message != nullptr) {
+    error_message->clear();
+  }
+  return true;
+}
+
+bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
+                                        std::span<const std::uint32_t> words,
+                                        DecodedInstruction* instruction,
+                                        std::size_t* words_consumed,
+                                        std::string* error_message) {
+  if (instruction == nullptr || words_consumed == nullptr) {
+    if (error_message != nullptr) {
+      *error_message = "decode outputs must not be null";
+    }
+    return false;
+  }
+  if (route.seed_entry == nullptr) {
+    return false;
+  }
+
+  const std::string_view instruction_name = route.seed_entry->instruction_name;
+  if (!IsPhase0ExecutableOpcode(instruction_name)) {
+    return false;
+  }
+
+  const std::uint32_t word = words.front();
+  *instruction = DecodedInstruction{};
+  *words_consumed = 0;
+
+  if (instruction_name == "S_ENDPGM") {
+    *instruction = DecodedInstruction::Nullary(instruction_name);
+    *words_consumed = 1;
+  } else if (instruction_name == "S_NOP") {
+    *instruction = DecodedInstruction::OneOperand(
+        instruction_name, InstructionOperand::Imm32(ExtractBits(word, 0, 16)));
+    *words_consumed = 1;
+  } else if (instruction_name == "S_MOV_B32") {
+    InstructionOperand dst;
+    if (!DecodeScalarDestination(ExtractBits(word, 16, 7), &dst, error_message)) {
+      return false;
+    }
+
+    std::size_t literal_words_consumed = 0;
+    InstructionOperand src0;
+    if (!DecodeScalarSource(ExtractBits(word, 0, 8), words.subspan(1),
+                            &literal_words_consumed, &src0, error_message)) {
+      return false;
+    }
+
+    *instruction = DecodedInstruction::Unary(instruction_name, dst, src0);
+    *words_consumed = 1 + literal_words_consumed;
+  } else if (instruction_name == "S_MOVK_I32") {
+    InstructionOperand dst;
+    if (!DecodeScalarDestination(ExtractBits(word, 16, 7), &dst, error_message)) {
+      return false;
+    }
+
+    *instruction = DecodedInstruction::Unary(
+        instruction_name, dst,
+        InstructionOperand::Imm32(static_cast<std::uint32_t>(
+            SignExtend16(ExtractBits(word, 0, 16)))));
+    *words_consumed = 1;
+  } else if (instruction_name == "V_MOV_B32") {
+    InstructionOperand dst;
+    if (!DecodeVectorDestination(ExtractBits(word, 17, 8), &dst, error_message)) {
+      return false;
+    }
+
+    std::size_t literal_words_consumed = 0;
+    InstructionOperand src0;
+    if (!DecodeVectorSource(ExtractBits(word, 0, 9), words.subspan(1),
+                            &literal_words_consumed, &src0, error_message)) {
+      return false;
+    }
+
+    *instruction = DecodedInstruction::Unary(instruction_name, dst, src0);
+    *words_consumed = 1 + literal_words_consumed;
+  } else {
+    return false;
+  }
+
+  if (error_message != nullptr) {
+    error_message->clear();
+  }
+  return true;
 }
 
 }  // namespace
@@ -60,8 +341,18 @@ bool Gfx1201BinaryDecoder::DecodeInstruction(
 
   Gfx1201OpcodeRoute route;
   if (SelectPhase0ComputeRoute(words, &route, error_message)) {
+    std::string decode_error;
+    if (route.status == Gfx1201OpcodeRouteStatus::kMatchedSeedEntry &&
+        TryDecodeExecutableSeedInstruction(route, words, instruction,
+                                           words_consumed, &decode_error)) {
+      if (error_message != nullptr) {
+        error_message->clear();
+      }
+      return true;
+    }
     if (error_message != nullptr) {
-      *error_message = BuildRouteMessage(route);
+      *error_message =
+          decode_error.empty() ? BuildRouteMessage(route) : decode_error;
     }
     return false;
   }
@@ -83,22 +374,32 @@ bool Gfx1201BinaryDecoder::DecodeProgram(std::span<const std::uint32_t> words,
   }
 
   program->clear();
-  if (words.empty()) {
-    return true;
-  }
-
-  Gfx1201OpcodeRoute route;
-  if (SelectPhase0ComputeRoute(words, &route, error_message)) {
-    if (error_message != nullptr) {
-      *error_message = BuildRouteMessage(route);
+  std::size_t word_offset = 0;
+  while (word_offset < words.size()) {
+    DecodedInstruction instruction;
+    std::size_t words_consumed = 0;
+    std::string decode_error;
+    if (!DecodeInstruction(words.subspan(word_offset), &instruction, &words_consumed,
+                           &decode_error)) {
+      if (error_message != nullptr) {
+        *error_message = decode_error;
+      }
+      return false;
     }
-    return false;
+    if (words_consumed == 0) {
+      if (error_message != nullptr) {
+        *error_message = "gfx1201 decoder made no progress";
+      }
+      return false;
+    }
+    program->push_back(instruction);
+    word_offset += words_consumed;
   }
 
   if (error_message != nullptr) {
-    *error_message = BuildDecoderBringupMessage();
+    error_message->clear();
   }
-  return false;
+  return true;
 }
 
 bool Gfx1201BinaryDecoder::SelectPhase0ComputeRoute(
@@ -108,9 +409,19 @@ bool Gfx1201BinaryDecoder::SelectPhase0ComputeRoute(
   return SelectGfx1201Phase0ComputeOpcodeRoute(words, route, error_message);
 }
 
+bool Gfx1201BinaryDecoder::SupportsPhase0ExecutableOpcode(
+    std::string_view opcode) const {
+  return IsPhase0ExecutableOpcode(opcode);
+}
+
 std::span<const Gfx1201DecoderSeedEncoding>
 Gfx1201BinaryDecoder::Phase0ComputeSeeds() const {
   return GetGfx1201Phase0ComputeDecoderSeeds();
+}
+
+std::span<const std::string_view> Gfx1201BinaryDecoder::Phase0ExecutableOpcodes()
+    const {
+  return kPhase0ExecutableOpcodes;
 }
 
 std::span<const Gfx1201OpcodeSelectorRule>

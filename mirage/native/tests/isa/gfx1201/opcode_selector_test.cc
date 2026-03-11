@@ -352,14 +352,13 @@ int main() {
 
   DecodedInstruction decoded_instruction;
   std::size_t words_consumed = 0;
-  if (!Expect(!decoder.DecodeInstruction(
+  if (!Expect(decoder.DecodeInstruction(
                   std::span<const std::uint32_t>(&sopp_word, 1),
                   &decoded_instruction, &words_consumed, &error_message),
-              "expected stub decode failure after route") ||
-      !Expect(error_message.find("ENC_SOPP opcode 48") != std::string::npos,
-              "expected routed SOPP message") ||
-      !Expect(error_message.find("S_ENDPGM") != std::string::npos,
-              "expected routed instruction name")) {
+              "expected S_ENDPGM decode success after route") ||
+      !Expect(decoded_instruction.opcode == "S_ENDPGM",
+              "expected decoded S_ENDPGM opcode") ||
+      !Expect(words_consumed == 1u, "expected one consumed dword")) {
     return 1;
   }
 
