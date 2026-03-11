@@ -644,7 +644,13 @@ def main(base_args, linux_families, windows_families):
         enable_build_jobs = True
         test_type = "full"
         test_type_reason = "scheduled run triggers full tests"
-        # Functional tests run on nightly/scheduled builds (can be extended via PR labels later)
+        # Functional tests run on nightly/scheduled builds
+        run_functional_tests = True
+    elif is_workflow_dispatch:
+        enable_build_jobs = True
+        test_type = "full"
+        test_type_reason = "workflow_dispatch run triggers full tests"
+        # Functional tests also run on manual dispatches (e.g. nightly triggered manually)
         run_functional_tests = True
     else:
         modified_paths = get_git_modified_paths(base_ref)
