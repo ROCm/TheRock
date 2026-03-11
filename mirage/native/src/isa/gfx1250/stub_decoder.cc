@@ -50,6 +50,9 @@ StubOperandSlotRecord MakeOperandSlots(
 FragmentShape ClassifyOperandFragmentShape(
     std::string_view instruction_name,
     const StubOperandSlotBinding& binding) {
+  const bool is_result_slot =
+      binding.slot_kind == StubOperandSlotKind::kDestination ||
+      binding.slot_kind == StubOperandSlotKind::kScalarDestination;
   switch (binding.value_class) {
     case StubOperandValueClass::kPackedVector:
       if (instruction_name == "V_CVT_PK_F16_FP8" ||
@@ -61,6 +64,19 @@ FragmentShape ClassifyOperandFragmentShape(
       }
       return MakePackedFragmentShape(binding.component_count, 16);
     case StubOperandValueClass::kVectorRegister:
+      if (instruction_name == "V_CVT_F16_FP8" ||
+          instruction_name == "V_CVT_F16_BF8") {
+        return MakeScalarFragmentShape(is_result_slot ? 16 : 8);
+      }
+      if (instruction_name == "V_CVT_F32_FP8") {
+        return MakeScalarFragmentShape(is_result_slot ? 32 : 8);
+      }
+      if (instruction_name == "V_DIV_SCALE_F64") {
+        return MakeScalarFragmentShape(64);
+      }
+      if (instruction_name == "V_WMMA_LD_SCALE16_PAIRED_B64") {
+        return MakeVectorFragmentShape(binding.component_count, 64);
+      }
       return MakeVectorFragmentShape(binding.component_count, 32);
     case StubOperandValueClass::kScalarRegister:
       return MakeScalarFragmentShape(32);
@@ -81,13 +97,27 @@ FragmentShape ClassifyOperandFragmentShape(
                 : 32,
             32);
       }
-      if (instruction_name == "V_SWMMAC_F32_16X16X128_FP8_FP8_w32" ||
+      if (instruction_name == "V_WMMA_F32_16X16X128_FP8_FP8_w32" ||
+          instruction_name == "V_SWMMAC_F32_16X16X128_FP8_FP8_w32" ||
           instruction_name == "V_WMMA_SCALE_F32_16X16X128_F8F6F4" ||
           instruction_name == "V_WMMA_SCALE16_F32_16X16X128_F8F6F4") {
         const bool wide_result =
             binding.value_class == StubOperandValueClass::kAccumulatorFragment ||
-            binding.slot_kind == StubOperandSlotKind::kDestination;
+            is_result_slot;
         return MakeMatrixFragmentShape(16, 16, 128, wide_result ? 32 : 8, 32);
+      }
+      if (instruction_name == "V_WMMA_F16_16X16X128_FP8_FP8_w32" ||
+          instruction_name == "V_SWMMAC_F16_16X16X128_FP8_FP8_w32") {
+        const bool wide_result =
+            binding.value_class == StubOperandValueClass::kAccumulatorFragment ||
+            is_result_slot;
+        return MakeMatrixFragmentShape(16, 16, 128, wide_result ? 16 : 8, 32);
+      }
+      if (instruction_name == "V_WMMA_F32_16X16X64_FP8_FP8_w32") {
+        const bool wide_result =
+            binding.value_class == StubOperandValueClass::kAccumulatorFragment ||
+            is_result_slot;
+        return MakeMatrixFragmentShape(16, 16, 64, wide_result ? 32 : 8, 32);
       }
       break;
     case StubOperandValueClass::kUnknown:
@@ -102,6 +132,78 @@ StubOperandSlotRecord AttachFragmentShapes(
   for (std::uint32_t index = 0; index < record.binding_count; ++index) {
     record.bindings[index].fragment_shape =
         ClassifyOperandFragmentShape(instruction_name, record.bindings[index]);
+  }
+  return record;
+}
+
+StubOperandRole RoleFromSlotKind(StubOperandSlotKind slot_kind) {
+  switch (slot_kind) {
+    case StubOperandSlotKind::kDestination:
+    case StubOperandSlotKind::kScalarDestination:
+      return StubOperandRole::kDestination;
+    case StubOperandSlotKind::kSource0:
+      return StubOperandRole::kSource0;
+    case StubOperandSlotKind::kSource1:
+      return StubOperandRole::kSource1;
+    case StubOperandSlotKind::kSource2:
+      return StubOperandRole::kSource2;
+    case StubOperandSlotKind::kAccumulatorSource:
+      return StubOperandRole::kAccumulator;
+    case StubOperandSlotKind::kScaleSource:
+      return StubOperandRole::kScale;
+    case StubOperandSlotKind::kPairedScaleSource:
+      return StubOperandRole::kPairedScale;
+    case StubOperandSlotKind::kTensorDescriptorSource:
+      return StubOperandRole::kTensorDescriptor;
+    case StubOperandSlotKind::kTensorCoordinateSource:
+      return StubOperandRole::kTensorCoordinate;
+    case StubOperandSlotKind::kLdsDestination:
+      return StubOperandRole::kLdsDestination;
+    case StubOperandSlotKind::kLdsSource:
+      return StubOperandRole::kLdsSource;
+    case StubOperandSlotKind::kUnknown:
+      break;
+  }
+  return StubOperandRole::kUnknown;
+}
+
+StubOperandAccess AccessFromSlotKind(StubOperandSlotKind slot_kind) {
+  switch (slot_kind) {
+    case StubOperandSlotKind::kDestination:
+    case StubOperandSlotKind::kScalarDestination:
+    case StubOperandSlotKind::kLdsDestination:
+      return StubOperandAccess::kWrite;
+    case StubOperandSlotKind::kSource0:
+    case StubOperandSlotKind::kSource1:
+    case StubOperandSlotKind::kSource2:
+    case StubOperandSlotKind::kAccumulatorSource:
+    case StubOperandSlotKind::kScaleSource:
+    case StubOperandSlotKind::kPairedScaleSource:
+    case StubOperandSlotKind::kTensorDescriptorSource:
+    case StubOperandSlotKind::kTensorCoordinateSource:
+    case StubOperandSlotKind::kLdsSource:
+      return StubOperandAccess::kRead;
+    case StubOperandSlotKind::kUnknown:
+      break;
+  }
+  return StubOperandAccess::kRead;
+}
+
+StubOperandDescriptorRecord BuildOperandDescriptors(
+    const StubOperandSlotRecord& operand_slots) {
+  StubOperandDescriptorRecord record;
+  record.descriptor_count = operand_slots.binding_count;
+  for (std::uint32_t index = 0; index < operand_slots.binding_count; ++index) {
+    const StubOperandSlotBinding& slot = operand_slots.bindings[index];
+    record.descriptors[index] = {
+        RoleFromSlotKind(slot.slot_kind),
+        slot.slot_kind,
+        slot.value_class,
+        AccessFromSlotKind(slot.slot_kind),
+        slot.fragment_shape,
+        static_cast<std::uint8_t>(slot.component_count),
+        slot.is_implicit,
+    };
   }
   return record;
 }
@@ -185,6 +287,45 @@ StubOperandLayoutRecord ClassifyOperandLayout(std::string_view instruction_name)
         false,
     };
   }
+  if (instruction_name == "V_WMMA_F32_16X16X128_FP8_FP8_w32") {
+    return {
+        StubOperandLayoutKind::kWmmaF32_16x16x128_Fp8Fp8W32,
+        2,
+        1,
+        1,
+        false,
+        false,
+        false,
+        false,
+        false,
+    };
+  }
+  if (instruction_name == "V_WMMA_F16_16X16X128_FP8_FP8_w32") {
+    return {
+        StubOperandLayoutKind::kWmmaF16_16x16x128_Fp8Fp8W32,
+        2,
+        1,
+        1,
+        false,
+        false,
+        false,
+        false,
+        false,
+    };
+  }
+  if (instruction_name == "V_WMMA_F32_16X16X64_FP8_FP8_w32") {
+    return {
+        StubOperandLayoutKind::kWmmaF32_16x16x64_Fp8Fp8W32,
+        2,
+        1,
+        1,
+        false,
+        false,
+        false,
+        false,
+        false,
+    };
+  }
   if (instruction_name == "V_WMMA_SCALE_F32_16X16X128_F8F6F4") {
     return {
         StubOperandLayoutKind::kWmmaScaleF32_16x16x128_F8F6F4,
@@ -240,6 +381,19 @@ StubOperandLayoutRecord ClassifyOperandLayout(std::string_view instruction_name)
   if (instruction_name == "V_SWMMAC_F32_16X16X128_FP8_FP8_w32") {
     return {
         StubOperandLayoutKind::kSwmmacF32_16x16x128_Fp8Fp8W32,
+        2,
+        1,
+        1,
+        false,
+        false,
+        false,
+        false,
+        false,
+    };
+  }
+  if (instruction_name == "V_SWMMAC_F16_16X16X128_FP8_FP8_w32") {
+    return {
+        StubOperandLayoutKind::kSwmmacF16_16x16x128_Fp8Fp8W32,
         2,
         1,
         1,
@@ -539,7 +693,10 @@ StubOperandRoleRecord ClassifyOperandRoles(std::string_view instruction_name) {
         {StubOperandRole::kDestination, 1, true, false},
     });
   }
-  if (instruction_name == "V_WMMA_F32_16X16X4_F32_w32") {
+  if (instruction_name == "V_WMMA_F32_16X16X4_F32_w32" ||
+      instruction_name == "V_WMMA_F32_16X16X128_FP8_FP8_w32" ||
+      instruction_name == "V_WMMA_F16_16X16X128_FP8_FP8_w32" ||
+      instruction_name == "V_WMMA_F32_16X16X64_FP8_FP8_w32") {
     return MakeOperandRoles({
         {StubOperandRole::kSource0, 1, false, false},
         {StubOperandRole::kSource1, 1, false, false},
@@ -573,7 +730,8 @@ StubOperandRoleRecord ClassifyOperandRoles(std::string_view instruction_name) {
         {StubOperandRole::kDestination, 1, true, false},
     });
   }
-  if (instruction_name == "V_SWMMAC_F32_16X16X128_FP8_FP8_w32") {
+  if (instruction_name == "V_SWMMAC_F32_16X16X128_FP8_FP8_w32" ||
+      instruction_name == "V_SWMMAC_F16_16X16X128_FP8_FP8_w32") {
     return MakeOperandRoles({
         {StubOperandRole::kSource0, 1, false, false},
         {StubOperandRole::kSource1, 1, false, false},
@@ -686,7 +844,11 @@ StubOperandSlotRecord ClassifyOperandSlots(std::string_view instruction_name) {
     }));
   }
   if (instruction_name == "V_WMMA_F32_16X16X4_F32_w32" ||
-      instruction_name == "V_SWMMAC_F32_16X16X128_FP8_FP8_w32") {
+      instruction_name == "V_WMMA_F32_16X16X128_FP8_FP8_w32" ||
+      instruction_name == "V_WMMA_F16_16X16X128_FP8_FP8_w32" ||
+      instruction_name == "V_WMMA_F32_16X16X64_FP8_FP8_w32" ||
+      instruction_name == "V_SWMMAC_F32_16X16X128_FP8_FP8_w32" ||
+      instruction_name == "V_SWMMAC_F16_16X16X128_FP8_FP8_w32") {
     return AttachFragmentShapes(instruction_name, MakeOperandSlots({
         {StubOperandSlotKind::kDestination,
          StubOperandValueClass::kMatrixFragment,
@@ -923,6 +1085,8 @@ StubDecodedInstruction BuildDecodedStub(
       ClassifyOperandRoles(route_info.instruction_name);
   const StubOperandSlotRecord operand_slots =
       ClassifyOperandSlots(route_info.instruction_name);
+  const StubOperandDescriptorRecord operand_descriptors =
+      BuildOperandDescriptors(operand_slots);
   return {
       route_info.instruction_name,
       StubDecodeStatus::kDecodedStub,
@@ -944,6 +1108,7 @@ StubDecodedInstruction BuildDecodedStub(
       operand_layout,
       operand_roles,
       operand_slots,
+      operand_descriptors,
   };
 }
 
@@ -968,6 +1133,7 @@ StubDecodedInstruction MakeUnsupportedInstruction(
       false,
       false,
       false,
+      {},
       {},
       {},
       {},
@@ -1119,6 +1285,12 @@ std::string_view GetStubOperandLayoutName(
       return "kPkMaxNumBf16";
     case StubOperandLayoutKind::kWmmaF32_16x16x4_F32W32:
       return "kWmmaF32_16x16x4_F32W32";
+    case StubOperandLayoutKind::kWmmaF32_16x16x128_Fp8Fp8W32:
+      return "kWmmaF32_16x16x128_Fp8Fp8W32";
+    case StubOperandLayoutKind::kWmmaF16_16x16x128_Fp8Fp8W32:
+      return "kWmmaF16_16x16x128_Fp8Fp8W32";
+    case StubOperandLayoutKind::kWmmaF32_16x16x64_Fp8Fp8W32:
+      return "kWmmaF32_16x16x64_Fp8Fp8W32";
     case StubOperandLayoutKind::kWmmaScaleF32_16x16x128_F8F6F4:
       return "kWmmaScaleF32_16x16x128_F8F6F4";
     case StubOperandLayoutKind::kWmmaScale16F32_16x16x128_F8F6F4:
@@ -1129,6 +1301,8 @@ std::string_view GetStubOperandLayoutName(
       return "kWmmaLdScale16PairedB64";
     case StubOperandLayoutKind::kSwmmacF32_16x16x128_Fp8Fp8W32:
       return "kSwmmacF32_16x16x128_Fp8Fp8W32";
+    case StubOperandLayoutKind::kSwmmacF16_16x16x128_Fp8Fp8W32:
+      return "kSwmmacF16_16x16x128_Fp8Fp8W32";
     case StubOperandLayoutKind::kTensorLoadToLds:
       return "kTensorLoadToLds";
     case StubOperandLayoutKind::kTensorStoreFromLds:

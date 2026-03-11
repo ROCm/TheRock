@@ -25,6 +25,7 @@ using mirage::sim::isa::gfx1250::StubDecodeStatus;
 using mirage::sim::isa::gfx1250::StubDecoderEntrypointManifest;
 using mirage::sim::isa::gfx1250::StubDecoderRoute;
 using mirage::sim::isa::gfx1250::StubExecutionDomain;
+using mirage::sim::isa::gfx1250::StubOperandAccess;
 using mirage::sim::isa::gfx1250::StubFragmentKind;
 using mirage::sim::isa::gfx1250::StubOperandLayoutKind;
 using mirage::sim::isa::gfx1250::StubOperandRole;
@@ -96,6 +97,28 @@ bool ContainsSlotFragment(const StubDecodedInstruction& instruction,
   return false;
 }
 
+bool ContainsDescriptor(const StubDecodedInstruction& instruction,
+                        StubOperandRole role,
+                        StubOperandSlotKind slot_kind,
+                        StubOperandValueClass value_class,
+                        StubOperandAccess access,
+                        std::uint8_t component_count,
+                        StubFragmentKind fragment_kind,
+                        std::uint8_t element_bit_width) {
+  for (std::uint32_t i = 0; i < instruction.operand_descriptors.descriptor_count;
+       ++i) {
+    const auto& descriptor = instruction.operand_descriptors.descriptors[i];
+    if (descriptor.role == role && descriptor.slot_kind == slot_kind &&
+        descriptor.value_class == value_class && descriptor.access == access &&
+        descriptor.component_count == component_count &&
+        descriptor.fragment_shape.kind == fragment_kind &&
+        descriptor.fragment_shape.element_bit_width == element_bit_width) {
+      return true;
+    }
+  }
+  return false;
+}
+
 }  // namespace
 
 int main() {
@@ -153,6 +176,10 @@ int main() {
               "expected PK_ADD operand slot count")) {
     return 1;
   }
+  if (!Expect(vop3p.operand_descriptors.descriptor_count == 3,
+              "expected PK_ADD descriptor count")) {
+    return 1;
+  }
   if (!Expect(
           ContainsSlot(vop3p, StubOperandSlotKind::kDestination,
                        StubOperandValueClass::kPackedVector, 0, 2, true) &&
@@ -166,6 +193,14 @@ int main() {
   if (!Expect(ContainsSlotFragment(vop3p, StubOperandSlotKind::kDestination,
                                    StubFragmentKind::kPacked, 1, 1, 1, 16, 2),
               "expected PK_ADD destination fragment shape")) {
+    return 1;
+  }
+  if (!Expect(ContainsDescriptor(vop3p, StubOperandRole::kDestination,
+                                 StubOperandSlotKind::kDestination,
+                                 StubOperandValueClass::kPackedVector,
+                                 StubOperandAccess::kWrite, 2,
+                                 StubFragmentKind::kPacked, 16),
+              "expected PK_ADD destination descriptor")) {
     return 1;
   }
 
@@ -270,6 +305,64 @@ int main() {
               "expected WMMA accumulator fragment shape")) {
     return 1;
   }
+  if (!Expect(ContainsDescriptor(wmma, StubOperandRole::kAccumulator,
+                                 StubOperandSlotKind::kAccumulatorSource,
+                                 StubOperandValueClass::kAccumulatorFragment,
+                                 StubOperandAccess::kRead, 1,
+                                 StubFragmentKind::kMatrix, 32),
+              "expected WMMA accumulator descriptor")) {
+    return 1;
+  }
+
+  const StubDecodedInstruction wmma128_fp8 =
+      DecodeVop3pStub("V_WMMA_F32_16X16X128_FP8_FP8_w32");
+  if (!Expect(wmma128_fp8.operand_layout.layout_kind ==
+                  StubOperandLayoutKind::kWmmaF32_16x16x128_Fp8Fp8W32,
+              "expected WMMA 128 FP8 operand layout")) {
+    return 1;
+  }
+  if (!Expect(ContainsSlotFragment(wmma128_fp8, StubOperandSlotKind::kSource0,
+                                   StubFragmentKind::kMatrix, 16, 16, 128, 8,
+                                   0),
+              "expected WMMA 128 FP8 source fragment shape")) {
+    return 1;
+  }
+  if (!Expect(ContainsSlotFragment(wmma128_fp8,
+                                   StubOperandSlotKind::kDestination,
+                                   StubFragmentKind::kMatrix, 16, 16, 128, 32,
+                                   0),
+              "expected WMMA 128 FP8 destination fragment shape")) {
+    return 1;
+  }
+
+  const StubDecodedInstruction wmma128_f16 =
+      DecodeVop3pStub("V_WMMA_F16_16X16X128_FP8_FP8_w32");
+  if (!Expect(wmma128_f16.operand_layout.layout_kind ==
+                  StubOperandLayoutKind::kWmmaF16_16x16x128_Fp8Fp8W32,
+              "expected WMMA F16 128 FP8 operand layout")) {
+    return 1;
+  }
+  if (!Expect(ContainsSlotFragment(wmma128_f16,
+                                   StubOperandSlotKind::kDestination,
+                                   StubFragmentKind::kMatrix, 16, 16, 128, 16,
+                                   0),
+              "expected WMMA F16 128 destination fragment shape")) {
+    return 1;
+  }
+
+  const StubDecodedInstruction wmma64_fp8 =
+      DecodeVop3pStub("V_WMMA_F32_16X16X64_FP8_FP8_w32");
+  if (!Expect(wmma64_fp8.operand_layout.layout_kind ==
+                  StubOperandLayoutKind::kWmmaF32_16x16x64_Fp8Fp8W32,
+              "expected WMMA 64 FP8 operand layout")) {
+    return 1;
+  }
+  if (!Expect(ContainsSlotFragment(wmma64_fp8, StubOperandSlotKind::kSource0,
+                                   StubFragmentKind::kMatrix, 16, 16, 64, 8,
+                                   0),
+              "expected WMMA 64 FP8 source fragment shape")) {
+    return 1;
+  }
 
   const StubDecodedInstruction wmma_scale =
       DecodeVop3pStub("V_WMMA_SCALE_F32_16X16X128_F8F6F4");
@@ -367,6 +460,27 @@ int main() {
               "expected SWMMAC accumulator slot")) {
     return 1;
   }
+  if (!Expect(ContainsSlotFragment(swmmac, StubOperandSlotKind::kSource0,
+                                   StubFragmentKind::kMatrix, 16, 16, 128, 8,
+                                   0),
+              "expected SWMMAC source fragment shape")) {
+    return 1;
+  }
+
+  const StubDecodedInstruction swmmac_f16 =
+      DecodeVop3pStub("V_SWMMAC_F16_16X16X128_FP8_FP8_w32");
+  if (!Expect(swmmac_f16.operand_layout.layout_kind ==
+                  StubOperandLayoutKind::kSwmmacF16_16x16x128_Fp8Fp8W32,
+              "expected SWMMAC F16 operand layout")) {
+    return 1;
+  }
+  if (!Expect(ContainsSlotFragment(swmmac_f16,
+                                   StubOperandSlotKind::kDestination,
+                                   StubFragmentKind::kMatrix, 16, 16, 128, 16,
+                                   0),
+              "expected SWMMAC F16 destination fragment shape")) {
+    return 1;
+  }
 
   const StubDecodedInstruction tensor =
       DecodeMimgTensorStub("TENSOR_LOAD_TO_LDS");
@@ -420,6 +534,14 @@ int main() {
                   tensor, StubOperandSlotKind::kTensorDescriptorSource,
                   StubFragmentKind::kTensorDescriptor, 1, 1, 1, 0, 1),
               "expected tensor-load descriptor fragment shape")) {
+    return 1;
+  }
+  if (!Expect(ContainsDescriptor(
+                  tensor, StubOperandRole::kLdsDestination,
+                  StubOperandSlotKind::kLdsDestination,
+                  StubOperandValueClass::kLdsAddress, StubOperandAccess::kWrite,
+                  1, StubFragmentKind::kAddress, 32),
+              "expected tensor-load LDS destination descriptor")) {
     return 1;
   }
 
@@ -497,6 +619,14 @@ int main() {
               "expected V_CVT_F16_FP8 operand slots")) {
     return 1;
   }
+  if (!Expect(ContainsDescriptor(vop1, StubOperandRole::kSource0,
+                                 StubOperandSlotKind::kSource0,
+                                 StubOperandValueClass::kVectorRegister,
+                                 StubOperandAccess::kRead, 1,
+                                 StubFragmentKind::kScalar, 8),
+              "expected V_CVT_F16_FP8 source descriptor")) {
+    return 1;
+  }
 
   const StubDecodedInstruction vop1_bf8 = DecodeVop1Stub("V_CVT_F16_BF8");
   if (!Expect(vop1_bf8.operand_layout.layout_kind ==
@@ -507,6 +637,14 @@ int main() {
   if (!Expect(ContainsSlot(vop1_bf8, StubOperandSlotKind::kSource0,
                            StubOperandValueClass::kVectorRegister, 1, 1, false),
               "expected V_CVT_F16_BF8 source slot")) {
+    return 1;
+  }
+  if (!Expect(ContainsDescriptor(vop1_bf8, StubOperandRole::kDestination,
+                                 StubOperandSlotKind::kDestination,
+                                 StubOperandValueClass::kVectorRegister,
+                                 StubOperandAccess::kWrite, 1,
+                                 StubFragmentKind::kScalar, 16),
+              "expected V_CVT_F16_BF8 destination descriptor")) {
     return 1;
   }
 
@@ -527,8 +665,16 @@ int main() {
     return 1;
   }
   if (!Expect(ContainsSlotFragment(vop1_f32, StubOperandSlotKind::kSource0,
-                                   StubFragmentKind::kVector, 1, 1, 1, 32, 1),
+                                   StubFragmentKind::kScalar, 1, 1, 1, 8, 1),
               "expected V_CVT_F32_FP8 source fragment shape")) {
+    return 1;
+  }
+  if (!Expect(ContainsDescriptor(vop1_f32, StubOperandRole::kDestination,
+                                 StubOperandSlotKind::kDestination,
+                                 StubOperandValueClass::kVectorRegister,
+                                 StubOperandAccess::kWrite, 1,
+                                 StubFragmentKind::kScalar, 32),
+              "expected V_CVT_F32_FP8 destination descriptor")) {
     return 1;
   }
 
@@ -556,6 +702,14 @@ int main() {
                   packed_vop1, StubOperandSlotKind::kSource0,
                   StubFragmentKind::kPacked, 1, 1, 1, 8, 2),
               "expected packed FP8 conversion source fragment shape")) {
+    return 1;
+  }
+  if (!Expect(ContainsDescriptor(packed_vop1, StubOperandRole::kDestination,
+                                 StubOperandSlotKind::kDestination,
+                                 StubOperandValueClass::kPackedVector,
+                                 StubOperandAccess::kWrite, 2,
+                                 StubFragmentKind::kPacked, 16),
+              "expected packed FP8 conversion destination descriptor")) {
     return 1;
   }
 
@@ -623,6 +777,19 @@ int main() {
                            StubOperandValueClass::kVectorRegister, 4, 2,
                            false),
           "expected V_DIV_SCALE_F64 operand slots")) {
+    return 1;
+  }
+  if (!Expect(ContainsSlotFragment(sdst, StubOperandSlotKind::kDestination,
+                                   StubFragmentKind::kScalar, 1, 1, 1, 64, 1),
+              "expected V_DIV_SCALE_F64 vector destination fragment shape")) {
+    return 1;
+  }
+  if (!Expect(ContainsDescriptor(sdst, StubOperandRole::kDestination,
+                                 StubOperandSlotKind::kScalarDestination,
+                                 StubOperandValueClass::kScalarRegister,
+                                 StubOperandAccess::kWrite, 1,
+                                 StubFragmentKind::kScalar, 32),
+              "expected V_DIV_SCALE_F64 scalar destination descriptor")) {
     return 1;
   }
 

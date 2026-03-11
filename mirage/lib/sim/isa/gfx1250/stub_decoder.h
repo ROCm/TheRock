@@ -50,11 +50,15 @@ enum class StubOperandLayoutKind {
   kPkMinNumBf16,
   kPkMaxNumBf16,
   kWmmaF32_16x16x4_F32W32,
+  kWmmaF32_16x16x128_Fp8Fp8W32,
+  kWmmaF16_16x16x128_Fp8Fp8W32,
+  kWmmaF32_16x16x64_Fp8Fp8W32,
   kWmmaScaleF32_16x16x128_F8F6F4,
   kWmmaScale16F32_16x16x128_F8F6F4,
   kWmmaLdScalePairedB32,
   kWmmaLdScale16PairedB64,
   kSwmmacF32_16x16x128_Fp8Fp8W32,
+  kSwmmacF16_16x16x128_Fp8Fp8W32,
   kTensorLoadToLds,
   kTensorStoreFromLds,
   kCvtF16Bf8,
@@ -79,13 +83,20 @@ struct StubOperandLayoutRecord {
 
 using StubFragmentKind = FragmentKind;
 using StubFragmentShape = FragmentShape;
+using StubOperandAccess = OperandAccess;
 using StubOperandRole = OperandRole;
 using StubOperandRoleBinding = OperandRoleBinding;
 using StubOperandRoleRecord = OperandRoleRecord;
 using StubOperandSlotKind = OperandSlotKind;
 using StubOperandValueClass = OperandValueClass;
+using StubOperandDescriptor = OperandDescriptor;
 using StubOperandSlotBinding = OperandSlotBinding;
 using StubOperandSlotRecord = OperandSlotRecord;
+
+struct StubOperandDescriptorRecord {
+  std::array<StubOperandDescriptor, 8> descriptors{};
+  std::uint32_t descriptor_count = 0;
+};
 
 struct StubDecodedInstruction {
   std::string_view instruction_name{};
@@ -108,6 +119,7 @@ struct StubDecodedInstruction {
   StubOperandLayoutRecord operand_layout{};
   StubOperandRoleRecord operand_roles{};
   StubOperandSlotRecord operand_slots{};
+  StubOperandDescriptorRecord operand_descriptors{};
 };
 
 struct StubDecoderEntrypointManifest {

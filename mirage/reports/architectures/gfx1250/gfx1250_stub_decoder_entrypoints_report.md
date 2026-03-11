@@ -16,6 +16,8 @@
   - operand-layout records for routed high-value seeds
   - operand-role records for routed high-value seeds
   - operand-slot records for routed high-value seeds
+  - shared common `OperandDescriptor` records derived from routed slot metadata
+  - shared common fragment-shape metadata on routed operand slots
 
 ## Routed Seed Metadata Coverage
 
@@ -27,11 +29,15 @@
   - `V_PK_MAX_NUM_BF16`
 - `VOP3P` WMMA / SWMMAC slice:
   - `V_WMMA_F32_16X16X4_F32_w32`
+  - `V_WMMA_F32_16X16X128_FP8_FP8_w32`
+  - `V_WMMA_F16_16X16X128_FP8_FP8_w32`
+  - `V_WMMA_F32_16X16X64_FP8_FP8_w32`
   - `V_WMMA_SCALE_F32_16X16X128_F8F6F4`
   - `V_WMMA_SCALE16_F32_16X16X128_F8F6F4`
   - `V_WMMA_LD_SCALE_PAIRED_B32`
   - `V_WMMA_LD_SCALE16_PAIRED_B64`
   - `V_SWMMAC_F32_16X16X128_FP8_FP8_w32`
+  - `V_SWMMAC_F16_16X16X128_FP8_FP8_w32`
 - `MIMG tensor` slice:
   - `TENSOR_LOAD_TO_LDS`
   - `TENSOR_STORE_FROM_LDS`
@@ -62,6 +68,13 @@
   - Sources: `2`
   - Destination vectors: `1`
   - Accumulator sources: `1`
+- Additional WMMA core variants:
+  - `V_WMMA_F32_16X16X128_FP8_FP8_w32` -> `kWmmaF32_16x16x128_Fp8Fp8W32`
+  - `V_WMMA_F16_16X16X128_FP8_FP8_w32` -> `kWmmaF16_16x16x128_Fp8Fp8W32`
+  - `V_WMMA_F32_16X16X64_FP8_FP8_w32` -> `kWmmaF32_16x16x64_Fp8Fp8W32`
+  - Sources: `2`
+  - Destinations: `1`
+  - Accumulator sources: `1`
 - WMMA scale:
   - `V_WMMA_SCALE_F32_16X16X128_F8F6F4` -> `kWmmaScaleF32_16x16x128_F8F6F4`
   - `V_WMMA_SCALE16_F32_16X16X128_F8F6F4` -> `kWmmaScale16F32_16x16x128_F8F6F4`
@@ -80,6 +93,7 @@
     - `has_paired_scale_operand`
 - SWMMAC:
   - `V_SWMMAC_F32_16X16X128_FP8_FP8_w32` -> `kSwmmacF32_16x16x128_Fp8Fp8W32`
+  - `V_SWMMAC_F16_16X16X128_FP8_FP8_w32` -> `kSwmmacF16_16x16x128_Fp8Fp8W32`
   - Sources: `2`
   - Destinations: `1`
   - Accumulator sources: `1`
@@ -186,6 +200,46 @@
   - source1: vector register, logical operand `3`, components `2`
   - scale source: vector register, logical operand `4`, components `2`
 
+## Shared Operand Descriptor Coverage
+
+- Routed operand slots now materialize shared common `OperandDescriptor` records.
+- Descriptor fields are populated from the routed slot metadata:
+  - `role`
+  - `slot_kind`
+  - `value_class`
+  - `access`
+  - `fragment_shape`
+  - `component_count`
+  - `is_implicit`
+- Representative descriptor coverage now includes:
+  - packed BF16 destination write descriptors
+  - WMMA accumulator read descriptors
+  - tensor LDS destination write descriptors
+  - FP8/BF8 conversion source and destination descriptors
+  - `V_DIV_SCALE_F64` scalar-destination write descriptors
+
+## Shared Fragment Shape Coverage
+
+- Packed BF16:
+  - packed fragment, `2 x 16-bit`
+- Scalar FP8/BF8 conversions:
+  - source fragment: scalar `8-bit`
+  - destination fragment: scalar `16-bit` or `32-bit`
+- Packed FP8 conversions:
+  - source fragment: packed `2 x 8-bit`
+  - destination fragment: packed `2 x 16-bit`
+- WMMA / SWMMAC:
+  - `V_WMMA_F32_16X16X4_F32_w32`: matrix `16x16x4`, `32-bit`
+  - `V_WMMA_F32_16X16X128_FP8_FP8_w32`: source matrix `16x16x128`, `8-bit`; destination/accumulator `32-bit`
+  - `V_WMMA_F16_16X16X128_FP8_FP8_w32`: source matrix `16x16x128`, `8-bit`; destination/accumulator `16-bit`
+  - `V_WMMA_F32_16X16X64_FP8_FP8_w32`: source matrix `16x16x64`, `8-bit`; destination/accumulator `32-bit`
+- Tensor routes:
+  - tensor descriptor fragment
+  - tensor coordinate fragment
+  - LDS address fragment
+- `V_DIV_SCALE_F64`:
+  - vector/scalar outputs and sources now carry scalar `64-bit` fragment metadata where practical
+
 ## Entrypoint Coverage
 
 - `DecodeVop3pStub`
@@ -230,6 +284,5 @@
 
 ## Recommended Next Slice
 
-- Keep the public stub API stable and turn the current slot records into operand-class or fragment-shape semantics for the same routed seeds.
-- Widen the same slot model across more `VOP3P` routed families, especially the remaining `WMMA_SCALE*`, `SWMMAC*`, and packed BF16 variants.
-- After that, carry the same metadata boundary into the currently deferred `kVop3` FP8 / scale conversion seeds.
+- Keep the public stub API stable and widen the shared descriptor/fragment model across more routed `VOP3P` seeds, especially the remaining `WMMA_*`, `WMMA_SCALE*`, and `SWMMAC*` variants.
+- After that, carry the same common operand-descriptor boundary into the currently deferred `kVop3` FP8 / scale conversion seeds.
