@@ -43,12 +43,17 @@
   - parser-backed representative routed variants:
     - `V_WMMA_BF16F32_16X16X32_BF16_w32`
     - `V_WMMA_BF16_16X16X32_BF16_w32`
+    - `V_WMMA_F16_16X16X32_F16_w32`
     - `V_WMMA_F16_16X16X128_BF8_BF8_w32`
     - `V_WMMA_F16_16X16X128_FP8_BF8_w32`
+    - `V_WMMA_F16_16X16X64_BF8_BF8_w32`
     - `V_WMMA_F16_16X16X64_FP8_FP8_w32`
     - `V_WMMA_F16_16X16X64_BF8_FP8_w32`
     - `V_WMMA_F32_16X16X128_BF8_BF8_w32`
     - `V_WMMA_F32_16X16X128_BF8_FP8_w32`
+    - `V_WMMA_F32_16X16X128_FP8_BF8_w32`
+    - `V_WMMA_F32_16X16X32_BF16_w32`
+    - `V_WMMA_F32_16X16X64_BF8_BF8_w32`
     - `V_WMMA_F32_16X16X64_FP8_BF8_w32`
     - `V_WMMA_F32_16X16X128_F8F6F4`
     - `V_WMMA_F32_16X16X32_F16_w32`
@@ -152,6 +157,7 @@
   - representative seeds:
     - `V_SWMMAC_BF16F32_16X16X64_BF16_w32`
     - `V_SWMMAC_BF16_16X16X64_BF16_w32`
+    - `V_SWMMAC_F16_16X16X64_F16_w32`
     - `V_SWMMAC_F16_16X16X128_BF8_BF8_w32`
     - `V_SWMMAC_F16_16X16X128_BF8_FP8_w32`
     - `V_SWMMAC_F16_16X16X128_FP8_BF8_w32`
@@ -168,12 +174,19 @@
     - `has_tensor_descriptor`
     - `touches_lds`
     - `is_store` for store path
+  - Descriptor depth:
+    - tensor-descriptor descriptors on load and store
+    - tensor-coordinate descriptors on load and store
+    - LDS address fragment/descriptor coverage on load and store
 - VOP1 FP8/BF8 conversions:
   - `V_CVT_F16_FP8` -> `kCvtF16Fp8`
   - `V_CVT_F16_BF8` -> `kCvtF16Bf8`
   - `V_CVT_F32_FP8` -> `kCvtF32Fp8`
   - `V_CVT_PK_F16_FP8` -> `kCvtPkF16Fp8`
   - `V_CVT_PK_F16_BF8` -> `kCvtPkF16Bf8`
+  - Descriptor depth:
+    - scalar FP8/BF8 source descriptors for `F16` and `F32` conversions
+    - packed FP8/BF8 source and destination descriptors for `PK_F16` conversions
 - VOP3 SDST scale assist:
   - `V_DIV_SCALE_F64` -> `kVDivScaleF64`
   - Sources: `3`

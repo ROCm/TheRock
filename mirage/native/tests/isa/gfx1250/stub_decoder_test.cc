@@ -712,6 +712,52 @@ int main() {
     return 1;
   }
 
+  const StubDecodedInstruction wmma_f16_f16_generic =
+      DecodeVop3pStub("V_WMMA_F16_16X16X32_F16_w32");
+  if (!Expect(wmma_f16_f16_generic.operand_layout.layout_kind ==
+                  StubOperandLayoutKind::kWmmaCoreGeneric,
+              "expected generic WMMA F16/F16 operand layout")) {
+    return 1;
+  }
+  if (!Expect(ContainsSlotFragment(wmma_f16_f16_generic,
+                                   StubOperandSlotKind::kSource0,
+                                   StubFragmentKind::kMatrix, 16, 16, 32, 16,
+                                   0),
+              "expected generic WMMA F16/F16 source fragment shape")) {
+    return 1;
+  }
+  if (!Expect(ContainsDescriptor(
+                  wmma_f16_f16_generic, StubOperandRole::kDestination,
+                  StubOperandSlotKind::kDestination,
+                  StubOperandValueClass::kMatrixFragment,
+                  StubOperandAccess::kWrite, 1, StubFragmentKind::kMatrix, 16),
+              "expected generic WMMA F16/F16 destination descriptor")) {
+    return 1;
+  }
+
+  const StubDecodedInstruction wmma_f32_bf16_generic =
+      DecodeVop3pStub("V_WMMA_F32_16X16X32_BF16_w32");
+  if (!Expect(wmma_f32_bf16_generic.operand_layout.layout_kind ==
+                  StubOperandLayoutKind::kWmmaCoreGeneric,
+              "expected generic WMMA F32/BF16 operand layout")) {
+    return 1;
+  }
+  if (!Expect(ContainsSlotFragment(wmma_f32_bf16_generic,
+                                   StubOperandSlotKind::kSource0,
+                                   StubFragmentKind::kMatrix, 16, 16, 32, 16,
+                                   0),
+              "expected generic WMMA F32/BF16 source fragment shape")) {
+    return 1;
+  }
+  if (!Expect(ContainsDescriptor(
+                  wmma_f32_bf16_generic, StubOperandRole::kDestination,
+                  StubOperandSlotKind::kDestination,
+                  StubOperandValueClass::kMatrixFragment,
+                  StubOperandAccess::kWrite, 1, StubFragmentKind::kMatrix, 32),
+              "expected generic WMMA F32/BF16 destination descriptor")) {
+    return 1;
+  }
+
   const StubDecodedInstruction wmma_f16_bf8_fp8_generic =
       DecodeVop3pStub("V_WMMA_F16_16X16X64_BF8_FP8_w32");
   if (!Expect(wmma_f16_bf8_fp8_generic.operand_layout.layout_kind ==
@@ -732,6 +778,29 @@ int main() {
                   StubOperandValueClass::kMatrixFragment,
                   StubOperandAccess::kWrite, 1, StubFragmentKind::kMatrix, 16),
               "expected generic WMMA F16 BF8/FP8 destination descriptor")) {
+    return 1;
+  }
+
+  const StubDecodedInstruction wmma_f16_bf8_bf8_64_generic =
+      DecodeVop3pStub("V_WMMA_F16_16X16X64_BF8_BF8_w32");
+  if (!Expect(wmma_f16_bf8_bf8_64_generic.operand_layout.layout_kind ==
+                  StubOperandLayoutKind::kWmmaCoreGeneric,
+              "expected generic WMMA F16 BF8/BF8 64 operand layout")) {
+    return 1;
+  }
+  if (!Expect(ContainsSlotFragment(wmma_f16_bf8_bf8_64_generic,
+                                   StubOperandSlotKind::kSource0,
+                                   StubFragmentKind::kMatrix, 16, 16, 64, 8,
+                                   0),
+              "expected generic WMMA F16 BF8/BF8 64 source fragment shape")) {
+    return 1;
+  }
+  if (!Expect(ContainsDescriptor(
+                  wmma_f16_bf8_bf8_64_generic, StubOperandRole::kDestination,
+                  StubOperandSlotKind::kDestination,
+                  StubOperandValueClass::kMatrixFragment,
+                  StubOperandAccess::kWrite, 1, StubFragmentKind::kMatrix, 16),
+              "expected generic WMMA F16 BF8/BF8 64 destination descriptor")) {
     return 1;
   }
 
@@ -818,6 +887,29 @@ int main() {
     return 1;
   }
 
+  const StubDecodedInstruction wmma_f32_fp8_bf8_128_generic =
+      DecodeVop3pStub("V_WMMA_F32_16X16X128_FP8_BF8_w32");
+  if (!Expect(wmma_f32_fp8_bf8_128_generic.operand_layout.layout_kind ==
+                  StubOperandLayoutKind::kWmmaCoreGeneric,
+              "expected generic WMMA F32 FP8/BF8 128 operand layout")) {
+    return 1;
+  }
+  if (!Expect(ContainsSlotFragment(wmma_f32_fp8_bf8_128_generic,
+                                   StubOperandSlotKind::kSource0,
+                                   StubFragmentKind::kMatrix, 16, 16, 128, 8,
+                                   0),
+              "expected generic WMMA F32 FP8/BF8 128 source fragment shape")) {
+    return 1;
+  }
+  if (!Expect(ContainsDescriptor(
+                  wmma_f32_fp8_bf8_128_generic, StubOperandRole::kDestination,
+                  StubOperandSlotKind::kDestination,
+                  StubOperandValueClass::kMatrixFragment,
+                  StubOperandAccess::kWrite, 1, StubFragmentKind::kMatrix, 32),
+              "expected generic WMMA F32 FP8/BF8 128 destination descriptor")) {
+    return 1;
+  }
+
   const StubDecodedInstruction wmma_f32_fp8_bf8_generic =
       DecodeVop3pStub("V_WMMA_F32_16X16X64_FP8_BF8_w32");
   if (!Expect(wmma_f32_fp8_bf8_generic.operand_layout.layout_kind ==
@@ -830,6 +922,29 @@ int main() {
                                    StubFragmentKind::kMatrix, 16, 16, 64, 8,
                                    0),
               "expected generic WMMA F32 FP8/BF8 source fragment shape")) {
+    return 1;
+  }
+
+  const StubDecodedInstruction wmma_f32_bf8_bf8_64_generic =
+      DecodeVop3pStub("V_WMMA_F32_16X16X64_BF8_BF8_w32");
+  if (!Expect(wmma_f32_bf8_bf8_64_generic.operand_layout.layout_kind ==
+                  StubOperandLayoutKind::kWmmaCoreGeneric,
+              "expected generic WMMA F32 BF8/BF8 64 operand layout")) {
+    return 1;
+  }
+  if (!Expect(ContainsSlotFragment(wmma_f32_bf8_bf8_64_generic,
+                                   StubOperandSlotKind::kSource0,
+                                   StubFragmentKind::kMatrix, 16, 16, 64, 8,
+                                   0),
+              "expected generic WMMA F32 BF8/BF8 64 source fragment shape")) {
+    return 1;
+  }
+  if (!Expect(ContainsDescriptor(
+                  wmma_f32_bf8_bf8_64_generic, StubOperandRole::kDestination,
+                  StubOperandSlotKind::kDestination,
+                  StubOperandValueClass::kMatrixFragment,
+                  StubOperandAccess::kWrite, 1, StubFragmentKind::kMatrix, 32),
+              "expected generic WMMA F32 BF8/BF8 64 destination descriptor")) {
     return 1;
   }
 
@@ -991,6 +1106,29 @@ int main() {
     return 1;
   }
 
+  const StubDecodedInstruction swmmac_f16_f16_generic =
+      DecodeVop3pStub("V_SWMMAC_F16_16X16X64_F16_w32");
+  if (!Expect(swmmac_f16_f16_generic.operand_layout.layout_kind ==
+                  StubOperandLayoutKind::kSwmmacCoreGeneric,
+              "expected generic SWMMAC F16/F16 operand layout")) {
+    return 1;
+  }
+  if (!Expect(ContainsSlotFragment(swmmac_f16_f16_generic,
+                                   StubOperandSlotKind::kSource0,
+                                   StubFragmentKind::kMatrix, 16, 16, 64, 16,
+                                   0),
+              "expected generic SWMMAC F16/F16 source fragment shape")) {
+    return 1;
+  }
+  if (!Expect(ContainsDescriptor(
+                  swmmac_f16_f16_generic, StubOperandRole::kDestination,
+                  StubOperandSlotKind::kDestination,
+                  StubOperandValueClass::kMatrixFragment,
+                  StubOperandAccess::kWrite, 1, StubFragmentKind::kMatrix, 16),
+              "expected generic SWMMAC F16/F16 destination descriptor")) {
+    return 1;
+  }
+
   const StubDecodedInstruction swmmac_f32_f16_generic =
       DecodeVop3pStub("V_SWMMAC_F32_16X16X64_F16_w32");
   if (!Expect(swmmac_f32_f16_generic.operand_layout.layout_kind ==
@@ -1092,6 +1230,11 @@ int main() {
               "expected tensor-load LDS destination descriptor")) {
     return 1;
   }
+  if (!Expect(ContainsSlotFragment(tensor, StubOperandSlotKind::kLdsDestination,
+                                   StubFragmentKind::kAddress, 1, 1, 1, 32, 1),
+              "expected tensor-load LDS destination fragment shape")) {
+    return 1;
+  }
 
   const StubDecodedInstruction tensor_store =
       DecodeMimgTensorStub("TENSOR_STORE_FROM_LDS");
@@ -1156,6 +1299,11 @@ int main() {
                   tensor_store, StubOperandSlotKind::kTensorCoordinateSource,
                   StubFragmentKind::kTensorCoordinate, 1, 1, 1, 0, 1),
               "expected tensor-store coordinate fragment shape")) {
+    return 1;
+  }
+  if (!Expect(ContainsSlotFragment(tensor_store, StubOperandSlotKind::kLdsSource,
+                                   StubFragmentKind::kAddress, 1, 1, 1, 32, 1),
+              "expected tensor-store LDS source fragment shape")) {
     return 1;
   }
 
@@ -1265,6 +1413,14 @@ int main() {
               "expected V_CVT_F32_FP8 destination descriptor")) {
     return 1;
   }
+  if (!Expect(ContainsDescriptor(vop1_f32, StubOperandRole::kSource0,
+                                 StubOperandSlotKind::kSource0,
+                                 StubOperandValueClass::kVectorRegister,
+                                 StubOperandAccess::kRead, 1,
+                                 StubFragmentKind::kScalar, 8),
+              "expected V_CVT_F32_FP8 source descriptor")) {
+    return 1;
+  }
 
   const StubDecodedInstruction packed_vop1 =
       DecodeVop1Stub("V_CVT_PK_F16_FP8");
@@ -1314,6 +1470,14 @@ int main() {
                                  StubOperandAccess::kRead, 2,
                                  StubFragmentKind::kPacked, 8),
               "expected packed BF8 conversion source descriptor")) {
+    return 1;
+  }
+  if (!Expect(ContainsDescriptor(packed_bf8, StubOperandRole::kDestination,
+                                 StubOperandSlotKind::kDestination,
+                                 StubOperandValueClass::kPackedVector,
+                                 StubOperandAccess::kWrite, 2,
+                                 StubFragmentKind::kPacked, 16),
+              "expected packed BF8 conversion destination descriptor")) {
     return 1;
   }
 
