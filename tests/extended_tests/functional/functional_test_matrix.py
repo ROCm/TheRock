@@ -39,5 +39,6 @@ functional_matrix = {
         # TODO(lajagapp): Add windows support (https://github.com/ROCm/TheRock/issues/3207)
         "platform": ["linux"],
         "total_shards": 1,
+        "submodules": "rocm-systems",
     },
 }
