@@ -55,9 +55,18 @@ from pytorch_utils import (
 
 THIS_SCRIPT_DIR = Path(__file__).resolve().parent
 
-# Maps AMDGPU_FAMILY to BUILD_ENVIRONMENT for test timing data lookup.
-# Must stay in sync with pytorch/pytorch PR #176445.
-# mi300 uses noble/py3.12; all others use jammy/py3.10.
+# Maps AMDGPU_FAMILY to BUILD_ENVIRONMENT, which run_test.py uses to look up
+# historical test durations in test-times.json for balanced shard splitting.
+# See: https://raw.githubusercontent.com/pytorch/test-infra/generated-stats/stats/test-times.json
+#
+# The values must match keys present in that JSON file exactly, which is why
+# they include linux-specific OS and Python versions (e.g. "linux-noble-rocm-
+# py3.12-mi300").  This list is intentionally non-exhaustive: GPU families not
+# listed here (e.g. gfx1151, Windows targets) fall back to
+# ROCM_BUILD_ENVIRONMENT_DEFAULT.  Falling back to mi300 timings still gives
+# reasonably balanced shards since relative test durations are similar across
+# GPU types.  Once pytorch/pytorch#176445 lands, we can match on the GPU SKU
+# suffix for a more robust lookup.
 AMDGPU_FAMILY_TO_BUILD_ENV = {
     "gfx90X-dcgpu": "linux-jammy-rocm-py3.10-mi200",
     "gfx94X-dcgpu": "linux-noble-rocm-py3.12-mi300",
