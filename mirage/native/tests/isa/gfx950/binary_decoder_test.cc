@@ -5910,11 +5910,12 @@ int main() {
     return 1;
   }
 
-  const std::array<std::string_view, 16> kExtendedDsOpcodes = {
+  const std::array<std::string_view, 18> kExtendedDsOpcodes = {
       "DS_SUB_U32", "DS_RSUB_U32", "DS_INC_U32", "DS_DEC_U32",
       "DS_MIN_I32", "DS_MAX_I32",  "DS_MIN_U32", "DS_MAX_U32",
       "DS_AND_B32", "DS_OR_B32",   "DS_XOR_B32", "DS_ADD_F32",
       "DS_MIN_F32", "DS_MAX_F32",  "DS_WRITE_B8", "DS_WRITE_B16",
+      "DS_PK_ADD_F16", "DS_PK_ADD_BF16",
   };
   for (std::string_view opcode_name : kExtendedDsOpcodes) {
     const auto opcode = FindDefaultEncodingOpcode(opcode_name, "ENC_DS");
@@ -6459,6 +6460,72 @@ int main() {
     }
   }
 
+  const auto ds_write_addtid_opcode =
+      FindDefaultEncodingOpcode("DS_WRITE_ADDTID_B32", "ENC_DS");
+  if (!Expect(ds_write_addtid_opcode.has_value(),
+              "expected ds write_addtid opcode lookup")) {
+    return 1;
+  }
+  {
+    const auto encoded = MakeDs(*ds_write_addtid_opcode, 0, 13, 2, 0, 7);
+    const std::vector<std::uint32_t> encoded_program = {
+        encoded[0], encoded[1], MakeSopp(1),
+    };
+    decoded_program.clear();
+    if (!Expect(decoder.DecodeProgram(encoded_program, &decoded_program,
+                                      &error_message),
+                error_message.c_str()) ||
+        !Expect(decoded_program.size() == 2,
+                "expected ds write_addtid decode program size") ||
+        !Expect(decoded_program[0].opcode == "DS_WRITE_ADDTID_B32",
+                "expected ds write_addtid opcode decode") ||
+        !Expect(decoded_program[0].operand_count == 2,
+                "expected ds write_addtid operand count") ||
+        !Expect(decoded_program[0].operands[0].kind == OperandKind::kVgpr,
+                "expected ds write_addtid data kind") ||
+        !Expect(decoded_program[0].operands[0].index == 2,
+                "expected ds write_addtid data index") ||
+        !Expect(decoded_program[0].operands[1].kind == OperandKind::kImm32,
+                "expected ds write_addtid offset kind") ||
+        !Expect(decoded_program[0].operands[1].imm32 == 7u,
+                "expected ds write_addtid offset value")) {
+      return 1;
+    }
+  }
+
+  const auto ds_read_addtid_opcode =
+      FindDefaultEncodingOpcode("DS_READ_ADDTID_B32", "ENC_DS");
+  if (!Expect(ds_read_addtid_opcode.has_value(),
+              "expected ds read_addtid opcode lookup")) {
+    return 1;
+  }
+  {
+    const auto encoded = MakeDs(*ds_read_addtid_opcode, 9, 13, 0, 0, 7);
+    const std::vector<std::uint32_t> encoded_program = {
+        encoded[0], encoded[1], MakeSopp(1),
+    };
+    decoded_program.clear();
+    if (!Expect(decoder.DecodeProgram(encoded_program, &decoded_program,
+                                      &error_message),
+                error_message.c_str()) ||
+        !Expect(decoded_program.size() == 2,
+                "expected ds read_addtid decode program size") ||
+        !Expect(decoded_program[0].opcode == "DS_READ_ADDTID_B32",
+                "expected ds read_addtid opcode decode") ||
+        !Expect(decoded_program[0].operand_count == 2,
+                "expected ds read_addtid operand count") ||
+        !Expect(decoded_program[0].operands[0].kind == OperandKind::kVgpr,
+                "expected ds read_addtid destination kind") ||
+        !Expect(decoded_program[0].operands[0].index == 9,
+                "expected ds read_addtid destination index") ||
+        !Expect(decoded_program[0].operands[1].kind == OperandKind::kImm32,
+                "expected ds read_addtid offset kind") ||
+        !Expect(decoded_program[0].operands[1].imm32 == 7u,
+                "expected ds read_addtid offset value")) {
+      return 1;
+    }
+  }
+
   const std::array<std::string_view, 3> kDsDualDataOpcodes = {
       "DS_MSKOR_B32",
       "DS_CMPST_B32",
@@ -6607,13 +6674,13 @@ int main() {
     }
   }
 
-  const std::array<std::string_view, 16> kReturningDsOpcodes = {
+  const std::array<std::string_view, 18> kReturningDsOpcodes = {
       "DS_ADD_RTN_U32", "DS_SUB_RTN_U32", "DS_RSUB_RTN_U32",
       "DS_INC_RTN_U32", "DS_DEC_RTN_U32", "DS_MIN_RTN_I32",
       "DS_MAX_RTN_I32", "DS_MIN_RTN_U32", "DS_MAX_RTN_U32",
       "DS_AND_RTN_B32", "DS_OR_RTN_B32",  "DS_XOR_RTN_B32",
       "DS_WRXCHG_RTN_B32", "DS_ADD_RTN_F32", "DS_MIN_RTN_F32",
-      "DS_MAX_RTN_F32",
+      "DS_MAX_RTN_F32", "DS_PK_ADD_RTN_F16", "DS_PK_ADD_RTN_BF16",
   };
   for (std::string_view opcode_name : kReturningDsOpcodes) {
     const auto opcode = FindDefaultEncodingOpcode(opcode_name, "ENC_DS");
@@ -6699,13 +6766,13 @@ int main() {
     }
   }
 
-  const std::array<std::string_view, 16> kWideReturningDsOpcodes = {
+  const std::array<std::string_view, 17> kWideReturningDsOpcodes = {
       "DS_ADD_RTN_U64", "DS_SUB_RTN_U64", "DS_RSUB_RTN_U64",
       "DS_INC_RTN_U64", "DS_DEC_RTN_U64", "DS_MIN_RTN_I64",
       "DS_MAX_RTN_I64", "DS_MIN_RTN_U64", "DS_MAX_RTN_U64",
       "DS_AND_RTN_B64", "DS_OR_RTN_B64",  "DS_XOR_RTN_B64",
       "DS_WRXCHG_RTN_B64", "DS_ADD_RTN_F64", "DS_MIN_RTN_F64",
-      "DS_MAX_RTN_F64",
+      "DS_CONDXCHG32_RTN_B64", "DS_MAX_RTN_F64",
   };
   for (std::string_view opcode_name : kWideReturningDsOpcodes) {
     const auto opcode = FindDefaultEncodingOpcode(opcode_name, "ENC_DS");

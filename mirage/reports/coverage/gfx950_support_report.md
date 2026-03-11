@@ -1,15 +1,15 @@
 # GFX950 Coverage Report
 
 - Catalog instructions: 1242
-- Semantic support: 617 (49.7%)
-- Raw decode support: 640 (51.5% of total, 63.1% of measured)
+- Semantic support: 624 (50.2%)
+- Raw decode support: 647 (52.1% of total, 63.8% of measured)
 - Raw decode measurable instructions: 1014
 
 ## Gaps
 
 - Semantic-only coverage without measured decode: 36
 - Decode-only without semantic support: 59
-- Missing both semantic and decode support: 566
+- Missing both semantic and decode support: 559
 
 ## Unmeasured Encoding Families
 
@@ -91,9 +91,6 @@
 
 ## Missing-Both Sample
 
-- `DS_PK_ADD_F16`
-- `DS_PK_ADD_BF16`
-- `DS_WRITE_ADDTID_B32`
 - `DS_WRXCHG2_RTN_B32`
 - `DS_WRXCHG2ST64_RTN_B32`
 - `DS_SWIZZLE_B32`
@@ -101,10 +98,6 @@
 - `DS_BPERMUTE_B32`
 - `DS_WRXCHG2_RTN_B64`
 - `DS_WRXCHG2ST64_RTN_B64`
-- `DS_CONDXCHG32_RTN_B64`
-- `DS_READ_ADDTID_B32`
-- `DS_PK_ADD_RTN_F16`
-- `DS_PK_ADD_RTN_BF16`
 - `DS_CONSUME`
 - `DS_APPEND`
 - `DS_READ_B64_TR_B4`
@@ -116,3 +109,10 @@
 - `FLAT_LOAD_UBYTE_D16`
 - `FLAT_LOAD_UBYTE_D16_HI`
 - `FLAT_LOAD_SBYTE_D16`
+- `FLAT_LOAD_SBYTE_D16_HI`
+- `FLAT_LOAD_SHORT_D16`
+- `FLAT_LOAD_SHORT_D16_HI`
+- `FLAT_ATOMIC_SWAP`
+- `FLAT_ATOMIC_CMPSWAP`
+- `FLAT_ATOMIC_ADD`
+- `FLAT_ATOMIC_SUB`

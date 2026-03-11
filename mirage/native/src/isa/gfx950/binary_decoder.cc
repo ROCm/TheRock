@@ -233,7 +233,11 @@ bool IsSupportedDsOpcode(std::string_view opcode_name) {
          opcode_name == "DS_CMPST_B32" ||
          opcode_name == "DS_CMPST_F32" ||
          opcode_name == "DS_ADD_F32" || opcode_name == "DS_MIN_F32" ||
-         opcode_name == "DS_MAX_F32" || opcode_name == "DS_WRITE_B8" ||
+         opcode_name == "DS_MAX_F32" ||
+         opcode_name == "DS_PK_ADD_F16" ||
+         opcode_name == "DS_PK_ADD_BF16" ||
+         opcode_name == "DS_WRITE_ADDTID_B32" ||
+         opcode_name == "DS_WRITE_B8" ||
          opcode_name == "DS_WRITE_B16" ||
          opcode_name == "DS_WRITE_B8_D16_HI" ||
          opcode_name == "DS_WRITE_B16_D16_HI" ||
@@ -267,6 +271,7 @@ bool IsSupportedDsOpcode(std::string_view opcode_name) {
          opcode_name == "DS_READ_B64" ||
          opcode_name == "DS_READ_B96" ||
          opcode_name == "DS_READ_B128" ||
+         opcode_name == "DS_READ_ADDTID_B32" ||
          opcode_name == "DS_READ2_B64" ||
          opcode_name == "DS_READ2ST64_B64" ||
          opcode_name == "DS_READ_I8" ||
@@ -299,6 +304,8 @@ bool IsSupportedDsOpcode(std::string_view opcode_name) {
          opcode_name == "DS_ADD_RTN_F32" ||
          opcode_name == "DS_MIN_RTN_F32" ||
          opcode_name == "DS_MAX_RTN_F32" ||
+         opcode_name == "DS_PK_ADD_RTN_F16" ||
+         opcode_name == "DS_PK_ADD_RTN_BF16" ||
          opcode_name == "DS_ADD_RTN_U64" ||
          opcode_name == "DS_SUB_RTN_U64" ||
          opcode_name == "DS_RSUB_RTN_U64" ||
@@ -315,6 +322,7 @@ bool IsSupportedDsOpcode(std::string_view opcode_name) {
          opcode_name == "DS_WRXCHG_RTN_B64" ||
          opcode_name == "DS_CMPST_RTN_B64" ||
          opcode_name == "DS_CMPST_RTN_F64" ||
+         opcode_name == "DS_CONDXCHG32_RTN_B64" ||
          opcode_name == "DS_ADD_RTN_F64" ||
          opcode_name == "DS_MIN_RTN_F64" ||
          opcode_name == "DS_MAX_RTN_F64";
@@ -351,6 +359,14 @@ bool IsDsDirectReadOpcode(std::string_view opcode_name) {
          IsDsNarrowReadOpcode(opcode_name);
 }
 
+bool IsDsAddTidWriteOpcode(std::string_view opcode_name) {
+  return opcode_name == "DS_WRITE_ADDTID_B32";
+}
+
+bool IsDsAddTidReadOpcode(std::string_view opcode_name) {
+  return opcode_name == "DS_READ_ADDTID_B32";
+}
+
 bool IsDsDualDataOpcode(std::string_view opcode_name) {
   return opcode_name == "DS_MSKOR_B32" ||
          opcode_name == "DS_CMPST_B32" ||
@@ -377,6 +393,8 @@ bool IsDsReturnOpcode(std::string_view opcode_name) {
          opcode_name == "DS_ADD_RTN_F32" ||
          opcode_name == "DS_MIN_RTN_F32" ||
          opcode_name == "DS_MAX_RTN_F32" ||
+         opcode_name == "DS_PK_ADD_RTN_F16" ||
+         opcode_name == "DS_PK_ADD_RTN_BF16" ||
          opcode_name == "DS_ADD_RTN_U64" ||
          opcode_name == "DS_SUB_RTN_U64" ||
          opcode_name == "DS_RSUB_RTN_U64" ||
@@ -390,6 +408,7 @@ bool IsDsReturnOpcode(std::string_view opcode_name) {
          opcode_name == "DS_OR_RTN_B64" ||
          opcode_name == "DS_XOR_RTN_B64" ||
          opcode_name == "DS_WRXCHG_RTN_B64" ||
+         opcode_name == "DS_CONDXCHG32_RTN_B64" ||
          opcode_name == "DS_ADD_RTN_F64" ||
          opcode_name == "DS_MIN_RTN_F64" ||
          opcode_name == "DS_MAX_RTN_F64";
@@ -801,6 +820,22 @@ bool Gfx950BinaryDecoder::DecodeDs(std::span<const std::uint32_t> words,
     }
     *instruction = DecodedInstruction::FiveOperand(instruction_name, dst, addr,
                                                    data0, data1, offset0);
+  } else if (IsDsAddTidReadOpcode(opcode_name)) {
+    InstructionOperand dst;
+    if (!DecodeVectorDestination(
+            static_cast<std::uint32_t>(ExtractBits(instruction_word, 56, 8)),
+            &dst, error_message)) {
+      return false;
+    }
+    *instruction = DecodedInstruction::TwoOperand(instruction_name, dst, offset0);
+  } else if (IsDsAddTidWriteOpcode(opcode_name)) {
+    InstructionOperand data0;
+    if (!DecodeVectorRegisterSource(
+            static_cast<std::uint32_t>(ExtractBits(instruction_word, 40, 8)),
+            &data0, error_message)) {
+      return false;
+    }
+    *instruction = DecodedInstruction::TwoOperand(instruction_name, data0, offset0);
   } else if (IsDsDirectReadOpcode(opcode_name)) {
     InstructionOperand dst;
     if (!DecodeVectorDestination(

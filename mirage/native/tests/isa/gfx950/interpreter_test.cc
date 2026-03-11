@@ -1162,11 +1162,12 @@ int main() {
     return 1;
   }
 
-  const std::array<std::string_view, 16> kExtendedDsOpcodes = {
+  const std::array<std::string_view, 18> kExtendedDsOpcodes = {
       "DS_SUB_U32", "DS_RSUB_U32", "DS_INC_U32", "DS_DEC_U32",
       "DS_MIN_I32", "DS_MAX_I32",  "DS_MIN_U32", "DS_MAX_U32",
       "DS_AND_B32", "DS_OR_B32",   "DS_XOR_B32", "DS_ADD_F32",
       "DS_MIN_F32", "DS_MAX_F32",  "DS_WRITE_B8", "DS_WRITE_B16",
+      "DS_PK_ADD_F16", "DS_PK_ADD_BF16",
   };
   for (std::string_view opcode : kExtendedDsOpcodes) {
     if (!Expect(interpreter.Supports(opcode),
@@ -1338,6 +1339,28 @@ int main() {
     }
   }
 
+  const std::array<std::string_view, 1> kDsAddTidWriteOpcodes = {
+      "DS_WRITE_ADDTID_B32",
+  };
+  for (std::string_view opcode : kDsAddTidWriteOpcodes) {
+    if (!Expect(interpreter.Supports(opcode),
+                "expected ds addtid write opcode support")) {
+      std::cerr << opcode << '\n';
+      return 1;
+    }
+  }
+
+  const std::array<std::string_view, 1> kDsAddTidReadOpcodes = {
+      "DS_READ_ADDTID_B32",
+  };
+  for (std::string_view opcode : kDsAddTidReadOpcodes) {
+    if (!Expect(interpreter.Supports(opcode),
+                "expected ds addtid read opcode support")) {
+      std::cerr << opcode << '\n';
+      return 1;
+    }
+  }
+
   const std::array<std::string_view, 4> kDsDualDataReturnOpcodes = {
       "DS_MSKOR_RTN_B32",
       "DS_CMPST_RTN_B32",
@@ -1365,13 +1388,13 @@ int main() {
     }
   }
 
-  const std::array<std::string_view, 16> kReturningDsOpcodes = {
+  const std::array<std::string_view, 18> kReturningDsOpcodes = {
       "DS_ADD_RTN_U32", "DS_SUB_RTN_U32", "DS_RSUB_RTN_U32",
       "DS_INC_RTN_U32", "DS_DEC_RTN_U32", "DS_MIN_RTN_I32",
       "DS_MAX_RTN_I32", "DS_MIN_RTN_U32", "DS_MAX_RTN_U32",
       "DS_AND_RTN_B32", "DS_OR_RTN_B32",  "DS_XOR_RTN_B32",
       "DS_WRXCHG_RTN_B32", "DS_ADD_RTN_F32", "DS_MIN_RTN_F32",
-      "DS_MAX_RTN_F32",
+      "DS_MAX_RTN_F32", "DS_PK_ADD_RTN_F16", "DS_PK_ADD_RTN_BF16",
   };
   for (std::string_view opcode : kReturningDsOpcodes) {
     if (!Expect(interpreter.Supports(opcode),
@@ -1394,13 +1417,13 @@ int main() {
     }
   }
 
-  const std::array<std::string_view, 16> kWideReturningDsOpcodes = {
+  const std::array<std::string_view, 17> kWideReturningDsOpcodes = {
       "DS_ADD_RTN_U64", "DS_SUB_RTN_U64", "DS_RSUB_RTN_U64",
       "DS_INC_RTN_U64", "DS_DEC_RTN_U64", "DS_MIN_RTN_I64",
       "DS_MAX_RTN_I64", "DS_MIN_RTN_U64", "DS_MAX_RTN_U64",
       "DS_AND_RTN_B64", "DS_OR_RTN_B64",  "DS_XOR_RTN_B64",
       "DS_WRXCHG_RTN_B64", "DS_ADD_RTN_F64", "DS_MIN_RTN_F64",
-      "DS_MAX_RTN_F64",
+      "DS_CONDXCHG32_RTN_B64", "DS_MAX_RTN_F64",
   };
   for (std::string_view opcode : kWideReturningDsOpcodes) {
     if (!Expect(interpreter.Supports(opcode),
@@ -6927,6 +6950,199 @@ int main() {
     return 1;
   }
 
+  {
+  const std::vector<DecodedInstruction> ds_packed_add_program = {
+      DecodedInstruction::ThreeOperand("DS_WRITE_B32", InstructionOperand::Vgpr(0),
+                                       InstructionOperand::Vgpr(1),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_PK_ADD_F16", InstructionOperand::Vgpr(0),
+                                       InstructionOperand::Vgpr(2),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_READ_B32", InstructionOperand::Vgpr(3),
+                                       InstructionOperand::Vgpr(0),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_WRITE_B32", InstructionOperand::Vgpr(4),
+                                       InstructionOperand::Vgpr(5),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_PK_ADD_BF16",
+                                       InstructionOperand::Vgpr(4),
+                                       InstructionOperand::Vgpr(6),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("DS_READ_B32", InstructionOperand::Vgpr(7),
+                                       InstructionOperand::Vgpr(4),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  auto make_ds_packed_add_state = []() {
+    WaveExecutionState state;
+    state.exec_mask = 0b1011ULL;
+    state.vgprs[0][0] = 0u;
+    state.vgprs[0][1] = 4u;
+    state.vgprs[0][3] = 8u;
+    state.vgprs[1][0] = 0x40003c00u;
+    state.vgprs[1][1] = 0x0000bc00u;
+    state.vgprs[1][3] = 0x4400c000u;
+    state.vgprs[2][0] = 0x3c004000u;
+    state.vgprs[2][1] = 0x3c003800u;
+    state.vgprs[2][3] = 0x40003c00u;
+    state.vgprs[4][0] = 16u;
+    state.vgprs[4][1] = 20u;
+    state.vgprs[4][3] = 24u;
+    state.vgprs[5][0] = 0x40003f80u;
+    state.vgprs[5][1] = 0x0000bf80u;
+    state.vgprs[5][3] = 0x4080c000u;
+    state.vgprs[6][0] = 0x3f804000u;
+    state.vgprs[6][1] = 0x3f803f00u;
+    state.vgprs[6][3] = 0x40003f80u;
+    state.vgprs[3][2] = 0xdeadbeefu;
+    state.vgprs[7][2] = 0xcafebabeu;
+    return state;
+  };
+  auto validate_ds_packed_add_state = [&](const WaveExecutionState& state,
+                                          const char* mode) {
+    if (!Expect(state.halted, "expected ds packed-add program to halt") ||
+        !Expect(state.vgprs[3][0] == 0x42004200u,
+                "expected ds_pk_add_f16 lane 0 result") ||
+        !Expect(state.vgprs[3][1] == 0x3c00b800u,
+                "expected ds_pk_add_f16 lane 1 result") ||
+        !Expect(state.vgprs[3][2] == 0xdeadbeefu,
+                "expected ds_pk_add_f16 inactive lane result") ||
+        !Expect(state.vgprs[3][3] == 0x4600bc00u,
+                "expected ds_pk_add_f16 lane 3 result") ||
+        !Expect(state.vgprs[7][0] == 0x40404040u,
+                "expected ds_pk_add_bf16 lane 0 result") ||
+        !Expect(state.vgprs[7][1] == 0x3f80bf00u,
+                "expected ds_pk_add_bf16 lane 1 result") ||
+        !Expect(state.vgprs[7][2] == 0xcafebabeu,
+                "expected ds_pk_add_bf16 inactive lane result") ||
+        !Expect(state.vgprs[7][3] == 0x40c0bf80u,
+                "expected ds_pk_add_bf16 lane 3 result")) {
+      std::cerr << mode << '\n';
+      return false;
+    }
+
+    const auto expect_lds_value = [&](std::size_t address,
+                                      std::uint32_t expected,
+                                      const char* label) {
+      std::uint32_t value = 0;
+      std::memcpy(&value, state.lds_bytes.data() + address, sizeof(value));
+      return Expect(value == expected, label);
+    };
+    if (!expect_lds_value(0u, 0x42004200u, "expected ds_pk_add_f16 lane 0 lds") ||
+        !expect_lds_value(4u, 0x3c00b800u, "expected ds_pk_add_f16 lane 1 lds") ||
+        !expect_lds_value(8u, 0x4600bc00u, "expected ds_pk_add_f16 lane 3 lds") ||
+        !expect_lds_value(16u, 0x40404040u, "expected ds_pk_add_bf16 lane 0 lds") ||
+        !expect_lds_value(20u, 0x3f80bf00u, "expected ds_pk_add_bf16 lane 1 lds") ||
+        !expect_lds_value(24u, 0x40c0bf80u, "expected ds_pk_add_bf16 lane 3 lds")) {
+      std::cerr << mode << '\n';
+      return false;
+    }
+    return true;
+  };
+
+  WaveExecutionState decoded_ds_packed_add_state = make_ds_packed_add_state();
+  if (!Expect(interpreter.ExecuteProgram(ds_packed_add_program,
+                                         &decoded_ds_packed_add_state,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_ds_packed_add_state(decoded_ds_packed_add_state, "decoded")) {
+    return 1;
+  }
+
+  std::vector<CompiledInstruction> compiled_ds_packed_add_program;
+  if (!Expect(interpreter.CompileProgram(ds_packed_add_program,
+                                         &compiled_ds_packed_add_program,
+                                         &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+  WaveExecutionState compiled_ds_packed_add_state = make_ds_packed_add_state();
+  if (!Expect(interpreter.ExecuteProgram(compiled_ds_packed_add_program,
+                                         &compiled_ds_packed_add_state,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_ds_packed_add_state(compiled_ds_packed_add_state, "compiled")) {
+    return 1;
+  }
+  }
+
+  {
+  const std::vector<DecodedInstruction> ds_addtid_program = {
+      DecodedInstruction::TwoOperand("DS_WRITE_ADDTID_B32",
+                                     InstructionOperand::Vgpr(1),
+                                     InstructionOperand::Imm32(16)),
+      DecodedInstruction::TwoOperand("DS_READ_ADDTID_B32",
+                                     InstructionOperand::Vgpr(2),
+                                     InstructionOperand::Imm32(16)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  auto make_ds_addtid_state = []() {
+    WaveExecutionState state;
+    state.exec_mask = 0b1011ULL;
+    state.sgprs[124] = 0x00010020u;
+    state.vgprs[1][0] = 111u;
+    state.vgprs[1][1] = 222u;
+    state.vgprs[1][3] = 444u;
+    state.vgprs[2][2] = 0xdeadbeefu;
+    return state;
+  };
+  auto validate_ds_addtid_state = [&](const WaveExecutionState& state,
+                                      const char* mode) {
+    if (!Expect(state.halted, "expected ds addtid program to halt") ||
+        !Expect(state.vgprs[2][0] == 111u,
+                "expected ds read_addtid lane 0 result") ||
+        !Expect(state.vgprs[2][1] == 222u,
+                "expected ds read_addtid lane 1 result") ||
+        !Expect(state.vgprs[2][2] == 0xdeadbeefu,
+                "expected ds read_addtid inactive lane result") ||
+        !Expect(state.vgprs[2][3] == 444u,
+                "expected ds read_addtid lane 3 result")) {
+      std::cerr << mode << '\n';
+      return false;
+    }
+
+    const auto expect_lds_value = [&](std::size_t address,
+                                      std::uint32_t expected,
+                                      const char* label) {
+      std::uint32_t value = 0;
+      std::memcpy(&value, state.lds_bytes.data() + address, sizeof(value));
+      return Expect(value == expected, label);
+    };
+    if (!expect_lds_value(48u, 111u, "expected ds write_addtid lane 0 lds") ||
+        !expect_lds_value(52u, 222u, "expected ds write_addtid lane 1 lds") ||
+        !expect_lds_value(60u, 444u, "expected ds write_addtid lane 3 lds")) {
+      std::cerr << mode << '\n';
+      return false;
+    }
+    return true;
+  };
+
+  WaveExecutionState decoded_ds_addtid_state = make_ds_addtid_state();
+  if (!Expect(interpreter.ExecuteProgram(ds_addtid_program,
+                                         &decoded_ds_addtid_state,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_ds_addtid_state(decoded_ds_addtid_state, "decoded")) {
+    return 1;
+  }
+
+  std::vector<CompiledInstruction> compiled_ds_addtid_program;
+  if (!Expect(interpreter.CompileProgram(ds_addtid_program,
+                                         &compiled_ds_addtid_program,
+                                         &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+  WaveExecutionState compiled_ds_addtid_state = make_ds_addtid_state();
+  if (!Expect(interpreter.ExecuteProgram(compiled_ds_addtid_program,
+                                         &compiled_ds_addtid_state,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_ds_addtid_state(compiled_ds_addtid_state, "compiled")) {
+    return 1;
+  }
+  }
+
   struct DsReturnCase {
     std::string_view opcode;
     std::array<std::uint32_t, 3> initial_values;
@@ -7022,7 +7238,7 @@ int main() {
         }
         return true;
       };
-  const std::array<DsReturnCase, 16> kDsReturnCases = {{
+  const std::array<DsReturnCase, 18> kDsReturnCases = {{
       {"DS_ADD_RTN_U32", {10u, 20u, 40u}, {1u, 2u, 4u}, {11u, 22u, 44u}},
       {"DS_SUB_RTN_U32", {10u, 20u, 40u}, {1u, 2u, 4u}, {9u, 18u, 36u}},
       {"DS_RSUB_RTN_U32", {10u, 20u, 40u}, {15u, 25u, 45u}, {5u, 5u, 5u}},
@@ -7066,6 +7282,14 @@ int main() {
        {FloatBits(4.0f), FloatBits(-2.0f), FloatBits(1.5f)},
        {FloatBits(3.0f), FloatBits(-3.5f), FloatBits(2.0f)},
        {FloatBits(4.0f), FloatBits(-2.0f), FloatBits(2.0f)}},
+      {"DS_PK_ADD_RTN_F16",
+       {0x40003c00u, 0x0000bc00u, 0x4400c000u},
+       {0x3c004000u, 0x3c003800u, 0x40003c00u},
+       {0x42004200u, 0x3c00b800u, 0x4600bc00u}},
+      {"DS_PK_ADD_RTN_BF16",
+       {0x40003f80u, 0x0000bf80u, 0x4080c000u},
+       {0x3f804000u, 0x3f803f00u, 0x40003f80u},
+       {0x40404040u, 0x3f80bf00u, 0x40c0bf80u}},
   }};
   for (const DsReturnCase& test_case : kDsReturnCases) {
     if (!run_ds_return_case(test_case, false) ||
@@ -8425,6 +8649,76 @@ int main() {
                                          &error_message),
               error_message.c_str()) ||
       !validate_ds_b64_return_state(compiled_ds_b64_return_state, "compiled")) {
+    return 1;
+  }
+  }
+
+  {
+  const std::vector<DecodedInstruction> ds_condxchg32_rtn_b64_program = {
+      DecodedInstruction::FourOperand("DS_CONDXCHG32_RTN_B64",
+                                      InstructionOperand::Vgpr(4),
+                                      InstructionOperand::Vgpr(0),
+                                      InstructionOperand::Vgpr(1),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  auto make_ds_condxchg32_rtn_b64_state = []() {
+    WaveExecutionState state;
+    state.exec_mask = 0x1ULL;
+    state.vgprs[0][0] = 64u;
+    SetLane0VgprU64(&state, 1, ComposeU64(0x80000033u, 0x00000044u));
+    state.vgprs[4][0] = 0xdeadbeefu;
+    state.vgprs[5][0] = 0xcafebabeu;
+    const std::uint64_t initial_value = ComposeU64(0x11111111u, 0x22222222u);
+    std::memcpy(state.lds_bytes.data() + 64u, &initial_value, sizeof(initial_value));
+    return state;
+  };
+  auto validate_ds_condxchg32_rtn_b64_state =
+      [&](const WaveExecutionState& state, const char* mode) {
+        if (!Expect(state.halted,
+                    "expected ds condxchg32 rtn b64 program to halt") ||
+            !Expect(ReadLane0VgprU64(state, 4) ==
+                        ComposeU64(0x11111111u, 0x22222222u),
+                    "expected ds condxchg32 rtn b64 return value")) {
+          std::cerr << mode << '\n';
+          return false;
+        }
+        std::uint64_t lds_value = 0;
+        std::memcpy(&lds_value, state.lds_bytes.data() + 64u, sizeof(lds_value));
+        if (!Expect(lds_value == ComposeU64(0x80000033u, 0x22222222u),
+                    "expected ds condxchg32 rtn b64 final value")) {
+          std::cerr << mode << '\n';
+          return false;
+        }
+        return true;
+      };
+
+  WaveExecutionState decoded_ds_condxchg32_rtn_b64_state =
+      make_ds_condxchg32_rtn_b64_state();
+  if (!Expect(interpreter.ExecuteProgram(ds_condxchg32_rtn_b64_program,
+                                         &decoded_ds_condxchg32_rtn_b64_state,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_ds_condxchg32_rtn_b64_state(
+          decoded_ds_condxchg32_rtn_b64_state, "decoded")) {
+    return 1;
+  }
+
+  std::vector<CompiledInstruction> compiled_ds_condxchg32_rtn_b64_program;
+  if (!Expect(interpreter.CompileProgram(ds_condxchg32_rtn_b64_program,
+                                         &compiled_ds_condxchg32_rtn_b64_program,
+                                         &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+  WaveExecutionState compiled_ds_condxchg32_rtn_b64_state =
+      make_ds_condxchg32_rtn_b64_state();
+  if (!Expect(interpreter.ExecuteProgram(
+                  compiled_ds_condxchg32_rtn_b64_program,
+                  &compiled_ds_condxchg32_rtn_b64_state, &error_message),
+              error_message.c_str()) ||
+      !validate_ds_condxchg32_rtn_b64_state(
+          compiled_ds_condxchg32_rtn_b64_state, "compiled")) {
     return 1;
   }
   }
