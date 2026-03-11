@@ -61,6 +61,13 @@
     "V_CMP_LG_F32",
     "V_CMP_LT_F32",
     "V_CMP_NEQ_F32",
+    "V_CMP_O_F32",
+    "V_CMP_U_F32",
+    "V_CMP_NGE_F32",
+    "V_CMP_NLG_F32",
+    "V_CMP_NGT_F32",
+    "V_CMP_NLE_F32",
+    "V_CMP_NLT_F32",
     "V_CMPX_CLASS_F32",
     "V_CMPX_EQ_F32",
     "V_CMPX_GE_F32",
@@ -69,6 +76,13 @@
     "V_CMPX_LG_F32",
     "V_CMPX_LT_F32",
     "V_CMPX_NEQ_F32",
+    "V_CMPX_O_F32",
+    "V_CMPX_U_F32",
+    "V_CMPX_NGE_F32",
+    "V_CMPX_NLG_F32",
+    "V_CMPX_NGT_F32",
+    "V_CMPX_NLE_F32",
+    "V_CMPX_NLT_F32",
     "V_NOT_B32",
     "V_BFREV_B32",
     "V_CVT_F32_UBYTE0",
@@ -86,6 +100,7 @@
     "V_MAX_I32",
     "V_MIN_U32",
     "V_MAX_U32",
+    "V_CNDMASK_B32",
     "V_LSHRREV_B32",
     "V_ASHRREV_I32",
     "V_LSHLREV_B32",
@@ -151,6 +166,7 @@
       "V_MAX_I32",
       "V_MIN_U32",
       "V_MAX_U32",
+      "V_CNDMASK_B32",
       "V_LSHRREV_B32",
       "V_ASHRREV_I32",
       "V_LSHLREV_B32",
@@ -191,6 +207,13 @@
       "V_CMP_LG_F32",
       "V_CMP_LT_F32",
       "V_CMP_NEQ_F32",
+      "V_CMP_O_F32",
+      "V_CMP_U_F32",
+      "V_CMP_NGE_F32",
+      "V_CMP_NLG_F32",
+      "V_CMP_NGT_F32",
+      "V_CMP_NLE_F32",
+      "V_CMP_NLT_F32",
       "V_CMPX_CLASS_F32",
       "V_CMPX_EQ_F32",
       "V_CMPX_GE_F32",
@@ -198,7 +221,14 @@
       "V_CMPX_LE_F32",
       "V_CMPX_LG_F32",
       "V_CMPX_LT_F32",
-      "V_CMPX_NEQ_F32"
+      "V_CMPX_NEQ_F32",
+      "V_CMPX_O_F32",
+      "V_CMPX_U_F32",
+      "V_CMPX_NGE_F32",
+      "V_CMPX_NLG_F32",
+      "V_CMPX_NGT_F32",
+      "V_CMPX_NLE_F32",
+      "V_CMPX_NLT_F32"
     ]
   },
   "decoder_capabilities": [
@@ -211,9 +241,9 @@
     "Decodes SGPR, inline integer, and literal sources for S_MOV_B32 and V_MOV_B32.",
     "Decodes V_NOT_B32, V_BFREV_B32, and V_CVT_F32_UBYTE0/1/2/3 from ENC_VOP1.",
     "Decodes V_CVT_F32_I32, V_CVT_F32_U32, V_CVT_U32_F32, and V_CVT_I32_F32 from ENC_VOP1.",
-    "Decodes V_ADD_U32, V_SUB_U32, V_SUBREV_U32, V_MIN/MAX_I32, V_MIN/MAX_U32, V_LSHRREV_B32, V_ASHRREV_I32, V_LSHLREV_B32, V_AND_B32, V_OR_B32, and V_XOR_B32 from ENC_VOP2.",
+    "Decodes V_ADD_U32, V_SUB_U32, V_SUBREV_U32, V_MIN/MAX_I32, V_MIN/MAX_U32, V_CNDMASK_B32, V_LSHRREV_B32, V_ASHRREV_I32, V_LSHLREV_B32, V_AND_B32, V_OR_B32, and V_XOR_B32 from ENC_VOP2.",
     "Decodes V_CMP_EQ/NE/LT/LE/GT/GE_I32, V_CMP_EQ/NE/LT/LE/GT/GE_U32, V_CMPX_EQ/NE/LT/LE/GT/GE_I32, and V_CMPX_EQ/NE/LT/LE/GT/GE_U32 from ENC_VOPC with SGPR, VGPR, inline, and literal sources.",
-    "Decodes the first local F32 VOPC float/class subset from ENC_VOPC: V_CMP_CLASS_F32, V_CMP_EQ/GE/GT/LE/LG/LT/NEQ_F32, V_CMPX_CLASS_F32, and V_CMPX_EQ/GE/GT/LE/LG/LT/NEQ_F32.",
+    "Decodes the full local F32 VOPC float/class subset currently present in the phase-0 seed from ENC_VOPC: V_CMP_CLASS_F32, V_CMP_EQ/GE/GT/LE/LG/LT/NEQ/O/U/NGE/NLG/NGT/NLE/NLT_F32, V_CMPX_CLASS_F32, and V_CMPX_EQ/GE/GT/LE/LG/LT/NEQ/O/U/NGE/NLG/NGT/NLE/NLT_F32.",
     "Sign-extends SIMM16 for S_MOVK_I32."
   ],
   "execution_capabilities": [
@@ -226,11 +256,11 @@
     "Executes exec-masked V_MOV_B32.",
     "Executes exec-masked V_CMP_EQ/NE/LT/LE/GT/GE_I32 and V_CMP_EQ/NE/LT/LE/GT/GE_U32 while preserving inactive-lane VCC bits.",
     "Executes exec-masked V_CMPX_EQ/NE/LT/LE/GT/GE_I32 and V_CMPX_EQ/NE/LT/LE/GT/GE_U32 and materializes the resulting active-lane compare mask into both vcc_mask and exec_mask.",
-    "Executes exec-masked V_CMP_CLASS_F32, V_CMP_EQ/GE/GT/LE/LG/LT/NEQ_F32, and preserves inactive-lane VCC bits on the non-CMPX path.",
-    "Executes exec-masked V_CMPX_CLASS_F32 and V_CMPX_EQ/GE/GT/LE/LG/LT/NEQ_F32 and materializes the resulting active-lane compare mask into both vcc_mask and exec_mask.",
+    "Executes exec-masked V_CMP_CLASS_F32, V_CMP_EQ/GE/GT/LE/LG/LT/NEQ/O/U/NGE/NLG/NGT/NLE/NLT_F32, and preserves inactive-lane VCC bits on the non-CMPX path.",
+    "Executes exec-masked V_CMPX_CLASS_F32 and V_CMPX_EQ/GE/GT/LE/LG/LT/NEQ/O/U/NGE/NLG/NGT/NLE/NLT_F32 and materializes the resulting active-lane compare mask into both vcc_mask and exec_mask.",
     "Executes exec-masked V_NOT_B32, V_BFREV_B32, and V_CVT_F32_UBYTE0/1/2/3.",
     "Executes exec-masked V_CVT_F32_I32, V_CVT_F32_U32, V_CVT_U32_F32, and V_CVT_I32_F32.",
-    "Executes exec-masked V_ADD_U32, V_SUB_U32, V_SUBREV_U32, V_MIN/MAX_I32, V_MIN/MAX_U32, V_LSHRREV_B32, V_ASHRREV_I32, V_LSHLREV_B32, V_AND_B32, V_OR_B32, and V_XOR_B32 lane-wise."
+    "Executes exec-masked V_ADD_U32, V_SUB_U32, V_SUBREV_U32, V_MIN/MAX_I32, V_MIN/MAX_U32, V_CNDMASK_B32, V_LSHRREV_B32, V_ASHRREV_I32, V_LSHLREV_B32, V_AND_B32, V_OR_B32, and V_XOR_B32 lane-wise."
   ],
   "still_scaffolded": [
     "Route-matched but non-executable phase-0 compute instructions still return selector-aware stub errors.",
@@ -238,7 +268,7 @@
     "ENC_VOP3",
     "ENC_VDS",
     "ENC_VGLOBAL",
-    "The remaining ENC_VOPC surface outside this seed is still scaffolded: the remaining ordered/unordered F32 compare forms plus the floating-point F64, 64-bit integer, and 16-bit compare families.",
-    "The next coherent extension point is the remaining ENC_VOPC floating-point/wider compare work or ENC_VOP3/half-conversion work rather than more 1-dword VOPC seed growth."
+    "The remaining ENC_VOPC surface outside this seed is now the wider/floating-point families beyond the local F32/class set: the F64, 64-bit integer, and 16-bit compare families.",
+    "The next coherent extension point is the wider ENC_VOPC compare work or ENC_VOP3/half-conversion work rather than more 1-dword VOPC seed growth."
   ]
 }

@@ -465,6 +465,22 @@ bool ExpectFloatVectorCmpxState(
          !state.waiting_on_barrier && state.pc == 23u;
 }
 
+bool ExpectVccDrivenCndmaskState(
+    const mirage::sim::isa::WaveExecutionState& state) {
+  return state.sgprs[116] == FloatBits(2.0f) && state.sgprs[120] == 222u &&
+         state.vgprs[42][0] == 10u && state.vgprs[42][1] == 10u &&
+         state.vgprs[42][2] == 10u && state.vgprs[42][3] == 20u &&
+         state.vcc_mask == 8u && state.exec_mask == 0xfu && state.halted &&
+         !state.waiting_on_barrier && state.pc == 7u;
+}
+
+bool ExpectFloatVectorCmpxExecBranchState(
+    const mirage::sim::isa::WaveExecutionState& state) {
+  return state.sgprs[117] == FloatBits(2.0f) && state.sgprs[121] == 222u &&
+         state.vcc_mask == 8u && state.exec_mask == 8u && state.halted &&
+         !state.waiting_on_barrier && state.pc == 6u;
+}
+
 }  // namespace
 
 int main() {
@@ -1120,6 +1136,66 @@ int main() {
                   OperandValueClass::kVectorRegister, OperandAccess::kRead,
                   FragmentKind::kVector, 32u, 1u, false),
               "expected V_CMPX_CLASS_F32 source1 descriptor")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_cmp_o_f32_words{MakeVopc(23u, 116u, 88u)};
+  if (!Expect(decoder.DecodeInstruction(v_cmp_o_f32_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_CMP_O_F32 decode success") ||
+      !Expect(ExpectBinaryInstruction(instruction, "V_CMP_O_F32",
+                                      OperandKind::kSgpr,
+                                      kImplicitVccPairSgprIndex,
+                                      OperandKind::kSgpr, 116u,
+                                      OperandKind::kVgpr, 88u),
+              "expected decoded V_CMP_O_F32 operands")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 2> v_cmpx_u_f32_literal_words{
+      MakeVopc(152u, 255u, 89u), FloatBits(2.0f)};
+  if (!Expect(decoder.DecodeInstruction(v_cmpx_u_f32_literal_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_CMPX_U_F32 literal decode success") ||
+      !Expect(words_consumed == 2u,
+              "expected literal V_CMPX_U_F32 decode to consume 2 dwords") ||
+      !Expect(ExpectBinaryInstruction(instruction, "V_CMPX_U_F32",
+                                      OperandKind::kSgpr,
+                                      kImplicitVccPairSgprIndex,
+                                      OperandKind::kImm32, FloatBits(2.0f),
+                                      OperandKind::kVgpr, 89u),
+              "expected decoded V_CMPX_U_F32 literal operands")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_cndmask_b32_words{
+      MakeVop2(1u, 10u, 257u, 4u)};
+  if (!Expect(decoder.DecodeInstruction(v_cndmask_b32_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_CNDMASK_B32 decode success") ||
+      !Expect(ExpectBinaryInstruction(instruction, "V_CNDMASK_B32",
+                                      OperandKind::kVgpr, 10u,
+                                      OperandKind::kVgpr, 1u,
+                                      OperandKind::kVgpr, 4u),
+              "expected decoded V_CNDMASK_B32 operands") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[0], OperandRole::kDestination,
+                  OperandSlotKind::kDestination,
+                  OperandValueClass::kVectorRegister, OperandAccess::kWrite,
+                  FragmentKind::kVector, 32u, 1u, false),
+              "expected V_CNDMASK_B32 destination descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[1], OperandRole::kSource0,
+                  OperandSlotKind::kSource0,
+                  OperandValueClass::kVectorRegister, OperandAccess::kRead,
+                  FragmentKind::kVector, 32u, 1u, false),
+              "expected V_CNDMASK_B32 source0 descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[2], OperandRole::kSource1,
+                  OperandSlotKind::kSource1,
+                  OperandValueClass::kVectorRegister, OperandAccess::kRead,
+                  FragmentKind::kVector, 32u, 1u, false),
+              "expected V_CNDMASK_B32 source1 descriptor")) {
     return 1;
   }
 
@@ -2724,6 +2800,296 @@ int main() {
               "expected compiled float vector CMPX execution success") ||
       !Expect(ExpectFloatVectorCmpxState(compiled_float_vector_cmpx_state),
               "expected compiled float vector CMPX state")) {
+    return 1;
+  }
+
+  struct RemainingFloatCompareCase {
+    const char* opcode;
+    std::uint32_t encoded_opcode;
+    std::uint64_t expected_mask;
+    Gfx1201CompiledOpcode compiled_opcode;
+    bool writes_exec;
+  };
+
+  constexpr std::array<RemainingFloatCompareCase, 14>
+      kRemainingFloatCompareCases{{
+          {"V_CMP_O_F32", 23u, 7u, Gfx1201CompiledOpcode::kVCmpOF32, false},
+          {"V_CMP_U_F32", 24u, 8u, Gfx1201CompiledOpcode::kVCmpUF32, false},
+          {"V_CMP_NGE_F32", 25u, 12u, Gfx1201CompiledOpcode::kVCmpNgeF32,
+           false},
+          {"V_CMP_NLG_F32", 26u, 10u, Gfx1201CompiledOpcode::kVCmpNlgF32,
+           false},
+          {"V_CMP_NGT_F32", 27u, 14u, Gfx1201CompiledOpcode::kVCmpNgtF32,
+           false},
+          {"V_CMP_NLE_F32", 28u, 9u, Gfx1201CompiledOpcode::kVCmpNleF32,
+           false},
+          {"V_CMP_NLT_F32", 30u, 11u, Gfx1201CompiledOpcode::kVCmpNltF32,
+           false},
+          {"V_CMPX_O_F32", 151u, 7u, Gfx1201CompiledOpcode::kVCmpxOF32, true},
+          {"V_CMPX_U_F32", 152u, 8u, Gfx1201CompiledOpcode::kVCmpxUF32, true},
+          {"V_CMPX_NGE_F32", 153u, 12u, Gfx1201CompiledOpcode::kVCmpxNgeF32,
+           true},
+          {"V_CMPX_NLG_F32", 154u, 10u, Gfx1201CompiledOpcode::kVCmpxNlgF32,
+           true},
+          {"V_CMPX_NGT_F32", 155u, 14u, Gfx1201CompiledOpcode::kVCmpxNgtF32,
+           true},
+          {"V_CMPX_NLE_F32", 156u, 9u, Gfx1201CompiledOpcode::kVCmpxNleF32,
+           true},
+          {"V_CMPX_NLT_F32", 158u, 11u, Gfx1201CompiledOpcode::kVCmpxNltF32,
+           true},
+      }};
+
+  for (const RemainingFloatCompareCase& test_case : kRemainingFloatCompareCases) {
+    const std::array<std::uint32_t, 4> remaining_float_compare_words{
+        MakeSop1(0u, 118u, 255u),
+        FloatBits(2.0f),
+        MakeVopc(test_case.encoded_opcode, 118u, 92u),
+        MakeSopp(48u),
+    };
+    std::vector<DecodedInstruction> remaining_float_compare_program;
+    if (!Expect(decoder.DecodeProgram(remaining_float_compare_words,
+                                      &remaining_float_compare_program,
+                                      &error_message),
+                "expected remaining float compare program decode success") ||
+        !Expect(remaining_float_compare_program.size() == 3u,
+                "expected three decoded remaining float compare instructions")
+        ||
+        !Expect(remaining_float_compare_program[1].opcode == test_case.opcode,
+                "expected decoded remaining float compare opcode")) {
+      return 1;
+    }
+
+    WaveExecutionState decoded_remaining_float_compare_state;
+    decoded_remaining_float_compare_state.exec_mask = 0xfu;
+    decoded_remaining_float_compare_state.vcc_mask = 0x80u;
+    decoded_remaining_float_compare_state.vgprs[92][0] = FloatBits(1.0f);
+    decoded_remaining_float_compare_state.vgprs[92][1] = FloatBits(2.0f);
+    decoded_remaining_float_compare_state.vgprs[92][2] = FloatBits(3.0f);
+    decoded_remaining_float_compare_state.vgprs[92][3] = kQuietNaNF32Bits;
+    if (!Expect(interpreter.ExecuteProgram(remaining_float_compare_program,
+                                           &decoded_remaining_float_compare_state,
+                                           &error_message),
+                "expected decoded remaining float compare execution success") ||
+        !Expect(decoded_remaining_float_compare_state.vcc_mask ==
+                    (test_case.writes_exec
+                         ? test_case.expected_mask
+                         : (test_case.expected_mask | 0x80u)),
+                "expected remaining float compare VCC mask") ||
+        !Expect(decoded_remaining_float_compare_state.exec_mask ==
+                    (test_case.writes_exec ? test_case.expected_mask : 0xfu),
+                "expected remaining float compare EXEC mask") ||
+        !Expect(decoded_remaining_float_compare_state.halted,
+                "expected remaining float compare program to halt") ||
+        !Expect(decoded_remaining_float_compare_state.pc == 2u,
+                "expected remaining float compare program advance")) {
+      return 1;
+    }
+
+    std::vector<Gfx1201CompiledInstruction>
+        compiled_remaining_float_compare_program;
+    if (!Expect(interpreter.CompileProgram(remaining_float_compare_program,
+                                           &compiled_remaining_float_compare_program,
+                                           &error_message),
+                "expected compiled remaining float compare program success") ||
+        !Expect(compiled_remaining_float_compare_program[1].opcode ==
+                    test_case.compiled_opcode,
+                "expected compiled remaining float compare opcode")) {
+      return 1;
+    }
+
+    WaveExecutionState compiled_remaining_float_compare_state;
+    compiled_remaining_float_compare_state.exec_mask = 0xfu;
+    compiled_remaining_float_compare_state.vcc_mask = 0x80u;
+    compiled_remaining_float_compare_state.vgprs[92][0] = FloatBits(1.0f);
+    compiled_remaining_float_compare_state.vgprs[92][1] = FloatBits(2.0f);
+    compiled_remaining_float_compare_state.vgprs[92][2] = FloatBits(3.0f);
+    compiled_remaining_float_compare_state.vgprs[92][3] = kQuietNaNF32Bits;
+    if (!Expect(interpreter.ExecuteProgram(
+                    compiled_remaining_float_compare_program,
+                    &compiled_remaining_float_compare_state, &error_message),
+                "expected compiled remaining float compare execution success")
+        ||
+        !Expect(compiled_remaining_float_compare_state.vcc_mask ==
+                    (test_case.writes_exec
+                         ? test_case.expected_mask
+                         : (test_case.expected_mask | 0x80u)),
+                "expected compiled remaining float compare VCC mask") ||
+        !Expect(compiled_remaining_float_compare_state.exec_mask ==
+                    (test_case.writes_exec ? test_case.expected_mask : 0xfu),
+                "expected compiled remaining float compare EXEC mask") ||
+        !Expect(compiled_remaining_float_compare_state.halted,
+                "expected compiled remaining float compare program to halt") ||
+        !Expect(compiled_remaining_float_compare_state.pc == 2u,
+                "expected compiled remaining float compare program advance")) {
+      return 1;
+    }
+  }
+
+  const std::array<std::uint32_t, 9> vcc_cndmask_words{
+      MakeSop1(0u, 116u, 255u),
+      FloatBits(2.0f),
+      MakeVopc(24u, 116u, 90u),
+      MakeSopp(36u, 2u),
+      MakeSopk(0u, 120u, 111u),
+      MakeSopp(32u, 1u),
+      MakeSopk(0u, 120u, 222u),
+      MakeVop2(1u, 42u, 296u, 41u),
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> vcc_cndmask_program;
+  if (!Expect(decoder.DecodeProgram(vcc_cndmask_words, &vcc_cndmask_program,
+                                    &error_message),
+              "expected VCC-driven cndmask program decode success") ||
+      !Expect(vcc_cndmask_program.size() == 8u,
+              "expected eight decoded VCC-driven cndmask instructions") ||
+      !Expect(vcc_cndmask_program[1].opcode == "V_CMP_U_F32",
+              "expected decoded V_CMP_U_F32") ||
+      !Expect(vcc_cndmask_program[2].opcode == "S_CBRANCH_VCCNZ",
+              "expected decoded S_CBRANCH_VCCNZ") ||
+      !Expect(vcc_cndmask_program[6].opcode == "V_CNDMASK_B32",
+              "expected decoded V_CNDMASK_B32")) {
+    return 1;
+  }
+
+  WaveExecutionState decoded_vcc_cndmask_state;
+  decoded_vcc_cndmask_state.exec_mask = 0xfu;
+  decoded_vcc_cndmask_state.vgprs[40][0] = 10u;
+  decoded_vcc_cndmask_state.vgprs[40][1] = 10u;
+  decoded_vcc_cndmask_state.vgprs[40][2] = 10u;
+  decoded_vcc_cndmask_state.vgprs[40][3] = 10u;
+  decoded_vcc_cndmask_state.vgprs[41][0] = 20u;
+  decoded_vcc_cndmask_state.vgprs[41][1] = 20u;
+  decoded_vcc_cndmask_state.vgprs[41][2] = 20u;
+  decoded_vcc_cndmask_state.vgprs[41][3] = 20u;
+  decoded_vcc_cndmask_state.vgprs[42][0] = 0xaaaaaaaau;
+  decoded_vcc_cndmask_state.vgprs[42][1] = 0xbbbbbbbbu;
+  decoded_vcc_cndmask_state.vgprs[42][2] = 0xccccccccu;
+  decoded_vcc_cndmask_state.vgprs[42][3] = 0xddddddddu;
+  decoded_vcc_cndmask_state.vgprs[90][0] = FloatBits(1.0f);
+  decoded_vcc_cndmask_state.vgprs[90][1] = FloatBits(2.0f);
+  decoded_vcc_cndmask_state.vgprs[90][2] = FloatBits(3.0f);
+  decoded_vcc_cndmask_state.vgprs[90][3] = kQuietNaNF32Bits;
+  if (!Expect(interpreter.ExecuteProgram(vcc_cndmask_program,
+                                         &decoded_vcc_cndmask_state,
+                                         &error_message),
+              "expected decoded VCC-driven cndmask execution success") ||
+      !Expect(ExpectVccDrivenCndmaskState(decoded_vcc_cndmask_state),
+              "expected decoded VCC-driven cndmask state")) {
+    return 1;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_vcc_cndmask_program;
+  if (!Expect(interpreter.CompileProgram(vcc_cndmask_program,
+                                         &compiled_vcc_cndmask_program,
+                                         &error_message),
+              "expected compiled VCC-driven cndmask program success") ||
+      !Expect(compiled_vcc_cndmask_program[1].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpUF32,
+              "expected compiled V_CMP_U_F32 opcode") ||
+      !Expect(compiled_vcc_cndmask_program[2].opcode ==
+                  Gfx1201CompiledOpcode::kSCbranchVccnz,
+              "expected compiled S_CBRANCH_VCCNZ opcode") ||
+      !Expect(compiled_vcc_cndmask_program[6].opcode ==
+                  Gfx1201CompiledOpcode::kVCndmaskB32,
+              "expected compiled V_CNDMASK_B32 opcode")) {
+    return 1;
+  }
+
+  WaveExecutionState compiled_vcc_cndmask_state;
+  compiled_vcc_cndmask_state.exec_mask = 0xfu;
+  compiled_vcc_cndmask_state.vgprs[40][0] = 10u;
+  compiled_vcc_cndmask_state.vgprs[40][1] = 10u;
+  compiled_vcc_cndmask_state.vgprs[40][2] = 10u;
+  compiled_vcc_cndmask_state.vgprs[40][3] = 10u;
+  compiled_vcc_cndmask_state.vgprs[41][0] = 20u;
+  compiled_vcc_cndmask_state.vgprs[41][1] = 20u;
+  compiled_vcc_cndmask_state.vgprs[41][2] = 20u;
+  compiled_vcc_cndmask_state.vgprs[41][3] = 20u;
+  compiled_vcc_cndmask_state.vgprs[42][0] = 0xaaaaaaaau;
+  compiled_vcc_cndmask_state.vgprs[42][1] = 0xbbbbbbbbu;
+  compiled_vcc_cndmask_state.vgprs[42][2] = 0xccccccccu;
+  compiled_vcc_cndmask_state.vgprs[42][3] = 0xddddddddu;
+  compiled_vcc_cndmask_state.vgprs[90][0] = FloatBits(1.0f);
+  compiled_vcc_cndmask_state.vgprs[90][1] = FloatBits(2.0f);
+  compiled_vcc_cndmask_state.vgprs[90][2] = FloatBits(3.0f);
+  compiled_vcc_cndmask_state.vgprs[90][3] = kQuietNaNF32Bits;
+  if (!Expect(interpreter.ExecuteProgram(compiled_vcc_cndmask_program,
+                                         &compiled_vcc_cndmask_state,
+                                         &error_message),
+              "expected compiled VCC-driven cndmask execution success") ||
+      !Expect(ExpectVccDrivenCndmaskState(compiled_vcc_cndmask_state),
+              "expected compiled VCC-driven cndmask state")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 8> float_cmpx_exec_branch_words{
+      MakeSop1(0u, 117u, 255u),
+      FloatBits(2.0f),
+      MakeVopc(152u, 117u, 91u),
+      MakeSopp(38u, 2u),
+      MakeSopk(0u, 121u, 111u),
+      MakeSopp(32u, 1u),
+      MakeSopk(0u, 121u, 222u),
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> float_cmpx_exec_branch_program;
+  if (!Expect(decoder.DecodeProgram(float_cmpx_exec_branch_words,
+                                    &float_cmpx_exec_branch_program,
+                                    &error_message),
+              "expected float CMPX exec-branch program decode success") ||
+      !Expect(float_cmpx_exec_branch_program.size() == 7u,
+              "expected seven decoded float CMPX exec-branch instructions") ||
+      !Expect(float_cmpx_exec_branch_program[1].opcode == "V_CMPX_U_F32",
+              "expected decoded V_CMPX_U_F32") ||
+      !Expect(float_cmpx_exec_branch_program[2].opcode == "S_CBRANCH_EXECNZ",
+              "expected decoded S_CBRANCH_EXECNZ")) {
+    return 1;
+  }
+
+  WaveExecutionState decoded_float_cmpx_exec_branch_state;
+  decoded_float_cmpx_exec_branch_state.exec_mask = 0xfu;
+  decoded_float_cmpx_exec_branch_state.vgprs[91][0] = FloatBits(1.0f);
+  decoded_float_cmpx_exec_branch_state.vgprs[91][1] = FloatBits(2.0f);
+  decoded_float_cmpx_exec_branch_state.vgprs[91][2] = FloatBits(3.0f);
+  decoded_float_cmpx_exec_branch_state.vgprs[91][3] = kQuietNaNF32Bits;
+  if (!Expect(interpreter.ExecuteProgram(float_cmpx_exec_branch_program,
+                                         &decoded_float_cmpx_exec_branch_state,
+                                         &error_message),
+              "expected decoded float CMPX exec-branch execution success") ||
+      !Expect(ExpectFloatVectorCmpxExecBranchState(
+                  decoded_float_cmpx_exec_branch_state),
+              "expected decoded float CMPX exec-branch state")) {
+    return 1;
+  }
+
+  std::vector<Gfx1201CompiledInstruction>
+      compiled_float_cmpx_exec_branch_program;
+  if (!Expect(interpreter.CompileProgram(float_cmpx_exec_branch_program,
+                                         &compiled_float_cmpx_exec_branch_program,
+                                         &error_message),
+              "expected compiled float CMPX exec-branch program success") ||
+      !Expect(compiled_float_cmpx_exec_branch_program[1].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpxUF32,
+              "expected compiled V_CMPX_U_F32 opcode") ||
+      !Expect(compiled_float_cmpx_exec_branch_program[2].opcode ==
+                  Gfx1201CompiledOpcode::kSCbranchExecnz,
+              "expected compiled S_CBRANCH_EXECNZ opcode")) {
+    return 1;
+  }
+
+  WaveExecutionState compiled_float_cmpx_exec_branch_state;
+  compiled_float_cmpx_exec_branch_state.exec_mask = 0xfu;
+  compiled_float_cmpx_exec_branch_state.vgprs[91][0] = FloatBits(1.0f);
+  compiled_float_cmpx_exec_branch_state.vgprs[91][1] = FloatBits(2.0f);
+  compiled_float_cmpx_exec_branch_state.vgprs[91][2] = FloatBits(3.0f);
+  compiled_float_cmpx_exec_branch_state.vgprs[91][3] = kQuietNaNF32Bits;
+  if (!Expect(interpreter.ExecuteProgram(compiled_float_cmpx_exec_branch_program,
+                                         &compiled_float_cmpx_exec_branch_state,
+                                         &error_message),
+              "expected compiled float CMPX exec-branch execution success") ||
+      !Expect(ExpectFloatVectorCmpxExecBranchState(
+                  compiled_float_cmpx_exec_branch_state),
+              "expected compiled float CMPX exec-branch state")) {
     return 1;
   }
 

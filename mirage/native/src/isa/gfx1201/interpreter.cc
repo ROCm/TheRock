@@ -27,7 +27,7 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 90> kExecutableSeedOpcodes{{
+constexpr std::array<std::string_view, 105> kExecutableSeedOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_ADD_U32",
@@ -87,6 +87,13 @@ constexpr std::array<std::string_view, 90> kExecutableSeedOpcodes{{
     "V_CMP_LG_F32",
     "V_CMP_LT_F32",
     "V_CMP_NEQ_F32",
+    "V_CMP_O_F32",
+    "V_CMP_U_F32",
+    "V_CMP_NGE_F32",
+    "V_CMP_NLG_F32",
+    "V_CMP_NGT_F32",
+    "V_CMP_NLE_F32",
+    "V_CMP_NLT_F32",
     "V_CMPX_CLASS_F32",
     "V_CMPX_EQ_F32",
     "V_CMPX_GE_F32",
@@ -95,6 +102,13 @@ constexpr std::array<std::string_view, 90> kExecutableSeedOpcodes{{
     "V_CMPX_LG_F32",
     "V_CMPX_LT_F32",
     "V_CMPX_NEQ_F32",
+    "V_CMPX_O_F32",
+    "V_CMPX_U_F32",
+    "V_CMPX_NGE_F32",
+    "V_CMPX_NLG_F32",
+    "V_CMPX_NGT_F32",
+    "V_CMPX_NLE_F32",
+    "V_CMPX_NLT_F32",
     "V_NOT_B32",
     "V_BFREV_B32",
     "V_CVT_F32_UBYTE0",
@@ -112,6 +126,7 @@ constexpr std::array<std::string_view, 90> kExecutableSeedOpcodes{{
     "V_MAX_I32",
     "V_MIN_U32",
     "V_MAX_U32",
+    "V_CNDMASK_B32",
     "V_LSHRREV_B32",
     "V_ASHRREV_I32",
     "V_LSHLREV_B32",
@@ -491,6 +506,34 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
     *compiled_opcode = Gfx1201CompiledOpcode::kVCmpNeqF32;
     return true;
   }
+  if (opcode == "V_CMP_O_F32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCmpOF32;
+    return true;
+  }
+  if (opcode == "V_CMP_U_F32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCmpUF32;
+    return true;
+  }
+  if (opcode == "V_CMP_NGE_F32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCmpNgeF32;
+    return true;
+  }
+  if (opcode == "V_CMP_NLG_F32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCmpNlgF32;
+    return true;
+  }
+  if (opcode == "V_CMP_NGT_F32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCmpNgtF32;
+    return true;
+  }
+  if (opcode == "V_CMP_NLE_F32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCmpNleF32;
+    return true;
+  }
+  if (opcode == "V_CMP_NLT_F32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCmpNltF32;
+    return true;
+  }
   if (opcode == "V_CMPX_CLASS_F32") {
     *compiled_opcode = Gfx1201CompiledOpcode::kVCmpxClassF32;
     return true;
@@ -521,6 +564,34 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
   }
   if (opcode == "V_CMPX_NEQ_F32") {
     *compiled_opcode = Gfx1201CompiledOpcode::kVCmpxNeqF32;
+    return true;
+  }
+  if (opcode == "V_CMPX_O_F32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCmpxOF32;
+    return true;
+  }
+  if (opcode == "V_CMPX_U_F32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCmpxUF32;
+    return true;
+  }
+  if (opcode == "V_CMPX_NGE_F32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCmpxNgeF32;
+    return true;
+  }
+  if (opcode == "V_CMPX_NLG_F32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCmpxNlgF32;
+    return true;
+  }
+  if (opcode == "V_CMPX_NGT_F32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCmpxNgtF32;
+    return true;
+  }
+  if (opcode == "V_CMPX_NLE_F32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCmpxNleF32;
+    return true;
+  }
+  if (opcode == "V_CMPX_NLT_F32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCmpxNltF32;
     return true;
   }
   if (opcode == "V_NOT_B32") {
@@ -589,6 +660,10 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
   }
   if (opcode == "V_MAX_U32") {
     *compiled_opcode = Gfx1201CompiledOpcode::kVMaxU32;
+    return true;
+  }
+  if (opcode == "V_CNDMASK_B32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCndmaskB32;
     return true;
   }
   if (opcode == "V_LSHRREV_B32") {
@@ -993,6 +1068,27 @@ std::string_view NormalizeVectorCompareSeedOpcode(std::string_view opcode) {
   if (opcode == "V_CMPX_NEQ_F32") {
     return "V_CMP_NEQ_F32";
   }
+  if (opcode == "V_CMPX_O_F32") {
+    return "V_CMP_O_F32";
+  }
+  if (opcode == "V_CMPX_U_F32") {
+    return "V_CMP_U_F32";
+  }
+  if (opcode == "V_CMPX_NGE_F32") {
+    return "V_CMP_NGE_F32";
+  }
+  if (opcode == "V_CMPX_NLG_F32") {
+    return "V_CMP_NLG_F32";
+  }
+  if (opcode == "V_CMPX_NGT_F32") {
+    return "V_CMP_NGT_F32";
+  }
+  if (opcode == "V_CMPX_NLE_F32") {
+    return "V_CMP_NLE_F32";
+  }
+  if (opcode == "V_CMPX_NLT_F32") {
+    return "V_CMP_NLT_F32";
+  }
   return opcode;
 }
 
@@ -1022,7 +1118,14 @@ bool IsVectorCompareSeedInstruction(std::string_view opcode) {
          normalized_opcode == "V_CMP_LE_F32" ||
          normalized_opcode == "V_CMP_LG_F32" ||
          normalized_opcode == "V_CMP_LT_F32" ||
-         normalized_opcode == "V_CMP_NEQ_F32";
+         normalized_opcode == "V_CMP_NEQ_F32" ||
+         normalized_opcode == "V_CMP_O_F32" ||
+         normalized_opcode == "V_CMP_U_F32" ||
+         normalized_opcode == "V_CMP_NGE_F32" ||
+         normalized_opcode == "V_CMP_NLG_F32" ||
+         normalized_opcode == "V_CMP_NGT_F32" ||
+         normalized_opcode == "V_CMP_NLE_F32" ||
+         normalized_opcode == "V_CMP_NLT_F32";
 }
 
 bool EvaluateVectorCompareSeedInstruction(std::string_view opcode,
@@ -1039,7 +1142,14 @@ bool EvaluateVectorCompareSeedInstruction(std::string_view opcode,
       normalized_opcode == "V_CMP_LE_F32" ||
       normalized_opcode == "V_CMP_LG_F32" ||
       normalized_opcode == "V_CMP_LT_F32" ||
-      normalized_opcode == "V_CMP_NEQ_F32") {
+      normalized_opcode == "V_CMP_NEQ_F32" ||
+      normalized_opcode == "V_CMP_O_F32" ||
+      normalized_opcode == "V_CMP_U_F32" ||
+      normalized_opcode == "V_CMP_NGE_F32" ||
+      normalized_opcode == "V_CMP_NLG_F32" ||
+      normalized_opcode == "V_CMP_NGT_F32" ||
+      normalized_opcode == "V_CMP_NLE_F32" ||
+      normalized_opcode == "V_CMP_NLT_F32") {
     const float lhs_float = BitCast<float>(lhs);
     const float rhs_float = BitCast<float>(rhs);
     const bool unordered = std::isnan(lhs_float) || std::isnan(rhs_float);
@@ -1061,7 +1171,28 @@ bool EvaluateVectorCompareSeedInstruction(std::string_view opcode,
     if (normalized_opcode == "V_CMP_LT_F32") {
       return !unordered && lhs_float < rhs_float;
     }
-    return unordered || lhs_float != rhs_float;
+    if (normalized_opcode == "V_CMP_NEQ_F32") {
+      return unordered || lhs_float != rhs_float;
+    }
+    if (normalized_opcode == "V_CMP_O_F32") {
+      return !unordered;
+    }
+    if (normalized_opcode == "V_CMP_U_F32") {
+      return unordered;
+    }
+    if (normalized_opcode == "V_CMP_NGE_F32") {
+      return unordered || lhs_float < rhs_float;
+    }
+    if (normalized_opcode == "V_CMP_NLG_F32") {
+      return unordered || lhs_float == rhs_float;
+    }
+    if (normalized_opcode == "V_CMP_NGT_F32") {
+      return unordered || lhs_float <= rhs_float;
+    }
+    if (normalized_opcode == "V_CMP_NLE_F32") {
+      return unordered || lhs_float > rhs_float;
+    }
+    return unordered || lhs_float >= rhs_float;
   }
   if (normalized_opcode == "V_CMP_EQ_I32") {
     return BitCast<std::int32_t>(lhs) == BitCast<std::int32_t>(rhs);
@@ -1381,6 +1512,7 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
       instruction.opcode == "V_SUBREV_U32" || instruction.opcode == "V_MIN_I32" ||
       instruction.opcode == "V_MAX_I32" || instruction.opcode == "V_MIN_U32" ||
       instruction.opcode == "V_MAX_U32" ||
+      instruction.opcode == "V_CNDMASK_B32" ||
       instruction.opcode == "V_LSHRREV_B32" ||
       instruction.opcode == "V_ASHRREV_I32" ||
       instruction.opcode == "V_LSHLREV_B32" || instruction.opcode == "V_AND_B32" ||
@@ -1404,7 +1536,9 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
         return false;
       }
       const std::uint32_t result =
-          EvaluateVectorBinarySeedInstruction(instruction.opcode, lhs, rhs);
+          instruction.opcode == "V_CNDMASK_B32"
+              ? (((state->vcc_mask >> lane_index) & 1ULL) != 0 ? rhs : lhs)
+              : EvaluateVectorBinarySeedInstruction(instruction.opcode, lhs, rhs);
       if (!WriteVectorOperand(instruction.operands[0], lane_index, result, state,
                               error_message)) {
         return false;
@@ -1483,6 +1617,13 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kVCmpLgF32:
     case Gfx1201CompiledOpcode::kVCmpLtF32:
     case Gfx1201CompiledOpcode::kVCmpNeqF32:
+    case Gfx1201CompiledOpcode::kVCmpOF32:
+    case Gfx1201CompiledOpcode::kVCmpUF32:
+    case Gfx1201CompiledOpcode::kVCmpNgeF32:
+    case Gfx1201CompiledOpcode::kVCmpNlgF32:
+    case Gfx1201CompiledOpcode::kVCmpNgtF32:
+    case Gfx1201CompiledOpcode::kVCmpNleF32:
+    case Gfx1201CompiledOpcode::kVCmpNltF32:
     case Gfx1201CompiledOpcode::kVCmpxClassF32:
     case Gfx1201CompiledOpcode::kVCmpxEqF32:
     case Gfx1201CompiledOpcode::kVCmpxGeF32:
@@ -1491,6 +1632,13 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kVCmpxLgF32:
     case Gfx1201CompiledOpcode::kVCmpxLtF32:
     case Gfx1201CompiledOpcode::kVCmpxNeqF32:
+    case Gfx1201CompiledOpcode::kVCmpxOF32:
+    case Gfx1201CompiledOpcode::kVCmpxUF32:
+    case Gfx1201CompiledOpcode::kVCmpxNgeF32:
+    case Gfx1201CompiledOpcode::kVCmpxNlgF32:
+    case Gfx1201CompiledOpcode::kVCmpxNgtF32:
+    case Gfx1201CompiledOpcode::kVCmpxNleF32:
+    case Gfx1201CompiledOpcode::kVCmpxNltF32:
     case Gfx1201CompiledOpcode::kVNotB32:
     case Gfx1201CompiledOpcode::kVBfrevB32:
     case Gfx1201CompiledOpcode::kVCvtF32Ubyte0:
@@ -1508,6 +1656,7 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kVMaxI32:
     case Gfx1201CompiledOpcode::kVMinU32:
     case Gfx1201CompiledOpcode::kVMaxU32:
+    case Gfx1201CompiledOpcode::kVCndmaskB32:
     case Gfx1201CompiledOpcode::kVLshrrevB32:
     case Gfx1201CompiledOpcode::kVAshrrevI32:
     case Gfx1201CompiledOpcode::kVLshlrevB32:
