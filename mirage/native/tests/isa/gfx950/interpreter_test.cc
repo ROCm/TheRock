@@ -2551,6 +2551,19 @@ int main() {
     }
   }
 
+  const std::array<std::string_view, 7> kGlobalLoadLdsOpcodes = {
+      "GLOBAL_LOAD_LDS_UBYTE",  "GLOBAL_LOAD_LDS_SBYTE",
+      "GLOBAL_LOAD_LDS_USHORT", "GLOBAL_LOAD_LDS_SSHORT",
+      "GLOBAL_LOAD_LDS_DWORD",  "GLOBAL_LOAD_LDS_DWORDX3",
+      "GLOBAL_LOAD_LDS_DWORDX4",
+  };
+  for (std::string_view opcode : kGlobalLoadLdsOpcodes) {
+    const std::string message = "expected " + std::string(opcode) + " support";
+    if (!Expect(interpreter.Supports(opcode), message.c_str())) {
+      return 1;
+    }
+  }
+
   const std::array<std::string_view, 32> kGlobalAtomicOpcodes = {
       "GLOBAL_ATOMIC_SWAP",
       "GLOBAL_ATOMIC_CMPSWAP",
@@ -11030,6 +11043,178 @@ int main() {
       !Expect(mixed_width_value == 0x71727374u,
               "expected global x3 store dword 2 result")) {
     return 1;
+  }
+
+  {
+  auto set_lane_u64 = [](WaveExecutionState* state,
+                         std::uint16_t reg,
+                         std::size_t lane,
+                         std::uint64_t value) {
+    if (state == nullptr) {
+      return;
+    }
+    std::uint32_t low = 0;
+    std::uint32_t high = 0;
+    SplitU64(value, &low, &high);
+    state->vgprs[reg][lane] = low;
+    state->vgprs[static_cast<std::uint16_t>(reg + 1u)][lane] = high;
+  };
+  auto make_global_load_lds_state =
+      [&](std::uint32_t m0_base,
+          std::array<std::uint64_t, 3> lane_addresses) {
+        WaveExecutionState state{};
+        state.exec_mask = 0b1011ULL;
+        state.sgprs[0] = 0u;
+        state.sgprs[1] = 0u;
+        state.sgprs[124] = m0_base;
+        set_lane_u64(&state, 0u, 0u, lane_addresses[0]);
+        set_lane_u64(&state, 0u, 1u, lane_addresses[1]);
+        set_lane_u64(&state, 0u, 3u, lane_addresses[2]);
+        return state;
+      };
+  auto expect_lds_dwords =
+      [&](const WaveExecutionState& state,
+          std::uint32_t base_address,
+          std::initializer_list<std::uint32_t> expected_values,
+          const char* mode) {
+        std::size_t index = 0;
+        for (std::uint32_t expected_value : expected_values) {
+          std::uint32_t observed_value = 0;
+          std::memcpy(&observed_value,
+                      state.lds_bytes.data() + base_address +
+                          index * sizeof(std::uint32_t),
+                      sizeof(observed_value));
+          if (!Expect(observed_value == expected_value,
+                      "expected global_load_lds LDS value")) {
+            std::cerr << mode << " index=" << index << '\n';
+            return false;
+          }
+          ++index;
+        }
+        return true;
+      };
+  auto run_global_load_lds_case =
+      [&](std::string_view opcode,
+          std::int32_t offset,
+          std::uint32_t m0_base,
+          std::array<std::uint64_t, 3> lane_addresses,
+          auto seed_memory,
+          std::initializer_list<std::uint32_t> expected_values) {
+        const std::vector<DecodedInstruction> program = {
+            DecodedInstruction::ThreeOperand(
+                opcode, InstructionOperand::Vgpr(0),
+                InstructionOperand::Sgpr(0), InstructionOperand::Imm32(offset)),
+            DecodedInstruction::Nullary("S_ENDPGM"),
+        };
+
+        LinearExecutionMemory decoded_memory(0x4000, 0);
+        if (!Expect(seed_memory(&decoded_memory),
+                    "expected decoded global_load_lds seed writes")) {
+          return false;
+        }
+        WaveExecutionState decoded_state =
+            make_global_load_lds_state(m0_base, lane_addresses);
+        if (!Expect(interpreter.ExecuteProgram(program, &decoded_state,
+                                               &decoded_memory, &error_message),
+                    error_message.c_str()) ||
+            !Expect(decoded_state.halted,
+                    "expected decoded global_load_lds program to halt") ||
+            !expect_lds_dwords(decoded_state,
+                               static_cast<std::uint32_t>(m0_base + offset),
+                               expected_values, "decoded")) {
+          std::cerr << opcode << '\n';
+          return false;
+        }
+
+        std::vector<CompiledInstruction> compiled_program;
+        if (!Expect(interpreter.CompileProgram(program, &compiled_program,
+                                               &error_message),
+                    error_message.c_str())) {
+          std::cerr << opcode << '\n';
+          return false;
+        }
+        LinearExecutionMemory compiled_memory(0x4000, 0);
+        if (!Expect(seed_memory(&compiled_memory),
+                    "expected compiled global_load_lds seed writes")) {
+          return false;
+        }
+        WaveExecutionState compiled_state =
+            make_global_load_lds_state(m0_base, lane_addresses);
+        if (!Expect(interpreter.ExecuteProgram(compiled_program, &compiled_state,
+                                               &compiled_memory, &error_message),
+                    error_message.c_str()) ||
+            !Expect(compiled_state.halted,
+                    "expected compiled global_load_lds program to halt") ||
+            !expect_lds_dwords(compiled_state,
+                               static_cast<std::uint32_t>(m0_base + offset),
+                               expected_values, "compiled")) {
+          std::cerr << opcode << '\n';
+          return false;
+        }
+        return true;
+      };
+
+  if (!run_global_load_lds_case(
+          "GLOBAL_LOAD_LDS_UBYTE", 0, 0x40u, {0x200u, 0x210u, 0x230u},
+          [](LinearExecutionMemory* memory) {
+            return memory != nullptr && WriteU8(memory, 0x200u, 0x7fu) &&
+                   WriteU8(memory, 0x210u, 0x80u) &&
+                   WriteU8(memory, 0x230u, 0xfeu);
+          },
+          {0x0000007fu, 0x00000080u, 0x000000feu}) ||
+      !run_global_load_lds_case(
+          "GLOBAL_LOAD_LDS_SSHORT", 0, 0x80u, {0x300u, 0x320u, 0x360u},
+          [](LinearExecutionMemory* memory) {
+            return memory != nullptr && WriteU16(memory, 0x300u, 0x0001u) &&
+                   WriteU16(memory, 0x320u, 0xff80u) &&
+                   WriteU16(memory, 0x360u, 0x7f01u);
+          },
+          {0x00000001u, 0xffffff80u, 0x00007f01u}) ||
+      !run_global_load_lds_case(
+          "GLOBAL_LOAD_LDS_DWORD", 0x10, 0x120u,
+          {0x3f0u, 0x410u, 0x450u},
+          [](LinearExecutionMemory* memory) {
+            return memory != nullptr && memory->WriteU32(0x400u, 0x11223344u) &&
+                   memory->WriteU32(0x420u, 0xaabbccddu) &&
+                   memory->WriteU32(0x460u, 0x01020304u);
+          },
+          {0x11223344u, 0xaabbccddu, 0x01020304u}) ||
+      !run_global_load_lds_case(
+          "GLOBAL_LOAD_LDS_DWORDX3", 0, 0x180u,
+          {0x500u, 0x520u, 0x560u},
+          [](LinearExecutionMemory* memory) {
+            return memory != nullptr && memory->WriteU32(0x500u, 11u) &&
+                   memory->WriteU32(0x504u, 12u) &&
+                   memory->WriteU32(0x508u, 13u) &&
+                   memory->WriteU32(0x520u, 21u) &&
+                   memory->WriteU32(0x524u, 22u) &&
+                   memory->WriteU32(0x528u, 23u) &&
+                   memory->WriteU32(0x560u, 31u) &&
+                   memory->WriteU32(0x564u, 32u) &&
+                   memory->WriteU32(0x568u, 33u);
+          },
+          {11u, 12u, 13u, 0u, 21u, 22u, 23u, 0u, 31u, 32u, 33u, 0u}) ||
+      !run_global_load_lds_case(
+          "GLOBAL_LOAD_LDS_DWORDX4", 0, 0x1c0u,
+          {0x600u, 0x620u, 0x660u},
+          [](LinearExecutionMemory* memory) {
+            return memory != nullptr && memory->WriteU32(0x600u, 101u) &&
+                   memory->WriteU32(0x604u, 102u) &&
+                   memory->WriteU32(0x608u, 103u) &&
+                   memory->WriteU32(0x60cu, 104u) &&
+                   memory->WriteU32(0x620u, 201u) &&
+                   memory->WriteU32(0x624u, 202u) &&
+                   memory->WriteU32(0x628u, 203u) &&
+                   memory->WriteU32(0x62cu, 204u) &&
+                   memory->WriteU32(0x660u, 301u) &&
+                   memory->WriteU32(0x664u, 302u) &&
+                   memory->WriteU32(0x668u, 303u) &&
+                   memory->WriteU32(0x66cu, 304u);
+          },
+          {101u, 102u, 103u, 104u, 201u, 202u, 203u, 204u,
+           301u, 302u, 303u, 304u})) {
+    return 1;
+  }
   }
 
   LinearExecutionMemory atomic_memory(0x1000, 0);

@@ -8257,6 +8257,51 @@ int main() {
     }
   }
 
+  const std::array<std::string_view, 7> kGlobalLoadLdsOpcodes = {
+      "GLOBAL_LOAD_LDS_UBYTE",  "GLOBAL_LOAD_LDS_SBYTE",
+      "GLOBAL_LOAD_LDS_USHORT", "GLOBAL_LOAD_LDS_SSHORT",
+      "GLOBAL_LOAD_LDS_DWORD",  "GLOBAL_LOAD_LDS_DWORDX3",
+      "GLOBAL_LOAD_LDS_DWORDX4",
+  };
+  for (std::string_view opcode_name : kGlobalLoadLdsOpcodes) {
+    const std::optional<std::uint32_t> opcode_value =
+        FindDefaultEncodingOpcode(opcode_name, "ENC_FLAT_GLBL");
+    if (!Expect(opcode_value.has_value(),
+                ("expected catalog opcode for " + std::string(opcode_name)).c_str())) {
+      return 1;
+    }
+
+    const auto word = MakeGlobal(*opcode_value, 60, 10, 20, 4, -8);
+    const std::array<std::uint32_t, 2> encoded_word = {word[0], word[1]};
+    DecodedInstruction instruction;
+    std::size_t words_consumed = 0;
+    if (!Expect(decoder.DecodeInstruction(encoded_word, &instruction, &words_consumed,
+                                          &error_message),
+                error_message.c_str())) {
+      return 1;
+    }
+    if (!Expect(words_consumed == 2,
+                ("expected two-word decode for " + std::string(opcode_name)).c_str()) ||
+        !Expect(instruction.opcode == opcode_name,
+                ("expected opcode decode for " + std::string(opcode_name)).c_str()) ||
+        !Expect(instruction.operand_count == 3,
+                ("expected operand count for " + std::string(opcode_name)).c_str())) {
+      return 1;
+    }
+    if (!Expect(instruction.operands[0].kind == OperandKind::kVgpr &&
+                    instruction.operands[0].index == 10,
+                ("expected address operand for " + std::string(opcode_name)).c_str()) ||
+        !Expect(instruction.operands[1].kind == OperandKind::kSgpr &&
+                    instruction.operands[1].index == 4,
+                ("expected scalar base for " + std::string(opcode_name)).c_str()) ||
+        !Expect(instruction.operands[2].kind == OperandKind::kImm32 &&
+                    instruction.operands[2].imm32 ==
+                        static_cast<std::uint32_t>(-8),
+                ("expected offset for " + std::string(opcode_name)).c_str())) {
+      return 1;
+    }
+  }
+
   const std::array<std::string_view, 32> kGlobalAtomicOpcodes = {
       "GLOBAL_ATOMIC_SWAP",
       "GLOBAL_ATOMIC_CMPSWAP",

@@ -1397,8 +1397,19 @@ bool IsFlatVectorMemoryOpcode(std::string_view opcode) {
          opcode == "FLAT_STORE_DWORDX3" || opcode == "FLAT_STORE_DWORDX4";
 }
 
+bool IsGlobalLoadLdsOpcode(std::string_view opcode) {
+  return opcode == "GLOBAL_LOAD_LDS_UBYTE" ||
+         opcode == "GLOBAL_LOAD_LDS_SBYTE" ||
+         opcode == "GLOBAL_LOAD_LDS_USHORT" ||
+         opcode == "GLOBAL_LOAD_LDS_SSHORT" ||
+         opcode == "GLOBAL_LOAD_LDS_DWORD" ||
+         opcode == "GLOBAL_LOAD_LDS_DWORDX3" ||
+         opcode == "GLOBAL_LOAD_LDS_DWORDX4";
+}
+
 bool IsGlobalVectorMemoryOpcode(std::string_view opcode) {
   return opcode == "GLOBAL_LOAD_UBYTE" || opcode == "GLOBAL_LOAD_SBYTE" ||
+         IsGlobalLoadLdsOpcode(opcode) ||
          opcode == "GLOBAL_LOAD_UBYTE_D16" ||
          opcode == "GLOBAL_LOAD_UBYTE_D16_HI" ||
          opcode == "GLOBAL_LOAD_SBYTE_D16" ||
@@ -1656,6 +1667,7 @@ std::uint32_t InsertDsD16Value(std::uint32_t container_value,
 }
 
 constexpr std::uint16_t kM0RegisterIndex = 124u;
+constexpr std::uint8_t kFlagVectorMemoryToLds = 1u << 4;
 
 bool IsDsWide64AccessOpcode(std::string_view opcode) {
   return opcode == "DS_WRITE_B64" || opcode == "DS_ADD_U64" ||
@@ -3006,6 +3018,7 @@ bool IsVectorMemoryLoadOpcode(std::string_view opcode) {
          opcode == "FLAT_LOAD_DWORD" || opcode == "FLAT_LOAD_DWORDX2" ||
          opcode == "FLAT_LOAD_DWORDX3" || opcode == "FLAT_LOAD_DWORDX4" ||
          opcode == "GLOBAL_LOAD_UBYTE" || opcode == "GLOBAL_LOAD_SBYTE" ||
+         IsGlobalLoadLdsOpcode(opcode) ||
          opcode == "GLOBAL_LOAD_UBYTE_D16" ||
          opcode == "GLOBAL_LOAD_UBYTE_D16_HI" ||
          opcode == "GLOBAL_LOAD_SBYTE_D16" ||
@@ -3021,7 +3034,8 @@ bool IsSignedVectorMemoryLoadOpcode(std::string_view opcode) {
   return opcode == "FLAT_LOAD_SBYTE" || opcode == "FLAT_LOAD_SSHORT" ||
          opcode == "FLAT_LOAD_SBYTE_D16" ||
          opcode == "FLAT_LOAD_SBYTE_D16_HI" ||
-         opcode == "GLOBAL_LOAD_SBYTE" || opcode == "GLOBAL_LOAD_SSHORT" ||
+         opcode == "GLOBAL_LOAD_SBYTE" || opcode == "GLOBAL_LOAD_LDS_SBYTE" ||
+         opcode == "GLOBAL_LOAD_SSHORT" || opcode == "GLOBAL_LOAD_LDS_SSHORT" ||
          opcode == "GLOBAL_LOAD_SBYTE_D16" ||
          opcode == "GLOBAL_LOAD_SBYTE_D16_HI";
 }
@@ -3458,10 +3472,16 @@ std::uint8_t GetVectorMemoryRegisterDwordCount(std::string_view opcode) {
   if (opcode == "GLOBAL_LOAD_DWORDX4" || opcode == "GLOBAL_STORE_DWORDX4") {
     return 4;
   }
+  if (opcode == "GLOBAL_LOAD_LDS_DWORDX4") {
+    return 4;
+  }
   if (opcode == "FLAT_LOAD_DWORDX4" || opcode == "FLAT_STORE_DWORDX4") {
     return 4;
   }
   if (opcode == "GLOBAL_LOAD_DWORDX3" || opcode == "GLOBAL_STORE_DWORDX3") {
+    return 3;
+  }
+  if (opcode == "GLOBAL_LOAD_LDS_DWORDX3") {
     return 3;
   }
   if (opcode == "FLAT_LOAD_DWORDX3" || opcode == "FLAT_STORE_DWORDX3") {
@@ -3481,7 +3501,8 @@ std::uint8_t GetVectorMemoryElementSizeBytes(std::string_view opcode) {
       opcode == "FLAT_LOAD_UBYTE_D16" || opcode == "FLAT_LOAD_UBYTE_D16_HI" ||
       opcode == "FLAT_LOAD_SBYTE_D16" || opcode == "FLAT_LOAD_SBYTE_D16_HI" ||
       opcode == "FLAT_STORE_BYTE" || opcode == "FLAT_STORE_BYTE_D16_HI" ||
-      opcode == "GLOBAL_LOAD_UBYTE" || opcode == "GLOBAL_LOAD_SBYTE" ||
+      opcode == "GLOBAL_LOAD_UBYTE" || opcode == "GLOBAL_LOAD_LDS_UBYTE" ||
+      opcode == "GLOBAL_LOAD_SBYTE" || opcode == "GLOBAL_LOAD_LDS_SBYTE" ||
       opcode == "GLOBAL_LOAD_UBYTE_D16" ||
       opcode == "GLOBAL_LOAD_UBYTE_D16_HI" ||
       opcode == "GLOBAL_LOAD_SBYTE_D16" ||
@@ -3493,7 +3514,8 @@ std::uint8_t GetVectorMemoryElementSizeBytes(std::string_view opcode) {
   if (opcode == "FLAT_LOAD_USHORT" || opcode == "FLAT_LOAD_SSHORT" ||
       opcode == "FLAT_LOAD_SHORT_D16" || opcode == "FLAT_LOAD_SHORT_D16_HI" ||
       opcode == "FLAT_STORE_SHORT" || opcode == "FLAT_STORE_SHORT_D16_HI" ||
-      opcode == "GLOBAL_LOAD_USHORT" || opcode == "GLOBAL_LOAD_SSHORT" ||
+      opcode == "GLOBAL_LOAD_USHORT" || opcode == "GLOBAL_LOAD_LDS_USHORT" ||
+      opcode == "GLOBAL_LOAD_SSHORT" || opcode == "GLOBAL_LOAD_LDS_SSHORT" ||
       opcode == "GLOBAL_LOAD_SHORT_D16" ||
       opcode == "GLOBAL_LOAD_SHORT_D16_HI" ||
       opcode == "GLOBAL_STORE_SHORT" ||
@@ -3501,6 +3523,53 @@ std::uint8_t GetVectorMemoryElementSizeBytes(std::string_view opcode) {
     return 2;
   }
   return 4;
+}
+
+std::uint8_t GetVectorMemoryLdsWriteDwordCount(
+    std::uint8_t register_dword_count) {
+  return register_dword_count == 3u ? 4u : register_dword_count;
+}
+
+bool AddSignedOffsetToAddress(std::uint64_t base_address,
+                              std::int32_t signed_offset,
+                              const char* underflow_message,
+                              const char* overflow_message,
+                              std::uint64_t* result_address,
+                              std::string* error_message) {
+  if (result_address == nullptr) {
+    if (error_message != nullptr) {
+      *error_message = "address output must not be null";
+    }
+    return false;
+  }
+
+  *result_address = base_address;
+  if (signed_offset < 0) {
+    const std::uint64_t magnitude =
+        static_cast<std::uint64_t>(-signed_offset);
+    if (*result_address < magnitude) {
+      if (error_message != nullptr) {
+        *error_message = underflow_message;
+      }
+      return false;
+    }
+    *result_address -= magnitude;
+  } else {
+    const std::uint64_t magnitude =
+        static_cast<std::uint64_t>(signed_offset);
+    if (*result_address > std::numeric_limits<std::uint64_t>::max() - magnitude) {
+      if (error_message != nullptr) {
+        *error_message = overflow_message;
+      }
+      return false;
+    }
+    *result_address += magnitude;
+  }
+
+  if (error_message != nullptr) {
+    error_message->clear();
+  }
+  return true;
 }
 
 std::uint8_t GetGlobalAtomicDataDwordCount(std::string_view opcode) {
@@ -4634,12 +4703,14 @@ void SetVectorMemoryMetadata(CompiledInstruction* instruction,
                              bool is_load,
                              bool is_signed_load,
                              std::uint8_t register_dword_count,
-                             std::uint8_t element_size_bytes) {
+                             std::uint8_t element_size_bytes,
+                             bool writes_lds = false) {
   instruction->opcode = opcode;
   instruction->flags =
       (is_global ? CompiledInstruction::kFlagIsGlobal : 0u) |
       (is_load ? CompiledInstruction::kFlagIsLoad : 0u) |
-      (is_signed_load ? CompiledInstruction::kFlagIsSignedLoad : 0u);
+      (is_signed_load ? CompiledInstruction::kFlagIsSignedLoad : 0u) |
+      (writes_lds ? kFlagVectorMemoryToLds : 0u);
   instruction->register_dword_count = register_dword_count;
   instruction->element_size_bytes = element_size_bytes;
 }
@@ -7144,6 +7215,11 @@ bool TryCompileOpcode(std::string_view opcode,
                             true, true, false, 1, 1);
     return true;
   }
+  if (opcode == "GLOBAL_LOAD_LDS_UBYTE") {
+    SetVectorMemoryMetadata(compiled_instruction, CompiledOpcode::kGlobalLoadUByte,
+                            true, true, false, 1, 1, true);
+    return true;
+  }
   if (opcode == "GLOBAL_LOAD_UBYTE_D16") {
     SetVectorMemoryMetadata(compiled_instruction,
                             CompiledOpcode::kGlobalLoadUByteD16, true, true,
@@ -7159,6 +7235,11 @@ bool TryCompileOpcode(std::string_view opcode,
   if (opcode == "GLOBAL_LOAD_SBYTE") {
     SetVectorMemoryMetadata(compiled_instruction, CompiledOpcode::kGlobalLoadSByte,
                             true, true, true, 1, 1);
+    return true;
+  }
+  if (opcode == "GLOBAL_LOAD_LDS_SBYTE") {
+    SetVectorMemoryMetadata(compiled_instruction, CompiledOpcode::kGlobalLoadSByte,
+                            true, true, true, 1, 1, true);
     return true;
   }
   if (opcode == "GLOBAL_LOAD_SBYTE_D16") {
@@ -7178,6 +7259,11 @@ bool TryCompileOpcode(std::string_view opcode,
                             true, true, false, 1, 2);
     return true;
   }
+  if (opcode == "GLOBAL_LOAD_LDS_USHORT") {
+    SetVectorMemoryMetadata(compiled_instruction, CompiledOpcode::kGlobalLoadUShort,
+                            true, true, false, 1, 2, true);
+    return true;
+  }
   if (opcode == "GLOBAL_LOAD_SHORT_D16") {
     SetVectorMemoryMetadata(compiled_instruction,
                             CompiledOpcode::kGlobalLoadShortD16, true, true,
@@ -7195,9 +7281,19 @@ bool TryCompileOpcode(std::string_view opcode,
                             true, true, true, 1, 2);
     return true;
   }
+  if (opcode == "GLOBAL_LOAD_LDS_SSHORT") {
+    SetVectorMemoryMetadata(compiled_instruction, CompiledOpcode::kGlobalLoadSShort,
+                            true, true, true, 1, 2, true);
+    return true;
+  }
   if (opcode == "GLOBAL_LOAD_DWORD") {
     SetVectorMemoryMetadata(compiled_instruction, CompiledOpcode::kGlobalLoadDword,
                             true, true, false, 1, 4);
+    return true;
+  }
+  if (opcode == "GLOBAL_LOAD_LDS_DWORD") {
+    SetVectorMemoryMetadata(compiled_instruction, CompiledOpcode::kGlobalLoadDword,
+                            true, true, false, 1, 4, true);
     return true;
   }
   if (opcode == "GLOBAL_LOAD_DWORDX2") {
@@ -7210,9 +7306,19 @@ bool TryCompileOpcode(std::string_view opcode,
                             true, true, false, 3, 4);
     return true;
   }
+  if (opcode == "GLOBAL_LOAD_LDS_DWORDX3") {
+    SetVectorMemoryMetadata(compiled_instruction, CompiledOpcode::kGlobalLoadDwordX3,
+                            true, true, false, 3, 4, true);
+    return true;
+  }
   if (opcode == "GLOBAL_LOAD_DWORDX4") {
     SetVectorMemoryMetadata(compiled_instruction, CompiledOpcode::kGlobalLoadDwordX4,
                             true, true, false, 4, 4);
+    return true;
+  }
+  if (opcode == "GLOBAL_LOAD_LDS_DWORDX4") {
+    SetVectorMemoryMetadata(compiled_instruction, CompiledOpcode::kGlobalLoadDwordX4,
+                            true, true, false, 4, 4, true);
     return true;
   }
   if (opcode == "GLOBAL_STORE_BYTE") {
@@ -11750,13 +11856,15 @@ bool Gfx950Interpreter::ExecuteVectorMemory(const DecodedInstruction& instructio
                                             std::string* error_message) const {
   const bool is_global = IsGlobalVectorMemoryOpcode(instruction.opcode);
   const bool is_load = IsVectorMemoryLoadOpcode(instruction.opcode);
+  const bool writes_lds = IsGlobalLoadLdsOpcode(instruction.opcode);
   const DsD16AccessKind d16_access_kind =
       GetVectorMemoryD16AccessKind(instruction.opcode);
   const std::uint8_t register_dword_count =
       GetVectorMemoryRegisterDwordCount(instruction.opcode);
   const std::uint8_t element_size_bytes =
       GetVectorMemoryElementSizeBytes(instruction.opcode);
-  const std::uint8_t expected_operands = is_global ? 4 : 3;
+  const std::uint8_t expected_operands =
+      writes_lds ? 3 : (is_global ? 4 : 3);
   if (!ValidateOperandCount(instruction, expected_operands, error_message)) {
     return false;
   }
@@ -11768,18 +11876,21 @@ bool Gfx950Interpreter::ExecuteVectorMemory(const DecodedInstruction& instructio
   }
 
   const InstructionOperand& address_operand =
-      instruction.operands[is_load ? 1 : 0];
+      instruction.operands[writes_lds ? 0 : (is_load ? 1 : 0)];
   const InstructionOperand& offset_operand =
       instruction.operands[expected_operands - 1];
-  const InstructionOperand& vector_data_operand =
-      instruction.operands[is_load ? 0 : 1];
-  if (vector_data_operand.kind != OperandKind::kVgpr) {
+  const InstructionOperand* vector_data_operand =
+      writes_lds ? nullptr : &instruction.operands[is_load ? 0 : 1];
+  if (vector_data_operand != nullptr &&
+      vector_data_operand->kind != OperandKind::kVgpr) {
     if (error_message != nullptr) {
       *error_message = "vector memory data operand must be a VGPR";
     }
     return false;
   }
-  if (vector_data_operand.index + register_dword_count - 1 >= state->vgprs.size()) {
+  if (vector_data_operand != nullptr &&
+      vector_data_operand->index + register_dword_count - 1 >=
+          state->vgprs.size()) {
     if (error_message != nullptr) {
       *error_message = "vector memory data register range out of bounds";
     }
@@ -11792,12 +11903,78 @@ bool Gfx950Interpreter::ExecuteVectorMemory(const DecodedInstruction& instructio
     return false;
   }
 
-  std::uint64_t scalar_base = 0;
   const InstructionOperand* scalar_base_operand =
-      is_global ? &instruction.operands[2] : nullptr;
+      is_global ? &instruction.operands[writes_lds ? 1 : 2] : nullptr;
   const std::int32_t signed_offset =
       static_cast<std::int32_t>(offset_operand.imm32);
+  std::span<std::byte> lds_storage(
+      state->lds_bytes.data(), state->lds_bytes.size());
+  const std::uint8_t lds_write_dword_count =
+      GetVectorMemoryLdsWriteDwordCount(register_dword_count);
+  std::uint64_t lds_base_address = 0;
+  if (writes_lds &&
+      !AddSignedOffsetToAddress(state->sgprs[kM0RegisterIndex], signed_offset,
+                                "global_load_lds lds address underflow",
+                                "global_load_lds lds address overflow",
+                                &lds_base_address, error_message)) {
+    return false;
+  }
 
+  auto execute_global_load_lds =
+      [&](std::uint64_t address, std::uint64_t lds_address) -> bool {
+    if (register_dword_count > 1u) {
+      const std::uint64_t transfer_size_bytes =
+          static_cast<std::uint64_t>(register_dword_count) *
+          sizeof(std::uint32_t);
+      if (address >
+          std::numeric_limits<std::uint64_t>::max() - (transfer_size_bytes - 1u)) {
+        if (error_message != nullptr) {
+          *error_message = "vector memory transfer address overflow";
+        }
+        return false;
+      }
+
+      std::array<std::uint32_t, 4> transfer_values{};
+      if (!memory->Load(
+              address,
+              std::as_writable_bytes(std::span<std::uint32_t>(
+                  transfer_values.data(), register_dword_count)))) {
+        if (error_message != nullptr) {
+          *error_message = "vector memory transfer load failed";
+        }
+        return false;
+      }
+      return WriteLdsDwords(lds_storage, lds_address, lds_write_dword_count,
+                            transfer_values.data(), error_message);
+    }
+
+    std::uint32_t value = 0;
+    if (element_size_bytes == 1u) {
+      std::uint8_t raw_value = 0;
+      if (!ReadMemoryU8(memory, address, &raw_value, error_message)) {
+        return false;
+      }
+      value = IsSignedVectorMemoryLoadOpcode(instruction.opcode)
+                  ? static_cast<std::uint32_t>(static_cast<std::int32_t>(
+                        static_cast<std::int8_t>(raw_value)))
+                  : raw_value;
+    } else if (element_size_bytes == 2u) {
+      std::uint16_t raw_value = 0;
+      if (!ReadMemoryU16(memory, address, &raw_value, error_message)) {
+        return false;
+      }
+      value = IsSignedVectorMemoryLoadOpcode(instruction.opcode)
+                  ? static_cast<std::uint32_t>(static_cast<std::int32_t>(
+                        static_cast<std::int16_t>(raw_value)))
+                  : raw_value;
+    } else if (!ReadMemoryU32(memory, address, &value, error_message)) {
+      return false;
+    }
+    return WriteLdsValue(lds_storage, lds_address, sizeof(std::uint32_t), value,
+                         error_message);
+  };
+
+  std::size_t active_write_index = 0;
   for (std::size_t lane_index = 0; lane_index < WaveExecutionState::kLaneCount;
        ++lane_index) {
     if (((state->exec_mask >> lane_index) & 1ULL) == 0) {
@@ -11809,6 +11986,25 @@ bool Gfx950Interpreter::ExecuteVectorMemory(const DecodedInstruction& instructio
                                     signed_offset, *state, lane_index, &address,
                                     error_message)) {
       return false;
+    }
+
+    if (writes_lds) {
+      const std::uint64_t lane_lds_byte_offset =
+          static_cast<std::uint64_t>(active_write_index) *
+          static_cast<std::uint64_t>(lds_write_dword_count) *
+          sizeof(std::uint32_t);
+      if (lds_base_address >
+          std::numeric_limits<std::uint64_t>::max() - lane_lds_byte_offset) {
+        if (error_message != nullptr) {
+          *error_message = "global_load_lds lds address overflow";
+        }
+        return false;
+      }
+      if (!execute_global_load_lds(address, lds_base_address + lane_lds_byte_offset)) {
+        return false;
+      }
+      ++active_write_index;
+      continue;
     }
 
     for (std::uint8_t element_index = 0; element_index < register_dword_count;
@@ -11823,7 +12019,7 @@ bool Gfx950Interpreter::ExecuteVectorMemory(const DecodedInstruction& instructio
       }
       const std::uint64_t element_address = address + byte_offset;
       const InstructionOperand element_operand = InstructionOperand::Vgpr(
-          static_cast<std::uint16_t>(vector_data_operand.index + element_index));
+          static_cast<std::uint16_t>(vector_data_operand->index + element_index));
 
       if (is_load) {
         std::uint32_t value = 0;
@@ -11892,11 +12088,13 @@ bool Gfx950Interpreter::ExecuteVectorMemory(const CompiledInstruction& instructi
                                             std::string* error_message) const {
   const bool is_global = instruction.IsGlobal();
   const bool is_load = instruction.IsLoad();
+  const bool writes_lds = (instruction.flags & kFlagVectorMemoryToLds) != 0u;
   const DsD16AccessKind d16_access_kind =
       GetVectorMemoryD16AccessKind(instruction.opcode);
   const std::uint8_t register_dword_count = instruction.register_dword_count;
   const std::uint8_t element_size_bytes = instruction.element_size_bytes;
-  const std::uint8_t expected_operands = is_global ? 4 : 3;
+  const std::uint8_t expected_operands =
+      writes_lds ? 3 : (is_global ? 4 : 3);
   if (!ValidateOperandCount(instruction, expected_operands, error_message)) {
     return false;
   }
@@ -11908,18 +12106,19 @@ bool Gfx950Interpreter::ExecuteVectorMemory(const CompiledInstruction& instructi
   }
 
   const InstructionOperand& address_operand =
-      instruction.operands[is_load ? 1 : 0];
+      instruction.operands[writes_lds ? 0 : (is_load ? 1 : 0)];
   const InstructionOperand& offset_operand =
       instruction.operands[expected_operands - 1];
-  const InstructionOperand& vector_data_operand =
-      instruction.operands[is_load ? 0 : 1];
+  const InstructionOperand* vector_data_operand =
+      writes_lds ? nullptr : &instruction.operands[is_load ? 0 : 1];
   if (address_operand.kind != OperandKind::kVgpr) {
     if (error_message != nullptr) {
       *error_message = "vector memory address operand must be a VGPR pair";
     }
     return false;
   }
-  if (vector_data_operand.kind != OperandKind::kVgpr) {
+  if (vector_data_operand != nullptr &&
+      vector_data_operand->kind != OperandKind::kVgpr) {
     if (error_message != nullptr) {
       *error_message = "vector memory data operand must be a VGPR";
     }
@@ -11931,7 +12130,9 @@ bool Gfx950Interpreter::ExecuteVectorMemory(const CompiledInstruction& instructi
     }
     return false;
   }
-  if (vector_data_operand.index + register_dword_count - 1 >= state->vgprs.size()) {
+  if (vector_data_operand != nullptr &&
+      vector_data_operand->index + register_dword_count - 1 >=
+          state->vgprs.size()) {
     if (error_message != nullptr) {
       *error_message = "vector memory data register range out of bounds";
     }
@@ -11945,7 +12146,7 @@ bool Gfx950Interpreter::ExecuteVectorMemory(const CompiledInstruction& instructi
   }
 
   const InstructionOperand* scalar_base_operand =
-      is_global ? &instruction.operands[2] : nullptr;
+      is_global ? &instruction.operands[writes_lds ? 1 : 2] : nullptr;
   std::uint64_t scalar_base = 0;
   if (scalar_base_operand != nullptr) {
     if (scalar_base_operand->kind != OperandKind::kSgpr) {
@@ -11967,8 +12168,76 @@ bool Gfx950Interpreter::ExecuteVectorMemory(const CompiledInstruction& instructi
   const std::int32_t signed_offset =
       static_cast<std::int32_t>(offset_operand.imm32);
   const std::uint16_t address_reg = address_operand.index;
-  const std::uint16_t vector_data_reg = vector_data_operand.index;
+  const std::uint16_t vector_data_reg =
+      vector_data_operand != nullptr ? vector_data_operand->index : 0u;
+  std::span<std::byte> lds_storage(
+      state->lds_bytes.data(), state->lds_bytes.size());
+  const std::uint8_t lds_write_dword_count =
+      GetVectorMemoryLdsWriteDwordCount(register_dword_count);
+  std::uint64_t lds_base_address = 0;
+  if (writes_lds &&
+      !AddSignedOffsetToAddress(state->sgprs[kM0RegisterIndex], signed_offset,
+                                "global_load_lds lds address underflow",
+                                "global_load_lds lds address overflow",
+                                &lds_base_address, error_message)) {
+    return false;
+  }
 
+  auto execute_global_load_lds =
+      [&](std::uint64_t address, std::uint64_t lds_address) -> bool {
+    if (register_dword_count > 1u) {
+      const std::uint64_t transfer_size_bytes =
+          static_cast<std::uint64_t>(register_dword_count) *
+          sizeof(std::uint32_t);
+      if (address >
+          std::numeric_limits<std::uint64_t>::max() - (transfer_size_bytes - 1u)) {
+        if (error_message != nullptr) {
+          *error_message = "vector memory transfer address overflow";
+        }
+        return false;
+      }
+
+      std::array<std::uint32_t, 4> transfer_values{};
+      if (!memory->Load(
+              address,
+              std::as_writable_bytes(std::span<std::uint32_t>(
+                  transfer_values.data(), register_dword_count)))) {
+        if (error_message != nullptr) {
+          *error_message = "vector memory transfer load failed";
+        }
+        return false;
+      }
+      return WriteLdsDwords(lds_storage, lds_address, lds_write_dword_count,
+                            transfer_values.data(), error_message);
+    }
+
+    std::uint32_t value = 0;
+    if (element_size_bytes == 1u) {
+      std::uint8_t raw_value = 0;
+      if (!ReadMemoryU8(memory, address, &raw_value, error_message)) {
+        return false;
+      }
+      value = instruction.IsSignedLoad()
+                  ? static_cast<std::uint32_t>(static_cast<std::int32_t>(
+                        static_cast<std::int8_t>(raw_value)))
+                  : raw_value;
+    } else if (element_size_bytes == 2u) {
+      std::uint16_t raw_value = 0;
+      if (!ReadMemoryU16(memory, address, &raw_value, error_message)) {
+        return false;
+      }
+      value = instruction.IsSignedLoad()
+                  ? static_cast<std::uint32_t>(static_cast<std::int32_t>(
+                        static_cast<std::int16_t>(raw_value)))
+                  : raw_value;
+    } else if (!ReadMemoryU32(memory, address, &value, error_message)) {
+      return false;
+    }
+    return WriteLdsValue(lds_storage, lds_address, sizeof(std::uint32_t), value,
+                         error_message);
+  };
+
+  std::size_t active_write_index = 0;
   for (std::size_t lane_index = 0; lane_index < WaveExecutionState::kLaneCount;
        ++lane_index) {
     if (((state->exec_mask >> lane_index) & 1ULL) == 0) {
@@ -12007,6 +12276,26 @@ bool Gfx950Interpreter::ExecuteVectorMemory(const CompiledInstruction& instructi
         return false;
       }
       address += magnitude;
+    }
+
+    if (writes_lds) {
+      const std::uint64_t lane_lds_byte_offset =
+          static_cast<std::uint64_t>(active_write_index) *
+          static_cast<std::uint64_t>(lds_write_dword_count) *
+          sizeof(std::uint32_t);
+      if (lds_base_address >
+          std::numeric_limits<std::uint64_t>::max() - lane_lds_byte_offset) {
+        if (error_message != nullptr) {
+          *error_message = "global_load_lds lds address overflow";
+        }
+        return false;
+      }
+      if (!execute_global_load_lds(address,
+                                   lds_base_address + lane_lds_byte_offset)) {
+        return false;
+      }
+      ++active_write_index;
+      continue;
     }
 
     if (element_size_bytes == sizeof(std::uint32_t) && register_dword_count > 1) {

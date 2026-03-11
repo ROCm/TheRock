@@ -1,15 +1,15 @@
 # GFX950 Coverage Report
 
 - Catalog instructions: 1242
-- Semantic support: 681 (54.8%)
-- Raw decode support: 704 (56.7% of total, 69.4% of measured)
+- Semantic support: 688 (55.4%)
+- Raw decode support: 711 (57.2% of total, 70.1% of measured)
 - Raw decode measurable instructions: 1014
 
 ## Gaps
 
 - Semantic-only coverage without measured decode: 36
 - Decode-only without semantic support: 59
-- Missing both semantic and decode support: 502
+- Missing both semantic and decode support: 495
 
 ## Unmeasured Encoding Families
 
@@ -95,13 +95,6 @@
 - `DS_READ_B96_TR_B6`
 - `DS_READ_B64_TR_B8`
 - `DS_READ_B64_TR_B16`
-- `GLOBAL_LOAD_LDS_UBYTE`
-- `GLOBAL_LOAD_LDS_SBYTE`
-- `GLOBAL_LOAD_LDS_USHORT`
-- `GLOBAL_LOAD_LDS_SSHORT`
-- `GLOBAL_LOAD_LDS_DWORD`
-- `GLOBAL_LOAD_LDS_DWORDX4`
-- `GLOBAL_LOAD_LDS_DWORDX3`
 - `SCRATCH_LOAD_UBYTE`
 - `SCRATCH_LOAD_SBYTE`
 - `SCRATCH_LOAD_USHORT`
@@ -116,3 +109,10 @@
 - `SCRATCH_STORE_SHORT_D16_HI`
 - `SCRATCH_STORE_DWORD`
 - `SCRATCH_STORE_DWORDX2`
+- `SCRATCH_STORE_DWORDX3`
+- `SCRATCH_STORE_DWORDX4`
+- `SCRATCH_LOAD_UBYTE_D16`
+- `SCRATCH_LOAD_UBYTE_D16_HI`
+- `SCRATCH_LOAD_SBYTE_D16`
+- `SCRATCH_LOAD_SBYTE_D16_HI`
+- `SCRATCH_LOAD_SHORT_D16`

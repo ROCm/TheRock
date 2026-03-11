@@ -216,13 +216,20 @@ bool IsSupportedGlobalVectorMemoryOpcode(std::string_view opcode_name) {
   return opcode_name == "GLOBAL_LOAD_UBYTE" ||
          opcode_name == "GLOBAL_LOAD_UBYTE_D16" ||
          opcode_name == "GLOBAL_LOAD_UBYTE_D16_HI" ||
+         opcode_name == "GLOBAL_LOAD_LDS_UBYTE" ||
+         opcode_name == "GLOBAL_LOAD_LDS_SBYTE" ||
          opcode_name == "GLOBAL_LOAD_SBYTE" ||
          opcode_name == "GLOBAL_LOAD_SBYTE_D16" ||
          opcode_name == "GLOBAL_LOAD_SBYTE_D16_HI" ||
+         opcode_name == "GLOBAL_LOAD_LDS_USHORT" ||
+         opcode_name == "GLOBAL_LOAD_LDS_SSHORT" ||
          opcode_name == "GLOBAL_LOAD_USHORT" ||
          opcode_name == "GLOBAL_LOAD_SHORT_D16" ||
          opcode_name == "GLOBAL_LOAD_SHORT_D16_HI" ||
          opcode_name == "GLOBAL_LOAD_SSHORT" ||
+         opcode_name == "GLOBAL_LOAD_LDS_DWORD" ||
+         opcode_name == "GLOBAL_LOAD_LDS_DWORDX3" ||
+         opcode_name == "GLOBAL_LOAD_LDS_DWORDX4" ||
          opcode_name == "GLOBAL_LOAD_DWORD" ||
          opcode_name == "GLOBAL_LOAD_DWORDX2" ||
          opcode_name == "GLOBAL_LOAD_DWORDX3" ||
@@ -1080,7 +1087,10 @@ bool Gfx950BinaryDecoder::DecodeFlatGlobal(
           ExtractBits(instruction_word, 0, 13)))));
   const bool return_prior_value = ExtractBits(instruction_word, 16, 1) != 0;
 
-  if (opcode_name.starts_with("GLOBAL_LOAD_")) {
+  if (opcode_name.starts_with("GLOBAL_LOAD_LDS_")) {
+    *instruction =
+        DecodedInstruction::ThreeOperand(instruction_name, addr, saddr, offset);
+  } else if (opcode_name.starts_with("GLOBAL_LOAD_")) {
     InstructionOperand dst;
     if (!DecodeVectorDestination(
             static_cast<std::uint32_t>(ExtractBits(instruction_word, 56, 8)),
