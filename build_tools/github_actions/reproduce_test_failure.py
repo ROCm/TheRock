@@ -46,7 +46,7 @@ def build_reproduction_command(args: argparse.Namespace) -> str:
     if args.test_type != "full":
         cmd += f" --test-type {args.test_type}"
     if args.fetch_artifact_args:
-        cmd += f' --fetch-artifact-args "{args.fetch_artifact_args}"'
+        cmd += f' --fetch-artifact-args="{args.fetch_artifact_args}"'
     return cmd
 
 
