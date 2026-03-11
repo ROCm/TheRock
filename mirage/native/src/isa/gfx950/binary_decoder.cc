@@ -195,25 +195,42 @@ bool IsFlatGlobalInstructionWord(std::uint32_t word) {
 
 bool IsSupportedFlatVectorMemoryOpcode(std::string_view opcode_name) {
   return opcode_name == "FLAT_LOAD_UBYTE" || opcode_name == "FLAT_LOAD_SBYTE" ||
+         opcode_name == "FLAT_LOAD_UBYTE_D16" ||
+         opcode_name == "FLAT_LOAD_UBYTE_D16_HI" ||
+         opcode_name == "FLAT_LOAD_SBYTE_D16" ||
+         opcode_name == "FLAT_LOAD_SBYTE_D16_HI" ||
          opcode_name == "FLAT_LOAD_USHORT" || opcode_name == "FLAT_LOAD_SSHORT" ||
+         opcode_name == "FLAT_LOAD_SHORT_D16" ||
+         opcode_name == "FLAT_LOAD_SHORT_D16_HI" ||
          opcode_name == "FLAT_LOAD_DWORD" || opcode_name == "FLAT_LOAD_DWORDX2" ||
          opcode_name == "FLAT_LOAD_DWORDX3" || opcode_name == "FLAT_LOAD_DWORDX4" ||
-         opcode_name == "FLAT_STORE_BYTE" || opcode_name == "FLAT_STORE_SHORT" ||
+         opcode_name == "FLAT_STORE_BYTE" ||
+         opcode_name == "FLAT_STORE_BYTE_D16_HI" ||
+         opcode_name == "FLAT_STORE_SHORT" ||
+         opcode_name == "FLAT_STORE_SHORT_D16_HI" ||
          opcode_name == "FLAT_STORE_DWORD" || opcode_name == "FLAT_STORE_DWORDX2" ||
          opcode_name == "FLAT_STORE_DWORDX3" || opcode_name == "FLAT_STORE_DWORDX4";
 }
 
 bool IsSupportedGlobalVectorMemoryOpcode(std::string_view opcode_name) {
   return opcode_name == "GLOBAL_LOAD_UBYTE" ||
+         opcode_name == "GLOBAL_LOAD_UBYTE_D16" ||
+         opcode_name == "GLOBAL_LOAD_UBYTE_D16_HI" ||
          opcode_name == "GLOBAL_LOAD_SBYTE" ||
+         opcode_name == "GLOBAL_LOAD_SBYTE_D16" ||
+         opcode_name == "GLOBAL_LOAD_SBYTE_D16_HI" ||
          opcode_name == "GLOBAL_LOAD_USHORT" ||
+         opcode_name == "GLOBAL_LOAD_SHORT_D16" ||
+         opcode_name == "GLOBAL_LOAD_SHORT_D16_HI" ||
          opcode_name == "GLOBAL_LOAD_SSHORT" ||
          opcode_name == "GLOBAL_LOAD_DWORD" ||
          opcode_name == "GLOBAL_LOAD_DWORDX2" ||
          opcode_name == "GLOBAL_LOAD_DWORDX3" ||
          opcode_name == "GLOBAL_LOAD_DWORDX4" ||
          opcode_name == "GLOBAL_STORE_BYTE" ||
+         opcode_name == "GLOBAL_STORE_BYTE_D16_HI" ||
          opcode_name == "GLOBAL_STORE_SHORT" ||
+         opcode_name == "GLOBAL_STORE_SHORT_D16_HI" ||
          opcode_name == "GLOBAL_STORE_DWORD" ||
          opcode_name == "GLOBAL_STORE_DWORDX2" ||
          opcode_name == "GLOBAL_STORE_DWORDX3" ||

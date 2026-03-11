@@ -1813,8 +1813,16 @@ int main() {
               "expected V_CVT_F64_U32 support") ||
       !Expect(interpreter.Supports("FLAT_LOAD_DWORD"),
               "expected FLAT_LOAD_DWORD support") ||
+      !Expect(interpreter.Supports("FLAT_LOAD_SBYTE_D16_HI"),
+              "expected FLAT_LOAD_SBYTE_D16_HI support") ||
+      !Expect(interpreter.Supports("FLAT_STORE_SHORT_D16_HI"),
+              "expected FLAT_STORE_SHORT_D16_HI support") ||
       !Expect(interpreter.Supports("GLOBAL_STORE_DWORD"),
               "expected GLOBAL_STORE_DWORD support") ||
+      !Expect(interpreter.Supports("GLOBAL_LOAD_SHORT_D16_HI"),
+              "expected GLOBAL_LOAD_SHORT_D16_HI support") ||
+      !Expect(interpreter.Supports("GLOBAL_STORE_BYTE_D16_HI"),
+              "expected GLOBAL_STORE_BYTE_D16_HI support") ||
       !Expect(interpreter.Supports("GLOBAL_LOAD_DWORDX2"),
               "expected GLOBAL_LOAD_DWORDX2 support") ||
       !Expect(interpreter.Supports("GLOBAL_STORE_DWORDX2"),
@@ -10380,6 +10388,213 @@ int main() {
       !Expect(ReadU16(subword_memory, 0xa70, &stored_short),
               "expected global short store read") ||
       !Expect(stored_short == 0xc3d4u, "expected global short store result")) {
+    return 1;
+  }
+
+  const std::vector<DecodedInstruction> vector_memory_d16_program = {
+      DecodedInstruction::ThreeOperand("FLAT_LOAD_UBYTE_D16",
+                                       InstructionOperand::Vgpr(60),
+                                       InstructionOperand::Vgpr(0),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("FLAT_LOAD_UBYTE_D16_HI",
+                                       InstructionOperand::Vgpr(61),
+                                       InstructionOperand::Vgpr(2),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("FLAT_LOAD_SBYTE_D16",
+                                       InstructionOperand::Vgpr(62),
+                                       InstructionOperand::Vgpr(4),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("FLAT_LOAD_SBYTE_D16_HI",
+                                       InstructionOperand::Vgpr(63),
+                                       InstructionOperand::Vgpr(6),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("FLAT_LOAD_SHORT_D16",
+                                       InstructionOperand::Vgpr(64),
+                                       InstructionOperand::Vgpr(8),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("FLAT_LOAD_SHORT_D16_HI",
+                                       InstructionOperand::Vgpr(65),
+                                       InstructionOperand::Vgpr(10),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::FourOperand("GLOBAL_LOAD_UBYTE_D16",
+                                      InstructionOperand::Vgpr(66),
+                                      InstructionOperand::Vgpr(12),
+                                      InstructionOperand::Sgpr(0),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FourOperand("GLOBAL_LOAD_UBYTE_D16_HI",
+                                      InstructionOperand::Vgpr(67),
+                                      InstructionOperand::Vgpr(14),
+                                      InstructionOperand::Sgpr(0),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FourOperand("GLOBAL_LOAD_SBYTE_D16",
+                                      InstructionOperand::Vgpr(68),
+                                      InstructionOperand::Vgpr(16),
+                                      InstructionOperand::Sgpr(0),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FourOperand("GLOBAL_LOAD_SBYTE_D16_HI",
+                                      InstructionOperand::Vgpr(69),
+                                      InstructionOperand::Vgpr(18),
+                                      InstructionOperand::Sgpr(0),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FourOperand("GLOBAL_LOAD_SHORT_D16",
+                                      InstructionOperand::Vgpr(70),
+                                      InstructionOperand::Vgpr(20),
+                                      InstructionOperand::Sgpr(0),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FourOperand("GLOBAL_LOAD_SHORT_D16_HI",
+                                      InstructionOperand::Vgpr(71),
+                                      InstructionOperand::Vgpr(22),
+                                      InstructionOperand::Sgpr(0),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("FLAT_STORE_BYTE_D16_HI",
+                                       InstructionOperand::Vgpr(24),
+                                       InstructionOperand::Vgpr(40),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::ThreeOperand("FLAT_STORE_SHORT_D16_HI",
+                                       InstructionOperand::Vgpr(26),
+                                       InstructionOperand::Vgpr(41),
+                                       InstructionOperand::Imm32(0)),
+      DecodedInstruction::FourOperand("GLOBAL_STORE_BYTE_D16_HI",
+                                      InstructionOperand::Vgpr(28),
+                                      InstructionOperand::Vgpr(42),
+                                      InstructionOperand::Sgpr(0),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FourOperand("GLOBAL_STORE_SHORT_D16_HI",
+                                      InstructionOperand::Vgpr(30),
+                                      InstructionOperand::Vgpr(43),
+                                      InstructionOperand::Sgpr(0),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  const auto seed_vector_memory_d16 =
+      [](LinearExecutionMemory* memory) -> bool {
+    return memory != nullptr &&
+           WriteU8(memory, 0x700, 0x34u) &&
+           WriteU8(memory, 0x710, 0x56u) &&
+           WriteU8(memory, 0x720, 0x80u) &&
+           WriteU8(memory, 0x730, 0xf0u) &&
+           WriteU16(memory, 0x740, 0x1234u) &&
+           WriteU16(memory, 0x750, 0xabcdu) &&
+           WriteU8(memory, 0xc20, 0x78u) &&
+           WriteU8(memory, 0xc30, 0x9au) &&
+           WriteU8(memory, 0xc40, 0x81u) &&
+           WriteU8(memory, 0xc50, 0x82u) &&
+           WriteU16(memory, 0xc60, 0x4567u) &&
+           WriteU16(memory, 0xc70, 0x89abu);
+  };
+  const auto make_vector_memory_d16_state = []() {
+    WaveExecutionState state{};
+    state.exec_mask = 0x1ULL;
+    state.sgprs[0] = 0xc00;
+    state.sgprs[1] = 0x0;
+    state.vgprs[0][0] = 0x700;
+    state.vgprs[2][0] = 0x710;
+    state.vgprs[4][0] = 0x720;
+    state.vgprs[6][0] = 0x730;
+    state.vgprs[8][0] = 0x740;
+    state.vgprs[10][0] = 0x750;
+    state.vgprs[12][0] = 0x20;
+    state.vgprs[14][0] = 0x30;
+    state.vgprs[16][0] = 0x40;
+    state.vgprs[18][0] = 0x50;
+    state.vgprs[20][0] = 0x60;
+    state.vgprs[22][0] = 0x70;
+    state.vgprs[24][0] = 0x760;
+    state.vgprs[26][0] = 0x770;
+    state.vgprs[28][0] = 0x80;
+    state.vgprs[30][0] = 0x90;
+    state.vgprs[40][0] = 0x1234abcdu;
+    state.vgprs[41][0] = 0x89abcdefu;
+    state.vgprs[42][0] = 0x13572468u;
+    state.vgprs[43][0] = 0x2468ace0u;
+    return state;
+  };
+  const auto validate_vector_memory_d16 =
+      [](const WaveExecutionState& state,
+         const LinearExecutionMemory& memory,
+         const char* mode) -> bool {
+    std::uint8_t byte_value = 0;
+    std::uint16_t short_value = 0;
+    return Expect(state.vgprs[60][0] == 0x00000034u,
+                  (std::string(mode) + " flat load ubyte d16").c_str()) &&
+           Expect(state.vgprs[61][0] == 0x00560000u,
+                  (std::string(mode) + " flat load ubyte d16 hi").c_str()) &&
+           Expect(state.vgprs[62][0] == 0x0000ff80u,
+                  (std::string(mode) + " flat load sbyte d16").c_str()) &&
+           Expect(state.vgprs[63][0] == 0xfff00000u,
+                  (std::string(mode) + " flat load sbyte d16 hi").c_str()) &&
+           Expect(state.vgprs[64][0] == 0x00001234u,
+                  (std::string(mode) + " flat load short d16").c_str()) &&
+           Expect(state.vgprs[65][0] == 0xabcd0000u,
+                  (std::string(mode) + " flat load short d16 hi").c_str()) &&
+           Expect(state.vgprs[66][0] == 0x00000078u,
+                  (std::string(mode) + " global load ubyte d16").c_str()) &&
+           Expect(state.vgprs[67][0] == 0x009a0000u,
+                  (std::string(mode) + " global load ubyte d16 hi").c_str()) &&
+           Expect(state.vgprs[68][0] == 0x0000ff81u,
+                  (std::string(mode) + " global load sbyte d16").c_str()) &&
+           Expect(state.vgprs[69][0] == 0xff820000u,
+                  (std::string(mode) + " global load sbyte d16 hi").c_str()) &&
+           Expect(state.vgprs[70][0] == 0x00004567u,
+                  (std::string(mode) + " global load short d16").c_str()) &&
+           Expect(state.vgprs[71][0] == 0x89ab0000u,
+                  (std::string(mode) + " global load short d16 hi").c_str()) &&
+           Expect(ReadU8(memory, 0x760, &byte_value),
+                  (std::string(mode) + " flat store byte d16 hi read").c_str()) &&
+           Expect(byte_value == 0x34u,
+                  (std::string(mode) + " flat store byte d16 hi").c_str()) &&
+           Expect(ReadU16(memory, 0x770, &short_value),
+                  (std::string(mode) + " flat store short d16 hi read").c_str()) &&
+           Expect(short_value == 0x89abu,
+                  (std::string(mode) + " flat store short d16 hi").c_str()) &&
+           Expect(ReadU8(memory, 0xc80, &byte_value),
+                  (std::string(mode) + " global store byte d16 hi read").c_str()) &&
+           Expect(byte_value == 0x57u,
+                  (std::string(mode) + " global store byte d16 hi").c_str()) &&
+           Expect(ReadU16(memory, 0xc90, &short_value),
+                  (std::string(mode) + " global store short d16 hi read").c_str()) &&
+           Expect(short_value == 0x2468u,
+                  (std::string(mode) + " global store short d16 hi").c_str());
+  };
+
+  LinearExecutionMemory vector_memory_d16_memory(0x2000, 0);
+  if (!Expect(seed_vector_memory_d16(&vector_memory_d16_memory),
+              "expected vector memory d16 seed writes")) {
+    return 1;
+  }
+  WaveExecutionState vector_memory_d16_state = make_vector_memory_d16_state();
+  if (!Expect(interpreter.ExecuteProgram(vector_memory_d16_program,
+                                         &vector_memory_d16_state,
+                                         &vector_memory_d16_memory,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_vector_memory_d16(vector_memory_d16_state,
+                                  vector_memory_d16_memory, "decoded")) {
+    return 1;
+  }
+
+  std::vector<CompiledInstruction> compiled_vector_memory_d16_program;
+  if (!Expect(interpreter.CompileProgram(vector_memory_d16_program,
+                                         &compiled_vector_memory_d16_program,
+                                         &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+  LinearExecutionMemory compiled_vector_memory_d16_memory(0x2000, 0);
+  if (!Expect(seed_vector_memory_d16(&compiled_vector_memory_d16_memory),
+              "expected compiled vector memory d16 seed writes")) {
+    return 1;
+  }
+  WaveExecutionState compiled_vector_memory_d16_state =
+      make_vector_memory_d16_state();
+  if (!Expect(interpreter.ExecuteProgram(compiled_vector_memory_d16_program,
+                                         &compiled_vector_memory_d16_state,
+                                         &compiled_vector_memory_d16_memory,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_vector_memory_d16(compiled_vector_memory_d16_state,
+                                  compiled_vector_memory_d16_memory,
+                                  "compiled")) {
     return 1;
   }
 

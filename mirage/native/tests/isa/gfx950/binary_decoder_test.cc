@@ -7962,11 +7962,17 @@ int main() {
     return 1;
   }
 
-  const std::array<std::string_view, 12> kAdditionalFlatMemoryOpcodes = {
-      "FLAT_LOAD_UBYTE",  "FLAT_LOAD_SBYTE",   "FLAT_LOAD_USHORT",
-      "FLAT_LOAD_SSHORT", "FLAT_LOAD_DWORDX2", "FLAT_LOAD_DWORDX3",
-      "FLAT_LOAD_DWORDX4","FLAT_STORE_BYTE",   "FLAT_STORE_SHORT",
-      "FLAT_STORE_DWORDX2","FLAT_STORE_DWORDX3","FLAT_STORE_DWORDX4",
+  const std::array<std::string_view, 20> kAdditionalFlatMemoryOpcodes = {
+      "FLAT_LOAD_UBYTE",        "FLAT_LOAD_UBYTE_D16",
+      "FLAT_LOAD_UBYTE_D16_HI", "FLAT_LOAD_SBYTE",
+      "FLAT_LOAD_SBYTE_D16",    "FLAT_LOAD_SBYTE_D16_HI",
+      "FLAT_LOAD_USHORT",       "FLAT_LOAD_SSHORT",
+      "FLAT_LOAD_SHORT_D16",    "FLAT_LOAD_SHORT_D16_HI",
+      "FLAT_LOAD_DWORDX2",      "FLAT_LOAD_DWORDX3",
+      "FLAT_LOAD_DWORDX4",      "FLAT_STORE_BYTE",
+      "FLAT_STORE_BYTE_D16_HI", "FLAT_STORE_SHORT",
+      "FLAT_STORE_SHORT_D16_HI","FLAT_STORE_DWORDX2",
+      "FLAT_STORE_DWORDX3",     "FLAT_STORE_DWORDX4",
   };
   for (std::string_view opcode_name : kAdditionalFlatMemoryOpcodes) {
     const std::optional<std::uint32_t> opcode_value =
@@ -8015,10 +8021,15 @@ int main() {
     }
   }
 
-  const std::array<std::string_view, 8> kAdditionalGlobalMemoryOpcodes = {
-      "GLOBAL_LOAD_UBYTE", "GLOBAL_LOAD_SBYTE",   "GLOBAL_LOAD_USHORT",
-      "GLOBAL_LOAD_SSHORT","GLOBAL_LOAD_DWORDX3", "GLOBAL_STORE_BYTE",
-      "GLOBAL_STORE_SHORT","GLOBAL_STORE_DWORDX3",
+  const std::array<std::string_view, 16> kAdditionalGlobalMemoryOpcodes = {
+      "GLOBAL_LOAD_UBYTE",        "GLOBAL_LOAD_UBYTE_D16",
+      "GLOBAL_LOAD_UBYTE_D16_HI", "GLOBAL_LOAD_SBYTE",
+      "GLOBAL_LOAD_SBYTE_D16",    "GLOBAL_LOAD_SBYTE_D16_HI",
+      "GLOBAL_LOAD_USHORT",       "GLOBAL_LOAD_SSHORT",
+      "GLOBAL_LOAD_SHORT_D16",    "GLOBAL_LOAD_SHORT_D16_HI",
+      "GLOBAL_LOAD_DWORDX3",      "GLOBAL_STORE_BYTE",
+      "GLOBAL_STORE_BYTE_D16_HI", "GLOBAL_STORE_SHORT",
+      "GLOBAL_STORE_SHORT_D16_HI","GLOBAL_STORE_DWORDX3",
   };
   for (std::string_view opcode_name : kAdditionalGlobalMemoryOpcodes) {
     const std::optional<std::uint32_t> opcode_value =

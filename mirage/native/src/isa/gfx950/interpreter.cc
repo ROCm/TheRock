@@ -1380,20 +1380,38 @@ bool IsVectorCompareClass64Opcode(CompiledOpcode opcode) {
 
 bool IsFlatVectorMemoryOpcode(std::string_view opcode) {
   return opcode == "FLAT_LOAD_UBYTE" || opcode == "FLAT_LOAD_SBYTE" ||
+         opcode == "FLAT_LOAD_UBYTE_D16" ||
+         opcode == "FLAT_LOAD_UBYTE_D16_HI" ||
+         opcode == "FLAT_LOAD_SBYTE_D16" ||
+         opcode == "FLAT_LOAD_SBYTE_D16_HI" ||
          opcode == "FLAT_LOAD_USHORT" || opcode == "FLAT_LOAD_SSHORT" ||
+         opcode == "FLAT_LOAD_SHORT_D16" ||
+         opcode == "FLAT_LOAD_SHORT_D16_HI" ||
          opcode == "FLAT_LOAD_DWORD" || opcode == "FLAT_LOAD_DWORDX2" ||
          opcode == "FLAT_LOAD_DWORDX3" || opcode == "FLAT_LOAD_DWORDX4" ||
-         opcode == "FLAT_STORE_BYTE" || opcode == "FLAT_STORE_SHORT" ||
+         opcode == "FLAT_STORE_BYTE" ||
+         opcode == "FLAT_STORE_BYTE_D16_HI" ||
+         opcode == "FLAT_STORE_SHORT" ||
+         opcode == "FLAT_STORE_SHORT_D16_HI" ||
          opcode == "FLAT_STORE_DWORD" || opcode == "FLAT_STORE_DWORDX2" ||
          opcode == "FLAT_STORE_DWORDX3" || opcode == "FLAT_STORE_DWORDX4";
 }
 
 bool IsGlobalVectorMemoryOpcode(std::string_view opcode) {
   return opcode == "GLOBAL_LOAD_UBYTE" || opcode == "GLOBAL_LOAD_SBYTE" ||
+         opcode == "GLOBAL_LOAD_UBYTE_D16" ||
+         opcode == "GLOBAL_LOAD_UBYTE_D16_HI" ||
+         opcode == "GLOBAL_LOAD_SBYTE_D16" ||
+         opcode == "GLOBAL_LOAD_SBYTE_D16_HI" ||
          opcode == "GLOBAL_LOAD_USHORT" || opcode == "GLOBAL_LOAD_SSHORT" ||
+         opcode == "GLOBAL_LOAD_SHORT_D16" ||
+         opcode == "GLOBAL_LOAD_SHORT_D16_HI" ||
          opcode == "GLOBAL_LOAD_DWORD" || opcode == "GLOBAL_LOAD_DWORDX2" ||
          opcode == "GLOBAL_LOAD_DWORDX3" || opcode == "GLOBAL_LOAD_DWORDX4" ||
-         opcode == "GLOBAL_STORE_BYTE" || opcode == "GLOBAL_STORE_SHORT" ||
+         opcode == "GLOBAL_STORE_BYTE" ||
+         opcode == "GLOBAL_STORE_BYTE_D16_HI" ||
+         opcode == "GLOBAL_STORE_SHORT" ||
+         opcode == "GLOBAL_STORE_SHORT_D16_HI" ||
          opcode == "GLOBAL_STORE_DWORD" || opcode == "GLOBAL_STORE_DWORDX2" ||
          opcode == "GLOBAL_STORE_DWORDX3" || opcode == "GLOBAL_STORE_DWORDX4";
 }
@@ -2950,27 +2968,133 @@ bool IsGlobalAtomicOpcode(std::string_view opcode) {
 
 bool IsVectorMemoryStoreOpcode(std::string_view opcode) {
   return opcode == "FLAT_STORE_BYTE" || opcode == "FLAT_STORE_SHORT" ||
+         opcode == "FLAT_STORE_BYTE_D16_HI" ||
+         opcode == "FLAT_STORE_SHORT_D16_HI" ||
          opcode == "FLAT_STORE_DWORD" || opcode == "FLAT_STORE_DWORDX2" ||
          opcode == "FLAT_STORE_DWORDX3" || opcode == "FLAT_STORE_DWORDX4" ||
          opcode == "GLOBAL_STORE_BYTE" || opcode == "GLOBAL_STORE_SHORT" ||
+         opcode == "GLOBAL_STORE_BYTE_D16_HI" ||
+         opcode == "GLOBAL_STORE_SHORT_D16_HI" ||
          opcode == "GLOBAL_STORE_DWORD" || opcode == "GLOBAL_STORE_DWORDX2" ||
          opcode == "GLOBAL_STORE_DWORDX3" || opcode == "GLOBAL_STORE_DWORDX4";
 }
 
 bool IsVectorMemoryLoadOpcode(std::string_view opcode) {
   return opcode == "FLAT_LOAD_UBYTE" || opcode == "FLAT_LOAD_SBYTE" ||
+         opcode == "FLAT_LOAD_UBYTE_D16" ||
+         opcode == "FLAT_LOAD_UBYTE_D16_HI" ||
+         opcode == "FLAT_LOAD_SBYTE_D16" ||
+         opcode == "FLAT_LOAD_SBYTE_D16_HI" ||
          opcode == "FLAT_LOAD_USHORT" || opcode == "FLAT_LOAD_SSHORT" ||
+         opcode == "FLAT_LOAD_SHORT_D16" ||
+         opcode == "FLAT_LOAD_SHORT_D16_HI" ||
          opcode == "FLAT_LOAD_DWORD" || opcode == "FLAT_LOAD_DWORDX2" ||
          opcode == "FLAT_LOAD_DWORDX3" || opcode == "FLAT_LOAD_DWORDX4" ||
          opcode == "GLOBAL_LOAD_UBYTE" || opcode == "GLOBAL_LOAD_SBYTE" ||
+         opcode == "GLOBAL_LOAD_UBYTE_D16" ||
+         opcode == "GLOBAL_LOAD_UBYTE_D16_HI" ||
+         opcode == "GLOBAL_LOAD_SBYTE_D16" ||
+         opcode == "GLOBAL_LOAD_SBYTE_D16_HI" ||
          opcode == "GLOBAL_LOAD_USHORT" || opcode == "GLOBAL_LOAD_SSHORT" ||
+         opcode == "GLOBAL_LOAD_SHORT_D16" ||
+         opcode == "GLOBAL_LOAD_SHORT_D16_HI" ||
          opcode == "GLOBAL_LOAD_DWORD" || opcode == "GLOBAL_LOAD_DWORDX2" ||
          opcode == "GLOBAL_LOAD_DWORDX3" || opcode == "GLOBAL_LOAD_DWORDX4";
 }
 
 bool IsSignedVectorMemoryLoadOpcode(std::string_view opcode) {
   return opcode == "FLAT_LOAD_SBYTE" || opcode == "FLAT_LOAD_SSHORT" ||
-         opcode == "GLOBAL_LOAD_SBYTE" || opcode == "GLOBAL_LOAD_SSHORT";
+         opcode == "FLAT_LOAD_SBYTE_D16" ||
+         opcode == "FLAT_LOAD_SBYTE_D16_HI" ||
+         opcode == "GLOBAL_LOAD_SBYTE" || opcode == "GLOBAL_LOAD_SSHORT" ||
+         opcode == "GLOBAL_LOAD_SBYTE_D16" ||
+         opcode == "GLOBAL_LOAD_SBYTE_D16_HI";
+}
+
+DsD16AccessKind GetVectorMemoryD16AccessKind(std::string_view opcode) {
+  if (opcode == "FLAT_LOAD_UBYTE_D16" || opcode == "FLAT_LOAD_SBYTE_D16" ||
+      opcode == "GLOBAL_LOAD_UBYTE_D16" ||
+      opcode == "GLOBAL_LOAD_SBYTE_D16") {
+    return DsD16AccessKind::kByteLo;
+  }
+  if (opcode == "FLAT_LOAD_UBYTE_D16_HI" ||
+      opcode == "FLAT_LOAD_SBYTE_D16_HI" ||
+      opcode == "FLAT_STORE_BYTE_D16_HI" ||
+      opcode == "GLOBAL_LOAD_UBYTE_D16_HI" ||
+      opcode == "GLOBAL_LOAD_SBYTE_D16_HI" ||
+      opcode == "GLOBAL_STORE_BYTE_D16_HI") {
+    return DsD16AccessKind::kByteHi;
+  }
+  if (opcode == "FLAT_LOAD_SHORT_D16" || opcode == "GLOBAL_LOAD_SHORT_D16") {
+    return DsD16AccessKind::kHalfLo;
+  }
+  if (opcode == "FLAT_LOAD_SHORT_D16_HI" ||
+      opcode == "FLAT_STORE_SHORT_D16_HI" ||
+      opcode == "GLOBAL_LOAD_SHORT_D16_HI" ||
+      opcode == "GLOBAL_STORE_SHORT_D16_HI") {
+    return DsD16AccessKind::kHalfHi;
+  }
+  return DsD16AccessKind::kNone;
+}
+
+std::uint32_t PackVectorMemoryD16LoadValue(std::uint32_t value,
+                                           DsD16AccessKind access_kind) {
+  const std::uint32_t packed_value = value & 0xffffu;
+  switch (access_kind) {
+    case DsD16AccessKind::kByteLo:
+    case DsD16AccessKind::kHalfLo:
+      return packed_value;
+    case DsD16AccessKind::kByteHi:
+    case DsD16AccessKind::kHalfHi:
+      return packed_value << 16;
+    case DsD16AccessKind::kNone:
+      return value;
+  }
+  return value;
+}
+
+std::uint32_t ExtractVectorMemoryD16StoreValue(std::uint32_t value,
+                                               DsD16AccessKind access_kind) {
+  switch (access_kind) {
+    case DsD16AccessKind::kByteLo:
+      return value & 0xffu;
+    case DsD16AccessKind::kByteHi:
+      return (value >> 16) & 0xffu;
+    case DsD16AccessKind::kHalfLo:
+      return value & 0xffffu;
+    case DsD16AccessKind::kHalfHi:
+      return (value >> 16) & 0xffffu;
+    case DsD16AccessKind::kNone:
+      return value;
+  }
+  return value;
+}
+
+DsD16AccessKind GetVectorMemoryD16AccessKind(CompiledOpcode opcode) {
+  switch (opcode) {
+    case CompiledOpcode::kFlatLoadUByteD16:
+    case CompiledOpcode::kFlatLoadSByteD16:
+    case CompiledOpcode::kGlobalLoadUByteD16:
+    case CompiledOpcode::kGlobalLoadSByteD16:
+      return DsD16AccessKind::kByteLo;
+    case CompiledOpcode::kFlatLoadUByteD16Hi:
+    case CompiledOpcode::kFlatLoadSByteD16Hi:
+    case CompiledOpcode::kFlatStoreByteD16Hi:
+    case CompiledOpcode::kGlobalLoadUByteD16Hi:
+    case CompiledOpcode::kGlobalLoadSByteD16Hi:
+    case CompiledOpcode::kGlobalStoreByteD16Hi:
+      return DsD16AccessKind::kByteHi;
+    case CompiledOpcode::kFlatLoadShortD16:
+    case CompiledOpcode::kGlobalLoadShortD16:
+      return DsD16AccessKind::kHalfLo;
+    case CompiledOpcode::kFlatLoadShortD16Hi:
+    case CompiledOpcode::kFlatStoreShortD16Hi:
+    case CompiledOpcode::kGlobalLoadShortD16Hi:
+    case CompiledOpcode::kGlobalStoreShortD16Hi:
+      return DsD16AccessKind::kHalfHi;
+    default:
+      return DsD16AccessKind::kNone;
+  }
 }
 
 std::uint32_t ReverseBits32(std::uint32_t value) {
@@ -3339,13 +3463,26 @@ std::uint8_t GetVectorMemoryRegisterDwordCount(std::string_view opcode) {
 
 std::uint8_t GetVectorMemoryElementSizeBytes(std::string_view opcode) {
   if (opcode == "FLAT_LOAD_UBYTE" || opcode == "FLAT_LOAD_SBYTE" ||
-      opcode == "FLAT_STORE_BYTE" || opcode == "GLOBAL_LOAD_UBYTE" ||
-      opcode == "GLOBAL_LOAD_SBYTE" || opcode == "GLOBAL_STORE_BYTE") {
+      opcode == "FLAT_LOAD_UBYTE_D16" || opcode == "FLAT_LOAD_UBYTE_D16_HI" ||
+      opcode == "FLAT_LOAD_SBYTE_D16" || opcode == "FLAT_LOAD_SBYTE_D16_HI" ||
+      opcode == "FLAT_STORE_BYTE" || opcode == "FLAT_STORE_BYTE_D16_HI" ||
+      opcode == "GLOBAL_LOAD_UBYTE" || opcode == "GLOBAL_LOAD_SBYTE" ||
+      opcode == "GLOBAL_LOAD_UBYTE_D16" ||
+      opcode == "GLOBAL_LOAD_UBYTE_D16_HI" ||
+      opcode == "GLOBAL_LOAD_SBYTE_D16" ||
+      opcode == "GLOBAL_LOAD_SBYTE_D16_HI" ||
+      opcode == "GLOBAL_STORE_BYTE" ||
+      opcode == "GLOBAL_STORE_BYTE_D16_HI") {
     return 1;
   }
   if (opcode == "FLAT_LOAD_USHORT" || opcode == "FLAT_LOAD_SSHORT" ||
-      opcode == "FLAT_STORE_SHORT" || opcode == "GLOBAL_LOAD_USHORT" ||
-      opcode == "GLOBAL_LOAD_SSHORT" || opcode == "GLOBAL_STORE_SHORT") {
+      opcode == "FLAT_LOAD_SHORT_D16" || opcode == "FLAT_LOAD_SHORT_D16_HI" ||
+      opcode == "FLAT_STORE_SHORT" || opcode == "FLAT_STORE_SHORT_D16_HI" ||
+      opcode == "GLOBAL_LOAD_USHORT" || opcode == "GLOBAL_LOAD_SSHORT" ||
+      opcode == "GLOBAL_LOAD_SHORT_D16" ||
+      opcode == "GLOBAL_LOAD_SHORT_D16_HI" ||
+      opcode == "GLOBAL_STORE_SHORT" ||
+      opcode == "GLOBAL_STORE_SHORT_D16_HI") {
     return 2;
   }
   return 4;
@@ -6757,14 +6894,50 @@ bool TryCompileOpcode(std::string_view opcode,
                             false, true, false, 1, 1);
     return true;
   }
+  if (opcode == "FLAT_LOAD_UBYTE_D16") {
+    SetVectorMemoryMetadata(compiled_instruction,
+                            CompiledOpcode::kFlatLoadUByteD16, false, true,
+                            false, 1, 1);
+    return true;
+  }
+  if (opcode == "FLAT_LOAD_UBYTE_D16_HI") {
+    SetVectorMemoryMetadata(compiled_instruction,
+                            CompiledOpcode::kFlatLoadUByteD16Hi, false, true,
+                            false, 1, 1);
+    return true;
+  }
   if (opcode == "FLAT_LOAD_SBYTE") {
     SetVectorMemoryMetadata(compiled_instruction, CompiledOpcode::kFlatLoadSByte,
                             false, true, true, 1, 1);
     return true;
   }
+  if (opcode == "FLAT_LOAD_SBYTE_D16") {
+    SetVectorMemoryMetadata(compiled_instruction,
+                            CompiledOpcode::kFlatLoadSByteD16, false, true,
+                            true, 1, 1);
+    return true;
+  }
+  if (opcode == "FLAT_LOAD_SBYTE_D16_HI") {
+    SetVectorMemoryMetadata(compiled_instruction,
+                            CompiledOpcode::kFlatLoadSByteD16Hi, false, true,
+                            true, 1, 1);
+    return true;
+  }
   if (opcode == "FLAT_LOAD_USHORT") {
     SetVectorMemoryMetadata(compiled_instruction, CompiledOpcode::kFlatLoadUShort,
                             false, true, false, 1, 2);
+    return true;
+  }
+  if (opcode == "FLAT_LOAD_SHORT_D16") {
+    SetVectorMemoryMetadata(compiled_instruction,
+                            CompiledOpcode::kFlatLoadShortD16, false, true,
+                            false, 1, 2);
+    return true;
+  }
+  if (opcode == "FLAT_LOAD_SHORT_D16_HI") {
+    SetVectorMemoryMetadata(compiled_instruction,
+                            CompiledOpcode::kFlatLoadShortD16Hi, false, true,
+                            false, 1, 2);
     return true;
   }
   if (opcode == "FLAT_LOAD_SSHORT") {
@@ -6797,9 +6970,21 @@ bool TryCompileOpcode(std::string_view opcode,
                             false, false, false, 1, 1);
     return true;
   }
+  if (opcode == "FLAT_STORE_BYTE_D16_HI") {
+    SetVectorMemoryMetadata(compiled_instruction,
+                            CompiledOpcode::kFlatStoreByteD16Hi, false, false,
+                            false, 1, 1);
+    return true;
+  }
   if (opcode == "FLAT_STORE_SHORT") {
     SetVectorMemoryMetadata(compiled_instruction, CompiledOpcode::kFlatStoreShort,
                             false, false, false, 1, 2);
+    return true;
+  }
+  if (opcode == "FLAT_STORE_SHORT_D16_HI") {
+    SetVectorMemoryMetadata(compiled_instruction,
+                            CompiledOpcode::kFlatStoreShortD16Hi, false, false,
+                            false, 1, 2);
     return true;
   }
   if (opcode == "FLAT_STORE_DWORD") {
@@ -6827,14 +7012,50 @@ bool TryCompileOpcode(std::string_view opcode,
                             true, true, false, 1, 1);
     return true;
   }
+  if (opcode == "GLOBAL_LOAD_UBYTE_D16") {
+    SetVectorMemoryMetadata(compiled_instruction,
+                            CompiledOpcode::kGlobalLoadUByteD16, true, true,
+                            false, 1, 1);
+    return true;
+  }
+  if (opcode == "GLOBAL_LOAD_UBYTE_D16_HI") {
+    SetVectorMemoryMetadata(compiled_instruction,
+                            CompiledOpcode::kGlobalLoadUByteD16Hi, true, true,
+                            false, 1, 1);
+    return true;
+  }
   if (opcode == "GLOBAL_LOAD_SBYTE") {
     SetVectorMemoryMetadata(compiled_instruction, CompiledOpcode::kGlobalLoadSByte,
                             true, true, true, 1, 1);
     return true;
   }
+  if (opcode == "GLOBAL_LOAD_SBYTE_D16") {
+    SetVectorMemoryMetadata(compiled_instruction,
+                            CompiledOpcode::kGlobalLoadSByteD16, true, true,
+                            true, 1, 1);
+    return true;
+  }
+  if (opcode == "GLOBAL_LOAD_SBYTE_D16_HI") {
+    SetVectorMemoryMetadata(compiled_instruction,
+                            CompiledOpcode::kGlobalLoadSByteD16Hi, true, true,
+                            true, 1, 1);
+    return true;
+  }
   if (opcode == "GLOBAL_LOAD_USHORT") {
     SetVectorMemoryMetadata(compiled_instruction, CompiledOpcode::kGlobalLoadUShort,
                             true, true, false, 1, 2);
+    return true;
+  }
+  if (opcode == "GLOBAL_LOAD_SHORT_D16") {
+    SetVectorMemoryMetadata(compiled_instruction,
+                            CompiledOpcode::kGlobalLoadShortD16, true, true,
+                            false, 1, 2);
+    return true;
+  }
+  if (opcode == "GLOBAL_LOAD_SHORT_D16_HI") {
+    SetVectorMemoryMetadata(compiled_instruction,
+                            CompiledOpcode::kGlobalLoadShortD16Hi, true, true,
+                            false, 1, 2);
     return true;
   }
   if (opcode == "GLOBAL_LOAD_SSHORT") {
@@ -6867,9 +7088,21 @@ bool TryCompileOpcode(std::string_view opcode,
                             true, false, false, 1, 1);
     return true;
   }
+  if (opcode == "GLOBAL_STORE_BYTE_D16_HI") {
+    SetVectorMemoryMetadata(compiled_instruction,
+                            CompiledOpcode::kGlobalStoreByteD16Hi, true, false,
+                            false, 1, 1);
+    return true;
+  }
   if (opcode == "GLOBAL_STORE_SHORT") {
     SetVectorMemoryMetadata(compiled_instruction, CompiledOpcode::kGlobalStoreShort,
                             true, false, false, 1, 2);
+    return true;
+  }
+  if (opcode == "GLOBAL_STORE_SHORT_D16_HI") {
+    SetVectorMemoryMetadata(compiled_instruction,
+                            CompiledOpcode::kGlobalStoreShortD16Hi, true, false,
+                            false, 1, 2);
     return true;
   }
   if (opcode == "GLOBAL_STORE_DWORD") {
@@ -7835,29 +8068,45 @@ bool Gfx950Interpreter::ExecuteInstruction(const CompiledInstruction& instructio
     case CompiledOpcode::kVCmpxTU64:
       return ExecuteVectorCompare(instruction, state, error_message);
     case CompiledOpcode::kFlatLoadUByte:
+    case CompiledOpcode::kFlatLoadUByteD16:
+    case CompiledOpcode::kFlatLoadUByteD16Hi:
     case CompiledOpcode::kFlatLoadSByte:
+    case CompiledOpcode::kFlatLoadSByteD16:
+    case CompiledOpcode::kFlatLoadSByteD16Hi:
     case CompiledOpcode::kFlatLoadUShort:
+    case CompiledOpcode::kFlatLoadShortD16:
+    case CompiledOpcode::kFlatLoadShortD16Hi:
     case CompiledOpcode::kFlatLoadSShort:
     case CompiledOpcode::kFlatLoadDword:
     case CompiledOpcode::kFlatLoadDwordX2:
     case CompiledOpcode::kFlatLoadDwordX3:
     case CompiledOpcode::kFlatLoadDwordX4:
     case CompiledOpcode::kFlatStoreByte:
+    case CompiledOpcode::kFlatStoreByteD16Hi:
     case CompiledOpcode::kFlatStoreShort:
+    case CompiledOpcode::kFlatStoreShortD16Hi:
     case CompiledOpcode::kFlatStoreDword:
     case CompiledOpcode::kFlatStoreDwordX2:
     case CompiledOpcode::kFlatStoreDwordX3:
     case CompiledOpcode::kFlatStoreDwordX4:
     case CompiledOpcode::kGlobalLoadUByte:
+    case CompiledOpcode::kGlobalLoadUByteD16:
+    case CompiledOpcode::kGlobalLoadUByteD16Hi:
     case CompiledOpcode::kGlobalLoadSByte:
+    case CompiledOpcode::kGlobalLoadSByteD16:
+    case CompiledOpcode::kGlobalLoadSByteD16Hi:
     case CompiledOpcode::kGlobalLoadUShort:
+    case CompiledOpcode::kGlobalLoadShortD16:
+    case CompiledOpcode::kGlobalLoadShortD16Hi:
     case CompiledOpcode::kGlobalLoadSShort:
     case CompiledOpcode::kGlobalLoadDword:
     case CompiledOpcode::kGlobalLoadDwordX2:
     case CompiledOpcode::kGlobalLoadDwordX3:
     case CompiledOpcode::kGlobalLoadDwordX4:
     case CompiledOpcode::kGlobalStoreByte:
+    case CompiledOpcode::kGlobalStoreByteD16Hi:
     case CompiledOpcode::kGlobalStoreShort:
+    case CompiledOpcode::kGlobalStoreShortD16Hi:
     case CompiledOpcode::kGlobalStoreDword:
     case CompiledOpcode::kGlobalStoreDwordX2:
     case CompiledOpcode::kGlobalStoreDwordX3:
@@ -11526,6 +11775,8 @@ bool Gfx950Interpreter::ExecuteVectorMemory(const DecodedInstruction& instructio
                                             std::string* error_message) const {
   const bool is_global = IsGlobalVectorMemoryOpcode(instruction.opcode);
   const bool is_load = IsVectorMemoryLoadOpcode(instruction.opcode);
+  const DsD16AccessKind d16_access_kind =
+      GetVectorMemoryD16AccessKind(instruction.opcode);
   const std::uint8_t register_dword_count =
       GetVectorMemoryRegisterDwordCount(instruction.opcode);
   const std::uint8_t element_size_bytes =
@@ -11626,6 +11877,9 @@ bool Gfx950Interpreter::ExecuteVectorMemory(const DecodedInstruction& instructio
         } else if (!ReadMemoryU32(memory, element_address, &value, error_message)) {
           return false;
         }
+        if (d16_access_kind != DsD16AccessKind::kNone) {
+          value = PackVectorMemoryD16LoadValue(value, d16_access_kind);
+        }
 
         if (!WriteVectorOperand(element_operand, lane_index, value, state,
                                 error_message)) {
@@ -11634,10 +11888,13 @@ bool Gfx950Interpreter::ExecuteVectorMemory(const DecodedInstruction& instructio
         continue;
       }
 
-      const std::uint32_t value =
+      std::uint32_t value =
           ReadVectorOperand(element_operand, *state, lane_index, error_message);
       if (error_message != nullptr && !error_message->empty()) {
         return false;
+      }
+      if (d16_access_kind != DsD16AccessKind::kNone) {
+        value = ExtractVectorMemoryD16StoreValue(value, d16_access_kind);
       }
       if ((element_size_bytes == 1 &&
            !WriteMemoryU8(memory, element_address,
@@ -11660,6 +11917,8 @@ bool Gfx950Interpreter::ExecuteVectorMemory(const CompiledInstruction& instructi
                                             std::string* error_message) const {
   const bool is_global = instruction.IsGlobal();
   const bool is_load = instruction.IsLoad();
+  const DsD16AccessKind d16_access_kind =
+      GetVectorMemoryD16AccessKind(instruction.opcode);
   const std::uint8_t register_dword_count = instruction.register_dword_count;
   const std::uint8_t element_size_bytes = instruction.element_size_bytes;
   const std::uint8_t expected_operands = is_global ? 4 : 3;
@@ -11864,12 +12123,18 @@ bool Gfx950Interpreter::ExecuteVectorMemory(const CompiledInstruction& instructi
         } else if (!ReadMemoryU32(memory, element_address, &value, error_message)) {
           return false;
         }
+        if (d16_access_kind != DsD16AccessKind::kNone) {
+          value = PackVectorMemoryD16LoadValue(value, d16_access_kind);
+        }
 
         state->vgprs[element_reg][lane_index] = value;
         continue;
       }
 
-      const std::uint32_t value = state->vgprs[element_reg][lane_index];
+      std::uint32_t value = state->vgprs[element_reg][lane_index];
+      if (d16_access_kind != DsD16AccessKind::kNone) {
+        value = ExtractVectorMemoryD16StoreValue(value, d16_access_kind);
+      }
       if ((element_size_bytes == 1 &&
            !WriteMemoryU8(memory, element_address,
                           static_cast<std::uint8_t>(value), error_message)) ||

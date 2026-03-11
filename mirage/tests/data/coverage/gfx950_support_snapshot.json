@@ -2020,14 +2020,18 @@
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "FLAT_STORE_BYTE_D16_HI"
+      ],
       "instruction_name": "FLAT_STORE_BYTE_D16_HI",
       "measured_encodings": [
         "ENC_FLAT:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT:default"
+      ]
     },
     {
       "decode_measured": true,
@@ -2046,14 +2050,18 @@
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "FLAT_STORE_SHORT_D16_HI"
+      ],
       "instruction_name": "FLAT_STORE_SHORT_D16_HI",
       "measured_encodings": [
         "ENC_FLAT:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT:default"
+      ]
     },
     {
       "decode_measured": true,
@@ -2117,69 +2125,93 @@
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "FLAT_LOAD_UBYTE_D16"
+      ],
       "instruction_name": "FLAT_LOAD_UBYTE_D16",
       "measured_encodings": [
         "ENC_FLAT:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "FLAT_LOAD_UBYTE_D16_HI"
+      ],
       "instruction_name": "FLAT_LOAD_UBYTE_D16_HI",
       "measured_encodings": [
         "ENC_FLAT:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "FLAT_LOAD_SBYTE_D16"
+      ],
       "instruction_name": "FLAT_LOAD_SBYTE_D16",
       "measured_encodings": [
         "ENC_FLAT:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "FLAT_LOAD_SBYTE_D16_HI"
+      ],
       "instruction_name": "FLAT_LOAD_SBYTE_D16_HI",
       "measured_encodings": [
         "ENC_FLAT:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "FLAT_LOAD_SHORT_D16"
+      ],
       "instruction_name": "FLAT_LOAD_SHORT_D16",
       "measured_encodings": [
         "ENC_FLAT:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "FLAT_LOAD_SHORT_D16_HI"
+      ],
       "instruction_name": "FLAT_LOAD_SHORT_D16_HI",
       "measured_encodings": [
         "ENC_FLAT:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT:default"
+      ]
     },
     {
       "decode_measured": true,
@@ -2670,14 +2702,18 @@
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "GLOBAL_STORE_BYTE_D16_HI"
+      ],
       "instruction_name": "GLOBAL_STORE_BYTE_D16_HI",
       "measured_encodings": [
         "ENC_FLAT_GLBL:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT_GLBL:default"
+      ]
     },
     {
       "decode_measured": true,
@@ -2696,14 +2732,18 @@
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "GLOBAL_STORE_SHORT_D16_HI"
+      ],
       "instruction_name": "GLOBAL_STORE_SHORT_D16_HI",
       "measured_encodings": [
         "ENC_FLAT_GLBL:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT_GLBL:default"
+      ]
     },
     {
       "decode_measured": true,
@@ -2767,69 +2807,93 @@
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "GLOBAL_LOAD_UBYTE_D16"
+      ],
       "instruction_name": "GLOBAL_LOAD_UBYTE_D16",
       "measured_encodings": [
         "ENC_FLAT_GLBL:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT_GLBL:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "GLOBAL_LOAD_UBYTE_D16_HI"
+      ],
       "instruction_name": "GLOBAL_LOAD_UBYTE_D16_HI",
       "measured_encodings": [
         "ENC_FLAT_GLBL:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT_GLBL:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "GLOBAL_LOAD_SBYTE_D16"
+      ],
       "instruction_name": "GLOBAL_LOAD_SBYTE_D16",
       "measured_encodings": [
         "ENC_FLAT_GLBL:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT_GLBL:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "GLOBAL_LOAD_SBYTE_D16_HI"
+      ],
       "instruction_name": "GLOBAL_LOAD_SBYTE_D16_HI",
       "measured_encodings": [
         "ENC_FLAT_GLBL:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT_GLBL:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "GLOBAL_LOAD_SHORT_D16"
+      ],
       "instruction_name": "GLOBAL_LOAD_SHORT_D16",
       "measured_encodings": [
         "ENC_FLAT_GLBL:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT_GLBL:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "GLOBAL_LOAD_SHORT_D16_HI"
+      ],
       "instruction_name": "GLOBAL_LOAD_SHORT_D16_HI",
       "measured_encodings": [
         "ENC_FLAT_GLBL:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_FLAT_GLBL:default"
+      ]
     },
     {
       "decode_measured": true,
@@ -16358,11 +16422,11 @@
   ],
   "summary": {
     "decode_measured": 1014,
-    "decode_supported": 656,
-    "decode_supported_percent_measured": 0.646943,
-    "decode_supported_percent_total": 0.52818,
-    "semantic_supported": 633,
-    "semantic_supported_percent_total": 0.509662
+    "decode_supported": 672,
+    "decode_supported_percent_measured": 0.662722,
+    "decode_supported_percent_total": 0.541063,
+    "semantic_supported": 649,
+    "semantic_supported_percent_total": 0.522544
   },
   "unmeasured_encoding_families": [
     "ENC_FLAT_SCRATCH",
