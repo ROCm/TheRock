@@ -491,13 +491,15 @@ if(NOT WIN32)
   if(THEROCK_ENABLE_ROCM_BANDWIDTH_TEST)
     therock_cmake_subproject_declare(rocm-bandwidth-test
       USE_DIST_AMDGPU_TARGETS
-      EXTERNAL_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/rocm-bandwidth-test"
+      EXTERNAL_SOURCE_DIR "rocm-bandwidth-test"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocm-bandwidth-test"
       BACKGROUND_BUILD
       COMPILER_TOOLCHAIN
         "${_system_toolchain}"
       CMAKE_ARGS
         "-DCMAKE_VERBOSE_MAKEFILE=OFF"
+        "-DAMD_APP_ROCM_BUILD_PACKAGE=ON"
+        "-DAMD_WORK_BENCH_EXCLUDE_PLUGINS=tb"
       RUNTIME_DEPS
         ROCR-Runtime
       INTERFACE_LINK_DIRS

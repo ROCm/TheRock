@@ -437,7 +437,20 @@ def main(argv):
                     "third_party/llvm-project",
                     "third_party/torch-mlir",
                 ],
-            )
+            ),
+            (
+                "core/rocm-bandwidth-test",
+                [
+                    "deps/3rd_party/fmt",
+                    "deps/3rd_party/spdlog",
+                    "deps/3rd_party/json",
+                    "deps/3rd_party/CLI11",
+                    "deps/3rd_party/Catch2",
+                    "deps/3rd_party/boost",
+                    "deps/3rd_party/jthread/jthread",
+                    "deps/external/TransferBench",
+                ],
+            ),
         ],
         help="Specify which nested submodules to fetch (e.g., project1:nested_in_project1_1,nested_in_project1_2 project2:nested_in_project2)",
     )
