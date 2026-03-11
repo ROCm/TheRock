@@ -15,6 +15,7 @@ using mirage::sim::isa::gfx1250::FindStubDecoderRouteInfo;
 using mirage::sim::isa::gfx1250::GetStubDecoderEntrypointManifests;
 using mirage::sim::isa::gfx1250::GetStubExecutionDomainName;
 using mirage::sim::isa::gfx1250::GetStubOperandLayoutName;
+using mirage::sim::isa::gfx1250::GetStubOperandRoleName;
 using mirage::sim::isa::gfx1250::GetStubOpcodeShapeName;
 using mirage::sim::isa::gfx1250::GetStubDecoderRouteInfos;
 using mirage::sim::isa::gfx1250::StubDecodedInstruction;
@@ -23,6 +24,7 @@ using mirage::sim::isa::gfx1250::StubDecoderEntrypointManifest;
 using mirage::sim::isa::gfx1250::StubDecoderRoute;
 using mirage::sim::isa::gfx1250::StubExecutionDomain;
 using mirage::sim::isa::gfx1250::StubOperandLayoutKind;
+using mirage::sim::isa::gfx1250::StubOperandRole;
 using mirage::sim::isa::gfx1250::StubOpcodeShape;
 
 bool Expect(bool condition, const char* message) {
@@ -31,6 +33,20 @@ bool Expect(bool condition, const char* message) {
     return false;
   }
   return true;
+}
+
+bool ContainsRole(const StubDecodedInstruction& instruction,
+                  StubOperandRole role,
+                  std::uint32_t count,
+                  bool is_output) {
+  for (std::uint32_t i = 0; i < instruction.operand_roles.binding_count; ++i) {
+    const auto& binding = instruction.operand_roles.bindings[i];
+    if (binding.role == role && binding.count == count &&
+        binding.is_output == is_output) {
+      return true;
+    }
+  }
+  return false;
 }
 
 }  // namespace
@@ -76,6 +92,16 @@ int main() {
               "expected PK_ADD operand layout counts")) {
     return 1;
   }
+  if (!Expect(vop3p.operand_roles.binding_count == 3,
+              "expected PK_ADD operand role count")) {
+    return 1;
+  }
+  if (!Expect(ContainsRole(vop3p, StubOperandRole::kSource0, 1, false) &&
+                  ContainsRole(vop3p, StubOperandRole::kSource1, 1, false) &&
+                  ContainsRole(vop3p, StubOperandRole::kDestination, 1, true),
+              "expected PK_ADD operand roles")) {
+    return 1;
+  }
 
   const StubDecodedInstruction vop3p_fma = DecodeVop3pStub("V_PK_FMA_BF16");
   if (!Expect(vop3p_fma.opcode_shape == StubOpcodeShape::kVop3pPackedFma,
@@ -90,6 +116,10 @@ int main() {
   if (!Expect(vop3p_fma.operand_layout.source_count == 3 &&
                   vop3p_fma.operand_layout.destination_count == 1,
               "expected PK_FMA operand layout counts")) {
+    return 1;
+  }
+  if (!Expect(ContainsRole(vop3p_fma, StubOperandRole::kSource2, 1, false),
+              "expected PK_FMA source2 operand role")) {
     return 1;
   }
 
@@ -118,6 +148,11 @@ int main() {
               "expected WMMA operand layout counts")) {
     return 1;
   }
+  if (!Expect(ContainsRole(wmma, StubOperandRole::kAccumulator, 1, false) &&
+                  ContainsRole(wmma, StubOperandRole::kDestination, 1, true),
+              "expected WMMA operand roles")) {
+    return 1;
+  }
 
   const StubDecodedInstruction paired_scale =
       DecodeVop3pStub("V_WMMA_LD_SCALE_PAIRED_B32");
@@ -142,6 +177,12 @@ int main() {
   if (!Expect(paired_scale.operand_layout.has_scale_operand &&
                   paired_scale.operand_layout.has_paired_scale_operand,
               "expected paired WMMA scale-load operand flags")) {
+    return 1;
+  }
+  if (!Expect(
+          ContainsRole(paired_scale, StubOperandRole::kScale, 1, false) &&
+              ContainsRole(paired_scale, StubOperandRole::kPairedScale, 1, false),
+          "expected paired WMMA scale-load roles")) {
     return 1;
   }
 
@@ -174,6 +215,13 @@ int main() {
               "expected tensor-load operand layout flags")) {
     return 1;
   }
+  if (!Expect(
+          ContainsRole(tensor, StubOperandRole::kTensorDescriptor, 1, false) &&
+              ContainsRole(tensor, StubOperandRole::kTensorCoordinate, 1, false) &&
+              ContainsRole(tensor, StubOperandRole::kLdsDestination, 1, true),
+          "expected tensor-load operand roles")) {
+    return 1;
+  }
 
   const StubDecodedInstruction tensor_store =
       DecodeMimgTensorStub("TENSOR_STORE_FROM_LDS");
@@ -186,6 +234,13 @@ int main() {
                   tensor_store.operand_layout.touches_lds &&
                   tensor_store.operand_layout.is_store,
               "expected tensor-store operand layout flags")) {
+    return 1;
+  }
+  if (!Expect(
+          ContainsRole(tensor_store, StubOperandRole::kTensorDescriptor, 1, false) &&
+              ContainsRole(tensor_store, StubOperandRole::kTensorCoordinate, 1, false) &&
+              ContainsRole(tensor_store, StubOperandRole::kLdsSource, 1, false),
+          "expected tensor-store operand roles")) {
     return 1;
   }
 
@@ -207,8 +262,30 @@ int main() {
     return 1;
   }
   if (!Expect(vop1.operand_layout.layout_kind ==
-                  StubOperandLayoutKind::kUnknown,
-              "expected no explicit operand layout for V_CVT_F16_FP8 yet")) {
+                  StubOperandLayoutKind::kCvtF16Fp8,
+              "expected explicit operand layout for V_CVT_F16_FP8")) {
+    return 1;
+  }
+  if (!Expect(vop1.operand_layout.source_count == 1 &&
+                  vop1.operand_layout.destination_count == 1,
+              "expected V_CVT_F16_FP8 operand layout counts")) {
+    return 1;
+  }
+  if (!Expect(ContainsRole(vop1, StubOperandRole::kSource0, 1, false) &&
+                  ContainsRole(vop1, StubOperandRole::kDestination, 1, true),
+              "expected V_CVT_F16_FP8 operand roles")) {
+    return 1;
+  }
+
+  const StubDecodedInstruction vop1_f32 = DecodeVop1Stub("V_CVT_F32_FP8");
+  if (!Expect(vop1_f32.operand_layout.layout_kind ==
+                  StubOperandLayoutKind::kCvtF32Fp8,
+              "expected explicit operand layout for V_CVT_F32_FP8")) {
+    return 1;
+  }
+  if (!Expect(vop1_f32.operand_layout.source_count == 1 &&
+                  vop1_f32.operand_layout.destination_count == 1,
+              "expected V_CVT_F32_FP8 operand layout counts")) {
     return 1;
   }
 
@@ -245,8 +322,14 @@ int main() {
     return 1;
   }
   if (!Expect(sdst.operand_layout.layout_kind ==
-                  StubOperandLayoutKind::kUnknown,
-              "expected no explicit operand layout for V_DIV_SCALE_F64 yet")) {
+                  StubOperandLayoutKind::kVDivScaleF64,
+              "expected explicit operand layout for V_DIV_SCALE_F64")) {
+    return 1;
+  }
+  if (!Expect(sdst.operand_layout.source_count == 2 &&
+                  sdst.operand_layout.destination_count == 1 &&
+                  sdst.operand_layout.has_scale_operand,
+              "expected V_DIV_SCALE_F64 operand layout counts and flags")) {
     return 1;
   }
 
@@ -322,6 +405,11 @@ int main() {
   if (!Expect(GetStubOperandLayoutName(via_route_info.operand_layout.layout_kind) ==
                   "kWmmaF32_16x16x4_F32W32",
               "expected operand-layout helper to match WMMA route")) {
+    return 1;
+  }
+  if (!Expect(GetStubOperandRoleName(via_route_info.operand_roles.bindings[0].role) ==
+                  "kSource0",
+              "expected operand-role helper to match WMMA route")) {
     return 1;
   }
 

@@ -1,6 +1,7 @@
 #ifndef MIRAGE_SIM_ISA_GFX1250_STUB_DECODER_H_
 #define MIRAGE_SIM_ISA_GFX1250_STUB_DECODER_H_
 
+#include <array>
 #include <cstdint>
 #include <span>
 #include <string_view>
@@ -48,6 +49,9 @@ enum class StubOperandLayoutKind {
   kWmmaLdScalePairedB32,
   kTensorLoadToLds,
   kTensorStoreFromLds,
+  kCvtF16Fp8,
+  kCvtF32Fp8,
+  kVDivScaleF64,
 };
 
 struct StubOperandLayoutRecord {
@@ -60,6 +64,33 @@ struct StubOperandLayoutRecord {
   bool has_tensor_descriptor = false;
   bool touches_lds = false;
   bool is_store = false;
+};
+
+enum class StubOperandRole {
+  kUnknown,
+  kDestination,
+  kSource0,
+  kSource1,
+  kSource2,
+  kAccumulator,
+  kScale,
+  kPairedScale,
+  kTensorDescriptor,
+  kTensorCoordinate,
+  kLdsDestination,
+  kLdsSource,
+};
+
+struct StubOperandRoleBinding {
+  StubOperandRole role = StubOperandRole::kUnknown;
+  std::uint32_t count = 0;
+  bool is_output = false;
+  bool is_implicit = false;
+};
+
+struct StubOperandRoleRecord {
+  std::array<StubOperandRoleBinding, 6> bindings{};
+  std::uint32_t binding_count = 0;
 };
 
 struct StubDecodedInstruction {
@@ -81,6 +112,7 @@ struct StubDecodedInstruction {
   bool uses_scale_path = false;
   bool uses_paired_operands = false;
   StubOperandLayoutRecord operand_layout{};
+  StubOperandRoleRecord operand_roles{};
 };
 
 struct StubDecoderEntrypointManifest {
@@ -102,6 +134,7 @@ std::string_view GetStubExecutionDomainName(
     StubExecutionDomain execution_domain);
 std::string_view GetStubOperandLayoutName(
     StubOperandLayoutKind operand_layout_kind);
+std::string_view GetStubOperandRoleName(StubOperandRole operand_role);
 std::span<const StubDecoderEntrypointManifest> GetStubDecoderEntrypointManifests();
 const StubDecoderEntrypointManifest* FindStubDecoderEntrypointManifest(
     StubDecoderRoute route);

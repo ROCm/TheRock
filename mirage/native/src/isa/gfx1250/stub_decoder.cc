@@ -19,6 +19,20 @@ struct ClassifiedStubShape {
   bool uses_paired_operands = false;
 };
 
+StubOperandRoleRecord MakeOperandRoles(
+    std::initializer_list<StubOperandRoleBinding> bindings) {
+  StubOperandRoleRecord record;
+  std::uint32_t index = 0;
+  for (const StubOperandRoleBinding& binding : bindings) {
+    if (index >= record.bindings.size()) {
+      break;
+    }
+    record.bindings[index++] = binding;
+  }
+  record.binding_count = index;
+  return record;
+}
+
 StubOperandLayoutRecord ClassifyOperandLayout(std::string_view instruction_name) {
   if (instruction_name == "V_PK_ADD_BF16") {
     return {
@@ -96,6 +110,45 @@ StubOperandLayoutRecord ClassifyOperandLayout(std::string_view instruction_name)
         true,
         true,
         true,
+    };
+  }
+  if (instruction_name == "V_CVT_F16_FP8") {
+    return {
+        StubOperandLayoutKind::kCvtF16Fp8,
+        1,
+        1,
+        0,
+        false,
+        false,
+        false,
+        false,
+        false,
+    };
+  }
+  if (instruction_name == "V_CVT_F32_FP8") {
+    return {
+        StubOperandLayoutKind::kCvtF32Fp8,
+        1,
+        1,
+        0,
+        false,
+        false,
+        false,
+        false,
+        false,
+    };
+  }
+  if (instruction_name == "V_DIV_SCALE_F64") {
+    return {
+        StubOperandLayoutKind::kVDivScaleF64,
+        2,
+        1,
+        0,
+        true,
+        false,
+        false,
+        false,
+        false,
     };
   }
   return {};
@@ -258,6 +311,74 @@ ClassifiedStubShape ClassifyVop3SdstShape(std::string_view instruction_name) {
   return {};
 }
 
+StubOperandRoleRecord ClassifyOperandRoles(std::string_view instruction_name) {
+  if (instruction_name == "V_PK_ADD_BF16") {
+    return MakeOperandRoles({
+        {StubOperandRole::kSource0, 1, false, false},
+        {StubOperandRole::kSource1, 1, false, false},
+        {StubOperandRole::kDestination, 1, true, false},
+    });
+  }
+  if (instruction_name == "V_PK_FMA_BF16") {
+    return MakeOperandRoles({
+        {StubOperandRole::kSource0, 1, false, false},
+        {StubOperandRole::kSource1, 1, false, false},
+        {StubOperandRole::kSource2, 1, false, false},
+        {StubOperandRole::kDestination, 1, true, false},
+    });
+  }
+  if (instruction_name == "V_WMMA_F32_16X16X4_F32_w32") {
+    return MakeOperandRoles({
+        {StubOperandRole::kSource0, 1, false, false},
+        {StubOperandRole::kSource1, 1, false, false},
+        {StubOperandRole::kAccumulator, 1, false, false},
+        {StubOperandRole::kDestination, 1, true, false},
+    });
+  }
+  if (instruction_name == "V_WMMA_LD_SCALE_PAIRED_B32") {
+    return MakeOperandRoles({
+        {StubOperandRole::kSource0, 1, false, false},
+        {StubOperandRole::kScale, 1, false, false},
+        {StubOperandRole::kPairedScale, 1, false, false},
+        {StubOperandRole::kDestination, 1, true, false},
+    });
+  }
+  if (instruction_name == "TENSOR_LOAD_TO_LDS") {
+    return MakeOperandRoles({
+        {StubOperandRole::kTensorDescriptor, 1, false, false},
+        {StubOperandRole::kTensorCoordinate, 1, false, false},
+        {StubOperandRole::kLdsDestination, 1, true, false},
+    });
+  }
+  if (instruction_name == "TENSOR_STORE_FROM_LDS") {
+    return MakeOperandRoles({
+        {StubOperandRole::kTensorDescriptor, 1, false, false},
+        {StubOperandRole::kTensorCoordinate, 1, false, false},
+        {StubOperandRole::kLdsSource, 1, false, false},
+    });
+  }
+  if (instruction_name == "V_CVT_F16_FP8") {
+    return MakeOperandRoles({
+        {StubOperandRole::kSource0, 1, false, false},
+        {StubOperandRole::kDestination, 1, true, false},
+    });
+  }
+  if (instruction_name == "V_CVT_F32_FP8") {
+    return MakeOperandRoles({
+        {StubOperandRole::kSource0, 1, false, false},
+        {StubOperandRole::kDestination, 1, true, false},
+    });
+  }
+  if (instruction_name == "V_DIV_SCALE_F64") {
+    return MakeOperandRoles({
+        {StubOperandRole::kSource0, 1, false, false},
+        {StubOperandRole::kScale, 1, false, false},
+        {StubOperandRole::kDestination, 1, true, false},
+    });
+  }
+  return {};
+}
+
 ClassifiedStubShape ClassifyStubShape(
     StubDecoderRoute route,
     std::string_view instruction_name) {
@@ -283,6 +404,8 @@ StubDecodedInstruction BuildDecodedStub(
       ClassifyStubShape(route_info.route, route_info.instruction_name);
   const StubOperandLayoutRecord operand_layout =
       ClassifyOperandLayout(route_info.instruction_name);
+  const StubOperandRoleRecord operand_roles =
+      ClassifyOperandRoles(route_info.instruction_name);
   return {
       route_info.instruction_name,
       StubDecodeStatus::kDecodedStub,
@@ -302,6 +425,7 @@ StubDecodedInstruction BuildDecodedStub(
       classified_shape.uses_scale_path,
       classified_shape.uses_paired_operands,
       operand_layout,
+      operand_roles,
   };
 }
 
@@ -326,6 +450,7 @@ StubDecodedInstruction MakeUnsupportedInstruction(
       false,
       false,
       false,
+      {},
       {},
   };
 }
@@ -475,7 +600,43 @@ std::string_view GetStubOperandLayoutName(
       return "kTensorLoadToLds";
     case StubOperandLayoutKind::kTensorStoreFromLds:
       return "kTensorStoreFromLds";
+    case StubOperandLayoutKind::kCvtF16Fp8:
+      return "kCvtF16Fp8";
+    case StubOperandLayoutKind::kCvtF32Fp8:
+      return "kCvtF32Fp8";
+    case StubOperandLayoutKind::kVDivScaleF64:
+      return "kVDivScaleF64";
     case StubOperandLayoutKind::kUnknown:
+      break;
+  }
+  return "kUnknown";
+}
+
+std::string_view GetStubOperandRoleName(StubOperandRole operand_role) {
+  switch (operand_role) {
+    case StubOperandRole::kDestination:
+      return "kDestination";
+    case StubOperandRole::kSource0:
+      return "kSource0";
+    case StubOperandRole::kSource1:
+      return "kSource1";
+    case StubOperandRole::kSource2:
+      return "kSource2";
+    case StubOperandRole::kAccumulator:
+      return "kAccumulator";
+    case StubOperandRole::kScale:
+      return "kScale";
+    case StubOperandRole::kPairedScale:
+      return "kPairedScale";
+    case StubOperandRole::kTensorDescriptor:
+      return "kTensorDescriptor";
+    case StubOperandRole::kTensorCoordinate:
+      return "kTensorCoordinate";
+    case StubOperandRole::kLdsDestination:
+      return "kLdsDestination";
+    case StubOperandRole::kLdsSource:
+      return "kLdsSource";
+    case StubOperandRole::kUnknown:
       break;
   }
   return "kUnknown";

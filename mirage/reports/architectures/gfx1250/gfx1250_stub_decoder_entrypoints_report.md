@@ -14,6 +14,8 @@
   - execution-domain classification
   - scale/paired/tensor/accumulator flags
   - operand-layout records for first high-value seeds
+  - operand-role records for the first six high-value seeds
+  - extended role records for `V_CVT_F16_FP8`, `V_CVT_F32_FP8`, and `V_DIV_SCALE_F64`
 
 ## First Operand Layout Records
 
@@ -57,6 +59,82 @@
     - `has_tensor_descriptor`
     - `touches_lds`
     - `is_store`
+
+- `V_CVT_F16_FP8`
+  - Layout: `kCvtF16Fp8`
+  - Sources: `1`
+  - Destinations: `1`
+
+- `V_CVT_F32_FP8`
+  - Layout: `kCvtF32Fp8`
+  - Sources: `1`
+  - Destinations: `1`
+
+- `V_DIV_SCALE_F64`
+  - Layout: `kVDivScaleF64`
+  - Sources: `2`
+  - Destinations: `1`
+  - Flags:
+    - `has_scale_operand`
+
+## First Operand Role Records
+
+- `V_PK_ADD_BF16`
+  - Roles:
+    - `kSource0`
+    - `kSource1`
+    - `kDestination`
+
+- `V_PK_FMA_BF16`
+  - Roles:
+    - `kSource0`
+    - `kSource1`
+    - `kSource2`
+    - `kDestination`
+
+- `V_WMMA_F32_16X16X4_F32_w32`
+  - Roles:
+    - `kSource0`
+    - `kSource1`
+    - `kAccumulator`
+    - `kDestination`
+
+- `V_WMMA_LD_SCALE_PAIRED_B32`
+  - Roles:
+    - `kSource0`
+    - `kScale`
+    - `kPairedScale`
+    - `kDestination`
+
+- `TENSOR_LOAD_TO_LDS`
+  - Roles:
+    - `kTensorDescriptor`
+    - `kTensorCoordinate`
+    - `kLdsDestination`
+
+- `TENSOR_STORE_FROM_LDS`
+  - Roles:
+    - `kTensorDescriptor`
+    - `kTensorCoordinate`
+    - `kLdsSource`
+
+## Extended Operand Role Records
+
+- `V_CVT_F16_FP8`
+  - Roles:
+    - `kSource0`
+    - `kDestination`
+
+- `V_CVT_F32_FP8`
+  - Roles:
+    - `kSource0`
+    - `kDestination`
+
+- `V_DIV_SCALE_F64`
+  - Roles:
+    - `kSource0`
+    - `kScale`
+    - `kDestination`
 
 ## Entrypoint Coverage
 
@@ -119,6 +197,6 @@
 
 ## Recommended Next Slice
 
-- Turn these first operand-layout records into route-local operand-role records for the same six seeds.
-- Extend explicit operand layouts next to `V_CVT_F16_FP8`, `V_CVT_F32_FP8`, and `V_DIV_SCALE_F64`.
-- After that, widen the same layout model across deferred `kVop3` FP8/scale seeds.
+- Turn these first operand-role records into route-local operand-slot semantics for the same six seeds.
+- Extend explicit operand-role coverage next to `V_CVT_F16_FP8`, `V_CVT_F32_FP8`, and `V_DIV_SCALE_F64`.
+- After that, widen the same role model across deferred `kVop3` FP8/scale seeds.
