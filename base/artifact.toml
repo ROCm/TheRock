@@ -45,6 +45,9 @@ optional = "windows"
 optional = "windows"
 [components.run."base/rocprofiler-register/stage"]
 optional = "windows"
+exclude = [
+  "share/rocprofiler-register/tests/**",
+]
 [components.test."base/rocprofiler-register/stage"]
 optional = "windows"
 include = [
