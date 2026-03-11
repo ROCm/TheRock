@@ -111,6 +111,12 @@ def setup_env(pytorch_dir: Path, test_config: str, amdgpu_family: str = "") -> N
     else:
         os.environ["PYTHONPATH"] = test_dir
 
+    # Force update the PYTHONPATH to be part of the sys path.
+    # Otherwise our current python process that will run pytest will NOT
+    # find it and pytest will crash!
+    if test_dir not in sys.path:
+        sys.path.insert(0, test_dir)
+
 
 def print_env() -> None:
     title = " TheRock PyTorch Test Environment "
