@@ -187,6 +187,9 @@ optional = true
 include = [
   "**/*.cmake"
 ]
+exclude = [
+  "share/hipsparse/test/**",
+]
 [components.doc."math-libs/BLAS/hipSPARSE/stage"]
 optional = true
 [components.lib."math-libs/BLAS/hipSPARSE/stage"]
