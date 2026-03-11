@@ -15,8 +15,11 @@ Usage examples:
     # Run shard 2 of 4 with the "default" config:
     python run_pytorch_tests_full.py --shard 2 --num-shards 4
 
-    # Run only specific test files:
-    python run_pytorch_tests_full.py --include test_nn test_torch
+    # Run only the test_nn test file:
+    python run_pytorch_tests_full.py --include test_nn
+
+    # Run a few specific test files:
+    python run_pytorch_tests_full.py --include test_nn test_torch test_cuda
 
     # Run with the "distributed" config on a multi-GPU runner:
     python run_pytorch_tests_full.py --test-config distributed

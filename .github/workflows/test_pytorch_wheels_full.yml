@@ -142,10 +142,6 @@ jobs:
           git config fetch.parallel 10
           git config --global core.longpaths true
 
-      - name: Runner health status
-        run: |
-          ./build_tools/health_status.py
-
       # Here we checkout the same version of PyTorch that wheels were built from
       # so we have the right set of test source files. We _probably_ don't need
       # to run HIPIFY or apply any patches, so we skip those steps to save time.
@@ -173,6 +169,9 @@ jobs:
             --index-subdir=${{ inputs.amdgpu_family }} \
             --activate-in-future-github-actions-steps
 
+      # export_test_times.py must run from the PyTorch repo root with
+      # PYTHONPATH=. because it imports internal PyTorch modules (e.g.
+      # tools.stats.*) that expect the repo root on sys.path.
       - name: Export test times for sharding
         run: |
           pushd external-builds/pytorch/pytorch
@@ -183,6 +182,10 @@ jobs:
         run: |
           python -m pip install -r external-builds/pytorch/requirements-test.txt
           python -m pip install -r external-builds/pytorch/pytorch/.ci/docker/requirements-ci.txt
+
+      - name: Runner health status
+        run: |
+          ./build_tools/health_status.py
 
       - name: Run rocm-sdk sanity tests
         run: |
