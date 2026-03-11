@@ -24,24 +24,10 @@ logger = logging.getLogger(__name__)
 
 
 def _amd_smi_path() -> Path:
-    """Return the path to the `amd-smi` binary from `THEROCK_BIN_DIR`.
-
-    Skips the test via pytest if `THEROCK_BIN_DIR` is not set. Asserts that
-    the expected `amd-smi` binary exists at the resolved path.
-
-    Args:
-        None
-
-    Returns:
-        pathlib.Path: Path to the `amd-smi` binary.
-    """
     therock_bin_dir_env = os.getenv("THEROCK_BIN_DIR")
     if not therock_bin_dir_env:
         pytest.skip("THEROCK_BIN_DIR not set; skipping amdsmi tests")
 
-    # Resolve the path to an absolute canonical path to avoid cwd-dependent
-    # failures (e.g., if a prior step changes directory). Also check that the
-    # binary exists and is executable.
     amd_smi_bin_path = (Path(therock_bin_dir_env).expanduser().resolve()) / "amd-smi"
     assert amd_smi_bin_path.exists(), f"amd-smi not found at {amd_smi_bin_path}"
     assert os.access(
@@ -50,20 +36,9 @@ def _amd_smi_path() -> Path:
     return amd_smi_bin_path
 
 
-def _run_amd_smi(amd_smi_path: Path, modifiers: list[str]) -> tuple[int, str, str]:
-    """Run `amd-smi list` with the given `modifiers` and return (rc, stdout, stderr).
-
-    The function invokes the binary via subprocess.run and captures text
-    output for assertions in the tests.
-
-    Args:
-        amd_smi_path (pathlib.Path): Path to the `amd-smi` binary.
-        modifiers (list[str]): Arguments to pass after `amd-smi list`.
-
-    Returns:
-        tuple[int, str, str]: Return code, stdout text, stderr text.
-    """
-    cmd = [str(amd_smi_path), "list"] + modifiers
+def _run_amd_smi(subcommands: list[str]) -> tuple[int, str, str]:
+    amd_smi_bin = _amd_smi_path()
+    cmd = [str(amd_smi_bin)] + list(subcommands)
     logger.info("Running amd-smi: %s", cmd)
     proc = subprocess.run(cmd, capture_output=True, text=True)
     logger.info("amd-smi returncode=%s", proc.returncode)
@@ -73,7 +48,7 @@ def _run_amd_smi(amd_smi_path: Path, modifiers: list[str]) -> tuple[int, str, st
 
 
 def _parse_gpu_blocks(text_output: str) -> list[str]:
-    """Parse human-readable `amd-smi list` output into GPU text blocks.
+    """Parse human-readable `amd-smi` output into GPU text blocks.
 
     Returns a list where each element is the multiline block describing a
     single GPU. The parser looks for lines that start GPU markers like
@@ -81,7 +56,7 @@ def _parse_gpu_blocks(text_output: str) -> list[str]:
     GPU marker.
 
     Args:
-        output (str): The human-readable stdout from `amd-smi list`.
+        output (str): The human-readable stdout from `amd-smi`.
 
     Returns:
         list[str]: List of multiline GPU description blocks.
@@ -239,7 +214,6 @@ def test_amd_smi_list(mod_args, tmp_path):
         None
     """
     modifiers, expected_output_mode = mod_args
-    amd_smi_bin = _amd_smi_path()
 
     output_file_path = None
     invocation_args = list(modifiers)
@@ -249,7 +223,8 @@ def test_amd_smi_list(mod_args, tmp_path):
         invocation_args = [a for a in invocation_args if a != "--file"]
         invocation_args.extend(["--file", str(output_file_path)])
 
-    return_code, stdout_text, stderr_text = _run_amd_smi(amd_smi_bin, invocation_args)
+    # subcommands: run `amd-smi list` with the invocation args
+    return_code, stdout_text, stderr_text = _run_amd_smi(["list"] + invocation_args)
     assert (
         return_code == 0
     ), f"amd-smi failed rc={return_code} stderr={stderr_text} stdout={stdout_text}"

@@ -158,7 +158,7 @@ test_matrix = {
     },
     "amdsmi_cli": {
         "job_name": "amdsmi_cli",
-        "fetch_artifact_args": "--tests",
+        "fetch_artifact_args": "--base-only",
         "timeout_minutes": 15,
         "test_script": f"pytest {_get_script_path('test_amdsmi_cli.py')} -o log_cli=true --log-cli-level=INFO",
         "platform": ["linux"],
