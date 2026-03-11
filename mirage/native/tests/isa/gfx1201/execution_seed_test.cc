@@ -327,6 +327,54 @@ bool ExpectConversionSeedState(const mirage::sim::isa::WaveExecutionState& state
          !state.waiting_on_barrier && state.pc == 8u;
 }
 
+bool ExpectWideConversionSeedState(
+    const mirage::sim::isa::WaveExecutionState& state) {
+  std::uint32_t neg_two_point_five_low = 0;
+  std::uint32_t neg_two_point_five_high = 0;
+  SplitU64(DoubleBits(-2.5), &neg_two_point_five_low, &neg_two_point_five_high);
+  std::uint32_t neg_three_low = 0;
+  std::uint32_t neg_three_high = 0;
+  SplitU64(DoubleBits(-3.0), &neg_three_low, &neg_three_high);
+  std::uint32_t seven_low = 0;
+  std::uint32_t seven_high = 0;
+  SplitU64(DoubleBits(7.0), &seven_low, &seven_high);
+
+  return state.vgprs[20][0] == neg_two_point_five_low &&
+         state.vgprs[20][1] == neg_two_point_five_low &&
+         state.vgprs[20][2] == 0x20202020u &&
+         state.vgprs[20][3] == neg_two_point_five_low &&
+         state.vgprs[21][0] == neg_two_point_five_high &&
+         state.vgprs[21][1] == neg_two_point_five_high &&
+         state.vgprs[21][2] == 0x21212121u &&
+         state.vgprs[21][3] == neg_two_point_five_high &&
+         state.vgprs[22][0] == neg_three_low &&
+         state.vgprs[22][1] == neg_three_low &&
+         state.vgprs[22][2] == 0x22222222u &&
+         state.vgprs[22][3] == neg_three_low &&
+         state.vgprs[23][0] == neg_three_high &&
+         state.vgprs[23][1] == neg_three_high &&
+         state.vgprs[23][2] == 0x23232323u &&
+         state.vgprs[23][3] == neg_three_high &&
+         state.vgprs[24][0] == seven_low && state.vgprs[24][1] == seven_low &&
+         state.vgprs[24][2] == 0x24242424u &&
+         state.vgprs[24][3] == seven_low &&
+         state.vgprs[25][0] == seven_high &&
+         state.vgprs[25][1] == seven_high &&
+         state.vgprs[25][2] == 0x25252525u &&
+         state.vgprs[25][3] == seven_high &&
+         state.vgprs[4][0] == FloatBits(-2.5f) &&
+         state.vgprs[4][1] == FloatBits(-2.5f) &&
+         state.vgprs[4][2] == 0x44444444u &&
+         state.vgprs[4][3] == FloatBits(-2.5f) &&
+         state.vgprs[5][0] == 0xfffffffeu &&
+         state.vgprs[5][1] == 0xfffffffeu &&
+         state.vgprs[5][2] == 0x55555555u &&
+         state.vgprs[5][3] == 0xfffffffeu &&
+         state.vgprs[6][0] == 7u && state.vgprs[6][1] == 7u &&
+         state.vgprs[6][2] == 0x66666666u && state.vgprs[6][3] == 7u &&
+         state.halted && !state.waiting_on_barrier && state.pc == 9u;
+}
+
 bool ExpectRemainingCompareState(const mirage::sim::isa::WaveExecutionState& state) {
   return state.sgprs[40] == 0xffffffffu && state.sgprs[41] == 0xffffffffu &&
          state.sgprs[42] == 1u && state.sgprs[43] == 4u &&
@@ -916,6 +964,54 @@ int main() {
                                      OperandKind::kVgpr, 9u,
                                      OperandKind::kVgpr, 4u),
               "expected decoded V_CVT_I32_F32 operands")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_cvt_f64_i32_words{
+      MakeVop1(4u, 10u, 257u)};
+  if (!Expect(decoder.DecodeInstruction(v_cvt_f64_i32_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_CVT_F64_I32 decode success") ||
+      !Expect(ExpectUnaryInstruction(instruction, "V_CVT_F64_I32",
+                                     OperandKind::kVgpr, 10u,
+                                     OperandKind::kVgpr, 1u),
+              "expected decoded V_CVT_F64_I32 operands") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[0], OperandRole::kDestination,
+                  OperandSlotKind::kDestination,
+                  OperandValueClass::kVectorRegister, OperandAccess::kWrite,
+                  FragmentKind::kVector, 64u, 2u, false),
+              "expected V_CVT_F64_I32 destination descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[1], OperandRole::kSource0,
+                  OperandSlotKind::kSource0,
+                  OperandValueClass::kVectorRegister, OperandAccess::kRead,
+                  FragmentKind::kVector, 32u, 1u, false),
+              "expected V_CVT_F64_I32 source descriptor")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_cvt_f32_f64_words{
+      MakeVop1(15u, 11u, 120u)};
+  if (!Expect(decoder.DecodeInstruction(v_cvt_f32_f64_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_CVT_F32_F64 decode success") ||
+      !Expect(ExpectUnaryInstruction(instruction, "V_CVT_F32_F64",
+                                     OperandKind::kVgpr, 11u,
+                                     OperandKind::kSgpr, 120u),
+              "expected decoded V_CVT_F32_F64 operands") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[0], OperandRole::kDestination,
+                  OperandSlotKind::kDestination,
+                  OperandValueClass::kVectorRegister, OperandAccess::kWrite,
+                  FragmentKind::kVector, 32u, 1u, false),
+              "expected V_CVT_F32_F64 destination descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[1], OperandRole::kSource0,
+                  OperandSlotKind::kSource0,
+                  OperandValueClass::kScalarRegister, OperandAccess::kRead,
+                  FragmentKind::kScalar, 64u, 2u, false),
+              "expected V_CVT_F32_F64 source descriptor")) {
     return 1;
   }
 
@@ -1772,6 +1868,106 @@ int main() {
               "expected compiled conversion execution success") ||
       !Expect(ExpectConversionSeedState(compiled_conversion_state),
               "expected compiled conversion state")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 13> wide_conversion_words{
+      MakeVop1(1u, 1u, 255u),
+      FloatBits(-2.5f),
+      MakeVop1(16u, 20u, 257u),
+      MakeVop1(1u, 2u, 255u),
+      0xfffffffdu,
+      MakeVop1(4u, 22u, 258u),
+      MakeVop1(1u, 3u, 255u),
+      7u,
+      MakeVop1(22u, 24u, 259u),
+      MakeVop1(15u, 4u, 276u),
+      MakeVop1(3u, 5u, 276u),
+      MakeVop1(21u, 6u, 280u),
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> wide_conversion_program;
+  if (!Expect(decoder.DecodeProgram(wide_conversion_words,
+                                    &wide_conversion_program, &error_message),
+              "expected wide conversion program decode success") ||
+      !Expect(wide_conversion_program.size() == 10u,
+              "expected ten decoded wide conversion instructions") ||
+      !Expect(wide_conversion_program[1].opcode == "V_CVT_F64_F32",
+              "expected decoded V_CVT_F64_F32") ||
+      !Expect(wide_conversion_program[3].opcode == "V_CVT_F64_I32",
+              "expected decoded V_CVT_F64_I32") ||
+      !Expect(wide_conversion_program[5].opcode == "V_CVT_F64_U32",
+              "expected decoded V_CVT_F64_U32") ||
+      !Expect(wide_conversion_program[6].opcode == "V_CVT_F32_F64",
+              "expected decoded V_CVT_F32_F64") ||
+      !Expect(wide_conversion_program[7].opcode == "V_CVT_I32_F64",
+              "expected decoded V_CVT_I32_F64") ||
+      !Expect(wide_conversion_program[8].opcode == "V_CVT_U32_F64",
+              "expected decoded V_CVT_U32_F64")) {
+    return 1;
+  }
+
+  auto initialize_wide_conversion_state = [](WaveExecutionState* state) {
+    state->exec_mask = 0xbu;
+    state->vgprs[1][2] = 0x11111111u;
+    state->vgprs[2][2] = 0x12121212u;
+    state->vgprs[3][2] = 0x13131313u;
+    state->vgprs[20][2] = 0x20202020u;
+    state->vgprs[21][2] = 0x21212121u;
+    state->vgprs[22][2] = 0x22222222u;
+    state->vgprs[23][2] = 0x23232323u;
+    state->vgprs[24][2] = 0x24242424u;
+    state->vgprs[25][2] = 0x25252525u;
+    state->vgprs[4][2] = 0x44444444u;
+    state->vgprs[5][2] = 0x55555555u;
+    state->vgprs[6][2] = 0x66666666u;
+  };
+
+  WaveExecutionState decoded_wide_conversion_state;
+  initialize_wide_conversion_state(&decoded_wide_conversion_state);
+  if (!Expect(interpreter.ExecuteProgram(wide_conversion_program,
+                                         &decoded_wide_conversion_state,
+                                         &error_message),
+              "expected decoded wide conversion execution success") ||
+      !Expect(ExpectWideConversionSeedState(decoded_wide_conversion_state),
+              "expected decoded wide conversion state")) {
+    return 1;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_wide_conversion_program;
+  if (!Expect(interpreter.CompileProgram(wide_conversion_program,
+                                         &compiled_wide_conversion_program,
+                                         &error_message),
+              "expected compiled wide conversion program success") ||
+      !Expect(compiled_wide_conversion_program[1].opcode ==
+                  Gfx1201CompiledOpcode::kVCvtF64F32,
+              "expected compiled V_CVT_F64_F32 opcode") ||
+      !Expect(compiled_wide_conversion_program[3].opcode ==
+                  Gfx1201CompiledOpcode::kVCvtF64I32,
+              "expected compiled V_CVT_F64_I32 opcode") ||
+      !Expect(compiled_wide_conversion_program[5].opcode ==
+                  Gfx1201CompiledOpcode::kVCvtF64U32,
+              "expected compiled V_CVT_F64_U32 opcode") ||
+      !Expect(compiled_wide_conversion_program[6].opcode ==
+                  Gfx1201CompiledOpcode::kVCvtF32F64,
+              "expected compiled V_CVT_F32_F64 opcode") ||
+      !Expect(compiled_wide_conversion_program[7].opcode ==
+                  Gfx1201CompiledOpcode::kVCvtI32F64,
+              "expected compiled V_CVT_I32_F64 opcode") ||
+      !Expect(compiled_wide_conversion_program[8].opcode ==
+                  Gfx1201CompiledOpcode::kVCvtU32F64,
+              "expected compiled V_CVT_U32_F64 opcode")) {
+    return 1;
+  }
+
+  WaveExecutionState compiled_wide_conversion_state;
+  initialize_wide_conversion_state(&compiled_wide_conversion_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_wide_conversion_program,
+                                         &compiled_wide_conversion_state,
+                                         &error_message),
+              "expected compiled wide conversion execution success") ||
+      !Expect(ExpectWideConversionSeedState(compiled_wide_conversion_state),
+              "expected compiled wide conversion state")) {
     return 1;
   }
 
