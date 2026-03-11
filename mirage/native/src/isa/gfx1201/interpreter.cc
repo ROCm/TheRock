@@ -15,16 +15,22 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 9> kExecutableSeedOpcodes{{
+constexpr std::array<std::string_view, 15> kExecutableSeedOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_ADD_U32",
     "S_ADD_I32",
     "S_SUB_U32",
+    "S_CMP_EQ_U32",
+    "S_CMP_LG_U32",
+    "S_BRANCH",
+    "S_CBRANCH_SCC0",
+    "S_CBRANCH_SCC1",
     "S_MOV_B32",
     "S_MOVK_I32",
     "V_MOV_B32",
     "V_ADD_U32",
+    "V_SUB_U32",
 }};
 
 bool IsExecutableSeedOpcode(std::string_view opcode) {
@@ -49,6 +55,9 @@ std::string_view NormalizeExecutableSeedOpcode(std::string_view opcode) {
   if (opcode == "V_ADD_NC_U32") {
     return "V_ADD_U32";
   }
+  if (opcode == "V_SUB_NC_U32") {
+    return "V_SUB_U32";
+  }
   return opcode;
 }
 
@@ -65,6 +74,9 @@ std::string_view ImportedSupportOpcode(std::string_view opcode) {
   }
   if (normalized_opcode == "V_ADD_U32") {
     return "V_ADD_NC_U32";
+  }
+  if (normalized_opcode == "V_SUB_U32") {
+    return "V_SUB_NC_U32";
   }
   return normalized_opcode;
 }
@@ -136,6 +148,26 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
     *compiled_opcode = Gfx1201CompiledOpcode::kSSubU32;
     return true;
   }
+  if (opcode == "S_CMP_EQ_U32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kSCmpEqU32;
+    return true;
+  }
+  if (opcode == "S_CMP_LG_U32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kSCmpLgU32;
+    return true;
+  }
+  if (opcode == "S_BRANCH") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kSBranch;
+    return true;
+  }
+  if (opcode == "S_CBRANCH_SCC0") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kSCbranchScc0;
+    return true;
+  }
+  if (opcode == "S_CBRANCH_SCC1") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kSCbranchScc1;
+    return true;
+  }
   if (opcode == "S_MOV_B32") {
     *compiled_opcode = Gfx1201CompiledOpcode::kSMovB32;
     return true;
@@ -152,8 +184,36 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
     *compiled_opcode = Gfx1201CompiledOpcode::kVAddU32;
     return true;
   }
+  if (opcode == "V_SUB_U32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVSubU32;
+    return true;
+  }
   *compiled_opcode = Gfx1201CompiledOpcode::kUnknown;
   return false;
+}
+
+bool ApplyRelativeBranch(std::int32_t delta_in_instructions,
+                         WaveExecutionState* state,
+                         bool* pc_was_updated,
+                         std::string* error_message) {
+  const std::int64_t target_pc =
+      static_cast<std::int64_t>(state->pc) + 1 +
+      static_cast<std::int64_t>(delta_in_instructions);
+  if (target_pc < 0) {
+    if (error_message != nullptr) {
+      *error_message = "branch target underflow";
+    }
+    return false;
+  }
+
+  state->pc = static_cast<std::uint64_t>(target_pc);
+  if (pc_was_updated != nullptr) {
+    *pc_was_updated = true;
+  }
+  if (error_message != nullptr) {
+    error_message->clear();
+  }
+  return true;
 }
 
 bool ValidateOperandCount(const DecodedInstruction& instruction,
@@ -308,7 +368,12 @@ bool WriteVectorOperand(const InstructionOperand& operand,
 
 bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
                                    WaveExecutionState* state,
+                                   bool* pc_was_updated,
                                    std::string* error_message) {
+  if (pc_was_updated != nullptr) {
+    *pc_was_updated = false;
+  }
+
   if (instruction.opcode == "S_ENDPGM") {
     if (!ValidateOperandCount(instruction, 0, error_message)) {
       return false;
@@ -323,6 +388,40 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
 
   if (instruction.opcode == "S_NOP") {
     return ValidateOperandCount(instruction, 1, error_message);
+  }
+
+  if (instruction.opcode == "S_BRANCH" || instruction.opcode == "S_CBRANCH_SCC0" ||
+      instruction.opcode == "S_CBRANCH_SCC1") {
+    if (!ValidateOperandCount(instruction, 1, error_message)) {
+      return false;
+    }
+    if (instruction.operands[0].kind != OperandKind::kImm32) {
+      if (error_message != nullptr) {
+        *error_message = "expected branch immediate operand";
+      }
+      return false;
+    }
+    const std::int32_t delta =
+        static_cast<std::int32_t>(instruction.operands[0].imm32);
+    if (instruction.opcode == "S_BRANCH") {
+      return ApplyRelativeBranch(delta, state, pc_was_updated, error_message);
+    }
+    if (instruction.opcode == "S_CBRANCH_SCC0") {
+      if (!state->scc) {
+        return ApplyRelativeBranch(delta, state, pc_was_updated, error_message);
+      }
+      if (error_message != nullptr) {
+        error_message->clear();
+      }
+      return true;
+    }
+    if (state->scc) {
+      return ApplyRelativeBranch(delta, state, pc_was_updated, error_message);
+    }
+    if (error_message != nullptr) {
+      error_message->clear();
+    }
+    return true;
   }
 
   if (instruction.opcode == "S_ADD_U32" || instruction.opcode == "S_ADD_I32" ||
@@ -351,6 +450,28 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
       state->scc = wide > 0xffffffffULL;
     }
     return WriteScalarOperand(instruction.operands[0], result, state, error_message);
+  }
+
+  if (instruction.opcode == "S_CMP_EQ_U32" || instruction.opcode == "S_CMP_LG_U32") {
+    if (!ValidateOperandCount(instruction, 2, error_message)) {
+      return false;
+    }
+    const std::uint32_t lhs =
+        ReadScalarOperand(instruction.operands[0], *state, error_message);
+    if (error_message != nullptr && !error_message->empty()) {
+      return false;
+    }
+    const std::uint32_t rhs =
+        ReadScalarOperand(instruction.operands[1], *state, error_message);
+    if (error_message != nullptr && !error_message->empty()) {
+      return false;
+    }
+
+    state->scc = instruction.opcode == "S_CMP_EQ_U32" ? (lhs == rhs) : (lhs != rhs);
+    if (error_message != nullptr) {
+      error_message->clear();
+    }
+    return true;
   }
 
   if (instruction.opcode == "S_MOV_B32" || instruction.opcode == "S_MOVK_I32") {
@@ -414,6 +535,33 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
     return true;
   }
 
+  if (instruction.opcode == "V_SUB_U32") {
+    if (!ValidateOperandCount(instruction, 3, error_message)) {
+      return false;
+    }
+    for (std::size_t lane_index = 0; lane_index < WaveExecutionState::kLaneCount;
+         ++lane_index) {
+      if (((state->exec_mask >> lane_index) & 1ULL) == 0) {
+        continue;
+      }
+      const std::uint32_t lhs = ReadVectorOperand(instruction.operands[1], *state,
+                                                  lane_index, error_message);
+      if (error_message != nullptr && !error_message->empty()) {
+        return false;
+      }
+      const std::uint32_t rhs = ReadVectorOperand(instruction.operands[2], *state,
+                                                  lane_index, error_message);
+      if (error_message != nullptr && !error_message->empty()) {
+        return false;
+      }
+      if (!WriteVectorOperand(instruction.operands[0], lane_index, lhs - rhs, state,
+                              error_message)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   if (error_message != nullptr) {
     *error_message = BuildInterpreterBringupMessage(instruction.opcode);
   }
@@ -422,6 +570,7 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
 
 bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instruction,
                                     WaveExecutionState* state,
+                                    bool* pc_was_updated,
                                     std::string* error_message) {
   switch (instruction.opcode) {
     case Gfx1201CompiledOpcode::kSEndpgm:
@@ -429,12 +578,18 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kSAddU32:
     case Gfx1201CompiledOpcode::kSAddI32:
     case Gfx1201CompiledOpcode::kSSubU32:
+    case Gfx1201CompiledOpcode::kSCmpEqU32:
+    case Gfx1201CompiledOpcode::kSCmpLgU32:
+    case Gfx1201CompiledOpcode::kSBranch:
+    case Gfx1201CompiledOpcode::kSCbranchScc0:
+    case Gfx1201CompiledOpcode::kSCbranchScc1:
     case Gfx1201CompiledOpcode::kSMovB32:
     case Gfx1201CompiledOpcode::kSMovkI32:
     case Gfx1201CompiledOpcode::kVMovB32:
     case Gfx1201CompiledOpcode::kVAddU32:
+    case Gfx1201CompiledOpcode::kVSubU32:
       return ExecuteDecodedSeedInstruction(instruction.decoded_instruction, state,
-                                           error_message);
+                                           pc_was_updated, error_message);
     case Gfx1201CompiledOpcode::kUnknown:
       break;
   }
@@ -554,10 +709,12 @@ bool Gfx1201Interpreter::ExecuteProgram(
     const std::uint64_t next_pc = state->pc + 1;
     const Gfx1201CompiledInstruction& instruction =
         program[static_cast<std::size_t>(state->pc)];
-    if (!ExecuteCompiledSeedInstruction(instruction, state, error_message)) {
+    bool pc_was_updated = false;
+    if (!ExecuteCompiledSeedInstruction(instruction, state, &pc_was_updated,
+                                        error_message)) {
       return false;
     }
-    if (!state->halted) {
+    if (!state->halted && !pc_was_updated) {
       state->pc = next_pc;
     }
   }

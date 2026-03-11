@@ -20,10 +20,16 @@ enum class Gfx1201CompiledOpcode : std::uint8_t {
   kSAddU32,
   kSAddI32,
   kSSubU32,
+  kSCmpEqU32,
+  kSCmpLgU32,
+  kSBranch,
+  kSCbranchScc0,
+  kSCbranchScc1,
   kSMovB32,
   kSMovkI32,
   kVMovB32,
   kVAddU32,
+  kVSubU32,
 };
 
 struct Gfx1201CompiledInstruction {
