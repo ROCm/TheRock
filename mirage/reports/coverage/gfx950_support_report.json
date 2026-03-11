@@ -1751,25 +1751,33 @@
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "DS_CONSUME"
+      ],
       "instruction_name": "DS_CONSUME",
       "measured_encodings": [
         "ENC_DS:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_DS:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "DS_APPEND"
+      ],
       "instruction_name": "DS_APPEND",
       "measured_encodings": [
         "ENC_DS:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_DS:default"
+      ]
     },
     {
       "decode_measured": true,
@@ -16350,11 +16358,11 @@
   ],
   "summary": {
     "decode_measured": 1014,
-    "decode_supported": 654,
-    "decode_supported_percent_measured": 0.64497,
-    "decode_supported_percent_total": 0.52657,
-    "semantic_supported": 631,
-    "semantic_supported_percent_total": 0.508052
+    "decode_supported": 656,
+    "decode_supported_percent_measured": 0.646943,
+    "decode_supported_percent_total": 0.52818,
+    "semantic_supported": 633,
+    "semantic_supported_percent_total": 0.509662
   },
   "unmeasured_encoding_families": [
     "ENC_FLAT_SCRATCH",

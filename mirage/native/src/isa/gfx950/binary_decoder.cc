@@ -240,6 +240,8 @@ bool IsSupportedDsOpcode(std::string_view opcode_name) {
          opcode_name == "DS_PK_ADD_F16" ||
          opcode_name == "DS_PK_ADD_BF16" ||
          opcode_name == "DS_WRITE_ADDTID_B32" ||
+         opcode_name == "DS_CONSUME" ||
+         opcode_name == "DS_APPEND" ||
          opcode_name == "DS_WRITE_B8" ||
          opcode_name == "DS_WRITE_B16" ||
          opcode_name == "DS_WRITE_B8_D16_HI" ||
@@ -392,6 +394,10 @@ bool IsDsAddTidWriteOpcode(std::string_view opcode_name) {
 
 bool IsDsAddTidReadOpcode(std::string_view opcode_name) {
   return opcode_name == "DS_READ_ADDTID_B32";
+}
+
+bool IsDsWaveCounterOpcode(std::string_view opcode_name) {
+  return opcode_name == "DS_CONSUME" || opcode_name == "DS_APPEND";
 }
 
 bool IsDsDualDataOpcode(std::string_view opcode_name) {
@@ -787,6 +793,7 @@ bool Gfx950BinaryDecoder::DecodeDs(std::span<const std::uint32_t> words,
       raw_offset0 | (raw_offset1 << 8));
   if (!IsDsPairWriteOpcode(opcode_name) && !IsDsPairReadOpcode(opcode_name) &&
       !IsDsPairReturnOpcode(opcode_name) &&
+      !IsDsWaveCounterOpcode(opcode_name) &&
       !IsDsLaneRoutingOpcode(opcode_name) && offset1.imm32 != 0) {
     if (error_message != nullptr) {
       *error_message = "offset1 ds forms are not implemented";
@@ -796,6 +803,19 @@ bool Gfx950BinaryDecoder::DecodeDs(std::span<const std::uint32_t> words,
 
   if (opcode_name == "DS_NOP") {
     *instruction = DecodedInstruction::Nullary(instruction_name);
+    *words_consumed = 2;
+    return true;
+  }
+
+  if (IsDsWaveCounterOpcode(opcode_name)) {
+    InstructionOperand dst;
+    if (!DecodeVectorDestination(
+            static_cast<std::uint32_t>(ExtractBits(instruction_word, 56, 8)),
+            &dst, error_message)) {
+      return false;
+    }
+    *instruction = DecodedInstruction::TwoOperand(instruction_name, dst,
+                                                  combined_offset);
     *words_consumed = 2;
     return true;
   }

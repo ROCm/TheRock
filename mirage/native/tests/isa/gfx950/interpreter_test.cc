@@ -1383,6 +1383,103 @@ bool RunDsDualDataTests(
   return true;
 }
 
+bool RunDsWaveCounterTests(
+    const mirage::sim::isa::Gfx950Interpreter& interpreter) {
+  using namespace mirage::sim::isa;
+
+  const std::vector<DecodedInstruction> ds_wave_counter_program = {
+      DecodedInstruction::TwoOperand("DS_CONSUME", InstructionOperand::Vgpr(10),
+                                     InstructionOperand::Imm32(0x120)),
+      DecodedInstruction::TwoOperand("DS_APPEND", InstructionOperand::Vgpr(11),
+                                     InstructionOperand::Imm32(0x450)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  auto make_ds_wave_counter_state = []() {
+    WaveExecutionState state;
+    state.exec_mask = 0b1011ULL;
+    state.vgprs[10][2] = 0xdeadbeefu;
+    state.vgprs[11][2] = 0xcafebabeu;
+    const std::uint32_t consume_initial = 20u;
+    const std::uint32_t append_initial = 50u;
+    std::memcpy(state.lds_bytes.data() + 0x120u, &consume_initial,
+                sizeof(consume_initial));
+    std::memcpy(state.lds_bytes.data() + 0x450u, &append_initial,
+                sizeof(append_initial));
+    return state;
+  };
+  auto validate_ds_wave_counter_state = [&](const WaveExecutionState& state,
+                                            const char* mode) {
+    if (!Expect(state.halted, "expected ds wave-counter program to halt")) {
+      std::cerr << mode << '\n';
+      return false;
+    }
+
+    static constexpr std::array<std::size_t, 3> kObservedLanes = {0u, 1u, 3u};
+    for (std::size_t lane : kObservedLanes) {
+      if (!Expect(state.vgprs[10][lane] == 20u,
+                  "expected ds consume return value") ||
+          !Expect(state.vgprs[11][lane] == 50u,
+                  "expected ds append return value")) {
+        std::cerr << mode << " lane=" << lane << '\n';
+        return false;
+      }
+    }
+
+    if (!Expect(state.vgprs[10][2] == 0xdeadbeefu,
+                "expected inactive ds consume destination preservation") ||
+        !Expect(state.vgprs[11][2] == 0xcafebabeu,
+                "expected inactive ds append destination preservation")) {
+      std::cerr << mode << '\n';
+      return false;
+    }
+
+    std::uint32_t consume_value = 0;
+    std::uint32_t append_value = 0;
+    std::memcpy(&consume_value, state.lds_bytes.data() + 0x120u,
+                sizeof(consume_value));
+    std::memcpy(&append_value, state.lds_bytes.data() + 0x450u,
+                sizeof(append_value));
+    if (!Expect(consume_value == 17u, "expected ds consume final lds value") ||
+        !Expect(append_value == 53u, "expected ds append final lds value")) {
+      std::cerr << mode << '\n';
+      return false;
+    }
+    return true;
+  };
+
+  std::string error_message;
+  WaveExecutionState decoded_ds_wave_counter_state =
+      make_ds_wave_counter_state();
+  if (!Expect(interpreter.ExecuteProgram(ds_wave_counter_program,
+                                         &decoded_ds_wave_counter_state,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_ds_wave_counter_state(decoded_ds_wave_counter_state,
+                                      "decoded")) {
+    return false;
+  }
+
+  std::vector<CompiledInstruction> compiled_ds_wave_counter_program;
+  if (!Expect(interpreter.CompileProgram(ds_wave_counter_program,
+                                         &compiled_ds_wave_counter_program,
+                                         &error_message),
+              error_message.c_str())) {
+    return false;
+  }
+  WaveExecutionState compiled_ds_wave_counter_state =
+      make_ds_wave_counter_state();
+  if (!Expect(interpreter.ExecuteProgram(compiled_ds_wave_counter_program,
+                                         &compiled_ds_wave_counter_state,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_ds_wave_counter_state(compiled_ds_wave_counter_state,
+                                      "compiled")) {
+    return false;
+  }
+
+  return true;
+}
+
 }  // namespace
 
 int main() {
@@ -2062,6 +2159,18 @@ int main() {
   for (std::string_view opcode : kDsAddTidReadOpcodes) {
     if (!Expect(interpreter.Supports(opcode),
                 "expected ds addtid read opcode support")) {
+      std::cerr << opcode << '\n';
+      return 1;
+    }
+  }
+
+  const std::array<std::string_view, 2> kDsWaveCounterOpcodes = {
+      "DS_CONSUME",
+      "DS_APPEND",
+  };
+  for (std::string_view opcode : kDsWaveCounterOpcodes) {
+    if (!Expect(interpreter.Supports(opcode),
+                "expected ds wave-counter opcode support")) {
       std::cerr << opcode << '\n';
       return 1;
     }
@@ -8007,6 +8116,10 @@ int main() {
       !validate_ds_addtid_state(compiled_ds_addtid_state, "compiled")) {
     return 1;
   }
+  }
+
+  if (!RunDsWaveCounterTests(interpreter)) {
+    return 1;
   }
 
   if (!RunDsReturnTests(interpreter)) {

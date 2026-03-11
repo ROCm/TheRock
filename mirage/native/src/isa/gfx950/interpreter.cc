@@ -1419,6 +1419,7 @@ bool IsDsOpcode(std::string_view opcode) {
          opcode == "DS_ADD_F32" || opcode == "DS_MIN_F32" ||
          opcode == "DS_MAX_F32" || opcode == "DS_PK_ADD_F16" ||
          opcode == "DS_PK_ADD_BF16" || opcode == "DS_WRITE_ADDTID_B32" ||
+         opcode == "DS_CONSUME" || opcode == "DS_APPEND" ||
          opcode == "DS_WRITE_B8" ||
          opcode == "DS_WRITE_B16" ||
          opcode == "DS_WRITE_B8_D16_HI" ||
@@ -1529,6 +1530,10 @@ bool IsDsAddTidWriteOpcode(std::string_view opcode) {
 
 bool IsDsAddTidReadOpcode(std::string_view opcode) {
   return opcode == "DS_READ_ADDTID_B32";
+}
+
+bool IsDsWaveCounterOpcode(std::string_view opcode) {
+  return opcode == "DS_CONSUME" || opcode == "DS_APPEND";
 }
 
 bool IsDsDirectReadOpcode(std::string_view opcode) {
@@ -1921,6 +1926,11 @@ bool IsDsAddTidWriteOpcode(CompiledOpcode opcode) {
 
 bool IsDsAddTidReadOpcode(CompiledOpcode opcode) {
   return opcode == CompiledOpcode::kDsReadAddTidB32;
+}
+
+bool IsDsWaveCounterOpcode(CompiledOpcode opcode) {
+  return opcode == CompiledOpcode::kDsConsume ||
+         opcode == CompiledOpcode::kDsAppend;
 }
 
 bool IsDsDirectReadOpcode(CompiledOpcode opcode) {
@@ -6333,6 +6343,14 @@ bool TryCompileOpcode(std::string_view opcode,
     compiled_instruction->opcode = CompiledOpcode::kDsWriteAddTidB32;
     return true;
   }
+  if (opcode == "DS_CONSUME") {
+    compiled_instruction->opcode = CompiledOpcode::kDsConsume;
+    return true;
+  }
+  if (opcode == "DS_APPEND") {
+    compiled_instruction->opcode = CompiledOpcode::kDsAppend;
+    return true;
+  }
   if (opcode == "DS_WRITE_B8") {
     compiled_instruction->opcode = CompiledOpcode::kDsWriteB8;
     return true;
@@ -7873,6 +7891,8 @@ bool Gfx950Interpreter::ExecuteInstruction(const CompiledInstruction& instructio
     case CompiledOpcode::kDsPkAddF16:
     case CompiledOpcode::kDsPkAddBf16:
     case CompiledOpcode::kDsWriteAddTidB32:
+    case CompiledOpcode::kDsConsume:
+    case CompiledOpcode::kDsAppend:
     case CompiledOpcode::kDsWriteB8:
     case CompiledOpcode::kDsWriteB16:
     case CompiledOpcode::kDsWriteB8D16Hi:
@@ -11880,6 +11900,7 @@ bool Gfx950Interpreter::ExecuteDsMemory(const DecodedInstruction& instruction,
   const bool is_lane_routing = is_swizzle || is_permute;
   const bool is_addtid_write = IsDsAddTidWriteOpcode(instruction.opcode);
   const bool is_addtid_read = IsDsAddTidReadOpcode(instruction.opcode);
+  const bool is_wave_counter = IsDsWaveCounterOpcode(instruction.opcode);
   const bool is_dual_data = IsDsDualDataOpcode(instruction.opcode);
   const bool is_dual_data_return =
       IsDsDualDataReturnOpcode(instruction.opcode);
@@ -11899,7 +11920,7 @@ bool Gfx950Interpreter::ExecuteDsMemory(const DecodedInstruction& instruction,
     expected_operands = 5;
   } else if (is_dual_data || is_return) {
     expected_operands = 4;
-  } else if (is_addtid_write || is_addtid_read) {
+  } else if (is_addtid_write || is_addtid_read || is_wave_counter) {
     expected_operands = 2;
   }
   if (!ValidateOperandCount(instruction, expected_operands, error_message)) {
@@ -11946,6 +11967,9 @@ bool Gfx950Interpreter::ExecuteDsMemory(const DecodedInstruction& instruction,
     second_data_operand = &instruction.operands[3];
     offset0_operand = &instruction.operands[4];
   } else if (is_addtid_read) {
+    destination_operand = &instruction.operands[0];
+    offset0_operand = &instruction.operands[1];
+  } else if (is_wave_counter) {
     destination_operand = &instruction.operands[0];
     offset0_operand = &instruction.operands[1];
   } else if (is_addtid_write) {
@@ -12092,6 +12116,44 @@ bool Gfx950Interpreter::ExecuteDsMemory(const DecodedInstruction& instruction,
       state->lds_bytes.data(), state->lds_bytes.size());
   if (workgroup != nullptr && !workgroup->shared_lds.empty()) {
     lds_storage = workgroup->shared_lds;
+  }
+  if (is_wave_counter) {
+    const std::uint32_t active_lane_count = PopCount64(state->exec_mask);
+    if (active_lane_count == 0u) {
+      if (error_message != nullptr) {
+        error_message->clear();
+      }
+      return true;
+    }
+
+    const std::uint64_t lds_address = offset0_operand->imm32;
+    std::uint32_t previous_value = 0;
+    if (!ReadLdsValue(lds_storage, lds_address, sizeof(std::uint32_t), false,
+                      &previous_value, error_message)) {
+      return false;
+    }
+    const std::uint32_t updated_value =
+        instruction.opcode == "DS_CONSUME"
+            ? previous_value - active_lane_count
+            : previous_value + active_lane_count;
+    if (!WriteLdsValue(lds_storage, lds_address, sizeof(std::uint32_t),
+                       updated_value, error_message)) {
+      return false;
+    }
+    for (std::size_t lane_index = 0; lane_index < WaveExecutionState::kLaneCount;
+         ++lane_index) {
+      if (((state->exec_mask >> lane_index) & 1ULL) == 0) {
+        continue;
+      }
+      if (!WriteVectorOperand(*destination_operand, lane_index, previous_value,
+                              state, error_message)) {
+        return false;
+      }
+    }
+    if (error_message != nullptr) {
+      error_message->clear();
+    }
+    return true;
   }
   for (std::size_t lane_index = 0; lane_index < WaveExecutionState::kLaneCount;
        ++lane_index) {
@@ -12500,6 +12562,7 @@ bool Gfx950Interpreter::ExecuteDsMemory(const CompiledInstruction& instruction,
   const bool is_lane_routing = is_swizzle || is_permute;
   const bool is_addtid_write = IsDsAddTidWriteOpcode(instruction.opcode);
   const bool is_addtid_read = IsDsAddTidReadOpcode(instruction.opcode);
+  const bool is_wave_counter = IsDsWaveCounterOpcode(instruction.opcode);
   const bool is_dual_data = IsDsDualDataOpcode(instruction.opcode);
   const bool is_dual_data_return =
       IsDsDualDataReturnOpcode(instruction.opcode);
@@ -12519,7 +12582,7 @@ bool Gfx950Interpreter::ExecuteDsMemory(const CompiledInstruction& instruction,
     expected_operands = 5;
   } else if (is_dual_data || is_return) {
     expected_operands = 4;
-  } else if (is_addtid_write || is_addtid_read) {
+  } else if (is_addtid_write || is_addtid_read || is_wave_counter) {
     expected_operands = 2;
   }
   if (!ValidateOperandCount(instruction, expected_operands, error_message)) {
@@ -12566,6 +12629,9 @@ bool Gfx950Interpreter::ExecuteDsMemory(const CompiledInstruction& instruction,
     second_data_operand = &instruction.operands[3];
     offset0_operand = &instruction.operands[4];
   } else if (is_addtid_read) {
+    destination_operand = &instruction.operands[0];
+    offset0_operand = &instruction.operands[1];
+  } else if (is_wave_counter) {
     destination_operand = &instruction.operands[0];
     offset0_operand = &instruction.operands[1];
   } else if (is_addtid_write) {
@@ -12702,6 +12768,41 @@ bool Gfx950Interpreter::ExecuteDsMemory(const CompiledInstruction& instruction,
       state->lds_bytes.data(), state->lds_bytes.size());
   if (workgroup != nullptr && !workgroup->shared_lds.empty()) {
     lds_storage = workgroup->shared_lds;
+  }
+  if (is_wave_counter) {
+    const std::uint32_t active_lane_count = PopCount64(state->exec_mask);
+    if (active_lane_count == 0u) {
+      if (error_message != nullptr) {
+        error_message->clear();
+      }
+      return true;
+    }
+
+    const std::uint64_t lds_address = offset0_operand->imm32;
+    std::uint32_t previous_value = 0;
+    if (!ReadLdsValue(lds_storage, lds_address, sizeof(std::uint32_t), false,
+                      &previous_value, error_message)) {
+      return false;
+    }
+    const std::uint32_t updated_value =
+        instruction.opcode == CompiledOpcode::kDsConsume
+            ? previous_value - active_lane_count
+            : previous_value + active_lane_count;
+    if (!WriteLdsValue(lds_storage, lds_address, sizeof(std::uint32_t),
+                       updated_value, error_message)) {
+      return false;
+    }
+    for (std::size_t lane_index = 0; lane_index < WaveExecutionState::kLaneCount;
+         ++lane_index) {
+      if (((state->exec_mask >> lane_index) & 1ULL) == 0) {
+        continue;
+      }
+      state->vgprs[destination_reg][lane_index] = previous_value;
+    }
+    if (error_message != nullptr) {
+      error_message->clear();
+    }
+    return true;
   }
   for (std::size_t lane_index = 0; lane_index < WaveExecutionState::kLaneCount;
        ++lane_index) {

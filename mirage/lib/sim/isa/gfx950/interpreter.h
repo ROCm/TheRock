@@ -506,6 +506,8 @@ enum class CompiledOpcode : std::uint16_t {
   kDsPkAddF16,
   kDsPkAddBf16,
   kDsWriteAddTidB32,
+  kDsConsume,
+  kDsAppend,
   kDsWriteB8,
   kDsWriteB16,
   kDsWriteB8D16Hi,

@@ -6719,6 +6719,55 @@ int main() {
     }
   }
 
+  struct DsWaveCounterDecodeCase {
+    std::string_view opcode_name;
+    std::uint32_t destination_index;
+    std::uint32_t offset0;
+    std::uint32_t offset1;
+    std::uint32_t expected_offset;
+  };
+  const std::array<DsWaveCounterDecodeCase, 2> kDsWaveCounterDecodeCases = {{
+      {"DS_CONSUME", 9u, 0x20u, 0x01u, 0x0120u},
+      {"DS_APPEND", 11u, 0x50u, 0x04u, 0x0450u},
+  }};
+  for (const DsWaveCounterDecodeCase& test_case : kDsWaveCounterDecodeCases) {
+    const auto opcode = FindDefaultEncodingOpcode(test_case.opcode_name, "ENC_DS");
+    if (!Expect(opcode.has_value(),
+                "expected ds wave-counter opcode lookup")) {
+      std::cerr << test_case.opcode_name << '\n';
+      return 1;
+    }
+
+    const auto encoded = MakeDs(*opcode, test_case.destination_index, 0, 0, 0,
+                                test_case.offset0, test_case.offset1);
+    const std::vector<std::uint32_t> encoded_program = {
+        encoded[0], encoded[1], MakeSopp(1),
+    };
+    decoded_program.clear();
+    if (!Expect(decoder.DecodeProgram(encoded_program, &decoded_program,
+                                      &error_message),
+                error_message.c_str()) ||
+        !Expect(decoded_program.size() == 2,
+                "expected ds wave-counter decode program size") ||
+        !Expect(decoded_program[0].opcode == test_case.opcode_name,
+                "expected ds wave-counter opcode decode") ||
+        !Expect(decoded_program[0].operand_count == 2,
+                "expected ds wave-counter operand count") ||
+        !Expect(decoded_program[0].operands[0].kind == OperandKind::kVgpr,
+                "expected ds wave-counter destination kind") ||
+        !Expect(decoded_program[0].operands[0].index ==
+                    test_case.destination_index,
+                "expected ds wave-counter destination index") ||
+        !Expect(decoded_program[0].operands[1].kind == OperandKind::kImm32,
+                "expected ds wave-counter offset kind") ||
+        !Expect(decoded_program[0].operands[1].imm32 ==
+                    test_case.expected_offset,
+                "expected ds wave-counter offset value")) {
+      std::cerr << test_case.opcode_name << '\n';
+      return 1;
+    }
+  }
+
   const std::array<std::string_view, 3> kDsDualDataOpcodes = {
       "DS_MSKOR_B32",
       "DS_CMPST_B32",
