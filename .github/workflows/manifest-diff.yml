@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       start_commit:
-        description: 'Start Commit SHA or Workflow Run ID'
+        description: 'Start Commit SHA or Workflow Run ID (required when using workflow mode or commit SHA mode without find-last-successful)'
         required: false
         type: string
       end_commit:
@@ -46,11 +46,11 @@ jobs:
     permissions:
       id-token: write
       contents: read
-    env:
-      IS_PR_FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
 
       # Case 1: find_last_successful + workflow_mode (find start, end as workflow ID)
       - name: Run with find-last-successful and workflow mode
@@ -77,7 +77,7 @@ jobs:
 
       # Case 3: workflow_mode only (both start and end as workflow IDs)
       - name: Run with workflow mode
-        if: ${{ !inputs.find_last_successful && inputs.workflow_mode }}
+        if: ${{ !inputs.find_last_successful && inputs.workflow_mode && inputs.start_commit != '' }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
@@ -89,7 +89,7 @@ jobs:
 
       # Case 4: Neither (both start and end as commit SHAs)
       - name: Run with commit SHAs
-        if: ${{ !inputs.find_last_successful && !inputs.workflow_mode }}
+        if: ${{ !inputs.find_last_successful && !inputs.workflow_mode && inputs.start_commit != '' }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
@@ -99,14 +99,14 @@ jobs:
             --output-dir reports
 
       - name: Configure AWS Credentials
-        if: ${{ !cancelled() && !github.event.pull_request.head.repo.fork }}
-        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        if: ${{ !cancelled() && github.repository == 'ROCm/TheRock' && (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork) }}
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-ci
 
       - name: Upload Report to S3
-        if: ${{ !cancelled() && !github.event.pull_request.head.repo.fork }}
+        if: ${{ !cancelled() && github.repository == 'ROCm/TheRock' && (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork) }}
         run: |
           python3 build_tools/github_actions/upload_test_report_script.py \
             --run-id ${{ github.run_id }} \
