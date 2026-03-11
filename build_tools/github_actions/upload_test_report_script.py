@@ -17,12 +17,16 @@ import platform
 import shlex
 import subprocess
 import sys
-from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
+_BUILD_TOOLS_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_BUILD_TOOLS_DIR))
+
+from _therock_utils.workflow_outputs import WorkflowOutputRoot
+from github_actions.github_actions_utils import gha_append_step_summary
 
 logging.basicConfig(level=logging.INFO)
 
-THEROCK_DIR = Path(__file__).resolve().parent.parent.parent
+THEROCK_DIR = _BUILD_TOOLS_DIR.parent
 PLATFORM = platform.system().lower()
 
 # Importing indexer.py
@@ -102,6 +106,9 @@ def run(args: argparse.Namespace):
 
     create_index_file(args)
     upload_test_report(args.report_path, base_uri, args.log_destination)
+
+    report_url = output_root.log_index(args.amdgpu_family).https_url
+    gha_append_step_summary(f"[Report (S3)]({report_url})")
 
 
 def main(argv):

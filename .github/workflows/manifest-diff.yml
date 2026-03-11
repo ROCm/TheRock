@@ -1,6 +1,9 @@
 name: Manifest Diff Report
 
 on:
+  push:
+    branches:
+      - amd/hsivasun/add-manifest-diff-workflow
   workflow_dispatch:
     inputs:
       start_commit:
@@ -52,9 +55,20 @@ jobs:
         with:
           fetch-depth: 0
 
+      # On push: run Case 2 (find-last-successful to current SHA) for testing
+      - name: Run on push (find-last-successful to current SHA)
+        if: ${{ github.event_name == 'push' }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python3 build_tools/generate_manifest_diff_report.py \
+            --find-last-successful ci_nightly.yml \
+            --end "${{ github.sha }}" \
+            --output-dir reports
+
       # Case 1: find_last_successful + workflow_mode (find start, end as workflow ID)
       - name: Run with find-last-successful and workflow mode
-        if: ${{ inputs.find_last_successful && inputs.workflow_mode }}
+        if: ${{ github.event_name != 'push' && inputs.find_last_successful && inputs.workflow_mode }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
@@ -66,7 +80,7 @@ jobs:
 
       # Case 2: find_last_successful only (find start, end as commit SHA)
       - name: Run with find-last-successful
-        if: ${{ inputs.find_last_successful && !inputs.workflow_mode }}
+        if: ${{ github.event_name != 'push' && inputs.find_last_successful && !inputs.workflow_mode }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
@@ -77,7 +91,7 @@ jobs:
 
       # Case 3: workflow_mode only (both start and end as workflow IDs)
       - name: Run with workflow mode
-        if: ${{ !inputs.find_last_successful && inputs.workflow_mode && inputs.start_commit != '' }}
+        if: ${{ github.event_name != 'push' && !inputs.find_last_successful && inputs.workflow_mode && inputs.start_commit != '' }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
@@ -89,7 +103,7 @@ jobs:
 
       # Case 4: Neither (both start and end as commit SHAs)
       - name: Run with commit SHAs
-        if: ${{ !inputs.find_last_successful && !inputs.workflow_mode && inputs.start_commit != '' }}
+        if: ${{ github.event_name != 'push' && !inputs.find_last_successful && !inputs.workflow_mode && inputs.start_commit != '' }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
@@ -99,14 +113,14 @@ jobs:
             --output-dir reports
 
       - name: Configure AWS Credentials
-        if: ${{ !cancelled() && github.repository == 'ROCm/TheRock' && (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork) }}
+        if: ${{ !cancelled() && (github.event_name == 'push' || inputs.find_last_successful || inputs.start_commit) && (github.event.pull_request == null || !github.event.pull_request.head.repo.fork) }}
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-ci
 
       - name: Upload Report to S3
-        if: ${{ !cancelled() && github.repository == 'ROCm/TheRock' && (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork) }}
+        if: ${{ !cancelled() && (github.event_name == 'push' || inputs.find_last_successful || inputs.start_commit) && (github.event.pull_request == null || !github.event.pull_request.head.repo.fork) }}
         run: |
           python3 build_tools/github_actions/upload_test_report_script.py \
             --run-id ${{ github.run_id }} \
