@@ -87,7 +87,7 @@ int main() {
               "expected phase-0 compute seed list") ||
       !Expect(decoder.Phase0ComputeSelectorRules().size() == 12u,
               "expected phase-0 selector rule list") ||
-      !Expect(decoder.Phase0ExecutableOpcodes().size() == 50u,
+      !Expect(decoder.Phase0ExecutableOpcodes().size() == 62u,
               "expected phase-0 executable opcode slice") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_ADD_U32"),
               "expected S_ADD_U32 executable decode support") ||
@@ -109,6 +109,10 @@ int main() {
               "expected S_CBRANCH_EXECZ executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("V_NOT_B32"),
               "expected V_NOT_B32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_CMP_EQ_U32"),
+              "expected V_CMP_EQ_U32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_CMP_GE_I32"),
+              "expected V_CMP_GE_I32 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("V_CVT_F32_UBYTE3"),
               "expected V_CVT_F32_UBYTE3 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("V_ADD_U32"),
@@ -158,7 +162,7 @@ int main() {
   }
 
   Gfx1201Interpreter interpreter;
-  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 50u,
+  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 62u,
               "expected executable seed opcode list") ||
       !Expect(interpreter.Supports("S_ENDPGM"),
               "expected interpreter support for S_ENDPGM") ||
@@ -204,6 +208,10 @@ int main() {
               "expected interpreter support for S_MOV_B32") ||
       !Expect(interpreter.Supports("V_NOT_B32"),
               "expected interpreter support for V_NOT_B32") ||
+      !Expect(interpreter.Supports("V_CMP_EQ_U32"),
+              "expected interpreter support for V_CMP_EQ_U32") ||
+      !Expect(interpreter.Supports("V_CMP_GE_I32"),
+              "expected interpreter support for V_CMP_GE_I32") ||
       !Expect(interpreter.Supports("V_BFREV_B32"),
               "expected interpreter support for V_BFREV_B32") ||
       !Expect(interpreter.Supports("V_CVT_F32_UBYTE0"),

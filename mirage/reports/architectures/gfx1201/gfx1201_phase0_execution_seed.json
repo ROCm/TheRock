@@ -29,6 +29,18 @@
     "S_MOV_B32",
     "S_MOVK_I32",
     "V_MOV_B32",
+    "V_CMP_EQ_I32",
+    "V_CMP_NE_I32",
+    "V_CMP_LT_I32",
+    "V_CMP_LE_I32",
+    "V_CMP_GT_I32",
+    "V_CMP_GE_I32",
+    "V_CMP_EQ_U32",
+    "V_CMP_NE_U32",
+    "V_CMP_LT_U32",
+    "V_CMP_LE_U32",
+    "V_CMP_GT_U32",
+    "V_CMP_GE_U32",
     "V_NOT_B32",
     "V_BFREV_B32",
     "V_CVT_F32_UBYTE0",
@@ -117,10 +129,25 @@
       "V_AND_B32",
       "V_OR_B32",
       "V_XOR_B32"
+    ],
+    "ENC_VOPC": [
+      "V_CMP_EQ_I32",
+      "V_CMP_NE_I32",
+      "V_CMP_LT_I32",
+      "V_CMP_LE_I32",
+      "V_CMP_GT_I32",
+      "V_CMP_GE_I32",
+      "V_CMP_EQ_U32",
+      "V_CMP_NE_U32",
+      "V_CMP_LT_U32",
+      "V_CMP_LE_U32",
+      "V_CMP_GT_U32",
+      "V_CMP_GE_U32"
     ]
   },
   "decoder_capabilities": [
     "Returns real DecodedInstruction values for the executable slice.",
+    "Attaches shared common operand descriptors for the active seed slice, including implicit VCC metadata for VOPC destinations.",
     "Normalizes imported arithmetic/control opcodes onto the Mirage alias surface for the new subset.",
     "Decodes S_ADD_U32, S_ADD_I32, and S_SUB_U32 from ENC_SOP2.",
     "Decodes the full local 32-bit signed/unsigned SOPC compare set from ENC_SOPC.",
@@ -129,6 +156,7 @@
     "Decodes V_NOT_B32, V_BFREV_B32, and V_CVT_F32_UBYTE0/1/2/3 from ENC_VOP1.",
     "Decodes V_CVT_F32_I32, V_CVT_F32_U32, V_CVT_U32_F32, and V_CVT_I32_F32 from ENC_VOP1.",
     "Decodes V_ADD_U32, V_SUB_U32, V_SUBREV_U32, V_MIN/MAX_I32, V_MIN/MAX_U32, V_LSHRREV_B32, V_ASHRREV_I32, V_LSHLREV_B32, V_AND_B32, V_OR_B32, and V_XOR_B32 from ENC_VOP2.",
+    "Decodes V_CMP_EQ/NE/LT/LE/GT/GE_I32 and V_CMP_EQ/NE/LT/LE/GT/GE_U32 from ENC_VOPC with SGPR, VGPR, inline, and literal sources.",
     "Sign-extends SIMM16 for S_MOVK_I32."
   ],
   "execution_capabilities": [
@@ -139,6 +167,7 @@
     "Executes scalar add/subtract and updates SCC using carry/borrow behavior.",
     "Executes scalar move and scalar immediate move.",
     "Executes exec-masked V_MOV_B32.",
+    "Executes exec-masked V_CMP_EQ/NE/LT/LE/GT/GE_I32 and V_CMP_EQ/NE/LT/LE/GT/GE_U32 and materializes the resulting mask into vcc_mask.",
     "Executes exec-masked V_NOT_B32, V_BFREV_B32, and V_CVT_F32_UBYTE0/1/2/3.",
     "Executes exec-masked V_CVT_F32_I32, V_CVT_F32_U32, V_CVT_U32_F32, and V_CVT_I32_F32.",
     "Executes exec-masked V_ADD_U32, V_SUB_U32, V_SUBREV_U32, V_MIN/MAX_I32, V_MIN/MAX_U32, V_LSHRREV_B32, V_ASHRREV_I32, V_LSHLREV_B32, V_AND_B32, V_OR_B32, and V_XOR_B32 lane-wise."
@@ -146,10 +175,10 @@
   "still_scaffolded": [
     "Route-matched but non-executable phase-0 compute instructions still return selector-aware stub errors.",
     "ENC_SMEM",
-    "ENC_VOPC",
     "ENC_VOP3",
     "ENC_VDS",
     "ENC_VGLOBAL",
-    "The next coherent extension point is ENC_VOP3/half-conversion work rather than more 1-dword seed growth."
+    "The remaining ENC_VOPC surface outside this seed is still scaffolded: CMPX forms plus the floating-point, 64-bit, and 16-bit compare families.",
+    "The next coherent extension point is the remaining ENC_VOPC/CMPX work or ENC_VOP3/half-conversion work rather than more 1-dword seed growth."
   ]
 }

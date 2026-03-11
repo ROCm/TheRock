@@ -13,6 +13,8 @@
 
 namespace {
 
+constexpr std::uint16_t kImplicitVccPairSgprIndex = 248;
+
 bool Expect(bool condition, const char* message) {
   if (!condition) {
     std::cerr << message << '\n';
@@ -122,6 +124,17 @@ constexpr std::uint32_t MakeVop2(std::uint32_t op,
   return word;
 }
 
+constexpr std::uint32_t MakeVopc(std::uint32_t op,
+                                 std::uint32_t src0,
+                                 std::uint32_t vsrc1) {
+  std::uint32_t word = 0;
+  word = SetBits(word, 0x3e, 25, 7);
+  word = SetBits(word, op, 17, 8);
+  word = SetBits(word, vsrc1, 9, 8);
+  word = SetBits(word, src0, 0, 9);
+  return word;
+}
+
 bool ExpectUnaryInstruction(const mirage::sim::isa::DecodedInstruction& instruction,
                             std::string_view expected_opcode,
                             mirage::sim::isa::OperandKind dst_kind,
@@ -208,6 +221,28 @@ bool ExpectBranchInstruction(const mirage::sim::isa::DecodedInstruction& instruc
          instruction.operand_count == 1u &&
          instruction.operands[0].kind == OperandKind::kImm32 &&
          instruction.operands[0].imm32 == expected_delta;
+}
+
+bool ExpectOperandDescriptor(
+    const mirage::sim::isa::InstructionOperand& operand,
+    mirage::sim::isa::OperandRole expected_role,
+    mirage::sim::isa::OperandSlotKind expected_slot_kind,
+    mirage::sim::isa::OperandValueClass expected_value_class,
+    mirage::sim::isa::OperandAccess expected_access,
+    mirage::sim::isa::FragmentKind expected_fragment_kind,
+    std::uint8_t expected_element_bit_width,
+    std::uint8_t expected_component_count,
+    bool expected_is_implicit) {
+  using namespace mirage::sim::isa;
+  return operand.descriptor.role == expected_role &&
+         operand.descriptor.slot_kind == expected_slot_kind &&
+         operand.descriptor.value_class == expected_value_class &&
+         operand.descriptor.access == expected_access &&
+         operand.descriptor.fragment_shape.kind == expected_fragment_kind &&
+         operand.descriptor.fragment_shape.element_bit_width ==
+             expected_element_bit_width &&
+         operand.descriptor.component_count == expected_component_count &&
+         operand.descriptor.is_implicit == expected_is_implicit;
 }
 
 bool ExpectArithmeticSeedProgramState(
@@ -369,6 +404,22 @@ bool ExpectVectorBinaryBatchState(const mirage::sim::isa::WaveExecutionState& st
          !state.waiting_on_barrier && state.pc == 15u;
 }
 
+bool ExpectUnsignedVectorCompareState(
+    const mirage::sim::isa::WaveExecutionState& state) {
+  return state.sgprs[70] == 7u && state.sgprs[71] == 5u &&
+         state.sgprs[90] == 222u && state.sgprs[91] == 444u &&
+         state.vcc_mask == 10u && state.halted &&
+         !state.waiting_on_barrier && state.pc == 17u;
+}
+
+bool ExpectSignedVectorCompareState(
+    const mirage::sim::isa::WaveExecutionState& state) {
+  return state.sgprs[72] == 0xfffffffdu && state.sgprs[73] == 2u &&
+         state.sgprs[92] == 666u && state.sgprs[93] == 888u &&
+         state.vcc_mask == 9u && state.halted &&
+         !state.waiting_on_barrier && state.pc == 17u;
+}
+
 }  // namespace
 
 int main() {
@@ -413,7 +464,25 @@ int main() {
                                       OperandKind::kSgpr, 6u,
                                       OperandKind::kSgpr, 1u,
                                       OperandKind::kSgpr, 2u),
-              "expected decoded S_ADD_U32 operands")) {
+              "expected decoded S_ADD_U32 operands") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[0], OperandRole::kDestination,
+                  OperandSlotKind::kScalarDestination,
+                  OperandValueClass::kScalarRegister, OperandAccess::kWrite,
+                  FragmentKind::kScalar, 32u, 1u, false),
+              "expected S_ADD_U32 destination descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[1], OperandRole::kSource0,
+                  OperandSlotKind::kSource0,
+                  OperandValueClass::kScalarRegister, OperandAccess::kRead,
+                  FragmentKind::kScalar, 32u, 1u, false),
+              "expected S_ADD_U32 source0 descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[2], OperandRole::kSource1,
+                  OperandSlotKind::kSource1,
+                  OperandValueClass::kScalarRegister, OperandAccess::kRead,
+                  FragmentKind::kScalar, 32u, 1u, false),
+              "expected S_ADD_U32 source1 descriptor")) {
     return 1;
   }
 
@@ -656,7 +725,19 @@ int main() {
       !Expect(ExpectUnaryInstruction(instruction, "V_MOV_B32",
                                      OperandKind::kVgpr, 3u,
                                      OperandKind::kSgpr, 2u),
-              "expected decoded V_MOV_B32 operands")) {
+              "expected decoded V_MOV_B32 operands") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[0], OperandRole::kDestination,
+                  OperandSlotKind::kDestination,
+                  OperandValueClass::kVectorRegister, OperandAccess::kWrite,
+                  FragmentKind::kVector, 32u, 1u, false),
+              "expected V_MOV_B32 destination descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[1], OperandRole::kSource0,
+                  OperandSlotKind::kSource0,
+                  OperandValueClass::kScalarRegister, OperandAccess::kRead,
+                  FragmentKind::kScalar, 32u, 1u, false),
+              "expected V_MOV_B32 source descriptor")) {
     return 1;
   }
 
@@ -825,6 +906,59 @@ int main() {
                                       OperandKind::kVgpr, 1u,
                                       OperandKind::kVgpr, 4u),
               "expected decoded V_XOR_B32 operands")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_cmp_eq_u32_words{
+      MakeVopc(74u, 1u, 4u)};
+  if (!Expect(decoder.DecodeInstruction(v_cmp_eq_u32_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_CMP_EQ_U32 decode success") ||
+      !Expect(ExpectBinaryInstruction(instruction, "V_CMP_EQ_U32",
+                                      OperandKind::kSgpr,
+                                      kImplicitVccPairSgprIndex,
+                                      OperandKind::kSgpr, 1u,
+                                      OperandKind::kVgpr, 4u),
+              "expected decoded V_CMP_EQ_U32 operands") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[0], OperandRole::kDestination,
+                  OperandSlotKind::kScalarDestination,
+                  OperandValueClass::kScalarRegister, OperandAccess::kWrite,
+                  FragmentKind::kScalar, 64u, 2u, true),
+              "expected implicit VCC destination descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[1], OperandRole::kSource0,
+                  OperandSlotKind::kSource0,
+                  OperandValueClass::kScalarRegister, OperandAccess::kRead,
+                  FragmentKind::kScalar, 32u, 1u, false),
+              "expected V_CMP_EQ_U32 source0 descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[2], OperandRole::kSource1,
+                  OperandSlotKind::kSource1,
+                  OperandValueClass::kVectorRegister, OperandAccess::kRead,
+                  FragmentKind::kVector, 32u, 1u, false),
+              "expected V_CMP_EQ_U32 source1 descriptor")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 2> v_cmp_ne_i32_literal_words{
+      MakeVopc(69u, 255u, 5u), 0xfffffffdu};
+  if (!Expect(decoder.DecodeInstruction(v_cmp_ne_i32_literal_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_CMP_NE_I32 literal decode success") ||
+      !Expect(words_consumed == 2u,
+              "expected literal V_CMP_NE_I32 decode to consume 2 dwords") ||
+      !Expect(ExpectBinaryInstruction(instruction, "V_CMP_NE_I32",
+                                      OperandKind::kSgpr,
+                                      kImplicitVccPairSgprIndex,
+                                      OperandKind::kImm32, 0xfffffffdu,
+                                      OperandKind::kVgpr, 5u),
+              "expected decoded V_CMP_NE_I32 literal operands") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[1], OperandRole::kSource0,
+                  OperandSlotKind::kSource0, OperandValueClass::kUnknown,
+                  OperandAccess::kRead, FragmentKind::kScalar, 32u, 1u, false),
+              "expected V_CMP_NE_I32 literal source descriptor")) {
     return 1;
   }
 
@@ -1662,6 +1796,230 @@ int main() {
               "expected compiled vector binary execution success") ||
       !Expect(ExpectVectorBinaryBatchState(compiled_vector_binary_state),
               "expected compiled vector binary state")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 18> unsigned_vector_compare_words{
+      MakeSopk(0u, 70u, 7u),
+      MakeSopk(0u, 71u, 5u),
+      MakeVopc(74u, 70u, 50u),
+      MakeSopp(36u, 2u),
+      MakeSopk(0u, 90u, 111u),
+      MakeSopp(32u, 1u),
+      MakeSopk(0u, 90u, 222u),
+      MakeVopc(76u, 71u, 54u),
+      MakeSopp(35u, 2u),
+      MakeSopk(0u, 91u, 333u),
+      MakeSopp(32u, 1u),
+      MakeSopk(0u, 91u, 444u),
+      MakeVopc(77u, 137u, 51u),
+      MakeVopc(73u, 71u, 52u),
+      MakeVopc(75u, 71u, 52u),
+      MakeVopc(76u, 71u, 52u),
+      MakeVopc(78u, 71u, 52u),
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> unsigned_vector_compare_program;
+  if (!Expect(decoder.DecodeProgram(unsigned_vector_compare_words,
+                                    &unsigned_vector_compare_program,
+                                    &error_message),
+              "expected unsigned vector compare program decode success") ||
+      !Expect(unsigned_vector_compare_program.size() == 18u,
+              "expected eighteen decoded unsigned vector compare instructions") ||
+      !Expect(unsigned_vector_compare_program[2].opcode == "V_CMP_EQ_U32",
+              "expected decoded V_CMP_EQ_U32") ||
+      !Expect(unsigned_vector_compare_program[7].opcode == "V_CMP_GT_U32",
+              "expected decoded zero-mask V_CMP_GT_U32") ||
+      !Expect(unsigned_vector_compare_program[12].opcode == "V_CMP_NE_U32",
+              "expected decoded V_CMP_NE_U32") ||
+      !Expect(unsigned_vector_compare_program[13].opcode == "V_CMP_LT_U32",
+              "expected decoded V_CMP_LT_U32") ||
+      !Expect(unsigned_vector_compare_program[14].opcode == "V_CMP_LE_U32",
+              "expected decoded V_CMP_LE_U32") ||
+      !Expect(unsigned_vector_compare_program[16].opcode == "V_CMP_GE_U32",
+              "expected decoded V_CMP_GE_U32")) {
+    return 1;
+  }
+
+  WaveExecutionState decoded_unsigned_vector_compare_state;
+  decoded_unsigned_vector_compare_state.exec_mask = 0xbu;
+  decoded_unsigned_vector_compare_state.vgprs[50][0] = 7u;
+  decoded_unsigned_vector_compare_state.vgprs[50][1] = 4u;
+  decoded_unsigned_vector_compare_state.vgprs[50][3] = 7u;
+  decoded_unsigned_vector_compare_state.vgprs[51][0] = 9u;
+  decoded_unsigned_vector_compare_state.vgprs[51][1] = 8u;
+  decoded_unsigned_vector_compare_state.vgprs[51][3] = 8u;
+  decoded_unsigned_vector_compare_state.vgprs[52][0] = 6u;
+  decoded_unsigned_vector_compare_state.vgprs[52][1] = 5u;
+  decoded_unsigned_vector_compare_state.vgprs[52][3] = 4u;
+  decoded_unsigned_vector_compare_state.vgprs[54][0] = 6u;
+  decoded_unsigned_vector_compare_state.vgprs[54][1] = 7u;
+  decoded_unsigned_vector_compare_state.vgprs[54][3] = 8u;
+  if (!Expect(interpreter.ExecuteProgram(unsigned_vector_compare_program,
+                                         &decoded_unsigned_vector_compare_state,
+                                         &error_message),
+              "expected decoded unsigned vector compare execution success") ||
+      !Expect(ExpectUnsignedVectorCompareState(
+                  decoded_unsigned_vector_compare_state),
+              "expected decoded unsigned vector compare state")) {
+    return 1;
+  }
+
+  std::vector<Gfx1201CompiledInstruction>
+      compiled_unsigned_vector_compare_program;
+  if (!Expect(interpreter.CompileProgram(unsigned_vector_compare_program,
+                                         &compiled_unsigned_vector_compare_program,
+                                         &error_message),
+              "expected compiled unsigned vector compare program success") ||
+      !Expect(compiled_unsigned_vector_compare_program[2].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpEqU32,
+              "expected compiled V_CMP_EQ_U32 opcode") ||
+      !Expect(compiled_unsigned_vector_compare_program[7].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpGtU32,
+              "expected compiled zero-mask V_CMP_GT_U32 opcode") ||
+      !Expect(compiled_unsigned_vector_compare_program[12].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpNeU32,
+              "expected compiled V_CMP_NE_U32 opcode") ||
+      !Expect(compiled_unsigned_vector_compare_program[13].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpLtU32,
+              "expected compiled V_CMP_LT_U32 opcode") ||
+      !Expect(compiled_unsigned_vector_compare_program[14].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpLeU32,
+              "expected compiled V_CMP_LE_U32 opcode") ||
+      !Expect(compiled_unsigned_vector_compare_program[15].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpGtU32,
+              "expected compiled V_CMP_GT_U32 opcode") ||
+      !Expect(compiled_unsigned_vector_compare_program[16].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpGeU32,
+              "expected compiled V_CMP_GE_U32 opcode")) {
+    return 1;
+  }
+
+  WaveExecutionState compiled_unsigned_vector_compare_state;
+  compiled_unsigned_vector_compare_state.exec_mask = 0xbu;
+  compiled_unsigned_vector_compare_state.vgprs[50][0] = 7u;
+  compiled_unsigned_vector_compare_state.vgprs[50][1] = 4u;
+  compiled_unsigned_vector_compare_state.vgprs[50][3] = 7u;
+  compiled_unsigned_vector_compare_state.vgprs[51][0] = 9u;
+  compiled_unsigned_vector_compare_state.vgprs[51][1] = 8u;
+  compiled_unsigned_vector_compare_state.vgprs[51][3] = 8u;
+  compiled_unsigned_vector_compare_state.vgprs[52][0] = 6u;
+  compiled_unsigned_vector_compare_state.vgprs[52][1] = 5u;
+  compiled_unsigned_vector_compare_state.vgprs[52][3] = 4u;
+  compiled_unsigned_vector_compare_state.vgprs[54][0] = 6u;
+  compiled_unsigned_vector_compare_state.vgprs[54][1] = 7u;
+  compiled_unsigned_vector_compare_state.vgprs[54][3] = 8u;
+  if (!Expect(interpreter.ExecuteProgram(compiled_unsigned_vector_compare_program,
+                                         &compiled_unsigned_vector_compare_state,
+                                         &error_message),
+              "expected compiled unsigned vector compare execution success") ||
+      !Expect(ExpectUnsignedVectorCompareState(
+                  compiled_unsigned_vector_compare_state),
+              "expected compiled unsigned vector compare state")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 18> signed_vector_compare_words{
+      MakeSopk(0u, 72u, 0xfffdu),
+      MakeSopk(0u, 73u, 2u),
+      MakeVopc(66u, 72u, 53u),
+      MakeSopp(36u, 2u),
+      MakeSopk(0u, 92u, 555u),
+      MakeSopp(32u, 1u),
+      MakeSopk(0u, 92u, 666u),
+      MakeVopc(65u, 73u, 55u),
+      MakeSopp(35u, 2u),
+      MakeSopk(0u, 93u, 777u),
+      MakeSopp(32u, 1u),
+      MakeSopk(0u, 93u, 888u),
+      MakeVopc(69u, 72u, 53u),
+      MakeVopc(65u, 72u, 53u),
+      MakeVopc(67u, 72u, 53u),
+      MakeVopc(68u, 73u, 53u),
+      MakeVopc(70u, 73u, 53u),
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> signed_vector_compare_program;
+  if (!Expect(decoder.DecodeProgram(signed_vector_compare_words,
+                                    &signed_vector_compare_program,
+                                    &error_message),
+              "expected signed vector compare program decode success") ||
+      !Expect(signed_vector_compare_program.size() == 18u,
+              "expected eighteen decoded signed vector compare instructions") ||
+      !Expect(signed_vector_compare_program[2].opcode == "V_CMP_EQ_I32",
+              "expected decoded V_CMP_EQ_I32") ||
+      !Expect(signed_vector_compare_program[7].opcode == "V_CMP_LT_I32",
+              "expected decoded zero-mask V_CMP_LT_I32") ||
+      !Expect(signed_vector_compare_program[12].opcode == "V_CMP_NE_I32",
+              "expected decoded V_CMP_NE_I32") ||
+      !Expect(signed_vector_compare_program[14].opcode == "V_CMP_LE_I32",
+              "expected decoded V_CMP_LE_I32") ||
+      !Expect(signed_vector_compare_program[16].opcode == "V_CMP_GE_I32",
+              "expected decoded V_CMP_GE_I32")) {
+    return 1;
+  }
+
+  WaveExecutionState decoded_signed_vector_compare_state;
+  decoded_signed_vector_compare_state.exec_mask = 0xbu;
+  decoded_signed_vector_compare_state.vgprs[53][0] = 0xfffffffdu;
+  decoded_signed_vector_compare_state.vgprs[53][1] = 4u;
+  decoded_signed_vector_compare_state.vgprs[53][3] = 0xfffffffbu;
+  decoded_signed_vector_compare_state.vgprs[55][0] = 0xffffffffu;
+  decoded_signed_vector_compare_state.vgprs[55][1] = 0u;
+  decoded_signed_vector_compare_state.vgprs[55][3] = 1u;
+  if (!Expect(interpreter.ExecuteProgram(signed_vector_compare_program,
+                                         &decoded_signed_vector_compare_state,
+                                         &error_message),
+              "expected decoded signed vector compare execution success") ||
+      !Expect(ExpectSignedVectorCompareState(decoded_signed_vector_compare_state),
+              "expected decoded signed vector compare state")) {
+    return 1;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_signed_vector_compare_program;
+  if (!Expect(interpreter.CompileProgram(signed_vector_compare_program,
+                                         &compiled_signed_vector_compare_program,
+                                         &error_message),
+              "expected compiled signed vector compare program success") ||
+      !Expect(compiled_signed_vector_compare_program[2].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpEqI32,
+              "expected compiled V_CMP_EQ_I32 opcode") ||
+      !Expect(compiled_signed_vector_compare_program[7].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpLtI32,
+              "expected compiled zero-mask V_CMP_LT_I32 opcode") ||
+      !Expect(compiled_signed_vector_compare_program[12].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpNeI32,
+              "expected compiled V_CMP_NE_I32 opcode") ||
+      !Expect(compiled_signed_vector_compare_program[13].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpLtI32,
+              "expected compiled V_CMP_LT_I32 opcode") ||
+      !Expect(compiled_signed_vector_compare_program[14].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpLeI32,
+              "expected compiled V_CMP_LE_I32 opcode") ||
+      !Expect(compiled_signed_vector_compare_program[15].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpGtI32,
+              "expected compiled V_CMP_GT_I32 opcode") ||
+      !Expect(compiled_signed_vector_compare_program[16].opcode ==
+                  Gfx1201CompiledOpcode::kVCmpGeI32,
+              "expected compiled V_CMP_GE_I32 opcode")) {
+    return 1;
+  }
+
+  WaveExecutionState compiled_signed_vector_compare_state;
+  compiled_signed_vector_compare_state.exec_mask = 0xbu;
+  compiled_signed_vector_compare_state.vgprs[53][0] = 0xfffffffdu;
+  compiled_signed_vector_compare_state.vgprs[53][1] = 4u;
+  compiled_signed_vector_compare_state.vgprs[53][3] = 0xfffffffbu;
+  compiled_signed_vector_compare_state.vgprs[55][0] = 0xffffffffu;
+  compiled_signed_vector_compare_state.vgprs[55][1] = 0u;
+  compiled_signed_vector_compare_state.vgprs[55][3] = 1u;
+  if (!Expect(interpreter.ExecuteProgram(compiled_signed_vector_compare_program,
+                                         &compiled_signed_vector_compare_state,
+                                         &error_message),
+              "expected compiled signed vector compare execution success") ||
+      !Expect(ExpectSignedVectorCompareState(
+                  compiled_signed_vector_compare_state),
+              "expected compiled signed vector compare state")) {
     return 1;
   }
 

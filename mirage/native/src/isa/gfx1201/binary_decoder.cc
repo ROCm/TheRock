@@ -11,11 +11,12 @@
 namespace mirage::sim::isa {
 namespace {
 
+constexpr std::uint16_t kImplicitVccPairSgprIndex = 248;
 constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 50> kPhase0ExecutableOpcodes{{
+constexpr std::array<std::string_view, 62> kPhase0ExecutableOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_ADD_U32",
@@ -43,6 +44,18 @@ constexpr std::array<std::string_view, 50> kPhase0ExecutableOpcodes{{
     "S_MOV_B32",
     "S_MOVK_I32",
     "V_MOV_B32",
+    "V_CMP_EQ_I32",
+    "V_CMP_NE_I32",
+    "V_CMP_LT_I32",
+    "V_CMP_LE_I32",
+    "V_CMP_GT_I32",
+    "V_CMP_GE_I32",
+    "V_CMP_EQ_U32",
+    "V_CMP_NE_U32",
+    "V_CMP_LT_U32",
+    "V_CMP_LE_U32",
+    "V_CMP_GT_U32",
+    "V_CMP_GE_U32",
     "V_NOT_B32",
     "V_BFREV_B32",
     "V_CVT_F32_UBYTE0",
@@ -149,6 +162,86 @@ std::string BuildDecoderBringupMessage() {
     first = false;
   }
   return message;
+}
+
+OperandDescriptor MakeScalarRegisterDescriptor(OperandRole role,
+                                               OperandSlotKind slot_kind,
+                                               OperandAccess access,
+                                               std::uint8_t element_bit_width = 32,
+                                               std::uint8_t component_count = 1,
+                                               bool is_implicit = false) {
+  OperandDescriptor descriptor;
+  descriptor.role = role;
+  descriptor.slot_kind = slot_kind;
+  descriptor.value_class = OperandValueClass::kScalarRegister;
+  descriptor.access = access;
+  descriptor.fragment_shape = MakeScalarFragmentShape(element_bit_width);
+  descriptor.component_count = component_count;
+  descriptor.is_implicit = is_implicit;
+  return descriptor;
+}
+
+OperandDescriptor MakeVectorRegisterDescriptor(OperandRole role,
+                                               OperandSlotKind slot_kind,
+                                               OperandAccess access,
+                                               std::uint8_t element_bit_width = 32) {
+  OperandDescriptor descriptor;
+  descriptor.role = role;
+  descriptor.slot_kind = slot_kind;
+  descriptor.value_class = OperandValueClass::kVectorRegister;
+  descriptor.access = access;
+  descriptor.fragment_shape = MakeVectorFragmentShape(1u, element_bit_width);
+  descriptor.component_count = 1;
+  return descriptor;
+}
+
+OperandDescriptor MakeImmediateDescriptor(OperandRole role,
+                                          OperandSlotKind slot_kind,
+                                          std::uint8_t element_bit_width = 32) {
+  OperandDescriptor descriptor;
+  descriptor.role = role;
+  descriptor.slot_kind = slot_kind;
+  descriptor.access = OperandAccess::kRead;
+  descriptor.fragment_shape = MakeScalarFragmentShape(element_bit_width);
+  descriptor.component_count = 1;
+  return descriptor;
+}
+
+InstructionOperand DescribeSourceOperand(InstructionOperand operand,
+                                         OperandRole role,
+                                         OperandSlotKind slot_kind) {
+  if (operand.kind == OperandKind::kSgpr) {
+    return operand.WithDescriptor(
+        MakeScalarRegisterDescriptor(role, slot_kind, OperandAccess::kRead));
+  }
+  if (operand.kind == OperandKind::kVgpr) {
+    return operand.WithDescriptor(
+        MakeVectorRegisterDescriptor(role, slot_kind, OperandAccess::kRead));
+  }
+  return operand.WithDescriptor(MakeImmediateDescriptor(role, slot_kind));
+}
+
+InstructionOperand DescribeScalarDestinationOperand(InstructionOperand operand,
+                                                    bool is_implicit = false,
+                                                    std::uint8_t element_bit_width = 32,
+                                                    std::uint8_t component_count = 1) {
+  return operand.WithDescriptor(MakeScalarRegisterDescriptor(
+      OperandRole::kDestination, OperandSlotKind::kScalarDestination,
+      OperandAccess::kWrite, element_bit_width, component_count, is_implicit));
+}
+
+InstructionOperand DescribeVectorDestinationOperand(InstructionOperand operand) {
+  return operand.WithDescriptor(MakeVectorRegisterDescriptor(
+      OperandRole::kDestination, OperandSlotKind::kDestination,
+      OperandAccess::kWrite));
+}
+
+InstructionOperand MakeImplicitVccDestinationOperand() {
+  return InstructionOperand::Sgpr(
+      kImplicitVccPairSgprIndex,
+      MakeScalarRegisterDescriptor(OperandRole::kDestination,
+                                   OperandSlotKind::kScalarDestination,
+                                   OperandAccess::kWrite, 64, 2, true));
 }
 
 std::string BuildRouteMessage(const Gfx1201OpcodeRoute& route) {
@@ -353,7 +446,10 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
     *words_consumed = 1;
   } else if (instruction_name == "S_NOP") {
     *instruction = DecodedInstruction::OneOperand(
-        instruction_name, InstructionOperand::Imm32(ExtractBits(word, 0, 16)));
+        instruction_name,
+        InstructionOperand::Imm32(ExtractBits(word, 0, 16))
+            .WithDescriptor(MakeImmediateDescriptor(OperandRole::kSource0,
+                                                   OperandSlotKind::kSource0)));
     *words_consumed = 1;
   } else if (instruction_name == "S_BRANCH" ||
              instruction_name == "S_CBRANCH_SCC0" ||
@@ -365,7 +461,9 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
     *instruction = DecodedInstruction::OneOperand(
         instruction_name,
         InstructionOperand::Imm32(static_cast<std::uint32_t>(
-            SignExtend16(ExtractBits(word, 0, 16)))));
+            SignExtend16(ExtractBits(word, 0, 16))))
+            .WithDescriptor(MakeImmediateDescriptor(OperandRole::kSource0,
+                                                   OperandSlotKind::kSource0)));
     *words_consumed = 1;
   } else if (instruction_name == "S_MOV_B32") {
     InstructionOperand dst;
@@ -380,7 +478,10 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
       return false;
     }
 
-    *instruction = DecodedInstruction::Unary(instruction_name, dst, src0);
+    *instruction = DecodedInstruction::Unary(
+        instruction_name, DescribeScalarDestinationOperand(dst),
+        DescribeSourceOperand(src0, OperandRole::kSource0,
+                              OperandSlotKind::kSource0));
     *words_consumed = 1 + literal_words_consumed;
   } else if (instruction_name == "S_MOVK_I32") {
     InstructionOperand dst;
@@ -389,9 +490,11 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
     }
 
     *instruction = DecodedInstruction::Unary(
-        instruction_name, dst,
+        instruction_name, DescribeScalarDestinationOperand(dst),
         InstructionOperand::Imm32(static_cast<std::uint32_t>(
-            SignExtend16(ExtractBits(word, 0, 16)))));
+            SignExtend16(ExtractBits(word, 0, 16))))
+            .WithDescriptor(MakeImmediateDescriptor(OperandRole::kSource0,
+                                                   OperandSlotKind::kSource0)));
     *words_consumed = 1;
   } else if (instruction_name == "S_ADD_U32" || instruction_name == "S_ADD_I32" ||
              instruction_name == "S_SUB_U32") {
@@ -417,7 +520,12 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
       return false;
     }
 
-    *instruction = DecodedInstruction::Binary(instruction_name, dst, src0, src1);
+    *instruction = DecodedInstruction::Binary(
+        instruction_name, DescribeScalarDestinationOperand(dst),
+        DescribeSourceOperand(src0, OperandRole::kSource0,
+                              OperandSlotKind::kSource0),
+        DescribeSourceOperand(src1, OperandRole::kSource1,
+                              OperandSlotKind::kSource1));
     *words_consumed =
         1 + src0_literal_words_consumed + src1_literal_words_consumed;
   } else if (instruction_name == "S_CMP_EQ_I32" ||
@@ -449,7 +557,12 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
       return false;
     }
 
-    *instruction = DecodedInstruction::TwoOperand(instruction_name, src0, src1);
+    *instruction = DecodedInstruction::TwoOperand(
+        instruction_name,
+        DescribeSourceOperand(src0, OperandRole::kSource0,
+                              OperandSlotKind::kSource0),
+        DescribeSourceOperand(src1, OperandRole::kSource1,
+                              OperandSlotKind::kSource1));
     *words_consumed =
         1 + src0_literal_words_consumed + src1_literal_words_consumed;
   } else if (instruction_name == "V_MOV_B32" ||
@@ -475,7 +588,42 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
       return false;
     }
 
-    *instruction = DecodedInstruction::Unary(instruction_name, dst, src0);
+    *instruction = DecodedInstruction::Unary(
+        instruction_name, DescribeVectorDestinationOperand(dst),
+        DescribeSourceOperand(src0, OperandRole::kSource0,
+                              OperandSlotKind::kSource0));
+    *words_consumed = 1 + literal_words_consumed;
+  } else if (instruction_name == "V_CMP_EQ_I32" ||
+             instruction_name == "V_CMP_NE_I32" ||
+             instruction_name == "V_CMP_LT_I32" ||
+             instruction_name == "V_CMP_LE_I32" ||
+             instruction_name == "V_CMP_GT_I32" ||
+             instruction_name == "V_CMP_GE_I32" ||
+             instruction_name == "V_CMP_EQ_U32" ||
+             instruction_name == "V_CMP_NE_U32" ||
+             instruction_name == "V_CMP_LT_U32" ||
+             instruction_name == "V_CMP_LE_U32" ||
+             instruction_name == "V_CMP_GT_U32" ||
+             instruction_name == "V_CMP_GE_U32") {
+    std::size_t literal_words_consumed = 0;
+    InstructionOperand src0;
+    if (!DecodeVectorSource(ExtractBits(word, 0, 9), words.subspan(1),
+                            &literal_words_consumed, &src0, error_message)) {
+      return false;
+    }
+
+    InstructionOperand src1;
+    if (!DecodeVectorRegisterSource(ExtractBits(word, 9, 8), &src1,
+                                    error_message)) {
+      return false;
+    }
+
+    *instruction = DecodedInstruction::Binary(
+        instruction_name, MakeImplicitVccDestinationOperand(),
+        DescribeSourceOperand(src0, OperandRole::kSource0,
+                              OperandSlotKind::kSource0),
+        DescribeSourceOperand(src1, OperandRole::kSource1,
+                              OperandSlotKind::kSource1));
     *words_consumed = 1 + literal_words_consumed;
   } else if (instruction_name == "V_ADD_U32" ||
              instruction_name == "V_SUBREV_U32" ||
@@ -507,7 +655,12 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
       return false;
     }
 
-    *instruction = DecodedInstruction::Binary(instruction_name, dst, src0, src1);
+    *instruction = DecodedInstruction::Binary(
+        instruction_name, DescribeVectorDestinationOperand(dst),
+        DescribeSourceOperand(src0, OperandRole::kSource0,
+                              OperandSlotKind::kSource0),
+        DescribeSourceOperand(src1, OperandRole::kSource1,
+                              OperandSlotKind::kSource1));
     *words_consumed = 1 + literal_words_consumed;
   } else if (instruction_name == "V_SUB_U32") {
     InstructionOperand dst;
@@ -528,7 +681,12 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
       return false;
     }
 
-    *instruction = DecodedInstruction::Binary(instruction_name, dst, src0, src1);
+    *instruction = DecodedInstruction::Binary(
+        instruction_name, DescribeVectorDestinationOperand(dst),
+        DescribeSourceOperand(src0, OperandRole::kSource0,
+                              OperandSlotKind::kSource0),
+        DescribeSourceOperand(src1, OperandRole::kSource1,
+                              OperandSlotKind::kSource1));
     *words_consumed = 1 + literal_words_consumed;
   } else {
     return false;
