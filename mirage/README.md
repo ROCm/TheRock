@@ -47,6 +47,11 @@ The standalone native build also vendors and builds the `simdojo` discrete
 event simulation library from `third_party/simdojo/`, with a dedicated smoke
 test `mirage_simdojo_smoke_test` to verify the import compiles and links
 cleanly inside Mirage without pulling in other `rocjitsu` infrastructure.
+Mirage now also carries a first real `simdojo` integration seam through
+`lib/sim/timing/simdojo_dispatch_harness.h`: a timed dispatch source and
+single-GPU executor component that use `simdojo` as the outer event shell
+while preserving `SingleGpuSimulator` as the functional execution engine.
+That path is covered by `mirage_simdojo_dispatch_harness_test`.
 
 The current native target brings up a single-GPU functional simulator slice:
 one virtual device, HBM-backed allocations, compute queue state, and a narrow
