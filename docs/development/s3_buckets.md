@@ -84,33 +84,33 @@ manually promoted from prereleases via IAM user policies (see
 Python, tarball, and native package buckets are fronted by CloudFront CDNs —
 prefer the CDN URLs for reading (e.g. `pip install --index-url`).
 
-| Bucket                                                                             | Contents        | IAM role             | CDN                                                                                                                         |
-| ---------------------------------------------------------------------------------- | --------------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| [`therock-dev-artifacts`](https://therock-dev-artifacts.s3.amazonaws.com/)         | Build outputs   | `therock-dev`        | —                                                                                                                           |
-| [`therock-dev-packages`](https://therock-dev-packages.s3.amazonaws.com/)           | Native packages | `therock-dev`        | [`rocm.devreleases.amd.com/deb/`](https://rocm.devreleases.amd.com/deb/), [`…/rpm/`](https://rocm.devreleases.amd.com/rpm/) |
-| [`therock-dev-python`](https://therock-dev-python.s3.amazonaws.com/)               | Python packages | `therock-dev`        | [`rocm.devreleases.amd.com/v2/`](https://rocm.devreleases.amd.com/v2/)                                                      |
-| [`therock-dev-tarball`](https://therock-dev-tarball.s3.amazonaws.com/)             | ROCm tarballs   | `therock-dev`        | [`rocm.devreleases.amd.com/tarball/`](https://rocm.devreleases.amd.com/tarball/)                                            |
-| [`therock-nightly-artifacts`](https://therock-nightly-artifacts.s3.amazonaws.com/) | Build outputs   | `therock-nightly`    | —                                                                                                                           |
-| [`therock-nightly-packages`](https://therock-nightly-packages.s3.amazonaws.com/)   | Native packages | `therock-nightly`    | [`rocm.nightlies.amd.com/deb/`](https://rocm.nightlies.amd.com/deb/), [`…/rpm/`](https://rocm.nightlies.amd.com/rpm/)       |
-| [`therock-nightly-python`](https://therock-nightly-python.s3.amazonaws.com/)       | Python packages | `therock-nightly`    | [`rocm.nightlies.amd.com/v2/`](https://rocm.nightlies.amd.com/v2/)                                                          |
-| [`therock-nightly-tarball`](https://therock-nightly-tarball.s3.amazonaws.com/)     | ROCm tarballs   | `therock-nightly`    | [`rocm.nightlies.amd.com/tarball/`](https://rocm.nightlies.amd.com/tarball/)                                                |
-| `therock-prerelease-artifacts`                                                     | Build outputs   | `therock-prerelease` | —                                                                                                                           |
-| `therock-prerelease-packages`                                                      | Native packages | `therock-prerelease` | [`rocm.prereleases.amd.com/packages/`](https://rocm.prereleases.amd.com/packages/)                                          |
-| `therock-prerelease-python`                                                        | Python packages | `therock-prerelease` | [`rocm.prereleases.amd.com/whl/`](https://rocm.prereleases.amd.com/whl/)                                                    |
-| `therock-prerelease-tarball`                                                       | ROCm tarballs   | `therock-prerelease` | [`rocm.prereleases.amd.com/tarball/`](https://rocm.prereleases.amd.com/tarball/)                                            |
-| `therock-release-artifacts`                                                        | Build outputs   | —                    | —                                                                                                                           |
-| `therock-release-packages`                                                         | Native packages | —                    | [`repo.amd.com/rocm/packages/`](https://repo.amd.com/rocm/packages/)                                                        |
-| `therock-release-python`                                                           | Python packages | —                    | [`repo.amd.com/rocm/whl/`](https://repo.amd.com/rocm/whl/)                                                                  |
-| `therock-release-tarball`                                                          | ROCm tarballs   | —                    | [`repo.amd.com/rocm/tarball/`](https://repo.amd.com/rocm/tarball/)                                                          |
+| Bucket                                                                                   | Contents        | IAM role             | CDN                                                                                                                         |
+| ---------------------------------------------------------------------------------------- | --------------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| [`therock-dev-artifacts`](https://therock-dev-artifacts.s3.amazonaws.com/)               | Build outputs   | `therock-dev`        | —                                                                                                                           |
+| [`therock-dev-packages`](https://therock-dev-packages.s3.amazonaws.com/)                 | Native packages | `therock-dev`        | [`rocm.devreleases.amd.com/deb/`](https://rocm.devreleases.amd.com/deb/), [`…/rpm/`](https://rocm.devreleases.amd.com/rpm/) |
+| [`therock-dev-python`](https://therock-dev-python.s3.amazonaws.com/)                     | Python packages | `therock-dev`        | [`rocm.devreleases.amd.com/v2/`](https://rocm.devreleases.amd.com/v2/)                                                      |
+| [`therock-dev-tarball`](https://therock-dev-tarball.s3.amazonaws.com/)                   | ROCm tarballs   | `therock-dev`        | [`rocm.devreleases.amd.com/tarball/`](https://rocm.devreleases.amd.com/tarball/)                                            |
+| [`therock-nightly-artifacts`](https://therock-nightly-artifacts.s3.amazonaws.com/)       | Build outputs   | `therock-nightly`    | —                                                                                                                           |
+| [`therock-nightly-packages`](https://therock-nightly-packages.s3.amazonaws.com/)         | Native packages | `therock-nightly`    | [`rocm.nightlies.amd.com/deb/`](https://rocm.nightlies.amd.com/deb/), [`…/rpm/`](https://rocm.nightlies.amd.com/rpm/)       |
+| [`therock-nightly-python`](https://therock-nightly-python.s3.amazonaws.com/)             | Python packages | `therock-nightly`    | [`rocm.nightlies.amd.com/v2/`](https://rocm.nightlies.amd.com/v2/)                                                          |
+| [`therock-nightly-tarball`](https://therock-nightly-tarball.s3.amazonaws.com/)           | ROCm tarballs   | `therock-nightly`    | [`rocm.nightlies.amd.com/tarball/`](https://rocm.nightlies.amd.com/tarball/)                                                |
+| [`therock-prerelease-artifacts`](https://therock-prerelease-artifacts.s3.amazonaws.com/) | Build outputs   | `therock-prerelease` | —                                                                                                                           |
+| `therock-prerelease-packages`                                                            | Native packages | `therock-prerelease` | [`rocm.prereleases.amd.com/packages/`](https://rocm.prereleases.amd.com/packages/)                                          |
+| `therock-prerelease-python`                                                              | Python packages | `therock-prerelease` | [`rocm.prereleases.amd.com/whl/`](https://rocm.prereleases.amd.com/whl/)                                                    |
+| `therock-prerelease-tarball`                                                             | ROCm tarballs   | `therock-prerelease` | [`rocm.prereleases.amd.com/tarball/`](https://rocm.prereleases.amd.com/tarball/)                                            |
+| [`therock-release-artifacts`](https://therock-release-artifacts.s3.amazonaws.com/)       | Build outputs   | —                    | —                                                                                                                           |
+| `therock-release-packages`                                                               | Native packages | —                    | [`repo.amd.com/rocm/packages/`](https://repo.amd.com/rocm/packages/)                                                        |
+| `therock-release-python`                                                                 | Python packages | —                    | [`repo.amd.com/rocm/whl/`](https://repo.amd.com/rocm/whl/)                                                                  |
+| `therock-release-tarball`                                                                | ROCm tarballs   | —                    | [`repo.amd.com/rocm/tarball/`](https://repo.amd.com/rocm/tarball/)                                                          |
 
 ### Cache buckets
 
-| Bucket                                                                                               | Contents                   | IAM role             |
-| ---------------------------------------------------------------------------------------------------- | -------------------------- | -------------------- |
-| [`therock-ci-pytorch-sccache`](https://therock-ci-pytorch-sccache.s3.amazonaws.com/)                 | PyTorch CI sccache         | `therock-ci`         |
-| [`therock-dev-pytorch-sccache`](https://therock-dev-pytorch-sccache.s3.amazonaws.com/)               | PyTorch dev sccache        | `therock-dev`        |
-| [`therock-nightly-pytorch-sccache`](https://therock-nightly-pytorch-sccache.s3.amazonaws.com/)       | PyTorch nightly sccache    | `therock-nightly`    |
-| [`therock-prerelease-pytorch-sccache`](https://therock-prerelease-pytorch-sccache.s3.amazonaws.com/) | PyTorch prerelease sccache | `therock-prerelease` |
+| Bucket                               | Contents                   | IAM role             |
+| ------------------------------------ | -------------------------- | -------------------- |
+| `therock-ci-pytorch-sccache`         | PyTorch CI sccache         | `therock-ci`         |
+| `therock-dev-pytorch-sccache`        | PyTorch dev sccache        | `therock-dev`        |
+| `therock-nightly-pytorch-sccache`    | PyTorch nightly sccache    | `therock-nightly`    |
+| `therock-prerelease-pytorch-sccache` | PyTorch prerelease sccache | `therock-prerelease` |
 
 ### Legacy buckets
 
