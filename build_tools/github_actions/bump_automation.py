@@ -38,6 +38,7 @@ SUBMODULE_CONFIG = {
     },
 }
 
+
 def run(cmd):
     """Run a shell command"""
     result = subprocess.run(cmd, capture_output=True, text=True)
@@ -150,34 +151,31 @@ def update_ref_in_file(file_path, new_sha):
     print(f"[INFO] Updated {file_path}")
 
 
-
 def close_stale_prs(submodule, old_sha, therock_token):
     """Close all open PRs on TheRock that originated from old submodule SHA"""
     old_short = old_sha[:7]
-    prs_json = gh_api(
-        therock_token, f"repos/{THEROCK_REPO}/pulls?state=open"
-    )
+    prs_json = gh_api(therock_token, f"repos/{THEROCK_REPO}/pulls?state=open")
     prs = json.loads(prs_json)
     for pr in prs:
         title = pr["title"].lower()
         if f"bump {submodule}" in title and f"from {old_short}" in title:
             number = pr["number"]
             print(f"[INFO] Closing stale PR #{number}")
-            
+
             # Add a comment to the PR being closed
             gh_api(
                 therock_token,
                 f"repos/{THEROCK_REPO}/issues/{number}/comments",
                 method="POST",
-                data={"body": "Closing stale PR."}
+                data={"body": "Closing stale PR."},
             )
-            
+
             # Close the PR
             gh_api(
                 therock_token,
                 f"repos/{THEROCK_REPO}/pulls/{number}",
                 method="PATCH",
-                data={"state": "closed"}
+                data={"state": "closed"},
             )
 
 
@@ -198,7 +196,7 @@ def create_therock_bump(submodule, token):
 
         os.chdir(clone_dir)
 
-        branch_name = f"bump-{submodule}-{latest[:7]}" 
+        branch_name = f"bump-{submodule}-{latest[:7]}"
         run(["git", "checkout", "-b", branch_name])
 
         # Initialize the submodule if needed
@@ -221,7 +219,18 @@ def create_therock_bump(submodule, token):
         # Commit and push
         title = f"Bump {submodule} from {current_sha[:7]} to {latest[:7]}"
         body = generate_pr_body(repo, current_sha, latest)
-        run(["git", "-c", "user.name=therockbot", "-c", "user.email=therockbot@amd.com", "commit", "-m", title])
+        run(
+            [
+                "git",
+                "-c",
+                "user.name=therockbot",
+                "-c",
+                "user.email=therockbot@amd.com",
+                "commit",
+                "-m",
+                title,
+            ]
+        )
         run(["git", "push", "origin", branch_name])
 
         # Create PR
@@ -229,12 +238,7 @@ def create_therock_bump(submodule, token):
             token,
             f"repos/{THEROCK_REPO}/pulls",
             method="POST",
-            data={
-                "title": title,
-                "head": branch_name,
-                "base": "main",
-                "body": body
-            }
+            data={"title": title, "head": branch_name, "base": "main", "body": body},
         )
         print(f"[INFO] Created bump PR for {submodule}")
         os.chdir(original_cwd)
@@ -274,18 +278,18 @@ def handle_push(before, after, systems_token, libraries_token, therock_token):
     with tempfile.TemporaryDirectory() as tmp:
         run(["git", "clone", "--depth", "1", clone_url, tmp])
         os.chdir(tmp)  # Change working directory to the cloned repo
-        
+
         # Verify that the file exists before accessing
         for f in config["files"]:
             if not os.path.exists(f):
                 print(f"[ERROR] File not found: {f}")
                 return
-        
+
         run(["git", "checkout", "-b", branch])
-        
+
         for f in config["files"]:
             update_ref_in_file(f, after)
-        
+
         run(["git", "add"] + config["files"])
         run(["git", "commit", "-m", f"Update TheRock ref to {after[:7]}"])
         run(["git", "push", "origin", branch])
@@ -297,8 +301,8 @@ def handle_push(before, after, systems_token, libraries_token, therock_token):
                 "title": f"Update TheRock reference to ({after[:7]})",
                 "head": branch,
                 "base": "develop",
-                "body": f"Updated TheRock ref to `{after[:7]}` due to submodule bump"
-            }
+                "body": f"Updated TheRock ref to `{after[:7]}` due to submodule bump",
+            },
         )
 
 
@@ -320,7 +324,7 @@ def main():
             args.after,
             args.systems_token,
             args.libraries_token,
-            args.therock_token
+            args.therock_token,
         )
 
 
