@@ -648,8 +648,8 @@ def main(base_args, linux_families, windows_families):
     if is_schedule:
         # Always build and run full tests on scheduled runs.
         enable_build_jobs = True
-        test_type = "full"
-        test_type_reason = "scheduled run triggers full tests"
+        test_type = "nightly"
+        test_type_reason = "scheduled run triggers nightly tests"
     elif is_workflow_dispatch:
         # Always build and conditionally run full tests for workflow dispatch.
         enable_build_jobs = True
@@ -691,6 +691,18 @@ def main(base_args, linux_families, windows_families):
                 is_pull_request or is_push
             ):
                 matrix_row["sanity_check_only_for_family"] = True
+
+        # If a test filter label is included, we set the "test_type" to the designated filter
+        if pr_labels and any("test_filter:" in label for label in pr_labels):
+            for label in pr_labels:
+                if "test_filter:" in label:
+                    _, filter_type = label.split(":")
+                    # If the filter type is not recognized, we ignore the label and keep the default test type
+                    if filter_type not in ["smoke", "standard", "nightly", "full"]:
+                        continue
+                    test_type = filter_type
+                    test_type_reason = f"test filter label specified: {label}"
+                    break
 
     print(f"test_type decision: '{test_type}' (reason: {test_type_reason})")
 
