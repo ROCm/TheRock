@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Module and CLI script for finding CI artifacts for a given commit.
 
 This script queries the GitHub API to find workflow runs for a commit and
@@ -8,18 +11,17 @@ Usage:
     python find_artifacts_for_commit.py \
         --commit abc123 \
         --repo ROCm/TheRock \
-        --artifact-group gfx94X-dcgpu
+        --artifact-group gfx94X-dcgpu gfx120X-all
 
 For script-to-script composition:
 
     from find_artifacts_for_commit import find_artifacts_for_commit, ArtifactRunInfo
 
-    info = find_artifacts_for_commit(
+    results = find_artifacts_for_commit(
         commit="abc123",
-        repo="ROCm/TheRock",
-        artifact_group="gfx94X-dcgpu",
+        artifact_groups=["gfx94X-dcgpu", "gfx120X-all"],
     )
-    if info:
+    for info in results:
         print(f"Artifacts at {info.s3_uri}")
 """
 
@@ -30,10 +32,10 @@ import sys
 import urllib.request
 import urllib.error
 
+from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from github_actions.github_actions_utils import (
     GitHubAPIError,
     gha_query_workflow_runs_for_commit,
-    retrieve_bucket_info,
 )
 
 
@@ -95,35 +97,6 @@ class ArtifactRunInfo:
         print(f"  S3 Index:            {self.s3_index_url}")
 
 
-def _build_artifact_run_info(
-    commit: str,
-    github_repository_name: str,
-    artifact_group: str,
-    workflow_file_name: str,
-    platform: str,
-    workflow_run: dict,
-) -> ArtifactRunInfo:
-    """Builds ArtifactRunInfo from a workflow run dict."""
-    external_repo, bucket = retrieve_bucket_info(
-        github_repository=github_repository_name,
-        workflow_run=workflow_run,
-    )
-
-    return ArtifactRunInfo(
-        git_commit_sha=commit,
-        github_repository_name=github_repository_name,
-        external_repo=external_repo,
-        workflow_file_name=workflow_file_name,
-        workflow_run_id=str(workflow_run["id"]),
-        workflow_run_status=workflow_run.get("status", "unknown"),
-        workflow_run_conclusion=workflow_run.get("conclusion"),
-        workflow_run_html_url=workflow_run.get("html_url", ""),
-        platform=platform,
-        artifact_group=artifact_group,
-        s3_bucket=bucket,
-    )
-
-
 def check_if_artifacts_exist(info: ArtifactRunInfo) -> bool:
     """Checks if artifacts exist at the expected S3 location.
 
@@ -152,59 +125,75 @@ def check_if_artifacts_exist(info: ArtifactRunInfo) -> bool:
 
 def find_artifacts_for_commit(
     commit: str,
-    artifact_group: str,
+    artifact_groups: list[str],
     github_repository_name: str = "ROCm/TheRock",
     workflow_file_name: str = "ci.yml",
     platform: str = platform_module.system().lower(),
-) -> ArtifactRunInfo | None:
-    """Main entry point: finds artifact info for a commit.
+) -> list[ArtifactRunInfo]:
+    """Find artifact info for one or more groups from a commit.
 
     Queries GitHub for workflow runs on this commit, then checks each run
-    (most recent first) for available artifacts. Returns the first run
-    where artifacts exist, or None if no artifacts are found.
-
-    A commit may have multiple workflow runs if the workflow was retriggered.
-    This function finds the first run with actual artifacts available in S3.
+    (most recent first) for the requested groups. Accumulates results across
+    runs — if attempt 2 has gfx110X artifacts and attempt 1 has gfx120X
+    artifacts, both are returned.
 
     Args:
         commit: Git commit SHA (full or abbreviated)
+        artifact_groups: GPU families (e.g., ["gfx94X-dcgpu", "gfx120X-all"])
         github_repository_name: Repository in "owner/repo" format
-        artifact_group: GPU family (e.g., "gfx94X-dcgpu", "gfx950-dcgpu-asan")
         workflow_file_name: Workflow filename, or None to infer from repo
         platform: "linux" or "windows", or None for current platform
 
     Returns:
-        ArtifactRunInfo for the first run with artifacts, or None if no
-        workflow runs exist or no artifacts are available.
+        List of ArtifactRunInfo for groups that have artifacts. May be empty
+        if no workflow runs exist or no artifacts are available.
 
     Raises:
         GitHubAPIError: If the GitHub API request fails (rate limit, network
             error, etc.). Callers should handle this to distinguish between
-            "no artifacts found" (None) and "couldn't check" (exception).
+            "no artifacts found" (empty list) and "couldn't check" (exception).
     """
     workflow_runs = gha_query_workflow_runs_for_commit(
         github_repository_name, workflow_file_name, commit
     )
 
     if not workflow_runs:
-        return None
+        return []
 
-    # Find the first workflow run with available artifacts
+    # Accumulate results across runs (most recent first). Once a group is
+    # found in a newer run, skip it in older runs.
+    found: dict[str, ArtifactRunInfo] = {}
     for workflow_run in workflow_runs:
-        info = _build_artifact_run_info(
-            commit=commit,
-            github_repository_name=github_repository_name,
-            artifact_group=artifact_group,
-            workflow_file_name=workflow_file_name,
+        # Bucket info depends only on the workflow run, not the artifact group.
+        output_root = WorkflowOutputRoot.from_workflow_run(
+            run_id=str(workflow_run["id"]),
             platform=platform,
+            github_repository=github_repository_name,
             workflow_run=workflow_run,
         )
+        external_repo = output_root.external_repo
+        bucket = output_root.bucket
+        for group in artifact_groups:
+            if group in found:
+                continue
+            info = ArtifactRunInfo(
+                git_commit_sha=commit,
+                github_repository_name=github_repository_name,
+                external_repo=external_repo,
+                workflow_file_name=workflow_file_name,
+                workflow_run_id=str(workflow_run["id"]),
+                workflow_run_status=workflow_run.get("status", "unknown"),
+                workflow_run_conclusion=workflow_run.get("conclusion"),
+                workflow_run_html_url=workflow_run.get("html_url", ""),
+                platform=platform,
+                artifact_group=group,
+                s3_bucket=bucket,
+            )
+            if check_if_artifacts_exist(info):
+                found[group] = info
 
-        if check_if_artifacts_exist(info):
-            return info
-
-    # No runs had artifacts available
-    return None
+    # Return in the same order as requested
+    return [found[g] for g in artifact_groups if g in found]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -241,25 +230,26 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--artifact-group",
         type=str,
+        nargs="+",
         required=True,
-        help="Artifact group (e.g., gfx94X-dcgpu, gfx950-dcgpu-asan)",
+        help="Artifact group(s) (e.g., gfx94X-dcgpu gfx120X-all)",
     )
 
     args = parser.parse_args(argv)
 
     try:
-        info = find_artifacts_for_commit(
+        results = find_artifacts_for_commit(
             commit=args.commit,
+            artifact_groups=args.artifact_group,
             github_repository_name=args.repo,
             workflow_file_name=args.workflow,
             platform=args.platform,
-            artifact_group=args.artifact_group,
         )
     except GitHubAPIError as e:
         print(f"Error: {e}", file=sys.stderr)
         return 2
 
-    if info is None:
+    if not results:
         print(
             f"No artifacts found for commit {args.commit} "
             f"(platform={args.platform}, artifact_group={args.artifact_group})",
@@ -267,7 +257,9 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
-    info.print()
+    for info in results:
+        info.print()
+        print()
     return 0
 
 

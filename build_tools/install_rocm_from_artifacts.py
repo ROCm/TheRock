@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """install_rocm_from_artifacts.py
 
 This script helps CI workflows, developers and testing suites easily install
@@ -32,6 +35,7 @@ python build_tools/install_rocm_from_artifacts.py
     [--rocdecode | --no-rocdecode]
     [--rocjpeg | --no-rocjpeg]
     [--rocprofiler-compute | --no-rocprofiler-compute]
+    [--rocprofiler-sdk | --no-rocprofiler-sdk ]
     [--rocprofiler-systems | --no-rocprofiler-systems]
     [--rocrtst | --no-rocrtst]
     [--rocwmma | --no-rocwmma]
@@ -352,6 +356,7 @@ def retrieve_artifacts_by_run_id(args):
             args.rocdecode,
             args.rocjpeg,
             args.rocprofiler_compute,
+            args.rocprofiler_sdk,
             args.rocprofiler_systems,
             args.rocrtst,
             args.rocwmma,
@@ -362,19 +367,15 @@ def retrieve_artifacts_by_run_id(args):
 
         extra_artifacts = []
         if args.aqlprofile:
-            extra_artifacts.append("aqlprofile-tests")
+            extra_artifacts.append("aqlprofile")
         if args.blas:
             extra_artifacts.append("blas")
         if args.debug_tools:
-            # Add extra artifacts so we generate _lib and _test artifact
-            # entries later.
             extra_artifacts.append("amd-dbgapi")
             extra_artifacts.append("rocgdb")
             extra_artifacts.append("rocr-debug-agent")
             extra_artifacts.append("rocr-debug-agent-tests")
-
-            # Add the rest of the artifacts not handled automatically (non-lib
-            # and non-test).
+            # Contains the rocgdb executable.
             argv.append("rocgdb_run")
 
             # Libraries rocgdb depends on.
@@ -391,7 +392,7 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("hipdnn-samples")
         if args.miopen:
             extra_artifacts.append("miopen")
-            # We need bin/MIOpenDriver executable for tests.
+            # Contains bin/MIOpenDriver executable for tests.
             argv.append("miopen_run")
             # Also need these for runtime kernel compilation (rocrand includes).
             argv.append("rand_dev")
@@ -425,10 +426,13 @@ def retrieve_artifacts_by_run_id(args):
             extra_artifacts.append("rccl")
         if args.rocprofiler_sdk:
             extra_artifacts.append("rocprofiler-sdk")
+            extra_artifacts.append("aqlprofile")
             # Contains rocprofiler-sdk-rocpd
             argv.append("rocprofiler-sdk_run")
         if args.rocprofiler_compute:
             extra_artifacts.append("rocprofiler-compute")
+            # Contains the rocprof-compute CLI executable.
+            argv.append("rocprofiler-compute_run")
         if args.rocprofiler_systems:
             extra_artifacts.append("rocprofiler-systems")
             # Contains executables (rocprof-sys-run, rocprof-sys-instrument, etc.)
@@ -447,6 +451,10 @@ def retrieve_artifacts_by_run_id(args):
             argv.append("amd-llvm_lib")
             argv.append("base_dev_generic")
 
+        # Fetch _lib (always) and _test (when --tests) for each artifact.
+        # Some projects have self-contained _test archives (just test
+        # binaries), while others may also need executables or data from
+        # _run. Add those explicitly above via argv.append("<name>_run").
         extra_artifact_patterns = [f"{a}_lib" for a in extra_artifacts]
         if args.tests:
             extra_artifact_patterns.extend([f"{a}_test" for a in extra_artifacts])
@@ -752,16 +760,16 @@ def main(argv):
     )
 
     artifacts_group.add_argument(
-        "--rocprofiler-systems",
+        "--rocprofiler-sdk",
         default=False,
-        help="Include 'rocprofiler-systems' artifacts",
+        help="Include 'rocprofiler-sdk' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 
     artifacts_group.add_argument(
-        "--rocprofiler-sdk",
+        "--rocprofiler-systems",
         default=False,
-        help="Include 'rocprofiler-sdk' artifacts",
+        help="Include 'rocprofiler-systems' artifacts",
         action=argparse.BooleanOptionalAction,
     )
 

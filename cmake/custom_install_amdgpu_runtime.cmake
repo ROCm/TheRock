@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Script run to install the amdgpu_hip_runtime component.
 # This runs at install time and has access to the staging tree files.
 message(STATUS "Custom installing amdgpu-runtime to: ${CMAKE_INSTALL_PREFIX}")

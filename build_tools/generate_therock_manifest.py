@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 import argparse
 import json
 from pathlib import Path
@@ -32,56 +35,68 @@ def git_root() -> Path:
     return repo_root
 
 
-def list_submodules_via_gitconfig(repo_dir: Path):
+def list_submodules_from_gitmodules_at_commit(repo_dir: Path, commit: str = "HEAD"):
     """
-    Read path/url/branch for all submodules from .gitmodules using a single git-config call.
+    Read path/url/branch for all submodules from .gitmodules at a specific commit.
+
+    Uses `git config --blob` to parse .gitmodules directly from git's object database.
+    This approach lets git handle all config file parsing edge cases and works with any valid submodule names.
+
+    Args:
+        repo_dir: Path to the repository root.
+        commit: The commit/ref to read .gitmodules from (default: HEAD).
+                This is important when inspecting historical commits where submodules
+                may have been added or removed since.
+
     Returns: [{name, path, url, branch}]
+
+    Raises:
+        RuntimeError: If git command fails for reasons other than missing .gitmodules.
     """
-    gitconfig_output = _run(
-        [
-            "git",
-            "config",
-            "-f",
-            ".gitmodules",
-            "--get-regexp",
-            r"^submodule\..*\.(path|url|branch)$",
-        ],
-        cwd=repo_dir,
-        check=False,
+    cmd = [
+        "git",
+        "config",
+        "--blob",
+        f"{commit}:.gitmodules",
+        "--get-regexp",
+        r"^submodule\.",
+    ]
+    result = subprocess.run(
+        cmd, cwd=repo_dir, text=True, capture_output=True, check=False
     )
-    if not gitconfig_output:
+
+    if result.returncode != 0:
+        stderr = result.stderr.strip()
+        # Exit code 1 with no stderr means no matches (no .gitmodules or no submodule entries)
+        # Exit code 1 with stderr means an actual error (invalid commit, etc.)
+        if stderr:
+            raise RuntimeError(f"Git command failed: {' '.join(cmd)}\n{stderr}")
         return []
 
-    submodules_by_name = (
-        {}
-    )  # name -> {"name": ..., "path": ..., "url": ..., "branch": ...}
-    for line in gitconfig_output.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            full_key, raw_value = line.split(None, 1)
-        except ValueError:
-            continue
+    submodules_by_name = {}
 
-        m = re.match(r"^submodule\.(?P<name>.+)\.(?P<attr>path|url|branch)$", full_key)
-        if not m:
-            continue
+    # Output format: submodule.<name>.<key> <value>
+    # Example: submodule.half.path base/half
+    # The regex uses (.+) for name to handle submodule names containing dots.
+    # The explicit \.(path|url|branch) ensures we match the last occurrence,
+    # correctly extracting names like "foo.bar" from "submodule.foo.bar.path".
+    pattern = re.compile(r"^submodule\.(.+)\.(path|url|branch)\s+(.+)$")
 
-        name = m.group("name")
-        attr = m.group("attr")
-        value = raw_value.strip()
+    for line in result.stdout.strip().splitlines():
+        match = pattern.match(line)
+        if match:
+            name, key, value = match.groups()
+            if name not in submodules_by_name:
+                submodules_by_name[name] = {
+                    "name": name,
+                    "path": None,
+                    "url": None,
+                    "branch": None,
+                }
+            submodules_by_name[name][key] = value
 
-        rec = submodules_by_name.setdefault(
-            name, {"name": name, "path": None, "url": None, "branch": None}
-        )
-        rec[attr] = value
-
-    results = [
-        {"name": n, "path": r["path"], "url": r["url"], "branch": r["branch"]}
-        for n, r in submodules_by_name.items()
-        if r["path"]
-    ]
+    # Filter out entries without a path and sort by path
+    results = [r for r in submodules_by_name.values() if r["path"]]
     results.sort(key=lambda r: r["path"])
     return results
 
@@ -119,8 +134,8 @@ def patches_for_submodule_by_name(repo_dir: Path, sub_name: str):
 
 def build_manifest_schema(repo_root: Path, the_rock_commit: str) -> dict:
 
-    # Enumerate submodules via .gitmodules
-    entries = list_submodules_via_gitconfig(repo_root)
+    # Enumerate submodules from .gitmodules at the specified commit.
+    entries = list_submodules_from_gitmodules_at_commit(repo_root, the_rock_commit)
 
     # Build rows with pins (from tree) and patch lists
     rows = []
@@ -162,12 +177,27 @@ def main():
     ap.add_argument(
         "--commit", help="TheRock commit/ref to inspect (default: HEAD)", default="HEAD"
     )
+    ap.add_argument(
+        "--flag-settings",
+        help="Path to flag_settings.json to include in the manifest",
+        default=None,
+    )
     args = ap.parse_args()
 
     repo_root = git_root()
     the_rock_commit = _run(["git", "rev-parse", args.commit], cwd=repo_root)
 
     manifest = build_manifest_schema(repo_root, the_rock_commit)
+
+    # Merge flag settings into the manifest if provided.
+    if args.flag_settings:
+        flag_settings_path = Path(args.flag_settings)
+        if not flag_settings_path.exists():
+            raise FileNotFoundError(
+                f"Flag settings file not found: {flag_settings_path}"
+            )
+        with open(flag_settings_path, encoding="utf-8") as f:
+            manifest["flags"] = json.load(f)
 
     # Decide output path
     # if not provided, write to repo_root / "therock_manifest.json"

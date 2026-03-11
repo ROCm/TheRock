@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """teatime.py - Combination of "tee" and "time" for managing build logs, while
 indicating that if you are watching them, it might be time for tea.
 

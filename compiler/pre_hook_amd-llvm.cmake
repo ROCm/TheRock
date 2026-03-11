@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Get access to LLVM_VERSION_MAJOR
 include("${THEROCK_SOURCE_DIR}/compiler/amd-llvm/cmake/Modules/LLVMVersion.cmake")
 
@@ -172,7 +175,9 @@ if(NOT THEROCK_ENABLE_LLVM_TESTS)
     # on a missing tool).
     set(_llvm_required_tools
       LLVM_AR
+      LLVM_AS
       LLVM_CONFIG
+      LLVM_DIS
       LLVM_DWARFDUMP
       LLVM_LINK
       LLVM_MC

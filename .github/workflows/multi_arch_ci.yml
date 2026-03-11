@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Multi-Arch CI
 #
 # This is a staging workflow for the sharded multi-arch build pipeline.

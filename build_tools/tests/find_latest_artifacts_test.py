@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 import os
 from pathlib import Path
 import sys
@@ -64,14 +67,15 @@ class FindLatestArtifactsTest(unittest.TestCase):
             TEST_THEROCK_COMMIT_OLDER,
         ]
 
-        info = find_latest_artifacts(
-            artifact_group="gfx110X-all",
+        results = find_latest_artifacts(
+            artifact_groups=["gfx110X-all"],
             github_repository_name="ROCm/TheRock",
             platform="linux",
         )
 
-        self.assertIsNotNone(info)
-        self.assertEqual(info.git_commit_sha, TEST_THEROCK_COMMIT_NEWER)
+        self.assertIsNotNone(results)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].git_commit_sha, TEST_THEROCK_COMMIT_NEWER)
 
     @_skip_unless_authenticated_github_api_is_available
     @mock.patch("find_artifacts_for_commit.check_if_artifacts_exist")
@@ -89,14 +93,15 @@ class FindLatestArtifactsTest(unittest.TestCase):
 
         mock_check.side_effect = check_by_commit
 
-        info = find_latest_artifacts(
-            artifact_group="gfx110X-all",
+        results = find_latest_artifacts(
+            artifact_groups=["gfx110X-all"],
             github_repository_name="ROCm/TheRock",
             platform="linux",
         )
 
-        self.assertIsNotNone(info)
-        self.assertEqual(info.git_commit_sha, TEST_THEROCK_COMMIT_OLDER)
+        self.assertIsNotNone(results)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].git_commit_sha, TEST_THEROCK_COMMIT_OLDER)
 
     @_skip_unless_authenticated_github_api_is_available
     @mock.patch(
@@ -110,13 +115,13 @@ class FindLatestArtifactsTest(unittest.TestCase):
             TEST_THEROCK_COMMIT_OLDER,
         ]
 
-        info = find_latest_artifacts(
-            artifact_group="gfx110X-all",
+        results = find_latest_artifacts(
+            artifact_groups=["gfx110X-all"],
             github_repository_name="ROCm/TheRock",
             platform="linux",
         )
 
-        self.assertIsNone(info)
+        self.assertIsNone(results)
 
     def test_rate_limit_error_on_commit_list_raises_exception(self):
         """Rate limit when fetching commits raises GitHubAPIError."""
@@ -131,11 +136,95 @@ class FindLatestArtifactsTest(unittest.TestCase):
         ):
             with self.assertRaises(GitHubAPIError) as ctx:
                 find_latest_artifacts(
-                    artifact_group="gfx110X-all",
+                    artifact_groups=["gfx110X-all"],
                     github_repository_name="ROCm/TheRock",
                 )
 
             self.assertIn("rate limit", str(ctx.exception).lower())
+
+
+class FindLatestArtifactsMultiGroupTest(unittest.TestCase):
+    """Tests for multi-group behavior of find_latest_artifacts()."""
+
+    @_skip_unless_authenticated_github_api_is_available
+    @mock.patch("find_artifacts_for_commit.check_if_artifacts_exist", return_value=True)
+    @mock.patch("find_latest_artifacts.gha_query_recent_branch_commits")
+    def test_multiple_groups_all_found(self, mock_commits, mock_check):
+        """Returns results when all requested groups have artifacts."""
+        mock_commits.return_value = [
+            TEST_THEROCK_COMMIT_NEWER,
+            TEST_THEROCK_COMMIT_OLDER,
+        ]
+
+        results = find_latest_artifacts(
+            artifact_groups=["gfx110X-all", "gfx120X-all"],
+            github_repository_name="ROCm/TheRock",
+            platform="linux",
+        )
+
+        self.assertIsNotNone(results)
+        self.assertEqual(len(results), 2)
+        self.assertEqual(results[0].artifact_group, "gfx110X-all")
+        self.assertEqual(results[1].artifact_group, "gfx120X-all")
+        # Both from the same commit
+        self.assertEqual(results[0].git_commit_sha, results[1].git_commit_sha)
+
+    @_skip_unless_authenticated_github_api_is_available
+    @mock.patch("find_artifacts_for_commit.check_if_artifacts_exist")
+    @mock.patch("find_latest_artifacts.gha_query_recent_branch_commits")
+    def test_skips_commit_with_partial_groups(self, mock_commits, mock_check):
+        """Skips a commit where only some groups have artifacts, returns next."""
+        mock_commits.return_value = [
+            TEST_THEROCK_COMMIT_NEWER,
+            TEST_THEROCK_COMMIT_OLDER,
+        ]
+
+        # Newer commit: only gfx110X has artifacts
+        # Older commit: both groups have artifacts
+        def check_by_commit_and_group(info):
+            if info.git_commit_sha == TEST_THEROCK_COMMIT_NEWER:
+                return info.artifact_group == "gfx110X-all"
+            return True  # older commit has everything
+
+        mock_check.side_effect = check_by_commit_and_group
+
+        results = find_latest_artifacts(
+            artifact_groups=["gfx110X-all", "gfx120X-all"],
+            github_repository_name="ROCm/TheRock",
+            platform="linux",
+        )
+
+        self.assertIsNotNone(results)
+        self.assertEqual(len(results), 2)
+        # Should come from the older commit (newer was partial)
+        self.assertEqual(results[0].git_commit_sha, TEST_THEROCK_COMMIT_OLDER)
+        self.assertEqual(results[1].git_commit_sha, TEST_THEROCK_COMMIT_OLDER)
+
+    @_skip_unless_authenticated_github_api_is_available
+    @mock.patch("find_artifacts_for_commit.check_if_artifacts_exist")
+    @mock.patch("find_latest_artifacts.gha_query_recent_branch_commits")
+    def test_returns_none_when_no_commit_has_all_groups(self, mock_commits, mock_check):
+        """Returns None when no single commit has all requested groups."""
+        mock_commits.return_value = [
+            TEST_THEROCK_COMMIT_NEWER,
+            TEST_THEROCK_COMMIT_OLDER,
+        ]
+
+        # Each commit only has one of the two groups
+        def check_alternating(info):
+            if info.git_commit_sha == TEST_THEROCK_COMMIT_NEWER:
+                return info.artifact_group == "gfx110X-all"
+            return info.artifact_group == "gfx120X-all"
+
+        mock_check.side_effect = check_alternating
+
+        results = find_latest_artifacts(
+            artifact_groups=["gfx110X-all", "gfx120X-all"],
+            github_repository_name="ROCm/TheRock",
+            platform="linux",
+        )
+
+        self.assertIsNone(results)
 
 
 if __name__ == "__main__":

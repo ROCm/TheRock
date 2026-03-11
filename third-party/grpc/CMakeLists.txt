@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # gRPC static library for RDC
 therock_subproject_fetch(therock-grpc-sources
   CMAKE_PROJECT

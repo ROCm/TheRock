@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Generates a stub executable and saves it to the given output_file.
 
 The stub executable will exec a child at the given path relative to its

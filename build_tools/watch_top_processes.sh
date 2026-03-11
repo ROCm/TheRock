@@ -1,4 +1,7 @@
 #!/bin/bash
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Reports top processes periodically. Meant to be run in the background before
 # starting a build with high latency tasks so that some progress can be seen.
 

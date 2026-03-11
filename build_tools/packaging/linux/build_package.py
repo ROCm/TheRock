@@ -558,6 +558,11 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
     rpmsuggests = ""
     sourcedir_list = []
     rpm_scripts = []
+    # amdrocm-debugger: Exclude libpython requirements
+    # Multiple Python-version-specific binaries are included; the wrapper script
+    # automatically selects the binary matching the system's Python version
+    exclude_libpython_requires = pkg_name == "amdrocm-debugger"
+
     if config.versioned_pkg:
         recommends_list = pkg_info.get("RPMRecommends", [])
         rpmrecommends = convert_to_versiondependency(recommends_list, config)
@@ -620,6 +625,7 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
         "disable_debug_package": is_debug_package_disabled(pkg_info),
         "sourcedir_list": sourcedir_list,
         "rpm_scripts": rpm_scripts,
+        "exclude_libpython_requires": exclude_libpython_requires,
     }
 
     with open(specfile, "w", encoding="utf-8") as f:

@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Optional subprojects add themselves to this list for artifact dependencies.
 set(_optional_artifact_deps)
 
@@ -10,6 +13,8 @@ therock_cmake_subproject_declare(therock-aux-overlay
   EXTERNAL_SOURCE_DIR "aux-overlay"
   USE_DIST_AMDGPU_TARGETS
   BACKGROUND_BUILD
+  CMAKE_ARGS
+    "-DTHEROCK_FLAG_SETTINGS_FILE=${THEROCK_FLAG_SETTINGS_FILE}"
 )
 therock_cmake_subproject_activate(therock-aux-overlay)
 
@@ -149,7 +154,7 @@ therock_cmake_subproject_activate(rocm-half)
 # rocm-kpack
 ################################################################################
 
-if(THEROCK_KPACK_SPLIT_ARTIFACTS)
+if(THEROCK_FLAG_KPACK_SPLIT_ARTIFACTS)
 
 therock_cmake_subproject_declare(rocm-kpack
   EXTERNAL_SOURCE_DIR "rocm-kpack"

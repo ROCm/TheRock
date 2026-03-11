@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """This file helps generate a package target matrix for workflows.
 
 Environment variable inputs:

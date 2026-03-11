@@ -1,4 +1,6 @@
 #!/usr/bin/bash
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
 
 # Causes bash process to die immediately after child process returns error
 # to make sure that script does not continue logic if error has happened.

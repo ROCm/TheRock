@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Fetches the specific pull request, commit or branch from a repo.
 This script is available for users, but it is primarily the mechanism
 to fetch a monorepo in the CI.

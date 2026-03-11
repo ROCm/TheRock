@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     # setup submodule project
     set(_source_dir "${CMAKE_CURRENT_SOURCE_DIR}/mesa-fork")

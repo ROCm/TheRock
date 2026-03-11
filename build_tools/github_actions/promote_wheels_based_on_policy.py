@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """
 Decide whether to upload/promote build artifacts in GitHub Actions.
 

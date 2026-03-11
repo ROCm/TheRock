@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Promotes release candidate packages to final releases.
 
 This script removes release candidate (rc) suffixes from package versions, such

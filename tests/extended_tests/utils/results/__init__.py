@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Results module for collection, formatting, and API submission."""
 
 from .results_handler import ResultsHandler

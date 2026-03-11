@@ -10,6 +10,10 @@
 %global _debugsource_template %{nil}
 %global debug_package %{nil}          # disables -debuginfo
 %define __brp_mangle_shebangs %{nil}
+# Exclue libpython requirements. Used for amdrocm-debugger
+{%- if exclude_libpython_requires %}
+%define __requires_exclude libpython*.*
+{%- endif %}
 
 Name: {{ pkg_name }}
 Version: {{ version }}

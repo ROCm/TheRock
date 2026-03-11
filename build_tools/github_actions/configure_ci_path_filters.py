@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """CI path filtering logic for determining whether to run CI based on modified files.
 
 This module provides utilities to:
