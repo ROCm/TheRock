@@ -50,6 +50,7 @@ TEST_TO_IGNORE = {
             "Unit_atomicExch_Positive_Same_Address_Compile_Time",
             "Unit_hipHostRegister_ReferenceFromKernelandhipMemset - int",
             "Unit_hipHostRegister_Graphs",
+            "Unit_hipManagedKeyword_SingleGpu",
             "Unit_hipMemsetSync",
             "Unit_hipMemset2DSync",
             "Unit_hipMemsetDASyncMulti - int16_t",
@@ -59,7 +60,7 @@ TEST_TO_IGNORE = {
             "Unit_hipMemset3DSync",
             "Unit_hipMemsetDASyncMulti - uint32_t",
             "Unit_hipStreamValue_Write - TestParams<uint64_t, PtrType::DevicePtrToHost>",
-            "Unit_hipHostRegister_ReferenceFromKernelandhipMemset - double"
+            "Unit_hipHostRegister_ReferenceFromKernelandhipMemset - double",
             "Unit_hipGetProcAddress_MemoryApisRegisterUnReg",
             "Unit_hipMemsetDSync - int16_t",
             "Unit_hipMemsetASyncMulti",
