@@ -15,32 +15,57 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 25> kPhase0ExecutableOpcodes{{
+constexpr std::array<std::string_view, 50> kPhase0ExecutableOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_ADD_U32",
     "S_ADD_I32",
     "S_SUB_U32",
+    "S_CMP_EQ_I32",
+    "S_CMP_LG_I32",
+    "S_CMP_GT_I32",
     "S_CMP_EQ_U32",
     "S_CMP_LG_U32",
     "S_CMP_GE_I32",
     "S_CMP_LT_I32",
+    "S_CMP_LE_I32",
+    "S_CMP_GT_U32",
     "S_CMP_GE_U32",
     "S_CMP_LT_U32",
+    "S_CMP_LE_U32",
     "S_BRANCH",
     "S_CBRANCH_SCC0",
     "S_CBRANCH_SCC1",
+    "S_CBRANCH_VCCZ",
+    "S_CBRANCH_VCCNZ",
     "S_CBRANCH_EXECZ",
     "S_CBRANCH_EXECNZ",
     "S_MOV_B32",
     "S_MOVK_I32",
     "V_MOV_B32",
+    "V_NOT_B32",
+    "V_BFREV_B32",
+    "V_CVT_F32_UBYTE0",
+    "V_CVT_F32_UBYTE1",
+    "V_CVT_F32_UBYTE2",
+    "V_CVT_F32_UBYTE3",
     "V_CVT_F32_I32",
     "V_CVT_F32_U32",
     "V_CVT_U32_F32",
     "V_CVT_I32_F32",
     "V_ADD_U32",
     "V_SUB_U32",
+    "V_SUBREV_U32",
+    "V_MIN_I32",
+    "V_MAX_I32",
+    "V_MIN_U32",
+    "V_MAX_U32",
+    "V_LSHRREV_B32",
+    "V_ASHRREV_I32",
+    "V_LSHLREV_B32",
+    "V_AND_B32",
+    "V_OR_B32",
+    "V_XOR_B32",
 }};
 
 constexpr std::uint32_t ExtractBits(std::uint32_t value,
@@ -93,6 +118,9 @@ std::string_view NormalizeExecutableInstructionName(std::string_view opcode) {
   }
   if (opcode == "V_SUB_NC_U32") {
     return "V_SUB_U32";
+  }
+  if (opcode == "V_SUBREV_NC_U32") {
+    return "V_SUBREV_U32";
   }
   return opcode;
 }
@@ -330,6 +358,8 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
   } else if (instruction_name == "S_BRANCH" ||
              instruction_name == "S_CBRANCH_SCC0" ||
              instruction_name == "S_CBRANCH_SCC1" ||
+             instruction_name == "S_CBRANCH_VCCZ" ||
+             instruction_name == "S_CBRANCH_VCCNZ" ||
              instruction_name == "S_CBRANCH_EXECZ" ||
              instruction_name == "S_CBRANCH_EXECNZ") {
     *instruction = DecodedInstruction::OneOperand(
@@ -390,12 +420,18 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
     *instruction = DecodedInstruction::Binary(instruction_name, dst, src0, src1);
     *words_consumed =
         1 + src0_literal_words_consumed + src1_literal_words_consumed;
-  } else if (instruction_name == "S_CMP_EQ_U32" ||
+  } else if (instruction_name == "S_CMP_EQ_I32" ||
+             instruction_name == "S_CMP_LG_I32" ||
+             instruction_name == "S_CMP_GT_I32" ||
+             instruction_name == "S_CMP_EQ_U32" ||
              instruction_name == "S_CMP_LG_U32" ||
              instruction_name == "S_CMP_GE_I32" ||
              instruction_name == "S_CMP_LT_I32" ||
+             instruction_name == "S_CMP_LE_I32" ||
+             instruction_name == "S_CMP_GT_U32" ||
              instruction_name == "S_CMP_GE_U32" ||
-             instruction_name == "S_CMP_LT_U32") {
+             instruction_name == "S_CMP_LT_U32" ||
+             instruction_name == "S_CMP_LE_U32") {
     std::size_t src0_literal_words_consumed = 0;
     InstructionOperand src0;
     if (!DecodeScalarSource(ExtractBits(word, 0, 8), words.subspan(1),
@@ -417,6 +453,12 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
     *words_consumed =
         1 + src0_literal_words_consumed + src1_literal_words_consumed;
   } else if (instruction_name == "V_MOV_B32" ||
+             instruction_name == "V_NOT_B32" ||
+             instruction_name == "V_BFREV_B32" ||
+             instruction_name == "V_CVT_F32_UBYTE0" ||
+             instruction_name == "V_CVT_F32_UBYTE1" ||
+             instruction_name == "V_CVT_F32_UBYTE2" ||
+             instruction_name == "V_CVT_F32_UBYTE3" ||
              instruction_name == "V_CVT_F32_I32" ||
              instruction_name == "V_CVT_F32_U32" ||
              instruction_name == "V_CVT_U32_F32" ||
@@ -435,7 +477,18 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
 
     *instruction = DecodedInstruction::Unary(instruction_name, dst, src0);
     *words_consumed = 1 + literal_words_consumed;
-  } else if (instruction_name == "V_ADD_U32") {
+  } else if (instruction_name == "V_ADD_U32" ||
+             instruction_name == "V_SUBREV_U32" ||
+             instruction_name == "V_MIN_I32" ||
+             instruction_name == "V_MAX_I32" ||
+             instruction_name == "V_MIN_U32" ||
+             instruction_name == "V_MAX_U32" ||
+             instruction_name == "V_LSHRREV_B32" ||
+             instruction_name == "V_ASHRREV_I32" ||
+             instruction_name == "V_LSHLREV_B32" ||
+             instruction_name == "V_AND_B32" ||
+             instruction_name == "V_OR_B32" ||
+             instruction_name == "V_XOR_B32") {
     InstructionOperand dst;
     if (!DecodeVectorDestination(ExtractBits(word, 17, 8), &dst, error_message)) {
       return false;
