@@ -41,8 +41,16 @@
   - `V_SWMMAC_F16_16X16X128_FP8_FP8_w32`
   - parser-backed representative routed variants:
     - `V_WMMA_BF16F32_16X16X32_BF16_w32`
+    - `V_WMMA_BF16_16X16X32_BF16_w32`
+    - `V_WMMA_F16_16X16X64_BF8_FP8_w32`
+    - `V_WMMA_F32_16X16X128_BF8_BF8_w32`
+    - `V_WMMA_F32_32X16X128_F4_w32`
     - `V_WMMA_I32_16X16X64_IU8_w32`
     - `V_SWMMAC_BF16F32_16X16X64_BF16_w32`
+    - `V_SWMMAC_BF16_16X16X64_BF16_w32`
+    - `V_SWMMAC_F16_16X16X128_BF8_FP8_w32`
+    - `V_SWMMAC_F32_16X16X128_BF8_BF8_w32`
+    - `V_SWMMAC_F32_16X16X64_BF16_w32`
     - `V_SWMMAC_I32_16X16X128_IU8_w32`
     - `V_WMMA_SCALE_F32_32X16X128_F4_w32`
     - `V_WMMA_SCALE16_F32_32X16X128_F4_w32`
@@ -87,6 +95,10 @@
   - parser-backed `V_WMMA_*` routed variants now fall back to `kWmmaCoreGeneric`
   - representative seeds:
     - `V_WMMA_BF16F32_16X16X32_BF16_w32`
+    - `V_WMMA_BF16_16X16X32_BF16_w32`
+    - `V_WMMA_F16_16X16X64_BF8_FP8_w32`
+    - `V_WMMA_F32_16X16X128_BF8_BF8_w32`
+    - `V_WMMA_F32_32X16X128_F4_w32`
     - `V_WMMA_I32_16X16X64_IU8_w32`
 - WMMA scale:
   - `V_WMMA_SCALE_F32_16X16X128_F8F6F4` -> `kWmmaScaleF32_16x16x128_F8F6F4`
@@ -119,6 +131,10 @@
   - parser-backed `V_SWMMAC_*` routed variants now fall back to `kSwmmacCoreGeneric`
   - representative seeds:
     - `V_SWMMAC_BF16F32_16X16X64_BF16_w32`
+    - `V_SWMMAC_BF16_16X16X64_BF16_w32`
+    - `V_SWMMAC_F16_16X16X128_BF8_FP8_w32`
+    - `V_SWMMAC_F32_16X16X128_BF8_BF8_w32`
+    - `V_SWMMAC_F32_16X16X64_BF16_w32`
     - `V_SWMMAC_I32_16X16X128_IU8_w32`
 - Tensor routes:
   - `TENSOR_LOAD_TO_LDS` -> `kTensorLoadToLds`
@@ -237,9 +253,13 @@
 - Representative descriptor coverage now includes:
   - packed BF16 destination write descriptors
   - WMMA accumulator read descriptors
+  - generic WMMA / SWMMAC destination descriptors for BF16, F16, and F32 routed variants
   - tensor LDS destination write descriptors
+  - tensor LDS source read descriptors
   - FP8/BF8 conversion source and destination descriptors
+  - paired scale-load `B64` destination descriptors
   - `V_DIV_SCALE_F64` scalar-destination write descriptors
+  - `V_DIV_SCALE_F64` scale-source read descriptors
 
 ## Shared Fragment Shape Coverage
 
@@ -258,8 +278,16 @@
   - `V_WMMA_F32_16X16X64_FP8_FP8_w32`: source matrix `16x16x64`, `8-bit`; destination/accumulator `32-bit`
   - parser-backed generic routed variants:
     - `V_WMMA_BF16F32_16X16X32_BF16_w32`: source matrix `16x16x32`, `16-bit`; destination/accumulator `32-bit`
+    - `V_WMMA_BF16_16X16X32_BF16_w32`: source matrix `16x16x32`, `16-bit`; destination/accumulator `16-bit`
+    - `V_WMMA_F16_16X16X64_BF8_FP8_w32`: source matrix `16x16x64`, `8-bit`; destination/accumulator `16-bit`
+    - `V_WMMA_F32_16X16X128_BF8_BF8_w32`: source matrix `16x16x128`, `8-bit`; destination/accumulator `32-bit`
+    - `V_WMMA_F32_32X16X128_F4_w32`: source matrix `32x16x128`, `4-bit`; destination/accumulator `32-bit`
     - `V_WMMA_I32_16X16X64_IU8_w32`: source matrix `16x16x64`, `8-bit`; destination/accumulator `32-bit`
     - `V_SWMMAC_BF16F32_16X16X64_BF16_w32`: source matrix `16x16x64`, `16-bit`; destination/accumulator `32-bit`
+    - `V_SWMMAC_BF16_16X16X64_BF16_w32`: source matrix `16x16x64`, `16-bit`; destination/accumulator `16-bit`
+    - `V_SWMMAC_F16_16X16X128_BF8_FP8_w32`: source matrix `16x16x128`, `8-bit`; destination/accumulator `16-bit`
+    - `V_SWMMAC_F32_16X16X128_BF8_BF8_w32`: source matrix `16x16x128`, `8-bit`; destination/accumulator `32-bit`
+    - `V_SWMMAC_F32_16X16X64_BF16_w32`: source matrix `16x16x64`, `16-bit`; destination/accumulator `32-bit`
     - `V_SWMMAC_I32_16X16X128_IU8_w32`: source matrix `16x16x128`, `8-bit`; destination/accumulator `32-bit`
     - `V_WMMA_SCALE_F32_32X16X128_F4_w32`: source matrix `32x16x128`, `4-bit`; destination/accumulator `32-bit`
     - `V_WMMA_SCALE16_F32_32X16X128_F4_w32`: source matrix `32x16x128`, `4-bit`; destination/accumulator `32-bit`
