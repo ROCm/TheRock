@@ -1,4 +1,7 @@
 #!/bin/bash
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # See corresponding linux_portable_build.py which invokes this within a
 # container.
 set -e
@@ -43,6 +46,8 @@ set -o xtrace
 time cmake -GNinja -S /therock/src -B "$OUTPUT_DIR/build" \
   -DTHEROCK_BUNDLE_SYSDEPS=ON \
   -DTHEROCK_ENABLE_SYSDEPS_AMD_MESA=ON \
+  -DTHEROCK_ENABLE_ROCDECODE=ON \
+  -DTHEROCK_ENABLE_ROCJPEG=ON \
   ${PYTHON_EXECUTABLES_ARG} \
   ${PYTHON_SHARED_EXECUTABLES_ARG} \
   "$@"

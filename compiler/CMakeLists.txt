@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 if(THEROCK_ENABLE_COMPILER)
   ##############################################################################
   # amd-llvm
@@ -92,6 +95,15 @@ if(THEROCK_ENABLE_COMPILER)
       -DCLANG_ENABLE_CLANGD=OFF
       -DCLANG_TIDY_ENABLE_STATIC_ANALYZER=OFF
 
+      -DCLANG_TOOL_CLANG_LINKER_WRAPPER_BUILD=${THEROCK_CONDITION_IS_NON_WINDOWS}
+      -DCLANG_TOOL_OFFLOAD_ARCH_BUILD=${THEROCK_CONDITION_IS_NON_WINDOWS}
+      -DOPENMP_ENABLE_LIBOMPTARGET=${THEROCK_CONDITION_IS_NON_WINDOWS}
+      -DLIBOMPTARGET_BUILD_DEVICE_FORTRT=${THEROCK_CONDITION_IS_NON_WINDOWS}
+      -DOFFLOAD_EXTERNAL_PROJECT_UNIFIED_ROCR=${THEROCK_CONDITION_IS_NON_WINDOWS}
+      -DLIBOMPTARGET_EXTERNAL_PROJECT_HSA_PATH=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime
+      -DFLANG_RUNTIME_F128_MATH_LIB=libquadmath
+      -DRUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_PER_TARGET_RUNTIME_DIR=${THEROCK_CONDITION_IS_NON_WINDOWS}
+      -DRUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_RUNTIMES=openmp
       # ASAN features.
       # Note that building AMDGPU ASAN extensions depends on various runtime headers
       # (since it instruments them). These paths must line up and will be an error
@@ -134,23 +146,22 @@ if(THEROCK_ENABLE_COMPILER)
   ##############################################################################
   # amd-comgr
   # A client of libLLVM which provides an in-process compiler API to the HIP
-  # runtime.
+  # runtime. LLVM/Clang/LLD are statically linked and hidden behind comgr's
+  # version script, avoiding symbol interposition issues.
   ##############################################################################
-  set(_amd_comgr_target_name "amd-comgr")
-  set(_amd_comgr_stub_target_name)
-  if(THEROCK_FLAG_COMGR_DELAY_LOAD)
-    set(_amd_comgr_target_name "amd-comgr-impl")
-    set(_amd_comgr_stub_target_name "amd-comgr")
-  endif()
 
-  therock_cmake_subproject_declare("${_amd_comgr_target_name}"
+  therock_cmake_subproject_declare(amd-comgr
     USE_DIST_AMDGPU_TARGETS
     NO_INSTALL_RPATH  # See manual handling in the pre_hook.
-    LOGICAL_TARGET_NAME "amd-comgr"
     EXTERNAL_SOURCE_DIR "amd-llvm/amd/comgr"
     BINARY_DIR "amd-comgr"
     BACKGROUND_BUILD
     CMAKE_ARGS
+      # Statically link LLVM/Clang into comgr. Combined with comgr's
+      # -fvisibility=hidden and version script (local: *;), this hides all LLVM
+      # symbols inside libamd_comgr.so, preventing symbol interposition without
+      # requiring namespace isolation via dlmopen.
+      -DCOMGR_STATIC_LLVM=ON
       # TODO: Currently unstable. Enable in >6.4.
       -DCOMGR_DISABLE_SPIRV=ON
       -DTHEROCK_HIP_MAJOR_VERSION=${THEROCK_HIP_MAJOR_VERSION}
@@ -167,54 +178,14 @@ if(THEROCK_ENABLE_COMPILER)
     INTERFACE_INSTALL_RPATH_DIRS
       "lib"
   )
-  if(NOT THEROCK_FLAG_COMGR_DELAY_LOAD)
-    therock_cmake_subproject_provide_package("${_amd_comgr_target_name}" amd_comgr lib/cmake/amd_comgr)
-  endif()
-  therock_cmake_subproject_activate("${_amd_comgr_target_name}")
+  therock_cmake_subproject_provide_package(amd-comgr amd_comgr lib/cmake/amd_comgr)
+  therock_cmake_subproject_activate(amd-comgr)
 
   therock_test_validate_shared_lib(
     PATH amd-comgr/dist/lib
     LIB_NAMES
       libamd_comgr.so
   )
-
-  ##############################################################################
-  # amd-comgr stub
-  # Generates a stub that is used for dynamically loading amd-comgr in an
-  # appropriately private namespace. Since all uses of LLVM are hidden behind
-  # the comgr interface, this allows us to completely hide our LLVM and make it
-  # impossible to conflict.
-  # When enabled, this is declared as the "amd-comgr" target so that all
-  # dependencies in TheRock will use it. It also advertises the amd_comgr
-  # CMake package to be sourced from itself.
-  ##############################################################################
-
-  if(THEROCK_FLAG_COMGR_DELAY_LOAD)
-    therock_cmake_subproject_declare("${_amd_comgr_stub_target_name}"
-      FPRINT_SOURCE_HASH
-      USE_DIST_AMDGPU_TARGETS
-      NO_INSTALL_RPATH
-      LOGICAL_TARGET_NAME "amd-comgr-stub"
-      EXTERNAL_SOURCE_DIR "amd-comgr-stub"
-      BINARY_DIR "amd-comgr-stub"
-      BACKGROUND_BUILD
-      CMAKE_ARGS
-        -DAMD_COMGR_STAGE_PATH=${CMAKE_CURRENT_BINARY_DIR}/amd-comgr/stage
-      RUNTIME_DEPS
-        "${_amd_comgr_target_name}"
-    INTERFACE_LINK_DIRS
-      "lib"
-    INTERFACE_INSTALL_RPATH_DIRS
-      "lib"
-    )
-    therock_cmake_subproject_glob_c_sources("${_amd_comgr_stub_target_name}" SUBDIRS src)
-    therock_cmake_subproject_provide_package("${_amd_comgr_stub_target_name}" amd_comgr lib/cmake/amd_comgr_stub)
-    therock_cmake_subproject_activate("${_amd_comgr_stub_target_name}")
-
-    add_test(NAME amd_comgr_stub_test
-      COMMAND "${CMAKE_CURRENT_BINARY_DIR}/amd-comgr-stub/dist/bin/test_amd_comgr_stub"
-    )
-  endif()
 
   ##############################################################################
   # hipcc
@@ -247,8 +218,7 @@ if(THEROCK_ENABLE_COMPILER)
     SUBPROJECT_DEPS
       amd-llvm
       hipcc
-      "${_amd_comgr_target_name}"
-      ${_amd_comgr_stub_target_name}
+      amd-comgr
   )
 endif(THEROCK_ENABLE_COMPILER)
 

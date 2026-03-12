@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Builds artifacts from a descriptor.
 
 See `artifacts` for a general description of artifacts and utilities for processing
@@ -30,6 +33,15 @@ class ComponentDefaults:
         return ComponentDefaults.ALL.get(name) or ComponentDefaults(name)
 
 
+# Component extends chain (each component skips files claimed by predecessors):
+#
+#   lib → run → dbg → dev → doc → test
+#
+# Artifact TOML descriptors should list components in this order so that
+# the file layout mirrors the processing priority.
+#
+# See docs/development/artifacts.md for full documentation.
+
 # Lib components include shared libraries, dlls and any assets needed for use
 # of shared libraries at runtime. Files are included by name pattern and
 # descriptors should include/exclude non-standard variations.
@@ -44,13 +56,19 @@ ComponentDefaults(
     ],
     excludes=[],
 )
+
 # Run components layer on top of 'lib' components and also include executables
 # and tools that are not needed by library consumers. Descriptors should
 # explicitly include "bin" directory contents as needed.
+# WARNING: 'run' has no default includes, so a bare entry like
+#   [components.run."some/stage"]
+# acts as a catch-all that claims ALL files not matched by 'lib'. This prevents
+# later components (dbg, dev, doc, test) from claiming files in that stage dir.
+# Always use explicit includes on run, or omit it for stage dirs where dev/test
+# content is expected.
 ComponentDefaults("run", extends=["lib"])
 
-
-# Debug components collect all platform specific dbg file patterns.
+# Debug components collect all platform-specific debug file patterns.
 ComponentDefaults(
     "dbg",
     includes=[
@@ -60,11 +78,10 @@ ComponentDefaults(
     extends=["run"],
 )
 
-# Dev components include all static library based file patterns and
-# exclude file name patterns implicitly included for "run" and "lib".
-# Descriptors should explicitly include header file any package file
-# sub-trees that do not have an explicit "cmake" or "include" path components
-# in them.
+# Dev components include static libraries, build-time configuration files
+# (cmake, pkgconfig, modulefiles), and headers. Descriptors should explicitly
+# include header or package file sub-trees that do not have an explicit "cmake"
+# or "include" path component in them.
 ComponentDefaults(
     "dev",
     includes=[
@@ -78,7 +95,13 @@ ComponentDefaults(
     excludes=[],
     extends=["dbg"],
 )
+
+# Doc components collect documentation files (typically under share/doc/).
 ComponentDefaults("doc", includes=["**/share/doc/**"], extends=["dev"])
+
+# Test components are last in the extends chain. Descriptors that want specific
+# files in test (instead of run) must exclude those files from run.
+ComponentDefaults("test", extends=["doc"])
 
 
 class ArtifactDescriptor:
@@ -282,7 +305,10 @@ class ComponentContents:
     def write_artifact(self, destdir: Path):
         for basedir_relpath, pm in self.basedir_contents.items():
             pm.copy_to(
-                destdir=destdir, destprefix=basedir_relpath + "/", remove_dest=False
+                destdir=destdir,
+                destprefix=basedir_relpath + "/",
+                remove_dest=False,
+                always_copy=True,
             )
         # Write a manifest containing relative paths of all base directories.
         manifest_path = destdir / "artifact_manifest.txt"

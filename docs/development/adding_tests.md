@@ -57,13 +57,15 @@ In [`fetch_test_configurations.py`](../../build_tools/github_actions/fetch_test_
 }
 ```
 
-| Field Name          | Type   | Description                                                                                                                        |
-| ------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------- |
-| job_name            | string | Name of the job                                                                                                                    |
-| fetch_artifact_args | string | Arguments for which artifacts for [`install_rocm_from_artifacts.py`](../../build_tools/install_rocm_from_artifacts.py) to retrieve |
-| timeout_minutes     | int    | The timeout (in minutes) for the test step                                                                                         |
-| test_script         | string | The path to the test script                                                                                                        |
-| platform            | array  | An array of platforms that the test can execute on, options are `linux` and `windows`                                              |
+| Field Name          | Type   | Platform | Description                                                                                                                        |
+| ------------------- | ------ | -------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| job_name            | string | Any      | Name of the job                                                                                                                    |
+| fetch_artifact_args | string | Any      | Arguments for which artifacts for [`install_rocm_from_artifacts.py`](../../build_tools/install_rocm_from_artifacts.py) to retrieve |
+| timeout_minutes     | int    | Any      | The timeout (in minutes) for the test step                                                                                         |
+| test_script         | string | Any      | The path to the test script                                                                                                        |
+| platform            | array  | Any      | An array of platforms that the test can execute on, options are `linux` and `windows`                                              |
+| container_image     | string | Linux    | The name of a container image to use for this component                                                                            |
+| container_options   | string | Linux    | Additional options to be passed when launching the container                                                                       |
 
 > [!NOTE]
 > When adding a new component to TheRock (typically a new .toml file), you may need to update `install_rocm_from_artifacts.py` to allow CI workflows and users to selectively install it.<br>

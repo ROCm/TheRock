@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # find_package dependency provider
 # This is injected into sub-projects that contain dependencies. It runs in a
 # context with the following variables defined at the top level:

@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 name: CI - Linux
 
 on:
@@ -22,6 +25,9 @@ on:
       benchmark_runs_on:
         type: string
         default: ""
+      run_functional_tests:
+        type: boolean
+        default: false
       expect_failure:
         type: boolean
       use_prebuilt_artifacts:
@@ -64,6 +70,25 @@ jobs:
   #   (implicit) run id, or it could be an explicit run id.
   #   How about having the "build artifacts" job run as a passthrough?
 
+  validate_linux_artifact_structure:
+    needs: [build_portable_linux_artifacts]
+    name: Validate Artifact Structure
+    if: >-
+      ${{
+        !failure() &&
+        !cancelled() &&
+        (
+          inputs.use_prebuilt_artifacts == 'false' ||
+          inputs.use_prebuilt_artifacts == 'true'
+        ) &&
+        inputs.expect_failure == false
+      }}
+    uses: ./.github/workflows/test_artifacts_structure.yml
+    with:
+      artifact_group: ${{ inputs.artifact_group }}
+      artifact_run_id: ${{ inputs.artifact_run_id }}
+      platform: linux
+
   test_linux_artifacts:
     needs: [build_portable_linux_artifacts]
     name: Test Artifacts
@@ -90,6 +115,7 @@ jobs:
       test_type: ${{ inputs.test_type }}
       test_labels: ${{ inputs.test_labels }}
       sanity_check_only_for_family: ${{ inputs.sanity_check_only_for_family == true }}
+      run_functional_tests: ${{ inputs.run_functional_tests }}
 
   test_linux_benchmarks:
     needs: [build_portable_linux_artifacts]
@@ -189,3 +215,6 @@ jobs:
       pytorch_git_ref: "release/2.10"
       rocm_package_find_links_url: ${{ needs.build_portable_linux_python_packages.outputs.package_find_links_url }}
       rocm_version: ${{ inputs.rocm_package_version }}
+    permissions:
+      contents: read
+      id-token: write

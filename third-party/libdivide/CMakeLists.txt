@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 therock_subproject_fetch(therock-libdivide-sources
   CMAKE_PROJECT
   # Originally mirrored from: https://github.com/ridiculousfish/libdivide/archive/refs/tags/v5.2.0.tar.gz

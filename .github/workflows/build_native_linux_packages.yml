@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 name: Build Native Linux Packages
 
 on:
@@ -27,6 +30,12 @@ on:
         description: The type of release to build ("dev", "nightly", or "prerelease"). All developer-triggered jobs should use "dev"!
         required: false
         type: string
+      repository:
+          description: "Repository to checkout. Otherwise, defaults to `github.repository`."
+          type: string
+      ref:
+          description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
+          type: string
   workflow_dispatch:
     inputs:
       artifact_group:
@@ -55,6 +64,9 @@ on:
         description: The type of release to build ("dev", "nightly", or "prerelease"). All developer-triggered jobs should use "dev"!
         type: string
         default: "dev"
+      ref:
+          description: "Branch, tag or SHA to checkout. Defaults to the reference or SHA that triggered the workflow."
+          type: string
 
 permissions:
   id-token: write
@@ -78,10 +90,17 @@ jobs:
       RELEASE_TYPE: ${{ inputs.release_type || '' }}
       S3_BUCKET_NATIVE: "therock-${{ inputs.release_type }}-packages"
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+      - name: "Checking out repository"
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || '' }}
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: '3.12'
+
       - name: Install Python requirements
         run: |
           pip install pyelftools boto3 jinja2
@@ -100,7 +119,7 @@ jobs:
           echo "Fetching artifacts for build ${{ inputs.artifact_run_id }}"
           python ./build_tools/fetch_artifacts.py \
             --run-id=${{ env.ARTIFACT_RUN_ID }} \
-            --run-github-repo="ROCm/TheRock" \
+            --run-github-repo=${{ github.repository }} \
             --artifact-group=${{ inputs.artifact_group }} \
             --output-dir=${{ env.ARTIFACTS_DIR }}
 
@@ -119,7 +138,7 @@ jobs:
       - name: Install AWS CLI
         run: bash ./dockerfiles/install_awscli.sh
 
-      - name: Configure AWS Credentials for non-forked repos
+      - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
         with:
           aws-region: us-east-2

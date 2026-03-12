@@ -1,4 +1,7 @@
 #!/bin/bash
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Install sccache from official GitHub releases.
 #
 # Usage: ./install_sccache.sh <VERSION>
