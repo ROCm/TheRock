@@ -368,7 +368,7 @@ test_matrix = {
     # hipDNN integration tests
     "hipdnn_integration_tests": {
         "job_name": "hipdnn_integration_tests",
-        "fetch_artifact_args": "--blas --miopen --hipdnn --miopen-plugin --hipdnn-integration-tests --tests",
+        "fetch_artifact_args": "--blas --miopen --hipdnn --miopenprovider --hipdnn-integration-tests --tests",
         "timeout_minutes": 10,
         "test_script": f"python {_get_script_path('test_hipdnn_integration_tests.py')}",
         "platform": ["linux"],
