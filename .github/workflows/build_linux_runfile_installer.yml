@@ -157,9 +157,9 @@ jobs:
           echo "### Runfile Build Options" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          echo "\`bash build-runfile-installer.sh config=$RUNFILE_CONFIG_FILE rocm amdgpu pull=$PULL_TYPE pulltag=$PULL_TAG pullrunid=$PULL_RUN_ID pullrocmver=$ROCM_VERSION pullpkg=$PULL_PKG buildtag=$BUILD_TAG buildrunid=$BUILD_RUNID $ARGS\`" >> $GITHUB_STEP_SUMMARY
+          echo "\`bash build-runfile-installer.sh config=$RUNFILE_CONFIG rocm amdgpu pull=$PULL_TYPE pulltag=$PULL_TAG pullrunid=$PULL_RUN_ID pullrocmver=$ROCM_VERSION pullpkg=$PULL_PKG buildtag=$BUILD_TAG buildrunid=$BUILD_RUNID $ARGS\`" >> $GITHUB_STEP_SUMMARY
           
-          bash build-runfile-installer.sh config=$RUNFILE_CONFIG_FILE rocm amdgpu pull=$PULL_TYPE pulltag=$PULL_TAG pullrunid=$PULL_RUN_ID pullrocmver=$ROCM_VERSION pullpkg=$PULL_PKG buildtag=$BUILD_TAG buildrunid=$BUILD_RUNID $ARGS
+          bash build-runfile-installer.sh config=$RUNFILE_CONFIG rocm amdgpu pull=$PULL_TYPE pulltag=$PULL_TAG pullrunid=$PULL_RUN_ID pullrocmver=$ROCM_VERSION pullpkg=$PULL_PKG buildtag=$BUILD_TAG buildrunid=$BUILD_RUNID $ARGS
 
       - name: Show .run file
         run: find . -name "*.run" -type f -exec ls -lctrh {} \;
