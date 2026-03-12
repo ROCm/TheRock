@@ -458,6 +458,20 @@ artifact_deps = ["sysdeps"]
 feature_name = "COMPILER"
 feature_group = "ALL"
 
+[artifacts.amd-llvm-flang]
+artifact_group = "compiler"
+type = "target-neutral"
+artifact_deps = ["amd-llvm"]
+feature_name = "FLANG"
+feature_group = "ALL"
+disable_platforms = ["windows"]
+
+[artifacts.amd-llvm-offload]
+artifact_group = "compiler"
+type = "target-neutral"
+artifact_deps = ["amd-llvm"]
+disable_platforms = ["windows"]
+
 [artifacts.hipify]
 artifact_group = "compiler"
 type = "target-neutral"

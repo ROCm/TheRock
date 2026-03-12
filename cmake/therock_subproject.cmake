@@ -335,7 +335,7 @@ endfunction()
 function(therock_cmake_subproject_declare target_name)
   cmake_parse_arguments(
     PARSE_ARGV 1 ARG
-    "ACTIVATE;USE_DIST_AMDGPU_TARGETS;USE_TEST_AMDGPU_TARGETS;DISABLE_AMDGPU_TARGETS;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH;FPRINT_SOURCE_HASH"
+    "ACTIVATE;USE_DIST_AMDGPU_TARGETS;USE_TEST_AMDGPU_TARGETS;DISABLE_AMDGPU_TARGETS;EXCLUDE_FROM_ALL;BACKGROUND_BUILD;NO_MERGE_COMPILE_COMMANDS;OUTPUT_ON_FAILURE;NO_INSTALL_RPATH;FPRINT_SOURCE_HASH;FORTRAN_REQUIRED;FORTRAN_OPTIONAL"
     "EXTERNAL_SOURCE_DIR;BINARY_DIR;DIR_PREFIX;INSTALL_DESTINATION;COMPILER_TOOLCHAIN;INTERFACE_PROGRAM_DIRS;CMAKE_LISTS_RELPATH;INTERFACE_PKG_CONFIG_DIRS;INSTALL_RPATH_EXECUTABLE_DIR;INSTALL_RPATH_LIBRARY_DIR;LOGICAL_TARGET_NAME;FPRINT_SOURCE_DIR"
     "BUILD_DEPS;RUNTIME_DEPS;CMAKE_ARGS;CMAKE_INCLUDES;INTERFACE_INCLUDE_DIRS;INTERFACE_LINK_DIRS;IGNORE_PACKAGES;EXTRA_DEPENDS;INSTALL_RPATH_DIRS;INTERFACE_INSTALL_RPATH_DIRS;DEFAULT_GPU_TARGETS;FPRINT_FILE_GLOBS"
   )
@@ -484,6 +484,28 @@ function(therock_cmake_subproject_declare target_name)
     set(_gpu_targets "${THEROCK_AMDGPU_TARGETS}")
   endif()
 
+  # Resolve Fortran toolchain from FORTRAN_REQUIRED / FORTRAN_OPTIONAL keywords.
+  # This determines whether this sub-project needs a Fortran compiler and, if so,
+  # which sub-project provides it.
+  set(_fortran_toolchain_subproject)
+  if(ARG_FORTRAN_OPTIONAL AND NOT THEROCK_FLAG_BUILD_FORTRAN_LIBS)
+    # FORTRAN_OPTIONAL but flag is off: no-op.
+  elseif(ARG_FORTRAN_OPTIONAL OR ARG_FORTRAN_REQUIRED)
+    if(NOT WIN32 AND THEROCK_ENABLE_FLANG)
+      # Linux with flang: use our built flang from amd-llvm-offload.
+      set(_fortran_toolchain_subproject "amd-llvm-offload")
+    elseif(WIN32)
+      # Windows: let CMake find system gfortran (no toolchain dep).
+    else()
+      # Linux, no flang built.
+      if(ARG_FORTRAN_REQUIRED)
+        message(FATAL_ERROR
+          "Sub-project ${target_name} requires Fortran (FORTRAN_REQUIRED) "
+          "but THEROCK_ENABLE_FLANG is OFF and no system Fortran compiler is available on Linux.")
+      endif()
+    endif()
+  endif()
+
   set_target_properties("${target_name}" PROPERTIES
     THEROCK_LOGICAL_TARGET_NAME "${ARG_LOGICAL_TARGET_NAME}"
     THEROCK_SUBPROJECT cmake
@@ -527,6 +549,7 @@ function(therock_cmake_subproject_declare target_name)
     THEROCK_INTERFACE_PROGRAM_DIRS "${_interface_program_dirs}"
     THEROCK_IGNORE_PACKAGES "${ARG_IGNORE_PACKAGES}"
     THEROCK_COMPILER_TOOLCHAIN "${ARG_COMPILER_TOOLCHAIN}"
+    THEROCK_FORTRAN_TOOLCHAIN_SUBPROJECT "${_fortran_toolchain_subproject}"
     # Any extra depend files that must be added to the configure phase of dependents.
     THEROCK_INTERFACE_CONFIGURE_DEPEND_FILES "${_transitive_configure_depend_files}"
     THEROCK_EXTRA_DEPENDS "${ARG_EXTRA_DEPENDS}"
@@ -726,6 +749,20 @@ function(therock_cmake_subproject_activate target_name)
   _therock_cmake_subproject_setup_toolchain("${target_name}"
     "${_compiler_toolchain}" "${_cmake_project_toolchain_file}")
   list(APPEND _fprint_files "${_cmake_project_toolchain_file}")
+
+  # Handle Fortran toolchain (resolved at declare time from FORTRAN_REQUIRED/OPTIONAL).
+  get_target_property(_fortran_toolchain_subproject "${target_name}" THEROCK_FORTRAN_TOOLCHAIN_SUBPROJECT)
+  if(_fortran_toolchain_subproject)
+    _therock_assert_is_cmake_subproject("${_fortran_toolchain_subproject}")
+    get_target_property(_fortran_dist_dir "${_fortran_toolchain_subproject}" THEROCK_DIST_DIR)
+    get_target_property(_fortran_stamp_dir "${_fortran_toolchain_subproject}" THEROCK_STAMP_DIR)
+    list(APPEND _compiler_toolchain_addl_depends "${_fortran_stamp_dir}/stage.stamp")
+    # Append CMAKE_Fortran_COMPILER to the already-generated toolchain file.
+    set(_fortran_compiler "${_fortran_dist_dir}/lib/llvm/bin/flang-new${CMAKE_EXECUTABLE_SUFFIX}")
+    file(APPEND "${_cmake_project_toolchain_file}"
+      "set(CMAKE_Fortran_COMPILER \"${_fortran_compiler}\")\n")
+    message(STATUS "  Fortran toolchain: ${_fortran_toolchain_subproject} (${_fortran_dist_dir})")
+  endif()
 
   # Customize any other super-project CMake variables that are captured by
   # _init.cmake.
@@ -1496,18 +1533,25 @@ function(_therock_cmake_subproject_setup_toolchain
       "${CMAKE_CXX_COMPILER}"
       "${compiler_toolchain}"
       "${target_name}")
-  elseif(compiler_toolchain STREQUAL "amd-llvm" OR compiler_toolchain STREQUAL "amd-hip")
-    # The "amd-llvm" and "amd-hip" toolchains are configured very similarly so
-    # we commingle them, but they are different:
+  elseif(compiler_toolchain STREQUAL "amd-llvm" OR compiler_toolchain STREQUAL "amd-hip"
+         OR compiler_toolchain STREQUAL "amd-llvm-offload")
+    # The "amd-llvm", "amd-hip", and "amd-llvm-offload" toolchains are configured
+    # very similarly so we commingle them, but they are different:
     #   "amd-llvm": Just the base LLVM compiler and device libraries. This
     #     doesn't know anything about hip (i.e. it doesn't have hipconfig, etc).
+    #   "amd-llvm-offload": Superset of "amd-llvm" which also includes offload
+    #     runtimes (libomptarget, device RTLs) and optionally flang/flang-rt.
+    #     Used by pure-Fortran projects and OpenMP offload projects.
     #   "amd-hip": Superset of "amd-llvm" which also includes hipcc, hip headers,
     #     and hip version info. This has hipconfig in it.
     # The main difference is that for "amd-llvm", we derive the configuration from
-    # the amd-llvm project's dist/ tree. And for "amd-hip", from the hip-clr
-    # project (which has runtime dependencies on the underlying toolchain).
+    # the amd-llvm project's dist/ tree. For "amd-llvm-offload", from the
+    # amd-llvm-offload project. And for "amd-hip", from the hip-clr project
+    # (which has runtime dependencies on the underlying toolchain).
     if(compiler_toolchain STREQUAL "amd-hip")
       set(_toolchain_subproject "hip-clr")
+    elseif(compiler_toolchain STREQUAL "amd-llvm-offload")
+      set(_toolchain_subproject "amd-llvm-offload")
     else()
       set(_toolchain_subproject "amd-llvm")
     endif()
@@ -1550,7 +1594,7 @@ function(_therock_cmake_subproject_setup_toolchain
       endif()
     endif()
   else()
-    message(FATAL_ERROR "Unsupported COMPILER_TOOLCHAIN = ${compiler_toolchain} (supported: 'amd-llvm' or none)")
+    message(FATAL_ERROR "Unsupported COMPILER_TOOLCHAIN = ${compiler_toolchain} (supported: 'amd-llvm', 'amd-llvm-offload', 'amd-hip', or none)")
   endif()
 
   # Configure additional HIP dependencies.

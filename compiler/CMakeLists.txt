@@ -14,17 +14,7 @@ if(THEROCK_ENABLE_COMPILER)
     list(APPEND _extra_llvm_cmake_args "-DLLVM_ENABLE_PEDANTIC=OFF")
   endif()
 
-  # Building Flang is very memory-intensive on systems with many cores. Allow
-  # users to specify the level of concurrency for these tasks so they can
-  # reduce the risk of running out of memory.
-  if(FLANG_PARALLEL_COMPILE_JOBS)
-    message(STATUS "Flang build concurrency level set to ${FLANG_PARALLEL_COMPILE_JOBS}")
-    list(APPEND _extra_llvm_cmake_args "-DFLANG_PARALLEL_COMPILE_JOBS=${FLANG_PARALLEL_COMPILE_JOBS}")
-  else()
-     message(WARNING "Flang concurrency is unlimited. Memory usage may be much higher. Set -DFLANG_PARALLEL_COMPILE_JOBS to reduce memory use.")
-  endif()
-
-  # LLVM linking is also very memory intensive. Allow users to adjust the number
+  # LLVM linking is very memory intensive. Allow users to adjust the number
   # of parallel link jobs.
   if(LLVM_PARALLEL_LINK_JOBS)
     message(STATUS "LLVM parallel link jobs set to ${LLVM_PARALLEL_LINK_JOBS}")
@@ -95,15 +85,6 @@ if(THEROCK_ENABLE_COMPILER)
       -DCLANG_ENABLE_CLANGD=OFF
       -DCLANG_TIDY_ENABLE_STATIC_ANALYZER=OFF
 
-      -DCLANG_TOOL_CLANG_LINKER_WRAPPER_BUILD=${THEROCK_CONDITION_IS_NON_WINDOWS}
-      -DCLANG_TOOL_OFFLOAD_ARCH_BUILD=${THEROCK_CONDITION_IS_NON_WINDOWS}
-      -DOPENMP_ENABLE_LIBOMPTARGET=${THEROCK_CONDITION_IS_NON_WINDOWS}
-      -DLIBOMPTARGET_BUILD_DEVICE_FORTRT=${THEROCK_CONDITION_IS_NON_WINDOWS}
-      -DOFFLOAD_EXTERNAL_PROJECT_UNIFIED_ROCR=${THEROCK_CONDITION_IS_NON_WINDOWS}
-      -DLIBOMPTARGET_EXTERNAL_PROJECT_HSA_PATH=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime
-      -DFLANG_RUNTIME_F128_MATH_LIB=libquadmath
-      -DRUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_PER_TARGET_RUNTIME_DIR=${THEROCK_CONDITION_IS_NON_WINDOWS}
-      -DRUNTIMES_amdgcn-amd-amdhsa_LLVM_ENABLE_RUNTIMES=openmp
       # ASAN features.
       # Note that building AMDGPU ASAN extensions depends on various runtime headers
       # (since it instruments them). These paths must line up and will be an error
@@ -220,6 +201,100 @@ if(THEROCK_ENABLE_COMPILER)
       hipcc
       amd-comgr
   )
+
+  ##############################################################################
+  # amd-llvm-flang
+  # Fortran compiler (flang) + MLIR, built separately from base LLVM.
+  # Gated by THEROCK_ENABLE_FLANG (Linux-only).
+  ##############################################################################
+
+  if(THEROCK_ENABLE_FLANG)
+    # Building Flang is very memory-intensive on systems with many cores. Allow
+    # users to specify the level of concurrency for these tasks so they can
+    # reduce the risk of running out of memory.
+    set(_extra_flang_cmake_args)
+    if(FLANG_PARALLEL_COMPILE_JOBS)
+      message(STATUS "Flang build concurrency level set to ${FLANG_PARALLEL_COMPILE_JOBS}")
+      list(APPEND _extra_flang_cmake_args "-DFLANG_PARALLEL_COMPILE_JOBS=${FLANG_PARALLEL_COMPILE_JOBS}")
+    else()
+      message(WARNING "Flang concurrency is unlimited. Memory usage may be much higher. Set -DFLANG_PARALLEL_COMPILE_JOBS to reduce memory use.")
+    endif()
+    if(LLVM_PARALLEL_LINK_JOBS)
+      list(APPEND _extra_flang_cmake_args "-DLLVM_PARALLEL_LINK_JOBS=${LLVM_PARALLEL_LINK_JOBS}")
+    endif()
+
+    therock_cmake_subproject_declare(amd-llvm-flang
+      EXTERNAL_SOURCE_DIR "amd-llvm-flang"
+      BINARY_DIR "amd-llvm-flang"
+      BACKGROUND_BUILD
+      COMPILER_TOOLCHAIN amd-llvm
+      CMAKE_ARGS
+        ${_extra_flang_cmake_args}
+      RUNTIME_DEPS
+        amd-llvm
+      INTERFACE_PROGRAM_DIRS
+        lib/llvm/bin
+      INSTALL_DESTINATION "lib/llvm"
+    )
+    therock_cmake_subproject_provide_package(amd-llvm-flang Flang lib/llvm/lib/cmake/flang)
+    therock_cmake_subproject_activate(amd-llvm-flang)
+
+    therock_provide_artifact(amd-llvm-flang
+      TARGET_NEUTRAL
+      DESCRIPTOR artifact-amd-llvm-flang.toml
+      COMPONENTS
+        dbg
+        dev
+        run
+      SUBPROJECT_DEPS
+        amd-llvm-flang
+    )
+  endif()
+
+  ##############################################################################
+  # amd-llvm-offload
+  # Offload runtimes (libomptarget, device RTLs) + conditionally flang-rt.
+  # Always built on non-Windows.
+  ##############################################################################
+
+  if(THEROCK_ENABLE_AMD_LLVM_OFFLOAD)
+    set(_offload_deps amd-llvm)
+    if(THEROCK_ENABLE_FLANG)
+      list(APPEND _offload_deps amd-llvm-flang)
+    endif()
+
+    therock_cmake_subproject_declare(amd-llvm-offload
+      USE_DIST_AMDGPU_TARGETS
+      EXTERNAL_SOURCE_DIR "amd-llvm-offload"
+      BINARY_DIR "amd-llvm-offload"
+      BACKGROUND_BUILD
+      COMPILER_TOOLCHAIN amd-llvm
+      CMAKE_ARGS
+        -DTHEROCK_ENABLE_FLANG=${THEROCK_ENABLE_FLANG}
+        "-DLIBOMPTARGET_EXTERNAL_PROJECT_HSA_PATH=${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocr-runtime"
+      RUNTIME_DEPS
+        ${_offload_deps}
+        ${THEROCK_BUNDLED_ZLIB}
+        ${THEROCK_BUNDLED_ZSTD}
+        ${THEROCK_BUNDLED_NUMACTL}
+        ${THEROCK_BUNDLED_ELFUTILS}
+        ${THEROCK_BUNDLED_LIBDRM}
+      INSTALL_DESTINATION "lib/llvm"
+    )
+    therock_cmake_subproject_activate(amd-llvm-offload)
+
+    therock_provide_artifact(amd-llvm-offload
+      TARGET_NEUTRAL
+      DESCRIPTOR artifact-amd-llvm-offload.toml
+      COMPONENTS
+        dbg
+        lib
+        run
+      SUBPROJECT_DEPS
+        amd-llvm-offload
+    )
+  endif()
+
 endif(THEROCK_ENABLE_COMPILER)
 
 if(THEROCK_ENABLE_HIPIFY)
