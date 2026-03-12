@@ -12141,6 +12141,15 @@ int main() {
                                       InstructionOperand::Imm32(0x20)),
       DecodedInstruction::Nullary("S_ENDPGM"),
   };
+  std::vector<CompiledInstruction> compiled_buffer_format_program;
+  if (!Expect(interpreter.CompileProgram(buffer_format_program,
+                                         &compiled_buffer_format_program,
+                                         &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+  const LinearExecutionMemory initial_buffer_format_memory = buffer_format_memory;
+  const WaveExecutionState initial_buffer_format_state = buffer_format_state;
   if (!Expect(interpreter.ExecuteProgram(buffer_format_program,
                                          &buffer_format_state,
                                          &buffer_format_memory,
@@ -12228,6 +12237,113 @@ int main() {
               "expected buffer format d16 hi store read") ||
       !Expect(buffer_format_short == 0x3344u,
               "expected buffer format d16 hi store result")) {
+    return 1;
+  }
+
+  LinearExecutionMemory compiled_buffer_format_memory =
+      initial_buffer_format_memory;
+  WaveExecutionState compiled_buffer_format_state = initial_buffer_format_state;
+  if (!Expect(interpreter.ExecuteProgram(compiled_buffer_format_program,
+                                         &compiled_buffer_format_state,
+                                         &compiled_buffer_format_memory,
+                                         &error_message),
+              error_message.c_str()) ||
+      !Expect(compiled_buffer_format_state.halted,
+              "expected compiled buffer format program to halt") ||
+      !Expect(compiled_buffer_format_state.vgprs[70][0] == 0x7au,
+              "expected compiled buffer format x load result") ||
+      !Expect(compiled_buffer_format_state.vgprs[71][0] == 0x01u &&
+                  compiled_buffer_format_state.vgprs[72][0] == 0x02u &&
+                  compiled_buffer_format_state.vgprs[73][0] == 0x03u &&
+                  compiled_buffer_format_state.vgprs[74][0] == 0x04u,
+              "expected compiled buffer format xyzw load result") ||
+      !Expect(compiled_buffer_format_state.vgprs[75][0] == 0x3fc00000u &&
+                  compiled_buffer_format_state.vgprs[76][0] == 0xc0000000u &&
+                  compiled_buffer_format_state.vgprs[77][0] == 0x3e800000u,
+              "expected compiled buffer format xyz load result") ||
+      !Expect(compiled_buffer_format_state.vgprs[80][0] == 0x00220011u,
+              "expected compiled buffer format d16 xy load result") ||
+      !Expect(compiled_buffer_format_state.vgprs[81][0] == 0x40003c00u &&
+                  compiled_buffer_format_state.vgprs[82][0] == 0x0000c000u,
+              "expected compiled buffer format d16 xyz load result") ||
+      !Expect(compiled_buffer_format_state.vgprs[83][0] == 0x33440000u,
+              "expected compiled buffer format d16 hi load result")) {
+    return 1;
+  }
+
+  std::uint8_t compiled_buffer_format_byte = 0;
+  std::uint16_t compiled_buffer_format_short = 0;
+  std::uint32_t compiled_buffer_format_dword = 0;
+  if (!Expect(ReadU8(compiled_buffer_format_memory, 0x120u,
+                     &compiled_buffer_format_byte),
+              "expected compiled buffer format x store read") ||
+      !Expect(compiled_buffer_format_byte == 0x55u,
+              "expected compiled buffer format x store result") ||
+      !Expect(ReadU8(compiled_buffer_format_memory, 0x160u,
+                     &compiled_buffer_format_byte),
+              "expected compiled buffer format xyzw store read") ||
+      !Expect(compiled_buffer_format_byte == 0x05u,
+              "expected compiled buffer format xyzw store result") ||
+      !Expect(ReadU8(compiled_buffer_format_memory, 0x161u,
+                     &compiled_buffer_format_byte),
+              "expected compiled buffer format xyzw store read") ||
+      !Expect(compiled_buffer_format_byte == 0x06u,
+              "expected compiled buffer format xyzw store result") ||
+      !Expect(ReadU8(compiled_buffer_format_memory, 0x162u,
+                     &compiled_buffer_format_byte),
+              "expected compiled buffer format xyzw store read") ||
+      !Expect(compiled_buffer_format_byte == 0x07u,
+              "expected compiled buffer format xyzw store result") ||
+      !Expect(ReadU8(compiled_buffer_format_memory, 0x163u,
+                     &compiled_buffer_format_byte),
+              "expected compiled buffer format xyzw store read") ||
+      !Expect(compiled_buffer_format_byte == 0x08u,
+              "expected compiled buffer format xyzw store result") ||
+      !Expect(compiled_buffer_format_memory.ReadU32(0x1a0u,
+                                                    &compiled_buffer_format_dword),
+              "expected compiled buffer format xyz store read") ||
+      !Expect(compiled_buffer_format_dword == 0x40200000u,
+              "expected compiled buffer format xyz store result") ||
+      !Expect(compiled_buffer_format_memory.ReadU32(0x1a4u,
+                                                    &compiled_buffer_format_dword),
+              "expected compiled buffer format xyz store read") ||
+      !Expect(compiled_buffer_format_dword == 0xbf800000u,
+              "expected compiled buffer format xyz store result") ||
+      !Expect(compiled_buffer_format_memory.ReadU32(0x1a8u,
+                                                    &compiled_buffer_format_dword),
+              "expected compiled buffer format xyz store read") ||
+      !Expect(compiled_buffer_format_dword == 0x40800000u,
+              "expected compiled buffer format xyz store result") ||
+      !Expect(ReadU16(compiled_buffer_format_memory, 0x1e0u,
+                      &compiled_buffer_format_short),
+              "expected compiled buffer format d16 xy store read") ||
+      !Expect(compiled_buffer_format_short == 0x0011u,
+              "expected compiled buffer format d16 xy store result") ||
+      !Expect(ReadU16(compiled_buffer_format_memory, 0x1e2u,
+                      &compiled_buffer_format_short),
+              "expected compiled buffer format d16 xy store read") ||
+      !Expect(compiled_buffer_format_short == 0x0022u,
+              "expected compiled buffer format d16 xy store result") ||
+      !Expect(ReadU16(compiled_buffer_format_memory, 0x220u,
+                      &compiled_buffer_format_short),
+              "expected compiled buffer format d16 xyz store read") ||
+      !Expect(compiled_buffer_format_short == 0x3c00u,
+              "expected compiled buffer format d16 xyz store result") ||
+      !Expect(ReadU16(compiled_buffer_format_memory, 0x222u,
+                      &compiled_buffer_format_short),
+              "expected compiled buffer format d16 xyz store read") ||
+      !Expect(compiled_buffer_format_short == 0x4000u,
+              "expected compiled buffer format d16 xyz store result") ||
+      !Expect(ReadU16(compiled_buffer_format_memory, 0x224u,
+                      &compiled_buffer_format_short),
+              "expected compiled buffer format d16 xyz store read") ||
+      !Expect(compiled_buffer_format_short == 0xc000u,
+              "expected compiled buffer format d16 xyz store result") ||
+      !Expect(ReadU16(compiled_buffer_format_memory, 0x260u,
+                      &compiled_buffer_format_short),
+              "expected compiled buffer format d16 hi store read") ||
+      !Expect(compiled_buffer_format_short == 0x3344u,
+              "expected compiled buffer format d16 hi store result")) {
     return 1;
   }
   }
@@ -12360,6 +12476,15 @@ int main() {
                                        InstructionOperand::Imm32(7)),
       DecodedInstruction::Nullary("S_ENDPGM"),
   };
+  std::vector<CompiledInstruction> compiled_typed_buffer_program;
+  if (!Expect(interpreter.CompileProgram(typed_buffer_program,
+                                         &compiled_typed_buffer_program,
+                                         &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+  const LinearExecutionMemory initial_typed_buffer_memory = typed_buffer_memory;
+  const WaveExecutionState initial_typed_buffer_state = typed_buffer_state;
   if (!Expect(interpreter.ExecuteProgram(typed_buffer_program,
                                          &typed_buffer_state,
                                          &typed_buffer_memory,
@@ -12435,6 +12560,98 @@ int main() {
               "expected typed buffer d16 xyz store read") ||
       !Expect(typed_buffer_short == 0x4000u,
               "expected typed buffer d16 xyz store result")) {
+    return 1;
+  }
+
+  LinearExecutionMemory compiled_typed_buffer_memory = initial_typed_buffer_memory;
+  WaveExecutionState compiled_typed_buffer_state = initial_typed_buffer_state;
+  if (!Expect(interpreter.ExecuteProgram(compiled_typed_buffer_program,
+                                         &compiled_typed_buffer_state,
+                                         &compiled_typed_buffer_memory,
+                                         &error_message),
+              error_message.c_str()) ||
+      !Expect(compiled_typed_buffer_state.halted,
+              "expected compiled typed buffer program to halt") ||
+      !Expect(compiled_typed_buffer_state.vgprs[90][0] == 0x11u &&
+                  compiled_typed_buffer_state.vgprs[91][0] == 0x22u &&
+                  compiled_typed_buffer_state.vgprs[92][0] == 0x33u &&
+                  compiled_typed_buffer_state.vgprs[93][0] == 0x44u,
+              "expected compiled typed buffer xyzw load result") ||
+      !Expect(compiled_typed_buffer_state.vgprs[94][0] == 0x3f800000u &&
+                  compiled_typed_buffer_state.vgprs[95][0] == 0xbf400000u &&
+                  compiled_typed_buffer_state.vgprs[96][0] == 0x40400000u,
+              "expected compiled typed buffer xyz load result") ||
+      !Expect(compiled_typed_buffer_state.vgprs[97][0] == 0x03040102u,
+              "expected compiled typed buffer d16 xy load result") ||
+      !Expect(compiled_typed_buffer_state.vgprs[98][0] == 0x3c003800u &&
+                  compiled_typed_buffer_state.vgprs[99][0] == 0x00004000u,
+              "expected compiled typed buffer d16 xyz load result")) {
+    return 1;
+  }
+
+  std::uint8_t compiled_typed_buffer_byte = 0;
+  std::uint16_t compiled_typed_buffer_short = 0;
+  std::uint32_t compiled_typed_buffer_dword = 0;
+  if (!Expect(ReadU8(compiled_typed_buffer_memory, 0x2a0u,
+                     &compiled_typed_buffer_byte),
+              "expected compiled typed buffer xyzw store read") ||
+      !Expect(compiled_typed_buffer_byte == 0xa1u,
+              "expected compiled typed buffer xyzw store result") ||
+      !Expect(ReadU8(compiled_typed_buffer_memory, 0x2a1u,
+                     &compiled_typed_buffer_byte),
+              "expected compiled typed buffer xyzw store read") ||
+      !Expect(compiled_typed_buffer_byte == 0xb2u,
+              "expected compiled typed buffer xyzw store result") ||
+      !Expect(ReadU8(compiled_typed_buffer_memory, 0x2a2u,
+                     &compiled_typed_buffer_byte),
+              "expected compiled typed buffer xyzw store read") ||
+      !Expect(compiled_typed_buffer_byte == 0xc3u,
+              "expected compiled typed buffer xyzw store result") ||
+      !Expect(ReadU8(compiled_typed_buffer_memory, 0x2a3u,
+                     &compiled_typed_buffer_byte),
+              "expected compiled typed buffer xyzw store read") ||
+      !Expect(compiled_typed_buffer_byte == 0xd4u,
+              "expected compiled typed buffer xyzw store result") ||
+      !Expect(compiled_typed_buffer_memory.ReadU32(0x2e0u,
+                                                   &compiled_typed_buffer_dword),
+              "expected compiled typed buffer xyz store read") ||
+      !Expect(compiled_typed_buffer_dword == 0x3f000000u,
+              "expected compiled typed buffer xyz store result") ||
+      !Expect(compiled_typed_buffer_memory.ReadU32(0x2e4u,
+                                                   &compiled_typed_buffer_dword),
+              "expected compiled typed buffer xyz store read") ||
+      !Expect(compiled_typed_buffer_dword == 0xbf800000u,
+              "expected compiled typed buffer xyz store result") ||
+      !Expect(compiled_typed_buffer_memory.ReadU32(0x2e8u,
+                                                   &compiled_typed_buffer_dword),
+              "expected compiled typed buffer xyz store read") ||
+      !Expect(compiled_typed_buffer_dword == 0x40200000u,
+              "expected compiled typed buffer xyz store result") ||
+      !Expect(ReadU16(compiled_typed_buffer_memory, 0x320u,
+                      &compiled_typed_buffer_short),
+              "expected compiled typed buffer d16 xy store read") ||
+      !Expect(compiled_typed_buffer_short == 0x0102u,
+              "expected compiled typed buffer d16 xy store result") ||
+      !Expect(ReadU16(compiled_typed_buffer_memory, 0x322u,
+                      &compiled_typed_buffer_short),
+              "expected compiled typed buffer d16 xy store read") ||
+      !Expect(compiled_typed_buffer_short == 0x0304u,
+              "expected compiled typed buffer d16 xy store result") ||
+      !Expect(ReadU16(compiled_typed_buffer_memory, 0x360u,
+                      &compiled_typed_buffer_short),
+              "expected compiled typed buffer d16 xyz store read") ||
+      !Expect(compiled_typed_buffer_short == 0x3800u,
+              "expected compiled typed buffer d16 xyz store result") ||
+      !Expect(ReadU16(compiled_typed_buffer_memory, 0x362u,
+                      &compiled_typed_buffer_short),
+              "expected compiled typed buffer d16 xyz store read") ||
+      !Expect(compiled_typed_buffer_short == 0x3c00u,
+              "expected compiled typed buffer d16 xyz store result") ||
+      !Expect(ReadU16(compiled_typed_buffer_memory, 0x364u,
+                      &compiled_typed_buffer_short),
+              "expected compiled typed buffer d16 xyz store read") ||
+      !Expect(compiled_typed_buffer_short == 0x4000u,
+              "expected compiled typed buffer d16 xyz store result")) {
     return 1;
   }
   }

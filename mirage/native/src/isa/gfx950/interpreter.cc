@@ -1161,6 +1161,8 @@ std::string NormalizeBufferAtomicOpcode(std::string_view opcode) {
   return "GLOBAL_" + std::string(opcode.substr(7));
 }
 
+constexpr std::uint8_t kFlagBufferFormatUsesInstructionFormat = 1u << 5;
+
 bool IsBufferMaintenanceOpcode(std::string_view opcode) {
   return opcode == "BUFFER_WBL2" || opcode == "BUFFER_INV";
 }
@@ -1325,6 +1327,126 @@ std::uint8_t GetBufferFormatRegisterDwordCount(std::string_view opcode) {
     return static_cast<std::uint8_t>((component_count + 1u) / 2u);
   }
   return component_count;
+}
+
+bool IsBufferFormatMemoryOpcode(CompiledOpcode opcode) {
+  switch (opcode) {
+    case CompiledOpcode::kBufferLoadFormat:
+    case CompiledOpcode::kBufferStoreFormat:
+    case CompiledOpcode::kBufferLoadFormatD16:
+    case CompiledOpcode::kBufferStoreFormatD16:
+    case CompiledOpcode::kBufferLoadFormatD16HiX:
+    case CompiledOpcode::kBufferStoreFormatD16HiX:
+      return true;
+    default:
+      return false;
+  }
+}
+
+std::string_view GetBufferFormatComponentSuffix(
+    std::uint8_t component_count) {
+  switch (component_count) {
+    case 1u:
+      return "X";
+    case 2u:
+      return "XY";
+    case 3u:
+      return "XYZ";
+    case 4u:
+      return "XYZW";
+    default:
+      return {};
+  }
+}
+
+bool BuildCompiledBufferFormatOpcode(const CompiledInstruction& instruction,
+                                     std::string* opcode,
+                                     std::string* error_message) {
+  if (opcode == nullptr) {
+    if (error_message != nullptr) {
+      *error_message = "compiled buffer format opcode output must not be null";
+    }
+    return false;
+  }
+
+  const std::uint8_t component_count = instruction.element_size_bytes;
+  const bool uses_instruction_format =
+      (instruction.flags & kFlagBufferFormatUsesInstructionFormat) != 0u;
+  const std::string_view component_suffix =
+      GetBufferFormatComponentSuffix(component_count);
+  if (component_suffix.empty()) {
+    if (error_message != nullptr) {
+      *error_message = "compiled buffer format metadata has invalid component count";
+    }
+    return false;
+  }
+
+  switch (instruction.opcode) {
+    case CompiledOpcode::kBufferLoadFormat:
+      *opcode = std::string(uses_instruction_format ? "TBUFFER_LOAD_FORMAT_"
+                                                    : "BUFFER_LOAD_FORMAT_") +
+                std::string(component_suffix);
+      break;
+    case CompiledOpcode::kBufferStoreFormat:
+      *opcode = std::string(uses_instruction_format ? "TBUFFER_STORE_FORMAT_"
+                                                    : "BUFFER_STORE_FORMAT_") +
+                std::string(component_suffix);
+      break;
+    case CompiledOpcode::kBufferLoadFormatD16:
+      *opcode = std::string(uses_instruction_format ? "TBUFFER_LOAD_FORMAT_D16_"
+                                                    : "BUFFER_LOAD_FORMAT_D16_") +
+                std::string(component_suffix);
+      break;
+    case CompiledOpcode::kBufferStoreFormatD16:
+      *opcode = std::string(uses_instruction_format ? "TBUFFER_STORE_FORMAT_D16_"
+                                                    : "BUFFER_STORE_FORMAT_D16_") +
+                std::string(component_suffix);
+      break;
+    case CompiledOpcode::kBufferLoadFormatD16HiX:
+      if (uses_instruction_format) {
+        if (error_message != nullptr) {
+          *error_message =
+              "typed buffer d16 hi-x format instructions are not supported";
+        }
+        return false;
+      }
+      if (component_count != 1u) {
+        if (error_message != nullptr) {
+          *error_message =
+              "compiled buffer d16 hi-x metadata must request exactly one component";
+        }
+        return false;
+      }
+      *opcode = "BUFFER_LOAD_FORMAT_D16_HI_X";
+      break;
+    case CompiledOpcode::kBufferStoreFormatD16HiX:
+      if (uses_instruction_format) {
+        if (error_message != nullptr) {
+          *error_message =
+              "typed buffer d16 hi-x format instructions are not supported";
+        }
+        return false;
+      }
+      if (component_count != 1u) {
+        if (error_message != nullptr) {
+          *error_message =
+              "compiled buffer d16 hi-x metadata must request exactly one component";
+        }
+        return false;
+      }
+      *opcode = "BUFFER_STORE_FORMAT_D16_HI_X";
+      break;
+    default:
+      if (error_message != nullptr) {
+        *error_message = "compiled opcode is not a buffer format instruction";
+      }
+      return false;
+  }
+
+  if (error_message != nullptr) {
+    error_message->clear();
+  }
+  return true;
 }
 
 bool IsBufferMemoryOpcode(std::string_view opcode) {
@@ -5749,6 +5871,20 @@ void SetBufferMemoryMetadata(CompiledInstruction* instruction,
   instruction->element_size_bytes = element_size_bytes;
 }
 
+void SetBufferFormatMemoryMetadata(CompiledInstruction* instruction,
+                                   CompiledOpcode opcode,
+                                   bool is_load,
+                                   std::uint8_t register_dword_count,
+                                   std::uint8_t component_count,
+                                   bool uses_instruction_format) {
+  instruction->opcode = opcode;
+  instruction->flags =
+      (is_load ? CompiledInstruction::kFlagIsLoad : 0u) |
+      (uses_instruction_format ? kFlagBufferFormatUsesInstructionFormat : 0u);
+  instruction->register_dword_count = register_dword_count;
+  instruction->element_size_bytes = component_count;
+}
+
 void SetScalarMemoryMetadata(CompiledInstruction* instruction,
                              CompiledOpcode opcode,
                              bool is_load,
@@ -6190,6 +6326,38 @@ bool TrySetBufferMemoryMetadata(std::string_view opcode,
     return set_memory(CompiledOpcode::kBufferStoreDword);
   }
   return false;
+}
+
+bool TrySetBufferFormatMemoryMetadata(std::string_view opcode,
+                                      CompiledInstruction* compiled_instruction) {
+  if (compiled_instruction == nullptr || !IsBufferFormatMemoryOpcode(opcode)) {
+    return false;
+  }
+
+  const bool is_load = IsBufferFormatLoadOpcode(opcode);
+  const bool is_d16 = IsBufferFormatD16Opcode(opcode);
+  const bool is_hi_x = IsBufferFormatD16HiXOpcode(opcode);
+  const bool uses_instruction_format = HasPrefix(opcode, "TBUFFER_");
+  const std::uint8_t register_dword_count =
+      GetBufferFormatRegisterDwordCount(opcode);
+  const std::uint8_t component_count = GetBufferFormatComponentCount(opcode);
+  const auto set_memory = [&](CompiledOpcode compiled_opcode) {
+    SetBufferFormatMemoryMetadata(compiled_instruction, compiled_opcode, is_load,
+                                  register_dword_count, component_count,
+                                  uses_instruction_format);
+    return true;
+  };
+
+  if (is_hi_x) {
+    return set_memory(is_load ? CompiledOpcode::kBufferLoadFormatD16HiX
+                              : CompiledOpcode::kBufferStoreFormatD16HiX);
+  }
+  if (is_d16) {
+    return set_memory(is_load ? CompiledOpcode::kBufferLoadFormatD16
+                              : CompiledOpcode::kBufferStoreFormatD16);
+  }
+  return set_memory(is_load ? CompiledOpcode::kBufferLoadFormat
+                            : CompiledOpcode::kBufferStoreFormat);
 }
 
 bool TryCompileOpcode(std::string_view opcode,
@@ -7968,6 +8136,9 @@ bool TryCompileOpcode(std::string_view opcode,
   if (TrySetBufferMemoryMetadata(opcode, compiled_instruction)) {
     return true;
   }
+  if (TrySetBufferFormatMemoryMetadata(opcode, compiled_instruction)) {
+    return true;
+  }
   if (opcode == "V_ADD_U32") {
     compiled_instruction->opcode = CompiledOpcode::kVAddU32;
     return true;
@@ -9392,6 +9563,10 @@ bool Gfx950Interpreter::ExecuteInstruction(const CompiledInstruction& instructio
 
   if (IsBufferMaintenanceOpcode(instruction.opcode)) {
     return ValidateOperandCount(instruction, 0, error_message);
+  }
+
+  if (IsBufferFormatMemoryOpcode(instruction.opcode)) {
+    return ExecuteBufferFormatMemory(instruction, state, memory, error_message);
   }
 
   if (IsBufferMemoryOpcode(instruction.opcode)) {
@@ -12289,6 +12464,24 @@ bool Gfx950Interpreter::ExecuteBufferFormatMemory(
     error_message->clear();
   }
   return true;
+}
+
+bool Gfx950Interpreter::ExecuteBufferFormatMemory(
+    const CompiledInstruction& instruction,
+    WaveExecutionState* state,
+    ExecutionMemory* memory,
+    std::string* error_message) const {
+  std::string opcode;
+  if (!BuildCompiledBufferFormatOpcode(instruction, &opcode, error_message)) {
+    return false;
+  }
+
+  DecodedInstruction decoded_instruction;
+  decoded_instruction.opcode = std::move(opcode);
+  decoded_instruction.operands = instruction.operands;
+  decoded_instruction.operand_count = instruction.operand_count;
+  return ExecuteBufferFormatMemory(decoded_instruction, state, memory,
+                                   error_message);
 }
 
 bool Gfx950Interpreter::ExecuteBufferMemory(const DecodedInstruction& instruction,

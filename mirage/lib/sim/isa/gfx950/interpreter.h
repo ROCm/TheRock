@@ -471,6 +471,12 @@ enum class CompiledOpcode : std::uint16_t {
   kBufferStoreShort,
   kBufferStoreShortD16Hi,
   kBufferStoreDword,
+  kBufferLoadFormat,
+  kBufferStoreFormat,
+  kBufferLoadFormatD16,
+  kBufferStoreFormatD16,
+  kBufferLoadFormatD16HiX,
+  kBufferStoreFormatD16HiX,
   kVCndmaskB32,
   kVAddU32,
   kVAddCoU32,
@@ -879,6 +885,10 @@ class Gfx950Interpreter {
                            ExecutionMemory* memory,
                            std::string* error_message) const;
   bool ExecuteBufferFormatMemory(const DecodedInstruction& instruction,
+                                 WaveExecutionState* state,
+                                 ExecutionMemory* memory,
+                                 std::string* error_message) const;
+  bool ExecuteBufferFormatMemory(const CompiledInstruction& instruction,
                                  WaveExecutionState* state,
                                  ExecutionMemory* memory,
                                  std::string* error_message) const;
