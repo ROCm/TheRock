@@ -75,6 +75,13 @@ AMDGPU_FAMILY_TO_BUILD_ENV = {
 }
 ROCM_BUILD_ENVIRONMENT_DEFAULT = "linux-noble-rocm-py3.12-mi300"
 
+# Upstream PyTorch uses a separate BUILD_ENVIRONMENT for the inductor config
+# (e.g. inductor-rocm-mi300.yml vs rocm-mi300.yml), so test-times.json stores
+# inductor timings under different keys.
+AMDGPU_FAMILY_TO_INDUCTOR_BUILD_ENV = {
+    "gfx94X-dcgpu": "rocm-py3.12-inductor-mi300",
+}
+
 THEROCK_ENV_VARS = [
     "CI",
     "BUILD_ENVIRONMENT",
@@ -94,9 +101,17 @@ THEROCK_ENV_VARS = [
 
 def setup_env(pytorch_dir: Path, test_config: str, amdgpu_family: str = "") -> None:
     os.environ.setdefault("CI", "1")
-    build_env = AMDGPU_FAMILY_TO_BUILD_ENV.get(
-        amdgpu_family, ROCM_BUILD_ENVIRONMENT_DEFAULT
-    )
+    if test_config == "inductor":
+        build_env = AMDGPU_FAMILY_TO_INDUCTOR_BUILD_ENV.get(
+            amdgpu_family,
+            AMDGPU_FAMILY_TO_BUILD_ENV.get(
+                amdgpu_family, ROCM_BUILD_ENVIRONMENT_DEFAULT
+            ),
+        )
+    else:
+        build_env = AMDGPU_FAMILY_TO_BUILD_ENV.get(
+            amdgpu_family, ROCM_BUILD_ENVIRONMENT_DEFAULT
+        )
     os.environ.setdefault("BUILD_ENVIRONMENT", build_env)
     os.environ.setdefault("PYTORCH_TEST_WITH_ROCM", "1")
     os.environ.setdefault("PYTORCH_TESTING_DEVICE_ONLY_FOR", "cuda")
