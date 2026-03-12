@@ -13,6 +13,7 @@ using mirage::sim::isa::gfx1250::DecodeVop3pStub;
 using mirage::sim::isa::gfx1250::FindStubDecoderEntrypointManifest;
 using mirage::sim::isa::gfx1250::FindStubDecoderRouteInfo;
 using mirage::sim::isa::gfx1250::GetStubDecoderEntrypointManifests;
+using mirage::sim::isa::gfx1250::GetStubDecoderRouteInstructions;
 using mirage::sim::isa::gfx1250::GetStubExecutionDomainName;
 using mirage::sim::isa::gfx1250::GetStubOperandLayoutName;
 using mirage::sim::isa::gfx1250::GetStubOperandRoleName;
@@ -151,11 +152,61 @@ bool ContainsDescriptorWaveSize(const StubDecodedInstruction& instruction,
   return false;
 }
 
+bool HasMatrixSlot(const StubDecodedInstruction& instruction) {
+  for (std::uint32_t i = 0; i < instruction.operand_slots.binding_count; ++i) {
+    if (instruction.operand_slots.bindings[i].fragment_shape.kind ==
+        StubFragmentKind::kMatrix) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool AllMatrixSlotsHaveWaveSize(const StubDecodedInstruction& instruction,
+                                std::uint8_t wave_size) {
+  for (std::uint32_t i = 0; i < instruction.operand_slots.binding_count; ++i) {
+    const auto& binding = instruction.operand_slots.bindings[i];
+    if (binding.fragment_shape.kind == StubFragmentKind::kMatrix &&
+        binding.fragment_shape.wave_size != wave_size) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool HasMatrixDescriptor(const StubDecodedInstruction& instruction) {
+  for (std::uint32_t i = 0; i < instruction.operand_descriptors.descriptor_count;
+       ++i) {
+    if (instruction.operand_descriptors.descriptors[i].fragment_shape.kind ==
+        StubFragmentKind::kMatrix) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool AllMatrixDescriptorsHaveWaveSize(const StubDecodedInstruction& instruction,
+                                      std::uint8_t wave_size) {
+  for (std::uint32_t i = 0; i < instruction.operand_descriptors.descriptor_count;
+       ++i) {
+    const auto& descriptor = instruction.operand_descriptors.descriptors[i];
+    if (descriptor.fragment_shape.kind == StubFragmentKind::kMatrix &&
+        descriptor.fragment_shape.wave_size != wave_size) {
+      return false;
+    }
+  }
+  return true;
+}
+
 }  // namespace
 
 int main() {
   if (!Expect(GetStubDecoderEntrypointManifests().size() == 4,
               "expected four stub decoder entrypoint manifests")) {
+    return 1;
+  }
+  if (!Expect(!GetStubDecoderRouteInstructions(StubDecoderRoute::kVop3p).empty(),
+              "expected VOP3P routed instruction list")) {
     return 1;
   }
 
@@ -1047,6 +1098,35 @@ int main() {
                       StubFragmentKind::kMatrix, 32),
               "expected suffix-less WMMA F8F6F4 wave32 fragment semantics")) {
     return 1;
+  }
+
+  for (std::string_view instruction_name :
+       GetStubDecoderRouteInstructions(StubDecoderRoute::kVop3p)) {
+    if (instruction_name == "V_WMMA_LD_SCALE_PAIRED_B32" ||
+        instruction_name == "V_WMMA_LD_SCALE16_PAIRED_B64") {
+      continue;
+    }
+    const bool is_matrix_route =
+        instruction_name.rfind("V_WMMA_", 0) == 0 ||
+        instruction_name.rfind("V_SWMMAC_", 0) == 0;
+    if (!is_matrix_route) {
+      continue;
+    }
+
+    const StubDecodedInstruction decoded = DecodeVop3pStub(instruction_name);
+    if (!Expect(decoded.status == StubDecodeStatus::kDecodedStub,
+                "expected routed WMMA/SWMMAC seed to decode")) {
+      return 1;
+    }
+    if (!Expect(HasMatrixSlot(decoded) && HasMatrixDescriptor(decoded),
+                "expected routed WMMA/SWMMAC seed to materialize matrix metadata")) {
+      return 1;
+    }
+    if (!Expect(AllMatrixSlotsHaveWaveSize(decoded, 32) &&
+                    AllMatrixDescriptorsHaveWaveSize(decoded, 32),
+                "expected routed WMMA/SWMMAC matrix fragments to stay wave32")) {
+      return 1;
+    }
   }
 
   const StubDecodedInstruction wmma_bf16_generic =

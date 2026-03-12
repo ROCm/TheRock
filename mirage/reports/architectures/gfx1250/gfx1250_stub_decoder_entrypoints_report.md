@@ -20,6 +20,7 @@
   - shared common fragment-shape metadata on routed operand slots
   - parser-backed generic matrix fragment metadata for routed WMMA / SWMMAC variants
   - explicit wave32 fragment semantics for routed WMMA / SWMMAC seeds on gfx1250
+  - route-wide wave32 validation across the current routed WMMA / SWMMAC seed set
 
 ## Routed Seed Metadata Coverage
 
@@ -143,6 +144,7 @@
     - source1 fragment coverage across routed BF16/BF8/FP8/IU8 variants
     - destination and accumulator descriptor coverage across routed F16/F32/BF16 variants
     - explicit wave32 fragment/descriptor checks on representative routed generic variants
+    - route-wide wave32 validation across current routed `V_WMMA_*` seeds except paired-load helpers
 - WMMA scale:
   - `V_WMMA_SCALE_F32_16X16X128_F8F6F4` -> `kWmmaScaleF32_16x16x128_F8F6F4`
   - `V_WMMA_SCALE16_F32_16X16X128_F8F6F4` -> `kWmmaScale16F32_16x16x128_F8F6F4`
@@ -197,6 +199,7 @@
     - source1 fragment coverage on routed BF16/BF8/FP8 and `I32/IU8` variants
     - destination and accumulator descriptor coverage on routed F16/F32/BF16/I32 variants
     - explicit wave32 fragment/descriptor checks on representative routed generic variants
+    - route-wide wave32 validation across current routed `V_SWMMAC_*` seeds
 - Tensor routes:
   - `TENSOR_LOAD_TO_LDS` -> `kTensorLoadToLds`
   - `TENSOR_STORE_FROM_LDS` -> `kTensorStoreFromLds`
