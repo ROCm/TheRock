@@ -12,6 +12,7 @@ from unittest import mock
 
 THIS_DIR = Path(__file__).resolve().parent
 
+sys.path.insert(0, os.fspath(THIS_DIR.parent.parent))
 sys.path.insert(0, os.fspath(THIS_DIR.parent))
 
 import generate_jax_manifest as jax_manifest
