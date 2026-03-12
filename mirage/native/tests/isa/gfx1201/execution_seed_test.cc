@@ -577,6 +577,22 @@ bool ExpectUnaryMathSeedState(const mirage::sim::isa::WaveExecutionState& state)
          state.halted && !state.waiting_on_barrier && state.pc == 16u;
 }
 
+bool ExpectUnaryCountConvertSeedState(
+    const mirage::sim::isa::WaveExecutionState& state) {
+  return state.vgprs[10][0] == 16u && state.vgprs[10][1] == 0xffffffffu &&
+         state.vgprs[10][2] == 0x10101010u && state.vgprs[10][3] == 31u &&
+         state.vgprs[11][0] == 12u && state.vgprs[11][1] == 0xffffffffu &&
+         state.vgprs[11][2] == 0x11111111u && state.vgprs[11][3] == 0u &&
+         state.vgprs[12][0] == 16u && state.vgprs[12][1] == 0xffffffffu &&
+         state.vgprs[12][2] == 0x12121212u && state.vgprs[12][3] == 1u &&
+         state.vgprs[13][0] == 0xffffffffu && state.vgprs[13][1] == 2u &&
+         state.vgprs[13][2] == 0x13131313u && state.vgprs[13][3] == 4u &&
+         state.vgprs[14][0] == 0xfffffffeu && state.vgprs[14][1] == 2u &&
+         state.vgprs[14][2] == 0x14141414u && state.vgprs[14][3] == 3u &&
+         state.exec_mask == 0xbu && state.halted &&
+         !state.waiting_on_barrier && state.pc == 5u;
+}
+
 bool ExpectRemainingCompareState(const mirage::sim::isa::WaveExecutionState& state) {
   return state.sgprs[40] == 0xffffffffu && state.sgprs[41] == 0xffffffffu &&
          state.sgprs[42] == 1u && state.sgprs[43] == 4u &&
@@ -1101,6 +1117,29 @@ int main() {
     return 1;
   }
 
+  const std::array<std::uint32_t, 1> v_clz_i32_u32_words{
+      MakeVop1(57u, 18u, 257u)};
+  if (!Expect(decoder.DecodeInstruction(v_clz_i32_u32_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_CLZ_I32_U32 decode success") ||
+      !Expect(ExpectUnaryInstruction(instruction, "V_CLZ_I32_U32",
+                                     OperandKind::kVgpr, 18u,
+                                     OperandKind::kVgpr, 1u),
+              "expected decoded V_CLZ_I32_U32 operands")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_cls_i32_words{MakeVop1(59u, 19u, 258u)};
+  if (!Expect(decoder.DecodeInstruction(v_cls_i32_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_CLS_I32 decode success") ||
+      !Expect(ExpectUnaryInstruction(instruction, "V_CLS_I32",
+                                     OperandKind::kVgpr, 19u,
+                                     OperandKind::kVgpr, 2u),
+              "expected decoded V_CLS_I32 operands")) {
+    return 1;
+  }
+
   const std::array<std::uint32_t, 1> v_cvt_f32_ubyte0_words{
       MakeVop1(17u, 6u, 259u)};
   if (!Expect(decoder.DecodeInstruction(v_cvt_f32_ubyte0_words, &instruction,
@@ -1166,6 +1205,31 @@ int main() {
                                      OperandKind::kVgpr, 9u,
                                      OperandKind::kVgpr, 4u),
               "expected decoded V_CVT_I32_F32 operands")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_cvt_nearest_i32_f32_words{
+      MakeVop1(12u, 20u, 261u)};
+  if (!Expect(decoder.DecodeInstruction(v_cvt_nearest_i32_f32_words,
+                                        &instruction, &words_consumed,
+                                        &error_message),
+              "expected V_CVT_NEAREST_I32_F32 decode success") ||
+      !Expect(ExpectUnaryInstruction(instruction, "V_CVT_NEAREST_I32_F32",
+                                     OperandKind::kVgpr, 20u,
+                                     OperandKind::kVgpr, 5u),
+              "expected decoded V_CVT_NEAREST_I32_F32 operands")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_cvt_floor_i32_f32_words{
+      MakeVop1(13u, 21u, 262u)};
+  if (!Expect(decoder.DecodeInstruction(v_cvt_floor_i32_f32_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_CVT_FLOOR_I32_F32 decode success") ||
+      !Expect(ExpectUnaryInstruction(instruction, "V_CVT_FLOOR_I32_F32",
+                                     OperandKind::kVgpr, 21u,
+                                     OperandKind::kVgpr, 6u),
+              "expected decoded V_CVT_FLOOR_I32_F32 operands")) {
     return 1;
   }
 
@@ -2645,6 +2709,111 @@ int main() {
               "expected compiled unary math execution success") ||
       !Expect(ExpectUnaryMathSeedState(compiled_unary_math_state),
               "expected compiled unary math state")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 6> unary_count_convert_words{
+      MakeVop1(57u, 10u, 257u),
+      MakeVop1(58u, 11u, 257u),
+      MakeVop1(59u, 12u, 258u),
+      MakeVop1(12u, 13u, 259u),
+      MakeVop1(13u, 14u, 260u),
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> unary_count_convert_program;
+  if (!Expect(decoder.DecodeProgram(unary_count_convert_words,
+                                    &unary_count_convert_program,
+                                    &error_message),
+              "expected unary count/convert program decode success") ||
+      !Expect(unary_count_convert_program.size() == 6u,
+              "expected six decoded unary count/convert instructions") ||
+      !Expect(unary_count_convert_program[0].opcode == "V_CLZ_I32_U32",
+              "expected decoded V_CLZ_I32_U32") ||
+      !Expect(unary_count_convert_program[1].opcode == "V_CTZ_I32_B32",
+              "expected decoded V_CTZ_I32_B32") ||
+      !Expect(unary_count_convert_program[2].opcode == "V_CLS_I32",
+              "expected decoded V_CLS_I32") ||
+      !Expect(unary_count_convert_program[3].opcode == "V_CVT_NEAREST_I32_F32",
+              "expected decoded V_CVT_NEAREST_I32_F32") ||
+      !Expect(unary_count_convert_program[4].opcode == "V_CVT_FLOOR_I32_F32",
+              "expected decoded V_CVT_FLOOR_I32_F32")) {
+    return 1;
+  }
+
+  auto initialize_unary_count_convert_state = [](WaveExecutionState* state) {
+    state->exec_mask = 0xbu;
+
+    state->vgprs[1][0] = 0x0000f000u;
+    state->vgprs[1][1] = 0u;
+    state->vgprs[1][2] = 0x01010101u;
+    state->vgprs[1][3] = 1u;
+
+    state->vgprs[2][0] = 0xffff0000u;
+    state->vgprs[2][1] = 0xffffffffu;
+    state->vgprs[2][2] = 0x02020202u;
+    state->vgprs[2][3] = 0x7fffffffu;
+
+    state->vgprs[3][0] = FloatBits(-1.25f);
+    state->vgprs[3][1] = FloatBits(2.5f);
+    state->vgprs[3][2] = FloatBits(-7.0f);
+    state->vgprs[3][3] = FloatBits(3.6f);
+
+    state->vgprs[4][0] = FloatBits(-1.25f);
+    state->vgprs[4][1] = FloatBits(2.5f);
+    state->vgprs[4][2] = FloatBits(-8.0f);
+    state->vgprs[4][3] = FloatBits(3.6f);
+
+    state->vgprs[10][2] = 0x10101010u;
+    state->vgprs[11][2] = 0x11111111u;
+    state->vgprs[12][2] = 0x12121212u;
+    state->vgprs[13][2] = 0x13131313u;
+    state->vgprs[14][2] = 0x14141414u;
+  };
+
+  WaveExecutionState decoded_unary_count_convert_state;
+  initialize_unary_count_convert_state(&decoded_unary_count_convert_state);
+  if (!Expect(interpreter.ExecuteProgram(unary_count_convert_program,
+                                         &decoded_unary_count_convert_state,
+                                         &error_message),
+              "expected decoded unary count/convert execution success") ||
+      !Expect(ExpectUnaryCountConvertSeedState(
+                  decoded_unary_count_convert_state),
+              "expected decoded unary count/convert state")) {
+    return 1;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_unary_count_convert_program;
+  if (!Expect(interpreter.CompileProgram(unary_count_convert_program,
+                                         &compiled_unary_count_convert_program,
+                                         &error_message),
+              "expected compiled unary count/convert program success") ||
+      !Expect(compiled_unary_count_convert_program[0].opcode ==
+                  Gfx1201CompiledOpcode::kVClzI32U32,
+              "expected compiled V_CLZ_I32_U32 opcode") ||
+      !Expect(compiled_unary_count_convert_program[1].opcode ==
+                  Gfx1201CompiledOpcode::kVCtzI32B32,
+              "expected compiled V_CTZ_I32_B32 opcode") ||
+      !Expect(compiled_unary_count_convert_program[2].opcode ==
+                  Gfx1201CompiledOpcode::kVClsI32,
+              "expected compiled V_CLS_I32 opcode") ||
+      !Expect(compiled_unary_count_convert_program[3].opcode ==
+                  Gfx1201CompiledOpcode::kVCvtNearestI32F32,
+              "expected compiled V_CVT_NEAREST_I32_F32 opcode") ||
+      !Expect(compiled_unary_count_convert_program[4].opcode ==
+                  Gfx1201CompiledOpcode::kVCvtFloorI32F32,
+              "expected compiled V_CVT_FLOOR_I32_F32 opcode")) {
+    return 1;
+  }
+
+  WaveExecutionState compiled_unary_count_convert_state;
+  initialize_unary_count_convert_state(&compiled_unary_count_convert_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_unary_count_convert_program,
+                                         &compiled_unary_count_convert_state,
+                                         &error_message),
+              "expected compiled unary count/convert execution success") ||
+      !Expect(ExpectUnaryCountConvertSeedState(
+                  compiled_unary_count_convert_state),
+              "expected compiled unary count/convert state")) {
     return 1;
   }
 

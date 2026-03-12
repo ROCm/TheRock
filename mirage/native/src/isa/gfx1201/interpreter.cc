@@ -27,7 +27,7 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 190> kExecutableSeedOpcodes{{
+constexpr std::array<std::string_view, 195> kExecutableSeedOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_ADD_U32",
@@ -165,6 +165,9 @@ constexpr std::array<std::string_view, 190> kExecutableSeedOpcodes{{
     "V_CMPX_NLT_F64",
     "V_NOT_B32",
     "V_BFREV_B32",
+    "V_CLS_I32",
+    "V_CLZ_I32_U32",
+    "V_CTZ_I32_B32",
     "V_CVT_F32_UBYTE0",
     "V_CVT_F32_UBYTE1",
     "V_CVT_F32_UBYTE2",
@@ -178,6 +181,8 @@ constexpr std::array<std::string_view, 190> kExecutableSeedOpcodes{{
     "V_CVT_U32_F32",
     "V_CVT_U32_F64",
     "V_CVT_I32_F32",
+    "V_CVT_FLOOR_I32_F32",
+    "V_CVT_NEAREST_I32_F32",
     "V_CVT_I32_F64",
     "V_EXP_F32",
     "V_LOG_F32",
@@ -258,6 +263,27 @@ std::int32_t TruncateDoubleToI32(double value) {
     return std::numeric_limits<std::int32_t>::max();
   }
   return static_cast<std::int32_t>(truncated);
+}
+
+std::int32_t FloorFloatToI32(float value) {
+  return TruncateDoubleToI32(std::floor(static_cast<double>(value)));
+}
+
+std::int32_t RoundNearestFloatToI32(float value) {
+  if (std::isnan(value)) {
+    return 0;
+  }
+  const double input = static_cast<double>(value);
+  const double floor_value = std::floor(input);
+  const double fraction = input - floor_value;
+  double rounded = floor_value;
+  if (fraction > 0.5) {
+    rounded = floor_value + 1.0;
+  } else if (fraction == 0.5) {
+    const auto floor_integer = static_cast<std::int64_t>(floor_value);
+    rounded = (floor_integer & 1LL) == 0 ? floor_value : floor_value + 1.0;
+  }
+  return TruncateDoubleToI32(rounded);
 }
 
 std::uint32_t TruncateDoubleToU32(double value) {
@@ -344,6 +370,45 @@ std::uint32_t ReverseBits32(std::uint32_t value) {
   value = ((value & 0x0f0f0f0fu) << 4) | ((value >> 4) & 0x0f0f0f0fu);
   value = ((value & 0x00ff00ffu) << 8) | ((value >> 8) & 0x00ff00ffu);
   return (value << 16) | (value >> 16);
+}
+
+std::uint32_t FindFirstBitHighUnsigned(std::uint32_t value) {
+  if (value == 0u) {
+    return 0xffffffffu;
+  }
+#if defined(__GNUC__) || defined(__clang__)
+  return static_cast<std::uint32_t>(__builtin_clz(value));
+#else
+  std::uint32_t index = 0;
+  while (((value >> (31u - index)) & 1u) == 0u) {
+    ++index;
+  }
+  return index;
+#endif
+}
+
+std::uint32_t FindFirstBitLow(std::uint32_t value) {
+  if (value == 0u) {
+    return 0xffffffffu;
+  }
+#if defined(__GNUC__) || defined(__clang__)
+  return static_cast<std::uint32_t>(__builtin_ctz(value));
+#else
+  std::uint32_t index = 0;
+  while (((value >> index) & 1u) == 0u) {
+    ++index;
+  }
+  return index;
+#endif
+}
+
+std::uint32_t FindFirstBitHighSigned(std::uint32_t value) {
+  const bool sign = (value >> 31) != 0;
+  const std::uint32_t toggled = sign ? ~value : value;
+  if (toggled == 0u) {
+    return 0xffffffffu;
+  }
+  return FindFirstBitHighUnsigned(toggled);
 }
 
 bool IsExecutableSeedOpcode(std::string_view opcode) {
@@ -995,6 +1060,18 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
     *compiled_opcode = Gfx1201CompiledOpcode::kVBfrevB32;
     return true;
   }
+  if (opcode == "V_CLS_I32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVClsI32;
+    return true;
+  }
+  if (opcode == "V_CLZ_I32_U32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVClzI32U32;
+    return true;
+  }
+  if (opcode == "V_CTZ_I32_B32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCtzI32B32;
+    return true;
+  }
   if (opcode == "V_CVT_F32_UBYTE0") {
     *compiled_opcode = Gfx1201CompiledOpcode::kVCvtF32Ubyte0;
     return true;
@@ -1045,6 +1122,14 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
   }
   if (opcode == "V_CVT_I32_F32") {
     *compiled_opcode = Gfx1201CompiledOpcode::kVCvtI32F32;
+    return true;
+  }
+  if (opcode == "V_CVT_FLOOR_I32_F32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCvtFloorI32F32;
+    return true;
+  }
+  if (opcode == "V_CVT_NEAREST_I32_F32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCvtNearestI32F32;
     return true;
   }
   if (opcode == "V_CVT_I32_F64") {
@@ -1494,6 +1579,15 @@ std::uint32_t EvaluateVectorUnarySeedInstruction(std::string_view opcode,
   if (opcode == "V_BFREV_B32") {
     return ReverseBits32(value);
   }
+  if (opcode == "V_CLS_I32") {
+    return FindFirstBitHighSigned(value);
+  }
+  if (opcode == "V_CLZ_I32_U32") {
+    return FindFirstBitHighUnsigned(value);
+  }
+  if (opcode == "V_CTZ_I32_B32") {
+    return FindFirstBitLow(value);
+  }
   if (opcode == "V_CVT_F32_UBYTE0") {
     return BitCast<std::uint32_t>(
         static_cast<float>(static_cast<std::uint8_t>(value & 0xffu)));
@@ -1552,6 +1646,12 @@ std::uint32_t EvaluateVectorUnarySeedInstruction(std::string_view opcode,
   }
   if (opcode == "V_CVT_I32_F32") {
     return BitCast<std::uint32_t>(TruncateFloatToI32(BitCast<float>(value)));
+  }
+  if (opcode == "V_CVT_FLOOR_I32_F32") {
+    return BitCast<std::uint32_t>(FloorFloatToI32(BitCast<float>(value)));
+  }
+  if (opcode == "V_CVT_NEAREST_I32_F32") {
+    return BitCast<std::uint32_t>(RoundNearestFloatToI32(BitCast<float>(value)));
   }
   return value;
 }
@@ -2376,6 +2476,9 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
 
   if (instruction.opcode == "V_MOV_B32" || instruction.opcode == "V_NOT_B32" ||
       instruction.opcode == "V_BFREV_B32" ||
+      instruction.opcode == "V_CLS_I32" ||
+      instruction.opcode == "V_CLZ_I32_U32" ||
+      instruction.opcode == "V_CTZ_I32_B32" ||
       instruction.opcode == "V_CVT_F32_UBYTE0" ||
       instruction.opcode == "V_CVT_F32_UBYTE1" ||
       instruction.opcode == "V_CVT_F32_UBYTE2" ||
@@ -2398,6 +2501,8 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
       instruction.opcode == "V_RNDNE_F32" ||
       instruction.opcode == "V_FLOOR_F32" ||
       instruction.opcode == "V_CVT_U32_F32" ||
+      instruction.opcode == "V_CVT_FLOOR_I32_F32" ||
+      instruction.opcode == "V_CVT_NEAREST_I32_F32" ||
       instruction.opcode == "V_CVT_I32_F32") {
     if (!ValidateOperandCount(instruction, 2, error_message)) {
       return false;
@@ -2778,6 +2883,9 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kVCmpxNltF64:
     case Gfx1201CompiledOpcode::kVNotB32:
     case Gfx1201CompiledOpcode::kVBfrevB32:
+    case Gfx1201CompiledOpcode::kVClsI32:
+    case Gfx1201CompiledOpcode::kVClzI32U32:
+    case Gfx1201CompiledOpcode::kVCtzI32B32:
     case Gfx1201CompiledOpcode::kVCvtF32Ubyte0:
     case Gfx1201CompiledOpcode::kVCvtF32Ubyte1:
     case Gfx1201CompiledOpcode::kVCvtF32Ubyte2:
@@ -2791,6 +2899,8 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kVCvtU32F32:
     case Gfx1201CompiledOpcode::kVCvtU32F64:
     case Gfx1201CompiledOpcode::kVCvtI32F32:
+    case Gfx1201CompiledOpcode::kVCvtFloorI32F32:
+    case Gfx1201CompiledOpcode::kVCvtNearestI32F32:
     case Gfx1201CompiledOpcode::kVCvtI32F64:
     case Gfx1201CompiledOpcode::kVExpF32:
     case Gfx1201CompiledOpcode::kVLogF32:
