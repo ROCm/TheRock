@@ -18,7 +18,7 @@ sys.path.insert(0, os.fspath(Path(__file__).parent.parent.parent))
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 import upload_jax_manifest
-from manifest_filename_utils import (
+from manifest_utils import (
     normalize_python_version_for_filename,
     normalize_ref_for_filename,
 )

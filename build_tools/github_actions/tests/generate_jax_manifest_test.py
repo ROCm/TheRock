@@ -15,7 +15,7 @@ THIS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, os.fspath(THIS_DIR.parent))
 
 import generate_jax_manifest as jax_manifest
-from manifest_filename_utils import normalize_python_version_for_filename
+from manifest_utils import normalize_python_version_for_filename
 
 
 class GenerateJaxManifestTest(unittest.TestCase):

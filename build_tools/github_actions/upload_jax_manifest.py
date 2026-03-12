@@ -16,8 +16,7 @@ from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from _therock_utils.storage_location import StorageLocation
 from _therock_utils.storage_backend import create_storage_backend
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from manifest_filename_utils import (
+from github_actions.manifest_utils import (
     normalize_python_version_for_filename,
     normalize_ref_for_filename,
 )

@@ -20,8 +20,7 @@ import subprocess
 import sys
 
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from manifest_filename_utils import (
+from github_actions.manifest_utils import (
     normalize_python_version_for_filename,
     normalize_ref_for_filename,
 )
