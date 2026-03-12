@@ -44,6 +44,11 @@ skip_tests = {
             "test_fp32_precision_with_tf32",
             # AttributeError: module 'torch.backends.cudnn.rnn' has no attribute 'fp32_precision'
             "test_invalid_status_for_legacy_api",
+            # Off-by-one due to float truncation (int() without round()) plus
+            # UnboundLocalError on cleanup when the assertion fails.
+            # Fixed upstream in pytorch#163297, landed in 2.10+.
+            # https://github.com/ROCm/pytorch/commit/66abba8f49f05b0998040443813380efc32844f6
+            "test_max_split_expandable",
         ],
     },
     "gfx94": {
