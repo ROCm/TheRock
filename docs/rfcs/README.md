@@ -21,6 +21,11 @@ benefit from further discussion.
 - [RFC0003: Build Tree Normalization](./RFC0003-Build-Tree-Normalization.md)
 - [RFC0004: Fusilli+IREE Kernel Provider for hipDNN](./RFC0004-Fusilli-IREE-Kernel-Provider-hipDNN.md)
 - [RFC0005: hipDNN Project Integration](./RFC0005-hipDNN-Project-Integration.md)
+- [RFC0006: libhipcxx ROCm Core Inclusion](./RFC0006-libhipcxx-ROCm-Core-Inclusion.md)
+- [RFC0007: RDC TheRock Integration](./RFC0007-rdc-therock-integration.md)
+- [RFC0008: Multi-Arch Packaging](./RFC0008-Multi-Arch-Packaging.md)
+- [RFC0009: OS Packaging Requirements](./RFC0009-OS-Packaging-Requirements.md)
+- [RFC0010: Test Scripts Migration to Owning Repositories](./RFC0010-Test-Scripts-Migration.md)
 
 ## Adding an RFC
 

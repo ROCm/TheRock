@@ -14,10 +14,10 @@ Unified testing framework for TheRock ROCm distribution, supporting benchmark an
 
 The test framework provides infrastructure for two test types:
 
-| Test Type                     | Purpose                          | Result Types         | When to Use                                  | Status            |
-| ----------------------------- | -------------------------------- | -------------------- | -------------------------------------------- | ----------------- |
-| **[Benchmark](benchmark/)**   | Performance regression detection | PASS/FAIL/UNKNOWN    | Prevent performance degradation (nightly CI) | Implemented       |
-| **[Functional](functional/)** | Correctness validation           | PASS/FAIL/ERROR/SKIP | Verify expected behavior (nightly CI)        | Under Development |
+| Test Type                     | Purpose                          | Result Types         | When to Use                                  |
+| ----------------------------- | -------------------------------- | -------------------- | -------------------------------------------- |
+| **[Benchmark](benchmark/)**   | Performance regression detection | PASS/FAIL/UNKNOWN    | Prevent performance degradation (nightly CI) |
+| **[Functional](functional/)** | Correctness validation           | PASS/FAIL/ERROR/SKIP | Verify expected behavior (nightly CI)        |
 
 ### Key Features
 
@@ -56,7 +56,7 @@ export AMDGPU_FAMILIES=gfx950-dcgpu
 See test-specific READMEs for detailed instructions and examples:
 
 - **[Benchmark Tests](benchmark/README.md)** - Performance regression testing
-- **[Functional Tests](functional/README.md)** - Correctness validation testing (under development)
+- **[Functional Tests](functional/README.md)** - Correctness validation testing
 
 ## Project Structure
 
@@ -78,8 +78,14 @@ extended_tests/
 │   ├── benchmark_test_matrix.py   # Benchmark test matrix
 │   └── README.md                  # Benchmark-specific docs
 │
-├── functional/                     # Functional/correctness tests (under development)
-│   └── README.md                  # Functional-specific docs (placeholder - tests to be added in follow-up PRs)
+├── functional/                    # Functional/correctness tests
+│   ├── scripts/                   # Test implementations
+│   │   ├── functional_base.py     # Base class for functional tests
+│   │   └── test_*.py              # Individual tests
+│   ├── configs/                   # Test-specific configurations
+│   │   └── *.json
+│   ├── functional_test_matrix.py  # Functional test matrix
+│   └── README.md                  # Functional-specific docs
 │
 └── utils/                          # SHARED utilities for all test types
     ├── extended_test_base.py      # ExtendedTestBase - shared base class for all tests
@@ -111,11 +117,11 @@ extended_tests/
 
 ### Test Execution Schedule
 
-| Workflow Trigger           | Benchmark Tests | Functional Tests  |
-| -------------------------- | --------------- | ----------------- |
-| **Pull Request (PR)**      | Skipped         | Skipped           |
-| **Nightly CI (scheduled)** | Run (parallel)  | Under Development |
-| **Push to main**           | Skipped         | Skipped           |
+| Workflow Trigger           | Benchmark Tests | Functional Tests |
+| -------------------------- | --------------- | ---------------- |
+| **Pull Request (PR)**      | Skipped         | Skipped          |
+| **Nightly CI (scheduled)** | Run (parallel)  | Run (parallel)   |
+| **Push to main**           | Skipped         | Skipped          |
 
 ### Parallel Execution Architecture
 
@@ -127,26 +133,24 @@ ci_nightly.yml
       ├─ build_artifacts
       │
       ├─ test_artifacts ────────────────────┐
-      │   └─ Component tests (smoke/full)   │ Run in parallel
-      │                                      │ after build
-      ├─ test_benchmarks ───────────────────┤
-      │   └─ Benchmark tests                │
-      └─ test_functional_tests ─────────────┘
-          └─ Functional tests (under development)
+      │   └─ Component + Functional tests   │ Run in parallel
+      │                                     │ after build
+      └─ test_benchmarks ───────────────────┘
+          └─ Benchmark tests
 ```
 
 **Workflow Files:**
 
 - `.github/workflows/ci_nightly.yml` - Nightly CI orchestration
 - `.github/workflows/ci_linux.yml` / `ci_windows.yml` - Platform-specific CI logic
+- `.github/workflows/test_artifacts.yml` - Component and functional test execution (uses `test_runs_on`)
 - `.github/workflows/test_benchmarks.yml` - Benchmark test execution (uses `benchmark_runs_on`)
-- `.github/workflows/test_artifacts.yml` - Component test execution (uses `test_runs_on`)
 
 **Key Differences:**
 
 - **Component Tests**: Run on all PRs (smoke) and nightly (full), use regular runners
 - **Benchmark Tests**: Run only on nightly, use dedicated performance runners (`benchmark_runs_on`)
-- **Functional Tests**: Under development - will run only on nightly, use regular runners (`test_runs_on`)
+- **Functional Tests**: Run only on nightly, use regular runners (`test_runs_on`)
 
 ## Architecture
 
@@ -165,5 +169,5 @@ All tests follow this pattern:
 See test-specific READMEs for detailed implementation guides:
 
 - **[Benchmark Tests](benchmark/README.md)** - LKG comparison logic and adding new benchmarks
-- **[Functional Tests](functional/README.md)** - Correctness validation and adding new tests (under development)
+- **[Functional Tests](functional/README.md)** - Correctness validation and adding new tests
 - **[Shared Utils](utils/README.md)** - Common utilities, exceptions, and helpers

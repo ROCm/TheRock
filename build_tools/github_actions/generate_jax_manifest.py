@@ -20,6 +20,12 @@ import subprocess
 import sys
 
 
+from github_actions.manifest_utils import (
+    normalize_python_version_for_filename,
+    normalize_ref_for_filename,
+)
+
+
 def _log(*args, **kwargs):
     print(*args, **kwargs)
     sys.stdout.flush()
@@ -123,27 +129,8 @@ def resolve_branch(*, inferred: str | None, provided: str | None) -> str | None:
     return None
 
 
-def normalize_ref_for_filename(ref: str) -> str:
-    """Normalize a git ref for filenames by replacing path separators.
-
-    Examples:
-      nightly                 -> nightly
-      release/0.4.28          -> release-0.4.28
-      users/alice/experiment  -> users-alice-experiment
-    """
-    return ref.replace("/", "-")
-
-
-def normalize_py(python_version: str) -> str:
-    """Normalize python version for filenames: 'py3.11' -> '3.11'."""
-    py = python_version.strip()
-    if py.startswith("py"):
-        py = py[2:]
-    return py
-
-
 def manifest_filename(*, python_version: str, jax_git_ref: str) -> str:
-    py = normalize_py(python_version)
+    py = normalize_python_version_for_filename(python_version)
     ref = normalize_ref_for_filename(jax_git_ref)
     return f"therock-manifest_jax_py{py}_{ref}.json"
 

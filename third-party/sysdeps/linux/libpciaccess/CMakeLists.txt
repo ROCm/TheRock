@@ -57,6 +57,9 @@ if(NOT PATCHELF OR NOT MESON_BUILD)
   message(FATAL_ERROR "Missing PATCHELF or MESON_BUILD from super-project")
 endif()
 
+include("${THEROCK_SOURCE_DIR}/cmake/therock_meson_env.cmake")
+therock_get_meson_compiler_env(_meson_cc _meson_cxx)
+
 add_custom_target(
   meson_build ALL
   WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
@@ -69,6 +72,8 @@ add_custom_target(
     "${CMAKE_COMMAND}" -E env
       # Apply symbol versioning via version.lds. RPATH is set post-install via patch_install.py.
       "LDFLAGS=-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
+      "CC=${_meson_cc}"
+      "CXX=${_meson_cxx}"
       --
       "${MESON_BUILD}" setup "${CMAKE_CURRENT_BINARY_DIR}"
         --reconfigure
