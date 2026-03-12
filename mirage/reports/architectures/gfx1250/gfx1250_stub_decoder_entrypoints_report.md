@@ -19,7 +19,7 @@
   - shared common `OperandDescriptor` records derived from routed slot metadata
   - shared common fragment-shape metadata on routed operand slots
   - parser-backed generic matrix fragment metadata for routed WMMA / SWMMAC variants
-  - local wave32 inference for routed WMMA / SWMMAC seeds whose LLVM-style names omit `_w32`
+  - explicit wave32 fragment semantics for routed WMMA / SWMMAC seeds on gfx1250
 
 ## Routed Seed Metadata Coverage
 
@@ -142,6 +142,7 @@
   - Descriptor depth:
     - source1 fragment coverage across routed BF16/BF8/FP8/IU8 variants
     - destination and accumulator descriptor coverage across routed F16/F32/BF16 variants
+    - explicit wave32 fragment/descriptor checks on representative routed generic variants
 - WMMA scale:
   - `V_WMMA_SCALE_F32_16X16X128_F8F6F4` -> `kWmmaScaleF32_16x16x128_F8F6F4`
   - `V_WMMA_SCALE16_F32_16X16X128_F8F6F4` -> `kWmmaScale16F32_16x16x128_F8F6F4`
@@ -158,6 +159,7 @@
   - Descriptor depth:
     - matrix `source1` fragment coverage on scale and scale16 routes
     - accumulator descriptor coverage on scale, scale16, and routed `F4` scale variants
+    - explicit wave32 fragment/descriptor checks on representative routed scale variants
 - WMMA scale paired loads:
   - `V_WMMA_LD_SCALE_PAIRED_B32` -> `kWmmaLdScalePairedB32`
   - `V_WMMA_LD_SCALE16_PAIRED_B64` -> `kWmmaLdScale16PairedB64`
@@ -194,6 +196,7 @@
   - Descriptor depth:
     - source1 fragment coverage on routed BF16/BF8/FP8 and `I32/IU8` variants
     - destination and accumulator descriptor coverage on routed F16/F32/BF16/I32 variants
+    - explicit wave32 fragment/descriptor checks on representative routed generic variants
 - Tensor routes:
   - `TENSOR_LOAD_TO_LDS` -> `kTensorLoadToLds`
   - `TENSOR_STORE_FROM_LDS` -> `kTensorStoreFromLds`
@@ -348,7 +351,7 @@
   - `V_WMMA_F32_16X16X128_FP8_FP8_w32`: source matrix `16x16x128`, `8-bit`; destination/accumulator `32-bit`
   - `V_WMMA_F16_16X16X128_FP8_FP8_w32`: source matrix `16x16x128`, `8-bit`; destination/accumulator `16-bit`
   - `V_WMMA_F32_16X16X64_FP8_FP8_w32`: source matrix `16x16x64`, `8-bit`; destination/accumulator `32-bit`
-  - suffix-less routed variants in the current local seed set default to wave32 for fragment-shape materialization
+  - suffix-less routed variants in the current local seed set materialize as wave32 fragments under the shared gfx1250 wave-size rule
   - parser-backed generic routed variants:
     - `V_WMMA_BF16F32_16X16X32_BF16_w32`: source matrix `16x16x32`, `16-bit`; destination/accumulator `32-bit`
     - `V_WMMA_BF16_16X16X32_BF16_w32`: source matrix `16x16x32`, `16-bit`; destination/accumulator `16-bit`

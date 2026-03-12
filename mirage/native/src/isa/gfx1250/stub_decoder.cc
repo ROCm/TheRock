@@ -165,15 +165,16 @@ std::uint8_t InferMatrixInputWidth(std::string_view instruction_name) {
 std::uint8_t InferWaveSize(std::string_view instruction_name) {
   const std::size_t wave_marker = instruction_name.rfind("_w");
   if (wave_marker == std::string_view::npos) {
-    // LLVM-style gfx1250 WMMA/SWMMAC seeds sometimes omit the explicit wave
-    // suffix even though the routed seed set is wave32 today.
+    // gfx1250 is wave32 in Mirage. LLVM-style routed seeds may omit the
+    // explicit `_w32` suffix, but the local stub layer still materializes
+    // matrix fragments as wave32.
     return 32;
   }
   std::uint16_t parsed_wave = 0;
   if (!ParseUnsigned16(instruction_name.substr(wave_marker + 2), &parsed_wave)) {
     return 0;
   }
-  return static_cast<std::uint8_t>(parsed_wave);
+  return parsed_wave == 32 ? 32 : 0;
 }
 
 ParsedMatrixInstructionShape ParseMatrixInstructionShape(
