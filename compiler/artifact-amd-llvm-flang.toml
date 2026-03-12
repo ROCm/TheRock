@@ -1,7 +1,4 @@
 [components.run."compiler/amd-llvm-flang/stage"]
 include = ["lib/llvm/bin/**"]
 
-[components.dev."compiler/amd-llvm-flang/stage"]
-include = ["lib/llvm/include/**"]
-
 [components.dbg."compiler/amd-llvm-flang/stage"]

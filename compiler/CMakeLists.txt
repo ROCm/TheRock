@@ -208,7 +208,6 @@ if(THEROCK_ENABLE_FLANG)
     DESCRIPTOR artifact-amd-llvm-flang.toml
     COMPONENTS
       dbg
-      dev
       run
     SUBPROJECT_DEPS
       amd-llvm-flang
