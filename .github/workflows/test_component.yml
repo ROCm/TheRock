@@ -145,6 +145,11 @@ jobs:
           echo "HSA_XNACK=1" >> $GITHUB_ENV
           echo "ASAN_SYMBOLIZER_PATH=${{ env.OUTPUT_ARTIFACTS_DIR }}/llvm/bin/llvm-symbolizer" >> $GITHUB_ENV
 
+      - name: Fetch required submodules
+        if: ${{ fromJSON(inputs.component).submodules != '' }}
+        run: |
+          git submodule update --init --depth 1 ${{ fromJSON(inputs.component).submodules }}
+
       - name: Test
         id: test
         timeout-minutes: ${{ fromJSON(inputs.component).timeout_minutes }}
