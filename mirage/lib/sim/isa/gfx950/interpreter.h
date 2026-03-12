@@ -896,6 +896,10 @@ class Gfx950Interpreter {
                            WaveExecutionState* state,
                            ExecutionMemory* memory,
                            std::string* error_message) const;
+  bool ExecuteBufferAtomic(const CompiledInstruction& instruction,
+                           WaveExecutionState* state,
+                           ExecutionMemory* memory,
+                           std::string* error_message) const;
   bool ExecuteDsMemory(const DecodedInstruction& instruction,
                        WaveExecutionState* state,
                        const WorkgroupExecutionContext* workgroup,

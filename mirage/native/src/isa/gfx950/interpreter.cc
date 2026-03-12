@@ -1161,7 +1161,83 @@ std::string NormalizeBufferAtomicOpcode(std::string_view opcode) {
   return "GLOBAL_" + std::string(opcode.substr(7));
 }
 
+std::string_view NormalizeVectorAtomicOpcode(CompiledOpcode opcode) {
+  switch (opcode) {
+    case CompiledOpcode::kGlobalAtomicSwap:
+      return "GLOBAL_ATOMIC_SWAP";
+    case CompiledOpcode::kGlobalAtomicCmpSwap:
+      return "GLOBAL_ATOMIC_CMPSWAP";
+    case CompiledOpcode::kGlobalAtomicAdd:
+      return "GLOBAL_ATOMIC_ADD";
+    case CompiledOpcode::kGlobalAtomicSub:
+      return "GLOBAL_ATOMIC_SUB";
+    case CompiledOpcode::kGlobalAtomicSMin:
+      return "GLOBAL_ATOMIC_SMIN";
+    case CompiledOpcode::kGlobalAtomicUMin:
+      return "GLOBAL_ATOMIC_UMIN";
+    case CompiledOpcode::kGlobalAtomicSMax:
+      return "GLOBAL_ATOMIC_SMAX";
+    case CompiledOpcode::kGlobalAtomicUMax:
+      return "GLOBAL_ATOMIC_UMAX";
+    case CompiledOpcode::kGlobalAtomicAnd:
+      return "GLOBAL_ATOMIC_AND";
+    case CompiledOpcode::kGlobalAtomicOr:
+      return "GLOBAL_ATOMIC_OR";
+    case CompiledOpcode::kGlobalAtomicXor:
+      return "GLOBAL_ATOMIC_XOR";
+    case CompiledOpcode::kGlobalAtomicInc:
+      return "GLOBAL_ATOMIC_INC";
+    case CompiledOpcode::kGlobalAtomicDec:
+      return "GLOBAL_ATOMIC_DEC";
+    case CompiledOpcode::kGlobalAtomicAddF32:
+      return "GLOBAL_ATOMIC_ADD_F32";
+    case CompiledOpcode::kGlobalAtomicPkAddF16:
+      return "GLOBAL_ATOMIC_PK_ADD_F16";
+    case CompiledOpcode::kGlobalAtomicAddF64:
+      return "GLOBAL_ATOMIC_ADD_F64";
+    case CompiledOpcode::kGlobalAtomicMinF64:
+      return "GLOBAL_ATOMIC_MIN_F64";
+    case CompiledOpcode::kGlobalAtomicMaxF64:
+      return "GLOBAL_ATOMIC_MAX_F64";
+    case CompiledOpcode::kGlobalAtomicPkAddBf16:
+      return "GLOBAL_ATOMIC_PK_ADD_BF16";
+    case CompiledOpcode::kGlobalAtomicSwapX2:
+      return "GLOBAL_ATOMIC_SWAP_X2";
+    case CompiledOpcode::kGlobalAtomicCmpSwapX2:
+      return "GLOBAL_ATOMIC_CMPSWAP_X2";
+    case CompiledOpcode::kGlobalAtomicAddX2:
+      return "GLOBAL_ATOMIC_ADD_X2";
+    case CompiledOpcode::kGlobalAtomicSubX2:
+      return "GLOBAL_ATOMIC_SUB_X2";
+    case CompiledOpcode::kGlobalAtomicSMinX2:
+      return "GLOBAL_ATOMIC_SMIN_X2";
+    case CompiledOpcode::kGlobalAtomicUMinX2:
+      return "GLOBAL_ATOMIC_UMIN_X2";
+    case CompiledOpcode::kGlobalAtomicSMaxX2:
+      return "GLOBAL_ATOMIC_SMAX_X2";
+    case CompiledOpcode::kGlobalAtomicUMaxX2:
+      return "GLOBAL_ATOMIC_UMAX_X2";
+    case CompiledOpcode::kGlobalAtomicAndX2:
+      return "GLOBAL_ATOMIC_AND_X2";
+    case CompiledOpcode::kGlobalAtomicOrX2:
+      return "GLOBAL_ATOMIC_OR_X2";
+    case CompiledOpcode::kGlobalAtomicXorX2:
+      return "GLOBAL_ATOMIC_XOR_X2";
+    case CompiledOpcode::kGlobalAtomicIncX2:
+      return "GLOBAL_ATOMIC_INC_X2";
+    case CompiledOpcode::kGlobalAtomicDecX2:
+      return "GLOBAL_ATOMIC_DEC_X2";
+    default:
+      return {};
+  }
+}
+
 constexpr std::uint8_t kFlagBufferFormatUsesInstructionFormat = 1u << 5;
+constexpr std::uint8_t kFlagBufferAtomic = 1u << 6;
+
+bool IsCompiledBufferAtomicInstruction(const CompiledInstruction& instruction) {
+  return (instruction.flags & kFlagBufferAtomic) != 0u;
+}
 
 bool IsBufferMaintenanceOpcode(std::string_view opcode) {
   return opcode == "BUFFER_WBL2" || opcode == "BUFFER_INV";
@@ -1443,6 +1519,31 @@ bool BuildCompiledBufferFormatOpcode(const CompiledInstruction& instruction,
       return false;
   }
 
+  if (error_message != nullptr) {
+    error_message->clear();
+  }
+  return true;
+}
+
+bool BuildCompiledBufferAtomicOpcode(const CompiledInstruction& instruction,
+                                     std::string* opcode,
+                                     std::string* error_message) {
+  if (opcode == nullptr) {
+    if (error_message != nullptr) {
+      *error_message = "compiled buffer atomic opcode output must not be null";
+    }
+    return false;
+  }
+
+  const std::string_view normalized_opcode =
+      NormalizeVectorAtomicOpcode(instruction.opcode);
+  if (normalized_opcode.empty()) {
+    if (error_message != nullptr) {
+      *error_message = "compiled opcode is not a buffer atomic instruction";
+    }
+    return false;
+  }
+  *opcode = "BUFFER_" + std::string(normalized_opcode.substr(7));
   if (error_message != nullptr) {
     error_message->clear();
   }
@@ -6029,20 +6130,21 @@ void SetAtomicMetadata(CompiledInstruction* instruction,
   instruction->data_dword_count = data_dword_count;
 }
 
-bool TrySetVectorAtomicMetadata(std::string_view opcode,
-                                CompiledInstruction* compiled_instruction) {
-  if (compiled_instruction == nullptr || !IsVectorAtomicOpcode(opcode)) {
+bool TrySetNormalizedVectorAtomicMetadata(std::string_view normalized_opcode,
+                                          bool is_global,
+                                          std::uint8_t extra_flags,
+                                          CompiledInstruction* instruction) {
+  if (instruction == nullptr) {
     return false;
   }
 
-  const bool is_global = IsGlobalAtomicOpcode(opcode);
-  const std::string normalized_opcode = NormalizeVectorAtomicOpcode(opcode);
   const auto set_atomic =
       [&](CompiledOpcode compiled_opcode,
           std::uint8_t memory_dword_count,
           std::uint8_t data_dword_count) {
-        SetAtomicMetadata(compiled_instruction, compiled_opcode, is_global,
-                          false, memory_dword_count, data_dword_count);
+        SetAtomicMetadata(instruction, compiled_opcode, is_global, false,
+                          memory_dword_count, data_dword_count);
+        instruction->flags |= extra_flags;
         return true;
       };
 
@@ -6143,6 +6245,29 @@ bool TrySetVectorAtomicMetadata(std::string_view opcode,
     return set_atomic(CompiledOpcode::kGlobalAtomicDecX2, 2, 2);
   }
   return false;
+}
+
+bool TrySetVectorAtomicMetadata(std::string_view opcode,
+                                CompiledInstruction* compiled_instruction) {
+  if (compiled_instruction == nullptr || !IsVectorAtomicOpcode(opcode)) {
+    return false;
+  }
+
+  const bool is_global = IsGlobalAtomicOpcode(opcode);
+  const std::string normalized_opcode = NormalizeVectorAtomicOpcode(opcode);
+  return TrySetNormalizedVectorAtomicMetadata(normalized_opcode, is_global, 0u,
+                                              compiled_instruction);
+}
+
+bool TrySetBufferAtomicMetadata(std::string_view opcode,
+                                CompiledInstruction* compiled_instruction) {
+  if (compiled_instruction == nullptr || !IsBufferAtomicOpcode(opcode)) {
+    return false;
+  }
+
+  return TrySetNormalizedVectorAtomicMetadata(
+      NormalizeBufferAtomicOpcode(opcode), false, kFlagBufferAtomic,
+      compiled_instruction);
 }
 
 bool TrySetScalarAtomicMetadata(std::string_view opcode,
@@ -8139,6 +8264,9 @@ bool TryCompileOpcode(std::string_view opcode,
   if (TrySetBufferFormatMemoryMetadata(opcode, compiled_instruction)) {
     return true;
   }
+  if (TrySetBufferAtomicMetadata(opcode, compiled_instruction)) {
+    return true;
+  }
   if (opcode == "V_ADD_U32") {
     compiled_instruction->opcode = CompiledOpcode::kVAddU32;
     return true;
@@ -9567,6 +9695,10 @@ bool Gfx950Interpreter::ExecuteInstruction(const CompiledInstruction& instructio
 
   if (IsBufferFormatMemoryOpcode(instruction.opcode)) {
     return ExecuteBufferFormatMemory(instruction, state, memory, error_message);
+  }
+
+  if (IsCompiledBufferAtomicInstruction(instruction)) {
+    return ExecuteBufferAtomic(instruction, state, memory, error_message);
   }
 
   if (IsBufferMemoryOpcode(instruction.opcode)) {
@@ -13225,6 +13357,22 @@ bool Gfx950Interpreter::ExecuteBufferAtomic(const DecodedInstruction& instructio
     error_message->clear();
   }
   return true;
+}
+
+bool Gfx950Interpreter::ExecuteBufferAtomic(const CompiledInstruction& instruction,
+                                            WaveExecutionState* state,
+                                            ExecutionMemory* memory,
+                                            std::string* error_message) const {
+  std::string opcode;
+  if (!BuildCompiledBufferAtomicOpcode(instruction, &opcode, error_message)) {
+    return false;
+  }
+
+  DecodedInstruction decoded_instruction;
+  decoded_instruction.opcode = std::move(opcode);
+  decoded_instruction.operands = instruction.operands;
+  decoded_instruction.operand_count = instruction.operand_count;
+  return ExecuteBufferAtomic(decoded_instruction, state, memory, error_message);
 }
 
 bool Gfx950Interpreter::ExecuteVectorMove(const DecodedInstruction& instruction,

@@ -305,7 +305,8 @@ bool RunAtomicSemanticCase(
 bool RunBufferAtomicSemanticCase(
     const mirage::sim::isa::Gfx950Interpreter& interpreter,
     const AtomicSemanticCase& test_case,
-    bool return_prior_value) {
+    bool return_prior_value,
+    bool use_compiled_program = false) {
   using namespace mirage::sim::isa;
 
   constexpr std::uint64_t kAtomicAddress = 0x100;
@@ -348,8 +349,23 @@ bool RunBufferAtomicSemanticCase(
   };
 
   std::string error_message;
-  if (!interpreter.ExecuteProgram(program, &state, &memory, &error_message)) {
-    std::cerr << test_case.opcode << ": " << error_message << '\n';
+  if (use_compiled_program) {
+    std::vector<CompiledInstruction> compiled_program;
+    if (!interpreter.CompileProgram(program, &compiled_program, &error_message)) {
+      std::cerr << test_case.opcode << ": failed to compile buffer atomic program: "
+                << error_message << '\n';
+      return false;
+    }
+    if (!interpreter.ExecuteProgram(compiled_program, &state, &memory,
+                                    &error_message)) {
+      std::cerr << test_case.opcode << ": compiled buffer atomic: "
+                << error_message << '\n';
+      return false;
+    }
+  } else if (!interpreter.ExecuteProgram(program, &state, &memory,
+                                         &error_message)) {
+    std::cerr << test_case.opcode << ": decoded buffer atomic: " << error_message
+              << '\n';
     return false;
   }
 
@@ -14188,14 +14204,16 @@ int main() {
         "BUFFER_" + std::string(test_case.opcode.substr(7));
     AtomicSemanticCase buffer_case = test_case;
     buffer_case.opcode = buffer_opcode;
-    if (!RunBufferAtomicSemanticCase(interpreter, buffer_case, true)) {
+    if (!RunBufferAtomicSemanticCase(interpreter, buffer_case, true, false) ||
+        !RunBufferAtomicSemanticCase(interpreter, buffer_case, true, true)) {
       return 1;
     }
     if (test_case.opcode == "GLOBAL_ATOMIC_SWAP" ||
         test_case.opcode == "GLOBAL_ATOMIC_CMPSWAP" ||
         test_case.opcode == "GLOBAL_ATOMIC_SWAP_X2" ||
         test_case.opcode == "GLOBAL_ATOMIC_CMPSWAP_X2") {
-      if (!RunBufferAtomicSemanticCase(interpreter, buffer_case, false)) {
+      if (!RunBufferAtomicSemanticCase(interpreter, buffer_case, false, false) ||
+          !RunBufferAtomicSemanticCase(interpreter, buffer_case, false, true)) {
         return 1;
       }
     }
