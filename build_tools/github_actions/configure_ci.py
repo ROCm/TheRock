@@ -38,7 +38,7 @@
   * windows_amdgpu_families : List of valid Windows AMD GPU families to execute build and test jobs
   * windows_test_labels : List of test names to run on Windows, optionally filtered by PR labels.
   * enable_build_jobs: If true, builds will be enabled
-  * test_type: The type of test that component tests will run (i.e. smoke, full)
+  * test_type: The type of test that component tests will run (i.e. quick, full)
 
   Written to GITHUB_STEP_SUMMARY:
   * Human-readable summary for most contributors
@@ -642,14 +642,14 @@ def main(base_args, linux_families, windows_families):
     )
     print("")
 
-    test_type = "smoke"
-    test_type_reason = "default (smoke tests)"
+    test_type = "quick"
+    test_type_reason = "default (quick tests)"
 
     if is_schedule:
         # Always build and run full tests on scheduled runs.
         enable_build_jobs = True
-        test_type = "nightly"
-        test_type_reason = "scheduled run triggers nightly tests"
+        test_type = "comprehensive"
+        test_type_reason = "scheduled run triggers comprehensive tests"
     elif is_workflow_dispatch:
         # Always build and conditionally run full tests for workflow dispatch.
         enable_build_jobs = True
@@ -668,7 +668,7 @@ def main(base_args, linux_families, windows_families):
         enable_build_jobs = is_ci_run_required(modified_paths)
 
         # If the modified path contains any git submodules, we want to run a full test suite.
-        # Otherwise, we just run smoke tests
+        # Otherwise, we just run quick tests
         submodule_paths = get_git_submodule_paths(repo_root=THEROCK_DIR)
         matching_submodule_paths = list(set(submodule_paths) & set(modified_paths))
         if matching_submodule_paths:
@@ -682,8 +682,8 @@ def main(base_args, linux_families, windows_families):
             test_type_reason = f"test label(s) specified: {combined_test_labels}"
 
         for matrix_row in linux_variants_output + windows_variants_output:
-            # If the "run-full-tests-only" flag is set for this family, we do not run tests if it is a smoke test type
-            if matrix_row.get("run-full-tests-only", False) and test_type == "smoke":
+            # If the "run-full-tests-only" flag is set for this family, we do not run tests if it is a quick test type
+            if matrix_row.get("run-full-tests-only", False) and test_type == "quick":
                 matrix_row["test-runs-on"] = ""
             # For nightly_check_only_for_family architectures, we want to run only full tests during nightly (scheduled) run
             # Otherwise, we run sanity checks in all other scenarios (presubmit/postsubmit)
@@ -696,9 +696,9 @@ def main(base_args, linux_families, windows_families):
         if pr_labels and any("test_filter:" in label for label in pr_labels):
             for label in pr_labels:
                 if "test_filter:" in label:
-                    _, filter_type = label.split(":")
+                    filter_type = label.split(":")[1]
                     # If the filter type is not recognized, we ignore the label and keep the default test type
-                    if filter_type not in ["smoke", "standard", "nightly", "full"]:
+                    if filter_type not in ["quick", "standard", "comprehensive", "full"]:
                         continue
                     test_type = filter_type
                     test_type_reason = f"test filter label specified: {label}"

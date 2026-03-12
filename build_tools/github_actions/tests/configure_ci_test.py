@@ -271,7 +271,7 @@ class ConfigureCITest(unittest.TestCase):
     @patch("subprocess.run")
     def test_filter_tests_from_pull_request(self, mock_run):
         base_args = {
-            "pr_labels": '{"labels":[{"name":"test_filter:nightly"}]}',
+            "pr_labels": '{"labels":[{"name":"test_filter:comprehensive"}]}',
             "build_variant": "release",
             "github_event_name": "pull_request",
             "base_ref": "HEAD^",
@@ -283,7 +283,7 @@ class ConfigureCITest(unittest.TestCase):
         captured_err = io.StringIO()
         with redirect_stdout(captured_out), redirect_stderr(captured_err):
             configure_ci.main(base_args, {}, {})
-        self.assertIn('"test_type": "nightly"', captured_out.getvalue())
+        self.assertIn('"test_type": "comprehensive"', captured_out.getvalue())
 
     @patch("subprocess.run")
     def test_invalid_filter_tests_from_pull_request(self, mock_run):
@@ -300,7 +300,7 @@ class ConfigureCITest(unittest.TestCase):
         captured_err = io.StringIO()
         with redirect_stdout(captured_out), redirect_stderr(captured_err):
             configure_ci.main(base_args, {}, {})
-        self.assertIn('"test_type": "smoke"', captured_out.getvalue())
+        self.assertIn('"test_type": "quick"', captured_out.getvalue())
 
     def test_skip_ci_label(self):
         base_args = {

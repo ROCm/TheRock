@@ -4,7 +4,7 @@
 
 ## Types of filters
 
-- <b>smoke</b>: A "sanity check" to ensure the system is fundamentally working
+- <b>quick</b>: A "sanity check" to ensure the system is fundamentally working
   - Runs on: pull requests (if ROCm non-component related change), push to main branch
   - Characteristics: Shallow validation, focus on critical paths, component runs properly
   - Execution time: < 5 min
@@ -39,21 +39,21 @@
 For gtest executables, using `gtest_filter` is sufficient
 
 ```
-./gtest-executable --gtest_filter=*smoke*
+./gtest-executable --gtest_filter=*quick*
 ./gtest-executable --gtest_filter=*nightly*
 ```
 
 For ctest, using the `GTEST_FILTER` environment variable with ctest executables will be sufficient like below:
 
 ```
-SMOKE_TESTS = [
-  "*smoke_tests*",
+QUICK_TESTS = [
+  "*quick_tests*",
   "*basic_tests*"
 ]
 environ_vars = os.environ.copy()
 test_type = os.getenv("TEST_TYPE", "full")
-if test_type == "smoke":
-    environ_vars["GTEST_FILTER"] = ":".join(SMOKE_TESTS)
+if test_type == "quick":
+    environ_vars["GTEST_FILTER"] = ":".join(QUICK_TESTS)
 ```
 
 ## Additional information
