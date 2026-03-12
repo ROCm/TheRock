@@ -45,7 +45,7 @@ on:
       tests_to_include:
         description: Space-separated list of test modules to run (passed as TESTS_TO_INCLUDE to run_test.py). Leave empty to run all tests.
         type: string
-        default: "test_nn test_torch test_cuda test_unary_ufuncs test_binary_ufuncs test_autograd"
+        default: ""
 
   workflow_call:
     inputs:
@@ -82,7 +82,7 @@ on:
       tests_to_include:
         description: Space-separated list of test modules to run (passed as TESTS_TO_INCLUDE to run_test.py). Leave empty to run all tests.
         type: string
-        default: "test_nn test_torch test_cuda test_unary_ufuncs test_binary_ufuncs test_autograd"
+        default: ""
 
 permissions:
   contents: read
