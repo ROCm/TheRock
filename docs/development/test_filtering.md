@@ -20,7 +20,7 @@
 
 <br/>
 
-- <b>nightly</b>: Test set that builds on top of standard tests, extending deeper test coverage
+- <b>comprehensive</b>: Test set that builds on top of standard tests, extending deeper test coverage
   - Runs on: nightly
   - Characteristics: deeper validation of edge cases, more expensive scenarios, more combinations of tests
   - Execution time: < 2 hours
@@ -36,25 +36,23 @@
 
 ## Test filter implementation
 
-For gtest executables, using `gtest_filter` is sufficient
+Test filter implementation is done with CTest.
+Whatever be the underlying test framework - say gtest, pytest etc - a ctest wrapper will be created over it exposing the capability to run each test category using ctest labels.
+
+To do this the implementation uses a test_categories.yaml file which provides the template to add/exclude the tests to be run for each category, which has to be updated by the component teams. We can add/exclude tests based on the gpu model and OS where the tests are run.
+
+TheRock CI uses the environment variables `TEST_TYPE` to specify the test category and `AMDGPU_FAMILIES` for gpu.
+
+A sample ctest command for a `quick` test run on `gfx110X` will look like
 
 ```
-./gtest-executable --gtest_filter=*quick*
-./gtest-executable --gtest_filter=*nightly*
+ctest -L quick -L ex_gpu_gfx110X
 ```
 
-For ctest, using the `GTEST_FILTER` environment variable with ctest executables will be sufficient like below:
+More information on implementation and integration is available in the below links:
 
-```
-QUICK_TESTS = [
-  "*quick_tests*",
-  "*basic_tests*"
-]
-environ_vars = os.environ.copy()
-test_type = os.getenv("TEST_TYPE", "full")
-if test_type == "quick":
-    environ_vars["GTEST_FILTER"] = ":".join(QUICK_TESTS)
-```
+https://github.com/ROCm/rocm-libraries/blob/develop/shared/ctest/README.md
+https://github.com/ROCm/TheRock/blob/main/build_tools/github_actions/test_executable_scripts/README.md
 
 ## Additional information
 
