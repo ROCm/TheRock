@@ -242,6 +242,29 @@ bool HasSlotKind(const StubDecodedInstruction& instruction,
   return false;
 }
 
+std::uint32_t CountDescriptorsForRole(const StubDecodedInstruction& instruction,
+                                      StubOperandRole role) {
+  std::uint32_t count = 0;
+  for (std::uint32_t i = 0; i < instruction.operand_descriptors.descriptor_count;
+       ++i) {
+    if (instruction.operand_descriptors.descriptors[i].role == role) {
+      ++count;
+    }
+  }
+  return count;
+}
+
+std::uint32_t CountSlotsOfKind(const StubDecodedInstruction& instruction,
+                               StubOperandSlotKind slot_kind) {
+  std::uint32_t count = 0;
+  for (std::uint32_t i = 0; i < instruction.operand_slots.binding_count; ++i) {
+    if (instruction.operand_slots.bindings[i].slot_kind == slot_kind) {
+      ++count;
+    }
+  }
+  return count;
+}
+
 }  // namespace
 
 int main() {
@@ -2383,22 +2406,34 @@ int main() {
                     decoded.operand_layout.touches_lds &&
                     decoded.operand_slots.binding_count == 3 &&
                     decoded.operand_descriptors.descriptor_count == 3 &&
+                    !decoded.uses_scale_path && !decoded.uses_paired_operands &&
                     AllSlotWaveSizesAre(decoded, 0) &&
                     AllDescriptorWaveSizesAre(decoded, 0),
                 "expected routed tensor seed to keep non-matrix wave-size semantics")) {
       return 1;
     }
+    if (!Expect(CountDescriptorsForRole(decoded, StubOperandRole::kTensorDescriptor) == 1 &&
+                    CountDescriptorsForRole(decoded, StubOperandRole::kTensorCoordinate) == 1 &&
+                    (CountDescriptorsForRole(decoded, StubOperandRole::kLdsDestination) == 1 ||
+                     CountDescriptorsForRole(decoded, StubOperandRole::kLdsSource) == 1) &&
+                    CountSlotsOfKind(decoded, StubOperandSlotKind::kTensorDescriptorSource) == 1 &&
+                    CountSlotsOfKind(decoded, StubOperandSlotKind::kTensorCoordinateSource) == 1,
+                "expected routed tensor seed to keep exact descriptor/slot composition")) {
+      return 1;
+    }
     if (instruction_name == "TENSOR_LOAD_TO_LDS") {
       if (!Expect(HasDescriptorRole(decoded, StubOperandRole::kTensorDescriptor) &&
                       HasDescriptorRole(decoded, StubOperandRole::kTensorCoordinate) &&
-                      HasDescriptorRole(decoded, StubOperandRole::kLdsDestination),
+                      HasDescriptorRole(decoded, StubOperandRole::kLdsDestination) &&
+                      CountSlotsOfKind(decoded, StubOperandSlotKind::kLdsDestination) == 1,
                   "expected routed tensor-load descriptor roles")) {
         return 1;
       }
     } else if (instruction_name == "TENSOR_STORE_FROM_LDS") {
       if (!Expect(HasDescriptorRole(decoded, StubOperandRole::kTensorDescriptor) &&
                       HasDescriptorRole(decoded, StubOperandRole::kTensorCoordinate) &&
-                      HasDescriptorRole(decoded, StubOperandRole::kLdsSource),
+                      HasDescriptorRole(decoded, StubOperandRole::kLdsSource) &&
+                      CountSlotsOfKind(decoded, StubOperandSlotKind::kLdsSource) == 1,
                   "expected routed tensor-store descriptor roles")) {
         return 1;
       }
@@ -2416,13 +2451,18 @@ int main() {
                     !HasMatrixSlot(decoded) && !HasMatrixDescriptor(decoded) &&
                     decoded.operand_slots.binding_count == 2 &&
                     decoded.operand_descriptors.descriptor_count == 2 &&
+                    !decoded.uses_scale_path && !decoded.uses_tensor_memory &&
                     AllSlotWaveSizesAre(decoded, 0) &&
                     AllDescriptorWaveSizesAre(decoded, 0),
                 "expected routed VOP1 seed to keep scalar/packed wave-size semantics")) {
       return 1;
     }
     if (!Expect(HasDescriptorRole(decoded, StubOperandRole::kSource0) &&
-                    HasDescriptorRole(decoded, StubOperandRole::kDestination),
+                    HasDescriptorRole(decoded, StubOperandRole::kDestination) &&
+                    CountDescriptorsForRole(decoded, StubOperandRole::kSource0) == 1 &&
+                    CountDescriptorsForRole(decoded, StubOperandRole::kDestination) == 1 &&
+                    CountSlotsOfKind(decoded, StubOperandSlotKind::kSource0) == 1 &&
+                    CountSlotsOfKind(decoded, StubOperandSlotKind::kDestination) == 1,
                 "expected routed VOP1 seed to keep source/destination descriptors")) {
       return 1;
     }
@@ -2441,6 +2481,10 @@ int main() {
               "expected routed packed VOP1 seed to keep packed descriptor shapes")) {
         return 1;
       }
+      if (!Expect(decoded.uses_paired_operands,
+                  "expected routed packed VOP1 seed to preserve paired-operand flag")) {
+        return 1;
+      }
     } else {
       if (!Expect(
               ContainsDescriptor(decoded, StubOperandRole::kSource0,
@@ -2450,6 +2494,10 @@ int main() {
                                  StubFragmentKind::kScalar, 8) &&
                   HasSlotKind(decoded, StubOperandSlotKind::kDestination),
               "expected routed scalar VOP1 seed to keep scalar descriptor shapes")) {
+        return 1;
+      }
+      if (!Expect(!decoded.uses_paired_operands,
+                  "expected routed scalar VOP1 seed to avoid paired-operand flag")) {
         return 1;
       }
     }
@@ -2466,6 +2514,7 @@ int main() {
                     !HasMatrixDescriptor(decoded) &&
                     decoded.operand_slots.binding_count == 5 &&
                     decoded.operand_descriptors.descriptor_count == 5 &&
+                    !decoded.uses_tensor_memory &&
                     AllSlotWaveSizesAre(decoded, 0) &&
                     AllDescriptorWaveSizesAre(decoded, 0),
                 "expected routed VOP3 SDST seed to keep non-matrix wave-size semantics")) {
@@ -2473,7 +2522,14 @@ int main() {
     }
     if (!Expect(HasDescriptorRole(decoded, StubOperandRole::kScale) &&
                     HasDescriptorRole(decoded, StubOperandRole::kDestination) &&
-                    HasSlotKind(decoded, StubOperandSlotKind::kScalarDestination),
+                    HasSlotKind(decoded, StubOperandSlotKind::kScalarDestination) &&
+                    CountDescriptorsForRole(decoded, StubOperandRole::kScale) == 1 &&
+                    CountDescriptorsForRole(decoded, StubOperandRole::kSource0) == 1 &&
+                    CountDescriptorsForRole(decoded, StubOperandRole::kSource1) == 1 &&
+                    CountDescriptorsForRole(decoded, StubOperandRole::kDestination) == 2 &&
+                    CountSlotsOfKind(decoded, StubOperandSlotKind::kDestination) == 1 &&
+                    CountSlotsOfKind(decoded, StubOperandSlotKind::kScalarDestination) == 1 &&
+                    CountSlotsOfKind(decoded, StubOperandSlotKind::kScaleSource) == 1,
                 "expected routed VOP3 SDST seed to keep scale/destination descriptors")) {
       return 1;
     }
@@ -2491,6 +2547,9 @@ int main() {
     }
     if (!Expect(decoded.uses_scale_path && decoded.uses_paired_operands &&
                     !HasMatrixSlot(decoded) && !HasMatrixDescriptor(decoded) &&
+                    !decoded.uses_tensor_memory &&
+                    decoded.operand_slots.binding_count == 4 &&
+                    decoded.operand_descriptors.descriptor_count == 4 &&
                     AllSlotWaveSizesAre(decoded, 0) &&
                     AllDescriptorWaveSizesAre(decoded, 0),
                 "expected paired-scale helper to keep non-matrix wave-size semantics")) {
@@ -2499,7 +2558,15 @@ int main() {
     if (!Expect(HasDescriptorRole(decoded, StubOperandRole::kSource0) &&
                     HasDescriptorRole(decoded, StubOperandRole::kScale) &&
                     HasDescriptorRole(decoded, StubOperandRole::kPairedScale) &&
-                    HasDescriptorRole(decoded, StubOperandRole::kDestination),
+                    HasDescriptorRole(decoded, StubOperandRole::kDestination) &&
+                    CountDescriptorsForRole(decoded, StubOperandRole::kSource0) == 1 &&
+                    CountDescriptorsForRole(decoded, StubOperandRole::kScale) == 1 &&
+                    CountDescriptorsForRole(decoded, StubOperandRole::kPairedScale) == 1 &&
+                    CountDescriptorsForRole(decoded, StubOperandRole::kDestination) == 1 &&
+                    CountSlotsOfKind(decoded, StubOperandSlotKind::kSource0) == 1 &&
+                    CountSlotsOfKind(decoded, StubOperandSlotKind::kScaleSource) == 1 &&
+                    CountSlotsOfKind(decoded, StubOperandSlotKind::kPairedScaleSource) == 1 &&
+                    CountSlotsOfKind(decoded, StubOperandSlotKind::kDestination) == 1,
                 "expected paired-scale helper descriptor roles")) {
       return 1;
     }

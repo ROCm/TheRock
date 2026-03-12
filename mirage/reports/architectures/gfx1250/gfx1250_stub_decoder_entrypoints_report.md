@@ -176,6 +176,7 @@
     - vector `source0` and destination fragment coverage on `B64`
     - scalar scale / paired-scale fragment coverage on `B64`
     - route-wide non-matrix wave-size and descriptor-role validation across current paired scale-load helpers
+    - route-wide slot-count and exact descriptor/slot composition validation across current paired scale-load helpers
 - SWMMAC:
   - `V_SWMMAC_F32_16X16X128_FP8_FP8_w32` -> `kSwmmacF32_16x16x128_Fp8Fp8W32`
   - `V_SWMMAC_F16_16X16X128_FP8_FP8_w32` -> `kSwmmacF16_16x16x128_Fp8Fp8W32`
@@ -216,6 +217,7 @@
     - tensor-descriptor fragment coverage on store
     - route-wide non-matrix wave-size and descriptor-role validation across the current tensor route set
     - route-wide slot-count and descriptor-count validation across the current tensor route set
+    - route-wide exact descriptor/slot composition checks across the current tensor route set
 - VOP1 FP8/BF8 conversions:
   - `V_CVT_F16_FP8` -> `kCvtF16Fp8`
   - `V_CVT_F16_BF8` -> `kCvtF16Bf8`
@@ -228,6 +230,7 @@
     - scalar and packed destination fragment coverage on BF8 conversion paths
     - route-wide non-matrix wave-size and source/destination descriptor validation across the current VOP1 route set
     - route-wide slot-count and descriptor-count validation plus packed-vs-scalar descriptor-shape checks across the current VOP1 route set
+    - route-wide exact source/destination descriptor composition plus paired-operand flag checks across the current VOP1 route set
 - VOP3 SDST scale assist:
   - `V_DIV_SCALE_F64` -> `kVDivScaleF64`
   - Sources: `3`
@@ -238,6 +241,7 @@
     - full vector source, scale, and vector/scalar destination descriptor coverage
     - route-wide non-matrix wave-size and scale/destination descriptor validation across the current VOP3 SDST route set
     - route-wide slot-count and descriptor-count validation plus scalar-destination slot checks across the current VOP3 SDST route set
+    - route-wide exact descriptor-role and slot-kind composition checks across the current VOP3 SDST route set
 
 ## Operand Role Records
 
