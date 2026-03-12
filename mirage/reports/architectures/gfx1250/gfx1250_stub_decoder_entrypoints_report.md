@@ -45,6 +45,7 @@
     - `V_WMMA_BF16_16X16X32_BF16_w32`
     - `V_WMMA_F16_16X16X32_F16_w32`
     - `V_WMMA_F16_16X16X128_BF8_BF8_w32`
+    - `V_WMMA_F16_16X16X128_BF8_FP8_w32`
     - `V_WMMA_F16_16X16X128_FP8_BF8_w32`
     - `V_WMMA_F16_16X16X64_BF8_BF8_w32`
     - `V_WMMA_F16_16X16X64_FP8_FP8_w32`
@@ -111,6 +112,9 @@
   - Sources: `2`
   - Destinations: `1`
   - Accumulator sources: `1`
+  - Descriptor depth:
+    - source1 fragment coverage on exact FP8 core routes
+    - accumulator descriptor coverage on exact `F32` and `F16` core routes
 - Generic WMMA core variants:
   - parser-backed `V_WMMA_*` routed variants now fall back to `kWmmaCoreGeneric`
   - representative seeds:
@@ -118,6 +122,7 @@
     - `V_WMMA_BF16_16X16X32_BF16_w32`
     - `V_WMMA_F16_16X16X32_F16_w32`
     - `V_WMMA_F16_16X16X128_BF8_BF8_w32`
+    - `V_WMMA_F16_16X16X128_BF8_FP8_w32`
     - `V_WMMA_F16_16X16X128_FP8_BF8_w32`
     - `V_WMMA_F16_16X16X64_BF8_BF8_w32`
     - `V_WMMA_F16_16X16X64_FP8_FP8_w32`
@@ -203,7 +208,7 @@
   - `V_CVT_PK_F16_FP8` -> `kCvtPkF16Fp8`
   - `V_CVT_PK_F16_BF8` -> `kCvtPkF16Bf8`
   - Descriptor depth:
-    - scalar FP8/BF8 source descriptors for `F16` and `F32` conversions
+    - scalar FP8/BF8 source and destination descriptors for `F16`/`F32` conversions
     - packed FP8/BF8 source and destination descriptors for `PK_F16` conversions
 - VOP3 SDST scale assist:
   - `V_DIV_SCALE_F64` -> `kVDivScaleF64`
@@ -211,6 +216,8 @@
   - Destinations: `2`
   - Flags:
     - `has_scale_operand`
+  - Descriptor depth:
+    - full vector source, scale, and vector/scalar destination descriptor coverage
 
 ## Operand Role Records
 
