@@ -58,6 +58,9 @@ if(NOT PATCHELF OR NOT MESON_BUILD)
   message(FATAL_ERROR "Missing PATCHELF or MESON_BUILD from super-project")
 endif()
 
+include("${THEROCK_SOURCE_DIR}/cmake/therock_meson_env.cmake")
+therock_get_meson_compiler_env(_meson_cc _meson_cxx)
+
 # Meson refuses to build if the source dir is a subdir of the build dir, so
 # make it a sibling.
 set(PATCH_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/../patch_source")
@@ -80,6 +83,8 @@ add_custom_target(
     "${CMAKE_COMMAND}" -E env
       # Escaping hack: experimentally determined to persist through the layers.
       "LDFLAGS=-Wl,-rpath='$$ORIGIN' -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version.lds"
+      "CC=${_meson_cc}"
+      "CXX=${_meson_cxx}"
       --
       "${MESON_BUILD}" setup "${CMAKE_CURRENT_BINARY_DIR}"
         --reconfigure

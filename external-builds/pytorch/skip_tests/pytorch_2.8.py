@@ -30,6 +30,11 @@ skip_tests = {
             # This test was fixed in torch 2.9, see
             # https://github.com/ROCm/TheRock/issues/2206
             "test_hip_device_count",
+            # Off-by-one due to float truncation (int() without round()) plus
+            # UnboundLocalError on cleanup when the assertion fails.
+            # Fixed upstream in pytorch#163297, landed in 2.10+.
+            # https://github.com/ROCm/pytorch/commit/66abba8f49f05b0998040443813380efc32844f6
+            "test_max_split_expandable",
         ]
     },
     "gfx120": {
