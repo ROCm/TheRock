@@ -86,7 +86,41 @@ class TargetIdBitExtractTest(FunctionalBase):
         env["HIP_PLATFORM"] = "amd"
         return env
 
+    def _is_submodule_populated(self, path: Path) -> bool:
+        """Return True if *path* exists and contains at least one entry."""
+        try:
+            return path.is_dir() and any(path.iterdir())
+        except OSError:
+            return False
+
+    def _init_rocm_systems_submodule(self) -> None:
+        """Shallow-init the rocm-systems git submodule.
+
+        In CI the repo is checked out without ``submodules: true``, so
+        rocm-systems/ exists as an empty directory.  This method fetches
+        just that single submodule (shallow, depth 1) so the hip-tests
+        sample sources become available.
+        """
+        log.info(
+            "rocm-systems submodule is empty or missing; "
+            "running 'git submodule update --init --depth 1 rocm-systems'"
+        )
+        rc, output = self._execute_command_with_output(
+            ["git", "submodule", "update", "--init", "--depth", "1", "rocm-systems"],
+            cwd=self.therock_dir,
+        )
+        if rc != 0:
+            raise TestExecutionError(
+                f"Failed to initialize rocm-systems submodule (exit code {rc}).\n"
+                f"Output: {output}\n"
+                "Ensure the TheRock checkout is a git repository with "
+                ".gitmodules present."
+            )
+
     def _ensure_sources_ready(self) -> None:
+        if not self._is_submodule_populated(self.rocm_systems_dir):
+            self._init_rocm_systems_submodule()
+
         if not self.rocm_systems_dir.exists():
             raise TestExecutionError(
                 f"rocm-systems directory not found at {self.rocm_systems_dir}\n"
