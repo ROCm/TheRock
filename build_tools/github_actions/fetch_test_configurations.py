@@ -545,7 +545,7 @@ def run():
                     "shard_arr": shard_arr,
                     "gpu_enable_pal": "1",
                 }
-                output_matrix.append(pal_entry)
+                all_components.append(pal_entry)
 
                 rocr_entry = {
                     "job_name": "hip-tests (ROCR)",
@@ -559,7 +559,7 @@ def run():
                     "expect_failure": True,
                     "gpu_enable_pal": "0",
                 }
-                output_matrix.append(rocr_entry)
+                all_components.append(rocr_entry)
                 continue
 
             job_config_data = selected_matrix[key]
