@@ -133,7 +133,9 @@ def patches_for_submodule_by_name(repo_dir: Path, sub_name: str):
     return [str(p.relative_to(repo_dir)) for p in sorted(base.glob("*.patch"))]
 
 
-def build_manifest_schema(repo_root: Path, the_rock_commit: str) -> dict:
+def build_manifest_schema(
+    repo_root: Path, the_rock_commit: str, github_run_id: str | None = None
+) -> dict:
 
     # Enumerate submodules from .gitmodules at the specified commit.
     entries = list_submodules_from_gitmodules_at_commit(repo_root, the_rock_commit)
@@ -152,10 +154,15 @@ def build_manifest_schema(repo_root: Path, the_rock_commit: str) -> dict:
             }
         )
 
-    return {
+    manifest = {
         "the_rock_commit": the_rock_commit,
-        "submodules": rows,
     }
+
+    if github_run_id:
+        manifest["github_run_id"] = github_run_id
+
+    manifest["submodules"] = rows
+    return manifest
 
 
 def write_manifest_json(out_path: Path, manifest: dict) -> None:
@@ -187,12 +194,9 @@ def main():
 
     repo_root = git_root()
     the_rock_commit = _run(["git", "rev-parse", args.commit], cwd=repo_root)
-
-    manifest = build_manifest_schema(repo_root, the_rock_commit)
-
     github_run_id = os.getenv("GITHUB_RUN_ID")
-    if github_run_id:
-        manifest["github_run_id"] = github_run_id
+
+    manifest = build_manifest_schema(repo_root, the_rock_commit, github_run_id)
 
     # Merge flag settings into the manifest if provided.
     if args.flag_settings:
