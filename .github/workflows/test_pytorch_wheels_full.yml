@@ -12,7 +12,7 @@ on:
         type: string
         default: "gfx94X-dcgpu"
       test_runs_on:
-        description: Runner label for default/inductor configs (1-GPU)
+        description: Runner label to use. The selected runner should have a GPU supported by amdgpu_family
         required: true
         type: string
         default: "linux-mi325-1gpu-ossci-rocm"
