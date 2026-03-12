@@ -40,7 +40,7 @@ extended_tests/utils/
 ### From Extended Test Base Classes
 
 Both `BenchmarkBase` and `FunctionalBase` inherit from `ExtendedTestBase`, which provides
-shared infrastructure (command execution, GPU detection, result creation, statistics, uploads):
+shared infrastructure (command execution, config loading, result creation, statistics, uploads):
 
 ```python
 # In benchmark_base.py / functional_base.py
@@ -98,7 +98,7 @@ from utils.results import ResultsHandler, ResultsAPI
 
 ### Root Level
 
-- **extended_test_base.py** - `ExtendedTestBase` shared base class for benchmark and functional tests (command execution, GPU detection, test result creation, statistics, result uploads)
+- **extended_test_base.py** - `ExtendedTestBase` shared base class for benchmark and functional tests (config loading, command execution, ROCm env setup, test result creation, statistics, result uploads)
 - **extended_test_client.py** - `ExtendedTestClient` API for system detection and result reporting
 - **constants.py** - Framework constants and defaults
 - **exceptions.py** - Custom exception classes
