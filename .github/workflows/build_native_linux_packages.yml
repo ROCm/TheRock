@@ -216,11 +216,11 @@ jobs:
 
       - name: Get base URL (repo_base_url) from CloudFront URL
         id: get-base-url
-        run: python build_tools/packaging/linux/get_url_repo_params.py get-base-url --from-cloudfront-url "${{ inputs.cloudfront_base_url }}" --format env >> $GITHUB_OUTPUT
+        run: python build_tools/packaging/linux/get_url_repo_params.py get-base-url --from-url "${{ inputs.cloudfront_base_url }}" --output env >> $GITHUB_OUTPUT
 
       - name: Get repo_sub_folder from S3 prefix (get_url_repo_params)
         id: get-repo-sub-folder
-        run: python build_tools/packaging/linux/get_url_repo_params.py get-repo-sub-folder --from-s3-prefix "${{ needs.build_native_packages.outputs.s3_prefix }}" --format env >> $GITHUB_OUTPUT
+        run: python build_tools/packaging/linux/get_url_repo_params.py get-repo-sub-folder --from-s3-prefix "${{ needs.build_native_packages.outputs.s3_prefix }}" --output env >> $GITHUB_OUTPUT
 
       - name: Set os_profiles and gfx_arch
         id: set
