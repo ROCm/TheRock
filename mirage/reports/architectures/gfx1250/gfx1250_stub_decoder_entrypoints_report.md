@@ -114,7 +114,7 @@
   - Accumulator sources: `1`
   - Descriptor depth:
     - source1 fragment coverage on exact FP8 core routes
-    - accumulator descriptor coverage on exact `F32` and `F16` core routes
+    - destination and accumulator descriptor coverage on exact `F32` and `F16` core routes
 - Generic WMMA core variants:
   - parser-backed `V_WMMA_*` routed variants now fall back to `kWmmaCoreGeneric`
   - representative seeds:
@@ -154,7 +154,7 @@
     - `V_WMMA_SCALE16_F32_32X16X128_F4_w32`
   - Descriptor depth:
     - matrix `source1` fragment coverage on scale and scale16 routes
-    - accumulator descriptor coverage on scale and scale16 routes
+    - accumulator descriptor coverage on scale, scale16, and routed `F4` scale variants
 - WMMA scale paired loads:
   - `V_WMMA_LD_SCALE_PAIRED_B32` -> `kWmmaLdScalePairedB32`
   - `V_WMMA_LD_SCALE16_PAIRED_B64` -> `kWmmaLdScale16PairedB64`
@@ -166,6 +166,7 @@
   - Descriptor depth:
     - vector `source0` and destination descriptor coverage on `B32`
     - vector `source0` and destination fragment coverage on `B64`
+    - scalar scale / paired-scale fragment coverage on `B64`
 - SWMMAC:
   - `V_SWMMAC_F32_16X16X128_FP8_FP8_w32` -> `kSwmmacF32_16x16x128_Fp8Fp8W32`
   - `V_SWMMAC_F16_16X16X128_FP8_FP8_w32` -> `kSwmmacF16_16x16x128_Fp8Fp8W32`
@@ -188,8 +189,8 @@
     - `V_SWMMAC_F32_16X16X64_F16_w32`
     - `V_SWMMAC_I32_16X16X128_IU8_w32`
   - Descriptor depth:
-    - source1 fragment coverage on routed FP8/BF8 variants
-    - accumulator descriptor coverage on routed F16 and F32 variants
+    - source1 fragment coverage on routed FP8/BF8 and `I32/IU8` variants
+    - destination and accumulator descriptor coverage on routed F16/F32/I32 variants
 - Tensor routes:
   - `TENSOR_LOAD_TO_LDS` -> `kTensorLoadToLds`
   - `TENSOR_STORE_FROM_LDS` -> `kTensorStoreFromLds`
@@ -201,6 +202,7 @@
     - tensor-descriptor descriptors on load and store
     - tensor-coordinate descriptors on load and store
     - LDS address fragment/descriptor coverage on load and store
+    - tensor-descriptor fragment coverage on store
 - VOP1 FP8/BF8 conversions:
   - `V_CVT_F16_FP8` -> `kCvtF16Fp8`
   - `V_CVT_F16_BF8` -> `kCvtF16Bf8`
@@ -210,6 +212,7 @@
   - Descriptor depth:
     - scalar FP8/BF8 source and destination descriptors for `F16`/`F32` conversions
     - packed FP8/BF8 source and destination descriptors for `PK_F16` conversions
+    - scalar and packed destination fragment coverage on BF8 conversion paths
 - VOP3 SDST scale assist:
   - `V_DIV_SCALE_F64` -> `kVDivScaleF64`
   - Sources: `3`
