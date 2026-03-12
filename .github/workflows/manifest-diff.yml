@@ -55,16 +55,16 @@ jobs:
         with:
           fetch-depth: 0
 
-      # On push: test Case 1 (find-last-successful + workflow mode; end = current run ID)
+      # On push: test Case 2 (find-last-successful only; end = commit SHA)
       - name: Generate manifest diff report
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           python3 build_tools/generate_manifest_diff_report.py \
-            --end "${{ github.event_name == 'push' && github.run_id || inputs.end_commit }}" \
+            --end "${{ github.event_name == 'push' && github.sha || inputs.end_commit }}" \
             --start "${{ inputs.start_commit || '' }}" \
             --find-last-successful "${{ github.event_name == 'push' && 'ci_nightly.yml' || (inputs.find_last_successful || '') }}" \
-            ${{ (github.event_name == 'push' || inputs.workflow_mode) && '--workflow-mode' || '' }} \
+            ${{ inputs.workflow_mode && '--workflow-mode' || '' }} \
             --output-dir reports
 
       - name: Configure AWS Credentials
