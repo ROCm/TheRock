@@ -155,6 +155,8 @@ jobs:
           TEST_COMPONENT: ${{ fromJSON(inputs.component).job_name }}
           ROCM_KPACK_DEBUG: "1"
         run: |
+          # FOR TESTING
+          exit 1
           ${{ fromJSON(inputs.component).test_script }}
 
       - name: Print test reproduction command

@@ -10,11 +10,7 @@ script, which automates the entire setup process.
 ```bash
 git clone https://github.com/ROCm/TheRock.git
 cd TheRock
-python build_tools/github_actions/reproduce_test_failure.py \
-    --run-id {CI_RUN_ID} \
-    --repository {GITHUB_REPO} \
-    --amdgpu-family {GPU_FAMILY} \
-    --test-script "{TEST_SCRIPT}"
+python build_tools/github_actions/reproduce_test_failure.py --run-id {CI_RUN_ID} --repository {GITHUB_REPO} --amdgpu-family {GPU_FAMILY} --test-script "{TEST_SCRIPT}"
 ```
 
 Options:
