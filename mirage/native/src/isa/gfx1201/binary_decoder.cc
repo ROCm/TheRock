@@ -16,7 +16,7 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 262> kPhase0ExecutableOpcodes{{
+constexpr std::array<std::string_view, 264> kPhase0ExecutableOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_ADD_U32",
@@ -48,6 +48,8 @@ constexpr std::array<std::string_view, 262> kPhase0ExecutableOpcodes{{
     "V_MOV_B16",
     "V_PERMLANE64_B32",
     "V_READFIRSTLANE_B32",
+    "V_SWAP_B32",
+    "V_SWAP_B16",
     "V_CMP_EQ_I32",
     "V_CMP_NE_I32",
     "V_CMP_LT_I32",
@@ -451,6 +453,14 @@ InstructionOperand DescribeVectorDestinationOperand(InstructionOperand operand) 
       OperandAccess::kWrite));
 }
 
+InstructionOperand DescribeReadWriteVectorOperand(InstructionOperand operand,
+                                                  OperandRole role,
+                                                  OperandSlotKind slot_kind,
+                                                  std::uint8_t element_bit_width = 32) {
+  return operand.WithDescriptor(MakeVectorRegisterDescriptor(
+      role, slot_kind, OperandAccess::kReadWrite, element_bit_width));
+}
+
 InstructionOperand DescribeWideVectorDestinationOperand(InstructionOperand operand) {
   return operand.WithDescriptor(MakeVectorRegisterDescriptor(
       OperandRole::kDestination, OperandSlotKind::kDestination,
@@ -812,6 +822,37 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
         instruction_name, DescribeScalarDestinationOperand(dst),
         DescribeSourceOperand(src0, OperandRole::kSource0,
                               OperandSlotKind::kSource0));
+    *words_consumed = 1 + literal_words_consumed;
+  } else if (instruction_name == "V_SWAP_B32" ||
+             instruction_name == "V_SWAP_B16") {
+    InstructionOperand dst;
+    if (!DecodeVectorDestination(ExtractBits(word, 17, 8), &dst, error_message)) {
+      return false;
+    }
+
+    std::size_t literal_words_consumed = 0;
+    InstructionOperand src0;
+    if (!DecodeVectorSource(ExtractBits(word, 0, 9), words.subspan(1),
+                            &literal_words_consumed, &src0, error_message)) {
+      return false;
+    }
+    if (src0.kind != OperandKind::kVgpr) {
+      if (error_message != nullptr) {
+        *error_message = "expected vector register source operand";
+      }
+      return false;
+    }
+
+    const std::uint8_t element_bit_width =
+        instruction_name == "V_SWAP_B16" ? 16u : 32u;
+    *instruction = DecodedInstruction::TwoOperand(
+        instruction_name,
+        DescribeReadWriteVectorOperand(dst, OperandRole::kDestination,
+                                       OperandSlotKind::kDestination,
+                                       element_bit_width),
+        DescribeReadWriteVectorOperand(src0, OperandRole::kSource0,
+                                       OperandSlotKind::kSource0,
+                                       element_bit_width));
     *words_consumed = 1 + literal_words_consumed;
   } else if (instruction_name == "V_MOV_B32" ||
              instruction_name == "V_MOV_B16" ||

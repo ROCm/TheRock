@@ -87,7 +87,7 @@ int main() {
               "expected phase-0 compute seed list") ||
       !Expect(decoder.Phase0ComputeSelectorRules().size() == 12u,
               "expected phase-0 selector rule list") ||
-      !Expect(decoder.Phase0ExecutableOpcodes().size() == 262u,
+      !Expect(decoder.Phase0ExecutableOpcodes().size() == 264u,
               "expected phase-0 executable opcode slice") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_ADD_U32"),
               "expected S_ADD_U32 executable decode support") ||
@@ -165,6 +165,10 @@ int main() {
               "expected V_MOV_B16 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("V_PERMLANE64_B32"),
               "expected V_PERMLANE64_B32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_SWAP_B32"),
+              "expected V_SWAP_B32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_SWAP_B16"),
+              "expected V_SWAP_B16 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("V_NOT_B16"),
               "expected V_NOT_B16 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("V_CVT_F32_I32"),
@@ -242,7 +246,7 @@ int main() {
   }
 
   Gfx1201Interpreter interpreter;
-  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 262u,
+  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 264u,
               "expected executable seed opcode list") ||
       !Expect(interpreter.Supports("S_ENDPGM"),
               "expected interpreter support for S_ENDPGM") ||
@@ -330,6 +334,10 @@ int main() {
               "expected interpreter support for V_MOV_B16") ||
       !Expect(interpreter.Supports("V_PERMLANE64_B32"),
               "expected interpreter support for V_PERMLANE64_B32") ||
+      !Expect(interpreter.Supports("V_SWAP_B32"),
+              "expected interpreter support for V_SWAP_B32") ||
+      !Expect(interpreter.Supports("V_SWAP_B16"),
+              "expected interpreter support for V_SWAP_B16") ||
       !Expect(interpreter.Supports("V_NOT_B16"),
               "expected interpreter support for V_NOT_B16") ||
       !Expect(interpreter.Supports("V_BFREV_B32"),

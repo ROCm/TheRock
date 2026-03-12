@@ -37,7 +37,7 @@ constexpr std::uint16_t kSrcSccSgprIndex = 253;
 float ExpandFp16ToFloat(std::uint16_t bits);
 std::uint16_t CompressFloatToFp16Bits(float value);
 
-constexpr std::array<std::string_view, 262> kExecutableSeedOpcodes{{
+constexpr std::array<std::string_view, 264> kExecutableSeedOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_ADD_U32",
@@ -69,6 +69,8 @@ constexpr std::array<std::string_view, 262> kExecutableSeedOpcodes{{
     "V_MOV_B16",
     "V_PERMLANE64_B32",
     "V_READFIRSTLANE_B32",
+    "V_SWAP_B32",
+    "V_SWAP_B16",
     "V_CMP_EQ_I32",
     "V_CMP_NE_I32",
     "V_CMP_LT_I32",
@@ -727,6 +729,14 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
   }
   if (opcode == "V_READFIRSTLANE_B32") {
     *compiled_opcode = Gfx1201CompiledOpcode::kVReadfirstlaneB32;
+    return true;
+  }
+  if (opcode == "V_SWAP_B32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVSwapB32;
+    return true;
+  }
+  if (opcode == "V_SWAP_B16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVSwapB16;
     return true;
   }
   if (opcode == "V_CMP_EQ_I32") {
@@ -3232,6 +3242,40 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
                               error_message);
   }
 
+  if (instruction.opcode == "V_SWAP_B32" || instruction.opcode == "V_SWAP_B16") {
+    if (!ValidateOperandCount(instruction, 2, error_message)) {
+      return false;
+    }
+    for (std::size_t lane_index = 0; lane_index < state->ActiveLaneCount();
+         ++lane_index) {
+      if (((state->exec_mask >> lane_index) & 1ULL) == 0) {
+        continue;
+      }
+      const std::uint32_t dst_value = ReadVectorOperand(
+          instruction.operands[0], *state, lane_index, error_message);
+      if (error_message != nullptr && !error_message->empty()) {
+        return false;
+      }
+      const std::uint32_t src_value = ReadVectorOperand(
+          instruction.operands[1], *state, lane_index, error_message);
+      if (error_message != nullptr && !error_message->empty()) {
+        return false;
+      }
+      const bool is_half_swap = instruction.opcode == "V_SWAP_B16";
+      const std::uint32_t write_dst =
+          is_half_swap ? static_cast<std::uint16_t>(src_value) : src_value;
+      const std::uint32_t write_src =
+          is_half_swap ? static_cast<std::uint16_t>(dst_value) : dst_value;
+      if (!WriteVectorOperand(instruction.operands[0], lane_index, write_dst,
+                              state, error_message) ||
+          !WriteVectorOperand(instruction.operands[1], lane_index, write_src,
+                              state, error_message)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   if (instruction.opcode == "V_MOV_B32" || instruction.opcode == "V_MOV_B16" ||
       instruction.opcode == "V_PERMLANE64_B32" ||
       instruction.opcode == "V_NOT_B16" ||
@@ -3546,6 +3590,8 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kVMovB16:
     case Gfx1201CompiledOpcode::kVPermlane64B32:
     case Gfx1201CompiledOpcode::kVReadfirstlaneB32:
+    case Gfx1201CompiledOpcode::kVSwapB32:
+    case Gfx1201CompiledOpcode::kVSwapB16:
     case Gfx1201CompiledOpcode::kVCmpEqI32:
     case Gfx1201CompiledOpcode::kVCmpNeI32:
     case Gfx1201CompiledOpcode::kVCmpLtI32:

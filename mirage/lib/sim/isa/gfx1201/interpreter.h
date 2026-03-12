@@ -45,6 +45,8 @@ enum class Gfx1201CompiledOpcode : std::uint16_t {
   kVMovB16,
   kVPermlane64B32,
   kVReadfirstlaneB32,
+  kVSwapB32,
+  kVSwapB16,
   kVCmpEqI32,
   kVCmpNeI32,
   kVCmpLtI32,

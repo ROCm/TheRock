@@ -663,6 +663,27 @@ bool ExpectHalfConsumerSeedState(
          !state.waiting_on_barrier && state.pc == 3u;
 }
 
+bool ExpectSwapSeedState(const mirage::sim::isa::WaveExecutionState& state) {
+  return state.vgprs[60][0] == 0xaaaaaaaau &&
+         state.vgprs[60][1] == 0xbbbbbbbbu &&
+         state.vgprs[60][2] == 0x60606060u &&
+         state.vgprs[60][3] == 0xccccccccu &&
+         state.vgprs[61][0] == 0x11111111u &&
+         state.vgprs[61][1] == 0x22222222u &&
+         state.vgprs[61][2] == 0x61616161u &&
+         state.vgprs[61][3] == 0x33333333u &&
+         state.vgprs[62][0] == 0x0000beefu &&
+         state.vgprs[62][1] == 0x00000002u &&
+         state.vgprs[62][2] == 0x62626262u &&
+         state.vgprs[62][3] == 0x00001234u &&
+         state.vgprs[63][0] == 0x00001234u &&
+         state.vgprs[63][1] == 0x00008001u &&
+         state.vgprs[63][2] == 0x63636363u &&
+         state.vgprs[63][3] == 0x0000ffffu &&
+         state.exec_mask == 0xbu && state.halted &&
+         !state.waiting_on_barrier && state.pc == 2u;
+}
+
 bool ExpectRemainingCompareState(const mirage::sim::isa::WaveExecutionState& state) {
   return state.sgprs[40] == 0xffffffffu && state.sgprs[41] == 0xffffffffu &&
          state.sgprs[42] == 1u && state.sgprs[43] == 4u &&
@@ -1247,6 +1268,68 @@ int main() {
                   OperandValueClass::kVectorRegister, OperandAccess::kRead,
                   FragmentKind::kVector, 32u, 1u, false),
               "expected V_PERMLANE64_B32 source descriptor")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_swap_b32_words{
+      MakeVop1(101u, 33u, 290u)};
+  if (!Expect(decoder.DecodeInstruction(v_swap_b32_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_SWAP_B32 decode success") ||
+      !Expect(instruction.opcode == "V_SWAP_B32",
+              "expected V_SWAP_B32 opcode") ||
+      !Expect(instruction.operand_count == 2u,
+              "expected V_SWAP_B32 two-operand decode") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[0], OperandRole::kDestination,
+                  OperandSlotKind::kDestination,
+                  OperandValueClass::kVectorRegister,
+                  OperandAccess::kReadWrite, FragmentKind::kVector, 32u, 1u,
+                  false),
+              "expected V_SWAP_B32 destination readwrite descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[1], OperandRole::kSource0,
+                  OperandSlotKind::kSource0,
+                  OperandValueClass::kVectorRegister,
+                  OperandAccess::kReadWrite, FragmentKind::kVector, 32u, 1u,
+                  false),
+              "expected V_SWAP_B32 source readwrite descriptor") ||
+      !Expect(instruction.operands[0].kind == OperandKind::kVgpr &&
+                  instruction.operands[0].index == 33u &&
+                  instruction.operands[1].kind == OperandKind::kVgpr &&
+                  instruction.operands[1].index == 34u,
+              "expected decoded V_SWAP_B32 registers")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_swap_b16_words{
+      MakeVop1(102u, 35u, 292u)};
+  if (!Expect(decoder.DecodeInstruction(v_swap_b16_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_SWAP_B16 decode success") ||
+      !Expect(instruction.opcode == "V_SWAP_B16",
+              "expected V_SWAP_B16 opcode") ||
+      !Expect(instruction.operand_count == 2u,
+              "expected V_SWAP_B16 two-operand decode") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[0], OperandRole::kDestination,
+                  OperandSlotKind::kDestination,
+                  OperandValueClass::kVectorRegister,
+                  OperandAccess::kReadWrite, FragmentKind::kVector, 16u, 1u,
+                  false),
+              "expected V_SWAP_B16 destination readwrite descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[1], OperandRole::kSource0,
+                  OperandSlotKind::kSource0,
+                  OperandValueClass::kVectorRegister,
+                  OperandAccess::kReadWrite, FragmentKind::kVector, 16u, 1u,
+                  false),
+              "expected V_SWAP_B16 source readwrite descriptor") ||
+      !Expect(instruction.operands[0].kind == OperandKind::kVgpr &&
+                  instruction.operands[0].index == 35u &&
+                  instruction.operands[1].kind == OperandKind::kVgpr &&
+                  instruction.operands[1].index == 36u,
+              "expected decoded V_SWAP_B16 registers")) {
     return 1;
   }
 
@@ -3431,6 +3514,84 @@ int main() {
               "expected compiled half consumer execution success") ||
       !Expect(ExpectHalfConsumerSeedState(compiled_half_consumer_state),
               "expected compiled half consumer state")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 3> swap_words{
+      MakeVop1(101u, 60u, 317u),
+      MakeVop1(102u, 62u, 319u),
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> swap_program;
+  if (!Expect(decoder.DecodeProgram(swap_words, &swap_program, &error_message),
+              "expected swap program decode success") ||
+      !Expect(swap_program.size() == 3u,
+              "expected three decoded swap instructions") ||
+      !Expect(swap_program[0].opcode == "V_SWAP_B32",
+              "expected decoded V_SWAP_B32") ||
+      !Expect(swap_program[1].opcode == "V_SWAP_B16",
+              "expected decoded V_SWAP_B16") ||
+      !Expect(swap_program[2].opcode == "S_ENDPGM",
+              "expected decoded S_ENDPGM after swap batch")) {
+    return 1;
+  }
+
+  auto initialize_swap_state = [](WaveExecutionState* state) {
+    state->exec_mask = 0xbu;
+
+    state->vgprs[60][0] = 0x11111111u;
+    state->vgprs[60][1] = 0x22222222u;
+    state->vgprs[60][2] = 0x60606060u;
+    state->vgprs[60][3] = 0x33333333u;
+
+    state->vgprs[61][0] = 0xaaaaaaaau;
+    state->vgprs[61][1] = 0xbbbbbbbbu;
+    state->vgprs[61][2] = 0x61616161u;
+    state->vgprs[61][3] = 0xccccccccu;
+
+    state->vgprs[62][0] = 0xaaaa1234u;
+    state->vgprs[62][1] = 0xbbbb8001u;
+    state->vgprs[62][2] = 0x62626262u;
+    state->vgprs[62][3] = 0xccccffffu;
+
+    state->vgprs[63][0] = 0xddddbeefu;
+    state->vgprs[63][1] = 0xeeee0002u;
+    state->vgprs[63][2] = 0x63636363u;
+    state->vgprs[63][3] = 0xffff1234u;
+  };
+
+  WaveExecutionState decoded_swap_state;
+  initialize_swap_state(&decoded_swap_state);
+  if (!Expect(interpreter.ExecuteProgram(swap_program, &decoded_swap_state,
+                                         &error_message),
+              "expected decoded swap execution success") ||
+      !Expect(ExpectSwapSeedState(decoded_swap_state),
+              "expected decoded swap state")) {
+    return 1;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_swap_program;
+  if (!Expect(interpreter.CompileProgram(swap_program, &compiled_swap_program,
+                                         &error_message),
+              "expected compiled swap program success") ||
+      !Expect(compiled_swap_program.size() == 3u,
+              "expected three compiled swap instructions") ||
+      !Expect(compiled_swap_program[0].opcode ==
+                  Gfx1201CompiledOpcode::kVSwapB32,
+              "expected compiled V_SWAP_B32 opcode") ||
+      !Expect(compiled_swap_program[1].opcode ==
+                  Gfx1201CompiledOpcode::kVSwapB16,
+              "expected compiled V_SWAP_B16 opcode")) {
+    return 1;
+  }
+
+  WaveExecutionState compiled_swap_state;
+  initialize_swap_state(&compiled_swap_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_swap_program,
+                                         &compiled_swap_state, &error_message),
+              "expected compiled swap execution success") ||
+      !Expect(ExpectSwapSeedState(compiled_swap_state),
+              "expected compiled swap state")) {
     return 1;
   }
 
