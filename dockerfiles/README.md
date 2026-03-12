@@ -86,6 +86,21 @@ sudo docker run -it \
 > pip install --index-url=https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu 'rocm[libraries,devel]'
 > ```
 
+| Source .Dockerfile                                                                           | Published package                                                               |
+| -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| [`no_rocm_image_ubuntu24_04_rocgdb.Dockerfile`](no_rocm_image_ubuntu24_04_rocgdb.Dockerfile) | https://github.com/ROCm/TheRock/pkgs/container/no_rocm_image_ubuntu24_04_rocgdb |
+
+Extended version of no_rocm_image_ubuntu24_04.Dockerfile, containing additional
+packages and tools required for validation of rocgdb.
+This includes dejagnu, make, gcc, g++ and gfortran.
+
+| Source .Dockerfile                                                                           | Published package                                                               |
+| -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| [`no_rocm_image_ubuntu24_04_ocl_rt.Dockerfile`](no_rocm_image_ubuntu24_04_ocl_rt.Dockerfile) | https://github.com/ROCm/TheRock/pkgs/container/no_rocm_image_ubuntu24_04_ocl_rt |
+
+Used in ocltst execution. It installs OCL ICD package required
+by ocltst
+
 ### `rocm_runtime.Dockerfile`
 
 | Source .Dockerfile                                   | Published package |

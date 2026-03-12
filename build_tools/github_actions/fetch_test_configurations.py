@@ -1,5 +1,15 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """
-This script determines what test configurations to run
+This script determines what test configurations to run.
+
+Outputs (written to $GITHUB_OUTPUT):
+  - sanity_component: JSON object for the sanity component, always present as a
+    prerequisite that must pass before other components are run.
+  - components: JSON array of component configs for the regular test matrix
+    (excludes sanity, which is output separately above).
+  - platform: lowercase OS name derived from RUNNER_OS.
 
 Required environment variables:
   - RUNNER_OS (https://docs.github.com/en/actions/how-tos/writing-workflows/choosing-what-your-workflow-does/store-information-in-variables#detecting-the-operating-system)
@@ -8,10 +18,14 @@ Required environment variables:
 import json
 import logging
 import os
+import sys
 from pathlib import Path
 
+# Add tests directory to path for extended_tests imports
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tests"))
 from github_actions_utils import *
-from benchmarks.benchmark_test_matrix import benchmark_matrix
+from extended_tests.benchmark.benchmark_test_matrix import benchmark_matrix
+from extended_tests.functional.functional_test_matrix import functional_matrix
 from amdgpu_family_matrix import get_all_families_for_trigger_types
 
 logging.basicConfig(level=logging.INFO)
@@ -30,6 +44,21 @@ def _get_script_path(script_name: str) -> str:
 
 
 test_matrix = {
+    # Sanity tests - always run first as a prerequisite for other component tests
+    "sanity": {
+        "job_name": "sanity",
+        "fetch_artifact_args": "--base-only",
+        "timeout_minutes": 5,
+        "test_script": f"python {_get_script_path('test_sanity.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
+        # Running docker with cap-add and -v /lib/modules, by recommendation of GitHub:
+        # https://rocm.docs.amd.com/projects/amdsmi/en/amd-staging/how-to/setup-docker-container.html
+        "container_options": "--cap-add SYS_MODULE -v /lib/modules:/lib/modules",
+    },
     # hip-tests
     "hip-tests": {
         "job_name": "hip-tests",
@@ -37,7 +66,10 @@ test_matrix = {
         "timeout_minutes": 120,
         "test_script": f"python {_get_script_path('test_hiptests.py')}",
         "platform": ["linux", "windows"],
-        "total_shards": 4,
+        "total_shards_dict": {
+            "linux": 4,
+            "windows": 4,
+        },
     },
     # BLAS tests
     "rocblas": {
@@ -46,7 +78,10 @@ test_matrix = {
         "timeout_minutes": 15,
         "test_script": f"python {_get_script_path('test_rocblas.py')}",
         "platform": ["linux", "windows"],
-        "total_shards": 1,
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
     },
     "rocroller": {
         "job_name": "rocroller",
@@ -54,7 +89,10 @@ test_matrix = {
         "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_rocroller.py')}",
         "platform": ["linux"],
-        "total_shards": 5,
+        "total_shards_dict": {
+            "linux": 5,
+            "windows": 5,
+        },
         "exclude_family": {
             # rocroller does not plan to support Linux and Windows gfx115X architectures
             "linux": [
@@ -78,7 +116,10 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_hipblas.py')}",
         "platform": ["linux", "windows"],
         # TODO(#2616): Enable full tests once known machine issues are resolved
-        "total_shards": 1,
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
     },
     "hipblaslt": {
         "job_name": "hipblaslt",
@@ -86,7 +127,10 @@ test_matrix = {
         "timeout_minutes": 180,
         "test_script": f"python {_get_script_path('test_hipblaslt.py')}",
         "platform": ["linux", "windows"],
-        "total_shards": 6,
+        "total_shards_dict": {
+            "linux": 6,
+            "windows": 1,
+        },
     },
     # SOLVER tests
     "hipsolver": {
@@ -95,7 +139,10 @@ test_matrix = {
         "timeout_minutes": 5,
         "test_script": f"python {_get_script_path('test_hipsolver.py')}",
         "platform": ["linux", "windows"],
-        "total_shards": 1,
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
     },
     "rocsolver": {
         "job_name": "rocsolver",
@@ -104,7 +151,10 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_rocsolver.py')}",
         # Issue for adding windows tests: https://github.com/ROCm/TheRock/issues/1770
         "platform": ["linux"],
-        "total_shards": 2,
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
     },
     # PRIM tests
     "rocprim": {
@@ -113,7 +163,10 @@ test_matrix = {
         "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_rocprim.py')}",
         "platform": ["linux", "windows"],
-        "total_shards": 2,
+        "total_shards_dict": {
+            "linux": 2,
+            "windows": 2,
+        },
     },
     "hipcub": {
         "job_name": "hipcub",
@@ -121,7 +174,31 @@ test_matrix = {
         "timeout_minutes": 15,
         "test_script": f"python {_get_script_path('test_hipcub.py')}",
         "platform": ["linux", "windows"],
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
+    },
+    "rocgdb": {
+        "job_name": "rocgdb",
+        "fetch_artifact_args": "--debug-tools --tests",
+        "timeout_minutes": 30,
+        "test_script": f"python {_get_script_path('test_rocgdb.py')}",
+        "platform": ["linux"],
         "total_shards": 1,
+        "container_image": "ghcr.io/rocm/no_rocm_image_ubuntu24_04_rocgdb@sha256:939b8e35887144d1ca4eca928dc2869991339cab869168790e495fc0a5907bbb",
+        "container_options": "--cap-add=SYS_PTRACE",
+    },
+    "rocr-debug-agent": {
+        "job_name": "rocr-debug-agent",
+        "fetch_artifact_args": "--debug-tools --tests",
+        "timeout_minutes": 10,
+        "test_script": f"python {_get_script_path('test_rocr-debug-agent.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
     },
     "rocthrust": {
         "job_name": "rocthrust",
@@ -129,7 +206,10 @@ test_matrix = {
         "timeout_minutes": 15,
         "test_script": f"python {_get_script_path('test_rocthrust.py')}",
         "platform": ["linux", "windows"],
-        "total_shards": 1,
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
     },
     # SPARSE tests
     "hipsparse": {
@@ -138,7 +218,10 @@ test_matrix = {
         "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_hipsparse.py')}",
         "platform": ["linux", "windows"],
-        "total_shards": 2,
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
     },
     "rocsparse": {
         "job_name": "rocsparse",
@@ -146,16 +229,21 @@ test_matrix = {
         "timeout_minutes": 15,
         "test_script": f"python {_get_script_path('test_rocsparse.py')}",
         "platform": ["linux", "windows"],
-        "total_shards": 1,
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
     },
     "hipsparselt": {
         "job_name": "hipsparselt",
         "fetch_artifact_args": "--blas --tests",
-        "timeout_minutes": 120,
+        "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_hipsparselt.py')}",
-        # TODO(#2616): Re-enable tests after test slowdown issues are resolved
-        "platform": [],
-        "total_shards": 4,
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
     },
     # RAND tests
     "rocrand": {
@@ -164,7 +252,10 @@ test_matrix = {
         "timeout_minutes": 15,
         "test_script": f"python {_get_script_path('test_rocrand.py')}",
         "platform": ["linux", "windows"],
-        "total_shards": 1,
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
     },
     "hiprand": {
         "job_name": "hiprand",
@@ -172,7 +263,10 @@ test_matrix = {
         "timeout_minutes": 5,
         "test_script": f"python {_get_script_path('test_hiprand.py')}",
         "platform": ["linux", "windows"],
-        "total_shards": 1,
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
     },
     # FFT tests
     "rocfft": {
@@ -182,7 +276,10 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_rocfft.py')}",
         # TODO(geomin12): Add windows test (https://github.com/ROCm/TheRock/issues/1391)
         "platform": ["linux"],
-        "total_shards": 1,
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
     },
     "hipfft": {
         "job_name": "hipfft",
@@ -190,16 +287,22 @@ test_matrix = {
         "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_hipfft.py')}",
         "platform": ["linux", "windows"],
-        "total_shards": 1,
+        "total_shards_dict": {
+            "linux": 2,
+            "windows": 2,
+        },
     },
     # MIOpen tests
     "miopen": {
         "job_name": "miopen",
-        "fetch_artifact_args": "--blas --miopen --tests",
+        "fetch_artifact_args": "--blas --miopen --rand --tests",
         "timeout_minutes": 60,
-        "test_script": f"python {_get_script_path('test_miopen.py')}",
+        "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
-        "total_shards": 4,
+        "total_shards_dict": {
+            "linux": 4,
+            "windows": 4,
+        },
     },
     # RCCL tests
     "rccl": {
@@ -208,7 +311,10 @@ test_matrix = {
         "timeout_minutes": 15,
         "test_script": f"pytest {_get_script_path('test_rccl.py')} -v -s --log-cli-level=info",
         "platform": ["linux"],
-        "total_shards": 1,
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
         # Architectures that we have multi GPU setup for testing
         "multi_gpu": {"linux": ["gfx94X-dcgpu"]},
     },
@@ -219,7 +325,10 @@ test_matrix = {
         "timeout_minutes": 5,
         "test_script": f"python {_get_script_path('test_hipdnn.py')}",
         "platform": ["linux", "windows"],
-        "total_shards": 1,
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
     },
     # hipDNN install/consumption tests
     "hipdnn_install": {
@@ -227,36 +336,57 @@ test_matrix = {
         "timeout_minutes": 10,
         "test_script": f"python {_get_script_path('test_hipdnn_install.py')}",
         "platform": ["linux", "windows"],
-        "total_shards": 1,
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
     },
     # hipDNN samples tests
     "hipdnn-samples": {
         "job_name": "hipdnn-samples",
-        "fetch_artifact_args": "--blas --miopen --hipdnn --miopen-plugin --hipdnn-samples --tests",
+        "fetch_artifact_args": "--blas --miopen --hipdnn --miopenprovider --hipdnn-samples --tests",
         "timeout_minutes": 5,
         "test_script": f"python {_get_script_path('test_hipdnn_samples.py')}",
         "platform": ["linux", "windows"],
-        "total_shards": 1,
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
     },
-    # MIOpen plugin tests
-    "miopen_plugin": {
-        "job_name": "miopen_plugin",
-        "fetch_artifact_args": "--blas --miopen --hipdnn --miopen-plugin --tests",
+    # MIOpen provider tests
+    "miopenprovider": {
+        "job_name": "miopenprovider",
+        "fetch_artifact_args": "--blas --miopen --hipdnn --miopenprovider --tests",
         "timeout_minutes": 15,
-        "test_script": f"python {_get_script_path('test_miopen_plugin.py')}",
+        "test_script": f"python {_get_script_path('test_miopenprovider.py')}",
         "platform": ["linux", "windows"],
-        "total_shards": 1,
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
     },
     # TODO(iree-org/fusilli/issues/57): Enable fusilli tests once build is
     # enabled by default.
-    # "fusilli_plugin": {
-    #     "job_name": "fusilli_plugin",
-    #     "fetch_artifact_args": "--hipdnn --fusilli-plugin --tests",
+    # "fusilliprovider": {
+    #     "job_name": "fusilliprovider",
+    #     "fetch_artifact_args": "--hipdnn --fusilliprovider --iree-compiler --tests",
     #     "timeout_minutes": 15,
-    #     "test_script": f"python {_get_script_path('test_fusilli_plugin.py')}",
+    #     "test_script": f"python {_get_script_path('test_fusilliprovider.py')}",
     #     "platform": ["linux"],
     #     "total_shards": 1,
     # },
+    # hipBLASLt provider tests
+    "hipblasltprovider": {
+        "job_name": "hipblasltprovider",
+        "fetch_artifact_args": "--blas --hipdnn --hipblasltprovider --tests",
+        "timeout_minutes": 15,
+        "test_script": f"python {_get_script_path('test_hipblasltprovider.py')}",
+        "platform": ["linux", "windows"],
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
+    },
     # rocWMMA tests
     "rocwmma": {
         "job_name": "rocwmma",
@@ -264,7 +394,34 @@ test_matrix = {
         "timeout_minutes": 60,
         "test_script": f"python {_get_script_path('test_rocwmma.py')}",
         "platform": ["linux", "windows"],
-        "total_shards": 5,
+        "total_shards_dict": {
+            "linux": 4,
+            "windows": 2,
+        },
+    },
+    # profiler tests
+    "rocprofiler-compute": {
+        "job_name": "rocprofiler-compute",
+        "fetch_artifact_args": "--rocprofiler-compute --rocprofiler-sdk --tests",
+        "timeout_minutes": 60,
+        "additional_requirements_files": [
+            "libexec/rocprofiler-compute/requirements.txt",
+            "libexec/rocprofiler-compute/requirements-test.txt",
+        ],
+        "test_script": f"python {_get_script_path('test_rocprofiler_compute.py')} -v",
+        "platform": ["linux"],
+        "total_shards_dict": {"linux": 2},
+    },
+    "rocprofiler-systems": {
+        "job_name": "rocprofiler-systems",
+        "fetch_artifact_args": "--rocprofiler-systems --rocprofiler-sdk --tests",
+        "timeout_minutes": 15,
+        "test_script": f"python {_get_script_path('test_rocprofiler_systems.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
     },
     # libhipcxx hipcc tests
     "libhipcxx_hipcc": {
@@ -273,7 +430,10 @@ test_matrix = {
         "timeout_minutes": 30,
         "test_script": f"python {_get_script_path('test_libhipcxx_hipcc.py')}",
         "platform": ["linux"],
-        "total_shards": 1,
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
     },
     # libhipcxx hiprtc tests
     "libhipcxx_hiprtc": {
@@ -282,7 +442,10 @@ test_matrix = {
         "timeout_minutes": 20,
         "test_script": f"python {_get_script_path('test_libhipcxx_hiprtc.py')}",
         "platform": ["linux"],
-        "total_shards": 1,
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
     },
     # aqlprofile tests
     "aqlprofile": {
@@ -291,7 +454,22 @@ test_matrix = {
         "timeout_minutes": 5,
         "test_script": f"python {_get_script_path('test_aqlprofile.py')}",
         "platform": ["linux"],
-        "total_shards": 1,
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
+    },
+    # rocrtst tests
+    "rocrtst": {
+        "job_name": "rocrtst",
+        "fetch_artifact_args": "--rocrtst --tests",
+        "timeout_minutes": 15,
+        "test_script": f"python {_get_script_path('test_rocrtst.py')}",
+        "platform": ["linux"],
+        "total_shards_dict": {
+            "linux": 1,
+            "windows": 1,
+        },
     },
 }
 
@@ -303,6 +481,7 @@ def run():
     test_type = os.getenv("TEST_TYPE", "full")
     test_labels = json.loads(os.getenv("TEST_LABELS") or "[]")
     is_benchmark_workflow = str2bool(os.getenv("IS_BENCHMARK_WORKFLOW", "false"))
+    run_functional_tests = str2bool(os.getenv("RUN_FUNCTIONAL_TESTS", "false"))
 
     logging.info(f"Selecting projects: {projects_to_test}")
 
@@ -313,14 +492,20 @@ def run():
         logging.info("Using benchmark_matrix only (benchmark tests)")
         selected_matrix = benchmark_matrix.copy()
     else:
-        # For regular workflow, use ONLY test_matrix
+        # For regular workflow, use test_matrix
         logging.info("Using test_matrix only (regular tests)")
         selected_matrix = test_matrix.copy()
+        # For nightly/scheduled builds, merge functional tests into the test matrix
+        if run_functional_tests and functional_matrix:
+            logging.info(
+                f"Merging {len(functional_matrix)} functional test(s) into test matrix"
+            )
+            selected_matrix.update(functional_matrix)
 
     # This string -> array conversion ensures no partial strings are detected during test selection (ex: "hipblas" in ["hipblaslt", "rocblas"] = false)
     project_array = [item.strip() for item in projects_to_test.split(",")]
 
-    output_matrix = []
+    all_components = []
     for key in selected_matrix:
         job_name = selected_matrix[key]["job_name"]
 
@@ -337,13 +522,15 @@ def run():
 
         # If test labels are populated, and the test job name is not in the test labels, skip the test
         # Note: Benchmarks never use test_labels (always empty list)
-        if test_labels and key not in test_labels:
+        if key != "sanity" and test_labels and key not in test_labels:
             logging.info(f"Excluding job {job_name} since it's not in the test labels")
             continue
 
-        # If the test is enabled for a particular platform and a particular (or all) projects are selected
+        # If the test is enabled for a particular platform and a particular (or all) projects are selected.
+        # Note: Sanity goes through the same all_components loop as other components, but is separated
+        # into its own sanity_component GHA output after the loop (see gha_set_output below).
         if platform in selected_matrix[key]["platform"] and (
-            key in project_array or "*" in project_array
+            key == "sanity" or key in project_array or "*" in project_array
         ):
             logging.info(f"Including job {job_name} with test_type {test_type}")
             job_config_data = selected_matrix[key]
@@ -352,9 +539,9 @@ def run():
             # This way, the test jobs will be split up into X shards. (ex: [1, 2, 3, 4] = 4 test shards)
             # For display purposes, we add "i + 1" for the job name (ex: 1 of 4). During the actual test sharding in the test executable, this array will become 0th index
             # Note: Benchmarks always have total_shards=1 (no sharding)
-            job_config_data["shard_arr"] = [
-                i + 1 for i in range(job_config_data["total_shards"])
-            ]
+            total_shards = job_config_data.get("total_shards_dict", {}).get(platform, 1)
+            job_config_data["shard_arr"] = [i + 1 for i in range(total_shards)]
+            job_config_data["total_shards"] = total_shards
 
             # If the test type is smoke tests, we only need one shard for the test job
             # Note: Benchmarks always use test_type="full" but have total_shards=1 anyway
@@ -391,10 +578,17 @@ def run():
                     )
                     continue
 
-            output_matrix.append(job_config_data)
+            all_components.append(job_config_data)
+
+    # Separate sanity (always a prerequisite) from the regular component matrix.
+    sanity_component = next(
+        (c for c in all_components if c.get("job_name") == "sanity"), None
+    )
+    output_matrix = [c for c in all_components if c.get("job_name") != "sanity"]
 
     gha_set_output(
         {
+            "sanity_component": json.dumps(sanity_component),
             "components": json.dumps(output_matrix),
             "platform": platform,
         }

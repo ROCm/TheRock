@@ -1,4 +1,7 @@
 #!/bin/bash
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Does basic sanity checks of the setup_ccache.py mechanism. This is meant to
 # be run interactively when updating setup_ccache.py without the need of
 # verifying a full build.

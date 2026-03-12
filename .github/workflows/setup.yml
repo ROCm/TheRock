@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 name: Setup
 
 on:
@@ -32,6 +35,9 @@ on:
       rocm_package_version:
         description: ROCm package version (primarily for Python packages).
         value: ${{ jobs.setup.outputs.rocm_package_version }}
+      run_functional_tests:
+        description: Whether to run functional tests (enabled for nightly/scheduled builds).
+        value: ${{ jobs.setup.outputs.run_functional_tests }}
 
 permissions:
   contents: read
@@ -51,6 +57,7 @@ jobs:
       test_type: ${{ steps.configure.outputs.test_type }}
       windows_test_labels: ${{ steps.configure.outputs.windows_test_labels }}
       rocm_package_version: ${{ steps.rocm_package_version.outputs.rocm_package_version }}
+      run_functional_tests: ${{ steps.configure.outputs.run_functional_tests }}
     steps:
       - name: Checking out repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -78,9 +85,6 @@ jobs:
           ADDITIONAL_LABEL_OPTIONS: ${{ github.event.inputs.additional_label_options }}
           BUILD_VARIANT: ${{ inputs.build_variant }}
           MULTI_ARCH: ${{ inputs.multi_arch }}
-          # Variable comes from ROCm organization variable 'ROCM_THEROCK_TEST_RUNNERS'
-          ROCM_THEROCK_TEST_RUNNERS: ${{ vars.ROCM_THEROCK_TEST_RUNNERS }}
-          LOAD_TEST_RUNNERS_FROM_VAR: false
         run: ./build_tools/github_actions/configure_ci.py
 
       - name: Compute package version

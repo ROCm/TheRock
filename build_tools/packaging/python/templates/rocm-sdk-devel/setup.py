@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Main rocm-sdk-devel (OS specific)."""
 
 import importlib.util

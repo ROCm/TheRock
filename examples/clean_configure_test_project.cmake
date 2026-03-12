@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 if(EXISTS "${BINARY_DIR}")
   message(STATUS "Removing build dir ${BINARY_DIR}")
   file(REMOVE_RECURSE "${BINARY_DIR}")

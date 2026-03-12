@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Integration tests for artifact_manager.py CLI tool.
 
 These tests verify end-to-end behavior of the artifact_manager push/fetch commands,
@@ -17,6 +20,7 @@ from unittest import mock
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 
 from _therock_utils.artifact_backend import ArtifactBackend, LocalDirectoryBackend
+from _therock_utils.workflow_outputs import WorkflowOutputRoot
 
 # Minimal topology TOML for testing push/fetch behavior.
 # Defines two stages: upstream-stage produces artifacts, downstream-stage consumes them.
@@ -29,6 +33,10 @@ description = "Test topology for artifact_manager tests"
 description = "Upstream stage that produces artifacts"
 artifact_groups = ["upstream-group"]
 
+[build_stages.second-upstream-stage]
+description = "Second upstream stage that produces different artifacts"
+artifact_groups = ["second-upstream-group"]
+
 [build_stages.downstream-stage]
 description = "Downstream stage that consumes artifacts"
 artifact_groups = ["downstream-group"]
@@ -37,19 +45,27 @@ artifact_groups = ["downstream-group"]
 description = "Upstream artifact group"
 type = "generic"
 
+[artifact_groups.second-upstream-group]
+description = "Second upstream artifact group"
+type = "generic"
+
 [artifact_groups.downstream-group]
 description = "Downstream artifact group"
 type = "generic"
-artifact_group_deps = ["upstream-group"]
+artifact_group_deps = ["upstream-group", "second-upstream-group"]
 
 [artifacts.test-artifact]
 artifact_group = "upstream-group"
 type = "target-neutral"
 
+[artifacts.second-artifact]
+artifact_group = "second-upstream-group"
+type = "target-neutral"
+
 [artifacts.downstream-artifact]
 artifact_group = "downstream-group"
 type = "target-neutral"
-artifact_deps = ["test-artifact"]
+artifact_deps = ["test-artifact", "second-artifact"]
 """
 
 # Platform used consistently across all tests
@@ -90,10 +106,10 @@ class FailingBackend(ArtifactBackend):
 
         # Use a real backend for successful operations
         if staging_dir:
+            output_root = WorkflowOutputRoot.for_local(run_id=run_id, platform=platform)
             self._real_backend = LocalDirectoryBackend(
                 staging_dir=staging_dir,
-                run_id=run_id,
-                platform=platform,
+                output_root=output_root,
             )
         else:
             self._real_backend = None
@@ -135,6 +151,11 @@ class FailingBackend(ArtifactBackend):
             )
         if self._real_backend:
             return self._real_backend.upload_artifact(source_path, artifact_key)
+
+    def copy_artifact(self, artifact_key, source_backend):
+        if self._real_backend:
+            return self._real_backend.copy_artifact(artifact_key, source_backend)
+        raise RuntimeError(f"No backend configured for copy: {artifact_key}")
 
     def artifact_exists(self, artifact_key):
         if self._real_backend:
@@ -208,10 +229,12 @@ class ArtifactManagerTestBase(unittest.TestCase):
         self, name: str, component: str, target_family: str, run_id: str = "local"
     ) -> str:
         """Create a fake artifact in the staging directory."""
+        output_root = WorkflowOutputRoot.for_local(
+            run_id=run_id, platform=TEST_PLATFORM
+        )
         backend = LocalDirectoryBackend(
             staging_dir=self.staging_dir,
-            run_id=run_id,
-            platform=TEST_PLATFORM,
+            output_root=output_root,
         )
 
         archive_name = f"{name}_{component}_{target_family}.tar.zst"
@@ -318,10 +341,12 @@ class TestPushFailureExitCode(ArtifactManagerTestBase):
         artifact_manager.main(argv)
 
         # Verify artifacts were uploaded
+        output_root = WorkflowOutputRoot.for_local(
+            run_id="local", platform=TEST_PLATFORM
+        )
         backend = LocalDirectoryBackend(
             staging_dir=self.staging_dir,
-            run_id="local",
-            platform=TEST_PLATFORM,
+            output_root=output_root,
         )
         self.assertTrue(backend.artifact_exists("test-artifact_lib_generic.tar.zst"))
 
@@ -430,6 +455,562 @@ class TestFetchFailureExitCode(ArtifactManagerTestBase):
 
         self.assertEqual(ctx.exception.code, 1)
         mock_extract.assert_called_once()
+
+
+class TestFetchAmdgpuTargets(ArtifactManagerTestBase):
+    """Tests that fetch command correctly handles --amdgpu-targets for split artifacts."""
+
+    def test_fetch_with_amdgpu_targets_finds_individual_target_archives(self):
+        """Test that --amdgpu-targets matches individual-target split archives."""
+        import artifact_manager
+
+        # Stage a generic artifact and a per-target artifact
+        self._create_staged_artifact("test-artifact", "lib", "generic")
+        self._create_staged_artifact("test-artifact", "lib", "gfx942")
+
+        extract_calls = []
+
+        def mock_extract(request):
+            extract_calls.append(request)
+            return request.output_dir
+
+        with mock.patch("artifact_manager.extract_artifact", mock_extract):
+            argv = [
+                "fetch",
+                "--stage",
+                "downstream-stage",
+                "--output-dir",
+                str(self.output_dir),
+                "--topology",
+                str(self.topology_path),
+                "--local-staging-dir",
+                str(self.staging_dir),
+                "--platform",
+                TEST_PLATFORM,
+                "--run-id",
+                "local",
+                "--amdgpu-targets",
+                "gfx942",
+            ]
+
+            artifact_manager.main(argv)
+
+        # Should have fetched both generic and gfx942
+        fetched_keys = [c.archive_path.name for c in extract_calls]
+        self.assertTrue(
+            any("generic" in k for k in fetched_keys),
+            f"Should fetch generic artifact, got: {fetched_keys}",
+        )
+        self.assertTrue(
+            any("gfx942" in k for k in fetched_keys),
+            f"Should fetch gfx942 artifact, got: {fetched_keys}",
+        )
+
+    def test_fetch_with_amdgpu_targets_skips_other_targets(self):
+        """Test that --amdgpu-targets doesn't fetch archives for other targets."""
+        import artifact_manager
+
+        # Stage artifacts for two different targets
+        self._create_staged_artifact("test-artifact", "lib", "generic")
+        self._create_staged_artifact("test-artifact", "lib", "gfx942")
+        self._create_staged_artifact("test-artifact", "lib", "gfx1100")
+
+        extract_calls = []
+
+        def mock_extract(request):
+            extract_calls.append(request)
+            return request.output_dir
+
+        with mock.patch("artifact_manager.extract_artifact", mock_extract):
+            argv = [
+                "fetch",
+                "--stage",
+                "downstream-stage",
+                "--output-dir",
+                str(self.output_dir),
+                "--topology",
+                str(self.topology_path),
+                "--local-staging-dir",
+                str(self.staging_dir),
+                "--platform",
+                TEST_PLATFORM,
+                "--run-id",
+                "local",
+                "--amdgpu-targets",
+                "gfx942",
+            ]
+
+            artifact_manager.main(argv)
+
+        fetched_keys = [c.archive_path.name for c in extract_calls]
+        self.assertFalse(
+            any("gfx1100" in k for k in fetched_keys),
+            f"Should NOT fetch gfx1100 artifact, got: {fetched_keys}",
+        )
+
+    def test_fetch_with_families_and_targets_is_inclusive(self):
+        """Test that --amdgpu-families and --amdgpu-targets together fetch both."""
+        import artifact_manager
+
+        # Stage family-named and target-named artifacts
+        self._create_staged_artifact("test-artifact", "lib", "generic")
+        self._create_staged_artifact("test-artifact", "lib", "gfx94X-dcgpu")
+        self._create_staged_artifact("test-artifact", "lib", "gfx942")
+
+        extract_calls = []
+
+        def mock_extract(request):
+            extract_calls.append(request)
+            return request.output_dir
+
+        with mock.patch("artifact_manager.extract_artifact", mock_extract):
+            argv = [
+                "fetch",
+                "--stage",
+                "downstream-stage",
+                "--output-dir",
+                str(self.output_dir),
+                "--topology",
+                str(self.topology_path),
+                "--local-staging-dir",
+                str(self.staging_dir),
+                "--platform",
+                TEST_PLATFORM,
+                "--run-id",
+                "local",
+                "--amdgpu-families",
+                "gfx94X-dcgpu",
+                "--amdgpu-targets",
+                "gfx942",
+            ]
+
+            artifact_manager.main(argv)
+
+        fetched_keys = [c.archive_path.name for c in extract_calls]
+        self.assertTrue(
+            any("generic" in k for k in fetched_keys),
+            f"Should fetch generic, got: {fetched_keys}",
+        )
+        self.assertTrue(
+            any("gfx94X-dcgpu" in k for k in fetched_keys),
+            f"Should fetch family archive, got: {fetched_keys}",
+        )
+        self.assertTrue(
+            any("gfx942" in k for k in fetched_keys),
+            f"Should fetch target archive, got: {fetched_keys}",
+        )
+
+
+class TestFetchFlatten(ArtifactManagerTestBase):
+    """Tests that fetch command correctly flattens artifacts."""
+
+    def test_fetch_flatten_merges_artifacts_into_single_directory(self):
+        """Test that fetch --flatten merges all artifacts into a single directory."""
+        import artifact_manager
+
+        # Create two staged artifacts
+        self._create_staged_artifact("test-artifact", "lib", "generic")
+        self._create_staged_artifact("test-artifact", "run", "generic")
+
+        # Mock extract_artifact to just verify it was called with flatten=True
+        extract_calls = []
+
+        def mock_extract(request):
+            extract_calls.append(request)
+            # Return success
+            return request.output_dir
+
+        with mock.patch("artifact_manager.extract_artifact", mock_extract):
+            argv = [
+                "fetch",
+                "--stage",
+                "downstream-stage",
+                "--output-dir",
+                str(self.output_dir),
+                "--topology",
+                str(self.topology_path),
+                "--local-staging-dir",
+                str(self.staging_dir),
+                "--platform",
+                TEST_PLATFORM,
+                "--run-id",
+                "local",
+                "--flatten",
+            ]
+
+            artifact_manager.main(argv)
+
+            # Verify extract was called with flatten=True
+            self.assertGreater(
+                len(extract_calls), 0, "extract_artifact should have been called"
+            )
+            for request in extract_calls:
+                self.assertTrue(
+                    request.flatten,
+                    "With --flatten, ExtractRequest.flatten should be True",
+                )
+                self.assertEqual(
+                    request.output_dir,
+                    self.output_dir,
+                    "With --flatten, output should be directly to output_dir (not artifacts/ subdirectory)",
+                )
+
+    def test_fetch_without_flatten_creates_artifact_subdirectories(self):
+        """Test that fetch without --flatten creates separate artifact subdirectories."""
+        import artifact_manager
+
+        self._create_staged_artifact("test-artifact", "lib", "generic")
+
+        argv = [
+            "fetch",
+            "--stage",
+            "downstream-stage",
+            "--output-dir",
+            str(self.output_dir),
+            "--topology",
+            str(self.topology_path),
+            "--local-staging-dir",
+            str(self.staging_dir),
+            "--platform",
+            TEST_PLATFORM,
+            "--run-id",
+            "local",
+        ]
+
+        with mock.patch("artifact_manager.extract_artifact") as mock_extract:
+            # Make extract_artifact return success
+            mock_extract.return_value = (
+                self.output_dir / "artifacts" / "test-artifact_lib_generic"
+            )
+
+            artifact_manager.main(argv)
+
+            # Verify extract_artifact was called
+            mock_extract.assert_called_once()
+
+            # Verify the ExtractRequest had correct output_dir (artifacts subdirectory)
+            call_args = mock_extract.call_args[0][0]
+            self.assertEqual(
+                call_args.output_dir,
+                self.output_dir / "artifacts",
+                "Without --flatten, artifacts should be extracted to 'artifacts/' subdirectory",
+            )
+            self.assertFalse(
+                call_args.flatten,
+                "Without --flatten, ExtractRequest.flatten should be False",
+            )
+
+    def test_flatten_and_bootstrap_are_mutually_exclusive(self):
+        """Test that --flatten and --bootstrap cannot be used together."""
+        import artifact_manager
+
+        self._create_staged_artifact("test-artifact", "lib", "generic")
+
+        argv = [
+            "fetch",
+            "--stage",
+            "downstream-stage",
+            "--output-dir",
+            str(self.output_dir),
+            "--topology",
+            str(self.topology_path),
+            "--local-staging-dir",
+            str(self.staging_dir),
+            "--platform",
+            TEST_PLATFORM,
+            "--run-id",
+            "local",
+            "--flatten",
+            "--bootstrap",
+        ]
+
+        # argparse should reject this combination
+        with self.assertRaises(SystemExit) as ctx:
+            artifact_manager.main(argv)
+
+        # Exit code 2 is used by argparse for command-line syntax errors
+        self.assertEqual(ctx.exception.code, 2)
+
+
+class TestCopy(ArtifactManagerTestBase):
+    """Tests for the copy subcommand."""
+
+    def _create_source_artifact(
+        self, name: str, component: str, target_family: str, run_id: str = "source-run"
+    ) -> str:
+        """Create a fake artifact in the source run's staging area."""
+        return self._create_staged_artifact(name, component, target_family, run_id)
+
+    def _run_copy(
+        self, extra_argv=None, source_run_id="source-run", dest_run_id="dest-run"
+    ):
+        """Run the copy command with standard arguments."""
+        import artifact_manager
+
+        argv = [
+            "copy",
+            "--source-run-id",
+            source_run_id,
+            "--stage",
+            "upstream-stage",
+            "--topology",
+            str(self.topology_path),
+            "--local-staging-dir",
+            str(self.staging_dir),
+            "--platform",
+            TEST_PLATFORM,
+            "--run-id",
+            dest_run_id,
+        ]
+        if extra_argv:
+            argv.extend(extra_argv)
+
+        artifact_manager.main(argv)
+
+    @mock.patch("artifact_manager._delay_for_retry")
+    def test_copy_transfers_artifacts_between_runs(self, mock_delay):
+        """Test that copy moves produced artifacts from source to dest run."""
+        self._create_source_artifact("test-artifact", "lib", "generic")
+
+        self._run_copy()
+
+        # Verify artifact exists in dest
+        dest_backend = LocalDirectoryBackend(
+            staging_dir=self.staging_dir,
+            output_root=WorkflowOutputRoot.for_local(
+                run_id="dest-run", platform=TEST_PLATFORM
+            ),
+        )
+        self.assertTrue(
+            dest_backend.artifact_exists("test-artifact_lib_generic.tar.zst")
+        )
+
+    @mock.patch("artifact_manager._delay_for_retry")
+    def test_copy_transfers_sha256sum_files(self, mock_delay):
+        """Test that copy also transfers sha256sum files (best-effort)."""
+        self._create_source_artifact("test-artifact", "lib", "generic")
+
+        # Also create a sha256sum file in the source
+        source_backend = LocalDirectoryBackend(
+            staging_dir=self.staging_dir,
+            output_root=WorkflowOutputRoot.for_local(
+                run_id="source-run", platform=TEST_PLATFORM
+            ),
+        )
+        sha_path = (
+            source_backend.base_path / "test-artifact_lib_generic.tar.zst.sha256sum"
+        )
+        sha_path.write_text("abc123  test-artifact_lib_generic.tar.zst\n")
+
+        self._run_copy()
+
+        dest_backend = LocalDirectoryBackend(
+            staging_dir=self.staging_dir,
+            output_root=WorkflowOutputRoot.for_local(
+                run_id="dest-run", platform=TEST_PLATFORM
+            ),
+        )
+        self.assertTrue(
+            (
+                dest_backend.base_path / "test-artifact_lib_generic.tar.zst.sha256sum"
+            ).exists()
+        )
+
+    @mock.patch("artifact_manager._delay_for_retry")
+    def test_copy_multiple_components(self, mock_delay):
+        """Test that copy handles multiple components of the same artifact."""
+        self._create_source_artifact("test-artifact", "lib", "generic")
+        self._create_source_artifact("test-artifact", "dev", "generic")
+        self._create_source_artifact("test-artifact", "run", "generic")
+
+        self._run_copy()
+
+        dest_backend = LocalDirectoryBackend(
+            staging_dir=self.staging_dir,
+            output_root=WorkflowOutputRoot.for_local(
+                run_id="dest-run", platform=TEST_PLATFORM
+            ),
+        )
+        for comp in ["lib", "dev", "run"]:
+            self.assertTrue(
+                dest_backend.artifact_exists(f"test-artifact_{comp}_generic.tar.zst"),
+                f"Component {comp} should be copied",
+            )
+
+    @mock.patch("artifact_manager._delay_for_retry")
+    def test_copy_only_copies_produced_artifacts(self, mock_delay):
+        """Test that copy only copies artifacts produced by the specified stage."""
+        # Stage artifacts for both upstream and downstream stages
+        self._create_source_artifact("test-artifact", "lib", "generic")
+        self._create_source_artifact("downstream-artifact", "lib", "generic")
+
+        self._run_copy()
+
+        dest_backend = LocalDirectoryBackend(
+            staging_dir=self.staging_dir,
+            output_root=WorkflowOutputRoot.for_local(
+                run_id="dest-run", platform=TEST_PLATFORM
+            ),
+        )
+        # upstream-stage produces test-artifact
+        self.assertTrue(
+            dest_backend.artifact_exists("test-artifact_lib_generic.tar.zst")
+        )
+        # upstream-stage does NOT produce downstream-artifact
+        self.assertFalse(
+            dest_backend.artifact_exists("downstream-artifact_lib_generic.tar.zst")
+        )
+
+    @mock.patch("artifact_manager._delay_for_retry")
+    def test_copy_dry_run_does_not_copy(self, mock_delay):
+        """Test that --dry-run lists artifacts without copying."""
+        self._create_source_artifact("test-artifact", "lib", "generic")
+
+        self._run_copy(extra_argv=["--dry-run"])
+
+        dest_backend = LocalDirectoryBackend(
+            staging_dir=self.staging_dir,
+            output_root=WorkflowOutputRoot.for_local(
+                run_id="dest-run", platform=TEST_PLATFORM
+            ),
+        )
+        self.assertFalse(
+            dest_backend.artifact_exists("test-artifact_lib_generic.tar.zst")
+        )
+
+    @mock.patch("artifact_manager._delay_for_retry")
+    @mock.patch("artifact_manager._create_source_backend")
+    @mock.patch("artifact_manager.create_backend_from_env")
+    def test_copy_fails_when_copy_fails(
+        self, mock_dest_factory, mock_source_factory, mock_delay
+    ):
+        """Test that copy exits with code 1 when artifact copy fails."""
+        import artifact_manager
+
+        # Source backend has the artifact
+        source_backend = LocalDirectoryBackend(
+            staging_dir=self.staging_dir,
+            output_root=WorkflowOutputRoot.for_local(
+                run_id="source-run", platform=TEST_PLATFORM
+            ),
+        )
+        self._create_source_artifact("test-artifact", "lib", "generic")
+        mock_source_factory.return_value = source_backend
+
+        # Dest backend will fail on copy
+        failing_dest = FailingBackend(fail_uploads_after=0)
+        # Override copy_artifact to always fail
+        failing_dest.copy_artifact = mock.Mock(
+            side_effect=RuntimeError("Simulated copy failure")
+        )
+        failing_dest.list_artifacts = source_backend.list_artifacts
+        mock_dest_factory.return_value = failing_dest
+
+        argv = [
+            "copy",
+            "--source-run-id",
+            "source-run",
+            "--stage",
+            "upstream-stage",
+            "--topology",
+            str(self.topology_path),
+            "--platform",
+            TEST_PLATFORM,
+            "--run-id",
+            "dest-run",
+        ]
+
+        with self.assertRaises(SystemExit) as ctx:
+            artifact_manager.main(argv)
+
+        self.assertEqual(ctx.exception.code, 1)
+
+    def test_copy_invalid_stage_exits_with_error(self):
+        """Test that copy exits with code 1 for invalid stage name."""
+        import artifact_manager
+
+        argv = [
+            "copy",
+            "--source-run-id",
+            "source-run",
+            "--stage",
+            "nonexistent-stage",
+            "--topology",
+            str(self.topology_path),
+            "--local-staging-dir",
+            str(self.staging_dir),
+            "--platform",
+            TEST_PLATFORM,
+            "--run-id",
+            "dest-run",
+        ]
+
+        with self.assertRaises(SystemExit) as ctx:
+            artifact_manager.main(argv)
+
+        self.assertEqual(ctx.exception.code, 1)
+
+    def test_copy_missing_source_run_id_exits_with_error(self):
+        """Test that copy exits with code 2 (argparse) when --source-run-id is missing."""
+        import artifact_manager
+
+        argv = [
+            "copy",
+            "--stage",
+            "upstream-stage",
+            "--topology",
+            str(self.topology_path),
+            "--local-staging-dir",
+            str(self.staging_dir),
+            "--platform",
+            TEST_PLATFORM,
+        ]
+
+        with self.assertRaises(SystemExit) as ctx:
+            artifact_manager.main(argv)
+
+        self.assertEqual(ctx.exception.code, 2)
+
+    @mock.patch("artifact_manager._delay_for_retry")
+    def test_copy_multiple_stages(self, mock_delay):
+        """Test that copy with comma-separated stages copies artifacts from all stages."""
+        import artifact_manager
+
+        self._create_source_artifact("test-artifact", "lib", "generic")
+        self._create_staged_artifact(
+            "second-artifact", "lib", "generic", run_id="source-run"
+        )
+
+        artifact_manager.main(
+            [
+                "copy",
+                "--source-run-id",
+                "source-run",
+                "--stage",
+                "upstream-stage,second-upstream-stage",
+                "--topology",
+                str(self.topology_path),
+                "--local-staging-dir",
+                str(self.staging_dir),
+                "--platform",
+                TEST_PLATFORM,
+                "--run-id",
+                "dest-run",
+            ]
+        )
+
+        dest_backend = LocalDirectoryBackend(
+            staging_dir=self.staging_dir,
+            output_root=WorkflowOutputRoot.for_local(
+                run_id="dest-run", platform=TEST_PLATFORM
+            ),
+        )
+        self.assertTrue(
+            dest_backend.artifact_exists("test-artifact_lib_generic.tar.zst")
+        )
+        self.assertTrue(
+            dest_backend.artifact_exists("second-artifact_lib_generic.tar.zst")
+        )
 
 
 if __name__ == "__main__":

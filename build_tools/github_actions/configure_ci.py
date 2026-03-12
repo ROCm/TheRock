@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 
 """Configures metadata for a CI workflow run.
 
@@ -18,8 +21,6 @@
   * WINDOWS_USE_PREBUILT_ARTIFACTS (optional): If enabled, CI will only run Windows tests
   * BRANCH_NAME (optional): The branch name
   * BUILD_VARIANT (optional): The build variant to run (ex: release, asan, tsan)
-  * ROCM_THEROCK_TEST_RUNNERS (optional): Test runner JSON object, coming from ROCm organization
-  * LOAD_TEST_RUNNERS_FROM_VAR (optional): boolean env variable that loads in ROCm org data if enabled
 
   Environment variables (for pull requests):
   * PR_LABELS (optional) : JSON list of PR label names.
@@ -38,6 +39,7 @@
   * windows_test_labels : List of test names to run on Windows, optionally filtered by PR labels.
   * enable_build_jobs: If true, builds will be enabled
   * test_type: The type of test that component tests will run (i.e. smoke, full)
+  * run_functional_tests: If true, functional tests will be enabled (nightly/scheduled builds)
 
   Written to GITHUB_STEP_SUMMARY:
   * Human-readable summary for most contributors
@@ -57,7 +59,7 @@ from amdgpu_family_matrix import (
     all_build_variants,
     get_all_families_for_trigger_types,
 )
-from fetch_test_configurations import test_matrix
+from fetch_test_configurations import test_matrix, functional_matrix
 
 from configure_ci_path_filters import (
     get_git_modified_paths,
@@ -113,7 +115,10 @@ def filter_known_names(
         ), "target_matrix must be provided for 'target' name_type"
         known_references = {"target": target_matrix}
     else:
-        known_references = {"test": test_matrix}
+        # Merge test_matrix and functional_matrix so that functional test
+        # names/labels will be recognised.
+        combined_test_matrix = {**test_matrix, **functional_matrix}
+        known_references = {"test": combined_test_matrix}
 
     filtered_names = []
     if name_type not in known_references:
@@ -195,12 +200,24 @@ def generate_multi_arch_matrix(
                 f["amdgpu_family"] for f in variant_to_family_info[build_variant_name]
             ]
             if family_name not in existing_families:
+                # fetch-gfx-targets: individual GPU arch(s) on the test runner,
+                # used for fetching split (per-target) artifacts.
+                fetch_gfx_targets = platform_info.get("fetch-gfx-targets", [])
                 variant_to_family_info[build_variant_name].append(
                     {
                         "amdgpu_family": family_name,
+                        "amdgpu_targets": ",".join(fetch_gfx_targets),
                         "test-runs-on": test_runs_on,
                         "sanity_check_only_for_family": platform_info.get(
                             "sanity_check_only_for_family", False
+                        ),
+                        # Per-family pytorch flag. False for families with known
+                        # build failures. Used to gate per-family pytorch wheel
+                        # builds in multi_arch_ci_linux.yml.
+                        # NOTE: This is distinct from a future combined (multi-arch)
+                        # pytorch build that would build once against the full index.
+                        "build_pytorch": not platform_info.get(
+                            "expect_pytorch_failure", False
                         ),
                     }
                 )
@@ -215,6 +232,8 @@ def generate_multi_arch_matrix(
         # Extract family names for dist_amdgpu_families
         family_names = [f["amdgpu_family"] for f in family_info_list]
 
+        expect_failure = info.get("expect_failure", False)
+        expect_pytorch_failure = info.get("expect_pytorch_failure", False)
         matrix_row = {
             "matrix_per_family_json": json.dumps(family_info_list),
             "dist_amdgpu_families": ";".join(family_names),
@@ -222,7 +241,8 @@ def generate_multi_arch_matrix(
             "build_variant_label": info["build_variant_label"],
             "build_variant_suffix": info["build_variant_suffix"],
             "build_variant_cmake_preset": info["build_variant_cmake_preset"],
-            "expect_failure": info.get("expect_failure", False),
+            "expect_failure": expect_failure,
+            "build_pytorch": not expect_failure and not expect_pytorch_failure,
         }
         matrix_output.append(matrix_row)
 
@@ -380,6 +400,8 @@ def matrix_generator(
                 print(f"    Label 'skip-ci' detected -> skipping all builds and tests")
                 selected_target_names = []
                 selected_test_names = []
+                requested_target_names = []
+                requested_test_names = []
                 break
             if "run-all-archs-ci" == label:
                 print(
@@ -489,6 +511,15 @@ def matrix_generator(
                 # But if not, honor what is already there.
                 if build_variant_info.get("expect_failure", False):
                     matrix_row["expect_failure"] = True
+
+                # Enable pytorch builds for families without known build failures.
+                # TODO(#3291): Add finer-grained controls over when pytorch is built
+                expect_failure = matrix_row.get("expect_failure", False)
+                expect_pytorch_failure = matrix_row.get("expect_pytorch_failure", False)
+                matrix_row["build_pytorch"] = (
+                    not expect_failure and not expect_pytorch_failure
+                )
+
                 del matrix_row["build_variants"]
                 matrix_row.update(build_variant_info)
 
@@ -525,6 +556,14 @@ def matrix_generator(
                             if "test-runs-on-multi-gpu" in platform_info:
                                 matrix_row["test-runs-on-multi-gpu"] = ""
                         break
+
+                # TODO(#3433): Remove sandbox logic once ASAN tests are passing and environment is no longer required
+                # To avoid impact on the production environment, we use the custom sandbox runners if this is an ASAN test run
+                if (
+                    "asan" in base_args.get("build_variant")
+                    and "test-runs-on-sandbox" in matrix_row
+                ):
+                    matrix_row["test-runs-on"] = matrix_row["test-runs-on-sandbox"]
 
                 matrix_output.append(matrix_row)
 
@@ -609,13 +648,27 @@ def main(base_args, linux_families, windows_families):
 
     test_type = "smoke"
     test_type_reason = "default (smoke tests)"
+    run_functional_tests = False
 
-    # In the case of a scheduled run, we always want to build and we want to run full tests
     if is_schedule:
+        # Always build and run full tests on scheduled runs.
         enable_build_jobs = True
         test_type = "full"
         test_type_reason = "scheduled run triggers full tests"
+        # Functional tests run on nightly/scheduled builds
+        run_functional_tests = True
+    elif is_workflow_dispatch:
+        # Always build and conditionally run full tests for workflow dispatch.
+        enable_build_jobs = True
+        if linux_test_output or windows_test_output:
+            combined_test_labels = list(set(linux_test_output + windows_test_output))
+            test_type = "full"
+            test_type_reason = f"test label(s) specified: {combined_test_labels}"
+            # Functional tests run on nightly/scheduled builds
+            run_functional_tests = True
     else:
+        # Conditionally build and conditionally run full tests for other
+        # triggers (pull_request), based on modified paths and other inputs.
         modified_paths = get_git_modified_paths(base_ref)
         print("modified_paths (max 200):", modified_paths[:200])
         print(f"Checking modified files since this had a {github_event_name} trigger")
@@ -637,6 +690,17 @@ def main(base_args, linux_families, windows_families):
             test_type = "full"
             test_type_reason = f"test label(s) specified: {combined_test_labels}"
 
+        for matrix_row in linux_variants_output + windows_variants_output:
+            # If the "run-full-tests-only" flag is set for this family, we do not run tests if it is a smoke test type
+            if matrix_row.get("run-full-tests-only", False) and test_type == "smoke":
+                matrix_row["test-runs-on"] = ""
+            # For nightly_check_only_for_family architectures, we want to run only full tests during nightly (scheduled) run
+            # Otherwise, we run sanity checks in all other scenarios (presubmit/postsubmit)
+            if matrix_row.get("nightly_check_only_for_family", False) and (
+                is_pull_request or is_push
+            ):
+                matrix_row["sanity_check_only_for_family"] = True
+
     print(f"test_type decision: '{test_type}' (reason: {test_type_reason})")
 
     # Format variants for summary - handle both regular and multi-arch modes
@@ -644,7 +708,16 @@ def main(base_args, linux_families, windows_families):
         result = []
         for item in variants:
             if "family" in item:
-                result.append(item["family"])
+                label = item["family"]
+                # Also show flags for the family, if any.
+                flags = []
+                if item.get("expect_failure"):
+                    flags.append("expect_failure")
+                if item.get("build_pytorch"):
+                    flags.append("build_pytorch")
+                if flags:
+                    label += f" ({', '.join(flags)})"
+                result.append(label)
             elif "matrix_per_family_json" in item:
                 # Multi-arch mode: show the families from the JSON
                 families = json.loads(item["matrix_per_family_json"])
@@ -662,6 +735,7 @@ def main(base_args, linux_families, windows_families):
 * `windows_use_prebuilt_artifacts`: {json.dumps(windows_use_prebuilt_artifacts)}
 * `enable_build_jobs`: {json.dumps(enable_build_jobs)}
 * `test_type`: {test_type}
+* `run_functional_tests`: {json.dumps(run_functional_tests)}
     """
     )
 
@@ -672,6 +746,7 @@ def main(base_args, linux_families, windows_families):
         "windows_test_labels": json.dumps(windows_test_output),
         "enable_build_jobs": json.dumps(enable_build_jobs),
         "test_type": test_type,
+        "run_functional_tests": json.dumps(run_functional_tests),
     }
     gha_set_output(output)
 

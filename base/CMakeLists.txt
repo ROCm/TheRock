@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 # Optional subprojects add themselves to this list for artifact dependencies.
 set(_optional_artifact_deps)
 
@@ -10,6 +13,8 @@ therock_cmake_subproject_declare(therock-aux-overlay
   EXTERNAL_SOURCE_DIR "aux-overlay"
   USE_DIST_AMDGPU_TARGETS
   BACKGROUND_BUILD
+  CMAKE_ARGS
+    "-DTHEROCK_FLAG_SETTINGS_FILE=${THEROCK_FLAG_SETTINGS_FILE}"
 )
 therock_cmake_subproject_activate(therock-aux-overlay)
 
@@ -55,37 +60,6 @@ therock_cmake_subproject_glob_c_sources(rocm-core
 therock_cmake_subproject_provide_package(rocm-core rocm-core lib/cmake/rocm-core)
 therock_cmake_subproject_activate(rocm-core)
 
-
-################################################################################
-# amdsmi
-################################################################################
-
-if(NOT WIN32)  # TODO(#36): Enable on Windows and/or make subproject inclusion generally optional
-
-therock_cmake_subproject_declare(amdsmi
-  EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/amdsmi"
-  BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/amdsmi"
-  USE_DIST_AMDGPU_TARGETS
-  BACKGROUND_BUILD
-  CMAKE_ARGS
-    "-DCMAKE_VERBOSE_MAKEFILE=OFF"
-    -DBUILD_TESTS=${THEROCK_BUILD_TESTING}
-  BUILD_DEPS
-    therock-googletest
-  RUNTIME_DEPS
-    rocm-core
-    ${THEROCK_BUNDLED_LIBDRM}
-  INSTALL_RPATH_DIRS
-    lib
-  INTERFACE_INSTALL_RPATH_DIRS
-    lib
-)
-therock_cmake_subproject_provide_package(amdsmi
-  amd_smi lib/cmake)
-therock_cmake_subproject_activate(amdsmi)
-list(APPEND _optional_artifact_deps amdsmi)
-
-endif()
 
 
 ################################################################################
@@ -180,7 +154,7 @@ therock_cmake_subproject_activate(rocm-half)
 # rocm-kpack
 ################################################################################
 
-if(THEROCK_KPACK_SPLIT_ARTIFACTS)
+if(THEROCK_FLAG_KPACK_SPLIT_ARTIFACTS)
 
 therock_cmake_subproject_declare(rocm-kpack
   EXTERNAL_SOURCE_DIR "rocm-kpack"
@@ -193,7 +167,7 @@ therock_cmake_subproject_declare(rocm-kpack
   BUILD_DEPS
     therock-msgpack-cxx
   RUNTIME_DEPS
-    therock-zstd
+    ${THEROCK_BUNDLED_ZSTD}
   INTERFACE_LINK_DIRS
     lib
   INTERFACE_INSTALL_RPATH_DIRS

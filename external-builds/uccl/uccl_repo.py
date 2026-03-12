@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Checks out UCCL.
 
 Helper script to checkout upstream UCCL sources without cloning the full repo.

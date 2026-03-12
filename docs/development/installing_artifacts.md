@@ -41,8 +41,14 @@ Choose one of these options to specify where to install from:
 | `--prim`        | Flag | Include primitives artifacts                       |
 | `--rand`        | Flag | Include random number generator artifacts          |
 | `--rccl`        | Flag | Include RCCL artifacts                             |
+| `--rocdecode`   | Flag | Include rocDecode artifacts (Linux only)           |
+| `--rocjpeg`     | Flag | Include rocJPEG artifacts (Linux only)             |
 | `--rocwmma`     | Flag | Include rocWMMA artifacts                          |
 | `--tests`       | Flag | Include test artifacts for enabled components      |
+
+> [!NOTE]
+> `--rocdecode` and `--rocjpeg` require `sysdeps-amd-mesa` and are only
+> available on Linux.
 
 ### Utility Options
 
@@ -287,6 +293,17 @@ python build_tools/install_rocm_from_artifacts.py \
     --amdgpu-family gfx94X-dcgpu \
     --tests \
     --run-github-repo ROCm/rocm-libraries
+```
+
+### Install Media Libraries from CI Run (Linux only)
+
+Install rocDecode and rocJPEG artifacts from a CI run:
+
+```bash
+python build_tools/install_rocm_from_artifacts.py \
+    --run-id 19588907671 \
+    --amdgpu-family gfx110X-all \
+    --rocdecode --rocjpeg
 ```
 
 ### Install from Dev Tarball

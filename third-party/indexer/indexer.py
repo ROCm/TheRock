@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright (c) 2021 Josh Brunty
+# SPDX-License-Identifier: MIT
 
 # Indexer v.1.0.1
 # Author: Josh Brunty (josh dot brunty at marshall dot edu)

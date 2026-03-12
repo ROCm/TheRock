@@ -1,0 +1,6 @@
+# Python Requirements needed for the CI workflows
+
+# As this is only for building PyTorch we are not limited by the requirements
+# of dvc[s3] as in TheRock/requirements.txt
+boto3>1.42.0
+packaging>=26.0

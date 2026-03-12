@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """Applies patches to a monorepo.
 This script is available for users, but it is primarily the mechanism
 the CI uses to apply patches to a monorepo.

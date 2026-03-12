@@ -1,3 +1,6 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 name: Unit Tests
 
 on:
@@ -26,8 +29,8 @@ jobs:
         GITHUB_TOKEN: ${{ github.token }}
 
     steps:
-    - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
-    - uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+    - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
       with:
         python-version: 3.12
 
@@ -39,17 +42,22 @@ jobs:
     #   build_tools/github_actions/benchmarks/scripts/
     #   build_tools/github_actions/test_executable_scripts/
     # We could move them if we want a simple `pytest build_tools/` to work.
-    # TODO(scotttodd): enable code coverage collection/reporting here
     - name: Test build_tools
+      working-directory: build_tools
       run: |
         python -m pytest -vv \
-          build_tools/tests \
-          build_tools/github_actions/tests
+          --cov --cov-report=term-missing --cov-report=html
 
-  # TODO(scotttodd): share code with ci_summary in ci.yml
-  #   Could reuse this from prior projects:
-  #   https://github.com/iree-org/iree/blob/main/.github/workflows/workflow_summary.yml
-  #   (including support for sending alerts on failures)
+    # TODO: upload to AWS S3 instead (so reports are hosted and don't require
+    #       a download step to view).
+    #       We could also use https://about.codecov.io/ instead of custom infra.
+    - name: Upload coverage report
+      if: always()
+      uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+      with:
+        name: coverage-report-${{ matrix.runs-on }}
+        path: build/coverage-html/
+
   unit_tests_summary:
     name: Unit Tests Summary
     if: always()
@@ -57,16 +65,10 @@ jobs:
       - unit_tests
     runs-on: ubuntu-24.04
     steps:
-      - name: Output failed jobs
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Evaluate workflow results
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          echo '${{ toJson(needs) }}'
-          FAILED_JOBS="$(echo '${{ toJson(needs) }}' \
-            | jq --raw-output \
-            'map_values(select(.result!="success" and .result!="skipped")) | keys | join(",")' \
-          )"
-          if [[ "${FAILED_JOBS}" != "" ]]; then
-            echo "The following jobs failed: ${FAILED_JOBS}"
-            exit 1
-          else
-            echo "All required jobs succeeded."
-          fi
+          python build_tools/github_actions/workflow_summary.py \
+            --needs-json '${{ toJSON(needs) }}'
