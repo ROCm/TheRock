@@ -2,7 +2,7 @@
 
 This report captures the current executable `gfx1201` seed slice layered on top of the
 existing phase-0 compute selector and seed catalog. The local seed surface now covers
-259 executable phase-0 ops without leaving architecture-local `gfx1201` files, and
+262 executable phase-0 ops without leaving architecture-local `gfx1201` files, and
 the local interpreter continues to normalize execution to wave32.
 
 ## Executable opcodes
@@ -35,6 +35,8 @@ the local interpreter continues to normalize execution to wave32.
 - `S_MOVK_I32`
 - `V_NOP`
 - `V_MOV_B32`
+- `V_MOV_B16`
+- `V_PERMLANE64_B32`
 - `V_READFIRSTLANE_B32`
 - `V_CMP_EQ_I32`
 - `V_CMP_NE_I32`
@@ -198,6 +200,7 @@ the local interpreter continues to normalize execution to wave32.
 - `V_CMPX_NGT_F64`
 - `V_CMPX_NLE_F64`
 - `V_CMPX_NLT_F64`
+- `V_NOT_B16`
 - `V_NOT_B32`
 - `V_BFREV_B32`
 - `V_CLS_I32`
@@ -274,7 +277,7 @@ the local interpreter continues to normalize execution to wave32.
 - `ENC_SOPC`: `S_CMP_EQ_I32`, `S_CMP_LG_I32`, `S_CMP_GT_I32`, `S_CMP_EQ_U32`, `S_CMP_LG_U32`, `S_CMP_GE_I32`, `S_CMP_LT_I32`, `S_CMP_LE_I32`, `S_CMP_GT_U32`, `S_CMP_GE_U32`, `S_CMP_LT_U32`, `S_CMP_LE_U32`
 - `ENC_SOP1`: `S_MOV_B32`
 - `ENC_SOPK`: `S_MOVK_I32`
-- `ENC_VOP1`: `V_NOP`, `V_MOV_B32`, `V_READFIRSTLANE_B32`, `V_NOT_B32`, `V_BFREV_B32`, `V_CLS_I32`, `V_CLZ_I32_U32`, `V_CTZ_I32_B32`, `V_CVT_F32_UBYTE0`, `V_CVT_F32_UBYTE1`, `V_CVT_F32_UBYTE2`, `V_CVT_F32_UBYTE3`, `V_CVT_F32_I32`, `V_CVT_F32_U32`, `V_CVT_F32_F16`, `V_CVT_F32_F64`, `V_CVT_F16_F32`, `V_CVT_F16_I16`, `V_CVT_F16_U16`, `V_CVT_I16_F16`, `V_CVT_U16_F16`, `V_CVT_F64_F32`, `V_CVT_F64_I32`, `V_CVT_F64_U32`, `V_CVT_U32_F32`, `V_CVT_U32_F64`, `V_CVT_I32_F32`, `V_CVT_FLOOR_I32_F32`, `V_CVT_NEAREST_I32_F32`, `V_CVT_I32_I16`, `V_CVT_U32_U16`, `V_CVT_I32_F64`, `V_EXP_F32`, `V_LOG_F32`, `V_RCP_F32`, `V_RCP_IFLAG_F32`, `V_RSQ_F32`, `V_SQRT_F32`, `V_SIN_F32`, `V_COS_F32`, `V_RCP_F64`, `V_RSQ_F64`, `V_SQRT_F64`, `V_FREXP_EXP_I32_F32`, `V_FREXP_MANT_F32`, `V_FRACT_F32`, `V_FREXP_EXP_I32_F64`, `V_FREXP_MANT_F64`, `V_FRACT_F64`, `V_TRUNC_F32`, `V_CEIL_F32`, `V_RNDNE_F32`, `V_FLOOR_F32`, `V_TRUNC_F64`, `V_CEIL_F64`, `V_RNDNE_F64`, `V_FLOOR_F64`
+- `ENC_VOP1`: `V_NOP`, `V_MOV_B32`, `V_MOV_B16`, `V_PERMLANE64_B32`, `V_READFIRSTLANE_B32`, `V_NOT_B16`, `V_NOT_B32`, `V_BFREV_B32`, `V_CLS_I32`, `V_CLZ_I32_U32`, `V_CTZ_I32_B32`, `V_CVT_F32_UBYTE0`, `V_CVT_F32_UBYTE1`, `V_CVT_F32_UBYTE2`, `V_CVT_F32_UBYTE3`, `V_CVT_F32_I32`, `V_CVT_F32_U32`, `V_CVT_F32_F16`, `V_CVT_F32_F64`, `V_CVT_F16_F32`, `V_CVT_F16_I16`, `V_CVT_F16_U16`, `V_CVT_I16_F16`, `V_CVT_U16_F16`, `V_CVT_F64_F32`, `V_CVT_F64_I32`, `V_CVT_F64_U32`, `V_CVT_U32_F32`, `V_CVT_U32_F64`, `V_CVT_I32_F32`, `V_CVT_FLOOR_I32_F32`, `V_CVT_NEAREST_I32_F32`, `V_CVT_I32_I16`, `V_CVT_U32_U16`, `V_CVT_I32_F64`, `V_EXP_F32`, `V_LOG_F32`, `V_RCP_F32`, `V_RCP_IFLAG_F32`, `V_RSQ_F32`, `V_SQRT_F32`, `V_SIN_F32`, `V_COS_F32`, `V_RCP_F64`, `V_RSQ_F64`, `V_SQRT_F64`, `V_FREXP_EXP_I32_F32`, `V_FREXP_MANT_F32`, `V_FRACT_F32`, `V_FREXP_EXP_I32_F64`, `V_FREXP_MANT_F64`, `V_FRACT_F64`, `V_TRUNC_F32`, `V_CEIL_F32`, `V_RNDNE_F32`, `V_FLOOR_F32`, `V_TRUNC_F64`, `V_CEIL_F64`, `V_RNDNE_F64`, `V_FLOOR_F64`
 - `ENC_VOP2`: imported `V_ADD_NC_U32`, `V_SUB_NC_U32`, `V_SUBREV_NC_U32` normalized to `V_ADD_U32`, `V_SUB_U32`, `V_SUBREV_U32`; plus `V_MIN_I32`, `V_MAX_I32`, `V_MIN_U32`, `V_MAX_U32`, `V_CNDMASK_B32`, `V_LSHRREV_B32`, `V_ASHRREV_I32`, `V_LSHLREV_B32`, `V_AND_B32`, `V_OR_B32`, `V_XOR_B32`
 - `ENC_VOPC`: `V_CMP_EQ/NE/LT/LE/GT/GE_I32`, `V_CMP_EQ/NE/LT/LE/GT/GE_U32`, `V_CMPX_EQ/NE/LT/LE/GT/GE_I32`, `V_CMPX_EQ/NE/LT/LE/GT/GE_U32`, the local 16-bit integer subset `V_CMP_EQ/NE/LT/LE/GT/GE_I16/U16` and `V_CMPX_EQ/NE/LT/LE/GT/GE_I16/U16`, the local wide integer subset `V_CMP_EQ/NE/LT/LE/GT/GE_I64/U64` and `V_CMPX_EQ/NE/LT/LE/GT/GE_I64/U64`, the local F16 compare/class subset now brought onto the same path: `V_CMP_CLASS_F16`, `V_CMP_EQ/GE/GT/LE/LG/LT/NEQ/O/U/NGE/NLG/NGT/NLE/NLT_F16`, `V_CMPX_CLASS_F16`, and `V_CMPX_EQ/GE/GT/LE/LG/LT/NEQ/O/U/NGE/NLG/NGT/NLE/NLT_F16`, the full local F32 compare/class subset currently present in the 1-dword seed path, and the local F64 compare/class subset now brought onto the same path: `V_CMP_CLASS_F64`, `V_CMP_EQ/GE/GT/LE/LG/LT/NEQ/O/U/NGE/NLG/NGT/NLE/NLT_F64`, `V_CMPX_CLASS_F64`, and `V_CMPX_EQ/GE/GT/LE/LG/LT/NEQ/O/U/NGE/NLG/NGT/NLE/NLT_F64`
 
@@ -289,6 +292,8 @@ the local interpreter continues to normalize execution to wave32.
 - `S_MOV_B32` and `V_MOV_B32` accept SGPR sources, inline integer sources, and literal dwords.
 - `V_NOT_B32`, `V_BFREV_B32`, `V_CLS_I32`, `V_CLZ_I32_U32`, `V_CTZ_I32_B32`, and `V_CVT_F32_UBYTE0/1/2/3` decode from `ENC_VOP1` on the same source path as `V_MOV_B32`.
 - `V_NOP` now decodes from `ENC_VOP1` as a nullary wave32-local no-op on the current seed path.
+- `V_MOV_B16` and `V_NOT_B16` now decode from `ENC_VOP1` on the same unary vector path, using the current local low-16-bit payload convention without widening the shared/common surface.
+- `V_PERMLANE64_B32` now decodes from `ENC_VOP1` on the same unary vector path and is constrained to VGPR sources, matching its imported wave32-local consumer shape.
 - `V_READFIRSTLANE_B32` now decodes from `ENC_VOP1` with a scalar destination descriptor, a vector-register source descriptor, and the imported wave32-local consumer shape.
 - `V_CVT_F32_I32`, `V_CVT_F32_U32`, `V_CVT_U32_F32`, `V_CVT_I32_F32`, `V_CVT_FLOOR_I32_F32`, and `V_CVT_NEAREST_I32_F32` now decode from `ENC_VOP1`.
 - `V_CVT_F32_F16`, `V_CVT_F16_F32`, `V_CVT_F16_I16`, and `V_CVT_F16_U16` now decode from `ENC_VOP1` on the same unary 32-bit vector path, interpreting or materializing `F16` values in the low 16 bits without widening the shared/common surface.
@@ -316,6 +321,8 @@ the local interpreter continues to normalize execution to wave32.
 - Scalar add/sub updates `SCC` using the imported carry/borrow behavior.
 - `V_MOV_B32` execution respects `exec_mask`.
 - `V_NOP` now executes as a wave32-local no-op on both the decoded and compiled seed paths.
+- `V_MOV_B16` and `V_NOT_B16` now execute lane-wise under `exec_mask`, preserving the current local low-16-bit payload convention on the wave32 seed path.
+- `V_PERMLANE64_B32` now executes as a wave32-local identity move on the current seed path, matching the imported RDNA4 no-op behavior for wave32 mode.
 - `V_READFIRSTLANE_B32` now reads the lowest active lane in the wave32 `exec_mask`, clamps away lanes above lane 31, and writes the selected value into an SGPR.
 - `V_CMP_EQ/NE/LT/LE/GT/GE_I32` and `V_CMP_EQ/NE/LT/LE/GT/GE_U32` execute lane-wise under `exec_mask` while preserving inactive-lane `vcc_mask` bits.
 - `V_CMPX_EQ/NE/LT/LE/GT/GE_I32` and `V_CMPX_EQ/NE/LT/LE/GT/GE_U32` execute lane-wise under `exec_mask` and materialize the resulting active-lane compare mask into both `vcc_mask` and `exec_mask`.
@@ -347,4 +354,4 @@ the local interpreter continues to normalize execution to wave32.
   the existing selector-aware stub errors.
 - `ENC_SMEM`, `ENC_VOP3`, `ENC_VDS`, and `ENC_VGLOBAL` remain route-only in this slice.
 - The remaining `ENC_VOPC` surface outside this seed is now primarily packed and other wider forms not yet on the current local path.
-- The next coherent extension point is the remaining adjacent `ENC_VOP1` consumer or half-width seed work after the local `F16` payload bridge, or the remaining packed/wider `ENC_VOPC` compare work, before `ENC_VOP3`/half-conversion work.
+- The next coherent extension point is the remaining adjacent `ENC_VOP1` consumer or half-width seed work after the local `B16/F16` payload bridge, or the remaining packed/wider `ENC_VOPC` compare work, before `ENC_VOP3`/half-conversion work.

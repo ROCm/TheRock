@@ -645,6 +645,24 @@ bool ExpectF16BridgeSeedState(
          !state.waiting_on_barrier && state.pc == 9u;
 }
 
+bool ExpectHalfConsumerSeedState(
+    const mirage::sim::isa::WaveExecutionState& state) {
+  return state.vgprs[48][0] == 0x00001234u &&
+         state.vgprs[48][1] == 0x00008001u &&
+         state.vgprs[48][2] == 0x48484848u &&
+         state.vgprs[48][3] == 0x00000000u &&
+         state.vgprs[49][0] == 0x00004110u &&
+         state.vgprs[49][1] == 0x00004110u &&
+         state.vgprs[49][2] == 0x49494949u &&
+         state.vgprs[49][3] == 0x00004110u &&
+         state.vgprs[50][0] == 0x11223344u &&
+         state.vgprs[50][1] == 0x55667788u &&
+         state.vgprs[50][2] == 0x50505050u &&
+         state.vgprs[50][3] == 0x99aabbccu &&
+         state.exec_mask == 0xbu && state.halted &&
+         !state.waiting_on_barrier && state.pc == 3u;
+}
+
 bool ExpectRemainingCompareState(const mirage::sim::isa::WaveExecutionState& state) {
   return state.sgprs[40] == 0xffffffffu && state.sgprs[41] == 0xffffffffu &&
          state.sgprs[42] == 1u && state.sgprs[43] == 4u &&
@@ -1194,6 +1212,52 @@ int main() {
                   OperandValueClass::kVectorRegister, OperandAccess::kRead,
                   FragmentKind::kVector, 32u, 1u, false),
               "expected V_READFIRSTLANE_B32 source descriptor")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_mov_b16_words{MakeVop1(28u, 30u, 257u)};
+  if (!Expect(decoder.DecodeInstruction(v_mov_b16_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_MOV_B16 decode success") ||
+      !Expect(ExpectUnaryInstruction(instruction, "V_MOV_B16",
+                                     OperandKind::kVgpr, 30u,
+                                     OperandKind::kVgpr, 1u),
+              "expected decoded V_MOV_B16 operands")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_permlane64_b32_words{
+      MakeVop1(103u, 31u, 260u)};
+  if (!Expect(decoder.DecodeInstruction(v_permlane64_b32_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_PERMLANE64_B32 decode success") ||
+      !Expect(ExpectUnaryInstruction(instruction, "V_PERMLANE64_B32",
+                                     OperandKind::kVgpr, 31u,
+                                     OperandKind::kVgpr, 4u),
+              "expected decoded V_PERMLANE64_B32 operands") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[0], OperandRole::kDestination,
+                  OperandSlotKind::kDestination,
+                  OperandValueClass::kVectorRegister, OperandAccess::kWrite,
+                  FragmentKind::kVector, 32u, 1u, false),
+              "expected V_PERMLANE64_B32 destination descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[1], OperandRole::kSource0,
+                  OperandSlotKind::kSource0,
+                  OperandValueClass::kVectorRegister, OperandAccess::kRead,
+                  FragmentKind::kVector, 32u, 1u, false),
+              "expected V_PERMLANE64_B32 source descriptor")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_not_b16_words{MakeVop1(105u, 32u, 2u)};
+  if (!Expect(decoder.DecodeInstruction(v_not_b16_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_NOT_B16 decode success") ||
+      !Expect(ExpectUnaryInstruction(instruction, "V_NOT_B16",
+                                     OperandKind::kVgpr, 32u,
+                                     OperandKind::kSgpr, 2u),
+              "expected decoded V_NOT_B16 operands")) {
     return 1;
   }
 
@@ -3283,6 +3347,90 @@ int main() {
               "expected compiled F16 bridge execution success") ||
       !Expect(ExpectF16BridgeSeedState(compiled_f16_bridge_state),
               "expected compiled F16 bridge state")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 4> half_consumer_words{
+      MakeVop1(28u, 48u, 257u),
+      MakeVop1(105u, 49u, 2u),
+      MakeVop1(103u, 50u, 260u),
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> half_consumer_program;
+  if (!Expect(decoder.DecodeProgram(half_consumer_words, &half_consumer_program,
+                                    &error_message),
+              "expected half consumer program decode success") ||
+      !Expect(half_consumer_program.size() == 4u,
+              "expected four decoded half consumer instructions") ||
+      !Expect(half_consumer_program[0].opcode == "V_MOV_B16",
+              "expected decoded V_MOV_B16") ||
+      !Expect(half_consumer_program[1].opcode == "V_NOT_B16",
+              "expected decoded V_NOT_B16") ||
+      !Expect(half_consumer_program[2].opcode == "V_PERMLANE64_B32",
+              "expected decoded V_PERMLANE64_B32") ||
+      !Expect(half_consumer_program[3].opcode == "S_ENDPGM",
+              "expected decoded S_ENDPGM after half consumer batch")) {
+    return 1;
+  }
+
+  auto initialize_half_consumer_state = [](WaveExecutionState* state) {
+    state->exec_mask = 0xbu;
+
+    state->vgprs[1][0] = 0xaaaa1234u;
+    state->vgprs[1][1] = 0xbbbb8001u;
+    state->vgprs[1][2] = 0x01010101u;
+    state->vgprs[1][3] = 0xcccc0000u;
+
+    state->vgprs[4][0] = 0x11223344u;
+    state->vgprs[4][1] = 0x55667788u;
+    state->vgprs[4][2] = 0x04040404u;
+    state->vgprs[4][3] = 0x99aabbccu;
+
+    state->sgprs[2] = 0xdeadbeefu;
+
+    state->vgprs[48][2] = 0x48484848u;
+    state->vgprs[49][2] = 0x49494949u;
+    state->vgprs[50][2] = 0x50505050u;
+  };
+
+  WaveExecutionState decoded_half_consumer_state;
+  initialize_half_consumer_state(&decoded_half_consumer_state);
+  if (!Expect(interpreter.ExecuteProgram(half_consumer_program,
+                                         &decoded_half_consumer_state,
+                                         &error_message),
+              "expected decoded half consumer execution success") ||
+      !Expect(ExpectHalfConsumerSeedState(decoded_half_consumer_state),
+              "expected decoded half consumer state")) {
+    return 1;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_half_consumer_program;
+  if (!Expect(interpreter.CompileProgram(half_consumer_program,
+                                         &compiled_half_consumer_program,
+                                         &error_message),
+              "expected compiled half consumer program success") ||
+      !Expect(compiled_half_consumer_program.size() == 4u,
+              "expected four compiled half consumer instructions") ||
+      !Expect(compiled_half_consumer_program[0].opcode ==
+                  Gfx1201CompiledOpcode::kVMovB16,
+              "expected compiled V_MOV_B16 opcode") ||
+      !Expect(compiled_half_consumer_program[1].opcode ==
+                  Gfx1201CompiledOpcode::kVNotB16,
+              "expected compiled V_NOT_B16 opcode") ||
+      !Expect(compiled_half_consumer_program[2].opcode ==
+                  Gfx1201CompiledOpcode::kVPermlane64B32,
+              "expected compiled V_PERMLANE64_B32 opcode")) {
+    return 1;
+  }
+
+  WaveExecutionState compiled_half_consumer_state;
+  initialize_half_consumer_state(&compiled_half_consumer_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_half_consumer_program,
+                                         &compiled_half_consumer_state,
+                                         &error_message),
+              "expected compiled half consumer execution success") ||
+      !Expect(ExpectHalfConsumerSeedState(compiled_half_consumer_state),
+              "expected compiled half consumer state")) {
     return 1;
   }
 

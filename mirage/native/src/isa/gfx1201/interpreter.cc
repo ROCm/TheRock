@@ -37,7 +37,7 @@ constexpr std::uint16_t kSrcSccSgprIndex = 253;
 float ExpandFp16ToFloat(std::uint16_t bits);
 std::uint16_t CompressFloatToFp16Bits(float value);
 
-constexpr std::array<std::string_view, 259> kExecutableSeedOpcodes{{
+constexpr std::array<std::string_view, 262> kExecutableSeedOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_ADD_U32",
@@ -66,6 +66,8 @@ constexpr std::array<std::string_view, 259> kExecutableSeedOpcodes{{
     "S_MOVK_I32",
     "V_NOP",
     "V_MOV_B32",
+    "V_MOV_B16",
+    "V_PERMLANE64_B32",
     "V_READFIRSTLANE_B32",
     "V_CMP_EQ_I32",
     "V_CMP_NE_I32",
@@ -229,6 +231,7 @@ constexpr std::array<std::string_view, 259> kExecutableSeedOpcodes{{
     "V_CMPX_NGT_F64",
     "V_CMPX_NLE_F64",
     "V_CMPX_NLT_F64",
+    "V_NOT_B16",
     "V_NOT_B32",
     "V_BFREV_B32",
     "V_CLS_I32",
@@ -712,6 +715,14 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
   }
   if (opcode == "V_MOV_B32") {
     *compiled_opcode = Gfx1201CompiledOpcode::kVMovB32;
+    return true;
+  }
+  if (opcode == "V_MOV_B16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVMovB16;
+    return true;
+  }
+  if (opcode == "V_PERMLANE64_B32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVPermlane64B32;
     return true;
   }
   if (opcode == "V_READFIRSTLANE_B32") {
@@ -1366,6 +1377,10 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
     *compiled_opcode = Gfx1201CompiledOpcode::kVCmpxNltF64;
     return true;
   }
+  if (opcode == "V_NOT_B16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVNotB16;
+    return true;
+  }
   if (opcode == "V_NOT_B32") {
     *compiled_opcode = Gfx1201CompiledOpcode::kVNotB32;
     return true;
@@ -1925,6 +1940,15 @@ bool WriteWideVectorOperand(const InstructionOperand& operand,
 
 std::uint32_t EvaluateVectorUnarySeedInstruction(std::string_view opcode,
                                                  std::uint32_t value) {
+  if (opcode == "V_MOV_B16") {
+    return static_cast<std::uint16_t>(value);
+  }
+  if (opcode == "V_PERMLANE64_B32") {
+    return value;
+  }
+  if (opcode == "V_NOT_B16") {
+    return static_cast<std::uint16_t>(~value);
+  }
   if (opcode == "V_NOT_B32") {
     return ~value;
   }
@@ -3208,7 +3232,10 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
                               error_message);
   }
 
-  if (instruction.opcode == "V_MOV_B32" || instruction.opcode == "V_NOT_B32" ||
+  if (instruction.opcode == "V_MOV_B32" || instruction.opcode == "V_MOV_B16" ||
+      instruction.opcode == "V_PERMLANE64_B32" ||
+      instruction.opcode == "V_NOT_B16" ||
+      instruction.opcode == "V_NOT_B32" ||
       instruction.opcode == "V_BFREV_B32" ||
       instruction.opcode == "V_CLS_I32" ||
       instruction.opcode == "V_CLZ_I32_U32" ||
@@ -3259,10 +3286,10 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
       if (error_message != nullptr && !error_message->empty()) {
         return false;
       }
-      const std::uint32_t result =
-          instruction.opcode == "V_MOV_B32"
-              ? value
-              : EvaluateVectorUnarySeedInstruction(instruction.opcode, value);
+      const std::uint32_t result = instruction.opcode == "V_MOV_B32"
+                                       ? value
+                                       : EvaluateVectorUnarySeedInstruction(
+                                             instruction.opcode, value);
       if (!WriteVectorOperand(instruction.operands[0], lane_index, result, state,
                               error_message)) {
         return false;
@@ -3516,6 +3543,8 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kSMovB32:
     case Gfx1201CompiledOpcode::kSMovkI32:
     case Gfx1201CompiledOpcode::kVMovB32:
+    case Gfx1201CompiledOpcode::kVMovB16:
+    case Gfx1201CompiledOpcode::kVPermlane64B32:
     case Gfx1201CompiledOpcode::kVReadfirstlaneB32:
     case Gfx1201CompiledOpcode::kVCmpEqI32:
     case Gfx1201CompiledOpcode::kVCmpNeI32:
@@ -3679,6 +3708,7 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kVCmpxNgtF64:
     case Gfx1201CompiledOpcode::kVCmpxNleF64:
     case Gfx1201CompiledOpcode::kVCmpxNltF64:
+    case Gfx1201CompiledOpcode::kVNotB16:
     case Gfx1201CompiledOpcode::kVNotB32:
     case Gfx1201CompiledOpcode::kVBfrevB32:
     case Gfx1201CompiledOpcode::kVClsI32:
