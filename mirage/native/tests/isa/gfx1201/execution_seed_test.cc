@@ -633,8 +633,16 @@ bool ExpectF16BridgeSeedState(
          state.vgprs[45][1] == FloatBits(7.0f) &&
          state.vgprs[45][2] == 0x45454545u &&
          state.vgprs[45][3] == FloatBits(1.0f) &&
+         state.vgprs[46][0] == 0x00000001u &&
+         state.vgprs[46][1] == 0x0000fffeu &&
+         state.vgprs[46][2] == 0x46464646u &&
+         state.vgprs[46][3] == 0x00000000u &&
+         state.vgprs[47][0] == 0x00000002u &&
+         state.vgprs[47][1] == 0x00000007u &&
+         state.vgprs[47][2] == 0x47474747u &&
+         state.vgprs[47][3] == 0x00000001u &&
          state.exec_mask == 0xbu && state.halted &&
-         !state.waiting_on_barrier && state.pc == 6u;
+         !state.waiting_on_barrier && state.pc == 9u;
 }
 
 bool ExpectRemainingCompareState(const mirage::sim::isa::WaveExecutionState& state) {
@@ -1154,6 +1162,17 @@ int main() {
     return 1;
   }
 
+  const std::array<std::uint32_t, 1> v_nop_words{MakeVop1(0u, 0u, 0u)};
+  if (!Expect(decoder.DecodeInstruction(v_nop_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_NOP decode success") ||
+      !Expect(words_consumed == 1u, "expected one dword consumed for V_NOP") ||
+      !Expect(instruction.opcode == "V_NOP", "expected V_NOP opcode") ||
+      !Expect(instruction.operand_count == 0u,
+              "expected V_NOP nullary decode")) {
+    return 1;
+  }
+
   const std::array<std::uint32_t, 1> v_readfirstlane_words{
       MakeVop1(2u, 22u, 278u)};
   if (!Expect(decoder.DecodeInstruction(v_readfirstlane_words, &instruction,
@@ -1385,6 +1404,30 @@ int main() {
                                      OperandKind::kVgpr, 27u,
                                      OperandKind::kVgpr, 3u),
               "expected decoded V_CVT_F32_F16 operands")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_cvt_i16_f16_words{
+      MakeVop1(83u, 28u, 260u)};
+  if (!Expect(decoder.DecodeInstruction(v_cvt_i16_f16_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_CVT_I16_F16 decode success") ||
+      !Expect(ExpectUnaryInstruction(instruction, "V_CVT_I16_F16",
+                                     OperandKind::kVgpr, 28u,
+                                     OperandKind::kVgpr, 4u),
+              "expected decoded V_CVT_I16_F16 operands")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_cvt_u16_f16_words{
+      MakeVop1(82u, 29u, 5u)};
+  if (!Expect(decoder.DecodeInstruction(v_cvt_u16_f16_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_CVT_U16_F16 decode success") ||
+      !Expect(ExpectUnaryInstruction(instruction, "V_CVT_U16_F16",
+                                     OperandKind::kVgpr, 29u,
+                                     OperandKind::kSgpr, 5u),
+              "expected decoded V_CVT_U16_F16 operands")) {
     return 1;
   }
 
@@ -3119,33 +3162,42 @@ int main() {
     return 1;
   }
 
-  const std::array<std::uint32_t, 7> f16_bridge_words{
+  const std::array<std::uint32_t, 10> f16_bridge_words{
+      MakeVop1(0u, 0u, 0u),
       MakeVop1(10u, 40u, 257u),
       MakeVop1(81u, 41u, 258u),
       MakeVop1(80u, 42u, 259u),
       MakeVop1(11u, 43u, 296u),
       MakeVop1(11u, 44u, 297u),
       MakeVop1(11u, 45u, 298u),
+      MakeVop1(83u, 46u, 296u),
+      MakeVop1(82u, 47u, 298u),
       MakeSopp(48u),
   };
   std::vector<DecodedInstruction> f16_bridge_program;
   if (!Expect(decoder.DecodeProgram(f16_bridge_words, &f16_bridge_program,
                                     &error_message),
               "expected F16 bridge program decode success") ||
-      !Expect(f16_bridge_program.size() == 7u,
-              "expected seven decoded F16 bridge instructions") ||
-      !Expect(f16_bridge_program[0].opcode == "V_CVT_F16_F32",
+      !Expect(f16_bridge_program.size() == 10u,
+              "expected ten decoded F16 bridge instructions") ||
+      !Expect(f16_bridge_program[0].opcode == "V_NOP",
+              "expected decoded V_NOP") ||
+      !Expect(f16_bridge_program[1].opcode == "V_CVT_F16_F32",
               "expected decoded V_CVT_F16_F32") ||
-      !Expect(f16_bridge_program[1].opcode == "V_CVT_F16_I16",
+      !Expect(f16_bridge_program[2].opcode == "V_CVT_F16_I16",
               "expected decoded V_CVT_F16_I16") ||
-      !Expect(f16_bridge_program[2].opcode == "V_CVT_F16_U16",
+      !Expect(f16_bridge_program[3].opcode == "V_CVT_F16_U16",
               "expected decoded V_CVT_F16_U16") ||
-      !Expect(f16_bridge_program[3].opcode == "V_CVT_F32_F16",
-              "expected decoded V_CVT_F32_F16 from V_CVT_F16_F32 result") ||
       !Expect(f16_bridge_program[4].opcode == "V_CVT_F32_F16",
-              "expected decoded V_CVT_F32_F16 from V_CVT_F16_I16 result") ||
+              "expected decoded V_CVT_F32_F16 from V_CVT_F16_F32 result") ||
       !Expect(f16_bridge_program[5].opcode == "V_CVT_F32_F16",
-              "expected decoded V_CVT_F32_F16 from V_CVT_F16_U16 result")) {
+              "expected decoded V_CVT_F32_F16 from V_CVT_F16_I16 result") ||
+      !Expect(f16_bridge_program[6].opcode == "V_CVT_F32_F16",
+              "expected decoded V_CVT_F32_F16 from V_CVT_F16_U16 result") ||
+      !Expect(f16_bridge_program[7].opcode == "V_CVT_I16_F16",
+              "expected decoded V_CVT_I16_F16") ||
+      !Expect(f16_bridge_program[8].opcode == "V_CVT_U16_F16",
+              "expected decoded V_CVT_U16_F16")) {
     return 1;
   }
 
@@ -3173,6 +3225,8 @@ int main() {
     state->vgprs[43][2] = 0x43434343u;
     state->vgprs[44][2] = 0x44444444u;
     state->vgprs[45][2] = 0x45454545u;
+    state->vgprs[46][2] = 0x46464646u;
+    state->vgprs[47][2] = 0x47474747u;
   };
 
   WaveExecutionState decoded_f16_bridge_state;
@@ -3192,23 +3246,32 @@ int main() {
                                          &error_message),
               "expected compiled F16 bridge program success") ||
       !Expect(compiled_f16_bridge_program[0].opcode ==
+                  Gfx1201CompiledOpcode::kSNop,
+              "expected compiled V_NOP opcode") ||
+      !Expect(compiled_f16_bridge_program[1].opcode ==
                   Gfx1201CompiledOpcode::kVCvtF16F32,
               "expected compiled V_CVT_F16_F32 opcode") ||
-      !Expect(compiled_f16_bridge_program[1].opcode ==
+      !Expect(compiled_f16_bridge_program[2].opcode ==
                   Gfx1201CompiledOpcode::kVCvtF16I16,
               "expected compiled V_CVT_F16_I16 opcode") ||
-      !Expect(compiled_f16_bridge_program[2].opcode ==
+      !Expect(compiled_f16_bridge_program[3].opcode ==
                   Gfx1201CompiledOpcode::kVCvtF16U16,
               "expected compiled V_CVT_F16_U16 opcode") ||
-      !Expect(compiled_f16_bridge_program[3].opcode ==
-                  Gfx1201CompiledOpcode::kVCvtF32F16,
-              "expected compiled V_CVT_F32_F16 opcode") ||
       !Expect(compiled_f16_bridge_program[4].opcode ==
                   Gfx1201CompiledOpcode::kVCvtF32F16,
-              "expected second compiled V_CVT_F32_F16 opcode") ||
+              "expected compiled V_CVT_F32_F16 opcode") ||
       !Expect(compiled_f16_bridge_program[5].opcode ==
                   Gfx1201CompiledOpcode::kVCvtF32F16,
-              "expected third compiled V_CVT_F32_F16 opcode")) {
+              "expected second compiled V_CVT_F32_F16 opcode") ||
+      !Expect(compiled_f16_bridge_program[6].opcode ==
+                  Gfx1201CompiledOpcode::kVCvtF32F16,
+              "expected third compiled V_CVT_F32_F16 opcode") ||
+      !Expect(compiled_f16_bridge_program[7].opcode ==
+                  Gfx1201CompiledOpcode::kVCvtI16F16,
+              "expected compiled V_CVT_I16_F16 opcode") ||
+      !Expect(compiled_f16_bridge_program[8].opcode ==
+                  Gfx1201CompiledOpcode::kVCvtU16F16,
+              "expected compiled V_CVT_U16_F16 opcode")) {
     return 1;
   }
 

@@ -221,6 +221,8 @@ enum class Gfx1201CompiledOpcode : std::uint16_t {
   kVCvtF16F32,
   kVCvtF16I16,
   kVCvtF16U16,
+  kVCvtI16F16,
+  kVCvtU16F16,
   kVCvtF64F32,
   kVCvtF64I32,
   kVCvtF64U32,

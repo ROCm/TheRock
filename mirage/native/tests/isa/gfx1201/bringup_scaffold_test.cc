@@ -87,7 +87,7 @@ int main() {
               "expected phase-0 compute seed list") ||
       !Expect(decoder.Phase0ComputeSelectorRules().size() == 12u,
               "expected phase-0 selector rule list") ||
-      !Expect(decoder.Phase0ExecutableOpcodes().size() == 256u,
+      !Expect(decoder.Phase0ExecutableOpcodes().size() == 259u,
               "expected phase-0 executable opcode slice") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_ADD_U32"),
               "expected S_ADD_U32 executable decode support") ||
@@ -159,6 +159,8 @@ int main() {
               "expected V_CNDMASK_B32 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("V_XOR_B32"),
               "expected V_XOR_B32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_NOP"),
+              "expected V_NOP executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("V_CVT_F32_I32"),
               "expected V_CVT_F32_I32 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("V_CVT_NEAREST_I32_F32"),
@@ -171,6 +173,10 @@ int main() {
               "expected V_CVT_F16_U16 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("V_CVT_F32_F16"),
               "expected V_CVT_F32_F16 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_CVT_I16_F16"),
+              "expected V_CVT_I16_F16 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_CVT_U16_F16"),
+              "expected V_CVT_U16_F16 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("V_CVT_I32_I16"),
               "expected V_CVT_I32_I16 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("V_CVT_U32_U16"),
@@ -230,7 +236,7 @@ int main() {
   }
 
   Gfx1201Interpreter interpreter;
-  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 256u,
+  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 259u,
               "expected executable seed opcode list") ||
       !Expect(interpreter.Supports("S_ENDPGM"),
               "expected interpreter support for S_ENDPGM") ||
@@ -312,6 +318,8 @@ int main() {
               "expected interpreter support for V_CMP_GE_I32") ||
       !Expect(interpreter.Supports("V_CMPX_GE_I32"),
               "expected interpreter support for V_CMPX_GE_I32") ||
+      !Expect(interpreter.Supports("V_NOP"),
+              "expected interpreter support for V_NOP") ||
       !Expect(interpreter.Supports("V_BFREV_B32"),
               "expected interpreter support for V_BFREV_B32") ||
       !Expect(interpreter.Supports("V_CVT_F32_UBYTE0"),
@@ -330,6 +338,10 @@ int main() {
               "expected interpreter support for V_CVT_F16_U16") ||
       !Expect(interpreter.Supports("V_CVT_F32_F16"),
               "expected interpreter support for V_CVT_F32_F16") ||
+      !Expect(interpreter.Supports("V_CVT_I16_F16"),
+              "expected interpreter support for V_CVT_I16_F16") ||
+      !Expect(interpreter.Supports("V_CVT_U16_F16"),
+              "expected interpreter support for V_CVT_U16_F16") ||
       !Expect(interpreter.Supports("V_CVT_I32_I16"),
               "expected interpreter support for V_CVT_I32_I16") ||
       !Expect(interpreter.Supports("V_CVT_U32_U16"),
