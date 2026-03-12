@@ -32,6 +32,7 @@ PULL_CONFIG_ROCM_VER=""                # 7.11.0
 PULL_CONFIG_PKG="amdrocm-core-sdk"     # Base package name (e.g., amdrocm-core-sdk, amdrocm-dev-tools)
 PULL_CONFIG_PKG_TYPE="arch"            # Package type: "arch" (has -gfxXYZ suffix) or "base" (no suffix)
 PULL_CONFIG_PKG_EXTRA=()               # Additional packages (array, comma-separated via pullpkgextra=)
+PULL_CONFIG_PKG_FORCE=()               # Packages with dependency issues (pulled separately with --force)
 
 # ROCm package version control (optional - defaults to latest)
 PULL_ROCM_PKG_VERSION=""               # Explicit package version (e.g., 7.11.0-2 for release, 7.11.0~0-21265702726 for prerelease)
@@ -53,7 +54,16 @@ PULLER_OUTPUT_DIR_AMDGPU_BASE="../package-extractor/packages-amdgpu"
 
 # GPU architectures to include in package pulls
 # Modify this array to control which GPU architectures are downloaded
-ROCM_GFX_ARCHS=(gfx90x gfx94x gfx950 gfx110x gfx1150 gfx1151 gfx1152 gfx120x)
+#
+# Note: ROCm 7.12+ uses split CDNA architectures (gfx908, gfx90a) instead of gfx90x
+#       - gfx908: MI100 (CDNA 1)
+#       - gfx90a: MI250X, MI250, MI210 (CDNA 2)
+#       - gfx90x: Legacy combined arch (deprecated in 7.12+)
+#
+# For backwards compatibility with older ROCm versions (< 7.12) that only have gfx90x:
+#   Use: rocm-archs=gfx90x,gfx94x,gfx950,gfx110x,gfx1150,gfx1151,gfx120x
+#
+ROCM_GFX_ARCHS=(gfx908 gfx90a gfx94x gfx950 gfx110x gfx1150 gfx1151 gfx120x)
 
 # Packages list (will be generated dynamically by generate_package_lists function)
 PULLER_PACKAGES_DEB=""
@@ -99,7 +109,7 @@ Usage: $PROG [options]
     rocm-mode=native      = Pull DEB packages using native OS.
     rocm-mode=chroot      = Pull DEB packages using Ubuntu chroot.
     rocm-archs=<archs>    = Set GPU architectures to pull (comma-separated or single, e.g., gfx94x,gfx950 or gfx94x).
-                            Default: gfx90x,gfx94x,gfx950,gfx110x,gfx1150,gfx1151,gfx1152,gfx120x
+                            Default: gfx90x,gfx94x,gfx950,gfx110x,gfx1150,gfx1151,gfx120x
 
     pull=<release-type>   = Pull ROCm packages from specified repository (required).
                             Valid types: dev, nightly, prerelease, release
@@ -123,6 +133,10 @@ Usage: $PROG [options]
                                - base:<package> = Base package (no -gfxXYZ suffix)
                                Example: pullpkgextra=arch:amdrocm-opencl,base:amdrocm-llvm
                                Or without prefix: pullpkgextra=rocm-llvm,rocm-device-libs (defaults to arch)
+    pullpkgforce=<pkgs>      = Pull packages without dependency resolution (comma-separated).
+                               Use for packages with missing system dependencies (e.g., FFTW).
+                               Syntax: pullpkgforce=[type:]pkg1,[type:]pkg2
+                               Example: pullpkgforce=amdrocm-fft-test,amdrocm-blas-test
     pullrocmpkgver=<version> = DISABLED - Support for version package pull - disabled.
 
 Examples:
@@ -135,6 +149,7 @@ Examples:
     # GPU architectures
     ./setup-installer.sh rocm-archs=gfx94x,gfx950             # Pull for specific GPU architectures
     ./setup-installer.sh rocm-archs=gfx110x                   # Pull for single GPU architecture
+    ./setup-installer.sh rocm-archs=gfx90x,gfx94x,gfx950      # Use gfx90x for older ROCm (< 7.12)
 
     # Using preset configs
     ./setup-installer.sh config=config/nightly.config         # Use nightly preset
@@ -143,15 +158,16 @@ Examples:
     ./setup-installer.sh config=config/release.config         # Use release preset
 
     # Pull from specific builds (with actual values from preset configs)
-    ./setup-installer.sh pull=nightly pulltag=20260212 pullrunid=21933875966 pullrocmver=7.12.0      # Nightly build
-    ./setup-installer.sh pull=dev pulltag=20260219 pullrunid=22188089855 pullrocmver=7.12.0          # Dev build
-    ./setup-installer.sh pull=prerelease pulltag=rc2 pullrunid=21843385957 pullrocmver=7.11.0        # Prerelease RC2
-    ./setup-installer.sh pull=release pulltag=release pullrunid=99999 pullrocmver=7.11.0             # Release build
+    ./setup-installer.sh pull=nightly pulltag=20260304 pullrunid=22655273671 pullrocmver=7.12.0  # Nightly build (w/ gfx908/gfx90a)
+    ./setup-installer.sh pull=dev pulltag=20260219 pullrunid=22188089855 pullrocmver=7.12.0      # Dev build
+    ./setup-installer.sh pull=prerelease pulltag=rc2 pullrunid=21843385957 pullrocmver=7.11.0    # Prerelease RC2
+    ./setup-installer.sh pull=release pulltag=release pullrunid=99999 pullrocmver=7.11.0         # Release build
 
     # Custom packages
-    ./setup-installer.sh pullpkg=arch:amdrocm-core                                                  # Arch-specific package
-    ./setup-installer.sh pullpkg=base:amdrocm-amdsmi                                                # Base package
-    ./setup-installer.sh pullpkgextra=arch:amdrocm-opencl,base:amdrocm-llvm                         # Extra packages
+    ./setup-installer.sh pullpkg=arch:amdrocm-core                                               # Arch-specific package
+    ./setup-installer.sh pullpkg=base:amdrocm-amdsmi                                             # Base package
+    ./setup-installer.sh pullpkgextra=arch:amdrocm-opencl,base:amdrocm-llvm                      # Extra packages
+    ./setup-installer.sh pullpkgforce=amdrocm-fft-test,amdrocm-blas-test                         # Problem packages
 
 END_USAGE
 }
@@ -605,6 +621,69 @@ generate_package_lists_extra() {
     echo "Adding extra packages...Complete"
 }
 
+add_skip_broken_packages() {
+    # Build package lists for force packages (pulled separately with --force)
+    # These packages have unresolvable dependencies and must be isolated from main pull
+    echo -------------------------------------------------------------
+    echo "Adding force packages..."
+
+    # Check if there are any force packages
+    if [ ${#PULL_CONFIG_PKG_FORCE[@]} -eq 0 ]; then
+        echo "No force packages specified."
+        echo "Adding force packages...Complete"
+        return
+    fi
+
+    # Strip patch version (XX.YY.ZZ -> XX.YY) for package list creation
+    # Package names use major.minor format only (e.g., amdrocm-fft-test7.12-gfx110x)
+    local rocm_ver="${PULL_CONFIG_ROCM_VER%.*}"
+
+    # Initialize separate package lists for force
+    PULLER_PACKAGES_RPM_FORCE=""
+    PULLER_PACKAGES_DEB_FORCE=""
+
+    # Process each force package
+    echo "Processing force packages: ${PULL_CONFIG_PKG_FORCE[*]}"
+    for pkg_with_type in "${PULL_CONFIG_PKG_FORCE[@]}"; do
+        # Parse optional type prefix (base: or arch:)
+        local pkg_type="arch"  # Default type
+        local pkg_name="$pkg_with_type"
+
+        if [[ "$pkg_with_type" =~ ^(base|arch):(.+)$ ]]; then
+            pkg_type="${BASH_REMATCH[1]}"
+            pkg_name="${BASH_REMATCH[2]}"
+        fi
+
+        echo "  Processing: $pkg_name (type: $pkg_type)"
+
+        # Build architecture-specific or base package names
+        if [[ "$pkg_type" == "arch" ]]; then
+            # Add version and arch suffix for each supported architecture
+            local rpm_packages=""
+            local deb_packages=""
+
+            for arch in "${ROCM_GFX_ARCHS[@]}"; do
+                rpm_packages+="${pkg_name}${rocm_ver}-${arch} "
+                deb_packages+="${pkg_name}${rocm_ver}-${arch} "
+            done
+
+            PULLER_PACKAGES_RPM_FORCE="$PULLER_PACKAGES_RPM_FORCE $rpm_packages"
+            PULLER_PACKAGES_DEB_FORCE="$PULLER_PACKAGES_DEB_FORCE $deb_packages"
+        else
+            # Base package: no architecture suffix
+            PULLER_PACKAGES_RPM_FORCE="$PULLER_PACKAGES_RPM_FORCE ${pkg_name}${rocm_ver} "
+            PULLER_PACKAGES_DEB_FORCE="$PULLER_PACKAGES_DEB_FORCE ${pkg_name}${rocm_ver} "
+        fi
+    done
+
+    # Trim any extra spaces
+    PULLER_PACKAGES_RPM_FORCE="${PULLER_PACKAGES_RPM_FORCE# }"
+    PULLER_PACKAGES_DEB_FORCE="${PULLER_PACKAGES_DEB_FORCE# }"
+
+    echo "Force packages: ${#PULL_CONFIG_PKG_FORCE[@]} package(s)"
+    echo "Adding force packages...Complete"
+}
+
 setup_puller_config_rocm() {
     echo -------------------------------------------------------------
     echo "Setting up ROCm package puller configuration files..."
@@ -792,8 +871,16 @@ setup_rocm_deb() {
         echo "Pulling DEB packages..."
         echo "========================================="
 
-        # check if package pull was successful
-        if ! ./package-puller-deb.sh amd config="$PULLER_CONFIG_DEB" pkg="$PULLER_PACKAGES_DEB"; then
+        # Build the package-puller command
+        local puller_cmd="./package-puller-deb.sh amd config=\"$PULLER_CONFIG_DEB\" pkg=\"$PULLER_PACKAGES_DEB\""
+
+        # Add force packages if defined
+        if [[ -n "$PULLER_PACKAGES_DEB_FORCE" ]]; then
+            puller_cmd="$puller_cmd pkgforce=\"$PULLER_PACKAGES_DEB_FORCE\""
+        fi
+
+        # Execute the package pull (main + force in one call)
+        if ! eval "$puller_cmd"; then
             echo -e "\e[31mFailed pull of ROCm DEB packages.\e[0m"
             exit 1
         fi
@@ -815,8 +902,16 @@ setup_rocm_deb_chroot() {
         echo "Pulling DEB packages using Ubuntu chroot..."
         echo "========================================="
 
-        # check if package pull was successful
-        if ! ./package-puller-deb-chroot.sh amd config="$PULLER_CONFIG_DEB" pkg="$PULLER_PACKAGES_DEB"; then
+        # Build the package-puller command
+        local puller_cmd="./package-puller-deb-chroot.sh amd config=\"$PULLER_CONFIG_DEB\" pkg=\"$PULLER_PACKAGES_DEB\""
+
+        # Add force packages if defined
+        if [[ -n "$PULLER_PACKAGES_DEB_FORCE" ]]; then
+            puller_cmd="$puller_cmd pkgforce=\"$PULLER_PACKAGES_DEB_FORCE\""
+        fi
+
+        # Execute the package pull (main + force in one call)
+        if ! eval "$puller_cmd"; then
             echo -e "\e[31mFailed pull of ROCm DEB packages (chroot).\e[0m"
             exit 1
         fi
@@ -838,8 +933,16 @@ setup_rocm_rpm() {
         echo "Pulling RPM packages..."
         echo "========================================="
 
-        # check if package pull was successful
-        if ! ./package-puller-el.sh amd config="$PULLER_CONFIG_RPM" pkg="$PULLER_PACKAGES_RPM"; then
+        # Build the package-puller command
+        local puller_cmd="./package-puller-el.sh amd config=\"$PULLER_CONFIG_RPM\" pkg=\"$PULLER_PACKAGES_RPM\""
+
+        # Add force packages if defined
+        if [[ -n "$PULLER_PACKAGES_RPM_FORCE" ]]; then
+            puller_cmd="$puller_cmd pkgforce=\"$PULLER_PACKAGES_RPM_FORCE\""
+        fi
+
+        # Execute the package pull (main + force in one call)
+        if ! eval "$puller_cmd"; then
             echo -e "\e[31mFailed pull of ROCm RPM packages.\e[0m"
             exit 1
         fi
@@ -1084,11 +1187,33 @@ do
         ;;
     pullpkgextra=*)
         PKGS_INPUT="${1#*=}"
-        # Convert comma-separated string to array
-        # Each element can have optional type prefix (e.g., "base:pkg" or "arch:pkg")
-        IFS=',' read -ra PULL_CONFIG_PKG_EXTRA <<< "$PKGS_INPUT"
-        echo "Extra ROCm packages set to: ${PULL_CONFIG_PKG_EXTRA[*]}"
-        echo "Note: Use [type:]package syntax - arch:package (default) or base:package"
+        # Check for "none" keyword to clear the array
+        if [[ "$PKGS_INPUT" == "none" ]]; then
+            PULL_CONFIG_PKG_EXTRA=()
+            echo "Extra ROCm packages cleared (none specified)"
+        else
+            # Convert comma-separated string to array
+            # Each element can have optional type prefix (e.g., "base:pkg" or "arch:pkg")
+            IFS=',' read -ra PULL_CONFIG_PKG_EXTRA <<< "$PKGS_INPUT"
+            echo "Extra ROCm packages set to: ${PULL_CONFIG_PKG_EXTRA[*]}"
+            echo "Note: Use [type:]package syntax - arch:package (default) or base:package"
+        fi
+        shift
+        ;;
+    pullpkgforce=*)
+        PKGS_INPUT="${1#*=}"
+        # Check for "none" keyword to clear the array
+        if [[ "$PKGS_INPUT" == "none" ]]; then
+            PULL_CONFIG_PKG_FORCE=()
+            echo "Force ROCm packages cleared (none specified)"
+        else
+            # Convert comma-separated string to array
+            # Each element can have optional type prefix (e.g., "base:pkg" or "arch:pkg")
+            IFS=',' read -ra PULL_CONFIG_PKG_FORCE <<< "$PKGS_INPUT"
+            echo "Force ROCm packages set to: ${PULL_CONFIG_PKG_FORCE[*]}"
+            echo "Note: These packages will be downloaded separately with --force"
+            echo "Note: Use [type:]package syntax - arch:package (default) or base:package"
+        fi
         shift
         ;;
     rocm-archs=*)
@@ -1138,6 +1263,9 @@ generate_package_lists
 
 # Add extra packages to the package lists
 generate_package_lists_extra
+
+# Add force packages to separate package lists
+add_skip_broken_packages
 
 echo Running Package Puller...
 

@@ -8,7 +8,8 @@ optimized for your GPU.
 [H2]Instinct (Data Center):
   MI355X/MI350 (gfx950)         - CDNA 4 architecture
   MI325X/MI300X/MI300A (gfx94x) - CDNA 3 architecture
-  MI250X/MI250/MI210 (gfx90x)   - CDNA 2 architecture
+  MI250X/MI250/MI210 (gfx90a)   - CDNA 2 architecture
+  MI100 (gfx908)                - CDNA 1 architecture
 
 [H2]Radeon PRO (Professional Workstation):
   W7900/W7800/W7700/V710 (gfx110x) - RDNA 3 workstation GPUs

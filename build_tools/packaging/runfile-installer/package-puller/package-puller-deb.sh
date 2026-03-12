@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC2086  # Package lists intentionally use word splitting
 
 # #############################################################################
 # Copyright (C) 2024-2026 Advanced Micro Devices, Inc. All rights reserved.
@@ -36,6 +37,7 @@ PULL_CURRENT_LOG="$PULL_LOGS_DIR/pull_$(date +%s).log"
 
 # Config
 PACKAGES="rocm"
+PACKAGES_FORCE=""
 VERBOSE=0
 
 REPO_LIST=(rocm-build.list amdgpu-build.list graphics-build.list rocm.list amdgpu.list amdgpu-proprietary.list)
@@ -306,60 +308,91 @@ setup_graphics_repo() {
 }
 
 download_packages() {
+    # Download main packages with dependency resolution
+    echo -e "\e[32mDownloading packages...\e[0m"
+
+    pushd "$PACKAGE_REPO" || exit
+        $SUDO apt-get -y --download-only -o Dir::Cache="./" -o Dir::Cache::archives="./" install $PACKAGES
+        ret=$?
+        cleanup_pkg_cache
+    popd || exit
+
+    # check for any download errors
+    if [[ $ret -ne 0 ]]; then
+        print_err "Failed main packages download."
+        cleanup
+        exit 1
+    else
+        print_no_err "Main packages download successful."
+    fi
+
+    # Validate main packages
+    echo "Validating main package dependencies..."
+    # shellcheck disable=SC2086
+    if ! $SUDO apt-get install --dry-run $PACKAGES; then
+        print_err "Repo validation failed."
+
+        cleanup
+
+        exit 1
+    else
+        print_no_err "Valid package dependencies."
+    fi
+}
+
+download_force_packages() {
+    # Download force packages without dependency resolution
+    echo ""
+    echo -e "\e[32mDownloading force packages...\e[0m"
+
+    pushd "$PACKAGE_REPO" || exit
+        $SUDO apt-get -y --download-only --ignore-missing -o Dir::Cache="./" -o Dir::Cache::archives="./" install $PACKAGES_FORCE
+        ret=$?
+        cleanup_pkg_cache
+    popd || exit
+
+    # check for any download errors
+    if [[ $ret -ne 0 ]]; then
+        print_err "Failed force packages download."
+        cleanup
+        exit 1
+    else
+        print_no_err "Force packages downloaded (validation skipped)."
+    fi
+}
+
+setup_and_download_packages() {
     echo ++++++++++++++++++++++++++++++++
     echo Downloading and setting up Packaging...
 
     # create the package directory repo
     echo Creating packages directory: "$PACKAGE_REPO"
     mkdir "$PACKAGE_REPO"
-       
+
     $SUDO apt-get update  > /dev/null 2>&1
     $SUDO apt-get clean
-    
+
     echo "-=-=-= download packages -=-=-="
     prompt_user "Start Download : (y/n): "
     if [[ $option == "Y" || $option == "y" ]]; then
-    
-        # Download the package dependencies to the dep directory
-        pushd "$PACKAGE_REPO" || exit
 
-            $SUDO apt-get -y --download-only -o Dir::Cache="./" -o Dir::Cache::archives="./" install $PACKAGES
-            ret=$?
-
-            cleanup_pkg_cache
-        popd || exit
-        
-        # check for any download errors
-        if [[ $ret -ne 0 ]]; then
-            print_err "Failed packages download."
-            cleanup
-            exit 1
-        else
-            print_no_err "Packages download successful."
+        # Download main packages if specified
+        if [[ -n "$PACKAGES" ]]; then
+            download_packages
         fi
-        
+
+        # Download force packages if specified
+        if [[ -n "$PACKAGES_FORCE" ]]; then
+            download_force_packages
+        fi
+
     else
         cleanup
-        
+
         echo "Exiting."
         exit 1
     fi
-    
-    # simulate/dryrun the install
-    if ! $SUDO apt-get install --dry-run $PACKAGES; then
-        echo -e "\e[31m++++++++++++++++++++++++++++++++++++++++\e[0m"
-        echo -e "\e[31mError occurred.  Repo validation failed.\e[0m"
-        echo -e "\e[31m++++++++++++++++++++++++++++++++++++++++\e[0m"
 
-        cleanup
-        
-        exit 1
-    else
-        echo -e "\e[32m+++++++++++++++++++++++++++++++++++++++\e[0m"
-        echo -e "\e[32m No error.  Valid package dependencies.\e[0m"
-        echo -e "\e[32m+++++++++++++++++++++++++++++++++++++++\e[0m"
-    fi
-    
     echo Downloading and setting up Packaging...Complete.
 }
 
@@ -535,6 +568,11 @@ do
         DUMP_NON_AMD_PKGS=1
         shift
         ;;
+    pkgforce=*)
+        PACKAGES_FORCE="${1#*=}"
+        echo "Force packages: $PACKAGES_FORCE"
+        shift
+        ;;
     config=*)
         CONFIG_FILE="${1#*=}"
         echo "Using Configuration file: $CONFIG_FILE"
@@ -598,7 +636,7 @@ setup_rocm_repo
 setup_amdgpu_repo
 setup_graphics_repo
 
-download_packages
+setup_and_download_packages
 
 dump_packages_info
 

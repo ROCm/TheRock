@@ -85,11 +85,6 @@ Examples:
 END_USAGE
 }
 
-print_status() {
-    local msg=$1
-    echo -e "\e[32m===== $msg =====\e[0m"
-}
-
 print_error() {
     local msg=$1
     echo -e "\e[31mERROR: $msg\e[0m"
@@ -105,7 +100,7 @@ download_deb_packages() {
     local config_file=$2
     local output_dir=$3
 
-    print_status "Downloading DEB packages for $distro_tag"
+    echo -e "Downloading DEB packages for \e[32m$distro_tag\e[0m"
 
     # Read config file to get repository URL
     if [ ! -f "$config_file" ]; then
@@ -135,14 +130,14 @@ download_deb_packages() {
         COMPONENT="main"
     fi
 
-    print_status "Repository: $REPO_URL"
-    print_status "Distribution: $DISTRO_NAME"
-    print_status "Component: $COMPONENT"
+    echo -e "Repository: \e[32m$REPO_URL\e[0m"
+    echo "Distribution: $DISTRO_NAME"
+    echo "Component: $COMPONENT"
 
     # Download Packages file to get package information
     PACKAGES_URL="${REPO_URL}/dists/${DISTRO_NAME}/${COMPONENT}/binary-amd64/Packages.gz"
 
-    print_status "Downloading package index from: $PACKAGES_URL"
+    echo "Downloading package index from: $PACKAGES_URL"
 
     if ! wget -q -O "$output_dir/Packages.gz" "$PACKAGES_URL"; then
         print_warning "Repository not available for $distro_tag at $PACKAGES_URL"
@@ -155,7 +150,7 @@ download_deb_packages() {
 
     # Download each package
     for pkg in $AMDGPU_PACKAGES; do
-        print_status "Searching for package: $pkg"
+        echo "Searching for package: $pkg"
 
         # Extract package filename from Packages file using awk for better parsing
         # This handles packages with names like "amdgpu-dkms" or "amdgpu-dkms-firmware"
@@ -190,7 +185,7 @@ download_deb_packages() {
             continue
         fi
 
-        print_status "Downloading $PKG_NAME from $PKG_URL"
+        echo "Downloading $PKG_NAME from $PKG_URL"
 
         if wget -q -O "$output_dir/$PKG_NAME" "$PKG_URL"; then
             echo -e "\e[32mSuccessfully downloaded: $PKG_NAME\e[0m"
@@ -210,7 +205,7 @@ download_rpm_packages() {
     local config_file=$2
     local output_dir=$3
 
-    print_status "Downloading RPM packages for $distro_tag"
+    echo -e "Downloading RPM packages for \e[32m$distro_tag\e[0m"
 
     # Read config file to get repository URL
     if [ ! -f "$config_file" ]; then
@@ -238,7 +233,7 @@ download_rpm_packages() {
     # Remove trailing slash from REPO_BASEURL to avoid double slashes
     REPO_BASEURL="${REPO_BASEURL%/}"
 
-    print_status "Repository: $REPO_BASEURL"
+    echo -e "Repository: \e[32m$REPO_BASEURL\e[0m"
 
     # Create output directory
     mkdir -p "$output_dir"
@@ -246,7 +241,7 @@ download_rpm_packages() {
     # Download repodata to get package information
     REPOMD_URL="${REPO_BASEURL}/repodata/repomd.xml"
 
-    print_status "Downloading repomd.xml from: $REPOMD_URL"
+    echo "Downloading repomd.xml from: $REPOMD_URL"
 
     if ! wget -q -O "$output_dir/repomd.xml" "$REPOMD_URL"; then
         print_warning "Repository not available for $distro_tag at $REPOMD_URL"
@@ -271,7 +266,7 @@ download_rpm_packages() {
 
     PRIMARY_URL="${REPO_BASEURL}/${PRIMARY_HREF}"
 
-    print_status "Downloading primary metadata from: $PRIMARY_URL"
+    echo "Downloading primary metadata from: $PRIMARY_URL"
     if ! wget -q -O "$output_dir/primary.xml.gz" "$PRIMARY_URL"; then
         print_error "Failed to download primary.xml.gz from $PRIMARY_URL"
         rm -f "$output_dir/repomd.xml"
@@ -288,7 +283,7 @@ download_rpm_packages() {
 
     # Download each package
     for pkg in $AMDGPU_PACKAGES; do
-        print_status "Searching for package: $pkg"
+        echo "Searching for package: $pkg"
 
         # Extract package location from primary.xml
         # Look for package name and extract the location href (exact match)
@@ -329,7 +324,7 @@ download_rpm_packages() {
             continue
         fi
 
-        print_status "Downloading $PKG_NAME from $PKG_URL"
+        echo "Downloading $PKG_NAME from $PKG_URL"
 
         if wget -q -O "$output_dir/$PKG_NAME" "$PKG_URL"; then
             echo -e "\e[32mSuccessfully downloaded: $PKG_NAME\e[0m"
@@ -460,9 +455,9 @@ else
     echo ""
     if [ $EXIT_CODE -eq 0 ]; then
         if [ $SKIP_COUNT -gt 0 ]; then
-            print_status "AMDGPU package download complete! (Some distros skipped due to unavailable repositories)"
+            echo "AMDGPU package download complete! (Some distros skipped due to unavailable repositories)"
         else
-            print_status "AMDGPU package download complete!"
+            echo "AMDGPU package download complete!"
         fi
     else
         print_error "Some package downloads failed. Check the output above for details."

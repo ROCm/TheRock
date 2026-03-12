@@ -132,6 +132,23 @@ prompt_user() {
     fi
 }
 
+format_size() {
+    local bytes=$1
+    local kb=$((bytes / 1024))
+    local mb=$((kb / 1024))
+    local gb=$((mb / 1024))
+
+    if [[ $gb -gt 0 ]]; then
+        local gb_dec=$(( (mb * 10 / 1024) % 10 ))
+        echo "${gb}.${gb_dec} GB"
+    elif [[ $mb -gt 0 ]]; then
+        local mb_dec=$(( (kb * 10 / 1024) % 10 ))
+        echo "${mb}.${mb_dec} MB"
+    else
+        echo "${kb} KB"
+    fi
+}
+
 ###### NO-DPKG HELPER FUNCTIONS ################################################
 
 # Global variable to cache the control file content
@@ -234,8 +251,11 @@ dump_extract_stats() {
     echo ----------------------------
     echo "size:"
     echo "-----"
-    du -sh "$stat_dir" | awk '{print $1}'
-    echo "$(du -sb "$stat_dir" | awk '{print $1}')" bytes
+    local size_bytes
+    size_bytes=$(du -sb "$stat_dir" | awk '{print $1}')
+
+    format_size "$size_bytes"
+    echo "$size_bytes bytes"
     echo "------"
     echo "types:"
     echo "------"
@@ -420,7 +440,7 @@ extract_version() {
         else
             extract_control_file "$pkg"
             VERSION_INFO=$(get_control_field "Version")
-            echo VERSION_INFO = $VERSION_INFO
+            echo VERSION_INFO = "$VERSION_INFO"
             ROCM_VER=$(echo "$VERSION_INFO" | cut -d '.' -f 1-2)
         fi
 
@@ -534,7 +554,7 @@ extract_scriptlets() {
     for scriptlet in "$package_dir_scriptlet"/*; do
        if [[ -s "$scriptlet" ]]; then
            echo ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-           echo Making scriptlet $scriptlet executable.
+           echo Making scriptlet "$scriptlet" executable.
            chmod +x "$scriptlet"
            
            # Check the script content for /opt
@@ -735,6 +755,7 @@ filter_deps_version() {
         echo -e "dep : \e[96m$line\e[0m"
         
         # filter the current package for spaces around "|" in multi-deps lines and versioning within brackets
+        # shellcheck disable=SC2001
         current_package=$(echo "$line" | sed 's/ *| */|/g')
         current_package=$(echo "$current_package" | awk -F '[()]' '{print $1}' | awk '{print $1}')
         
@@ -827,7 +848,7 @@ extract_debs() {
     fi
 
     echo Creating Extraction directory.
-    mkdir $EXTRACT_DIR
+    mkdir "$EXTRACT_DIR"
 
     echo Extracting DEB...
 

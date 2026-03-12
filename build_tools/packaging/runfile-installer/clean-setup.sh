@@ -349,6 +349,53 @@ if [ $CLEAN_BUILD -eq 1 ]; then
         INSTALLER_VERSION=$(head -1 build-installer/VERSION)
         echo "$INSTALLER_VERSION" > build-installer/VERSION
     fi
+
+    # Clean hybrid compression artifacts
+    if [ -f "build-installer/tools/xz-static" ]; then
+        echo -e "\e[93mRemoving: build-installer/tools/xz-static\e[0m"
+        $SUDO rm build-installer/tools/xz-static
+    fi
+
+    if [ -f "build-installer/tools/xz-static-build-note.txt" ]; then
+        echo -e "\e[93mRemoving: build-installer/tools/xz-static-build-note.txt\e[0m"
+        $SUDO rm build-installer/tools/xz-static-build-note.txt
+    fi
+
+    # Remove compressed test archive
+    if [ -f "rocm-installer/tests.tar.xz" ]; then
+        echo -e "\e[93mRemoving: rocm-installer/tests.tar.xz\e[0m"
+        $SUDO rm rocm-installer/tests.tar.xz
+    fi
+
+    # Remove compressed components archives (both old and new names, both gzip and xz)
+    if [ -f "rocm-installer/components.tar.gz" ]; then
+        echo -e "\e[93mRemoving: rocm-installer/components.tar.gz\e[0m"
+        $SUDO rm rocm-installer/components.tar.gz
+    fi
+
+    if [ -f "rocm-installer/components.tar.xz" ]; then
+        echo -e "\e[93mRemoving: rocm-installer/components.tar.xz\e[0m"
+        $SUDO rm rocm-installer/components.tar.xz
+    fi
+
+    # Remove embedded xz-static binary
+    if [ -d "rocm-installer/bin" ]; then
+        echo -e "\e[93mRemoving: rocm-installer/bin (xz-static)\e[0m"
+        $SUDO rm -r rocm-installer/bin
+    fi
+
+    # Clean any leftover xz build directories from testing
+    for xz_build_dir in /tmp/xz-static-build-*; do
+        if [ -d "$xz_build_dir" ]; then
+            echo -e "\e[93mRemoving: $xz_build_dir\e[0m"
+            $SUDO rm -r "$xz_build_dir" 2>/dev/null || true
+        fi
+    done
+
+    if [ -f "/tmp/xz-compression.log" ]; then
+        echo -e "\e[93mRemoving: /tmp/xz-compression.log\e[0m"
+        $SUDO rm /tmp/xz-compression.log 2>/dev/null || true
+    fi
 fi
 
 popd || exit

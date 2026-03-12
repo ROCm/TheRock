@@ -107,6 +107,83 @@ os_release() {
     fi
 }
 
+run_with_progress() {
+    local message="$1"
+    shift
+
+    # Start progress indicator in background
+    (
+        local i=0
+        local spin='-\|/'
+        while true; do
+            i=$(( (i+1) %4 ))
+            printf "\r[%c] %s " "${spin:$i:1}" "$message"
+            sleep 0.1
+        done
+    ) &
+    local progress_pid=$!
+
+    # Run the command and capture exit status
+    "$@" 2>/dev/null
+    local exit_status=$?
+
+    # Cleanup progress indicator
+    kill $progress_pid 2>/dev/null
+    wait $progress_pid 2>/dev/null
+    printf "\r"
+
+    return $exit_status
+}
+
+extract_components() {
+    echo "-------------------------------------------------------------"
+    echo "Extracting components..."
+    echo "-------------------------------------------------------------"
+
+    cd "$INSTALLER_DIR" || exit 1
+
+    local extract_start
+    extract_start=$(date +%s)
+
+    # Extract components archive using appropriate method
+    if [[ "$ARCHIVE_TYPE" == "xz" ]]; then
+        echo "Extracting compressed archive: $COMPONENTS_ARCHIVE"
+        # Use embedded xz-static to avoid system dependencies
+        XZ_STATIC="$INSTALLER_DIR/bin/xz-static"
+        if [[ ! -f "$XZ_STATIC" ]]; then
+            echo -e "\e[31mERROR: xz-static binary not found at $XZ_STATIC\e[0m"
+            exit 1
+        fi
+
+        if run_with_progress "Extracting..." bash -c "\"$XZ_STATIC\" -dc \"$COMPONENTS_ARCHIVE\" | tar -xf -"; then
+            local extract_end
+            extract_end=$(date +%s)
+            local extract_duration=$((extract_end - extract_start))
+            echo -e "\e[32mExtracted components successfully ($extract_duration seconds).\e[0m"
+            # Keep the archive for now, cleanup script will remove it
+        else
+            echo -e "\e[31mERROR: Failed to extract compressed components archive\e[0m"
+            exit 1
+        fi
+    elif [[ "$ARCHIVE_TYPE" == "gzip" ]]; then
+        echo "Extracting compressed archive: $COMPONENTS_ARCHIVE"
+
+        if run_with_progress "Extracting..." tar -xzf "$COMPONENTS_ARCHIVE"; then
+            local extract_end
+            extract_end=$(date +%s)
+            local extract_duration=$((extract_end - extract_start))
+            echo -e "\e[32mExtracted components successfully ($extract_duration seconds).\e[0m"
+            # Keep the archive for now, cleanup script will remove it
+        else
+            echo -e "\e[31mERROR: Failed to extract compressed components archive\e[0m"
+            exit 1
+        fi
+    fi
+
+    cd - >/dev/null || exit
+    echo ""
+}
+
 
 ####### Main script ###############################################################
 
@@ -122,6 +199,50 @@ do
         ;;
     esac
 done
+
+# Check if hybrid compression mode is used
+INSTALLER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Check for compressed components (supports both old and new archive names)
+COMPONENTS_ARCHIVE=""
+ARCHIVE_TYPE=""
+
+# Check for xz-compressed archives first (hybrid mode)
+if [[ -f "$INSTALLER_DIR/components.tar.xz" ]]; then
+    COMPONENTS_ARCHIVE="components.tar.xz"
+    ARCHIVE_TYPE="xz"
+# Then check for gzip-compressed archives (hybrid mode)
+elif [[ -f "$INSTALLER_DIR/components.tar.gz" ]]; then
+    COMPONENTS_ARCHIVE="components.tar.gz"
+    ARCHIVE_TYPE="gzip"
+fi
+
+if [[ -n "$COMPONENTS_ARCHIVE" ]]; then
+    # Check if components are already extracted (to avoid duplicate extraction)
+    if [[ -d "$INSTALLER_DIR/component-rocm" ]] || [[ -d "$INSTALLER_DIR/component-amdgpu" ]]; then
+        echo "Components already extracted, skipping..."
+    else
+        extract_components
+    fi
+fi
+
+# Check if noexec was requested - exit before running installer/UI
+for arg in $ARGS; do
+    if [[ "$arg" == "noexec" || "$arg" == "--noexec" ]]; then
+        echo "noexec mode: extraction complete, exiting."
+        exit 0
+    fi
+done
+
+# Check if tests are compressed (hybrid compression mode)
+if [[ -f "$INSTALLER_DIR/tests.tar.xz" ]]; then
+    export TESTS_COMPRESSED="yes"
+    export TESTS_ARCHIVE="$INSTALLER_DIR/tests.tar.xz"
+    echo "Test components archive present. Tests will be extracted automatically when needed."
+    echo ""
+else
+    export TESTS_COMPRESSED="no"
+fi
 
 if [ -z "$ARGS" ]; then
     # Set TERMINFO path for static ncurses compatibility across distros
@@ -144,6 +265,7 @@ if [ -z "$ARGS" ]; then
     ./rocm_ui
 else
     echo Using ROCm Installer script with args: "$ARGS"
+    # shellcheck disable=SC2086  # ARGS is intentionally unquoted to split arguments
     ./rocm-installer.sh $ARGS
 fi
 

@@ -96,7 +96,7 @@ ITEMLIST_PARAMS mainMenuItems = {
     .pItemListDesp      = mainMenuDesc
 };
 
-void get_os_release_value(char *key, char *value) 
+void get_os_release_value(char *key, char *value, size_t max_size)
 {
     FILE *fp;
     char *line = NULL;
@@ -104,27 +104,31 @@ void get_os_release_value(char *key, char *value)
     ssize_t read;
 
     fp = fopen("/etc/os-release", "r");
-    if (fp == NULL) 
+    if (fp == NULL)
     {
         return;
     }
 
-    while ((read = getline(&line, &len, fp)) != -1) 
+    while ((read = getline(&line, &len, fp)) != -1)
     {
-        if (strstr(line, key) != NULL) 
+        if (strstr(line, key) != NULL)
         {
             if (key[0] == line[0])
             {
                 char *p = strchr(line, '=');
                 if (p[1] == '\"')
                 {
-                    strcpy(value, p + 2);
-                     value[strlen(value) - 2] = '\0';
+                    strncpy(value, p + 2, max_size - 1);
+                    value[max_size - 1] = '\0';
+                    if (strlen(value) >= 2)
+                        value[strlen(value) - 2] = '\0';
                 }
                 else
                 {
-                    strcpy(value, p + 1);
-                    value[strlen(value) - 1] = '\0';
+                    strncpy(value, p + 1, max_size - 1);
+                    value[max_size - 1] = '\0';
+                    if (strlen(value) >= 1)
+                        value[strlen(value) - 1] = '\0';
                 }
                 break;
             }
@@ -147,9 +151,9 @@ int get_os_info()
 
     strcpy(g_pConfig->kernelVersion, unameData.release);
 
-    get_os_release_value("PRETTY_NAME", g_pConfig->distroName);
-    get_os_release_value("ID", g_pConfig->distroID);
-    get_os_release_value("VERSION_ID", g_pConfig->distroVersion);
+    get_os_release_value("PRETTY_NAME", g_pConfig->distroName,    sizeof(g_pConfig->distroName));
+    get_os_release_value("ID",           g_pConfig->distroID,      sizeof(g_pConfig->distroID));
+    get_os_release_value("VERSION_ID",   g_pConfig->distroVersion, sizeof(g_pConfig->distroVersion));
 
     char *debList[] = {"ubuntu", "debian"};
     char *elList[]  = {"rhel", "ol", "rocky", "centos", "almalinux", "amzn"};
@@ -383,6 +387,21 @@ void main_menu_draw(MENU_DATA *pMenuData)
     box(pMenuData->pMenuWindow, 0, 0);
 }
 
+/* Append a space-separated token to buf, skipping empty tokens.
+ * Using strncat rather than snprintf avoids -Wformat-truncation: the
+ * theoretical maximum of all tokens combined exceeds DEFAULT_CHAR_SIZE,
+ * so a single snprintf call trips the warning under -Werror. */
+static void append_token(char *buf, size_t buf_size, const char *token)
+{
+    if (!token || !token[0]) return;
+    size_t current = strlen(buf);
+    if (current > 0 && current < buf_size - 1) {
+        buf[current++] = ' ';
+        buf[current]   = '\0';
+    }
+    strncat(buf, token, buf_size - strlen(buf) - 1);
+}
+
 void config_install(char *cmdArgs)
 {
     char installcomps[SMALL_CHAR_SIZE];
@@ -446,7 +465,13 @@ void config_install(char *cmdArgs)
         sprintf(postinstall, "%s", "gpu-access=all");
     }
 
-    sprintf(cmdArgs, "%s %s %s %s %s %s", installcomps, target, gfx, compo, postrocm, postinstall);
+    cmdArgs[0] = '\0';
+    append_token(cmdArgs, DEFAULT_CHAR_SIZE, installcomps);
+    append_token(cmdArgs, DEFAULT_CHAR_SIZE, target);
+    append_token(cmdArgs, DEFAULT_CHAR_SIZE, gfx);
+    append_token(cmdArgs, DEFAULT_CHAR_SIZE, compo);
+    append_token(cmdArgs, DEFAULT_CHAR_SIZE, postrocm);
+    append_token(cmdArgs, DEFAULT_CHAR_SIZE, postinstall);
 }
 
 void set_install_state(MENU_DATA *pMenuData)
@@ -550,7 +575,11 @@ int main()
     }
 
     // Get distro/kernel info on the system
-    get_os_info();
+    if (get_os_info() != 0)
+    {
+        fprintf(stderr, "ERROR: Failed to detect OS information. Exiting.\n");
+        return 1;
+    }
 
     // Set TERMINFO path for static ncurses compatibility across distros
     // Static ncurses built on AlmaLinux 8.10 looks for terminfo in /usr/share/terminfo
@@ -689,6 +718,17 @@ int main()
 
         char cmdArgs[DEFAULT_CHAR_SIZE];
         clear_str(cmdArgs);
+
+        // Defence-in-depth: re-validate the install path immediately before
+        // building the shell command. The install button is already gated by
+        // is_rocm_path_valid, so this should never fire in normal flow.
+        if (g_pRocmConfig->install_rocm &&
+            !validate_install_path(g_pRocmConfig->rocm_install_path))
+        {
+            fprintf(stderr, "ERROR: Install path contains invalid characters. Aborting.\n");
+            endwin();
+            return 1;
+        }
 
         config_install(cmdArgs);
 

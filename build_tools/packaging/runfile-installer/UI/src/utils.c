@@ -22,7 +22,6 @@
 #include "utils.h"
 
 #include <string.h>
-#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/stat.h>
@@ -48,7 +47,7 @@ void exit_error(char *pError)
 int calculate_text_height(char *desc, int width)
 {
     int desc_length = strlen(desc);
-    int rows_needed = ceil(desc_length/width);
+    int rows_needed = (desc_length + width - 1) / width;
     return rows_needed + 1;
 }
 
@@ -115,12 +114,10 @@ void field_trim(char *src, char *dst, int max)
     }
 }
 
-int check_url(char *url) 
+int check_url(char *url)
 {
     char command[DEFAULT_CHAR_SIZE];
-
     sprintf(command, "wget -q --spider %s", url);
-    
     return system(command);
 }
 
@@ -134,6 +131,36 @@ int check_path_exists(char *path, int max)
     ret = stat(path, &buffer);
 
     return ret;
+}
+
+/* Validate an install path against an allowlist of safe characters.
+ *
+ * Accepts: alphanumerics, '/', '-', '_', '.', and ' ' (space).
+ * Rejects: all shell metacharacters (';', '|', '&', '$', '`', etc.)
+ * that could cause command injection when the path is passed to
+ * system() or popen().
+ *
+ * Returns true if the path is safe, false if it contains any
+ * character not in the allowlist or if the path is empty. */
+bool validate_install_path(const char *path)
+{
+    if (!path || path[0] == '\0')
+    {
+        return false;
+    }
+
+    for (size_t i = 0; path[i] != '\0'; i++)
+    {
+        unsigned char c = (unsigned char)path[i];
+        if (!isalnum(c) &&
+            c != '/' && c != '-' && c != '_' &&
+            c != '.' && c != ' ')
+        {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 void remove_slash(char *str)
@@ -151,14 +178,15 @@ void remove_slash(char *str)
 
 void remove_end_spaces(char *str, int max)
 {
-    int field_len = get_field_length(str, max);
-
-    char temp[DEFAULT_CHAR_SIZE];
-
-    memset(temp, '\0', DEFAULT_CHAR_SIZE);
-    strncpy(temp, str, field_len);
-    
-    strcpy(str, temp);
+    /* Strip trailing spaces only, preserving any spaces within the content.
+     * ncurses form fields are padded with spaces to the field width, so this
+     * removes that padding without corrupting paths that contain spaces. */
+    int len = (int)strnlen(str, (size_t)max);
+    while (len > 0 && str[len - 1] == ' ')
+    {
+        len--;
+    }
+    str[len] = '\0';
 }
 
 int clear_str(char *str)
@@ -213,17 +241,21 @@ int is_rocm_pkg_installed(DISTRO_TYPE distroType)
 }
 
 // Helper function to extract the version number from a path
-int extract_version(const char *path, char *version) 
+int extract_version(const char *path, char *version)
 {
-    const char *start = strstr(path, "rocm-");
-    if (start) 
+    const char *start = strstr(path, "core-");
+    if (start)
     {
-        start += strlen("rocm-"); // Move past "rocm-"
+        start += strlen("core-"); // Move past "core-"
         const char *end = start;
 
-        while (*end && (isdigit(*end) || *end == '.')) 
+        while (*end && (isdigit(*end) || *end == '.'))
         {
             end++;
+        }
+        if (end == start)
+        {
+            return -1;
         }
         strncpy(version, start, end - start);
         version[end - start] = '\0';
@@ -234,14 +266,28 @@ int extract_version(const char *path, char *version)
 }
 
 // Helper function to compare paths by version
-int compare_versions(const void *a, const void *b) 
+int compare_versions(const void *a, const void *b)
 {
     char version_a[SMALL_CHAR_SIZE], version_b[SMALL_CHAR_SIZE];
 
-    extract_version(*(const char **)a, version_a);
-    extract_version(*(const char **)b, version_b);
+    int ret_a = extract_version(*(const char **)a, version_a);
+    int ret_b = extract_version(*(const char **)b, version_b);
 
-    return strcmp(version_a, version_b);
+    // Fall back to string comparison if either extraction failed
+    if (ret_a != 0 || ret_b != 0)
+    {
+        return strcmp(version_a, version_b);
+    }
+
+    int maj_a = 0, min_a = 0, pat_a = 0;
+    int maj_b = 0, min_b = 0, pat_b = 0;
+
+    sscanf(version_a, "%d.%d.%d", &maj_a, &min_a, &pat_a);
+    sscanf(version_b, "%d.%d.%d", &maj_b, &min_b, &pat_b);
+
+    if (maj_a != maj_b) return maj_a - maj_b;
+    if (min_a != min_b) return min_a - min_b;
+    return pat_a - pat_b;
 }
 
 int find_rocm_installed(char *target, char fpaths[MAX_PATHS][LARGE_CHAR_SIZE], int *pCount)
@@ -254,6 +300,15 @@ int find_rocm_installed(char *target, char fpaths[MAX_PATHS][LARGE_CHAR_SIZE], i
 
     if (pCount == NULL)
     {
+        return -1;
+    }
+
+    // Validate target path before it is used in the popen command string.
+    // This prevents command injection via shell metacharacters even if the
+    // caller has not sanitised the path.
+    if (!validate_install_path(target))
+    {
+        *pCount = 0;
         return -1;
     }
 
@@ -288,8 +343,7 @@ int find_rocm_installed(char *target, char fpaths[MAX_PATHS][LARGE_CHAR_SIZE], i
     fp = popen(command, "r");
     if (fp == NULL)
     {
-        perror("popen failed");
-        exit(1);
+        exit_error("popen failed");
     }
 
     // Initialize found_count

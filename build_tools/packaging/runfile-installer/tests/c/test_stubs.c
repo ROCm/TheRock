@@ -19,44 +19,28 @@
  * CTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
  * ************************************************************************ */
-#ifndef _UTILIS_H
-#define _UTILIS_H
 
-#include <stdbool.h>
-#include "install_types.h"
+/*
+ * test_stubs.c
+ *
+ * Provides definitions for the five global config pointers that are normally
+ * owned and initialised by rocm_ui.c.  In the production binary, rocm_ui.c
+ * stack-allocates an OFFLINE_INSTALL_CONFIG and points all five globals at it.
+ *
+ * For unit tests, rocm_ui.c is excluded from the build (it defines main()).
+ * These stubs satisfy the linker for any compiled module that declares the
+ * pointers as extern.
+ *
+ * The tests in this suite never call functions that dereference these
+ * globals, so NULL is a safe sentinel value.  Future tests that exercise
+ * functions which DO dereference these globals must initialise them in
+ * their cmocka setup() callbacks before calling production code.
+ */
 
+#include "config.h"
 
-#define TOGGLE_BIT(val, bitIndx) val ^= (1u << bitIndx)
-#define TOGGLE_FALSE(val, bitIndx) val &= ~(1u << bitIndx)
-
-
-void exit_error(char *pError);
-
-int calculate_text_height(char *desc, int width);
-int get_char_array_size(char *array[]);
-bool is_field_empty(char *text);
-int get_field_length(char *text, int field_width);
-void field_trim(char *src, char *dst, int max);
-
-int check_path_exists(char *path, int max);
-bool validate_install_path(const char *path);
-
-void remove_slash(char *str);
-void remove_end_spaces(char *str, int max);
-int clear_str(char *str);
-
-bool is_dir_exist(char *path);
-
-int is_rocm_pkg_installed(DISTRO_TYPE distroType);
-int find_rocm_installed(char *target, char fpaths[MAX_PATHS][LARGE_CHAR_SIZE], int *pCount);
-int get_rocm_version_str_from_path(char *rocm_loc, char *rocm_core_ver);
-int get_rocm_core_pkg(DISTRO_TYPE distroType, char *rocm_core_out, size_t out_size);
-int is_loc_opt_rocm(char *rocm_loc);
-
-int is_dkms_pkg_installed(DISTRO_TYPE distroType);
-int is_amdgpu_dkms_pkg_installed(DISTRO_TYPE distroType);
-int check_dkms_status(char *dkms_out, size_t dkms_out_size);
-
-int execute_cmd(const char *script, const char *args, WINDOW *pWin);
-
-#endif // _UTILIS_H
+OFFLINE_INSTALL_CONFIG *g_pConfig       = NULL;
+ROCM_MENU_CONFIG       *g_pRocmConfig   = NULL;
+DRIVER_MENU_CONFIG     *g_pDriverConfig = NULL;  /* needed when driver_menu.c is added */
+POST_MENU_CONFIG       *g_pPostConfig   = NULL;  /* needed when post_menu.c is added   */
+PRE_MENU_CONFIG        *g_pPreConfig    = NULL;  /* needed when pre_menu.c is added     */

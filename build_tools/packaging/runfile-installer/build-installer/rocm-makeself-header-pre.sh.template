@@ -304,54 +304,98 @@ Usage examples:
     
 # ROCm installation (no Dependency install)
 
-    * ROCm install location (default) => $PWD/rocm-x.y.z
-        bash \$installer_name.run rocm
-    
-# ROCm + Dependency installation
-    
-    * ROCm install location (default) => $PWD/rocm-x.y.z
-        bash \$installer_name.run deps=install rocm
-    
-# ROCm + Dependency installation + ROCm target location
-    
-    * ROCm install location => /opt/rocm-x.y.z
-        bash \$installer_name.run deps=install target="/" rocm
- 
-    * ROCm install location => $HOME/myrocm/rocm-x.y.z
-        bash \$installer_name.run deps=install target="$HOME/myrocm" rocm
-    
-# ROCm + Dependency installation + ROCm target location + Post ROCm configuration
-    
-    bash \$installer_name.run deps=install target="/" rocm postrocm
-    bash \$installer_name.run deps=install target="$HOME/myrocm" rocm postrocm
-    
-# ROCm + Dependency installation + ROCm target location + Post ROCm configuration + gpu access (all)
+    * ROCm install location (default) => /opt/rocm-x.y.z
+        bash \$installer_name.run gfx=gfx94x rocm
 
-    bash \$installer_name.run deps=install target="/" rocm postrocm gpu-access=all
-    bash \$installer_name.run deps=install target="$HOME/myrocm" rocm postrocm gpu-access=all
-    
+# ROCm + Dependency installation
+
+    * ROCm install location (default) => /opt/rocm-x.y.z
+        bash \$installer_name.run deps=install gfx=gfx94x rocm
+
+# ROCm + Dependency installation + ROCm target location
+
+    * ROCm install location => $HOME/myrocm/rocm-x.y.z
+        bash \$installer_name.run deps=install target="$HOME/myrocm" gfx=gfx94x rocm
+
+# ROCm + Dependency installation + gpu access (post-install runs by default)
+
+    bash \$installer_name.run deps=install gfx=gfx94x rocm gpu-access=all
+    bash \$installer_name.run deps=install target="$HOME/myrocm" gfx=gfx94x rocm gpu-access=all
+
+# ROCm + Component selection (post-install runs by default)
+
+    * Install core + dev-tools
+        bash \$installer_name.run compo=core,dev-tools gfx=gfx94x rocm
+
+    * Install core-sdk with gfx support
+        bash \$installer_name.run compo=core-sdk gfx=gfx94x rocm
+
+    * Install without post-install processing
+        bash \$installer_name.run gfx=gfx94x rocm nopostrocm
+
+    * Run post-install later (after installing with nopostrocm)
+        bash \$installer_name.run postrocm                                      # Auto-detect, uses default /opt
+        bash \$installer_name.run target=/custom/path postrocm                  # Auto-detect, custom location
+        bash \$installer_name.run gfx=gfx94x postrocm                           # Explicit gfx, uses default /opt
+        bash \$installer_name.run compo=core-sdk gfx=gfx94x postrocm            # With component selection
+        bash \$installer_name.run target=/custom/path gfx=gfx94x postrocm       # Custom location with gfx
+
+# ROCm + GFX architecture-specific installation
+
+    * Install base ROCm + gfx94x components to default location
+        bash \$installer_name.run gfx=gfx94x rocm
+
+    * Install base ROCm + gfx950 components with dependencies
+        bash \$installer_name.run deps=install gfx=gfx950 rocm
+
+    * Install base ROCm + gfx94x components to custom location
+        bash \$installer_name.run deps=install target="$HOME/myrocm" gfx=gfx94x rocm
+
+# ROCm + Component selection
+
+    * Install core components only (default)
+        bash \$installer_name.run gfx=gfx94x rocm
+        bash \$installer_name.run compo=core gfx=gfx94x rocm
+
+    * Install core + developer tools
+        bash \$installer_name.run compo=core,dev-tools gfx=gfx94x rocm
+
+    * Install core SDK with gfx94x support
+        bash \$installer_name.run compo=core-sdk gfx=gfx94x rocm
+
+    * Install core development components with dependencies
+        bash \$installer_name.run deps=install compo=core-dev gfx=gfx950 rocm
+
     ** Recommended ***
-    
+
 # amdgpu Driver installation (no Dependency install)
-    
+
     bash \$installer_name.run amdgpu
 
 # amdgpu Driver + Dependency installation
-    
+
     bash \$installer_name.run deps=install amdgpu
-    
+
 # Combined Installation
 
-    bash \$installer_name.run deps=install target="/" rocm amdgpu postrocm gpu-access=all
-    bash \$installer_name.run deps=install target=$HOME/myrocm" rocm amdgpu postrocm gpu-access=all
-    
+    bash \$installer_name.run deps=install gfx=gfx94x rocm amdgpu gpu-access=all
+    bash \$installer_name.run deps=install target="$HOME/myrocm" gfx=gfx94x rocm amdgpu gpu-access=all
+
 # Uninstall
 
-    Uninstall ROCm               = bash \$installer_name.run uninstall-rocm
-    Uninstall ROCm from location = bash \$installer_name.run target="$HOME/myrocm/rocm-x.y.z" uninstall-rocm
+    * Complete uninstall (auto-detects all installed components)
+        bash \$installer_name.run uninstall-rocm
+        bash \$installer_name.run target="$HOME/myrocm/rocm-x.y.z" uninstall-rocm
 
-    Uninstall amdgpu driver      = bash \$installer_name.run uninstall-amdgpu
-    Uninstall combined           = bash \$installer_name.run uninstall-amdgpu uninstall-rocm
+    * Selective uninstall (specify same compo=/gfx= as install)
+        bash \$installer_name.run target=/opt/rocm-7.11 compo=core gfx=gfx950 uninstall-rocm
+        bash \$installer_name.run target=/opt/rocm-7.11 compo=core-sdk gfx=gfx94x uninstall-rocm
+
+    * Uninstall amdgpu driver
+        bash \$installer_name.run uninstall-amdgpu
+
+    * Uninstall combined
+        bash \$installer_name.run uninstall-amdgpu uninstall-rocm
 
 <><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><>
 EOH
@@ -640,6 +684,8 @@ EOLSM
 	--noexec | noexec)
 	script=""
     cleanup_script=""
+    # Pass noexec to install-init.sh so it can exit after component extraction
+    scriptargs="\$scriptargs noexec"
 	shift
 	;;
     --noexec-cleanup | noexec-cleanup)
@@ -854,6 +900,59 @@ if test x"\$quiet" = xn; then
 fi
 
 cd "\$tmpdir"
+
+# ROCm Hybrid Compression: Delegate to install-init.sh for extraction
+# Check for hybrid compression markers
+if test -f "components.tar.xz" || test -f "components.tar.gz"; then
+    # Hybrid compression detected - let install-init.sh handle extraction
+    # This path handles both noexec and normal execution
+
+    # For hybrid mode, we need to run install-init.sh even if noexec is set
+    # because it handles the component extraction
+    script_to_run="\$script"
+    if test x"\$script_to_run" = x; then
+        # noexec was set, but we still need install-init.sh to extract components
+        script_to_run="./install-init.sh"
+    fi
+
+    if test x"\$export_conf" = x"y"; then
+        MS_BUNDLE="\$0"
+        MS_LABEL="\$label"
+        MS_SCRIPT="\$script_to_run"
+        MS_SCRIPTARGS="\$scriptargs"
+        MS_ARCHDIRNAME="\$archdirname"
+        MS_KEEP="\$KEEP"
+        MS_NOOVERWRITE="\$NOOVERWRITE"
+        MS_COMPRESS="\$COMPRESS"
+        MS_CLEANUP="\$cleanup"
+        export MS_BUNDLE MS_LABEL MS_SCRIPT MS_SCRIPTARGS
+        export MS_ARCHDIRNAME MS_KEEP MS_NOOVERWRITE MS_COMPRESS
+    fi
+
+    if test x"\$verbose" = x"y"; then
+        MS_Printf "OK to execute: \$script_to_run \$scriptargs \$* ? [Y/n] "
+        read yn
+        if test x"\$yn" = x -o x"\$yn" = xy -o x"\$yn" = xY; then
+            eval "\"\$script_to_run\" \$scriptargs \"\\\$@\""; res=\$?;
+        fi
+    else
+        eval "\"\$script_to_run\" \$scriptargs \"\\\$@\""; res=\$?
+    fi
+    if test "\$res" -ne 0; then
+        test x"\$verbose" = xy && echo "The program '\$script_to_run' returned an error code (\$res)" >&2
+    fi
+
+    # After script execution, cleanup and exit
+    cd "-"
+    MS_exec_cleanup
+    if test x"\$keep" = xn; then
+        cd "\$TMPROOT"
+        rm -rf "\$tmpdir"
+    fi
+    eval \$finish; exit \$res
+fi
+
+# Non-hybrid mode: continue with normal makeself script execution
 res=0
 if test x"\$script" != x; then
     if test x"\$export_conf" = x"y"; then

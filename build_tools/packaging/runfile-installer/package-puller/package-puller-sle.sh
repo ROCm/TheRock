@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC2086  # Package lists intentionally use word splitting
 
 # #############################################################################
 # Copyright (C) 2024-2026 Advanced Micro Devices, Inc. All rights reserved.
@@ -260,7 +261,7 @@ setup_graphics_repo() {
     echo Setting up graphics repo...Complete.
 }
 
-download_packages() {
+setup_and_download_packages() {
     echo ++++++++++++++++++++++++++++++++
     echo Downloading and setting up Packaging...
 
@@ -303,18 +304,15 @@ download_packages() {
     copy_rpms "/var/cache/zypp/packages" "$PACKAGE_REPO"
     
     # simulate/dryrun the install
+    # shellcheck disable=SC2086
     if ! $SUDO zypper install -y --dry-run $PACKAGES; then
-        echo -e "\e[31m++++++++++++++++++++++++++++++++++++++++\e[0m"
-        echo -e "\e[31mError occurred.  Repo validation failed.\e[0m"
-        echo -e "\e[31m++++++++++++++++++++++++++++++++++++++++\e[0m"
+        print_err "Repo validation failed."
 
         cleanup
-        
+
         exit 1
     else
-        echo -e "\e[32m+++++++++++++++++++++++++++++++++++++++\e[0m"
-        echo -e "\e[32m No error.  Valid package dependencies.\e[0m"
-        echo -e "\e[32m+++++++++++++++++++++++++++++++++++++++\e[0m"
+        print_no_err "Valid package dependencies."
     fi
     
     echo Downloading and setting up Packaging...Complete.
@@ -532,7 +530,7 @@ setup_rocm_repo
 setup_amdgpu_repo
 setup_graphics_repo
 
-download_packages
+setup_and_download_packages
 
 dump_packages_info
 

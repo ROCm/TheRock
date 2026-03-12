@@ -74,7 +74,8 @@ This script performs a complete ROCm runfile installer build:
     rocm-mode=native      = Pull DEB packages using native OS (default).
     rocm-mode=chroot      = Pull DEB packages using Ubuntu chroot (for RPM-based OS).
     rocm-archs=<archs>    = Set GPU architectures to pull (e.g., gfx94x,gfx950).
-                            Default: gfx90x,gfx94x,gfx950,gfx110x,gfx1150,gfx1151,gfx1152,gfx120x
+                            Default: gfx908,gfx90a,gfx94x,gfx950,gfx110x,gfx1150,gfx1151,gfx120x
+                            Legacy (ROCm < 7.12): gfx90x,gfx94x,gfx950,gfx110x,gfx1150,gfx1151,gfx120x
     
     pull=<release-type>   = Pull ROCm packages from specified repository (required).
                             Valid types: dev, nightly, prerelease, release
@@ -100,6 +101,10 @@ This script performs a complete ROCm runfile installer build:
                             - arch:<package> = Architecture-specific (has -gfxXYZ suffix, default)
                             - base:<package> = Base package (no -gfxXYZ suffix)
                             Example: pullpkgextra=arch:amdrocm-opencl,base:amdrocm-llvm
+    pullpkgforce=<pkgs>   = Force pull packages without dependency resolution (comma-separated).
+                            Use for packages with missing system dependencies (e.g., FFTW for test packages).
+                            Syntax: pullpkgforce=[type:]pkg1,[type:]pkg2
+                            Example: pullpkgforce=amdrocm-fft-test,amdrocm-blas-test
 
 [Build Options] - Passed to build-installer.sh:
     noextract             = Disable package extraction.
@@ -113,11 +118,13 @@ This script performs a complete ROCm runfile installer build:
     buildrunid=<id>       = Set the Runfile build run ID (default: 99999).
     buildtaginfo=<tag>    = Set a tag/name for the builds package pull information (optional, auto-constructed as pulltag-pullrunid if not provided).
     mscomp=<mode>         = Makeself compression (build speed vs file size):
-                            prodsmall  = XZ (slowest, ~30% smaller, requires xz-utils)
-                            prodmedium = Pbzip2 (slower, ~15-20% smaller, universal)
+                            hybrid     = XZ-9 everything (slowest, ~50-55%, embedded xz, universal)
+                            hybridmix  = Pigz+XZ tests (medium, ~73%, embedded xz, universal)
+                            hybriddev  = XZ-3 everything (fast, ~70-75%, embedded xz, universal)
+                            devsmall   = XZ (slowest, ~70%, requires xz-utils)
+                            devmedium  = Pbzip2 (slower, ~80-85%, universal)
+                            dev        = Pigz -6 (5-6x faster, ~105%, universal)
                             normal     = Gzip -9 (slow, baseline, universal)
-                            prodfast   = Pigz -9 (3-4x faster, same size, universal)
-                            dev        = Pigz -6 (5-6x faster, ~5% larger, universal)
 
 [Script Options]:
     help                  = Display this help information.
@@ -126,18 +133,18 @@ This script performs a complete ROCm runfile installer build:
 
 Examples:
     # Using preset configs (recommended)
-    $0 config=config/nightly.config                           # Nightly build (7.12.0, prodfast)
+    $0 config=config/nightly.config                           # Nightly build (7.12.0, hybrid)
     $0 config=config/dev.config                               # Dev build (7.12.0, gfx110x only)
-    $0 config=config/prerelease.config                        # Prerelease RC0 (7.11.0, prodmedium)
-    $0 config=config/release.config                           # Release build (7.11.0, prodmedium)
+    $0 config=config/prerelease.config                        # Prerelease RC0 (7.11.0, hybrid)
+    $0 config=config/release.config                           # Release build (7.11.0, hybrid)
 
     # Basic builds
     $0                                                        # Default build (both ROCm and AMDGPU)
     $0 rocm                                                   # ROCm only build
-    $0 amdgpu amdgpu-mode=single pullamdgpu=release,31.10    # AMDGPU for current distro only
+    $0 amdgpu amdgpu-mode=single pullamdgpu=release,31.10     # AMDGPU for current distro only
 
     # Pull from specific builds (with actual values from preset configs)
-    $0 pull=nightly pulltag=20260212 pullrunid=21933875966 pullrocmver=7.12.0        # Nightly
+    $0 pull=nightly pulltag=20260304 pullrunid=22655273671 pullrocmver=7.12.0        # Nightly (w/ gfx908/gfx90a)
     $0 pull=dev pulltag=20260219 pullrunid=22188089855 pullrocmver=7.12.0            # Dev
     $0 pull=prerelease pulltag=rc2 pullrunid=21843385957 pullrocmver=7.11.0          # Prerelease RC2
     $0 pull=release pulltag=release pullrunid=99999 pullrocmver=7.11.0               # Release
@@ -157,7 +164,7 @@ Examples:
     # Build options
     $0 nogui                                                  # Build without GUI
     $0 norunfile                                              # Pull and extract only (no .run file)
-    $0 mscomp=prodfast                                        # Use fast compression
+    $0 mscomp=hybriddev                                       # Use fast compression (xz-3)
 
     # Build phases
     $0 skip-build                                             # Only pull packages
@@ -268,7 +275,7 @@ while (($#)); do
         BUILD_ARGS+=("$1")
         shift
         ;;
-    amdgpu-mode=*|rocm-mode=*|rocm-archs=*|pull=*|pullrocmver=*|pullpkg=*|pullpkgextra=*|pullrocmpkgver=*|pullamdgpu=*)
+    amdgpu-mode=*|rocm-mode=*|rocm-archs=*|pull=*|pullrocmver=*|pullpkg=*|pullpkgextra=*|pullpkgforce=*|pullrocmpkgver=*|pullamdgpu=*)
         SETUP_ARGS+=("$1")
         shift
         ;;

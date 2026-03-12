@@ -1,7 +1,8 @@
 Instinct:
     MI355X/MI350                  (gfx950)
     MI325X/MI300X/MI300A          (gfx94x)
-    MI250X/MI250/MI210            (gfx90x)
+    MI250X/MI250/MI210            (gfx90a)
+    MI100                         (gfx908)
 Radeon Pro:
     W7900/W7800/W7700/V710        (gfx110x)
     AI PRO R9700/R9600D           (gfx120x)

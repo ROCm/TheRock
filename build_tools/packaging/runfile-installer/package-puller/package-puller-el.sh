@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC2086  # Package lists intentionally use word splitting
 
 # #############################################################################
 # Copyright (C) 2024-2026 Advanced Micro Devices, Inc. All rights reserved.
@@ -36,6 +37,7 @@ PULL_CURRENT_LOG="$PULL_LOGS_DIR/pull_$(date +%s).log"
 
 # Config
 PACKAGES="rocm"
+PACKAGES_FORCE=""
 VERBOSE=0
 
 REPO_LIST=(rocm-build.repo graphics-build.repo rocm.repo amdgpu-build.repo amdgpu.repo)
@@ -53,19 +55,22 @@ cat <<END_USAGE
 Usage: $PROG [Options] [Pull_Config] [Packages] [Output]
 
 [Options}:
-    help   = Display this help information.
-    
+    help    = Display this help information.
+
     prompt  = Run the package puller with user prompts.
     amd     = Copy amd-specific packages out.
     other   = Copy non-amd packages out.
     verbose = Run the package puller with verbose logging.
-    
-[Pull_Config]:   
+
+[Pull_Config]:
     config=<file_path> = <file_path> Path to a .config file with create settings in the format of create-default.config.
 
 [Packages]:
-    pkg=<package list> = <package-list> List of Package/Packages to pull
-    
+    pkg=<package list>      = <package-list> List of Package/Packages to pull (with dependency resolution)
+    pkgforce=<package list> = <package-list> List of packages to pull WITHOUT dependency resolution
+                                   These packages are downloaded AFTER main packages to the same directory
+                                   Use for packages with known missing dependencies (e.g., FFTW for test packages)
+
 [Output]:
     out=<file_path>    = <file_path> Path to output directory for pulled packages
 
@@ -73,7 +78,12 @@ Example (pull by config):
 -------------------------
 
     ./package_puller.sh config="config/rocm-6.2-22.04.config" out="/home/amd/package-extractor/packages" prompt amd
-       
+
+Example (pull with force packages):
+-----------------------------------------
+
+    ./package_puller.sh config="config/rocm.config" pkg="amdrocm-core-sdk" pkgforce="amdrocm-fft-test"
+
 END_USAGE
 }
 
@@ -379,60 +389,104 @@ setup_graphics_repo() {
 }
 
 download_packages() {
+    # Download main packages with dependency resolution
+    echo -e "\e[32mDownloading packages...\e[0m"
+
+    pushd "$PACKAGE_REPO" || exit
+        $SUDO dnf download --resolve --downloaddir="./" $PACKAGES
+        ret=$?
+    popd || exit
+
+    # check for any download errors
+    if [[ $ret -ne 0 ]]; then
+        print_err "Failed main packages download."
+        cleanup
+        exit 1
+    else
+        print_no_err "Main packages download successful."
+    fi
+
+    # WORKAROUND: Remove unwanted architecture packages if they were pulled as dependencies
+    # Issue: Multiple architecture packages (gfx101x, gfx110x, etc.) provide the same shared
+    # library names (e.g., librocblas.so.5) without architecture-specific differentiation.
+    # When dnf resolves dependencies, it may pull multiple architecture variants to satisfy
+    # the same library requirement. This is a packaging issue that should be fixed upstream.
+    # Check if gfx101x was explicitly requested in PACKAGES
+    if ! echo "$PACKAGES" | grep -q "gfx101x"; then
+        # gfx101x was not requested, remove any gfx101x packages that were pulled
+        gfx101x_pkgs=$(find "$PACKAGE_REPO" -name "*gfx101x*.rpm" 2>/dev/null)
+        if [[ -n "$gfx101x_pkgs" ]]; then
+            echo -e "\e[93mRemoving unwanted gfx101x packages (not in requested architectures)...\e[0m"
+            find "$PACKAGE_REPO" -name "*gfx101x*.rpm" -delete
+            echo -e "\e[93mRemoved gfx101x packages.\e[0m"
+        fi
+    fi
+
+    # Validate main packages
+    echo "Validating main package dependencies..."
+    errorCheck=$($SUDO dnf --nogpg --assumeno install $PACKAGES)
+    if  [[ $errorCheck == *"Error"* ]] || [[ $errorCheck == *"uninstallable"* ]]; then
+        print_err "Repo validation failed."
+
+        cleanup
+
+        exit 1
+    else
+        print_no_err "Valid package dependencies."
+    fi
+}
+
+download_force_packages() {
+    # Download force packages without dependency resolution
+    echo ""
+    echo -e "\e[32mDownloading force packages...\e[0m"
+
+    pushd "$PACKAGE_REPO" || exit
+        $SUDO dnf download --downloaddir="./" $PACKAGES_FORCE
+        ret=$?
+    popd || exit
+
+    # check for any download errors
+    if [[ $ret -ne 0 ]]; then
+        print_err "Failed force packages download."
+        cleanup
+        exit 1
+    else
+        print_no_err "Force packages downloaded (validation skipped)."
+    fi
+}
+
+setup_and_download_packages() {
     echo ++++++++++++++++++++++++++++++++
     echo Downloading and setting up Packaging...
 
     # create the package directory repo
     echo Creating packages directory: "$PACKAGE_REPO"
     mkdir "$PACKAGE_REPO"
-       
+
     $SUDO dnf clean all
     $SUDO rm -rf /var/cache/dnf/*
-    
+
     echo "-=-=-= download packages -=-=-="
     prompt_user "Start Download : (y/n): "
     if [[ $option == "Y" || $option == "y" ]]; then
-    
-        # Download the package dependencies to the dep directory
-        pushd "$PACKAGE_REPO" || exit
 
-            $SUDO dnf download --resolve --downloaddir="./" $PACKAGES
-            ret=$?
-
-        popd || exit
-        
-        # check for any download errors
-        if [[ $ret -ne 0 ]]; then
-            print_err "Failed packages download."
-            cleanup
-            exit 1
-        else
-            print_no_err "Packages download successful."
+        # Download main packages if specified
+        if [[ -n "$PACKAGES" ]]; then
+            download_packages
         fi
-        
+
+        # Download force packages if specified
+        if [[ -n "$PACKAGES_FORCE" ]]; then
+            download_force_packages
+        fi
+
     else
         cleanup
-        
         echo "Exiting."
         exit 1
     fi
-    
-    # simulate/dryrun the install
-    errorCheck=$($SUDO dnf --nogpg --assumeno install $PACKAGES)
-    if  [[ $errorCheck == *"Error"* ]] || [[ $errorCheck == *"uninstallable"* ]]; then
-        echo -e "\e[31m++++++++++++++++++++++++++++++++++++++++\e[0m"
-        echo -e "\e[31mError occurred.  Repo validation failed.\e[0m"
-        echo -e "\e[31m++++++++++++++++++++++++++++++++++++++++\e[0m"
-        
-        cleanup
-        
-        exit 1
-    else
-        echo -e "\e[32m+++++++++++++++++++++++++++++++++++++++\e[0m"
-        echo -e "\e[32m No error.  Valid package dependencies.\e[0m"
-        echo -e "\e[32m+++++++++++++++++++++++++++++++++++++++\e[0m"
-    fi
-    
+
     echo Downloading and setting up Packaging...Complete.
 }
 
@@ -585,6 +639,11 @@ do
         DUMP_NON_AMD_PKGS=1
         shift
         ;;
+    pkgforce=*)
+        PACKAGES_FORCE="${1#*=}"
+        echo "Force packages: $PACKAGES_FORCE"
+        shift
+        ;;
     config=*)
         CONFIG_FILE="${1#*=}"
         echo "Using Configuration file: $CONFIG_FILE"
@@ -646,7 +705,7 @@ setup_rocm_repo
 setup_amdgpu_repo
 setup_graphics_repo
 
-download_packages
+setup_and_download_packages
 
 dump_packages_info
 

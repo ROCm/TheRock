@@ -677,7 +677,19 @@ void process_rocm_menu_form(MENU_DATA *pMenuData)
     // store the ROCm install target path on exit
     strcpy(g_pRocmConfig->rocm_install_path, field_buffer(pForm->field[0], 0));
 
-    if (check_path_exists(g_pRocmConfig->rocm_install_path, MAX_FORM_FIELD_WIDTH) == 0)
+    // Strip ncurses trailing space padding before validation
+    remove_end_spaces(g_pRocmConfig->rocm_install_path, MAX_FORM_FIELD_WIDTH);
+
+    // Validate path characters. If invalid, mark the path as not valid so
+    // the install button is disabled. The path string is left unchanged so
+    // the user can see and correct their input.
+    // Dangerous downstream calls (popen in find_rocm_installed, system in
+    // main) validate independently — see validate_install_path() guards there.
+    if (!validate_install_path(g_pRocmConfig->rocm_install_path))
+    {
+        g_pRocmConfig->is_rocm_path_valid = false;
+    }
+    else if (check_path_exists(g_pRocmConfig->rocm_install_path, MAX_FORM_FIELD_WIDTH) == 0)
     {
         g_pRocmConfig->is_rocm_path_valid = true;
     }
@@ -1555,12 +1567,15 @@ void update_rocm_components_name()
     clear_rocm_components_name();
 
     // check for any selected items in the menu
+    const size_t buf_size = sizeof(g_pRocmConfig->rocm_components);
     for(i = 0; i < item_count(pMenu); ++i)
     {
         if(item_value(items[i]) == TRUE)
         {
-            strcat(g_pRocmConfig->rocm_components, item_name(items[i]));
-            strcat(g_pRocmConfig->rocm_components, ",");
+            size_t remaining = buf_size - strlen(g_pRocmConfig->rocm_components) - 1;
+            strncat(g_pRocmConfig->rocm_components, item_name(items[i]), remaining);
+            remaining = buf_size - strlen(g_pRocmConfig->rocm_components) - 1;
+            strncat(g_pRocmConfig->rocm_components, ",", remaining);
         }
     }
 

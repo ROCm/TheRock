@@ -173,6 +173,23 @@ prompt_user() {
     fi
 }
 
+format_size() {
+    local bytes=$1
+    local kb=$((bytes / 1024))
+    local mb=$((kb / 1024))
+    local gb=$((mb / 1024))
+
+    if [[ $gb -gt 0 ]]; then
+        local gb_dec=$(( (mb * 10 / 1024) % 10 ))
+        echo "${gb}.${gb_dec} GB"
+    elif [[ $mb -gt 0 ]]; then
+        local mb_dec=$(( (kb * 10 / 1024) % 10 ))
+        echo "${mb}.${mb_dec} MB"
+    else
+        echo "${kb} KB"
+    fi
+}
+
 install_tools_el() {
     if [[ "$DISTRO_NAME" = "rocky" ]]; then
         # Rocky Linux - use cpio and diffutils instead of rpmdevtools
@@ -238,8 +255,11 @@ dump_extract_stats() {
     echo ----------------------------
     echo "size:"
     echo "-----"
-    du -sh "$stat_dir" | awk '{print $1}'
-    echo "$(du -sb "$stat_dir" | awk '{print $1}')" bytes
+    local size_bytes
+    size_bytes=$(du -sb "$stat_dir" | awk '{print $1}')
+
+    format_size "$size_bytes"
+    echo "$size_bytes bytes"
     echo "------"
     echo "types:"
     echo "------"
@@ -550,7 +570,7 @@ extract_scriptlets() {
     for scriptlet in "$package_dir_scriptlet"/*; do
        if [[ -s "$scriptlet" ]]; then
            echo ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-           echo Making scriptlet $scriptlet executable.
+           echo Making scriptlet "$scriptlet" executable.
            chmod +x "$scriptlet"
            
            # Check the script content for /opt
@@ -611,6 +631,7 @@ extract_package() {
     local base_name
     base_name=$(basename "$PACKAGE")
 
+    # shellcheck disable=SC2001
     PACKAGE_DIR_NAME=$(echo "$base_name" | sed 's/-[0-9].*$//')
     PACKAGE_DIR=$EXTRACT_DIR/$PACKAGE_DIR_NAME
     
@@ -1032,7 +1053,12 @@ extract_meta_package_deps() {
 
         # Extract package name (remove version info after "=")
         local pkg_name
-        pkg_name=$(echo "$dep_line" | sed 's/[[:space:]]*=.*//' | xargs)
+        # shellcheck disable=SC2001
+        pkg_name=$(echo "$dep_line" | sed 's/[[:space:]]*=.*//')
+
+        # Trim whitespace using bash parameter expansion
+        pkg_name="${pkg_name#"${pkg_name%%[![:space:]]*}"}"
+        pkg_name="${pkg_name%"${pkg_name##*[![:space:]]}"}"
 
         # Only process amdrocm packages
         if [[ "$pkg_name" =~ ^amdrocm- ]]; then
@@ -1075,7 +1101,7 @@ extract_meta_package_deps() {
                 if [ -f "$gfx_check_dir/$current_pkg/deps/deps.txt" ]; then
                     pkg_deps_file="$gfx_check_dir/$current_pkg/deps/deps.txt"
                     found_in_gfx=1
-                    echo "  Found in gfx directory: $(basename $gfx_check_dir)"
+                    echo "  Found in gfx directory: $(basename "$gfx_check_dir")"
                     break
                 fi
             done
@@ -1093,7 +1119,12 @@ extract_meta_package_deps() {
 
             # Extract package name (remove version info after "=")
             local dep_pkg_name
-            dep_pkg_name=$(echo "$dep_line" | sed 's/[[:space:]]*=.*//' | xargs)
+            # shellcheck disable=SC2001
+            dep_pkg_name=$(echo "$dep_line" | sed 's/[[:space:]]*=.*//')
+
+            # Trim whitespace using bash parameter expansion
+            dep_pkg_name="${dep_pkg_name#"${dep_pkg_name%%[![:space:]]*}"}"
+            dep_pkg_name="${dep_pkg_name%"${dep_pkg_name##*[![:space:]]}"}"
 
             # Only process amdrocm packages
             if [[ "$dep_pkg_name" =~ ^amdrocm- ]]; then
@@ -1197,6 +1228,179 @@ extract_meta_packages() {
     echo "Meta package configuration extraction complete."
 }
 
+extract_test_packages() {
+    echo "=========================================="
+    echo "Extracting test package configurations..."
+    echo "=========================================="
+
+    # Create test directory in component-rocm
+    local test_dir="../rocm-installer/component-rocm/test"
+    if [ ! -d "$test_dir" ]; then
+        echo "Creating test directory: $test_dir"
+        mkdir -p "$test_dir"
+    fi
+
+    # Process each gfxXYZ directory to find test packages
+    for gfx_dir in ../rocm-installer/component-rocm/gfx*; do
+        if [ ! -d "$gfx_dir" ]; then
+            continue
+        fi
+
+        local gfx_tag
+        gfx_tag=$(basename "$gfx_dir")
+        echo ""
+        echo "Processing $gfx_tag directory for test packages..."
+
+        # Use associative array to track all packages (test + dependencies) and avoid duplicates
+        # Must unset before declare to ensure array is cleared for each architecture
+        unset all_test_packages
+        declare -A all_test_packages
+
+        # Find all test packages (packages with -test in the name)
+        local test_pkg_list=()
+        for pkg_dir in "$gfx_dir"/*-test*; do
+            if [ -d "$pkg_dir" ]; then
+                local pkg_name
+                pkg_name=$(basename "$pkg_dir")
+                test_pkg_list+=("$pkg_name")
+                echo "  Found test package: $pkg_name"
+            fi
+        done
+
+        # For each test package, resolve dependencies recursively
+        for test_pkg in "${test_pkg_list[@]}"; do
+            # Add the test package itself
+            all_test_packages["$test_pkg"]=1
+
+            # Queue for processing dependencies
+            local -a dep_queue=("$test_pkg")
+            unset processed_deps
+            declare -A processed_deps
+
+            while [ ${#dep_queue[@]} -gt 0 ]; do
+                local current_pkg="${dep_queue[0]}"
+                dep_queue=("${dep_queue[@]:1}")  # Remove first element
+
+                # Skip if already processed
+                [[ -n "${processed_deps[$current_pkg]}" ]] && continue
+                processed_deps["$current_pkg"]=1
+
+                # Find deps.txt for this package
+                local deps_file=""
+                if [ -f "$gfx_dir/$current_pkg/deps/deps.txt" ]; then
+                    deps_file="$gfx_dir/$current_pkg/deps/deps.txt"
+                elif [ -f "../rocm-installer/component-rocm/base/$current_pkg/deps/deps.txt" ]; then
+                    deps_file="../rocm-installer/component-rocm/base/$current_pkg/deps/deps.txt"
+                fi
+
+                if [ -n "$deps_file" ]; then
+                    # Read dependencies
+                    while IFS= read -r dep_line; do
+                        # Skip empty lines and comments
+                        [[ -z "$dep_line" || "$dep_line" =~ ^# ]] && continue
+
+                        # Extract package name (remove version info after "=")
+                        local dep_pkg
+                        # shellcheck disable=SC2001
+                        dep_pkg=$(echo "$dep_line" | sed 's/[[:space:]]*=.*//')
+
+                        # Trim whitespace using bash parameter expansion
+                        dep_pkg="${dep_pkg#"${dep_pkg%%[![:space:]]*}"}"
+                        dep_pkg="${dep_pkg%"${dep_pkg##*[![:space:]]}"}"
+
+                        # Only process amdrocm packages
+                        if [[ "$dep_pkg" =~ ^amdrocm- ]]; then
+                            all_test_packages["$dep_pkg"]=1
+                            dep_queue+=("$dep_pkg")
+                        fi
+                    done < "$deps_file"
+                fi
+            done
+        done
+
+        # If we found test packages for this architecture, create a config file
+        if [ ${#all_test_packages[@]} -gt 0 ]; then
+            local output_file="$test_dir/${gfx_tag}.config"
+            echo "  Creating test config with dependencies: $output_file"
+
+            # Write all packages (test + dependencies) to config file, sorted
+            printf "%s\n" "${!all_test_packages[@]}" | sort > "$output_file"
+            echo "  Wrote ${#all_test_packages[@]} packages (test + deps) to $output_file"
+        else
+            echo "  No test packages found for $gfx_tag"
+        fi
+    done
+
+    # Also check base directory for non-gfx test packages (if any)
+    local base_dir="../rocm-installer/component-rocm/base"
+    if [ -d "$base_dir" ]; then
+        echo ""
+        echo "Processing base directory for test packages..."
+
+        unset all_base_test_packages
+        declare -A all_base_test_packages
+        local base_test_pkg_list=()
+
+        for pkg_dir in "$base_dir"/*-test*; do
+            if [ -d "$pkg_dir" ]; then
+                local pkg_name
+                pkg_name=$(basename "$pkg_dir")
+                base_test_pkg_list+=("$pkg_name")
+                echo "  Found base test package: $pkg_name"
+            fi
+        done
+
+        # Resolve dependencies for base test packages
+        for test_pkg in "${base_test_pkg_list[@]}"; do
+            all_base_test_packages["$test_pkg"]=1
+
+            local -a dep_queue=("$test_pkg")
+            unset processed_deps
+            declare -A processed_deps
+
+            while [ ${#dep_queue[@]} -gt 0 ]; do
+                local current_pkg="${dep_queue[0]}"
+                dep_queue=("${dep_queue[@]:1}")
+
+                [[ -n "${processed_deps[$current_pkg]}" ]] && continue
+                processed_deps["$current_pkg"]=1
+
+                local deps_file="$base_dir/$current_pkg/deps/deps.txt"
+                if [ -f "$deps_file" ]; then
+                    while IFS= read -r dep_line; do
+                        [[ -z "$dep_line" || "$dep_line" =~ ^# ]] && continue
+
+                        local dep_pkg
+                        # shellcheck disable=SC2001
+                        dep_pkg=$(echo "$dep_line" | sed 's/[[:space:]]*=.*//')
+
+                        # Trim whitespace using bash parameter expansion
+                        dep_pkg="${dep_pkg#"${dep_pkg%%[![:space:]]*}"}"
+                        dep_pkg="${dep_pkg%"${dep_pkg##*[![:space:]]}"}"
+
+                        if [[ "$dep_pkg" =~ ^amdrocm- ]]; then
+                            all_base_test_packages["$dep_pkg"]=1
+                            dep_queue+=("$dep_pkg")
+                        fi
+                    done < "$deps_file"
+                fi
+            done
+        done
+
+        if [ ${#all_base_test_packages[@]} -gt 0 ]; then
+            local output_file="$test_dir/base.config"
+            echo "  Creating base test config with dependencies: $output_file"
+            printf "%s\n" "${!all_base_test_packages[@]}" | sort > "$output_file"
+            echo "  Wrote ${#all_base_test_packages[@]} packages (test + deps) to $output_file"
+        else
+            echo "  No base test packages found"
+        fi
+    fi
+
+    echo ""
+    echo "Test package configuration extraction complete."
+}
+
 combine_rocm_deps_meta() {
     echo "=========================================="
     echo "Combining ROCm dependencies metadata..."
@@ -1206,6 +1410,7 @@ combine_rocm_deps_meta() {
     # It can be extended in the future to perform additional metadata operations
 
     extract_meta_packages
+    extract_test_packages
 
     echo "ROCm dependencies metadata combination complete."
 }

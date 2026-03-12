@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC2086  # Package/command lists intentionally use word splitting
 
 # #############################################################################
 # Copyright (C) 2024-2026 Advanced Micro Devices, Inc. All rights reserved.
@@ -44,6 +45,7 @@ PULL_CURRENT_LOG="$PULL_LOGS_DIR/pull_chroot_$(date +%s).log"
 
 # Config
 PACKAGES="rocm"
+PACKAGES_FORCE=""
 
 PROMPT_USER=0
 DUMP_AMD_PKGS=0
@@ -302,10 +304,14 @@ download_packages_in_chroot() {
     echo "Downloading packages in chroot..."
     echo "========================================="
 
-    echo "Packages to download: $PACKAGES"
+    echo "Main packages: $PACKAGES"
+    if [[ -n "$PACKAGES_FORCE" ]]; then
+        echo "Force packages: $PACKAGES_FORCE"
+    fi
     echo "Creating chroot download script..."
 
-    # Create a script to run inside the chroot
+    # Create a script to run inside the chroot with support for force packages
+    # Use a marker to separate main packages from force packages
     cat > /tmp/chroot-download.sh <<'CHROOT_SCRIPT'
 #!/bin/bash
 set -e
@@ -344,18 +350,60 @@ cd /packages
 echo "Current directory: $(pwd)"
 echo ""
 
-# Download packages specified in arguments
-echo "Step 4: Downloading packages..."
-pkg_num=1
-for pkg in "$@"; do
-    echo "----------------------------------------"
-    echo "[$pkg_num] Downloading: $pkg"
-    echo "Resolving dependencies..."
-    $APT_CMD download $(apt-cache depends --recurse --no-recommends --no-suggests --no-conflicts --no-breaks --no-replaces --no-enhances $pkg | grep "^\w" | sort -u)
-    echo "[$pkg_num] Completed: $pkg"
-    pkg_num=$((pkg_num + 1))
-    echo ""
+# Parse arguments - split on FORCE marker
+MAIN_PKGS=()
+FORCE_PKGS=()
+MODE="main"
+
+for arg in "$@"; do
+    if [[ "$arg" == "FORCE" ]]; then
+        MODE="force"
+    else
+        if [[ "$MODE" == "main" ]]; then
+            MAIN_PKGS+=("$arg")
+        else
+            FORCE_PKGS+=("$arg")
+        fi
+    fi
 done
+
+download_main_packages() {
+    echo "========================================="
+    echo "Step 4a: Downloading packages..."
+    echo "========================================="
+    pkg_num=1
+    for pkg in "${MAIN_PKGS[@]}"; do
+        echo "----------------------------------------"
+        echo "[$pkg_num] Downloading: $pkg"
+        echo "Resolving dependencies..."
+        $APT_CMD download $(apt-cache depends --recurse --no-recommends --no-suggests --no-conflicts --no-breaks --no-replaces --no-enhances $pkg | grep "^\w" | sort -u) 2>&1 | grep -v "Download is performed unsandboxed as root"
+        echo "[$pkg_num] Completed: $pkg"
+        pkg_num=$((pkg_num + 1))
+        echo ""
+    done
+}
+
+download_force_packages() {
+    echo "========================================="
+    echo "Step 4b: Downloading force packages..."
+    echo "========================================="
+    pkg_num=1
+    for pkg in "${FORCE_PKGS[@]}"; do
+        echo "[$pkg_num] Downloading: $pkg"
+        $APT_CMD download $pkg --ignore-missing 2>&1 | grep -v "Download is performed unsandboxed as root" || true
+        pkg_num=$((pkg_num + 1))
+    done
+}
+
+# Download main packages with dependency resolution
+if [ ${#MAIN_PKGS[@]} -gt 0 ]; then
+    download_main_packages
+fi
+
+# Download force packages WITHOUT dependency resolution
+if [ ${#FORCE_PKGS[@]} -gt 0 ]; then
+    download_force_packages
+fi
 
 echo "========================================="
 echo "Package download complete."
@@ -373,10 +421,16 @@ CHROOT_SCRIPT
     echo "Script copied. Listing chroot /tmp directory:"
     $SUDO ls -la "$CHROOT_DIR/tmp/chroot-download.sh"
 
+    # Build command with marker to separate main and force packages
+    local chroot_cmd="$PACKAGES"
+    if [[ -n "$PACKAGES_FORCE" ]]; then
+        chroot_cmd="$chroot_cmd FORCE $PACKAGES_FORCE"
+    fi
+
     # Execute the download script inside chroot
     echo "Executing download in chroot..."
-    echo "Command: chroot $CHROOT_DIR /tmp/chroot-download.sh $PACKAGES"
-    if ! $SUDO chroot "$CHROOT_DIR" /tmp/chroot-download.sh $PACKAGES; then
+    echo "Command: chroot $CHROOT_DIR /tmp/chroot-download.sh $chroot_cmd"
+    if ! $SUDO chroot "$CHROOT_DIR" /tmp/chroot-download.sh $chroot_cmd; then
         echo -e "\e[31mERROR: Package download failed in chroot\e[0m"
         cleanup_chroot
         exit 1
@@ -523,6 +577,11 @@ do
     pkg=*)
         PACKAGES="${1#*=}"
         echo "Packages specified: $PACKAGES"
+        shift
+        ;;
+    pkgforce=*)
+        PACKAGES_FORCE="${1#*=}"
+        echo "Force packages: $PACKAGES_FORCE"
         shift
         ;;
     out=*)

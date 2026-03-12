@@ -130,6 +130,23 @@ int read_file_for_items(const char *filename, char lines[MAX_MENU_ITEMS][MAX_MEN
     // Read the file line by line
     while (fgets(buffer, sizeof(buffer), file))
     {
+        // If the buffer was filled without consuming a newline, the line is
+        // longer than the buffer. Drain the remainder so the next fgets call
+        // starts at the next real line, not at the stranded newline.
+        if (strlen(buffer) == sizeof(buffer) - 1 && buffer[sizeof(buffer) - 2] != '\n')
+        {
+            int c;
+            while ((c = getc(file)) != '\n' && c != EOF)
+                ;
+        }
+
+        // Remove the newline character, if present
+        buffer[strcspn(buffer, "\n")] = '\0';
+
+        // Skip empty lines
+        if (buffer[0] == '\0')
+            continue;
+
         // Check if we've reached the maximum number of lines
         if (line_count >= MAX_MENU_ITEMS)
         {
@@ -137,9 +154,6 @@ int read_file_for_items(const char *filename, char lines[MAX_MENU_ITEMS][MAX_MEN
             fclose(file);
             return -1;
         }
-
-        // Remove the newline character, if present
-        buffer[strcspn(buffer, "\n")] = '\0';
 
         // Copy the line into the pre-allocated array
         strncpy(lines[line_count], buffer, MAX_MENU_ITEM_NAME - 1);
@@ -207,11 +221,16 @@ void destroy_menu(MENU_DATA *pMenuData)
 
     free_menu(pMenuData->pMenu);
 
-    if (NULL != pMenuData->itemList[itemListIndex].items)
+    // Free the items array allocated for each item list. Must run after
+    // free_menu() to avoid freeing memory the menu still references.
+    for (itemListIndex = 0; itemListIndex < MAX_NUM_ITEM_LIST; itemListIndex++)
     {
-        free(pMenuData->itemList[itemListIndex].items);
-        pMenuData->itemList[itemListIndex].items = NULL;
-    }       
+        if (NULL != pMenuData->itemList[itemListIndex].items)
+        {
+            free(pMenuData->itemList[itemListIndex].items);
+            pMenuData->itemList[itemListIndex].items = NULL;
+        }
+    }
 }
 
 bool is_skippable_menu_item(ITEM* item)

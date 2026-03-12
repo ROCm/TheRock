@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC2086  # rsync options and command arguments intentionally use word splitting
 
 # #############################################################################
 # Copyright (C) 2024-2026 Advanced Micro Devices, Inc. All rights reserved.
@@ -38,8 +39,9 @@ TARGET_AMDGPU_DIR="/"
 # Component Configuration
 COMPO_ROCM_LIST="$EXTRACT_ROCM_DIR/base/components.txt"
 COMPO_AMDGPU_FILE=""  # Set dynamically after os_release() determines distro
-COMPO_INSTALL="core"  # Default component: core, core-dev, dev-tools, core-sdk, opencl (comma-separated)
+COMPO_INSTALL="core"  # Default component: core, core-dev, dev-tools, core-sdk, opencl, test (comma-separated)
 COMPO_META_DIR="$EXTRACT_ROCM_DIR/meta"
+COMPO_TEST_DIR="$EXTRACT_ROCM_DIR/test"
 USER_SPECIFIED_COMPO=0  # Track if user explicitly specified compo= argument
 USER_SPECIFIED_GFX=0    # Track if user explicitly specified gfx= argument
 COMPONENTS=
@@ -63,7 +65,7 @@ POST_ROCM_INSTALL=0
 VERBOSE=0
 
 # Installer preqreqs
-INSTALLER_DEPS=(rsync)
+INSTALLER_DEPS=(rsync findutils)
 
 # Uninstall data
 INSTALLED_AMDGPU_DKMS_BUILD_NUM=0
@@ -121,6 +123,7 @@ Usage: bash $PROG [options]
                                    dev-tools = Developer tools (amdrocm-developer-tools)
                                    core-sdk  = Core SDK components (amdrocm-core-sdk)
                                    opencl    = OpenCL runtime (amdrocm-opencl)
+                                   test      = Test packages (architecture-specific)
                                Examples:
                                    compo=core
                                    compo=core,dev-tools
@@ -540,6 +543,92 @@ prompt_user() {
     fi
 }
 
+format_size() {
+    local bytes=$1
+    local kb=$((bytes / 1024))
+    local mb=$((kb / 1024))
+    local gb=$((mb / 1024))
+
+    if [[ $gb -gt 0 ]]; then
+        local gb_dec=$(( (mb * 10 / 1024) % 10 ))
+        echo "${gb}.${gb_dec} GB"
+    elif [[ $mb -gt 0 ]]; then
+        local mb_dec=$(( (kb * 10 / 1024) % 10 ))
+        echo "${mb}.${mb_dec} MB"
+    else
+        echo "${kb} KB"
+    fi
+}
+
+run_with_progress() {
+    local message="$1"
+    shift
+
+    (
+        local i=0
+        local spin='-\|/'
+        while true; do
+            i=$(( (i+1) %4 ))
+            printf "\r[%c] %s " "${spin:$i:1}" "$message"
+            sleep 0.1
+        done
+    ) &
+    local progress_pid=$!
+
+    "$@" 2>/dev/null
+    local exit_status=$?
+
+    kill $progress_pid 2>/dev/null
+    wait $progress_pid 2>/dev/null
+    printf "\r"
+
+    return $exit_status
+}
+
+extract_tests_if_needed() {
+    # Check if tests are compressed (hybrid compression mode)
+    if [[ "$TESTS_COMPRESSED" == "yes" ]] && [[ -f "$TESTS_ARCHIVE" ]]; then
+        echo "-------------------------------------------------------------"
+        echo "Extracting tests..."
+        echo "-------------------------------------------------------------"
+
+        # Verify xz-static binary exists
+        local XZ_STATIC="./bin/xz-static"
+        if [[ ! -f "$XZ_STATIC" ]]; then
+            print_err "xz-static binary not found: $XZ_STATIC"
+            print_warning "Tests may not be available for installation."
+            return 1
+        fi
+
+        # Extract tests using embedded xz-static
+        echo "Extracting compressed archive: $(basename "$TESTS_ARCHIVE")..."
+
+        local extract_start
+        extract_start=$(date +%s)
+
+        if run_with_progress "Extracting tests..." bash -c "\"$XZ_STATIC\" -dc \"$TESTS_ARCHIVE\" | tar -xf -"; then
+            local extract_end
+            extract_end=$(date +%s)
+            
+            local extract_duration=$((extract_end - extract_start))
+            echo -e "\e[32mExtracted tests successfully ($extract_duration seconds).\e[0m"
+            
+            # Extraction successful, update environment
+            export TESTS_COMPRESSED="no"
+            unset TESTS_ARCHIVE
+            echo "Test extraction complete."
+            return 0
+        else
+            print_err "Failed to extract test packages"
+            print_warning "Tests may not be available for installation."
+            return 1
+        fi
+    fi
+
+    # Tests already extracted or not compressed
+    return 0
+}
+
 dump_rocm_state() {
     echo ============================
     echo ROCm Install Summary
@@ -612,7 +701,7 @@ get_available_gfx_archs() {
 get_available_components() {
     # Return list of available component categories
     # These are the high-level component categories, not individual packages
-    local components=("core" "core-dev" "dev-tools" "core-sdk" "opencl")
+    local components=("core" "core-dev" "dev-tools" "core-sdk" "opencl" "test")
     echo "${components[@]}"
 }
 
@@ -635,7 +724,9 @@ validate_gfx_arg() {
             local base_only_install=1
             IFS=',' read -ra COMPO_ARRAY <<< "$COMPO_INSTALL"
             for compo in "${COMPO_ARRAY[@]}"; do
-                compo=$(echo "$compo" | xargs)  # trim whitespace
+                # Trim whitespace using bash parameter expansion
+                compo="${compo#"${compo%%[![:space:]]*}"}"
+                compo="${compo%"${compo##*[![:space:]]}"}"
                 # If ANY component is NOT base-only, gfx= is required
                 if [[ "$compo" != "dev-tools" && "$compo" != "opencl" ]]; then
                     base_only_install=0
@@ -724,8 +815,9 @@ validate_compo_arg() {
 
             # Validate each component
             for compo_name in "${compo_list[@]}"; do
-                # Trim whitespace
-                compo_name=$(echo "$compo_name" | xargs)
+                # Trim whitespace using bash parameter expansion
+                compo_name="${compo_name#"${compo_name%%[![:space:]]*}"}"  # Remove leading whitespace
+                compo_name="${compo_name%"${compo_name##*[![:space:]]}"}"  # Remove trailing whitespace
 
                 # Check if component is valid
                 local valid_compo=0
@@ -765,8 +857,11 @@ dump_stats() {
     echo ----------------------------
     echo "size:"
     echo "-----"
-    du -sh "$stat_dir" | awk '{print $1}'
-    echo "$(du -sb "$stat_dir" | awk '{print $1}')" bytes
+    local size_bytes
+    size_bytes=$(du -sb "$stat_dir" | awk '{print $1}')
+
+    format_size "$size_bytes"
+    echo "$size_bytes bytes"
     echo "------"
     echo "types:"
     echo "------"
@@ -1590,8 +1685,8 @@ prereq_installer_check() {
         else
             echo "$pkg" is installed
         fi
-    done  
-    
+    done
+
     if [[ -n $not_install ]]; then
         print_err "ROCm Runfile installer requires installation of the following packages: $not_install"
         exit 1
@@ -1687,6 +1782,145 @@ set_rocm_target() {
     echo "TARGET_DIR : $TARGET_DIR"
 }
 
+process_test_component() {
+    # Test packages require gfx= to be specified
+    if [[ -z "$INSTALL_GFX" ]]; then
+        print_err "Test packages require gfx= argument to specify architecture."
+        echo "Example: $PROG compo=test gfx=gfx110x rocm"
+        exit 1
+    fi
+
+    # Extract tests if they are compressed (hybrid compression mode)
+    extract_tests_if_needed
+
+    # Read test config file for the specified architecture
+    # Test config includes test packages AND their dependencies
+    local test_config_file="$COMPO_TEST_DIR/${INSTALL_GFX}.config"
+    if [ -f "$test_config_file" ]; then
+        echo "  Reading test config (includes dependencies): $test_config_file"
+        while IFS= read -r pkg; do
+            # Skip empty lines
+            [[ -z "$pkg" ]] && continue
+
+            # Check if package is in gfx directory or base directory
+            if [ -d "$EXTRACT_ROCM_DIR/${INSTALL_GFX}/$pkg" ]; then
+                # Package is in gfx directory - add to COMPONENTS_GFX if not duplicate
+                if [[ ! " $COMPONENTS_GFX " =~ \ $pkg\  ]]; then
+                    COMPONENTS_GFX="$COMPONENTS_GFX $pkg"
+                fi
+            elif [ -d "$EXTRACT_ROCM_DIR/base/$pkg" ]; then
+                # Package is in base directory - add to COMPONENTS if not duplicate
+                if [[ ! " $COMPONENTS " =~ \ $pkg\  ]]; then
+                    COMPONENTS="$COMPONENTS $pkg"
+                fi
+            fi
+        done < "$test_config_file"
+    else
+        print_err "Test config file not found: $test_config_file"
+        echo "Available test architectures:"
+        for test_file in "$COMPO_TEST_DIR"/*.config; do
+            if [ -f "$test_file" ]; then
+                test_arch=$(basename "$test_file" .config)
+                echo "  - $test_arch"
+            fi
+        done
+        exit 1
+    fi
+}
+
+process_base_only_component() {
+    local meta_base="$1"
+
+    # Base-only components (dev-tools, opencl) have no gfx variants
+    local base_meta_file="$COMPO_META_DIR/${meta_base}-meta.config"
+    if [ -f "$base_meta_file" ]; then
+        echo "  Reading base meta config: $base_meta_file"
+        while IFS= read -r pkg; do
+            # Check if package is in base directory
+            if [ -d "$EXTRACT_ROCM_DIR/base/$pkg" ]; then
+                COMPONENTS="$COMPONENTS $pkg"
+            fi
+        done < "$base_meta_file"
+    else
+        print_err "Meta config file not found: $base_meta_file"
+        exit 1
+    fi
+}
+
+process_gfx_component() {
+    local meta_base="$1"
+
+    # GFX-specific installation
+    local gfx_meta_file="$COMPO_META_DIR/${meta_base}-${INSTALL_GFX}-meta.config"
+
+    if [ -f "$gfx_meta_file" ]; then
+        echo "  Reading GFX meta config: $gfx_meta_file"
+        while IFS= read -r pkg; do
+            # Split packages between base and gfx directories
+            if [ -d "$EXTRACT_ROCM_DIR/base/$pkg" ]; then
+                # Package is in base directory
+                if [[ ! " $COMPONENTS " =~ \ $pkg\  ]]; then
+                    COMPONENTS="$COMPONENTS $pkg"
+                fi
+            elif [ -d "$EXTRACT_ROCM_DIR/${INSTALL_GFX}/$pkg" ]; then
+                # Package is in gfx directory
+                if [[ ! " $COMPONENTS_GFX " =~ \ $pkg\  ]]; then
+                    COMPONENTS_GFX="$COMPONENTS_GFX $pkg"
+                fi
+            fi
+        done < "$gfx_meta_file"
+    else
+        print_err "GFX meta config file not found: $gfx_meta_file"
+        echo "Available GFX architectures:"
+        for gfx_dir in "$EXTRACT_ROCM_DIR"/gfx*/; do
+            if [ -d "$gfx_dir" ]; then
+                gfx_name=$(basename "$gfx_dir")
+                echo "  - $gfx_name"
+            fi
+        done
+        exit 1
+    fi
+}
+
+process_base_component() {
+    local meta_base="$1"
+
+    # Base-only installation (no gfx specified)
+    # For components that have base variants, install only base packages
+    local base_meta_file="$COMPO_META_DIR/${meta_base}-meta.config"
+
+    # Try base-specific meta file first (for base-only installs)
+    if [ -f "$base_meta_file" ]; then
+        echo "  Reading base meta config: $base_meta_file"
+        while IFS= read -r pkg; do
+            # Only add packages that are in base directory
+            if [ -d "$EXTRACT_ROCM_DIR/base/$pkg" ]; then
+                if [[ ! " $COMPONENTS " =~ \ $pkg\  ]]; then
+                    COMPONENTS="$COMPONENTS $pkg"
+                fi
+            fi
+        done < "$base_meta_file"
+    else
+        # If no base-specific meta file, try to find any gfx variant and extract base packages
+        local any_gfx_meta_file
+        any_gfx_meta_file=$(find "$COMPO_META_DIR" -name "${meta_base}-gfx*-meta.config" -print -quit)
+        if [ -f "$any_gfx_meta_file" ]; then
+            echo "  Reading base packages from: $any_gfx_meta_file"
+            while IFS= read -r pkg; do
+                # Only add packages that are in base directory
+                if [ -d "$EXTRACT_ROCM_DIR/base/$pkg" ]; then
+                    if [[ ! " $COMPONENTS " =~ \ $pkg\  ]]; then
+                        COMPONENTS="$COMPONENTS $pkg"
+                    fi
+                fi
+            done < "$any_gfx_meta_file"
+        else
+            print_err "No meta config file found for component: $meta_base"
+            exit 1
+        fi
+    fi
+}
+
 configure_rocm_install() {
     echo "Configuring ROCm installation using component list: $COMPO_INSTALL"
 
@@ -1705,128 +1939,62 @@ configure_rocm_install() {
 
     # Process each requested component
     for compo_name in "${COMPO_LIST[@]}"; do
-        # Trim whitespace
-        compo_name=$(echo "$compo_name" | xargs)
+        # Trim whitespace using bash parameter expansion
+        compo_name="${compo_name#"${compo_name%%[![:space:]]*}"}"
+        compo_name="${compo_name%"${compo_name##*[![:space:]]}"}"
 
         echo "Processing component: $compo_name"
 
+        # Determine meta base name for the component
+        local meta_base
         case "$compo_name" in
             core)
-                local meta_base="amdrocm-core${ROCM_VER}"
+                meta_base="amdrocm-core${ROCM_VER}"
                 ;;
             core-dev)
-                local meta_base="amdrocm-core-devel${ROCM_VER}"
+                meta_base="amdrocm-core-devel${ROCM_VER}"
                 ;;
             dev-tools)
-                local meta_base="amdrocm-developer-tools${ROCM_VER}"
+                meta_base="amdrocm-developer-tools${ROCM_VER}"
                 ;;
             core-sdk)
-                local meta_base="amdrocm-core-sdk${ROCM_VER}"
+                meta_base="amdrocm-core-sdk${ROCM_VER}"
                 ;;
             opencl)
-                local meta_base="amdrocm-opencl${ROCM_VER}"
+                meta_base="amdrocm-opencl${ROCM_VER}"
+                ;;
+            test)
+                # Test packages are handled separately using test config files
+                meta_base="test"
                 ;;
             *)
                 print_err "Unknown component: $compo_name"
-                echo "Valid components: core, core-dev, dev-tools, core-sdk, opencl"
+                echo "Valid components: core, core-dev, dev-tools, core-sdk, opencl, test"
                 exit 1
                 ;;
         esac
 
-        # Read base meta config (for dev-tools, opencl, and other base components)
-        if [[ "$compo_name" == "dev-tools" || "$compo_name" == "opencl" ]]; then
-            # dev-tools is base-only (no gfx variant)
-            local base_meta_file="$COMPO_META_DIR/${meta_base}-meta.config"
-            if [ -f "$base_meta_file" ]; then
-                echo "  Reading base meta config: $base_meta_file"
-                while IFS= read -r pkg; do
-                    # Check if package is in base directory
-                    if [ -d "$EXTRACT_ROCM_DIR/base/$pkg" ]; then
-                        COMPONENTS="$COMPONENTS $pkg"
-                    fi
-                done < "$base_meta_file"
-            else
-                print_err "Meta config file not found: $base_meta_file"
-                exit 1
-            fi
+        # Process component based on type
+        if [[ "$compo_name" == "test" ]]; then
+            process_test_component
+        elif [[ "$compo_name" == "dev-tools" || "$compo_name" == "opencl" ]]; then
+            process_base_only_component "$meta_base"
         else
             # For core, core-dev, core-sdk: read both base packages and gfx packages
-            # First, try to read from base meta config (if gfx not specified)
-            # or from gfx-specific meta config (if gfx specified)
-
             if [[ -n $INSTALL_GFX ]]; then
-                # GFX-specific installation
-                local gfx_meta_file="$COMPO_META_DIR/${meta_base}-${INSTALL_GFX}-meta.config"
-
-                if [ -f "$gfx_meta_file" ]; then
-                    echo "  Reading GFX meta config: $gfx_meta_file"
-                    while IFS= read -r pkg; do
-                        # Split packages between base and gfx directories
-                        if [ -d "$EXTRACT_ROCM_DIR/base/$pkg" ]; then
-                            # Package is in base directory
-                            if [[ ! " $COMPONENTS " =~ \ $pkg\  ]]; then
-                                COMPONENTS="$COMPONENTS $pkg"
-                            fi
-                        elif [ -d "$EXTRACT_ROCM_DIR/${INSTALL_GFX}/$pkg" ]; then
-                            # Package is in gfx directory
-                            if [[ ! " $COMPONENTS_GFX " =~ \ $pkg\  ]]; then
-                                COMPONENTS_GFX="$COMPONENTS_GFX $pkg"
-                            fi
-                        fi
-                    done < "$gfx_meta_file"
-                else
-                    print_err "GFX meta config file not found: $gfx_meta_file"
-                    echo "Available GFX architectures:"
-                    for gfx_dir in "$EXTRACT_ROCM_DIR"/gfx*/; do
-                        if [ -d "$gfx_dir" ]; then
-                            gfx_name=$(basename "$gfx_dir")
-                            echo "  - $gfx_name"
-                        fi
-                    done
-                    exit 1
-                fi
+                process_gfx_component "$meta_base"
             else
-                # Base-only installation (no gfx specified)
-                # For components that have base variants, install only base packages
-                local base_meta_file="$COMPO_META_DIR/${meta_base}-meta.config"
-
-                # Try base-specific meta file first (for base-only installs)
-                if [ -f "$base_meta_file" ]; then
-                    echo "  Reading base meta config: $base_meta_file"
-                    while IFS= read -r pkg; do
-                        # Only add packages that are in base directory
-                        if [ -d "$EXTRACT_ROCM_DIR/base/$pkg" ]; then
-                            if [[ ! " $COMPONENTS " =~ \ $pkg\  ]]; then
-                                COMPONENTS="$COMPONENTS $pkg"
-                            fi
-                        fi
-                    done < "$base_meta_file"
-                else
-                    # If no base-specific meta file, try to find any gfx variant and extract base packages
-                    local any_gfx_meta_file
-                    any_gfx_meta_file=$(find "$COMPO_META_DIR" -name "${meta_base}-gfx*-meta.config" -print -quit)
-                    if [ -f "$any_gfx_meta_file" ]; then
-                        echo "  Reading base packages from: $any_gfx_meta_file"
-                        while IFS= read -r pkg; do
-                            # Only add packages that are in base directory
-                            if [ -d "$EXTRACT_ROCM_DIR/base/$pkg" ]; then
-                                if [[ ! " $COMPONENTS " =~ \ $pkg\  ]]; then
-                                    COMPONENTS="$COMPONENTS $pkg"
-                                fi
-                            fi
-                        done < "$any_gfx_meta_file"
-                    else
-                        print_err "No meta config file found for component: $compo_name"
-                        exit 1
-                    fi
-                fi
+                process_base_component "$meta_base"
             fi
         fi
     done
 
-    # Trim leading/trailing spaces
-    COMPONENTS=$(echo "$COMPONENTS" | xargs)
-    COMPONENTS_GFX=$(echo "$COMPONENTS_GFX" | xargs)
+    # Trim leading/trailing spaces using bash parameter expansion
+    COMPONENTS="${COMPONENTS#"${COMPONENTS%%[![:space:]]*}"}"
+    COMPONENTS="${COMPONENTS%"${COMPONENTS##*[![:space:]]}"}"
+
+    COMPONENTS_GFX="${COMPONENTS_GFX#"${COMPONENTS_GFX%%[![:space:]]*}"}"
+    COMPONENTS_GFX="${COMPONENTS_GFX%"${COMPONENTS_GFX##*[![:space:]]}"}"
 
     echo "Base components to install: $COMPONENTS"
     if [[ -n $INSTALL_GFX ]]; then
@@ -2197,6 +2365,7 @@ get_amdgpu_version_from_scriptlet() {
 
         if [[ -z "$version" ]]; then
             # Try RPM pattern: $postinst amdgpu <version>
+            # shellcheck disable=SC2016  # Single quotes intentional - searching for literal '$postinst'
             version=$(grep '\$postinst amdgpu' "$scriptlet_file" | awk '{print $3}')
         fi
 
@@ -2861,6 +3030,8 @@ do
             echo "  core-dev     Core development components"
             echo "  dev-tools    Developer tools"
             echo "  core-sdk     Core SDK components"
+            echo "  opencl       OpenCL runtime"
+            echo "  test         Test packages (architecture-specific)"
             echo ""
             echo "Component categories can be combined with commas:"
             echo ""
@@ -2870,6 +3041,7 @@ do
             echo "  $PROG compo=core gfx=gfx110x rocm"
             echo "  $PROG compo=core,dev-tools gfx=gfx110x rocm"
             echo "  $PROG compo=core-sdk gfx=gfx110x rocm"
+            echo "  $PROG compo=core-sdk,test gfx=gfx110x rocm"
             echo "========================================="
             exit 0
         fi

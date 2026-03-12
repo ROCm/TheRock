@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC2086  # Package lists intentionally use word splitting (except where specifically quoted)
 
 # #############################################################################
 # Copyright (C) 2024-2026 Advanced Micro Devices, Inc. All rights reserved.
@@ -367,8 +368,9 @@ build_installable_pkg_cache_dnf() {
         IFS=',' read -ra package_array <<< "$MISSING_DEPS"
         
         for pkg in "${package_array[@]}"; do
+           # shellcheck disable=SC2001
            testdep=$(echo "$pkg" | sed 's/^ *//')
-           
+
            # check for a multi-option dependency
             if echo "$testdep" | grep -q '|'; then
             
@@ -600,7 +602,7 @@ is_pkg_rpm_installed() {
     # If not found via whatprovides, try direct package name
     if [[ $install_result -ne 0 ]]; then
         print_str "Trying direct package name: rpm -q $dep" 4
-        rpm -q $dep > /dev/null 2>&1
+        rpm -q "$dep" > /dev/null 2>&1
         install_result=$?
 
         if [[ $install_result -eq 0 ]]; then
@@ -636,6 +638,7 @@ check_dep_installable() {
     local result=1
 
     # remove any leading space
+    # shellcheck disable=SC2001
     testdep=$(echo "$testdep" | sed 's/^ *//')
     echo -e "($INSTALL_DEPS_COUNT/$MISSING_DEPS_COUNT): Checking for available packages:\e[36m $testdep\e[0m"
 
