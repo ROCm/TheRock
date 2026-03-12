@@ -107,7 +107,9 @@ def run(args: argparse.Namespace):
     create_index_file(args)
     upload_test_report(args.report_path, base_uri, args.log_destination)
 
-    report_url = output_root.log_file(args.amdgpu_family, args.index_file_name).https_url
+    report_url = output_root.log_file(
+        args.amdgpu_family, args.index_file_name
+    ).https_url
     gha_append_step_summary(f"[Report (S3)]({report_url})")
 
 
