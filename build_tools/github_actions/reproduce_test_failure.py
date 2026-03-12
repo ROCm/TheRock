@@ -222,6 +222,7 @@ def main() -> int:
 
     if args.print_cmd:
         print("To reproduce this failure, run:")
+        print("  git clone https://github.com/ROCm/TheRock.git && cd TheRock")
         print(f"  {build_reproduction_command(args)}")
         return 0
 
