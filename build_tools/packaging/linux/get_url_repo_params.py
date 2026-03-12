@@ -7,7 +7,7 @@ Get URL/repo parameters: base URL from a CloudFront URL, or repo_sub_folder from
 
 Subcommands (get operations):
 
-  get-base-url         Get base URL (scheme + netloc) from a CloudFront URL.
+  get-base-url         Get base URL (scheme + netloc) from a CloudFront URL. With --format env outputs repo_base_url=<value>.
   get-repo-sub-folder  Get repo_sub_folder from an S3 prefix (last segment if YYYYMMDD-<id>, else empty).
 
 Usage:
@@ -27,7 +27,6 @@ from urllib.parse import urlparse
 
 # --- base_url ---
 
-
 def get_base_url(url: str) -> str:
     """Return base URL (scheme + netloc only). No path, query, or fragment."""
     parsed = urlparse(url)
@@ -43,7 +42,7 @@ def cmd_base_url(args: argparse.Namespace) -> int:
         print(f"Error: {e}", file=sys.stderr)
         return 1
     if args.format == "env":
-        print(f"base_url={base_url}")
+        print(f"repo_base_url={base_url}")
     else:
         print(base_url)
     return 0
@@ -75,7 +74,6 @@ def cmd_repo_sub_folder(args: argparse.Namespace) -> int:
 
 
 # --- main ---
-
 
 def main() -> int:
     parser = argparse.ArgumentParser(
