@@ -1,0 +1,44 @@
+From 3e07eb170a16e54b892d04e12f91a3b6208dc67f Mon Sep 17 00:00:00 2001
+From: Stella Laurenzo <stellaraccident@gmail.com>
+Date: Wed, 11 Mar 2026 23:20:21 -0700
+Subject: [PATCH] [openmp] Remove clang resource dir from OpenMP::omp
+ INTERFACE_INCLUDE_DIRECTORIES
+
+The installed openmpTargets.cmake was setting INTERFACE_INCLUDE_DIRECTORIES
+to LIBOMP_HEADERS_INSTALL_PATH (lib/clang/<ver>/include) on the OpenMP::omp
+target. When LLVM is installed into a resource-dir layout, this adds
+-isystem .../lib/clang/<ver>/include to any consumer's compile line.
+
+This breaks #include_next chains (e.g. GCC 14's <cstdint> -> stdint.h)
+during HIP device compilation, because clang's stdint.h gets found before
+the system one.
+
+The -fopenmp flag already makes clang find omp.h through its built-in
+resource dir search, so the explicit include directory is redundant.
+
+Fixes: https://github.com/ROCm/TheRock/issues/3839
+---
+ openmp/runtime/src/CMakeLists.txt | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/openmp/runtime/src/CMakeLists.txt b/openmp/runtime/src/CMakeLists.txt
+index 06608afe2c69..6892bd399f5d 100644
+--- a/openmp/runtime/src/CMakeLists.txt
++++ b/openmp/runtime/src/CMakeLists.txt
+@@ -433,7 +433,12 @@ else()
+             DESTINATION "${OPENMP_INSTALL_LIBDIR}")
+     install(EXPORT openmpTargets FILE openmpTargets.cmake NAMESPACE OpenMP::
+             DESTINATION ${OPENMP_INSTALL_CFGDIR}/openmp)
+-    target_include_directories(omp PUBLIC $<INSTALL_INTERFACE:${LIBOMP_HEADERS_INSTALL_PATH}>)
++    # Note: not advertising LIBOMP_HEADERS_INSTALL_PATH as a public include
++    # directory. When LLVM is installed into a resource-dir layout, this
++    # resolves to lib/clang/<ver>/include, and adding it as -isystem breaks
++    # #include_next chains (e.g. GCC 14's <cstdint>) during HIP device
++    # compilation. The -fopenmp flag already makes clang find omp.h through
++    # its built-in resource dir search.
+   endif()
+ 
+   # Create cmake configuration files
+-- 
+2.48.1
+
