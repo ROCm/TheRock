@@ -1931,6 +1931,10 @@ int main() {
               "expected DS_READ_B32 support") ||
       !Expect(interpreter.Supports("DS_WRITE_B32"),
               "expected DS_WRITE_B32 support") ||
+      !Expect(interpreter.Supports("BUFFER_WBL2"),
+              "expected BUFFER_WBL2 support") ||
+      !Expect(interpreter.Supports("BUFFER_INV"),
+              "expected BUFFER_INV support") ||
       !Expect(!interpreter.Supports("BUFFER_LOAD_DWORD"),
               "expected BUFFER_LOAD_DWORD semantics to be unimplemented")) {
     return 1;
@@ -10605,6 +10609,23 @@ int main() {
               "expected s_atc_probe_buffer to preserve descriptor") ||
       !Expect(scalar_probe_state.sgprs[12] == 0x20u,
               "expected s_atc_probe_buffer to preserve soffset")) {
+    return 1;
+  }
+  }
+
+  {
+  const std::vector<DecodedInstruction> buffer_maintenance_program = {
+      DecodedInstruction::Nullary("BUFFER_WBL2"),
+      DecodedInstruction::Nullary("BUFFER_INV"),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  WaveExecutionState buffer_maintenance_state{};
+  if (!Expect(interpreter.ExecuteProgram(buffer_maintenance_program,
+                                         &buffer_maintenance_state,
+                                         &error_message),
+              error_message.c_str()) ||
+      !Expect(buffer_maintenance_state.halted,
+              "expected buffer maintenance program to halt")) {
     return 1;
   }
   }

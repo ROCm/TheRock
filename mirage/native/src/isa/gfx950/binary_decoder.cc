@@ -16,6 +16,7 @@ constexpr std::uint32_t kEncSop2 = 0x2;
 constexpr std::uint32_t kEncSopk = 0xb;
 constexpr std::uint32_t kEncDs = 0x36;
 constexpr std::uint32_t kEncFlat = 55;
+constexpr std::uint32_t kEncMubuf = 56;
 constexpr std::uint32_t kEncSmem = 0x30;
 constexpr std::uint32_t kEncVop1 = 0x3f;
 constexpr std::uint32_t kEncVopc = 0x3e;
@@ -510,6 +511,30 @@ bool Gfx950BinaryDecoder::DecodeInstruction(
   }
   if (words.size() >= 2 && IsDsInstructionWord(word)) {
     return DecodeDs(words, instruction, words_consumed, error_message);
+  }
+  if (words.size() >= 2 && ExtractBits(word, 26, 6) == kEncMubuf) {
+    const std::uint64_t instruction_word =
+        static_cast<std::uint64_t>(words[0]) |
+        (static_cast<std::uint64_t>(words[1]) << 32);
+    const std::uint32_t opcode =
+        static_cast<std::uint32_t>(ExtractBits(instruction_word, 18, 7));
+    const char* instruction_name = FindInstructionName("ENC_MUBUF", opcode);
+    if (instruction_name == nullptr) {
+      if (error_message != nullptr) {
+        *error_message = "unknown MUBUF opcode";
+      }
+      return false;
+    }
+    if (std::string_view(instruction_name) == "BUFFER_WBL2" ||
+        std::string_view(instruction_name) == "BUFFER_INV") {
+      *instruction = DecodedInstruction::Nullary(instruction_name);
+      *words_consumed = 2;
+      return true;
+    }
+    if (error_message != nullptr) {
+      *error_message = "unsupported mubuf opcode";
+    }
+    return false;
   }
   if (words.size() >= 2 && ExtractBits(word, 26, 6) == kEncSmem) {
     return DecodeSmem(words, instruction, words_consumed, error_message);

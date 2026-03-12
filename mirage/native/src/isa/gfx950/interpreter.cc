@@ -1027,6 +1027,10 @@ bool IsScalarMemoryProbeOpcode(std::string_view opcode) {
   return opcode == "S_ATC_PROBE" || opcode == "S_ATC_PROBE_BUFFER";
 }
 
+bool IsBufferMaintenanceOpcode(std::string_view opcode) {
+  return opcode == "BUFFER_WBL2" || opcode == "BUFFER_INV";
+}
+
 std::uint64_t ReadScalarMemoryTimeValue(std::string_view opcode) {
   if (opcode == "S_MEMREALTIME") {
     const auto now = std::chrono::system_clock::now().time_since_epoch();
@@ -7659,6 +7663,7 @@ bool Gfx950Interpreter::Supports(std::string_view opcode) const {
          IsScalarMemoryMaintenanceOpcode(opcode) ||
          IsScalarMemoryTimeOpcode(opcode) ||
          IsScalarMemoryProbeOpcode(opcode) ||
+         IsBufferMaintenanceOpcode(opcode) ||
          IsVectorBinaryOpcode(opcode) || IsVectorTernaryOpcode(opcode) ||
          IsVectorCompareOpcode(opcode) ||
          IsVectorMemoryOpcode(opcode) ||
@@ -7993,6 +7998,10 @@ bool Gfx950Interpreter::ExecuteInstruction(const DecodedInstruction& instruction
       error_message->clear();
     }
     return true;
+  }
+
+  if (IsBufferMaintenanceOpcode(instruction.opcode)) {
+    return ValidateOperandCount(instruction, 0, error_message);
   }
 
   if (IsBarrierOpcode(instruction.opcode)) {

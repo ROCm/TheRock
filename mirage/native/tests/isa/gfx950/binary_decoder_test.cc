@@ -254,6 +254,14 @@ std::array<std::uint32_t, 2> MakeSmem(std::uint32_t op,
           static_cast<std::uint32_t>(word >> 32)};
 }
 
+std::array<std::uint32_t, 2> MakeMubufNullary(std::uint32_t op) {
+  std::uint64_t word = 0;
+  word |= static_cast<std::uint64_t>(0x38u) << 26;
+  word |= static_cast<std::uint64_t>(op & 0x7fu) << 18;
+  return {static_cast<std::uint32_t>(word),
+          static_cast<std::uint32_t>(word >> 32)};
+}
+
 std::array<std::uint32_t, 2> MakeFlat(std::uint32_t op,
                                       std::uint32_t vdst,
                                       std::uint32_t addr,
@@ -6342,6 +6350,53 @@ int main() {
                 "expected s_atc_probe_buffer to preserve descriptor") ||
         !Expect(scalar_probe_state.sgprs[12] == 0x20u,
                 "expected s_atc_probe_buffer to preserve soffset")) {
+      return 1;
+    }
+  }
+
+  {
+    const auto buffer_wbl2_opcode =
+        FindDefaultEncodingOpcode("BUFFER_WBL2", "ENC_MUBUF");
+    const auto buffer_inv_opcode =
+        FindDefaultEncodingOpcode("BUFFER_INV", "ENC_MUBUF");
+    if (!Expect(buffer_wbl2_opcode.has_value(),
+                "expected buffer_wbl2 opcode lookup") ||
+        !Expect(buffer_inv_opcode.has_value(),
+                "expected buffer_inv opcode lookup")) {
+      return 1;
+    }
+
+    const auto buffer_wbl2_word = MakeMubufNullary(*buffer_wbl2_opcode);
+    const auto buffer_inv_word = MakeMubufNullary(*buffer_inv_opcode);
+    const std::vector<std::uint32_t> buffer_maintenance_program = {
+        buffer_wbl2_word[0], buffer_wbl2_word[1],
+        buffer_inv_word[0],  buffer_inv_word[1],
+        MakeSopp(1),
+    };
+    decoded_program.clear();
+    if (!Expect(decoder.DecodeProgram(buffer_maintenance_program,
+                                      &decoded_program, &error_message),
+                error_message.c_str()) ||
+        !Expect(decoded_program.size() == 3,
+                "expected decoded buffer maintenance program size") ||
+        !Expect(decoded_program[0].opcode == "BUFFER_WBL2",
+                "expected buffer_wbl2 decode") ||
+        !Expect(decoded_program[1].opcode == "BUFFER_INV",
+                "expected buffer_inv decode") ||
+        !Expect(decoded_program[0].operand_count == 0,
+                "expected buffer_wbl2 operand count") ||
+        !Expect(decoded_program[1].operand_count == 0,
+                "expected buffer_inv operand count")) {
+      return 1;
+    }
+
+    WaveExecutionState buffer_maintenance_state;
+    if (!Expect(interpreter.ExecuteProgram(decoded_program,
+                                           &buffer_maintenance_state,
+                                           &error_message),
+                error_message.c_str()) ||
+        !Expect(buffer_maintenance_state.halted,
+                "expected buffer maintenance program to halt")) {
       return 1;
     }
   }

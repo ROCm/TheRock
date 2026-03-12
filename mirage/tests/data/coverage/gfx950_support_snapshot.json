@@ -4361,7 +4361,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_WBL2",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4370,7 +4370,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_INV",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -16673,8 +16673,8 @@
     "decode_supported": 734,
     "decode_supported_percent_measured": 0.723866,
     "decode_supported_percent_total": 0.590982,
-    "semantic_supported": 711,
-    "semantic_supported_percent_total": 0.572464
+    "semantic_supported": 713,
+    "semantic_supported_percent_total": 0.574074
   },
   "unmeasured_encoding_families": [
     "ENC_FLAT_SCRATCH",
