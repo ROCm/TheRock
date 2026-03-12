@@ -145,6 +145,7 @@
     - source1 fragment coverage across routed BF16/BF8/FP8/IU8 variants
     - destination and accumulator descriptor coverage across routed F16/F32/BF16 variants
     - explicit wave32 fragment/descriptor checks on representative routed generic variants
+    - route-wide explicit slot/descriptor validation across current routed `V_WMMA_*` seeds except paired-load helpers
     - route-wide wave32 validation across current routed `V_WMMA_*` seeds except paired-load helpers
 - WMMA scale:
   - `V_WMMA_SCALE_F32_16X16X128_F8F6F4` -> `kWmmaScaleF32_16x16x128_F8F6F4`
@@ -163,6 +164,7 @@
     - matrix `source1` fragment coverage on scale and scale16 routes
     - accumulator descriptor coverage on scale, scale16, and routed `F4` scale variants
     - explicit wave32 fragment/descriptor checks on representative routed scale variants
+    - route-wide scalar scale-slot and scale-descriptor checks across current routed `V_WMMA_SCALE*` seeds
 - WMMA scale paired loads:
   - `V_WMMA_LD_SCALE_PAIRED_B32` -> `kWmmaLdScalePairedB32`
   - `V_WMMA_LD_SCALE16_PAIRED_B64` -> `kWmmaLdScale16PairedB64`
@@ -177,6 +179,7 @@
     - scalar scale / paired-scale fragment coverage on `B64`
     - route-wide non-matrix wave-size and descriptor-role validation across current paired scale-load helpers
     - route-wide slot-count and exact descriptor/slot composition validation across current paired scale-load helpers
+    - route-wide exact vector source/destination and scalar scale / paired-scale slot-shape checks across current paired scale-load helpers
     - route-wide exact scalar scale / paired-scale and width-specific destination descriptor-shape checks across current paired scale-load helpers
     - route-wide explicit slot/descriptor validation across current paired scale-load helpers
 - SWMMAC:
@@ -220,6 +223,7 @@
     - route-wide non-matrix wave-size and descriptor-role validation across the current tensor route set
     - route-wide slot-count and descriptor-count validation across the current tensor route set
     - route-wide exact descriptor/slot composition checks across the current tensor route set
+    - route-wide exact tensor-descriptor, tensor-coordinate, and LDS address slot-shape checks across the current tensor route set
     - route-wide exact tensor-descriptor, tensor-coordinate, and LDS address descriptor-shape checks across the current tensor route set
     - route-wide explicit slot/descriptor validation across the current tensor route set
 - VOP1 FP8/BF8 conversions:
@@ -235,6 +239,7 @@
     - route-wide non-matrix wave-size and source/destination descriptor validation across the current VOP1 route set
     - route-wide slot-count and descriptor-count validation plus packed-vs-scalar descriptor-shape checks across the current VOP1 route set
     - route-wide exact source/destination descriptor composition plus paired-operand flag checks across the current VOP1 route set
+    - route-wide exact scalar and packed source/destination slot-shape checks across the current VOP1 route set
     - route-wide exact scalar and packed source/destination descriptor-shape checks across the current VOP1 route set
     - route-wide explicit slot/descriptor validation across the current VOP1 route set
 - VOP3 SDST scale assist:
@@ -248,6 +253,7 @@
     - route-wide non-matrix wave-size and scale/destination descriptor validation across the current VOP3 SDST route set
     - route-wide slot-count and descriptor-count validation plus scalar-destination slot checks across the current VOP3 SDST route set
     - route-wide exact descriptor-role and slot-kind composition checks across the current VOP3 SDST route set
+    - route-wide exact source, scale, and vector/scalar destination slot-shape checks across the current VOP3 SDST route set
     - route-wide exact scale-source and vector/scalar destination descriptor-shape checks across the current VOP3 SDST route set
     - route-wide explicit slot/descriptor validation across the current VOP3 SDST route set
 

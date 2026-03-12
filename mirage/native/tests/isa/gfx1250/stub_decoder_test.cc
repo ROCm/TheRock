@@ -1222,10 +1222,30 @@ int main() {
                 "expected routed WMMA/SWMMAC seed to materialize matrix metadata")) {
       return 1;
     }
-    if (!Expect(AllMatrixSlotsHaveWaveSize(decoded, 32) &&
+    if (!Expect(AllSlotsExplicit(decoded) &&
+                    AllDescriptorsExplicit(decoded) &&
+                    AllMatrixSlotsHaveWaveSize(decoded, 32) &&
                     AllMatrixDescriptorsHaveWaveSize(decoded, 32),
                 "expected routed WMMA/SWMMAC matrix fragments to stay wave32")) {
       return 1;
+    }
+    if (instruction_name.rfind("V_WMMA_SCALE", 0) == 0 &&
+        instruction_name.rfind("V_WMMA_LD_SCALE", 0) != 0) {
+      if (!Expect(ContainsSlot(decoded, StubOperandSlotKind::kScaleSource,
+                               StubOperandValueClass::kScalarRegister, 4, 1,
+                               false) &&
+                      ContainsSlotFragment(decoded,
+                                           StubOperandSlotKind::kScaleSource,
+                                           StubFragmentKind::kScalar, 1, 1, 1,
+                                           32, 1) &&
+                      ContainsDescriptor(decoded, StubOperandRole::kScale,
+                                         StubOperandSlotKind::kScaleSource,
+                                         StubOperandValueClass::kScalarRegister,
+                                         StubOperandAccess::kRead, 1,
+                                         StubFragmentKind::kScalar, 32),
+                  "expected routed WMMA scale seed to keep scalar scale metadata")) {
+        return 1;
+      }
     }
   }
 
@@ -2446,6 +2466,27 @@ int main() {
       if (!Expect(HasDescriptorRole(decoded, StubOperandRole::kTensorDescriptor) &&
                       HasDescriptorRole(decoded, StubOperandRole::kTensorCoordinate) &&
                       HasDescriptorRole(decoded, StubOperandRole::kLdsDestination) &&
+                      ContainsSlot(decoded,
+                                   StubOperandSlotKind::kTensorDescriptorSource,
+                                   StubOperandValueClass::kTensorDescriptor, 0,
+                                   1, false) &&
+                      ContainsSlot(decoded,
+                                   StubOperandSlotKind::kTensorCoordinateSource,
+                                   StubOperandValueClass::kTensorCoordinate, 1,
+                                   1, false) &&
+                      ContainsSlot(decoded, StubOperandSlotKind::kLdsDestination,
+                                   StubOperandValueClass::kLdsAddress, 2, 1,
+                                   true) &&
+                      ContainsSlotFragment(
+                          decoded, StubOperandSlotKind::kTensorDescriptorSource,
+                          StubFragmentKind::kTensorDescriptor, 1, 1, 1, 0, 1) &&
+                      ContainsSlotFragment(
+                          decoded, StubOperandSlotKind::kTensorCoordinateSource,
+                          StubFragmentKind::kTensorCoordinate, 1, 1, 1, 0, 1) &&
+                      ContainsSlotFragment(decoded,
+                                           StubOperandSlotKind::kLdsDestination,
+                                           StubFragmentKind::kAddress, 1, 1, 1,
+                                           32, 1) &&
                       ContainsDescriptor(decoded,
                                          StubOperandRole::kTensorDescriptor,
                                          StubOperandSlotKind::kTensorDescriptorSource,
@@ -2472,6 +2513,27 @@ int main() {
       if (!Expect(HasDescriptorRole(decoded, StubOperandRole::kTensorDescriptor) &&
                       HasDescriptorRole(decoded, StubOperandRole::kTensorCoordinate) &&
                       HasDescriptorRole(decoded, StubOperandRole::kLdsSource) &&
+                      ContainsSlot(decoded,
+                                   StubOperandSlotKind::kTensorDescriptorSource,
+                                   StubOperandValueClass::kTensorDescriptor, 0,
+                                   1, false) &&
+                      ContainsSlot(decoded,
+                                   StubOperandSlotKind::kTensorCoordinateSource,
+                                   StubOperandValueClass::kTensorCoordinate, 1,
+                                   1, false) &&
+                      ContainsSlot(decoded, StubOperandSlotKind::kLdsSource,
+                                   StubOperandValueClass::kLdsAddress, 2, 1,
+                                   false) &&
+                      ContainsSlotFragment(
+                          decoded, StubOperandSlotKind::kTensorDescriptorSource,
+                          StubFragmentKind::kTensorDescriptor, 1, 1, 1, 0, 1) &&
+                      ContainsSlotFragment(
+                          decoded, StubOperandSlotKind::kTensorCoordinateSource,
+                          StubFragmentKind::kTensorCoordinate, 1, 1, 1, 0, 1) &&
+                      ContainsSlotFragment(decoded,
+                                           StubOperandSlotKind::kLdsSource,
+                                           StubFragmentKind::kAddress, 1, 1, 1,
+                                           32, 1) &&
                       ContainsDescriptor(decoded,
                                          StubOperandRole::kTensorDescriptor,
                                          StubOperandSlotKind::kTensorDescriptorSource,
@@ -2527,6 +2589,18 @@ int main() {
     }
     if (instruction_name.find("PK_") != std::string_view::npos) {
       if (!Expect(
+              ContainsSlot(decoded, StubOperandSlotKind::kSource0,
+                           StubOperandValueClass::kPackedVector, 1, 2, false) &&
+                  ContainsSlot(decoded, StubOperandSlotKind::kDestination,
+                               StubOperandValueClass::kPackedVector, 0, 2,
+                               true) &&
+                  ContainsSlotFragment(decoded, StubOperandSlotKind::kSource0,
+                                       StubFragmentKind::kPacked, 1, 1, 1, 8,
+                                       2) &&
+                  ContainsSlotFragment(decoded,
+                                       StubOperandSlotKind::kDestination,
+                                       StubFragmentKind::kPacked, 1, 1, 1, 16,
+                                       2) &&
               ContainsDescriptor(decoded, StubOperandRole::kSource0,
                                  StubOperandSlotKind::kSource0,
                                  StubOperandValueClass::kPackedVector,
@@ -2546,6 +2620,19 @@ int main() {
       }
     } else {
       if (!Expect(
+              ContainsSlot(decoded, StubOperandSlotKind::kSource0,
+                           StubOperandValueClass::kVectorRegister, 1, 1,
+                           false) &&
+                  ContainsSlot(decoded, StubOperandSlotKind::kDestination,
+                               StubOperandValueClass::kVectorRegister, 0, 1,
+                               true) &&
+                  ContainsSlotFragment(decoded, StubOperandSlotKind::kSource0,
+                                       StubFragmentKind::kScalar, 1, 1, 1, 8,
+                                       1) &&
+                  ContainsSlotFragment(
+                      decoded, StubOperandSlotKind::kDestination,
+                      StubFragmentKind::kScalar, 1, 1, 1,
+                      instruction_name == "V_CVT_F32_FP8" ? 32 : 16, 1) &&
               ContainsDescriptor(decoded, StubOperandRole::kSource0,
                                  StubOperandSlotKind::kSource0,
                                  StubOperandValueClass::kVectorRegister,
@@ -2590,6 +2677,41 @@ int main() {
     }
     if (!Expect(HasDescriptorRole(decoded, StubOperandRole::kScale) &&
                     HasDescriptorRole(decoded, StubOperandRole::kDestination) &&
+                    ContainsSlot(decoded, StubOperandSlotKind::kDestination,
+                                 StubOperandValueClass::kVectorRegister, 0, 2,
+                                 true) &&
+                    ContainsSlot(decoded,
+                                 StubOperandSlotKind::kScalarDestination,
+                                 StubOperandValueClass::kScalarRegister, 1, 1,
+                                 true) &&
+                    ContainsSlot(decoded, StubOperandSlotKind::kSource0,
+                                 StubOperandValueClass::kVectorRegister, 2, 2,
+                                 false) &&
+                    ContainsSlot(decoded, StubOperandSlotKind::kSource1,
+                                 StubOperandValueClass::kVectorRegister, 3, 2,
+                                 false) &&
+                    ContainsSlot(decoded,
+                                 StubOperandSlotKind::kScaleSource,
+                                 StubOperandValueClass::kVectorRegister, 4, 2,
+                                 false) &&
+                    ContainsSlotFragment(decoded,
+                                         StubOperandSlotKind::kDestination,
+                                         StubFragmentKind::kScalar, 1, 1, 1,
+                                         64, 1) &&
+                    ContainsSlotFragment(decoded,
+                                         StubOperandSlotKind::kScalarDestination,
+                                         StubFragmentKind::kScalar, 1, 1, 1,
+                                         32, 1) &&
+                    ContainsSlotFragment(decoded, StubOperandSlotKind::kSource0,
+                                         StubFragmentKind::kScalar, 1, 1, 1,
+                                         64, 1) &&
+                    ContainsSlotFragment(decoded, StubOperandSlotKind::kSource1,
+                                         StubFragmentKind::kScalar, 1, 1, 1,
+                                         64, 1) &&
+                    ContainsSlotFragment(decoded,
+                                         StubOperandSlotKind::kScaleSource,
+                                         StubFragmentKind::kScalar, 1, 1, 1,
+                                         64, 1) &&
                     HasSlotKind(decoded, StubOperandSlotKind::kScalarDestination) &&
                     CountDescriptorsForRole(decoded, StubOperandRole::kScale) == 1 &&
                     CountDescriptorsForRole(decoded, StubOperandRole::kSource0) == 1 &&
@@ -2644,6 +2766,39 @@ int main() {
                     HasDescriptorRole(decoded, StubOperandRole::kScale) &&
                     HasDescriptorRole(decoded, StubOperandRole::kPairedScale) &&
                     HasDescriptorRole(decoded, StubOperandRole::kDestination) &&
+                    ContainsSlot(decoded, StubOperandSlotKind::kDestination,
+                                 StubOperandValueClass::kVectorRegister, 0, 1,
+                                 true) &&
+                    ContainsSlot(decoded, StubOperandSlotKind::kSource0,
+                                 StubOperandValueClass::kVectorRegister, 1, 1,
+                                 false) &&
+                    ContainsSlot(decoded,
+                                 StubOperandSlotKind::kScaleSource,
+                                 StubOperandValueClass::kScalarRegister, 2, 1,
+                                 false) &&
+                    ContainsSlot(decoded,
+                                 StubOperandSlotKind::kPairedScaleSource,
+                                 StubOperandValueClass::kScalarRegister, 3, 1,
+                                 false) &&
+                    ContainsSlotFragment(
+                        decoded, StubOperandSlotKind::kSource0,
+                        StubFragmentKind::kVector, 1, 1, 1,
+                        instruction_name == "V_WMMA_LD_SCALE16_PAIRED_B64" ? 64
+                                                                           : 32,
+                        1) &&
+                    ContainsSlotFragment(
+                        decoded, StubOperandSlotKind::kDestination,
+                        StubFragmentKind::kVector, 1, 1, 1,
+                        instruction_name == "V_WMMA_LD_SCALE16_PAIRED_B64" ? 64
+                                                                           : 32,
+                        1) &&
+                    ContainsSlotFragment(decoded,
+                                         StubOperandSlotKind::kScaleSource,
+                                         StubFragmentKind::kScalar, 1, 1, 1,
+                                         32, 1) &&
+                    ContainsSlotFragment(
+                        decoded, StubOperandSlotKind::kPairedScaleSource,
+                        StubFragmentKind::kScalar, 1, 1, 1, 32, 1) &&
                     CountDescriptorsForRole(decoded, StubOperandRole::kSource0) == 1 &&
                     CountDescriptorsForRole(decoded, StubOperandRole::kScale) == 1 &&
                     CountDescriptorsForRole(decoded, StubOperandRole::kPairedScale) == 1 &&
