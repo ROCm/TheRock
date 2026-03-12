@@ -707,7 +707,12 @@ def main(base_args, linux_families, windows_families):
                 if "test_filter:" in label:
                     filter_type = label.split(":")[1]
                     # If the filter type is not recognized, we ignore the label and keep the default test type
-                    if filter_type not in ["quick", "standard", "comprehensive", "full"]:
+                    if filter_type not in [
+                        "quick",
+                        "standard",
+                        "comprehensive",
+                        "full",
+                    ]:
                         continue
                     test_type = filter_type
                     test_type_reason = f"test filter label specified: {label}"
