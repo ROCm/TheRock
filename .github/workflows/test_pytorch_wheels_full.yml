@@ -20,7 +20,7 @@ on:
         description: Runner label for distributed config (multi-GPU)
         required: true
         type: string
-        default: "linux-mi325-4gpu-ossci-rocm"
+        default: "linux-mi325-8gpu-ossci-rocm"
       package_index_url:
         description: Base Python package index URL to test, typically nightly/dev URL with a "v2" or "v2-staging" subdir (without a GPU family subdir)
         required: true
