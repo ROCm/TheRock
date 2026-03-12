@@ -24,7 +24,7 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Generate GitHub App token
+      - name: Generate GitHub App token rocm-systems
         uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2.2.1
         id: systems-token
         with:
@@ -33,21 +33,21 @@ jobs:
           owner: "ROCm"
           repositories: "rocm-systems"
 
-      - name: Generate GitHub App token
+      - name: Generate GitHub App token rocm-libraries
         uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2.2.1
         id: librarian-token
         with:
-          app-id: ${{ secrets.ROCM_SYSTEMS_APP_ID }}
-          private-key: ${{ secrets.ROCM_SYSTEMS_APP_PRIVATE_KEY }}
+          app-id: ${{ secrets.ROCM_LIBRARIES_APP_ID }}
+          private-key: ${{ secrets.ROCM_LIBRARIES_APP_PRIVATE_KEY }}
           owner: "ROCm"
           repositories: "rocm-libraries"
 
-      - name: Generate GitHub App token
+      - name: Generate GitHub App token TheRock
         uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2.2.1
         id: therock-token
         with:
-          app-id: ${{ secrets.ROCM_SYSTEMS_APP_ID }}
-          private-key: ${{ secrets.ROCM_SYSTEMS_APP_PRIVATE_KEY }}
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.PRIVATE_KEY }}
           owner: "ROCm"
           repositories: "rocm-libraries"
 
