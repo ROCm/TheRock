@@ -108,13 +108,12 @@ jobs:
           esac
           echo "release_type=${RELEASE_TYPE}" >> $GITHUB_OUTPUT
           echo "pkg_type=${PKG_TYPE}" >> $GITHUB_OUTPUT
-          python build_tools/packaging/linux/get_url_repo_params.py get-repo-url \
+          python build_tools/packaging/linux/get_url_repo_params.py --output-format kvp get-repo-url \
             --release-type "${RELEASE_TYPE}" \
             --native-package-type "${PKG_TYPE}" \
             --repo-base-url "${{ inputs.repo_base_url }}" \
             --os-profile "${{ inputs.os_profile }}" \
-            --repo-sub-folder "${{ inputs.repo_sub_folder }}" \
-            --output env >> $GITHUB_OUTPUT
+            --repo-sub-folder "${{ inputs.repo_sub_folder }}" >> $GITHUB_OUTPUT
 
   test_native_linux_packages_install:
     name: Test Native Linux Packages Installation - ${{ inputs.os_profile }}
