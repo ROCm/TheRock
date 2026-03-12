@@ -6268,6 +6268,84 @@ int main() {
     }
   }
 
+  {
+    const auto atc_probe_opcode =
+        FindDefaultEncodingOpcode("S_ATC_PROBE", "ENC_SMEM");
+    const auto atc_probe_buffer_opcode =
+        FindDefaultEncodingOpcode("S_ATC_PROBE_BUFFER", "ENC_SMEM");
+    if (!Expect(atc_probe_opcode.has_value(),
+                "expected s_atc_probe opcode lookup") ||
+        !Expect(atc_probe_buffer_opcode.has_value(),
+                "expected s_atc_probe_buffer opcode lookup")) {
+      return 1;
+    }
+
+    const auto atc_probe_word = MakeSmem(*atc_probe_opcode, 0x2au, 0, true, 0x44);
+    const auto atc_probe_buffer_word =
+        MakeSmem(*atc_probe_buffer_opcode, 0x55u, 8, false, 12, true);
+    const std::vector<std::uint32_t> scalar_probe_program = {
+        atc_probe_word[0],        atc_probe_word[1],
+        atc_probe_buffer_word[0], atc_probe_buffer_word[1],
+        MakeSopp(1),
+    };
+    decoded_program.clear();
+    if (!Expect(decoder.DecodeProgram(scalar_probe_program,
+                                      &decoded_program, &error_message),
+                error_message.c_str()) ||
+        !Expect(decoded_program.size() == 3,
+                "expected decoded scalar probe program size") ||
+        !Expect(decoded_program[0].opcode == "S_ATC_PROBE",
+                "expected s_atc_probe decode") ||
+        !Expect(decoded_program[1].opcode == "S_ATC_PROBE_BUFFER",
+                "expected s_atc_probe_buffer decode") ||
+        !Expect(decoded_program[0].operand_count == 3,
+                "expected s_atc_probe operand count") ||
+        !Expect(decoded_program[1].operand_count == 3,
+                "expected s_atc_probe_buffer operand count") ||
+        !Expect(decoded_program[0].operands[0].kind == OperandKind::kImm32 &&
+                    decoded_program[0].operands[0].imm32 == 0x2au,
+                "expected s_atc_probe hint immediate") ||
+        !Expect(decoded_program[0].operands[1].kind == OperandKind::kSgpr &&
+                    decoded_program[0].operands[1].index == 0,
+                "expected s_atc_probe base decode") ||
+        !Expect(decoded_program[0].operands[2].kind == OperandKind::kImm32 &&
+                    decoded_program[0].operands[2].imm32 == 0x44u,
+                "expected s_atc_probe offset decode") ||
+        !Expect(decoded_program[1].operands[0].kind == OperandKind::kImm32 &&
+                    decoded_program[1].operands[0].imm32 == 0x55u,
+                "expected s_atc_probe_buffer hint immediate") ||
+        !Expect(decoded_program[1].operands[1].kind == OperandKind::kSgpr &&
+                    decoded_program[1].operands[1].index == 8,
+                "expected s_atc_probe_buffer base decode") ||
+        !Expect(decoded_program[1].operands[2].kind == OperandKind::kSgpr &&
+                    decoded_program[1].operands[2].index == 12,
+                "expected s_atc_probe_buffer soffset decode")) {
+      return 1;
+    }
+
+    WaveExecutionState scalar_probe_state;
+    scalar_probe_state.sgprs[0] = 0x180u;
+    scalar_probe_state.sgprs[1] = 0u;
+    scalar_probe_state.sgprs[8] = 0x240u;
+    scalar_probe_state.sgprs[9] = 0u;
+    scalar_probe_state.sgprs[10] = 0x100u;
+    scalar_probe_state.sgprs[11] = 0u;
+    scalar_probe_state.sgprs[12] = 0x20u;
+    if (!Expect(interpreter.ExecuteProgram(decoded_program, &scalar_probe_state,
+                                           &error_message),
+                error_message.c_str()) ||
+        !Expect(scalar_probe_state.halted,
+                "expected scalar probe program to halt") ||
+        !Expect(scalar_probe_state.sgprs[0] == 0x180u,
+                "expected s_atc_probe to preserve base") ||
+        !Expect(scalar_probe_state.sgprs[8] == 0x240u,
+                "expected s_atc_probe_buffer to preserve descriptor") ||
+        !Expect(scalar_probe_state.sgprs[12] == 0x20u,
+                "expected s_atc_probe_buffer to preserve soffset")) {
+      return 1;
+    }
+  }
+
   const auto ds_nop_opcode = FindDefaultEncodingOpcode("DS_NOP", "ENC_DS");
   const auto ds_write_opcode =
       FindDefaultEncodingOpcode("DS_WRITE_B32", "ENC_DS");

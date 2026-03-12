@@ -697,6 +697,30 @@ bool Gfx950BinaryDecoder::DecodeSmem(std::span<const std::uint32_t> words,
     return true;
   }
 
+  if (std::string_view(instruction_name) == "S_ATC_PROBE" ||
+      std::string_view(instruction_name) == "S_ATC_PROBE_BUFFER") {
+    // ENC_SMEM exposes SDATA as a 7-bit field for these probe hints.
+    const InstructionOperand sdata = InstructionOperand::Imm32(
+        static_cast<std::uint32_t>(ExtractBits(instruction_word, 6, 7)));
+
+    InstructionOperand sbase;
+    if (!DecodeSmemBase(
+            static_cast<std::uint32_t>(ExtractBits(instruction_word, 0, 6)),
+            &sbase, error_message)) {
+      return false;
+    }
+
+    InstructionOperand offset;
+    if (!DecodeSmemOffset(instruction_word, &offset, error_message)) {
+      return false;
+    }
+
+    *instruction =
+        DecodedInstruction::ThreeOperand(instruction_name, sdata, sbase, offset);
+    *words_consumed = 2;
+    return true;
+  }
+
   if (std::string_view(instruction_name) != "S_LOAD_DWORD" &&
       std::string_view(instruction_name) != "S_LOAD_DWORDX2" &&
       std::string_view(instruction_name) != "S_BUFFER_LOAD_DWORD" &&

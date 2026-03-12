@@ -1023,6 +1023,10 @@ bool IsScalarMemoryTimeOpcode(std::string_view opcode) {
   return opcode == "S_MEMTIME" || opcode == "S_MEMREALTIME";
 }
 
+bool IsScalarMemoryProbeOpcode(std::string_view opcode) {
+  return opcode == "S_ATC_PROBE" || opcode == "S_ATC_PROBE_BUFFER";
+}
+
 std::uint64_t ReadScalarMemoryTimeValue(std::string_view opcode) {
   if (opcode == "S_MEMREALTIME") {
     const auto now = std::chrono::system_clock::now().time_since_epoch();
@@ -7654,6 +7658,7 @@ bool Gfx950Interpreter::Supports(std::string_view opcode) const {
          IsScalarCompareOpcode(opcode) || IsScalarMemoryOpcode(opcode) ||
          IsScalarMemoryMaintenanceOpcode(opcode) ||
          IsScalarMemoryTimeOpcode(opcode) ||
+         IsScalarMemoryProbeOpcode(opcode) ||
          IsVectorBinaryOpcode(opcode) || IsVectorTernaryOpcode(opcode) ||
          IsVectorCompareOpcode(opcode) ||
          IsVectorMemoryOpcode(opcode) ||
@@ -7960,6 +7965,30 @@ bool Gfx950Interpreter::ExecuteInstruction(const DecodedInstruction& instruction
     const std::uint64_t value = ReadScalarMemoryTimeValue(instruction.opcode);
     SplitU64(value, &state->sgprs[instruction.operands[0].index],
              &state->sgprs[instruction.operands[0].index + 1]);
+    if (error_message != nullptr) {
+      error_message->clear();
+    }
+    return true;
+  }
+
+  if (IsScalarMemoryProbeOpcode(instruction.opcode)) {
+    if (!ValidateOperandCount(instruction, 3, error_message)) {
+      return false;
+    }
+    if (instruction.operands[0].kind != OperandKind::kImm32) {
+      if (error_message != nullptr) {
+        *error_message = "scalar atc probe kind must be an immediate";
+      }
+      return false;
+    }
+
+    std::uint64_t address = 0;
+    if (!ResolveScalarMemoryAddress(instruction.operands[1], instruction.operands[2],
+                                    *state,
+                                    instruction.opcode == "S_ATC_PROBE_BUFFER",
+                                    1, &address, error_message)) {
+      return false;
+    }
     if (error_message != nullptr) {
       error_message->clear();
     }

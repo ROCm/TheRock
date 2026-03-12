@@ -2588,10 +2588,11 @@ int main() {
     }
   }
 
-  const std::array<std::string_view, 8> kScalarMaintenanceOpcodes = {
+  const std::array<std::string_view, 10> kScalarMaintenanceOpcodes = {
       "S_DCACHE_INV",      "S_DCACHE_WB",      "S_DCACHE_INV_VOL",
       "S_DCACHE_WB_VOL",   "S_DCACHE_DISCARD", "S_DCACHE_DISCARD_X2",
-      "S_MEMTIME",         "S_MEMREALTIME",
+      "S_MEMTIME",         "S_MEMREALTIME",    "S_ATC_PROBE",
+      "S_ATC_PROBE_BUFFER",
   };
   for (std::string_view opcode : kScalarMaintenanceOpcodes) {
     const std::string message = "expected " + std::string(opcode) + " support";
@@ -10568,6 +10569,42 @@ int main() {
       !Expect(scalar_maintenance_state.sgprs[6] != 0u ||
                   scalar_maintenance_state.sgprs[7] != 0u,
               "expected s_memrealtime to write a timestamp")) {
+    return 1;
+  }
+  }
+
+  {
+  const std::vector<DecodedInstruction> scalar_probe_program = {
+      DecodedInstruction::ThreeOperand("S_ATC_PROBE",
+                                       InstructionOperand::Imm32(0x2a),
+                                       InstructionOperand::Sgpr(0),
+                                       InstructionOperand::Imm32(0x44)),
+      DecodedInstruction::ThreeOperand("S_ATC_PROBE_BUFFER",
+                                       InstructionOperand::Imm32(0x55),
+                                       InstructionOperand::Sgpr(8),
+                                       InstructionOperand::Sgpr(12)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  WaveExecutionState scalar_probe_state{};
+  scalar_probe_state.sgprs[0] = 0x180u;
+  scalar_probe_state.sgprs[1] = 0u;
+  scalar_probe_state.sgprs[8] = 0x240u;
+  scalar_probe_state.sgprs[9] = 0u;
+  scalar_probe_state.sgprs[10] = 0x100u;
+  scalar_probe_state.sgprs[11] = 0u;
+  scalar_probe_state.sgprs[12] = 0x20u;
+  if (!Expect(interpreter.ExecuteProgram(scalar_probe_program,
+                                         &scalar_probe_state,
+                                         &error_message),
+              error_message.c_str()) ||
+      !Expect(scalar_probe_state.halted,
+              "expected scalar probe program to halt") ||
+      !Expect(scalar_probe_state.sgprs[0] == 0x180u,
+              "expected s_atc_probe to preserve base") ||
+      !Expect(scalar_probe_state.sgprs[8] == 0x240u,
+              "expected s_atc_probe_buffer to preserve descriptor") ||
+      !Expect(scalar_probe_state.sgprs[12] == 0x20u,
+              "expected s_atc_probe_buffer to preserve soffset")) {
     return 1;
   }
   }
