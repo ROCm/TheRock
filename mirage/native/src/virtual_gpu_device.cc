@@ -5,10 +5,13 @@
 namespace mirage::sim::gpu {
 
 VirtualGpuDevice::VirtualGpuDevice(GpuProperties properties)
-    : properties_(std::move(properties)) {}
+    : properties_(std::move(properties)) {
+  properties_.NormalizeWavefrontSize();
+}
 
 void VirtualGpuDevice::Initialize(GpuProperties properties) {
   properties_ = std::move(properties);
+  properties_.NormalizeWavefrontSize();
   next_queue_id_ = 1;
   next_signal_id_ = 1;
   queues_.clear();

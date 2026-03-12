@@ -21,6 +21,7 @@ To BitCast(From value) {
   return result;
 }
 
+constexpr std::uint32_t kGfx1201LaneCount = 32;
 constexpr std::uint16_t kExecPairSgprIndex = 126;
 constexpr std::uint16_t kImplicitVccPairSgprIndex = 248;
 constexpr std::uint16_t kSrcVcczSgprIndex = 251;
@@ -1485,6 +1486,7 @@ bool WriteScalarOperand(const InstructionOperand& operand,
   }
   if (operand.index == kImplicitVccPairSgprIndex) {
     state->vcc_mask = (state->vcc_mask & 0xffffffff00000000ULL) | value;
+    state->ClampMasksToLaneCount();
     if (error_message != nullptr) {
       error_message->clear();
     }
@@ -1493,6 +1495,7 @@ bool WriteScalarOperand(const InstructionOperand& operand,
   if (operand.index == kImplicitVccPairSgprIndex + 1) {
     state->vcc_mask = (state->vcc_mask & 0x00000000ffffffffULL) |
                       (static_cast<std::uint64_t>(value) << 32);
+    state->ClampMasksToLaneCount();
     if (error_message != nullptr) {
       error_message->clear();
     }
@@ -1512,6 +1515,7 @@ bool WriteScalarOperand(const InstructionOperand& operand,
     state->exec_mask = (state->exec_mask & 0x00000000ffffffffULL) |
                        (static_cast<std::uint64_t>(value) << 32);
   }
+  state->ClampMasksToLaneCount();
 
   if (error_message != nullptr) {
     error_message->clear();
@@ -2507,7 +2511,7 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
     if (!ValidateOperandCount(instruction, 2, error_message)) {
       return false;
     }
-    for (std::size_t lane_index = 0; lane_index < WaveExecutionState::kLaneCount;
+    for (std::size_t lane_index = 0; lane_index < state->ActiveLaneCount();
          ++lane_index) {
       if (((state->exec_mask >> lane_index) & 1ULL) == 0) {
         continue;
@@ -2535,7 +2539,7 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
     if (!ValidateOperandCount(instruction, 2, error_message)) {
       return false;
     }
-    for (std::size_t lane_index = 0; lane_index < WaveExecutionState::kLaneCount;
+    for (std::size_t lane_index = 0; lane_index < state->ActiveLaneCount();
          ++lane_index) {
       if (((state->exec_mask >> lane_index) & 1ULL) == 0) {
         continue;
@@ -2562,7 +2566,7 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
     if (!ValidateOperandCount(instruction, 2, error_message)) {
       return false;
     }
-    for (std::size_t lane_index = 0; lane_index < WaveExecutionState::kLaneCount;
+    for (std::size_t lane_index = 0; lane_index < state->ActiveLaneCount();
          ++lane_index) {
       if (((state->exec_mask >> lane_index) & 1ULL) == 0) {
         continue;
@@ -2594,7 +2598,7 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
     if (!ValidateOperandCount(instruction, 2, error_message)) {
       return false;
     }
-    for (std::size_t lane_index = 0; lane_index < WaveExecutionState::kLaneCount;
+    for (std::size_t lane_index = 0; lane_index < state->ActiveLaneCount();
          ++lane_index) {
       if (((state->exec_mask >> lane_index) & 1ULL) == 0) {
         continue;
@@ -2633,7 +2637,7 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
     const bool is_wide_compare =
         !is_wide_class && IsWideVectorCompareSeedInstruction(instruction.opcode);
     std::uint64_t next_vcc_mask = writes_exec ? 0ULL : state->vcc_mask;
-    for (std::size_t lane_index = 0; lane_index < WaveExecutionState::kLaneCount;
+    for (std::size_t lane_index = 0; lane_index < state->ActiveLaneCount();
          ++lane_index) {
       if (((state->exec_mask >> lane_index) & 1ULL) == 0) {
         continue;
@@ -2690,6 +2694,7 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
     if (writes_exec) {
       state->exec_mask = next_vcc_mask;
     }
+    state->ClampMasksToLaneCount();
     if (error_message != nullptr) {
       error_message->clear();
     }
@@ -2708,7 +2713,7 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
     if (!ValidateOperandCount(instruction, 3, error_message)) {
       return false;
     }
-    for (std::size_t lane_index = 0; lane_index < WaveExecutionState::kLaneCount;
+    for (std::size_t lane_index = 0; lane_index < state->ActiveLaneCount();
          ++lane_index) {
       if (((state->exec_mask >> lane_index) & 1ULL) == 0) {
         continue;
@@ -2966,6 +2971,7 @@ bool ValidateStateAndResetForExecution(WaveExecutionState* state,
     state->halted = false;
     state->waiting_on_barrier = false;
   }
+  state->SetLaneCount(kGfx1201LaneCount);
   return true;
 }
 

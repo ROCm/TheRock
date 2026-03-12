@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 
+#include "lib/sim/isa/common/wavefront_size.h"
+
 namespace mirage::sim::topology {
 
 struct PackageProfile {
@@ -38,12 +40,16 @@ struct GpuProfile {
   std::string arch_name;
   std::string gfx_target;
   std::uint32_t compute_units = 0;
-  std::uint32_t wavefront_size = 64;
+  std::uint32_t wavefront_size = isa::kWavefrontSize64;
   std::uint64_t hbm_bytes = 0;
   std::uint64_t vram_bytes = 0;
 
   std::uint64_t EffectiveVramBytes() const {
     return vram_bytes == 0 ? hbm_bytes : vram_bytes;
+  }
+
+  void NormalizeWavefrontSize() {
+    wavefront_size = isa::DefaultWavefrontSizeForGfxTarget(gfx_target);
   }
 };
 

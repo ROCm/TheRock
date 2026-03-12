@@ -220,6 +220,7 @@ struct ClusterInstance {
         if (gpu_instance.profile.gfx_target.empty()) {
           gpu_instance.profile.gfx_target = instance.package.gfx_target;
         }
+        gpu_instance.profile.NormalizeWavefrontSize();
         gpu_instance.vram_bytes = detail::EffectiveVramBytes(gpu_instance.profile);
 
         node_instance.total_hbm_bytes += gpu_instance.profile.hbm_bytes;

@@ -361,6 +361,10 @@ int main() {
   WaveExecutionState state;
   if (!Expect(interpreter.ExecuteProgram(supported_program, &state, &error_message),
               "expected decoded execution success for executable seed slice") ||
+      !Expect(state.lane_count == 32u,
+              "expected gfx1201 execution to normalize to wave32") ||
+      !Expect(state.exec_mask == 0xffffffffULL,
+              "expected gfx1201 execution to clamp exec to wave32") ||
       !Expect(state.sgprs[1] == 7u, "expected decoded execution to write SGPR") ||
       !Expect(state.sgprs[2] == 12u, "expected decoded execution to add into SGPR") ||
       !Expect(state.halted, "expected decoded execution to halt")) {

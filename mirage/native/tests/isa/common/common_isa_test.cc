@@ -6,6 +6,8 @@
 #include "lib/sim/isa/common/decoded_instruction.h"
 #include "lib/sim/isa/common/numeric_conversions.h"
 #include "lib/sim/isa/common/operand_metadata.h"
+#include "lib/sim/isa/common/wave_execution_state.h"
+#include "lib/sim/isa/common/wavefront_size.h"
 
 namespace {
 
@@ -19,6 +21,7 @@ using mirage::sim::isa::OperandDescriptor;
 using mirage::sim::isa::OperandRole;
 using mirage::sim::isa::OperandSlotKind;
 using mirage::sim::isa::OperandValueClass;
+using mirage::sim::isa::WaveExecutionState;
 
 bool Expect(bool condition, const char* message) {
   if (!condition) {
@@ -75,6 +78,28 @@ int main() {
                   matrix_shape.element_bit_width == 32 &&
                   matrix_shape.wave_size == 32,
               "expected matrix fragment helper to preserve shape")) {
+    return 1;
+  }
+
+  if (!Expect(mirage::sim::isa::DefaultWavefrontSizeForGfxTarget("gfx950") == 64u,
+              "expected gfx950 default wavefront size to remain wave64") ||
+      !Expect(mirage::sim::isa::DefaultWavefrontSizeForGfxTarget("gfx1201") == 32u,
+              "expected gfx1201 default wavefront size to be wave32") ||
+      !Expect(mirage::sim::isa::DefaultWavefrontSizeForGfxTarget("gfx1250") == 32u,
+              "expected gfx1250 default wavefront size to be wave32")) {
+    return 1;
+  }
+
+  WaveExecutionState wave_state;
+  wave_state.exec_mask = ~0ULL;
+  wave_state.vcc_mask = ~0ULL;
+  wave_state.SetLaneCount(32);
+  if (!Expect(wave_state.ActiveLaneCount() == 32u,
+              "expected wave state to track a runtime lane count") ||
+      !Expect(wave_state.exec_mask == 0xffffffffULL,
+              "expected exec mask to clamp to wave32") ||
+      !Expect(wave_state.vcc_mask == 0xffffffffULL,
+              "expected vcc mask to clamp to wave32")) {
     return 1;
   }
 
