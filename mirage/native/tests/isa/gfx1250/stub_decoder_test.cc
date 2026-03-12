@@ -232,6 +232,16 @@ bool HasDescriptorRole(const StubDecodedInstruction& instruction,
   return false;
 }
 
+bool HasSlotKind(const StubDecodedInstruction& instruction,
+                 StubOperandSlotKind slot_kind) {
+  for (std::uint32_t i = 0; i < instruction.operand_slots.binding_count; ++i) {
+    if (instruction.operand_slots.bindings[i].slot_kind == slot_kind) {
+      return true;
+    }
+  }
+  return false;
+}
+
 }  // namespace
 
 int main() {
@@ -2371,6 +2381,8 @@ int main() {
     if (!Expect(decoded.uses_tensor_memory &&
                     decoded.operand_layout.has_tensor_descriptor &&
                     decoded.operand_layout.touches_lds &&
+                    decoded.operand_slots.binding_count == 3 &&
+                    decoded.operand_descriptors.descriptor_count == 3 &&
                     AllSlotWaveSizesAre(decoded, 0) &&
                     AllDescriptorWaveSizesAre(decoded, 0),
                 "expected routed tensor seed to keep non-matrix wave-size semantics")) {
@@ -2402,6 +2414,8 @@ int main() {
     }
     if (!Expect(decoded.execution_domain == StubExecutionDomain::kConversion &&
                     !HasMatrixSlot(decoded) && !HasMatrixDescriptor(decoded) &&
+                    decoded.operand_slots.binding_count == 2 &&
+                    decoded.operand_descriptors.descriptor_count == 2 &&
                     AllSlotWaveSizesAre(decoded, 0) &&
                     AllDescriptorWaveSizesAre(decoded, 0),
                 "expected routed VOP1 seed to keep scalar/packed wave-size semantics")) {
@@ -2411,6 +2425,33 @@ int main() {
                     HasDescriptorRole(decoded, StubOperandRole::kDestination),
                 "expected routed VOP1 seed to keep source/destination descriptors")) {
       return 1;
+    }
+    if (instruction_name.find("PK_") != std::string_view::npos) {
+      if (!Expect(
+              ContainsDescriptor(decoded, StubOperandRole::kSource0,
+                                 StubOperandSlotKind::kSource0,
+                                 StubOperandValueClass::kPackedVector,
+                                 StubOperandAccess::kRead, 2,
+                                 StubFragmentKind::kPacked, 8) &&
+                  ContainsDescriptor(decoded, StubOperandRole::kDestination,
+                                     StubOperandSlotKind::kDestination,
+                                     StubOperandValueClass::kPackedVector,
+                                     StubOperandAccess::kWrite, 2,
+                                     StubFragmentKind::kPacked, 16),
+              "expected routed packed VOP1 seed to keep packed descriptor shapes")) {
+        return 1;
+      }
+    } else {
+      if (!Expect(
+              ContainsDescriptor(decoded, StubOperandRole::kSource0,
+                                 StubOperandSlotKind::kSource0,
+                                 StubOperandValueClass::kVectorRegister,
+                                 StubOperandAccess::kRead, 1,
+                                 StubFragmentKind::kScalar, 8) &&
+                  HasSlotKind(decoded, StubOperandSlotKind::kDestination),
+              "expected routed scalar VOP1 seed to keep scalar descriptor shapes")) {
+        return 1;
+      }
     }
   }
 
@@ -2423,14 +2464,43 @@ int main() {
     }
     if (!Expect(decoded.uses_scale_path && !HasMatrixSlot(decoded) &&
                     !HasMatrixDescriptor(decoded) &&
+                    decoded.operand_slots.binding_count == 5 &&
+                    decoded.operand_descriptors.descriptor_count == 5 &&
                     AllSlotWaveSizesAre(decoded, 0) &&
                     AllDescriptorWaveSizesAre(decoded, 0),
                 "expected routed VOP3 SDST seed to keep non-matrix wave-size semantics")) {
       return 1;
     }
     if (!Expect(HasDescriptorRole(decoded, StubOperandRole::kScale) &&
-                    HasDescriptorRole(decoded, StubOperandRole::kDestination),
+                    HasDescriptorRole(decoded, StubOperandRole::kDestination) &&
+                    HasSlotKind(decoded, StubOperandSlotKind::kScalarDestination),
                 "expected routed VOP3 SDST seed to keep scale/destination descriptors")) {
+      return 1;
+    }
+  }
+
+  for (std::string_view instruction_name :
+       GetStubDecoderRouteInstructions(StubDecoderRoute::kVop3p)) {
+    if (instruction_name.rfind("V_WMMA_LD_SCALE", 0) != 0) {
+      continue;
+    }
+    const StubDecodedInstruction decoded = DecodeVop3pStub(instruction_name);
+    if (!Expect(decoded.status == StubDecodeStatus::kDecodedStub,
+                "expected routed paired-scale seed to decode")) {
+      return 1;
+    }
+    if (!Expect(decoded.uses_scale_path && decoded.uses_paired_operands &&
+                    !HasMatrixSlot(decoded) && !HasMatrixDescriptor(decoded) &&
+                    AllSlotWaveSizesAre(decoded, 0) &&
+                    AllDescriptorWaveSizesAre(decoded, 0),
+                "expected paired-scale helper to keep non-matrix wave-size semantics")) {
+      return 1;
+    }
+    if (!Expect(HasDescriptorRole(decoded, StubOperandRole::kSource0) &&
+                    HasDescriptorRole(decoded, StubOperandRole::kScale) &&
+                    HasDescriptorRole(decoded, StubOperandRole::kPairedScale) &&
+                    HasDescriptorRole(decoded, StubOperandRole::kDestination),
+                "expected paired-scale helper descriptor roles")) {
       return 1;
     }
   }
