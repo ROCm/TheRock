@@ -55,61 +55,16 @@ jobs:
         with:
           fetch-depth: 0
 
-      # On push: run Case 2 (find-last-successful to current SHA) for testing
-      - name: Run on push (find-last-successful to current SHA)
-        if: ${{ github.event_name == 'push' }}
+      # On push: test Case 1 (find-last-successful + workflow mode; end = current run ID)
+      - name: Generate manifest diff report
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           python3 build_tools/generate_manifest_diff_report.py \
-            --find-last-successful ci_nightly.yml \
-            --end "${{ github.sha }}" \
-            --output-dir reports
-
-      # Case 1: find_last_successful + workflow_mode (find start, end as workflow ID)
-      - name: Run with find-last-successful and workflow mode
-        if: ${{ github.event_name != 'push' && inputs.find_last_successful && inputs.workflow_mode }}
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          python3 build_tools/generate_manifest_diff_report.py \
-            --find-last-successful "${{ inputs.find_last_successful }}" \
-            --workflow-mode \
-            --end "${{ inputs.end_commit }}" \
-            --output-dir reports
-
-      # Case 2: find_last_successful only (find start, end as commit SHA)
-      - name: Run with find-last-successful
-        if: ${{ github.event_name != 'push' && inputs.find_last_successful && !inputs.workflow_mode }}
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          python3 build_tools/generate_manifest_diff_report.py \
-            --find-last-successful "${{ inputs.find_last_successful }}" \
-            --end "${{ inputs.end_commit }}" \
-            --output-dir reports
-
-      # Case 3: workflow_mode only (both start and end as workflow IDs)
-      - name: Run with workflow mode
-        if: ${{ github.event_name != 'push' && !inputs.find_last_successful && inputs.workflow_mode && inputs.start_commit != '' }}
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          python3 build_tools/generate_manifest_diff_report.py \
-            --workflow-mode \
-            --start "${{ inputs.start_commit }}" \
-            --end "${{ inputs.end_commit }}" \
-            --output-dir reports
-
-      # Case 4: Neither (both start and end as commit SHAs)
-      - name: Run with commit SHAs
-        if: ${{ github.event_name != 'push' && !inputs.find_last_successful && !inputs.workflow_mode && inputs.start_commit != '' }}
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          python3 build_tools/generate_manifest_diff_report.py \
-            --start "${{ inputs.start_commit }}" \
-            --end "${{ inputs.end_commit }}" \
+            --end "${{ github.event_name == 'push' && github.run_id || inputs.end_commit }}" \
+            --start "${{ inputs.start_commit || '' }}" \
+            --find-last-successful "${{ github.event_name == 'push' && 'ci_nightly.yml' || (inputs.find_last_successful || '') }}" \
+            ${{ (github.event_name == 'push' || inputs.workflow_mode) && '--workflow-mode' || '' }} \
             --output-dir reports
 
       - name: Configure AWS Credentials
