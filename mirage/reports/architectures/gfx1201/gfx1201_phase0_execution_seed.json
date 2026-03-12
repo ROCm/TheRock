@@ -153,6 +153,14 @@
     "V_CVT_U32_F64",
     "V_CVT_I32_F32",
     "V_CVT_I32_F64",
+    "V_TRUNC_F32",
+    "V_CEIL_F32",
+    "V_RNDNE_F32",
+    "V_FLOOR_F32",
+    "V_TRUNC_F64",
+    "V_CEIL_F64",
+    "V_RNDNE_F64",
+    "V_FLOOR_F64",
     "V_ADD_U32",
     "V_SUB_U32",
     "V_SUBREV_U32",
@@ -222,7 +230,15 @@
       "V_CVT_U32_F32",
       "V_CVT_U32_F64",
       "V_CVT_I32_F32",
-      "V_CVT_I32_F64"
+      "V_CVT_I32_F64",
+      "V_TRUNC_F32",
+      "V_CEIL_F32",
+      "V_RNDNE_F32",
+      "V_FLOOR_F32",
+      "V_TRUNC_F64",
+      "V_CEIL_F64",
+      "V_RNDNE_F64",
+      "V_FLOOR_F64"
     ],
     "ENC_VOP2": [
       "V_ADD_NC_U32 -> V_ADD_U32",
@@ -361,8 +377,10 @@
     "Decodes SGPR, inline integer, and literal sources for S_MOV_B32 and V_MOV_B32.",
     "Decodes V_NOT_B32, V_BFREV_B32, and V_CVT_F32_UBYTE0/1/2/3 from ENC_VOP1.",
     "Decodes V_CVT_F32_I32, V_CVT_F32_U32, V_CVT_U32_F32, and V_CVT_I32_F32 from ENC_VOP1.",
+    "Decodes V_TRUNC_F32, V_CEIL_F32, V_RNDNE_F32, and V_FLOOR_F32 from ENC_VOP1 on the existing unary 32-bit vector path.",
     "Decodes V_CVT_F64_F32, V_CVT_F64_I32, and V_CVT_F64_U32 from ENC_VOP1 with architecture-local wide vector destination descriptors.",
     "Decodes V_CVT_F32_F64, V_CVT_I32_F64, and V_CVT_U32_F64 from ENC_VOP1 with architecture-local wide source descriptors for SGPR/VGPR register pairs.",
+    "Decodes V_TRUNC_F64, V_CEIL_F64, V_RNDNE_F64, and V_FLOOR_F64 from ENC_VOP1 with architecture-local wide source and destination descriptors for VGPR pairs.",
     "Decodes V_ADD_U32, V_SUB_U32, V_SUBREV_U32, V_MIN/MAX_I32, V_MIN/MAX_U32, V_CNDMASK_B32, V_LSHRREV_B32, V_ASHRREV_I32, V_LSHLREV_B32, V_AND_B32, V_OR_B32, and V_XOR_B32 from ENC_VOP2.",
     "Decodes V_CMP_EQ/NE/LT/LE/GT/GE_I32, V_CMP_EQ/NE/LT/LE/GT/GE_U32, V_CMPX_EQ/NE/LT/LE/GT/GE_I32, and V_CMPX_EQ/NE/LT/LE/GT/GE_U32 from ENC_VOPC with SGPR, VGPR, inline, and literal sources.",
     "Decodes V_CMP_EQ/NE/LT/LE/GT/GE_I64/U64 and V_CMPX_EQ/NE/LT/LE/GT/GE_I64/U64 on the same ENC_VOPC path, using architecture-local wide source descriptors for SGPR/VGPR register pairs while keeping the shared implicit VCC destination model.",
@@ -388,8 +406,10 @@
     "Executes exec-masked V_CMPX_CLASS_F64 and V_CMPX_EQ/GE/GT/LE/LG/LT/NEQ/O/U/NGE/NLG/NGT/NLE/NLT_F64 and materializes the resulting active-lane compare mask into both vcc_mask and exec_mask.",
     "Executes exec-masked V_NOT_B32, V_BFREV_B32, and V_CVT_F32_UBYTE0/1/2/3.",
     "Executes exec-masked V_CVT_F32_I32, V_CVT_F32_U32, V_CVT_U32_F32, and V_CVT_I32_F32.",
+    "Executes exec-masked V_TRUNC_F32, V_CEIL_F32, V_RNDNE_F32, and V_FLOOR_F32 with gfx950-consistent rounding behavior.",
     "Executes exec-masked V_CVT_F64_F32, V_CVT_F64_I32, and V_CVT_F64_U32 and materializes 64-bit results into VGPR pairs on the local path.",
     "Executes exec-masked V_CVT_F32_F64, V_CVT_I32_F64, and V_CVT_U32_F64 with gfx950-consistent double-to-float and double-to-int truncation behavior.",
+    "Executes exec-masked V_TRUNC_F64, V_CEIL_F64, V_RNDNE_F64, and V_FLOOR_F64 and materializes 64-bit results into VGPR pairs on the local path.",
     "Executes exec-masked V_ADD_U32, V_SUB_U32, V_SUBREV_U32, V_MIN/MAX_I32, V_MIN/MAX_U32, V_CNDMASK_B32, V_LSHRREV_B32, V_ASHRREV_I32, V_LSHLREV_B32, V_AND_B32, V_OR_B32, and V_XOR_B32 lane-wise."
   ],
   "still_scaffolded": [
@@ -399,6 +419,6 @@
     "ENC_VDS",
     "ENC_VGLOBAL",
     "The remaining ENC_VOPC surface outside this seed is now primarily the 16-bit compare families and other packed/wider forms not yet on the current local path.",
-    "The next coherent extension point is the adjacent ENC_VOP1 math/consumer seed work or the remaining packed/16-bit ENC_VOPC compare work before ENC_VOP3/half-conversion work."
+    "The next coherent extension point is the remaining adjacent ENC_VOP1 math/consumer seed work or the packed/16-bit ENC_VOPC compare work before ENC_VOP3/half-conversion work."
   ]
 }

@@ -375,6 +375,76 @@ bool ExpectWideConversionSeedState(
          state.halted && !state.waiting_on_barrier && state.pc == 9u;
 }
 
+bool ExpectRoundingSeedState(const mirage::sim::isa::WaveExecutionState& state) {
+  std::uint32_t source_f64_low = 0;
+  std::uint32_t source_f64_high = 0;
+  SplitU64(DoubleBits(-2.75), &source_f64_low, &source_f64_high);
+  std::uint32_t neg_two_f64_low = 0;
+  std::uint32_t neg_two_f64_high = 0;
+  SplitU64(DoubleBits(-2.0), &neg_two_f64_low, &neg_two_f64_high);
+  std::uint32_t neg_three_f64_low = 0;
+  std::uint32_t neg_three_f64_high = 0;
+  SplitU64(DoubleBits(-3.0), &neg_three_f64_low, &neg_three_f64_high);
+
+  return state.vgprs[4][0] == FloatBits(-2.0f) &&
+         state.vgprs[4][1] == FloatBits(-2.0f) &&
+         state.vgprs[4][2] == 0x44444444u &&
+         state.vgprs[4][3] == FloatBits(-2.0f) &&
+         state.vgprs[5][0] == FloatBits(-2.0f) &&
+         state.vgprs[5][1] == FloatBits(-2.0f) &&
+         state.vgprs[5][2] == 0x55555555u &&
+         state.vgprs[5][3] == FloatBits(-2.0f) &&
+         state.vgprs[6][0] == FloatBits(-3.0f) &&
+         state.vgprs[6][1] == FloatBits(-3.0f) &&
+         state.vgprs[6][2] == 0x66666666u &&
+         state.vgprs[6][3] == FloatBits(-3.0f) &&
+         state.vgprs[7][0] == FloatBits(-3.0f) &&
+         state.vgprs[7][1] == FloatBits(-3.0f) &&
+         state.vgprs[7][2] == 0x77777777u &&
+         state.vgprs[7][3] == FloatBits(-3.0f) &&
+         state.vgprs[20][0] == source_f64_low &&
+         state.vgprs[20][1] == source_f64_low &&
+         state.vgprs[20][2] == 0x20202020u &&
+         state.vgprs[20][3] == source_f64_low &&
+         state.vgprs[21][0] == source_f64_high &&
+         state.vgprs[21][1] == source_f64_high &&
+         state.vgprs[21][2] == 0x21212121u &&
+         state.vgprs[21][3] == source_f64_high &&
+         state.vgprs[30][0] == neg_two_f64_low &&
+         state.vgprs[30][1] == neg_two_f64_low &&
+         state.vgprs[30][2] == 0x30303030u &&
+         state.vgprs[30][3] == neg_two_f64_low &&
+         state.vgprs[31][0] == neg_two_f64_high &&
+         state.vgprs[31][1] == neg_two_f64_high &&
+         state.vgprs[31][2] == 0x31313131u &&
+         state.vgprs[31][3] == neg_two_f64_high &&
+         state.vgprs[32][0] == neg_two_f64_low &&
+         state.vgprs[32][1] == neg_two_f64_low &&
+         state.vgprs[32][2] == 0x32323232u &&
+         state.vgprs[32][3] == neg_two_f64_low &&
+         state.vgprs[33][0] == neg_two_f64_high &&
+         state.vgprs[33][1] == neg_two_f64_high &&
+         state.vgprs[33][2] == 0x33333333u &&
+         state.vgprs[33][3] == neg_two_f64_high &&
+         state.vgprs[34][0] == neg_three_f64_low &&
+         state.vgprs[34][1] == neg_three_f64_low &&
+         state.vgprs[34][2] == 0x34343434u &&
+         state.vgprs[34][3] == neg_three_f64_low &&
+         state.vgprs[35][0] == neg_three_f64_high &&
+         state.vgprs[35][1] == neg_three_f64_high &&
+         state.vgprs[35][2] == 0x35353535u &&
+         state.vgprs[35][3] == neg_three_f64_high &&
+         state.vgprs[36][0] == neg_three_f64_low &&
+         state.vgprs[36][1] == neg_three_f64_low &&
+         state.vgprs[36][2] == 0x36363636u &&
+         state.vgprs[36][3] == neg_three_f64_low &&
+         state.vgprs[37][0] == neg_three_f64_high &&
+         state.vgprs[37][1] == neg_three_f64_high &&
+         state.vgprs[37][2] == 0x37373737u &&
+         state.vgprs[37][3] == neg_three_f64_high && state.halted &&
+         !state.waiting_on_barrier && state.pc == 10u;
+}
+
 bool ExpectRemainingCompareState(const mirage::sim::isa::WaveExecutionState& state) {
   return state.sgprs[40] == 0xffffffffu && state.sgprs[41] == 0xffffffffu &&
          state.sgprs[42] == 1u && state.sgprs[43] == 4u &&
@@ -1012,6 +1082,42 @@ int main() {
                   OperandValueClass::kScalarRegister, OperandAccess::kRead,
                   FragmentKind::kScalar, 64u, 2u, false),
               "expected V_CVT_F32_F64 source descriptor")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_trunc_f32_words{
+      MakeVop1(33u, 12u, 257u)};
+  if (!Expect(decoder.DecodeInstruction(v_trunc_f32_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_TRUNC_F32 decode success") ||
+      !Expect(ExpectUnaryInstruction(instruction, "V_TRUNC_F32",
+                                     OperandKind::kVgpr, 12u,
+                                     OperandKind::kVgpr, 1u),
+              "expected decoded V_TRUNC_F32 operands")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_ceil_f64_words{
+      MakeVop1(24u, 13u, 120u)};
+  if (!Expect(decoder.DecodeInstruction(v_ceil_f64_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_CEIL_F64 decode success") ||
+      !Expect(ExpectUnaryInstruction(instruction, "V_CEIL_F64",
+                                     OperandKind::kVgpr, 13u,
+                                     OperandKind::kSgpr, 120u),
+              "expected decoded V_CEIL_F64 operands") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[0], OperandRole::kDestination,
+                  OperandSlotKind::kDestination,
+                  OperandValueClass::kVectorRegister, OperandAccess::kWrite,
+                  FragmentKind::kVector, 64u, 2u, false),
+              "expected V_CEIL_F64 destination descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[1], OperandRole::kSource0,
+                  OperandSlotKind::kSource0,
+                  OperandValueClass::kScalarRegister, OperandAccess::kRead,
+                  FragmentKind::kScalar, 64u, 2u, false),
+              "expected V_CEIL_F64 source descriptor")) {
     return 1;
   }
 
@@ -1968,6 +2074,116 @@ int main() {
               "expected compiled wide conversion execution success") ||
       !Expect(ExpectWideConversionSeedState(compiled_wide_conversion_state),
               "expected compiled wide conversion state")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 12> rounding_words{
+      MakeVop1(1u, 1u, 255u),
+      FloatBits(-2.75f),
+      MakeVop1(33u, 4u, 257u),
+      MakeVop1(34u, 5u, 257u),
+      MakeVop1(35u, 6u, 257u),
+      MakeVop1(36u, 7u, 257u),
+      MakeVop1(16u, 20u, 257u),
+      MakeVop1(23u, 30u, 276u),
+      MakeVop1(24u, 32u, 276u),
+      MakeVop1(25u, 34u, 276u),
+      MakeVop1(26u, 36u, 276u),
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> rounding_program;
+  if (!Expect(decoder.DecodeProgram(rounding_words, &rounding_program,
+                                    &error_message),
+              "expected rounding program decode success") ||
+      !Expect(rounding_program.size() == 11u,
+              "expected eleven decoded rounding instructions") ||
+      !Expect(rounding_program[1].opcode == "V_TRUNC_F32",
+              "expected decoded V_TRUNC_F32") ||
+      !Expect(rounding_program[2].opcode == "V_CEIL_F32",
+              "expected decoded V_CEIL_F32") ||
+      !Expect(rounding_program[3].opcode == "V_RNDNE_F32",
+              "expected decoded V_RNDNE_F32") ||
+      !Expect(rounding_program[4].opcode == "V_FLOOR_F32",
+              "expected decoded V_FLOOR_F32") ||
+      !Expect(rounding_program[6].opcode == "V_TRUNC_F64",
+              "expected decoded V_TRUNC_F64") ||
+      !Expect(rounding_program[7].opcode == "V_CEIL_F64",
+              "expected decoded V_CEIL_F64") ||
+      !Expect(rounding_program[8].opcode == "V_RNDNE_F64",
+              "expected decoded V_RNDNE_F64") ||
+      !Expect(rounding_program[9].opcode == "V_FLOOR_F64",
+              "expected decoded V_FLOOR_F64")) {
+    return 1;
+  }
+
+  auto initialize_rounding_state = [](WaveExecutionState* state) {
+    state->exec_mask = 0xbu;
+    state->vgprs[4][2] = 0x44444444u;
+    state->vgprs[5][2] = 0x55555555u;
+    state->vgprs[6][2] = 0x66666666u;
+    state->vgprs[7][2] = 0x77777777u;
+    state->vgprs[20][2] = 0x20202020u;
+    state->vgprs[21][2] = 0x21212121u;
+    state->vgprs[30][2] = 0x30303030u;
+    state->vgprs[31][2] = 0x31313131u;
+    state->vgprs[32][2] = 0x32323232u;
+    state->vgprs[33][2] = 0x33333333u;
+    state->vgprs[34][2] = 0x34343434u;
+    state->vgprs[35][2] = 0x35353535u;
+    state->vgprs[36][2] = 0x36363636u;
+    state->vgprs[37][2] = 0x37373737u;
+  };
+
+  WaveExecutionState decoded_rounding_state;
+  initialize_rounding_state(&decoded_rounding_state);
+  if (!Expect(interpreter.ExecuteProgram(rounding_program, &decoded_rounding_state,
+                                         &error_message),
+              "expected decoded rounding execution success") ||
+      !Expect(ExpectRoundingSeedState(decoded_rounding_state),
+              "expected decoded rounding state")) {
+    return 1;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_rounding_program;
+  if (!Expect(interpreter.CompileProgram(rounding_program,
+                                         &compiled_rounding_program,
+                                         &error_message),
+              "expected compiled rounding program success") ||
+      !Expect(compiled_rounding_program[1].opcode ==
+                  Gfx1201CompiledOpcode::kVTruncF32,
+              "expected compiled V_TRUNC_F32 opcode") ||
+      !Expect(compiled_rounding_program[2].opcode ==
+                  Gfx1201CompiledOpcode::kVCeilF32,
+              "expected compiled V_CEIL_F32 opcode") ||
+      !Expect(compiled_rounding_program[3].opcode ==
+                  Gfx1201CompiledOpcode::kVRndneF32,
+              "expected compiled V_RNDNE_F32 opcode") ||
+      !Expect(compiled_rounding_program[4].opcode ==
+                  Gfx1201CompiledOpcode::kVFloorF32,
+              "expected compiled V_FLOOR_F32 opcode") ||
+      !Expect(compiled_rounding_program[6].opcode ==
+                  Gfx1201CompiledOpcode::kVTruncF64,
+              "expected compiled V_TRUNC_F64 opcode") ||
+      !Expect(compiled_rounding_program[7].opcode ==
+                  Gfx1201CompiledOpcode::kVCeilF64,
+              "expected compiled V_CEIL_F64 opcode") ||
+      !Expect(compiled_rounding_program[8].opcode ==
+                  Gfx1201CompiledOpcode::kVRndneF64,
+              "expected compiled V_RNDNE_F64 opcode") ||
+      !Expect(compiled_rounding_program[9].opcode ==
+                  Gfx1201CompiledOpcode::kVFloorF64,
+              "expected compiled V_FLOOR_F64 opcode")) {
+    return 1;
+  }
+
+  WaveExecutionState compiled_rounding_state;
+  initialize_rounding_state(&compiled_rounding_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_rounding_program,
+                                         &compiled_rounding_state,
+                                         &error_message),
+              "expected compiled rounding execution success") ||
+      !Expect(ExpectRoundingSeedState(compiled_rounding_state),
+              "expected compiled rounding state")) {
     return 1;
   }
 

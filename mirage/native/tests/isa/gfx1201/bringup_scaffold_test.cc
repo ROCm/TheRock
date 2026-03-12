@@ -87,7 +87,7 @@ int main() {
               "expected phase-0 compute seed list") ||
       !Expect(decoder.Phase0ComputeSelectorRules().size() == 12u,
               "expected phase-0 selector rule list") ||
-      !Expect(decoder.Phase0ExecutableOpcodes().size() == 165u,
+      !Expect(decoder.Phase0ExecutableOpcodes().size() == 173u,
               "expected phase-0 executable opcode slice") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_ADD_U32"),
               "expected S_ADD_U32 executable decode support") ||
@@ -151,6 +151,10 @@ int main() {
               "expected V_CVT_F64_F32 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("V_CVT_I32_F64"),
               "expected V_CVT_I32_F64 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_TRUNC_F32"),
+              "expected V_TRUNC_F32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_FLOOR_F64"),
+              "expected V_FLOOR_F64 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("V_CVT_I32_F32"),
               "expected V_CVT_I32_F32 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_MOV_B32"),
@@ -188,7 +192,7 @@ int main() {
   }
 
   Gfx1201Interpreter interpreter;
-  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 165u,
+  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 173u,
               "expected executable seed opcode list") ||
       !Expect(interpreter.Supports("S_ENDPGM"),
               "expected interpreter support for S_ENDPGM") ||
@@ -272,6 +276,10 @@ int main() {
               "expected interpreter support for V_CVT_F64_F32") ||
       !Expect(interpreter.Supports("V_CVT_I32_F64"),
               "expected interpreter support for V_CVT_I32_F64") ||
+      !Expect(interpreter.Supports("V_TRUNC_F32"),
+              "expected interpreter support for V_TRUNC_F32") ||
+      !Expect(interpreter.Supports("V_FLOOR_F64"),
+              "expected interpreter support for V_FLOOR_F64") ||
       !Expect(interpreter.Supports("V_CVT_U32_F32"),
               "expected interpreter support for V_CVT_U32_F32") ||
       !Expect(interpreter.Supports("V_CVT_I32_F32"),

@@ -27,7 +27,7 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 165> kExecutableSeedOpcodes{{
+constexpr std::array<std::string_view, 173> kExecutableSeedOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_ADD_U32",
@@ -179,6 +179,14 @@ constexpr std::array<std::string_view, 165> kExecutableSeedOpcodes{{
     "V_CVT_U32_F64",
     "V_CVT_I32_F32",
     "V_CVT_I32_F64",
+    "V_TRUNC_F32",
+    "V_CEIL_F32",
+    "V_RNDNE_F32",
+    "V_FLOOR_F32",
+    "V_TRUNC_F64",
+    "V_CEIL_F64",
+    "V_RNDNE_F64",
+    "V_FLOOR_F64",
     "V_ADD_U32",
     "V_SUB_U32",
     "V_SUBREV_U32",
@@ -960,6 +968,38 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
     *compiled_opcode = Gfx1201CompiledOpcode::kVCvtI32F64;
     return true;
   }
+  if (opcode == "V_TRUNC_F32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVTruncF32;
+    return true;
+  }
+  if (opcode == "V_CEIL_F32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCeilF32;
+    return true;
+  }
+  if (opcode == "V_RNDNE_F32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVRndneF32;
+    return true;
+  }
+  if (opcode == "V_FLOOR_F32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVFloorF32;
+    return true;
+  }
+  if (opcode == "V_TRUNC_F64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVTruncF64;
+    return true;
+  }
+  if (opcode == "V_CEIL_F64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCeilF64;
+    return true;
+  }
+  if (opcode == "V_RNDNE_F64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVRndneF64;
+    return true;
+  }
+  if (opcode == "V_FLOOR_F64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVFloorF64;
+    return true;
+  }
   if (opcode == "V_ADD_U32") {
     *compiled_opcode = Gfx1201CompiledOpcode::kVAddU32;
     return true;
@@ -1326,6 +1366,18 @@ std::uint32_t EvaluateVectorUnarySeedInstruction(std::string_view opcode,
   if (opcode == "V_CVT_F32_U32") {
     return BitCast<std::uint32_t>(static_cast<float>(value));
   }
+  if (opcode == "V_TRUNC_F32") {
+    return BitCast<std::uint32_t>(std::trunc(BitCast<float>(value)));
+  }
+  if (opcode == "V_CEIL_F32") {
+    return BitCast<std::uint32_t>(std::ceil(BitCast<float>(value)));
+  }
+  if (opcode == "V_RNDNE_F32") {
+    return BitCast<std::uint32_t>(std::nearbyint(BitCast<float>(value)));
+  }
+  if (opcode == "V_FLOOR_F32") {
+    return BitCast<std::uint32_t>(std::floor(BitCast<float>(value)));
+  }
   if (opcode == "V_CVT_U32_F32") {
     return TruncateFloatToU32(BitCast<float>(value));
   }
@@ -1360,6 +1412,23 @@ std::uint32_t EvaluateVectorUnaryFromWideSeedInstruction(std::string_view opcode
   }
   if (opcode == "V_CVT_U32_F64") {
     return TruncateDoubleToU32(BitCast<double>(value));
+  }
+  return 0u;
+}
+
+std::uint64_t EvaluateWideVectorUnaryToWideSeedInstruction(
+    std::string_view opcode, std::uint64_t value) {
+  if (opcode == "V_TRUNC_F64") {
+    return BitCast<std::uint64_t>(std::trunc(BitCast<double>(value)));
+  }
+  if (opcode == "V_CEIL_F64") {
+    return BitCast<std::uint64_t>(std::ceil(BitCast<double>(value)));
+  }
+  if (opcode == "V_RNDNE_F64") {
+    return BitCast<std::uint64_t>(std::nearbyint(BitCast<double>(value)));
+  }
+  if (opcode == "V_FLOOR_F64") {
+    return BitCast<std::uint64_t>(std::floor(BitCast<double>(value)));
   }
   return 0u;
 }
@@ -2127,7 +2196,12 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
       instruction.opcode == "V_CVT_F32_UBYTE2" ||
       instruction.opcode == "V_CVT_F32_UBYTE3" ||
       instruction.opcode == "V_CVT_F32_I32" ||
-      instruction.opcode == "V_CVT_F32_U32" || instruction.opcode == "V_CVT_U32_F32" ||
+      instruction.opcode == "V_CVT_F32_U32" ||
+      instruction.opcode == "V_TRUNC_F32" ||
+      instruction.opcode == "V_CEIL_F32" ||
+      instruction.opcode == "V_RNDNE_F32" ||
+      instruction.opcode == "V_FLOOR_F32" ||
+      instruction.opcode == "V_CVT_U32_F32" ||
       instruction.opcode == "V_CVT_I32_F32") {
     if (!ValidateOperandCount(instruction, 2, error_message)) {
       return false;
@@ -2200,6 +2274,34 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
           EvaluateVectorUnaryFromWideSeedInstruction(instruction.opcode, value);
       if (!WriteVectorOperand(instruction.operands[0], lane_index, result, state,
                               error_message)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  if (instruction.opcode == "V_TRUNC_F64" ||
+      instruction.opcode == "V_CEIL_F64" ||
+      instruction.opcode == "V_RNDNE_F64" ||
+      instruction.opcode == "V_FLOOR_F64") {
+    if (!ValidateOperandCount(instruction, 2, error_message)) {
+      return false;
+    }
+    for (std::size_t lane_index = 0; lane_index < WaveExecutionState::kLaneCount;
+         ++lane_index) {
+      if (((state->exec_mask >> lane_index) & 1ULL) == 0) {
+        continue;
+      }
+      const std::uint64_t value = ReadWideSourceOperand(
+          instruction.operands[1], *state, lane_index, error_message);
+      if (error_message != nullptr && !error_message->empty()) {
+        return false;
+      }
+      const std::uint64_t result =
+          EvaluateWideVectorUnaryToWideSeedInstruction(instruction.opcode,
+                                                       value);
+      if (!WriteWideVectorOperand(instruction.operands[0], lane_index, result,
+                                  state, error_message)) {
         return false;
       }
     }
@@ -2488,6 +2590,14 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kVCvtU32F64:
     case Gfx1201CompiledOpcode::kVCvtI32F32:
     case Gfx1201CompiledOpcode::kVCvtI32F64:
+    case Gfx1201CompiledOpcode::kVTruncF32:
+    case Gfx1201CompiledOpcode::kVCeilF32:
+    case Gfx1201CompiledOpcode::kVRndneF32:
+    case Gfx1201CompiledOpcode::kVFloorF32:
+    case Gfx1201CompiledOpcode::kVTruncF64:
+    case Gfx1201CompiledOpcode::kVCeilF64:
+    case Gfx1201CompiledOpcode::kVRndneF64:
+    case Gfx1201CompiledOpcode::kVFloorF64:
     case Gfx1201CompiledOpcode::kVAddU32:
     case Gfx1201CompiledOpcode::kVSubU32:
     case Gfx1201CompiledOpcode::kVSubrevU32:

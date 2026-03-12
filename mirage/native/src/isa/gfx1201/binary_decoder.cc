@@ -16,7 +16,7 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 165> kPhase0ExecutableOpcodes{{
+constexpr std::array<std::string_view, 173> kPhase0ExecutableOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_ADD_U32",
@@ -168,6 +168,14 @@ constexpr std::array<std::string_view, 165> kPhase0ExecutableOpcodes{{
     "V_CVT_U32_F64",
     "V_CVT_I32_F32",
     "V_CVT_I32_F64",
+    "V_TRUNC_F32",
+    "V_CEIL_F32",
+    "V_RNDNE_F32",
+    "V_FLOOR_F32",
+    "V_TRUNC_F64",
+    "V_CEIL_F64",
+    "V_RNDNE_F64",
+    "V_FLOOR_F64",
     "V_ADD_U32",
     "V_SUB_U32",
     "V_SUBREV_U32",
@@ -698,6 +706,10 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
              instruction_name == "V_CVT_F32_UBYTE3" ||
              instruction_name == "V_CVT_F32_I32" ||
              instruction_name == "V_CVT_F32_U32" ||
+             instruction_name == "V_TRUNC_F32" ||
+             instruction_name == "V_CEIL_F32" ||
+             instruction_name == "V_RNDNE_F32" ||
+             instruction_name == "V_FLOOR_F32" ||
              instruction_name == "V_CVT_U32_F32" ||
              instruction_name == "V_CVT_I32_F32") {
     InstructionOperand dst;
@@ -754,6 +766,27 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
 
     *instruction = DecodedInstruction::Unary(
         instruction_name, DescribeVectorDestinationOperand(dst),
+        DescribeWideSourceOperand(src0, OperandRole::kSource0,
+                                  OperandSlotKind::kSource0));
+    *words_consumed = 1 + literal_words_consumed;
+  } else if (instruction_name == "V_TRUNC_F64" ||
+             instruction_name == "V_CEIL_F64" ||
+             instruction_name == "V_RNDNE_F64" ||
+             instruction_name == "V_FLOOR_F64") {
+    InstructionOperand dst;
+    if (!DecodeVectorDestination(ExtractBits(word, 17, 8), &dst, error_message)) {
+      return false;
+    }
+
+    std::size_t literal_words_consumed = 0;
+    InstructionOperand src0;
+    if (!DecodeVectorSource(ExtractBits(word, 0, 9), words.subspan(1),
+                            &literal_words_consumed, &src0, error_message)) {
+      return false;
+    }
+
+    *instruction = DecodedInstruction::Unary(
+        instruction_name, DescribeWideVectorDestinationOperand(dst),
         DescribeWideSourceOperand(src0, OperandRole::kSource0,
                                   OperandSlotKind::kSource0));
     *words_consumed = 1 + literal_words_consumed;
