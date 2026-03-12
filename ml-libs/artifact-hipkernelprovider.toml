@@ -6,6 +6,6 @@ exclude = [
 ]
 [components.test."ml-libs/hipkernelprovider/stage"]
 include = [
-  "bin/hip_kernel_*_test*",
-  "bin/hip_kernel_plugin/CTestTestfile.cmake",
+  "bin/hip_kernel_provider*_test*",
+  "bin/hip_kernel_provider/CTestTestfile.cmake",
 ]

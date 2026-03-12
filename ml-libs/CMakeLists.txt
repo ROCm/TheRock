@@ -315,7 +315,9 @@ if(THEROCK_ENABLE_HIPKERNELPROVIDER)
       -DHIP_PLATFORM=amd
       -DROCM_PATH=
       -DROCM_DIR=
-      "-DHIP_DNN_SKIP_TESTS=$<NOT:$<BOOL:${THEROCK_BUILD_TESTING}>>"
+      -DHIPKERNELPROVIDER_ENABLE_TESTS=${THEROCK_BUILD_TESTING}
+      -DENABLE_CLANG_TIDY=OFF
+      -DENABLE_CLANG_FORMAT=OFF
     CMAKE_INCLUDES
       therock_explicit_finders.cmake
     COMPILER_TOOLCHAIN
@@ -326,6 +328,7 @@ if(THEROCK_ENABLE_HIPKERNELPROVIDER)
       therock-flatbuffers
       therock-nlohmann-json
     RUNTIME_DEPS
+      hip-clr
   )
   therock_cmake_subproject_glob_c_sources(hipkernelprovider
   SUBDIRS
