@@ -198,6 +198,40 @@ bool AllMatrixDescriptorsHaveWaveSize(const StubDecodedInstruction& instruction,
   return true;
 }
 
+bool AllSlotWaveSizesAre(const StubDecodedInstruction& instruction,
+                         std::uint8_t wave_size) {
+  for (std::uint32_t i = 0; i < instruction.operand_slots.binding_count; ++i) {
+    if (instruction.operand_slots.bindings[i].fragment_shape.wave_size !=
+        wave_size) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool AllDescriptorWaveSizesAre(const StubDecodedInstruction& instruction,
+                               std::uint8_t wave_size) {
+  for (std::uint32_t i = 0; i < instruction.operand_descriptors.descriptor_count;
+       ++i) {
+    if (instruction.operand_descriptors.descriptors[i].fragment_shape.wave_size !=
+        wave_size) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool HasDescriptorRole(const StubDecodedInstruction& instruction,
+                       StubOperandRole role) {
+  for (std::uint32_t i = 0; i < instruction.operand_descriptors.descriptor_count;
+       ++i) {
+    if (instruction.operand_descriptors.descriptors[i].role == role) {
+      return true;
+    }
+  }
+  return false;
+}
+
 }  // namespace
 
 int main() {
@@ -207,6 +241,20 @@ int main() {
   }
   if (!Expect(!GetStubDecoderRouteInstructions(StubDecoderRoute::kVop3p).empty(),
               "expected VOP3P routed instruction list")) {
+    return 1;
+  }
+  if (!Expect(
+          !GetStubDecoderRouteInstructions(StubDecoderRoute::kMimgTensor).empty(),
+          "expected tensor routed instruction list")) {
+    return 1;
+  }
+  if (!Expect(!GetStubDecoderRouteInstructions(StubDecoderRoute::kVop1).empty(),
+              "expected VOP1 routed instruction list")) {
+    return 1;
+  }
+  if (!Expect(
+          !GetStubDecoderRouteInstructions(StubDecoderRoute::kVop3Sdst).empty(),
+          "expected VOP3 SDST routed instruction list")) {
     return 1;
   }
 
@@ -2311,6 +2359,80 @@ int main() {
                                  StubFragmentKind::kVector, 64),
               "expected paired WMMA scale16 destination descriptor")) {
     return 1;
+  }
+
+  for (std::string_view instruction_name :
+       GetStubDecoderRouteInstructions(StubDecoderRoute::kMimgTensor)) {
+    const StubDecodedInstruction decoded = DecodeMimgTensorStub(instruction_name);
+    if (!Expect(decoded.status == StubDecodeStatus::kDecodedStub,
+                "expected routed tensor seed to decode")) {
+      return 1;
+    }
+    if (!Expect(decoded.uses_tensor_memory &&
+                    decoded.operand_layout.has_tensor_descriptor &&
+                    decoded.operand_layout.touches_lds &&
+                    AllSlotWaveSizesAre(decoded, 0) &&
+                    AllDescriptorWaveSizesAre(decoded, 0),
+                "expected routed tensor seed to keep non-matrix wave-size semantics")) {
+      return 1;
+    }
+    if (instruction_name == "TENSOR_LOAD_TO_LDS") {
+      if (!Expect(HasDescriptorRole(decoded, StubOperandRole::kTensorDescriptor) &&
+                      HasDescriptorRole(decoded, StubOperandRole::kTensorCoordinate) &&
+                      HasDescriptorRole(decoded, StubOperandRole::kLdsDestination),
+                  "expected routed tensor-load descriptor roles")) {
+        return 1;
+      }
+    } else if (instruction_name == "TENSOR_STORE_FROM_LDS") {
+      if (!Expect(HasDescriptorRole(decoded, StubOperandRole::kTensorDescriptor) &&
+                      HasDescriptorRole(decoded, StubOperandRole::kTensorCoordinate) &&
+                      HasDescriptorRole(decoded, StubOperandRole::kLdsSource),
+                  "expected routed tensor-store descriptor roles")) {
+        return 1;
+      }
+    }
+  }
+
+  for (std::string_view instruction_name :
+       GetStubDecoderRouteInstructions(StubDecoderRoute::kVop1)) {
+    const StubDecodedInstruction decoded = DecodeVop1Stub(instruction_name);
+    if (!Expect(decoded.status == StubDecodeStatus::kDecodedStub,
+                "expected routed VOP1 seed to decode")) {
+      return 1;
+    }
+    if (!Expect(decoded.execution_domain == StubExecutionDomain::kConversion &&
+                    !HasMatrixSlot(decoded) && !HasMatrixDescriptor(decoded) &&
+                    AllSlotWaveSizesAre(decoded, 0) &&
+                    AllDescriptorWaveSizesAre(decoded, 0),
+                "expected routed VOP1 seed to keep scalar/packed wave-size semantics")) {
+      return 1;
+    }
+    if (!Expect(HasDescriptorRole(decoded, StubOperandRole::kSource0) &&
+                    HasDescriptorRole(decoded, StubOperandRole::kDestination),
+                "expected routed VOP1 seed to keep source/destination descriptors")) {
+      return 1;
+    }
+  }
+
+  for (std::string_view instruction_name :
+       GetStubDecoderRouteInstructions(StubDecoderRoute::kVop3Sdst)) {
+    const StubDecodedInstruction decoded = DecodeVop3SdstStub(instruction_name);
+    if (!Expect(decoded.status == StubDecodeStatus::kDecodedStub,
+                "expected routed VOP3 SDST seed to decode")) {
+      return 1;
+    }
+    if (!Expect(decoded.uses_scale_path && !HasMatrixSlot(decoded) &&
+                    !HasMatrixDescriptor(decoded) &&
+                    AllSlotWaveSizesAre(decoded, 0) &&
+                    AllDescriptorWaveSizesAre(decoded, 0),
+                "expected routed VOP3 SDST seed to keep non-matrix wave-size semantics")) {
+      return 1;
+    }
+    if (!Expect(HasDescriptorRole(decoded, StubOperandRole::kScale) &&
+                    HasDescriptorRole(decoded, StubOperandRole::kDestination),
+                "expected routed VOP3 SDST seed to keep scale/destination descriptors")) {
+      return 1;
+    }
   }
 
   const StubDecodedInstruction wrong_route =

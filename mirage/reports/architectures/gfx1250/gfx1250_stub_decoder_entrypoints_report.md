@@ -21,6 +21,7 @@
   - parser-backed generic matrix fragment metadata for routed WMMA / SWMMAC variants
   - explicit wave32 fragment semantics for routed WMMA / SWMMAC seeds on gfx1250
   - route-wide wave32 validation across the current routed WMMA / SWMMAC seed set
+  - route-wide non-matrix wave-size and descriptor-role validation across current tensor, VOP1 FP8/BF8, and VOP3 SDST scale-assist seeds
 
 ## Routed Seed Metadata Coverage
 
@@ -212,6 +213,7 @@
     - tensor-coordinate descriptors on load and store
     - LDS address fragment/descriptor coverage on load and store
     - tensor-descriptor fragment coverage on store
+    - route-wide non-matrix wave-size and descriptor-role validation across the current tensor route set
 - VOP1 FP8/BF8 conversions:
   - `V_CVT_F16_FP8` -> `kCvtF16Fp8`
   - `V_CVT_F16_BF8` -> `kCvtF16Bf8`
@@ -222,6 +224,7 @@
     - scalar FP8/BF8 source and destination descriptors for `F16`/`F32` conversions
     - packed FP8/BF8 source and destination descriptors for `PK_F16` conversions
     - scalar and packed destination fragment coverage on BF8 conversion paths
+    - route-wide non-matrix wave-size and source/destination descriptor validation across the current VOP1 route set
 - VOP3 SDST scale assist:
   - `V_DIV_SCALE_F64` -> `kVDivScaleF64`
   - Sources: `3`
@@ -230,6 +233,7 @@
     - `has_scale_operand`
   - Descriptor depth:
     - full vector source, scale, and vector/scalar destination descriptor coverage
+    - route-wide non-matrix wave-size and scale/destination descriptor validation across the current VOP3 SDST route set
 
 ## Operand Role Records
 
