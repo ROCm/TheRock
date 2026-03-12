@@ -5,11 +5,9 @@
 [components.run."core/rocrtst/stage"]
 exclude = [
   "bin/**",
+  "share/rocrtst/**",
 ]
 [components.test."core/rocrtst/stage"]
-include = [
-    "share/rocrtst/**",
-]
 exclude = [
     "lib/rocrtst/lib/libhwloc.so*",
     "lib/rocrtst/lib/LICENSE",
