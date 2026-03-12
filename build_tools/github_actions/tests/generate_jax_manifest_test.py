@@ -12,9 +12,11 @@ from unittest import mock
 
 THIS_DIR = Path(__file__).resolve().parent
 
+sys.path.insert(0, os.fspath(THIS_DIR.parent.parent))
 sys.path.insert(0, os.fspath(THIS_DIR.parent))
 
 import generate_jax_manifest as jax_manifest
+from manifest_utils import normalize_python_version_for_filename
 
 
 class GenerateJaxManifestTest(unittest.TestCase):
@@ -56,10 +58,10 @@ class GenerateJaxManifestTest(unittest.TestCase):
     def _run_main_with_args(self, argv: list[str]) -> None:
         jax_manifest.main(argv)
 
-    def test_normalize_py(self) -> None:
-        self.assertEqual(jax_manifest.normalize_py("3.12"), "3.12")
-        self.assertEqual(jax_manifest.normalize_py("py3.12"), "3.12")
-        self.assertEqual(jax_manifest.normalize_py(" py3.13 "), "3.13")
+    def test_normalize_python_version_for_filename(self) -> None:
+        self.assertEqual(normalize_python_version_for_filename("3.12"), "3.12")
+        self.assertEqual(normalize_python_version_for_filename("py3.12"), "3.12")
+        self.assertEqual(normalize_python_version_for_filename(" py3.13 "), "3.13")
 
     def test_manifest_filename(self) -> None:
         name = jax_manifest.manifest_filename(
