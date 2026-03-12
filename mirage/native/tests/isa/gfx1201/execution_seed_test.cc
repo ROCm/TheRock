@@ -496,6 +496,87 @@ bool ExpectFractFrexpSeedState(
          !state.waiting_on_barrier && state.pc == 9u;
 }
 
+bool ExpectUnaryMathSeedState(const mirage::sim::isa::WaveExecutionState& state) {
+  std::uint32_t source_f64_low = 0;
+  std::uint32_t source_f64_high = 0;
+  SplitU64(DoubleBits(4.0), &source_f64_low, &source_f64_high);
+  std::uint32_t rcp_f64_low = 0;
+  std::uint32_t rcp_f64_high = 0;
+  SplitU64(DoubleBits(0.25), &rcp_f64_low, &rcp_f64_high);
+  std::uint32_t rsq_f64_low = 0;
+  std::uint32_t rsq_f64_high = 0;
+  SplitU64(DoubleBits(0.5), &rsq_f64_low, &rsq_f64_high);
+  std::uint32_t sqrt_f64_low = 0;
+  std::uint32_t sqrt_f64_high = 0;
+  SplitU64(DoubleBits(2.0), &sqrt_f64_low, &sqrt_f64_high);
+
+  return state.vgprs[10][0] == FloatBits(0.25f) &&
+         state.vgprs[10][1] == FloatBits(0.25f) &&
+         state.vgprs[10][2] == 0x10101010u &&
+         state.vgprs[10][3] == FloatBits(0.25f) &&
+         state.vgprs[11][0] == FloatBits(0.25f) &&
+         state.vgprs[11][1] == FloatBits(0.25f) &&
+         state.vgprs[11][2] == 0x11111111u &&
+         state.vgprs[11][3] == FloatBits(0.25f) &&
+         state.vgprs[12][0] == FloatBits(0.5f) &&
+         state.vgprs[12][1] == FloatBits(0.5f) &&
+         state.vgprs[12][2] == 0x12121212u &&
+         state.vgprs[12][3] == FloatBits(0.5f) &&
+         state.vgprs[13][0] == FloatBits(2.0f) &&
+         state.vgprs[13][1] == FloatBits(2.0f) &&
+         state.vgprs[13][2] == 0x13131313u &&
+         state.vgprs[13][3] == FloatBits(2.0f) &&
+         state.vgprs[14][0] == FloatBits(8.0f) &&
+         state.vgprs[14][1] == FloatBits(8.0f) &&
+         state.vgprs[14][2] == 0x14141414u &&
+         state.vgprs[14][3] == FloatBits(8.0f) &&
+         state.vgprs[15][0] == FloatBits(3.0f) &&
+         state.vgprs[15][1] == FloatBits(3.0f) &&
+         state.vgprs[15][2] == 0x15151515u &&
+         state.vgprs[15][3] == FloatBits(3.0f) &&
+         state.vgprs[16][0] == FloatBits(0.0f) &&
+         state.vgprs[16][1] == FloatBits(0.0f) &&
+         state.vgprs[16][2] == 0x16161616u &&
+         state.vgprs[16][3] == FloatBits(0.0f) &&
+         state.vgprs[17][0] == FloatBits(1.0f) &&
+         state.vgprs[17][1] == FloatBits(1.0f) &&
+         state.vgprs[17][2] == 0x17171717u &&
+         state.vgprs[17][3] == FloatBits(1.0f) &&
+         state.vgprs[20][0] == source_f64_low &&
+         state.vgprs[20][1] == source_f64_low &&
+         state.vgprs[20][2] == 0x20202020u &&
+         state.vgprs[20][3] == source_f64_low &&
+         state.vgprs[21][0] == source_f64_high &&
+         state.vgprs[21][1] == source_f64_high &&
+         state.vgprs[21][2] == 0x21212121u &&
+         state.vgprs[21][3] == source_f64_high &&
+         state.vgprs[30][0] == rcp_f64_low &&
+         state.vgprs[30][1] == rcp_f64_low &&
+         state.vgprs[30][2] == 0x30303030u &&
+         state.vgprs[30][3] == rcp_f64_low &&
+         state.vgprs[31][0] == rcp_f64_high &&
+         state.vgprs[31][1] == rcp_f64_high &&
+         state.vgprs[31][2] == 0x31313131u &&
+         state.vgprs[31][3] == rcp_f64_high &&
+         state.vgprs[32][0] == rsq_f64_low &&
+         state.vgprs[32][1] == rsq_f64_low &&
+         state.vgprs[32][2] == 0x32323232u &&
+         state.vgprs[32][3] == rsq_f64_low &&
+         state.vgprs[33][0] == rsq_f64_high &&
+         state.vgprs[33][1] == rsq_f64_high &&
+         state.vgprs[33][2] == 0x33333333u &&
+         state.vgprs[33][3] == rsq_f64_high &&
+         state.vgprs[34][0] == sqrt_f64_low &&
+         state.vgprs[34][1] == sqrt_f64_low &&
+         state.vgprs[34][2] == 0x34343434u &&
+         state.vgprs[34][3] == sqrt_f64_low &&
+         state.vgprs[35][0] == sqrt_f64_high &&
+         state.vgprs[35][1] == sqrt_f64_high &&
+         state.vgprs[35][2] == 0x35353535u &&
+         state.vgprs[35][3] == sqrt_f64_high && state.exec_mask == 0xbu &&
+         state.halted && !state.waiting_on_barrier && state.pc == 16u;
+}
+
 bool ExpectRemainingCompareState(const mirage::sim::isa::WaveExecutionState& state) {
   return state.sgprs[40] == 0xffffffffu && state.sgprs[41] == 0xffffffffu &&
          state.sgprs[42] == 1u && state.sgprs[43] == 4u &&
@@ -1229,6 +1310,41 @@ int main() {
                   OperandValueClass::kVectorRegister, OperandAccess::kRead,
                   FragmentKind::kVector, 64u, 2u, false),
               "expected V_FRACT_F64 source descriptor")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_rcp_f32_words{MakeVop1(42u, 17u, 257u)};
+  if (!Expect(decoder.DecodeInstruction(v_rcp_f32_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_RCP_F32 decode success") ||
+      !Expect(ExpectUnaryInstruction(instruction, "V_RCP_F32",
+                                     OperandKind::kVgpr, 17u,
+                                     OperandKind::kVgpr, 1u),
+              "expected decoded V_RCP_F32 operands")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_sqrt_f64_words{
+      MakeVop1(52u, 18u, 120u)};
+  if (!Expect(decoder.DecodeInstruction(v_sqrt_f64_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_SQRT_F64 decode success") ||
+      !Expect(ExpectUnaryInstruction(instruction, "V_SQRT_F64",
+                                     OperandKind::kVgpr, 18u,
+                                     OperandKind::kSgpr, 120u),
+              "expected decoded V_SQRT_F64 operands") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[0], OperandRole::kDestination,
+                  OperandSlotKind::kDestination,
+                  OperandValueClass::kVectorRegister, OperandAccess::kWrite,
+                  FragmentKind::kVector, 64u, 2u, false),
+              "expected V_SQRT_F64 destination descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[1], OperandRole::kSource0,
+                  OperandSlotKind::kSource0,
+                  OperandValueClass::kScalarRegister, OperandAccess::kRead,
+                  FragmentKind::kScalar, 64u, 2u, false),
+              "expected V_SQRT_F64 source descriptor")) {
     return 1;
   }
 
@@ -2392,6 +2508,143 @@ int main() {
               "expected compiled fract/frexp execution success") ||
       !Expect(ExpectFractFrexpSeedState(compiled_fract_frexp_state),
               "expected compiled fract/frexp state")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 21> unary_math_words{
+      MakeVop1(1u, 1u, 255u),
+      FloatBits(4.0f),
+      MakeVop1(1u, 2u, 255u),
+      FloatBits(3.0f),
+      MakeVop1(1u, 3u, 255u),
+      FloatBits(8.0f),
+      MakeVop1(1u, 4u, 255u),
+      FloatBits(0.0f),
+      MakeVop1(42u, 10u, 257u),
+      MakeVop1(43u, 11u, 257u),
+      MakeVop1(46u, 12u, 257u),
+      MakeVop1(51u, 13u, 257u),
+      MakeVop1(37u, 14u, 258u),
+      MakeVop1(39u, 15u, 259u),
+      MakeVop1(53u, 16u, 260u),
+      MakeVop1(54u, 17u, 260u),
+      MakeVop1(16u, 20u, 257u),
+      MakeVop1(47u, 30u, 276u),
+      MakeVop1(49u, 32u, 276u),
+      MakeVop1(52u, 34u, 276u),
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> unary_math_program;
+  if (!Expect(decoder.DecodeProgram(unary_math_words, &unary_math_program,
+                                    &error_message),
+              "expected unary math program decode success") ||
+      !Expect(unary_math_program.size() == 17u,
+              "expected seventeen decoded unary math instructions") ||
+      !Expect(unary_math_program[4].opcode == "V_RCP_F32",
+              "expected decoded V_RCP_F32") ||
+      !Expect(unary_math_program[5].opcode == "V_RCP_IFLAG_F32",
+              "expected decoded V_RCP_IFLAG_F32") ||
+      !Expect(unary_math_program[6].opcode == "V_RSQ_F32",
+              "expected decoded V_RSQ_F32") ||
+      !Expect(unary_math_program[7].opcode == "V_SQRT_F32",
+              "expected decoded V_SQRT_F32") ||
+      !Expect(unary_math_program[8].opcode == "V_EXP_F32",
+              "expected decoded V_EXP_F32") ||
+      !Expect(unary_math_program[9].opcode == "V_LOG_F32",
+              "expected decoded V_LOG_F32") ||
+      !Expect(unary_math_program[10].opcode == "V_SIN_F32",
+              "expected decoded V_SIN_F32") ||
+      !Expect(unary_math_program[11].opcode == "V_COS_F32",
+              "expected decoded V_COS_F32") ||
+      !Expect(unary_math_program[13].opcode == "V_RCP_F64",
+              "expected decoded V_RCP_F64") ||
+      !Expect(unary_math_program[14].opcode == "V_RSQ_F64",
+              "expected decoded V_RSQ_F64") ||
+      !Expect(unary_math_program[15].opcode == "V_SQRT_F64",
+              "expected decoded V_SQRT_F64")) {
+    return 1;
+  }
+
+  auto initialize_unary_math_state = [](WaveExecutionState* state) {
+    state->exec_mask = 0xbu;
+    state->vgprs[10][2] = 0x10101010u;
+    state->vgprs[11][2] = 0x11111111u;
+    state->vgprs[12][2] = 0x12121212u;
+    state->vgprs[13][2] = 0x13131313u;
+    state->vgprs[14][2] = 0x14141414u;
+    state->vgprs[15][2] = 0x15151515u;
+    state->vgprs[16][2] = 0x16161616u;
+    state->vgprs[17][2] = 0x17171717u;
+    state->vgprs[20][2] = 0x20202020u;
+    state->vgprs[21][2] = 0x21212121u;
+    state->vgprs[30][2] = 0x30303030u;
+    state->vgprs[31][2] = 0x31313131u;
+    state->vgprs[32][2] = 0x32323232u;
+    state->vgprs[33][2] = 0x33333333u;
+    state->vgprs[34][2] = 0x34343434u;
+    state->vgprs[35][2] = 0x35353535u;
+  };
+
+  WaveExecutionState decoded_unary_math_state;
+  initialize_unary_math_state(&decoded_unary_math_state);
+  if (!Expect(interpreter.ExecuteProgram(unary_math_program,
+                                         &decoded_unary_math_state,
+                                         &error_message),
+              "expected decoded unary math execution success") ||
+      !Expect(ExpectUnaryMathSeedState(decoded_unary_math_state),
+              "expected decoded unary math state")) {
+    return 1;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_unary_math_program;
+  if (!Expect(interpreter.CompileProgram(unary_math_program,
+                                         &compiled_unary_math_program,
+                                         &error_message),
+              "expected compiled unary math program success") ||
+      !Expect(compiled_unary_math_program[4].opcode ==
+                  Gfx1201CompiledOpcode::kVRcpF32,
+              "expected compiled V_RCP_F32 opcode") ||
+      !Expect(compiled_unary_math_program[5].opcode ==
+                  Gfx1201CompiledOpcode::kVRcpIflagF32,
+              "expected compiled V_RCP_IFLAG_F32 opcode") ||
+      !Expect(compiled_unary_math_program[6].opcode ==
+                  Gfx1201CompiledOpcode::kVRsqF32,
+              "expected compiled V_RSQ_F32 opcode") ||
+      !Expect(compiled_unary_math_program[7].opcode ==
+                  Gfx1201CompiledOpcode::kVSqrtF32,
+              "expected compiled V_SQRT_F32 opcode") ||
+      !Expect(compiled_unary_math_program[8].opcode ==
+                  Gfx1201CompiledOpcode::kVExpF32,
+              "expected compiled V_EXP_F32 opcode") ||
+      !Expect(compiled_unary_math_program[9].opcode ==
+                  Gfx1201CompiledOpcode::kVLogF32,
+              "expected compiled V_LOG_F32 opcode") ||
+      !Expect(compiled_unary_math_program[10].opcode ==
+                  Gfx1201CompiledOpcode::kVSinF32,
+              "expected compiled V_SIN_F32 opcode") ||
+      !Expect(compiled_unary_math_program[11].opcode ==
+                  Gfx1201CompiledOpcode::kVCosF32,
+              "expected compiled V_COS_F32 opcode") ||
+      !Expect(compiled_unary_math_program[13].opcode ==
+                  Gfx1201CompiledOpcode::kVRcpF64,
+              "expected compiled V_RCP_F64 opcode") ||
+      !Expect(compiled_unary_math_program[14].opcode ==
+                  Gfx1201CompiledOpcode::kVRsqF64,
+              "expected compiled V_RSQ_F64 opcode") ||
+      !Expect(compiled_unary_math_program[15].opcode ==
+                  Gfx1201CompiledOpcode::kVSqrtF64,
+              "expected compiled V_SQRT_F64 opcode")) {
+    return 1;
+  }
+
+  WaveExecutionState compiled_unary_math_state;
+  initialize_unary_math_state(&compiled_unary_math_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_unary_math_program,
+                                         &compiled_unary_math_state,
+                                         &error_message),
+              "expected compiled unary math execution success") ||
+      !Expect(ExpectUnaryMathSeedState(compiled_unary_math_state),
+              "expected compiled unary math state")) {
     return 1;
   }
 

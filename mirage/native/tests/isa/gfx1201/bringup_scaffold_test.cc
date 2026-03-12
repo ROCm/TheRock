@@ -87,7 +87,7 @@ int main() {
               "expected phase-0 compute seed list") ||
       !Expect(decoder.Phase0ComputeSelectorRules().size() == 12u,
               "expected phase-0 selector rule list") ||
-      !Expect(decoder.Phase0ExecutableOpcodes().size() == 179u,
+      !Expect(decoder.Phase0ExecutableOpcodes().size() == 190u,
               "expected phase-0 executable opcode slice") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_ADD_U32"),
               "expected S_ADD_U32 executable decode support") ||
@@ -151,6 +151,12 @@ int main() {
               "expected V_CVT_F64_F32 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("V_CVT_I32_F64"),
               "expected V_CVT_I32_F64 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_RCP_F32"),
+              "expected V_RCP_F32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_LOG_F32"),
+              "expected V_LOG_F32 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_SQRT_F64"),
+              "expected V_SQRT_F64 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("V_FREXP_EXP_I32_F32"),
               "expected V_FREXP_EXP_I32_F32 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("V_FRACT_F64"),
@@ -196,7 +202,7 @@ int main() {
   }
 
   Gfx1201Interpreter interpreter;
-  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 179u,
+  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 190u,
               "expected executable seed opcode list") ||
       !Expect(interpreter.Supports("S_ENDPGM"),
               "expected interpreter support for S_ENDPGM") ||
@@ -280,6 +286,12 @@ int main() {
               "expected interpreter support for V_CVT_F64_F32") ||
       !Expect(interpreter.Supports("V_CVT_I32_F64"),
               "expected interpreter support for V_CVT_I32_F64") ||
+      !Expect(interpreter.Supports("V_RCP_F32"),
+              "expected interpreter support for V_RCP_F32") ||
+      !Expect(interpreter.Supports("V_LOG_F32"),
+              "expected interpreter support for V_LOG_F32") ||
+      !Expect(interpreter.Supports("V_SQRT_F64"),
+              "expected interpreter support for V_SQRT_F64") ||
       !Expect(interpreter.Supports("V_FREXP_EXP_I32_F32"),
               "expected interpreter support for V_FREXP_EXP_I32_F32") ||
       !Expect(interpreter.Supports("V_FRACT_F64"),

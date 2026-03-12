@@ -16,7 +16,7 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 179> kPhase0ExecutableOpcodes{{
+constexpr std::array<std::string_view, 190> kPhase0ExecutableOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_ADD_U32",
@@ -168,6 +168,17 @@ constexpr std::array<std::string_view, 179> kPhase0ExecutableOpcodes{{
     "V_CVT_U32_F64",
     "V_CVT_I32_F32",
     "V_CVT_I32_F64",
+    "V_EXP_F32",
+    "V_LOG_F32",
+    "V_RCP_F32",
+    "V_RCP_IFLAG_F32",
+    "V_RSQ_F32",
+    "V_SQRT_F32",
+    "V_SIN_F32",
+    "V_COS_F32",
+    "V_RCP_F64",
+    "V_RSQ_F64",
+    "V_SQRT_F64",
     "V_FREXP_EXP_I32_F32",
     "V_FREXP_MANT_F32",
     "V_FRACT_F32",
@@ -712,6 +723,14 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
              instruction_name == "V_CVT_F32_UBYTE3" ||
              instruction_name == "V_CVT_F32_I32" ||
              instruction_name == "V_CVT_F32_U32" ||
+             instruction_name == "V_EXP_F32" ||
+             instruction_name == "V_LOG_F32" ||
+             instruction_name == "V_RCP_F32" ||
+             instruction_name == "V_RCP_IFLAG_F32" ||
+             instruction_name == "V_RSQ_F32" ||
+             instruction_name == "V_SQRT_F32" ||
+             instruction_name == "V_SIN_F32" ||
+             instruction_name == "V_COS_F32" ||
              instruction_name == "V_FREXP_EXP_I32_F32" ||
              instruction_name == "V_FREXP_MANT_F32" ||
              instruction_name == "V_FRACT_F32" ||
@@ -779,7 +798,10 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
         DescribeWideSourceOperand(src0, OperandRole::kSource0,
                                   OperandSlotKind::kSource0));
     *words_consumed = 1 + literal_words_consumed;
-  } else if (instruction_name == "V_TRUNC_F64" ||
+  } else if (instruction_name == "V_RCP_F64" ||
+             instruction_name == "V_RSQ_F64" ||
+             instruction_name == "V_SQRT_F64" ||
+             instruction_name == "V_TRUNC_F64" ||
              instruction_name == "V_FREXP_MANT_F64" ||
              instruction_name == "V_FRACT_F64" ||
              instruction_name == "V_CEIL_F64" ||

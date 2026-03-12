@@ -27,7 +27,7 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 179> kExecutableSeedOpcodes{{
+constexpr std::array<std::string_view, 190> kExecutableSeedOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_ADD_U32",
@@ -179,6 +179,17 @@ constexpr std::array<std::string_view, 179> kExecutableSeedOpcodes{{
     "V_CVT_U32_F64",
     "V_CVT_I32_F32",
     "V_CVT_I32_F64",
+    "V_EXP_F32",
+    "V_LOG_F32",
+    "V_RCP_F32",
+    "V_RCP_IFLAG_F32",
+    "V_RSQ_F32",
+    "V_SQRT_F32",
+    "V_SIN_F32",
+    "V_COS_F32",
+    "V_RCP_F64",
+    "V_RSQ_F64",
+    "V_SQRT_F64",
     "V_FREXP_EXP_I32_F32",
     "V_FREXP_MANT_F32",
     "V_FRACT_F32",
@@ -293,6 +304,38 @@ double EvaluateFrexpMantissaF64(double input) {
   }
   int exponent = 0;
   return std::frexp(input, &exponent);
+}
+
+float EvaluateUnaryFloatMathF32(std::string_view opcode, float input) {
+  if (opcode == "V_EXP_F32") {
+    return std::exp2(input);
+  }
+  if (opcode == "V_LOG_F32") {
+    return std::log2(input);
+  }
+  if (opcode == "V_RCP_F32" || opcode == "V_RCP_IFLAG_F32") {
+    return 1.0f / input;
+  }
+  if (opcode == "V_RSQ_F32") {
+    return 1.0f / std::sqrt(input);
+  }
+  if (opcode == "V_SQRT_F32") {
+    return std::sqrt(input);
+  }
+  if (opcode == "V_SIN_F32") {
+    return std::sin(input);
+  }
+  return std::cos(input);
+}
+
+double EvaluateUnaryFloatMathF64(std::string_view opcode, double input) {
+  if (opcode == "V_RCP_F64") {
+    return 1.0 / input;
+  }
+  if (opcode == "V_RSQ_F64") {
+    return 1.0 / std::sqrt(input);
+  }
+  return std::sqrt(input);
 }
 
 std::uint32_t ReverseBits32(std::uint32_t value) {
@@ -1008,6 +1051,50 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
     *compiled_opcode = Gfx1201CompiledOpcode::kVCvtI32F64;
     return true;
   }
+  if (opcode == "V_EXP_F32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVExpF32;
+    return true;
+  }
+  if (opcode == "V_LOG_F32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVLogF32;
+    return true;
+  }
+  if (opcode == "V_RCP_F32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVRcpF32;
+    return true;
+  }
+  if (opcode == "V_RCP_IFLAG_F32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVRcpIflagF32;
+    return true;
+  }
+  if (opcode == "V_RSQ_F32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVRsqF32;
+    return true;
+  }
+  if (opcode == "V_SQRT_F32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVSqrtF32;
+    return true;
+  }
+  if (opcode == "V_SIN_F32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVSinF32;
+    return true;
+  }
+  if (opcode == "V_COS_F32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCosF32;
+    return true;
+  }
+  if (opcode == "V_RCP_F64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVRcpF64;
+    return true;
+  }
+  if (opcode == "V_RSQ_F64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVRsqF64;
+    return true;
+  }
+  if (opcode == "V_SQRT_F64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVSqrtF64;
+    return true;
+  }
   if (opcode == "V_FREXP_EXP_I32_F32") {
     *compiled_opcode = Gfx1201CompiledOpcode::kVFrexpExpI32F32;
     return true;
@@ -1430,6 +1517,13 @@ std::uint32_t EvaluateVectorUnarySeedInstruction(std::string_view opcode,
   if (opcode == "V_CVT_F32_U32") {
     return BitCast<std::uint32_t>(static_cast<float>(value));
   }
+  if (opcode == "V_EXP_F32" || opcode == "V_LOG_F32" ||
+      opcode == "V_RCP_F32" || opcode == "V_RCP_IFLAG_F32" ||
+      opcode == "V_RSQ_F32" || opcode == "V_SQRT_F32" ||
+      opcode == "V_SIN_F32" || opcode == "V_COS_F32") {
+    return BitCast<std::uint32_t>(
+        EvaluateUnaryFloatMathF32(opcode, BitCast<float>(value)));
+  }
   if (opcode == "V_FREXP_EXP_I32_F32") {
     return BitCast<std::uint32_t>(EvaluateFrexpExpI32(BitCast<float>(value)));
   }
@@ -1496,6 +1590,11 @@ std::uint32_t EvaluateVectorUnaryFromWideSeedInstruction(std::string_view opcode
 
 std::uint64_t EvaluateWideVectorUnaryToWideSeedInstruction(
     std::string_view opcode, std::uint64_t value) {
+  if (opcode == "V_RCP_F64" || opcode == "V_RSQ_F64" ||
+      opcode == "V_SQRT_F64") {
+    return BitCast<std::uint64_t>(
+        EvaluateUnaryFloatMathF64(opcode, BitCast<double>(value)));
+  }
   if (opcode == "V_FREXP_MANT_F64") {
     return BitCast<std::uint64_t>(
         EvaluateFrexpMantissaF64(BitCast<double>(value)));
@@ -2283,6 +2382,14 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
       instruction.opcode == "V_CVT_F32_UBYTE3" ||
       instruction.opcode == "V_CVT_F32_I32" ||
       instruction.opcode == "V_CVT_F32_U32" ||
+      instruction.opcode == "V_EXP_F32" ||
+      instruction.opcode == "V_LOG_F32" ||
+      instruction.opcode == "V_RCP_F32" ||
+      instruction.opcode == "V_RCP_IFLAG_F32" ||
+      instruction.opcode == "V_RSQ_F32" ||
+      instruction.opcode == "V_SQRT_F32" ||
+      instruction.opcode == "V_SIN_F32" ||
+      instruction.opcode == "V_COS_F32" ||
       instruction.opcode == "V_FREXP_EXP_I32_F32" ||
       instruction.opcode == "V_FREXP_MANT_F32" ||
       instruction.opcode == "V_FRACT_F32" ||
@@ -2370,7 +2477,10 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
     return true;
   }
 
-  if (instruction.opcode == "V_FREXP_MANT_F64" ||
+  if (instruction.opcode == "V_RCP_F64" ||
+      instruction.opcode == "V_RSQ_F64" ||
+      instruction.opcode == "V_SQRT_F64" ||
+      instruction.opcode == "V_FREXP_MANT_F64" ||
       instruction.opcode == "V_FRACT_F64" ||
       instruction.opcode == "V_TRUNC_F64" ||
       instruction.opcode == "V_CEIL_F64" ||
@@ -2682,6 +2792,17 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kVCvtU32F64:
     case Gfx1201CompiledOpcode::kVCvtI32F32:
     case Gfx1201CompiledOpcode::kVCvtI32F64:
+    case Gfx1201CompiledOpcode::kVExpF32:
+    case Gfx1201CompiledOpcode::kVLogF32:
+    case Gfx1201CompiledOpcode::kVRcpF32:
+    case Gfx1201CompiledOpcode::kVRcpIflagF32:
+    case Gfx1201CompiledOpcode::kVRsqF32:
+    case Gfx1201CompiledOpcode::kVSqrtF32:
+    case Gfx1201CompiledOpcode::kVSinF32:
+    case Gfx1201CompiledOpcode::kVCosF32:
+    case Gfx1201CompiledOpcode::kVRcpF64:
+    case Gfx1201CompiledOpcode::kVRsqF64:
+    case Gfx1201CompiledOpcode::kVSqrtF64:
     case Gfx1201CompiledOpcode::kVFrexpExpI32F32:
     case Gfx1201CompiledOpcode::kVFrexpMantF32:
     case Gfx1201CompiledOpcode::kVFractF32:
