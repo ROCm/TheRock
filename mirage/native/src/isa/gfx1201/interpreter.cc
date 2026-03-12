@@ -21,6 +21,12 @@ To BitCast(From value) {
   return result;
 }
 
+constexpr std::uint64_t kGfx1201Wave32Mask = 0xffffffffULL;
+
+constexpr std::uint64_t MaskToGfx1201Wave32(std::uint64_t mask) {
+  return mask & kGfx1201Wave32Mask;
+}
+
 constexpr std::uint32_t kGfx1201LaneCount = 32;
 constexpr std::uint16_t kExecPairSgprIndex = 126;
 constexpr std::uint16_t kImplicitVccPairSgprIndex = 248;
@@ -28,7 +34,7 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 195> kExecutableSeedOpcodes{{
+constexpr std::array<std::string_view, 196> kExecutableSeedOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_ADD_U32",
@@ -56,6 +62,7 @@ constexpr std::array<std::string_view, 195> kExecutableSeedOpcodes{{
     "S_MOV_B32",
     "S_MOVK_I32",
     "V_MOV_B32",
+    "V_READFIRSTLANE_B32",
     "V_CMP_EQ_I32",
     "V_CMP_NE_I32",
     "V_CMP_LT_I32",
@@ -412,6 +419,22 @@ std::uint32_t FindFirstBitHighSigned(std::uint32_t value) {
   return FindFirstBitHighUnsigned(toggled);
 }
 
+std::size_t FindLowestActiveLane(std::uint64_t exec_mask) {
+  const std::uint64_t masked_exec = MaskToGfx1201Wave32(exec_mask);
+  if (masked_exec == 0) {
+    return kGfx1201LaneCount;
+  }
+#if defined(__GNUC__) || defined(__clang__)
+  return static_cast<std::size_t>(__builtin_ctzll(masked_exec));
+#else
+  std::size_t lane_index = 0;
+  while (((masked_exec >> lane_index) & 1ULL) == 0) {
+    ++lane_index;
+  }
+  return lane_index;
+#endif
+}
+
 bool IsExecutableSeedOpcode(std::string_view opcode) {
   for (std::string_view supported_opcode : kExecutableSeedOpcodes) {
     if (supported_opcode == opcode) {
@@ -619,6 +642,10 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
   }
   if (opcode == "V_MOV_B32") {
     *compiled_opcode = Gfx1201CompiledOpcode::kVMovB32;
+    return true;
+  }
+  if (opcode == "V_READFIRSTLANE_B32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVReadfirstlaneB32;
     return true;
   }
   if (opcode == "V_CMP_EQ_I32") {
@@ -1360,18 +1387,21 @@ std::uint32_t ReadScalarOperand(const InstructionOperand& operand,
     return 0;
   }
 
+  const std::uint64_t active_vcc_mask = MaskToGfx1201Wave32(state.vcc_mask);
+  const std::uint64_t active_exec_mask = MaskToGfx1201Wave32(state.exec_mask);
+
   if (operand.index >= state.sgprs.size()) {
     if (operand.index == kImplicitVccPairSgprIndex) {
-      return static_cast<std::uint32_t>(state.vcc_mask);
+      return static_cast<std::uint32_t>(active_vcc_mask);
     }
     if (operand.index == kImplicitVccPairSgprIndex + 1) {
-      return static_cast<std::uint32_t>(state.vcc_mask >> 32);
+      return 0u;
     }
     if (operand.index == kSrcVcczSgprIndex) {
-      return state.vcc_mask == 0 ? 1u : 0u;
+      return active_vcc_mask == 0 ? 1u : 0u;
     }
     if (operand.index == kSrcExeczSgprIndex) {
-      return state.exec_mask == 0 ? 1u : 0u;
+      return active_exec_mask == 0 ? 1u : 0u;
     }
     if (operand.index == kSrcSccSgprIndex) {
       return state.scc ? 1u : 0u;
@@ -1383,10 +1413,10 @@ std::uint32_t ReadScalarOperand(const InstructionOperand& operand,
   }
 
   if (operand.index == kExecPairSgprIndex) {
-    return static_cast<std::uint32_t>(state.exec_mask);
+    return static_cast<std::uint32_t>(active_exec_mask);
   }
   if (operand.index == kExecPairSgprIndex + 1) {
-    return static_cast<std::uint32_t>(state.exec_mask >> 32);
+    return 0u;
   }
   return state.sgprs[operand.index];
 }
@@ -1452,12 +1482,12 @@ std::uint64_t ReadWideSourceOperand(const InstructionOperand& operand,
   }
 
   if (operand.index == kExecPairSgprIndex) {
-    return state.exec_mask;
+    return MaskToGfx1201Wave32(state.exec_mask);
   }
 
   if (operand.index >= state.sgprs.size()) {
     if (operand.index == kImplicitVccPairSgprIndex) {
-      return state.vcc_mask;
+      return MaskToGfx1201Wave32(state.vcc_mask);
     }
     if (error_message != nullptr) {
       *error_message = "scalar register pair out of range";
@@ -2478,6 +2508,35 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
     return WriteScalarOperand(instruction.operands[0], value, state, error_message);
   }
 
+  if (instruction.opcode == "V_READFIRSTLANE_B32") {
+    if (!ValidateOperandCount(instruction, 2, error_message)) {
+      return false;
+    }
+    if (instruction.operands[0].kind != OperandKind::kSgpr) {
+      if (error_message != nullptr) {
+        *error_message = "expected scalar destination operand";
+      }
+      return false;
+    }
+    if (instruction.operands[1].kind != OperandKind::kVgpr) {
+      if (error_message != nullptr) {
+        *error_message = "expected vector register source operand";
+      }
+      return false;
+    }
+    const std::size_t lane_index = FindLowestActiveLane(state->exec_mask);
+    const std::uint32_t value =
+        lane_index < state->ActiveLaneCount()
+            ? ReadVectorOperand(instruction.operands[1], *state, lane_index,
+                                error_message)
+            : 0u;
+    if (error_message != nullptr && !error_message->empty()) {
+      return false;
+    }
+    return WriteScalarOperand(instruction.operands[0], value, state,
+                              error_message);
+  }
+
   if (instruction.opcode == "V_MOV_B32" || instruction.opcode == "V_NOT_B32" ||
       instruction.opcode == "V_BFREV_B32" ||
       instruction.opcode == "V_CLS_I32" ||
@@ -2778,6 +2837,7 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kSMovB32:
     case Gfx1201CompiledOpcode::kSMovkI32:
     case Gfx1201CompiledOpcode::kVMovB32:
+    case Gfx1201CompiledOpcode::kVReadfirstlaneB32:
     case Gfx1201CompiledOpcode::kVCmpEqI32:
     case Gfx1201CompiledOpcode::kVCmpNeI32:
     case Gfx1201CompiledOpcode::kVCmpLtI32:

@@ -16,7 +16,7 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 195> kPhase0ExecutableOpcodes{{
+constexpr std::array<std::string_view, 196> kPhase0ExecutableOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_ADD_U32",
@@ -44,6 +44,7 @@ constexpr std::array<std::string_view, 195> kPhase0ExecutableOpcodes{{
     "S_MOV_B32",
     "S_MOVK_I32",
     "V_MOV_B32",
+    "V_READFIRSTLANE_B32",
     "V_CMP_EQ_I32",
     "V_CMP_NE_I32",
     "V_CMP_LT_I32",
@@ -719,6 +720,30 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
                               OperandSlotKind::kSource1));
     *words_consumed =
         1 + src0_literal_words_consumed + src1_literal_words_consumed;
+  } else if (instruction_name == "V_READFIRSTLANE_B32") {
+    InstructionOperand dst;
+    if (!DecodeScalarDestination(ExtractBits(word, 17, 8), &dst, error_message)) {
+      return false;
+    }
+
+    std::size_t literal_words_consumed = 0;
+    InstructionOperand src0;
+    if (!DecodeVectorSource(ExtractBits(word, 0, 9), words.subspan(1),
+                            &literal_words_consumed, &src0, error_message)) {
+      return false;
+    }
+    if (src0.kind != OperandKind::kVgpr) {
+      if (error_message != nullptr) {
+        *error_message = "expected vector register source operand";
+      }
+      return false;
+    }
+
+    *instruction = DecodedInstruction::Unary(
+        instruction_name, DescribeScalarDestinationOperand(dst),
+        DescribeSourceOperand(src0, OperandRole::kSource0,
+                              OperandSlotKind::kSource0));
+    *words_consumed = 1 + literal_words_consumed;
   } else if (instruction_name == "V_MOV_B32" ||
              instruction_name == "V_NOT_B32" ||
              instruction_name == "V_BFREV_B32" ||

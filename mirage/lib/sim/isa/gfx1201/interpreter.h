@@ -42,6 +42,7 @@ enum class Gfx1201CompiledOpcode : std::uint8_t {
   kSMovB32,
   kSMovkI32,
   kVMovB32,
+  kVReadfirstlaneB32,
   kVCmpEqI32,
   kVCmpNeI32,
   kVCmpLtI32,

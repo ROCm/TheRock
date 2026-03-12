@@ -297,6 +297,13 @@ bool ExpectExecBranchState(const mirage::sim::isa::WaveExecutionState& state) {
          state.pc == 10u;
 }
 
+bool ExpectReadfirstlaneSeedState(
+    const mirage::sim::isa::WaveExecutionState& state) {
+  return state.lane_count == 32u && state.exec_mask == (1ULL << 31) &&
+         state.sgprs[60] == 0xfeedbeefu && state.halted &&
+         !state.waiting_on_barrier && state.pc == 1u;
+}
+
 bool ExpectConversionSeedState(const mirage::sim::isa::WaveExecutionState& state) {
   return state.vgprs[1][0] == 0xfffffff9u && state.vgprs[1][1] == 0xfffffff9u &&
          state.vgprs[1][2] == 0x11111111u && state.vgprs[1][3] == 0xfffffff9u &&
@@ -1092,6 +1099,30 @@ int main() {
                   OperandValueClass::kScalarRegister, OperandAccess::kRead,
                   FragmentKind::kScalar, 32u, 1u, false),
               "expected V_MOV_B32 source descriptor")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_readfirstlane_words{
+      MakeVop1(2u, 22u, 278u)};
+  if (!Expect(decoder.DecodeInstruction(v_readfirstlane_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_READFIRSTLANE_B32 decode success") ||
+      !Expect(ExpectUnaryInstruction(instruction, "V_READFIRSTLANE_B32",
+                                     OperandKind::kSgpr, 22u,
+                                     OperandKind::kVgpr, 22u),
+              "expected decoded V_READFIRSTLANE_B32 operands") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[0], OperandRole::kDestination,
+                  OperandSlotKind::kScalarDestination,
+                  OperandValueClass::kScalarRegister, OperandAccess::kWrite,
+                  FragmentKind::kScalar, 32u, 1u, false),
+              "expected V_READFIRSTLANE_B32 destination descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[1], OperandRole::kSource0,
+                  OperandSlotKind::kSource0,
+                  OperandValueClass::kVectorRegister, OperandAccess::kRead,
+                  FragmentKind::kVector, 32u, 1u, false),
+              "expected V_READFIRSTLANE_B32 source descriptor")) {
     return 1;
   }
 
@@ -2814,6 +2845,65 @@ int main() {
       !Expect(ExpectUnaryCountConvertSeedState(
                   compiled_unary_count_convert_state),
               "expected compiled unary count/convert state")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 2> readfirstlane_words{
+      MakeVop1(2u, 60u, 278u),
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> readfirstlane_program;
+  if (!Expect(decoder.DecodeProgram(readfirstlane_words, &readfirstlane_program,
+                                    &error_message),
+              "expected readfirstlane program decode success") ||
+      !Expect(readfirstlane_program.size() == 2u,
+              "expected two decoded readfirstlane instructions") ||
+      !Expect(readfirstlane_program[0].opcode == "V_READFIRSTLANE_B32",
+              "expected decoded V_READFIRSTLANE_B32") ||
+      !Expect(readfirstlane_program[1].opcode == "S_ENDPGM",
+              "expected decoded S_ENDPGM after V_READFIRSTLANE_B32")) {
+    return 1;
+  }
+
+  auto initialize_readfirstlane_state = [](WaveExecutionState* state) {
+    state->exec_mask = (1ULL << 31) | (1ULL << 40);
+    state->vgprs[22][31] = 0xfeedbeefu;
+    state->vgprs[22][5] = 0x11111111u;
+    state->sgprs[60] = 0xaaaaaaaau;
+  };
+
+  WaveExecutionState decoded_readfirstlane_state;
+  initialize_readfirstlane_state(&decoded_readfirstlane_state);
+  if (!Expect(interpreter.ExecuteProgram(readfirstlane_program,
+                                         &decoded_readfirstlane_state,
+                                         &error_message),
+              "expected decoded readfirstlane execution success") ||
+      !Expect(ExpectReadfirstlaneSeedState(decoded_readfirstlane_state),
+              "expected decoded readfirstlane wave32 state")) {
+    return 1;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_readfirstlane_program;
+  if (!Expect(interpreter.CompileProgram(readfirstlane_program,
+                                         &compiled_readfirstlane_program,
+                                         &error_message),
+              "expected compiled readfirstlane program success") ||
+      !Expect(compiled_readfirstlane_program.size() == 2u,
+              "expected two compiled readfirstlane instructions") ||
+      !Expect(compiled_readfirstlane_program[0].opcode ==
+                  Gfx1201CompiledOpcode::kVReadfirstlaneB32,
+              "expected compiled V_READFIRSTLANE_B32 opcode")) {
+    return 1;
+  }
+
+  WaveExecutionState compiled_readfirstlane_state;
+  initialize_readfirstlane_state(&compiled_readfirstlane_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_readfirstlane_program,
+                                         &compiled_readfirstlane_state,
+                                         &error_message),
+              "expected compiled readfirstlane execution success") ||
+      !Expect(ExpectReadfirstlaneSeedState(compiled_readfirstlane_state),
+              "expected compiled readfirstlane wave32 state")) {
     return 1;
   }
 

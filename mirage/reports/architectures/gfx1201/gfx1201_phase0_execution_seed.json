@@ -29,6 +29,7 @@
     "S_MOV_B32",
     "S_MOVK_I32",
     "V_MOV_B32",
+    "V_READFIRSTLANE_B32",
     "V_CMP_EQ_I32",
     "V_CMP_NE_I32",
     "V_CMP_LT_I32",
@@ -237,6 +238,7 @@
     ],
     "ENC_VOP1": [
       "V_MOV_B32",
+      "V_READFIRSTLANE_B32",
       "V_NOT_B32",
       "V_BFREV_B32",
       "V_CLS_I32",
@@ -419,6 +421,7 @@
     "Decodes the full local 32-bit signed/unsigned SOPC compare set from ENC_SOPC.",
     "Decodes S_BRANCH, S_CBRANCH_SCC0, S_CBRANCH_SCC1, S_CBRANCH_VCCZ, S_CBRANCH_VCCNZ, S_CBRANCH_EXECZ, and S_CBRANCH_EXECNZ from ENC_SOPP with sign-extended relative deltas.",
     "Decodes SGPR, inline integer, and literal sources for S_MOV_B32 and V_MOV_B32.",
+    "Decodes V_READFIRSTLANE_B32 from ENC_VOP1 with a scalar destination descriptor and a vector-register source descriptor on the current wave32-local path.",
     "Decodes V_NOT_B32, V_BFREV_B32, V_CLS_I32, V_CLZ_I32_U32, V_CTZ_I32_B32, and V_CVT_F32_UBYTE0/1/2/3 from ENC_VOP1.",
     "Decodes V_CVT_F32_I32, V_CVT_F32_U32, V_CVT_U32_F32, V_CVT_I32_F32, V_CVT_FLOOR_I32_F32, and V_CVT_NEAREST_I32_F32 from ENC_VOP1.",
     "Decodes V_EXP_F32, V_LOG_F32, V_RCP_F32, V_RCP_IFLAG_F32, V_RSQ_F32, V_SQRT_F32, V_SIN_F32, and V_COS_F32 from ENC_VOP1 on the existing unary 32-bit vector path.",
@@ -443,7 +446,9 @@
     "Executes S_BRANCH, S_CBRANCH_SCC0, S_CBRANCH_SCC1, S_CBRANCH_VCCZ, S_CBRANCH_VCCNZ, S_CBRANCH_EXECZ, and S_CBRANCH_EXECNZ with relative instruction deltas.",
     "Executes scalar add/subtract and updates SCC using carry/borrow behavior.",
     "Executes scalar move and scalar immediate move.",
+    "Normalizes gfx1201 execution to wave32 and clamps exec/vcc state to the low 32 lanes before running the local seed.",
     "Executes exec-masked V_MOV_B32.",
+    "Executes V_READFIRSTLANE_B32 by reading the lowest active lane in the wave32 exec mask and writing the selected value into an SGPR.",
     "Executes exec-masked V_CMP_EQ/NE/LT/LE/GT/GE_I32 and V_CMP_EQ/NE/LT/LE/GT/GE_U32 while preserving inactive-lane VCC bits.",
     "Executes exec-masked V_CMPX_EQ/NE/LT/LE/GT/GE_I32 and V_CMPX_EQ/NE/LT/LE/GT/GE_U32 and materializes the resulting active-lane compare mask into both vcc_mask and exec_mask.",
     "Executes exec-masked V_CMP_EQ/NE/LT/LE/GT/GE_I64/U64 while preserving inactive-lane VCC bits, using architecture-local 64-bit signed and unsigned compare semantics on SGPR/VGPR register pairs.",
@@ -471,6 +476,6 @@
     "ENC_VDS",
     "ENC_VGLOBAL",
     "The remaining ENC_VOPC surface outside this seed is now primarily the 16-bit compare families and other packed/wider forms not yet on the current local path.",
-    "The next coherent extension point is the remaining adjacent ENC_VOP1 consumer or half-width seed work, or the packed/16-bit ENC_VOPC compare work, before ENC_VOP3/half-conversion work."
+    "The next coherent extension point is the remaining adjacent ENC_VOP1 consumer or half-width seed work after V_READFIRSTLANE_B32, or the packed/16-bit ENC_VOPC compare work, before ENC_VOP3/half-conversion work."
   ]
 }
