@@ -18,7 +18,6 @@ on:
         default: "linux-mi325-1gpu-ossci-rocm"
       distributed_test_runs_on:
         description: Runner label for distributed config (multi-GPU)
-        required: true
         type: string
         default: "linux-mi325-8gpu-ossci-rocm"
       package_index_url:
@@ -56,7 +55,6 @@ on:
         required: true
         type: string
       distributed_test_runs_on:
-        required: true
         type: string
       package_index_url:
         required: true
