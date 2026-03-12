@@ -20,7 +20,7 @@ import subprocess
 import sys
 
 
-from build_tools.github_actions.manifest_utils import (
+from github_actions.manifest_utils import (
     normalize_python_version_for_filename,
     normalize_ref_for_filename,
 )
