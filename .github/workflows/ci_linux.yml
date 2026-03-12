@@ -25,6 +25,9 @@ on:
       benchmark_runs_on:
         type: string
         default: ""
+      run_functional_tests:
+        type: boolean
+        default: false
       expect_failure:
         type: boolean
       use_prebuilt_artifacts:
@@ -112,6 +115,7 @@ jobs:
       test_type: ${{ inputs.test_type }}
       test_labels: ${{ inputs.test_labels }}
       sanity_check_only_for_family: ${{ inputs.sanity_check_only_for_family == true }}
+      run_functional_tests: ${{ inputs.run_functional_tests }}
 
   test_linux_benchmarks:
     needs: [build_portable_linux_artifacts]

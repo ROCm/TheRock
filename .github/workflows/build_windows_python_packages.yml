@@ -90,8 +90,10 @@ jobs:
             --dest-dir="${{ env.PACKAGES_DIR }}" \
             --version="${{ inputs.package_version }}"
 
-      - name: Configure AWS Credentials for non-forked repos
-        if: ${{ !github.event.pull_request.head.repo.fork }}
+      # Assume the therock-ci OIDC role in ROCm/TheRock. Other repos
+      # fall back to runner base credentials (therock-ci-artifacts-external).
+      - name: Configure AWS Credentials
+        if: ${{ github.repository == 'ROCm/TheRock' && !github.event.pull_request.head.repo.fork }}
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
         with:
           aws-region: us-east-2
