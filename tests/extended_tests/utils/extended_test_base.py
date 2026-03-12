@@ -1,9 +1,13 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
 """
 Shared base class for benchmark and functional tests.
 
 Both BenchmarkBase and FunctionalBase inherit from ExtendedTestBase.
 """
 
+import json
 import os
 import shlex
 import subprocess
@@ -43,10 +47,37 @@ class ExtendedTestBase:
         self.artifact_run_id = os.getenv("ARTIFACT_RUN_ID")
         self.amdgpu_families = os.getenv("AMDGPU_FAMILIES")
         self.therock_dir = Path(__file__).resolve().parents[3]
+        self.rocm_path = (
+            Path(self.therock_bin_dir).resolve().parent
+            if self.therock_bin_dir
+            else None
+        )
 
         # Initialize test client with auto-detection
         self.client = ExtendedTestClient(auto_detect=True)
         self.client.print_system_summary()
+
+    def load_config(self, config_filename: str) -> Dict[str, Any]:
+        """Load test configuration from JSON file in configs/ directory.
+
+        Expects self.script_dir to be set by the child class.
+        Config file is resolved as: <script_dir>/../configs/<config_filename>
+        """
+        config_file = self.script_dir.parent / "configs" / config_filename
+
+        try:
+            with open(config_file, "r") as f:
+                return json.load(f)
+        except FileNotFoundError:
+            raise TestExecutionError(
+                f"Configuration file not found: {config_file}\n"
+                f"Ensure {config_filename} exists in configs/ directory"
+            )
+        except json.JSONDecodeError as e:
+            raise TestExecutionError(
+                f"Invalid JSON in configuration file: {e}\n"
+                f"Check JSON syntax in {config_filename}"
+            )
 
     def execute_command(
         self,
@@ -147,6 +178,7 @@ class ExtendedTestBase:
             "passed": sum(1 for r in test_results if r.get("status") == "PASS"),
             "failed": sum(1 for r in test_results if r.get("status") == "FAIL"),
             "error": sum(1 for r in test_results if r.get("status") == "ERROR"),
+            "skipped": sum(1 for r in test_results if r.get("status") == "SKIP"),
         }
 
         counts["total"] = len(test_results)
@@ -200,3 +232,28 @@ class ExtendedTestBase:
             )
 
         return success
+
+    def get_rocm_env(self, additional_paths: List[Path] = None) -> Dict[str, str]:
+        """Get environment with LD_LIBRARY_PATH set for ROCm libraries.
+
+        Args:
+            additional_paths: Additional library paths to include
+
+        Returns:
+            Environment dictionary with LD_LIBRARY_PATH configured
+        """
+        env = os.environ.copy()
+        rocm_lib = self.rocm_path / "lib"
+
+        # Build list of library paths
+        lib_paths = [str(rocm_lib)]
+        if additional_paths:
+            lib_paths.extend(str(p) for p in additional_paths)
+
+        # Append existing LD_LIBRARY_PATH if present
+        existing = env.get("LD_LIBRARY_PATH", "")
+        if existing:
+            lib_paths.append(existing)
+
+        env["LD_LIBRARY_PATH"] = ":".join(lib_paths)
+        return env
