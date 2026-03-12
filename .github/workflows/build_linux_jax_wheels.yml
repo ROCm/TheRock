@@ -184,6 +184,7 @@ jobs:
             dist_wheels
 
       - name: Generate JAX manifest
+        working-directory: build_tools
         run: |
           python3 -m github_actions.generate_jax_manifest \
             --manifest-dir "${{ env.PACKAGE_DIST_DIR }}/manifests" \
@@ -221,6 +222,7 @@ jobs:
 
       - name: Upload JAX manifest to artifacts S3
         if: ${{ github.repository_owner == 'ROCm' }}
+        working-directory: build_tools
         run: |
           python3 -m github_actions.upload_jax_manifest \
             --dist-dir "${{ env.PACKAGE_DIST_DIR }}" \
