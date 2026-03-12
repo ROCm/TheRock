@@ -116,7 +116,7 @@ jobs:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
 
-# TODO: remove repo-metadata once s3_prefix is available PR#3561, 
+# TODO: remove repo-metadata once s3_prefix is available PR#3561,
 # repo-metadata is a work around only for generating s3_prefix.
       - name: Set repo_sub_folder
         id: repo-metadata
@@ -244,8 +244,9 @@ jobs:
         os_profile: ${{ fromJson(needs.get_install_test_profiles.outputs.os_profiles) }}
     uses: ./.github/workflows/test_native_linux_packages_install.yml
     with:
-      repo_url: ${{ (inputs.release_type == 'prerelease' && (inputs.native_package_type == 'deb' && format('{0}/{1}', needs.get_install_test_profiles.outputs.repo_base_url, matrix.os_profile) || format('{0}/{1}/x86_64/', needs.get_install_test_profiles.outputs.repo_base_url, matrix.os_profile))) || (inputs.native_package_type == 'deb' && format('{0}/deb/{1}/', needs.get_install_test_profiles.outputs.repo_base_url, needs.get_install_test_profiles.outputs.repo_sub_folder) || format('{0}/rpm/{1}/x86_64/', needs.get_install_test_profiles.outputs.repo_base_url, needs.get_install_test_profiles.outputs.repo_sub_folder)) }}
-      gpg_key_url: ${{ inputs.release_type == 'prerelease' && format('{0}/gpg/rocm.gpg', needs.get_install_test_profiles.outputs.repo_base_url) || '' }}
+      repo_base_url: ${{ needs.get_install_test_profiles.outputs.repo_base_url }}
+      repo_sub_folder: ${{ needs.get_install_test_profiles.outputs.repo_sub_folder }}
       os_profile: ${{ matrix.os_profile }}
+      gpg_key_url: ${{ inputs.release_type == 'prerelease' && format('{0}/gpg/rocm.gpg', needs.get_install_test_profiles.outputs.repo_base_url) || '' }}
       gfx_arch: ${{ needs.get_install_test_profiles.outputs.gfx_arch }}
       install_prefix: ${{ inputs.install_prefix || '/opt/rocm/core' }}
