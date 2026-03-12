@@ -816,9 +816,9 @@ gpgcheck=0
         else:
             cmd = [sys.executable, str(rdhc_script)]
 
-        # Try to run with --help first, then without arguments
-        test_args = ["--all"]
-        print(f"\nTrying to run rdhc.py with --all...")
+        # Set RDHC arguments for full test
+        test_args = ["--rocm-install-prefix", "/opt/rocm/core", "--all"]
+        print(f"\nRun rdhc.py with --rocm-install-prefix /opt/rocm/core --all...")
         print(f"Command: {' '.join(cmd + test_args)}")
 
         try:
@@ -831,7 +831,7 @@ gpgcheck=0
                 text=True,
                 timeout=RDHC_TIMEOUT_SEC,
             )
-            print("   [PASS] rdhc.py executed successfully with --all")
+            print("   [PASS] rdhc.py executed successfully")
             if result.stdout:
                 # Print first few lines of output
                 lines = result.stdout.split("\n")[:5]
