@@ -3696,6 +3696,10 @@ bool IsBranchOpcode(std::string_view opcode) {
 
 bool IsBarrierOpcode(std::string_view opcode) { return opcode == "S_BARRIER"; }
 
+bool IsInstructionCacheMaintenanceOpcode(std::string_view opcode) {
+  return opcode == "S_ICACHE_INV";
+}
+
 std::size_t FindLowestActiveLane(std::uint64_t exec_mask) {
   if (exec_mask == 0) {
     return WaveExecutionState::kLaneCount;
@@ -7664,6 +7668,7 @@ bool Gfx950Interpreter::Supports(std::string_view opcode) const {
          IsScalarMemoryTimeOpcode(opcode) ||
          IsScalarMemoryProbeOpcode(opcode) ||
          IsBufferMaintenanceOpcode(opcode) ||
+         IsInstructionCacheMaintenanceOpcode(opcode) ||
          IsVectorBinaryOpcode(opcode) || IsVectorTernaryOpcode(opcode) ||
          IsVectorCompareOpcode(opcode) ||
          IsVectorMemoryOpcode(opcode) ||
@@ -7907,6 +7912,10 @@ bool Gfx950Interpreter::ExecuteInstruction(const DecodedInstruction& instruction
   }
 
   if (instruction.opcode == "DS_NOP") {
+    return ValidateOperandCount(instruction, 0, error_message);
+  }
+
+  if (IsInstructionCacheMaintenanceOpcode(instruction.opcode)) {
     return ValidateOperandCount(instruction, 0, error_message);
   }
 

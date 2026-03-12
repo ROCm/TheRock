@@ -6401,6 +6401,41 @@ int main() {
     }
   }
 
+  {
+    const auto icache_inv_opcode =
+        FindDefaultEncodingOpcode("S_ICACHE_INV", "ENC_SOPP");
+    if (!Expect(icache_inv_opcode.has_value(),
+                "expected s_icache_inv opcode lookup")) {
+      return 1;
+    }
+
+    const std::vector<std::uint32_t> icache_program = {
+        MakeSopp(*icache_inv_opcode),
+        MakeSopp(1),
+    };
+    decoded_program.clear();
+    if (!Expect(decoder.DecodeProgram(icache_program, &decoded_program,
+                                      &error_message),
+                error_message.c_str()) ||
+        !Expect(decoded_program.size() == 2,
+                "expected decoded s_icache_inv program size") ||
+        !Expect(decoded_program[0].opcode == "S_ICACHE_INV",
+                "expected s_icache_inv decode") ||
+        !Expect(decoded_program[0].operand_count == 0,
+                "expected s_icache_inv operand count")) {
+      return 1;
+    }
+
+    WaveExecutionState icache_state;
+    if (!Expect(interpreter.ExecuteProgram(decoded_program, &icache_state,
+                                           &error_message),
+                error_message.c_str()) ||
+        !Expect(icache_state.halted,
+                "expected s_icache_inv program to halt")) {
+      return 1;
+    }
+  }
+
   const auto ds_nop_opcode = FindDefaultEncodingOpcode("DS_NOP", "ENC_DS");
   const auto ds_write_opcode =
       FindDefaultEncodingOpcode("DS_WRITE_B32", "ENC_DS");

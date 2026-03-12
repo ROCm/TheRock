@@ -8134,14 +8134,18 @@
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_ICACHE_INV"
+      ],
       "instruction_name": "S_ICACHE_INV",
       "measured_encodings": [
         "ENC_SOPP:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SOPP:default"
+      ]
     },
     {
       "decode_measured": true,
@@ -16670,11 +16674,11 @@
   ],
   "summary": {
     "decode_measured": 1014,
-    "decode_supported": 734,
-    "decode_supported_percent_measured": 0.723866,
-    "decode_supported_percent_total": 0.590982,
-    "semantic_supported": 713,
-    "semantic_supported_percent_total": 0.574074
+    "decode_supported": 735,
+    "decode_supported_percent_measured": 0.724852,
+    "decode_supported_percent_total": 0.591787,
+    "semantic_supported": 714,
+    "semantic_supported_percent_total": 0.574879
   },
   "unmeasured_encoding_families": [
     "ENC_FLAT_SCRATCH",

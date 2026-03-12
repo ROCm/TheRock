@@ -632,7 +632,8 @@ bool Gfx950BinaryDecoder::DecodeSopp(std::uint32_t word,
   }
 
   if (instruction_name == std::string_view("S_ENDPGM") ||
-      instruction_name == std::string_view("S_BARRIER")) {
+      instruction_name == std::string_view("S_BARRIER") ||
+      instruction_name == std::string_view("S_ICACHE_INV")) {
     *instruction = DecodedInstruction::Nullary(instruction_name);
     return true;
   }

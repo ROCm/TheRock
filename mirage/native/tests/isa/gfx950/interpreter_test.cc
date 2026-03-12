@@ -1931,6 +1931,8 @@ int main() {
               "expected DS_READ_B32 support") ||
       !Expect(interpreter.Supports("DS_WRITE_B32"),
               "expected DS_WRITE_B32 support") ||
+      !Expect(interpreter.Supports("S_ICACHE_INV"),
+              "expected S_ICACHE_INV support") ||
       !Expect(interpreter.Supports("BUFFER_WBL2"),
               "expected BUFFER_WBL2 support") ||
       !Expect(interpreter.Supports("BUFFER_INV"),
@@ -10626,6 +10628,21 @@ int main() {
               error_message.c_str()) ||
       !Expect(buffer_maintenance_state.halted,
               "expected buffer maintenance program to halt")) {
+    return 1;
+  }
+  }
+
+  {
+  const std::vector<DecodedInstruction> icache_program = {
+      DecodedInstruction::Nullary("S_ICACHE_INV"),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  WaveExecutionState icache_state{};
+  if (!Expect(interpreter.ExecuteProgram(icache_program, &icache_state,
+                                         &error_message),
+              error_message.c_str()) ||
+      !Expect(icache_state.halted,
+              "expected s_icache_inv program to halt")) {
     return 1;
   }
   }
