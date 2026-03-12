@@ -398,7 +398,6 @@ test_matrix = {
             "windows": 1,
         },
     },
-
     # rocWMMA tests
     "rocwmma": {
         "job_name": "rocwmma",

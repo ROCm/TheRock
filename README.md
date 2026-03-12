@@ -207,7 +207,6 @@ hipDNN provider plugins:
 | `-DTHEROCK_ENABLE_FUSILLIPROVIDER=ON`   | Enables hipDNN Fusilli-provider plugin    |
 | `-DTHEROCK_ENABLE_HIPKERNELPROVIDER=ON` | Enables hipDNN hip kernel provider plugin |
 
-
 > [!TIP]
 > Enabling any features will implicitly enable their *minimum* dependencies. Some
 > libraries (like MIOpen) have a number of *optional* dependencies, which must
