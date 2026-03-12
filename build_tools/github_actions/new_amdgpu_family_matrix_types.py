@@ -50,10 +50,37 @@ AmdGpuFamilyMatrix.get_default_for_family(family)
     (e.g. gfx115X where each GPU is registered individually).
 
 AmdGpuFamilyMatrix.get_entries_for_groups(list[str])
-    Return MatrixEntry list for a list of group keys (e.g. you can use amdgpu_presubmit).
+    Return a GroupLookupResult with matched MatrixEntry list and unmatched keys.
 
 AmdGpuFamilyMatrix.keys()
-    Return all canonical keys in matrix definition order.
+    Return all canonical keys in alphabetical order.
+
+AmdGpuFamilyMatrix.to_nested_dict()
+    Serialize to nested dict: family → scope → platform → fields.
+    For example, the gfx101X-dgpu entry would be:
+    {'gfx101X': {'dgpu': {  'amdgpu_family': 'gfx101X-dgpu',
+                            'linux': {'build': {'build_variants': ['release'],
+                                                'expect_failure': False},
+                                        'release': {'bypass_tests_for_releases': False},
+                                        'test': {'expect_pytorch_failure': True,
+                                                'fetch-gfx-targets': [],
+                                                'run_tests': False,
+                                                'runs_on': {'benchmark': '',
+                                                            'test': '',
+                                                            'test-multi-gpu': ''},
+                                                'sanity_check_only_for_family': False,
+                                                'test_scope': 'all'}},
+                            'windows': {'build': {'build_variants': ['release'],
+                                                    'expect_failure': False},
+                                        'release': {'bypass_tests_for_releases': False},
+                                        'test': {'expect_pytorch_failure': False,
+                                                'fetch-gfx-targets': [],
+                                                'run_tests': False,
+                                                'runs_on': {'benchmark': '',
+                                                            'test': '',
+                                                            'test-multi-gpu': ''},
+                                                'sanity_check_only_for_family': False,
+                                                'test_scope': 'all'}}}},
 
 MatrixEntry.to_dict(platform=None)
     Serialize to dict. Without platform: nested linux/windows keys.
@@ -282,6 +309,14 @@ class MatrixEntry:
 
 
 @dataclass
+class GroupLookupResult:
+    """Result of get_entries_for_groups: matched entries and keys with no match."""
+
+    entries: list[MatrixEntry]
+    unmatched_keys: list[str]
+
+
+@dataclass
 class AmdGpuFamilyMatrix:
     """The complete AMD GPU family matrix."""
 
@@ -293,6 +328,8 @@ class AmdGpuFamilyMatrix:
         If no exact match is found, treats the key as a family name and returns
         the default entry for that family (e.g. 'gfx950' → gfx950-dcgpu).
         Lookup is case-insensitive.
+
+        If no match is found, return None.
         """
         key_lower = key.lower()
         for entry in self.entries:
@@ -301,8 +338,10 @@ class AmdGpuFamilyMatrix:
         return self.get_default_for_family(key)
 
     def get_default_for_family(self, family: str) -> Optional[MatrixEntry]:
-        """Return the default entry for a family (e.g. 'gfx110X' → gfx110X-all entry).
-        Lookup is case-insensitive.
+        """Return the is_family_default entry for a family, or None if no default is set.
+
+        For example, 'gfx110X' → gfx110X-all entry. Families like gfx115X that register
+        GPUs individually without a default will return None. Lookup is case-insensitive.
         """
         family_lower = family.lower()
         for entry in self.entries:
@@ -310,21 +349,29 @@ class AmdGpuFamilyMatrix:
                 return entry
         return None
 
-    def get_entries_for_groups(self, group_keys: list[str]) -> list[MatrixEntry]:
-        """Return entries matching the given keys, preserving order and skipping unknowns."""
-        result = []
+    def get_entries_for_groups(self, group_keys: list[str]) -> GroupLookupResult:
+        """Look up entries for a list of keys, returning both matches and misses.
+
+        Returns a GroupLookupResult with:
+            entries: matched MatrixEntry objects, in the order of group_keys
+            unmatched_keys: keys from group_keys that had no match in the matrix
+        """
+        entries = []
+        unmatched_keys = []
         for key in group_keys:
             entry = self.get_entry(key)
             if entry is not None:
-                result.append(entry)
-        return result
+                entries.append(entry)
+            else:
+                unmatched_keys.append(key)
+        return GroupLookupResult(entries=entries, unmatched_keys=unmatched_keys)
 
     def keys(self) -> list[str]:
-        """Return all canonical keys in matrix order."""
-        return [e.key for e in self.entries]
+        """Return all canonical keys in alphabetical order."""
+        return sorted(e.key for e in self.entries)
 
     def to_nested_dict(self) -> dict:
-        """Convert to the original nested-dict format: family → target → platform → ..."""
+        """Convert to the original nested-dict format: family → target → platform → fields"""
         result: dict = {}
         for entry in self.entries:
             result.setdefault(entry.family, {})[entry.scope] = entry.to_dict()
