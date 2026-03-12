@@ -115,6 +115,7 @@ jobs:
       BUILD_RUNID: ${{ github.run_id }}
       OUTPUT_DIR: ${{ github.workspace }}/build
       RUNFILE_BUILD_DIR: ${{ github.workspace }}/build
+      ROCM_VERSION: ${{ inputs.rocm_version }}
       RELEASE_TYPE: ${{ inputs.release_type }}
       PULL_TAG: ${{ inputs.pull_tag }}
       PULL_RUN_ID: ${{ inputs.pull_run_id }}
