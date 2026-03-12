@@ -1069,6 +1069,14 @@ bool IsScalarBufferAtomicOpcode(std::string_view opcode) {
   return HasPrefix(opcode, "S_BUFFER_ATOMIC_");
 }
 
+bool IsBufferAtomicOpcode(std::string_view opcode) {
+  return HasPrefix(opcode, "BUFFER_ATOMIC_");
+}
+
+std::string NormalizeBufferAtomicOpcode(std::string_view opcode) {
+  return "GLOBAL_" + std::string(opcode.substr(7));
+}
+
 bool IsBufferMaintenanceOpcode(std::string_view opcode) {
   return opcode == "BUFFER_WBL2" || opcode == "BUFFER_INV";
 }
@@ -7799,6 +7807,7 @@ bool Gfx950Interpreter::Supports(std::string_view opcode) const {
          IsScalarMemoryMaintenanceOpcode(opcode) ||
          IsScalarMemoryTimeOpcode(opcode) ||
          IsScalarMemoryProbeOpcode(opcode) ||
+         IsBufferAtomicOpcode(opcode) ||
          IsBufferMemoryOpcode(opcode) ||
          IsBufferMaintenanceOpcode(opcode) ||
          IsInstructionCacheMaintenanceOpcode(opcode) ||
@@ -8176,6 +8185,9 @@ bool Gfx950Interpreter::ExecuteInstruction(const DecodedInstruction& instruction
   }
   if (IsScalarAtomicOpcode(instruction.opcode)) {
     return ExecuteScalarAtomic(instruction, state, memory, error_message);
+  }
+  if (IsBufferAtomicOpcode(instruction.opcode)) {
+    return ExecuteBufferAtomic(instruction, state, memory, error_message);
   }
   if (IsBufferMemoryOpcode(instruction.opcode)) {
     return ExecuteBufferMemory(instruction, state, memory, error_message);
@@ -10793,6 +10805,326 @@ bool Gfx950Interpreter::ExecuteBufferMemory(const DecodedInstruction& instructio
              !WriteMemoryU32(memory, dword_address, value, error_message))) {
           return false;
         }
+      }
+    }
+  }
+
+  if (error_message != nullptr) {
+    error_message->clear();
+  }
+  return true;
+}
+
+bool Gfx950Interpreter::ExecuteBufferAtomic(const DecodedInstruction& instruction,
+                                            WaveExecutionState* state,
+                                            ExecutionMemory* memory,
+                                            std::string* error_message) const {
+  if (!ValidateOperandCount(instruction, 6, error_message)) {
+    return false;
+  }
+  if (memory == nullptr) {
+    if (error_message != nullptr) {
+      *error_message = "buffer atomic instruction requires execution memory";
+    }
+    return false;
+  }
+
+  const InstructionOperand& data_operand = instruction.operands[0];
+  const InstructionOperand& address_operand = instruction.operands[1];
+  const InstructionOperand& resource_operand = instruction.operands[2];
+  const InstructionOperand& soffset_operand = instruction.operands[3];
+  const InstructionOperand& offset_operand = instruction.operands[4];
+  const InstructionOperand& return_flag_operand = instruction.operands[5];
+  if (data_operand.kind != OperandKind::kVgpr) {
+    if (error_message != nullptr) {
+      *error_message = "buffer atomic data operand must be a VGPR";
+    }
+    return false;
+  }
+  if (address_operand.kind != OperandKind::kImm32 &&
+      address_operand.kind != OperandKind::kVgpr) {
+    if (error_message != nullptr) {
+      *error_message = "buffer atomic address operand must be an immediate or VGPR";
+    }
+    return false;
+  }
+  if (resource_operand.kind != OperandKind::kSgpr) {
+    if (error_message != nullptr) {
+      *error_message = "buffer atomic resource operand must use scalar registers";
+    }
+    return false;
+  }
+  if (offset_operand.kind != OperandKind::kImm32 ||
+      return_flag_operand.kind != OperandKind::kImm32) {
+    if (error_message != nullptr) {
+      *error_message =
+          "buffer atomic offset and return flag operands must be immediates";
+    }
+    return false;
+  }
+
+  const std::string normalized_opcode =
+      NormalizeBufferAtomicOpcode(instruction.opcode);
+  const std::uint8_t memory_dword_count =
+      GetGlobalAtomicMemoryDwordCount(normalized_opcode);
+  const std::uint8_t data_dword_count =
+      GetGlobalAtomicDataDwordCount(normalized_opcode);
+  const bool return_prior_value = return_flag_operand.imm32 != 0u;
+  if (data_operand.index + data_dword_count - 1 >= state->vgprs.size()) {
+    if (error_message != nullptr) {
+      *error_message = "buffer atomic data register range out of bounds";
+    }
+    return false;
+  }
+  if (address_operand.kind == OperandKind::kVgpr &&
+      address_operand.index >= state->vgprs.size()) {
+    if (error_message != nullptr) {
+      *error_message = "buffer atomic address register out of bounds";
+    }
+    return false;
+  }
+  if (resource_operand.index + 3 >= state->sgprs.size()) {
+    if (error_message != nullptr) {
+      *error_message = "buffer atomic resource descriptor out of bounds";
+    }
+    return false;
+  }
+
+  const std::uint32_t descriptor_word0 = state->sgprs[resource_operand.index];
+  const std::uint32_t descriptor_word1 =
+      state->sgprs[resource_operand.index + 1];
+  if ((descriptor_word1 >> 16) != 0u) {
+    if (error_message != nullptr) {
+      *error_message = "structured buffer descriptors are not supported";
+    }
+    return false;
+  }
+  const std::uint64_t base_address =
+      static_cast<std::uint64_t>(descriptor_word0) |
+      (static_cast<std::uint64_t>(descriptor_word1 & 0xffffu) << 32);
+  const std::uint64_t buffer_size = state->sgprs[resource_operand.index + 2];
+  const std::uint64_t transfer_size =
+      static_cast<std::uint64_t>(memory_dword_count) * sizeof(std::uint32_t);
+  const std::uint64_t instruction_offset = offset_operand.imm32;
+  const std::uint32_t scalar_offset =
+      ReadScalarOperand(soffset_operand, *state, error_message);
+  if (error_message != nullptr && !error_message->empty()) {
+    return false;
+  }
+
+  for (std::size_t lane_index = 0; lane_index < WaveExecutionState::kLaneCount;
+       ++lane_index) {
+    if (((state->exec_mask >> lane_index) & 1ULL) == 0) {
+      continue;
+    }
+
+    std::uint64_t lane_offset = 0;
+    if (address_operand.kind == OperandKind::kVgpr) {
+      lane_offset =
+          ReadVectorOperand(address_operand, *state, lane_index, error_message);
+      if (error_message != nullptr && !error_message->empty()) {
+        return false;
+      }
+    }
+
+    std::uint64_t byte_offset = static_cast<std::uint64_t>(scalar_offset);
+    if (byte_offset > std::numeric_limits<std::uint64_t>::max() - lane_offset) {
+      if (error_message != nullptr) {
+        *error_message = "buffer atomic byte offset overflow";
+      }
+      return false;
+    }
+    byte_offset += lane_offset;
+    if (byte_offset >
+        std::numeric_limits<std::uint64_t>::max() - instruction_offset) {
+      if (error_message != nullptr) {
+        *error_message = "buffer atomic byte offset overflow";
+      }
+      return false;
+    }
+    byte_offset += instruction_offset;
+    if (byte_offset > buffer_size ||
+        transfer_size > buffer_size - byte_offset) {
+      if (error_message != nullptr) {
+        *error_message = "buffer atomic access exceeds resource size";
+      }
+      return false;
+    }
+    if (base_address > std::numeric_limits<std::uint64_t>::max() - byte_offset) {
+      if (error_message != nullptr) {
+        *error_message = "buffer atomic address overflow";
+      }
+      return false;
+    }
+    const std::uint64_t address = base_address + byte_offset;
+
+    std::array<std::uint32_t, 4> old_dwords{};
+    std::array<std::uint32_t, 4> data_dwords{};
+    std::array<std::uint32_t, 4> new_dwords{};
+    for (std::uint8_t dword_index = 0; dword_index < memory_dword_count;
+         ++dword_index) {
+      const std::uint64_t dword_byte_offset =
+          static_cast<std::uint64_t>(dword_index) * sizeof(std::uint32_t);
+      if (address > std::numeric_limits<std::uint64_t>::max() - dword_byte_offset) {
+        if (error_message != nullptr) {
+          *error_message = "buffer atomic address overflow";
+        }
+        return false;
+      }
+      if (!ReadMemoryU32(memory, address + dword_byte_offset,
+                         &old_dwords[dword_index], error_message)) {
+        return false;
+      }
+      new_dwords[dword_index] = old_dwords[dword_index];
+    }
+    for (std::uint8_t dword_index = 0; dword_index < data_dword_count;
+         ++dword_index) {
+      data_dwords[dword_index] = ReadVectorOperand(
+          InstructionOperand::Vgpr(
+              static_cast<std::uint16_t>(data_operand.index + dword_index)),
+          *state, lane_index, error_message);
+      if (error_message != nullptr && !error_message->empty()) {
+        return false;
+      }
+    }
+
+    if (normalized_opcode == "GLOBAL_ATOMIC_SWAP") {
+      new_dwords[0] = data_dwords[0];
+    } else if (normalized_opcode == "GLOBAL_ATOMIC_CMPSWAP") {
+      if (old_dwords[0] == data_dwords[0]) {
+        new_dwords[0] = data_dwords[1];
+      }
+    } else if (normalized_opcode == "GLOBAL_ATOMIC_ADD") {
+      new_dwords[0] = old_dwords[0] + data_dwords[0];
+    } else if (normalized_opcode == "GLOBAL_ATOMIC_SUB") {
+      new_dwords[0] = old_dwords[0] - data_dwords[0];
+    } else if (normalized_opcode == "GLOBAL_ATOMIC_SMIN") {
+      new_dwords[0] =
+          BitCast<std::int32_t>(old_dwords[0]) <
+                  BitCast<std::int32_t>(data_dwords[0])
+              ? old_dwords[0]
+              : data_dwords[0];
+    } else if (normalized_opcode == "GLOBAL_ATOMIC_UMIN") {
+      new_dwords[0] =
+          old_dwords[0] < data_dwords[0] ? old_dwords[0] : data_dwords[0];
+    } else if (normalized_opcode == "GLOBAL_ATOMIC_SMAX") {
+      new_dwords[0] =
+          BitCast<std::int32_t>(old_dwords[0]) >
+                  BitCast<std::int32_t>(data_dwords[0])
+              ? old_dwords[0]
+              : data_dwords[0];
+    } else if (normalized_opcode == "GLOBAL_ATOMIC_UMAX") {
+      new_dwords[0] =
+          old_dwords[0] > data_dwords[0] ? old_dwords[0] : data_dwords[0];
+    } else if (normalized_opcode == "GLOBAL_ATOMIC_AND") {
+      new_dwords[0] = old_dwords[0] & data_dwords[0];
+    } else if (normalized_opcode == "GLOBAL_ATOMIC_OR") {
+      new_dwords[0] = old_dwords[0] | data_dwords[0];
+    } else if (normalized_opcode == "GLOBAL_ATOMIC_XOR") {
+      new_dwords[0] = old_dwords[0] ^ data_dwords[0];
+    } else if (normalized_opcode == "GLOBAL_ATOMIC_INC") {
+      new_dwords[0] = AtomicIncU32(old_dwords[0], data_dwords[0]);
+    } else if (normalized_opcode == "GLOBAL_ATOMIC_DEC") {
+      new_dwords[0] = AtomicDecU32(old_dwords[0], data_dwords[0]);
+    } else if (normalized_opcode == "GLOBAL_ATOMIC_ADD_F32") {
+      new_dwords[0] =
+          BitCast<std::uint32_t>(BitCast<float>(old_dwords[0]) +
+                                 BitCast<float>(data_dwords[0]));
+    } else if (normalized_opcode == "GLOBAL_ATOMIC_PK_ADD_F16") {
+      new_dwords[0] = PackedHalfAdd(old_dwords[0], data_dwords[0]);
+    } else if (normalized_opcode == "GLOBAL_ATOMIC_PK_ADD_BF16") {
+      new_dwords[0] = PackedBFloat16Add(old_dwords[0], data_dwords[0]);
+    } else if (normalized_opcode == "GLOBAL_ATOMIC_ADD_F64" ||
+               normalized_opcode == "GLOBAL_ATOMIC_MIN_F64" ||
+               normalized_opcode == "GLOBAL_ATOMIC_MAX_F64") {
+      const std::uint64_t old_value = ComposeU64(old_dwords[0], old_dwords[1]);
+      const std::uint64_t data_value = ComposeU64(data_dwords[0], data_dwords[1]);
+      const double old_double = BitCast<double>(old_value);
+      const double data_double = BitCast<double>(data_value);
+      double new_double = old_double;
+      if (normalized_opcode == "GLOBAL_ATOMIC_ADD_F64") {
+        new_double = old_double + data_double;
+      } else if (normalized_opcode == "GLOBAL_ATOMIC_MIN_F64") {
+        new_double = std::fmin(old_double, data_double);
+      } else {
+        new_double = std::fmax(old_double, data_double);
+      }
+      SplitU64(BitCast<std::uint64_t>(new_double), &new_dwords[0], &new_dwords[1]);
+    } else if (normalized_opcode == "GLOBAL_ATOMIC_SWAP_X2" ||
+               normalized_opcode == "GLOBAL_ATOMIC_CMPSWAP_X2" ||
+               normalized_opcode == "GLOBAL_ATOMIC_ADD_X2" ||
+               normalized_opcode == "GLOBAL_ATOMIC_SUB_X2" ||
+               normalized_opcode == "GLOBAL_ATOMIC_SMIN_X2" ||
+               normalized_opcode == "GLOBAL_ATOMIC_UMIN_X2" ||
+               normalized_opcode == "GLOBAL_ATOMIC_SMAX_X2" ||
+               normalized_opcode == "GLOBAL_ATOMIC_UMAX_X2" ||
+               normalized_opcode == "GLOBAL_ATOMIC_AND_X2" ||
+               normalized_opcode == "GLOBAL_ATOMIC_OR_X2" ||
+               normalized_opcode == "GLOBAL_ATOMIC_XOR_X2" ||
+               normalized_opcode == "GLOBAL_ATOMIC_INC_X2" ||
+               normalized_opcode == "GLOBAL_ATOMIC_DEC_X2") {
+      const std::uint64_t old_value = ComposeU64(old_dwords[0], old_dwords[1]);
+      const std::uint64_t data_value = ComposeU64(data_dwords[0], data_dwords[1]);
+      std::uint64_t new_value = old_value;
+      if (normalized_opcode == "GLOBAL_ATOMIC_SWAP_X2") {
+        new_value = data_value;
+      } else if (normalized_opcode == "GLOBAL_ATOMIC_CMPSWAP_X2") {
+        const std::uint64_t replacement_value =
+            ComposeU64(data_dwords[2], data_dwords[3]);
+        if (old_value == data_value) {
+          new_value = replacement_value;
+        }
+      } else if (normalized_opcode == "GLOBAL_ATOMIC_ADD_X2") {
+        new_value = old_value + data_value;
+      } else if (normalized_opcode == "GLOBAL_ATOMIC_SUB_X2") {
+        new_value = old_value - data_value;
+      } else if (normalized_opcode == "GLOBAL_ATOMIC_SMIN_X2") {
+        new_value =
+            BitCast<std::int64_t>(old_value) < BitCast<std::int64_t>(data_value)
+                ? old_value
+                : data_value;
+      } else if (normalized_opcode == "GLOBAL_ATOMIC_UMIN_X2") {
+        new_value = old_value < data_value ? old_value : data_value;
+      } else if (normalized_opcode == "GLOBAL_ATOMIC_SMAX_X2") {
+        new_value =
+            BitCast<std::int64_t>(old_value) > BitCast<std::int64_t>(data_value)
+                ? old_value
+                : data_value;
+      } else if (normalized_opcode == "GLOBAL_ATOMIC_UMAX_X2") {
+        new_value = old_value > data_value ? old_value : data_value;
+      } else if (normalized_opcode == "GLOBAL_ATOMIC_AND_X2") {
+        new_value = old_value & data_value;
+      } else if (normalized_opcode == "GLOBAL_ATOMIC_OR_X2") {
+        new_value = old_value | data_value;
+      } else if (normalized_opcode == "GLOBAL_ATOMIC_XOR_X2") {
+        new_value = old_value ^ data_value;
+      } else if (normalized_opcode == "GLOBAL_ATOMIC_INC_X2") {
+        new_value = AtomicIncU64(old_value, data_value);
+      } else if (normalized_opcode == "GLOBAL_ATOMIC_DEC_X2") {
+        new_value = AtomicDecU64(old_value, data_value);
+      }
+      SplitU64(new_value, &new_dwords[0], &new_dwords[1]);
+    } else {
+      if (error_message != nullptr) {
+        *error_message = "unsupported buffer atomic opcode";
+      }
+      return false;
+    }
+
+    for (std::uint8_t dword_index = 0; dword_index < memory_dword_count;
+         ++dword_index) {
+      const std::uint64_t dword_byte_offset =
+          static_cast<std::uint64_t>(dword_index) * sizeof(std::uint32_t);
+      if (!WriteMemoryU32(memory, address + dword_byte_offset,
+                          new_dwords[dword_index], error_message)) {
+        return false;
+      }
+      if (return_prior_value &&
+          !WriteVectorOperand(
+              InstructionOperand::Vgpr(static_cast<std::uint16_t>(
+                  data_operand.index + dword_index)),
+              lane_index, old_dwords[dword_index], state, error_message)) {
+        return false;
       }
     }
   }

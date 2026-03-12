@@ -321,6 +321,41 @@ bool IsSupportedMubufVectorMemoryOpcode(std::string_view opcode_name) {
          opcode_name == "BUFFER_LOAD_SHORT_D16_HI";
 }
 
+bool IsSupportedMubufAtomicOpcode(std::string_view opcode_name) {
+  return opcode_name == "BUFFER_ATOMIC_SWAP" ||
+         opcode_name == "BUFFER_ATOMIC_CMPSWAP" ||
+         opcode_name == "BUFFER_ATOMIC_ADD" ||
+         opcode_name == "BUFFER_ATOMIC_SUB" ||
+         opcode_name == "BUFFER_ATOMIC_SMIN" ||
+         opcode_name == "BUFFER_ATOMIC_UMIN" ||
+         opcode_name == "BUFFER_ATOMIC_SMAX" ||
+         opcode_name == "BUFFER_ATOMIC_UMAX" ||
+         opcode_name == "BUFFER_ATOMIC_AND" ||
+         opcode_name == "BUFFER_ATOMIC_OR" ||
+         opcode_name == "BUFFER_ATOMIC_XOR" ||
+         opcode_name == "BUFFER_ATOMIC_INC" ||
+         opcode_name == "BUFFER_ATOMIC_DEC" ||
+         opcode_name == "BUFFER_ATOMIC_ADD_F32" ||
+         opcode_name == "BUFFER_ATOMIC_PK_ADD_F16" ||
+         opcode_name == "BUFFER_ATOMIC_ADD_F64" ||
+         opcode_name == "BUFFER_ATOMIC_MIN_F64" ||
+         opcode_name == "BUFFER_ATOMIC_MAX_F64" ||
+         opcode_name == "BUFFER_ATOMIC_PK_ADD_BF16" ||
+         opcode_name == "BUFFER_ATOMIC_SWAP_X2" ||
+         opcode_name == "BUFFER_ATOMIC_CMPSWAP_X2" ||
+         opcode_name == "BUFFER_ATOMIC_ADD_X2" ||
+         opcode_name == "BUFFER_ATOMIC_SUB_X2" ||
+         opcode_name == "BUFFER_ATOMIC_SMIN_X2" ||
+         opcode_name == "BUFFER_ATOMIC_UMIN_X2" ||
+         opcode_name == "BUFFER_ATOMIC_SMAX_X2" ||
+         opcode_name == "BUFFER_ATOMIC_UMAX_X2" ||
+         opcode_name == "BUFFER_ATOMIC_AND_X2" ||
+         opcode_name == "BUFFER_ATOMIC_OR_X2" ||
+         opcode_name == "BUFFER_ATOMIC_XOR_X2" ||
+         opcode_name == "BUFFER_ATOMIC_INC_X2" ||
+         opcode_name == "BUFFER_ATOMIC_DEC_X2";
+}
+
 bool IsSupportedDsOpcode(std::string_view opcode_name) {
   return opcode_name == "DS_NOP" ||
          opcode_name == "DS_WRITE_B32" || opcode_name == "DS_READ_B32" ||
@@ -880,7 +915,8 @@ bool Gfx950BinaryDecoder::DecodeMubuf(std::span<const std::uint32_t> words,
     *words_consumed = 2;
     return true;
   }
-  if (!IsSupportedMubufVectorMemoryOpcode(opcode_name)) {
+  if (!IsSupportedMubufVectorMemoryOpcode(opcode_name) &&
+      !IsSupportedMubufAtomicOpcode(opcode_name)) {
     if (error_message != nullptr) {
       *error_message = "unsupported mubuf opcode";
     }
@@ -930,10 +966,17 @@ bool Gfx950BinaryDecoder::DecodeMubuf(std::span<const std::uint32_t> words,
     return false;
   }
 
-  *instruction = DecodedInstruction::FiveOperand(
-      instruction_name, data, address, resource, soffset,
-      InstructionOperand::Imm32(
-          static_cast<std::uint32_t>(ExtractBits(instruction_word, 0, 12))));
+  const InstructionOperand offset = InstructionOperand::Imm32(
+      static_cast<std::uint32_t>(ExtractBits(instruction_word, 0, 12)));
+  if (IsSupportedMubufAtomicOpcode(opcode_name)) {
+    *instruction = DecodedInstruction::SixOperand(
+        instruction_name, data, address, resource, soffset, offset,
+        InstructionOperand::Imm32(
+            static_cast<std::uint32_t>(ExtractBits(instruction_word, 14, 1))));
+  } else {
+    *instruction = DecodedInstruction::FiveOperand(instruction_name, data, address,
+                                                   resource, soffset, offset);
+  }
   *words_consumed = 2;
   return true;
 }

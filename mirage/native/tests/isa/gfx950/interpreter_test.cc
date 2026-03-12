@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstring>
@@ -295,6 +296,88 @@ bool RunAtomicSemanticCase(
         test_case.expected_return[dword_index]) {
       std::cerr << test_case.opcode << ": return dword " << +dword_index
                 << " mismatch\n";
+      return false;
+    }
+  }
+  return true;
+}
+
+bool RunBufferAtomicSemanticCase(
+    const mirage::sim::isa::Gfx950Interpreter& interpreter,
+    const AtomicSemanticCase& test_case,
+    bool return_prior_value) {
+  using namespace mirage::sim::isa;
+
+  constexpr std::uint64_t kAtomicAddress = 0x100;
+  constexpr std::uint16_t kDataReg = 20;
+  constexpr std::uint16_t kResourceReg = 2;
+
+  LinearExecutionMemory memory(0x400, 0);
+  for (std::uint8_t dword_index = 0; dword_index < test_case.memory_dword_count;
+       ++dword_index) {
+    if (!memory.WriteU32(kAtomicAddress + static_cast<std::uint64_t>(dword_index) * 4u,
+                         test_case.initial_memory[dword_index])) {
+      std::cerr << test_case.opcode << ": failed to seed buffer atomic memory\n";
+      return false;
+    }
+  }
+
+  static thread_local WaveExecutionState state;
+  state = {};
+  state.exec_mask = 0x1ULL;
+  state.sgprs[kResourceReg] = static_cast<std::uint32_t>(kAtomicAddress);
+  state.sgprs[kResourceReg + 1] = 0u;
+  state.sgprs[kResourceReg + 2] = 0x100u;
+  state.sgprs[kResourceReg + 3] = 0u;
+  for (std::uint8_t dword_index = 0; dword_index < test_case.data_dword_count;
+       ++dword_index) {
+    state.vgprs[kDataReg + dword_index][0] = test_case.data[dword_index];
+  }
+
+  const std::vector<DecodedInstruction> program = {
+      DecodedInstruction::SixOperand(test_case.opcode,
+                                     InstructionOperand::Vgpr(kDataReg),
+                                     InstructionOperand::Imm32(0),
+                                     InstructionOperand::Sgpr(kResourceReg),
+                                     InstructionOperand::Imm32(0),
+                                     InstructionOperand::Imm32(0),
+                                     InstructionOperand::Imm32(return_prior_value
+                                                                   ? 1u
+                                                                   : 0u)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+
+  std::string error_message;
+  if (!interpreter.ExecuteProgram(program, &state, &memory, &error_message)) {
+    std::cerr << test_case.opcode << ": " << error_message << '\n';
+    return false;
+  }
+
+  for (std::uint8_t dword_index = 0; dword_index < test_case.memory_dword_count;
+       ++dword_index) {
+    std::uint32_t actual_value = 0;
+    if (!memory.ReadU32(kAtomicAddress + static_cast<std::uint64_t>(dword_index) * 4u,
+                        &actual_value)) {
+      std::cerr << test_case.opcode
+                << ": failed to read buffer atomic result memory\n";
+      return false;
+    }
+    if (actual_value != test_case.expected_memory[dword_index]) {
+      std::cerr << test_case.opcode << ": buffer atomic memory dword "
+                << +dword_index << " mismatch\n";
+      return false;
+    }
+  }
+
+  for (std::uint8_t dword_index = 0; dword_index < test_case.data_dword_count;
+       ++dword_index) {
+    const std::uint32_t expected_value =
+        (return_prior_value && dword_index < test_case.memory_dword_count)
+            ? test_case.expected_return[dword_index]
+            : test_case.data[dword_index];
+    if (state.vgprs[kDataReg + dword_index][0] != expected_value) {
+      std::cerr << test_case.opcode << ": buffer atomic data dword "
+                << +dword_index << " mismatch\n";
       return false;
     }
   }
@@ -2688,6 +2771,31 @@ int main() {
       "BUFFER_LOAD_SHORT_D16",    "BUFFER_LOAD_SHORT_D16_HI",
   };
   for (std::string_view opcode : kBufferMemoryOpcodes) {
+    const std::string message = "expected " + std::string(opcode) + " support";
+    if (!Expect(interpreter.Supports(opcode), message.c_str())) {
+      return 1;
+    }
+  }
+
+  const std::array<std::string_view, 32> kBufferAtomicOpcodes = {
+      "BUFFER_ATOMIC_SWAP",      "BUFFER_ATOMIC_CMPSWAP",
+      "BUFFER_ATOMIC_ADD",       "BUFFER_ATOMIC_SUB",
+      "BUFFER_ATOMIC_SMIN",      "BUFFER_ATOMIC_UMIN",
+      "BUFFER_ATOMIC_SMAX",      "BUFFER_ATOMIC_UMAX",
+      "BUFFER_ATOMIC_AND",       "BUFFER_ATOMIC_OR",
+      "BUFFER_ATOMIC_XOR",       "BUFFER_ATOMIC_INC",
+      "BUFFER_ATOMIC_DEC",       "BUFFER_ATOMIC_ADD_F32",
+      "BUFFER_ATOMIC_PK_ADD_F16","BUFFER_ATOMIC_ADD_F64",
+      "BUFFER_ATOMIC_MIN_F64",   "BUFFER_ATOMIC_MAX_F64",
+      "BUFFER_ATOMIC_PK_ADD_BF16","BUFFER_ATOMIC_SWAP_X2",
+      "BUFFER_ATOMIC_CMPSWAP_X2","BUFFER_ATOMIC_ADD_X2",
+      "BUFFER_ATOMIC_SUB_X2",    "BUFFER_ATOMIC_SMIN_X2",
+      "BUFFER_ATOMIC_UMIN_X2",   "BUFFER_ATOMIC_SMAX_X2",
+      "BUFFER_ATOMIC_UMAX_X2",   "BUFFER_ATOMIC_AND_X2",
+      "BUFFER_ATOMIC_OR_X2",     "BUFFER_ATOMIC_XOR_X2",
+      "BUFFER_ATOMIC_INC_X2",    "BUFFER_ATOMIC_DEC_X2",
+  };
+  for (std::string_view opcode : kBufferAtomicOpcodes) {
     const std::string message = "expected " + std::string(opcode) + " support";
     if (!Expect(interpreter.Supports(opcode), message.c_str())) {
       return 1;
@@ -12921,6 +13029,24 @@ int main() {
   for (const AtomicSemanticCase& test_case : atomic_cases) {
     if (!RunAtomicSemanticCase(interpreter, test_case)) {
       return 1;
+    }
+  }
+
+  for (const AtomicSemanticCase& test_case : atomic_cases) {
+    const std::string buffer_opcode =
+        "BUFFER_" + std::string(test_case.opcode.substr(7));
+    AtomicSemanticCase buffer_case = test_case;
+    buffer_case.opcode = buffer_opcode;
+    if (!RunBufferAtomicSemanticCase(interpreter, buffer_case, true)) {
+      return 1;
+    }
+    if (test_case.opcode == "GLOBAL_ATOMIC_SWAP" ||
+        test_case.opcode == "GLOBAL_ATOMIC_CMPSWAP" ||
+        test_case.opcode == "GLOBAL_ATOMIC_SWAP_X2" ||
+        test_case.opcode == "GLOBAL_ATOMIC_CMPSWAP_X2") {
+      if (!RunBufferAtomicSemanticCase(interpreter, buffer_case, false)) {
+        return 1;
+      }
     }
   }
 

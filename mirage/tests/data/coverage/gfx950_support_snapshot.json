@@ -4379,7 +4379,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_ATOMIC_SWAP",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4388,7 +4388,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_ATOMIC_CMPSWAP",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4397,7 +4397,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_ATOMIC_ADD",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4406,7 +4406,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_ATOMIC_SUB",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4415,7 +4415,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_ATOMIC_SMIN",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4424,7 +4424,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_ATOMIC_UMIN",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4433,7 +4433,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_ATOMIC_SMAX",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4442,7 +4442,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_ATOMIC_UMAX",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4451,7 +4451,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_ATOMIC_AND",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4460,7 +4460,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_ATOMIC_OR",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4469,7 +4469,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_ATOMIC_XOR",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4478,7 +4478,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_ATOMIC_INC",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4487,7 +4487,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_ATOMIC_DEC",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4496,7 +4496,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_ATOMIC_ADD_F32",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4505,7 +4505,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_ATOMIC_PK_ADD_F16",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4514,7 +4514,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_ATOMIC_ADD_F64",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4523,7 +4523,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_ATOMIC_MIN_F64",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4532,7 +4532,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_ATOMIC_MAX_F64",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4541,7 +4541,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_ATOMIC_PK_ADD_BF16",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4550,7 +4550,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_ATOMIC_SWAP_X2",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4559,7 +4559,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_ATOMIC_CMPSWAP_X2",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4568,7 +4568,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_ATOMIC_ADD_X2",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4577,7 +4577,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_ATOMIC_SUB_X2",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4586,7 +4586,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_ATOMIC_SMIN_X2",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4595,7 +4595,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_ATOMIC_UMIN_X2",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4604,7 +4604,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_ATOMIC_SMAX_X2",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4613,7 +4613,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_ATOMIC_UMAX_X2",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4622,7 +4622,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_ATOMIC_AND_X2",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4631,7 +4631,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_ATOMIC_OR_X2",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4640,7 +4640,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_ATOMIC_XOR_X2",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4649,7 +4649,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_ATOMIC_INC_X2",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4658,7 +4658,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_ATOMIC_DEC_X2",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -16869,8 +16869,8 @@
     "decode_supported": 783,
     "decode_supported_percent_measured": 0.772189,
     "decode_supported_percent_total": 0.630435,
-    "semantic_supported": 784,
-    "semantic_supported_percent_total": 0.63124
+    "semantic_supported": 816,
+    "semantic_supported_percent_total": 0.657005
   },
   "unmeasured_encoding_families": [
     "ENC_FLAT_SCRATCH",
