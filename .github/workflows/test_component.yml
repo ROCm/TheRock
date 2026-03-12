@@ -103,6 +103,11 @@ jobs:
         with:
           repository: "ROCm/TheRock"
 
+      - name: Fetch required submodules
+        if: ${{ fromJSON(inputs.component).submodules != '' }}
+        run: |
+          git submodule update --init --depth 1 ${{ fromJSON(inputs.component).submodules }}
+
       - name: Run setup test environment workflow
         timeout-minutes: 15
         uses: './.github/actions/setup_test_environment'
@@ -144,11 +149,6 @@ jobs:
           echo "ASAN_OPTIONS=detect_odr_violation=0:quarantine_size_mb=600" >> $GITHUB_ENV
           echo "HSA_XNACK=1" >> $GITHUB_ENV
           echo "ASAN_SYMBOLIZER_PATH=${{ env.OUTPUT_ARTIFACTS_DIR }}/llvm/bin/llvm-symbolizer" >> $GITHUB_ENV
-
-      - name: Fetch required submodules
-        if: ${{ fromJSON(inputs.component).submodules != '' }}
-        run: |
-          git submodule update --init --depth 1 ${{ fromJSON(inputs.component).submodules }}
 
       - name: Test
         id: test
