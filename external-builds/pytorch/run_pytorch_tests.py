@@ -77,6 +77,7 @@ from pathlib import Path
 import pytest
 
 from pytorch_utils import (
+    check_pytorch_source_version,
     set_gpu_execution_policy,
     detect_pytorch_version,
 )
@@ -215,6 +216,7 @@ def main() -> int:
         args, passthrough_pytest_args = cmd_arguments(sys.argv[1:])
 
         pytorch_dir = args.pytorch_dir
+        check_pytorch_source_version(pytorch_dir)
 
         # CRITICAL: Determine AMDGPU family and set HIP_VISIBLE_DEVICES
         # BEFORE importing torch/running pytest. Once torch.cuda is initialized,
