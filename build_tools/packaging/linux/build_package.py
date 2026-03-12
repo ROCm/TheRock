@@ -274,10 +274,10 @@ def generate_rules_file(pkg_info, deb_dir, config: PackageConfig):
     # Get package name for changelog installation
     pkg_name = update_package_name(pkg_info.get("Package"), config)
 
-    # Disable debian dh_strip for multi-arch buillds
+    # Disable debian dh_strip for multi-arch builds
     # TODO: Fix required for dh_strip error in multi-arch builds
     if config.enable_multi_arch:
-        disable_dh_strip = "True"
+        disable_dh_strip = True
 
     env = Environment(loader=FileSystemLoader(str(SCRIPT_DIR)))
     template = env.get_template("template/debian_rules.j2")
@@ -307,46 +307,32 @@ def generate_control_file(pkg_info, deb_dir, config: PackageConfig):
     """
     print_function_name()
     control_file = Path(deb_dir) / "control"
-
     pkg_name = pkg_info.get("Package")
     is_meta = is_meta_package(pkg_info)
-    provides = ""
-    replaces = ""
-    conflicts = ""
-    debrecommends = ""
-    debsuggests = ""
+
+    # Initialize optional fields
+    provides = replaces = conflicts = ""
+    debrecommends = debsuggests = ""
 
     if config.versioned_pkg:
-        recommends_list = pkg_info.get("DEBRecommends", [])
-        debrecommends = convert_to_versiondependency(recommends_list, config)
-        suggests_list = pkg_info.get("DEBSuggests", [])
-        debsuggests = convert_to_versiondependency(suggests_list, config)
-
-        depends_list = get_dependency_list_for_multiarch(pkg_info, "DEBDepends", config)
+        # Get -> Filter -> Transform
+        debrecommends = process_dependency_field(pkg_info, "DEBRecommends", config)
+        debsuggests = process_dependency_field(pkg_info, "DEBSuggests", config)
+        depends = process_dependency_field(
+            pkg_info, "DEBDepends", config, use_multiarch=True
+        )
     else:
-        depends_list = [pkg_name]
-        provides_list = [
-            debian_replace_devel_name(pkg)
-            for pkg in (pkg_info.get("Provides", []) or [])
-        ]
-        provides = ", ".join(provides_list)
-        replaces_list = [
-            debian_replace_devel_name(pkg)
-            for pkg in (pkg_info.get("Replaces", []) or [])
-        ]
-        replaces = ", ".join(replaces_list)
-        conflicts_list = [
-            debian_replace_devel_name(pkg)
-            for pkg in (pkg_info.get("Conflicts", []) or [])
-        ]
-        conflicts = ", ".join(conflicts_list)
-
-    depends = resolve_versioned_dependencies(depends_list, config, is_meta)
+        # Get -> Transform -> Join
+        provides = process_name_field(pkg_info, "Provides", debian_replace_devel_name)
+        replaces = process_name_field(pkg_info, "Replaces", debian_replace_devel_name)
+        conflicts = process_name_field(pkg_info, "Conflicts", debian_replace_devel_name)
+        # Non-versioned package depends on versioned package itself
+        depends = resolve_versioned_dependencies([pkg_name], config, is_meta)
 
     pkg_name = update_package_name(pkg_name, config)
+
     env = Environment(loader=FileSystemLoader(str(SCRIPT_DIR)))
     template = env.get_template("template/debian_control.j2")
-    # Prepare your context dictionary
     context = {
         "source": pkg_name,
         "depends": depends,
@@ -565,15 +551,12 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
     os.makedirs(os.path.dirname(specfile), exist_ok=True)
 
     pkg_info = get_package_info(pkg_name)
-    # populate packge version details
     version = f"{config.rocm_version}"
-    # TBD: Whether to use component version details?
-    #    version = pkg_info.get("Version")
-    provides = ""
-    obsoletes = ""
-    conflicts = ""
-    rpmrecommends = ""
-    rpmsuggests = ""
+    is_meta = is_meta_package(pkg_info)
+
+    # Initialize optional fields
+    provides = obsoletes = conflicts = ""
+    rpmrecommends = rpmsuggests = ""
     sourcedir_list = []
     rpm_scripts = []
     # amdrocm-debugger: Exclude libpython requirements
@@ -581,15 +564,12 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
     # automatically selects the binary matching the system's Python version
     exclude_libpython_requires = pkg_name == "amdrocm-debugger"
 
-    is_meta = is_meta_package(pkg_info)
     if config.versioned_pkg:
-        recommends_list = pkg_info.get("RPMRecommends", [])
-        rpmrecommends = convert_to_versiondependency(recommends_list, config)
-        suggests_list = pkg_info.get("RPMSuggests", [])
-        rpmsuggests = convert_to_versiondependency(suggests_list, config)
-
-        requires_list = get_dependency_list_for_multiarch(
-            pkg_info, "RPMRequires", config
+        # Get -> Filter -> Transform
+        rpmrecommends = process_dependency_field(pkg_info, "RPMRecommends", config)
+        rpmsuggests = process_dependency_field(pkg_info, "RPMSuggests", config)
+        requires = process_dependency_field(
+            pkg_info, "RPMRequires", config, use_multiarch=True
         )
 
         dir_list = filter_components_fromartifactory(
@@ -618,22 +598,17 @@ def generate_spec_file(pkg_name, specfile, config: PackageConfig):
             for path in sourcedir_list:
                 convert_runpath_to_rpath(path)
     else:
-        # Provides, Obsoletes and Conflicts field is only valid
-        # for non-versioned packages
-        provides = ", ".join(pkg_info.get("Provides", []) or [])
-        obsoletes = ", ".join(pkg_info.get("Obsoletes", []) or [])
-        conflicts = ", ".join(pkg_info.get("Conflicts", []) or [])
-        requires_list = [pkg_name]
+        # Get -> Transform -> Join (no transform needed for RPM)
+        provides = process_name_field(pkg_info, "Provides")
+        obsoletes = process_name_field(pkg_info, "Obsoletes")
+        conflicts = process_name_field(pkg_info, "Conflicts")
+        # Non-versioned package requires versioned package itself
+        requires = resolve_versioned_dependencies([pkg_name], config, is_meta)
 
-    requires = resolve_versioned_dependencies(requires_list, config, is_meta)
-
-    # Update package name with version details and gfxarch
     pkg_name = update_package_name(pkg_name, config)
 
     env = Environment(loader=FileSystemLoader(str(SCRIPT_DIR)))
     template = env.get_template("template/rpm_specfile.j2")
-
-    # Prepare your context dictionary
     context = {
         "pkg_name": pkg_name,
         "version": version,
@@ -896,9 +871,6 @@ def run(args: argparse.Namespace):
                         else pkg_name
                     )
                     failed_pkglist.append(variant_name)
-
-            if not pkg_built:
-                failed_pkglist.append(pkg_name)
 
         # Clean the build directories
         clean_package_build_dir(config)

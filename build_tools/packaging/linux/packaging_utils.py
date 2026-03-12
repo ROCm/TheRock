@@ -446,6 +446,62 @@ def debian_replace_devel_name(pkg_name):
     return pkg_name
 
 
+def process_name_field(
+    pkg_info: dict,
+    field_key: str,
+    transform_fn=None,
+) -> str:
+    """Process a name field: get -> transform -> join.
+
+    For non-dependency fields: Provides, Replaces, Conflicts, Obsoletes
+
+    Parameters:
+    pkg_info: Package details from JSON
+    field_key: Key to extract (e.g., "Provides", "Conflicts")
+    transform_fn: Optional function to transform each name
+
+    Returns: Comma-separated string of names
+    """
+    name_list = pkg_info.get(field_key, []) or []
+    if transform_fn:
+        name_list = [transform_fn(name) for name in name_list]
+    return ", ".join(name_list)
+
+
+def process_dependency_field(
+    pkg_info: dict,
+    field_key: str,
+    config: PackageConfig,
+    use_multiarch: bool = False,
+) -> str:
+    """Process a dependency field with 3-step pattern.
+
+    Works for: DEBDepends, DEBRecommends, DEBSuggests,
+               RPMRequires, RPMRecommends, RPMSuggests
+
+    Parameters:
+    pkg_info: Package details from JSON
+    field_key: Key to extract (e.g., "DEBDepends", "RPMRecommends")
+    config: Configuration object containing package metadata
+    use_multiarch: If True, apply multi-arch expansion for main dependencies
+
+    Returns: Comma-separated string of versioned dependencies
+    """
+    is_meta = is_meta_package(pkg_info)
+    # Step 1 & 2: Get + Filter
+    if use_multiarch:
+        dep_list = get_dependency_list_for_multiarch(pkg_info, field_key, config)
+    else:
+        dep_list = pkg_info.get(field_key, []) or []
+
+    # Return empty string if no dependencies
+    if not dep_list:
+        return ""
+
+    # Step 3: Transform
+    return resolve_versioned_dependencies(dep_list, config, is_meta)
+
+
 def convert_to_versiondependency(
     dependency_list, config: PackageConfig, preserve_arch=False
 ):
@@ -733,6 +789,55 @@ def resolve_versioned_dependencies(dep_list, config: PackageConfig, is_meta):
     return deps
 
 
+def has_artifact_for_arch(pkg_name, artifacts_dir, gfx_arch):
+    """Check if a package has artifacts available for a specific architecture.
+
+    Parameters:
+    pkg_name: Package name to check
+    artifacts_dir: Directory where artifacts are stored
+    gfx_arch: Graphics architecture to check for
+
+    Returns: True if artifacts exist for the architecture, False otherwise
+    """
+    pkg_info = get_package_info(pkg_name)
+    if pkg_info is None:
+        return False
+
+    # Non-gfxarch packages don't need arch-specific artifacts
+    if not is_gfxarch_package(pkg_info, enable_multi_arch=True):
+        return True
+
+    # Meta packages don't have their own artifacts
+    if is_meta_package(pkg_info):
+        return True
+
+    artifactory = pkg_info.get("Artifactory")
+    if artifactory is None:
+        return False
+
+    # Check if at least one required artifact directory exists for this architecture
+    for artifact in artifactory:
+        artifact_prefix = artifact["Artifact"]
+        # Check for artifact-specific gfxarch override
+        if "Artifact_Gfxarch" in artifact:
+            is_gfxarch = str(artifact["Artifact_Gfxarch"]).lower() == "true"
+            artifact_suffix = gfx_arch if is_gfxarch else "generic"
+        else:
+            artifact_suffix = gfx_arch
+
+        for subdir in artifact["Artifact_Subdir"]:
+            component_list = subdir["Components"]
+            for component in component_list:
+                source_dir = (
+                    Path(artifacts_dir)
+                    / f"{artifact_prefix}_{component}_{artifact_suffix}"
+                )
+                if source_dir.exists():
+                    return True
+
+    return False
+
+
 def get_dependency_list_for_multiarch(pkg_info, dep_key, config: PackageConfig):
     """Determine the appropriate dependency list for multi-arch mode.
 
@@ -757,7 +862,13 @@ def get_dependency_list_for_multiarch(pkg_info, dep_key, config: PackageConfig):
             )
         else:
             # Arch-specific metapackage: depend on actual runtime packages
-            return pkg_info.get(dep_key, [])
+            # Filter out dependencies that don't have artifacts for this architecture
+            dep_list = pkg_info.get(dep_key, [])
+            return [
+                dep
+                for dep in dep_list
+                if has_artifact_for_arch(dep, config.artifacts_dir, config.gfx_arch)
+            ]
     elif config.enable_multi_arch and config.gfx_arch == GFX_GENERIC:
         # Generic package in multi-arch mode:
         # Only include non-gfxarch dependencies
@@ -773,11 +884,13 @@ def get_dependency_list_for_multiarch(pkg_info, dep_key, config: PackageConfig):
     elif config.enable_multi_arch and config.gfx_arch != GFX_GENERIC:
         # Gfx-specific package in multi-arch mode:
         # Depend on generic self + gfxarch dependencies with arch suffix
+        # Filter out dependencies that don't have artifacts for this architecture
         dep_list = pkg_info.get(dep_key, [])
         gfxarch_deps = [
             dep
             for dep in dep_list
             if is_gfxarch_package(get_package_info(dep) or {}, config.enable_multi_arch)
+            and has_artifact_for_arch(dep, config.artifacts_dir, config.gfx_arch)
         ]
         return [pkg_name] + gfxarch_deps
     else:
