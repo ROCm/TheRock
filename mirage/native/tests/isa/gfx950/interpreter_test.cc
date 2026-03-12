@@ -10846,8 +10846,32 @@ int main() {
        0xfedcba9876543210ULL, 0xfedcba9876543210ULL},
   }};
 
+  const auto execute_scalar_atomic_program =
+      [&](const std::vector<DecodedInstruction>& program,
+          WaveExecutionState* state,
+          LinearExecutionMemory* memory,
+          bool use_compiled_program,
+          const char* mode) {
+        if (use_compiled_program) {
+          std::vector<CompiledInstruction> compiled_program;
+          if (!Expect(interpreter.CompileProgram(program, &compiled_program,
+                                                 &error_message),
+                      error_message.c_str())) {
+            std::cerr << mode << " compile\n";
+            return false;
+          }
+          return Expect(interpreter.ExecuteProgram(compiled_program, state, memory,
+                                                  &error_message),
+                        error_message.c_str());
+        }
+        return Expect(interpreter.ExecuteProgram(program, state, memory,
+                                                &error_message),
+                      error_message.c_str());
+      };
+
   const auto run_scalar_atomic_cases32 =
       [&](bool uses_buffer_descriptor,
+          bool use_compiled_program,
           const auto& cases,
           const auto& opcodes,
           const char* mode) {
@@ -10880,9 +10904,8 @@ int main() {
         }
         program.push_back(DecodedInstruction::Nullary("S_ENDPGM"));
 
-        if (!Expect(interpreter.ExecuteProgram(program, &state, &memory,
-                                               &error_message),
-                    error_message.c_str()) ||
+        if (!execute_scalar_atomic_program(program, &state, &memory,
+                                           use_compiled_program, mode) ||
             !Expect(state.halted, "expected scalar atomic program to halt")) {
           std::cerr << mode << '\n';
           return false;
@@ -10908,6 +10931,7 @@ int main() {
 
   const auto run_scalar_atomic_cases64 =
       [&](bool uses_buffer_descriptor,
+          bool use_compiled_program,
           const auto& cases,
           const auto& opcodes,
           const char* mode) {
@@ -10941,9 +10965,8 @@ int main() {
         }
         program.push_back(DecodedInstruction::Nullary("S_ENDPGM"));
 
-        if (!Expect(interpreter.ExecuteProgram(program, &state, &memory,
-                                               &error_message),
-                    error_message.c_str()) ||
+        if (!execute_scalar_atomic_program(program, &state, &memory,
+                                           use_compiled_program, mode) ||
             !Expect(state.halted, "expected scalar atomic x2 program to halt")) {
           std::cerr << mode << '\n';
           return false;
@@ -10971,6 +10994,7 @@ int main() {
 
   const auto run_scalar_atomic_cmpswap_cases32 =
       [&](bool uses_buffer_descriptor,
+          bool use_compiled_program,
           std::string_view opcode,
           const auto& cases,
           const char* mode) {
@@ -11003,9 +11027,8 @@ int main() {
         }
         program.push_back(DecodedInstruction::Nullary("S_ENDPGM"));
 
-        if (!Expect(interpreter.ExecuteProgram(program, &state, &memory,
-                                               &error_message),
-                    error_message.c_str()) ||
+        if (!execute_scalar_atomic_program(program, &state, &memory,
+                                           use_compiled_program, mode) ||
             !Expect(state.halted,
                     "expected scalar atomic cmpswap program to halt")) {
           std::cerr << mode << '\n';
@@ -11034,6 +11057,7 @@ int main() {
 
   const auto run_scalar_atomic_cmpswap_cases64 =
       [&](bool uses_buffer_descriptor,
+          bool use_compiled_program,
           std::string_view opcode,
           const auto& cases,
           const char* mode) {
@@ -11068,9 +11092,8 @@ int main() {
         }
         program.push_back(DecodedInstruction::Nullary("S_ENDPGM"));
 
-        if (!Expect(interpreter.ExecuteProgram(program, &state, &memory,
-                                               &error_message),
-                    error_message.c_str()) ||
+        if (!execute_scalar_atomic_program(program, &state, &memory,
+                                           use_compiled_program, mode) ||
             !Expect(state.halted,
                     "expected scalar atomic cmpswap x2 program to halt")) {
           std::cerr << mode << '\n';
@@ -11101,30 +11124,60 @@ int main() {
         return true;
       };
 
-  if (!run_scalar_atomic_cases32(false, kScalarAtomicCases32,
+  if (!run_scalar_atomic_cases32(false, false, kScalarAtomicCases32,
                                  kScalarAtomicCase32Opcodes,
                                  "decoded scalar atomic") ||
-      !run_scalar_atomic_cases32(true, kScalarAtomicCases32,
+      !run_scalar_atomic_cases32(true, false, kScalarAtomicCases32,
                                  kScalarBufferAtomicCase32Opcodes,
                                  "decoded scalar buffer atomic") ||
-      !run_scalar_atomic_cases64(false, kScalarAtomicCases64,
+      !run_scalar_atomic_cases64(false, false, kScalarAtomicCases64,
                                  kScalarAtomicCase64Opcodes,
                                  "decoded scalar atomic x2") ||
-      !run_scalar_atomic_cases64(true, kScalarAtomicCases64,
+      !run_scalar_atomic_cases64(true, false, kScalarAtomicCases64,
                                  kScalarBufferAtomicCase64Opcodes,
                                  "decoded scalar buffer atomic x2") ||
-      !run_scalar_atomic_cmpswap_cases32(false, "S_ATOMIC_CMPSWAP",
+      !run_scalar_atomic_cmpswap_cases32(false, false, "S_ATOMIC_CMPSWAP",
                                          kScalarAtomicCmpSwapCases32,
                                          "decoded scalar atomic cmpswap") ||
-      !run_scalar_atomic_cmpswap_cases32(true, "S_BUFFER_ATOMIC_CMPSWAP",
+      !run_scalar_atomic_cmpswap_cases32(true, false,
+                                         "S_BUFFER_ATOMIC_CMPSWAP",
                                          kScalarAtomicCmpSwapCases32,
                                          "decoded scalar buffer atomic cmpswap") ||
-      !run_scalar_atomic_cmpswap_cases64(false, "S_ATOMIC_CMPSWAP_X2",
+      !run_scalar_atomic_cmpswap_cases64(false, false,
+                                         "S_ATOMIC_CMPSWAP_X2",
                                          kScalarAtomicCmpSwapCases64,
                                          "decoded scalar atomic cmpswap x2") ||
-      !run_scalar_atomic_cmpswap_cases64(true, "S_BUFFER_ATOMIC_CMPSWAP_X2",
+      !run_scalar_atomic_cmpswap_cases64(true, false,
+                                         "S_BUFFER_ATOMIC_CMPSWAP_X2",
                                          kScalarAtomicCmpSwapCases64,
-                                         "decoded scalar buffer atomic cmpswap x2")) {
+                                         "decoded scalar buffer atomic cmpswap x2") ||
+      !run_scalar_atomic_cases32(false, true, kScalarAtomicCases32,
+                                 kScalarAtomicCase32Opcodes,
+                                 "compiled scalar atomic") ||
+      !run_scalar_atomic_cases32(true, true, kScalarAtomicCases32,
+                                 kScalarBufferAtomicCase32Opcodes,
+                                 "compiled scalar buffer atomic") ||
+      !run_scalar_atomic_cases64(false, true, kScalarAtomicCases64,
+                                 kScalarAtomicCase64Opcodes,
+                                 "compiled scalar atomic x2") ||
+      !run_scalar_atomic_cases64(true, true, kScalarAtomicCases64,
+                                 kScalarBufferAtomicCase64Opcodes,
+                                 "compiled scalar buffer atomic x2") ||
+      !run_scalar_atomic_cmpswap_cases32(false, true, "S_ATOMIC_CMPSWAP",
+                                         kScalarAtomicCmpSwapCases32,
+                                         "compiled scalar atomic cmpswap") ||
+      !run_scalar_atomic_cmpswap_cases32(true, true,
+                                         "S_BUFFER_ATOMIC_CMPSWAP",
+                                         kScalarAtomicCmpSwapCases32,
+                                         "compiled scalar buffer atomic cmpswap") ||
+      !run_scalar_atomic_cmpswap_cases64(false, true,
+                                         "S_ATOMIC_CMPSWAP_X2",
+                                         kScalarAtomicCmpSwapCases64,
+                                         "compiled scalar atomic cmpswap x2") ||
+      !run_scalar_atomic_cmpswap_cases64(true, true,
+                                         "S_BUFFER_ATOMIC_CMPSWAP_X2",
+                                         kScalarAtomicCmpSwapCases64,
+                                         "compiled scalar buffer atomic cmpswap x2")) {
     return 1;
   }
   }
@@ -11145,26 +11198,56 @@ int main() {
       DecodedInstruction::OneOperand("S_MEMREALTIME", InstructionOperand::Sgpr(6)),
       DecodedInstruction::Nullary("S_ENDPGM"),
   };
-  WaveExecutionState scalar_maintenance_state{};
-  scalar_maintenance_state.sgprs[0] = 0x200u;
-  scalar_maintenance_state.sgprs[1] = 0u;
-  scalar_maintenance_state.sgprs[2] = 0x80u;
+  const auto make_scalar_maintenance_state = []() {
+    WaveExecutionState state{};
+    state.sgprs[0] = 0x200u;
+    state.sgprs[1] = 0u;
+    state.sgprs[2] = 0x80u;
+    return state;
+  };
+  const auto validate_scalar_maintenance_state =
+      [&](const WaveExecutionState& state, const char* mode) {
+        if (!Expect(state.halted, "expected scalar maintenance program to halt") ||
+            !Expect(state.sgprs[0] == 0x200u,
+                    "expected scalar maintenance to preserve base") ||
+            !Expect(state.sgprs[2] == 0x80u,
+                    "expected scalar maintenance to preserve offset") ||
+            !Expect(state.sgprs[4] != 0u || state.sgprs[5] != 0u,
+                    "expected s_memtime to write a timestamp") ||
+            !Expect(state.sgprs[6] != 0u || state.sgprs[7] != 0u,
+                    "expected s_memrealtime to write a timestamp")) {
+          std::cerr << mode << '\n';
+          return false;
+        }
+        return true;
+      };
+
+  WaveExecutionState decoded_scalar_maintenance_state =
+      make_scalar_maintenance_state();
   if (!Expect(interpreter.ExecuteProgram(scalar_maintenance_program,
-                                         &scalar_maintenance_state,
+                                         &decoded_scalar_maintenance_state,
                                          &error_message),
               error_message.c_str()) ||
-      !Expect(scalar_maintenance_state.halted,
-              "expected scalar maintenance program to halt") ||
-      !Expect(scalar_maintenance_state.sgprs[0] == 0x200u,
-              "expected scalar maintenance to preserve base") ||
-      !Expect(scalar_maintenance_state.sgprs[2] == 0x80u,
-              "expected scalar maintenance to preserve offset") ||
-      !Expect(scalar_maintenance_state.sgprs[4] != 0u ||
-                  scalar_maintenance_state.sgprs[5] != 0u,
-              "expected s_memtime to write a timestamp") ||
-      !Expect(scalar_maintenance_state.sgprs[6] != 0u ||
-                  scalar_maintenance_state.sgprs[7] != 0u,
-              "expected s_memrealtime to write a timestamp")) {
+      !validate_scalar_maintenance_state(decoded_scalar_maintenance_state,
+                                         "decoded scalar maintenance")) {
+    return 1;
+  }
+
+  std::vector<CompiledInstruction> compiled_scalar_maintenance_program;
+  if (!Expect(interpreter.CompileProgram(scalar_maintenance_program,
+                                         &compiled_scalar_maintenance_program,
+                                         &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+  WaveExecutionState compiled_scalar_maintenance_state =
+      make_scalar_maintenance_state();
+  if (!Expect(interpreter.ExecuteProgram(compiled_scalar_maintenance_program,
+                                         &compiled_scalar_maintenance_state,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_scalar_maintenance_state(compiled_scalar_maintenance_state,
+                                         "compiled scalar maintenance")) {
     return 1;
   }
   }
@@ -11181,26 +11264,56 @@ int main() {
                                        InstructionOperand::Sgpr(12)),
       DecodedInstruction::Nullary("S_ENDPGM"),
   };
-  WaveExecutionState scalar_probe_state{};
-  scalar_probe_state.sgprs[0] = 0x180u;
-  scalar_probe_state.sgprs[1] = 0u;
-  scalar_probe_state.sgprs[8] = 0x240u;
-  scalar_probe_state.sgprs[9] = 0u;
-  scalar_probe_state.sgprs[10] = 0x100u;
-  scalar_probe_state.sgprs[11] = 0u;
-  scalar_probe_state.sgprs[12] = 0x20u;
+  const auto make_scalar_probe_state = []() {
+    WaveExecutionState state{};
+    state.sgprs[0] = 0x180u;
+    state.sgprs[1] = 0u;
+    state.sgprs[8] = 0x240u;
+    state.sgprs[9] = 0u;
+    state.sgprs[10] = 0x100u;
+    state.sgprs[11] = 0u;
+    state.sgprs[12] = 0x20u;
+    return state;
+  };
+  const auto validate_scalar_probe_state =
+      [&](const WaveExecutionState& state, const char* mode) {
+        if (!Expect(state.halted, "expected scalar probe program to halt") ||
+            !Expect(state.sgprs[0] == 0x180u,
+                    "expected s_atc_probe to preserve base") ||
+            !Expect(state.sgprs[8] == 0x240u,
+                    "expected s_atc_probe_buffer to preserve descriptor") ||
+            !Expect(state.sgprs[12] == 0x20u,
+                    "expected s_atc_probe_buffer to preserve soffset")) {
+          std::cerr << mode << '\n';
+          return false;
+        }
+        return true;
+      };
+
+  WaveExecutionState decoded_scalar_probe_state = make_scalar_probe_state();
   if (!Expect(interpreter.ExecuteProgram(scalar_probe_program,
-                                         &scalar_probe_state,
+                                         &decoded_scalar_probe_state,
                                          &error_message),
               error_message.c_str()) ||
-      !Expect(scalar_probe_state.halted,
-              "expected scalar probe program to halt") ||
-      !Expect(scalar_probe_state.sgprs[0] == 0x180u,
-              "expected s_atc_probe to preserve base") ||
-      !Expect(scalar_probe_state.sgprs[8] == 0x240u,
-              "expected s_atc_probe_buffer to preserve descriptor") ||
-      !Expect(scalar_probe_state.sgprs[12] == 0x20u,
-              "expected s_atc_probe_buffer to preserve soffset")) {
+      !validate_scalar_probe_state(decoded_scalar_probe_state,
+                                   "decoded scalar probe")) {
+    return 1;
+  }
+
+  std::vector<CompiledInstruction> compiled_scalar_probe_program;
+  if (!Expect(interpreter.CompileProgram(scalar_probe_program,
+                                         &compiled_scalar_probe_program,
+                                         &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+  WaveExecutionState compiled_scalar_probe_state = make_scalar_probe_state();
+  if (!Expect(interpreter.ExecuteProgram(compiled_scalar_probe_program,
+                                         &compiled_scalar_probe_state,
+                                         &error_message),
+              error_message.c_str()) ||
+      !validate_scalar_probe_state(compiled_scalar_probe_state,
+                                   "compiled scalar probe")) {
     return 1;
   }
   }
@@ -12172,12 +12285,28 @@ int main() {
       DecodedInstruction::Nullary("S_ICACHE_INV"),
       DecodedInstruction::Nullary("S_ENDPGM"),
   };
-  WaveExecutionState icache_state{};
-  if (!Expect(interpreter.ExecuteProgram(icache_program, &icache_state,
+  WaveExecutionState decoded_icache_state{};
+  if (!Expect(interpreter.ExecuteProgram(icache_program, &decoded_icache_state,
                                          &error_message),
               error_message.c_str()) ||
-      !Expect(icache_state.halted,
+      !Expect(decoded_icache_state.halted,
               "expected s_icache_inv program to halt")) {
+    return 1;
+  }
+
+  std::vector<CompiledInstruction> compiled_icache_program;
+  if (!Expect(interpreter.CompileProgram(icache_program, &compiled_icache_program,
+                                         &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+  WaveExecutionState compiled_icache_state{};
+  if (!Expect(interpreter.ExecuteProgram(compiled_icache_program,
+                                         &compiled_icache_state,
+                                         &error_message),
+              error_message.c_str()) ||
+      !Expect(compiled_icache_state.halted,
+              "expected compiled s_icache_inv program to halt")) {
     return 1;
   }
   }

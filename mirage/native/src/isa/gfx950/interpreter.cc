@@ -1019,12 +1019,31 @@ bool IsScalarMemoryMaintenanceOpcode(std::string_view opcode) {
          opcode == "S_DCACHE_DISCARD" || opcode == "S_DCACHE_DISCARD_X2";
 }
 
+bool IsScalarMemoryMaintenanceOpcode(CompiledOpcode opcode) {
+  return opcode == CompiledOpcode::kSDcacheInv ||
+         opcode == CompiledOpcode::kSDcacheWb ||
+         opcode == CompiledOpcode::kSDcacheInvVol ||
+         opcode == CompiledOpcode::kSDcacheWbVol ||
+         opcode == CompiledOpcode::kSDcacheDiscard ||
+         opcode == CompiledOpcode::kSDcacheDiscardX2;
+}
+
 bool IsScalarMemoryTimeOpcode(std::string_view opcode) {
   return opcode == "S_MEMTIME" || opcode == "S_MEMREALTIME";
 }
 
+bool IsScalarMemoryTimeOpcode(CompiledOpcode opcode) {
+  return opcode == CompiledOpcode::kSMemtime ||
+         opcode == CompiledOpcode::kSMemrealtime;
+}
+
 bool IsScalarMemoryProbeOpcode(std::string_view opcode) {
   return opcode == "S_ATC_PROBE" || opcode == "S_ATC_PROBE_BUFFER";
+}
+
+bool IsScalarMemoryProbeOpcode(CompiledOpcode opcode) {
+  return opcode == CompiledOpcode::kSAtcProbe ||
+         opcode == CompiledOpcode::kSAtcProbeBuffer;
 }
 
 std::string_view NormalizeScalarAtomicOpcode(std::string_view opcode) {
@@ -1065,6 +1084,69 @@ bool IsScalarAtomicOpcode(std::string_view opcode) {
          normalized == "ATOMIC_XOR_X2" ||
          normalized == "ATOMIC_INC_X2" ||
          normalized == "ATOMIC_DEC_X2";
+}
+
+std::string_view NormalizeScalarAtomicOpcode(CompiledOpcode opcode) {
+  switch (opcode) {
+    case CompiledOpcode::kSAtomicSwap:
+      return "ATOMIC_SWAP";
+    case CompiledOpcode::kSAtomicCmpSwap:
+      return "ATOMIC_CMPSWAP";
+    case CompiledOpcode::kSAtomicAdd:
+      return "ATOMIC_ADD";
+    case CompiledOpcode::kSAtomicSub:
+      return "ATOMIC_SUB";
+    case CompiledOpcode::kSAtomicSMin:
+      return "ATOMIC_SMIN";
+    case CompiledOpcode::kSAtomicUMin:
+      return "ATOMIC_UMIN";
+    case CompiledOpcode::kSAtomicSMax:
+      return "ATOMIC_SMAX";
+    case CompiledOpcode::kSAtomicUMax:
+      return "ATOMIC_UMAX";
+    case CompiledOpcode::kSAtomicAnd:
+      return "ATOMIC_AND";
+    case CompiledOpcode::kSAtomicOr:
+      return "ATOMIC_OR";
+    case CompiledOpcode::kSAtomicXor:
+      return "ATOMIC_XOR";
+    case CompiledOpcode::kSAtomicInc:
+      return "ATOMIC_INC";
+    case CompiledOpcode::kSAtomicDec:
+      return "ATOMIC_DEC";
+    case CompiledOpcode::kSAtomicSwapX2:
+      return "ATOMIC_SWAP_X2";
+    case CompiledOpcode::kSAtomicCmpSwapX2:
+      return "ATOMIC_CMPSWAP_X2";
+    case CompiledOpcode::kSAtomicAddX2:
+      return "ATOMIC_ADD_X2";
+    case CompiledOpcode::kSAtomicSubX2:
+      return "ATOMIC_SUB_X2";
+    case CompiledOpcode::kSAtomicSMinX2:
+      return "ATOMIC_SMIN_X2";
+    case CompiledOpcode::kSAtomicUMinX2:
+      return "ATOMIC_UMIN_X2";
+    case CompiledOpcode::kSAtomicSMaxX2:
+      return "ATOMIC_SMAX_X2";
+    case CompiledOpcode::kSAtomicUMaxX2:
+      return "ATOMIC_UMAX_X2";
+    case CompiledOpcode::kSAtomicAndX2:
+      return "ATOMIC_AND_X2";
+    case CompiledOpcode::kSAtomicOrX2:
+      return "ATOMIC_OR_X2";
+    case CompiledOpcode::kSAtomicXorX2:
+      return "ATOMIC_XOR_X2";
+    case CompiledOpcode::kSAtomicIncX2:
+      return "ATOMIC_INC_X2";
+    case CompiledOpcode::kSAtomicDecX2:
+      return "ATOMIC_DEC_X2";
+    default:
+      return {};
+  }
+}
+
+bool IsScalarAtomicOpcode(CompiledOpcode opcode) {
+  return !NormalizeScalarAtomicOpcode(opcode).empty();
 }
 
 bool IsScalarBufferAtomicOpcode(std::string_view opcode) {
@@ -1125,7 +1207,22 @@ std::uint8_t GetScalarAtomicMemoryDwordCount(std::string_view opcode) {
   return HasSuffix(NormalizeScalarAtomicOpcode(opcode), "_X2") ? 2u : 1u;
 }
 
+std::uint8_t GetScalarAtomicMemoryDwordCount(CompiledOpcode opcode) {
+  return HasSuffix(NormalizeScalarAtomicOpcode(opcode), "_X2") ? 2u : 1u;
+}
+
 std::uint8_t GetScalarAtomicDataDwordCount(std::string_view opcode) {
+  const std::string_view normalized = NormalizeScalarAtomicOpcode(opcode);
+  if (normalized == "ATOMIC_CMPSWAP") {
+    return 2u;
+  }
+  if (normalized == "ATOMIC_CMPSWAP_X2") {
+    return 4u;
+  }
+  return GetScalarAtomicMemoryDwordCount(opcode);
+}
+
+std::uint8_t GetScalarAtomicDataDwordCount(CompiledOpcode opcode) {
   const std::string_view normalized = NormalizeScalarAtomicOpcode(opcode);
   if (normalized == "ATOMIC_CMPSWAP") {
     return 2u;
@@ -4482,6 +4579,10 @@ bool IsInstructionCacheMaintenanceOpcode(std::string_view opcode) {
   return opcode == "S_ICACHE_INV";
 }
 
+bool IsInstructionCacheMaintenanceOpcode(CompiledOpcode opcode) {
+  return opcode == CompiledOpcode::kSIcacheInv;
+}
+
 std::size_t FindLowestActiveLane(std::uint64_t exec_mask) {
   if (exec_mask == 0) {
     return WaveExecutionState::kLaneCount;
@@ -5602,6 +5703,18 @@ void SetScalarMemoryMetadata(CompiledInstruction* instruction,
   instruction->register_dword_count = register_dword_count;
 }
 
+void SetScalarAtomicMetadata(CompiledInstruction* instruction,
+                             CompiledOpcode opcode,
+                             std::uint8_t memory_dword_count,
+                             std::uint8_t data_dword_count,
+                             bool uses_buffer_descriptor = false) {
+  instruction->opcode = opcode;
+  instruction->flags =
+      uses_buffer_descriptor ? CompiledInstruction::kFlagIsGlobal : 0u;
+  instruction->memory_dword_count = memory_dword_count;
+  instruction->data_dword_count = data_dword_count;
+}
+
 bool ResolveScalarMemoryAddress(const InstructionOperand& base_operand,
                                 const InstructionOperand& offset_operand,
                                 const WaveExecutionState& state,
@@ -5834,6 +5947,105 @@ bool TrySetVectorAtomicMetadata(std::string_view opcode,
   }
   if (normalized_opcode == "GLOBAL_ATOMIC_DEC_X2") {
     return set_atomic(CompiledOpcode::kGlobalAtomicDecX2, 2, 2);
+  }
+  return false;
+}
+
+bool TrySetScalarAtomicMetadata(std::string_view opcode,
+                                CompiledInstruction* compiled_instruction) {
+  if (compiled_instruction == nullptr || !IsScalarAtomicOpcode(opcode)) {
+    return false;
+  }
+
+  const std::string_view normalized_opcode =
+      NormalizeScalarAtomicOpcode(opcode);
+  const bool uses_buffer_descriptor = IsScalarBufferAtomicOpcode(opcode);
+  const auto set_atomic = [&](CompiledOpcode compiled_opcode,
+                              std::uint8_t memory_dword_count,
+                              std::uint8_t data_dword_count) {
+    SetScalarAtomicMetadata(compiled_instruction, compiled_opcode,
+                            memory_dword_count, data_dword_count,
+                            uses_buffer_descriptor);
+    return true;
+  };
+
+  if (normalized_opcode == "ATOMIC_SWAP") {
+    return set_atomic(CompiledOpcode::kSAtomicSwap, 1, 1);
+  }
+  if (normalized_opcode == "ATOMIC_CMPSWAP") {
+    return set_atomic(CompiledOpcode::kSAtomicCmpSwap, 1, 2);
+  }
+  if (normalized_opcode == "ATOMIC_ADD") {
+    return set_atomic(CompiledOpcode::kSAtomicAdd, 1, 1);
+  }
+  if (normalized_opcode == "ATOMIC_SUB") {
+    return set_atomic(CompiledOpcode::kSAtomicSub, 1, 1);
+  }
+  if (normalized_opcode == "ATOMIC_SMIN") {
+    return set_atomic(CompiledOpcode::kSAtomicSMin, 1, 1);
+  }
+  if (normalized_opcode == "ATOMIC_UMIN") {
+    return set_atomic(CompiledOpcode::kSAtomicUMin, 1, 1);
+  }
+  if (normalized_opcode == "ATOMIC_SMAX") {
+    return set_atomic(CompiledOpcode::kSAtomicSMax, 1, 1);
+  }
+  if (normalized_opcode == "ATOMIC_UMAX") {
+    return set_atomic(CompiledOpcode::kSAtomicUMax, 1, 1);
+  }
+  if (normalized_opcode == "ATOMIC_AND") {
+    return set_atomic(CompiledOpcode::kSAtomicAnd, 1, 1);
+  }
+  if (normalized_opcode == "ATOMIC_OR") {
+    return set_atomic(CompiledOpcode::kSAtomicOr, 1, 1);
+  }
+  if (normalized_opcode == "ATOMIC_XOR") {
+    return set_atomic(CompiledOpcode::kSAtomicXor, 1, 1);
+  }
+  if (normalized_opcode == "ATOMIC_INC") {
+    return set_atomic(CompiledOpcode::kSAtomicInc, 1, 1);
+  }
+  if (normalized_opcode == "ATOMIC_DEC") {
+    return set_atomic(CompiledOpcode::kSAtomicDec, 1, 1);
+  }
+  if (normalized_opcode == "ATOMIC_SWAP_X2") {
+    return set_atomic(CompiledOpcode::kSAtomicSwapX2, 2, 2);
+  }
+  if (normalized_opcode == "ATOMIC_CMPSWAP_X2") {
+    return set_atomic(CompiledOpcode::kSAtomicCmpSwapX2, 2, 4);
+  }
+  if (normalized_opcode == "ATOMIC_ADD_X2") {
+    return set_atomic(CompiledOpcode::kSAtomicAddX2, 2, 2);
+  }
+  if (normalized_opcode == "ATOMIC_SUB_X2") {
+    return set_atomic(CompiledOpcode::kSAtomicSubX2, 2, 2);
+  }
+  if (normalized_opcode == "ATOMIC_SMIN_X2") {
+    return set_atomic(CompiledOpcode::kSAtomicSMinX2, 2, 2);
+  }
+  if (normalized_opcode == "ATOMIC_UMIN_X2") {
+    return set_atomic(CompiledOpcode::kSAtomicUMinX2, 2, 2);
+  }
+  if (normalized_opcode == "ATOMIC_SMAX_X2") {
+    return set_atomic(CompiledOpcode::kSAtomicSMaxX2, 2, 2);
+  }
+  if (normalized_opcode == "ATOMIC_UMAX_X2") {
+    return set_atomic(CompiledOpcode::kSAtomicUMaxX2, 2, 2);
+  }
+  if (normalized_opcode == "ATOMIC_AND_X2") {
+    return set_atomic(CompiledOpcode::kSAtomicAndX2, 2, 2);
+  }
+  if (normalized_opcode == "ATOMIC_OR_X2") {
+    return set_atomic(CompiledOpcode::kSAtomicOrX2, 2, 2);
+  }
+  if (normalized_opcode == "ATOMIC_XOR_X2") {
+    return set_atomic(CompiledOpcode::kSAtomicXorX2, 2, 2);
+  }
+  if (normalized_opcode == "ATOMIC_INC_X2") {
+    return set_atomic(CompiledOpcode::kSAtomicIncX2, 2, 2);
+  }
+  if (normalized_opcode == "ATOMIC_DEC_X2") {
+    return set_atomic(CompiledOpcode::kSAtomicDecX2, 2, 2);
   }
   return false;
 }
@@ -7556,6 +7768,53 @@ bool TryCompileOpcode(std::string_view opcode,
                             false, 4, true);
     return true;
   }
+  if (opcode == "S_ICACHE_INV") {
+    compiled_instruction->opcode = CompiledOpcode::kSIcacheInv;
+    return true;
+  }
+  if (opcode == "S_DCACHE_INV") {
+    compiled_instruction->opcode = CompiledOpcode::kSDcacheInv;
+    return true;
+  }
+  if (opcode == "S_DCACHE_WB") {
+    compiled_instruction->opcode = CompiledOpcode::kSDcacheWb;
+    return true;
+  }
+  if (opcode == "S_DCACHE_INV_VOL") {
+    compiled_instruction->opcode = CompiledOpcode::kSDcacheInvVol;
+    return true;
+  }
+  if (opcode == "S_DCACHE_WB_VOL") {
+    compiled_instruction->opcode = CompiledOpcode::kSDcacheWbVol;
+    return true;
+  }
+  if (opcode == "S_DCACHE_DISCARD") {
+    compiled_instruction->opcode = CompiledOpcode::kSDcacheDiscard;
+    return true;
+  }
+  if (opcode == "S_DCACHE_DISCARD_X2") {
+    compiled_instruction->opcode = CompiledOpcode::kSDcacheDiscardX2;
+    return true;
+  }
+  if (opcode == "S_MEMTIME") {
+    compiled_instruction->opcode = CompiledOpcode::kSMemtime;
+    return true;
+  }
+  if (opcode == "S_MEMREALTIME") {
+    compiled_instruction->opcode = CompiledOpcode::kSMemrealtime;
+    return true;
+  }
+  if (opcode == "S_ATC_PROBE") {
+    compiled_instruction->opcode = CompiledOpcode::kSAtcProbe;
+    return true;
+  }
+  if (opcode == "S_ATC_PROBE_BUFFER") {
+    compiled_instruction->opcode = CompiledOpcode::kSAtcProbeBuffer;
+    return true;
+  }
+  if (TrySetScalarAtomicMetadata(opcode, compiled_instruction)) {
+    return true;
+  }
   if (opcode == "V_ADD_U32") {
     compiled_instruction->opcode = CompiledOpcode::kVAddU32;
     return true;
@@ -8875,6 +9134,107 @@ bool Gfx950Interpreter::ExecuteInstruction(const CompiledInstruction& instructio
   }
   if (wave_yielded != nullptr) {
     *wave_yielded = false;
+  }
+
+  if (IsInstructionCacheMaintenanceOpcode(instruction.opcode)) {
+    return ValidateOperandCount(instruction, 0, error_message);
+  }
+
+  if (IsScalarMemoryMaintenanceOpcode(instruction.opcode)) {
+    if (instruction.opcode == CompiledOpcode::kSDcacheDiscard ||
+        instruction.opcode == CompiledOpcode::kSDcacheDiscardX2) {
+      if (!ValidateOperandCount(instruction, 2, error_message)) {
+        return false;
+      }
+      if (instruction.operands[0].kind != OperandKind::kSgpr) {
+        if (error_message != nullptr) {
+          *error_message = "scalar cache discard base must be an SGPR pair";
+        }
+        return false;
+      }
+      if (instruction.operands[0].index + 1 >= state->sgprs.size()) {
+        if (error_message != nullptr) {
+          *error_message = "scalar cache discard base register out of range";
+        }
+        return false;
+      }
+      if (instruction.operands[1].kind != OperandKind::kImm32 &&
+          instruction.operands[1].kind != OperandKind::kSgpr) {
+        if (error_message != nullptr) {
+          *error_message =
+              "scalar cache discard offset must be immediate or SGPR";
+        }
+        return false;
+      }
+      if (instruction.operands[1].kind == OperandKind::kSgpr &&
+          instruction.operands[1].index >= state->sgprs.size()) {
+        if (error_message != nullptr) {
+          *error_message = "scalar cache discard offset register out of range";
+        }
+        return false;
+      }
+      if (error_message != nullptr) {
+        error_message->clear();
+      }
+      return true;
+    }
+    return ValidateOperandCount(instruction, 0, error_message);
+  }
+
+  if (IsScalarMemoryTimeOpcode(instruction.opcode)) {
+    if (!ValidateOperandCount(instruction, 1, error_message)) {
+      return false;
+    }
+    if (instruction.operands[0].kind != OperandKind::kSgpr) {
+      if (error_message != nullptr) {
+        *error_message = "scalar memory time destination must be an SGPR pair";
+      }
+      return false;
+    }
+    if (instruction.operands[0].index + 1 >= state->sgprs.size()) {
+      if (error_message != nullptr) {
+        *error_message = "scalar memory time destination out of range";
+      }
+      return false;
+    }
+    const std::uint64_t value =
+        ReadScalarMemoryTimeValue(instruction.opcode == CompiledOpcode::kSMemrealtime
+                                      ? "S_MEMREALTIME"
+                                      : "S_MEMTIME");
+    SplitU64(value, &state->sgprs[instruction.operands[0].index],
+             &state->sgprs[instruction.operands[0].index + 1]);
+    if (error_message != nullptr) {
+      error_message->clear();
+    }
+    return true;
+  }
+
+  if (IsScalarMemoryProbeOpcode(instruction.opcode)) {
+    if (!ValidateOperandCount(instruction, 3, error_message)) {
+      return false;
+    }
+    if (instruction.operands[0].kind != OperandKind::kImm32) {
+      if (error_message != nullptr) {
+        *error_message = "scalar atc probe kind must be an immediate";
+      }
+      return false;
+    }
+
+    std::uint64_t address = 0;
+    if (!ResolveScalarMemoryAddress(
+            instruction.operands[1], instruction.operands[2], *state,
+            instruction.opcode == CompiledOpcode::kSAtcProbeBuffer, 1, &address,
+            error_message)) {
+      return false;
+    }
+    if (error_message != nullptr) {
+      error_message->clear();
+    }
+    return true;
+  }
+
+  if (IsScalarAtomicOpcode(instruction.opcode)) {
+    return ExecuteScalarAtomic(instruction, state, memory, error_message);
   }
 
   switch (instruction.opcode) {
@@ -11239,6 +11599,195 @@ bool Gfx950Interpreter::ExecuteScalarAtomic(const DecodedInstruction& instructio
   } else {
     if (error_message != nullptr) {
       *error_message = "unsupported scalar atomic opcode";
+    }
+    return false;
+  }
+
+  for (std::uint8_t dword_index = 0; dword_index < memory_dword_count;
+       ++dword_index) {
+    const std::uint64_t byte_offset =
+        static_cast<std::uint64_t>(dword_index) * sizeof(std::uint32_t);
+    if (!WriteMemoryU32(memory, address + byte_offset, new_dwords[dword_index],
+                        error_message)) {
+      return false;
+    }
+    state->sgprs[static_cast<std::uint16_t>(instruction.operands[0].index +
+                                            dword_index)] = old_dwords[dword_index];
+  }
+
+  if (error_message != nullptr) {
+    error_message->clear();
+  }
+  return true;
+}
+
+bool Gfx950Interpreter::ExecuteScalarAtomic(const CompiledInstruction& instruction,
+                                            WaveExecutionState* state,
+                                            ExecutionMemory* memory,
+                                            std::string* error_message) const {
+  if (!ValidateOperandCount(instruction, 3, error_message)) {
+    return false;
+  }
+  if (memory == nullptr) {
+    if (error_message != nullptr) {
+      *error_message = "memory-backed instruction requires execution memory";
+    }
+    return false;
+  }
+  if (instruction.operands[0].kind != OperandKind::kSgpr ||
+      instruction.operands[1].kind != OperandKind::kSgpr) {
+    if (error_message != nullptr) {
+      *error_message = "scalar atomic operands must use scalar registers";
+    }
+    return false;
+  }
+
+  const bool uses_buffer_descriptor = instruction.IsGlobal();
+  const std::string_view normalized_opcode =
+      NormalizeScalarAtomicOpcode(instruction.opcode);
+  const std::uint8_t memory_dword_count =
+      instruction.memory_dword_count == 0u
+          ? GetScalarAtomicMemoryDwordCount(instruction.opcode)
+          : instruction.memory_dword_count;
+  const std::uint8_t data_dword_count =
+      instruction.data_dword_count == 0u
+          ? GetScalarAtomicDataDwordCount(instruction.opcode)
+          : instruction.data_dword_count;
+  if (instruction.operands[0].index + data_dword_count - 1 >=
+      state->sgprs.size()) {
+    if (error_message != nullptr) {
+      *error_message = "scalar atomic data register range out of bounds";
+    }
+    return false;
+  }
+
+  std::uint64_t address = 0;
+  if (!ResolveScalarMemoryAddress(instruction.operands[1], instruction.operands[2],
+                                  *state, uses_buffer_descriptor,
+                                  memory_dword_count, &address,
+                                  error_message)) {
+    return false;
+  }
+
+  std::array<std::uint32_t, 4> old_dwords{};
+  std::array<std::uint32_t, 4> data_dwords{};
+  std::array<std::uint32_t, 4> new_dwords{};
+  for (std::uint8_t dword_index = 0; dword_index < memory_dword_count;
+       ++dword_index) {
+    const std::uint64_t byte_offset =
+        static_cast<std::uint64_t>(dword_index) * sizeof(std::uint32_t);
+    if (address > std::numeric_limits<std::uint64_t>::max() - byte_offset) {
+      if (error_message != nullptr) {
+        *error_message = "scalar atomic address overflow";
+      }
+      return false;
+    }
+    if (!ReadMemoryU32(memory, address + byte_offset, &old_dwords[dword_index],
+                       error_message)) {
+      return false;
+    }
+    new_dwords[dword_index] = old_dwords[dword_index];
+  }
+  for (std::uint8_t dword_index = 0; dword_index < data_dword_count;
+       ++dword_index) {
+    data_dwords[dword_index] =
+        state->sgprs[static_cast<std::uint16_t>(instruction.operands[0].index +
+                                                dword_index)];
+  }
+
+  if (normalized_opcode == "ATOMIC_SWAP") {
+    new_dwords[0] = data_dwords[0];
+  } else if (normalized_opcode == "ATOMIC_CMPSWAP") {
+    if (old_dwords[0] == data_dwords[1]) {
+      new_dwords[0] = data_dwords[0];
+    }
+  } else if (normalized_opcode == "ATOMIC_ADD") {
+    new_dwords[0] = old_dwords[0] + data_dwords[0];
+  } else if (normalized_opcode == "ATOMIC_SUB") {
+    new_dwords[0] = old_dwords[0] - data_dwords[0];
+  } else if (normalized_opcode == "ATOMIC_SMIN") {
+    new_dwords[0] =
+        BitCast<std::int32_t>(old_dwords[0]) < BitCast<std::int32_t>(data_dwords[0])
+            ? old_dwords[0]
+            : data_dwords[0];
+  } else if (normalized_opcode == "ATOMIC_UMIN") {
+    new_dwords[0] =
+        old_dwords[0] < data_dwords[0] ? old_dwords[0] : data_dwords[0];
+  } else if (normalized_opcode == "ATOMIC_SMAX") {
+    new_dwords[0] =
+        BitCast<std::int32_t>(old_dwords[0]) > BitCast<std::int32_t>(data_dwords[0])
+            ? old_dwords[0]
+            : data_dwords[0];
+  } else if (normalized_opcode == "ATOMIC_UMAX") {
+    new_dwords[0] =
+        old_dwords[0] > data_dwords[0] ? old_dwords[0] : data_dwords[0];
+  } else if (normalized_opcode == "ATOMIC_AND") {
+    new_dwords[0] = old_dwords[0] & data_dwords[0];
+  } else if (normalized_opcode == "ATOMIC_OR") {
+    new_dwords[0] = old_dwords[0] | data_dwords[0];
+  } else if (normalized_opcode == "ATOMIC_XOR") {
+    new_dwords[0] = old_dwords[0] ^ data_dwords[0];
+  } else if (normalized_opcode == "ATOMIC_INC") {
+    new_dwords[0] = AtomicIncU32(old_dwords[0], data_dwords[0]);
+  } else if (normalized_opcode == "ATOMIC_DEC") {
+    new_dwords[0] = AtomicDecU32(old_dwords[0], data_dwords[0]);
+  } else if (normalized_opcode == "ATOMIC_SWAP_X2" ||
+             normalized_opcode == "ATOMIC_CMPSWAP_X2" ||
+             normalized_opcode == "ATOMIC_ADD_X2" ||
+             normalized_opcode == "ATOMIC_SUB_X2" ||
+             normalized_opcode == "ATOMIC_SMIN_X2" ||
+             normalized_opcode == "ATOMIC_UMIN_X2" ||
+             normalized_opcode == "ATOMIC_SMAX_X2" ||
+             normalized_opcode == "ATOMIC_UMAX_X2" ||
+             normalized_opcode == "ATOMIC_AND_X2" ||
+             normalized_opcode == "ATOMIC_OR_X2" ||
+             normalized_opcode == "ATOMIC_XOR_X2" ||
+             normalized_opcode == "ATOMIC_INC_X2" ||
+             normalized_opcode == "ATOMIC_DEC_X2") {
+    const std::uint64_t old_value = ComposeU64(old_dwords[0], old_dwords[1]);
+    const std::uint64_t data_value = ComposeU64(data_dwords[0], data_dwords[1]);
+    std::uint64_t new_value = old_value;
+    if (normalized_opcode == "ATOMIC_SWAP_X2") {
+      new_value = data_value;
+    } else if (normalized_opcode == "ATOMIC_CMPSWAP_X2") {
+      const std::uint64_t compare_value =
+          ComposeU64(data_dwords[2], data_dwords[3]);
+      if (old_value == compare_value) {
+        new_value = data_value;
+      }
+    } else if (normalized_opcode == "ATOMIC_ADD_X2") {
+      new_value = old_value + data_value;
+    } else if (normalized_opcode == "ATOMIC_SUB_X2") {
+      new_value = old_value - data_value;
+    } else if (normalized_opcode == "ATOMIC_SMIN_X2") {
+      new_value =
+          BitCast<std::int64_t>(old_value) < BitCast<std::int64_t>(data_value)
+              ? old_value
+              : data_value;
+    } else if (normalized_opcode == "ATOMIC_UMIN_X2") {
+      new_value = old_value < data_value ? old_value : data_value;
+    } else if (normalized_opcode == "ATOMIC_SMAX_X2") {
+      new_value =
+          BitCast<std::int64_t>(old_value) > BitCast<std::int64_t>(data_value)
+              ? old_value
+              : data_value;
+    } else if (normalized_opcode == "ATOMIC_UMAX_X2") {
+      new_value = old_value > data_value ? old_value : data_value;
+    } else if (normalized_opcode == "ATOMIC_AND_X2") {
+      new_value = old_value & data_value;
+    } else if (normalized_opcode == "ATOMIC_OR_X2") {
+      new_value = old_value | data_value;
+    } else if (normalized_opcode == "ATOMIC_XOR_X2") {
+      new_value = old_value ^ data_value;
+    } else if (normalized_opcode == "ATOMIC_INC_X2") {
+      new_value = AtomicIncU64(old_value, data_value);
+    } else {
+      new_value = AtomicDecU64(old_value, data_value);
+    }
+    SplitU64(new_value, &new_dwords[0], &new_dwords[1]);
+  } else {
+    if (error_message != nullptr) {
+      *error_message = "unsupported compiled scalar atomic opcode";
     }
     return false;
   }
