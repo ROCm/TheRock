@@ -34,10 +34,8 @@ on:
         type: string
       expect_failure:
         type: boolean
-      prebuilt_stages:
+      use_prebuilt_artifacts:
         type: string
-        default: ""
-        description: "Comma-separated build stages to skip (artifacts already copied by the orchestrator)"
       rocm_package_version:
         type: string
       test_type:
@@ -51,7 +49,6 @@ jobs:
   # STAGE: foundation (generic)
   # ==========================================================================
   foundation:
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'foundation') }}
     uses: ./.github/workflows/multi_arch_build_windows_artifacts.yml
     secrets: inherit
     with:
@@ -70,7 +67,6 @@ jobs:
   # ==========================================================================
   compiler-runtime:
     needs: foundation
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'compiler-runtime') }}
     uses: ./.github/workflows/multi_arch_build_windows_artifacts.yml
     secrets: inherit
     with:
@@ -89,7 +85,6 @@ jobs:
   # ==========================================================================
   math-libs:
     needs: compiler-runtime
-    if: ${{ !cancelled() && !failure() && !contains(inputs.prebuilt_stages, 'math-libs') }}
     strategy:
       fail-fast: false
       matrix:

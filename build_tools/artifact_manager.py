@@ -1132,7 +1132,7 @@ def main(argv: Optional[List[str]] = None):
     info_parser.add_argument(
         "--amdgpu-families",
         type=str,
-        help="Semicolon-separated GPU families to show file lists for",
+        help="Comma-separated GPU families to show file lists for",
     )
     info_parser.set_defaults(func=do_info)
 
