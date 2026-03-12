@@ -4145,7 +4145,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_LOAD_UBYTE",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4154,7 +4154,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_LOAD_SBYTE",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4163,7 +4163,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_LOAD_USHORT",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4172,7 +4172,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_LOAD_SSHORT",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4181,7 +4181,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_LOAD_DWORD",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4190,7 +4190,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_LOAD_DWORDX2",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4199,7 +4199,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_LOAD_DWORDX3",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4208,7 +4208,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_LOAD_DWORDX4",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4217,7 +4217,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_STORE_BYTE",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4226,7 +4226,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_STORE_BYTE_D16_HI",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4235,7 +4235,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_STORE_SHORT",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4244,7 +4244,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_STORE_SHORT_D16_HI",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4253,7 +4253,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_STORE_DWORD",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4262,7 +4262,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_STORE_DWORDX2",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4271,7 +4271,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_STORE_DWORDX3",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4280,7 +4280,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_STORE_DWORDX4",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4289,7 +4289,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_LOAD_UBYTE_D16",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4298,7 +4298,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_LOAD_UBYTE_D16_HI",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4307,7 +4307,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_LOAD_SBYTE_D16",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4316,7 +4316,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_LOAD_SBYTE_D16_HI",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4325,7 +4325,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_LOAD_SHORT_D16",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4334,7 +4334,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_LOAD_SHORT_D16_HI",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -5119,14 +5119,18 @@
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_BUFFER_ATOMIC_SWAP"
+      ],
       "instruction_name": "S_BUFFER_ATOMIC_SWAP",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
@@ -5141,135 +5145,183 @@
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_BUFFER_ATOMIC_ADD"
+      ],
       "instruction_name": "S_BUFFER_ATOMIC_ADD",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_BUFFER_ATOMIC_SUB"
+      ],
       "instruction_name": "S_BUFFER_ATOMIC_SUB",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_BUFFER_ATOMIC_SMIN"
+      ],
       "instruction_name": "S_BUFFER_ATOMIC_SMIN",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_BUFFER_ATOMIC_UMIN"
+      ],
       "instruction_name": "S_BUFFER_ATOMIC_UMIN",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_BUFFER_ATOMIC_SMAX"
+      ],
       "instruction_name": "S_BUFFER_ATOMIC_SMAX",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_BUFFER_ATOMIC_UMAX"
+      ],
       "instruction_name": "S_BUFFER_ATOMIC_UMAX",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_BUFFER_ATOMIC_AND"
+      ],
       "instruction_name": "S_BUFFER_ATOMIC_AND",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_BUFFER_ATOMIC_OR"
+      ],
       "instruction_name": "S_BUFFER_ATOMIC_OR",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_BUFFER_ATOMIC_XOR"
+      ],
       "instruction_name": "S_BUFFER_ATOMIC_XOR",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_BUFFER_ATOMIC_INC"
+      ],
       "instruction_name": "S_BUFFER_ATOMIC_INC",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_BUFFER_ATOMIC_DEC"
+      ],
       "instruction_name": "S_BUFFER_ATOMIC_DEC",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_BUFFER_ATOMIC_SWAP_X2"
+      ],
       "instruction_name": "S_BUFFER_ATOMIC_SWAP_X2",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
@@ -5284,135 +5336,183 @@
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_BUFFER_ATOMIC_ADD_X2"
+      ],
       "instruction_name": "S_BUFFER_ATOMIC_ADD_X2",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_BUFFER_ATOMIC_SUB_X2"
+      ],
       "instruction_name": "S_BUFFER_ATOMIC_SUB_X2",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_BUFFER_ATOMIC_SMIN_X2"
+      ],
       "instruction_name": "S_BUFFER_ATOMIC_SMIN_X2",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_BUFFER_ATOMIC_UMIN_X2"
+      ],
       "instruction_name": "S_BUFFER_ATOMIC_UMIN_X2",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_BUFFER_ATOMIC_SMAX_X2"
+      ],
       "instruction_name": "S_BUFFER_ATOMIC_SMAX_X2",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_BUFFER_ATOMIC_UMAX_X2"
+      ],
       "instruction_name": "S_BUFFER_ATOMIC_UMAX_X2",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_BUFFER_ATOMIC_AND_X2"
+      ],
       "instruction_name": "S_BUFFER_ATOMIC_AND_X2",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_BUFFER_ATOMIC_OR_X2"
+      ],
       "instruction_name": "S_BUFFER_ATOMIC_OR_X2",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_BUFFER_ATOMIC_XOR_X2"
+      ],
       "instruction_name": "S_BUFFER_ATOMIC_XOR_X2",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_BUFFER_ATOMIC_INC_X2"
+      ],
       "instruction_name": "S_BUFFER_ATOMIC_INC_X2",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_BUFFER_ATOMIC_DEC_X2"
+      ],
       "instruction_name": "S_BUFFER_ATOMIC_DEC_X2",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_ATOMIC_SWAP"
+      ],
       "instruction_name": "S_ATOMIC_SWAP",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
@@ -5427,135 +5527,183 @@
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_ATOMIC_ADD"
+      ],
       "instruction_name": "S_ATOMIC_ADD",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_ATOMIC_SUB"
+      ],
       "instruction_name": "S_ATOMIC_SUB",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_ATOMIC_SMIN"
+      ],
       "instruction_name": "S_ATOMIC_SMIN",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_ATOMIC_UMIN"
+      ],
       "instruction_name": "S_ATOMIC_UMIN",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_ATOMIC_SMAX"
+      ],
       "instruction_name": "S_ATOMIC_SMAX",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_ATOMIC_UMAX"
+      ],
       "instruction_name": "S_ATOMIC_UMAX",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_ATOMIC_AND"
+      ],
       "instruction_name": "S_ATOMIC_AND",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_ATOMIC_OR"
+      ],
       "instruction_name": "S_ATOMIC_OR",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_ATOMIC_XOR"
+      ],
       "instruction_name": "S_ATOMIC_XOR",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_ATOMIC_INC"
+      ],
       "instruction_name": "S_ATOMIC_INC",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_ATOMIC_DEC"
+      ],
       "instruction_name": "S_ATOMIC_DEC",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_ATOMIC_SWAP_X2"
+      ],
       "instruction_name": "S_ATOMIC_SWAP_X2",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
@@ -5570,124 +5718,168 @@
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_ATOMIC_ADD_X2"
+      ],
       "instruction_name": "S_ATOMIC_ADD_X2",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_ATOMIC_SUB_X2"
+      ],
       "instruction_name": "S_ATOMIC_SUB_X2",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_ATOMIC_SMIN_X2"
+      ],
       "instruction_name": "S_ATOMIC_SMIN_X2",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_ATOMIC_UMIN_X2"
+      ],
       "instruction_name": "S_ATOMIC_UMIN_X2",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_ATOMIC_SMAX_X2"
+      ],
       "instruction_name": "S_ATOMIC_SMAX_X2",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_ATOMIC_UMAX_X2"
+      ],
       "instruction_name": "S_ATOMIC_UMAX_X2",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_ATOMIC_AND_X2"
+      ],
       "instruction_name": "S_ATOMIC_AND_X2",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_ATOMIC_OR_X2"
+      ],
       "instruction_name": "S_ATOMIC_OR_X2",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_ATOMIC_XOR_X2"
+      ],
       "instruction_name": "S_ATOMIC_XOR_X2",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_ATOMIC_INC_X2"
+      ],
       "instruction_name": "S_ATOMIC_INC_X2",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
-      "decode_supported": false,
-      "decoded_opcodes": [],
+      "decode_supported": true,
+      "decoded_opcodes": [
+        "S_ATOMIC_DEC_X2"
+      ],
       "instruction_name": "S_ATOMIC_DEC_X2",
       "measured_encodings": [
         "ENC_SMEM:default"
       ],
-      "semantic_supported": false,
-      "successful_encodings": []
+      "semantic_supported": true,
+      "successful_encodings": [
+        "ENC_SMEM:default"
+      ]
     },
     {
       "decode_measured": true,
@@ -16674,11 +16866,11 @@
   ],
   "summary": {
     "decode_measured": 1014,
-    "decode_supported": 735,
-    "decode_supported_percent_measured": 0.724852,
-    "decode_supported_percent_total": 0.591787,
-    "semantic_supported": 714,
-    "semantic_supported_percent_total": 0.574879
+    "decode_supported": 783,
+    "decode_supported_percent_measured": 0.772189,
+    "decode_supported_percent_total": 0.630435,
+    "semantic_supported": 784,
+    "semantic_supported_percent_total": 0.63124
   },
   "unmeasured_encoding_families": [
     "ENC_FLAT_SCRATCH",

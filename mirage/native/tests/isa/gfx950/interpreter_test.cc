@@ -1937,8 +1937,8 @@ int main() {
               "expected BUFFER_WBL2 support") ||
       !Expect(interpreter.Supports("BUFFER_INV"),
               "expected BUFFER_INV support") ||
-      !Expect(!interpreter.Supports("BUFFER_LOAD_DWORD"),
-              "expected BUFFER_LOAD_DWORD semantics to be unimplemented")) {
+      !Expect(interpreter.Supports("BUFFER_LOAD_DWORD"),
+              "expected BUFFER_LOAD_DWORD support")) {
     return 1;
   }
 
@@ -2594,6 +2594,73 @@ int main() {
     }
   }
 
+  const std::array<std::string_view, 12> kScalarBufferAtomic32Opcodes = {
+      "S_BUFFER_ATOMIC_SWAP", "S_BUFFER_ATOMIC_ADD",
+      "S_BUFFER_ATOMIC_SUB",  "S_BUFFER_ATOMIC_SMIN",
+      "S_BUFFER_ATOMIC_UMIN", "S_BUFFER_ATOMIC_SMAX",
+      "S_BUFFER_ATOMIC_UMAX", "S_BUFFER_ATOMIC_AND",
+      "S_BUFFER_ATOMIC_OR",   "S_BUFFER_ATOMIC_XOR",
+      "S_BUFFER_ATOMIC_INC",  "S_BUFFER_ATOMIC_DEC",
+  };
+  for (std::string_view opcode : kScalarBufferAtomic32Opcodes) {
+    const std::string message = "expected " + std::string(opcode) + " support";
+    if (!Expect(interpreter.Supports(opcode), message.c_str())) {
+      return 1;
+    }
+  }
+
+  const std::array<std::string_view, 12> kScalarBufferAtomic64Opcodes = {
+      "S_BUFFER_ATOMIC_SWAP_X2", "S_BUFFER_ATOMIC_ADD_X2",
+      "S_BUFFER_ATOMIC_SUB_X2",  "S_BUFFER_ATOMIC_SMIN_X2",
+      "S_BUFFER_ATOMIC_UMIN_X2", "S_BUFFER_ATOMIC_SMAX_X2",
+      "S_BUFFER_ATOMIC_UMAX_X2", "S_BUFFER_ATOMIC_AND_X2",
+      "S_BUFFER_ATOMIC_OR_X2",   "S_BUFFER_ATOMIC_XOR_X2",
+      "S_BUFFER_ATOMIC_INC_X2",  "S_BUFFER_ATOMIC_DEC_X2",
+  };
+  for (std::string_view opcode : kScalarBufferAtomic64Opcodes) {
+    const std::string message = "expected " + std::string(opcode) + " support";
+    if (!Expect(interpreter.Supports(opcode), message.c_str())) {
+      return 1;
+    }
+  }
+
+  const std::array<std::string_view, 12> kScalarAtomic32Opcodes = {
+      "S_ATOMIC_SWAP", "S_ATOMIC_ADD",  "S_ATOMIC_SUB", "S_ATOMIC_SMIN",
+      "S_ATOMIC_UMIN", "S_ATOMIC_SMAX", "S_ATOMIC_UMAX", "S_ATOMIC_AND",
+      "S_ATOMIC_OR",   "S_ATOMIC_XOR",  "S_ATOMIC_INC",  "S_ATOMIC_DEC",
+  };
+  for (std::string_view opcode : kScalarAtomic32Opcodes) {
+    const std::string message = "expected " + std::string(opcode) + " support";
+    if (!Expect(interpreter.Supports(opcode), message.c_str())) {
+      return 1;
+    }
+  }
+
+  const std::array<std::string_view, 12> kScalarAtomic64Opcodes = {
+      "S_ATOMIC_SWAP_X2", "S_ATOMIC_ADD_X2",  "S_ATOMIC_SUB_X2",
+      "S_ATOMIC_SMIN_X2", "S_ATOMIC_UMIN_X2", "S_ATOMIC_SMAX_X2",
+      "S_ATOMIC_UMAX_X2", "S_ATOMIC_AND_X2",  "S_ATOMIC_OR_X2",
+      "S_ATOMIC_XOR_X2",  "S_ATOMIC_INC_X2",  "S_ATOMIC_DEC_X2",
+  };
+  for (std::string_view opcode : kScalarAtomic64Opcodes) {
+    const std::string message = "expected " + std::string(opcode) + " support";
+    if (!Expect(interpreter.Supports(opcode), message.c_str())) {
+      return 1;
+    }
+  }
+
+  const std::array<std::string_view, 4> kBlockedScalarAtomicOpcodes = {
+      "S_BUFFER_ATOMIC_CMPSWAP", "S_BUFFER_ATOMIC_CMPSWAP_X2",
+      "S_ATOMIC_CMPSWAP",        "S_ATOMIC_CMPSWAP_X2",
+  };
+  for (std::string_view opcode : kBlockedScalarAtomicOpcodes) {
+    const std::string message = "expected " + std::string(opcode) +
+                                " to remain unsupported";
+    if (!Expect(!interpreter.Supports(opcode), message.c_str())) {
+      return 1;
+    }
+  }
+
   const std::array<std::string_view, 10> kScalarMaintenanceOpcodes = {
       "S_DCACHE_INV",      "S_DCACHE_WB",      "S_DCACHE_INV_VOL",
       "S_DCACHE_WB_VOL",   "S_DCACHE_DISCARD", "S_DCACHE_DISCARD_X2",
@@ -2601,6 +2668,26 @@ int main() {
       "S_ATC_PROBE_BUFFER",
   };
   for (std::string_view opcode : kScalarMaintenanceOpcodes) {
+    const std::string message = "expected " + std::string(opcode) + " support";
+    if (!Expect(interpreter.Supports(opcode), message.c_str())) {
+      return 1;
+    }
+  }
+
+  const std::array<std::string_view, 22> kBufferMemoryOpcodes = {
+      "BUFFER_LOAD_UBYTE",        "BUFFER_LOAD_SBYTE",
+      "BUFFER_LOAD_USHORT",       "BUFFER_LOAD_SSHORT",
+      "BUFFER_LOAD_DWORD",        "BUFFER_LOAD_DWORDX2",
+      "BUFFER_LOAD_DWORDX3",      "BUFFER_LOAD_DWORDX4",
+      "BUFFER_STORE_BYTE",        "BUFFER_STORE_BYTE_D16_HI",
+      "BUFFER_STORE_SHORT",       "BUFFER_STORE_SHORT_D16_HI",
+      "BUFFER_STORE_DWORD",       "BUFFER_STORE_DWORDX2",
+      "BUFFER_STORE_DWORDX3",     "BUFFER_STORE_DWORDX4",
+      "BUFFER_LOAD_UBYTE_D16",    "BUFFER_LOAD_UBYTE_D16_HI",
+      "BUFFER_LOAD_SBYTE_D16",    "BUFFER_LOAD_SBYTE_D16_HI",
+      "BUFFER_LOAD_SHORT_D16",    "BUFFER_LOAD_SHORT_D16_HI",
+  };
+  for (std::string_view opcode : kBufferMemoryOpcodes) {
     const std::string message = "expected " + std::string(opcode) + " support";
     if (!Expect(interpreter.Supports(opcode), message.c_str())) {
       return 1;
@@ -7557,8 +7644,8 @@ int main() {
   };
   if (!Expect(!interpreter.ExecuteProgram(unsupported_program, &unsupported_state,
                                           &error_message),
-              "expected unsupported opcode to fail") ||
-      !Expect(!error_message.empty(), "expected unsupported opcode error")) {
+              "expected malformed buffer opcode to fail") ||
+      !Expect(!error_message.empty(), "expected malformed buffer opcode error")) {
     return 1;
   }
 
@@ -10540,6 +10627,212 @@ int main() {
   }
 
   {
+  struct ScalarAtomicCase32 {
+    std::string_view opcode;
+    std::uint32_t offset;
+    std::uint32_t data_value;
+    std::uint32_t old_value;
+    std::uint32_t new_value;
+  };
+  const std::array<ScalarAtomicCase32, 12> kScalarAtomicCases32 = {{
+      {"S_ATOMIC_SWAP", 0x00u, 0xaaaa5555u, 0x11110000u, 0xaaaa5555u},
+      {"S_ATOMIC_ADD", 0x04u, 4u, 9u, 13u},
+      {"S_ATOMIC_SUB", 0x08u, 4u, 9u, 5u},
+      {"S_ATOMIC_SMIN", 0x0cu, static_cast<std::uint32_t>(-3), 5u,
+       static_cast<std::uint32_t>(-3)},
+      {"S_ATOMIC_UMIN", 0x10u, 4u, 9u, 4u},
+      {"S_ATOMIC_SMAX", 0x14u, 3u, static_cast<std::uint32_t>(-10), 3u},
+      {"S_ATOMIC_UMAX", 0x18u, 9u, 2u, 9u},
+      {"S_ATOMIC_AND", 0x1cu, 0x00000ff0u, 0x0000f0f0u, 0x000000f0u},
+      {"S_ATOMIC_OR", 0x20u, 0x000000f1u, 0x0000f000u, 0x0000f0f1u},
+      {"S_ATOMIC_XOR", 0x24u, 0x0f0f0f0fu, 0xf0f0f0f0u, 0xffffffffu},
+      {"S_ATOMIC_INC", 0x28u, 5u, 3u, 4u},
+      {"S_ATOMIC_DEC", 0x2cu, 9u, 0u, 9u},
+  }};
+  const std::array<std::string_view, 12> kScalarBufferAtomicCase32Opcodes = {
+      "S_BUFFER_ATOMIC_SWAP", "S_BUFFER_ATOMIC_ADD",
+      "S_BUFFER_ATOMIC_SUB",  "S_BUFFER_ATOMIC_SMIN",
+      "S_BUFFER_ATOMIC_UMIN", "S_BUFFER_ATOMIC_SMAX",
+      "S_BUFFER_ATOMIC_UMAX", "S_BUFFER_ATOMIC_AND",
+      "S_BUFFER_ATOMIC_OR",   "S_BUFFER_ATOMIC_XOR",
+      "S_BUFFER_ATOMIC_INC",  "S_BUFFER_ATOMIC_DEC",
+  };
+
+  struct ScalarAtomicCase64 {
+    std::string_view opcode;
+    std::uint32_t offset;
+    std::uint64_t data_value;
+    std::uint64_t old_value;
+    std::uint64_t new_value;
+  };
+  const std::array<ScalarAtomicCase64, 12> kScalarAtomicCases64 = {{
+      {"S_ATOMIC_SWAP_X2", 0x80u, 0xaaaabbbbccccddddULL,
+       0x1111222233334444ULL, 0xaaaabbbbccccddddULL},
+      {"S_ATOMIC_ADD_X2", 0x88u, 4u, 9u, 13u},
+      {"S_ATOMIC_SUB_X2", 0x90u, 4u, 9u, 5u},
+      {"S_ATOMIC_SMIN_X2", 0x98u, static_cast<std::uint64_t>(-3LL), 5u,
+       static_cast<std::uint64_t>(-3LL)},
+      {"S_ATOMIC_UMIN_X2", 0xa0u, 4u, 9u, 4u},
+      {"S_ATOMIC_SMAX_X2", 0xa8u, 3u, static_cast<std::uint64_t>(-10LL), 3u},
+      {"S_ATOMIC_UMAX_X2", 0xb0u, 9u, 2u, 9u},
+      {"S_ATOMIC_AND_X2", 0xb8u, 0x0f0f0f0f0f0f0f0fULL,
+       0xff00ff00ff00ff00ULL, 0x0f000f000f000f00ULL},
+      {"S_ATOMIC_OR_X2", 0xc0u, 0x00000000000000f1ULL,
+       0xf000000000000000ULL, 0xf0000000000000f1ULL},
+      {"S_ATOMIC_XOR_X2", 0xc8u, 0x0f0f0f0f0f0f0f0fULL,
+       0xf0f0f0f0f0f0f0f0ULL, 0xffffffffffffffffULL},
+      {"S_ATOMIC_INC_X2", 0xd0u, 5u, 3u, 4u},
+      {"S_ATOMIC_DEC_X2", 0xd8u, 9u, 0u, 9u},
+  }};
+  const std::array<std::string_view, 12> kScalarBufferAtomicCase64Opcodes = {
+      "S_BUFFER_ATOMIC_SWAP_X2", "S_BUFFER_ATOMIC_ADD_X2",
+      "S_BUFFER_ATOMIC_SUB_X2",  "S_BUFFER_ATOMIC_SMIN_X2",
+      "S_BUFFER_ATOMIC_UMIN_X2", "S_BUFFER_ATOMIC_SMAX_X2",
+      "S_BUFFER_ATOMIC_UMAX_X2", "S_BUFFER_ATOMIC_AND_X2",
+      "S_BUFFER_ATOMIC_OR_X2",   "S_BUFFER_ATOMIC_XOR_X2",
+      "S_BUFFER_ATOMIC_INC_X2",  "S_BUFFER_ATOMIC_DEC_X2",
+  };
+
+  const auto run_scalar_atomic_cases32 =
+      [&](bool uses_buffer_descriptor,
+          const auto& cases,
+          const auto& opcodes,
+          const char* mode) {
+        WaveExecutionState state{};
+        LinearExecutionMemory memory(0x400, 0);
+        state.sgprs[0] = 0x100u;
+        state.sgprs[1] = 0u;
+        if (uses_buffer_descriptor) {
+          state.sgprs[2] = 0x200u;
+          state.sgprs[3] = 0u;
+        }
+
+        std::vector<DecodedInstruction> program;
+        program.reserve(cases.size() + 1u);
+        for (std::size_t index = 0; index < cases.size(); ++index) {
+          const auto& atomic_case = cases[index];
+          const std::uint16_t data_sgpr =
+              static_cast<std::uint16_t>(4u + index);
+          state.sgprs[data_sgpr] = atomic_case.data_value;
+          if (!Expect(memory.WriteU32(0x100u + atomic_case.offset,
+                                      atomic_case.old_value),
+                      "expected scalar atomic seed write")) {
+            std::cerr << mode << " " << atomic_case.opcode << '\n';
+            return false;
+          }
+          program.push_back(DecodedInstruction::ThreeOperand(
+              opcodes[index],
+              InstructionOperand::Sgpr(data_sgpr), InstructionOperand::Sgpr(0),
+              InstructionOperand::Imm32(atomic_case.offset)));
+        }
+        program.push_back(DecodedInstruction::Nullary("S_ENDPGM"));
+
+        if (!Expect(interpreter.ExecuteProgram(program, &state, &memory,
+                                               &error_message),
+                    error_message.c_str()) ||
+            !Expect(state.halted, "expected scalar atomic program to halt")) {
+          std::cerr << mode << '\n';
+          return false;
+        }
+
+        for (std::size_t index = 0; index < cases.size(); ++index) {
+          const auto& atomic_case = cases[index];
+          const std::uint16_t data_sgpr =
+              static_cast<std::uint16_t>(4u + index);
+          std::uint32_t memory_value = 0;
+          if (!Expect(state.sgprs[data_sgpr] == atomic_case.old_value,
+                      "expected scalar atomic old value return") ||
+              !Expect(memory.ReadU32(0x100u + atomic_case.offset, &memory_value),
+                      "expected scalar atomic memory read") ||
+              !Expect(memory_value == atomic_case.new_value,
+                      "expected scalar atomic memory update")) {
+            std::cerr << mode << " " << atomic_case.opcode << '\n';
+            return false;
+          }
+        }
+        return true;
+      };
+
+  const auto run_scalar_atomic_cases64 =
+      [&](bool uses_buffer_descriptor,
+          const auto& cases,
+          const auto& opcodes,
+          const char* mode) {
+        WaveExecutionState state{};
+        LinearExecutionMemory memory(0x400, 0);
+        state.sgprs[0] = 0x100u;
+        state.sgprs[1] = 0u;
+        if (uses_buffer_descriptor) {
+          state.sgprs[2] = 0x200u;
+          state.sgprs[3] = 0u;
+        }
+
+        std::vector<DecodedInstruction> program;
+        program.reserve(cases.size() + 1u);
+        for (std::size_t index = 0; index < cases.size(); ++index) {
+          const auto& atomic_case = cases[index];
+          const std::uint16_t data_sgpr =
+              static_cast<std::uint16_t>(32u + index * 2u);
+          SplitU64(atomic_case.data_value, &state.sgprs[data_sgpr],
+                   &state.sgprs[data_sgpr + 1u]);
+          if (!Expect(WriteU64(&memory, 0x100u + atomic_case.offset,
+                               atomic_case.old_value),
+                      "expected scalar atomic x2 seed write")) {
+            std::cerr << mode << " " << atomic_case.opcode << '\n';
+            return false;
+          }
+          program.push_back(DecodedInstruction::ThreeOperand(
+              opcodes[index],
+              InstructionOperand::Sgpr(data_sgpr), InstructionOperand::Sgpr(0),
+              InstructionOperand::Imm32(atomic_case.offset)));
+        }
+        program.push_back(DecodedInstruction::Nullary("S_ENDPGM"));
+
+        if (!Expect(interpreter.ExecuteProgram(program, &state, &memory,
+                                               &error_message),
+                    error_message.c_str()) ||
+            !Expect(state.halted, "expected scalar atomic x2 program to halt")) {
+          std::cerr << mode << '\n';
+          return false;
+        }
+
+        for (std::size_t index = 0; index < cases.size(); ++index) {
+          const auto& atomic_case = cases[index];
+          const std::uint16_t data_sgpr =
+              static_cast<std::uint16_t>(32u + index * 2u);
+          std::uint64_t memory_value = 0;
+          if (!Expect(ComposeU64(state.sgprs[data_sgpr],
+                                 state.sgprs[data_sgpr + 1u]) ==
+                          atomic_case.old_value,
+                      "expected scalar atomic x2 old value return") ||
+              !Expect(ReadU64(memory, 0x100u + atomic_case.offset, &memory_value),
+                      "expected scalar atomic x2 memory read") ||
+              !Expect(memory_value == atomic_case.new_value,
+                      "expected scalar atomic x2 memory update")) {
+            std::cerr << mode << " " << atomic_case.opcode << '\n';
+            return false;
+          }
+        }
+        return true;
+      };
+
+  if (!run_scalar_atomic_cases32(false, kScalarAtomicCases32,
+                                 kScalarAtomic32Opcodes,
+                                 "decoded scalar atomic") ||
+      !run_scalar_atomic_cases32(true, kScalarAtomicCases32,
+                                 kScalarBufferAtomicCase32Opcodes,
+                                 "decoded scalar buffer atomic") ||
+      !run_scalar_atomic_cases64(false, kScalarAtomicCases64,
+                                 kScalarAtomic64Opcodes,
+                                 "decoded scalar atomic x2") ||
+      !run_scalar_atomic_cases64(true, kScalarAtomicCases64,
+                                 kScalarBufferAtomicCase64Opcodes,
+                                 "decoded scalar buffer atomic x2")) {
+    return 1;
+  }
+  }
+
+  {
   const std::vector<DecodedInstruction> scalar_maintenance_program = {
       DecodedInstruction::Nullary("S_DCACHE_INV"),
       DecodedInstruction::Nullary("S_DCACHE_WB"),
@@ -10628,6 +10921,494 @@ int main() {
               error_message.c_str()) ||
       !Expect(buffer_maintenance_state.halted,
               "expected buffer maintenance program to halt")) {
+    return 1;
+  }
+  }
+
+  {
+  LinearExecutionMemory buffer_memory(0x500, 0);
+  if (!Expect(buffer_memory.WriteU32(0x100u, 0x11111111u),
+              "expected buffer load seed write") ||
+      !Expect(buffer_memory.WriteU32(0x114u, 0x22220001u),
+              "expected buffer loadx2 seed write") ||
+      !Expect(buffer_memory.WriteU32(0x118u, 0x22220002u),
+              "expected buffer loadx2 seed write") ||
+      !Expect(buffer_memory.WriteU32(0x124u, 0x22220011u),
+              "expected buffer loadx2 seed write") ||
+      !Expect(buffer_memory.WriteU32(0x128u, 0x22220012u),
+              "expected buffer loadx2 seed write") ||
+      !Expect(buffer_memory.WriteU32(0x134u, 0x22220031u),
+              "expected buffer loadx2 seed write") ||
+      !Expect(buffer_memory.WriteU32(0x138u, 0x22220032u),
+              "expected buffer loadx2 seed write") ||
+      !Expect(buffer_memory.WriteU32(0x150u, 0x33330001u),
+              "expected buffer loadx3 seed write") ||
+      !Expect(buffer_memory.WriteU32(0x154u, 0x33330002u),
+              "expected buffer loadx3 seed write") ||
+      !Expect(buffer_memory.WriteU32(0x158u, 0x33330003u),
+              "expected buffer loadx3 seed write") ||
+      !Expect(buffer_memory.WriteU32(0x160u, 0x33330011u),
+              "expected buffer loadx3 seed write") ||
+      !Expect(buffer_memory.WriteU32(0x164u, 0x33330012u),
+              "expected buffer loadx3 seed write") ||
+      !Expect(buffer_memory.WriteU32(0x168u, 0x33330013u),
+              "expected buffer loadx3 seed write") ||
+      !Expect(buffer_memory.WriteU32(0x170u, 0x33330031u),
+              "expected buffer loadx3 seed write") ||
+      !Expect(buffer_memory.WriteU32(0x174u, 0x33330032u),
+              "expected buffer loadx3 seed write") ||
+      !Expect(buffer_memory.WriteU32(0x178u, 0x33330033u),
+              "expected buffer loadx3 seed write") ||
+      !Expect(buffer_memory.WriteU32(0x190u, 0x44440001u),
+              "expected buffer loadx4 seed write") ||
+      !Expect(buffer_memory.WriteU32(0x194u, 0x44440002u),
+              "expected buffer loadx4 seed write") ||
+      !Expect(buffer_memory.WriteU32(0x198u, 0x44440003u),
+              "expected buffer loadx4 seed write") ||
+      !Expect(buffer_memory.WriteU32(0x19cu, 0x44440004u),
+              "expected buffer loadx4 seed write") ||
+      !Expect(buffer_memory.WriteU32(0x1a0u, 0x44440011u),
+              "expected buffer loadx4 seed write") ||
+      !Expect(buffer_memory.WriteU32(0x1a4u, 0x44440012u),
+              "expected buffer loadx4 seed write") ||
+      !Expect(buffer_memory.WriteU32(0x1a8u, 0x44440013u),
+              "expected buffer loadx4 seed write") ||
+      !Expect(buffer_memory.WriteU32(0x1acu, 0x44440014u),
+              "expected buffer loadx4 seed write") ||
+      !Expect(buffer_memory.WriteU32(0x1b0u, 0x44440031u),
+              "expected buffer loadx4 seed write") ||
+      !Expect(buffer_memory.WriteU32(0x1b4u, 0x44440032u),
+              "expected buffer loadx4 seed write") ||
+      !Expect(buffer_memory.WriteU32(0x1b8u, 0x44440033u),
+              "expected buffer loadx4 seed write") ||
+      !Expect(buffer_memory.WriteU32(0x1bcu, 0x44440034u),
+              "expected buffer loadx4 seed write")) {
+    return 1;
+  }
+
+  WaveExecutionState buffer_memory_state{};
+  buffer_memory_state.exec_mask = 0b1011ULL;
+  buffer_memory_state.sgprs[8] = 0x100u;
+  buffer_memory_state.sgprs[9] = 0u;
+  buffer_memory_state.sgprs[10] = 0x300u;
+  buffer_memory_state.sgprs[11] = 0u;
+  buffer_memory_state.sgprs[70] = 0x80u;
+  buffer_memory_state.sgprs[71] = 0xf0u;
+  buffer_memory_state.vgprs[2][0] = 0x10u;
+  buffer_memory_state.vgprs[2][1] = 0x20u;
+  buffer_memory_state.vgprs[2][3] = 0x30u;
+  buffer_memory_state.vgprs[50][0] = 0x50000001u;
+  buffer_memory_state.vgprs[50][1] = 0x50000002u;
+  buffer_memory_state.vgprs[50][3] = 0x50000004u;
+  buffer_memory_state.vgprs[52][0] = 0x52000001u;
+  buffer_memory_state.vgprs[53][0] = 0x53000001u;
+  buffer_memory_state.vgprs[52][1] = 0x52000002u;
+  buffer_memory_state.vgprs[53][1] = 0x53000002u;
+  buffer_memory_state.vgprs[52][3] = 0x52000004u;
+  buffer_memory_state.vgprs[53][3] = 0x53000004u;
+  buffer_memory_state.vgprs[56][0] = 0x56000001u;
+  buffer_memory_state.vgprs[57][0] = 0x57000001u;
+  buffer_memory_state.vgprs[58][0] = 0x58000001u;
+  buffer_memory_state.vgprs[56][1] = 0x56000002u;
+  buffer_memory_state.vgprs[57][1] = 0x57000002u;
+  buffer_memory_state.vgprs[58][1] = 0x58000002u;
+  buffer_memory_state.vgprs[56][3] = 0x56000004u;
+  buffer_memory_state.vgprs[57][3] = 0x57000004u;
+  buffer_memory_state.vgprs[58][3] = 0x58000004u;
+  buffer_memory_state.vgprs[60][0] = 0x60000001u;
+  buffer_memory_state.vgprs[61][0] = 0x61000001u;
+  buffer_memory_state.vgprs[62][0] = 0x62000001u;
+  buffer_memory_state.vgprs[63][0] = 0x63000001u;
+  buffer_memory_state.vgprs[60][1] = 0x60000002u;
+  buffer_memory_state.vgprs[61][1] = 0x61000002u;
+  buffer_memory_state.vgprs[62][1] = 0x62000002u;
+  buffer_memory_state.vgprs[63][1] = 0x63000002u;
+  buffer_memory_state.vgprs[60][3] = 0x60000004u;
+  buffer_memory_state.vgprs[61][3] = 0x61000004u;
+  buffer_memory_state.vgprs[62][3] = 0x62000004u;
+  buffer_memory_state.vgprs[63][3] = 0x63000004u;
+
+  const std::vector<DecodedInstruction> buffer_memory_program = {
+      DecodedInstruction::FiveOperand("BUFFER_LOAD_DWORD",
+                                      InstructionOperand::Vgpr(20),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Sgpr(8),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FiveOperand("BUFFER_LOAD_DWORDX2",
+                                      InstructionOperand::Vgpr(24),
+                                      InstructionOperand::Vgpr(2),
+                                      InstructionOperand::Sgpr(8),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(4)),
+      DecodedInstruction::FiveOperand("BUFFER_LOAD_DWORDX3",
+                                      InstructionOperand::Vgpr(30),
+                                      InstructionOperand::Vgpr(2),
+                                      InstructionOperand::Sgpr(8),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0x40)),
+      DecodedInstruction::FiveOperand("BUFFER_LOAD_DWORDX4",
+                                      InstructionOperand::Vgpr(40),
+                                      InstructionOperand::Vgpr(2),
+                                      InstructionOperand::Sgpr(8),
+                                      InstructionOperand::Sgpr(70),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FiveOperand("BUFFER_STORE_DWORD",
+                                      InstructionOperand::Vgpr(50),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Sgpr(8),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0xc0)),
+      DecodedInstruction::FiveOperand("BUFFER_STORE_DWORDX2",
+                                      InstructionOperand::Vgpr(52),
+                                      InstructionOperand::Vgpr(2),
+                                      InstructionOperand::Sgpr(8),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0xc0)),
+      DecodedInstruction::FiveOperand("BUFFER_STORE_DWORDX3",
+                                      InstructionOperand::Vgpr(56),
+                                      InstructionOperand::Vgpr(2),
+                                      InstructionOperand::Sgpr(8),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0xe0)),
+      DecodedInstruction::FiveOperand("BUFFER_STORE_DWORDX4",
+                                      InstructionOperand::Vgpr(60),
+                                      InstructionOperand::Vgpr(2),
+                                      InstructionOperand::Sgpr(8),
+                                      InstructionOperand::Sgpr(71),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  if (!Expect(interpreter.ExecuteProgram(buffer_memory_program,
+                                         &buffer_memory_state, &buffer_memory,
+                                         &error_message),
+              error_message.c_str()) ||
+      !Expect(buffer_memory_state.halted,
+              "expected buffer memory program to halt") ||
+      !Expect(buffer_memory_state.vgprs[20][0] == 0x11111111u,
+              "expected buffer load lane 0 result") ||
+      !Expect(buffer_memory_state.vgprs[20][1] == 0x11111111u,
+              "expected buffer load lane 1 result") ||
+      !Expect(buffer_memory_state.vgprs[20][2] == 0u,
+              "expected inactive buffer load lane to remain untouched") ||
+      !Expect(buffer_memory_state.vgprs[20][3] == 0x11111111u,
+              "expected buffer load lane 3 result") ||
+      !Expect(buffer_memory_state.vgprs[24][0] == 0x22220001u &&
+                  buffer_memory_state.vgprs[25][0] == 0x22220002u,
+              "expected buffer loadx2 lane 0 result") ||
+      !Expect(buffer_memory_state.vgprs[24][1] == 0x22220011u &&
+                  buffer_memory_state.vgprs[25][1] == 0x22220012u,
+              "expected buffer loadx2 lane 1 result") ||
+      !Expect(buffer_memory_state.vgprs[24][3] == 0x22220031u &&
+                  buffer_memory_state.vgprs[25][3] == 0x22220032u,
+              "expected buffer loadx2 lane 3 result") ||
+      !Expect(buffer_memory_state.vgprs[30][1] == 0x33330011u &&
+                  buffer_memory_state.vgprs[31][1] == 0x33330012u &&
+                  buffer_memory_state.vgprs[32][1] == 0x33330013u,
+              "expected buffer loadx3 lane 1 result") ||
+      !Expect(buffer_memory_state.vgprs[40][3] == 0x44440031u &&
+                  buffer_memory_state.vgprs[41][3] == 0x44440032u &&
+                  buffer_memory_state.vgprs[42][3] == 0x44440033u &&
+                  buffer_memory_state.vgprs[43][3] == 0x44440034u,
+              "expected buffer loadx4 lane 3 result")) {
+    return 1;
+  }
+
+  std::uint32_t value = 0;
+  if (!Expect(buffer_memory.ReadU32(0x1c0u, &value),
+              "expected buffer store read") ||
+      !Expect(value == 0x50000004u,
+              "expected scalar-address buffer store last-lane result") ||
+      !Expect(buffer_memory.ReadU32(0x1d0u, &value),
+              "expected buffer storex2 read") ||
+      !Expect(value == 0x52000001u, "expected buffer storex2 lane 0 result") ||
+      !Expect(buffer_memory.ReadU32(0x1d4u, &value),
+              "expected buffer storex2 read") ||
+      !Expect(value == 0x53000001u, "expected buffer storex2 lane 0 result") ||
+      !Expect(buffer_memory.ReadU32(0x1e0u, &value),
+              "expected buffer storex2 read") ||
+      !Expect(value == 0x52000002u, "expected buffer storex2 lane 1 result") ||
+      !Expect(buffer_memory.ReadU32(0x1f0u, &value),
+              "expected buffer storex3 read") ||
+      !Expect(value == 0x56000001u, "expected buffer storex3 lane 0 result") ||
+      !Expect(buffer_memory.ReadU32(0x1f8u, &value),
+              "expected buffer storex3 read") ||
+      !Expect(value == 0x58000001u, "expected buffer storex3 lane 0 result") ||
+      !Expect(buffer_memory.ReadU32(0x200u, &value),
+              "expected buffer storex4 read") ||
+      !Expect(value == 0x60000001u, "expected buffer storex4 lane 0 result") ||
+      !Expect(buffer_memory.ReadU32(0x22cu, &value),
+              "expected buffer storex4 read") ||
+      !Expect(value == 0x63000004u, "expected buffer storex4 lane 3 result")) {
+    return 1;
+  }
+  }
+
+  {
+  LinearExecutionMemory buffer_subword_memory(0x500, 0);
+  if (!Expect(WriteU8(&buffer_subword_memory, 0x100u, 0x7au),
+              "expected buffer ubyte seed write") ||
+      !Expect(WriteU8(&buffer_subword_memory, 0x110u, 0x80u),
+              "expected buffer sbyte seed write") ||
+      !Expect(WriteU8(&buffer_subword_memory, 0x120u, 0x7fu),
+              "expected buffer sbyte seed write") ||
+      !Expect(WriteU8(&buffer_subword_memory, 0x130u, 0xfeu),
+              "expected buffer sbyte seed write") ||
+      !Expect(WriteU16(&buffer_subword_memory, 0x150u, 0x1234u),
+              "expected buffer ushort seed write") ||
+      !Expect(WriteU16(&buffer_subword_memory, 0x160u, 0x5678u),
+              "expected buffer ushort seed write") ||
+      !Expect(WriteU16(&buffer_subword_memory, 0x170u, 0xabcdu),
+              "expected buffer ushort seed write") ||
+      !Expect(WriteU16(&buffer_subword_memory, 0x190u, 0x8001u),
+              "expected buffer sshort seed write") ||
+      !Expect(WriteU16(&buffer_subword_memory, 0x1a0u, 0x7fffu),
+              "expected buffer sshort seed write") ||
+      !Expect(WriteU16(&buffer_subword_memory, 0x1b0u, 0xff00u),
+              "expected buffer sshort seed write") ||
+      !Expect(WriteU8(&buffer_subword_memory, 0x1d0u, 0x34u),
+              "expected buffer ubyte d16 seed write") ||
+      !Expect(WriteU8(&buffer_subword_memory, 0x1e0u, 0x56u),
+              "expected buffer ubyte d16 seed write") ||
+      !Expect(WriteU8(&buffer_subword_memory, 0x1f0u, 0x78u),
+              "expected buffer ubyte d16 seed write") ||
+      !Expect(WriteU8(&buffer_subword_memory, 0x240u, 0x9au),
+              "expected buffer ubyte d16 hi seed write") ||
+      !Expect(WriteU8(&buffer_subword_memory, 0x250u, 0xbcu),
+              "expected buffer ubyte d16 hi seed write") ||
+      !Expect(WriteU8(&buffer_subword_memory, 0x260u, 0xdeu),
+              "expected buffer ubyte d16 hi seed write") ||
+      !Expect(WriteU8(&buffer_subword_memory, 0x270u, 0x81u),
+              "expected buffer sbyte d16 seed write") ||
+      !Expect(WriteU8(&buffer_subword_memory, 0x280u, 0x82u),
+              "expected buffer sbyte d16 seed write") ||
+      !Expect(WriteU8(&buffer_subword_memory, 0x290u, 0x7fu),
+              "expected buffer sbyte d16 seed write") ||
+      !Expect(WriteU8(&buffer_subword_memory, 0x2b0u, 0xfeu),
+              "expected buffer sbyte d16 hi seed write") ||
+      !Expect(WriteU8(&buffer_subword_memory, 0x2c0u, 0x80u),
+              "expected buffer sbyte d16 hi seed write") ||
+      !Expect(WriteU8(&buffer_subword_memory, 0x2d0u, 0x01u),
+              "expected buffer sbyte d16 hi seed write") ||
+      !Expect(WriteU16(&buffer_subword_memory, 0x2f0u, 0x1122u),
+              "expected buffer short d16 seed write") ||
+      !Expect(WriteU16(&buffer_subword_memory, 0x300u, 0x3344u),
+              "expected buffer short d16 seed write") ||
+      !Expect(WriteU16(&buffer_subword_memory, 0x310u, 0x5566u),
+              "expected buffer short d16 seed write") ||
+      !Expect(WriteU16(&buffer_subword_memory, 0x340u, 0x89abu),
+              "expected buffer short d16 hi seed write") ||
+      !Expect(WriteU16(&buffer_subword_memory, 0x350u, 0xcdefu),
+              "expected buffer short d16 hi seed write") ||
+      !Expect(WriteU16(&buffer_subword_memory, 0x360u, 0x1357u),
+              "expected buffer short d16 hi seed write")) {
+    return 1;
+  }
+
+  WaveExecutionState buffer_subword_state{};
+  buffer_subword_state.exec_mask = 0b1011ULL;
+  buffer_subword_state.sgprs[8] = 0x100u;
+  buffer_subword_state.sgprs[9] = 0u;
+  buffer_subword_state.sgprs[10] = 0x400u;
+  buffer_subword_state.sgprs[11] = 0u;
+  buffer_subword_state.vgprs[2][0] = 0x10u;
+  buffer_subword_state.vgprs[2][1] = 0x20u;
+  buffer_subword_state.vgprs[2][3] = 0x30u;
+  buffer_subword_state.vgprs[40][0] = 0x111111abu;
+  buffer_subword_state.vgprs[40][1] = 0x222222bcu;
+  buffer_subword_state.vgprs[40][3] = 0x333333deu;
+  buffer_subword_state.vgprs[41][0] = 0x00340000u;
+  buffer_subword_state.vgprs[41][1] = 0x00ab0000u;
+  buffer_subword_state.vgprs[41][3] = 0x00fe0000u;
+  buffer_subword_state.vgprs[42][0] = 0x000089abu;
+  buffer_subword_state.vgprs[42][1] = 0x0000cdefu;
+  buffer_subword_state.vgprs[42][3] = 0x00001357u;
+  buffer_subword_state.vgprs[43][0] = 0x24680000u;
+  buffer_subword_state.vgprs[43][1] = 0x13570000u;
+  buffer_subword_state.vgprs[43][3] = 0xabcd0000u;
+
+  const std::vector<DecodedInstruction> buffer_subword_program = {
+      DecodedInstruction::FiveOperand("BUFFER_LOAD_UBYTE",
+                                      InstructionOperand::Vgpr(60),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Sgpr(8),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FiveOperand("BUFFER_LOAD_SBYTE",
+                                      InstructionOperand::Vgpr(61),
+                                      InstructionOperand::Vgpr(2),
+                                      InstructionOperand::Sgpr(8),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FiveOperand("BUFFER_LOAD_USHORT",
+                                      InstructionOperand::Vgpr(62),
+                                      InstructionOperand::Vgpr(2),
+                                      InstructionOperand::Sgpr(8),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0x40)),
+      DecodedInstruction::FiveOperand("BUFFER_LOAD_SSHORT",
+                                      InstructionOperand::Vgpr(63),
+                                      InstructionOperand::Vgpr(2),
+                                      InstructionOperand::Sgpr(8),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0x80)),
+      DecodedInstruction::FiveOperand("BUFFER_LOAD_UBYTE_D16",
+                                      InstructionOperand::Vgpr(64),
+                                      InstructionOperand::Vgpr(2),
+                                      InstructionOperand::Sgpr(8),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0xc0)),
+      DecodedInstruction::FiveOperand("BUFFER_LOAD_UBYTE_D16_HI",
+                                      InstructionOperand::Vgpr(65),
+                                      InstructionOperand::Vgpr(2),
+                                      InstructionOperand::Sgpr(8),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0x130)),
+      DecodedInstruction::FiveOperand("BUFFER_LOAD_SBYTE_D16",
+                                      InstructionOperand::Vgpr(66),
+                                      InstructionOperand::Vgpr(2),
+                                      InstructionOperand::Sgpr(8),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0x160)),
+      DecodedInstruction::FiveOperand("BUFFER_LOAD_SBYTE_D16_HI",
+                                      InstructionOperand::Vgpr(67),
+                                      InstructionOperand::Vgpr(2),
+                                      InstructionOperand::Sgpr(8),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0x1a0)),
+      DecodedInstruction::FiveOperand("BUFFER_LOAD_SHORT_D16",
+                                      InstructionOperand::Vgpr(68),
+                                      InstructionOperand::Vgpr(2),
+                                      InstructionOperand::Sgpr(8),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0x1e0)),
+      DecodedInstruction::FiveOperand("BUFFER_LOAD_SHORT_D16_HI",
+                                      InstructionOperand::Vgpr(69),
+                                      InstructionOperand::Vgpr(2),
+                                      InstructionOperand::Sgpr(8),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0x230)),
+      DecodedInstruction::FiveOperand("BUFFER_STORE_BYTE",
+                                      InstructionOperand::Vgpr(40),
+                                      InstructionOperand::Vgpr(2),
+                                      InstructionOperand::Sgpr(8),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0x270)),
+      DecodedInstruction::FiveOperand("BUFFER_STORE_BYTE_D16_HI",
+                                      InstructionOperand::Vgpr(41),
+                                      InstructionOperand::Vgpr(2),
+                                      InstructionOperand::Sgpr(8),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0x2a0)),
+      DecodedInstruction::FiveOperand("BUFFER_STORE_SHORT",
+                                      InstructionOperand::Vgpr(42),
+                                      InstructionOperand::Vgpr(2),
+                                      InstructionOperand::Sgpr(8),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0x2e0)),
+      DecodedInstruction::FiveOperand("BUFFER_STORE_SHORT_D16_HI",
+                                      InstructionOperand::Vgpr(43),
+                                      InstructionOperand::Vgpr(2),
+                                      InstructionOperand::Sgpr(8),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0x320)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  if (!Expect(interpreter.ExecuteProgram(buffer_subword_program,
+                                         &buffer_subword_state,
+                                         &buffer_subword_memory,
+                                         &error_message),
+              error_message.c_str()) ||
+      !Expect(buffer_subword_state.halted,
+              "expected buffer subword program to halt") ||
+      !Expect(buffer_subword_state.vgprs[60][0] == 0x7au &&
+                  buffer_subword_state.vgprs[60][1] == 0x7au &&
+                  buffer_subword_state.vgprs[60][3] == 0x7au,
+              "expected buffer ubyte load result") ||
+      !Expect(buffer_subword_state.vgprs[61][0] == 0xffffff80u &&
+                  buffer_subword_state.vgprs[61][1] == 0x0000007fu &&
+                  buffer_subword_state.vgprs[61][3] == 0xfffffffeu,
+              "expected buffer sbyte load result") ||
+      !Expect(buffer_subword_state.vgprs[62][1] == 0x5678u &&
+                  buffer_subword_state.vgprs[62][3] == 0xabcdu,
+              "expected buffer ushort load result") ||
+      !Expect(buffer_subword_state.vgprs[63][0] == 0xffff8001u &&
+                  buffer_subword_state.vgprs[63][1] == 0x00007fffu &&
+                  buffer_subword_state.vgprs[63][3] == 0xffffff00u,
+              "expected buffer sshort load result") ||
+      !Expect(buffer_subword_state.vgprs[64][0] == 0x00000034u &&
+                  buffer_subword_state.vgprs[64][1] == 0x00000056u &&
+                  buffer_subword_state.vgprs[64][3] == 0x00000078u,
+              "expected buffer ubyte d16 load result") ||
+      !Expect(buffer_subword_state.vgprs[65][0] == 0x009a0000u &&
+                  buffer_subword_state.vgprs[65][1] == 0x00bc0000u &&
+                  buffer_subword_state.vgprs[65][3] == 0x00de0000u,
+              "expected buffer ubyte d16 hi load result") ||
+      !Expect(buffer_subword_state.vgprs[66][0] == 0x0000ff81u &&
+                  buffer_subword_state.vgprs[66][1] == 0x0000ff82u &&
+                  buffer_subword_state.vgprs[66][3] == 0x0000007fu,
+              "expected buffer sbyte d16 load result") ||
+      !Expect(buffer_subword_state.vgprs[67][0] == 0xfffe0000u &&
+                  buffer_subword_state.vgprs[67][1] == 0xff800000u &&
+                  buffer_subword_state.vgprs[67][3] == 0x00010000u,
+              "expected buffer sbyte d16 hi load result") ||
+      !Expect(buffer_subword_state.vgprs[68][1] == 0x00003344u &&
+                  buffer_subword_state.vgprs[68][3] == 0x00005566u,
+              "expected buffer short d16 load result") ||
+      !Expect(buffer_subword_state.vgprs[69][0] == 0x89ab0000u &&
+                  buffer_subword_state.vgprs[69][1] == 0xcdef0000u &&
+                  buffer_subword_state.vgprs[69][3] == 0x13570000u,
+              "expected buffer short d16 hi load result")) {
+    return 1;
+  }
+
+  std::uint8_t stored_byte = 0;
+  std::uint16_t stored_short = 0;
+  if (!Expect(ReadU8(buffer_subword_memory, 0x380u, &stored_byte),
+              "expected buffer byte store read") ||
+      !Expect(stored_byte == 0xabu, "expected buffer byte store lane 0 result") ||
+      !Expect(ReadU8(buffer_subword_memory, 0x390u, &stored_byte),
+              "expected buffer byte store read") ||
+      !Expect(stored_byte == 0xbcu, "expected buffer byte store lane 1 result") ||
+      !Expect(ReadU8(buffer_subword_memory, 0x3a0u, &stored_byte),
+              "expected buffer byte store read") ||
+      !Expect(stored_byte == 0xdeu, "expected buffer byte store lane 3 result") ||
+      !Expect(ReadU8(buffer_subword_memory, 0x3b0u, &stored_byte),
+              "expected buffer byte d16 hi store read") ||
+      !Expect(stored_byte == 0x34u,
+              "expected buffer byte d16 hi store lane 0 result") ||
+      !Expect(ReadU8(buffer_subword_memory, 0x3c0u, &stored_byte),
+              "expected buffer byte d16 hi store read") ||
+      !Expect(stored_byte == 0xabu,
+              "expected buffer byte d16 hi store lane 1 result") ||
+      !Expect(ReadU8(buffer_subword_memory, 0x3d0u, &stored_byte),
+              "expected buffer byte d16 hi store read") ||
+      !Expect(stored_byte == 0xfeu,
+              "expected buffer byte d16 hi store lane 3 result") ||
+      !Expect(ReadU16(buffer_subword_memory, 0x3f0u, &stored_short),
+              "expected buffer short store read") ||
+      !Expect(stored_short == 0x89abu,
+              "expected buffer short store lane 0 result") ||
+      !Expect(ReadU16(buffer_subword_memory, 0x400u, &stored_short),
+              "expected buffer short store read") ||
+      !Expect(stored_short == 0xcdefu,
+              "expected buffer short store lane 1 result") ||
+      !Expect(ReadU16(buffer_subword_memory, 0x410u, &stored_short),
+              "expected buffer short store read") ||
+      !Expect(stored_short == 0x1357u,
+              "expected buffer short store lane 3 result") ||
+      !Expect(ReadU16(buffer_subword_memory, 0x430u, &stored_short),
+              "expected buffer short d16 hi store read") ||
+      !Expect(stored_short == 0x2468u,
+              "expected buffer short d16 hi store lane 0 result") ||
+      !Expect(ReadU16(buffer_subword_memory, 0x440u, &stored_short),
+              "expected buffer short d16 hi store read") ||
+      !Expect(stored_short == 0x1357u,
+              "expected buffer short d16 hi store lane 1 result") ||
+      !Expect(ReadU16(buffer_subword_memory, 0x450u, &stored_short),
+              "expected buffer short d16 hi store read") ||
+      !Expect(stored_short == 0xabcdu,
+              "expected buffer short d16 hi store lane 3 result")) {
     return 1;
   }
   }

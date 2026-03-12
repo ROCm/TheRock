@@ -1027,6 +1027,48 @@ bool IsScalarMemoryProbeOpcode(std::string_view opcode) {
   return opcode == "S_ATC_PROBE" || opcode == "S_ATC_PROBE_BUFFER";
 }
 
+std::string_view NormalizeScalarAtomicOpcode(std::string_view opcode) {
+  if (HasPrefix(opcode, "S_BUFFER_")) {
+    return opcode.substr(9);
+  }
+  if (HasPrefix(opcode, "S_")) {
+    return opcode.substr(2);
+  }
+  return opcode;
+}
+
+bool IsScalarAtomicOpcode(std::string_view opcode) {
+  const std::string_view normalized = NormalizeScalarAtomicOpcode(opcode);
+  return normalized == "ATOMIC_SWAP" ||
+         normalized == "ATOMIC_ADD" ||
+         normalized == "ATOMIC_SUB" ||
+         normalized == "ATOMIC_SMIN" ||
+         normalized == "ATOMIC_UMIN" ||
+         normalized == "ATOMIC_SMAX" ||
+         normalized == "ATOMIC_UMAX" ||
+         normalized == "ATOMIC_AND" ||
+         normalized == "ATOMIC_OR" ||
+         normalized == "ATOMIC_XOR" ||
+         normalized == "ATOMIC_INC" ||
+         normalized == "ATOMIC_DEC" ||
+         normalized == "ATOMIC_SWAP_X2" ||
+         normalized == "ATOMIC_ADD_X2" ||
+         normalized == "ATOMIC_SUB_X2" ||
+         normalized == "ATOMIC_SMIN_X2" ||
+         normalized == "ATOMIC_UMIN_X2" ||
+         normalized == "ATOMIC_SMAX_X2" ||
+         normalized == "ATOMIC_UMAX_X2" ||
+         normalized == "ATOMIC_AND_X2" ||
+         normalized == "ATOMIC_OR_X2" ||
+         normalized == "ATOMIC_XOR_X2" ||
+         normalized == "ATOMIC_INC_X2" ||
+         normalized == "ATOMIC_DEC_X2";
+}
+
+bool IsScalarBufferAtomicOpcode(std::string_view opcode) {
+  return HasPrefix(opcode, "S_BUFFER_ATOMIC_");
+}
+
 bool IsBufferMaintenanceOpcode(std::string_view opcode) {
   return opcode == "BUFFER_WBL2" || opcode == "BUFFER_INV";
 }
@@ -1067,6 +1109,71 @@ std::uint8_t GetScalarMemoryRegisterDwordCount(std::string_view opcode) {
     return 2;
   }
   return 1;
+}
+
+std::uint8_t GetScalarAtomicMemoryDwordCount(std::string_view opcode) {
+  return HasSuffix(NormalizeScalarAtomicOpcode(opcode), "_X2") ? 2u : 1u;
+}
+
+bool IsBufferMemoryOpcode(std::string_view opcode) {
+  return opcode == "BUFFER_LOAD_UBYTE" ||
+         opcode == "BUFFER_LOAD_SBYTE" ||
+         opcode == "BUFFER_LOAD_USHORT" ||
+         opcode == "BUFFER_LOAD_SSHORT" ||
+         opcode == "BUFFER_LOAD_DWORD" ||
+         opcode == "BUFFER_LOAD_DWORDX2" ||
+         opcode == "BUFFER_LOAD_DWORDX3" ||
+         opcode == "BUFFER_LOAD_DWORDX4" ||
+         opcode == "BUFFER_STORE_BYTE" ||
+         opcode == "BUFFER_STORE_BYTE_D16_HI" ||
+         opcode == "BUFFER_STORE_SHORT" ||
+         opcode == "BUFFER_STORE_SHORT_D16_HI" ||
+         opcode == "BUFFER_STORE_DWORD" ||
+         opcode == "BUFFER_STORE_DWORDX2" ||
+         opcode == "BUFFER_STORE_DWORDX3" ||
+         opcode == "BUFFER_STORE_DWORDX4" ||
+         opcode == "BUFFER_LOAD_UBYTE_D16" ||
+         opcode == "BUFFER_LOAD_UBYTE_D16_HI" ||
+         opcode == "BUFFER_LOAD_SBYTE_D16" ||
+         opcode == "BUFFER_LOAD_SBYTE_D16_HI" ||
+         opcode == "BUFFER_LOAD_SHORT_D16" ||
+         opcode == "BUFFER_LOAD_SHORT_D16_HI";
+}
+
+bool IsBufferMemoryLoadOpcode(std::string_view opcode) {
+  return opcode == "BUFFER_LOAD_UBYTE" ||
+         opcode == "BUFFER_LOAD_SBYTE" ||
+         opcode == "BUFFER_LOAD_USHORT" ||
+         opcode == "BUFFER_LOAD_SSHORT" ||
+         opcode == "BUFFER_LOAD_DWORD" ||
+         opcode == "BUFFER_LOAD_DWORDX2" ||
+         opcode == "BUFFER_LOAD_DWORDX3" ||
+         opcode == "BUFFER_LOAD_DWORDX4" ||
+         opcode == "BUFFER_LOAD_UBYTE_D16" ||
+         opcode == "BUFFER_LOAD_UBYTE_D16_HI" ||
+         opcode == "BUFFER_LOAD_SBYTE_D16" ||
+         opcode == "BUFFER_LOAD_SBYTE_D16_HI" ||
+         opcode == "BUFFER_LOAD_SHORT_D16" ||
+         opcode == "BUFFER_LOAD_SHORT_D16_HI";
+}
+
+std::uint8_t GetBufferMemoryRegisterDwordCount(std::string_view opcode) {
+  if (opcode == "BUFFER_LOAD_DWORDX4" || opcode == "BUFFER_STORE_DWORDX4") {
+    return 4u;
+  }
+  if (opcode == "BUFFER_LOAD_DWORDX3" || opcode == "BUFFER_STORE_DWORDX3") {
+    return 3u;
+  }
+  if (opcode == "BUFFER_LOAD_DWORDX2" || opcode == "BUFFER_STORE_DWORDX2") {
+    return 2u;
+  }
+  return 1u;
+}
+
+bool IsSignedBufferMemoryLoadOpcode(std::string_view opcode) {
+  return opcode == "BUFFER_LOAD_SBYTE" || opcode == "BUFFER_LOAD_SSHORT" ||
+         opcode == "BUFFER_LOAD_SBYTE_D16" ||
+         opcode == "BUFFER_LOAD_SBYTE_D16_HI";
 }
 
 bool IsVectorBinaryOpcode(std::string_view opcode) {
@@ -3126,13 +3233,19 @@ bool IsSignedVectorMemoryLoadOpcode(std::string_view opcode) {
          opcode == "GLOBAL_LOAD_SBYTE" || opcode == "GLOBAL_LOAD_LDS_SBYTE" ||
          opcode == "GLOBAL_LOAD_SSHORT" || opcode == "GLOBAL_LOAD_LDS_SSHORT" ||
          opcode == "GLOBAL_LOAD_SBYTE_D16" ||
-         opcode == "GLOBAL_LOAD_SBYTE_D16_HI";
+         opcode == "GLOBAL_LOAD_SBYTE_D16_HI" ||
+         opcode == "BUFFER_LOAD_SBYTE" ||
+         opcode == "BUFFER_LOAD_SSHORT" ||
+         opcode == "BUFFER_LOAD_SBYTE_D16" ||
+         opcode == "BUFFER_LOAD_SBYTE_D16_HI";
 }
 
 DsD16AccessKind GetVectorMemoryD16AccessKind(std::string_view opcode) {
   if (opcode == "FLAT_LOAD_UBYTE_D16" || opcode == "FLAT_LOAD_SBYTE_D16" ||
       opcode == "GLOBAL_LOAD_UBYTE_D16" ||
-      opcode == "GLOBAL_LOAD_SBYTE_D16") {
+      opcode == "GLOBAL_LOAD_SBYTE_D16" ||
+      opcode == "BUFFER_LOAD_UBYTE_D16" ||
+      opcode == "BUFFER_LOAD_SBYTE_D16") {
     return DsD16AccessKind::kByteLo;
   }
   if (opcode == "FLAT_LOAD_UBYTE_D16_HI" ||
@@ -3140,16 +3253,22 @@ DsD16AccessKind GetVectorMemoryD16AccessKind(std::string_view opcode) {
       opcode == "FLAT_STORE_BYTE_D16_HI" ||
       opcode == "GLOBAL_LOAD_UBYTE_D16_HI" ||
       opcode == "GLOBAL_LOAD_SBYTE_D16_HI" ||
-      opcode == "GLOBAL_STORE_BYTE_D16_HI") {
+      opcode == "GLOBAL_STORE_BYTE_D16_HI" ||
+      opcode == "BUFFER_LOAD_UBYTE_D16_HI" ||
+      opcode == "BUFFER_LOAD_SBYTE_D16_HI" ||
+      opcode == "BUFFER_STORE_BYTE_D16_HI") {
     return DsD16AccessKind::kByteHi;
   }
-  if (opcode == "FLAT_LOAD_SHORT_D16" || opcode == "GLOBAL_LOAD_SHORT_D16") {
+  if (opcode == "FLAT_LOAD_SHORT_D16" || opcode == "GLOBAL_LOAD_SHORT_D16" ||
+      opcode == "BUFFER_LOAD_SHORT_D16") {
     return DsD16AccessKind::kHalfLo;
   }
   if (opcode == "FLAT_LOAD_SHORT_D16_HI" ||
       opcode == "FLAT_STORE_SHORT_D16_HI" ||
       opcode == "GLOBAL_LOAD_SHORT_D16_HI" ||
-      opcode == "GLOBAL_STORE_SHORT_D16_HI") {
+      opcode == "GLOBAL_STORE_SHORT_D16_HI" ||
+      opcode == "BUFFER_LOAD_SHORT_D16_HI" ||
+      opcode == "BUFFER_STORE_SHORT_D16_HI") {
     return DsD16AccessKind::kHalfHi;
   }
   return DsD16AccessKind::kNone;
@@ -3597,7 +3716,14 @@ std::uint8_t GetVectorMemoryElementSizeBytes(std::string_view opcode) {
       opcode == "GLOBAL_LOAD_SBYTE_D16" ||
       opcode == "GLOBAL_LOAD_SBYTE_D16_HI" ||
       opcode == "GLOBAL_STORE_BYTE" ||
-      opcode == "GLOBAL_STORE_BYTE_D16_HI") {
+      opcode == "GLOBAL_STORE_BYTE_D16_HI" ||
+      opcode == "BUFFER_LOAD_UBYTE" || opcode == "BUFFER_LOAD_SBYTE" ||
+      opcode == "BUFFER_LOAD_UBYTE_D16" ||
+      opcode == "BUFFER_LOAD_UBYTE_D16_HI" ||
+      opcode == "BUFFER_LOAD_SBYTE_D16" ||
+      opcode == "BUFFER_LOAD_SBYTE_D16_HI" ||
+      opcode == "BUFFER_STORE_BYTE" ||
+      opcode == "BUFFER_STORE_BYTE_D16_HI") {
     return 1;
   }
   if (opcode == "FLAT_LOAD_USHORT" || opcode == "FLAT_LOAD_SSHORT" ||
@@ -3608,7 +3734,12 @@ std::uint8_t GetVectorMemoryElementSizeBytes(std::string_view opcode) {
       opcode == "GLOBAL_LOAD_SHORT_D16" ||
       opcode == "GLOBAL_LOAD_SHORT_D16_HI" ||
       opcode == "GLOBAL_STORE_SHORT" ||
-      opcode == "GLOBAL_STORE_SHORT_D16_HI") {
+      opcode == "GLOBAL_STORE_SHORT_D16_HI" ||
+      opcode == "BUFFER_LOAD_USHORT" || opcode == "BUFFER_LOAD_SSHORT" ||
+      opcode == "BUFFER_LOAD_SHORT_D16" ||
+      opcode == "BUFFER_LOAD_SHORT_D16_HI" ||
+      opcode == "BUFFER_STORE_SHORT" ||
+      opcode == "BUFFER_STORE_SHORT_D16_HI") {
     return 2;
   }
   return 4;
@@ -7664,9 +7795,11 @@ bool Gfx950Interpreter::Supports(std::string_view opcode) const {
          IsVectorUnaryOpcode(opcode) ||
          IsScalarBinaryOpcode(opcode) ||
          IsScalarCompareOpcode(opcode) || IsScalarMemoryOpcode(opcode) ||
+         IsScalarAtomicOpcode(opcode) ||
          IsScalarMemoryMaintenanceOpcode(opcode) ||
          IsScalarMemoryTimeOpcode(opcode) ||
          IsScalarMemoryProbeOpcode(opcode) ||
+         IsBufferMemoryOpcode(opcode) ||
          IsBufferMaintenanceOpcode(opcode) ||
          IsInstructionCacheMaintenanceOpcode(opcode) ||
          IsVectorBinaryOpcode(opcode) || IsVectorTernaryOpcode(opcode) ||
@@ -8040,6 +8173,12 @@ bool Gfx950Interpreter::ExecuteInstruction(const DecodedInstruction& instruction
   }
   if (IsScalarMemoryOpcode(instruction.opcode)) {
     return ExecuteScalarMemory(instruction, state, memory, error_message);
+  }
+  if (IsScalarAtomicOpcode(instruction.opcode)) {
+    return ExecuteScalarAtomic(instruction, state, memory, error_message);
+  }
+  if (IsBufferMemoryOpcode(instruction.opcode)) {
+    return ExecuteBufferMemory(instruction, state, memory, error_message);
   }
   if (IsVectorBinaryOpcode(instruction.opcode)) {
     return ExecuteVectorBinary(instruction, state, error_message);
@@ -10270,6 +10409,391 @@ bool Gfx950Interpreter::ExecuteScalarMemory(const CompiledInstruction& instructi
                                                     dword_index)],
             error_message)) {
       return false;
+    }
+  }
+
+  if (error_message != nullptr) {
+    error_message->clear();
+  }
+  return true;
+}
+
+bool Gfx950Interpreter::ExecuteScalarAtomic(const DecodedInstruction& instruction,
+                                            WaveExecutionState* state,
+                                            ExecutionMemory* memory,
+                                            std::string* error_message) const {
+  if (!ValidateOperandCount(instruction, 3, error_message)) {
+    return false;
+  }
+  if (memory == nullptr) {
+    if (error_message != nullptr) {
+      *error_message = "memory-backed instruction requires execution memory";
+    }
+    return false;
+  }
+  if (instruction.operands[0].kind != OperandKind::kSgpr ||
+      instruction.operands[1].kind != OperandKind::kSgpr) {
+    if (error_message != nullptr) {
+      *error_message = "scalar atomic operands must use scalar registers";
+    }
+    return false;
+  }
+
+  const bool uses_buffer_descriptor =
+      IsScalarBufferAtomicOpcode(instruction.opcode);
+  const std::string_view normalized_opcode =
+      NormalizeScalarAtomicOpcode(instruction.opcode);
+  const std::uint8_t memory_dword_count =
+      GetScalarAtomicMemoryDwordCount(instruction.opcode);
+  const std::uint8_t data_dword_count = memory_dword_count;
+  if (instruction.operands[0].index + data_dword_count - 1 >=
+      state->sgprs.size()) {
+    if (error_message != nullptr) {
+      *error_message = "scalar atomic data register range out of bounds";
+    }
+    return false;
+  }
+
+  std::uint64_t address = 0;
+  if (!ResolveScalarMemoryAddress(instruction.operands[1], instruction.operands[2],
+                                  *state, uses_buffer_descriptor,
+                                  memory_dword_count, &address,
+                                  error_message)) {
+    return false;
+  }
+
+  std::array<std::uint32_t, 2> old_dwords{};
+  std::array<std::uint32_t, 2> data_dwords{};
+  std::array<std::uint32_t, 2> new_dwords{};
+  for (std::uint8_t dword_index = 0; dword_index < memory_dword_count;
+       ++dword_index) {
+    const std::uint64_t byte_offset =
+        static_cast<std::uint64_t>(dword_index) * sizeof(std::uint32_t);
+    if (address > std::numeric_limits<std::uint64_t>::max() - byte_offset) {
+      if (error_message != nullptr) {
+        *error_message = "scalar atomic address overflow";
+      }
+      return false;
+    }
+    if (!ReadMemoryU32(memory, address + byte_offset, &old_dwords[dword_index],
+                       error_message)) {
+      return false;
+    }
+    data_dwords[dword_index] =
+        state->sgprs[static_cast<std::uint16_t>(instruction.operands[0].index +
+                                                dword_index)];
+    new_dwords[dword_index] = old_dwords[dword_index];
+  }
+
+  if (normalized_opcode == "ATOMIC_SWAP") {
+    new_dwords[0] = data_dwords[0];
+  } else if (normalized_opcode == "ATOMIC_ADD") {
+    new_dwords[0] = old_dwords[0] + data_dwords[0];
+  } else if (normalized_opcode == "ATOMIC_SUB") {
+    new_dwords[0] = old_dwords[0] - data_dwords[0];
+  } else if (normalized_opcode == "ATOMIC_SMIN") {
+    new_dwords[0] =
+        BitCast<std::int32_t>(old_dwords[0]) < BitCast<std::int32_t>(data_dwords[0])
+            ? old_dwords[0]
+            : data_dwords[0];
+  } else if (normalized_opcode == "ATOMIC_UMIN") {
+    new_dwords[0] =
+        old_dwords[0] < data_dwords[0] ? old_dwords[0] : data_dwords[0];
+  } else if (normalized_opcode == "ATOMIC_SMAX") {
+    new_dwords[0] =
+        BitCast<std::int32_t>(old_dwords[0]) > BitCast<std::int32_t>(data_dwords[0])
+            ? old_dwords[0]
+            : data_dwords[0];
+  } else if (normalized_opcode == "ATOMIC_UMAX") {
+    new_dwords[0] =
+        old_dwords[0] > data_dwords[0] ? old_dwords[0] : data_dwords[0];
+  } else if (normalized_opcode == "ATOMIC_AND") {
+    new_dwords[0] = old_dwords[0] & data_dwords[0];
+  } else if (normalized_opcode == "ATOMIC_OR") {
+    new_dwords[0] = old_dwords[0] | data_dwords[0];
+  } else if (normalized_opcode == "ATOMIC_XOR") {
+    new_dwords[0] = old_dwords[0] ^ data_dwords[0];
+  } else if (normalized_opcode == "ATOMIC_INC") {
+    new_dwords[0] = AtomicIncU32(old_dwords[0], data_dwords[0]);
+  } else if (normalized_opcode == "ATOMIC_DEC") {
+    new_dwords[0] = AtomicDecU32(old_dwords[0], data_dwords[0]);
+  } else if (normalized_opcode == "ATOMIC_SWAP_X2" ||
+             normalized_opcode == "ATOMIC_ADD_X2" ||
+             normalized_opcode == "ATOMIC_SUB_X2" ||
+             normalized_opcode == "ATOMIC_SMIN_X2" ||
+             normalized_opcode == "ATOMIC_UMIN_X2" ||
+             normalized_opcode == "ATOMIC_SMAX_X2" ||
+             normalized_opcode == "ATOMIC_UMAX_X2" ||
+             normalized_opcode == "ATOMIC_AND_X2" ||
+             normalized_opcode == "ATOMIC_OR_X2" ||
+             normalized_opcode == "ATOMIC_XOR_X2" ||
+             normalized_opcode == "ATOMIC_INC_X2" ||
+             normalized_opcode == "ATOMIC_DEC_X2") {
+    const std::uint64_t old_value = ComposeU64(old_dwords[0], old_dwords[1]);
+    const std::uint64_t data_value = ComposeU64(data_dwords[0], data_dwords[1]);
+    std::uint64_t new_value = old_value;
+    if (normalized_opcode == "ATOMIC_SWAP_X2") {
+      new_value = data_value;
+    } else if (normalized_opcode == "ATOMIC_ADD_X2") {
+      new_value = old_value + data_value;
+    } else if (normalized_opcode == "ATOMIC_SUB_X2") {
+      new_value = old_value - data_value;
+    } else if (normalized_opcode == "ATOMIC_SMIN_X2") {
+      new_value =
+          BitCast<std::int64_t>(old_value) < BitCast<std::int64_t>(data_value)
+              ? old_value
+              : data_value;
+    } else if (normalized_opcode == "ATOMIC_UMIN_X2") {
+      new_value = old_value < data_value ? old_value : data_value;
+    } else if (normalized_opcode == "ATOMIC_SMAX_X2") {
+      new_value =
+          BitCast<std::int64_t>(old_value) > BitCast<std::int64_t>(data_value)
+              ? old_value
+              : data_value;
+    } else if (normalized_opcode == "ATOMIC_UMAX_X2") {
+      new_value = old_value > data_value ? old_value : data_value;
+    } else if (normalized_opcode == "ATOMIC_AND_X2") {
+      new_value = old_value & data_value;
+    } else if (normalized_opcode == "ATOMIC_OR_X2") {
+      new_value = old_value | data_value;
+    } else if (normalized_opcode == "ATOMIC_XOR_X2") {
+      new_value = old_value ^ data_value;
+    } else if (normalized_opcode == "ATOMIC_INC_X2") {
+      new_value = AtomicIncU64(old_value, data_value);
+    } else {
+      new_value = AtomicDecU64(old_value, data_value);
+    }
+    SplitU64(new_value, &new_dwords[0], &new_dwords[1]);
+  } else {
+    if (error_message != nullptr) {
+      *error_message = "unsupported scalar atomic opcode";
+    }
+    return false;
+  }
+
+  for (std::uint8_t dword_index = 0; dword_index < memory_dword_count;
+       ++dword_index) {
+    const std::uint64_t byte_offset =
+        static_cast<std::uint64_t>(dword_index) * sizeof(std::uint32_t);
+    if (!WriteMemoryU32(memory, address + byte_offset, new_dwords[dword_index],
+                        error_message)) {
+      return false;
+    }
+    state->sgprs[static_cast<std::uint16_t>(instruction.operands[0].index +
+                                            dword_index)] = old_dwords[dword_index];
+  }
+
+  if (error_message != nullptr) {
+    error_message->clear();
+  }
+  return true;
+}
+
+bool Gfx950Interpreter::ExecuteBufferMemory(const DecodedInstruction& instruction,
+                                            WaveExecutionState* state,
+                                            ExecutionMemory* memory,
+                                            std::string* error_message) const {
+  if (!ValidateOperandCount(instruction, 5, error_message)) {
+    return false;
+  }
+  if (memory == nullptr) {
+    if (error_message != nullptr) {
+      *error_message = "buffer instruction requires execution memory";
+    }
+    return false;
+  }
+
+  const bool is_load = IsBufferMemoryLoadOpcode(instruction.opcode);
+  const DsD16AccessKind d16_access_kind =
+      GetVectorMemoryD16AccessKind(instruction.opcode);
+  const std::uint8_t register_dword_count =
+      GetBufferMemoryRegisterDwordCount(instruction.opcode);
+  const std::uint8_t element_size_bytes =
+      GetVectorMemoryElementSizeBytes(instruction.opcode);
+  const InstructionOperand& data_operand = instruction.operands[0];
+  const InstructionOperand& address_operand = instruction.operands[1];
+  const InstructionOperand& resource_operand = instruction.operands[2];
+  const InstructionOperand& soffset_operand = instruction.operands[3];
+  const InstructionOperand& offset_operand = instruction.operands[4];
+  if (data_operand.kind != OperandKind::kVgpr) {
+    if (error_message != nullptr) {
+      *error_message = "buffer data operand must be a VGPR";
+    }
+    return false;
+  }
+  if (address_operand.kind != OperandKind::kImm32 &&
+      address_operand.kind != OperandKind::kVgpr) {
+    if (error_message != nullptr) {
+      *error_message = "buffer address operand must be an immediate or VGPR";
+    }
+    return false;
+  }
+  if (resource_operand.kind != OperandKind::kSgpr) {
+    if (error_message != nullptr) {
+      *error_message = "buffer resource operand must use scalar registers";
+    }
+    return false;
+  }
+  if (offset_operand.kind != OperandKind::kImm32) {
+    if (error_message != nullptr) {
+      *error_message = "buffer offset operand must be an immediate";
+    }
+    return false;
+  }
+  if (data_operand.index + register_dword_count - 1 >= state->vgprs.size()) {
+    if (error_message != nullptr) {
+      *error_message = "buffer data register range out of bounds";
+    }
+    return false;
+  }
+  if (address_operand.kind == OperandKind::kVgpr &&
+      address_operand.index >= state->vgprs.size()) {
+    if (error_message != nullptr) {
+      *error_message = "buffer address register out of bounds";
+    }
+    return false;
+  }
+  if (resource_operand.index + 3 >= state->sgprs.size()) {
+    if (error_message != nullptr) {
+      *error_message = "buffer resource descriptor out of bounds";
+    }
+    return false;
+  }
+
+  const std::uint32_t descriptor_word0 = state->sgprs[resource_operand.index];
+  const std::uint32_t descriptor_word1 =
+      state->sgprs[resource_operand.index + 1];
+  if ((descriptor_word1 >> 16) != 0u) {
+    if (error_message != nullptr) {
+      *error_message = "structured buffer descriptors are not supported";
+    }
+    return false;
+  }
+  const std::uint64_t base_address =
+      static_cast<std::uint64_t>(descriptor_word0) |
+      (static_cast<std::uint64_t>(descriptor_word1 & 0xffffu) << 32);
+  const std::uint64_t buffer_size =
+      state->sgprs[resource_operand.index + 2];
+  const std::uint64_t transfer_size =
+      static_cast<std::uint64_t>(register_dword_count) *
+      static_cast<std::uint64_t>(element_size_bytes);
+  const std::uint64_t instruction_offset = offset_operand.imm32;
+  const std::uint32_t scalar_offset =
+      ReadScalarOperand(soffset_operand, *state, error_message);
+  if (error_message != nullptr && !error_message->empty()) {
+    return false;
+  }
+
+  for (std::size_t lane_index = 0; lane_index < WaveExecutionState::kLaneCount;
+       ++lane_index) {
+    if (((state->exec_mask >> lane_index) & 1ULL) == 0) {
+      continue;
+    }
+
+    std::uint64_t lane_offset = 0;
+    if (address_operand.kind == OperandKind::kVgpr) {
+      lane_offset =
+          ReadVectorOperand(address_operand, *state, lane_index, error_message);
+      if (error_message != nullptr && !error_message->empty()) {
+        return false;
+      }
+    }
+
+    std::uint64_t byte_offset = static_cast<std::uint64_t>(scalar_offset);
+    if (byte_offset > std::numeric_limits<std::uint64_t>::max() - lane_offset) {
+      if (error_message != nullptr) {
+        *error_message = "buffer byte offset overflow";
+      }
+      return false;
+    }
+    byte_offset += lane_offset;
+    if (byte_offset >
+        std::numeric_limits<std::uint64_t>::max() - instruction_offset) {
+      if (error_message != nullptr) {
+        *error_message = "buffer byte offset overflow";
+      }
+      return false;
+    }
+    byte_offset += instruction_offset;
+    if (byte_offset > buffer_size ||
+        transfer_size > buffer_size - byte_offset) {
+      if (error_message != nullptr) {
+        *error_message = "buffer access exceeds resource size";
+      }
+      return false;
+    }
+    if (base_address > std::numeric_limits<std::uint64_t>::max() - byte_offset) {
+      if (error_message != nullptr) {
+        *error_message = "buffer address overflow";
+      }
+      return false;
+    }
+    const std::uint64_t address = base_address + byte_offset;
+
+    for (std::uint8_t dword_index = 0; dword_index < register_dword_count;
+         ++dword_index) {
+      const std::uint64_t dword_byte_offset =
+          static_cast<std::uint64_t>(dword_index) *
+          static_cast<std::uint64_t>(element_size_bytes);
+      if (address > std::numeric_limits<std::uint64_t>::max() - dword_byte_offset) {
+        if (error_message != nullptr) {
+          *error_message = "buffer address overflow";
+        }
+        return false;
+      }
+      const std::uint64_t dword_address = address + dword_byte_offset;
+      const InstructionOperand dword_operand = InstructionOperand::Vgpr(
+          static_cast<std::uint16_t>(data_operand.index + dword_index));
+      if (is_load) {
+        std::uint32_t value = 0;
+        if (element_size_bytes == 1u) {
+          std::uint8_t raw_value = 0;
+          if (!ReadMemoryU8(memory, dword_address, &raw_value, error_message)) {
+            return false;
+          }
+          value = IsSignedBufferMemoryLoadOpcode(instruction.opcode)
+                      ? static_cast<std::uint32_t>(static_cast<std::int32_t>(
+                            static_cast<std::int8_t>(raw_value)))
+                      : raw_value;
+        } else if (element_size_bytes == 2u) {
+          std::uint16_t raw_value = 0;
+          if (!ReadMemoryU16(memory, dword_address, &raw_value, error_message)) {
+            return false;
+          }
+          value = IsSignedBufferMemoryLoadOpcode(instruction.opcode)
+                      ? static_cast<std::uint32_t>(static_cast<std::int32_t>(
+                            static_cast<std::int16_t>(raw_value)))
+                      : raw_value;
+        } else if (!ReadMemoryU32(memory, dword_address, &value, error_message)) {
+          return false;
+        }
+        if (d16_access_kind != DsD16AccessKind::kNone) {
+          value = PackVectorMemoryD16LoadValue(value, d16_access_kind);
+        }
+        if (!WriteVectorOperand(dword_operand, lane_index, value, state,
+                                error_message)) {
+          return false;
+        }
+      } else {
+        std::uint32_t value =
+            ReadVectorOperand(dword_operand, *state, lane_index, error_message);
+        if (error_message != nullptr && !error_message->empty()) {
+          return false;
+        }
+        if (d16_access_kind != DsD16AccessKind::kNone) {
+          value = ExtractVectorMemoryD16StoreValue(value, d16_access_kind);
+        }
+        if ((element_size_bytes == 1u &&
+             !WriteMemoryU8(memory, dword_address,
+                            static_cast<std::uint8_t>(value), error_message)) ||
+            (element_size_bytes == 2u &&
+             !WriteMemoryU16(memory, dword_address,
+                             static_cast<std::uint16_t>(value), error_message)) ||
+            (element_size_bytes == 4u &&
+             !WriteMemoryU32(memory, dword_address, value, error_message))) {
+          return false;
+        }
+      }
     }
   }
 

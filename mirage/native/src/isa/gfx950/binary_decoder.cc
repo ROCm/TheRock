@@ -245,6 +245,82 @@ bool IsSupportedGlobalVectorMemoryOpcode(std::string_view opcode_name) {
          opcode_name == "GLOBAL_STORE_DWORDX4";
 }
 
+bool IsSupportedScalarAtomicOpcode(std::string_view opcode_name) {
+  return opcode_name == "S_BUFFER_ATOMIC_SWAP" ||
+         opcode_name == "S_BUFFER_ATOMIC_ADD" ||
+         opcode_name == "S_BUFFER_ATOMIC_SUB" ||
+         opcode_name == "S_BUFFER_ATOMIC_SMIN" ||
+         opcode_name == "S_BUFFER_ATOMIC_UMIN" ||
+         opcode_name == "S_BUFFER_ATOMIC_SMAX" ||
+         opcode_name == "S_BUFFER_ATOMIC_UMAX" ||
+         opcode_name == "S_BUFFER_ATOMIC_AND" ||
+         opcode_name == "S_BUFFER_ATOMIC_OR" ||
+         opcode_name == "S_BUFFER_ATOMIC_XOR" ||
+         opcode_name == "S_BUFFER_ATOMIC_INC" ||
+         opcode_name == "S_BUFFER_ATOMIC_DEC" ||
+         opcode_name == "S_BUFFER_ATOMIC_SWAP_X2" ||
+         opcode_name == "S_BUFFER_ATOMIC_ADD_X2" ||
+         opcode_name == "S_BUFFER_ATOMIC_SUB_X2" ||
+         opcode_name == "S_BUFFER_ATOMIC_SMIN_X2" ||
+         opcode_name == "S_BUFFER_ATOMIC_UMIN_X2" ||
+         opcode_name == "S_BUFFER_ATOMIC_SMAX_X2" ||
+         opcode_name == "S_BUFFER_ATOMIC_UMAX_X2" ||
+         opcode_name == "S_BUFFER_ATOMIC_AND_X2" ||
+         opcode_name == "S_BUFFER_ATOMIC_OR_X2" ||
+         opcode_name == "S_BUFFER_ATOMIC_XOR_X2" ||
+         opcode_name == "S_BUFFER_ATOMIC_INC_X2" ||
+         opcode_name == "S_BUFFER_ATOMIC_DEC_X2" ||
+         opcode_name == "S_ATOMIC_SWAP" ||
+         opcode_name == "S_ATOMIC_ADD" ||
+         opcode_name == "S_ATOMIC_SUB" ||
+         opcode_name == "S_ATOMIC_SMIN" ||
+         opcode_name == "S_ATOMIC_UMIN" ||
+         opcode_name == "S_ATOMIC_SMAX" ||
+         opcode_name == "S_ATOMIC_UMAX" ||
+         opcode_name == "S_ATOMIC_AND" ||
+         opcode_name == "S_ATOMIC_OR" ||
+         opcode_name == "S_ATOMIC_XOR" ||
+         opcode_name == "S_ATOMIC_INC" ||
+         opcode_name == "S_ATOMIC_DEC" ||
+         opcode_name == "S_ATOMIC_SWAP_X2" ||
+         opcode_name == "S_ATOMIC_ADD_X2" ||
+         opcode_name == "S_ATOMIC_SUB_X2" ||
+         opcode_name == "S_ATOMIC_SMIN_X2" ||
+         opcode_name == "S_ATOMIC_UMIN_X2" ||
+         opcode_name == "S_ATOMIC_SMAX_X2" ||
+         opcode_name == "S_ATOMIC_UMAX_X2" ||
+         opcode_name == "S_ATOMIC_AND_X2" ||
+         opcode_name == "S_ATOMIC_OR_X2" ||
+         opcode_name == "S_ATOMIC_XOR_X2" ||
+         opcode_name == "S_ATOMIC_INC_X2" ||
+         opcode_name == "S_ATOMIC_DEC_X2";
+}
+
+bool IsSupportedMubufVectorMemoryOpcode(std::string_view opcode_name) {
+  return opcode_name == "BUFFER_LOAD_UBYTE" ||
+         opcode_name == "BUFFER_LOAD_SBYTE" ||
+         opcode_name == "BUFFER_LOAD_USHORT" ||
+         opcode_name == "BUFFER_LOAD_SSHORT" ||
+         opcode_name == "BUFFER_LOAD_DWORD" ||
+         opcode_name == "BUFFER_LOAD_DWORDX2" ||
+         opcode_name == "BUFFER_LOAD_DWORDX3" ||
+         opcode_name == "BUFFER_LOAD_DWORDX4" ||
+         opcode_name == "BUFFER_STORE_BYTE" ||
+         opcode_name == "BUFFER_STORE_BYTE_D16_HI" ||
+         opcode_name == "BUFFER_STORE_SHORT" ||
+         opcode_name == "BUFFER_STORE_SHORT_D16_HI" ||
+         opcode_name == "BUFFER_STORE_DWORD" ||
+         opcode_name == "BUFFER_STORE_DWORDX2" ||
+         opcode_name == "BUFFER_STORE_DWORDX3" ||
+         opcode_name == "BUFFER_STORE_DWORDX4" ||
+         opcode_name == "BUFFER_LOAD_UBYTE_D16" ||
+         opcode_name == "BUFFER_LOAD_UBYTE_D16_HI" ||
+         opcode_name == "BUFFER_LOAD_SBYTE_D16" ||
+         opcode_name == "BUFFER_LOAD_SBYTE_D16_HI" ||
+         opcode_name == "BUFFER_LOAD_SHORT_D16" ||
+         opcode_name == "BUFFER_LOAD_SHORT_D16_HI";
+}
+
 bool IsSupportedDsOpcode(std::string_view opcode_name) {
   return opcode_name == "DS_NOP" ||
          opcode_name == "DS_WRITE_B32" || opcode_name == "DS_READ_B32" ||
@@ -513,28 +589,7 @@ bool Gfx950BinaryDecoder::DecodeInstruction(
     return DecodeDs(words, instruction, words_consumed, error_message);
   }
   if (words.size() >= 2 && ExtractBits(word, 26, 6) == kEncMubuf) {
-    const std::uint64_t instruction_word =
-        static_cast<std::uint64_t>(words[0]) |
-        (static_cast<std::uint64_t>(words[1]) << 32);
-    const std::uint32_t opcode =
-        static_cast<std::uint32_t>(ExtractBits(instruction_word, 18, 7));
-    const char* instruction_name = FindInstructionName("ENC_MUBUF", opcode);
-    if (instruction_name == nullptr) {
-      if (error_message != nullptr) {
-        *error_message = "unknown MUBUF opcode";
-      }
-      return false;
-    }
-    if (std::string_view(instruction_name) == "BUFFER_WBL2" ||
-        std::string_view(instruction_name) == "BUFFER_INV") {
-      *instruction = DecodedInstruction::Nullary(instruction_name);
-      *words_consumed = 2;
-      return true;
-    }
-    if (error_message != nullptr) {
-      *error_message = "unsupported mubuf opcode";
-    }
-    return false;
+    return DecodeMubuf(words, instruction, words_consumed, error_message);
   }
   if (words.size() >= 2 && ExtractBits(word, 26, 6) == kEncSmem) {
     return DecodeSmem(words, instruction, words_consumed, error_message);
@@ -762,7 +817,8 @@ bool Gfx950BinaryDecoder::DecodeSmem(std::span<const std::uint32_t> words,
       std::string_view(instruction_name) != "S_BUFFER_STORE_DWORDX2" &&
       std::string_view(instruction_name) != "S_BUFFER_STORE_DWORDX4" &&
       std::string_view(instruction_name) != "S_STORE_DWORDX2" &&
-      std::string_view(instruction_name) != "S_STORE_DWORDX4") {
+      std::string_view(instruction_name) != "S_STORE_DWORDX4" &&
+      !IsSupportedScalarAtomicOpcode(instruction_name)) {
     if (error_message != nullptr) {
       *error_message = "unsupported smem opcode";
     }
@@ -790,6 +846,94 @@ bool Gfx950BinaryDecoder::DecodeSmem(std::span<const std::uint32_t> words,
 
   *instruction = DecodedInstruction::ThreeOperand(instruction_name, sdata, sbase,
                                                   offset);
+  *words_consumed = 2;
+  return true;
+}
+
+bool Gfx950BinaryDecoder::DecodeMubuf(std::span<const std::uint32_t> words,
+                                      DecodedInstruction* instruction,
+                                      std::size_t* words_consumed,
+                                      std::string* error_message) const {
+  if (words.size() < 2) {
+    if (error_message != nullptr) {
+      *error_message = "mubuf instruction requires two dwords";
+    }
+    return false;
+  }
+
+  const std::uint64_t instruction_word =
+      static_cast<std::uint64_t>(words[0]) |
+      (static_cast<std::uint64_t>(words[1]) << 32);
+  const std::uint32_t opcode =
+      static_cast<std::uint32_t>(ExtractBits(instruction_word, 18, 7));
+  const char* instruction_name = FindInstructionName("ENC_MUBUF", opcode);
+  if (instruction_name == nullptr) {
+    if (error_message != nullptr) {
+      *error_message = "unknown MUBUF opcode";
+    }
+    return false;
+  }
+
+  const std::string_view opcode_name(instruction_name);
+  if (opcode_name == "BUFFER_WBL2" || opcode_name == "BUFFER_INV") {
+    *instruction = DecodedInstruction::Nullary(instruction_name);
+    *words_consumed = 2;
+    return true;
+  }
+  if (!IsSupportedMubufVectorMemoryOpcode(opcode_name)) {
+    if (error_message != nullptr) {
+      *error_message = "unsupported mubuf opcode";
+    }
+    return false;
+  }
+  if (ExtractBits(instruction_word, 13, 1) != 0u) {
+    if (error_message != nullptr) {
+      *error_message = "idxen mubuf addressing is not implemented";
+    }
+    return false;
+  }
+  if (ExtractBits(instruction_word, 16, 1) != 0u) {
+    if (error_message != nullptr) {
+      *error_message = "lds mubuf forms are not implemented";
+    }
+    return false;
+  }
+
+  InstructionOperand data;
+  if (opcode_name.starts_with("BUFFER_LOAD_")) {
+    if (!DecodeVectorDestination(
+            static_cast<std::uint32_t>(ExtractBits(instruction_word, 40, 8)),
+            &data, error_message)) {
+      return false;
+    }
+  } else if (!DecodeVectorRegisterSource(
+                 static_cast<std::uint32_t>(ExtractBits(instruction_word, 40, 8)),
+                 &data, error_message)) {
+    return false;
+  }
+
+  InstructionOperand address = InstructionOperand::Imm32(0u);
+  if (ExtractBits(instruction_word, 12, 1) != 0u &&
+      !DecodeVectorRegisterSource(
+          static_cast<std::uint32_t>(ExtractBits(instruction_word, 32, 8)),
+          &address, error_message)) {
+    return false;
+  }
+
+  const InstructionOperand resource = InstructionOperand::Sgpr(
+      static_cast<std::uint16_t>(ExtractBits(instruction_word, 48, 5) * 4u));
+
+  InstructionOperand soffset;
+  std::size_t literal_words_consumed = 0;
+  if (!DecodeScalarSource(static_cast<std::uint32_t>(ExtractBits(instruction_word, 56, 8)),
+                          {}, &literal_words_consumed, &soffset, error_message)) {
+    return false;
+  }
+
+  *instruction = DecodedInstruction::FiveOperand(
+      instruction_name, data, address, resource, soffset,
+      InstructionOperand::Imm32(
+          static_cast<std::uint32_t>(ExtractBits(instruction_word, 0, 12))));
   *words_consumed = 2;
   return true;
 }

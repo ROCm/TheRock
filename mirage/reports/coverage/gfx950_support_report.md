@@ -1,15 +1,15 @@
 # GFX950 Coverage Report
 
 - Catalog instructions: 1242
-- Semantic support: 714 (57.5%)
-- Raw decode support: 735 (59.2% of total, 72.5% of measured)
+- Semantic support: 784 (63.1%)
+- Raw decode support: 783 (63.0% of total, 77.2% of measured)
 - Raw decode measurable instructions: 1014
 
 ## Gaps
 
-- Semantic-only coverage without measured decode: 38
+- Semantic-only coverage without measured decode: 60
 - Decode-only without semantic support: 59
-- Missing both semantic and decode support: 469
+- Missing both semantic and decode support: 399
 
 ## Unmeasured Encoding Families
 
@@ -35,31 +35,31 @@
 
 ## Semantic-Only Sample
 
+- `BUFFER_LOAD_UBYTE`
+- `BUFFER_LOAD_SBYTE`
+- `BUFFER_LOAD_USHORT`
+- `BUFFER_LOAD_SSHORT`
+- `BUFFER_LOAD_DWORD`
+- `BUFFER_LOAD_DWORDX2`
+- `BUFFER_LOAD_DWORDX3`
+- `BUFFER_LOAD_DWORDX4`
+- `BUFFER_STORE_BYTE`
+- `BUFFER_STORE_BYTE_D16_HI`
+- `BUFFER_STORE_SHORT`
+- `BUFFER_STORE_SHORT_D16_HI`
+- `BUFFER_STORE_DWORD`
+- `BUFFER_STORE_DWORDX2`
+- `BUFFER_STORE_DWORDX3`
+- `BUFFER_STORE_DWORDX4`
+- `BUFFER_LOAD_UBYTE_D16`
+- `BUFFER_LOAD_UBYTE_D16_HI`
+- `BUFFER_LOAD_SBYTE_D16`
+- `BUFFER_LOAD_SBYTE_D16_HI`
+- `BUFFER_LOAD_SHORT_D16`
+- `BUFFER_LOAD_SHORT_D16_HI`
 - `BUFFER_WBL2`
 - `BUFFER_INV`
 - `V_MIN_F64`
-- `V_MAX_F64`
-- `V_CMP_CLASS_F16`
-- `V_CMPX_CLASS_F16`
-- `V_CMP_F_F16`
-- `V_CMP_LT_F16`
-- `V_CMP_EQ_F16`
-- `V_CMP_LE_F16`
-- `V_CMP_GT_F16`
-- `V_CMP_LG_F16`
-- `V_CMP_GE_F16`
-- `V_CMP_O_F16`
-- `V_CMP_U_F16`
-- `V_CMP_NGE_F16`
-- `V_CMP_NLG_F16`
-- `V_CMP_NGT_F16`
-- `V_CMP_NLE_F16`
-- `V_CMP_NEQ_F16`
-- `V_CMP_NLT_F16`
-- `V_CMP_TRU_F16`
-- `V_CMPX_F_F16`
-- `V_CMPX_LT_F16`
-- `V_CMPX_EQ_F16`
 
 ## Decode-Only Sample
 

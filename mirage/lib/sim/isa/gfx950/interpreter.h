@@ -763,6 +763,10 @@ class Gfx950Interpreter {
                            WaveExecutionState* state,
                            ExecutionMemory* memory,
                            std::string* error_message) const;
+  bool ExecuteScalarAtomic(const DecodedInstruction& instruction,
+                           WaveExecutionState* state,
+                           ExecutionMemory* memory,
+                           std::string* error_message) const;
   bool ExecuteVectorMove(const DecodedInstruction& instruction,
                          WaveExecutionState* state,
                          std::string* error_message) const;
@@ -804,6 +808,10 @@ class Gfx950Interpreter {
                            ExecutionMemory* memory,
                            std::string* error_message) const;
   bool ExecuteVectorMemory(const CompiledInstruction& instruction,
+                           WaveExecutionState* state,
+                           ExecutionMemory* memory,
+                           std::string* error_message) const;
+  bool ExecuteBufferMemory(const DecodedInstruction& instruction,
                            WaveExecutionState* state,
                            ExecutionMemory* memory,
                            std::string* error_message) const;

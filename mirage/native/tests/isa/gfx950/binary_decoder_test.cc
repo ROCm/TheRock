@@ -262,6 +262,30 @@ std::array<std::uint32_t, 2> MakeMubufNullary(std::uint32_t op) {
           static_cast<std::uint32_t>(word >> 32)};
 }
 
+std::array<std::uint32_t, 2> MakeMubuf(std::uint32_t op,
+                                       std::uint32_t vdata,
+                                       std::uint32_t vaddr,
+                                       std::uint32_t srsrc_start,
+                                       std::uint32_t soffset,
+                                       std::uint32_t offset,
+                                       bool offen = false,
+                                       bool idxen = false,
+                                       bool lds = false) {
+  std::uint64_t word = 0;
+  word |= static_cast<std::uint64_t>(0x38u) << 26;
+  word |= static_cast<std::uint64_t>(offset & 0xfffu) << 0;
+  word |= static_cast<std::uint64_t>(offen ? 1u : 0u) << 12;
+  word |= static_cast<std::uint64_t>(idxen ? 1u : 0u) << 13;
+  word |= static_cast<std::uint64_t>(lds ? 1u : 0u) << 16;
+  word |= static_cast<std::uint64_t>(op & 0x7fu) << 18;
+  word |= static_cast<std::uint64_t>(vaddr & 0xffu) << 32;
+  word |= static_cast<std::uint64_t>(vdata & 0xffu) << 40;
+  word |= static_cast<std::uint64_t>((srsrc_start >> 2) & 0x1fu) << 48;
+  word |= static_cast<std::uint64_t>(soffset & 0xffu) << 56;
+  return {static_cast<std::uint32_t>(word),
+          static_cast<std::uint32_t>(word >> 32)};
+}
+
 std::array<std::uint32_t, 2> MakeFlat(std::uint32_t op,
                                       std::uint32_t vdst,
                                       std::uint32_t addr,
@@ -6160,6 +6184,115 @@ int main() {
   }
 
   {
+    const auto decode_scalar_atomic_family =
+        [&](const auto& opcodes,
+            std::uint32_t sbase_start,
+            std::uint32_t sdata_start,
+            std::uint32_t sdata_stride,
+            std::uint32_t offset_base,
+            const char* label) {
+          std::vector<std::uint32_t> program_words;
+          program_words.reserve(opcodes.size() * 2u + 1u);
+          for (std::size_t index = 0; index < opcodes.size(); ++index) {
+            const auto opcode =
+                FindDefaultEncodingOpcode(opcodes[index].data(), "ENC_SMEM");
+            if (!Expect(opcode.has_value(), "expected scalar atomic opcode lookup")) {
+              std::cerr << label << " " << opcodes[index] << '\n';
+              return false;
+            }
+            const bool use_imm_offset = index + 1u != opcodes.size();
+            const auto word = MakeSmem(
+                *opcode, sdata_start + static_cast<std::uint32_t>(index) * sdata_stride,
+                sbase_start, use_imm_offset,
+                use_imm_offset ? offset_base + static_cast<std::uint32_t>(index) * 4u
+                               : 70u,
+                !use_imm_offset);
+            program_words.push_back(word[0]);
+            program_words.push_back(word[1]);
+          }
+          program_words.push_back(MakeSopp(1));
+
+          decoded_program.clear();
+          if (!Expect(decoder.DecodeProgram(program_words, &decoded_program,
+                                            &error_message),
+                      error_message.c_str()) ||
+              !Expect(decoded_program.size() == opcodes.size() + 1u,
+                      "expected decoded scalar atomic program size")) {
+            std::cerr << label << '\n';
+            return false;
+          }
+
+          for (std::size_t index = 0; index < opcodes.size(); ++index) {
+            const auto& instruction = decoded_program[index];
+            const bool use_imm_offset = index + 1u != opcodes.size();
+            if (!Expect(instruction.opcode == opcodes[index],
+                        "expected scalar atomic opcode decode") ||
+                !Expect(instruction.operand_count == 3,
+                        "expected scalar atomic operand count") ||
+                !Expect(instruction.operands[0].kind == OperandKind::kSgpr &&
+                            instruction.operands[0].index ==
+                                sdata_start +
+                                    static_cast<std::uint32_t>(index) * sdata_stride,
+                        "expected scalar atomic sdata decode") ||
+                !Expect(instruction.operands[1].kind == OperandKind::kSgpr &&
+                            instruction.operands[1].index == sbase_start,
+                        "expected scalar atomic sbase decode") ||
+                !Expect(use_imm_offset
+                            ? (instruction.operands[2].kind == OperandKind::kImm32 &&
+                               instruction.operands[2].imm32 ==
+                                   offset_base +
+                                       static_cast<std::uint32_t>(index) * 4u)
+                            : (instruction.operands[2].kind == OperandKind::kSgpr &&
+                               instruction.operands[2].index == 70u),
+                        "expected scalar atomic offset decode")) {
+              std::cerr << label << " " << opcodes[index] << '\n';
+              return false;
+            }
+          }
+          return true;
+        };
+
+    const std::array<std::string_view, 12> kScalarAtomic32Opcodes = {
+        "S_ATOMIC_SWAP", "S_ATOMIC_ADD",  "S_ATOMIC_SUB", "S_ATOMIC_SMIN",
+        "S_ATOMIC_UMIN", "S_ATOMIC_SMAX", "S_ATOMIC_UMAX", "S_ATOMIC_AND",
+        "S_ATOMIC_OR",   "S_ATOMIC_XOR",  "S_ATOMIC_INC",  "S_ATOMIC_DEC",
+    };
+    const std::array<std::string_view, 12> kScalarAtomic64Opcodes = {
+        "S_ATOMIC_SWAP_X2", "S_ATOMIC_ADD_X2",  "S_ATOMIC_SUB_X2",
+        "S_ATOMIC_SMIN_X2", "S_ATOMIC_UMIN_X2", "S_ATOMIC_SMAX_X2",
+        "S_ATOMIC_UMAX_X2", "S_ATOMIC_AND_X2",  "S_ATOMIC_OR_X2",
+        "S_ATOMIC_XOR_X2",  "S_ATOMIC_INC_X2",  "S_ATOMIC_DEC_X2",
+    };
+    const std::array<std::string_view, 12> kScalarBufferAtomic32Opcodes = {
+        "S_BUFFER_ATOMIC_SWAP", "S_BUFFER_ATOMIC_ADD",
+        "S_BUFFER_ATOMIC_SUB",  "S_BUFFER_ATOMIC_SMIN",
+        "S_BUFFER_ATOMIC_UMIN", "S_BUFFER_ATOMIC_SMAX",
+        "S_BUFFER_ATOMIC_UMAX", "S_BUFFER_ATOMIC_AND",
+        "S_BUFFER_ATOMIC_OR",   "S_BUFFER_ATOMIC_XOR",
+        "S_BUFFER_ATOMIC_INC",  "S_BUFFER_ATOMIC_DEC",
+    };
+    const std::array<std::string_view, 12> kScalarBufferAtomic64Opcodes = {
+        "S_BUFFER_ATOMIC_SWAP_X2", "S_BUFFER_ATOMIC_ADD_X2",
+        "S_BUFFER_ATOMIC_SUB_X2",  "S_BUFFER_ATOMIC_SMIN_X2",
+        "S_BUFFER_ATOMIC_UMIN_X2", "S_BUFFER_ATOMIC_SMAX_X2",
+        "S_BUFFER_ATOMIC_UMAX_X2", "S_BUFFER_ATOMIC_AND_X2",
+        "S_BUFFER_ATOMIC_OR_X2",   "S_BUFFER_ATOMIC_XOR_X2",
+        "S_BUFFER_ATOMIC_INC_X2",  "S_BUFFER_ATOMIC_DEC_X2",
+    };
+
+    if (!decode_scalar_atomic_family(kScalarAtomic32Opcodes, 0u, 4u, 1u, 0u,
+                                     "scalar atomic decode") ||
+        !decode_scalar_atomic_family(kScalarAtomic64Opcodes, 0u, 32u, 2u, 0x80u,
+                                     "scalar atomic x2 decode") ||
+        !decode_scalar_atomic_family(kScalarBufferAtomic32Opcodes, 8u, 4u, 1u, 0u,
+                                     "scalar buffer atomic decode") ||
+        !decode_scalar_atomic_family(kScalarBufferAtomic64Opcodes, 8u, 32u, 2u,
+                                     0x80u, "scalar buffer atomic x2 decode")) {
+      return 1;
+    }
+  }
+
+  {
     const auto dcache_inv_opcode =
         FindDefaultEncodingOpcode("S_DCACHE_INV", "ENC_SMEM");
     const auto dcache_wb_opcode =
@@ -6398,6 +6531,161 @@ int main() {
         !Expect(buffer_maintenance_state.halted,
                 "expected buffer maintenance program to halt")) {
       return 1;
+    }
+  }
+
+  {
+    const std::array<std::string_view, 8> kBufferMemoryOpcodes = {
+        "BUFFER_LOAD_DWORD",   "BUFFER_LOAD_DWORDX2",
+        "BUFFER_LOAD_DWORDX3", "BUFFER_LOAD_DWORDX4",
+        "BUFFER_STORE_DWORD",  "BUFFER_STORE_DWORDX2",
+        "BUFFER_STORE_DWORDX3","BUFFER_STORE_DWORDX4",
+    };
+
+    std::vector<std::uint32_t> program_words;
+    program_words.reserve(kBufferMemoryOpcodes.size() * 2u + 1u);
+    for (std::size_t index = 0; index < kBufferMemoryOpcodes.size(); ++index) {
+      const auto opcode =
+          FindDefaultEncodingOpcode(kBufferMemoryOpcodes[index], "ENC_MUBUF");
+      if (!Expect(opcode.has_value(), "expected buffer memory opcode lookup")) {
+        return 1;
+      }
+      const bool use_lane_offset = index != 0u;
+      const bool use_soffset_register = index + 1u == kBufferMemoryOpcodes.size();
+      const auto word = MakeMubuf(*opcode, 16u + static_cast<std::uint32_t>(index),
+                                  2u, 8u, use_soffset_register ? 70u : 128u,
+                                  static_cast<std::uint32_t>(index) * 4u,
+                                  use_lane_offset, false, false);
+      program_words.push_back(word[0]);
+      program_words.push_back(word[1]);
+    }
+    program_words.push_back(MakeSopp(1));
+
+    decoded_program.clear();
+    if (!Expect(decoder.DecodeProgram(program_words, &decoded_program,
+                                      &error_message),
+                error_message.c_str()) ||
+        !Expect(decoded_program.size() == 9u,
+                "expected decoded buffer memory program size")) {
+      return 1;
+    }
+
+    for (std::size_t index = 0; index < kBufferMemoryOpcodes.size(); ++index) {
+      const auto& instruction = decoded_program[index];
+      const bool use_lane_offset = index != 0u;
+      const bool use_soffset_register = index + 1u == kBufferMemoryOpcodes.size();
+      if (!Expect(instruction.opcode == kBufferMemoryOpcodes[index],
+                  "expected buffer memory opcode decode") ||
+          !Expect(instruction.operand_count == 5,
+                  "expected buffer memory operand count") ||
+          !Expect(instruction.operands[0].kind == OperandKind::kVgpr &&
+                      instruction.operands[0].index ==
+                          16u + static_cast<std::uint32_t>(index),
+                  "expected buffer memory data decode") ||
+          !Expect(use_lane_offset
+                      ? (instruction.operands[1].kind == OperandKind::kVgpr &&
+                         instruction.operands[1].index == 2u)
+                      : (instruction.operands[1].kind == OperandKind::kImm32 &&
+                         instruction.operands[1].imm32 == 0u),
+                  "expected buffer memory address decode") ||
+          !Expect(instruction.operands[2].kind == OperandKind::kSgpr &&
+                      instruction.operands[2].index == 8u,
+                  "expected buffer memory resource decode") ||
+          !Expect(use_soffset_register
+                      ? (instruction.operands[3].kind == OperandKind::kSgpr &&
+                         instruction.operands[3].index == 70u)
+                      : (instruction.operands[3].kind == OperandKind::kImm32 &&
+                         instruction.operands[3].imm32 == 0u),
+                  "expected buffer memory soffset decode") ||
+          !Expect(instruction.operands[4].kind == OperandKind::kImm32 &&
+                      instruction.operands[4].imm32 ==
+                          static_cast<std::uint32_t>(index) * 4u,
+                  "expected buffer memory offset decode")) {
+        std::cerr << kBufferMemoryOpcodes[index] << '\n';
+        return 1;
+      }
+    }
+  }
+
+  {
+    const std::array<std::string_view, 14> kBufferSubwordMemoryOpcodes = {
+        "BUFFER_LOAD_UBYTE",      "BUFFER_LOAD_SBYTE",
+        "BUFFER_LOAD_USHORT",     "BUFFER_LOAD_SSHORT",
+        "BUFFER_STORE_BYTE",      "BUFFER_STORE_BYTE_D16_HI",
+        "BUFFER_STORE_SHORT",     "BUFFER_STORE_SHORT_D16_HI",
+        "BUFFER_LOAD_UBYTE_D16",  "BUFFER_LOAD_UBYTE_D16_HI",
+        "BUFFER_LOAD_SBYTE_D16",  "BUFFER_LOAD_SBYTE_D16_HI",
+        "BUFFER_LOAD_SHORT_D16",  "BUFFER_LOAD_SHORT_D16_HI",
+    };
+
+    std::vector<std::uint32_t> program_words;
+    program_words.reserve(kBufferSubwordMemoryOpcodes.size() * 2u + 1u);
+    for (std::size_t index = 0; index < kBufferSubwordMemoryOpcodes.size();
+         ++index) {
+      const auto opcode = FindDefaultEncodingOpcode(
+          kBufferSubwordMemoryOpcodes[index], "ENC_MUBUF");
+      if (!Expect(opcode.has_value(),
+                  "expected buffer subword memory opcode lookup")) {
+        return 1;
+      }
+      const bool use_lane_offset = index != 0u;
+      const bool use_soffset_register =
+          index + 1u == kBufferSubwordMemoryOpcodes.size();
+      const auto word = MakeMubuf(
+          *opcode, 80u + static_cast<std::uint32_t>(index), 4u, 12u,
+          use_soffset_register ? 71u : 128u,
+          static_cast<std::uint32_t>(index) * 8u, use_lane_offset, false, false);
+      program_words.push_back(word[0]);
+      program_words.push_back(word[1]);
+    }
+    program_words.push_back(MakeSopp(1));
+
+    decoded_program.clear();
+    if (!Expect(decoder.DecodeProgram(program_words, &decoded_program,
+                                      &error_message),
+                error_message.c_str()) ||
+        !Expect(decoded_program.size() ==
+                    kBufferSubwordMemoryOpcodes.size() + 1u,
+                "expected decoded buffer subword program size")) {
+      return 1;
+    }
+
+    for (std::size_t index = 0; index < kBufferSubwordMemoryOpcodes.size();
+         ++index) {
+      const auto& instruction = decoded_program[index];
+      const bool use_lane_offset = index != 0u;
+      const bool use_soffset_register =
+          index + 1u == kBufferSubwordMemoryOpcodes.size();
+      if (!Expect(instruction.opcode == kBufferSubwordMemoryOpcodes[index],
+                  "expected buffer subword opcode decode") ||
+          !Expect(instruction.operand_count == 5,
+                  "expected buffer subword operand count") ||
+          !Expect(instruction.operands[0].kind == OperandKind::kVgpr &&
+                      instruction.operands[0].index ==
+                          80u + static_cast<std::uint32_t>(index),
+                  "expected buffer subword data decode") ||
+          !Expect(use_lane_offset
+                      ? (instruction.operands[1].kind == OperandKind::kVgpr &&
+                         instruction.operands[1].index == 4u)
+                      : (instruction.operands[1].kind == OperandKind::kImm32 &&
+                         instruction.operands[1].imm32 == 0u),
+                  "expected buffer subword address decode") ||
+          !Expect(instruction.operands[2].kind == OperandKind::kSgpr &&
+                      instruction.operands[2].index == 12u,
+                  "expected buffer subword resource decode") ||
+          !Expect(use_soffset_register
+                      ? (instruction.operands[3].kind == OperandKind::kSgpr &&
+                         instruction.operands[3].index == 71u)
+                      : (instruction.operands[3].kind == OperandKind::kImm32 &&
+                         instruction.operands[3].imm32 == 0u),
+                  "expected buffer subword soffset decode") ||
+          !Expect(instruction.operands[4].kind == OperandKind::kImm32 &&
+                      instruction.operands[4].imm32 ==
+                          static_cast<std::uint32_t>(index) * 8u,
+                  "expected buffer subword offset decode")) {
+        std::cerr << kBufferSubwordMemoryOpcodes[index] << '\n';
+        return 1;
+      }
     }
   }
 
