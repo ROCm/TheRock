@@ -1,0 +1,5 @@
+# rocm_bandwidth_test (RBT)
+[components.dbg."core/rocm-bandwidth-test/stage"]
+[components.doc."core/rocm-bandwidth-test/stage"]
+[components.lib."core/rocm-bandwidth-test/stage"]
+[components.run."core/rocm-bandwidth-test/stage"]
