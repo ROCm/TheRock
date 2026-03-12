@@ -64,14 +64,14 @@ jobs:
             --output-dir reports
 
       - name: Configure AWS Credentials
-        if: ${{ !cancelled() && (github.event.pull_request == null || !github.event.pull_request.head.repo.fork) }}
+        if: ${{ !cancelled() && github.repository_owner == 'ROCm' && (github.event.pull_request == null || !github.event.pull_request.head.repo.fork) }}
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::692859939525:role/therock-ci
 
       - name: Upload Report to S3
-        if: ${{ !cancelled() && (github.event.pull_request == null || !github.event.pull_request.head.repo.fork) }}
+        if: ${{ !cancelled() && github.repository_owner == 'ROCm' && (github.event.pull_request == null || !github.event.pull_request.head.repo.fork) }}
         run: |
           python3 build_tools/github_actions/upload_test_report_script.py \
             --run-id ${{ github.run_id }} \

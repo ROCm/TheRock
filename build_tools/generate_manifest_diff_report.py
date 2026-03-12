@@ -210,10 +210,8 @@ def _optional_str(val: str | None) -> str | None:
     """
     if val is None:
         return None
-    if isinstance(val, str):
-        s = val.strip()
-        return s if s else None
-    return val
+    s = val.strip()
+    return s if s else None
 
 
 def resolve_commits(args: argparse.Namespace) -> tuple[str, str]:
