@@ -47,7 +47,9 @@ See also the [ROCm Device Support Wishlist GitHub Discussion](https://github.com
 | **RDNA3**    | **gfx1100** | ✅            | ✅            |               |
 | RDNA2        | gfx1036     | ✅            |               |               |
 | RDNA2        | gfx1035     | ✅            |               |               |
+| RDNA2        | gfx1033     | ✅            |               |               |
 | RDNA2        | gfx1032     | ✅            |               |               |
+| RDNA2        | gfx1031     | ✅            |               |               |
 | RDNA2        | gfx1030     | ✅            |               |               |
 | RDNA1        | gfx1012     | ✅            |               |               |
 | RDNA1        | gfx1011     | ✅            |               |               |
@@ -76,7 +78,9 @@ Check [windows_support.md](docs/development/windows_support.md) on current statu
 | **RDNA3**    | **gfx1100** | ✅            |               |               |
 | RDNA2        | gfx1036     | ✅            |               |               |
 | RDNA2        | gfx1035     | ✅            |               |               |
+| RDNA2        | gfx1033     | ✅            |               |               |
 | RDNA2        | gfx1032     | ✅            |               |               |
+| RDNA2        | gfx1031     | ✅            |               |               |
 | RDNA2        | gfx1030     | ✅            |               |               |
 | RDNA1        | gfx1012     | ✅            |               |               |
 | RDNA1        | gfx1011     | ✅            |               |               |
