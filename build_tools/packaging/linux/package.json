@@ -239,19 +239,6 @@
             ]
           }
         ]
-      },
-      {
-        "Artifact": "amd-llvm",
-        "Artifact_Subdir": [
-          {
-            "Name": "amd-comgr-stub",
-            "Components": [
-              "lib",
-              "run",
-              "doc"
-            ]
-          }
-        ]
       }
     ],
     "Gfxarch": "False"
@@ -2118,7 +2105,8 @@
           {
             "Name": "rocdecode",
             "Components": [
-              "lib"
+              "lib",
+              "doc"
             ]
           }
         ]
@@ -2192,7 +2180,8 @@
           {
             "Name": "rocjpeg",
             "Components": [
-              "lib"
+              "lib",
+              "doc"
             ]
           }
         ]
