@@ -34,7 +34,10 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 252> kExecutableSeedOpcodes{{
+float ExpandFp16ToFloat(std::uint16_t bits);
+std::uint16_t CompressFloatToFp16Bits(float value);
+
+constexpr std::array<std::string_view, 256> kExecutableSeedOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_ADD_U32",
@@ -236,7 +239,11 @@ constexpr std::array<std::string_view, 252> kExecutableSeedOpcodes{{
     "V_CVT_F32_UBYTE3",
     "V_CVT_F32_I32",
     "V_CVT_F32_U32",
+    "V_CVT_F32_F16",
     "V_CVT_F32_F64",
+    "V_CVT_F16_F32",
+    "V_CVT_F16_I16",
+    "V_CVT_F16_U16",
     "V_CVT_F64_F32",
     "V_CVT_F64_I32",
     "V_CVT_F64_U32",
@@ -1396,8 +1403,24 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
     *compiled_opcode = Gfx1201CompiledOpcode::kVCvtF32U32;
     return true;
   }
+  if (opcode == "V_CVT_F32_F16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCvtF32F16;
+    return true;
+  }
   if (opcode == "V_CVT_F32_F64") {
     *compiled_opcode = Gfx1201CompiledOpcode::kVCvtF32F64;
+    return true;
+  }
+  if (opcode == "V_CVT_F16_F32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCvtF16F32;
+    return true;
+  }
+  if (opcode == "V_CVT_F16_I16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCvtF16I16;
+    return true;
+  }
+  if (opcode == "V_CVT_F16_U16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCvtF16U16;
     return true;
   }
   if (opcode == "V_CVT_F64_F32") {
@@ -1925,6 +1948,22 @@ std::uint32_t EvaluateVectorUnarySeedInstruction(std::string_view opcode,
   if (opcode == "V_CVT_F32_U32") {
     return BitCast<std::uint32_t>(static_cast<float>(value));
   }
+  if (opcode == "V_CVT_F32_F16") {
+    return BitCast<std::uint32_t>(
+        ExpandFp16ToFloat(static_cast<std::uint16_t>(value)));
+  }
+  if (opcode == "V_CVT_F16_F32") {
+    return static_cast<std::uint32_t>(
+        CompressFloatToFp16Bits(BitCast<float>(value)));
+  }
+  if (opcode == "V_CVT_F16_I16") {
+    return static_cast<std::uint32_t>(CompressFloatToFp16Bits(static_cast<float>(
+        BitCast<std::int16_t>(static_cast<std::uint16_t>(value)))));
+  }
+  if (opcode == "V_CVT_F16_U16") {
+    return static_cast<std::uint32_t>(CompressFloatToFp16Bits(
+        static_cast<float>(static_cast<std::uint16_t>(value))));
+  }
   if (opcode == "V_EXP_F32" || opcode == "V_LOG_F32" ||
       opcode == "V_RCP_F32" || opcode == "V_RCP_IFLAG_F32" ||
       opcode == "V_RSQ_F32" || opcode == "V_SQRT_F32" ||
@@ -2141,6 +2180,67 @@ std::uint32_t ClassifyFp16Mask(std::uint16_t bits) {
     return negative ? kFpClassNegativeSubnormal : kFpClassPositiveSubnormal;
   }
   return negative ? kFpClassNegativeNormal : kFpClassPositiveNormal;
+}
+
+std::uint16_t CompressFloatToFp16Bits(float value) {
+  const std::uint32_t bits = BitCast<std::uint32_t>(value);
+  const std::uint16_t sign = static_cast<std::uint16_t>((bits >> 16) & 0x8000u);
+  const std::uint32_t exponent = (bits >> 23) & 0xffu;
+  const std::uint32_t mantissa = bits & 0x007fffffu;
+
+  if (exponent == 0xffu) {
+    if (mantissa == 0u) {
+      return static_cast<std::uint16_t>(sign | 0x7c00u);
+    }
+    std::uint16_t half_mantissa = static_cast<std::uint16_t>(mantissa >> 13);
+    if (half_mantissa == 0u) {
+      half_mantissa = 1u;
+    }
+    return static_cast<std::uint16_t>(sign | 0x7c00u | 0x0200u |
+                                      half_mantissa);
+  }
+
+  int half_exponent = static_cast<int>(exponent) - 127 + 15;
+  if (half_exponent >= 0x1f) {
+    return static_cast<std::uint16_t>(sign | 0x7c00u);
+  }
+
+  if (half_exponent <= 0) {
+    if (half_exponent < -10) {
+      return sign;
+    }
+    const std::uint32_t normalized_mantissa = mantissa | 0x00800000u;
+    const std::uint32_t shift = static_cast<std::uint32_t>(14 - half_exponent);
+    std::uint16_t half_mantissa =
+        static_cast<std::uint16_t>(normalized_mantissa >> shift);
+    const std::uint32_t remainder_mask = (1u << shift) - 1u;
+    const std::uint32_t remainder = normalized_mantissa & remainder_mask;
+    const std::uint32_t halfway = 1u << (shift - 1u);
+    if (remainder > halfway ||
+        (remainder == halfway && (half_mantissa & 1u) != 0u)) {
+      ++half_mantissa;
+    }
+    return static_cast<std::uint16_t>(sign | half_mantissa);
+  }
+
+  std::uint16_t half_mantissa = static_cast<std::uint16_t>(mantissa >> 13);
+  const std::uint32_t remainder = mantissa & 0x1fffu;
+  if (remainder > 0x1000u ||
+      (remainder == 0x1000u && (half_mantissa & 1u) != 0u)) {
+    ++half_mantissa;
+    if (half_mantissa == 0x0400u) {
+      half_mantissa = 0u;
+      ++half_exponent;
+      if (half_exponent >= 0x1f) {
+        return static_cast<std::uint16_t>(sign | 0x7c00u);
+      }
+    }
+  }
+
+  return static_cast<std::uint16_t>(sign |
+                                    (static_cast<std::uint16_t>(half_exponent)
+                                     << 10) |
+                                    half_mantissa);
 }
 
 std::uint32_t ClassifyFp32Mask(std::uint32_t bits) {
@@ -3092,6 +3192,10 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
       instruction.opcode == "V_CVT_F32_UBYTE3" ||
       instruction.opcode == "V_CVT_F32_I32" ||
       instruction.opcode == "V_CVT_F32_U32" ||
+      instruction.opcode == "V_CVT_F32_F16" ||
+      instruction.opcode == "V_CVT_F16_F32" ||
+      instruction.opcode == "V_CVT_F16_I16" ||
+      instruction.opcode == "V_CVT_F16_U16" ||
       instruction.opcode == "V_EXP_F32" ||
       instruction.opcode == "V_LOG_F32" ||
       instruction.opcode == "V_RCP_F32" ||
@@ -3557,7 +3661,11 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kVCvtF32Ubyte3:
     case Gfx1201CompiledOpcode::kVCvtF32I32:
     case Gfx1201CompiledOpcode::kVCvtF32U32:
+    case Gfx1201CompiledOpcode::kVCvtF32F16:
     case Gfx1201CompiledOpcode::kVCvtF32F64:
+    case Gfx1201CompiledOpcode::kVCvtF16F32:
+    case Gfx1201CompiledOpcode::kVCvtF16I16:
+    case Gfx1201CompiledOpcode::kVCvtF16U16:
     case Gfx1201CompiledOpcode::kVCvtF64F32:
     case Gfx1201CompiledOpcode::kVCvtF64I32:
     case Gfx1201CompiledOpcode::kVCvtF64U32:

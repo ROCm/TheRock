@@ -13,7 +13,7 @@
 
 namespace mirage::sim::isa {
 
-enum class Gfx1201CompiledOpcode : std::uint8_t {
+enum class Gfx1201CompiledOpcode : std::uint16_t {
   kUnknown,
   kSEndpgm,
   kSNop,
@@ -216,7 +216,11 @@ enum class Gfx1201CompiledOpcode : std::uint8_t {
   kVCvtF32Ubyte3,
   kVCvtF32I32,
   kVCvtF32U32,
+  kVCvtF32F16,
   kVCvtF32F64,
+  kVCvtF16F32,
+  kVCvtF16I16,
+  kVCvtF16U16,
   kVCvtF64F32,
   kVCvtF64I32,
   kVCvtF64U32,

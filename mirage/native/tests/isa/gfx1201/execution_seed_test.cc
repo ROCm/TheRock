@@ -607,6 +607,36 @@ bool ExpectUnaryCountConvertSeedState(
          !state.waiting_on_barrier && state.pc == 7u;
 }
 
+bool ExpectF16BridgeSeedState(
+    const mirage::sim::isa::WaveExecutionState& state) {
+  return state.vgprs[40][0] == 0x00003e00u &&
+         state.vgprs[40][1] == 0x0000c000u &&
+         state.vgprs[40][2] == 0x40404040u &&
+         state.vgprs[40][3] == 0x00003800u &&
+         state.vgprs[41][0] == 0x0000c000u &&
+         state.vgprs[41][1] == 0x00004200u &&
+         state.vgprs[41][2] == 0x41414141u &&
+         state.vgprs[41][3] == 0x00000000u &&
+         state.vgprs[42][0] == 0x00004000u &&
+         state.vgprs[42][1] == 0x00004700u &&
+         state.vgprs[42][2] == 0x42424242u &&
+         state.vgprs[42][3] == 0x00003c00u &&
+         state.vgprs[43][0] == FloatBits(1.5f) &&
+         state.vgprs[43][1] == FloatBits(-2.0f) &&
+         state.vgprs[43][2] == 0x43434343u &&
+         state.vgprs[43][3] == FloatBits(0.5f) &&
+         state.vgprs[44][0] == FloatBits(-2.0f) &&
+         state.vgprs[44][1] == FloatBits(3.0f) &&
+         state.vgprs[44][2] == 0x44444444u &&
+         state.vgprs[44][3] == FloatBits(0.0f) &&
+         state.vgprs[45][0] == FloatBits(2.0f) &&
+         state.vgprs[45][1] == FloatBits(7.0f) &&
+         state.vgprs[45][2] == 0x45454545u &&
+         state.vgprs[45][3] == FloatBits(1.0f) &&
+         state.exec_mask == 0xbu && state.halted &&
+         !state.waiting_on_barrier && state.pc == 6u;
+}
+
 bool ExpectRemainingCompareState(const mirage::sim::isa::WaveExecutionState& state) {
   return state.sgprs[40] == 0xffffffffu && state.sgprs[41] == 0xffffffffu &&
          state.sgprs[42] == 1u && state.sgprs[43] == 4u &&
@@ -1307,6 +1337,54 @@ int main() {
                                      OperandKind::kVgpr, 23u,
                                      OperandKind::kSgpr, 2u),
               "expected decoded V_CVT_U32_U16 operands")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_cvt_f16_f32_words{
+      MakeVop1(10u, 24u, 257u)};
+  if (!Expect(decoder.DecodeInstruction(v_cvt_f16_f32_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_CVT_F16_F32 decode success") ||
+      !Expect(ExpectUnaryInstruction(instruction, "V_CVT_F16_F32",
+                                     OperandKind::kVgpr, 24u,
+                                     OperandKind::kVgpr, 1u),
+              "expected decoded V_CVT_F16_F32 operands")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_cvt_f16_i16_words{
+      MakeVop1(81u, 25u, 258u)};
+  if (!Expect(decoder.DecodeInstruction(v_cvt_f16_i16_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_CVT_F16_I16 decode success") ||
+      !Expect(ExpectUnaryInstruction(instruction, "V_CVT_F16_I16",
+                                     OperandKind::kVgpr, 25u,
+                                     OperandKind::kVgpr, 2u),
+              "expected decoded V_CVT_F16_I16 operands")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_cvt_f16_u16_words{
+      MakeVop1(80u, 26u, 3u)};
+  if (!Expect(decoder.DecodeInstruction(v_cvt_f16_u16_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_CVT_F16_U16 decode success") ||
+      !Expect(ExpectUnaryInstruction(instruction, "V_CVT_F16_U16",
+                                     OperandKind::kVgpr, 26u,
+                                     OperandKind::kSgpr, 3u),
+              "expected decoded V_CVT_F16_U16 operands")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_cvt_f32_f16_words{
+      MakeVop1(11u, 27u, 259u)};
+  if (!Expect(decoder.DecodeInstruction(v_cvt_f32_f16_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_CVT_F32_F16 decode success") ||
+      !Expect(ExpectUnaryInstruction(instruction, "V_CVT_F32_F16",
+                                     OperandKind::kVgpr, 27u,
+                                     OperandKind::kVgpr, 3u),
+              "expected decoded V_CVT_F32_F16 operands")) {
     return 1;
   }
 
@@ -3038,6 +3116,110 @@ int main() {
       !Expect(ExpectUnaryCountConvertSeedState(
                   compiled_unary_count_convert_state),
               "expected compiled unary count/convert state")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 7> f16_bridge_words{
+      MakeVop1(10u, 40u, 257u),
+      MakeVop1(81u, 41u, 258u),
+      MakeVop1(80u, 42u, 259u),
+      MakeVop1(11u, 43u, 296u),
+      MakeVop1(11u, 44u, 297u),
+      MakeVop1(11u, 45u, 298u),
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> f16_bridge_program;
+  if (!Expect(decoder.DecodeProgram(f16_bridge_words, &f16_bridge_program,
+                                    &error_message),
+              "expected F16 bridge program decode success") ||
+      !Expect(f16_bridge_program.size() == 7u,
+              "expected seven decoded F16 bridge instructions") ||
+      !Expect(f16_bridge_program[0].opcode == "V_CVT_F16_F32",
+              "expected decoded V_CVT_F16_F32") ||
+      !Expect(f16_bridge_program[1].opcode == "V_CVT_F16_I16",
+              "expected decoded V_CVT_F16_I16") ||
+      !Expect(f16_bridge_program[2].opcode == "V_CVT_F16_U16",
+              "expected decoded V_CVT_F16_U16") ||
+      !Expect(f16_bridge_program[3].opcode == "V_CVT_F32_F16",
+              "expected decoded V_CVT_F32_F16 from V_CVT_F16_F32 result") ||
+      !Expect(f16_bridge_program[4].opcode == "V_CVT_F32_F16",
+              "expected decoded V_CVT_F32_F16 from V_CVT_F16_I16 result") ||
+      !Expect(f16_bridge_program[5].opcode == "V_CVT_F32_F16",
+              "expected decoded V_CVT_F32_F16 from V_CVT_F16_U16 result")) {
+    return 1;
+  }
+
+  auto initialize_f16_bridge_state = [](WaveExecutionState* state) {
+    state->exec_mask = 0xbu;
+
+    state->vgprs[1][0] = FloatBits(1.5f);
+    state->vgprs[1][1] = FloatBits(-2.0f);
+    state->vgprs[1][2] = 0x01010101u;
+    state->vgprs[1][3] = FloatBits(0.5f);
+
+    state->vgprs[2][0] = 0x0000fffeu;
+    state->vgprs[2][1] = 0x00000003u;
+    state->vgprs[2][2] = 0x02020202u;
+    state->vgprs[2][3] = 0x00000000u;
+
+    state->vgprs[3][0] = 0x00000002u;
+    state->vgprs[3][1] = 0x00000007u;
+    state->vgprs[3][2] = 0x03030303u;
+    state->vgprs[3][3] = 0x00000001u;
+
+    state->vgprs[40][2] = 0x40404040u;
+    state->vgprs[41][2] = 0x41414141u;
+    state->vgprs[42][2] = 0x42424242u;
+    state->vgprs[43][2] = 0x43434343u;
+    state->vgprs[44][2] = 0x44444444u;
+    state->vgprs[45][2] = 0x45454545u;
+  };
+
+  WaveExecutionState decoded_f16_bridge_state;
+  initialize_f16_bridge_state(&decoded_f16_bridge_state);
+  if (!Expect(interpreter.ExecuteProgram(f16_bridge_program,
+                                         &decoded_f16_bridge_state,
+                                         &error_message),
+              "expected decoded F16 bridge execution success") ||
+      !Expect(ExpectF16BridgeSeedState(decoded_f16_bridge_state),
+              "expected decoded F16 bridge state")) {
+    return 1;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_f16_bridge_program;
+  if (!Expect(interpreter.CompileProgram(f16_bridge_program,
+                                         &compiled_f16_bridge_program,
+                                         &error_message),
+              "expected compiled F16 bridge program success") ||
+      !Expect(compiled_f16_bridge_program[0].opcode ==
+                  Gfx1201CompiledOpcode::kVCvtF16F32,
+              "expected compiled V_CVT_F16_F32 opcode") ||
+      !Expect(compiled_f16_bridge_program[1].opcode ==
+                  Gfx1201CompiledOpcode::kVCvtF16I16,
+              "expected compiled V_CVT_F16_I16 opcode") ||
+      !Expect(compiled_f16_bridge_program[2].opcode ==
+                  Gfx1201CompiledOpcode::kVCvtF16U16,
+              "expected compiled V_CVT_F16_U16 opcode") ||
+      !Expect(compiled_f16_bridge_program[3].opcode ==
+                  Gfx1201CompiledOpcode::kVCvtF32F16,
+              "expected compiled V_CVT_F32_F16 opcode") ||
+      !Expect(compiled_f16_bridge_program[4].opcode ==
+                  Gfx1201CompiledOpcode::kVCvtF32F16,
+              "expected second compiled V_CVT_F32_F16 opcode") ||
+      !Expect(compiled_f16_bridge_program[5].opcode ==
+                  Gfx1201CompiledOpcode::kVCvtF32F16,
+              "expected third compiled V_CVT_F32_F16 opcode")) {
+    return 1;
+  }
+
+  WaveExecutionState compiled_f16_bridge_state;
+  initialize_f16_bridge_state(&compiled_f16_bridge_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_f16_bridge_program,
+                                         &compiled_f16_bridge_state,
+                                         &error_message),
+              "expected compiled F16 bridge execution success") ||
+      !Expect(ExpectF16BridgeSeedState(compiled_f16_bridge_state),
+              "expected compiled F16 bridge state")) {
     return 1;
   }
 
