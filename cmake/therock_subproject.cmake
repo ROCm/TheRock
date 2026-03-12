@@ -493,6 +493,9 @@ function(therock_cmake_subproject_declare target_name)
   elseif(ARG_FORTRAN_OPTIONAL OR ARG_FORTRAN_REQUIRED)
     if(NOT WIN32 AND THEROCK_ENABLE_FLANG)
       # Linux with flang: use our built flang from amd-llvm-offload.
+      # amd-llvm-offload's dist/ contains both the flang compiler (from
+      # amd-llvm-flang) and the flang-rt runtime libraries — downstream
+      # math-libs need both to compile and link Fortran code.
       set(_fortran_toolchain_subproject "amd-llvm-offload")
     elseif(WIN32)
       # Windows: let CMake find system gfortran (no toolchain dep).
@@ -758,7 +761,7 @@ function(therock_cmake_subproject_activate target_name)
     get_target_property(_fortran_stamp_dir "${_fortran_toolchain_subproject}" THEROCK_STAMP_DIR)
     list(APPEND _compiler_toolchain_addl_depends "${_fortran_stamp_dir}/stage.stamp")
     # Append CMAKE_Fortran_COMPILER to the already-generated toolchain file.
-    set(_fortran_compiler "${_fortran_dist_dir}/lib/llvm/bin/flang-new${CMAKE_EXECUTABLE_SUFFIX}")
+    set(_fortran_compiler "${_fortran_dist_dir}/lib/llvm/bin/flang${CMAKE_EXECUTABLE_SUFFIX}")
     file(APPEND "${_cmake_project_toolchain_file}"
       "set(CMAKE_Fortran_COMPILER \"${_fortran_compiler}\")\n")
     message(STATUS "  Fortran toolchain: ${_fortran_toolchain_subproject} (${_fortran_dist_dir})")

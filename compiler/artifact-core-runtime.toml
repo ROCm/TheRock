@@ -1,0 +1,11 @@
+# ROCR-Runtime
+[components.dbg."compiler/ROCR-Runtime/stage"]
+[components.dev."compiler/ROCR-Runtime/stage"]
+[components.doc."compiler/ROCR-Runtime/stage"]
+[components.lib."compiler/ROCR-Runtime/stage"]
+[components.run."compiler/ROCR-Runtime/stage"]
+
+# rocminfo
+[components.dbg."compiler/rocminfo/stage"]
+[components.doc."compiler/rocminfo/stage"]
+[components.run."compiler/rocminfo/stage"]

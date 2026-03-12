@@ -27,7 +27,7 @@ therock_declare_flag(
 
 therock_declare_flag(
   NAME BUILD_FORTRAN_LIBS
-  DEFAULT_VALUE OFF
+  DEFAULT_VALUE ON
   DESCRIPTION "Build Fortran components in sub-projects (wrappers, tests, hipfort)"
   GLOBAL_CMAKE_VARS
     ROCM_BUILD_FORTRAN_LIBS=ON

@@ -31,7 +31,6 @@ set(_amdgcn_runtimes "openmp")  # device openmp runtime
 if(THEROCK_ENABLE_FLANG)
   list(APPEND _runtimes "flang-rt")
   list(APPEND _amdgcn_runtimes "flang-rt")
-  set(CMAKE_Fortran_COMPILER_WORKS YES CACHE BOOL "" FORCE)
   set(FLANG_RUNTIME_F128_MATH_LIB "libquadmath")
   set(LIBOMPTARGET_BUILD_DEVICE_FORTRT ON)
   set(RUNTIMES_amdgcn-amd-amdhsa_FLANG_RT_LIBC_PROVIDER "llvm")
@@ -43,10 +42,16 @@ endif()
 set(LLVM_ENABLE_RUNTIMES "${_runtimes}" CACHE STRING "" FORCE)
 
 # Offload settings
+# Disable libffi detection — the system's static libffi.a is not built with
+# -fPIC and cannot be linked into libomptarget.so. The host x86_64 offload
+# plugin falls back to dlopening libffi at runtime instead.
+# TODO: Fix upstream offload/cmake/Modules/LibomptargetGetDependencies.cmake
+# to condition find_package(FFI) on LLVM_ENABLE_FFI so this workaround can
+# be removed.
+set(CMAKE_DISABLE_FIND_PACKAGE_FFI TRUE)
 set(OPENMP_ENABLE_LIBOMPTARGET ON)
 set(LIBOMPTARGET_ENABLE_DEBUG ON)
 set(LIBOMPTARGET_NO_SANITIZER_AMDGPU ON)
-set(OFFLOAD_EXTERNAL_PROJECT_UNIFIED_ROCR ON)
 
 # There is an issue with finding the zstd config built by TheRock when zstd
 # is searched for in the llvm config. LLVM has a FindZSTD.cmake that is

@@ -80,7 +80,9 @@ set(FLANG_INCLUDE_TESTS OFF)
 
 # Other LLVM settings sub-projects check
 set(LLVM_ENABLE_PROJECTS "")
-set(LLVM_ENABLE_RUNTIMES "")
+# Declare openmp as a runtime so flang knows omp_lib.mod will be built
+# (by amd-llvm-offload, not here). Suppresses the "Not building omp_lib.mod" warning.
+set(LLVM_ENABLE_RUNTIMES "openmp")
 
 #=============================================================================
 # Flang settings
