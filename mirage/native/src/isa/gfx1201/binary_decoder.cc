@@ -16,7 +16,7 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 196> kPhase0ExecutableOpcodes{{
+constexpr std::array<std::string_view, 220> kPhase0ExecutableOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_ADD_U32",
@@ -69,6 +69,30 @@ constexpr std::array<std::string_view, 196> kPhase0ExecutableOpcodes{{
     "V_CMPX_LE_U32",
     "V_CMPX_GT_U32",
     "V_CMPX_GE_U32",
+    "V_CMP_EQ_I16",
+    "V_CMP_EQ_U16",
+    "V_CMP_GE_I16",
+    "V_CMP_GE_U16",
+    "V_CMP_GT_I16",
+    "V_CMP_GT_U16",
+    "V_CMP_LE_I16",
+    "V_CMP_LE_U16",
+    "V_CMP_LT_I16",
+    "V_CMP_LT_U16",
+    "V_CMP_NE_I16",
+    "V_CMP_NE_U16",
+    "V_CMPX_EQ_I16",
+    "V_CMPX_EQ_U16",
+    "V_CMPX_GE_I16",
+    "V_CMPX_GE_U16",
+    "V_CMPX_GT_I16",
+    "V_CMPX_GT_U16",
+    "V_CMPX_LE_I16",
+    "V_CMPX_LE_U16",
+    "V_CMPX_LT_I16",
+    "V_CMPX_LT_U16",
+    "V_CMPX_NE_I16",
+    "V_CMPX_NE_U16",
     "V_CMP_EQ_I64",
     "V_CMP_NE_I64",
     "V_CMP_LT_I64",
@@ -883,6 +907,30 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
              instruction_name == "V_CMPX_LE_U32" ||
              instruction_name == "V_CMPX_GT_U32" ||
              instruction_name == "V_CMPX_GE_U32" ||
+             instruction_name == "V_CMP_EQ_I16" ||
+             instruction_name == "V_CMP_EQ_U16" ||
+             instruction_name == "V_CMP_GE_I16" ||
+             instruction_name == "V_CMP_GE_U16" ||
+             instruction_name == "V_CMP_GT_I16" ||
+             instruction_name == "V_CMP_GT_U16" ||
+             instruction_name == "V_CMP_LE_I16" ||
+             instruction_name == "V_CMP_LE_U16" ||
+             instruction_name == "V_CMP_LT_I16" ||
+             instruction_name == "V_CMP_LT_U16" ||
+             instruction_name == "V_CMP_NE_I16" ||
+             instruction_name == "V_CMP_NE_U16" ||
+             instruction_name == "V_CMPX_EQ_I16" ||
+             instruction_name == "V_CMPX_EQ_U16" ||
+             instruction_name == "V_CMPX_GE_I16" ||
+             instruction_name == "V_CMPX_GE_U16" ||
+             instruction_name == "V_CMPX_GT_I16" ||
+             instruction_name == "V_CMPX_GT_U16" ||
+             instruction_name == "V_CMPX_LE_I16" ||
+             instruction_name == "V_CMPX_LE_U16" ||
+             instruction_name == "V_CMPX_LT_I16" ||
+             instruction_name == "V_CMPX_LT_U16" ||
+             instruction_name == "V_CMPX_NE_I16" ||
+             instruction_name == "V_CMPX_NE_U16" ||
              instruction_name == "V_CMP_CLASS_F32" ||
              instruction_name == "V_CMP_EQ_F32" ||
              instruction_name == "V_CMP_GE_F32" ||
