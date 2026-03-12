@@ -2677,13 +2677,14 @@ int main() {
     }
   }
 
-  const std::array<std::string_view, 12> kScalarBufferAtomic32Opcodes = {
-      "S_BUFFER_ATOMIC_SWAP", "S_BUFFER_ATOMIC_ADD",
-      "S_BUFFER_ATOMIC_SUB",  "S_BUFFER_ATOMIC_SMIN",
-      "S_BUFFER_ATOMIC_UMIN", "S_BUFFER_ATOMIC_SMAX",
-      "S_BUFFER_ATOMIC_UMAX", "S_BUFFER_ATOMIC_AND",
-      "S_BUFFER_ATOMIC_OR",   "S_BUFFER_ATOMIC_XOR",
-      "S_BUFFER_ATOMIC_INC",  "S_BUFFER_ATOMIC_DEC",
+  const std::array<std::string_view, 13> kScalarBufferAtomic32Opcodes = {
+      "S_BUFFER_ATOMIC_SWAP", "S_BUFFER_ATOMIC_CMPSWAP",
+      "S_BUFFER_ATOMIC_ADD",  "S_BUFFER_ATOMIC_SUB",
+      "S_BUFFER_ATOMIC_SMIN", "S_BUFFER_ATOMIC_UMIN",
+      "S_BUFFER_ATOMIC_SMAX", "S_BUFFER_ATOMIC_UMAX",
+      "S_BUFFER_ATOMIC_AND",  "S_BUFFER_ATOMIC_OR",
+      "S_BUFFER_ATOMIC_XOR",  "S_BUFFER_ATOMIC_INC",
+      "S_BUFFER_ATOMIC_DEC",
   };
   for (std::string_view opcode : kScalarBufferAtomic32Opcodes) {
     const std::string message = "expected " + std::string(opcode) + " support";
@@ -2692,13 +2693,14 @@ int main() {
     }
   }
 
-  const std::array<std::string_view, 12> kScalarBufferAtomic64Opcodes = {
-      "S_BUFFER_ATOMIC_SWAP_X2", "S_BUFFER_ATOMIC_ADD_X2",
-      "S_BUFFER_ATOMIC_SUB_X2",  "S_BUFFER_ATOMIC_SMIN_X2",
-      "S_BUFFER_ATOMIC_UMIN_X2", "S_BUFFER_ATOMIC_SMAX_X2",
-      "S_BUFFER_ATOMIC_UMAX_X2", "S_BUFFER_ATOMIC_AND_X2",
-      "S_BUFFER_ATOMIC_OR_X2",   "S_BUFFER_ATOMIC_XOR_X2",
-      "S_BUFFER_ATOMIC_INC_X2",  "S_BUFFER_ATOMIC_DEC_X2",
+  const std::array<std::string_view, 13> kScalarBufferAtomic64Opcodes = {
+      "S_BUFFER_ATOMIC_SWAP_X2", "S_BUFFER_ATOMIC_CMPSWAP_X2",
+      "S_BUFFER_ATOMIC_ADD_X2",  "S_BUFFER_ATOMIC_SUB_X2",
+      "S_BUFFER_ATOMIC_SMIN_X2", "S_BUFFER_ATOMIC_UMIN_X2",
+      "S_BUFFER_ATOMIC_SMAX_X2", "S_BUFFER_ATOMIC_UMAX_X2",
+      "S_BUFFER_ATOMIC_AND_X2",  "S_BUFFER_ATOMIC_OR_X2",
+      "S_BUFFER_ATOMIC_XOR_X2",  "S_BUFFER_ATOMIC_INC_X2",
+      "S_BUFFER_ATOMIC_DEC_X2",
   };
   for (std::string_view opcode : kScalarBufferAtomic64Opcodes) {
     const std::string message = "expected " + std::string(opcode) + " support";
@@ -2707,10 +2709,11 @@ int main() {
     }
   }
 
-  const std::array<std::string_view, 12> kScalarAtomic32Opcodes = {
-      "S_ATOMIC_SWAP", "S_ATOMIC_ADD",  "S_ATOMIC_SUB", "S_ATOMIC_SMIN",
-      "S_ATOMIC_UMIN", "S_ATOMIC_SMAX", "S_ATOMIC_UMAX", "S_ATOMIC_AND",
-      "S_ATOMIC_OR",   "S_ATOMIC_XOR",  "S_ATOMIC_INC",  "S_ATOMIC_DEC",
+  const std::array<std::string_view, 13> kScalarAtomic32Opcodes = {
+      "S_ATOMIC_SWAP", "S_ATOMIC_CMPSWAP", "S_ATOMIC_ADD",  "S_ATOMIC_SUB",
+      "S_ATOMIC_SMIN", "S_ATOMIC_UMIN",    "S_ATOMIC_SMAX", "S_ATOMIC_UMAX",
+      "S_ATOMIC_AND",  "S_ATOMIC_OR",      "S_ATOMIC_XOR",  "S_ATOMIC_INC",
+      "S_ATOMIC_DEC",
   };
   for (std::string_view opcode : kScalarAtomic32Opcodes) {
     const std::string message = "expected " + std::string(opcode) + " support";
@@ -2719,27 +2722,16 @@ int main() {
     }
   }
 
-  const std::array<std::string_view, 12> kScalarAtomic64Opcodes = {
-      "S_ATOMIC_SWAP_X2", "S_ATOMIC_ADD_X2",  "S_ATOMIC_SUB_X2",
-      "S_ATOMIC_SMIN_X2", "S_ATOMIC_UMIN_X2", "S_ATOMIC_SMAX_X2",
-      "S_ATOMIC_UMAX_X2", "S_ATOMIC_AND_X2",  "S_ATOMIC_OR_X2",
-      "S_ATOMIC_XOR_X2",  "S_ATOMIC_INC_X2",  "S_ATOMIC_DEC_X2",
+  const std::array<std::string_view, 13> kScalarAtomic64Opcodes = {
+      "S_ATOMIC_SWAP_X2", "S_ATOMIC_CMPSWAP_X2", "S_ATOMIC_ADD_X2",
+      "S_ATOMIC_SUB_X2",  "S_ATOMIC_SMIN_X2",    "S_ATOMIC_UMIN_X2",
+      "S_ATOMIC_SMAX_X2", "S_ATOMIC_UMAX_X2",    "S_ATOMIC_AND_X2",
+      "S_ATOMIC_OR_X2",   "S_ATOMIC_XOR_X2",     "S_ATOMIC_INC_X2",
+      "S_ATOMIC_DEC_X2",
   };
   for (std::string_view opcode : kScalarAtomic64Opcodes) {
     const std::string message = "expected " + std::string(opcode) + " support";
     if (!Expect(interpreter.Supports(opcode), message.c_str())) {
-      return 1;
-    }
-  }
-
-  const std::array<std::string_view, 4> kBlockedScalarAtomicOpcodes = {
-      "S_BUFFER_ATOMIC_CMPSWAP", "S_BUFFER_ATOMIC_CMPSWAP_X2",
-      "S_ATOMIC_CMPSWAP",        "S_ATOMIC_CMPSWAP_X2",
-  };
-  for (std::string_view opcode : kBlockedScalarAtomicOpcodes) {
-    const std::string message = "expected " + std::string(opcode) +
-                                " to remain unsupported";
-    if (!Expect(!interpreter.Supports(opcode), message.c_str())) {
       return 1;
     }
   }
@@ -10774,6 +10766,11 @@ int main() {
       {"S_ATOMIC_INC", 0x28u, 5u, 3u, 4u},
       {"S_ATOMIC_DEC", 0x2cu, 9u, 0u, 9u},
   }};
+  const std::array<std::string_view, 12> kScalarAtomicCase32Opcodes = {
+      "S_ATOMIC_SWAP", "S_ATOMIC_ADD",  "S_ATOMIC_SUB", "S_ATOMIC_SMIN",
+      "S_ATOMIC_UMIN", "S_ATOMIC_SMAX", "S_ATOMIC_UMAX", "S_ATOMIC_AND",
+      "S_ATOMIC_OR",   "S_ATOMIC_XOR",  "S_ATOMIC_INC",  "S_ATOMIC_DEC",
+  };
   const std::array<std::string_view, 12> kScalarBufferAtomicCase32Opcodes = {
       "S_BUFFER_ATOMIC_SWAP", "S_BUFFER_ATOMIC_ADD",
       "S_BUFFER_ATOMIC_SUB",  "S_BUFFER_ATOMIC_SMIN",
@@ -10809,6 +10806,12 @@ int main() {
       {"S_ATOMIC_INC_X2", 0xd0u, 5u, 3u, 4u},
       {"S_ATOMIC_DEC_X2", 0xd8u, 9u, 0u, 9u},
   }};
+  const std::array<std::string_view, 12> kScalarAtomicCase64Opcodes = {
+      "S_ATOMIC_SWAP_X2", "S_ATOMIC_ADD_X2",  "S_ATOMIC_SUB_X2",
+      "S_ATOMIC_SMIN_X2", "S_ATOMIC_UMIN_X2", "S_ATOMIC_SMAX_X2",
+      "S_ATOMIC_UMAX_X2", "S_ATOMIC_AND_X2",  "S_ATOMIC_OR_X2",
+      "S_ATOMIC_XOR_X2",  "S_ATOMIC_INC_X2",  "S_ATOMIC_DEC_X2",
+  };
   const std::array<std::string_view, 12> kScalarBufferAtomicCase64Opcodes = {
       "S_BUFFER_ATOMIC_SWAP_X2", "S_BUFFER_ATOMIC_ADD_X2",
       "S_BUFFER_ATOMIC_SUB_X2",  "S_BUFFER_ATOMIC_SMIN_X2",
@@ -10817,6 +10820,31 @@ int main() {
       "S_BUFFER_ATOMIC_OR_X2",   "S_BUFFER_ATOMIC_XOR_X2",
       "S_BUFFER_ATOMIC_INC_X2",  "S_BUFFER_ATOMIC_DEC_X2",
   };
+  struct ScalarAtomicCmpSwapCase32 {
+    std::uint32_t offset;
+    std::uint32_t source_value;
+    std::uint32_t compare_value;
+    std::uint32_t old_value;
+    std::uint32_t new_value;
+  };
+  const std::array<ScalarAtomicCmpSwapCase32, 2> kScalarAtomicCmpSwapCases32 = {{
+      {0x40u, 0x13572468u, 0x11110000u, 0x11110000u, 0x13572468u},
+      {0x44u, 0x24681357u, 0xaaaaaaaau, 0x55555555u, 0x55555555u},
+  }};
+
+  struct ScalarAtomicCmpSwapCase64 {
+    std::uint32_t offset;
+    std::uint64_t source_value;
+    std::uint64_t compare_value;
+    std::uint64_t old_value;
+    std::uint64_t new_value;
+  };
+  const std::array<ScalarAtomicCmpSwapCase64, 2> kScalarAtomicCmpSwapCases64 = {{
+      {0xe0u, 0xaaaabbbbccccddddULL, 0x1111222233334444ULL,
+       0x1111222233334444ULL, 0xaaaabbbbccccddddULL},
+      {0xe8u, 0x9999aaaabbbbccccULL, 0x0123456789abcdefULL,
+       0xfedcba9876543210ULL, 0xfedcba9876543210ULL},
+  }};
 
   const auto run_scalar_atomic_cases32 =
       [&](bool uses_buffer_descriptor,
@@ -10941,18 +10969,162 @@ int main() {
         return true;
       };
 
+  const auto run_scalar_atomic_cmpswap_cases32 =
+      [&](bool uses_buffer_descriptor,
+          std::string_view opcode,
+          const auto& cases,
+          const char* mode) {
+        WaveExecutionState state{};
+        LinearExecutionMemory memory(0x400, 0);
+        state.sgprs[0] = 0x100u;
+        state.sgprs[1] = 0u;
+        if (uses_buffer_descriptor) {
+          state.sgprs[2] = 0x200u;
+          state.sgprs[3] = 0u;
+        }
+
+        std::vector<DecodedInstruction> program;
+        program.reserve(cases.size() + 1u);
+        for (std::size_t index = 0; index < cases.size(); ++index) {
+          const auto& atomic_case = cases[index];
+          const std::uint16_t data_sgpr =
+              static_cast<std::uint16_t>(80u + index * 2u);
+          state.sgprs[data_sgpr] = atomic_case.source_value;
+          state.sgprs[data_sgpr + 1u] = atomic_case.compare_value;
+          if (!Expect(memory.WriteU32(0x100u + atomic_case.offset,
+                                      atomic_case.old_value),
+                      "expected scalar atomic cmpswap seed write")) {
+            std::cerr << mode << " " << opcode << '\n';
+            return false;
+          }
+          program.push_back(DecodedInstruction::ThreeOperand(
+              opcode, InstructionOperand::Sgpr(data_sgpr),
+              InstructionOperand::Sgpr(0), InstructionOperand::Imm32(atomic_case.offset)));
+        }
+        program.push_back(DecodedInstruction::Nullary("S_ENDPGM"));
+
+        if (!Expect(interpreter.ExecuteProgram(program, &state, &memory,
+                                               &error_message),
+                    error_message.c_str()) ||
+            !Expect(state.halted,
+                    "expected scalar atomic cmpswap program to halt")) {
+          std::cerr << mode << '\n';
+          return false;
+        }
+
+        for (std::size_t index = 0; index < cases.size(); ++index) {
+          const auto& atomic_case = cases[index];
+          const std::uint16_t data_sgpr =
+              static_cast<std::uint16_t>(80u + index * 2u);
+          std::uint32_t memory_value = 0;
+          if (!Expect(state.sgprs[data_sgpr] == atomic_case.old_value,
+                      "expected scalar atomic cmpswap old value return") ||
+              !Expect(state.sgprs[data_sgpr + 1u] == atomic_case.compare_value,
+                      "expected scalar atomic cmpswap compare preservation") ||
+              !Expect(memory.ReadU32(0x100u + atomic_case.offset, &memory_value),
+                      "expected scalar atomic cmpswap memory read") ||
+              !Expect(memory_value == atomic_case.new_value,
+                      "expected scalar atomic cmpswap memory update")) {
+            std::cerr << mode << " " << opcode << '\n';
+            return false;
+          }
+        }
+        return true;
+      };
+
+  const auto run_scalar_atomic_cmpswap_cases64 =
+      [&](bool uses_buffer_descriptor,
+          std::string_view opcode,
+          const auto& cases,
+          const char* mode) {
+        WaveExecutionState state{};
+        LinearExecutionMemory memory(0x400, 0);
+        state.sgprs[0] = 0x100u;
+        state.sgprs[1] = 0u;
+        if (uses_buffer_descriptor) {
+          state.sgprs[2] = 0x200u;
+          state.sgprs[3] = 0u;
+        }
+
+        std::vector<DecodedInstruction> program;
+        program.reserve(cases.size() + 1u);
+        for (std::size_t index = 0; index < cases.size(); ++index) {
+          const auto& atomic_case = cases[index];
+          const std::uint16_t data_sgpr =
+              static_cast<std::uint16_t>(96u + index * 4u);
+          SplitU64(atomic_case.source_value, &state.sgprs[data_sgpr],
+                   &state.sgprs[data_sgpr + 1u]);
+          SplitU64(atomic_case.compare_value, &state.sgprs[data_sgpr + 2u],
+                   &state.sgprs[data_sgpr + 3u]);
+          if (!Expect(WriteU64(&memory, 0x100u + atomic_case.offset,
+                               atomic_case.old_value),
+                      "expected scalar atomic cmpswap x2 seed write")) {
+            std::cerr << mode << " " << opcode << '\n';
+            return false;
+          }
+          program.push_back(DecodedInstruction::ThreeOperand(
+              opcode, InstructionOperand::Sgpr(data_sgpr),
+              InstructionOperand::Sgpr(0), InstructionOperand::Imm32(atomic_case.offset)));
+        }
+        program.push_back(DecodedInstruction::Nullary("S_ENDPGM"));
+
+        if (!Expect(interpreter.ExecuteProgram(program, &state, &memory,
+                                               &error_message),
+                    error_message.c_str()) ||
+            !Expect(state.halted,
+                    "expected scalar atomic cmpswap x2 program to halt")) {
+          std::cerr << mode << '\n';
+          return false;
+        }
+
+        for (std::size_t index = 0; index < cases.size(); ++index) {
+          const auto& atomic_case = cases[index];
+          const std::uint16_t data_sgpr =
+              static_cast<std::uint16_t>(96u + index * 4u);
+          std::uint64_t memory_value = 0;
+          if (!Expect(ComposeU64(state.sgprs[data_sgpr],
+                                 state.sgprs[data_sgpr + 1u]) ==
+                          atomic_case.old_value,
+                      "expected scalar atomic cmpswap x2 old value return") ||
+              !Expect(ComposeU64(state.sgprs[data_sgpr + 2u],
+                                 state.sgprs[data_sgpr + 3u]) ==
+                          atomic_case.compare_value,
+                      "expected scalar atomic cmpswap x2 compare preservation") ||
+              !Expect(ReadU64(memory, 0x100u + atomic_case.offset, &memory_value),
+                      "expected scalar atomic cmpswap x2 memory read") ||
+              !Expect(memory_value == atomic_case.new_value,
+                      "expected scalar atomic cmpswap x2 memory update")) {
+            std::cerr << mode << " " << opcode << '\n';
+            return false;
+          }
+        }
+        return true;
+      };
+
   if (!run_scalar_atomic_cases32(false, kScalarAtomicCases32,
-                                 kScalarAtomic32Opcodes,
+                                 kScalarAtomicCase32Opcodes,
                                  "decoded scalar atomic") ||
       !run_scalar_atomic_cases32(true, kScalarAtomicCases32,
                                  kScalarBufferAtomicCase32Opcodes,
                                  "decoded scalar buffer atomic") ||
       !run_scalar_atomic_cases64(false, kScalarAtomicCases64,
-                                 kScalarAtomic64Opcodes,
+                                 kScalarAtomicCase64Opcodes,
                                  "decoded scalar atomic x2") ||
       !run_scalar_atomic_cases64(true, kScalarAtomicCases64,
                                  kScalarBufferAtomicCase64Opcodes,
-                                 "decoded scalar buffer atomic x2")) {
+                                 "decoded scalar buffer atomic x2") ||
+      !run_scalar_atomic_cmpswap_cases32(false, "S_ATOMIC_CMPSWAP",
+                                         kScalarAtomicCmpSwapCases32,
+                                         "decoded scalar atomic cmpswap") ||
+      !run_scalar_atomic_cmpswap_cases32(true, "S_BUFFER_ATOMIC_CMPSWAP",
+                                         kScalarAtomicCmpSwapCases32,
+                                         "decoded scalar buffer atomic cmpswap") ||
+      !run_scalar_atomic_cmpswap_cases64(false, "S_ATOMIC_CMPSWAP_X2",
+                                         kScalarAtomicCmpSwapCases64,
+                                         "decoded scalar atomic cmpswap x2") ||
+      !run_scalar_atomic_cmpswap_cases64(true, "S_BUFFER_ATOMIC_CMPSWAP_X2",
+                                         kScalarAtomicCmpSwapCases64,
+                                         "decoded scalar buffer atomic cmpswap x2")) {
     return 1;
   }
   }

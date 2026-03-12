@@ -248,6 +248,7 @@ bool IsSupportedGlobalVectorMemoryOpcode(std::string_view opcode_name) {
 
 bool IsSupportedScalarAtomicOpcode(std::string_view opcode_name) {
   return opcode_name == "S_BUFFER_ATOMIC_SWAP" ||
+         opcode_name == "S_BUFFER_ATOMIC_CMPSWAP" ||
          opcode_name == "S_BUFFER_ATOMIC_ADD" ||
          opcode_name == "S_BUFFER_ATOMIC_SUB" ||
          opcode_name == "S_BUFFER_ATOMIC_SMIN" ||
@@ -260,6 +261,7 @@ bool IsSupportedScalarAtomicOpcode(std::string_view opcode_name) {
          opcode_name == "S_BUFFER_ATOMIC_INC" ||
          opcode_name == "S_BUFFER_ATOMIC_DEC" ||
          opcode_name == "S_BUFFER_ATOMIC_SWAP_X2" ||
+         opcode_name == "S_BUFFER_ATOMIC_CMPSWAP_X2" ||
          opcode_name == "S_BUFFER_ATOMIC_ADD_X2" ||
          opcode_name == "S_BUFFER_ATOMIC_SUB_X2" ||
          opcode_name == "S_BUFFER_ATOMIC_SMIN_X2" ||
@@ -272,6 +274,7 @@ bool IsSupportedScalarAtomicOpcode(std::string_view opcode_name) {
          opcode_name == "S_BUFFER_ATOMIC_INC_X2" ||
          opcode_name == "S_BUFFER_ATOMIC_DEC_X2" ||
          opcode_name == "S_ATOMIC_SWAP" ||
+         opcode_name == "S_ATOMIC_CMPSWAP" ||
          opcode_name == "S_ATOMIC_ADD" ||
          opcode_name == "S_ATOMIC_SUB" ||
          opcode_name == "S_ATOMIC_SMIN" ||
@@ -284,6 +287,7 @@ bool IsSupportedScalarAtomicOpcode(std::string_view opcode_name) {
          opcode_name == "S_ATOMIC_INC" ||
          opcode_name == "S_ATOMIC_DEC" ||
          opcode_name == "S_ATOMIC_SWAP_X2" ||
+         opcode_name == "S_ATOMIC_CMPSWAP_X2" ||
          opcode_name == "S_ATOMIC_ADD_X2" ||
          opcode_name == "S_ATOMIC_SUB_X2" ||
          opcode_name == "S_ATOMIC_SMIN_X2" ||

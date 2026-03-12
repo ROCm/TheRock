@@ -1040,6 +1040,7 @@ std::string_view NormalizeScalarAtomicOpcode(std::string_view opcode) {
 bool IsScalarAtomicOpcode(std::string_view opcode) {
   const std::string_view normalized = NormalizeScalarAtomicOpcode(opcode);
   return normalized == "ATOMIC_SWAP" ||
+         normalized == "ATOMIC_CMPSWAP" ||
          normalized == "ATOMIC_ADD" ||
          normalized == "ATOMIC_SUB" ||
          normalized == "ATOMIC_SMIN" ||
@@ -1052,6 +1053,7 @@ bool IsScalarAtomicOpcode(std::string_view opcode) {
          normalized == "ATOMIC_INC" ||
          normalized == "ATOMIC_DEC" ||
          normalized == "ATOMIC_SWAP_X2" ||
+         normalized == "ATOMIC_CMPSWAP_X2" ||
          normalized == "ATOMIC_ADD_X2" ||
          normalized == "ATOMIC_SUB_X2" ||
          normalized == "ATOMIC_SMIN_X2" ||
@@ -1121,6 +1123,17 @@ std::uint8_t GetScalarMemoryRegisterDwordCount(std::string_view opcode) {
 
 std::uint8_t GetScalarAtomicMemoryDwordCount(std::string_view opcode) {
   return HasSuffix(NormalizeScalarAtomicOpcode(opcode), "_X2") ? 2u : 1u;
+}
+
+std::uint8_t GetScalarAtomicDataDwordCount(std::string_view opcode) {
+  const std::string_view normalized = NormalizeScalarAtomicOpcode(opcode);
+  if (normalized == "ATOMIC_CMPSWAP") {
+    return 2u;
+  }
+  if (normalized == "ATOMIC_CMPSWAP_X2") {
+    return 4u;
+  }
+  return GetScalarAtomicMemoryDwordCount(opcode);
 }
 
 bool IsBufferFormatMemoryOpcode(std::string_view opcode) {
@@ -11087,7 +11100,8 @@ bool Gfx950Interpreter::ExecuteScalarAtomic(const DecodedInstruction& instructio
       NormalizeScalarAtomicOpcode(instruction.opcode);
   const std::uint8_t memory_dword_count =
       GetScalarAtomicMemoryDwordCount(instruction.opcode);
-  const std::uint8_t data_dword_count = memory_dword_count;
+  const std::uint8_t data_dword_count =
+      GetScalarAtomicDataDwordCount(instruction.opcode);
   if (instruction.operands[0].index + data_dword_count - 1 >=
       state->sgprs.size()) {
     if (error_message != nullptr) {
@@ -11104,9 +11118,9 @@ bool Gfx950Interpreter::ExecuteScalarAtomic(const DecodedInstruction& instructio
     return false;
   }
 
-  std::array<std::uint32_t, 2> old_dwords{};
-  std::array<std::uint32_t, 2> data_dwords{};
-  std::array<std::uint32_t, 2> new_dwords{};
+  std::array<std::uint32_t, 4> old_dwords{};
+  std::array<std::uint32_t, 4> data_dwords{};
+  std::array<std::uint32_t, 4> new_dwords{};
   for (std::uint8_t dword_index = 0; dword_index < memory_dword_count;
        ++dword_index) {
     const std::uint64_t byte_offset =
@@ -11121,14 +11135,23 @@ bool Gfx950Interpreter::ExecuteScalarAtomic(const DecodedInstruction& instructio
                        error_message)) {
       return false;
     }
+    new_dwords[dword_index] = old_dwords[dword_index];
+  }
+  for (std::uint8_t dword_index = 0; dword_index < data_dword_count;
+       ++dword_index) {
     data_dwords[dword_index] =
         state->sgprs[static_cast<std::uint16_t>(instruction.operands[0].index +
                                                 dword_index)];
-    new_dwords[dword_index] = old_dwords[dword_index];
   }
 
   if (normalized_opcode == "ATOMIC_SWAP") {
     new_dwords[0] = data_dwords[0];
+  } else if (normalized_opcode == "ATOMIC_CMPSWAP") {
+    // CDNA scalar-memory compare-swap uses DATA[0] as the replacement value
+    // and DATA[1] as the comparison value, returning only the old memory word.
+    if (old_dwords[0] == data_dwords[1]) {
+      new_dwords[0] = data_dwords[0];
+    }
   } else if (normalized_opcode == "ATOMIC_ADD") {
     new_dwords[0] = old_dwords[0] + data_dwords[0];
   } else if (normalized_opcode == "ATOMIC_SUB") {
@@ -11160,6 +11183,7 @@ bool Gfx950Interpreter::ExecuteScalarAtomic(const DecodedInstruction& instructio
   } else if (normalized_opcode == "ATOMIC_DEC") {
     new_dwords[0] = AtomicDecU32(old_dwords[0], data_dwords[0]);
   } else if (normalized_opcode == "ATOMIC_SWAP_X2" ||
+             normalized_opcode == "ATOMIC_CMPSWAP_X2" ||
              normalized_opcode == "ATOMIC_ADD_X2" ||
              normalized_opcode == "ATOMIC_SUB_X2" ||
              normalized_opcode == "ATOMIC_SMIN_X2" ||
@@ -11176,6 +11200,12 @@ bool Gfx950Interpreter::ExecuteScalarAtomic(const DecodedInstruction& instructio
     std::uint64_t new_value = old_value;
     if (normalized_opcode == "ATOMIC_SWAP_X2") {
       new_value = data_value;
+    } else if (normalized_opcode == "ATOMIC_CMPSWAP_X2") {
+      const std::uint64_t compare_value =
+          ComposeU64(data_dwords[2], data_dwords[3]);
+      if (old_value == compare_value) {
+        new_value = data_value;
+      }
     } else if (normalized_opcode == "ATOMIC_ADD_X2") {
       new_value = old_value + data_value;
     } else if (normalized_opcode == "ATOMIC_SUB_X2") {

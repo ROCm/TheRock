@@ -6280,32 +6280,36 @@ int main() {
           return true;
         };
 
-    const std::array<std::string_view, 12> kScalarAtomic32Opcodes = {
-        "S_ATOMIC_SWAP", "S_ATOMIC_ADD",  "S_ATOMIC_SUB", "S_ATOMIC_SMIN",
-        "S_ATOMIC_UMIN", "S_ATOMIC_SMAX", "S_ATOMIC_UMAX", "S_ATOMIC_AND",
-        "S_ATOMIC_OR",   "S_ATOMIC_XOR",  "S_ATOMIC_INC",  "S_ATOMIC_DEC",
+    const std::array<std::string_view, 13> kScalarAtomic32Opcodes = {
+        "S_ATOMIC_SWAP", "S_ATOMIC_CMPSWAP", "S_ATOMIC_ADD",  "S_ATOMIC_SUB",
+        "S_ATOMIC_SMIN", "S_ATOMIC_UMIN",    "S_ATOMIC_SMAX", "S_ATOMIC_UMAX",
+        "S_ATOMIC_AND",  "S_ATOMIC_OR",      "S_ATOMIC_XOR",  "S_ATOMIC_INC",
+        "S_ATOMIC_DEC",
     };
-    const std::array<std::string_view, 12> kScalarAtomic64Opcodes = {
-        "S_ATOMIC_SWAP_X2", "S_ATOMIC_ADD_X2",  "S_ATOMIC_SUB_X2",
-        "S_ATOMIC_SMIN_X2", "S_ATOMIC_UMIN_X2", "S_ATOMIC_SMAX_X2",
-        "S_ATOMIC_UMAX_X2", "S_ATOMIC_AND_X2",  "S_ATOMIC_OR_X2",
-        "S_ATOMIC_XOR_X2",  "S_ATOMIC_INC_X2",  "S_ATOMIC_DEC_X2",
+    const std::array<std::string_view, 13> kScalarAtomic64Opcodes = {
+        "S_ATOMIC_SWAP_X2", "S_ATOMIC_CMPSWAP_X2", "S_ATOMIC_ADD_X2",
+        "S_ATOMIC_SUB_X2",  "S_ATOMIC_SMIN_X2",    "S_ATOMIC_UMIN_X2",
+        "S_ATOMIC_SMAX_X2", "S_ATOMIC_UMAX_X2",    "S_ATOMIC_AND_X2",
+        "S_ATOMIC_OR_X2",   "S_ATOMIC_XOR_X2",     "S_ATOMIC_INC_X2",
+        "S_ATOMIC_DEC_X2",
     };
-    const std::array<std::string_view, 12> kScalarBufferAtomic32Opcodes = {
-        "S_BUFFER_ATOMIC_SWAP", "S_BUFFER_ATOMIC_ADD",
-        "S_BUFFER_ATOMIC_SUB",  "S_BUFFER_ATOMIC_SMIN",
-        "S_BUFFER_ATOMIC_UMIN", "S_BUFFER_ATOMIC_SMAX",
-        "S_BUFFER_ATOMIC_UMAX", "S_BUFFER_ATOMIC_AND",
-        "S_BUFFER_ATOMIC_OR",   "S_BUFFER_ATOMIC_XOR",
-        "S_BUFFER_ATOMIC_INC",  "S_BUFFER_ATOMIC_DEC",
+    const std::array<std::string_view, 13> kScalarBufferAtomic32Opcodes = {
+        "S_BUFFER_ATOMIC_SWAP", "S_BUFFER_ATOMIC_CMPSWAP",
+        "S_BUFFER_ATOMIC_ADD",  "S_BUFFER_ATOMIC_SUB",
+        "S_BUFFER_ATOMIC_SMIN", "S_BUFFER_ATOMIC_UMIN",
+        "S_BUFFER_ATOMIC_SMAX", "S_BUFFER_ATOMIC_UMAX",
+        "S_BUFFER_ATOMIC_AND",  "S_BUFFER_ATOMIC_OR",
+        "S_BUFFER_ATOMIC_XOR",  "S_BUFFER_ATOMIC_INC",
+        "S_BUFFER_ATOMIC_DEC",
     };
-    const std::array<std::string_view, 12> kScalarBufferAtomic64Opcodes = {
-        "S_BUFFER_ATOMIC_SWAP_X2", "S_BUFFER_ATOMIC_ADD_X2",
-        "S_BUFFER_ATOMIC_SUB_X2",  "S_BUFFER_ATOMIC_SMIN_X2",
-        "S_BUFFER_ATOMIC_UMIN_X2", "S_BUFFER_ATOMIC_SMAX_X2",
-        "S_BUFFER_ATOMIC_UMAX_X2", "S_BUFFER_ATOMIC_AND_X2",
-        "S_BUFFER_ATOMIC_OR_X2",   "S_BUFFER_ATOMIC_XOR_X2",
-        "S_BUFFER_ATOMIC_INC_X2",  "S_BUFFER_ATOMIC_DEC_X2",
+    const std::array<std::string_view, 13> kScalarBufferAtomic64Opcodes = {
+        "S_BUFFER_ATOMIC_SWAP_X2", "S_BUFFER_ATOMIC_CMPSWAP_X2",
+        "S_BUFFER_ATOMIC_ADD_X2",  "S_BUFFER_ATOMIC_SUB_X2",
+        "S_BUFFER_ATOMIC_SMIN_X2", "S_BUFFER_ATOMIC_UMIN_X2",
+        "S_BUFFER_ATOMIC_SMAX_X2", "S_BUFFER_ATOMIC_UMAX_X2",
+        "S_BUFFER_ATOMIC_AND_X2",  "S_BUFFER_ATOMIC_OR_X2",
+        "S_BUFFER_ATOMIC_XOR_X2",  "S_BUFFER_ATOMIC_INC_X2",
+        "S_BUFFER_ATOMIC_DEC_X2",
     };
 
     if (!decode_scalar_atomic_family(kScalarAtomic32Opcodes, 0u, 4u, 1u, 0u,
@@ -6316,6 +6320,32 @@ int main() {
                                      "scalar buffer atomic decode") ||
         !decode_scalar_atomic_family(kScalarBufferAtomic64Opcodes, 8u, 32u, 2u,
                                      0x80u, "scalar buffer atomic x2 decode")) {
+      return 1;
+    }
+
+    const std::array<std::string_view, 1> kScalarCmpSwap32Opcodes = {
+        "S_ATOMIC_CMPSWAP",
+    };
+    const std::array<std::string_view, 1> kScalarCmpSwap64Opcodes = {
+        "S_ATOMIC_CMPSWAP_X2",
+    };
+    const std::array<std::string_view, 1> kScalarBufferCmpSwap32Opcodes = {
+        "S_BUFFER_ATOMIC_CMPSWAP",
+    };
+    const std::array<std::string_view, 1> kScalarBufferCmpSwap64Opcodes = {
+        "S_BUFFER_ATOMIC_CMPSWAP_X2",
+    };
+
+    if (!decode_scalar_atomic_family(kScalarCmpSwap32Opcodes, 0u, 96u, 2u, 0x100u,
+                                     "scalar atomic cmpswap decode") ||
+        !decode_scalar_atomic_family(kScalarCmpSwap64Opcodes, 0u, 112u, 4u, 0x180u,
+                                     "scalar atomic cmpswap x2 decode") ||
+        !decode_scalar_atomic_family(kScalarBufferCmpSwap32Opcodes, 8u, 96u, 2u,
+                                     0x100u,
+                                     "scalar buffer atomic cmpswap decode") ||
+        !decode_scalar_atomic_family(kScalarBufferCmpSwap64Opcodes, 8u, 112u, 4u,
+                                     0x180u,
+                                     "scalar buffer atomic cmpswap x2 decode")) {
       return 1;
     }
   }
