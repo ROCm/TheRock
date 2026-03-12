@@ -6151,6 +6151,123 @@ int main() {
     }
   }
 
+  {
+    const auto dcache_inv_opcode =
+        FindDefaultEncodingOpcode("S_DCACHE_INV", "ENC_SMEM");
+    const auto dcache_wb_opcode =
+        FindDefaultEncodingOpcode("S_DCACHE_WB", "ENC_SMEM");
+    const auto dcache_inv_vol_opcode =
+        FindDefaultEncodingOpcode("S_DCACHE_INV_VOL", "ENC_SMEM");
+    const auto dcache_wb_vol_opcode =
+        FindDefaultEncodingOpcode("S_DCACHE_WB_VOL", "ENC_SMEM");
+    const auto dcache_discard_opcode =
+        FindDefaultEncodingOpcode("S_DCACHE_DISCARD", "ENC_SMEM");
+    const auto dcache_discard_x2_opcode =
+        FindDefaultEncodingOpcode("S_DCACHE_DISCARD_X2", "ENC_SMEM");
+    const auto memtime_opcode =
+        FindDefaultEncodingOpcode("S_MEMTIME", "ENC_SMEM");
+    const auto memrealtime_opcode =
+        FindDefaultEncodingOpcode("S_MEMREALTIME", "ENC_SMEM");
+    if (!Expect(dcache_inv_opcode.has_value(),
+                "expected s_dcache_inv opcode lookup") ||
+        !Expect(dcache_wb_opcode.has_value(),
+                "expected s_dcache_wb opcode lookup") ||
+        !Expect(dcache_inv_vol_opcode.has_value(),
+                "expected s_dcache_inv_vol opcode lookup") ||
+        !Expect(dcache_wb_vol_opcode.has_value(),
+                "expected s_dcache_wb_vol opcode lookup") ||
+        !Expect(dcache_discard_opcode.has_value(),
+                "expected s_dcache_discard opcode lookup") ||
+        !Expect(dcache_discard_x2_opcode.has_value(),
+                "expected s_dcache_discard_x2 opcode lookup") ||
+        !Expect(memtime_opcode.has_value(),
+                "expected s_memtime opcode lookup") ||
+        !Expect(memrealtime_opcode.has_value(),
+                "expected s_memrealtime opcode lookup")) {
+      return 1;
+    }
+
+    const auto dcache_inv_word = MakeSmem(*dcache_inv_opcode, 0, 0, true, 0);
+    const auto dcache_wb_word = MakeSmem(*dcache_wb_opcode, 0, 0, true, 0);
+    const auto dcache_inv_vol_word =
+        MakeSmem(*dcache_inv_vol_opcode, 0, 0, true, 0);
+    const auto dcache_wb_vol_word =
+        MakeSmem(*dcache_wb_vol_opcode, 0, 0, true, 0);
+    const auto dcache_discard_word =
+        MakeSmem(*dcache_discard_opcode, 0, 0, true, 0x40);
+    const auto dcache_discard_x2_word =
+        MakeSmem(*dcache_discard_x2_opcode, 0, 0, false, 2, true);
+    const auto memtime_word = MakeSmem(*memtime_opcode, 4, 0, true, 0);
+    const auto memrealtime_word =
+        MakeSmem(*memrealtime_opcode, 6, 0, true, 0);
+    const std::vector<std::uint32_t> scalar_maintenance_program = {
+        dcache_inv_word[0],        dcache_inv_word[1],
+        dcache_wb_word[0],         dcache_wb_word[1],
+        dcache_inv_vol_word[0],    dcache_inv_vol_word[1],
+        dcache_wb_vol_word[0],     dcache_wb_vol_word[1],
+        dcache_discard_word[0],    dcache_discard_word[1],
+        dcache_discard_x2_word[0], dcache_discard_x2_word[1],
+        memtime_word[0],           memtime_word[1],
+        memrealtime_word[0],       memrealtime_word[1],
+        MakeSopp(1),
+    };
+    decoded_program.clear();
+    if (!Expect(decoder.DecodeProgram(scalar_maintenance_program,
+                                      &decoded_program, &error_message),
+                error_message.c_str()) ||
+        !Expect(decoded_program.size() == 9,
+                "expected decoded scalar maintenance program size") ||
+        !Expect(decoded_program[0].opcode == "S_DCACHE_INV",
+                "expected s_dcache_inv decode") ||
+        !Expect(decoded_program[1].opcode == "S_DCACHE_WB",
+                "expected s_dcache_wb decode") ||
+        !Expect(decoded_program[2].opcode == "S_DCACHE_INV_VOL",
+                "expected s_dcache_inv_vol decode") ||
+        !Expect(decoded_program[3].opcode == "S_DCACHE_WB_VOL",
+                "expected s_dcache_wb_vol decode") ||
+        !Expect(decoded_program[4].opcode == "S_DCACHE_DISCARD",
+                "expected s_dcache_discard decode") ||
+        !Expect(decoded_program[5].opcode == "S_DCACHE_DISCARD_X2",
+                "expected s_dcache_discard_x2 decode") ||
+        !Expect(decoded_program[6].opcode == "S_MEMTIME",
+                "expected s_memtime decode") ||
+        !Expect(decoded_program[7].opcode == "S_MEMREALTIME",
+                "expected s_memrealtime decode") ||
+        !Expect(decoded_program[4].operand_count == 2,
+                "expected s_dcache_discard operand count") ||
+        !Expect(decoded_program[5].operands[1].kind == OperandKind::kSgpr &&
+                    decoded_program[5].operands[1].index == 2,
+                "expected s_dcache_discard_x2 soffset decode") ||
+        !Expect(decoded_program[6].operands[0].kind == OperandKind::kSgpr &&
+                    decoded_program[6].operands[0].index == 4,
+                "expected s_memtime destination decode")) {
+      return 1;
+    }
+
+    WaveExecutionState scalar_maintenance_state;
+    scalar_maintenance_state.sgprs[0] = 0x200u;
+    scalar_maintenance_state.sgprs[1] = 0u;
+    scalar_maintenance_state.sgprs[2] = 0x80u;
+    if (!Expect(interpreter.ExecuteProgram(decoded_program,
+                                           &scalar_maintenance_state,
+                                           &error_message),
+                error_message.c_str()) ||
+        !Expect(scalar_maintenance_state.halted,
+                "expected scalar maintenance program to halt") ||
+        !Expect(scalar_maintenance_state.sgprs[0] == 0x200u,
+                "expected scalar maintenance to preserve base") ||
+        !Expect(scalar_maintenance_state.sgprs[2] == 0x80u,
+                "expected scalar maintenance to preserve offset") ||
+        !Expect(scalar_maintenance_state.sgprs[4] != 0u ||
+                    scalar_maintenance_state.sgprs[5] != 0u,
+                "expected s_memtime to write a timestamp") ||
+        !Expect(scalar_maintenance_state.sgprs[6] != 0u ||
+                    scalar_maintenance_state.sgprs[7] != 0u,
+                "expected s_memrealtime to write a timestamp")) {
+      return 1;
+    }
+  }
+
   const auto ds_nop_opcode = FindDefaultEncodingOpcode("DS_NOP", "ENC_DS");
   const auto ds_write_opcode =
       FindDefaultEncodingOpcode("DS_WRITE_B32", "ENC_DS");

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -1010,6 +1011,28 @@ bool IsScalarMemoryLoadOpcode(std::string_view opcode) {
          opcode == "S_BUFFER_LOAD_DWORDX16" ||
          opcode == "S_LOAD_DWORDX4" || opcode == "S_LOAD_DWORDX8" ||
          opcode == "S_LOAD_DWORDX16";
+}
+
+bool IsScalarMemoryMaintenanceOpcode(std::string_view opcode) {
+  return opcode == "S_DCACHE_INV" || opcode == "S_DCACHE_WB" ||
+         opcode == "S_DCACHE_INV_VOL" || opcode == "S_DCACHE_WB_VOL" ||
+         opcode == "S_DCACHE_DISCARD" || opcode == "S_DCACHE_DISCARD_X2";
+}
+
+bool IsScalarMemoryTimeOpcode(std::string_view opcode) {
+  return opcode == "S_MEMTIME" || opcode == "S_MEMREALTIME";
+}
+
+std::uint64_t ReadScalarMemoryTimeValue(std::string_view opcode) {
+  if (opcode == "S_MEMREALTIME") {
+    const auto now = std::chrono::system_clock::now().time_since_epoch();
+    return static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(now).count());
+  }
+
+  const auto now = std::chrono::steady_clock::now().time_since_epoch();
+  return static_cast<std::uint64_t>(
+      std::chrono::duration_cast<std::chrono::nanoseconds>(now).count());
 }
 
 std::uint8_t GetScalarMemoryRegisterDwordCount(std::string_view opcode) {
@@ -7629,6 +7652,8 @@ bool Gfx950Interpreter::Supports(std::string_view opcode) const {
          IsVectorUnaryOpcode(opcode) ||
          IsScalarBinaryOpcode(opcode) ||
          IsScalarCompareOpcode(opcode) || IsScalarMemoryOpcode(opcode) ||
+         IsScalarMemoryMaintenanceOpcode(opcode) ||
+         IsScalarMemoryTimeOpcode(opcode) ||
          IsVectorBinaryOpcode(opcode) || IsVectorTernaryOpcode(opcode) ||
          IsVectorCompareOpcode(opcode) ||
          IsVectorMemoryOpcode(opcode) ||
@@ -7873,6 +7898,72 @@ bool Gfx950Interpreter::ExecuteInstruction(const DecodedInstruction& instruction
 
   if (instruction.opcode == "DS_NOP") {
     return ValidateOperandCount(instruction, 0, error_message);
+  }
+
+  if (IsScalarMemoryMaintenanceOpcode(instruction.opcode)) {
+    if (instruction.opcode == "S_DCACHE_DISCARD" ||
+        instruction.opcode == "S_DCACHE_DISCARD_X2") {
+      if (!ValidateOperandCount(instruction, 2, error_message)) {
+        return false;
+      }
+      if (instruction.operands[0].kind != OperandKind::kSgpr) {
+        if (error_message != nullptr) {
+          *error_message = "scalar cache discard base must be an SGPR pair";
+        }
+        return false;
+      }
+      if (instruction.operands[0].index + 1 >= state->sgprs.size()) {
+        if (error_message != nullptr) {
+          *error_message = "scalar cache discard base register out of range";
+        }
+        return false;
+      }
+      if (instruction.operands[1].kind != OperandKind::kImm32 &&
+          instruction.operands[1].kind != OperandKind::kSgpr) {
+        if (error_message != nullptr) {
+          *error_message =
+              "scalar cache discard offset must be immediate or SGPR";
+        }
+        return false;
+      }
+      if (instruction.operands[1].kind == OperandKind::kSgpr &&
+          instruction.operands[1].index >= state->sgprs.size()) {
+        if (error_message != nullptr) {
+          *error_message = "scalar cache discard offset register out of range";
+        }
+        return false;
+      }
+      if (error_message != nullptr) {
+        error_message->clear();
+      }
+      return true;
+    }
+    return ValidateOperandCount(instruction, 0, error_message);
+  }
+
+  if (IsScalarMemoryTimeOpcode(instruction.opcode)) {
+    if (!ValidateOperandCount(instruction, 1, error_message)) {
+      return false;
+    }
+    if (instruction.operands[0].kind != OperandKind::kSgpr) {
+      if (error_message != nullptr) {
+        *error_message = "scalar memory time destination must be an SGPR pair";
+      }
+      return false;
+    }
+    if (instruction.operands[0].index + 1 >= state->sgprs.size()) {
+      if (error_message != nullptr) {
+        *error_message = "scalar memory time destination out of range";
+      }
+      return false;
+    }
+    const std::uint64_t value = ReadScalarMemoryTimeValue(instruction.opcode);
+    SplitU64(value, &state->sgprs[instruction.operands[0].index],
+             &state->sgprs[instruction.operands[0].index + 1]);
+    if (error_message != nullptr) {
+      error_message->clear();
+    }
+    return true;
   }
 
   if (IsBarrierOpcode(instruction.opcode)) {

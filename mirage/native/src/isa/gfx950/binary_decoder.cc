@@ -656,6 +656,47 @@ bool Gfx950BinaryDecoder::DecodeSmem(std::span<const std::uint32_t> words,
     return false;
   }
 
+  if (std::string_view(instruction_name) == "S_DCACHE_INV" ||
+      std::string_view(instruction_name) == "S_DCACHE_WB" ||
+      std::string_view(instruction_name) == "S_DCACHE_INV_VOL" ||
+      std::string_view(instruction_name) == "S_DCACHE_WB_VOL") {
+    *instruction = DecodedInstruction::Nullary(instruction_name);
+    *words_consumed = 2;
+    return true;
+  }
+
+  if (std::string_view(instruction_name) == "S_MEMTIME" ||
+      std::string_view(instruction_name) == "S_MEMREALTIME") {
+    InstructionOperand sdata;
+    if (!DecodeScalarDestination(
+            static_cast<std::uint32_t>(ExtractBits(instruction_word, 6, 7)),
+            &sdata, error_message)) {
+      return false;
+    }
+    *instruction = DecodedInstruction::OneOperand(instruction_name, sdata);
+    *words_consumed = 2;
+    return true;
+  }
+
+  if (std::string_view(instruction_name) == "S_DCACHE_DISCARD" ||
+      std::string_view(instruction_name) == "S_DCACHE_DISCARD_X2") {
+    InstructionOperand sbase;
+    if (!DecodeSmemBase(
+            static_cast<std::uint32_t>(ExtractBits(instruction_word, 0, 6)),
+            &sbase, error_message)) {
+      return false;
+    }
+
+    InstructionOperand offset;
+    if (!DecodeSmemOffset(instruction_word, &offset, error_message)) {
+      return false;
+    }
+
+    *instruction = DecodedInstruction::TwoOperand(instruction_name, sbase, offset);
+    *words_consumed = 2;
+    return true;
+  }
+
   if (std::string_view(instruction_name) != "S_LOAD_DWORD" &&
       std::string_view(instruction_name) != "S_LOAD_DWORDX2" &&
       std::string_view(instruction_name) != "S_BUFFER_LOAD_DWORD" &&

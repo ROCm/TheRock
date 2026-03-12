@@ -2588,6 +2588,18 @@ int main() {
     }
   }
 
+  const std::array<std::string_view, 8> kScalarMaintenanceOpcodes = {
+      "S_DCACHE_INV",      "S_DCACHE_WB",      "S_DCACHE_INV_VOL",
+      "S_DCACHE_WB_VOL",   "S_DCACHE_DISCARD", "S_DCACHE_DISCARD_X2",
+      "S_MEMTIME",         "S_MEMREALTIME",
+  };
+  for (std::string_view opcode : kScalarMaintenanceOpcodes) {
+    const std::string message = "expected " + std::string(opcode) + " support";
+    if (!Expect(interpreter.Supports(opcode), message.c_str())) {
+      return 1;
+    }
+  }
+
   const std::array<std::string_view, 32> kGlobalAtomicOpcodes = {
       "GLOBAL_ATOMIC_SWAP",
       "GLOBAL_ATOMIC_CMPSWAP",
@@ -10516,6 +10528,46 @@ int main() {
       !validate_scalar_buffer_state(compiled_scalar_buffer_memory_state,
                                     compiled_scalar_buffer_memory,
                                     "compiled")) {
+    return 1;
+  }
+  }
+
+  {
+  const std::vector<DecodedInstruction> scalar_maintenance_program = {
+      DecodedInstruction::Nullary("S_DCACHE_INV"),
+      DecodedInstruction::Nullary("S_DCACHE_WB"),
+      DecodedInstruction::Nullary("S_DCACHE_INV_VOL"),
+      DecodedInstruction::Nullary("S_DCACHE_WB_VOL"),
+      DecodedInstruction::TwoOperand("S_DCACHE_DISCARD",
+                                     InstructionOperand::Sgpr(0),
+                                     InstructionOperand::Imm32(0x40)),
+      DecodedInstruction::TwoOperand("S_DCACHE_DISCARD_X2",
+                                     InstructionOperand::Sgpr(0),
+                                     InstructionOperand::Sgpr(2)),
+      DecodedInstruction::OneOperand("S_MEMTIME", InstructionOperand::Sgpr(4)),
+      DecodedInstruction::OneOperand("S_MEMREALTIME", InstructionOperand::Sgpr(6)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  WaveExecutionState scalar_maintenance_state{};
+  scalar_maintenance_state.sgprs[0] = 0x200u;
+  scalar_maintenance_state.sgprs[1] = 0u;
+  scalar_maintenance_state.sgprs[2] = 0x80u;
+  if (!Expect(interpreter.ExecuteProgram(scalar_maintenance_program,
+                                         &scalar_maintenance_state,
+                                         &error_message),
+              error_message.c_str()) ||
+      !Expect(scalar_maintenance_state.halted,
+              "expected scalar maintenance program to halt") ||
+      !Expect(scalar_maintenance_state.sgprs[0] == 0x200u,
+              "expected scalar maintenance to preserve base") ||
+      !Expect(scalar_maintenance_state.sgprs[2] == 0x80u,
+              "expected scalar maintenance to preserve offset") ||
+      !Expect(scalar_maintenance_state.sgprs[4] != 0u ||
+                  scalar_maintenance_state.sgprs[5] != 0u,
+              "expected s_memtime to write a timestamp") ||
+      !Expect(scalar_maintenance_state.sgprs[6] != 0u ||
+                  scalar_maintenance_state.sgprs[7] != 0u,
+              "expected s_memrealtime to write a timestamp")) {
     return 1;
   }
   }
