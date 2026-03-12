@@ -158,8 +158,7 @@ jobs:
           ${{ fromJSON(inputs.component).test_script }}
 
       - name: Print test reproduction command
-        # TODO: Add windows reproduction steps
-        if: ${{ failure() && steps.test.outcome == 'failure' && inputs.platform == 'linux' }}
+        if: ${{ failure() && steps.test.outcome == 'failure' }}
         run: |
           python ./build_tools/github_actions/reproduce_test_failure.py \
             --run-id "${{ env.ARTIFACT_RUN_ID }}" \
@@ -170,6 +169,7 @@ jobs:
             --total-shards "${{ fromJSON(inputs.component).total_shards }}" \
             --test-type "${{ fromJSON(inputs.component).test_type }}" \
             --fetch-artifact-args="${{ fromJSON(inputs.component).fetch_artifact_args }}" \
+            --platform "${{ inputs.platform }}" \
             --print-cmd
 
       # GitHub's 'Complete job' step is unaware of launched executables

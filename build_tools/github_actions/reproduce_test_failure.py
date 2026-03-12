@@ -6,9 +6,13 @@
 Reproduces a test failure from CI.
 
 Usage:
-    # Full reproduction (runs test)
+    # Linux (uses Docker)
     python reproduce_test_failure.py --run-id 12345678 --repository ROCm/TheRock \
-        --amdgpu-family gfx942 --test-script "python test.py"
+        --amdgpu-family gfx942 --test-script "python test.py" --platform linux
+
+    # Windows (bare metal, requires admin PowerShell)
+    python reproduce_test_failure.py --run-id 12345678 --repository ROCm/TheRock \
+        --amdgpu-family gfx1100 --test-script "python test.py" --platform windows
 
     # Setup only (drops into shell)
     python reproduce_test_failure.py --run-id 12345678 --repository ROCm/TheRock \
@@ -16,9 +20,12 @@ Usage:
 """
 
 import argparse
+import platform
 import shutil
 import subprocess
 import sys
+import tempfile
+from pathlib import Path
 
 DEFAULT_CONTAINER_IMAGE = "ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest"
 
@@ -37,7 +44,8 @@ def build_reproduction_command(args: argparse.Namespace) -> str:
         f"--run-id {args.run_id} "
         f"--repository {args.repository} "
         f"--amdgpu-family {args.amdgpu_family} "
-        f'--test-script "{args.test_script}"'
+        f'--test-script "{args.test_script}" '
+        f"--platform {args.platform}"
     )
     if args.shard_index != "1":
         cmd += f" --shard-index {args.shard_index}"
@@ -50,7 +58,8 @@ def build_reproduction_command(args: argparse.Namespace) -> str:
     return cmd
 
 
-def run_reproduction(args: argparse.Namespace) -> int:
+def run_linux(args: argparse.Namespace) -> int:
+    """Run reproduction in Docker for Linux."""
     if not check_docker():
         print("ERROR: Docker is not available. Install Docker and try again.")
         return 1
@@ -88,13 +97,12 @@ def run_reproduction(args: argparse.Namespace) -> int:
     lines = ["set -e"]
     for i, (desc, cmd) in enumerate(steps, 1):
         lines.append(f"echo '[{i}/{total}] {desc}'")
-        # Disable set -e for the last step so we can drop into shell after
         if i == total:
             lines.append("set +e")
         lines.append(cmd)
     lines.append("exec /bin/bash")
 
-    cmd = [
+    docker_cmd = [
         "docker", "run", "--rm", "-it",
         "--ipc", "host",
         "--group-add", "video",
@@ -105,9 +113,94 @@ def run_reproduction(args: argparse.Namespace) -> int:
     ]
 
     try:
-        return subprocess.run(cmd).returncode
+        return subprocess.run(docker_cmd).returncode
     except KeyboardInterrupt:
         return 130
+
+
+def run_windows(args: argparse.Namespace) -> int:
+    """Run reproduction on bare metal for Windows."""
+    fetch_cmd = (
+        f"$env:GITHUB_REPOSITORY='{args.repository}'; "
+        f"python build_tools/install_rocm_from_artifacts.py "
+        f"--run-id {args.run_id} "
+        f"--amdgpu-family {args.amdgpu_family}"
+    )
+    if args.fetch_artifact_args:
+        fetch_cmd += f" {args.fetch_artifact_args}"
+
+    steps = [
+        ("Installing chocolatey", (
+            "Set-ExecutionPolicy Bypass -Scope Process -Force; "
+            "[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; "
+            "iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))"
+        )),
+        ("Installing dependencies", "choco install -y git python cmake ninja ccache"),
+        ("Refreshing environment", "$env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path','User')"),
+        ("Installing uv", "irm https://astral.sh/uv/install.ps1 | iex"),
+        ("Cloning TheRock", "git clone https://github.com/ROCm/TheRock.git; Set-Location TheRock"),
+        ("Creating virtual environment", "uv venv .venv; .venv\\Scripts\\Activate.ps1"),
+        ("Installing Python dependencies", "uv pip install -r requirements-test.txt"),
+        ("Downloading artifacts", fetch_cmd),
+        ("Setting environment variables", "; ".join([
+            "$env:THEROCK_BIN_DIR='./therock-build/bin'",
+            "$env:OUTPUT_ARTIFACTS_DIR='./therock-build'",
+            f"$env:SHARD_INDEX='{args.shard_index}'",
+            f"$env:TOTAL_SHARDS='{args.total_shards}'",
+            f"$env:TEST_TYPE='{args.test_type}'",
+        ])),
+    ]
+
+    if args.setup_only:
+        steps.append(("Setup complete", f"Write-Host 'Run: {args.test_script}'"))
+    else:
+        steps.append(("Running test", args.test_script))
+
+    total = len(steps)
+    lines = ["$ErrorActionPreference = 'Stop'"]
+    for i, (desc, cmd) in enumerate(steps, 1):
+        lines.append(f"Write-Host '[{i}/{total}] {desc}'")
+        if i == total:
+            lines.append("$ErrorActionPreference = 'Continue'")
+        lines.append(cmd)
+
+    script_content = "\n".join(lines)
+
+    # Write to temp file and execute
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.ps1', delete=False) as f:
+        f.write(script_content)
+        script_path = f.name
+
+    try:
+        print("=" * 60)
+        print("WINDOWS REPRODUCTION (bare metal)")
+        print("=" * 60)
+        print()
+        print(f"Run ID: {args.run_id}")
+        print(f"Repository: {args.repository}")
+        print(f"AMDGPU Family: {args.amdgpu_family}")
+        print(f"Test Script: {args.test_script}")
+        print()
+
+        if platform.system() != "Windows":
+            print("NOTE: Not running on Windows. Printing script instead:")
+            print("-" * 60)
+            print(script_content)
+            print("-" * 60)
+            print(f"\nScript saved to: {script_path}")
+            print("Copy this script to your Windows machine and run:")
+            print(f"  powershell -ExecutionPolicy Bypass -File {Path(script_path).name}")
+            return 0
+
+        result = subprocess.run(
+            ["powershell", "-ExecutionPolicy", "Bypass", "-File", script_path],
+        )
+        return result.returncode
+    except KeyboardInterrupt:
+        return 130
+    finally:
+        if platform.system() == "Windows":
+            Path(script_path).unlink(missing_ok=True)
 
 
 def main() -> int:
@@ -116,10 +209,11 @@ def main() -> int:
     parser.add_argument("--repository", required=True, help="GitHub repository")
     parser.add_argument("--amdgpu-family", required=True, help="AMDGPU family")
     parser.add_argument("--test-script", required=True, help="Test script to run")
+    parser.add_argument("--platform", choices=["linux", "windows"], default="linux", help="Target platform")
     parser.add_argument("--shard-index", default="1", help="Shard index")
     parser.add_argument("--total-shards", default="1", help="Total shards")
     parser.add_argument("--test-type", default="full", help="Test type")
-    parser.add_argument("--container-image", default=DEFAULT_CONTAINER_IMAGE)
+    parser.add_argument("--container-image", default=DEFAULT_CONTAINER_IMAGE, help="Docker image (Linux only)")
     parser.add_argument("--fetch-artifact-args", default="", help="Extra artifact args")
     parser.add_argument("--setup-only", action="store_true", help="Setup only, don't run test")
     parser.add_argument("--print-cmd", action="store_true", help="Print reproduction command")
@@ -131,7 +225,10 @@ def main() -> int:
         print(f"  {build_reproduction_command(args)}")
         return 0
 
-    return run_reproduction(args)
+    if args.platform == "windows":
+        return run_windows(args)
+    else:
+        return run_linux(args)
 
 
 if __name__ == "__main__":
