@@ -11324,13 +11324,30 @@ int main() {
       DecodedInstruction::Nullary("BUFFER_INV"),
       DecodedInstruction::Nullary("S_ENDPGM"),
   };
-  WaveExecutionState buffer_maintenance_state{};
+  WaveExecutionState decoded_buffer_maintenance_state{};
   if (!Expect(interpreter.ExecuteProgram(buffer_maintenance_program,
-                                         &buffer_maintenance_state,
+                                         &decoded_buffer_maintenance_state,
                                          &error_message),
               error_message.c_str()) ||
-      !Expect(buffer_maintenance_state.halted,
+      !Expect(decoded_buffer_maintenance_state.halted,
               "expected buffer maintenance program to halt")) {
+    return 1;
+  }
+
+  std::vector<CompiledInstruction> compiled_buffer_maintenance_program;
+  if (!Expect(interpreter.CompileProgram(buffer_maintenance_program,
+                                         &compiled_buffer_maintenance_program,
+                                         &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+  WaveExecutionState compiled_buffer_maintenance_state{};
+  if (!Expect(interpreter.ExecuteProgram(compiled_buffer_maintenance_program,
+                                         &compiled_buffer_maintenance_state,
+                                         &error_message),
+              error_message.c_str()) ||
+      !Expect(compiled_buffer_maintenance_state.halted,
+              "expected compiled buffer maintenance program to halt")) {
     return 1;
   }
   }
@@ -11819,6 +11836,148 @@ int main() {
               "expected buffer short d16 hi store read") ||
       !Expect(stored_short == 0xabcdu,
               "expected buffer short d16 hi store lane 3 result")) {
+    return 1;
+  }
+  }
+
+  {
+  LinearExecutionMemory compiled_buffer_memory(0x400, 0);
+  if (!Expect(compiled_buffer_memory.WriteU32(0x100u, 0x11111111u),
+              "expected compiled buffer dword seed write") ||
+      !Expect(compiled_buffer_memory.WriteU32(0x150u, 0x22220001u),
+              "expected compiled buffer dwordx3 seed write") ||
+      !Expect(compiled_buffer_memory.WriteU32(0x154u, 0x22220002u),
+              "expected compiled buffer dwordx3 seed write") ||
+      !Expect(compiled_buffer_memory.WriteU32(0x158u, 0x22220003u),
+              "expected compiled buffer dwordx3 seed write") ||
+      !Expect(compiled_buffer_memory.WriteU32(0x160u, 0x22220011u),
+              "expected compiled buffer dwordx3 seed write") ||
+      !Expect(compiled_buffer_memory.WriteU32(0x164u, 0x22220012u),
+              "expected compiled buffer dwordx3 seed write") ||
+      !Expect(compiled_buffer_memory.WriteU32(0x168u, 0x22220013u),
+              "expected compiled buffer dwordx3 seed write") ||
+      !Expect(compiled_buffer_memory.WriteU32(0x170u, 0x22220031u),
+              "expected compiled buffer dwordx3 seed write") ||
+      !Expect(compiled_buffer_memory.WriteU32(0x174u, 0x22220032u),
+              "expected compiled buffer dwordx3 seed write") ||
+      !Expect(compiled_buffer_memory.WriteU32(0x178u, 0x22220033u),
+              "expected compiled buffer dwordx3 seed write") ||
+      !Expect(WriteU8(&compiled_buffer_memory, 0x1b0u, 0xfeu),
+              "expected compiled buffer sbyte d16 hi seed write") ||
+      !Expect(WriteU8(&compiled_buffer_memory, 0x1c0u, 0x7fu),
+              "expected compiled buffer sbyte d16 hi seed write") ||
+      !Expect(WriteU8(&compiled_buffer_memory, 0x1d0u, 0x80u),
+              "expected compiled buffer sbyte d16 hi seed write")) {
+    return 1;
+  }
+
+  WaveExecutionState compiled_buffer_state{};
+  compiled_buffer_state.exec_mask = 0b1011ULL;
+  compiled_buffer_state.sgprs[8] = 0x100u;
+  compiled_buffer_state.sgprs[9] = 0u;
+  compiled_buffer_state.sgprs[10] = 0x300u;
+  compiled_buffer_state.sgprs[11] = 0u;
+  compiled_buffer_state.vgprs[2][0] = 0x10u;
+  compiled_buffer_state.vgprs[2][1] = 0x20u;
+  compiled_buffer_state.vgprs[2][3] = 0x30u;
+  compiled_buffer_state.vgprs[40][0] = 0x40000001u;
+  compiled_buffer_state.vgprs[41][0] = 0x41000001u;
+  compiled_buffer_state.vgprs[42][0] = 0x42000001u;
+  compiled_buffer_state.vgprs[43][0] = 0x43000001u;
+  compiled_buffer_state.vgprs[40][1] = 0x40000002u;
+  compiled_buffer_state.vgprs[41][1] = 0x41000002u;
+  compiled_buffer_state.vgprs[42][1] = 0x42000002u;
+  compiled_buffer_state.vgprs[43][1] = 0x43000002u;
+  compiled_buffer_state.vgprs[40][3] = 0x40000004u;
+  compiled_buffer_state.vgprs[41][3] = 0x41000004u;
+  compiled_buffer_state.vgprs[42][3] = 0x42000004u;
+  compiled_buffer_state.vgprs[43][3] = 0x43000004u;
+  compiled_buffer_state.vgprs[50][0] = 0x24680000u;
+  compiled_buffer_state.vgprs[50][1] = 0x13570000u;
+  compiled_buffer_state.vgprs[50][3] = 0xabcd0000u;
+
+  const std::vector<DecodedInstruction> compiled_buffer_program = {
+      DecodedInstruction::FiveOperand("BUFFER_LOAD_DWORD",
+                                      InstructionOperand::Vgpr(30),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Sgpr(8),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FiveOperand("BUFFER_LOAD_DWORDX3",
+                                      InstructionOperand::Vgpr(32),
+                                      InstructionOperand::Vgpr(2),
+                                      InstructionOperand::Sgpr(8),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0x40)),
+      DecodedInstruction::FiveOperand("BUFFER_LOAD_SBYTE_D16_HI",
+                                      InstructionOperand::Vgpr(35),
+                                      InstructionOperand::Vgpr(2),
+                                      InstructionOperand::Sgpr(8),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0xa0)),
+      DecodedInstruction::FiveOperand("BUFFER_STORE_DWORDX4",
+                                      InstructionOperand::Vgpr(40),
+                                      InstructionOperand::Vgpr(2),
+                                      InstructionOperand::Sgpr(8),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0xc0)),
+      DecodedInstruction::FiveOperand("BUFFER_STORE_SHORT_D16_HI",
+                                      InstructionOperand::Vgpr(50),
+                                      InstructionOperand::Vgpr(2),
+                                      InstructionOperand::Sgpr(8),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0x180)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  std::vector<CompiledInstruction> compiled_buffer_program_binary;
+  if (!Expect(interpreter.CompileProgram(compiled_buffer_program,
+                                         &compiled_buffer_program_binary,
+                                         &error_message),
+              error_message.c_str()) ||
+      !Expect(interpreter.ExecuteProgram(compiled_buffer_program_binary,
+                                         &compiled_buffer_state,
+                                         &compiled_buffer_memory,
+                                         &error_message),
+              error_message.c_str()) ||
+      !Expect(compiled_buffer_state.halted,
+              "expected compiled buffer program to halt") ||
+      !Expect(compiled_buffer_state.vgprs[30][0] == 0x11111111u &&
+                  compiled_buffer_state.vgprs[30][1] == 0x11111111u &&
+                  compiled_buffer_state.vgprs[30][3] == 0x11111111u,
+              "expected compiled buffer dword load result") ||
+      !Expect(compiled_buffer_state.vgprs[32][1] == 0x22220011u &&
+                  compiled_buffer_state.vgprs[33][1] == 0x22220012u &&
+                  compiled_buffer_state.vgprs[34][1] == 0x22220013u,
+              "expected compiled buffer dwordx3 load result") ||
+      !Expect(compiled_buffer_state.vgprs[35][0] == 0xfffe0000u &&
+                  compiled_buffer_state.vgprs[35][1] == 0x007f0000u &&
+                  compiled_buffer_state.vgprs[35][3] == 0xff800000u,
+              "expected compiled buffer sbyte d16 hi load result")) {
+    return 1;
+  }
+
+  std::uint32_t compiled_buffer_value = 0;
+  std::uint16_t compiled_buffer_short = 0;
+  if (!Expect(compiled_buffer_memory.ReadU32(0x1d0u, &compiled_buffer_value),
+              "expected compiled buffer storex4 read") ||
+      !Expect(compiled_buffer_value == 0x40000001u,
+              "expected compiled buffer storex4 lane 0 result") ||
+      !Expect(compiled_buffer_memory.ReadU32(0x1fcu, &compiled_buffer_value),
+              "expected compiled buffer storex4 read") ||
+      !Expect(compiled_buffer_value == 0x43000004u,
+              "expected compiled buffer storex4 lane 3 result") ||
+      !Expect(ReadU16(compiled_buffer_memory, 0x290u, &compiled_buffer_short),
+              "expected compiled buffer short d16 hi store read") ||
+      !Expect(compiled_buffer_short == 0x2468u,
+              "expected compiled buffer short d16 hi lane 0 result") ||
+      !Expect(ReadU16(compiled_buffer_memory, 0x2a0u, &compiled_buffer_short),
+              "expected compiled buffer short d16 hi store read") ||
+      !Expect(compiled_buffer_short == 0x1357u,
+              "expected compiled buffer short d16 hi lane 1 result") ||
+      !Expect(ReadU16(compiled_buffer_memory, 0x2b0u, &compiled_buffer_short),
+              "expected compiled buffer short d16 hi store read") ||
+      !Expect(compiled_buffer_short == 0xabcdu,
+              "expected compiled buffer short d16 hi lane 3 result")) {
     return 1;
   }
   }
