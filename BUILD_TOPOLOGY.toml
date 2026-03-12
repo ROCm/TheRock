@@ -677,7 +677,7 @@ disable_platforms = ["windows"]
 
 [artifacts.rocshmem]
 artifact_group = "comm-libs"
-type = "target-specific"
+type = "target-neutral"
 artifact_deps = ["core-runtime", "core-hip", "sysdeps"]
 disable_platforms = ["windows"]
 
