@@ -2446,6 +2446,24 @@ int main() {
       if (!Expect(HasDescriptorRole(decoded, StubOperandRole::kTensorDescriptor) &&
                       HasDescriptorRole(decoded, StubOperandRole::kTensorCoordinate) &&
                       HasDescriptorRole(decoded, StubOperandRole::kLdsDestination) &&
+                      ContainsDescriptor(decoded,
+                                         StubOperandRole::kTensorDescriptor,
+                                         StubOperandSlotKind::kTensorDescriptorSource,
+                                         StubOperandValueClass::kTensorDescriptor,
+                                         StubOperandAccess::kRead, 1,
+                                         StubFragmentKind::kTensorDescriptor, 0) &&
+                      ContainsDescriptor(decoded,
+                                         StubOperandRole::kTensorCoordinate,
+                                         StubOperandSlotKind::kTensorCoordinateSource,
+                                         StubOperandValueClass::kTensorCoordinate,
+                                         StubOperandAccess::kRead, 1,
+                                         StubFragmentKind::kTensorCoordinate, 0) &&
+                      ContainsDescriptor(decoded,
+                                         StubOperandRole::kLdsDestination,
+                                         StubOperandSlotKind::kLdsDestination,
+                                         StubOperandValueClass::kLdsAddress,
+                                         StubOperandAccess::kWrite, 1,
+                                         StubFragmentKind::kAddress, 32) &&
                       CountSlotsOfKind(decoded, StubOperandSlotKind::kLdsDestination) == 1,
                   "expected routed tensor-load descriptor roles")) {
         return 1;
@@ -2454,6 +2472,24 @@ int main() {
       if (!Expect(HasDescriptorRole(decoded, StubOperandRole::kTensorDescriptor) &&
                       HasDescriptorRole(decoded, StubOperandRole::kTensorCoordinate) &&
                       HasDescriptorRole(decoded, StubOperandRole::kLdsSource) &&
+                      ContainsDescriptor(decoded,
+                                         StubOperandRole::kTensorDescriptor,
+                                         StubOperandSlotKind::kTensorDescriptorSource,
+                                         StubOperandValueClass::kTensorDescriptor,
+                                         StubOperandAccess::kRead, 1,
+                                         StubFragmentKind::kTensorDescriptor, 0) &&
+                      ContainsDescriptor(decoded,
+                                         StubOperandRole::kTensorCoordinate,
+                                         StubOperandSlotKind::kTensorCoordinateSource,
+                                         StubOperandValueClass::kTensorCoordinate,
+                                         StubOperandAccess::kRead, 1,
+                                         StubFragmentKind::kTensorCoordinate, 0) &&
+                      ContainsDescriptor(decoded,
+                                         StubOperandRole::kLdsSource,
+                                         StubOperandSlotKind::kLdsSource,
+                                         StubOperandValueClass::kLdsAddress,
+                                         StubOperandAccess::kRead, 1,
+                                         StubFragmentKind::kAddress, 32) &&
                       CountSlotsOfKind(decoded, StubOperandSlotKind::kLdsSource) == 1,
                   "expected routed tensor-store descriptor roles")) {
         return 1;
@@ -2515,6 +2551,13 @@ int main() {
                                  StubOperandValueClass::kVectorRegister,
                                  StubOperandAccess::kRead, 1,
                                  StubFragmentKind::kScalar, 8) &&
+                  ContainsDescriptor(
+                      decoded, StubOperandRole::kDestination,
+                      StubOperandSlotKind::kDestination,
+                      StubOperandValueClass::kVectorRegister,
+                      StubOperandAccess::kWrite, 1,
+                      StubFragmentKind::kScalar,
+                      instruction_name == "V_CVT_F32_FP8" ? 32 : 16) &&
                   HasSlotKind(decoded, StubOperandSlotKind::kDestination),
               "expected routed scalar VOP1 seed to keep scalar descriptor shapes")) {
         return 1;
@@ -2554,7 +2597,22 @@ int main() {
                     CountDescriptorsForRole(decoded, StubOperandRole::kDestination) == 2 &&
                     CountSlotsOfKind(decoded, StubOperandSlotKind::kDestination) == 1 &&
                     CountSlotsOfKind(decoded, StubOperandSlotKind::kScalarDestination) == 1 &&
-                    CountSlotsOfKind(decoded, StubOperandSlotKind::kScaleSource) == 1,
+                    CountSlotsOfKind(decoded, StubOperandSlotKind::kScaleSource) == 1 &&
+                    ContainsDescriptor(decoded, StubOperandRole::kScale,
+                                       StubOperandSlotKind::kScaleSource,
+                                       StubOperandValueClass::kVectorRegister,
+                                       StubOperandAccess::kRead, 2,
+                                       StubFragmentKind::kScalar, 64) &&
+                    ContainsDescriptor(decoded, StubOperandRole::kDestination,
+                                       StubOperandSlotKind::kScalarDestination,
+                                       StubOperandValueClass::kScalarRegister,
+                                       StubOperandAccess::kWrite, 1,
+                                       StubFragmentKind::kScalar, 32) &&
+                    ContainsDescriptor(decoded, StubOperandRole::kDestination,
+                                       StubOperandSlotKind::kDestination,
+                                       StubOperandValueClass::kVectorRegister,
+                                       StubOperandAccess::kWrite, 2,
+                                       StubFragmentKind::kScalar, 64),
                 "expected routed VOP3 SDST seed to keep scale/destination descriptors")) {
       return 1;
     }
@@ -2593,7 +2651,25 @@ int main() {
                     CountSlotsOfKind(decoded, StubOperandSlotKind::kSource0) == 1 &&
                     CountSlotsOfKind(decoded, StubOperandSlotKind::kScaleSource) == 1 &&
                     CountSlotsOfKind(decoded, StubOperandSlotKind::kPairedScaleSource) == 1 &&
-                    CountSlotsOfKind(decoded, StubOperandSlotKind::kDestination) == 1,
+                    CountSlotsOfKind(decoded, StubOperandSlotKind::kDestination) == 1 &&
+                    ContainsDescriptor(decoded, StubOperandRole::kScale,
+                                       StubOperandSlotKind::kScaleSource,
+                                       StubOperandValueClass::kScalarRegister,
+                                       StubOperandAccess::kRead, 1,
+                                       StubFragmentKind::kScalar, 32) &&
+                    ContainsDescriptor(decoded, StubOperandRole::kPairedScale,
+                                       StubOperandSlotKind::kPairedScaleSource,
+                                       StubOperandValueClass::kScalarRegister,
+                                       StubOperandAccess::kRead, 1,
+                                       StubFragmentKind::kScalar, 32) &&
+                    ContainsDescriptor(
+                        decoded, StubOperandRole::kDestination,
+                        StubOperandSlotKind::kDestination,
+                        StubOperandValueClass::kVectorRegister,
+                        StubOperandAccess::kWrite, 1,
+                        StubFragmentKind::kVector,
+                        instruction_name == "V_WMMA_LD_SCALE16_PAIRED_B64" ? 64
+                                                                           : 32),
                 "expected paired-scale helper descriptor roles")) {
       return 1;
     }
