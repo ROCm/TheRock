@@ -42,7 +42,7 @@ class TargetIdBitExtractTest(FunctionalBase):
         self.source_file = config.get("source_file", "bit_extract.cpp")
         self.binary_prefix = config.get("binary_prefix", "bit_extract")
 
-        self.rocm_systems_dir = self.therock_dir / "build"
+        self.rocm_systems_dir = self.therock_dir / "rocm-systems"
         self.sample_dir = self.rocm_systems_dir / self.sample_relative_path
         self.include_dir = self.rocm_systems_dir / self.include_relative_path
 
