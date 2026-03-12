@@ -16,7 +16,7 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 222> kPhase0ExecutableOpcodes{{
+constexpr std::array<std::string_view, 252> kPhase0ExecutableOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_ADD_U32",
@@ -117,6 +117,36 @@ constexpr std::array<std::string_view, 222> kPhase0ExecutableOpcodes{{
     "V_CMPX_LE_U64",
     "V_CMPX_GT_U64",
     "V_CMPX_GE_U64",
+    "V_CMP_CLASS_F16",
+    "V_CMP_EQ_F16",
+    "V_CMP_GE_F16",
+    "V_CMP_GT_F16",
+    "V_CMP_LE_F16",
+    "V_CMP_LG_F16",
+    "V_CMP_LT_F16",
+    "V_CMP_NEQ_F16",
+    "V_CMP_O_F16",
+    "V_CMP_U_F16",
+    "V_CMP_NGE_F16",
+    "V_CMP_NLG_F16",
+    "V_CMP_NGT_F16",
+    "V_CMP_NLE_F16",
+    "V_CMP_NLT_F16",
+    "V_CMPX_CLASS_F16",
+    "V_CMPX_EQ_F16",
+    "V_CMPX_GE_F16",
+    "V_CMPX_GT_F16",
+    "V_CMPX_LE_F16",
+    "V_CMPX_LG_F16",
+    "V_CMPX_LT_F16",
+    "V_CMPX_NEQ_F16",
+    "V_CMPX_O_F16",
+    "V_CMPX_U_F16",
+    "V_CMPX_NGE_F16",
+    "V_CMPX_NLG_F16",
+    "V_CMPX_NGT_F16",
+    "V_CMPX_NLE_F16",
+    "V_CMPX_NLT_F16",
     "V_CMP_CLASS_F32",
     "V_CMP_EQ_F32",
     "V_CMP_GE_F32",
@@ -935,6 +965,36 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
              instruction_name == "V_CMPX_LT_U16" ||
              instruction_name == "V_CMPX_NE_I16" ||
              instruction_name == "V_CMPX_NE_U16" ||
+             instruction_name == "V_CMP_CLASS_F16" ||
+             instruction_name == "V_CMP_EQ_F16" ||
+             instruction_name == "V_CMP_GE_F16" ||
+             instruction_name == "V_CMP_GT_F16" ||
+             instruction_name == "V_CMP_LE_F16" ||
+             instruction_name == "V_CMP_LG_F16" ||
+             instruction_name == "V_CMP_LT_F16" ||
+             instruction_name == "V_CMP_NEQ_F16" ||
+             instruction_name == "V_CMP_O_F16" ||
+             instruction_name == "V_CMP_U_F16" ||
+             instruction_name == "V_CMP_NGE_F16" ||
+             instruction_name == "V_CMP_NLG_F16" ||
+             instruction_name == "V_CMP_NGT_F16" ||
+             instruction_name == "V_CMP_NLE_F16" ||
+             instruction_name == "V_CMP_NLT_F16" ||
+             instruction_name == "V_CMPX_CLASS_F16" ||
+             instruction_name == "V_CMPX_EQ_F16" ||
+             instruction_name == "V_CMPX_GE_F16" ||
+             instruction_name == "V_CMPX_GT_F16" ||
+             instruction_name == "V_CMPX_LE_F16" ||
+             instruction_name == "V_CMPX_LG_F16" ||
+             instruction_name == "V_CMPX_LT_F16" ||
+             instruction_name == "V_CMPX_NEQ_F16" ||
+             instruction_name == "V_CMPX_O_F16" ||
+             instruction_name == "V_CMPX_U_F16" ||
+             instruction_name == "V_CMPX_NGE_F16" ||
+             instruction_name == "V_CMPX_NLG_F16" ||
+             instruction_name == "V_CMPX_NGT_F16" ||
+             instruction_name == "V_CMPX_NLE_F16" ||
+             instruction_name == "V_CMPX_NLT_F16" ||
              instruction_name == "V_CMP_CLASS_F32" ||
              instruction_name == "V_CMP_EQ_F32" ||
              instruction_name == "V_CMP_GE_F32" ||

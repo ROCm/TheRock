@@ -34,7 +34,7 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 222> kExecutableSeedOpcodes{{
+constexpr std::array<std::string_view, 252> kExecutableSeedOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_ADD_U32",
@@ -135,6 +135,36 @@ constexpr std::array<std::string_view, 222> kExecutableSeedOpcodes{{
     "V_CMPX_LE_U64",
     "V_CMPX_GT_U64",
     "V_CMPX_GE_U64",
+    "V_CMP_CLASS_F16",
+    "V_CMP_EQ_F16",
+    "V_CMP_GE_F16",
+    "V_CMP_GT_F16",
+    "V_CMP_LE_F16",
+    "V_CMP_LG_F16",
+    "V_CMP_LT_F16",
+    "V_CMP_NEQ_F16",
+    "V_CMP_O_F16",
+    "V_CMP_U_F16",
+    "V_CMP_NGE_F16",
+    "V_CMP_NLG_F16",
+    "V_CMP_NGT_F16",
+    "V_CMP_NLE_F16",
+    "V_CMP_NLT_F16",
+    "V_CMPX_CLASS_F16",
+    "V_CMPX_EQ_F16",
+    "V_CMPX_GE_F16",
+    "V_CMPX_GT_F16",
+    "V_CMPX_LE_F16",
+    "V_CMPX_LG_F16",
+    "V_CMPX_LT_F16",
+    "V_CMPX_NEQ_F16",
+    "V_CMPX_O_F16",
+    "V_CMPX_U_F16",
+    "V_CMPX_NGE_F16",
+    "V_CMPX_NLG_F16",
+    "V_CMPX_NGT_F16",
+    "V_CMPX_NLE_F16",
+    "V_CMPX_NLT_F16",
     "V_CMP_CLASS_F32",
     "V_CMP_EQ_F32",
     "V_CMP_GE_F32",
@@ -960,6 +990,126 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
   }
   if (opcode == "V_CMPX_GE_U64") {
     *compiled_opcode = Gfx1201CompiledOpcode::kVCmpxGeU64;
+    return true;
+  }
+  if (opcode == "V_CMP_CLASS_F16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCmpClassF16;
+    return true;
+  }
+  if (opcode == "V_CMP_EQ_F16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCmpEqF16;
+    return true;
+  }
+  if (opcode == "V_CMP_GE_F16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCmpGeF16;
+    return true;
+  }
+  if (opcode == "V_CMP_GT_F16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCmpGtF16;
+    return true;
+  }
+  if (opcode == "V_CMP_LE_F16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCmpLeF16;
+    return true;
+  }
+  if (opcode == "V_CMP_LG_F16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCmpLgF16;
+    return true;
+  }
+  if (opcode == "V_CMP_LT_F16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCmpLtF16;
+    return true;
+  }
+  if (opcode == "V_CMP_NEQ_F16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCmpNeqF16;
+    return true;
+  }
+  if (opcode == "V_CMP_O_F16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCmpOF16;
+    return true;
+  }
+  if (opcode == "V_CMP_U_F16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCmpUF16;
+    return true;
+  }
+  if (opcode == "V_CMP_NGE_F16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCmpNgeF16;
+    return true;
+  }
+  if (opcode == "V_CMP_NLG_F16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCmpNlgF16;
+    return true;
+  }
+  if (opcode == "V_CMP_NGT_F16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCmpNgtF16;
+    return true;
+  }
+  if (opcode == "V_CMP_NLE_F16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCmpNleF16;
+    return true;
+  }
+  if (opcode == "V_CMP_NLT_F16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCmpNltF16;
+    return true;
+  }
+  if (opcode == "V_CMPX_CLASS_F16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCmpxClassF16;
+    return true;
+  }
+  if (opcode == "V_CMPX_EQ_F16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCmpxEqF16;
+    return true;
+  }
+  if (opcode == "V_CMPX_GE_F16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCmpxGeF16;
+    return true;
+  }
+  if (opcode == "V_CMPX_GT_F16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCmpxGtF16;
+    return true;
+  }
+  if (opcode == "V_CMPX_LE_F16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCmpxLeF16;
+    return true;
+  }
+  if (opcode == "V_CMPX_LG_F16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCmpxLgF16;
+    return true;
+  }
+  if (opcode == "V_CMPX_LT_F16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCmpxLtF16;
+    return true;
+  }
+  if (opcode == "V_CMPX_NEQ_F16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCmpxNeqF16;
+    return true;
+  }
+  if (opcode == "V_CMPX_O_F16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCmpxOF16;
+    return true;
+  }
+  if (opcode == "V_CMPX_U_F16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCmpxUF16;
+    return true;
+  }
+  if (opcode == "V_CMPX_NGE_F16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCmpxNgeF16;
+    return true;
+  }
+  if (opcode == "V_CMPX_NLG_F16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCmpxNlgF16;
+    return true;
+  }
+  if (opcode == "V_CMPX_NGT_F16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCmpxNgtF16;
+    return true;
+  }
+  if (opcode == "V_CMPX_NLE_F16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCmpxNleF16;
+    return true;
+  }
+  if (opcode == "V_CMPX_NLT_F16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCmpxNltF16;
     return true;
   }
   if (opcode == "V_CMP_CLASS_F32") {
@@ -1947,6 +2097,52 @@ constexpr std::uint32_t kFpClassPositiveSubnormal = 0x080u;
 constexpr std::uint32_t kFpClassPositiveNormal = 0x100u;
 constexpr std::uint32_t kFpClassPositiveInfinity = 0x200u;
 
+float ExpandFp16ToFloat(std::uint16_t bits) {
+  const bool negative = (bits >> 15) != 0;
+  const std::uint16_t exponent = (bits >> 10) & 0x1fu;
+  const std::uint16_t mantissa = bits & 0x03ffu;
+  if (exponent == 0x1fu) {
+    if (mantissa == 0u) {
+      return negative ? -std::numeric_limits<float>::infinity()
+                      : std::numeric_limits<float>::infinity();
+    }
+    return std::numeric_limits<float>::quiet_NaN();
+  }
+
+  float value = 0.0f;
+  if (exponent == 0u) {
+    if (mantissa == 0u) {
+      value = 0.0f;
+    } else {
+      value = std::ldexp(static_cast<float>(mantissa), -24);
+    }
+  } else {
+    value = std::ldexp(static_cast<float>(0x0400u + mantissa),
+                       static_cast<int>(exponent) - 25);
+  }
+  return negative ? -value : value;
+}
+
+std::uint32_t ClassifyFp16Mask(std::uint16_t bits) {
+  const bool negative = (bits >> 15) != 0;
+  const std::uint16_t exponent = (bits >> 10) & 0x1fu;
+  const std::uint16_t mantissa = bits & 0x03ffu;
+  if (exponent == 0x1fu) {
+    if (mantissa == 0u) {
+      return negative ? kFpClassNegativeInfinity : kFpClassPositiveInfinity;
+    }
+    const bool quiet = (mantissa & 0x0200u) != 0u;
+    return quiet ? kFpClassQuietNaN : kFpClassSignalingNaN;
+  }
+  if (exponent == 0u) {
+    if (mantissa == 0u) {
+      return negative ? kFpClassNegativeZero : kFpClassPositiveZero;
+    }
+    return negative ? kFpClassNegativeSubnormal : kFpClassPositiveSubnormal;
+  }
+  return negative ? kFpClassNegativeNormal : kFpClassPositiveNormal;
+}
+
 std::uint32_t ClassifyFp32Mask(std::uint32_t bits) {
   const bool negative = (bits >> 31) != 0;
   const std::uint32_t exponent = (bits >> 23) & 0xffu;
@@ -2096,6 +2292,51 @@ std::string_view NormalizeVectorCompareSeedOpcode(std::string_view opcode) {
   if (opcode == "V_CMPX_GE_U64") {
     return "V_CMP_GE_U64";
   }
+  if (opcode == "V_CMPX_CLASS_F16") {
+    return "V_CMP_CLASS_F16";
+  }
+  if (opcode == "V_CMPX_EQ_F16") {
+    return "V_CMP_EQ_F16";
+  }
+  if (opcode == "V_CMPX_GE_F16") {
+    return "V_CMP_GE_F16";
+  }
+  if (opcode == "V_CMPX_GT_F16") {
+    return "V_CMP_GT_F16";
+  }
+  if (opcode == "V_CMPX_LE_F16") {
+    return "V_CMP_LE_F16";
+  }
+  if (opcode == "V_CMPX_LG_F16") {
+    return "V_CMP_LG_F16";
+  }
+  if (opcode == "V_CMPX_LT_F16") {
+    return "V_CMP_LT_F16";
+  }
+  if (opcode == "V_CMPX_NEQ_F16") {
+    return "V_CMP_NEQ_F16";
+  }
+  if (opcode == "V_CMPX_O_F16") {
+    return "V_CMP_O_F16";
+  }
+  if (opcode == "V_CMPX_U_F16") {
+    return "V_CMP_U_F16";
+  }
+  if (opcode == "V_CMPX_NGE_F16") {
+    return "V_CMP_NGE_F16";
+  }
+  if (opcode == "V_CMPX_NLG_F16") {
+    return "V_CMP_NLG_F16";
+  }
+  if (opcode == "V_CMPX_NGT_F16") {
+    return "V_CMP_NGT_F16";
+  }
+  if (opcode == "V_CMPX_NLE_F16") {
+    return "V_CMP_NLE_F16";
+  }
+  if (opcode == "V_CMPX_NLT_F16") {
+    return "V_CMP_NLT_F16";
+  }
   if (opcode == "V_CMPX_CLASS_F32") {
     return "V_CMP_CLASS_F32";
   }
@@ -2232,6 +2473,21 @@ bool IsVectorCompareSeedInstruction(std::string_view opcode) {
          normalized_opcode == "V_CMP_LE_U64" ||
          normalized_opcode == "V_CMP_GT_U64" ||
          normalized_opcode == "V_CMP_GE_U64" ||
+         normalized_opcode == "V_CMP_CLASS_F16" ||
+         normalized_opcode == "V_CMP_EQ_F16" ||
+         normalized_opcode == "V_CMP_GE_F16" ||
+         normalized_opcode == "V_CMP_GT_F16" ||
+         normalized_opcode == "V_CMP_LE_F16" ||
+         normalized_opcode == "V_CMP_LG_F16" ||
+         normalized_opcode == "V_CMP_LT_F16" ||
+         normalized_opcode == "V_CMP_NEQ_F16" ||
+         normalized_opcode == "V_CMP_O_F16" ||
+         normalized_opcode == "V_CMP_U_F16" ||
+         normalized_opcode == "V_CMP_NGE_F16" ||
+         normalized_opcode == "V_CMP_NLG_F16" ||
+         normalized_opcode == "V_CMP_NGT_F16" ||
+         normalized_opcode == "V_CMP_NLE_F16" ||
+         normalized_opcode == "V_CMP_NLT_F16" ||
          normalized_opcode == "V_CMP_CLASS_F32" ||
          normalized_opcode == "V_CMP_EQ_F32" ||
          normalized_opcode == "V_CMP_GE_F32" ||
@@ -2304,6 +2560,67 @@ bool EvaluateVectorCompareSeedInstruction(std::string_view opcode,
                                           std::uint32_t rhs) {
   const std::string_view normalized_opcode =
       NormalizeVectorCompareSeedOpcode(opcode);
+  if (normalized_opcode == "V_CMP_CLASS_F16") {
+    return (ClassifyFp16Mask(static_cast<std::uint16_t>(lhs)) & rhs) != 0u;
+  }
+  if (normalized_opcode == "V_CMP_EQ_F16" ||
+      normalized_opcode == "V_CMP_GE_F16" ||
+      normalized_opcode == "V_CMP_GT_F16" ||
+      normalized_opcode == "V_CMP_LE_F16" ||
+      normalized_opcode == "V_CMP_LG_F16" ||
+      normalized_opcode == "V_CMP_LT_F16" ||
+      normalized_opcode == "V_CMP_NEQ_F16" ||
+      normalized_opcode == "V_CMP_O_F16" ||
+      normalized_opcode == "V_CMP_U_F16" ||
+      normalized_opcode == "V_CMP_NGE_F16" ||
+      normalized_opcode == "V_CMP_NLG_F16" ||
+      normalized_opcode == "V_CMP_NGT_F16" ||
+      normalized_opcode == "V_CMP_NLE_F16" ||
+      normalized_opcode == "V_CMP_NLT_F16") {
+    const float lhs_float = ExpandFp16ToFloat(static_cast<std::uint16_t>(lhs));
+    const float rhs_float = ExpandFp16ToFloat(static_cast<std::uint16_t>(rhs));
+    const bool unordered = std::isnan(lhs_float) || std::isnan(rhs_float);
+    if (normalized_opcode == "V_CMP_EQ_F16") {
+      return !unordered && lhs_float == rhs_float;
+    }
+    if (normalized_opcode == "V_CMP_GE_F16") {
+      return !unordered && lhs_float >= rhs_float;
+    }
+    if (normalized_opcode == "V_CMP_GT_F16") {
+      return !unordered && lhs_float > rhs_float;
+    }
+    if (normalized_opcode == "V_CMP_LE_F16") {
+      return !unordered && lhs_float <= rhs_float;
+    }
+    if (normalized_opcode == "V_CMP_LG_F16") {
+      return !unordered && lhs_float != rhs_float;
+    }
+    if (normalized_opcode == "V_CMP_LT_F16") {
+      return !unordered && lhs_float < rhs_float;
+    }
+    if (normalized_opcode == "V_CMP_NEQ_F16") {
+      return unordered || lhs_float != rhs_float;
+    }
+    if (normalized_opcode == "V_CMP_O_F16") {
+      return !unordered;
+    }
+    if (normalized_opcode == "V_CMP_U_F16") {
+      return unordered;
+    }
+    if (normalized_opcode == "V_CMP_NGE_F16") {
+      return unordered || lhs_float < rhs_float;
+    }
+    if (normalized_opcode == "V_CMP_NLG_F16") {
+      return unordered || lhs_float == rhs_float;
+    }
+    if (normalized_opcode == "V_CMP_NGT_F16") {
+      return unordered || lhs_float <= rhs_float;
+    }
+    if (normalized_opcode == "V_CMP_NLE_F16") {
+      return unordered || lhs_float > rhs_float;
+    }
+    return unordered || lhs_float >= rhs_float;
+  }
   if (normalized_opcode == "V_CMP_CLASS_F32") {
     return (ClassifyFp32Mask(lhs) & rhs) != 0u;
   }
@@ -3139,6 +3456,36 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kVCmpxLeU64:
     case Gfx1201CompiledOpcode::kVCmpxGtU64:
     case Gfx1201CompiledOpcode::kVCmpxGeU64:
+    case Gfx1201CompiledOpcode::kVCmpClassF16:
+    case Gfx1201CompiledOpcode::kVCmpEqF16:
+    case Gfx1201CompiledOpcode::kVCmpGeF16:
+    case Gfx1201CompiledOpcode::kVCmpGtF16:
+    case Gfx1201CompiledOpcode::kVCmpLeF16:
+    case Gfx1201CompiledOpcode::kVCmpLgF16:
+    case Gfx1201CompiledOpcode::kVCmpLtF16:
+    case Gfx1201CompiledOpcode::kVCmpNeqF16:
+    case Gfx1201CompiledOpcode::kVCmpOF16:
+    case Gfx1201CompiledOpcode::kVCmpUF16:
+    case Gfx1201CompiledOpcode::kVCmpNgeF16:
+    case Gfx1201CompiledOpcode::kVCmpNlgF16:
+    case Gfx1201CompiledOpcode::kVCmpNgtF16:
+    case Gfx1201CompiledOpcode::kVCmpNleF16:
+    case Gfx1201CompiledOpcode::kVCmpNltF16:
+    case Gfx1201CompiledOpcode::kVCmpxClassF16:
+    case Gfx1201CompiledOpcode::kVCmpxEqF16:
+    case Gfx1201CompiledOpcode::kVCmpxGeF16:
+    case Gfx1201CompiledOpcode::kVCmpxGtF16:
+    case Gfx1201CompiledOpcode::kVCmpxLeF16:
+    case Gfx1201CompiledOpcode::kVCmpxLgF16:
+    case Gfx1201CompiledOpcode::kVCmpxLtF16:
+    case Gfx1201CompiledOpcode::kVCmpxNeqF16:
+    case Gfx1201CompiledOpcode::kVCmpxOF16:
+    case Gfx1201CompiledOpcode::kVCmpxUF16:
+    case Gfx1201CompiledOpcode::kVCmpxNgeF16:
+    case Gfx1201CompiledOpcode::kVCmpxNlgF16:
+    case Gfx1201CompiledOpcode::kVCmpxNgtF16:
+    case Gfx1201CompiledOpcode::kVCmpxNleF16:
+    case Gfx1201CompiledOpcode::kVCmpxNltF16:
     case Gfx1201CompiledOpcode::kVCmpClassF32:
     case Gfx1201CompiledOpcode::kVCmpEqF32:
     case Gfx1201CompiledOpcode::kVCmpGeF32:
