@@ -4,6 +4,7 @@
 
 import argparse
 import json
+import os
 from pathlib import Path
 import re
 import shlex
@@ -188,6 +189,10 @@ def main():
     the_rock_commit = _run(["git", "rev-parse", args.commit], cwd=repo_root)
 
     manifest = build_manifest_schema(repo_root, the_rock_commit)
+
+    github_run_id = os.getenv("GITHUB_RUN_ID")
+    if github_run_id:
+        manifest["github_run_id"] = github_run_id
 
     # Merge flag settings into the manifest if provided.
     if args.flag_settings:
