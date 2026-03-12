@@ -8,6 +8,9 @@ skip_tests = {
             "test_warn_on_accumulate_grad_stream_mismatch_flag_cuda",
         ],
         "cuda": [
+            # ROCm allocator does not raise OOM in the same path as CUDA
+            #   AssertionError: RuntimeError not raised
+            "test_out_of_memory_retry",
             # AttributeError: module 'torch.backends.cudnn.rnn' has no attribute 'fp32_precision'
             "test_fp32_precision_with_float32_matmul_precision",
             # AttributeError: module 'torch.backends.cudnn.rnn' has no attribute 'fp32_precision'
@@ -62,9 +65,6 @@ skip_tests = {
             # fixed or just good with no caching?
             # "test_reentrant_parent_error_on_cpu_cuda",
             # "test_multi_grad_all_hooks",
-            # flaky, was good some itme
-            "test_side_stream_backward_overlap",
-            "test_side_stream_backward_overlap_cuda"
             #
             #  Test run says they are good????
             # # AttributeError: 'torch._C._autograd.SavedTensor' object has no attribute 'data'

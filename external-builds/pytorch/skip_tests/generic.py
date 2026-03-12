@@ -9,6 +9,12 @@ skip_tests = {
         }
     },
     "common": {
+        "autograd": [
+            # Stream comparison mismatch on ROCm (non-default stream vs default stream)
+            #   AssertionError: <torch.cuda.Stream ...> != <torch.cuda.Stream cuda_stream=0x0>
+            # Fails on Linux gfx94 and Windows gfx1100 across torch versions.
+            "test_side_stream_backward_overlap",
+        ],
         "cuda": [
             # HIP_VISIBLE_DEVICES and CUDA_VISIBLE_DEVICES not working
             # to restrict visibility of devices
