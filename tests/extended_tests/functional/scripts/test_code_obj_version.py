@@ -9,6 +9,7 @@ import json
 import os
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -42,7 +43,7 @@ class TargetIdBitExtractTest(FunctionalBase):
         self.source_file = config.get("source_file", "bit_extract.cpp")
         self.binary_prefix = config.get("binary_prefix", "bit_extract")
 
-        self.rocm_systems_dir = self.therock_dir / "build"
+        self.rocm_systems_dir = self.therock_dir / "rocm-systems"
         self.sample_dir = self.rocm_systems_dir / self.sample_relative_path
         self.include_dir = self.rocm_systems_dir / self.include_relative_path
 
@@ -77,7 +78,11 @@ class TargetIdBitExtractTest(FunctionalBase):
     def _get_rocm_env_with_path(self) -> Dict[str, str]:
         env = self.get_rocm_env()
         rocm_bin = str(self.rocm_path / "bin")
-        env["PATH"] = f"{rocm_bin}:{env.get('PATH', '')}".rstrip(":")
+        llvm_bin = str(self.rocm_path / "llvm" / "bin")
+        llvm_lib_bin = str(self.rocm_path / "lib" / "llvm" / "bin")
+        env["PATH"] = (
+            f"{rocm_bin}:{llvm_bin}:{llvm_lib_bin}:{env.get('PATH', '')}".rstrip(":")
+        )
         env["HIP_PLATFORM"] = "amd"
         return env
 
@@ -99,7 +104,13 @@ class TargetIdBitExtractTest(FunctionalBase):
         for candidate in candidates:
             if candidate.exists():
                 return str(candidate)
-        return default_tool
+        found = shutil.which(default_tool)
+        if found:
+            return found
+        searched = [str(c) for c in candidates] + [f"'{default_tool}' on PATH"]
+        raise TestExecutionError(
+            f"Required tool '{default_tool}' not found. Searched: {searched}"
+        )
 
     def _compile_sample(self, output_binary: Path, code_obj_version: int = None) -> int:
         hipcc = self._resolve_tool(

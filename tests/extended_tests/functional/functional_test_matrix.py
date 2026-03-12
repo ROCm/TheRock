@@ -33,7 +33,7 @@ functional_matrix = {
     },
     "test_code_obj_version": {
         "job_name": "test_code_obj_version",
-        "fetch_artifact_args": "--base-only --tests",
+        "fetch_artifact_args": "--tests",
         "timeout_minutes": 30,
         "test_script": (
             "python "
