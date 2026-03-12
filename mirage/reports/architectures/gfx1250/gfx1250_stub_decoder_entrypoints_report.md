@@ -139,6 +139,9 @@
     - `V_WMMA_F32_16X16X32_F16_w32`
     - `V_WMMA_F32_32X16X128_F4_w32`
     - `V_WMMA_I32_16X16X64_IU8_w32`
+  - Descriptor depth:
+    - source1 fragment coverage across routed BF16/BF8/FP8/IU8 variants
+    - destination and accumulator descriptor coverage across routed F16/F32/BF16 variants
 - WMMA scale:
   - `V_WMMA_SCALE_F32_16X16X128_F8F6F4` -> `kWmmaScaleF32_16x16x128_F8F6F4`
   - `V_WMMA_SCALE16_F32_16X16X128_F8F6F4` -> `kWmmaScale16F32_16x16x128_F8F6F4`
@@ -189,8 +192,8 @@
     - `V_SWMMAC_F32_16X16X64_F16_w32`
     - `V_SWMMAC_I32_16X16X128_IU8_w32`
   - Descriptor depth:
-    - source1 fragment coverage on routed FP8/BF8 and `I32/IU8` variants
-    - destination and accumulator descriptor coverage on routed F16/F32/I32 variants
+    - source1 fragment coverage on routed BF16/BF8/FP8 and `I32/IU8` variants
+    - destination and accumulator descriptor coverage on routed F16/F32/BF16/I32 variants
 - Tensor routes:
   - `TENSOR_LOAD_TO_LDS` -> `kTensorLoadToLds`
   - `TENSOR_STORE_FROM_LDS` -> `kTensorStoreFromLds`
