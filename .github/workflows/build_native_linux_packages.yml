@@ -35,8 +35,8 @@ on:
         required: false
         type: string
         default: "/opt/rocm/core"
-      repo_base_url:
-        description: "Base URL for the repo (no trailing slash). For nightly use e.g. https://rocm.nightlies.amd.com; for prerelease use e.g. https://rocm.prereleases.amd.com/packages. Used to build repo_url for install test; for prerelease, GPG key URL is derived as repo_base_url/gpg/rocm.gpg."
+      cloudfront_base_url:
+        description: "CloudFront base URL (no trailing slash). For nightly use e.g. https://rocm.nightlies.amd.com; for prerelease use e.g. https://rocm.prereleases.amd.com/packages. Used to build repo_url for install test; for prerelease, GPG key URL is derived as <this_url>/gpg/rocm.gpg."
         required: false
         type: string
         default: "https://rocm.nightlies.amd.com"
@@ -78,8 +78,8 @@ on:
         description: Installation prefix for install test.
         type: string
         default: "/opt/rocm/core"
-      repo_base_url:
-        description: "Base URL for the repo (nightly e.g. https://rocm.nightlies.amd.com; prerelease e.g. https://rocm.prereleases.amd.com/packages)."
+      cloudfront_base_url:
+        description: "CloudFront base URL (nightly e.g. https://rocm.nightlies.amd.com; prerelease e.g. https://rocm.prereleases.amd.com/packages)."
         type: string
         default: "https://rocm.nightlies.amd.com"
       ref:
@@ -99,8 +99,7 @@ jobs:
       fail-fast: false
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     outputs:
-      repo_sub_folder: ${{ steps.repo-metadata.outputs.repo_sub_folder }}
-      build_date: ${{ steps.repo-metadata.outputs.build_date }}
+      s3_prefix: ${{ steps.repo-metadata.outputs.s3_prefix }}
     env:
       BUILD_IMAGE: ghcr.io/rocm/therock_build_manylinux_x86_64@sha256:d6ae5712a9c7e8b88281d021e907b312cd8a26295b95690baef3e8dde4805858
       ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id || github.run_id }}
@@ -117,14 +116,19 @@ jobs:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || '' }}
 
+# TODO: remove repo-metadata once s3_prefix is available PR#3561, 
+# repo-metadata is a work around only for generating s3_prefix.
       - name: Set repo_sub_folder
         id: repo-metadata
         run: |
           BUILD_DATE=$(date +%Y%m%d)
           REPO_SUB_FOLDER="${BUILD_DATE}-${{ env.ARTIFACT_RUN_ID }}"
-          echo "repo_sub_folder=${REPO_SUB_FOLDER}" >> $GITHUB_OUTPUT
-          echo "build_date=${BUILD_DATE}" >> $GITHUB_OUTPUT
-          echo "REPO_SUB_FOLDER=${REPO_SUB_FOLDER}"
+          if [ "${{ inputs.release_type }}" = "prerelease" ]; then
+            S3_PREFIX="v3/packages/${{ inputs.native_package_type }}"
+          else
+            S3_PREFIX="v3/packages/${{ inputs.native_package_type }}/${REPO_SUB_FOLDER}"
+          fi
+          echo "s3_prefix=${S3_PREFIX}" >> $GITHUB_OUTPUT
 
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
@@ -204,7 +208,20 @@ jobs:
     outputs:
       os_profiles: ${{ steps.set.outputs.os_profiles }}
       gfx_arch: ${{ steps.set.outputs.gfx_arch }}
+      repo_base_url: ${{ steps.get-base-url.outputs.repo_base_url }}
+      repo_sub_folder: ${{ steps.get-repo-sub-folder.outputs.repo_sub_folder }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Get base URL (repo_base_url) from CloudFront URL
+        id: get-base-url
+        run: python build_tools/packaging/linux/get_url_repo_params.py get-base-url --from-cloudfront-url "${{ inputs.cloudfront_base_url }}" --format env >> $GITHUB_OUTPUT
+
+      - name: Get repo_sub_folder from S3 prefix (get_url_repo_params)
+        id: get-repo-sub-folder
+        run: python build_tools/packaging/linux/get_url_repo_params.py get-repo-sub-folder --from-s3-prefix "${{ needs.build_native_packages.outputs.s3_prefix }}" --format env >> $GITHUB_OUTPUT
+
       - name: Set os_profiles and gfx_arch
         id: set
         run: |
@@ -227,8 +244,8 @@ jobs:
         os_profile: ${{ fromJson(needs.get_install_test_profiles.outputs.os_profiles) }}
     uses: ./.github/workflows/test_native_linux_packages_install.yml
     with:
-      repo_url: ${{ (inputs.release_type == 'prerelease' && (inputs.native_package_type == 'deb' && format('{0}/{1}', inputs.repo_base_url, matrix.os_profile) || format('{0}/{1}/x86_64/', inputs.repo_base_url, matrix.os_profile))) || (inputs.native_package_type == 'deb' && format('{0}/deb/{1}/', inputs.repo_base_url, needs.build_native_packages.outputs.repo_sub_folder) || format('{0}/rpm/{1}/x86_64/', inputs.repo_base_url, needs.build_native_packages.outputs.repo_sub_folder)) }}
-      gpg_key_url: ${{ inputs.release_type == 'prerelease' && format('{0}/gpg/rocm.gpg', inputs.repo_base_url) || '' }}
+      repo_url: ${{ (inputs.release_type == 'prerelease' && (inputs.native_package_type == 'deb' && format('{0}/{1}', needs.get_install_test_profiles.outputs.repo_base_url, matrix.os_profile) || format('{0}/{1}/x86_64/', needs.get_install_test_profiles.outputs.repo_base_url, matrix.os_profile))) || (inputs.native_package_type == 'deb' && format('{0}/deb/{1}/', needs.get_install_test_profiles.outputs.repo_base_url, needs.get_install_test_profiles.outputs.repo_sub_folder) || format('{0}/rpm/{1}/x86_64/', needs.get_install_test_profiles.outputs.repo_base_url, needs.get_install_test_profiles.outputs.repo_sub_folder)) }}
+      gpg_key_url: ${{ inputs.release_type == 'prerelease' && format('{0}/gpg/rocm.gpg', needs.get_install_test_profiles.outputs.repo_base_url) || '' }}
       os_profile: ${{ matrix.os_profile }}
       gfx_arch: ${{ needs.get_install_test_profiles.outputs.gfx_arch }}
       install_prefix: ${{ inputs.install_prefix || '/opt/rocm/core' }}
