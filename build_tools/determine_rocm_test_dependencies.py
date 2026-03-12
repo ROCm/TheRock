@@ -4,180 +4,151 @@
 """
 Compute package-level test dependencies for changed components.
 
-This module analyzes CMakeLists.txt files to extract RUNTIME_DEPS and determines
-which packages need testing when a specific package is updated.
+This module reads BUILD_TOPOLOGY.toml to extract artifact dependencies and
+determines which packages need testing when a specific package is updated.
 
-We only test the changed package plus its direct downstream dependents.
+By default, we test the changed package plus its direct downstream dependents.
+Some packages have hardcoded overrides to limit testing scope.
 
-usage: determine_rocm_test_dependencies.py [-h] [--therock-dir THEROCK_DIR] [--changed PACKAGE [PACKAGE ...]] [--list-packages]
+usage: determine_rocm_test_dependencies.py [-h] [--therock-dir THEROCK_DIR]
+                                           [--changed PACKAGE [PACKAGE ...]]
+                                           [--list-packages]
+
 options:
   -h, --help            show this help message and exit
   --therock-dir THEROCK_DIR
                         Path to TheRock directory (default: current directory)
   --changed PACKAGE [PACKAGE ...]
-                        Package(s) that have changed (e.g., rocBLAS, hipBLAS)
-  --list-packages       List all available packages with their directories
+                        Package(s) that have changed (e.g., blas, miopen)
+  --list-packages       List all available packages with their artifact groups
 """
 
 import argparse
 import json
-import re
 import sys
 from pathlib import Path
-from typing import Dict, List, Set, Optional
+from typing import Dict, List, Optional, Set
 
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent))
+try:
+    import tomllib
+except ImportError:
+    import tomli as tomllib  # type: ignore[import-not-found,no-redef]
 
 
-class PackageInfo:
-    """Information about a CMake subproject package."""
+# Hardcoded overrides for packages that should only test specific direct dependents.
+# These are packages where testing the full downstream graph is too expensive or
+# unnecessary. The override specifies exactly which packages to test when the
+# key package changes (in addition to the package itself).
+#
+# Format: { "package_name": ["direct_dependent_1", "direct_dependent_2", ...] }
+#
+# If a package is not in this dict, all direct dependents are tested.
+DIRECT_DEPENDENT_OVERRIDES: Dict[str, List[str]] = {
+    # rocBLAS changes should only trigger tests for solver and hipblas,
+    # not the entire downstream graph (miopen, sparse, etc.)
+    "blas": ["solver"],
+}
 
-    def __init__(self, name: str, cmake_file: Path):
+
+class ArtifactInfo:
+    """Information about an artifact from BUILD_TOPOLOGY.toml."""
+
+    def __init__(self, name: str, artifact_group: str):
         self.name = name
-        self.cmake_file = cmake_file
-        self.runtime_deps: Set[str] = set()
-        self.artifact: Optional[str] = None
+        self.artifact_group = artifact_group
+        self.artifact_deps: Set[str] = set()
 
 
-class PackageDependencyAnalyzer:
-    """Analyzes package-level test dependencies from CMakeLists.txt files."""
+class ArtifactDependencyAnalyzer:
+    """Analyzes artifact-level test dependencies from BUILD_TOPOLOGY.toml."""
 
     def __init__(self, therock_dir: Path):
         self.therock_dir = therock_dir
-        self.packages: Dict[str, PackageInfo] = {}
+        self.artifacts: Dict[str, ArtifactInfo] = {}
         self.reverse_deps: Dict[str, Set[str]] = {}
-        self._discover_packages()
+        self._load_topology()
         self._build_reverse_dependency_graph()
 
-    def _discover_packages(self):
-        """Discover all CMake subprojects and their dependencies."""
-        # Search in known directories
-        search_dirs = [
-            self.therock_dir / "math-libs",
-            self.therock_dir / "ml-libs",
-            self.therock_dir / "comm-libs",
-            self.therock_dir / "core",
-            self.therock_dir / "compiler",
-            self.therock_dir / "base",
-            self.therock_dir / "profiler",
-            self.therock_dir / "debug-tools",
-            self.therock_dir / "dctools",
-            self.therock_dir / "media-libs",
-            self.therock_dir / "iree-libs",
-        ]
+    def _load_topology(self):
+        """Load and parse BUILD_TOPOLOGY.toml."""
+        topology_file = self.therock_dir / "BUILD_TOPOLOGY.toml"
+        if not topology_file.exists():
+            raise FileNotFoundError(f"BUILD_TOPOLOGY.toml not found: {topology_file}")
 
-        for search_dir in search_dirs:
-            if not search_dir.exists():
-                continue
+        with open(topology_file, "rb") as f:
+            topology = tomllib.load(f)
 
-            for cmake_file in search_dir.rglob("CMakeLists.txt"):
-                try:
-                    content = cmake_file.read_text()
-                    self._parse_cmake_file(cmake_file, content)
-                except Exception as e:
-                    # Skip files that can't be read
-                    pass
+        # Extract artifacts
+        artifacts_section = topology.get("artifacts", {})
+        for artifact_name, artifact_data in artifacts_section.items():
+            artifact_group = artifact_data.get("artifact_group", "")
+            info = ArtifactInfo(artifact_name, artifact_group)
 
-    def _parse_cmake_file(self, cmake_file: Path, content: str):
-        """Parse a CMakeLists.txt file to extract package declarations."""
-        # Pattern to match therock_cmake_subproject_declare
-        declare_pattern = re.compile(
-            r"therock_cmake_subproject_declare\((\w+(?:-\w+)*)", re.MULTILINE
-        )
+            # Get artifact dependencies
+            deps = artifact_data.get("artifact_deps", [])
+            info.artifact_deps = set(deps)
 
-        for match in declare_pattern.finditer(content):
-            package_name = match.group(1).lower()  # Normalize to lowercase
-
-            # Find the corresponding closing parenthesis for this declaration
-            start_pos = match.start()
-            # Extract the full declaration block (simplified - find next standalone ')')
-            # This is a heuristic; proper parsing would require a CMake parser
-            decl_end = content.find("\n)", start_pos)
-            if decl_end == -1:
-                decl_end = len(content)
-
-            decl_block = content[start_pos : decl_end + 2]
-
-            pkg_info = PackageInfo(package_name, cmake_file)
-
-            # Extract RUNTIME_DEPS
-            # Match until we hit another keyword or closing paren
-            runtime_deps_match = re.search(
-                r"RUNTIME_DEPS\s+((?:(?!\b(?:BUILD_DEPS|CMAKE_ARGS|CMAKE_INCLUDES|COMPILER_TOOLCHAIN|EXTERNAL_SOURCE_DIR|BINARY_DIR|BACKGROUND_BUILD|DEFAULT_GPU_TARGETS)\b)[^\n)]+(?:\n\s+)?)+)",
-                decl_block,
-                re.MULTILINE,
-            )
-            if runtime_deps_match:
-                deps_text = runtime_deps_match.group(1)
-                for line in deps_text.split("\n"):
-                    line = line.strip()
-                    if line.startswith("#") or not line:
-                        continue
-                    dep = line.split("#")[0].strip()
-                    if dep and not dep.startswith("${"):
-                        pkg_info.runtime_deps.add(dep.lower())  # Normalize to lowercase
-
-            # Determine artifact from file path
-            rel_path = cmake_file.relative_to(self.therock_dir)
-            if len(rel_path.parts) > 0:
-                pkg_info.artifact = rel_path.parts[0]
-
-            self.packages[package_name] = pkg_info
+            self.artifacts[artifact_name] = info
 
     def _build_reverse_dependency_graph(self):
         """
         Build a reverse dependency graph for fast lookups.
 
-        Maps each package to its direct downstream dependents (packages that depend on it).
+        Maps each artifact to its direct downstream dependents.
 
-        Example: if hipblas has RUNTIME_DEPS on rocblas:
-            packages["hipblas"].runtime_deps contains "rocblas"
-            reverse_deps["rocblas"] contains "hipblas"
+        Example: if solver has artifact_deps containing "blas":
+            artifacts["solver"].artifact_deps contains "blas"
+            reverse_deps["blas"] contains "solver"
         """
-        # Initialize empty sets for all packages
-        for package_name in self.packages:
-            self.reverse_deps[package_name] = set()
+        # Initialize empty sets for all artifacts
+        for artifact_name in self.artifacts:
+            self.reverse_deps[artifact_name] = set()
 
-        # Populate reverse dependencies based on RUNTIME_DEPS
-        for package_name, pkg_info in self.packages.items():
-            for dep_name in pkg_info.runtime_deps:
-                # Only track dependencies on packages we know about
-                if dep_name in self.packages:
-                    self.reverse_deps[dep_name].add(package_name)
+        # Populate reverse dependencies
+        for artifact_name, artifact_info in self.artifacts.items():
+            for dep_name in artifact_info.artifact_deps:
+                if dep_name in self.artifacts:
+                    self.reverse_deps[dep_name].add(artifact_name)
 
     def get_packages_to_test(self, changed_packages: List[str]) -> Set[str]:
         """
         Get all packages that need testing given a list of changed packages.
 
         Returns the changed packages PLUS their direct downstream dependents.
+        Respects DIRECT_DEPENDENT_OVERRIDES for packages with limited test scope.
 
-        Example: rocblas ← hipblas ← hipblaslt
-            get_packages_to_test(["rocblas"]) → {rocblas, hipblas}
-            get_packages_to_test(["hipblas"]) → {hipblas, hipblaslt}
-            get_packages_to_test(["hipblaslt"]) → {hipblaslt}
+        Example: blas <- solver <- (nothing)
+            get_packages_to_test(["blas"]) -> {blas, solver}  # due to override
+            get_packages_to_test(["solver"]) -> {solver}
         """
         packages_to_test = set(changed_packages)
 
         for changed in changed_packages:
-            # Add only DIRECT dependents
-            packages_to_test.update(self.reverse_deps.get(changed, set()))
+            if changed in DIRECT_DEPENDENT_OVERRIDES:
+                # Use hardcoded overrides - only add specified dependents
+                override_deps = DIRECT_DEPENDENT_OVERRIDES[changed]
+                for dep in override_deps:
+                    if dep in self.artifacts:
+                        packages_to_test.add(dep)
+            else:
+                # Add all direct dependents
+                packages_to_test.update(self.reverse_deps.get(changed, set()))
 
         return packages_to_test
 
 
-def create_analyzer(therock_dir: Optional[Path] = None) -> PackageDependencyAnalyzer:
+def create_analyzer(therock_dir: Optional[Path] = None) -> ArtifactDependencyAnalyzer:
     """
-    Create a PackageDependencyAnalyzer instance.
+    Create an ArtifactDependencyAnalyzer instance.
 
     This is a convenience function for programmatic use.
 
     Example:
         >>> from determine_rocm_test_dependencies import create_analyzer
         >>> analyzer = create_analyzer()
-        >>> packages_to_test = analyzer.get_packages_to_test(["rocblas"])
+        >>> packages_to_test = analyzer.get_packages_to_test(["blas"])
         >>> print(packages_to_test)
-        {'rocblas', 'hipblas'}
+        {'blas', 'solver'}
     """
     if therock_dir is None:
         therock_dir = Path.cwd()
@@ -187,7 +158,7 @@ def create_analyzer(therock_dir: Optional[Path] = None) -> PackageDependencyAnal
     if not therock_dir.exists():
         raise FileNotFoundError(f"TheRock root directory not found: {therock_dir}")
 
-    return PackageDependencyAnalyzer(therock_dir)
+    return ArtifactDependencyAnalyzer(therock_dir)
 
 
 def main():
@@ -205,12 +176,12 @@ def main():
         type=str,
         nargs="+",
         metavar="PACKAGE",
-        help="Package(s) that have changed (e.g., rocBLAS, hipBLAS)",
+        help="Package(s) that have changed (e.g., blas, miopen)",
     )
     parser.add_argument(
         "--list-packages",
         action="store_true",
-        help="List all available packages with their directories",
+        help="List all available packages with their artifact groups",
     )
 
     args = parser.parse_args()
@@ -224,27 +195,33 @@ def main():
         sys.exit(1)
 
     # Create the analyzer
-    analyzer = PackageDependencyAnalyzer(therock_dir)
+    try:
+        analyzer = ArtifactDependencyAnalyzer(therock_dir)
+    except FileNotFoundError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
 
-    if not analyzer.packages:
-        print("Error: No packages found. Check the TheRock root path.", file=sys.stderr)
+    if not analyzer.artifacts:
+        print(
+            "Error: No artifacts found. Check the TheRock root path.", file=sys.stderr
+        )
         sys.exit(1)
 
     # Handle --list-packages
     if args.list_packages:
-        # Group packages by artifact/directory
-        packages_by_dir: Dict[str, List[str]] = {}
-        for pkg_name, pkg_info in analyzer.packages.items():
-            artifact = pkg_info.artifact or "unknown"
-            if artifact not in packages_by_dir:
-                packages_by_dir[artifact] = []
-            packages_by_dir[artifact].append(pkg_name)
+        # Group artifacts by artifact_group
+        packages_by_group: Dict[str, List[str]] = {}
+        for artifact_name, artifact_info in analyzer.artifacts.items():
+            group = artifact_info.artifact_group or "unknown"
+            if group not in packages_by_group:
+                packages_by_group[group] = []
+            packages_by_group[group].append(artifact_name)
 
-        # Sort package lists within each directory
-        for artifact in packages_by_dir:
-            packages_by_dir[artifact].sort()
+        # Sort package lists within each group
+        for group in packages_by_group:
+            packages_by_group[group].sort()
 
-        print(json.dumps(packages_by_dir, indent=2, sort_keys=True))
+        print(json.dumps(packages_by_group, indent=2, sort_keys=True))
         return
 
     # Require --changed if not listing packages
@@ -255,7 +232,7 @@ def main():
     changed_packages = [p.lower() for p in args.changed]
 
     # Validate package names
-    valid_packages = set(analyzer.packages.keys())
+    valid_packages = set(analyzer.artifacts.keys())
     invalid = [p for p in changed_packages if p not in valid_packages]
     if invalid:
         print(f"Error: Unknown package(s): {', '.join(invalid)}", file=sys.stderr)
