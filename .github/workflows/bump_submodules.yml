@@ -10,7 +10,7 @@ on:
     branches:
       - main
 jobs:
-  tag-rocm-systems:
+  bump-submodules:
     runs-on: ubuntu-24.04
 
     steps:
@@ -49,11 +49,7 @@ jobs:
           app-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.PRIVATE_KEY }}
           owner: "ROCm"
-          repositories: "rocm-libraries"
-
-      - name: Install dependencies
-        run: |
-          pip install PyGithub
+          repositories: "TheRock"
 
       - name: Run scheduled bump automation
         if: github.event_name == 'schedule'
@@ -69,7 +65,7 @@ jobs:
         run: |
           python3 .github/scripts/bump_submodules.py \
             --event_type "push" \
-            --before "${{ github.event.before }}"" \
+            --before "${{ github.event.before }}" \
             --after "${{ github.sha }}" \
             --systems_token "${{ steps.systems-token.outputs.token }}" \
             --libraries_token "${{ steps.librarian-token.outputs.token }}" \
