@@ -8,15 +8,15 @@ Reproduces a test failure from CI.
 Usage:
     # Linux (uses Docker)
     python reproduce_test_failure.py --run-id 12345678 --repository ROCm/TheRock \
-        --amdgpu-family gfx942 --test-script "python test.py" --platform linux
+        --amdgpu-family gfx94X --test-script "python test.py" --platform linux
 
     # Windows (bare metal, requires admin PowerShell)
     python reproduce_test_failure.py --run-id 12345678 --repository ROCm/TheRock \
-        --amdgpu-family gfx1100 --test-script "python test.py" --platform windows
+        --amdgpu-family gfx110X --test-script "python test.py" --platform windows
 
     # Setup only (drops into shell)
     python reproduce_test_failure.py --run-id 12345678 --repository ROCm/TheRock \
-        --amdgpu-family gfx942 --test-script "python test.py" --setup-only
+        --amdgpu-family gfx94X --test-script "python test.py" --setup-only
 """
 
 import argparse
@@ -28,6 +28,8 @@ import tempfile
 from pathlib import Path
 
 DEFAULT_CONTAINER_IMAGE = "ghcr.io/rocm/no_rocm_image_ubuntu24_04:latest"
+
+is_windows = platform.system() == "Windows"
 
 
 def check_docker() -> bool:
@@ -45,7 +47,6 @@ def build_reproduction_command(args: argparse.Namespace) -> str:
         f"--repository {args.repository} "
         f"--amdgpu-family {args.amdgpu_family} "
         f'--test-script "{args.test_script}" '
-        f"--platform {args.platform}"
     )
     if args.shard_index != "1":
         cmd += f" --shard-index {args.shard_index}"
@@ -209,7 +210,6 @@ def main() -> int:
     parser.add_argument("--repository", required=True, help="GitHub repository")
     parser.add_argument("--amdgpu-family", required=True, help="AMDGPU family")
     parser.add_argument("--test-script", required=True, help="Test script to run")
-    parser.add_argument("--platform", choices=["linux", "windows"], default="linux", help="Target platform")
     parser.add_argument("--shard-index", default="1", help="Shard index")
     parser.add_argument("--total-shards", default="1", help="Total shards")
     parser.add_argument("--test-type", default="full", help="Test type")
@@ -226,7 +226,7 @@ def main() -> int:
         print(f"  {build_reproduction_command(args)}")
         return 0
 
-    if args.platform == "windows":
+    if is_windows():
         return run_windows(args)
     else:
         return run_linux(args)
