@@ -16,7 +16,7 @@ from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from _therock_utils.storage_location import StorageLocation
 from _therock_utils.storage_backend import create_storage_backend
 
-from github_actions.manifest_utils import (
+from build_tools.github_actions.manifest_utils import (
     normalize_python_version_for_filename,
     normalize_ref_for_filename,
 )
