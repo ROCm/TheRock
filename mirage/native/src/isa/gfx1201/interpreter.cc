@@ -34,7 +34,7 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 220> kExecutableSeedOpcodes{{
+constexpr std::array<std::string_view, 222> kExecutableSeedOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_ADD_U32",
@@ -215,6 +215,8 @@ constexpr std::array<std::string_view, 220> kExecutableSeedOpcodes{{
     "V_CVT_I32_F32",
     "V_CVT_FLOOR_I32_F32",
     "V_CVT_NEAREST_I32_F32",
+    "V_CVT_I32_I16",
+    "V_CVT_U32_U16",
     "V_CVT_I32_F64",
     "V_EXP_F32",
     "V_LOG_F32",
@@ -1280,6 +1282,14 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
     *compiled_opcode = Gfx1201CompiledOpcode::kVCvtNearestI32F32;
     return true;
   }
+  if (opcode == "V_CVT_I32_I16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCvtI32I16;
+    return true;
+  }
+  if (opcode == "V_CVT_U32_U16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCvtU32U16;
+    return true;
+  }
   if (opcode == "V_CVT_I32_F64") {
     *compiled_opcode = Gfx1201CompiledOpcode::kVCvtI32F64;
     return true;
@@ -1806,6 +1816,13 @@ std::uint32_t EvaluateVectorUnarySeedInstruction(std::string_view opcode,
   }
   if (opcode == "V_CVT_NEAREST_I32_F32") {
     return BitCast<std::uint32_t>(RoundNearestFloatToI32(BitCast<float>(value)));
+  }
+  if (opcode == "V_CVT_I32_I16") {
+    return BitCast<std::uint32_t>(static_cast<std::int32_t>(
+        BitCast<std::int16_t>(static_cast<std::uint16_t>(value))));
+  }
+  if (opcode == "V_CVT_U32_U16") {
+    return static_cast<std::uint16_t>(value);
   }
   return value;
 }
@@ -2776,6 +2793,8 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
       instruction.opcode == "V_CVT_U32_F32" ||
       instruction.opcode == "V_CVT_FLOOR_I32_F32" ||
       instruction.opcode == "V_CVT_NEAREST_I32_F32" ||
+      instruction.opcode == "V_CVT_I32_I16" ||
+      instruction.opcode == "V_CVT_U32_U16" ||
       instruction.opcode == "V_CVT_I32_F32") {
     if (!ValidateOperandCount(instruction, 2, error_message)) {
       return false;
@@ -3200,6 +3219,8 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kVCvtI32F32:
     case Gfx1201CompiledOpcode::kVCvtFloorI32F32:
     case Gfx1201CompiledOpcode::kVCvtNearestI32F32:
+    case Gfx1201CompiledOpcode::kVCvtI32I16:
+    case Gfx1201CompiledOpcode::kVCvtU32U16:
     case Gfx1201CompiledOpcode::kVCvtI32F64:
     case Gfx1201CompiledOpcode::kVExpF32:
     case Gfx1201CompiledOpcode::kVLogF32:

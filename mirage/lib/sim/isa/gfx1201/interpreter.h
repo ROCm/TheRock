@@ -195,6 +195,8 @@ enum class Gfx1201CompiledOpcode : std::uint8_t {
   kVCvtI32F32,
   kVCvtFloorI32F32,
   kVCvtNearestI32F32,
+  kVCvtI32I16,
+  kVCvtU32U16,
   kVCvtI32F64,
   kVExpF32,
   kVLogF32,

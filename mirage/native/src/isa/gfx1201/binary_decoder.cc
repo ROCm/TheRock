@@ -16,7 +16,7 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 220> kPhase0ExecutableOpcodes{{
+constexpr std::array<std::string_view, 222> kPhase0ExecutableOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_ADD_U32",
@@ -197,6 +197,8 @@ constexpr std::array<std::string_view, 220> kPhase0ExecutableOpcodes{{
     "V_CVT_I32_F32",
     "V_CVT_FLOOR_I32_F32",
     "V_CVT_NEAREST_I32_F32",
+    "V_CVT_I32_I16",
+    "V_CVT_U32_U16",
     "V_CVT_I32_F64",
     "V_EXP_F32",
     "V_LOG_F32",
@@ -798,6 +800,8 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
              instruction_name == "V_CVT_U32_F32" ||
              instruction_name == "V_CVT_FLOOR_I32_F32" ||
              instruction_name == "V_CVT_NEAREST_I32_F32" ||
+             instruction_name == "V_CVT_I32_I16" ||
+             instruction_name == "V_CVT_U32_U16" ||
              instruction_name == "V_CVT_I32_F32") {
     InstructionOperand dst;
     if (!DecodeVectorDestination(ExtractBits(word, 17, 8), &dst, error_message)) {
