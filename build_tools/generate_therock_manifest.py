@@ -134,7 +134,10 @@ def patches_for_submodule_by_name(repo_dir: Path, sub_name: str):
 
 
 def build_manifest_schema(
-    repo_root: Path, the_rock_commit: str, github_run_id: str | None = None
+    repo_root: Path,
+    the_rock_commit: str,
+    github_run_id: str | None = None,
+    rocm_package_version: str | None = None,
 ) -> dict:
 
     # Enumerate submodules from .gitmodules at the specified commit.
@@ -160,6 +163,9 @@ def build_manifest_schema(
 
     if github_run_id:
         manifest["github_run_id"] = github_run_id
+
+    if rocm_package_version:
+        manifest["rocm_package_version"] = rocm_package_version
 
     manifest["submodules"] = rows
     return manifest
@@ -190,13 +196,23 @@ def main():
         help="Path to flag_settings.json to include in the manifest",
         default=None,
     )
+    ap.add_argument(
+        "--rocm-package-version",
+        help="ROCm package version to include in the manifest",
+        default=None,
+    )
     args = ap.parse_args()
 
     repo_root = git_root()
     the_rock_commit = _run(["git", "rev-parse", args.commit], cwd=repo_root)
     github_run_id = os.getenv("GITHUB_RUN_ID")
 
-    manifest = build_manifest_schema(repo_root, the_rock_commit, github_run_id)
+    manifest = build_manifest_schema(
+        repo_root,
+        the_rock_commit,
+        github_run_id,
+        args.rocm_package_version,
+    )
 
     # Merge flag settings into the manifest if provided.
     if args.flag_settings:
