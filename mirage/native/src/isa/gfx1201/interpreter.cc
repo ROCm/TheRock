@@ -27,7 +27,7 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 173> kExecutableSeedOpcodes{{
+constexpr std::array<std::string_view, 179> kExecutableSeedOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_ADD_U32",
@@ -179,6 +179,12 @@ constexpr std::array<std::string_view, 173> kExecutableSeedOpcodes{{
     "V_CVT_U32_F64",
     "V_CVT_I32_F32",
     "V_CVT_I32_F64",
+    "V_FREXP_EXP_I32_F32",
+    "V_FREXP_MANT_F32",
+    "V_FRACT_F32",
+    "V_FREXP_EXP_I32_F64",
+    "V_FREXP_MANT_F64",
+    "V_FRACT_F64",
     "V_TRUNC_F32",
     "V_CEIL_F32",
     "V_RNDNE_F32",
@@ -253,6 +259,40 @@ std::uint32_t TruncateDoubleToU32(double value) {
     return std::numeric_limits<std::uint32_t>::max();
   }
   return static_cast<std::uint32_t>(truncated);
+}
+
+std::int32_t EvaluateFrexpExpI32(float input) {
+  if (input == 0.0f || !std::isfinite(input)) {
+    return 0;
+  }
+  int exponent = 0;
+  std::frexp(input, &exponent);
+  return exponent;
+}
+
+std::int32_t EvaluateFrexpExpI32(double input) {
+  if (input == 0.0 || !std::isfinite(input)) {
+    return 0;
+  }
+  int exponent = 0;
+  std::frexp(input, &exponent);
+  return exponent;
+}
+
+float EvaluateFrexpMantissaF32(float input) {
+  if (input == 0.0f || !std::isfinite(input)) {
+    return input;
+  }
+  int exponent = 0;
+  return std::frexp(input, &exponent);
+}
+
+double EvaluateFrexpMantissaF64(double input) {
+  if (input == 0.0 || !std::isfinite(input)) {
+    return input;
+  }
+  int exponent = 0;
+  return std::frexp(input, &exponent);
 }
 
 std::uint32_t ReverseBits32(std::uint32_t value) {
@@ -968,6 +1008,30 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
     *compiled_opcode = Gfx1201CompiledOpcode::kVCvtI32F64;
     return true;
   }
+  if (opcode == "V_FREXP_EXP_I32_F32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVFrexpExpI32F32;
+    return true;
+  }
+  if (opcode == "V_FREXP_MANT_F32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVFrexpMantF32;
+    return true;
+  }
+  if (opcode == "V_FRACT_F32") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVFractF32;
+    return true;
+  }
+  if (opcode == "V_FREXP_EXP_I32_F64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVFrexpExpI32F64;
+    return true;
+  }
+  if (opcode == "V_FREXP_MANT_F64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVFrexpMantF64;
+    return true;
+  }
+  if (opcode == "V_FRACT_F64") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVFractF64;
+    return true;
+  }
   if (opcode == "V_TRUNC_F32") {
     *compiled_opcode = Gfx1201CompiledOpcode::kVTruncF32;
     return true;
@@ -1366,6 +1430,17 @@ std::uint32_t EvaluateVectorUnarySeedInstruction(std::string_view opcode,
   if (opcode == "V_CVT_F32_U32") {
     return BitCast<std::uint32_t>(static_cast<float>(value));
   }
+  if (opcode == "V_FREXP_EXP_I32_F32") {
+    return BitCast<std::uint32_t>(EvaluateFrexpExpI32(BitCast<float>(value)));
+  }
+  if (opcode == "V_FREXP_MANT_F32") {
+    return BitCast<std::uint32_t>(
+        EvaluateFrexpMantissaF32(BitCast<float>(value)));
+  }
+  if (opcode == "V_FRACT_F32") {
+    const float input = BitCast<float>(value);
+    return BitCast<std::uint32_t>(input - std::floor(input));
+  }
   if (opcode == "V_TRUNC_F32") {
     return BitCast<std::uint32_t>(std::trunc(BitCast<float>(value)));
   }
@@ -1413,11 +1488,22 @@ std::uint32_t EvaluateVectorUnaryFromWideSeedInstruction(std::string_view opcode
   if (opcode == "V_CVT_U32_F64") {
     return TruncateDoubleToU32(BitCast<double>(value));
   }
+  if (opcode == "V_FREXP_EXP_I32_F64") {
+    return BitCast<std::uint32_t>(EvaluateFrexpExpI32(BitCast<double>(value)));
+  }
   return 0u;
 }
 
 std::uint64_t EvaluateWideVectorUnaryToWideSeedInstruction(
     std::string_view opcode, std::uint64_t value) {
+  if (opcode == "V_FREXP_MANT_F64") {
+    return BitCast<std::uint64_t>(
+        EvaluateFrexpMantissaF64(BitCast<double>(value)));
+  }
+  if (opcode == "V_FRACT_F64") {
+    const double input = BitCast<double>(value);
+    return BitCast<std::uint64_t>(input - std::floor(input));
+  }
   if (opcode == "V_TRUNC_F64") {
     return BitCast<std::uint64_t>(std::trunc(BitCast<double>(value)));
   }
@@ -2197,6 +2283,9 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
       instruction.opcode == "V_CVT_F32_UBYTE3" ||
       instruction.opcode == "V_CVT_F32_I32" ||
       instruction.opcode == "V_CVT_F32_U32" ||
+      instruction.opcode == "V_FREXP_EXP_I32_F32" ||
+      instruction.opcode == "V_FREXP_MANT_F32" ||
+      instruction.opcode == "V_FRACT_F32" ||
       instruction.opcode == "V_TRUNC_F32" ||
       instruction.opcode == "V_CEIL_F32" ||
       instruction.opcode == "V_RNDNE_F32" ||
@@ -2256,7 +2345,8 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
 
   if (instruction.opcode == "V_CVT_F32_F64" ||
       instruction.opcode == "V_CVT_I32_F64" ||
-      instruction.opcode == "V_CVT_U32_F64") {
+      instruction.opcode == "V_CVT_U32_F64" ||
+      instruction.opcode == "V_FREXP_EXP_I32_F64") {
     if (!ValidateOperandCount(instruction, 2, error_message)) {
       return false;
     }
@@ -2280,7 +2370,9 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
     return true;
   }
 
-  if (instruction.opcode == "V_TRUNC_F64" ||
+  if (instruction.opcode == "V_FREXP_MANT_F64" ||
+      instruction.opcode == "V_FRACT_F64" ||
+      instruction.opcode == "V_TRUNC_F64" ||
       instruction.opcode == "V_CEIL_F64" ||
       instruction.opcode == "V_RNDNE_F64" ||
       instruction.opcode == "V_FLOOR_F64") {
@@ -2590,6 +2682,12 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kVCvtU32F64:
     case Gfx1201CompiledOpcode::kVCvtI32F32:
     case Gfx1201CompiledOpcode::kVCvtI32F64:
+    case Gfx1201CompiledOpcode::kVFrexpExpI32F32:
+    case Gfx1201CompiledOpcode::kVFrexpMantF32:
+    case Gfx1201CompiledOpcode::kVFractF32:
+    case Gfx1201CompiledOpcode::kVFrexpExpI32F64:
+    case Gfx1201CompiledOpcode::kVFrexpMantF64:
+    case Gfx1201CompiledOpcode::kVFractF64:
     case Gfx1201CompiledOpcode::kVTruncF32:
     case Gfx1201CompiledOpcode::kVCeilF32:
     case Gfx1201CompiledOpcode::kVRndneF32:

@@ -445,6 +445,57 @@ bool ExpectRoundingSeedState(const mirage::sim::isa::WaveExecutionState& state) 
          !state.waiting_on_barrier && state.pc == 10u;
 }
 
+bool ExpectFractFrexpSeedState(
+    const mirage::sim::isa::WaveExecutionState& state) {
+  std::uint32_t source_f64_low = 0;
+  std::uint32_t source_f64_high = 0;
+  SplitU64(DoubleBits(6.5), &source_f64_low, &source_f64_high);
+  std::uint32_t mantissa_f64_low = 0;
+  std::uint32_t mantissa_f64_high = 0;
+  SplitU64(DoubleBits(0.8125), &mantissa_f64_low, &mantissa_f64_high);
+  std::uint32_t fract_f64_low = 0;
+  std::uint32_t fract_f64_high = 0;
+  SplitU64(DoubleBits(0.5), &fract_f64_low, &fract_f64_high);
+
+  return state.vgprs[4][0] == FloatBits(0.25f) &&
+         state.vgprs[4][1] == FloatBits(0.25f) &&
+         state.vgprs[4][2] == 0x44444444u &&
+         state.vgprs[4][3] == FloatBits(0.25f) &&
+         state.vgprs[5][0] == 3u && state.vgprs[5][1] == 3u &&
+         state.vgprs[5][2] == 0x55555555u && state.vgprs[5][3] == 3u &&
+         state.vgprs[6][0] == FloatBits(-0.71875f) &&
+         state.vgprs[6][1] == FloatBits(-0.71875f) &&
+         state.vgprs[6][2] == 0x66666666u &&
+         state.vgprs[6][3] == FloatBits(-0.71875f) &&
+         state.vgprs[8][0] == 3u && state.vgprs[8][1] == 3u &&
+         state.vgprs[8][2] == 0x88888888u && state.vgprs[8][3] == 3u &&
+         state.vgprs[20][0] == source_f64_low &&
+         state.vgprs[20][1] == source_f64_low &&
+         state.vgprs[20][2] == 0x20202020u &&
+         state.vgprs[20][3] == source_f64_low &&
+         state.vgprs[21][0] == source_f64_high &&
+         state.vgprs[21][1] == source_f64_high &&
+         state.vgprs[21][2] == 0x21212121u &&
+         state.vgprs[21][3] == source_f64_high &&
+         state.vgprs[30][0] == mantissa_f64_low &&
+         state.vgprs[30][1] == mantissa_f64_low &&
+         state.vgprs[30][2] == 0x30303030u &&
+         state.vgprs[30][3] == mantissa_f64_low &&
+         state.vgprs[31][0] == mantissa_f64_high &&
+         state.vgprs[31][1] == mantissa_f64_high &&
+         state.vgprs[31][2] == 0x31313131u &&
+         state.vgprs[31][3] == mantissa_f64_high &&
+         state.vgprs[32][0] == fract_f64_low &&
+         state.vgprs[32][1] == fract_f64_low &&
+         state.vgprs[32][2] == 0x32323232u &&
+         state.vgprs[32][3] == fract_f64_low &&
+         state.vgprs[33][0] == fract_f64_high &&
+         state.vgprs[33][1] == fract_f64_high &&
+         state.vgprs[33][2] == 0x33333333u &&
+         state.vgprs[33][3] == fract_f64_high && state.halted &&
+         !state.waiting_on_barrier && state.pc == 9u;
+}
+
 bool ExpectRemainingCompareState(const mirage::sim::isa::WaveExecutionState& state) {
   return state.sgprs[40] == 0xffffffffu && state.sgprs[41] == 0xffffffffu &&
          state.sgprs[42] == 1u && state.sgprs[43] == 4u &&
@@ -1118,6 +1169,66 @@ int main() {
                   OperandValueClass::kScalarRegister, OperandAccess::kRead,
                   FragmentKind::kScalar, 64u, 2u, false),
               "expected V_CEIL_F64 source descriptor")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_fract_f32_words{
+      MakeVop1(32u, 14u, 257u)};
+  if (!Expect(decoder.DecodeInstruction(v_fract_f32_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_FRACT_F32 decode success") ||
+      !Expect(ExpectUnaryInstruction(instruction, "V_FRACT_F32",
+                                     OperandKind::kVgpr, 14u,
+                                     OperandKind::kVgpr, 1u),
+              "expected decoded V_FRACT_F32 operands")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_frexp_exp_i32_f64_words{
+      MakeVop1(60u, 15u, 120u)};
+  if (!Expect(decoder.DecodeInstruction(v_frexp_exp_i32_f64_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_FREXP_EXP_I32_F64 decode success") ||
+      !Expect(ExpectUnaryInstruction(instruction, "V_FREXP_EXP_I32_F64",
+                                     OperandKind::kVgpr, 15u,
+                                     OperandKind::kSgpr, 120u),
+              "expected decoded V_FREXP_EXP_I32_F64 operands") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[0], OperandRole::kDestination,
+                  OperandSlotKind::kDestination,
+                  OperandValueClass::kVectorRegister, OperandAccess::kWrite,
+                  FragmentKind::kVector, 32u, 1u, false),
+              "expected V_FREXP_EXP_I32_F64 destination descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[1], OperandRole::kSource0,
+                  OperandSlotKind::kSource0,
+                  OperandValueClass::kScalarRegister, OperandAccess::kRead,
+                  FragmentKind::kScalar, 64u, 2u, false),
+              "expected V_FREXP_EXP_I32_F64 source descriptor")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_fract_f64_words{
+      MakeVop1(62u, 16u, 276u)};
+  if (!Expect(decoder.DecodeInstruction(v_fract_f64_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_FRACT_F64 decode success") ||
+      !Expect(ExpectUnaryInstruction(instruction, "V_FRACT_F64",
+                                     OperandKind::kVgpr, 16u,
+                                     OperandKind::kVgpr, 20u),
+              "expected decoded V_FRACT_F64 operands") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[0], OperandRole::kDestination,
+                  OperandSlotKind::kDestination,
+                  OperandValueClass::kVectorRegister, OperandAccess::kWrite,
+                  FragmentKind::kVector, 64u, 2u, false),
+              "expected V_FRACT_F64 destination descriptor") ||
+      !Expect(ExpectOperandDescriptor(
+                  instruction.operands[1], OperandRole::kSource0,
+                  OperandSlotKind::kSource0,
+                  OperandValueClass::kVectorRegister, OperandAccess::kRead,
+                  FragmentKind::kVector, 64u, 2u, false),
+              "expected V_FRACT_F64 source descriptor")) {
     return 1;
   }
 
@@ -2184,6 +2295,103 @@ int main() {
               "expected compiled rounding execution success") ||
       !Expect(ExpectRoundingSeedState(compiled_rounding_state),
               "expected compiled rounding state")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 12> fract_frexp_words{
+      MakeVop1(1u, 1u, 255u),
+      FloatBits(-5.75f),
+      MakeVop1(32u, 4u, 257u),
+      MakeVop1(63u, 5u, 257u),
+      MakeVop1(64u, 6u, 257u),
+      MakeVop1(1u, 2u, 255u),
+      FloatBits(6.5f),
+      MakeVop1(16u, 20u, 258u),
+      MakeVop1(60u, 8u, 276u),
+      MakeVop1(61u, 30u, 276u),
+      MakeVop1(62u, 32u, 276u),
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> fract_frexp_program;
+  if (!Expect(decoder.DecodeProgram(fract_frexp_words, &fract_frexp_program,
+                                    &error_message),
+              "expected fract/frexp program decode success") ||
+      !Expect(fract_frexp_program.size() == 10u,
+              "expected ten decoded fract/frexp instructions") ||
+      !Expect(fract_frexp_program[1].opcode == "V_FRACT_F32",
+              "expected decoded V_FRACT_F32") ||
+      !Expect(fract_frexp_program[2].opcode == "V_FREXP_EXP_I32_F32",
+              "expected decoded V_FREXP_EXP_I32_F32") ||
+      !Expect(fract_frexp_program[3].opcode == "V_FREXP_MANT_F32",
+              "expected decoded V_FREXP_MANT_F32") ||
+      !Expect(fract_frexp_program[6].opcode == "V_FREXP_EXP_I32_F64",
+              "expected decoded V_FREXP_EXP_I32_F64") ||
+      !Expect(fract_frexp_program[7].opcode == "V_FREXP_MANT_F64",
+              "expected decoded V_FREXP_MANT_F64") ||
+      !Expect(fract_frexp_program[8].opcode == "V_FRACT_F64",
+              "expected decoded V_FRACT_F64")) {
+    return 1;
+  }
+
+  auto initialize_fract_frexp_state = [](WaveExecutionState* state) {
+    state->exec_mask = 0xbu;
+    state->vgprs[4][2] = 0x44444444u;
+    state->vgprs[5][2] = 0x55555555u;
+    state->vgprs[6][2] = 0x66666666u;
+    state->vgprs[8][2] = 0x88888888u;
+    state->vgprs[20][2] = 0x20202020u;
+    state->vgprs[21][2] = 0x21212121u;
+    state->vgprs[30][2] = 0x30303030u;
+    state->vgprs[31][2] = 0x31313131u;
+    state->vgprs[32][2] = 0x32323232u;
+    state->vgprs[33][2] = 0x33333333u;
+  };
+
+  WaveExecutionState decoded_fract_frexp_state;
+  initialize_fract_frexp_state(&decoded_fract_frexp_state);
+  if (!Expect(interpreter.ExecuteProgram(fract_frexp_program,
+                                         &decoded_fract_frexp_state,
+                                         &error_message),
+              "expected decoded fract/frexp execution success") ||
+      !Expect(ExpectFractFrexpSeedState(decoded_fract_frexp_state),
+              "expected decoded fract/frexp state")) {
+    return 1;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_fract_frexp_program;
+  if (!Expect(interpreter.CompileProgram(fract_frexp_program,
+                                         &compiled_fract_frexp_program,
+                                         &error_message),
+              "expected compiled fract/frexp program success") ||
+      !Expect(compiled_fract_frexp_program[1].opcode ==
+                  Gfx1201CompiledOpcode::kVFractF32,
+              "expected compiled V_FRACT_F32 opcode") ||
+      !Expect(compiled_fract_frexp_program[2].opcode ==
+                  Gfx1201CompiledOpcode::kVFrexpExpI32F32,
+              "expected compiled V_FREXP_EXP_I32_F32 opcode") ||
+      !Expect(compiled_fract_frexp_program[3].opcode ==
+                  Gfx1201CompiledOpcode::kVFrexpMantF32,
+              "expected compiled V_FREXP_MANT_F32 opcode") ||
+      !Expect(compiled_fract_frexp_program[6].opcode ==
+                  Gfx1201CompiledOpcode::kVFrexpExpI32F64,
+              "expected compiled V_FREXP_EXP_I32_F64 opcode") ||
+      !Expect(compiled_fract_frexp_program[7].opcode ==
+                  Gfx1201CompiledOpcode::kVFrexpMantF64,
+              "expected compiled V_FREXP_MANT_F64 opcode") ||
+      !Expect(compiled_fract_frexp_program[8].opcode ==
+                  Gfx1201CompiledOpcode::kVFractF64,
+              "expected compiled V_FRACT_F64 opcode")) {
+    return 1;
+  }
+
+  WaveExecutionState compiled_fract_frexp_state;
+  initialize_fract_frexp_state(&compiled_fract_frexp_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_fract_frexp_program,
+                                         &compiled_fract_frexp_state,
+                                         &error_message),
+              "expected compiled fract/frexp execution success") ||
+      !Expect(ExpectFractFrexpSeedState(compiled_fract_frexp_state),
+              "expected compiled fract/frexp state")) {
     return 1;
   }
 
