@@ -75,24 +75,40 @@ def run_linux(args: argparse.Namespace) -> int:
         fetch_cmd += f" {args.fetch_artifact_args}"
 
     steps = [
-        ("Installing uv", "curl -LsSf https://astral.sh/uv/install.sh | bash && source $HOME/.local/bin/env"),
-        ("Cloning TheRock", "git clone https://github.com/ROCm/TheRock.git && cd TheRock"),
+        (
+            "Installing uv",
+            "curl -LsSf https://astral.sh/uv/install.sh | bash && source $HOME/.local/bin/env",
+        ),
+        (
+            "Cloning TheRock",
+            "git clone https://github.com/ROCm/TheRock.git && cd TheRock",
+        ),
         ("Creating virtual environment", "uv venv .venv && source .venv/bin/activate"),
         ("Installing dependencies", "uv pip install -r requirements-test.txt"),
         ("Downloading artifacts", fetch_cmd),
-        ("Setting environment variables", " && ".join([
-            "export THEROCK_BIN_DIR=./therock-build/bin",
-            "export OUTPUT_ARTIFACTS_DIR=./therock-build",
-            f"export SHARD_INDEX={args.shard_index}",
-            f"export TOTAL_SHARDS={args.total_shards}",
-            f"export TEST_TYPE={args.test_type}",
-        ])),
+        (
+            "Setting environment variables",
+            " && ".join(
+                [
+                    "export THEROCK_BIN_DIR=./therock-build/bin",
+                    "export OUTPUT_ARTIFACTS_DIR=./therock-build",
+                    f"export SHARD_INDEX={args.shard_index}",
+                    f"export TOTAL_SHARDS={args.total_shards}",
+                    f"export TEST_TYPE={args.test_type}",
+                ]
+            ),
+        ),
     ]
 
     if args.setup_only:
         steps.append(("Setup complete", f"echo 'Run: {args.test_script}'"))
     else:
-        steps.append(("Running test", f"{args.test_script} || echo 'Test failed with exit code '$?"))
+        steps.append(
+            (
+                "Running test",
+                f"{args.test_script} || echo 'Test failed with exit code '$?",
+            )
+        )
 
     total = len(steps)
     lines = ["set -e"]
@@ -104,13 +120,22 @@ def run_linux(args: argparse.Namespace) -> int:
     lines.append("exec /bin/bash")
 
     docker_cmd = [
-        "docker", "run", "--rm", "-it",
-        "--ipc", "host",
-        "--group-add", "video",
-        "--device", "/dev/kfd",
-        "--device", "/dev/dri",
+        "docker",
+        "run",
+        "--rm",
+        "-it",
+        "--ipc",
+        "host",
+        "--group-add",
+        "video",
+        "--device",
+        "/dev/kfd",
+        "--device",
+        "/dev/dri",
         args.container_image,
-        "/bin/bash", "-c", "\n".join(lines),
+        "/bin/bash",
+        "-c",
+        "\n".join(lines),
     ]
 
     try:
@@ -147,25 +172,39 @@ def run_windows(args: argparse.Namespace) -> int:
         fetch_cmd += f" {args.fetch_artifact_args}"
 
     steps = [
-        ("Installing chocolatey", (
-            "Set-ExecutionPolicy Bypass -Scope Process -Force; "
-            "[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; "
-            "iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))"
-        )),
+        (
+            "Installing chocolatey",
+            (
+                "Set-ExecutionPolicy Bypass -Scope Process -Force; "
+                "[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; "
+                "iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))"
+            ),
+        ),
         ("Installing dependencies", "choco install -y git python cmake ninja ccache"),
-        ("Refreshing environment", "$env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path','User')"),
+        (
+            "Refreshing environment",
+            "$env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path','User')",
+        ),
         ("Installing uv", "irm https://astral.sh/uv/install.ps1 | iex"),
-        ("Cloning TheRock", "git clone https://github.com/ROCm/TheRock.git; Set-Location TheRock"),
+        (
+            "Cloning TheRock",
+            "git clone https://github.com/ROCm/TheRock.git; Set-Location TheRock",
+        ),
         ("Creating virtual environment", "uv venv .venv; .venv\\Scripts\\Activate.ps1"),
         ("Installing Python dependencies", "uv pip install -r requirements-test.txt"),
         ("Downloading artifacts", fetch_cmd),
-        ("Setting environment variables", "; ".join([
-            "$env:THEROCK_BIN_DIR='./therock-build/bin'",
-            "$env:OUTPUT_ARTIFACTS_DIR='./therock-build'",
-            f"$env:SHARD_INDEX='{args.shard_index}'",
-            f"$env:TOTAL_SHARDS='{args.total_shards}'",
-            f"$env:TEST_TYPE='{args.test_type}'",
-        ])),
+        (
+            "Setting environment variables",
+            "; ".join(
+                [
+                    "$env:THEROCK_BIN_DIR='./therock-build/bin'",
+                    "$env:OUTPUT_ARTIFACTS_DIR='./therock-build'",
+                    f"$env:SHARD_INDEX='{args.shard_index}'",
+                    f"$env:TOTAL_SHARDS='{args.total_shards}'",
+                    f"$env:TEST_TYPE='{args.test_type}'",
+                ]
+            ),
+        ),
     ]
 
     if args.setup_only:
@@ -184,7 +223,7 @@ def run_windows(args: argparse.Namespace) -> int:
     script_content = "\n".join(lines)
 
     # Write to temp file and execute
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.ps1', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".ps1", delete=False) as f:
         f.write(script_content)
         script_path = f.name
 
@@ -196,7 +235,9 @@ def run_windows(args: argparse.Namespace) -> int:
             print("-" * 60)
             print(f"\nScript saved to: {script_path}")
             print("Copy this script to your Windows machine and run:")
-            print(f"  powershell -ExecutionPolicy Bypass -File {Path(script_path).name}")
+            print(
+                f"  powershell -ExecutionPolicy Bypass -File {Path(script_path).name}"
+            )
             return 0
 
         result = subprocess.run(
@@ -219,10 +260,18 @@ def main() -> int:
     parser.add_argument("--shard-index", default="1", help="Shard index")
     parser.add_argument("--total-shards", default="1", help="Total shards")
     parser.add_argument("--test-type", default="full", help="Test type")
-    parser.add_argument("--container-image", default=DEFAULT_CONTAINER_IMAGE, help="Docker image (Linux only)")
+    parser.add_argument(
+        "--container-image",
+        default=DEFAULT_CONTAINER_IMAGE,
+        help="Docker image (Linux only)",
+    )
     parser.add_argument("--fetch-artifact-args", default="", help="Extra artifact args")
-    parser.add_argument("--setup-only", action="store_true", help="Setup only, don't run test")
-    parser.add_argument("--print-cmd", action="store_true", help="Print reproduction command")
+    parser.add_argument(
+        "--setup-only", action="store_true", help="Setup only, don't run test"
+    )
+    parser.add_argument(
+        "--print-cmd", action="store_true", help="Print reproduction command"
+    )
 
     args = parser.parse_args()
 

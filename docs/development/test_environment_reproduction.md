@@ -14,15 +14,12 @@ python build_tools/github_actions/reproduce_test_failure.py \
     --repository {GITHUB_REPO} \
     --amdgpu-family {GPU_FAMILY} \
     --test-script "{TEST_SCRIPT}" \
-    --platform {linux|windows}
 ```
 
 Options:
 
 - `--setup-only`: Set up the environment and drop into a shell without running
   the test
-- `--platform linux`: Use Docker (default)
-- `--platform windows`: Bare metal setup with PowerShell
 
 When a test fails in CI, the reproduction command is printed in the job output.
 
@@ -127,13 +124,13 @@ python build_tools/github_actions/test_executable_scripts/test_rocblas.py
 
 ## Parameters
 
-| Parameter           | Description                                                                                                                                                             |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `CI_RUN_ID`         | GitHub Actions run ID (e.g., from `https://github.com/ROCm/TheRock/actions/runs/16948046392` → `16948046392`)                                                           |
-| `GPU_FAMILY`        | LLVM target name (e.g., `gfx94X-dcgpu`, `gfx1151`, `gfx110X-all`)                                                                                                       |
-| `GITHUB_REPO`       | Repository where the CI run was executed (e.g., `ROCm/TheRock`, `ROCm/rocm-libraries`)                                                                                  |
-| `ADDITIONAL_FLAGS`  | Optional flags for `install_rocm_from_artifacts.py`. See [installing_artifacts.md](installing_artifacts.md#component-selection) for available options.                 |
-| `TEST_SCRIPT`       | The test command to run (e.g., `python build_tools/github_actions/test_executable_scripts/test_rocblas.py`)                                                            |
+| Parameter          | Description                                                                                                                                            |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `CI_RUN_ID`        | GitHub Actions run ID (e.g., from `https://github.com/ROCm/TheRock/actions/runs/16948046392` → `16948046392`)                                          |
+| `GPU_FAMILY`       | LLVM target name (e.g., `gfx94X-dcgpu`, `gfx1151`, `gfx110X-all`)                                                                                      |
+| `GITHUB_REPO`      | Repository where the CI run was executed (e.g., `ROCm/TheRock`, `ROCm/rocm-libraries`)                                                                 |
+| `ADDITIONAL_FLAGS` | Optional flags for `install_rocm_from_artifacts.py`. See [installing_artifacts.md](installing_artifacts.md#component-selection) for available options. |
+| `TEST_SCRIPT`      | The test command to run (e.g., `python build_tools/github_actions/test_executable_scripts/test_rocblas.py`)                                            |
 
 ## Test Scripts
 
