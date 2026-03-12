@@ -121,6 +121,22 @@ def run_linux(args: argparse.Namespace) -> int:
 
 def run_windows(args: argparse.Namespace) -> int:
     """Run reproduction on bare metal for Windows."""
+    packages = ["chocolatey", "git", "python", "cmake", "ninja", "ccache", "uv"]
+
+    print("=" * 60)
+    print("WINDOWS REPRODUCTION (bare metal)")
+    print("=" * 60)
+    print()
+    print("This will install the following packages on your system:")
+    for pkg in packages:
+        print(f"  - {pkg}")
+    print()
+    response = input("Continue? [y/N] ").strip().lower()
+    if response not in ("y", "yes"):
+        print("Aborted.")
+        return 1
+    print()
+
     fetch_cmd = (
         f"$env:GITHUB_REPOSITORY='{args.repository}'; "
         f"python build_tools/install_rocm_from_artifacts.py "
@@ -173,16 +189,6 @@ def run_windows(args: argparse.Namespace) -> int:
         script_path = f.name
 
     try:
-        print("=" * 60)
-        print("WINDOWS REPRODUCTION (bare metal)")
-        print("=" * 60)
-        print()
-        print(f"Run ID: {args.run_id}")
-        print(f"Repository: {args.repository}")
-        print(f"AMDGPU Family: {args.amdgpu_family}")
-        print(f"Test Script: {args.test_script}")
-        print()
-
         if platform.system() != "Windows":
             print("NOTE: Not running on Windows. Printing script instead:")
             print("-" * 60)
