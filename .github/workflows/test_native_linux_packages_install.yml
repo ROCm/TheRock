@@ -6,12 +6,17 @@ name: Test Native Linux Packages Install
 on:
   workflow_call:
     inputs:
-      repo_url:
-        description: "Full repository URL (e.g. https://rocm.nightlies.amd.com/deb/20260204-12345/ or https://rocm.prereleases.amd.com/packages/ubuntu2404)"
+      repo_base_url:
+        description: "Base repository URL (scheme + netloc, no trailing slash). repo_url is computed via get_url_repo_params get-repo-url using os_profile, gpg_key_url, and repo_sub_folder."
         required: true
         type: string
+      repo_sub_folder:
+        description: "Repo subfolder (e.g. YYYYMMDD-<id> for dev/nightly; empty for prerelease). Passed from build_native_linux_packages."
+        required: false
+        type: string
+        default: ""
       gpg_key_url:
-        description: "GPG key URL for signed repos (optional; leave empty for nightly). Set for prerelease."
+        description: "GPG key URL for signed repos"
         required: false
         type: string
         default: ""
@@ -31,12 +36,16 @@ on:
         default: "/opt/rocm/core"
   workflow_dispatch:
     inputs:
-      repo_url:
-        description: "Full repository URL"
+      repo_base_url:
+        description: "Base repository URL (no trailing slash)"
         required: true
         type: string
+      repo_sub_folder:
+        description: "Repo subfolder (e.g. YYYYMMDD-id; empty for prerelease)"
+        type: string
+        default: ""
       gpg_key_url:
-        description: "GPG key URL (optional; leave empty for nightly)"
+        description: "GPG key URL for signed repos"
         type: string
         default: ""
       os_profile:
@@ -73,8 +82,43 @@ permissions:
 run-name: Test - Native Linux packages Install (${{ inputs.os_profile }})
 
 jobs:
+  compute_repo_url:
+    name: Get repo URL (get-repo-url)
+    runs-on: ubuntu-24.04
+    outputs:
+      repo_url: ${{ steps.get-repo-url.outputs.repo_url }}
+      pkg_type: ${{ steps.get-repo-url.outputs.pkg_type }}
+      release_type: ${{ steps.get-repo-url.outputs.release_type }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Get repo URL from params (get_url_repo_params get-repo-url)
+        id: get-repo-url
+        run: |
+          # TODO: Enhance Logic for
+          # Deriving release_type using gpg key.
+          if [ -n "${{ inputs.gpg_key_url }}" ]; then
+            RELEASE_TYPE="prerelease"
+          else
+            RELEASE_TYPE="dev"
+          fi
+          case "${{ inputs.os_profile }}" in
+            ubuntu*|debian*) PKG_TYPE="deb" ;;
+            *) PKG_TYPE="rpm" ;;
+          esac
+          echo "release_type=${RELEASE_TYPE}" >> $GITHUB_OUTPUT
+          echo "pkg_type=${PKG_TYPE}" >> $GITHUB_OUTPUT
+          python build_tools/packaging/linux/get_url_repo_params.py get-repo-url \
+            --release-type "${RELEASE_TYPE}" \
+            --native-package-type "${PKG_TYPE}" \
+            --repo-base-url "${{ inputs.repo_base_url }}" \
+            --os-profile "${{ inputs.os_profile }}" \
+            --repo-sub-folder "${{ inputs.repo_sub_folder }}" \
+            --output env >> $GITHUB_OUTPUT
+
   test_native_linux_packages_install:
     name: Test Native Linux Packages Installation - ${{ inputs.os_profile }}
+    needs: [compute_repo_url]
     strategy:
       fail-fast: false
     runs-on: ${{ github.repository_owner == 'ROCm' && 'linux-mi325-1gpu-ossci-rocm' || 'ubuntu-24.04' }}
@@ -84,15 +128,13 @@ jobs:
       options: --ipc host
         --privileged
     env:
-      REPO_URL: ${{ inputs.repo_url }}
+      REPO_URL: ${{ needs.compute_repo_url.outputs.repo_url }}
       GPG_KEY_URL: ${{ inputs.gpg_key_url || '' }}
       OS_PROFILE: ${{ inputs.os_profile }}
-      # Package type from os_profile: ubuntu/debian -> deb, else rpm
-      PKG_TYPE: ${{ (startsWith(inputs.os_profile, 'ubuntu') || startsWith(inputs.os_profile, 'debian')) && 'deb' || 'rpm' }}
+      PKG_TYPE: ${{ needs.compute_repo_url.outputs.pkg_type }}
+      RELEASE_TYPE: ${{ needs.compute_repo_url.outputs.release_type }}
       GFX_ARCH: ${{ inputs.gfx_arch || 'gfx94x' }}
       INSTALL_PREFIX: ${{ inputs.install_prefix || '/opt/rocm/core' }}
-      # Release type for script: prerelease if GPG key URL is set, else nightly
-      RELEASE_TYPE: ${{ inputs.gpg_key_url != '' && 'prerelease' || 'nightly' }}
     steps:
       - name: Install System Prerequisites
         run: |
