@@ -242,6 +242,25 @@ bool HasSlotKind(const StubDecodedInstruction& instruction,
   return false;
 }
 
+bool AllSlotsExplicit(const StubDecodedInstruction& instruction) {
+  for (std::uint32_t i = 0; i < instruction.operand_slots.binding_count; ++i) {
+    if (instruction.operand_slots.bindings[i].is_implicit) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool AllDescriptorsExplicit(const StubDecodedInstruction& instruction) {
+  for (std::uint32_t i = 0; i < instruction.operand_descriptors.descriptor_count;
+       ++i) {
+    if (instruction.operand_descriptors.descriptors[i].is_implicit) {
+      return false;
+    }
+  }
+  return true;
+}
+
 std::uint32_t CountDescriptorsForRole(const StubDecodedInstruction& instruction,
                                       StubOperandRole role) {
   std::uint32_t count = 0;
@@ -2407,6 +2426,8 @@ int main() {
                     decoded.operand_slots.binding_count == 3 &&
                     decoded.operand_descriptors.descriptor_count == 3 &&
                     !decoded.uses_scale_path && !decoded.uses_paired_operands &&
+                    AllSlotsExplicit(decoded) &&
+                    AllDescriptorsExplicit(decoded) &&
                     AllSlotWaveSizesAre(decoded, 0) &&
                     AllDescriptorWaveSizesAre(decoded, 0),
                 "expected routed tensor seed to keep non-matrix wave-size semantics")) {
@@ -2452,6 +2473,8 @@ int main() {
                     decoded.operand_slots.binding_count == 2 &&
                     decoded.operand_descriptors.descriptor_count == 2 &&
                     !decoded.uses_scale_path && !decoded.uses_tensor_memory &&
+                    AllSlotsExplicit(decoded) &&
+                    AllDescriptorsExplicit(decoded) &&
                     AllSlotWaveSizesAre(decoded, 0) &&
                     AllDescriptorWaveSizesAre(decoded, 0),
                 "expected routed VOP1 seed to keep scalar/packed wave-size semantics")) {
@@ -2515,6 +2538,8 @@ int main() {
                     decoded.operand_slots.binding_count == 5 &&
                     decoded.operand_descriptors.descriptor_count == 5 &&
                     !decoded.uses_tensor_memory &&
+                    AllSlotsExplicit(decoded) &&
+                    AllDescriptorsExplicit(decoded) &&
                     AllSlotWaveSizesAre(decoded, 0) &&
                     AllDescriptorWaveSizesAre(decoded, 0),
                 "expected routed VOP3 SDST seed to keep non-matrix wave-size semantics")) {
@@ -2550,6 +2575,8 @@ int main() {
                     !decoded.uses_tensor_memory &&
                     decoded.operand_slots.binding_count == 4 &&
                     decoded.operand_descriptors.descriptor_count == 4 &&
+                    AllSlotsExplicit(decoded) &&
+                    AllDescriptorsExplicit(decoded) &&
                     AllSlotWaveSizesAre(decoded, 0) &&
                     AllDescriptorWaveSizesAre(decoded, 0),
                 "expected paired-scale helper to keep non-matrix wave-size semantics")) {
