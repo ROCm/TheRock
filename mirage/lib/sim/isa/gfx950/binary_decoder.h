@@ -35,6 +35,10 @@ class Gfx950BinaryDecoder {
                    DecodedInstruction* instruction,
                    std::size_t* words_consumed,
                    std::string* error_message) const;
+  bool DecodeMtbuf(std::span<const std::uint32_t> words,
+                   DecodedInstruction* instruction,
+                   std::size_t* words_consumed,
+                   std::string* error_message) const;
   bool DecodeFlat(std::span<const std::uint32_t> words,
                   DecodedInstruction* instruction,
                   std::size_t* words_consumed,

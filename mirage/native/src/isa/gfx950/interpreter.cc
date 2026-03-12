@@ -1123,8 +1123,98 @@ std::uint8_t GetScalarAtomicMemoryDwordCount(std::string_view opcode) {
   return HasSuffix(NormalizeScalarAtomicOpcode(opcode), "_X2") ? 2u : 1u;
 }
 
+bool IsBufferFormatMemoryOpcode(std::string_view opcode) {
+  return opcode == "BUFFER_LOAD_FORMAT_X" ||
+         opcode == "BUFFER_LOAD_FORMAT_XY" ||
+         opcode == "BUFFER_LOAD_FORMAT_XYZ" ||
+         opcode == "BUFFER_LOAD_FORMAT_XYZW" ||
+         opcode == "TBUFFER_LOAD_FORMAT_X" ||
+         opcode == "TBUFFER_LOAD_FORMAT_XY" ||
+         opcode == "TBUFFER_LOAD_FORMAT_XYZ" ||
+         opcode == "TBUFFER_LOAD_FORMAT_XYZW" ||
+         opcode == "BUFFER_STORE_FORMAT_X" ||
+         opcode == "BUFFER_STORE_FORMAT_XY" ||
+         opcode == "BUFFER_STORE_FORMAT_XYZ" ||
+         opcode == "BUFFER_STORE_FORMAT_XYZW" ||
+         opcode == "TBUFFER_STORE_FORMAT_X" ||
+         opcode == "TBUFFER_STORE_FORMAT_XY" ||
+         opcode == "TBUFFER_STORE_FORMAT_XYZ" ||
+         opcode == "TBUFFER_STORE_FORMAT_XYZW" ||
+         opcode == "BUFFER_LOAD_FORMAT_D16_X" ||
+         opcode == "BUFFER_LOAD_FORMAT_D16_XY" ||
+         opcode == "BUFFER_LOAD_FORMAT_D16_XYZ" ||
+         opcode == "BUFFER_LOAD_FORMAT_D16_XYZW" ||
+         opcode == "TBUFFER_LOAD_FORMAT_D16_X" ||
+         opcode == "TBUFFER_LOAD_FORMAT_D16_XY" ||
+         opcode == "TBUFFER_LOAD_FORMAT_D16_XYZ" ||
+         opcode == "TBUFFER_LOAD_FORMAT_D16_XYZW" ||
+         opcode == "BUFFER_STORE_FORMAT_D16_X" ||
+         opcode == "BUFFER_STORE_FORMAT_D16_XY" ||
+         opcode == "BUFFER_STORE_FORMAT_D16_XYZ" ||
+         opcode == "BUFFER_STORE_FORMAT_D16_XYZW" ||
+         opcode == "TBUFFER_STORE_FORMAT_D16_X" ||
+         opcode == "TBUFFER_STORE_FORMAT_D16_XY" ||
+         opcode == "TBUFFER_STORE_FORMAT_D16_XYZ" ||
+         opcode == "TBUFFER_STORE_FORMAT_D16_XYZW" ||
+         opcode == "BUFFER_LOAD_FORMAT_D16_HI_X" ||
+         opcode == "BUFFER_STORE_FORMAT_D16_HI_X";
+}
+
+bool IsBufferFormatLoadOpcode(std::string_view opcode) {
+  return opcode == "BUFFER_LOAD_FORMAT_X" ||
+         opcode == "BUFFER_LOAD_FORMAT_XY" ||
+         opcode == "BUFFER_LOAD_FORMAT_XYZ" ||
+         opcode == "BUFFER_LOAD_FORMAT_XYZW" ||
+         opcode == "TBUFFER_LOAD_FORMAT_X" ||
+         opcode == "TBUFFER_LOAD_FORMAT_XY" ||
+         opcode == "TBUFFER_LOAD_FORMAT_XYZ" ||
+         opcode == "TBUFFER_LOAD_FORMAT_XYZW" ||
+         opcode == "BUFFER_LOAD_FORMAT_D16_X" ||
+         opcode == "BUFFER_LOAD_FORMAT_D16_XY" ||
+         opcode == "BUFFER_LOAD_FORMAT_D16_XYZ" ||
+         opcode == "BUFFER_LOAD_FORMAT_D16_XYZW" ||
+         opcode == "TBUFFER_LOAD_FORMAT_D16_X" ||
+         opcode == "TBUFFER_LOAD_FORMAT_D16_XY" ||
+         opcode == "TBUFFER_LOAD_FORMAT_D16_XYZ" ||
+         opcode == "TBUFFER_LOAD_FORMAT_D16_XYZW" ||
+         opcode == "BUFFER_LOAD_FORMAT_D16_HI_X";
+}
+
+bool IsBufferFormatD16Opcode(std::string_view opcode) {
+  return opcode.find("_FORMAT_D16_") != std::string_view::npos ||
+         opcode == "BUFFER_LOAD_FORMAT_D16_HI_X" ||
+         opcode == "BUFFER_STORE_FORMAT_D16_HI_X";
+}
+
+bool IsBufferFormatD16HiXOpcode(std::string_view opcode) {
+  return opcode == "BUFFER_LOAD_FORMAT_D16_HI_X" ||
+         opcode == "BUFFER_STORE_FORMAT_D16_HI_X";
+}
+
+std::uint8_t GetBufferFormatComponentCount(std::string_view opcode) {
+  if (HasSuffix(opcode, "_XYZW")) {
+    return 4u;
+  }
+  if (HasSuffix(opcode, "_XYZ")) {
+    return 3u;
+  }
+  if (HasSuffix(opcode, "_XY")) {
+    return 2u;
+  }
+  return 1u;
+}
+
+std::uint8_t GetBufferFormatRegisterDwordCount(std::string_view opcode) {
+  const std::uint8_t component_count = GetBufferFormatComponentCount(opcode);
+  if (IsBufferFormatD16Opcode(opcode)) {
+    return static_cast<std::uint8_t>((component_count + 1u) / 2u);
+  }
+  return component_count;
+}
+
 bool IsBufferMemoryOpcode(std::string_view opcode) {
-  return opcode == "BUFFER_LOAD_UBYTE" ||
+  return IsBufferFormatMemoryOpcode(opcode) ||
+         opcode == "BUFFER_LOAD_UBYTE" ||
          opcode == "BUFFER_LOAD_SBYTE" ||
          opcode == "BUFFER_LOAD_USHORT" ||
          opcode == "BUFFER_LOAD_SSHORT" ||
@@ -1149,7 +1239,8 @@ bool IsBufferMemoryOpcode(std::string_view opcode) {
 }
 
 bool IsBufferMemoryLoadOpcode(std::string_view opcode) {
-  return opcode == "BUFFER_LOAD_UBYTE" ||
+  return IsBufferFormatLoadOpcode(opcode) ||
+         opcode == "BUFFER_LOAD_UBYTE" ||
          opcode == "BUFFER_LOAD_SBYTE" ||
          opcode == "BUFFER_LOAD_USHORT" ||
          opcode == "BUFFER_LOAD_SSHORT" ||
@@ -1166,6 +1257,9 @@ bool IsBufferMemoryLoadOpcode(std::string_view opcode) {
 }
 
 std::uint8_t GetBufferMemoryRegisterDwordCount(std::string_view opcode) {
+  if (IsBufferFormatMemoryOpcode(opcode)) {
+    return GetBufferFormatRegisterDwordCount(opcode);
+  }
   if (opcode == "BUFFER_LOAD_DWORDX4" || opcode == "BUFFER_STORE_DWORDX4") {
     return 4u;
   }
@@ -1182,6 +1276,542 @@ bool IsSignedBufferMemoryLoadOpcode(std::string_view opcode) {
   return opcode == "BUFFER_LOAD_SBYTE" || opcode == "BUFFER_LOAD_SSHORT" ||
          opcode == "BUFFER_LOAD_SBYTE_D16" ||
          opcode == "BUFFER_LOAD_SBYTE_D16_HI";
+}
+
+constexpr std::uint8_t kBufferDstSelZero = 0u;
+constexpr std::uint8_t kBufferDstSelOne = 1u;
+constexpr std::uint8_t kBufferDstSelX = 4u;
+constexpr std::uint8_t kBufferDstSelY = 5u;
+constexpr std::uint8_t kBufferDstSelZ = 6u;
+constexpr std::uint8_t kBufferDstSelW = 7u;
+
+constexpr std::uint8_t kBufferNumFormatUnorm = 0u;
+constexpr std::uint8_t kBufferNumFormatSnorm = 1u;
+constexpr std::uint8_t kBufferNumFormatUscaled = 2u;
+constexpr std::uint8_t kBufferNumFormatSscaled = 3u;
+constexpr std::uint8_t kBufferNumFormatUint = 4u;
+constexpr std::uint8_t kBufferNumFormatSint = 5u;
+constexpr std::uint8_t kBufferNumFormatFloat = 7u;
+
+struct BufferFormatLayout {
+  std::uint8_t component_count = 0u;
+  std::array<std::uint8_t, 4> component_bits{};
+  std::uint16_t total_bits = 0u;
+};
+
+struct BufferFormatResourceDescriptor {
+  std::uint64_t base_address = 0u;
+  std::uint32_t size_bytes = 0u;
+  std::array<std::uint8_t, 4> dst_sel{};
+  std::uint8_t data_format = 0u;
+  std::uint8_t num_format = 0u;
+  bool add_tid_enable = false;
+};
+
+std::uint32_t BitMask32(std::uint8_t bit_count) {
+  if (bit_count >= 32u) {
+    return std::numeric_limits<std::uint32_t>::max();
+  }
+  return (1u << bit_count) - 1u;
+}
+
+std::uint32_t ExtractPackedBits(const std::array<std::uint8_t, 16>& bytes,
+                                std::uint16_t bit_offset,
+                                std::uint8_t bit_count) {
+  std::uint32_t value = 0u;
+  for (std::uint8_t bit_index = 0; bit_index < bit_count; ++bit_index) {
+    const std::uint16_t absolute_bit = bit_offset + bit_index;
+    const std::uint8_t source_byte = bytes[absolute_bit / 8u];
+    const std::uint8_t source_bit = absolute_bit % 8u;
+    if (((source_byte >> source_bit) & 1u) != 0u) {
+      value |= (1u << bit_index);
+    }
+  }
+  return value;
+}
+
+void InsertPackedBits(std::array<std::uint8_t, 16>* bytes,
+                      std::uint16_t bit_offset,
+                      std::uint8_t bit_count,
+                      std::uint32_t value) {
+  if (bytes == nullptr) {
+    return;
+  }
+  for (std::uint8_t bit_index = 0; bit_index < bit_count; ++bit_index) {
+    const std::uint16_t absolute_bit = bit_offset + bit_index;
+    const std::uint8_t destination_byte_index = absolute_bit / 8u;
+    const std::uint8_t destination_bit = absolute_bit % 8u;
+    const std::uint8_t bit_value = static_cast<std::uint8_t>((value >> bit_index) & 1u);
+    if (bit_value != 0u) {
+      (*bytes)[destination_byte_index] |= (1u << destination_bit);
+    } else {
+      (*bytes)[destination_byte_index] &=
+          static_cast<std::uint8_t>(~(1u << destination_bit));
+    }
+  }
+}
+
+std::int32_t SignExtendToI32(std::uint32_t value, std::uint8_t bit_count) {
+  if (bit_count >= 32u) {
+    return static_cast<std::int32_t>(value);
+  }
+  const std::uint32_t mask = BitMask32(bit_count);
+  const std::uint32_t sign_bit = 1u << (bit_count - 1u);
+  const std::uint32_t masked_value = value & mask;
+  if ((masked_value & sign_bit) == 0u) {
+    return static_cast<std::int32_t>(masked_value);
+  }
+  return static_cast<std::int32_t>(masked_value | ~mask);
+}
+
+std::uint32_t ClampUnsignedToBits(std::uint32_t value, std::uint8_t bit_count) {
+  return std::min(value, BitMask32(bit_count));
+}
+
+std::int32_t ClampSignedToBits(std::int32_t value, std::uint8_t bit_count) {
+  if (bit_count >= 32u) {
+    return value;
+  }
+  const std::int32_t min_value =
+      -static_cast<std::int32_t>(1u << (bit_count - 1u));
+  const std::int32_t max_value =
+      static_cast<std::int32_t>((1u << (bit_count - 1u)) - 1u);
+  return std::clamp(value, min_value, max_value);
+}
+
+std::uint32_t EncodeSignedToBits(std::int32_t value, std::uint8_t bit_count) {
+  return static_cast<std::uint32_t>(value) & BitMask32(bit_count);
+}
+
+bool GetBufferFormatLayout(std::uint8_t data_format,
+                           BufferFormatLayout* layout,
+                           std::string* error_message) {
+  if (layout == nullptr) {
+    if (error_message != nullptr) {
+      *error_message = "buffer format layout output must not be null";
+    }
+    return false;
+  }
+
+  layout->component_count = 0u;
+  layout->component_bits = {};
+  layout->total_bits = 0u;
+  switch (data_format) {
+    case 1u:
+      layout->component_count = 1u;
+      layout->component_bits[0] = 8u;
+      layout->total_bits = 8u;
+      return true;
+    case 2u:
+      layout->component_count = 1u;
+      layout->component_bits[0] = 16u;
+      layout->total_bits = 16u;
+      return true;
+    case 3u:
+      layout->component_count = 2u;
+      layout->component_bits[0] = 8u;
+      layout->component_bits[1] = 8u;
+      layout->total_bits = 16u;
+      return true;
+    case 4u:
+      layout->component_count = 1u;
+      layout->component_bits[0] = 32u;
+      layout->total_bits = 32u;
+      return true;
+    case 5u:
+      layout->component_count = 2u;
+      layout->component_bits[0] = 16u;
+      layout->component_bits[1] = 16u;
+      layout->total_bits = 32u;
+      return true;
+    case 6u:
+      layout->component_count = 3u;
+      layout->component_bits[0] = 10u;
+      layout->component_bits[1] = 11u;
+      layout->component_bits[2] = 11u;
+      layout->total_bits = 32u;
+      return true;
+    case 7u:
+      layout->component_count = 3u;
+      layout->component_bits[0] = 11u;
+      layout->component_bits[1] = 11u;
+      layout->component_bits[2] = 10u;
+      layout->total_bits = 32u;
+      return true;
+    case 8u:
+      layout->component_count = 4u;
+      layout->component_bits[0] = 10u;
+      layout->component_bits[1] = 10u;
+      layout->component_bits[2] = 10u;
+      layout->component_bits[3] = 2u;
+      layout->total_bits = 32u;
+      return true;
+    case 9u:
+      layout->component_count = 4u;
+      layout->component_bits[0] = 2u;
+      layout->component_bits[1] = 10u;
+      layout->component_bits[2] = 10u;
+      layout->component_bits[3] = 10u;
+      layout->total_bits = 32u;
+      return true;
+    case 10u:
+      layout->component_count = 4u;
+      layout->component_bits[0] = 8u;
+      layout->component_bits[1] = 8u;
+      layout->component_bits[2] = 8u;
+      layout->component_bits[3] = 8u;
+      layout->total_bits = 32u;
+      return true;
+    case 11u:
+      layout->component_count = 2u;
+      layout->component_bits[0] = 32u;
+      layout->component_bits[1] = 32u;
+      layout->total_bits = 64u;
+      return true;
+    case 12u:
+      layout->component_count = 4u;
+      layout->component_bits[0] = 16u;
+      layout->component_bits[1] = 16u;
+      layout->component_bits[2] = 16u;
+      layout->component_bits[3] = 16u;
+      layout->total_bits = 64u;
+      return true;
+    case 13u:
+      layout->component_count = 3u;
+      layout->component_bits[0] = 32u;
+      layout->component_bits[1] = 32u;
+      layout->component_bits[2] = 32u;
+      layout->total_bits = 96u;
+      return true;
+    case 14u:
+      layout->component_count = 4u;
+      layout->component_bits[0] = 32u;
+      layout->component_bits[1] = 32u;
+      layout->component_bits[2] = 32u;
+      layout->component_bits[3] = 32u;
+      layout->total_bits = 128u;
+      return true;
+    default:
+      if (error_message != nullptr) {
+        *error_message = "unsupported buffer data format";
+      }
+      return false;
+  }
+}
+
+bool IsIdentityBufferFormatDstSel(const BufferFormatResourceDescriptor& descriptor,
+                                  std::uint8_t component_count) {
+  static constexpr std::array<std::uint8_t, 4> kIdentityDstSel = {
+      kBufferDstSelX, kBufferDstSelY, kBufferDstSelZ, kBufferDstSelW};
+  for (std::uint8_t component_index = 0; component_index < component_count;
+       ++component_index) {
+    if (descriptor.dst_sel[component_index] != kIdentityDstSel[component_index]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool DecodeBufferFormatComponentToFloat(std::uint32_t raw_value,
+                                        std::uint8_t component_bits,
+                                        std::uint8_t num_format,
+                                        float* value,
+                                        std::string* error_message) {
+  if (value == nullptr) {
+    if (error_message != nullptr) {
+      *error_message = "buffer format float output must not be null";
+    }
+    return false;
+  }
+
+  const std::uint32_t unsigned_value = raw_value & BitMask32(component_bits);
+  const std::int32_t signed_value =
+      SignExtendToI32(unsigned_value, component_bits);
+  switch (num_format) {
+    case kBufferNumFormatUnorm:
+      *value = static_cast<float>(unsigned_value) /
+               static_cast<float>(BitMask32(component_bits));
+      return true;
+    case kBufferNumFormatSnorm: {
+      if (component_bits >= 32u) {
+        if (signed_value == std::numeric_limits<std::int32_t>::min()) {
+          *value = -1.0f;
+        } else {
+          *value = static_cast<float>(signed_value) /
+                   static_cast<float>(std::numeric_limits<std::int32_t>::max());
+        }
+        return true;
+      }
+      const std::int32_t min_value =
+          -static_cast<std::int32_t>(1u << (component_bits - 1u));
+      const std::int32_t max_value =
+          static_cast<std::int32_t>((1u << (component_bits - 1u)) - 1u);
+      *value = signed_value <= min_value
+                   ? -1.0f
+                   : static_cast<float>(signed_value) /
+                         static_cast<float>(max_value);
+      return true;
+    }
+    case kBufferNumFormatUscaled:
+      *value = static_cast<float>(unsigned_value);
+      return true;
+    case kBufferNumFormatSscaled:
+      *value = static_cast<float>(signed_value);
+      return true;
+    case kBufferNumFormatFloat:
+      if (component_bits == 16u) {
+        *value = HalfToFloat(static_cast<std::uint16_t>(unsigned_value));
+        return true;
+      }
+      if (component_bits == 32u) {
+        *value = BitCast<float>(unsigned_value);
+        return true;
+      }
+      if (error_message != nullptr) {
+        *error_message = "unsupported packed float buffer format";
+      }
+      return false;
+    default:
+      if (error_message != nullptr) {
+        *error_message = "buffer format is not a floating-point load format";
+      }
+      return false;
+  }
+}
+
+bool DecodeBufferFormatComponentToU32(std::uint32_t raw_value,
+                                      std::uint8_t component_bits,
+                                      std::uint8_t num_format,
+                                      std::uint32_t* value,
+                                      std::string* error_message) {
+  if (value == nullptr) {
+    if (error_message != nullptr) {
+      *error_message = "buffer format load output must not be null";
+    }
+    return false;
+  }
+
+  const std::uint32_t unsigned_value = raw_value & BitMask32(component_bits);
+  switch (num_format) {
+    case kBufferNumFormatUint:
+      *value = unsigned_value;
+      return true;
+    case kBufferNumFormatSint:
+      *value = static_cast<std::uint32_t>(
+          SignExtendToI32(unsigned_value, component_bits));
+      return true;
+    case kBufferNumFormatUnorm:
+    case kBufferNumFormatSnorm:
+    case kBufferNumFormatUscaled:
+    case kBufferNumFormatSscaled:
+    case kBufferNumFormatFloat: {
+      float decoded_value = 0.0f;
+      if (!DecodeBufferFormatComponentToFloat(raw_value, component_bits,
+                                              num_format, &decoded_value,
+                                              error_message)) {
+        return false;
+      }
+      *value = BitCast<std::uint32_t>(decoded_value);
+      return true;
+    }
+    default:
+      if (error_message != nullptr) {
+        *error_message = "unsupported buffer number format";
+      }
+      return false;
+  }
+}
+
+bool DecodeBufferFormatComponentToPackedD16(std::uint32_t raw_value,
+                                            std::uint8_t component_bits,
+                                            std::uint8_t num_format,
+                                            std::uint16_t* value,
+                                            std::string* error_message) {
+  if (value == nullptr) {
+    if (error_message != nullptr) {
+      *error_message = "buffer format d16 output must not be null";
+    }
+    return false;
+  }
+
+  const std::uint32_t unsigned_value = raw_value & BitMask32(component_bits);
+  switch (num_format) {
+    case kBufferNumFormatUint:
+      *value = static_cast<std::uint16_t>(
+          std::min(unsigned_value,
+                   static_cast<std::uint32_t>(
+                       std::numeric_limits<std::uint16_t>::max())));
+      return true;
+    case kBufferNumFormatSint: {
+      const std::int32_t signed_value =
+          SignExtendToI32(unsigned_value, component_bits);
+      *value = static_cast<std::uint16_t>(static_cast<std::int16_t>(
+          std::clamp(signed_value,
+                     static_cast<std::int32_t>(
+                         std::numeric_limits<std::int16_t>::min()),
+                     static_cast<std::int32_t>(
+                         std::numeric_limits<std::int16_t>::max()))));
+      return true;
+    }
+    case kBufferNumFormatUnorm:
+    case kBufferNumFormatSnorm:
+    case kBufferNumFormatUscaled:
+    case kBufferNumFormatSscaled:
+    case kBufferNumFormatFloat: {
+      float decoded_value = 0.0f;
+      if (!DecodeBufferFormatComponentToFloat(raw_value, component_bits,
+                                              num_format, &decoded_value,
+                                              error_message)) {
+        return false;
+      }
+      *value = FloatToHalf(decoded_value);
+      return true;
+    }
+    default:
+      if (error_message != nullptr) {
+        *error_message = "unsupported buffer d16 number format";
+      }
+      return false;
+  }
+}
+
+std::uint32_t EncodeUnormToBits(float value, std::uint8_t component_bits) {
+  const float clamped = std::clamp(value, 0.0f, 1.0f);
+  const double scaled =
+      std::round(static_cast<double>(clamped) * BitMask32(component_bits));
+  return ClampUnsignedToBits(static_cast<std::uint32_t>(scaled), component_bits);
+}
+
+std::uint32_t EncodeSnormToBits(float value, std::uint8_t component_bits) {
+  const float clamped = std::clamp(value, -1.0f, 1.0f);
+  if (component_bits >= 32u) {
+    if (clamped <= -1.0f) {
+      return static_cast<std::uint32_t>(std::numeric_limits<std::int32_t>::min());
+    }
+    const double scaled = std::round(
+        static_cast<double>(clamped) *
+        static_cast<double>(std::numeric_limits<std::int32_t>::max()));
+    return EncodeSignedToBits(static_cast<std::int32_t>(scaled), component_bits);
+  }
+  const std::int32_t min_value =
+      -static_cast<std::int32_t>(1u << (component_bits - 1u));
+  const std::int32_t max_value =
+      static_cast<std::int32_t>((1u << (component_bits - 1u)) - 1u);
+  if (clamped <= -1.0f) {
+    return EncodeSignedToBits(min_value, component_bits);
+  }
+  const double scaled =
+      std::round(static_cast<double>(clamped) * static_cast<double>(max_value));
+  return EncodeSignedToBits(static_cast<std::int32_t>(scaled), component_bits);
+}
+
+bool EncodeBufferFormatComponentFromFloat(float value,
+                                          std::uint8_t component_bits,
+                                          std::uint8_t num_format,
+                                          std::uint32_t* raw_value,
+                                          std::string* error_message) {
+  if (raw_value == nullptr) {
+    if (error_message != nullptr) {
+      *error_message = "buffer format store output must not be null";
+    }
+    return false;
+  }
+
+  switch (num_format) {
+    case kBufferNumFormatUnorm:
+      *raw_value = EncodeUnormToBits(value, component_bits);
+      return true;
+    case kBufferNumFormatSnorm:
+      *raw_value = EncodeSnormToBits(value, component_bits);
+      return true;
+    case kBufferNumFormatUscaled:
+      *raw_value =
+          ClampUnsignedToBits(TruncateFloatToU32(value), component_bits);
+      return true;
+    case kBufferNumFormatSscaled:
+      *raw_value = EncodeSignedToBits(
+          ClampSignedToBits(TruncateFloatToI32(value), component_bits),
+          component_bits);
+      return true;
+    case kBufferNumFormatFloat:
+      if (component_bits == 16u) {
+        *raw_value = FloatToHalf(value);
+        return true;
+      }
+      if (component_bits == 32u) {
+        *raw_value = BitCast<std::uint32_t>(value);
+        return true;
+      }
+      if (error_message != nullptr) {
+        *error_message = "unsupported packed float buffer format";
+      }
+      return false;
+    default:
+      if (error_message != nullptr) {
+        *error_message = "buffer format is not a floating-point store format";
+      }
+      return false;
+  }
+}
+
+bool EncodeBufferFormatComponentFromU32(std::uint32_t value,
+                                        std::uint8_t component_bits,
+                                        std::uint8_t num_format,
+                                        std::uint32_t* raw_value,
+                                        std::string* error_message) {
+  switch (num_format) {
+    case kBufferNumFormatUint:
+      *raw_value = ClampUnsignedToBits(value, component_bits);
+      return true;
+    case kBufferNumFormatSint:
+      *raw_value = EncodeSignedToBits(
+          ClampSignedToBits(BitCast<std::int32_t>(value), component_bits),
+          component_bits);
+      return true;
+    case kBufferNumFormatUnorm:
+    case kBufferNumFormatSnorm:
+    case kBufferNumFormatUscaled:
+    case kBufferNumFormatSscaled:
+    case kBufferNumFormatFloat:
+      return EncodeBufferFormatComponentFromFloat(BitCast<float>(value),
+                                                  component_bits, num_format,
+                                                  raw_value, error_message);
+    default:
+      if (error_message != nullptr) {
+        *error_message = "unsupported buffer number format";
+      }
+      return false;
+  }
+}
+
+bool EncodeBufferFormatComponentFromPackedD16(std::uint16_t value,
+                                              std::uint8_t component_bits,
+                                              std::uint8_t num_format,
+                                              std::uint32_t* raw_value,
+                                              std::string* error_message) {
+  switch (num_format) {
+    case kBufferNumFormatUint:
+      *raw_value = ClampUnsignedToBits(value, component_bits);
+      return true;
+    case kBufferNumFormatSint:
+      *raw_value = EncodeSignedToBits(
+          ClampSignedToBits(static_cast<std::int16_t>(value), component_bits),
+          component_bits);
+      return true;
+    case kBufferNumFormatUnorm:
+    case kBufferNumFormatSnorm:
+    case kBufferNumFormatUscaled:
+    case kBufferNumFormatSscaled:
+    case kBufferNumFormatFloat:
+      return EncodeBufferFormatComponentFromFloat(
+          HalfToFloat(value), component_bits, num_format, raw_value,
+          error_message);
+    default:
+      if (error_message != nullptr) {
+        *error_message = "unsupported buffer d16 number format";
+      }
+      return false;
+  }
 }
 
 bool IsVectorBinaryOpcode(std::string_view opcode) {
@@ -10601,10 +11231,333 @@ bool Gfx950Interpreter::ExecuteScalarAtomic(const DecodedInstruction& instructio
   return true;
 }
 
+bool Gfx950Interpreter::ExecuteBufferFormatMemory(
+    const DecodedInstruction& instruction,
+    WaveExecutionState* state,
+    ExecutionMemory* memory,
+    std::string* error_message) const {
+  const bool uses_instruction_format = HasPrefix(instruction.opcode, "TBUFFER_");
+  if (!ValidateOperandCount(instruction, uses_instruction_format ? 7u : 5u,
+                            error_message)) {
+    return false;
+  }
+  if (memory == nullptr) {
+    if (error_message != nullptr) {
+      *error_message = "buffer format instruction requires execution memory";
+    }
+    return false;
+  }
+
+  const bool is_load = IsBufferFormatLoadOpcode(instruction.opcode);
+  const bool is_d16 = IsBufferFormatD16Opcode(instruction.opcode);
+  const bool is_hi_x = IsBufferFormatD16HiXOpcode(instruction.opcode);
+  const std::uint8_t requested_component_count =
+      GetBufferFormatComponentCount(instruction.opcode);
+  const std::uint8_t register_dword_count =
+      GetBufferFormatRegisterDwordCount(instruction.opcode);
+  const InstructionOperand& data_operand = instruction.operands[0];
+  const InstructionOperand& address_operand = instruction.operands[1];
+  const InstructionOperand& resource_operand = instruction.operands[2];
+  const InstructionOperand& soffset_operand = instruction.operands[3];
+  const InstructionOperand& offset_operand = instruction.operands[4];
+  const InstructionOperand* data_format_operand =
+      uses_instruction_format ? &instruction.operands[5] : nullptr;
+  const InstructionOperand* num_format_operand =
+      uses_instruction_format ? &instruction.operands[6] : nullptr;
+  if (data_operand.kind != OperandKind::kVgpr) {
+    if (error_message != nullptr) {
+      *error_message = "buffer format data operand must be a VGPR";
+    }
+    return false;
+  }
+  if (address_operand.kind != OperandKind::kImm32 &&
+      address_operand.kind != OperandKind::kVgpr) {
+    if (error_message != nullptr) {
+      *error_message =
+          "buffer format address operand must be an immediate or VGPR";
+    }
+    return false;
+  }
+  if (resource_operand.kind != OperandKind::kSgpr) {
+    if (error_message != nullptr) {
+      *error_message = "buffer format resource operand must use scalar registers";
+    }
+    return false;
+  }
+  if (offset_operand.kind != OperandKind::kImm32) {
+    if (error_message != nullptr) {
+      *error_message = "buffer format offset operand must be an immediate";
+    }
+    return false;
+  }
+  if (uses_instruction_format &&
+      (data_format_operand->kind != OperandKind::kImm32 ||
+       num_format_operand->kind != OperandKind::kImm32)) {
+    if (error_message != nullptr) {
+      *error_message =
+          "typed buffer format operands must be immediates";
+    }
+    return false;
+  }
+  if (data_operand.index + register_dword_count - 1 >= state->vgprs.size()) {
+    if (error_message != nullptr) {
+      *error_message = "buffer format data register range out of bounds";
+    }
+    return false;
+  }
+  if (address_operand.kind == OperandKind::kVgpr &&
+      address_operand.index >= state->vgprs.size()) {
+    if (error_message != nullptr) {
+      *error_message = "buffer format address register out of bounds";
+    }
+    return false;
+  }
+  if (resource_operand.index + 3 >= state->sgprs.size()) {
+    if (error_message != nullptr) {
+      *error_message = "buffer format resource descriptor out of bounds";
+    }
+    return false;
+  }
+
+  const std::uint32_t descriptor_word0 = state->sgprs[resource_operand.index];
+  const std::uint32_t descriptor_word1 =
+      state->sgprs[resource_operand.index + 1];
+  if ((descriptor_word1 >> 16) != 0u) {
+    if (error_message != nullptr) {
+      *error_message = "structured buffer descriptors are not supported";
+    }
+    return false;
+  }
+
+  BufferFormatResourceDescriptor descriptor{};
+  descriptor.base_address = static_cast<std::uint64_t>(descriptor_word0) |
+                            (static_cast<std::uint64_t>(descriptor_word1 & 0xffffu)
+                             << 32);
+  descriptor.size_bytes = state->sgprs[resource_operand.index + 2];
+  const std::uint32_t descriptor_word3 =
+      state->sgprs[resource_operand.index + 3];
+  descriptor.dst_sel[0] = static_cast<std::uint8_t>(descriptor_word3 & 0x7u);
+  descriptor.dst_sel[1] =
+      static_cast<std::uint8_t>((descriptor_word3 >> 3) & 0x7u);
+  descriptor.dst_sel[2] =
+      static_cast<std::uint8_t>((descriptor_word3 >> 6) & 0x7u);
+  descriptor.dst_sel[3] =
+      static_cast<std::uint8_t>((descriptor_word3 >> 9) & 0x7u);
+  descriptor.data_format = uses_instruction_format
+                               ? static_cast<std::uint8_t>(
+                                     data_format_operand->imm32 & 0xfu)
+                               : static_cast<std::uint8_t>(
+                                     (descriptor_word3 >> 12) & 0x7fu);
+  descriptor.num_format = uses_instruction_format
+                              ? static_cast<std::uint8_t>(
+                                    num_format_operand->imm32 & 0x7u)
+                              : static_cast<std::uint8_t>(
+                                    (descriptor_word3 >> 19) & 0x7u);
+  descriptor.add_tid_enable = ((descriptor_word3 >> 22) & 1u) != 0u;
+  if (descriptor.add_tid_enable) {
+    if (error_message != nullptr) {
+      *error_message = "buffer format add_tid descriptors are not supported";
+    }
+    return false;
+  }
+
+  BufferFormatLayout layout{};
+  if (!GetBufferFormatLayout(descriptor.data_format, &layout, error_message)) {
+    return false;
+  }
+  if (requested_component_count > layout.component_count) {
+    if (error_message != nullptr) {
+      *error_message =
+          "buffer format opcode requests more components than the descriptor format";
+    }
+    return false;
+  }
+  if (!IsIdentityBufferFormatDstSel(descriptor, requested_component_count)) {
+    if (error_message != nullptr) {
+      *error_message = "non-identity buffer format dst_sel is not supported";
+    }
+    return false;
+  }
+
+  std::uint16_t accessed_bits = 0u;
+  for (std::uint8_t component_index = 0; component_index < requested_component_count;
+       ++component_index) {
+    accessed_bits = static_cast<std::uint16_t>(
+        accessed_bits + layout.component_bits[component_index]);
+  }
+  const std::uint64_t transfer_size =
+      static_cast<std::uint64_t>((accessed_bits + 7u) / 8u);
+  const std::uint64_t instruction_offset = offset_operand.imm32;
+  const std::uint32_t scalar_offset =
+      ReadScalarOperand(soffset_operand, *state, error_message);
+  if (error_message != nullptr && !error_message->empty()) {
+    return false;
+  }
+
+  for (std::size_t lane_index = 0; lane_index < WaveExecutionState::kLaneCount;
+       ++lane_index) {
+    if (((state->exec_mask >> lane_index) & 1ULL) == 0) {
+      continue;
+    }
+
+    std::uint64_t lane_offset = 0u;
+    if (address_operand.kind == OperandKind::kVgpr) {
+      lane_offset =
+          ReadVectorOperand(address_operand, *state, lane_index, error_message);
+      if (error_message != nullptr && !error_message->empty()) {
+        return false;
+      }
+    }
+
+    std::uint64_t byte_offset = static_cast<std::uint64_t>(scalar_offset);
+    if (byte_offset > std::numeric_limits<std::uint64_t>::max() - lane_offset) {
+      if (error_message != nullptr) {
+        *error_message = "buffer format byte offset overflow";
+      }
+      return false;
+    }
+    byte_offset += lane_offset;
+    if (byte_offset >
+        std::numeric_limits<std::uint64_t>::max() - instruction_offset) {
+      if (error_message != nullptr) {
+        *error_message = "buffer format byte offset overflow";
+      }
+      return false;
+    }
+    byte_offset += instruction_offset;
+    if (byte_offset > descriptor.size_bytes ||
+        transfer_size > descriptor.size_bytes - byte_offset) {
+      if (error_message != nullptr) {
+        *error_message = "buffer format access exceeds resource size";
+      }
+      return false;
+    }
+    if (descriptor.base_address >
+        std::numeric_limits<std::uint64_t>::max() - byte_offset) {
+      if (error_message != nullptr) {
+        *error_message = "buffer format address overflow";
+      }
+      return false;
+    }
+    const std::uint64_t address = descriptor.base_address + byte_offset;
+
+    std::array<std::uint8_t, 16> element_bytes{};
+    for (std::uint64_t byte_index = 0; byte_index < transfer_size; ++byte_index) {
+      std::uint8_t value = 0u;
+      if (!ReadMemoryU8(memory, address + byte_index, &value, error_message)) {
+        return false;
+      }
+      element_bytes[byte_index] = value;
+    }
+
+    if (is_load) {
+      std::array<std::uint32_t, 4> results{};
+      std::uint16_t bit_offset = 0u;
+      for (std::uint8_t component_index = 0;
+           component_index < requested_component_count; ++component_index) {
+        const std::uint32_t raw_value = ExtractPackedBits(
+            element_bytes, bit_offset, layout.component_bits[component_index]);
+        if (!is_d16) {
+          if (!DecodeBufferFormatComponentToU32(
+                  raw_value, layout.component_bits[component_index],
+                  descriptor.num_format, &results[component_index],
+                  error_message)) {
+            return false;
+          }
+        } else {
+          std::uint16_t packed_component = 0u;
+          if (!DecodeBufferFormatComponentToPackedD16(
+                  raw_value, layout.component_bits[component_index],
+                  descriptor.num_format, &packed_component, error_message)) {
+            return false;
+          }
+          const std::uint8_t dword_index =
+              is_hi_x ? 0u : static_cast<std::uint8_t>(component_index / 2u);
+          const std::uint8_t shift =
+              is_hi_x ? 16u
+                      : static_cast<std::uint8_t>((component_index % 2u) * 16u);
+          results[dword_index] |=
+              static_cast<std::uint32_t>(packed_component) << shift;
+        }
+        bit_offset = static_cast<std::uint16_t>(
+            bit_offset + layout.component_bits[component_index]);
+      }
+
+      for (std::uint8_t dword_index = 0; dword_index < register_dword_count;
+           ++dword_index) {
+        if (!WriteVectorOperand(
+                InstructionOperand::Vgpr(
+                    static_cast<std::uint16_t>(data_operand.index + dword_index)),
+                lane_index, results[dword_index], state, error_message)) {
+          return false;
+        }
+      }
+    } else {
+      std::uint16_t bit_offset = 0u;
+      for (std::uint8_t component_index = 0;
+           component_index < requested_component_count; ++component_index) {
+        std::uint32_t raw_value = 0u;
+        if (!is_d16) {
+          const std::uint32_t component_value = ReadVectorOperand(
+              InstructionOperand::Vgpr(
+                  static_cast<std::uint16_t>(data_operand.index + component_index)),
+              *state, lane_index, error_message);
+          if (error_message != nullptr && !error_message->empty()) {
+            return false;
+          }
+          if (!EncodeBufferFormatComponentFromU32(
+                  component_value, layout.component_bits[component_index],
+                  descriptor.num_format, &raw_value, error_message)) {
+            return false;
+          }
+        } else {
+          const std::uint32_t packed_value = ReadVectorOperand(
+              InstructionOperand::Vgpr(
+                  static_cast<std::uint16_t>(data_operand.index +
+                                             (is_hi_x ? 0u : component_index / 2u))),
+              *state, lane_index, error_message);
+          if (error_message != nullptr && !error_message->empty()) {
+            return false;
+          }
+          const std::uint8_t shift =
+              is_hi_x ? 16u
+                      : static_cast<std::uint8_t>((component_index % 2u) * 16u);
+          const std::uint16_t component_value = static_cast<std::uint16_t>(
+              (packed_value >> shift) & 0xffffu);
+          if (!EncodeBufferFormatComponentFromPackedD16(
+                  component_value, layout.component_bits[component_index],
+                  descriptor.num_format, &raw_value, error_message)) {
+            return false;
+          }
+        }
+        InsertPackedBits(&element_bytes, bit_offset,
+                         layout.component_bits[component_index], raw_value);
+        bit_offset = static_cast<std::uint16_t>(
+            bit_offset + layout.component_bits[component_index]);
+      }
+
+      for (std::uint64_t byte_index = 0; byte_index < transfer_size; ++byte_index) {
+        if (!WriteMemoryU8(memory, address + byte_index, element_bytes[byte_index],
+                           error_message)) {
+          return false;
+        }
+      }
+    }
+  }
+
+  if (error_message != nullptr) {
+    error_message->clear();
+  }
+  return true;
+}
+
 bool Gfx950Interpreter::ExecuteBufferMemory(const DecodedInstruction& instruction,
                                             WaveExecutionState* state,
                                             ExecutionMemory* memory,
                                             std::string* error_message) const {
+  if (IsBufferFormatMemoryOpcode(instruction.opcode)) {
+    return ExecuteBufferFormatMemory(instruction, state, memory, error_message);
+  }
   if (!ValidateOperandCount(instruction, 5, error_message)) {
     return false;
   }

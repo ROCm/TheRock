@@ -17,6 +17,7 @@ constexpr std::uint32_t kEncSopk = 0xb;
 constexpr std::uint32_t kEncDs = 0x36;
 constexpr std::uint32_t kEncFlat = 55;
 constexpr std::uint32_t kEncMubuf = 56;
+constexpr std::uint32_t kEncMtbuf = 58;
 constexpr std::uint32_t kEncSmem = 0x30;
 constexpr std::uint32_t kEncVop1 = 0x3f;
 constexpr std::uint32_t kEncVopc = 0x3e;
@@ -297,7 +298,25 @@ bool IsSupportedScalarAtomicOpcode(std::string_view opcode_name) {
 }
 
 bool IsSupportedMubufVectorMemoryOpcode(std::string_view opcode_name) {
-  return opcode_name == "BUFFER_LOAD_UBYTE" ||
+  return opcode_name == "BUFFER_LOAD_FORMAT_X" ||
+         opcode_name == "BUFFER_LOAD_FORMAT_XY" ||
+         opcode_name == "BUFFER_LOAD_FORMAT_XYZ" ||
+         opcode_name == "BUFFER_LOAD_FORMAT_XYZW" ||
+         opcode_name == "BUFFER_STORE_FORMAT_X" ||
+         opcode_name == "BUFFER_STORE_FORMAT_XY" ||
+         opcode_name == "BUFFER_STORE_FORMAT_XYZ" ||
+         opcode_name == "BUFFER_STORE_FORMAT_XYZW" ||
+         opcode_name == "BUFFER_LOAD_FORMAT_D16_X" ||
+         opcode_name == "BUFFER_LOAD_FORMAT_D16_XY" ||
+         opcode_name == "BUFFER_LOAD_FORMAT_D16_XYZ" ||
+         opcode_name == "BUFFER_LOAD_FORMAT_D16_XYZW" ||
+         opcode_name == "BUFFER_STORE_FORMAT_D16_X" ||
+         opcode_name == "BUFFER_STORE_FORMAT_D16_XY" ||
+         opcode_name == "BUFFER_STORE_FORMAT_D16_XYZ" ||
+         opcode_name == "BUFFER_STORE_FORMAT_D16_XYZW" ||
+         opcode_name == "BUFFER_LOAD_FORMAT_D16_HI_X" ||
+         opcode_name == "BUFFER_STORE_FORMAT_D16_HI_X" ||
+         opcode_name == "BUFFER_LOAD_UBYTE" ||
          opcode_name == "BUFFER_LOAD_SBYTE" ||
          opcode_name == "BUFFER_LOAD_USHORT" ||
          opcode_name == "BUFFER_LOAD_SSHORT" ||
@@ -354,6 +373,25 @@ bool IsSupportedMubufAtomicOpcode(std::string_view opcode_name) {
          opcode_name == "BUFFER_ATOMIC_XOR_X2" ||
          opcode_name == "BUFFER_ATOMIC_INC_X2" ||
          opcode_name == "BUFFER_ATOMIC_DEC_X2";
+}
+
+bool IsSupportedMtbufOpcode(std::string_view opcode_name) {
+  return opcode_name == "TBUFFER_LOAD_FORMAT_X" ||
+         opcode_name == "TBUFFER_LOAD_FORMAT_XY" ||
+         opcode_name == "TBUFFER_LOAD_FORMAT_XYZ" ||
+         opcode_name == "TBUFFER_LOAD_FORMAT_XYZW" ||
+         opcode_name == "TBUFFER_STORE_FORMAT_X" ||
+         opcode_name == "TBUFFER_STORE_FORMAT_XY" ||
+         opcode_name == "TBUFFER_STORE_FORMAT_XYZ" ||
+         opcode_name == "TBUFFER_STORE_FORMAT_XYZW" ||
+         opcode_name == "TBUFFER_LOAD_FORMAT_D16_X" ||
+         opcode_name == "TBUFFER_LOAD_FORMAT_D16_XY" ||
+         opcode_name == "TBUFFER_LOAD_FORMAT_D16_XYZ" ||
+         opcode_name == "TBUFFER_LOAD_FORMAT_D16_XYZW" ||
+         opcode_name == "TBUFFER_STORE_FORMAT_D16_X" ||
+         opcode_name == "TBUFFER_STORE_FORMAT_D16_XY" ||
+         opcode_name == "TBUFFER_STORE_FORMAT_D16_XYZ" ||
+         opcode_name == "TBUFFER_STORE_FORMAT_D16_XYZW";
 }
 
 bool IsSupportedDsOpcode(std::string_view opcode_name) {
@@ -625,6 +663,9 @@ bool Gfx950BinaryDecoder::DecodeInstruction(
   }
   if (words.size() >= 2 && ExtractBits(word, 26, 6) == kEncMubuf) {
     return DecodeMubuf(words, instruction, words_consumed, error_message);
+  }
+  if (words.size() >= 2 && ExtractBits(word, 26, 6) == kEncMtbuf) {
+    return DecodeMtbuf(words, instruction, words_consumed, error_message);
   }
   if (words.size() >= 2 && ExtractBits(word, 26, 6) == kEncSmem) {
     return DecodeSmem(words, instruction, words_consumed, error_message);
@@ -977,6 +1018,87 @@ bool Gfx950BinaryDecoder::DecodeMubuf(std::span<const std::uint32_t> words,
     *instruction = DecodedInstruction::FiveOperand(instruction_name, data, address,
                                                    resource, soffset, offset);
   }
+  *words_consumed = 2;
+  return true;
+}
+
+bool Gfx950BinaryDecoder::DecodeMtbuf(std::span<const std::uint32_t> words,
+                                      DecodedInstruction* instruction,
+                                      std::size_t* words_consumed,
+                                      std::string* error_message) const {
+  if (words.size() < 2) {
+    if (error_message != nullptr) {
+      *error_message = "mtbuf instruction requires two dwords";
+    }
+    return false;
+  }
+
+  const std::uint64_t instruction_word =
+      static_cast<std::uint64_t>(words[0]) |
+      (static_cast<std::uint64_t>(words[1]) << 32);
+  const std::uint32_t opcode =
+      static_cast<std::uint32_t>(ExtractBits(instruction_word, 15, 4));
+  const char* instruction_name = FindInstructionName("ENC_MTBUF", opcode);
+  if (instruction_name == nullptr) {
+    if (error_message != nullptr) {
+      *error_message = "unknown MTBUF opcode";
+    }
+    return false;
+  }
+
+  const std::string_view opcode_name(instruction_name);
+  if (!IsSupportedMtbufOpcode(opcode_name)) {
+    if (error_message != nullptr) {
+      *error_message = "unsupported mtbuf opcode";
+    }
+    return false;
+  }
+  if (ExtractBits(instruction_word, 13, 1) != 0u) {
+    if (error_message != nullptr) {
+      *error_message = "idxen mtbuf addressing is not implemented";
+    }
+    return false;
+  }
+
+  InstructionOperand data;
+  if (opcode_name.starts_with("TBUFFER_LOAD_")) {
+    if (!DecodeVectorDestination(
+            static_cast<std::uint32_t>(ExtractBits(instruction_word, 40, 8)),
+            &data, error_message)) {
+      return false;
+    }
+  } else if (!DecodeVectorRegisterSource(
+                 static_cast<std::uint32_t>(ExtractBits(instruction_word, 40, 8)),
+                 &data, error_message)) {
+    return false;
+  }
+
+  InstructionOperand address = InstructionOperand::Imm32(0u);
+  if (ExtractBits(instruction_word, 12, 1) != 0u &&
+      !DecodeVectorRegisterSource(
+          static_cast<std::uint32_t>(ExtractBits(instruction_word, 32, 8)),
+          &address, error_message)) {
+    return false;
+  }
+
+  const InstructionOperand resource = InstructionOperand::Sgpr(
+      static_cast<std::uint16_t>(ExtractBits(instruction_word, 48, 5) * 4u));
+
+  InstructionOperand soffset;
+  std::size_t literal_words_consumed = 0;
+  if (!DecodeScalarSource(static_cast<std::uint32_t>(ExtractBits(instruction_word, 56, 8)),
+                          {}, &literal_words_consumed, &soffset, error_message)) {
+    return false;
+  }
+
+  *instruction = DecodedInstruction::SevenOperand(
+      instruction_name, data, address, resource, soffset,
+      InstructionOperand::Imm32(
+          static_cast<std::uint32_t>(ExtractBits(instruction_word, 0, 12))),
+      InstructionOperand::Imm32(
+          static_cast<std::uint32_t>(ExtractBits(instruction_word, 19, 4))),
+      InstructionOperand::Imm32(
+          static_cast<std::uint32_t>(ExtractBits(instruction_word, 23, 3))));
   *words_consumed = 2;
   return true;
 }

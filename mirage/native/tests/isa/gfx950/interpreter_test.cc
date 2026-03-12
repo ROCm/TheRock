@@ -2757,7 +2757,24 @@ int main() {
     }
   }
 
-  const std::array<std::string_view, 22> kBufferMemoryOpcodes = {
+  const std::array<std::string_view, 56> kBufferMemoryOpcodes = {
+      "BUFFER_LOAD_FORMAT_X",     "BUFFER_LOAD_FORMAT_XY",
+      "BUFFER_LOAD_FORMAT_XYZ",   "BUFFER_LOAD_FORMAT_XYZW",
+      "BUFFER_STORE_FORMAT_X",    "BUFFER_STORE_FORMAT_XY",
+      "BUFFER_STORE_FORMAT_XYZ",  "BUFFER_STORE_FORMAT_XYZW",
+      "BUFFER_LOAD_FORMAT_D16_X", "BUFFER_LOAD_FORMAT_D16_XY",
+      "BUFFER_LOAD_FORMAT_D16_XYZ", "BUFFER_LOAD_FORMAT_D16_XYZW",
+      "BUFFER_STORE_FORMAT_D16_X",  "BUFFER_STORE_FORMAT_D16_XY",
+      "BUFFER_STORE_FORMAT_D16_XYZ", "BUFFER_STORE_FORMAT_D16_XYZW",
+      "BUFFER_LOAD_FORMAT_D16_HI_X", "BUFFER_STORE_FORMAT_D16_HI_X",
+      "TBUFFER_LOAD_FORMAT_X",      "TBUFFER_LOAD_FORMAT_XY",
+      "TBUFFER_LOAD_FORMAT_XYZ",    "TBUFFER_LOAD_FORMAT_XYZW",
+      "TBUFFER_STORE_FORMAT_X",     "TBUFFER_STORE_FORMAT_XY",
+      "TBUFFER_STORE_FORMAT_XYZ",   "TBUFFER_STORE_FORMAT_XYZW",
+      "TBUFFER_LOAD_FORMAT_D16_X",  "TBUFFER_LOAD_FORMAT_D16_XY",
+      "TBUFFER_LOAD_FORMAT_D16_XYZ","TBUFFER_LOAD_FORMAT_D16_XYZW",
+      "TBUFFER_STORE_FORMAT_D16_X", "TBUFFER_STORE_FORMAT_D16_XY",
+      "TBUFFER_STORE_FORMAT_D16_XYZ","TBUFFER_STORE_FORMAT_D16_XYZW",
       "BUFFER_LOAD_UBYTE",        "BUFFER_LOAD_SBYTE",
       "BUFFER_LOAD_USHORT",       "BUFFER_LOAD_SSHORT",
       "BUFFER_LOAD_DWORD",        "BUFFER_LOAD_DWORDX2",
@@ -11517,6 +11534,463 @@ int main() {
               "expected buffer short d16 hi store read") ||
       !Expect(stored_short == 0xabcdu,
               "expected buffer short d16 hi store lane 3 result")) {
+    return 1;
+  }
+  }
+
+  {
+  auto make_buffer_format_descriptor_word3 = [](std::uint32_t data_format,
+                                                std::uint32_t num_format) {
+    return (4u << 0) | (5u << 3) | (6u << 6) | (7u << 9) |
+           (data_format << 12) | (num_format << 19);
+  };
+
+  LinearExecutionMemory buffer_format_memory(0x400, 0);
+  if (!Expect(WriteU8(&buffer_format_memory, 0x100u, 0x7au),
+              "expected buffer format x seed write") ||
+      !Expect(WriteU8(&buffer_format_memory, 0x140u, 0x01u),
+              "expected buffer format xyzw seed write") ||
+      !Expect(WriteU8(&buffer_format_memory, 0x141u, 0x02u),
+              "expected buffer format xyzw seed write") ||
+      !Expect(WriteU8(&buffer_format_memory, 0x142u, 0x03u),
+              "expected buffer format xyzw seed write") ||
+      !Expect(WriteU8(&buffer_format_memory, 0x143u, 0x04u),
+              "expected buffer format xyzw seed write") ||
+      !Expect(buffer_format_memory.WriteU32(0x180u, 0x3fc00000u),
+              "expected buffer format xyz seed write") ||
+      !Expect(buffer_format_memory.WriteU32(0x184u, 0xc0000000u),
+              "expected buffer format xyz seed write") ||
+      !Expect(buffer_format_memory.WriteU32(0x188u, 0x3e800000u),
+              "expected buffer format xyz seed write") ||
+      !Expect(WriteU16(&buffer_format_memory, 0x1c0u, 0x0011u),
+              "expected buffer format d16 xy seed write") ||
+      !Expect(WriteU16(&buffer_format_memory, 0x1c2u, 0x0022u),
+              "expected buffer format d16 xy seed write") ||
+      !Expect(WriteU16(&buffer_format_memory, 0x200u, 0x3c00u),
+              "expected buffer format d16 xyz seed write") ||
+      !Expect(WriteU16(&buffer_format_memory, 0x202u, 0x4000u),
+              "expected buffer format d16 xyz seed write") ||
+      !Expect(WriteU16(&buffer_format_memory, 0x204u, 0xc000u),
+              "expected buffer format d16 xyz seed write") ||
+      !Expect(WriteU16(&buffer_format_memory, 0x240u, 0x3344u),
+              "expected buffer format d16 hi seed write")) {
+    return 1;
+  }
+
+  WaveExecutionState buffer_format_state{};
+  buffer_format_state.exec_mask = 0x1ULL;
+  buffer_format_state.sgprs[20] = 0x100u;
+  buffer_format_state.sgprs[21] = 0u;
+  buffer_format_state.sgprs[22] = 0x80u;
+  buffer_format_state.sgprs[23] =
+      make_buffer_format_descriptor_word3(1u, 4u);
+  buffer_format_state.sgprs[24] = 0x140u;
+  buffer_format_state.sgprs[25] = 0u;
+  buffer_format_state.sgprs[26] = 0x80u;
+  buffer_format_state.sgprs[27] =
+      make_buffer_format_descriptor_word3(10u, 4u);
+  buffer_format_state.sgprs[28] = 0x180u;
+  buffer_format_state.sgprs[29] = 0u;
+  buffer_format_state.sgprs[30] = 0x80u;
+  buffer_format_state.sgprs[31] =
+      make_buffer_format_descriptor_word3(13u, 7u);
+  buffer_format_state.sgprs[32] = 0x1c0u;
+  buffer_format_state.sgprs[33] = 0u;
+  buffer_format_state.sgprs[34] = 0x80u;
+  buffer_format_state.sgprs[35] =
+      make_buffer_format_descriptor_word3(5u, 4u);
+  buffer_format_state.sgprs[36] = 0x200u;
+  buffer_format_state.sgprs[37] = 0u;
+  buffer_format_state.sgprs[38] = 0x80u;
+  buffer_format_state.sgprs[39] =
+      make_buffer_format_descriptor_word3(12u, 7u);
+  buffer_format_state.sgprs[40] = 0x240u;
+  buffer_format_state.sgprs[41] = 0u;
+  buffer_format_state.sgprs[42] = 0x80u;
+  buffer_format_state.sgprs[43] =
+      make_buffer_format_descriptor_word3(2u, 4u);
+  buffer_format_state.vgprs[30][0] = 0x55u;
+  buffer_format_state.vgprs[40][0] = 0x05u;
+  buffer_format_state.vgprs[41][0] = 0x06u;
+  buffer_format_state.vgprs[42][0] = 0x07u;
+  buffer_format_state.vgprs[43][0] = 0x08u;
+  buffer_format_state.vgprs[50][0] = 0x40200000u;
+  buffer_format_state.vgprs[51][0] = 0xbf800000u;
+  buffer_format_state.vgprs[52][0] = 0x40800000u;
+  buffer_format_state.vgprs[60][0] = 0x00220011u;
+  buffer_format_state.vgprs[61][0] = 0x40003c00u;
+  buffer_format_state.vgprs[62][0] = 0x0000c000u;
+  buffer_format_state.vgprs[63][0] = 0x33440000u;
+
+  const std::vector<DecodedInstruction> buffer_format_program = {
+      DecodedInstruction::FiveOperand("BUFFER_LOAD_FORMAT_X",
+                                      InstructionOperand::Vgpr(70),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Sgpr(20),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FiveOperand("BUFFER_STORE_FORMAT_X",
+                                      InstructionOperand::Vgpr(30),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Sgpr(20),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0x20)),
+      DecodedInstruction::FiveOperand("BUFFER_LOAD_FORMAT_XYZW",
+                                      InstructionOperand::Vgpr(71),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Sgpr(24),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FiveOperand("BUFFER_STORE_FORMAT_XYZW",
+                                      InstructionOperand::Vgpr(40),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Sgpr(24),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0x20)),
+      DecodedInstruction::FiveOperand("BUFFER_LOAD_FORMAT_XYZ",
+                                      InstructionOperand::Vgpr(75),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Sgpr(28),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FiveOperand("BUFFER_STORE_FORMAT_XYZ",
+                                      InstructionOperand::Vgpr(50),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Sgpr(28),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0x20)),
+      DecodedInstruction::FiveOperand("BUFFER_LOAD_FORMAT_D16_XY",
+                                      InstructionOperand::Vgpr(80),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Sgpr(32),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FiveOperand("BUFFER_STORE_FORMAT_D16_XY",
+                                      InstructionOperand::Vgpr(60),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Sgpr(32),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0x20)),
+      DecodedInstruction::FiveOperand("BUFFER_LOAD_FORMAT_D16_XYZ",
+                                      InstructionOperand::Vgpr(81),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Sgpr(36),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FiveOperand("BUFFER_STORE_FORMAT_D16_XYZ",
+                                      InstructionOperand::Vgpr(61),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Sgpr(36),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0x20)),
+      DecodedInstruction::FiveOperand("BUFFER_LOAD_FORMAT_D16_HI_X",
+                                      InstructionOperand::Vgpr(83),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Sgpr(40),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0)),
+      DecodedInstruction::FiveOperand("BUFFER_STORE_FORMAT_D16_HI_X",
+                                      InstructionOperand::Vgpr(63),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Sgpr(40),
+                                      InstructionOperand::Imm32(0),
+                                      InstructionOperand::Imm32(0x20)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  if (!Expect(interpreter.ExecuteProgram(buffer_format_program,
+                                         &buffer_format_state,
+                                         &buffer_format_memory,
+                                         &error_message),
+              error_message.c_str()) ||
+      !Expect(buffer_format_state.halted,
+              "expected buffer format program to halt") ||
+      !Expect(buffer_format_state.vgprs[70][0] == 0x7au,
+              "expected buffer format x load result") ||
+      !Expect(buffer_format_state.vgprs[71][0] == 0x01u &&
+                  buffer_format_state.vgprs[72][0] == 0x02u &&
+                  buffer_format_state.vgprs[73][0] == 0x03u &&
+                  buffer_format_state.vgprs[74][0] == 0x04u,
+              "expected buffer format xyzw load result") ||
+      !Expect(buffer_format_state.vgprs[75][0] == 0x3fc00000u &&
+                  buffer_format_state.vgprs[76][0] == 0xc0000000u &&
+                  buffer_format_state.vgprs[77][0] == 0x3e800000u,
+              "expected buffer format xyz load result") ||
+      !Expect(buffer_format_state.vgprs[80][0] == 0x00220011u,
+              "expected buffer format d16 xy load result") ||
+      !Expect(buffer_format_state.vgprs[81][0] == 0x40003c00u &&
+                  buffer_format_state.vgprs[82][0] == 0x0000c000u,
+              "expected buffer format d16 xyz load result") ||
+      !Expect(buffer_format_state.vgprs[83][0] == 0x33440000u,
+              "expected buffer format d16 hi load result")) {
+    return 1;
+  }
+
+  std::uint8_t buffer_format_byte = 0;
+  std::uint16_t buffer_format_short = 0;
+  std::uint32_t buffer_format_dword = 0;
+  if (!Expect(ReadU8(buffer_format_memory, 0x120u, &buffer_format_byte),
+              "expected buffer format x store read") ||
+      !Expect(buffer_format_byte == 0x55u,
+              "expected buffer format x store result") ||
+      !Expect(ReadU8(buffer_format_memory, 0x160u, &buffer_format_byte),
+              "expected buffer format xyzw store read") ||
+      !Expect(buffer_format_byte == 0x05u,
+              "expected buffer format xyzw store result") ||
+      !Expect(ReadU8(buffer_format_memory, 0x161u, &buffer_format_byte),
+              "expected buffer format xyzw store read") ||
+      !Expect(buffer_format_byte == 0x06u,
+              "expected buffer format xyzw store result") ||
+      !Expect(ReadU8(buffer_format_memory, 0x162u, &buffer_format_byte),
+              "expected buffer format xyzw store read") ||
+      !Expect(buffer_format_byte == 0x07u,
+              "expected buffer format xyzw store result") ||
+      !Expect(ReadU8(buffer_format_memory, 0x163u, &buffer_format_byte),
+              "expected buffer format xyzw store read") ||
+      !Expect(buffer_format_byte == 0x08u,
+              "expected buffer format xyzw store result") ||
+      !Expect(buffer_format_memory.ReadU32(0x1a0u, &buffer_format_dword),
+              "expected buffer format xyz store read") ||
+      !Expect(buffer_format_dword == 0x40200000u,
+              "expected buffer format xyz store result") ||
+      !Expect(buffer_format_memory.ReadU32(0x1a4u, &buffer_format_dword),
+              "expected buffer format xyz store read") ||
+      !Expect(buffer_format_dword == 0xbf800000u,
+              "expected buffer format xyz store result") ||
+      !Expect(buffer_format_memory.ReadU32(0x1a8u, &buffer_format_dword),
+              "expected buffer format xyz store read") ||
+      !Expect(buffer_format_dword == 0x40800000u,
+              "expected buffer format xyz store result") ||
+      !Expect(ReadU16(buffer_format_memory, 0x1e0u, &buffer_format_short),
+              "expected buffer format d16 xy store read") ||
+      !Expect(buffer_format_short == 0x0011u,
+              "expected buffer format d16 xy store result") ||
+      !Expect(ReadU16(buffer_format_memory, 0x1e2u, &buffer_format_short),
+              "expected buffer format d16 xy store read") ||
+      !Expect(buffer_format_short == 0x0022u,
+              "expected buffer format d16 xy store result") ||
+      !Expect(ReadU16(buffer_format_memory, 0x220u, &buffer_format_short),
+              "expected buffer format d16 xyz store read") ||
+      !Expect(buffer_format_short == 0x3c00u,
+              "expected buffer format d16 xyz store result") ||
+      !Expect(ReadU16(buffer_format_memory, 0x222u, &buffer_format_short),
+              "expected buffer format d16 xyz store read") ||
+      !Expect(buffer_format_short == 0x4000u,
+              "expected buffer format d16 xyz store result") ||
+      !Expect(ReadU16(buffer_format_memory, 0x224u, &buffer_format_short),
+              "expected buffer format d16 xyz store read") ||
+      !Expect(buffer_format_short == 0xc000u,
+              "expected buffer format d16 xyz store result") ||
+      !Expect(ReadU16(buffer_format_memory, 0x260u, &buffer_format_short),
+              "expected buffer format d16 hi store read") ||
+      !Expect(buffer_format_short == 0x3344u,
+              "expected buffer format d16 hi store result")) {
+    return 1;
+  }
+  }
+
+  {
+  const std::uint32_t typed_buffer_dst_sel_word3 =
+      (4u << 0) | (5u << 3) | (6u << 6) | (7u << 9);
+
+  LinearExecutionMemory typed_buffer_memory(0x500, 0);
+  if (!Expect(WriteU8(&typed_buffer_memory, 0x280u, 0x11u),
+              "expected typed buffer xyzw seed write") ||
+      !Expect(WriteU8(&typed_buffer_memory, 0x281u, 0x22u),
+              "expected typed buffer xyzw seed write") ||
+      !Expect(WriteU8(&typed_buffer_memory, 0x282u, 0x33u),
+              "expected typed buffer xyzw seed write") ||
+      !Expect(WriteU8(&typed_buffer_memory, 0x283u, 0x44u),
+              "expected typed buffer xyzw seed write") ||
+      !Expect(typed_buffer_memory.WriteU32(0x2c0u, 0x3f800000u),
+              "expected typed buffer xyz seed write") ||
+      !Expect(typed_buffer_memory.WriteU32(0x2c4u, 0xbf400000u),
+              "expected typed buffer xyz seed write") ||
+      !Expect(typed_buffer_memory.WriteU32(0x2c8u, 0x40400000u),
+              "expected typed buffer xyz seed write") ||
+      !Expect(WriteU16(&typed_buffer_memory, 0x300u, 0x0102u),
+              "expected typed buffer d16 xy seed write") ||
+      !Expect(WriteU16(&typed_buffer_memory, 0x302u, 0x0304u),
+              "expected typed buffer d16 xy seed write") ||
+      !Expect(WriteU16(&typed_buffer_memory, 0x340u, 0x3800u),
+              "expected typed buffer d16 xyz seed write") ||
+      !Expect(WriteU16(&typed_buffer_memory, 0x342u, 0x3c00u),
+              "expected typed buffer d16 xyz seed write") ||
+      !Expect(WriteU16(&typed_buffer_memory, 0x344u, 0x4000u),
+              "expected typed buffer d16 xyz seed write")) {
+    return 1;
+  }
+
+  WaveExecutionState typed_buffer_state{};
+  typed_buffer_state.exec_mask = 0x1ULL;
+  typed_buffer_state.sgprs[44] = 0x280u;
+  typed_buffer_state.sgprs[45] = 0u;
+  typed_buffer_state.sgprs[46] = 0x80u;
+  typed_buffer_state.sgprs[47] = typed_buffer_dst_sel_word3;
+  typed_buffer_state.sgprs[48] = 0x2c0u;
+  typed_buffer_state.sgprs[49] = 0u;
+  typed_buffer_state.sgprs[50] = 0x80u;
+  typed_buffer_state.sgprs[51] = typed_buffer_dst_sel_word3;
+  typed_buffer_state.sgprs[52] = 0x300u;
+  typed_buffer_state.sgprs[53] = 0u;
+  typed_buffer_state.sgprs[54] = 0x80u;
+  typed_buffer_state.sgprs[55] = typed_buffer_dst_sel_word3;
+  typed_buffer_state.sgprs[56] = 0x340u;
+  typed_buffer_state.sgprs[57] = 0u;
+  typed_buffer_state.sgprs[58] = 0x80u;
+  typed_buffer_state.sgprs[59] = typed_buffer_dst_sel_word3;
+  typed_buffer_state.vgprs[100][0] = 0xa1u;
+  typed_buffer_state.vgprs[101][0] = 0xb2u;
+  typed_buffer_state.vgprs[102][0] = 0xc3u;
+  typed_buffer_state.vgprs[103][0] = 0xd4u;
+  typed_buffer_state.vgprs[110][0] = 0x3f000000u;
+  typed_buffer_state.vgprs[111][0] = 0xbf800000u;
+  typed_buffer_state.vgprs[112][0] = 0x40200000u;
+  typed_buffer_state.vgprs[120][0] = 0x03040102u;
+  typed_buffer_state.vgprs[121][0] = 0x3c003800u;
+  typed_buffer_state.vgprs[122][0] = 0x00004000u;
+
+  const std::vector<DecodedInstruction> typed_buffer_program = {
+      DecodedInstruction::SevenOperand("TBUFFER_LOAD_FORMAT_XYZW",
+                                       InstructionOperand::Vgpr(90),
+                                       InstructionOperand::Imm32(0),
+                                       InstructionOperand::Sgpr(44),
+                                       InstructionOperand::Imm32(0),
+                                       InstructionOperand::Imm32(0),
+                                       InstructionOperand::Imm32(10),
+                                       InstructionOperand::Imm32(4)),
+      DecodedInstruction::SevenOperand("TBUFFER_STORE_FORMAT_XYZW",
+                                       InstructionOperand::Vgpr(100),
+                                       InstructionOperand::Imm32(0),
+                                       InstructionOperand::Sgpr(44),
+                                       InstructionOperand::Imm32(0),
+                                       InstructionOperand::Imm32(0x20),
+                                       InstructionOperand::Imm32(10),
+                                       InstructionOperand::Imm32(4)),
+      DecodedInstruction::SevenOperand("TBUFFER_LOAD_FORMAT_XYZ",
+                                       InstructionOperand::Vgpr(94),
+                                       InstructionOperand::Imm32(0),
+                                       InstructionOperand::Sgpr(48),
+                                       InstructionOperand::Imm32(0),
+                                       InstructionOperand::Imm32(0),
+                                       InstructionOperand::Imm32(13),
+                                       InstructionOperand::Imm32(7)),
+      DecodedInstruction::SevenOperand("TBUFFER_STORE_FORMAT_XYZ",
+                                       InstructionOperand::Vgpr(110),
+                                       InstructionOperand::Imm32(0),
+                                       InstructionOperand::Sgpr(48),
+                                       InstructionOperand::Imm32(0),
+                                       InstructionOperand::Imm32(0x20),
+                                       InstructionOperand::Imm32(13),
+                                       InstructionOperand::Imm32(7)),
+      DecodedInstruction::SevenOperand("TBUFFER_LOAD_FORMAT_D16_XY",
+                                       InstructionOperand::Vgpr(97),
+                                       InstructionOperand::Imm32(0),
+                                       InstructionOperand::Sgpr(52),
+                                       InstructionOperand::Imm32(0),
+                                       InstructionOperand::Imm32(0),
+                                       InstructionOperand::Imm32(5),
+                                       InstructionOperand::Imm32(4)),
+      DecodedInstruction::SevenOperand("TBUFFER_STORE_FORMAT_D16_XY",
+                                       InstructionOperand::Vgpr(120),
+                                       InstructionOperand::Imm32(0),
+                                       InstructionOperand::Sgpr(52),
+                                       InstructionOperand::Imm32(0),
+                                       InstructionOperand::Imm32(0x20),
+                                       InstructionOperand::Imm32(5),
+                                       InstructionOperand::Imm32(4)),
+      DecodedInstruction::SevenOperand("TBUFFER_LOAD_FORMAT_D16_XYZ",
+                                       InstructionOperand::Vgpr(98),
+                                       InstructionOperand::Imm32(0),
+                                       InstructionOperand::Sgpr(56),
+                                       InstructionOperand::Imm32(0),
+                                       InstructionOperand::Imm32(0),
+                                       InstructionOperand::Imm32(12),
+                                       InstructionOperand::Imm32(7)),
+      DecodedInstruction::SevenOperand("TBUFFER_STORE_FORMAT_D16_XYZ",
+                                       InstructionOperand::Vgpr(121),
+                                       InstructionOperand::Imm32(0),
+                                       InstructionOperand::Sgpr(56),
+                                       InstructionOperand::Imm32(0),
+                                       InstructionOperand::Imm32(0x20),
+                                       InstructionOperand::Imm32(12),
+                                       InstructionOperand::Imm32(7)),
+      DecodedInstruction::Nullary("S_ENDPGM"),
+  };
+  if (!Expect(interpreter.ExecuteProgram(typed_buffer_program,
+                                         &typed_buffer_state,
+                                         &typed_buffer_memory,
+                                         &error_message),
+              error_message.c_str()) ||
+      !Expect(typed_buffer_state.halted,
+              "expected typed buffer program to halt") ||
+      !Expect(typed_buffer_state.vgprs[90][0] == 0x11u &&
+                  typed_buffer_state.vgprs[91][0] == 0x22u &&
+                  typed_buffer_state.vgprs[92][0] == 0x33u &&
+                  typed_buffer_state.vgprs[93][0] == 0x44u,
+              "expected typed buffer xyzw load result") ||
+      !Expect(typed_buffer_state.vgprs[94][0] == 0x3f800000u &&
+                  typed_buffer_state.vgprs[95][0] == 0xbf400000u &&
+                  typed_buffer_state.vgprs[96][0] == 0x40400000u,
+              "expected typed buffer xyz load result") ||
+      !Expect(typed_buffer_state.vgprs[97][0] == 0x03040102u,
+              "expected typed buffer d16 xy load result") ||
+      !Expect(typed_buffer_state.vgprs[98][0] == 0x3c003800u &&
+                  typed_buffer_state.vgprs[99][0] == 0x00004000u,
+              "expected typed buffer d16 xyz load result")) {
+    return 1;
+  }
+
+  std::uint8_t typed_buffer_byte = 0;
+  std::uint16_t typed_buffer_short = 0;
+  std::uint32_t typed_buffer_dword = 0;
+  if (!Expect(ReadU8(typed_buffer_memory, 0x2a0u, &typed_buffer_byte),
+              "expected typed buffer xyzw store read") ||
+      !Expect(typed_buffer_byte == 0xa1u,
+              "expected typed buffer xyzw store result") ||
+      !Expect(ReadU8(typed_buffer_memory, 0x2a1u, &typed_buffer_byte),
+              "expected typed buffer xyzw store read") ||
+      !Expect(typed_buffer_byte == 0xb2u,
+              "expected typed buffer xyzw store result") ||
+      !Expect(ReadU8(typed_buffer_memory, 0x2a2u, &typed_buffer_byte),
+              "expected typed buffer xyzw store read") ||
+      !Expect(typed_buffer_byte == 0xc3u,
+              "expected typed buffer xyzw store result") ||
+      !Expect(ReadU8(typed_buffer_memory, 0x2a3u, &typed_buffer_byte),
+              "expected typed buffer xyzw store read") ||
+      !Expect(typed_buffer_byte == 0xd4u,
+              "expected typed buffer xyzw store result") ||
+      !Expect(typed_buffer_memory.ReadU32(0x2e0u, &typed_buffer_dword),
+              "expected typed buffer xyz store read") ||
+      !Expect(typed_buffer_dword == 0x3f000000u,
+              "expected typed buffer xyz store result") ||
+      !Expect(typed_buffer_memory.ReadU32(0x2e4u, &typed_buffer_dword),
+              "expected typed buffer xyz store read") ||
+      !Expect(typed_buffer_dword == 0xbf800000u,
+              "expected typed buffer xyz store result") ||
+      !Expect(typed_buffer_memory.ReadU32(0x2e8u, &typed_buffer_dword),
+              "expected typed buffer xyz store read") ||
+      !Expect(typed_buffer_dword == 0x40200000u,
+              "expected typed buffer xyz store result") ||
+      !Expect(ReadU16(typed_buffer_memory, 0x320u, &typed_buffer_short),
+              "expected typed buffer d16 xy store read") ||
+      !Expect(typed_buffer_short == 0x0102u,
+              "expected typed buffer d16 xy store result") ||
+      !Expect(ReadU16(typed_buffer_memory, 0x322u, &typed_buffer_short),
+              "expected typed buffer d16 xy store read") ||
+      !Expect(typed_buffer_short == 0x0304u,
+              "expected typed buffer d16 xy store result") ||
+      !Expect(ReadU16(typed_buffer_memory, 0x360u, &typed_buffer_short),
+              "expected typed buffer d16 xyz store read") ||
+      !Expect(typed_buffer_short == 0x3800u,
+              "expected typed buffer d16 xyz store result") ||
+      !Expect(ReadU16(typed_buffer_memory, 0x362u, &typed_buffer_short),
+              "expected typed buffer d16 xyz store read") ||
+      !Expect(typed_buffer_short == 0x3c00u,
+              "expected typed buffer d16 xyz store result") ||
+      !Expect(ReadU16(typed_buffer_memory, 0x364u, &typed_buffer_short),
+              "expected typed buffer d16 xyz store read") ||
+      !Expect(typed_buffer_short == 0x4000u,
+              "expected typed buffer d16 xyz store result")) {
     return 1;
   }
   }

@@ -3857,7 +3857,7 @@
       "decoded_opcodes": [],
       "instruction_name": "TBUFFER_LOAD_FORMAT_X",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -3866,7 +3866,7 @@
       "decoded_opcodes": [],
       "instruction_name": "TBUFFER_LOAD_FORMAT_XY",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -3875,7 +3875,7 @@
       "decoded_opcodes": [],
       "instruction_name": "TBUFFER_LOAD_FORMAT_XYZ",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -3884,7 +3884,7 @@
       "decoded_opcodes": [],
       "instruction_name": "TBUFFER_LOAD_FORMAT_XYZW",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -3893,7 +3893,7 @@
       "decoded_opcodes": [],
       "instruction_name": "TBUFFER_STORE_FORMAT_X",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -3902,7 +3902,7 @@
       "decoded_opcodes": [],
       "instruction_name": "TBUFFER_STORE_FORMAT_XY",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -3911,7 +3911,7 @@
       "decoded_opcodes": [],
       "instruction_name": "TBUFFER_STORE_FORMAT_XYZ",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -3920,7 +3920,7 @@
       "decoded_opcodes": [],
       "instruction_name": "TBUFFER_STORE_FORMAT_XYZW",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -3929,7 +3929,7 @@
       "decoded_opcodes": [],
       "instruction_name": "TBUFFER_LOAD_FORMAT_D16_X",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -3938,7 +3938,7 @@
       "decoded_opcodes": [],
       "instruction_name": "TBUFFER_LOAD_FORMAT_D16_XY",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -3947,7 +3947,7 @@
       "decoded_opcodes": [],
       "instruction_name": "TBUFFER_LOAD_FORMAT_D16_XYZ",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -3956,7 +3956,7 @@
       "decoded_opcodes": [],
       "instruction_name": "TBUFFER_LOAD_FORMAT_D16_XYZW",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -3965,7 +3965,7 @@
       "decoded_opcodes": [],
       "instruction_name": "TBUFFER_STORE_FORMAT_D16_X",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -3974,7 +3974,7 @@
       "decoded_opcodes": [],
       "instruction_name": "TBUFFER_STORE_FORMAT_D16_XY",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -3983,7 +3983,7 @@
       "decoded_opcodes": [],
       "instruction_name": "TBUFFER_STORE_FORMAT_D16_XYZ",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -3992,7 +3992,7 @@
       "decoded_opcodes": [],
       "instruction_name": "TBUFFER_STORE_FORMAT_D16_XYZW",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4001,7 +4001,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_LOAD_FORMAT_X",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4010,7 +4010,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_LOAD_FORMAT_XY",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4019,7 +4019,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_LOAD_FORMAT_XYZ",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4028,7 +4028,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_LOAD_FORMAT_XYZW",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4037,7 +4037,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_STORE_FORMAT_X",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4046,7 +4046,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_STORE_FORMAT_XY",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4055,7 +4055,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_STORE_FORMAT_XYZ",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4064,7 +4064,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_STORE_FORMAT_XYZW",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4073,7 +4073,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_LOAD_FORMAT_D16_X",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4082,7 +4082,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_LOAD_FORMAT_D16_XY",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4091,7 +4091,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_LOAD_FORMAT_D16_XYZ",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4100,7 +4100,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_LOAD_FORMAT_D16_XYZW",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4109,7 +4109,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_STORE_FORMAT_D16_X",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4118,7 +4118,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_STORE_FORMAT_D16_XY",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4127,7 +4127,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_STORE_FORMAT_D16_XYZ",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4136,7 +4136,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_STORE_FORMAT_D16_XYZW",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4343,7 +4343,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_LOAD_FORMAT_D16_HI_X",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -4352,7 +4352,7 @@
       "decoded_opcodes": [],
       "instruction_name": "BUFFER_STORE_FORMAT_D16_HI_X",
       "measured_encodings": [],
-      "semantic_supported": false,
+      "semantic_supported": true,
       "successful_encodings": []
     },
     {
@@ -16869,8 +16869,8 @@
     "decode_supported": 783,
     "decode_supported_percent_measured": 0.772189,
     "decode_supported_percent_total": 0.630435,
-    "semantic_supported": 816,
-    "semantic_supported_percent_total": 0.657005
+    "semantic_supported": 850,
+    "semantic_supported_percent_total": 0.68438
   },
   "unmeasured_encoding_families": [
     "ENC_FLAT_SCRATCH",
