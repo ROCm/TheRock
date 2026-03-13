@@ -13,6 +13,7 @@ from unittest.mock import patch
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 import get_s3_config
 
+
 class ExtractDateFromVersionTest(unittest.TestCase):
     """Tests for date extraction from ROCm package versions."""
 
@@ -298,6 +299,7 @@ class DetermineS3ConfigDateConsistencyTest(unittest.TestCase):
         )
         # Should use current date
         self.assertIn("20260312", prefix)
+
 
 if __name__ == "__main__":
     unittest.main()
