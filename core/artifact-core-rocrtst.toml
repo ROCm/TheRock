@@ -2,6 +2,7 @@
 [components.run."core/rocrtst/stage"]
 exclude = [
   "bin/**",
+  "share/rocrtst/**",
 ]
 [components.dbg."core/rocrtst/stage"]
 [components.dev."core/rocrtst/stage"]
