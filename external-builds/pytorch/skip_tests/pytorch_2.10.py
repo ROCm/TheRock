@@ -8,9 +8,6 @@ skip_tests = {
             "test_warn_on_accumulate_grad_stream_mismatch_flag_cuda",
         ],
         "cuda": [
-            # ROCm allocator does not raise OOM in the same path as CUDA
-            #   AssertionError: RuntimeError not raised
-            "test_out_of_memory_retry",
             # AttributeError: module 'torch.backends.cudnn.rnn' has no attribute 'fp32_precision'
             "test_fp32_precision_with_float32_matmul_precision",
             # AttributeError: module 'torch.backends.cudnn.rnn' has no attribute 'fp32_precision'
@@ -125,6 +122,10 @@ skip_tests = {
             "test_grad_scaling_autocast_foreach0_fused0_Adam_cuda_float32",
         ],
         "cuda": [
+            # Flaky? See https://github.com/ROCm/TheRock/issues/3724
+            # ROCm allocator does not raise OOM in the same path as CUDA
+            #   AssertionError: RuntimeError not raised
+            "test_out_of_memory_retry",
             # This test uses subprocess.run, so it hangs.
             # See https://github.com/ROCm/TheRock/issues/999.
             "test_pinned_memory_use_background_threads",
