@@ -81,7 +81,7 @@ test_matrix = {
         "test_script": f"python {_get_script_path('test_runner.py')}",
         "platform": ["linux", "windows"],
         "total_shards_dict": {
-            "linux": 1,
+            "linux": 6,
             "windows": 1,
         },
         # Windows: run quick only (avoids known failures in standard suite, e.g. SEH 0xc0000094 in axpy).
