@@ -1,7 +1,4 @@
 # rccl
-[components.dbg."comm-libs/rccl/stage"]
-[components.dev."comm-libs/rccl/stage"]
-[components.doc."comm-libs/rccl/stage"]
 [components.lib."comm-libs/rccl/stage"]
 include = [
   "share/rccl/**",
@@ -10,6 +7,9 @@ include = [
 include = [
   "bin/rcclras",
 ]
+[components.dbg."comm-libs/rccl/stage"]
+[components.dev."comm-libs/rccl/stage"]
+[components.doc."comm-libs/rccl/stage"]
 [components.test."comm-libs/rccl/stage"]
 include = [
   "bin/rccl-UnitTests",

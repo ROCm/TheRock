@@ -1,15 +1,15 @@
 # comgr and hipcc compose the "amd-llvm" distribution artifact
 # (the base compiler itself is in amd-llvm-base)
 
+[components.lib."compiler/amd-comgr/stage"]
+[components.run."compiler/amd-comgr/stage"]
 [components.dbg."compiler/amd-comgr/stage"]
 [components.dev."compiler/amd-comgr/stage"]
 [components.doc."compiler/amd-comgr/stage"]
-[components.lib."compiler/amd-comgr/stage"]
-[components.run."compiler/amd-comgr/stage"]
 
 # hipcc
+[components.lib."compiler/hipcc/stage"]
+[components.run."compiler/hipcc/stage"]
 [components.dbg."compiler/hipcc/stage"]
 [components.dev."compiler/hipcc/stage"]
 [components.doc."compiler/hipcc/stage"]
-[components.lib."compiler/hipcc/stage"]
-[components.run."compiler/hipcc/stage"]
