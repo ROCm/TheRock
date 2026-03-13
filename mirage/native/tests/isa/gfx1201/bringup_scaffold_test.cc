@@ -87,7 +87,7 @@ int main() {
               "expected phase-0 compute seed list") ||
       !Expect(decoder.Phase0ComputeSelectorRules().size() == 12u,
               "expected phase-0 selector rule list") ||
-      !Expect(decoder.Phase0ExecutableOpcodes().size() == 264u,
+      !Expect(decoder.Phase0ExecutableOpcodes().size() == 268u,
               "expected phase-0 executable opcode slice") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("S_ADD_U32"),
               "expected S_ADD_U32 executable decode support") ||
@@ -161,6 +161,8 @@ int main() {
               "expected V_XOR_B32 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("V_NOP"),
               "expected V_NOP executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_PIPEFLUSH"),
+              "expected V_PIPEFLUSH executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("V_MOV_B16"),
               "expected V_MOV_B16 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("V_PERMLANE64_B32"),
@@ -187,6 +189,12 @@ int main() {
               "expected V_CVT_I16_F16 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("V_CVT_U16_F16"),
               "expected V_CVT_U16_F16 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_CVT_OFF_F32_I4"),
+              "expected V_CVT_OFF_F32_I4 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_CVT_NORM_I16_F16"),
+              "expected V_CVT_NORM_I16_F16 executable decode support") ||
+      !Expect(decoder.SupportsPhase0ExecutableOpcode("V_CVT_NORM_U16_F16"),
+              "expected V_CVT_NORM_U16_F16 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("V_CVT_I32_I16"),
               "expected V_CVT_I32_I16 executable decode support") ||
       !Expect(decoder.SupportsPhase0ExecutableOpcode("V_CVT_U32_U16"),
@@ -246,7 +254,7 @@ int main() {
   }
 
   Gfx1201Interpreter interpreter;
-  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 264u,
+  if (!Expect(interpreter.ExecutableSeedOpcodes().size() == 268u,
               "expected executable seed opcode list") ||
       !Expect(interpreter.Supports("S_ENDPGM"),
               "expected interpreter support for S_ENDPGM") ||
@@ -330,6 +338,8 @@ int main() {
               "expected interpreter support for V_CMPX_GE_I32") ||
       !Expect(interpreter.Supports("V_NOP"),
               "expected interpreter support for V_NOP") ||
+      !Expect(interpreter.Supports("V_PIPEFLUSH"),
+              "expected interpreter support for V_PIPEFLUSH") ||
       !Expect(interpreter.Supports("V_MOV_B16"),
               "expected interpreter support for V_MOV_B16") ||
       !Expect(interpreter.Supports("V_PERMLANE64_B32"),
@@ -362,6 +372,12 @@ int main() {
               "expected interpreter support for V_CVT_I16_F16") ||
       !Expect(interpreter.Supports("V_CVT_U16_F16"),
               "expected interpreter support for V_CVT_U16_F16") ||
+      !Expect(interpreter.Supports("V_CVT_OFF_F32_I4"),
+              "expected interpreter support for V_CVT_OFF_F32_I4") ||
+      !Expect(interpreter.Supports("V_CVT_NORM_I16_F16"),
+              "expected interpreter support for V_CVT_NORM_I16_F16") ||
+      !Expect(interpreter.Supports("V_CVT_NORM_U16_F16"),
+              "expected interpreter support for V_CVT_NORM_U16_F16") ||
       !Expect(interpreter.Supports("V_CVT_I32_I16"),
               "expected interpreter support for V_CVT_I32_I16") ||
       !Expect(interpreter.Supports("V_CVT_U32_U16"),

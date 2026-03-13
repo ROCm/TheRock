@@ -37,7 +37,7 @@ constexpr std::uint16_t kSrcSccSgprIndex = 253;
 float ExpandFp16ToFloat(std::uint16_t bits);
 std::uint16_t CompressFloatToFp16Bits(float value);
 
-constexpr std::array<std::string_view, 264> kExecutableSeedOpcodes{{
+constexpr std::array<std::string_view, 268> kExecutableSeedOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_ADD_U32",
@@ -65,6 +65,7 @@ constexpr std::array<std::string_view, 264> kExecutableSeedOpcodes{{
     "S_MOV_B32",
     "S_MOVK_I32",
     "V_NOP",
+    "V_PIPEFLUSH",
     "V_MOV_B32",
     "V_MOV_B16",
     "V_PERMLANE64_B32",
@@ -245,6 +246,7 @@ constexpr std::array<std::string_view, 264> kExecutableSeedOpcodes{{
     "V_CVT_F32_UBYTE3",
     "V_CVT_F32_I32",
     "V_CVT_F32_U32",
+    "V_CVT_OFF_F32_I4",
     "V_CVT_F32_F16",
     "V_CVT_F32_F64",
     "V_CVT_F16_F32",
@@ -252,6 +254,8 @@ constexpr std::array<std::string_view, 264> kExecutableSeedOpcodes{{
     "V_CVT_F16_U16",
     "V_CVT_I16_F16",
     "V_CVT_U16_F16",
+    "V_CVT_NORM_I16_F16",
+    "V_CVT_NORM_U16_F16",
     "V_CVT_F64_F32",
     "V_CVT_F64_I32",
     "V_CVT_F64_U32",
@@ -375,6 +379,68 @@ std::uint32_t TruncateDoubleToU32(double value) {
     return std::numeric_limits<std::uint32_t>::max();
   }
   return static_cast<std::uint32_t>(truncated);
+}
+
+std::uint32_t EvaluateCvtOffF32I4(std::uint32_t value) {
+  switch (value & 0xfu) {
+    case 0u:
+      return BitCast<std::uint32_t>(0.0f);
+    case 1u:
+      return BitCast<std::uint32_t>(0.0625f);
+    case 2u:
+      return BitCast<std::uint32_t>(0.125f);
+    case 3u:
+      return BitCast<std::uint32_t>(0.1875f);
+    case 4u:
+      return BitCast<std::uint32_t>(0.25f);
+    case 5u:
+      return BitCast<std::uint32_t>(0.3125f);
+    case 6u:
+      return BitCast<std::uint32_t>(0.375f);
+    case 7u:
+      return BitCast<std::uint32_t>(0.4375f);
+    case 8u:
+      return BitCast<std::uint32_t>(-0.5f);
+    case 9u:
+      return BitCast<std::uint32_t>(-0.4375f);
+    case 10u:
+      return BitCast<std::uint32_t>(-0.375f);
+    case 11u:
+      return BitCast<std::uint32_t>(-0.3125f);
+    case 12u:
+      return BitCast<std::uint32_t>(-0.25f);
+    case 13u:
+      return BitCast<std::uint32_t>(-0.1875f);
+    case 14u:
+      return BitCast<std::uint32_t>(-0.125f);
+    case 15u:
+    default:
+      return BitCast<std::uint32_t>(-0.0625f);
+  }
+}
+
+std::uint16_t NormalizeFloatToSnorm16(float input) {
+  if (std::isnan(input)) {
+    return 0u;
+  }
+  if (input <= -1.0f) {
+    return 0x8000u;
+  }
+  if (input >= 1.0f) {
+    return 0x7fffu;
+  }
+  return static_cast<std::uint16_t>(static_cast<std::int16_t>(
+      std::nearbyint(input * 32767.0f)));
+}
+
+std::uint16_t NormalizeFloatToUnorm16(float input) {
+  if (std::isnan(input) || input <= 0.0f) {
+    return 0u;
+  }
+  if (input >= 1.0f) {
+    return 0xffffu;
+  }
+  return static_cast<std::uint16_t>(std::nearbyint(input * 65535.0f));
 }
 
 std::int32_t EvaluateFrexpExpI32(float input) {
@@ -619,6 +685,10 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
     *compiled_opcode = Gfx1201CompiledOpcode::kSNop;
     return true;
   }
+  if (opcode == "V_PIPEFLUSH") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kSNop;
+    return true;
+  }
   if (opcode == "S_ADD_U32") {
     *compiled_opcode = Gfx1201CompiledOpcode::kSAddU32;
     return true;
@@ -737,6 +807,10 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
   }
   if (opcode == "V_SWAP_B16") {
     *compiled_opcode = Gfx1201CompiledOpcode::kVSwapB16;
+    return true;
+  }
+  if (opcode == "V_CVT_OFF_F32_I4") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCvtOffF32I4;
     return true;
   }
   if (opcode == "V_CMP_EQ_I32") {
@@ -1463,6 +1537,14 @@ bool TryCompileExecutableOpcode(std::string_view opcode,
     *compiled_opcode = Gfx1201CompiledOpcode::kVCvtU16F16;
     return true;
   }
+  if (opcode == "V_CVT_NORM_I16_F16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCvtNormI16F16;
+    return true;
+  }
+  if (opcode == "V_CVT_NORM_U16_F16") {
+    *compiled_opcode = Gfx1201CompiledOpcode::kVCvtNormU16F16;
+    return true;
+  }
   if (opcode == "V_CVT_F64_F32") {
     *compiled_opcode = Gfx1201CompiledOpcode::kVCvtF64F32;
     return true;
@@ -1997,6 +2079,9 @@ std::uint32_t EvaluateVectorUnarySeedInstruction(std::string_view opcode,
   if (opcode == "V_CVT_F32_U32") {
     return BitCast<std::uint32_t>(static_cast<float>(value));
   }
+  if (opcode == "V_CVT_OFF_F32_I4") {
+    return EvaluateCvtOffF32I4(value);
+  }
   if (opcode == "V_CVT_F32_F16") {
     return BitCast<std::uint32_t>(
         ExpandFp16ToFloat(static_cast<std::uint16_t>(value)));
@@ -2020,6 +2105,14 @@ std::uint32_t EvaluateVectorUnarySeedInstruction(std::string_view opcode,
   if (opcode == "V_CVT_U16_F16") {
     return static_cast<std::uint32_t>(static_cast<std::uint16_t>(
         TruncateFloatToU32(ExpandFp16ToFloat(static_cast<std::uint16_t>(value)))));
+  }
+  if (opcode == "V_CVT_NORM_I16_F16") {
+    return static_cast<std::uint32_t>(NormalizeFloatToSnorm16(
+        ExpandFp16ToFloat(static_cast<std::uint16_t>(value))));
+  }
+  if (opcode == "V_CVT_NORM_U16_F16") {
+    return static_cast<std::uint32_t>(NormalizeFloatToUnorm16(
+        ExpandFp16ToFloat(static_cast<std::uint16_t>(value))));
   }
   if (opcode == "V_EXP_F32" || opcode == "V_LOG_F32" ||
       opcode == "V_RCP_F32" || opcode == "V_RCP_IFLAG_F32" ||
@@ -3038,7 +3131,8 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
     return ValidateOperandCount(instruction, 1, error_message);
   }
 
-  if (instruction.opcode == "V_NOP") {
+  if (instruction.opcode == "V_NOP" ||
+      instruction.opcode == "V_PIPEFLUSH") {
     return ValidateOperandCount(instruction, 0, error_message);
   }
 
@@ -3290,12 +3384,15 @@ bool ExecuteDecodedSeedInstruction(const DecodedInstruction& instruction,
       instruction.opcode == "V_CVT_F32_UBYTE3" ||
       instruction.opcode == "V_CVT_F32_I32" ||
       instruction.opcode == "V_CVT_F32_U32" ||
+      instruction.opcode == "V_CVT_OFF_F32_I4" ||
       instruction.opcode == "V_CVT_F32_F16" ||
       instruction.opcode == "V_CVT_F16_F32" ||
       instruction.opcode == "V_CVT_F16_I16" ||
       instruction.opcode == "V_CVT_F16_U16" ||
       instruction.opcode == "V_CVT_I16_F16" ||
       instruction.opcode == "V_CVT_U16_F16" ||
+      instruction.opcode == "V_CVT_NORM_I16_F16" ||
+      instruction.opcode == "V_CVT_NORM_U16_F16" ||
       instruction.opcode == "V_EXP_F32" ||
       instruction.opcode == "V_LOG_F32" ||
       instruction.opcode == "V_RCP_F32" ||
@@ -3592,6 +3689,7 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kVReadfirstlaneB32:
     case Gfx1201CompiledOpcode::kVSwapB32:
     case Gfx1201CompiledOpcode::kVSwapB16:
+    case Gfx1201CompiledOpcode::kVCvtOffF32I4:
     case Gfx1201CompiledOpcode::kVCmpEqI32:
     case Gfx1201CompiledOpcode::kVCmpNeI32:
     case Gfx1201CompiledOpcode::kVCmpLtI32:
@@ -3773,6 +3871,8 @@ bool ExecuteCompiledSeedInstruction(const Gfx1201CompiledInstruction& instructio
     case Gfx1201CompiledOpcode::kVCvtF16U16:
     case Gfx1201CompiledOpcode::kVCvtI16F16:
     case Gfx1201CompiledOpcode::kVCvtU16F16:
+    case Gfx1201CompiledOpcode::kVCvtNormI16F16:
+    case Gfx1201CompiledOpcode::kVCvtNormU16F16:
     case Gfx1201CompiledOpcode::kVCvtF64F32:
     case Gfx1201CompiledOpcode::kVCvtF64I32:
     case Gfx1201CompiledOpcode::kVCvtF64U32:

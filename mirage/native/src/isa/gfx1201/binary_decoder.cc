@@ -16,7 +16,7 @@ constexpr std::uint16_t kSrcVcczSgprIndex = 251;
 constexpr std::uint16_t kSrcExeczSgprIndex = 252;
 constexpr std::uint16_t kSrcSccSgprIndex = 253;
 
-constexpr std::array<std::string_view, 264> kPhase0ExecutableOpcodes{{
+constexpr std::array<std::string_view, 268> kPhase0ExecutableOpcodes{{
     "S_ENDPGM",
     "S_NOP",
     "S_ADD_U32",
@@ -44,6 +44,7 @@ constexpr std::array<std::string_view, 264> kPhase0ExecutableOpcodes{{
     "S_MOV_B32",
     "S_MOVK_I32",
     "V_NOP",
+    "V_PIPEFLUSH",
     "V_MOV_B32",
     "V_MOV_B16",
     "V_PERMLANE64_B32",
@@ -224,6 +225,7 @@ constexpr std::array<std::string_view, 264> kPhase0ExecutableOpcodes{{
     "V_CVT_F32_UBYTE3",
     "V_CVT_F32_I32",
     "V_CVT_F32_U32",
+    "V_CVT_OFF_F32_I4",
     "V_CVT_F32_F16",
     "V_CVT_F32_F64",
     "V_CVT_F16_F32",
@@ -231,6 +233,8 @@ constexpr std::array<std::string_view, 264> kPhase0ExecutableOpcodes{{
     "V_CVT_F16_U16",
     "V_CVT_I16_F16",
     "V_CVT_U16_F16",
+    "V_CVT_NORM_I16_F16",
+    "V_CVT_NORM_U16_F16",
     "V_CVT_F64_F32",
     "V_CVT_F64_I32",
     "V_CVT_F64_U32",
@@ -796,7 +800,8 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
                               OperandSlotKind::kSource1));
     *words_consumed =
         1 + src0_literal_words_consumed + src1_literal_words_consumed;
-  } else if (instruction_name == "V_NOP") {
+  } else if (instruction_name == "V_NOP" ||
+             instruction_name == "V_PIPEFLUSH") {
     *instruction = DecodedInstruction::Nullary(instruction_name);
     *words_consumed = 1;
   } else if (instruction_name == "V_READFIRSTLANE_B32") {
@@ -869,12 +874,15 @@ bool TryDecodeExecutableSeedInstruction(const Gfx1201OpcodeRoute& route,
              instruction_name == "V_CVT_F32_UBYTE3" ||
              instruction_name == "V_CVT_F32_I32" ||
              instruction_name == "V_CVT_F32_U32" ||
+             instruction_name == "V_CVT_OFF_F32_I4" ||
              instruction_name == "V_CVT_F32_F16" ||
              instruction_name == "V_CVT_F16_F32" ||
              instruction_name == "V_CVT_F16_I16" ||
              instruction_name == "V_CVT_F16_U16" ||
              instruction_name == "V_CVT_I16_F16" ||
              instruction_name == "V_CVT_U16_F16" ||
+             instruction_name == "V_CVT_NORM_I16_F16" ||
+             instruction_name == "V_CVT_NORM_U16_F16" ||
              instruction_name == "V_EXP_F32" ||
              instruction_name == "V_LOG_F32" ||
              instruction_name == "V_RCP_F32" ||

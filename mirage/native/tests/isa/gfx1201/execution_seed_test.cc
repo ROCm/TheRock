@@ -684,6 +684,24 @@ bool ExpectSwapSeedState(const mirage::sim::isa::WaveExecutionState& state) {
          !state.waiting_on_barrier && state.pc == 2u;
 }
 
+bool ExpectOffsetNormSeedState(
+    const mirage::sim::isa::WaveExecutionState& state) {
+  return state.vgprs[70][0] == FloatBits(-0.5f) &&
+         state.vgprs[70][1] == FloatBits(0.125f) &&
+         state.vgprs[70][2] == 0x70707070u &&
+         state.vgprs[70][3] == FloatBits(-0.0625f) &&
+         state.vgprs[71][0] == 0x00004000u &&
+         state.vgprs[71][1] == 0x0000c000u &&
+         state.vgprs[71][2] == 0x71717171u &&
+         state.vgprs[71][3] == 0x00002000u &&
+         state.vgprs[72][0] == 0x00004000u &&
+         state.vgprs[72][1] == 0x0000ffffu &&
+         state.vgprs[72][2] == 0x72727272u &&
+         state.vgprs[72][3] == 0x00000000u &&
+         state.exec_mask == 0xbu && state.halted &&
+         !state.waiting_on_barrier && state.pc == 4u;
+}
+
 bool ExpectRemainingCompareState(const mirage::sim::isa::WaveExecutionState& state) {
   return state.sgprs[40] == 0xffffffffu && state.sgprs[41] == 0xffffffffu &&
          state.sgprs[42] == 1u && state.sgprs[43] == 4u &&
@@ -1212,6 +1230,19 @@ int main() {
     return 1;
   }
 
+  const std::array<std::uint32_t, 1> v_pipeflush_words{MakeVop1(27u, 0u, 0u)};
+  if (!Expect(decoder.DecodeInstruction(v_pipeflush_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_PIPEFLUSH decode success") ||
+      !Expect(words_consumed == 1u,
+              "expected one dword consumed for V_PIPEFLUSH") ||
+      !Expect(instruction.opcode == "V_PIPEFLUSH",
+              "expected V_PIPEFLUSH opcode") ||
+      !Expect(instruction.operand_count == 0u,
+              "expected V_PIPEFLUSH nullary decode")) {
+    return 1;
+  }
+
   const std::array<std::uint32_t, 1> v_readfirstlane_words{
       MakeVop1(2u, 22u, 278u)};
   if (!Expect(decoder.DecodeInstruction(v_readfirstlane_words, &instruction,
@@ -1503,6 +1534,44 @@ int main() {
                                      OperandKind::kVgpr, 23u,
                                      OperandKind::kSgpr, 2u),
               "expected decoded V_CVT_U32_U16 operands")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_cvt_off_f32_i4_words{
+      MakeVop1(14u, 37u, 257u)};
+  if (!Expect(decoder.DecodeInstruction(v_cvt_off_f32_i4_words, &instruction,
+                                        &words_consumed, &error_message),
+              "expected V_CVT_OFF_F32_I4 decode success") ||
+      !Expect(ExpectUnaryInstruction(instruction, "V_CVT_OFF_F32_I4",
+                                     OperandKind::kVgpr, 37u,
+                                     OperandKind::kVgpr, 1u),
+              "expected decoded V_CVT_OFF_F32_I4 operands")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_cvt_norm_i16_f16_words{
+      MakeVop1(99u, 38u, 258u)};
+  if (!Expect(decoder.DecodeInstruction(v_cvt_norm_i16_f16_words,
+                                        &instruction, &words_consumed,
+                                        &error_message),
+              "expected V_CVT_NORM_I16_F16 decode success") ||
+      !Expect(ExpectUnaryInstruction(instruction, "V_CVT_NORM_I16_F16",
+                                     OperandKind::kVgpr, 38u,
+                                     OperandKind::kVgpr, 2u),
+              "expected decoded V_CVT_NORM_I16_F16 operands")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 1> v_cvt_norm_u16_f16_words{
+      MakeVop1(100u, 39u, 3u)};
+  if (!Expect(decoder.DecodeInstruction(v_cvt_norm_u16_f16_words,
+                                        &instruction, &words_consumed,
+                                        &error_message),
+              "expected V_CVT_NORM_U16_F16 decode success") ||
+      !Expect(ExpectUnaryInstruction(instruction, "V_CVT_NORM_U16_F16",
+                                     OperandKind::kVgpr, 39u,
+                                     OperandKind::kSgpr, 3u),
+              "expected decoded V_CVT_NORM_U16_F16 operands")) {
     return 1;
   }
 
@@ -3592,6 +3661,99 @@ int main() {
               "expected compiled swap execution success") ||
       !Expect(ExpectSwapSeedState(compiled_swap_state),
               "expected compiled swap state")) {
+    return 1;
+  }
+
+  const std::array<std::uint32_t, 5> offset_norm_words{
+      MakeVop1(27u, 0u, 0u),
+      MakeVop1(14u, 70u, 266u),
+      MakeVop1(99u, 71u, 267u),
+      MakeVop1(100u, 72u, 268u),
+      MakeSopp(48u),
+  };
+  std::vector<DecodedInstruction> offset_norm_program;
+  if (!Expect(decoder.DecodeProgram(offset_norm_words, &offset_norm_program,
+                                    &error_message),
+              "expected offset/norm program decode success") ||
+      !Expect(offset_norm_program.size() == 5u,
+              "expected five decoded offset/norm instructions") ||
+      !Expect(offset_norm_program[0].opcode == "V_PIPEFLUSH",
+              "expected decoded V_PIPEFLUSH") ||
+      !Expect(offset_norm_program[1].opcode == "V_CVT_OFF_F32_I4",
+              "expected decoded V_CVT_OFF_F32_I4") ||
+      !Expect(offset_norm_program[2].opcode == "V_CVT_NORM_I16_F16",
+              "expected decoded V_CVT_NORM_I16_F16") ||
+      !Expect(offset_norm_program[3].opcode == "V_CVT_NORM_U16_F16",
+              "expected decoded V_CVT_NORM_U16_F16") ||
+      !Expect(offset_norm_program[4].opcode == "S_ENDPGM",
+              "expected decoded S_ENDPGM after offset/norm batch")) {
+    return 1;
+  }
+
+  auto initialize_offset_norm_state = [](WaveExecutionState* state) {
+    state->exec_mask = 0xbu;
+
+    state->vgprs[10][0] = 0x00000008u;
+    state->vgprs[10][1] = 0x00000002u;
+    state->vgprs[10][2] = 0x10101010u;
+    state->vgprs[10][3] = 0x0000000fu;
+
+    state->vgprs[11][0] = 0x00003800u;
+    state->vgprs[11][1] = 0x0000b800u;
+    state->vgprs[11][2] = 0x11111111u;
+    state->vgprs[11][3] = 0x00003400u;
+
+    state->vgprs[12][0] = 0x00003400u;
+    state->vgprs[12][1] = 0x00003e00u;
+    state->vgprs[12][2] = 0x12121212u;
+    state->vgprs[12][3] = 0x0000b800u;
+
+    state->vgprs[70][2] = 0x70707070u;
+    state->vgprs[71][2] = 0x71717171u;
+    state->vgprs[72][2] = 0x72727272u;
+  };
+
+  WaveExecutionState decoded_offset_norm_state;
+  initialize_offset_norm_state(&decoded_offset_norm_state);
+  if (!Expect(interpreter.ExecuteProgram(offset_norm_program,
+                                         &decoded_offset_norm_state,
+                                         &error_message),
+              "expected decoded offset/norm execution success") ||
+      !Expect(ExpectOffsetNormSeedState(decoded_offset_norm_state),
+              "expected decoded offset/norm state")) {
+    return 1;
+  }
+
+  std::vector<Gfx1201CompiledInstruction> compiled_offset_norm_program;
+  if (!Expect(interpreter.CompileProgram(offset_norm_program,
+                                         &compiled_offset_norm_program,
+                                         &error_message),
+              "expected compiled offset/norm program success") ||
+      !Expect(compiled_offset_norm_program.size() == 5u,
+              "expected five compiled offset/norm instructions") ||
+      !Expect(compiled_offset_norm_program[0].opcode ==
+                  Gfx1201CompiledOpcode::kSNop,
+              "expected compiled V_PIPEFLUSH opcode") ||
+      !Expect(compiled_offset_norm_program[1].opcode ==
+                  Gfx1201CompiledOpcode::kVCvtOffF32I4,
+              "expected compiled V_CVT_OFF_F32_I4 opcode") ||
+      !Expect(compiled_offset_norm_program[2].opcode ==
+                  Gfx1201CompiledOpcode::kVCvtNormI16F16,
+              "expected compiled V_CVT_NORM_I16_F16 opcode") ||
+      !Expect(compiled_offset_norm_program[3].opcode ==
+                  Gfx1201CompiledOpcode::kVCvtNormU16F16,
+              "expected compiled V_CVT_NORM_U16_F16 opcode")) {
+    return 1;
+  }
+
+  WaveExecutionState compiled_offset_norm_state;
+  initialize_offset_norm_state(&compiled_offset_norm_state);
+  if (!Expect(interpreter.ExecuteProgram(compiled_offset_norm_program,
+                                         &compiled_offset_norm_state,
+                                         &error_message),
+              "expected compiled offset/norm execution success") ||
+      !Expect(ExpectOffsetNormSeedState(compiled_offset_norm_state),
+              "expected compiled offset/norm state")) {
     return 1;
   }
 
