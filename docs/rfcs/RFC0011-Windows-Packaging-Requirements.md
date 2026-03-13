@@ -176,3 +176,40 @@ msiexec /famus amdrocm-core-sdk.msi /quiet
 ```
 
 MSI installers should be GUI-less or minimal-UI by default and must support unattended enterprise deployment.
+
+### Installation Logic and Version Handling
+
+Upon execution, MSI packages must inspect the installation target and apply deterministic version-handling rules.
+
+The following behavior matrix must be supported:
+
+| Scenario                                                 | Behavior                                                                                           |
+| :------------------------------------------------------- | :------------------------------------------------------------------------------------------------- |
+| No ROCm installation at target path                      | Installs normally                                                                                  |
+| Older version detected at the same target path           | Perform in-place upgrade                                                                         |
+| Same version detected at the same target path            | Return success with no action, unless an explicit repair or reinstall mode is requested |
+| Newer version detected at the same target path           | Abort with error and instruct the user to uninstall or choose a different path                   |
+Different major.minor version detected at a different path | Allow side-by-side installation                                                                    |
+
+Path versions must upgrade in place within the same `X.Y` installation root.
+
+Major.minor releases must be installable side by side in distinct versioned roots.
+
+### Upgrade and Uninstall Requirements
+
+Windows packages must provide predictable and clean upgrade and uninstall behavior.
+
+Upgrade requirements:
+
+- In-place upgrades must preserve the expected installation root for the target `X.Y` line
+- Upgrade flows must avoid overwriting unrelated user environment settings
+- Upgrade flows must not leave stale package-owned files in shared locations when the package manager can safely remove them
+- Package upgrade behavior must remain consistent whether invoked directly through MSI or through winget
+
+Uninstall requirements:
+
+- Remove files owned by the installation being removed
+- Remove environment-variable updates owned by that installation if they still reference that installation
+- Remove registry entries created by that installation
+- Remove package-owend  `PATH` entries associated with that installation only
+- Avoid impacting other installed ROCm major.minor versions
