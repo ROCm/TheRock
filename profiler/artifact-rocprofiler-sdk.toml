@@ -1,21 +1,4 @@
-# aqlprofile
-[components.dbg."profiler/aqlprofile/stage"]
-[components.dev."profiler/aqlprofile/stage"]
-[components.doc."profiler/aqlprofile/stage"]
-[components.lib."profiler/aqlprofile/stage"]
-[components.run."profiler/aqlprofile/stage"]
-[components.test."profiler/aqlprofile/stage"]
-include = [
-  "share/hsa-amd-aqlprofile/**",
-]
-
 # rocprofiler-sdk
-[components.dbg."profiler/rocprofiler-sdk/stage"]
-[components.dev."profiler/rocprofiler-sdk/stage"]
-include = [
-  "share/rocprofiler-sdk/samples/**",
-]
-[components.doc."profiler/rocprofiler-sdk/stage"]
 [components.lib."profiler/rocprofiler-sdk/stage"]
 include = [
   "libexec/rocprofiler-sdk/**",
@@ -28,17 +11,26 @@ include = [
   "share/rocprofiler-sdk-roctx/**",
   "lib/python*/**",
 ]
+exclude = [
+  "share/rocprofiler-sdk/tests/**",
+]
+[components.dbg."profiler/rocprofiler-sdk/stage"]
+[components.dev."profiler/rocprofiler-sdk/stage"]
+include = [
+  "share/rocprofiler-sdk/samples/**",
+]
+[components.doc."profiler/rocprofiler-sdk/stage"]
 [components.test."profiler/rocprofiler-sdk/stage"]
 include = [
   "share/rocprofiler-sdk/tests/**",
 ]
 
 # roctracer
+[components.lib."profiler/roctracer/stage"]
+[components.run."profiler/roctracer/stage"]
 [components.dbg."profiler/roctracer/stage"]
 [components.dev."profiler/roctracer/stage"]
 [components.doc."profiler/roctracer/stage"]
-[components.lib."profiler/roctracer/stage"]
-[components.run."profiler/roctracer/stage"]
 [components.test."profiler/roctracer/stage"]
 
 # rocprof-trace-decoder-binary

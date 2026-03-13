@@ -1,0 +1,4 @@
+# openmpi
+[components.lib."third-party/openmpi/build/stage"]
+[components.run."third-party/openmpi/build/stage"]
+[components.dev."third-party/openmpi/build/stage"]

@@ -4,6 +4,11 @@
 if(THEROCK_ENABLE_ROCPROFV3)
   set(_rocprofiler_sdk_optional_deps)
 
+  set(_openmpi_optional_dep)
+  if(THEROCK_ENABLE_MPI)
+    set(_openmpi_optional_dep therock-openmpi)
+  endif()
+
   ##############################################################################
   # rocprof-trace-decoder-binary
   # The trace decoder is responsible for decoding advanced thread traces from
@@ -27,7 +32,7 @@ if(THEROCK_ENABLE_ROCPROFV3)
   # aqlprofile
   ##############################################################################
   therock_cmake_subproject_declare(aqlprofile
-    USE_DIST_AMDGPU_TARGETS
+    USE_TEST_AMDGPU_TARGETS
     EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/aqlprofile"
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/aqlprofile"
     BACKGROUND_BUILD
@@ -50,15 +55,19 @@ if(THEROCK_ENABLE_ROCPROFV3)
   )
   therock_cmake_subproject_activate(aqlprofile)
 
-if(THEROCK_BUILD_TESTING)
-  therock_provide_artifact(aqlprofile-tests
+  therock_provide_artifact(aqlprofile
+    TARGET_NEUTRAL
     DESCRIPTOR artifact-aqlprofile.toml
     COMPONENTS
+      dbg
+      dev
+      doc
+      lib
+      run
       test
     SUBPROJECT_DEPS
       aqlprofile
   )
-endif(THEROCK_BUILD_TESTING)
 
   ##############################################################################
   # rocprofiler-sdk
@@ -145,6 +154,7 @@ endif(THEROCK_BUILD_TESTING)
       ${THEROCK_BUNDLED_ELFUTILS}
       ${THEROCK_BUNDLED_LIBDRM}
       ${THEROCK_BUNDLED_SQLITE3}
+      ${_openmpi_optional_dep}
     )
     therock_cmake_subproject_glob_c_sources(rocprofiler-compute
       SUBDIRS .
@@ -202,7 +212,6 @@ endif(THEROCK_BUILD_TESTING)
       run
       test
     SUBPROJECT_DEPS
-      aqlprofile
       rocprofiler-sdk
       roctracer
       ${_rocprofiler_sdk_optional_deps}
@@ -231,14 +240,14 @@ endif(THEROCK_BUILD_TESTING)
   # Skip enabling rocprofiler-systems when building with sanitizers.
   if (THEROCK_ENABLE_ROCPROFSYS AND THEROCK_SANITIZER STREQUAL "")
     # Escape semicolons in GPU targets list to prevent shell interpretation
-    if (THEROCK_DIST_AMDGPU_TARGETS STREQUAL "THEROCK_DIST_AMDGPU_TARGETS-NOTFOUND")
+    if (THEROCK_TEST_AMDGPU_TARGETS STREQUAL "THEROCK_TEST_AMDGPU_TARGETS-NOTFOUND")
       set(_ROCPROFSYS_GFX_TARGETS_ESCAPED "")
     else()
-      string(REPLACE ";" "\\;" _ROCPROFSYS_GFX_TARGETS_ESCAPED "${THEROCK_DIST_AMDGPU_TARGETS}")
+      string(REPLACE ";" "\\;" _ROCPROFSYS_GFX_TARGETS_ESCAPED "${THEROCK_TEST_AMDGPU_TARGETS}")
     endif()
 
     therock_cmake_subproject_declare(rocprofiler-systems
-      USE_DIST_AMDGPU_TARGETS
+      USE_TEST_AMDGPU_TARGETS
       EXTERNAL_SOURCE_DIR "${THEROCK_ROCM_SYSTEMS_SOURCE_DIR}/projects/rocprofiler-systems"
       BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/rocprofiler-systems"
       BACKGROUND_BUILD
@@ -252,6 +261,7 @@ endif(THEROCK_BUILD_TESTING)
         -DROCPROFSYS_BUILD_FOR_THEROCK=ON
         -DROCPROFSYS_GFX_TARGETS="${_ROCPROFSYS_GFX_TARGETS_ESCAPED}"
         -DROCPROFSYS_BUILD_SPDLOG=OFF
+        "-DROCPROFSYS_USE_MPI=${THEROCK_ENABLE_MPI}"
       INSTALL_RPATH_DIRS
         "lib"
         "lib/rocprofiler-systems"
@@ -269,6 +279,7 @@ endif(THEROCK_BUILD_TESTING)
         rocprofiler-sdk
         ${THEROCK_BUNDLED_LIBDRM}
         ${THEROCK_BUNDLED_SQLITE3}
+        ${_openmpi_optional_dep}
     )
     therock_cmake_subproject_glob_c_sources(rocprofiler-systems
       SUBDIRS .
@@ -285,6 +296,7 @@ endif(THEROCK_BUILD_TESTING)
         doc
         lib
         run
+        test
       SUBPROJECT_DEPS
         amdsmi
         rocprofiler-sdk

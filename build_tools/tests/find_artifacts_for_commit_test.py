@@ -13,6 +13,7 @@ from find_artifacts_for_commit import (
     ArtifactRunInfo,
     find_artifacts_for_commit,
 )
+from _therock_utils.workflow_outputs import WorkflowOutputRoot
 from github_actions.github_actions_utils import (
     GitHubAPIError,
     is_authenticated_github_api_available,
@@ -271,14 +272,19 @@ class FindArtifactsCrossRunTest(unittest.TestCase):
     }
 
     @mock.patch("find_artifacts_for_commit.check_if_artifacts_exist")
-    @mock.patch("find_artifacts_for_commit.retrieve_bucket_info")
+    @mock.patch("find_artifacts_for_commit.WorkflowOutputRoot.from_workflow_run")
     @mock.patch("find_artifacts_for_commit.gha_query_workflow_runs_for_commit")
     def test_accumulates_groups_across_runs(
-        self, mock_query_runs, mock_bucket_info, mock_check
+        self, mock_query_runs, mock_from_wfr, mock_check
     ):
         """Groups found across different retriggered runs are accumulated."""
         mock_query_runs.return_value = [self.FAKE_RUN_NEWER, self.FAKE_RUN_OLDER]
-        mock_bucket_info.return_value = ("", "therock-ci-artifacts")
+        mock_from_wfr.return_value = WorkflowOutputRoot(
+            bucket="therock-ci-artifacts",
+            external_repo="",
+            run_id="0",
+            platform="linux",
+        )
 
         # Newer run only built gfx120X; older run built gfx110X.
         def check_by_run_and_group(info):
@@ -305,14 +311,17 @@ class FindArtifactsCrossRunTest(unittest.TestCase):
         self.assertEqual(results[1].workflow_run_id, str(self.FAKE_RUN_NEWER["id"]))
 
     @mock.patch("find_artifacts_for_commit.check_if_artifacts_exist")
-    @mock.patch("find_artifacts_for_commit.retrieve_bucket_info")
+    @mock.patch("find_artifacts_for_commit.WorkflowOutputRoot.from_workflow_run")
     @mock.patch("find_artifacts_for_commit.gha_query_workflow_runs_for_commit")
-    def test_newer_run_takes_priority(
-        self, mock_query_runs, mock_bucket_info, mock_check
-    ):
+    def test_newer_run_takes_priority(self, mock_query_runs, mock_from_wfr, mock_check):
         """When multiple retriggered runs have the same group, the newer wins."""
         mock_query_runs.return_value = [self.FAKE_RUN_NEWER, self.FAKE_RUN_OLDER]
-        mock_bucket_info.return_value = ("", "therock-ci-artifacts")
+        mock_from_wfr.return_value = WorkflowOutputRoot(
+            bucket="therock-ci-artifacts",
+            external_repo="",
+            run_id="0",
+            platform="linux",
+        )
         mock_check.return_value = True  # both runs have all groups
 
         results = find_artifacts_for_commit(

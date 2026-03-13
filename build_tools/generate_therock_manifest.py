@@ -177,12 +177,27 @@ def main():
     ap.add_argument(
         "--commit", help="TheRock commit/ref to inspect (default: HEAD)", default="HEAD"
     )
+    ap.add_argument(
+        "--flag-settings",
+        help="Path to flag_settings.json to include in the manifest",
+        default=None,
+    )
     args = ap.parse_args()
 
     repo_root = git_root()
     the_rock_commit = _run(["git", "rev-parse", args.commit], cwd=repo_root)
 
     manifest = build_manifest_schema(repo_root, the_rock_commit)
+
+    # Merge flag settings into the manifest if provided.
+    if args.flag_settings:
+        flag_settings_path = Path(args.flag_settings)
+        if not flag_settings_path.exists():
+            raise FileNotFoundError(
+                f"Flag settings file not found: {flag_settings_path}"
+            )
+        with open(flag_settings_path, encoding="utf-8") as f:
+            manifest["flags"] = json.load(f)
 
     # Decide output path
     # if not provided, write to repo_root / "therock_manifest.json"
