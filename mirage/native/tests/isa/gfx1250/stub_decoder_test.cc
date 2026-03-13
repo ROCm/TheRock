@@ -284,6 +284,29 @@ std::uint32_t CountSlotsOfKind(const StubDecodedInstruction& instruction,
   return count;
 }
 
+std::uint32_t CountDescriptorsWithAccess(
+    const StubDecodedInstruction& instruction,
+    StubOperandAccess access) {
+  std::uint32_t count = 0;
+  for (std::uint32_t i = 0; i < instruction.operand_descriptors.descriptor_count;
+       ++i) {
+    if (instruction.operand_descriptors.descriptors[i].access == access) {
+      ++count;
+    }
+  }
+  return count;
+}
+
+std::uint32_t CountOutputSlots(const StubDecodedInstruction& instruction) {
+  std::uint32_t count = 0;
+  for (std::uint32_t i = 0; i < instruction.operand_slots.binding_count; ++i) {
+    if (instruction.operand_slots.bindings[i].is_output) {
+      ++count;
+    }
+  }
+  return count;
+}
+
 }  // namespace
 
 int main() {
@@ -2520,6 +2543,12 @@ int main() {
                     decoded.operand_layout.touches_lds &&
                     decoded.operand_slots.binding_count == 3 &&
                     decoded.operand_descriptors.descriptor_count == 3 &&
+                    CountOutputSlots(decoded) ==
+                        (instruction_name == "TENSOR_LOAD_TO_LDS" ? 1u : 0u) &&
+                    CountDescriptorsWithAccess(decoded, StubOperandAccess::kRead) ==
+                        (instruction_name == "TENSOR_LOAD_TO_LDS" ? 2u : 3u) &&
+                    CountDescriptorsWithAccess(decoded, StubOperandAccess::kWrite) ==
+                        (instruction_name == "TENSOR_LOAD_TO_LDS" ? 1u : 0u) &&
                     !decoded.uses_scale_path && !decoded.uses_paired_operands &&
                     AllSlotsExplicit(decoded) &&
                     AllDescriptorsExplicit(decoded) &&
@@ -2687,6 +2716,9 @@ int main() {
                     !HasMatrixSlot(decoded) && !HasMatrixDescriptor(decoded) &&
                     decoded.operand_slots.binding_count == 2 &&
                     decoded.operand_descriptors.descriptor_count == 2 &&
+                    CountOutputSlots(decoded) == 1 &&
+                    CountDescriptorsWithAccess(decoded, StubOperandAccess::kRead) == 1 &&
+                    CountDescriptorsWithAccess(decoded, StubOperandAccess::kWrite) == 1 &&
                     !decoded.uses_scale_path && !decoded.uses_tensor_memory &&
                     AllSlotsExplicit(decoded) &&
                     AllDescriptorsExplicit(decoded) &&
@@ -2808,6 +2840,9 @@ int main() {
                     !HasMatrixDescriptor(decoded) &&
                     decoded.operand_slots.binding_count == 5 &&
                     decoded.operand_descriptors.descriptor_count == 5 &&
+                    CountOutputSlots(decoded) == 2 &&
+                    CountDescriptorsWithAccess(decoded, StubOperandAccess::kRead) == 3 &&
+                    CountDescriptorsWithAccess(decoded, StubOperandAccess::kWrite) == 2 &&
                     !decoded.uses_tensor_memory &&
                     AllSlotsExplicit(decoded) &&
                     AllDescriptorsExplicit(decoded) &&
@@ -2921,6 +2956,9 @@ int main() {
                     !decoded.uses_tensor_memory &&
                     decoded.operand_slots.binding_count == 4 &&
                     decoded.operand_descriptors.descriptor_count == 4 &&
+                    CountOutputSlots(decoded) == 1 &&
+                    CountDescriptorsWithAccess(decoded, StubOperandAccess::kRead) == 3 &&
+                    CountDescriptorsWithAccess(decoded, StubOperandAccess::kWrite) == 1 &&
                     AllSlotsExplicit(decoded) &&
                     AllDescriptorsExplicit(decoded) &&
                     AllSlotWaveSizesAre(decoded, 0) &&
