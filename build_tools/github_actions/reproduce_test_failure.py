@@ -252,6 +252,13 @@ def run_windows(args: argparse.Namespace) -> int:
 
     if "uv" in missing:
         steps.append(("Installing uv", "irm https://astral.sh/uv/install.ps1 | iex"))
+        # Refresh PATH to pick up uv installation
+        steps.append(
+            (
+                "Refreshing environment for uv",
+                "$env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path','User') + ';' + \"$env:USERPROFILE\\.local\\bin\"",
+            )
+        )
 
     steps.extend([
         ("Creating virtual environment", "uv venv .venv; .venv\\Scripts\\Activate.ps1"),
