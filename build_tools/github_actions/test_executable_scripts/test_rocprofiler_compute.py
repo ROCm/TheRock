@@ -19,8 +19,8 @@ EXCLUDED_TESTS = [
     "test_profile_live_attach_detach",
 ]
 
-# quick Tests
-QUICK_TESTS = [
+# Smoke Tests
+SMOKE_TESTS = [
     "test_autogen_config",
     "test_utils",
     "test_num_xcds_cli_output",
@@ -76,12 +76,12 @@ def execute_tests():
         f"{shard_index},,{total_shards}",
     ]
 
-    # If quick tests are enabled, we run quick tests only.
+    # If smoke tests are enabled, we run smoke tests only.
     # Otherwise, we run the normal test suite
     test_type = os.getenv("TEST_TYPE", "full")
-    if test_type == "quick":
+    if test_type == "smoke":
         cmd.append("--tests-regex")
-        cmd.append("|".join(QUICK_TESTS))
+        cmd.append("|".join(SMOKE_TESTS))
 
     logging.info(f"++ Exec [{THEROCK_PATH}]$ {shlex.join(cmd)}")
     subprocess.run(

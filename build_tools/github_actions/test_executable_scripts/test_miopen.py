@@ -240,8 +240,8 @@ if any(prefix in AMDGPU_FAMILIES for prefix in ["gfx110", "gfx115", "gfx120"]):
 
 ####################################################
 
-# Creating a quick test filter
-quick_filter = [
+# Creating a smoke test filter
+smoke_filter = [
     # Batch norm FWD smoke tests
     "Smoke/GPU_BNCKFWDTrainLarge2D_FP16*",
     "Smoke/GPU_BNOCLFWDTrainLarge2D_FP16*",
@@ -256,16 +256,16 @@ quick_filter = [
 
 # TODO(rocm-libraries#2266): re-enable test for gfx950-dcgpu
 if AMDGPU_FAMILIES != "gfx950-dcgpu":
-    quick_filter.append("*DBSync*")
+    smoke_filter.append("*DBSync*")
     positive_filter.append("*DBSync*")
 
 ####################################################
 
-# If quick tests are enabled, we run quick tests only.
+# If smoke tests are enabled, we run smoke tests only.
 # Otherwise, we run the normal test suite
 test_type = os.getenv("TEST_TYPE", "full")
-if test_type == "quick":
-    test_filter = "--gtest_filter=" + ":".join(quick_filter)
+if test_type == "smoke":
+    test_filter = "--gtest_filter=" + ":".join(smoke_filter)
 else:
     test_filter = (
         "--gtest_filter=" + ":".join(positive_filter) + "-" + ":".join(negative_filter)

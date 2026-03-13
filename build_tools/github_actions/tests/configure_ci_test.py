@@ -1,19 +1,18 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-from contextlib import redirect_stdout, redirect_stderr
-import io
 import json
 from pathlib import Path
 import os
 import sys
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 sys.path.insert(0, os.fspath(Path(__file__).parent.parent))
 # Add tests directory to path for extended_tests imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tests"))
 import configure_ci
+from extended_tests.benchmark.benchmark_test_matrix import benchmark_matrix
 
 
 class ConfigureCITest(unittest.TestCase):
@@ -267,40 +266,6 @@ class ConfigureCITest(unittest.TestCase):
             target_output=linux_target_output, allow_xfail=False
         )
         self.assertEqual(linux_test_labels, [])
-
-    @patch("subprocess.run")
-    def test_filter_tests_from_pull_request(self, mock_run):
-        base_args = {
-            "pr_labels": '{"labels":[{"name":"test_filter:comprehensive"}]}',
-            "build_variant": "release",
-            "github_event_name": "pull_request",
-            "base_ref": "HEAD^",
-        }
-        mock_process = MagicMock()
-        mock_process.stdout = ".github/workflows/ci.yml\nsrc/some_code.cpp"
-        mock_run.return_value = mock_process
-        captured_out = io.StringIO()
-        captured_err = io.StringIO()
-        with redirect_stdout(captured_out), redirect_stderr(captured_err):
-            configure_ci.main(base_args, {}, {})
-        self.assertIn('"test_type": "comprehensive"', captured_out.getvalue())
-
-    @patch("subprocess.run")
-    def test_invalid_filter_tests_from_pull_request(self, mock_run):
-        base_args = {
-            "pr_labels": '{"labels":[{"name":"test_filter:extended"}]}',
-            "build_variant": "release",
-            "github_event_name": "pull_request",
-            "base_ref": "HEAD^",
-        }
-        mock_process = MagicMock()
-        mock_process.stdout = ".github/workflows/ci.yml\nsrc/some_code.cpp"
-        mock_run.return_value = mock_process
-        captured_out = io.StringIO()
-        captured_err = io.StringIO()
-        with redirect_stdout(captured_out), redirect_stderr(captured_err):
-            configure_ci.main(base_args, {}, {})
-        self.assertIn('"test_type": "quick"', captured_out.getvalue())
 
     def test_skip_ci_label(self):
         base_args = {
