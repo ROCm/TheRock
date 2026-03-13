@@ -31,4 +31,16 @@ functional_matrix = {
         "platform": ["linux"],
         "total_shards": 1,
     },
+     "test_code_obj_version": {
+        "job_name": "test_code_obj_version",
+        "fetch_artifact_args": "--tests",
+        "timeout_minutes": 30,
+        "test_script": (
+            "python "
+            f"{_get_functional_script_path('test_code_obj_version.py')}"
+        ),
+        "platform": ["linux"],
+        "total_shards": 1,
+    },
+
 }
