@@ -154,7 +154,7 @@ jobs:
           AMD_LOG_LEVEL: 4
           ROCM_KPACK_DEBUG: "1"
         run: |
-          pytest tests/ -m "not amdsmi_tests_default_unblocking_for_sanity" --log-cli-level=info
+          pytest tests/ -m "not amdsmi_tests_default_unblocking_for_sanity" --log-cli-level=info --timeout=600
 
       - name: Run ROCm AMDSMI Default-Unblocking-For-Sanity Tests
         id: amdsmi_tests_default_unblocking_for_sanity_tests
@@ -166,7 +166,7 @@ jobs:
           AMD_LOG_LEVEL: 4
           ROCM_KPACK_DEBUG: "1"
         run: |
-          pytest tests/ -m "amdsmi_tests_default_unblocking_for_sanity" --log-cli-level=info
+          pytest tests/ -m "amdsmi_tests_default_unblocking_for_sanity" --log-cli-level=info --timeout=600
 
       - name: Post-job cleanup processes on Windows
         if: ${{ always() && runner.os == 'Windows' }}
