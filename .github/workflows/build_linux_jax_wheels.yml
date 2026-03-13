@@ -84,11 +84,11 @@ on:
       s3_subdir:
         description: S3 subdirectory, not including the GPU-family
         type: string
-        default: "v2"
+        default: "v3/whl"
       s3_staging_subdir:
         description: S3 staging subdirectory, not including the GPU-family
         type: string
-        default: "v2-staging"
+        default: "v3/whl-staging"
       rocm_version:
         description: ROCm version to install
         type: string
@@ -98,11 +98,11 @@ on:
       cloudfront_url:
         description: CloudFront base URL pointing to Python index
         type: string
-        default: "https://rocm.devreleases.amd.com/v2"
+        default: "https://rocm.devreleases.amd.com/whl"
       cloudfront_staging_url:
         description: CloudFront base URL pointing to staging Python index
         type: string
-        default: "https://rocm.devreleases.amd.com/v2-staging"
+        default: "https://rocm.devreleases.amd.com/whl-staging"
       ref:
         description: TheRock repository ref/branch to check out
         type: string

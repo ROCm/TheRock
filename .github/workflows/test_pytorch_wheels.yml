@@ -17,10 +17,10 @@ on:
         type: string
         default: "linux-mi325-1gpu-ossci-rocm"
       package_index_url:
-        description: Base Python package index URL to test, typically nightly/dev URL with a "v2" or "v2-staging" subdir (without a GPU family subdir)
+        description: Base Python package index URL to test, typically nightly/dev URL with a "whl" or "whl-staging" subdir (without a GPU family subdir)
         required: true
         type: string
-        default: "https://rocm.nightlies.amd.com/v2"
+        default: "https://rocm.nightlies.amd.com/whl"
       python_version:
         required: true
         type: string

@@ -40,11 +40,11 @@ on:
       sourcesubdir:
         type: choice
         options:
-          - v2
-          - v2-staging
+          - v3/whl
+          - v3/whl-staging
       destsubdir:
         type: string
-        default: v2
+        default: v3/whl
       sourcebucket:
         type: choice
         options:

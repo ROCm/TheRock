@@ -16,11 +16,11 @@ on:
       s3_subdir:
         description: S3 subdirectory, not including the GPU-family
         type: string
-        default: "v2"
+        default: "v3/whl"
       s3_staging_subdir:
         description: Staging subdirectory to push the wheels for test
         type: string
-        default: "v2-staging"
+        default: "v3/whl-staging"
       cloudfront_url:
         description: CloudFront URL pointing to Python index
         required: true
@@ -62,19 +62,19 @@ on:
       s3_subdir:
         description: S3 subdirectory, not including the GPU-family
         type: string
-        default: "v2"
+        default: "v3/whl"
       s3_staging_subdir:
         description: "Staging subdirectory to push the wheels for test"
         type: string
-        default: "v2-staging"
+        default: "v3/whl-staging"
       cloudfront_url:
         description: CloudFront URL pointing to Python index
         type: string
-        default: "https://rocm.devreleases.amd.com/v2"
+        default: "https://rocm.devreleases.amd.com/whl"
       cloudfront_staging_url:
         description: CloudFront base URL pointing to staging Python index
         type: string
-        default: "https://rocm.devreleases.amd.com/v2-staging"
+        default: "https://rocm.devreleases.amd.com/whl-staging"
       rocm_version:
         description: ROCm version to pip install (e.g. "7.10.0a20251124")
         type: string

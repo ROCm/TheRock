@@ -19,7 +19,7 @@ on:
       package_index_url_base:
         description: Base Python package index URL (without GPU family subdir)
         type: string
-        default: "https://rocm.nightlies.amd.com/v2"
+        default: "https://rocm.nightlies.amd.com/whl"
       package_find_links_url:
         description: Full Python package index URL for use with --find-links (usually instead of package_index_url_base)
         type: string

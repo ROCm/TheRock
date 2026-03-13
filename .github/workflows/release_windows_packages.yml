@@ -16,11 +16,11 @@ on:
       s3_subdir:
         description: "Subdirectory to push the Python packages"
         type: string
-        default: "v2"
+        default: "v3/whl"
       s3_staging_subdir:
         description: "Staging subdirectory to push the packages"
         type: string
-        default: "v2-staging"
+        default: "v3/whl-staging"
       families:
         description: "Comma separated list of AMD GPU families, e.g. `gfx94X,gfx103x`, or empty for the default list"
         type: string
@@ -48,11 +48,11 @@ on:
       s3_subdir:
         description: "Subdirectory to push the Python packages"
         type: string
-        default: "v2"
+        default: "v3/whl"
       s3_staging_subdir:
         description: "Staging subdirectory to push the packages"
         type: string
-        default: "v2-staging"
+        default: "v3/whl-staging"
       families:
         description: "A comma separated list of AMD GPU families, e.g. `gfx94X,gfx103x`, or empty for the default list"
         type: string
@@ -108,9 +108,9 @@ jobs:
       - name: Set variables for nightly release
         if: ${{ env.release_type == 'nightly' }}
         run: |
-          echo "tmp_cloudfront_url=https://rocm.nightlies.amd.com/v2" >> $GITHUB_ENV
-          echo "tmp_cloudfront_staging_url=https://rocm.nightlies.amd.com/v2-staging" >> $GITHUB_ENV
-          echo "tmp_s3_subdir_tar=''" >> $GITHUB_ENV
+          echo "tmp_cloudfront_url=https://rocm.nightlies.amd.com/whl" >> $GITHUB_ENV
+          echo "tmp_cloudfront_staging_url=https://rocm.nightlies.amd.com/whl-staging" >> $GITHUB_ENV
+          echo "tmp_s3_subdir_tar=v3/tarball/" >> $GITHUB_ENV
 
       - name: Set variables for prerelease
         if: ${{ env.release_type == 'prerelease' }}
@@ -122,9 +122,9 @@ jobs:
       - name: Set variables for development release
         if: ${{ env.release_type == 'dev' }}
         run: |
-          echo "tmp_cloudfront_url=https://rocm.devreleases.amd.com/v2" >> $GITHUB_ENV
-          echo "tmp_cloudfront_staging_url=https://rocm.devreleases.amd.com/v2-staging" >> $GITHUB_ENV
-          echo "tmp_s3_subdir_tar=''" >> $GITHUB_ENV
+          echo "tmp_cloudfront_url=https://rocm.devreleases.amd.com/whl" >> $GITHUB_ENV
+          echo "tmp_cloudfront_staging_url=https://rocm.devreleases.amd.com/whl-staging" >> $GITHUB_ENV
+          echo "tmp_s3_subdir_tar=v3/tarball/" >> $GITHUB_ENV
 
       - name: Generate release information
         id: release_information
@@ -168,8 +168,8 @@ jobs:
       S3_BUCKET_TAR: "therock-${{ needs.setup_metadata.outputs.release_type }}-tarball"
       S3_SUBDIR_TAR: ${{ needs.setup_metadata.outputs.s3_subdir_tar }}
       S3_BUCKET_PY: "therock-${{ needs.setup_metadata.outputs.release_type }}-python"
-      S3_SUBDIR: ${{ inputs.s3_subdir || 'v2' }}
-      S3_STAGING_SUBDIR: ${{ inputs.s3_staging_subdir || 'v2-staging' }}
+      S3_SUBDIR: ${{ inputs.s3_subdir || 'v3/whl' }}
+      S3_STAGING_SUBDIR: ${{ inputs.s3_staging_subdir || 'v3/whl-staging' }}
 
     steps:
       - name: "Checking out repository"
