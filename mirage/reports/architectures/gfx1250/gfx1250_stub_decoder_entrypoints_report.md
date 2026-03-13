@@ -146,7 +146,9 @@
     - destination and accumulator descriptor coverage across routed F16/F32/BF16 variants
     - explicit wave32 fragment/descriptor checks on representative routed generic variants
     - route-wide explicit slot/descriptor validation across current routed `V_WMMA_*` seeds except paired-load helpers
+    - route-wide exact destination/source0/source1/accumulator logical slot binding checks across current routed non-scale `V_WMMA_*` seeds
     - route-wide exact destination/source0/source1/accumulator slot and descriptor composition checks across current routed non-scale `V_WMMA_*` seeds
+    - route-wide role-specific wave32 checks across current routed non-scale `V_WMMA_*` seeds
     - route-wide wave32 validation across current routed `V_WMMA_*` seeds except paired-load helpers
 - WMMA scale:
   - `V_WMMA_SCALE_F32_16X16X128_F8F6F4` -> `kWmmaScaleF32_16x16x128_F8F6F4`
@@ -165,6 +167,7 @@
     - matrix `source1` fragment coverage on scale and scale16 routes
     - accumulator descriptor coverage on scale, scale16, and routed `F4` scale variants
     - explicit wave32 fragment/descriptor checks on representative routed scale variants
+    - route-wide exact destination/source0/source1/accumulator/scale logical slot binding checks across current routed `V_WMMA_SCALE*` seeds
     - route-wide exact destination/source0/source1/accumulator/scale slot and descriptor composition checks across current routed `V_WMMA_SCALE*` seeds
     - route-wide scalar scale-slot and scale-descriptor checks across current routed `V_WMMA_SCALE*` seeds
 - WMMA scale paired loads:
@@ -209,7 +212,9 @@
     - source1 fragment coverage on routed BF16/BF8/FP8 and `I32/IU8` variants
     - destination and accumulator descriptor coverage on routed F16/F32/BF16/I32 variants
     - explicit wave32 fragment/descriptor checks on representative routed generic variants
+    - route-wide exact destination/source0/source1/accumulator logical slot binding checks across current routed `V_SWMMAC_*` seeds
     - route-wide exact destination/source0/source1/accumulator slot and descriptor composition checks across current routed `V_SWMMAC_*` seeds
+    - route-wide role-specific wave32 checks across current routed `V_SWMMAC_*` seeds
     - route-wide wave32 validation across current routed `V_SWMMAC_*` seeds
 - Tensor routes:
   - `TENSOR_LOAD_TO_LDS` -> `kTensorLoadToLds`

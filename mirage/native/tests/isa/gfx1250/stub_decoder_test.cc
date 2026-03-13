@@ -1224,6 +1224,45 @@ int main() {
     }
     if (!Expect(AllSlotsExplicit(decoded) &&
                     AllDescriptorsExplicit(decoded) &&
+                    ContainsSlot(decoded, StubOperandSlotKind::kDestination,
+                                 StubOperandValueClass::kMatrixFragment, 0, 1,
+                                 true) &&
+                    ContainsSlot(decoded, StubOperandSlotKind::kSource0,
+                                 StubOperandValueClass::kMatrixFragment, 1, 1,
+                                 false) &&
+                    ContainsSlot(decoded, StubOperandSlotKind::kSource1,
+                                 StubOperandValueClass::kMatrixFragment, 2, 1,
+                                 false) &&
+                    ContainsSlot(decoded,
+                                 StubOperandSlotKind::kAccumulatorSource,
+                                 StubOperandValueClass::kAccumulatorFragment, 3,
+                                 1, false) &&
+                    ContainsSlotWaveSize(decoded,
+                                         StubOperandSlotKind::kDestination,
+                                         StubFragmentKind::kMatrix, 32) &&
+                    ContainsSlotWaveSize(decoded, StubOperandSlotKind::kSource0,
+                                         StubFragmentKind::kMatrix, 32) &&
+                    ContainsSlotWaveSize(decoded, StubOperandSlotKind::kSource1,
+                                         StubFragmentKind::kMatrix, 32) &&
+                    ContainsSlotWaveSize(
+                        decoded, StubOperandSlotKind::kAccumulatorSource,
+                        StubFragmentKind::kMatrix, 32) &&
+                    ContainsDescriptorWaveSize(decoded,
+                                               StubOperandRole::kDestination,
+                                               StubOperandSlotKind::kDestination,
+                                               StubFragmentKind::kMatrix, 32) &&
+                    ContainsDescriptorWaveSize(decoded,
+                                               StubOperandRole::kSource0,
+                                               StubOperandSlotKind::kSource0,
+                                               StubFragmentKind::kMatrix, 32) &&
+                    ContainsDescriptorWaveSize(decoded,
+                                               StubOperandRole::kSource1,
+                                               StubOperandSlotKind::kSource1,
+                                               StubFragmentKind::kMatrix, 32) &&
+                    ContainsDescriptorWaveSize(
+                        decoded, StubOperandRole::kAccumulator,
+                        StubOperandSlotKind::kAccumulatorSource,
+                        StubFragmentKind::kMatrix, 32) &&
                     AllMatrixSlotsHaveWaveSize(decoded, 32) &&
                     AllMatrixDescriptorsHaveWaveSize(decoded, 32),
                 "expected routed WMMA/SWMMAC matrix fragments to stay wave32")) {
@@ -1231,7 +1270,8 @@ int main() {
     }
     if (instruction_name.rfind("V_WMMA_SCALE", 0) == 0 &&
         instruction_name.rfind("V_WMMA_LD_SCALE", 0) != 0) {
-      if (!Expect(decoded.operand_slots.binding_count == 5 &&
+      if (!Expect(decoded.uses_scale_path &&
+                      decoded.operand_slots.binding_count == 5 &&
                       decoded.operand_descriptors.descriptor_count == 5 &&
                       CountSlotsOfKind(decoded, StubOperandSlotKind::kDestination) == 1 &&
                       CountSlotsOfKind(decoded, StubOperandSlotKind::kSource0) == 1 &&
@@ -1267,6 +1307,7 @@ int main() {
     } else {
       if (!Expect(decoded.operand_slots.binding_count == 4 &&
                       decoded.operand_descriptors.descriptor_count == 4 &&
+                      !decoded.uses_scale_path &&
                       CountSlotsOfKind(decoded, StubOperandSlotKind::kDestination) == 1 &&
                       CountSlotsOfKind(decoded, StubOperandSlotKind::kSource0) == 1 &&
                       CountSlotsOfKind(decoded, StubOperandSlotKind::kSource1) == 1 &&
