@@ -281,7 +281,7 @@ def main() -> int:
         print(f"  {build_reproduction_command(args)}")
         return 0
 
-    if is_windows():
+    if is_windows:
         return run_windows(args)
     else:
         return run_linux(args)
