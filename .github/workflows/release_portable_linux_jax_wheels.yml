@@ -51,6 +51,7 @@ on:
           - gfx1152
           - gfx1153
           - gfx120X-all
+          - gfx900
           - gfx906
           - gfx908
           - gfx90a
@@ -102,7 +103,7 @@ jobs:
       fail-fast: false
       matrix:
         python_version: ["3.11", "3.12", "3.13", "3.14"]
-        jax_ref: ["rocm-jaxlib-v0.8.0", "rocm-jaxlib-v0.8.2"]
+        jax_ref: ["rocm-jaxlib-v0.8.0", "rocm-jaxlib-v0.8.2", "rocm-jaxlib-v0.9.0"]
 
     uses: ./.github/workflows/build_linux_jax_wheels.yml
     with:

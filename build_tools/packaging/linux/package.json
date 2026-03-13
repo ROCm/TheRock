@@ -228,14 +228,12 @@
         ]
       },
       {
-        "Artifact": "amd-llvm",
+        "Artifact": "core-kpack",
         "Artifact_Subdir": [
           {
-            "Name": "amd-comgr",
+            "Name": "rocm-kpack",
             "Components": [
-              "lib",
-              "run",
-              "doc"
+              "lib"
             ]
           }
         ]
@@ -244,7 +242,7 @@
         "Artifact": "amd-llvm",
         "Artifact_Subdir": [
           {
-            "Name": "amd-comgr-stub",
+            "Name": "amd-comgr",
             "Components": [
               "lib",
               "run",
@@ -298,6 +296,17 @@
         "Artifact_Subdir": [
           {
             "Name": "clr",
+            "Components": [
+              "dev"
+            ]
+          }
+        ]
+      },
+      {
+        "Artifact": "core-kpack",
+        "Artifact_Subdir": [
+          {
+            "Name": "rocm-kpack",
             "Components": [
               "dev"
             ]
@@ -1168,6 +1177,20 @@
             ]
           }
         ]
+      },
+      {
+        "Artifact": "aqlprofile",
+        "Artifact_Subdir": [
+          {
+            "Name": "aqlprofile",
+            "Components": [
+              "lib",
+              "dev",
+              "run",
+              "doc"
+            ]
+          }
+        ]
       }
     ],
 
@@ -1230,8 +1253,9 @@
       }
     ],
 
+    "Gfxarch": "False",
     "Disable_DWZ": "True",
-    "Gfxarch": "False"
+    "Disable_DEB_STRIP": "True"
   },
   {
     "Package": "amdrocm-hipify",
@@ -1649,6 +1673,7 @@
             "Name": "composable_kernel",
             "Components": [
               "run",
+              "dev",
               "doc"
             ]
           }
@@ -2103,7 +2128,8 @@
           {
             "Name": "rocdecode",
             "Components": [
-              "lib"
+              "lib",
+              "doc"
             ]
           }
         ]
@@ -2177,7 +2203,8 @@
           {
             "Name": "rocjpeg",
             "Components": [
-              "lib"
+              "lib",
+              "doc"
             ]
           }
         ]

@@ -62,6 +62,7 @@ on:
           - gfx1152
           - gfx1153
           - gfx120X-all
+          - gfx900
           - gfx906
           - gfx908
           - gfx90a
@@ -124,6 +125,7 @@ jobs:
     env:
       PACKAGE_DIST_DIR: ${{ github.workspace }}/rocm-jax/jax_rocm_plugin/wheelhouse
       S3_BUCKET_PY: "therock-${{ inputs.release_type }}-python"
+      RELEASE_TYPE: ${{ inputs.release_type }}
     outputs:
       cp_version: ${{ env.cp_version }}
       jax_version: ${{ steps.write_jax_versions.outputs.jax_version }}
@@ -134,6 +136,9 @@ jobs:
     steps:
       - name: Checkout TheRock
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || '' }}
 
       - name: Checkout rocm-jax
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -170,7 +175,7 @@ jobs:
         run: |
           ls -lah
           pushd rocm-jax
-          [[ "${{ inputs.jax_ref }}" == *"0.8.2"* ]] && SOURCE_ARG="--jax-source-dir=${{ github.workspace }}/jax" || SOURCE_ARG=""
+          [[ "${{ inputs.jax_ref }}" != *"0.8.0"* ]] && SOURCE_ARG="--jax-source-dir=${{ github.workspace }}/jax" || SOURCE_ARG=""
           python3 build/ci_build \
             --compiler=clang \
             --python-versions="${{ inputs.python_version }}" \
@@ -178,6 +183,15 @@ jobs:
             --therock-path="${{ inputs.tar_url }}" \
             $SOURCE_ARG \
             dist_wheels
+
+      - name: Generate JAX manifest
+        working-directory: build_tools
+        run: |
+          python3 -m github_actions.generate_jax_manifest \
+            --manifest-dir "${{ env.PACKAGE_DIST_DIR }}/manifests" \
+            --python-version "${{ inputs.python_version }}" \
+            --jax-git-ref "${{ inputs.jax_ref }}" \
+            --jax-dir "${{ github.workspace }}/jax"
 
       - name: Extract JAX versions from built wheels
         id: write_jax_versions
@@ -201,6 +215,22 @@ jobs:
         run: |
           aws s3 cp ${{ env.PACKAGE_DIST_DIR }}/ s3://${{ env.S3_BUCKET_PY }}/${{ inputs.s3_staging_subdir }}/${{ inputs.amdgpu_family }}/ \
             --recursive --exclude "*" --include "*.whl"
+
+      - name: Install boto3 for manifest upload
+        if: ${{ github.repository_owner == 'ROCm' }}
+        run: |
+          python3 -m pip install boto3
+
+      - name: Upload JAX manifest to artifacts S3
+        if: ${{ github.repository_owner == 'ROCm' }}
+        working-directory: build_tools
+        run: |
+          python3 -m github_actions.upload_jax_manifest \
+            --dist-dir "${{ env.PACKAGE_DIST_DIR }}" \
+            --run-id "${{ github.run_id }}" \
+            --amdgpu-family "${{ inputs.amdgpu_family }}" \
+            --python-version "${{ inputs.python_version }}" \
+            --jax-git-ref "${{ inputs.jax_ref }}"
 
       - name: (Re-)Generate Python package release index
         if: ${{ github.repository_owner == 'ROCm' }}
@@ -253,6 +283,8 @@ jobs:
       jax_ref: ${{ needs.build_jax_wheels.outputs.jax_ref }}
       jax_version: ${{ needs.build_jax_wheels.outputs.jax_version }}
       jaxlib_version: ${{ needs.build_jax_wheels.outputs.jaxlib_version }}
+      jax_plugin_version: ${{ needs.build_jax_wheels.outputs.jax_plugin_version }}
+      jax_pjrt_version: ${{ needs.build_jax_wheels.outputs.jax_pjrt_version }}
       test_runs_on: ${{ needs.generate_target_to_run.outputs.test_runs_on }}
 
   upload_jax_wheels:
