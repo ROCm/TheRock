@@ -18,6 +18,7 @@ THEROCK_DIR = Path(THEROCK_BIN_DIR).resolve().parent
 env = os.environ.copy()
 is_windows = platform.system() == "Windows"
 
+
 def setup_env(env):
     ROCM_PATH = Path(THEROCK_DIR)
     env["ROCM_PATH"] = str(ROCM_PATH)
