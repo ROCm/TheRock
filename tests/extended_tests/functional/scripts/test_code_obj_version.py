@@ -22,7 +22,7 @@ from utils.exceptions import TestExecutionError
 from utils.logger import log
 
 
-class TargetIdBitExtractTest(FunctionalBase):
+class CovBackwardCompatibilityTest(FunctionalBase):
     """Validate bit_extract code object backward compatibility."""
 
     def __init__(self):
@@ -32,15 +32,10 @@ class TargetIdBitExtractTest(FunctionalBase):
         )
         self.test_results: List[Dict[str, Any]] = []
 
-        config = self.load_config("cov_backward_comp.json")
-        self.sample_relative_path = config.get(
-            "sample_relative_path", "projects/hip-tests/samples/0_Intro/bit_extract"
-        )
-        self.include_relative_path = config.get(
-            "include_relative_path", "projects/hip-tests/samples/common"
-        )
-        self.source_file = config.get("source_file", "bit_extract.cpp")
-        self.binary_prefix = config.get("binary_prefix", "bit_extract")
+        self.sample_relative_path = "projects/hip-tests/samples/0_Intro/bit_extract"
+        self.include_relative_path = "projects/hip-tests/samples/common"
+        self.source_file = "bit_extract.cpp"
+        self.binary_prefix = "bit_extract"
 
         self.rocm_systems_dir = self.therock_dir / "rocm-systems"
         self.sample_dir = self.rocm_systems_dir / self.sample_relative_path
@@ -76,22 +71,35 @@ class TargetIdBitExtractTest(FunctionalBase):
 
     def _get_rocm_env_with_path(self) -> Dict[str, str]:
         env = self.get_rocm_env()
-        rocm_bin = str(self.rocm_path / "bin")
-        env["PATH"] = f"{rocm_bin}:{env.get('PATH', '')}".rstrip(":")
+        extra_dirs = [
+            str(self.rocm_path / "bin"),
+            str(self.rocm_path / "llvm" / "bin"),
+            "/opt/rocm/llvm/bin",
+        ]
+        existing_path = env.get("PATH", "")
+        env["PATH"] = ":".join(d for d in extra_dirs + [existing_path] if d)
         env["HIP_PLATFORM"] = "amd"
         return env
 
-    def _ensure_sources_ready(self) -> None:
-        if not self.rocm_systems_dir.exists():
-            raise TestExecutionError(
-                f"rocm-systems directory not found at {self.rocm_systems_dir}\n"
-                "Ensure rocm-systems is present in TheRock directory"
-            )
+    _ROCM_SYSTEMS_REPO = "https://github.com/ROCm/rocm-systems.git"
 
-        if not self.sample_dir.exists():
-            raise TestExecutionError(f"bit_extract sample directory not found: {self.sample_dir}")
-        if not (self.sample_dir / self.source_file).exists():
-            raise TestExecutionError(f"Source file not found: {self.sample_dir / self.source_file}")
+    def _ensure_sources_ready(self) -> None:
+        is_empty = (
+            not self.rocm_systems_dir.exists()
+            or not any(self.rocm_systems_dir.iterdir())
+        )
+        if is_empty:
+            log.info("rocm-systems not found or empty at %s, cloning with --depth 1",
+                     self.rocm_systems_dir)
+            rc, output = self._execute_command_with_output(
+                ["git", "clone", "--depth", "1", self._ROCM_SYSTEMS_REPO,
+                 str(self.rocm_systems_dir)],
+            )
+            if rc != 0:
+                raise TestExecutionError(
+                    f"Failed to clone rocm-systems (exit {rc}): {output}"
+                )
+
         if not self.include_dir.exists():
             raise TestExecutionError(f"Include path not found: {self.include_dir}")
 
@@ -423,4 +431,4 @@ class TargetIdBitExtractTest(FunctionalBase):
         return parsed_results
 
 if __name__ == "__main__":
-    run_functional_main(TargetIdBitExtractTest())
+    run_functional_main(CovBackwardCompatibilityTest())
