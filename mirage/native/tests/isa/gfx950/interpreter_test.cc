@@ -229,7 +229,8 @@ struct ScalarPairCompareCase {
 
 bool RunAtomicSemanticCase(
     const mirage::sim::isa::Gfx950Interpreter& interpreter,
-    const AtomicSemanticCase& test_case) {
+    const AtomicSemanticCase& test_case,
+    bool use_compiled_program = false) {
   using namespace mirage::sim::isa;
 
   constexpr std::uint64_t kAtomicAddress = 0x100;
@@ -274,8 +275,23 @@ bool RunAtomicSemanticCase(
   };
 
   std::string error_message;
-  if (!interpreter.ExecuteProgram(program, &state, &memory, &error_message)) {
-    std::cerr << test_case.opcode << ": " << error_message << '\n';
+  if (use_compiled_program) {
+    std::vector<CompiledInstruction> compiled_program;
+    if (!interpreter.CompileProgram(program, &compiled_program, &error_message)) {
+      std::cerr << test_case.opcode << ": failed to compile atomic program: "
+                << error_message << '\n';
+      return false;
+    }
+    if (!interpreter.ExecuteProgram(compiled_program, &state, &memory,
+                                    &error_message)) {
+      std::cerr << test_case.opcode << ": compiled atomic: " << error_message
+                << '\n';
+      return false;
+    }
+  } else if (!interpreter.ExecuteProgram(program, &state, &memory,
+                                         &error_message)) {
+    std::cerr << test_case.opcode << ": decoded atomic: " << error_message
+              << '\n';
     return false;
   }
 
@@ -13889,6 +13905,122 @@ int main() {
     return 1;
   }
 
+  std::vector<CompiledInstruction> compiled_atomic_program;
+  if (!Expect(interpreter.CompileProgram(atomic_program, &compiled_atomic_program,
+                                         &error_message),
+              error_message.c_str())) {
+    return 1;
+  }
+  auto seed_global_atomic_memory = [](LinearExecutionMemory* memory) {
+    return memory != nullptr && memory->WriteU32(0x520, 10u) &&
+           memory->WriteU32(0x524, 20u) && memory->WriteU32(0x52c, 40u) &&
+           memory->WriteU32(0x530, 50u) && memory->WriteU32(0x534, 60u) &&
+           memory->WriteU32(0x53c, 80u) && memory->WriteU32(0x540, 100u) &&
+           memory->WriteU32(0x544, 110u) && memory->WriteU32(0x54c, 130u);
+  };
+  auto make_global_atomic_state = []() {
+    WaveExecutionState state{};
+    state.exec_mask = 0b1011ULL;
+    state.sgprs[0] = 0x500u;
+    state.sgprs[1] = 0u;
+    auto set_lane_u64 = [&](std::uint16_t reg, std::size_t lane,
+                            std::uint64_t value) {
+      std::uint32_t low = 0;
+      std::uint32_t high = 0;
+      SplitU64(value, &low, &high);
+      state.vgprs[reg][lane] = low;
+      state.vgprs[reg + 1][lane] = high;
+    };
+    set_lane_u64(14, 0u, 0x20ULL);
+    set_lane_u64(14, 1u, 0x24ULL);
+    set_lane_u64(14, 3u, 0x2cULL);
+    set_lane_u64(16, 0u, 0x30ULL);
+    set_lane_u64(16, 1u, 0x34ULL);
+    set_lane_u64(16, 3u, 0x3cULL);
+    set_lane_u64(18, 0u, 0x40ULL);
+    set_lane_u64(18, 1u, 0x44ULL);
+    set_lane_u64(18, 3u, 0x4cULL);
+    state.vgprs[19][0] = 0x0;
+    state.vgprs[19][1] = 0x0;
+    state.vgprs[19][3] = 0x0;
+    state.vgprs[20][0] = 1u;
+    state.vgprs[20][1] = 2u;
+    state.vgprs[20][3] = 4u;
+    state.vgprs[21][0] = 500u;
+    state.vgprs[21][1] = 600u;
+    state.vgprs[21][3] = 800u;
+    state.vgprs[22][0] = 100u;
+    state.vgprs[22][1] = 999u;
+    state.vgprs[22][3] = 130u;
+    state.vgprs[23][0] = 700u;
+    state.vgprs[23][1] = 777u;
+    state.vgprs[23][3] = 900u;
+    state.vgprs[31][0] = 0xdeadbeefu;
+    state.vgprs[31][2] = 0xdeadbeefu;
+    return state;
+  };
+  LinearExecutionMemory compiled_atomic_memory(0x1000, 0);
+  if (!Expect(seed_global_atomic_memory(&compiled_atomic_memory),
+              "expected compiled global atomic seed writes")) {
+    return 1;
+  }
+  WaveExecutionState compiled_atomic_state = make_global_atomic_state();
+  if (!Expect(interpreter.ExecuteProgram(compiled_atomic_program,
+                                         &compiled_atomic_state,
+                                         &compiled_atomic_memory,
+                                         &error_message),
+              error_message.c_str()) ||
+      !Expect(compiled_atomic_state.vgprs[30][0] == 10u,
+              "expected compiled lane 0 atomic add return value") ||
+      !Expect(compiled_atomic_state.vgprs[30][1] == 20u,
+              "expected compiled lane 1 atomic add return value") ||
+      !Expect(compiled_atomic_state.vgprs[30][2] == 0u,
+              "expected compiled inactive lane atomic add return to remain untouched") ||
+      !Expect(compiled_atomic_state.vgprs[30][3] == 40u,
+              "expected compiled lane 3 atomic add return value") ||
+      !Expect(compiled_atomic_state.vgprs[31][0] == 100u,
+              "expected compiled lane 0 atomic cmpswap return value") ||
+      !Expect(compiled_atomic_state.vgprs[31][1] == 110u,
+              "expected compiled lane 1 atomic cmpswap return value") ||
+      !Expect(compiled_atomic_state.vgprs[31][2] == 0xdeadbeefu,
+              "expected compiled inactive lane atomic cmpswap destination to remain untouched") ||
+      !Expect(compiled_atomic_state.vgprs[31][3] == 130u,
+              "expected compiled lane 3 atomic cmpswap return value")) {
+    return 1;
+  }
+
+  if (!Expect(compiled_atomic_memory.ReadU32(0x520, &atomic_value),
+              "expected compiled lane 0 atomic add read") ||
+      !Expect(atomic_value == 11u, "expected compiled lane 0 atomic add result") ||
+      !Expect(compiled_atomic_memory.ReadU32(0x524, &atomic_value),
+              "expected compiled lane 1 atomic add read") ||
+      !Expect(atomic_value == 22u, "expected compiled lane 1 atomic add result") ||
+      !Expect(compiled_atomic_memory.ReadU32(0x52c, &atomic_value),
+              "expected compiled lane 3 atomic add read") ||
+      !Expect(atomic_value == 44u, "expected compiled lane 3 atomic add result") ||
+      !Expect(compiled_atomic_memory.ReadU32(0x530, &atomic_value),
+              "expected compiled lane 0 atomic swap read") ||
+      !Expect(atomic_value == 500u, "expected compiled lane 0 atomic swap result") ||
+      !Expect(compiled_atomic_memory.ReadU32(0x534, &atomic_value),
+              "expected compiled lane 1 atomic swap read") ||
+      !Expect(atomic_value == 600u, "expected compiled lane 1 atomic swap result") ||
+      !Expect(compiled_atomic_memory.ReadU32(0x53c, &atomic_value),
+              "expected compiled lane 3 atomic swap read") ||
+      !Expect(atomic_value == 800u, "expected compiled lane 3 atomic swap result") ||
+      !Expect(compiled_atomic_memory.ReadU32(0x540, &atomic_value),
+              "expected compiled lane 0 atomic cmpswap read") ||
+      !Expect(atomic_value == 700u, "expected compiled lane 0 atomic cmpswap result") ||
+      !Expect(compiled_atomic_memory.ReadU32(0x544, &atomic_value),
+              "expected compiled lane 1 atomic cmpswap read") ||
+      !Expect(atomic_value == 110u,
+              "expected compiled lane 1 atomic cmpswap mismatch result") ||
+      !Expect(compiled_atomic_memory.ReadU32(0x54c, &atomic_value),
+              "expected compiled lane 3 atomic cmpswap read") ||
+      !Expect(atomic_value == 900u,
+              "expected compiled lane 3 atomic cmpswap result")) {
+    return 1;
+  }
+
   const std::vector<DecodedInstruction> flat_atomic_program = {
       DecodedInstruction::FourOperand("FLAT_ATOMIC_ADD",
                                       InstructionOperand::Vgpr(30),
@@ -14194,7 +14326,8 @@ int main() {
        TwoDwords(5ULL), TwoDwords(7ULL)},
   };
   for (const AtomicSemanticCase& test_case : atomic_cases) {
-    if (!RunAtomicSemanticCase(interpreter, test_case)) {
+    if (!RunAtomicSemanticCase(interpreter, test_case, false) ||
+        !RunAtomicSemanticCase(interpreter, test_case, true)) {
       return 1;
     }
   }
