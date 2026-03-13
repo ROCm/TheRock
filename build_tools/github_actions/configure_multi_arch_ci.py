@@ -2,19 +2,30 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-"""Configures CI matrix and stage decisions for multi-arch workflows.
+"""Configures CI matrix and job decisions for multi-arch workflows.
 
 This script is a pipeline of data transformations:
 
     1. Parse Inputs    — read GitHub event context → CIInputs
     2. Check Skip CI   — gate: should we skip CI entirely?
     3. Select Targets  — trigger type + labels → GPU families
-    4. Decide Stages   — changed files + topology → rebuild/prebuilt per stage
+    4. Decide Jobs     — changed files + topology → per-job-group decisions
     5. Expand Matrix   — families × variant → matrix entries
     6. Write Outputs   — JSON → GITHUB_OUTPUT + GITHUB_STEP_SUMMARY
 
 Each step (except 1 and 6) is a pure function of typed dataclasses,
 independently testable without environment variables or filesystem access.
+
+The CI pipeline is a DAG of job groups:
+
+    build-rocm → test-rocm
+               → build-rocm-python → build-pytorch → test-pytorch
+                                   → build-jax     → test-jax (future)
+
+Step 4 determines which job groups to run, skip, or satisfy with prebuilt
+artifacts. Within build-rocm, per-stage rebuild/prebuilt granularity is
+available. Test details (which tests to run, smoke vs full) are decided
+per test job group.
 
 Inputs:
     GITHUB_EVENT_NAME   : push, pull_request, schedule, workflow_dispatch
@@ -27,8 +38,6 @@ Inputs:
 Outputs (written to GITHUB_OUTPUT):
     linux_variants      : JSON array of matrix entries
     windows_variants    : JSON array of matrix entries
-    linux_test_labels   : JSON array of test label strings
-    windows_test_labels : JSON array of test label strings
     enable_build_jobs   : "true" or "false"
     test_type           : "smoke" or "full"
 """
@@ -160,32 +169,76 @@ class TargetSelection:
 
     linux_families: list[str] = field(default_factory=list)
     windows_families: list[str] = field(default_factory=list)
-    test_names: list[str] = field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Job decisions — the CI pipeline as a DAG of job groups
+#
+#   build-rocm → test-rocm
+#              → build-rocm-python → build-pytorch → test-pytorch
+#                                  → build-jax     → test-jax (future)
+#
+# Each node gets a JobGroupDecision (run/prebuilt/skip). Subclasses add
+# group-specific details (per-stage granularity, test type, etc.).
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class JobGroupDecision:
+    """Decision for one node in the CI job graph."""
+
+    action: Literal["run", "prebuilt", "skip"]
+    reason: str
 
 
 @dataclass(frozen=True)
 class StageDecision:
-    """Decision for a single build stage."""
+    """Decision for a single build stage within build-rocm."""
 
     action: Literal["rebuild", "prebuilt"]
     reason: str
 
 
 @dataclass(frozen=True)
-class StageDecisions:
-    """Per-stage build/prebuilt decisions and test type."""
+class BuildRocmDecision(JobGroupDecision):
+    """Build-rocm job group with per-stage granularity."""
 
-    decisions: dict[str, StageDecision] = field(default_factory=dict)
-    test_type: str = "smoke"
-    test_type_reason: str = "default"
+    stage_decisions: dict[str, StageDecision] = field(default_factory=dict)
 
     @property
     def prebuilt_stages(self) -> list[str]:
-        return [name for name, d in self.decisions.items() if d.action == "prebuilt"]
+        return [
+            name for name, d in self.stage_decisions.items() if d.action == "prebuilt"
+        ]
 
     @property
     def rebuild_stages(self) -> list[str]:
-        return [name for name, d in self.decisions.items() if d.action == "rebuild"]
+        return [
+            name for name, d in self.stage_decisions.items() if d.action == "rebuild"
+        ]
+
+
+@dataclass(frozen=True)
+class TestRocmDecision(JobGroupDecision):
+    """Test-rocm job group with test filtering details."""
+
+    test_type: str = "smoke"  # smoke or full
+    test_type_reason: str = "default"
+
+
+@dataclass(frozen=True)
+class JobDecisions:
+    """Decisions for the entire CI job graph.
+
+    Each field corresponds to a node in the job DAG. The field types show
+    which groups have extra decision logic beyond run/skip/prebuilt.
+    """
+
+    build_rocm: BuildRocmDecision
+    test_rocm: TestRocmDecision
+    build_rocm_python: JobGroupDecision
+    build_pytorch: JobGroupDecision
+    test_pytorch: JobGroupDecision
 
 
 @dataclass(frozen=True)
@@ -219,20 +272,15 @@ class MatrixEntry:
 class CIOutputs:
     """All outputs from the CI configuration pipeline."""
 
+    is_ci_enabled: bool = True
     linux_variants: list[MatrixEntry] = field(default_factory=list)
     windows_variants: list[MatrixEntry] = field(default_factory=list)
-    linux_test_labels: list[str] = field(default_factory=list)
-    windows_test_labels: list[str] = field(default_factory=list)
-    enable_build_jobs: bool = True
-    test_type: str = "smoke"
-    # Stage decisions (feeds into prebuilt workflow plumbing)
-    prebuilt_stages: list[str] = field(default_factory=list)
-    rebuild_stages: list[str] = field(default_factory=list)
+    jobs: JobDecisions | None = None
 
     @staticmethod
     def skipped(reason: str) -> CIOutputs:
         """Produce empty outputs when CI is skipped."""
-        return CIOutputs(enable_build_jobs=False)
+        return CIOutputs(is_ci_enabled=False)
 
 
 # ---------------------------------------------------------------------------
@@ -274,21 +322,29 @@ def select_targets(inputs: CIInputs) -> TargetSelection:
 
 
 # ---------------------------------------------------------------------------
-# Step 4: Decide Stages
+# Step 4: Decide Jobs
 # ---------------------------------------------------------------------------
 
 
-def decide_stages(
+def decide_jobs(
     inputs: CIInputs,
     targets: TargetSelection,
     changed_files: list[str] | None,
-) -> StageDecisions:
-    """Determine per-stage rebuild/prebuilt decisions and test type.
+) -> JobDecisions:
+    """Determine which job groups to run, skip, or satisfy with prebuilt files.
 
-    Currently returns "rebuild all" — source-set-aware logic comes in Phase 4.
+    Currently returns "run everything, rebuild all stages" — subgraph
+    selection based on changed files comes later.
     """
-    # TODO: Implement — topology parsing, source-set analysis, propagation
-    return StageDecisions(test_type="smoke", test_type_reason="default (stub)")
+    # TODO: Implement — classify changed files, find entry point in job DAG,
+    # propagate forward through reachable nodes, mark unreachable as skip
+    return JobDecisions(
+        build_rocm=BuildRocmDecision(action="run", reason="default (stub)"),
+        test_rocm=TestRocmDecision(action="run", reason="default (stub)"),
+        build_rocm_python=JobGroupDecision(action="run", reason="default (stub)"),
+        build_pytorch=JobGroupDecision(action="run", reason="default (stub)"),
+        test_pytorch=JobGroupDecision(action="run", reason="default (stub)"),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -320,8 +376,18 @@ def format_summary(outputs: CIOutputs) -> str:
     # TODO: Implement — structured markdown with families, stages, reasons
     lines = ["## Multi-Arch CI Configuration"]
     lines.append("")
-    lines.append(f"* `enable_build_jobs`: {outputs.enable_build_jobs}")
-    lines.append(f"* `test_type`: {outputs.test_type}")
+    lines.append(f"* `is_ci_enabled`: {outputs.is_ci_enabled}")
+    if outputs.jobs:
+        lines.append(f"* `test_type`: {outputs.jobs.test_rocm.test_type}")
+        for name in (
+            "build_rocm",
+            "test_rocm",
+            "build_rocm_python",
+            "build_pytorch",
+            "test_pytorch",
+        ):
+            decision = getattr(outputs.jobs, name)
+            lines.append(f"* `{name}`: {decision.action} — {decision.reason}")
     return "\n".join(lines)
 
 
@@ -332,17 +398,17 @@ def write_outputs(outputs: CIOutputs) -> None:
     """
     from github_actions_utils import gha_set_output, gha_append_step_summary
 
+    test_type = outputs.jobs.test_rocm.test_type if outputs.jobs else "smoke"
     output_vars = {
         "linux_variants": json.dumps(
             [entry.to_dict() for entry in outputs.linux_variants]
         ),
-        "linux_test_labels": json.dumps(outputs.linux_test_labels),
         "windows_variants": json.dumps(
             [entry.to_dict() for entry in outputs.windows_variants]
         ),
-        "windows_test_labels": json.dumps(outputs.windows_test_labels),
-        "enable_build_jobs": json.dumps(outputs.enable_build_jobs),
-        "test_type": outputs.test_type,
+        # Workflow YAML references this as 'enable_build_jobs'
+        "enable_build_jobs": json.dumps(outputs.is_ci_enabled),
+        "test_type": test_type,
     }
     gha_set_output(output_vars)
     gha_append_step_summary(format_summary(outputs))
@@ -377,8 +443,8 @@ def configure(inputs: CIInputs) -> CIOutputs:
     # Step 3: Select targets
     targets = select_targets(inputs)
 
-    # Step 4: Decide stages (stub: rebuild all)
-    stage_decisions = decide_stages(inputs, targets, changed_files)
+    # Step 4: Decide jobs (stub: run everything)
+    jobs = decide_jobs(inputs, targets, changed_files)
 
     # Step 5: Expand matrix
     linux_matrix = expand_matrix(
@@ -393,14 +459,10 @@ def configure(inputs: CIInputs) -> CIOutputs:
     )
 
     return CIOutputs(
+        is_ci_enabled=True,
         linux_variants=linux_matrix,
         windows_variants=windows_matrix,
-        linux_test_labels=targets.test_names,
-        windows_test_labels=targets.test_names,
-        enable_build_jobs=True,
-        test_type=stage_decisions.test_type,
-        prebuilt_stages=stage_decisions.prebuilt_stages,
-        rebuild_stages=stage_decisions.rebuild_stages,
+        jobs=jobs,
     )
 
 

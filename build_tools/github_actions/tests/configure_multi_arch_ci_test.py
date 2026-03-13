@@ -230,12 +230,12 @@ class TestSelectTargets(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# Step 4: Decide Stages
+# Step 4: Decide Jobs
 # ---------------------------------------------------------------------------
 
 
-class TestDecideStages(unittest.TestCase):
-    """Test stage decision logic."""
+class TestDecideJobs(unittest.TestCase):
+    """Test job decision logic."""
 
     def _make_inputs(self, **kwargs) -> cm.CIInputs:
         defaults = {
@@ -247,18 +247,32 @@ class TestDecideStages(unittest.TestCase):
         defaults.update(kwargs)
         return cm.CIInputs(**defaults)
 
-    def test_stub_returns_stage_decisions(self):
-        """Stub returns a StageDecisions with smoke test type."""
+    def test_stub_returns_job_decisions(self):
+        """Stub returns JobDecisions with all groups set to run."""
         inputs = self._make_inputs()
         targets = cm.TargetSelection()
-        result = cm.decide_stages(inputs, targets, changed_files=None)
-        self.assertIsInstance(result, cm.StageDecisions)
-        self.assertEqual(result.test_type, "smoke")
+        result = cm.decide_jobs(inputs, targets, changed_files=None)
+        self.assertIsInstance(result, cm.JobDecisions)
+        self.assertEqual(result.build_rocm.action, "run")
+        self.assertEqual(result.test_rocm.action, "run")
+        self.assertEqual(result.build_rocm_python.action, "run")
+        self.assertEqual(result.build_pytorch.action, "run")
+        self.assertEqual(result.test_pytorch.action, "run")
 
-    def test_prebuilt_and_rebuild_stages(self):
-        """StageDecisions correctly partitions into prebuilt/rebuild lists."""
-        decisions = cm.StageDecisions(
-            decisions={
+    def test_test_rocm_has_test_type(self):
+        """TestRocmDecision carries test_type details."""
+        inputs = self._make_inputs()
+        targets = cm.TargetSelection()
+        result = cm.decide_jobs(inputs, targets, changed_files=None)
+        self.assertIsInstance(result.test_rocm, cm.TestRocmDecision)
+        self.assertEqual(result.test_rocm.test_type, "smoke")
+
+    def test_build_rocm_stage_partitioning(self):
+        """BuildRocmDecision correctly partitions stages into prebuilt/rebuild."""
+        decision = cm.BuildRocmDecision(
+            action="run",
+            reason="source changes",
+            stage_decisions={
                 "foundation": cm.StageDecision(action="prebuilt", reason="no changes"),
                 "compiler-runtime": cm.StageDecision(
                     action="prebuilt", reason="no changes"
@@ -266,13 +280,13 @@ class TestDecideStages(unittest.TestCase):
                 "math-libs": cm.StageDecision(
                     action="rebuild", reason="rocm-libraries changed"
                 ),
-            }
+            },
         )
         self.assertEqual(
-            sorted(decisions.prebuilt_stages),
+            sorted(decision.prebuilt_stages),
             ["compiler-runtime", "foundation"],
         )
-        self.assertEqual(decisions.rebuild_stages, ["math-libs"])
+        self.assertEqual(decision.rebuild_stages, ["math-libs"])
 
 
 # ---------------------------------------------------------------------------
@@ -319,14 +333,24 @@ class TestFormatSummary(unittest.TestCase):
     def test_skipped_summary(self):
         outputs = cm.CIOutputs.skipped("only .md files changed")
         summary = cm.format_summary(outputs)
-        self.assertIn("enable_build_jobs", summary)
+        self.assertIn("is_ci_enabled", summary)
         self.assertIn("False", summary)
 
     def test_normal_summary(self):
-        outputs = cm.CIOutputs(enable_build_jobs=True, test_type="full")
+        jobs = cm.JobDecisions(
+            build_rocm=cm.BuildRocmDecision(action="run", reason="default"),
+            test_rocm=cm.TestRocmDecision(
+                action="run", reason="default", test_type="full"
+            ),
+            build_rocm_python=cm.JobGroupDecision(action="run", reason="default"),
+            build_pytorch=cm.JobGroupDecision(action="run", reason="default"),
+            test_pytorch=cm.JobGroupDecision(action="run", reason="default"),
+        )
+        outputs = cm.CIOutputs(is_ci_enabled=True, jobs=jobs)
         summary = cm.format_summary(outputs)
         self.assertIn("True", summary)
         self.assertIn("full", summary)
+        self.assertIn("build_rocm", summary)
 
 
 # ---------------------------------------------------------------------------
@@ -340,7 +364,7 @@ class TestConfigurePipeline(unittest.TestCase):
     def test_skipped_outputs(self):
         """CIOutputs.skipped produces empty, disabled outputs."""
         outputs = cm.CIOutputs.skipped("test reason")
-        self.assertFalse(outputs.enable_build_jobs)
+        self.assertFalse(outputs.is_ci_enabled)
         self.assertEqual(outputs.linux_variants, [])
         self.assertEqual(outputs.windows_variants, [])
 
@@ -355,25 +379,28 @@ class TestConfigurePipeline(unittest.TestCase):
             build_variant="release",
         )
         outputs = cm.configure(inputs)
-        self.assertFalse(outputs.enable_build_jobs)
+        self.assertFalse(outputs.is_ci_enabled)
         self.assertEqual(outputs.linux_variants, [])
 
     @patch("configure_multi_arch_ci.check_skip_ci")
     @patch("configure_multi_arch_ci.select_targets")
-    @patch("configure_multi_arch_ci.decide_stages")
+    @patch("configure_multi_arch_ci.decide_jobs")
     @patch("configure_multi_arch_ci.expand_matrix")
     def test_pipeline_calls_all_steps(
-        self, mock_expand, mock_stages, mock_targets, mock_skip
+        self, mock_expand, mock_jobs, mock_targets, mock_skip
     ):
         """When not skipped, all pipeline steps are called."""
         mock_skip.return_value = cm.SkipDecision(skip=False, reason="")
         mock_targets.return_value = cm.TargetSelection(
             linux_families=["gfx94x"],
             windows_families=[],
-            test_names=[],
         )
-        mock_stages.return_value = cm.StageDecisions(
-            test_type="smoke", test_type_reason="default"
+        mock_jobs.return_value = cm.JobDecisions(
+            build_rocm=cm.BuildRocmDecision(action="run", reason="default"),
+            test_rocm=cm.TestRocmDecision(action="run", reason="default"),
+            build_rocm_python=cm.JobGroupDecision(action="run", reason="default"),
+            build_pytorch=cm.JobGroupDecision(action="run", reason="default"),
+            test_pytorch=cm.JobGroupDecision(action="run", reason="default"),
         )
         mock_expand.return_value = []
 
@@ -385,9 +412,10 @@ class TestConfigurePipeline(unittest.TestCase):
         )
         outputs = cm.configure(inputs)
 
-        self.assertTrue(outputs.enable_build_jobs)
+        self.assertTrue(outputs.is_ci_enabled)
+        self.assertIsNotNone(outputs.jobs)
         mock_targets.assert_called_once()
-        mock_stages.assert_called_once()
+        mock_jobs.assert_called_once()
         # expand_matrix called twice: once for linux, once for windows
         self.assertEqual(mock_expand.call_count, 2)
 
