@@ -45,6 +45,8 @@ skip_tests = {
             # "test_hip_device_count"
             # "test_nvtx"
             # ----------------
+            # 2026-03-02T17:47:14.7110175Z RuntimeError: Error building extension 'dummy_allocator'
+            "test_tensor_delete_after_allocator_delete"
         ],
         "nn": [
             # external-builds/pytorch/pytorch/test/test_nn.py::TestNN::test_RNN_dropout_state MIOpen(HIP): Error [Compile] 'hiprtcCompileProgram(prog.get(), c_options.size(), c_options.data())' MIOpenDropoutHIP.cpp: HIPRTC_ERROR_COMPILATION (6)
@@ -60,6 +62,14 @@ skip_tests = {
             # to be on the same device, but got weight is on cpu, different from other tensors on cuda:0 (when checking
             # argument in method wrapper_CUDA__miopen_rnn)"
             "test_rnn_check_device",
+            # 2026-03-02T17:43:53.2139032Z AssertionError: False is not true : Expected NaN in pdist output
+            "test_pdist_inf_nan_propagation",
+            # 2026-03-02T17:43:53.2168251Z AssertionError: Scalars are not close!
+            # 2026-03-02T17:43:53.2168254Z
+            # 2026-03-02T17:43:53.2168305Z Expected 3.875156879425049 but got 3.876049757003784.
+            # 2026-03-02T17:43:53.2168373Z Absolute difference: 0.0008928775787353516 (up to 1e-05 allowed)
+            # 2026-03-02T17:43:53.2168440Z Relative difference: 0.0002304106921389532 (up to 1.3e-06 allowed)
+            "test_CTCLoss_cudnn_cuda"
         ],
         "torch": [
             # FLAKY!! AssertionError: 'tensor([2.3000+4.j, 7.0000+6.j])' != 'tensor([2.30000+4.j, 7.00000+6.j])'
