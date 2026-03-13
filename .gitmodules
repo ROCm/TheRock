@@ -14,9 +14,6 @@
 	path = base/rocm-cmake
 	url = https://github.com/ROCm/rocm-cmake.git
 	branch = mainline
-[submodule "rocprof-trace-decoder"]
-	path = profiler/rocprof-trace-decoder/binaries
-	url = https://github.com/ROCm/rocprof-trace-decoder.git
 [submodule "rocm-libraries"]
 	path = rocm-libraries
 	url = https://github.com/ROCm/rocm-libraries
@@ -41,9 +38,6 @@
 	path = iree-libs/fusilli
 	url = https://github.com/iree-org/fusilli.git
 	branch = main
-[submodule "rocm-kpack"]
-	path = base/rocm-kpack
-	url = https://github.com/ROCm/rocm-kpack.git
 [submodule "libhipcxx"]
 	path = math-libs/libhipcxx
 	url = https://github.com/ROCm/libhipcxx.git
