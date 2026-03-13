@@ -109,6 +109,51 @@ RDHC_TIMEOUT_SEC = 30
 VERIFY_MIN_COMPONENTS = 2
 
 
+def run_simulate_install_test(pkg_type: str, packages_dir: str) -> bool:
+    """Run simulated package install test (dry-run only, no actual install).
+
+    Equivalent to the GitHub Actions 'Simulated install Test' step:
+    - deb: apt install --simulate *.deb
+    - rpm: rpm -Uvh --test --nodeps *.rpm
+
+    Returns:
+        True if simulate succeeded, False otherwise.
+    """
+    path = Path(packages_dir)
+    if not path.is_dir():
+        print(f"[FAIL] Not a directory: {packages_dir}", file=sys.stderr)
+        return False
+
+    if pkg_type == "deb":
+        debs = [str(p) for p in path.glob("*.deb")]
+        if not debs:
+            print(f"[FAIL] No .deb files found in {packages_dir}", file=sys.stderr)
+            return False
+        print("Simulate installing DEB packages on host system for testing")
+        cmd = ["sudo", "apt", "install", "--simulate"] + debs
+    elif pkg_type == "rpm":
+        rpms = [str(p) for p in path.glob("*.rpm")]
+        if not rpms:
+            print(f"[FAIL] No .rpm files found in {packages_dir}", file=sys.stderr)
+            return False
+        print("Simulate installing RPM packages for testing")
+        cmd = ["sudo", "rpm", "-Uvh", "--test", "--nodeps"] + rpms
+    else:
+        print(f"[FAIL] Unsupported pkg_type: {pkg_type}. Use 'deb' or 'rpm'.", file=sys.stderr)
+        return False
+
+    try:
+        subprocess.run(cmd, check=True)
+        print("[PASS] Simulated install test completed successfully")
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"[FAIL] Simulated install failed with exit code {e.returncode}", file=sys.stderr)
+        return False
+    except FileNotFoundError as e:
+        print(f"[FAIL] Command not found: {e}", file=sys.stderr)
+        return False
+
+
 def _run_streaming(cmd: list[str], timeout_sec: int) -> int:
     """Run a command with streaming stdout/stderr and return its exit code.
 
@@ -876,12 +921,47 @@ Examples:
     parser.add_argument(
         "--test-type",
         type=str,
-        choices=["sanity", "full"],
+        choices=["sanity", "full", "simulate"],
         default="sanity",
-        help="Test type: 'sanity' runs only basic verification; 'full' runs basic + full verification.",
+        help="Test type: 'sanity' = basic verification only; 'full' = basic + full verification; 'simulate' = run simulated install test only (requires --packages-dir).",
+    )
+
+    parser.add_argument(
+        "--packages-dir",
+        type=str,
+        metavar="DIR",
+        help="Directory containing .deb or .rpm files. Required when --test-type is 'simulate'.",
+    )
+
+    parser.add_argument(
+        "--pkg-type",
+        type=str,
+        choices=["deb", "rpm"],
+        help="Package type (deb or rpm). For --test-type simulate only; if omitted, derived from --os-profile.",
     )
 
     args = parser.parse_args()
+
+    if args.test_type == "simulate":
+        if not args.packages_dir:
+            parser.error("--packages-dir is required when --test-type is 'simulate'")
+        if args.pkg_type:
+            pkg_type = args.pkg_type
+        elif args.os_profile:
+            try:
+                pkg_type = NativeLinuxPackagesTester._derive_package_type(args.os_profile)
+            except ValueError as e:
+                parser.error(str(e))
+        else:
+            parser.error("When --test-type is 'simulate', provide --pkg-type or --os-profile")
+        print("\n" + "=" * 80)
+        print("SIMULATED INSTALL TEST")
+        print("=" * 80)
+        ok = run_simulate_install_test(pkg_type, args.packages_dir)
+        sys.exit(0 if ok else 1)
+
+    if not args.os_profile:
+        parser.error("--os-profile is required when --test-type is not 'simulate'")
 
     # Derive package type from OS profile
     try:
