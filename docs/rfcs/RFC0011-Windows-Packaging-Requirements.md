@@ -46,3 +46,61 @@ Our goals are to:
 ## Windows Packaging Requirements
 
 ### Packaging Formats
+
+Windows ROCm software must be delivered using packaging formats appropriate to the Windows ecosystem while preserving the same general package boundaries expected from TheRock on Linux.
+
+The supported packaging formats are:
+
+- **MSI packages** as the primary OS-integrated installation unit
+- **Winget packages** as Windows package-manger-facing meta packages or installers that reference AMD-hosted MSI artifacts
+- **Python pip packages** for Python bindings, Python-first tooling, and environment-scoped developer workflows
+- **ZIP archives** for portable, offline, CI, ir power-user scenarios
+
+MSI packages are the authoritative Windows installation unit. Winget, pip, and ZIP deliverables must complement MSI behavior rather than redefine the core packaging contract.
+
+### Directory Layout
+
+The ROCm Core SDK on Windows must be installed under a versioned installation root to support side-by-side installation of major.minor releases.
+
+```
+C:\rocm\core-X.Y
+```
+
+Where:
+
+- `X.Y` is the major and minor version
+- Patch versions must be installed in place within the existing `X.Y` directory
+- Side-by-side installation is supported for different major.minor versions
+- Patch-only side-by-side installation is not supported
+
+The installed directory structure must mirror the cross-platform ROCm layout as closely as practical:
+
+```
+C:\rocm\core-X.Y\
+  bin\
+  lib\
+  include\
+  share\
+  tools\
+  version.txt
+```
+
+A convenience path to the most recently installed version should be maintained when practical:
+
+```
+C:\rocm\core  ->  C:\rocm\core-8.2
+C:\rocm\core-8  ->  C:\rocm\core-8.2
+```
+
+This allows users, scripts, and build systems to either target and latest installed release or pin to a major line while still preserving independently versioned install roots.
+
+### DLL Search Order and Runtime Discovery
+
+Windows packages must avoid reliance on `C:\Windows\System32` for ROCm runtime discovery.
+
+All new Windows ROCm runtime components must be installed into the package installation root, primarily under `bin`, and discovered through one or more of the following supported mechanisms:
+
+- Application-local deployment for redistributable scenarios
+- `PATH` entries associated with the selected ROCm installation
+- Registry-based SDK discovery
+- Environment-variable-based SDK discovery
