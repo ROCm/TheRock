@@ -13,7 +13,7 @@ The script can be tested locally with inputs like this:
 
     python ./build_tools/github_actions/summarize_test_pytorch_workflow.py \
       --pytorch-git-ref=release/2.7 \
-      --index-url=https://rocm.nightlies.amd.com/v2-staging \
+      --index-url=https://rocm.nightlies.amd.com/whl-staging \
       --index-subdir=gfx110X-dgpu \
       --torch-version=2.7.1+rocm7.10.0a20251120
 """
@@ -98,7 +98,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--index-url",
         type=str,
-        default="https://rocm.nightlies.amd.com/v2-staging",
+        default="https://rocm.nightlies.amd.com/whl-staging",
         help="Full URL for a release index to use with 'pip install --index-url='",
     )
     # TODO: default the index subdir based on the current GPU somehow?

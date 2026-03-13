@@ -83,7 +83,7 @@ sudo docker run -it \
 > python3 -m venv .venv && source .venv/bin/activate
 >
 > # Then install packages. For example, with nightly rocm packages for gfx94X:
-> pip install --index-url=https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu 'rocm[libraries,devel]'
+> pip install --index-url=https://rocm.nightlies.amd.com/whl/gfx94X-dcgpu 'rocm[libraries,devel]'
 > ```
 
 | Source .Dockerfile                                                                           | Published package                                                               |

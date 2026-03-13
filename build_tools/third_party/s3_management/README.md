@@ -15,10 +15,10 @@ The Python package buckets we maintain are:
 
 S3 bucket name | S3 URL | User-facing URLs
 -- | -- | --
-`therock-dev-python` | https://therock-dev-python.s3.amazonaws.com/ | <ul><li>https://rocm.devreleases.amd.com/v2/</li><li>https://rocm.devreleases.amd.com/v2-staging/</li></ul>
-`therock-nightly-python` | https://therock-nightly-python.s3.amazonaws.com/ | <ul><li>https://rocm.nightlies.amd.com/v2/</li><li>https://rocm.nightlies.amd.com/v2-staging/</li></ul>
+`therock-dev-python` | https://therock-dev-python.s3.amazonaws.com/ | <ul><li>https://rocm.devreleases.amd.com/whl/</li><li>https://rocm.devreleases.amd.com/whl-staging/</li></ul>
+`therock-nightly-python` | https://therock-nightly-python.s3.amazonaws.com/ | <ul><li>https://rocm.nightlies.amd.com/whl/</li><li>https://rocm.nightlies.amd.com/whl-staging/</li></ul>
 
-Each bucket has `v2` and `v2-staging` top level folders at the moment. This may
+Each bucket has `v3/whl` and `v3/whl-staging` top level folders at the moment. This may
 evolve with `v3` in the future. Within each folder there are subfolders for
 each index we publish, currently corresponding to each GPU family that we
 build releases for. See these other pages for more details:
@@ -29,7 +29,7 @@ The user-facing URLs can be used with `pip install --index-url`. For example:
 
 ```bash
 python -m pip install \
-  --index-url https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/ \
+  --index-url https://rocm.nightlies.amd.com/whl/gfx94X-dcgpu/ \
   "rocm[libraries,devel]"
 ```
 
@@ -96,7 +96,7 @@ those changes to the dev bucket:
     ```
 
 1. Visit the URL to check that the index pages look as expected and include the
-  new dep. For example: https://rocm.devreleases.amd.com/v2/gfx120X-all/.
+  new dep. For example: https://rocm.devreleases.amd.com/whl/gfx120X-all/.
 
 Finally, repeat those steps for the nightly bucket:
 
@@ -115,7 +115,7 @@ Finally, repeat those steps for the nightly bucket:
     ```
 
 1. Visit the URL to check that the index pages look as expected and include the
-  new dep. For example: https://rocm.nightlies.amd.com/v2/gfx120X-all/.
+  new dep. For example: https://rocm.nightlies.amd.com/whl/gfx120X-all/.
 
 1. If no longer needed, revoke your access to `therock-nightly-releases-access`.
 

@@ -156,7 +156,7 @@ For more detailed build options (including building `jax_rocm7_plugin` and
 
    ```bash
    # Install jaxlib, jax_rocm7_plugin, and jax_rocm7_pjrt from the GPU-family index
-   pip install --index-url "https://rocm.nightlies.amd.com/v2/<amdgpu_family>/" \
+   pip install --index-url "https://rocm.nightlies.amd.com/whl/<amdgpu_family>/" \
      jaxlib jax_rocm7_plugin jax_rocm7_pjrt
 
    # Install jax from PyPI to match the version
@@ -183,10 +183,10 @@ consistency. Tracking issue:
 ### Gating releases with JAX tests
 
 With passing builds we upload `jaxlib`, `jax_rocm7_plugin`, and
-`jax_rocm7_pjrt` wheels to subfolders of the `v2-staging` directory in the
+`jax_rocm7_pjrt` wheels to subfolders of the `v3/whl-staging` directory in the
 nightly release S3 bucket with a public URL at
-<https://rocm.nightlies.amd.com/v2-staging/>.
+<https://rocm.nightlies.amd.com/whl-staging/>.
 
-Only with passing JAX tests we promote passed wheels to the `v2` directory in
+Only with passing JAX tests we promote passed wheels to the `v3/whl` directory in
 the nightly release S3 bucket with a public URL at
-<https://rocm.nightlies.amd.com/v2/>.
+<https://rocm.nightlies.amd.com/whl/>.

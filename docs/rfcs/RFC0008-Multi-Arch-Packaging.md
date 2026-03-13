@@ -249,7 +249,7 @@ The ROCm SDK will be distributed as Python packages from a single multi-architec
 
 ```
 # Single index serving all architectures
-https://rocm.nightlies.amd.com/v2/multi-arch/
+https://rocm.nightlies.amd.com/whl/multi-arch/
 
 # Package structure after recombination
 rocm                           # Meta-package with dynamic dependency resolution
@@ -263,7 +263,7 @@ rocm-sdk-libraries-gfx942     # Device code for gfx942
 rocm-sdk-devel                # Development tools (generic)
 
 # Installation automatically resolves architecture dependencies
-pip install --index-url https://rocm.nightlies.amd.com/v2/multi-arch/ "rocm[libraries,devel]"
+pip install --index-url https://rocm.nightlies.amd.com/whl/multi-arch/ "rocm[libraries,devel]"
 ```
 
 ##### PyTorch Packages

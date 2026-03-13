@@ -40,14 +40,14 @@ Follow these steps:
 
 1. Identify the ROCm package version that you want to build against, like
    `7.11.0a20251124`. You can find recent versions in a nightly release index
-   like at https://rocm.nightlies.amd.com/v2/gfx94X-dcgpu/rocm/.
+   like at https://rocm.nightlies.amd.com/whl/gfx94X-dcgpu/rocm/.
 
 1. Copy that version from the "nightly" release bucket to the "dev" release
    bucket by triggering
    https://github.com/ROCm/TheRock/actions/workflows/copy_release.yml.
 
-   Trigger the workflow twice, once to copy to the `v2` "destsubdir" and again
-   to copy to the `v2-staging` "destsubdir".
+   Trigger the workflow twice, once to copy to the `v3/whl` "destsubdir" and again
+   to copy to the `v3/whl-staging` "destsubdir".
 
    ![copy_release_workflow_dispatch](assets/copy_release_workflow_dispatch.jpg)
 

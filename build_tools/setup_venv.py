@@ -49,8 +49,8 @@ is_windows = platform.system() == "Windows"
 ROCM_INDEX_URLS_MAP = {
     "stable": "https://repo.amd.com/rocm/whl/",
     "prerelease": "https://rocm.prereleases.amd.com/whl",
-    "nightly": "https://rocm.nightlies.amd.com/v2",
-    "dev": "https://rocm.devreleases.amd.com/v2",
+    "nightly": "https://rocm.nightlies.amd.com/whl",
+    "dev": "https://rocm.devreleases.amd.com/whl",
 }
 
 

@@ -16,9 +16,9 @@ S3 = boto3.resource("s3")
 CLIENT = boto3.client("s3")
 # We also manage `therock-nightly-python` (not the default to make the script safer to test)
 BUCKET = S3.Bucket(getenv("S3_BUCKET_PY", "therock-dev-python"))
-# Note: v2-staging first, in case issues are observed while the script runs
+# Note: v3/whl-staging first, in case issues are observed while the script runs
 # and the developer wants to more safely cancel the script.
-VERSIONS = ["v2-staging", "v2"]
+VERSIONS = ["v3/whl-staging", "v3/whl"]
 
 PACKAGES_PER_PROJECT = {
     "dbus_python": {"versions": ["latest"], "project": "jax"},
