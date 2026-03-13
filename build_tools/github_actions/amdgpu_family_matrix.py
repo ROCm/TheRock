@@ -69,12 +69,18 @@ amdgpu_family_info_matrix dictionary fields:
 amdgpu_family_info_matrix_presubmit = {
     "gfx94x": {
         "linux": {
-            "test-runs-on": "linux-mi325-1gpu-ossci-rocm",
+            # Due to migrating MI325s, we have lost capacity as of 3/13/2026 11:41am PST
+            # Labels are:
+            # "test-runs-on": "linux-mi325-1gpu-ossci-rocm",
+            # "test-runs-on-sandbox": "linux-mi325-8gpu-ossci-rocm-sandbox",
+            # "test-runs-on-multi-gpu": "linux-mi325-8gpu-ossci-rocm",
+            # "benchmark-runs-on": "linux-mi325-8gpu-ossci-rocm",
+            "test-runs-on": "",
             # TODO(#3433): Remove sandbox label once ASAN tests are passing
-            "test-runs-on-sandbox": "linux-mi325-8gpu-ossci-rocm-sandbox",
-            "test-runs-on-multi-gpu": "linux-mi325-8gpu-ossci-rocm",
+            "test-runs-on-sandbox": "",
+            "test-runs-on-multi-gpu": "",
             # TODO(#2754): Add new benchmark-runs-on runner for benchmarks
-            "benchmark-runs-on": "linux-mi325-8gpu-ossci-rocm",
+            "benchmark-runs-on": "",
             "family": "gfx94X-dcgpu",
             # Individual GPU target(s) on the test runner, for fetching split artifacts.
             # TODO(#3444): ASAN variants may need xnack suffix expansion (e.g. gfx942:xnack+).
