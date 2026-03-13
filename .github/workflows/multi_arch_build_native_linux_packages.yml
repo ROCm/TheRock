@@ -42,13 +42,11 @@ permissions:
   id-token: write
   contents: read
 
-run-name: Build multi-arch native Linux packages (${{ inputs.dist_amdgpu_families }}, ${{ inputs.rocm_version }}, ${{ inputs.native_package_type }}, ${{ inputs.release_type }})
+run-name: Build ${{ inputs.native_package_type }} packages (${{ inputs.rocm_version }}${{ inputs.release_type && format(', {0}', inputs.release_type) || '' }})
 
 jobs:
   build_native_packages:
     name: Build ${{ inputs.native_package_type }} packages
-    strategy:
-      fail-fast: false
     runs-on: ${{ github.repository_owner == 'ROCm' && 'azure-linux-scale-rocm' || 'ubuntu-24.04' }}
     env:
       ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id }}
@@ -86,84 +84,14 @@ jobs:
       - name: Determine S3 bucket and prefix
         id: s3_config
         run: |
-          # ================================================================
-          # S3 Bucket Selection Logic
-          # ================================================================
-          # Determines which S3 bucket and prefix to use based on:
-          #   1. release_type input (dev/nightly/prerelease/release)
-          #   2. Repository name (ROCm/TheRock, ROCm/therock-releases-internal, etc.)
-          #   3. Whether this is a fork PR
-          #
-          # Decision Tree:
-          #   ├─ IF release_type is set (dev/nightly/prerelease/release)
-          #   │  └─ Use: therock-${release_type}-packages bucket
-          #   │     ├─ prerelease/release → prefix: v3/packages/<pkg_type>
-          #   │     └─ dev/nightly → prefix: v3/packages/<pkg_type>/<YYYYMMDD>-<artifact_id>
-          #   │
-          #   ├─ ELSE IF repository is "ROCm/therock-releases-internal"
-          #   │  └─ Use: therock-artifacts-internal bucket (internal releases)
-          #   │     └─ prefix: v3/packages/<pkg_type>/<YYYYMMDD>-<artifact_id>
-          #   │
-          #   ├─ ELSE IF fork PR OR non-ROCm/TheRock repository
-          #   │  └─ Use: therock-ci-artifacts-external bucket (external CI)
-          #   │     └─ prefix: v3/packages/<pkg_type>/<YYYYMMDD>-<artifact_id>
-          #   │
-          #   └─ ELSE (default: ROCm/TheRock non-fork)
-          #      └─ Use: therock-ci-artifacts bucket (internal CI)
-          #         └─ prefix: v3/packages/<pkg_type>/<YYYYMMDD>-<artifact_id>
-          # ================================================================
-
-          RELEASE_TYPE="${{ env.RELEASE_TYPE }}"
-          GITHUB_REPO="${{ github.repository }}"
-          IS_FORK="${{ github.event.pull_request.head.repo.fork || 'false' }}"
-          PKG_TYPE="${{ inputs.native_package_type }}"
-          ARTIFACT_ID="${{ env.ARTIFACT_RUN_ID }}"
-          YYYYMMDD=$(date +%Y%m%d)
-
-          # Branch 1: Release-type-specific package buckets (dev/nightly/prerelease/release)
-          if [[ -n "${RELEASE_TYPE}" && "${RELEASE_TYPE}" != "" ]]; then
-            S3_BUCKET="therock-${RELEASE_TYPE}-packages"
-
-            if [[ "${RELEASE_TYPE}" == "prerelease" || "${RELEASE_TYPE}" == "release" ]]; then
-              # Prerelease/Release packages go to stable prefix (no date subfolder)
-              S3_PREFIX="v3/packages/${PKG_TYPE}"
-              JOB_TYPE="${RELEASE_TYPE}"
-            else
-              # Dev/Nightly packages go to dated subfolder for versioning
-              S3_PREFIX="v3/packages/${PKG_TYPE}/${YYYYMMDD}-${ARTIFACT_ID}"
-              JOB_TYPE="${RELEASE_TYPE}"
-            fi
-            echo "✓ Using release-type bucket: ${S3_BUCKET}"
-
-          # Branch 2: Internal releases repository
-          elif [[ "${GITHUB_REPO}" == "ROCm/therock-releases-internal" ]]; then
-            S3_BUCKET="therock-artifacts-internal"
-            S3_PREFIX="v3/packages/${PKG_TYPE}/${YYYYMMDD}-${ARTIFACT_ID}"
-            JOB_TYPE="ci"
-            echo "✓ Using internal releases bucket: ${S3_BUCKET}"
-
-          # Branch 3: Fork PRs or external repositories
-          elif [[ "${IS_FORK}" == "true" || "${GITHUB_REPO}" != "ROCm/TheRock" ]]; then
-            S3_BUCKET="therock-ci-artifacts-external"
-            S3_PREFIX="v3/packages/${PKG_TYPE}/${YYYYMMDD}-${ARTIFACT_ID}"
-            JOB_TYPE="ci"
-            echo "✓ Using external bucket: ${S3_BUCKET}"
-
-          # Branch 4: Default - ROCm/TheRock non-fork (normal CI builds)
-          else
-            S3_BUCKET="therock-ci-artifacts"
-            S3_PREFIX="v3/packages/${PKG_TYPE}/${YYYYMMDD}-${ARTIFACT_ID}"
-            JOB_TYPE="ci"
-            echo "✓ Using default CI bucket: ${S3_BUCKET}"
-          fi
-
-          echo "S3 bucket: ${S3_BUCKET}"
-          echo "S3 prefix: ${S3_PREFIX}"
-          echo "Job type: ${JOB_TYPE}"
-
-          echo "s3_bucket=${S3_BUCKET}" >> $GITHUB_OUTPUT
-          echo "s3_prefix=${S3_PREFIX}" >> $GITHUB_OUTPUT
-          echo "job_type=${JOB_TYPE}" >> $GITHUB_OUTPUT
+          python ./build_tools/packaging/linux/get_s3_config.py \
+            --release-type "${{ env.RELEASE_TYPE }}" \
+            --repository "${{ github.repository }}" \
+            --is-fork "${{ github.event.pull_request.head.repo.fork || 'false' }}" \
+            --pkg-type "${{ inputs.native_package_type }}" \
+            --artifact-id "${{ env.ARTIFACT_RUN_ID }}" \
+            --rocm-version "${{ inputs.rocm_version }}" \
+            --output-format github >> $GITHUB_OUTPUT
 
       - name: Determine IAM role
         id: iam_role
@@ -176,18 +104,12 @@ jobs:
           # Role Mapping:
           #   ├─ IF job_type == "ci"
           #   │  └─ Use: therock-ci role
-          #   │     (For all CI artifact buckets: therock-ci-artifacts, therock-ci-artifacts-external, therock-artifacts-internal)
+          #   │     (For all CI buckets: therock-ci-artifacts, therock-ci-artifacts-external, therock-artifacts-internal)
           #   │
           #   └─ ELSE (job_type == dev/nightly/prerelease/release)
           #      └─ Use: therock-${job_type} role
-          #         (For release package buckets: therock-dev-packages, therock-nightly-packages, etc.)
+          #         (For package buckets: therock-dev-packages, therock-nightly-packages, etc.)
           #
-          # Examples:
-          #   job_type="ci"         → role/therock-ci
-          #   job_type="dev"        → role/therock-dev
-          #   job_type="nightly"    → role/therock-nightly
-          #   job_type="prerelease" → role/therock-prerelease
-          #   job_type="release"    → role/therock-release
           # ================================================================
 
           JOB_TYPE="${{ steps.s3_config.outputs.job_type }}"
@@ -207,28 +129,22 @@ jobs:
       - name: Fetch Artifacts for all GPU families
         run: |
           echo "Fetching artifacts for build ${{ env.ARTIFACT_RUN_ID }}"
-          echo "GPU families: ${{ env.DIST_AMDGPU_FAMILIES }}"
 
-          # Convert semicolon-separated list to array using parameter expansion
-          FAMILIES=(${DIST_AMDGPU_FAMILIES//;/ })
+          # Convert semicolon-separated to comma-separated
+          FAMILIES_CSV="${DIST_AMDGPU_FAMILIES//;/,}"
+          # Extract first family for --artifact-group (required parameter)
+          FIRST_FAMILY="${DIST_AMDGPU_FAMILIES%%;*}"
+          echo "Fetching artifacts for GPU families: ${FAMILIES_CSV}"
 
           # Create artifacts directory
           mkdir -p "${{ env.ARTIFACTS_DIR }}"
 
-          # Download artifacts for each family to the same output directory
-          # Artifact filenames are unique per family (e.g., blas_lib_gfx94X.tar.zst)
-          # so they won't conflict
-          for family in "${FAMILIES[@]}"; do
-            echo "Fetching artifacts for family: ${family}"
-            python ./build_tools/fetch_artifacts.py \
-              --run-id=${{ env.ARTIFACT_RUN_ID }} \
-              --run-github-repo=${{ github.repository }} \
-              --artifact-group="${family}" \
-              --output-dir="${{ env.ARTIFACTS_DIR }}"
-          done
-
-          echo "Fetched artifacts:"
-          ls -lh "${{ env.ARTIFACTS_DIR }}" || echo "No artifacts found"
+          python ./build_tools/fetch_artifacts.py \
+            --run-id="${{ env.ARTIFACT_RUN_ID }}" \
+            --run-github-repo="${{ github.repository }}" \
+            --artifact-group="${FIRST_FAMILY}" \
+            --amdgpu-targets="${FAMILIES_CSV}" \
+            --output-dir="${{ env.ARTIFACTS_DIR }}"
 
       - name: Build Packages
         id: build-packages
