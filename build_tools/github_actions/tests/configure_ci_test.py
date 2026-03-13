@@ -46,6 +46,7 @@ class ConfigureCITest(unittest.TestCase):
             self.assertTrue(
                 all("sanity_check_only_for_family" in f for f in family_info_list)
             )
+            self.assertTrue(all("build_pytorch" in f for f in family_info_list))
 
         if not allow_xfail:
             self.assertFalse(
@@ -581,7 +582,8 @@ class ConfigureCITest(unittest.TestCase):
             self.assertIn("test-runs-on", family_info)
 
     def test_multi_arch_sanity_check_field_propagation_logic(self):
-        """Unit test: Verify sanity_check_only_for_family field is correctly propagated.
+        """Unit test: Verify sanity_check_only_for_family and build_pytorch fields
+        are correctly propagated into matrix_per_family_json entries.
 
         Uses synthetic data to test the code logic in isolation.
         This test should never need updates unless the code behavior changes.
@@ -594,7 +596,7 @@ class ConfigureCITest(unittest.TestCase):
                     "family": "testfamily1-stable",
                     "test-runs-on": "linux-stable-runner",
                     "build_variants": ["release"],
-                    # Field not present - should default to False
+                    # Neither field present - sanity_check defaults False, build_pytorch defaults True
                 }
             },
             "testfamily2": {
@@ -603,6 +605,7 @@ class ConfigureCITest(unittest.TestCase):
                     "test-runs-on": "linux-experimental-runner",
                     "build_variants": ["release"],
                     "sanity_check_only_for_family": True,
+                    "expect_pytorch_failure": True,
                 }
             },
             "testfamily3": {
@@ -650,7 +653,7 @@ class ConfigureCITest(unittest.TestCase):
 
             family_dict = {f["amdgpu_family"]: f for f in family_info_list}
 
-            # Verify field is correctly propagated with proper defaults
+            # Verify sanity_check_only_for_family is correctly propagated
             self.assertIn("testfamily1-stable", family_dict)
             self.assertFalse(
                 family_dict["testfamily1-stable"]["sanity_check_only_for_family"],
@@ -671,10 +674,26 @@ class ConfigureCITest(unittest.TestCase):
                 "Explicit False should be preserved",
             )
 
-            # Verify all entries have the field (even if False)
+            # Verify build_pytorch is correctly propagated per family
+            self.assertTrue(
+                family_dict["testfamily1-stable"]["build_pytorch"],
+                "Missing expect_pytorch_failure should default build_pytorch to True",
+            )
+            self.assertFalse(
+                family_dict["testfamily2-experimental"]["build_pytorch"],
+                "expect_pytorch_failure=True should set build_pytorch=False",
+            )
+            self.assertTrue(
+                family_dict["testfamily3-explicit-false"]["build_pytorch"],
+                "Missing expect_pytorch_failure should default build_pytorch to True",
+            )
+
+            # Verify all entries have both fields as booleans
             for family_info in family_info_list:
                 self.assertIn("sanity_check_only_for_family", family_info)
                 self.assertIsInstance(family_info["sanity_check_only_for_family"], bool)
+                self.assertIn("build_pytorch", family_info)
+                self.assertIsInstance(family_info["build_pytorch"], bool)
 
     def test_multi_arch_production_sanity_check_configuration(self):
         """Integration test: Verify production matrix sanity_check configuration.
@@ -775,11 +794,19 @@ class ConfigureCITest(unittest.TestCase):
             family_dict[stable_arch_name]["sanity_check_only_for_family"],
             f"Stable family {stable_arch_name} should have sanity_check=False",
         )
+        self.assertTrue(
+            family_dict[stable_arch_name]["build_pytorch"],
+            f"Stable family {stable_arch_name} should have build_pytorch=True",
+        )
 
         self.assertIn(experimental_arch_name, family_dict)
         self.assertTrue(
             family_dict[experimental_arch_name]["sanity_check_only_for_family"],
             f"Experimental family {experimental_arch_name} should have sanity_check=True",
+        )
+        self.assertTrue(
+            family_dict[experimental_arch_name]["build_pytorch"],
+            f"Experimental family {experimental_arch_name} should have build_pytorch=True",
         )
 
     # TODO(#3433): Remove sandbox logic once ASAN tests are passing and environment is no longer required

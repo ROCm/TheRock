@@ -121,10 +121,10 @@ therock_provide_artifact(sysdeps
   TARGET_NEUTRAL
   DESCRIPTOR artifact.toml
   COMPONENTS
-    dev
-    doc
     lib
     run
+    dev
+    doc
   SUBPROJECT_DEPS
     therock-bzip2
     therock-elfutils
@@ -151,16 +151,16 @@ Abbreviated example:
 
 ```
 # bzip2
-[components.dev."third-party/sysdeps/linux/bzip2/build/stage"]
 [components.lib."third-party/sysdeps/linux/bzip2/build/stage"]
+[components.dev."third-party/sysdeps/linux/bzip2/build/stage"]
 
 # elfutils
-[components.dev."third-party/sysdeps/linux/elfutils/build/stage"]
 [components.lib."third-party/sysdeps/linux/elfutils/build/stage"]
+[components.dev."third-party/sysdeps/linux/elfutils/build/stage"]
 
 # libdrm
-[components.dev."third-party/sysdeps/linux/libdrm/build/stage"]
 [components.lib."third-party/sysdeps/linux/libdrm/build/stage"]
+[components.dev."third-party/sysdeps/linux/libdrm/build/stage"]
 include = [
   "**/share/**",
 ]
@@ -224,9 +224,6 @@ Since `run` is a catch-all that claims files before `test`, care is needed when 
 This is the most common pattern in blas, where each subproject lists only the components it needs:
 
 ```toml
-[components.dbg."math-libs/BLAS/rocBLAS/stage"]
-[components.dev."math-libs/BLAS/rocBLAS/stage"]
-[components.doc."math-libs/BLAS/rocBLAS/stage"]
 [components.lib."math-libs/BLAS/rocBLAS/stage"]
 include = ["bin/rocblas/library/**", "lib/rocblas/library/**"]
 
@@ -234,6 +231,10 @@ include = ["bin/rocblas/library/**", "lib/rocblas/library/**"]
 # binaries. If 'run' were listed here, its catch-all behavior would claim the
 # test binaries before 'test' could.
 # [components.run."math-libs/BLAS/rocBLAS/stage"]
+
+[components.dbg."math-libs/BLAS/rocBLAS/stage"]
+[components.dev."math-libs/BLAS/rocBLAS/stage"]
+[components.doc."math-libs/BLAS/rocBLAS/stage"]
 
 # rocBLAS test binaries and data files. Explicit includes limit the test
 # archive to known test content — without them, test would catch-all remaining
@@ -255,11 +256,11 @@ include = ["bin/rocsparse-bench*", "bin/rocsparse-test*", ...]
 
 ```toml
 # MIOpen — run needs to catch runtime files, but miopen_gtest should go to test
-[components.test."ml-libs/MIOpen/stage"]
-include = ["bin/miopen_gtest*"]
-
 [components.run."ml-libs/MIOpen/stage"]
 exclude = ["bin/miopen_gtest*"]
+
+[components.test."ml-libs/MIOpen/stage"]
+include = ["bin/miopen_gtest*"]
 ```
 
 Without the `exclude` on `run`, the test binary would be claimed by `run` (catch-all) and `test` would skip it.
