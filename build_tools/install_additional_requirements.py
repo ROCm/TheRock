@@ -45,6 +45,8 @@ THEROCK_OUTPUT_DIR = str(
 
 def install_requirements(req_files_list: str):
     environ_vars = os.environ.copy()
+    environ_vars["CC"] = "clang"
+    environ_vars["CXX"] = "clang++"
 
     requirements_files = req_files_list.split(",")
 

@@ -318,6 +318,21 @@ test_matrix = {
         # Architectures that we have multi GPU setup for testing
         "multi_gpu": {"linux": ["gfx94X-dcgpu"]},
     },
+    # rocprofiler-sdk tests
+    "rocprofiler-sdk": {
+        "job_name": "rocprofiler-sdk",
+        "fetch_artifact_args": "--tests",
+        "timeout_minutes": 15,
+        "additional_requirements_files": [
+            "share/rocprofiler-sdk/tests/requirements.txt",
+        ],
+        "test_script": f"python {_get_script_path('test_rocprofiler_sdk.py')}",
+        "platform": ["linux"],
+        "container_options": "--cap-add=SYS_PTRACE",
+        "total_shards_dict": {
+            "linux": 1,
+        },
+    },
     # hipDNN tests
     "hipdnn": {
         "job_name": "hipdnn",

@@ -9,6 +9,7 @@ include = [
   "share/rocprofiler-sdk/**",
   "share/rocprofiler-sdk-rocpd/**",
   "share/rocprofiler-sdk-roctx/**",
+  "share/rocprofiler-sdk-tests/**",
   "lib/python*/**",
 ]
 exclude = [
@@ -23,6 +24,7 @@ include = [
 [components.test."profiler/rocprofiler-sdk/stage"]
 include = [
   "share/rocprofiler-sdk/tests/**",
+  "lib/cmake/**",
 ]
 
 # roctracer
