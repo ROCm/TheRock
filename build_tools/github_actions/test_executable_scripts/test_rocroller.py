@@ -6,6 +6,8 @@ import logging
 import os
 import shlex
 import subprocess
+import sys
+import tempfile
 from pathlib import Path
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -15,6 +17,10 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR", "")
 platform = os.getenv("RUNNER_OS", "linux").lower()
+
+# Import test result collection utilities
+sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
+from github_actions_utils import run_test
 
 # Sharding
 env = os.environ.copy()
@@ -100,7 +106,10 @@ if test_filter_arg:
 else:
     test_filter_arg = f"--gtest_filter=-{_exclude_str}"
 
-cmd = [str(test_bin)]
+# Create temp file for JSON output
+gtest_json_path = Path(tempfile.gettempdir()) / "rocroller_test_results.json"
+
+cmd = [str(test_bin), f"--gtest_output=json:{gtest_json_path}"]
 if test_filter_arg:
     cmd.append(test_filter_arg)
 
@@ -108,5 +117,6 @@ extra = os.getenv("EXTRA_GTEST_ARGS", "")
 if extra:
     cmd += shlex.split(extra)
 
-logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-subprocess.run(cmd, cwd=str(THEROCK_DIR), check=True, env=env)
+run_test(
+    cmd, output_format="gtest", output_path=gtest_json_path, cwd=THEROCK_DIR, env=env
+)

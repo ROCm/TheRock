@@ -5,12 +5,18 @@ import logging
 import os
 import shlex
 import subprocess
+import sys
+import tempfile
 from pathlib import Path
 
 THEROCK_BIN_DIR = Path(os.getenv("THEROCK_BIN_DIR")).resolve()
 OUTPUT_ARTIFACTS_DIR = Path(os.getenv("OUTPUT_ARTIFACTS_DIR")).resolve()
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent.resolve()
+
+# Import test result collection utilities
+sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
+from github_actions_utils import run_test
 
 logging.basicConfig(level=logging.INFO)
 
@@ -37,10 +43,19 @@ else:
         f"{THEROCK_DIR}/build/share/rocsparse/test/rocsparse_smoke.yaml",
     ]
 
+# Create temp file for JSON output
+gtest_json_path = Path(tempfile.gettempdir()) / "rocsparse_test_results.json"
+
 cmd = [
     f"{THEROCK_BIN_DIR}/rocsparse-test",
+    f"--gtest_output=json:{gtest_json_path}",
     "--matrices-dir",
     f"{OUTPUT_ARTIFACTS_DIR}/clients/matrices/",
 ] + test_filter
-logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=environ_vars)
+run_test(
+    cmd,
+    output_format="gtest",
+    output_path=gtest_json_path,
+    cwd=THEROCK_DIR,
+    env=environ_vars,
+)

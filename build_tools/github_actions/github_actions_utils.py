@@ -12,6 +12,7 @@ import logging
 import os
 from pathlib import Path
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -634,3 +635,151 @@ def is_asan():
     """Using artifact_group, determines if this is an asan build"""
     ARTIFACT_GROUP = os.getenv("ARTIFACT_GROUP", "")
     return "asan" in ARTIFACT_GROUP
+
+
+# =============================================================================
+# Test Result Collection Utilities
+# =============================================================================
+
+
+def parse_ctest_junit_xml(xml_path: str | Path) -> list[str]:
+    """Parse ctest JUnit XML output to extract failed test names."""
+    import xml.etree.ElementTree as ET
+
+    xml_path = Path(xml_path)
+    failed_tests = []
+
+    if not xml_path.exists():
+        _log(f"Warning: JUnit XML file not found: {xml_path}")
+        return failed_tests
+
+    try:
+        tree = ET.parse(xml_path)
+        root = tree.getroot()
+
+        # Handle both <testsuites> and <testsuite> as root
+        if root.tag == "testsuites":
+            testsuites = root.findall("testsuite")
+        elif root.tag == "testsuite":
+            testsuites = [root]
+        else:
+            _log(f"Warning: Unexpected XML root element: {root.tag}")
+            return failed_tests
+
+        for testsuite in testsuites:
+            for testcase in testsuite.findall("testcase"):
+                test_name = testcase.get("name", "")
+                # Check for failure or error elements
+                if (
+                    testcase.find("failure") is not None
+                    or testcase.find("error") is not None
+                ):
+                    failed_tests.append(test_name)
+
+    except ET.ParseError as e:
+        _log(f"Error: Failed to parse JUnit XML: {e}")
+
+    return failed_tests
+
+
+def parse_gtest_json(json_path: str | Path) -> list[str]:
+    """Parse gtest JSON output to extract failed test names."""
+    json_path = Path(json_path)
+    failed_tests = []
+
+    if not json_path.exists():
+        _log(f"Warning: GTest JSON file not found: {json_path}")
+        return failed_tests
+
+    try:
+        with open(json_path) as f:
+            data = json.load(f)
+
+        # gtest JSON format has "testsuites" array
+        for testsuite in data.get("testsuites", []):
+            suite_name = testsuite.get("name", "")
+            for testcase in testsuite.get("testsuite", []):
+                test_name = testcase.get("name", "")
+                full_name = f"{suite_name}.{test_name}" if suite_name else test_name
+
+                # Check for failures array
+                if testcase.get("failures"):
+                    failed_tests.append(full_name)
+
+    except json.JSONDecodeError as e:
+        _log(f"Error: Failed to parse gtest JSON: {e}")
+
+    return failed_tests
+
+
+def output_failed_tests(failed_tests: list[str]) -> None:
+    """Output failed tests to GITHUB_OUTPUT for workflow consumption."""
+    gha_set_output(
+        {
+            "failed_tests": json.dumps(failed_tests),
+            "failed_tests_count": str(len(failed_tests)),
+        }
+    )
+
+
+def run_test(
+    cmd: list[str],
+    *,
+    output_format: str,
+    output_path: str | Path,
+    cwd: str | Path | None = None,
+    env: dict[str, str] | None = None,
+    success_returncodes: list[int] | None = None,
+) -> None:
+    """Run a test command, parse results, output failed tests, and exit.
+
+    This is a convenience wrapper that handles the common pattern of:
+    1. Running a test command (gtest or ctest)
+    2. Parsing the output file for failed tests
+    3. Outputting failed tests to GITHUB_OUTPUT
+    4. Exiting with the test command's return code
+
+    Example:
+        # For gtest:
+        run_test(
+            [f"{THEROCK_BIN_DIR}/rocblas-test", f"--gtest_output=json:{json_path}"],
+            output_format="gtest",
+            output_path=json_path,
+            cwd=THEROCK_DIR,
+        )
+
+        # For ctest:
+        run_test(
+            ["ctest", "--test-dir", test_dir, "--output-junit", str(xml_path)],
+            output_format="ctest",
+            output_path=xml_path,
+            cwd=THEROCK_DIR,
+        )
+    """
+    if output_format not in ("gtest", "ctest"):
+        raise ValueError(
+            f"output_format must be 'gtest' or 'ctest', got: {output_format}"
+        )
+
+    if success_returncodes is None:
+        success_returncodes = [0]
+
+    _log(f"++ Exec: {shlex.join(cmd)}")
+
+    result = subprocess.run(
+        cmd,
+        cwd=cwd,
+        env=env,
+        check=False,
+    )
+
+    if output_format == "gtest":
+        failed_tests = parse_gtest_json(output_path)
+    else:
+        failed_tests = parse_ctest_junit_xml(output_path)
+
+    output_failed_tests(failed_tests)
+
+    if result.returncode in success_returncodes:
+        sys.exit(0)
+    sys.exit(result.returncode)

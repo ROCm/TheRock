@@ -5,11 +5,17 @@ import logging
 import os
 import shlex
 import subprocess
+import sys
+import tempfile
 from pathlib import Path
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
+
+# Import test result collection utilities
+sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
+from github_actions_utils import run_test
 
 PLATFORM = os.getenv("PLATFORM")
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
@@ -44,10 +50,19 @@ tests_to_exclude = [
 
 exclusion_list = ":".join(tests_to_exclude)
 
+# Create temp file for JSON output
+gtest_json_path = Path(tempfile.gettempdir()) / "hipsolver_test_results.json"
+
 cmd = [
     f"{THEROCK_BIN_DIR}/hipsolver-test",
+    f"--gtest_output=json:{gtest_json_path}",
     f"--gtest_filter=-{exclusion_list}",
 ]
 
-logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=envion_vars)
+run_test(
+    cmd,
+    output_format="gtest",
+    output_path=gtest_json_path,
+    cwd=THEROCK_DIR,
+    env=envion_vars,
+)

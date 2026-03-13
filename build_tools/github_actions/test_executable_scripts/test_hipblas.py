@@ -6,15 +6,16 @@ import os
 import shlex
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
-# Importing is_asan from github_actions_utils.py
+# Importing utilities from github_actions_utils.py
 sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
-from github_actions_utils import is_asan
+from github_actions_utils import is_asan, run_test
 
 # GTest sharding
 SHARD_INDEX = os.getenv("SHARD_INDEX", 1)
@@ -38,8 +39,12 @@ tests_to_exclude = [
 
 exclusion_list = ":".join(tests_to_exclude)
 
+# Create temp file for JSON output
+gtest_json_path = Path(tempfile.gettempdir()) / "hipblas_test_results.json"
+
 cmd = [
     f"{THEROCK_BIN_DIR}/hipblas-test",
+    f"--gtest_output=json:{gtest_json_path}",
 ]
 
 # If smoke tests are enabled, we run smoke tests only.
@@ -56,5 +61,11 @@ else:
     cmd += [f"--gtest_filter=*pre_checkin*-{exclusion_list}"]
 
 
-logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-result = subprocess.run(cmd, cwd=THEROCK_DIR, env=environ_vars)
+run_test(
+    cmd,
+    output_format="gtest",
+    output_path=gtest_json_path,
+    cwd=THEROCK_DIR,
+    env=environ_vars,
+    success_returncodes=[0, 3],
+)

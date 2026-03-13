@@ -5,12 +5,18 @@ import logging
 import os
 import shlex
 import subprocess
+import sys
+import tempfile
 from pathlib import Path
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 OUTPUT_ARTIFACTS_DIR = os.getenv("OUTPUT_ARTIFACTS_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
+
+# Import test result collection utilities
+sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
+from github_actions_utils import run_test
 
 # GTest sharding
 SHARD_INDEX = os.getenv("SHARD_INDEX", 1)
@@ -26,7 +32,10 @@ environ_vars["HIPSPARSE_CLIENTS_MATRICES_DIR"] = (
     f"{OUTPUT_ARTIFACTS_DIR}/clients/matrices/"
 )
 
-cmd = [f"{THEROCK_BIN_DIR}/hipsparse-test"]
+# Create temp file for JSON output
+gtest_json_path = Path(tempfile.gettempdir()) / "hipsparse_test_results.json"
+
+cmd = [f"{THEROCK_BIN_DIR}/hipsparse-test", f"--gtest_output=json:{gtest_json_path}"]
 
 test_type = os.getenv("TEST_TYPE", "full")
 if test_type == "smoke":
@@ -37,10 +46,10 @@ else:
     # TODO(#2616): Enable correct filter once known test set is reduced to appropriate amount
     cmd.append("--gtest_filter=*quick*:-known_bug*")
 
-logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-subprocess.run(
+run_test(
     cmd,
+    output_format="gtest",
+    output_path=gtest_json_path,
     cwd=THEROCK_DIR,
-    check=True,
     env=environ_vars,
 )

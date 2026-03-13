@@ -5,12 +5,18 @@ import logging
 import os
 import shlex
 import subprocess
+import sys
+import tempfile
 from pathlib import Path
 import platform
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
+
+# Import test result collection utilities
+sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
+from github_actions_utils import run_test
 
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 os_type = platform.system().lower()
@@ -102,11 +108,16 @@ shard_index = int(os.getenv("SHARD_INDEX", "1")) - 1
 total_shards = int(os.getenv("TOTAL_SHARDS", "1"))
 
 
+# Create temp file for JUnit XML output
+junit_xml_path = Path(tempfile.gettempdir()) / "rocprim_test_results.xml"
+
 cmd = [
     "ctest",
     "--test-dir",
     f"{THEROCK_BIN_DIR}/rocprim",
     "--output-on-failure",
+    "--output-junit",
+    str(junit_xml_path),
     "--parallel",
     "8",
     "--timeout",
@@ -129,6 +140,10 @@ test_type = os.getenv("TEST_TYPE", "full")
 if test_type == "smoke":
     environ_vars["GTEST_FILTER"] = ":".join(SMOKE_TESTS)
 
-logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-
-subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=environ_vars)
+run_test(
+    cmd,
+    output_format="ctest",
+    output_path=junit_xml_path,
+    cwd=THEROCK_DIR,
+    env=environ_vars,
+)

@@ -5,11 +5,17 @@ import logging
 import os
 import shlex
 import subprocess
+import sys
+import tempfile
 from pathlib import Path
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
+
+# Import test result collection utilities
+sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
+from github_actions_utils import run_test
 
 logging.basicConfig(level=logging.INFO)
 
@@ -35,11 +41,18 @@ else:
         "0.01",
     ]
 
-cmd = [f"{THEROCK_BIN_DIR}/hipfft-test"] + test_filter
-logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-subprocess.run(
+# Create temp file for JSON output
+gtest_json_path = Path(tempfile.gettempdir()) / "hipfft_test_results.json"
+
+cmd = [
+    f"{THEROCK_BIN_DIR}/hipfft-test",
+    f"--gtest_output=json:{gtest_json_path}",
+] + test_filter
+
+run_test(
     cmd,
+    output_format="gtest",
+    output_path=gtest_json_path,
     cwd=THEROCK_DIR,
-    check=True,
     env=environ_vars,
 )

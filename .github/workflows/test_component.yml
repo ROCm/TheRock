@@ -146,7 +146,7 @@ jobs:
           echo "ASAN_SYMBOLIZER_PATH=${{ env.OUTPUT_ARTIFACTS_DIR }}/llvm/bin/llvm-symbolizer" >> $GITHUB_ENV
 
       - name: Test
-        id: test
+        id: run_tests
         timeout-minutes: ${{ fromJSON(inputs.component).timeout_minutes }}
         env:
           SHARD_INDEX: ${{ matrix.shard }}
@@ -157,9 +157,18 @@ jobs:
         run: |
           ${{ fromJSON(inputs.component).test_script }}
 
+      - name: Report failed tests
+        if: ${{ always() && steps.run_tests.outputs.failed_tests_count != '' && steps.run_tests.outputs.failed_tests_count != '0' }}
+        run: |
+          echo "=== Failed Tests Summary ==="
+          echo "Component: ${{ fromJSON(inputs.component).job_name }}"
+          echo "Shard: ${{ matrix.shard }}/${{ fromJSON(inputs.component).total_shards }}"
+          echo ""
+          echo "Failed tests: ${{ steps.run_tests.outputs.failed_tests }}"
+
       - name: Print test reproduction steps
         # TODO: Add windows reproduction steps
-        if: ${{ failure() && steps.test.outcome == 'failure' && inputs.platform == 'linux' }}
+        if: ${{ failure() && steps.run_tests.outcome == 'failure' && inputs.platform == 'linux' }}
         run: |
           python ./build_tools/github_actions/print_test_reproduction_steps.py \
             --run-id "${{ env.ARTIFACT_RUN_ID }}" \

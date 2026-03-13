@@ -6,15 +6,16 @@ import os
 import shlex
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
 
-# Importing is_asan from github_actions_utils.py
+# Importing utilities from github_actions_utils.py
 sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
-from github_actions_utils import is_asan
+from github_actions_utils import is_asan, run_test
 
 # GTest sharding
 SHARD_INDEX = os.getenv("SHARD_INDEX", 1)
@@ -38,11 +39,12 @@ else:
     # only running smoke tests due to openBLAS issue: https://github.com/ROCm/TheRock/issues/1605
     test_filter = ["--yaml", f"{THEROCK_BIN_DIR}/rocblas_smoke.yaml"]
 
-cmd = [f"{THEROCK_BIN_DIR}/rocblas-test"] + test_filter
-logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
+# Create temp file for JSON output
+gtest_json_path = Path(tempfile.gettempdir()) / "rocblas_test_results.json"
 
-subprocess.run(
-    cmd,
-    cwd=THEROCK_DIR,
-    check=True,
-)
+cmd = [
+    f"{THEROCK_BIN_DIR}/rocblas-test",
+    f"--gtest_output=json:{gtest_json_path}",
+] + test_filter
+
+run_test(cmd, output_format="gtest", output_path=gtest_json_path, cwd=THEROCK_DIR)

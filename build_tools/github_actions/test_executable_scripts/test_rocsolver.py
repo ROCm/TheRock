@@ -5,12 +5,18 @@ import logging
 import os
 import shlex
 import subprocess
+import sys
+import tempfile
 from pathlib import Path
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 OUTPUT_ARTIFACTS_DIR = os.getenv("OUTPUT_ARTIFACTS_DIR")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
+
+# Import test result collection utilities
+sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
+from github_actions_utils import run_test
 
 logging.basicConfig(level=logging.INFO)
 
@@ -22,8 +28,12 @@ envion_vars = os.environ.copy()
 envion_vars["GTEST_SHARD_INDEX"] = str(int(SHARD_INDEX) - 1)
 envion_vars["GTEST_TOTAL_SHARDS"] = str(TOTAL_SHARDS)
 
+# Create temp file for JSON output
+gtest_json_path = Path(tempfile.gettempdir()) / "rocsolver_test_results.json"
+
 cmd = [
     f"{THEROCK_BIN_DIR}/rocsolver-test",
+    f"--gtest_output=json:{gtest_json_path}",
 ]
 
 # If smoke tests are enabled, we run smoke tests only.
@@ -56,5 +66,10 @@ else:
         ["--gtest_filter=checkin*-*known_bug*:checkin_lapack/SYGVDX_INPLACE.__float/41"]
     )
 
-logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=envion_vars)
+run_test(
+    cmd,
+    output_format="gtest",
+    output_path=gtest_json_path,
+    cwd=THEROCK_DIR,
+    env=envion_vars,
+)

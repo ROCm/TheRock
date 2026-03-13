@@ -6,12 +6,18 @@ import os
 import platform
 import shlex
 import subprocess
+import sys
+import tempfile
 from pathlib import Path
 
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
 AMDGPU_FAMILIES = os.getenv("AMDGPU_FAMILIES")
 SCRIPT_DIR = Path(__file__).resolve().parent
 THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
+
+# Import test result collection utilities
+sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
+from github_actions_utils import run_test
 
 logging.basicConfig(level=logging.INFO)
 
@@ -124,12 +130,17 @@ res_gen_cmd = [
 logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(res_gen_cmd)}")
 subprocess.run(res_gen_cmd, cwd=THEROCK_DIR, check=True, env=env_vars)
 
+# Create temp file for JUnit XML output
+junit_xml_path = Path(tempfile.gettempdir()) / "rocthrust_test_results.xml"
+
 # Run ctest with resource spec file
 cmd = [
     "ctest",
     "--test-dir",
     f"{THEROCK_BIN_DIR}/rocthrust",
     "--output-on-failure",
+    "--output-junit",
+    str(junit_xml_path),
     "--parallel",
     f"{ctest_parallel_count}",
     "--resource-spec-file",
@@ -145,6 +156,10 @@ test_type = os.getenv("TEST_TYPE", "full")
 if test_type == "smoke":
     environ_vars["GTEST_FILTER"] = ":".join(SMOKE_TESTS)
 
-logging.info(f"++ Exec [{THEROCK_DIR}]$ {shlex.join(cmd)}")
-
-subprocess.run(cmd, cwd=THEROCK_DIR, check=True, env=environ_vars)
+run_test(
+    cmd,
+    output_format="ctest",
+    output_path=junit_xml_path,
+    cwd=THEROCK_DIR,
+    env=environ_vars,
+)

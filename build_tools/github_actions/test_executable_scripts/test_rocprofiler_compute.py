@@ -5,10 +5,20 @@ import logging
 import os
 import shlex
 import subprocess
+import sys
+import tempfile
 from pathlib import Path
 
 # Resolve paths
 THEROCK_BIN_DIR = os.getenv("THEROCK_BIN_DIR")
+OUTPUT_ARTIFACTS_DIR = os.getenv("OUTPUT_ARTIFACTS_DIR")
+SCRIPT_DIR = Path(__file__).resolve().parent
+THEROCK_DIR = SCRIPT_DIR.parent.parent.parent
+
+# Import test result collection utilities
+sys.path.append(str(THEROCK_DIR / "build_tools" / "github_actions"))
+from github_actions_utils import run_test
+
 THEROCK_BIN_PATH = Path(THEROCK_BIN_DIR).resolve()
 THEROCK_PATH = THEROCK_BIN_PATH.parent
 THEROCK_LIB_PATH = str(THEROCK_PATH / "lib")
@@ -32,6 +42,8 @@ SMOKE_TESTS = [
     "test_profile_iteration_multiplexing_1",
 ]
 
+# Create temp file for JUnit XML output
+junit_xml_path = Path(tempfile.gettempdir()) / "rocprofiler_compute_test_results.xml"
 environ_vars = os.environ.copy()
 
 
@@ -74,6 +86,8 @@ def execute_tests():
         f"{"|".join(EXCLUDED_TESTS)}",
         "--tests-information",
         f"{shard_index},,{total_shards}",
+        "--output-junit",
+        str(junit_xml_path),
     ]
 
     # If smoke tests are enabled, we run smoke tests only.
@@ -83,11 +97,11 @@ def execute_tests():
         cmd.append("--tests-regex")
         cmd.append("|".join(SMOKE_TESTS))
 
-    logging.info(f"++ Exec [{THEROCK_PATH}]$ {shlex.join(cmd)}")
-    subprocess.run(
+    run_test(
         cmd,
+        output_format="ctest",
+        output_path=junit_xml_path,
         cwd=THEROCK_PATH,
-        check=True,
         env=environ_vars,
     )
 
